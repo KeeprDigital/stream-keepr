@@ -36,16 +36,34 @@ function getRoundsForPhase(phaseId: number): Round[] {
 
 function getPhaseSummary(phaseId: number): string {
 	const count = getRoundsForPhase(phaseId).length;
-	return `${count} round${count !== 1 ? 's' : ''}`;
+	return `${count} round${count !== 1
+		? 's'
+		: ''}`;
 }
 
 function getPhaseMenuItems(phase: Phase): DropdownMenuItem[][] {
-	return [[
-		{ label: 'Edit Phase', icon: 'i-lucide-pencil', onSelect: () => emit('editPhase', phase) },
-		{ label: 'Add Round', icon: 'i-lucide-plus', onSelect: () => emit('addRound', phase) },
-	], [
-		{ label: 'Delete Phase', icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: () => emit('deletePhase', phase) },
-	]];
+	return [
+		[
+			{
+				label: 'Edit Phase',
+				icon: 'i-lucide-pencil',
+				onSelect: () => emit('editPhase', phase),
+			},
+			{
+				label: 'Add Round',
+				icon: 'i-lucide-plus',
+				onSelect: () => emit('addRound', phase),
+			},
+		],
+		[
+			{
+				label: 'Delete Phase',
+				icon: 'i-lucide-trash-2',
+				color: 'error' as const,
+				onSelect: () => emit('deletePhase', phase),
+			},
+		],
+	];
 }
 </script>
 

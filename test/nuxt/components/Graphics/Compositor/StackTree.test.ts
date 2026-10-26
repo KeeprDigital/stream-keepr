@@ -14,20 +14,30 @@ import ReorderControls from '~/components/Graphics/Compositor/ReorderControls.vu
 enableAutoUnmount(afterEach);
 
 const UFormFieldStub = defineComponent({
-	props: { label: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+	},
 	template: '<div><span>{{ label }}</span><slot /></div>',
 });
 
 const USelectStub = defineComponent({
 	name: 'USelect',
-	props: { items: { type: Array, required: false }, modelValue: { type: [String, Number], required: false } },
+	props: {
+		items: { type: Array, required: false },
+		modelValue: {
+			type: [String, Number],
+			required: false,
+		},
+	},
 	emits: ['update:modelValue'],
 	template: '<select @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items" :key="item.value" :value="item.value">{{ item.label }}</option></select>',
 });
 
 const UButtonStub = defineComponent({
 	name: 'UButton',
-	props: { disabled: { type: Boolean, required: false } },
+	props: {
+		disabled: { type: Boolean, required: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
@@ -83,37 +93,44 @@ function groupStack(): BroadcastGraphicConfig {
 	return {
 		id: 'a',
 		name: 'A',
-		items: [{
-			type: 'group',
-			id: 'cluster',
-			label: 'Name block',
-			visible: true,
-			anchor: 'top-left',
-			x: 0,
-			y: 0,
-			width: 400,
-			height: 100,
-			arrangement: 'row',
-			padding: 0,
-			gap: 8,
-			align: 'stretch',
-			justify: 'start',
-			clip: false,
-			geometry: squareShapeGeometry(),
-			children: [{
-				type: 'shape',
-				id: 'child',
-				label: 'Shape 1',
+		items: [
+			{
+				type: 'group',
+				id: 'cluster',
+				label: 'Name block',
 				visible: true,
 				anchor: 'top-left',
 				x: 0,
 				y: 0,
-				width: 10,
-				height: 10,
+				width: 400,
+				height: 100,
+				arrangement: 'row',
+				padding: 0,
+				gap: 8,
+				align: 'stretch',
+				justify: 'start',
+				clip: false,
 				geometry: squareShapeGeometry(),
-				surfaceStyle: { fill: { type: 'solid', color: '#ffffff' }, fillOpacity: 1 },
-			}],
-		}],
+				children: [
+					{
+						type: 'shape',
+						id: 'child',
+						label: 'Shape 1',
+						visible: true,
+						anchor: 'top-left',
+						x: 0,
+						y: 0,
+						width: 10,
+						height: 10,
+						geometry: squareShapeGeometry(),
+						surfaceStyle: {
+							fill: { type: 'solid', color: '#ffffff' },
+							fillOpacity: 1,
+						},
+					},
+				],
+			},
+		],
 	};
 }
 
@@ -145,7 +162,11 @@ describe('graphicsCompositorStackTree', () => {
 	});
 
 	it('adds a Broadcast Graphic to the front of the Screen stack and selects it', async () => {
-		const wrapper = await mountComponent({ graphics: [{ id: 'a', name: 'Graphic 1', items: [] }] });
+		const wrapper = await mountComponent({
+			graphics: [
+				{ id: 'a', name: 'Graphic 1', items: [] },
+			],
+		});
 
 		await wrapper.get('[data-testid="add-broadcast-graphic"]').trigger('click');
 
@@ -156,7 +177,10 @@ describe('graphicsCompositorStackTree', () => {
 
 	it('reorders a Broadcast Graphic within the authored back-to-front stack', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{ id: 'a', name: 'A', items: [] }, { id: 'b', name: 'B', items: [] }],
+			graphics: [
+				{ id: 'a', name: 'A', items: [] },
+				{ id: 'b', name: 'B', items: [] },
+			],
 		});
 
 		await wrapper.get('[aria-label="Move A forward"]').trigger('click');
@@ -166,7 +190,10 @@ describe('graphicsCompositorStackTree', () => {
 
 	it('cannot move the frontmost Broadcast Graphic any further forward', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{ id: 'a', name: 'A', items: [] }, { id: 'b', name: 'B', items: [] }],
+			graphics: [
+				{ id: 'a', name: 'A', items: [] },
+				{ id: 'b', name: 'B', items: [] },
+			],
 		});
 
 		expect(wrapper.get('[aria-label="Move B forward"]').attributes('disabled')).toBeDefined();
@@ -175,7 +202,10 @@ describe('graphicsCompositorStackTree', () => {
 
 	it('deletes a Broadcast Graphic and drops the selection', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{ id: 'a', name: 'A', items: [] }, { id: 'b', name: 'B', items: [] }],
+			graphics: [
+				{ id: 'a', name: 'A', items: [] },
+				{ id: 'b', name: 'B', items: [] },
+			],
 			selectedGraphicId: 'a',
 			selectedTarget: { type: 'graphic', graphicId: 'a' },
 		});
@@ -188,16 +218,26 @@ describe('graphicsCompositorStackTree', () => {
 
 	it('offers only the Graphic Item kinds the Host Contract supports', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{ id: 'a', name: 'A', items: [] }],
+			graphics: [
+				{ id: 'a', name: 'A', items: [] },
+			],
 			selectedGraphicId: 'a',
 		});
 
-		expect(itemPaletteKinds(wrapper)).toEqual(['text', 'shape', 'media', 'social-network-icon', 'group']);
+		expect(itemPaletteKinds(wrapper)).toEqual([
+			'text',
+			'shape',
+			'media',
+			'social-network-icon',
+			'group',
+		]);
 	});
 
 	it('creates a semantic Social Network Icon with the application defaults', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{ id: 'a', name: 'A', items: [] }],
+			graphics: [
+				{ id: 'a', name: 'A', items: [] },
+			],
 			selectedGraphicId: 'a',
 		});
 
@@ -214,7 +254,9 @@ describe('graphicsCompositorStackTree', () => {
 
 	it('places a Graphic Item at the front of the Graphic Layer Order and selects it', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{ id: 'a', name: 'A', items: [] }],
+			graphics: [
+				{ id: 'a', name: 'A', items: [] },
+			],
 			selectedGraphicId: 'a',
 		});
 
@@ -222,7 +264,9 @@ describe('graphicsCompositorStackTree', () => {
 		await nextTick();
 
 		const graphics = emittedGraphics(wrapper);
-		expect(graphics[0]?.items.map(item => [item.type, item.label])).toEqual([['text', 'Text 1']]);
+		expect(graphics[0]?.items.map(item => [item.type, item.label])).toEqual([
+			['text', 'Text 1'],
+		]);
 		expect(emittedTarget(wrapper)).toEqual({
 			type: 'item',
 			graphicId: 'a',
@@ -238,16 +282,22 @@ describe('graphicsCompositorStackTree', () => {
 	 */
 	it('adds a second Graphic Item of the kind it just added', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{ id: 'a', name: 'A', items: [] }],
+			graphics: [
+				{ id: 'a', name: 'A', items: [] },
+			],
 			selectedGraphicId: 'a',
 		});
 
 		await wrapper.get('[data-add-graphic-item-kind="shape"]').trigger('click');
-		await wrapper.setProps({ graphics: emittedGraphics(wrapper) });
+		await wrapper.setProps({
+			graphics: emittedGraphics(wrapper),
+		});
 		await wrapper.get('[data-add-graphic-item-kind="shape"]').trigger('click');
 
 		expect(emittedGraphics(wrapper, 1).map(graphic => graphic.items.map(item => item.type)))
-			.toEqual([['shape', 'shape']]);
+			.toEqual([
+				['shape', 'shape'],
+			]);
 	});
 
 	it('holds no chosen kind of its own for a repeat press to match', async () => {
@@ -255,7 +305,9 @@ describe('graphicsCompositorStackTree', () => {
 		// value, so a stubbed re-selection could pass this file while the real
 		// USelect kept swallowing the second press.
 		const wrapper = await mountComponent({
-			graphics: [{ id: 'a', name: 'A', items: [] }],
+			graphics: [
+				{ id: 'a', name: 'A', items: [] },
+			],
 			selectedGraphicId: 'a',
 		});
 
@@ -266,30 +318,41 @@ describe('graphicsCompositorStackTree', () => {
 	});
 
 	it('shows no Graphic Item palette until a Broadcast Graphic is selected', async () => {
-		const wrapper = await mountComponent({ graphics: [{ id: 'a', name: 'A', items: [] }] });
+		const wrapper = await mountComponent({
+			graphics: [
+				{ id: 'a', name: 'A', items: [] },
+			],
+		});
 
 		expect(wrapper.find('[data-testid="graphic-item-palette"]').exists()).toBe(false);
 	});
 
 	it('deletes a Graphic Item and falls back to its Broadcast Graphic', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{
-				id: 'a',
-				name: 'A',
-				items: [{
-					type: 'shape',
-					id: 'bar',
-					label: 'Shape 1',
-					visible: true,
-					anchor: 'top-left',
-					x: 0,
-					y: 0,
-					width: 10,
-					height: 10,
-					geometry: squareShapeGeometry(),
-					surfaceStyle: { fill: { type: 'solid', color: '#ffffff' }, fillOpacity: 1 },
-				}],
-			}],
+			graphics: [
+				{
+					id: 'a',
+					name: 'A',
+					items: [
+						{
+							type: 'shape',
+							id: 'bar',
+							label: 'Shape 1',
+							visible: true,
+							anchor: 'top-left',
+							x: 0,
+							y: 0,
+							width: 10,
+							height: 10,
+							geometry: squareShapeGeometry(),
+							surfaceStyle: {
+								fill: { type: 'solid', color: '#ffffff' },
+								fillOpacity: 1,
+							},
+						},
+					],
+				},
+			],
 			selectedGraphicId: 'a',
 			selectedTarget: { type: 'item', graphicId: 'a', itemId: 'bar' },
 		});
@@ -302,15 +365,17 @@ describe('graphicsCompositorStackTree', () => {
 
 	it('prevents deleting a Presentation Group outside the projection combined-delete path', async () => {
 		const projected = groupStack();
-		projected.socialProfileProjections = [{
-			key: 'profile',
-			label: 'Talent profile',
-			sourceKey: 'talent',
-			presentationGroupId: 'cluster',
-			dwellMs: 8_000,
-			transition: 'crossfade',
-			transitionDurationMs: 250,
-		}];
+		projected.socialProfileProjections = [
+			{
+				key: 'profile',
+				label: 'Talent profile',
+				sourceKey: 'talent',
+				presentationGroupId: 'cluster',
+				dwellMs: 8_000,
+				transition: 'crossfade',
+				transitionDurationMs: 250,
+			},
+		];
 		const wrapper = await mountComponent({
 			graphics: [projected],
 			selectedGraphicId: 'a',
@@ -335,41 +400,50 @@ describe('graphicsCompositorStackTree', () => {
 
 	it('nests the children of a Graphic Group under it as one layer', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{
-				id: 'a',
-				name: 'A',
-				items: [{
-					type: 'group',
-					id: 'cluster',
-					label: 'Name block',
-					visible: true,
-					anchor: 'top-left',
-					x: 0,
-					y: 0,
-					width: 400,
-					height: 100,
-					arrangement: 'row',
-					padding: 0,
-					gap: 8,
-					align: 'stretch',
-					justify: 'start',
-					clip: false,
-					geometry: squareShapeGeometry(),
-					children: [{
-						type: 'shape',
-						id: 'child',
-						label: 'Shape 1',
-						visible: true,
-						anchor: 'top-left',
-						x: 0,
-						y: 0,
-						width: 10,
-						height: 10,
-						geometry: squareShapeGeometry(),
-						surfaceStyle: { fill: { type: 'solid', color: '#ffffff' }, fillOpacity: 1 },
-					}],
-				}],
-			}],
+			graphics: [
+				{
+					id: 'a',
+					name: 'A',
+					items: [
+						{
+							type: 'group',
+							id: 'cluster',
+							label: 'Name block',
+							visible: true,
+							anchor: 'top-left',
+							x: 0,
+							y: 0,
+							width: 400,
+							height: 100,
+							arrangement: 'row',
+							padding: 0,
+							gap: 8,
+							align: 'stretch',
+							justify: 'start',
+							clip: false,
+							geometry: squareShapeGeometry(),
+							children: [
+								{
+									type: 'shape',
+									id: 'child',
+									label: 'Shape 1',
+									visible: true,
+									anchor: 'top-left',
+									x: 0,
+									y: 0,
+									width: 10,
+									height: 10,
+									geometry: squareShapeGeometry(),
+									surfaceStyle: {
+										fill: { type: 'solid', color: '#ffffff' },
+										fillOpacity: 1,
+									},
+								},
+							],
+						},
+					],
+				},
+			],
 			selectedGraphicId: 'a',
 			selectedTarget: { type: 'item', graphicId: 'a', itemId: 'cluster' },
 		});
@@ -391,16 +465,31 @@ describe('graphicsCompositorStackTree', () => {
 			width: 10,
 			height: 10,
 			geometry: squareShapeGeometry(),
-			surfaceStyle: { fill: { type: 'solid' as const, color: '#ffffff' }, fillOpacity: 1 },
+			surfaceStyle: {
+				fill: { type: 'solid' as const, color: '#ffffff' },
+				fillOpacity: 1,
+			},
 		});
 		const wrapper = await mountComponent({
-			graphics: [{ id: 'a', name: 'A', items: [shape('back', 'Back'), shape('front', 'Front')] }],
+			graphics: [
+				{
+					id: 'a',
+					name: 'A',
+					items: [
+						shape('back', 'Back'),
+						shape('front', 'Front'),
+					],
+				},
+			],
 			selectedGraphicId: 'a',
 			selectedTarget: { type: 'graphic', graphicId: 'a' },
 		});
 
 		const rows = wrapper.findAll('[data-testid="graphic-item-node"]');
-		expect(rows.map(row => row.text())).toEqual([expect.stringContaining('Front'), expect.stringContaining('Back')]);
+		expect(rows.map(row => row.text())).toEqual([
+			expect.stringContaining('Front'),
+			expect.stringContaining('Back'),
+		]);
 
 		// The lower row moves up the list, which is toward the front.
 		await wrapper.get('[aria-label="Move Back forward"]').trigger('click');
@@ -409,36 +498,45 @@ describe('graphicsCompositorStackTree', () => {
 
 	it('offers a Graphic Group child palette that never offers another Graphic Group', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{
-				id: 'a',
-				name: 'A',
-				items: [{
-					type: 'group',
-					id: 'cluster',
-					label: 'Name block',
-					visible: true,
-					anchor: 'top-left',
-					x: 0,
-					y: 0,
-					width: 400,
-					height: 100,
-					arrangement: 'row',
-					padding: 0,
-					gap: 8,
-					align: 'stretch',
-					justify: 'start',
-					clip: false,
-					geometry: squareShapeGeometry(),
-					children: [],
-				}],
-			}],
+			graphics: [
+				{
+					id: 'a',
+					name: 'A',
+					items: [
+						{
+							type: 'group',
+							id: 'cluster',
+							label: 'Name block',
+							visible: true,
+							anchor: 'top-left',
+							x: 0,
+							y: 0,
+							width: 400,
+							height: 100,
+							arrangement: 'row',
+							padding: 0,
+							gap: 8,
+							align: 'stretch',
+							justify: 'start',
+							clip: false,
+							geometry: squareShapeGeometry(),
+							children: [],
+						},
+					],
+				},
+			],
 			selectedGraphicId: 'a',
 			selectedTarget: { type: 'item', graphicId: 'a', itemId: 'cluster' },
 		});
 
 		expect(wrapper.findAll('[data-add-graphic-group-child-kind]')
 			.map(button => button.attributes('data-add-graphic-group-child-kind')))
-			.toEqual(['text', 'shape', 'media', 'social-network-icon']);
+			.toEqual([
+				'text',
+				'shape',
+				'media',
+				'social-network-icon',
+			]);
 
 		await wrapper.get('[data-add-graphic-group-child-kind="text"]').trigger('click');
 		await nextTick();
@@ -450,7 +548,9 @@ describe('graphicsCompositorStackTree', () => {
 
 	it('shows no Graphic Group child palette while no group is in the selection', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{ id: 'a', name: 'A', items: [] }],
+			graphics: [
+				{ id: 'a', name: 'A', items: [] },
+			],
 			selectedGraphicId: 'a',
 		});
 
@@ -459,7 +559,10 @@ describe('graphicsCompositorStackTree', () => {
 
 	it('offers no authoring control to a read-only observer', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{ id: 'a', name: 'A', items: [] }, { id: 'b', name: 'B', items: [] }],
+			graphics: [
+				{ id: 'a', name: 'A', items: [] },
+				{ id: 'b', name: 'B', items: [] },
+			],
 			selectedGraphicId: 'a',
 			writable: false,
 		});
@@ -472,7 +575,9 @@ describe('graphicsCompositorStackTree', () => {
 
 	it('still lets a read-only observer select what it is observing', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{ id: 'a', name: 'A', items: [] }],
+			graphics: [
+				{ id: 'a', name: 'A', items: [] },
+			],
 			writable: false,
 		});
 
@@ -483,7 +588,9 @@ describe('graphicsCompositorStackTree', () => {
 	});
 	it('offers a read-only observer no control over a Graphic Group child', async () => {
 		const wrapper = await mountComponent({
-			graphics: [groupStack()],
+			graphics: [
+				groupStack(),
+			],
 			selectedGraphicId: 'a',
 			selectedTarget: { type: 'item', graphicId: 'a', itemId: 'cluster' },
 			writable: false,
@@ -504,7 +611,9 @@ describe('graphicsCompositorStackTree', () => {
 
 	it('offers no stack to a host that composes one composition', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{ id: 'layout', name: 'Feature Match Layout', items: [] }],
+			graphics: [
+				{ id: 'layout', name: 'Feature Match Layout', items: [] },
+			],
 			selectedGraphicId: 'layout',
 			contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 		});
@@ -518,7 +627,9 @@ describe('graphicsCompositorStackTree', () => {
 		// Withholding the stack must not withhold the tree: the whole point of
 		// embedding the compositor is to author this composition's items.
 		const wrapper = await mountComponent({
-			graphics: [{ id: 'layout', name: 'Feature Match Layout', items: [] }],
+			graphics: [
+				{ id: 'layout', name: 'Feature Match Layout', items: [] },
+			],
 			selectedGraphicId: 'layout',
 			contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 		});
@@ -536,7 +647,9 @@ describe('graphicsCompositorStackTree', () => {
 		// The stack is the host's declaration, not a count. A Screen with one
 		// Broadcast Graphic must not silently lose its ability to add a second.
 		const wrapper = await mountComponent({
-			graphics: [{ id: 'a', name: 'A', items: [] }],
+			graphics: [
+				{ id: 'a', name: 'A', items: [] },
+			],
 			selectedGraphicId: 'a',
 		});
 

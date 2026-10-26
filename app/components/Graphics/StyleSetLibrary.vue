@@ -218,7 +218,9 @@ function renameEntry(entryId: string, name: string) {
 		return;
 	// Renaming preserves identity, so nothing that references this entry moves and no
 	// linked template sees an available update.
-	void saveDraft(current.draft.map(entry => entry.id === entryId ? { ...entry, name: next } : entry));
+	void saveDraft(current.draft.map(entry => entry.id === entryId
+		? { ...entry, name: next }
+		: entry));
 }
 
 function updateEntryValue(entryId: string, value: GraphicStyleSetEntry['value']) {
@@ -226,7 +228,9 @@ function updateEntryValue(entryId: string, value: GraphicStyleSetEntry['value'])
 	if (!current)
 		return;
 	void saveDraft(current.draft.map(entry =>
-		entry.id === entryId ? { ...entry, value } as GraphicStyleSetEntry : entry,
+		entry.id === entryId
+			? { ...entry, value } as GraphicStyleSetEntry
+			: entry,
 	));
 }
 
@@ -239,7 +243,9 @@ async function deleteEntry(mode: 'replace' | 'detach') {
 	try {
 		open.value = await repository.deleteEntry(current.id, entryId, {
 			mode,
-			...(mode === 'replace' ? { replacementEntryId: replacementEntryId.value ?? '' } : {}),
+			...(mode === 'replace'
+				? { replacementEntryId: replacementEntryId.value ?? '' }
+				: {}),
 			draftRevision: current.draftRevision,
 		});
 		pendingDeleteEntryId.value = null;

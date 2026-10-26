@@ -60,7 +60,10 @@ describe('warming the acceptance browser', () => {
 		const tag = `--stand-in=${process.pid}-${Date.now()}`;
 		process.env.CHROME_BIN = STUBBORN_CHROME;
 
-		await expect(warmChromium({ extraArgs: [tag], terminateGraceMs: 200 })).resolves.toBe(STUBBORN_CHROME);
+		await expect(warmChromium({
+			extraArgs: [tag],
+			terminateGraceMs: 200,
+		})).resolves.toBe(STUBBORN_CHROME);
 
 		const ps = execFileSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' });
 		expect(ps.split('\n').filter(line => line.includes(tag))).toEqual([]);
@@ -69,7 +72,10 @@ describe('warming the acceptance browser', () => {
 	it('says why a browser could not start even on an idle machine', async () => {
 		process.env.CHROME_BIN = STUBBORN_CHROME;
 
-		await expect(warmChromium({ extraArgs: ['--silent', '--say=still loading fonts'], ...quick }))
+		await expect(warmChromium({
+			extraArgs: ['--silent', '--say=still loading fonts'],
+			...quick,
+		}))
 			.rejects
 			.toThrow(/Chrome DevTools endpoint timed out\.[\s\S]*still loading fonts/);
 	});

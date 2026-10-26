@@ -159,7 +159,9 @@ export const GRAPHICS_EVIDENCE_CATEGORY_GROUP_VALUES = Object.keys(
 export function graphicsEvidenceCategoriesForGroups(
 	groups: readonly GraphicsEvidenceCategoryGroup[],
 ): GraphicsAssetEvidenceCategory[] {
-	return [...new Set(groups.flatMap(group => GRAPHICS_EVIDENCE_CATEGORY_GROUPS[group]))];
+	return [
+		...new Set(groups.flatMap(group => GRAPHICS_EVIDENCE_CATEGORY_GROUPS[group])),
+	];
 }
 
 /**

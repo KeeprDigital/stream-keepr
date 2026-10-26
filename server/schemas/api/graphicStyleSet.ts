@@ -93,7 +93,10 @@ const typographyValueSchema = z.object({
 }).strict();
 
 const fillValueSchema = z.discriminatedUnion('type', [
-	z.object({ type: z.literal('solid'), colorEntryId: entryIdSchema }).strict(),
+	z.object({
+		type: z.literal('solid'),
+		colorEntryId: entryIdSchema,
+	}).strict(),
 	z.object({
 		type: z.literal('linear-gradient'),
 		angle: finiteNumberSchema.min(-360).max(360),
@@ -147,7 +150,9 @@ const animationRecipeValueSchema = z.object({
 		factor: finiteNumberSchema.min(0).max(MAX_GRAPHIC_ANIMATION_SCALE),
 		origin: z.enum(GRAPHIC_ANIMATION_ORIGIN_VALUES),
 	}).strict().optional(),
-	reveal: z.object({ edge: z.enum(GRAPHIC_REVEAL_EDGE_VALUES) }).strict().optional(),
+	reveal: z.object({
+		edge: z.enum(GRAPHIC_REVEAL_EDGE_VALUES),
+	}).strict().optional(),
 	pause: finiteNumberSchema.nonnegative().max(MAX_GRAPHIC_ANIMATION_PAUSE_MS).optional(),
 	repeat: z.union([
 		finiteNumberSchema.int().min(MIN_GRAPHIC_ANIMATION_REPEAT).max(MAX_GRAPHIC_ANIMATION_REPEAT),
@@ -171,13 +176,41 @@ const entryBase = {
 };
 
 export const graphicStyleSetEntrySchema = z.discriminatedUnion('kind', [
-	z.object({ ...entryBase, kind: z.literal('palette'), value: paletteValueSchema }).strict(),
-	z.object({ ...entryBase, kind: z.literal('typography'), value: typographyValueSchema }).strict(),
-	z.object({ ...entryBase, kind: z.literal('fill'), value: fillValueSchema }).strict(),
-	z.object({ ...entryBase, kind: z.literal('surface-style'), value: surfaceStyleValueSchema }).strict(),
-	z.object({ ...entryBase, kind: z.literal('media-treatment'), value: mediaTreatmentValueSchema }).strict(),
-	z.object({ ...entryBase, kind: z.literal('shape-geometry'), value: shapeGeometrySchema }).strict(),
-	z.object({ ...entryBase, kind: z.literal('animation-recipe'), value: animationRecipeValueSchema }).strict(),
+	z.object({
+		...entryBase,
+		kind: z.literal('palette'),
+		value: paletteValueSchema,
+	}).strict(),
+	z.object({
+		...entryBase,
+		kind: z.literal('typography'),
+		value: typographyValueSchema,
+	}).strict(),
+	z.object({
+		...entryBase,
+		kind: z.literal('fill'),
+		value: fillValueSchema,
+	}).strict(),
+	z.object({
+		...entryBase,
+		kind: z.literal('surface-style'),
+		value: surfaceStyleValueSchema,
+	}).strict(),
+	z.object({
+		...entryBase,
+		kind: z.literal('media-treatment'),
+		value: mediaTreatmentValueSchema,
+	}).strict(),
+	z.object({
+		...entryBase,
+		kind: z.literal('shape-geometry'),
+		value: shapeGeometrySchema,
+	}).strict(),
+	z.object({
+		...entryBase,
+		kind: z.literal('animation-recipe'),
+		value: animationRecipeValueSchema,
+	}).strict(),
 ]);
 
 /**

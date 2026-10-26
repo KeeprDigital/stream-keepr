@@ -33,7 +33,10 @@ export function useInspectorSections() {
 	}
 
 	function setAll(ids: readonly string[], open: boolean) {
-		stored.value = { ...stored.value, ...Object.fromEntries(ids.map(id => [id, open])) };
+		stored.value = {
+			...stored.value,
+			...Object.fromEntries(ids.map(id => [id, open])),
+		};
 	}
 
 	return { isOpen, setOpen, setAll };

@@ -37,7 +37,9 @@ vi.mock('~/modules/feature-match-session/client', () => ({
 	useFeatureMatchSessionClient: () => mockRepo,
 }));
 
-mockNuxtImport('useServerTime', () => () => ({ getServerTime: () => 1000000 }));
+mockNuxtImport('useServerTime', () => () => ({
+	getServerTime: () => 1000000,
+}));
 
 async function flushPromises() {
 	await Promise.resolve();

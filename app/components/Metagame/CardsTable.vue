@@ -34,29 +34,40 @@ const {
 	toggleType,
 	resetFilters,
 	filteredEntries,
-} = useMetagameCardFilters(computed(() => props.entries), { defaultExcludedTypes: ['Land'] });
+} = useMetagameCardFilters(computed(() => props.entries), {
+	defaultExcludedTypes: ['Land'],
+});
 
 function toggleMainboard() {
 	if (showMainboard.value && !showSideboard.value)
 		return;
-	emit('update:boardFilter', props.boardFilter === 'full' ? 'sideboard' : 'full');
+	emit('update:boardFilter', props.boardFilter === 'full'
+		? 'sideboard'
+		: 'full');
 }
 
 function toggleSideboard() {
 	if (showSideboard.value && !showMainboard.value)
 		return;
-	emit('update:boardFilter', props.boardFilter === 'full' ? 'mainboard' : 'full');
+	emit('update:boardFilter', props.boardFilter === 'full'
+		? 'mainboard'
+		: 'full');
 }
 
 // ── Table ──
 
 const SORTABLE_FIELDS = new Set<MetagameCardSortBy>(['inclusionRate', 'avgCopies', 'totalCopies']);
 
-const sorting = ref([{ id: props.sortBy, desc: true }]);
+const sorting = ref([
+	{ id: props.sortBy, desc: true },
+]);
 
 watch(() => props.sortBy, (sortBy) => {
-	if (sorting.value[0]?.id !== sortBy)
-		sorting.value = [{ id: sortBy, desc: true }];
+	if (sorting.value[0]?.id !== sortBy) {
+		sorting.value = [
+			{ id: sortBy, desc: true },
+		];
+	}
 });
 
 watch(sorting, (value) => {
@@ -69,12 +80,36 @@ const columns = computed<TableColumn<CardBreakdownEntry>[]>(() => [
 	createNameColumn<CardBreakdownEntry>(),
 	createManaCostColumn<CardBreakdownEntry>(),
 	createCardTypeColumn<CardBreakdownEntry>(),
-	{ accessorKey: 'inclusionRate', header: createSortableHeader('Inclusion'), enableSorting: true },
-	{ accessorKey: 'avgCopies', header: createSortableHeader('Avg Copies'), enableSorting: true },
-	{ accessorKey: 'totalCopies', header: createSortableHeader('Total Copies'), enableSorting: true },
-	...(props.showDeckCount !== false ? [createDeckCountColumn<CardBreakdownEntry>()] : []),
-	{ accessorKey: 'mainboardCount', header: createSortableHeader('MB'), enableSorting: true },
-	{ accessorKey: 'sideboardCount', header: createSortableHeader('SB'), enableSorting: true },
+	{
+		accessorKey: 'inclusionRate',
+		header: createSortableHeader('Inclusion'),
+		enableSorting: true,
+	},
+	{
+		accessorKey: 'avgCopies',
+		header: createSortableHeader('Avg Copies'),
+		enableSorting: true,
+	},
+	{
+		accessorKey: 'totalCopies',
+		header: createSortableHeader('Total Copies'),
+		enableSorting: true,
+	},
+	...(props.showDeckCount !== false
+		? [
+				createDeckCountColumn<CardBreakdownEntry>(),
+			]
+		: []),
+	{
+		accessorKey: 'mainboardCount',
+		header: createSortableHeader('MB'),
+		enableSorting: true,
+	},
+	{
+		accessorKey: 'sideboardCount',
+		header: createSortableHeader('SB'),
+		enableSorting: true,
+	},
 ]);
 
 function handleRowClick(_e: unknown, row: { original: CardBreakdownEntry }) {

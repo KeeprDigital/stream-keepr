@@ -32,7 +32,9 @@ const emit = defineEmits<{
 
 const root = ref<HTMLElement | null>(null);
 const { width: drawnWidth } = useElementSize(root);
-const scale = computed(() => props.canvasWidth > 0 ? drawnWidth.value / props.canvasWidth : 0);
+const scale = computed(() => props.canvasWidth > 0
+	? drawnWidth.value / props.canvasWidth
+	: 0);
 
 const origin = computed(() => props.origin ?? { x: 0, y: 0 });
 
@@ -108,7 +110,10 @@ function moveTo(event: PointerEvent) {
 		keepRatio: event.shiftKey,
 		snap: event.altKey
 			? undefined
-			: { lines: canvasSnapLines({ width: props.canvasWidth, height: props.canvasHeight }), threshold: 6 / scale.value },
+			: {
+					lines: canvasSnapLines({ width: props.canvasWidth, height: props.canvasHeight }),
+					threshold: 6 / scale.value,
+				},
 	});
 	const rect = { ...result.rect, x: result.rect.x - origin.value.x, y: result.rect.y - origin.value.y };
 	const previous = live.value?.rect ?? current.startRect;

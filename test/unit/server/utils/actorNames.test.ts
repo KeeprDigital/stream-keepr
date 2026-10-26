@@ -29,7 +29,9 @@ vi.mock('~~/server/db', () => ({
 		select: () => ({
 			from: () => ({
 				where: mockWhere,
-				innerJoin: () => ({ where: () => ({ limit: mockJoinedWhere }) }),
+				innerJoin: () => ({
+					where: () => ({ limit: mockJoinedWhere }),
+				}),
 			}),
 		}),
 	},
@@ -164,7 +166,9 @@ describe('the name behind a lease holder\'s session', () => {
 	});
 
 	it('answers the person the holding session belongs to', async () => {
-		mockJoinedWhere.mockResolvedValue([{ name: 'Marcus Angel' }]);
+		mockJoinedWhere.mockResolvedValue([
+			{ name: 'Marcus Angel' },
+		]);
 
 		await expect(sessionHolderName('a-session')).resolves.toBe('Marcus Angel');
 	});
@@ -174,7 +178,9 @@ describe('the name behind a lease holder\'s session', () => {
 		// not: that reader is an administrator who may act on the account, this one
 		// is every other author in the installation, and "who has this Screen open"
 		// does not need somebody's email address to be answered honestly.
-		mockJoinedWhere.mockResolvedValue([{ name: '  ' }]);
+		mockJoinedWhere.mockResolvedValue([
+			{ name: '  ' },
+		]);
 
 		await expect(sessionHolderName('a-session')).resolves.toBeNull();
 	});

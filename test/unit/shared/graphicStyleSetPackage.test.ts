@@ -53,7 +53,10 @@ function heading(fontId: GraphicApplicationFontId = 'inter', fontSize = 64): Gra
 	};
 }
 
-const ENTRIES: GraphicStyleSetEntry[] = [BRAND, heading()];
+const ENTRIES: GraphicStyleSetEntry[] = [
+	BRAND,
+	heading(),
+];
 
 function installed(
 	overrides: Partial<InstalledGraphicStyleSetFacts> = {},
@@ -87,8 +90,20 @@ function packaged(overrides: Partial<{
 describe('the content digest a Graphic Style Set Package records', () => {
 	it('reads the same on two installations that serialised the same entries differently', async () => {
 		const reordered = [
-			{ value: { color: '#ff0044' }, schemaVersion: 1, name: 'Brand', kind: 'palette', id: 'brand' },
-			{ value: heading().value, schemaVersion: 1, name: 'Heading', kind: 'typography', id: 'heading' },
+			{
+				value: { color: '#ff0044' },
+				schemaVersion: 1,
+				name: 'Brand',
+				kind: 'palette',
+				id: 'brand',
+			},
+			{
+				value: heading().value,
+				schemaVersion: 1,
+				name: 'Heading',
+				kind: 'typography',
+				id: 'heading',
+			},
 		] as unknown as GraphicStyleSetEntry[];
 
 		expect(await graphicStyleSetContentDigest(reordered))
@@ -96,13 +111,19 @@ describe('the content digest a Graphic Style Set Package records', () => {
 	});
 
 	it('changes when a published value changes', async () => {
-		expect(await graphicStyleSetContentDigest([BRAND, heading('inter', 72)]))
+		expect(await graphicStyleSetContentDigest([
+			BRAND,
+			heading('inter', 72),
+		]))
 			.not
 			.toBe(await graphicStyleSetContentDigest(ENTRIES));
 	});
 
 	it('changes when the author reordered the entries, because the order is authored', async () => {
-		expect(await graphicStyleSetContentDigest([heading(), BRAND]))
+		expect(await graphicStyleSetContentDigest([
+			heading(),
+			BRAND,
+		]))
 			.not
 			.toBe(await graphicStyleSetContentDigest(ENTRIES));
 	});
@@ -115,14 +136,24 @@ describe('the content digest a Graphic Style Set Package records', () => {
 
 describe('the application fonts a Graphic Style Set Package declares', () => {
 	it('names one declaration per distinct font, with every entry that needs it', () => {
-		const second: GraphicStyleSetEntry = { ...heading(), id: 'caption', name: 'Caption' };
+		const second: GraphicStyleSetEntry = {
+			...heading(),
+			id: 'caption',
+			name: 'Caption',
+		};
 
-		expect(graphicStyleSetPackageCapabilities([BRAND, heading(), second])).toEqual([{
-			capability: 'application-font',
-			identity: 'inter',
-			configurationVersion: 1,
-			requiredBy: ['entries.caption.font.fontId', 'entries.heading.font.fontId'],
-		}]);
+		expect(graphicStyleSetPackageCapabilities([
+			BRAND,
+			heading(),
+			second,
+		])).toEqual([
+			{
+				capability: 'application-font',
+				identity: 'inter',
+				configurationVersion: 1,
+				requiredBy: ['entries.caption.font.fontId', 'entries.heading.font.fontId'],
+			},
+		]);
 	});
 
 	it('declares nothing for a Style Set with no typography', () => {
@@ -162,7 +193,9 @@ describe('reading a received Graphic Style Set Package manifest', () => {
 		}));
 		expect(read).toMatchObject({
 			outcome: 'rejected',
-			issues: [{ code: 'unsupported-package-schema-version' }],
+			issues: [
+				{ code: 'unsupported-package-schema-version' },
+			],
 		});
 	});
 
@@ -170,22 +203,37 @@ describe('reading a received Graphic Style Set Package manifest', () => {
 		const read = readGraphicStyleSetPackageManifest(manifest({ packageKind: 'skgraphic' }));
 		expect(read).toMatchObject({
 			outcome: 'rejected',
-			issues: [{ code: 'unsupported-package-artifact' }],
+			issues: [
+				{ code: 'unsupported-package-artifact' },
+			],
 		});
 	});
 
 	it('refuses a manifest carrying an unpublished revision, because a package only carries published entries', () => {
 		const read = readGraphicStyleSetPackageManifest(manifest({
-			styleSet: { ...manifest().styleSet, revision: 0 },
+			styleSet: {
+				...manifest().styleSet,
+				revision: 0,
+			},
 		}));
-		expect(read).toMatchObject({ outcome: 'rejected', issues: [{ code: 'invalid-package-manifest' }] });
+		expect(read).toMatchObject({
+			outcome: 'rejected',
+			issues: [
+				{ code: 'invalid-package-manifest' },
+			],
+		});
 	});
 
 	it('refuses a manifest that does not agree with its own totals', () => {
 		const read = readGraphicStyleSetPackageManifest(manifest({
 			totals: { archiveEntryCount: 5, expandedByteLength: 1024 },
 		}));
-		expect(read).toMatchObject({ outcome: 'rejected', issues: [{ code: 'invalid-package-manifest' }] });
+		expect(read).toMatchObject({
+			outcome: 'rejected',
+			issues: [
+				{ code: 'invalid-package-manifest' },
+			],
+		});
 	});
 });
 
@@ -228,7 +276,13 @@ describe('what installing a Graphic Style Set Package would do', () => {
 
 	it('offers a newer revision as an update the author confirms', () => {
 		const decided = graphicStyleSetPackageDisposition({
-			packaged: packaged({ revision: 4, entries: [BRAND, heading('inter', 72)] }),
+			packaged: packaged({
+				revision: 4,
+				entries: [
+					BRAND,
+					heading('inter', 72),
+				],
+			}),
 			installed: installed(),
 			resolution: 'preserve-identity',
 		});
@@ -252,7 +306,12 @@ describe('what installing a Graphic Style Set Package would do', () => {
 
 	it('treats the same revision with different content as a conflict rather than merging it', () => {
 		const decided = graphicStyleSetPackageDisposition({
-			packaged: packaged({ entries: [BRAND, heading('inter', 72)] }),
+			packaged: packaged({
+				entries: [
+					BRAND,
+					heading('inter', 72),
+				],
+			}),
 			installed: installed(),
 			resolution: 'preserve-identity',
 		});
@@ -294,12 +353,35 @@ describe('what installing a Graphic Style Set Package would do', () => {
 
 	it('gives every issue it raises a remediation, whatever the relation', () => {
 		const relations = [
-			{ packaged: packaged(), installed: undefined },
-			{ packaged: packaged({ name: 'Renamed' }), installed: installed() },
-			{ packaged: packaged({ revision: 2 }), installed: installed() },
-			{ packaged: packaged({ revision: 4 }), installed: installed({ hasUnpublishedChanges: true }) },
-			{ packaged: packaged({ entries: [BRAND, heading('inter', 72)] }), installed: installed() },
-			{ packaged: packaged(), installed: installed({ revision: 0, published: null }) },
+			{
+				packaged: packaged(),
+				installed: undefined,
+			},
+			{
+				packaged: packaged({ name: 'Renamed' }),
+				installed: installed(),
+			},
+			{
+				packaged: packaged({ revision: 2 }),
+				installed: installed(),
+			},
+			{
+				packaged: packaged({ revision: 4 }),
+				installed: installed({ hasUnpublishedChanges: true }),
+			},
+			{
+				packaged: packaged({
+					entries: [
+						BRAND,
+						heading('inter', 72),
+					],
+				}),
+				installed: installed(),
+			},
+			{
+				packaged: packaged(),
+				installed: installed({ revision: 0, published: null }),
+			},
 		] as const;
 
 		for (const relation of relations) {
@@ -310,9 +392,23 @@ describe('what installing a Graphic Style Set Package would do', () => {
 	});
 
 	it.each([
-		['a conflicting package', packaged({ entries: [BRAND, heading('inter', 72)] })],
-		['an older package', packaged({ revision: 2 })],
-		['an already-installed package', packaged()],
+		[
+			'a conflicting package',
+			packaged({
+				entries: [
+					BRAND,
+					heading('inter', 72),
+				],
+			}),
+		],
+		[
+			'an older package',
+			packaged({ revision: 2 }),
+		],
+		[
+			'an already-installed package',
+			packaged(),
+		],
 	])('offers %s an independent copy with a new identity instead', (_label, subject) => {
 		const decided = graphicStyleSetPackageDisposition({
 			packaged: subject,

@@ -56,12 +56,16 @@ describe('setArchetypeKeyCardsSchema', () => {
 	});
 
 	it('accepts up to 5 card IDs', () => {
-		const result = setArchetypeKeyCardsSchema.safeParse({ cardIds: [1, 2, 3, 4, 5] });
+		const result = setArchetypeKeyCardsSchema.safeParse({
+			cardIds: [1, 2, 3, 4, 5],
+		});
 		expect(result.success).toBe(true);
 	});
 
 	it('trims card names', () => {
-		const result = setArchetypeKeyCardsSchema.safeParse({ cardNames: ['  Lightning Bolt  '] });
+		const result = setArchetypeKeyCardsSchema.safeParse({
+			cardNames: ['  Lightning Bolt  '],
+		});
 		expect(result.success).toBe(true);
 		if (result.success)
 			expect(result.data.cardNames).toEqual(['Lightning Bolt']);

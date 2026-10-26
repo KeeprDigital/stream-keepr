@@ -46,7 +46,10 @@ function canonicalIdentity(digest: string) {
 }
 
 function canonicalMetadata(digest: string) {
-	return { contentType: 'image/png', custom: { sha256: digest } };
+	return {
+		contentType: 'image/png',
+		custom: { sha256: digest },
+	};
 }
 
 function boundedBytes(bytes: Uint8Array) {
@@ -278,11 +281,13 @@ describe('the Graphics Asset Library operational queues', () => {
 		expect(queueOf(overview, 'retired-asset')).toMatchObject({
 			totalCount: 1,
 			severity: 'info',
-			items: [{
-				subject: { kind: 'graphic-asset', id: retired.result!.assetId },
-				title: 'Retired backdrop',
-				actions: ['restore-graphic-asset'],
-			}],
+			items: [
+				{
+					subject: { kind: 'graphic-asset', id: retired.result!.assetId },
+					title: 'Retired backdrop',
+					actions: ['restore-graphic-asset'],
+				},
+			],
 		});
 		// Retirement is reversible and never expires, so it carries no deadline.
 		expect(queueOf(overview, 'retired-asset').items[0]!.deadline).toBeUndefined();
@@ -290,12 +295,14 @@ describe('the Graphics Asset Library operational queues', () => {
 		expect(queueOf(overview, 'trashed-asset')).toMatchObject({
 			totalCount: 1,
 			severity: 'warning',
-			items: [{
-				subject: { kind: 'graphic-asset', id: trashed.result!.assetId },
-				title: 'Trashed backdrop',
-				referenceCount: 0,
-				actions: ['restore-graphic-asset', 'purge-now'],
-			}],
+			items: [
+				{
+					subject: { kind: 'graphic-asset', id: trashed.result!.assetId },
+					title: 'Trashed backdrop',
+					referenceCount: 0,
+					actions: ['restore-graphic-asset', 'purge-now'],
+				},
+			],
 		});
 		expect(queueOf(overview, 'trashed-asset').items[0]!.deadline)
 			.toBe(new Date(trashedAt + 30 * DAY).toISOString());
@@ -692,7 +699,11 @@ describe('the operational queue inspector', () => {
 			lifecycle: { state: 'trashed', priorState: 'active' },
 		});
 		expect(inspection.detail).toMatchObject({
-			usage: [{ owner: { kind: 'screen', slot: 'layout.frame.backgroundImage' } }],
+			usage: [
+				{
+					owner: { kind: 'screen', slot: 'layout.frame.backgroundImage' },
+				},
+			],
 		});
 
 		// The ledger is filtered to this subject rather than to the newest rows
@@ -751,7 +762,11 @@ describe('the operational queue inspector', () => {
 		// Every pinned use stays intact and is named, because repair changes none
 		// of them.
 		expect(inspection.detail).toMatchObject({
-			discrepancy: { affectedUsage: [{ assetName: 'Unreachable backdrop' }] },
+			discrepancy: {
+				affectedUsage: [
+					{ assetName: 'Unreachable backdrop' },
+				],
+			},
 		});
 		expect(inspection.actions).toContain('repair-with-exact-bytes');
 		expect(inspection.evidence.map(entry => entry.category))

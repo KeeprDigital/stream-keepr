@@ -31,8 +31,14 @@ describe('feature match session command API', () => {
 
 		expect(session.sequence).toBe(1);
 		expect(session.currentState).toMatchObject({
-			player1: expect.objectContaining({ lifeTotal: expect.any(Number), gameWins: 0 }),
-			player2: expect.objectContaining({ lifeTotal: expect.any(Number), gameWins: 0 }),
+			player1: expect.objectContaining({
+				lifeTotal: expect.any(Number),
+				gameWins: 0,
+			}),
+			player2: expect.objectContaining({
+				lifeTotal: expect.any(Number),
+				gameWins: 0,
+			}),
 			clock: expect.objectContaining({ isRunning: false }),
 			currentGame: 1,
 			isComplete: false,
@@ -96,15 +102,47 @@ describe('feature match session command API', () => {
 			type: 'Batch',
 			payload: {
 				commands: [
-					{ type: 'SetLife', payload: { player: 'player1', lifeTotal: 12 } },
-					{ type: 'SetLife', payload: { player: 'player2', lifeTotal: 9 } },
-					{ type: 'SetCounters', payload: { player: 'player1', counters: [{ type: 'poison', value: 3 }] } },
-					{ type: 'SetCardsKept', payload: { player: 'player2', cardsKept: 6 } },
-					{ type: 'SetSideboardRevealed', payload: { player: 'player1', revealed: true } },
-					{ type: 'SetClock', payload: { targetMs: 30_000 } },
-					{ type: 'SetFirstPlayer', payload: { player: 'player2' } },
-					{ type: 'SetActivePlayer', payload: { player: 'player1' } },
-					{ type: 'SetTurnNumber', payload: { turnNumber: 4 } },
+					{
+						type: 'SetLife',
+						payload: { player: 'player1', lifeTotal: 12 },
+					},
+					{
+						type: 'SetLife',
+						payload: { player: 'player2', lifeTotal: 9 },
+					},
+					{
+						type: 'SetCounters',
+						payload: {
+							player: 'player1',
+							counters: [
+								{ type: 'poison', value: 3 },
+							],
+						},
+					},
+					{
+						type: 'SetCardsKept',
+						payload: { player: 'player2', cardsKept: 6 },
+					},
+					{
+						type: 'SetSideboardRevealed',
+						payload: { player: 'player1', revealed: true },
+					},
+					{
+						type: 'SetClock',
+						payload: { targetMs: 30_000 },
+					},
+					{
+						type: 'SetFirstPlayer',
+						payload: { player: 'player2' },
+					},
+					{
+						type: 'SetActivePlayer',
+						payload: { player: 'player1' },
+					},
+					{
+						type: 'SetTurnNumber',
+						payload: { turnNumber: 4 },
+					},
 				],
 			},
 			baseSequence,
@@ -112,7 +150,13 @@ describe('feature match session command API', () => {
 
 		expect(result.sequence).toBe(baseSequence + 1);
 		expect(result.currentState).toMatchObject({
-			player1: expect.objectContaining({ lifeTotal: 12, counters: [{ type: 'poison', value: 3 }], sideboardRevealed: true }),
+			player1: expect.objectContaining({
+				lifeTotal: 12,
+				counters: [
+					{ type: 'poison', value: 3 },
+				],
+				sideboardRevealed: true,
+			}),
 			player2: expect.objectContaining({ lifeTotal: 9, cardsKept: 6 }),
 			firstPlayer: 'player2',
 			activePlayer: 'player1',
@@ -144,8 +188,14 @@ describe('feature match session command API', () => {
 					type: 'Batch',
 					payload: {
 						commands: [
-							{ type: 'SetLife', payload: { player: 'player1', lifeTotal: 3 } },
-							{ type: 'SetTurnNumber', payload: { turnNumber: 9 } },
+							{
+								type: 'SetLife',
+								payload: { player: 'player1', lifeTotal: 3 },
+							},
+							{
+								type: 'SetTurnNumber',
+								payload: { turnNumber: 9 },
+							},
 						],
 					},
 					baseSequence: staleBaseSequence,

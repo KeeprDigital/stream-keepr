@@ -53,7 +53,10 @@ export function useStoreHelpers() {
 		}
 
 		const original = structuredClone(toRaw(items.value[index]!));
-		items.value[index] = { ...items.value[index]!, ...updates };
+		items.value[index] = {
+			...items.value[index]!,
+			...updates,
+		};
 
 		return executeAction(
 			async () => {
@@ -61,8 +64,11 @@ export function useStoreHelpers() {
 				if (flight.stale)
 					return updated;
 				const idx = items.value.findIndex(item => item.id === id);
-				if (admit && !admit(updated))
-					return idx === -1 ? updated : items.value[idx]!;
+				if (admit && !admit(updated)) {
+					return idx === -1
+						? updated
+						: items.value[idx]!;
+				}
 				if (idx !== -1)
 					items.value[idx] = updated;
 				onSuccess?.();

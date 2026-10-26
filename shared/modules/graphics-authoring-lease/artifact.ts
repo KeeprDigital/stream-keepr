@@ -19,7 +19,10 @@ export interface GraphicsAuthoringArtifactRef {
 
 /** The complete graphics Edit workspace of one Screen. */
 export function screenEditWorkspaceArtifact(screenId: number): GraphicsAuthoringArtifactRef {
-	return { kind: 'screen-edit-workspace', id: String(screenId) };
+	return {
+		kind: 'screen-edit-workspace',
+		id: String(screenId),
+	};
 }
 
 /** One reusable graphics Template in a template library. */

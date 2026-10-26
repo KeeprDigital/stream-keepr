@@ -17,17 +17,26 @@ const mockUpdate = vi.fn(() => ({ set: mockSet }));
 // assertion on its key.
 vi.stubGlobal('useStorage', vi.fn((base?: string) => base === 'kv'
 	? mockKv
-	: { get: vi.fn(), set: vi.fn(), del: vi.fn() }));
+	: {
+			get: vi.fn(),
+			set: vi.fn(),
+			del: vi.fn(),
+		}));
 vi.mock('~~/server/db', () => ({
 	db: {
 		update: mockUpdate,
-		query: { screens: { findFirst: mockFindFirst } },
+		query: {
+			screens: { findFirst: mockFindFirst },
+		},
 	},
 }));
 vi.mock('drizzle-orm', () => ({
 	and: (...conditions: unknown[]) => ({ and: conditions }),
 	eq: (field: unknown, value: unknown) => ({ field, value }),
-	sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings: [...strings], values }),
+	sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({
+		strings: [...strings],
+		values,
+	}),
 }));
 vi.mock('~~/server/db/schema', () => ({
 	screens: {
@@ -51,7 +60,9 @@ describe('cardService', () => {
 		mockKv.get.mockReset();
 		mockKv.set.mockReset();
 		mockKv.del.mockReset();
-		mockReturning.mockResolvedValue([{ revision: 4 }]);
+		mockReturning.mockResolvedValue([
+			{ revision: 4 },
+		]);
 		mockFindFirst.mockResolvedValue({ activeCard: null, activeCardVersion: 0 });
 	});
 
@@ -63,8 +74,18 @@ describe('cardService', () => {
 				set: 'alpha',
 				layout: 'normal',
 				imageData: { front: null, back: null },
-				orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
-				displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
+				orientationData: {
+					flipable: false,
+					turnable: false,
+					rotateable: false,
+					counterRotateable: false,
+				},
+				displayData: {
+					flipped: false,
+					rotated: false,
+					counterRotated: false,
+					turnedOver: false,
+				},
 			};
 
 			// The save answers the Card revision it committed (#734).
@@ -72,7 +93,10 @@ describe('cardService', () => {
 
 			expect(mockKv.set).toHaveBeenCalledWith(
 				'event:1:screen:2:card',
-				expect.objectContaining({ id: 'card-1', savedAt: expect.any(Number) }),
+				expect.objectContaining({
+					id: 'card-1',
+					savedAt: expect.any(Number),
+				}),
 			);
 			expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({
 				activeCard: expect.objectContaining({ id: 'card-1' }),
@@ -90,8 +114,18 @@ describe('cardService', () => {
 				set: 'alpha',
 				layout: 'normal',
 				imageData: { front: null, back: null },
-				orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
-				displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
+				orientationData: {
+					flipable: false,
+					turnable: false,
+					rotateable: false,
+					counterRotateable: false,
+				},
+				displayData: {
+					flipped: false,
+					rotated: false,
+					counterRotated: false,
+					turnedOver: false,
+				},
 			};
 
 			await expect(cardService().setScreenCard(1, 2, cardData as any)).resolves.toBe(4);
@@ -109,8 +143,18 @@ describe('cardService', () => {
 				set: 'alpha',
 				layout: 'normal',
 				imageData: { front: null, back: null },
-				orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
-				displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
+				orientationData: {
+					flipable: false,
+					turnable: false,
+					rotateable: false,
+					counterRotateable: false,
+				},
+				displayData: {
+					flipped: false,
+					rotated: false,
+					counterRotated: false,
+					turnedOver: false,
+				},
 			} as any)).rejects.toThrow('Screen not found');
 			expect(mockKv.set).not.toHaveBeenCalled();
 		});

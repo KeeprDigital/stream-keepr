@@ -37,7 +37,15 @@ const config = ref<any>({
 });
 
 const pageData = ref<any[]>([
-	{ id: 1, name: 'Mono Red', count: 12, metaShare: 25, winRate: 61.5, avgPosition: 3.2, colors: 'R' },
+	{
+		id: 1,
+		name: 'Mono Red',
+		count: 12,
+		metaShare: 25,
+		winRate: 61.5,
+		avgPosition: 3.2,
+		colors: 'R',
+	},
 ]);
 
 const chartBars = ref<MetagameChartBar[]>([]);
@@ -52,7 +60,9 @@ mockNuxtImport('useMetagameModeData', () => () => ({
 	error: ref<string | null>(null),
 	isEmpty: computed(() => false),
 	emptyMessage: computed(() => 'No metagame data available'),
-	headerText: computed(() => config.value.viewMode === 'cards' ? 'Most Played Cards' : 'Full Field Metagame'),
+	headerText: computed(() => config.value.viewMode === 'cards'
+		? 'Most Played Cards'
+		: 'Full Field Metagame'),
 	pageData: computed(() => pageData.value),
 	chartBars: computed(() => chartBars.value),
 	currentPage: computed(() => 1),
@@ -123,7 +133,16 @@ describe('screenMetagameDisplay', () => {
 			],
 		};
 		pageData.value = [
-			{ id: 1, name: 'Mono Red', count: 12, metaShare: 25, winRate: 61.5, avgPosition: 3.2, colors: 'R', conversionRate: 37.5 },
+			{
+				id: 1,
+				name: 'Mono Red',
+				count: 12,
+				metaShare: 25,
+				winRate: 61.5,
+				avgPosition: 3.2,
+				colors: 'R',
+				conversionRate: 37.5,
+			},
 		];
 		chartBars.value = [];
 	});
@@ -153,8 +172,16 @@ describe('screenMetagameDisplay', () => {
 	});
 
 	it('shows an absent Conversion Rate as a dash', async () => {
-		config.value = { ...config.value, archetypeColumns: [{ key: 'archetype', visible: true }, { key: 'conversionRate', visible: true }] };
-		pageData.value = [{ ...pageData.value[0], conversionRate: null }];
+		config.value = {
+			...config.value,
+			archetypeColumns: [
+				{ key: 'archetype', visible: true },
+				{ key: 'conversionRate', visible: true },
+			],
+		};
+		pageData.value = [
+			{ ...pageData.value[0], conversionRate: null },
+		];
 
 		const wrapper = await mountComponent();
 
@@ -164,14 +191,21 @@ describe('screenMetagameDisplay', () => {
 	it('renders a stored column list saved before Conversion Rate existed unchanged', async () => {
 		const wrapper = await mountComponent();
 
-		expect(wrapper.findAll('.metagame-header-cell').map(cell => cell.text())).toEqual(['Archetype', 'Count', 'Share', 'Win Rate']);
+		expect(wrapper.findAll('.metagame-header-cell').map(cell => cell.text())).toEqual([
+			'Archetype',
+			'Count',
+			'Share',
+			'Win Rate',
+		]);
 	});
 
 	it('renders the colors column when it is visible', async () => {
 		config.value = {
 			...config.value,
 			archetypeColumns: config.value.archetypeColumns.map((column: any) =>
-				column.key === 'colors' ? { ...column, visible: true } : column,
+				column.key === 'colors'
+					? { ...column, visible: true }
+					: column,
 			),
 		};
 
@@ -185,9 +219,30 @@ describe('screenMetagameDisplay', () => {
 		beforeEach(() => {
 			config.value = { ...config.value, viewMode: 'chart' };
 			chartBars.value = [
-				{ id: 4, name: 'Boros Energy', colors: 'RW', metaShare: 50, length: 1, colorSlot: 4 },
-				{ id: 9, name: 'Eldrazi Ramp', colors: null, metaShare: 33.33, length: 0.6666, colorSlot: 1 },
-				{ id: -1, name: 'Other', colors: null, metaShare: 16.67, length: 0.3334, colorSlot: null },
+				{
+					id: 4,
+					name: 'Boros Energy',
+					colors: 'RW',
+					metaShare: 50,
+					length: 1,
+					colorSlot: 4,
+				},
+				{
+					id: 9,
+					name: 'Eldrazi Ramp',
+					colors: null,
+					metaShare: 33.33,
+					length: 0.6666,
+					colorSlot: 1,
+				},
+				{
+					id: -1,
+					name: 'Other',
+					colors: null,
+					metaShare: 16.67,
+					length: 0.3334,
+					colorSlot: null,
+				},
 			];
 		});
 

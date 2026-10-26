@@ -11,7 +11,9 @@ const mockLoadByEventId = vi.fn();
 const mockFindByName = vi.fn();
 const mockFindByNameAndColors = vi.fn();
 const mockSetKeyCards = vi.fn().mockResolvedValue([]);
-const mockToast = { add: vi.fn() };
+const mockToast = {
+	add: vi.fn(),
+};
 
 const mockArchetypeStore = reactive({
 	archetypes: [] as any[],
@@ -33,7 +35,9 @@ mockNuxtImport('usePlayerDeckStore', () => () => ({ reviewDeck: mockReviewDeck }
 mockNuxtImport('useToast', () => () => mockToast);
 
 // ── Mock $fetch for key card PATCH ──
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn().mockResolvedValue({}) }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn().mockResolvedValue({}),
+}));
 mockNuxtImport('$fetch', () => mockFetch);
 
 // ── Helpers ──
@@ -56,7 +60,9 @@ function makeEntry(opts?: {
 			id: 1,
 			playerId: opts?.playerId ?? 1,
 			archetypeId: opts?.archetypeId ?? null,
-			reviewedAt: opts?.deckReviewed ? new Date() : null,
+			reviewedAt: opts?.deckReviewed
+				? new Date()
+				: null,
 		},
 		displayName: opts?.deckName ?? '',
 		displayColors: opts?.deckColors ?? null,
@@ -82,7 +88,15 @@ function makeDeck(cards: Array<{ name: string; cardId?: number }>): any {
 
 /** Create a CardResponse-like key card object */
 function makeKeyCard(name: string, id: number = 1): any {
-	return { id, name, game: 'mtg', scryfallId: null, cardType: 'Instant', colors: null, cmc: null };
+	return {
+		id,
+		name,
+		game: 'mtg',
+		scryfallId: null,
+		cardType: 'Instant',
+		colors: null,
+		cmc: null,
+	};
 }
 
 function makeArchetype(opts?: {
@@ -116,8 +130,16 @@ function makeOptions(
 		cancel: vi.fn(),
 	});
 	const archetypePlayerCounts = computed(() => archetypePlayerCountsOverride ?? new Map<number, number>());
-	const activeDeck = ref<any>(activeDeckCards ? makeDeck(activeDeckCards) : null);
-	return { currentEntry, activeDeck, eventId, prepareAdvance, archetypePlayerCounts };
+	const activeDeck = ref<any>(activeDeckCards
+		? makeDeck(activeDeckCards)
+		: null);
+	return {
+		currentEntry,
+		activeDeck,
+		eventId,
+		prepareAdvance,
+		archetypePlayerCounts,
+	};
 }
 
 // ── Tests ──
@@ -130,7 +152,12 @@ describe('useArchetypeAssignment', () => {
 		mockFindByName.mockReturnValue(undefined);
 		mockFindByNameAndColors.mockReturnValue(undefined);
 		mockReviewDeck.mockImplementation(async (_eventId, playerId, deckId, archetypeId) => ({
-			deck: { id: deckId, playerId, archetypeId, reviewedAt: new Date() },
+			deck: {
+				id: deckId,
+				playerId,
+				archetypeId,
+				reviewedAt: new Date(),
+			},
 			player: null,
 		}));
 		mockCreateArchetype.mockResolvedValue(undefined);
@@ -145,7 +172,13 @@ describe('useArchetypeAssignment', () => {
 	describe('acceptName with existing archetype', () => {
 		it('assigns and advances when archetype exists and no key card changes', async () => {
 			const advance = vi.fn();
-			const existing = makeArchetype({ id: 5, name: 'Control', keyCards: [makeKeyCard('Counterspell', 1)] });
+			const existing = makeArchetype({
+				id: 5,
+				name: 'Control',
+				keyCards: [
+					makeKeyCard('Counterspell', 1),
+				],
+			});
 			mockFindByName.mockReturnValue(existing);
 			mockFindByNameAndColors.mockReturnValue(existing);
 
@@ -161,11 +194,19 @@ describe('useArchetypeAssignment', () => {
 
 		it('calls PATCH key cards and assigns when key cards changed', async () => {
 			const advance = vi.fn();
-			const existing = makeArchetype({ id: 5, name: 'Control', keyCards: [makeKeyCard('Counterspell', 1)] });
+			const existing = makeArchetype({
+				id: 5,
+				name: 'Control',
+				keyCards: [
+					makeKeyCard('Counterspell', 1),
+				],
+			});
 			mockFindByName.mockReturnValue(existing);
 			mockFindByNameAndColors.mockReturnValue(existing);
 
-			const opts = makeOptions(makeEntry(), advance, undefined, [{ name: 'Wrath of God', cardId: 2 }]);
+			const opts = makeOptions(makeEntry(), advance, undefined, [
+				{ name: 'Wrath of God', cardId: 2 },
+			]);
 			const { nameInput, selectedKeyCards, acceptName } = useArchetypeAssignment(opts);
 			nameInput.value = 'Control';
 			selectedKeyCards.value = new Set(['Wrath of God']);
@@ -187,18 +228,24 @@ describe('useArchetypeAssignment', () => {
 				id: 8,
 				name: 'Control',
 				colors: 'WU',
-				keyCards: [makeKeyCard('Counterspell', 1)],
+				keyCards: [
+					makeKeyCard('Counterspell', 1),
+				],
 			});
 			const updated = makeArchetype({
 				id: 8,
 				name: 'Control',
 				colors: 'UB',
-				keyCards: [makeKeyCard('Counterspell', 1)],
+				keyCards: [
+					makeKeyCard('Counterspell', 1),
+				],
 			});
 			mockFindByName.mockReturnValue(existing);
 			mockUpdateArchetype.mockResolvedValue(updated);
 
-			const opts = makeOptions(makeEntry({ playerId: 7, archetypeId: null }), advance, undefined, [{ name: 'Sheoldred, the Apocalypse', cardId: 2 }]);
+			const opts = makeOptions(makeEntry({ playerId: 7, archetypeId: null }), advance, undefined, [
+				{ name: 'Sheoldred, the Apocalypse', cardId: 2 },
+			]);
 			const { nameInput, colorsInput, selectedKeyCards, acceptName } = useArchetypeAssignment(opts);
 			nameInput.value = 'Control';
 			colorsInput.value = ['U', 'B'];
@@ -241,7 +288,15 @@ describe('useArchetypeAssignment', () => {
 			mockFindByNameAndColors.mockReturnValue(existing);
 			mockReviewDeck.mockImplementation(async () => {
 				savingValues.push(true); // saving should be true here
-				return { deck: { id: 1, playerId: 1, archetypeId: 1, reviewedAt: new Date() }, player: null };
+				return {
+					deck: {
+						id: 1,
+						playerId: 1,
+						archetypeId: 1,
+						reviewedAt: new Date(),
+					},
+					player: null,
+				};
 			});
 
 			const opts = makeOptions();
@@ -316,9 +371,18 @@ describe('useArchetypeAssignment', () => {
 			const currentEntry = computed(() => null as any);
 			const eventId = computed(() => 1 as number | null);
 			const advance = vi.fn() as () => void;
-			const prepareAdvance = () => ({ commit: advance, cancel: vi.fn() });
+			const prepareAdvance = () => ({
+				commit: advance,
+				cancel: vi.fn(),
+			});
 			const archetypePlayerCounts = computed(() => new Map<number, number>());
-			const { isEditMode } = useArchetypeAssignment({ currentEntry, activeDeck: ref(null), eventId, prepareAdvance, archetypePlayerCounts });
+			const { isEditMode } = useArchetypeAssignment({
+				currentEntry,
+				activeDeck: ref(null),
+				eventId,
+				prepareAdvance,
+				archetypePlayerCounts,
+			});
 			expect(isEditMode.value).toBe(false);
 		});
 	});
@@ -357,7 +421,12 @@ describe('useArchetypeAssignment', () => {
 		});
 
 		it('returns \'Reassign\' in edit mode with no key card changes', () => {
-			const archetype = makeArchetype({ name: 'Control', keyCards: [makeKeyCard('Counterspell', 1)] });
+			const archetype = makeArchetype({
+				name: 'Control',
+				keyCards: [
+					makeKeyCard('Counterspell', 1),
+				],
+			});
 			mockFindByName.mockReturnValue(archetype);
 			mockFindByNameAndColors.mockReturnValue(archetype);
 			const opts = makeOptions(makeEntry({ archetypeId: 5, deckReviewed: true }));
@@ -368,7 +437,12 @@ describe('useArchetypeAssignment', () => {
 		});
 
 		it('returns \'Update & Reassign\' in edit mode with key card changes', () => {
-			const archetype = makeArchetype({ name: 'Control', keyCards: [makeKeyCard('Counterspell', 1)] });
+			const archetype = makeArchetype({
+				name: 'Control',
+				keyCards: [
+					makeKeyCard('Counterspell', 1),
+				],
+			});
 			mockFindByName.mockReturnValue(archetype);
 			mockFindByNameAndColors.mockReturnValue(archetype);
 			const opts = makeOptions(makeEntry({ archetypeId: 5, deckReviewed: true }));

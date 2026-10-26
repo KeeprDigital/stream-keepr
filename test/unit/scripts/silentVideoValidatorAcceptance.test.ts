@@ -27,14 +27,24 @@ const ENV = {
 
 const INSTALLATION = {
 	app: {
-		routes: [{ pattern: 'stream.keepr.digital', custom_domain: true }],
-		r2_buckets: [{ binding: 'GRAPHICS_ASSET_STAGING', bucket_name: BUCKET }],
-		services: [{ binding: 'SILENT_VIDEO_PLAYBACK_VALIDATOR', service: 'stream-silent-video-validator' }],
+		routes: [
+			{ pattern: 'stream.keepr.digital', custom_domain: true },
+		],
+		r2_buckets: [
+			{ binding: 'GRAPHICS_ASSET_STAGING', bucket_name: BUCKET },
+		],
+		services: [
+			{ binding: 'SILENT_VIDEO_PLAYBACK_VALIDATOR', service: 'stream-silent-video-validator' },
+		],
 	},
 	validator: {
 		name: 'stream-silent-video-validator',
-		r2_buckets: [{ binding: 'GRAPHICS_ASSET_STAGING', bucket_name: BUCKET }],
-		workflows: [{ name: WORKFLOW, binding: 'SILENT_VIDEO_VALIDATION_WORKFLOW' }],
+		r2_buckets: [
+			{ binding: 'GRAPHICS_ASSET_STAGING', bucket_name: BUCKET },
+		],
+		workflows: [
+			{ name: WORKFLOW, binding: 'SILENT_VIDEO_VALIDATION_WORKFLOW' },
+		],
 	},
 	validatorConfigPath: '/repo/workers/silent-video-validator/wrangler.jsonc',
 };
@@ -65,7 +75,13 @@ function fakeCommands(options: FakeOptions = {}) {
 	const instances = new Map<string, object>();
 	let deleteFailures = options.failDeletes ?? 0;
 	const log = (op: string, target: { accountId: string; stagingBucket: string; workflow: string }, key?: string) =>
-		calls.push({ op, accountId: target.accountId, bucket: target.stagingBucket, workflow: target.workflow, key });
+		calls.push({
+			op,
+			accountId: target.accountId,
+			bucket: target.stagingBucket,
+			workflow: target.workflow,
+			key,
+		});
 
 	return {
 		calls,
@@ -116,7 +132,12 @@ function fakeCommands(options: FakeOptions = {}) {
 		},
 		async describeInstance({ target, id }: any) {
 			log('describe', target);
-			return options.neverSettle ? { status: 'Running' } : { status: 'Complete', output: instances.get(id) };
+			return options.neverSettle
+				? { status: 'Running' }
+				: {
+						status: 'Complete',
+						output: instances.get(id),
+					};
 		},
 	};
 }
@@ -168,10 +189,26 @@ function expectSafe(text: string) {
 
 describe('deployed validator acceptance: preflight', () => {
 	it.each([
-		['no account', { ...ENV, CLOUDFLARE_ACCOUNT_ID: undefined }, 'harness-precondition-unmet'],
-		['no acceptance URL', { ...ENV, STREAM_KEEPR_BROWSER_ACCEPTANCE_URL: undefined }, 'harness-precondition-unmet'],
-		['no operator', { ...ENV, STREAM_KEEPR_ACCEPTANCE_OPERATOR_PASSWORD: undefined }, 'harness-operator-unavailable'],
-		['an alternate URL', { ...ENV, STREAM_KEEPR_BROWSER_ACCEPTANCE_URL: 'https://staging.keepr.digital' }, 'harness-target-inconsistent'],
+		[
+			'no account',
+			{ ...ENV, CLOUDFLARE_ACCOUNT_ID: undefined },
+			'harness-precondition-unmet',
+		],
+		[
+			'no acceptance URL',
+			{ ...ENV, STREAM_KEEPR_BROWSER_ACCEPTANCE_URL: undefined },
+			'harness-precondition-unmet',
+		],
+		[
+			'no operator',
+			{ ...ENV, STREAM_KEEPR_ACCEPTANCE_OPERATOR_PASSWORD: undefined },
+			'harness-operator-unavailable',
+		],
+		[
+			'an alternate URL',
+			{ ...ENV, STREAM_KEEPR_BROWSER_ACCEPTANCE_URL: 'https://staging.keepr.digital' },
+			'harness-target-inconsistent',
+		],
 	])('touches nothing with %s', async (_, env, code) => {
 		const commands = fakeCommands();
 		const { exitCode, openSession } = await run(commands, { env });
@@ -293,7 +330,9 @@ describe('deployed validator acceptance: cleanup', () => {
 		// Idempotent: a second retry finds nothing and deletes nothing.
 		output = '';
 		const again = fakeCommands();
-		expect((await run(again, { flags: ['--deployed', '--cleanup'] })).exitCode).toBeUndefined();
+		expect((await run(again, {
+			flags: ['--deployed', '--cleanup'],
+		})).exitCode).toBeUndefined();
 		expect(mutations(again)).toEqual([]);
 		expect(output.trim()).toBe('silent-video-validator-v1 acceptance passed checks=1 cleaned=0');
 	});
@@ -307,12 +346,19 @@ describe('deployed validator acceptance: cleanup', () => {
 		// The source is gone; the poster the instance may still write is not forgotten.
 		expect(output).toContain('silent-video-validator-v1 harness-cleanup-incomplete remaining=1');
 		const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-		expect(manifest.objects).toEqual([{ key: expect.stringMatching(/^validation\/silent-video\//u), instance: expect.any(String) }]);
+		expect(manifest.objects).toEqual([
+			{
+				key: expect.stringMatching(/^validation\/silent-video\//u),
+				instance: expect.any(String),
+			},
+		]);
 		expectSafe(output);
 
 		output = '';
 		const settled = fakeCommands();
-		expect((await run(settled, { flags: ['--deployed', '--cleanup'] })).exitCode).toBeUndefined();
+		expect((await run(settled, {
+			flags: ['--deployed', '--cleanup'],
+		})).exitCode).toBeUndefined();
 		expect(output.trim()).toBe('silent-video-validator-v1 acceptance passed checks=1 cleaned=1');
 		expect(existsSync(manifestPath)).toBe(false);
 	});
@@ -333,7 +379,9 @@ describe('deployed validator acceptance: cleanup', () => {
 		await run(fakeCommands({ failDeletes: 2 }));
 		output = '';
 
-		const retried = await run(fakeCommands({ failDeletes: 1 }), { flags: ['--deployed', '--cleanup'] });
+		const retried = await run(fakeCommands({ failDeletes: 1 }), {
+			flags: ['--deployed', '--cleanup'],
+		});
 
 		expect(retried.exitCode).toBe(1);
 		expect(output).toContain('harness-cleanup-incomplete remaining=1');
@@ -346,7 +394,10 @@ describe('deployed validator acceptance: cleanup', () => {
 
 		const other = fakeCommands();
 		const retried = await run(other, {
-			env: { ...ENV, CLOUDFLARE_ACCOUNT_ID: 'f'.repeat(32) },
+			env: {
+				...ENV,
+				CLOUDFLARE_ACCOUNT_ID: 'f'.repeat(32),
+			},
 			flags: ['--deployed', '--cleanup'],
 		});
 

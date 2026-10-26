@@ -64,8 +64,12 @@ export function buildRemoveImportedStructureQueries(
 ): ImportedStructureRemoval {
 	const importedRound = and(eq(rounds.eventId, eventId), eq(rounds.externalSource, 'melee'));
 	const importedPhase = and(eq(phases.eventId, eventId), eq(phases.externalSource, 'melee'));
-	const scopedRounds = scope.kind === 'all' ? importedRound : and(importedRound, inJsonArray(rounds.id, scope.roundIds));
-	const scopedPhases = scope.kind === 'all' ? importedPhase : and(importedPhase, inJsonArray(phases.id, scope.phaseIds));
+	const scopedRounds = scope.kind === 'all'
+		? importedRound
+		: and(importedRound, inJsonArray(rounds.id, scope.roundIds));
+	const scopedPhases = scope.kind === 'all'
+		? importedPhase
+		: and(importedPhase, inJsonArray(phases.id, scope.phaseIds));
 	const scopedRoundIds = db.select({ id: rounds.id }).from(rounds).where(scopedRounds);
 	const now = new Date();
 
@@ -80,7 +84,12 @@ export function buildRemoveImportedStructureQueries(
 			sql`${playerRoundStandings.roundId} in ${scopedRoundIds}`,
 		)),
 		db.update(rounds)
-			.set({ externalId: null, externalSource: 'manual', lastSyncedAt: null, updatedAt: now })
+			.set({
+				externalId: null,
+				externalSource: 'manual',
+				lastSyncedAt: null,
+				updatedAt: now,
+			})
 			.where(and(scopedRounds, sql`exists (select 1 from ${matches} where ${matches.roundId} = ${rounds.id})`))
 			.returning({
 				id: rounds.id,

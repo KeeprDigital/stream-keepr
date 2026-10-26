@@ -140,7 +140,12 @@ describe('matches API', () => {
 	it('updates a match', async () => {
 		const updated = await $fetch(`/api/events/${eventId}/matches/${matchId}`, {
 			method: 'PATCH',
-			body: { tableNumber: 5, hasResult: true, player1GameWins: 2, player2GameWins: 1 },
+			body: {
+				tableNumber: 5,
+				hasResult: true,
+				player1GameWins: 2,
+				player2GameWins: 1,
+			},
 		});
 
 		expect(updated.id).toBe(matchId);

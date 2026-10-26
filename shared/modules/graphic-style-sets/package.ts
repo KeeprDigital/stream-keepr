@@ -80,7 +80,9 @@ export async function graphicStyleSetContentDigest(
 ): Promise<string> {
 	const bytes = new TextEncoder().encode(canonicalGraphicStyleSetJson(entries));
 	const digest = await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource);
-	return [...new Uint8Array(digest)]
+	return [
+		...new Uint8Array(digest),
+	]
 		.map(byte => byte.toString(16).padStart(2, '0'))
 		.join('');
 }
@@ -182,7 +184,9 @@ export function readGraphicStyleSetPackageManifest(
 ): ReadGraphicStyleSetPackageManifestOutcome {
 	const invalid = (message: string, subject?: string) => ({
 		outcome: 'rejected' as const,
-		issues: [{ code: 'invalid-package-manifest' as const, subject, message }],
+		issues: [
+			{ code: 'invalid-package-manifest' as const, subject, message },
+		],
 	});
 
 	if (!isPlainObject(value))
@@ -197,19 +201,23 @@ export function readGraphicStyleSetPackageManifest(
 	if (schemaVersion > GRAPHIC_STYLE_SET_PACKAGE_SCHEMA_VERSION) {
 		return {
 			outcome: 'rejected',
-			issues: [{
-				code: 'unsupported-package-schema-version',
-				message: `The package declares schema version ${schemaVersion}, which is newer than the version ${GRAPHIC_STYLE_SET_PACKAGE_SCHEMA_VERSION} this installation reads`,
-			}],
+			issues: [
+				{
+					code: 'unsupported-package-schema-version',
+					message: `The package declares schema version ${schemaVersion}, which is newer than the version ${GRAPHIC_STYLE_SET_PACKAGE_SCHEMA_VERSION} this installation reads`,
+				},
+			],
 		};
 	}
 	if (schemaVersion < GRAPHIC_STYLE_SET_PACKAGE_MINIMUM_MIGRATABLE_SCHEMA_VERSION) {
 		return {
 			outcome: 'rejected',
-			issues: [{
-				code: 'package-migration-unavailable',
-				message: `This installation cannot migrate a package from schema version ${schemaVersion}`,
-			}],
+			issues: [
+				{
+					code: 'package-migration-unavailable',
+					message: `This installation cannot migrate a package from schema version ${schemaVersion}`,
+				},
+			],
 		};
 	}
 
@@ -220,10 +228,12 @@ export function readGraphicStyleSetPackageManifest(
 	) {
 		return {
 			outcome: 'rejected',
-			issues: [{
-				code: 'unsupported-package-artifact',
-				message: 'The package does not declare a Graphic Style Set Package',
-			}],
+			issues: [
+				{
+					code: 'unsupported-package-artifact',
+					message: 'The package does not declare a Graphic Style Set Package',
+				},
+			],
 		};
 	}
 

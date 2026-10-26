@@ -30,16 +30,31 @@ describe('the Top Cut Bracket Screen Mode key migration', () => {
 				INSERT INTO screens (id, event_id, name, slug, current_mode, mode_configs, asset_capability_seed, asset_capability_digest)
 				VALUES (?, 1, ?, ?, ?, ?, ?, ?)
 			`,
-			args: [id, `Screen ${id}`, `screen-${id}`, currentMode, modeConfigs === null ? null : JSON.stringify(modeConfigs), `seed-${id}`, `digest-${id}`],
+			args: [
+				id,
+				`Screen ${id}`,
+				`screen-${id}`,
+				currentMode,
+				modeConfigs === null
+					? null
+					: JSON.stringify(modeConfigs),
+				`seed-${id}`,
+				`digest-${id}`,
+			],
 		});
 	}
 
 	async function readScreen(id: number) {
-		const result = await harness.client.execute({ sql: 'SELECT current_mode, mode_configs FROM screens WHERE id = ?', args: [id] });
+		const result = await harness.client.execute({
+			sql: 'SELECT current_mode, mode_configs FROM screens WHERE id = ?',
+			args: [id],
+		});
 		const row = result.rows[0]!;
 		return {
 			currentMode: row.current_mode,
-			modeConfigs: row.mode_configs === null ? null : JSON.parse(String(row.mode_configs)),
+			modeConfigs: row.mode_configs === null
+				? null
+				: JSON.parse(String(row.mode_configs)),
 		};
 	}
 
@@ -71,7 +86,15 @@ describe('the Top Cut Bracket Screen Mode key migration', () => {
 		harness = await createSqliteD1Harness({ throughMigration: '0002' });
 		await insertEvent();
 		await insertScreen(1, 'topCut', {
-			topCut: { phaseId: 4, showSeeds: true, showArchetypes: true, showHeader: false, backgroundLayers: [{ id: 'layer-1', type: 'color' }] },
+			topCut: {
+				phaseId: 4,
+				showSeeds: true,
+				showArchetypes: true,
+				showHeader: false,
+				backgroundLayers: [
+					{ id: 'layer-1', type: 'color' },
+				],
+			},
 			standings: { rowsPerPage: 8 },
 		});
 
@@ -80,7 +103,15 @@ describe('the Top Cut Bracket Screen Mode key migration', () => {
 		expect(await readScreen(1)).toEqual({
 			currentMode: 'top-cut',
 			modeConfigs: {
-				'top-cut': { phaseId: 4, showSeeds: true, showArchetypes: true, showHeader: false, backgroundLayers: [{ id: 'layer-1', type: 'color' }] },
+				'top-cut': {
+					phaseId: 4,
+					showSeeds: true,
+					showArchetypes: true,
+					showHeader: false,
+					backgroundLayers: [
+						{ id: 'layer-1', type: 'color' },
+					],
+				},
 				'standings': { rowsPerPage: 8 },
 			},
 		});
@@ -88,38 +119,67 @@ describe('the Top Cut Bracket Screen Mode key migration', () => {
 		// Read as every Top Cut Bracket rendering and the Screen Output read do.
 		const { currentMode, modeConfigs } = await readScreen(1);
 		expect(SCREEN_MODE_VALUES).toContain(currentMode);
-		expect(resolveScreenModeConfig(modeConfigs, 'top-cut')).toMatchObject({ phaseId: 4, showSeeds: true, showArchetypes: true, showHeader: false });
+		expect(resolveScreenModeConfig(modeConfigs, 'top-cut')).toMatchObject({
+			phaseId: 4,
+			showSeeds: true,
+			showArchetypes: true,
+			showHeader: false,
+		});
 	});
 
 	it('moves a Top Cut Bracket config held by a Screen in another mode, and leaves Screens without one alone', async () => {
 		harness = await createSqliteD1Harness({ throughMigration: '0002' });
 		await insertEvent();
-		await insertScreen(1, 'standings', { topCut: { phaseId: 4 } });
-		await insertScreen(2, 'top-cards', { 'top-cards': { columns: 4 } });
+		await insertScreen(1, 'standings', {
+			topCut: { phaseId: 4 },
+		});
+		await insertScreen(2, 'top-cards', {
+			'top-cards': { columns: 4 },
+		});
 		await insertScreen(3, 'background', null);
 
 		await harness.applyRemainingMigrations();
 
-		expect(await readScreen(1)).toEqual({ currentMode: 'standings', modeConfigs: { 'top-cut': { phaseId: 4 } } });
-		expect(await readScreen(2)).toEqual({ currentMode: 'top-cards', modeConfigs: { 'top-cards': { columns: 4 } } });
+		expect(await readScreen(1)).toEqual({
+			currentMode: 'standings',
+			modeConfigs: {
+				'top-cut': { phaseId: 4 },
+			},
+		});
+		expect(await readScreen(2)).toEqual({
+			currentMode: 'top-cards',
+			modeConfigs: {
+				'top-cards': { columns: 4 },
+			},
+		});
 		expect(await readScreen(3)).toEqual({ currentMode: 'background', modeConfigs: null });
 	});
 
 	it('keeps the top-cut config of a Screen holding both keys, as a Screen write does', async () => {
 		harness = await createSqliteD1Harness({ throughMigration: '0002' });
 		await insertEvent();
-		await insertScreen(1, 'topCut', { 'topCut': { phaseId: 4 }, 'top-cut': { phaseId: 5 } });
+		await insertScreen(1, 'topCut', {
+			'topCut': { phaseId: 4 },
+			'top-cut': { phaseId: 5 },
+		});
 
 		await harness.applyRemainingMigrations();
 
-		expect(await readScreen(1)).toEqual({ currentMode: 'top-cut', modeConfigs: { 'top-cut': { phaseId: 5 } } });
+		expect(await readScreen(1)).toEqual({
+			currentMode: 'top-cut',
+			modeConfigs: {
+				'top-cut': { phaseId: 5 },
+			},
+		});
 	});
 
 	it('re-roots a Screen\'s Top Cut Bracket Background Layer references, and only those', async () => {
 		harness = await createSqliteD1Harness({ throughMigration: '0002' });
 		await insertEvent();
 		await insertGraphicAsset();
-		await insertScreen(1, 'topCut', { topCut: { phaseId: 4 } });
+		await insertScreen(1, 'topCut', {
+			topCut: { phaseId: 4 },
+		});
 		await insertReference('top-cut-layer', 'screen', 'topCut.backgroundLayers.layer-1.source');
 		await insertReference('top-cards-layer', 'screen', 'top-cards.backgroundLayers.layer-2.source');
 		await insertReference('template-slot', 'broadcast-graphic-template', 'topCut.backgroundLayers.layer-3.source');

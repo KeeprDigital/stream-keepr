@@ -131,11 +131,17 @@ async function submit() {
 				// What the operator must know beyond the save itself: the kept
 				// structure the reset named, and a local refresh that failed.
 				const notices = [
-					...(localRefreshFailed ? ['Local synced data could not be refreshed. Reload this page before continuing.'] : []),
+					...(localRefreshFailed
+						? ['Local synced data could not be refreshed. Reload this page before continuing.']
+						: []),
 					...warnings,
 				];
 				return notices.length > 0
-					? { title: 'Melee configuration updated', description: notices.join(' · '), color: 'warning' }
+					? {
+							title: 'Melee configuration updated',
+							description: notices.join(' · '),
+							color: 'warning',
+						}
 					: { title: 'Success', description: 'Melee configuration updated', color: 'success' };
 			},
 			error: {

@@ -64,7 +64,9 @@ async function handleSave() {
 
 useEnterToSubmit(() => {
 	void handleSave();
-}, { disabled: () => saving.value || !hasChanges.value });
+}, {
+	disabled: () => saving.value || !hasChanges.value,
+});
 </script>
 
 <template>

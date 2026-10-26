@@ -119,7 +119,10 @@ function structurallySame(left: unknown, right: unknown): boolean {
 	}
 	if (typeof left !== 'object' || typeof right !== 'object' || left === null || right === null)
 		return false;
-	const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+	const keys = new Set([
+		...Object.keys(left),
+		...Object.keys(right),
+	]);
 	for (const key of keys) {
 		if (!structurallySame(
 			(left as Record<string, unknown>)[key],
@@ -193,12 +196,17 @@ export function projectSocialProfileRotation(
 		&& interruptedElapsed < transitionMs
 	) {
 		return {
-			...(fallback ? { current: fallback } : {}),
+			...(fallback
+				? { current: fallback }
+				: {}),
 			phase: { kind: 'transition', elapsedMs: interruptedElapsed, durationMs: transitionMs },
 		};
 	}
-	if (!fallback)
-		return { phase: { kind: 'static', elapsedMs: 0, durationMs: null } };
+	if (!fallback) {
+		return {
+			phase: { kind: 'static', elapsedMs: 0, durationMs: null },
+		};
+	}
 
 	const anchor = state.rotationAnchor;
 	const anchorIndex = anchor
@@ -299,9 +307,15 @@ export function projectSocialProfilePresentation(
 					...transitionAnchor.from,
 					{
 						values: rotation.current,
-						opacity: declaration.transition === 'crossfade' ? 0 : 1,
-						offsetX: slide?.x === undefined ? 0 : -slide.x,
-						offsetY: slide?.y === undefined ? 0 : -slide.y,
+						opacity: declaration.transition === 'crossfade'
+							? 0
+							: 1,
+						offsetX: slide?.x === undefined
+							? 0
+							: -slide.x,
+						offsetY: slide?.y === undefined
+							? 0
+							: -slide.y,
 					},
 				])
 			.slice(-MAX_SOCIAL_PROFILE_PRESENTATION_LAYERS);
@@ -338,7 +352,14 @@ export function projectSocialProfilePresentation(
 	if (rotation.phase.kind !== 'transition' || !rotation.outgoing || rotation.phase.durationMs === null) {
 		return {
 			phase: rotation.phase,
-			layers: [{ values: rotation.current, opacity: 1, offsetX: 0, offsetY: 0 }],
+			layers: [
+				{
+					values: rotation.current,
+					opacity: 1,
+					offsetX: 0,
+					offsetY: 0,
+				},
+			],
 		};
 	}
 
@@ -357,8 +378,12 @@ export function projectSocialProfilePresentation(
 				{
 					values: rotation.current,
 					opacity: 1,
-					offsetX: slide.x === 0 ? 0 : -slide.x * (1 - progress),
-					offsetY: slide.y === 0 ? 0 : -slide.y * (1 - progress),
+					offsetX: slide.x === 0
+						? 0
+						: -slide.x * (1 - progress),
+					offsetY: slide.y === 0
+						? 0
+						: -slide.y * (1 - progress),
 				},
 			],
 		};
@@ -366,8 +391,18 @@ export function projectSocialProfilePresentation(
 	return {
 		phase: rotation.phase,
 		layers: [
-			{ values: rotation.outgoing, opacity: 1 - progress, offsetX: 0, offsetY: 0 },
-			{ values: rotation.current, opacity: progress, offsetX: 0, offsetY: 0 },
+			{
+				values: rotation.outgoing,
+				opacity: 1 - progress,
+				offsetX: 0,
+				offsetY: 0,
+			},
+			{
+				values: rotation.current,
+				opacity: progress,
+				offsetX: 0,
+				offsetY: 0,
+			},
 		],
 	};
 }
@@ -382,7 +417,11 @@ function declaredSocialProfileProjections(
 	);
 	return Object.entries(projections).flatMap(([projectionKey, projection]) => {
 		const declaration = declarations.get(projectionKey);
-		return declaration ? [[declaration, projection]] : [];
+		return declaration
+			? [
+					[declaration, projection],
+				]
+			: [];
 	});
 }
 
@@ -412,7 +451,11 @@ export function socialProfileProjectionValues(
 			onAir: state.playout[graphic.id]?.onAir === true,
 			now,
 		}).current;
-		return current ? [[declaration.key, current]] : [];
+		return current
+			? [
+					[declaration.key, current],
+				]
+			: [];
 	}));
 }
 
@@ -423,7 +466,9 @@ function talentIdOf(talent: GraphicBindingTalent, data: GraphicBindingDataSet): 
 
 	const entry = Object.entries(data.talents).find(([, candidate]) => candidate === talent);
 	const id = Number(entry?.[0]);
-	return Number.isFinite(id) ? id : undefined;
+	return Number.isFinite(id)
+		? id
+		: undefined;
 }
 
 /**
@@ -446,7 +491,9 @@ export function resolveSocialProfileProjectionAcceptances(
 		const talent = source?.kind === 'talent' && source.entity !== undefined
 			? source.entity as GraphicBindingTalent
 			: undefined;
-		const talentId = talent ? talentIdOf(talent, data) : undefined;
+		const talentId = talent
+			? talentIdOf(talent, data)
+			: undefined;
 		const acceptedProfiles = talent && talentId !== undefined
 			? SUPPORTED_SOCIAL_NETWORKS.flatMap((network) => {
 					const handle = talent.socialProfiles[network.key];
@@ -455,18 +502,22 @@ export function resolveSocialProfileProjectionAcceptances(
 					// whole session incompatible, and the next Take re-commit the same tuple.
 					return handle === undefined || handle.length === 0 || handle.length > MAX_SOCIAL_PROFILE_HANDLE_LENGTH
 						? []
-						: [{
-							network: network.key,
-							networkLabel: network.label,
-							handle,
-							profileUrl: canonicalSocialProfileUrl(network.key, handle),
-						} satisfies SocialProfileProjectionValue];
+						: [
+{
+	network: network.key,
+	networkLabel: network.label,
+	handle,
+	profileUrl: canonicalSocialProfileUrl(network.key, handle),
+} satisfies SocialProfileProjectionValue,
+							];
 				})
 			: [];
 
 		accepted[projection.key] = {
 			...(talent && talentId !== undefined
-				? { talent: { id: talentId, name: talent.name } }
+				? {
+						talent: { id: talentId, name: talent.name },
+					}
 				: {}),
 			acceptedProfiles,
 		};

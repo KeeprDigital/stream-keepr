@@ -180,11 +180,27 @@ const OVERFLOW_POLICY_OPTIONS = [
 	{ label: 'Ellipsis', value: 'ellipsis' },
 	{ label: 'Shrink then ellipsis', value: 'shrink' },
 ] satisfies Array<{ label: string; value: typeof TEXT_OVERFLOW_POLICY_VALUES[number] }>;
-const TEXT_ALIGN_OPTIONS = GRAPHIC_TEXT_ALIGN_VALUES.map(value => ({ label: optionLabel(value), value, icon: `i-lucide-align-${value}` }));
-const PLAYER_LIFE_ANIMATION_OPTIONS = PLAYER_LIFE_ANIMATION_VALUES.map(value => ({ label: optionLabel(value), value }));
-const GAME_WINS_DISPLAY_MODE_OPTIONS = GAME_WINS_DISPLAY_MODE_VALUES.map(value => ({ label: optionLabel(value), value }));
-const GAME_WINS_BOX_ORIENTATION_OPTIONS = GAME_WINS_BOX_ORIENTATION_VALUES.map(value => ({ label: optionLabel(value), value }));
-const DECK_LIST_VIEW_OPTIONS = DECK_LIST_VIEW_VALUES.map(value => ({ label: optionLabel(value), value }));
+const TEXT_ALIGN_OPTIONS = GRAPHIC_TEXT_ALIGN_VALUES.map(value => ({
+	label: optionLabel(value),
+	value,
+	icon: `i-lucide-align-${value}`,
+}));
+const PLAYER_LIFE_ANIMATION_OPTIONS = PLAYER_LIFE_ANIMATION_VALUES.map(value => ({
+	label: optionLabel(value),
+	value,
+}));
+const GAME_WINS_DISPLAY_MODE_OPTIONS = GAME_WINS_DISPLAY_MODE_VALUES.map(value => ({
+	label: optionLabel(value),
+	value,
+}));
+const GAME_WINS_BOX_ORIENTATION_OPTIONS = GAME_WINS_BOX_ORIENTATION_VALUES.map(value => ({
+	label: optionLabel(value),
+	value,
+}));
+const DECK_LIST_VIEW_OPTIONS = DECK_LIST_VIEW_VALUES.map(value => ({
+	label: optionLabel(value),
+	value,
+}));
 const SOCIAL_NETWORK_OPTIONS = SUPPORTED_SOCIAL_NETWORKS.map(network => ({
 	label: network.label,
 	value: network.key,
@@ -196,9 +212,19 @@ const SOCIAL_NETWORK_ICON_SOURCE_OPTIONS = [
 /** Icon-only, named for assistive technology. */
 const TEXT_ALIGN_ITEMS = TEXT_ALIGN_OPTIONS.map(option => ({ value: option.value, icon: option.icon, ariaLabel: `Align ${option.value}` }));
 const ARRANGEMENT_ICONS = { row: 'i-lucide-columns-3', column: 'i-lucide-rows-3', canvas: 'i-lucide-move' } as const;
-const ARRANGEMENT_OPTIONS = GRAPHIC_GROUP_ARRANGEMENT_VALUES.map(value => ({ label: optionLabel(value), value, icon: ARRANGEMENT_ICONS[value] }));
-const ALIGN_OPTIONS = GRAPHIC_GROUP_ALIGN_VALUES.map(value => ({ label: optionLabel(value), value }));
-const JUSTIFY_OPTIONS = GRAPHIC_GROUP_JUSTIFY_VALUES.map(value => ({ label: optionLabel(value), value }));
+const ARRANGEMENT_OPTIONS = GRAPHIC_GROUP_ARRANGEMENT_VALUES.map(value => ({
+	label: optionLabel(value),
+	value,
+	icon: ARRANGEMENT_ICONS[value],
+}));
+const ALIGN_OPTIONS = GRAPHIC_GROUP_ALIGN_VALUES.map(value => ({
+	label: optionLabel(value),
+	value,
+}));
+const JUSTIFY_OPTIONS = GRAPHIC_GROUP_JUSTIFY_VALUES.map(value => ({
+	label: optionLabel(value),
+	value,
+}));
 const SIZING_MODE_OPTIONS = [
 	{ label: 'Fixed', value: 'fixed' },
 	{ label: 'Weighted fill', value: 'fill' },
@@ -240,18 +266,28 @@ const header = computed(() => {
 	};
 });
 
-const selectedItem = computed(() => selection.value.kind === 'item' ? selection.value.item : null);
+const selectedItem = computed(() => selection.value.kind === 'item'
+	? selection.value.item
+	: null);
 const parentGroup = computed<GraphicGroupItemConfig | null>(() =>
-	selection.value.kind === 'item' ? selection.value.group ?? null : null,
+	selection.value.kind === 'item'
+		? selection.value.group ?? null
+		: null,
 );
 const selectedTextItem = computed<TextGraphicItemConfig | null>(() =>
-	selectedItem.value?.type === 'text' ? selectedItem.value : null,
+	selectedItem.value?.type === 'text'
+		? selectedItem.value
+		: null,
 );
 const selectedMediaItem = computed<MediaGraphicItemConfig | null>(() =>
-	selectedItem.value?.type === 'media' ? selectedItem.value : null,
+	selectedItem.value?.type === 'media'
+		? selectedItem.value
+		: null,
 );
 const selectedSocialNetworkIcon = computed<SocialNetworkIconGraphicItemConfig | null>(() =>
-	selectedItem.value?.type === 'social-network-icon' ? selectedItem.value : null,
+	selectedItem.value?.type === 'social-network-icon'
+		? selectedItem.value
+		: null,
 );
 const socialProfileProjectionOptions = computed(() => {
 	const current = selection.value;
@@ -275,20 +311,31 @@ function updateSocialNetworkIconSource(source: 'static' | 'projection') {
 		return;
 	}
 	const projectionKey = socialProfileProjectionOptions.value[0]?.value;
-	if (projectionKey)
-		editItem(patchGraphicItem, { network: { projectionKey } });
+	if (projectionKey) {
+		editItem(patchGraphicItem, {
+			network: { projectionKey },
+		});
+	}
 }
 const selectedGroup = computed<GraphicGroupItemConfig | null>(() =>
-	selectedItem.value?.type === 'group' ? selectedItem.value : null,
+	selectedItem.value?.type === 'group'
+		? selectedItem.value
+		: null,
 );
 const selectedPlayerLife = computed<PlayerLifeGraphicItemConfig | null>(() =>
-	selectedItem.value?.type === 'player-life' ? selectedItem.value : null,
+	selectedItem.value?.type === 'player-life'
+		? selectedItem.value
+		: null,
 );
 const selectedGameWins = computed<GameWinsGraphicItemConfig | null>(() =>
-	selectedItem.value?.type === 'game-wins' ? selectedItem.value : null,
+	selectedItem.value?.type === 'game-wins'
+		? selectedItem.value
+		: null,
 );
 const selectedDeckList = computed<DeckListGraphicItemConfig | null>(() =>
-	selectedItem.value?.type === 'deck-list' ? selectedItem.value : null,
+	selectedItem.value?.type === 'deck-list'
+		? selectedItem.value
+		: null,
 );
 
 /**
@@ -298,7 +345,9 @@ const selectedDeckList = computed<DeckListGraphicItemConfig | null>(() =>
  * Graphic Style Set typography slot reads the same declaration.
  */
 const selectedTypography = computed<GraphicTypography | null>(() =>
-	selectedItem.value ? paintedGraphicTypography(selectedItem.value) : null);
+	selectedItem.value
+		? paintedGraphicTypography(selectedItem.value)
+		: null);
 
 /** The Text Overflow Policy of a selection whose Definition says its text can outgrow its bounds. */
 const selectedTextOverflow = computed(() => {
@@ -319,7 +368,9 @@ const selectedTextOverflow = computed(() => {
  */
 const selectedPlayerSideItem = computed<GraphicPlayerSideItem | null>(() => {
 	const item = selectedItem.value;
-	return item && ownsPlayerSide(item) ? item : null;
+	return item && ownsPlayerSide(item)
+		? item
+		: null;
 });
 
 const PLAYER_SIDE_OPTIONS = [
@@ -340,11 +391,15 @@ const PLAYER_SIDE_OPTIONS = [
  * whichever geometry they edit.
  */
 const selectedShapeGeometry = computed<OwnedShapeGeometry | null>(() =>
-	selectedItem.value ? paintedShapeGeometry(selectedItem.value) : null);
+	selectedItem.value
+		? paintedShapeGeometry(selectedItem.value)
+		: null);
 
 /** Named for what it shapes, because a win box's geometry is not the item's own bounds. */
 const geometryTitle = computed(() =>
-	selectedShapeGeometry.value?.slot === 'boxGeometry' ? 'Win box Shape Geometry' : 'Shape Geometry',
+	selectedShapeGeometry.value?.slot === 'boxGeometry'
+		? 'Win box Shape Geometry'
+		: 'Shape Geometry',
 );
 
 /** Only a canvas-positioned item has a coordinate and a Graphic Rotation. */
@@ -364,7 +419,9 @@ const isStackedChild = computed(() =>
  * the group itself.
  */
 const selectedSurfaces = computed<Partial<Record<GraphicSurfaceStyleSlot, GraphicSurfaceStyle | null>>>(() =>
-	selectedItem.value ? paintedGraphicSurfaceStyles(selectedItem.value) : {});
+	selectedItem.value
+		? paintedGraphicSurfaceStyles(selectedItem.value)
+		: {});
 
 /* ── Section titles and the summaries a collapsed section shows ── */
 
@@ -379,7 +436,9 @@ const hasContentSection = computed(() => Boolean(
 ));
 
 /** The kind-specific section is named for the kind: Text, Media, Game Wins… */
-const contentTitle = computed(() => selectedItem.value ? graphicItemKindLabel(selectedItem.value.type) : 'Content');
+const contentTitle = computed(() => selectedItem.value
+	? graphicItemKindLabel(selectedItem.value.type)
+	: 'Content');
 
 const hasSurfaceSection = computed(() =>
 	'surfaceStyle' in selectedSurfaces.value
@@ -393,7 +452,9 @@ const layoutSummary = computed(() => {
 	const size = `${Math.round(item.width)}×${Math.round(item.height)}`;
 	if (!isCanvasPositioned.value)
 		return size;
-	const rotation = item.rotation ? ` · ${item.rotation}°` : '';
+	const rotation = item.rotation
+		? ` · ${item.rotation}°`
+		: '';
 	return `${Math.round(item.x)}, ${Math.round(item.y)} · ${size}${rotation}`;
 });
 
@@ -408,16 +469,27 @@ const groupSummary = computed(() => {
 
 const typographySummary = computed(() => {
 	const typography = selectedTypography.value;
-	return typography ? `${typography.fontSize}px · ${typography.fontWeight} · ${typography.textAlign}` : undefined;
+	return typography
+		? `${typography.fontSize}px · ${typography.fontWeight} · ${typography.textAlign}`
+		: undefined;
 });
 
 const shapeSummary = computed(() => {
 	const geometry = selectedShapeGeometry.value?.geometry;
 	if (!geometry)
 		return undefined;
-	const treatments = new Set([geometry.topLeft, geometry.topRight, geometry.bottomRight, geometry.bottomLeft].map(corner => corner.treatment));
-	const corners = treatments.size === 1 ? `${[...treatments][0]} corners` : 'mixed corners';
-	return geometry.leftSlant || geometry.rightSlant ? `${corners} · slanted` : corners;
+	const treatments = new Set([
+		geometry.topLeft,
+		geometry.topRight,
+		geometry.bottomRight,
+		geometry.bottomLeft,
+	].map(corner => corner.treatment));
+	const corners = treatments.size === 1
+		? `${[...treatments][0]} corners`
+		: 'mixed corners';
+	return geometry.leftSlant || geometry.rightSlant
+		? `${corners} · slanted`
+		: corners;
 });
 
 const surfaceSummary = computed(() => {
@@ -426,11 +498,23 @@ const surfaceSummary = computed(() => {
 		return undefined;
 	if (surface === null)
 		return 'None';
-	const fill = surface.fill.type === 'solid' ? surface.fill.color : `${surface.fill.type} fill`;
-	return surface.outline ? `${fill} · outline` : fill;
+	const fill = surface.fill.type === 'solid'
+		? surface.fill.color
+		: `${surface.fill.type} fill`;
+	return surface.outline
+		? `${fill} · outline`
+		: fill;
 });
 
-const INSPECTOR_SECTION_IDS = ['layout', 'group', 'content', 'typography', 'shape', 'surface', 'animation'] as const;
+const INSPECTOR_SECTION_IDS = [
+	'layout',
+	'group',
+	'content',
+	'typography',
+	'shape',
+	'surface',
+	'animation',
+] as const;
 const inspectorSections = useInspectorSections();
 
 /** A Geometry Unit projects against the containing canvas — a Graphic Group for its children. */
@@ -476,18 +560,25 @@ function updateFontSource(source: GraphicFontSource) {
 	if (source === 'base')
 		return;
 	fontSourceOverride.value = source;
-	if (source === 'application' && selectedFont.value?.kind === 'asset')
-		editItem(patchGraphicTypography, { font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID) });
+	if (source === 'application' && selectedFont.value?.kind === 'asset') {
+		editItem(patchGraphicTypography, {
+			font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID),
+		});
+	}
 }
 
 /** Pin one exact font Graphic Asset Revision, as a Media Graphic Item pins content. */
 function selectFontAsset(_asset: GraphicAsset, reference: GraphicAssetReference) {
-	editItem(patchGraphicTypography, { font: { kind: 'asset', reference } });
+	editItem(patchGraphicTypography, {
+		font: { kind: 'asset', reference },
+	});
 }
 
 /** Unpinning a library font leaves the item on an application font rather than none. */
 function clearFontAsset() {
-	editItem(patchGraphicTypography, { font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID) });
+	editItem(patchGraphicTypography, {
+		font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID),
+	});
 }
 
 /** A cleared opacity is opaque again and a cleared playback rate is normal speed. */
@@ -506,7 +597,9 @@ function updateMediaFields(patch: MediaFieldsPatch) {
 function selectMediaAsset(asset: GraphicAsset, reference: GraphicAssetReference) {
 	editItem(selectMediaGraphicItemAsset, {
 		asset: reference,
-		mediaKind: asset.kind === 'silent-video' ? 'silent-video' : 'image',
+		mediaKind: asset.kind === 'silent-video'
+			? 'silent-video'
+			: 'image',
 	});
 }
 
@@ -522,7 +615,9 @@ function selectMediaAsset(asset: GraphicAsset, reference: GraphicAssetReference)
  * input — so this panel appears with the Broadcast Graphic selected.
  */
 const selectedGraphicInputs = computed<GraphicInputDeclaration[]>(() =>
-	selection.value.kind === 'graphic' ? selection.value.graphic.inputs ?? [] : [],
+	selection.value.kind === 'graphic'
+		? selection.value.graphic.inputs ?? []
+		: [],
 );
 
 /**
@@ -575,7 +670,10 @@ const availablePlaceholders = computed<Array<{ key: string; label: string }>>(()
 			label: `${valueLabels[value]} — ${projection.label}`,
 		})),
 	);
-	return [...inputs, ...projected];
+	return [
+		...inputs,
+		...projected,
+	];
 });
 
 const availablePlaceholderKeys = computed(() => availablePlaceholders.value.map(entry => entry.key));
@@ -701,7 +799,9 @@ function parseChoiceOptions(key: string, value: string) {
 function choiceDefaultOptions(input: GraphicInputDeclaration) {
 	return [
 		{ label: 'No default', value: NO_CHOICE_DEFAULT },
-		...(input.type === 'choice' ? input.options : []).map(option => ({
+		...(input.type === 'choice'
+			? input.options
+			: []).map(option => ({
 			label: option.label,
 			value: option.value,
 		})),
@@ -709,7 +809,11 @@ function choiceDefaultOptions(input: GraphicInputDeclaration) {
 }
 
 function updateChoiceDefault(key: string, value: string) {
-	updateInput(key, { default: value === NO_CHOICE_DEFAULT ? null : value });
+	updateInput(key, {
+		default: value === NO_CHOICE_DEFAULT
+			? null
+			: value,
+	});
 }
 
 /**
@@ -717,7 +821,9 @@ function updateChoiceDefault(key: string, value: string) {
  * authored default is indexed from the configuration the same way an item's asset is.
  */
 function selectInputDefaultAsset(key: string, reference: GraphicAssetReference) {
-	updateInput(key, { default: { ...reference } });
+	updateInput(key, {
+		default: { ...reference },
+	});
 }
 
 /* ────────────────────────────────────────────────
@@ -783,10 +889,14 @@ function placeholderFontSource(inputKey: string): GraphicFontSource {
 function updatePlaceholderFontSource(inputKey: string, source: GraphicFontSource) {
 	placeholderFontSourceOverrides.value = { ...placeholderFontSourceOverrides.value, [inputKey]: source };
 	const current = placeholderStyleFor(inputKey).font;
-	if (source === 'base' && current)
+	if (source === 'base' && current) {
 		editItem(patchGraphicPlaceholderStyle, inputKey, { font: undefined });
-	else if (source === 'application' && current?.kind !== 'application')
-		editItem(patchGraphicPlaceholderStyle, inputKey, { font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID) });
+	}
+	else if (source === 'application' && current?.kind !== 'application') {
+		editItem(patchGraphicPlaceholderStyle, inputKey, {
+			font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID),
+		});
+	}
 }
 
 /** Pin one exact font Graphic Asset Revision for one placeholder. */
@@ -795,7 +905,9 @@ function selectPlaceholderFontAsset(
 	_asset: GraphicAsset,
 	reference: GraphicAssetReference,
 ) {
-	editItem(patchGraphicPlaceholderStyle, inputKey, { font: { kind: 'asset', reference } });
+	editItem(patchGraphicPlaceholderStyle, inputKey, {
+		font: { kind: 'asset', reference },
+	});
 }
 
 /**

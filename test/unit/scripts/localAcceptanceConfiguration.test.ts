@@ -42,7 +42,9 @@ const A_KEY = 'Zm9vYmFyYmF6cXV4Zm9vYmFyYmF6cXV4Zm9vYmFyYmE=';
  */
 function configuredBody() {
 	return LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES
-		.map(name => `${name}=${name === SIGNING_KEY ? A_KEY : 'a-value'}`)
+		.map(name => `${name}=${name === SIGNING_KEY
+			? A_KEY
+			: 'a-value'}`)
 		.join('\n');
 }
 
@@ -63,7 +65,10 @@ describe('which required names a local acceptance run needs', () => {
 	 * nothing would say so.
 	 */
 	it('classifies every required name as either needed here or unreached', () => {
-		expect([...LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES, ...LOCAL_ACCEPTANCE_UNREACHED_NUXT_NAMES].sort())
+		expect([
+			...LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES,
+			...LOCAL_ACCEPTANCE_UNREACHED_NUXT_NAMES,
+		].sort())
 			.toEqual([...LOCALLY_REQUIRED_NUXT_NAMES].sort());
 	});
 
@@ -132,7 +137,9 @@ describe('folding the checkout\'s sources into one answer', () => {
 	it('reads every name a local run needs, not only the first', () => {
 		// The negative control for the rows above: they would all pass against a
 		// fold that had stopped reading anything but the signing key.
-		expect(missingLocalAcceptanceNames(suppliedNames([configuredBody()]))).toEqual([]);
+		expect(missingLocalAcceptanceNames(suppliedNames([
+			configuredBody(),
+		]))).toEqual([]);
 	});
 
 	/**
@@ -151,7 +158,9 @@ describe('folding the checkout\'s sources into one answer', () => {
 	});
 
 	it('counts whitespace as blank, the way the readers do', () => {
-		expect(missingLocalAcceptanceNames(suppliedNames([{ [SIGNING_KEY]: '   ' }]))).toContain(SIGNING_KEY);
+		expect(missingLocalAcceptanceNames(suppliedNames([
+			{ [SIGNING_KEY]: '   ' },
+		]))).toContain(SIGNING_KEY);
 	});
 
 	/**
@@ -163,7 +172,10 @@ describe('folding the checkout\'s sources into one answer', () => {
 	 * which is a false alarm on a checkout that works.
 	 */
 	it('does not let a whitespace-only earlier source shadow a real later one', () => {
-		const supplied = suppliedNames([{ [SIGNING_KEY]: '   ' }, `${SIGNING_KEY}=${A_KEY}`]);
+		const supplied = suppliedNames([
+			{ [SIGNING_KEY]: '   ' },
+			`${SIGNING_KEY}=${A_KEY}`,
+		]);
 		expect(supplied[SIGNING_KEY]).toBe(A_KEY);
 		expect(missingLocalAcceptanceNames(supplied)).not.toContain(SIGNING_KEY);
 	});
@@ -207,7 +219,10 @@ describe('a local run', () => {
 	it('is checked, and reads the sources to decide', () => {
 		const readSources = vi.fn(noFiles);
 		expect(localAcceptanceConfiguration({ deployed: false, env: {}, readSources }))
-			.toEqual({ checked: true, missing: [...LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES] });
+			.toEqual({
+				checked: true,
+				missing: [...LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES],
+			});
 		expect(readSources).toHaveBeenCalledTimes(1);
 	});
 
@@ -215,7 +230,10 @@ describe('a local run', () => {
 		expect(requireLocalAcceptanceConfiguration({
 			deployed: false,
 			env: {},
-			readSources: () => [configuredBody(), null],
+			readSources: () => [
+				configuredBody(),
+				null,
+			],
 		})).toEqual({ checked: true, missing: [] });
 	});
 
@@ -257,7 +275,9 @@ describe('a local run', () => {
 describe('the notice, read as prose', () => {
 	function noticeFor(readSources: () => (string | null)[], env: Record<string, string> = {}) {
 		const decision = localAcceptanceConfiguration({ deployed: false, env, readSources });
-		return decision.missing.length === 0 ? undefined : localConfigurationNotice(decision.missing);
+		return decision.missing.length === 0
+			? undefined
+			: localConfigurationNotice(decision.missing);
 	}
 
 	/** No file at all — the fresh worktree the ticket is about. */
@@ -329,7 +349,10 @@ describe('the notice, read as prose', () => {
 	});
 
 	it('says nothing when only the built worker\'s own copy carries them', () => {
-		expect(noticeFor(() => [null, configuredBody()])).toBeUndefined();
+		expect(noticeFor(() => [
+			null,
+			configuredBody(),
+		])).toBeUndefined();
 	});
 
 	it('joins two names and surfaces with a plain conjunction', () => {
@@ -446,7 +469,12 @@ describe('staging .env for the preview', () => {
 
 	it('does nothing at all when there is no .env to stage', () => {
 		expect(previewStagingPlan({ source: null, existing: null, stale: false }))
-			.toEqual({ stage: false, body: null, removeStale: false, lines: [] });
+			.toEqual({
+				stage: false,
+				body: null,
+				removeStale: false,
+				lines: [],
+			});
 	});
 
 	/**
@@ -456,7 +484,12 @@ describe('staging .env for the preview', () => {
 	 * at all.
 	 */
 	it('adds the bypass line for a bypassed preview, and says so', () => {
-		const plan = previewStagingPlan({ source, existing: null, stale: false, bypassActive: true });
+		const plan = previewStagingPlan({
+			source,
+			existing: null,
+			stale: false,
+			bypassActive: true,
+		});
 
 		expect(plan.body).toBe(`${source}${LOCAL_AUTH_BYPASS_NAME}=${LOCAL_AUTH_BYPASS_ENABLED_VALUE}\n`);
 		expect(plan.lines.at(-1)).toContain(LOCAL_AUTH_BYPASS_NAME);
@@ -468,7 +501,12 @@ describe('staging .env for the preview', () => {
 		// A fresh worktree previewing bypassed: nothing to sign in with and nothing
 		// that needs signing in. The old plan returned `stage: false` here, which
 		// would have left the choice with no way to reach the Worker.
-		const plan = previewStagingPlan({ source: null, existing: null, stale: false, bypassActive: true });
+		const plan = previewStagingPlan({
+			source: null,
+			existing: null,
+			stale: false,
+			bypassActive: true,
+		});
 
 		expect(plan.stage).toBe(true);
 		expect(plan.body).toBe(`${LOCAL_AUTH_BYPASS_NAME}=${LOCAL_AUTH_BYPASS_ENABLED_VALUE}\n`);
@@ -577,7 +615,12 @@ describe('the failure this preflight raises', () => {
 			'and',
 		);
 
-		expect(evidence.report([{ code: 'harness-local-configuration-missing', detail: { surface } }]))
+		expect(evidence.report([
+			{
+				code: 'harness-local-configuration-missing',
+				detail: { surface },
+			},
+		]))
 			.toBe(`graphics-delivery-v1 harness-local-configuration-missing surface=${surface}`);
 	});
 });

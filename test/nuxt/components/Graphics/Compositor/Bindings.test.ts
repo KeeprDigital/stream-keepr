@@ -17,14 +17,19 @@ enableAutoUnmount(afterEach);
  */
 
 const SlotOnlyStub = defineComponent({
-	props: { label: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+	},
 	template: '<div><span>{{ label }}</span><slot /></div>',
 });
 
 const USelectStub = defineComponent({
 	name: 'USelect',
 	props: {
-		modelValue: { type: [String, Number], required: false },
+		modelValue: {
+			type: [String, Number],
+			required: false,
+		},
 		items: { type: Array, required: false },
 	},
 	emits: ['update:modelValue'],
@@ -33,14 +38,18 @@ const USelectStub = defineComponent({
 
 const UInputStub = defineComponent({
 	name: 'UInput',
-	props: { modelValue: { type: String, required: false } },
+	props: {
+		modelValue: { type: String, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input :value="modelValue" />',
 });
 
 const UButtonStub = defineComponent({
 	name: 'UButton',
-	props: { disabled: { type: Boolean, required: false } },
+	props: {
+		disabled: { type: Boolean, required: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
@@ -70,7 +79,14 @@ function numberInput(key: string, label = key): GraphicInputDeclaration {
 }
 
 function graphic(overrides: Partial<BroadcastGraphicConfig> = {}): BroadcastGraphicConfig[] {
-	return [{ id: 'lower-third', name: 'Lower Third', items: [], ...overrides }];
+	return [
+		{
+			id: 'lower-third',
+			name: 'Lower Third',
+			items: [],
+			...overrides,
+		},
+	];
 }
 
 const GRAPHIC_SELECTED: GraphicsSelectionTarget = { type: 'graphic', graphicId: 'lower-third' };
@@ -90,7 +106,9 @@ async function mountComponent(options: {
 			selectedTarget: options.selectedTarget ?? GRAPHIC_SELECTED,
 			// `in` rather than `??`, so a caller can mount the unresolved-game case
 			// deliberately instead of having it defaulted back to a game.
-			game: 'game' in options ? options.game : 'mtg',
+			game: 'game' in options
+				? options.game
+				: 'mtg',
 			writable: options.writable ?? true,
 		},
 		global: {
@@ -133,7 +151,9 @@ const PLAYER = { key: 'player', label: 'Featured Player', kind: 'player' as cons
 describe('graphicsCompositorBindings', () => {
 	describe('authoring Graphic Source Selections', () => {
 		it('offers every single-entity kind a Graphic Source Selection may select', async () => {
-			const wrapper = await mountComponent({ graphics: graphic() });
+			const wrapper = await mountComponent({
+				graphics: graphic(),
+			});
 
 			expect(optionLabels(wrapper, 'graphic-source-kind')).toEqual([
 				'Current Event',
@@ -148,7 +168,9 @@ describe('graphicsCompositorBindings', () => {
 		});
 
 		it('declares a Graphic Source Selection of the chosen kind', async () => {
-			const wrapper = await mountComponent({ graphics: graphic() });
+			const wrapper = await mountComponent({
+				graphics: graphic(),
+			});
 
 			selects(wrapper, 'graphic-source-kind')[0]?.vm.$emit('update:modelValue', 'feature-match-slot');
 			await nextTick();
@@ -162,22 +184,30 @@ describe('graphicsCompositorBindings', () => {
 
 		it('renames one without moving the key its bindings name', async () => {
 			const wrapper = await mountComponent({
-				graphics: graphic({ sources: [PLAYER] }),
+				graphics: graphic({
+					sources: [PLAYER],
+				}),
 			});
 
 			wrapper.findAllComponents(UInputStub)[0]?.vm.$emit('update:modelValue', 'Champion');
 			await nextTick();
 
-			expect(emittedGraphics(wrapper)[0]!.sources).toEqual([{ ...PLAYER, label: 'Champion' }]);
+			expect(emittedGraphics(wrapper)[0]!.sources).toEqual([
+				{ ...PLAYER, label: 'Champion' },
+			]);
 			expect(wrapper.get('[data-testid="graphic-source-key"]').text()).toBe('player');
 		});
 
 		it('removes one, and the Graphic Input Bindings that read it', async () => {
 			const wrapper = await mountComponent({
 				graphics: graphic({
-					inputs: [textInput('name')],
+					inputs: [
+						textInput('name'),
+					],
 					sources: [PLAYER],
-					bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+					bindings: [
+						{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+					],
 				}),
 			});
 
@@ -194,7 +224,12 @@ describe('graphicsCompositorBindings', () => {
 					sources: [
 						{ key: 'event', label: 'Event', kind: 'event' },
 						SLOT,
-						{ key: 'p1', label: 'Player 1', kind: 'player', from: { sourceKey: 'slot', relation: 'player1' } },
+						{
+							key: 'p1',
+							label: 'Player 1',
+							kind: 'player',
+							from: { sourceKey: 'slot', relation: 'player1' },
+						},
 					],
 				}),
 			});
@@ -207,7 +242,9 @@ describe('graphicsCompositorBindings', () => {
 
 		it('writes nothing when an author clears the name, so the previous one stands', async () => {
 			const wrapper = await mountComponent({
-				graphics: graphic({ sources: [PLAYER] }),
+				graphics: graphic({
+					sources: [PLAYER],
+				}),
 			});
 
 			wrapper.findAllComponents(UInputStub)[0]?.vm.$emit('update:modelValue', '');
@@ -223,7 +260,9 @@ describe('graphicsCompositorBindings', () => {
 				label: `Source ${index}`,
 				kind: 'player' as const,
 			}));
-			const wrapper = await mountComponent({ graphics: graphic({ sources: full }) });
+			const wrapper = await mountComponent({
+				graphics: graphic({ sources: full }),
+			});
 
 			expect(buttons(wrapper, 'graphic-source-add')[0]?.props('disabled')).toBe(true);
 			expect(wrapper.get('[data-testid="graphic-source-budget-spent"]').text())
@@ -244,7 +283,10 @@ describe('graphicsCompositorBindings', () => {
 				})),
 			}));
 			const wrapper = await mountComponent({
-				graphics: [...spent, { id: 'lower-third', name: 'Lower Third', items: [] }],
+				graphics: [
+					...spent,
+					{ id: 'lower-third', name: 'Lower Third', items: [] },
+				],
 			});
 
 			expect(buttons(wrapper, 'graphic-source-add')[0]?.props('disabled')).toBe(true);
@@ -254,7 +296,11 @@ describe('graphicsCompositorBindings', () => {
 
 		it('offers the current Event no derivation, because it follows nothing', async () => {
 			const wrapper = await mountComponent({
-				graphics: graphic({ sources: [{ key: 'event', label: 'Event', kind: 'event' }] }),
+				graphics: graphic({
+					sources: [
+						{ key: 'event', label: 'Event', kind: 'event' },
+					],
+				}),
 			});
 
 			expect(selects(wrapper, 'graphic-source-derivation')).toHaveLength(0);
@@ -264,7 +310,9 @@ describe('graphicsCompositorBindings', () => {
 	describe('deriving one Graphic Source Selection from another', () => {
 		it('offers only the relationships that yield this selection\'s kind', async () => {
 			const wrapper = await mountComponent({
-				graphics: graphic({ sources: [SLOT, PLAYER] }),
+				graphics: graphic({
+					sources: [SLOT, PLAYER],
+				}),
 			});
 
 			// The Player's own picker is second; a Feature Match Slot is reached by nothing,
@@ -282,7 +330,12 @@ describe('graphicsCompositorBindings', () => {
 				graphics: graphic({
 					sources: [
 						{ key: 'match', label: 'Match', kind: 'match' },
-						{ key: 'round', label: 'Round', kind: 'round', from: { sourceKey: 'match', relation: 'round' } },
+						{
+							key: 'round',
+							label: 'Round',
+							kind: 'round',
+							from: { sourceKey: 'match', relation: 'round' },
+						},
 					],
 				}),
 			});
@@ -295,7 +348,9 @@ describe('graphicsCompositorBindings', () => {
 
 		it('stores a chosen derivation and clears it back to an operator pick', async () => {
 			const wrapper = await mountComponent({
-				graphics: graphic({ sources: [SLOT, PLAYER] }),
+				graphics: graphic({
+					sources: [SLOT, PLAYER],
+				}),
 			});
 
 			selects(wrapper, 'graphic-source-derivation')[1]?.vm.$emit('update:modelValue', 'slot:player1');
@@ -307,7 +362,15 @@ describe('graphicsCompositorBindings', () => {
 			});
 
 			const derived = await mountComponent({
-				graphics: graphic({ sources: [SLOT, { ...PLAYER, from: { sourceKey: 'slot', relation: 'player1' } }] }),
+				graphics: graphic({
+					sources: [
+						SLOT,
+						{
+							...PLAYER,
+							from: { sourceKey: 'slot', relation: 'player1' },
+						},
+					],
+				}),
 			});
 			selects(derived, 'graphic-source-derivation')[1]?.vm.$emit('update:modelValue', '');
 			await nextTick();
@@ -318,12 +381,21 @@ describe('graphicsCompositorBindings', () => {
 
 	describe('authoring Graphic Input Bindings', () => {
 		const bindable = graphic({
-			inputs: [textInput('name', 'Presenter name'), numberInput('life', 'Life total')],
+			inputs: [
+				textInput('name', 'Presenter name'),
+				numberInput('life', 'Life total'),
+			],
 			sources: [PLAYER, SLOT],
 		});
 
 		it('asks for a Graphic Source Selection before offering any binding', async () => {
-			const wrapper = await mountComponent({ graphics: graphic({ inputs: [textInput('name')] }) });
+			const wrapper = await mountComponent({
+				graphics: graphic({
+					inputs: [
+						textInput('name'),
+					],
+				}),
+			});
 
 			expect(wrapper.find('[data-testid="graphic-binding-needs-source"]').exists()).toBe(true);
 			expect(selects(wrapper, 'graphic-binding-source')).toHaveLength(0);
@@ -332,9 +404,13 @@ describe('graphicsCompositorBindings', () => {
 		it('presents common and game-specific fields separately, and only this Event\'s game', async () => {
 			const wrapper = await mountComponent({
 				graphics: graphic({
-					inputs: [textInput('name')],
+					inputs: [
+						textInput('name'),
+					],
 					sources: [PLAYER],
-					bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+					bindings: [
+						{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+					],
 				}),
 			});
 
@@ -350,9 +426,13 @@ describe('graphicsCompositorBindings', () => {
 		it('offers only fields of the Graphic Input\'s own type', async () => {
 			const wrapper = await mountComponent({
 				graphics: graphic({
-					inputs: [numberInput('life')],
+					inputs: [
+						numberInput('life'),
+					],
 					sources: [PLAYER],
-					bindings: [{ inputKey: 'life', sourceKey: 'player', fieldId: 'player.wins' }],
+					bindings: [
+						{ inputKey: 'life', sourceKey: 'player', fieldId: 'player.wins' },
+					],
 				}),
 			});
 
@@ -368,8 +448,12 @@ describe('graphicsCompositorBindings', () => {
 		it('states why a Graphic Source Selection has nothing this Graphic Input can read', async () => {
 			const wrapper = await mountComponent({
 				graphics: graphic({
-					inputs: [numberInput('life', 'Life total')],
-					sources: [{ key: 'talent', label: 'Commentator', kind: 'talent' }],
+					inputs: [
+						numberInput('life', 'Life total'),
+					],
+					sources: [
+						{ key: 'talent', label: 'Commentator', kind: 'talent' },
+					],
 					bindings: [],
 				}),
 			});
@@ -385,11 +469,15 @@ describe('graphicsCompositorBindings', () => {
 		it('says so when a binding reads a Graphic Source Selection nothing declares', async () => {
 			const wrapper = await mountComponent({
 				graphics: graphic({
-					inputs: [textInput('name')],
+					inputs: [
+						textInput('name'),
+					],
 					sources: [PLAYER],
 					// Authorable only by writing the mode configuration directly: removing a
 					// Graphic Source Selection here takes the bindings reading it with it.
-					bindings: [{ inputKey: 'name', sourceKey: 'departed', fieldId: 'player.name' }],
+					bindings: [
+						{ inputKey: 'name', sourceKey: 'departed', fieldId: 'player.name' },
+					],
 				}),
 			});
 
@@ -413,9 +501,13 @@ describe('graphicsCompositorBindings', () => {
 		it('replaces the binding a Graphic Input already had rather than adding a second', async () => {
 			const wrapper = await mountComponent({
 				graphics: graphic({
-					inputs: [textInput('name')],
+					inputs: [
+						textInput('name'),
+					],
 					sources: [PLAYER],
-					bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+					bindings: [
+						{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+					],
 				}),
 			});
 
@@ -430,9 +522,13 @@ describe('graphicsCompositorBindings', () => {
 		it('drops a field the newly chosen Graphic Source Selection kind does not have', async () => {
 			const wrapper = await mountComponent({
 				graphics: graphic({
-					inputs: [textInput('name')],
+					inputs: [
+						textInput('name'),
+					],
 					sources: [PLAYER, SLOT],
-					bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+					bindings: [
+						{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+					],
 				}),
 			});
 
@@ -447,9 +543,16 @@ describe('graphicsCompositorBindings', () => {
 		it('keeps the field when the new Graphic Source Selection is of the same kind', async () => {
 			const wrapper = await mountComponent({
 				graphics: graphic({
-					inputs: [textInput('name')],
-					sources: [PLAYER, { key: 'opponent', label: 'Opponent', kind: 'player' }],
-					bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+					inputs: [
+						textInput('name'),
+					],
+					sources: [
+						PLAYER,
+						{ key: 'opponent', label: 'Opponent', kind: 'player' },
+					],
+					bindings: [
+						{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+					],
 				}),
 			});
 
@@ -464,9 +567,13 @@ describe('graphicsCompositorBindings', () => {
 		it('unbinds a Graphic Input, leaving it a manually entered value', async () => {
 			const wrapper = await mountComponent({
 				graphics: graphic({
-					inputs: [textInput('name')],
+					inputs: [
+						textInput('name'),
+					],
 					sources: [PLAYER],
-					bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+					bindings: [
+						{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+					],
 				}),
 			});
 
@@ -488,7 +595,9 @@ describe('graphicsCompositorBindings', () => {
 	describe('before this Event\'s game is known', () => {
 		const unresolved = {
 			graphics: graphic({
-				inputs: [textInput('name', 'Presenter name')],
+				inputs: [
+					textInput('name', 'Presenter name'),
+				],
 				sources: [PLAYER],
 			}),
 			game: undefined,
@@ -525,9 +634,13 @@ describe('graphicsCompositorBindings', () => {
 		it('reads every Graphic Source Selection and Graphic Input Binding without changing one', async () => {
 			const wrapper = await mountComponent({
 				graphics: graphic({
-					inputs: [textInput('name')],
+					inputs: [
+						textInput('name'),
+					],
 					sources: [PLAYER],
-					bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+					bindings: [
+						{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+					],
 				}),
 				writable: false,
 			});
@@ -546,7 +659,9 @@ describe('graphicsCompositorBindings', () => {
 	describe('where the surface appears', () => {
 		it('appears with the Broadcast Graphic selected rather than one of its Graphic Items', async () => {
 			const wrapper = await mountComponent({
-				graphics: graphic({ sources: [PLAYER] }),
+				graphics: graphic({
+					sources: [PLAYER],
+				}),
 				selectedTarget: { type: 'canvas' },
 			});
 

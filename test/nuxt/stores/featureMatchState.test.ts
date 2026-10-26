@@ -63,7 +63,9 @@ vi.mock('@vueuse/core', async () => {
 });
 
 // useEventStore mock for bulkClockAction
-const mockEventStore = { event: { featureMatchDefaultClockDuration: 50 } };
+const mockEventStore = {
+	event: { featureMatchDefaultClockDuration: 50 },
+};
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 
 describe('useFeatureMatchStateStore', () => {
@@ -106,7 +108,10 @@ describe('useFeatureMatchStateStore', () => {
 	}
 
 	function commandResult(state: FeatureMatchState = createMockFeatureMatchState(), session?: Partial<FeatureMatchSessionResponse>) {
-		const responseSession = { ...createSession(state), ...session };
+		const responseSession = {
+			...createSession(state),
+			...session,
+		};
 		return {
 			featureMatchState: state,
 			session: responseSession,
@@ -250,11 +255,18 @@ describe('useFeatureMatchStateStore', () => {
 		it('merges player sub-objects', async () => {
 			seedState();
 			const serverState = createMockFeatureMatchState({
-				player1: { lifeTotal: 15, gameWins: 0, counters: [], sideboardRevealed: false },
+				player1: {
+					lifeTotal: 15,
+					gameWins: 0,
+					counters: [],
+					sideboardRevealed: false,
+				},
 			});
 			mockRepo.updateState.mockResolvedValue(commandResult(serverState));
 
-			await store.updateState(EVENT_ID, MATCH_ID, { player1: { lifeTotal: 15 } });
+			await store.updateState(EVENT_ID, MATCH_ID, {
+				player1: { lifeTotal: 15 },
+			});
 
 			expect(store.featureMatchStates.get(MATCH_ID)!.player1.lifeTotal).toBe(15);
 		});
@@ -279,7 +291,9 @@ describe('useFeatureMatchStateStore', () => {
 			});
 
 			// The operator types 10:00 — the clock should read 10:00, not 40:00.
-			await store.updateState(EVENT_ID, MATCH_ID, { clock: { targetDisplayMs: 10 * 60 * 1000 } });
+			await store.updateState(EVENT_ID, MATCH_ID, {
+				clock: { targetDisplayMs: 10 * 60 * 1000 },
+			});
 
 			expect(predicted).toBeDefined();
 			expect(predicted!.durationMs - predicted!.elapsedMs).toBe(10 * 60 * 1000);
@@ -359,7 +373,10 @@ describe('useFeatureMatchStateStore', () => {
 
 		it('updates cached session snapshot for accepted events', async () => {
 			store.cacheSession(createSession());
-			const nextSnapshot = { ...createSourceSnapshot(), bestOf: 5 };
+			const nextSnapshot = {
+				...createSourceSnapshot(),
+				bestOf: 5,
+			};
 
 			await store.applyRemoteSessionEvent(sessionEvent({ sourceSnapshot: nextSnapshot }));
 
@@ -430,7 +447,16 @@ describe('useFeatureMatchStateStore', () => {
 
 			expect(promise2).toBeNull(); // dropped by guard
 
-			resolveFirst(commandResult(createMockFeatureMatchState({ clock: { type: 'countdown', durationMs: 3000000, elapsedMs: 0, isRunning: true, lastStartedAt: 1000000, countUpAfterCountdown: false } })));
+			resolveFirst(commandResult(createMockFeatureMatchState({
+				clock: {
+					type: 'countdown',
+					durationMs: 3000000,
+					elapsedMs: 0,
+					isRunning: true,
+					lastStartedAt: 1000000,
+					countUpAfterCountdown: false,
+				},
+			})));
 			await promise1;
 
 			expect(mockRepo.startClock).toHaveBeenCalledTimes(1);

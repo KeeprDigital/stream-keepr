@@ -22,7 +22,10 @@ function topLevelMp4Boxes(bytes: Uint8Array) {
 	for (let offset = 0; offset < bytes.byteLength;) {
 		const size = view.getUint32(offset);
 		const type = new TextDecoder().decode(bytes.subarray(offset + 4, offset + 8));
-		boxes.push({ type, bytes: bytes.subarray(offset, offset + size) });
+		boxes.push({
+			type,
+			bytes: bytes.subarray(offset, offset + size),
+		});
 		offset += size;
 	}
 	return boxes;
@@ -159,7 +162,9 @@ function withVp9Superframe(
 	});
 	const marker = 0xC0 | ((frames.length - 1) << 3);
 	const index = Uint8Array.of(
-		options.malformedIndex === 'marker' ? marker ^ 1 : marker,
+		options.malformedIndex === 'marker'
+			? marker ^ 1
+			: marker,
 		...frames.map((frame, frameIndex) =>
 			options.malformedIndex === 'size' && frameIndex === frames.length - 1
 				? frame.byteLength + 1
@@ -537,21 +542,27 @@ describe('silent-video bounded inspection', () => {
 
 	it('rejects a VP9 superframe presenting more than one shown frame per block', async () => {
 		await expectIssue(
-			processSilentVideo(withVp9Superframe(vp9Webm, { constituents: ['shown', 'shown'] })),
+			processSilentVideo(withVp9Superframe(vp9Webm, {
+				constituents: ['shown', 'shown'],
+			})),
 			'malformed-video-timeline',
 		);
 	});
 
 	it('rejects a VP9 superframe whose final constituent is not shown', async () => {
 		await expectIssue(
-			processSilentVideo(withVp9Superframe(vp9Webm, { constituents: ['hidden', 'hidden'] })),
+			processSilentVideo(withVp9Superframe(vp9Webm, {
+				constituents: ['hidden', 'hidden'],
+			})),
 			'malformed-video-timeline',
 		);
 	});
 
 	it('rejects a VP9 superframe with more than one hidden alternate-reference frame', async () => {
 		await expectIssue(
-			processSilentVideo(withVp9Superframe(vp9Webm, { constituents: ['hidden', 'hidden', 'shown'] })),
+			processSilentVideo(withVp9Superframe(vp9Webm, {
+				constituents: ['hidden', 'hidden', 'shown'],
+			})),
 			'video-frame-rate-exceeded',
 		);
 	});
@@ -588,7 +599,10 @@ describe('silent-video bounded inspection', () => {
 	it.each(['moof', 'sidx', 'mfra', 'uuid', 'junk'] as const)(
 		'rejects an appended uninspected top-level $0 box',
 		async (type) => {
-			const appended = concatenate([h264Mp4, isoBox(type)]);
+			const appended = concatenate([
+				h264Mp4,
+				isoBox(type),
+			]);
 			await expectIssue(processSilentVideo(appended), 'unsupported-video-tracks');
 			await expectIssue(processSilentVideoFromRandomAccess({
 				byteLength: appended.byteLength,

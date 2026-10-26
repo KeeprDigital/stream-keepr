@@ -44,7 +44,9 @@ const emit = defineEmits<{
 
 const POLICY_OPTIONS = GRAPHIC_CHANNEL_HANDOFF_POLICY_VALUES.map(value => ({
 	value,
-	label: value === 'overlap' ? 'Overlap' : 'Out then in',
+	label: value === 'overlap'
+		? 'Overlap'
+		: 'Out then in',
 })) satisfies Array<{ value: GraphicChannelHandoffPolicy; label: string }>;
 
 const canAuthor = computed(() => props.writable === true);
@@ -83,17 +85,28 @@ function addChannel() {
 			// A durable authored id, like every other graphics id an author creates. A
 			// command id would embed a wall clock and a counter that only correlate a live
 			// -session command with its retry, which a Screen's stored configuration is not.
-			{ id: randomUuid(), name: `Channel ${props.channels.length + 1}` },
+			{
+				id: randomUuid(),
+				name: `Channel ${props.channels.length + 1}`,
+			},
 		],
 	});
 }
 
 function renameChannel(channelId: string, name: string) {
-	write({ channels: props.channels.map(channel => (channel.id === channelId ? { ...channel, name } : channel)) });
+	write({
+		channels: props.channels.map(channel => (channel.id === channelId
+			? { ...channel, name }
+			: channel)),
+	});
 }
 
 function setPolicy(channelId: string, handoff: GraphicChannelHandoffPolicy) {
-	write({ channels: props.channels.map(channel => (channel.id === channelId ? { ...channel, handoff } : channel)) });
+	write({
+		channels: props.channels.map(channel => (channel.id === channelId
+			? { ...channel, handoff }
+			: channel)),
+	});
 }
 
 /** The same Broadcast Graphic with no Graphic Channel, rather than an empty membership. */
@@ -105,7 +118,9 @@ function released(graphic: BroadcastGraphicConfig): BroadcastGraphicConfig {
 function removeChannel(channelId: string) {
 	write({
 		channels: props.channels.filter(channel => channel.id !== channelId),
-		graphics: props.graphics.map(graphic => (graphic.channelId === channelId ? released(graphic) : graphic)),
+		graphics: props.graphics.map(graphic => (graphic.channelId === channelId
+			? released(graphic)
+			: graphic)),
 	});
 }
 
@@ -114,7 +129,9 @@ function setMembership(graphicId: string, channelId: string | null) {
 		graphics: props.graphics.map((graphic) => {
 			if (graphic.id !== graphicId)
 				return graphic;
-			return channelId === null ? released(graphic) : { ...graphic, channelId };
+			return channelId === null
+				? released(graphic)
+				: { ...graphic, channelId };
 		}),
 	});
 }

@@ -105,7 +105,10 @@ export function createSequencedLiveEpochs<TScope, TOpening, TAggregate>(
 	port: SequencedLiveEpochPort<TScope, TOpening, TAggregate>,
 ): SequencedLiveEpochs<TScope, TOpening, TAggregate> {
 	function forgetClosedReceipts(scope: TScope): BatchItem<'sqlite'> {
-		return forgetAggregateReceipts({ aggregateKind: port.aggregateKind, aggregateIds: port.closedIds(scope) });
+		return forgetAggregateReceipts({
+			aggregateKind: port.aggregateKind,
+			aggregateIds: port.closedIds(scope),
+		});
 	}
 
 	async function transition(
@@ -137,7 +140,10 @@ export function createSequencedLiveEpochs<TScope, TOpening, TAggregate>(
 	}
 
 	return {
-		close: async scope => await transition(scope, [...port.close(scope), forgetClosedReceipts(scope)]),
+		close: async scope => await transition(scope, [
+			...port.close(scope),
+			forgetClosedReceipts(scope),
+		]),
 		replace: async (scope, opening) => await transition(scope, [
 			...port.close(scope),
 			forgetClosedReceipts(scope),

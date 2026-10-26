@@ -17,7 +17,9 @@ const UFieldGroupStub = defineComponent({
 });
 
 const UInputStub = defineComponent({
-	props: { modelValue: { type: String, required: false } },
+	props: {
+		modelValue: { type: String, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 });
@@ -77,9 +79,25 @@ async function mountComponent() {
 			const boardFilter = ref<BoardSelection>('full');
 			const loading = ref(false);
 			const entriesByBoard: Record<BoardSelection, CardBreakdownEntry[]> = {
-				full: [makeEntry()],
-				mainboard: [makeEntry({ inclusionRate: 25, avgCopies: 4, totalCopies: 4, deckCount: 1 })],
-				sideboard: [makeEntry({ inclusionRate: 25, avgCopies: 2, totalCopies: 2, deckCount: 1 })],
+				full: [
+					makeEntry(),
+				],
+				mainboard: [
+					makeEntry({
+						inclusionRate: 25,
+						avgCopies: 4,
+						totalCopies: 4,
+						deckCount: 1,
+					}),
+				],
+				sideboard: [
+					makeEntry({
+						inclusionRate: 25,
+						avgCopies: 2,
+						totalCopies: 2,
+						deckCount: 1,
+					}),
+				],
 			};
 
 			return { boardFilter, entriesByBoard, loading };

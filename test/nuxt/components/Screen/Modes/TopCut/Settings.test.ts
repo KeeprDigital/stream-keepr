@@ -15,8 +15,18 @@ const writes: Record<string, unknown>[] = [];
 const phaseStore = {
 	isLoaded: false,
 	phases: [
-		{ id: 4, eventId: 1, name: 'Top 8', sortOrder: 2 },
-		{ id: 3, eventId: 1, name: 'Swiss', sortOrder: 1 },
+		{
+			id: 4,
+			eventId: 1,
+			name: 'Top 8',
+			sortOrder: 2,
+		},
+		{
+			id: 3,
+			eventId: 1,
+			name: 'Swiss',
+			sortOrder: 1,
+		},
 	],
 	loadPhasesByEventId: vi.fn(),
 	$reset: vi.fn(),
@@ -27,18 +37,27 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	saving: ref(false),
 	updateConfig: (patch: Record<string, unknown>) => {
 		writes.push(patch);
-		config.value = { ...config.value, ...patch };
+		config.value = {
+			...config.value,
+			...patch,
+		};
 	},
 	resetConfig: vi.fn(),
 }));
 mockNuxtImport('usePhaseStore', () => () => phaseStore);
 
 const USelectStub = defineComponent({
-	props: { modelValue: { type: null, required: false }, items: { type: Array, required: true } },
+	props: {
+		modelValue: { type: null, required: false },
+		items: { type: Array, required: true },
+	},
 	emits: ['update:modelValue'],
 	setup(props, { emit }) {
 		// Choosing the Top 8 Phase.
-		return () => h('select', { 'data-items': JSON.stringify(props.items), 'onChange': () => emit('update:modelValue', 4) });
+		return () => h('select', {
+			'data-items': JSON.stringify(props.items),
+			'onChange': () => emit('update:modelValue', 4),
+		});
 	},
 });
 
@@ -61,12 +80,19 @@ const ScreenSettingsToggleStub = defineComponent({
 async function mountEditor() {
 	const { default: Settings } = await import('../../../../../../app/components/Screen/Modes/TopCut/Settings.vue');
 	const wrapper = mount(Settings, {
-		props: { screen: { id: 1 } as Screen, eventId: 1 },
+		props: {
+			screen: { id: 1 } as Screen,
+			eventId: 1,
+		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: defineComponent({ setup: (_, { slots }) => () => h('section', slots.default?.()) }),
+				ScreenSettingsCard: defineComponent({
+					setup: (_, { slots }) => () => h('section', slots.default?.()),
+				}),
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
-				UFormField: defineComponent({ setup: (_, { slots }) => () => h('div', slots.default?.()) }),
+				UFormField: defineComponent({
+					setup: (_, { slots }) => () => h('div', slots.default?.()),
+				}),
 				USelect: USelectStub,
 				UInput: true,
 			},
@@ -78,7 +104,9 @@ async function mountEditor() {
 
 describe('screenModesTopCutSettings', () => {
 	beforeEach(() => {
-		config.value = { ...getDefaultConfigForMode('top-cut') };
+		config.value = {
+			...getDefaultConfigForMode('top-cut'),
+		};
 		writes.length = 0;
 		phaseStore.loadPhasesByEventId.mockClear();
 	});

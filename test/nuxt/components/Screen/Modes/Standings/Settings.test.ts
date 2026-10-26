@@ -10,7 +10,9 @@ vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/ed
 vi.mock('vue-draggable-plus', () => ({
 	VueDraggable: defineComponent({
 		name: 'VueDraggable',
-		props: { modelValue: { type: Array, required: false } },
+		props: {
+			modelValue: { type: Array, required: false },
+		},
 		emits: ['update:modelValue', 'end'],
 		template: '<div data-testid="draggable"><slot /></div>',
 	}),
@@ -24,18 +26,38 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	saving: ref(false),
 	updateConfig: (patch: Record<string, unknown>) => {
 		writes.push(patch);
-		config.value = { ...config.value, ...patch };
+		config.value = {
+			...config.value,
+			...patch,
+		};
 	},
 	resetConfig: vi.fn(),
 }));
 
-const loaded = { isLoaded: true, $reset: vi.fn() };
-mockNuxtImport('usePlayerStore', () => () => ({ ...loaded, players: [], loadPlayersByEventId: vi.fn() }));
-mockNuxtImport('usePlayerListStore', () => () => ({ ...loaded, lists: [], loadByEventId: vi.fn() }));
-mockNuxtImport('useRoundStore', () => () => ({ ...loaded, rounds: [], loadRoundsByEventId: vi.fn() }));
+const loaded = {
+	isLoaded: true,
+	$reset: vi.fn(),
+};
+mockNuxtImport('usePlayerStore', () => () => ({
+	...loaded,
+	players: [],
+	loadPlayersByEventId: vi.fn(),
+}));
+mockNuxtImport('usePlayerListStore', () => () => ({
+	...loaded,
+	lists: [],
+	loadByEventId: vi.fn(),
+}));
+mockNuxtImport('useRoundStore', () => () => ({
+	...loaded,
+	rounds: [],
+	loadRoundsByEventId: vi.fn(),
+}));
 
 const USwitchStub = defineComponent({
-	props: { modelValue: { type: Boolean, required: false } },
+	props: {
+		modelValue: { type: Boolean, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<button type="button" data-testid="u-switch" @click="$emit(\'update:modelValue\', !modelValue)" />',
 });
@@ -43,8 +65,13 @@ const USwitchStub = defineComponent({
 async function mountSettings() {
 	const { default: Settings } = await import('../../../../../../app/components/Screen/Modes/Standings/Settings.vue');
 	const wrapper = mount(Settings, {
-		props: { screen: { id: 1 } as Screen, eventId: 1 },
-		global: { stubs: { USwitch: USwitchStub, UIcon: true } },
+		props: {
+			screen: { id: 1 } as Screen,
+			eventId: 1,
+		},
+		global: {
+			stubs: { USwitch: USwitchStub, UIcon: true },
+		},
 	});
 	await flushPromises();
 	return wrapper;
@@ -78,7 +105,14 @@ describe('the Standings settings editor\'s columns', () => {
 		const wrapper = await mountSettings();
 		const rows = wrapper.findAll('[data-testid="column-row"]');
 
-		expect(columnLabels(wrapper)).toEqual(['Name', '#', 'Record (W-L-D)', 'Points', 'Deck', 'Position Change']);
+		expect(columnLabels(wrapper)).toEqual([
+			'Name',
+			'#',
+			'Record (W-L-D)',
+			'Points',
+			'Deck',
+			'Position Change',
+		]);
 
 		await rows[5]!.get('[data-testid="u-switch"]').trigger('click');
 

@@ -59,7 +59,9 @@ export function useFeatureMatchNoteEditor(options: FeatureMatchNoteEditorOptions
 			confirmingClear.value = false;
 		}
 		catch (cause) {
-			error.value = cause instanceof Error ? cause.message : 'The Note could not be saved.';
+			error.value = cause instanceof Error
+				? cause.message
+				: 'The Note could not be saved.';
 		}
 		finally {
 			saving.value = false;

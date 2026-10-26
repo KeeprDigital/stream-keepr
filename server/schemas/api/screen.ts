@@ -126,7 +126,10 @@ export const screenConfigSchema = z.object({
 }).strict();
 
 const screenConfigPatchShape = Object.fromEntries(
-	Object.entries(screenConfigSchema.shape).map(([key, schema]) => [key, schema.unwrap().nullable().optional()]),
+	Object.entries(screenConfigSchema.shape).map(([key, schema]) => [
+		key,
+		schema.unwrap().nullable().optional(),
+	]),
 ) as z.ZodRawShape;
 
 export const screenSlugSchema = z.string().min(1).max(50).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens');
@@ -388,13 +391,20 @@ function configContractModeForms<M extends ScreenMode>(
 			throw new Error(`Screen Mode "${mode}" config field "${key}" is server-validated, but the server supplies no schema for it.`);
 		return [key, serverField];
 	}));
-	const shape = (screenModeSupportsBackgroundLayers(mode) ? { ...own, ...BACKGROUND_LAYERS_CONFIG_SHAPE } : own) as ModeConfigShape<M>;
+	const shape = (screenModeSupportsBackgroundLayers(mode)
+		? {
+				...own,
+				...BACKGROUND_LAYERS_CONFIG_SHAPE,
+			}
+		: own) as ModeConfigShape<M>;
 	const schema = z.object(shape).strict();
 
 	const authoredStacks: readonly string[] = contract.authoredStacks;
 	const patchShape = Object.fromEntries(Object.entries(shape as Record<string, z.ZodType>).map(([key, field]) => [
 		key,
-		authoredStacks.includes(key) ? field.optional() : field.nullable().optional(),
+		authoredStacks.includes(key)
+			? field.optional()
+			: field.nullable().optional(),
 	])) as ModeConfigPatchShape<ModeConfigShape<M>, ContractOf<M>['authoredStacks'][number]>;
 
 	// A former field may still be in what a client read, so a write naming one
@@ -566,7 +576,9 @@ const graphicAnimationChannelsShape = {
 		factor: finiteNumberSchema.min(0).max(MAX_GRAPHIC_ANIMATION_SCALE),
 		origin: z.enum(GRAPHIC_ANIMATION_ORIGIN_VALUES),
 	}).strict().optional(),
-	reveal: z.object({ edge: z.enum(GRAPHIC_REVEAL_EDGE_VALUES) }).strict().optional(),
+	reveal: z.object({
+		edge: z.enum(GRAPHIC_REVEAL_EDGE_VALUES),
+	}).strict().optional(),
 };
 
 const graphicAnimationRecipeShape = {
@@ -1194,14 +1206,38 @@ const graphicGroupChildSizingSchema = z.object({
  * schema rather than a rule something has to check.
  */
 const graphicGroupChildConfigSchema = z.discriminatedUnion('type', [
-	z.object({ ...textGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
-	z.object({ ...shapeGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
-	z.object({ ...mediaGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
-	z.object({ ...socialNetworkIconGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
-	z.object({ ...clockGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
-	z.object({ ...playerLifeGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
-	z.object({ ...gameWinsGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
-	z.object({ ...deckListGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
+	z.object({
+		...textGraphicItemShape,
+		sizing: graphicGroupChildSizingSchema.optional(),
+	}).strict(),
+	z.object({
+		...shapeGraphicItemShape,
+		sizing: graphicGroupChildSizingSchema.optional(),
+	}).strict(),
+	z.object({
+		...mediaGraphicItemShape,
+		sizing: graphicGroupChildSizingSchema.optional(),
+	}).strict(),
+	z.object({
+		...socialNetworkIconGraphicItemShape,
+		sizing: graphicGroupChildSizingSchema.optional(),
+	}).strict(),
+	z.object({
+		...clockGraphicItemShape,
+		sizing: graphicGroupChildSizingSchema.optional(),
+	}).strict(),
+	z.object({
+		...playerLifeGraphicItemShape,
+		sizing: graphicGroupChildSizingSchema.optional(),
+	}).strict(),
+	z.object({
+		...gameWinsGraphicItemShape,
+		sizing: graphicGroupChildSizingSchema.optional(),
+	}).strict(),
+	z.object({
+		...deckListGraphicItemShape,
+		sizing: graphicGroupChildSizingSchema.optional(),
+	}).strict(),
 ]);
 
 export const MAX_GRAPHIC_GROUP_CHILDREN = 50;
@@ -1314,7 +1350,9 @@ export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 
 
 function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
 	return items.reduce(
-		(total, item) => total + 1 + (item.type === 'group' ? (item.children?.length ?? 0) : 0),
+		(total, item) => total + 1 + (item.type === 'group'
+			? (item.children?.length ?? 0)
+			: 0),
 		0,
 	);
 }
@@ -1322,7 +1360,9 @@ function countGraphicItems(items: readonly { type: string; children?: readonly u
 function graphicItemIds(items: readonly { id: string; type: string; children?: readonly { id: string }[] }[]) {
 	return items.flatMap(item => [
 		item.id,
-		...(item.type === 'group' ? (item.children ?? []).map(child => child.id) : []),
+		...(item.type === 'group'
+			? (item.children ?? []).map(child => child.id)
+			: []),
 	]);
 }
 

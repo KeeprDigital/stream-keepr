@@ -108,7 +108,12 @@ const WORKSPACE_OPTIONS = [
 ] satisfies Array<{ label: string; value: BroadcastGraphicsWorkspace; icon: string }>;
 
 function navigate(location: BroadcastGraphicsWorkspaceLocation) {
-	void router.replace({ query: { ...route.query, ...broadcastGraphicsWorkspaceQuery(location) } });
+	void router.replace({
+		query: {
+			...route.query,
+			...broadcastGraphicsWorkspaceQuery(location),
+		},
+	});
 }
 
 /** Both workspaces are URL-addressable, and the selected Broadcast Graphic travels with them. */
@@ -126,7 +131,9 @@ function setSelectedTarget(target: GraphicsSelectionTarget) {
 watch(selectedGraphicId, (graphicId) => {
 	if (graphicsSelectionGraphicId(selectedTarget.value) === graphicId)
 		return;
-	selectedTarget.value = graphicId ? { type: 'graphic', graphicId } : { type: 'canvas' };
+	selectedTarget.value = graphicId
+		? { type: 'graphic', graphicId }
+		: { type: 'canvas' };
 }, { immediate: true });
 
 /**
@@ -142,7 +149,9 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 	if (!canvasWritable.value)
 		return;
 	updateScreenConfig({
-		[field]: value ?? (field === 'width' ? canvasDefaults.width : canvasDefaults.height),
+		[field]: value ?? (field === 'width'
+			? canvasDefaults.width
+			: canvasDefaults.height),
 	});
 }
 

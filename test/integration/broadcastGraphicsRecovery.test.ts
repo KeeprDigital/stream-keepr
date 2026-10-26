@@ -66,12 +66,18 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 	describe('what a mode change keeps and what it discards', () => {
 		it('turns every graphic off and advances the epoch, while prepared working values survive', async () => {
 			const harness = await createGraphicsHarness(eventId, 'hardening-mode-change', [
-				integrationBroadcastGraphicWithInputs('a', [integrationTextInput('name')]),
+				integrationBroadcastGraphicWithInputs('a', [
+					integrationTextInput('name'),
+				]),
 			]);
 			const endedSessionId = harness.session().id;
 
 			await setBroadcastGraphicInput(harness, 'a', 'name', 'Ava Reed');
-			await harness.send({ commandId: playoutCommandId('take'), type: 'Take', payload: { graphicId: 'a' } });
+			await harness.send({
+				commandId: playoutCommandId('take'),
+				type: 'Take',
+				payload: { graphicId: 'a' },
+			});
 
 			await setScreenMode(eventId, harness.screen.id, 'background');
 			await setScreenMode(eventId, harness.screen.id, 'broadcast-graphics');
@@ -94,11 +100,17 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 			// unavailable-value fallback speak for a show that is over. The next Take does
 			// not need it: acceptance reads the carried working value.
 			const harness = await createGraphicsHarness(eventId, 'hardening-mode-change-accepted', [
-				integrationBroadcastGraphicWithInputs('a', [integrationTextInput('name')]),
+				integrationBroadcastGraphicWithInputs('a', [
+					integrationTextInput('name'),
+				]),
 			]);
 
 			await setBroadcastGraphicInput(harness, 'a', 'name', 'Ava Reed');
-			await harness.send({ commandId: playoutCommandId('take'), type: 'Take', payload: { graphicId: 'a' } });
+			await harness.send({
+				commandId: playoutCommandId('take'),
+				type: 'Take',
+				payload: { graphicId: 'a' },
+			});
 
 			await setScreenMode(eventId, harness.screen.id, 'background');
 			await setScreenMode(eventId, harness.screen.id, 'broadcast-graphics');
@@ -127,7 +139,11 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 			]);
 
 			await setBroadcastGraphicInput(harness, 'a', 'name', 'Ava Reed');
-			await harness.send({ commandId: playoutCommandId('take'), type: 'Take', payload: { graphicId: 'a' } });
+			await harness.send({
+				commandId: playoutCommandId('take'),
+				type: 'Take',
+				payload: { graphicId: 'a' },
+			});
 			// Now unavailable: longer than the declaration allows, so never acceptable.
 			await setBroadcastGraphicInput(harness, 'a', 'name', 'A'.repeat(50));
 
@@ -165,12 +181,18 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 	describe('an explicit live-state reset', () => {
 		it('turns every graphic off, advances the epoch, and discards prepared values', async () => {
 			const harness = await createGraphicsHarness(eventId, 'hardening-reset', [
-				integrationBroadcastGraphicWithInputs('a', [integrationTextInput('name')]),
+				integrationBroadcastGraphicWithInputs('a', [
+					integrationTextInput('name'),
+				]),
 			]);
 			const endedSessionId = harness.session().id;
 
 			await setBroadcastGraphicInput(harness, 'a', 'name', 'Ava Reed');
-			await harness.send({ commandId: playoutCommandId('take'), type: 'Take', payload: { graphicId: 'a' } });
+			await harness.send({
+				commandId: playoutCommandId('take'),
+				type: 'Take',
+				payload: { graphicId: 'a' },
+			});
 
 			const reset = await resetLiveState(eventId, harness.screen.id);
 
@@ -201,7 +223,11 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 				integrationBroadcastGraphic('a'),
 			]);
 			const endedSessionId = harness.session().id;
-			await harness.send({ commandId: playoutCommandId('take'), type: 'Take', payload: { graphicId: 'a' } });
+			await harness.send({
+				commandId: playoutCommandId('take'),
+				type: 'Take',
+				payload: { graphicId: 'a' },
+			});
 
 			const reset = await resetLiveState(eventId, harness.screen.id);
 
@@ -213,7 +239,11 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 				`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${endedSessionId}/commands`,
 				{
 					method: 'POST',
-					body: { commandId: playoutCommandId('reset-stale'), type: 'Take', payload: { graphicId: 'a' } },
+					body: {
+						commandId: playoutCommandId('reset-stale'),
+						type: 'Take',
+						payload: { graphicId: 'a' },
+					},
 					ignoreResponseError: true,
 				},
 			);
@@ -255,12 +285,22 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 			await harness.send({
 				commandId: playoutCommandId('set-name'),
 				type: 'Set Input',
-				payload: { graphicId: 'a', inputKey: 'name', value: 'Ava Reed', basedOn: { value: '' } },
+				payload: {
+					graphicId: 'a',
+					inputKey: 'name',
+					value: 'Ava Reed',
+					basedOn: { value: '' },
+				},
 			} as never);
 			const merged = await harness.send({
 				commandId: playoutCommandId('set-title'),
 				type: 'Set Input',
-				payload: { graphicId: 'a', inputKey: 'title', value: 'Champion', basedOn: { value: '' } },
+				payload: {
+					graphicId: 'a',
+					inputKey: 'title',
+					value: 'Champion',
+					basedOn: { value: '' },
+				},
 			} as never);
 
 			expect(merged.currentState.inputs.a?.working).toEqual({ name: 'Ava Reed', title: 'Champion' });
@@ -268,13 +308,20 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 
 		it('rejects a stale edit to the same Graphic Input rather than overwriting it', async () => {
 			const harness = await createGraphicsHarness(eventId, 'hardening-same-field', [
-				integrationBroadcastGraphicWithInputs('a', [integrationTextInput('name')]),
+				integrationBroadcastGraphicWithInputs('a', [
+					integrationTextInput('name'),
+				]),
 			]);
 
 			await harness.send({
 				commandId: playoutCommandId('set-first'),
 				type: 'Set Input',
-				payload: { graphicId: 'a', inputKey: 'name', value: 'Ava Reed', basedOn: { value: '' } },
+				payload: {
+					graphicId: 'a',
+					inputKey: 'name',
+					value: 'Ava Reed',
+					basedOn: { value: '' },
+				},
 			} as never);
 
 			// The second operator's Live Control still showed the default when they typed.
@@ -285,7 +332,12 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 					body: {
 						commandId: playoutCommandId('set-second'),
 						type: 'Set Input',
-						payload: { graphicId: 'a', inputKey: 'name', value: 'Ben Cole', basedOn: { value: '' } },
+						payload: {
+							graphicId: 'a',
+							inputKey: 'name',
+							value: 'Ben Cole',
+							basedOn: { value: '' },
+						},
 					},
 					ignoreResponseError: true,
 				},
@@ -302,12 +354,19 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 
 		it('accepts the same operator’s next edit once they have seen what landed', async () => {
 			const harness = await createGraphicsHarness(eventId, 'hardening-refresh', [
-				integrationBroadcastGraphicWithInputs('a', [integrationTextInput('name')]),
+				integrationBroadcastGraphicWithInputs('a', [
+					integrationTextInput('name'),
+				]),
 			]);
 			await harness.send({
 				commandId: playoutCommandId('set-first'),
 				type: 'Set Input',
-				payload: { graphicId: 'a', inputKey: 'name', value: 'Ava Reed', basedOn: { value: '' } },
+				payload: {
+					graphicId: 'a',
+					inputKey: 'name',
+					value: 'Ava Reed',
+					basedOn: { value: '' },
+				},
 			} as never);
 
 			// Rejected and refreshed: the refusal is recoverable by looking, which is the
@@ -315,7 +374,12 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 			const accepted = await harness.send({
 				commandId: playoutCommandId('set-refreshed'),
 				type: 'Set Input',
-				payload: { graphicId: 'a', inputKey: 'name', value: 'Ben Cole', basedOn: { value: 'Ava Reed' } },
+				payload: {
+					graphicId: 'a',
+					inputKey: 'name',
+					value: 'Ben Cole',
+					basedOn: { value: 'Ava Reed' },
+				},
 			} as never);
 
 			expect(accepted.currentState.inputs.a?.working).toEqual({ name: 'Ben Cole' });
@@ -323,12 +387,19 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 
 		it('leaves an edit that claims nothing unguarded, so the guard is a property of the claim', async () => {
 			const harness = await createGraphicsHarness(eventId, 'hardening-no-claim', [
-				integrationBroadcastGraphicWithInputs('a', [integrationTextInput('name')]),
+				integrationBroadcastGraphicWithInputs('a', [
+					integrationTextInput('name'),
+				]),
 			]);
 			await harness.send({
 				commandId: playoutCommandId('set-first'),
 				type: 'Set Input',
-				payload: { graphicId: 'a', inputKey: 'name', value: 'Ava Reed', basedOn: { value: '' } },
+				payload: {
+					graphicId: 'a',
+					inputKey: 'name',
+					value: 'Ava Reed',
+					basedOn: { value: '' },
+				},
 			} as never);
 
 			const overwritten = await setBroadcastGraphicInput(harness, 'a', 'name', 'Ben Cole');
@@ -341,9 +412,15 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 			// an overtaken *acceptance*. Neither substitutes for the other, so both are
 			// asserted against the same graphic.
 			const harness = await createGraphicsHarness(eventId, 'hardening-stale-acceptance', [
-				integrationBroadcastGraphicWithInputs('a', [integrationTextInput('name')]),
+				integrationBroadcastGraphicWithInputs('a', [
+					integrationTextInput('name'),
+				]),
 			]);
-			await harness.send({ commandId: playoutCommandId('take'), type: 'Take', payload: { graphicId: 'a' } });
+			await harness.send({
+				commandId: playoutCommandId('take'),
+				type: 'Take',
+				payload: { graphicId: 'a' },
+			});
 			const staleRevision = harness.session().currentState.inputs.a!.acceptedRevision;
 
 			await setBroadcastGraphicInput(harness, 'a', 'name', 'Ava Reed');
@@ -377,7 +454,9 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 			// can produce a fault, so a fault always means the durable state was damaged
 			// from outside the command path rather than by ordinary operation.
 			const harness = await createGraphicsHarness(eventId, 'hardening-no-fault', [
-				integrationBroadcastGraphicWithInputs('a', [integrationTextInput('name')]),
+				integrationBroadcastGraphicWithInputs('a', [
+					integrationTextInput('name'),
+				]),
 			]);
 
 			await setBroadcastGraphicInput(harness, 'a', 'name', 'Ava Reed');
@@ -393,7 +472,9 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 
 		it('reports a recovery fault for durable state damaged outside the command path', async () => {
 			const harness = await createGraphicsHarness(eventId, 'hardening-corrupt-read', [
-				integrationBroadcastGraphicWithInputs('a', [integrationTextInput('name')]),
+				integrationBroadcastGraphicWithInputs('a', [
+					integrationTextInput('name'),
+				]),
 			]);
 
 			await corruptLiveState(harness.session().id);
@@ -407,7 +488,9 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 
 		it('clears that fault on the first accepted command, whatever kind it is', async () => {
 			const harness = await createGraphicsHarness(eventId, 'hardening-corrupt-cleared', [
-				integrationBroadcastGraphicWithInputs('a', [integrationTextInput('name')]),
+				integrationBroadcastGraphicWithInputs('a', [
+					integrationTextInput('name'),
+				]),
 			]);
 
 			await corruptLiveState(harness.session().id);

@@ -43,7 +43,12 @@ function updateFrame(updates: Partial<FeatureMatchLayoutFrameConfig>) {
 }
 
 function updateAnimation(updates: Partial<Pick<FeatureMatchOverlayFrameAnimationConfig, 'enabled' | 'opacity'>>) {
-	updateFrame({ animation: { ...animation.value, ...updates } });
+	updateFrame({
+		animation: {
+			...animation.value,
+			...updates,
+		},
+	});
 }
 
 /** The shared fields own effect switching and param coercion; the Frame adds its own fields back. */
@@ -58,7 +63,13 @@ function applyAnimationSelection(selection: AnimationEffectSelection) {
 }
 
 function updateMediaBackground(updates: Partial<ScreenMediaBackgroundConfig>) {
-	updateFrame({ mediaBackground: { ...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG, ...mediaBackground.value, ...updates } });
+	updateFrame({
+		mediaBackground: {
+			...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG,
+			...mediaBackground.value,
+			...updates,
+		},
+	});
 }
 
 function updateFrameBackground(updates: { color?: string; gradient?: string; opacity?: number }) {
@@ -88,7 +99,9 @@ const backgroundSummary = computed(() => {
 
 const borderSummary = computed(() => {
 	const frame = props.config.layout.frame;
-	return frame.borderVisible ? `${frame.borderWidth ?? 1}px border` : 'No border';
+	return frame.borderVisible
+		? `${frame.borderWidth ?? 1}px border`
+		: 'No border';
 });
 
 function animationSummary() {

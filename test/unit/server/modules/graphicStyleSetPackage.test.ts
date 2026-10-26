@@ -68,14 +68,19 @@ function styleEntryNeedingAnAsset(): GraphicStyleSetEntry {
 		kind: 'media-treatment',
 		name: 'Backdrop',
 		schemaVersion: 1,
-		value: { source: { assetId: 'asset-1', revisionId: 'revision-1' } },
+		value: {
+			source: { assetId: 'asset-1', revisionId: 'revision-1' },
+		},
 	} as unknown as GraphicStyleSetEntry;
 }
 
 const SOURCE_ID = 'style-set-from-the-sending-installation';
 
 function storedStyleSet(overrides: Partial<DbGraphicStyleSet> = {}): DbGraphicStyleSet {
-	const entries = [BRAND, heading()];
+	const entries = [
+		BRAND,
+		heading(),
+	];
 	return {
 		id: SOURCE_ID,
 		name: 'Show Style',
@@ -183,8 +188,14 @@ async function rebuiltArchive(
 	await rewrite(documents);
 	const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value, null, '\t'));
 	const encoded = [
-		{ name: GRAPHIC_STYLE_SET_PACKAGE_MANIFEST_ENTRY, bytes: encode(documents.manifest) },
-		{ name: GRAPHIC_STYLE_SET_PACKAGE_STYLE_SET_ENTRY, bytes: encode(documents.snapshot) },
+		{
+			name: GRAPHIC_STYLE_SET_PACKAGE_MANIFEST_ENTRY,
+			bytes: encode(documents.manifest),
+		},
+		{
+			name: GRAPHIC_STYLE_SET_PACKAGE_STYLE_SET_ENTRY,
+			bytes: encode(documents.snapshot),
+		},
 	];
 	return await collectStream(createStoredZipArchive(encoded.map(entry => ({
 		name: entry.name,
@@ -202,24 +213,42 @@ describe('exporting a Graphic Style Set as a `.skstyle` package', () => {
 
 		expect(outcome).toMatchObject({
 			outcome: 'rejected',
-			report: { issues: [{ code: 'graphic-style-set-never-published' }] },
+			report: {
+				issues: [
+					{ code: 'graphic-style-set-never-published' },
+				],
+			},
 		});
 	});
 
 	it('refuses published entries that do not resolve, naming every entry at fault', async () => {
 		const outcome = await exportGraphicStyleSetPackage({
-			styleSet: storedStyleSet({ published: [heading()], draft: [heading()] }),
+			styleSet: storedStyleSet({
+				published: [
+					heading(),
+				],
+				draft: [
+					heading(),
+				],
+			}),
 			now: NOW,
 		});
 
 		expect(outcome).toMatchObject({
 			outcome: 'rejected',
-			report: { issues: [{ code: 'graphic-style-set-unresolvable', entryId: 'heading' }] },
+			report: {
+				issues: [
+					{ code: 'graphic-style-set-unresolvable', entryId: 'heading' },
+				],
+			},
 		});
 	});
 
 	it('carries the published entries, the identity, the revision, and the fonts it needs', async () => {
-		const outcome = await exportGraphicStyleSetPackage({ styleSet: storedStyleSet(), now: NOW });
+		const outcome = await exportGraphicStyleSetPackage({
+			styleSet: storedStyleSet(),
+			now: NOW,
+		});
 		expect(outcome.outcome).toBe('exported');
 		if (outcome.outcome !== 'exported')
 			return;
@@ -239,15 +268,25 @@ describe('exporting a Graphic Style Set as a `.skstyle` package', () => {
 		expect(archive.json(GRAPHIC_STYLE_SET_PACKAGE_MANIFEST_ENTRY)).toMatchObject({
 			packageKind: 'skstyle',
 			artifactKind: 'graphic-style-set',
-			styleSet: { identity: SOURCE_ID, name: 'Show Style', revision: 3, entryCount: 2 },
-			applicationCapabilities: [{ capability: 'application-font', identity: 'inter' }],
+			styleSet: {
+				identity: SOURCE_ID,
+				name: 'Show Style',
+				revision: 3,
+				entryCount: 2,
+			},
+			applicationCapabilities: [
+				{ capability: 'application-font', identity: 'inter' },
+			],
 		});
 		expect(archive.json(GRAPHIC_STYLE_SET_PACKAGE_STYLE_SET_ENTRY)).toEqual({
 			id: SOURCE_ID,
 			name: 'Show Style',
 			description: 'The 2026 season look',
 			revision: 3,
-			entries: [BRAND, heading()],
+			entries: [
+				BRAND,
+				heading(),
+			],
 		});
 	});
 
@@ -257,8 +296,14 @@ describe('exporting a Graphic Style Set as a `.skstyle` package', () => {
 		// fails loudly here instead of exporting a package whose asset silently vanished.
 		const outcome = await exportGraphicStyleSetPackage({
 			styleSet: storedStyleSet({
-				published: [BRAND, styleEntryNeedingAnAsset()],
-				draft: [BRAND, styleEntryNeedingAnAsset()],
+				published: [
+					BRAND,
+					styleEntryNeedingAnAsset(),
+				],
+				draft: [
+					BRAND,
+					styleEntryNeedingAnAsset(),
+				],
 			}),
 			now: NOW,
 		});
@@ -273,11 +318,19 @@ describe('exporting a Graphic Style Set as a `.skstyle` package', () => {
 	});
 
 	it('freezes the published entries rather than the working draft', async () => {
-		const bytes = await packageBytes(storedStyleSet({ draft: [BRAND, heading(96)] }));
+		const bytes = await packageBytes(storedStyleSet({
+			draft: [
+				BRAND,
+				heading(96),
+			],
+		}));
 		const snapshot = readStoredZipArchive(bytes)
 			.json<{ entries: GraphicStyleSetEntry[] }>(GRAPHIC_STYLE_SET_PACKAGE_STYLE_SET_ENTRY);
 
-		expect(snapshot.entries).toEqual([BRAND, heading()]);
+		expect(snapshot.entries).toEqual([
+			BRAND,
+			heading(),
+		]);
 	});
 });
 
@@ -314,14 +367,19 @@ describe('receiving a `.skstyle` package on another installation', () => {
 			return;
 		expect(outcome.styleSet.id).toBe(SOURCE_ID);
 		expect(outcome.styleSet.revision).toBe(3);
-		expect(outcome.styleSet.published).toEqual([BRAND, heading()]);
+		expect(outcome.styleSet.published).toEqual([
+			BRAND,
+			heading(),
+		]);
 		// The Style Set opens with no unpublished changes, so the first thing an author
 		// does to it is an edit rather than a reconciliation.
 		expect(outcome.styleSet.draft).toEqual(outcome.styleSet.published);
 	});
 
 	it('writes nothing at all when the exact identity, revision, and content are already installed', async () => {
-		const receiver = library([storedStyleSet()]);
+		const receiver = library([
+			storedStyleSet(),
+		]);
 		const outcome = await installGraphicStyleSetPackage({
 			archive: sent,
 			resolution: 'preserve-identity',
@@ -338,7 +396,9 @@ describe('receiving a `.skstyle` package on another installation', () => {
 	});
 
 	it('never downgrades an installed Graphic Style Set to an older packaged revision', async () => {
-		const receiver = library([storedStyleSet({ revision: 5 })]);
+		const receiver = library([
+			storedStyleSet({ revision: 5 }),
+		]);
 		const outcome = await installGraphicStyleSetPackage({
 			archive: sent,
 			resolution: 'preserve-identity',
@@ -354,14 +414,27 @@ describe('receiving a `.skstyle` package on another installation', () => {
 	});
 
 	it('publishes a newer packaged revision only once its author has confirmed the proposal', async () => {
-		const receiver = library([storedStyleSet()]);
+		const receiver = library([
+			storedStyleSet(),
+		]);
 		receiver.linkTemplates([
-			{ id: 'lower-third', name: 'Lower third', revision: 7, styleChanged: true },
+			{
+				id: 'lower-third',
+				name: 'Lower third',
+				revision: 7,
+				styleChanged: true,
+			},
 		]);
 		const newer = await packageBytes(storedStyleSet({
 			revision: 4,
-			draft: [BRAND, heading(96)],
-			published: [BRAND, heading(96)],
+			draft: [
+				BRAND,
+				heading(96),
+			],
+			published: [
+				BRAND,
+				heading(96),
+			],
 		}));
 
 		const unconfirmed = await installGraphicStyleSetPackage({
@@ -390,16 +463,29 @@ describe('receiving a `.skstyle` package on another installation', () => {
 		// The packaged revision is preserved rather than incremented, so both
 		// installations stay on one numbering and a third package still recognises either.
 		expect(confirmed.styleSet.revision).toBe(4);
-		expect(confirmed.styleSet.published).toEqual([BRAND, heading(96)]);
-		expect(confirmed.affectedTemplates).toMatchObject([{ id: 'lower-third' }]);
+		expect(confirmed.styleSet.published).toEqual([
+			BRAND,
+			heading(96),
+		]);
+		expect(confirmed.affectedTemplates).toMatchObject([
+			{ id: 'lower-third' },
+		]);
 	});
 
 	it('refuses a confirmation that was given for a different proposal', async () => {
-		const receiver = library([storedStyleSet()]);
+		const receiver = library([
+			storedStyleSet(),
+		]);
 		const newer = await packageBytes(storedStyleSet({
 			revision: 4,
-			draft: [BRAND, heading(96)],
-			published: [BRAND, heading(96)],
+			draft: [
+				BRAND,
+				heading(96),
+			],
+			published: [
+				BRAND,
+				heading(96),
+			],
 		}));
 
 		const outcome = await installGraphicStyleSetPackage({
@@ -415,7 +501,14 @@ describe('receiving a `.skstyle` package on another installation', () => {
 	});
 
 	it('installs a conflicting package as an independent copy under a new identity when asked', async () => {
-		const receiver = library([storedStyleSet({ published: [BRAND, heading(96)] })]);
+		const receiver = library([
+			storedStyleSet({
+				published: [
+					BRAND,
+					heading(96),
+				],
+			}),
+		]);
 		const outcome = await installGraphicStyleSetPackage({
 			archive: sent,
 			resolution: 'independent-copy',
@@ -437,11 +530,21 @@ describe('receiving a `.skstyle` package on another installation', () => {
 		// A copy is the first published revision of something that did not exist a moment
 		// ago, so it claims no history the packaged revision would have given it.
 		expect(outcome.styleSet.revision).toBe(1);
-		expect(receiver.rows.get(SOURCE_ID)?.published).toEqual([BRAND, heading(96)]);
+		expect(receiver.rows.get(SOURCE_ID)?.published).toEqual([
+			BRAND,
+			heading(96),
+		]);
 	});
 
 	it('binds a confirmation to the resolution it was given for', async () => {
-		const receiver = library([storedStyleSet({ published: [BRAND, heading(96)] })]);
+		const receiver = library([
+			storedStyleSet({
+				published: [
+					BRAND,
+					heading(96),
+				],
+			}),
+		]);
 		const preserving = await graphicStyleSetPackagePreflight({
 			archive: sent,
 			resolution: 'preserve-identity',
@@ -476,19 +579,23 @@ describe('receiving a `.skstyle` package on another installation', () => {
 		});
 
 		expect(outcome.outcome).toBe('rejected');
-		expect(outcome.report.issues).toMatchObject([{ code: 'package-content-digest-mismatch' }]);
+		expect(outcome.report.issues).toMatchObject([
+			{ code: 'package-content-digest-mismatch' },
+		]);
 		expect(receiver.rows.size).toBe(0);
 	});
 
 	it('refuses a package needing a font this installation does not have, installing nothing', async () => {
 		const unsupported = await rebuiltArchive(sent, (documents) => {
 			documents.snapshot.entries[1].value.font.fontId = 'a-font-from-somewhere-else';
-			documents.manifest.applicationCapabilities = [{
-				capability: 'application-font',
-				identity: 'a-font-from-somewhere-else',
-				configurationVersion: 1,
-				requiredBy: ['entries.heading.font.fontId'],
-			}];
+			documents.manifest.applicationCapabilities = [
+				{
+					capability: 'application-font',
+					identity: 'a-font-from-somewhere-else',
+					configurationVersion: 1,
+					requiredBy: ['entries.heading.font.fontId'],
+				},
+			];
 		});
 		const receiver = library();
 
@@ -553,11 +660,24 @@ describe('receiving a `.skstyle` package on another installation', () => {
 	});
 
 	it('names an unpublished draft it would discard, and discards it only once confirmed', async () => {
-		const receiver = library([storedStyleSet({ draft: [BRAND, heading(120)] })]);
+		const receiver = library([
+			storedStyleSet({
+				draft: [
+					BRAND,
+					heading(120),
+				],
+			}),
+		]);
 		const newer = await packageBytes(storedStyleSet({
 			revision: 4,
-			draft: [BRAND, heading(96)],
-			published: [BRAND, heading(96)],
+			draft: [
+				BRAND,
+				heading(96),
+			],
+			published: [
+				BRAND,
+				heading(96),
+			],
 		}));
 
 		const unconfirmed = await installGraphicStyleSetPackage({
@@ -570,7 +690,10 @@ describe('receiving a `.skstyle` package on another installation', () => {
 		expect(unconfirmed.outcome).toBe('requires-confirmation');
 		expect(unconfirmed.report.issues.map(issue => issue.code))
 			.toContain('graphic-style-set-draft-discarded');
-		expect(receiver.rows.get(SOURCE_ID)?.draft).toEqual([BRAND, heading(120)]);
+		expect(receiver.rows.get(SOURCE_ID)?.draft).toEqual([
+			BRAND,
+			heading(120),
+		]);
 
 		const confirmed = await installGraphicStyleSetPackage({
 			archive: newer,
@@ -581,11 +704,16 @@ describe('receiving a `.skstyle` package on another installation', () => {
 		});
 
 		expect(confirmed.outcome).toBe('installed');
-		expect(receiver.rows.get(SOURCE_ID)?.draft).toEqual([BRAND, heading(96)]);
+		expect(receiver.rows.get(SOURCE_ID)?.draft).toEqual([
+			BRAND,
+			heading(96),
+		]);
 	});
 
 	it('refuses a package whose identity exists here and has never been published', async () => {
-		const receiver = library([storedStyleSet({ revision: 0, published: null })]);
+		const receiver = library([
+			storedStyleSet({ revision: 0, published: null }),
+		]);
 
 		const outcome = await installGraphicStyleSetPackage({
 			archive: sent,
@@ -596,7 +724,9 @@ describe('receiving a `.skstyle` package on another installation', () => {
 
 		expect(outcome.outcome).toBe('rejected');
 		expect(outcome.report.issues)
-			.toMatchObject([{ code: 'graphic-style-set-identity-unpublished', severity: 'error' }]);
+			.toMatchObject([
+				{ code: 'graphic-style-set-identity-unpublished', severity: 'error' },
+			]);
 		expect(receiver.rows.get(SOURCE_ID)?.revision).toBe(0);
 	});
 
@@ -634,11 +764,24 @@ describe('receiving a `.skstyle` package on another installation', () => {
 		// entries would pass this for the wrong reason: the edit would introduce a warning
 		// that was absent before, and the confirmation would be refused over the issue
 		// list rather than over the revision the write is actually bound to.
-		const receiver = library([storedStyleSet({ draft: [BRAND, heading(120)] })]);
+		const receiver = library([
+			storedStyleSet({
+				draft: [
+					BRAND,
+					heading(120),
+				],
+			}),
+		]);
 		const newer = await packageBytes(storedStyleSet({
 			revision: 4,
-			draft: [BRAND, heading(96)],
-			published: [BRAND, heading(96)],
+			draft: [
+				BRAND,
+				heading(96),
+			],
+			published: [
+				BRAND,
+				heading(96),
+			],
 		}));
 
 		const proposal = await installGraphicStyleSetPackage({
@@ -657,7 +800,10 @@ describe('receiving a `.skstyle` package on another installation', () => {
 		const installed = receiver.rows.get(SOURCE_ID)!;
 		receiver.rows.set(SOURCE_ID, {
 			...installed,
-			draft: [BRAND, heading(150)],
+			draft: [
+				BRAND,
+				heading(150),
+			],
 			draftRevision: installed.draftRevision + 1,
 		} as DbGraphicStyleSet);
 
@@ -674,16 +820,32 @@ describe('receiving a `.skstyle` package on another installation', () => {
 		// to — and the second author's work is still there.
 		expect(raced.outcome).toBe('requires-confirmation');
 		expect(raced.report.installedDraftRevision).toBe(5);
-		expect(receiver.rows.get(SOURCE_ID)?.draft).toEqual([BRAND, heading(150)]);
+		expect(receiver.rows.get(SOURCE_ID)?.draft).toEqual([
+			BRAND,
+			heading(150),
+		]);
 		expect(receiver.rows.get(SOURCE_ID)?.revision).toBe(3);
 	});
 
 	it('writes nothing when a draft edit lands inside the install’s own preflight', async () => {
-		const receiver = library([storedStyleSet({ draft: [BRAND, heading(120)] })]);
+		const receiver = library([
+			storedStyleSet({
+				draft: [
+					BRAND,
+					heading(120),
+				],
+			}),
+		]);
 		const newer = await packageBytes(storedStyleSet({
 			revision: 4,
-			draft: [BRAND, heading(96)],
-			published: [BRAND, heading(96)],
+			draft: [
+				BRAND,
+				heading(96),
+			],
+			published: [
+				BRAND,
+				heading(96),
+			],
 		}));
 
 		const proposal = await installGraphicStyleSetPackage({
@@ -706,7 +868,10 @@ describe('receiving a `.skstyle` package on another installation', () => {
 				const installed = receiver.rows.get(SOURCE_ID)!;
 				receiver.rows.set(SOURCE_ID, {
 					...installed,
-					draft: [BRAND, heading(150)],
+					draft: [
+						BRAND,
+						heading(150),
+					],
 					draftRevision: installed.draftRevision + 1,
 				} as DbGraphicStyleSet);
 				return linked;
@@ -722,7 +887,10 @@ describe('receiving a `.skstyle` package on another installation', () => {
 		});
 
 		expect(raced.outcome).toBe('conflict');
-		expect(receiver.rows.get(SOURCE_ID)?.draft).toEqual([BRAND, heading(150)]);
+		expect(receiver.rows.get(SOURCE_ID)?.draft).toEqual([
+			BRAND,
+			heading(150),
+		]);
 		expect(receiver.rows.get(SOURCE_ID)?.revision).toBe(3);
 	});
 

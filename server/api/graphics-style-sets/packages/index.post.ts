@@ -80,7 +80,9 @@ export default defineEventHandler(async (event) => {
 			};
 
 		case 'installed':
-			setResponseStatus(event, outcome.report.disposition === 'update-installed' ? 200 : 201);
+			setResponseStatus(event, outcome.report.disposition === 'update-installed'
+				? 200
+				: 201);
 			return {
 				report: outcome.report,
 				styleSet: mapGraphicStyleSetToResponse(outcome.styleSet),

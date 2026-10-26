@@ -110,13 +110,20 @@ describe('mapTimestamps return type', () => {
 	});
 
 	it('leaves an At key alone when it holds something the body never rewrites', () => {
-		const result = mapTimestamps({ createdAt: new Date(), updatedAt: new Date(), reversalCompletesAt: 250 });
+		const result = mapTimestamps({
+			createdAt: new Date(),
+			updatedAt: new Date(),
+			reversalCompletesAt: 250,
+		});
 
 		expectTypeOf(result.reversalCompletesAt).toEqualTypeOf<number>();
 	});
 
 	it('keeps an optional timestamp optional', () => {
-		const result = mapTimestamps({ createdAt: new Date(), updatedAt: new Date() } as {
+		const result = mapTimestamps({
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		} as {
 			createdAt: Date;
 			updatedAt: Date;
 			resolvedAt?: string;

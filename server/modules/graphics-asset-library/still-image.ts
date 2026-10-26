@@ -229,7 +229,9 @@ function parseJpeg(bytes: Uint8Array) {
 					'JPEG must use sequential or progressive Huffman coding.',
 				);
 			}
-			colorModel = components === 1 ? 'grayscale' : 'rgb';
+			colorModel = components === 1
+				? 'grayscale'
+				: 'rgb';
 			assertDimensions(width, height, 'JPEG', 'malformed-jpeg');
 		}
 
@@ -258,7 +260,12 @@ function parseJpeg(bytes: Uint8Array) {
 		validationError('incomplete-jpeg-frame', 'JPEG does not contain one complete frame.');
 	if (!foundEnd || offset !== bytes.byteLength)
 		validationError('incomplete-jpeg-frame', 'JPEG does not end exactly after its complete frame.');
-	return { width, height, colorModel, hasAlpha: false as const };
+	return {
+		width,
+		height,
+		colorModel,
+		hasAlpha: false as const,
+	};
 }
 
 function parseWebp(bytes: Uint8Array) {
@@ -302,7 +309,9 @@ function parseWebp(bytes: Uint8Array) {
 		}
 		if (type === 'ICCP' || type === 'EXIF' || type === 'XMP ') {
 			validationError(
-				type === 'EXIF' ? 'unsupported-image-orientation' : 'unsupported-webp-profile',
+				type === 'EXIF'
+					? 'unsupported-image-orientation'
+					: 'unsupported-webp-profile',
 				type === 'ICCP'
 					? 'Embedded WebP colour profiles are not supported by still-image-v1.'
 					: type === 'EXIF'
@@ -449,7 +458,9 @@ function validateDeclarations(
 		?.trim()
 		.toLocaleLowerCase()
 		.match(/\.([^.]+)$/)?.[1];
-	const acceptedExtensions = format === 'jpeg' ? ['jpg', 'jpeg'] : [format];
+	const acceptedExtensions = format === 'jpeg'
+		? ['jpg', 'jpeg']
+		: [format];
 	if (extension && !acceptedExtensions.includes(extension)) {
 		validationError(
 			'conflicting-image-extension',

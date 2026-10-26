@@ -37,7 +37,9 @@ export function recordEdit<T>(history: EditHistory<T>, before: T, options: Recor
 		&& history.last?.key === key
 		&& now - history.last.at <= EDIT_HISTORY_COALESCE_MS
 		&& history.past.length > 0;
-	const last = key === undefined ? undefined : { key, at: now };
+	const last = key === undefined
+		? undefined
+		: { key, at: now };
 	if (coalesces)
 		return { past: history.past, future: [], last };
 	return {
@@ -53,7 +55,10 @@ export function undoEdit<T>(history: EditHistory<T>, current: T): { history: Edi
 	if (restore === undefined)
 		return null;
 	return {
-		history: { past: history.past.slice(0, -1), future: [...history.future, current] },
+		history: {
+			past: history.past.slice(0, -1),
+			future: [...history.future, current],
+		},
 		restore,
 	};
 }
@@ -64,7 +69,10 @@ export function redoEdit<T>(history: EditHistory<T>, current: T): { history: Edi
 	if (restore === undefined)
 		return null;
 	return {
-		history: { past: [...history.past, current], future: history.future.slice(0, -1) },
+		history: {
+			past: [...history.past, current],
+			future: history.future.slice(0, -1),
+		},
 		restore,
 	};
 }

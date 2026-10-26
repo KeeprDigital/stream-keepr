@@ -304,7 +304,9 @@ describe('scheduled Graphics Asset Library retention', () => {
 			await expect(context.library.getIngestionOperation({
 				operationId: operation.id,
 				initiatedBy: operation.initiatedBy,
-			})).resolves.toMatchObject({ failure: { retryable: true } });
+			})).resolves.toMatchObject({
+				failure: { retryable: true },
+			});
 
 			context.advanceTo(new Date(lastCheckpoint + 7 * DAY).toISOString());
 			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
@@ -460,13 +462,15 @@ describe('scheduled Graphics Asset Library retention', () => {
 						},
 					},
 				},
-				assets: [{
-					slot: 'backdrop',
-					reference: {
-						assetId: backdrop.result!.assetId,
-						revisionId: backdrop.result!.revisionId,
+				assets: [
+					{
+						slot: 'backdrop',
+						reference: {
+							assetId: backdrop.result!.assetId,
+							revisionId: backdrop.result!.revisionId,
+						},
 					},
-				}],
+				],
 			});
 			if (exported.outcome !== 'exported')
 				throw new Error('Expected the fixture package to export');
@@ -737,7 +741,10 @@ describe('scheduled Graphics Asset Library retention', () => {
 				remoteSource: createGraphicsRemoteSourceFetcher({
 					resolver: {
 						async resolve() {
-							return { outcome: 'resolved', addresses: ['93.184.216.34'] };
+							return {
+								outcome: 'resolved',
+								addresses: ['93.184.216.34'],
+							};
 						},
 					},
 					// No declared length, so the copy discovers it while reading and
@@ -798,7 +805,10 @@ describe('scheduled Graphics Asset Library retention', () => {
 				remoteSource: createGraphicsRemoteSourceFetcher({
 					resolver: {
 						async resolve() {
-							return { outcome: 'resolved', addresses: ['93.184.216.34'] };
+							return {
+								outcome: 'resolved',
+								addresses: ['93.184.216.34'],
+							};
 						},
 					},
 					async fetch() {
@@ -920,7 +930,9 @@ describe('scheduled Graphics Asset Library retention', () => {
 			await expect(context.library.getIngestionOperation({
 				operationId: first.id,
 				initiatedBy: first.initiatedBy,
-			})).resolves.toMatchObject({ failure: { code: 'staged-input-expired' } });
+			})).resolves.toMatchObject({
+				failure: { code: 'staged-input-expired' },
+			});
 			await expect(context.library.getIngestionOperation({
 				operationId: second.id,
 				initiatedBy: second.initiatedBy,
@@ -1464,7 +1476,11 @@ describe('scheduled Graphics Asset Library retention', () => {
 				confirmation: 'purge-now',
 			})).resolves.toMatchObject({
 				outcome: 'in-use',
-				usage: [expect.objectContaining({ reference: { assetId, revisionId } })],
+				usage: [
+					expect.objectContaining({
+						reference: { assetId, revisionId },
+					}),
+				],
 			});
 			await expect(context.library.listGraphicAssets({
 				lifecycleStates: ['trashed'],
@@ -1749,7 +1765,12 @@ describe('scheduled Graphics Asset Library retention', () => {
 			expect(contended.content.bytesReclaimed).toBe(0);
 			await expect(context.library.getRetentionOverview())
 				.resolves
-				.toMatchObject({ quarantinedContent: [expect.anything(), expect.anything()] });
+				.toMatchObject({
+					quarantinedContent: [
+						expect.anything(),
+						expect.anything(),
+					],
+				});
 
 			// Once that claim is older than its lease, this sweep may reclaim it,
 			// and it counts the work exactly once.
@@ -1931,7 +1952,9 @@ describe('scheduled Graphics Asset Library retention', () => {
 								pruneAfter: new Date(restoredAt + 80 * DAY).toISOString(),
 							},
 						}),
-						expect.objectContaining({ retention: { policy: 'latest-revision' } }),
+						expect.objectContaining({
+							retention: { policy: 'latest-revision' },
+						}),
 					],
 				});
 		});

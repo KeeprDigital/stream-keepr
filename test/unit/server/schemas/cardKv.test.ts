@@ -8,8 +8,18 @@ function validCard() {
 		set: 'lea',
 		layout: 'normal',
 		imageData: { front: null, back: null },
-		orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
-		displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
+		orientationData: {
+			flipable: false,
+			turnable: false,
+			rotateable: false,
+			counterRotateable: false,
+		},
+		displayData: {
+			flipped: false,
+			rotated: false,
+			counterRotated: false,
+			turnedOver: false,
+		},
 	};
 }
 
@@ -44,7 +54,10 @@ describe('cardInputSchema persistence bounds', () => {
 		]) {
 			expect(cardInputSchema.safeParse({
 				...validCard(),
-				imageData: { front: { normal: url }, back: null },
+				imageData: {
+					front: { normal: url },
+					back: null,
+				},
 			}).success).toBe(false);
 		}
 	});
@@ -52,7 +65,10 @@ describe('cardInputSchema persistence bounds', () => {
 	it('rejects invalid or excessive timeout values', () => {
 		expect(cardInputSchema.safeParse({
 			...validCard(),
-			timeoutData: { timeoutDuration: Number.MAX_SAFE_INTEGER, timeoutStartTimestamp: Date.now() },
+			timeoutData: {
+				timeoutDuration: Number.MAX_SAFE_INTEGER,
+				timeoutStartTimestamp: Date.now(),
+			},
 		}).success).toBe(false);
 	});
 });

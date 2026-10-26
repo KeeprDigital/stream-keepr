@@ -39,7 +39,9 @@ watch(() => eventStore.event?.cardTimeout, (value) => {
 
 const timeoutLabel = computed(() => {
 	const seconds = eventStore.event?.cardTimeout ?? 0;
-	return seconds > 0 ? `${seconds}s timeout` : 'No timeout';
+	return seconds > 0
+		? `${seconds}s timeout`
+		: 'No timeout';
 });
 
 async function saveTimeout() {

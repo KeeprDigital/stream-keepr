@@ -61,7 +61,9 @@ describe('the ban body', () => {
 	});
 
 	it('refuses a reason too long to display back on the listing', () => {
-		expect(() => banUserAccountSchema.parse({ reason: 'x'.repeat(501) })).toThrow();
+		expect(() => banUserAccountSchema.parse({
+			reason: 'x'.repeat(501),
+		})).toThrow();
 	});
 
 	it('refuses a key it does not know', () => {

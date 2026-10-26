@@ -98,7 +98,12 @@ describe('archetypeWriteModule', () => {
 		mockArchetypeCardService.setKeyCards.mockResolvedValue([]);
 		mockPlayerDeckService.listPlayerIdsByArchetype.mockResolvedValue([]);
 		mockPlayerDeckService.listPrimaryPlayerIdsByArchetype.mockResolvedValue([]);
-		mockBatch.mockResolvedValue([[], [{ id: 11 }]]);
+		mockBatch.mockResolvedValue([
+			[],
+			[
+				{ id: 11 },
+			],
+		]);
 		mockFindEvent.mockResolvedValue({ game: 'mtg' });
 		mockSelectWhere.mockResolvedValue([]);
 		mockPublication.archetypeCreated.mockResolvedValue({ id: 11, name: 'New Deck', keyCards: [] });
@@ -127,7 +132,9 @@ describe('archetypeWriteModule', () => {
 	it('updates an Archetype, reconciles decks, and publishes with key cards', async () => {
 		mockPlayerDeckService.listPlayerIdsByArchetype.mockResolvedValue([5, 6, 7]);
 		mockPlayerDeckService.listPrimaryPlayerIdsByArchetype.mockResolvedValue([5]);
-		mockArchetypeCardService.getKeyCards.mockResolvedValue([{ id: 99 }]);
+		mockArchetypeCardService.getKeyCards.mockResolvedValue([
+			{ id: 99 },
+		]);
 
 		const response = await archetypeWriteModule().updateArchetype({
 			eventId: 1,
@@ -151,7 +158,9 @@ describe('archetypeWriteModule', () => {
 		expect(mockPublication.archetypeUpdated).toHaveBeenCalledWith({
 			eventId: 1,
 			entity: expect.objectContaining({ id: 11 }),
-			keyCards: [{ id: 99 }],
+			keyCards: [
+				{ id: 99 },
+			],
 			originConnectionId: 'origin-1',
 		});
 		expect(response).toEqual({ id: 11, name: 'Updated Deck', keyCards: [] });
@@ -238,13 +247,21 @@ describe('archetypeWriteModule', () => {
 
 	describe('updateCards', () => {
 		it('resolves explicit cardIds, sets key cards, and publishes', async () => {
-			mockSelectWhere.mockResolvedValue([{ id: 3 }, { id: 4 }]);
-			mockArchetypeCardService.setKeyCards.mockResolvedValue([{ id: 3 }, { id: 4 }]);
+			mockSelectWhere.mockResolvedValue([
+				{ id: 3 },
+				{ id: 4 },
+			]);
+			mockArchetypeCardService.setKeyCards.mockResolvedValue([
+				{ id: 3 },
+				{ id: 4 },
+			]);
 
 			const response = await archetypeWriteModule().updateCards({
 				eventId: 1,
 				archetypeId: 11,
-				input: { cardIds: [3, 4] },
+				input: {
+					cardIds: [3, 4],
+				},
 				originConnectionId: 'origin-1',
 			});
 
@@ -252,10 +269,18 @@ describe('archetypeWriteModule', () => {
 			expect(mockPublication.archetypeKeyCardsUpdated).toHaveBeenCalledWith({
 				eventId: 1,
 				archetypeId: 11,
-				keyCards: [{ id: 3 }, { id: 4 }],
+				keyCards: [
+					{ id: 3 },
+					{ id: 4 },
+				],
 				originConnectionId: 'origin-1',
 			});
-			expect(response).toEqual({ keyCards: [{ id: 3 }, { id: 4 }] });
+			expect(response).toEqual({
+				keyCards: [
+					{ id: 3 },
+					{ id: 4 },
+				],
+			});
 		});
 
 		it('returns 404 when the archetype does not belong to the event', async () => {
@@ -279,7 +304,9 @@ describe('archetypeWriteModule', () => {
 			await expect(archetypeWriteModule().updateCards({
 				eventId: 1,
 				archetypeId: 11,
-				input: { cardIds: [3] },
+				input: {
+					cardIds: [3],
+				},
 			})).rejects.toMatchObject({
 				statusCode: 400,
 				message: 'Key cards are only supported for MTG events',
@@ -289,12 +316,16 @@ describe('archetypeWriteModule', () => {
 		});
 
 		it('rejects cardIds that do not reference MTG cards', async () => {
-			mockSelectWhere.mockResolvedValue([{ id: 3 }]);
+			mockSelectWhere.mockResolvedValue([
+				{ id: 3 },
+			]);
 
 			await expect(archetypeWriteModule().updateCards({
 				eventId: 1,
 				archetypeId: 11,
-				input: { cardIds: [3, 4] },
+				input: {
+					cardIds: [3, 4],
+				},
 			})).rejects.toMatchObject({
 				statusCode: 400,
 				message: 'One or more cardIds do not reference MTG cards',

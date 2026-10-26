@@ -30,11 +30,26 @@ describe('the shared GLSL prelude', () => {
 	// The effects written for Stream Keepr. The fork ports (fog, cells) keep
 	// their fork-faithful helpers inline, so they are not held to this.
 	it.each([
-		['ember', [prelude.GLSL_HASH_2D_SALTED]],
-		['shards', [prelude.GLSL_HASH_2D_SALTED]],
-		['inkmap', [prelude.GLSL_HASH_2D, prelude.GLSL_VALUE_NOISE_2D]],
-		['ridgelines', [prelude.GLSL_HASH_1D, prelude.GLSL_VALUE_NOISE_1D]],
-		['weave', [prelude.GLSL_HASH_1D]],
+		[
+			'ember',
+			[prelude.GLSL_HASH_2D_SALTED],
+		],
+		[
+			'shards',
+			[prelude.GLSL_HASH_2D_SALTED],
+		],
+		[
+			'inkmap',
+			[prelude.GLSL_HASH_2D, prelude.GLSL_VALUE_NOISE_2D],
+		],
+		[
+			'ridgelines',
+			[prelude.GLSL_HASH_1D, prelude.GLSL_VALUE_NOISE_1D],
+		],
+		[
+			'weave',
+			[prelude.GLSL_HASH_1D],
+		],
 	] as const)('is where %s takes its hash and noise helpers from', async (effect, snippets) => {
 		let shader = await emittedFragmentShader(effect);
 		for (const snippet of snippets) {

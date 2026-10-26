@@ -11,7 +11,9 @@ vi.stubGlobal('readValidatedBody', mockReadValidatedBody);
 vi.stubGlobal('setResponseStatus', mockSetResponseStatus);
 
 vi.mock('~~/server/schemas/api/event', () => ({
-	createEventSchema: { parse: vi.fn(input => input) },
+	createEventSchema: {
+		parse: vi.fn(input => input),
+	},
 }));
 
 vi.mock('~~/server/mappers/event', () => ({

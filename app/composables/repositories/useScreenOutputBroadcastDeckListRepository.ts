@@ -10,7 +10,9 @@ export function useScreenOutputBroadcastDeckListRepository() {
 	): Promise<BroadcastDeckListResponse> {
 		return await $fetch<BroadcastDeckListResponse>(
 			`/api/screen-output/events/${eventId}/screens/${screenId}/broadcast-deck-list`,
-			{ headers: screenOutputCapabilityHeaders(assetCapability) },
+			{
+				headers: screenOutputCapabilityHeaders(assetCapability),
+			},
 		);
 	}
 

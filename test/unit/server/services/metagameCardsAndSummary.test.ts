@@ -84,7 +84,15 @@ const metagameService = createMetagameReadModelImplementation;
 /** Chain where .where() or .orderBy() is the terminal (most common) */
 function makeSelectChain(resolvedValue: any[]) {
 	const chain: any = {};
-	const noopMethods = ['from', 'innerJoin', 'leftJoin', 'groupBy', 'having', 'limit', 'offset'];
+	const noopMethods = [
+		'from',
+		'innerJoin',
+		'leftJoin',
+		'groupBy',
+		'having',
+		'limit',
+		'offset',
+	];
 	for (const m of noopMethods) {
 		chain[m] = vi.fn().mockReturnValue(chain);
 	}
@@ -97,7 +105,16 @@ function makeSelectChain(resolvedValue: any[]) {
 /** Chain where .orderBy() is terminal and .where() is a noop */
 function makeOrderByChain(resolvedValue: any[]) {
 	const chain: any = {};
-	const noopMethods = ['from', 'innerJoin', 'leftJoin', 'groupBy', 'having', 'limit', 'offset', 'where'];
+	const noopMethods = [
+		'from',
+		'innerJoin',
+		'leftJoin',
+		'groupBy',
+		'having',
+		'limit',
+		'offset',
+		'where',
+	];
 	for (const m of noopMethods) {
 		chain[m] = vi.fn().mockReturnValue(chain);
 	}
@@ -108,7 +125,15 @@ function makeOrderByChain(resolvedValue: any[]) {
 /** Chain where .groupBy() is terminal */
 function makeGroupByChain(resolvedValue: any[]) {
 	const chain: any = {};
-	const noopMethods = ['from', 'innerJoin', 'leftJoin', 'having', 'offset', 'where', 'orderBy'];
+	const noopMethods = [
+		'from',
+		'innerJoin',
+		'leftJoin',
+		'having',
+		'offset',
+		'where',
+		'orderBy',
+	];
 	for (const m of noopMethods) {
 		chain[m] = vi.fn().mockReturnValue(chain);
 	}
@@ -169,7 +194,10 @@ describe('metagameService cards and summary', () => {
 						deckCount: 2,
 					},
 				]));
-			mockDb.selectDistinct.mockReturnValue(makeSelectChain([{ playerId: 1 }, { playerId: 2 }]));
+			mockDb.selectDistinct.mockReturnValue(makeSelectChain([
+				{ playerId: 1 },
+				{ playerId: 2 },
+			]));
 
 			const result = await metagameService().getCardBreakdown(1, 'all');
 
@@ -187,10 +215,38 @@ describe('metagameService cards and summary', () => {
 		it('sortBy=\'avgCopies\' orders correctly', async () => {
 			mockDb.select
 				.mockReturnValueOnce(makeGroupByChain([
-					{ cardId: 1, name: 'Bolt', cardType: 'Instant', scryfallId: null, colors: 'R', cmc: 1, totalCopies: 4, mainboardCount: 4, sideboardCount: 0, mainboardDeckCount: 1, sideboardDeckCount: 0, deckCount: 1 },
-					{ cardId: 2, name: 'Wrath', cardType: 'Sorcery', scryfallId: null, colors: 'W', cmc: 4, totalCopies: 2, mainboardCount: 2, sideboardCount: 0, mainboardDeckCount: 1, sideboardDeckCount: 0, deckCount: 1 },
+					{
+						cardId: 1,
+						name: 'Bolt',
+						cardType: 'Instant',
+						scryfallId: null,
+						colors: 'R',
+						cmc: 1,
+						totalCopies: 4,
+						mainboardCount: 4,
+						sideboardCount: 0,
+						mainboardDeckCount: 1,
+						sideboardDeckCount: 0,
+						deckCount: 1,
+					},
+					{
+						cardId: 2,
+						name: 'Wrath',
+						cardType: 'Sorcery',
+						scryfallId: null,
+						colors: 'W',
+						cmc: 4,
+						totalCopies: 2,
+						mainboardCount: 2,
+						sideboardCount: 0,
+						mainboardDeckCount: 1,
+						sideboardDeckCount: 0,
+						deckCount: 1,
+					},
 				]));
-			mockDb.selectDistinct.mockReturnValue(makeSelectChain([{ playerId: 1 }]));
+			mockDb.selectDistinct.mockReturnValue(makeSelectChain([
+				{ playerId: 1 },
+			]));
 
 			const result = await metagameService().getCardBreakdown(1, 'all', 'avgCopies');
 
@@ -200,10 +256,38 @@ describe('metagameService cards and summary', () => {
 		it('limit=1 slices to 1 entry', async () => {
 			mockDb.select
 				.mockReturnValueOnce(makeGroupByChain([
-					{ cardId: 1, name: 'Bolt', cardType: null, scryfallId: null, colors: 'R', cmc: 1, totalCopies: 4, mainboardCount: 4, sideboardCount: 0, mainboardDeckCount: 1, sideboardDeckCount: 0, deckCount: 1 },
-					{ cardId: 2, name: 'Wrath', cardType: null, scryfallId: null, colors: 'W', cmc: 4, totalCopies: 2, mainboardCount: 2, sideboardCount: 0, mainboardDeckCount: 1, sideboardDeckCount: 0, deckCount: 1 },
+					{
+						cardId: 1,
+						name: 'Bolt',
+						cardType: null,
+						scryfallId: null,
+						colors: 'R',
+						cmc: 1,
+						totalCopies: 4,
+						mainboardCount: 4,
+						sideboardCount: 0,
+						mainboardDeckCount: 1,
+						sideboardDeckCount: 0,
+						deckCount: 1,
+					},
+					{
+						cardId: 2,
+						name: 'Wrath',
+						cardType: null,
+						scryfallId: null,
+						colors: 'W',
+						cmc: 4,
+						totalCopies: 2,
+						mainboardCount: 2,
+						sideboardCount: 0,
+						mainboardDeckCount: 1,
+						sideboardDeckCount: 0,
+						deckCount: 1,
+					},
 				]));
-			mockDb.selectDistinct.mockReturnValue(makeSelectChain([{ playerId: 1 }]));
+			mockDb.selectDistinct.mockReturnValue(makeSelectChain([
+				{ playerId: 1 },
+			]));
 
 			const result = await metagameService().getCardBreakdown(1, 'all', 'inclusionRate', 1);
 
@@ -213,12 +297,71 @@ describe('metagameService cards and summary', () => {
 		it('excludes only basic lands while keeping nonbasic lands and spell-front MDFCs', async () => {
 			mockDb.select
 				.mockReturnValueOnce(makeGroupByChain([
-					{ cardId: 1, name: 'Forest', cardType: 'Basic Land', scryfallId: null, colors: 'G', cmc: 0, manaCost: null, totalCopies: 24, mainboardCount: 24, sideboardCount: 0, mainboardDeckCount: 2, sideboardDeckCount: 0, deckCount: 2 },
-					{ cardId: 2, name: 'Treasure Vault', cardType: 'Artifact Land', scryfallId: null, colors: null, cmc: 0, manaCost: null, totalCopies: 2, mainboardCount: 2, sideboardCount: 0, mainboardDeckCount: 1, sideboardDeckCount: 0, deckCount: 1 },
-					{ cardId: 3, name: 'Lightning Bolt', cardType: 'Instant', scryfallId: null, colors: 'R', cmc: 1, manaCost: '{R}', totalCopies: 8, mainboardCount: 8, sideboardCount: 0, mainboardDeckCount: 2, sideboardDeckCount: 0, deckCount: 2 },
-					{ cardId: 4, name: 'Shatterskull Smashing', cardType: 'Sorcery // Land', scryfallId: null, colors: 'R', cmc: 2, manaCost: '{X}{R}{R}', totalCopies: 2, mainboardCount: 2, sideboardCount: 0, mainboardDeckCount: 2, sideboardDeckCount: 0, deckCount: 2 },
+					{
+						cardId: 1,
+						name: 'Forest',
+						cardType: 'Basic Land',
+						scryfallId: null,
+						colors: 'G',
+						cmc: 0,
+						manaCost: null,
+						totalCopies: 24,
+						mainboardCount: 24,
+						sideboardCount: 0,
+						mainboardDeckCount: 2,
+						sideboardDeckCount: 0,
+						deckCount: 2,
+					},
+					{
+						cardId: 2,
+						name: 'Treasure Vault',
+						cardType: 'Artifact Land',
+						scryfallId: null,
+						colors: null,
+						cmc: 0,
+						manaCost: null,
+						totalCopies: 2,
+						mainboardCount: 2,
+						sideboardCount: 0,
+						mainboardDeckCount: 1,
+						sideboardDeckCount: 0,
+						deckCount: 1,
+					},
+					{
+						cardId: 3,
+						name: 'Lightning Bolt',
+						cardType: 'Instant',
+						scryfallId: null,
+						colors: 'R',
+						cmc: 1,
+						manaCost: '{R}',
+						totalCopies: 8,
+						mainboardCount: 8,
+						sideboardCount: 0,
+						mainboardDeckCount: 2,
+						sideboardDeckCount: 0,
+						deckCount: 2,
+					},
+					{
+						cardId: 4,
+						name: 'Shatterskull Smashing',
+						cardType: 'Sorcery // Land',
+						scryfallId: null,
+						colors: 'R',
+						cmc: 2,
+						manaCost: '{X}{R}{R}',
+						totalCopies: 2,
+						mainboardCount: 2,
+						sideboardCount: 0,
+						mainboardDeckCount: 2,
+						sideboardDeckCount: 0,
+						deckCount: 2,
+					},
 				]));
-			mockDb.selectDistinct.mockReturnValue(makeSelectChain([{ playerId: 1 }, { playerId: 2 }]));
+			mockDb.selectDistinct.mockReturnValue(makeSelectChain([
+				{ playerId: 1 },
+				{ playerId: 2 },
+			]));
 
 			const result = await metagameService().getCardBreakdown(1, 'all');
 
@@ -232,9 +375,51 @@ describe('metagameService cards and summary', () => {
 		it('recomputes metrics from mainboard-only data before sorting and filtering', async () => {
 			mockDb.select
 				.mockReturnValueOnce(makeGroupByChain([
-					{ cardId: 1, name: 'Lightning Bolt', cardType: 'Instant', scryfallId: null, colors: 'R', cmc: 1, manaCost: '{R}', totalCopies: 6, mainboardCount: 4, sideboardCount: 2, mainboardDeckCount: 1, sideboardDeckCount: 1, deckCount: 2 },
-					{ cardId: 2, name: 'Negate', cardType: 'Instant', scryfallId: null, colors: 'U', cmc: 2, manaCost: '{1}{U}', totalCopies: 6, mainboardCount: 6, sideboardCount: 0, mainboardDeckCount: 2, sideboardDeckCount: 0, deckCount: 2 },
-					{ cardId: 3, name: 'Disdainful Stroke', cardType: 'Instant', scryfallId: null, colors: 'U', cmc: 2, manaCost: '{1}{U}', totalCopies: 4, mainboardCount: 0, sideboardCount: 4, mainboardDeckCount: 0, sideboardDeckCount: 2, deckCount: 2 },
+					{
+						cardId: 1,
+						name: 'Lightning Bolt',
+						cardType: 'Instant',
+						scryfallId: null,
+						colors: 'R',
+						cmc: 1,
+						manaCost: '{R}',
+						totalCopies: 6,
+						mainboardCount: 4,
+						sideboardCount: 2,
+						mainboardDeckCount: 1,
+						sideboardDeckCount: 1,
+						deckCount: 2,
+					},
+					{
+						cardId: 2,
+						name: 'Negate',
+						cardType: 'Instant',
+						scryfallId: null,
+						colors: 'U',
+						cmc: 2,
+						manaCost: '{1}{U}',
+						totalCopies: 6,
+						mainboardCount: 6,
+						sideboardCount: 0,
+						mainboardDeckCount: 2,
+						sideboardDeckCount: 0,
+						deckCount: 2,
+					},
+					{
+						cardId: 3,
+						name: 'Disdainful Stroke',
+						cardType: 'Instant',
+						scryfallId: null,
+						colors: 'U',
+						cmc: 2,
+						manaCost: '{1}{U}',
+						totalCopies: 4,
+						mainboardCount: 0,
+						sideboardCount: 4,
+						mainboardDeckCount: 0,
+						sideboardDeckCount: 2,
+						deckCount: 2,
+					},
 				]));
 			mockDb.selectDistinct.mockReturnValue(makeSelectChain([
 				{ playerId: 1 },
@@ -269,8 +454,36 @@ describe('metagameService cards and summary', () => {
 		it('recomputes metrics from sideboard-only data', async () => {
 			mockDb.select
 				.mockReturnValueOnce(makeGroupByChain([
-					{ cardId: 1, name: 'Lightning Bolt', cardType: 'Instant', scryfallId: null, colors: 'R', cmc: 1, manaCost: '{R}', totalCopies: 6, mainboardCount: 4, sideboardCount: 2, mainboardDeckCount: 1, sideboardDeckCount: 1, deckCount: 2 },
-					{ cardId: 2, name: 'Disdainful Stroke', cardType: 'Instant', scryfallId: null, colors: 'U', cmc: 2, manaCost: '{1}{U}', totalCopies: 4, mainboardCount: 0, sideboardCount: 4, mainboardDeckCount: 0, sideboardDeckCount: 2, deckCount: 2 },
+					{
+						cardId: 1,
+						name: 'Lightning Bolt',
+						cardType: 'Instant',
+						scryfallId: null,
+						colors: 'R',
+						cmc: 1,
+						manaCost: '{R}',
+						totalCopies: 6,
+						mainboardCount: 4,
+						sideboardCount: 2,
+						mainboardDeckCount: 1,
+						sideboardDeckCount: 1,
+						deckCount: 2,
+					},
+					{
+						cardId: 2,
+						name: 'Disdainful Stroke',
+						cardType: 'Instant',
+						scryfallId: null,
+						colors: 'U',
+						cmc: 2,
+						manaCost: '{1}{U}',
+						totalCopies: 4,
+						mainboardCount: 0,
+						sideboardCount: 4,
+						mainboardDeckCount: 0,
+						sideboardDeckCount: 2,
+						deckCount: 2,
+					},
 				]));
 			mockDb.selectDistinct.mockReturnValue(makeSelectChain([
 				{ playerId: 1 },
@@ -309,7 +522,10 @@ describe('metagameService cards and summary', () => {
 		});
 
 		it('deduplicates tokens by name and counts distinct decks and source cards', async () => {
-			mockDb.selectDistinct.mockReturnValue(makeSelectChain([{ playerId: 1 }, { playerId: 2 }]));
+			mockDb.selectDistinct.mockReturnValue(makeSelectChain([
+				{ playerId: 1 },
+				{ playerId: 2 },
+			]));
 			mockDb.select.mockReturnValueOnce(makeSelectChain([
 				{
 					deckId: 1,
@@ -318,7 +534,13 @@ describe('metagameService cards and summary', () => {
 					cardScryfallId: 'source-10',
 					cardType: 'Enchantment',
 					deckTokens: [
-						{ id: 'token-a', scryfallId: 'token-a', name: 'Map', typeLine: 'Token Artifact - Map', uri: 'https://example.com/token-a' },
+						{
+							id: 'token-a',
+							scryfallId: 'token-a',
+							name: 'Map',
+							typeLine: 'Token Artifact - Map',
+							uri: 'https://example.com/token-a',
+						},
 					],
 				},
 				{
@@ -328,7 +550,13 @@ describe('metagameService cards and summary', () => {
 					cardScryfallId: 'source-11',
 					cardType: 'Enchantment',
 					deckTokens: [
-						{ id: 'token-a-copy', scryfallId: 'token-a-copy', name: 'map', typeLine: 'Token Artifact - Map', uri: null },
+						{
+							id: 'token-a-copy',
+							scryfallId: 'token-a-copy',
+							name: 'map',
+							typeLine: 'Token Artifact - Map',
+							uri: null,
+						},
 					],
 				},
 				{
@@ -338,8 +566,20 @@ describe('metagameService cards and summary', () => {
 					cardScryfallId: 'source-12',
 					cardType: 'Sorcery',
 					deckTokens: [
-						{ id: 'token-b', scryfallId: 'token-b', name: 'Reflection', typeLine: 'Token Creature - Reflection', uri: null },
-						{ id: 'token-a', scryfallId: 'token-a', name: 'Map', typeLine: 'Token Artifact - Map', uri: 'https://example.com/token-a' },
+						{
+							id: 'token-b',
+							scryfallId: 'token-b',
+							name: 'Reflection',
+							typeLine: 'Token Creature - Reflection',
+							uri: null,
+						},
+						{
+							id: 'token-a',
+							scryfallId: 'token-a',
+							name: 'Map',
+							typeLine: 'Token Artifact - Map',
+							uri: 'https://example.com/token-a',
+						},
 					],
 				},
 			]));
@@ -367,7 +607,9 @@ describe('metagameService cards and summary', () => {
 		});
 
 		it('respects scoped deck count filters from the metagame scope model', async () => {
-			mockDb.selectDistinct.mockReturnValue(makeSelectChain([{ playerId: 1 }]));
+			mockDb.selectDistinct.mockReturnValue(makeSelectChain([
+				{ playerId: 1 },
+			]));
 			mockDb.select.mockReturnValueOnce(makeSelectChain([
 				{
 					deckId: 1,
@@ -376,7 +618,13 @@ describe('metagameService cards and summary', () => {
 					cardScryfallId: 'source-10',
 					cardType: 'Creature',
 					deckTokens: [
-						{ id: 'treasure', scryfallId: 'treasure', name: 'Treasure', typeLine: 'Token Artifact - Treasure', uri: null },
+						{
+							id: 'treasure',
+							scryfallId: 'treasure',
+							name: 'Treasure',
+							typeLine: 'Token Artifact - Treasure',
+							uri: null,
+						},
 					],
 				},
 			]));
@@ -401,12 +649,34 @@ describe('metagameService cards and summary', () => {
 			// 4. computeArchetypeBreakdown: archetypeRows → [] (no matching archetype → entries=[])
 			// computeCardBreakdown: no select (totalDecks=0 via selectDistinct → [])
 			mockDb.select
-				.mockReturnValueOnce(makeSelectChain([{ c: 4 }]))
-				.mockReturnValueOnce(makeSelectChain([{ c: 2 }]))
 				.mockReturnValueOnce(makeSelectChain([
-					{ archetypeId: 1, wins: 1, losses: 0, points: 3, position: 1 },
-					{ archetypeId: 1, wins: 1, losses: 0, points: 3, position: 2 },
-					{ archetypeId: 1, wins: 1, losses: 0, points: 3, position: 3 },
+					{ c: 4 },
+				]))
+				.mockReturnValueOnce(makeSelectChain([
+					{ c: 2 },
+				]))
+				.mockReturnValueOnce(makeSelectChain([
+					{
+						archetypeId: 1,
+						wins: 1,
+						losses: 0,
+						points: 3,
+						position: 1,
+					},
+					{
+						archetypeId: 1,
+						wins: 1,
+						losses: 0,
+						points: 3,
+						position: 2,
+					},
+					{
+						archetypeId: 1,
+						wins: 1,
+						losses: 0,
+						points: 3,
+						position: 3,
+					},
 				]))
 				.mockReturnValueOnce(makeSelectChain([]));
 			mockDb.selectDistinct.mockReturnValue(makeSelectChain([]));
@@ -432,22 +702,104 @@ describe('metagameService cards and summary', () => {
 			// 4. computeArchetypeBreakdown: archetypeRows → [Mono Red]
 			// 5. computeCardBreakdown: aggRows (totalDecks=2 via selectDistinct)
 			mockDb.select
-				.mockReturnValueOnce(makeSelectChain([{ c: 2 }]))
-				.mockReturnValueOnce(makeSelectChain([{ c: 1 }]))
 				.mockReturnValueOnce(makeSelectChain([
-					{ archetypeId: 1, wins: 4, losses: 2, points: 12, position: 1, deckColors: 'R' },
-					{ archetypeId: 1, wins: 3, losses: 3, points: 9, position: 2, deckColors: 'R' },
+					{ c: 2 },
 				]))
 				.mockReturnValueOnce(makeSelectChain([
-					{ id: 1, name: 'Mono Red', colors: 'R', eventId: 1 },
+					{ c: 1 },
+				]))
+				.mockReturnValueOnce(makeSelectChain([
+					{
+						archetypeId: 1,
+						wins: 4,
+						losses: 2,
+						points: 12,
+						position: 1,
+						deckColors: 'R',
+					},
+					{
+						archetypeId: 1,
+						wins: 3,
+						losses: 3,
+						points: 9,
+						position: 2,
+						deckColors: 'R',
+					},
+				]))
+				.mockReturnValueOnce(makeSelectChain([
+					{
+						id: 1,
+						name: 'Mono Red',
+						colors: 'R',
+						eventId: 1,
+					},
 				]))
 				.mockReturnValueOnce(makeGroupByChain([
-					{ cardId: 1, name: 'Mountain', cardType: 'Basic Land', scryfallId: null, colors: 'R', cmc: 0, manaCost: null, totalCopies: 20, mainboardCount: 20, sideboardCount: 0, mainboardDeckCount: 2, sideboardDeckCount: 0, deckCount: 2 },
-					{ cardId: 2, name: 'Lightning Bolt', cardType: 'Instant', scryfallId: null, colors: 'R', cmc: 1, manaCost: '{R}', totalCopies: 8, mainboardCount: 8, sideboardCount: 0, mainboardDeckCount: 2, sideboardDeckCount: 0, deckCount: 2 },
-					{ cardId: 3, name: 'Restless Anchorage', cardType: 'Land Creature', scryfallId: null, colors: 'WU', cmc: 0, manaCost: null, totalCopies: 6, mainboardCount: 6, sideboardCount: 0, mainboardDeckCount: 2, sideboardDeckCount: 0, deckCount: 2 },
-					{ cardId: 4, name: 'Shatterskull Smashing', cardType: 'Sorcery // Land', scryfallId: null, colors: 'R', cmc: 2, manaCost: '{X}{R}{R}', totalCopies: 2, mainboardCount: 2, sideboardCount: 0, mainboardDeckCount: 1, sideboardDeckCount: 0, deckCount: 1 },
+					{
+						cardId: 1,
+						name: 'Mountain',
+						cardType: 'Basic Land',
+						scryfallId: null,
+						colors: 'R',
+						cmc: 0,
+						manaCost: null,
+						totalCopies: 20,
+						mainboardCount: 20,
+						sideboardCount: 0,
+						mainboardDeckCount: 2,
+						sideboardDeckCount: 0,
+						deckCount: 2,
+					},
+					{
+						cardId: 2,
+						name: 'Lightning Bolt',
+						cardType: 'Instant',
+						scryfallId: null,
+						colors: 'R',
+						cmc: 1,
+						manaCost: '{R}',
+						totalCopies: 8,
+						mainboardCount: 8,
+						sideboardCount: 0,
+						mainboardDeckCount: 2,
+						sideboardDeckCount: 0,
+						deckCount: 2,
+					},
+					{
+						cardId: 3,
+						name: 'Restless Anchorage',
+						cardType: 'Land Creature',
+						scryfallId: null,
+						colors: 'WU',
+						cmc: 0,
+						manaCost: null,
+						totalCopies: 6,
+						mainboardCount: 6,
+						sideboardCount: 0,
+						mainboardDeckCount: 2,
+						sideboardDeckCount: 0,
+						deckCount: 2,
+					},
+					{
+						cardId: 4,
+						name: 'Shatterskull Smashing',
+						cardType: 'Sorcery // Land',
+						scryfallId: null,
+						colors: 'R',
+						cmc: 2,
+						manaCost: '{X}{R}{R}',
+						totalCopies: 2,
+						mainboardCount: 2,
+						sideboardCount: 0,
+						mainboardDeckCount: 1,
+						sideboardDeckCount: 0,
+						deckCount: 1,
+					},
 				]));
-			mockDb.selectDistinct.mockReturnValue(makeSelectChain([{ playerId: 1 }, { playerId: 2 }]));
+			mockDb.selectDistinct.mockReturnValue(makeSelectChain([
+				{ playerId: 1 },
+				{ playerId: 2 },
+			]));
 
 			const result = await metagameService().getSummary(1, 'all');
 
@@ -467,15 +819,34 @@ describe('metagameService cards and summary', () => {
 
 	describe('getArchetypeDetail', () => {
 		it('players include deckName field (null when not present in row)', async () => {
-			const arch = { id: 1, name: 'Mono Red', colors: 'R', eventId: 1 };
+			const arch = {
+				id: 1,
+				name: 'Mono Red',
+				colors: 'R',
+				eventId: 1,
+			};
 			mockDb.query.archetypes.findFirst.mockResolvedValue(arch);
 
-			const playerRow = { id: 1, name: 'Player 1', position: 1, points: 15, wins: 5, losses: 1, draws: 0, deckColors: 'R', deckName: 'My Deck' };
+			const playerRow = {
+				id: 1,
+				name: 'Player 1',
+				position: 1,
+				points: 15,
+				wins: 5,
+				losses: 1,
+				draws: 0,
+				deckColors: 'R',
+				deckName: 'My Deck',
+			};
 
 			mockDb.select
 				.mockReturnValueOnce(makeOrderByChain([playerRow]))
-				.mockReturnValueOnce(makeSelectChain([{ id: 1 }]))
-				.mockReturnValueOnce(makeSelectChain([{ c: 1 }]));
+				.mockReturnValueOnce(makeSelectChain([
+					{ id: 1 },
+				]))
+				.mockReturnValueOnce(makeSelectChain([
+					{ c: 1 },
+				]));
 			mockDb.selectDistinct.mockReturnValue(makeSelectChain([]));
 
 			const result = await metagameService().getArchetypeDetail(1, 1, 'all');
@@ -484,15 +855,33 @@ describe('metagameService cards and summary', () => {
 		});
 
 		it('players deckName is null when not provided', async () => {
-			const arch = { id: 1, name: 'Mono Red', colors: 'R', eventId: 1 };
+			const arch = {
+				id: 1,
+				name: 'Mono Red',
+				colors: 'R',
+				eventId: 1,
+			};
 			mockDb.query.archetypes.findFirst.mockResolvedValue(arch);
 
-			const playerRow = { id: 1, name: 'Player 1', position: 1, points: 15, wins: 5, losses: 1, draws: 0, deckColors: 'R' };
+			const playerRow = {
+				id: 1,
+				name: 'Player 1',
+				position: 1,
+				points: 15,
+				wins: 5,
+				losses: 1,
+				draws: 0,
+				deckColors: 'R',
+			};
 
 			mockDb.select
 				.mockReturnValueOnce(makeOrderByChain([playerRow]))
-				.mockReturnValueOnce(makeSelectChain([{ id: 1 }]))
-				.mockReturnValueOnce(makeSelectChain([{ c: 1 }]));
+				.mockReturnValueOnce(makeSelectChain([
+					{ id: 1 },
+				]))
+				.mockReturnValueOnce(makeSelectChain([
+					{ c: 1 },
+				]));
 			mockDb.selectDistinct.mockReturnValue(makeSelectChain([]));
 
 			const result = await metagameService().getArchetypeDetail(1, 1, 'all');

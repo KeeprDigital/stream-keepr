@@ -52,7 +52,9 @@ export function useFeatureMatchOverlaySideboardRevealAnimation(
 	function advanceClock() {
 		now.value = performance.now();
 		triggers.value = settleSideboardRevealTriggers(triggers.value, now.value);
-		frame = triggers.value.length > 0 ? requestAnimationFrame(advanceClock) : null;
+		frame = triggers.value.length > 0
+			? requestAnimationFrame(advanceClock)
+			: null;
 	}
 
 	for (const side of PLAYER_SIDES) {

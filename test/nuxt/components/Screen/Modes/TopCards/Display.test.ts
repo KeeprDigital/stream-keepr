@@ -31,8 +31,26 @@ const defaultConfig = {
 const config = ref<any>({ ...defaultConfig });
 
 const entries = ref<any[]>([
-	{ id: 1, name: 'Lightning Bolt', inclusionRate: 80, avgCopies: 3.6, totalCopies: 18, deckCount: 4, cardType: 'Instant', scryfallId: null },
-	{ id: 2, name: 'Counterspell', inclusionRate: 60, avgCopies: 3, totalCopies: 12, deckCount: 3, cardType: 'Instant', scryfallId: null },
+	{
+		id: 1,
+		name: 'Lightning Bolt',
+		inclusionRate: 80,
+		avgCopies: 3.6,
+		totalCopies: 18,
+		deckCount: 4,
+		cardType: 'Instant',
+		scryfallId: null,
+	},
+	{
+		id: 2,
+		name: 'Counterspell',
+		inclusionRate: 60,
+		avgCopies: 3,
+		totalCopies: 12,
+		deckCount: 3,
+		cardType: 'Instant',
+		scryfallId: null,
+	},
 ]);
 
 // The page the composable projects: by default every card, ranked from 1.
@@ -99,8 +117,26 @@ describe('screenTopCardsDisplay', () => {
 		};
 		config.value = { ...defaultConfig };
 		entries.value = [
-			{ id: 1, name: 'Lightning Bolt', inclusionRate: 80, avgCopies: 3.6, totalCopies: 18, deckCount: 4, cardType: 'Instant', scryfallId: null },
-			{ id: 2, name: 'Counterspell', inclusionRate: 60, avgCopies: 3, totalCopies: 12, deckCount: 3, cardType: 'Instant', scryfallId: null },
+			{
+				id: 1,
+				name: 'Lightning Bolt',
+				inclusionRate: 80,
+				avgCopies: 3.6,
+				totalCopies: 18,
+				deckCount: 4,
+				cardType: 'Instant',
+				scryfallId: null,
+			},
+			{
+				id: 2,
+				name: 'Counterspell',
+				inclusionRate: 60,
+				avgCopies: 3,
+				totalCopies: 12,
+				deckCount: 3,
+				cardType: 'Instant',
+				scryfallId: null,
+			},
 		];
 		pageEntries.value = null;
 		currentPage.value = 1;
@@ -108,7 +144,9 @@ describe('screenTopCardsDisplay', () => {
 	});
 
 	it('renders only the current page, ranking each card across the whole ranking', async () => {
-		pageEntries.value = [{ entry: entries.value[1], rank: 7 }];
+		pageEntries.value = [
+			{ entry: entries.value[1], rank: 7 },
+		];
 		currentPage.value = 2;
 		totalPages.value = 3;
 

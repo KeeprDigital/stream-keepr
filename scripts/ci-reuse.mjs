@@ -78,7 +78,9 @@ export function recordName(tree) {
  * @returns {{ claims: Record<string, unknown> } | { problem: string }} the claims, or why the token is not GitHub's
  */
 function verifiedClaims(jwt, jwks) {
-	const parts = typeof jwt === 'string' ? jwt.trim().split('.') : [];
+	const parts = typeof jwt === 'string'
+		? jwt.trim().split('.')
+		: [];
 	if (parts.length !== 3 || parts.includes(''))
 		return { problem: 'the record is not a signed token' };
 	const [header, payload, signature] = /** @type {[string, string, string]} */ (parts);
@@ -93,7 +95,9 @@ function verifiedClaims(jwt, jwks) {
 	}
 	if (parsedHeader?.alg !== 'RS256')
 		return { problem: `the token's signature algorithm is ${JSON.stringify(parsedHeader?.alg)}, not GitHub's RS256` };
-	const keys = Array.isArray(jwks?.keys) ? jwks.keys : [];
+	const keys = Array.isArray(jwks?.keys)
+		? jwks.keys
+		: [];
 	const jwk = keys.find((/** @type {any} */ key) => key?.kid === parsedHeader.kid && key?.kty === 'RSA');
 	if (!jwk)
 		return { problem: `the token's signing key ${JSON.stringify(parsedHeader.kid)} is not one GitHub publishes` };
@@ -120,14 +124,19 @@ function verifiedClaims(jwt, jwks) {
  * @returns {string | undefined} the problem, if any
  */
 function claimsProblem(claims, { repository, repositoryId, runId }) {
-	const workflowRef = typeof claims.workflow_ref === 'string' ? claims.workflow_ref : '';
+	const workflowRef = typeof claims.workflow_ref === 'string'
+		? claims.workflow_ref
+		: '';
 	/** @type {[boolean, string][]} */
 	const checks = [
 		[claims.iss === ISSUER, `the token's issuer is ${JSON.stringify(claims.iss)}`],
 		[claims.aud === AUDIENCE, `the token's audience is ${JSON.stringify(claims.aud)}`],
 		[claims.repository === repository && String(claims.repository_id) === repositoryId, `the token is from ${JSON.stringify(claims.repository)} (${JSON.stringify(claims.repository_id)}), not this repository`],
 		[claims.event_name === 'pull_request', `the token is from a ${JSON.stringify(claims.event_name)} run, not a pull_request run`],
-		[workflowRef.startsWith(`${repository}/${CI_WORKFLOW}@`), `the token is from workflow ${JSON.stringify(claims.workflow_ref)}, not ${CI_WORKFLOW}`],
+		[
+			workflowRef.startsWith(`${repository}/${CI_WORKFLOW}@`),
+			`the token is from workflow ${JSON.stringify(claims.workflow_ref)}, not ${CI_WORKFLOW}`,
+		],
 		[typeof claims.sha === 'string' && COMMIT_ID.test(claims.sha), `the token's commit ${JSON.stringify(claims.sha)} is not a commit id`],
 		[claims.workflow_sha === claims.sha, `the token's workflow file came from ${JSON.stringify(claims.workflow_sha)}, not the commit it ran on`],
 		[claims.runner_environment === 'github-hosted', `the token is from a ${JSON.stringify(claims.runner_environment)} runner`],
@@ -148,8 +157,11 @@ function claimsProblem(claims, { repository, repositoryId, runId }) {
 function runProblem(run, jobs, { repository, runId }) {
 	if (run?.id !== runId || run?.repository?.full_name !== repository || run?.path !== CI_WORKFLOW || run?.event !== 'pull_request')
 		return `run ${runId} is not a pull_request run of ${CI_WORKFLOW} in ${repository}`;
-	if (run.status !== 'completed' || run.conclusion !== 'success')
-		return `run ${runId} is ${run.status}${run.conclusion ? ` (${run.conclusion})` : ''}, not a completed success`;
+	if (run.status !== 'completed' || run.conclusion !== 'success') {
+		return `run ${runId} is ${run.status}${run.conclusion
+			? ` (${run.conclusion})`
+			: ''}, not a completed success`;
+	}
 	if (!Array.isArray(jobs) || jobs.length === 0)
 		return `GitHub lists no jobs for run ${runId}`;
 	const notPassed = jobs.filter(job => job?.status !== 'completed' || job?.conclusion !== 'success');
@@ -220,10 +232,17 @@ export async function findVerifiedRun(options) {
 			.map(artifact => ({ runId: /** @type {number} */ (artifact.workflow_run?.id), name: artifact.name }));
 	}
 	catch (error) {
-		return { run: undefined, rejected: [`Could not list the records of tree ${options.tree} (${messageOf(error)}).`] };
+		return {
+			run: undefined,
+			rejected: [`Could not list the records of tree ${options.tree} (${messageOf(error)}).`],
+		};
 	}
-	if (records.length === 0)
-		return { run: undefined, rejected: [`No PR run left a record of tree ${options.tree}.`] };
+	if (records.length === 0) {
+		return {
+			run: undefined,
+			rejected: [`No PR run left a record of tree ${options.tree}.`],
+		};
+	}
 	for (const record of records) {
 		try {
 			const outcome = await checkRecord(record, options);
@@ -244,12 +263,17 @@ export async function findVerifiedRun(options) {
  * @param {unknown} error
  */
 function messageOf(error) {
-	return (error instanceof Error ? error.message : String(error)).replace(/\s+/g, ' ').trim();
+	return (error instanceof Error
+		? error.message
+		: String(error)).replace(/\s+/g, ' ').trim();
 }
 
 /** @param {string[]} args */
 function git(args) {
-	return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).trim();
+	return execFileSync('git', args, {
+		encoding: 'utf8',
+		stdio: ['ignore', 'pipe', 'inherit'],
+	}).trim();
 }
 
 /**
@@ -261,16 +285,34 @@ function git(args) {
  */
 function githubIo(repository) {
 	/** @param {string} path */
-	const api = path => JSON.parse(execFileSync('gh', ['api', path], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 16 * 1024 * 1024 }));
+	const api = path => JSON.parse(execFileSync('gh', ['api', path], {
+		encoding: 'utf8',
+		stdio: ['ignore', 'pipe', 'pipe'],
+		maxBuffer: 16 * 1024 * 1024,
+	}));
 	return {
 		artifacts: async name => api(`repos/${repository}/actions/artifacts?name=${encodeURIComponent(name)}&per_page=20`).artifacts,
 		record: async (runId, name) => {
 			const directory = mkdtempSync(join(tmpdir(), 'ci-reuse-'));
-			execFileSync('gh', ['run', 'download', String(runId), '--repo', repository, '--name', name, '--dir', directory], { stdio: ['ignore', 'ignore', 'pipe'] });
+			execFileSync('gh', [
+				'run',
+				'download',
+				String(runId),
+				'--repo',
+				repository,
+				'--name',
+				name,
+				'--dir',
+				directory,
+			], {
+				stdio: ['ignore', 'ignore', 'pipe'],
+			});
 			return readFileSync(join(directory, RECORD_FILE), 'utf8');
 		},
 		jwks: async () => {
-			const response = await fetch(JWKS_URL, { signal: AbortSignal.timeout(15_000) });
+			const response = await fetch(JWKS_URL, {
+				signal: AbortSignal.timeout(15_000),
+			});
 			if (!response.ok)
 				throw new Error(`${JWKS_URL} answered ${response.status}`);
 			return response.json();
@@ -298,7 +340,12 @@ export async function verifiedRunOnGitHub(head) {
 		return undefined;
 	try {
 		const tree = git(['rev-parse', `${head}^{tree}`]);
-		const { run, rejected } = await findVerifiedRun({ tree, repository, repositoryId, io: githubIo(repository) });
+		const { run, rejected } = await findVerifiedRun({
+			tree,
+			repository,
+			repositoryId,
+			io: githubIo(repository),
+		});
 		for (const reason of rejected)
 			console.log(reason);
 		console.log(run
@@ -328,7 +375,10 @@ async function record() {
 		const tree = git(['rev-parse', 'HEAD^{tree}']);
 		const url = new URL(requestUrl);
 		url.searchParams.set('audience', AUDIENCE);
-		const response = await fetch(url, { headers: { Authorization: `bearer ${requestToken}` }, signal: AbortSignal.timeout(15_000) });
+		const response = await fetch(url, {
+			headers: { Authorization: `bearer ${requestToken}` },
+			signal: AbortSignal.timeout(15_000),
+		});
 		if (!response.ok)
 			throw new Error(`the OIDC provider answered ${response.status}`);
 		const { value } = /** @type {{ value?: unknown }} */ (await response.json());

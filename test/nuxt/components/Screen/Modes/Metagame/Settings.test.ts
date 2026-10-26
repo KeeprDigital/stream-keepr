@@ -18,14 +18,20 @@ vi.mock('vue-draggable-plus', () => ({
 }));
 
 const mockPlayerStore = {
-	players: [{ id: 1 }, { id: 2 }, { id: 3 }],
+	players: [
+		{ id: 1 },
+		{ id: 2 },
+		{ id: 3 },
+	],
 	isLoaded: false,
 	loadPlayersByEventId: vi.fn().mockResolvedValue(undefined),
 	$reset: vi.fn(),
 };
 
 const mockPlayerListStore = {
-	lists: [{ id: 7, name: 'Feature Table', memberCount: 4 }],
+	lists: [
+		{ id: 7, name: 'Feature Table', memberCount: 4 },
+	],
 	isLoaded: false,
 	loadByEventId: vi.fn().mockResolvedValue(undefined),
 	$reset: vi.fn(),
@@ -137,7 +143,10 @@ const UFormFieldStub = defineComponent({
 
 const USelectStub = defineComponent({
 	props: {
-		modelValue: { type: [String, Number, Boolean, Object], required: false },
+		modelValue: {
+			type: [String, Number, Boolean, Object],
+			required: false,
+		},
 		items: { type: Array, required: false },
 	},
 	template: '<div data-testid="u-select">{{ (items || []).map(item => item.label).join("|") }}</div>',
@@ -225,7 +234,15 @@ describe('screenMetagameSettings', () => {
 		await flushPromises();
 
 		expect(wrapper.findAll('[data-testid="column-label"]').map(label => label.text()))
-			.toEqual(['Archetype', 'Count', 'Share', 'Win Rate', 'Avg Place', 'Colors', 'Conversion Rate']);
+			.toEqual([
+				'Archetype',
+				'Count',
+				'Share',
+				'Win Rate',
+				'Avg Place',
+				'Colors',
+				'Conversion Rate',
+			]);
 
 		await wrapper.findAll('[data-testid="u-switch"]')[6]!.trigger('click');
 
@@ -245,7 +262,10 @@ describe('screenMetagameSettings', () => {
 
 		mockConfig.value = {
 			...structuredClone(defaultConfig),
-			archetypeColumns: [...defaultConfig.archetypeColumns, { key: 'conversionRate', visible: true }],
+			archetypeColumns: [
+				...defaultConfig.archetypeColumns,
+				{ key: 'conversionRate', visible: true },
+			],
 			conversionMetric: 'topN',
 			conversionThreshold: 8,
 		};
@@ -278,7 +298,11 @@ describe('screenMetagameSettings', () => {
 	});
 
 	it('shows a minimum points input for the minPoints scope and persists changes', async () => {
-		mockConfig.value = { ...structuredClone(defaultConfig), scope: 'minPoints', minPoints: 9 };
+		mockConfig.value = {
+			...structuredClone(defaultConfig),
+			scope: 'minPoints',
+			minPoints: 9,
+		};
 
 		const wrapper = await mountComponent();
 		await flushPromises();
@@ -330,7 +354,10 @@ describe('screenMetagameSettings', () => {
 	});
 
 	it('scopes, sorts and limits the chart as it does the archetype table, as one page with no columns', async () => {
-		mockConfig.value = { ...structuredClone(defaultConfig), viewMode: 'chart' };
+		mockConfig.value = {
+			...structuredClone(defaultConfig),
+			viewMode: 'chart',
+		};
 
 		const wrapper = await mountComponent();
 		await flushPromises();

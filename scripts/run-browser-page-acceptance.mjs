@@ -51,12 +51,21 @@ export async function main(argv = process.argv) {
 						}),
 					});
 			try {
-				const origin = deployed ? acceptanceOrigin({ deployed }) : local.origin;
+				const origin = deployed
+					? acceptanceOrigin({ deployed })
+					: local.origin;
 				const verdict = await observeChromiumVerdict({ url: `${origin}${page.path}` });
 				record(verdict.outcome === 'passed'
 					? []
-					: [{ code: verdictFailureCode(verdict), detail: { page: page.harness } }]);
-				return { mode: deployed ? 'deployed' : 'local' };
+					: [
+							{
+								code: verdictFailureCode(verdict),
+								detail: { page: page.harness },
+							},
+						]);
+				return {
+					mode: deployed ? 'deployed' : 'local',
+				};
 			}
 			finally {
 				await local?.close();

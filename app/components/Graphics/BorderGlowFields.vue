@@ -75,7 +75,9 @@ const showGlow = computed(() => !props.glowGatedOnBorder || props.border !== nul
 
 /** "Outline width" alone; "Won box outline width" where a prefix tells surfaces apart. */
 function ariaLabel(label: string) {
-	return props.ariaLabelPrefix ? `${props.ariaLabelPrefix} ${label.toLowerCase()}` : label;
+	return props.ariaLabelPrefix
+		? `${props.ariaLabelPrefix} ${label.toLowerCase()}`
+		: label;
 }
 
 function sideVisible(side: BorderSide) {

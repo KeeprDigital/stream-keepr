@@ -151,7 +151,12 @@ export async function installGraphicStyleSetPackage(
 			});
 			if (!styleSet)
 				return { outcome: 'conflict', report };
-			return { outcome: 'installed', report, styleSet, affectedTemplates: [] };
+			return {
+				outcome: 'installed',
+				report,
+				styleSet,
+				affectedTemplates: [],
+			};
 		}
 
 		case 'install-independent-copy': {
@@ -171,7 +176,12 @@ export async function installGraphicStyleSetPackage(
 			// is asserting a uniqueness this module does not own.
 			if (!styleSet)
 				return { outcome: 'conflict', report };
-			return { outcome: 'installed', report, styleSet, affectedTemplates: [] };
+			return {
+				outcome: 'installed',
+				report,
+				styleSet,
+				affectedTemplates: [],
+			};
 		}
 
 		case 'update-installed': {

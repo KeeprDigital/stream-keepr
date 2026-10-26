@@ -218,12 +218,16 @@ describe('talents API', () => {
 	it('returns validation errors for malformed and wrong-network profile input', async () => {
 		const malformed = await $fetchRaw(`/api/events/${eventId}/talents/${talentId}`, {
 			method: 'PATCH',
-			body: { socialProfiles: { twitch: 'two words' } },
+			body: {
+				socialProfiles: { twitch: 'two words' },
+			},
 			ignoreResponseError: true,
 		});
 		const wrongNetwork = await $fetchRaw(`/api/events/${eventId}/talents/${talentId}`, {
 			method: 'PATCH',
-			body: { socialProfiles: { twitch: 'https://x.com/Jane' } },
+			body: {
+				socialProfiles: { twitch: 'https://x.com/Jane' },
+			},
 			ignoreResponseError: true,
 		});
 

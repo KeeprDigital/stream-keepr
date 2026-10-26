@@ -24,6 +24,8 @@ export const topCutModeConfigContract = defineScreenModeConfigContract({
 	showSeeds: false,
 	showArchetypes: false,
 	...DEFAULT_HEADER_CONFIG,
-}, { formerFields: ['bracketSize'] });
+}, {
+	formerFields: ['bracketSize'],
+});
 
 export type TopCutModeConfig = ScreenModeConfigOf<typeof topCutModeConfigContract>;

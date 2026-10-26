@@ -35,7 +35,9 @@ describe('post /api/events/[id]/player-lists/[listId]/members', () => {
 	beforeEach(() => {
 		vi.resetModules();
 		mockGetValidatedRouterParams.mockReset().mockResolvedValue({ id: 1, listId: 10 });
-		mockReadValidatedBody.mockReset().mockResolvedValue({ playerIds: [101, 102] });
+		mockReadValidatedBody.mockReset().mockResolvedValue({
+			playerIds: [101, 102],
+		});
 		mockSetResponseStatus.mockReset();
 		mockGetOriginConnectionId.mockReset().mockReturnValue('origin-1');
 		mockAddMembers.mockReset().mockResolvedValue({ added: 2 });

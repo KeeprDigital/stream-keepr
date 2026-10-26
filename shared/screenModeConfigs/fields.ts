@@ -82,10 +82,16 @@ function inclusiveNumberBounds(schema: z.ZodNumber): { min?: number; max?: numbe
 		const def = check._zod.def as { check: string; value?: unknown; inclusive?: boolean };
 		if (def.inclusive !== true || typeof def.value !== 'number')
 			continue;
-		if (def.check === 'greater_than')
-			bounds.min = bounds.min === undefined ? def.value : Math.max(bounds.min, def.value);
-		else if (def.check === 'less_than')
-			bounds.max = bounds.max === undefined ? def.value : Math.min(bounds.max, def.value);
+		if (def.check === 'greater_than') {
+			bounds.min = bounds.min === undefined
+				? def.value
+				: Math.max(bounds.min, def.value);
+		}
+		else if (def.check === 'less_than') {
+			bounds.max = bounds.max === undefined
+				? def.value
+				: Math.min(bounds.max, def.value);
+		}
 	}
 	return bounds;
 }
@@ -99,15 +105,24 @@ function editorFieldView(key: string, field: z.ZodType, meta: ConfigFieldMeta): 
 		return {
 			...base,
 			control: 'number',
-			min: min === undefined ? undefined : min / displayScale,
-			max: max === undefined ? undefined : max / displayScale,
+			min: min === undefined
+				? undefined
+				: min / displayScale,
+			max: max === undefined
+				? undefined
+				: max / displayScale,
 			step: meta.step,
 		};
 	}
 	if (inner instanceof z.ZodBoolean)
 		return { ...base, control: 'toggle' };
-	if (inner instanceof z.ZodEnum)
-		return { ...base, control: 'select', values: inner.options.map(String) };
+	if (inner instanceof z.ZodEnum) {
+		return {
+			...base,
+			control: 'select',
+			values: inner.options.map(String),
+		};
+	}
 	if (inner instanceof z.ZodString)
 		return { ...base, control: meta.control ?? 'text' };
 	throw new Error(`Editor field "${key}" is not a scalar: give a rich field a bespoke control instead (#498).`);

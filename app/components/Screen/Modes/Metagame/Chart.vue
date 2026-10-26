@@ -20,7 +20,9 @@ const { height: plotHeight } = useElementSize(plotRef);
 // Rows share the plot's height, like the table's; the type scales with them.
 const layoutStyle = computed(() => {
 	const rowCount = Math.max(props.bars.length, 1);
-	const rowHeight = plotHeight.value > 0 ? plotHeight.value / rowCount : 56;
+	const rowHeight = plotHeight.value > 0
+		? plotHeight.value / rowCount
+		: 56;
 	const fontSize = Math.min(Math.max(14, rowHeight * 0.34), 44);
 
 	return {

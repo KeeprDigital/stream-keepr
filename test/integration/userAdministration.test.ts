@@ -47,7 +47,11 @@ function administer(path: string, options: {
 			'content-type': 'application/json',
 			...(options.headers ?? ADMIN_HEADERS),
 		},
-		...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+		...(options.body === undefined
+			? {}
+			: {
+					body: JSON.stringify(options.body),
+				}),
 	});
 }
 
@@ -62,7 +66,10 @@ function administer(path: string, options: {
 function authFetch(path: string, body: unknown) {
 	return fetch(path, {
 		method: 'POST',
-		headers: { 'content-type': 'application/json', 'origin': url('/') },
+		headers: {
+			'content-type': 'application/json',
+			'origin': url('/'),
+		},
 		body: JSON.stringify(body),
 	});
 }
@@ -90,7 +97,9 @@ function cookieFrom(response: Response) {
 
 /** Whether a session cookie still resolves to a session, which is what revocation ends. */
 async function sessionStillLive(cookie: string) {
-	const response = await fetch('/api/auth/get-session', { headers: { cookie } });
+	const response = await fetch('/api/auth/get-session', {
+		headers: { cookie },
+	});
 	if (!response.ok)
 		return false;
 
@@ -133,7 +142,9 @@ describe('user administration', () => {
 		});
 
 		it('refuses a caller with the wrong token', async () => {
-			expect((await administer('', { headers: { 'x-graphics-admin-token': 'not-the-token' } })).status)
+			expect((await administer('', {
+				headers: { 'x-graphics-admin-token': 'not-the-token' },
+			})).status)
 				.toBe(403);
 		});
 
@@ -195,7 +206,10 @@ describe('user administration', () => {
 		it('refuses a second account for the same email', async () => {
 			const response = await administer('', {
 				method: 'POST',
-				body: { email: INVITED_EMAIL.toUpperCase(), name: 'A Duplicate' },
+				body: {
+					email: INVITED_EMAIL.toUpperCase(),
+					name: 'A Duplicate',
+				},
 			});
 
 			// 409 rather than the unique index's 500: what the administrator needs
@@ -286,7 +300,10 @@ describe('user administration', () => {
 		it('answers 404 for an account that does not exist', async () => {
 			expect((await administer('/no-such-user/password-reset-link', { method: 'POST' })).status)
 				.toBe(404);
-			expect((await administer('/no-such-user/password', { method: 'PUT', body: { password: THIRD_PASSWORD } })).status)
+			expect((await administer('/no-such-user/password', {
+				method: 'PUT',
+				body: { password: THIRD_PASSWORD },
+			})).status)
 				.toBe(404);
 		});
 	});
@@ -300,7 +317,9 @@ describe('user administration', () => {
 
 			expect(response.status).toBe(200);
 			expect(await response.json() as RevokedUserSessions)
-				.toMatchObject({ revokedSessionCount: expect.any(Number) });
+				.toMatchObject({
+					revokedSessionCount: expect.any(Number),
+				});
 			expect(await sessionStillLive(cookie)).toBe(false);
 			// The laptop left open in the production office: they sign straight back
 			// in on their own machine.

@@ -32,10 +32,14 @@ const mockAssignmentStore = {
 
 mockNuxtImport('useFeatureMatchRepository', () => () => mockRepo);
 mockNuxtImport('useFeatureMatchAssignmentStore', () => () => mockAssignmentStore);
-mockNuxtImport('useOverlay', () => () => ({ create: vi.fn() }));
+mockNuxtImport('useOverlay', () => () => ({
+	create: vi.fn(),
+}));
 mockNuxtImport('useRealtime', () => () => createMockRealtime());
 vi.mock('~/modules/feature-match-session/client', () => ({
-	useFeatureMatchSessionClient: () => ({ ensureSession: vi.fn() }),
+	useFeatureMatchSessionClient: () => ({
+		ensureSession: vi.fn(),
+	}),
 }));
 
 const EVENT_ID = 1;
@@ -86,7 +90,11 @@ function slot(id: number, matchId: number | null, sessionId: number): FeatureMat
 }
 
 function announce(featureMatch: FeatureMatch) {
-	useFeatureMatchStore().applyRemoteUpdated({ eventId: EVENT_ID, timestamp: Date.now(), featureMatch });
+	useFeatureMatchStore().applyRemoteUpdated({
+		eventId: EVENT_ID,
+		timestamp: Date.now(),
+		featureMatch,
+	});
 }
 
 function heldSlot(id: number) {
@@ -98,17 +106,27 @@ function heldSessionId(id: number) {
 }
 
 function promoteMine() {
-	return useFeatureMatchPromotion().promote({ eventId: EVENT_ID, roundId: ROUND_ID, slotId: MINE, matchId: CONTESTED });
+	return useFeatureMatchPromotion().promote({
+		eventId: EVENT_ID,
+		roundId: ROUND_ID,
+		slotId: MINE,
+		matchId: CONTESTED,
+	});
 }
 
 describe('two simultaneous promotions of one Match, seen by the promoting operator', () => {
 	beforeEach(async () => {
 		vi.clearAllMocks();
 		mockAssignmentStore.currentEventId = EVENT_ID;
-		mockAssignmentStore.assignmentsByRound = new Map([[ROUND_ID, []]]);
+		mockAssignmentStore.assignmentsByRound = new Map([
+			[ROUND_ID, []],
+		]);
 		useFeatureMatchStore().$reset();
 		useFeatureMatchStateStore().$reset();
-		mockRepo.list.mockResolvedValue([slot(MINE, null, 10), slot(THEIRS, null, 20)]);
+		mockRepo.list.mockResolvedValue([
+			slot(MINE, null, 10),
+			slot(THEIRS, null, 20),
+		]);
 		await useFeatureMatchStore().loadFeatureMatchesByEventId(EVENT_ID);
 	});
 
@@ -116,10 +134,26 @@ describe('two simultaneous promotions of one Match, seen by the promoting operat
 		const promoted = () => slot(MINE, CONTESTED, 21);
 
 		it.each([
-			['its answer before its announcement', [() => promoteMine(), () => announce(promoted())]],
-			['its announcement before its answer', [() => announce(promoted()), () => promoteMine()]],
+			[
+				'its answer before its announcement',
+				[
+					() => promoteMine(),
+					() => announce(promoted()),
+				],
+			],
+			[
+				'its announcement before its answer',
+				[
+					() => announce(promoted()),
+					() => promoteMine(),
+				],
+			],
 		] as const)('this promotion takes the Match whichever arrives first: %s', async (_, steps) => {
-			mockRepo.promoteMatch.mockResolvedValue({ promotedSlot: promoted(), clearedSlots: [], assignment: {} });
+			mockRepo.promoteMatch.mockResolvedValue({
+				promotedSlot: promoted(),
+				clearedSlots: [],
+				assignment: {},
+			});
 
 			for (const step of steps)
 				await step();
@@ -135,16 +169,42 @@ describe('two simultaneous promotions of one Match, seen by the promoting operat
 	describe('the colleague moves the Match off this Slot', () => {
 		// This promotion committed first (Session 21); the colleague's then moved the
 		// Match to their Slot (Session 22) and cleared this one with a fresh Session (23).
-		const mineAnswer = () => ({ promotedSlot: slot(MINE, CONTESTED, 21), clearedSlots: [], assignment: { slotId: MINE } });
+		const mineAnswer = () => ({
+			promotedSlot: slot(MINE, CONTESTED, 21),
+			clearedSlots: [],
+			assignment: { slotId: MINE },
+		});
 		const theirsAnnounced = () => {
 			announce(slot(THEIRS, CONTESTED, 22));
 			announce(slot(MINE, null, 23));
 		};
 
 		it.each([
-			['the colleague\'s announcements before this answer', false, [theirsAnnounced, () => promoteMine()]],
-			['this answer before the colleague\'s announcements', true, [() => promoteMine(), theirsAnnounced]],
-			['this promotion\'s own late announcement last', true, [() => promoteMine(), theirsAnnounced, () => announce(slot(MINE, CONTESTED, 21))]],
+			[
+				'the colleague\'s announcements before this answer',
+				false,
+				[
+					theirsAnnounced,
+					() => promoteMine(),
+				],
+			],
+			[
+				'this answer before the colleague\'s announcements',
+				true,
+				[
+					() => promoteMine(),
+					theirsAnnounced,
+				],
+			],
+			[
+				'this promotion\'s own late announcement last',
+				true,
+				[
+					() => promoteMine(),
+					theirsAnnounced,
+					() => announce(slot(MINE, CONTESTED, 21)),
+				],
+			],
 		] as const)('this Slot ends cleared on its newer Session: %s', async (_, answerCurrent, steps) => {
 			mockRepo.promoteMatch.mockResolvedValue(mineAnswer());
 

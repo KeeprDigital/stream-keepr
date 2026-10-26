@@ -19,7 +19,12 @@ const UInputNumberStub = defineComponent({
 		ui: { type: Object, required: false },
 		disabled: { type: Boolean, required: false },
 	},
-	emits: ['update:modelValue', 'blur', 'focus', 'keydown'],
+	emits: [
+		'update:modelValue',
+		'blur',
+		'focus',
+		'keydown',
+	],
 	setup(_, { emit, expose }) {
 		const inputRef = ref<HTMLInputElement | null>(null);
 
@@ -77,7 +82,9 @@ describe('numericCounter', () => {
 		await input.setValue('9');
 		await input.trigger('blur');
 
-		expect(wrapper.emitted('set')).toEqual([[5]]);
+		expect(wrapper.emitted('set')).toEqual([
+			[5],
+		]);
 	});
 
 	it('updates button disabled state from the draft value while editing', async () => {
@@ -117,7 +124,9 @@ describe('numericCounter', () => {
 		await input.trigger('keydown', { key: 'Enter' });
 		await nextTick();
 
-		expect(wrapper.emitted('set')).toEqual([[23]]);
+		expect(wrapper.emitted('set')).toEqual([
+			[23],
+		]);
 	});
 
 	it('gives every control a contextual accessible name', async () => {

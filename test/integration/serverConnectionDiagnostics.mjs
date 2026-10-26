@@ -36,7 +36,9 @@ const STALL_MILLISECONDS = 1_000;
 
 /** Where this line was written from: `nuxt dev`'s own thread, or Nitro's dev worker. */
 function threadLabel() {
-	return isMainThread ? 'main thread' : `worker thread ${threadId}`;
+	return isMainThread
+		? 'main thread'
+		: `worker thread ${threadId}`;
 }
 
 /** @param {string | undefined} url */
@@ -122,10 +124,16 @@ export function installServerConnectionDiagnostics(options = {}) {
 			socket.off('error', onError);
 			if (connection) {
 				connection.inFlight--;
-				connection.lastResponse = { label, finishedAt: Date.now() };
+				connection.lastResponse = {
+					label,
+					finishedAt: Date.now(),
+				};
 			}
-			if (!response.writableFinished)
-				report(`${label}: connection closed after ${elapsed()} before the response finished${socketError ? ` (${socketError})` : ''}`);
+			if (!response.writableFinished) {
+				report(`${label}: connection closed after ${elapsed()} before the response finished${socketError
+					? ` (${socketError})`
+					: ''}`);
+			}
 		});
 	}
 
@@ -190,7 +198,12 @@ export function installServerConnectionDiagnostics(options = {}) {
 	function watchOutgoing(request, socket) {
 		if (outgoingRequests.has(request))
 			return;
-		const state = { startedAt: Date.now(), target: request.host, reported: false, answered: false };
+		const state = {
+			startedAt: Date.now(),
+			target: request.host,
+			reported: false,
+			answered: false,
+		};
 		outgoingRequests.set(request, state);
 		const learnTarget = () => {
 			state.target = targetOf(request, socket);
@@ -259,10 +272,14 @@ export function installServerConnectionDiagnostics(options = {}) {
 			const preload = `--require=${PRELOAD_PATH}`;
 			super(filename, {
 				...workerOptions,
-				execArgv: execArgv.includes(preload) ? execArgv : [...execArgv, preload],
+				execArgv: execArgv.includes(preload)
+					? execArgv
+					: [...execArgv, preload],
 			});
 			const id = this.threadId;
-			report(`started worker thread ${id} (${workerOptions.eval ? 'eval' : String(filename).split(/[\\/]/).slice(-2).join('/')})`);
+			report(`started worker thread ${id} (${workerOptions.eval
+				? 'eval'
+				: String(filename).split(/[\\/]/).slice(-2).join('/')})`);
 			this.once('exit', code => report(`worker thread ${id} exited with code ${code}`));
 		}
 	}

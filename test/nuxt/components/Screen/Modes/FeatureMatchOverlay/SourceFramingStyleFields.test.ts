@@ -19,24 +19,36 @@ const global = {
 		UFormField: defineComponent({ template: '<div><slot /></div>' }),
 		USwitch: defineComponent({
 			name: 'USwitch',
-			props: { modelValue: { type: Boolean, required: false } },
+			props: {
+				modelValue: { type: Boolean, required: false },
+			},
 			emits: ['update:modelValue'],
 			template: '<button type="button" role="switch" :aria-checked="String(modelValue)" @click="$emit(\'update:modelValue\', !modelValue)" />',
 		}),
 		UButton: defineComponent({ template: '<button type="button"><slot /></button>' }),
 		UInputNumber: defineComponent({ name: 'UInputNumber', template: '<input />' }),
 		UIOpacityInput: true,
-		USelect: defineComponent({ name: 'USelect', emits: ['update:modelValue'], template: '<select />' }),
+		USelect: defineComponent({
+			name: 'USelect',
+			emits: ['update:modelValue'],
+			template: '<select />',
+		}),
 		UIColorPicker: defineComponent({
 			name: 'UIColorPicker',
-			props: { modelValue: { type: String, required: false }, hexOnly: { type: Boolean, required: false } },
+			props: {
+				modelValue: { type: String, required: false },
+				hexOnly: { type: Boolean, required: false },
+			},
 			template: '<button type="button" />',
 		}),
 	},
 };
 
 function mountFields(framingStyle: FeatureMatchSourceFramingStyle) {
-	return mount(SourceFramingStyleFields, { global, props: { framingStyle } });
+	return mount(SourceFramingStyleFields, {
+		global,
+		props: { framingStyle },
+	});
 }
 
 describe('source framing style fields', () => {

@@ -48,7 +48,11 @@ function sortSummaries(summaries: BroadcastDeckListSummaryResponse[]) {
 	return [...summaries].sort((left, right) => {
 		const leftName = normalizeBroadcastDeckListName(left.name);
 		const rightName = normalizeBroadcastDeckListName(right.name);
-		const byName = leftName < rightName ? -1 : leftName > rightName ? 1 : 0;
+		const byName = leftName < rightName
+			? -1
+			: leftName > rightName
+				? 1
+				: 0;
 		return byName || left.id - right.id;
 	});
 }
@@ -110,7 +114,9 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 			pending.authoritySummary = authorityById.get(listId) ?? null;
 		const merged = authority.flatMap((item) => {
 			const next = mergeSummaryFromAuthority(item);
-			return next ? [next] : [];
+			return next
+				? [next]
+				: [];
 		});
 		const foundIds = new Set(authority.map(item => item.id));
 		for (const [listId, pending] of pendingMutations) {
@@ -130,8 +136,11 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 		if (pending?.kind === 'delete')
 			return null;
 		const local = detailById(listId);
-		if (pending?.kind === 'update' && local)
-			return authority ? mergeFields(authority, local, pending.detailFields) : local;
+		if (pending?.kind === 'update' && local) {
+			return authority
+				? mergeFields(authority, local, pending.detailFields)
+				: local;
+		}
 		return authority;
 	}
 
@@ -143,7 +152,9 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 		const local = summaries.value.find(item => item.id === listId);
 		if (local && snapshot) {
 			summaries.value = sortSummaries(summaries.value.map(item =>
-				item.id === listId ? mergeFields(item, snapshot, fields) : item,
+				item.id === listId
+					? mergeFields(item, snapshot, fields)
+					: item,
 			));
 		}
 		else if (!snapshot) {
@@ -167,7 +178,9 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 		await Promise.allSettled([
 			loadCollection(eventId),
 			...(forceDetail || consumedDetailIds.value.has(listId) || details.value.has(listId)
-				? [loadDetail(eventId, listId)]
+				? [
+						loadDetail(eventId, listId),
+					]
 				: []),
 		]);
 	}
@@ -225,8 +238,11 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 			return loaded;
 		}
 		catch (cause) {
-			if (flight.current)
-				error.value = cause instanceof Error ? cause.message : 'Failed to load Broadcast Deck Lists';
+			if (flight.current) {
+				error.value = cause instanceof Error
+					? cause.message
+					: 'Failed to load Broadcast Deck Lists';
+			}
 			throw cause;
 		}
 		finally {
@@ -245,8 +261,11 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 			return loaded;
 		}
 		catch (cause) {
-			if (flight.current)
-				error.value = cause instanceof Error ? cause.message : 'Failed to load Broadcast Deck List';
+			if (flight.current) {
+				error.value = cause instanceof Error
+					? cause.message
+					: 'Failed to load Broadcast Deck List';
+			}
 			throw cause;
 		}
 	}
@@ -270,8 +289,11 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 			created = await withFailureSentence(() => repo.create(eventId, input));
 		}
 		catch (cause) {
-			if (flight.current)
-				error.value = cause instanceof Error ? cause.message : 'Failed to create Broadcast Deck List';
+			if (flight.current) {
+				error.value = cause instanceof Error
+					? cause.message
+					: 'Failed to create Broadcast Deck List';
+			}
 			throw cause;
 		}
 		if (flight.stale)
@@ -298,27 +320,50 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 		const previousSummary = summaries.value.find(item => item.id === listId) ?? null;
 		const optimisticRevision = input.expectedRevision + 1;
 		const sharedPatch = {
-			...(input.name !== undefined ? { name: input.name } : {}),
-			...(input.archetypeLabel !== undefined ? { archetypeLabel: input.archetypeLabel } : {}),
-			...(input.colors !== undefined ? { colors: input.colors } : {}),
+			...(input.name !== undefined
+				? { name: input.name }
+				: {}),
+			...(input.archetypeLabel !== undefined
+				? { archetypeLabel: input.archetypeLabel }
+				: {}),
+			...(input.colors !== undefined
+				? { colors: input.colors }
+				: {}),
 			revision: optimisticRevision,
 		};
 		const detailPatch = {
 			...sharedPatch,
-			...(input.sourceText !== undefined ? { sourceText: input.sourceText } : {}),
+			...(input.sourceText !== undefined
+				? { sourceText: input.sourceText }
+				: {}),
 		};
 		const summaryFields = new Set(Object.keys(sharedPatch) as (keyof BroadcastDeckListSummaryResponse)[]);
 		const detailFields = new Set(Object.keys(detailPatch) as (keyof BroadcastDeckListResponse)[]);
 		const flight = mutationFlights.begin(listId);
-		const pending: PendingUpdate = { flight, kind: 'update', summaryFields, detailFields, remoteInvalidated: false };
+		const pending: PendingUpdate = {
+			flight,
+			kind: 'update',
+			summaryFields,
+			detailFields,
+			remoteInvalidated: false,
+		};
 		collectionLoads.supersede();
 		detailLoads.supersede(listId);
 		pendingMutations.set(listId, pending);
-		if (previousDetail)
-			replaceDetail(listId, { ...previousDetail, ...detailPatch });
+		if (previousDetail) {
+			replaceDetail(listId, {
+				...previousDetail,
+				...detailPatch,
+			});
+		}
 		if (previousSummary) {
 			summaries.value = sortSummaries(summaries.value.map(item =>
-				item.id === listId ? { ...item, ...sharedPatch } : item,
+				item.id === listId
+					? {
+							...item,
+							...sharedPatch,
+						}
+					: item,
 			));
 		}
 
@@ -336,7 +381,10 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 					|| (authoritySummary !== undefined && authoritySummary.revision > updated.revision);
 				const summaryToStore = authoritySummaryWins ? authoritySummary : acceptedSummary;
 				summaries.value = summaryToStore
-					? sortSummaries([...summaries.value.filter(item => item.id !== listId), summaryToStore])
+					? sortSummaries([
+							...summaries.value.filter(item => item.id !== listId),
+							summaryToStore,
+						])
 					: summaries.value.filter(item => item.id !== listId);
 				const authorityDetail = pending.authorityDetail;
 				const detailToStore = authoritySummary === null || authorityDetail === null
@@ -355,7 +403,9 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 			return updated;
 		}
 		catch (cause) {
-			const failureSentence = cause instanceof Error ? cause.message : 'Failed to update Broadcast Deck List';
+			const failureSentence = cause instanceof Error
+				? cause.message
+				: 'Failed to update Broadcast Deck List';
 			if (flight.current && currentEventId.value === eventId && pendingMutations.get(listId) === pending) {
 				collectionLoads.supersede();
 				detailLoads.supersede(listId);
@@ -366,7 +416,10 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 					restoreDetailFields(listId, previousDetail, detailFields);
 				if (pending.authoritySummary !== undefined) {
 					summaries.value = pending.authoritySummary
-						? sortSummaries([...summaries.value.filter(item => item.id !== listId), pending.authoritySummary])
+						? sortSummaries([
+								...summaries.value.filter(item => item.id !== listId),
+								pending.authoritySummary,
+							])
 						: summaries.value.filter(item => item.id !== listId);
 				}
 				else {
@@ -414,14 +467,19 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 			return result;
 		}
 		catch (cause) {
-			const failureSentence = cause instanceof Error ? cause.message : 'Failed to delete Broadcast Deck List';
+			const failureSentence = cause instanceof Error
+				? cause.message
+				: 'Failed to delete Broadcast Deck List';
 			if (flight.current && currentEventId.value === eventId && pendingMutations.get(listId) === pending) {
 				collectionLoads.supersede();
 				detailLoads.supersede(listId);
 				pendingMutations.delete(listId);
 				if (pending.authoritySummary !== undefined) {
 					summaries.value = pending.authoritySummary
-						? sortSummaries([...summaries.value.filter(item => item.id !== listId), pending.authoritySummary])
+						? sortSummaries([
+								...summaries.value.filter(item => item.id !== listId),
+								pending.authoritySummary,
+							])
 						: summaries.value.filter(item => item.id !== listId);
 				}
 				else if (previousSummary) {

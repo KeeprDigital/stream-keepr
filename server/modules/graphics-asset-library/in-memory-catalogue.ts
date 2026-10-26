@@ -157,7 +157,10 @@ export function createInMemoryGraphicsAssetCatalogue(
 	 * reference an installed Template actually persisted.
 	 */
 	function allUsage(): GraphicAssetUsage[] {
-		return [...usage, ...references.values()];
+		return [
+			...usage,
+			...references.values(),
+		];
 	}
 
 	/**
@@ -171,10 +174,14 @@ export function createInMemoryGraphicsAssetCatalogue(
 	}
 
 	function getCapacity(): GraphicsAssetLibraryCapacity {
-		const retainedSourceBytes = [...canonicalContents.values()]
+		const retainedSourceBytes = [
+			...canonicalContents.values(),
+		]
 			.filter(content => content.category === 'source')
 			.reduce((total, content) => total + content.byteLength, 0);
-		const retainedDerivativeBytes = [...canonicalContents.values()]
+		const retainedDerivativeBytes = [
+			...canonicalContents.values(),
+		]
 			.filter(content => content.category === 'derivative')
 			.reduce((total, content) => total + content.byteLength, 0);
 		const usedBytes = retainedSourceBytes + retainedDerivativeBytes;
@@ -186,11 +193,16 @@ export function createInMemoryGraphicsAssetCatalogue(
 			operations: [
 				...operations.values(),
 			],
-			assets: [...assets.values()],
+			assets: [
+				...assets.values(),
+			],
 			thumbnailDigests: [...thumbnailDigests],
 			canonicalContents: [...canonicalContents],
 			canonicalWriteCandidates: [...canonicalWriteCandidates].map(
-				([operationId, contents]) => [operationId, [...contents]],
+				([operationId, contents]) => [
+					operationId,
+					[...contents],
+				],
 			),
 		})).byteLength;
 		const unreachableDigests = new Map<string, number>();
@@ -397,18 +409,25 @@ export function createInMemoryGraphicsAssetCatalogue(
 			};
 			operations.set(reserved.id, cloneOperation(reserved));
 			canonicalReservations.set(reserved.id, growthBytes);
-			return { outcome: 'reserved' as const, operation: cloneOperation(reserved) };
+			return {
+				outcome: 'reserved' as const,
+				operation: cloneOperation(reserved),
+			};
 		},
 		async getIngestionOperation(operationId, initiatedBy) {
 			const operation = operations.get(operationId);
-			return operation?.initiatedBy === initiatedBy ? cloneOperation(operation) : undefined;
+			return operation?.initiatedBy === initiatedBy
+				? cloneOperation(operation)
+				: undefined;
 		},
 		async getGraphicAssetMultipartState(operationId, initiatedBy) {
 			const operation = operations.get(operationId);
 			if (!operation || operation.initiatedBy !== initiatedBy)
 				return undefined;
 			const state = multipartStates.get(operationId);
-			return state ? structuredClone(state) : undefined;
+			return state
+				? structuredClone(state)
+				: undefined;
 		},
 		async updateGraphicAssetMultipartState(input) {
 			const operation = operations.get(input.operationId);
@@ -465,7 +484,9 @@ export function createInMemoryGraphicsAssetCatalogue(
 			if (operation?.initiatedBy !== initiatedBy || operation.source !== 'template-package')
 				return undefined;
 			const state = packagePreflights.get(operationId);
-			return state ? structuredClone(state) : undefined;
+			return state
+				? structuredClone(state)
+				: undefined;
 		},
 		async updateTemplatePackagePreflight(input) {
 			const operation = operations.get(input.operationId);
@@ -519,23 +540,34 @@ export function createInMemoryGraphicsAssetCatalogue(
 			const localMatch = localRevision?.assetId === input.sourceAssetId
 				? { revisionId: input.sourceRevisionId as GraphicAssetRevisionId, revision: localRevision }
 				: undefined;
-			const importedMatch = [...origins.entries()]
+			const importedMatch = [
+				...origins.entries(),
+			]
 				.filter(([, origin]) =>
 					origin.sourceAssetId === input.sourceAssetId
 					&& origin.sourceRevisionId === input.sourceRevisionId,
 				)
-				.map(([revisionId]) => ({ revisionId, revision: revisions.get(revisionId) }))
+				.map(([revisionId]) => ({
+					revisionId,
+					revision: revisions.get(revisionId),
+				}))
 				.find((candidate): candidate is {
 					revisionId: GraphicAssetRevisionId;
 					revision: NonNullable<ReturnType<typeof revisions.get>>;
 				} => candidate.revision !== undefined);
 			const exactMatch = localMatch ?? importedMatch;
-			const exactAsset = exactMatch ? assets.get(exactMatch.revision.assetId) : undefined;
-			const relatedRevisionExists = [...revisions.entries()].some(
+			const exactAsset = exactMatch
+				? assets.get(exactMatch.revision.assetId)
+				: undefined;
+			const relatedRevisionExists = [
+				...revisions.entries(),
+			].some(
 				([revisionId, candidate]) =>
 					candidate.assetId === input.sourceAssetId
 					&& revisionId !== input.sourceRevisionId,
-			) || [...origins.values()].some(origin =>
+			) || [
+				...origins.values(),
+			].some(origin =>
 				origin.sourceAssetId === input.sourceAssetId
 				&& origin.sourceRevisionId !== input.sourceRevisionId,
 			);
@@ -597,7 +629,10 @@ export function createInMemoryGraphicsAssetCatalogue(
 				updatedAt: input.reservedAt,
 			};
 			operations.set(reserved.id, cloneOperation(reserved));
-			return { outcome: 'reserved' as const, operation: cloneOperation(reserved) };
+			return {
+				outcome: 'reserved' as const,
+				operation: cloneOperation(reserved),
+			};
 		},
 		async installTemplatePackage(input) {
 			const existing = operations.get(input.operation.id);
@@ -634,11 +669,13 @@ export function createInMemoryGraphicsAssetCatalogue(
 					kind: asset.kind,
 					revisionId: asset.revisionId,
 					revisionNumber: 1,
-					revisions: [{
-						id: asset.revisionId,
-						revisionNumber: 1,
-						facts: asset.facts,
-					}],
+					revisions: [
+						{
+							id: asset.revisionId,
+							revisionNumber: 1,
+							facts: asset.facts,
+						},
+					],
 					facts: asset.facts,
 					eventIds: input.operation.defaultEventId === undefined
 						? []
@@ -681,7 +718,9 @@ export function createInMemoryGraphicsAssetCatalogue(
 					const existingAsset = assets.get(asset.assetId)!;
 					assets.set(asset.assetId, {
 						...existingAsset,
-						eventIds: [...new Set([...existingAsset.eventIds, input.operation.defaultEventId])]
+						eventIds: [
+							...new Set([...existingAsset.eventIds, input.operation.defaultEventId]),
+						]
 							.sort((left, right) => left - right),
 					});
 				}
@@ -725,7 +764,11 @@ export function createInMemoryGraphicsAssetCatalogue(
 					// Code-point order, which is what the catalogue's own ORDER BY
 					// gives; a locale-aware comparison would order these differently
 					// from the database this double stands in for.
-					.sort((left, right) => (left.ownerSlot < right.ownerSlot ? -1 : left.ownerSlot > right.ownerSlot ? 1 : 0)),
+					.sort((left, right) => (left.ownerSlot < right.ownerSlot
+						? -1
+						: left.ownerSlot > right.ownerSlot
+							? 1
+							: 0)),
 				installedAt: publishedAt,
 			});
 
@@ -750,21 +793,31 @@ export function createInMemoryGraphicsAssetCatalogue(
 		},
 		async findInstalledGraphicsTemplate(templateId) {
 			const template = installedTemplates.get(templateId);
-			return template ? structuredClone(template) : undefined;
+			return template
+				? structuredClone(template)
+				: undefined;
 		},
 		async listInstalledGraphicsTemplates(kind) {
-			return [...installedTemplates.values()]
+			return [
+				...installedTemplates.values(),
+			]
 				.filter(template => template.kind === kind)
 				// Name then identity, matching the catalogue's own ORDER BY, and by code
 				// point rather than locale for the same reason the references above are.
 				.sort((left, right) => {
-					const order = `${left.name} ${left.id}` < `${right.name} ${right.id}` ? -1 : 1;
-					return left.id === right.id ? 0 : order;
+					const order = `${left.name} ${left.id}` < `${right.name} ${right.id}`
+						? -1
+						: 1;
+					return left.id === right.id
+						? 0
+						: order;
 				})
 				.map(({ references: _references, ...summary }) => structuredClone(summary));
 		},
 		async findGraphicAssetByContentDigest(digest) {
-			const revision = [...revisions.entries()].find(
+			const revision = [
+				...revisions.entries(),
+			].find(
 				([, candidate]) => candidate.facts.sha256 === digest,
 			);
 			const asset = revision && assets.get(revision[1].assetId);
@@ -837,8 +890,14 @@ export function createInMemoryGraphicsAssetCatalogue(
 			// A confirmed Template Package proposal is resting rather than running,
 			// so claiming it needs no staleness proof.
 			const resting = existing.stage === 'awaiting-installation';
-			const staleActive = !['created', 'completed', 'cancelled', 'failed', 'awaiting-installation'].includes(existing.stage)
-				&& existing.updatedAt <= input.staleBefore;
+			const staleActive = ![
+				'created',
+				'completed',
+				'cancelled',
+				'failed',
+				'awaiting-installation',
+			].includes(existing.stage)
+			&& existing.updatedAt <= input.staleBefore;
 			if (!retryableFailure && !resting && !staleActive)
 				return undefined;
 			const claimed: GraphicsIngestionOperation = {
@@ -850,7 +909,9 @@ export function createInMemoryGraphicsAssetCatalogue(
 			return cloneOperation(claimed);
 		},
 		async findReusableGraphicAsset(sourceDigest) {
-			const revision = [...revisions.entries()].find(([, candidate]) =>
+			const revision = [
+				...revisions.entries(),
+			].find(([, candidate]) =>
 				candidate.facts.sha256 === sourceDigest
 				&& assets.get(candidate.assetId)?.lifecycle.state === 'active',
 			);
@@ -897,7 +958,9 @@ export function createInMemoryGraphicsAssetCatalogue(
 			releaseCanonicalReservation(completed.id);
 			const eventIds = input.operation.defaultEventId === undefined
 				? asset.eventIds
-				: [...new Set([...asset.eventIds, input.operation.defaultEventId])].sort((left, right) => left - right);
+				: [
+						...new Set([...asset.eventIds, input.operation.defaultEventId]),
+					].sort((left, right) => left - right);
 			assets.set(asset.id, {
 				...asset,
 				eventIds,
@@ -1015,7 +1078,9 @@ export function createInMemoryGraphicsAssetCatalogue(
 			if (existing.updatedAt !== input.operation.updatedAt)
 				throw new Error('Graphics Ingestion Operation publication lost its claim');
 			const reusable = input.operation.duplicateContentPolicy === 'reuse'
-				? [...assets.values()].find(asset =>
+				? [
+						...assets.values(),
+					].find(asset =>
 						asset.lifecycle.state === 'active'
 						&& asset.facts.sha256 === input.sourceDigest,
 					)
@@ -1040,7 +1105,9 @@ export function createInMemoryGraphicsAssetCatalogue(
 					...reusable,
 					eventIds: input.operation.defaultEventId === undefined
 						? reusable.eventIds
-						: [...new Set([...reusable.eventIds, input.operation.defaultEventId])]
+						: [
+								...new Set([...reusable.eventIds, input.operation.defaultEventId]),
+							]
 								.sort((left, right) => left - right),
 					operation: cloneOperation(completed),
 				});
@@ -1067,11 +1134,13 @@ export function createInMemoryGraphicsAssetCatalogue(
 				kind: input.report.facts.kind,
 				revisionId: input.revisionId,
 				revisionNumber: 1,
-				revisions: [{
-					id: input.revisionId,
-					revisionNumber: 1,
-					facts: input.report.facts,
-				}],
+				revisions: [
+					{
+						id: input.revisionId,
+						revisionNumber: 1,
+						facts: input.report.facts,
+					},
+				],
 				facts: input.report.facts,
 				eventIds: input.operation.defaultEventId === undefined
 					? []
@@ -1113,7 +1182,9 @@ export function createInMemoryGraphicsAssetCatalogue(
 		},
 		async listGraphicAssets(search, lifecycleStates) {
 			const normalizedSearch = search.trim().toLocaleLowerCase();
-			return [...assets.values()]
+			return [
+				...assets.values(),
+			]
 				.filter(asset => lifecycleStates.includes(asset.lifecycle.state))
 				.filter(asset => !normalizedSearch || asset.name.toLocaleLowerCase().includes(normalizedSearch))
 				.map(asset => structuredClone(asset));
@@ -1135,7 +1206,10 @@ export function createInMemoryGraphicsAssetCatalogue(
 				lifecycle: { state: 'retired' },
 			};
 			assets.set(input.assetId, retired);
-			return { outcome: 'updated', asset: structuredClone(retired) };
+			return {
+				outcome: 'updated',
+				asset: structuredClone(retired),
+			};
 		},
 		async trashGraphicAsset(input) {
 			const asset = assets.get(input.assetId);
@@ -1158,7 +1232,10 @@ export function createInMemoryGraphicsAssetCatalogue(
 				},
 			};
 			assets.set(input.assetId, trashed);
-			return { outcome: 'updated', asset: structuredClone(trashed) };
+			return {
+				outcome: 'updated',
+				asset: structuredClone(trashed),
+			};
 		},
 		async restoreGraphicAsset(input) {
 			const asset = assets.get(input.assetId);
@@ -1170,7 +1247,10 @@ export function createInMemoryGraphicsAssetCatalogue(
 					lifecycle: { state: 'active' },
 				};
 				assets.set(input.assetId, active);
-				return { outcome: 'updated', asset: structuredClone(active) };
+				return {
+					outcome: 'updated',
+					asset: structuredClone(active),
+				};
 			}
 			if (
 				asset.lifecycle.state !== 'trashed'
@@ -1183,7 +1263,10 @@ export function createInMemoryGraphicsAssetCatalogue(
 				lifecycle: { state: asset.lifecycle.priorState },
 			};
 			assets.set(input.assetId, restored);
-			return { outcome: 'updated', asset: structuredClone(restored) };
+			return {
+				outcome: 'updated',
+				asset: structuredClone(restored),
+			};
 		},
 		async findRevisionContent(input) {
 			return revisionContentFor(input);
@@ -1209,8 +1292,12 @@ export function createInMemoryGraphicsAssetCatalogue(
 		},
 		async findThumbnailContent(assetId: GraphicAssetId) {
 			const asset = assets.get(assetId);
-			const digest = asset ? revisions.get(asset.revisionId)?.thumbnailDigest : undefined;
-			const content = digest === undefined ? undefined : canonicalContents.get(digest);
+			const digest = asset
+				? revisions.get(asset.revisionId)?.thumbnailDigest
+				: undefined;
+			const content = digest === undefined
+				? undefined
+				: canonicalContents.get(digest);
 			return digest !== undefined && content !== undefined
 				? {
 						digest,

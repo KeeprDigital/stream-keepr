@@ -54,8 +54,14 @@ describe('feature match game win modal', () => {
 
 		fireEnter();
 
-		expect(wrapper.emitted('confirm')).toEqual([[{ resetLife: true, resetCounters: true }]]);
-		expect(wrapper.emitted('update:open')).toEqual([[false]]);
+		expect(wrapper.emitted('confirm')).toEqual([
+			[
+				{ resetLife: true, resetCounters: true },
+			],
+		]);
+		expect(wrapper.emitted('update:open')).toEqual([
+			[false],
+		]);
 		wrapper.unmount();
 	});
 

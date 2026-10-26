@@ -13,8 +13,11 @@ const crcTable = (() => {
 	const table = new Uint32Array(256);
 	for (let index = 0; index < table.length; index++) {
 		let value = index;
-		for (let bit = 0; bit < 8; bit++)
-			value = value & 1 ? 0xEDB88320 ^ (value >>> 1) : value >>> 1;
+		for (let bit = 0; bit < 8; bit++) {
+			value = value & 1
+				? 0xEDB88320 ^ (value >>> 1)
+				: value >>> 1;
+		}
 		table[index] = value >>> 0;
 	}
 	return table;

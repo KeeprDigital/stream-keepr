@@ -99,7 +99,9 @@ export function useDegradedRefetch<TSource>(
 			return 'render';
 		}
 		schedule();
-		return options.isUnchanged(next) ? 'keep' : 'render';
+		return options.isUnchanged(next)
+			? 'keep'
+			: 'render';
 	}
 
 	function keepCadence(): boolean {

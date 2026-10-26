@@ -130,7 +130,9 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 			console.error([
 				`[graphicsAssetReplacement] operations during "${context.task.name}":`,
 				...steps.map(({ label, milliseconds }) => `  ${label}: ${
-					milliseconds === undefined ? 'never returned' : `${milliseconds}ms`
+					milliseconds === undefined
+						? 'never returned'
+						: `${milliseconds}ms`
 				}`),
 			].join('\n'));
 		});
@@ -180,7 +182,10 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 		await step('pin the original revision to the Screen', async (): Promise<void> => {
 			await $fetch(
 				`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-				{ method: 'PATCH', body: { layout: config.layout } },
+				{
+					method: 'PATCH',
+					body: { layout: config.layout },
+				},
 			);
 		});
 	});
@@ -284,7 +289,10 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 		await step('adopt the new revision on the Screen', async (): Promise<void> => {
 			await $fetch(
 				`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-				{ method: 'PATCH', body: { layout: config.layout } },
+				{
+					method: 'PATCH',
+					body: { layout: config.layout },
+				},
 			);
 		});
 		await expect(step('read usage after adoption', async () => await $fetch<GraphicAssetUsage[]>(
@@ -293,7 +301,10 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 		))).resolves.toEqual([
 			expect.objectContaining({
 				reference: screenMediaSourceReference(config.layout.frame.backgroundImage),
-				owner: expect.objectContaining({ eventId, id: String(screenId) }),
+				owner: expect.objectContaining({
+					eventId,
+					id: String(screenId),
+				}),
 			}),
 		]);
 	});

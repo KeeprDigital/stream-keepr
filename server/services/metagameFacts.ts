@@ -17,7 +17,9 @@ interface BuildMetagameFactsOptions {
 }
 
 function formatPercent(value: number | null | undefined) {
-	return value == null ? '-' : `${value}%`;
+	return value == null
+		? '-'
+		: `${value}%`;
 }
 
 function formatDeckShare(deckCount: number, totalDecks: number) {
@@ -111,8 +113,12 @@ export function buildMetagameFacts({
 	const highestAvgCopiesMainboardCard = cards
 		.filter(card => card.mainboardDeckCount >= minCardDecks)
 		.sort((left, right) => {
-			const leftAvg = left.mainboardDeckCount > 0 ? left.mainboardCount / left.mainboardDeckCount : 0;
-			const rightAvg = right.mainboardDeckCount > 0 ? right.mainboardCount / right.mainboardDeckCount : 0;
+			const leftAvg = left.mainboardDeckCount > 0
+				? left.mainboardCount / left.mainboardDeckCount
+				: 0;
+			const rightAvg = right.mainboardDeckCount > 0
+				? right.mainboardCount / right.mainboardDeckCount
+				: 0;
 			if (rightAvg !== leftAvg)
 				return rightAvg - leftAvg;
 			return right.mainboardDeckCount - left.mainboardDeckCount;
@@ -121,8 +127,12 @@ export function buildMetagameFacts({
 	const highestAvgCopiesSideboardCard = cards
 		.filter(card => card.sideboardDeckCount >= minCardDecks)
 		.sort((left, right) => {
-			const leftAvg = left.sideboardDeckCount > 0 ? left.sideboardCount / left.sideboardDeckCount : 0;
-			const rightAvg = right.sideboardDeckCount > 0 ? right.sideboardCount / right.sideboardDeckCount : 0;
+			const leftAvg = left.sideboardDeckCount > 0
+				? left.sideboardCount / left.sideboardDeckCount
+				: 0;
+			const rightAvg = right.sideboardDeckCount > 0
+				? right.sideboardCount / right.sideboardDeckCount
+				: 0;
 			if (rightAvg !== leftAvg)
 				return rightAvg - leftAvg;
 			return right.sideboardDeckCount - left.sideboardDeckCount;

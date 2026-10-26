@@ -108,7 +108,9 @@ export function graphicTextTemplateInputKeys(template: string): string[] {
 	const keys = parseGraphicTextTemplate(template)
 		.map(segment => segment.inputKey)
 		.filter((key): key is string => key !== undefined && isInputKey(key));
-	return [...new Set(keys)];
+	return [
+		...new Set(keys),
+	];
 }
 
 /** The projection value references in template order, once each. */
@@ -130,10 +132,14 @@ export function graphicTextTemplateProjectedValueReferences(
 
 /** Dotted placeholder candidates, including unsupported projection fields. */
 export function graphicTextTemplateDottedPlaceholderKeys(template: string): string[] {
-	const keys = [...template.matchAll(PLACEHOLDER)]
+	const keys = [
+		...template.matchAll(PLACEHOLDER),
+	]
 		.map(match => match[1] ?? '')
 		.filter(key => key.includes('.'));
-	return [...new Set(keys)];
+	return [
+		...new Set(keys),
+	];
 }
 
 /**
@@ -165,7 +171,9 @@ export function renderGraphicTextTemplate(
 
 		const declaration = findGraphicInputDeclaration(declarations, segment.inputKey);
 		return {
-			text: declaration ? graphicInputTextValue(declaration, values[segment.inputKey]) : '',
+			text: declaration
+				? graphicInputTextValue(declaration, values[segment.inputKey])
+				: '',
 			inputKey: segment.inputKey,
 		};
 	});

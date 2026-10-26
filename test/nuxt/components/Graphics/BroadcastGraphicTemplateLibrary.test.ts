@@ -32,7 +32,9 @@ mockNuxtImport('useBroadcastGraphicTemplateRepository', () => () => ({
 }));
 
 const mockGetScreenById = vi.fn();
-const mockScreens = ref<Array<{ id: number; stateVersion: number }>>([{ id: 3, stateVersion: 12 }]);
+const mockScreens = ref<Array<{ id: number; stateVersion: number }>>([
+	{ id: 3, stateVersion: 12 },
+]);
 
 mockNuxtImport('useScreenStore', () => () => ({
 	getScreenById: mockGetScreenById,
@@ -42,33 +44,46 @@ mockNuxtImport('useScreenStore', () => () => ({
 }));
 
 const ScreenSettingsCardStub = defineComponent({
-	props: { title: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+	},
 	template: '<section><h2>{{ title }}</h2><slot /></section>',
 });
 const UIEmptyStateStub = defineComponent({
-	props: { title: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+	},
 	template: '<div data-testid="empty-state">{{ title }}</div>',
 });
 const UAlertStub = defineComponent({
-	props: { title: { type: String, required: false }, description: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+		description: { type: String, required: false },
+	},
 	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span><slot /></div>',
 });
 const UBadgeStub = defineComponent({ template: '<span><slot /></span>' });
 const UIconStub = defineComponent({ template: '<i />' });
 const UButtonStub = defineComponent({
 	name: 'UButton',
-	props: { disabled: { type: Boolean, default: false } },
+	props: {
+		disabled: { type: Boolean, default: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
 const UInputStub = defineComponent({
 	name: 'UInput',
-	props: { modelValue: { type: String, default: '' } },
+	props: {
+		modelValue: { type: String, default: '' },
+	},
 	emits: ['update:modelValue', 'change', 'blur'],
 	template: '<input :value="modelValue" @change="$emit(\'change\', $event)" @blur="$emit(\'blur\', $event)" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 });
 const UFormFieldStub = defineComponent({
-	props: { label: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+	},
 	template: '<label><span>{{ label }}</span><slot /></label>',
 });
 
@@ -112,8 +127,13 @@ function receivedPackage(
  */
 async function chooseImportFile(wrapper: { get: (selector: string) => any }) {
 	const input = wrapper.get('[data-testid="template-library-import-input"]');
-	const file = new File([new Uint8Array([1, 2, 3])], 'lower-third.skgraphic');
-	Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
+	const file = new File([
+		new Uint8Array([1, 2, 3]),
+	], 'lower-third.skgraphic');
+	Object.defineProperty(input.element, 'files', {
+		value: [file],
+		configurable: true,
+	});
 	await input.trigger('change');
 	await flushPromises();
 }
@@ -150,15 +170,26 @@ async function mountLibrary(props: Record<string, unknown> = {}) {
 describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockList.mockResolvedValue([summary()]);
-		mockSave.mockResolvedValue({ ...summary(), document: lowerThird });
-		mockUpdate.mockResolvedValue({ ...summary(), name: 'Renamed', document: lowerThird });
+		mockList.mockResolvedValue([
+			summary(),
+		]);
+		mockSave.mockResolvedValue({
+			...summary(),
+			document: lowerThird,
+		});
+		mockUpdate.mockResolvedValue({
+			...summary(),
+			name: 'Renamed',
+			document: lowerThird,
+		});
 		mockPlace.mockResolvedValue({
 			screen: { id: 3 },
 			graphic: { ...lowerThird, id: 'placed-copy' },
 		});
 		mockRemove.mockResolvedValue(undefined);
-		mockScreens.value = [{ id: 3, stateVersion: 12 }];
+		mockScreens.value = [
+			{ id: 3, stateVersion: 12 },
+		];
 	});
 
 	it('browses the installation library', async () => {
@@ -206,7 +237,9 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 		// The Screen was written server-side, so the authoritative Screen is reloaded
 		// rather than guessed at.
 		expect(mockGetScreenById).toHaveBeenCalledWith(7, 3);
-		expect(wrapper.emitted('placed')).toEqual([['placed-copy']]);
+		expect(wrapper.emitted('placed')).toEqual([
+			['placed-copy'],
+		]);
 	});
 
 	it('renames a template in the library', async () => {
@@ -264,7 +297,9 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 			revision: 1,
 		});
 
-		mockList.mockResolvedValue([summary({ description: 'Main show, both casters' })]);
+		mockList.mockResolvedValue([
+			summary({ description: 'Main show, both casters' }),
+		]);
 		const described = await mountLibrary();
 		const clearing = described.get('[data-testid="template-description"]');
 		await clearing.setValue('   ');
@@ -408,7 +443,10 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 
 	it('installs a clean Template Package without asking anything', async () => {
 		mockReceivePackage.mockResolvedValue(receivedPackage('awaiting-installation'));
-		mockInstallPackage.mockResolvedValue({ ...receivedPackage('completed'), stage: 'completed' });
+		mockInstallPackage.mockResolvedValue({
+			...receivedPackage('completed'),
+			stage: 'completed',
+		});
 		const wrapper = await mountLibrary();
 
 		await chooseImportFile(wrapper);
@@ -429,16 +467,21 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 	it('pauses on a proposal carrying warnings until the author accepts it', async () => {
 		mockReceivePackage.mockResolvedValue(receivedPackage('awaiting-confirmation', {
 			outcome: 'requires-confirmation',
-			issues: [{
-				code: 'graphic-asset-created-from-shared-content',
-				severity: 'warning',
-				message: '"Backdrop" carries content this installation already stores as "Bug"',
-				remediation: 'Install it as a separate Graphic Asset, or cancel and reuse the existing one.',
-				retryable: false,
-			}],
+			issues: [
+				{
+					code: 'graphic-asset-created-from-shared-content',
+					severity: 'warning',
+					message: '"Backdrop" carries content this installation already stores as "Bug"',
+					remediation: 'Install it as a separate Graphic Asset, or cancel and reuse the existing one.',
+					retryable: false,
+				},
+			],
 		}));
 		mockConfirmPackage.mockResolvedValue(receivedPackage('awaiting-installation'));
-		mockInstallPackage.mockResolvedValue({ ...receivedPackage('completed'), stage: 'completed' });
+		mockInstallPackage.mockResolvedValue({
+			...receivedPackage('completed'),
+			stage: 'completed',
+		});
 		const wrapper = await mountLibrary();
 
 		await chooseImportFile(wrapper);
@@ -462,13 +505,15 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 	it('reports a rejected Template Package without offering to install it', async () => {
 		mockReceivePackage.mockResolvedValue(receivedPackage('failed', {
 			outcome: 'rejected',
-			issues: [{
-				code: 'unsupported-application-capability',
-				severity: 'error',
-				message: 'This installation does not provide graphic-item-definition "media" at configuration version 2',
-				remediation: 'Replace it with a supported one before exporting.',
-				retryable: false,
-			}],
+			issues: [
+				{
+					code: 'unsupported-application-capability',
+					severity: 'error',
+					message: 'This installation does not provide graphic-item-definition "media" at configuration version 2',
+					remediation: 'Replace it with a supported one before exporting.',
+					retryable: false,
+				},
+			],
 		}));
 		const wrapper = await mountLibrary();
 
@@ -495,11 +540,13 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 	 * component offers only what actually works on one: place, and export.
 	 */
 	it('offers an imported design only what can be done to it', async () => {
-		mockList.mockResolvedValue([summary({
-			id: 'installed-1',
-			authored: false,
-			provenance: { sourceTemplateIdentity: 'template-elsewhere', sourceTemplateRevision: 3 },
-		})]);
+		mockList.mockResolvedValue([
+			summary({
+				id: 'installed-1',
+				authored: false,
+				provenance: { sourceTemplateIdentity: 'template-elsewhere', sourceTemplateRevision: 3 },
+			}),
+		]);
 		const wrapper = await mountLibrary();
 
 		const entry = wrapper.get('[data-template-id="installed-1"]');

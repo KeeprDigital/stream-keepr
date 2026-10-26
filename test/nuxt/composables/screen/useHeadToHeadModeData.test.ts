@@ -16,7 +16,9 @@ const defaultConfig = {
 
 const mutableConfig = reactive({ ...defaultConfig });
 const mockEventId = ref<number | null>(1);
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 type Handler = (message: Record<string, unknown>) => void;
 const channelHandlers = new Map<string, Set<Handler>>();
 const continuity = createContinuitySignal();
@@ -55,15 +57,42 @@ const ALICE = 7;
 const BOB = 8;
 
 function side(id: number, name: string): ScreenOutputHeadToHeadPlayer {
-	return { id, name, pronouns: null, wins: 3, losses: 1, draws: 0, points: 9, deckName: null, deckColors: null };
+	return {
+		id,
+		name,
+		pronouns: null,
+		wins: 3,
+		losses: 1,
+		draws: 0,
+		points: 9,
+		deckName: null,
+		deckColors: null,
+	};
 }
 
 function earlierMatch(overrides: Partial<ScreenOutputHeadToHeadEarlierMatch> = {}): ScreenOutputHeadToHeadEarlierMatch {
-	return { matchId: 20, roundId: 31, roundName: 'Round 2', roundNumber: 2, phaseName: 'Swiss', outcome: 'player1', gameScore: '2-1', resultString: null, ...overrides };
+	return {
+		matchId: 20,
+		roundId: 31,
+		roundName: 'Round 2',
+		roundNumber: 2,
+		phaseName: 'Swiss',
+		outcome: 'player1',
+		gameScore: '2-1',
+		resultString: null,
+		...overrides,
+	};
 }
 
 function answer(overrides: Partial<ScreenOutputHeadToHeadResponse> = {}): ScreenOutputHeadToHeadResponse {
-	return { player1: side(ALICE, 'Alice'), player2: side(BOB, 'Bob'), earlierMatches: [earlierMatch()], ...overrides };
+	return {
+		player1: side(ALICE, 'Alice'),
+		player2: side(BOB, 'Bob'),
+		earlierMatches: [
+			earlierMatch(),
+		],
+		...overrides,
+	};
 }
 
 const scopes: EffectScope[] = [];
@@ -210,9 +239,19 @@ describe('useHeadToHeadModeData', () => {
 
 		it('follows its Slot to the Players of its next Feature Match Assignment', async () => {
 			const { player1 } = await showingSlot();
-			mockFetch.mockResolvedValue(answer({ player1: side(9, 'Carol'), earlierMatches: [] }));
+			mockFetch.mockResolvedValue(answer({
+				player1: side(9, 'Carol'),
+				earlierMatches: [],
+			}));
 
-			deliver('featureMatch:updated', { featureMatch: { id: 4, matchId: 99, player1Id: 9, player2Id: BOB } });
+			deliver('featureMatch:updated', {
+				featureMatch: {
+					id: 4,
+					matchId: 99,
+					player1Id: 9,
+					player2Id: BOB,
+				},
+			});
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -222,8 +261,12 @@ describe('useHeadToHeadModeData', () => {
 		it('ignores other Slots, and its Slot once Players are picked directly', async () => {
 			await showingSlot();
 
-			deliver('featureMatch:updated', { featureMatch: { id: 5, player1Id: 1, player2Id: 2 } });
-			deliver('melee:featureMatchesSynced', { slotIds: [5] });
+			deliver('featureMatch:updated', {
+				featureMatch: { id: 5, player1Id: 1, player2Id: 2 },
+			});
+			deliver('melee:featureMatchesSynced', {
+				slotIds: [5],
+			});
 			await flushPromises();
 			expect(mockFetch).not.toHaveBeenCalled();
 
@@ -233,7 +276,9 @@ describe('useHeadToHeadModeData', () => {
 			await flushPromises();
 			mockFetch.mockClear();
 
-			deliver('featureMatch:updated', { featureMatch: { id: 4, player1Id: 1, player2Id: 2 } });
+			deliver('featureMatch:updated', {
+				featureMatch: { id: 4, player1Id: 1, player2Id: 2 },
+			});
 			await flushPromises();
 			expect(mockFetch).not.toHaveBeenCalled();
 		});
@@ -241,7 +286,9 @@ describe('useHeadToHeadModeData', () => {
 		it('follows its Slot being synced from Melee or deleted', async () => {
 			await showingSlot();
 
-			deliver('melee:featureMatchesSynced', { slotIds: [4] });
+			deliver('melee:featureMatchesSynced', {
+				slotIds: [4],
+			});
 			await flushPromises();
 			deliver('featureMatch:deleted', { featureMatchId: 4 });
 			await flushPromises();
@@ -252,15 +299,43 @@ describe('useHeadToHeadModeData', () => {
 		it('follows a result reported between the two, and no other Match', async () => {
 			await showingSlot();
 
-			deliver('match:updated', { match: { id: 30, roundId: 32, player1Id: ALICE, player2Id: 9 } });
-			deliver('match:created', { match: { id: 31, roundId: 32, player1Id: 9, player2Id: 10 } });
+			deliver('match:updated', {
+				match: {
+					id: 30,
+					roundId: 32,
+					player1Id: ALICE,
+					player2Id: 9,
+				},
+			});
+			deliver('match:created', {
+				match: {
+					id: 31,
+					roundId: 32,
+					player1Id: 9,
+					player2Id: 10,
+				},
+			});
 			deliver('match:deleted', { matchId: 31 });
 			await flushPromises();
 			expect(mockFetch).not.toHaveBeenCalled();
 
-			deliver('match:updated', { match: { id: 21, roundId: 32, player1Id: BOB, player2Id: ALICE } });
+			deliver('match:updated', {
+				match: {
+					id: 21,
+					roundId: 32,
+					player1Id: BOB,
+					player2Id: ALICE,
+				},
+			});
 			await flushPromises();
-			deliver('match:created', { match: { id: 22, roundId: 33, player1Id: ALICE, player2Id: BOB } });
+			deliver('match:created', {
+				match: {
+					id: 22,
+					roundId: 33,
+					player1Id: ALICE,
+					player2Id: BOB,
+				},
+			});
 			await flushPromises();
 			deliver('match:deleted', { matchId: 20 });
 			await flushPromises();
@@ -270,11 +345,15 @@ describe('useHeadToHeadModeData', () => {
 		it('follows a change to either Player, and to no one else', async () => {
 			await showingSlot();
 
-			deliver('player:updated', { player: { id: 5 } });
+			deliver('player:updated', {
+				player: { id: 5 },
+			});
 			await flushPromises();
 			expect(mockFetch).not.toHaveBeenCalled();
 
-			deliver('player:updated', { player: { id: BOB } });
+			deliver('player:updated', {
+				player: { id: BOB },
+			});
 			await flushPromises();
 			deliver('player:deleted', { playerId: ALICE });
 			await flushPromises();
@@ -284,9 +363,17 @@ describe('useHeadToHeadModeData', () => {
 		it('follows new Round Standings and Archetype changes', async () => {
 			await showingSlot();
 
-			deliver('melee:roundSynced', { roundId: 40, matchCount: 8, created: 0, updated: 8, staleDeleted: 0 });
+			deliver('melee:roundSynced', {
+				roundId: 40,
+				matchCount: 8,
+				created: 0,
+				updated: 8,
+				staleDeleted: 0,
+			});
 			await flushPromises();
-			deliver('archetype:updated', { archetype: { id: 3, name: 'Boros Energy' } });
+			deliver('archetype:updated', {
+				archetype: { id: 3, name: 'Boros Energy' },
+			});
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -297,7 +384,12 @@ describe('useHeadToHeadModeData', () => {
 
 			mockRealtime.connectionState = 'disconnected';
 			await nextTick();
-			mockFetch.mockResolvedValue(answer({ earlierMatches: [earlierMatch(), earlierMatch({ matchId: 21, roundName: 'Round 5' })] }));
+			mockFetch.mockResolvedValue(answer({
+				earlierMatches: [
+					earlierMatch(),
+					earlierMatch({ matchId: 21, roundName: 'Round 5' }),
+				],
+			}));
 			mockRealtime.connectionState = 'connected';
 			continuity.reattach('event:1');
 			await flushPromises();

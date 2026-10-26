@@ -192,7 +192,9 @@ export function broadcastGraphicsStateService() {
 		idOf: session => session.id,
 		findActive: async ({ screenId, eventId }) => {
 			const active = await findActiveSessionByScreen(screenId, eventId);
-			return active ? [active] : [];
+			return active
+				? [active]
+				: [];
 		},
 
 		close: ({ screenId, eventId, onlyIf }) => {
@@ -228,7 +230,13 @@ export function broadcastGraphicsStateService() {
 
 		open: ({ screenId, eventId }, currentState) => [
 			db.insert(broadcastGraphicsLiveSessions)
-				.values({ eventId, screenId, status: 'active', currentState, sequence: 1 })
+				.values({
+					eventId,
+					screenId,
+					status: 'active',
+					currentState,
+					sequence: 1,
+				})
 				.returning(),
 		],
 
@@ -459,7 +467,10 @@ export function broadcastGraphicsStateService() {
 					// the phase this intent interrupts still running, and when is a coalesced
 					// update due — and both have to be settled once, here, rather than by
 					// each output against its own clock.
-					{ ...context, acceptedAt: Date.now() },
+					{
+						...context,
+						acceptedAt: Date.now(),
+					},
 				);
 			}
 			catch (error) {

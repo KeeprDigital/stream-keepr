@@ -133,7 +133,11 @@ async function ingestImage(
 	});
 	const response = await fetch(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-		{ method: 'PUT', headers: { cookie }, body: bytes },
+		{
+			method: 'PUT',
+			headers: { cookie },
+			body: bytes,
+		},
 	);
 	const operation = await expectOperationResult(response);
 	return { assetId: operation.result.assetId, revisionId: operation.result.revisionId };
@@ -210,7 +214,11 @@ async function ingestFont(eventId: number, name: string, cookie: string): Promis
 	});
 	const response = await fetch(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-		{ method: 'PUT', headers: { cookie, 'content-type': 'font/woff' }, body: bytes },
+		{
+			method: 'PUT',
+			headers: { cookie, 'content-type': 'font/woff' },
+			body: bytes,
+		},
 	);
 	await expectResponseStatus(response, 200);
 	const awaitingEvidence = await response.json() as GraphicsIngestionOperation;
@@ -259,7 +267,9 @@ describe('broadcast Graphics Media Graphic Items', () => {
 	async function usageOf(reference: Reference): Promise<GraphicAssetUsage[]> {
 		return await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${reference.assetId}/usage`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 	}
 
@@ -295,32 +305,36 @@ describe('broadcast Graphics Media Graphic Items', () => {
 	});
 
 	it('saves the authored stack and every exact-revision usage in one write', async () => {
-		const graphics = [{
-			id: 'lower-third',
-			name: 'Lower Third',
-			items: [
-				mediaItem('logo', { asset: logo }),
-				{
-					type: 'group' as const,
-					id: 'cluster',
-					label: 'Cluster',
-					visible: true,
-					anchor: 'top-left' as const,
-					x: 0,
-					y: 0,
-					width: 900,
-					height: 200,
-					arrangement: 'row' as const,
-					padding: 0,
-					gap: 8,
-					align: 'stretch' as const,
-					justify: 'start' as const,
-					clip: false,
-					geometry: SQUARE_GEOMETRY,
-					children: [mediaItem('badge', { asset: badge })],
-				},
-			],
-		}];
+		const graphics = [
+			{
+				id: 'lower-third',
+				name: 'Lower Third',
+				items: [
+					mediaItem('logo', { asset: logo }),
+					{
+						type: 'group' as const,
+						id: 'cluster',
+						label: 'Cluster',
+						visible: true,
+						anchor: 'top-left' as const,
+						x: 0,
+						y: 0,
+						width: 900,
+						height: 200,
+						arrangement: 'row' as const,
+						padding: 0,
+						gap: 8,
+						align: 'stretch' as const,
+						justify: 'start' as const,
+						clip: false,
+						geometry: SQUARE_GEOMETRY,
+						children: [
+							mediaItem('badge', { asset: badge }),
+						],
+					},
+				],
+			},
+		];
 
 		const updated = await $fetch<ScreenResponse>(configPath(), {
 			method: 'PATCH',
@@ -355,7 +369,9 @@ describe('broadcast Graphics Media Graphic Items', () => {
 	it('resolves an indexed revision through the Screen Output Asset Capability, and nothing else', async () => {
 		const { assetCapability } = await $fetch<{ assetCapability: string }>(
 			`/api/events/${eventId}/screens/${screenId}/asset-capability`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 		// A separate Graphic Asset identity over identical content: in the library but
 		// not published by this Screen, which is exactly the case the capability must
@@ -365,7 +381,9 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		function outputContent(reference: Reference) {
 			return fetch(
 				`/api/screen-output/screens/${screenId}/assets/${reference.assetId}/revisions/${reference.revisionId}/content`,
-				{ headers: { authorization: `Bearer ${assetCapability}` } },
+				{
+					headers: { authorization: `Bearer ${assetCapability}` },
+				},
 			);
 		}
 
@@ -381,11 +399,17 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		await expect($fetch(configPath(), {
 			method: 'PATCH',
 			body: {
-				graphics: [{
-					id: 'lower-third',
-					name: 'Lower Third',
-					items: [mediaItem('logo', { asset: { assetId: 'missing-asset', revisionId: 'missing-revision' } })],
-				}],
+				graphics: [
+					{
+						id: 'lower-third',
+						name: 'Lower Third',
+						items: [
+							mediaItem('logo', {
+								asset: { assetId: 'missing-asset', revisionId: 'missing-revision' },
+							}),
+						],
+					},
+				],
 			},
 			headers: { cookie: graphicsAuthorCookie },
 		})).rejects.toMatchObject({ statusCode: 409 });
@@ -434,7 +458,15 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		await $fetch(`/api/events/${eventId}/screens/${overlayScreen.id}/config/broadcast-graphics`, {
 			method: 'PATCH',
 			body: {
-				graphics: [{ id: 'bug', name: 'Bug', items: [mediaItem('badge', { asset: badge })] }],
+				graphics: [
+					{
+						id: 'bug',
+						name: 'Bug',
+						items: [
+							mediaItem('badge', { asset: badge }),
+						],
+					},
+				],
 			},
 			headers: { cookie: graphicsAuthorCookie },
 		});
@@ -451,12 +483,16 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		// Match Overlay mode, so the Broadcast Graphics reference is not on this output.
 		const { assetCapability } = await $fetch<{ assetCapability: string }>(
 			`/api/events/${eventId}/screens/${overlayScreen.id}/asset-capability`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 		function outputContent(reference: Reference) {
 			return fetch(
 				`/api/screen-output/screens/${overlayScreen.id}/assets/${reference.assetId}/revisions/${reference.revisionId}/content`,
-				{ headers: { authorization: `Bearer ${assetCapability}` } },
+				{
+					headers: { authorization: `Bearer ${assetCapability}` },
+				},
 			);
 		}
 		await expect(outputContent(logo).then(response => response.status)).resolves.toBe(200);
@@ -474,11 +510,15 @@ describe('broadcast Graphics Media Graphic Items', () => {
 				stateVersion: screen.stateVersion,
 				modeConfigs: {
 					'broadcast-graphics': {
-						graphics: [{
-							id: 'lower-third',
-							name: 'Lower Third',
-							items: [mediaItem('logo', { asset: badge })],
-						}],
+						graphics: [
+							{
+								id: 'lower-third',
+								name: 'Lower Third',
+								items: [
+									mediaItem('logo', { asset: badge }),
+								],
+							},
+						],
 					},
 				},
 			},
@@ -494,7 +534,15 @@ describe('broadcast Graphics Media Graphic Items', () => {
 				currentMode: 'broadcast-graphics',
 				modeConfigs: {
 					'broadcast-graphics': {
-						graphics: [{ id: 'g', name: 'G', items: [mediaItem('logo', { asset: logo })] }],
+						graphics: [
+							{
+								id: 'g',
+								name: 'G',
+								items: [
+									mediaItem('logo', { asset: logo }),
+								],
+							},
+						],
 					},
 				},
 			},
@@ -505,11 +553,15 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		await $fetch(configPath(), {
 			method: 'PATCH',
 			body: {
-				graphics: [{
-					id: 'lower-third',
-					name: 'Lower Third',
-					items: [mediaItem('logo', { asset: undefined })],
-				}],
+				graphics: [
+					{
+						id: 'lower-third',
+						name: 'Lower Third',
+						items: [
+							mediaItem('logo', { asset: undefined }),
+						],
+					},
+				],
 			},
 			headers: { cookie: graphicsAuthorCookie },
 		});
@@ -535,7 +587,13 @@ describe('broadcast Graphics Media Graphic Items', () => {
 			method: 'PATCH',
 			body: {
 				graphics: [
-					{ id: 'sound', name: 'Sound', items: [mediaItem('logo', { asset: takeable })] },
+					{
+						id: 'sound',
+						name: 'Sound',
+						items: [
+							mediaItem('logo', { asset: takeable }),
+						],
+					},
 					{ id: 'clean', name: 'Clean', items: [] },
 				],
 			},
@@ -548,7 +606,14 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		function command(type: 'Take' | 'Out', graphicId: string, commandId: string) {
 			return $fetch(
 				`/api/events/${eventId}/screens/${screen.id}/broadcast-graphics/live-sessions/${session.id}/commands`,
-				{ method: 'POST', body: { commandId, type, payload: { graphicId } } },
+				{
+					method: 'POST',
+					body: {
+						commandId,
+						type,
+						payload: { graphicId },
+					},
+				},
 			);
 		}
 
@@ -611,18 +676,22 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		const updated = await $fetch<ScreenResponse>(configPath(), {
 			method: 'PATCH',
 			body: {
-				graphics: [{
-					id: 'sting',
-					name: 'Sting',
-					items: [mediaItem('clip', {
-						fit: 'contain',
-						opacity: 0.75,
-						focalPosition: { horizontal: 0.1, vertical: 0.9 },
-						playbackRate: 0.5,
-						loop: false,
-						clipGeometry: { ...SQUARE_GEOMETRY, rightSlant: 40 },
-					})],
-				}],
+				graphics: [
+					{
+						id: 'sting',
+						name: 'Sting',
+						items: [
+							mediaItem('clip', {
+								fit: 'contain',
+								opacity: 0.75,
+								focalPosition: { horizontal: 0.1, vertical: 0.9 },
+								playbackRate: 0.5,
+								loop: false,
+								clipGeometry: { ...SQUARE_GEOMETRY, rightSlant: 40 },
+							}),
+						],
+					},
+				],
 			},
 			headers: { cookie: graphicsAuthorCookie },
 		});
@@ -635,7 +704,10 @@ describe('broadcast Graphics Media Graphic Items', () => {
 			focalPosition: { horizontal: 0.1, vertical: 0.9 },
 			playbackRate: 0.5,
 			loop: false,
-			clipGeometry: { rightSlant: 40, topLeft: { treatment: 'square', size: 0 } },
+			clipGeometry: {
+				rightSlant: 40,
+				topLeft: { treatment: 'square', size: 0 },
+			},
 		});
 	});
 
@@ -643,7 +715,15 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		await expect($fetch(configPath(), {
 			method: 'PATCH',
 			body: {
-				graphics: [{ id: 'sting', name: 'Sting', items: [mediaItem('clip', { playbackRate: 12 })] }],
+				graphics: [
+					{
+						id: 'sting',
+						name: 'Sting',
+						items: [
+							mediaItem('clip', { playbackRate: 12 }),
+						],
+					},
+				],
 			},
 			headers: { cookie: graphicsAuthorCookie },
 		})).rejects.toMatchObject({ statusCode: 400 });
@@ -665,11 +745,15 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		const updated = await $fetch<ScreenResponse>(configPath(), {
 			method: 'PATCH',
 			body: {
-				graphics: [{
-					id: 'name-plate',
-					name: 'Name Plate',
-					items: [textItem('player-name', { kind: 'asset', reference: font })],
-				}],
+				graphics: [
+					{
+						id: 'name-plate',
+						name: 'Name Plate',
+						items: [
+							textItem('player-name', { kind: 'asset', reference: font }),
+						],
+					},
+				],
 			},
 			headers: { cookie: graphicsAuthorCookie },
 		});
@@ -690,11 +774,15 @@ describe('broadcast Graphics Media Graphic Items', () => {
 
 		const { assetCapability } = await $fetch<{ assetCapability: string }>(
 			`/api/events/${eventId}/screens/${screenId}/asset-capability`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 		const content = await fetch(
 			`/api/screen-output/screens/${screenId}/assets/${font.assetId}/revisions/${font.revisionId}/content`,
-			{ headers: { authorization: `Bearer ${assetCapability}` } },
+			{
+				headers: { authorization: `Bearer ${assetCapability}` },
+			},
 		);
 
 		expect(content.status).toBe(200);
@@ -708,11 +796,15 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		await expect($fetch(configPath(), {
 			method: 'PATCH',
 			body: {
-				graphics: [{
-					id: 'name-plate',
-					name: 'Name Plate',
-					items: [textItem('player-name', { kind: 'asset', reference: logo })],
-				}],
+				graphics: [
+					{
+						id: 'name-plate',
+						name: 'Name Plate',
+						items: [
+							textItem('player-name', { kind: 'asset', reference: logo }),
+						],
+					},
+				],
 			},
 			headers: { cookie: graphicsAuthorCookie },
 		})).rejects.toMatchObject({ statusCode: 409 });
@@ -763,7 +855,16 @@ describe('media Graphic Input values on air', () => {
 			`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`,
 			{
 				method: 'PATCH',
-				body: { graphics: [{ id: graphicId, name: 'Promo', items: [], inputs }] },
+				body: {
+					graphics: [
+						{
+							id: graphicId,
+							name: 'Promo',
+							items: [],
+							inputs,
+						},
+					],
+				},
 				headers: { cookie: graphicsAuthorCookie },
 			},
 		);
@@ -772,7 +873,9 @@ describe('media Graphic Input values on air', () => {
 	async function capabilityFor(screenId: number): Promise<string> {
 		const { assetCapability } = await $fetch<{ assetCapability: string }>(
 			`/api/events/${eventId}/screens/${screenId}/asset-capability`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 		return assetCapability;
 	}
@@ -791,7 +894,9 @@ describe('media Graphic Input values on air', () => {
 			{
 				headers: {
 					authorization: `Bearer ${capability}`,
-					...(userAgent ? { 'user-agent': userAgent } : {}),
+					...(userAgent
+						? { 'user-agent': userAgent }
+						: {}),
 				},
 			},
 		).then(response => response.status);
@@ -813,7 +918,9 @@ describe('media Graphic Input values on air', () => {
 	async function usageOf(reference: Reference): Promise<GraphicAssetUsage[]> {
 		return await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${reference.assetId}/usage`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 	}
 
@@ -841,7 +948,9 @@ describe('media Graphic Input values on air', () => {
 
 	it('resolves a runtime-chosen revision only while the Live Session accepts it', async () => {
 		const screenId = await createScreen('media-input-runtime');
-		await declare(screenId, [mediaInput('backdrop')]);
+		await declare(screenId, [
+			mediaInput('backdrop'),
+		]);
 		const capability = await capabilityFor(screenId);
 		const session = await liveSession(screenId);
 
@@ -914,7 +1023,9 @@ describe('media Graphic Input values on air', () => {
 		// and the asset still pinned against retirement.
 		const screenId = await createScreen('media-input-undeclared');
 		const backdrop = await ingestImage(eventId, `media-input-undeclared-${runId}`, pngWithTextChunks(104), graphicsAuthorCookie);
-		await declare(screenId, [mediaInput('backdrop')]);
+		await declare(screenId, [
+			mediaInput('backdrop'),
+		]);
 		const capability = await capabilityFor(screenId);
 		const session = await liveSession(screenId);
 
@@ -940,7 +1051,9 @@ describe('media Graphic Input values on air', () => {
 	it('stops resolving once the authored write removes the whole Broadcast Graphic', async () => {
 		const screenId = await createScreen('media-input-unplaced');
 		const backdrop = await ingestImage(eventId, `media-input-unplaced-${runId}`, pngWithTextChunks(105), graphicsAuthorCookie);
-		await declare(screenId, [mediaInput('backdrop')]);
+		await declare(screenId, [
+			mediaInput('backdrop'),
+		]);
 		const capability = await capabilityFor(screenId);
 		const session = await liveSession(screenId);
 
@@ -978,7 +1091,9 @@ describe('media Graphic Input values on air', () => {
 		// Session publishes, so this route needs the same reconciliation.
 		const screenId = await createScreen('media-input-generic-write');
 		const backdrop = await ingestImage(eventId, `media-input-generic-${runId}`, pngWithTextChunks(107), graphicsAuthorCookie);
-		await declare(screenId, [mediaInput('backdrop')]);
+		await declare(screenId, [
+			mediaInput('backdrop'),
+		]);
 		const capability = await capabilityFor(screenId);
 		const session = await liveSession(screenId);
 
@@ -1003,7 +1118,14 @@ describe('media Graphic Input values on air', () => {
 				stateVersion: screen.stateVersion,
 				modeConfigs: {
 					'broadcast-graphics': {
-						graphics: [{ id: 'promo', name: 'Promo', items: [], inputs: [] }],
+						graphics: [
+							{
+								id: 'promo',
+								name: 'Promo',
+								items: [],
+								inputs: [],
+							},
+						],
 					},
 				},
 			},
@@ -1020,7 +1142,9 @@ describe('media Graphic Input values on air', () => {
 		// references actually went.
 		const screenId = await createScreen('media-input-mode-change');
 		const backdrop = await ingestImage(eventId, `media-input-mode-change-${runId}`, pngWithTextChunks(106), graphicsAuthorCookie);
-		await declare(screenId, [mediaInput('backdrop')]);
+		await declare(screenId, [
+			mediaInput('backdrop'),
+		]);
 		const session = await liveSession(screenId);
 
 		await command(screenId, session.id, {
@@ -1050,7 +1174,9 @@ describe('media Graphic Input values on air', () => {
 		// shown as unavailable: there is no fact to record about a revision that is not
 		// there, and an unrecorded fact is what loses the write's precondition later.
 		const screenId = await createScreen('media-input-missing');
-		await declare(screenId, [mediaInput('backdrop')]);
+		await declare(screenId, [
+			mediaInput('backdrop'),
+		]);
 		const session = await liveSession(screenId);
 
 		await expect(command(screenId, session.id, {
@@ -1134,16 +1260,20 @@ describe('media Graphic Input values on air', () => {
 			WHERE id = '${transparent.revisionId}';
 		`);
 
-		await declare(screenId, [mediaInput('sting', {
-			mediaKind: 'silent-video',
-			default: transparent,
-		})]);
+		await declare(screenId, [
+			mediaInput('sting', {
+				mediaKind: 'silent-video',
+				default: transparent,
+			}),
+		]);
 		// A default recorded before ADR-0020 still carries the fact; it reads, and the
 		// fact is dropped.
-		await declare(screenId, [mediaInput('sting', {
-			mediaKind: 'silent-video',
-			default: { ...transparent, videoCompatibility: 'chromium-transparency' } as typeof transparent,
-		})]);
+		await declare(screenId, [
+			mediaInput('sting', {
+				mediaKind: 'silent-video',
+				default: { ...transparent, videoCompatibility: 'chromium-transparency' } as typeof transparent,
+			}),
+		]);
 		const stored = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`, {
 			headers: { cookie: graphicsAuthorCookie },
 		});

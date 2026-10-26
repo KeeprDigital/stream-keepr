@@ -43,7 +43,9 @@ const mockRepo = {
 
 const mockAbly = createMockRealtime();
 const mockIsSelfOrigin = vi.fn(() => false);
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 
 const ablyCallbacks: Record<string, Record<string, (...args: unknown[]) => void>> = {};
 mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
@@ -103,8 +105,12 @@ describe('useScreenStore', () => {
 		});
 
 		it('keeps a cached Screen the fetched list serves at an older revision', async () => {
-			store.screens = [createMockScreen({ id: 1, name: 'Saved', stateVersion: 4 })];
-			mockRepo.list.mockResolvedValue([createMockScreen({ id: 1, name: 'Stale', stateVersion: 3 })]);
+			store.screens = [
+				createMockScreen({ id: 1, name: 'Saved', stateVersion: 4 }),
+			];
+			mockRepo.list.mockResolvedValue([
+				createMockScreen({ id: 1, name: 'Stale', stateVersion: 3 }),
+			]);
 
 			await store.loadScreensByEventId(1);
 
@@ -116,8 +122,12 @@ describe('useScreenStore', () => {
 			// Equal is not older: the server bumps `stateVersion` once per write, so a
 			// list serving the same revision carries the same Screen, and refusing it
 			// would leave a reload unable to correct anything.
-			store.screens = [createMockScreen({ id: 1, name: 'Old', stateVersion: 4 })];
-			mockRepo.list.mockResolvedValue([createMockScreen({ id: 1, name: 'Fresh', stateVersion: 4 })]);
+			store.screens = [
+				createMockScreen({ id: 1, name: 'Old', stateVersion: 4 }),
+			];
+			mockRepo.list.mockResolvedValue([
+				createMockScreen({ id: 1, name: 'Fresh', stateVersion: 4 }),
+			]);
 
 			await store.loadScreensByEventId(1);
 
@@ -133,7 +143,9 @@ describe('useScreenStore', () => {
 				createMockScreen({ id: 1, name: 'Deleted elsewhere', stateVersion: 9 }),
 				createMockScreen({ id: 2, name: 'Still there', stateVersion: 1 }),
 			];
-			mockRepo.list.mockResolvedValue([createMockScreen({ id: 2, name: 'Still there', stateVersion: 1 })]);
+			mockRepo.list.mockResolvedValue([
+				createMockScreen({ id: 2, name: 'Still there', stateVersion: 1 }),
+			]);
 
 			await store.loadScreensByEventId(1);
 
@@ -141,7 +153,9 @@ describe('useScreenStore', () => {
 		});
 
 		it('adds a Screen the fetched list brings that the cache lacks, in the order the list gives', async () => {
-			store.screens = [createMockScreen({ id: 1, stateVersion: 4 })];
+			store.screens = [
+				createMockScreen({ id: 1, stateVersion: 4 }),
+			];
 			mockRepo.list.mockResolvedValue([
 				createMockScreen({ id: 2, stateVersion: 1 }),
 				createMockScreen({ id: 1, stateVersion: 4 }),
@@ -157,7 +171,9 @@ describe('useScreenStore', () => {
 			// different entry than the comparison did writes a revision older than the
 			// one the fetched list brought, which is worse than replacing wholesale.
 			seedDuplicateCacheEntries(store, [1, 5, 2]);
-			mockRepo.list.mockResolvedValue([createMockScreen({ id: 10, name: 'v3', stateVersion: 3 })]);
+			mockRepo.list.mockResolvedValue([
+				createMockScreen({ id: 10, name: 'v3', stateVersion: 3 }),
+			]);
 
 			await store.loadScreensByEventId(1);
 
@@ -174,7 +190,13 @@ describe('useScreenStore', () => {
 			// Every step is driven explicitly — the save's debounce by fake timers, the
 			// list's answer by its own resolver — so the ordering is the test's.
 			vi.useFakeTimers();
-			store.screens = [createMockScreen({ id: 5, screenConfig: { width: 100 }, stateVersion: 3 })];
+			store.screens = [
+				createMockScreen({
+					id: 5,
+					screenConfig: { width: 100 },
+					stateVersion: 3,
+				}),
+			];
 
 			let serveRefresh: (screens: unknown) => void = () => {};
 			mockRepo.list.mockReturnValueOnce(new Promise((resolve) => {
@@ -182,7 +204,11 @@ describe('useScreenStore', () => {
 			}));
 			const refresh = store.loadScreensByEventId(1);
 
-			const saved = createMockScreen({ id: 5, screenConfig: { width: 1920 }, stateVersion: 4 });
+			const saved = createMockScreen({
+				id: 5,
+				screenConfig: { width: 1920 },
+				stateVersion: 4,
+			});
 			mockRepo.updateScreenConfig.mockResolvedValue(saved);
 			const save = store.updateScreenConfig(1, 5, { width: 1920 });
 			await vi.advanceTimersByTimeAsync(300);
@@ -191,7 +217,13 @@ describe('useScreenStore', () => {
 
 			// Served before that save committed, so it answers with the revision the
 			// save superseded.
-			serveRefresh([createMockScreen({ id: 5, screenConfig: { width: 100 }, stateVersion: 3 })]);
+			serveRefresh([
+				createMockScreen({
+					id: 5,
+					screenConfig: { width: 100 },
+					stateVersion: 3,
+				}),
+			]);
 			const loaded = await refresh;
 
 			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
@@ -238,8 +270,20 @@ describe('useScreenStore', () => {
 		});
 
 		it('keeps a held revision newer than the one the slug answer brings', async () => {
-			store.screens = [createMockScreen({ id: 7, slug: 'main', name: 'Saved', stateVersion: 4 })];
-			mockRepo.getBySlug.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', name: 'Stale', stateVersion: 3 }));
+			store.screens = [
+				createMockScreen({
+					id: 7,
+					slug: 'main',
+					name: 'Saved',
+					stateVersion: 4,
+				}),
+			];
+			mockRepo.getBySlug.mockResolvedValue(createMockScreen({
+				id: 7,
+				slug: 'main',
+				name: 'Stale',
+				stateVersion: 3,
+			}));
 
 			const loaded = await store.loadScreenBySlug(1, 'main');
 
@@ -255,8 +299,20 @@ describe('useScreenStore', () => {
 		it('takes the slug answer at the revision the cache already holds', async () => {
 			// Equal is not older: the server bumps `stateVersion` once per write, so the
 			// same revision carries the same Screen (#236, #251).
-			store.screens = [createMockScreen({ id: 7, slug: 'main', name: 'Old', stateVersion: 4 })];
-			mockRepo.getBySlug.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', name: 'Fresh', stateVersion: 4 }));
+			store.screens = [
+				createMockScreen({
+					id: 7,
+					slug: 'main',
+					name: 'Old',
+					stateVersion: 4,
+				}),
+			];
+			mockRepo.getBySlug.mockResolvedValue(createMockScreen({
+				id: 7,
+				slug: 'main',
+				name: 'Fresh',
+				stateVersion: 4,
+			}));
 
 			await store.loadScreenBySlug(1, 'main');
 
@@ -284,7 +340,14 @@ describe('useScreenStore', () => {
 			// `screens` — which is exactly where a writing client's save lands, since
 			// `updateScreenConfig` refuses a Screen it does not hold there.
 			vi.useFakeTimers();
-			store.screens = [createMockScreen({ id: 5, slug: 'main', screenConfig: { width: 100 }, stateVersion: 3 })];
+			store.screens = [
+				createMockScreen({
+					id: 5,
+					slug: 'main',
+					screenConfig: { width: 100 },
+					stateVersion: 3,
+				}),
+			];
 
 			let serveLoad: (screen: unknown) => void = () => {};
 			mockRepo.getBySlug.mockReturnValueOnce(new Promise((resolve) => {
@@ -292,7 +355,12 @@ describe('useScreenStore', () => {
 			}));
 			const load = store.loadScreenBySlug(1, 'main');
 
-			const saved = createMockScreen({ id: 5, slug: 'main', screenConfig: { width: 1920 }, stateVersion: 4 });
+			const saved = createMockScreen({
+				id: 5,
+				slug: 'main',
+				screenConfig: { width: 1920 },
+				stateVersion: 4,
+			});
 			mockRepo.updateScreenConfig.mockResolvedValue(saved);
 			const save = store.updateScreenConfig(1, 5, { width: 1920 });
 			await vi.advanceTimersByTimeAsync(300);
@@ -300,7 +368,12 @@ describe('useScreenStore', () => {
 
 			// Served before that save committed, so it answers with the revision the save
 			// superseded.
-			serveLoad(createMockScreen({ id: 5, slug: 'main', screenConfig: { width: 100 }, stateVersion: 3 }));
+			serveLoad(createMockScreen({
+				id: 5,
+				slug: 'main',
+				screenConfig: { width: 100 },
+				stateVersion: 3,
+			}));
 			const loaded = await load;
 
 			expect(store.activeScreen!.screenConfig).toEqual({ width: 1920 });
@@ -368,9 +441,26 @@ describe('useScreenStore', () => {
 		it('keeps a held revision newer than the one the answer brings', async () => {
 			// The same comparison the three loaders share (#251): a GET issued before a
 			// save commits can be served after it settles.
-			store.screens = [createMockScreen({ id: 7, slug: 'main', name: 'Saved', stateVersion: 4 })];
-			store.activeScreen = createMockScreen({ id: 7, slug: 'main', name: 'Saved', stateVersion: 4 });
-			mockRepo.getScreenOutputById.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', name: 'Stale', stateVersion: 3 }));
+			store.screens = [
+				createMockScreen({
+					id: 7,
+					slug: 'main',
+					name: 'Saved',
+					stateVersion: 4,
+				}),
+			];
+			store.activeScreen = createMockScreen({
+				id: 7,
+				slug: 'main',
+				name: 'Saved',
+				stateVersion: 4,
+			});
+			mockRepo.getScreenOutputById.mockResolvedValue(createMockScreen({
+				id: 7,
+				slug: 'main',
+				name: 'Stale',
+				stateVersion: 3,
+			}));
 
 			const refreshed = await store.refreshActiveScreen(1, 7);
 
@@ -457,7 +547,9 @@ describe('useScreenStore', () => {
 		});
 
 		it('refuses an answer older than the cached revision, and answers with the cached one', async () => {
-			store.screens = [createMockScreen({ id: 5, name: 'Saved', stateVersion: 4 })];
+			store.screens = [
+				createMockScreen({ id: 5, name: 'Saved', stateVersion: 4 }),
+			];
 			mockRepo.getById.mockResolvedValue(createMockScreen({ id: 5, name: 'Stale', stateVersion: 3 }));
 
 			const loaded = await store.getScreenById(1, 5);
@@ -487,7 +579,9 @@ describe('useScreenStore', () => {
 		});
 
 		it('caches an answer at the revision the cache already holds', async () => {
-			store.screens = [createMockScreen({ id: 5, name: 'Old', stateVersion: 4 })];
+			store.screens = [
+				createMockScreen({ id: 5, name: 'Old', stateVersion: 4 }),
+			];
 			mockRepo.getById.mockResolvedValue(createMockScreen({ id: 5, name: 'Fresh', stateVersion: 4 }));
 
 			await store.getScreenById(1, 5);
@@ -515,7 +609,13 @@ describe('useScreenStore', () => {
 			// Same interleaving as the list refresh above, reached through the single
 			// Screen load the configuration page runs on mount and on route change.
 			vi.useFakeTimers();
-			store.screens = [createMockScreen({ id: 5, screenConfig: { width: 100 }, stateVersion: 3 })];
+			store.screens = [
+				createMockScreen({
+					id: 5,
+					screenConfig: { width: 100 },
+					stateVersion: 3,
+				}),
+			];
 
 			let serveLoad: (screen: unknown) => void = () => {};
 			mockRepo.getById.mockReturnValueOnce(new Promise((resolve) => {
@@ -523,14 +623,22 @@ describe('useScreenStore', () => {
 			}));
 			const load = store.getScreenById(1, 5);
 
-			const saved = createMockScreen({ id: 5, screenConfig: { width: 1920 }, stateVersion: 4 });
+			const saved = createMockScreen({
+				id: 5,
+				screenConfig: { width: 1920 },
+				stateVersion: 4,
+			});
 			mockRepo.updateScreenConfig.mockResolvedValue(saved);
 			const save = store.updateScreenConfig(1, 5, { width: 1920 });
 			await vi.advanceTimersByTimeAsync(300);
 			await save;
 			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
 
-			serveLoad(createMockScreen({ id: 5, screenConfig: { width: 100 }, stateVersion: 3 }));
+			serveLoad(createMockScreen({
+				id: 5,
+				screenConfig: { width: 100 },
+				stateVersion: 3,
+			}));
 			const loaded = await load;
 
 			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
@@ -580,7 +688,9 @@ describe('useScreenStore', () => {
 			// Collision semantics, decided: newest wins, through the same selection every
 			// other door into `screens` uses. A create's answer is refused exactly when a
 			// load's would be, so no door can move a Screen's `stateVersion` backwards.
-			store.screens = [createMockScreen({ id: 10, name: 'Saved', stateVersion: 4 })];
+			store.screens = [
+				createMockScreen({ id: 10, name: 'Saved', stateVersion: 4 }),
+			];
 			mockRepo.create.mockResolvedValue(createMockScreen({ id: 10, name: 'Created', stateVersion: 3 }));
 
 			const created = await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'background' });
@@ -594,7 +704,9 @@ describe('useScreenStore', () => {
 		});
 
 		it('takes a create answering at the revision the cache already holds', async () => {
-			store.screens = [createMockScreen({ id: 10, name: 'Old', stateVersion: 4 })];
+			store.screens = [
+				createMockScreen({ id: 10, name: 'Old', stateVersion: 4 }),
+			];
 			mockRepo.create.mockResolvedValue(createMockScreen({ id: 10, name: 'Fresh', stateVersion: 4 }));
 
 			await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'background' });
@@ -690,16 +802,32 @@ describe('useScreenStore', () => {
 	 * not add, change or put back a Screen there (ADR-0024).
 	 */
 	describe.each([
-		['Event B', [2]],
-		['Event A, loaded again since', [2, 1]],
+		[
+			'Event B',
+			[2],
+		],
+		[
+			'Event A, loaded again since',
+			[2, 1],
+		],
 	])('a Screen write answered after the operator moved on to %s', (_, switches) => {
 		/** Ends on Screens 1 and 2 at the revision the write would answer with, as Event A's own are when loaded again. */
 		async function switchAway() {
 			for (const eventId of switches) {
 				store.$reset();
 				mockRepo.list.mockResolvedValueOnce([
-					createMockScreen({ id: 1, eventId, name: `One as loaded for ${eventId}`, stateVersion: 2 }),
-					createMockScreen({ id: 2, eventId, name: `Two as loaded for ${eventId}`, stateVersion: 2 }),
+					createMockScreen({
+						id: 1,
+						eventId,
+						name: `One as loaded for ${eventId}`,
+						stateVersion: 2,
+					}),
+					createMockScreen({
+						id: 2,
+						eventId,
+						name: `Two as loaded for ${eventId}`,
+						stateVersion: 2,
+					}),
 				]);
 				await store.loadScreensByEventId(eventId);
 			}
@@ -719,7 +847,10 @@ describe('useScreenStore', () => {
 		});
 
 		it('a late update changes no Screen, whether it succeeds or fails', async () => {
-			store.screens = [createMockScreen({ id: 1, name: 'One', stateVersion: 1 }), createMockScreen({ id: 2, name: 'Two', stateVersion: 1 })];
+			store.screens = [
+				createMockScreen({ id: 1, name: 'One', stateVersion: 1 }),
+				createMockScreen({ id: 2, name: 'Two', stateVersion: 1 }),
+			];
 			const succeeded = deferred<ReturnType<typeof createMockScreen>>();
 			const failed = deferred<never>();
 			mockRepo.update
@@ -738,7 +869,9 @@ describe('useScreenStore', () => {
 		});
 
 		it('a late failed delete puts back no Screen', async () => {
-			store.screens = [createMockScreen({ id: 3, name: 'Three', stateVersion: 1 })];
+			store.screens = [
+				createMockScreen({ id: 3, name: 'Three', stateVersion: 1 }),
+			];
 			const remove = deferred<never>();
 			mockRepo.remove.mockReturnValueOnce(remove.promise);
 

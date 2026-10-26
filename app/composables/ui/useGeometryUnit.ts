@@ -29,7 +29,9 @@ function rememberedUnit(): Ref<string> {
 export function useGeometryUnit() {
 	const stored = rememberedUnit();
 	return computed<GeometryUnit>({
-		get: () => isGeometryUnit(stored.value) ? stored.value : 'px',
+		get: () => isGeometryUnit(stored.value)
+			? stored.value
+			: 'px',
 		set: (unit) => {
 			stored.value = unit;
 		},

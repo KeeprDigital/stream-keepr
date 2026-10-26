@@ -66,7 +66,10 @@ export function graphicChannelGroups(
 	stack: GraphicChannelStack,
 ): { channel: GraphicChannelConfig | null; graphics: readonly BroadcastGraphicConfig[] }[] {
 	const groups = (stack.channels ?? [])
-		.map(channel => ({ channel, graphics: graphicChannelMembers(stack, channel.id) }))
+		.map(channel => ({
+			channel,
+			graphics: graphicChannelMembers(stack, channel.id),
+		}))
 		.filter(group => group.graphics.length > 0);
 
 	// A channel the Screen does not declare is no channel, so its members fall through
@@ -76,6 +79,9 @@ export function graphicChannelGroups(
 		graphic => graphic.channelId === undefined || !declared.has(graphic.channelId),
 	);
 	return unchanneled.length > 0
-		? [...groups, { channel: null, graphics: unchanneled }]
+		? [
+				...groups,
+				{ channel: null, graphics: unchanneled },
+			]
 		: groups;
 }

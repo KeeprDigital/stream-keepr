@@ -104,7 +104,9 @@ export async function runWorkerSmoke({
 			actual: 'hard timeout reached',
 		}),
 	), hardTimeoutMs);
-	const smokeSignal = signal ? AbortSignal.any([signal, timeout.signal]) : timeout.signal;
+	const smokeSignal = signal
+		? AbortSignal.any([signal, timeout.signal])
+		: timeout.signal;
 	const startedAt = Date.now();
 	let persistencePath;
 	let activeChild;
@@ -256,7 +258,9 @@ async function runLocalPreviewAuthProbes({ origin, fetchRequest, signal }) {
 		path: '/api/auth/get-session',
 		fetchRequest,
 		signal,
-		init: { headers: { cookie: firstCookie } },
+		init: {
+			headers: { cookie: firstCookie },
+		},
 	});
 	const repeated = await responseJson(repeatedResponse, 'local-auth-bypassed-session-repeat');
 	const otherResponse = await expectStatus({
@@ -282,7 +286,9 @@ async function runLocalPreviewAuthProbes({ origin, fetchRequest, signal }) {
 		path: '/api/events',
 		fetchRequest,
 		signal,
-		init: { headers: { cookie: firstCookie } },
+		init: {
+			headers: { cookie: firstCookie },
+		},
 	});
 }
 
@@ -372,7 +378,9 @@ function childExit(child, probe) {
 }
 
 function exitDescription({ status, signal }) {
-	return status === null ? `signal ${signal ?? 'unknown'}` : `exit ${status}`;
+	return status === null
+		? `signal ${signal ?? 'unknown'}`
+		: `exit ${status}`;
 }
 
 async function availableLoopbackPort() {
@@ -382,7 +390,9 @@ async function availableLoopbackPort() {
 		server.listen(0, '127.0.0.1', resolve);
 	});
 	const address = server.address();
-	await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+	await new Promise((resolve, reject) => server.close(error => error
+		? reject(error)
+		: resolve()));
 	if (!address || typeof address === 'string')
 		throw new WorkerSmokeFailure('setup', 'loopback-port-unavailable');
 	return address.port;
@@ -432,7 +442,10 @@ async function terminateChild(child, exit) {
 	if (!child)
 		return;
 	const alreadyExited = exit
-		? await Promise.race([exit.then(() => true, () => true), Promise.resolve(false)])
+		? await Promise.race([
+				exit.then(() => true, () => true),
+				Promise.resolve(false),
+			])
 		: false;
 	if (alreadyExited)
 		return;
@@ -525,7 +538,12 @@ async function runProductProbes({ origin, fetchRequest, generated, sensitiveValu
 	// is what shows this scenario left their bucket alone. Those header-less
 	// sign-ins share one bucket of three per 10 seconds, and the limiter counts
 	// an origin refusal too, so the two below use two of the three.
-	await expectSignInRateLimit({ origin, fetchRequest, signInBody, signal });
+	await expectSignInRateLimit({
+		origin,
+		fetchRequest,
+		signInBody,
+		signal,
+	});
 	await expectStatus({
 		probe: 'auth-origin-refusal',
 		expected: 403,
@@ -554,7 +572,9 @@ async function runProductProbes({ origin, fetchRequest, generated, sensitiveValu
 		path: '/api/events',
 		fetchRequest,
 		signal,
-		init: { headers: { cookie } },
+		init: {
+			headers: { cookie },
+		},
 	});
 
 	const event = await expectJson({
@@ -582,12 +602,15 @@ async function runProductProbes({ origin, fetchRequest, generated, sensitiveValu
 		path: `/api/events/${event.id}/melee-config`,
 		fetchRequest,
 		signal,
-		init: { ...jsonRequest({
-			meleeEnabled: false,
-			meleeEventId: 'worker-smoke-event',
-			meleeClientId: 'worker-smoke-client',
-			meleeClientSecret,
-		}, { cookie }), method: 'PUT' },
+		init: {
+			...jsonRequest({
+				meleeEnabled: false,
+				meleeEventId: 'worker-smoke-event',
+				meleeClientId: 'worker-smoke-client',
+				meleeClientSecret,
+			}, { cookie }),
+			method: 'PUT',
+		},
 	});
 	assertMeleeRedaction(melee, meleeClientSecret, 'melee-configuration');
 	const reread = await expectJson({
@@ -597,7 +620,9 @@ async function runProductProbes({ origin, fetchRequest, generated, sensitiveValu
 		path: `/api/events/${event.id}`,
 		fetchRequest,
 		signal,
-		init: { headers: { cookie } },
+		init: {
+			headers: { cookie },
+		},
 	});
 	assertMeleeRedaction(reread, meleeClientSecret, 'melee-configuration-read');
 
@@ -654,7 +679,10 @@ const SIGN_IN_ADMITTED_PER_WINDOW = 3;
 async function expectSignInRateLimit({ origin, fetchRequest, signInBody, signal }) {
 	const limitedClient = documentationAddress('203.0.113');
 	const independentClient = documentationAddress('198.51.100');
-	const wrongPassword = { ...signInBody, password: randomBytes(24).toString('base64url') };
+	const wrongPassword = {
+		...signInBody,
+		password: randomBytes(24).toString('base64url'),
+	};
 	const limitedAttempt = () => jsonRequest(wrongPassword, {
 		'origin': origin,
 		'cf-connecting-ip': limitedClient,
@@ -706,7 +734,12 @@ function documentationAddress(network) {
  */
 async function expectDeployVerifyPasses({ origin, fetchRequest, signal }) {
 	try {
-		await verifyDeployment({ baseUrl: origin, fetchRequest, attempts: 1, signal });
+		await verifyDeployment({
+			baseUrl: origin,
+			fetchRequest,
+			attempts: 1,
+			signal,
+		});
 	}
 	catch (error) {
 		if (!(error instanceof DeployVerifyFailure))
@@ -768,7 +801,9 @@ async function responseJson(response, probe) {
 function setCookieHeaders(response) {
 	return typeof response.headers.getSetCookie === 'function'
 		? response.headers.getSetCookie()
-		: [response.headers.get('set-cookie')].filter(Boolean);
+		: [
+				response.headers.get('set-cookie'),
+			].filter(Boolean);
 }
 
 const SESSION_TOKEN_COOKIE = /^(?:__Secure-)?better-auth\.session_token$/u;
@@ -852,7 +887,12 @@ async function publishStillImage({ format, bytes, mime, fileName, eventId, origi
 			name: `Built Worker smoke ${format}`,
 			sourceFileName: fileName,
 			declaredMime: mime,
-			browserDecodeEvidence: { outcome: 'decoded', sourceDigest: digest, width: 1, height: 1 },
+			browserDecodeEvidence: {
+				outcome: 'decoded',
+				sourceDigest: digest,
+				width: 1,
+				height: 1,
+			},
 			declaredByteLength: bytes.byteLength,
 			defaultEventId: eventId,
 			duplicateContentPolicy: 'create-separate',
@@ -867,7 +907,11 @@ async function publishStillImage({ format, bytes, mime, fileName, eventId, origi
 		path: `/api/graphics-assets/ingestion-operations/${operation.id}/content`,
 		fetchRequest,
 		signal,
-		init: { method: 'PUT', headers: { 'content-type': mime, cookie }, body: bytes },
+		init: {
+			method: 'PUT',
+			headers: { 'content-type': mime, cookie },
+			body: bytes,
+		},
 	});
 	if (completed?.stage !== 'completed'
 		|| completed?.report?.outcome !== 'accepted'
@@ -889,7 +933,9 @@ async function verifyJpegDelivery({ assetId, revisionId, bytes, origin, cookie, 
 		path,
 		fetchRequest,
 		signal,
-		init: { headers: { cookie } },
+		init: {
+			headers: { cookie },
+		},
 	});
 	const completeBytes = new Uint8Array(await complete.arrayBuffer());
 	if (complete.headers.get('content-type') !== 'image/jpeg' || !sameBytes(completeBytes, bytes))
@@ -901,7 +947,9 @@ async function verifyJpegDelivery({ assetId, revisionId, bytes, origin, cookie, 
 		path,
 		fetchRequest,
 		signal,
-		init: { headers: { cookie, range: 'bytes=1-3' } },
+		init: {
+			headers: { cookie, range: 'bytes=1-3' },
+		},
 	});
 	const rangeBytes = new Uint8Array(await range.arrayBuffer());
 	if (range.headers.get('content-range') !== `bytes 1-3/${bytes.byteLength}`

@@ -6,14 +6,19 @@ import { defineComponent, ref } from 'vue';
 import { eventDataResync } from '~/modules/event-data/resync';
 
 const mockPlayerStore = {
-	players: [{ id: 1 }, { id: 2 }],
+	players: [
+		{ id: 1 },
+		{ id: 2 },
+	],
 	isLoaded: false,
 	loadPlayersByEventId: vi.fn().mockResolvedValue(undefined),
 	$reset: vi.fn(),
 };
 
 const mockPlayerListStore = {
-	lists: [{ id: 7, name: 'Feature Table', memberCount: 4 }],
+	lists: [
+		{ id: 7, name: 'Feature Table', memberCount: 4 },
+	],
 	isLoaded: false,
 	loadByEventId: vi.fn().mockResolvedValue(undefined),
 	$reset: vi.fn(),
@@ -56,7 +61,9 @@ const mockUpdateConfig = vi.fn((patch: Record<string, unknown>) => {
 });
 
 // The Screen's ranking, read as its Screen Output reads it.
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('tryUseRealtime', () => () => null);
 
@@ -111,7 +118,10 @@ const UFormFieldStub = defineComponent({
 
 const USelectStub = defineComponent({
 	props: {
-		modelValue: { type: [String, Number, Boolean, Object], required: false },
+		modelValue: {
+			type: [String, Number, Boolean, Object],
+			required: false,
+		},
 		items: { type: Array, required: false },
 	},
 	template: '<div data-testid="u-select">{{ (items || []).map(item => item.label).join("|") }}</div>',
@@ -149,7 +159,10 @@ async function mountComponent() {
 	const wrapper = mount(Settings, {
 		props: {
 			// Saved as edited: the Screen reads through its saved configuration.
-			screen: { id: 1, modeConfigs: { 'top-cards': mockConfig.value } } as unknown as Screen,
+			screen: {
+				id: 1,
+				modeConfigs: { 'top-cards': mockConfig.value },
+			} as unknown as Screen,
 			eventId: 1,
 		},
 		global: {
@@ -208,7 +221,10 @@ describe('screenTopCardsSettings', () => {
 
 		await wrapper.get('[data-testid="top-cards-type-Creature"]').trigger('click');
 
-		expect(mockUpdateConfig).toHaveBeenCalledWith({ excludedCardTypes: ['Land', 'Creature'], currentPage: 1 });
+		expect(mockUpdateConfig).toHaveBeenCalledWith({
+			excludedCardTypes: ['Land', 'Creature'],
+			currentPage: 1,
+		});
 	});
 
 	it('hides the fixed card size select while dynamic sizing is on', async () => {
@@ -230,7 +246,9 @@ describe('screenTopCardsSettings', () => {
 		const wrapperWithoutLists = await mountComponent();
 		expect(wrapperWithoutLists.text()).not.toContain('Player List');
 
-		mockPlayerListStore.lists = [{ id: 7, name: 'Feature Table', memberCount: 4 }];
+		mockPlayerListStore.lists = [
+			{ id: 7, name: 'Feature Table', memberCount: 4 },
+		];
 	});
 
 	it('loads players and player lists on mount', async () => {
@@ -256,7 +274,12 @@ describe('screenTopCardsSettings', () => {
 
 	describe('page rotation', () => {
 		it('counts pages of whole grid rows from the cards the Screen reads and its columns', async () => {
-			mockConfig.value = { ...mockConfig.value, limit: 12, columns: 5, rowsPerPage: 1 };
+			mockConfig.value = {
+				...mockConfig.value,
+				limit: 12,
+				columns: 5,
+				rowsPerPage: 1,
+			};
 			mockFetch.mockResolvedValue(ranking(12));
 
 			const wrapper = await mountComponent();
@@ -267,7 +290,13 @@ describe('screenTopCardsSettings', () => {
 		});
 
 		it('counts the cards the filters leave, not the configured limit (#780)', async () => {
-			mockConfig.value = { ...mockConfig.value, limit: 12, columns: 5, rowsPerPage: 1, excludedCardTypes: ['Land', 'Creature'] };
+			mockConfig.value = {
+				...mockConfig.value,
+				limit: 12,
+				columns: 5,
+				rowsPerPage: 1,
+				excludedCardTypes: ['Land', 'Creature'],
+			};
 			// Only 7 cards are left once Lands and Creatures are excluded.
 			mockFetch.mockResolvedValue(ranking(7));
 

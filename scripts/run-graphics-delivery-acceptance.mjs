@@ -78,7 +78,9 @@ const FAULTS = new Set([
 
 function flagValue(argv, name) {
 	const index = argv.indexOf(name);
-	return index === -1 ? undefined : argv[index + 1];
+	return index === -1
+		? undefined
+		: argv[index + 1];
 }
 
 function capabilityHeaders(capability, extra) {
@@ -139,13 +141,18 @@ export async function main(argv = process.argv) {
 
 				// Before anything is authorized, the route must already refuse.
 				const anonymous = await session.request(path);
-				record(checkCapabilityDenial(anonymous, { route, body: anonymous.text() }));
+				record(checkCapabilityDenial(anonymous, {
+					route,
+					body: anonymous.text(),
+				}));
 
 				// And it must refuse an unreachable revision in exactly the same way,
 				// or the refusal itself becomes a way to enumerate the Screen Output.
 				const unreferenced = await session.request(
 					acceptanceRoutes.capabilityContent(scenario.screenId, scenario.assetId, 'gar-not-referenced'),
-					{ headers: capabilityHeaders(scenario.capability) },
+					{
+						headers: capabilityHeaders(scenario.capability),
+					},
 				);
 				record(checkMissingIdentity(unreferenced, { route }));
 				record(checkDenialIndistinguishableFromMissing(anonymous, unreferenced, { route }));
@@ -197,13 +204,21 @@ export async function main(argv = process.argv) {
 					headers: capabilityHeaders(scenario.capability),
 				});
 				record(checkCacheParity(full, repeated, { route }));
-				record(checkValidatorStability([etag, repeated.headers.get('etag')], { route }));
+				record(checkValidatorStability([
+					etag,
+					repeated.headers.get('etag'),
+				], { route }));
 				if (deployed) {
 					const warmth = checkCacheWarmed(repeated, { route });
-					if (requireCacheHit)
+					if (requireCacheHit) {
 						record(warmth);
-					else if (warmth.length > 0)
-						note({ code: 'delivery-cache-state-unreported', detail: { route } });
+					}
+					else if (warmth.length > 0) {
+						note({
+							code: 'delivery-cache-state-unreported',
+							detail: { route },
+						});
+					}
 				}
 
 				// Native media elements carry the capability as a path-scoped cookie,
@@ -211,14 +226,19 @@ export async function main(argv = process.argv) {
 				const sessionRoute = deliveryRouteLabel(acceptanceRoutes.capabilitySession(scenario.screenId));
 				const bootstrap = await session.request(
 					acceptanceRoutes.capabilitySession(scenario.screenId),
-					{ method: 'POST', headers: capabilityHeaders(scenario.capability) },
+					{
+						method: 'POST',
+						headers: capabilityHeaders(scenario.capability),
+					},
 				);
 				const sessionCookie = bootstrap.headers.getSetCookie().map(value => value.split(';', 1)[0])[0];
 				if (bootstrap.status !== 200 || !sessionCookie) {
-					record([{
-						code: 'harness-precondition-unmet',
-						detail: { route: sessionRoute, actual: bootstrap.status },
-					}]);
+					record([
+						{
+							code: 'harness-precondition-unmet',
+							detail: { route: sessionRoute, actual: bootstrap.status },
+						},
+					]);
 				}
 				else {
 					const viaCookie = await session.request(path, {
@@ -242,7 +262,12 @@ export async function main(argv = process.argv) {
 					},
 				});
 				record(preflight.headers.get('access-control-allow-origin')
-					? [{ code: 'cors-preflight-permitted', detail: { route } }]
+					? [
+							{
+								code: 'cors-preflight-permitted',
+								detail: { route },
+							},
+						]
 					: []);
 
 				return { route };
@@ -256,12 +281,16 @@ export async function main(argv = process.argv) {
 			async function runOutputDocument(scenario) {
 				const path = acceptanceRoutes.screenOutputDocument(scenario.eventId, scenario.screenSlug);
 				const route = deliveryRouteLabel(path);
-				const document = await session.request(path, { headers: { accept: 'text/html' } });
+				const document = await session.request(path, {
+					headers: { accept: 'text/html' },
+				});
 				if (document.status !== 200) {
-					record([{
-						code: 'harness-precondition-unmet',
-						detail: { route, actual: document.status },
-					}]);
+					record([
+						{
+							code: 'harness-precondition-unmet',
+							detail: { route, actual: document.status },
+						},
+					]);
 					return;
 				}
 				record(checkContentSecurityPolicy(document.headers, { route, settled: 'absent' }));
@@ -279,29 +308,51 @@ export async function main(argv = process.argv) {
 				const revoked = scenario.capability;
 				const replacement = await scenario.rotateCapability();
 
-				const staleRead = await session.request(path, { headers: capabilityHeaders(revoked) });
+				const staleRead = await session.request(path, {
+					headers: capabilityHeaders(revoked),
+				});
 				record(staleRead.status === 200
-					? [{ code: 'delivery-revocation-ineffective', detail: { route } }]
-					: checkCapabilityDenial(staleRead, { route, body: staleRead.text() }));
+					? [
+							{
+								code: 'delivery-revocation-ineffective',
+								detail: { route },
+							},
+						]
+					: checkCapabilityDenial(staleRead, {
+							route,
+							body: staleRead.text(),
+						}));
 
 				const staleBootstrap = await session.request(
 					acceptanceRoutes.capabilitySession(scenario.screenId),
-					{ method: 'POST', headers: capabilityHeaders(revoked) },
+					{
+						method: 'POST',
+						headers: capabilityHeaders(revoked),
+					},
 				);
 				record(staleBootstrap.status === 404
 					? []
-					: [{
-							code: 'delivery-revocation-ineffective',
-							detail: { route, actual: staleBootstrap.status },
-						}]);
+					: [
+							{
+								code: 'delivery-revocation-ineffective',
+								detail: { route, actual: staleBootstrap.status },
+							},
+						]);
 
 				// Warmed or not, an unauthorized read is still refused.
 				const anonymous = await session.request(path);
 				record(anonymous.status === 200
-					? [{ code: 'delivery-authorization-skipped', detail: { route } }]
+					? [
+							{
+								code: 'delivery-authorization-skipped',
+								detail: { route },
+							},
+						]
 					: []);
 
-				const renewed = await session.request(path, { headers: capabilityHeaders(replacement) });
+				const renewed = await session.request(path, {
+					headers: capabilityHeaders(replacement),
+				});
 				record(checkFullRead(renewed, capabilityExpectations(scenario, route)));
 				scenario.capability = replacement;
 				evidence.addSecret(replacement);
@@ -406,7 +457,10 @@ export async function main(argv = process.argv) {
 					}
 					const bootstrap = await session.request(
 						acceptanceRoutes.capabilitySession(cold.screenId),
-						{ method: 'POST', headers: capabilityHeaders(cold.capability) },
+						{
+							method: 'POST',
+							headers: capabilityHeaders(cold.capability),
+						},
 					);
 					record(checkRetryableUnavailable(bootstrap, {
 						route: deliveryRouteLabel(acceptanceRoutes.capabilitySession(cold.screenId)),
@@ -439,7 +493,10 @@ export async function main(argv = process.argv) {
 						// Distinct from `delivery-cache-state-unreported`, which means the
 						// edge did not report warmth. This means there is no edge cache
 						// here to report anything, so the assertion was never attempted.
-						note({ code: 'delivery-cache-not-observable', detail: { route: warmed.route } });
+						note({
+							code: 'delivery-cache-not-observable',
+							detail: { route: warmed.route },
+						});
 					}
 				}
 			}
@@ -453,7 +510,10 @@ export async function main(argv = process.argv) {
 
 				let faultPassed = false;
 				try {
-					await runFault({ warm: restore(armed.warm), cold: restore(armed.cold) });
+					await runFault({
+						warm: restore(armed.warm),
+						cold: restore(armed.cold),
+					});
 					faultPassed = !failed();
 				}
 				finally {
@@ -487,7 +547,10 @@ export async function main(argv = process.argv) {
 						);
 					}
 				}
-				return { checks: checks(), mode: `fault:${fault}` };
+				return {
+					checks: checks(),
+					mode: `fault:${fault}`,
+				};
 			}
 
 			if (armPath) {
@@ -513,7 +576,9 @@ export async function main(argv = process.argv) {
 					cold: armedRepresentation(cold),
 				});
 				record([]);
-				return { mode: deployed ? 'armed-deployed' : 'armed-local' };
+				return {
+					mode: deployed ? 'armed-deployed' : 'armed-local',
+				};
 			}
 
 			const scenario = await provisionScreenOutputScenario(session, { label: 'Delivery Semantics' });
@@ -527,7 +592,9 @@ export async function main(argv = process.argv) {
 			finally {
 				await scenario.dispose();
 			}
-			return { mode: deployed ? 'deployed' : 'local' };
+			return {
+				mode: deployed ? 'deployed' : 'local',
+			};
 		},
 	});
 }

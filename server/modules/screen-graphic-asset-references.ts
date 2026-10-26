@@ -132,7 +132,9 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 				graphic_asset_reference_version = ?, updated_at = ?
 			WHERE id = ? AND event_id = ? AND state_version = ?
 				${REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE}
-				${fence ? `AND ${fence.sql}` : ''}
+				${fence
+					? `AND ${fence.sql}`
+					: ''}
 		`).bind(
 			JSON.stringify(mergedConfigs),
 			referenceVersion,
@@ -174,7 +176,8 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 		// commit this write's version.
 		...(indexedReferences.length === 0
 			? []
-			: [client.prepare(`
+			: [
+					client.prepare(`
 				INSERT INTO graphic_asset_references (
 					id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
 					event_id, created_at, updated_at
@@ -195,15 +198,16 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 							AND graphic_asset_reference_version = ?
 					)
 			`).bind(
-					String(input.id),
-					input.eventId,
-					now,
-					now,
-					boundFacts,
-					input.id,
-					input.eventId,
-					referenceVersion,
-				)]),
+						String(input.id),
+						input.eventId,
+						now,
+						now,
+						boundFacts,
+						input.id,
+						input.eventId,
+						referenceVersion,
+					),
+				]),
 	];
 	const [updateResult] = await client.batch(statements).catch(mapDeckSourceConflict);
 	if (updateResult?.meta.changes !== 1) {

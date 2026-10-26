@@ -23,7 +23,9 @@ const filteredEntries = computed(() => {
 	);
 });
 
-const sorting = ref([{ id: 'deckCount', desc: true }]);
+const sorting = ref([
+	{ id: 'deckCount', desc: true },
+]);
 
 const columns = computed<TableColumn<TokenRequirementEntry>[]>(() => [
 	{

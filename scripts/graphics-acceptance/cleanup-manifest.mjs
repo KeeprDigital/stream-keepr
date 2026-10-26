@@ -86,7 +86,11 @@ export function openCleanupManifest(path) {
 		},
 		/** Nothing is written until the first `record`, so an empty run leaves no file. */
 		begin(target) {
-			state = { version: 1, target: targetIdentity(target), objects: [] };
+			state = {
+				version: 1,
+				target: targetIdentity(target),
+				objects: [],
+			};
 		},
 		resume(manifest) {
 			state = manifest;
@@ -97,7 +101,9 @@ export function openCleanupManifest(path) {
 		 */
 		async record(key, { instance } = {}) {
 			if (!state.objects.some(entry => entry.key === key)) {
-				state.objects.push(instance ? { key, instance } : { key });
+				state.objects.push(instance
+					? { key, instance }
+					: { key });
 				await persist();
 			}
 		},

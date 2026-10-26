@@ -33,7 +33,10 @@ async function mountComponent() {
 		},
 		global: {
 			stubs: {
-				UForm: { emits: ['submit'], template: '<form @submit.prevent="$emit(\'submit\', $event)"><slot /></form>' },
+				UForm: {
+					emits: ['submit'],
+					template: '<form @submit.prevent="$emit(\'submit\', $event)"><slot /></form>',
+				},
 				UFormField: { template: '<label><slot /></label>' },
 				UInput: { template: '<input>' },
 				UInputNumber: UInputNumberStub,

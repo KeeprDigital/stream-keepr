@@ -61,7 +61,9 @@ export function useBroadcastGraphicsAssetEligibility(
 
 		return {
 			graphicId: graphic.id,
-			references: broadcastGraphicsGraphicAssetReferences({ graphics: [graphic] }).map(item => ({
+			references: broadcastGraphicsGraphicAssetReferences({
+				graphics: [graphic],
+			}).map(item => ({
 				...item,
 				// A slot is `graphics.<graphicId>.items.…<itemId>.asset`, so the item is
 				// the segment before the field. Falls back to the slot itself, because a
@@ -90,8 +92,12 @@ export function useBroadcastGraphicsAssetEligibility(
 			const previous = eligibility.value;
 			const pending = byGraphic.filter(entry => entry.references.length > 0);
 			eligibility.value = new Map(byGraphic.map((entry): [string, BroadcastGraphicAssetEligibility] => {
-				if (entry.references.length === 0)
-					return [entry.graphicId, { outcome: 'eligible' }];
+				if (entry.references.length === 0) {
+					return [
+						entry.graphicId,
+						{ outcome: 'eligible' },
+					];
+				}
 				return [entry.graphicId, previous.get(entry.graphicId) ?? { outcome: 'checking' }];
 			}));
 			if (pending.length === 0)
@@ -99,7 +105,10 @@ export function useBroadcastGraphicsAssetEligibility(
 
 			// One request per distinct revision, however many items pin it.
 			const unique = new Map(
-				pending.flatMap(entry => entry.references).map(item => [referenceKey(item.reference), item.reference]),
+				pending.flatMap(entry => entry.references).map(item => [
+					referenceKey(item.reference),
+					item.reference,
+				]),
 			);
 			const statuses = new Map(await Promise.all(
 				Array.from(unique, async ([key, reference]) => [
@@ -118,12 +127,23 @@ export function useBroadcastGraphicsAssetEligibility(
 				// Missing wins over unavailable: repairing an integrity failure is the
 				// action to take, and retrying would not help it.
 				const missing = itemsWith('missing');
-				if (missing.length > 0)
-					return [entry.graphicId, { outcome: 'missing', items: missing }];
+				if (missing.length > 0) {
+					return [
+						entry.graphicId,
+						{ outcome: 'missing', items: missing },
+					];
+				}
 				const unavailable = itemsWith('unavailable');
-				if (unavailable.length > 0)
-					return [entry.graphicId, { outcome: 'unavailable', items: unavailable }];
-				return [entry.graphicId, { outcome: 'eligible' }];
+				if (unavailable.length > 0) {
+					return [
+						entry.graphicId,
+						{ outcome: 'unavailable', items: unavailable },
+					];
+				}
+				return [
+					entry.graphicId,
+					{ outcome: 'eligible' },
+				];
 			}));
 		},
 		{ immediate: true },

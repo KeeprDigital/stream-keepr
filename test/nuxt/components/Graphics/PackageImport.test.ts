@@ -17,7 +17,9 @@ enableAutoUnmount(afterEach);
 
 const UButtonStub = defineComponent({
 	name: 'UButton',
-	props: { disabled: { type: Boolean, default: false } },
+	props: {
+		disabled: { type: Boolean, default: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
@@ -33,15 +35,22 @@ async function mountImport(props: Record<string, unknown> = {}) {
 			writable: true,
 			...props,
 		},
-		global: { stubs: { UButton: UButtonStub } },
+		global: {
+			stubs: { UButton: UButtonStub },
+		},
 	});
 }
 
 /** Choosing an archive the way an author does, through the hidden file input. */
 async function chooseFile(wrapper: Awaited<ReturnType<typeof mountImport>>, name = 'show.skgraphic') {
 	const input = wrapper.get<HTMLInputElement>('[data-testid="library-import-input"]');
-	const file = new File([new Uint8Array([1, 2, 3])], name);
-	Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
+	const file = new File([
+		new Uint8Array([1, 2, 3]),
+	], name);
+	Object.defineProperty(input.element, 'files', {
+		value: [file],
+		configurable: true,
+	});
 	await input.trigger('change');
 	return file;
 }
@@ -81,7 +90,9 @@ describe('graphicsPackageImport', () => {
 
 		const chosen = await chooseFile(wrapper);
 
-		expect(wrapper.emitted('file')).toEqual([[chosen]]);
+		expect(wrapper.emitted('file')).toEqual([
+			[chosen],
+		]);
 		// Cleared straight away, so choosing the same file twice still fires a change.
 		expect(wrapper.get<HTMLInputElement>('[data-testid="library-import-input"]').element.value)
 			.toBe('');
@@ -91,11 +102,13 @@ describe('graphicsPackageImport', () => {
 		const wrapper = await mountImport({
 			reported: true,
 			awaitingConfirmation: true,
-			issues: [{
-				code: 'graphic-asset-name-differs',
-				message: 'A name differs',
-				remediation: 'Review it',
-			}],
+			issues: [
+				{
+					code: 'graphic-asset-name-differs',
+					message: 'A name differs',
+					remediation: 'Review it',
+				},
+			],
 		});
 
 		const report = wrapper.get('[data-testid="library-import-report"]');
@@ -113,7 +126,9 @@ describe('graphicsPackageImport', () => {
 		const wrapper = await mountImport({
 			reported: true,
 			rejected: true,
-			issues: [{ code: 'unsupported-application-capability', message: 'Not supported here' }],
+			issues: [
+				{ code: 'unsupported-application-capability', message: 'Not supported here' },
+			],
 		});
 
 		const report = wrapper.get('[data-testid="library-import-report"]');

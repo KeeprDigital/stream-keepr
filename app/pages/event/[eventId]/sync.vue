@@ -48,8 +48,16 @@ const {
 } = useMeleeSyncUnresolvedDeckListResolution({ eventId, isSetupComplete });
 
 const { initialLoading, initialError, retry } = useEventPageLoading([
-	{ consumes: 'phases', isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
-	{ consumes: 'rounds', isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },
+	{
+		consumes: 'phases',
+		isLoaded: () => phaseStore.isLoaded,
+		load: id => phaseStore.loadPhasesByEventId(id),
+	},
+	{
+		consumes: 'rounds',
+		isLoaded: () => roundStore.isLoaded,
+		load: id => roundStore.loadRoundsByEventId(id),
+	},
 ]);
 
 const connectionBadge = computed<{ color: 'success' | 'error'; label: string }>(() => {
@@ -142,9 +150,18 @@ const freshnessItems = computed(() => {
 	}
 
 	return [
-		{ label: 'Event structure', value: formatSyncTimestamp(event.value.lastEventSyncedAt) },
-		{ label: 'Players and standings', value: formatSyncTimestamp(event.value.lastPlayersSyncedAt) },
-		{ label: 'Deck lists', value: formatSyncTimestamp(event.value.lastDecklistsSyncedAt) },
+		{
+			label: 'Event structure',
+			value: formatSyncTimestamp(event.value.lastEventSyncedAt),
+		},
+		{
+			label: 'Players and standings',
+			value: formatSyncTimestamp(event.value.lastPlayersSyncedAt),
+		},
+		{
+			label: 'Deck lists',
+			value: formatSyncTimestamp(event.value.lastDecklistsSyncedAt),
+		},
 	];
 });
 
@@ -216,12 +233,20 @@ function latestOperationToast() {
 	return {
 		title: operation.title,
 		description: operation.description,
-		color: operation.status === 'success' ? 'success' : operation.status === 'warning' ? 'warning' : 'error',
+		color: operation.status === 'success'
+			? 'success'
+			: operation.status === 'warning'
+				? 'warning'
+				: 'error',
 	} as const;
 }
 
 function operationAlertColor(status: 'success' | 'warning' | 'error') {
-	return status === 'success' ? 'success' : status === 'warning' ? 'warning' : 'error';
+	return status === 'success'
+		? 'success'
+		: status === 'warning'
+			? 'warning'
+			: 'error';
 }
 
 function operationAlertIcon(status: 'success' | 'warning' | 'error') {

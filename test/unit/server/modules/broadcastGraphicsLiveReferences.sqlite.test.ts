@@ -124,7 +124,10 @@ const CONTENT_DIGEST = 'd'.repeat(64);
 
 /** A media Graphic Input value, as an operator's selection stores one. */
 function clip(revisionId: string): MediaGraphicInputValue {
-	return { assetId: testGraphicAssetId(ASSET_ID), revisionId: testGraphicAssetRevisionId(revisionId) };
+	return {
+		assetId: testGraphicAssetId(ASSET_ID),
+		revisionId: testGraphicAssetRevisionId(revisionId),
+	};
 }
 
 /** A revision that exists but whose bytes the library cannot currently reach. */
@@ -184,17 +187,26 @@ const SLATE: BroadcastGraphicConfig = {
 	id: 'slate',
 	name: 'Slate',
 	items: [],
-	inputs: [mediaInput(CLIP_A), mediaInput(CLIP_B)],
+	inputs: [
+		mediaInput(CLIP_A),
+		mediaInput(CLIP_B),
+	],
 };
 
-const STACK: BroadcastGraphicsModeConfig = { graphics: [SLATE] };
+const STACK: BroadcastGraphicsModeConfig = {
+	graphics: [SLATE],
+};
 
 const nextCommandId = createCommandIdSequence();
 
 function command(type: BroadcastGraphicsCommand['type'], payload: Record<string, unknown>): BroadcastGraphicsCommand {
 	// The payload shape belongs to each command variant; a test that names the
 	// variant by its `type` supplies the matching payload itself.
-	return { commandId: nextCommandId(), type, payload } as unknown as BroadcastGraphicsCommand;
+	return {
+		commandId: nextCommandId(),
+		type,
+		payload,
+	} as unknown as BroadcastGraphicsCommand;
 }
 
 interface LiveSession {
@@ -271,7 +283,9 @@ async function liveSession(): Promise<LiveSession> {
 /** Every revision, in one answer, so a scenario states the whole index it left. */
 async function resolvable(live: LiveSession): Promise<Revision[]> {
 	const answers = await Promise.all(REVISIONS.map(async revisionId =>
-		await live.canResolve(revisionId) ? revisionId : undefined));
+		await live.canResolve(revisionId)
+			? revisionId
+			: undefined));
 	return answers.filter((revisionId): revisionId is Revision => revisionId !== undefined);
 }
 
@@ -371,7 +385,10 @@ describe('a media selection the Graphics Asset Library refuses', () => {
 
 		await expect(live.setInput(CLIP_A, clip('no-such-revision'))).rejects.toMatchObject({
 			statusCode: 409,
-			data: { code: 'missing-asset-reference', inputKeys: [CLIP_A] },
+			data: {
+				code: 'missing-asset-reference',
+				inputKeys: [CLIP_A],
+			},
 		});
 
 		// Refused outright: the value is not accepted, so the index publishes nothing
@@ -388,7 +405,10 @@ describe('a media selection the Graphics Asset Library refuses', () => {
 
 		await expect(live.setInput(CLIP_A, clip(UNREACHABLE_REVISION))).rejects.toMatchObject({
 			statusCode: 409,
-			data: { code: 'unavailable-asset-content', inputKeys: [CLIP_A] },
+			data: {
+				code: 'unavailable-asset-content',
+				inputKeys: [CLIP_A],
+			},
 		});
 	});
 

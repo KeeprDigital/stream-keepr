@@ -2,7 +2,9 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 
 mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('useRealtime', () => () => createMockRealtime());
@@ -30,7 +32,9 @@ describe('usePlayerListRepository', () => {
 			'/api/events/1/player-lists/1/members',
 			expect.objectContaining({
 				method: 'POST',
-				body: { playerIds: [1, 2, 3] },
+				body: {
+					playerIds: [1, 2, 3],
+				},
 			}),
 		);
 	});
@@ -55,13 +59,17 @@ describe('usePlayerListRepository', () => {
 			'/api/events/1/player-lists/1/members/reorder',
 			expect.objectContaining({
 				method: 'PUT',
-				body: { playerIds: [3, 1, 2] },
+				body: {
+					playerIds: [3, 1, 2],
+				},
 			}),
 		);
 	});
 
 	it('gets member IDs', async () => {
-		mockFetch.mockResolvedValue({ memberIds: [1, 2, 3] });
+		mockFetch.mockResolvedValue({
+			memberIds: [1, 2, 3],
+		});
 		const repo = usePlayerListRepository();
 
 		const result = await repo.getMemberIds(1, 1);

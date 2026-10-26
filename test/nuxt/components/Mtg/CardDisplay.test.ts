@@ -78,7 +78,9 @@ describe('mtgCardDisplay', () => {
 			id: 'card-1',
 			name: 'Brainstorm',
 			displayData: null,
-			imageData: { front: { normal: 'https://example.com/card.jpg' } },
+			imageData: {
+				front: { normal: 'https://example.com/card.jpg' },
+			},
 		};
 
 		await nextTick();
@@ -102,7 +104,9 @@ describe('mtgCardDisplay', () => {
 			id: 'card-2',
 			name: 'Ponder',
 			displayData: null,
-			imageData: { front: { normal: 'https://example.com/card.jpg' } },
+			imageData: {
+				front: { normal: 'https://example.com/card.jpg' },
+			},
 		};
 
 		await nextTick();
@@ -123,7 +127,9 @@ describe('mtgCardDisplay', () => {
 			id: 'old-card',
 			name: 'Old Card',
 			displayData: null,
-			imageData: { front: { normal: 'https://example.com/old.jpg' } },
+			imageData: {
+				front: { normal: 'https://example.com/old.jpg' },
+			},
 		};
 		await nextTick();
 		await wrapper.get('img').trigger('load');
@@ -133,7 +139,9 @@ describe('mtgCardDisplay', () => {
 			id: 'new-card',
 			name: 'New Card',
 			displayData: null,
-			imageData: { front: { normal: 'https://example.com/new.jpg' } },
+			imageData: {
+				front: { normal: 'https://example.com/new.jpg' },
+			},
 		};
 		await nextTick();
 		await wrapper.get('img').trigger('load');

@@ -11,7 +11,9 @@ export function useEventConfigSubmit() {
 		await runRequest(
 			async () => {
 				const updated = await eventStore.updateEvent(data);
-				return updated === null ? null : updated ?? true;
+				return updated === null
+					? null
+					: updated ?? true;
 			},
 			{
 				success: {

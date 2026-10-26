@@ -80,14 +80,32 @@ type OwnedFields
 function applyOwnedFields(screen: Screen, fields: OwnedFields): Screen {
 	switch (fields.kind) {
 		case 'screen':
-			return { ...screen, ...fields.patch };
+			return {
+				...screen,
+				...fields.patch,
+			};
 		case 'mode': {
 			const configs = (screen.modeConfigs ?? {}) as ModeConfigsMap;
 			const current = configs[fields.mode] ?? getDefaultConfigForMode(fields.mode);
-			return { ...screen, modeConfigs: { ...configs, [fields.mode]: stripNullValues({ ...current, ...fields.patch }) } };
+			return {
+				...screen,
+				modeConfigs: {
+					...configs,
+					[fields.mode]: stripNullValues({
+						...current,
+						...fields.patch,
+					}),
+				},
+			};
 		}
 		case 'screen-config':
-			return { ...screen, screenConfig: stripNullValues({ ...(screen.screenConfig ?? {}), ...fields.patch }) as ScreenConfig };
+			return {
+				...screen,
+				screenConfig: stripNullValues({
+					...(screen.screenConfig ?? {}),
+					...fields.patch,
+				}) as ScreenConfig,
+			};
 	}
 }
 
@@ -156,7 +174,11 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	}
 	const lifetimes = createGuardedSequence();
 	function beginLifetime(): WriteLifetime {
-		return { flight: lifetimes.begin(), versions: new Map(), owned: new Map() };
+		return {
+			flight: lifetimes.begin(),
+			versions: new Map(),
+			owned: new Map(),
+		};
 	}
 	let lifetime = beginLifetime();
 
@@ -191,7 +213,10 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 			return;
 		let owned = lifetime.owned.get(screenId);
 		if (!owned) {
-			owned = { base: toRaw(shown), writes: [] };
+			owned = {
+				base: toRaw(shown),
+				writes: [],
+			};
 			lifetime.owned.set(screenId, owned);
 		}
 		owned.writes.push(fields);
@@ -245,7 +270,9 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		if (writeLifetime.flight.stale)
 			return answer;
 		const held = writeLifetime.owned.get(answer.id)?.base ?? cachedRevision(answer.id);
-		return held && held.stateVersion > answer.stateVersion ? toRaw(held) : answer;
+		return held && held.stateVersion > answer.stateVersion
+			? toRaw(held)
+			: answer;
 	}
 
 	function resolveAll<T>(deferred: Deferred<T>[], value: T) {
@@ -395,7 +422,9 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	}
 
 	function flushModeConfigWrites() {
-		const entries = [...pendingModeConfigWrites.values()];
+		const entries = [
+			...pendingModeConfigWrites.values(),
+		];
 		pendingModeConfigWrites.clear();
 		for (const entry of entries) {
 			void runWrite(entry.lifetime, entry.eventId, entry.screenId, entry.owner, stateVersion =>
@@ -409,7 +438,9 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	const modeConfigWriteDebounce = createCancelableDebounce(flushModeConfigWrites, 300, 1000);
 
 	function flushScreenConfigWrites() {
-		const entries = [...pendingScreenConfigWrites.values()];
+		const entries = [
+			...pendingScreenConfigWrites.values(),
+		];
 		pendingScreenConfigWrites.clear();
 		for (const entry of entries) {
 			void runWrite(entry.lifetime, entry.eventId, entry.screenId, entry.owner, stateVersion =>
@@ -441,10 +472,26 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		const patch: Record<string, unknown> = toModeConfigPatch(mode, partialConfig);
 		const key = `mode:${screenId}:${mode}`;
 		const entry: PendingModeConfigWrite = pendingModeConfigWrites.get(key)
-			?? { eventId, screenId, mode, partialConfig: {}, owner: Symbol(key), lifetime, deferred: [] };
+			?? {
+				eventId,
+				screenId,
+				mode,
+				partialConfig: {},
+				owner: Symbol(key),
+				lifetime,
+				deferred: [],
+			};
 		pendingModeConfigWrites.set(key, entry);
-		entry.partialConfig = { ...entry.partialConfig, ...patch };
-		own(screenId, { owner: entry.owner, kind: 'mode', mode, patch });
+		entry.partialConfig = {
+			...entry.partialConfig,
+			...patch,
+		};
+		own(screenId, {
+			owner: entry.owner,
+			kind: 'mode',
+			mode,
+			patch,
+		});
 
 		return new Promise<Screen>((resolve, reject) => {
 			entry.deferred.push({ resolve, reject });
@@ -461,9 +508,19 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		const patch: Record<string, unknown> = toScreenConfigPatch(partialConfig);
 		const key = `screen-config:${screenId}`;
 		const entry: PendingScreenConfigWrite = pendingScreenConfigWrites.get(key)
-			?? { eventId, screenId, partialConfig: {}, owner: Symbol(key), lifetime, deferred: [] };
+			?? {
+				eventId,
+				screenId,
+				partialConfig: {},
+				owner: Symbol(key),
+				lifetime,
+				deferred: [],
+			};
 		pendingScreenConfigWrites.set(key, entry);
-		entry.partialConfig = { ...entry.partialConfig, ...patch };
+		entry.partialConfig = {
+			...entry.partialConfig,
+			...patch,
+		};
 		own(screenId, { owner: entry.owner, kind: 'screen-config', patch });
 
 		return new Promise<Screen>((resolve, reject) => {
@@ -496,7 +553,9 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 				onError: () => {
 					const idx = state.screens.value.findIndex(s => s.id === screenId);
 					if (idx === -1) {
-						const insertIdx = index < state.screens.value.length ? index : state.screens.value.length;
+						const insertIdx = index < state.screens.value.length
+							? index
+							: state.screens.value.length;
 						state.screens.value.splice(insertIdx, 0, removed);
 					}
 				},
@@ -573,7 +632,9 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		if (state.activeScreen.value?.id === screenId)
 			held.push(state.activeScreen.value);
 		return held.reduce<Screen | null>(
-			(newest, screen) => (!newest || screen.stateVersion > newest.stateVersion ? screen : newest),
+			(newest, screen) => (!newest || screen.stateVersion > newest.stateVersion
+				? screen
+				: newest),
 			null,
 		);
 	}
@@ -708,7 +769,9 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	}
 
 	function unsubscribeFromAllPresence() {
-		for (const screenId of [...presenceUnsubscribers.keys()])
+		for (const screenId of [
+			...presenceUnsubscribers.keys(),
+		])
 			unsubscribeFromScreenPresence(screenId);
 	}
 

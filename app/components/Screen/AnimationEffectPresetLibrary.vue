@@ -33,7 +33,9 @@ function failureMessage(caught: unknown): string {
 		if (typeof data?.message === 'string')
 			return data.message;
 	}
-	return caught instanceof Error ? caught.message : 'The Animation Effect Preset action failed';
+	return caught instanceof Error
+		? caught.message
+		: 'The Animation Effect Preset action failed';
 }
 
 async function refresh(preferredId?: string) {
@@ -69,7 +71,11 @@ function apply() {
 		return;
 	emit('apply', {
 		effect: selected.value.selection.effect,
-		...(selected.value.selection.params ? { params: { ...selected.value.selection.params } } : {}),
+		...(selected.value.selection.params
+			? {
+					params: { ...selected.value.selection.params },
+				}
+			: {}),
 	} as AnimationEffectSelection);
 }
 

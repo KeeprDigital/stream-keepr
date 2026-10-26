@@ -67,7 +67,9 @@ const {
 const loadFailureMessage = computed(() => reportedMessage(error.value));
 
 const acceptedKinds = computed<GraphicAsset['kind'][]>(
-	() => Array.isArray(props.assetKind) ? props.assetKind : [props.assetKind],
+	() => Array.isArray(props.assetKind)
+		? props.assetKind
+		: [props.assetKind],
 );
 
 /* ────────────────────────────────────────────────
@@ -94,11 +96,15 @@ const libraryAssets = computed(() => (assets.value ?? []).filter(asset =>
 const eventAssets = computed(() => libraryAssets.value.filter(asset =>
 	asset.eventIds.includes(props.eventId),
 ));
-const visibleAssets = computed(() => scope.value === 'event' ? eventAssets.value : libraryAssets.value);
+const visibleAssets = computed(() => scope.value === 'event'
+	? eventAssets.value
+	: libraryAssets.value);
 
 /** How many the Event scope is holding back — the number that says 'not gone'. */
 const hiddenByScope = computed(() =>
-	scope.value === 'event' ? libraryAssets.value.length - eventAssets.value.length : 0,
+	scope.value === 'event'
+		? libraryAssets.value.length - eventAssets.value.length
+		: 0,
 );
 
 /**
@@ -113,7 +119,11 @@ const hiddenByScope = computed(() =>
  * under them mid-keystroke would be worse than the empty result.
  */
 watch(
-	[open, () => eventAssets.value.length, () => libraryAssets.value.length],
+	[
+		open,
+		() => eventAssets.value.length,
+		() => libraryAssets.value.length,
+	],
 	() => {
 		if (!open.value) {
 			widenedForThisOpening.value = false;

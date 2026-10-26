@@ -28,7 +28,9 @@ const mockDeckCache = {
 };
 
 const mockOverlay = {
-	create: vi.fn(() => ({ open: vi.fn() })),
+	create: vi.fn(() => ({
+		open: vi.fn(),
+	})),
 };
 
 mockNuxtImport('useEventStore', () => () => mockEventStore);

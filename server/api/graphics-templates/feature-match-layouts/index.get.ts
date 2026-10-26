@@ -21,5 +21,7 @@ export default defineEventHandler(async (event) => {
 	await requireUserId(event);
 	const entries = await listFeatureMatchLayoutTemplateLibrary(event);
 
-	return { templates: entries.map(featureMatchLayoutTemplateLibrarySummary) };
+	return {
+		templates: entries.map(featureMatchLayoutTemplateLibrarySummary),
+	};
 });

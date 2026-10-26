@@ -38,7 +38,9 @@ describe('the #374 latency probe configuration', () => {
 		expect(itemCount).toBe(300);
 		const references = screenModeGraphicAssetReferences(
 			'broadcast-graphics',
-			{ 'broadcast-graphics': schema.parse(config) as never },
+			{
+				'broadcast-graphics': schema.parse(config) as never,
+			},
 		);
 		expect(references.filter(item => item.kind === 'image')).toHaveLength(150);
 		expect(references.filter(item => item.kind === 'font')).toHaveLength(450);
@@ -48,7 +50,9 @@ describe('the #374 latency probe configuration', () => {
 		const config = authoredConfigForReferenceCount(60, { image: assets.image });
 		const references = screenModeGraphicAssetReferences(
 			'broadcast-graphics',
-			{ 'broadcast-graphics': schema.parse(config) as never },
+			{
+				'broadcast-graphics': schema.parse(config) as never,
+			},
 		);
 		expect(references).toHaveLength(60);
 		expect(references.every(item => item.kind === 'image')).toBe(true);

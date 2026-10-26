@@ -20,10 +20,18 @@ describe('useRealtimeMessageGate', () => {
 		const accepted = useRealtimeMessageGate(ref('connection-1')).accept('player:updated', handler as never);
 
 		accepted({ eventId: 1, originConnectionId: 'connection-1' } as never, undefined);
-		accepted({ eventId: 1, originConnectionId: 'connection-2', player: { id: 2 } } as never, undefined);
+		accepted({
+			eventId: 1,
+			originConnectionId: 'connection-2',
+			player: { id: 2 },
+		} as never, undefined);
 
 		expect(handler).toHaveBeenCalledOnce();
-		expect(handler).toHaveBeenCalledWith({ eventId: 1, originConnectionId: 'connection-2', player: { id: 2 } });
+		expect(handler).toHaveBeenCalledWith({
+			eventId: 1,
+			originConnectionId: 'connection-2',
+			player: { id: 2 },
+		});
 	});
 
 	it('logs async handler failures without throwing', async () => {

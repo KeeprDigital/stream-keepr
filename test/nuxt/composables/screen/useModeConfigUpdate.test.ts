@@ -2,14 +2,26 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockUpdateModeConfig = vi.fn();
-const mockToast = { add: vi.fn() };
+const mockToast = {
+	add: vi.fn(),
+};
 
 const mockScreenStore = {
-	screens: [{ id: 1, modeConfigs: {
-		'feature-match': { featureMatchId: 5 },
-		// A Standings Page Rotation running from a manual selection of page 3.
-		'standings': { autoPageEnabled: true, rowsPerPage: 4, currentPage: 3, rotationAnchor: 123 },
-	} }],
+	screens: [
+		{
+			id: 1,
+			modeConfigs: {
+				'feature-match': { featureMatchId: 5 },
+				// A Standings Page Rotation running from a manual selection of page 3.
+				'standings': {
+					autoPageEnabled: true,
+					rowsPerPage: 4,
+					currentPage: 3,
+					rotationAnchor: 123,
+				},
+			},
+		},
+	],
 	updateModeConfig: mockUpdateModeConfig,
 };
 

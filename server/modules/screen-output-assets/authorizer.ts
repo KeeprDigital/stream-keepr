@@ -82,7 +82,9 @@ export function createD1ScreenOutputAssetAuthorizer(database: D1Database) {
 			`).bind(
 				input.capabilityDigest,
 			).first<{ id: number; eventId: number }>();
-			return row ? { screenId: row.id, eventId: row.eventId } : null;
+			return row
+				? { screenId: row.id, eventId: row.eventId }
+				: null;
 		},
 
 		/**

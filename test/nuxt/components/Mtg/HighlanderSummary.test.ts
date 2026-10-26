@@ -47,10 +47,23 @@ function createHighlander(overrides: Partial<HighlanderDeckSummary> = {}): Highl
 		maxPoints: 3,
 		hasReserveListCards: false,
 		pointedCards: [
-			{ name: 'Mana Drain', points: 1, compartments: ['sideboard'], totalQuantity: 1 },
-			{ name: 'Lutri, the Spellchaser', points: 3, compartments: [], totalQuantity: 1, pointedAs: 'companion' },
+			{
+				name: 'Mana Drain',
+				points: 1,
+				compartments: ['sideboard'],
+				totalQuantity: 1,
+			},
+			{
+				name: 'Lutri, the Spellchaser',
+				points: 3,
+				compartments: [],
+				totalQuantity: 1,
+				pointedAs: 'companion',
+			},
 		],
-		duplicateCards: [{ name: 'Mana Drain', quantity: 2 }],
+		duplicateCards: [
+			{ name: 'Mana Drain', quantity: 2 },
+		],
 		unknownCards: [],
 		...overrides,
 	};

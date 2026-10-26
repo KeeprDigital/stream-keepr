@@ -38,7 +38,12 @@ async function mountComponent(curve: ManaCurve, height?: number) {
 
 describe('deckManaCurveChart', () => {
 	it('maps visible buckets and counts into an echarts bar option', async () => {
-		const wrapper = await mountComponent(makeCurve({ 0: 1, 1: 3, 2: 2, [CURVE_MAX_BUCKET]: 4 }), 180);
+		const wrapper = await mountComponent(makeCurve({
+			0: 1,
+			1: 3,
+			2: 2,
+			[CURVE_MAX_BUCKET]: 4,
+		}), 180);
 
 		const chart = wrapper.getComponent({ name: 'VChart' });
 		const props = chart.props();

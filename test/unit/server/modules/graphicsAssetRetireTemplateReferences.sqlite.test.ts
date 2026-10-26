@@ -76,7 +76,9 @@ async function ingestAsset(name: string) {
 }
 
 async function lifecycleState(): Promise<string | undefined> {
-	const assets = await library.listGraphicAssets({ lifecycleStates: ['active', 'retired', 'trashed'] });
+	const assets = await library.listGraphicAssets({
+		lifecycleStates: ['active', 'retired', 'trashed'],
+	});
 	return assets.find(asset => asset.id === assetId)?.lifecycle.state;
 }
 
@@ -115,7 +117,11 @@ describe('retiring a Graphic Asset a saved template references', () => {
 
 		expect(outcome).toMatchObject({
 			outcome: 'in-use',
-			usage: [expect.objectContaining({ owner: expect.objectContaining({ kind: ownerKind, id: 'template-1' }) })],
+			usage: [
+				expect.objectContaining({
+					owner: expect.objectContaining({ kind: ownerKind, id: 'template-1' }),
+				}),
+			],
 		});
 		expect(await lifecycleState()).toBe('active');
 	});
@@ -135,7 +141,11 @@ describe('retiring a Graphic Asset a saved template references', () => {
 
 		expect(outcome).toMatchObject({
 			outcome: 'in-use',
-			usage: [expect.objectContaining({ owner: expect.objectContaining({ name: 'Lower third' }) })],
+			usage: [
+				expect.objectContaining({
+					owner: expect.objectContaining({ name: 'Lower third' }),
+				}),
+			],
 		});
 	});
 

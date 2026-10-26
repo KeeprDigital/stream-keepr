@@ -17,7 +17,9 @@ const previewWindow = { name: 'preview' };
 const expectedFromEditor = { origin: 'https://keepr.test', source: editorWindow };
 const expectedFromPreview = { origin: 'https://keepr.test', source: previewWindow };
 
-const config = { layout: { sources: [] } };
+const config = {
+	layout: { sources: [] },
+};
 const sourceTarget = { type: 'source', itemId: 'main-source' };
 
 describe('featureMatchOverlayPreviewMessages', () => {
@@ -63,7 +65,10 @@ describe('featureMatchOverlayPreviewMessages', () => {
 			expect(isFeatureMatchOverlayPreviewSelectedTargetMessage({
 				origin: 'https://keepr.test',
 				source: editorWindow,
-				data: { type: FEATURE_MATCH_OVERLAY_PREVIEW_SELECTED_TARGET_MESSAGE, target: { type: 'canvas' } },
+				data: {
+					type: FEATURE_MATCH_OVERLAY_PREVIEW_SELECTED_TARGET_MESSAGE,
+					target: { type: 'canvas' },
+				},
 			}, expectedFromEditor)).toBe(true);
 		});
 
@@ -89,7 +94,12 @@ describe('featureMatchOverlayPreviewMessages', () => {
 			// review found it: without it, whatever the editor sent became the frame's
 			// host-owned selection unexamined. Its sibling below has had this since the
 			// module was written — the same check, one guard over.
-			for (const target of [{ type: 'unsupported' }, { type: 'source' }, undefined, null]) {
+			for (const target of [
+				{ type: 'unsupported' },
+				{ type: 'source' },
+				undefined,
+				null,
+			]) {
 				expect(isFeatureMatchOverlayPreviewSelectedTargetMessage({
 					origin: 'https://keepr.test',
 					source: editorWindow,
@@ -110,7 +120,11 @@ describe('featureMatchOverlayPreviewMessages', () => {
 		});
 
 		it('ignores a selection that names nothing this host owns', () => {
-			for (const target of [{ type: 'unsupported' }, { type: 'source' }, null]) {
+			for (const target of [
+				{ type: 'unsupported' },
+				{ type: 'source' },
+				null,
+			]) {
 				expect(isFeatureMatchOverlayPreviewSelectMessage({
 					origin: 'https://keepr.test',
 					source: previewWindow,

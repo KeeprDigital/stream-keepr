@@ -12,7 +12,9 @@ const { mockSetResponseHeader, mockSetResponseHeaders } = vi.hoisted(() => ({
 // The module reaches the library runtime for its two exporters, which reach `~~/server/db`.
 // Nothing here exercises those; the HTTP boundary below is called directly.
 vi.mock('~~/server/modules/graphics-asset-library/runtime', () => ({
-	graphicsAssetLibraryForEvent: () => ({ exportTemplatePackage: vi.fn() }),
+	graphicsAssetLibraryForEvent: () => ({
+		exportTemplatePackage: vi.fn(),
+	}),
 }));
 
 vi.mock('~~/server/utils/graphicsAssetApi', () => ({
@@ -36,7 +38,10 @@ async function respond() {
 }
 
 function rejectedWith(issues: { code: string; retryable: boolean }[]): TemplatePackageExportOutcome {
-	return { outcome: 'rejected', report: { issues } } as unknown as TemplatePackageExportOutcome;
+	return {
+		outcome: 'rejected',
+		report: { issues },
+	} as unknown as TemplatePackageExportOutcome;
 }
 
 /** The refusal this boundary raised, as a caller receives it: after the sanitizer. */
@@ -75,7 +80,9 @@ describe('the Template Package export HTTP boundary', () => {
 	it('says what could not be exported when every issue is retryable', async () => {
 		const event = stubH3Event();
 
-		const failure = await refusalOf(event, rejectedWith([{ code: 'asset-bytes-unreadable', retryable: true }]));
+		const failure = await refusalOf(event, rejectedWith([
+			{ code: 'asset-bytes-unreadable', retryable: true },
+		]));
 
 		expect(failure).toMatchObject({
 			statusCode: 503,
@@ -88,10 +95,16 @@ describe('the Template Package export HTTP boundary', () => {
 	it('keeps the report beside the sentence, which is what hid the sanitizing', async () => {
 		const failure = await refusalOf(
 			stubH3Event(),
-			rejectedWith([{ code: 'asset-bytes-unreadable', retryable: true }]),
+			rejectedWith([
+				{ code: 'asset-bytes-unreadable', retryable: true },
+			]),
 		) as { data?: unknown };
 
-		expect(failure.data).toEqual({ issues: [{ code: 'asset-bytes-unreadable', retryable: true }] });
+		expect(failure.data).toEqual({
+			issues: [
+				{ code: 'asset-bytes-unreadable', retryable: true },
+			],
+		});
 	});
 
 	it('answers a report the author has to act on with 409, which is never sanitized', async () => {

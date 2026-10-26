@@ -168,7 +168,12 @@ async function exportedPackage() {
 	const sender = createLibrary(`sender-${++sequence}`);
 	const asset = await ingestImage(sender, 'Backdrop');
 	const document = maximalBroadcastGraphicDocument({ asset });
-	return { sender, asset, document, archive: await exportGraphic(sender, document) };
+	return {
+		sender,
+		asset,
+		document,
+		archive: await exportGraphic(sender, document),
+	};
 }
 
 async function exportedProjectedPackage() {

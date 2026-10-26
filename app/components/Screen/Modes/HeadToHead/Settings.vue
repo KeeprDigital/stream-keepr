@@ -42,7 +42,9 @@ onMounted(async () => {
 		return;
 	await Promise.all([
 		featureMatchStore.loadFeatureMatchesByEventId(props.eventId),
-		playerStore.isLoaded ? undefined : playerStore.loadPlayersByEventId(props.eventId),
+		playerStore.isLoaded
+			? undefined
+			: playerStore.loadPlayersByEventId(props.eventId),
 	]);
 });
 </script>

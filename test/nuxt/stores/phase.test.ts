@@ -197,7 +197,9 @@ describe('usePhaseStore', () => {
 				await store.loadPhasesByEventId(1);
 				store.phases = [];
 
-				ablyCallbacks.phase!['phase:created']!({ phase: createMockPhase({ id: 10, eventId: 1 }) });
+				ablyCallbacks.phase!['phase:created']!({
+					phase: createMockPhase({ id: 10, eventId: 1 }),
+				});
 
 				expect(store.phases).toHaveLength(0);
 			});
@@ -205,18 +207,26 @@ describe('usePhaseStore', () => {
 
 		describe('phase:updated', () => {
 			it('updates existing phase from remote message', () => {
-				store.phases = [createMockPhase({ id: 10, name: 'Old' })];
+				store.phases = [
+					createMockPhase({ id: 10, name: 'Old' }),
+				];
 
-				ablyCallbacks.phase!['phase:updated']!({ phase: createMockPhase({ id: 10, name: 'New' }) });
+				ablyCallbacks.phase!['phase:updated']!({
+					phase: createMockPhase({ id: 10, name: 'New' }),
+				});
 
 				expect(store.phases[0]!.name).toBe('New');
 			});
 
 			it('skips when isSelfOrigin returns true', () => {
-				store.phases = [createMockPhase({ id: 10, name: 'Old' })];
+				store.phases = [
+					createMockPhase({ id: 10, name: 'Old' }),
+				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
-				ablyCallbacks.phase!['phase:updated']!({ phase: createMockPhase({ id: 10, name: 'New' }) });
+				ablyCallbacks.phase!['phase:updated']!({
+					phase: createMockPhase({ id: 10, name: 'New' }),
+				});
 
 				expect(store.phases[0]!.name).toBe('Old');
 			});
@@ -224,7 +234,9 @@ describe('usePhaseStore', () => {
 
 		describe('phase:deleted', () => {
 			it('removes phase from remote message', () => {
-				store.phases = [createMockPhase({ id: 10 })];
+				store.phases = [
+					createMockPhase({ id: 10 }),
+				];
 
 				ablyCallbacks.phase!['phase:deleted']!({ phaseId: 10 });
 
@@ -232,7 +244,9 @@ describe('usePhaseStore', () => {
 			});
 
 			it('skips when isSelfOrigin returns true', () => {
-				store.phases = [createMockPhase({ id: 10 })];
+				store.phases = [
+					createMockPhase({ id: 10 }),
+				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
 				ablyCallbacks.phase!['phase:deleted']!({ phaseId: 10 });
@@ -246,7 +260,9 @@ describe('usePhaseStore', () => {
 
 	describe('$reset', () => {
 		it('clears all state', () => {
-			store.phases = [createMockPhase()];
+			store.phases = [
+				createMockPhase(),
+			];
 			store.error = 'some error';
 
 			store.$reset();

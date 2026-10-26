@@ -28,7 +28,9 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
  */
 
 function allItems(items: readonly GraphicItemConfig[]): Array<GraphicItemConfig | GraphicGroupChildConfig> {
-	return items.flatMap(item => item.type === 'group' ? [item, ...item.children] : [item]);
+	return items.flatMap(item => item.type === 'group'
+		? [item, ...item.children]
+		: [item]);
 }
 
 function presetItems(config: Omit<FeatureMatchOverlayModeConfig, 'featureMatchId'>) {
@@ -71,7 +73,15 @@ describe('feature Match Overlay capability parity', () => {
 		for (const item of everyPresetItem()) {
 			expect(item).not.toHaveProperty('zIndex');
 			expect(item).not.toHaveProperty('widget');
-			expect(['text', 'shape', 'media', 'group', 'clock', 'player-life', 'game-wins']).toContain(item.type);
+			expect([
+				'text',
+				'shape',
+				'media',
+				'group',
+				'clock',
+				'player-life',
+				'game-wins',
+			]).toContain(item.type);
 		}
 	});
 
@@ -189,9 +199,18 @@ describe('feature Match Overlay capability parity', () => {
 
 		expect(rounded.length).toBeGreaterThan(0);
 		for (const item of rounded) {
-			const geometry = item.type === 'game-wins' ? item.boxGeometry : item.geometry;
+			const geometry = item.type === 'game-wins'
+				? item.boxGeometry
+				: item.geometry;
 			expect(Object.keys(geometry).toSorted())
-				.toEqual(['bottomLeft', 'bottomRight', 'leftSlant', 'rightSlant', 'topLeft', 'topRight']);
+				.toEqual([
+					'bottomLeft',
+					'bottomRight',
+					'leftSlant',
+					'rightSlant',
+					'topLeft',
+					'topRight',
+				]);
 		}
 	});
 

@@ -23,8 +23,12 @@ describe('feature match assignment schemas', () => {
 
 	it('accepts note-only updates', () => {
 		expect(updateFeatureMatchAssignmentSchema.safeParse({ note: null }).success).toBe(true);
-		expect(updateFeatureMatchAssignmentSchema.safeParse({ note: 'x'.repeat(5000) }).success).toBe(true);
-		expect(updateFeatureMatchAssignmentSchema.safeParse({ note: 'x'.repeat(5001) }).success).toBe(false);
+		expect(updateFeatureMatchAssignmentSchema.safeParse({
+			note: 'x'.repeat(5000),
+		}).success).toBe(true);
+		expect(updateFeatureMatchAssignmentSchema.safeParse({
+			note: 'x'.repeat(5001),
+		}).success).toBe(false);
 		expect(updateFeatureMatchAssignmentSchema.safeParse({ matchId: 8 }).success).toBe(false);
 	});
 

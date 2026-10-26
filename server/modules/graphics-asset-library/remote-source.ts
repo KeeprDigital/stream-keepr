@@ -92,7 +92,9 @@ function ipv4Octets(address: string): number[] | undefined {
 	if (parts.length !== 4)
 		return undefined;
 	const octets = parts.map(part =>
-		/^\d{1,3}$/.test(part) ? Number(part) : Number.NaN);
+		/^\d{1,3}$/.test(part)
+			? Number(part)
+			: Number.NaN);
 	return octets.every(octet => Number.isInteger(octet) && octet <= 255)
 		? octets
 		: undefined;
@@ -138,7 +140,9 @@ function ipv6Groups(address: string): number[] | undefined {
 		const groups: number[] = [];
 		const parts = section.split(':');
 		for (const [index, part] of parts.entries()) {
-			const trailingIpv4 = index === parts.length - 1 ? ipv4Octets(part) : undefined;
+			const trailingIpv4 = index === parts.length - 1
+				? ipv4Octets(part)
+				: undefined;
 			if (trailingIpv4) {
 				groups.push(
 					(trailingIpv4[0]! << 8) | trailingIpv4[1]!,
@@ -154,19 +158,33 @@ function ipv6Groups(address: string): number[] | undefined {
 	}
 
 	const headGroups = expand(head);
-	const tailGroups = tail === undefined ? [] : expand(tail);
+	const tailGroups = tail === undefined
+		? []
+		: expand(tail);
 	if (!headGroups || !tailGroups)
 		return undefined;
-	if (tail === undefined)
-		return headGroups.length === 8 ? headGroups : undefined;
+	if (tail === undefined) {
+		return headGroups.length === 8
+			? headGroups
+			: undefined;
+	}
 	const missing = 8 - headGroups.length - tailGroups.length;
 	if (missing < 1)
 		return undefined;
-	return [...headGroups, ...Array.from<number>({ length: missing }).fill(0), ...tailGroups];
+	return [
+		...headGroups,
+		...Array.from<number>({ length: missing }).fill(0),
+		...tailGroups,
+	];
 }
 
 function ipv4FromGroupPair(high: number, low: number) {
-	return [high >> 8, high & 0xFF, low >> 8, low & 0xFF];
+	return [
+		high >> 8,
+		high & 0xFF,
+		low >> 8,
+		low & 0xFF,
+	];
 }
 
 function isPublicIpv6(groups: readonly number[]) {
@@ -222,14 +240,19 @@ export function isPublicRemoteAddress(address: string): boolean {
 	if (octets)
 		return isPublicIpv4(octets);
 	const groups = ipv6Groups(trimmed);
-	return groups ? isPublicIpv6(groups) : false;
+	return groups
+		? isPublicIpv6(groups)
+		: false;
 }
 
 function rejection(
 	code: GraphicsRemoteSourceRejectionCode,
 	message: string,
 ): { outcome: 'rejected'; rejection: GraphicsRemoteSourceRejection } {
-	return { outcome: 'rejected', rejection: { code, message } };
+	return {
+		outcome: 'rejected',
+		rejection: { code, message },
+	};
 }
 
 /**
@@ -394,7 +417,9 @@ export function createGraphicsRemoteSourceFetcher(dependencies: {
 				// omit or misstate it, so an unusable value simply means "unknown"
 				// and the transfer stays bounded by the kind's maximum instead.
 				const declaredLength = response.headers.get('content-length');
-				const declared = declaredLength === null ? Number.NaN : Number(declaredLength);
+				const declared = declaredLength === null
+					? Number.NaN
+					: Number(declaredLength);
 				const byteLength = Number.isSafeInteger(declared) && declared > 0
 					? declared
 					: undefined;

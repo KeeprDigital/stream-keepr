@@ -22,12 +22,16 @@ const filteredCards = computed(() => {
 });
 
 const totalCount = computed(() => props.cards.reduce(
-	(sum, card) => sum + ('quantity' in card ? card.quantity : 1),
+	(sum, card) => sum + ('quantity' in card
+		? card.quantity
+		: 1),
 	0,
 ));
 
 const filteredCount = computed(() => filteredCards.value.reduce(
-	(sum, card) => sum + ('quantity' in card ? card.quantity : 1),
+	(sum, card) => sum + ('quantity' in card
+		? card.quantity
+		: 1),
 	0,
 ));
 

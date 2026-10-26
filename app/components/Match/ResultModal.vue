@@ -26,7 +26,9 @@ const formData = ref({
 
 const totalGames = computed(() => formData.value.player1GameWins + formData.value.player2GameWins + formData.value.gameDraws);
 const isValid = computed(() => totalGames.value > 0 && totalGames.value <= props.bestOf);
-const resultString = computed(() => `${formData.value.player1GameWins}-${formData.value.player2GameWins}${formData.value.gameDraws > 0 ? `-${formData.value.gameDraws}` : ''}`);
+const resultString = computed(() => `${formData.value.player1GameWins}-${formData.value.player2GameWins}${formData.value.gameDraws > 0
+	? `-${formData.value.gameDraws}`
+	: ''}`);
 
 async function handleSave() {
 	if (!eventStore.eventId || !isValid.value) {

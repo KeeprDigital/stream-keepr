@@ -54,7 +54,9 @@ function screenRow(overrides: Record<string, unknown> = {}) {
 		assetCapabilityDigest: 'some-other-digest',
 		currentMode: 'deck',
 		modeConfigs: {
-			deck: { deckSource: { type: 'broadcast', broadcastDeckListId: 23 } },
+			deck: {
+				deckSource: { type: 'broadcast', broadcastDeckListId: 23 },
+			},
 		},
 		stateVersion: 1,
 		createdAt: new Date(0),
@@ -107,7 +109,10 @@ describe('the selected Broadcast Deck List Screen Output read', () => {
 	});
 
 	it('also answers a session-bearing operator embed', async () => {
-		mockOptionalUserSession.mockResolvedValue({ user: { id: 'user-1' }, session: { id: 'session-1' } });
+		mockOptionalUserSession.mockResolvedValue({
+			user: { id: 'user-1' },
+			session: { id: 'session-1' },
+		});
 		const handler = await broadcastDeckListRoute();
 
 		await expect(handler(stubH3Event())).resolves.toMatchObject({ id: 23 });
@@ -129,7 +134,10 @@ describe('the selected Broadcast Deck List Screen Output read', () => {
 
 	it('refuses a Screen from another Event with the same 404', async () => {
 		mockFindScreenById.mockResolvedValue(undefined);
-		mockOptionalUserSession.mockResolvedValue({ user: { id: 'user-1' }, session: { id: 'session-1' } });
+		mockOptionalUserSession.mockResolvedValue({
+			user: { id: 'user-1' },
+			session: { id: 'session-1' },
+		});
 		const handler = await broadcastDeckListRoute();
 
 		await expect(handler(stubH3Event())).rejects.toMatchObject({ statusCode: 404 });
@@ -138,9 +146,16 @@ describe('the selected Broadcast Deck List Screen Output read', () => {
 
 	it('refuses a Player source without exposing whether the Event has lists', async () => {
 		mockFindScreenById.mockResolvedValue(screenRow({
-			modeConfigs: { deck: { deckSource: { type: 'player', playerId: 11 } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId: 11 },
+				},
+			},
 		}));
-		mockOptionalUserSession.mockResolvedValue({ user: { id: 'user-1' }, session: { id: 'session-1' } });
+		mockOptionalUserSession.mockResolvedValue({
+			user: { id: 'user-1' },
+			session: { id: 'session-1' },
+		});
 		const handler = await broadcastDeckListRoute();
 
 		await expect(handler(stubH3Event())).rejects.toMatchObject({ statusCode: 404 });
@@ -148,7 +163,10 @@ describe('the selected Broadcast Deck List Screen Output read', () => {
 	});
 
 	it('refuses a stale disabled or cross-Event source and a missing selected list alike', async () => {
-		mockOptionalUserSession.mockResolvedValue({ user: { id: 'user-1' }, session: { id: 'session-1' } });
+		mockOptionalUserSession.mockResolvedValue({
+			user: { id: 'user-1' },
+			session: { id: 'session-1' },
+		});
 		const handler = await broadcastDeckListRoute();
 
 		mockSourceIsSelectable.mockResolvedValueOnce(false);

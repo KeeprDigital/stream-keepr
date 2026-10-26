@@ -166,5 +166,9 @@ export default function createDotsEffect(
 	host: HTMLElement,
 	params: AnimationEffectParams<'dots'>,
 ): AnimationEffectInstance<AnimationEffectParams<'dots'>> {
-	return createSceneEffect({ three: THREE, host, delegate: createDotsDelegate() }, params);
+	return createSceneEffect({
+		three: THREE,
+		host,
+		delegate: createDotsDelegate(),
+	}, params);
 }

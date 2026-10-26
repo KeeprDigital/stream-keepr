@@ -29,7 +29,9 @@ function handleClose() {
 	emit('close', false);
 }
 
-useEnterToSubmit(handleConfirm, { disabled: () => props.loading });
+useEnterToSubmit(handleConfirm, {
+	disabled: () => props.loading,
+});
 </script>
 
 <template>

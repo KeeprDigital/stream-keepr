@@ -85,5 +85,7 @@ export function passwordResetTokenFromHash(hash: string): string | null {
 		return null;
 
 	const value = new URLSearchParams(hash.replace(/^#/, '')).get(PASSWORD_RESET_TOKEN_FRAGMENT_KEY);
-	return value && PASSWORD_RESET_TOKEN_PATTERN.test(value) ? value : null;
+	return value && PASSWORD_RESET_TOKEN_PATTERN.test(value)
+		? value
+		: null;
 }

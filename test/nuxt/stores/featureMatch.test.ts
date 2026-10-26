@@ -191,7 +191,9 @@ describe('useFeatureMatchStore', () => {
 	describe('realtime handlers', () => {
 		describe('featureMatch:created', () => {
 			it('adds match from remote message and sorts by sortOrder', () => {
-				store.featureMatches = [createMockFeatureMatch({ id: 1, sortOrder: 0 })];
+				store.featureMatches = [
+					createMockFeatureMatch({ id: 1, sortOrder: 0 }),
+				];
 				const newMatch = createMockFeatureMatch({ id: 2, sortOrder: 1 });
 
 				ablyCallbacks.featureMatches!['featureMatch:created']!({ featureMatch: newMatch });
@@ -213,7 +215,9 @@ describe('useFeatureMatchStore', () => {
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 				store.featureMatches = [];
 
-				ablyCallbacks.featureMatches!['featureMatch:created']!({ featureMatch: createMockFeatureMatch({ id: 1 }) });
+				ablyCallbacks.featureMatches!['featureMatch:created']!({
+					featureMatch: createMockFeatureMatch({ id: 1 }),
+				});
 
 				expect(store.featureMatches).toHaveLength(0);
 			});
@@ -221,18 +225,26 @@ describe('useFeatureMatchStore', () => {
 
 		describe('featureMatch:updated', () => {
 			it('updates existing match from remote message', () => {
-				store.featureMatches = [createMockFeatureMatch({ id: 1, bestOf: 3 })];
+				store.featureMatches = [
+					createMockFeatureMatch({ id: 1, bestOf: 3 }),
+				];
 
-				ablyCallbacks.featureMatches!['featureMatch:updated']!({ featureMatch: createMockFeatureMatch({ id: 1, bestOf: 5 }) });
+				ablyCallbacks.featureMatches!['featureMatch:updated']!({
+					featureMatch: createMockFeatureMatch({ id: 1, bestOf: 5 }),
+				});
 
 				expect(store.featureMatches[0]!.bestOf).toBe(5);
 			});
 
 			it('skips when isSelfOrigin returns true', () => {
-				store.featureMatches = [createMockFeatureMatch({ id: 1, bestOf: 3 })];
+				store.featureMatches = [
+					createMockFeatureMatch({ id: 1, bestOf: 3 }),
+				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
-				ablyCallbacks.featureMatches!['featureMatch:updated']!({ featureMatch: createMockFeatureMatch({ id: 1, bestOf: 5 }) });
+				ablyCallbacks.featureMatches!['featureMatch:updated']!({
+					featureMatch: createMockFeatureMatch({ id: 1, bestOf: 5 }),
+				});
 
 				expect(store.featureMatches[0]!.bestOf).toBe(3);
 			});
@@ -240,7 +252,9 @@ describe('useFeatureMatchStore', () => {
 
 		describe('featureMatch:deleted', () => {
 			it('removes match from remote message', () => {
-				store.featureMatches = [createMockFeatureMatch({ id: 1 })];
+				store.featureMatches = [
+					createMockFeatureMatch({ id: 1 }),
+				];
 
 				ablyCallbacks.featureMatches!['featureMatch:deleted']!({ featureMatchId: 1 });
 
@@ -248,7 +262,9 @@ describe('useFeatureMatchStore', () => {
 			});
 
 			it('skips when isSelfOrigin returns true', () => {
-				store.featureMatches = [createMockFeatureMatch({ id: 1 })];
+				store.featureMatches = [
+					createMockFeatureMatch({ id: 1 }),
+				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
 				ablyCallbacks.featureMatches!['featureMatch:deleted']!({ featureMatchId: 1 });
@@ -282,7 +298,12 @@ describe('useFeatureMatchStore', () => {
 				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
-				ablyCallbacks.featureMatches!['featureMatch:reordered']!({ featureMatches: [{ featureMatchId: 1, sortOrder: 1 }, { featureMatchId: 2, sortOrder: 0 }] });
+				ablyCallbacks.featureMatches!['featureMatch:reordered']!({
+					featureMatches: [
+						{ featureMatchId: 1, sortOrder: 1 },
+						{ featureMatchId: 2, sortOrder: 0 },
+					],
+				});
 
 				expect(store.featureMatches[0]!.id).toBe(1);
 			});
@@ -308,7 +329,9 @@ describe('useFeatureMatchStore', () => {
 		});
 
 		it('a settings answer from an ended epoch does not replace the held Slot, and answers with it', async () => {
-			store.featureMatches = [slotInEpoch(1, 501)];
+			store.featureMatches = [
+				slotInEpoch(1, 501),
+			];
 			stateStore().offerSlotSession(store.featureMatches[0]!);
 			const update = deferred<ReturnType<typeof slotInEpoch>>();
 			mockRepo.update.mockReturnValueOnce(update.promise);
@@ -323,7 +346,9 @@ describe('useFeatureMatchStore', () => {
 		});
 
 		it('a same-epoch settings answer replaces the held Slot', async () => {
-			store.featureMatches = [slotInEpoch(1, 501)];
+			store.featureMatches = [
+				slotInEpoch(1, 501),
+			];
 			stateStore().offerSlotSession(store.featureMatches[0]!);
 			const answered = slotInEpoch(1, 501, { bestOf: 5 });
 			mockRepo.update.mockResolvedValueOnce(answered);
@@ -334,7 +359,10 @@ describe('useFeatureMatchStore', () => {
 		});
 
 		it('a load keeps a Slot held from a newer epoch and applies the rest', async () => {
-			mockRepo.list.mockResolvedValueOnce([slotInEpoch(1, 501), slotInEpoch(2, 601)]);
+			mockRepo.list.mockResolvedValueOnce([
+				slotInEpoch(1, 501),
+				slotInEpoch(2, 601),
+			]);
 			await store.loadFeatureMatchesByEventId(1);
 			const load = deferred<ReturnType<typeof slotInEpoch>[]>();
 			mockRepo.list.mockReturnValueOnce(load.promise);
@@ -343,7 +371,10 @@ describe('useFeatureMatchStore', () => {
 			const promoted = slotInEpoch(1, 502);
 			announce(promoted);
 			const sameEpoch = slotInEpoch(2, 601, { bestOf: 5 });
-			load.resolve([slotInEpoch(1, 501, { bestOf: 5 }), sameEpoch]);
+			load.resolve([
+				slotInEpoch(1, 501, { bestOf: 5 }),
+				sameEpoch,
+			]);
 			await loading;
 
 			expect(store.featureMatches).toEqual([promoted, sameEpoch]);
@@ -376,7 +407,9 @@ describe('useFeatureMatchStore', () => {
 		});
 
 		it('a settings answer does not replace a Slot holding a Session, and answers with it', async () => {
-			store.featureMatches = [sessionlessSlot(1)];
+			store.featureMatches = [
+				sessionlessSlot(1),
+			];
 			const update = deferred<ReturnType<typeof createMockFeatureMatch>>();
 			mockRepo.update.mockReturnValueOnce(update.promise);
 
@@ -390,7 +423,10 @@ describe('useFeatureMatchStore', () => {
 		});
 
 		it('a load keeps a Slot holding a Session and applies the rest', async () => {
-			mockRepo.list.mockResolvedValueOnce([sessionlessSlot(1), sessionlessSlot(2)]);
+			mockRepo.list.mockResolvedValueOnce([
+				sessionlessSlot(1),
+				sessionlessSlot(2),
+			]);
 			await store.loadFeatureMatchesByEventId(1);
 			const load = deferred<ReturnType<typeof createMockFeatureMatch>[]>();
 			mockRepo.list.mockReturnValueOnce(load.promise);
@@ -399,7 +435,10 @@ describe('useFeatureMatchStore', () => {
 			const withSession = slotInEpoch(1, 501);
 			announce(withSession);
 			const stillSessionless = sessionlessSlot(2, { bestOf: 5 });
-			load.resolve([sessionlessSlot(1, { bestOf: 5 }), stillSessionless]);
+			load.resolve([
+				sessionlessSlot(1, { bestOf: 5 }),
+				stillSessionless,
+			]);
 			await loading;
 
 			expect(store.featureMatches).toEqual([withSession, stillSessionless]);
@@ -423,7 +462,9 @@ describe('useFeatureMatchStore', () => {
 		});
 
 		it('applies while no Session is held for the Slot', () => {
-			store.featureMatches = [sessionlessSlot(1)];
+			store.featureMatches = [
+				sessionlessSlot(1),
+			];
 			const edited = sessionlessSlot(1, { bestOf: 5 });
 
 			announce(edited);
@@ -440,8 +481,14 @@ describe('useFeatureMatchStore', () => {
 	 * may not add a Slot, prime a Feature Match Session, or put back an order there.
 	 */
 	describe.each([
-		['Event B', [2]],
-		['Event A, loaded again since', [2, 1]],
+		[
+			'Event B',
+			[2],
+		],
+		[
+			'Event A, loaded again since',
+			[2, 1],
+		],
 	])('a Slot write answered after the operator moved on to %s', (_, switches) => {
 		const stateStore = () => useFeatureMatchStateStore();
 
@@ -450,8 +497,18 @@ describe('useFeatureMatchStore', () => {
 			let shown!: ReturnType<typeof createMockFeatureMatch>[];
 			for (const eventId of switches) {
 				shown = [
-					createMockFeatureMatch({ id: 1, eventId, sortOrder: 0, bestOf: 1 }),
-					createMockFeatureMatch({ id: 2, eventId, sortOrder: 1, bestOf: 1 }),
+					createMockFeatureMatch({
+						id: 1,
+						eventId,
+						sortOrder: 0,
+						bestOf: 1,
+					}),
+					createMockFeatureMatch({
+						id: 2,
+						eventId,
+						sortOrder: 1,
+						bestOf: 1,
+					}),
 				];
 				store.$reset();
 				stateStore().$reset();
@@ -475,13 +532,18 @@ describe('useFeatureMatchStore', () => {
 		});
 
 		it('a late update changes no Slot and primes no Feature Match Session', async () => {
-			store.featureMatches = [createMockFeatureMatch({ id: 1, bestOf: 3 })];
+			store.featureMatches = [
+				createMockFeatureMatch({ id: 1, bestOf: 3 }),
+			];
 			const update = deferred<ReturnType<typeof slotInEpoch>>();
 			mockRepo.update.mockReturnValueOnce(update.promise);
 
 			const updating = store.updateFeatureMatch(1, 1, { bestOf: 5 });
 			const shown = await switchAway();
-			update.resolve({ ...slotInEpoch(1, 501), bestOf: 5 });
+			update.resolve({
+				...slotInEpoch(1, 501),
+				bestOf: 5,
+			});
 			await updating;
 
 			expect(store.featureMatches).toEqual(shown);
@@ -512,27 +574,42 @@ describe('useFeatureMatchStore', () => {
 			const promotion = deferred<unknown>();
 			mockRepo.promoteMatch.mockReturnValueOnce(promotion.promise);
 
-			const promoting = useFeatureMatchPromotion().promote({ eventId: 1, roundId: 10, slotId: 1, matchId: 7 });
+			const promoting = useFeatureMatchPromotion().promote({
+				eventId: 1,
+				roundId: 10,
+				slotId: 1,
+				matchId: 7,
+			});
 			const shown = await switchAway();
 			const eventId = switches.at(-1)!;
-			const loadedAssignments = [{
-				id: 9,
-				eventId,
-				roundId: 10,
-				slotId: 2,
-				matchId: 8,
-				note: 'Loaded since',
-				createdAt: new Date('2026-01-01T00:00:00Z'),
-				updatedAt: new Date('2026-01-01T00:00:00Z'),
-			}];
+			const loadedAssignments = [
+				{
+					id: 9,
+					eventId,
+					roundId: 10,
+					slotId: 2,
+					matchId: 8,
+					note: 'Loaded since',
+					createdAt: new Date('2026-01-01T00:00:00Z'),
+					updatedAt: new Date('2026-01-01T00:00:00Z'),
+				},
+			];
 			assignments.$reset();
 			assignments.consumeRound(eventId, 10);
 			mockAssignmentRepo.listByRound.mockResolvedValueOnce(structuredClone(loadedAssignments));
 			await assignments.loadAssignments(eventId, 10);
 			promotion.resolve({
 				promotedSlot: createMockFeatureMatch({ id: 1, matchId: 7 }),
-				clearedSlots: [createMockFeatureMatch({ id: 2, matchId: null })],
-				assignment: { ...loadedAssignments[0]!, eventId: 1, slotId: 1, matchId: 7, note: null },
+				clearedSlots: [
+					createMockFeatureMatch({ id: 2, matchId: null }),
+				],
+				assignment: {
+					...loadedAssignments[0]!,
+					eventId: 1,
+					slotId: 1,
+					matchId: 7,
+					note: null,
+				},
 			});
 			await promoting;
 
@@ -545,7 +622,9 @@ describe('useFeatureMatchStore', () => {
 
 	describe('$reset', () => {
 		it('clears all state', () => {
-			store.featureMatches = [createMockFeatureMatch()];
+			store.featureMatches = [
+				createMockFeatureMatch(),
+			];
 			store.error = 'some error';
 			store.currentEventId = 1;
 

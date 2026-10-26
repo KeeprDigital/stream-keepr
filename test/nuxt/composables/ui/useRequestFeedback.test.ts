@@ -2,7 +2,9 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { transportFailure } from '~~/test/helpers/transportFailure';
 
-const mockToast = { add: vi.fn() };
+const mockToast = {
+	add: vi.fn(),
+};
 
 mockNuxtImport('useToast', () => () => mockToast);
 
@@ -61,7 +63,10 @@ describe('useRequestFeedback', () => {
 		const { runRequest } = useRequestFeedback();
 
 		await runRequest(async () => {
-			throw transportFailure({ status: 400, body: { message: 'Server validation failed' } });
+			throw transportFailure({
+				status: 400,
+				body: { message: 'Server validation failed' },
+			});
 		}, {
 			error: ({ message }) => ({
 				title: 'Failed',

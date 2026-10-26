@@ -27,21 +27,32 @@ const UInputNumberStub = defineComponent({
 
 const USelectStub = defineComponent({
 	name: 'USelect',
-	props: { modelValue: { type: String, required: false }, items: { type: Array, default: () => [] } },
+	props: {
+		modelValue: { type: String, required: false },
+		items: {
+			type: Array,
+			default: () => [],
+		},
+	},
 	emits: ['update:modelValue'],
 	template: '<select />',
 });
 
 const USwitchStub = defineComponent({
 	name: 'USwitch',
-	props: { modelValue: { type: Boolean, default: false } },
+	props: {
+		modelValue: { type: Boolean, default: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input type="checkbox" :checked="modelValue" />',
 });
 
 const global = {
 	stubs: {
-		UFormField: defineComponent({ props: { label: String }, template: '<label><span>{{ label }}</span><slot /></label>' }),
+		UFormField: defineComponent({
+			props: { label: String },
+			template: '<label><span>{{ label }}</span><slot /></label>',
+		}),
 		UInputNumber: UInputNumberStub,
 		USelect: USelectStub,
 		USwitch: USwitchStub,
@@ -57,7 +68,10 @@ const media = {
 };
 
 function mountFields(props: Record<string, unknown> = {}) {
-	return mount(MediaFields, { global, props: { media, ...props } });
+	return mount(MediaFields, {
+		global,
+		props: { media, ...props },
+	});
 }
 
 type Wrapper = ReturnType<typeof mountFields>;
@@ -84,7 +98,12 @@ describe('media fields', () => {
 	it('offers opacity, focal position, and playback each by prop', () => {
 		const wrapper = mountFields({ opacity: true, focal: true, playback: true });
 
-		for (const testId of ['media-opacity', 'media-focal-horizontal', 'media-focal-vertical', 'media-playback-rate'])
+		for (const testId of [
+			'media-opacity',
+			'media-focal-horizontal',
+			'media-focal-vertical',
+			'media-playback-rate',
+		])
 			expect(numberField(wrapper, testId), testId).toBeDefined();
 		expect(wrapper.find('[data-testid="media-loop"]').exists()).toBe(true);
 
@@ -127,8 +146,12 @@ describe('media fields', () => {
 	it('moves one focal axis, keeping the other', async () => {
 		const wrapper = mountFields({ focal: true });
 
-		expect(await enter(wrapper, 'media-focal-horizontal', 0.1)).toEqual({ focalPosition: { horizontal: 0.1, vertical: 0.75 } });
-		expect(await enter(wrapper, 'media-focal-vertical', null)).toEqual({ focalPosition: { horizontal: 0.25, vertical: 0.5 } });
+		expect(await enter(wrapper, 'media-focal-horizontal', 0.1)).toEqual({
+			focalPosition: { horizontal: 0.1, vertical: 0.75 },
+		});
+		expect(await enter(wrapper, 'media-focal-vertical', null)).toEqual({
+			focalPosition: { horizontal: 0.25, vertical: 0.5 },
+		});
 	});
 
 	it('emits null for a cleared opacity or playback rate, for the host to resolve', async () => {
@@ -139,9 +162,18 @@ describe('media fields', () => {
 	});
 
 	it('disables every field for an observer', () => {
-		const wrapper = mountFields({ opacity: true, focal: true, playback: true, disabled: true });
+		const wrapper = mountFields({
+			opacity: true,
+			focal: true,
+			playback: true,
+			disabled: true,
+		});
 
-		for (const field of [...wrapper.findAllComponents(UInputNumberStub), wrapper.getComponent(USelectStub), wrapper.getComponent(USwitchStub)])
+		for (const field of [
+			...wrapper.findAllComponents(UInputNumberStub),
+			wrapper.getComponent(USelectStub),
+			wrapper.getComponent(USwitchStub),
+		])
 			expect(field.attributes('disabled')).toBeDefined();
 	});
 });

@@ -2,7 +2,9 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 const mockAbly = createMockRealtime();
 
 mockNuxtImport('$fetch', () => mockFetch);
@@ -26,7 +28,10 @@ describe('useCardRepository', () => {
 	});
 
 	it('gets a screen card with its Card revision', async () => {
-		const answer = { card: { id: 'abc', name: 'Bolt' }, revision: 3 };
+		const answer = {
+			card: { id: 'abc', name: 'Bolt' },
+			revision: 3,
+		};
 		mockFetch.mockResolvedValue(answer);
 		const repo = useCardRepository();
 

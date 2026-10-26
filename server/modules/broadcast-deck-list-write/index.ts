@@ -45,14 +45,20 @@ function revisionConflictError(current: unknown) {
 }
 
 function nameConflictError(error: BroadcastDeckListNameConflict) {
-	return createError({ statusCode: 409, message: error.message, data: { code: 'BROADCAST_DECK_LIST_NAME_CONFLICT' } });
+	return createError({
+		statusCode: 409,
+		message: error.message,
+		data: { code: 'BROADCAST_DECK_LIST_NAME_CONFLICT' },
+	});
 }
 
 function inUseError(screens: Array<{ id: number; name: string }>) {
 	const names = screens.map(screen => screen.name).join(', ');
 	return createError({
 		statusCode: 409,
-		message: `Broadcast Deck List is selected by ${screens.length === 1 ? 'Screen' : 'Screens'}: ${names}`,
+		message: `Broadcast Deck List is selected by ${screens.length === 1
+			? 'Screen'
+			: 'Screens'}: ${names}`,
 		data: { code: BROADCAST_DECK_LIST_IN_USE, screens },
 	});
 }
@@ -121,7 +127,9 @@ export function broadcastDeckListWriteModule() {
 
 	async function updateBroadcastDeckList({ eventId, listId, input, originConnectionId }: UpdateParams) {
 		await requireMtgEvent(eventId);
-		const document = input.sourceText === undefined ? undefined : await resolveSource(eventId, input.sourceText);
+		const document = input.sourceText === undefined
+			? undefined
+			: await resolveSource(eventId, input.sourceText);
 		let result;
 		try {
 			result = await lists.update(listId, eventId, input, document);

@@ -12,13 +12,18 @@ import MediaSourceField from '~/components/Screen/MediaSourceField.vue';
 enableAutoUnmount(afterEach);
 
 const USelectStub = defineComponent({
-	props: { modelValue: { type: String, required: false }, items: { type: Array, required: false } },
+	props: {
+		modelValue: { type: String, required: false },
+		items: { type: Array, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<select data-testid="source-kind" :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items" :key="item.value" :value="item.value">{{ item.label }}</option></select>',
 });
 
 const UInputStub = defineComponent({
-	props: { modelValue: { type: String, required: false } },
+	props: {
+		modelValue: { type: String, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input data-testid="source-url" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 });
@@ -36,7 +41,12 @@ const FocusPickerStub = defineComponent({
 const global = {
 	stubs: {
 		UFormField: defineComponent({
-			props: { error: { type: [String, Boolean], required: false } },
+			props: {
+				error: {
+					type: [String, Boolean],
+					required: false,
+				},
+			},
 			template: '<div><slot /><p v-if="typeof error === \'string\'" data-testid="field-error">{{ error }}</p></div>',
 		}),
 		USelect: USelectStub,
@@ -50,7 +60,12 @@ const librarySource: ScreenMediaSource = { kind: 'asset', assetId: 'plate' as ne
 function mountField(modelValue: ScreenMediaSource | undefined) {
 	return mount(MediaSourceField, {
 		global,
-		props: { modelValue, eventId: 7, assetKind: 'silent-video', label: 'Video asset' },
+		props: {
+			modelValue,
+			eventId: 7,
+			assetKind: 'silent-video',
+			label: 'Video asset',
+		},
 	});
 }
 
@@ -60,7 +75,9 @@ describe('the Screen Media Source field', () => {
 
 		await wrapper.find('[data-testid="source-url"]').setValue('https://cdn.example.com/loop.webm');
 
-		expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([{ kind: 'url', url: 'https://cdn.example.com/loop.webm' }]);
+		expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([
+			{ kind: 'url', url: 'https://cdn.example.com/loop.webm' },
+		]);
 	});
 
 	it('refuses a root-relative path the application does not serve as media, and says where library media comes from', () => {
@@ -88,7 +105,9 @@ describe('the Screen Media Source field', () => {
 
 		wrapper.findComponent(FocusPickerStub).vm.$emit('select', {}, { assetId: 'loop', revisionId: 'loop-2' });
 
-		expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([{ kind: 'asset', assetId: 'loop', revisionId: 'loop-2' }]);
+		expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([
+			{ kind: 'asset', assetId: 'loop', revisionId: 'loop-2' },
+		]);
 	});
 
 	it('starts a URL over when switching away from the library', async () => {
@@ -96,7 +115,9 @@ describe('the Screen Media Source field', () => {
 
 		await wrapper.find('[data-testid="source-kind"]').setValue('url');
 
-		expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([{ kind: 'url', url: '' }]);
+		expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([
+			{ kind: 'url', url: '' },
+		]);
 	});
 
 	it('answers the picker’s Clear with no source at all', () => {

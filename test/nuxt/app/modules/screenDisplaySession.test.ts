@@ -340,7 +340,9 @@ describe('useScreenDisplaySession', () => {
 	});
 
 	it('does not start realtime when embed=preview', async () => {
-		const harness = createHarness({ query: { embed: 'preview' } });
+		const harness = createHarness({
+			query: { embed: 'preview' },
+		});
 		await flushPromises();
 
 		expect(harness.realtimeSession.start).not.toHaveBeenCalled();
@@ -382,7 +384,9 @@ describe('useScreenDisplaySession', () => {
 	 * on the one display an operator never needs to find.
 	 */
 	it('does not start realtime when embed=monitor, so a Program monitor is no output', async () => {
-		const harness = createHarness({ query: { embed: 'monitor' } });
+		const harness = createHarness({
+			query: { embed: 'monitor' },
+		});
 		await flushPromises();
 
 		expect(harness.realtimeSession.start).not.toHaveBeenCalled();
@@ -394,7 +398,9 @@ describe('useScreenDisplaySession', () => {
 	 * an output does — both of which the preview reading of this URL suppresses.
 	 */
 	it('leaves a Program monitor live: not a preview, and no preview backdrop or guides', async () => {
-		const harness = createHarness({ query: { embed: 'monitor', guides: '1', safe: '1' } });
+		const harness = createHarness({
+			query: { embed: 'monitor', guides: '1', safe: '1' },
+		});
 		await flushPromises();
 
 		expect(harness.session.screenContext.isPreview?.value).toBe(false);
@@ -409,7 +415,9 @@ describe('useScreenDisplaySession', () => {
 	 * about it with nothing saying so.
 	 */
 	it('treats an unrecognised embed role as a live Screen Output', async () => {
-		const harness = createHarness({ query: { embed: 'program' } });
+		const harness = createHarness({
+			query: { embed: 'program' },
+		});
 		await flushPromises();
 
 		expect(harness.realtimeSession.start).toHaveBeenCalledWith(42, 7);
@@ -428,7 +436,9 @@ describe('useScreenDisplaySession', () => {
 	 * asked for as such here so the case cannot quietly become a preview.
 	 */
 	it('draws no guides for guides=1 and safe=1 without embed=preview', async () => {
-		const harness = createHarness({ query: { guides: '1', safe: '1' } });
+		const harness = createHarness({
+			query: { guides: '1', safe: '1' },
+		});
 		await flushPromises();
 
 		expect(harness.session.screenContext.isPreview?.value).toBe(false);
@@ -442,7 +452,9 @@ describe('useScreenDisplaySession', () => {
 	 * rather than the flags never being read at all.
 	 */
 	it('draws the guides an embedded preview asks for', async () => {
-		const harness = createHarness({ query: { embed: 'preview', guides: '1', safe: '1' } });
+		const harness = createHarness({
+			query: { embed: 'preview', guides: '1', safe: '1' },
+		});
 		await flushPromises();
 
 		expect(harness.session.screenContext.previewGuides?.value).toBe(true);
@@ -677,7 +689,12 @@ describe('useScreenDisplaySession', () => {
 				route: createRoute({}, '#asset-capability=a-screen-output-capability-token'),
 			});
 			await flushPromises();
-			const missed = { id: 42, name: 'Output Event', orientation: 'portrait', featureFlags: { metagame: true } };
+			const missed = {
+				id: 42,
+				name: 'Output Event',
+				orientation: 'portrait',
+				featureFlags: { metagame: true },
+			};
 			harness.outputReads.event.mockResolvedValueOnce(missed as any);
 
 			harness.reattach('event:42');
@@ -861,7 +878,9 @@ describe('useScreenDisplaySession', () => {
 			});
 
 			it('finishes a Program monitor\'s load without entering presence', async () => {
-				const harness = await failedLoad({ query: { embed: 'monitor' } });
+				const harness = await failedLoad({
+					query: { embed: 'monitor' },
+				});
 
 				await suspendAndResume(harness);
 
@@ -871,7 +890,9 @@ describe('useScreenDisplaySession', () => {
 			});
 
 			it('finishes a preview\'s load without entering presence', async () => {
-				const harness = await failedLoad({ query: { embed: 'preview' } });
+				const harness = await failedLoad({
+					query: { embed: 'preview' },
+				});
 
 				await suspendAndResume(harness);
 
@@ -992,7 +1013,9 @@ describe('useScreenDisplaySession', () => {
 		});
 
 		it('re-reads for a Program monitor too, without entering presence', async () => {
-			const harness = createHarness({ query: { embed: 'monitor' } });
+			const harness = createHarness({
+				query: { embed: 'monitor' },
+			});
 			await flushPromises();
 			harness.order.splice(0);
 
@@ -1157,7 +1180,9 @@ describe('useScreenDisplaySession', () => {
 		});
 
 		it('recovers for a Program monitor too, without entering presence', async () => {
-			const harness = createHarness({ query: { embed: 'monitor' } });
+			const harness = createHarness({
+				query: { embed: 'monitor' },
+			});
 			const inFlight = deferred<any>();
 			harness.outputReads.event.mockReturnValueOnce(inFlight.promise);
 			await flushPromises();

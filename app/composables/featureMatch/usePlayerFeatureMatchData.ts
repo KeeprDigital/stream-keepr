@@ -52,11 +52,15 @@ export function usePlayerFeatureMatchData(
 		const m = match.value;
 		if (!m)
 			return null;
-		return s === 'player1' ? m.player1Data : m.player2Data;
+		return s === 'player1'
+			? m.player1Data
+			: m.player2Data;
 	});
 
 	const playerName = computed(() => {
-		const fallback = side() === 'player1' ? 'Player 1' : 'Player 2';
+		const fallback = side() === 'player1'
+			? 'Player 1'
+			: 'Player 2';
 		return playerData.value?.name || fallback;
 	});
 
@@ -68,7 +72,9 @@ export function usePlayerFeatureMatchData(
 
 	const deckName = computed(() => {
 		if (game.value === 'mtg') {
-			const playerId = side() === 'player1' ? match.value?.player1Id : match.value?.player2Id;
+			const playerId = side() === 'player1'
+				? match.value?.player1Id
+				: match.value?.player2Id;
 			const rosterPlayer = playerId
 				? playerStore.players.find(p => p.id === playerId)
 				: playerStore.players.find(p => p.name.toLowerCase() === playerName.value.toLowerCase());
@@ -87,7 +93,9 @@ export function usePlayerFeatureMatchData(
 	const seatLabel = computed(() => {
 		const orientation = eventStore.displayEvent?.featureMatchOrientation;
 		if (orientation === 'vertical') {
-			return side() === 'player1' ? 'Top' : 'Bottom';
+			return side() === 'player1'
+				? 'Top'
+				: 'Bottom';
 		}
 		return undefined;
 	});
@@ -107,7 +115,9 @@ export function usePlayerFeatureMatchData(
 			const pos = data.position;
 			if (pos === null || pos === undefined)
 				return undefined;
-			const num = typeof pos === 'number' ? pos : Number.parseInt(String(pos), 10);
+			const num = typeof pos === 'number'
+				? pos
+				: Number.parseInt(String(pos), 10);
 			if (Number.isNaN(num))
 				return String(pos);
 			if (event?.displayPositionFormat === 'ordinal') {

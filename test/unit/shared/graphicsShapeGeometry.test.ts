@@ -13,7 +13,10 @@ import {
 const SIZE = { width: 100, height: 50 };
 
 function geometry(overrides: Partial<ShapeGeometry> = {}): ShapeGeometry {
-	return { ...squareShapeGeometry(), ...overrides };
+	return {
+		...squareShapeGeometry(),
+		...overrides,
+	};
 }
 
 describe('shapeGeometry', () => {
@@ -22,13 +25,17 @@ describe('shapeGeometry', () => {
 	});
 
 	it('cuts one corner without touching the others', () => {
-		const path = shapeGeometryPath(SIZE, geometry({ topRight: { treatment: 'cut', size: 20 } }));
+		const path = shapeGeometryPath(SIZE, geometry({
+			topRight: { treatment: 'cut', size: 20 },
+		}));
 
 		expect(path).toBe('M 0 0 L 80 0 L 100 20 L 100 50 L 0 50 Z');
 	});
 
 	it('rounds one corner with an arc of its own radius', () => {
-		const path = shapeGeometryPath(SIZE, geometry({ topLeft: { treatment: 'rounded', size: 10 } }));
+		const path = shapeGeometryPath(SIZE, geometry({
+			topLeft: { treatment: 'rounded', size: 10 },
+		}));
 
 		expect(path).toBe('M 0 10 A 10 10 0 0 1 10 0 L 100 0 L 100 50 L 0 50 Z');
 	});
@@ -72,8 +79,12 @@ describe('shapeGeometry', () => {
 
 	it('recognises an unmodified rectangle, so nothing is clipped for no reason', () => {
 		expect(isRectangularShapeGeometry(geometry())).toBe(true);
-		expect(isRectangularShapeGeometry(geometry({ topLeft: { treatment: 'rounded', size: 0 } }))).toBe(true);
-		expect(isRectangularShapeGeometry(geometry({ topLeft: { treatment: 'rounded', size: 4 } }))).toBe(false);
+		expect(isRectangularShapeGeometry(geometry({
+			topLeft: { treatment: 'rounded', size: 0 },
+		}))).toBe(true);
+		expect(isRectangularShapeGeometry(geometry({
+			topLeft: { treatment: 'rounded', size: 4 },
+		}))).toBe(false);
 		expect(isRectangularShapeGeometry(geometry({ rightSlant: 4 }))).toBe(false);
 	});
 
@@ -89,7 +100,12 @@ describe('shapeGeometry', () => {
 		// Named, because "every preset" is only as strong as the list it walks: removing
 		// one shrinks this test's coverage rather than failing it. `CONTEXT.md:371` settles
 		// the membership as exactly these four, so the glossary is what is asserted.
-		expect([...SHAPE_GEOMETRY_PRESET_IDS]).toEqual(['rectangle', 'rule', 'slanted-edge', 'corner-cut']);
+		expect([...SHAPE_GEOMETRY_PRESET_IDS]).toEqual([
+			'rectangle',
+			'rule',
+			'slanted-edge',
+			'corner-cut',
+		]);
 
 		for (const id of SHAPE_GEOMETRY_PRESET_IDS) {
 			const result = getShapeGeometryPreset(id).apply(SIZE);

@@ -37,7 +37,9 @@ export function useScreenOutputReadRepository() {
 	async function read<T>(scope: ScreenOutputReadScope, resource: string, query?: Record<string, unknown>): Promise<T> {
 		return await $fetch<T>(`/api/screen-output/events/${scope.eventId}/screens/${scope.screenId}/${resource}`, {
 			headers: screenOutputCapabilityHeaders(scope.assetCapability),
-			...(query ? { query } : {}),
+			...(query
+				? { query }
+				: {}),
 		}) as T;
 	}
 
@@ -62,7 +64,9 @@ export function useScreenOutputReadRepository() {
 			read<ScreenOutputPlayerDecksResponse>(
 				scope,
 				`players/${playerId}/decks`,
-				selection.deckId != null ? { deckId: selection.deckId } : undefined,
+				selection.deckId != null
+					? { deckId: selection.deckId }
+					: undefined,
 			),
 	};
 }

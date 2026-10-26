@@ -60,7 +60,9 @@ const ScreenModeBaseStub = defineComponent({
 });
 
 const ManaColorDisplayStub = defineComponent({
-	props: { colors: { type: String, required: false } },
+	props: {
+		colors: { type: String, required: false },
+	},
 	template: '<div data-testid="mana-colors" :data-colors="colors" />',
 });
 
@@ -94,8 +96,19 @@ function createHighlanderSummary(overrides: Partial<HighlanderDeckSummary> = {})
 		maxPoints: 3,
 		hasReserveListCards: false,
 		pointedCards: [
-			{ name: 'Mana Drain', points: 1, compartments: ['sideboard'], totalQuantity: 1 },
-			{ name: 'Lutri, the Spellchaser', points: 3, compartments: [], totalQuantity: 1, pointedAs: 'companion' },
+			{
+				name: 'Mana Drain',
+				points: 1,
+				compartments: ['sideboard'],
+				totalQuantity: 1,
+			},
+			{
+				name: 'Lutri, the Spellchaser',
+				points: 3,
+				compartments: [],
+				totalQuantity: 1,
+				pointedAs: 'companion',
+			},
 		],
 		duplicateCards: [],
 		unknownCards: [],
@@ -153,10 +166,14 @@ describe('screenDeckDisplay', () => {
 		displayedDeckVersion.value = 1;
 		pendingSwapVersion.value = 0;
 		commitPendingDeck.mockReset();
-		mainboard.value = [createCard()];
+		mainboard.value = [
+			createCard(),
+		];
 		sideboard.value = [];
 		companion.value = { name: 'Lurrus of the Dream-Den' };
-		deckStats.value = [{ type: 'Instants', count: 12 }];
+		deckStats.value = [
+			{ type: 'Instants', count: 12 },
+		];
 		deckCounters.value = [];
 		highlander.value = createHighlanderSummary();
 		tokenCards.value = [];
@@ -197,7 +214,9 @@ describe('screenDeckDisplay', () => {
 			mainboard: { view: 'list', listColumns: 2 },
 			sideboard: { view: 'list', listColumns: 2 },
 		};
-		sideboard.value = [createCard({ name: 'Force of Will', compartment: 'sideboard' })];
+		sideboard.value = [
+			createCard({ name: 'Force of Will', compartment: 'sideboard' }),
+		];
 
 		const wrapper = await mountComponent();
 
@@ -215,7 +234,9 @@ describe('screenDeckDisplay', () => {
 			mainboard: { view: 'list', listColumns: 3 },
 			sideboard: { view: 'list', listColumns: 2 },
 		};
-		sideboard.value = [createCard({ name: 'Force of Will', compartment: 'sideboard' })];
+		sideboard.value = [
+			createCard({ name: 'Force of Will', compartment: 'sideboard' }),
+		];
 
 		let wrapper = await mountComponent();
 
@@ -239,7 +260,9 @@ describe('screenDeckDisplay', () => {
 			sideboard: { view: 'grid', columns: 6 },
 			sideboardPlacement: 'below',
 		};
-		sideboard.value = [createCard({ name: 'Force of Will', compartment: 'sideboard' })];
+		sideboard.value = [
+			createCard({ name: 'Force of Will', compartment: 'sideboard' }),
+		];
 
 		const wrapper = await mountComponent();
 
@@ -253,7 +276,9 @@ describe('screenDeckDisplay', () => {
 			mainboard: { view: 'grid', columns: 4 },
 			sideboard: { view: 'grid', columns: 2 },
 		};
-		sideboard.value = [createCard({ name: 'Force of Will', compartment: 'sideboard' })];
+		sideboard.value = [
+			createCard({ name: 'Force of Will', compartment: 'sideboard' }),
+		];
 
 		const wrapper = await mountComponent();
 
@@ -262,7 +287,9 @@ describe('screenDeckDisplay', () => {
 	});
 
 	it('keeps a beside stacked sideboard content-sized while the mainboard flexes', async () => {
-		sideboard.value = [createCard({ name: 'Force of Will', compartment: 'sideboard' })];
+		sideboard.value = [
+			createCard({ name: 'Force of Will', compartment: 'sideboard' }),
+		];
 
 		const wrapper = await mountComponent();
 
@@ -309,7 +336,9 @@ describe('screenDeckDisplay', () => {
 
 	it('does not reserve an empty Mainboard section beside a populated Sideboard', async () => {
 		mainboard.value = [];
-		sideboard.value = [createCard({ name: 'Force of Will', compartment: 'sideboard' })];
+		sideboard.value = [
+			createCard({ name: 'Force of Will', compartment: 'sideboard' }),
+		];
 
 		const wrapper = await mountComponent();
 
@@ -341,14 +370,20 @@ describe('screenDeckDisplay', () => {
 		secondaryName.value = 'Azorius Control';
 		deckColors.value = 'WU';
 		mainboard.value = [];
-		sideboard.value = [createCard({
-			name: 'Rest in Peace',
-			compartment: 'sideboard',
-			highlanderPoints: null,
-		})];
+		sideboard.value = [
+			createCard({
+				name: 'Rest in Peace',
+				compartment: 'sideboard',
+				highlanderPoints: null,
+			}),
+		];
 		companion.value = { name: 'Kaheera, the Orphanguard' };
-		deckStats.value = [{ type: 'Creatures', count: 0 }];
-		deckCounters.value = [{ key: 'energy', label: 'Energy', icon: 'i-lucide-activity' }];
+		deckStats.value = [
+			{ type: 'Creatures', count: 0 },
+		];
+		deckCounters.value = [
+			{ key: 'energy', label: 'Energy', icon: 'i-lucide-activity' },
+		];
 		highlander.value = null;
 
 		const wrapper = await mountComponent();
@@ -366,7 +401,9 @@ describe('screenDeckDisplay', () => {
 	});
 
 	it('does not render token metadata on the Deck display', async () => {
-		tokenCards.value = [createCard({ name: 'Treasure Token', compartment: 'sideboard' })];
+		tokenCards.value = [
+			createCard({ name: 'Treasure Token', compartment: 'sideboard' }),
+		];
 
 		const wrapper = await mountComponent();
 

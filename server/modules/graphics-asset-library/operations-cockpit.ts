@@ -208,7 +208,9 @@ function worstStatus(
 ): GraphicsLibraryConditionStatus {
 	return conditions.reduce<GraphicsLibraryConditionStatus>(
 		(worst, condition) =>
-			CONDITION_RANK[condition.status] > CONDITION_RANK[worst] ? condition.status : worst,
+			CONDITION_RANK[condition.status] > CONDITION_RANK[worst]
+				? condition.status
+				: worst,
 		'healthy',
 	);
 }
@@ -256,11 +258,15 @@ export async function readGraphicsOperationsCockpit(
 				{ code: LIVENESS_ALERT_CODES.catalogue, openCount: 1 },
 				{
 					code: LIVENESS_ALERT_CODES.canonical,
-					openCount: canonicalByteStore.status === 'unavailable' ? 1 : 0,
+					openCount: canonicalByteStore.status === 'unavailable'
+						? 1
+						: 0,
 				},
 				{
 					code: LIVENESS_ALERT_CODES.staging,
-					openCount: stagingByteStore.status === 'unavailable' ? 1 : 0,
+					openCount: stagingByteStore.status === 'unavailable'
+						? 1
+						: 0,
 				},
 			]),
 		};
@@ -302,7 +308,10 @@ export async function readGraphicsOperationsCockpit(
 		openCounts,
 	});
 
-	const attentionCounts = { ...emptyAttentionCounts(), ...ingestion.counts };
+	const attentionCounts = {
+		...emptyAttentionCounts(),
+		...ingestion.counts,
+	};
 
 	return {
 		outcome: 'complete',
@@ -311,11 +320,15 @@ export async function readGraphicsOperationsCockpit(
 		alerts: summariseAlerts([
 			{
 				code: LIVENESS_ALERT_CODES.canonical,
-				openCount: condition.canonicalByteStore.status === 'unavailable' ? 1 : 0,
+				openCount: condition.canonicalByteStore.status === 'unavailable'
+					? 1
+					: 0,
 			},
 			{
 				code: LIVENESS_ALERT_CODES.staging,
-				openCount: stagingByteStore.status === 'unavailable' ? 1 : 0,
+				openCount: stagingByteStore.status === 'unavailable'
+					? 1
+					: 0,
 			},
 			...Object.entries(openCounts).map(([kind, openCount]) => ({
 				code: graphicsDiscrepancyAlertCode(kind as GraphicsDiscrepancyKind),
@@ -435,9 +448,15 @@ function quotaAlerts(
 					? 'canonical-quota-warning'
 					: undefined;
 	return [
-		...(canonical ? [{ code: canonical, openCount: 1 }] : []),
+		...(canonical
+			? [
+					{ code: canonical, openCount: 1 },
+				]
+			: []),
 		...(capacity.staging.availableBytes <= 0
-			? [{ code: 'staging-allowance-exhausted' as const, openCount: 1 }]
+			? [
+					{ code: 'staging-allowance-exhausted' as const, openCount: 1 },
+				]
 			: []),
 	];
 }
@@ -452,7 +471,9 @@ function describeCapacity(capacity: GraphicsAssetLibraryCapacity): GraphicsCockp
 	return {
 		canonical: {
 			...capacity.canonical,
-			usedFraction: limit > 0 ? capacity.canonical.usedBytes / limit : 0,
+			usedFraction: limit > 0
+				? capacity.canonical.usedBytes / limit
+				: 0,
 			boundaries: {
 				warningFraction: GRAPHICS_CANONICAL_QUOTA_BOUNDARY_FRACTIONS.warning,
 				criticalFraction: GRAPHICS_CANONICAL_QUOTA_BOUNDARY_FRACTIONS.critical,

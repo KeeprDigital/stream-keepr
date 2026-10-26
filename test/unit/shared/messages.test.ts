@@ -12,14 +12,18 @@ describe('createMessage', () => {
 	});
 
 	it('creates a message with eventId and timestamp', () => {
-		const payload = { event: { id: 1, name: 'Test' } } satisfies MessagePayload<'event:updated'>;
+		const payload = {
+			event: { id: 1, name: 'Test' },
+		} satisfies MessagePayload<'event:updated'>;
 		const msg = createMessage(1, 'event:updated', payload);
 		expect(msg.eventId).toBe(1);
 		expect(msg.timestamp).toBe(Date.now());
 	});
 
 	it('spreads payload into the message', () => {
-		const payload = { event: { id: 5, name: 'Test' } } satisfies MessagePayload<'event:updated'>;
+		const payload = {
+			event: { id: 5, name: 'Test' },
+		} satisfies MessagePayload<'event:updated'>;
 		const msg = createMessage(1, 'event:updated', payload);
 		expect(msg).toHaveProperty('event');
 		expect(msg.event.id).toBe(5);

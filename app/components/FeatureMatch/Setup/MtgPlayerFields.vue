@@ -16,7 +16,9 @@ const deckColorsArray = computed({
 	set: (value: string[]) => {
 		modelValue.value = {
 			...modelValue.value,
-			deckColors: value.length > 0 ? mtgColorsToString(value) : null,
+			deckColors: value.length > 0
+				? mtgColorsToString(value)
+				: null,
 		};
 	},
 });

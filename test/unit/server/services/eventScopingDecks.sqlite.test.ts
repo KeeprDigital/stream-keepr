@@ -53,7 +53,12 @@ async function seedEvent(name: string): Promise<SeededEvent> {
 		.values({ eventId, name: `${name} Swiss`, formatExternalId: 'format-shared' })
 		.returning({ id: schema.phases.id });
 	const [round] = await db.insert(schema.rounds)
-		.values({ eventId, phaseId: phase!.id, name: 'Round 1', roundNumber: 1 })
+		.values({
+			eventId,
+			phaseId: phase!.id,
+			name: 'Round 1',
+			roundNumber: 1,
+		})
 		.returning({ id: schema.rounds.id });
 	const [deck] = await db.insert(schema.playerDecks)
 		.values({
@@ -68,7 +73,13 @@ async function seedEvent(name: string): Promise<SeededEvent> {
 		})
 		.returning({ id: schema.playerDecks.id });
 	await db.insert(schema.playerDeckCards)
-		.values({ deckId: deck!.id, cardId, quantity: 4, compartment: 'mainboard', sortOrder: 0 });
+		.values({
+			deckId: deck!.id,
+			cardId,
+			quantity: 4,
+			compartment: 'mainboard',
+			sortOrder: 0,
+		});
 	await db.insert(schema.playerDeckCompanions)
 		.values({ deckId: deck!.id, companionCardId: cardId, source: 'melee' });
 	const [unresolved] = await db.insert(schema.playerDeckUnresolvedCards)
@@ -167,36 +178,51 @@ describe('playerDeckService event scoping', () => {
 	it('replaceMeleeDecksForEvent never touches the other Event\'s colliding deck', async () => {
 		// Replace Event 1's decks for its player: the shared external id gets a
 		// new name, a fresh card list, and its imported companion cleared.
-		await playerDeckService().replaceMeleeDecksForEvent(one.eventId, [{
-			playerId: one.playerId,
-			snapshots: [{
-				deck: {
-					eventId: one.eventId,
-					playerId: one.playerId,
-					externalId: 'deck-shared',
-					formatExternalId: 'format-shared',
-					name: 'Event One Deck v2',
-					colors: 'R',
-					sortOrder: 0,
-					isPrimary: true,
-				},
-				cards: [{ cardId, quantity: 1, compartment: 'sideboard', sortOrder: 0 }],
-				unresolvedCards: [{
-					entryType: 'card',
-					originalName: 'Counterspell',
-					normalizedOriginalName: 'counterspell',
-					quantity: 3,
-					compartment: 'mainboard',
-				}],
-				importedCompanion: { action: 'clear' },
-			}],
-		}]);
+		await playerDeckService().replaceMeleeDecksForEvent(one.eventId, [
+			{
+				playerId: one.playerId,
+				snapshots: [
+					{
+						deck: {
+							eventId: one.eventId,
+							playerId: one.playerId,
+							externalId: 'deck-shared',
+							formatExternalId: 'format-shared',
+							name: 'Event One Deck v2',
+							colors: 'R',
+							sortOrder: 0,
+							isPrimary: true,
+						},
+						cards: [
+							{
+								cardId,
+								quantity: 1,
+								compartment: 'sideboard',
+								sortOrder: 0,
+							},
+						],
+						unresolvedCards: [
+							{
+								entryType: 'card',
+								originalName: 'Counterspell',
+								normalizedOriginalName: 'counterspell',
+								quantity: 3,
+								compartment: 'mainboard',
+							},
+						],
+						importedCompanion: { action: 'clear' },
+					},
+				],
+			},
+		]);
 
 		// Event 1's copy was rewritten in place…
 		const [deckOne] = await playerDeckService().findManyByIds(one.eventId, [one.deckId]);
 		expect(deckOne?.name).toBe('Event One Deck v2');
 		const cardsOne = await db.select().from(schema.playerDeckCards).where(eq(schema.playerDeckCards.deckId, one.deckId));
-		expect(cardsOne).toMatchObject([{ quantity: 1, compartment: 'sideboard' }]);
+		expect(cardsOne).toMatchObject([
+			{ quantity: 1, compartment: 'sideboard' },
+		]);
 		const companionsOne = await db.select().from(schema.playerDeckCompanions).where(eq(schema.playerDeckCompanions.deckId, one.deckId));
 		expect(companionsOne).toEqual([]);
 
@@ -204,11 +230,17 @@ describe('playerDeckService event scoping', () => {
 		const [deckTwo] = await playerDeckService().findManyByIds(two.eventId, [two.deckId]);
 		expect(deckTwo?.name).toBe('Event Two Deck');
 		const cardsTwo = await db.select().from(schema.playerDeckCards).where(eq(schema.playerDeckCards.deckId, two.deckId));
-		expect(cardsTwo).toMatchObject([{ quantity: 4, compartment: 'mainboard' }]);
+		expect(cardsTwo).toMatchObject([
+			{ quantity: 4, compartment: 'mainboard' },
+		]);
 		const companionsTwo = await db.select().from(schema.playerDeckCompanions).where(eq(schema.playerDeckCompanions.deckId, two.deckId));
-		expect(companionsTwo).toMatchObject([{ companionCardId: cardId, source: 'melee' }]);
+		expect(companionsTwo).toMatchObject([
+			{ companionCardId: cardId, source: 'melee' },
+		]);
 		const unresolvedTwo = await db.select().from(schema.playerDeckUnresolvedCards).where(eq(schema.playerDeckUnresolvedCards.deckId, two.deckId));
-		expect(unresolvedTwo).toMatchObject([{ normalizedOriginalName: 'brainstorm' }]);
+		expect(unresolvedTwo).toMatchObject([
+			{ normalizedOriginalName: 'brainstorm' },
+		]);
 	});
 });
 

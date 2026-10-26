@@ -27,7 +27,12 @@ export interface EventDataPathOptions {
 export function buildEventDataPath(options: EventDataPathOptions): string {
 	const eventScoped = options.eventScoped ?? true;
 	const segments: Array<string | number> = eventScoped
-		? ['api', 'events', options.eventId ?? '', options.resourcePath]
+		? [
+				'api',
+				'events',
+				options.eventId ?? '',
+				options.resourcePath,
+			]
 		: ['api', options.resourcePath];
 
 	if (options.resourceId !== undefined)
@@ -62,12 +67,18 @@ export function useEventDataFetch() {
 	): Promise<TResponse> {
 		const fetchOptions = {
 			method: options.method,
-			...(options.body !== undefined ? { body: options.body } : {}),
-			...(options.query !== undefined ? { query: options.query } : {}),
+			...(options.body !== undefined
+				? { body: options.body }
+				: {}),
+			...(options.query !== undefined
+				? { query: options.query }
+				: {}),
 		};
 		return await $fetch<TResponse>(
 			buildEventDataPath(pathOptions),
-			options.includeHeaders === false ? fetchOptions : withOriginHeaders(fetchOptions),
+			options.includeHeaders === false
+				? fetchOptions
+				: withOriginHeaders(fetchOptions),
 		) as TResponse;
 	}
 
@@ -155,9 +166,13 @@ export function useEventDataResource<
 	const writeOptions = <TBody extends object>(method: 'POST' | 'PATCH' | 'DELETE', body?: TBody) => {
 		const options = {
 			method,
-			...(body !== undefined ? { body } : {}),
+			...(body !== undefined
+				? { body }
+				: {}),
 		};
-		return includeHeaders ? eventData.withOriginHeaders(options) : options;
+		return includeHeaders
+			? eventData.withOriginHeaders(options)
+			: options;
 	};
 
 	const create = async (eventId: number | null, data: TCreate): Promise<T> => {

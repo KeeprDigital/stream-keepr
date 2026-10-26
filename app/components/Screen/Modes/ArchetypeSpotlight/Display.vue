@@ -17,8 +17,12 @@ const {
 } = useArchetypeSpotlightModeData();
 
 const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
-const primaryTextStyle = computed(() => screenConfig.value.primaryTextColor ? { color: screenConfig.value.primaryTextColor } : {});
-const secondaryTextStyle = computed(() => screenConfig.value.secondaryTextColor ? { color: screenConfig.value.secondaryTextColor } : {});
+const primaryTextStyle = computed(() => screenConfig.value.primaryTextColor
+	? { color: screenConfig.value.primaryTextColor }
+	: {});
+const secondaryTextStyle = computed(() => screenConfig.value.secondaryTextColor
+	? { color: screenConfig.value.secondaryTextColor }
+	: {});
 const themeStyle = computed(() => ({
 	'--broadcast-table-primary-text': screenConfig.value.primaryTextColor ?? '#ffffff',
 	'--broadcast-table-secondary-text': screenConfig.value.secondaryTextColor ?? 'rgba(255, 255, 255, 0.72)',
@@ -30,7 +34,10 @@ const stats = computed(() => {
 	if (!data)
 		return [];
 	return [
-		{ label: 'Pilots', value: String(data.playerCount) },
+		{
+			label: 'Pilots',
+			value: String(data.playerCount),
+		},
 		{ label: 'Meta Share', value: `${data.metaShare}%` },
 		{
 			label: `Conversion (${conversionLabel.value})`,

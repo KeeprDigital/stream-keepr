@@ -92,11 +92,18 @@ export const useEventStore = defineStore('event', () => {
 	function upsertTalentById(talentData: Talent) {
 		const index = event.value?.talents.findIndex(t => t.id === talentData.id) ?? -1;
 		if (index !== -1 && event.value) {
-			event.value.talents[index] = { ...talentData, updatedAt: new Date() };
+			event.value.talents[index] = {
+				...talentData,
+				updatedAt: new Date(),
+			};
 			return;
 		}
 		if (event.value) {
-			event.value.talents.push({ ...talentData, createdAt: new Date(), updatedAt: new Date() });
+			event.value.talents.push({
+				...talentData,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			});
 		}
 	}
 
@@ -125,8 +132,12 @@ export const useEventStore = defineStore('event', () => {
 			};
 		}
 
-		if (outputEvent.value && data.event.id === outputEvent.value.id)
-			outputEvent.value = toScreenOutputEvent({ ...outputEvent.value, ...data.event });
+		if (outputEvent.value && data.event.id === outputEvent.value.id) {
+			outputEvent.value = toScreenOutputEvent({
+				...outputEvent.value,
+				...data.event,
+			});
+		}
 
 		const index = eventsList.value.findIndex(e => e.id === data.event.id);
 		if (index !== -1) {
@@ -388,7 +399,9 @@ export const useEventStore = defineStore('event', () => {
 					const idx = event.value.talents.findIndex(t => t.id === talentId);
 					if (idx === -1) {
 						// If not found, insert at original position or at end
-						const insertIdx = index < event.value.talents.length ? index : event.value.talents.length;
+						const insertIdx = index < event.value.talents.length
+							? index
+							: event.value.talents.length;
 						event.value.talents.splice(insertIdx, 0, removed);
 					}
 				},

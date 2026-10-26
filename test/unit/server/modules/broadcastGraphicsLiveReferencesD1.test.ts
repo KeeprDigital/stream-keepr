@@ -49,7 +49,9 @@ const db = drizzle(harness.database, { schema });
 
 afterAll(async () => await harness.dispose());
 
-vi.doMock('~~/server/db', () => ({ db: { $client: harness.database } }));
+vi.doMock('~~/server/db', () => ({
+	db: { $client: harness.database },
+}));
 
 const { updateBroadcastGraphicsLiveSessionGraphicAssetReferences } = await import(
 	'~~/server/modules/screen-graphic-asset-references',
@@ -63,11 +65,13 @@ const OWNER_SLOT = 'liveSession.slate.inputs.clip';
 
 /** The reference set one accepted media Graphic Input value produces. */
 function references(revisionId: string) {
-	return [{
-		reference: testGraphicAssetReference(ASSET_ID, revisionId),
-		ownerSlot: OWNER_SLOT,
-		kind: 'image' as const,
-	}];
+	return [
+		{
+			reference: testGraphicAssetReference(ASSET_ID, revisionId),
+			ownerSlot: OWNER_SLOT,
+			kind: 'image' as const,
+		},
+	];
 }
 
 let eventId: number;

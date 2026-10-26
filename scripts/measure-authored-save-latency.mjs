@@ -35,7 +35,10 @@ export function authoredConfigForReferenceCount(count, assets) {
 	let remaining = count;
 	let index = 0;
 	const fontSelection = assets.font
-		? { kind: 'asset', reference: { assetId: assets.font.assetId, revisionId: assets.font.revisionId } }
+		? {
+				kind: 'asset',
+				reference: { assetId: assets.font.assetId, revisionId: assets.font.revisionId },
+			}
 		: { kind: 'application', fontId: 'inter' };
 
 	const mediaItem = () => ({
@@ -126,7 +129,18 @@ export function authoredConfigForReferenceCount(count, assets) {
 function parseArguments(argv) {
 	const options = {
 		url: 'https://stream.keepr.digital',
-		series: [1, 12, 60, 150, 300, 600, 600, 300, 60, 1],
+		series: [
+			1,
+			12,
+			60,
+			150,
+			300,
+			600,
+			600,
+			300,
+			60,
+			1,
+		],
 	};
 	for (let index = 2; index < argv.length; index++) {
 		if (argv[index] === '--url')
@@ -154,12 +168,17 @@ async function main() {
 		for (const header of response.headers.getSetCookie?.() ?? [])
 			rememberCookie(header.split(';')[0]);
 	}
-	const cookieHeader = () => [...jar.entries()].map(([name, value]) => `${name}=${value}`).join('; ');
+	const cookieHeader = () => [
+		...jar.entries(),
+	].map(([name, value]) => `${name}=${value}`).join('; ');
 
 	async function request(path, init = {}) {
 		const response = await fetch(`${base}${path}`, {
 			...init,
-			headers: { cookie: cookieHeader(), ...(init.headers ?? {}) },
+			headers: {
+				cookie: cookieHeader(),
+				...(init.headers ?? {}),
+			},
 		});
 		storeCookies(response);
 		return response;
@@ -171,7 +190,10 @@ async function main() {
 		return await response.json();
 	}
 	const jsonBody = body => ({
-		headers: { 'content-type': 'application/json', 'cookie': cookieHeader() },
+		headers: {
+			'content-type': 'application/json',
+			'cookie': cookieHeader(),
+		},
 		body: JSON.stringify(body),
 	});
 
@@ -228,10 +250,15 @@ async function main() {
 		// timed series.
 		let image = null;
 		for (const candidate of images) {
-			await json(leasePath, { method: 'POST', ...jsonBody({ heartbeatIntervalMs: 300_000 }) });
+			await json(leasePath, {
+				method: 'POST',
+				...jsonBody({ heartbeatIntervalMs: 300_000 }),
+			});
 			const attempt = await request(configPath, {
 				method: 'PATCH',
-				...jsonBody(authoredConfigForReferenceCount(1, { image: { assetId: candidate.id, revisionId: candidate.revisionId } })),
+				...jsonBody(authoredConfigForReferenceCount(1, {
+					image: { assetId: candidate.id, revisionId: candidate.revisionId },
+				})),
 			});
 			await attempt.text();
 			if (attempt.ok) {
@@ -243,16 +270,26 @@ async function main() {
 			throw new Error('No active image Graphic Asset committed a single-reference authored save.');
 		const assets = {
 			image,
-			...(font ? { font: { assetId: font.id, revisionId: font.revisionId } } : {}),
+			...(font
+				? {
+						font: { assetId: font.id, revisionId: font.revisionId },
+					}
+				: {}),
 		};
 
 		for (const count of options.series) {
-			await json(leasePath, { method: 'POST', ...jsonBody({ heartbeatIntervalMs: 300_000 }) });
+			await json(leasePath, {
+				method: 'POST',
+				...jsonBody({ heartbeatIntervalMs: 300_000 }),
+			});
 			const body = JSON.stringify(authoredConfigForReferenceCount(count, assets));
 			const startedAt = performance.now();
 			const response = await request(configPath, {
 				method: 'PATCH',
-				headers: { 'content-type': 'application/json', 'cookie': cookieHeader() },
+				headers: {
+					'content-type': 'application/json',
+					'cookie': cookieHeader(),
+				},
 				body,
 			});
 			const elapsedMs = Math.round(performance.now() - startedAt);

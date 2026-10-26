@@ -93,8 +93,11 @@ export function rewriteTemplateDocumentReferences(
 		if (!isPlainObject(value))
 			return value;
 		const rewritten: Record<string, unknown> = {};
-		for (const key of Object.keys(value))
-			rewritten[key] = rewrite(value[key], path ? `${path}.${key}` : key);
+		for (const key of Object.keys(value)) {
+			rewritten[key] = rewrite(value[key], path
+				? `${path}.${key}`
+				: key);
+		}
 		if (typeof value.assetId !== 'string' || typeof value.revisionId !== 'string')
 			return rewritten;
 		if (value.assetId.length === 0 || value.revisionId.length === 0)
@@ -103,7 +106,9 @@ export function rewriteTemplateDocumentReferences(
 			sourceAssetId: value.assetId,
 			sourceRevisionId: value.revisionId,
 		}));
-		const ownerSlot = path === '' ? DOCUMENT_ROOT_SLOT : path;
+		const ownerSlot = path === ''
+			? DOCUMENT_ROOT_SLOT
+			: path;
 		if (!local) {
 			unmapped.push(ownerSlot);
 			return rewritten;
@@ -116,7 +121,11 @@ export function rewriteTemplateDocumentReferences(
 		};
 	}
 
-	return { document: rewrite(document, ''), references, unmapped };
+	return {
+		document: rewrite(document, ''),
+		references,
+		unmapped,
+	};
 }
 
 /**

@@ -102,7 +102,9 @@ describe('the DNS-over-HTTPS remote host resolver', () => {
 						{ name, type: 1, data: '93.184.216.34' },
 						{ name, type: 1, data: '93.184.216.35' },
 					]
-				: [{ name, type: 28, data: '2606:4700:10::ac42:93f3' }],
+				: [
+						{ name, type: 28, data: '2606:4700:10::ac42:93f3' },
+					],
 		}));
 
 		await expect(resolver.resolve('cdn.example.test')).resolves.toEqual({
@@ -154,7 +156,12 @@ describe('the DNS-over-HTTPS remote host resolver', () => {
 
 	it('never reports a partially resolved hostname as public', async () => {
 		const { resolver } = createResolver((name, type) => type === '1'
-			? dnsJson({ Status: 0, Answer: [{ name, type: 1, data: '93.184.216.34' }] })
+			? dnsJson({
+					Status: 0,
+					Answer: [
+						{ name, type: 1, data: '93.184.216.34' },
+					],
+				})
 			: dnsJson({ Status: 2 }));
 
 		await expect(resolver.resolve('cdn.example.test')).resolves.toEqual({ outcome: 'unavailable' });

@@ -4,7 +4,12 @@ import { tableRowLayout, tableRowLayoutStyle } from '~~/app/utils/tableRowLayout
 describe('tableRowLayout', () => {
 	it('shares the measured height, less the page inset, across a page of rows', () => {
 		expect(tableRowLayout({ density: 'compact', measuredHeight: 800, rowCount: 8 }).rowHeight).toBe(100);
-		expect(tableRowLayout({ density: 'compact', measuredHeight: 800, rowCount: 8, insetY: 80 }).rowHeight).toBe(90);
+		expect(tableRowLayout({
+			density: 'compact',
+			measuredHeight: 800,
+			rowCount: 8,
+			insetY: 80,
+		}).rowHeight).toBe(90);
 		expect(tableRowLayout({ density: 'roomy', measuredHeight: 800, rowCount: 4 }).rowHeight).toBe(200);
 	});
 
@@ -34,7 +39,12 @@ describe('tableRowLayout', () => {
 	it('keeps compact type and padding at their minimums in short rows', () => {
 		const layout = tableRowLayout({ density: 'compact', measuredHeight: 192, rowCount: 8 });
 
-		expect(layout).toEqual({ rowHeight: 24, fontSize: 14, secondaryFontSize: 12, padding: { y: 4, x: 10.5 } });
+		expect(layout).toEqual({
+			rowHeight: 24,
+			fontSize: 14,
+			secondaryFontSize: 12,
+			padding: { y: 4, x: 10.5 },
+		});
 	});
 
 	it('grows roomy type with the row height and leaves padding to the stylesheet', () => {
@@ -47,13 +57,23 @@ describe('tableRowLayout', () => {
 
 	it('keeps roomy type at its minimums in short rows', () => {
 		expect(tableRowLayout({ density: 'roomy', measuredHeight: 352, rowCount: 8 }))
-			.toEqual({ rowHeight: 44, fontSize: 18, secondaryFontSize: 13, padding: null });
+			.toEqual({
+				rowHeight: 44,
+				fontSize: 18,
+				secondaryFontSize: 13,
+				padding: null,
+			});
 	});
 });
 
 describe('tableRowLayoutStyle', () => {
 	it('names each measure as a custom property under the given prefix', () => {
-		expect(tableRowLayoutStyle('standings', { rowHeight: 50, fontSize: 16, secondaryFontSize: 13, padding: { y: 6, x: 12 } })).toEqual({
+		expect(tableRowLayoutStyle('standings', {
+			rowHeight: 50,
+			fontSize: 16,
+			secondaryFontSize: 13,
+			padding: { y: 6, x: 12 },
+		})).toEqual({
 			'--standings-row-height': '50px',
 			'--standings-row-font-size': '16px',
 			'--standings-row-secondary-font-size': '13px',
@@ -63,7 +83,12 @@ describe('tableRowLayoutStyle', () => {
 	});
 
 	it('leaves padding properties out when the density does not size padding', () => {
-		expect(tableRowLayoutStyle('pairings', { rowHeight: 50, fontSize: 18, secondaryFontSize: 13, padding: null })).toEqual({
+		expect(tableRowLayoutStyle('pairings', {
+			rowHeight: 50,
+			fontSize: 18,
+			secondaryFontSize: 13,
+			padding: null,
+		})).toEqual({
 			'--pairings-row-height': '50px',
 			'--pairings-row-font-size': '18px',
 			'--pairings-row-secondary-font-size': '13px',

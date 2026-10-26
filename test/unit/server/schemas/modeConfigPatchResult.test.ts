@@ -122,7 +122,9 @@ function graphicsStack(totalItems: number, graphics: number, totalInputs = 0) {
 			name: 'N'.repeat(100),
 			items: Array.from({ length: take }, (_, i) => fatGraphicItem(`item-${g}-${i}`)),
 			...(takeInputs > 0
-				? { inputs: Array.from({ length: takeInputs }, (_, i) => fatGraphicInput(`g${g}input${i}`)) }
+				? {
+						inputs: Array.from({ length: takeInputs }, (_, i) => fatGraphicInput(`g${g}input${i}`)),
+					}
 				: {}),
 		};
 	});
@@ -202,7 +204,11 @@ describe('parseModeConfigPatchResult', () => {
 	it('refuses a patch whose merged result exceeds the mode configuration byte total', () => {
 		// Neither write is unreasonable on its own; the accumulated configuration is
 		// what breaches the limit, which is why only the merged result can catch it.
-		const stored = { 'broadcast-graphics': { graphics: storableStack() } };
+		const stored = {
+			'broadcast-graphics': {
+				graphics: storableStack(),
+			},
+		};
 		const layout = fatOverlayLayout();
 
 		// Both halves measured, so it stays visible that neither alone is the problem
@@ -226,9 +232,15 @@ describe('parseModeConfigPatchResult', () => {
 	});
 
 	it('names the limit, so an operator reads what they reached', () => {
-		const stored = { 'broadcast-graphics': { graphics: storableStack() } };
+		const stored = {
+			'broadcast-graphics': {
+				graphics: storableStack(),
+			},
+		};
 
-		expect(() => parseModeConfigPatchResult(stored, 'feature-match-overlay', { layout: fatOverlayLayout() }))
+		expect(() => parseModeConfigPatchResult(stored, 'feature-match-overlay', {
+			layout: fatOverlayLayout(),
+		}))
 			.toThrow(new RegExp(`must not exceed ${MAX_MODE_CONFIGS_BYTES} bytes`));
 	});
 
@@ -237,7 +249,9 @@ describe('parseModeConfigPatchResult', () => {
 		// one payload, both paths, same answer. Before #85 was fixed the second of
 		// these accepted what the first refused.
 		const oversized = {
-			'broadcast-graphics': { graphics: storableStack() },
+			'broadcast-graphics': {
+				graphics: storableStack(),
+			},
 			'feature-match-overlay': {
 				featureMatchId: null,
 				presetId: 'full-table' as const,
@@ -256,9 +270,13 @@ describe('parseModeConfigPatchResult', () => {
 
 	it('accepts a realistic configuration, which is nowhere near the limit', () => {
 		const merged = parseModeConfigPatchResult(
-			{ metagame: getDefaultConfigForMode('metagame') },
+			{
+				metagame: getDefaultConfigForMode('metagame'),
+			},
 			'broadcast-graphics',
-			{ graphics: graphicsStack(20, 5, 6) },
+			{
+				graphics: graphicsStack(20, 5, 6),
+			},
 		);
 
 		// A measured figure with a stated margin, not a round envelope. A loose
@@ -277,7 +295,12 @@ describe('parseModeConfigPatchResult', () => {
 		// so a stored config with required fields absent is entirely valid. Re-checking
 		// each mode against its full schema here would reject ordinary editing — this
 		// pins that it does not.
-		const patch = { layout: { frame: { backgroundColor: '#000000', opacity: 1 }, items: [] } };
+		const patch = {
+			layout: {
+				frame: { backgroundColor: '#000000', opacity: 1 },
+				items: [],
+			},
+		};
 
 		expect(modeConfigSchemaMap['feature-match-overlay'].safeParse(patch).success).toBe(false);
 		expect(() => parseModeConfigPatchResult({}, 'feature-match-overlay', patch)).not.toThrow();
@@ -292,7 +315,9 @@ describe('parseModeConfigPatchResult', () => {
 
 	it('merges onto the stored configuration rather than replacing it', () => {
 		const merged = parseModeConfigPatchResult(
-			{ metagame: { topN: 5, autoPageEnabled: true } as never },
+			{
+				metagame: { topN: 5, autoPageEnabled: true } as never,
+			},
 			'metagame',
 			{ topN: 12 },
 		);
@@ -304,7 +329,9 @@ describe('parseModeConfigPatchResult', () => {
 		// The merge is the shared one the repository uses, so validation cannot judge a
 		// configuration different from the one that gets stored.
 		const merged = parseModeConfigPatchResult(
-			{ metagame: { topN: 5, archetypeFilter: 'aggro' } as never },
+			{
+				metagame: { topN: 5, archetypeFilter: 'aggro' } as never,
+			},
 			'metagame',
 			{ archetypeFilter: null },
 		);
@@ -315,26 +342,56 @@ describe('parseModeConfigPatchResult', () => {
 });
 
 describe('per-mode background layers', () => {
-	const colorLayer = (id: string) => ({ id, type: 'color' as const, color: '#101010', enabled: true, opacity: 1 });
-	const animationLayer = (id: string) => ({ id, type: 'animation' as const, animation: { effect: 'fog' as const }, enabled: true, opacity: 1 });
+	const colorLayer = (id: string) => ({
+		id,
+		type: 'color' as const,
+		color: '#101010',
+		enabled: true,
+		opacity: 1,
+	});
+	const animationLayer = (id: string) => ({
+		id,
+		type: 'animation' as const,
+		animation: { effect: 'fog' as const },
+		enabled: true,
+		opacity: 1,
+	});
 
 	it('accepts a background layer stack on every capable mode\'s patch path', () => {
-		for (const mode of ['card', 'deck', 'standings', 'top-cut', 'metagame', 'player-history', 'pairings', 'archetype-spotlight', 'head-to-head'] as const) {
+		for (const mode of [
+			'card',
+			'deck',
+			'standings',
+			'top-cut',
+			'metagame',
+			'player-history',
+			'pairings',
+			'archetype-spotlight',
+			'head-to-head',
+		] as const) {
 			expect(modeConfigPatchSchemaMap[mode].safeParse({
-				backgroundLayers: [colorLayer('base'), animationLayer('fx')],
+				backgroundLayers: [
+					colorLayer('base'),
+					animationLayer('fx'),
+				],
 			}).success).toBe(true);
 		}
 	});
 
 	it('holds the one-animation-layer rule on the patch path, like the Background Screen\'s own stack', () => {
 		expect(modeConfigPatchSchemaMap.metagame.safeParse({
-			backgroundLayers: [animationLayer('one'), animationLayer('two')],
+			backgroundLayers: [
+				animationLayer('one'),
+				animationLayer('two'),
+			],
 		}).success).toBe(false);
 	});
 
 	it('refuses a background layer stack on a graphics host, which owns its background', () => {
 		expect(modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({
-			backgroundLayers: [colorLayer('base')],
+			backgroundLayers: [
+				colorLayer('base'),
+			],
 		}).success).toBe(false);
 	});
 });
@@ -346,8 +403,16 @@ describe('object-level rules cannot be silently unenforced', () => {
 		// object rules would have bought nothing.
 		const patch = modeConfigPatchSchemaMap['broadcast-graphics'];
 
-		expect(patch.safeParse({ graphics: [{ id: 'a', name: 'A', items: [] }] }).success).toBe(true);
-		expect(patch.safeParse({ graphics: [{ id: '', name: 'A', items: [] }] }).success).toBe(false);
+		expect(patch.safeParse({
+			graphics: [
+				{ id: 'a', name: 'A', items: [] },
+			],
+		}).success).toBe(true);
+		expect(patch.safeParse({
+			graphics: [
+				{ id: '', name: 'A', items: [] },
+			],
+		}).success).toBe(false);
 		expect(patch.safeParse({ graphics: null }).success).toBe(false);
 		expect(patch.safeParse({ unknownKey: 1 }).success).toBe(false);
 	});
@@ -357,7 +422,9 @@ describe('the object-level check detector', () => {
 	// The guard is only worth having if it catches the thing #85 reports, so this
 	// runs the issue's own reproduction against the detector rather than asserting
 	// only that today's schemas happen to be clean.
-	const plain = z.object({ topN: z.number() }).strict();
+	const plain = z.object({
+		topN: z.number(),
+	}).strict();
 
 	it('finds an object-level refinement, which is what the shape rebuild loses', () => {
 		const refined = plain.refine(() => false, 'never valid');

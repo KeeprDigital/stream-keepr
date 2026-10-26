@@ -5,11 +5,13 @@ import { defineComponent, reactive } from 'vue';
 
 const selectPreviewCard = vi.fn();
 const cardStore = reactive({
-	selectionHistory: [{
-		id: 'card-1',
-		name: 'Lightning Bolt',
-		displayData: { turnedOver: false },
-	}],
+	selectionHistory: [
+		{
+			id: 'card-1',
+			name: 'Lightning Bolt',
+			displayData: { turnedOver: false },
+		},
+	],
 	selectPreviewCard,
 	clearHistory: vi.fn(),
 });

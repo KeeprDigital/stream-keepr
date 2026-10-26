@@ -42,7 +42,11 @@ async function fetchTokens() {
 const { summaryLoading, fetchPageData } = useMetagamePage(fetchTokens);
 
 const { initialLoading, initialError, retry } = useEventPageLoading([
-	{ consumes: 'players', isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
+	{
+		consumes: 'players',
+		isLoaded: () => playerStore.isLoaded,
+		load: id => playerStore.loadPlayersByEventId(id),
+	},
 ], fetchPageData);
 </script>
 

@@ -5,7 +5,12 @@ import { archetypes } from '~~/server/db/schema';
 // ── Archetype CRUD Schemas ──
 
 export const createArchetypeSchema = createInsertSchema(archetypes)
-	.omit({ id: true, eventId: true, createdAt: true, updatedAt: true })
+	.omit({
+		id: true,
+		eventId: true,
+		createdAt: true,
+		updatedAt: true,
+	})
 	.extend({
 		name: z.string().min(1).max(200),
 		colors: z.string().max(50).nullable().optional(),
@@ -13,7 +18,12 @@ export const createArchetypeSchema = createInsertSchema(archetypes)
 	.strict();
 
 export const updateArchetypeSchema = createUpdateSchema(archetypes)
-	.omit({ id: true, eventId: true, createdAt: true, updatedAt: true })
+	.omit({
+		id: true,
+		eventId: true,
+		createdAt: true,
+		updatedAt: true,
+	})
 	.extend({
 		name: z.string().min(1).max(200).optional(),
 		colors: z.string().max(50).nullable().optional(),

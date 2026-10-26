@@ -40,7 +40,9 @@ describe('playerDeckService', () => {
 	});
 
 	it('selects the submitted deck matching the phase format', async () => {
-		getChain('select').limit.mockResolvedValue([{ formatExternalId: 'standard' }]);
+		getChain('select').limit.mockResolvedValue([
+			{ formatExternalId: 'standard' },
+		]);
 
 		const selected = await playerDeckService().selectFromDecks(1, [primary, finals], { phaseId: 5 });
 
@@ -48,7 +50,9 @@ describe('playerDeckService', () => {
 	});
 
 	it('resolves a round through its phase format and falls back to primary when no format deck exists', async () => {
-		getChain('select').limit.mockResolvedValue([{ formatExternalId: 'pioneer' }]);
+		getChain('select').limit.mockResolvedValue([
+			{ formatExternalId: 'pioneer' },
+		]);
 
 		const selected = await playerDeckService().selectFromDecks(1, [primary, finals], { roundId: 7 });
 
@@ -56,40 +60,58 @@ describe('playerDeckService', () => {
 	});
 
 	it('reconciles one player deck snapshot in a single atomic batch', async () => {
-		getChain('select').where.mockResolvedValue([{
-			playerId: 2,
-			gameData: { type: 'mtg', deckName: 'Imported', deckColors: 'UR' },
-			archetypeId: 5,
-			reviewedAt: new Date('2026-07-15T00:00:00.000Z'),
-			archetypeName: 'Control',
-			archetypeColors: 'WU',
-		}]);
-
-		await playerDeckService().replaceMeleeDecksForEvent(1, [{ playerId: 2, snapshots: [{
-			deck: {
-				eventId: 1,
+		getChain('select').where.mockResolvedValue([
+			{
 				playerId: 2,
-				externalId: 'deck-10',
-				formatExternalId: 'modern',
-				name: 'Imported Modern',
-				colors: 'UR',
-				sortOrder: 0,
-				isPrimary: true,
+				gameData: { type: 'mtg', deckName: 'Imported', deckColors: 'UR' },
+				archetypeId: 5,
+				reviewedAt: new Date('2026-07-15T00:00:00.000Z'),
+				archetypeName: 'Control',
+				archetypeColors: 'WU',
 			},
-			cards: [{ cardId: 7, quantity: 4, compartment: 'mainboard', sortOrder: 0 }],
-			unresolvedCards: [{
-				entryType: 'card',
-				originalName: 'Unknown',
-				normalizedOriginalName: 'unknown',
-				setCode: null,
-				normalizedSetCode: '',
-				quantity: 1,
-				compartment: 'sideboard',
-				sortOrder: 1,
-				cardType: null,
-			}],
-			importedCompanion: { action: 'set', cardId: 9 },
-		}] }]);
+		]);
+
+		await playerDeckService().replaceMeleeDecksForEvent(1, [
+			{
+				playerId: 2,
+				snapshots: [
+					{
+						deck: {
+							eventId: 1,
+							playerId: 2,
+							externalId: 'deck-10',
+							formatExternalId: 'modern',
+							name: 'Imported Modern',
+							colors: 'UR',
+							sortOrder: 0,
+							isPrimary: true,
+						},
+						cards: [
+							{
+								cardId: 7,
+								quantity: 4,
+								compartment: 'mainboard',
+								sortOrder: 0,
+							},
+						],
+						unresolvedCards: [
+							{
+								entryType: 'card',
+								originalName: 'Unknown',
+								normalizedOriginalName: 'unknown',
+								setCode: null,
+								normalizedSetCode: '',
+								quantity: 1,
+								compartment: 'sideboard',
+								sortOrder: 1,
+								cardType: null,
+							},
+						],
+						importedCompanion: { action: 'set', cardId: 9 },
+					},
+				],
+			},
+		]);
 
 		expect(mockDb.batch).toHaveBeenCalledOnce();
 		expect(mockDb.batch.mock.calls[0]![0]).toHaveLength(10);
@@ -105,17 +127,21 @@ describe('playerDeckService', () => {
 	});
 
 	it('does not execute any deck mutation outside the atomic batch when it fails', async () => {
-		getChain('select').where.mockResolvedValue([{
-			playerId: 2,
-			gameData: { type: 'mtg', deckName: null, deckColors: null },
-			archetypeId: null,
-			reviewedAt: null,
-			archetypeName: null,
-			archetypeColors: null,
-		}]);
+		getChain('select').where.mockResolvedValue([
+			{
+				playerId: 2,
+				gameData: { type: 'mtg', deckName: null, deckColors: null },
+				archetypeId: null,
+				reviewedAt: null,
+				archetypeName: null,
+				archetypeColors: null,
+			},
+		]);
 		mockDb.batch.mockRejectedValue(new Error('injected batch failure'));
 
-		await expect(playerDeckService().replaceMeleeDecksForEvent(1, [{ playerId: 2, snapshots: [] }])).rejects.toThrow('injected batch failure');
+		await expect(playerDeckService().replaceMeleeDecksForEvent(1, [
+			{ playerId: 2, snapshots: [] },
+		])).rejects.toThrow('injected batch failure');
 
 		expect(mockDb.batch).toHaveBeenCalledOnce();
 	});
@@ -127,7 +153,12 @@ describe('playerDeckService', () => {
 		}));
 		getChain('select').where.mockResolvedValue(replacements.map(replacement => ({
 			playerId: replacement.playerId,
-			gameData: { type: 'mtg', deckName: 'Old', deckColors: 'R', customField: 'preserved' },
+			gameData: {
+				type: 'mtg',
+				deckName: 'Old',
+				deckColors: 'R',
+				customField: 'preserved',
+			},
 			archetypeId: null,
 			reviewedAt: null,
 			archetypeName: null,
@@ -146,16 +177,18 @@ describe('playerDeckService', () => {
 		const updatedPlayer = { id: 2, eventId: 1, archetypeId: 5 };
 		const selectLimit = getChain('select').limit;
 		selectLimit.mockResolvedValueOnce([primary]);
-		selectLimit.mockResolvedValueOnce([{
-			gameData: { type: 'mtg', deckName: 'Imported', deckColors: 'UR' },
-			deckId: 10,
-			archetypeId: 5,
-			reviewedAt,
-			importedName: 'Imported',
-			importedColors: 'UR',
-			archetypeName: 'Control',
-			archetypeColors: 'WU',
-		}]);
+		selectLimit.mockResolvedValueOnce([
+			{
+				gameData: { type: 'mtg', deckName: 'Imported', deckColors: 'UR' },
+				deckId: 10,
+				archetypeId: 5,
+				reviewedAt,
+				importedName: 'Imported',
+				importedColors: 'UR',
+				archetypeName: 'Control',
+				archetypeColors: 'WU',
+			},
+		]);
 		const updateReturning = getChain('update').returning;
 		updateReturning.mockResolvedValueOnce([reviewedDeck]);
 		updateReturning.mockResolvedValueOnce([updatedPlayer]);
@@ -174,16 +207,18 @@ describe('playerDeckService', () => {
 	});
 
 	it('does not overwrite a generic player edit when the primary deck is unreviewed', async () => {
-		getChain('select').limit.mockResolvedValue([{
-			gameData: { type: 'mtg', deckName: 'Manual', deckColors: 'G' },
-			deckId: 10,
-			archetypeId: null,
-			reviewedAt: null,
-			importedName: 'Imported',
-			importedColors: 'R',
-			archetypeName: null,
-			archetypeColors: null,
-		}]);
+		getChain('select').limit.mockResolvedValue([
+			{
+				gameData: { type: 'mtg', deckName: 'Manual', deckColors: 'G' },
+				deckId: 10,
+				archetypeId: null,
+				reviewedAt: null,
+				importedName: 'Imported',
+				importedColors: 'R',
+				archetypeName: null,
+				archetypeColors: null,
+			},
+		]);
 
 		await expect(playerDeckService().reconcilePrimaryArchetype(1, 2, { reviewedOnly: true })).resolves.toBeNull();
 		expect(mockDb.update).not.toHaveBeenCalled();

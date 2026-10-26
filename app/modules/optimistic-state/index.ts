@@ -140,7 +140,9 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 
 	function mergeIntoState(id: number, source: S, owned: ReadonlySet<keyof S>) {
 		const live = options.stateMap.value.get(id);
-		options.stateMap.value.set(id, live ? mergeOwned(live, source, owned) : source);
+		options.stateMap.value.set(id, live
+			? mergeOwned(live, source, owned)
+			: source);
 	}
 
 	/**
@@ -157,11 +159,15 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 	function resultFor(result: FlushResult<S>, id: number): S | undefined {
 		if (result == null)
 			return undefined;
-		return result instanceof Map ? result.get(id) : result as S;
+		return result instanceof Map
+			? result.get(id)
+			: result as S;
 	}
 
 	function normalizeTargets(targets: number | readonly number[]): readonly number[] {
-		return typeof targets === 'number' ? [targets] : targets;
+		return typeof targets === 'number'
+			? [targets]
+			: targets;
 	}
 
 	/**
@@ -176,7 +182,9 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 		const queue = createKeyedQueue();
 
 		const debouncedFlush = useDebounceFn(() => {
-			const entries = [...pending.entries()];
+			const entries = [
+				...pending.entries(),
+			];
 			pending.clear();
 
 			for (const [key, entry] of entries) {
@@ -184,8 +192,12 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 				// Pending claims stay live through the in-flight flush and are
 				// released only once the result (or rollback) has been merged.
 				const targets = entry.targets;
-				const [firstId, firstTarget] = [...targets.entries()][0]!;
-				const snapshots = new Map([...targets.entries()].map(([id, t]) => [id, t.snapshot]));
+				const [firstId, firstTarget] = [
+					...targets.entries(),
+				][0]!;
+				const snapshots = new Map([
+					...targets.entries(),
+				].map(([id, t]) => [id, t.snapshot]));
 				const flushEntry: FlushEntry<S, P> = {
 					targets: snapshots,
 					payload: entry.payload,
@@ -254,7 +266,10 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 		) {
 			const ids = normalizeTargets(targets);
 			const existing = pending.get(key);
-			const entry = existing ?? { targets: new Map<number, TargetState<S>>(), payload: undefined as P };
+			const entry = existing ?? {
+				targets: new Map<number, TargetState<S>>(),
+				payload: undefined as P,
+			};
 
 			let touched = false;
 			for (const id of ids) {
@@ -277,7 +292,11 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 						target.owned.add(field);
 				}
 				else {
-					entry.targets.set(id, { snapshot: current, owned, ...claim(id, owned) });
+					entry.targets.set(id, {
+						snapshot: current,
+						owned,
+						...claim(id, owned),
+					});
 				}
 			}
 
@@ -334,7 +353,11 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 				continue;
 			options.stateMap.value.set(id, optimistic);
 			const owned = deriveOwnership(current, optimistic, ownership?.serverOwns);
-			applied.set(id, { snapshot: current, owned, ...claim(id, owned) });
+			applied.set(id, {
+				snapshot: current,
+				owned,
+				...claim(id, owned),
+			});
 		}
 
 		if (applied.size === 0)

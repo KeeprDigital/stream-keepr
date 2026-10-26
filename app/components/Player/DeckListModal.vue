@@ -94,8 +94,12 @@ const sideboardGroupContainer = ref<HTMLElement | null>(null);
 const { width: mainboardGroupWidth } = useElementSize(mainboardGroupContainer);
 const { width: sideboardGroupWidth } = useElementSize(sideboardGroupContainer);
 
-const mainboardGroups = computed(() => [...mainboardByType.value.entries()]);
-const sideboardGroups = computed(() => [...sideboardByType.value.entries()]);
+const mainboardGroups = computed(() => [
+	...mainboardByType.value.entries(),
+]);
+const sideboardGroups = computed(() => [
+	...sideboardByType.value.entries(),
+]);
 
 function getGroupColumnWeight<T>(groups: readonly (readonly [string, T[]])[]) {
 	return groups.reduce((total, [, groupedCards]) => total + groupedCards.length + 1, 0);
@@ -162,8 +166,12 @@ const modalContentClass = computed(() => {
 		: 0;
 	const preferredWidth = MODAL_BASE_CONTENT_WIDTH
 		+ (mainboardPreferredColumns * MODAL_DECK_TYPE_MIN_COLUMN_WIDTH)
-		+ (sideboardPreferredColumns > 0 ? sideboardPreferredColumns * MODAL_DECK_TYPE_MIN_COLUMN_WIDTH : 0)
-		+ ((mainboardPreferredColumns > 0 && sideboardPreferredColumns > 0) ? DECK_TYPE_COLUMN_GAP : 0);
+		+ (sideboardPreferredColumns > 0
+			? sideboardPreferredColumns * MODAL_DECK_TYPE_MIN_COLUMN_WIDTH
+			: 0)
+		+ ((mainboardPreferredColumns > 0 && sideboardPreferredColumns > 0)
+			? DECK_TYPE_COLUMN_GAP
+			: 0);
 
 	return MODAL_WIDTH_BUCKETS.find(({ maxWidth }) => preferredWidth <= maxWidth)?.className ?? 'sm:max-w-screen-xl';
 });

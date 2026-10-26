@@ -42,7 +42,9 @@ describe('graphic Asset Revision status', () => {
 		mockInspectGraphicAssetRevision.mockReset().mockResolvedValue({ outcome: 'missing' });
 		mockSetResponseHeader.mockReset();
 		mockRouterParam.mockReset().mockImplementation((_event, name: string) =>
-			name === 'assetId' ? 'asset-1' : 'revision-1');
+			name === 'assetId'
+				? 'asset-1'
+				: 'revision-1');
 	});
 
 	it('maps a retryable catalogue failure to 503 with retry guidance', async () => {
@@ -63,7 +65,9 @@ describe('graphic Asset Revision status', () => {
 
 	it('answers a blank revision segment with 400 rather than an unclassified failure', async () => {
 		mockRouterParam.mockImplementation((_event, name: string) =>
-			name === 'assetId' ? 'asset-1' : '');
+			name === 'assetId'
+				? 'asset-1'
+				: '');
 		const handler = (await import(routePath)).default;
 
 		await expect(handler(stubH3Event())).rejects.toMatchObject({

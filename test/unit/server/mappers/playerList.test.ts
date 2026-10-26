@@ -5,14 +5,20 @@ import { createMockPlayerList } from '~~/test/helpers/fixtures';
 describe('playerList mapper', () => {
 	describe('mapPlayerListToSummaryResponse', () => {
 		it('includes memberCount in the response', () => {
-			const list = { ...createMockPlayerList(), memberCount: 8 };
+			const list = {
+				...createMockPlayerList(),
+				memberCount: 8,
+			};
 			const result = mapPlayerListToSummaryResponse(list);
 
 			expect(result.memberCount).toBe(8);
 		});
 
 		it('includes memberCount of zero', () => {
-			const list = { ...createMockPlayerList(), memberCount: 0 };
+			const list = {
+				...createMockPlayerList(),
+				memberCount: 0,
+			};
 			const result = mapPlayerListToSummaryResponse(list);
 
 			expect(result.memberCount).toBe(0);

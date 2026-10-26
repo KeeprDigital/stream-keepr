@@ -15,7 +15,9 @@ function r2Object(key: string): R2Object {
 		size: 5,
 		etag: 'etag-1',
 		httpEtag: '"etag-1"',
-		checksums: { toJSON: () => ({}) },
+		checksums: {
+			toJSON: () => ({}),
+		},
 		uploaded: new Date('2026-07-27T04:00:00.000Z'),
 		httpMetadata: { contentType: 'text/plain' },
 		customMetadata: { digest: 'example' },
@@ -108,16 +110,23 @@ describe('the R2 Graphic Asset object-store adapter', () => {
 				identity,
 				uploadId: 'upload-1' as never,
 			},
-			parts: [{
-				partNumber: 1,
-				partIdentity: 'etag-1' as never,
-				byteLength: 5,
-			}],
+			parts: [
+				{
+					partNumber: 1,
+					partIdentity: 'etag-1' as never,
+					byteLength: 5,
+				},
+			],
 		});
 
 		expect(head).not.toHaveBeenCalled();
-		expect(complete).toHaveBeenCalledWith([{ partNumber: 1, etag: 'etag-1' }]);
-		expect(outcome).toMatchObject({ outcome: 'created', object: { identity } });
+		expect(complete).toHaveBeenCalledWith([
+			{ partNumber: 1, etag: 'etag-1' },
+		]);
+		expect(outcome).toMatchObject({
+			outcome: 'created',
+			object: { identity },
+		});
 	});
 
 	it('says what R2 threw when a multipart part becomes an outage (#633)', async () => {

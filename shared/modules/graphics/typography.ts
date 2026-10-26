@@ -103,7 +103,9 @@ const GRAPHIC_FONT_MAP = new Map<GraphicApplicationFontId, GraphicFontDefinition
 
 export function getGraphicFontDefinition(value: string | null | undefined) {
 	const normalized = value?.trim();
-	return normalized ? GRAPHIC_FONT_MAP.get(normalized as GraphicApplicationFontId) : undefined;
+	return normalized
+		? GRAPHIC_FONT_MAP.get(normalized as GraphicApplicationFontId)
+		: undefined;
 }
 
 export const GRAPHIC_FONT_OPTIONS = GRAPHIC_FONTS.map(font => ({

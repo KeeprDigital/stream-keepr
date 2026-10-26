@@ -4,7 +4,9 @@ import { eventParamsSchema } from '~~/server/schemas/api/event';
 import { updateFeatureMatchAssignmentSchema } from '~~/server/schemas/api/featureMatchAssignment';
 import { getOriginConnectionId } from '~~/server/utils/ably';
 
-const paramsSchema = eventParamsSchema.extend({ assignmentId: z.coerce.number().int().positive() });
+const paramsSchema = eventParamsSchema.extend({
+	assignmentId: z.coerce.number().int().positive(),
+});
 
 export default defineEventHandler(async (event) => {
 	const { id, assignmentId } = await getValidatedRouterParams(event, paramsSchema.parse);

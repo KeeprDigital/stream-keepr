@@ -33,7 +33,11 @@ vi.doMock('~~/server/modules/event-data-publication', () => ({
 const { screenService } = await import('~~/server/services/screen');
 const { screenWriteModule } = await import('~~/server/modules/screen-write');
 
-const provideUnusedGraphicsAssets = () => ({ inspectGraphicAssetRevisions: vi.fn() });
+function provideUnusedGraphicsAssets() {
+	return {
+		inspectGraphicAssetRevisions: vi.fn(),
+	};
+}
 const capability = {
 	assetCapabilitySeed: 'seed',
 	assetCapabilityVersion: 1,
@@ -56,7 +60,12 @@ interface EventEntities {
 
 async function seedEventEntities(eventId: number, label: string): Promise<EventEntities> {
 	const [phase] = await db.insert(schema.phases).values({ eventId, name: `${label} Phase` }).returning({ id: schema.phases.id });
-	const [round] = await db.insert(schema.rounds).values({ eventId, phaseId: phase!.id, name: `${label} Round`, roundNumber: 1 }).returning({ id: schema.rounds.id });
+	const [round] = await db.insert(schema.rounds).values({
+		eventId,
+		phaseId: phase!.id,
+		name: `${label} Round`,
+		roundNumber: 1,
+	}).returning({ id: schema.rounds.id });
 	const [player] = await db.insert(schema.players).values({ eventId, name: `${label} Player` }).returning({ id: schema.players.id });
 	const [list] = await db.insert(schema.playerLists).values({ eventId, name: `${label} List` }).returning({ id: schema.playerLists.id });
 	const [slot] = await db.insert(schema.featureMatchSlots).values({ eventId }).returning({ id: schema.featureMatchSlots.id });
@@ -93,22 +102,76 @@ interface Sample {
 
 /** For each kind of Event Reference, the values a declared field may hold. A new kind fails to compile here until it has some. */
 const SAMPLES: Record<EventReferenceKind, Sample[]> = {
-	phase: [{ name: 'Phase', naming: e => e.phaseId, refusal: { statusCode: 404, message: 'Phase not found' } }],
-	round: [{ name: 'Round', naming: e => e.roundId, refusal: { statusCode: 404, message: 'Round not found' } }],
-	player: [{ name: 'Player', naming: e => e.playerId, refusal: { statusCode: 404, message: 'Player not found' } }],
-	playerList: [{ name: 'Player List', naming: e => e.playerListId, refusal: { statusCode: 404, message: 'Player list not found' } }],
-	featureMatchSlot: [{ name: 'Feature Match Slot', naming: e => e.featureMatchSlotId, refusal: { statusCode: 404, message: 'Feature match slot not found' } }],
-	archetype: [{ name: 'Archetype', naming: e => e.archetypeId, refusal: { statusCode: 404, message: 'Archetype not found' } }],
+	phase: [
+		{
+			name: 'Phase',
+			naming: e => e.phaseId,
+			refusal: { statusCode: 404, message: 'Phase not found' },
+		},
+	],
+	round: [
+		{
+			name: 'Round',
+			naming: e => e.roundId,
+			refusal: { statusCode: 404, message: 'Round not found' },
+		},
+	],
+	player: [
+		{
+			name: 'Player',
+			naming: e => e.playerId,
+			refusal: { statusCode: 404, message: 'Player not found' },
+		},
+	],
+	playerList: [
+		{
+			name: 'Player List',
+			naming: e => e.playerListId,
+			refusal: { statusCode: 404, message: 'Player list not found' },
+		},
+	],
+	featureMatchSlot: [
+		{
+			name: 'Feature Match Slot',
+			naming: e => e.featureMatchSlotId,
+			refusal: { statusCode: 404, message: 'Feature match slot not found' },
+		},
+	],
+	archetype: [
+		{
+			name: 'Archetype',
+			naming: e => e.archetypeId,
+			refusal: { statusCode: 404, message: 'Archetype not found' },
+		},
+	],
 	deckSource: [
-		{ name: 'Player Deck Source', naming: e => ({ type: 'player', playerId: e.playerId }), refusal: { statusCode: 404, message: 'Player not found' } },
-		{ name: 'Broadcast Deck Source', naming: e => ({ type: 'broadcast', broadcastDeckListId: e.broadcastDeckListId }), refusal: { statusCode: 409, code: 'SCREEN_DECK_SOURCE_CONFLICT' } },
+		{
+			name: 'Player Deck Source',
+			naming: e => ({ type: 'player', playerId: e.playerId }),
+			refusal: { statusCode: 404, message: 'Player not found' },
+		},
+		{
+			name: 'Broadcast Deck Source',
+			naming: e => ({ type: 'broadcast', broadcastDeckListId: e.broadcastDeckListId }),
+			refusal: { statusCode: 409, code: 'SCREEN_DECK_SOURCE_CONFLICT' },
+		},
 	],
 };
 
 beforeAll(async () => {
 	const [event, otherEvent] = await db.insert(schema.events).values([
-		{ name: 'Screen Event', game: 'mtg', featureMatchOrientation: 'horizontal', broadcastDeckListsEnabled: true },
-		{ name: 'Other Event', game: 'mtg', featureMatchOrientation: 'horizontal', broadcastDeckListsEnabled: true },
+		{
+			name: 'Screen Event',
+			game: 'mtg',
+			featureMatchOrientation: 'horizontal',
+			broadcastDeckListsEnabled: true,
+		},
+		{
+			name: 'Other Event',
+			game: 'mtg',
+			featureMatchOrientation: 'horizontal',
+			broadcastDeckListsEnabled: true,
+		},
 	]).returning({ id: schema.events.id });
 	eventId = event!.id;
 	own = await seedEventEntities(eventId, 'Own');
@@ -142,7 +205,12 @@ function saveModeConfig(mode: ScreenMode, config: Record<string, unknown>, state
 }
 
 const declaredFields = SCREEN_MODE_VALUES.flatMap(mode =>
-	Object.entries(SCREEN_MODES[mode].eventReferences).map(([field, kind]) => ({ mode, field, kind, declared: `${mode}.${field}: ${kind}` })));
+	Object.entries(SCREEN_MODES[mode].eventReferences).map(([field, kind]) => ({
+		mode,
+		field,
+		kind,
+		declared: `${mode}.${field}: ${kind}`,
+	})));
 
 describe('screen Mode Event References', () => {
 	it('declares every config field naming something in the Event', () => {
@@ -188,7 +256,9 @@ describe('screen Mode Event References', () => {
 			async ({ naming, refusal, index }) => {
 				const value = naming(foreign);
 				const before = await current();
-				const modeConfigs = { [mode]: { [field]: value } };
+				const modeConfigs = {
+					[mode]: { [field]: value },
+				};
 
 				await expect(saveModeConfig(mode, { [field]: value }, before.stateVersion)).rejects.toMatchObject(refusal);
 				await expect(screenWriteModule().updateScreen({
@@ -211,7 +281,9 @@ describe('screen Mode Event References', () => {
 
 		it.each(SAMPLES[kind])('accepts a $name from the Screen\'s own Event', async ({ naming }) => {
 			const before = await current();
-			const saved = await saveModeConfig(mode, { [field]: naming(own) }, before.stateVersion);
+			const saved = await saveModeConfig(mode, {
+				[field]: naming(own),
+			}, before.stateVersion);
 			expect(saved.stateVersion).toBe(before.stateVersion + 1);
 		});
 	});

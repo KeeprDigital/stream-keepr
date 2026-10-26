@@ -40,7 +40,16 @@ function textItem(overrides: Partial<TextGraphicItemConfig> = {}): TextGraphicIt
 }
 
 function stack(overrides: Partial<BroadcastGraphicConfig> = {}): BroadcastGraphicConfig[] {
-	return [{ id: 'lower-third', name: 'Lower Third', items: [textItem()], ...overrides }];
+	return [
+		{
+			id: 'lower-third',
+			name: 'Lower Third',
+			items: [
+				textItem(),
+			],
+			...overrides,
+		},
+	];
 }
 
 describe('graphicInputAuthoring', () => {
@@ -54,15 +63,17 @@ describe('graphicInputAuthoring', () => {
 	it('declares a new Graphic Input optional and staged', () => {
 		const [graphic] = addGraphicInput(stack(), 'lower-third', 'text');
 
-		expect(graphic!.inputs).toEqual([{
-			type: 'text',
-			key: 'input-1',
-			label: 'Input 1',
-			required: false,
-			updatePolicy: 'staged',
-			default: '',
-			maxLength: 1000,
-		}]);
+		expect(graphic!.inputs).toEqual([
+			{
+				type: 'text',
+				key: 'input-1',
+				label: 'Input 1',
+				required: false,
+				updatePolicy: 'staged',
+				default: '',
+				maxLength: 1000,
+			},
+		]);
 	});
 
 	/**
@@ -102,7 +113,12 @@ describe('graphicInputAuthoring', () => {
 			updatePolicy: 'live',
 		});
 
-		expect(patched[0]!.inputs![0]).toMatchObject({ key: 'input-1', label: 'Presenter name', required: true, updatePolicy: 'live' });
+		expect(patched[0]!.inputs![0]).toMatchObject({
+			key: 'input-1',
+			label: 'Presenter name',
+			required: true,
+			updatePolicy: 'live',
+		});
 		expect(patched[0]!.inputs![1]).toMatchObject({ key: 'input-2', type: 'toggle' });
 	});
 
@@ -129,7 +145,12 @@ describe('graphicInputAuthoring', () => {
 			{ value: 'l', label: 'Left' },
 		]);
 
-		expect(graphics[0]!.inputs![0]).toMatchObject({ type: 'choice', options: [{ value: 'l', label: 'Left' }] });
+		expect(graphics[0]!.inputs![0]).toMatchObject({
+			type: 'choice',
+			options: [
+				{ value: 'l', label: 'Left' },
+			],
+		});
 	});
 
 	/**
@@ -174,14 +195,36 @@ describe('graphicInputAuthoring', () => {
 		const unchanged = setGraphicInputMediaKind(graphics, 'lower-third', 'input-1', 'image');
 
 		expect(switched[0]!.inputs![0]).toMatchObject({ type: 'media', mediaKind: 'silent-video', default: null });
-		expect(unchanged[0]!.inputs![0]).toMatchObject({ mediaKind: 'image', default: { assetId: 'asset-1' } });
+		expect(unchanged[0]!.inputs![0]).toMatchObject({
+			mediaKind: 'image',
+			default: { assetId: 'asset-1' },
+		});
 	});
 
 	it('drops the binding and Graphic Placeholder Style of a Graphic Input it stops declaring', () => {
 		const graphics = stack({
-			inputs: [{ type: 'text', key: 'title', label: 'Title', required: false, updatePolicy: 'staged', default: '', maxLength: 20 }],
-			bindings: [{ inputKey: 'title', sourceKey: 'player', fieldId: 'player.name' }],
-			items: [textItem({ placeholderStyles: { title: { fontWeight: 300 }, name: { fontWeight: 900 } } })],
+			inputs: [
+				{
+					type: 'text',
+					key: 'title',
+					label: 'Title',
+					required: false,
+					updatePolicy: 'staged',
+					default: '',
+					maxLength: 20,
+				},
+			],
+			bindings: [
+				{ inputKey: 'title', sourceKey: 'player', fieldId: 'player.name' },
+			],
+			items: [
+				textItem({
+					placeholderStyles: {
+						title: { fontWeight: 300 },
+						name: { fontWeight: 900 },
+					},
+				}),
+			],
 		});
 
 		const [graphic] = deleteGraphicInput(graphics, 'lower-third', 'title');
@@ -189,7 +232,9 @@ describe('graphicInputAuthoring', () => {
 
 		expect(graphic!.inputs).toEqual([]);
 		expect(graphic!.bindings).toEqual([]);
-		expect(item.placeholderStyles).toEqual({ name: { fontWeight: 900 } });
+		expect(item.placeholderStyles).toEqual({
+			name: { fontWeight: 900 },
+		});
 		// The author's own `{title}` text is left alone; it renders nothing until they
 		// declare that key again or edit it away.
 		expect(item.text).toBe('{name} — {title}');
@@ -203,7 +248,9 @@ describe('graphicInputAuthoring', () => {
 		const cleared = patchGraphicPlaceholderStyle(restyled, 'name-line', 'title', null);
 
 		expect((restyled.items[0] as TextGraphicItemConfig).placeholderStyles)
-			.toEqual({ title: { fontWeight: 300, color: '#ff0000' } });
+			.toEqual({
+				title: { fontWeight: 300, color: '#ff0000' },
+			});
 		expect((cleared.items[0] as TextGraphicItemConfig).placeholderStyles).toBeUndefined();
 	});
 });

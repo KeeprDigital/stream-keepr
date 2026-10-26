@@ -38,7 +38,11 @@ mockNuxtImport('useRealtime', () => () => mockAbly);
  */
 
 function createSummary(overrides?: Record<string, any>) {
-	return { ...createMockPlayerList(overrides), memberCount: 0, ...overrides };
+	return {
+		...createMockPlayerList(overrides),
+		memberCount: 0,
+		...overrides,
+	};
 }
 
 describe('usePlayerListStore', () => {
@@ -97,7 +101,9 @@ describe('usePlayerListStore', () => {
 
 	describe('updateList', () => {
 		it('optimistically updates then applies server response', async () => {
-			store.lists = [createSummary({ id: 1, name: 'Old Name' })];
+			store.lists = [
+				createSummary({ id: 1, name: 'Old Name' }),
+			];
 
 			const serverUpdated = createMockPlayerList({ id: 1, name: 'Server Name' });
 			mockRepo.update.mockResolvedValue(serverUpdated);
@@ -112,7 +118,9 @@ describe('usePlayerListStore', () => {
 
 	describe('removeList', () => {
 		it('removes list from state and clears member cache', async () => {
-			store.lists = [createSummary({ id: 1 })];
+			store.lists = [
+				createSummary({ id: 1 }),
+			];
 			store.membersByListId.set(1, [10, 20]);
 			mockRepo.remove.mockResolvedValue({ success: true });
 
@@ -160,7 +168,9 @@ describe('usePlayerListStore', () => {
 
 	describe('addMembers', () => {
 		it('optimistically increments member count', async () => {
-			store.lists = [createSummary({ id: 1, memberCount: 2 })];
+			store.lists = [
+				createSummary({ id: 1, memberCount: 2 }),
+			];
 			store.membersByListId.set(1, [10, 20]);
 			mockRepo.addMembers.mockResolvedValue({ added: 1, memberCount: 3 });
 
@@ -170,7 +180,9 @@ describe('usePlayerListStore', () => {
 		});
 
 		it('corrects member count when server added fewer than expected', async () => {
-			store.lists = [createSummary({ id: 1, memberCount: 2 })];
+			store.lists = [
+				createSummary({ id: 1, memberCount: 2 }),
+			];
 			mockRepo.addMembers.mockResolvedValue({ added: 1, memberCount: 3 });
 
 			await store.addMembers(1, 1, [30, 40]);
@@ -181,7 +193,9 @@ describe('usePlayerListStore', () => {
 
 	describe('removeMember', () => {
 		it('optimistically decrements member count', async () => {
-			store.lists = [createSummary({ id: 1, memberCount: 3 })];
+			store.lists = [
+				createSummary({ id: 1, memberCount: 3 }),
+			];
 			store.membersByListId.set(1, [10, 20, 30]);
 			mockRepo.removeMember.mockResolvedValue({ success: true, memberCount: 2 });
 
@@ -204,7 +218,9 @@ describe('usePlayerListStore', () => {
 
 	describe('reorderMembers', () => {
 		it('optimistically updates cached member order', async () => {
-			store.lists = [createSummary({ id: 1, memberCount: 3 })];
+			store.lists = [
+				createSummary({ id: 1, memberCount: 3 }),
+			];
 			store.membersByListId.set(1, [10, 20, 30]);
 			mockRepo.reorderMembers.mockResolvedValue({ reordered: 3, memberCount: 3 });
 
@@ -228,7 +244,9 @@ describe('usePlayerListStore', () => {
 	 */
 	describe('member mutation failures', () => {
 		it('reports the sentence and rolls the optimistic count back when adding is refused', async () => {
-			store.lists = [createSummary({ id: 1, memberCount: 2 })];
+			store.lists = [
+				createSummary({ id: 1, memberCount: 2 }),
+			];
 			store.membersByListId.set(1, [10, 20]);
 			mockRepo.addMembers.mockRejectedValue(transportFailure({
 				status: 409,
@@ -243,7 +261,9 @@ describe('usePlayerListStore', () => {
 		});
 
 		it('reports the sentence when removing a member is refused', async () => {
-			store.lists = [createSummary({ id: 1, memberCount: 3 })];
+			store.lists = [
+				createSummary({ id: 1, memberCount: 3 }),
+			];
 			store.membersByListId.set(1, [10, 20, 30]);
 			mockRepo.removeMember.mockRejectedValue(transportFailure({
 				status: 403,
@@ -258,7 +278,9 @@ describe('usePlayerListStore', () => {
 		});
 
 		it('reports the sentence when a batch removal is refused', async () => {
-			store.lists = [createSummary({ id: 1, memberCount: 3 })];
+			store.lists = [
+				createSummary({ id: 1, memberCount: 3 }),
+			];
 			mockRepo.batchRemoveMembers.mockRejectedValue(transportFailure({
 				status: 409,
 				body: { message: 'Two of those players have already been dropped' },
@@ -271,7 +293,9 @@ describe('usePlayerListStore', () => {
 		});
 
 		it('reports the sentence and restores the order when a reorder is refused', async () => {
-			store.lists = [createSummary({ id: 1, memberCount: 3 })];
+			store.lists = [
+				createSummary({ id: 1, memberCount: 3 }),
+			];
 			store.membersByListId.set(1, [10, 20, 30]);
 			mockRepo.reorderMembers.mockRejectedValue(transportFailure({
 				status: 409,
@@ -297,7 +321,9 @@ describe('usePlayerListStore', () => {
 		});
 
 		it('shows the transport line rather than a 5xx body detail', async () => {
-			store.lists = [createSummary({ id: 1, memberCount: 2 })];
+			store.lists = [
+				createSummary({ id: 1, memberCount: 2 }),
+			];
 			mockRepo.addMembers.mockRejectedValue(transportFailure({
 				status: 500,
 				body: { message: 'D1_ERROR: no such table: player_list_members' },
@@ -311,7 +337,9 @@ describe('usePlayerListStore', () => {
 		});
 
 		it('reports a rejection that is not an Error as the composable does', async () => {
-			store.lists = [createSummary({ id: 1, memberCount: 2 })];
+			store.lists = [
+				createSummary({ id: 1, memberCount: 2 }),
+			];
 			mockRepo.addMembers.mockRejectedValue({ message: 'not an Error at all' });
 
 			await store.addMembers(1, 1, [30]);
@@ -327,7 +355,9 @@ describe('usePlayerListStore', () => {
 			it('adds list from remote message', () => {
 				store.lists = [];
 
-				ablyCallbacks.playerList!['playerList:created']!({ playerList: { id: 10, name: 'Remote List', memberCount: 0 } });
+				ablyCallbacks.playerList!['playerList:created']!({
+					playerList: { id: 10, name: 'Remote List', memberCount: 0 },
+				});
 
 				expect(store.lists).toHaveLength(1);
 			});
@@ -336,7 +366,9 @@ describe('usePlayerListStore', () => {
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 				store.lists = [];
 
-				ablyCallbacks.playerList!['playerList:created']!({ playerList: { id: 10, name: 'Remote List', memberCount: 0 } });
+				ablyCallbacks.playerList!['playerList:created']!({
+					playerList: { id: 10, name: 'Remote List', memberCount: 0 },
+				});
 
 				expect(store.lists).toHaveLength(0);
 			});
@@ -344,18 +376,26 @@ describe('usePlayerListStore', () => {
 
 		describe('playerList:updated', () => {
 			it('updates existing list from remote message', () => {
-				store.lists = [createSummary({ id: 10, name: 'Old' })];
+				store.lists = [
+					createSummary({ id: 10, name: 'Old' }),
+				];
 
-				ablyCallbacks.playerList!['playerList:updated']!({ playerList: { id: 10, name: 'New' } });
+				ablyCallbacks.playerList!['playerList:updated']!({
+					playerList: { id: 10, name: 'New' },
+				});
 
 				expect(store.lists[0]!.name).toBe('New');
 			});
 
 			it('skips when isSelfOrigin returns true', () => {
-				store.lists = [createSummary({ id: 10, name: 'Old' })];
+				store.lists = [
+					createSummary({ id: 10, name: 'Old' }),
+				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
-				ablyCallbacks.playerList!['playerList:updated']!({ playerList: { id: 10, name: 'New' } });
+				ablyCallbacks.playerList!['playerList:updated']!({
+					playerList: { id: 10, name: 'New' },
+				});
 
 				expect(store.lists[0]!.name).toBe('Old');
 			});
@@ -363,7 +403,9 @@ describe('usePlayerListStore', () => {
 
 		describe('playerList:deleted', () => {
 			it('removes list and member cache from remote message', () => {
-				store.lists = [createSummary({ id: 10 })];
+				store.lists = [
+					createSummary({ id: 10 }),
+				];
 				store.membersByListId.set(10, [1, 2]);
 
 				ablyCallbacks.playerList!['playerList:deleted']!({ listId: 10 });
@@ -375,27 +417,48 @@ describe('usePlayerListStore', () => {
 
 		describe('playerList:membersChanged', () => {
 			it('sets authoritative count on added action', () => {
-				store.lists = [createSummary({ id: 10, memberCount: 2 })];
+				store.lists = [
+					createSummary({ id: 10, memberCount: 2 }),
+				];
 
-				ablyCallbacks.playerList!['playerList:membersChanged']!({ listId: 10, action: 'added', playerIds: [1, 2, 3], memberCount: 8 });
+				ablyCallbacks.playerList!['playerList:membersChanged']!({
+					listId: 10,
+					action: 'added',
+					playerIds: [1, 2, 3],
+					memberCount: 8,
+				});
 
 				expect(store.lists[0]!.memberCount).toBe(8);
 			});
 
 			it('invalidates member cache on any change', () => {
-				store.lists = [createSummary({ id: 10 })];
+				store.lists = [
+					createSummary({ id: 10 }),
+				];
 				store.membersByListId.set(10, [1, 2]);
 
-				ablyCallbacks.playerList!['playerList:membersChanged']!({ listId: 10, action: 'reordered', playerIds: [2, 1], memberCount: 2 });
+				ablyCallbacks.playerList!['playerList:membersChanged']!({
+					listId: 10,
+					action: 'reordered',
+					playerIds: [2, 1],
+					memberCount: 2,
+				});
 
 				expect(store.membersByListId.has(10)).toBe(false);
 			});
 
 			it('skips when isSelfOrigin returns true', () => {
-				store.lists = [createSummary({ id: 10, memberCount: 2 })];
+				store.lists = [
+					createSummary({ id: 10, memberCount: 2 }),
+				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
-				ablyCallbacks.playerList!['playerList:membersChanged']!({ listId: 10, action: 'added', playerIds: [1], memberCount: 3 });
+				ablyCallbacks.playerList!['playerList:membersChanged']!({
+					listId: 10,
+					action: 'added',
+					playerIds: [1],
+					memberCount: 3,
+				});
 
 				expect(store.lists[0]!.memberCount).toBe(2);
 			});
@@ -410,8 +473,14 @@ describe('usePlayerListStore', () => {
 	 * the lifetime it belongs to, so neither its answer nor its rollback lands there.
 	 */
 	describe.each([
-		['Event B', [2]],
-		['Event A, loaded again since', [2, 1]],
+		[
+			'Event B',
+			[2],
+		],
+		[
+			'Event A, loaded again since',
+			[2, 1],
+		],
 	])('a Player List write answered after the operator moved on to %s', (_, switches) => {
 		/** Ends on Lists 1 and 2 with members cached, as Event A's own are when loaded again. */
 		async function switchAway() {
@@ -424,11 +493,17 @@ describe('usePlayerListStore', () => {
 				mockRepo.getMemberIds.mockResolvedValue([7]);
 				await store.loadByEventId(eventId);
 			}
-			return { lists: structuredClone(toRaw(store.lists)), members: new Map(store.membersByListId) };
+			return {
+				lists: structuredClone(toRaw(store.lists)),
+				members: new Map(store.membersByListId),
+			};
 		}
 
 		function inEventA() {
-			store.lists = [createSummary({ id: 2, memberCount: 1 }), createSummary({ id: 1, memberCount: 2 })];
+			store.lists = [
+				createSummary({ id: 2, memberCount: 1 }),
+				createSummary({ id: 1, memberCount: 2 }),
+			];
 			store.membersByListId.set(1, [10, 20]);
 			store.membersByListId.set(2, [30]);
 		}
@@ -494,7 +569,9 @@ describe('usePlayerListStore', () => {
 
 	describe('$reset', () => {
 		it('clears all state', () => {
-			store.lists = [createSummary()];
+			store.lists = [
+				createSummary(),
+			];
 			store.membersByListId.set(1, [10]);
 			store.error = 'some error';
 

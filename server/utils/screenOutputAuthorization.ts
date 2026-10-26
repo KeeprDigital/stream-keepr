@@ -33,7 +33,9 @@ export async function screenOutputReader(
 			return 'capability';
 	}
 
-	return (await optionalUserSession(event)) ? 'session' : null;
+	return (await optionalUserSession(event))
+		? 'session'
+		: null;
 }
 
 /** Whether this request may read data published exclusively by one Screen. */

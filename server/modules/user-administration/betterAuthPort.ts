@@ -59,12 +59,16 @@ export async function betterAuthUserAdministrationPort(
 
 		findByEmail: async (email) => {
 			const found = await context.internalAdapter.findUserByEmail(email);
-			return found ? toAccount(found.user) : null;
+			return found
+				? toAccount(found.user)
+				: null;
 		},
 
 		findById: async (userId) => {
 			const found = await context.internalAdapter.findUserById(userId);
-			return found ? toAccount(found) : null;
+			return found
+				? toAccount(found)
+				: null;
 		},
 
 		createUser: async ({ email, name }) => {
@@ -78,14 +82,18 @@ export async function betterAuthUserAdministrationPort(
 			// ADR-0010 asks for — the first password is set by whoever redeems the
 			// link. Without a role the plugin's own `defaultRole` applies, so an
 			// invited operator cannot silently arrive as an administrator.
-			const { user } = await auth.api.createUser({ body: { email, name } });
+			const { user } = await auth.api.createUser({
+				body: { email, name },
+			});
 
 			// Read back rather than mapped from the response: `createUser` is typed
 			// without the admin plugin's fields, so `role` and `banned` are not on
 			// what it returns, and reading them through a cast would be inventing
 			// facts about a row this can simply go and look at.
 			const stored = await context.internalAdapter.findUserById(user.id);
-			return stored ? toAccount(stored) : toAccount({ ...user, role: null });
+			return stored
+				? toAccount(stored)
+				: toAccount({ ...user, role: null });
 		},
 
 		// An invited account has no `credential` row until its link is redeemed, so
@@ -203,6 +211,8 @@ function toAccount(row: Record<string, unknown>): AdministeredUser {
 		// account.
 		banned: banned === true,
 		banReason: banReason ?? null,
-		createdAt: createdAt ? new Date(createdAt).toISOString() : new Date(0).toISOString(),
+		createdAt: createdAt
+			? new Date(createdAt).toISOString()
+			: new Date(0).toISOString(),
 	};
 }

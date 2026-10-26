@@ -76,7 +76,9 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		screenId = screen.id;
 		const capabilityResponse = await $fetch<{ assetCapability: string }>(
 			`/api/events/${eventId}/screens/${screenId}/asset-capability`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 		capability = capabilityResponse.assetCapability;
 
@@ -101,7 +103,11 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		);
 		const upload = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-			{ method: 'PUT', headers: { cookie: graphicsAuthorCookie }, body: pixelPng },
+			{
+				method: 'PUT',
+				headers: { cookie: graphicsAuthorCookie },
+				body: pixelPng,
+			},
 		);
 		const operation = await expectOperationResult(upload);
 		assetId = operation.result.assetId;
@@ -122,7 +128,10 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		} as never);
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: config.layout } },
+			{
+				method: 'PATCH',
+				body: { layout: config.layout },
+			},
 		);
 	});
 
@@ -141,7 +150,9 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 	});
 
 	it('streams full, conditional, and byte-range responses through the same capability', async () => {
-		const full = await fetch(contentPath(), { headers: authorizedHeaders() });
+		const full = await fetch(contentPath(), {
+			headers: authorizedHeaders(),
+		});
 		expect(full.status).toBe(200);
 		expect(full.headers.get('content-type')).toBe('image/png');
 		expect(full.headers.get('content-length')).toBe(String(pixelPng.byteLength));
@@ -181,7 +192,9 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 	it('answers the Screen lookup by slug to the capability alone, with no session', async () => {
 		const response = await anonymousFetch(
 			`/api/screen-output/events/${eventId}/screens/slug/unattended-overlay`,
-			{ headers: authorizedHeaders() },
+			{
+				headers: authorizedHeaders(),
+			},
 		);
 
 		expect(response.status).toBe(200);
@@ -204,7 +217,9 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 
 		const response = await anonymousFetch(
 			`/api/screen-output/events/${eventId}/screens/slug/not-this-one`,
-			{ headers: authorizedHeaders() },
+			{
+				headers: authorizedHeaders(),
+			},
 		);
 
 		expect(response.status).toBe(404);
@@ -214,7 +229,10 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 	it('range-delivers the exact revision when native media sends its path-scoped capability cookie', async () => {
 		const session = await fetch(
 			`/api/screen-output/screens/${screenId}/asset-capability-session`,
-			{ method: 'POST', headers: authorizedHeaders() },
+			{
+				method: 'POST',
+				headers: authorizedHeaders(),
+			},
 		);
 		expect(session.status).toBe(200);
 		expect(session.headers.get('cache-control')).toBe('private, no-store');
@@ -244,10 +262,15 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: config.layout } },
+			{
+				method: 'PATCH',
+				body: { layout: config.layout },
+			},
 		);
 
-		const response = await fetch(contentPath(), { headers: authorizedHeaders() });
+		const response = await fetch(contentPath(), {
+			headers: authorizedHeaders(),
+		});
 		expect(response.status).toBe(404);
 	});
 
@@ -256,7 +279,10 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		config.layout.frame.backgroundImage = { kind: 'asset', assetId, revisionId };
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: config.layout } },
+			{
+				method: 'PATCH',
+				body: { layout: config.layout },
+			},
 		);
 		const previous = capability;
 		const rotation = await fetch(
@@ -284,7 +310,9 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 			headers: { authorization: `Bearer ${previous}` },
 		});
 		expect(revoked.status).toBe(404);
-		const authorized = await fetch(contentPath(), { headers: authorizedHeaders() });
+		const authorized = await fetch(contentPath(), {
+			headers: authorizedHeaders(),
+		});
 		expect(authorized.status).toBe(200);
 	});
 
@@ -334,16 +362,31 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		const IOS_CHROMIUM = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 CriOS/138.0 Mobile/15E148 Safari/604.1';
 		const CHROMIUM = 'Mozilla/5.0 Chrome/138.0.0.0 Safari/537.36';
 
-		for (const userAgent of [SAFARI, IOS_CHROMIUM, CHROMIUM, undefined]) {
-			const engine: Record<string, string> = userAgent ? { 'user-agent': userAgent } : {};
+		for (const userAgent of [
+			SAFARI,
+			IOS_CHROMIUM,
+			CHROMIUM,
+			undefined,
+		]) {
+			const engine: Record<string, string> = userAgent
+				? { 'user-agent': userAgent }
+				: {};
 			const session = await fetch(
 				`/api/screen-output/screens/${screenId}/asset-capability-session`,
-				{ method: 'POST', headers: { ...Object.fromEntries(authorizedHeaders()), ...engine } },
+				{
+					method: 'POST',
+					headers: {
+						...Object.fromEntries(authorizedHeaders()),
+						...engine,
+					},
+				},
 			);
 			expect(session.status).toBe(200);
 			expect(await session.json()).not.toHaveProperty('unplayableRevisions');
 
-			const delivered = await fetch(contentPath(), { headers: authorizedHeaders(engine) });
+			const delivered = await fetch(contentPath(), {
+				headers: authorizedHeaders(engine),
+			});
 			expect(delivered.status).toBe(200);
 		}
 	});
@@ -351,7 +394,9 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 	it('deleting the Screen revokes its current capability', async () => {
 		await $fetch(`/api/events/${eventId}/screens/${screenId}`, { method: 'DELETE' });
 
-		const response = await fetch(contentPath(), { headers: authorizedHeaders() });
+		const response = await fetch(contentPath(), {
+			headers: authorizedHeaders(),
+		});
 		expect(response.status).toBe(404);
 	});
 });

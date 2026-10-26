@@ -2,7 +2,9 @@ import type { GraphicAssetId, GraphicAssetRevisionId } from '~~/shared/types/gra
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+const { mockApiFetch } = vi.hoisted(() => ({
+	mockApiFetch: vi.fn(),
+}));
 
 mockNuxtImport('$fetch', () => mockApiFetch);
 

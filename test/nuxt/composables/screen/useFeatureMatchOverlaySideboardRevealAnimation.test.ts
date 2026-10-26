@@ -17,18 +17,44 @@ function overlayConfig(): FeatureMatchOverlayModeConfig {
 			canvasWidth: 1920,
 			canvasHeight: 1080,
 		}),
-		{ animation: { enter: { ...LINEAR, fade: { opacity: 0 } }, exit: { ...LINEAR, fade: { opacity: 0 } } } },
+		{
+			animation: {
+				enter: {
+					...LINEAR,
+					fade: { opacity: 0 },
+				},
+				exit: {
+					...LINEAR,
+					fade: { opacity: 0 },
+				},
+			},
+		},
 	);
 	return {
-		layout: { composition: { ...createFeatureMatchLayoutComposition(), items: [deckList] } },
+		layout: {
+			composition: {
+				...createFeatureMatchLayoutComposition(),
+				items: [deckList],
+			},
+		},
 	} as unknown as FeatureMatchOverlayModeConfig;
 }
 
 function context(player1Revealed: boolean): GraphicsFeatureMatchContext {
 	return {
 		clockDisplayTime: '0:00',
-		player1: { lifeTotal: null, gameWins: 0, sideboard: [], sideboardRevealed: player1Revealed },
-		player2: { lifeTotal: null, gameWins: 0, sideboard: null, sideboardRevealed: false },
+		player1: {
+			lifeTotal: null,
+			gameWins: 0,
+			sideboard: [],
+			sideboardRevealed: player1Revealed,
+		},
+		player2: {
+			lifeTotal: null,
+			gameWins: 0,
+			sideboard: null,
+			sideboardRevealed: false,
+		},
 		bestOf: 3,
 	};
 }
@@ -78,10 +104,18 @@ describe('useFeatureMatchOverlaySideboardRevealAnimation', () => {
 		expect(itemAnimation.value).toBeUndefined();
 
 		featureMatch.value = context(true);
-		expect(itemAnimation.value).toEqual({ 'side-1': [{ phase: 'enter', elapsed: 0 }] });
+		expect(itemAnimation.value).toEqual({
+			'side-1': [
+				{ phase: 'enter', elapsed: 0 },
+			],
+		});
 
 		tick(250);
-		expect(itemAnimation.value).toEqual({ 'side-1': [{ phase: 'enter', elapsed: 250 }] });
+		expect(itemAnimation.value).toEqual({
+			'side-1': [
+				{ phase: 'enter', elapsed: 250 },
+			],
+		});
 	});
 
 	it('drops a settled trigger and stops projecting entirely', () => {
@@ -89,7 +123,11 @@ describe('useFeatureMatchOverlaySideboardRevealAnimation', () => {
 
 		featureMatch.value = context(false);
 		tick(250);
-		expect(itemAnimation.value).toEqual({ 'side-1': [{ phase: 'exit', elapsed: 250 }] });
+		expect(itemAnimation.value).toEqual({
+			'side-1': [
+				{ phase: 'exit', elapsed: 250 },
+			],
+		});
 
 		// Past delay + duration the trigger settles: the flag's renders-nothing
 		// state takes over, and no animation frame stays scheduled for a quiet flag.

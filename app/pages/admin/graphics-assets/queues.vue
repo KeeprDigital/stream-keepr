@@ -199,13 +199,19 @@ const OUTCOME_SUMMARIES: Record<GraphicsQueueActionOutcome, string> = {
 };
 
 function severityColor(severity: GraphicsStorageHealthAlertSeverity) {
-	return severity === 'critical' ? 'error' : severity === 'warning' ? 'warning' : 'info';
+	return severity === 'critical'
+		? 'error'
+		: severity === 'warning'
+			? 'warning'
+			: 'info';
 }
 
 function outcomeColor(outcome: GraphicsQueueActionOutcome) {
 	return outcome === 'completed'
 		? 'success'
-		: outcome === 'already-in-state' ? 'neutral' : 'error';
+		: outcome === 'already-in-state'
+			? 'neutral'
+			: 'error';
 }
 
 function isSelected(item: GraphicsOperationalQueueItem) {
@@ -229,7 +235,9 @@ function byteEvidence(observed: {
 	if (!observed.present)
 		return 'No bytes present at the expected identity.';
 	return `${formatByteCount(observed.byteLength ?? 0)}`
-		+ `${observed.canonicalMime ? ` · ${observed.canonicalMime}` : ''}`;
+		+ `${observed.canonicalMime
+			? ` · ${observed.canonicalMime}`
+			: ''}`;
 }
 
 const discrepancyDetail = computed(() =>
@@ -238,10 +246,14 @@ const discrepancyDetail = computed(() =>
 		: null);
 
 const assetDetail = computed(() =>
-	inspection.value?.detail.kind === 'graphic-asset' ? inspection.value.detail : null);
+	inspection.value?.detail.kind === 'graphic-asset'
+		? inspection.value.detail
+		: null);
 
 const revisionDetail = computed(() =>
-	inspection.value?.detail.kind === 'graphic-asset-revision' ? inspection.value.detail : null);
+	inspection.value?.detail.kind === 'graphic-asset-revision'
+		? inspection.value.detail
+		: null);
 
 const operationDetail = computed(() =>
 	inspection.value?.detail.kind === 'graphics-ingestion-operation'
@@ -283,7 +295,9 @@ async function run(action: GraphicsQueueAction, perform: () => Promise<GraphicsQ
 			return;
 		const status = statusOf(caught);
 		report(
-			status === undefined ? 'retryable-unavailable' : graphicsQueueOutcomeFromStatus(status),
+			status === undefined
+				? 'retryable-unavailable'
+				: graphicsQueueOutcomeFromStatus(status),
 			describeFailure(caught, 'The action could not be completed.'),
 		);
 	}
@@ -302,7 +316,11 @@ async function runDiscrepancyAction(action: GraphicsQueueAction) {
 	await run(action, async () => graphicsDiscrepancyQueueOutcome(
 		await $fetch<GraphicsDiscrepancyActionOutcome>(
 			`/api/admin/graphics-assets/discrepancies/${subjectId}/actions`,
-			{ method: 'POST', headers: administratorHeaders(), body: { action } },
+			{
+				method: 'POST',
+				headers: administratorHeaders(),
+				body: { action },
+			},
 		),
 	));
 }
@@ -315,7 +333,11 @@ async function repairWithExactBytes(fileEvent: Event) {
 	await run('repair-with-exact-bytes', async () => graphicsDiscrepancyQueueOutcome(
 		await $fetch<GraphicsDiscrepancyActionOutcome>(
 			`/api/admin/graphics-assets/discrepancies/${subjectId}/repair`,
-			{ method: 'PUT', headers: administratorHeaders(), body: file },
+			{
+				method: 'PUT',
+				headers: administratorHeaders(),
+				body: file,
+			},
 		),
 	));
 	repairRequested.value = false;
@@ -329,7 +351,11 @@ async function restoreGraphicAsset() {
 		outcome: GraphicsQueueActionOutcome;
 	}>(
 		`/api/admin/graphics-assets/${subjectId}/lifecycle-actions`,
-		{ method: 'POST', headers: administratorHeaders(), body: { action: 'restore' } },
+		{
+			method: 'POST',
+			headers: administratorHeaders(),
+			body: { action: 'restore' },
+		},
 	)).outcome);
 }
 
@@ -341,7 +367,10 @@ async function retryIngestion() {
 		outcome: GraphicsQueueActionOutcome;
 	}>(
 		`/api/admin/graphics-assets/ingestion-operations/${operation.operationId}/retry`,
-		{ method: 'POST', headers: administratorHeaders() },
+		{
+			method: 'POST',
+			headers: administratorHeaders(),
+		},
 	)).outcome);
 }
 
@@ -353,7 +382,10 @@ async function retryRelease() {
 		outcome: GraphicsQueueActionOutcome;
 	}>(
 		`/api/admin/graphics-assets/ingestion-operations/${strand.operationId}/release-staged-input`,
-		{ method: 'POST', headers: administratorHeaders() },
+		{
+			method: 'POST',
+			headers: administratorHeaders(),
+		},
 	)).outcome);
 }
 

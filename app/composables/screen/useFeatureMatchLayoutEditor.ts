@@ -80,7 +80,10 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 
 	/** Record the current layout as an undo step, without writing anything. */
 	function checkpoint(edit: FeatureMatchLayoutEditOptions = {}) {
-		history.value = recordEdit(history.value, snapshot(), { now: Date.now(), key: edit.coalesce });
+		history.value = recordEdit(history.value, snapshot(), {
+			now: Date.now(),
+			key: edit.coalesce,
+		});
 	}
 
 	/** Write part of the mode config as one undoable edit. */
@@ -135,7 +138,9 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		const composition = apply(current);
 		if (composition === current)
 			return false;
-		edit({ layout: { ...config.value.layout, composition } }, editOptions);
+		edit({
+			layout: { ...config.value.layout, composition },
+		}, editOptions);
 		return true;
 	}
 
@@ -159,7 +164,9 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		const location = findGraphicItem(config.value.layout.composition, current.itemId);
 		if (location?.group)
 			return location.group;
-		return location?.item.type === 'group' ? location.item : null;
+		return location?.item.type === 'group'
+			? location.item
+			: null;
 	});
 
 	function addGroupChild(kind: Exclude<GraphicItemKind, 'group'>) {
@@ -287,8 +294,11 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 	function nudge(delta: { x: number; y: number }) {
 		const target = selection.value;
 		const frame = editorSelectionFrame(config.value.layout, target);
-		if (frame)
-			setRect(target, nudgeRect(frame.rect, delta), { coalesce: `nudge:${target.type}:${'itemId' in target ? target.itemId : ''}` });
+		if (frame) {
+			setRect(target, nudgeRect(frame.rect, delta), { coalesce: `nudge:${target.type}:${'itemId' in target
+				? target.itemId
+				: ''}` });
+		}
 	}
 
 	return {

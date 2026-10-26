@@ -26,7 +26,12 @@ export const GRAPHIC_ASSET_KIND_VALUES = ['image', 'silent-video', 'font'] as co
 export const GRAPHIC_ASSET_LIFECYCLE_STATE_VALUES = ['active', 'retired', 'trashed'] as const;
 export const GRAPHIC_ASSET_CONTENT_AVAILABILITY_VALUES = ['available', 'unavailable'] as const;
 export const GRAPHICS_DERIVATIVE_KIND_VALUES = ['thumbnail', 'video-poster', 'font-specimen'] as const;
-export const GRAPHICS_INGESTION_SOURCE_VALUES = ['local-upload', 'remote-copy', 'replacement', 'template-package'] as const;
+export const GRAPHICS_INGESTION_SOURCE_VALUES = [
+	'local-upload',
+	'remote-copy',
+	'replacement',
+	'template-package',
+] as const;
 export const GRAPHICS_DUPLICATE_CONTENT_POLICY_VALUES = ['reuse', 'create-separate'] as const;
 /**
  * Written out rather than aliased to the shared `GRAPHIC_ASSET_PURGE_REASONS`.
@@ -94,7 +99,9 @@ export const graphicAssets = sqliteTable('graphic_assets', {
 	name: text('name').notNull(),
 	kind: text('kind', { enum: GRAPHIC_ASSET_KIND_VALUES }).notNull(),
 	lifecycleState: text('lifecycle_state', { enum: GRAPHIC_ASSET_LIFECYCLE_STATE_VALUES }).notNull().default('active'),
-	trashPriorState: text('trash_prior_state', { enum: ['active', 'retired'] }),
+	trashPriorState: text('trash_prior_state', {
+		enum: ['active', 'retired'],
+	}),
 	trashedAt: integer('trashed_at', { mode: 'timestamp_ms' }),
 	trashRecoverableUntil: integer('trash_recoverable_until', { mode: 'timestamp_ms' }),
 	createdAt,
@@ -206,7 +213,9 @@ export const graphicAssetEventAssociations = sqliteTable('graphic_asset_event_as
 		.notNull(),
 	createdAt,
 }, table => [
-	primaryKey({ columns: [table.assetId, table.eventId] }),
+	primaryKey({
+		columns: [table.assetId, table.eventId],
+	}),
 	index('graphic_asset_event_associations_event_idx').on(table.eventId),
 ]);
 
@@ -357,7 +366,9 @@ export const graphicsCanonicalWriteCandidates = sqliteTable('graphics_canonical_
 	byteLength: integer('byte_length').notNull(),
 	createdAt,
 }, table => [
-	primaryKey({ columns: [table.operationId, table.digest] }),
+	primaryKey({
+		columns: [table.operationId, table.digest],
+	}),
 	index('graphics_canonical_write_candidates_digest_idx').on(table.digest),
 ]);
 

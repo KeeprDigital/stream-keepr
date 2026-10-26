@@ -55,7 +55,14 @@ describe('parseDeckListRecords', () => {
 
 	it('maps record fields to DeckListCard format', () => {
 		const records = [
-			{ l: 'en', n: 'Lightning Bolt', s: 'STA', q: 4, c: 0, t: 'Instant' },
+			{
+				l: 'en',
+				n: 'Lightning Bolt',
+				s: 'STA',
+				q: 4,
+				c: 0,
+				t: 'Instant',
+			},
 		];
 		const result = parseDeckListRecords(records);
 
@@ -72,7 +79,14 @@ describe('parseDeckListRecords', () => {
 
 	it('maps compartment 99 to sideboard', () => {
 		const records = [
-			{ l: 'en', n: 'Negate', s: null, q: 2, c: 99, t: 'Instant' },
+			{
+				l: 'en',
+				n: 'Negate',
+				s: null,
+				q: 2,
+				c: 99,
+				t: 'Instant',
+			},
 		];
 		const result = parseDeckListRecords(records);
 
@@ -81,8 +95,22 @@ describe('parseDeckListRecords', () => {
 
 	it('excludes companion records from normal deck cards', () => {
 		const records = [
-			{ l: 'lutri', n: 'Lutri, the Spellchaser', s: null, q: 1, c: 4, t: 'Creature' },
-			{ l: 'bolt', n: 'Lightning Bolt', s: null, q: 1, c: 0, t: 'Instant' },
+			{
+				l: 'lutri',
+				n: 'Lutri, the Spellchaser',
+				s: null,
+				q: 1,
+				c: 4,
+				t: 'Creature',
+			},
+			{
+				l: 'bolt',
+				n: 'Lightning Bolt',
+				s: null,
+				q: 1,
+				c: 0,
+				t: 'Instant',
+			},
 		];
 
 		const result = parseDeckListRecords(records);
@@ -93,7 +121,14 @@ describe('parseDeckListRecords', () => {
 
 	it('maps compartment 0 to mainboard', () => {
 		const records = [
-			{ l: 'en', n: 'Counterspell', s: null, q: 4, c: 0, t: 'Instant' },
+			{
+				l: 'en',
+				n: 'Counterspell',
+				s: null,
+				q: 4,
+				c: 0,
+				t: 'Instant',
+			},
 		];
 		const result = parseDeckListRecords(records);
 
@@ -102,7 +137,14 @@ describe('parseDeckListRecords', () => {
 
 	it('sets scryfallId to null for all cards', () => {
 		const records = [
-			{ l: 'en', n: 'Opt', s: 'STA', q: 4, c: 0, t: 'Instant' },
+			{
+				l: 'en',
+				n: 'Opt',
+				s: 'STA',
+				q: 4,
+				c: 0,
+				t: 'Instant',
+			},
 		];
 		const result = parseDeckListRecords(records);
 
@@ -111,10 +153,38 @@ describe('parseDeckListRecords', () => {
 
 	it('sorts cards by type then name', () => {
 		const records = [
-			{ l: 'en', n: 'Wrath of God', s: null, q: 2, c: 0, t: 'Sorcery' },
-			{ l: 'en', n: 'Adanto Vanguard', s: null, q: 4, c: 0, t: 'Creature' },
-			{ l: 'en', n: 'Llanowar Elves', s: null, q: 4, c: 0, t: 'Creature' },
-			{ l: 'en', n: 'Lightning Bolt', s: null, q: 4, c: 0, t: 'Instant' },
+			{
+				l: 'en',
+				n: 'Wrath of God',
+				s: null,
+				q: 2,
+				c: 0,
+				t: 'Sorcery',
+			},
+			{
+				l: 'en',
+				n: 'Adanto Vanguard',
+				s: null,
+				q: 4,
+				c: 0,
+				t: 'Creature',
+			},
+			{
+				l: 'en',
+				n: 'Llanowar Elves',
+				s: null,
+				q: 4,
+				c: 0,
+				t: 'Creature',
+			},
+			{
+				l: 'en',
+				n: 'Lightning Bolt',
+				s: null,
+				q: 4,
+				c: 0,
+				t: 'Instant',
+			},
 		];
 		const result = parseDeckListRecords(records);
 
@@ -128,12 +198,54 @@ describe('parseDeckListRecords', () => {
 
 	it('sorts basic lands last in WUBRG order', () => {
 		const records = [
-			{ l: 'en', n: 'Forest', s: null, q: 4, c: 0, t: 'Basic Land' },
-			{ l: 'en', n: 'Plains', s: null, q: 4, c: 0, t: 'Basic Land' },
-			{ l: 'en', n: 'Mountain', s: null, q: 4, c: 0, t: 'Basic Land' },
-			{ l: 'en', n: 'Island', s: null, q: 4, c: 0, t: 'Basic Land' },
-			{ l: 'en', n: 'Swamp', s: null, q: 4, c: 0, t: 'Basic Land' },
-			{ l: 'en', n: 'Lightning Bolt', s: null, q: 4, c: 0, t: 'Instant' },
+			{
+				l: 'en',
+				n: 'Forest',
+				s: null,
+				q: 4,
+				c: 0,
+				t: 'Basic Land',
+			},
+			{
+				l: 'en',
+				n: 'Plains',
+				s: null,
+				q: 4,
+				c: 0,
+				t: 'Basic Land',
+			},
+			{
+				l: 'en',
+				n: 'Mountain',
+				s: null,
+				q: 4,
+				c: 0,
+				t: 'Basic Land',
+			},
+			{
+				l: 'en',
+				n: 'Island',
+				s: null,
+				q: 4,
+				c: 0,
+				t: 'Basic Land',
+			},
+			{
+				l: 'en',
+				n: 'Swamp',
+				s: null,
+				q: 4,
+				c: 0,
+				t: 'Basic Land',
+			},
+			{
+				l: 'en',
+				n: 'Lightning Bolt',
+				s: null,
+				q: 4,
+				c: 0,
+				t: 'Instant',
+			},
 		];
 		const result = parseDeckListRecords(records);
 
@@ -149,9 +261,30 @@ describe('parseDeckListRecords', () => {
 
 	it('sorts basic lands after all non-basic-land types', () => {
 		const records = [
-			{ l: 'en', n: 'Plains', s: null, q: 4, c: 0, t: 'Basic Land' },
-			{ l: 'en', n: 'Breeding Pool', s: null, q: 2, c: 0, t: 'Land' },
-			{ l: 'en', n: 'Sol Ring', s: null, q: 1, c: 0, t: 'Artifact' },
+			{
+				l: 'en',
+				n: 'Plains',
+				s: null,
+				q: 4,
+				c: 0,
+				t: 'Basic Land',
+			},
+			{
+				l: 'en',
+				n: 'Breeding Pool',
+				s: null,
+				q: 2,
+				c: 0,
+				t: 'Land',
+			},
+			{
+				l: 'en',
+				n: 'Sol Ring',
+				s: null,
+				q: 1,
+				c: 0,
+				t: 'Artifact',
+			},
 		];
 		const result = parseDeckListRecords(records);
 
@@ -164,7 +297,14 @@ describe('parseDeckListRecords', () => {
 
 	it('handles null setCode values', () => {
 		const records = [
-			{ l: 'en', n: 'Dark Ritual', s: null, q: 4, c: 0, t: 'Instant' },
+			{
+				l: 'en',
+				n: 'Dark Ritual',
+				s: null,
+				q: 4,
+				c: 0,
+				t: 'Instant',
+			},
 		];
 		const result = parseDeckListRecords(records);
 
@@ -175,7 +315,14 @@ describe('parseDeckListRecords', () => {
 describe('parseDeckListCompanion', () => {
 	it('maps compartment 4 to a companion entry', () => {
 		const result = parseDeckListCompanion([
-			{ l: 'lutri', n: 'Lutri, the Spellchaser', s: null, q: 1, c: 4, t: 'Creature' },
+			{
+				l: 'lutri',
+				n: 'Lutri, the Spellchaser',
+				s: null,
+				q: 1,
+				c: 4,
+				t: 'Creature',
+			},
 		]);
 
 		expect(result).toEqual({
@@ -290,8 +437,18 @@ describe('calculateDeckStats', () => {
 
 	it('only counts mainboard cards', () => {
 		const cards = [
-			createDeckListCard({ name: 'Lightning Bolt', cardType: 'Instant', quantity: 4, compartment: 'mainboard' }),
-			createDeckListCard({ name: 'Negate', cardType: 'Instant', quantity: 2, compartment: 'sideboard' }),
+			createDeckListCard({
+				name: 'Lightning Bolt',
+				cardType: 'Instant',
+				quantity: 4,
+				compartment: 'mainboard',
+			}),
+			createDeckListCard({
+				name: 'Negate',
+				cardType: 'Instant',
+				quantity: 2,
+				compartment: 'sideboard',
+			}),
 		];
 		const result = calculateDeckStats(cards);
 
@@ -307,7 +464,12 @@ describe('calculateDeckStats', () => {
 			createDeckListCard({ name: 'Blood Moon', cardType: 'Enchantment', quantity: 3 }),
 			createDeckListCard({ name: 'Jace', cardType: 'Planeswalker', quantity: 2 }),
 			createDeckListCard({ name: 'Mountain', cardType: 'Land', quantity: 18 }),
-			createDeckListCard({ name: 'Teferi', cardType: 'Planeswalker', quantity: 1, compartment: 'sideboard' }),
+			createDeckListCard({
+				name: 'Teferi',
+				cardType: 'Planeswalker',
+				quantity: 1,
+				compartment: 'sideboard',
+			}),
 		];
 		const result = calculateDeckStats(cards);
 

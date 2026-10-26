@@ -136,7 +136,10 @@ describe('screenWriteModule', () => {
 		});
 
 		it('validates mode config references before checking the slug', async () => {
-			const input = { slug: 'main', modeConfigs: { card: {} } } as never;
+			const input = {
+				slug: 'main',
+				modeConfigs: { card: {} },
+			} as never;
 
 			await screenWriteModule().createScreen({
 				eventId: 1,
@@ -273,7 +276,11 @@ describe('screenWriteModule', () => {
 				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
-				input: { stateVersion: 3, slug: 'renamed', modeConfigs: { card: {} } } as never,
+				input: {
+					stateVersion: 3,
+					slug: 'renamed',
+					modeConfigs: { card: {} },
+				} as never,
 				originConnectionId: 'origin-1',
 			});
 
@@ -282,7 +289,10 @@ describe('screenWriteModule', () => {
 			expect(mockScreenService.update).toHaveBeenCalledWith(
 				7,
 				1,
-				{ slug: 'renamed', modeConfigs: { card: {} } },
+				{
+					slug: 'renamed',
+					modeConfigs: { card: {} },
+				},
 				3,
 				// No epoch to end, so nothing rides with the write.
 				undefined,
@@ -498,11 +508,13 @@ describe('screenWriteModule', () => {
 				assetId: graphicAssetId('asset-1'),
 				revisionId: graphicAssetRevisionId('revision-1'),
 			};
-			const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([{
-				outcome: 'available',
-				lifecycleState: 'active',
-				kind: 'image',
-			}]);
+			const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([
+				{
+					outcome: 'available',
+					lifecycleState: 'active',
+					kind: 'image',
+				},
+			]);
 
 			await screenWriteModule().updateModeConfig({
 				authoringSessionId: undefined,
@@ -514,10 +526,12 @@ describe('screenWriteModule', () => {
 			});
 
 			expect(inspectGraphicAssetRevisions).toHaveBeenCalledWith({
-				references: [{
-					assetId: graphicAssetId('asset-1'),
-					revisionId: graphicAssetRevisionId('revision-1'),
-				}],
+				references: [
+					{
+						assetId: graphicAssetId('asset-1'),
+						revisionId: graphicAssetRevisionId('revision-1'),
+					},
+				],
 			});
 			expect(mockScreenService.updateModeConfig).toHaveBeenCalled();
 		});
@@ -537,10 +551,12 @@ describe('screenWriteModule', () => {
 				mode: 'feature-match-overlay',
 				config: { layout: config.layout },
 				graphicsAssets: () => ({
-					inspectGraphicAssetRevisions: vi.fn().mockResolvedValue([{
-						outcome: 'unavailable',
-						retryable: true,
-					}]),
+					inspectGraphicAssetRevisions: vi.fn().mockResolvedValue([
+						{
+							outcome: 'unavailable',
+							retryable: true,
+						},
+					]),
 				}),
 			})).rejects.toMatchObject({
 				statusCode: 409,
@@ -595,8 +611,14 @@ describe('screenWriteModule', () => {
 			expect(inspectGraphicAssetRevisions).toHaveBeenCalledTimes(1);
 			expect(inspectGraphicAssetRevisions).toHaveBeenCalledWith({
 				references: [
-					{ assetId: graphicAssetId('asset-1'), revisionId: graphicAssetRevisionId('revision-1') },
-					{ assetId: graphicAssetId('asset-2'), revisionId: graphicAssetRevisionId('revision-1') },
+					{
+						assetId: graphicAssetId('asset-1'),
+						revisionId: graphicAssetRevisionId('revision-1'),
+					},
+					{
+						assetId: graphicAssetId('asset-2'),
+						revisionId: graphicAssetRevisionId('revision-1'),
+					},
 				],
 			});
 			expect(mockScreenService.updateModeConfig).not.toHaveBeenCalled();
@@ -689,11 +711,13 @@ describe('screenWriteModule', () => {
 			// revision moved does build one. Without it this test would pass just as
 			// happily if the reference were never discovered in the merged
 			// configuration at all.
-			mockGraphicsAssets.inspectGraphicAssetRevisions.mockResolvedValue([{
-				outcome: 'available',
-				lifecycleState: 'active',
-				kind: 'image',
-			}]);
+			mockGraphicsAssets.inspectGraphicAssetRevisions.mockResolvedValue([
+				{
+					outcome: 'available',
+					lifecycleState: 'active',
+					kind: 'image',
+				},
+			]);
 			const moved = structuredClone(config);
 			moved.layout.frame.backgroundImage = {
 				kind: 'asset',
@@ -712,10 +736,12 @@ describe('screenWriteModule', () => {
 
 			expect(provideGraphicsAssets).toHaveBeenCalledTimes(1);
 			expect(mockGraphicsAssets.inspectGraphicAssetRevisions).toHaveBeenCalledWith({
-				references: [{
-					assetId: 'asset-1',
-					revisionId: 'revision-2',
-				}],
+				references: [
+					{
+						assetId: 'asset-1',
+						revisionId: 'revision-2',
+					},
+				],
 			});
 		});
 

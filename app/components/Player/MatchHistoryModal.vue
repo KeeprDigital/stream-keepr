@@ -18,8 +18,12 @@ const { hasPlayerHistoryScreens, playerHistoryScreens, sendToScreen, sendToFirst
 const { openPlayerDeckList } = usePlayerDeckListModal();
 const playerStore = usePlayerStore();
 
-const record = computed(() => `${props.player.wins ?? 0}-${props.player.losses ?? 0}${props.player.draws ? `-${props.player.draws}` : ''}`);
-const sorting = ref([{ id: 'roundNumber', desc: false }]);
+const record = computed(() => `${props.player.wins ?? 0}-${props.player.losses ?? 0}${props.player.draws
+	? `-${props.player.draws}`
+	: ''}`);
+const sorting = ref([
+	{ id: 'roundNumber', desc: false },
+]);
 
 const columns: TableColumn<PlayerMatchHistoryEntry>[] = [
 	{
@@ -64,13 +68,22 @@ function formatResult(row: PlayerMatchHistoryEntry) {
 		return 'BYE';
 	if (!row.hasResult)
 		return 'Pending';
-	if (row.playerGameWins != null && row.opponentGameWins != null)
-		return `${row.playerGameWins}-${row.opponentGameWins}${row.gameDraws ? `-${row.gameDraws}` : ''}`;
+	if (row.playerGameWins != null && row.opponentGameWins != null) {
+		return `${row.playerGameWins}-${row.opponentGameWins}${row.gameDraws
+			? `-${row.gameDraws}`
+			: ''}`;
+	}
 	return row.resultString ?? 'Result';
 }
 
 function outcomeLabel(outcome: PlayerMatchHistoryEntry['outcome']) {
-	return ({ win: 'Win', loss: 'Loss', draw: 'Draw', bye: 'Bye', pending: 'Pending' })[outcome];
+	return ({
+		win: 'Win',
+		loss: 'Loss',
+		draw: 'Draw',
+		bye: 'Bye',
+		pending: 'Pending',
+	})[outcome];
 }
 
 function outcomeColor(outcome: PlayerMatchHistoryEntry['outcome']) {

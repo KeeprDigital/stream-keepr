@@ -25,16 +25,20 @@ function projectedGraphic(): BroadcastGraphicConfig {
 	(group.children[0] as TextGraphicItemConfig).text
 		= '{profile.networkLabel} · {profile.handle} · {profile.profileUrl}';
 	(group.children[1] as SocialNetworkIconGraphicItemConfig).network = { projectionKey: 'profile' };
-	graphic.sources = [{ key: 'talent', label: 'Talent', kind: 'talent' }];
-	graphic.socialProfileProjections = [{
-		key: 'profile',
-		label: 'Profile',
-		sourceKey: 'talent',
-		presentationGroupId: 'profile-group',
-		dwellMs: 8_000,
-		transition: 'crossfade',
-		transitionDurationMs: 250,
-	}];
+	graphic.sources = [
+		{ key: 'talent', label: 'Talent', kind: 'talent' },
+	];
+	graphic.socialProfileProjections = [
+		{
+			key: 'profile',
+			label: 'Profile',
+			sourceKey: 'talent',
+			presentationGroupId: 'profile-group',
+			dwellMs: 8_000,
+			transition: 'crossfade',
+			transitionDurationMs: 250,
+		},
+	];
 	return graphic;
 }
 
@@ -43,7 +47,9 @@ describe('programmatic Social Profile Projection rendering', () => {
 		const model = resolveBroadcastGraphicsRenderModel({
 			output: 'overlay',
 			...CANVAS,
-			graphics: [projectedGraphic()],
+			graphics: [
+				projectedGraphic(),
+			],
 			onAirGraphicIds: ['lower-third'],
 			socialProfileValues: {
 				'lower-third': {
@@ -67,7 +73,9 @@ describe('programmatic Social Profile Projection rendering', () => {
 		const model = resolveBroadcastGraphicsRenderModel({
 			output: 'overlay',
 			...CANVAS,
-			graphics: [projectedGraphic()],
+			graphics: [
+				projectedGraphic(),
+			],
 			onAirGraphicIds: ['lower-third'],
 		});
 
@@ -78,7 +86,9 @@ describe('programmatic Social Profile Projection rendering', () => {
 		const model = resolveBroadcastGraphicsRenderModel({
 			output: 'overlay',
 			...CANVAS,
-			graphics: [projectedGraphic()],
+			graphics: [
+				projectedGraphic(),
+			],
 			onAirGraphicIds: ['lower-third'],
 			socialProfilePresentations: {
 				'lower-third': {
@@ -138,7 +148,12 @@ describe('programmatic Social Profile Projection rendering', () => {
 	it('preserves an interrupted layered presentation beneath explicit Update Graphic', () => {
 		const social = projectedGraphic();
 		(social.items[0] as GraphicGroupItemConfig).animation = {
-			update: { duration: 250, easing: 'linear', delay: 0, fade: { opacity: 0 } },
+			update: {
+				duration: 250,
+				easing: 'linear',
+				delay: 0,
+				fade: { opacity: 0 },
+			},
 		};
 		const outgoing = {
 			network: 'twitch' as const,
@@ -157,14 +172,29 @@ describe('programmatic Social Profile Projection rendering', () => {
 			...CANVAS,
 			graphics: [social],
 			onAirGraphicIds: ['lower-third'],
-			animation: { 'lower-third': [{ phase: 'update', elapsed: 125 }] },
-			socialProfileValues: { 'lower-third': { profile: current } },
-			outgoingSocialProfileValues: { 'lower-third': { profile: current } },
+			animation: {
+				'lower-third': [
+					{ phase: 'update', elapsed: 125 },
+				],
+			},
+			socialProfileValues: {
+				'lower-third': { profile: current },
+			},
+			outgoingSocialProfileValues: {
+				'lower-third': { profile: current },
+			},
 			socialProfilePresentations: {
 				'lower-third': {
 					profile: {
 						phase: { kind: 'static', elapsedMs: 0, durationMs: null },
-						layers: [{ values: current, opacity: 1, offsetX: 0, offsetY: 0 }],
+						layers: [
+							{
+								values: current,
+								opacity: 1,
+								offsetX: 0,
+								offsetY: 0,
+							},
+						],
 					},
 				},
 			},
@@ -173,8 +203,18 @@ describe('programmatic Social Profile Projection rendering', () => {
 					profile: {
 						phase: { kind: 'static', elapsedMs: 0, durationMs: null },
 						layers: [
-							{ values: outgoing, opacity: 0.5, offsetX: 0, offsetY: 0 },
-							{ values: current, opacity: 0.5, offsetX: 0, offsetY: 0 },
+							{
+								values: outgoing,
+								opacity: 0.5,
+								offsetX: 0,
+								offsetY: 0,
+							},
+							{
+								values: current,
+								opacity: 0.5,
+								offsetX: 0,
+								offsetY: 0,
+							},
 						],
 					},
 				},
@@ -194,7 +234,12 @@ describe('programmatic Social Profile Projection rendering', () => {
 		const social = projectedGraphic();
 		const group = social.items[0] as GraphicGroupItemConfig;
 		group.children[0]!.animation = {
-			update: { duration: 250, easing: 'linear', delay: 0, fade: { opacity: 0 } },
+			update: {
+				duration: 250,
+				easing: 'linear',
+				delay: 0,
+				fade: { opacity: 0 },
+			},
 		};
 		const twitch = {
 			network: 'twitch' as const,
@@ -213,20 +258,53 @@ describe('programmatic Social Profile Projection rendering', () => {
 			...CANVAS,
 			graphics: [social],
 			onAirGraphicIds: ['lower-third'],
-			animation: { 'lower-third': [{ phase: 'update', elapsed: 125 }] },
-			socialProfileValues: { 'lower-third': { profile: youtube } },
-			outgoingSocialProfileValues: { 'lower-third': { profile: youtube } },
-			socialProfilePresentations: { 'lower-third': { profile: {
-				phase: { kind: 'static', elapsedMs: 0, durationMs: null },
-				layers: [{ values: youtube, opacity: 1, offsetX: 0, offsetY: 0 }],
-			} } },
-			outgoingSocialProfilePresentations: { 'lower-third': { profile: {
-				phase: { kind: 'static', elapsedMs: 0, durationMs: null },
-				layers: [
-					{ values: twitch, opacity: 0.5, offsetX: 0, offsetY: 0 },
-					{ values: youtube, opacity: 0.5, offsetX: 0, offsetY: 0 },
+			animation: {
+				'lower-third': [
+					{ phase: 'update', elapsed: 125 },
 				],
-			} } },
+			},
+			socialProfileValues: {
+				'lower-third': { profile: youtube },
+			},
+			outgoingSocialProfileValues: {
+				'lower-third': { profile: youtube },
+			},
+			socialProfilePresentations: {
+				'lower-third': {
+					profile: {
+						phase: { kind: 'static', elapsedMs: 0, durationMs: null },
+						layers: [
+							{
+								values: youtube,
+								opacity: 1,
+								offsetX: 0,
+								offsetY: 0,
+							},
+						],
+					},
+				},
+			},
+			outgoingSocialProfilePresentations: {
+				'lower-third': {
+					profile: {
+						phase: { kind: 'static', elapsedMs: 0, durationMs: null },
+						layers: [
+							{
+								values: twitch,
+								opacity: 0.5,
+								offsetX: 0,
+								offsetY: 0,
+							},
+							{
+								values: youtube,
+								opacity: 0.5,
+								offsetX: 0,
+								offsetY: 0,
+							},
+						],
+					},
+				},
+			},
 		});
 		const transition = model.graphics[0]!.items[0]!.crossTransition!;
 
@@ -239,18 +317,41 @@ describe('programmatic Social Profile Projection rendering', () => {
 	it('uses the update recipe to cross the outgoing and incoming correlated Social Profile values', () => {
 		const social = projectedGraphic();
 		(social.items[0] as GraphicGroupItemConfig).animation = {
-			update: { duration: 250, easing: 'linear', delay: 0, fade: { opacity: 0 } },
+			update: {
+				duration: 250,
+				easing: 'linear',
+				delay: 0,
+				fade: { opacity: 0 },
+			},
 		};
-		const outgoing = { network: 'twitch' as const, networkLabel: 'Twitch', handle: 'alpha', profileUrl: 'https://www.twitch.tv/alpha' };
-		const incoming = { network: 'youtube' as const, networkLabel: 'YouTube', handle: 'bravo', profileUrl: 'https://www.youtube.com/@bravo' };
+		const outgoing = {
+			network: 'twitch' as const,
+			networkLabel: 'Twitch',
+			handle: 'alpha',
+			profileUrl: 'https://www.twitch.tv/alpha',
+		};
+		const incoming = {
+			network: 'youtube' as const,
+			networkLabel: 'YouTube',
+			handle: 'bravo',
+			profileUrl: 'https://www.youtube.com/@bravo',
+		};
 		const model = resolveBroadcastGraphicsRenderModel({
 			output: 'overlay',
 			...CANVAS,
 			graphics: [social],
 			onAirGraphicIds: ['lower-third'],
-			animation: { 'lower-third': [{ phase: 'update', elapsed: 125 }] },
-			socialProfileValues: { 'lower-third': { profile: incoming } },
-			outgoingSocialProfileValues: { 'lower-third': { profile: outgoing } },
+			animation: {
+				'lower-third': [
+					{ phase: 'update', elapsed: 125 },
+				],
+			},
+			socialProfileValues: {
+				'lower-third': { profile: incoming },
+			},
+			outgoingSocialProfileValues: {
+				'lower-third': { profile: outgoing },
+			},
 		});
 		const transition = model.graphics[0]!.items[0]!.crossTransition!;
 
@@ -263,24 +364,55 @@ describe('programmatic Social Profile Projection rendering', () => {
 	it('uses the update recipe to animate an available Presentation Group to transparency', () => {
 		const social = projectedGraphic();
 		(social.items[0] as GraphicGroupItemConfig).animation = {
-			update: { duration: 250, easing: 'linear', delay: 0, fade: { opacity: 0 } },
+			update: {
+				duration: 250,
+				easing: 'linear',
+				delay: 0,
+				fade: { opacity: 0 },
+			},
 		};
-		const outgoing = { network: 'twitch' as const, networkLabel: 'Twitch', handle: 'alpha', profileUrl: 'https://www.twitch.tv/alpha' };
+		const outgoing = {
+			network: 'twitch' as const,
+			networkLabel: 'Twitch',
+			handle: 'alpha',
+			profileUrl: 'https://www.twitch.tv/alpha',
+		};
 		const model = resolveBroadcastGraphicsRenderModel({
 			output: 'overlay',
 			...CANVAS,
 			graphics: [social],
 			onAirGraphicIds: ['lower-third'],
-			animation: { 'lower-third': [{ phase: 'update', elapsed: 125 }] },
-			socialProfilePresentations: { 'lower-third': { profile: {
-				phase: { kind: 'static', elapsedMs: 0, durationMs: null },
-				layers: [],
-			} } },
-			outgoingSocialProfileValues: { 'lower-third': { profile: outgoing } },
-			outgoingSocialProfilePresentations: { 'lower-third': { profile: {
-				phase: { kind: 'static', elapsedMs: 0, durationMs: null },
-				layers: [{ values: outgoing, opacity: 1, offsetX: 0, offsetY: 0 }],
-			} } },
+			animation: {
+				'lower-third': [
+					{ phase: 'update', elapsed: 125 },
+				],
+			},
+			socialProfilePresentations: {
+				'lower-third': {
+					profile: {
+						phase: { kind: 'static', elapsedMs: 0, durationMs: null },
+						layers: [],
+					},
+				},
+			},
+			outgoingSocialProfileValues: {
+				'lower-third': { profile: outgoing },
+			},
+			outgoingSocialProfilePresentations: {
+				'lower-third': {
+					profile: {
+						phase: { kind: 'static', elapsedMs: 0, durationMs: null },
+						layers: [
+							{
+								values: outgoing,
+								opacity: 1,
+								offsetX: 0,
+								offsetY: 0,
+							},
+						],
+					},
+				},
+			},
 		});
 		const transition = model.graphics[0]!.items[0]!.crossTransition!;
 
@@ -309,21 +441,45 @@ describe('programmatic Social Profile Projection rendering', () => {
 				slide: { direction: 'south', distanceMode: 'fixed', distance: 100 },
 			},
 		};
-		const outgoing = { network: 'twitch' as const, networkLabel: 'Twitch', handle: 'alpha', profileUrl: 'https://www.twitch.tv/alpha' };
-		const incoming = { network: 'youtube' as const, networkLabel: 'YouTube', handle: 'bravo', profileUrl: 'https://www.youtube.com/@bravo' };
+		const outgoing = {
+			network: 'twitch' as const,
+			networkLabel: 'Twitch',
+			handle: 'alpha',
+			profileUrl: 'https://www.twitch.tv/alpha',
+		};
+		const incoming = {
+			network: 'youtube' as const,
+			networkLabel: 'YouTube',
+			handle: 'bravo',
+			profileUrl: 'https://www.youtube.com/@bravo',
+		};
 		const model = resolveBroadcastGraphicsRenderModel({
 			output: 'overlay',
 			...CANVAS,
 			graphics: [social],
 			onAirGraphicIds: ['lower-third'],
-			animation: { 'lower-third': [{ phase, elapsed: 500 }] },
+			animation: {
+				'lower-third': [
+					{ phase, elapsed: 500 },
+				],
+			},
 			socialProfilePresentations: {
 				'lower-third': {
 					profile: {
 						phase: { kind: 'transition', elapsedMs: 125, durationMs: 250 },
 						layers: [
-							{ values: outgoing, opacity: 1, offsetX: -50, offsetY: 0 },
-							{ values: incoming, opacity: 1, offsetX: 50, offsetY: 0 },
+							{
+								values: outgoing,
+								opacity: 1,
+								offsetX: -50,
+								offsetY: 0,
+							},
+							{
+								values: incoming,
+								opacity: 1,
+								offsetX: 50,
+								offsetY: 0,
+							},
 						],
 					},
 				},
@@ -342,23 +498,53 @@ describe('programmatic Social Profile Projection rendering', () => {
 	it('preserves both concurrent lifecycle reveal masks around Social Profile layers', () => {
 		const social = projectedGraphic();
 		(social.items[0] as GraphicGroupItemConfig).animation = {
-			'on-screen': { duration: 400, easing: 'linear', delay: 0, pause: 0, repeat: 1, reveal: { edge: 'top' } },
-			'exit': { duration: 400, easing: 'linear', delay: 0, reveal: { edge: 'left' } },
+			'on-screen': {
+				duration: 400,
+				easing: 'linear',
+				delay: 0,
+				pause: 0,
+				repeat: 1,
+				reveal: { edge: 'top' },
+			},
+			'exit': {
+				duration: 400,
+				easing: 'linear',
+				delay: 0,
+				reveal: { edge: 'left' },
+			},
 		};
-		const current = { network: 'youtube' as const, networkLabel: 'YouTube', handle: 'bravo', profileUrl: 'https://www.youtube.com/@bravo' };
+		const current = {
+			network: 'youtube' as const,
+			networkLabel: 'YouTube',
+			handle: 'bravo',
+			profileUrl: 'https://www.youtube.com/@bravo',
+		};
 		const model = resolveBroadcastGraphicsRenderModel({
 			output: 'overlay',
 			...CANVAS,
 			graphics: [social],
 			onAirGraphicIds: ['lower-third'],
-			animation: { 'lower-third': [
-				{ phase: 'on-screen', elapsed: 100 },
-				{ phase: 'exit', elapsed: 200 },
-			] },
-			socialProfilePresentations: { 'lower-third': { profile: {
-				phase: { kind: 'transition', elapsedMs: 125, durationMs: 250 },
-				layers: [{ values: current, opacity: 0.5, offsetX: 0, offsetY: 0 }],
-			} } },
+			animation: {
+				'lower-third': [
+					{ phase: 'on-screen', elapsed: 100 },
+					{ phase: 'exit', elapsed: 200 },
+				],
+			},
+			socialProfilePresentations: {
+				'lower-third': {
+					profile: {
+						phase: { kind: 'transition', elapsedMs: 125, durationMs: 250 },
+						layers: [
+							{
+								values: current,
+								opacity: 0.5,
+								offsetX: 0,
+								offsetY: 0,
+							},
+						],
+					},
+				},
+			},
 		});
 		const group = model.graphics[0]!.items[0]!;
 

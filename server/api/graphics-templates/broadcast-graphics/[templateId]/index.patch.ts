@@ -44,8 +44,12 @@ export default defineEventHandler(async (event) => {
 	// rename is held to the rule as much as a new composition is (#614). A rename
 	// built on a stale revision is left to the compare-and-swap, so the author hears
 	// about the revision they missed before anything in a document they never read.
-	const stored = body.document ? undefined : await broadcastGraphicTemplateService().findById(templateId);
-	const document = body.document ?? (stored?.revision === body.revision ? stored.document : undefined);
+	const stored = body.document
+		? undefined
+		: await broadcastGraphicTemplateService().findById(templateId);
+	const document = body.document ?? (stored?.revision === body.revision
+		? stored.document
+		: undefined);
 	if (document)
 		await assertBroadcastGraphicTemplateReferencesSelectable(graphicsAssetLibraryForEvent(event), document);
 	if (body.document)

@@ -11,5 +11,7 @@
 export function failureRetryAfterSeconds(caught: unknown): number | undefined {
 	const failure = caught as { response?: { headers?: Headers } } | null;
 	const retryAfter = failure?.response?.headers?.get('retry-after')?.trim();
-	return retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) : undefined;
+	return retryAfter && /^\d+$/.test(retryAfter)
+		? Number(retryAfter)
+		: undefined;
 }

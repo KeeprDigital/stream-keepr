@@ -10,10 +10,17 @@ const mockPlayerControls = {
 
 const mockFeatureMatchStateStore = {
 	$reset: vi.fn(),
-	featureMatchStates: new Map([[1, { currentGame: 2, isComplete: false }]]),
+	featureMatchStates: new Map([
+		[
+			1,
+			{ currentGame: 2, isComplete: false },
+		],
+	]),
 };
 
-const mockToast = { add: vi.fn() };
+const mockToast = {
+	add: vi.fn(),
+};
 
 mockNuxtImport('usePlayerControls', () => () => mockPlayerControls);
 mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
@@ -48,7 +55,12 @@ describe('featureMatchGameWins', () => {
 		mockPlayerControls.recordWin.mockReset();
 		mockPlayerControls.undoWin.mockReset();
 		mockFeatureMatchStateStore.$reset.mockReset();
-		mockFeatureMatchStateStore.featureMatchStates = new Map([[1, { currentGame: 2, isComplete: false }]]);
+		mockFeatureMatchStateStore.featureMatchStates = new Map([
+			[
+				1,
+				{ currentGame: 2, isComplete: false },
+			],
+		]);
 		mockToast.add.mockReset();
 	});
 

@@ -63,7 +63,10 @@ async function runSweep(sweep: 'reconciliation' | 'retention') {
 		if (sweep === 'reconciliation') {
 			const result = await $fetch<GraphicsReconciliationSweepResult>(
 				'/api/admin/graphics-assets/reconciliation',
-				{ method: 'POST', headers: administratorHeaders() },
+				{
+					method: 'POST',
+					headers: administratorHeaders(),
+				},
 			);
 			sweepSummary.value = `Reconciliation checked ${result.content.checked} contents, `
 				+ `detected ${result.content.unavailableDetected} unavailable, `
@@ -72,7 +75,10 @@ async function runSweep(sweep: 'reconciliation' | 'retention') {
 		else {
 			const result = await $fetch<GraphicsRetentionSweepResult>(
 				'/api/admin/graphics-assets/retention',
-				{ method: 'POST', headers: administratorHeaders() },
+				{
+					method: 'POST',
+					headers: administratorHeaders(),
+				},
 			);
 			sweepSummary.value = `Retention pruned ${result.revisions.pruned} revisions and `
 				+ `reclaimed ${formatByteCount(result.content.bytesReclaimed)}.`;
@@ -161,7 +167,11 @@ const ALERT_SUMMARIES: Record<GraphicsStorageHealthAlert['code'], string> = {
 };
 
 function alertColor(severity: GraphicsStorageHealthAlertSeverity) {
-	return severity === 'critical' ? 'error' : severity === 'warning' ? 'warning' : 'info';
+	return severity === 'critical'
+		? 'error'
+		: severity === 'warning'
+			? 'warning'
+			: 'info';
 }
 
 const ATTENTION_LABELS: Record<GraphicsIngestionAttentionItem['attention'], string> = {
@@ -196,7 +206,9 @@ function boundaryOffset(fraction: number) {
 function boundaryMarkerStyle(fraction: number) {
 	return fraction >= 1
 		? { right: '0px' }
-		: { left: boundaryOffset(fraction) };
+		: {
+				left: boundaryOffset(fraction),
+			};
 }
 </script>
 

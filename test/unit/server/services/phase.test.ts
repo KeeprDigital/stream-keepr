@@ -72,7 +72,9 @@ describe('phaseService', () => {
 		});
 
 		it('strips unclassified and server-managed keys before inserting', async () => {
-			getChain('insert').returning.mockResolvedValue([createMockPhase()]);
+			getChain('insert').returning.mockResolvedValue([
+				createMockPhase(),
+			]);
 
 			await phaseService().create(1, {
 				name: 'Swiss',
@@ -96,7 +98,9 @@ describe('phaseService', () => {
 		});
 
 		it('strips forged Melee provenance before writing', async () => {
-			getChain('update').returning.mockResolvedValue([createMockPhase()]);
+			getChain('update').returning.mockResolvedValue([
+				createMockPhase(),
+			]);
 
 			await phaseService().update(1, 1, {
 				name: 'Forged Phase',
@@ -111,7 +115,9 @@ describe('phaseService', () => {
 
 	describe('remove', () => {
 		it('returns true when phase deleted', async () => {
-			getChain('delete').returning.mockResolvedValue([createMockPhase()]);
+			getChain('delete').returning.mockResolvedValue([
+				createMockPhase(),
+			]);
 
 			const result = await phaseService().remove(1, 1);
 
@@ -148,7 +154,9 @@ describe('phaseService', () => {
 
 	describe('getMaxSortOrder', () => {
 		it('returns max sort order for event', async () => {
-			getChain('select').where.mockResolvedValue([{ max: 3 }]);
+			getChain('select').where.mockResolvedValue([
+				{ max: 3 },
+			]);
 
 			const result = await phaseService().getMaxSortOrder(1);
 
@@ -156,7 +164,9 @@ describe('phaseService', () => {
 		});
 
 		it('returns -1 when no phases exist', async () => {
-			getChain('select').where.mockResolvedValue([{ max: -1 }]);
+			getChain('select').where.mockResolvedValue([
+				{ max: -1 },
+			]);
 
 			const result = await phaseService().getMaxSortOrder(1);
 

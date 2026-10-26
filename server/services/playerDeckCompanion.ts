@@ -98,7 +98,10 @@ async function writeCompanionRow(deckId: number, data: UpsertDeckCompanionRow) {
 	if (existing) {
 		await db
 			.update(playerDeckCompanions)
-			.set({ ...data, updatedAt: new Date() })
+			.set({
+				...data,
+				updatedAt: new Date(),
+			})
 			.where(eq(playerDeckCompanions.id, existing.id));
 		return;
 	}

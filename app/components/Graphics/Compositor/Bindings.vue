@@ -91,7 +91,9 @@ const selection = computed(() => resolveGraphicsSelection(props.graphics, props.
  * itself selected — the same place its Graphic Inputs are declared.
  */
 const selectedGraphic = computed<BroadcastGraphicConfig | null>(() =>
-	selection.value.kind === 'graphic' ? selection.value.graphic : null,
+	selection.value.kind === 'graphic'
+		? selection.value.graphic
+		: null,
 );
 
 const sources = computed<GraphicSourceSelectionDeclaration[]>(() => selectedGraphic.value?.sources ?? []);
@@ -105,7 +107,9 @@ const inputs = computed<GraphicInputDeclaration[]>(() => selectedGraphic.value?.
  * fields, and a binding made in that window is not corrected when the game arrives.
  */
 const bindableInputs = computed(() =>
-	sources.value.length > 0 && props.game !== undefined ? inputs.value : [],
+	sources.value.length > 0 && props.game !== undefined
+		? inputs.value
+		: [],
 );
 
 const SOURCE_KIND_OPTIONS = GRAPHIC_SOURCE_SELECTION_KIND_VALUES.map(kind => ({
@@ -184,7 +188,9 @@ function derivationKey(from: GraphicSourceDerivation): string {
 }
 
 function derivationValue(source: GraphicSourceSelectionDeclaration): string {
-	return source.from ? derivationKey(source.from) : OPERATOR_SELECTED;
+	return source.from
+		? derivationKey(source.from)
+		: OPERATOR_SELECTED;
 }
 
 function derivationOptions(source: GraphicSourceSelectionDeclaration) {
@@ -302,10 +308,16 @@ function bindingFieldGroups(input: GraphicInputDeclaration) {
 
 	return [
 		common.length > 0
-			? [{ type: 'label' as const, label: 'Common fields' }, ...common.map(field => ({ label: field.label, value: field.id }))]
+			? [
+					{ type: 'label' as const, label: 'Common fields' },
+					...common.map(field => ({ label: field.label, value: field.id })),
+				]
 			: [],
 		gameSpecific.length > 0
-			? [{ type: 'label' as const, label: `${gameLabel} fields` }, ...gameSpecific.map(field => ({ label: field.label, value: field.id }))]
+			? [
+					{ type: 'label' as const, label: `${gameLabel} fields` },
+					...gameSpecific.map(field => ({ label: field.label, value: field.id })),
+				]
 			: [],
 	].filter(group => group.length > 0);
 }

@@ -98,5 +98,7 @@ const SUPPORTED_IDENTITIES = new Set(
 export function supportedFeatureMatchLayoutVocabularyVersion(
 	identity: string,
 ): number | undefined {
-	return SUPPORTED_IDENTITIES.has(identity) ? FEATURE_MATCH_LAYOUT_FORMAT_VERSION : undefined;
+	return SUPPORTED_IDENTITIES.has(identity)
+		? FEATURE_MATCH_LAYOUT_FORMAT_VERSION
+		: undefined;
 }

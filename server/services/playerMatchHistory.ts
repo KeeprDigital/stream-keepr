@@ -50,7 +50,9 @@ export async function findPlayerMatchHistory(eventId: number, playerId: number) 
 		const match = row.match;
 		const side = readMatchFromPlayerSide(match, playerId);
 		const opponentDeck = resolvePlayerDeckIdentity(
-			row.opponentArchetypeName == null ? null : { name: row.opponentArchetypeName, colors: row.opponentArchetypeColors },
+			row.opponentArchetypeName == null
+				? null
+				: { name: row.opponentArchetypeName, colors: row.opponentArchetypeColors },
 			row.opponentGameData,
 		);
 
@@ -62,7 +64,9 @@ export async function findPlayerMatchHistory(eventId: number, playerId: number) 
 			phaseName: row.phaseName,
 			tableNumber: match.tableNumber,
 			opponentId: match.isBye ? null : row.opponentId,
-			opponentName: match.isBye ? 'BYE' : (row.opponentName ?? 'Unknown opponent'),
+			opponentName: match.isBye
+				? 'BYE'
+				: (row.opponentName ?? 'Unknown opponent'),
 			opponentDeckName: match.isBye ? null : opponentDeck.name,
 			opponentDeckColors: match.isBye ? null : opponentDeck.colors,
 			...side,
@@ -70,5 +74,8 @@ export async function findPlayerMatchHistory(eventId: number, playerId: number) 
 		};
 	});
 
-	return { player: mapPlayerToResponse(player), history };
+	return {
+		player: mapPlayerToResponse(player),
+		history,
+	};
 }

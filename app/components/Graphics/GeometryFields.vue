@@ -73,7 +73,9 @@ const ALIGN_ACTIONS = [
 const SIZE_AXES = { width: 'x', height: 'y' } as const;
 
 function containerSpan(axis: 'x' | 'y') {
-	return axis === 'x' ? props.container.width : props.container.height;
+	return axis === 'x'
+		? props.container.width
+		: props.container.height;
 }
 
 const anchoredPosition = computed(() => anchoredGraphicPosition(props.rect, props.anchor));
@@ -99,7 +101,9 @@ const isLinked = computed(() => activeRatio.value !== null);
 
 function toggleLink() {
 	const { width, height } = props.rect;
-	linkedRatio.value = linkedRatio.value === null && width > 0 && height > 0 ? width / height : null;
+	linkedRatio.value = linkedRatio.value === null && width > 0 && height > 0
+		? width / height
+		: null;
 }
 
 function updateSize(axis: 'width' | 'height', value: number | null | undefined) {
@@ -108,8 +112,14 @@ function updateSize(axis: 'width' | 'height', value: number | null | undefined) 
 	const sizes = ratio === null
 		? { [axis]: size }
 		: axis === 'width'
-			? { width: size, height: Math.max(1, size / ratio) }
-			: { width: Math.max(1, size * ratio), height: size };
+			? {
+					width: size,
+					height: Math.max(1, size / ratio),
+				}
+			: {
+					width: Math.max(1, size * ratio),
+					height: size,
+				};
 	emit('update', resizeGraphicRectFromAnchor(props.rect, sizes, props.anchor));
 }
 

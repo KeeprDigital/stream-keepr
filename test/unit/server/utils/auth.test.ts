@@ -114,7 +114,10 @@ describe('the optional session read', () => {
 	it('answers null on a blank secret rather than raising the 503', async () => {
 		mockUseRuntimeConfig.mockReturnValue({ betterAuthSecret: '' });
 
-		await expect(optionalUserSession(stubH3Event({ headers: new Headers(), context: {} }))).resolves.toBeNull();
+		await expect(optionalUserSession(stubH3Event({
+			headers: new Headers(),
+			context: {},
+		}))).resolves.toBeNull();
 	});
 
 	it('lets every other failure out, so only the configuration fault is absorbed', async () => {
@@ -132,7 +135,10 @@ describe('the optional session read', () => {
 		const unreachable = new Error('D1 is unreachable');
 		vi.spyOn(fresh.serverAuth().api, 'getSession').mockRejectedValue(unreachable);
 
-		await expect(fresh.optionalUserSession(stubH3Event({ headers: new Headers(), context: {} })))
+		await expect(fresh.optionalUserSession(stubH3Event({
+			headers: new Headers(),
+			context: {},
+		})))
 			.rejects
 			.toThrow(unreachable);
 	});
@@ -168,7 +174,10 @@ describe('the identities a request carries', () => {
 		return createEvent(request, new ServerResponse(request));
 	}
 
-	const signedIn = { session: { id: 'a-browser-session' }, user: { id: 'a-user' } };
+	const signedIn = {
+		session: { id: 'a-browser-session' },
+		user: { id: 'a-user' },
+	};
 
 	it('names the person, not the browser, as who a request is acting as', async () => {
 		// The widening ADR-0010 pre-committed to: an operation survives the browser
@@ -220,7 +229,10 @@ describe('the identities a request carries', () => {
 		const event = requestEvent();
 
 		await requestUserSession(event);
-		await Promise.all([requireUserId(event), optionalBrowserSessionId(event)]);
+		await Promise.all([
+			requireUserId(event),
+			optionalBrowserSessionId(event),
+		]);
 
 		expect(getSession).toHaveBeenCalledTimes(1);
 	});
@@ -241,7 +253,10 @@ describe('the identities a request carries', () => {
 		const event = requestEvent();
 
 		await requestUserSession(event);
-		await Promise.all([requireUserId(event), optionalBrowserSessionId(event)]);
+		await Promise.all([
+			requireUserId(event),
+			optionalBrowserSessionId(event),
+		]);
 
 		expect(getSession).toHaveBeenCalledTimes(1);
 		expect(event.node.res.getHeader('set-cookie')).toEqual([
@@ -296,7 +311,10 @@ describe('the Local Developer Session', () => {
 	}
 
 	function requestEvent() {
-		return stubH3Event({ headers: new Headers(), context: {} });
+		return stubH3Event({
+			headers: new Headers(),
+			context: {},
+		});
 	}
 
 	it('supplies one stable User without a Better Auth secret or session cookie', async () => {

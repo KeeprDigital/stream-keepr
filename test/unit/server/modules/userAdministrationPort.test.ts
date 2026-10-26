@@ -77,14 +77,22 @@ const ORIGIN = 'https://stream.keepr.digital';
  * something that enforces it. The distinction is whether a real expiry check is
  * downstream.
  */
-const CONTEXT = { now: new Date('2026-08-18T09:00:00.000Z'), origin: ORIGIN };
+const CONTEXT = {
+	now: new Date('2026-08-18T09:00:00.000Z'),
+	origin: ORIGIN,
+};
 const EMAIL = 'operator@keepr.digital';
 const PASSWORD = 'a-long-enough-password';
 
 function throwawayAuth() {
 	return betterAuth({
 		...authStaticOptions,
-		database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
+		database: memoryAdapter({
+			user: [],
+			session: [],
+			account: [],
+			verification: [],
+		}),
 		secret: 'a-throwaway-secret-for-the-unit-suite',
 	}) as unknown as ServerAuth;
 }
@@ -92,7 +100,9 @@ function throwawayAuth() {
 let auth: ServerAuth;
 
 beforeEach(() => {
-	vi.useFakeTimers({ toFake: ['Date'] });
+	vi.useFakeTimers({
+		toFake: ['Date'],
+	});
 	vi.setSystemTime(CONTEXT.now);
 	auth = throwawayAuth();
 });
@@ -111,11 +121,15 @@ function tokenFrom(url: string) {
 }
 
 async function redeem(token: string, newPassword: string) {
-	return auth.api.resetPassword({ body: { token, newPassword } });
+	return auth.api.resetPassword({
+		body: { token, newPassword },
+	});
 }
 
 async function signIn(email: string, password: string) {
-	return auth.api.signInEmail({ body: { email, password } });
+	return auth.api.signInEmail({
+		body: { email, password },
+	});
 }
 
 describe('what Better Auth\'s admin API will do without a session', () => {
@@ -132,12 +146,40 @@ describe('what Better Auth\'s admin API will do without a session', () => {
 	});
 
 	it.each([
-		['banUser', () => auth.api.banUser({ body: { userId: 'any-user' } })],
-		['unbanUser', () => auth.api.unbanUser({ body: { userId: 'any-user' } })],
-		['revokeUserSessions', () => auth.api.revokeUserSessions({ body: { userId: 'any-user' } })],
-		['listUsers', () => auth.api.listUsers({ query: {} })],
-		['listUserSessions', () => auth.api.listUserSessions({ body: { userId: 'any-user' } })],
-		['setUserPassword', () => auth.api.setUserPassword({ body: { userId: 'any-user', newPassword: PASSWORD } })],
+		[
+			'banUser',
+			() => auth.api.banUser({
+				body: { userId: 'any-user' },
+			}),
+		],
+		[
+			'unbanUser',
+			() => auth.api.unbanUser({
+				body: { userId: 'any-user' },
+			}),
+		],
+		[
+			'revokeUserSessions',
+			() => auth.api.revokeUserSessions({
+				body: { userId: 'any-user' },
+			}),
+		],
+		[
+			'listUsers',
+			() => auth.api.listUsers({ query: {} }),
+		],
+		[
+			'listUserSessions',
+			() => auth.api.listUserSessions({
+				body: { userId: 'any-user' },
+			}),
+		],
+		[
+			'setUserPassword',
+			() => auth.api.setUserPassword({
+				body: { userId: 'any-user', newPassword: PASSWORD },
+			}),
+		],
 	])('refuses %s, session or no session', async (_name, call) => {
 		// All six sit behind the plugin's `adminMiddleware`, which requires an
 		// admin session unconditionally. That is the whole reason this port goes
@@ -151,7 +193,9 @@ describe('what Better Auth\'s admin API will do without a session', () => {
 		// no `sendResetPassword` configured, `/request-password-reset` refuses, so
 		// the only way a reset token comes into existence is an administrator
 		// asking this surface for one.
-		await expect(auth.api.requestPasswordReset({ body: { email: EMAIL } }))
+		await expect(auth.api.requestPasswordReset({
+			body: { email: EMAIL },
+		}))
 			.rejects
 			.toMatchObject({ status: 'BAD_REQUEST' });
 	});
@@ -431,7 +475,12 @@ describe('our copy of the plugin\'s semantics, against the plugin', () => {
 	/** An admin, signed in, as request headers the plugin's middleware accepts. */
 	async function adminHeaders() {
 		await auth.api.createUser({
-			body: { email: ADMIN_EMAIL, password: PASSWORD, name: 'An Admin', role: 'admin' },
+			body: {
+				email: ADMIN_EMAIL,
+				password: PASSWORD,
+				name: 'An Admin',
+				role: 'admin',
+			},
 		});
 		const response = await auth.api.signInEmail({
 			body: { email: ADMIN_EMAIL, password: PASSWORD },
@@ -488,7 +537,10 @@ describe('our copy of the plugin\'s semantics, against the plugin', () => {
 	it('bans exactly the way the plugin bans', async () => {
 		const headers = await adminHeaders();
 		const theirs = await subject();
-		await auth.api.banUser({ body: { userId: theirs.userId, banReason: 'Left the office' }, headers });
+		await auth.api.banUser({
+			body: { userId: theirs.userId, banReason: 'Left the office' },
+			headers,
+		});
 		const pluginState = await banStateOf(theirs.userId);
 
 		// The same starting state, down our code path instead.
@@ -505,8 +557,14 @@ describe('our copy of the plugin\'s semantics, against the plugin', () => {
 	it('lifts a ban exactly the way the plugin lifts one', async () => {
 		const headers = await adminHeaders();
 		const theirs = await subject();
-		await auth.api.banUser({ body: { userId: theirs.userId, banReason: 'A reason' }, headers });
-		await auth.api.unbanUser({ body: { userId: theirs.userId }, headers });
+		await auth.api.banUser({
+			body: { userId: theirs.userId, banReason: 'A reason' },
+			headers,
+		});
+		await auth.api.unbanUser({
+			body: { userId: theirs.userId },
+			headers,
+		});
 		const pluginState = await banStateOf(theirs.userId);
 
 		auth = throwawayAuth();

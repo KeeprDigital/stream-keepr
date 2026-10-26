@@ -70,7 +70,12 @@ function plan(revisions: readonly ResolvedPackagedRevision[]) {
 
 describe('the stored-ZIP archive Template Packages are written as', () => {
 	it('agrees with node:zlib on CRC-32', () => {
-		for (const sample of ['', '123456789', 'the quick brown fox', 'multi-byte: \u00FF\u00FE']) {
+		for (const sample of [
+			'',
+			'123456789',
+			'the quick brown fox',
+			'multi-byte: \u00FF\u00FE',
+		]) {
 			const bytes = new Uint8Array(Buffer.from(sample, 'utf8'));
 			expect(crc32(bytes)).toBe(nodeCrc32(Buffer.from(bytes)));
 		}
@@ -80,9 +85,18 @@ describe('the stored-ZIP archive Template Packages are written as', () => {
 
 	it('predicts its own exact length before streaming', async () => {
 		const entries = [
-			{ name: 'manifest.json', bytes: new Uint8Array(Buffer.from('{"a":1}')) },
-			{ name: 'template.json', bytes: new Uint8Array(Buffer.from('{}')) },
-			{ name: 'content/sha256-aa.bin', bytes: new Uint8Array(512).fill(7) },
+			{
+				name: 'manifest.json',
+				bytes: new Uint8Array(Buffer.from('{"a":1}')),
+			},
+			{
+				name: 'template.json',
+				bytes: new Uint8Array(Buffer.from('{}')),
+			},
+			{
+				name: 'content/sha256-aa.bin',
+				bytes: new Uint8Array(512).fill(7),
+			},
 		];
 		const sources = entries.map(entry => ({
 			name: entry.name,
@@ -114,11 +128,23 @@ describe('the stored-ZIP archive Template Packages are written as', () => {
 			byteLength: 0,
 			open: async () => readableBytes(new Uint8Array()),
 		});
-		for (const name of ['../escape.json', '/absolute.json', 'a\\b.json', 'a/../b.json', 'control\u0000.json', '']) {
-			expect(() => createStoredZipArchive([source(name)]))
+		for (const name of [
+			'../escape.json',
+			'/absolute.json',
+			'a\\b.json',
+			'a/../b.json',
+			'control\u0000.json',
+			'',
+		]) {
+			expect(() => createStoredZipArchive([
+				source(name),
+			]))
 				.toThrow(StoredZipArchiveError);
 		}
-		expect(() => createStoredZipArchive([source('Manifest.json'), source('manifest.json')]))
+		expect(() => createStoredZipArchive([
+			source('Manifest.json'),
+			source('manifest.json'),
+		]))
 			.toThrow(StoredZipArchiveError);
 	});
 
@@ -158,11 +184,13 @@ describe('the stored-ZIP archive Template Packages are written as', () => {
 	});
 
 	it('errors the stream rather than truncating when an entry produces the wrong byte count', async () => {
-		const stream = createStoredZipArchive([{
-			name: 'content/sha256-aa.bin',
-			byteLength: 64,
-			open: async () => readableBytes(new Uint8Array(8)),
-		}]);
+		const stream = createStoredZipArchive([
+			{
+				name: 'content/sha256-aa.bin',
+				byteLength: 64,
+				open: async () => readableBytes(new Uint8Array(8)),
+			},
+		]);
 		await expect(collectStream(stream)).rejects.toThrow(StoredZipArchiveError);
 	});
 });
@@ -182,7 +210,9 @@ describe('template Package envelope limits', () => {
 	});
 
 	it('reports the manifest expanded size it is itself part of', () => {
-		const result = plan([packagedRevision(0, 4096)]);
+		const result = plan([
+			packagedRevision(0, 4096),
+		]);
 
 		expect(result.manifest.totals.expandedByteLength).toBe(result.totals.expandedByteLength);
 		expect(result.totals.expandedByteLength).toBe(
@@ -229,7 +259,9 @@ describe('template Package envelope limits', () => {
 		['negative', -1],
 		['fractional', 12.5],
 	])('reports rather than silently accepting a %s content size', (_description, byteLength) => {
-		const result = plan([packagedRevision(0, byteLength)]);
+		const result = plan([
+			packagedRevision(0, byteLength),
+		]);
 
 		// NaN fails every `>` comparison, so an unmeasurable envelope would
 		// otherwise pass the limits and throw when the archive is opened.
@@ -244,7 +276,9 @@ describe('template Package envelope limits', () => {
 	});
 
 	it('blocks a package that would expand beyond one gibibyte', () => {
-		const result = plan([packagedRevision(0, TEMPLATE_PACKAGE_LIMITS.maximumExpandedByteLength)]);
+		const result = plan([
+			packagedRevision(0, TEMPLATE_PACKAGE_LIMITS.maximumExpandedByteLength),
+		]);
 
 		expect(result.issues.map(issue => issue.code)).toEqual(
 			expect.arrayContaining(['package-expanded-limit-exceeded', 'package-archive-limit-exceeded']),

@@ -37,7 +37,9 @@ const options = computed(() =>
 
 /** The entry a reference names, when the published Style Set still has it. */
 const linked = computed(() =>
-	props.current ? props.entries?.find(entry => entry.id === props.current!.entryId) : undefined,
+	props.current
+		? props.entries?.find(entry => entry.id === props.current!.entryId)
+		: undefined,
 );
 
 /**

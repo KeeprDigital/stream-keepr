@@ -62,7 +62,9 @@ export function buildDeleteStaleMatchesByRoundQuery(
 	roundId: number,
 	keepExternalIds: string[],
 ) {
-	const keepExternalIdPayloads = chunkJsonRows([...new Set(keepExternalIds)]);
+	const keepExternalIdPayloads = chunkJsonRows([
+		...new Set(keepExternalIds),
+	]);
 	const keptExists = keepExternalIdPayloads.map(payload => sql`exists (
 		select 1
 		from json_each(${payload}) as kept
@@ -142,7 +144,9 @@ function buildPromotionPlanFenceQuery(
 }
 
 export function isMatchPromotionPlanStaleViolation(error: unknown): boolean {
-	const message = error instanceof Error ? error.message : '';
+	const message = error instanceof Error
+		? error.message
+		: '';
 	return message.includes('NOT NULL constraint failed: feature_match_slots.event_id');
 }
 
@@ -182,7 +186,9 @@ export async function buildMatchPromotionPlan(
 	});
 	const now = new Date();
 
-	const duplicateConditions = [eq(featureMatches.matchId, match.id)];
+	const duplicateConditions = [
+		eq(featureMatches.matchId, match.id),
+	];
 	if (match.externalId && match.externalSource) {
 		duplicateConditions.push(and(
 			eq(featureMatches.externalId, match.externalId),
@@ -230,8 +236,16 @@ export async function buildMatchPromotionPlan(
 		player2Data: match.player2Data,
 	} as const;
 
-	const clearedSlots: DbFeatureMatch[] = duplicateSlots.map(slot => ({ ...slot, ...clearedValues, updatedAt: now }));
-	const promotedSlot: DbFeatureMatch = { ...targetSlot, ...promotedValues, updatedAt: now };
+	const clearedSlots: DbFeatureMatch[] = duplicateSlots.map(slot => ({
+		...slot,
+		...clearedValues,
+		updatedAt: now,
+	}));
+	const promotedSlot: DbFeatureMatch = {
+		...targetSlot,
+		...promotedValues,
+		updatedAt: now,
+	};
 
 	const queries: BatchItem<'sqlite'>[] = [
 		buildPromotionPlanFenceQuery(eventId, [targetSlot, ...duplicateSlots], unobservedHolderWhere),

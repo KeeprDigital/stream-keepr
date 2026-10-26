@@ -96,7 +96,9 @@ async function api(path, init = {}) {
 	const text = await response.text();
 	if (!response.ok)
 		throw new Error(`${init.method ?? 'GET'} ${path} -> ${response.status}: ${text.slice(0, 200)}`);
-	return text.length === 0 ? undefined : JSON.parse(text);
+	return text.length === 0
+		? undefined
+		: JSON.parse(text);
 }
 
 function lowerThirdGraphic(id) {
@@ -104,35 +106,53 @@ function lowerThirdGraphic(id) {
 		id,
 		name: `Graphic ${id}`,
 		inputs: [
-			{ type: 'text', key: 'name', label: 'name', required: false, updatePolicy: 'staged', default: '', maxLength: 40 },
-			{ type: 'text', key: 'title', label: 'title', required: false, updatePolicy: 'staged', default: '', maxLength: 40 },
-		],
-		items: [{
-			id: `${id}-text`,
-			label: 'Name',
-			type: 'text',
-			visible: true,
-			anchor: 'top-left',
-			x: 0,
-			y: 0,
-			width: 600,
-			height: 120,
-			text: '{name} — {title}',
-			typography: {
-				font: { kind: 'application', fontId: 'inter' },
-				fontSize: 48,
-				fontWeight: 700,
-				fontStyle: 'normal',
-				textTransform: 'none',
-				letterSpacing: 0,
-				lineHeight: 1.2,
-				textAlign: 'left',
-				color: '#ffffff',
+			{
+				type: 'text',
+				key: 'name',
+				label: 'name',
+				required: false,
+				updatePolicy: 'staged',
+				default: '',
+				maxLength: 40,
 			},
-			overflowPolicy: 'ellipsis',
-			minFontSize: 24,
-			placeholderStyles: {},
-		}],
+			{
+				type: 'text',
+				key: 'title',
+				label: 'title',
+				required: false,
+				updatePolicy: 'staged',
+				default: '',
+				maxLength: 40,
+			},
+		],
+		items: [
+			{
+				id: `${id}-text`,
+				label: 'Name',
+				type: 'text',
+				visible: true,
+				anchor: 'top-left',
+				x: 0,
+				y: 0,
+				width: 600,
+				height: 120,
+				text: '{name} — {title}',
+				typography: {
+					font: { kind: 'application', fontId: 'inter' },
+					fontSize: 48,
+					fontWeight: 700,
+					fontStyle: 'normal',
+					textTransform: 'none',
+					letterSpacing: 0,
+					lineHeight: 1.2,
+					textAlign: 'left',
+					color: '#ffffff',
+				},
+				overflowPolicy: 'ellipsis',
+				minFontSize: 24,
+				placeholderStyles: {},
+			},
+		],
 	};
 }
 
@@ -161,7 +181,11 @@ async function main() {
 
 	const graphicId = 'lower-third';
 	const screens = [];
-	for (const [index, mode] of [['a', 'broadcast-graphics'], ['b', 'feature-match-overlay'], ['c', 'broadcast-graphics']]) {
+	for (const [index, mode] of [
+		['a', 'broadcast-graphics'],
+		['b', 'feature-match-overlay'],
+		['c', 'broadcast-graphics'],
+	]) {
 		screens.push(await api(`/api/events/${event.id}/screens`, {
 			method: 'POST',
 			body: {
@@ -169,7 +193,15 @@ async function main() {
 				slug: `issue189-fan-${index}-${marker}`,
 				currentMode: mode,
 				...(mode === 'broadcast-graphics'
-					? { modeConfigs: { 'broadcast-graphics': { graphics: [lowerThirdGraphic(graphicId)] } } }
+					? {
+							modeConfigs: {
+								'broadcast-graphics': {
+									graphics: [
+										lowerThirdGraphic(graphicId),
+									],
+								},
+							},
+						}
 					: {}),
 			},
 		}));
@@ -208,7 +240,9 @@ async function main() {
 					callback(null, request);
 				}
 				catch (error) {
-					callback(error instanceof Error ? error.message : String(error), null);
+					callback(error instanceof Error
+						? error.message
+						: String(error), null);
 				}
 			},
 		});
@@ -288,27 +322,49 @@ async function main() {
 
 	let playoutCommands = 0;
 	const setInput = async (key, value) => {
-		await send({ commandId: commandId(`set-${key}`), type: 'Set Input', payload: { graphicId, inputKey: key, value } });
+		await send({
+			commandId: commandId(`set-${key}`),
+			type: 'Set Input',
+			payload: { graphicId, inputKey: key, value },
+		});
 		playoutCommands += 1;
 	};
 
 	for (let cycle = 1; cycle <= CYCLES; cycle += 1) {
 		await setInput('name', `Competitor ${cycle}`);
 		await setInput('title', 'Quarterfinalist');
-		await send({ commandId: commandId('take'), type: 'Take', payload: { graphicId } });
+		await send({
+			commandId: commandId('take'),
+			type: 'Take',
+			payload: { graphicId },
+		});
 		playoutCommands += 1;
 		await setInput('name', `Competitor ${cycle} Longname`);
 		await setInput('title', `Seed ${cycle} — Quarterfinalist`);
-		await send({ commandId: commandId('update'), type: 'Update Graphic', payload: { graphicId, basedOnAcceptedRevision: acceptedRevisionOf() } });
+		await send({
+			commandId: commandId('update'),
+			type: 'Update Graphic',
+			payload: {
+				graphicId,
+				basedOnAcceptedRevision: acceptedRevisionOf(),
+			},
+		});
 		playoutCommands += 1;
-		await send({ commandId: commandId('out'), type: 'Out', payload: { graphicId } });
+		await send({
+			commandId: commandId('out'),
+			type: 'Out',
+			payload: { graphicId },
+		});
 		playoutCommands += 1;
 	}
 
 	let screenCommands = 0;
 	for (const screen of screens) {
 		for (const command of ['refresh', 'identify']) {
-			await api(`/api/events/${event.id}/screens/${screen.id}/command`, { method: 'POST', body: { command } });
+			await api(`/api/events/${event.id}/screens/${screen.id}/command`, {
+				method: 'POST',
+				body: { command },
+			});
 			screenCommands += 1;
 		}
 	}

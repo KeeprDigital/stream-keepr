@@ -20,12 +20,14 @@ describe('feature match overlay presets', () => {
 		// on "Reset" would delete it. A preset now ships the tree itself, so nothing
 		// is carried and nothing is half-replaced.
 		const authored = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		authored.layout.composition.items = [getGraphicItemDefinition('clock').createDefault({
-			id: 'my-clock',
-			label: 'My Clock',
-			canvasWidth: 1920,
-			canvasHeight: 1080,
-		})];
+		authored.layout.composition.items = [
+			getGraphicItemDefinition('clock').createDefault({
+				id: 'my-clock',
+				label: 'My Clock',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			}),
+		];
 		authored.layout.sources = [];
 
 		const result = applyFeatureMatchOverlayPreset(authored, 'full-table');
@@ -58,11 +60,23 @@ describe('feature match overlay presets', () => {
 		]))).toEqual({
 			'full-table': {
 				sources: ['main-source'],
-				items: ['top-bar', 'bottom-bar', 'player1-game-wins', 'player2-game-wins', 'branding'],
+				items: [
+					'top-bar',
+					'bottom-bar',
+					'player1-game-wins',
+					'player2-game-wins',
+					'branding',
+				],
 			},
 			'left-stacked-player-cams': {
 				sources: ['main-source', 'player1-source', 'player2-source'],
-				items: ['top-bar', 'bottom-bar', 'player1-game-wins', 'player2-game-wins', 'branding'],
+				items: [
+					'top-bar',
+					'bottom-bar',
+					'player1-game-wins',
+					'player2-game-wins',
+					'branding',
+				],
 			},
 			'neon-feature-match': {
 				sources: ['main-source', 'player1-source', 'player2-source'],
@@ -83,7 +97,12 @@ describe('feature match overlay presets', () => {
 	it('keeps every Graphic Item id unique within a preset, including group children', () => {
 		for (const preset of FEATURE_MATCH_OVERLAY_PRESETS) {
 			const ids = preset.config.layout.composition.items.flatMap(item =>
-				item.type === 'group' ? [item.id, ...item.children.map(child => child.id)] : [item.id]);
+				item.type === 'group'
+					? [
+							item.id,
+							...item.children.map(child => child.id),
+						]
+					: [item.id]);
 
 			expect(new Set(ids).size, preset.id).toBe(ids.length);
 		}

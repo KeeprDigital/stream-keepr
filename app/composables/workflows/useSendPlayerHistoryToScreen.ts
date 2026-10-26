@@ -36,5 +36,10 @@ export function useSendPlayerHistoryToScreen() {
 		return sendToScreen(playerId, screen);
 	}
 
-	return { playerHistoryScreens, hasPlayerHistoryScreens, sendToScreen, sendToFirstPlayerHistoryScreen };
+	return {
+		playerHistoryScreens,
+		hasPlayerHistoryScreens,
+		sendToScreen,
+		sendToFirstPlayerHistoryScreen,
+	};
 }

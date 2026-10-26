@@ -30,7 +30,9 @@ export const usePlayerDeckStore = defineStore('playerDeck', () => {
 			return decks.value;
 		}
 		catch (cause) {
-			error.value = cause instanceof Error ? cause.message : 'Failed to load submitted decks';
+			error.value = cause instanceof Error
+				? cause.message
+				: 'Failed to load submitted decks';
 			throw cause;
 		}
 		finally {

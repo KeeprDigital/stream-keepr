@@ -20,7 +20,9 @@ import { createMockScreen } from '~~/test/helpers/fixtures';
  * Every answer can be held back, so the order under test is the test's.
  */
 
-const mockToast = { add: vi.fn() };
+const mockToast = {
+	add: vi.fn(),
+};
 mockNuxtImport('useToast', () => () => mockToast);
 
 const mockRepo = {
@@ -48,7 +50,9 @@ function createServer(initial: Screen) {
 	const holds: Array<() => void> = [];
 	let holding = false;
 
-	mockRepo.list.mockImplementation(async () => [wire(held)]);
+	mockRepo.list.mockImplementation(async () => [
+		wire(held),
+	]);
 	mockRepo.getById.mockImplementation(async () => wire(held));
 	mockRepo.updateModeConfig.mockImplementation(async (eventId: number, screenId: number, mode: ScreenMode, config: Record<string, unknown>, stateVersion: number) => {
 		const body = wire({ ...config, stateVersion });
@@ -59,8 +63,14 @@ function createServer(initial: Screen) {
 			throw Object.assign(new Error('Screen not found'), { statusCode: 404 });
 		const { stateVersion: sent, ...raw } = body;
 		const patch = modeConfigPatchSchemaMap[mode].parse(raw) as Record<string, unknown>;
-		if (sent !== held.stateVersion)
-			throw Object.assign(new Error('Conflict'), { statusCode: 409, data: { data: { code: STATE_CONFLICT_CODE } } });
+		if (sent !== held.stateVersion) {
+			throw Object.assign(new Error('Conflict'), {
+				statusCode: 409,
+				data: {
+					data: { code: STATE_CONFLICT_CODE },
+				},
+			});
+		}
 		held = {
 			...held,
 			modeConfigs: mergeScreenModeConfig((held.modeConfigs ?? {}) as ModeConfigsMap, mode, patch),
@@ -126,7 +136,14 @@ describe('screen settings saves', () => {
 	}
 
 	describe('an edit queued behind a save in flight', () => {
-		const initial = createMockScreen({ id: 1, eventId: 1, stateVersion: 3, modeConfigs: { metagame: { topN: 8, limit: 50 } } });
+		const initial = createMockScreen({
+			id: 1,
+			eventId: 1,
+			stateVersion: 3,
+			modeConfigs: {
+				metagame: { topN: 8, limit: 50 },
+			},
+		});
 
 		it('reaches its own Event and Screen when the operator navigates to another Event', async () => {
 			const server = await openScreen(initial);
@@ -145,8 +162,13 @@ describe('screen settings saves', () => {
 			server.release();
 			await sendPending();
 
-			expect(server.bodies).toEqual([{ topN: 16, stateVersion: 3 }, { limit: 20, stateVersion: 4 }]);
-			expect(server.held.modeConfigs).toEqual({ metagame: { topN: 16, limit: 20 } });
+			expect(server.bodies).toEqual([
+				{ topN: 16, stateVersion: 3 },
+				{ limit: 20, stateVersion: 4 },
+			]);
+			expect(server.held.modeConfigs).toEqual({
+				metagame: { topN: 16, limit: 20 },
+			});
 			expect(await reloadedConfig('metagame')).toMatchObject({ topN: 16, limit: 20 });
 		});
 
@@ -163,7 +185,9 @@ describe('screen settings saves', () => {
 			server.release();
 			await sendPending();
 
-			expect(server.held.modeConfigs).toEqual({ metagame: { topN: 16, limit: 20 } });
+			expect(server.held.modeConfigs).toEqual({
+				metagame: { topN: 16, limit: 20 },
+			});
 			expect(await reloadedConfig('metagame')).toMatchObject({ topN: 16, limit: 20 });
 		});
 
@@ -178,7 +202,9 @@ describe('screen settings saves', () => {
 			scope.stop();
 			await sendPending();
 
-			expect(server.held.modeConfigs).toEqual({ metagame: { topN: 16, limit: 20 } });
+			expect(server.held.modeConfigs).toEqual({
+				metagame: { topN: 16, limit: 20 },
+			});
 		});
 
 		it('reports a queued edit the server refuses as failed, never as saved', async () => {
@@ -196,8 +222,13 @@ describe('screen settings saves', () => {
 			server.release();
 			await sendPending();
 
-			expect(server.bodies).toEqual([{ topN: 16, stateVersion: 3 }, { limit: 9_999, stateVersion: 4 }]);
-			expect(server.held.modeConfigs).toEqual({ metagame: { topN: 16, limit: 50 } });
+			expect(server.bodies).toEqual([
+				{ topN: 16, stateVersion: 3 },
+				{ limit: 9_999, stateVersion: 4 },
+			]);
+			expect(server.held.modeConfigs).toEqual({
+				metagame: { topN: 16, limit: 50 },
+			});
 			expect(saveState.value).toBe('failed');
 			expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({ color: 'error' }));
 			scope.stop();
@@ -210,22 +241,102 @@ describe('screen settings saves', () => {
 	 * operator clear, with an unrelated field beside it that must survive.
 	 */
 	describe.each<[ScreenMode, string, unknown, Record<string, unknown>]>([
-		['metagame', 'archetypeFilter', 'Rakdos Midrange', { topN: 16 }],
-		['metagame', 'headerText', 'Day 2 Metagame', { topN: 16 }],
-		['metagame', 'playerListId', 7, { topN: 16 }],
-		['top-cards', 'archetypeFilter', 'Azorius Control', { topN: 4 }],
-		['top-cards', 'headerText', 'Top Cards', { topN: 4 }],
-		['top-cards', 'playerListId', 7, { topN: 4 }],
-		['standings', 'headerText', 'Final Standings', { rowsPerPage: 6 }],
-		['standings', 'playerListId', 7, { rowsPerPage: 6 }],
-		['player-history', 'headerText', 'Match History', { rowsPerPage: 6 }],
-		['player-history', 'playerId', 5, { rowsPerPage: 6 }],
-		['pairings', 'headerText', 'Top Tables', { rowsPerPage: 6 }],
-		['pairings', 'roundId', 31, { rowsPerPage: 6 }],
-		['archetype-spotlight', 'headerText', 'Deck to Beat', { rowsPerPage: 6 }],
-		['archetype-spotlight', 'archetypeId', 4, { rowsPerPage: 6 }],
-		['head-to-head', 'headerText', 'Feature Match Preview', { featureMatchId: 4 }],
-		['head-to-head', 'player1Id', 7, { playerSource: 'players' }],
+		[
+			'metagame',
+			'archetypeFilter',
+			'Rakdos Midrange',
+			{ topN: 16 },
+		],
+		[
+			'metagame',
+			'headerText',
+			'Day 2 Metagame',
+			{ topN: 16 },
+		],
+		[
+			'metagame',
+			'playerListId',
+			7,
+			{ topN: 16 },
+		],
+		[
+			'top-cards',
+			'archetypeFilter',
+			'Azorius Control',
+			{ topN: 4 },
+		],
+		[
+			'top-cards',
+			'headerText',
+			'Top Cards',
+			{ topN: 4 },
+		],
+		[
+			'top-cards',
+			'playerListId',
+			7,
+			{ topN: 4 },
+		],
+		[
+			'standings',
+			'headerText',
+			'Final Standings',
+			{ rowsPerPage: 6 },
+		],
+		[
+			'standings',
+			'playerListId',
+			7,
+			{ rowsPerPage: 6 },
+		],
+		[
+			'player-history',
+			'headerText',
+			'Match History',
+			{ rowsPerPage: 6 },
+		],
+		[
+			'player-history',
+			'playerId',
+			5,
+			{ rowsPerPage: 6 },
+		],
+		[
+			'pairings',
+			'headerText',
+			'Top Tables',
+			{ rowsPerPage: 6 },
+		],
+		[
+			'pairings',
+			'roundId',
+			31,
+			{ rowsPerPage: 6 },
+		],
+		[
+			'archetype-spotlight',
+			'headerText',
+			'Deck to Beat',
+			{ rowsPerPage: 6 },
+		],
+		[
+			'archetype-spotlight',
+			'archetypeId',
+			4,
+			{ rowsPerPage: 6 },
+		],
+		[
+			'head-to-head',
+			'headerText',
+			'Feature Match Preview',
+			{ featureMatchId: 4 },
+		],
+		[
+			'head-to-head',
+			'player1Id',
+			7,
+			{ playerSource: 'players' },
+		],
 	])('clearing %s %s', (mode, field, storedValue, unrelated) => {
 		it.each([
 			['null, the deletion the PATCH contract defines', null],
@@ -236,7 +347,9 @@ describe('screen settings saves', () => {
 				id: 1,
 				eventId: 1,
 				stateVersion: 1,
-				modeConfigs: { [mode]: { ...unrelated, [field]: storedValue } },
+				modeConfigs: {
+					[mode]: { ...unrelated, [field]: storedValue },
+				},
 			}));
 			const scope = effectScope();
 			const { config, updateConfig } = scope.run(() => useModeConfigUpdate(1, 1, mode))!;
@@ -246,7 +359,9 @@ describe('screen settings saves', () => {
 			expect(fieldOf(config.value, field)).toBe(declared);
 			await sendPending();
 
-			expect(server.bodies).toEqual([{ [field]: null, stateVersion: 1 }]);
+			expect(server.bodies).toEqual([
+				{ [field]: null, stateVersion: 1 },
+			]);
 			expect(server.held.modeConfigs).toEqual({ [mode]: unrelated });
 			expect(fieldOf(config.value, field)).toBe(declared);
 			scope.stop();
@@ -262,7 +377,9 @@ describe('screen settings saves', () => {
 			id: 1,
 			eventId: 1,
 			stateVersion: 1,
-			modeConfigs: { metagame: { headerText: 'Day 2 Metagame', archetypeFilter: 'Rakdos Midrange' } },
+			modeConfigs: {
+				metagame: { headerText: 'Day 2 Metagame', archetypeFilter: 'Rakdos Midrange' },
+			},
 		}));
 		const scope = effectScope();
 		const { config, resetConfig } = scope.run(() => useModeConfigUpdate(1, 1, 'metagame'))!;

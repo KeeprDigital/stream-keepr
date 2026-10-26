@@ -27,7 +27,9 @@ const emit = defineEmits<{ 'update:composition': [composition: BroadcastGraphicC
 const stack = computed(() => featureMatchLayoutStack(props.layout));
 
 function updateStack(next: BroadcastGraphicConfig[]) {
-	const composition = next.length === 1 ? next[0] : undefined;
+	const composition = next.length === 1
+		? next[0]
+		: undefined;
 	if (composition)
 		emit('update:composition', composition);
 }

@@ -90,7 +90,9 @@ export function useGraphicStyleSetAuthoring(
 		}
 		catch (caught) {
 			context.value = null;
-			error.value = caught instanceof Error ? caught.message : 'The Graphic Style Set could not be loaded';
+			error.value = caught instanceof Error
+				? caught.message
+				: 'The Graphic Style Set could not be loaded';
 		}
 		finally {
 			loading.value = false;
@@ -103,5 +105,12 @@ export function useGraphicStyleSetAuthoring(
 		void refreshLibrary();
 	});
 
-	return { styleSets, context, loading, error, refreshLibrary, refreshLinked };
+	return {
+		styleSets,
+		context,
+		loading,
+		error,
+		refreshLibrary,
+		refreshLinked,
+	};
 }

@@ -82,7 +82,9 @@ const BUG: BroadcastGraphicConfig = {
 	inputs: [],
 };
 
-const STACK: BroadcastGraphicsModeConfig = { graphics: [SLATE, BUG] };
+const STACK: BroadcastGraphicsModeConfig = {
+	graphics: [SLATE, BUG],
+};
 
 const nextCommandId = createCommandIdSequence();
 
@@ -114,7 +116,11 @@ async function liveSession() {
 				sessionId: session.id,
 				// The payload shape belongs to each command variant; a test that names the
 				// variant by its `type` supplies the matching payload itself.
-				command: { commandId: nextCommandId(), type, payload } as unknown as BroadcastGraphicsCommand,
+				command: {
+					commandId: nextCommandId(),
+					type,
+					payload,
+				} as unknown as BroadcastGraphicsCommand,
 				graphicsAssets,
 			}),
 	};

@@ -53,7 +53,10 @@ export const createEventSchema = createInsertSchema(events)
 	.strict()
 	.refine(
 		input => input.broadcastDeckListsEnabled !== true || input.game === 'mtg',
-		{ message: 'Broadcast Deck Lists can only be enabled for MTG Events', path: ['broadcastDeckListsEnabled'] },
+		{
+			message: 'Broadcast Deck Lists can only be enabled for MTG Events',
+			path: ['broadcastDeckListsEnabled'],
+		},
 	);
 
 // UPDATE — all fields optional for partial updates

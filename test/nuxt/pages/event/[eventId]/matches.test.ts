@@ -15,7 +15,9 @@ function buildFullPath() {
 		Object.entries(route.query).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
 	).toString();
 
-	route.fullPath = queryString ? `${route.path}?${queryString}` : route.path;
+	route.fullPath = queryString
+		? `${route.path}?${queryString}`
+		: route.path;
 }
 
 const router = {
@@ -149,18 +151,35 @@ mockNuxtImport('useRoundStore', () => () => mockRoundStore);
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
 mockNuxtImport('useFeatureMatchPromotion', () => () => mockFeatureMatchPromotion);
 mockNuxtImport('useFeatureMatchAssignmentStore', () => () => mockFeatureMatchAssignmentStore);
-mockNuxtImport('useFeatureMatchStateStore', () => () => ({ $reset: vi.fn() }));
+mockNuxtImport('useFeatureMatchStateStore', () => () => ({
+	$reset: vi.fn(),
+}));
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
-mockNuxtImport('useArchetypeStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useMetagameStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('usePlayerListStore', () => () => ({ $reset: vi.fn() }));
+mockNuxtImport('useArchetypeStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('useMetagameStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('usePlayerListStore', () => () => ({
+	$reset: vi.fn(),
+}));
 mockNuxtImport('usePhaseStore', () => () => mockPhaseStore);
 mockNuxtImport('useToast', () => () => mockToast);
 mockNuxtImport('useOverlay', () => () => mockOverlay);
 mockNuxtImport('usePlayerDeckCache', () => () => mockPlayerDeckCache);
-mockNuxtImport('useEventPageLoading', () => () => ({ eventId, initialLoading: storesLoading, initialError: ref(null), retry: vi.fn() }));
-mockNuxtImport('useScreenStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useCardStore', () => () => ({ $reset: vi.fn() }));
+mockNuxtImport('useEventPageLoading', () => () => ({
+	eventId,
+	initialLoading: storesLoading,
+	initialError: ref(null),
+	retry: vi.fn(),
+}));
+mockNuxtImport('useScreenStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('useCardStore', () => () => ({
+	$reset: vi.fn(),
+}));
 mockNuxtImport('useMeleeStore', () => () => mockMeleeStore);
 mockNuxtImport('clearPlayerDeckCache', () => vi.fn());
 mockNuxtImport('navigateTo', () => vi.fn());
@@ -306,7 +325,14 @@ describe('matches page', () => {
 	});
 
 	it('shows an empty state when rounds exist but none of them have matches', async () => {
-		mockRoundStore.rounds = [{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: null }];
+		mockRoundStore.rounds = [
+			{
+				id: 2,
+				phaseId: 1,
+				name: 'Round 1',
+				lastSyncedAt: null,
+			},
+		];
 
 		const wrapper = await mountPage();
 		await flushPromises();
@@ -316,8 +342,22 @@ describe('matches page', () => {
 	});
 
 	it('shows the navbar Add Match action once matches exist', async () => {
-		mockRoundStore.rounds = [{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: null }];
-		mockMatchStore.matches = [{ id: 9, roundId: 2, hasResult: false, isBye: false }];
+		mockRoundStore.rounds = [
+			{
+				id: 2,
+				phaseId: 1,
+				name: 'Round 1',
+				lastSyncedAt: null,
+			},
+		];
+		mockMatchStore.matches = [
+			{
+				id: 9,
+				roundId: 2,
+				hasResult: false,
+				isBye: false,
+			},
+		];
 
 		const wrapper = await mountPage();
 		await flushPromises();
@@ -329,9 +369,24 @@ describe('matches page', () => {
 
 	it('prefers the most recently synced round when no query or current round exists', async () => {
 		mockRoundStore.rounds = [
-			{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: '2026-04-10T10:00:00.000Z' },
-			{ id: 3, phaseId: 1, name: 'Round 2', lastSyncedAt: '2026-04-10T11:00:00.000Z' },
-			{ id: 4, phaseId: 1, name: 'Round 3', lastSyncedAt: null },
+			{
+				id: 2,
+				phaseId: 1,
+				name: 'Round 1',
+				lastSyncedAt: '2026-04-10T10:00:00.000Z',
+			},
+			{
+				id: 3,
+				phaseId: 1,
+				name: 'Round 2',
+				lastSyncedAt: '2026-04-10T11:00:00.000Z',
+			},
+			{
+				id: 4,
+				phaseId: 1,
+				name: 'Round 3',
+				lastSyncedAt: null,
+			},
 		];
 
 		await mountPage();
@@ -342,8 +397,18 @@ describe('matches page', () => {
 
 	it('uses most recently synced round when no query exists', async () => {
 		mockRoundStore.rounds = [
-			{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: '2026-04-10T11:00:00.000Z' },
-			{ id: 4, phaseId: 1, name: 'Round 2', lastSyncedAt: null },
+			{
+				id: 2,
+				phaseId: 1,
+				name: 'Round 1',
+				lastSyncedAt: '2026-04-10T11:00:00.000Z',
+			},
+			{
+				id: 4,
+				phaseId: 1,
+				name: 'Round 2',
+				lastSyncedAt: null,
+			},
 		];
 
 		await mountPage();
@@ -354,10 +419,22 @@ describe('matches page', () => {
 
 	it('shows available rounds in the selector', async () => {
 		mockRoundStore.rounds = [
-			{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: null },
-			{ id: 3, phaseId: 1, name: 'Round 2', lastSyncedAt: null },
+			{
+				id: 2,
+				phaseId: 1,
+				name: 'Round 1',
+				lastSyncedAt: null,
+			},
+			{
+				id: 3,
+				phaseId: 1,
+				name: 'Round 2',
+				lastSyncedAt: null,
+			},
 		];
-		mockMatchStore.matches = [{ id: 1, roundId: 3 }];
+		mockMatchStore.matches = [
+			{ id: 1, roundId: 3 },
+		];
 
 		const wrapper = await mountPage();
 		await flushPromises();
@@ -367,11 +444,33 @@ describe('matches page', () => {
 	});
 
 	it('shows all matches for the selected round', async () => {
-		mockRoundStore.rounds = [{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: null }];
+		mockRoundStore.rounds = [
+			{
+				id: 2,
+				phaseId: 1,
+				name: 'Round 1',
+				lastSyncedAt: null,
+			},
+		];
 		mockMatchStore.matches = [
-			{ id: 11, roundId: 2, hasResult: false, isBye: false },
-			{ id: 12, roundId: 2, hasResult: true, isBye: false },
-			{ id: 13, roundId: 2, hasResult: false, isBye: true },
+			{
+				id: 11,
+				roundId: 2,
+				hasResult: false,
+				isBye: false,
+			},
+			{
+				id: 12,
+				roundId: 2,
+				hasResult: true,
+				isBye: false,
+			},
+			{
+				id: 13,
+				roundId: 2,
+				hasResult: false,
+				isBye: true,
+			},
 		];
 
 		const wrapper = await mountPage();
@@ -384,12 +483,33 @@ describe('matches page', () => {
 	it('passes only the selected previous Round Assignments to the Matches list and releases it on unmount', async () => {
 		route.query.roundId = '3';
 		mockRoundStore.rounds = [
-			{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: null },
-			{ id: 3, phaseId: 1, name: 'Round 2', lastSyncedAt: null },
+			{
+				id: 2,
+				phaseId: 1,
+				name: 'Round 1',
+				lastSyncedAt: null,
+			},
+			{
+				id: 3,
+				phaseId: 1,
+				name: 'Round 2',
+				lastSyncedAt: null,
+			},
 		];
-		mockMatchStore.matches = [{ id: 13, roundId: 3, hasResult: false, isBye: false }];
-		assignmentsByRound.set(2, [{ id: 20, roundId: 2, note: 'Wrong Round' }]);
-		assignmentsByRound.set(3, [{ id: 30, roundId: 3, note: 'Selected Round Note' }]);
+		mockMatchStore.matches = [
+			{
+				id: 13,
+				roundId: 3,
+				hasResult: false,
+				isBye: false,
+			},
+		];
+		assignmentsByRound.set(2, [
+			{ id: 20, roundId: 2, note: 'Wrong Round' },
+		]);
+		assignmentsByRound.set(3, [
+			{ id: 30, roundId: 3, note: 'Selected Round Note' },
+		]);
 
 		const wrapper = await mountPage();
 		await flushPromises();
@@ -401,7 +521,14 @@ describe('matches page', () => {
 	});
 
 	it('makes no Event-wide Match list request on load', async () => {
-		mockRoundStore.rounds = [{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: null }];
+		mockRoundStore.rounds = [
+			{
+				id: 2,
+				phaseId: 1,
+				name: 'Round 1',
+				lastSyncedAt: null,
+			},
+		];
 
 		await mountPage();
 		await flushPromises();
@@ -422,8 +549,18 @@ describe('matches page', () => {
 		expect(router.replace).not.toHaveBeenCalled();
 
 		mockRoundStore.rounds = [
-			{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: '2026-04-10T11:00:00.000Z' },
-			{ id: 3, phaseId: 1, name: 'Round 2', lastSyncedAt: null },
+			{
+				id: 2,
+				phaseId: 1,
+				name: 'Round 1',
+				lastSyncedAt: '2026-04-10T11:00:00.000Z',
+			},
+			{
+				id: 3,
+				phaseId: 1,
+				name: 'Round 2',
+				lastSyncedAt: null,
+			},
 		];
 		storesLoading.value = false;
 		await flushPromises();
@@ -435,7 +572,15 @@ describe('matches page', () => {
 
 	it('re-reads the synced Round\'s Matches and the Rounds after a Round sync, without an Event-wide Match list', async () => {
 		mockEventStore.event = { meleeEnabled: true };
-		mockRoundStore.rounds = [{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: null, externalSource: 'melee' }];
+		mockRoundStore.rounds = [
+			{
+				id: 2,
+				phaseId: 1,
+				name: 'Round 1',
+				lastSyncedAt: null,
+				externalSource: 'melee',
+			},
+		];
 
 		const wrapper = await mountPage();
 		await flushPromises();

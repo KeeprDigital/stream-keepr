@@ -33,7 +33,11 @@ const playerOptions = computed(() => [
 // The Player's Matches the Screen pages, read and followed as its Screen Output reads and follows them, so
 // the page count is the one it renders (#780).
 const { rowCount, loading: loadingHistory } = useEditedScreenModeData(
-	{ screen: () => props.screen, eventId: () => props.eventId, saving: () => saving.value },
+	{
+		screen: () => props.screen,
+		eventId: () => props.eventId,
+		saving: () => saving.value,
+	},
 	usePlayerHistoryModeData,
 );
 
@@ -52,7 +56,12 @@ const columns = computed(() => withEveryColumn(config.value.columns, screenModeC
 // The live Page Rotation projection and the anchor writes an operator makes.
 // Every edit below goes through its `updateConfig`, which restarts the
 // rotation from page 1 when the edit changes the rotation's shape.
-const rotation = useRotationConfigWrites({ mode: 'player-history', config, rowCount, saveConfig });
+const rotation = useRotationConfigWrites({
+	mode: 'player-history',
+	config,
+	rowCount,
+	saveConfig,
+});
 const { updateConfig } = rotation;
 
 // What the pickers below load, re-read on Reconnect Resync (#610).

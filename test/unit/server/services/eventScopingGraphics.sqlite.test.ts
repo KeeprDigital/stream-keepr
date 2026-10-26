@@ -48,8 +48,18 @@ function storedCard(id: string): StoredCardData {
 		set: 'mh2',
 		layout: 'normal',
 		imageData: { front: null, back: null },
-		orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
-		displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
+		orientationData: {
+			flipable: false,
+			turnable: false,
+			rotateable: false,
+			counterRotateable: false,
+		},
+		displayData: {
+			flipped: false,
+			rotated: false,
+			counterRotated: false,
+			turnedOver: false,
+		},
 		savedAt: 1755000000000,
 	};
 }
@@ -94,7 +104,12 @@ async function seedEvent(name: string, index: number): Promise<SeededEvent> {
 		.values({ eventId, name: `${name} Swiss` })
 		.returning({ id: schema.phases.id });
 	const [round] = await db.insert(schema.rounds)
-		.values({ eventId, phaseId: phase!.id, name: 'Round 1', roundNumber: 1 })
+		.values({
+			eventId,
+			phaseId: phase!.id,
+			name: 'Round 1',
+			roundNumber: 1,
+		})
 		.returning({ id: schema.rounds.id });
 	const [match] = await db.insert(schema.matches)
 		.values({ eventId, roundId: round!.id })
@@ -158,7 +173,10 @@ beforeAll(async () => {
 	liveSessionTwoId = liveSessionTwo!.id;
 
 	await db.update(schema.screens)
-		.set({ activeCard: storedCard('card-two'), activeCardVersion: 1 })
+		.set({
+			activeCard: storedCard('card-two'),
+			activeCardVersion: 1,
+		})
 		.where(eq(schema.screens.id, two.screenId));
 });
 
@@ -202,7 +220,10 @@ describe('screenService event scoping', () => {
 describe('cardService event scoping', () => {
 	it('never surfaces another Event\'s Screen Card', async () => {
 		const service = cardService();
-		expect(await service.getScreenCard(two.eventId, two.screenId)).toEqual({ card: expect.objectContaining({ id: 'card-two' }), revision: 1 });
+		expect(await service.getScreenCard(two.eventId, two.screenId)).toEqual({
+			card: expect.objectContaining({ id: 'card-two' }),
+			revision: 1,
+		});
 		// Nor its Card revision: the wrong Event reads as a Screen never written.
 		expect(await service.getScreenCard(one.eventId, two.screenId)).toEqual({ card: null, revision: 0 });
 	});

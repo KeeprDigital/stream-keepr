@@ -286,7 +286,9 @@ const ROUTE_WORDS = new Set([
  * the half that must not travel.
  */
 export function deliveryRouteLabel(value) {
-	const pathname = URL_PATTERN.test(value) ? new URL(value).pathname : value;
+	const pathname = URL_PATTERN.test(value)
+		? new URL(value).pathname
+		: value;
 	const segments = pathname.split('/').filter(Boolean);
 	const labelled = segments.map((segment, index) => {
 		if (ROUTE_WORDS.has(segment))
@@ -348,9 +350,13 @@ export function pageTextEvidence(text) {
 	const reduced = firstLine
 		.replace(URL_RUN_PATTERN, '<url>')
 		.replace(FILENAME_RUN_PATTERN, '<file>')
-		.replace(TOKEN_RUN_PATTERN, run => carriesOpaqueToken(run) ? '<token>' : run)
+		.replace(TOKEN_RUN_PATTERN, run => carriesOpaqueToken(run)
+			? '<token>'
+			: run)
 		.replace(/\s+/g, ' ');
-	return reduced.length <= PAGE_TEXT_LENGTH ? reduced : `${reduced.slice(0, PAGE_TEXT_LENGTH - 1)}…`;
+	return reduced.length <= PAGE_TEXT_LENGTH
+		? reduced
+		: `${reduced.slice(0, PAGE_TEXT_LENGTH - 1)}…`;
 }
 
 /** How many of a page's newest console messages a failure line carries. */
@@ -369,8 +375,13 @@ export function pageDiagnosticsEvidence(diagnostics) {
 	const logged = (diagnostics?.console ?? []).slice(-PRINTED_CONSOLE_MESSAGES);
 	return {
 		uncaught: pageTextEvidence(uncaught.at(-1)),
-		...Object.fromEntries((logged.length > 0 ? logged : [undefined])
-			.map((text, index) => [`console${index + 1}`, pageTextEvidence(text)])),
+		...Object.fromEntries((logged.length > 0
+			? logged
+			: [undefined])
+			.map((text, index) => [
+				`console${index + 1}`,
+				pageTextEvidence(text),
+			])),
 	};
 }
 

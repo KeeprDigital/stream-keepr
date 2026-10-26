@@ -53,7 +53,9 @@ function currentDisplayMs(): number {
 function takeSnapshot() {
 	for (const player of ['player1', 'player2'] as const) {
 		snapshot.life[player] = String(props.state[player].lifeTotal);
-		snapshot.cardsKept[player] = props.state[player].cardsKept != null ? String(props.state[player].cardsKept) : '';
+		snapshot.cardsKept[player] = props.state[player].cardsKept != null
+			? String(props.state[player].cardsKept)
+			: '';
 		lifeInput[player] = snapshot.life[player];
 		cardsKeptInput[player] = snapshot.cardsKept[player];
 	}
@@ -74,8 +76,12 @@ watch(() => props.open, (isOpen) => {
 }, { immediate: true });
 
 function playerLabel(player: PlayerSide): string {
-	const name = player === 'player1' ? props.player1Name : props.player2Name;
-	return name || (player === 'player1' ? 'Player 1' : 'Player 2');
+	const name = player === 'player1'
+		? props.player1Name
+		: props.player2Name;
+	return name || (player === 'player1'
+		? 'Player 1'
+		: 'Player 2');
 }
 
 const playerItems = computed(() => (['player1', 'player2'] as const).map(player => ({
@@ -85,9 +91,15 @@ const playerItems = computed(() => (['player1', 'player2'] as const).map(player 
 // A first player can be chosen but never unset, so "Not selected" is offered
 // only while it is the current truth.
 const firstPlayerItems = computed(() => snapshot.firstPlayer === NONE
-	? [{ label: 'Not selected', value: NONE }, ...playerItems.value]
+	? [
+			{ label: 'Not selected', value: NONE },
+			...playerItems.value,
+		]
 	: playerItems.value);
-const activePlayerItems = computed(() => [{ label: 'None', value: NONE }, ...playerItems.value]);
+const activePlayerItems = computed(() => [
+	{ label: 'None', value: NONE },
+	...playerItems.value,
+]);
 
 const clockParsedMs = computed(() => parseTimeInput(clockInput.value));
 const clockValid = computed(() => clockInput.value.trim() === '' || clockParsedMs.value !== null);
@@ -148,8 +160,11 @@ function buildUpdate(): FeatureMatchStateUpdate {
 	if (props.showPlayerTracking) {
 		if (firstPlayerChoice.value !== snapshot.firstPlayer && firstPlayerChoice.value !== NONE)
 			update.firstPlayer = firstPlayerChoice.value;
-		if (activePlayerChoice.value !== snapshot.activePlayer)
-			update.activePlayer = activePlayerChoice.value === NONE ? null : activePlayerChoice.value;
+		if (activePlayerChoice.value !== snapshot.activePlayer) {
+			update.activePlayer = activePlayerChoice.value === NONE
+				? null
+				: activePlayerChoice.value;
+		}
 	}
 
 	const clockMs = clockParsedMs.value;

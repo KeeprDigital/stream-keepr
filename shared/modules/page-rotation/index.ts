@@ -106,7 +106,13 @@ export function pageRotationEdit<Patch extends object>(
 		return patch;
 	return {
 		...patch,
-		...(resizesPages ? { currentPage: 1 } : {}),
-		...(rotation.autoPageEnabled ? { rotationAnchor: restartedRotationAnchor(now) } : {}),
+		...(resizesPages
+			? { currentPage: 1 }
+			: {}),
+		...(rotation.autoPageEnabled
+			? {
+					rotationAnchor: restartedRotationAnchor(now),
+				}
+			: {}),
 	};
 }

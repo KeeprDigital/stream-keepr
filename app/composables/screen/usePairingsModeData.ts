@@ -52,7 +52,9 @@ export function usePairingsModeData() {
 	const round = computed(() => freshness.data.value?.round ?? null);
 	const rows = computed(() => freshness.data.value?.matches ?? []);
 
-	const headerText = computed(() => config.value.headerText || (round.value ? `${round.value.name} Pairings` : 'Pairings'));
+	const headerText = computed(() => config.value.headerText || (round.value
+		? `${round.value.name} Pairings`
+		: 'Pairings'));
 	const isEmpty = computed(() => !loading.value && (!config.value.roundId || rows.value.length === 0));
 
 	const { pageData, rowCount } = usePaginatedScreenMode({ mode: 'pairings', config, rows });
@@ -62,19 +64,38 @@ export function usePairingsModeData() {
 			return 'BYE';
 		if (!row.hasResult)
 			return 'Pending';
-		if (row.player1GameWins != null && row.player2GameWins != null)
-			return `${row.player1GameWins}-${row.player2GameWins}${row.gameDraws ? `-${row.gameDraws}` : ''}`;
+		if (row.player1GameWins != null && row.player2GameWins != null) {
+			return `${row.player1GameWins}-${row.player2GameWins}${row.gameDraws
+				? `-${row.gameDraws}`
+				: ''}`;
+		}
 		return row.resultString || 'Result';
 	}
 
 	/** Which side won the Match: the seated Player of a bye, or the one with more game wins; `null` for a draw or a pending Match. */
 	function winner(row: ScreenOutputRoundMatch): 1 | 2 | null {
-		if (row.isBye)
-			return row.player1 || !row.player2 ? 1 : 2;
+		if (row.isBye) {
+			return row.player1 || !row.player2
+				? 1
+				: 2;
+		}
 		if (!row.hasResult || row.player1GameWins == null || row.player2GameWins == null || row.player1GameWins === row.player2GameWins)
 			return null;
-		return row.player1GameWins > row.player2GameWins ? 1 : 2;
+		return row.player1GameWins > row.player2GameWins
+			? 1
+			: 2;
 	}
 
-	return { config, loading, error, isEmpty, headerText, round, pageData, rowCount, formatResult, winner };
+	return {
+		config,
+		loading,
+		error,
+		isEmpty,
+		headerText,
+		round,
+		pageData,
+		rowCount,
+		formatResult,
+		winner,
+	};
 }

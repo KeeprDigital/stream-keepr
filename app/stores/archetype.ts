@@ -72,7 +72,11 @@ export const useArchetypeStore = defineStore('archetype', () => {
 			async () => {
 				const result = await $fetch<{ keyCards: Array<{ id: number; name: string; game: string; scryfallId: string | null; cardType: string | null; colors: string | null; cmc: number | null; manaCost: string | null }> }>(
 					`/api/events/${eventId}/archetypes/${archetypeId}/cards`,
-					{ method: 'PATCH', body: { cardNames }, headers: apiHeaders.getHeaders() },
+					{
+						method: 'PATCH',
+						body: { cardNames },
+						headers: apiHeaders.getHeaders(),
+					},
 				);
 				if (flight.stale)
 					return result.keyCards;
@@ -113,7 +117,9 @@ export const useArchetypeStore = defineStore('archetype', () => {
 		return archetypes.value.find((a) => {
 			if (a.name !== name)
 				return false;
-			const archetypeColors = [...(a.colors ?? [])].sort().join(',');
+			const archetypeColors = [
+				...(a.colors ?? []),
+			].sort().join(',');
 			return archetypeColors === inputColors;
 		});
 	}

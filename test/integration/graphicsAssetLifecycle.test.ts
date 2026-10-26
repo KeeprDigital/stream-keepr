@@ -106,7 +106,11 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 	async function lifecycleAction(assetId: string, action: GraphicAssetLifecycleAction) {
 		return await $fetch<GraphicAssetLifecycleActionOutcome>(
 			`/api/graphics-assets/${assetId}/lifecycle-actions`,
-			{ method: 'POST', headers: authorHeaders, body: { action } },
+			{
+				method: 'POST',
+				headers: authorHeaders,
+				body: { action },
+			},
 		);
 	}
 
@@ -145,7 +149,10 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 		config.layout.frame.backgroundImage = { kind: 'asset', ...reference };
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: config.layout } },
+			{
+				method: 'PATCH',
+				body: { layout: config.layout },
+			},
 		);
 		const replacement = await replace(reference.assetId, 'lifecycle-retire-replacement');
 		await $fetch(`/api/graphics-assets/${reference.assetId}`, {
@@ -219,7 +226,10 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 		});
 		await expect($fetch(
 			`/api/events/${eventId}/screens/${secondScreen.id}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: config.layout } },
+			{
+				method: 'PATCH',
+				body: { layout: config.layout },
+			},
 		)).rejects.toMatchObject({ statusCode: 409 });
 
 		const restored = await lifecycleAction(reference.assetId, 'restore');
@@ -366,7 +376,10 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 		// `map` exhausts the type comparison depth limit.
 		await Promise.all([secondScreen.id, thirdScreen.id].map(async id => await $fetch<unknown>(
 			`/api/events/${eventId}/screens/${id}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: config.layout } },
+			{
+				method: 'PATCH',
+				body: { layout: config.layout },
+			},
 		)));
 
 		// Both references, in whichever order they landed: the two Screens were
@@ -420,7 +433,10 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 		const [referenceResult, trashResult] = await Promise.allSettled([
 			$fetch(
 				`/api/events/${eventId}/screens/${racingScreen.id}/config/feature-match-overlay`,
-				{ method: 'PATCH', body: { layout: config.layout } },
+				{
+					method: 'PATCH',
+					body: { layout: config.layout },
+				},
 			),
 			lifecycleAction(reference.assetId, 'trash'),
 		]);
@@ -450,10 +466,14 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 				status: 'fulfilled',
 				value: {
 					outcome: 'in-use',
-					usage: [expect.objectContaining({ reference })],
+					usage: [
+						expect.objectContaining({ reference }),
+					],
 				},
 			});
-			expect(usage).toEqual([expect.objectContaining({ reference })]);
+			expect(usage).toEqual([
+				expect.objectContaining({ reference }),
+			]);
 		}
 	});
 

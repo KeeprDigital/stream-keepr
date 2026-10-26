@@ -18,7 +18,12 @@ export function useFeatureMatchRepository() {
 
 	const update = async (eventId: number, slotId: number, updates: UpdateFeatureMatchInput): Promise<FeatureMatch> => {
 		return await eventData.command<FeatureMatch, UpdateFeatureMatchInput>(
-			{ eventId, resourcePath: 'feature-match-slots', resourceId: slotId, suffix: 'setup' },
+			{
+				eventId,
+				resourcePath: 'feature-match-slots',
+				resourceId: slotId,
+				suffix: 'setup',
+			},
 			{ method: 'PATCH', body: updates },
 		);
 	};
@@ -26,7 +31,10 @@ export function useFeatureMatchRepository() {
 	const reorder = async (eventId: number, slotId: number, direction: 'up' | 'down'): Promise<void> => {
 		await eventData.command<void, { slotId: number; direction: 'up' | 'down' }>(
 			{ eventId, resourcePath: 'feature-match-slots', suffix: 'reorder' },
-			{ method: 'PATCH', body: { slotId, direction } },
+			{
+				method: 'PATCH',
+				body: { slotId, direction },
+			},
 		);
 	};
 
@@ -37,8 +45,21 @@ export function useFeatureMatchRepository() {
 		confirmedNoteDiscards?: FeatureMatchNoteDiscardConfirmation[],
 	): Promise<FeatureMatchPromotionResponse> => {
 		return await eventData.command<FeatureMatchPromotionResponse, { matchId: number; confirmedNoteDiscards?: FeatureMatchNoteDiscardConfirmation[] }>(
-			{ eventId, resourcePath: 'feature-match-slots', resourceId: slotId, suffix: 'promote' },
-			{ method: 'POST', body: { matchId, ...(confirmedNoteDiscards ? { confirmedNoteDiscards } : {}) } },
+			{
+				eventId,
+				resourcePath: 'feature-match-slots',
+				resourceId: slotId,
+				suffix: 'promote',
+			},
+			{
+				method: 'POST',
+				body: {
+					matchId,
+					...(confirmedNoteDiscards
+						? { confirmedNoteDiscards }
+						: {}),
+				},
+			},
 		);
 	};
 

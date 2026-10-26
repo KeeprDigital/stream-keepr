@@ -27,10 +27,18 @@ const p2Data = {
 };
 
 const mockMatchState = createMockFeatureMatchState();
-const matchStatesMap = new Map([[1, mockMatchState]]);
+const matchStatesMap = new Map([
+	[1, mockMatchState],
+]);
 
 const mockMatches = ref([
-	{ id: 1, bestOf: 3, player1Data: p1Data, player2Data: p2Data, playerDisplayMode: 'score' },
+	{
+		id: 1,
+		bestOf: 3,
+		player1Data: p1Data,
+		player2Data: p2Data,
+		playerDisplayMode: 'score',
+	},
 ]);
 
 const mockEvent = ref(createMockEvent());
@@ -52,7 +60,13 @@ describe('usePlayerFeatureMatchData', () => {
 		vi.clearAllMocks();
 		// Reset to defaults
 		mockMatches.value = [
-			{ id: 1, bestOf: 3, player1Data: p1Data, player2Data: p2Data, playerDisplayMode: 'score' },
+			{
+				id: 1,
+				bestOf: 3,
+				player1Data: p1Data,
+				player2Data: p2Data,
+				playerDisplayMode: 'score',
+			},
 		];
 		mockEvent.value = createMockEvent();
 	});
@@ -97,7 +111,13 @@ describe('usePlayerFeatureMatchData', () => {
 
 	it('returns undefined pronouns when playerData is null', () => {
 		mockMatches.value = [
-			{ id: 1, bestOf: 3, player1Data: null as any, player2Data: p2Data, playerDisplayMode: 'score' },
+			{
+				id: 1,
+				bestOf: 3,
+				player1Data: null as any,
+				player2Data: p2Data,
+				playerDisplayMode: 'score',
+			},
 		];
 		const { playerPronouns } = usePlayerFeatureMatchData(1, 'player1');
 		expect(playerPronouns.value).toBeUndefined();
@@ -112,7 +132,13 @@ describe('usePlayerFeatureMatchData', () => {
 
 	it('returns undefined deckName when no gameData', () => {
 		mockMatches.value = [
-			{ id: 1, bestOf: 3, player1Data: { ...p1Data, gameData: null as any }, player2Data: p2Data, playerDisplayMode: 'score' },
+			{
+				id: 1,
+				bestOf: 3,
+				player1Data: { ...p1Data, gameData: null as any },
+				player2Data: p2Data,
+				playerDisplayMode: 'score',
+			},
 		];
 		const { deckName } = usePlayerFeatureMatchData(1, 'player1');
 		expect(deckName.value).toBeUndefined();
@@ -189,7 +215,13 @@ describe('usePlayerFeatureMatchData', () => {
 	describe('playerRecord — position mode', () => {
 		it('formats position as ordinal by default', () => {
 			mockMatches.value = [
-				{ id: 1, bestOf: 3, player1Data: p1Data, player2Data: p2Data, playerDisplayMode: 'position' },
+				{
+					id: 1,
+					bestOf: 3,
+					player1Data: p1Data,
+					player2Data: p2Data,
+					playerDisplayMode: 'position',
+				},
 			];
 			const { playerRecord } = usePlayerFeatureMatchData(1, 'player1');
 			// p1Data.position = 1, displayPositionFormat = 'ordinal' by default
@@ -198,7 +230,13 @@ describe('usePlayerFeatureMatchData', () => {
 
 		it('formats position as plain number when format is not ordinal', () => {
 			mockMatches.value = [
-				{ id: 1, bestOf: 3, player1Data: p1Data, player2Data: p2Data, playerDisplayMode: 'position' },
+				{
+					id: 1,
+					bestOf: 3,
+					player1Data: p1Data,
+					player2Data: p2Data,
+					playerDisplayMode: 'position',
+				},
 			];
 			mockEvent.value = createMockEvent({ displayPositionFormat: 'numeric' as any });
 			const { playerRecord } = usePlayerFeatureMatchData(1, 'player1');
@@ -207,7 +245,13 @@ describe('usePlayerFeatureMatchData', () => {
 
 		it('handles string position that is not a number', () => {
 			mockMatches.value = [
-				{ id: 1, bestOf: 3, player1Data: { ...p1Data, position: 'N/A' as any }, player2Data: p2Data, playerDisplayMode: 'position' },
+				{
+					id: 1,
+					bestOf: 3,
+					player1Data: { ...p1Data, position: 'N/A' as any },
+					player2Data: p2Data,
+					playerDisplayMode: 'position',
+				},
 			];
 			const { playerRecord } = usePlayerFeatureMatchData(1, 'player1');
 			expect(playerRecord.value).toBe('N/A');

@@ -42,7 +42,9 @@ describe('player lists extended API', () => {
 
 		await $fetch(`/api/events/${eventId}/player-lists/${listId}/members`, {
 			method: 'POST',
-			body: { playerIds: [player1Id, player2Id, player3Id] },
+			body: {
+				playerIds: [player1Id, player2Id, player3Id],
+			},
 		});
 	});
 
@@ -108,12 +110,16 @@ describe('player lists extended API', () => {
 	it('rejects a partial or duplicate reorder payload', async () => {
 		await expect($fetch(`/api/events/${eventId}/player-lists/${listId}/members/reorder`, {
 			method: 'PUT',
-			body: { playerIds: [player1Id, player2Id] },
+			body: {
+				playerIds: [player1Id, player2Id],
+			},
 		})).rejects.toMatchObject({ statusCode: 400 });
 
 		await expect($fetch(`/api/events/${eventId}/player-lists/${listId}/members/reorder`, {
 			method: 'PUT',
-			body: { playerIds: [player1Id, player1Id, player3Id] },
+			body: {
+				playerIds: [player1Id, player1Id, player3Id],
+			},
 		})).rejects.toMatchObject({ statusCode: 400 });
 
 		const data = await $fetch(`/api/events/${eventId}/player-lists/${listId}`);

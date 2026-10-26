@@ -17,8 +17,14 @@ function createSnapshot(): FeatureMatchSourceSnapshot {
 		playerDisplayMode: 'score',
 		game: 'mtg',
 		defaults: DEFAULT_FEATURE_MATCH_DEFAULTS,
-		player1: { playerId: 1, data: { name: 'Alice' } },
-		player2: { playerId: 2, data: { name: 'Bob' } },
+		player1: {
+			playerId: 1,
+			data: { name: 'Alice' },
+		},
+		player2: {
+			playerId: 2,
+			data: { name: 'Bob' },
+		},
 		createdAt: 1000,
 	};
 }
@@ -28,9 +34,22 @@ function createBusyState(): FeatureMatchState {
 	const state = createInitialFeatureMatchState();
 	return {
 		...state,
-		player1: { ...state.player1, lifeTotal: 14, gameWins: 1, counters: [{ type: 'poison', value: 2 }], cardsKept: 7 },
+		player1: {
+			...state.player1,
+			lifeTotal: 14,
+			gameWins: 1,
+			counters: [
+				{ type: 'poison', value: 2 },
+			],
+			cardsKept: 7,
+		},
 		player2: { ...state.player2, lifeTotal: 18, gameWins: 1 },
-		clock: { ...state.clock, isRunning: true, lastStartedAt: 1_000, elapsedMs: 5_000 },
+		clock: {
+			...state.clock,
+			isRunning: true,
+			lastStartedAt: 1_000,
+			elapsedMs: 5_000,
+		},
 		turnNumber: 3,
 		firstPlayer: 'player1',
 		activePlayer: 'player2',
@@ -40,8 +59,11 @@ function createBusyState(): FeatureMatchState {
 
 /** Collect paths of every non-finite number nested anywhere in a value. */
 function nonFinitePaths(value: unknown, path = '$'): string[] {
-	if (typeof value === 'number')
-		return Number.isFinite(value) ? [] : [path];
+	if (typeof value === 'number') {
+		return Number.isFinite(value)
+			? []
+			: [path];
+	}
 	if (Array.isArray(value))
 		return value.flatMap((entry, index) => nonFinitePaths(entry, `${path}[${index}]`));
 	if (value && typeof value === 'object')
@@ -49,7 +71,15 @@ function nonFinitePaths(value: unknown, path = '$'): string[] {
 	return [];
 }
 
-const NON_FINITE_VALUES: unknown[] = [Number.NaN, Infinity, -Infinity, 'abc', '12:34', {}, [1, 2]];
+const NON_FINITE_VALUES: unknown[] = [
+	Number.NaN,
+	Infinity,
+	-Infinity,
+	'abc',
+	'12:34',
+	{},
+	[1, 2],
+];
 
 interface GuardCase {
 	type: FeatureMatchCommandType;
@@ -59,35 +89,104 @@ interface GuardCase {
 }
 
 const GUARD_CASES: GuardCase[] = [
-	{ type: 'AdjustLife', valid: { player: 'player1', delta: 3 }, numericFields: ['delta'] },
-	{ type: 'SetLife', valid: { player: 'player1', lifeTotal: 15 }, numericFields: ['lifeTotal'] },
-	{ type: 'SetCardsKept', valid: { player: 'player1', cardsKept: 6 }, numericFields: ['cardsKept'] },
-	{ type: 'SetSideboardRevealed', valid: { player: 'player1', revealed: true }, numericFields: [] },
-	{ type: 'AdjustClock', valid: { at: 5_000, deltaMs: 1_000 }, numericFields: ['at', 'deltaMs'] },
-	{ type: 'SetClock', valid: { at: 5_000, targetMs: 60_000 }, numericFields: ['at', 'targetMs'] },
+	{
+		type: 'AdjustLife',
+		valid: { player: 'player1', delta: 3 },
+		numericFields: ['delta'],
+	},
+	{
+		type: 'SetLife',
+		valid: { player: 'player1', lifeTotal: 15 },
+		numericFields: ['lifeTotal'],
+	},
+	{
+		type: 'SetCardsKept',
+		valid: { player: 'player1', cardsKept: 6 },
+		numericFields: ['cardsKept'],
+	},
+	{
+		type: 'SetSideboardRevealed',
+		valid: { player: 'player1', revealed: true },
+		numericFields: [],
+	},
+	{
+		type: 'AdjustClock',
+		valid: { at: 5_000, deltaMs: 1_000 },
+		numericFields: ['at', 'deltaMs'],
+	},
+	{
+		type: 'SetClock',
+		valid: { at: 5_000, targetMs: 60_000 },
+		numericFields: ['at', 'targetMs'],
+	},
 	{
 		type: 'StartClock',
 		valid: { at: 5_000 },
 		numericFields: ['at'],
-		state: state => ({ ...state, clock: { ...state.clock, isRunning: false, lastStartedAt: null } }),
+		state: state => ({
+			...state,
+			clock: { ...state.clock, isRunning: false, lastStartedAt: null },
+		}),
 	},
-	{ type: 'PauseClock', valid: { at: 5_000 }, numericFields: ['at'] },
-	{ type: 'ResetClock', valid: { durationMs: 60_000 }, numericFields: ['durationMs'] },
-	{ type: 'RestartClock', valid: { at: 5_000 }, numericFields: ['at'] },
-	{ type: 'SetTurnNumber', valid: { turnNumber: 4 }, numericFields: ['turnNumber'] },
-	{ type: 'RecordGameWin', valid: { player: 'player1', startingLife: 20 }, numericFields: ['startingLife'] },
-	{ type: 'UndoGameWin', valid: { player: 'player1', startingLife: 20 }, numericFields: ['startingLife'] },
-	{ type: 'ResetState', valid: { type: 'game', startingLife: 20 }, numericFields: ['startingLife'] },
-	{ type: 'StartOvertime', valid: { totalTurns: 3 }, numericFields: ['totalTurns'] },
-	{ type: 'StepTurn', valid: { delta: 1 }, numericFields: ['delta'] },
-	{ type: 'StepOvertime', valid: { delta: 1 }, numericFields: ['delta'] },
+	{
+		type: 'PauseClock',
+		valid: { at: 5_000 },
+		numericFields: ['at'],
+	},
+	{
+		type: 'ResetClock',
+		valid: { durationMs: 60_000 },
+		numericFields: ['durationMs'],
+	},
+	{
+		type: 'RestartClock',
+		valid: { at: 5_000 },
+		numericFields: ['at'],
+	},
+	{
+		type: 'SetTurnNumber',
+		valid: { turnNumber: 4 },
+		numericFields: ['turnNumber'],
+	},
+	{
+		type: 'RecordGameWin',
+		valid: { player: 'player1', startingLife: 20 },
+		numericFields: ['startingLife'],
+	},
+	{
+		type: 'UndoGameWin',
+		valid: { player: 'player1', startingLife: 20 },
+		numericFields: ['startingLife'],
+	},
+	{
+		type: 'ResetState',
+		valid: { type: 'game', startingLife: 20 },
+		numericFields: ['startingLife'],
+	},
+	{
+		type: 'StartOvertime',
+		valid: { totalTurns: 3 },
+		numericFields: ['totalTurns'],
+	},
+	{
+		type: 'StepTurn',
+		valid: { delta: 1 },
+		numericFields: ['delta'],
+	},
+	{
+		type: 'StepOvertime',
+		valid: { delta: 1 },
+		numericFields: ['delta'],
+	},
 ];
 
 describe('feature match session reducer payload guards', () => {
 	it('never commits a non-finite number, for any action and any malformed numeric field', () => {
 		const snapshot = createSnapshot();
 		for (const guardCase of GUARD_CASES) {
-			const state = guardCase.state ? guardCase.state(createBusyState()) : createBusyState();
+			const state = guardCase.state
+				? guardCase.state(createBusyState())
+				: createBusyState();
 			for (const field of guardCase.numericFields) {
 				for (const malformed of NON_FINITE_VALUES) {
 					const payload = { ...guardCase.valid, [field]: malformed };
@@ -104,8 +203,14 @@ describe('feature match session reducer payload guards', () => {
 		const snapshot = createSnapshot();
 		const state = createBusyState();
 		for (const [type, payload] of [
-			['SetLife', { player: 'player1' }],
-			['SetCardsKept', { player: 'player1' }],
+			[
+				'SetLife',
+				{ player: 'player1' },
+			],
+			[
+				'SetCardsKept',
+				{ player: 'player1' },
+			],
 			['SetTurnNumber', {}],
 			['StartOvertime', {}],
 			['PauseClock', {}],
@@ -119,9 +224,22 @@ describe('feature match session reducer payload guards', () => {
 	it('rejects player-scoped actions whose player is not a valid side, without throwing', () => {
 		const snapshot = createSnapshot();
 		const state = createBusyState();
-		for (const type of ['AdjustLife', 'SetLife', 'SetCounters', 'SetCardsKept', 'SetSideboardRevealed', 'SelectFirstPlayer', 'SetFirstPlayer', 'RecordGameWin', 'UndoGameWin'] as FeatureMatchCommandType[]) {
+		for (const type of [
+			'AdjustLife',
+			'SetLife',
+			'SetCounters',
+			'SetCardsKept',
+			'SetSideboardRevealed',
+			'SelectFirstPlayer',
+			'SetFirstPlayer',
+			'RecordGameWin',
+			'UndoGameWin',
+		] as FeatureMatchCommandType[]) {
 			for (const player of ['playerX', null, undefined, {}, 3]) {
-				const result = applyFeatureMatchSessionEvent(state, snapshot, type, { ...GUARD_CASES.find(c => c.type === type)?.valid, player });
+				const result = applyFeatureMatchSessionEvent(state, snapshot, type, {
+					...GUARD_CASES.find(c => c.type === type)?.valid,
+					player,
+				});
 				expect(result.currentState, `${type} with player=${String(player)}`).toEqual(state);
 			}
 		}
@@ -143,18 +261,33 @@ describe('feature match session reducer payload guards', () => {
 		const state = createBusyState();
 		for (const counters of [
 			'not-an-array',
-			[{ type: 'poison', value: Number.NaN }],
-			[{ type: 'poison', value: Infinity }],
-			[{ type: 'poison', value: '3' }],
-			[{ value: 3 }],
+			[
+				{ type: 'poison', value: Number.NaN },
+			],
+			[
+				{ type: 'poison', value: Infinity },
+			],
+			[
+				{ type: 'poison', value: '3' },
+			],
+			[
+				{ value: 3 },
+			],
 			[null],
 		]) {
 			const result = applyFeatureMatchSessionEvent(state, snapshot, 'SetCounters', { player: 'player1', counters });
 			expect(result.currentState, JSON.stringify(counters)).toEqual(state);
 		}
 
-		const applied = applyFeatureMatchSessionEvent(state, snapshot, 'SetCounters', { player: 'player1', counters: [{ type: 'energy', value: 4 }] });
-		expect(applied.currentState.player1.counters).toEqual([{ type: 'energy', value: 4 }]);
+		const applied = applyFeatureMatchSessionEvent(state, snapshot, 'SetCounters', {
+			player: 'player1',
+			counters: [
+				{ type: 'energy', value: 4 },
+			],
+		});
+		expect(applied.currentState.player1.counters).toEqual([
+			{ type: 'energy', value: 4 },
+		]);
 	});
 
 	it('rejects SetSideboardRevealed payloads whose revealed flag is not a strict boolean', () => {
@@ -185,9 +318,18 @@ describe('feature match session reducer payload guards', () => {
 
 		const result = applyFeatureMatchSessionEvent(state, snapshot, 'Batch', {
 			commands: [
-				{ type: 'SetLife', payload: { player: 'player1', lifeTotal: 11 } },
-				{ type: 'SetLife', payload: { player: 'player2', lifeTotal: Number.NaN } },
-				{ type: 'SetTurnNumber', payload: { turnNumber: 6 } },
+				{
+					type: 'SetLife',
+					payload: { player: 'player1', lifeTotal: 11 },
+				},
+				{
+					type: 'SetLife',
+					payload: { player: 'player2', lifeTotal: Number.NaN },
+				},
+				{
+					type: 'SetTurnNumber',
+					payload: { turnNumber: 6 },
+				},
 			],
 		});
 
@@ -201,8 +343,14 @@ describe('feature match session reducer payload guards', () => {
 
 		const result = applyFeatureMatchSessionEvent(state, snapshot, 'Batch', {
 			commands: [
-				{ type: 'SetLife', payload: { player: 'player1', lifeTotal: 11 } },
-				{ type: 'SetTurnNumber', payload: { turnNumber: 6 } },
+				{
+					type: 'SetLife',
+					payload: { player: 'player1', lifeTotal: 11 },
+				},
+				{
+					type: 'SetTurnNumber',
+					payload: { turnNumber: 6 },
+				},
 			],
 		});
 
@@ -218,10 +366,27 @@ describe('feature match session reducer payload guards', () => {
 			'not-an-array',
 			42,
 			null,
-			[null, 'junk', { type: 'SetLife' }, { type: 'SetLife', payload: 'junk' }],
+			[
+				null,
+				'junk',
+				{ type: 'SetLife' },
+				{ type: 'SetLife', payload: 'junk' },
+			],
 			// A shape-garbage entry sinks the well-formed one beside it too.
-			[null, { type: 'SetLife', payload: { player: 'player1', lifeTotal: 11 } }],
-			[{ type: 'SetLife', payload: 'junk' }, { type: 'SetLife', payload: { player: 'player1', lifeTotal: 11 } }],
+			[
+				null,
+				{
+					type: 'SetLife',
+					payload: { player: 'player1', lifeTotal: 11 },
+				},
+			],
+			[
+				{ type: 'SetLife', payload: 'junk' },
+				{
+					type: 'SetLife',
+					payload: { player: 'player1', lifeTotal: 11 },
+				},
+			],
 		]) {
 			const result = applyFeatureMatchSessionEvent(state, snapshot, 'Batch', { commands });
 			expect(result.currentState, JSON.stringify(commands)).toEqual(state);
@@ -236,11 +401,26 @@ describe('feature match session reducer payload guards', () => {
 		// boundary guard this committed elapsedMs = NaN, which survived every
 		// later event because Math.max(0, NaN) is NaN.
 		const events: [FeatureMatchCommandType, Record<string, unknown>][] = [
-			['StartClock', { at: 1_000 }],
-			['PauseClock', { at: 'garbage' }],
-			['StartClock', { at: 2_000 }],
-			['PauseClock', { at: 3_000 }],
-			['AdjustClock', { at: 4_000, deltaMs: -10_000 }],
+			[
+				'StartClock',
+				{ at: 1_000 },
+			],
+			[
+				'PauseClock',
+				{ at: 'garbage' },
+			],
+			[
+				'StartClock',
+				{ at: 2_000 },
+			],
+			[
+				'PauseClock',
+				{ at: 3_000 },
+			],
+			[
+				'AdjustClock',
+				{ at: 4_000, deltaMs: -10_000 },
+			],
 		];
 		for (const [type, payload] of events) {
 			const result = applyFeatureMatchSessionEvent(state, snapshot, type, payload);

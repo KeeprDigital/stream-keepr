@@ -129,7 +129,12 @@ export function featureMatchOverlayFrameContentMaskStyle(
 export const SOURCE_ITEM_UNSET_BORDER_COLOUR = '#ffffff';
 
 function rectStyle(rect: FeatureMatchOverlayRect): CSSProperties {
-	return { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` };
+	return {
+		left: `${rect.x}px`,
+		top: `${rect.y}px`,
+		width: `${rect.width}px`,
+		height: `${rect.height}px`,
+	};
 }
 
 function cssBackgroundStyle(output: FeatureMatchOverlayOutput, style: FeatureMatchSourceFramingStyle | undefined) {
@@ -143,8 +148,11 @@ function cssBackgroundStyle(output: FeatureMatchOverlayOutput, style: FeatureMat
 	// A Key Output is a matte: the raw CSS gradient becomes coverage, not colour.
 	if (output === 'key')
 		return colourAtOpacity(output, '#ffffff', opacity);
-	if (gradient)
-		return hasBaseColor ? `${gradient}, ${colourAtOpacity(output, color!, opacity)}` : gradient;
+	if (gradient) {
+		return hasBaseColor
+			? `${gradient}, ${colourAtOpacity(output, color!, opacity)}`
+			: gradient;
+	}
 
 	return colourAtOpacity(output, color!, opacity);
 }
@@ -225,7 +233,9 @@ function sourceGlowStyles(
 			height: `${Math.max(0, item.height) + (extent * 2)}px`,
 			overflow: 'hidden',
 			pointerEvents: 'none',
-			...(position === 'both' ? {} : sourceGlowMaskStyle(item, extent, position)),
+			...(position === 'both'
+				? {}
+				: sourceGlowMaskStyle(item, extent, position)),
 		},
 		glowStyle: {
 			position: 'absolute',
@@ -245,7 +255,13 @@ function sourceGlowStyles(
 
 function cssBorderStyle(output: FeatureMatchOverlayOutput, style: FeatureMatchSourceFramingStyle | undefined) {
 	if (!style) {
-		return { border: 'none', borderTop: 'none', borderRight: 'none', borderBottom: 'none', borderLeft: 'none' };
+		return {
+			border: 'none',
+			borderTop: 'none',
+			borderRight: 'none',
+			borderBottom: 'none',
+			borderLeft: 'none',
+		};
 	}
 
 	const border = style.borderVisible
@@ -253,10 +269,18 @@ function cssBorderStyle(output: FeatureMatchOverlayOutput, style: FeatureMatchSo
 		: 'none';
 	return {
 		border: 'none',
-		borderTop: featureMatchOverlayBorderSideEnabled(style, 'Top') ? border : 'none',
-		borderRight: featureMatchOverlayBorderSideEnabled(style, 'Right') ? border : 'none',
-		borderBottom: featureMatchOverlayBorderSideEnabled(style, 'Bottom') ? border : 'none',
-		borderLeft: featureMatchOverlayBorderSideEnabled(style, 'Left') ? border : 'none',
+		borderTop: featureMatchOverlayBorderSideEnabled(style, 'Top')
+			? border
+			: 'none',
+		borderRight: featureMatchOverlayBorderSideEnabled(style, 'Right')
+			? border
+			: 'none',
+		borderBottom: featureMatchOverlayBorderSideEnabled(style, 'Bottom')
+			? border
+			: 'none',
+		borderLeft: featureMatchOverlayBorderSideEnabled(style, 'Left')
+			? border
+			: 'none',
 	};
 }
 
@@ -266,9 +290,19 @@ export function frameBorderLine(side: FeatureMatchOverlayBorderSide, width: numb
 		case 'Top':
 			return { x1: 0, y1: 0, x2: width, y2: 0 };
 		case 'Right':
-			return { x1: width, y1: 0, x2: width, y2: height };
+			return {
+				x1: width,
+				y1: 0,
+				x2: width,
+				y2: height,
+			};
 		case 'Bottom':
-			return { x1: 0, y1: height, x2: width, y2: height };
+			return {
+				x1: 0,
+				y1: height,
+				x2: width,
+				y2: height,
+			};
 		case 'Left':
 			return { x1: 0, y1: 0, x2: 0, y2: height };
 	}
@@ -327,7 +361,9 @@ function frameRenderModel(
 		gradientStyle: output !== 'key' && gradient
 			? { background: frame.gradient, opacity: frame.opacity }
 			: undefined,
-		fill: output === 'key' ? paintColour(output, '#ffffff') : svgFillColor(frame.backgroundColor),
+		fill: output === 'key'
+			? paintColour(output, '#ffffff')
+			: svgFillColor(frame.backgroundColor),
 		opacity: frame.opacity,
 		border: frameBorder(output, frame, ids.glowFilterId),
 	};

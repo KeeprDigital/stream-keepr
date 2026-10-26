@@ -128,7 +128,10 @@ async function ingest(
 async function ingestRetryablyFailed(context: Context, idempotencyKey: string, bytes = pixelPng) {
 	context.canonical.injectTransientFailure('create', 2);
 	const failed = await ingest(context, { idempotencyKey, bytes });
-	expect(failed).toMatchObject({ stage: 'failed', failure: { retryable: true } });
+	expect(failed).toMatchObject({
+		stage: 'failed',
+		failure: { retryable: true },
+	});
 	return failed;
 }
 

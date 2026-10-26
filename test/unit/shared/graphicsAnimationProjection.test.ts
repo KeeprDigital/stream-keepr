@@ -10,7 +10,12 @@ import {
 } from '~~/shared/modules/graphics';
 import { GRAPHIC_ANIMATION_EASING_VALUES } from '~~/shared/types/graphics';
 
-const RECT = { x: 200, y: 100, width: 400, height: 80 };
+const RECT = {
+	x: 200,
+	y: 100,
+	width: 400,
+	height: 80,
+};
 const CANVAS = { width: 1920, height: 1080 };
 
 function project(
@@ -19,7 +24,14 @@ function project(
 	elapsed: number,
 	staggerOffset = 0,
 ) {
-	return resolveGraphicAnimationValues({ recipe, phase, elapsed, staggerOffset, rect: RECT, parent: CANVAS });
+	return resolveGraphicAnimationValues({
+		recipe,
+		phase,
+		elapsed,
+		staggerOffset,
+		rect: RECT,
+		parent: CANVAS,
+	});
 }
 
 const LINEAR: GraphicAnimationRecipe = { duration: 400, easing: 'linear', delay: 0 };
@@ -52,36 +64,97 @@ describe('graphicAnimationLinearProgress', () => {
 
 describe('graphicAnimationExcursion', () => {
 	it('enters from the excursion and settles at the Graphic Resting State', () => {
-		expect(graphicAnimationExcursion({ recipe: LINEAR, phase: 'enter', elapsed: 0, rect: RECT, parent: CANVAS })).toBe(1);
-		expect(graphicAnimationExcursion({ recipe: LINEAR, phase: 'enter', elapsed: 200, rect: RECT, parent: CANVAS })).toBe(0.5);
-		expect(graphicAnimationExcursion({ recipe: LINEAR, phase: 'enter', elapsed: 400, rect: RECT, parent: CANVAS })).toBe(0);
+		expect(graphicAnimationExcursion({
+			recipe: LINEAR,
+			phase: 'enter',
+			elapsed: 0,
+			rect: RECT,
+			parent: CANVAS,
+		})).toBe(1);
+		expect(graphicAnimationExcursion({
+			recipe: LINEAR,
+			phase: 'enter',
+			elapsed: 200,
+			rect: RECT,
+			parent: CANVAS,
+		})).toBe(0.5);
+		expect(graphicAnimationExcursion({
+			recipe: LINEAR,
+			phase: 'enter',
+			elapsed: 400,
+			rect: RECT,
+			parent: CANVAS,
+		})).toBe(0);
 	});
 
 	it('exits away from the Graphic Resting State', () => {
-		expect(graphicAnimationExcursion({ recipe: LINEAR, phase: 'exit', elapsed: 0, rect: RECT, parent: CANVAS })).toBe(0);
-		expect(graphicAnimationExcursion({ recipe: LINEAR, phase: 'exit', elapsed: 400, rect: RECT, parent: CANVAS })).toBe(1);
+		expect(graphicAnimationExcursion({
+			recipe: LINEAR,
+			phase: 'exit',
+			elapsed: 0,
+			rect: RECT,
+			parent: CANVAS,
+		})).toBe(0);
+		expect(graphicAnimationExcursion({
+			recipe: LINEAR,
+			phase: 'exit',
+			elapsed: 400,
+			rect: RECT,
+			parent: CANVAS,
+		})).toBe(1);
 	});
 
 	it('projects an update like an incoming rendering, from the excursion to rest', () => {
-		expect(graphicAnimationExcursion({ recipe: LINEAR, phase: 'update', elapsed: 0, rect: RECT, parent: CANVAS })).toBe(1);
-		expect(graphicAnimationExcursion({ recipe: LINEAR, phase: 'update', elapsed: 400, rect: RECT, parent: CANVAS })).toBe(0);
+		expect(graphicAnimationExcursion({
+			recipe: LINEAR,
+			phase: 'update',
+			elapsed: 0,
+			rect: RECT,
+			parent: CANVAS,
+		})).toBe(1);
+		expect(graphicAnimationExcursion({
+			recipe: LINEAR,
+			phase: 'update',
+			elapsed: 400,
+			rect: RECT,
+			parent: CANVAS,
+		})).toBe(0);
 	});
 
 	it('settles anything with no recipe immediately, in every phase', () => {
-		for (const phase of ['enter', 'on-screen', 'update', 'exit'] as const)
-			expect(graphicAnimationExcursion({ recipe: undefined, phase, elapsed: 0, rect: RECT, parent: CANVAS })).toBe(0);
+		for (const phase of ['enter', 'on-screen', 'update', 'exit'] as const) {
+			expect(graphicAnimationExcursion({
+				recipe: undefined,
+				phase,
+				elapsed: 0,
+				rect: RECT,
+				parent: CANVAS,
+			})).toBe(0);
+		}
 	});
 });
 
 describe('an update cross-transitions the old and the new rendering', () => {
 	it('cross-fades: the old rendering leaves as the new one arrives', () => {
-		const fade: GraphicAnimationRecipe = { ...LINEAR, fade: { opacity: 0 } };
+		const fade: GraphicAnimationRecipe = {
+			...LINEAR,
+			fade: { opacity: 0 },
+		};
 
 		// At the start the new rendering is invisible and the old one is fully present;
 		// halfway both are half present; at the end they have swapped exactly.
-		expect(project(fade, 'update', 0)).toMatchObject({ opacity: 0, outgoing: { opacity: 1 } });
-		expect(project(fade, 'update', 200)).toMatchObject({ opacity: 0.5, outgoing: { opacity: 0.5 } });
-		expect(project(fade, 'update', 400)).toMatchObject({ opacity: 1, outgoing: { opacity: 0 } });
+		expect(project(fade, 'update', 0)).toMatchObject({
+			opacity: 0,
+			outgoing: { opacity: 1 },
+		});
+		expect(project(fade, 'update', 200)).toMatchObject({
+			opacity: 0.5,
+			outgoing: { opacity: 0.5 },
+		});
+		expect(project(fade, 'update', 400)).toMatchObject({
+			opacity: 1,
+			outgoing: { opacity: 0 },
+		});
 	});
 
 	it('slides: old content leaves in the authored direction and new content enters from the opposite side', () => {
@@ -94,46 +167,71 @@ describe('an update cross-transitions the old and the new rendering', () => {
 		// east; the new one starts 100 to the *west* and arrives at rest.
 		expect(project(slide, 'update', 0)).toMatchObject({
 			translate: { x: -100, y: 0 },
-			outgoing: { translate: { x: 0, y: 0 } },
+			outgoing: {
+				translate: { x: 0, y: 0 },
+			},
 		});
 		expect(project(slide, 'update', 200)).toMatchObject({
 			translate: { x: -50, y: 0 },
-			outgoing: { translate: { x: 50, y: 0 } },
+			outgoing: {
+				translate: { x: 50, y: 0 },
+			},
 		});
 		expect(project(slide, 'update', 400)).toMatchObject({
 			translate: { x: 0, y: 0 },
-			outgoing: { translate: { x: 100, y: 0 } },
+			outgoing: {
+				translate: { x: 100, y: 0 },
+			},
 		});
 	});
 
 	it('reveals: one boundary travels, with new content behind it and old content ahead', () => {
-		const reveal: GraphicAnimationRecipe = { ...LINEAR, reveal: { edge: 'left' } };
+		const reveal: GraphicAnimationRecipe = {
+			...LINEAR,
+			reveal: { edge: 'left' },
+		};
 
 		// One boundary, read from both sides: a quarter of the way across, the new
 		// rendering shows its leftmost quarter and the old shows the other three
 		// quarters from the right, so together they cover the bounds exactly once.
 		expect(project(reveal, 'update', 100)).toMatchObject({
 			reveal: { edge: 'left', visible: 0.25 },
-			outgoing: { reveal: { edge: 'right', visible: 0.75 } },
+			outgoing: {
+				reveal: { edge: 'right', visible: 0.75 },
+			},
 		});
 		expect(project(reveal, 'update', 300)).toMatchObject({
 			reveal: { edge: 'left', visible: 0.75 },
-			outgoing: { reveal: { edge: 'right', visible: 0.25 } },
+			outgoing: {
+				reveal: { edge: 'right', visible: 0.25 },
+			},
 		});
 	});
 
 	it('leaves no outgoing rendering in any other phase', () => {
-		const fade: GraphicAnimationRecipe = { ...LINEAR, fade: { opacity: 0 } };
+		const fade: GraphicAnimationRecipe = {
+			...LINEAR,
+			fade: { opacity: 0 },
+		};
 
 		for (const phase of ['enter', 'exit'] as const)
 			expect(project(fade, phase, 200).outgoing).toBeUndefined();
 	});
 
 	it('scales: the old rendering leaves the resting size as the new one reaches it', () => {
-		const scale: GraphicAnimationRecipe = { ...LINEAR, scale: { factor: 0.5, origin: 'center' } };
+		const scale: GraphicAnimationRecipe = {
+			...LINEAR,
+			scale: { factor: 0.5, origin: 'center' },
+		};
 
-		expect(project(scale, 'update', 0)).toMatchObject({ scale: 0.5, outgoing: { scale: 1 } });
-		expect(project(scale, 'update', 400)).toMatchObject({ scale: 1, outgoing: { scale: 0.5 } });
+		expect(project(scale, 'update', 0)).toMatchObject({
+			scale: 0.5,
+			outgoing: { scale: 1 },
+		});
+		expect(project(scale, 'update', 400)).toMatchObject({
+			scale: 1,
+			outgoing: { scale: 0.5 },
+		});
 	});
 });
 
@@ -148,18 +246,54 @@ describe('on-screen cycling', () => {
 
 	it('cycles from the Graphic Resting State to the excursion and back', () => {
 		expect(project(cycle, 'on-screen', 0).opacity).toBeUndefined();
-		expect(graphicAnimationExcursion({ recipe: cycle, phase: 'on-screen', elapsed: 0, rect: RECT, parent: CANVAS })).toBe(0);
-		expect(graphicAnimationExcursion({ recipe: cycle, phase: 'on-screen', elapsed: 500, rect: RECT, parent: CANVAS })).toBe(1);
-		expect(graphicAnimationExcursion({ recipe: cycle, phase: 'on-screen', elapsed: 999, rect: RECT, parent: CANVAS })).toBeCloseTo(0.002, 3);
+		expect(graphicAnimationExcursion({
+			recipe: cycle,
+			phase: 'on-screen',
+			elapsed: 0,
+			rect: RECT,
+			parent: CANVAS,
+		})).toBe(0);
+		expect(graphicAnimationExcursion({
+			recipe: cycle,
+			phase: 'on-screen',
+			elapsed: 500,
+			rect: RECT,
+			parent: CANVAS,
+		})).toBe(1);
+		expect(graphicAnimationExcursion({
+			recipe: cycle,
+			phase: 'on-screen',
+			elapsed: 999,
+			rect: RECT,
+			parent: CANVAS,
+		})).toBeCloseTo(0.002, 3);
 	});
 
 	it('rests through the pause between cycles', () => {
-		expect(graphicAnimationExcursion({ recipe: cycle, phase: 'on-screen', elapsed: 1200, rect: RECT, parent: CANVAS })).toBe(0);
+		expect(graphicAnimationExcursion({
+			recipe: cycle,
+			phase: 'on-screen',
+			elapsed: 1200,
+			rect: RECT,
+			parent: CANVAS,
+		})).toBe(0);
 	});
 
 	it('never accumulates motion across cycles', () => {
-		const first = graphicAnimationExcursion({ recipe: cycle, phase: 'on-screen', elapsed: 500, rect: RECT, parent: CANVAS });
-		const fourth = graphicAnimationExcursion({ recipe: cycle, phase: 'on-screen', elapsed: (3 * 1500) + 500, rect: RECT, parent: CANVAS });
+		const first = graphicAnimationExcursion({
+			recipe: cycle,
+			phase: 'on-screen',
+			elapsed: 500,
+			rect: RECT,
+			parent: CANVAS,
+		});
+		const fourth = graphicAnimationExcursion({
+			recipe: cycle,
+			phase: 'on-screen',
+			elapsed: (3 * 1500) + 500,
+			rect: RECT,
+			parent: CANVAS,
+		});
 
 		expect(fourth).toBe(first);
 	});
@@ -167,13 +301,37 @@ describe('on-screen cycling', () => {
 	it('stops at the Graphic Resting State once a finite repetition is exhausted', () => {
 		const twice = { ...cycle, repeat: 2 };
 
-		expect(graphicAnimationExcursion({ recipe: twice, phase: 'on-screen', elapsed: 1500 + 500, rect: RECT, parent: CANVAS })).toBe(1);
-		expect(graphicAnimationExcursion({ recipe: twice, phase: 'on-screen', elapsed: 3000 + 500, rect: RECT, parent: CANVAS })).toBe(0);
-		expect(graphicAnimationExcursion({ recipe: twice, phase: 'on-screen', elapsed: 900_000, rect: RECT, parent: CANVAS })).toBe(0);
+		expect(graphicAnimationExcursion({
+			recipe: twice,
+			phase: 'on-screen',
+			elapsed: 1500 + 500,
+			rect: RECT,
+			parent: CANVAS,
+		})).toBe(1);
+		expect(graphicAnimationExcursion({
+			recipe: twice,
+			phase: 'on-screen',
+			elapsed: 3000 + 500,
+			rect: RECT,
+			parent: CANVAS,
+		})).toBe(0);
+		expect(graphicAnimationExcursion({
+			recipe: twice,
+			phase: 'on-screen',
+			elapsed: 900_000,
+			rect: RECT,
+			parent: CANVAS,
+		})).toBe(0);
 	});
 
 	it('keeps an indefinite recipe cycling for as long as it is asked', () => {
-		expect(graphicAnimationExcursion({ recipe: cycle, phase: 'on-screen', elapsed: (600 * 1500) + 500, rect: RECT, parent: CANVAS })).toBe(1);
+		expect(graphicAnimationExcursion({
+			recipe: cycle,
+			phase: 'on-screen',
+			elapsed: (600 * 1500) + 500,
+			rect: RECT,
+			parent: CANVAS,
+		})).toBe(1);
 	});
 });
 
@@ -183,14 +341,20 @@ describe('channel projection', () => {
 		expect(isGraphicRestingProjection(project(undefined, 'enter', 0))).toBe(true);
 		// A settled update still projects both halves, so it reports values rather than
 		// nothing — and an owner whose own recipe has finished is at rest all the same.
-		const fade: GraphicAnimationRecipe = { ...LINEAR, fade: { opacity: 0 } };
+		const fade: GraphicAnimationRecipe = {
+			...LINEAR,
+			fade: { opacity: 0 },
+		};
 		expect(isGraphicRestingProjection(project(fade, 'update', 400))).toBe(true);
 		expect(isGraphicRestingProjection(project(fade, 'update', 200))).toBe(false);
 		expect(isGraphicRestingProjection(project(fade, 'update', 400).outgoing!)).toBe(false);
 	});
 
 	it('reduces opacity from resting towards the authored fade', () => {
-		const recipe = { ...LINEAR, fade: { opacity: 0.25 } };
+		const recipe = {
+			...LINEAR,
+			fade: { opacity: 0.25 },
+		};
 
 		expect(project(recipe, 'enter', 0).opacity).toBeCloseTo(0.25, 10);
 		expect(project(recipe, 'enter', 200).opacity).toBeCloseTo(0.625, 10);
@@ -199,15 +363,24 @@ describe('channel projection', () => {
 	});
 
 	it('slides a fixed canonical pixel distance along one compass direction', () => {
-		const recipe = { ...LINEAR, slide: { direction: 'north-east' as const, distanceMode: 'fixed' as const, distance: 100 } };
+		const recipe = {
+			...LINEAR,
+			slide: { direction: 'north-east' as const, distanceMode: 'fixed' as const, distance: 100 },
+		};
 
 		expect(project(recipe, 'enter', 0).translate).toEqual({ x: 100, y: -100 });
 		expect(project(recipe, 'enter', 400)).toEqual({});
 	});
 
 	it('slides far enough to clear its parent when asked, from its own position', () => {
-		const east = { ...LINEAR, slide: { direction: 'east' as const, distanceMode: 'clear-parent' as const, distance: 0 } };
-		const west = { ...LINEAR, slide: { direction: 'west' as const, distanceMode: 'clear-parent' as const, distance: 0 } };
+		const east = {
+			...LINEAR,
+			slide: { direction: 'east' as const, distanceMode: 'clear-parent' as const, distance: 0 },
+		};
+		const west = {
+			...LINEAR,
+			slide: { direction: 'west' as const, distanceMode: 'clear-parent' as const, distance: 0 },
+		};
 
 		// East has to reach the parent's right edge from x=200 of a 1920 canvas.
 		expect(project(east, 'exit', 400).translate).toEqual({ x: 1720, y: 0 });
@@ -216,20 +389,32 @@ describe('channel projection', () => {
 	});
 
 	it('scales uniformly about its Graphic Animation Origin, independent of any anchor', () => {
-		const recipe = { ...LINEAR, scale: { factor: 0.5, origin: 'bottom-right' as const } };
+		const recipe = {
+			...LINEAR,
+			scale: { factor: 0.5, origin: 'bottom-right' as const },
+		};
 
-		expect(project(recipe, 'enter', 0)).toMatchObject({ scale: 0.5, scaleOrigin: { x: 1, y: 1 } });
+		expect(project(recipe, 'enter', 0)).toMatchObject({
+			scale: 0.5,
+			scaleOrigin: { x: 1, y: 1 },
+		});
 		expect(project(recipe, 'enter', 400)).toEqual({});
 	});
 
 	it('scales up to twice the resting size', () => {
-		const recipe = { ...LINEAR, scale: { factor: 2, origin: 'center' as const } };
+		const recipe = {
+			...LINEAR,
+			scale: { factor: 2, origin: 'center' as const },
+		};
 
 		expect(project(recipe, 'exit', 400).scale).toBe(2);
 	});
 
 	it('reveals from one edge, fully hidden at the excursion and fully visible at rest', () => {
-		const recipe = { ...LINEAR, reveal: { edge: 'left' as const } };
+		const recipe = {
+			...LINEAR,
+			reveal: { edge: 'left' as const },
+		};
 
 		expect(project(recipe, 'enter', 0).reveal).toEqual({ edge: 'left', visible: 0 });
 		expect(project(recipe, 'enter', 200).reveal).toEqual({ edge: 'left', visible: 0.5 });
@@ -254,7 +439,11 @@ describe('channel projection', () => {
 	});
 
 	it('holds at the excursion through a delay and a stagger offset, then travels', () => {
-		const recipe = { ...LINEAR, delay: 100, fade: { opacity: 0 } };
+		const recipe = {
+			...LINEAR,
+			delay: 100,
+			fade: { opacity: 0 },
+		};
 
 		expect(project(recipe, 'enter', 300, 200).opacity).toBe(0);
 		expect(project(recipe, 'enter', 500, 200).opacity).toBeCloseTo(0.5, 10);
@@ -291,7 +480,12 @@ describe('graphicClearParentDistance', () => {
 	});
 
 	it('never asks for a negative distance from an item already outside its parent', () => {
-		const outside = { x: -900, y: -900, width: 10, height: 10 };
+		const outside = {
+			x: -900,
+			y: -900,
+			width: 10,
+			height: 10,
+		};
 
 		expect(graphicClearParentDistance(outside, CANVAS, 'north')).toBe(0);
 		expect(graphicClearParentDistance(outside, CANVAS, 'west')).toBe(0);
@@ -343,7 +537,12 @@ describe('a settled phase is indistinguishable from the Graphic Resting State', 
 	});
 
 	it('projects nothing once a finite on-screen repetition is exhausted', () => {
-		const cycles = { ...busy, delay: 0, pause: 0, repeat: 2 } as GraphicOnScreenAnimationRecipe;
+		const cycles = {
+			...busy,
+			delay: 0,
+			pause: 0,
+			repeat: 2,
+		} as GraphicOnScreenAnimationRecipe;
 
 		expect(project(cycles, 'on-screen', 800)).toEqual({});
 		expect(project(cycles, 'on-screen', 86_400_000)).toEqual({});
@@ -363,7 +562,13 @@ describe('on-screen easing', () => {
 	};
 
 	function excursion(recipe: GraphicOnScreenAnimationRecipe, elapsed: number) {
-		return graphicAnimationExcursion({ recipe, phase: 'on-screen', elapsed, rect: RECT, parent: CANVAS });
+		return graphicAnimationExcursion({
+			recipe,
+			phase: 'on-screen',
+			elapsed,
+			rect: RECT,
+			parent: CANVAS,
+		});
 	}
 
 	it('eases the outbound leg of a cycle rather than travelling it linearly', () => {

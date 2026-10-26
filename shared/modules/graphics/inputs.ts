@@ -98,7 +98,9 @@ export function graphicInputAvailability(
 			return AVAILABLE;
 		}
 		case 'toggle':
-			return typeof value === 'boolean' ? AVAILABLE : unavailable('Expected on or off');
+			return typeof value === 'boolean'
+				? AVAILABLE
+				: unavailable('Expected on or off');
 		case 'choice': {
 			if (typeof value !== 'string')
 				return unavailable('Expected one of the declared choices');
@@ -109,7 +111,9 @@ export function graphicInputAvailability(
 		case 'color': {
 			if (typeof value !== 'string')
 				return unavailable('Expected a colour');
-			return HEX_COLOUR_VALUE.test(value) ? AVAILABLE : unavailable('Not a hex colour');
+			return HEX_COLOUR_VALUE.test(value)
+				? AVAILABLE
+				: unavailable('Not a hex colour');
 		}
 		case 'media':
 			return isMediaGraphicInputValue(value)
@@ -189,17 +193,37 @@ export function createDefaultGraphicInputDeclaration(
 
 	switch (type) {
 		case 'text':
-			return { ...base, type: 'text', default: '', maxLength: MAX_GRAPHIC_TEXT_LENGTH };
+			return {
+				...base,
+				type: 'text',
+				default: '',
+				maxLength: MAX_GRAPHIC_TEXT_LENGTH,
+			};
 		case 'number':
-			return { ...base, type: 'number', default: null, integer: false };
+			return {
+				...base,
+				type: 'number',
+				default: null,
+				integer: false,
+			};
 		case 'toggle':
 			return { ...base, type: 'toggle', default: false };
 		case 'choice':
-			return { ...base, type: 'choice', default: null, options: [] };
+			return {
+				...base,
+				type: 'choice',
+				default: null,
+				options: [],
+			};
 		case 'color':
 			return { ...base, type: 'color', default: null };
 		case 'media':
-			return { ...base, type: 'media', default: null, mediaKind: 'image' };
+			return {
+				...base,
+				type: 'media',
+				default: null,
+				mediaKind: 'image',
+			};
 	}
 }
 

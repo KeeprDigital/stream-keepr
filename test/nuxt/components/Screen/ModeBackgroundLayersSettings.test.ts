@@ -67,7 +67,13 @@ describe('screenModeBackgroundLayersSettings', () => {
 
 		config.value = {
 			backgroundLayers: [
-				{ id: 'wash', type: 'color', color: '#101010', enabled: true, opacity: 1 },
+				{
+					id: 'wash',
+					type: 'color',
+					color: '#101010',
+					enabled: true,
+					opacity: 1,
+				},
 			] satisfies BackgroundLayer[],
 		};
 		const populated = await mountComponent();
@@ -79,6 +85,10 @@ describe('screenModeBackgroundLayersSettings', () => {
 
 		await wrapper.get('[data-testid="layers-editor"]').trigger('click');
 
-		expect(updateConfig).toHaveBeenCalledWith({ backgroundLayers: [{ id: 'added' }] });
+		expect(updateConfig).toHaveBeenCalledWith({
+			backgroundLayers: [
+				{ id: 'added' },
+			],
+		});
 	});
 });

@@ -49,7 +49,9 @@ describe('graphicTextTemplate', () => {
 	it('keeps projection-shaped braces literal unless a Broadcast Graphic opts in that projection', () => {
 		const template = 'Contact {profile.handle} at {profile.profileUrl}';
 
-		expect(parseGraphicTextTemplate(template)).toEqual([{ text: template }]);
+		expect(parseGraphicTextTemplate(template)).toEqual([
+			{ text: template },
+		]);
 		expect(renderGraphicTextTemplate(template, [], {}).map(segment => segment.text).join('')).toBe(template);
 		expect(parseGraphicTextTemplate(template, new Set(['profile']))).toEqual([
 			{ text: 'Contact ' },
@@ -66,7 +68,10 @@ describe('graphicTextTemplate', () => {
 	it('renders each placeholder from the accepted value of the input it names', () => {
 		const rendered = renderGraphicTextTemplate(
 			'{name} — {team}',
-			[text('name'), text('team')],
+			[
+				text('name'),
+				text('team'),
+			],
 			{ name: 'Ava Reed', team: 'Blue' },
 		);
 
@@ -85,7 +90,9 @@ describe('graphicTextTemplate', () => {
 		// not truncated into something shorter, it simply does not render.
 		const rendered = renderGraphicTextTemplate(
 			'{name}',
-			[text('name', { maxLength: 4 } as Partial<GraphicInputDeclaration>)],
+			[
+				text('name', { maxLength: 4 } as Partial<GraphicInputDeclaration>),
+			],
 			{ name: 'Ava Reed' },
 		);
 
@@ -100,7 +107,10 @@ describe('graphicTextTemplate', () => {
 			required: false,
 			updatePolicy: 'staged',
 			default: null,
-			options: [{ value: 'l', label: 'Left' }, { value: 'r', label: 'Right' }],
+			options: [
+				{ value: 'l', label: 'Left' },
+				{ value: 'r', label: 'Right' },
+			],
 		};
 
 		expect(graphicInputTextValue(declaration, 'r')).toBe('Right');

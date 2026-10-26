@@ -7,7 +7,13 @@ import { authStaticOptions } from '~~/server/utils/authOptions';
  * the rate limiter's (`rateLimit.storage: 'database'`, #697).
  */
 export function throwawayAuthDatabase() {
-	return memoryAdapter({ user: [], session: [], account: [], verification: [], rateLimit: [] });
+	return memoryAdapter({
+		user: [],
+		session: [],
+		account: [],
+		verification: [],
+		rateLimit: [],
+	});
 }
 
 /**

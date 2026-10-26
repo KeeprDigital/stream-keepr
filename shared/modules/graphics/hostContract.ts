@@ -123,7 +123,9 @@ export const FEATURE_MATCH_OVERLAY_HOST_CONTRACT: GraphicsHostContract = {
 export function graphicsHostTokenCatalogue(
 	contract: GraphicsHostContract,
 ): readonly GraphicsHostToken[] {
-	return contract.textValues.kind === 'host-tokens' ? contract.textValues.catalogue : [];
+	return contract.textValues.kind === 'host-tokens'
+		? contract.textValues.catalogue
+		: [];
 }
 
 /**

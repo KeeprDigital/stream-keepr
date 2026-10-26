@@ -24,16 +24,33 @@ mockNuxtImport('useCardStore', () => () => stores.card);
 
 describe('storeReloaders', () => {
 	beforeEach(() => {
-		stores.event = reactive({ eventId: 12, event: { id: 12 }, loadEvent: vi.fn(async () => ({ id: 12 })) });
-		stores.player = reactive({ isLoaded: true, loadPlayersByEventId: vi.fn(async () => []) });
-		stores.round = reactive({ isLoaded: true, rounds: [{ id: 3 }], loadRoundsByEventId: vi.fn(async () => []) });
+		stores.event = reactive({
+			eventId: 12,
+			event: { id: 12 },
+			loadEvent: vi.fn(async () => ({ id: 12 })),
+		});
+		stores.player = reactive({
+			isLoaded: true,
+			loadPlayersByEventId: vi.fn(async () => []),
+		});
+		stores.round = reactive({
+			isLoaded: true,
+			rounds: [
+				{ id: 3 },
+			],
+			loadRoundsByEventId: vi.fn(async () => []),
+		});
 		stores.match = reactive({
 			isLoaded: true,
 			loadedRoundId: 3 as number | null,
 			loadMatchesByRoundId: vi.fn(async () => []),
 			loadMatchesByEventId: vi.fn(async () => []),
 		});
-		stores.card = reactive({ activeScreenId: 5 as number | null, setActiveScreen: vi.fn(), loadActiveCard: vi.fn(async () => 'landed') });
+		stores.card = reactive({
+			activeScreenId: 5 as number | null,
+			setActiveScreen: vi.fn(),
+			loadActiveCard: vi.fn(async () => 'landed'),
+		});
 	});
 
 	it('re-reads a held collection for the current Event, and leaves one nothing loaded', async () => {

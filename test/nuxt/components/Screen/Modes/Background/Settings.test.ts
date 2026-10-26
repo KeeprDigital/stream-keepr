@@ -17,7 +17,9 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 }));
 
 const UFormFieldStub = defineComponent({
-	props: { label: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+	},
 	template: '<label :data-label="label"><slot /></label>',
 });
 
@@ -39,13 +41,17 @@ const UButtonStub = defineComponent({
 });
 
 const UInputStub = defineComponent({
-	props: { modelValue: { type: String, required: false } },
+	props: {
+		modelValue: { type: String, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input data-testid="u-input" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 });
 
 const UInputNumberStub = defineComponent({
-	props: { modelValue: { type: Number, required: false } },
+	props: {
+		modelValue: { type: Number, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input data-testid="u-input-number" type="number" :value="modelValue" @input="$emit(\'update:modelValue\', Number($event.target.value))" />',
 });
@@ -60,17 +66,32 @@ const ScreenSettingsToggleStub = defineComponent({
 });
 
 const AnimationEffectFieldsStub = defineComponent({
-	props: { selection: { type: Object, required: true } },
+	props: {
+		selection: { type: Object, required: true },
+	},
 	emits: ['update:selection'],
 	template: '<div data-testid="animation-effect-fields" @click="$emit(\'update:selection\', { effect: \'caustics\' })" />',
 });
 
 function colorLayer(id: string, overrides: Partial<Extract<BackgroundLayer, { type: 'color' }>> = {}): BackgroundLayer {
-	return { id, type: 'color', enabled: true, opacity: 1, color: '#101010', ...overrides };
+	return {
+		id,
+		type: 'color',
+		enabled: true,
+		opacity: 1,
+		color: '#101010',
+		...overrides,
+	};
 }
 
 function animationLayer(id: string): BackgroundLayer {
-	return { id, type: 'animation', enabled: true, opacity: 1, animation: { effect: 'fog' } };
+	return {
+		id,
+		type: 'animation',
+		enabled: true,
+		opacity: 1,
+		animation: { effect: 'fog' },
+	};
 }
 
 async function mountComponent() {
@@ -88,7 +109,12 @@ async function mountComponent() {
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
 				ScreenAnimationEffectFields: AnimationEffectFieldsStub,
 				GraphicsAssetFocusPicker: defineComponent({ template: '<div data-testid="asset-picker" />' }),
-				UIColorPicker: defineComponent({ props: { modelValue: { type: String, required: false } }, template: '<div data-testid="color-picker" />' }),
+				UIColorPicker: defineComponent({
+					props: {
+						modelValue: { type: String, required: false },
+					},
+					template: '<div data-testid="color-picker" />',
+				}),
 				UFormField: UFormFieldStub,
 				USelect: USelectStub,
 				UButton: UButtonStub,
@@ -112,7 +138,12 @@ describe('screenModesBackgroundSettings', () => {
 	});
 
 	it('lists each layer in stack order', async () => {
-		config.value = { layers: [colorLayer('base'), animationLayer('anim')] };
+		config.value = {
+			layers: [
+				colorLayer('base'),
+				animationLayer('anim'),
+			],
+		};
 		const wrapper = await mountComponent();
 
 		const rows = wrapper.findAll('[data-testid="background-layer-row"]');
@@ -146,7 +177,11 @@ describe('screenModesBackgroundSettings', () => {
 	});
 
 	it('refuses a second animation layer at the editor, matching the schema rule', async () => {
-		config.value = { layers: [animationLayer('anim')] };
+		config.value = {
+			layers: [
+				animationLayer('anim'),
+			],
+		};
 		const wrapper = await mountComponent();
 
 		const animationOption = wrapper.find('[data-testid="add-layer-type"] option[value="animation"]');
@@ -154,7 +189,12 @@ describe('screenModesBackgroundSettings', () => {
 	});
 
 	it('removes a layer', async () => {
-		config.value = { layers: [colorLayer('base'), animationLayer('anim')] };
+		config.value = {
+			layers: [
+				colorLayer('base'),
+				animationLayer('anim'),
+			],
+		};
 		const wrapper = await mountComponent();
 
 		await wrapper.find('[data-layer-id="base"] [data-testid="remove-layer"]').trigger('click');
@@ -163,7 +203,12 @@ describe('screenModesBackgroundSettings', () => {
 	});
 
 	it('reorders a layer within the stack', async () => {
-		config.value = { layers: [colorLayer('base'), animationLayer('anim')] };
+		config.value = {
+			layers: [
+				colorLayer('base'),
+				animationLayer('anim'),
+			],
+		};
 		const wrapper = await mountComponent();
 
 		await wrapper.find('[data-layer-id="anim"] [data-testid="move-layer-back"]').trigger('click');
@@ -172,7 +217,12 @@ describe('screenModesBackgroundSettings', () => {
 	});
 
 	it('writes an enabled toggle and an opacity change onto that layer alone', async () => {
-		config.value = { layers: [colorLayer('base'), animationLayer('anim')] };
+		config.value = {
+			layers: [
+				colorLayer('base'),
+				animationLayer('anim'),
+			],
+		};
 		const wrapper = await mountComponent();
 
 		await wrapper.find('[data-layer-id="base"] [data-testid="settings-toggle"]').trigger('click');
@@ -184,7 +234,11 @@ describe('screenModesBackgroundSettings', () => {
 	});
 
 	it('returns a cleared layer opacity to opaque rather than to clear', async () => {
-		config.value = { layers: [colorLayer('base', { opacity: 0.4 })] };
+		config.value = {
+			layers: [
+				colorLayer('base', { opacity: 0.4 }),
+			],
+		};
 		const wrapper = await mountComponent();
 
 		wrapper.findComponent(UInputNumberStub).vm.$emit('update:modelValue', null);
@@ -193,9 +247,27 @@ describe('screenModesBackgroundSettings', () => {
 	});
 
 	it('edits a video layer through the shared media fields, and an image layer without playback', async () => {
-		const video: BackgroundLayer = { id: 'clip', type: 'video', enabled: true, opacity: 1, source: { kind: 'url', url: '' }, fit: 'cover', playbackRate: 2, loop: true };
-		const image: BackgroundLayer = { id: 'plate', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url: '' }, fit: 'cover' };
-		config.value = { layers: [video, image] };
+		const video: BackgroundLayer = {
+			id: 'clip',
+			type: 'video',
+			enabled: true,
+			opacity: 1,
+			source: { kind: 'url', url: '' },
+			fit: 'cover',
+			playbackRate: 2,
+			loop: true,
+		};
+		const image: BackgroundLayer = {
+			id: 'plate',
+			type: 'image',
+			enabled: true,
+			opacity: 1,
+			source: { kind: 'url', url: '' },
+			fit: 'cover',
+		};
+		config.value = {
+			layers: [video, image],
+		};
 		const wrapper = await mountComponent();
 
 		const fit = wrapper.get('[data-layer-id="clip"] [data-testid="media-fit"]');
@@ -213,7 +285,11 @@ describe('screenModesBackgroundSettings', () => {
 	});
 
 	it('edits an animation layer through the shared Animation Effect fields', async () => {
-		config.value = { layers: [animationLayer('anim')] };
+		config.value = {
+			layers: [
+				animationLayer('anim'),
+			],
+		};
 		const wrapper = await mountComponent();
 
 		await wrapper.find('[data-testid="animation-effect-fields"]').trigger('click');

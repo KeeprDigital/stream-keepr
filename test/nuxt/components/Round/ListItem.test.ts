@@ -21,7 +21,9 @@ const UBadgeStub = defineComponent({
 });
 
 const UIconStub = defineComponent({
-	props: { name: { type: String, required: false } },
+	props: {
+		name: { type: String, required: false },
+	},
 	template: '<i />',
 });
 
@@ -33,7 +35,13 @@ const UIconStub = defineComponent({
  * against a button-text search that could never match anything (#333).
  */
 const UDropdownMenuStub = defineComponent({
-	props: { items: { type: Array, required: false, default: () => [] } },
+	props: {
+		items: {
+			type: Array,
+			required: false,
+			default: () => [],
+		},
+	},
 	computed: {
 		labels(): string[] {
 			return (this.items as { label: string }[][]).flat().map(item => item.label);
@@ -162,7 +170,10 @@ const ROUND_STATE_CASES = [
 	},
 	{
 		name: 'a completed round that has been synced',
-		overrides: { status: 'completed', lastSyncedAt: new Date('2026-01-01T10:00:00Z') } as Partial<RoundProps>,
+		overrides: {
+			status: 'completed',
+			lastSyncedAt: new Date('2026-01-01T10:00:00Z'),
+		} as Partial<RoundProps>,
 		isMeleeEvent: false,
 		menu: ['Review Matches', 'Edit Round', 'Delete Round'],
 		syncedBadge: true,
@@ -178,7 +189,12 @@ const ROUND_STATE_CASES = [
 		name: 'an unsynced Melee round in a Melee event',
 		overrides: { externalSource: 'melee', externalId: 'ext-123', lastSyncedAt: null } as Partial<RoundProps>,
 		isMeleeEvent: true,
-		menu: ['Review Matches', 'Edit Round', 'Switch to Manual Override', 'Delete Round'],
+		menu: [
+			'Review Matches',
+			'Edit Round',
+			'Switch to Manual Override',
+			'Delete Round',
+		],
 		syncedBadge: false,
 	},
 	{
@@ -189,7 +205,13 @@ const ROUND_STATE_CASES = [
 			lastSyncedAt: new Date('2026-01-01T10:00:00Z'),
 		} as Partial<RoundProps>,
 		isMeleeEvent: true,
-		menu: ['Review Matches', 'Edit Round', 'Re-sync Matches', 'Switch to Manual Override', 'Delete Round'],
+		menu: [
+			'Review Matches',
+			'Edit Round',
+			'Re-sync Matches',
+			'Switch to Manual Override',
+			'Delete Round',
+		],
 		syncedBadge: true,
 	},
 	{
@@ -229,7 +251,10 @@ describe('roundListItem', () => {
 	it.each(ROUND_STATE_CASES)(
 		'offers $name two icon-only controls and no round-lifecycle action',
 		async ({ overrides, isMeleeEvent, menu, syncedBadge }) => {
-			const wrapper = await mountComponent({ round: makeRound(overrides), isMeleeEvent });
+			const wrapper = await mountComponent({
+				round: makeRound(overrides),
+				isMeleeEvent,
+			});
 
 			expect(inlineButtonText(wrapper)).toEqual(['', '']);
 			expect(menuItemLabels(wrapper)).toEqual(menu);
@@ -247,7 +272,9 @@ describe('roundListItem', () => {
 		 * `v-if` and an unsynced round starts announcing 'Synced Never'.
 		 */
 		it('renders no badge at all until the round has been synced', async () => {
-			const wrapper = await mountComponent({ round: makeRound({ lastSyncedAt: null }) });
+			const wrapper = await mountComponent({
+				round: makeRound({ lastSyncedAt: null }),
+			});
 
 			expect(wrapper.text()).not.toContain('Synced');
 			expect(wrapper.text()).not.toContain('Never');
@@ -260,7 +287,9 @@ describe('roundListItem', () => {
 		 * copy fails this.
 		 */
 		it('says Just now under a minute, in the shared formatter\'s casing', async () => {
-			const round = makeWireRound({ lastSyncedAt: new Date(Date.now() - 5 * 1000) });
+			const round = makeWireRound({
+				lastSyncedAt: new Date(Date.now() - 5 * 1000),
+			});
 
 			const wrapper = await mountComponent({ round });
 
@@ -285,7 +314,9 @@ describe('roundListItem', () => {
 		 * guard it always was.
 		 */
 		it('formats the sync time the wire delivers, not the Date the response type promises', async () => {
-			const round = makeWireRound({ lastSyncedAt: new Date(Date.now() - 125 * 60 * 1000) });
+			const round = makeWireRound({
+				lastSyncedAt: new Date(Date.now() - 125 * 60 * 1000),
+			});
 			// The row's own control: a fixture that is still a Date proves nothing here.
 			expect(typeof round.lastSyncedAt).toBe('string');
 

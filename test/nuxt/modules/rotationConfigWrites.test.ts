@@ -124,7 +124,14 @@ describe('useRotationConfigWrites', () => {
 		writes.adminSetPage(9);
 		writes.adminSetPage(0);
 
-		expect(saveConfig.mock.calls).toEqual([[{ currentPage: 4 }], [{ currentPage: 1 }]]);
+		expect(saveConfig.mock.calls).toEqual([
+			[
+				{ currentPage: 4 },
+			],
+			[
+				{ currentPage: 1 },
+			],
+		]);
 	});
 
 	it('a manual selection while rotating anchors at most the real last page', () => {

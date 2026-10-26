@@ -161,7 +161,10 @@ function stubPort(existing?: AdminBootstrapAccount, overrides: Partial<AdminBoot
 		findByEmail: async () => existing ?? null,
 		createAdmin: async (input) => {
 			created.push(input);
-			return { id: 'created-user-id', roles: ['admin'] };
+			return {
+				id: 'created-user-id',
+				roles: ['admin'],
+			};
 		},
 		setPassword: async (_userId, password) => {
 			passwords.push(password);
@@ -194,11 +197,13 @@ describe('ensuring the first admin account', () => {
 			email: 'first@keepr.digital',
 			grantedAdminRole: true,
 		});
-		expect(created).toEqual([{
-			email: 'first@keepr.digital',
-			password: VALID_PASSWORD,
-			name: 'First Admin',
-		}]);
+		expect(created).toEqual([
+			{
+				email: 'first@keepr.digital',
+				password: VALID_PASSWORD,
+				name: 'First Admin',
+			},
+		]);
 	});
 
 	it('names a created account after its email when no name is given', async () => {
@@ -229,7 +234,10 @@ describe('ensuring the first admin account', () => {
 	 */
 	it('sets the password on an account that already exists', async () => {
 		const { ensureAdminAccount } = await adminBootstrap();
-		const { port, passwords, created } = stubPort({ id: 'existing-user-id', roles: ['admin'] });
+		const { port, passwords, created } = stubPort({
+			id: 'existing-user-id',
+			roles: ['admin'],
+		});
 
 		const outcome = await ensureAdminAccount(port, {
 			email: 'first@keepr.digital',
@@ -252,7 +260,10 @@ describe('ensuring the first admin account', () => {
 		// is the only port operation that carries a name, so the name given cannot
 		// reach the account unless that is called.
 		const { ensureAdminAccount } = await adminBootstrap();
-		const { port, created } = stubPort({ id: 'existing-user-id', roles: ['admin'] });
+		const { port, created } = stubPort({
+			id: 'existing-user-id',
+			roles: ['admin'],
+		});
 
 		await ensureAdminAccount(port, {
 			email: 'first@keepr.digital',
@@ -265,7 +276,10 @@ describe('ensuring the first admin account', () => {
 
 	it('grants the admin role to an existing account that lacks it', async () => {
 		const { ensureAdminAccount } = await adminBootstrap();
-		const { port, roleWrites } = stubPort({ id: 'existing-user-id', roles: ['user'] });
+		const { port, roleWrites } = stubPort({
+			id: 'existing-user-id',
+			roles: ['user'],
+		});
 
 		const outcome = await ensureAdminAccount(port, {
 			email: 'first@keepr.digital',
@@ -274,7 +288,9 @@ describe('ensuring the first admin account', () => {
 
 		expect(outcome.grantedAdminRole).toBe(true);
 		// Appended, not replaced: whatever else this account was, it stays.
-		expect(roleWrites).toEqual([['user', 'admin']]);
+		expect(roleWrites).toEqual([
+			['user', 'admin'],
+		]);
 	});
 
 	it('grants the admin role to an account carrying no role at all', async () => {
@@ -283,12 +299,17 @@ describe('ensuring the first admin account', () => {
 
 		await ensureAdminAccount(port, { email: 'first@keepr.digital', password: VALID_PASSWORD });
 
-		expect(roleWrites).toEqual([['admin']]);
+		expect(roleWrites).toEqual([
+			['admin'],
+		]);
 	});
 
 	it('leaves the roles alone when admin is already among several', async () => {
 		const { ensureAdminAccount } = await adminBootstrap();
-		const { port, roleWrites } = stubPort({ id: 'existing-user-id', roles: ['user', 'admin'] });
+		const { port, roleWrites } = stubPort({
+			id: 'existing-user-id',
+			roles: ['user', 'admin'],
+		});
 
 		const outcome = await ensureAdminAccount(port, {
 			email: 'first@keepr.digital',
@@ -309,7 +330,10 @@ describe('ensuring the first admin account', () => {
 			findByEmail: async () => account,
 			createAdmin: async (input) => {
 				created.push(input);
-				account = { id: 'created-user-id', roles: ['admin'] };
+				account = {
+					id: 'created-user-id',
+					roles: ['admin'],
+				};
 				return account;
 			},
 			setPassword: async () => {},
@@ -370,7 +394,10 @@ describe('ensuring the first admin account', () => {
 		const { ensureAdminAccount } = await adminBootstrap();
 		const { port, created } = stubPort();
 
-		await expect(ensureAdminAccount(port, { email: 'first@keepr.digital', password: 'x'.repeat(129) }))
+		await expect(ensureAdminAccount(port, {
+			email: 'first@keepr.digital',
+			password: 'x'.repeat(129),
+		}))
 			.rejects
 			.toMatchObject({ statusCode: 400, message: 'Password must be at most 128 characters' });
 		expect(created).toEqual([]);

@@ -33,7 +33,9 @@ function formatCount(value: number) {
 }
 
 function formatPlayerCount(value: number) {
-	return `${formatCount(value)} player${value === 1 ? '' : 's'}`;
+	return `${formatCount(value)} player${value === 1
+		? ''
+		: 's'}`;
 }
 
 function sortByDefaultOrder(left: ArchetypeBreakdownEntry, right: ArchetypeBreakdownEntry) {
@@ -58,7 +60,9 @@ const chartHeight = computed(() => CHART_VERTICAL_PADDING + sortedEntries.value.
 const loadingHeight = computed(() => CHART_VERTICAL_PADDING + Math.max(sortedEntries.value.length, LOADING_ROW_COUNT) * BAR_ROW_HEIGHT);
 
 function tooltipFormatter(params: TooltipComponentFormatterCallbackParams) {
-	const datum = Array.isArray(params) ? params[0] : params;
+	const datum = Array.isArray(params)
+		? params[0]
+		: params;
 	const entry = datum?.data as BarDatum | undefined;
 	if (!entry)
 		return '';

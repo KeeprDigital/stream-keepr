@@ -13,14 +13,18 @@ import GeometryFields from '~/components/Graphics/GeometryFields.vue';
 enableAutoUnmount(afterEach);
 
 const UButtonStub = defineComponent({
-	props: { label: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" @click="$emit(\'click\')">{{ label }}</button>',
 });
 
 const UInputNumberStub = defineComponent({
 	name: 'UInputNumber',
-	props: { modelValue: { type: Number, required: false } },
+	props: {
+		modelValue: { type: Number, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input type="number" :value="modelValue" />',
 });
@@ -36,13 +40,23 @@ const global = {
 };
 
 // A 400×100 item at (100, 200) on a 1920×1080 canvas.
-const rect: GraphicRect = { x: 100, y: 200, width: 400, height: 100 };
+const rect: GraphicRect = {
+	x: 100,
+	y: 200,
+	width: 400,
+	height: 100,
+};
 const canvas = { width: 1920, height: 1080 };
 
 function mountFields(props: { anchor?: GraphicAnchorPoint; stacked?: boolean; rect?: GraphicRect } = {}) {
 	return mount(GeometryFields, {
 		global,
-		props: { rect: props.rect ?? rect, container: canvas, anchor: props.anchor ?? 'center', stacked: props.stacked },
+		props: {
+			rect: props.rect ?? rect,
+			container: canvas,
+			anchor: props.anchor ?? 'center',
+			stacked: props.stacked,
+		},
 	});
 }
 
@@ -112,14 +126,29 @@ describe('geometry fields', () => {
 		// 0 on the centred grid is the canvas centre: 540, less half the 100 height.
 		expect(await enter(wrapper, 'Item y', 0)).toEqual({ y: 490 });
 		// A size is not offset: 8 of 32 is a quarter of 1920, grown around the centre at 300.
-		expect(await enter(wrapper, 'Item width', 8)).toEqual({ x: 60, y: 200, width: 480, height: 100 });
+		expect(await enter(wrapper, 'Item width', 8)).toEqual({
+			x: 60,
+			y: 200,
+			width: 480,
+			height: 100,
+		});
 	});
 
 	it('resizes around the anchor and never below one pixel', async () => {
 		const wrapper = mountFields({ anchor: 'top-left' });
 
-		expect(await enter(wrapper, 'Item width', 0)).toEqual({ x: 100, y: 200, width: 1, height: 100 });
-		expect(await enter(wrapper, 'Item height', -20)).toEqual({ x: 100, y: 200, width: 400, height: 1 });
+		expect(await enter(wrapper, 'Item width', 0)).toEqual({
+			x: 100,
+			y: 200,
+			width: 1,
+			height: 100,
+		});
+		expect(await enter(wrapper, 'Item height', -20)).toEqual({
+			x: 100,
+			y: 200,
+			width: 400,
+			height: 1,
+		});
 	});
 
 	it('aligns the item\'s edge with the container\'s, not its anchor point', async () => {
@@ -155,7 +184,12 @@ describe('geometry fields', () => {
 			await link(wrapper);
 
 			// 400×100 is 4:1, so 200 wide is 50 high, still centred on (300, 250).
-			expect(await enter(wrapper, 'Item width', 200)).toEqual({ x: 200, y: 225, width: 200, height: 50 });
+			expect(await enter(wrapper, 'Item width', 200)).toEqual({
+				x: 200,
+				y: 225,
+				width: 200,
+				height: 50,
+			});
 		});
 
 		it('sets the width from the height in pixels, whatever the Geometry Unit', async () => {
@@ -164,13 +198,20 @@ describe('geometry fields', () => {
 			await chooseUnit(wrapper, '%');
 
 			// 50% of the 1080 canvas is 540 high, so 2160 wide (not 50% of 1920), around (300, 250).
-			expect(await enter(wrapper, 'Item height', 50)).toEqual({ x: -780, y: -20, width: 2160, height: 540 });
+			expect(await enter(wrapper, 'Item height', 50)).toEqual({
+				x: -780,
+				y: -20,
+				width: 2160,
+				height: 540,
+			});
 		});
 
 		it('keeps the ratio captured on linking, not the item\'s current one', async () => {
 			const wrapper = mountFields();
 			await link(wrapper);
-			await wrapper.setProps({ rect: { ...rect, height: 200 } });
+			await wrapper.setProps({
+				rect: { ...rect, height: 200 },
+			});
 
 			expect(await enter(wrapper, 'Item width', 200)).toMatchObject({ width: 200, height: 50 });
 		});
@@ -187,14 +228,24 @@ describe('geometry fields', () => {
 			await link(wrapper);
 			await link(wrapper);
 
-			expect(await enter(wrapper, 'Item width', 200)).toEqual({ x: 100, y: 200, width: 200, height: 100 });
+			expect(await enter(wrapper, 'Item width', 200)).toEqual({
+				x: 100,
+				y: 200,
+				width: 200,
+				height: 100,
+			});
 		});
 
 		it('is unlinked by default', async () => {
 			const wrapper = mountFields({ anchor: 'top-left' });
 
 			expect(wrapper.get('button[aria-label="Link width and height"]').attributes('aria-pressed')).toBe('false');
-			expect(await enter(wrapper, 'Item height', 50)).toEqual({ x: 100, y: 200, width: 400, height: 50 });
+			expect(await enter(wrapper, 'Item height', 50)).toEqual({
+				x: 100,
+				y: 200,
+				width: 400,
+				height: 50,
+			});
 		});
 
 		it('is not offered for an item its group sizes', async () => {

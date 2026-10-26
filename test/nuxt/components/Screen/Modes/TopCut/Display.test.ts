@@ -6,7 +6,13 @@ import { computed, ref } from 'vue';
 import { deriveTopCutBracket, EMPTY_TOP_CUT_BRACKET } from '~~/shared/modules/top-cut-bracket';
 
 const screen = ref<any>({ id: 1, screenConfig: {} });
-const config = ref({ phaseId: 3, showSeeds: false, showArchetypes: false, showHeader: true, headerText: undefined as string | undefined });
+const config = ref({
+	phaseId: 3,
+	showSeeds: false,
+	showArchetypes: false,
+	showHeader: true,
+	headerText: undefined as string | undefined,
+});
 const error = ref<string | null>(null);
 const isEmpty = ref(false);
 const headerText = ref('Top 8');
@@ -44,11 +50,13 @@ function match(matchId: number, table: number, a: BracketEntrant | null, b: Brac
 
 /** A Top `size` with every first-Round Match unplayed. */
 function unplayed(size: number): TopCutBracket {
-	return deriveTopCutBracket([{
-		roundId: 1,
-		name: 'First Round',
-		matches: Array.from({ length: size / 2 }, (_, index) => match(index + 1, index + 1, player(index + 1), player(size - index))),
-	}]);
+	return deriveTopCutBracket([
+		{
+			roundId: 1,
+			name: 'First Round',
+			matches: Array.from({ length: size / 2 }, (_, index) => match(index + 1, index + 1, player(index + 1), player(size - index))),
+		},
+	]);
 }
 
 async function mountComponent() {
@@ -70,30 +78,57 @@ function columnTexts(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
 
 describe('screenModesTopCutDisplay', () => {
 	beforeEach(() => {
-		config.value = { phaseId: 3, showSeeds: false, showArchetypes: false, showHeader: true, headerText: undefined };
+		config.value = {
+			phaseId: 3,
+			showSeeds: false,
+			showArchetypes: false,
+			showHeader: true,
+			headerText: undefined,
+		};
 		error.value = null;
 		isEmpty.value = false;
 		headerText.value = 'Top 8';
 	});
 
 	it('renders one column per Round, each Match\'s Players and result, and the winners advancing into pending positions', async () => {
-		bracket.value = deriveTopCutBracket([{
-			roundId: 1,
-			name: 'Quarterfinals',
-			matches: [
-				match(1, 1, player(1), player(8), [2, 1]),
-				match(2, 2, player(4), player(5), [0, 2]),
-				match(3, 3, player(2), player(7)),
-				match(4, 4, player(3), player(6)),
-			],
-		}]);
+		bracket.value = deriveTopCutBracket([
+			{
+				roundId: 1,
+				name: 'Quarterfinals',
+				matches: [
+					match(1, 1, player(1), player(8), [2, 1]),
+					match(2, 2, player(4), player(5), [0, 2]),
+					match(3, 3, player(2), player(7)),
+					match(4, 4, player(3), player(6)),
+				],
+			},
+		]);
 		const wrapper = await mountComponent();
 
 		expect(wrapper.find('.broadcast-table-title').text()).toBe('Top 8');
 		expect(columnTexts(wrapper)).toEqual([
-			{ name: 'Quarterfinals', positions: [['Seed 1 2', 'Seed 8 1'], ['Seed 4 0', 'Seed 5 2'], ['Seed 2', 'Seed 7'], ['Seed 3', 'Seed 6']] },
-			{ name: 'Semifinals', positions: [['Seed 1', 'Seed 5'], ['TBD', 'TBD']] },
-			{ name: 'Final', positions: [['TBD', 'TBD']] },
+			{
+				name: 'Quarterfinals',
+				positions: [
+					['Seed 1 2', 'Seed 8 1'],
+					['Seed 4 0', 'Seed 5 2'],
+					['Seed 2', 'Seed 7'],
+					['Seed 3', 'Seed 6'],
+				],
+			},
+			{
+				name: 'Semifinals',
+				positions: [
+					['Seed 1', 'Seed 5'],
+					['TBD', 'TBD'],
+				],
+			},
+			{
+				name: 'Final',
+				positions: [
+					['TBD', 'TBD'],
+				],
+			},
 		]);
 
 		const firstMatch = wrapper.findAll('.bracket-column')[0]!.findAll('.bracket-position')[0]!;
@@ -107,11 +142,19 @@ describe('screenModesTopCutDisplay', () => {
 	});
 
 	it('shows a bye\'s empty seat as a bye', async () => {
-		bracket.value = deriveTopCutBracket([{
-			roundId: 1,
-			name: 'Semifinals',
-			matches: [{ ...match(1, 1, player(1), null), isBye: true }, match(2, 2, player(2), player(3))],
-		}]);
+		bracket.value = deriveTopCutBracket([
+			{
+				roundId: 1,
+				name: 'Semifinals',
+				matches: [
+					{
+						...match(1, 1, player(1), null),
+						isBye: true,
+					},
+					match(2, 2, player(2), player(3)),
+				],
+			},
+		]);
 		const wrapper = await mountComponent();
 
 		expect(columnTexts(wrapper)[0]!.positions[0]).toEqual(['Seed 1', 'Bye']);
@@ -120,8 +163,21 @@ describe('screenModesTopCutDisplay', () => {
 
 	it('crowns the Final\'s winner', async () => {
 		bracket.value = deriveTopCutBracket([
-			{ roundId: 1, name: 'Semifinals', matches: [match(1, 1, player(1), player(4), [2, 0]), match(2, 2, player(2), player(3), [2, 0])] },
-			{ roundId: 2, name: 'Finals', matches: [match(3, 1, player(1), player(2), [1, 2])] },
+			{
+				roundId: 1,
+				name: 'Semifinals',
+				matches: [
+					match(1, 1, player(1), player(4), [2, 0]),
+					match(2, 2, player(2), player(3), [2, 0]),
+				],
+			},
+			{
+				roundId: 2,
+				name: 'Finals',
+				matches: [
+					match(3, 1, player(1), player(2), [1, 2]),
+				],
+			},
 		]);
 		const wrapper = await mountComponent();
 
@@ -139,14 +195,32 @@ describe('screenModesTopCutDisplay', () => {
 	describe('seeds and Archetypes', () => {
 		/** A Semifinal whose Players carry a seed and an Archetype, or neither. */
 		function detailed(): TopCutBracket {
-			return deriveTopCutBracket([{
-				roundId: 1,
-				name: 'Semifinals',
-				matches: [
-					match(1, 1, { ...player(1), seed: 1, deck: { name: 'Izzet Prowess', colors: 'UR' } }, { ...player(4), seed: null, deck: null }),
-					match(2, 2, { ...player(2), seed: 2, deck: null }, { ...player(3), seed: 3, deck: { name: 'Mono-Green Landfall', colors: 'G' } }),
-				],
-			}]);
+			return deriveTopCutBracket([
+				{
+					roundId: 1,
+					name: 'Semifinals',
+					matches: [
+						match(1, 1, {
+							...player(1),
+							seed: 1,
+							deck: { name: 'Izzet Prowess', colors: 'UR' },
+						}, {
+							...player(4),
+							seed: null,
+							deck: null,
+						}),
+						match(2, 2, {
+							...player(2),
+							seed: 2,
+							deck: null,
+						}, {
+							...player(3),
+							seed: 3,
+							deck: { name: 'Mono-Green Landfall', colors: 'G' },
+						}),
+					],
+				},
+			]);
 		}
 
 		function firstColumnEntrants(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
@@ -158,7 +232,10 @@ describe('screenModesTopCutDisplay', () => {
 			config.value = { ...config.value, showSeeds: true };
 			const wrapper = await mountComponent();
 
-			expect(firstColumnEntrants(wrapper).map(entrant => [entrant.find('.bracket-entrant-seed').text(), entrant.find('.bracket-entrant-name').text()])).toEqual([
+			expect(firstColumnEntrants(wrapper).map(entrant => [
+				entrant.find('.bracket-entrant-seed').text(),
+				entrant.find('.bracket-entrant-name').text(),
+			])).toEqual([
 				['1', 'Seed 1'],
 				['', 'Seed 4'],
 				['2', 'Seed 2'],

@@ -28,7 +28,12 @@ describe('playerService JSON bulk SQLite integration', () => {
 		const service = playerService();
 		const firstSeen = new Date('2026-07-15T00:00:00.000Z');
 		const first = await service.reconcileMeleeSnapshot(1, [
-			{ externalId: 'player-1', externalStatus: 1, name: 'One', pronouns: 'they/them' },
+			{
+				externalId: 'player-1',
+				externalStatus: 1,
+				name: 'One',
+				pronouns: 'they/them',
+			},
 			{ externalId: 'player-2', externalStatus: 1, name: 'Two' },
 		], firstSeen);
 		expect(first).toMatchObject({ created: 2, updated: 0, deactivated: 0 });
@@ -40,7 +45,13 @@ describe('playerService JSON bulk SQLite integration', () => {
 
 		const rows = await client.execute('select external_id, name, pronouns, external_status, is_active from players order by external_id');
 		expect(rows.rows).toEqual([
-			expect.objectContaining({ external_id: 'player-1', name: 'One Updated', pronouns: 'they/them', external_status: 2, is_active: 1 }),
+			expect.objectContaining({
+				external_id: 'player-1',
+				name: 'One Updated',
+				pronouns: 'they/them',
+				external_status: 2,
+				is_active: 1,
+			}),
 			expect.objectContaining({ external_id: 'player-2', is_active: 0 }),
 		]);
 	});

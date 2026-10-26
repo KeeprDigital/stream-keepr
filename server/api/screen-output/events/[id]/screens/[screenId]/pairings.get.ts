@@ -5,7 +5,9 @@ import { requireScreenOutputModeRead, screenOutputReadNotFound } from '~~/server
 /** The Matches of the Round this Screen's Pairings mode names, in table order (#751). */
 export default defineEventHandler(async (event): Promise<ScreenOutputPairingsResponse> => {
 	const { eventId, config: { roundId } } = await requireScreenOutputModeRead(event, 'pairings');
-	const result = roundId ? await findRoundMatches(eventId, roundId) : null;
+	const result = roundId
+		? await findRoundMatches(eventId, roundId)
+		: null;
 	if (!result)
 		screenOutputReadNotFound();
 

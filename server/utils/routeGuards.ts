@@ -18,7 +18,9 @@ function throwReferenceNotFound(message: string): never {
 }
 
 function uniqueNumbers(values: Array<number | null | undefined>): number[] {
-	return [...new Set(values.filter((value): value is number => value != null))];
+	return [
+		...new Set(values.filter((value): value is number => value != null)),
+	];
 }
 
 export async function requireRoundInEvent(eventId: number, roundId: number | null | undefined): Promise<void> {
@@ -126,7 +128,9 @@ export async function validateFeatureMatchAssignmentCreateReferences(
 
 /** A field naming an entity by id; any other value names nothing to check. */
 function referencedId(value: unknown): number | null | undefined {
-	return typeof value === 'number' || value === null ? value : undefined;
+	return typeof value === 'number' || value === null
+		? value
+		: undefined;
 }
 
 async function requireDeckSourceInEvent(eventId: number, value: unknown): Promise<void> {
@@ -135,11 +139,15 @@ async function requireDeckSourceInEvent(eventId: number, value: unknown): Promis
 
 	const source = value as Record<string, unknown>;
 	if (source.type === 'player') {
-		await requirePlayersInEvent(eventId, [referencedId(source.playerId)]);
+		await requirePlayersInEvent(eventId, [
+			referencedId(source.playerId),
+		]);
 	}
 	else if (source.type === 'broadcast') {
 		// A Broadcast Deck Source always names a list; one naming none is never selectable.
-		const listId = typeof source.broadcastDeckListId === 'number' ? source.broadcastDeckListId : 0;
+		const listId = typeof source.broadcastDeckListId === 'number'
+			? source.broadcastDeckListId
+			: 0;
 		if (!await broadcastDeckListService().sourceIsSelectable(listId, eventId))
 			throw new ScreenDeckSourceConflictError();
 	}
@@ -149,7 +157,9 @@ async function requireDeckSourceInEvent(eventId: number, value: unknown): Promis
 const EVENT_REFERENCE_CHECKS: { readonly [K in EventReferenceKind]: (eventId: number, value: unknown) => Promise<void> } = {
 	phase: (eventId, value) => requirePhaseInEvent(eventId, referencedId(value)),
 	round: (eventId, value) => requireRoundInEvent(eventId, referencedId(value)),
-	player: (eventId, value) => requirePlayersInEvent(eventId, [referencedId(value)]),
+	player: (eventId, value) => requirePlayersInEvent(eventId, [
+		referencedId(value),
+	]),
 	playerList: (eventId, value) => requirePlayerListInEvent(eventId, referencedId(value)),
 	featureMatchSlot: (eventId, value) => requireFeatureMatchSlotInEvent(eventId, referencedId(value)),
 	archetype: (eventId, value) => requireArchetypeInEvent(eventId, referencedId(value)),
@@ -166,7 +176,9 @@ export async function validateScreenModeConfigReferences(
 	mode: ScreenMode,
 	config: Partial<ScreenModeConfig> | Record<string, unknown> | null | undefined,
 ): Promise<void> {
-	const fields: Record<string, unknown> = config && typeof config === 'object' ? config : {};
+	const fields: Record<string, unknown> = config && typeof config === 'object'
+		? config
+		: {};
 	await Promise.all(
 		Object.entries(SCREEN_MODES[mode].eventReferences)
 			.map(([field, kind]) => EVENT_REFERENCE_CHECKS[kind](eventId, fields[field])),

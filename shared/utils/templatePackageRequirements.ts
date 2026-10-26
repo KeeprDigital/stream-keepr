@@ -69,7 +69,9 @@ function appendApplicationFontCapabilities(
 		return;
 	}
 	for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-		const nestedPath = path ? `${path}.${key}` : key;
+		const nestedPath = path
+			? `${path}.${key}`
+			: key;
 		if (key === 'font' && isApplicationFontSelection(nested)) {
 			capabilities.push({
 				slot: nestedPath,
@@ -134,7 +136,9 @@ export function broadcastGraphicTemplatePackageRequirements(
 	// added to one walk can never be missed by the other. Slots are renamed
 	// relative to the graphic the package carries, as the layout side does.
 	const graphicSlotPrefix = `graphics.${graphic.id}.`;
-	const assets = broadcastGraphicsGraphicAssetReferences({ graphics: [graphic] } as BroadcastGraphicsModeConfig)
+	const assets = broadcastGraphicsGraphicAssetReferences({
+		graphics: [graphic],
+	} as BroadcastGraphicsModeConfig)
 		.map(discovered => ({
 			slot: discovered.ownerSlot.startsWith(graphicSlotPrefix)
 				? discovered.ownerSlot.slice(graphicSlotPrefix.length)

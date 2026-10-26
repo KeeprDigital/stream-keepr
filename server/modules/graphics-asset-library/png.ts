@@ -72,8 +72,11 @@ const crcTable = (() => {
 	const table = new Uint32Array(256);
 	for (let index = 0; index < table.length; index++) {
 		let value = index;
-		for (let bit = 0; bit < 8; bit++)
-			value = value & 1 ? 0xEDB88320 ^ (value >>> 1) : value >>> 1;
+		for (let bit = 0; bit < 8; bit++) {
+			value = value & 1
+				? 0xEDB88320 ^ (value >>> 1)
+				: value >>> 1;
+		}
 		table[index] = value >>> 0;
 	}
 	return table;
@@ -167,7 +170,9 @@ function channelCount(colorType: ParsedPng['colorType']) {
 }
 
 function passLength(fullLength: number, start: number, step: number): number {
-	return fullLength <= start ? 0 : Math.ceil((fullLength - start) / step);
+	return fullLength <= start
+		? 0
+		: Math.ceil((fullLength - start) / step);
 }
 
 function unfilterRow(
@@ -180,9 +185,13 @@ function unfilterRow(
 		validationError('malformed-png', 'PNG uses an invalid scanline filter.');
 	const decoded = new Uint8Array(raw.byteLength);
 	for (let column = 0; column < raw.byteLength; column++) {
-		const left = column >= channels ? decoded[column - channels]! : 0;
+		const left = column >= channels
+			? decoded[column - channels]!
+			: 0;
 		const above = previous[column] ?? 0;
-		const upperLeft = column >= channels ? previous[column - channels] ?? 0 : 0;
+		const upperLeft = column >= channels
+			? previous[column - channels] ?? 0
+			: 0;
 		let predictor: number;
 		switch (filter) {
 			case 0:
@@ -258,7 +267,12 @@ function writeRgbaPixel(
 		}
 		case 4: {
 			const grayscale = row[sourceOffset]!;
-			target.set([grayscale, grayscale, grayscale, row[sourceOffset + 1]!], targetOffset);
+			target.set([
+				grayscale,
+				grayscale,
+				grayscale,
+				row[sourceOffset + 1]!,
+			], targetOffset);
 			break;
 		}
 		case 6:
@@ -278,7 +292,9 @@ async function decodeThumbnail(
 	const channels = channelCount(parsed.colorType);
 	const passes = parsed.interlaced
 		? ADAM7_PASSES
-		: [{ x: 0, y: 0, dx: 1, dy: 1 }] as const;
+		: [
+				{ x: 0, y: 0, dx: 1, dy: 1 },
+			] as const;
 
 	try {
 		for (const pass of passes) {
@@ -592,7 +608,19 @@ async function inspectAndDecodePng(
 					break;
 				default:
 					if (
-						!['IDAT', 'sRGB', 'gAMA', 'cHRM', 'acTL', 'fcTL', 'fdAT', 'iCCP', 'cICP', 'mDCv', 'cLLi'].includes(type)
+						![
+							'IDAT',
+							'sRGB',
+							'gAMA',
+							'cHRM',
+							'acTL',
+							'fcTL',
+							'fdAT',
+							'iCCP',
+							'cICP',
+							'mDCv',
+							'cLLi',
+						].includes(type)
 						&& (typeBytes[0]! & 0x20) === 0
 					) {
 						issues.push(validationIssue(
@@ -632,7 +660,9 @@ function adler32(bytes: Uint8Array): number {
 }
 
 function uncompressedZlib(bytes: Uint8Array): Uint8Array {
-	const blocks: Uint8Array[] = [Uint8Array.of(0x78, 0x01)];
+	const blocks: Uint8Array[] = [
+		Uint8Array.of(0x78, 0x01),
+	];
 	for (let offset = 0; offset < bytes.byteLength || offset === 0; offset += 65_535) {
 		const length = Math.min(65_535, bytes.byteLength - offset);
 		const final = offset + length >= bytes.byteLength;

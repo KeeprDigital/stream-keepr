@@ -15,7 +15,9 @@ describe('createTalentSchema', () => {
 	});
 
 	it('accepts name of exactly 200 characters', () => {
-		const result = createTalentSchema.safeParse({ name: 'a'.repeat(200) });
+		const result = createTalentSchema.safeParse({
+			name: 'a'.repeat(200),
+		});
 		expect(result.success).toBe(true);
 	});
 
@@ -52,7 +54,9 @@ describe('createTalentSchema', () => {
 	it('rejects a Social Profile handle beyond the bounded live-document ceiling', () => {
 		expect(createTalentSchema.safeParse({
 			name: 'Alice',
-			socialProfiles: { twitch: 'a'.repeat(MAX_SOCIAL_PROFILE_HANDLE_LENGTH + 1) },
+			socialProfiles: {
+				twitch: 'a'.repeat(MAX_SOCIAL_PROFILE_HANDLE_LENGTH + 1),
+			},
 		}).success).toBe(false);
 	});
 });
@@ -71,13 +75,17 @@ describe('updateTalentSchema', () => {
 	});
 
 	it('accepts name of exactly 200 characters', () => {
-		const result = updateTalentSchema.safeParse({ name: 'a'.repeat(200) });
+		const result = updateTalentSchema.safeParse({
+			name: 'a'.repeat(200),
+		});
 		expect(result.success).toBe(true);
 	});
 
 	it('distinguishes omitted, replacement and clearing Social Profile updates', () => {
 		expect(updateTalentSchema.parse({})).toEqual({});
-		expect(updateTalentSchema.parse({ socialProfiles: { instagram: '@Alice' } })).toEqual({
+		expect(updateTalentSchema.parse({
+			socialProfiles: { instagram: '@Alice' },
+		})).toEqual({
 			socialProfiles: { instagram: 'Alice' },
 		});
 		expect(updateTalentSchema.parse({ socialProfiles: {} })).toEqual({ socialProfiles: {} });

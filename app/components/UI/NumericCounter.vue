@@ -167,7 +167,9 @@ const btnClass = computed(() => {
 const containerClass = computed(() => [
 	'flex items-center justify-center',
 	isVertical.value ? 'flex-col' : 'flex-row',
-	props.touch && !props.compact ? 'gap-4' : 'gap-3',
+	props.touch && !props.compact
+		? 'gap-4'
+		: 'gap-3',
 ]);
 </script>
 

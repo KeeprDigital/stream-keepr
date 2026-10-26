@@ -43,12 +43,16 @@ type LoadedDeckSource
 function selectedDeckSource(source: DeckSource): LoadedDeckSource | null {
 	if (source.type === 'broadcast')
 		return { type: 'broadcast', broadcastDeckListId: source.broadcastDeckListId };
-	return source.playerId === null ? null : { type: 'player', playerId: source.playerId };
+	return source.playerId === null
+		? null
+		: { type: 'player', playerId: source.playerId };
 }
 
 /** One Deck Source as one comparable value. */
 function deckSourceKey(source: LoadedDeckSource): string {
-	return source.type === 'player' ? `player:${source.playerId}` : `broadcast:${source.broadcastDeckListId}`;
+	return source.type === 'player'
+		? `player:${source.playerId}`
+		: `broadcast:${source.broadcastDeckListId}`;
 }
 
 function sameDeckSource(left: LoadedDeckSource | null | undefined, right: LoadedDeckSource): boolean {
@@ -65,7 +69,9 @@ type DeckSourceRead
 function readRevision(read: DeckSourceRead | null): number | null | undefined {
 	if (!read)
 		return undefined;
-	return read.type === 'player' ? deckSourceStamp(read.player.updatedAt) : read.list.revision;
+	return read.type === 'player'
+		? deckSourceStamp(read.player.updatedAt)
+		: read.list.revision;
 }
 
 /**
@@ -78,11 +84,15 @@ function readRevision(read: DeckSourceRead | null): number | null | undefined {
 function deckDependencies(selected: () => LoadedDeckSource | null): ScreenModeDependencies<DeckSourceRead | null> {
 	const selectedPlayerId = () => {
 		const source = selected();
-		return source?.type === 'player' ? source.playerId : null;
+		return source?.type === 'player'
+			? source.playerId
+			: null;
 	};
 	const selectedListId = () => {
 		const source = selected();
-		return source?.type === 'broadcast' ? source.broadcastDeckListId : null;
+		return source?.type === 'broadcast'
+			? source.broadcastDeckListId
+			: null;
 	};
 	const showsPlayer = () => selectedPlayerId() !== null;
 	const showsArchetype = (archetypeId: number, held: DeckSourceRead | null) =>
@@ -108,7 +118,16 @@ function deckDependencies(selected: () => LoadedDeckSource | null): ScreenModeDe
 }
 
 function computeDeckStats(cards: Array<{ quantity: number; compartment: string; cardType: string | null }>): Array<{ type: string; count: number }> {
-	const stats: DeckListStats = { creatures: 0, instants: 0, sorceries: 0, enchantments: 0, artifacts: 0, planeswalkers: 0, lands: 0, other: 0 };
+	const stats: DeckListStats = {
+		creatures: 0,
+		instants: 0,
+		sorceries: 0,
+		enchantments: 0,
+		artifacts: 0,
+		planeswalkers: 0,
+		lands: 0,
+		other: 0,
+	};
 
 	for (const card of cards) {
 		if (card.compartment !== 'mainboard') {
@@ -164,7 +183,9 @@ function computeDeckStats(cards: Array<{ quantity: number; compartment: string; 
 }
 
 function deckSourceStamp(updatedAt: Date | string | null | undefined): number | null {
-	return updatedAt == null ? null : new Date(updatedAt).getTime();
+	return updatedAt == null
+		? null
+		: new Date(updatedAt).getTime();
 }
 
 function preloadDeckImage(url: string): Promise<boolean> {
@@ -210,11 +231,13 @@ async function preloadDeckImages(cards: DeckListCardWithData[]): Promise<boolean
 		return false;
 	}
 
-	const imageUrls = [...new Set(
-		cards
-			.map(card => card.mtgCard?.imageData?.front?.normal)
-			.filter((url): url is string => !!url),
-	)];
+	const imageUrls = [
+		...new Set(
+			cards
+				.map(card => card.mtgCard?.imageData?.front?.normal)
+				.filter((url): url is string => !!url),
+		),
+	];
 	const results = await Promise.all(imageUrls.map(async url => [url, await preloadDeckImage(url)] as const));
 	const failedUrls = new Set(results.filter(([, loaded]) => !loaded).map(([url]) => url));
 	if (failedUrls.size === 0)
@@ -381,7 +404,10 @@ export function useDeckModeData() {
 			input.cards.flatMap(card => card.deckCounterTypes ?? []),
 			getCounterTypeConfigs('mtg'),
 		);
-		const artDegraded = await preloadDeckImages([...arrays.mainboard, ...arrays.sideboard]);
+		const artDegraded = await preloadDeckImages([
+			...arrays.mainboard,
+			...arrays.sideboard,
+		]);
 
 		return {
 			deck: {
@@ -467,7 +493,9 @@ export function useDeckModeData() {
 	function displayInput(read: DeckSourceRead): DeckDisplayInput | null {
 		if (read.type === 'broadcast')
 			return broadcastDisplayInput(read.list);
-		return read.deck && read.deck.cards.length > 0 ? playerDisplayInput(read.player, read.deck) : null;
+		return read.deck && read.deck.cards.length > 0
+			? playerDisplayInput(read.player, read.deck)
+			: null;
 	}
 
 	function stageLoadedDeck(nextDeck: DeckDisplayState, degraded: boolean) {
@@ -486,7 +514,11 @@ export function useDeckModeData() {
 
 	async function buildDeck(input: DeckDisplayInput) {
 		const flight = degradedRefetch.begin();
-		const build: DeckBuild = { input, key: buildKey(input), failed: false };
+		const build: DeckBuild = {
+			input,
+			key: buildKey(input),
+			failed: false,
+		};
 		built = build;
 		buildFailed.value = false;
 		try {

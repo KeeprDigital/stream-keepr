@@ -17,7 +17,10 @@ class MockChannel {
 	private stateListeners = new Map<string, StateListener[]>();
 
 	on = vi.fn((event: string, listener: StateListener) => {
-		this.stateListeners.set(event, [...(this.stateListeners.get(event) ?? []), listener]);
+		this.stateListeners.set(event, [
+			...(this.stateListeners.get(event) ?? []),
+			listener,
+		]);
 	});
 
 	/**
@@ -59,7 +62,10 @@ class MockChannel {
 		subscribe: vi.fn((event: string, handler: PresenceHandler) => {
 			if (this.state === 'failed')
 				return Promise.reject(new Error('channel failed'));
-			this.presenceHandlers.set(event, [...(this.presenceHandlers.get(event) ?? []), handler]);
+			this.presenceHandlers.set(event, [
+				...(this.presenceHandlers.get(event) ?? []),
+				handler,
+			]);
 			return this.presenceSubscribeResult;
 		}),
 		unsubscribe: vi.fn((event: string, handler: PresenceHandler) => {
@@ -70,7 +76,10 @@ class MockChannel {
 	subscribe = vi.fn((messageType: string, handler: MessageHandler) => {
 		if (this.state === 'failed')
 			return Promise.reject(new Error('channel failed'));
-		this.handlers.set(messageType, [...(this.handlers.get(messageType) ?? []), handler]);
+		this.handlers.set(messageType, [
+			...(this.handlers.get(messageType) ?? []),
+			handler,
+		]);
 		return this.subscribeResult;
 	});
 
@@ -134,7 +143,9 @@ const realtimeInstances: MockRealtime[] = [];
 class MockRealtime {
 	connection = mockConnection;
 	channels = mockChannels;
-	auth = { authorize: vi.fn() };
+	auth = {
+		authorize: vi.fn(),
+	};
 
 	constructor(public options: unknown) {
 		realtimeInstances.push(this);
@@ -160,7 +171,10 @@ vi.stubGlobal('$fetch', vi.fn());
  * this document has. Stubbed empty by default — the operator's own pages carry no
  * fragment — and set per test where the bearer arm is what is being read.
  */
-vi.stubGlobal('window', { addEventListener: vi.fn(), location: { hash: '' } });
+vi.stubGlobal('window', {
+	addEventListener: vi.fn(),
+	location: { hash: '' },
+});
 
 async function createTransport() {
 	vi.resetModules();
@@ -430,8 +444,12 @@ describe('realtime plugin', () => {
 		await Promise.resolve();
 		await Promise.resolve();
 
-		channels.get('event:2')!.emit('player:updated', { player: { id: 2 } });
-		expect(handler).toHaveBeenCalledWith({ player: { id: 2 } }, expect.any(Object));
+		channels.get('event:2')!.emit('player:updated', {
+			player: { id: 2 },
+		});
+		expect(handler).toHaveBeenCalledWith({
+			player: { id: 2 },
+		}, expect.any(Object));
 	});
 
 	it('defers direct channel subscription until its event token is minted', async () => {
@@ -650,9 +668,13 @@ describe('realtime plugin', () => {
 			await settleRetries();
 
 			expect(realtime.tokenError).toBeNull();
-			channels.get('event:9')!.emit('player:updated', { player: { id: 9 } });
+			channels.get('event:9')!.emit('player:updated', {
+				player: { id: 9 },
+			});
 			expect(handler).toHaveBeenCalledOnce();
-			expect(handler).toHaveBeenCalledWith({ player: { id: 9 } }, expect.any(Object));
+			expect(handler).toHaveBeenCalledWith({
+				player: { id: 9 },
+			}, expect.any(Object));
 		});
 
 		it('reaches the original room handlers in the reported sequence: restore, then a new Screen subscription', async () => {
@@ -673,7 +695,9 @@ describe('realtime plugin', () => {
 			await settleRetries();
 
 			expect(realtime.tokenError).toBeNull();
-			channels.get('event:9')!.emit('player:updated', { player: { id: 9 } });
+			channels.get('event:9')!.emit('player:updated', {
+				player: { id: 9 },
+			});
 			expect(handler).toHaveBeenCalledOnce();
 		});
 
@@ -698,10 +722,18 @@ describe('realtime plugin', () => {
 			expect(commandHandler).toHaveBeenCalledOnce();
 
 			presenceCallback.mockClear();
-			channel.setPresenceMembers([{ data: { screenId: 1 } }]);
+			channel.setPresenceMembers([
+				{
+					data: { screenId: 1 },
+				},
+			]);
 			channel.emitPresence('enter');
 			await vi.advanceTimersByTimeAsync(0);
-			expect(presenceCallback).toHaveBeenCalledWith([{ data: { screenId: 1 } }]);
+			expect(presenceCallback).toHaveBeenCalledWith([
+				{
+					data: { screenId: 1 },
+				},
+			]);
 		});
 
 		it('keeps the fault standing through failed re-attempts, even beside an Event still covered', async () => {
@@ -722,7 +754,9 @@ describe('realtime plugin', () => {
 
 		it('stops re-attempting, and drops the fault, once everything that waited is disposed', async () => {
 			const realtime = await createTransport();
-			realtime.onRoom('player', { 'player:updated': vi.fn() });
+			realtime.onRoom('player', {
+				'player:updated': vi.fn(),
+			});
 			realtime.setRoom('event:7');
 			await settleRetries();
 
@@ -918,7 +952,9 @@ describe('realtime plugin', () => {
 			await vi.advanceTimersByTimeAsync(0);
 
 			await (realtimeInstances[0]!.options as any).authCallback({}, vi.fn());
-			expect($fetch).toHaveBeenLastCalledWith('/api/realtime/token', expect.objectContaining({ query: { eventId: 7 } }));
+			expect($fetch).toHaveBeenLastCalledWith('/api/realtime/token', expect.objectContaining({
+				query: { eventId: 7 },
+			}));
 		});
 
 		it('backs off to one attempt every 30 seconds for as long as the outage lasts', async () => {
@@ -1133,7 +1169,9 @@ describe('realtime plugin', () => {
 		realtime.onRoom('metagame', { 'player:updated': secondHandler });
 		await settle();
 
-		channels.get('event:1')!.emit('player:updated', { player: { id: 1 } });
+		channels.get('event:1')!.emit('player:updated', {
+			player: { id: 1 },
+		});
 
 		expect(firstHandler).toHaveBeenCalledOnce();
 		expect(secondHandler).toHaveBeenCalledOnce();
@@ -1148,11 +1186,17 @@ describe('realtime plugin', () => {
 		realtime.setRoom('event:2');
 		await settle();
 
-		channels.get('event:1')!.emit('player:updated', { player: { id: 1 } });
-		channels.get('event:2')!.emit('player:updated', { player: { id: 2 } });
+		channels.get('event:1')!.emit('player:updated', {
+			player: { id: 1 },
+		});
+		channels.get('event:2')!.emit('player:updated', {
+			player: { id: 2 },
+		});
 
 		expect(handler).toHaveBeenCalledOnce();
-		expect(handler).toHaveBeenCalledWith({ player: { id: 2 } }, expect.any(Object));
+		expect(handler).toHaveBeenCalledWith({
+			player: { id: 2 },
+		}, expect.any(Object));
 	});
 
 	it('keeps room handlers registered while no room is active and resubscribes later', async () => {
@@ -1163,14 +1207,20 @@ describe('realtime plugin', () => {
 		realtime.onRoom('player', { 'player:updated': handler });
 		await settle();
 		realtime.setRoom(null);
-		channels.get('event:1')!.emit('player:updated', { player: { id: 1 } });
+		channels.get('event:1')!.emit('player:updated', {
+			player: { id: 1 },
+		});
 
 		realtime.setRoom('event:2');
 		await settle();
-		channels.get('event:2')!.emit('player:updated', { player: { id: 2 } });
+		channels.get('event:2')!.emit('player:updated', {
+			player: { id: 2 },
+		});
 
 		expect(handler).toHaveBeenCalledOnce();
-		expect(handler).toHaveBeenCalledWith({ player: { id: 2 } }, expect.any(Object));
+		expect(handler).toHaveBeenCalledWith({
+			player: { id: 2 },
+		}, expect.any(Object));
 	});
 
 	it('keeps channel subscriptions to the same channel and type independent', async () => {
@@ -1213,7 +1263,10 @@ describe('realtime plugin', () => {
 		const realtime = await createTransport();
 		const channel = channels.get('screen:1:2') ?? new MockChannel();
 		channels.set('screen:1:2', channel);
-		channel.setPresenceMembers([{ clientId: 'a' }, { clientId: 'b' }]);
+		channel.setPresenceMembers([
+			{ clientId: 'a' },
+			{ clientId: 'b' },
+		]);
 		const callback = vi.fn();
 
 		await realtime.enterPresence('screen:1:2', { screenId: 2 });
@@ -1222,7 +1275,10 @@ describe('realtime plugin', () => {
 		unsubscribe();
 
 		expect(channel.presence.enter).toHaveBeenCalledWith({ screenId: 2 });
-		expect(callback).toHaveBeenCalledWith([{ clientId: 'a' }, { clientId: 'b' }]);
+		expect(callback).toHaveBeenCalledWith([
+			{ clientId: 'a' },
+			{ clientId: 'b' },
+		]);
 		expect(channel.presence.leave).toHaveBeenCalledOnce();
 		expect(channel.presence.unsubscribe).toHaveBeenCalledTimes(3);
 	});

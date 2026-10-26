@@ -87,5 +87,11 @@ export function useEventPageLoading(
 		await loadPage(id);
 	}, { immediate: true });
 
-	return { eventId, initialLoading, loading, initialError, retry };
+	return {
+		eventId,
+		initialLoading,
+		loading,
+		initialError,
+		retry,
+	};
 }

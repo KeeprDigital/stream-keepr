@@ -90,7 +90,7 @@ function bindingFromResponse(response: Response): SilentVideoPlaybackValidationB
 function finiteHeader(response: Response, name: string) {
 	const value = Number(requiredHeader(response, name));
 	if (!Number.isFinite(value))
-		throw new Error(`Silent-video validation response has invalid ${name}`);
+		throw new TypeError(`Silent-video validation response has invalid ${name}`);
 	return value;
 }
 
@@ -138,8 +138,15 @@ export function createSilentVideoPlaybackServiceBindingValidator(
 			if (response.status === 422) {
 				try {
 					const body = await response.json() as { stage?: unknown };
-					if (!['metadata', 'playback', 'seek', 'poster', 'transparency'].includes(String(body.stage)))
+					if (![
+						'metadata',
+						'playback',
+						'seek',
+						'poster',
+						'transparency',
+					].includes(String(body.stage))) {
 						return { outcome: 'unavailable', retryable: true };
+					}
 					return {
 						outcome: 'rejected',
 						...bindingFromResponse(response),

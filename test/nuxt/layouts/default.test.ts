@@ -20,7 +20,10 @@ const { mockClearPlayerDeckCache, mockNavigateTo, mockSignOut, mockToastAdd, moc
 // hoisted factory cannot call `ref`; a computed over the hoisted container is
 // both, and each test sets the container before it mounts.
 vi.mock('~/modules/auth/session', () => ({
-	useAuthSession: () => ({ signOut: mockSignOut, user: computed(() => mockUser.value) }),
+	useAuthSession: () => ({
+		signOut: mockSignOut,
+		user: computed(() => mockUser.value),
+	}),
 }));
 
 const mockEventStore = reactive({
@@ -41,7 +44,11 @@ const mockScreenStore = reactive({
 	$reset: vi.fn(),
 });
 
-const mockResetStore = () => ({ $reset: vi.fn() });
+function mockResetStore() {
+	return {
+		$reset: vi.fn(),
+	};
+}
 const mockPlayerStore = mockResetStore();
 const mockArchetypeStore = mockResetStore();
 const mockMetagameStore = mockResetStore();
@@ -74,7 +81,11 @@ mockNuxtImport('useScreenStore', () => () => mockScreenStore);
 mockNuxtImport('useCardStore', () => () => mockCardStore);
 mockNuxtImport('useMeleeStore', () => () => mockMeleeStore);
 mockNuxtImport('useColorMode', () => () => mockColorMode);
-mockNuxtImport('useRoute', () => () => ({ meta: { title: 'Dashboard' }, path: '/event/1', query: {} }));
+mockNuxtImport('useRoute', () => () => ({
+	meta: { title: 'Dashboard' },
+	path: '/event/1',
+	query: {},
+}));
 mockNuxtImport('clearPlayerDeckCache', () => mockClearPlayerDeckCache);
 mockNuxtImport('navigateTo', () => mockNavigateTo);
 mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
@@ -100,7 +111,10 @@ const UNavigationMenuStub = defineComponent({
 	},
 	setup(props: { items: Array<any> }) {
 		const labels = computed(() => (props.items as Array<any>)
-			.flatMap(item => [item.label, ...(item.children?.map((child: any) => child.label) ?? [])])
+			.flatMap(item => [
+				item.label,
+				...(item.children?.map((child: any) => child.label) ?? []),
+			])
 			.filter(Boolean)
 			.join('|'));
 
@@ -123,7 +137,9 @@ const UButtonStub = defineComponent({
 
 /** The navbar's own slots, and whether it would offer the mobile sidebar toggle. */
 const UDashboardNavbarStub = defineComponent({
-	props: { toggle: { type: Boolean, default: true } },
+	props: {
+		toggle: { type: Boolean, default: true },
+	},
 	template: '<header data-testid="navbar" :data-toggle="String(toggle)"><slot name="leading" /><slot /><slot name="right" /></header>',
 });
 

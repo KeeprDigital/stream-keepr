@@ -73,12 +73,16 @@ mockNuxtImport('useStandingsModeData', () => () => ({
 			case 'deck':
 				return player.gameData?.deckName ?? '-';
 			case 'positionChange':
-				return player.id === 1 ? '▲2' : 'new';
+				return player.id === 1
+					? '▲2'
+					: 'new';
 			default:
 				return '-';
 		}
 	},
-	positionChangeOf: (player: any) => player.id === 1 ? { kind: 'up', by: 2 } : { kind: 'new' },
+	positionChangeOf: (player: any) => player.id === 1
+		? { kind: 'up', by: 2 }
+		: { kind: 'new' },
 }));
 
 const ScreenModeBaseStub = defineComponent({
@@ -222,7 +226,12 @@ describe('screenStandingsDisplay', () => {
 		};
 		pageData.value = [
 			pageData.value[0],
-			{ id: 2, name: 'Newcomer', position: 2, gameData: null },
+			{
+				id: 2,
+				name: 'Newcomer',
+				position: 2,
+				gameData: null,
+			},
 		];
 
 		const wrapper = await mountComponent();

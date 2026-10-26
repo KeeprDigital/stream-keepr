@@ -96,7 +96,9 @@ export function groupUnresolvedDeckCards(
 		});
 	}
 
-	return [...groups.values()]
+	return [
+		...groups.values(),
+	]
 		.map((group) => {
 			const playerIds = new Set(group.entries.map(entry => entry.playerId));
 			const deckIds = new Set(group.entries.map(entry => entry.deckId));
@@ -137,7 +139,11 @@ function unresolvedDeckCardsCountLabel(groupCount: number, entryCount: number): 
 	if (groupCount === 0)
 		return '0 unresolved deck entries';
 
-	return `${groupCount} unresolved group${groupCount === 1 ? '' : 's'} across ${entryCount} entr${entryCount === 1 ? 'y' : 'ies'}`;
+	return `${groupCount} unresolved group${groupCount === 1
+		? ''
+		: 's'} across ${entryCount} entr${entryCount === 1
+		? 'y'
+		: 'ies'}`;
 }
 
 export function useMeleeSyncUnresolvedDeckListResolution(
@@ -173,7 +179,9 @@ export function useMeleeSyncUnresolvedDeckListResolution(
 	);
 	const activeUnresolvedGroup = computed(() => {
 		const index = activeUnresolvedGroupIndex.value;
-		return index >= 0 ? unresolvedDeckCardGroups.value[index]! : null;
+		return index >= 0
+			? unresolvedDeckCardGroups.value[index]!
+			: null;
 	});
 
 	async function loadUnresolvedDeckCards() {
@@ -380,7 +388,10 @@ export function useMeleeSyncUnresolvedDeckListResolution(
 		invalidateResolveSearch();
 	}, { flush: 'sync' });
 
-	watch([() => toValue(options.eventId), () => toValue(options.isSetupComplete)], () => {
+	watch([
+		() => toValue(options.eventId),
+		() => toValue(options.isSetupComplete),
+	], () => {
 		void loadUnresolvedDeckCards();
 	}, { immediate: true });
 

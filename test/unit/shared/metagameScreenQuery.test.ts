@@ -20,9 +20,19 @@ describe('metagameScreenQuery', () => {
 	});
 
 	it('asks for the Screen\'s own conversion target, inside its scope', () => {
-		const { query } = screenQuery({ scope: 'topN', topN: 32, conversionMetric: 'minPoints', conversionThreshold: 15 });
+		const { query } = screenQuery({
+			scope: 'topN',
+			topN: 32,
+			conversionMetric: 'minPoints',
+			conversionThreshold: 15,
+		});
 
-		expect(query).toMatchObject({ scope: 'topN', topN: 32, conversionMetric: 'minPoints', conversionThreshold: 15 });
+		expect(query).toMatchObject({
+			scope: 'topN',
+			topN: 32,
+			conversionMetric: 'minPoints',
+			conversionThreshold: 15,
+		});
 		expect(metagameArchetypesQuerySchema.parse(query)).toMatchObject({ conversionMetric: 'minPoints', conversionThreshold: 15 });
 	});
 
@@ -50,7 +60,12 @@ describe('archetypeSpotlightScreenQuery', () => {
 	it('asks the archetype detail read for what the archetype page asks for by default', () => {
 		expect(spotlightQuery({ archetypeId: 7 })).toEqual({
 			archetypeId: 7,
-			query: { scope: 'all', board: 'full', conversionMetric: 'topN', conversionThreshold: 8 },
+			query: {
+				scope: 'all',
+				board: 'full',
+				conversionMetric: 'topN',
+				conversionThreshold: 8,
+			},
 		});
 	});
 
@@ -64,7 +79,13 @@ describe('archetypeSpotlightScreenQuery', () => {
 			conversionThreshold: 18,
 		});
 
-		expect(request?.query).toEqual({ scope: 'minPoints', minPoints: 12, board: 'mainboard', conversionMetric: 'minPoints', conversionThreshold: 18 });
+		expect(request?.query).toEqual({
+			scope: 'minPoints',
+			minPoints: 12,
+			board: 'mainboard',
+			conversionMetric: 'minPoints',
+			conversionThreshold: 18,
+		});
 		expect(metagameArchetypeDetailQuerySchema.parse(request!.query)).toMatchObject({ scope: 'minPoints', minPoints: 12, conversionThreshold: 18 });
 	});
 
@@ -80,7 +101,13 @@ describe('topCardsScreenQuery', () => {
 	}
 
 	it('asks the card breakdown for every Player by default', () => {
-		expect(topCardsQuery({})).toEqual({ scope: 'all', sortBy: 'inclusionRate', limit: 10, board: 'mainboard', excludeTypes: 'Land' });
+		expect(topCardsQuery({})).toEqual({
+			scope: 'all',
+			sortBy: 'inclusionRate',
+			limit: 10,
+			board: 'mainboard',
+			excludeTypes: 'Land',
+		});
 	});
 
 	it('asks for the Screen\'s own scope, and its Player List only while the scope names one', () => {

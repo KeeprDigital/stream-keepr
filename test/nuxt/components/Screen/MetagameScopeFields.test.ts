@@ -13,13 +13,17 @@ import MetagameScopeFields from '~/components/Screen/MetagameScopeFields.vue';
  */
 
 const mockPlayerListStore = {
-	lists: [{ id: 7, name: 'Feature Table', memberCount: 4 }] as Array<{ id: number; name: string; memberCount: number }>,
+	lists: [
+		{ id: 7, name: 'Feature Table', memberCount: 4 },
+	] as Array<{ id: number; name: string; memberCount: number }>,
 };
 
 mockNuxtImport('usePlayerListStore', () => () => mockPlayerListStore);
 
 const UFormFieldStub = defineComponent({
-	props: { label: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+	},
 	template: '<div data-testid="form-field" :data-label="label"><slot /></div>',
 });
 
@@ -36,8 +40,16 @@ const USelectStub = defineComponent({
 	template: '<div data-testid="u-select">{{ (items || []).map(item => item.label).join("|") }}</div>',
 });
 
-const UInputNumberStub = defineComponent({ props: controlProps, emits: ['update:modelValue'], template: '<div data-testid="u-input-number" />' });
-const UInputStub = defineComponent({ props: controlProps, emits: ['update:modelValue'], template: '<div data-testid="u-input" />' });
+const UInputNumberStub = defineComponent({
+	props: controlProps,
+	emits: ['update:modelValue'],
+	template: '<div data-testid="u-input-number" />',
+});
+const UInputStub = defineComponent({
+	props: controlProps,
+	emits: ['update:modelValue'],
+	template: '<div data-testid="u-input" />',
+});
 
 const metagameFields = screenModeConfigContract('metagame').fields;
 const topCardsFields = screenModeConfigContract('top-cards').fields;
@@ -46,11 +58,24 @@ const spotlightFields = screenModeConfigContract('archetype-spotlight').fields;
 function mountFields(props: Record<string, unknown>) {
 	return mount(MetagameScopeFields, {
 		props: { description: 'Which players to include.', ...props } as any,
-		global: { stubs: { UFormField: UFormFieldStub, USelect: USelectStub, UInputNumber: UInputNumberStub, UInput: UInputStub } },
+		global: {
+			stubs: {
+				UFormField: UFormFieldStub,
+				USelect: USelectStub,
+				UInputNumber: UInputNumberStub,
+				UInput: UInputStub,
+			},
+		},
 	});
 }
 
-const baseConfig = { scope: 'all', topN: 8, minPoints: 9, playerListId: undefined, archetypeFilter: undefined };
+const baseConfig = {
+	scope: 'all',
+	topN: 8,
+	minPoints: 9,
+	playerListId: undefined,
+	archetypeFilter: undefined,
+};
 
 function field(wrapper: ReturnType<typeof mountFields>, label: string) {
 	return wrapper.findAll('[data-testid="form-field"]').find(item => item.attributes('data-label') === label);
@@ -58,7 +83,9 @@ function field(wrapper: ReturnType<typeof mountFields>, label: string) {
 
 describe('screenMetagameScopeFields', () => {
 	beforeEach(() => {
-		mockPlayerListStore.lists = [{ id: 7, name: 'Feature Table', memberCount: 4 }];
+		mockPlayerListStore.lists = [
+			{ id: 7, name: 'Feature Table', memberCount: 4 },
+		];
 	});
 
 	it('offers every scope its contract holds', () => {
@@ -84,20 +111,42 @@ describe('screenMetagameScopeFields', () => {
 		const wrapper = mountFields({ config: baseConfig, fields: metagameFields });
 		field(wrapper, 'Player scope')!.getComponent(USelectStub).vm.$emit('update:modelValue', 'topN');
 
-		expect(wrapper.emitted('update')).toEqual([[{ scope: 'topN' }]]);
+		expect(wrapper.emitted('update')).toEqual([
+			[
+				{ scope: 'topN' },
+			],
+		]);
 	});
 
 	it.each([
-		['topN', 'Top N', 16, { topN: 16 }],
-		['minPoints', 'Minimum points', 12, { minPoints: 12 }],
+		[
+			'topN',
+			'Top N',
+			16,
+			{ topN: 16 },
+		],
+		[
+			'minPoints',
+			'Minimum points',
+			12,
+			{ minPoints: 12 },
+		],
 	] as const)('asks for the %s scope\'s own field, within its contract bounds', (scope, label, value, patch) => {
-		const wrapper = mountFields({ config: { ...baseConfig, scope }, fields: metagameFields });
+		const wrapper = mountFields({
+			config: { ...baseConfig, scope },
+			fields: metagameFields,
+		});
 		const input = field(wrapper, label)!.getComponent(UInputNumberStub);
 
-		expect({ min: input.props('min'), max: input.props('max') })
+		expect({
+			min: input.props('min'),
+			max: input.props('max'),
+		})
 			.toEqual({ min: metagameFields[scope].min, max: metagameFields[scope].max });
 		input.vm.$emit('update:modelValue', value);
-		expect(wrapper.emitted('update')).toEqual([[patch]]);
+		expect(wrapper.emitted('update')).toEqual([
+			[patch],
+		]);
 	});
 
 	it('asks for no scope field under the All Players scope', () => {
@@ -108,18 +157,31 @@ describe('screenMetagameScopeFields', () => {
 	});
 
 	it('picks a Player List under its scope, and clears it as a deletion', () => {
-		const wrapper = mountFields({ config: { ...baseConfig, scope: 'playerList', playerListId: 7 }, fields: spotlightFields });
+		const wrapper = mountFields({
+			config: { ...baseConfig, scope: 'playerList', playerListId: 7 },
+			fields: spotlightFields,
+		});
 		const picker = field(wrapper, 'Select list')!.getComponent(USelectStub);
 
 		expect(picker.text()).toBe('Select a list...|Feature Table (4)');
 		picker.vm.$emit('update:modelValue', 7);
 		picker.vm.$emit('update:modelValue', null);
-		expect(wrapper.emitted('update')).toEqual([[{ playerListId: 7 }], [{ playerListId: null }]]);
+		expect(wrapper.emitted('update')).toEqual([
+			[
+				{ playerListId: 7 },
+			],
+			[
+				{ playerListId: null },
+			],
+		]);
 	});
 
 	it('says there is no list to pick while the Event has none', () => {
 		mockPlayerListStore.lists = [];
-		const wrapper = mountFields({ config: { ...baseConfig, scope: 'playerList' }, fields: metagameFields });
+		const wrapper = mountFields({
+			config: { ...baseConfig, scope: 'playerList' },
+			fields: metagameFields,
+		});
 
 		expect(field(wrapper, 'Select list')).toBeUndefined();
 		expect(wrapper.text()).toContain('No player lists available');
@@ -131,7 +193,14 @@ describe('screenMetagameScopeFields', () => {
 
 		filter.vm.$emit('update:modelValue', 'Rakdos Midrange');
 		filter.vm.$emit('update:modelValue', '');
-		expect(wrapper.emitted('update')).toEqual([[{ archetypeFilter: 'Rakdos Midrange' }], [{ archetypeFilter: null }]]);
+		expect(wrapper.emitted('update')).toEqual([
+			[
+				{ archetypeFilter: 'Rakdos Midrange' },
+			],
+			[
+				{ archetypeFilter: null },
+			],
+		]);
 	});
 
 	it('offers no archetype filter where its mode holds none, or the editor hides it', () => {

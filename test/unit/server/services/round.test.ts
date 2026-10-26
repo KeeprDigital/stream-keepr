@@ -79,7 +79,9 @@ describe('roundService', () => {
 		});
 
 		it('strips unclassified and server-managed keys before inserting', async () => {
-			getChain('insert').returning.mockResolvedValue([createMockRound()]);
+			getChain('insert').returning.mockResolvedValue([
+				createMockRound(),
+			]);
 
 			await roundService().create(1, {
 				name: 'Round 1',
@@ -104,7 +106,9 @@ describe('roundService', () => {
 		});
 
 		it('strips forged Melee provenance before writing', async () => {
-			getChain('update').returning.mockResolvedValue([createMockRound()]);
+			getChain('update').returning.mockResolvedValue([
+				createMockRound(),
+			]);
 
 			await roundService().update(1, 1, {
 				name: 'Forged Round',
@@ -119,7 +123,9 @@ describe('roundService', () => {
 
 	describe('remove', () => {
 		it('returns true when round deleted', async () => {
-			getChain('delete').returning.mockResolvedValue([createMockRound()]);
+			getChain('delete').returning.mockResolvedValue([
+				createMockRound(),
+			]);
 
 			const result = await roundService().remove(1, 1);
 
@@ -170,7 +176,12 @@ describe('roundService', () => {
 		it('returns rounds for a specific phase', async () => {
 			const rounds = [
 				createMockRound({ id: 1, phaseId: 2, roundNumber: 1 }),
-				createMockRound({ id: 2, phaseId: 2, roundNumber: 2, name: 'Round 2' }),
+				createMockRound({
+					id: 2,
+					phaseId: 2,
+					roundNumber: 2,
+					name: 'Round 2',
+				}),
 			];
 			getChain('select').orderBy.mockResolvedValue(rounds);
 

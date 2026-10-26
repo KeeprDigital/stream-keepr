@@ -57,7 +57,9 @@ export const scryfallCardSchema = z.object({
 export const scryfallCollectionResponseSchema = z.object({
 	object: z.literal('list'),
 	not_found: z.array(
-		z.object({ name: z.string().max(500) }).passthrough(),
+		z.object({
+			name: z.string().max(500),
+		}).passthrough(),
 	).max(75),
 	data: z.array(scryfallCardSchema).max(75),
 }).passthrough();

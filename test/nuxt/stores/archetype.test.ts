@@ -19,7 +19,9 @@ vi.mock('~/modules/event-data/client', async importOriginal => ({
 	useEventDataResource: () => mockRepo,
 }));
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 mockNuxtImport('$fetch', () => mockFetch);
 
 const mockAbly = createMockRealtime();
@@ -165,16 +167,18 @@ describe('useArchetypeStore', () => {
 		it('updates key cards and invalidates metagame after successful update', async () => {
 			const archetype = createMockUiArchetype({ id: 1, name: 'Azorius Control' });
 			store.archetypes = [archetype];
-			const keyCards = [{
-				id: 10,
-				name: 'Counterspell',
-				game: 'mtg',
-				scryfallId: null,
-				cardType: null,
-				colors: null,
-				cmc: null,
-				manaCost: null,
-			}];
+			const keyCards = [
+				{
+					id: 10,
+					name: 'Counterspell',
+					game: 'mtg',
+					scryfallId: null,
+					cardType: null,
+					colors: null,
+					cmc: null,
+					manaCost: null,
+				},
+			];
 			mockFetch.mockResolvedValue({ keyCards });
 
 			await store.setKeyCards(1, 1, ['Counterspell']);
@@ -182,7 +186,9 @@ describe('useArchetypeStore', () => {
 			expect(store.archetypes[0]!.keyCards).toEqual(keyCards);
 			expect(mockFetch).toHaveBeenCalledWith('/api/events/1/archetypes/1/cards', {
 				method: 'PATCH',
-				body: { cardNames: ['Counterspell'] },
+				body: {
+					cardNames: ['Counterspell'],
+				},
 				headers: { 'x-realtime-connection-id': 'test-connection-id' },
 			});
 			expect(mockMetagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
@@ -204,7 +210,9 @@ describe('useArchetypeStore', () => {
 		});
 
 		it('reports the sentence a refused key-card write carries, to the caller as well as to `error`', async () => {
-			store.archetypes = [createMockUiArchetype({ id: 1 })];
+			store.archetypes = [
+				createMockUiArchetype({ id: 1 }),
+			];
 			mockFetch.mockRejectedValue(transportFailure({
 				status: 422,
 				body: { message: 'No card named “Counterspel” exists in the catalogue' },
@@ -300,8 +308,14 @@ describe('useArchetypeStore', () => {
 	 * is the lifetime it belongs to.
 	 */
 	describe.each([
-		['Event B', [2]],
-		['Event A, loaded again since', [2, 1]],
+		[
+			'Event B',
+			[2],
+		],
+		[
+			'Event A, loaded again since',
+			[2, 1],
+		],
 	])('an Archetype write answered after the operator moved on to %s', (_, switches) => {
 		const archetype = createMockUiArchetype({ id: 1, name: 'Azorius Control' });
 
@@ -309,7 +323,9 @@ describe('useArchetypeStore', () => {
 		async function switchAway() {
 			let shown!: ReturnType<typeof createMockUiArchetype>[];
 			for (const eventId of switches) {
-				shown = [createMockUiArchetype({ id: 1, eventId, name: `Loaded for ${eventId}` } as any)];
+				shown = [
+					createMockUiArchetype({ id: 1, eventId, name: `Loaded for ${eventId}` } as any),
+				];
 				store.$reset();
 				mockRepo.list.mockResolvedValueOnce(structuredClone(shown));
 				await store.loadByEventId(eventId);
@@ -442,7 +458,9 @@ describe('useArchetypeStore', () => {
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 				store.archetypes = [];
 
-				ablyCallbacks.archetype!['archetype:created']!({ archetype: createMockUiArchetype({ id: 10 }) });
+				ablyCallbacks.archetype!['archetype:created']!({
+					archetype: createMockUiArchetype({ id: 10 }),
+				});
 
 				expect(store.archetypes).toHaveLength(0);
 			});
@@ -450,26 +468,38 @@ describe('useArchetypeStore', () => {
 
 		describe('archetype:updated', () => {
 			it('updates existing archetype from remote message', () => {
-				store.archetypes = [createMockUiArchetype({ id: 10, name: 'Old Name' })];
+				store.archetypes = [
+					createMockUiArchetype({ id: 10, name: 'Old Name' }),
+				];
 
-				ablyCallbacks.archetype!['archetype:updated']!({ archetype: createMockUiArchetype({ id: 10, name: 'New Name' }) });
+				ablyCallbacks.archetype!['archetype:updated']!({
+					archetype: createMockUiArchetype({ id: 10, name: 'New Name' }),
+				});
 
 				expect(store.archetypes[0]!.name).toBe('New Name');
 			});
 
 			it('ignores message when archetype not in state', () => {
-				store.archetypes = [createMockUiArchetype({ id: 10, name: 'Existing' })];
+				store.archetypes = [
+					createMockUiArchetype({ id: 10, name: 'Existing' }),
+				];
 
-				ablyCallbacks.archetype!['archetype:updated']!({ archetype: createMockUiArchetype({ id: 99, name: 'Unknown' }) });
+				ablyCallbacks.archetype!['archetype:updated']!({
+					archetype: createMockUiArchetype({ id: 99, name: 'Unknown' }),
+				});
 
 				expect(store.archetypes[0]!.name).toBe('Existing');
 			});
 
 			it('skips when isSelfOrigin returns true', () => {
-				store.archetypes = [createMockUiArchetype({ id: 10, name: 'Old' })];
+				store.archetypes = [
+					createMockUiArchetype({ id: 10, name: 'Old' }),
+				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
-				ablyCallbacks.archetype!['archetype:updated']!({ archetype: createMockUiArchetype({ id: 10, name: 'New' }) });
+				ablyCallbacks.archetype!['archetype:updated']!({
+					archetype: createMockUiArchetype({ id: 10, name: 'New' }),
+				});
 
 				expect(store.archetypes[0]!.name).toBe('Old');
 			});
@@ -477,7 +507,9 @@ describe('useArchetypeStore', () => {
 
 		describe('archetype:deleted', () => {
 			it('removes archetype from remote message', () => {
-				store.archetypes = [createMockUiArchetype({ id: 10 })];
+				store.archetypes = [
+					createMockUiArchetype({ id: 10 }),
+				];
 
 				ablyCallbacks.archetype!['archetype:deleted']!({ archetypeId: 10 });
 
@@ -485,7 +517,9 @@ describe('useArchetypeStore', () => {
 			});
 
 			it('skips when isSelfOrigin returns true', () => {
-				store.archetypes = [createMockUiArchetype({ id: 10 })];
+				store.archetypes = [
+					createMockUiArchetype({ id: 10 }),
+				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
 				ablyCallbacks.archetype!['archetype:deleted']!({ archetypeId: 10 });
@@ -499,7 +533,9 @@ describe('useArchetypeStore', () => {
 
 	describe('$reset', () => {
 		it('clears all state', () => {
-			store.archetypes = [createMockUiArchetype()];
+			store.archetypes = [
+				createMockUiArchetype(),
+			];
 			store.error = 'some error';
 
 			store.$reset();

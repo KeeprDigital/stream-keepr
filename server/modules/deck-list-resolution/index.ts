@@ -47,7 +47,9 @@ export interface ResolveUnresolvedDeckCardResult {
 
 /** The Event's Deck Lists holding the matching entries; refuses any outside it. */
 async function requireMatchingDecksInEvent(eventId: number, matchingEntries: Array<{ deckId: number }>) {
-	const deckIds = [...new Set(matchingEntries.map(entry => entry.deckId))];
+	const deckIds = [
+		...new Set(matchingEntries.map(entry => entry.deckId)),
+	];
 	const eventDecks = await playerDeckService().findManyByIds(eventId, deckIds);
 
 	if (eventDecks.length !== deckIds.length) {
@@ -80,7 +82,9 @@ function groupCardEntries(entries: DbPlayerDeckUnresolvedCard[]) {
 		groups.set(key, group);
 	}
 
-	return [...groups.values()];
+	return [
+		...groups.values(),
+	];
 }
 
 async function listExistingDeckCards(deckIds: number[], cardName: string): Promise<ExistingDeckCard[]> {
@@ -274,7 +278,9 @@ export function deckListResolutionModule() {
 			}
 		}
 		else {
-			const deckIds = [...new Set(matchingEntries.map(entry => entry.deckId))];
+			const deckIds = [
+				...new Set(matchingEntries.map(entry => entry.deckId)),
+			];
 			const existingRows = await listExistingDeckCards(deckIds, scryfallData.name);
 			for (const group of groupCardEntries(matchingEntries)) {
 				const existingForGroup = existingRows
@@ -357,13 +363,17 @@ export function deckListResolutionModule() {
 		await eventDataPublicationModule().playerDeckCardsResolved({
 			eventId,
 			deckIds: affectedDecks.map(deck => deck.id),
-			playerIds: [...new Set(affectedDecks.map(deck => deck.playerId))],
+			playerIds: [
+				...new Set(affectedDecks.map(deck => deck.playerId)),
+			],
 			originConnectionId,
 		});
 
 		return {
 			success: true,
-			message: `Resolved ${matchingEntries.length} entr${matchingEntries.length === 1 ? 'y' : 'ies'} for ${unresolvedCard.originalName} as ${scryfallData.name}`,
+			message: `Resolved ${matchingEntries.length} entr${matchingEntries.length === 1
+				? 'y'
+				: 'ies'} for ${unresolvedCard.originalName} as ${scryfallData.name}`,
 			resolvedCardName: scryfallData.name,
 			unresolvedId: unresolvedCardId,
 			resolvedCount: matchingEntries.length,

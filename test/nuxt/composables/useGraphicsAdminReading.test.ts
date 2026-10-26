@@ -83,7 +83,10 @@ describe('useGraphicsAdminReading', () => {
 		const reading = mountReading();
 		await reading.load();
 
-		mockRead.mockRejectedValueOnce(transportFailure({ status: 503, body: { message: 'The Graphics Asset Library store cannot be reached' } }));
+		mockRead.mockRejectedValueOnce(transportFailure({
+			status: 503,
+			body: { message: 'The Graphics Asset Library store cannot be reached' },
+		}));
 		await reading.load();
 
 		expect(reading.reading.value).toEqual({ count: 3 });
@@ -170,7 +173,10 @@ describe('useGraphicsAdminReading', () => {
 
 			// First polled reading fails (non-authorization, so the stale reading
 			// stays on screen and polling continues): one tick is now skipped.
-			mockRead.mockRejectedValueOnce(transportFailure({ status: 503, body: { message: 'down' } }));
+			mockRead.mockRejectedValueOnce(transportFailure({
+				status: 503,
+				body: { message: 'down' },
+			}));
 			await vi.advanceTimersByTimeAsync(5000);
 			await flushPromises();
 			expect(mockRead).toHaveBeenCalledTimes(2);
@@ -179,7 +185,10 @@ describe('useGraphicsAdminReading', () => {
 			expect(mockRead).toHaveBeenCalledTimes(2);
 
 			// Second failure: two ticks are skipped before the next attempt.
-			mockRead.mockRejectedValueOnce(transportFailure({ status: 503, body: { message: 'down' } }));
+			mockRead.mockRejectedValueOnce(transportFailure({
+				status: 503,
+				body: { message: 'down' },
+			}));
 			await vi.advanceTimersByTimeAsync(5000);
 			await flushPromises();
 			expect(mockRead).toHaveBeenCalledTimes(3);

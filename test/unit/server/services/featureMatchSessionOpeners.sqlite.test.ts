@@ -128,7 +128,9 @@ describe('opening a Feature Match Session announces it', () => {
 		const opened = await featureMatchSessionModule().createSessionForSlot(slot.id, eventId);
 
 		expect(await receipts(ended)).toBe(0);
-		expect((await db.query.featureMatches.findFirst({ where: eq(schema.featureMatches.id, slot.id) }))?.activeSessionId)
+		expect((await db.query.featureMatches.findFirst({
+			where: eq(schema.featureMatches.id, slot.id),
+		}))?.activeSessionId)
 			.toBe(opened?.id);
 		// The same command id is a new command in the new Session.
 		await expect(featureMatchSessionModule().applyCommand(opened!.id, eventId, {
@@ -174,7 +176,10 @@ describe('opening a Feature Match Session announces it', () => {
 		const eventId = await stageEvent();
 		const slot = await featureMatchService().create(eventId, {});
 		await db.update(schema.featureMatchSessions)
-			.set({ status: 'closed', closedAt: new Date() })
+			.set({
+				status: 'closed',
+				closedAt: new Date(),
+			})
 			.where(eq(schema.featureMatchSessions.slotId, slot.id));
 		await db.update(schema.featureMatches).set({ activeSessionId: null }).where(eq(schema.featureMatches.id, slot.id));
 		publishMessage.mockClear();
@@ -201,17 +206,29 @@ describe('opening a Feature Match Session announces it', () => {
 
 		await expectAnnounced(eventId, [imported.id]);
 		expect(await activeSessionId(eventId, manual.id)).toBe(untouched);
-		expect((await db.query.featureMatches.findFirst({ where: eq(schema.featureMatches.id, imported.id) }))?.externalSource).toBeNull();
+		expect((await db.query.featureMatches.findFirst({
+			where: eq(schema.featureMatches.id, imported.id),
+		}))?.externalSource).toBeNull();
 	});
 
 	it('when a promotion opens the promoted Slot\'s Session and resets the Slot it clears', async () => {
 		const eventId = await stageEvent();
 		const [phase] = await db.insert(schema.phases).values({ eventId, name: 'Swiss', sortOrder: 0 }).returning();
 		const [round] = await db.insert(schema.rounds)
-			.values({ eventId, phaseId: phase!.id, name: 'Round 1', roundNumber: 1 })
+			.values({
+				eventId,
+				phaseId: phase!.id,
+				name: 'Round 1',
+				roundNumber: 1,
+			})
 			.returning();
 		const [match] = await db.insert(schema.matches)
-			.values({ eventId, roundId: round!.id, tableNumber: 1, sortOrder: 0 })
+			.values({
+				eventId,
+				roundId: round!.id,
+				tableNumber: 1,
+				sortOrder: 0,
+			})
 			.returning();
 		const first = await featureMatchService().create(eventId, {});
 		const second = await featureMatchService().create(eventId, {});

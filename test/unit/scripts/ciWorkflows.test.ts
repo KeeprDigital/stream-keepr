@@ -23,7 +23,10 @@ function code(workflow: string) {
 function jobs(workflow: string) {
 	const text = code(workflow);
 	const body = text.slice(text.indexOf('\njobs:\n') + '\njobs:\n'.length);
-	return new Map(body.split(/^(?= {2}[\w-]+:$)/m).filter(Boolean).map(job => [job.slice(2, job.indexOf(':')), job]));
+	return new Map(body.split(/^(?= {2}[\w-]+:$)/m).filter(Boolean).map(job => [
+		job.slice(2, job.indexOf(':')),
+		job,
+	]));
 }
 
 function triggers(workflow: string) {
@@ -31,13 +34,18 @@ function triggers(workflow: string) {
 }
 
 describe('every required check reports in the merge queue as well as on PRs', () => {
-	it.each([['ci.yml', ci], ['pr-title.yml', prTitle]])('%s runs on merge groups and on PRs', (_name, workflow) => {
+	it.each([
+		['ci.yml', ci],
+		['pr-title.yml', prTitle],
+	])('%s runs on merge groups and on PRs', (_name, workflow) => {
 		expect(triggers(workflow)).toMatch(/^ {2}merge_group:\n {4}types: \[checks_requested\]$/m);
 		expect(triggers(workflow)).toMatch(/^ {2}pull_request:$/m);
 	});
 
 	it('names each required check exactly once, as a job of a workflow that runs in the queue', () => {
-		const names = [ci, prTitle].flatMap(workflow => [...jobs(workflow).values()].map(job => job.match(/^ {4}name: (.+)$/m)?.[1]));
+		const names = [ci, prTitle].flatMap(workflow => [
+			...jobs(workflow).values(),
+		].map(job => job.match(/^ {4}name: (.+)$/m)?.[1]));
 
 		for (const check of REQUIRED_CHECKS)
 			expect(names.filter(name => name === check)).toHaveLength(1);
@@ -50,7 +58,9 @@ describe('every required check reports in the merge queue as well as on PRs', ()
 
 		expect(passed).toMatch(/^ {4}name: CI passed$/m);
 		expect(passed).toMatch(/^ {4}if: always\(\)$/m);
-		expect(needs.toSorted()).toEqual([...all.keys()].filter(id => id !== 'passed').toSorted());
+		expect(needs.toSorted()).toEqual([
+			...all.keys(),
+		].filter(id => id !== 'passed').toSorted());
 		// A failed or cancelled job fails it; only success and skipped pass. The
 		// record job alone only warns: it proves nothing.
 		expect(passed).toContain('success|skipped) ;;');
@@ -102,7 +112,9 @@ describe('a merge group skips the gates only for a tree a full, green PR run ver
 	const all = jobs(ci);
 	const scope = all.get('scope')!;
 	const record = all.get('record')!;
-	const gates = [...all.keys()].filter(id => !['scope', 'record', 'passed'].includes(id));
+	const gates = [
+		...all.keys(),
+	].filter(id => !['scope', 'record', 'passed'].includes(id));
 
 	it('the scope job can read the PR runs\' records, their jobs and commits, and nothing more', () => {
 		expect(scope).toMatch(/^ {4}permissions:\n {6}contents: read\n {6}actions: read\n/m);

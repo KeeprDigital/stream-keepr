@@ -36,7 +36,9 @@ function cookieFrom(response: Response): string {
 
 async function localSession(cookie?: string) {
 	const response = await fetch('/api/auth/get-session', {
-		headers: cookie ? { cookie } : undefined,
+		headers: cookie
+			? { cookie }
+			: undefined,
 	});
 	expect(response.status).toBe(200);
 	return {
@@ -54,7 +56,9 @@ async function request(path: string, options: { cookie?: string; method?: string
 	return await fetch(path, {
 		method: options.method,
 		headers,
-		body: options.body === undefined ? undefined : JSON.stringify(options.body),
+		body: options.body === undefined
+			? undefined
+			: JSON.stringify(options.body),
 	});
 }
 
@@ -167,7 +171,9 @@ describe('a dev server with the Local Developer Session enabled', () => {
 		const observed = await request(leasePath, { cookie: browserB.cookie, method: 'POST', body: {} });
 
 		expect(acquired.status).toBe(200);
-		expect(await acquired.json()).toMatchObject({ lease: { role: 'holder', writable: true } });
+		expect(await acquired.json()).toMatchObject({
+			lease: { role: 'holder', writable: true },
+		});
 		expect(observed.status).toBe(200);
 		expect(await observed.json()).toMatchObject({
 			outcome: 'observe',

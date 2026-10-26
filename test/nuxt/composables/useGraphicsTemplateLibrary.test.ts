@@ -75,7 +75,9 @@ describe('useGraphicsTemplateLibrary', () => {
 	beforeEach(() => {
 		for (const method of Object.values(repository))
 			method.mockReset();
-		repository.list.mockResolvedValue([template()]);
+		repository.list.mockResolvedValue([
+			template(),
+		]);
 		canAuthor.value = true;
 	});
 
@@ -83,7 +85,9 @@ describe('useGraphicsTemplateLibrary', () => {
 		const library = await mountedLibrary();
 
 		expect(repository.list).toHaveBeenCalledTimes(1);
-		expect(library.entries.value).toEqual([template()]);
+		expect(library.entries.value).toEqual([
+			template(),
+		]);
 	});
 
 	describe('fail-closed authoring', () => {
@@ -141,7 +145,10 @@ describe('useGraphicsTemplateLibrary', () => {
 			const library = await mountedLibrary();
 
 			await library.attempt('template-1', async () => {
-				throw transportFailure({ status: 409, body: { message: 'The template has moved on.' } });
+				throw transportFailure({
+					status: 409,
+					body: { message: 'The template has moved on.' },
+				});
 			});
 
 			expect(library.error.value).toBe('The template has moved on.');
@@ -162,7 +169,10 @@ describe('useGraphicsTemplateLibrary', () => {
 		});
 
 		it('keeps the refusal message through the re-read that follows it', async () => {
-			repository.update.mockRejectedValue(transportFailure({ status: 409, body: { message: 'The template has moved on.' } }));
+			repository.update.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'The template has moved on.' },
+			}));
 			const library = await mountedLibrary();
 
 			await library.revise(template(), { name: 'Renamed' });
@@ -202,7 +212,10 @@ describe('useGraphicsTemplateLibrary', () => {
 		});
 
 		it('keeps the pending confirmation when the deletion is refused', async () => {
-			repository.remove.mockRejectedValue(transportFailure({ status: 409, body: { message: 'The template is in use.' } }));
+			repository.remove.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'The template is in use.' },
+			}));
 			const library = await mountedLibrary();
 			library.askToRemove('template-1');
 
@@ -232,7 +245,9 @@ describe('useGraphicsTemplateLibrary', () => {
 				stage: 'rejected',
 				templatePackagePreflight: {
 					outcome: 'rejected',
-					issues: [{ code: 'unreadable-archive' }],
+					issues: [
+						{ code: 'unreadable-archive' },
+					],
 				},
 			}));
 			const library = await mountedLibrary();
@@ -243,7 +258,9 @@ describe('useGraphicsTemplateLibrary', () => {
 			expect(library.packageImport.reported).toBe(true);
 			expect(library.packageImport.rejected).toBe(true);
 			expect(library.packageImport.awaitingConfirmation).toBe(false);
-			expect(library.packageImport.issues).toEqual([{ code: 'unreadable-archive' }]);
+			expect(library.packageImport.issues).toEqual([
+				{ code: 'unreadable-archive' },
+			]);
 
 			library.packageImport.dismiss();
 
@@ -255,7 +272,9 @@ describe('useGraphicsTemplateLibrary', () => {
 				stage: 'awaiting-confirmation',
 				templatePackagePreflight: {
 					outcome: 'accepted-with-warnings',
-					issues: [{ code: 'duplicate-content' }],
+					issues: [
+						{ code: 'duplicate-content' },
+					],
 					fingerprint: 'fingerprint-1',
 				},
 			}));
@@ -280,11 +299,16 @@ describe('useGraphicsTemplateLibrary', () => {
 				stage: 'awaiting-confirmation',
 				templatePackagePreflight: {
 					outcome: 'accepted-with-warnings',
-					issues: [{ code: 'duplicate-content' }],
+					issues: [
+						{ code: 'duplicate-content' },
+					],
 					fingerprint: 'fingerprint-1',
 				},
 			}));
-			repository.confirmPackage.mockRejectedValue(transportFailure({ status: 409, body: { message: 'The report has expired.' } }));
+			repository.confirmPackage.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'The report has expired.' },
+			}));
 			const library = await mountedLibrary();
 			await library.packageImport.receive(packageFile);
 
@@ -320,7 +344,10 @@ describe('useGraphicsTemplateLibrary', () => {
 		});
 
 		it('reports a refused package in the library\'s one message', async () => {
-			repository.receivePackage.mockRejectedValue(transportFailure({ status: 507, body: { message: 'The byte store is exhausted.' } }));
+			repository.receivePackage.mockRejectedValue(transportFailure({
+				status: 507,
+				body: { message: 'The byte store is exhausted.' },
+			}));
 			const library = await mountedLibrary();
 
 			await library.packageImport.receive(packageFile);
@@ -339,7 +366,10 @@ describe('useGraphicsTemplateLibrary', () => {
 			const settled = library.packageImport.receive(packageFile);
 			expect(library.packageImport.busy).toBe(true);
 
-			resolveReceive(operation({ stage: 'rejected', templatePackagePreflight: { outcome: 'rejected', issues: [] } }));
+			resolveReceive(operation({
+				stage: 'rejected',
+				templatePackagePreflight: { outcome: 'rejected', issues: [] },
+			}));
 			await settled;
 
 			expect(library.packageImport.busy).toBe(false);

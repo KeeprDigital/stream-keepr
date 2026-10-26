@@ -19,11 +19,18 @@ const event = computed(() => eventStore.event);
 const loading = computed(() => eventStore.loading);
 const error = computed(() => eventStore.error);
 const routeEventId = computed(() => Number.parseInt(route.params.eventId as string));
-const eventId = computed(() => event.value?.id ?? (Number.isNaN(routeEventId.value) ? 0 : routeEventId.value));
+const eventId = computed(() => event.value?.id ?? (Number.isNaN(routeEventId.value)
+	? 0
+	: routeEventId.value));
 
 // Tab bar
 const tabs = computed<NavigationMenuItem[]>(() => [
-	{ label: 'Event', icon: 'i-lucide-settings', to: `/event/${eventId.value}/config`, exact: true },
+	{
+		label: 'Event',
+		icon: 'i-lucide-settings',
+		to: `/event/${eventId.value}/config`,
+		exact: true,
+	},
 	{ label: 'Features', icon: 'i-lucide-toggle-left', to: `/event/${eventId.value}/config/features` },
 	{ label: 'Broadcast', icon: 'i-lucide-radio', to: `/event/${eventId.value}/config/broadcast` },
 	{ label: 'Integrations', icon: 'i-lucide-plug', to: `/event/${eventId.value}/config/integrations` },

@@ -47,7 +47,12 @@ describe('metagame client module', () => {
 		await client.loadArchetypeDetail(1, 2, { scope: 'all' }, { conversionMetric: 'minPoints', conversionThreshold: 12 });
 
 		expect(mockFetch).toHaveBeenNthCalledWith(1, '/api/events/1/metagame/archetypes', {
-			query: { scope: 'all', sortBy: 'metaShare', conversionMetric: 'topN', conversionThreshold: 8 },
+			query: {
+				scope: 'all',
+				sortBy: 'metaShare',
+				conversionMetric: 'topN',
+				conversionThreshold: 8,
+			},
 		});
 		expect(mockFetch).toHaveBeenNthCalledWith(2, '/api/events/1/metagame/archetypes/2', {
 			query: { scope: 'all', conversionMetric: 'minPoints', conversionThreshold: 12 },
@@ -68,7 +73,13 @@ describe('metagame client module', () => {
 		await client.loadCardBreakdown(
 			1,
 			{ scope: 'playerList', playerListId: 5 },
-			{ sortBy: 'totalCopies', limit: 100, board: 'sideboard', archetypeId: 9, archetype: ' Mono Red ' },
+			{
+				sortBy: 'totalCopies',
+				limit: 100,
+				board: 'sideboard',
+				archetypeId: 9,
+				archetype: ' Mono Red ',
+			},
 		);
 
 		expect(mockFetch).toHaveBeenCalledWith('/api/events/1/metagame/cards', {

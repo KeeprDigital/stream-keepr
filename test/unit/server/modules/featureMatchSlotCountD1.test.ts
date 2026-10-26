@@ -74,7 +74,12 @@ beforeEach(() => {
 
 async function createEvent(numFeatureMatches: number) {
 	return await (createEventRoute as unknown as (event: { body: unknown }) => Promise<{ id: number; numFeatureMatches: number }>)({
-		body: { name: `Slots ${numFeatureMatches}`, game: 'mtg', featureMatchOrientation: 'horizontal', numFeatureMatches },
+		body: {
+			name: `Slots ${numFeatureMatches}`,
+			game: 'mtg',
+			featureMatchOrientation: 'horizontal',
+			numFeatureMatches,
+		},
 	});
 }
 
@@ -82,7 +87,10 @@ async function slotsOf(eventId: number) {
 	return await realDb.query.featureMatches.findMany({
 		where: eq(schema.featureMatches.eventId, eventId),
 		with: { activeSession: true },
-		orderBy: [asc(schema.featureMatches.sortOrder), asc(schema.featureMatches.id)],
+		orderBy: [
+			asc(schema.featureMatches.sortOrder),
+			asc(schema.featureMatches.id),
+		],
 	});
 }
 
@@ -94,7 +102,9 @@ async function activeSessionsOf(eventId: number) {
 }
 
 async function countOf(eventId: number) {
-	const event = await realDb.query.events.findFirst({ where: eq(schema.events.id, eventId) });
+	const event = await realDb.query.events.findFirst({
+		where: eq(schema.events.id, eventId),
+	});
 	return event?.numFeatureMatches;
 }
 
@@ -121,7 +131,10 @@ describe('an Event\'s Feature Match Slot count on D1', () => {
 		const event = await createEvent(1);
 		const [first] = await slotsOf(event.id);
 
-		const updated = await eventWriteModule().updateEvent({ eventId: event.id, input: { numFeatureMatches: 50 } });
+		const updated = await eventWriteModule().updateEvent({
+			eventId: event.id,
+			input: { numFeatureMatches: 50 },
+		});
 
 		expect(updated.numFeatureMatches).toBe(50);
 		const slots = await slotsOf(event.id);
@@ -135,7 +148,10 @@ describe('an Event\'s Feature Match Slot count on D1', () => {
 		const event = await createEvent(50);
 		const kept = (await slotsOf(event.id)).slice(0, 20).map(slot => slot.id);
 
-		const updated = await eventWriteModule().updateEvent({ eventId: event.id, input: { numFeatureMatches: 20 } });
+		const updated = await eventWriteModule().updateEvent({
+			eventId: event.id,
+			input: { numFeatureMatches: 20 },
+		});
 
 		expect(updated.numFeatureMatches).toBe(20);
 		expect((await slotsOf(event.id)).map(slot => slot.id)).toEqual(kept);
@@ -143,10 +159,16 @@ describe('an Event\'s Feature Match Slot count on D1', () => {
 
 	it('keeps ordinary small counts working', async () => {
 		const event = await createEvent(2);
-		await eventWriteModule().updateEvent({ eventId: event.id, input: { numFeatureMatches: 3 } });
+		await eventWriteModule().updateEvent({
+			eventId: event.id,
+			input: { numFeatureMatches: 3 },
+		});
 		expect(await slotsOf(event.id)).toHaveLength(3);
 
-		await eventWriteModule().updateEvent({ eventId: event.id, input: { numFeatureMatches: 1 } });
+		await eventWriteModule().updateEvent({
+			eventId: event.id,
+			input: { numFeatureMatches: 1 },
+		});
 		const slots = await slotsOf(event.id);
 		expect(slots).toHaveLength(1);
 		expectInitialisedInOrder(slots);
@@ -159,7 +181,10 @@ describe('an Event\'s Feature Match Slot count on D1', () => {
 			const before = await slotsOf(event.id);
 			refuseNextBatchWriting('feature_match_slots');
 
-			await expect(eventWriteModule().updateEvent({ eventId: event.id, input: { numFeatureMatches: 40 } }))
+			await expect(eventWriteModule().updateEvent({
+				eventId: event.id,
+				input: { numFeatureMatches: 40 },
+			}))
 				.rejects
 				.toThrow('injected D1 batch failure');
 
@@ -172,7 +197,10 @@ describe('an Event\'s Feature Match Slot count on D1', () => {
 			const before = await slotsOf(event.id);
 			refuseNextBatchWriting('feature_match_sessions');
 
-			await expect(eventWriteModule().updateEvent({ eventId: event.id, input: { numFeatureMatches: 40 } }))
+			await expect(eventWriteModule().updateEvent({
+				eventId: event.id,
+				input: { numFeatureMatches: 40 },
+			}))
 				.rejects
 				.toThrow('injected D1 batch failure');
 

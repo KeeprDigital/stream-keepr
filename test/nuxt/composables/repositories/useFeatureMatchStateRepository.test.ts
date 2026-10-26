@@ -2,7 +2,9 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockFeatureMatchState } from '~~/test/helpers/fixtures';
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 const mockApiHeaders = {
 	getHeaders: vi.fn(() => ({ 'x-realtime-connection-id': 'test-connection-id' })),
 };
@@ -50,7 +52,9 @@ describe('useFeatureMatchStateRepository', () => {
 	});
 
 	it('lists Feature Match slots by path', async () => {
-		const slots = [createSlot()];
+		const slots = [
+			createSlot(),
+		];
 		mockFetch.mockResolvedValueOnce({ featureMatchSlots: slots });
 
 		const repo = useFeatureMatchStateRepository();

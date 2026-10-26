@@ -74,7 +74,9 @@ describe('the Graphics Asset Library recovery window', () => {
 			assetId: firstAssetId,
 		})).resolves.toMatchObject({
 			outcome: 'restored',
-			asset: { lifecycle: { state: 'active' } },
+			asset: {
+				lifecycle: { state: 'active' },
+			},
 		});
 
 		const expired = createLifecycleLibrary();
@@ -149,7 +151,9 @@ describe('the Graphics Asset Library recovery window', () => {
 			outcome: 'in-use',
 			usage,
 		});
-		await expect(library.listGraphicAssets({ lifecycleStates: ['active'] })).resolves.toEqual([
+		await expect(library.listGraphicAssets({
+			lifecycleStates: ['active'],
+		})).resolves.toEqual([
 			expect.objectContaining({ id: assetId }),
 		]);
 	});

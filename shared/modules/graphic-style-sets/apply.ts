@@ -76,7 +76,10 @@ export function sameGraphicStyleValue(left: unknown, right: unknown): boolean {
 	const rightRecord = right as Record<string, unknown>;
 	// Keys whose value is `undefined` are absent as far as a stored document is
 	// concerned: they vanish through JSON and reappear as nothing.
-	const keys = new Set([...Object.keys(leftRecord), ...Object.keys(rightRecord)]
+	const keys = new Set([
+		...Object.keys(leftRecord),
+		...Object.keys(rightRecord),
+	]
 		.filter(key => leftRecord[key] !== undefined || rightRecord[key] !== undefined));
 	for (const key of keys) {
 		if (!sameGraphicStyleValue(leftRecord[key], rightRecord[key]))
@@ -93,22 +96,113 @@ export function sameGraphicStyleValue(left: unknown, right: unknown): boolean {
  * typography is inherited.
  */
 export const GRAPHIC_STYLE_SLOT_OWNED_KEYS: Record<GraphicStyleSlot, readonly string[]> = {
-	'typography': ['font', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'letterSpacing', 'lineHeight', 'color'],
-	'surfaceStyle': ['fill', 'fillOpacity', 'outline', 'glow'],
+	'typography': [
+		'font',
+		'fontSize',
+		'fontWeight',
+		'fontStyle',
+		'textTransform',
+		'letterSpacing',
+		'lineHeight',
+		'color',
+	],
+	'surfaceStyle': [
+		'fill',
+		'fillOpacity',
+		'outline',
+		'glow',
+	],
 	// A Graphic Fill is a discriminated union with no meaningful partial, so this slot
 	// takes no overrides at all: deviating from a Graphic Fill entry is unbinding it.
 	'surfaceStyle.fill': [],
-	'defaultChildSurfaceStyle': ['fill', 'fillOpacity', 'outline', 'glow'],
-	'boxSurfaceStyle': ['fill', 'fillOpacity', 'outline', 'glow'],
-	'wonBoxSurfaceStyle': ['fill', 'fillOpacity', 'outline', 'glow'],
-	'geometry': ['topLeft', 'topRight', 'bottomRight', 'bottomLeft', 'leftSlant', 'rightSlant'],
-	'clipGeometry': ['topLeft', 'topRight', 'bottomRight', 'bottomLeft', 'leftSlant', 'rightSlant'],
-	'boxGeometry': ['topLeft', 'topRight', 'bottomRight', 'bottomLeft', 'leftSlant', 'rightSlant'],
-	'media': ['fit', 'focalPosition', 'opacity', 'clipGeometry', 'playbackRate', 'loop'],
-	'animation.enter': ['duration', 'easing', 'delay', 'fade', 'slide', 'scale', 'reveal'],
-	'animation.on-screen': ['duration', 'easing', 'delay', 'fade', 'slide', 'scale', 'reveal', 'pause', 'repeat'],
-	'animation.update': ['duration', 'easing', 'delay', 'fade', 'slide', 'scale', 'reveal'],
-	'animation.exit': ['duration', 'easing', 'delay', 'fade', 'slide', 'scale', 'reveal'],
+	'defaultChildSurfaceStyle': [
+		'fill',
+		'fillOpacity',
+		'outline',
+		'glow',
+	],
+	'boxSurfaceStyle': [
+		'fill',
+		'fillOpacity',
+		'outline',
+		'glow',
+	],
+	'wonBoxSurfaceStyle': [
+		'fill',
+		'fillOpacity',
+		'outline',
+		'glow',
+	],
+	'geometry': [
+		'topLeft',
+		'topRight',
+		'bottomRight',
+		'bottomLeft',
+		'leftSlant',
+		'rightSlant',
+	],
+	'clipGeometry': [
+		'topLeft',
+		'topRight',
+		'bottomRight',
+		'bottomLeft',
+		'leftSlant',
+		'rightSlant',
+	],
+	'boxGeometry': [
+		'topLeft',
+		'topRight',
+		'bottomRight',
+		'bottomLeft',
+		'leftSlant',
+		'rightSlant',
+	],
+	'media': [
+		'fit',
+		'focalPosition',
+		'opacity',
+		'clipGeometry',
+		'playbackRate',
+		'loop',
+	],
+	'animation.enter': [
+		'duration',
+		'easing',
+		'delay',
+		'fade',
+		'slide',
+		'scale',
+		'reveal',
+	],
+	'animation.on-screen': [
+		'duration',
+		'easing',
+		'delay',
+		'fade',
+		'slide',
+		'scale',
+		'reveal',
+		'pause',
+		'repeat',
+	],
+	'animation.update': [
+		'duration',
+		'easing',
+		'delay',
+		'fade',
+		'slide',
+		'scale',
+		'reveal',
+	],
+	'animation.exit': [
+		'duration',
+		'easing',
+		'delay',
+		'fade',
+		'slide',
+		'scale',
+		'reveal',
+	],
 };
 
 function pick(source: Record<string, unknown> | undefined, keys: readonly string[]): Record<string, unknown> {
@@ -151,13 +245,20 @@ export function resolveGraphicStyleSlotValue(
 	switch (resolved.kind) {
 		case 'typography':
 			// Unowned keys — text alignment — come from the item and stay there.
-			return { ...baseRecord, ...resolved.value, ...deviations };
+			return {
+				...baseRecord,
+				...resolved.value,
+				...deviations,
+			};
 
 		case 'fill':
 			return structuredClone(resolved.value);
 
 		case 'shape-geometry':
-			return { ...structuredClone(resolved.value), ...deviations };
+			return {
+				...structuredClone(resolved.value),
+				...deviations,
+			};
 
 		case 'surface-style': {
 			const surface = resolved.value;
@@ -167,10 +268,21 @@ export function resolveGraphicStyleSlotValue(
 				// clearing it to nothing renderable.
 				fill: structuredClone(surface.fill ?? (baseRecord?.fill as GraphicSurfaceStyle['fill'])),
 				fillOpacity: surface.fillOpacity,
-				...(surface.outline ? { outline: { ...surface.outline } } : {}),
-				...(surface.glow ? { glow: { ...surface.glow } } : {}),
+				...(surface.outline
+					? {
+							outline: { ...surface.outline },
+						}
+					: {}),
+				...(surface.glow
+					? {
+							glow: { ...surface.glow },
+						}
+					: {}),
 			};
-			return { ...next, ...deviations };
+			return {
+				...next,
+				...deviations,
+			};
 		}
 
 		case 'media-treatment': {
@@ -180,7 +292,9 @@ export function resolveGraphicStyleSlotValue(
 				focalPosition: { ...treatment.focalPosition },
 				opacity: treatment.opacity,
 				// Absent clears the item's clipping; the write path deletes the key.
-				clipGeometry: treatment.clipGeometry ? structuredClone(treatment.clipGeometry) : undefined,
+				clipGeometry: treatment.clipGeometry
+					? structuredClone(treatment.clipGeometry)
+					: undefined,
 				// Video-only defaults. An entry that states none leaves the item's own,
 				// exactly as a Media Graphic Item keeps its playback while its kind changes.
 				playbackRate: treatment.playbackRate ?? baseRecord?.playbackRate,
@@ -190,14 +304,19 @@ export function resolveGraphicStyleSlotValue(
 		}
 
 		case 'animation-recipe': {
-			const recipe = { ...structuredClone(resolved.value) } as Record<string, unknown>;
+			const recipe = {
+				...structuredClone(resolved.value),
+			} as Record<string, unknown>;
 			// Repetition is on-screen-only. Carrying it onto an enter recipe would store
 			// fields the wire schema refuses.
 			if (slot !== 'animation.on-screen') {
 				delete recipe.pause;
 				delete recipe.repeat;
 			}
-			return { ...recipe, ...deviations };
+			return {
+				...recipe,
+				...deviations,
+			};
 		}
 
 		case 'palette':
@@ -219,7 +338,9 @@ export interface GraphicStyleRefOwner {
 
 /** Every Graphic Item of a composition, groups before their children. */
 function ownedItems(graphic: BroadcastGraphicConfig): GraphicItemConfig[] {
-	return graphic.items.flatMap(item => item.type === 'group' ? [item, ...item.children] : [item]);
+	return graphic.items.flatMap(item => item.type === 'group'
+		? [item, ...item.children]
+		: [item]);
 }
 
 /** Every owner in a composition that references at least one Graphic Style Set entry. */
@@ -263,7 +384,9 @@ function mapStyleRefOwners(
 	function updateOwner<T extends GraphicStyleOwnerNode>(owner: T, itemId: string | null): T {
 		if (!owner.styleRefs)
 			return owner;
-		const next = { ...update(owner, owner.styleRefs as GraphicStyleRefs, itemId) };
+		const next = {
+			...update(owner, owner.styleRefs as GraphicStyleRefs, itemId),
+		};
 		if (!next.styleRefs || Object.keys(next.styleRefs).length === 0)
 			delete next.styleRefs;
 		return next;
@@ -273,7 +396,9 @@ function mapStyleRefOwners(
 	// there is nothing to update — and assigning `items` onto that would rewrite the
 	// caller's own composition. Every operation here is pure, and this is the one
 	// place that could quietly stop being.
-	const next = { ...updateOwner(graphic, null) };
+	const next = {
+		...updateOwner(graphic, null),
+	};
 
 	next.items = next.items.map((item) => {
 		const updated = updateOwner(item, item.id);
@@ -605,7 +730,12 @@ export function graphicStyleSlotInStep(
 export function graphicStyleChangedKeys(current: unknown, next: unknown): string[] {
 	const currentRecord = (current ?? {}) as Record<string, unknown>;
 	const nextRecord = (next ?? {}) as Record<string, unknown>;
-	return [...new Set([...Object.keys(currentRecord), ...Object.keys(nextRecord)])]
+	return [
+		...new Set([
+			...Object.keys(currentRecord),
+			...Object.keys(nextRecord),
+		]),
+	]
 		.filter(key => !sameGraphicStyleValue(currentRecord[key], nextRecord[key]));
 }
 
@@ -643,7 +773,9 @@ export function captureGraphicStyleOverrides(
 		if (!sameGraphicStyleValue(currentRecord[key], inheritedRecord[key]))
 			overrides[key] = currentRecord[key];
 	}
-	return Object.keys(overrides).length === 0 ? undefined : overrides;
+	return Object.keys(overrides).length === 0
+		? undefined
+		: overrides;
 }
 
 /**
@@ -685,7 +817,9 @@ export function detachGraphicStyleRefs(
 	graphic: BroadcastGraphicConfig,
 	entryIds: readonly string[] | null,
 ): BroadcastGraphicConfig {
-	const targeted = entryIds === null ? null : new Set(entryIds);
+	const targeted = entryIds === null
+		? null
+		: new Set(entryIds);
 
 	const detached = mapStyleRefOwners(graphic, (owner, refs) => {
 		const kept: GraphicStyleRefs = {};

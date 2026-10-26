@@ -88,7 +88,10 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 	// `null` is "unset" unless the default itself is `null`.
 	const config = computed<T>(() => {
 		const defaultValues = defaults as Record<string, unknown>;
-		const merged: Record<string, unknown> = { ...defaults, ...getStoreConfig() };
+		const merged: Record<string, unknown> = {
+			...defaults,
+			...getStoreConfig(),
+		};
 		for (const [key, value] of Object.entries(localOverrides.value))
 			merged[key] = value ?? defaultValues[key];
 		return Object.fromEntries(
@@ -215,9 +218,15 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 		saving.value = true;
 		forgetRefusedKeys(Object.keys(updates));
 		// Apply to local overrides immediately — UI updates this tick
-		localOverrides.value = { ...localOverrides.value, ...updates };
+		localOverrides.value = {
+			...localOverrides.value,
+			...updates,
+		};
 		// Queue for the debounced API save
-		pendingUpdates.value = { ...pendingUpdates.value, ...updates };
+		pendingUpdates.value = {
+			...pendingUpdates.value,
+			...updates,
+		};
 		saveDebounce.schedule();
 	}
 
@@ -226,7 +235,10 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 		if (refused.length === 0)
 			return;
 		const retried = Object.fromEntries(refused.map(([key, { value }]) => [key, value])) as U;
-		pendingUpdates.value = { ...retried, ...pendingUpdates.value };
+		pendingUpdates.value = {
+			...retried,
+			...pendingUpdates.value,
+		};
 		refusedFields.value = {};
 		saving.value = true;
 		await flushPendingUpdates();
@@ -268,5 +280,12 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 		handOffPendingEdits();
 	});
 
-	return { config, saving, saveState, saveError, updateConfig, retry };
+	return {
+		config,
+		saving,
+		saveState,
+		saveError,
+		updateConfig,
+		retry,
+	};
 }

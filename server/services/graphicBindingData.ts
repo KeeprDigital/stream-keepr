@@ -76,7 +76,9 @@ function selectedIds(
 		.filter(declaration => declaration.kind === kind && declaration.from === undefined)
 		.map(declaration => selections[declaration.key])
 		.filter((id): id is number => typeof id === 'number');
-	return [...new Set(ids)];
+	return [
+		...new Set(ids),
+	];
 }
 
 function byId<T extends { id: number }>(rows: readonly T[]): Record<number, T> {
@@ -157,9 +159,15 @@ export function graphicBindingDataService() {
 			selectedMatches,
 			selectedSlots,
 		] = await Promise.all([
-			kinds.has('archetype') || kinds.has('player') ? archetypes.findByEventId(eventId) : [],
-			kinds.has('phase') ? phases.findByEventId(eventId) : [],
-			kinds.has('round') ? rounds.findByEventId(eventId) : [],
+			kinds.has('archetype') || kinds.has('player')
+				? archetypes.findByEventId(eventId)
+				: [],
+			kinds.has('phase')
+				? phases.findByEventId(eventId)
+				: [],
+			kinds.has('round')
+				? rounds.findByEventId(eventId)
+				: [],
 			Promise.all(selectedIds(declarations, selections, 'player')
 				.map(async id => await players.findById(id, eventId))),
 			Promise.all(selectedIds(declarations, selections, 'match')

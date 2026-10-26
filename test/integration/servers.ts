@@ -54,7 +54,10 @@ export interface IntegrationServerAddress {
  * variable on first use, so setting it before a test file runs is all it takes.
  */
 export function testContextFor(server: IntegrationServerAddress): string {
-	return JSON.stringify({ options: { dev: true, rootDir: repositoryRoot }, url: server.url });
+	return JSON.stringify({
+		options: { dev: true, rootDir: repositoryRoot },
+		url: server.url,
+	});
 }
 
 /**
@@ -106,10 +109,16 @@ process.once('exit', () => {
 async function stopChild(child: ChildProcess) {
 	const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 	signalGroup(child, 'SIGTERM');
-	await Promise.race([exited(child), sleep(5_000)]);
+	await Promise.race([
+		exited(child),
+		sleep(5_000),
+	]);
 	// Unconditional: workerd may outlive a leader that exited on SIGTERM.
 	signalGroup(child, 'SIGKILL');
-	await Promise.race([exited(child), sleep(5_000)]);
+	await Promise.race([
+		exited(child),
+		sleep(5_000),
+	]);
 }
 
 /**
@@ -156,7 +165,11 @@ export async function startIntegrationServer(
 		});
 	}
 
-	const server: IntegrationServer = { url, persistDir, stop: () => stopChild(child) };
+	const server: IntegrationServer = {
+		url,
+		persistDir,
+		stop: () => stopChild(child),
+	};
 	const failure = (reason: string) => new Error(
 		`Integration server over ${persistDir} ${reason}. Full output in ${logFile.path}; the last of it:\n${
 			logs.slice(-40).join('\n')}`,
@@ -167,7 +180,9 @@ export async function startIntegrationServer(
 		if (child.exitCode !== null || child.signalCode !== null)
 			throw failure(`exited before becoming ready (${child.exitCode ?? child.signalCode})`);
 		try {
-			const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+			const response = await fetch(url, {
+				signal: AbortSignal.timeout(10_000),
+			});
 			// `nuxt dev` answers 503, then a loading page, before the app is up.
 			if (response.status !== 503 && !(await response.text()).includes('__NUXT_LOADING__'))
 				return server;

@@ -4,7 +4,9 @@ import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 mockNuxtImport('$fetch', () => mockFetch);
 
 type Handler = (message: Record<string, unknown>) => void;
@@ -93,7 +95,9 @@ function makeTopCardsModeData() {
 describe('useTopCardsModeData', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		Object.assign(mutableConfig, defaultConfig, { excludedCardTypes: ['Land'] });
+		Object.assign(mutableConfig, defaultConfig, {
+			excludedCardTypes: ['Land'],
+		});
 		mockEventId.value = 1;
 		mockServerNow = 1_000_000;
 		mockRealtime.connectionState = 'connected';
@@ -180,7 +184,25 @@ describe('useTopCardsModeData', () => {
 
 	it('exposes fetched entries', async () => {
 		mockFetch.mockResolvedValue({
-			entries: [{ id: 1, name: 'Lightning Bolt', inclusionRate: 80, avgCopies: 3.6, totalCopies: 18, deckCount: 4, mainboardCount: 18, sideboardCount: 0, mainboardDeckCount: 4, sideboardDeckCount: 0, cardType: 'Instant', scryfallId: null, colors: 'R', cmc: 1, manaCost: '{R}' }],
+			entries: [
+				{
+					id: 1,
+					name: 'Lightning Bolt',
+					inclusionRate: 80,
+					avgCopies: 3.6,
+					totalCopies: 18,
+					deckCount: 4,
+					mainboardCount: 18,
+					sideboardCount: 0,
+					mainboardDeckCount: 4,
+					sideboardDeckCount: 0,
+					cardType: 'Instant',
+					scryfallId: null,
+					colors: 'R',
+					cmc: 1,
+					manaCost: '{R}',
+				},
+			],
 			totalDecks: 5,
 			scope: 'all',
 		});
@@ -215,7 +237,11 @@ describe('useTopCardsModeData', () => {
 		}
 
 		it('shows every card on one page when a Screen never set its page size', async () => {
-			mockFetch.mockResolvedValue({ entries: rankedCards(12), totalDecks: 5, scope: 'all' });
+			mockFetch.mockResolvedValue({
+				entries: rankedCards(12),
+				totalDecks: 5,
+				scope: 'all',
+			});
 			mutableConfig.columns = 1;
 
 			const { pageEntries, totalPages } = makeTopCardsModeData();
@@ -227,7 +253,11 @@ describe('useTopCardsModeData', () => {
 		});
 
 		it('pages the grid by whole rows of columns cards, keeping each card\'s overall rank', async () => {
-			mockFetch.mockResolvedValue({ entries: rankedCards(5), totalDecks: 5, scope: 'all' });
+			mockFetch.mockResolvedValue({
+				entries: rankedCards(5),
+				totalDecks: 5,
+				scope: 'all',
+			});
 			Object.assign(mutableConfig, { columns: 2, rowsPerPage: 1, currentPage: 2 });
 
 			const { pageEntries, currentPage, totalPages } = makeTopCardsModeData();
@@ -239,7 +269,11 @@ describe('useTopCardsModeData', () => {
 		});
 
 		it('ends on a partial last page', async () => {
-			mockFetch.mockResolvedValue({ entries: rankedCards(5), totalDecks: 5, scope: 'all' });
+			mockFetch.mockResolvedValue({
+				entries: rankedCards(5),
+				totalDecks: 5,
+				scope: 'all',
+			});
 			Object.assign(mutableConfig, { columns: 2, rowsPerPage: 2, currentPage: 2 });
 
 			const { pageEntries, totalPages } = makeTopCardsModeData();
@@ -250,9 +284,19 @@ describe('useTopCardsModeData', () => {
 		});
 
 		it('shows the page projected from the Rotation Anchor while auto-page is on', async () => {
-			mockFetch.mockResolvedValue({ entries: rankedCards(6), totalDecks: 5, scope: 'all' });
+			mockFetch.mockResolvedValue({
+				entries: rankedCards(6),
+				totalDecks: 5,
+				scope: 'all',
+			});
 			// 25s into 10s pages: the third page, whatever page was last selected by hand.
-			Object.assign(mutableConfig, { columns: 2, rowsPerPage: 1, currentPage: 1, autoPageEnabled: true, rotationAnchor: mockServerNow - 25_000 });
+			Object.assign(mutableConfig, {
+				columns: 2,
+				rowsPerPage: 1,
+				currentPage: 1,
+				autoPageEnabled: true,
+				rotationAnchor: mockServerNow - 25_000,
+			});
 
 			const { pageEntries, currentPage } = makeTopCardsModeData();
 			await flushPromises();
@@ -276,7 +320,10 @@ describe('useTopCardsModeData', () => {
 		it('re-reads when another browser resolves an unresolved deck card (#648)', async () => {
 			await showingCards();
 
-			deliver('playerDeck:cardsResolved', { deckIds: [3, 9], playerIds: [2, 7] });
+			deliver('playerDeck:cardsResolved', {
+				deckIds: [3, 9],
+				playerIds: [2, 7],
+			});
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -287,7 +334,9 @@ describe('useTopCardsModeData', () => {
 		it('re-reads when a deck review lands elsewhere', async () => {
 			await showingCards();
 
-			deliver('playerDeck:reviewed', { deck: { id: 3, playerId: 2 } });
+			deliver('playerDeck:reviewed', {
+				deck: { id: 3, playerId: 2 },
+			});
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -298,7 +347,9 @@ describe('useTopCardsModeData', () => {
 		it('re-reads when an Archetype is edited or its key cards change', async () => {
 			await showingCards();
 
-			deliver('archetype:updated', { archetype: { id: 4, name: 'Mono Red' } });
+			deliver('archetype:updated', {
+				archetype: { id: 4, name: 'Mono Red' },
+			});
 			await flushPromises();
 			deliver('archetype:keyCardsUpdated', { archetypeId: 4, keyCards: [] });
 			await flushPromises();
@@ -312,13 +363,28 @@ describe('useTopCardsModeData', () => {
 			mutableConfig.playerListId = 5;
 			await showingCards();
 
-			deliver('playerList:membersChanged', { listId: 6, playerIds: [2], action: 'added', memberCount: 3 });
+			deliver('playerList:membersChanged', {
+				listId: 6,
+				playerIds: [2],
+				action: 'added',
+				memberCount: 3,
+			});
 			await flushPromises();
 			expect(mockFetch).not.toHaveBeenCalled();
 
-			deliver('playerList:membersChanged', { listId: 5, playerIds: [2], action: 'added', memberCount: 3 });
+			deliver('playerList:membersChanged', {
+				listId: 5,
+				playerIds: [2],
+				action: 'added',
+				memberCount: 3,
+			});
 			await flushPromises();
-			deliver('playerList:membersChanged', { listId: 5, playerIds: [2], action: 'removed', memberCount: 2 });
+			deliver('playerList:membersChanged', {
+				listId: 5,
+				playerIds: [2],
+				action: 'removed',
+				memberCount: 2,
+			});
 			await flushPromises();
 			expect(mockFetch).toHaveBeenCalledTimes(2);
 			expect(usePlayerStore().dataVersion).toBe(0);
@@ -328,7 +394,12 @@ describe('useTopCardsModeData', () => {
 			mutableConfig.playerListId = 5;
 			await showingCards();
 
-			deliver('playerList:membersChanged', { listId: 5, playerIds: [2], action: 'added', memberCount: 3 });
+			deliver('playerList:membersChanged', {
+				listId: 5,
+				playerIds: [2],
+				action: 'added',
+				memberCount: 3,
+			});
 			await flushPromises();
 
 			expect(mockFetch).not.toHaveBeenCalled();
@@ -338,7 +409,13 @@ describe('useTopCardsModeData', () => {
 			mutableConfig.scope = 'topN';
 			await showingCards();
 
-			deliver('melee:roundSynced', { roundId: 31, matchCount: 8, created: 0, updated: 8, staleDeleted: 0 });
+			deliver('melee:roundSynced', {
+				roundId: 31,
+				matchCount: 8,
+				created: 0,
+				updated: 8,
+				staleDeleted: 0,
+			});
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -349,7 +426,13 @@ describe('useTopCardsModeData', () => {
 
 			mockRealtime.connectionState = 'disconnected';
 			await nextTick();
-			mockFetch.mockResolvedValue({ entries: [{ id: 1, name: 'Lightning Bolt' }], totalDecks: 4, scope: 'all' });
+			mockFetch.mockResolvedValue({
+				entries: [
+					{ id: 1, name: 'Lightning Bolt' },
+				],
+				totalDecks: 4,
+				scope: 'all',
+			});
 			mockRealtime.connectionState = 'connected';
 			continuity.reattach('event:1');
 			await flushPromises();

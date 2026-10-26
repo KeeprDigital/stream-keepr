@@ -100,18 +100,24 @@ describe('metagame players table', () => {
 		const player = makePlayer();
 		mockPlayerStore.players = [player];
 
-		const wrapper = await mountComponent([makeEntry()]);
+		const wrapper = await mountComponent([
+			makeEntry(),
+		]);
 		await wrapper.get('[aria-label="View deck list"]').trigger('click');
 
-		expect(wrapper.emitted('viewDeckList')).toEqual([[
-			player,
-		]]);
+		expect(wrapper.emitted('viewDeckList')).toEqual([
+			[
+				player,
+			],
+		]);
 	});
 
 	it('renders player text without a deck-list action until the full player is loaded', async () => {
 		mockPlayerStore.players = [];
 
-		const wrapper = await mountComponent([makeEntry()]);
+		const wrapper = await mountComponent([
+			makeEntry(),
+		]);
 
 		expect(wrapper.find('button').exists()).toBe(false);
 		expect(wrapper.text()).toContain('Alice');

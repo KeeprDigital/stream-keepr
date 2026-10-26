@@ -103,7 +103,14 @@ describe('getOriginConnectionId', () => {
 
 	it('ignores a malformed connection id instead of relaying it', async () => {
 		const { getOriginConnectionId } = await import('~~/server/utils/ably');
-		for (const malformed of ['has spaces', 'json{"a":1}', 'line\nbreak', 'quote"d', '<script>', 'né']) {
+		for (const malformed of [
+			'has spaces',
+			'json{"a":1}',
+			'line\nbreak',
+			'quote"d',
+			'<script>',
+			'né',
+		]) {
 			vi.mocked(getHeader).mockReturnValue(malformed);
 			expect(getOriginConnectionId({} as any)).toBeUndefined();
 		}
@@ -319,7 +326,9 @@ describe('failed realtime publishes', () => {
 		// Losing the reason must not cost the status too: the fields are read
 		// independently, so a malformed message leaves 404/40400 legible.
 		const arrayMessage = new ErrorInfoShaped('', 40400, 404);
-		Object.defineProperty(arrayMessage, 'message', { value: ['No application found'] });
+		Object.defineProperty(arrayMessage, 'message', {
+			value: ['No application found'],
+		});
 		mockPublish.mockRejectedValue(arrayMessage);
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const { publishMessage } = await import('~~/server/utils/ably');
@@ -439,7 +448,10 @@ describe('oversized realtime messages', () => {
 	function oversizedPayload() {
 		// One field over the documented floor, so the assertion is about the threshold
 		// rather than about any particular message type's shape.
-		return { eventId: 1, reason: 'x'.repeat(MAX_REALTIME_MESSAGE_BYTES) } as never;
+		return {
+			eventId: 1,
+			reason: 'x'.repeat(MAX_REALTIME_MESSAGE_BYTES),
+		} as never;
 	}
 
 	/** Every line the spy recorded, parsed — for the assertion about the whole list. */
@@ -477,13 +489,15 @@ describe('oversized realtime messages', () => {
 
 		await publishMessage(1, 'event:deleted', oversizedPayload(), 'conn-123');
 
-		expect(loggedMessages(errorSpy)).toEqual([{
-			message: 'realtime_publish_oversized',
-			eventId: 1,
-			messageType: 'event:deleted',
-			bytes: expect.any(Number),
-			limit: MAX_REALTIME_MESSAGE_BYTES,
-		}]);
+		expect(loggedMessages(errorSpy)).toEqual([
+			{
+				message: 'realtime_publish_oversized',
+				eventId: 1,
+				messageType: 'event:deleted',
+				bytes: expect.any(Number),
+				limit: MAX_REALTIME_MESSAGE_BYTES,
+			},
+		]);
 		expect(oversizedFields(errorSpy).bytes).toBeGreaterThan(MAX_REALTIME_MESSAGE_BYTES);
 		// Reported, not refused: the write has committed and this is a documented
 		// floor rather than this account's confirmed ceiling.
@@ -679,7 +693,12 @@ describe('publishScreenCommand', () => {
 			const { mapPublicNitroError } = await import('~~/server/utils/nitroErrorMapping');
 
 			const cause = await publishScreenCommand(1, 10, 'identify').then(() => null, error => error);
-			const error = { statusCode: 500, message: 'Something went wrong', cause, unhandled: true };
+			const error = {
+				statusCode: 500,
+				message: 'Something went wrong',
+				cause,
+				unhandled: true,
+			};
 
 			mapPublicNitroError(error);
 

@@ -50,7 +50,12 @@ function waitForExportReadyMarkers(element: HTMLElement): Promise<void> {
 				resolve();
 			}
 		});
-		observer.observe(element, { attributes: true, childList: true, subtree: true, attributeFilter: ['data-export-ready'] });
+		observer.observe(element, {
+			attributes: true,
+			childList: true,
+			subtree: true,
+			attributeFilter: ['data-export-ready'],
+		});
 	});
 }
 
@@ -107,7 +112,11 @@ async function waitForVideos(element: HTMLElement) {
 export async function waitForElementExportReadiness(element: HTMLElement, options: ExportReadinessOptions = {}) {
 	const timeoutMs = options.timeoutMs ?? 5000;
 	await withTimeout(waitForExportReadyMarkers(element), timeoutMs);
-	await withTimeout(Promise.all([waitForFonts(), waitForImages(element), waitForVideos(element)]).then(() => undefined), timeoutMs);
+	await withTimeout(Promise.all([
+		waitForFonts(),
+		waitForImages(element),
+		waitForVideos(element),
+	]).then(() => undefined), timeoutMs);
 	await nextFrame();
 	await nextFrame();
 }
@@ -335,7 +344,10 @@ function internalFragmentUrl(source: string): string | undefined {
  */
 export async function inlineExportStyleUrls(target: Element) {
 	const dataUrls = new Map<string, Promise<string>>();
-	const elements = [target, ...Array.from(target.querySelectorAll('*'))];
+	const elements = [
+		target,
+		...Array.from(target.querySelectorAll('*')),
+	];
 
 	await Promise.all(elements.map(async (element) => {
 		let style = element.getAttribute('style') ?? '';
@@ -376,7 +388,9 @@ function exportFontSources(target: Element): ExportFontSource[] {
 		}
 		marker.removeAttribute('data-export-font-sources');
 	}
-	return [...sources.values()];
+	return [
+		...sources.values(),
+	];
 }
 
 /**

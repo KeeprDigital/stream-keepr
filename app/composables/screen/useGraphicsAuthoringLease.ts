@@ -141,5 +141,15 @@ export function useGraphicsAuthoringLease(options: UseGraphicsAuthoringLeaseOpti
 		void release();
 	});
 
-	return { lease, status, writable, heldByAnotherSession, holderName, canTakeOver, refresh: ask, takeOver, release };
+	return {
+		lease,
+		status,
+		writable,
+		heldByAnotherSession,
+		holderName,
+		canTakeOver,
+		refresh: ask,
+		takeOver,
+		release,
+	};
 }

@@ -2,7 +2,9 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 mockNuxtImport('$fetch', () => mockFetch);
 
 const mockApiHeaders = {
@@ -18,7 +20,10 @@ describe('useFeatureMatchRepository', () => {
 	});
 
 	it('lists slots using the slot response key', async () => {
-		const matches = [{ id: 1 }, { id: 2 }];
+		const matches = [
+			{ id: 1 },
+			{ id: 2 },
+		];
 		mockFetch.mockResolvedValue({ featureMatchSlots: matches });
 		const repo = useFeatureMatchRepository();
 		const result = await repo.list(1);
@@ -53,7 +58,12 @@ describe('useFeatureMatchRepository', () => {
 		const response = {
 			promotedSlot: { id: 3, matchId: 7 },
 			clearedSlots: [],
-			assignment: { id: 11, roundId: 2, slotId: 3, matchId: 7 },
+			assignment: {
+				id: 11,
+				roundId: 2,
+				slotId: 3,
+				matchId: 7,
+			},
 		};
 		mockFetch.mockResolvedValue(response);
 		const repo = useFeatureMatchRepository();

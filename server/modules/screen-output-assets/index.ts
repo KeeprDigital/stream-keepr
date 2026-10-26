@@ -153,8 +153,12 @@ export function createScreenOutputAssetDelivery(
 		const cacheRequest = internalCacheRequest(representationTag, input.headers);
 		if (dependencies.cache) {
 			const cached = await dependencies.cache.match(cacheRequest).catch(() => undefined);
-			if (cached)
-				return { outcome: 'delivered', response: publicResponse(cached) };
+			if (cached) {
+				return {
+					outcome: 'delivered',
+					response: publicResponse(cached),
+				};
+			}
 		}
 
 		let inspection: ScreenOutputAssetInspection;

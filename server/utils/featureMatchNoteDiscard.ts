@@ -27,10 +27,12 @@ export async function throwFeatureMatchNoteDiscardRequired(
 		statusMessage: 'Feature Match Note discard requires confirmation',
 		data: {
 			code: 'feature-match-note-discard-required',
-			assignments: [{
-				assignment: mapFeatureMatchAssignmentToResponse(assignment),
-				match: mapMatchToResponse(match),
-			}],
+			assignments: [
+				{
+					assignment: mapFeatureMatchAssignmentToResponse(assignment),
+					match: mapMatchToResponse(match),
+				},
+			],
 		},
 	});
 }

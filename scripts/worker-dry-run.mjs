@@ -60,7 +60,14 @@ rmSync(outDir, { recursive: true, force: true });
 
 const dryRun = spawnSync(
 	wrangler,
-	['deploy', '--dry-run', '--config', CONFIG, '--outdir', outDir],
+	[
+		'deploy',
+		'--dry-run',
+		'--config',
+		CONFIG,
+		'--outdir',
+		outDir,
+	],
 	{ cwd: repositoryRoot, stdio: 'inherit' },
 );
 
@@ -82,4 +89,6 @@ for (const scan of scans) {
 		(scan.ok ? process.stdout : process.stderr).write(`${line}\n`);
 }
 
-process.exit(scans.every(scan => scan.ok) ? 0 : 1);
+process.exit(scans.every(scan => scan.ok)
+	? 0
+	: 1);

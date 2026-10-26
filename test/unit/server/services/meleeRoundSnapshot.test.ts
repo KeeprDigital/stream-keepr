@@ -28,29 +28,47 @@ describe('meleeRoundSnapshotService', () => {
 			updatedAt: new Date('2026-01-02T00:00:00.000Z'),
 		});
 		mockDb.batch.mockResolvedValue([
-			[{ externalId: 'match-2' }],
+			[
+				{ externalId: 'match-2' },
+			],
 			[createdMatch, updatedMatch],
 			[],
 			[],
-			[{ id: 99 }],
-			[{ id: 10 }],
+			[
+				{ id: 99 },
+			],
+			[
+				{ id: 10 },
+			],
 		]);
 
 		const result = await meleeRoundSnapshotService().replace({
 			eventId: 1,
 			roundId: 10,
 			matches: [
-				{ eventId: 1, roundId: 10, externalId: 'match-1', externalSource: 'melee' },
-				{ eventId: 1, roundId: 10, externalId: 'match-2', externalSource: 'melee' },
+				{
+					eventId: 1,
+					roundId: 10,
+					externalId: 'match-1',
+					externalSource: 'melee',
+				},
+				{
+					eventId: 1,
+					roundId: 10,
+					externalId: 'match-2',
+					externalSource: 'melee',
+				},
 			],
-			standings: [{
-				playerId: 5,
-				wins: 3,
-				losses: 1,
-				draws: 0,
-				position: 2,
-				points: 9,
-			}],
+			standings: [
+				{
+					playerId: 5,
+					wins: 3,
+					losses: 1,
+					draws: 0,
+					position: 2,
+					points: 9,
+				},
+			],
 		});
 
 		expect(mockDb.batch).toHaveBeenCalledOnce();
@@ -66,8 +84,13 @@ describe('meleeRoundSnapshotService', () => {
 	it('atomically clears stale data for an empty authoritative snapshot', async () => {
 		mockDb.batch.mockResolvedValue([
 			[],
-			[{ id: 1 }, { id: 2 }],
-			[{ id: 10 }],
+			[
+				{ id: 1 },
+				{ id: 2 },
+			],
+			[
+				{ id: 10 },
+			],
 		]);
 
 		const result = await meleeRoundSnapshotService().replace({
@@ -79,7 +102,12 @@ describe('meleeRoundSnapshotService', () => {
 
 		expect(mockDb.batch).toHaveBeenCalledOnce();
 		expect(mockDb.batch.mock.calls[0]![0]).toHaveLength(3);
-		expect(result).toEqual({ matches: [], created: 0, updated: 0, staleDeleted: 2 });
+		expect(result).toEqual({
+			matches: [],
+			created: 0,
+			updated: 0,
+			staleDeleted: 2,
+		});
 	});
 
 	it('surfaces a batch failure without executing a fallback partial write', async () => {
@@ -88,7 +116,14 @@ describe('meleeRoundSnapshotService', () => {
 		await expect(meleeRoundSnapshotService().replace({
 			eventId: 1,
 			roundId: 10,
-			matches: [{ eventId: 1, roundId: 10, externalId: 'match-1', externalSource: 'melee' }],
+			matches: [
+				{
+					eventId: 1,
+					roundId: 10,
+					externalId: 'match-1',
+					externalSource: 'melee',
+				},
+			],
 			standings: [],
 		})).rejects.toThrow('transaction rolled back');
 
@@ -112,7 +147,9 @@ describe('meleeRoundSnapshotService', () => {
 			[],
 			[],
 			[],
-			[{ id: 10 }],
+			[
+				{ id: 10 },
+			],
 		]);
 
 		const result = await meleeRoundSnapshotService().replace({
@@ -151,8 +188,18 @@ describe('meleeRoundSnapshotService', () => {
 			eventId: 1,
 			roundId: 10,
 			matches: [
-				{ eventId: 1, roundId: 10, externalId: 'duplicate', externalSource: 'melee' },
-				{ eventId: 1, roundId: 10, externalId: 'duplicate', externalSource: 'melee' },
+				{
+					eventId: 1,
+					roundId: 10,
+					externalId: 'duplicate',
+					externalSource: 'melee',
+				},
+				{
+					eventId: 1,
+					roundId: 10,
+					externalId: 'duplicate',
+					externalSource: 'melee',
+				},
 			],
 			standings: [],
 		})).rejects.toThrow('Duplicate Melee Match external identity');
@@ -162,8 +209,22 @@ describe('meleeRoundSnapshotService', () => {
 			roundId: 10,
 			matches: [],
 			standings: [
-				{ playerId: 4, wins: 1, losses: 0, draws: 0, position: 1, points: 3 },
-				{ playerId: 4, wins: 0, losses: 1, draws: 0, position: 2, points: 0 },
+				{
+					playerId: 4,
+					wins: 1,
+					losses: 0,
+					draws: 0,
+					position: 1,
+					points: 3,
+				},
+				{
+					playerId: 4,
+					wins: 0,
+					losses: 1,
+					draws: 0,
+					position: 2,
+					points: 0,
+				},
 			],
 		})).rejects.toThrow('Duplicate Round standing player identity');
 
@@ -174,7 +235,9 @@ describe('meleeRoundSnapshotService', () => {
 		await expect(meleeRoundSnapshotService().replace({
 			eventId: 1,
 			roundId: 10,
-			matches: [{ eventId: 1, roundId: 10 }],
+			matches: [
+				{ eventId: 1, roundId: 10 },
+			],
 			standings: [],
 		})).rejects.toThrow('outside its authoritative scope');
 

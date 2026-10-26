@@ -19,7 +19,9 @@ withDefaults(defineProps<Props>(), {
 	size: 'md',
 });
 
-const model = defineModel<string[]>({ default: () => [] });
+const model = defineModel<string[]>({
+	default: () => [],
+});
 
 const colorClassMap: Record<string, string> = {
 	W: 'ms-w',

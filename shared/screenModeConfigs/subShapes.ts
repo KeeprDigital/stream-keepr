@@ -39,7 +39,10 @@ export function withEveryColumn<Column extends { key: string; visible: boolean }
 	const missing = defaultColumns.filter(column => !held.has(column.key));
 	if (missing.length === 0)
 		return columns as Column[];
-	return [...columns, ...missing.map(column => ({ ...column, visible: false }))];
+	return [
+		...columns,
+		...missing.map(column => ({ ...column, visible: false })),
+	];
 }
 
 /** The optional header above a mode's content. */

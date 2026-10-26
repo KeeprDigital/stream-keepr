@@ -91,7 +91,9 @@ describe('archetypeCardService', () => {
 
 	describe('setKeyCards', () => {
 		it('non-empty replaces existing (calls db.batch)', async () => {
-			const mockKeyCards = [createMockKeyCard({ id: 1, name: 'Lightning Bolt' })];
+			const mockKeyCards = [
+				createMockKeyCard({ id: 1, name: 'Lightning Bolt' }),
+			];
 			getChain('select').orderBy.mockResolvedValue(mockKeyCards);
 			mockDb.batch.mockResolvedValue([]);
 
@@ -107,9 +109,23 @@ describe('archetypeCardService', () => {
 	describe('getKeyCardsByArchetypeIds', () => {
 		it('non-empty builds correct Map keyed by archetypeId', async () => {
 			const rows = [
-				{ ...createMockKeyCard({ id: 1, name: 'Lightning Bolt', sortOrder: 0 }), archetypeId: 10 },
-				{ ...createMockKeyCard({ id: 2, name: 'Goblin Guide', sortOrder: 1 }), archetypeId: 10 },
-				{ ...createMockKeyCard({ id: 3, name: 'Counterspell', sortOrder: 0, colors: 'UU' }), archetypeId: 20 },
+				{
+					...createMockKeyCard({ id: 1, name: 'Lightning Bolt', sortOrder: 0 }),
+					archetypeId: 10,
+				},
+				{
+					...createMockKeyCard({ id: 2, name: 'Goblin Guide', sortOrder: 1 }),
+					archetypeId: 10,
+				},
+				{
+					...createMockKeyCard({
+						id: 3,
+						name: 'Counterspell',
+						sortOrder: 0,
+						colors: 'UU',
+					}),
+					archetypeId: 20,
+				},
 			];
 			getChain('select').orderBy.mockResolvedValue(rows);
 

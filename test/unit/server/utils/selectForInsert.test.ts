@@ -54,8 +54,18 @@ describe('selectForInsert', () => {
 
 		const rows = await db.select().from(gadgets).orderBy(gadgets.sortOrder);
 		expect(rows).toEqual([
-			{ id: expect.any(Number), eventId: 41, name: 'left', sortOrder: 7 },
-			{ id: expect.any(Number), eventId: 41, name: 'right', sortOrder: 9 },
+			{
+				id: expect.any(Number),
+				eventId: 41,
+				name: 'left',
+				sortOrder: 7,
+			},
+			{
+				id: expect.any(Number),
+				eventId: 41,
+				name: 'right',
+				sortOrder: 9,
+			},
 		]);
 	});
 
@@ -63,7 +73,9 @@ describe('selectForInsert', () => {
 		await db.insert(gadgets).values({ eventId: 41, name: 'solo', sortOrder: 1 });
 		await client.execute('create unique index if not exists gadgets_name_unique on gadgets(name)');
 
-		const payload = JSON.stringify([{ name: 'solo', sortOrder: 5 }]);
+		const payload = JSON.stringify([
+			{ name: 'solo', sortOrder: 5 },
+		]);
 		const returned = await db.insert(gadgets).select(selectForInsert(gadgets, {
 			id: sql`null`,
 			eventId: sql`${41}`,
@@ -71,10 +83,19 @@ describe('selectForInsert', () => {
 			sortOrder: sql`json_extract(value, '$.sortOrder')`,
 		}, sql`from json_each(${payload}) where true`)).onConflictDoUpdate({
 			target: gadgets.name,
-			set: { sortOrder: sql.raw('excluded.sort_order') },
+			set: {
+				sortOrder: sql.raw('excluded.sort_order'),
+			},
 		}).returning();
 
-		expect(returned).toEqual([{ id: expect.any(Number), eventId: 41, name: 'solo', sortOrder: 5 }]);
+		expect(returned).toEqual([
+			{
+				id: expect.any(Number),
+				eventId: 41,
+				name: 'solo',
+				sortOrder: 5,
+			},
+		]);
 	});
 
 	it('rejects a map missing a column, naming it', () => {
@@ -123,7 +144,13 @@ describe('selectForInsert with a generated column', () => {
 		}, sql`where true`));
 
 		const rows = await db.select().from(gizmos);
-		expect(rows).toEqual([{ id: expect.any(Number), width: 21, doubled: 42 }]);
+		expect(rows).toEqual([
+			{
+				id: expect.any(Number),
+				width: 21,
+				doubled: 42,
+			},
+		]);
 	});
 
 	it('rejects an expression for the generated column, naming it', () => {

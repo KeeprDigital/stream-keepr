@@ -38,13 +38,21 @@ export async function main(argv = process.argv) {
 		harness: HARNESS,
 		async run({ record }) {
 			if (deployed) {
-				record([{ code: 'harness-precondition-unmet', detail: { reason: 'local-only' } }]);
+				record([
+					{
+						code: 'harness-precondition-unmet',
+						detail: { reason: 'local-only' },
+					},
+				]);
 				return { mode: 'local' };
 			}
 
 			const script = await bundleKeyMattePage();
 			const local = await serveAcceptanceRoutes({
-				[KEY_MATTE_PROOF_PAGE_PATH]: async () => ({ body: keyMatteProofPage(), type: 'text/html; charset=utf-8' }),
+				[KEY_MATTE_PROOF_PAGE_PATH]: async () => ({
+					body: keyMatteProofPage(),
+					type: 'text/html; charset=utf-8',
+				}),
 				[KEY_MATTE_PROOF_SCRIPT_PATH]: async () => ({ body: script, type: 'text/javascript; charset=utf-8' }),
 			});
 			try {
@@ -60,7 +68,12 @@ export async function main(argv = process.argv) {
 						'unavailable': 'browser-driver-unavailable',
 						'timed-out': 'browser-acceptance-timed-out',
 					};
-					record([{ code: outcomes[observed.outcome] ?? 'browser-acceptance-failed', detail: { page: HARNESS } }]);
+					record([
+						{
+							code: outcomes[observed.outcome] ?? 'browser-acceptance-failed',
+							detail: { page: HARNESS },
+						},
+					]);
 					return { mode: 'local' };
 				}
 
@@ -71,7 +84,9 @@ export async function main(argv = process.argv) {
 					report = JSON.parse(observed.value);
 				}
 				catch {
-					record([{ code: 'key-matte-page-failed' }]);
+					record([
+						{ code: 'key-matte-page-failed' },
+					]);
 					return { mode: 'local' };
 				}
 

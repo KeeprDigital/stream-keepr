@@ -578,7 +578,11 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 		// retry path, most likely. Nothing further to record.
 		if (released.outcome !== 'released')
 			return released;
-		return { outcome: 'released', releasedAt: timestamp(), bytesFreed: released.bytesFreed };
+		return {
+			outcome: 'released',
+			releasedAt: timestamp(),
+			bytesFreed: released.bytesFreed,
+		};
 	}
 
 	/** The `staged-input-released` entry a finally-landed release records. */
@@ -650,7 +654,10 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				quotaState,
 			}));
 		}
-		return { strandedStagedInput: { released }, records };
+		return {
+			strandedStagedInput: { released },
+			records,
+		};
 	}
 
 	/**
@@ -675,7 +682,9 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 					referenceCount: revision.referenceCount,
 					transition: {
 						from: 'unreferenced-superseded',
-						to: revision.reason === 'referenced' ? 'referenced' : 'latest-revision',
+						to: revision.reason === 'referenced'
+							? 'referenced'
+							: 'latest-revision',
 					},
 				},
 			}));
@@ -971,7 +980,10 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				quotaState,
 			}));
 		}
-		return { trash: { purged, blockedByReferences }, records };
+		return {
+			trash: { purged, blockedByReferences },
+			records,
+		};
 	}
 
 	/** How many deadlines one operational view lists per queue. */
@@ -1018,7 +1030,9 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			});
 			const affected = revisions.filter(revision =>
 				revision.retention.policy === (
-					input.transition === 'frozen' ? 'pruning-frozen' : 'unreferenced-superseded'
+					input.transition === 'frozen'
+						? 'pruning-frozen'
+						: 'unreferenced-superseded'
 				));
 			if (affected.length === 0)
 				return;
@@ -1068,26 +1082,30 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			/** The recovery deadline Trash established, where the transition set one. */
 			deadline?: string;
 		}) {
-			await catalogue.recordGraphicsAssetEvidence([evidence({
-				recordedAt: input.recordedAt,
-				correlationId: generateIdentity(),
-				actor: input.actor,
-				category: `graphic-asset-${input.transition}`,
-				subject: { kind: 'graphic-asset', id: input.assetId },
-				outcome: `graphic-asset-${input.transition}`,
-				reason: input.transition === 'trashed'
-					? 'trash-recovery-window-opened'
-					: input.transition === 'restored'
-						? 'restored-before-recovery-window-elapsed'
-						: 'withdrawn-from-selection',
-				detail: {
-					transition: { from: input.from, to: input.to },
-					...(input.deadline === undefined ? {} : { deadline: input.deadline }),
-					...(input.transition === 'trashed'
-						? { remainingMilliseconds: GRAPHICS_RETENTION_GUARANTEES.trashRecoveryMilliseconds }
-						: {}),
-				},
-			})]);
+			await catalogue.recordGraphicsAssetEvidence([
+				evidence({
+					recordedAt: input.recordedAt,
+					correlationId: generateIdentity(),
+					actor: input.actor,
+					category: `graphic-asset-${input.transition}`,
+					subject: { kind: 'graphic-asset', id: input.assetId },
+					outcome: `graphic-asset-${input.transition}`,
+					reason: input.transition === 'trashed'
+						? 'trash-recovery-window-opened'
+						: input.transition === 'restored'
+							? 'restored-before-recovery-window-elapsed'
+							: 'withdrawn-from-selection',
+					detail: {
+						transition: { from: input.from, to: input.to },
+						...(input.deadline === undefined
+							? {}
+							: { deadline: input.deadline }),
+						...(input.transition === 'trashed'
+							? { remainingMilliseconds: GRAPHICS_RETENTION_GUARANTEES.trashRecoveryMilliseconds }
+							: {}),
+					},
+				}),
+			]);
 		},
 		/**
 		 * Records the revision retention deadlines a publication just established.
@@ -1162,18 +1180,20 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			});
 			if (outcome.outcome === 'not-found' || outcome.outcome === 'not-trashed')
 				return outcome;
-			await catalogue.recordGraphicsAssetEvidence([purgeEvidence({
-				assetId: input.assetId,
-				purgedAt,
-				correlationId,
-				actor: input.actor,
-				reason: 'early-purge',
-				outcome,
-				// An early purge is how an administrator reclaims space under
-				// pressure, so the capacity it was reclaiming against is the first
-				// thing anyone reviewing the decision will want.
-				quotaState: await observeQuotaState(),
-			})]);
+			await catalogue.recordGraphicsAssetEvidence([
+				purgeEvidence({
+					assetId: input.assetId,
+					purgedAt,
+					correlationId,
+					actor: input.actor,
+					reason: 'early-purge',
+					outcome,
+					// An early purge is how an administrator reclaims space under
+					// pressure, so the capacity it was reclaiming against is the first
+					// thing anyone reviewing the decision will want.
+					quotaState: await observeQuotaState(),
+				}),
+			]);
 			return outcome.outcome === 'purged'
 				? {
 						outcome: 'purged' as const,
@@ -1202,15 +1222,17 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			// A sweep beat this action to the zeroing between the read and now.
 			if (released.outcome === 'already-released')
 				return { outcome: 'already-in-state' };
-			await catalogue.recordGraphicsAssetEvidence([strandReleasedEvidence({
-				strand,
-				releasedAt: released.releasedAt,
-				bytesFreed: released.bytesFreed,
-				correlationId: generateIdentity(),
-				reason: 'administrator-retried-release',
-				actor: input.actor,
-				quotaState: await observeQuotaState(),
-			})]);
+			await catalogue.recordGraphicsAssetEvidence([
+				strandReleasedEvidence({
+					strand,
+					releasedAt: released.releasedAt,
+					bytesFreed: released.bytesFreed,
+					correlationId: generateIdentity(),
+					reason: 'administrator-retried-release',
+					actor: input.actor,
+					quotaState: await observeQuotaState(),
+				}),
+			]);
 			return { outcome: 'completed', bytesFreed: released.bytesFreed };
 		},
 		async run(): Promise<GraphicsRetentionSweepResult> {
@@ -1288,7 +1310,9 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			// and the cursor is exclusive, so handing the old one back would skip
 			// the entry the caller is looking at.
 			function positionAt(entry: typeof first) {
-				return entry === undefined ? null : { recordedAt: entry.recordedAt, id: entry.id };
+				return entry === undefined
+					? null
+					: { recordedAt: entry.recordedAt, id: entry.id };
 			}
 			// A purged identity has a tombstone that outlives both the asset and
 			// this Evidence, and an empty ledger for a purged asset means something
@@ -1297,14 +1321,24 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				? await catalogue.findGraphicAssetTombstone(input.subject.id as GraphicAssetId)
 				: undefined;
 			return {
-				...(tombstone === undefined ? {} : { tombstone }),
+				...(tombstone === undefined
+					? {}
+					: { tombstone }),
 				entries,
 				older: travellingNewer
-					? (input.cursor === undefined ? null : positionAt(last))
-					: (beyond ? positionAt(last) : null),
+					? (input.cursor === undefined
+							? null
+							: positionAt(last))
+					: (beyond
+							? positionAt(last)
+							: null),
 				newer: travellingNewer
-					? (beyond ? positionAt(first) : null)
-					: (input.cursor === undefined ? null : positionAt(first)),
+					? (beyond
+							? positionAt(first)
+							: null)
+					: (input.cursor === undefined
+							? null
+							: positionAt(first)),
 			};
 		},
 	};

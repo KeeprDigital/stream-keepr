@@ -62,7 +62,9 @@ export function createEventDataResync(reloaders: EventDataReloaders) {
 	 * It dies with the consumer, so it is never behind.
 	 */
 	function consume(datasets: readonly ConsumedEventData[], reread?: () => unknown) {
-		const named = [...new Set(datasets)];
+		const named = [
+			...new Set(datasets),
+		];
 		if (reread)
 			ownRereads.add(reread);
 		const caughtUp = named.filter(dataset => behind.delete(dataset));

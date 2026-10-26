@@ -137,7 +137,9 @@ export async function findFeatureMatchLayoutTemplateLibraryEntry(
 	// perfectly valid identity — it is simply not an entry in *this* library, and
 	// answering with it would hand a caller a document it cannot place. This is the
 	// read side of the two package kinds being non-interchangeable.
-	return installed?.kind === 'feature-match-layout' ? installedEntry(installed) : undefined;
+	return installed?.kind === 'feature-match-layout'
+		? installedEntry(installed)
+		: undefined;
 }
 
 export function featureMatchLayoutTemplateLibrarySummary(

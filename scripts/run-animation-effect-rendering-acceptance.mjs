@@ -58,7 +58,12 @@ export async function main(argv = process.argv) {
 			// else is how a reader ends up believing a deployed installation was
 			// proven by a run that never left this checkout.
 			if (deployed) {
-				record([{ code: 'harness-precondition-unmet', detail: { reason: 'local-only' } }]);
+				record([
+					{
+						code: 'harness-precondition-unmet',
+						detail: { reason: 'local-only' },
+					},
+				]);
 				return { mode: 'local' };
 			}
 
@@ -94,16 +99,23 @@ export async function main(argv = process.argv) {
 						'timed-out': 'browser-acceptance-timed-out',
 					};
 					const thrown = observed.outcome === 'failed'
-						? { source: 'evaluate', thrown: pageTextEvidence(observed.detail) }
+						? {
+								source: 'evaluate',
+								thrown: pageTextEvidence(observed.detail),
+							}
 						: {};
-					record([{
-						code: outcomes[observed.outcome] ?? 'browser-acceptance-failed',
-						detail: {
-							page: HARNESS,
-							...thrown,
-							...(observed.diagnostics ? pageDiagnosticsEvidence(observed.diagnostics) : {}),
+					record([
+						{
+							code: outcomes[observed.outcome] ?? 'browser-acceptance-failed',
+							detail: {
+								page: HARNESS,
+								...thrown,
+								...(observed.diagnostics
+									? pageDiagnosticsEvidence(observed.diagnostics)
+									: {}),
+							},
 						},
-					}]);
+					]);
 					return { mode: 'local' };
 				}
 
@@ -118,12 +130,23 @@ export async function main(argv = process.argv) {
 					report = JSON.parse(observed.value);
 				}
 				catch {
-					record([{ code: 'animation-effect-page-failed', detail: { source: 'report', ...pageSaid } }]);
+					record([
+						{
+							code: 'animation-effect-page-failed',
+							detail: { source: 'report', ...pageSaid },
+						},
+					]);
 					return { mode: 'local' };
 				}
 
 				record(judgeAnimationEffectReport(report).map(failure => failure.code === 'animation-effect-page-failed'
-					? { ...failure, detail: { ...failure.detail, ...pageSaid } }
+					? {
+							...failure,
+							detail: {
+								...failure.detail,
+								...pageSaid,
+							},
+						}
 					: failure));
 				return {
 					mode: 'local',

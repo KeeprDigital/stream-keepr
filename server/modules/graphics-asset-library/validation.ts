@@ -31,7 +31,9 @@ export function validationError(
 	code: GraphicAssetValidationIssue['code'],
 	message: string,
 ): never {
-	throw new GraphicAssetValidationError([validationIssue(code, message)]);
+	throw new GraphicAssetValidationError([
+		validationIssue(code, message),
+	]);
 }
 
 export function rejectedValidationReport(

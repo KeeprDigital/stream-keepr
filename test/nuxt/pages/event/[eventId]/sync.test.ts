@@ -28,7 +28,9 @@ const mockRoundStore = reactive({
 const mockPhaseStore = reactive({
 	isLoaded: true,
 	loadPhasesByEventId: vi.fn(),
-	getPhaseById: vi.fn((id: number) => (id === 1 ? { id: 1, name: 'Swiss' } : undefined)),
+	getPhaseById: vi.fn((id: number) => (id === 1
+		? { id: 1, name: 'Swiss' }
+		: undefined)),
 	$reset: vi.fn(),
 });
 
@@ -64,18 +66,37 @@ const mockMeleeStore = reactive({
 	$reset: vi.fn(),
 });
 
-const mockPlayerStore = { $reset: vi.fn(), loadPlayersByEventId: vi.fn() };
-const mockNoopStore = { $reset: vi.fn() };
-const mockScreenStore = { ...mockNoopStore, loadScreensByEventId: vi.fn(), screens: [] };
+const mockPlayerStore = {
+	$reset: vi.fn(),
+	loadPlayersByEventId: vi.fn(),
+};
+const mockNoopStore = {
+	$reset: vi.fn(),
+};
+const mockScreenStore = {
+	...mockNoopStore,
+	loadScreensByEventId: vi.fn(),
+	screens: [],
+};
 const mockEventRepo = {
 	listUnresolvedDeckCards: vi.fn(async () => []),
-	resolveUnresolvedDeckCard: vi.fn(async () => ({ success: true, message: 'Resolved card', resolvedCardName: 'Lightning Bolt', unresolvedId: 1, resolvedCount: 1 })),
+	resolveUnresolvedDeckCard: vi.fn(async () => ({
+		success: true,
+		message: 'Resolved card',
+		resolvedCardName: 'Lightning Bolt',
+		unresolvedId: 1,
+		resolvedCount: 1,
+	})),
 };
 
-const mockToast = { add: vi.fn() };
+const mockToast = {
+	add: vi.fn(),
+};
 const mockOverlay = {
 	create: vi.fn(() => ({
-		open: vi.fn(() => ({ result: Promise.resolve(false) })),
+		open: vi.fn(() => ({
+			result: Promise.resolve(false),
+		})),
 	})),
 };
 
@@ -99,7 +120,12 @@ mockNuxtImport('useEventRepository', () => () => mockEventRepo);
 mockNuxtImport('clearPlayerDeckCache', () => vi.fn());
 mockNuxtImport('useToast', () => () => mockToast);
 mockNuxtImport('useOverlay', () => () => mockOverlay);
-mockNuxtImport('useEventPageLoading', () => () => ({ eventId, initialLoading, initialError: ref(null), retry: vi.fn() }));
+mockNuxtImport('useEventPageLoading', () => () => ({
+	eventId,
+	initialLoading,
+	initialError: ref(null),
+	retry: vi.fn(),
+}));
 mockNuxtImport('navigateTo', () => vi.fn());
 
 const NuxtLayoutStub = defineComponent({
@@ -134,7 +160,10 @@ const UButtonStub = defineComponent({
 const USelectMenuStub = defineComponent({
 	props: {
 		disabled: { type: Boolean, required: false },
-		items: { type: Array, default: () => [] },
+		items: {
+			type: Array,
+			default: () => [],
+		},
 	},
 	template: '<select :disabled="disabled"><option v-for="item in items" :key="item.value" :value="item.value">{{ item.label }}</option></select>',
 });
@@ -205,8 +234,26 @@ describe('melee Sync page', () => {
 			lastSyncError: null,
 		};
 		mockRoundStore.rounds = [
-			{ id: 11, phaseId: 1, name: 'Round 1', status: 'active', lastSyncedAt: new Date('2026-04-09T10:15:00.000Z'), externalId: 'melee-11', externalSource: 'melee', controlMode: 'external' },
-			{ id: 12, phaseId: 1, name: 'Round 2', status: 'upcoming', lastSyncedAt: null, externalId: 'melee-12', externalSource: 'melee', controlMode: 'external' },
+			{
+				id: 11,
+				phaseId: 1,
+				name: 'Round 1',
+				status: 'active',
+				lastSyncedAt: new Date('2026-04-09T10:15:00.000Z'),
+				externalId: 'melee-11',
+				externalSource: 'melee',
+				controlMode: 'external',
+			},
+			{
+				id: 12,
+				phaseId: 1,
+				name: 'Round 2',
+				status: 'upcoming',
+				lastSyncedAt: null,
+				externalId: 'melee-12',
+				externalSource: 'melee',
+				controlMode: 'external',
+			},
 		];
 		mockMeleeStore.availableRounds = [...mockRoundStore.rounds];
 		mockMatchStore.matches = [];

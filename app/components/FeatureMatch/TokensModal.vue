@@ -110,7 +110,9 @@ const tokenEntries = computed(() => {
 		}
 	}
 
-	return [...tokenMap.values()]
+	return [
+		...tokenMap.values(),
+	]
 		.map(entry => ({
 			...entry,
 			playerNames: [...entry.playerNames].sort((a, b) => a.localeCompare(b)),

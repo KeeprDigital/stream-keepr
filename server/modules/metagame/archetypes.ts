@@ -112,9 +112,13 @@ export function buildArchetypeBreakdownEntries(
 			name: archetype.name,
 			colors: archetype.colors,
 			count: group.count,
-			metaShare: classifiedPlayers > 0 ? Math.round((group.count / classifiedPlayers) * 10000) / 100 : 0,
+			metaShare: classifiedPlayers > 0
+				? Math.round((group.count / classifiedPlayers) * 10000) / 100
+				: 0,
 			winRate: computeMetagameWinRate(group.wins, group.losses),
-			avgPosition: group.playersWithPosition > 0 ? Math.round((group.totalPosition / group.playersWithPosition) * 10) / 10 : null,
+			avgPosition: group.playersWithPosition > 0
+				? Math.round((group.totalPosition / group.playersWithPosition) * 10) / 10
+				: null,
 			conversionRate: computeConversionRate(group.convertedCount, group.count, conversionTarget),
 			keyCards: keyCardsByArchetypeId.get(archetypeId) ?? [],
 		});

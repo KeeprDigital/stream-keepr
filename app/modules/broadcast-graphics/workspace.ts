@@ -30,7 +30,9 @@ export function resolveSelectedBroadcastGraphicId(
 ): string | null {
 	if (typeof value !== 'string' || value === '')
 		return null;
-	return graphics.some(graphic => graphic.id === value) ? value : null;
+	return graphics.some(graphic => graphic.id === value)
+		? value
+		: null;
 }
 
 export interface BroadcastGraphicsWorkspaceLocation {
@@ -41,7 +43,9 @@ export interface BroadcastGraphicsWorkspaceLocation {
 /** The query patch that addresses one workspace location. */
 export function broadcastGraphicsWorkspaceQuery(location: BroadcastGraphicsWorkspaceLocation) {
 	return {
-		[BROADCAST_GRAPHICS_WORKSPACE_QUERY_KEY]: location.workspace === 'live' ? undefined : location.workspace,
+		[BROADCAST_GRAPHICS_WORKSPACE_QUERY_KEY]: location.workspace === 'live'
+			? undefined
+			: location.workspace,
 		[BROADCAST_GRAPHICS_GRAPHIC_QUERY_KEY]: location.selectedGraphicId ?? undefined,
 	};
 }

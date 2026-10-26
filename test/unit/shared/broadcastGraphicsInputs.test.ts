@@ -59,7 +59,10 @@ function reduce(
 }
 
 function take(state: BroadcastGraphicsLiveState, inputs?: readonly GraphicInputDeclaration[]) {
-	return reduce(state, { type: 'Take', payload: { graphicId: GRAPHIC } }, inputs);
+	return reduce(state, {
+		type: 'Take',
+		payload: { graphicId: GRAPHIC },
+	}, inputs);
 }
 
 function setInput(
@@ -68,7 +71,10 @@ function setInput(
 	value: unknown,
 	inputs?: readonly GraphicInputDeclaration[],
 ) {
-	return reduce(state, { type: 'Set Input', payload: { graphicId: GRAPHIC, inputKey, value } } as BroadcastGraphicsCommandInput, inputs);
+	return reduce(state, {
+		type: 'Set Input',
+		payload: { graphicId: GRAPHIC, inputKey, value },
+	} as BroadcastGraphicsCommandInput, inputs);
 }
 
 function updateGraphic(
@@ -79,7 +85,10 @@ function updateGraphic(
 ) {
 	return reduce(
 		state,
-		{ type: 'Update Graphic', payload: { graphicId: GRAPHIC, cut, basedOnAcceptedRevision } },
+		{
+			type: 'Update Graphic',
+			payload: { graphicId: GRAPHIC, cut, basedOnAcceptedRevision },
+		},
 		inputs,
 	);
 }
@@ -237,7 +246,10 @@ describe('broadcastGraphicsInputs', () => {
 	it('forgets accepted values whose Graphic Input declaration has gone', () => {
 		let state = setInput(createInitialBroadcastGraphicsLiveState(), 'name', 'Ava Reed');
 		state = take(state);
-		state = take(reduce(state, { type: 'Out', payload: { graphicId: GRAPHIC } }), []);
+		state = take(reduce(state, {
+			type: 'Out',
+			payload: { graphicId: GRAPHIC },
+		}), []);
 
 		expect(broadcastGraphicInputsState(state, GRAPHIC).accepted).toEqual({});
 	});
@@ -245,7 +257,10 @@ describe('broadcastGraphicsInputs', () => {
 	it('leaves accepted values alone when the Broadcast Graphic goes off air', () => {
 		let state = setInput(createInitialBroadcastGraphicsLiveState(), 'name', 'Ava Reed');
 		state = take(state);
-		const outed = reduce(state, { type: 'Out', payload: { graphicId: GRAPHIC } });
+		const outed = reduce(state, {
+			type: 'Out',
+			payload: { graphicId: GRAPHIC },
+		});
 
 		expect(acceptedGraphicInputValues(outed, GRAPHIC, [NAME])).toEqual({ name: 'Ava Reed' });
 		expect(broadcastGraphicInputsState(outed, GRAPHIC).acceptedRevision).toBe(1);
@@ -266,7 +281,9 @@ describe('broadcastGraphicsInputs', () => {
 
 		const [trace] = graphicInputTraces(state, GRAPHIC, {
 			inputs: [NAME],
-			bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+			bindings: [
+				{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+			],
 		});
 
 		expect(trace!.working.value).toBe('Ava Reed');
@@ -285,7 +302,9 @@ describe('broadcastGraphicsInputs', () => {
 		let state = take(createInitialBroadcastGraphicsLiveState());
 		state = setInput(state, 'name', 'A'.repeat(50));
 
-		const [trace] = graphicInputTraces(state, GRAPHIC, { inputs: [NAME] });
+		const [trace] = graphicInputTraces(state, GRAPHIC, {
+			inputs: [NAME],
+		});
 
 		expect(trace!.status).toBe('unavailable');
 		expect(trace!.working.availability).toEqual({ available: false, reason: 'Longer than 20 characters' });

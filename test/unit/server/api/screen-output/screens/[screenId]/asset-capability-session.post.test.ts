@@ -28,7 +28,9 @@ vi.mock('~~/server/modules/screen-output-assets/capability', () => ({
 
 vi.mock('~~/server/utils/screenOutputCapabilityAuthorization', () => ({
 	bearerScreenOutputCapability: (value: string | undefined) =>
-		value === undefined ? undefined : value.replace('Bearer ', ''),
+		value === undefined
+			? undefined
+			: value.replace('Bearer ', ''),
 }));
 
 vi.stubGlobal('defineEventHandler', vi.fn(handler => handler));

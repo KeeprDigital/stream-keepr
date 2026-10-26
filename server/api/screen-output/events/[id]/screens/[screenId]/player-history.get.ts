@@ -4,7 +4,9 @@ import { requireScreenOutputModeRead, screenOutputReadNotFound } from '~~/server
 /** The match history of the Player this Screen's Player History mode names (#604). */
 export default defineEventHandler(async (event) => {
 	const { eventId, config: { playerId } } = await requireScreenOutputModeRead(event, 'player-history');
-	const result = playerId ? await findPlayerMatchHistory(eventId, playerId) : null;
+	const result = playerId
+		? await findPlayerMatchHistory(eventId, playerId)
+		: null;
 	if (!result)
 		screenOutputReadNotFound();
 

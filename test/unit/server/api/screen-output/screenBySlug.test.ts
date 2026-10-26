@@ -127,7 +127,10 @@ describe('the Screen lookup by slug', () => {
 
 	it('answers an operator with a session and no capability, for the preview embeds', async () => {
 		mockFindBySlug.mockResolvedValue(screenRow('some-other-screens-digest'));
-		mockOptionalUserSession.mockResolvedValue({ user: { id: 'user-1' }, session: { id: 'session-1' } });
+		mockOptionalUserSession.mockResolvedValue({
+			user: { id: 'user-1' },
+			session: { id: 'session-1' },
+		});
 		const handler = await slugRoute();
 
 		await expect(handler(stubH3Event())).resolves.toMatchObject({ id: 7 });
@@ -139,7 +142,12 @@ describe('the Screen lookup by slug', () => {
 	] as const)('refuses %s with the same 404 a missing Screen gets', async (_case, authorization, hasSession) => {
 		mockFindBySlug.mockResolvedValue(screenRow('some-other-screens-digest'));
 		mockGetRequestHeader.mockReturnValue(authorization);
-		mockOptionalUserSession.mockResolvedValue(hasSession ? { user: { id: 'u' }, session: {} } : null);
+		mockOptionalUserSession.mockResolvedValue(hasSession
+			? {
+					user: { id: 'u' },
+					session: {},
+				}
+			: null);
 		const handler = await slugRoute();
 
 		await expect(handler(stubH3Event())).rejects.toMatchObject({

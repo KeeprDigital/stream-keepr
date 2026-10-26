@@ -31,6 +31,8 @@ export function mapFeatureMatchToResponse(match: DbFeatureMatchWithSession): Fea
 	const mapped = mapTimestamps(match);
 	return {
 		...mapped,
-		activeSession: match.activeSession ? mapFeatureMatchSessionToResponse(match.activeSession) : null,
+		activeSession: match.activeSession
+			? mapFeatureMatchSessionToResponse(match.activeSession)
+			: null,
 	};
 }

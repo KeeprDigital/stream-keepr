@@ -191,7 +191,9 @@ export function useGraphicsTemplateLibrary<Entry extends GraphicsTemplateSummary
 	function askToRemove(templateId: string) {
 		if (!authorises())
 			return;
-		pendingDeleteId.value = pendingDeleteId.value === templateId ? null : templateId;
+		pendingDeleteId.value = pendingDeleteId.value === templateId
+			? null
+			: templateId;
 	}
 
 	function cancelRemove() {
@@ -240,7 +242,9 @@ export function useGraphicsTemplateLibrary<Entry extends GraphicsTemplateSummary
 	/** Finish an operation that has nothing left to ask, and show what it produced. */
 	async function installReceivedPackage(operationId: string) {
 		const installed = await repository.installPackage(operationId);
-		pendingImport.value = installed.stage === 'completed' ? null : installed;
+		pendingImport.value = installed.stage === 'completed'
+			? null
+			: installed;
 		await refresh();
 	}
 

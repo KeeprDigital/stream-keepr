@@ -9,8 +9,12 @@ function isHttpStatus(err: unknown, statusCode: number): boolean {
 	if (typeof err !== 'object' || err === null)
 		return false;
 
-	const statusCodeValue = 'statusCode' in err ? err.statusCode : undefined;
-	const statusValue = 'status' in err ? err.status : undefined;
+	const statusCodeValue = 'statusCode' in err
+		? err.statusCode
+		: undefined;
+	const statusValue = 'status' in err
+		? err.status
+		: undefined;
 	return statusCodeValue === statusCode || statusValue === statusCode;
 }
 

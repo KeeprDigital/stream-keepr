@@ -46,26 +46,114 @@ const secondaryTextStyle = computed(() => {
 });
 
 const archetypeColumnDefinitions: Record<MetagameArchetypeColumnKey, TableColumnDefinition<MetagameArchetypeColumnKey>> = {
-	archetype: { key: 'archetype', label: 'Archetype', width: 'minmax(0, 2.4fr)', cellClass: 'is-name' },
-	count: { key: 'count', label: 'Count', width: '5rem', headerClass: 'is-numeric', cellClass: 'is-numeric is-primary-metric' },
-	metaShare: { key: 'metaShare', label: 'Share', width: '7rem', headerClass: 'is-numeric', cellClass: 'is-numeric is-primary-metric' },
-	winRate: { key: 'winRate', label: 'Win Rate', width: '7rem', headerClass: 'is-numeric', cellClass: 'is-numeric' },
-	avgPlace: { key: 'avgPlace', label: 'Avg Place', width: '7rem', headerClass: 'is-numeric', cellClass: 'is-numeric' },
-	colors: { key: 'colors', label: 'Colors', width: '6rem', headerClass: 'is-center', cellClass: 'is-center' },
+	archetype: {
+		key: 'archetype',
+		label: 'Archetype',
+		width: 'minmax(0, 2.4fr)',
+		cellClass: 'is-name',
+	},
+	count: {
+		key: 'count',
+		label: 'Count',
+		width: '5rem',
+		headerClass: 'is-numeric',
+		cellClass: 'is-numeric is-primary-metric',
+	},
+	metaShare: {
+		key: 'metaShare',
+		label: 'Share',
+		width: '7rem',
+		headerClass: 'is-numeric',
+		cellClass: 'is-numeric is-primary-metric',
+	},
+	winRate: {
+		key: 'winRate',
+		label: 'Win Rate',
+		width: '7rem',
+		headerClass: 'is-numeric',
+		cellClass: 'is-numeric',
+	},
+	avgPlace: {
+		key: 'avgPlace',
+		label: 'Avg Place',
+		width: '7rem',
+		headerClass: 'is-numeric',
+		cellClass: 'is-numeric',
+	},
+	colors: {
+		key: 'colors',
+		label: 'Colors',
+		width: '6rem',
+		headerClass: 'is-center',
+		cellClass: 'is-center',
+	},
 	// Headed 'Conversion', as on the Metagame page's archetype table.
-	conversionRate: { key: 'conversionRate', label: 'Conversion', width: '8rem', headerClass: 'is-numeric', cellClass: 'is-numeric' },
+	conversionRate: {
+		key: 'conversionRate',
+		label: 'Conversion',
+		width: '8rem',
+		headerClass: 'is-numeric',
+		cellClass: 'is-numeric',
+	},
 };
 
 const cardColumnDefinitions: Record<MetagameCardColumnKey, TableColumnDefinition<MetagameCardColumnKey>> = {
-	card: { key: 'card', label: 'Card', width: 'minmax(0, 2.2fr)', cellClass: 'is-name' },
-	manaCost: { key: 'manaCost', label: 'Cost', width: '7rem', headerClass: 'is-center', cellClass: 'is-center' },
+	card: {
+		key: 'card',
+		label: 'Card',
+		width: 'minmax(0, 2.2fr)',
+		cellClass: 'is-name',
+	},
+	manaCost: {
+		key: 'manaCost',
+		label: 'Cost',
+		width: '7rem',
+		headerClass: 'is-center',
+		cellClass: 'is-center',
+	},
 	type: { key: 'type', label: 'Type', width: '8rem' },
-	inclusionRate: { key: 'inclusionRate', label: 'Inclusion', width: '7rem', headerClass: 'is-numeric', cellClass: 'is-numeric is-primary-metric' },
-	avgCopies: { key: 'avgCopies', label: 'Avg Copies', width: '7rem', headerClass: 'is-numeric', cellClass: 'is-numeric is-primary-metric' },
-	totalCopies: { key: 'totalCopies', label: 'Total Copies', width: '7rem', headerClass: 'is-numeric', cellClass: 'is-numeric' },
-	deckCount: { key: 'deckCount', label: 'Decks', width: '6rem', headerClass: 'is-numeric', cellClass: 'is-numeric' },
-	mainboardCount: { key: 'mainboardCount', label: 'Main', width: '6rem', headerClass: 'is-numeric', cellClass: 'is-numeric' },
-	sideboardCount: { key: 'sideboardCount', label: 'Side', width: '6rem', headerClass: 'is-numeric', cellClass: 'is-numeric' },
+	inclusionRate: {
+		key: 'inclusionRate',
+		label: 'Inclusion',
+		width: '7rem',
+		headerClass: 'is-numeric',
+		cellClass: 'is-numeric is-primary-metric',
+	},
+	avgCopies: {
+		key: 'avgCopies',
+		label: 'Avg Copies',
+		width: '7rem',
+		headerClass: 'is-numeric',
+		cellClass: 'is-numeric is-primary-metric',
+	},
+	totalCopies: {
+		key: 'totalCopies',
+		label: 'Total Copies',
+		width: '7rem',
+		headerClass: 'is-numeric',
+		cellClass: 'is-numeric',
+	},
+	deckCount: {
+		key: 'deckCount',
+		label: 'Decks',
+		width: '6rem',
+		headerClass: 'is-numeric',
+		cellClass: 'is-numeric',
+	},
+	mainboardCount: {
+		key: 'mainboardCount',
+		label: 'Main',
+		width: '6rem',
+		headerClass: 'is-numeric',
+		cellClass: 'is-numeric',
+	},
+	sideboardCount: {
+		key: 'sideboardCount',
+		label: 'Side',
+		width: '6rem',
+		headerClass: 'is-numeric',
+		cellClass: 'is-numeric',
+	},
 };
 
 const visibleArchetypeColumns = computed(() =>
@@ -101,7 +189,9 @@ const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('rowsRef'),
 
 const contentStyle = computed(() => ({
 	width: '100%',
-	maxWidth: config.value.maxTableWidth ? `${config.value.maxTableWidth}px` : undefined,
+	maxWidth: config.value.maxTableWidth
+		? `${config.value.maxTableWidth}px`
+		: undefined,
 	marginInline: config.value.maxTableWidth ? 'auto' : undefined,
 }));
 

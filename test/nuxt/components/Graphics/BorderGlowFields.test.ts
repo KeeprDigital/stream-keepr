@@ -14,13 +14,18 @@ import BorderGlowFields from '~/components/Graphics/BorderGlowFields.vue';
 enableAutoUnmount(afterEach);
 
 const UFormFieldStub = defineComponent({
-	props: { label: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+	},
 	template: '<div><span>{{ label }}</span><slot /></div>',
 });
 
 const USwitchStub = defineComponent({
 	name: 'USwitch',
-	props: { modelValue: { type: Boolean, required: false }, disabled: { type: Boolean, required: false } },
+	props: {
+		modelValue: { type: Boolean, required: false },
+		disabled: { type: Boolean, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<button type="button" role="switch" :aria-checked="String(modelValue)" @click="$emit(\'update:modelValue\', !modelValue)" />',
 });
@@ -38,7 +43,9 @@ const UInputNumberStub = defineComponent({
 });
 
 const UButtonStub = defineComponent({
-	props: { label: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" @click="$emit(\'click\')"><slot /></button>',
 });
@@ -50,20 +57,28 @@ const global = {
 		UInputNumber: UInputNumberStub,
 		UIOpacityInput: defineComponent({
 			name: 'UIOpacityInput',
-			props: { modelValue: { type: Number, required: false } },
+			props: {
+				modelValue: { type: Number, required: false },
+			},
 			emits: ['update:modelValue'],
 			template: '<input type="number" :value="modelValue" />',
 		}),
 		UButton: UButtonStub,
 		USelect: defineComponent({
 			name: 'USelect',
-			props: { modelValue: { type: String, required: false }, items: { type: Array, required: false } },
+			props: {
+				modelValue: { type: String, required: false },
+				items: { type: Array, required: false },
+			},
 			emits: ['update:modelValue'],
 			template: '<select />',
 		}),
 		UIColorPicker: defineComponent({
 			name: 'UIColorPicker',
-			props: { modelValue: { type: String, required: false }, hexOnly: { type: Boolean, required: false } },
+			props: {
+				modelValue: { type: String, required: false },
+				hexOnly: { type: Boolean, required: false },
+			},
 			emits: ['update:modelValue'],
 			template: '<button type="button" />',
 		}),
@@ -76,7 +91,12 @@ const glow: GlowFieldsValue = { color: '#ffffff', size: 8, opacity: 0.75 };
 function mountFields(props: Record<string, unknown> = {}, slots: Record<string, unknown> = {}) {
 	return mount(BorderGlowFields, {
 		global,
-		props: { borderLabel: 'Border', border, glow, ...props },
+		props: {
+			borderLabel: 'Border',
+			border,
+			glow,
+			...props,
+		},
 		slots: slots as never,
 	});
 }
@@ -132,7 +152,10 @@ describe('border and glow fields', () => {
 
 		for (const label of ['Border width', 'Glow size']) {
 			const field = input(wrapper, 'UInputNumber', label)!;
-			expect([field.props('min'), field.props('max')]).toEqual([0, 500]);
+			expect([
+				field.props('min'),
+				field.props('max'),
+			]).toEqual([0, 500]);
 		}
 	});
 
@@ -141,15 +164,24 @@ describe('border and glow fields', () => {
 
 		input(wrapper, 'UInputNumber', 'Border width')!.vm.$emit('update:modelValue', 6);
 		await flushPromises();
-		expect(lastEdit(wrapper)).toEqual({ kind: 'border', patch: { width: 6 } });
+		expect(lastEdit(wrapper)).toEqual({
+			kind: 'border',
+			patch: { width: 6 },
+		});
 
 		input(wrapper, 'UInputNumber', 'Glow size')!.vm.$emit('update:modelValue', null);
 		await flushPromises();
-		expect(lastEdit(wrapper)).toEqual({ kind: 'glow', patch: { size: 0 } });
+		expect(lastEdit(wrapper)).toEqual({
+			kind: 'glow',
+			patch: { size: 0 },
+		});
 
 		input(wrapper, 'UIOpacityInput', 'Glow opacity')!.vm.$emit('update:modelValue', 0.4);
 		await flushPromises();
-		expect(lastEdit(wrapper)).toEqual({ kind: 'glow', patch: { opacity: 0.4 } });
+		expect(lastEdit(wrapper)).toEqual({
+			kind: 'glow',
+			patch: { opacity: 0.4 },
+		});
 	});
 
 	it('edits colour with a colour picker, hex-only where the host asks, and clears to undefined', async () => {
@@ -161,11 +193,17 @@ describe('border and glow fields', () => {
 
 		picker.vm.$emit('update:modelValue', '');
 		await flushPromises();
-		expect(lastEdit(wrapper)).toEqual({ kind: 'border', patch: { color: undefined } });
+		expect(lastEdit(wrapper)).toEqual({
+			kind: 'border',
+			patch: { color: undefined },
+		});
 
 		input(wrapper, 'UIColorPicker', 'Glow colour')!.vm.$emit('update:modelValue', '#ff0000');
 		await flushPromises();
-		expect(lastEdit(wrapper)).toEqual({ kind: 'glow', patch: { color: '#ff0000' } });
+		expect(lastEdit(wrapper)).toEqual({
+			kind: 'glow',
+			patch: { color: '#ff0000' },
+		});
 	});
 
 	it('lets the host replace the colour picker through the colour slot', async () => {
@@ -185,13 +223,22 @@ describe('border and glow fields', () => {
 		expect(wrapper.get('[data-testid="palette-glow"]').attributes('aria-label')).toBe('Glow colour');
 
 		await wrapper.get('[data-testid="palette-glow"]').trigger('click');
-		expect(lastEdit(wrapper)).toEqual({ kind: 'glow', patch: { color: 'brand' } });
+		expect(lastEdit(wrapper)).toEqual({
+			kind: 'glow',
+			patch: { color: 'brand' },
+		});
 	});
 
 	it('offers per-side borders only where the host does, a missing side counting as shown', async () => {
 		expect(mountFields().text()).not.toContain('Top');
 
-		const wrapper = mountFields({ perSide: true, border: { ...border, sides: { right: false } } });
+		const wrapper = mountFields({
+			perSide: true,
+			border: {
+				...border,
+				sides: { right: false },
+			},
+		});
 		const sideButton = (label: string) => wrapper.findAll('button').find(button => button.text() === label)!;
 
 		expect(sideButton('Top').attributes('aria-pressed')).toBe('true');
@@ -213,7 +260,10 @@ describe('border and glow fields', () => {
 
 		select.vm.$emit('update:modelValue', 'inside');
 		await flushPromises();
-		expect(lastEdit(wrapper)).toEqual({ kind: 'glow', patch: { position: 'inside' } });
+		expect(lastEdit(wrapper)).toEqual({
+			kind: 'glow',
+			patch: { position: 'inside' },
+		});
 	});
 
 	it('hides the glow while the border is off where the host only glows a border', () => {

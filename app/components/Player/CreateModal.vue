@@ -34,7 +34,9 @@ async function handleSubmit() {
 	const input = toCreatePlayerInput({
 		...formData.value,
 		name,
-		gameData: props.game === 'mtg' ? mtgGameData.value : opGameData.value,
+		gameData: props.game === 'mtg'
+			? mtgGameData.value
+			: opGameData.value,
 	});
 
 	await runRequest(

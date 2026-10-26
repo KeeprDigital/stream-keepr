@@ -1,7 +1,9 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+const { mockApiFetch } = vi.hoisted(() => ({
+	mockApiFetch: vi.fn(),
+}));
 
 mockNuxtImport('$fetch', () => mockApiFetch);
 
@@ -60,7 +62,11 @@ describe('useScreenOutputAccessUrl', () => {
 	});
 
 	it('opens the output in a tab it points only once the capability is in hand', async () => {
-		const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+		const outputWindow = {
+			opener: {} as unknown,
+			location: { href: '' },
+			close: vi.fn(),
+		};
 		vi.stubGlobal('open', vi.fn(() => outputWindow));
 		const { openScreenOutput } = useScreenOutputAccessUrl();
 
@@ -87,7 +93,11 @@ describe('useScreenOutputAccessUrl', () => {
 
 		expect(await openScreenOutput(screen)).toBe('window-blocked');
 
-		const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+		const outputWindow = {
+			opener: {} as unknown,
+			location: { href: '' },
+			close: vi.fn(),
+		};
 		vi.stubGlobal('open', vi.fn(() => outputWindow));
 		mockApiFetch.mockRejectedValue(new Error('unavailable'));
 
@@ -115,7 +125,11 @@ describe('useScreenOutputAccessUrl', () => {
 	 * like a rendered output, and is missing every asset the Screen publishes.
 	 */
 	it('carries the capability into a PNG capture, and answers whether it opened one', async () => {
-		const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+		const outputWindow = {
+			opener: {} as unknown,
+			location: { href: '' },
+			close: vi.fn(),
+		};
 		vi.stubGlobal('open', vi.fn(() => outputWindow));
 		const { screenOutputAccessUrl, openScreenOutput } = useScreenOutputAccessUrl();
 
@@ -131,7 +145,11 @@ describe('useScreenOutputAccessUrl', () => {
 
 	it('closes the tab it opened rather than leaving an output that cannot resolve media', async () => {
 		mockApiFetch.mockRejectedValue(new Error('unavailable'));
-		const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+		const outputWindow = {
+			opener: {} as unknown,
+			location: { href: '' },
+			close: vi.fn(),
+		};
 		vi.stubGlobal('open', vi.fn(() => outputWindow));
 		const { openScreenOutput } = useScreenOutputAccessUrl();
 

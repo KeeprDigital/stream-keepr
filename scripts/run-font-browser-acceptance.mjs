@@ -109,7 +109,10 @@ async function serveLocally() {
 	const file = async (path, type) => ({ body: await readFile(fromRepository(path)), type });
 	return await serveAcceptanceRoutes({
 		[ACCEPTANCE_PATH]: () => file(`public${ACCEPTANCE_PATH}`, 'text/html; charset=utf-8'),
-		[MANIFEST_PATH]: async () => ({ body: JSON.stringify(manifest), type: 'application/json' }),
+		[MANIFEST_PATH]: async () => ({
+			body: JSON.stringify(manifest),
+			type: 'application/json',
+		}),
 		'/fonts/mana.ttf': () => file('public/fonts/mana.ttf', 'font/ttf'),
 		'/fonts/mplantin.woff': () => file('public/fonts/mplantin.woff', 'font/woff'),
 		// Served to be refused: the profile rejects these bytes, and this run is what
@@ -137,7 +140,9 @@ export async function main(argv = process.argv) {
 			// The library face has to be reached from the installation's own origin:
 			// its routes are same-origin and cookie-authorized, so a page served from
 			// loopback could not read them at all.
-			const local = library ? undefined : await serveLocally();
+			const local = library
+				? undefined
+				: await serveLocally();
 			let staged;
 			try {
 				let page;
@@ -166,7 +171,12 @@ export async function main(argv = process.argv) {
 				const verdict = await observeChromiumVerdict(page);
 				record(verdict.outcome === 'passed'
 					? []
-					: [{ code: verdictFailureCode(verdict), detail: { page: HARNESS } }]);
+					: [
+							{
+								code: verdictFailureCode(verdict),
+								detail: { page: HARNESS },
+							},
+						]);
 
 				return {
 					faces: library ? 6 : 5,

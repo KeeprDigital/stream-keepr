@@ -17,7 +17,9 @@ describe('graphic Asset Library discovery query', () => {
 	});
 
 	it('truncates an over-long search term rather than refusing it', () => {
-		const parsed = graphicAssetListQuerySchema.parse({ search: 'a'.repeat(250) });
+		const parsed = graphicAssetListQuerySchema.parse({
+			search: 'a'.repeat(250),
+		});
 
 		expect(parsed.search).toBe('a'.repeat(200));
 	});

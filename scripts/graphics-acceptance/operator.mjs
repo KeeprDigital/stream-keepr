@@ -58,7 +58,9 @@ const BOOTSTRAP_TOKEN_HEADER = 'x-admin-bootstrap-token';
 
 /** A value the environment can actually supply, or undefined. */
 function usable(value) {
-	return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+	return typeof value === 'string' && value.trim().length > 0
+		? value
+		: undefined;
 }
 
 /**
@@ -84,9 +86,17 @@ export function operatorCredentialPlan({ deployed = false, env = {}, supplied = 
 		return { kind: 'sign-in', email, password };
 
 	const bootstrapToken = usable(env[BOOTSTRAP_TOKEN_NAME])
-		?? (deployed ? undefined : usable(supplied[BOOTSTRAP_TOKEN_NAME]));
-	if (bootstrapToken)
-		return { kind: 'bootstrap', email: HARNESS_OPERATOR_EMAIL, password: newPassword, bootstrapToken };
+		?? (deployed
+			? undefined
+			: usable(supplied[BOOTSTRAP_TOKEN_NAME]));
+	if (bootstrapToken) {
+		return {
+			kind: 'bootstrap',
+			email: HARNESS_OPERATOR_EMAIL,
+			password: newPassword,
+			bootstrapToken,
+		};
+	}
 
 	// Prose first, then the code, exactly as the local-configuration preflight
 	// does it: the reader needs the two names, and the detail a formatter will
@@ -147,7 +157,13 @@ export function operatorUnavailableNotice({ deployed = false } = {}) {
 export function isLoopbackOrigin(origin) {
 	try {
 		const { hostname } = new URL(origin);
-		return ['127.0.0.1', 'localhost', '::1', '[::1]', '0.0.0.0'].includes(hostname);
+		return [
+			'127.0.0.1',
+			'localhost',
+			'::1',
+			'[::1]',
+			'0.0.0.0',
+		].includes(hostname);
 	}
 	catch {
 		return false;
@@ -218,7 +234,12 @@ async function postJson(origin, path, body, headers = {}) {
  * @param {{ deployed?: boolean, env?: Record<string, string | undefined>, supplied?: Record<string, string | undefined> }} options
  */
 export async function openOperatorSession(origin, { deployed = false, env = process.env, supplied = {} } = {}) {
-	const plan = operatorCredentialPlan({ deployed, env, supplied, newPassword: newOperatorPassword() });
+	const plan = operatorCredentialPlan({
+		deployed,
+		env,
+		supplied,
+		newPassword: newOperatorPassword(),
+	});
 
 	if (plan.kind === 'bootstrap') {
 		const armed = await postJson(
@@ -273,6 +294,8 @@ export async function openOperatorSessionForOrigin(origin) {
 	const local = isLoopbackOrigin(origin);
 	return await openOperatorSession(origin, {
 		deployed: !local,
-		supplied: local ? suppliedNames(readLocalConfigurationFiles()) : {},
+		supplied: local
+			? suppliedNames(readLocalConfigurationFiles())
+			: {},
 	});
 }

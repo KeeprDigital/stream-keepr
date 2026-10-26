@@ -72,9 +72,17 @@ export function useGraphicAssetFontFaces(
 			.filter(item => item.kind === 'font')
 			.map(({ reference }) => {
 				const family = graphicAssetFontFaceFamily(reference);
-				return [family, { family, url: contentUrl(reference) }] as const;
+				return [
+					family,
+					{
+						family,
+						url: contentUrl(reference),
+					},
+				] as const;
 			}));
-		return [...byFamily.values()];
+		return [
+			...byFamily.values(),
+		];
 	});
 
 	/**
@@ -101,7 +109,9 @@ export function useGraphicAssetFontFaces(
 		// reordering a stack is not a change. The URL is part of the key because the
 		// same family resolved through a different Screen Output Asset Capability is
 		// different bytes to fetch.
-		`${toValue(contentUrlsSettled) ? 'settled' : 'unsettled'}${sourceKey(sources.value)}`);
+		`${toValue(contentUrlsSettled)
+			? 'settled'
+			: 'unsettled'}${sourceKey(sources.value)}`);
 
 	watch(loadKey, async () => {
 		const settled = toValue(contentUrlsSettled);

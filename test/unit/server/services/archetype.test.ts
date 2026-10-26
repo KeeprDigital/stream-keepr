@@ -54,7 +54,10 @@ describe('archetypeService', () => {
 
 	describe('findManyByIds', () => {
 		it('deduplicates IDs and scopes the lookup to the event', async () => {
-			const rows = [createMockArchetype({ id: 1 }), createMockArchetype({ id: 2 })];
+			const rows = [
+				createMockArchetype({ id: 1 }),
+				createMockArchetype({ id: 2 }),
+			];
 			getChain('select').where.mockResolvedValue(rows);
 
 			await expect(archetypeService().findManyByIds(3, [1, 2, 1])).resolves.toEqual(rows);

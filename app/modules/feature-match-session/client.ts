@@ -87,32 +87,70 @@ function buildStateUpdateCommands(update: FeatureMatchStateUpdate): FeatureMatch
 		const patch = update[player];
 		if (!patch)
 			continue;
-		if (patch.lifeTotal !== undefined)
-			commands.push({ type: 'SetLife', payload: { player, lifeTotal: patch.lifeTotal } });
-		if (patch.counters !== undefined)
-			commands.push({ type: 'SetCounters', payload: { player, counters: patch.counters } });
-		if (patch.cardsKept !== undefined)
-			commands.push({ type: 'SetCardsKept', payload: { player, cardsKept: patch.cardsKept } });
-		if (patch.sideboardRevealed !== undefined)
-			commands.push({ type: 'SetSideboardRevealed', payload: { player, revealed: patch.sideboardRevealed } });
+		if (patch.lifeTotal !== undefined) {
+			commands.push({
+				type: 'SetLife',
+				payload: { player, lifeTotal: patch.lifeTotal },
+			});
+		}
+		if (patch.counters !== undefined) {
+			commands.push({
+				type: 'SetCounters',
+				payload: { player, counters: patch.counters },
+			});
+		}
+		if (patch.cardsKept !== undefined) {
+			commands.push({
+				type: 'SetCardsKept',
+				payload: { player, cardsKept: patch.cardsKept },
+			});
+		}
+		if (patch.sideboardRevealed !== undefined) {
+			commands.push({
+				type: 'SetSideboardRevealed',
+				payload: { player, revealed: patch.sideboardRevealed },
+			});
+		}
 	}
 
-	if (update.clock !== undefined)
-		commands.push({ type: 'SetClock', payload: { targetMs: update.clock.targetDisplayMs } });
+	if (update.clock !== undefined) {
+		commands.push({
+			type: 'SetClock',
+			payload: { targetMs: update.clock.targetDisplayMs },
+		});
+	}
 
 	const { firstPlayer, activePlayer, turnNumber } = update;
 	const selectsInitialFirstPlayer = firstPlayer !== undefined && activePlayer === firstPlayer && turnNumber === 1;
 	if (firstPlayer) {
 		commands.push(selectsInitialFirstPlayer
-			? { type: 'SelectFirstPlayer', payload: { player: firstPlayer } }
-			: { type: 'SetFirstPlayer', payload: { player: firstPlayer } });
+			? {
+					type: 'SelectFirstPlayer',
+					payload: { player: firstPlayer },
+				}
+			: {
+					type: 'SetFirstPlayer',
+					payload: { player: firstPlayer },
+				});
 	}
-	if (activePlayer !== undefined && !selectsInitialFirstPlayer)
-		commands.push({ type: 'SetActivePlayer', payload: { player: activePlayer } });
-	if (turnNumber !== undefined && !selectsInitialFirstPlayer)
-		commands.push({ type: 'SetTurnNumber', payload: { turnNumber } });
-	if (update.overtime !== undefined)
-		commands.push({ type: 'StartOvertime', payload: { totalTurns: update.overtime.totalTurns } });
+	if (activePlayer !== undefined && !selectsInitialFirstPlayer) {
+		commands.push({
+			type: 'SetActivePlayer',
+			payload: { player: activePlayer },
+		});
+	}
+	if (turnNumber !== undefined && !selectsInitialFirstPlayer) {
+		commands.push({
+			type: 'SetTurnNumber',
+			payload: { turnNumber },
+		});
+	}
+	if (update.overtime !== undefined) {
+		commands.push({
+			type: 'StartOvertime',
+			payload: { totalTurns: update.overtime.totalTurns },
+		});
+	}
 
 	return commands;
 }
@@ -125,17 +163,41 @@ function createBulkClockCommand(
 ): FeatureMatchSessionCommand | null {
 	switch (action) {
 		case 'start':
-			return { commandId, type: 'StartClock', payload: {}, baseSequence: session.sequence };
+			return {
+				commandId,
+				type: 'StartClock',
+				payload: {},
+				baseSequence: session.sequence,
+			};
 		case 'pause':
-			return { commandId, type: 'PauseClock', payload: {}, baseSequence: session.sequence };
+			return {
+				commandId,
+				type: 'PauseClock',
+				payload: {},
+				baseSequence: session.sequence,
+			};
 		case 'reset':
-			return { commandId, type: 'ResetClock', payload: {}, baseSequence: session.sequence };
+			return {
+				commandId,
+				type: 'ResetClock',
+				payload: {},
+				baseSequence: session.sequence,
+			};
 		case 'restart':
-			return { commandId, type: 'RestartClock', payload: {}, baseSequence: session.sequence };
+			return {
+				commandId,
+				type: 'RestartClock',
+				payload: {},
+				baseSequence: session.sequence,
+			};
 		case 'adjust':
 			return deltaMs === undefined
 				? null
-				: { commandId, type: 'AdjustClock', payload: { deltaMs } };
+				: {
+						commandId,
+						type: 'AdjustClock',
+						payload: { deltaMs },
+					};
 	}
 }
 
@@ -198,8 +260,17 @@ export function useFeatureMatchSessionClient() {
 			return sessionStateResult(session);
 
 		const command: FeatureMatchSessionCommand = commands.length === 1
-			? { ...commands[0]!, commandId: randomCommandId(commands[0]!.type), baseSequence: session.sequence }
-			: { commandId: randomCommandId('Batch'), type: 'Batch', payload: { commands }, baseSequence: session.sequence };
+			? {
+					...commands[0]!,
+					commandId: randomCommandId(commands[0]!.type),
+					baseSequence: session.sequence,
+				}
+			: {
+					commandId: randomCommandId('Batch'),
+					type: 'Batch',
+					payload: { commands },
+					baseSequence: session.sequence,
+				};
 
 		return toCommandStateResult(await repository.sendCommand(eventId, session.id, command));
 	};

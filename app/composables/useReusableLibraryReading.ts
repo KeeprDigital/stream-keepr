@@ -118,5 +118,12 @@ export function useReusableLibraryReading<Entry>(options: {
 		void refresh();
 	});
 
-	return { entries, loading, error, signedOut: authorship.signedOut, failureMessage, refresh };
+	return {
+		entries,
+		loading,
+		error,
+		signedOut: authorship.signedOut,
+		failureMessage,
+		refresh,
+	};
 }

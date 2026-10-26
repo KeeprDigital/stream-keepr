@@ -36,7 +36,10 @@ function chooseDeterministically(
 
 function orderedFormats(selection: MatchDeckSelection): string[] {
 	const formats: string[] = [];
-	for (const value of [...(selection.formatExternalIds ?? []), selection.formatExternalId]) {
+	for (const value of [
+		...(selection.formatExternalIds ?? []),
+		selection.formatExternalId,
+	]) {
 		if (value && !formats.includes(value))
 			formats.push(value);
 	}
@@ -109,9 +112,13 @@ export function applyMatchDeckSnapshot(
 		return {
 			...base,
 			deckId: deck.id,
-			archetypeId: hasReviewedPlayerDeckDetails(deck, archetype) ? deck.archetypeId : null,
+			archetypeId: hasReviewedPlayerDeckDetails(deck, archetype)
+				? deck.archetypeId
+				: null,
 			gameData: {
-				...(base.gameData?.type === 'mtg' ? base.gameData : {}),
+				...(base.gameData?.type === 'mtg'
+					? base.gameData
+					: {}),
 				type: 'mtg',
 				deckName: details.name,
 				deckColors: details.colors,

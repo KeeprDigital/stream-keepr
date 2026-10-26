@@ -110,8 +110,18 @@ describe('playerFeatureMatchSyncService', () => {
 			const player = createMockPlayer({ id: 5, name: 'Updated Name' });
 			mockRefreshReads({
 				matches: [
-					{ id: 1, eventId: 1, player1Id: 5, player2Id: 10 },
-					{ id: 2, eventId: 1, player1Id: 20, player2Id: 5 },
+					{
+						id: 1,
+						eventId: 1,
+						player1Id: 5,
+						player2Id: 10,
+					},
+					{
+						id: 2,
+						eventId: 1,
+						player1Id: 20,
+						player2Id: 5,
+					},
 				],
 				players: [player],
 			});
@@ -125,7 +135,14 @@ describe('playerFeatureMatchSyncService', () => {
 
 		it('returns empty when player not found', async () => {
 			mockRefreshReads({
-				matches: [{ id: 1, eventId: 1, player1Id: 999, player2Id: null }],
+				matches: [
+					{
+						id: 1,
+						eventId: 1,
+						player1Id: 999,
+						player2Id: null,
+					},
+				],
 				players: [],
 			});
 
@@ -149,13 +166,43 @@ describe('playerFeatureMatchSyncService', () => {
 				gameData: { type: 'mtg', deckName: 'Primary Import', deckColors: 'R' },
 			});
 			mockRefreshReads({
-				matches: [{ id: 1, eventId: 1, player1Id: 5, player2Id: 10, formatExternalId: 'standard' }],
+				matches: [
+					{
+						id: 1,
+						eventId: 1,
+						player1Id: 5,
+						player2Id: 10,
+						formatExternalId: 'standard',
+					},
+				],
 				players: [player],
 				decks: [
-					{ id: 10, playerId: 5, formatExternalId: 'modern', name: 'Primary Import', colors: 'R', isPrimary: true, sortOrder: 0, archetypeId: null, reviewedAt: null },
-					{ id: 20, playerId: 5, formatExternalId: 'standard', name: 'Secondary Import', colors: 'U', isPrimary: false, sortOrder: 1, archetypeId: 7, reviewedAt },
+					{
+						id: 10,
+						playerId: 5,
+						formatExternalId: 'modern',
+						name: 'Primary Import',
+						colors: 'R',
+						isPrimary: true,
+						sortOrder: 0,
+						archetypeId: null,
+						reviewedAt: null,
+					},
+					{
+						id: 20,
+						playerId: 5,
+						formatExternalId: 'standard',
+						name: 'Secondary Import',
+						colors: 'U',
+						isPrimary: false,
+						sortOrder: 1,
+						archetypeId: 7,
+						reviewedAt,
+					},
 				],
-				archetypes: [{ id: 7, name: 'Reviewed Control', colors: 'WU' }],
+				archetypes: [
+					{ id: 7, name: 'Reviewed Control', colors: 'WU' },
+				],
 			});
 
 			await playerFeatureMatchSyncService().syncMatchesFromPlayers(1, [5]);
@@ -177,20 +224,52 @@ describe('playerFeatureMatchSyncService', () => {
 				gameData: { type: 'mtg', deckName: 'Primary Import', deckColors: 'R' },
 			});
 			mockRefreshReads({
-				matches: [{
-					id: 1,
-					eventId: 1,
-					player1Id: 5,
-					player2Id: 10,
-					player1Data: { name: 'Alice', deckId: 30 },
-					player2Data: null,
-					formatExternalId: 'standard',
-				}],
+				matches: [
+					{
+						id: 1,
+						eventId: 1,
+						player1Id: 5,
+						player2Id: 10,
+						player1Data: { name: 'Alice', deckId: 30 },
+						player2Data: null,
+						formatExternalId: 'standard',
+					},
+				],
 				players: [player],
 				decks: [
-					{ id: 20, playerId: 5, formatExternalId: 'standard', name: 'First Standard', colors: 'U', sortOrder: 0, isPrimary: false, archetypeId: null, reviewedAt: null },
-					{ id: 30, playerId: 5, formatExternalId: 'standard', name: 'Exact Standard', colors: 'G', sortOrder: 1, isPrimary: false, archetypeId: null, reviewedAt: null },
-					{ id: 10, playerId: 5, formatExternalId: 'modern', name: 'Primary Import', colors: 'R', sortOrder: 0, isPrimary: true, archetypeId: null, reviewedAt: null },
+					{
+						id: 20,
+						playerId: 5,
+						formatExternalId: 'standard',
+						name: 'First Standard',
+						colors: 'U',
+						sortOrder: 0,
+						isPrimary: false,
+						archetypeId: null,
+						reviewedAt: null,
+					},
+					{
+						id: 30,
+						playerId: 5,
+						formatExternalId: 'standard',
+						name: 'Exact Standard',
+						colors: 'G',
+						sortOrder: 1,
+						isPrimary: false,
+						archetypeId: null,
+						reviewedAt: null,
+					},
+					{
+						id: 10,
+						playerId: 5,
+						formatExternalId: 'modern',
+						name: 'Primary Import',
+						colors: 'R',
+						sortOrder: 0,
+						isPrimary: true,
+						archetypeId: null,
+						reviewedAt: null,
+					},
 				],
 			});
 
@@ -213,22 +292,34 @@ describe('playerFeatureMatchSyncService', () => {
 				gameData: { type: 'mtg', deckName: 'Primary Import', deckColors: 'R' },
 			});
 			mockRefreshReads({
-				matches: [{
-					id: 1,
-					eventId: 1,
-					player1Id: 5,
-					player2Id: null,
-					player1Data: {
-						name: 'Alice',
-						deckId: null,
-						archetypeId: null,
-						gameData: { type: 'mtg', deckName: null, deckColors: null },
+				matches: [
+					{
+						id: 1,
+						eventId: 1,
+						player1Id: 5,
+						player2Id: null,
+						player1Data: {
+							name: 'Alice',
+							deckId: null,
+							archetypeId: null,
+							gameData: { type: 'mtg', deckName: null, deckColors: null },
+						},
+						formatExternalId: 'standard',
 					},
-					formatExternalId: 'standard',
-				}],
+				],
 				players: [player],
 				decks: [
-					{ id: 20, playerId: 5, formatExternalId: 'standard', name: 'Standard Deck', colors: 'U', sortOrder: 0, isPrimary: false, archetypeId: null, reviewedAt: null },
+					{
+						id: 20,
+						playerId: 5,
+						formatExternalId: 'standard',
+						name: 'Standard Deck',
+						colors: 'U',
+						sortOrder: 0,
+						isPrimary: false,
+						archetypeId: null,
+						reviewedAt: null,
+					},
 				],
 			});
 
@@ -250,22 +341,34 @@ describe('playerFeatureMatchSyncService', () => {
 				gameData: { type: 'mtg', deckName: 'Current Primary', deckColors: 'R' },
 			});
 			mockRefreshReads({
-				matches: [{
-					id: 1,
-					eventId: 1,
-					player1Id: 5,
-					player2Id: null,
-					player1Data: {
-						name: 'Alice',
-						deckId: 99,
-						archetypeId: 8,
-						gameData: historicalGameData,
+				matches: [
+					{
+						id: 1,
+						eventId: 1,
+						player1Id: 5,
+						player2Id: null,
+						player1Data: {
+							name: 'Alice',
+							deckId: 99,
+							archetypeId: 8,
+							gameData: historicalGameData,
+						},
+						formatExternalId: 'standard',
 					},
-					formatExternalId: 'standard',
-				}],
+				],
 				players: [player],
 				decks: [
-					{ id: 20, playerId: 5, formatExternalId: 'standard', name: 'New Standard', colors: 'U', sortOrder: 0, isPrimary: false, archetypeId: null, reviewedAt: null },
+					{
+						id: 20,
+						playerId: 5,
+						formatExternalId: 'standard',
+						name: 'New Standard',
+						colors: 'U',
+						sortOrder: 0,
+						isPrimary: false,
+						archetypeId: null,
+						reviewedAt: null,
+					},
 				],
 			});
 
@@ -300,22 +403,54 @@ describe('playerFeatureMatchSyncService', () => {
 			const aliceHistorical = { type: 'mtg' as const, deckName: 'Alice Historical', deckColors: 'G' };
 			const bobHistorical = { type: 'mtg' as const, deckName: 'Bob Historical', deckColors: 'W' };
 			mockRefreshReads({
-				matches: [{
-					id: 1,
-					eventId: 1,
-					player1Id: 5,
-					player2Id: 6,
-					player1Data: { name: 'Alice', deckId: 99, archetypeId: 8, gameData: aliceHistorical },
-					player2Data: { name: 'Bob', deckId: 77, archetypeId: 3, gameData: bobHistorical },
-					formatExternalId: 'standard',
-				}],
+				matches: [
+					{
+						id: 1,
+						eventId: 1,
+						player1Id: 5,
+						player2Id: 6,
+						player1Data: {
+							name: 'Alice',
+							deckId: 99,
+							archetypeId: 8,
+							gameData: aliceHistorical,
+						},
+						player2Data: {
+							name: 'Bob',
+							deckId: 77,
+							archetypeId: 3,
+							gameData: bobHistorical,
+						},
+						formatExternalId: 'standard',
+					},
+				],
 				players: [
 					createMockPlayer({ id: 5, name: 'Alice' }),
 					createMockPlayer({ id: 6, name: 'Bob' }),
 				],
 				decks: [
-					{ id: 20, playerId: 5, formatExternalId: 'standard', name: 'New Standard', colors: 'U', sortOrder: 0, isPrimary: false, archetypeId: null, reviewedAt: null },
-					{ id: 21, playerId: 6, formatExternalId: 'standard', name: 'Other Standard', colors: 'B', sortOrder: 0, isPrimary: false, archetypeId: null, reviewedAt: null },
+					{
+						id: 20,
+						playerId: 5,
+						formatExternalId: 'standard',
+						name: 'New Standard',
+						colors: 'U',
+						sortOrder: 0,
+						isPrimary: false,
+						archetypeId: null,
+						reviewedAt: null,
+					},
+					{
+						id: 21,
+						playerId: 6,
+						formatExternalId: 'standard',
+						name: 'Other Standard',
+						colors: 'B',
+						sortOrder: 0,
+						isPrimary: false,
+						archetypeId: null,
+						reviewedAt: null,
+					},
 				],
 			});
 
@@ -325,8 +460,18 @@ describe('playerFeatureMatchSyncService', () => {
 			// last, so each side's own preserved identity is the discriminator.
 			const snapshot = mockFeatureMatchStateService.buildSourceSnapshot.mock.calls[0]![0];
 			expect(snapshot).toEqual(expect.objectContaining({
-				player1Data: expect.objectContaining({ name: 'Alice', deckId: 99, archetypeId: 8, gameData: aliceHistorical }),
-				player2Data: expect.objectContaining({ name: 'Bob', deckId: 77, archetypeId: 3, gameData: bobHistorical }),
+				player1Data: expect.objectContaining({
+					name: 'Alice',
+					deckId: 99,
+					archetypeId: 8,
+					gameData: aliceHistorical,
+				}),
+				player2Data: expect.objectContaining({
+					name: 'Bob',
+					deckId: 77,
+					archetypeId: 3,
+					gameData: bobHistorical,
+				}),
 			}));
 			expect(snapshot.player1Data).not.toBe(snapshot.player2Data);
 		});
@@ -343,21 +488,39 @@ describe('playerFeatureMatchSyncService', () => {
 			const player1 = createMockPlayer({ id: 1 });
 			const player2 = createMockPlayer({ id: 2 });
 			mockRefreshReads({
-				matches: [{ id: 1, eventId: 1, player1Id: 1, player2Id: 2 }],
+				matches: [
+					{
+						id: 1,
+						eventId: 1,
+						player1Id: 1,
+						player2Id: 2,
+					},
+				],
 				players: [player1, player2],
 			});
 
 			const result = await playerFeatureMatchSyncService().syncMatchesFromPlayers(1, [1, 2, 1]);
 
-			const unique = [...new Set(result)];
+			const unique = [
+				...new Set(result),
+			];
 			expect(unique.length).toBe(result.length);
 		});
 
 		it('corrects active session snapshots after updating stored player data', async () => {
 			const sourceSnapshot = { eventId: 1, slotId: 1 };
 			mockRefreshReads({
-				matches: [{ id: 1, eventId: 1, player1Id: 1, player2Id: 2 }],
-				players: [createMockPlayer({ id: 1 })],
+				matches: [
+					{
+						id: 1,
+						eventId: 1,
+						player1Id: 1,
+						player2Id: 2,
+					},
+				],
+				players: [
+					createMockPlayer({ id: 1 }),
+				],
 			});
 			mockFeatureMatchStateService.buildSourceSnapshot.mockResolvedValue(sourceSnapshot);
 
@@ -381,8 +544,17 @@ describe('playerFeatureMatchSyncService', () => {
 				const conflict = new Error('Feature match session has advanced') as Error & { statusCode: number };
 				conflict.statusCode = 409;
 				mockRefreshReads({
-					matches: [{ id: 1, eventId: 1, player1Id: 1, player2Id: null }],
-					players: [createMockPlayer({ id: 1, name: 'Renamed Player' })],
+					matches: [
+						{
+							id: 1,
+							eventId: 1,
+							player1Id: 1,
+							player2Id: null,
+						},
+					],
+					players: [
+						createMockPlayer({ id: 1, name: 'Renamed Player' }),
+					],
 				});
 				mockFeatureMatchStateService.applyCommandToActiveSession.mockRejectedValueOnce(conflict);
 				const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -398,8 +570,17 @@ describe('playerFeatureMatchSyncService', () => {
 
 			it('still fails on a fault, which is not a race the caller may absorb', async () => {
 				mockRefreshReads({
-					matches: [{ id: 1, eventId: 1, player1Id: 1, player2Id: null }],
-					players: [createMockPlayer({ id: 1, name: 'Renamed Player' })],
+					matches: [
+						{
+							id: 1,
+							eventId: 1,
+							player1Id: 1,
+							player2Id: null,
+						},
+					],
+					players: [
+						createMockPlayer({ id: 1, name: 'Renamed Player' }),
+					],
 				});
 				mockFeatureMatchStateService.applyCommandToActiveSession
 					.mockRejectedValueOnce(new Error('D1_ERROR: no such table: feature_match_sessions'));
@@ -412,8 +593,17 @@ describe('playerFeatureMatchSyncService', () => {
 
 		it('leaves slot snapshots retryable when active-session correction fails', async () => {
 			const readOptions = {
-				matches: [{ id: 1, eventId: 1, player1Id: 1, player2Id: null }],
-				players: [createMockPlayer({ id: 1, name: 'Updated Player' })],
+				matches: [
+					{
+						id: 1,
+						eventId: 1,
+						player1Id: 1,
+						player2Id: null,
+					},
+				],
+				players: [
+					createMockPlayer({ id: 1, name: 'Updated Player' }),
+				],
 			};
 			mockRefreshReads(readOptions);
 			mockFeatureMatchStateService.applyCommandToActiveSession.mockRejectedValueOnce(new Error('session CAS failed'));
@@ -463,7 +653,15 @@ describe('playerFeatureMatchSyncService', () => {
 				deckId: null,
 			};
 			mockRefreshReads({
-				matches: [{ id: 1, eventId: 1, player1Id: 1, player2Id: null, player1Data }],
+				matches: [
+					{
+						id: 1,
+						eventId: 1,
+						player1Id: 1,
+						player2Id: null,
+						player1Data,
+					},
+				],
 				players: [player],
 			});
 

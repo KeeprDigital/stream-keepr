@@ -22,7 +22,10 @@ const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
 
 function layoutWith(items: (composition: FeatureMatchLayoutConfig['composition']) => FeatureMatchLayoutConfig['composition']): FeatureMatchLayoutConfig {
 	const layout = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG).layout;
-	return { ...layout, composition: items({ ...layout.composition, items: [] }) };
+	return {
+		...layout,
+		composition: items({ ...layout.composition, items: [] }),
+	};
 }
 
 function group(layout: FeatureMatchLayoutConfig): GraphicGroupItemConfig {
@@ -80,11 +83,21 @@ describe('feature match layout editor selection', () => {
 		const source = layout.sources.find(item => item.id === 'main-source')!;
 
 		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'title' })).toEqual({
-			rect: { x: title.x, y: title.y, width: title.width, height: title.height },
+			rect: {
+				x: title.x,
+				y: title.y,
+				width: title.width,
+				height: title.height,
+			},
 			origin: { x: 0, y: 0 },
 		});
 		expect(editorSelectionFrame(layout, { type: 'source', itemId: 'main-source' })?.rect)
-			.toEqual({ x: source.x, y: source.y, width: source.width, height: source.height });
+			.toEqual({
+				x: source.x,
+				y: source.y,
+				width: source.width,
+				height: source.height,
+			});
 		expect(editorSelectionFrame(layout, { type: 'canvas' })).toBeNull();
 	});
 
@@ -93,8 +106,20 @@ describe('feature match layout editor selection', () => {
 			addGraphicItem(composition, { kind: 'group', id: 'cluster', ...CANVAS }).graphic,
 			{ kind: 'shape', groupId: 'cluster', id: 'child' },
 		).graphic);
-		const cluster = { ...group(layout), arrangement: 'canvas' as const, padding: 4, x: 50, y: 60 };
-		layout = { ...layout, composition: { ...layout.composition, items: [cluster] } };
+		const cluster = {
+			...group(layout),
+			arrangement: 'canvas' as const,
+			padding: 4,
+			x: 50,
+			y: 60,
+		};
+		layout = {
+			...layout,
+			composition: {
+				...layout.composition,
+				items: [cluster],
+			},
+		};
 
 		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'child' })?.origin).toEqual({ x: 54, y: 64 });
 	});
@@ -104,7 +129,18 @@ describe('feature match layout editor selection', () => {
 			addGraphicItem(composition, { kind: 'group', id: 'cluster', ...CANVAS }).graphic,
 			{ kind: 'shape', groupId: 'cluster', id: 'child' },
 		).graphic);
-		layout = { ...layout, composition: { ...layout.composition, items: [{ ...group(layout), arrangement: 'row' }] } };
+		layout = {
+			...layout,
+			composition: {
+				...layout.composition,
+				items: [
+					{
+						...group(layout),
+						arrangement: 'row',
+					},
+				],
+			},
+		};
 		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'child' })).toBeNull();
 
 		const rotated = layoutWith(composition => addGraphicItem(composition, { kind: 'text', id: 'title', ...CANVAS }).graphic);

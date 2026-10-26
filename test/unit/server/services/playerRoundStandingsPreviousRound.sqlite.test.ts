@@ -20,7 +20,12 @@ let eventId: number;
 let otherEventId: number;
 let otherRoundId: number;
 const players: Record<'alpha' | 'beta' | 'gamma', number> = { alpha: 0, beta: 0, gamma: 0 };
-const roundIds: Record<'day1r1' | 'day1r2' | 'day1r3' | 'day2r1', number> = { day1r1: 0, day1r2: 0, day1r3: 0, day2r1: 0 };
+const roundIds: Record<'day1r1' | 'day1r2' | 'day1r3' | 'day2r1', number> = {
+	day1r1: 0,
+	day1r2: 0,
+	day1r3: 0,
+	day2r1: 0,
+};
 
 async function insertEvent(name: string) {
 	const [event] = await db.insert(schema.events)
@@ -38,14 +43,24 @@ async function insertPhase(forEvent: number, name: string, sortOrder: number) {
 
 async function insertRound(forEvent: number, phaseId: number, roundNumber: number) {
 	const [round] = await db.insert(schema.rounds)
-		.values({ eventId: forEvent, phaseId, name: `Round ${roundNumber}`, roundNumber })
+		.values({
+			eventId: forEvent,
+			phaseId,
+			name: `Round ${roundNumber}`,
+			roundNumber,
+		})
 		.returning({ id: schema.rounds.id });
 	return round!.id;
 }
 
 async function insertStandings(forEvent: number, roundId: number, positions: Array<[playerId: number, position: number | null]>) {
 	await db.insert(schema.playerRoundStandings)
-		.values(positions.map(([playerId, position]) => ({ eventId: forEvent, playerId, roundId, position })));
+		.values(positions.map(([playerId, position]) => ({
+			eventId: forEvent,
+			playerId,
+			roundId,
+			position,
+		})));
 }
 
 beforeAll(async () => {
@@ -65,16 +80,29 @@ beforeAll(async () => {
 	// A Round with no Round Standings, such as a manual one.
 	roundIds.day1r2 = await insertRound(eventId, day1, 2);
 
-	await insertStandings(eventId, roundIds.day1r1, [[players.alpha, 1], [players.beta, 2]]);
-	await insertStandings(eventId, roundIds.day1r3, [[players.beta, 1], [players.alpha, 2], [players.gamma, null]]);
-	await insertStandings(eventId, roundIds.day2r1, [[players.gamma, 1], [players.beta, 2], [players.alpha, 3]]);
+	await insertStandings(eventId, roundIds.day1r1, [
+		[players.alpha, 1],
+		[players.beta, 2],
+	]);
+	await insertStandings(eventId, roundIds.day1r3, [
+		[players.beta, 1],
+		[players.alpha, 2],
+		[players.gamma, null],
+	]);
+	await insertStandings(eventId, roundIds.day2r1, [
+		[players.gamma, 1],
+		[players.beta, 2],
+		[players.alpha, 3],
+	]);
 
 	// Another Event whose Round sorts between them on every non-Event predicate.
 	otherEventId = await insertEvent('Other Event');
 	const otherPhase = await insertPhase(otherEventId, 'Other Day', 1);
 	otherRoundId = await insertRound(otherEventId, otherPhase, 2);
 	const [otherPlayer] = await db.insert(schema.players).values({ eventId: otherEventId, name: 'other' }).returning({ id: schema.players.id });
-	await insertStandings(otherEventId, otherRoundId, [[otherPlayer!.id, 1]]);
+	await insertStandings(otherEventId, otherRoundId, [
+		[otherPlayer!.id, 1],
+	]);
 });
 
 afterAll(async () => await harness.close());

@@ -64,7 +64,9 @@ async function sessionAfterSignIn(headers: Record<string, string>) {
 
 beforeEach(async () => {
 	auth = throwawayAuth();
-	await auth.api.createUser({ body: { email: EMAIL, password: PASSWORD, name: 'Client IP' } });
+	await auth.api.createUser({
+		body: { email: EMAIL, password: PASSWORD, name: 'Client IP' },
+	});
 });
 
 describe('the client IP a session records, under the environment the tests run in', () => {

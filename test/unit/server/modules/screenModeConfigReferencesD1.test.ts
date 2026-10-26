@@ -115,15 +115,20 @@ function revisionId(index: number, generation = 1) {
  */
 function stackPinning(revisions: readonly string[]) {
 	return {
-		graphics: [{
-			id: 'graphic-one',
-			items: revisions.map((revision, index) => ({
-				id: `item-${`${index}`.padStart(4, '0')}`,
-				type: 'media',
-				mediaKind: 'image',
-				asset: { assetId: assetId(index), revisionId: revision },
-			})),
-		}],
+		graphics: [
+			{
+				id: 'graphic-one',
+				items: revisions.map((revision, index) => ({
+					id: `item-${`${index}`.padStart(4, '0')}`,
+					type: 'media',
+					mediaKind: 'image',
+					asset: {
+						assetId: assetId(index),
+						revisionId: revision,
+					},
+				})),
+			},
+		],
 	};
 }
 
@@ -186,10 +191,16 @@ function maximalStack(repickedMediaIndex?: number) {
 						id,
 						type: 'text',
 						text: 'Round {home} of {away}',
-						typography: { font: fontSelection(position) },
+						typography: {
+							font: fontSelection(position),
+						},
 						placeholderStyles: {
-							home: { font: fontSelection(position + 1) },
-							away: { font: fontSelection(position + 2) },
+							home: {
+								font: fontSelection(position + 1),
+							},
+							away: {
+								font: fontSelection(position + 2),
+							},
 						},
 					};
 				}
@@ -201,7 +212,9 @@ function maximalStack(repickedMediaIndex?: number) {
 					mediaKind: 'image',
 					asset: {
 						assetId: assetId(asset),
-						revisionId: revisionId(asset, index === repickedMediaIndex ? 2 : 1),
+						revisionId: revisionId(asset, index === repickedMediaIndex
+							? 2
+							: 1),
 					},
 				};
 			}),

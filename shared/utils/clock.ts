@@ -61,21 +61,29 @@ export function normalizeTimeInput(input: string): string | null {
 		case 3:
 			mm = digits.slice(0, 1).padStart(2, '0');
 			ss = digits.slice(1);
-			return Number(ss) >= 60 ? null : `${mm}:${ss}`;
+			return Number(ss) >= 60
+				? null
+				: `${mm}:${ss}`;
 		case 4:
 			mm = digits.slice(0, 2);
 			ss = digits.slice(2);
-			return Number(ss) >= 60 ? null : `${mm}:${ss}`;
+			return Number(ss) >= 60
+				? null
+				: `${mm}:${ss}`;
 		case 5:
 			hh = digits.slice(0, 1);
 			mm = digits.slice(1, 3);
 			ss = digits.slice(3);
-			return (Number(mm) >= 60 || Number(ss) >= 60) ? null : `${hh}:${mm}:${ss}`;
+			return (Number(mm) >= 60 || Number(ss) >= 60)
+				? null
+				: `${hh}:${mm}:${ss}`;
 		case 6:
 			hh = digits.slice(0, 2);
 			mm = digits.slice(2, 4);
 			ss = digits.slice(4);
-			return (Number(mm) >= 60 || Number(ss) >= 60) ? null : `${hh}:${mm}:${ss}`;
+			return (Number(mm) >= 60 || Number(ss) >= 60)
+				? null
+				: `${hh}:${mm}:${ss}`;
 		default:
 			return null;
 	}

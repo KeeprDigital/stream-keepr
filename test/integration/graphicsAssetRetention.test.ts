@@ -205,7 +205,9 @@ describe('the Graphics Asset Library retention API', () => {
 		await expect($fetch<GraphicAssetRetentionView>(
 			`/api/graphics-assets/${assetId}/retention`,
 			{ headers: authorHeaders },
-		)).resolves.toMatchObject({ lifecycle: { state: 'trashed' } });
+		)).resolves.toMatchObject({
+			lifecycle: { state: 'trashed' },
+		});
 
 		// Restore so this asset does not affect the other cases.
 		await $fetch(`/api/graphics-assets/${assetId}/lifecycle-actions`, {
@@ -267,7 +269,10 @@ describe('the Graphics Asset Library retention API', () => {
 
 		const evidence = await $fetch<GraphicsAssetEvidencePage>(
 			'/api/admin/graphics-assets/evidence',
-			{ headers: administratorHeaders, query: { category: 'graphic-asset-purged' } },
+			{
+				headers: administratorHeaders,
+				query: { category: 'graphic-asset-purged' },
+			},
 		);
 		expect(evidence.entries).toEqual(expect.arrayContaining([
 			expect.objectContaining({
@@ -282,7 +287,10 @@ describe('the Graphics Asset Library retention API', () => {
 	it('reads the ledger by group, actor, correlation, and cursor', async () => {
 		const page = await $fetch<GraphicsAssetEvidencePage>(
 			'/api/admin/graphics-assets/evidence',
-			{ headers: administratorHeaders, query: { group: 'lifecycle', limit: 1 } },
+			{
+				headers: administratorHeaders,
+				query: { group: 'lifecycle', limit: 1 },
+			},
 		);
 		expect(page.entries).toHaveLength(1);
 		const entry = page.entries[0]!;
@@ -325,7 +333,10 @@ describe('the Graphics Asset Library retention API', () => {
 
 		await expect($fetch<GraphicsAssetEvidencePage>(
 			'/api/admin/graphics-assets/evidence',
-			{ headers: administratorHeaders, query: { actor: entry.actor, limit: 5 } },
+			{
+				headers: administratorHeaders,
+				query: { actor: entry.actor, limit: 5 },
+			},
 		)).resolves.toMatchObject({
 			entries: expect.arrayContaining([
 				expect.objectContaining({ actor: entry.actor }),
@@ -368,14 +379,22 @@ describe('the Graphics Asset Library retention API', () => {
 		// to elapse, which only the controlled-clock module tests can offer.
 		const page = await $fetch<GraphicsAssetEvidencePage>(
 			'/api/admin/graphics-assets/evidence',
-			{ headers: administratorHeaders, query: { limit: 500 } },
+			{
+				headers: administratorHeaders,
+				query: { limit: 500 },
+			},
 		);
 		expect(page.entries.length).toBeGreaterThan(0);
 		const covered = new Set(page.entries.flatMap(entry =>
 			GRAPHICS_EVIDENCE_CATEGORY_GROUP_VALUES.filter(group =>
 				(GRAPHICS_EVIDENCE_CATEGORY_GROUPS[group] as readonly string[])
 					.includes(entry.category))));
-		for (const group of ['lifecycle', 'pruning', 'purge', 'restoration'] as const)
+		for (const group of [
+			'lifecycle',
+			'pruning',
+			'purge',
+			'restoration',
+		] as const)
 			expect([...covered], `no Evidence from the ${group} group`).toContain(group);
 
 		const serialised = JSON.stringify(page);
@@ -438,7 +457,10 @@ describe('the Graphics Asset Library retention API', () => {
 			};
 			await $fetch(
 				`/api/events/${event.id}/screens/${screen.id}/config/feature-match-overlay`,
-				{ method: 'PATCH', body: { layout: config.layout } },
+				{
+					method: 'PATCH',
+					body: { layout: config.layout },
+				},
 			);
 			await replace(assetId, 'retention-referenced-revision-replacement');
 

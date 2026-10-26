@@ -25,7 +25,10 @@ describe('expectResponseStatus', () => {
 	it('fails with the status and the body the server answered', async () => {
 		const response = new Response(
 			'{"statusCode":503,"message":"Multipart part 1 is temporarily unavailable"}',
-			{ status: 503, headers: { 'retry-after': '5' } },
+			{
+				status: 503,
+				headers: { 'retry-after': '5' },
+			},
 		);
 
 		await expect(expectResponseStatus(response, 200)).rejects.toThrow(
@@ -54,7 +57,11 @@ describe('expectResponseStatus', () => {
  * undefined (reading 'assetId')` and said nothing about why.
  */
 describe('expectOperationResult', () => {
-	const published = { id: 'op-1', stage: 'completed', result: { assetId: 'asset-1', revisionId: 'revision-1' } };
+	const published = {
+		id: 'op-1',
+		stage: 'completed',
+		result: { assetId: 'asset-1', revisionId: 'revision-1' },
+	};
 
 	it('hands back the operation a published upload answered', async () => {
 		const operation = await expectOperationResult(Response.json(published));
@@ -71,7 +78,11 @@ describe('expectOperationResult', () => {
 	});
 
 	it('fails an upload answered 200 that published nothing, naming its stage', async () => {
-		const unpublished = Response.json({ id: 'op-1', stage: 'rejected', report: { code: 'still-image-undecodable' } });
+		const unpublished = Response.json({
+			id: 'op-1',
+			stage: 'rejected',
+			report: { code: 'still-image-undecodable' },
+		});
 
 		await expect(expectOperationResult(unpublished)).rejects.toThrow(
 			/reached no result \(stage rejected\)[\s\S]*still-image-undecodable/,

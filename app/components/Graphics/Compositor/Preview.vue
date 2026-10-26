@@ -133,7 +133,10 @@ function updateSocialProfileSample(
 		...socialProfileSamples.value,
 		[graphicId]: {
 			...socialProfileSamples.value[graphicId],
-			[projectionKey]: { ...current, ...patch },
+			[projectionKey]: {
+				...current,
+				...patch,
+			},
 		},
 	};
 }
@@ -243,7 +246,12 @@ onBeforeUnmount(() => {
 });
 
 watch(
-	() => [props.graphics, props.selectedTarget, previewSocialProfileValues.value, animationPlan.value] as const,
+	() => [
+		props.graphics,
+		props.selectedTarget,
+		previewSocialProfileValues.value,
+		animationPlan.value,
+	] as const,
 	() => pushPreviewState(),
 	{ deep: true },
 );

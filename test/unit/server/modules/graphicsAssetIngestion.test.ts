@@ -141,7 +141,12 @@ function createLibrary(
 			});
 		},
 	};
-	return { library, staging, canonical, catalogue };
+	return {
+		library,
+		staging,
+		canonical,
+		catalogue,
+	};
 }
 
 describe('still-image ingestion through the Graphics Asset Library public module', () => {
@@ -198,7 +203,9 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			stage: 'failed',
 			report: {
 				outcome: 'rejected',
-				issues: [{ code }],
+				issues: [
+					{ code },
+				],
 			},
 			failure: { code: 'validation-failed', retryable: false },
 		});
@@ -303,7 +310,9 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			report: {
 				outcome: 'rejected',
 				compatibilityProfile: 'still-image-v1',
-				issues: [{ code: 'conflicting-image-mime' }],
+				issues: [
+					{ code: 'conflicting-image-mime' },
+				],
 			},
 			failure: { code: 'validation-failed', retryable: false },
 		});
@@ -355,7 +364,9 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			report: {
 				outcome: 'rejected',
 				compatibilityProfile: 'still-image-v1',
-				issues: [{ code }],
+				issues: [
+					{ code },
+				],
 			},
 			failure: { code: 'validation-failed', retryable: false },
 		});
@@ -725,10 +736,12 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			report: {
 				outcome: 'rejected',
 				compatibilityProfile: 'still-image-v1',
-				issues: [{
-					severity: 'error',
-					code: 'unsupported-image-format',
-				}],
+				issues: [
+					{
+						severity: 'error',
+						code: 'unsupported-image-format',
+					},
+				],
 			},
 			failure: {
 				code: 'validation-failed',
@@ -956,7 +969,9 @@ describe('still-image ingestion through the Graphics Asset Library public module
 				assetId: original.result!.assetId,
 				idempotencyKey,
 				initiatedBy: 'graphics-author-1',
-				sourceFileName: `replacement.${declaredMime === 'image/png' ? 'png' : 'jpg'}`,
+				sourceFileName: `replacement.${declaredMime === 'image/png'
+					? 'png'
+					: 'jpg'}`,
 				declaredMime,
 				browserDecodeEvidence: {
 					outcome: 'decoded',
@@ -1152,7 +1167,9 @@ describe('still-image ingestion through the Graphics Asset Library public module
 				assetId: original.result!.assetId,
 				idempotencyKey,
 				initiatedBy: 'graphics-author-1',
-				sourceFileName: `${idempotencyKey}.${declaredMime === 'image/png' ? 'png' : 'jpg'}`,
+				sourceFileName: `${idempotencyKey}.${declaredMime === 'image/png'
+					? 'png'
+					: 'jpg'}`,
 				declaredMime,
 				browserDecodeEvidence: {
 					outcome: 'decoded',
@@ -1786,7 +1803,9 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			stage: 'failed',
 			report: {
 				outcome: 'rejected',
-				issues: [{ code: 'browser-video-playback-failed' }],
+				issues: [
+					{ code: 'browser-video-playback-failed' },
+				],
 			},
 			failure: { code: 'validation-failed', retryable: false },
 		});

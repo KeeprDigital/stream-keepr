@@ -49,7 +49,9 @@ const FILL_KIND_OPTIONS = [
 
 /** "Stop 1 colour" alone; "Win box stop 1 colour" where a prefix tells surfaces apart. */
 function ariaLabel(label: string) {
-	return props.ariaLabelPrefix ? `${props.ariaLabelPrefix} ${label.toLowerCase()}` : label;
+	return props.ariaLabelPrefix
+		? `${props.ariaLabelPrefix} ${label.toLowerCase()}`
+		: label;
 }
 
 function testId(suffix: string) {

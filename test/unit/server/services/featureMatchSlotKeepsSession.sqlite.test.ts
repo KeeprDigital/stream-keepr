@@ -53,22 +53,44 @@ async function stageEvent() {
 	const eventId = event!.id;
 	const [phase] = await db.insert(schema.phases).values({ eventId, name: 'Swiss', sortOrder: 0 }).returning();
 	const [round] = await db.insert(schema.rounds)
-		.values({ eventId, phaseId: phase!.id, name: 'Round 1', roundNumber: 1 })
+		.values({
+			eventId,
+			phaseId: phase!.id,
+			name: 'Round 1',
+			roundNumber: 1,
+		})
 		.returning();
 	const [player1, player2] = await db.insert(schema.players)
-		.values([{ eventId, name: 'Mia' }, { eventId, name: 'Rei' }])
+		.values([
+			{ eventId, name: 'Mia' },
+			{ eventId, name: 'Rei' },
+		])
 		.returning();
 	const [match] = await db.insert(schema.matches)
-		.values({ eventId, roundId: round!.id, tableNumber: 1, sortOrder: 0, player1Id: player1!.id, player2Id: player2!.id })
+		.values({
+			eventId,
+			roundId: round!.id,
+			tableNumber: 1,
+			sortOrder: 0,
+			player1Id: player1!.id,
+			player2Id: player2!.id,
+		})
 		.returning();
 	const first = await featureMatchService().create(eventId, {});
 	const second = await featureMatchService().create(eventId, {});
-	return { eventId, matchId: match!.id, player1Id: player1!.id, slotIds: [first.id, second.id] };
+	return {
+		eventId,
+		matchId: match!.id,
+		player1Id: player1!.id,
+		slotIds: [first.id, second.id],
+	};
 }
 
 /** Each Slot links exactly one active Session of its own; answers those Session ids by Slot. */
 async function expectEverySlotHoldsASession(eventId: number) {
-	const slots = await db.query.featureMatches.findMany({ where: eq(schema.featureMatches.eventId, eventId) });
+	const slots = await db.query.featureMatches.findMany({
+		where: eq(schema.featureMatches.eventId, eventId),
+	});
 	const held = new Map<number, number>();
 	for (const slot of slots) {
 		const active = await db.query.featureMatchSessions.findMany({

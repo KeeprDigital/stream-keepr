@@ -25,7 +25,9 @@ export interface FeatureMatchOverlayRoundedRect {
 
 function pixelValue(value: number | undefined, fallback = 0): number {
 	const numeric = Number(value ?? fallback);
-	return Number.isFinite(numeric) ? Math.max(0, numeric) : Math.max(0, fallback);
+	return Number.isFinite(numeric)
+		? Math.max(0, numeric)
+		: Math.max(0, fallback);
 }
 
 export type FeatureMatchOverlayBorderSide = 'Top' | 'Right' | 'Bottom' | 'Left';
@@ -48,7 +50,9 @@ export function featureMatchOverlayBorderSideEnabled(
 }
 
 function borderSideInset(style: FeatureMatchSourceFramingStyle, side: FeatureMatchOverlayBorderSide, borderWidth: number): number {
-	return style.borderVisible && featureMatchOverlayBorderSideEnabled(style, side) ? borderWidth : 0;
+	return style.borderVisible && featureMatchOverlayBorderSideEnabled(style, side)
+		? borderWidth
+		: 0;
 }
 
 function fitFeatureMatchOverlayInsets(startInset: number, endInset: number, total: number): [number, number] {
@@ -101,10 +105,18 @@ export function normalizeFeatureMatchOverlayRadiiForRect(radii: FeatureMatchOver
 	const safeRadii = mapRadii(radii, value => pixelValue(value));
 	const scale = Math.min(
 		1,
-		safeRadii.topLeft + safeRadii.topRight > 0 ? safeWidth / (safeRadii.topLeft + safeRadii.topRight) : 1,
-		safeRadii.bottomLeft + safeRadii.bottomRight > 0 ? safeWidth / (safeRadii.bottomLeft + safeRadii.bottomRight) : 1,
-		safeRadii.topLeft + safeRadii.bottomLeft > 0 ? safeHeight / (safeRadii.topLeft + safeRadii.bottomLeft) : 1,
-		safeRadii.topRight + safeRadii.bottomRight > 0 ? safeHeight / (safeRadii.topRight + safeRadii.bottomRight) : 1,
+		safeRadii.topLeft + safeRadii.topRight > 0
+			? safeWidth / (safeRadii.topLeft + safeRadii.topRight)
+			: 1,
+		safeRadii.bottomLeft + safeRadii.bottomRight > 0
+			? safeWidth / (safeRadii.bottomLeft + safeRadii.bottomRight)
+			: 1,
+		safeRadii.topLeft + safeRadii.bottomLeft > 0
+			? safeHeight / (safeRadii.topLeft + safeRadii.bottomLeft)
+			: 1,
+		safeRadii.topRight + safeRadii.bottomRight > 0
+			? safeHeight / (safeRadii.topRight + safeRadii.bottomRight)
+			: 1,
 	);
 
 	return mapRadii(safeRadii, value => value * scale);
@@ -112,7 +124,9 @@ export function normalizeFeatureMatchOverlayRadiiForRect(radii: FeatureMatchOver
 
 export function featureMatchOverlaySourceCutoutRect(item: FeatureMatchSourceItemConfig): FeatureMatchOverlayRoundedRect {
 	const style: FeatureMatchSourceFramingStyle = item.framingStyle ?? {};
-	const borderWidth = style.borderVisible ? pixelValue(style.borderWidth) : 0;
+	const borderWidth = style.borderVisible
+		? pixelValue(style.borderWidth)
+		: 0;
 	const itemWidth = pixelValue(item.width);
 	const itemHeight = pixelValue(item.height);
 	const [leftInset, rightInset] = fitFeatureMatchOverlayInsets(
@@ -148,7 +162,9 @@ export function featureMatchOverlaySourceCutoutRect(item: FeatureMatchSourceItem
 }
 
 function arcTo(radius: number, x: number, y: number): string {
-	return radius > 0 ? `A ${radius} ${radius} 0 0 1 ${x} ${y}` : `L ${x} ${y}`;
+	return radius > 0
+		? `A ${radius} ${radius} 0 0 1 ${x} ${y}`
+		: `L ${x} ${y}`;
 }
 
 export function roundedRectPath(rect: FeatureMatchOverlayRoundedRect): string {

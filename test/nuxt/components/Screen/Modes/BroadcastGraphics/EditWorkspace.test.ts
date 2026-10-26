@@ -7,7 +7,9 @@ import { defineComponent, h, ref } from 'vue';
 
 enableAutoUnmount(afterEach);
 
-mockNuxtImport('useEventStore', () => () => ({ event: { id: 7, name: 'Regional', game: 'mtg' } }));
+mockNuxtImport('useEventStore', () => () => ({
+	event: { id: 7, name: 'Regional', game: 'mtg' },
+}));
 
 /**
  * The playout facts the on-air badge reads (#373): the Live Session store's
@@ -38,7 +40,12 @@ const slate: BroadcastGraphicConfig = { id: 'slate', name: 'Slate', items: [] };
  * the real tree does, so the badge logic is observable through the stub.
  */
 const StackTreeStub = defineComponent({
-	props: { graphics: { type: Array, default: () => [] } },
+	props: {
+		graphics: {
+			type: Array,
+			default: () => [],
+		},
+	},
 	setup(props, { slots }) {
 		return () => h('div', { 'data-testid': 'stack-tree' }, (props.graphics as Array<{ id: string }>).map(graphic =>
 			h('div', { 'data-testid': 'stack-tree-row', 'data-graphic-id': graphic.id }, slots['graphic-badge']?.({ graphic }))));
@@ -47,7 +54,10 @@ const StackTreeStub = defineComponent({
 const PreviewStub = defineComponent({ template: '<div data-testid="preview" />' });
 /** Stands in for the inspector, reporting the Event facts the workspace hands it. */
 const InspectorStub = defineComponent({
-	props: { eventId: { type: Number, required: true }, game: { type: String, default: '' } },
+	props: {
+		eventId: { type: Number, required: true },
+		game: { type: String, default: '' },
+	},
 	emits: ['update:graphics'],
 	setup(props) {
 		return () => h('div', {
@@ -59,7 +69,9 @@ const InspectorStub = defineComponent({
 });
 const UIconStub = defineComponent({ template: '<i />' });
 const UButtonStub = defineComponent({
-	props: { disabled: { type: Boolean, default: false } },
+	props: {
+		disabled: { type: Boolean, default: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
@@ -90,8 +102,14 @@ const TemplateLibraryStub = defineComponent({
 const ChannelsStub = defineComponent({
 	name: 'ScreenModesBroadcastGraphicsChannels',
 	props: {
-		graphics: { type: Array, default: () => [] },
-		channels: { type: Array, default: () => [] },
+		graphics: {
+			type: Array,
+			default: () => [],
+		},
+		channels: {
+			type: Array,
+			default: () => [],
+		},
 		writable: { type: Boolean, default: false },
 	},
 	setup(props) {
@@ -198,7 +216,9 @@ describe('broadcastGraphicsEditWorkspace', () => {
 		await wrapper.get('[data-testid="template-library"]').trigger('click');
 
 		expect(wrapper.emitted('update:selectedTarget')).toEqual([
-			[{ type: 'graphic', graphicId: 'placed-copy' }],
+			[
+				{ type: 'graphic', graphicId: 'placed-copy' },
+			],
 		]);
 	});
 
@@ -210,7 +230,9 @@ describe('broadcastGraphicsEditWorkspace', () => {
 
 	it('carries Graphic Channel authoring, under the same Graphics Authoring Lease', async () => {
 		const wrapper = await mountWorkspace({
-			channels: [{ id: 'thirds', name: 'Lower thirds' }],
+			channels: [
+				{ id: 'thirds', name: 'Lower thirds' },
+			],
 			writable: false,
 		});
 
@@ -233,23 +255,30 @@ describe('broadcastGraphicsEditWorkspace', () => {
 
 	it('funnels Social Profile Projection authoring through the workspace graphics save path', async () => {
 		const wrapper = await mountWorkspace();
-		const projected = [lowerThird, {
-			...slate,
-			socialProfileProjections: [{
-				key: 'talent-profile',
-				label: 'Talent profile',
-				sourceKey: 'talent',
-				presentationGroupId: 'profile-group',
-				dwellMs: 8_000,
-				transition: 'crossfade' as const,
-				transitionDurationMs: 250,
-			}],
-		}];
+		const projected = [
+			lowerThird,
+			{
+				...slate,
+				socialProfileProjections: [
+					{
+						key: 'talent-profile',
+						label: 'Talent profile',
+						sourceKey: 'talent',
+						presentationGroupId: 'profile-group',
+						dwellMs: 8_000,
+						transition: 'crossfade' as const,
+						transitionDurationMs: 250,
+					},
+				],
+			},
+		];
 
 		wrapper.getComponent(InspectorStub).vm.$emit('update:graphics', projected);
 		await flushPromises();
 
-		expect(wrapper.emitted('update:graphics')).toEqual([[projected]]);
+		expect(wrapper.emitted('update:graphics')).toEqual([
+			[projected],
+		]);
 		// There is no projection-specific write that could bypass the mode document's
 		// Graphics Authoring Lease and strict save path.
 		expect(wrapper.emitted('update:socialProfileProjections')).toBeUndefined();

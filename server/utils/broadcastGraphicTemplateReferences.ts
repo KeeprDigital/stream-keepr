@@ -17,7 +17,9 @@ export async function assertBroadcastGraphicTemplateReferencesSelectable(
 ): Promise<void> {
 	await assertGraphicsTemplateReferencesSelectable(
 		library,
-		broadcastGraphicsGraphicAssetReferences({ graphics: [document] }),
+		broadcastGraphicsGraphicAssetReferences({
+			graphics: [document],
+		}),
 		'Broadcast Graphic Template',
 	);
 }
@@ -36,7 +38,9 @@ export async function assertStyleSetRewritesReferencesSelectable(
 		library,
 		rewrites.map(rewrite => ({
 			name: linked.find(template => template.id === rewrite.id)?.name ?? rewrite.id,
-			references: broadcastGraphicsGraphicAssetReferences({ graphics: [rewrite.document] }),
+			references: broadcastGraphicsGraphicAssetReferences({
+				graphics: [rewrite.document],
+			}),
 		})),
 		'Broadcast Graphic Template',
 	);

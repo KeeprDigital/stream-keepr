@@ -90,7 +90,11 @@ describe('the Graphics Asset Library operational queues API', () => {
 	async function restore(assetId: string) {
 		return await $fetch<QueueActionResult>(
 			`/api/admin/graphics-assets/${assetId}/lifecycle-actions`,
-			{ method: 'POST', headers: administratorHeaders, body: { action: 'restore' } },
+			{
+				method: 'POST',
+				headers: administratorHeaders,
+				body: { action: 'restore' },
+			},
 		);
 	}
 
@@ -121,7 +125,10 @@ describe('the Graphics Asset Library operational queues API', () => {
 		expect(lifecycle.status).toBe(403);
 		const retry = await fetch(
 			'/api/admin/graphics-assets/ingestion-operations/x/retry',
-			{ method: 'POST', headers: { 'content-type': 'application/json' } },
+			{
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+			},
 		);
 		expect(retry.status).toBe(403);
 	});
@@ -230,7 +237,10 @@ describe('the Graphics Asset Library operational queues API', () => {
 			};
 			await $fetch(
 				`/api/events/${event.id}/screens/${screen.id}/config/feature-match-overlay`,
-				{ method: 'PATCH', body: { layout: config.layout } },
+				{
+					method: 'PATCH',
+					body: { layout: config.layout },
+				},
 			);
 
 			// A fresh reference proof found pinned usage, so nothing was reclaimed.

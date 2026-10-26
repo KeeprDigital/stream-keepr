@@ -172,7 +172,9 @@ describe('the Graphics Asset Library read surface', () => {
 
 	describe('any authenticated graphics author', () => {
 		it.each(readRoutes)('may still perform $label', async ({ path }) => {
-			const response = await fetch(path(subject), { headers: { cookie: readingAuthorCookie } });
+			const response = await fetch(path(subject), {
+				headers: { cookie: readingAuthorCookie },
+			});
 			expect(response.status).toBe(200);
 		});
 
@@ -185,7 +187,12 @@ describe('the Graphics Asset Library read surface', () => {
 			await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
 				headers: { cookie: readingAuthorCookie },
 				query: { search: SUBJECT_NAME },
-			})).resolves.toMatchObject([{ id: subject.assetId, eventIds: [eventId] }]);
+			})).resolves.toMatchObject([
+				{
+					id: subject.assetId,
+					eventIds: [eventId],
+				},
+			]);
 		});
 	});
 

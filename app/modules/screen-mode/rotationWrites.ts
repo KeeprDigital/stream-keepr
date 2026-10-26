@@ -120,7 +120,10 @@ export function useRotationConfigWrites<M extends PageRotationMode>(
 
 	function setAutoPageEnabled(enabled: boolean) {
 		saveRotation(enabled
-			? { autoPageEnabled: true, rotationAnchor: restartedRotationAnchor(getServerTime()) }
+			? {
+					autoPageEnabled: true,
+					rotationAnchor: restartedRotationAnchor(getServerTime()),
+				}
 			: { autoPageEnabled: false });
 	}
 
@@ -131,11 +134,13 @@ export function useRotationConfigWrites<M extends PageRotationMode>(
 	function adminSetPage(requested: number) {
 		const page = Math.max(1, Math.min(requested, totalPages.value));
 		if (rotation.value.autoPageEnabled) {
-			saveRotation({ rotationAnchor: rotationAnchorForPage({
-				page,
-				pageDurationMs: rotation.value.autoPageIntervalMs,
-				now: getServerTime(),
-			}) });
+			saveRotation({
+				rotationAnchor: rotationAnchorForPage({
+					page,
+					pageDurationMs: rotation.value.autoPageIntervalMs,
+					now: getServerTime(),
+				}),
+			});
 		}
 		else {
 			saveRotation({ currentPage: page });
@@ -143,11 +148,15 @@ export function useRotationConfigWrites<M extends PageRotationMode>(
 	}
 
 	function adminNextPage() {
-		adminSetPage(currentPage.value < totalPages.value ? currentPage.value + 1 : 1);
+		adminSetPage(currentPage.value < totalPages.value
+			? currentPage.value + 1
+			: 1);
 	}
 
 	function adminPrevPage() {
-		adminSetPage(currentPage.value > 1 ? currentPage.value - 1 : totalPages.value);
+		adminSetPage(currentPage.value > 1
+			? currentPage.value - 1
+			: totalPages.value);
 	}
 
 	return {

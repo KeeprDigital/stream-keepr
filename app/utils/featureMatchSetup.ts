@@ -34,7 +34,9 @@ function normalizeOptionalString(value: unknown): string | null | undefined {
 		return value as string | null | undefined;
 
 	const trimmed = value.trim();
-	return trimmed.length > 0 ? trimmed : null;
+	return trimmed.length > 0
+		? trimmed
+		: null;
 }
 
 function normalizeNullableInteger(value: unknown): NullableInteger {
@@ -47,7 +49,9 @@ function normalizeNullableInteger(value: unknown): NullableInteger {
 		if (trimmed.length === 0)
 			return null;
 		const parsed = Number(trimmed);
-		return Number.isFinite(parsed) ? parsed : (value as unknown as number);
+		return Number.isFinite(parsed)
+			? parsed
+			: (value as unknown as number);
 	}
 	return value as NullableInteger;
 }
@@ -60,7 +64,9 @@ function normalizeOptionalInteger(value: unknown): number | undefined {
 		if (trimmed.length === 0)
 			return undefined;
 		const parsed = Number(trimmed);
-		return Number.isFinite(parsed) ? parsed : (value as unknown as number);
+		return Number.isFinite(parsed)
+			? parsed
+			: (value as unknown as number);
 	}
 	return value as number | undefined;
 }
@@ -90,14 +96,18 @@ function normalizeGameData(gameData: PlayerGameData | null | undefined): PlayerG
 			deckName: normalizeOptionalString(gameData.deckName) ?? null,
 			deckColors: normalizeOptionalString(gameData.deckColors) ?? null,
 		};
-		return hasMeaningfulValue(normalized) ? normalized : null;
+		return hasMeaningfulValue(normalized)
+			? normalized
+			: null;
 	}
 
 	const normalized: PlayerGameData = {
 		type: 'op',
 		leader: normalizeOptionalString(gameData.leader) ?? null,
 	};
-	return hasMeaningfulValue(normalized) ? normalized : null;
+	return hasMeaningfulValue(normalized)
+		? normalized
+		: null;
 }
 
 export function normalizePlayerSlotData(data: Partial<PlayerData> | null | undefined): ManualPlayerSlotData | null {
@@ -128,7 +138,9 @@ export function normalizePlayerSlotData(data: Partial<PlayerData> | null | undef
 			normalized.gameData = value;
 	}
 
-	return hasMeaningfulValue(normalized) ? normalized : null;
+	return hasMeaningfulValue(normalized)
+		? normalized
+		: null;
 }
 
 export function buildFeatureMatchSetupUpdate(changes: FeatureMatchSetupChanges): UpdateFeatureMatchInput {

@@ -68,12 +68,22 @@ async function mountComponent() {
 
 describe('screenModesPairingsDisplay', () => {
 	beforeEach(() => {
-		screen.value = { screenConfig: { primaryTextColor: '#123456', secondaryTextColor: '#654321', paddingY: 0 } };
-		config.value = { roundId: 31, showHeader: true, rowsPerPage: 8, autoPageEnabled: false, autoPageIntervalMs: 10000 };
+		screen.value = {
+			screenConfig: { primaryTextColor: '#123456', secondaryTextColor: '#654321', paddingY: 0 },
+		};
+		config.value = {
+			roundId: 31,
+			showHeader: true,
+			rowsPerPage: 8,
+			autoPageEnabled: false,
+			autoPageIntervalMs: 10000,
+		};
 		error.value = null;
 		isEmpty.value = false;
 		headerText.value = 'Round 4 Pairings';
-		pageData.value = [pairingRow()];
+		pageData.value = [
+			pairingRow(),
+		];
 		cannedResults.clear();
 		cannedWinners.clear();
 	});
@@ -89,8 +99,19 @@ describe('screenModesPairingsDisplay', () => {
 
 	it('lists each Match with its table, both Players and its result, in the order given', async () => {
 		pageData.value = [
-			pairingRow({ matchId: 1, tableNumber: 1, player1: { id: 7, name: 'Nadia Rivers' }, player2: { id: 8, name: 'Oskar Lind' } }),
-			pairingRow({ matchId: 2, tableNumber: 2, player1: { id: 9, name: 'Sam Ortiz' }, player2: { id: 10, name: 'Ivy Chen' }, hasResult: true }),
+			pairingRow({
+				matchId: 1,
+				tableNumber: 1,
+				player1: { id: 7, name: 'Nadia Rivers' },
+				player2: { id: 8, name: 'Oskar Lind' },
+			}),
+			pairingRow({
+				matchId: 2,
+				tableNumber: 2,
+				player1: { id: 9, name: 'Sam Ortiz' },
+				player2: { id: 10, name: 'Ivy Chen' },
+				hasResult: true,
+			}),
 		];
 		cannedResults.set(2, '2-1');
 
@@ -106,7 +127,9 @@ describe('screenModesPairingsDisplay', () => {
 	});
 
 	it('marks the winning side of a reported Match', async () => {
-		pageData.value = [pairingRow({ hasResult: true })];
+		pageData.value = [
+			pairingRow({ hasResult: true }),
+		];
 		cannedResults.set(1, '0-2');
 		cannedWinners.set(1, 2);
 
@@ -117,7 +140,9 @@ describe('screenModesPairingsDisplay', () => {
 	});
 
 	it('marks a bye, with no table and no opponent', async () => {
-		pageData.value = [pairingRow({ tableNumber: null, isBye: true, player2: null })];
+		pageData.value = [
+			pairingRow({ tableNumber: null, isBye: true, player2: null }),
+		];
 		cannedResults.set(1, 'BYE');
 
 		const row = (await mountComponent()).get('.pairing-row');
@@ -129,7 +154,9 @@ describe('screenModesPairingsDisplay', () => {
 	});
 
 	it('names an unfilled seat as to be decided', async () => {
-		pageData.value = [pairingRow({ player2: null })];
+		pageData.value = [
+			pairingRow({ player2: null }),
+		];
 
 		expect((await mountComponent()).get('.player-2').text()).toBe('TBD');
 	});

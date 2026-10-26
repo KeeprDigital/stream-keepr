@@ -68,7 +68,10 @@ async function tokenRoute() {
 
 /** A signed-in operator, as `optionalUserSession` answers. */
 function signedIn(userId = 'user-1') {
-	mockOptionalUserSession.mockResolvedValue({ user: { id: userId }, session: { id: 'session-1' } });
+	mockOptionalUserSession.mockResolvedValue({
+		user: { id: userId },
+		session: { id: 'session-1' },
+	});
 }
 
 describe('/api/realtime/token', () => {

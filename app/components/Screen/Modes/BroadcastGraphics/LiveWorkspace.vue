@@ -149,7 +149,9 @@ const playoutFailure = computed(() => {
 	if (!sessionStore.error)
 		return null;
 
-	const outcome = sessionStore.refusal ? graphicAssetRefusalOutcome(sessionStore.refusal.code) : undefined;
+	const outcome = sessionStore.refusal
+		? graphicAssetRefusalOutcome(sessionStore.refusal.code)
+		: undefined;
 	if (outcome)
 		return { ...ASSET_REFUSAL_ALERTS[outcome], icon: 'i-lucide-image-off', description: sessionStore.error };
 	if (sessionStore.refusal) {

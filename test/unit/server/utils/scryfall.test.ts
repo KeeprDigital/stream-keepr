@@ -185,7 +185,13 @@ describe('batchLookupScryfallIds', () => {
 	it('stores results with both name+set and name-only keys', async () => {
 		vi.mocked(fetch).mockResolvedValue(
 			createScryfallResponse([
-				{ id: 'abc', name: 'Lightning Bolt', set: 'm21', oracle_id: 'oracle-1', mana_cost: '{R}' },
+				{
+					id: 'abc',
+					name: 'Lightning Bolt',
+					set: 'm21',
+					oracle_id: 'oracle-1',
+					mana_cost: '{R}',
+				},
 			]) as any,
 		);
 
@@ -201,11 +207,18 @@ describe('batchLookupScryfallIds', () => {
 	it('extracts oracle_id fields', async () => {
 		vi.mocked(fetch).mockResolvedValue(
 			createScryfallResponse([
-				{ id: 'abc', name: 'Time Vault', set: 'lea', oracle_id: 'oracle-time-vault' },
+				{
+					id: 'abc',
+					name: 'Time Vault',
+					set: 'lea',
+					oracle_id: 'oracle-time-vault',
+				},
 			]) as any,
 		);
 
-		const result = await batchLookupScryfallIds([{ name: 'Time Vault', setCode: 'lea' }]);
+		const result = await batchLookupScryfallIds([
+			{ name: 'Time Vault', setCode: 'lea' },
+		]);
 
 		expect(result.results.get('time vault|lea')?.oracleId).toBe('oracle-time-vault');
 	});
@@ -252,7 +265,9 @@ describe('batchLookupScryfallIds', () => {
 					'User-Agent': 'stream-keepr/1.0',
 				},
 				body: JSON.stringify({
-					identifiers: [{ name: 'Shock', set: 'm21' }],
+					identifiers: [
+						{ name: 'Shock', set: 'm21' },
+					],
 				}),
 			}),
 		);
@@ -261,11 +276,18 @@ describe('batchLookupScryfallIds', () => {
 	it('cmc is extracted from response', async () => {
 		vi.mocked(fetch).mockResolvedValue(
 			createScryfallResponse([
-				{ id: 'abc', name: 'Lightning Bolt', set: 'm21', cmc: 1 },
+				{
+					id: 'abc',
+					name: 'Lightning Bolt',
+					set: 'm21',
+					cmc: 1,
+				},
 			]) as any,
 		);
 
-		const result = await batchLookupScryfallIds([{ name: 'Lightning Bolt', setCode: 'm21' }]);
+		const result = await batchLookupScryfallIds([
+			{ name: 'Lightning Bolt', setCode: 'm21' },
+		]);
 
 		expect(result.results.get('lightning bolt|m21')?.cmc).toBe(1);
 	});
@@ -273,11 +295,18 @@ describe('batchLookupScryfallIds', () => {
 	it('color_identity joined to colors string', async () => {
 		vi.mocked(fetch).mockResolvedValue(
 			createScryfallResponse([
-				{ id: 'abc', name: 'Detention Sphere', set: 'rtr', color_identity: ['W', 'U'] },
+				{
+					id: 'abc',
+					name: 'Detention Sphere',
+					set: 'rtr',
+					color_identity: ['W', 'U'],
+				},
 			]) as any,
 		);
 
-		const result = await batchLookupScryfallIds([{ name: 'Detention Sphere', setCode: 'rtr' }]);
+		const result = await batchLookupScryfallIds([
+			{ name: 'Detention Sphere', setCode: 'rtr' },
+		]);
 
 		expect(result.results.get('detention sphere|rtr')?.colors).toBe('WU');
 	});
@@ -285,11 +314,18 @@ describe('batchLookupScryfallIds', () => {
 	it('type_line extracted to typeLine', async () => {
 		vi.mocked(fetch).mockResolvedValue(
 			createScryfallResponse([
-				{ id: 'abc', name: 'Serra Angel', set: 'm21', type_line: 'Creature — Angel' },
+				{
+					id: 'abc',
+					name: 'Serra Angel',
+					set: 'm21',
+					type_line: 'Creature — Angel',
+				},
 			]) as any,
 		);
 
-		const result = await batchLookupScryfallIds([{ name: 'Serra Angel', setCode: 'm21' }]);
+		const result = await batchLookupScryfallIds([
+			{ name: 'Serra Angel', setCode: 'm21' },
+		]);
 
 		expect(result.results.get('serra angel|m21')?.typeLine).toBe('Creature — Angel');
 	});
@@ -301,7 +337,9 @@ describe('batchLookupScryfallIds', () => {
 			]) as any,
 		);
 
-		const result = await batchLookupScryfallIds([{ name: 'Plains', setCode: 'm21' }]);
+		const result = await batchLookupScryfallIds([
+			{ name: 'Plains', setCode: 'm21' },
+		]);
 
 		expect(result.results.get('plains|m21')?.cmc).toBeNull();
 	});
@@ -335,7 +373,9 @@ describe('batchLookupScryfallIds', () => {
 		]);
 
 		const body = JSON.parse(vi.mocked(fetch).mock.calls[0]![1]!.body as string);
-		expect(body.identifiers).toEqual([{ name: 'Shock', set: 'm21' }]);
+		expect(body.identifiers).toEqual([
+			{ name: 'Shock', set: 'm21' },
+		]);
 	});
 
 	it('includes status without retaining the untrusted response body when Scryfall rejects a batch', async () => {
@@ -344,7 +384,9 @@ describe('batchLookupScryfallIds', () => {
 		);
 
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const result = await batchLookupScryfallIds([{ name: 'Shock', setCode: 'm21' }]);
+		const result = await batchLookupScryfallIds([
+			{ name: 'Shock', setCode: 'm21' },
+		]);
 
 		expect(result.errors[0]).toContain('HTTP 422');
 		expect(result.errors[0]).not.toContain('Identifiers are invalid');
@@ -359,7 +401,9 @@ describe('batchLookupScryfallIds', () => {
 				{ id: 'abc', name: 'Shock', set: 'm21' },
 			]) as any);
 
-		const result = await batchLookupScryfallIds([{ name: 'Shock', setCode: 'm21' }]);
+		const result = await batchLookupScryfallIds([
+			{ name: 'Shock', setCode: 'm21' },
+		]);
 
 		expect(result.results.get('shock|m21')?.id).toBe('abc');
 		expect(fetch).toHaveBeenCalledTimes(2);
@@ -369,7 +413,9 @@ describe('batchLookupScryfallIds', () => {
 		vi.mocked(fetch).mockResolvedValue(createScryfallErrorResponse(422, 'x'.repeat(10_000)) as any);
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-		const result = await batchLookupScryfallIds([{ name: 'Shock', setCode: 'm21' }]);
+		const result = await batchLookupScryfallIds([
+			{ name: 'Shock', setCode: 'm21' },
+		]);
 
 		expect(result.errors[0]).not.toContain('xxx');
 		expect(JSON.stringify(consoleSpy.mock.calls)).not.toContain('xxx');
@@ -408,11 +454,19 @@ describe('batchLookupScryfallIds', () => {
 	it('wraps invalid collection schemas as an upstream failure', async () => {
 		vi.mocked(fetch).mockResolvedValue({
 			ok: true,
-			json: () => Promise.resolve({ object: 'list', not_found: [], data: [{ name: 'missing identifiers' }] }),
+			json: () => Promise.resolve({
+				object: 'list',
+				not_found: [],
+				data: [
+					{ name: 'missing identifiers' },
+				],
+			}),
 		} as any);
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-		const result = await batchLookupScryfallIds([{ name: 'Shock', setCode: 'm21' }]);
+		const result = await batchLookupScryfallIds([
+			{ name: 'Shock', setCode: 'm21' },
+		]);
 
 		expect(result.results.size).toBe(0);
 		expect(result.errors).toEqual([
@@ -453,21 +507,25 @@ describe('batchLookupScryfallIds', () => {
 
 	it('split card: extracts front face mana_cost from card_faces when top-level is combined', async () => {
 		vi.mocked(fetch).mockResolvedValue(
-			createScryfallResponse([{
-				id: 'fire-ice-1',
-				name: 'Fire // Ice',
-				set: 'ema',
-				mana_cost: '{1}{R} // {1}{U}',
-				cmc: 4,
-				color_identity: ['R', 'U'],
-				card_faces: [
-					{ mana_cost: '{1}{R}' },
-					{ mana_cost: '{1}{U}' },
-				],
-			}]) as any,
+			createScryfallResponse([
+				{
+					id: 'fire-ice-1',
+					name: 'Fire // Ice',
+					set: 'ema',
+					mana_cost: '{1}{R} // {1}{U}',
+					cmc: 4,
+					color_identity: ['R', 'U'],
+					card_faces: [
+						{ mana_cost: '{1}{R}' },
+						{ mana_cost: '{1}{U}' },
+					],
+				},
+			]) as any,
 		);
 
-		const result = await batchLookupScryfallIds([{ name: 'Fire', setCode: 'ema' }]);
+		const result = await batchLookupScryfallIds([
+			{ name: 'Fire', setCode: 'ema' },
+		]);
 
 		// Should use front face cost, not the combined "{1}{R} // {1}{U}"
 		expect(result.results.get('fire // ice|ema')?.manaCost).toBe('{1}{R}');
@@ -475,21 +533,25 @@ describe('batchLookupScryfallIds', () => {
 
 	it('adventure card: extracts creature face mana_cost from card_faces when top-level is combined', async () => {
 		vi.mocked(fetch).mockResolvedValue(
-			createScryfallResponse([{
-				id: 'bonecrusher-1',
-				name: 'Bonecrusher Giant // Stomp',
-				set: 'eld',
-				mana_cost: '{2}{R} // {1}{R}',
-				cmc: 3,
-				color_identity: ['R'],
-				card_faces: [
-					{ mana_cost: '{2}{R}' },
-					{ mana_cost: '{1}{R}' },
-				],
-			}]) as any,
+			createScryfallResponse([
+				{
+					id: 'bonecrusher-1',
+					name: 'Bonecrusher Giant // Stomp',
+					set: 'eld',
+					mana_cost: '{2}{R} // {1}{R}',
+					cmc: 3,
+					color_identity: ['R'],
+					card_faces: [
+						{ mana_cost: '{2}{R}' },
+						{ mana_cost: '{1}{R}' },
+					],
+				},
+			]) as any,
 		);
 
-		const result = await batchLookupScryfallIds([{ name: 'Bonecrusher Giant', setCode: 'eld' }]);
+		const result = await batchLookupScryfallIds([
+			{ name: 'Bonecrusher Giant', setCode: 'eld' },
+		]);
 
 		// Should use creature face cost, not the combined "{2}{R} // {1}{R}"
 		expect(result.results.get('bonecrusher giant // stomp|eld')?.manaCost).toBe('{2}{R}');
@@ -501,22 +563,26 @@ describe('batchLookupScryfallIds', () => {
 			json: () => Promise.resolve({
 				object: 'list',
 				not_found: [],
-				data: [{
-					id: 'ajani-1',
-					name: 'Ajani, Nacatl Pariah // Ajani, Nacatl Avenger',
-					set: 'mh3',
-					// No top-level mana_cost — transform layout
-					cmc: 2,
-					color_identity: ['R', 'W'],
-					card_faces: [
-						{ mana_cost: '{1}{W}' },
-						{ mana_cost: '' }, // back face — planeswalker, no casting cost
-					],
-				}],
+				data: [
+					{
+						id: 'ajani-1',
+						name: 'Ajani, Nacatl Pariah // Ajani, Nacatl Avenger',
+						set: 'mh3',
+						// No top-level mana_cost — transform layout
+						cmc: 2,
+						color_identity: ['R', 'W'],
+						card_faces: [
+							{ mana_cost: '{1}{W}' },
+							{ mana_cost: '' }, // back face — planeswalker, no casting cost
+						],
+					},
+				],
 			}),
 		} as any);
 
-		const result = await batchLookupScryfallIds([{ name: 'Ajani, Nacatl Pariah', setCode: 'mh3' }]);
+		const result = await batchLookupScryfallIds([
+			{ name: 'Ajani, Nacatl Pariah', setCode: 'mh3' },
+		]);
 
 		expect(result.results.get('ajani, nacatl pariah|mh3')?.manaCost).toBe('{1}{W}');
 		expect(result.results.get('ajani, nacatl pariah|mh3')?.cmc).toBe(2);
@@ -527,8 +593,12 @@ describe('batchLookupScryfallIds', () => {
 
 		vi.mocked(fetch).mockResolvedValue(
 			createScryfallResponse(
-				[{ id: 'abc', name: 'Shock', set: 'm21' }],
-				[{ name: 'Fake Card Name' }],
+				[
+					{ id: 'abc', name: 'Shock', set: 'm21' },
+				],
+				[
+					{ name: 'Fake Card Name' },
+				],
 			) as any,
 		);
 
@@ -554,14 +624,16 @@ describe('batchLookupScryfallIds', () => {
 
 	it('double-faced card extracts cmc, color_identity, type_line from top-level fields', async () => {
 		vi.mocked(fetch).mockResolvedValue(
-			createScryfallResponse([{
-				id: 'dfc-1',
-				name: 'Fable of the Mirror-Breaker // Reflection of Kiki-Jiki',
-				set: 'neo',
-				cmc: 3,
-				color_identity: ['R'],
-				type_line: 'Enchantment // Enchantment Creature — Reflection',
-			}]) as any,
+			createScryfallResponse([
+				{
+					id: 'dfc-1',
+					name: 'Fable of the Mirror-Breaker // Reflection of Kiki-Jiki',
+					set: 'neo',
+					cmc: 3,
+					color_identity: ['R'],
+					type_line: 'Enchantment // Enchantment Creature — Reflection',
+				},
+			]) as any,
 		);
 
 		const result = await batchLookupScryfallIds([

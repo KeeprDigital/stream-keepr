@@ -64,7 +64,9 @@ const containerBackgroundStyle = computed(() =>
 );
 
 function setHostContainer(el: Element | ComponentPublicInstance | null) {
-	overlayContainer.value = host.value.provideOverlayContainer && el instanceof HTMLElement ? el : null;
+	overlayContainer.value = host.value.provideOverlayContainer && el instanceof HTMLElement
+		? el
+		: null;
 }
 </script>
 

@@ -56,7 +56,9 @@ export function createConnectionLineField(
 	geometry.setDrawRange(0, 0);
 	const mesh = new three.LineSegments(geometry, new three.LineBasicMaterial({
 		vertexColors: true,
-		blending: usesAdditiveBlending(three, params) ? three.AdditiveBlending : three.NormalBlending,
+		blending: usesAdditiveBlending(three, params)
+			? three.AdditiveBlending
+			: three.NormalBlending,
 		transparent: true,
 	}));
 
@@ -108,7 +110,9 @@ export function createConnectionLineField(
 			geometry.getAttribute('color').needsUpdate = true;
 		},
 		applyBlending: (current) => {
-			mesh.material.blending = usesAdditiveBlending(three, current) ? three.AdditiveBlending : three.NormalBlending;
+			mesh.material.blending = usesAdditiveBlending(three, current)
+				? three.AdditiveBlending
+				: three.NormalBlending;
 		},
 		dispose: () => {
 			geometry.dispose();

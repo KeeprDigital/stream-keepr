@@ -144,7 +144,9 @@ function createInMemoryGraphicsObjectStoreImplementation() {
 			// without `include` reports no content type and empty custom metadata
 			// for every object. If that request is ever dropped, this double will
 			// keep passing while production reads every object as a conflict.
-			const matching = [...objects.entries()]
+			const matching = [
+				...objects.entries(),
+			]
 				.filter(([identity]) => identity.startsWith(input.prefix ?? ''))
 				.filter(([identity]) => input.cursor === undefined || identity > input.cursor)
 				.toSorted(([left], [right]) => left.localeCompare(right));
@@ -154,7 +156,9 @@ function createInMemoryGraphicsObjectStoreImplementation() {
 				outcome: 'listed' as const,
 				listing: {
 					objects: page.map(([, stored]) => stored.metadata),
-					cursor: matching.length > page.length ? page.at(-1)?.[0] : undefined,
+					cursor: matching.length > page.length
+						? page.at(-1)?.[0]
+						: undefined,
 				},
 			};
 		},

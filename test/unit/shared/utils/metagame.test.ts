@@ -15,7 +15,17 @@ describe('metagame card type display helpers', () => {
 	});
 
 	it('uses the shared bucket ordering consistently', () => {
-		expect(CARD_TYPE_BUCKET_ORDER).toEqual(['Creature', 'Planeswalker', 'Battle', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Land', 'Other']);
+		expect(CARD_TYPE_BUCKET_ORDER).toEqual([
+			'Creature',
+			'Planeswalker',
+			'Battle',
+			'Instant',
+			'Sorcery',
+			'Artifact',
+			'Enchantment',
+			'Land',
+			'Other',
+		]);
 		expect(getCardTypeBucketOrder('Creature — Human')).toBeLessThan(getCardTypeBucketOrder('Instant'));
 		expect(getCardTypeBucketOrder('Instant')).toBeLessThan(getCardTypeBucketOrder('Land'));
 	});

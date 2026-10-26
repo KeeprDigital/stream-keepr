@@ -30,7 +30,9 @@ const statusText = computed(() => {
 		return `${runningCount.value} of ${matchCount.value} running`;
 	if (pausedCount.value > 0)
 		return `${pausedCount.value} of ${matchCount.value} paused`;
-	return `${matchCount.value} clock${matchCount.value === 1 ? '' : 's'} idle`;
+	return `${matchCount.value} clock${matchCount.value === 1
+		? ''
+		: 's'} idle`;
 });
 
 const statusColor = computed(() => {

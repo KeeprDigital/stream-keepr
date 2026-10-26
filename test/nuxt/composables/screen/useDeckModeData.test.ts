@@ -28,9 +28,21 @@ const mockPlayerDecks = vi.fn(async (playerId: number) => {
 	if (!player)
 		throw Object.assign(new Error('Not found'), { statusCode: 404 });
 	const deck = await mockReadDeck(playerId, mockEventId.value, player.updatedAt);
-	return { player, decks: { decks: deck ? [deck] : [], selectedDeckId: deck?.id ?? null } };
+	return {
+		player,
+		decks: {
+			decks: deck
+				? [deck]
+				: [],
+			selectedDeckId: deck?.id ?? null,
+		},
+	};
 });
-const mockScreen = ref({ id: 1, name: 'Test', modeConfigs: { deck: {} } });
+const mockScreen = ref({
+	id: 1,
+	name: 'Test',
+	modeConfigs: { deck: {} },
+});
 const mockAssetCapability = ref<string | null>('output-capability');
 const continuity = createContinuitySignal();
 const mockRealtime = reactive({
@@ -41,8 +53,12 @@ const mockRealtime = reactive({
 });
 
 mockNuxtImport('useScreenOutputReads', () => () => ({
-	scope: computed(() => mockEventId.value ? { eventId: mockEventId.value, screenId: mockScreen.value.id } : null),
-	scopeKey: computed(() => mockEventId.value ? `${mockEventId.value}:${mockScreen.value.id}` : null),
+	scope: computed(() => mockEventId.value
+		? { eventId: mockEventId.value, screenId: mockScreen.value.id }
+		: null),
+	scopeKey: computed(() => mockEventId.value
+		? `${mockEventId.value}:${mockScreen.value.id}`
+		: null),
 	playerDecks: mockPlayerDecks,
 }));
 mockNuxtImport('useScreenOutputBroadcastDeckListRepository', () => () => ({
@@ -93,7 +109,9 @@ class MockImage {
 	}
 
 	get naturalWidth() {
-		return MockImage.failedUrls.has(this.#src) ? 0 : 488;
+		return MockImage.failedUrls.has(this.#src)
+			? 0
+			: 488;
 	}
 
 	decode() {
@@ -212,13 +230,20 @@ describe('useDeckModeData', () => {
 		mockPlayerId.value = null;
 		mockBroadcastDeckListId.value = null;
 		mockEventId.value = 1;
-		mockScreen.value = { id: 1, name: 'Test', modeConfigs: { deck: {} } };
+		mockScreen.value = {
+			id: 1,
+			name: 'Test',
+			modeConfigs: { deck: {} },
+		};
 		mockAssetCapability.value = 'output-capability';
 		mockRealtime.connectionState = 'connected';
 		mockCardDataHealth.value = 'complete';
 		mockReadDeck.mockResolvedValue(createDeckResponse([]));
 		mockGetSelectedBroadcastDeckList.mockResolvedValue(null);
-		mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: false });
+		mockFetchScryfallCards.mockResolvedValue({
+			cards: new Map(),
+			degraded: false,
+		});
 		mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
 	});
 
@@ -259,9 +284,13 @@ describe('useDeckModeData', () => {
 			name: 'Alice',
 			gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 		});
-		mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard({ quantity: 4 })]));
+		mockReadDeck.mockResolvedValue(createDeckResponse([
+			createDeckCard({ quantity: 4 }),
+		]));
 		mockBuildDeckListArrays.mockReturnValue({
-			mainboard: [createEnrichedCard('Counterspell', 'https://img.test/counterspell.jpg', { quantity: 4 })],
+			mainboard: [
+				createEnrichedCard('Counterspell', 'https://img.test/counterspell.jpg', { quantity: 4 }),
+			],
 			sideboard: [],
 		});
 
@@ -293,10 +322,74 @@ describe('useDeckModeData', () => {
 			createdAt: new Date(0),
 			updatedAt: new Date(0),
 			entries: [
-				{ id: 1, listId: 23, compartment: 'mainboard', quantity: 4, sortOrder: 0, canonicalName: 'Lightning Bolt', scryfallId: 'printing-bolt', oracleId: 'oracle-bolt', setCode: 'lea', collectorNumber: '161', cardType: 'Instant', colors: 'R', manaCost: '{R}', manaValue: 1, deckCounterTypes: ['storm'] },
-				{ id: 2, listId: 23, compartment: 'mainboard', quantity: 1, sortOrder: 1, canonicalName: 'Birds of Paradise', scryfallId: 'printing-birds', oracleId: 'oracle-birds', setCode: 'lea', collectorNumber: '186', cardType: 'Creature — Bird', colors: 'G', manaCost: '{G}', manaValue: 1, deckCounterTypes: [] },
-				{ id: 3, listId: 23, compartment: 'sideboard', quantity: 2, sortOrder: 0, canonicalName: 'Surgical Extraction', scryfallId: 'printing-surgical', oracleId: 'oracle-surgical', setCode: 'nph', collectorNumber: '74', cardType: 'Instant', colors: 'B', manaCost: '{B/P}', manaValue: 1, deckCounterTypes: ['poison'] },
-				{ id: 4, listId: 23, compartment: 'companion', quantity: 1, sortOrder: 0, canonicalName: 'Lutri, the Spellchaser', scryfallId: 'printing-lutri', oracleId: 'oracle-lutri', setCode: 'iko', collectorNumber: '227', cardType: 'Legendary Creature — Elemental Otter', colors: 'UR', manaCost: '{1}{U/R}{U/R}', manaValue: 3, deckCounterTypes: ['energy'] },
+				{
+					id: 1,
+					listId: 23,
+					compartment: 'mainboard',
+					quantity: 4,
+					sortOrder: 0,
+					canonicalName: 'Lightning Bolt',
+					scryfallId: 'printing-bolt',
+					oracleId: 'oracle-bolt',
+					setCode: 'lea',
+					collectorNumber: '161',
+					cardType: 'Instant',
+					colors: 'R',
+					manaCost: '{R}',
+					manaValue: 1,
+					deckCounterTypes: ['storm'],
+				},
+				{
+					id: 2,
+					listId: 23,
+					compartment: 'mainboard',
+					quantity: 1,
+					sortOrder: 1,
+					canonicalName: 'Birds of Paradise',
+					scryfallId: 'printing-birds',
+					oracleId: 'oracle-birds',
+					setCode: 'lea',
+					collectorNumber: '186',
+					cardType: 'Creature — Bird',
+					colors: 'G',
+					manaCost: '{G}',
+					manaValue: 1,
+					deckCounterTypes: [],
+				},
+				{
+					id: 3,
+					listId: 23,
+					compartment: 'sideboard',
+					quantity: 2,
+					sortOrder: 0,
+					canonicalName: 'Surgical Extraction',
+					scryfallId: 'printing-surgical',
+					oracleId: 'oracle-surgical',
+					setCode: 'nph',
+					collectorNumber: '74',
+					cardType: 'Instant',
+					colors: 'B',
+					manaCost: '{B/P}',
+					manaValue: 1,
+					deckCounterTypes: ['poison'],
+				},
+				{
+					id: 4,
+					listId: 23,
+					compartment: 'companion',
+					quantity: 1,
+					sortOrder: 0,
+					canonicalName: 'Lutri, the Spellchaser',
+					scryfallId: 'printing-lutri',
+					oracleId: 'oracle-lutri',
+					setCode: 'iko',
+					collectorNumber: '227',
+					cardType: 'Legendary Creature — Elemental Otter',
+					colors: 'UR',
+					manaCost: '{1}{U/R}{U/R}',
+					manaValue: 3,
+					deckCounterTypes: ['energy'],
+				},
 			],
 		});
 		mockBuildDeckListArrays.mockImplementation((cards: Array<Record<string, unknown>>) => ({
@@ -367,7 +460,10 @@ describe('useDeckModeData', () => {
 		expect(mockGetSelectedBroadcastDeckList).toHaveBeenCalledTimes(1);
 
 		// A Player edit is not the Broadcast Deck List's.
-		playerUpdatedHandler()!({ eventId: 1, player: { id: 5, name: 'Alice', updatedAt: '2026-10-15T10:05:00.000Z' } });
+		playerUpdatedHandler()!({
+			eventId: 1,
+			player: { id: 5, name: 'Alice', updatedAt: '2026-10-15T10:05:00.000Z' },
+		});
 		await flushPromises();
 		expect(mockGetSelectedBroadcastDeckList).toHaveBeenCalledTimes(1);
 		expect(mockPlayerDecks).not.toHaveBeenCalled();
@@ -423,10 +519,22 @@ describe('useDeckModeData', () => {
 				.mockResolvedValueOnce(createBroadcastList(1, 'First', [entry]))
 				.mockResolvedValue(createBroadcastList(2, 'Second', [entry]));
 			mockFetchScryfallCards
-				.mockResolvedValueOnce({ cards: new Map(), degraded: false })
-				.mockResolvedValueOnce({ cards: new Map(), degraded: true })
-				.mockResolvedValueOnce({ cards: new Map(), degraded: true })
-				.mockResolvedValue({ cards: new Map(), degraded: false });
+				.mockResolvedValueOnce({
+					cards: new Map(),
+					degraded: false,
+				})
+				.mockResolvedValueOnce({
+					cards: new Map(),
+					degraded: true,
+				})
+				.mockResolvedValueOnce({
+					cards: new Map(),
+					degraded: true,
+				})
+				.mockResolvedValue({
+					cards: new Map(),
+					degraded: false,
+				});
 			mockBuildDeckListArrays.mockImplementation((cards: Array<Record<string, unknown>>) => ({
 				mainboard: cards.map(card => ({ ...card, mtgCard: null })),
 				sideboard: [],
@@ -528,17 +636,31 @@ describe('useDeckModeData', () => {
 	it('keeps the current deck visible until the pending deck is committed', async () => {
 		mockReadPlayer.mockImplementation(async (_eventId: number, playerId: number) => {
 			if (playerId === 1) {
-				return { id: 1, name: 'Alice', gameData: { type: 'mtg', deckName: 'Deck A', deckColors: 'U' } };
+				return {
+					id: 1,
+					name: 'Alice',
+					gameData: { type: 'mtg', deckName: 'Deck A', deckColors: 'U' },
+				};
 			}
-			return { id: 2, name: 'Bob', gameData: { type: 'mtg', deckName: 'Deck B', deckColors: 'R' } };
+			return {
+				id: 2,
+				name: 'Bob',
+				gameData: { type: 'mtg', deckName: 'Deck B', deckColors: 'R' },
+			};
 		});
 		mockReadDeck.mockImplementation(async (playerId: number) => {
 			return playerId === 1
-				? createDeckResponse([createDeckCard({ name: 'Card A' })], { id: 10, name: 'Deck A', colors: 'U' })
-				: createDeckResponse([createDeckCard({ name: 'Card B', scryfallId: 'card-2' })], { id: 20, name: 'Deck B', colors: 'R' });
+				? createDeckResponse([
+						createDeckCard({ name: 'Card A' }),
+					], { id: 10, name: 'Deck A', colors: 'U' })
+				: createDeckResponse([
+						createDeckCard({ name: 'Card B', scryfallId: 'card-2' }),
+					], { id: 20, name: 'Deck B', colors: 'R' });
 		});
 		mockBuildDeckListArrays.mockImplementation((cards: Array<{ name: string }>) => ({
-			mainboard: [createEnrichedCard(cards[0]!.name, `https://img.test/${cards[0]!.name}.jpg`)],
+			mainboard: [
+				createEnrichedCard(cards[0]!.name, `https://img.test/${cards[0]!.name}.jpg`),
+			],
 			sideboard: [],
 		}));
 
@@ -567,24 +689,42 @@ describe('useDeckModeData', () => {
 		const bobResolver: { resolve: ((value: BobPlayer) => void) | null } = { resolve: null };
 		mockReadPlayer.mockImplementation((_eventId: number, playerId: number) => {
 			if (playerId === 1) {
-				return Promise.resolve({ id: 1, name: 'Alice', gameData: { type: 'mtg', deckName: 'Deck A', deckColors: 'U' } });
+				return Promise.resolve({
+					id: 1,
+					name: 'Alice',
+					gameData: { type: 'mtg', deckName: 'Deck A', deckColors: 'U' },
+				});
 			}
 			if (playerId === 2) {
 				return new Promise<BobPlayer>((resolve) => {
 					bobResolver.resolve = resolve;
 				});
 			}
-			return Promise.resolve({ id: 3, name: 'Carol', gameData: { type: 'mtg', deckName: 'Deck C', deckColors: 'G' } });
+			return Promise.resolve({
+				id: 3,
+				name: 'Carol',
+				gameData: { type: 'mtg', deckName: 'Deck C', deckColors: 'G' },
+			});
 		});
 		mockReadDeck.mockImplementation(async (playerId: number) => {
-			if (playerId === 1)
-				return createDeckResponse([createDeckCard({ name: 'Card A' })], { id: 10, name: 'Deck A', colors: 'U' });
-			if (playerId === 2)
-				return createDeckResponse([createDeckCard({ name: 'Card B', scryfallId: 'card-2' })], { id: 20, name: 'Deck B', colors: 'R' });
-			return createDeckResponse([createDeckCard({ name: 'Card C', scryfallId: 'card-3' })], { id: 30, name: 'Deck C', colors: 'G' });
+			if (playerId === 1) {
+				return createDeckResponse([
+					createDeckCard({ name: 'Card A' }),
+				], { id: 10, name: 'Deck A', colors: 'U' });
+			}
+			if (playerId === 2) {
+				return createDeckResponse([
+					createDeckCard({ name: 'Card B', scryfallId: 'card-2' }),
+				], { id: 20, name: 'Deck B', colors: 'R' });
+			}
+			return createDeckResponse([
+				createDeckCard({ name: 'Card C', scryfallId: 'card-3' }),
+			], { id: 30, name: 'Deck C', colors: 'G' });
 		});
 		mockBuildDeckListArrays.mockImplementation((cards: Array<{ name: string }>) => ({
-			mainboard: [createEnrichedCard(cards[0]!.name, `https://img.test/${cards[0]!.name}.jpg`)],
+			mainboard: [
+				createEnrichedCard(cards[0]!.name, `https://img.test/${cards[0]!.name}.jpg`),
+			],
 			sideboard: [],
 		}));
 
@@ -606,7 +746,11 @@ describe('useDeckModeData', () => {
 		expect(result.primaryHeader.value).toBe('Carol');
 
 		if (bobResolver.resolve) {
-			bobResolver.resolve({ id: 2, name: 'Bob', gameData: { type: 'mtg', deckName: 'Deck B', deckColors: 'R' } });
+			bobResolver.resolve({
+				id: 2,
+				name: 'Bob',
+				gameData: { type: 'mtg', deckName: 'Deck B', deckColors: 'R' },
+			});
 		}
 		await flushPromises();
 
@@ -620,10 +764,20 @@ describe('useDeckModeData', () => {
 			name: 'Alice',
 			gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 		});
-		mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
-		mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+		mockReadDeck.mockResolvedValue(createDeckResponse([
+			createDeckCard(),
+		]));
+		mockFetchScryfallCards.mockResolvedValue({
+			cards: new Map(),
+			degraded: true,
+		});
 		mockBuildDeckListArrays.mockReturnValue({
-			mainboard: [{ ...createEnrichedCard('Counterspell', ''), mtgCard: null }],
+			mainboard: [
+				{
+					...createEnrichedCard('Counterspell', ''),
+					mtgCard: null,
+				},
+			],
 			sideboard: [],
 		});
 
@@ -644,10 +798,18 @@ describe('useDeckModeData', () => {
 				name: 'Alice',
 				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 			});
-			mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+			mockReadDeck.mockResolvedValue(createDeckResponse([
+				createDeckCard(),
+			]));
 			mockFetchScryfallCards
-				.mockResolvedValueOnce({ cards: new Map(), degraded: true })
-				.mockResolvedValue({ cards: new Map(), degraded: false });
+				.mockResolvedValueOnce({
+					cards: new Map(),
+					degraded: true,
+				})
+				.mockResolvedValue({
+					cards: new Map(),
+					degraded: false,
+				});
 			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
 
 			mockPlayerId.value = 5;
@@ -682,8 +844,13 @@ describe('useDeckModeData', () => {
 				name: 'Alice',
 				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 			}));
-			mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
-			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+			mockReadDeck.mockResolvedValue(createDeckResponse([
+				createDeckCard(),
+			]));
+			mockFetchScryfallCards.mockResolvedValue({
+				cards: new Map(),
+				degraded: true,
+			});
 			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
 
 			mockPlayerId.value = 5;
@@ -692,12 +859,18 @@ describe('useDeckModeData', () => {
 			expect(mockCardDataHealth.value).toBe('degraded');
 
 			// Recovery reports itself the same way.
-			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: false });
+			mockFetchScryfallCards.mockResolvedValue({
+				cards: new Map(),
+				degraded: false,
+			});
 			await vi.advanceTimersByTimeAsync(60_000);
 			expect(mockCardDataHealth.value).toBe('complete');
 
 			// A degraded surface that goes away must not leave its report standing.
-			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+			mockFetchScryfallCards.mockResolvedValue({
+				cards: new Map(),
+				degraded: true,
+			});
 			mockPlayerId.value = 6;
 			await vi.advanceTimersByTimeAsync(0);
 			expect(mockCardDataHealth.value).toBe('degraded');
@@ -717,8 +890,13 @@ describe('useDeckModeData', () => {
 				name: 'Alice',
 				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 			});
-			mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
-			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+			mockReadDeck.mockResolvedValue(createDeckResponse([
+				createDeckCard(),
+			]));
+			mockFetchScryfallCards.mockResolvedValue({
+				cards: new Map(),
+				degraded: true,
+			});
 			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
 
 			mockPlayerId.value = 5;
@@ -747,8 +925,13 @@ describe('useDeckModeData', () => {
 				name: 'Alice',
 				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 			});
-			mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
-			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+			mockReadDeck.mockResolvedValue(createDeckResponse([
+				createDeckCard(),
+			]));
+			mockFetchScryfallCards.mockResolvedValue({
+				cards: new Map(),
+				degraded: true,
+			});
 			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
 
 			mockPlayerId.value = 5;
@@ -779,10 +962,18 @@ describe('useDeckModeData', () => {
 				name: 'Alice',
 				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 			});
-			mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+			mockReadDeck.mockResolvedValue(createDeckResponse([
+				createDeckCard(),
+			]));
 			mockFetchScryfallCards
-				.mockResolvedValueOnce({ cards: new Map(), degraded: true })
-				.mockResolvedValue({ cards: new Map(), degraded: false });
+				.mockResolvedValueOnce({
+					cards: new Map(),
+					degraded: true,
+				})
+				.mockResolvedValue({
+					cards: new Map(),
+					degraded: false,
+				});
 			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
 
 			mockPlayerId.value = 5;
@@ -814,8 +1005,13 @@ describe('useDeckModeData', () => {
 				updatedAt,
 				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 			}));
-			mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
-			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+			mockReadDeck.mockResolvedValue(createDeckResponse([
+				createDeckCard(),
+			]));
+			mockFetchScryfallCards.mockResolvedValue({
+				cards: new Map(),
+				degraded: true,
+			});
 			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
 
 			mockPlayerId.value = 5;
@@ -830,7 +1026,10 @@ describe('useDeckModeData', () => {
 			// The operator edits the deck mid-outage: the rebuild carries new cards
 			// and must reach program even though its card data is still degraded.
 			updatedAt = '2026-08-21T01:00:00.000Z';
-			playerUpdatedHandler()!({ eventId: 1, player: { id: 5, name: 'Alice', updatedAt } });
+			playerUpdatedHandler()!({
+				eventId: 1,
+				player: { id: 5, name: 'Alice', updatedAt },
+			});
 			await vi.advanceTimersByTimeAsync(0);
 			expect(result.pendingSwapVersion.value).toBe(1);
 		}
@@ -844,12 +1043,28 @@ describe('useDeckModeData', () => {
 		try {
 			mockReadPlayer.mockImplementation(async (_eventId: number, playerId: number) =>
 				playerId === 5
-					? { id: 5, name: 'Alice', gameData: { type: 'mtg', deckName: 'Deck A', deckColors: 'U' } }
-					: { id: 6, name: 'Bob', gameData: { type: 'mtg', deckName: 'Deck B', deckColors: 'R' } });
-			mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+					? {
+							id: 5,
+							name: 'Alice',
+							gameData: { type: 'mtg', deckName: 'Deck A', deckColors: 'U' },
+						}
+					: {
+							id: 6,
+							name: 'Bob',
+							gameData: { type: 'mtg', deckName: 'Deck B', deckColors: 'R' },
+						});
+			mockReadDeck.mockResolvedValue(createDeckResponse([
+				createDeckCard(),
+			]));
 			mockFetchScryfallCards
-				.mockResolvedValueOnce({ cards: new Map(), degraded: true })
-				.mockResolvedValue({ cards: new Map(), degraded: false });
+				.mockResolvedValueOnce({
+					cards: new Map(),
+					degraded: true,
+				})
+				.mockResolvedValue({
+					cards: new Map(),
+					degraded: false,
+				});
 			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
 
 			mockPlayerId.value = 5;
@@ -879,9 +1094,13 @@ describe('useDeckModeData', () => {
 			name: 'Alice',
 			gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 		});
-		mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+		mockReadDeck.mockResolvedValue(createDeckResponse([
+			createDeckCard(),
+		]));
 		mockBuildDeckListArrays.mockReturnValue({
-			mainboard: [createEnrichedCard('Counterspell', 'https://img.test/counterspell.jpg')],
+			mainboard: [
+				createEnrichedCard('Counterspell', 'https://img.test/counterspell.jpg'),
+			],
 			sideboard: [],
 		});
 
@@ -935,11 +1154,21 @@ describe('useDeckModeData', () => {
 		beforeEach(() => {
 			serverPlayer = { id: 5, name: 'Alice', updatedAt: BEFORE_EDIT };
 			mockReadPlayer.mockImplementation(async (_eventId: number, playerId: number) =>
-				playerId === serverPlayer.id ? serverPlayer : null);
+				playerId === serverPlayer.id
+					? serverPlayer
+					: null);
 			mockReadDeck.mockImplementation(async (_playerId: number, _eventId: number, updatedAt: string) =>
-				createDeckResponse([createDeckCard({ name: updatedAt === BEFORE_EDIT ? 'Counterspell' : 'Brainstorm' })]));
+				createDeckResponse([
+					createDeckCard({
+						name: updatedAt === BEFORE_EDIT
+							? 'Counterspell'
+							: 'Brainstorm',
+					}),
+				]));
 			mockBuildDeckListArrays.mockImplementation((cards: Array<{ name: string }>) => ({
-				mainboard: [createEnrichedCard(cards[0]!.name, `https://img.test/${cards[0]!.name}.jpg`)],
+				mainboard: [
+					createEnrichedCard(cards[0]!.name, `https://img.test/${cards[0]!.name}.jpg`),
+				],
 				sideboard: [],
 			}));
 		});
@@ -1019,11 +1248,15 @@ describe('useDeckModeData', () => {
 
 			deliver('melee:decklistsSynced', { playerCount: 1, deckCount: 1 });
 			await flushPromises();
-			deliver('playerDeck:reviewed', { deck: { playerId: 6 } });
+			deliver('playerDeck:reviewed', {
+				deck: { playerId: 6 },
+			});
 			await flushPromises();
 			expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
 
-			deliver('playerDeck:reviewed', { deck: { playerId: 5 } });
+			deliver('playerDeck:reviewed', {
+				deck: { playerId: 5 },
+			});
 			await flushPromises();
 			expect(mockPlayerDecks).toHaveBeenCalledTimes(3);
 		});
@@ -1035,7 +1268,11 @@ describe('useDeckModeData', () => {
 			beforeEach(() => {
 				resolved = false;
 				mockReadDeck.mockImplementation(async () =>
-					createDeckResponse([createDeckCard({ name: resolved ? 'Lightning Bolt' : 'Counterspell' })]));
+					createDeckResponse([
+						createDeckCard({
+							name: resolved ? 'Lightning Bolt' : 'Counterspell',
+						}),
+					]));
 			});
 
 			it('stages the rewritten Deck List of the selected Player, and reads nothing for another', async () => {
@@ -1045,11 +1282,17 @@ describe('useDeckModeData', () => {
 				expect(mainboardNames(result)).toEqual(['Counterspell']);
 
 				resolved = true;
-				deliver('playerDeck:cardsResolved', { deckIds: [9], playerIds: [6] });
+				deliver('playerDeck:cardsResolved', {
+					deckIds: [9],
+					playerIds: [6],
+				});
 				await flushPromises();
 				expect(mockPlayerDecks).toHaveBeenCalledTimes(1);
 
-				deliver('playerDeck:cardsResolved', { deckIds: [3, 9], playerIds: [5, 6] });
+				deliver('playerDeck:cardsResolved', {
+					deckIds: [3, 9],
+					playerIds: [5, 6],
+				});
 				await flushPromises();
 
 				expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
@@ -1060,14 +1303,20 @@ describe('useDeckModeData', () => {
 			});
 
 			it('swaps in the rewritten Deck List even while its card data is still degraded', async () => {
-				mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+				mockFetchScryfallCards.mockResolvedValue({
+					cards: new Map(),
+					degraded: true,
+				});
 				mockPlayerId.value = 5;
 				const result = mountDeckModeData();
 				await flushPromises();
 				expect(mainboardNames(result)).toEqual(['Counterspell']);
 
 				resolved = true;
-				deliver('playerDeck:cardsResolved', { deckIds: [3], playerIds: [5] });
+				deliver('playerDeck:cardsResolved', {
+					deckIds: [3],
+					playerIds: [5],
+				});
 				await flushPromises();
 
 				expect(result.pendingSwapVersion.value).toBe(1);
@@ -1179,7 +1428,11 @@ describe('useDeckModeData', () => {
 
 		it('shows a deck imported after the Player was selected without one', async () => {
 			mockReadDeck.mockImplementation(async (_playerId: number, _eventId: number, updatedAt: string) =>
-				createDeckResponse(updatedAt === BEFORE_EDIT ? [] : [createDeckCard({ name: 'Brainstorm' })]));
+				createDeckResponse(updatedAt === BEFORE_EDIT
+					? []
+					: [
+							createDeckCard({ name: 'Brainstorm' }),
+						]));
 			mockPlayerId.value = 5;
 			const result = mountDeckModeData();
 			await flushPromises();

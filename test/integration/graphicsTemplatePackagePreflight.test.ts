@@ -25,7 +25,10 @@ const basePixelPng = Uint8Array.from(Buffer.from(
 
 /** Appends a valid ancillary text chunk so this suite owns a distinct digest. */
 function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array<ArrayBuffer> {
-	const payload = Buffer.concat([Buffer.from('tEXt'), Buffer.from(`${keyword}\0`)]);
+	const payload = Buffer.concat([
+		Buffer.from('tEXt'),
+		Buffer.from(`${keyword}\0`),
+	]);
 	const length = Buffer.alloc(4);
 	length.writeUInt32BE(payload.byteLength - 4, 0);
 	const checksum = Buffer.alloc(4);
@@ -250,11 +253,16 @@ describe('template Package preflight through the API boundary', () => {
 		config.layout.frame.backgroundImage = { kind: 'asset', ...reference } as never;
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: config.layout } },
+			{
+				method: 'PATCH',
+				body: { layout: config.layout },
+			},
 		);
 		const exported = await fetch(
 			`/api/events/${eventId}/screens/${screenId}/template-packages/feature-match-layout`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 		expect(exported.status).toBe(200);
 		exportedPackage = await collectStream(exported.body!);
@@ -279,12 +287,14 @@ describe('template Package preflight through the API boundary', () => {
 		expect(report.outcome).toBe('ready');
 		expect(report.issues).toEqual([]);
 		expect(report.packageKind).toBe('sklayout');
-		expect(report.mappings).toEqual([expect.objectContaining({
-			proposal: 'reuse-graphic-asset-revision',
-			basis: 'exact-origin',
-			reference,
-			canonicalGrowthBytes: 0,
-		})]);
+		expect(report.mappings).toEqual([
+			expect.objectContaining({
+				proposal: 'reuse-graphic-asset-revision',
+				basis: 'exact-origin',
+				reference,
+				canonicalGrowthBytes: 0,
+			}),
+		]);
 		expect(report.quota.canonicalGrowthBytes).toBe(0);
 		expect(report.observed.archiveByteLength).toBe(exportedPackage.byteLength);
 
@@ -328,33 +338,39 @@ describe('template Package preflight through the API boundary', () => {
 			revisionId: 'a-revision-never-seen-here',
 		};
 		const entry = templatePackageContentEntry(digestOf(filling));
-		parts.contents = [{ name: entry, bytes: filling }];
-		parts.manifest.packagedAssets = [{
-			...packaged,
-			content: { entry },
-			origin: {
-				sourceAssetId: unseen.assetId as never,
-				sourceRevisionId: unseen.revisionId as never,
-				sourceRevisionNumber: 1,
-				digest: digestOf(filling),
+		parts.contents = [
+			{ name: entry, bytes: filling },
+		];
+		parts.manifest.packagedAssets = [
+			{
+				...packaged,
+				content: { entry },
+				origin: {
+					sourceAssetId: unseen.assetId as never,
+					sourceRevisionId: unseen.revisionId as never,
+					sourceRevisionNumber: 1,
+					digest: digestOf(filling),
+				},
+				integrity: {
+					...packaged.integrity,
+					digest: digestOf(filling),
+					byteLength: filling.byteLength,
+				},
+				facts: {
+					...packaged.facts,
+					byteLength: filling.byteLength,
+					sha256: digestOf(filling),
+				},
 			},
-			integrity: {
-				...packaged.integrity,
+		];
+		parts.manifest.contents = [
+			{
+				...parts.manifest.contents[0]!,
 				digest: digestOf(filling),
 				byteLength: filling.byteLength,
+				entry,
 			},
-			facts: {
-				...packaged.facts,
-				byteLength: filling.byteLength,
-				sha256: digestOf(filling),
-			},
-		}];
-		parts.manifest.contents = [{
-			...parts.manifest.contents[0]!,
-			digest: digestOf(filling),
-			byteLength: filling.byteLength,
-			entry,
-		}];
+		];
 		parts.template = {
 			...(parts.template as Record<string, unknown>),
 			frame: {
@@ -389,10 +405,15 @@ describe('template Package preflight through the API boundary', () => {
 		const packaged = parts.manifest.packagedAssets[0]!;
 		// A revision of a known source this installation does not hold: a separate
 		// Graphic Asset, and something the author is asked about.
-		parts.manifest.packagedAssets = [{
-			...packaged,
-			origin: { ...packaged.origin, sourceRevisionId: testGraphicAssetRevisionId('a-revision-never-seen-here') },
-		}];
+		parts.manifest.packagedAssets = [
+			{
+				...packaged,
+				origin: {
+					...packaged.origin,
+					sourceRevisionId: testGraphicAssetRevisionId('a-revision-never-seen-here'),
+				},
+			},
+		];
 		parts.template = {
 			...(parts.template as Record<string, unknown>),
 			frame: {
@@ -420,7 +441,9 @@ describe('template Package preflight through the API boundary', () => {
 			{
 				method: 'POST',
 				headers: { ...authorHeaders, 'content-type': 'application/json' },
-				body: JSON.stringify({ fingerprint: 'a'.repeat(64) }),
+				body: JSON.stringify({
+					fingerprint: 'a'.repeat(64),
+				}),
 			},
 		);
 		expect(wrongFingerprint.status).toBe(400);
@@ -431,7 +454,11 @@ describe('template Package preflight through the API boundary', () => {
 
 		const confirmed = await $fetch<GraphicsIngestionOperation>(
 			`/api/graphics-assets/ingestion-operations/${operation.id}/template-package-confirmation`,
-			{ method: 'POST', headers: authorHeaders, body: { fingerprint: report.fingerprint } },
+			{
+				method: 'POST',
+				headers: authorHeaders,
+				body: { fingerprint: report.fingerprint },
+			},
 		);
 		expect(confirmed.stage).toBe('awaiting-installation');
 
@@ -447,7 +474,10 @@ describe('template Package preflight through the API boundary', () => {
 		const parts = readTemplatePackageParts(exportedPackage);
 		const operation = await receivePackage(writeTemplatePackage(parts, {
 			extraEntries: [
-				{ name: '../escaped.json', bytes: new TextEncoder().encode('{}') },
+				{
+					name: '../escaped.json',
+					bytes: new TextEncoder().encode('{}'),
+				},
 				{
 					name: 'link.bin',
 					bytes: new TextEncoder().encode('/etc/passwd'),
@@ -478,10 +508,15 @@ describe('template Package preflight through the API boundary', () => {
 	it('cancels a paused package idempotently', async () => {
 		const parts = readTemplatePackageParts(exportedPackage);
 		const packaged = parts.manifest.packagedAssets[0]!;
-		parts.manifest.packagedAssets = [{
-			...packaged,
-			origin: { ...packaged.origin, sourceRevisionId: testGraphicAssetRevisionId('another-unseen-revision') },
-		}];
+		parts.manifest.packagedAssets = [
+			{
+				...packaged,
+				origin: {
+					...packaged.origin,
+					sourceRevisionId: testGraphicAssetRevisionId('another-unseen-revision'),
+				},
+			},
+		];
 		parts.template = {
 			...(parts.template as Record<string, unknown>),
 			frame: {

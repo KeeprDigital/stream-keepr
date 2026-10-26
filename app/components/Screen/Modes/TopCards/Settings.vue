@@ -55,7 +55,11 @@ onMounted(async () => {
 // applied, in rows of `columns` — read and followed as its Screen Output reads
 // and follows them, so the page count is the one it renders (#780).
 const { rowCount, loading: loadingCards } = useEditedScreenModeData(
-	{ screen: () => props.screen, eventId: () => props.eventId, saving: () => saving.value },
+	{
+		screen: () => props.screen,
+		eventId: () => props.eventId,
+		saving: () => saving.value,
+	},
 	useTopCardsModeData,
 );
 
@@ -63,7 +67,12 @@ const { rowCount, loading: loadingCards } = useEditedScreenModeData(
 // Every edit below goes through its `updateConfig`, which restarts the
 // rotation from page 1 when the edit changes the rotation's shape. An edit
 // changing which cards each page holds returns to page 1 as well.
-const rotation = useRotationConfigWrites({ mode: 'top-cards', config, rowCount, saveConfig });
+const rotation = useRotationConfigWrites({
+	mode: 'top-cards',
+	config,
+	rowCount,
+	saveConfig,
+});
 const { updateConfig } = rotation;
 
 const boardOptions = [
@@ -111,7 +120,9 @@ function toggleType(bucket: CardTypeBucket) {
 }
 
 function typeLabel(bucket: CardTypeBucket): string {
-	return bucket === 'Land' ? 'Nonbasic Land' : bucket;
+	return bucket === 'Land'
+		? 'Nonbasic Land'
+		: bucket;
 }
 </script>
 

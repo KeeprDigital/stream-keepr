@@ -90,7 +90,9 @@ export function eventService() {
 			conditions.push(eq(events.game, params.game));
 		}
 
-		return conditions.length > 0 ? and(...conditions) : undefined;
+		return conditions.length > 0
+			? and(...conditions)
+			: undefined;
 	};
 
 	const findById = async (id: number): Promise<EventWithTalents | undefined> => {
@@ -150,7 +152,9 @@ export function eventService() {
 			.update(events)
 			.set({
 				...data,
-				...(shouldResetDecklistSync ? { lastDecklistsSyncedAt: null } : {}),
+				...(shouldResetDecklistSync
+					? { lastDecklistsSyncedAt: null }
+					: {}),
 			})
 			.where(and(
 				eq(events.id, id),
@@ -255,11 +259,17 @@ export function eventService() {
 			// Announces the cleared Slots' new Sessions, now that they exist.
 			await reset.settle();
 			const { keptPhases, keptRounds } = reset.structureRemoval.readOutcome(batch, results);
-			return { clearedScreens: results[0], keptStructure: { keptPhases, keptRounds } };
+			return {
+				clearedScreens: results[0],
+				keptStructure: { keptPhases, keptRounds },
+			};
 		}
 
 		await updateEventQuery;
-		return { clearedScreens: [], keptStructure: { keptPhases: [], keptRounds: [] } };
+		return {
+			clearedScreens: [],
+			keptStructure: { keptPhases: [], keptRounds: [] },
+		};
 	};
 
 	const updateSyncMetadata = async (
@@ -267,7 +277,9 @@ export function eventService() {
 		data: SyncMetadataUpdate,
 		leaseToken?: string,
 	): Promise<boolean> => {
-		const conditions = [eq(events.id, id)];
+		const conditions = [
+			eq(events.id, id),
+		];
 		if (leaseToken !== undefined)
 			conditions.push(eq(events.meleeSyncLeaseToken, leaseToken));
 

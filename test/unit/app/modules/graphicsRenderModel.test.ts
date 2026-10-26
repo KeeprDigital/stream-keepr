@@ -30,7 +30,11 @@ import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
 import { resolveGraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 
 function surfaceStyle(overrides: Partial<GraphicSurfaceStyle> = {}): GraphicSurfaceStyle {
-	return { fill: { type: 'solid', color: '#0077a3' }, fillOpacity: 0.5, ...overrides };
+	return {
+		fill: { type: 'solid', color: '#0077a3' },
+		fillOpacity: 0.5,
+		...overrides,
+	};
 }
 
 function shape(id: string, overrides: Partial<ShapeGraphicItemConfig> = {}): ShapeGraphicItemConfig {
@@ -169,7 +173,10 @@ function contextGated<K extends 'clock' | 'player-life' | 'game-wins' | 'deck-li
 		canvasWidth: 1920,
 		canvasHeight: 1080,
 	});
-	return { ...item, ...overrides } as Extract<GraphicItemConfig, { type: K }>;
+	return {
+		...item,
+		...overrides,
+	} as Extract<GraphicItemConfig, { type: K }>;
 }
 
 function clock(id: string, overrides: Partial<ClockGraphicItemConfig> = {}) {
@@ -216,7 +223,9 @@ function keyChannels(value: string): { luminance: number; alpha: number } {
 		throw new Error(`Key Output must paint greyscale, got #${rgb}`);
 	return {
 		luminance: red,
-		alpha: hex[2] === undefined ? 1 : Number.parseInt(hex[2], 16) / 255,
+		alpha: hex[2] === undefined
+			? 1
+			: Number.parseInt(hex[2], 16) / 255,
 	};
 }
 
@@ -428,7 +437,12 @@ function mediaPaints(media: GraphicMediaRenderDescriptor, path: string): KeyPain
 	if (media.style.filter !== KEY_MEDIA_ALPHA_TO_WHITE)
 		throw new Error(`${path}.media paints its own colours into the Key Output instead of its alpha as white`);
 
-	return [{ color: '#ffffff', opacity: Number(media.style.opacity ?? 1) }];
+	return [
+		{
+			color: '#ffffff',
+			opacity: Number(media.style.opacity ?? 1),
+		},
+	];
 }
 
 /**
@@ -456,7 +470,9 @@ function deckCardImagePaints(image: { src: string; style: CSSProperties }, path:
 
 	if (image.style.filter !== KEY_MEDIA_ALPHA_TO_WHITE)
 		throw new Error(`${path} paints its own colours into the Key Output instead of its alpha as white`);
-	return [{ color: '#ffffff', opacity: 1 }];
+	return [
+		{ color: '#ffffff', opacity: 1 },
+	];
 }
 
 function surfacePaints(surface: GraphicSurfaceRenderDescriptor, path: string): KeyPaint[] {
@@ -494,34 +510,48 @@ function itemPaints(item: GraphicItemRenderDescriptor, prefix = ''): KeyPaint[] 
 
 	return [
 		...stylePaints(item.style, path),
-		...(item.textStyle ? stylePaints(item.textStyle, `${path}.textStyle`) : []),
+		...(item.textStyle
+			? stylePaints(item.textStyle, `${path}.textStyle`)
+			: []),
 		// A Graphic Placeholder Style paints one run of a rendered Graphic Text
 		// Template, so it is a painting surface like any other and has to be walked.
 		// Leaving it out would let a placeholder style that later gained a background
 		// or a text stroke reach the matte unnoticed, and would keep a segment's own
 		// alpha out of the union arithmetic below.
 		...(item.textSegments ?? []).flatMap((segment, index) =>
-			segment.style ? stylePaints(segment.style, `${path}.textSegments[${index}]`) : []),
+			segment.style
+				? stylePaints(segment.style, `${path}.textSegments[${index}]`)
+				: []),
 		// A Graphic Placeholder Style paints one run of a rendered Graphic Text
 		// Template, so it is a painting surface like any other and has to be walked.
 		// Leaving it out would let a placeholder style that later gained a background
 		// or a text stroke reach the matte unnoticed, and would keep a segment's own
 		// alpha out of the union arithmetic below.
-		...(item.surface ? surfacePaints(item.surface, path) : []),
-		...(item.media ? mediaPaints(item.media, path) : []),
-		...(item.icon ? stylePaints(item.icon.style, `${path}.icon`) : []),
+		...(item.surface
+			? surfacePaints(item.surface, path)
+			: []),
+		...(item.media
+			? mediaPaints(item.media, path)
+			: []),
+		...(item.icon
+			? stylePaints(item.icon.style, `${path}.icon`)
+			: []),
 		// A Deck List Item's grid cards are painted subtrees like any other: the cell box,
 		// the art or its placeholder surface and name, and the quantity badge.
 		...(item.deckList?.cards ?? []).flatMap((card, index) => [
 			...stylePaints(card.style, `${path}.deckList[${index}]`),
-			...(card.image ? deckCardImagePaints(card.image, `${path}.deckList[${index}].image`) : []),
+			...(card.image
+				? deckCardImagePaints(card.image, `${path}.deckList[${index}].image`)
+				: []),
 			...(card.placeholder
 				? [
 						...surfacePaints(card.placeholder.surface, `${path}.deckList[${index}].placeholder`),
 						...stylePaints(card.placeholder.textStyle, `${path}.deckList[${index}].placeholder.text`),
 					]
 				: []),
-			...(card.badge ? stylePaints(card.badge.style, `${path}.deckList[${index}].badge`) : []),
+			...(card.badge
+				? stylePaints(card.badge.style, `${path}.deckList[${index}].badge`)
+				: []),
 		]),
 		...(item.children ?? []).flatMap(child => itemPaints(child, `${path}>`)),
 		// An update phase's two renderings are two painted subtrees, so both are walked.
@@ -536,7 +566,9 @@ function itemPaints(item: GraphicItemRenderDescriptor, prefix = ''): KeyPaint[] 
 		// Concurrent lifecycle phases wipe on two elements, because CSS allows one mask
 		// per element. The enclosing one is a painting surface like any other, so a
 		// composition that ever put a colour there has to fail the same check.
-		...(item.enclosed ? itemPaints(item.enclosed, `${path}~enclosed>`) : []),
+		...(item.enclosed
+			? itemPaints(item.enclosed, `${path}~enclosed>`)
+			: []),
 	];
 }
 
@@ -549,12 +581,18 @@ function graphicPaints(graphic: {
 	outgoing?: { style?: CSSProperties; items: GraphicItemRenderDescriptor[] };
 }): KeyPaint[] {
 	return [
-		...(graphic.enclosingStyle ? stylePaints(graphic.enclosingStyle, `${graphic.id}.enclosingStyle`) : []),
-		...(graphic.style ? stylePaints(graphic.style, `${graphic.id}.style`) : []),
+		...(graphic.enclosingStyle
+			? stylePaints(graphic.enclosingStyle, `${graphic.id}.enclosingStyle`)
+			: []),
+		...(graphic.style
+			? stylePaints(graphic.style, `${graphic.id}.style`)
+			: []),
 		...graphic.items.flatMap(item => itemPaints(item, `${graphic.id}>`)),
 		// The frame an update is leaving is a second painted subtree under the same
 		// enclosure, so it is walked for the same reason the pair inside an item is.
-		...(graphic.outgoing?.style ? stylePaints(graphic.outgoing.style, `${graphic.id}.outgoing.style`) : []),
+		...(graphic.outgoing?.style
+			? stylePaints(graphic.outgoing.style, `${graphic.id}.outgoing.style`)
+			: []),
 		...(graphic.outgoing?.items ?? []).flatMap(item => itemPaints(item, `${graphic.id}~outgoing>`)),
 	];
 }
@@ -563,7 +601,11 @@ const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
 
 describe('graphicsCompositionRenderModel', () => {
 	it('renders an empty composition transparent in the Overlay Output and black in Fill and Key', () => {
-		for (const [output, background] of [['overlay', 'transparent'], ['fill', '#000000'], ['key', '#000000']] as const) {
+		for (const [output, background] of [
+			['overlay', 'transparent'],
+			['fill', '#000000'],
+			['key', '#000000'],
+		] as const) {
 			const model = resolveGraphicsCompositionRenderModel({ output, graphics: [], ...CANVAS });
 
 			expect(model.graphics).toEqual([]);
@@ -604,7 +646,17 @@ describe('graphicsCompositionRenderModel', () => {
 	});
 
 	it('composites concurrent Broadcast Graphics in authored Screen stack order regardless of selection order', () => {
-		const graphics = [graphic('back', [shape('a')]), graphic('middle', [shape('b')]), graphic('front', [shape('c')])];
+		const graphics = [
+			graphic('back', [
+				shape('a'),
+			]),
+			graphic('middle', [
+				shape('b'),
+			]),
+			graphic('front', [
+				shape('c'),
+			]),
+		];
 
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
@@ -619,7 +671,10 @@ describe('graphicsCompositionRenderModel', () => {
 	it('composites every Broadcast Graphic when no visible set is supplied', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', []), graphic('b', [])],
+			graphics: [
+				graphic('a', []),
+				graphic('b', []),
+			],
 			...CANVAS,
 		});
 
@@ -629,11 +684,16 @@ describe('graphicsCompositionRenderModel', () => {
 	it('omits a hidden Graphic Item, and a hidden Graphic Group child, from the composed frame', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [
-				shape('shown'),
-				shape('hidden', { visible: false }),
-				group('cluster', [shape('child-shown'), shape('child-hidden', { visible: false })]),
-			])],
+			graphics: [
+				graphic('a', [
+					shape('shown'),
+					shape('hidden', { visible: false }),
+					group('cluster', [
+						shape('child-shown'),
+						shape('child-hidden', { visible: false }),
+					]),
+				]),
+			],
 			...CANVAS,
 		});
 
@@ -644,7 +704,12 @@ describe('graphicsCompositionRenderModel', () => {
 	it('positions a Graphic Item from its stored top-left rectangle whatever its Graphic Anchor Point', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [shape('corner'), shape('centred', { anchor: 'center' })])],
+			graphics: [
+				graphic('a', [
+					shape('corner'),
+					shape('centred', { anchor: 'center' }),
+				]),
+			],
 			...CANVAS,
 		});
 
@@ -659,9 +724,17 @@ describe('graphicsCompositionRenderModel', () => {
 	it('paints a Shape Graphic Item as its Shape Geometry path with its authored fill opacity', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [shape('bar', {
-				geometry: { ...squareShapeGeometry(), topRight: { treatment: 'cut', size: 24 }, rightSlant: 40 },
-			})])],
+			graphics: [
+				graphic('a', [
+					shape('bar', {
+						geometry: {
+							...squareShapeGeometry(),
+							topRight: { treatment: 'cut', size: 24 },
+							rightSlant: 40,
+						},
+					}),
+				]),
+			],
 			...CANVAS,
 		});
 
@@ -677,19 +750,23 @@ describe('graphicsCompositionRenderModel', () => {
 	it('paints a linear-gradient Graphic Fill as a gradient projected on the surface', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [shape('bed', {
-				surfaceStyle: surfaceStyle({
-					fillOpacity: 1,
-					fill: {
-						type: 'linear-gradient',
-						angle: 90,
-						stops: [
-							{ color: '#080d12', position: 0, opacity: 0.97 },
-							{ color: '#1c272d', position: 1, opacity: 0.9 },
-						],
-					},
-				}),
-			})])],
+			graphics: [
+				graphic('a', [
+					shape('bed', {
+						surfaceStyle: surfaceStyle({
+							fillOpacity: 1,
+							fill: {
+								type: 'linear-gradient',
+								angle: 90,
+								stops: [
+									{ color: '#080d12', position: 0, opacity: 0.97 },
+									{ color: '#1c272d', position: 1, opacity: 0.9 },
+								],
+							},
+						}),
+					}),
+				]),
+			],
 			...CANVAS,
 		});
 
@@ -712,9 +789,15 @@ describe('graphicsCompositionRenderModel', () => {
 	it('draws a uniform outline as an inner stroke of the same Shape Geometry path', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [shape('bar', {
-				surfaceStyle: surfaceStyle({ outline: { color: '#00d9ff', width: 3 } }),
-			})])],
+			graphics: [
+				graphic('a', [
+					shape('bar', {
+						surfaceStyle: surfaceStyle({
+							outline: { color: '#00d9ff', width: 3 },
+						}),
+					}),
+				]),
+			],
 			...CANVAS,
 		});
 
@@ -726,9 +809,15 @@ describe('graphicsCompositionRenderModel', () => {
 	it('omits an outline of zero width rather than painting a hairline', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [shape('bar', {
-				surfaceStyle: surfaceStyle({ outline: { color: '#00d9ff', width: 0 } }),
-			})])],
+			graphics: [
+				graphic('a', [
+					shape('bar', {
+						surfaceStyle: surfaceStyle({
+							outline: { color: '#00d9ff', width: 0 },
+						}),
+					}),
+				]),
+			],
 			...CANVAS,
 		});
 
@@ -738,11 +827,21 @@ describe('graphicsCompositionRenderModel', () => {
 	it('renders a glow as a drop-shadow of the item at its authored colour and opacity', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [
-				shape('lit', { surfaceStyle: surfaceStyle({ glow: { color: '#00d9ff', size: 24, opacity: 0.5 } }) }),
-				shape('unlit'),
-				shape('off', { surfaceStyle: surfaceStyle({ glow: { color: '#00d9ff', size: 0, opacity: 1 } }) }),
-			])],
+			graphics: [
+				graphic('a', [
+					shape('lit', {
+						surfaceStyle: surfaceStyle({
+							glow: { color: '#00d9ff', size: 24, opacity: 0.5 },
+						}),
+					}),
+					shape('unlit'),
+					shape('off', {
+						surfaceStyle: surfaceStyle({
+							glow: { color: '#00d9ff', size: 0, opacity: 1 },
+						}),
+					}),
+				]),
+			],
 			...CANVAS,
 		});
 
@@ -755,9 +854,15 @@ describe('graphicsCompositionRenderModel', () => {
 	it('keeps the opacity of a glow colour that is not hex, and paints it white at that opacity in the Key Output', () => {
 		const glowing = (output: 'fill' | 'key') => resolveGraphicsCompositionRenderModel({
 			output,
-			graphics: [graphic('a', [
-				shape('lit', { surfaceStyle: surfaceStyle({ glow: { color: 'rebeccapurple', size: 24, opacity: 0.5 } }) }),
-			])],
+			graphics: [
+				graphic('a', [
+					shape('lit', {
+						surfaceStyle: surfaceStyle({
+							glow: { color: 'rebeccapurple', size: 24, opacity: 0.5 },
+						}),
+					}),
+				]),
+			],
 			...CANVAS,
 		}).graphics[0]!.items[0]!.style.filter;
 
@@ -768,16 +873,22 @@ describe('graphicsCompositionRenderModel', () => {
 	it('gives a Text Graphic Item its own Graphic Surface Style behind its text', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [
-				text('plain'),
-				text('badge', { surfaceStyle: surfaceStyle({ fillOpacity: 1 }) }),
-			])],
+			graphics: [
+				graphic('a', [
+					text('plain'),
+					text('badge', {
+						surfaceStyle: surfaceStyle({ fillOpacity: 1 }),
+					}),
+				]),
+			],
 			...CANVAS,
 		});
 
 		const [plain, badge] = model.graphics[0]!.items;
 		expect(plain?.surface).toBeUndefined();
-		expect(badge?.surface).toMatchObject({ fill: { color: '#0077a3', opacity: 1 } });
+		expect(badge?.surface).toMatchObject({
+			fill: { color: '#0077a3', opacity: 1 },
+		});
 		// Typography owns text colour; the surface is the box behind it.
 		expect(badge?.textStyle?.color).toBe(DEFAULT_GRAPHIC_TYPOGRAPHY.color);
 	});
@@ -785,10 +896,12 @@ describe('graphicsCompositionRenderModel', () => {
 	it('rotates a canvas-positioned Graphic Item around its Graphic Anchor Point', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [
-				shape('tilted', { rotation: -6, anchor: 'bottom-left' }),
-				shape('straight', { rotation: 0 }),
-			])],
+			graphics: [
+				graphic('a', [
+					shape('tilted', { rotation: -6, anchor: 'bottom-left' }),
+					shape('straight', { rotation: 0 }),
+				]),
+			],
 			...CANVAS,
 		});
 
@@ -802,7 +915,13 @@ describe('graphicsCompositionRenderModel', () => {
 	it('never rotates a row or column Graphic Group child, which its group positions', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [group('row', [shape('child', { rotation: 30 })])])],
+			graphics: [
+				graphic('a', [
+					group('row', [
+						shape('child', { rotation: 30 }),
+					]),
+				]),
+			],
 			...CANVAS,
 		});
 
@@ -813,8 +932,10 @@ describe('graphicsCompositionRenderModel', () => {
 		it('resolves every Supported Social Network to the catalog vector identity', () => {
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', SUPPORTED_SOCIAL_NETWORKS.map(network =>
-					socialIcon(network.key, { network: network.key })))],
+				graphics: [
+					graphic('a', SUPPORTED_SOCIAL_NETWORKS.map(network =>
+						socialIcon(network.key, { network: network.key }))),
+				],
 				...CANVAS,
 			});
 
@@ -825,12 +946,20 @@ describe('graphicsCompositionRenderModel', () => {
 		it('keeps authored colour and opacity independent in Overlay and paints the same alpha white in Key', () => {
 			const overlay = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [socialIcon('twitch', { color: '#123456', opacity: 0.35 })])],
+				graphics: [
+					graphic('a', [
+						socialIcon('twitch', { color: '#123456', opacity: 0.35 }),
+					]),
+				],
 				...CANVAS,
 			});
 			const key = resolveGraphicsCompositionRenderModel({
 				output: 'key',
-				graphics: [graphic('a', [socialIcon('twitch', { color: '#123456', opacity: 0.35 })])],
+				graphics: [
+					graphic('a', [
+						socialIcon('twitch', { color: '#123456', opacity: 0.35 }),
+					]),
+				],
 				...CANVAS,
 			});
 
@@ -842,23 +971,40 @@ describe('graphicsCompositionRenderModel', () => {
 			for (const arrangement of ['row', 'column', 'canvas'] as const) {
 				const model = resolveGraphicsCompositionRenderModel({
 					output: 'overlay',
-					graphics: [graphic('a', [group('cluster', [socialIcon('icon')], { arrangement })])],
+					graphics: [
+						graphic('a', [
+							group('cluster', [
+								socialIcon('icon'),
+							], { arrangement }),
+						]),
+					],
 					...CANVAS,
 				});
 
 				const child = model.graphics[0]?.items[0]?.children?.[0];
 				expect(child?.kind).toBe('social-network-icon');
-				expect(child?.style.position).toBe(arrangement === 'canvas' ? 'absolute' : 'relative');
+				expect(child?.style.position).toBe(arrangement === 'canvas'
+					? 'absolute'
+					: 'relative');
 			}
 		});
 	});
 
 	describe('graphic groups', () => {
 		it('arranges direct children as a row, a column, or a canvas', () => {
-			for (const [arrangement, flexDirection] of [['row', 'row'], ['column', 'column']] as const) {
+			for (const [arrangement, flexDirection] of [
+				['row', 'row'],
+				['column', 'column'],
+			] as const) {
 				const model = resolveGraphicsCompositionRenderModel({
 					output: 'overlay',
-					graphics: [graphic('a', [group('cluster', [shape('one')], { arrangement, gap: 12, padding: 8 })])],
+					graphics: [
+						graphic('a', [
+							group('cluster', [
+								shape('one'),
+							], { arrangement, gap: 12, padding: 8 }),
+						]),
+					],
 					...CANVAS,
 				});
 
@@ -872,7 +1018,13 @@ describe('graphicsCompositionRenderModel', () => {
 
 			const canvas = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [group('cluster', [shape('one')], { arrangement: 'canvas' })])],
+				graphics: [
+					graphic('a', [
+						group('cluster', [
+							shape('one'),
+						], { arrangement: 'canvas' }),
+					]),
+				],
 				...CANVAS,
 			});
 
@@ -882,11 +1034,19 @@ describe('graphicsCompositionRenderModel', () => {
 		it('sizes a row child by fixed pixels or by weighted fill', () => {
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [group('cluster', [
-					shape('fixed', { sizing: { mode: 'fixed', size: 220, weight: 1 } }),
-					shape('filling', { sizing: { mode: 'fill', size: 0, weight: 3 } }),
-					shape('default'),
-				])])],
+				graphics: [
+					graphic('a', [
+						group('cluster', [
+							shape('fixed', {
+								sizing: { mode: 'fixed', size: 220, weight: 1 },
+							}),
+							shape('filling', {
+								sizing: { mode: 'fill', size: 0, weight: 3 },
+							}),
+							shape('default'),
+						]),
+					]),
+				],
 				...CANVAS,
 			});
 
@@ -900,10 +1060,16 @@ describe('graphicsCompositionRenderModel', () => {
 		it('applies its own alignment and justification to stacked children', () => {
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [group('cluster', [shape('one')], {
-					align: 'center',
-					justify: 'space-between',
-				})])],
+				graphics: [
+					graphic('a', [
+						group('cluster', [
+							shape('one'),
+						], {
+							align: 'center',
+							justify: 'space-between',
+						}),
+					]),
+				],
 				...CANVAS,
 			});
 
@@ -921,10 +1087,16 @@ describe('graphicsCompositionRenderModel', () => {
 		it('places a canvas child absolutely inside its group, offset by the group padding', () => {
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [group('cluster', [shape('badge', { x: 24, y: 8 })], {
-					arrangement: 'canvas',
-					padding: 10,
-				})])],
+				graphics: [
+					graphic('a', [
+						group('cluster', [
+							shape('badge', { x: 24, y: 8 }),
+						], {
+							arrangement: 'canvas',
+							padding: 10,
+						}),
+					]),
+				],
 				...CANVAS,
 			});
 
@@ -938,20 +1110,35 @@ describe('graphicsCompositionRenderModel', () => {
 		it('clips children to its own Shape Geometry only when asked', () => {
 			const clipped = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [group('cluster', [], {
-					clip: true,
-					geometry: { ...squareShapeGeometry(), rightSlant: 60 },
-				})])],
+				graphics: [
+					graphic('a', [
+						group('cluster', [], {
+							clip: true,
+							geometry: {
+								...squareShapeGeometry(),
+								rightSlant: 60,
+							},
+						}),
+					]),
+				],
 				...CANVAS,
 			});
 			const rectangular = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [group('cluster', [], { clip: true })])],
+				graphics: [
+					graphic('a', [
+						group('cluster', [], { clip: true }),
+					]),
+				],
 				...CANVAS,
 			});
 			const open = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [group('cluster', [])])],
+				graphics: [
+					graphic('a', [
+						group('cluster', []),
+					]),
+				],
 				...CANVAS,
 			});
 
@@ -967,12 +1154,24 @@ describe('graphicsCompositionRenderModel', () => {
 		it('lends its local style default to children that have none of their own', () => {
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [group('cluster', [
-					shape('inherits', { surfaceStyle: undefined }),
-					shape('overrides', { surfaceStyle: surfaceStyle({ fill: { type: 'solid', color: '#ff0000' }, fillOpacity: 1 }) }),
-				], {
-					defaultChildSurfaceStyle: { fill: { type: 'solid', color: '#00ff00' }, fillOpacity: 0.25 },
-				})])],
+				graphics: [
+					graphic('a', [
+						group('cluster', [
+							shape('inherits', { surfaceStyle: undefined }),
+							shape('overrides', {
+								surfaceStyle: surfaceStyle({
+									fill: { type: 'solid', color: '#ff0000' },
+									fillOpacity: 1,
+								}),
+							}),
+						], {
+							defaultChildSurfaceStyle: {
+								fill: { type: 'solid', color: '#00ff00' },
+								fillOpacity: 0.25,
+							},
+						}),
+					]),
+				],
 				...CANVAS,
 			});
 
@@ -984,7 +1183,13 @@ describe('graphicsCompositionRenderModel', () => {
 		it('paints no surface for a child with no style of its own and no group default', () => {
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [group('cluster', [shape('bare', { surfaceStyle: undefined })])])],
+				graphics: [
+					graphic('a', [
+						group('cluster', [
+							shape('bare', { surfaceStyle: undefined }),
+						]),
+					]),
+				],
 				...CANVAS,
 			});
 
@@ -994,11 +1199,16 @@ describe('graphicsCompositionRenderModel', () => {
 		it('forms one layer among its siblings, with its children inside it', () => {
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [
-					shape('behind'),
-					group('cluster', [text('name'), shape('rule')]),
-					shape('in-front'),
-				])],
+				graphics: [
+					graphic('a', [
+						shape('behind'),
+						group('cluster', [
+							text('name'),
+							shape('rule'),
+						]),
+						shape('in-front'),
+					]),
+				],
 				...CANVAS,
 			});
 
@@ -1015,9 +1225,15 @@ describe('graphicsCompositionRenderModel', () => {
 			// Template mechanism renders them with nothing special added to it.
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('layout', [text('name', { text: '{player1Name} vs {player2Name}' })])],
+				graphics: [
+					graphic('layout', [
+						text('name', { text: '{player1Name} vs {player2Name}' }),
+					]),
+				],
 				textDeclarations: featureMatchTokenDeclarations(),
-				inputValues: { layout: { player1Name: 'Alice', player2Name: 'Bo' } },
+				inputValues: {
+					layout: { player1Name: 'Alice', player2Name: 'Bo' },
+				},
 				...CANVAS,
 			});
 
@@ -1029,9 +1245,15 @@ describe('graphicsCompositionRenderModel', () => {
 			// key, so nothing declares it and nothing resolves it.
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('layout', [text('name', { text: 'Hi {name}' })])],
+				graphics: [
+					graphic('layout', [
+						text('name', { text: 'Hi {name}' }),
+					]),
+				],
 				textDeclarations: featureMatchTokenDeclarations(),
-				inputValues: { layout: { name: 'Alice' } },
+				inputValues: {
+					layout: { name: 'Alice' },
+				},
 				...CANVAS,
 			});
 
@@ -1059,10 +1281,14 @@ describe('graphicsCompositionRenderModel', () => {
 			};
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [{
-					...graphic('layout', [text('name', { text: '{player1Name}' })]),
-					inputs: [declared],
-				}],
+				graphics: [
+					{
+						...graphic('layout', [
+							text('name', { text: '{player1Name}' }),
+						]),
+						inputs: [declared],
+					},
+				],
 				textDeclarations: featureMatchTokenDeclarations(),
 				substituteAuthoredDefaults: true,
 				...CANVAS,
@@ -1078,9 +1304,15 @@ describe('graphicsCompositionRenderModel', () => {
 			// list wins, and this proves the values still arrive through it.
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('layout', [text('name', { text: '{player1Name}' })])],
+				graphics: [
+					graphic('layout', [
+						text('name', { text: '{player1Name}' }),
+					]),
+				],
 				textDeclarations: featureMatchTokenDeclarations(),
-				inputValues: { layout: { player1Name: 'Alice' } },
+				inputValues: {
+					layout: { player1Name: 'Alice' },
+				},
 				...CANVAS,
 			});
 
@@ -1096,15 +1328,27 @@ describe('graphicsCompositionRenderModel', () => {
 		];
 		const FEATURE_MATCH: GraphicsFeatureMatchContext = {
 			clockDisplayTime: '12:34',
-			player1: { lifeTotal: 17, gameWins: 1, sideboard: SIDEBOARD, sideboardRevealed: true },
-			player2: { lifeTotal: null, gameWins: 0, sideboard: null, sideboardRevealed: true },
+			player1: {
+				lifeTotal: 17,
+				gameWins: 1,
+				sideboard: SIDEBOARD,
+				sideboardRevealed: true,
+			},
+			player2: {
+				lifeTotal: null,
+				gameWins: 0,
+				sideboard: null,
+				sideboardRevealed: true,
+			},
 			bestOf: 3,
 		};
 
 		function contextItem(item: BroadcastGraphicConfig['items'][number], featureMatch = FEATURE_MATCH) {
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('layout', [item])],
+				graphics: [
+					graphic('layout', [item]),
+				],
 				featureMatch,
 				...CANVAS,
 			});
@@ -1173,7 +1417,13 @@ describe('graphicsCompositionRenderModel', () => {
 			// Feature Match Overlay whose Slot holds no Match is an ordinary state.
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('layout', [clock('c'), playerLife('l'), gameWins('w')])],
+				graphics: [
+					graphic('layout', [
+						clock('c'),
+						playerLife('l'),
+						gameWins('w'),
+					]),
+				],
 				...CANVAS,
 			});
 			const [renderedClock, renderedLife, renderedWins] = model.graphics[0]!.items;
@@ -1245,7 +1495,11 @@ describe('graphicsCompositionRenderModel', () => {
 			// No host context at all still resolves rather than throwing.
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('layout', [deckList('side-1')])],
+				graphics: [
+					graphic('layout', [
+						deckList('side-1'),
+					]),
+				],
 				...CANVAS,
 			});
 			expect(model.graphics[0]!.items[0]!.deckList).toBeUndefined();
@@ -1311,11 +1565,17 @@ describe('graphicsCompositionRenderModel', () => {
 		it('fits an asset inside the authored bounds at its focal position and opacity', () => {
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [
-					media('cover'),
-					media('contained', { fit: 'contain', opacity: 0.4, focalPosition: { horizontal: 0, vertical: 1 } }),
-					media('filled', { fit: 'fill' }),
-				])],
+				graphics: [
+					graphic('a', [
+						media('cover'),
+						media('contained', {
+							fit: 'contain',
+							opacity: 0.4,
+							focalPosition: { horizontal: 0, vertical: 1 },
+						}),
+						media('filled', { fit: 'fill' }),
+					]),
+				],
 				graphicAssetContentUrl: contentUrl,
 				...CANVAS,
 			});
@@ -1342,7 +1602,11 @@ describe('graphicsCompositionRenderModel', () => {
 			// A Screen Output supplies a resolver backed by its Screen Output Asset
 			// Capability. The model never derives a library URL of its own, so there is
 			// no path by which an output could reach unpublished library content.
-			const graphics = [graphic('a', [media('logo')])];
+			const graphics = [
+				graphic('a', [
+					media('logo'),
+				]),
+			];
 
 			const resolved = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
@@ -1364,14 +1628,23 @@ describe('graphicsCompositionRenderModel', () => {
 		it('paints nothing for an item with no asset pinned, and still occupies its bounds', () => {
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [media('empty', { asset: undefined })])],
+				graphics: [
+					graphic('a', [
+						media('empty', { asset: undefined }),
+					]),
+				],
 				graphicAssetContentUrl: contentUrl,
 				...CANVAS,
 			});
 
 			const item = model.graphics[0]?.items[0];
 			expect(item?.media?.src).toBe('');
-			expect(item?.style).toMatchObject({ left: '40px', top: '60px', width: '480px', height: '270px' });
+			expect(item?.style).toMatchObject({
+				left: '40px',
+				top: '60px',
+				width: '480px',
+				height: '270px',
+			});
 		});
 
 		it('carries silent-video playback and starts from the beginning by construction', () => {
@@ -1380,11 +1653,15 @@ describe('graphicsCompositionRenderModel', () => {
 			// of mounting the element rather than a value to carry.
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [media('sting', {
-					mediaKind: 'silent-video',
-					playbackRate: 0.5,
-					loop: false,
-				})])],
+				graphics: [
+					graphic('a', [
+						media('sting', {
+							mediaKind: 'silent-video',
+							playbackRate: 0.5,
+							loop: false,
+						}),
+					]),
+				],
 				graphicAssetContentUrl: contentUrl,
 				...CANVAS,
 			});
@@ -1408,23 +1685,40 @@ describe('graphicsCompositionRenderModel', () => {
 		it('clips to an optional Shape Geometry, and to its own rectangle without one', () => {
 			const clipped = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [media('angled', {
-					width: 600,
-					height: 120,
-					clipGeometry: { ...squareShapeGeometry(), rightSlant: 60 },
-				})])],
+				graphics: [
+					graphic('a', [
+						media('angled', {
+							width: 600,
+							height: 120,
+							clipGeometry: {
+								...squareShapeGeometry(),
+								rightSlant: 60,
+							},
+						}),
+					]),
+				],
 				graphicAssetContentUrl: contentUrl,
 				...CANVAS,
 			});
 			const rectangular = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [media('plain', { clipGeometry: squareShapeGeometry() })])],
+				graphics: [
+					graphic('a', [
+						media('plain', {
+							clipGeometry: squareShapeGeometry(),
+						}),
+					]),
+				],
 				graphicAssetContentUrl: contentUrl,
 				...CANVAS,
 			});
 			const unclipped = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [media('plain')])],
+				graphics: [
+					graphic('a', [
+						media('plain'),
+					]),
+				],
 				graphicAssetContentUrl: contentUrl,
 				...CANVAS,
 			});
@@ -1443,14 +1737,26 @@ describe('graphicsCompositionRenderModel', () => {
 			// known box; a weighted-fill or stretched child's box is the browser's, and
 			// a path measured against the authored rectangle would clip the wrong shape
 			// while looking deliberate.
-			const angled = { ...squareShapeGeometry(), rightSlant: 30 };
+			const angled = {
+				...squareShapeGeometry(),
+				rightSlant: 30,
+			};
 
 			function childStyle(overrides: Parameters<typeof group>[2], childOverrides = {}) {
 				const model = resolveGraphicsCompositionRenderModel({
 					output: 'overlay',
-					graphics: [graphic('a', [group('cluster', [
-						media('badge', { width: 200, height: 100, clipGeometry: angled, ...childOverrides }),
-					], overrides)])],
+					graphics: [
+						graphic('a', [
+							group('cluster', [
+								media('badge', {
+									width: 200,
+									height: 100,
+									clipGeometry: angled,
+									...childOverrides,
+								}),
+							], overrides),
+						]),
+					],
 					graphicAssetContentUrl: contentUrl,
 					...CANVAS,
 				});
@@ -1458,20 +1764,28 @@ describe('graphicsCompositionRenderModel', () => {
 			}
 
 			// Fixed main axis, group not stretching: the box is known, so the clip applies.
-			expect(childStyle({ align: 'center' }, { sizing: { mode: 'fixed', size: 160, weight: 1 } }).clipPath)
+			expect(childStyle({ align: 'center' }, {
+				sizing: { mode: 'fixed', size: 160, weight: 1 },
+			}).clipPath)
 				.toBe(`path('M 0 0 L 130 0 L 160 100 L 0 100 Z')`);
 			// Weighted fill: the main extent is the browser's.
-			expect(childStyle({ align: 'center' }, { sizing: { mode: 'fill', size: 0, weight: 1 } }).clipPath)
+			expect(childStyle({ align: 'center' }, {
+				sizing: { mode: 'fill', size: 0, weight: 1 },
+			}).clipPath)
 				.toBeUndefined();
 			// Stretching: the cross extent is the browser's.
-			expect(childStyle({ align: 'stretch' }, { sizing: { mode: 'fixed', size: 160, weight: 1 } }).clipPath)
+			expect(childStyle({ align: 'stretch' }, {
+				sizing: { mode: 'fixed', size: 160, weight: 1 },
+			}).clipPath)
 				.toBeUndefined();
 			// A canvas child keeps its authored rectangle either way.
 			expect(childStyle({ arrangement: 'canvas' }).clipPath)
 				.toBe(`path('M 0 0 L 170 0 L 200 100 L 0 100 Z')`);
 			// Whichever way, the item never paints outside its own bounds.
 			for (const style of [
-				childStyle({ align: 'center' }, { sizing: { mode: 'fill', size: 0, weight: 1 } }),
+				childStyle({ align: 'center' }, {
+					sizing: { mode: 'fill', size: 0, weight: 1 },
+				}),
 				childStyle({ align: 'stretch' }),
 			])
 				expect(style.overflow).toBe('hidden');
@@ -1480,13 +1794,22 @@ describe('graphicsCompositionRenderModel', () => {
 		it('places a Media Graphic Item inside a Graphic Group like any other child', () => {
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [group('cluster', [
-					media('badge', { sizing: { mode: 'fixed', size: 120, weight: 1 } }),
-				], {
-					// A Media Graphic Item paints no surface, so a group style default has
-					// nothing on it to fill in.
-					defaultChildSurfaceStyle: { fill: { type: 'solid', color: '#00ff00' }, fillOpacity: 1 },
-				})])],
+				graphics: [
+					graphic('a', [
+						group('cluster', [
+							media('badge', {
+								sizing: { mode: 'fixed', size: 120, weight: 1 },
+							}),
+						], {
+							// A Media Graphic Item paints no surface, so a group style default has
+							// nothing on it to fill in.
+							defaultChildSurfaceStyle: {
+								fill: { type: 'solid', color: '#00ff00' },
+								fillOpacity: 1,
+							},
+						}),
+					]),
+				],
 				graphicAssetContentUrl: contentUrl,
 				...CANVAS,
 			});
@@ -1501,7 +1824,11 @@ describe('graphicsCompositionRenderModel', () => {
 		it('paints no Graphic Surface Style and no glow of its own', () => {
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [media('logo')])],
+				graphics: [
+					graphic('a', [
+						media('logo'),
+					]),
+				],
 				graphicAssetContentUrl: contentUrl,
 				...CANVAS,
 			});
@@ -1531,8 +1858,14 @@ describe('graphicsCompositionRenderModel', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
 			graphics: [
-				graphic('bug', [shape('bed', { surfaceStyle: styled })]),
-				graphic('lower-third', [group('cluster', [shape('bed', { surfaceStyle: styled })])]),
+				graphic('bug', [
+					shape('bed', { surfaceStyle: styled }),
+				]),
+				graphic('lower-third', [
+					group('cluster', [
+						shape('bed', { surfaceStyle: styled }),
+					]),
+				]),
 			],
 			...CANVAS,
 		});
@@ -1551,7 +1884,12 @@ describe('graphicsCompositionRenderModel', () => {
 		it('derives the Key Output as a grayscale alpha matte of the composed opacity', () => {
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'key',
-				graphics: [graphic('a', [shape('bar'), text('name')])],
+				graphics: [
+					graphic('a', [
+						shape('bar'),
+						text('name'),
+					]),
+				],
 				...CANVAS,
 			});
 
@@ -1564,10 +1902,22 @@ describe('graphicsCompositionRenderModel', () => {
 			// the alpha union 1 - (1 - a1)(1 - a2) = 0.75, independent of this module.
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'key',
-				graphics: [graphic('a', [
-					shape('under', { surfaceStyle: surfaceStyle({ fill: { type: 'solid', color: '#0077a3' }, fillOpacity: 0.5 }) }),
-					shape('over', { surfaceStyle: surfaceStyle({ fill: { type: 'solid', color: '#ff0000' }, fillOpacity: 0.5 }) }),
-				])],
+				graphics: [
+					graphic('a', [
+						shape('under', {
+							surfaceStyle: surfaceStyle({
+								fill: { type: 'solid', color: '#0077a3' },
+								fillOpacity: 0.5,
+							}),
+						}),
+						shape('over', {
+							surfaceStyle: surfaceStyle({
+								fill: { type: 'solid', color: '#ff0000' },
+								fillOpacity: 0.5,
+							}),
+						}),
+					]),
+				],
 				...CANVAS,
 			});
 
@@ -1584,9 +1934,16 @@ describe('graphicsCompositionRenderModel', () => {
 			const alphas = [0.25, 0.5, 0.75, 0.5];
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'key',
-				graphics: [graphic('a', alphas.map((fillOpacity, index) =>
-					shape(`item-${index}`, { surfaceStyle: surfaceStyle({ fill: { type: 'solid', color: '#123456' }, fillOpacity }) }),
-				))],
+				graphics: [
+					graphic('a', alphas.map((fillOpacity, index) =>
+						shape(`item-${index}`, {
+							surfaceStyle: surfaceStyle({
+								fill: { type: 'solid', color: '#123456' },
+								fillOpacity,
+							}),
+						}),
+					)),
+				],
 				...CANVAS,
 			});
 
@@ -1606,27 +1963,37 @@ describe('graphicsCompositionRenderModel', () => {
 			// to white, and the run's own alpha must reach the union arithmetic.
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'key',
-				graphics: [{
-					id: 'a',
-					name: 'a',
-					inputs: [{
-						type: 'text',
-						key: 'name',
-						label: 'Name',
-						required: false,
-						updatePolicy: 'staged',
-						default: 'Ava Reed',
-						maxLength: 40,
-					}],
-					items: [text('line', {
-						text: 'Live: {name}',
-						placeholderStyles: { name: { color: '#ff0000', fontWeight: 300 } },
-					})],
-				}],
+				graphics: [
+					{
+						id: 'a',
+						name: 'a',
+						inputs: [
+							{
+								type: 'text',
+								key: 'name',
+								label: 'Name',
+								required: false,
+								updatePolicy: 'staged',
+								default: 'Ava Reed',
+								maxLength: 40,
+							},
+						],
+						items: [
+							text('line', {
+								text: 'Live: {name}',
+								placeholderStyles: {
+									name: { color: '#ff0000', fontWeight: 300 },
+								},
+							}),
+						],
+					},
+				],
 				// Stated as an accepted value rather than left to the declared default, so
 				// this guard depends only on the matte identity and not on whether unset
 				// Graphic Inputs render their authored defaults.
-				inputValues: { a: { name: 'Ava Reed' } },
+				inputValues: {
+					a: { name: 'Ava Reed' },
+				},
 				...CANVAS,
 			});
 
@@ -1648,7 +2015,13 @@ describe('graphicsCompositionRenderModel', () => {
 				label: 'line',
 				kind: 'text',
 				style: { color: '#ffffff' },
-				textSegments: [{ text: 'Ava Reed', inputKey: 'name', style: { background: '#ff0000' } }],
+				textSegments: [
+					{
+						text: 'Ava Reed',
+						inputKey: 'name',
+						style: { background: '#ff0000' },
+					},
+				],
 			})).toThrow(/textSegments\[0\]/);
 		});
 
@@ -1664,15 +2037,22 @@ describe('graphicsCompositionRenderModel', () => {
 					],
 					sideboardRevealed: true,
 				},
-				player2: { lifeTotal: null, gameWins: 0, sideboard: null, sideboardRevealed: true },
+				player2: {
+					lifeTotal: null,
+					gameWins: 0,
+					sideboard: null,
+					sideboardRevealed: true,
+				},
 				bestOf: 3,
 			};
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'key',
-				graphics: [graphic('a', [
-					deckList('side-grid', { view: 'grid' }),
-					deckList('side-list'),
-				])],
+				graphics: [
+					graphic('a', [
+						deckList('side-grid', { view: 'grid' }),
+						deckList('side-list'),
+					]),
+				],
 				featureMatch,
 				...CANVAS,
 			});
@@ -1699,19 +2079,23 @@ describe('graphicsCompositionRenderModel', () => {
 		it('paints a gradient in the Key Output as white at each stop opacity', () => {
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'key',
-				graphics: [graphic('a', [shape('bed', {
-					surfaceStyle: surfaceStyle({
-						fillOpacity: 1,
-						fill: {
-							type: 'linear-gradient',
-							angle: 45,
-							stops: [
-								{ color: '#ff0000', position: 0, opacity: 0.25 },
-								{ color: '#00ff00', position: 1, opacity: 1 },
-							],
-						},
-					}),
-				})])],
+				graphics: [
+					graphic('a', [
+						shape('bed', {
+							surfaceStyle: surfaceStyle({
+								fillOpacity: 1,
+								fill: {
+									type: 'linear-gradient',
+									angle: 45,
+									stops: [
+										{ color: '#ff0000', position: 0, opacity: 0.25 },
+										{ color: '#00ff00', position: 1, opacity: 1 },
+									],
+								},
+							}),
+						}),
+					]),
+				],
 				...CANVAS,
 			});
 
@@ -1730,12 +2114,20 @@ describe('graphicsCompositionRenderModel', () => {
 
 			const overlay = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [shape('bar', { surfaceStyle: authored })])],
+				graphics: [
+					graphic('a', [
+						shape('bar', { surfaceStyle: authored }),
+					]),
+				],
 				...CANVAS,
 			});
 			const key = resolveGraphicsCompositionRenderModel({
 				output: 'key',
-				graphics: [graphic('a', [shape('bar', { surfaceStyle: authored })])],
+				graphics: [
+					graphic('a', [
+						shape('bar', { surfaceStyle: authored }),
+					]),
+				],
 				...CANVAS,
 			});
 
@@ -1750,7 +2142,11 @@ describe('graphicsCompositionRenderModel', () => {
 			// colours looks perfect in the Overlay Output and produces a matte that is
 			// the asset's luminance instead of its alpha, so the downstream composite
 			// is wrong only once it is on air.
-			const graphics = [graphic('a', [media('logo')])];
+			const graphics = [
+				graphic('a', [
+					media('logo'),
+				]),
+			];
 
 			const overlay = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
@@ -1779,10 +2175,14 @@ describe('graphicsCompositionRenderModel', () => {
 			// number would move with the asset.
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'key',
-				graphics: [graphic('a', [
-					shape('under', { surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }) }),
-					media('over', { opacity: 0.5 }),
-				])],
+				graphics: [
+					graphic('a', [
+						shape('under', {
+							surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }),
+						}),
+						media('over', { opacity: 0.5 }),
+					]),
+				],
 				graphicAssetContentUrl: contentUrl,
 				...CANVAS,
 			});
@@ -1801,7 +2201,11 @@ describe('graphicsCompositionRenderModel', () => {
 			// load would key a hole in program.
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'key',
-				graphics: [graphic('a', [media('empty', { asset: undefined })])],
+				graphics: [
+					graphic('a', [
+						media('empty', { asset: undefined }),
+					]),
+				],
 				graphicAssetContentUrl: contentUrl,
 				...CANVAS,
 			});
@@ -1907,7 +2311,9 @@ describe('graphicsCompositionRenderModel', () => {
 			// A hidden paint inside a Graphic Group child is found too.
 			expect(() => itemPaints({
 				...white({}),
-				children: [white({ background: 'red' })],
+				children: [
+					white({ background: 'red' }),
+				],
 			})).toThrow(/unrecognised style property/);
 
 			// And the shapes the model really does emit still pass.
@@ -1934,19 +2340,28 @@ describe('graphicsCompositionRenderModel', () => {
 
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'key',
-				graphics: [graphic('a', [
-					shape('bed', { surfaceStyle: loud }),
-					text('name', {
-						surfaceStyle: loud,
-						typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, color: '#bd167f' },
-					}),
-					media('picture', { clipGeometry: { ...squareShapeGeometry(), leftSlant: 20 } }),
-					group('cluster', [
-						shape('child', { surfaceStyle: loud }),
-						text('child-name', { typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, color: '#321048' } }),
-						media('child-picture', { mediaKind: 'silent-video' }),
-					], { surfaceStyle: loud, defaultChildSurfaceStyle: loud }),
-				])],
+				graphics: [
+					graphic('a', [
+						shape('bed', { surfaceStyle: loud }),
+						text('name', {
+							surfaceStyle: loud,
+							typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, color: '#bd167f' },
+						}),
+						media('picture', {
+							clipGeometry: {
+								...squareShapeGeometry(),
+								leftSlant: 20,
+							},
+						}),
+						group('cluster', [
+							shape('child', { surfaceStyle: loud }),
+							text('child-name', {
+								typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, color: '#321048' },
+							}),
+							media('child-picture', { mediaKind: 'silent-video' }),
+						], { surfaceStyle: loud, defaultChildSurfaceStyle: loud }),
+					]),
+				],
 				graphicAssetContentUrl: contentUrl,
 				...CANVAS,
 			});
@@ -1965,11 +2380,13 @@ describe('graphicsCompositionRenderModel', () => {
 	it('clips every Text Overflow Policy inside the authored bounds', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [
-				text('clip', { overflowPolicy: 'clip' }),
-				text('ellipsis', { overflowPolicy: 'ellipsis' }),
-				text('shrink', { overflowPolicy: 'shrink', minFontSize: 30 }),
-			])],
+			graphics: [
+				graphic('a', [
+					text('clip', { overflowPolicy: 'clip' }),
+					text('ellipsis', { overflowPolicy: 'ellipsis' }),
+					text('shrink', { overflowPolicy: 'shrink', minFontSize: 30 }),
+				]),
+			],
 			...CANVAS,
 		});
 
@@ -1988,10 +2405,12 @@ describe('graphicsCompositionRenderModel', () => {
 	it('clamps ellipsis text to the whole lines that fit the authored height', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [
-				text('one-line', { height: 80 }),
-				text('two-lines', { height: 160 }),
-			])],
+			graphics: [
+				graphic('a', [
+					text('one-line', { height: 80 }),
+					text('two-lines', { height: 160 }),
+				]),
+			],
 			...CANVAS,
 		});
 
@@ -2003,10 +2422,21 @@ describe('graphicsCompositionRenderModel', () => {
 	it('resolves one identical composition for the editor preview and a Screen Output', () => {
 		// The editor preview asks for guides; a Screen Output never does. Nothing
 		// else may differ, or the two would not render the same frame.
-		const graphics = [graphic('a', [
-			shape('bed', { surfaceStyle: surfaceStyle({ outline: { color: '#fff', width: 2 } }) }),
-			group('cluster', [text('name'), shape('rule', { sizing: { mode: 'fill', size: 0, weight: 2 } })]),
-		])];
+		const graphics = [
+			graphic('a', [
+				shape('bed', {
+					surfaceStyle: surfaceStyle({
+						outline: { color: '#fff', width: 2 },
+					}),
+				}),
+				group('cluster', [
+					text('name'),
+					shape('rule', {
+						sizing: { mode: 'fill', size: 0, weight: 2 },
+					}),
+				]),
+			]),
+		];
 
 		const output = resolveGraphicsCompositionRenderModel({ output: 'overlay', graphics, ...CANVAS });
 		const preview = resolveGraphicsCompositionRenderModel({
@@ -2035,16 +2465,33 @@ describe('graphicsCompositionRenderModel', () => {
 
 		expect(withoutGuides.safeAreaGuides).toEqual([]);
 		expect(withGuides.safeAreaGuides.map(guide => guide.id)).toEqual(['action-safe', 'title-safe']);
-		expect(withGuides.safeAreaGuides[0]?.style).toMatchObject({ left: '96px', top: '54px', width: '1728px', height: '972px' });
-		expect(withGuides.safeAreaGuides[1]?.style).toMatchObject({ left: '192px', top: '108px', width: '1536px', height: '864px' });
+		expect(withGuides.safeAreaGuides[0]?.style).toMatchObject({
+			left: '96px',
+			top: '54px',
+			width: '1728px',
+			height: '972px',
+		});
+		expect(withGuides.safeAreaGuides[1]?.style).toMatchObject({
+			left: '192px',
+			top: '108px',
+			width: '1536px',
+			height: '864px',
+		});
 	});
 
 	it('never lets advisory guides constrain or clip an authored Graphic Item', () => {
-		const outsideTitleSafe = shape('edge', { x: 0, y: 0, width: 1920, height: 1080 });
+		const outsideTitleSafe = shape('edge', {
+			x: 0,
+			y: 0,
+			width: 1920,
+			height: 1080,
+		});
 
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [outsideTitleSafe])],
+			graphics: [
+				graphic('a', [outsideTitleSafe]),
+			],
 			safeAreaGuides: true,
 			...CANVAS,
 		});
@@ -2058,7 +2505,12 @@ describe('graphicsCompositionRenderModel', () => {
 	});
 
 	it('offers item guides only when the editor asks for them, marking the selected Graphic Item', () => {
-		const graphics = [graphic('a', [shape('bar'), shape('badge')])];
+		const graphics = [
+			graphic('a', [
+				shape('bar'),
+				shape('badge'),
+			]),
+		];
 
 		expect(resolveGraphicsCompositionRenderModel({ output: 'overlay', graphics, ...CANVAS }).itemGuides).toEqual([]);
 
@@ -2079,10 +2531,16 @@ describe('graphicsCompositionRenderModel', () => {
 	it('guides a canvas Graphic Group child at its own place on the canvas', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [
-				group('canvas-cluster', [shape('badge', { x: 20, y: 5 })], { arrangement: 'canvas', padding: 10 }),
-				group('row-cluster', [shape('laid-out')]),
-			])],
+			graphics: [
+				graphic('a', [
+					group('canvas-cluster', [
+						shape('badge', { x: 20, y: 5 }),
+					], { arrangement: 'canvas', padding: 10 }),
+					group('row-cluster', [
+						shape('laid-out'),
+					]),
+				]),
+			],
 			itemGuides: true,
 			...CANVAS,
 		});
@@ -2095,7 +2553,14 @@ describe('graphicsCompositionRenderModel', () => {
 	it('marks which composed Graphic Items belong to the Broadcast Graphic under authoring', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('bug', [shape('logo')]), graphic('lower-third', [shape('bar')])],
+			graphics: [
+				graphic('bug', [
+					shape('logo'),
+				]),
+				graphic('lower-third', [
+					shape('bar'),
+				]),
+			],
 			itemGuides: true,
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 			...CANVAS,
@@ -2123,7 +2588,12 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			output,
 			graphics,
 			animation: animation && Object.fromEntries(
-				Object.entries(animation).map(([id, projected]) => [id, Array.isArray(projected) ? projected : [projected]]),
+				Object.entries(animation).map(([id, projected]) => [
+					id,
+					Array.isArray(projected)
+						? projected
+						: [projected],
+				]),
 			),
 			...CANVAS,
 		});
@@ -2140,7 +2610,10 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			maxLength: 80,
 		};
 
-		const CROSS_FADE = { ...LINEAR, fade: { opacity: 0 } };
+		const CROSS_FADE = {
+			...LINEAR,
+			fade: { opacity: 0 },
+		};
 
 		function updating(
 			graphics: BroadcastGraphicConfig[],
@@ -2150,21 +2623,38 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			return resolveGraphicsCompositionRenderModel({
 				output,
 				graphics,
-				animation: { a: [{ phase: 'update', elapsed }] },
-				inputValues: { a: { headline: 'AFTER' } },
-				outgoingInputValues: { a: { headline: 'BEFORE' } },
+				animation: {
+					a: [
+						{ phase: 'update', elapsed },
+					],
+				},
+				inputValues: {
+					a: { headline: 'AFTER' },
+				},
+				outgoingInputValues: {
+					a: { headline: 'BEFORE' },
+				},
 				...CANVAS,
 			});
 		}
 
 		function headlineGraphic(items: BroadcastGraphicConfig['items'], animation?: BroadcastGraphicConfig['animation']) {
-			return { ...graphic('a', items), inputs: [HEADLINE], animation };
+			return {
+				...graphic('a', items),
+				inputs: [HEADLINE],
+				animation,
+			};
 		}
 
 		it('renders the old text alongside the new one, each on its own half of the recipe', () => {
-			const model = updating([headlineGraphic([
-				text('headline', { text: '{headline}', animation: { update: CROSS_FADE } }),
-			])]);
+			const model = updating([
+				headlineGraphic([
+					text('headline', {
+						text: '{headline}',
+						animation: { update: CROSS_FADE },
+					}),
+				]),
+			]);
 			const pair = model.graphics[0]!.items[0]!.crossTransition!;
 
 			expect(pair.incoming.text).toBe('AFTER');
@@ -2178,13 +2668,28 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			// Asserted on the pair rather than on the graphic-level `outgoing`, which is
 			// undefined in all four phases for a graphic with no whole-graphic recipe — so a
 			// test watching that could not fail, and the one it replaced could not.
-			const items = [text('headline', { text: '{headline}', animation: { update: CROSS_FADE, enter: CROSS_FADE } })];
+			const items = [
+				text('headline', {
+					text: '{headline}',
+					animation: { update: CROSS_FADE, enter: CROSS_FADE },
+				}),
+			];
 			const at = (phase: 'enter' | 'on-screen' | 'update' | 'exit') => resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [headlineGraphic(items)],
-				animation: { a: [{ phase, elapsed: 200 }] },
-				inputValues: { a: { headline: 'AFTER' } },
-				outgoingInputValues: { a: { headline: 'BEFORE' } },
+				graphics: [
+					headlineGraphic(items),
+				],
+				animation: {
+					a: [
+						{ phase, elapsed: 200 },
+					],
+				},
+				inputValues: {
+					a: { headline: 'AFTER' },
+				},
+				outgoingInputValues: {
+					a: { headline: 'BEFORE' },
+				},
 				...CANVAS,
 			});
 
@@ -2203,10 +2708,17 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			// Graphic Item renders changes nothing on screen. So an update recipe must not
 			// fire for it: there is no old rendering to cross, and firing anyway would dip or
 			// slide the item on program with no counterpart. CONTEXT.md:545.
-			const model = updating([headlineGraphic([
-				shape('panel', { animation: { update: CROSS_FADE } }),
-				text('headline', { text: '{headline}', animation: { update: CROSS_FADE } }),
-			])]);
+			const model = updating([
+				headlineGraphic([
+					shape('panel', {
+						animation: { update: CROSS_FADE },
+					}),
+					text('headline', {
+						text: '{headline}',
+						animation: { update: CROSS_FADE },
+					}),
+				]),
+			]);
 
 			expect(model.graphics[0]?.items[0]?.style.opacity).toBeUndefined();
 			expect(model.graphics[0]?.items[0]?.crossTransition).toBeUndefined();
@@ -2218,13 +2730,25 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			// opacity and back, on program. CONTEXT.md:546.
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [headlineGraphic(
-					[text('headline', { text: '{headline}' })],
-					{ update: CROSS_FADE },
-				)],
-				animation: { a: [{ phase: 'update', elapsed: 200 }] },
-				inputValues: { a: { headline: 'SAME' } },
-				outgoingInputValues: { a: { headline: 'SAME' } },
+				graphics: [
+					headlineGraphic(
+						[
+							text('headline', { text: '{headline}' }),
+						],
+						{ update: CROSS_FADE },
+					),
+				],
+				animation: {
+					a: [
+						{ phase: 'update', elapsed: 200 },
+					],
+				},
+				inputValues: {
+					a: { headline: 'SAME' },
+				},
+				outgoingInputValues: {
+					a: { headline: 'SAME' },
+				},
 				...CANVAS,
 			});
 
@@ -2235,7 +2759,11 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 
 		it('cuts an item whose content changed but which authored no update recipe', () => {
 			// Also asserted on the pair: `outgoing` was unconditionally absent here too.
-			const model = updating([headlineGraphic([text('headline', { text: '{headline}' })])]);
+			const model = updating([
+				headlineGraphic([
+					text('headline', { text: '{headline}' }),
+				]),
+			]);
 
 			expect(model.graphics[0]?.items[0]?.crossTransition).toBeUndefined();
 			expect(model.graphics[0]?.items[0]?.text).toBe('AFTER');
@@ -2249,10 +2777,17 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			// renderings are overlaid inside the crossing item's own box instead, which is
 			// the one place Graphic Layer Order puts them both above the panel and below
 			// anything stacked on top.
-			const model = updating([headlineGraphic([
-				shape('panel', { surfaceStyle: surfaceStyle({ fillOpacity: 0.75 }) }),
-				text('headline', { text: '{headline}', animation: { update: CROSS_FADE } }),
-			])]);
+			const model = updating([
+				headlineGraphic([
+					shape('panel', {
+						surfaceStyle: surfaceStyle({ fillOpacity: 0.75 }),
+					}),
+					text('headline', {
+						text: '{headline}',
+						animation: { update: CROSS_FADE },
+					}),
+				]),
+			]);
 			const composed = model.graphics[0]!;
 
 			// No second copy of the whole graphic, so the panel is drawn exactly once and
@@ -2287,12 +2822,17 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			// A row group lays its children out, so a second sibling would shift every
 			// child along. The pair goes inside the child's own box, which consumes no
 			// extra layout.
-			const model = updating([headlineGraphic([
-				group('cluster', [
-					shape('badge'),
-					text('headline', { text: '{headline}', animation: { update: CROSS_FADE } }),
+			const model = updating([
+				headlineGraphic([
+					group('cluster', [
+						shape('badge'),
+						text('headline', {
+							text: '{headline}',
+							animation: { update: CROSS_FADE },
+						}),
+					]),
 				]),
-			])]);
+			]);
 			const children = model.graphics[0]!.items[0]!.children!;
 
 			expect(children.map(child => child.id)).toEqual(['badge', 'headline']);
@@ -2306,13 +2846,17 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 		it('cross-transitions the whole graphic when the whole graphic authored an update', () => {
 			// A whole-graphic update recipe is the case where drawing everything twice is
 			// what the author asked for, so unchanged items are drawn in both copies.
-			const model = updating([headlineGraphic(
-				[
-					shape('panel', { surfaceStyle: surfaceStyle({ fillOpacity: 0.75 }) }),
-					text('headline', { text: '{headline}' }),
-				],
-				{ update: CROSS_FADE },
-			)]);
+			const model = updating([
+				headlineGraphic(
+					[
+						shape('panel', {
+							surfaceStyle: surfaceStyle({ fillOpacity: 0.75 }),
+						}),
+						text('headline', { text: '{headline}' }),
+					],
+					{ update: CROSS_FADE },
+				),
+			]);
 			const composed = model.graphics[0]!;
 
 			expect(composed.style?.opacity).toBe(0.5);
@@ -2329,25 +2873,37 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			// the new rendering would hard-cut in.
 			const model = resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [{
-					...graphic('a', [
-						group('cluster', [
-							text('first', { text: '{one}' }),
-							text('second', { text: '{two}' }),
-						], { animation: { update: CROSS_FADE } }),
-					]),
-					inputs: [
-						{ ...HEADLINE, key: 'one' },
-						{ ...HEADLINE, key: 'two' },
+				graphics: [
+					{
+						...graphic('a', [
+							group('cluster', [
+								text('first', { text: '{one}' }),
+								text('second', { text: '{two}' }),
+							], {
+								animation: { update: CROSS_FADE },
+							}),
+						]),
+						inputs: [
+							{ ...HEADLINE, key: 'one' },
+							{ ...HEADLINE, key: 'two' },
+						],
+					},
+				],
+				animation: {
+					a: [
+						{ phase: 'update', elapsed: 200 },
 					],
-				}],
-				animation: { a: [{ phase: 'update', elapsed: 200 }] },
+				},
 				// A space would satisfy a test that only moved a character across the boundary,
 				// because "ab"+"c" and "a"+"bc" differ once anything separates them. These
 				// children contain the space themselves, so only a separator the content cannot
 				// contain tells the two renderings apart — which is what the docblock claims.
-				inputValues: { a: { one: 'a', two: 'b c' } },
-				outgoingInputValues: { a: { one: 'a b', two: 'c' } },
+				inputValues: {
+					a: { one: 'a', two: 'b c' },
+				},
+				outgoingInputValues: {
+					a: { one: 'a b', two: 'c' },
+				},
 				...CANVAS,
 			});
 
@@ -2366,18 +2922,26 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			// for a slide, and the double alpha this whole mechanism exists to prevent for
 			// anything carrying a surface. One level of nesting is the deepest tree
 			// CONTEXT.md:509 allows, so this is the ordinary case rather than an exotic one.
-			const model = updating([headlineGraphic([
-				group('cluster', [
-					shape('badge'),
-					text('headline', { text: '{headline}', animation: { update: CROSS_FADE } }),
-				], {
-					clip: true,
-					surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }),
-					animation: {
-						update: { ...LINEAR, slide: { direction: 'east', distanceMode: 'fixed', distance: 80 } },
-					},
-				}),
-			])]);
+			const model = updating([
+				headlineGraphic([
+					group('cluster', [
+						shape('badge'),
+						text('headline', {
+							text: '{headline}',
+							animation: { update: CROSS_FADE },
+						}),
+					], {
+						clip: true,
+						surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }),
+						animation: {
+							update: {
+								...LINEAR,
+								slide: { direction: 'east', distanceMode: 'fixed', distance: 80 },
+							},
+						},
+					}),
+				]),
+			]);
 			const composed = model.graphics[0]!;
 
 			// The group is the outermost crosser, so the group carries the pair.
@@ -2419,14 +2983,25 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 
 		it('keeps the Key Output a true alpha matte through a cross-transition', () => {
 			for (const elapsed of [0, 100, 200, 399, 400]) {
-				const model = updating([headlineGraphic([
-					shape('panel', { surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }) }),
-					text('headline', {
-						text: '{headline}',
-						surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }),
-						animation: { update: { ...LINEAR, fade: { opacity: 0 }, reveal: { edge: 'left' }, slide: { direction: 'east', distanceMode: 'fixed', distance: 40 } } },
-					}),
-				])], elapsed, 'key');
+				const model = updating([
+					headlineGraphic([
+						shape('panel', {
+							surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }),
+						}),
+						text('headline', {
+							text: '{headline}',
+							surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }),
+							animation: {
+								update: {
+									...LINEAR,
+									fade: { opacity: 0 },
+									reveal: { edge: 'left' },
+									slide: { direction: 'east', distanceMode: 'fixed', distance: 40 },
+								},
+							},
+						}),
+					]),
+				], elapsed, 'key');
 				const composed = model.graphics[0]!;
 
 				// `graphicPaints` walks each item's cross-transition pair, so this covers both
@@ -2444,13 +3019,20 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			// alpha it is supposed to be reporting. The fade factor is deliberately outside
 			// this arithmetic: element `opacity` multiplies through both outputs equally,
 			// which is why the harness treats it as a factor on paint rather than as paint.
-			const model = updating([headlineGraphic(
-				[
-					shape('panel', { surfaceStyle: surfaceStyle({ fill: { type: 'solid', color: '#123456' }, fillOpacity: 0.5 }) }),
-					text('headline', { text: '{headline}' }),
-				],
-				{ update: CROSS_FADE },
-			)], 200, 'key');
+			const model = updating([
+				headlineGraphic(
+					[
+						shape('panel', {
+							surfaceStyle: surfaceStyle({
+								fill: { type: 'solid', color: '#123456' },
+								fillOpacity: 0.5,
+							}),
+						}),
+						text('headline', { text: '{headline}' }),
+					],
+					{ update: CROSS_FADE },
+				),
+			], 200, 'key');
 			const composed = model.graphics[0]!;
 
 			// The panel, drawn once by each copy because the whole graphic is what is
@@ -2469,7 +3051,14 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 		// The unanimated Screen, the settled on-air graphic, and the recovered Live
 		// Session all reach the model as an absent projection, and all three have to
 		// produce exactly the descriptors that existed before animation did.
-		const graphics = [graphic('a', [shape('bar'), group('cluster', [text('name')])])];
+		const graphics = [
+			graphic('a', [
+				shape('bar'),
+				group('cluster', [
+					text('name'),
+				]),
+			]),
+		];
 
 		expect(model(graphics)).toEqual(model(graphics, {}));
 		expect(model(graphics).graphics[0]?.style).toBeUndefined();
@@ -2479,23 +3068,61 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 
 	it('rests a Broadcast Graphic that is not in the projection while another animates', () => {
 		const graphics = [
-			graphic('animating', [shape('bar', { animation: { enter: { ...LINEAR, fade: { opacity: 0 } } } })]),
-			graphic('settled', [shape('bug', { animation: { enter: { ...LINEAR, fade: { opacity: 0 } } } })]),
+			graphic('animating', [
+				shape('bar', {
+					animation: {
+						enter: {
+							...LINEAR,
+							fade: { opacity: 0 },
+						},
+					},
+				}),
+			]),
+			graphic('settled', [
+				shape('bug', {
+					animation: {
+						enter: {
+							...LINEAR,
+							fade: { opacity: 0 },
+						},
+					},
+				}),
+			]),
 		];
 
-		const resolved = model(graphics, { animating: { phase: 'enter', elapsed: 0 } });
+		const resolved = model(graphics, {
+			animating: { phase: 'enter', elapsed: 0 },
+		});
 
 		expect(resolved.graphics[0]?.items[0]?.style.opacity).toBe(0);
 		expect(resolved.graphics[1]?.items[0]?.style.opacity).toBeUndefined();
 	});
 
 	it('carries a whole-graphic recipe on the graphic own wrapper, so item fades compose multiplicatively', () => {
-		const graphics = [{
-			...graphic('a', [shape('bar', { animation: { enter: { ...LINEAR, fade: { opacity: 0 } } } })]),
-			animation: { enter: { ...LINEAR, fade: { opacity: 0 } } },
-		}];
+		const graphics = [
+			{
+				...graphic('a', [
+					shape('bar', {
+						animation: {
+							enter: {
+								...LINEAR,
+								fade: { opacity: 0 },
+							},
+						},
+					}),
+				]),
+				animation: {
+					enter: {
+						...LINEAR,
+						fade: { opacity: 0 },
+					},
+				},
+			},
+		];
 
-		const resolved = model(graphics, { a: { phase: 'enter', elapsed: 200 } });
+		const resolved = model(graphics, {
+			a: { phase: 'enter', elapsed: 200 },
+		});
 
 		// Each is half way, and they nest, so the composed result is 0.25 without
 		// either of them having to know the other exists.
@@ -2504,12 +3131,25 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 	});
 
 	it('slides an item in canvas pixels from its Graphic Resting State position', () => {
-		const graphics = [graphic('a', [shape('bar', {
-			animation: { enter: { ...LINEAR, slide: { direction: 'north', distanceMode: 'fixed', distance: 100 } } },
-		})])];
+		const graphics = [
+			graphic('a', [
+				shape('bar', {
+					animation: {
+						enter: {
+							...LINEAR,
+							slide: { direction: 'north', distanceMode: 'fixed', distance: 100 },
+						},
+					},
+				}),
+			]),
+		];
 
-		const start = model(graphics, { a: { phase: 'enter', elapsed: 0 } }).graphics[0]?.items[0];
-		const settled = model(graphics, { a: { phase: 'enter', elapsed: 400 } }).graphics[0]?.items[0];
+		const start = model(graphics, {
+			a: { phase: 'enter', elapsed: 0 },
+		}).graphics[0]?.items[0];
+		const settled = model(graphics, {
+			a: { phase: 'enter', elapsed: 400 },
+		}).graphics[0]?.items[0];
 
 		expect(start?.style.transform).toBe('translate(0px, -100px)');
 		// The resting position is unchanged: motion is a transform, never a rewrite
@@ -2520,13 +3160,24 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 	});
 
 	it('scales about its Graphic Animation Origin while rotating about its Graphic Anchor Point', () => {
-		const graphics = [graphic('a', [shape('bar', {
-			anchor: 'top-left',
-			rotation: 30,
-			animation: { enter: { ...LINEAR, scale: { factor: 0.5, origin: 'center' } } },
-		})])];
+		const graphics = [
+			graphic('a', [
+				shape('bar', {
+					anchor: 'top-left',
+					rotation: 30,
+					animation: {
+						enter: {
+							...LINEAR,
+							scale: { factor: 0.5, origin: 'center' },
+						},
+					},
+				}),
+			]),
+		];
 
-		const item = model(graphics, { a: { phase: 'enter', elapsed: 0 } }).graphics[0]?.items[0];
+		const item = model(graphics, {
+			a: { phase: 'enter', elapsed: 0 },
+		}).graphics[0]?.items[0];
 
 		// One transform, one origin: the rotation is about the anchor, and the scale
 		// reaches the centre origin by translating (1-s)(O-A) inside that rotation.
@@ -2535,18 +3186,24 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 	});
 
 	it('applies a slide outside the authored rotation and a scale inside it', () => {
-		const graphics = [graphic('a', [shape('bar', {
-			rotation: 45,
-			animation: {
-				enter: {
-					...LINEAR,
-					slide: { direction: 'east', distanceMode: 'fixed', distance: 60 },
-					scale: { factor: 0, origin: 'top-left' },
-				},
-			},
-		})])];
+		const graphics = [
+			graphic('a', [
+				shape('bar', {
+					rotation: 45,
+					animation: {
+						enter: {
+							...LINEAR,
+							slide: { direction: 'east', distanceMode: 'fixed', distance: 60 },
+							scale: { factor: 0, origin: 'top-left' },
+						},
+					},
+				}),
+			]),
+		];
 
-		const item = model(graphics, { a: { phase: 'enter', elapsed: 0 } }).graphics[0]?.items[0];
+		const item = model(graphics, {
+			a: { phase: 'enter', elapsed: 0 },
+		}).graphics[0]?.items[0];
 
 		// A slide is a canvas-space offset, so it must not be rotated by the item's
 		// own Graphic Rotation; a scale is in the item's own frame, so it must be.
@@ -2554,13 +3211,27 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 	});
 
 	it('wipes a reveal as a mask, so an existing Shape Geometry clip survives it', () => {
-		const clipped = group('cluster', [text('name')], {
+		const clipped = group('cluster', [
+			text('name'),
+		], {
 			clip: true,
-			geometry: { ...squareShapeGeometry(), topRight: { treatment: 'cut', size: 24 } },
-			animation: { enter: { ...LINEAR, reveal: { edge: 'left' } } },
+			geometry: {
+				...squareShapeGeometry(),
+				topRight: { treatment: 'cut', size: 24 },
+			},
+			animation: {
+				enter: {
+					...LINEAR,
+					reveal: { edge: 'left' },
+				},
+			},
 		});
 
-		const item = model([graphic('a', [clipped])], { a: { phase: 'enter', elapsed: 200 } }).graphics[0]?.items[0];
+		const item = model([
+			graphic('a', [clipped]),
+		], {
+			a: { phase: 'enter', elapsed: 200 },
+		}).graphics[0]?.items[0];
 
 		expect(item?.style.maskImage).toBe('linear-gradient(to right, #ffffff 0 50%, #ffffff00 50%)');
 		// The group's own Shape Geometry clip is still there: a wipe composes with
@@ -2569,38 +3240,98 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 	});
 
 	it('wipes from each of the four edges towards the opposite one', () => {
-		const edges = { left: 'to right', right: 'to left', top: 'to bottom', bottom: 'to top' } as const;
+		const edges = {
+			left: 'to right',
+			right: 'to left',
+			top: 'to bottom',
+			bottom: 'to top',
+		} as const;
 
 		for (const [edge, direction] of Object.entries(edges)) {
-			const graphics = [graphic('a', [shape('bar', {
-				animation: { enter: { ...LINEAR, reveal: { edge: edge as 'left' } } },
-			})])];
-			const item = model(graphics, { a: { phase: 'enter', elapsed: 0 } }).graphics[0]?.items[0];
+			const graphics = [
+				graphic('a', [
+					shape('bar', {
+						animation: {
+							enter: {
+								...LINEAR,
+								reveal: { edge: edge as 'left' },
+							},
+						},
+					}),
+				]),
+			];
+			const item = model(graphics, {
+				a: { phase: 'enter', elapsed: 0 },
+			}).graphics[0]?.items[0];
 
 			expect(item?.style.maskImage).toBe(`linear-gradient(${direction}, #ffffff 0 0%, #ffffff00 0%)`);
 		}
 	});
 
 	it('drops the mask once a reveal is fully open, rather than emitting an inert one', () => {
-		const graphics = [graphic('a', [shape('bar', {
-			animation: { enter: { ...LINEAR, reveal: { edge: 'left' } } },
-		})])];
+		const graphics = [
+			graphic('a', [
+				shape('bar', {
+					animation: {
+						enter: {
+							...LINEAR,
+							reveal: { edge: 'left' },
+						},
+					},
+				}),
+			]),
+		];
 
-		expect(model(graphics, { a: { phase: 'enter', elapsed: 400 } }).graphics[0]?.items[0]?.style.maskImage)
+		expect(model(graphics, {
+			a: { phase: 'enter', elapsed: 400 },
+		}).graphics[0]?.items[0]?.style.maskImage)
 			.toBeUndefined();
 	});
 
 	it('staggers a selected subset of direct items in list order from one shared phase start', () => {
-		const graphics = [{
-			...graphic('a', [
-				shape('first', { animation: { enter: { ...LINEAR, fade: { opacity: 0 } } } }),
-				shape('second', { animation: { enter: { ...LINEAR, fade: { opacity: 0 } } } }),
-				shape('third', { animation: { enter: { ...LINEAR, fade: { opacity: 0 } } } }),
-			]),
-			animation: { stagger: { enter: { order: 'list' as const, step: 400, itemIds: ['first', 'third'] } } },
-		}];
+		const graphics = [
+			{
+				...graphic('a', [
+					shape('first', {
+						animation: {
+							enter: {
+								...LINEAR,
+								fade: { opacity: 0 },
+							},
+						},
+					}),
+					shape('second', {
+						animation: {
+							enter: {
+								...LINEAR,
+								fade: { opacity: 0 },
+							},
+						},
+					}),
+					shape('third', {
+						animation: {
+							enter: {
+								...LINEAR,
+								fade: { opacity: 0 },
+							},
+						},
+					}),
+				]),
+				animation: {
+					stagger: {
+						enter: {
+							order: 'list' as const,
+							step: 400,
+							itemIds: ['first', 'third'],
+						},
+					},
+				},
+			},
+		];
 
-		const items = model(graphics, { a: { phase: 'enter', elapsed: 400 } }).graphics[0]?.items ?? [];
+		const items = model(graphics, {
+			a: { phase: 'enter', elapsed: 400 },
+		}).graphics[0]?.items ?? [];
 
 		// `first` has finished, `second` is not staggered so it has finished too, and
 		// `third` is only now starting its own 400ms travel.
@@ -2611,15 +3342,41 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 
 	it('reverses a stagger for an exit without touching the enter order', () => {
 		const items = [
-			shape('first', { animation: { exit: { ...LINEAR, fade: { opacity: 0 } } } }),
-			shape('second', { animation: { exit: { ...LINEAR, fade: { opacity: 0 } } } }),
+			shape('first', {
+				animation: {
+					exit: {
+						...LINEAR,
+						fade: { opacity: 0 },
+					},
+				},
+			}),
+			shape('second', {
+				animation: {
+					exit: {
+						...LINEAR,
+						fade: { opacity: 0 },
+					},
+				},
+			}),
 		];
-		const graphics = [{
-			...graphic('a', items),
-			animation: { stagger: { exit: { order: 'reverse-list' as const, step: 400, itemIds: ['first', 'second'] } } },
-		}];
+		const graphics = [
+			{
+				...graphic('a', items),
+				animation: {
+					stagger: {
+						exit: {
+							order: 'reverse-list' as const,
+							step: 400,
+							itemIds: ['first', 'second'],
+						},
+					},
+				},
+			},
+		];
 
-		const resolved = model(graphics, { a: { phase: 'exit', elapsed: 400 } }).graphics[0]?.items ?? [];
+		const resolved = model(graphics, {
+			a: { phase: 'exit', elapsed: 400 },
+		}).graphics[0]?.items ?? [];
 
 		// Reverse-list: `second` leads and has finished fading out, while `first` has
 		// not begun and so is still exactly at its Graphic Resting State.
@@ -2628,20 +3385,54 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 	});
 
 	it('adds a Graphic Group stagger on top of the offset the group itself received', () => {
-		const graphics = [{
-			...graphic('a', [
-				shape('bed'),
-				group('cluster', [
-					text('one', { animation: { enter: { ...LINEAR, fade: { opacity: 0 } } } }),
-					text('two', { animation: { enter: { ...LINEAR, fade: { opacity: 0 } } } }),
-				], {
-					animation: { stagger: { enter: { order: 'list', step: 400, itemIds: ['one', 'two'] } } },
-				}),
-			]),
-			animation: { stagger: { enter: { order: 'list' as const, step: 400, itemIds: ['bed', 'cluster'] } } },
-		}];
+		const graphics = [
+			{
+				...graphic('a', [
+					shape('bed'),
+					group('cluster', [
+						text('one', {
+							animation: {
+								enter: {
+									...LINEAR,
+									fade: { opacity: 0 },
+								},
+							},
+						}),
+						text('two', {
+							animation: {
+								enter: {
+									...LINEAR,
+									fade: { opacity: 0 },
+								},
+							},
+						}),
+					], {
+						animation: {
+							stagger: {
+								enter: {
+									order: 'list',
+									step: 400,
+									itemIds: ['one', 'two'],
+								},
+							},
+						},
+					}),
+				]),
+				animation: {
+					stagger: {
+						enter: {
+							order: 'list' as const,
+							step: 400,
+							itemIds: ['bed', 'cluster'],
+						},
+					},
+				},
+			},
+		];
 
-		const children = model(graphics, { a: { phase: 'enter', elapsed: 800 } }).graphics[0]?.items[1]?.children ?? [];
+		const children = model(graphics, {
+			a: { phase: 'enter', elapsed: 800 },
+		}).graphics[0]?.items[1]?.children ?? [];
 
 		// `cluster` is second in the graphic's stagger (400), `two` second in its
 		// group's (another 400), so at 800ms it is only just beginning.
@@ -2650,13 +3441,26 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 	});
 
 	it('clears the Graphic Group, not the canvas, for a child sliding past its parent', () => {
-		const graphics = [graphic('a', [group('cluster', [text('name', {
-			x: 0,
-			width: 100,
-			animation: { exit: { ...LINEAR, slide: { direction: 'east', distanceMode: 'clear-parent', distance: 0 } } },
-		})], { arrangement: 'canvas', width: 600 })])];
+		const graphics = [
+			graphic('a', [
+				group('cluster', [
+					text('name', {
+						x: 0,
+						width: 100,
+						animation: {
+							exit: {
+								...LINEAR,
+								slide: { direction: 'east', distanceMode: 'clear-parent', distance: 0 },
+							},
+						},
+					}),
+				], { arrangement: 'canvas', width: 600 }),
+			]),
+		];
 
-		const child = model(graphics, { a: { phase: 'exit', elapsed: 400 } }).graphics[0]?.items[0]?.children?.[0];
+		const child = model(graphics, {
+			a: { phase: 'exit', elapsed: 400 },
+		}).graphics[0]?.items[0]?.children?.[0];
 
 		// The group is 600 wide and the child sits at its left edge, so clearing the
 		// group is 600 — not the 1920 it would take to clear the Screen canvas.
@@ -2664,11 +3468,25 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 	});
 
 	it('animates a row or column Graphic Group child, which has no Graphic Rotation of its own', () => {
-		const graphics = [graphic('a', [group('cluster', [text('name', {
-			animation: { enter: { ...LINEAR, scale: { factor: 0.5, origin: 'center' }, fade: { opacity: 0 } } },
-		})], { arrangement: 'row' })])];
+		const graphics = [
+			graphic('a', [
+				group('cluster', [
+					text('name', {
+						animation: {
+							enter: {
+								...LINEAR,
+								scale: { factor: 0.5, origin: 'center' },
+								fade: { opacity: 0 },
+							},
+						},
+					}),
+				], { arrangement: 'row' }),
+			]),
+		];
 
-		const child = model(graphics, { a: { phase: 'enter', elapsed: 0 } }).graphics[0]?.items[0]?.children?.[0];
+		const child = model(graphics, {
+			a: { phase: 'enter', elapsed: 0 },
+		}).graphics[0]?.items[0]?.children?.[0];
 
 		expect(child?.style.opacity).toBe(0);
 		expect(String(child?.style.transform)).toContain('scale(0.5)');
@@ -2678,21 +3496,32 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 	it('resolves the same composition and animation phase in the Overlay, Fill, and Key Outputs', () => {
 		// At the same authoritative time every output has to agree, so the motion each
 		// one resolves must be identical even though what they paint differs.
-		const graphics = [{
-			...graphic('a', [shape('bar', {
+		const graphics = [
+			{
+				...graphic('a', [
+					shape('bar', {
+						animation: {
+							enter: {
+								...LINEAR,
+								fade: { opacity: 0 },
+								slide: { direction: 'south', distanceMode: 'fixed', distance: 40 },
+								scale: { factor: 0.8, origin: 'bottom-right' },
+								reveal: { edge: 'top' },
+							},
+						},
+					}),
+				]),
 				animation: {
 					enter: {
 						...LINEAR,
-						fade: { opacity: 0 },
-						slide: { direction: 'south', distanceMode: 'fixed', distance: 40 },
-						scale: { factor: 0.8, origin: 'bottom-right' },
-						reveal: { edge: 'top' },
+						fade: { opacity: 0.2 },
 					},
 				},
-			})]),
-			animation: { enter: { ...LINEAR, fade: { opacity: 0.2 } } },
-		}];
-		const at = { a: { phase: 'enter' as const, elapsed: 137 } };
+			},
+		];
+		const at = {
+			a: { phase: 'enter' as const, elapsed: 137 },
+		};
 
 		const motion = (output: 'overlay' | 'fill' | 'key') => {
 			const resolved = model(graphics, at, output);
@@ -2711,12 +3540,18 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 	});
 
 	describe('concurrent lifecycle phases compose', () => {
-		const FADE = (opacity: number) => ({ ...LINEAR, fade: { opacity } });
+		const FADE = (opacity: number) => ({
+			...LINEAR,
+			fade: { opacity },
+		});
 		const SLIDE = (distance: number) => ({
 			...LINEAR,
 			slide: { direction: 'east' as const, distanceMode: 'fixed' as const, distance },
 		});
-		const WIPE = (edge: 'left' | 'top') => ({ ...LINEAR, reveal: { edge } });
+		const WIPE = (edge: 'left' | 'top') => ({
+			...LINEAR,
+			reveal: { edge },
+		});
 
 		/** An on-screen recipe still cycling underneath an exit that interrupted it. */
 		const CYCLING_UNDER_EXIT = [
@@ -2725,9 +3560,21 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 		];
 
 		it('multiplies two fades, so the composed opacity is what nesting would give', () => {
-			const graphics = [graphic('a', [shape('bar', {
-				animation: { 'on-screen': { ...LINEAR, pause: 0, repeat: 1, fade: { opacity: 0.5 } }, 'exit': FADE(0) },
-			})])];
+			const graphics = [
+				graphic('a', [
+					shape('bar', {
+						animation: {
+							'on-screen': {
+								...LINEAR,
+								pause: 0,
+								repeat: 1,
+								fade: { opacity: 0.5 },
+							},
+							'exit': FADE(0),
+						},
+					}),
+				]),
+			];
 
 			const item = model(graphics, { a: CYCLING_UNDER_EXIT }).graphics[0]?.items[0];
 
@@ -2738,9 +3585,21 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 		});
 
 		it('adds two slides into one offset', () => {
-			const graphics = [graphic('a', [shape('bar', {
-				animation: { 'on-screen': { ...LINEAR, pause: 0, repeat: 1, ...SLIDE(40) }, 'exit': SLIDE(100) },
-			})])];
+			const graphics = [
+				graphic('a', [
+					shape('bar', {
+						animation: {
+							'on-screen': {
+								...LINEAR,
+								pause: 0,
+								repeat: 1,
+								...SLIDE(40),
+							},
+							'exit': SLIDE(100),
+						},
+					}),
+				]),
+			];
 
 			const item = model(graphics, { a: CYCLING_UNDER_EXIT }).graphics[0]?.items[0];
 
@@ -2750,13 +3609,25 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 		});
 
 		it('nests two scales, writing the phase that moves the result first', () => {
-			const graphics = [graphic('a', [shape('bar', {
-				anchor: 'top-left',
-				animation: {
-					'on-screen': { ...LINEAR, pause: 0, repeat: 1, scale: { factor: 2, origin: 'top-left' } },
-					'exit': { ...LINEAR, scale: { factor: 0.5, origin: 'center' } },
-				},
-			})])];
+			const graphics = [
+				graphic('a', [
+					shape('bar', {
+						anchor: 'top-left',
+						animation: {
+							'on-screen': {
+								...LINEAR,
+								pause: 0,
+								repeat: 1,
+								scale: { factor: 2, origin: 'top-left' },
+							},
+							'exit': {
+								...LINEAR,
+								scale: { factor: 0.5, origin: 'center' },
+							},
+						},
+					}),
+				]),
+			];
 
 			const item = model(graphics, { a: CYCLING_UNDER_EXIT }).graphics[0]?.items[0];
 
@@ -2773,13 +3644,28 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			// on. A second element is the answer, and it must be a *mask* on that element
 			// rather than a clip — a Graphic Group already spends its clip on Shape Geometry
 			// clipping, and CSS allows one clip path per element too.
-			const clipped = group('cluster', [text('name')], {
+			const clipped = group('cluster', [
+				text('name'),
+			], {
 				clip: true,
-				geometry: { ...squareShapeGeometry(), topRight: { treatment: 'cut', size: 24 } },
-				animation: { 'on-screen': { ...LINEAR, pause: 0, repeat: 1, reveal: { edge: 'top' } }, 'exit': WIPE('left') },
+				geometry: {
+					...squareShapeGeometry(),
+					topRight: { treatment: 'cut', size: 24 },
+				},
+				animation: {
+					'on-screen': {
+						...LINEAR,
+						pause: 0,
+						repeat: 1,
+						reveal: { edge: 'top' },
+					},
+					'exit': WIPE('left'),
+				},
 			});
 
-			const item = model([graphic('a', [clipped])], { a: CYCLING_UNDER_EXIT }).graphics[0]?.items[0];
+			const item = model([
+				graphic('a', [clipped]),
+			], { a: CYCLING_UNDER_EXIT }).graphics[0]?.items[0];
 
 			// The enclosure is the item's own box, so the gradient still resolves across the
 			// bounds the reveal was authored across.
@@ -2795,9 +3681,21 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 		});
 
 		it('needs no second element when at most one concurrent phase wipes', () => {
-			const graphics = [graphic('a', [shape('bar', {
-				animation: { 'on-screen': { ...LINEAR, pause: 0, repeat: 1, fade: { opacity: 0.5 } }, 'exit': WIPE('left') },
-			})])];
+			const graphics = [
+				graphic('a', [
+					shape('bar', {
+						animation: {
+							'on-screen': {
+								...LINEAR,
+								pause: 0,
+								repeat: 1,
+								fade: { opacity: 0.5 },
+							},
+							'exit': WIPE('left'),
+						},
+					}),
+				]),
+			];
 
 			const item = model(graphics, { a: CYCLING_UNDER_EXIT }).graphics[0]?.items[0];
 
@@ -2806,11 +3704,27 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 		});
 
 		it('keeps the descriptor a single lifecycle phase always produced', () => {
-			const graphics = [graphic('a', [shape('bar', { animation: { exit: FADE(0) } })])];
+			const graphics = [
+				graphic('a', [
+					shape('bar', {
+						animation: {
+							exit: FADE(0),
+						},
+					}),
+				]),
+			];
 
-			expect(model(graphics, { a: [{ phase: 'exit', elapsed: 200 }] }).graphics[0])
-				.toEqual(model(graphics, { a: { phase: 'exit', elapsed: 200 } }).graphics[0]);
-			expect(model(graphics, { a: { phase: 'exit', elapsed: 200 } }).graphics[0]?.enclosingStyle)
+			expect(model(graphics, {
+				a: [
+					{ phase: 'exit', elapsed: 200 },
+				],
+			}).graphics[0])
+				.toEqual(model(graphics, {
+					a: { phase: 'exit', elapsed: 200 },
+				}).graphics[0]);
+			expect(model(graphics, {
+				a: { phase: 'exit', elapsed: 200 },
+			}).graphics[0]?.enclosingStyle)
 				.toBeUndefined();
 		});
 
@@ -2832,10 +3746,20 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			function crossing(items: BroadcastGraphicConfig['items'], animation?: BroadcastGraphicConfig['animation']) {
 				return resolveGraphicsCompositionRenderModel({
 					output: 'overlay',
-					graphics: [{ ...graphic('a', items), inputs: [HEADLINE], animation }],
+					graphics: [
+						{
+							...graphic('a', items),
+							inputs: [HEADLINE],
+							animation,
+						},
+					],
 					animation: { a: UPDATING_UNDER_EXIT },
-					inputValues: { a: { headline: 'AFTER' } },
-					outgoingInputValues: { a: { headline: 'BEFORE' } },
+					inputValues: {
+						a: { headline: 'AFTER' },
+					},
+					outgoingInputValues: {
+						a: { headline: 'BEFORE' },
+					},
 					...CANVAS,
 				}).graphics[0]!;
 			}
@@ -2844,10 +3768,15 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 				// The exit moves both renderings together, so it cannot sit on either of them:
 				// two half-opaque copies of one item are not the same picture as one half-opaque
 				// copy of the pair.
-				const composed = crossing([text('headline', {
-					text: '{headline}',
-					animation: { update: FADE(0), exit: FADE(0) },
-				})]);
+				const composed = crossing([
+					text('headline', {
+						text: '{headline}',
+						animation: {
+							update: FADE(0),
+							exit: FADE(0),
+						},
+					}),
+				]);
 				const item = composed.items[0]!;
 
 				expect(item.style.opacity).toBe(0.5);
@@ -2857,8 +3786,13 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 
 			it('encloses both frames of a whole-graphic update in the phase that moves them together', () => {
 				const composed = crossing(
-					[text('headline', { text: '{headline}' })],
-					{ update: FADE(0), exit: FADE(0) },
+					[
+						text('headline', { text: '{headline}' }),
+					],
+					{
+						update: FADE(0),
+						exit: FADE(0),
+					},
 				);
 
 				// The enclosure carries the exit; each frame carries its own half of the update.
@@ -2870,14 +3804,28 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			it('leaves the enclosure absent when an update runs with nothing over it', () => {
 				const composed = resolveGraphicsCompositionRenderModel({
 					output: 'overlay',
-					graphics: [{
-						...graphic('a', [text('headline', { text: '{headline}' })]),
-						inputs: [HEADLINE],
-						animation: { update: FADE(0) },
-					}],
-					animation: { a: [{ phase: 'update', elapsed: 200 }] },
-					inputValues: { a: { headline: 'AFTER' } },
-					outgoingInputValues: { a: { headline: 'BEFORE' } },
+					graphics: [
+						{
+							...graphic('a', [
+								text('headline', { text: '{headline}' }),
+							]),
+							inputs: [HEADLINE],
+							animation: {
+								update: FADE(0),
+							},
+						},
+					],
+					animation: {
+						a: [
+							{ phase: 'update', elapsed: 200 },
+						],
+					},
+					inputValues: {
+						a: { headline: 'AFTER' },
+					},
+					outgoingInputValues: {
+						a: { headline: 'BEFORE' },
+					},
 					...CANVAS,
 				}).graphics[0]!;
 
@@ -2888,20 +3836,41 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			it('keeps the Key Output matte over both phases at once', () => {
 				const composed = resolveGraphicsCompositionRenderModel({
 					output: 'key',
-					graphics: [{
-						...graphic('a', [
-							text('headline', {
-								text: '{headline}',
-								surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }),
-								animation: { update: { ...FADE(0), reveal: { edge: 'left' } }, exit: { ...FADE(0.2), reveal: { edge: 'top' } } },
-							}),
-						]),
-						inputs: [HEADLINE],
-						animation: { update: FADE(0), exit: { ...FADE(0), scale: { factor: 0.4, origin: 'center' } } },
-					}],
+					graphics: [
+						{
+							...graphic('a', [
+								text('headline', {
+									text: '{headline}',
+									surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }),
+									animation: {
+										update: {
+											...FADE(0),
+											reveal: { edge: 'left' },
+										},
+										exit: {
+											...FADE(0.2),
+											reveal: { edge: 'top' },
+										},
+									},
+								}),
+							]),
+							inputs: [HEADLINE],
+							animation: {
+								update: FADE(0),
+								exit: {
+									...FADE(0),
+									scale: { factor: 0.4, origin: 'center' },
+								},
+							},
+						},
+					],
 					animation: { a: UPDATING_UNDER_EXIT },
-					inputValues: { a: { headline: 'AFTER' } },
-					outgoingInputValues: { a: { headline: 'BEFORE' } },
+					inputValues: {
+						a: { headline: 'AFTER' },
+					},
+					outgoingInputValues: {
+						a: { headline: 'BEFORE' },
+					},
 					...CANVAS,
 				}).graphics[0]!;
 
@@ -2910,11 +3879,27 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 		});
 
 		it('keeps the Key Output matte over two wipes on two elements', () => {
-			const graphics = [graphic('a', [group('cluster', [text('name', { surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }) })], {
-				clip: true,
-				surfaceStyle: surfaceStyle(),
-				animation: { 'on-screen': { ...LINEAR, pause: 0, repeat: 1, reveal: { edge: 'top' } }, 'exit': WIPE('left') },
-			})])];
+			const graphics = [
+				graphic('a', [
+					group('cluster', [
+						text('name', {
+							surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }),
+						}),
+					], {
+						clip: true,
+						surfaceStyle: surfaceStyle(),
+						animation: {
+							'on-screen': {
+								...LINEAR,
+								pause: 0,
+								repeat: 1,
+								reveal: { edge: 'top' },
+							},
+							'exit': WIPE('left'),
+						},
+					}),
+				]),
+			];
 
 			const composed = model(graphics, { a: CYCLING_UNDER_EXIT }, 'key').graphics[0]!;
 
@@ -2923,10 +3908,23 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 	});
 
 	it('is deterministic: one elapsed time always produces one frame', () => {
-		const graphics = [graphic('a', [shape('bar', {
-			animation: { enter: { duration: 700, easing: 'back-out', delay: 120, scale: { factor: 0.4, origin: 'top' } } },
-		})])];
-		const at = { a: { phase: 'enter' as const, elapsed: 333 } };
+		const graphics = [
+			graphic('a', [
+				shape('bar', {
+					animation: {
+						enter: {
+							duration: 700,
+							easing: 'back-out',
+							delay: 120,
+							scale: { factor: 0.4, origin: 'top' },
+						},
+					},
+				}),
+			]),
+		];
+		const at = {
+			a: { phase: 'enter' as const, elapsed: 333 },
+		};
 
 		expect(model(graphics, at)).toEqual(model(graphics, at));
 	});
@@ -2935,7 +3933,11 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 		const animated = {
 			...graphic('a', [
 				shape('bar', {
-					surfaceStyle: surfaceStyle({ fillOpacity: 0.5, outline: { color: '#00d9ff', width: 4 }, glow: { color: '#ff51c7', size: 20, opacity: 0.5 } }),
+					surfaceStyle: surfaceStyle({
+						fillOpacity: 0.5,
+						outline: { color: '#00d9ff', width: 4 },
+						glow: { color: '#ff51c7', size: 20, opacity: 0.5 },
+					}),
 					rotation: 12,
 					animation: {
 						enter: {
@@ -2949,24 +3951,55 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 						},
 					},
 				}),
-				group('cluster', [text('name', {
-					surfaceStyle: surfaceStyle({ fillOpacity: 0.75 }),
-					animation: { enter: { duration: 400, easing: 'linear', delay: 0, reveal: { edge: 'right' }, fade: { opacity: 0 } } },
-				})], {
+				group('cluster', [
+					text('name', {
+						surfaceStyle: surfaceStyle({ fillOpacity: 0.75 }),
+						animation: {
+							enter: {
+								duration: 400,
+								easing: 'linear',
+								delay: 0,
+								reveal: { edge: 'right' },
+								fade: { opacity: 0 },
+							},
+						},
+					}),
+				], {
 					clip: true,
 					surfaceStyle: surfaceStyle(),
-					animation: { enter: { duration: 400, easing: 'linear', delay: 0, scale: { factor: 0.2, origin: 'center' } } },
+					animation: {
+						enter: {
+							duration: 400,
+							easing: 'linear',
+							delay: 0,
+							scale: { factor: 0.2, origin: 'center' },
+						},
+					},
 				}),
 			]),
 			animation: {
-				enter: { duration: 400, easing: 'linear' as const, delay: 0, fade: { opacity: 0 }, scale: { factor: 0.5, origin: 'center' as const } },
-				stagger: { enter: { order: 'list' as const, step: 50, itemIds: ['bar', 'cluster'] } },
+				enter: {
+					duration: 400,
+					easing: 'linear' as const,
+					delay: 0,
+					fade: { opacity: 0 },
+					scale: { factor: 0.5, origin: 'center' as const },
+				},
+				stagger: {
+					enter: {
+						order: 'list' as const,
+						step: 50,
+						itemIds: ['bar', 'cluster'],
+					},
+				},
 			},
 		};
 
 		it('paints nothing the matte identity does not allow, at any point in a phase', () => {
 			for (const elapsed of [0, 25, 50, 137, 200, 399, 400, 4000]) {
-				const resolved = model([animated], { a: { phase: 'enter', elapsed } }, 'key');
+				const resolved = model([animated], {
+					a: { phase: 'enter', elapsed },
+				}, 'key');
 
 				expect(() => graphicPaints(resolved.graphics[0]!)).not.toThrow();
 			}
@@ -2977,12 +4010,27 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 			// animation contributes transforms, an opacity factor, and a stencil, none
 			// of which add paint, so the composed luminance is unchanged.
 			const alphas = [0.5, 0.5];
-			const graphics = [graphic('a', alphas.map((fillOpacity, index) => shape(`item-${index}`, {
-				surfaceStyle: surfaceStyle({ fill: { type: 'solid', color: '#123456' }, fillOpacity }),
-				animation: { enter: { duration: 400, easing: 'linear', delay: 0, slide: { direction: 'south', distanceMode: 'fixed', distance: 10 }, reveal: { edge: 'left' } } },
-			})))];
+			const graphics = [
+				graphic('a', alphas.map((fillOpacity, index) => shape(`item-${index}`, {
+					surfaceStyle: surfaceStyle({
+						fill: { type: 'solid', color: '#123456' },
+						fillOpacity,
+					}),
+					animation: {
+						enter: {
+							duration: 400,
+							easing: 'linear',
+							delay: 0,
+							slide: { direction: 'south', distanceMode: 'fixed', distance: 10 },
+							reveal: { edge: 'left' },
+						},
+					},
+				}))),
+			];
 
-			const resolved = model(graphics, { a: { phase: 'enter', elapsed: 200 } }, 'key');
+			const resolved = model(graphics, {
+				a: { phase: 'enter', elapsed: 200 },
+			}, 'key');
 			const luminance = compositeKeyLuminance(
 				resolved.canvasStyle.background,
 				resolved.graphics[0]!.items.flatMap(item => itemPaints(item)),
@@ -3035,7 +4083,12 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 
 describe('graphicsCompositionRenderModel per-item phase triggers', () => {
 	const LINEAR = { duration: 400, easing: 'linear' as const, delay: 0 };
-	const FADE_IN = { enter: { ...LINEAR, fade: { opacity: 0 } } };
+	const FADE_IN = {
+		enter: {
+			...LINEAR,
+			fade: { opacity: 0 },
+		},
+	};
 
 	it('plays an item"s authored enter recipe from a per-item projection, leaving its siblings still', () => {
 		// The projection names one Graphic Item rather than a Broadcast Graphic: this
@@ -3044,11 +4097,19 @@ describe('graphicsCompositionRenderModel per-item phase triggers', () => {
 		// has no lifecycle phase in play at all.
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [
-				shape('revealing', { animation: FADE_IN }),
-				shape('bystander', { animation: FADE_IN }),
-			])],
-			itemAnimation: { a: { revealing: [{ phase: 'enter', elapsed: 200 }] } },
+			graphics: [
+				graphic('a', [
+					shape('revealing', { animation: FADE_IN }),
+					shape('bystander', { animation: FADE_IN }),
+				]),
+			],
+			itemAnimation: {
+				a: {
+					revealing: [
+						{ phase: 'enter', elapsed: 200 },
+					],
+				},
+			},
 			...CANVAS,
 		});
 		const [revealing, bystander] = model.graphics[0]!.items;
@@ -3068,23 +4129,45 @@ describe('graphicsCompositionRenderModel per-item phase triggers', () => {
 			player1: {
 				lifeTotal: null,
 				gameWins: 0,
-				sideboard: [{ name: 'Rest in Peace', quantity: 2, imageUrl: null }],
+				sideboard: [
+					{ name: 'Rest in Peace', quantity: 2, imageUrl: null },
+				],
 				sideboardRevealed: false,
 			},
-			player2: { lifeTotal: null, gameWins: 0, sideboard: null, sideboardRevealed: false },
+			player2: {
+				lifeTotal: null,
+				gameWins: 0,
+				sideboard: null,
+				sideboardRevealed: false,
+			},
 			bestOf: 3,
 		};
-		const exitFade = deckList('side-1', { animation: { exit: { ...LINEAR, fade: { opacity: 0 } } } });
+		const exitFade = deckList('side-1', {
+			animation: {
+				exit: {
+					...LINEAR,
+					fade: { opacity: 0 },
+				},
+			},
+		});
 		const at = (itemAnimation?: { layout: { 'side-1': [{ phase: 'exit'; elapsed: number }] } }) =>
 			resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('layout', [exitFade])],
+				graphics: [
+					graphic('layout', [exitFade]),
+				],
 				featureMatch: hidden,
 				itemAnimation,
 				...CANVAS,
 			}).graphics[0]!.items[0]!;
 
-		const leaving = at({ layout: { 'side-1': [{ phase: 'exit', elapsed: 200 }] } });
+		const leaving = at({
+			layout: {
+				'side-1': [
+					{ phase: 'exit', elapsed: 200 },
+				],
+			},
+		});
 		expect(leaving.text).toContain('Rest in Peace');
 		expect(leaving.style.opacity).toBe(0.5);
 
@@ -3097,10 +4180,20 @@ describe('graphicsCompositionRenderModel per-item phase triggers', () => {
 		// authored inside a group plays its own recipes off the same trigger.
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [group('cluster', [
-				shape('inner', { animation: FADE_IN }),
-			])])],
-			itemAnimation: { a: { inner: [{ phase: 'enter', elapsed: 200 }] } },
+			graphics: [
+				graphic('a', [
+					group('cluster', [
+						shape('inner', { animation: FADE_IN }),
+					]),
+				]),
+			],
+			itemAnimation: {
+				a: {
+					inner: [
+						{ phase: 'enter', elapsed: 200 },
+					],
+				},
+			},
 			...CANVAS,
 		});
 		const inner = model.graphics[0]!.items[0]!.children![0]!;
@@ -3114,8 +4207,18 @@ describe('graphicsCompositionRenderModel per-item phase triggers', () => {
 		// hid (ADR 0015).
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',
-			graphics: [graphic('a', [shape('hidden', { visible: false, animation: FADE_IN })])],
-			itemAnimation: { a: { hidden: [{ phase: 'enter', elapsed: 200 }] } },
+			graphics: [
+				graphic('a', [
+					shape('hidden', { visible: false, animation: FADE_IN }),
+				]),
+			],
+			itemAnimation: {
+				a: {
+					hidden: [
+						{ phase: 'enter', elapsed: 200 },
+					],
+				},
+			},
 			...CANVAS,
 		});
 
@@ -3129,11 +4232,21 @@ describe('graphicsCompositionRenderModel per-item phase triggers', () => {
 		const at = (itemAnimation?: Record<string, Record<string, [{ phase: 'enter'; elapsed: number }]>>) =>
 			resolveGraphicsCompositionRenderModel({
 				output: 'overlay',
-				graphics: [graphic('a', [shape('bar', { animation: FADE_IN })])],
+				graphics: [
+					graphic('a', [
+						shape('bar', { animation: FADE_IN }),
+					]),
+				],
 				itemAnimation,
 				...CANVAS,
 			}).graphics[0]!.items[0]!;
 
-		expect(at({ a: { bar: [{ phase: 'enter', elapsed: 4000 }] } })).toEqual(at());
+		expect(at({
+			a: {
+				bar: [
+					{ phase: 'enter', elapsed: 4000 },
+				],
+			},
+		})).toEqual(at());
 	});
 });

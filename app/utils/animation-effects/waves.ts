@@ -140,5 +140,9 @@ export default function createWavesEffect(
 	host: HTMLElement,
 	params: AnimationEffectParams<'waves'>,
 ): AnimationEffectInstance<AnimationEffectParams<'waves'>> {
-	return createSceneEffect({ three: THREE, host, delegate: createWavesDelegate() }, params);
+	return createSceneEffect({
+		three: THREE,
+		host,
+		delegate: createWavesDelegate(),
+	}, params);
 }

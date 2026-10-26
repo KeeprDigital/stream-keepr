@@ -43,7 +43,12 @@ mockNuxtImport('useRoute', () => () => reactive({
 }));
 
 function emptyQueue(id: GraphicsOperationalQueueId, severity: 'critical' | 'warning' | 'info') {
-	return { id, severity, totalCount: 0, items: [] };
+	return {
+		id,
+		severity,
+		totalCount: 0,
+		items: [],
+	};
 }
 
 /**
@@ -62,114 +67,137 @@ function overview(): GraphicsOperationalQueuesOverview {
 			{
 				...emptyQueue('critical-integrity-incident', 'critical'),
 				totalCount: 1,
-				items: [{
-					key: 'critical-integrity-incident:discrepancy-critical',
-					queue: 'critical-integrity-incident',
-					subject: { kind: 'graphics-discrepancy', id: 'discrepancy-critical' },
-					title: 'Sponsor bumper · revision 2',
-					referenceCount: 3,
-					actions: ['recheck', 'verify-stored-bytes'],
-				}],
+				items: [
+					{
+						key: 'critical-integrity-incident:discrepancy-critical',
+						queue: 'critical-integrity-incident',
+						subject: { kind: 'graphics-discrepancy', id: 'discrepancy-critical' },
+						title: 'Sponsor bumper · revision 2',
+						referenceCount: 3,
+						actions: ['recheck', 'verify-stored-bytes'],
+					},
+				],
 			},
 			{
 				...emptyQueue('unavailable-content', 'warning'),
 				totalCount: 1,
-				items: [{
-					key: 'unavailable-content:discrepancy-unavailable',
-					queue: 'unavailable-content',
-					subject: { kind: 'graphics-discrepancy', id: 'discrepancy-unavailable' },
-					title: 'Lower third · revision 1',
-					referenceCount: 2,
-					actions: ['recheck', 'verify-stored-bytes', 'repair-with-exact-bytes'],
-				}],
+				items: [
+					{
+						key: 'unavailable-content:discrepancy-unavailable',
+						queue: 'unavailable-content',
+						subject: { kind: 'graphics-discrepancy', id: 'discrepancy-unavailable' },
+						title: 'Lower third · revision 1',
+						referenceCount: 2,
+						actions: ['recheck', 'verify-stored-bytes', 'repair-with-exact-bytes'],
+					},
+				],
 			},
 			{
 				...emptyQueue('missing-derivative', 'warning'),
 				totalCount: 1,
-				items: [{
-					key: 'missing-derivative:discrepancy-derivative',
-					queue: 'missing-derivative',
-					subject: { kind: 'graphics-discrepancy', id: 'discrepancy-derivative' },
-					title: 'Graphics Derivative · thumbnail',
-					referenceCount: 0,
-					actions: ['recheck', 'verify-stored-bytes', 'repair-with-exact-bytes', 'regenerate-derivative'],
-				}],
+				items: [
+					{
+						key: 'missing-derivative:discrepancy-derivative',
+						queue: 'missing-derivative',
+						subject: { kind: 'graphics-discrepancy', id: 'discrepancy-derivative' },
+						title: 'Graphics Derivative · thumbnail',
+						referenceCount: 0,
+						actions: [
+							'recheck',
+							'verify-stored-bytes',
+							'repair-with-exact-bytes',
+							'regenerate-derivative',
+						],
+					},
+				],
 			},
 			{
 				...emptyQueue('retryable-ingestion', 'warning'),
 				totalCount: 1,
-				items: [{
-					key: 'retryable-ingestion:operation-retryable',
-					queue: 'retryable-ingestion',
-					subject: { kind: 'graphics-ingestion-operation', id: 'operation-retryable' },
-					title: 'Interrupted publication',
-					deadline: '2026-08-06T09:00:00.000Z',
-					actions: ['retry-ingestion'],
-				}],
+				items: [
+					{
+						key: 'retryable-ingestion:operation-retryable',
+						queue: 'retryable-ingestion',
+						subject: { kind: 'graphics-ingestion-operation', id: 'operation-retryable' },
+						title: 'Interrupted publication',
+						deadline: '2026-08-06T09:00:00.000Z',
+						actions: ['retry-ingestion'],
+					},
+				],
 			},
 			{
 				...emptyQueue('expired-ingestion-input', 'warning'),
 				totalCount: 1,
-				items: [{
-					key: 'expired-ingestion-input:operation-expired',
-					queue: 'expired-ingestion-input',
-					subject: { kind: 'graphics-ingestion-operation', id: 'operation-expired' },
-					title: 'Abandoned upload',
-					deadline: '2026-07-29T09:00:00.000Z',
-					actions: [],
-				}],
+				items: [
+					{
+						key: 'expired-ingestion-input:operation-expired',
+						queue: 'expired-ingestion-input',
+						subject: { kind: 'graphics-ingestion-operation', id: 'operation-expired' },
+						title: 'Abandoned upload',
+						deadline: '2026-07-29T09:00:00.000Z',
+						actions: [],
+					},
+				],
 			},
 			{
 				...emptyQueue('trashed-asset', 'warning'),
 				totalCount: 1,
 				nextDeadline: '2026-08-29T09:00:00.000Z',
-				items: [{
-					key: 'trashed-asset:asset-trashed',
-					queue: 'trashed-asset',
-					subject: { kind: 'graphic-asset', id: 'asset-trashed' },
-					title: 'Old sting',
-					deadline: '2026-08-29T09:00:00.000Z',
-					referenceCount: 0,
-					actions: ['restore-graphic-asset', 'purge-now'],
-				}],
+				items: [
+					{
+						key: 'trashed-asset:asset-trashed',
+						queue: 'trashed-asset',
+						subject: { kind: 'graphic-asset', id: 'asset-trashed' },
+						title: 'Old sting',
+						deadline: '2026-08-29T09:00:00.000Z',
+						referenceCount: 0,
+						actions: ['restore-graphic-asset', 'purge-now'],
+					},
+				],
 			},
 			{
 				...emptyQueue('superseded-revision', 'info'),
 				totalCount: 1,
-				items: [{
-					key: 'superseded-revision:revision-superseded',
-					queue: 'superseded-revision',
-					subject: { kind: 'graphic-asset-revision', id: 'revision-superseded' },
-					title: 'Revision 1',
-					deadline: '2026-10-28T09:00:00.000Z',
-					referenceCount: 0,
-					actions: [],
-				}],
+				items: [
+					{
+						key: 'superseded-revision:revision-superseded',
+						queue: 'superseded-revision',
+						subject: { kind: 'graphic-asset-revision', id: 'revision-superseded' },
+						title: 'Revision 1',
+						deadline: '2026-10-28T09:00:00.000Z',
+						referenceCount: 0,
+						actions: [],
+					},
+				],
 			},
 			{
 				...emptyQueue('quarantined-object', 'info'),
 				totalCount: 1,
-				items: [{
-					key: 'quarantined-object:discrepancy-quarantined',
-					queue: 'quarantined-object',
-					subject: { kind: 'graphics-discrepancy', id: 'discrepancy-quarantined' },
-					title: 'unexpected-canonical-object',
-					deadline: '2026-08-06T09:00:00.000Z',
-					referenceCount: 0,
-					actions: ['recheck'],
-				}],
+				items: [
+					{
+						key: 'quarantined-object:discrepancy-quarantined',
+						queue: 'quarantined-object',
+						subject: { kind: 'graphics-discrepancy', id: 'discrepancy-quarantined' },
+						title: 'unexpected-canonical-object',
+						deadline: '2026-08-06T09:00:00.000Z',
+						referenceCount: 0,
+						actions: ['recheck'],
+					},
+				],
 			},
 			{
 				...emptyQueue('retired-asset', 'info'),
 				totalCount: 1,
-				items: [{
-					key: 'retired-asset:asset-retired',
-					queue: 'retired-asset',
-					subject: { kind: 'graphic-asset', id: 'asset-retired' },
-					title: 'Season one backdrop',
-					referenceCount: 1,
-					actions: ['restore-graphic-asset'],
-				}],
+				items: [
+					{
+						key: 'retired-asset:asset-retired',
+						queue: 'retired-asset',
+						subject: { kind: 'graphic-asset', id: 'asset-retired' },
+						title: 'Season one backdrop',
+						referenceCount: 1,
+						actions: ['restore-graphic-asset'],
+					},
+				],
 			},
 		],
 	};
@@ -201,30 +229,34 @@ function unavailableInspection(): GraphicsQueueInspectionReading {
 				lastCheckedAt: '2026-07-30T08:30:00.000Z',
 				expected: { byteLength: 4096, canonicalMime: 'image/png' },
 				observed: { present: false },
-				affectedUsage: [{
-					assetId: 'asset-lower-third' as never,
-					assetName: 'Lower third',
-					revisionId: 'revision-1' as never,
-					revisionNumber: 1,
-					kind: 'image',
-					lifecycleState: 'active',
-					referenceCount: 2,
-				}],
+				affectedUsage: [
+					{
+						assetId: 'asset-lower-third' as never,
+						assetName: 'Lower third',
+						revisionId: 'revision-1' as never,
+						revisionNumber: 1,
+						kind: 'image',
+						lifecycleState: 'active',
+						referenceCount: 2,
+					},
+				],
 				actions: ['recheck', 'verify-stored-bytes', 'repair-with-exact-bytes'],
 			},
 		},
-		evidence: [{
-			id: 'evidence-1',
-			recordedAt: '2026-07-30T08:00:00.000Z',
-			category: 'content-unavailable-detected',
-			actor: 'graphics-reconciliation-policy',
-			subject: { kind: 'graphics-discrepancy', id: 'discrepancy-unavailable' },
-			outcome: 'content-unavailable',
-			reason: 'canonical-object-missing',
-			correlationId: 'sweep-1',
-			detail: { affectedRevisionCount: 1 },
-			expiresAt: '2027-07-30T08:00:00.000Z',
-		}],
+		evidence: [
+			{
+				id: 'evidence-1',
+				recordedAt: '2026-07-30T08:00:00.000Z',
+				category: 'content-unavailable-detected',
+				actor: 'graphics-reconciliation-policy',
+				subject: { kind: 'graphics-discrepancy', id: 'discrepancy-unavailable' },
+				outcome: 'content-unavailable',
+				reason: 'canonical-object-missing',
+				correlationId: 'sweep-1',
+				detail: { affectedRevisionCount: 1 },
+				expiresAt: '2027-07-30T08:00:00.000Z',
+			},
+		],
 		// A sweep is not a person, so the reading gives its own spelling back (#398).
 		actorNames: { 'graphics-reconciliation-policy': 'graphics-reconciliation-policy' },
 	};
@@ -389,7 +421,9 @@ describe('the Graphics Asset Library operational queues page', () => {
 
 		expect(mockApiFetch).toHaveBeenCalledWith(
 			'/api/admin/graphics-assets/queues',
-			{ headers: { 'x-graphics-admin-token': 'admin-token' } },
+			{
+				headers: { 'x-graphics-admin-token': 'admin-token' },
+			},
 		);
 
 		// Nine queues, nine distinct labels: nothing collapses two states into one.
@@ -501,7 +535,9 @@ describe('the Graphics Asset Library operational queues page', () => {
 		// recheck says when the bytes are still gone, which is the commonest
 		// answer on open unavailable content — and the opposite of the subject
 		// already being how the administrator wanted it.
-		serve({ action: { outcome: 'unchanged' } });
+		serve({
+			action: { outcome: 'unchanged' },
+		});
 		const wrapper = await openQueues();
 		await buttonNamed(wrapper, 'Lower third · revision 1')!.trigger('click');
 		await settle();
@@ -511,7 +547,10 @@ describe('the Graphics Asset Library operational queues page', () => {
 
 		expect(mockApiFetch).toHaveBeenCalledWith(
 			'/api/admin/graphics-assets/discrepancies/discrepancy-unavailable/actions',
-			expect.objectContaining({ method: 'POST', body: { action: 'recheck' } }),
+			expect.objectContaining({
+				method: 'POST',
+				body: { action: 'recheck' },
+			}),
 		);
 		expect(wrapper.text()).toContain('Retryable — unavailable');
 		expect(wrapper.text()).not.toContain('Already in state');
@@ -531,13 +570,18 @@ describe('the Graphics Asset Library operational queues page', () => {
 
 		expect(mockApiFetch).toHaveBeenCalledWith(
 			'/api/admin/graphics-assets/asset-retired/lifecycle-actions',
-			expect.objectContaining({ method: 'POST', body: { action: 'restore' } }),
+			expect.objectContaining({
+				method: 'POST',
+				body: { action: 'restore' },
+			}),
 		);
 		expect(wrapper.text()).toContain('Already in state');
 	});
 
 	it('will not purge without an explicit typed confirmation', async () => {
-		serve({ inspection: trashedInspection() });
+		serve({
+			inspection: trashedInspection(),
+		});
 		const wrapper = await openQueues();
 		await buttonNamed(wrapper, 'Old sting')!.trigger('click');
 		await settle();
@@ -561,7 +605,10 @@ describe('the Graphics Asset Library operational queues page', () => {
 		await confirmation.setValue('purge-now');
 		await settle();
 
-		serve({ inspection: trashedInspection(), action: { outcome: 'purged', referenceCount: 0 } });
+		serve({
+			inspection: trashedInspection(),
+			action: { outcome: 'purged', referenceCount: 0 },
+		});
 		await buttonNamed(wrapper, 'Confirm early purge')!.trigger('click');
 		await settle();
 

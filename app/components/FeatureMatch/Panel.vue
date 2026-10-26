@@ -38,7 +38,9 @@ const featureMatchAssignment = computed(() => assignmentStore.assignments.find(a
 const assignmentNote = computed(() => featureMatchAssignment.value?.note ?? '');
 const featureMatchNotesEnabled = computed(() => eventStore.event?.featureMatchNotesEnabled ?? false);
 const sourceMatch = ref<import('~/types').Match | null>(null);
-const sourceRound = computed(() => sourceMatch.value ? roundStore.getRoundById(sourceMatch.value.roundId) : undefined);
+const sourceRound = computed(() => sourceMatch.value
+	? roundStore.getRoundById(sourceMatch.value.roundId)
+	: undefined);
 
 watch(
 	() => props.match.matchId,
@@ -88,8 +90,12 @@ onMounted(async () => {
 function normalizeMatchData(match: FeatureMatchData): FeatureMatchFormData {
 	return {
 		...match,
-		player1Data: match.player1Data ? toPlayerData(match.player1Data) : { ...DEFAULT_PLAYER_DATA },
-		player2Data: match.player2Data ? toPlayerData(match.player2Data) : { ...DEFAULT_PLAYER_DATA },
+		player1Data: match.player1Data
+			? toPlayerData(match.player1Data)
+			: { ...DEFAULT_PLAYER_DATA },
+		player2Data: match.player2Data
+			? toPlayerData(match.player2Data)
+			: { ...DEFAULT_PLAYER_DATA },
 	};
 }
 
@@ -203,11 +209,17 @@ function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
 		showPronouns: pronounsEnabled.value,
 		showRecord: standingsEnabled.value,
 		showLgs: lgsEnabled.value,
-		hasDeckList: side === 'player1' ? player1HasDeckList.value : player2HasDeckList.value,
+		hasDeckList: side === 'player1'
+			? player1HasDeckList.value
+			: player2HasDeckList.value,
 		activePlayerTrackingEnabled: activePlayerTrackingEnabled.value,
 		seatLabel: isVerticalArena.value
-			? (side === 'player1' ? 'Top' : 'Bottom')
-			: (side === 'player1' ? 'Left' : 'Right'),
+			? (side === 'player1'
+					? 'Top'
+					: 'Bottom')
+			: (side === 'player1'
+					? 'Left'
+					: 'Right'),
 		mulliganPhase: inMulliganPhase.value,
 		startingHandSize: startingHandSize.value,
 	};

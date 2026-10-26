@@ -61,7 +61,9 @@ async function loadCapacity() {
 	try {
 		capacity.value = await $fetch<GraphicsAssetLibraryCapacity>(
 			'/api/admin/graphics-assets/capacity',
-			{ headers: administratorHeaders() },
+			{
+				headers: administratorHeaders(),
+			},
 		);
 	}
 	catch (caught) {
@@ -101,11 +103,15 @@ const results = computed(() => health.value
 	: []);
 
 function healthLabel(result: GraphicsAssetLibraryComponentHealth) {
-	return result.status === 'healthy' ? 'Healthy' : 'Unavailable';
+	return result.status === 'healthy'
+		? 'Healthy'
+		: 'Unavailable';
 }
 
 function healthColor(result: GraphicsAssetLibraryComponentHealth) {
-	return result.status === 'healthy' ? 'success' : 'error';
+	return result.status === 'healthy'
+		? 'success'
+		: 'error';
 }
 
 async function saveCapacityLimits() {

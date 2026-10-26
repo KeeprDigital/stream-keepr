@@ -53,7 +53,9 @@ async function seedAsset(reference: GraphicAssetReference, kind: 'image' | 'font
 	await db.insert(graphicAssetContents).values({
 		digest,
 		byteLength: 70,
-		canonicalMime: kind === 'font' ? 'font/woff2' : 'image/png',
+		canonicalMime: kind === 'font'
+			? 'font/woff2'
+			: 'image/png',
 	} as never);
 	await db.insert(graphicAssets).values({ id: reference.assetId, name: reference.assetId, kind } as never);
 	await db.insert(graphicAssetRevisions).values({
@@ -61,7 +63,9 @@ async function seedAsset(reference: GraphicAssetReference, kind: 'image' | 'font
 		assetId: reference.assetId,
 		revisionNumber: 1,
 		contentDigest: digest,
-		compatibilityProfile: kind === 'font' ? 'static-font-v1' : 'still-image-v1',
+		compatibilityProfile: kind === 'font'
+			? 'static-font-v1'
+			: 'still-image-v1',
 		technicalFacts: {},
 	} as never);
 }
@@ -99,7 +103,9 @@ function broadcastGraphic(...items: MediaGraphicItemConfig[]): BroadcastGraphicC
 
 function featureMatchLayout(backgroundImage: GraphicAssetReference, ...items: MediaGraphicItemConfig[]): FeatureMatchLayoutConfig {
 	return {
-		frame: { backgroundImage: { kind: 'asset', ...backgroundImage } },
+		frame: {
+			backgroundImage: { kind: 'asset', ...backgroundImage },
+		},
 		composition: { items },
 	} as unknown as FeatureMatchLayoutConfig;
 }

@@ -416,8 +416,11 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 		// right after an operator restores bytes, when nothing has re-observed
 		// them yet. The action itself reports honestly when there is nothing to
 		// verify.
-		if (record.isolated || record.kind === 'critical-integrity-incident')
-			return record.digest ? ['recheck', 'verify-stored-bytes'] : ['recheck'];
+		if (record.isolated || record.kind === 'critical-integrity-incident') {
+			return record.digest
+				? ['recheck', 'verify-stored-bytes']
+				: ['recheck'];
+		}
 		// An unexpected object is never adopted, so nothing here writes catalogue
 		// state for it either.
 		if (record.kind === 'unexpected-object')
@@ -452,11 +455,18 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 	async function loadDiscrepancyContext(
 		records: readonly GraphicsDiscrepancyRecord[],
 	): Promise<DiscrepancyContext> {
-		const digests = [...new Set(
-			records.map(record => record.digest).filter((digest): digest is string => Boolean(digest)),
-		)];
-		if (digests.length === 0)
-			return { expectations: new Map(), usage: new Map(), quarantine: new Map() };
+		const digests = [
+			...new Set(
+				records.map(record => record.digest).filter((digest): digest is string => Boolean(digest)),
+			),
+		];
+		if (digests.length === 0) {
+			return {
+				expectations: new Map(),
+				usage: new Map(),
+				quarantine: new Map(),
+			};
+		}
 		const [expectations, usage, quarantine] = await Promise.all([
 			catalogue.findExpectedContents({ digests }),
 			catalogue.listContentUsageForDigests({ digests }),
@@ -464,11 +474,15 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 		]);
 		// A missing Graphics Derivative is judged against its source, which is a
 		// different digest, so those are resolved in one further set-based read.
-		const sourceDigests = [...new Set(
-			[...expectations.values()]
-				.map(expectation => expectation.derivative?.sourceDigest)
-				.filter((digest): digest is string => Boolean(digest) && !expectations.has(digest!)),
-		)];
+		const sourceDigests = [
+			...new Set(
+				[
+					...expectations.values(),
+				]
+					.map(expectation => expectation.derivative?.sourceDigest)
+					.filter((digest): digest is string => Boolean(digest) && !expectations.has(digest!)),
+			),
+		];
 		if (sourceDigests.length > 0) {
 			for (const [digest, expectation] of await catalogue.findExpectedContents({
 				digests: sourceDigests,
@@ -495,7 +509,9 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 		record: GraphicsDiscrepancyRecord,
 		context: DiscrepancyContext,
 	): GraphicsDiscrepancy {
-		const expectation = record.digest ? context.expectations.get(record.digest) : undefined;
+		const expectation = record.digest
+			? context.expectations.get(record.digest)
+			: undefined;
 		const quarantine = record.digest && record.state === 'open'
 			? context.quarantine.get(record.digest)
 			: undefined;
@@ -511,8 +527,12 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			isolated: record.isolated,
 			detectedAt: record.detectedAt,
 			lastCheckedAt: record.lastCheckedAt,
-			...(record.resolvedAt ? { resolvedAt: record.resolvedAt } : {}),
-			...(record.resolution ? { resolution: record.resolution } : {}),
+			...(record.resolvedAt
+				? { resolvedAt: record.resolvedAt }
+				: {}),
+			...(record.resolution
+				? { resolution: record.resolution }
+				: {}),
 			expected: record.expected,
 			observed: record.observed,
 			affectedUsage,
@@ -611,7 +631,9 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 				return {
 					present: true,
 					byteLength: observation.byteLength,
-					...(observation.canonicalMime ? { canonicalMime: observation.canonicalMime } : {}),
+					...(observation.canonicalMime
+						? { canonicalMime: observation.canonicalMime }
+						: {}),
 				};
 		}
 	}
@@ -787,7 +809,10 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 					discrepancyKind: kind,
 					reasonCode,
 					isolated: critical,
-					transition: { from: 'none', to: critical ? 'isolated' : 'open' },
+					transition: {
+						from: 'none',
+						to: critical ? 'isolated' : 'open',
+					},
 					affectedRevisionCount: content.revisionReach,
 				},
 			}));
@@ -856,8 +881,14 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			cursor: state.canonicalScanCursor,
 			limit: GRAPHICS_RECONCILIATION_STAGE_BATCH,
 		});
-		if (page.outcome !== 'listed')
-			return { records, scanned: 0, quarantined: 0, criticalIncidents: 0 };
+		if (page.outcome !== 'listed') {
+			return {
+				records,
+				scanned: 0,
+				quarantined: 0,
+				criticalIncidents: 0,
+			};
+		}
 
 		const startedAt = state.canonicalScanStartedAt ?? timestamp();
 		const digestedObjects = new Map<string, { key: string; byteLength: number }>();
@@ -878,7 +909,9 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 					observed: {
 						present: true,
 						byteLength: object.byteLength,
-						...(object.contentType ? { canonicalMime: object.contentType } : {}),
+						...(object.contentType
+							? { canonicalMime: object.contentType }
+							: {}),
 					},
 					observedAt,
 					correlationId,
@@ -910,7 +943,9 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 		}
 
 		const accounted = await catalogue.filterAccountedDigests({
-			digests: [...digestedObjects.keys()],
+			digests: [
+				...digestedObjects.keys(),
+			],
 		});
 		let quarantined = 0;
 		for (const [digest, object] of digestedObjects) {
@@ -966,7 +1001,9 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 		// added behind the cursor is still eventually seen.
 		await catalogue.recordCanonicalScanProgress({
 			cursor: page.listing.cursor,
-			startedAt: page.listing.cursor === undefined ? undefined : startedAt,
+			startedAt: page.listing.cursor === undefined
+				? undefined
+				: startedAt,
 		});
 		return {
 			records,
@@ -1095,24 +1132,26 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 		actor: string,
 	): Promise<GraphicsDiscrepancyActionOutcome> {
 		const recordedAt = timestamp();
-		await catalogue.recordGraphicsAssetEvidence([evidence({
-			recordedAt,
-			correlationId: record.correlationId,
-			actor,
-			category: 'repair-rejected',
-			subject: { kind: 'graphics-discrepancy', id: record.id },
-			outcome: 'repair-refused',
-			reason: code,
-			detail: {
-				discrepancyId: record.id,
-				discrepancyKind: record.kind,
-				rejectionCode: code,
-				isolated: record.isolated,
+		await catalogue.recordGraphicsAssetEvidence([
+			evidence({
+				recordedAt,
+				correlationId: record.correlationId,
+				actor,
+				category: 'repair-rejected',
+				subject: { kind: 'graphics-discrepancy', id: record.id },
+				outcome: 'repair-refused',
+				reason: code,
+				detail: {
+					discrepancyId: record.id,
+					discrepancyKind: record.kind,
+					rejectionCode: code,
+					isolated: record.isolated,
 				// A refusal decides nothing and moves nothing: the discrepancy is
 				// left exactly as it was found, which is why this entry carries
 				// neither a transition nor a quota reading.
-			},
-		})]);
+				},
+			}),
+		]);
 		return {
 			outcome: 'rejected',
 			code,
@@ -1198,27 +1237,31 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 		// A recovery is the one reconciliation action that puts bytes back, so
 		// the capacity it landed in is part of explaining it later.
 		const capacity = await catalogue.getCapacity();
-		await catalogue.recordGraphicsAssetEvidence([evidence({
-			recordedAt,
-			correlationId: input.record.correlationId,
-			actor: input.actor,
-			category: input.category,
-			subject: { kind: 'graphics-discrepancy', id: input.record.id },
-			outcome: input.resolution,
-			reason: input.reason,
-			detail: {
-				discrepancyId: input.record.id,
-				discrepancyKind: input.record.kind,
-				transition: { from: 'open', to: 'resolved' },
-				affectedRevisionCount: usage.length,
-				canonicalUsedBytes: capacity.canonical.usedBytes,
-				canonicalLimitBytes: capacity.canonical.limitBytes,
-				canonicalPressure: capacity.canonical.pressure,
-				// An alert left standing over restored bytes is the one thing an
-				// administrator must not have to infer from a success.
-				...(cleared ? {} : { isolated: true }),
-			},
-		})]);
+		await catalogue.recordGraphicsAssetEvidence([
+			evidence({
+				recordedAt,
+				correlationId: input.record.correlationId,
+				actor: input.actor,
+				category: input.category,
+				subject: { kind: 'graphics-discrepancy', id: input.record.id },
+				outcome: input.resolution,
+				reason: input.reason,
+				detail: {
+					discrepancyId: input.record.id,
+					discrepancyKind: input.record.kind,
+					transition: { from: 'open', to: 'resolved' },
+					affectedRevisionCount: usage.length,
+					canonicalUsedBytes: capacity.canonical.usedBytes,
+					canonicalLimitBytes: capacity.canonical.limitBytes,
+					canonicalPressure: capacity.canonical.pressure,
+					// An alert left standing over restored bytes is the one thing an
+					// administrator must not have to infer from a success.
+					...(cleared
+						? {}
+						: { isolated: true }),
+				},
+			}),
+		]);
 		const updated = await catalogue.findDiscrepancy({ id: input.record.id });
 		return {
 			outcome: 'resolved',
@@ -1262,22 +1305,24 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			observedAt,
 			correlationId: input.record.correlationId,
 		});
-		await catalogue.recordGraphicsAssetEvidence([evidence({
-			recordedAt: observedAt,
-			correlationId: input.record.correlationId,
-			actor: input.actor,
-			category: 'critical-integrity-incident',
-			subject: { kind: 'graphics-discrepancy', id: incident.id },
-			outcome: 'integrity-incident-isolated',
-			reason: input.reasonCode,
-			detail: {
-				discrepancyId: incident.id,
-				discrepancyKind: 'critical-integrity-incident',
-				reasonCode: input.reasonCode,
-				isolated: true,
-				transition: { from: 'none', to: 'isolated' },
-			},
-		})]);
+		await catalogue.recordGraphicsAssetEvidence([
+			evidence({
+				recordedAt: observedAt,
+				correlationId: input.record.correlationId,
+				actor: input.actor,
+				category: 'critical-integrity-incident',
+				subject: { kind: 'graphics-discrepancy', id: incident.id },
+				outcome: 'integrity-incident-isolated',
+				reason: input.reasonCode,
+				detail: {
+					discrepancyId: incident.id,
+					discrepancyKind: 'critical-integrity-incident',
+					reasonCode: input.reasonCode,
+					isolated: true,
+					transition: { from: 'none', to: 'isolated' },
+				},
+			}),
+		]);
 	}
 
 	async function reconcileObservedDigest(input: { digest: string }): Promise<void> {
@@ -1305,7 +1350,9 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 				kinds: [kind],
 				// Quarantined bytes are sampled by how soon they are deleted; every
 				// other kind by what went wrong most recently.
-				orderBy: kind === 'unexpected-object' ? 'quarantine-deadline' : 'detected',
+				orderBy: kind === 'unexpected-object'
+					? 'quarantine-deadline'
+					: 'detected',
 			})),
 		);
 		return perKind.flat();
@@ -1324,7 +1371,11 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			const unexpected = await scanForUnexpectedObjects(correlationId);
 			const settled = await settleUnexpectedObjects(correlationId);
 			const reclaimed = await reclaimStaleWorkingCopies();
-			const records = [...content.records, ...unexpected.records, ...settled.records];
+			const records = [
+				...content.records,
+				...unexpected.records,
+				...settled.records,
+			];
 			if (records.length > 0)
 				await catalogue.recordGraphicsAssetEvidence(records);
 			const completedAt = timestamp();
@@ -1396,7 +1447,10 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 							},
 						}
 					: {}),
-				openCounts: { ...EMPTY_OPEN_COUNTS, ...openCounts },
+				openCounts: {
+					...EMPTY_OPEN_COUNTS,
+					...openCounts,
+				},
 				discrepancies: discrepancies.map(
 					record => describeWith(record, context),
 				),
@@ -1404,7 +1458,9 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 		},
 		async inspect(input: { discrepancyId: string }): Promise<GraphicsDiscrepancy | undefined> {
 			const record = await catalogue.findDiscrepancy({ id: input.discrepancyId });
-			return record ? await describe(record) : undefined;
+			return record
+				? await describe(record)
+				: undefined;
 		},
 		/**
 		 * Re-observes one discrepancy now. A byte store that has come back into

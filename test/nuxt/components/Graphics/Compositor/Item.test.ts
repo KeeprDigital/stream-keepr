@@ -20,7 +20,9 @@ function lifeDescriptor(text: string, animation: PlayerLifeAnimation = 'glow'): 
 		style: { position: 'absolute' },
 		textStyle: { fontSize: '64px' },
 		text,
-		textSegments: [{ text }],
+		textSegments: [
+			{ text },
+		],
 		lifeChange: { animation, durationMs: 420, accentColor: '#ffffff' },
 	};
 }
@@ -29,7 +31,9 @@ async function mountItem(render: GraphicItemRenderDescriptor) {
 	const componentPath = '../../../../../app/components/Graphics/Compositor/Item.vue';
 	const { default: Item } = await import(componentPath);
 
-	return mount(Item, { props: { render } });
+	return mount(Item, {
+		props: { render },
+	});
 }
 
 describe('graphicsCompositorItem MTG mana colours', () => {
@@ -43,7 +47,9 @@ describe('graphicsCompositorItem MTG mana colours', () => {
 			style: { position: 'absolute' },
 			textStyle: { fontSize: '28px' },
 			text: manaColors.colors,
-			textSegments: [{ text: manaColors.colors, inputKey: 'player1DeckColors', manaColors }],
+			textSegments: [
+				{ text: manaColors.colors, inputKey: 'player1DeckColors', manaColors },
+			],
 		};
 	}
 
@@ -90,7 +96,9 @@ describe('graphicsCompositorItem player life', () => {
 		const wrapper = await mountItem(lifeDescriptor('20'));
 		const before = lifeParagraph(wrapper);
 
-		await wrapper.setProps({ render: lifeDescriptor('19') });
+		await wrapper.setProps({
+			render: lifeDescriptor('19'),
+		});
 		await nextTick();
 
 		// A re-keyed element is a new node, which is what restarts the CSS animation.
@@ -104,11 +112,15 @@ describe('graphicsCompositorItem player life', () => {
 		// the first one silently did nothing.
 		const wrapper = await mountItem(lifeDescriptor('20'));
 
-		await wrapper.setProps({ render: lifeDescriptor('19') });
+		await wrapper.setProps({
+			render: lifeDescriptor('19'),
+		});
 		await nextTick();
 		const afterFirst = lifeParagraph(wrapper);
 
-		await wrapper.setProps({ render: lifeDescriptor('18') });
+		await wrapper.setProps({
+			render: lifeDescriptor('18'),
+		});
 		await nextTick();
 
 		expect(lifeParagraph(wrapper)).not.toBe(afterFirst);
@@ -120,7 +132,9 @@ describe('graphicsCompositorItem player life', () => {
 		const wrapper = await mountItem(lifeDescriptor(''));
 		const before = lifeParagraph(wrapper);
 
-		await wrapper.setProps({ render: lifeDescriptor('20') });
+		await wrapper.setProps({
+			render: lifeDescriptor('20'),
+		});
 		await nextTick();
 
 		expect(lifeParagraph(wrapper)).toBe(before);
@@ -130,7 +144,9 @@ describe('graphicsCompositorItem player life', () => {
 		const wrapper = await mountItem(lifeDescriptor('20'));
 		const before = lifeParagraph(wrapper);
 
-		await wrapper.setProps({ render: lifeDescriptor('') });
+		await wrapper.setProps({
+			render: lifeDescriptor(''),
+		});
 		await nextTick();
 
 		expect(lifeParagraph(wrapper)).toBe(before);
@@ -140,7 +156,9 @@ describe('graphicsCompositorItem player life', () => {
 		const wrapper = await mountItem(lifeDescriptor('20', 'none'));
 		const before = lifeParagraph(wrapper);
 
-		await wrapper.setProps({ render: lifeDescriptor('19', 'none') });
+		await wrapper.setProps({
+			render: lifeDescriptor('19', 'none'),
+		});
 		await nextTick();
 
 		expect(lifeParagraph(wrapper)).toBe(before);
@@ -177,7 +195,10 @@ describe('graphicsCompositorItem deck list grid', () => {
 			},
 			textStyle: { color: '#ffffff', textAlign: 'center' as const },
 		},
-		badge: { text: '2x', style: { position: 'absolute' as const, color: '#ffffff' } },
+		badge: {
+			text: '2x',
+			style: { position: 'absolute' as const, color: '#ffffff' },
+		},
 	};
 
 	const artCard = {
@@ -188,7 +209,10 @@ describe('graphicsCompositorItem deck list grid', () => {
 			src: 'https://cards.example/needle.jpg',
 			style: { display: 'block' as const, objectFit: 'contain' as const },
 		},
-		badge: { text: '1x', style: { position: 'absolute' as const, color: '#ffffff' } },
+		badge: {
+			text: '1x',
+			style: { position: 'absolute' as const, color: '#ffffff' },
+		},
 	};
 
 	it('renders one cell per card: art contained, or a placeholder carrying the name', async () => {
@@ -237,7 +261,13 @@ describe('graphicsCompositorItem social network icon', () => {
 				style: { position: 'absolute', left: '120px', top: '80px' },
 				icon: {
 					name: network.icon,
-					style: { display: 'block', width: '100%', height: '100%', color: '#1185fe', opacity: '0.65' },
+					style: {
+						display: 'block',
+						width: '100%',
+						height: '100%',
+						color: '#1185fe',
+						opacity: '0.65',
+					},
 				},
 			});
 			await flushPromises();

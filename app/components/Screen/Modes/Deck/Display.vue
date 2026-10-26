@@ -143,7 +143,9 @@ function boardFlexStyle(section: VisibleBoard) {
 	if (section.key === 'sideboard' && section.layout.view === 'stack') {
 		return {};
 	}
-	const weight = section.layout.view === 'list' ? section.layout.listColumns : section.layout.columns;
+	const weight = section.layout.view === 'list'
+		? section.layout.listColumns
+		: section.layout.columns;
 	return { flex: `${weight} 1 0%` };
 }
 const showHighlanderPoints = computed(() => config.value.showHighlanderPoints !== false);
@@ -158,7 +160,9 @@ const showHighlanderPointedCards = computed(() =>
 );
 const showDeckMetaPill = computed(() => config.value.showDeckMetaPill !== false);
 const highlanderTotalLabel = computed(() =>
-	highlander.value ? formatHighlanderPointsLabel(highlander.value) : '',
+	highlander.value
+		? formatHighlanderPointsLabel(highlander.value)
+		: '',
 );
 const highlanderPointedCardsList = computed(() => highlander.value?.pointedCards ?? []);
 const showTopHeader = computed(() =>

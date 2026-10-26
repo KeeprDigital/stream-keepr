@@ -51,7 +51,9 @@ export function useFeatureMatchGameMode(
 	);
 
 	const startingHandSize = computed(() => {
-		return game.value ? getStartingHandSize(game.value) : 7;
+		return game.value
+			? getStartingHandSize(game.value)
+			: 7;
 	});
 
 	// ── Turn counter ──
@@ -85,7 +87,9 @@ export function useFeatureMatchGameMode(
 	const turnHalf = computed<1 | 2 | undefined>(() => {
 		if (!activePlayerTrackingEnabled.value || !matchState.value?.activePlayer || !matchState.value.firstPlayer)
 			return undefined;
-		return matchState.value.activePlayer === matchState.value.firstPlayer ? 1 : 2;
+		return matchState.value.activePlayer === matchState.value.firstPlayer
+			? 1
+			: 2;
 	});
 
 	const extraTurnsTotal = computed(() => defaults.value.extraTurns);
@@ -292,19 +296,21 @@ export function useFeatureMatchGameMode(
 		return items;
 	});
 
-	const resetActionItems = computed<import('@nuxt/ui').DropdownMenuItem[][]>(() => [[
-		{
-			label: 'Reset Game',
-			icon: 'i-lucide-refresh-cw',
-			onSelect: handleResetGame,
-		},
-		{
-			label: 'Reset Match',
-			icon: 'i-lucide-rotate-ccw',
-			color: 'error',
-			onSelect: handleResetMatch,
-		},
-	]]);
+	const resetActionItems = computed<import('@nuxt/ui').DropdownMenuItem[][]>(() => [
+		[
+			{
+				label: 'Reset Game',
+				icon: 'i-lucide-refresh-cw',
+				onSelect: handleResetGame,
+			},
+			{
+				label: 'Reset Match',
+				icon: 'i-lucide-rotate-ccw',
+				color: 'error',
+				onSelect: handleResetMatch,
+			},
+		],
+	]);
 
 	return {
 		// Feature flags

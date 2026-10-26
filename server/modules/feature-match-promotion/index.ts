@@ -20,7 +20,9 @@ import { decidePromotion } from './decision';
  * indexes a promotion batch writes through.
  */
 function isDuplicateSlotMatchViolation(error: unknown): boolean {
-	const message = error instanceof Error ? error.message : '';
+	const message = error instanceof Error
+		? error.message
+		: '';
 	return message.includes('UNIQUE constraint failed')
 		&& message.includes('feature_match_slots.match_id');
 }
@@ -70,7 +72,9 @@ export function featureMatchPromotionModule() {
 			assignments.findByRoundAndSlot(eventId, match.roundId, slotId),
 			assignments.findByRoundAndMatch(eventId, match.roundId, matchId),
 		]);
-		const assignmentToDisplace = displacedAssignment?.matchId !== matchId ? displacedAssignment : undefined;
+		const assignmentToDisplace = displacedAssignment?.matchId !== matchId
+			? displacedAssignment
+			: undefined;
 		const hasExactConfirmation = assignmentToDisplace
 			? hasExactNoteDiscardConfirmation(assignmentToDisplace, confirmedNoteDiscards)
 			: false;

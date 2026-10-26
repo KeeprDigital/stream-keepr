@@ -76,15 +76,24 @@ describe('which processes say anything about local configuration at all', () => 
 	 * away with the file and the adoption; the silence is now about noise alone.
 	 */
 	it('says nothing under the integration suite, whose environment is its own', () => {
-		expect(announcesLocalConfiguration({ dev: true, env: { STREAM_KEEPR_INTEGRATION: 'true' } })).toBe(false);
+		expect(announcesLocalConfiguration({
+			dev: true,
+			env: { STREAM_KEEPR_INTEGRATION: 'true' },
+		})).toBe(false);
 	});
 
 	it('reads that announcement exactly as the rest of the repo reads it', () => {
 		// `nuxt.config.ts` and `server/plugins/error-handler.ts` both test for
 		// `'true'`. A looser reading here would silence the notice for a developer
 		// who happens to have the variable set to anything else at all.
-		expect(announcesLocalConfiguration({ dev: true, env: { STREAM_KEEPR_INTEGRATION: 'false' } })).toBe(true);
-		expect(announcesLocalConfiguration({ dev: true, env: { STREAM_KEEPR_INTEGRATION: '' } })).toBe(true);
+		expect(announcesLocalConfiguration({
+			dev: true,
+			env: { STREAM_KEEPR_INTEGRATION: 'false' },
+		})).toBe(true);
+		expect(announcesLocalConfiguration({
+			dev: true,
+			env: { STREAM_KEEPR_INTEGRATION: '' },
+		})).toBe(true);
 	});
 });
 
@@ -104,7 +113,12 @@ describe('which names a local checkout has to be given', () => {
 		// or to a space is not configured. It is also the likeliest wrong state there
 		// is: `cp .env.example .env` produces exactly it, and this notice is where
 		// that advice comes from.
-		const blanks = Object.fromEntries(LOCALLY_REQUIRED_NUXT_NAMES.map((name, index) => [name, index % 2 === 0 ? '' : '   ']));
+		const blanks = Object.fromEntries(LOCALLY_REQUIRED_NUXT_NAMES.map((name, index) => [
+			name,
+			index % 2 === 0
+				? ''
+				: '   ',
+		]));
 
 		expect(missingLocalNuxtNames(blanks)).toEqual([...LOCALLY_REQUIRED_NUXT_NAMES]);
 	});
@@ -131,9 +145,14 @@ describe('which names a local checkout has to be given', () => {
 		// deliberately-optional before this passes — rather than silently becoming a
 		// name the notice never mentions.
 		const example = readFileSync(fileURLToPath(new URL('../../../.env.example', import.meta.url)), 'utf8');
-		const assigned = [...example.matchAll(/^(NUXT_\w+)=/gm)].map(match => match[1]).sort();
+		const assigned = [
+			...example.matchAll(/^(NUXT_\w+)=/gm),
+		].map(match => match[1]).sort();
 
-		expect(assigned).toEqual([...LOCALLY_REQUIRED_NUXT_NAMES, ...LOCALLY_OPTIONAL_NUXT_NAMES].sort());
+		expect(assigned).toEqual([
+			...LOCALLY_REQUIRED_NUXT_NAMES,
+			...LOCALLY_OPTIONAL_NUXT_NAMES,
+		].sort());
 	});
 
 	it('gives every required name a surface, in that surface\'s own words', () => {
@@ -206,7 +225,10 @@ describe('which names a local checkout has to be given', () => {
 		// It is set by the `:bypass` launchers in `package.json` and
 		// assigned in no file, so neither side of a partition over `.env.example`
 		// has a place for it (#519, ADR-0017).
-		for (const name of [...LOCALLY_REQUIRED_NUXT_NAMES, ...LOCALLY_OPTIONAL_NUXT_NAMES])
+		for (const name of [
+			...LOCALLY_REQUIRED_NUXT_NAMES,
+			...LOCALLY_OPTIONAL_NUXT_NAMES,
+		])
 			expect(name).not.toContain('LOCAL_AUTH_BYPASS');
 	});
 });
@@ -250,7 +272,10 @@ describe('what a dev server says about its local configuration', () => {
 	 * made the names are simply there. Saying anything here is saying something false.
 	 */
 	it('says nothing when `.env` already supplied the names', () => {
-		expect(localConfigurationLogLine({ dev: true, env: configuredEnv() })).toBeUndefined();
+		expect(localConfigurationLogLine({
+			dev: true,
+			env: configuredEnv(),
+		})).toBeUndefined();
 	});
 
 	it('stays silent for the two runs that are not a developer\'s dev server', () => {
@@ -499,7 +524,9 @@ describe('the file this ticket deleted', () => {
 		// era in the past tense on purpose — what must not survive is a line an agent
 		// pastes into a shell, and that is what this reads.
 		const doc = readFileSync(join(root, 'README.md'), 'utf8');
-		const copySteps = [...doc.matchAll(/^cp .*$/gm)].map(match => match[0]);
+		const copySteps = [
+			...doc.matchAll(/^cp .*$/gm),
+		].map(match => match[0]);
 
 		expect(copySteps.length).toBeGreaterThan(0);
 		for (const step of copySteps)

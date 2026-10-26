@@ -32,7 +32,9 @@ async function signIn(cookie?: string) {
 			'content-type': 'application/json',
 			'host': LOCAL_HOST,
 			'origin': LOCAL_ORIGIN,
-			...(cookie ? { cookie } : {}),
+			...(cookie
+				? { cookie }
+				: {}),
 		},
 		body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
 	}));
@@ -54,12 +56,16 @@ function sessionSetCookie(response: Response) {
 }
 
 async function sessionFor(cookie: string) {
-	return await auth.api.getSession({ headers: new Headers({ cookie }) });
+	return await auth.api.getSession({
+		headers: new Headers({ cookie }),
+	});
 }
 
 beforeEach(async () => {
 	auth = throwawayAuth();
-	await auth.api.createUser({ body: { email: EMAIL, password: PASSWORD, name: 'Session Cookie' } });
+	await auth.api.createUser({
+		body: { email: EMAIL, password: PASSWORD, name: 'Session Cookie' },
+	});
 });
 
 describe('the session cookie outside the dev server', () => {
@@ -67,7 +73,12 @@ describe('the session cookie outside the dev server', () => {
 		const cookie = sessionSetCookie(await signIn());
 
 		expect(cookie.name).toBe(SECURE_NAME);
-		expect(cookie.attributes).toEqual(expect.arrayContaining(['secure', 'httponly', 'samesite=lax', 'path=/']));
+		expect(cookie.attributes).toEqual(expect.arrayContaining([
+			'secure',
+			'httponly',
+			'samesite=lax',
+			'path=/',
+		]));
 	});
 
 	it('is the cookie a later request is admitted by', async () => {

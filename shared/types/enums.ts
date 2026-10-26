@@ -10,7 +10,22 @@ export const EXTERNAL_SOURCE_VALUES = ['melee', 'manual'] as const;
 export const PLAYER_DISPLAY_MODE_VALUES = ['score', 'position'] as const;
 export const POSITION_FORMAT_VALUES = ['number', 'ordinal'] as const;
 export const DISPLAY_TYPE_VALUES = ['overlay', 'control'] as const;
-export const SCREEN_MODE_VALUES = ['background', 'card', 'deck', 'standings', 'top-cut', 'feature-match', 'feature-match-overlay', 'broadcast-graphics', 'metagame', 'top-cards', 'player-history', 'pairings', 'archetype-spotlight', 'head-to-head'] as const;
+export const SCREEN_MODE_VALUES = [
+	'background',
+	'card',
+	'deck',
+	'standings',
+	'top-cut',
+	'feature-match',
+	'feature-match-overlay',
+	'broadcast-graphics',
+	'metagame',
+	'top-cards',
+	'player-history',
+	'pairings',
+	'archetype-spotlight',
+	'head-to-head',
+] as const;
 /**
  * Each Screen Mode key renamed after release, and the key it is now (#773, ADR-0043).
  * A migration moved stored Screens; a Screen write accepts the former key from a
@@ -26,7 +41,16 @@ export const DECK_BOARD_VIEW_VALUES = ['grid', 'stack', 'list'] as const;
 export const DECK_CARD_SIZE_VALUES = ['small', 'medium', 'large'] as const;
 // Where a badge sits on a Deck Screen card: the nine points less the centre, spelled as `NINE_POINTS`
 // (`shared/utils/ninePoints.ts`) so the nine-point picker edits it directly (#543).
-export const QUANTITY_POSITION_VALUES = ['top-left', 'top', 'top-right', 'left', 'right', 'bottom-left', 'bottom', 'bottom-right'] as const;
+export const QUANTITY_POSITION_VALUES = [
+	'top-left',
+	'top',
+	'top-right',
+	'left',
+	'right',
+	'bottom-left',
+	'bottom',
+	'bottom-right',
+] as const;
 export const QUANTITY_SIZE_VALUES = ['small', 'medium', 'large'] as const;
 export const SIDEBOARD_PLACEMENT_VALUES = ['beside', 'below'] as const;
 export const BOARD_SELECTION_VALUES = ['full', 'mainboard', 'sideboard'] as const;
@@ -36,20 +60,80 @@ export const CARD_ANIMATION_SPEED_VALUES = ['slow', 'normal', 'fast'] as const;
 export const HORIZONTAL_ALIGN_VALUES = ['left', 'center', 'right'] as const;
 export const VERTICAL_ALIGN_VALUES = ['top', 'center', 'bottom'] as const;
 export const RESET_TYPE_VALUES = ['game', 'match'] as const;
-export const BULK_CLOCK_ACTION_VALUES = ['start', 'pause', 'reset', 'restart', 'adjust'] as const;
+export const BULK_CLOCK_ACTION_VALUES = [
+	'start',
+	'pause',
+	'reset',
+	'restart',
+	'adjust',
+] as const;
 export const DECK_LIST_COMPARTMENT_VALUES = ['mainboard', 'sideboard'] as const;
 export const UNRESOLVED_DECK_ENTRY_TYPE_VALUES = ['card', 'companion'] as const;
 export const METAGAME_VIEW_MODE_VALUES = ['archetype', 'cards', 'chart'] as const;
-export const METAGAME_SCOPE_VALUES = ['all', 'topN', 'playerList', 'minPoints'] as const;
-export const METAGAME_SORT_BY_VALUES = ['count', 'winRate', 'metaShare', 'conversionRate'] as const;
+export const METAGAME_SCOPE_VALUES = [
+	'all',
+	'topN',
+	'playerList',
+	'minPoints',
+] as const;
+export const METAGAME_SORT_BY_VALUES = [
+	'count',
+	'winRate',
+	'metaShare',
+	'conversionRate',
+] as const;
 export const METAGAME_CONVERSION_METRIC_VALUES = ['topN', 'minPoints'] as const;
 export const METAGAME_CARD_SORT_BY_VALUES = ['inclusionRate', 'avgCopies', 'totalCopies'] as const;
-export const TOP_CARDS_STAT_VALUES = ['none', 'inclusionRate', 'avgCopies', 'totalCopies', 'deckCount'] as const;
-export const METAGAME_ARCHETYPE_COLUMN_KEY_VALUES = ['archetype', 'count', 'metaShare', 'winRate', 'avgPlace', 'colors', 'conversionRate'] as const;
-export const METAGAME_CARD_COLUMN_KEY_VALUES = ['card', 'manaCost', 'type', 'inclusionRate', 'avgCopies', 'totalCopies', 'deckCount', 'mainboardCount', 'sideboardCount'] as const;
-export const STANDINGS_VIEW_MODE_VALUES = ['all', 'topN', 'slice', 'watchlist', 'reveal'] as const;
-export const STANDINGS_COLUMN_KEY_VALUES = ['position', 'name', 'record', 'points', 'deck', 'positionChange'] as const;
-export const PLAYER_HISTORY_COLUMN_KEY_VALUES = ['round', 'opponent', 'table', 'outcome', 'opponentArchetype', 'gameScore'] as const;
+export const TOP_CARDS_STAT_VALUES = [
+	'none',
+	'inclusionRate',
+	'avgCopies',
+	'totalCopies',
+	'deckCount',
+] as const;
+export const METAGAME_ARCHETYPE_COLUMN_KEY_VALUES = [
+	'archetype',
+	'count',
+	'metaShare',
+	'winRate',
+	'avgPlace',
+	'colors',
+	'conversionRate',
+] as const;
+export const METAGAME_CARD_COLUMN_KEY_VALUES = [
+	'card',
+	'manaCost',
+	'type',
+	'inclusionRate',
+	'avgCopies',
+	'totalCopies',
+	'deckCount',
+	'mainboardCount',
+	'sideboardCount',
+] as const;
+export const STANDINGS_VIEW_MODE_VALUES = [
+	'all',
+	'topN',
+	'slice',
+	'watchlist',
+	'reveal',
+] as const;
+export const STANDINGS_COLUMN_KEY_VALUES = [
+	'position',
+	'name',
+	'record',
+	'points',
+	'deck',
+	'positionChange',
+] as const;
+export const PLAYER_HISTORY_COLUMN_KEY_VALUES = [
+	'round',
+	'opponent',
+	'table',
+	'outcome',
+	'opponentArchetype',
+	'gameScore',
+] as const;
 export const REVEAL_ORDER_VALUES = ['bottomUp', 'topDown'] as const;
 export const REVEAL_TRIGGER_VALUES = ['manual', 'auto'] as const;
 export const ROUND_CONTROL_MODE_VALUES = ['default', 'manual_override'] as const;

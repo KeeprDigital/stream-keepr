@@ -42,11 +42,29 @@ const WINS_INPUT: GraphicInputDeclaration = {
 
 function data(overrides: Partial<GraphicBindingDataSet> = {}): GraphicBindingDataSet {
 	return {
-		event: { name: 'Regional', game: 'mtg', displayRecordSeparator: '-', displayHideZeroDraws: true, commentator1TalentId: 5 },
-		players: { 1: { name: 'Ava Reed', wins: 5, gameData: { type: 'mtg', deckName: 'Dimir Midrange' } } },
-		talents: { 5: { name: 'Jules Kim', socialProfiles: {} } },
-		phases: { 20: { name: 'Swiss' } },
-		rounds: { 30: { name: 'Round 5', roundNumber: 5, phaseId: 20 } },
+		event: {
+			name: 'Regional',
+			game: 'mtg',
+			displayRecordSeparator: '-',
+			displayHideZeroDraws: true,
+			commentator1TalentId: 5,
+		},
+		players: {
+			1: {
+				name: 'Ava Reed',
+				wins: 5,
+				gameData: { type: 'mtg', deckName: 'Dimir Midrange' },
+			},
+		},
+		talents: {
+			5: { name: 'Jules Kim', socialProfiles: {} },
+		},
+		phases: {
+			20: { name: 'Swiss' },
+		},
+		rounds: {
+			30: { name: 'Round 5', roundNumber: 5, phaseId: 20 },
+		},
 		matches: {
 			40: {
 				roundId: 30,
@@ -85,7 +103,9 @@ describe('graphic Source Selection resolution', () => {
 
 	it('resolves the current Event without anyone selecting it', () => {
 		const resolved = resolveGraphicSourceSelections(
-			[{ key: 'event', label: 'Event', kind: 'event' }],
+			[
+				{ key: 'event', label: 'Event', kind: 'event' },
+			],
 			{},
 			data(),
 		);
@@ -115,7 +135,15 @@ describe('graphic Source Selection resolution', () => {
 
 	it('resolves nothing for a relationship the parent kind does not offer', () => {
 		const resolved = resolveGraphicSourceSelections(
-			[PLAYER_SOURCE, { key: 'nope', label: 'Nope', kind: 'player', from: { sourceKey: 'player', relation: 'player1' } }],
+			[
+				PLAYER_SOURCE,
+				{
+					key: 'nope',
+					label: 'Nope',
+					kind: 'player',
+					from: { sourceKey: 'player', relation: 'player1' },
+				},
+			],
 			{ player: 1 },
 			data(),
 		);
@@ -126,8 +154,18 @@ describe('graphic Source Selection resolution', () => {
 	it('terminates on a derived chain that loops back on itself', () => {
 		const resolved = resolveGraphicSourceSelections(
 			[
-				{ key: 'a', label: 'A', kind: 'player', from: { sourceKey: 'b', relation: 'player1' } },
-				{ key: 'b', label: 'B', kind: 'match', from: { sourceKey: 'a', relation: 'player1' } },
+				{
+					key: 'a',
+					label: 'A',
+					kind: 'player',
+					from: { sourceKey: 'b', relation: 'player1' },
+				},
+				{
+					key: 'b',
+					label: 'B',
+					kind: 'match',
+					from: { sourceKey: 'a', relation: 'player1' },
+				},
 			],
 			{},
 			data(),
@@ -148,7 +186,10 @@ describe('graphic Input Binding resolution', () => {
 			{
 				inputs: [NAME_INPUT, WINS_INPUT],
 				sources: [PLAYER_SOURCE],
-				bindings: [bind('name', 'player', 'player.name'), bind('wins', 'player', 'player.wins')],
+				bindings: [
+					bind('name', 'player', 'player.name'),
+					bind('wins', 'player', 'player.wins'),
+				],
 			},
 			{ player: 1 },
 			data(),
@@ -159,7 +200,13 @@ describe('graphic Input Binding resolution', () => {
 
 	it('contributes no value at all when its Graphic Source Selection resolves nothing', () => {
 		const bound = resolveGraphicInputBindings(
-			{ inputs: [NAME_INPUT], sources: [PLAYER_SOURCE], bindings: [bind('name', 'player', 'player.name')] },
+			{
+				inputs: [NAME_INPUT],
+				sources: [PLAYER_SOURCE],
+				bindings: [
+					bind('name', 'player', 'player.name'),
+				],
+			},
 			{},
 			data(),
 		);
@@ -173,7 +220,9 @@ describe('graphic Input Binding resolution', () => {
 		const graphic = {
 			inputs: [NAME_INPUT],
 			sources: [PLAYER_SOURCE],
-			bindings: [bind('name', 'player', 'player.deckName')],
+			bindings: [
+				bind('name', 'player', 'player.deckName'),
+			],
 		};
 
 		expect(resolveGraphicInputBindings(graphic, { player: 1 }, data()))
@@ -185,7 +234,13 @@ describe('graphic Input Binding resolution', () => {
 
 	it('contributes no value when the field\'s type is not the Graphic Input\'s', () => {
 		const bound = resolveGraphicInputBindings(
-			{ inputs: [NAME_INPUT], sources: [PLAYER_SOURCE], bindings: [bind('name', 'player', 'player.wins')] },
+			{
+				inputs: [NAME_INPUT],
+				sources: [PLAYER_SOURCE],
+				bindings: [
+					bind('name', 'player', 'player.wins'),
+				],
+			},
 			{ player: 1 },
 			data(),
 		);
@@ -198,7 +253,10 @@ describe('graphic Input Binding resolution', () => {
 			{
 				inputs: [NAME_INPUT, WINS_INPUT],
 				sources: [MATCH_SOURCE, MATCH_PLAYER1],
-				bindings: [bind('name', 'p1', 'player.name'), bind('wins', 'p1', 'player.wins')],
+				bindings: [
+					bind('name', 'p1', 'player.name'),
+					bind('wins', 'p1', 'player.wins'),
+				],
 			},
 			{ match: 40 },
 			data(),
@@ -210,9 +268,21 @@ describe('graphic Input Binding resolution', () => {
 	it('lets several bindings share one Graphic Source Selection', () => {
 		const bound = resolveGraphicInputBindings(
 			{
-				inputs: [NAME_INPUT, { ...WINS_INPUT, key: 'record', type: 'text', default: '', maxLength: 20 } as GraphicInputDeclaration],
+				inputs: [
+					NAME_INPUT,
+					{
+						...WINS_INPUT,
+						key: 'record',
+						type: 'text',
+						default: '',
+						maxLength: 20,
+					} as GraphicInputDeclaration,
+				],
 				sources: [PLAYER_SOURCE],
-				bindings: [bind('name', 'player', 'player.name'), bind('record', 'player', 'player.record')],
+				bindings: [
+					bind('name', 'player', 'player.name'),
+					bind('record', 'player', 'player.record'),
+				],
 			},
 			{ player: 1 },
 			data(),
@@ -229,11 +299,33 @@ describe('graphic Input Binding resolution', () => {
 					tableNumber: 3,
 					player1Data: { name: 'Stale Name' },
 					activeSession: {
-						sourceSnapshot: { tableNumber: 9, player1: { data: { name: 'Ava R.' } } },
+						sourceSnapshot: {
+							tableNumber: 9,
+							player1: {
+								data: { name: 'Ava R.' },
+							},
+						},
 						currentState: {
-							player1: { lifeTotal: 17, gameWins: 1, counters: [], sideboardRevealed: false },
-							player2: { lifeTotal: 20, gameWins: 0, counters: [], sideboardRevealed: false },
-							clock: { type: 'countdown', durationMs: 0, elapsedMs: 0, isRunning: false, lastStartedAt: null, countUpAfterCountdown: false },
+							player1: {
+								lifeTotal: 17,
+								gameWins: 1,
+								counters: [],
+								sideboardRevealed: false,
+							},
+							player2: {
+								lifeTotal: 20,
+								gameWins: 0,
+								counters: [],
+								sideboardRevealed: false,
+							},
+							clock: {
+								type: 'countdown',
+								durationMs: 0,
+								elapsedMs: 0,
+								isRunning: false,
+								lastStartedAt: null,
+								countUpAfterCountdown: false,
+							},
 							currentGame: 2,
 							turnNumber: 4,
 							isComplete: false,
@@ -251,7 +343,15 @@ describe('graphic Input Binding resolution', () => {
 					{ ...NAME_INPUT, key: 'table' },
 					{ ...NAME_INPUT, key: 'name' },
 				],
-				sources: [slotSource, { key: 'slotP1', label: 'Slot Player 1', kind: 'player', from: { sourceKey: 'slot', relation: 'player1' } }],
+				sources: [
+					slotSource,
+					{
+						key: 'slotP1',
+						label: 'Slot Player 1',
+						kind: 'player',
+						from: { sourceKey: 'slot', relation: 'player1' },
+					},
+				],
 				bindings: [
 					bind('life', 'slot', 'featureMatchSlot.player1Life'),
 					bind('table', 'slot', 'featureMatchSlot.tableLabel'),

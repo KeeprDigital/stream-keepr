@@ -36,10 +36,17 @@ async function request(
 	const response = await fetch(path, {
 		method: options.method ?? 'GET',
 		headers,
-		body: options.body === undefined ? undefined : JSON.stringify(options.body),
+		body: options.body === undefined
+			? undefined
+			: JSON.stringify(options.body),
 	});
 	const text = await response.text();
-	return { status: response.status, data: text ? JSON.parse(text) : null };
+	return {
+		status: response.status,
+		data: text
+			? JSON.parse(text)
+			: null,
+	};
 }
 
 describe('feature Match Layout Template library', () => {
@@ -122,21 +129,26 @@ describe('feature Match Layout Template library', () => {
 		// author would recognise: the Frame, the Source Items, and the composition.
 		const authored = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout);
 		authored.frame.backgroundColor = '#123456';
-		authored.sources = [{
-			id: 'main-source',
-			label: 'Authored Main Source',
-			visible: true,
-			anchor: 'top-left',
-			sourceRole: 'main',
-			frameCutout: true,
-			x: 10,
-			y: 20,
-			width: 800,
-			height: 600,
-		}];
+		authored.sources = [
+			{
+				id: 'main-source',
+				label: 'Authored Main Source',
+				visible: true,
+				anchor: 'top-left',
+				sourceRole: 'main',
+				frameCutout: true,
+				x: 10,
+				y: 20,
+				width: 800,
+				height: 600,
+			},
+		];
 		const patched = await request(
 			`/api/events/${sourceEventId}/screens/${sourceScreenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: authored, featureMatchId: sourceSlotId } },
+			{
+				method: 'PATCH',
+				body: { layout: authored, featureMatchId: sourceSlotId },
+			},
 		);
 		expect(patched.status).toBe(200);
 		savedLayout = await storedLayout(sourceEventId, sourceScreenId);
@@ -147,7 +159,10 @@ describe('feature Match Layout Template library', () => {
 		// own state survives" is a comparison against state that really is there.
 		const seeded = await request(
 			`/api/events/${otherEventId}/screens/${otherScreenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout, featureMatchId: otherSlotId } },
+			{
+				method: 'PATCH',
+				body: { layout: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout, featureMatchId: otherSlotId },
+			},
 		);
 		expect(seeded.status).toBe(200);
 	});
@@ -308,7 +323,11 @@ describe('feature Match Layout Template library', () => {
 		});
 		await request(`/api/events/${sourceEventId}/screens/${graphicsScreen.id}/config/broadcast-graphics`, {
 			method: 'PATCH',
-			body: { graphics: [{ id: 'a-graphic', name: 'A graphic', items: [] }] },
+			body: {
+				graphics: [
+					{ id: 'a-graphic', name: 'A graphic', items: [] },
+				],
+			},
 		});
 		const savedGraphic = await request('/api/graphics-templates/broadcast-graphics', {
 			method: 'POST',

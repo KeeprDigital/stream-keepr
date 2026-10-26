@@ -51,10 +51,30 @@ describe('readMatchFromPlayerSide', () => {
 
 describe('formatGameScore', () => {
 	it.each([
-		['a win', match(), 1, '2-1'],
-		['a loss, from the losing side', match(), 2, '1-2'],
-		['a game draw', match({ player1GameWins: 1, player2GameWins: 1, gameDraws: 1 }), 1, '1-1-1'],
-		['an unplayed draw', match({ player1GameWins: 0, player2GameWins: 0, gameDraws: 0 }), 1, '0-0'],
+		[
+			'a win',
+			match(),
+			1,
+			'2-1',
+		],
+		[
+			'a loss, from the losing side',
+			match(),
+			2,
+			'1-2',
+		],
+		[
+			'a game draw',
+			match({ player1GameWins: 1, player2GameWins: 1, gameDraws: 1 }),
+			1,
+			'1-1-1',
+		],
+		[
+			'an unplayed draw',
+			match({ player1GameWins: 0, player2GameWins: 0, gameDraws: 0 }),
+			1,
+			'0-0',
+		],
 	])('scores %s', (_name, played, playerId, expected) => {
 		expect(formatGameScore(readMatchFromPlayerSide(played, playerId))).toBe(expected);
 	});

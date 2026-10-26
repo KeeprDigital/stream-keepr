@@ -3,7 +3,9 @@ import { wasmModulePlugin } from './build/wasmModulePlugin.ts';
 import { rootAliases, unitCoverageConfig } from './vitest.shared.ts';
 
 export default defineConfig({
-	plugins: [wasmModulePlugin('test-webassembly-modules')],
+	plugins: [
+		wasmModulePlugin('test-webassembly-modules'),
+	],
 	resolve: {
 		alias: rootAliases,
 	},

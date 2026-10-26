@@ -187,7 +187,9 @@ function requireExpandedLimit(byteLength: number) {
 
 async function decompressWoffTable(bytes: Uint8Array, expectedLength: number) {
 	try {
-		const stream = new Blob([Uint8Array.from(bytes)])
+		const stream = new Blob([
+			Uint8Array.from(bytes),
+		])
 			.stream()
 			.pipeThrough(new DecompressionStream('deflate'));
 		const reader = stream.getReader();
@@ -427,16 +429,42 @@ function expandedByteLength(
 
 function validateTables(font: ParsedFont) {
 	const tags = new Set(Object.keys(font.directory?.tables ?? {}));
-	for (const tag of ['head', 'hhea', 'hmtx', 'maxp', 'name', 'OS/2', 'cmap']) {
+	for (const tag of [
+		'head',
+		'hhea',
+		'hmtx',
+		'maxp',
+		'name',
+		'OS/2',
+		'cmap',
+	]) {
 		if (!tags.has(tag))
 			validationError('font-required-table-missing', `Font is missing required ${tag} table.`);
 	}
 	if (!(tags.has('glyf') && tags.has('loca')) && !tags.has('CFF '))
 		validationError('font-required-table-missing', 'Font must contain one TrueType or CFF outline face.');
-	if ([...tags].some(tag => ['fvar', 'gvar', 'avar', 'HVAR', 'VVAR', 'MVAR', 'STAT', 'CFF2'].includes(tag)))
+	if ([...tags].some(tag => [
+		'fvar',
+		'gvar',
+		'avar',
+		'HVAR',
+		'VVAR',
+		'MVAR',
+		'STAT',
+		'CFF2',
+	].includes(tag))) {
 		validationError('font-variable-not-supported', 'Variable fonts are not supported.');
-	if ([...tags].some(tag => ['CBDT', 'CBLC', 'EBDT', 'EBLC', 'EBSC', 'sbix'].includes(tag)))
+	}
+	if ([...tags].some(tag => [
+		'CBDT',
+		'CBLC',
+		'EBDT',
+		'EBLC',
+		'EBSC',
+		'sbix',
+	].includes(tag))) {
 		validationError('font-bitmap-not-supported', 'Bitmap fonts and bitmap strikes are not supported.');
+	}
 	if ([...tags].some(tag => ['COLR', 'CPAL'].includes(tag)))
 		validationError('font-colour-glyphs-not-supported', 'Colour-glyph fonts are not supported.');
 	if (tags.has('SVG '))
@@ -507,7 +535,10 @@ function representativeCodePoints(font: ParsedFont, coverage: readonly number[],
 		|| (codePoint >= 65 && codePoint <= 90)
 		|| (codePoint >= 97 && codePoint <= 122),
 	);
-	const candidates = [...preferred, ...coverage.filter(codePoint => !preferred.includes(codePoint))];
+	const candidates = [
+		...preferred,
+		...coverage.filter(codePoint => !preferred.includes(codePoint)),
+	];
 	const selected: number[] = [];
 	for (const codePoint of candidates) {
 		const glyph = font.glyphForCodePoint(codePoint);
@@ -570,7 +601,9 @@ function glyphContours(
 			if (contour && contour.length > 1)
 				contours.push(contour);
 			current = { x: command.args[0]!, y: command.args[1]! };
-			contour = [transform(current.x, current.y)];
+			contour = [
+				transform(current.x, current.y),
+			];
 			continue;
 		}
 		if (!contour)
@@ -581,12 +614,16 @@ function glyphContours(
 		}
 		else if (command.command === 'quadraticCurveTo' || command.command === 'bezierCurveTo') {
 			const controls = command.command === 'quadraticCurveTo'
-				? [{ x: command.args[0]!, y: command.args[1]! }]
+				? [
+						{ x: command.args[0]!, y: command.args[1]! },
+					]
 				: [
 						{ x: command.args[0]!, y: command.args[1]! },
 						{ x: command.args[2]!, y: command.args[3]! },
 					];
-			const endOffset = command.command === 'quadraticCurveTo' ? 2 : 4;
+			const endOffset = command.command === 'quadraticCurveTo'
+				? 2
+				: 4;
 			const end = { x: command.args[endOffset]!, y: command.args[endOffset + 1]! };
 			for (let step = 1; step <= 12; step++) {
 				const point = curvePoint(current, controls, end, step / 12);

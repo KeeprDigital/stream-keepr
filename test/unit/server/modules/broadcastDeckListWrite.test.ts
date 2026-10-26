@@ -11,7 +11,9 @@ const mocks = vi.hoisted(() => {
 		NameConflict,
 		ProviderError,
 		importList: vi.fn(),
-		createResolver: vi.fn(() => ({ resolve: vi.fn() })),
+		createResolver: vi.fn(() => ({
+			resolve: vi.fn(),
+		})),
 		listOverrides: vi.fn(async () => []),
 		service: {
 			findEventGame: vi.fn(async () => 'mtg'),
@@ -49,20 +51,22 @@ const { broadcastDeckListWriteModule } = await import('~~/server/modules/broadca
 
 const document: BroadcastDeckListCanonicalDocument = {
 	sourceText: '1 Island',
-	mainboard: [{
-		canonicalName: 'Island',
-		scryfallId: 'island-printing',
-		oracleId: 'island-oracle',
-		setCode: 'lea',
-		collectorNumber: '295',
-		cardType: 'Basic Land — Island',
-		colors: null,
-		manaCost: null,
-		manaValue: 0,
-		deckCounterTypes: [],
-		quantity: 1,
-		sortOrder: 0,
-	}],
+	mainboard: [
+		{
+			canonicalName: 'Island',
+			scryfallId: 'island-printing',
+			oracleId: 'island-oracle',
+			setCode: 'lea',
+			collectorNumber: '295',
+			cardType: 'Basic Land — Island',
+			colors: null,
+			manaCost: null,
+			manaValue: 0,
+			deckCounterTypes: [],
+			quantity: 1,
+			sortOrder: 0,
+		},
+	],
 	sideboard: [],
 	companion: null,
 };
@@ -81,12 +85,22 @@ describe('broadcastDeckListWriteModule', () => {
 		mocks.service.findEventGame.mockResolvedValue('mtg');
 		mocks.importList.mockResolvedValue({ ok: true, document });
 		mocks.service.create.mockResolvedValue(item);
-		mocks.service.update.mockResolvedValue({ status: 'updated', item: { ...item, revision: 2 } });
+		mocks.service.update.mockResolvedValue({
+			status: 'updated',
+			item: { ...item, revision: 2 },
+		});
 		mocks.service.remove.mockResolvedValue({ status: 'deleted' });
 	});
 
 	it('returns the stable parser error array and writes nothing on invalid create', async () => {
-		const errors = [{ lineNumber: 1, code: 'INVALID_CARD_LINE', message: 'Expected a card', sourceText: 'Island' }];
+		const errors = [
+			{
+				lineNumber: 1,
+				code: 'INVALID_CARD_LINE',
+				message: 'Expected a card',
+				sourceText: 'Island',
+			},
+		];
 		mocks.importList.mockResolvedValue({ ok: false, errors });
 
 		await expect(broadcastDeckListWriteModule().createBroadcastDeckList({
@@ -113,7 +127,14 @@ describe('broadcastDeckListWriteModule', () => {
 	});
 
 	it('does not touch the saved item when replacement validation fails', async () => {
-		const errors = [{ lineNumber: 1, code: 'UNRESOLVED_CARD', message: 'Could not resolve Nope', sourceText: '1 Nope' }];
+		const errors = [
+			{
+				lineNumber: 1,
+				code: 'UNRESOLVED_CARD',
+				message: 'Could not resolve Nope',
+				sourceText: '1 Nope',
+			},
+		];
 		mocks.importList.mockResolvedValue({ ok: false, errors });
 
 		await expect(broadcastDeckListWriteModule().updateBroadcastDeckList({
@@ -170,7 +191,10 @@ describe('broadcastDeckListWriteModule', () => {
 	});
 
 	it('returns every affected Screen in a stable in-use conflict', async () => {
-		const screens = [{ id: 3, name: 'Alpha' }, { id: 9, name: 'Studio' }];
+		const screens = [
+			{ id: 3, name: 'Alpha' },
+			{ id: 9, name: 'Studio' },
+		];
 		mocks.service.remove.mockResolvedValueOnce({ status: 'in-use', current: item, screens });
 
 		await expect(broadcastDeckListWriteModule().deleteBroadcastDeckList({

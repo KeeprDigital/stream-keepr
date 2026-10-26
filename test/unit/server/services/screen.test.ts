@@ -47,7 +47,10 @@ describe('screenService', () => {
 
 	describe('findByEventId', () => {
 		it('returns all screens for event', async () => {
-			const screens = [createMockScreen(), createMockScreen({ id: 2 })];
+			const screens = [
+				createMockScreen(),
+				createMockScreen({ id: 2 }),
+			];
 			getChain('select').orderBy.mockResolvedValue(screens);
 
 			const result = await screenService().findByEventId(1);
@@ -66,12 +69,18 @@ describe('screenService', () => {
 
 	describe('findIdsByEventId', () => {
 		it('projects only Screen identities for bounded cleanup work', async () => {
-			getChain('select').where.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+			getChain('select').where.mockResolvedValue([
+				{ id: 1 },
+				{ id: 2 },
+			]);
 
 			const result = await screenService().findIdsByEventId(1);
 
 			expect(mockDb.select).toHaveBeenCalledWith({ id: 'screens.id' });
-			expect(result).toEqual([{ id: 1 }, { id: 2 }]);
+			expect(result).toEqual([
+				{ id: 1 },
+				{ id: 2 },
+			]);
 		});
 	});
 
@@ -133,7 +142,9 @@ describe('screenService', () => {
 	describe('update', () => {
 		it('returns updated screen via versioned write', async () => {
 			const updated = createMockScreen({ name: 'Updated', stateVersion: 1 });
-			mockDb.batch.mockResolvedValue([[updated]]);
+			mockDb.batch.mockResolvedValue([
+				[updated],
+			]);
 
 			const result = await screenService().update(1, 1, { name: 'Updated' } as any, 0);
 
@@ -145,7 +156,9 @@ describe('screenService', () => {
 			// Broadcast Graphics mode ends the Screen's playout epoch — rides in the
 			// same batch, behind the update whose postcondition it is guarded on.
 			const updated = createMockScreen({ name: 'Updated', stateVersion: 1 });
-			mockDb.batch.mockResolvedValue([[updated]]);
+			mockDb.batch.mockResolvedValue([
+				[updated],
+			]);
 
 			await screenService().update(1, 1, { name: 'Updated' } as any, 0, [
 				'end-epoch' as never,
@@ -161,9 +174,15 @@ describe('screenService', () => {
 	describe('remove', () => {
 		it('returns true when deleted', async () => {
 			mockD1Client.batch.mockResolvedValue([
-				{ meta: { changes: 1 } },
-				{ meta: { changes: 2 } },
-				{ meta: { changes: 1 } },
+				{
+					meta: { changes: 1 },
+				},
+				{
+					meta: { changes: 2 },
+				},
+				{
+					meta: { changes: 1 },
+				},
 			]);
 
 			const result = await screenService().remove(1, 1);
@@ -173,9 +192,15 @@ describe('screenService', () => {
 
 		it('returns false when not found', async () => {
 			mockD1Client.batch.mockResolvedValue([
-				{ meta: { changes: 0 } },
-				{ meta: { changes: 0 } },
-				{ meta: { changes: 0 } },
+				{
+					meta: { changes: 0 },
+				},
+				{
+					meta: { changes: 0 },
+				},
+				{
+					meta: { changes: 0 },
+				},
 			]);
 
 			const result = await screenService().remove(999, 1);
@@ -205,9 +230,15 @@ describe('screenService', () => {
 				.mockResolvedValueOnce(screen)
 				.mockResolvedValueOnce(updatedScreen);
 			mockD1Client.batch.mockResolvedValue([
-				{ meta: { changes: 1 } },
-				{ meta: { changes: 0 } },
-				{ meta: { changes: 1 } },
+				{
+					meta: { changes: 1 },
+				},
+				{
+					meta: { changes: 0 },
+				},
+				{
+					meta: { changes: 1 },
+				},
 			]);
 
 			const result = await screenService().updateModeConfig(
@@ -225,10 +256,16 @@ describe('screenService', () => {
 
 		it('merges config for given mode', async () => {
 			// A mode that pins no Graphic Asset, so its write is the plain versioned one.
-			const screen = createMockScreen({ modeConfigs: { 'feature-match': { showNames: true } } as any });
+			const screen = createMockScreen({
+				modeConfigs: {
+					'feature-match': { showNames: true },
+				} as any,
+			});
 			mockDb.query.screens.findFirst.mockResolvedValue(screen);
 			const updatedScreen = createMockScreen({ stateVersion: 1 });
-			mockDb.batch.mockResolvedValue([[updatedScreen]]);
+			mockDb.batch.mockResolvedValue([
+				[updatedScreen],
+			]);
 
 			const result = await screenService().updateModeConfig(1, 1, 'feature-match', { showNames: false });
 
@@ -238,10 +275,14 @@ describe('screenService', () => {
 
 	describe('updateScreenConfig', () => {
 		it('merges screen-level config', async () => {
-			const screen = createMockScreen({ screenConfig: { theme: 'dark' } as any });
+			const screen = createMockScreen({
+				screenConfig: { theme: 'dark' } as any,
+			});
 			mockDb.query.screens.findFirst.mockResolvedValue(screen);
 			const updatedScreen = createMockScreen({ stateVersion: 1 });
-			mockDb.batch.mockResolvedValue([[updatedScreen]]);
+			mockDb.batch.mockResolvedValue([
+				[updatedScreen],
+			]);
 
 			const result = await screenService().updateScreenConfig(1, 1, { theme: 'light' });
 

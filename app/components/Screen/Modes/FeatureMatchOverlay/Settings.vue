@@ -79,7 +79,9 @@ const aspectMismatch = computed(() => {
 
 function updateCanvasDimension(field: 'width' | 'height', value: number | null | undefined) {
 	updateScreenConfig({
-		[field]: value ?? (field === 'width' ? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH : DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT),
+		[field]: value ?? (field === 'width'
+			? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH
+			: DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT),
 	});
 }
 
@@ -188,18 +190,54 @@ function templatePlaced() {
  * ──────────────────────────────────────────────── */
 
 const SHORTCUTS = [
-	{ keys: ['⌘', 'Z'], label: 'Undo' },
-	{ keys: ['⌘', '⇧', 'Z'], label: 'Redo' },
-	{ keys: ['⌘', 'D'], label: 'Duplicate' },
-	{ keys: ['⌫'], label: 'Delete' },
-	{ keys: ['←↑↓→'], label: 'Nudge 1px (⇧ 10px)' },
-	{ keys: ['⌘', ']'], label: 'Bring forward (⇧ to front)' },
-	{ keys: ['⌘', '['], label: 'Send backward (⇧ to back)' },
-	{ keys: ['⌘', '⇧', 'H'], label: 'Hide or show' },
-	{ keys: ['F2'], label: 'Rename the focused layer (or double-click it)' },
-	{ keys: ['Esc'], label: 'Select canvas' },
-	{ keys: ['⇧ drag'], label: 'Keep aspect ratio' },
-	{ keys: ['⌥ drag'], label: 'Turn off snapping' },
+	{
+		keys: ['⌘', 'Z'],
+		label: 'Undo',
+	},
+	{
+		keys: ['⌘', '⇧', 'Z'],
+		label: 'Redo',
+	},
+	{
+		keys: ['⌘', 'D'],
+		label: 'Duplicate',
+	},
+	{
+		keys: ['⌫'],
+		label: 'Delete',
+	},
+	{
+		keys: ['←↑↓→'],
+		label: 'Nudge 1px (⇧ 10px)',
+	},
+	{
+		keys: ['⌘', ']'],
+		label: 'Bring forward (⇧ to front)',
+	},
+	{
+		keys: ['⌘', '['],
+		label: 'Send backward (⇧ to back)',
+	},
+	{
+		keys: ['⌘', '⇧', 'H'],
+		label: 'Hide or show',
+	},
+	{
+		keys: ['F2'],
+		label: 'Rename the focused layer (or double-click it)',
+	},
+	{
+		keys: ['Esc'],
+		label: 'Select canvas',
+	},
+	{
+		keys: ['⇧ drag'],
+		label: 'Keep aspect ratio',
+	},
+	{
+		keys: ['⌥ drag'],
+		label: 'Turn off snapping',
+	},
 ] as const;
 
 /** Whether a key press belongs to something the author is typing into or choosing in. */
@@ -238,10 +276,14 @@ function handleKeydown(event: KeyboardEvent) {
 	}
 	else if (mod && (event.code === 'BracketRight' || event.code === 'BracketLeft')) {
 		const forward = event.code === 'BracketRight';
-		if (event.shiftKey)
+		if (event.shiftKey) {
 			editor.moveToEdge(current, forward ? 'front' : 'back');
-		else
-			editor.move(current, forward ? 1 : -1);
+		}
+		else {
+			editor.move(current, forward
+				? 1
+				: -1);
+		}
 	}
 	else if (mod && event.shiftKey && key === 'h') {
 		editor.toggleVisible();
@@ -265,7 +307,9 @@ function handleKeydown(event: KeyboardEvent) {
 		event.preventDefault();
 }
 
-useEventListener(import.meta.client ? window : undefined, 'keydown', handleKeydown);
+useEventListener(import.meta.client
+	? window
+	: undefined, 'keydown', handleKeydown);
 </script>
 
 <template>

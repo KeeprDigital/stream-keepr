@@ -70,11 +70,15 @@ function batchedEvents(payload: FeatureMatchSessionEventPayload): FeatureMatchBa
 /** Coerce like `Number(...)` but refuse to hand back a non-finite result. */
 function finiteNumber(value: unknown): number | null {
 	const coerced = Number(value);
-	return Number.isFinite(coerced) ? coerced : null;
+	return Number.isFinite(coerced)
+		? coerced
+		: null;
 }
 
 function playerSideOf(value: unknown): PlayerSide | null {
-	return value === 'player1' || value === 'player2' ? value : null;
+	return value === 'player1' || value === 'player2'
+		? value
+		: null;
 }
 
 function countersOf(value: unknown): CounterState[] | null {
@@ -118,7 +122,10 @@ export function normalizeFeatureMatchSessionCommandPayload(
 		|| type === 'PauseClock'
 		|| type === 'RestartClock'
 	) {
-		return { ...payload, at: now() };
+		return {
+			...payload,
+			at: now(),
+		};
 	}
 
 	return payload;
@@ -353,7 +360,9 @@ function reduceFeatureMatchSessionEvent(
 			return null;
 		if (!currentState.clock.isRunning)
 			return { currentState, sourceSnapshot };
-		const additionalElapsed = currentState.clock.lastStartedAt ? at - currentState.clock.lastStartedAt : 0;
+		const additionalElapsed = currentState.clock.lastStartedAt
+			? at - currentState.clock.lastStartedAt
+			: 0;
 		return {
 			sourceSnapshot,
 			currentState: {
@@ -369,7 +378,9 @@ function reduceFeatureMatchSessionEvent(
 	}
 
 	if (type === 'ResetClock') {
-		const durationMs = payload.durationMs == null ? undefined : finiteNumber(payload.durationMs);
+		const durationMs = payload.durationMs == null
+			? undefined
+			: finiteNumber(payload.durationMs);
 		if (durationMs === null)
 			return null;
 		return {
@@ -396,7 +407,12 @@ function reduceFeatureMatchSessionEvent(
 			sourceSnapshot,
 			currentState: {
 				...currentState,
-				clock: { ...currentState.clock, elapsedMs: 0, isRunning: true, lastStartedAt: at },
+				clock: {
+					...currentState.clock,
+					elapsedMs: 0,
+					isRunning: true,
+					lastStartedAt: at,
+				},
 			},
 		};
 	}
@@ -407,7 +423,12 @@ function reduceFeatureMatchSessionEvent(
 			return null;
 		return {
 			sourceSnapshot,
-			currentState: { ...currentState, firstPlayer: player, activePlayer: player, turnNumber: 1 },
+			currentState: {
+				...currentState,
+				firstPlayer: player,
+				activePlayer: player,
+				turnNumber: 1,
+			},
 		};
 	}
 
@@ -461,13 +482,17 @@ function reduceFeatureMatchSessionEvent(
 					...winner,
 					gameWins: wins,
 					lifeTotal: resetLife ? startingLife : winner.lifeTotal,
-					counters: resetCounters ? [] : winner.counters,
+					counters: resetCounters
+						? []
+						: winner.counters,
 					cardsKept: resetLife ? undefined : winner.cardsKept,
 				},
 				[opponent]: {
 					...currentState[opponent],
 					lifeTotal: resetLife ? startingLife : currentState[opponent].lifeTotal,
-					counters: resetCounters ? [] : currentState[opponent].counters,
+					counters: resetCounters
+						? []
+						: currentState[opponent].counters,
 					cardsKept: resetLife ? undefined : currentState[opponent].cardsKept,
 				},
 				currentGame: currentState.currentGame + 1,
@@ -498,12 +523,16 @@ function reduceFeatureMatchSessionEvent(
 					...currentState[player],
 					gameWins: currentState[player].gameWins - 1,
 					lifeTotal: resetLife ? startingLife : currentState[player].lifeTotal,
-					counters: resetCounters ? [] : currentState[player].counters,
+					counters: resetCounters
+						? []
+						: currentState[player].counters,
 				},
 				[opponent]: {
 					...currentState[opponent],
 					lifeTotal: resetLife ? startingLife : currentState[opponent].lifeTotal,
-					counters: resetCounters ? [] : currentState[opponent].counters,
+					counters: resetCounters
+						? []
+						: currentState[opponent].counters,
 				},
 				currentGame: Math.max(1, currentState.currentGame - 1),
 				isComplete: false,
@@ -516,7 +545,10 @@ function reduceFeatureMatchSessionEvent(
 		if (startingLife === null)
 			return null;
 		if (payload.type === 'match') {
-			return { sourceSnapshot, currentState: createInitialFeatureMatchSessionStateFromSnapshot(sourceSnapshot) };
+			return {
+				sourceSnapshot,
+				currentState: createInitialFeatureMatchSessionStateFromSnapshot(sourceSnapshot),
+			};
 		}
 
 		return {
@@ -538,7 +570,10 @@ function reduceFeatureMatchSessionEvent(
 			return null;
 		return {
 			sourceSnapshot,
-			currentState: { ...currentState, overtime: createInitialOvertimeState(totalTurns) },
+			currentState: {
+				...currentState,
+				overtime: createInitialOvertimeState(totalTurns),
+			},
 		};
 	}
 
@@ -563,8 +598,12 @@ function reduceFeatureMatchSessionEvent(
 	}
 
 	if (type === 'SwapPlayers') {
-		const swappedActivePlayer = currentState.activePlayer ? otherFeatureMatchPlayer(currentState.activePlayer) : currentState.activePlayer;
-		const swappedFirstPlayer = currentState.firstPlayer ? otherFeatureMatchPlayer(currentState.firstPlayer) : currentState.firstPlayer;
+		const swappedActivePlayer = currentState.activePlayer
+			? otherFeatureMatchPlayer(currentState.activePlayer)
+			: currentState.activePlayer;
+		const swappedFirstPlayer = currentState.firstPlayer
+			? otherFeatureMatchPlayer(currentState.firstPlayer)
+			: currentState.firstPlayer;
 		return {
 			sourceSnapshot: {
 				...sourceSnapshot,

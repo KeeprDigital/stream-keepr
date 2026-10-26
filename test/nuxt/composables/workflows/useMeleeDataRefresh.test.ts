@@ -1,18 +1,31 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockPhaseStore = { loadPhasesByEventId: vi.fn() };
-const mockRoundStore = { rounds: [] as Array<{ id: number }>, loadRoundsByEventId: vi.fn() };
+const mockPhaseStore = {
+	loadPhasesByEventId: vi.fn(),
+};
+const mockRoundStore = {
+	rounds: [] as Array<{ id: number }>,
+	loadRoundsByEventId: vi.fn(),
+};
 const mockMatchStore = {
 	isLoaded: true,
 	loadedRoundId: null as number | null,
 	loadMatchesByEventId: vi.fn(),
 	loadMatchesByRoundId: vi.fn(),
 };
-const mockPlayerStore = { loadPlayersByEventId: vi.fn() };
-const mockPlayerDeckStore = { loadByEventId: vi.fn() };
-const mockFeatureMatchStore = { loadFeatureMatchesByEventId: vi.fn() };
-const mockMetagameStore = { applyRemoteInvalidated: vi.fn() };
+const mockPlayerStore = {
+	loadPlayersByEventId: vi.fn(),
+};
+const mockPlayerDeckStore = {
+	loadByEventId: vi.fn(),
+};
+const mockFeatureMatchStore = {
+	loadFeatureMatchesByEventId: vi.fn(),
+};
+const mockMetagameStore = {
+	applyRemoteInvalidated: vi.fn(),
+};
 const mockClearPlayerDeckCache = vi.hoisted(() => vi.fn());
 
 mockNuxtImport('usePhaseStore', () => () => mockPhaseStore);
@@ -34,7 +47,9 @@ describe('useMeleeDataRefresh', () => {
 
 	it('refreshes structure, feature slots, and the current match scope together', async () => {
 		mockMatchStore.loadedRoundId = 8;
-		mockRoundStore.rounds = [{ id: 8 }];
+		mockRoundStore.rounds = [
+			{ id: 8 },
+		];
 		const { refreshMeleeStructureData } = useMeleeDataRefresh();
 
 		await refreshMeleeStructureData(1);

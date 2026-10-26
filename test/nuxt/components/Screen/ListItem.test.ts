@@ -18,7 +18,9 @@ enableAutoUnmount(afterEach);
 
 /** What the Screen Output Asset Capability endpoint issues, if anything. */
 const mockCapabilityResponse = { value: null as string | null };
-const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+const { mockApiFetch } = vi.hoisted(() => ({
+	mockApiFetch: vi.fn(),
+}));
 
 /** What the hand-out controls report through, and what they were handed. */
 const mockCopyToClipboard = vi.fn();
@@ -30,13 +32,17 @@ mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
 mockNuxtImport('navigateTo', () => vi.fn());
 
 /** What this Screen's outputs report of themselves through presence. */
-const mockScreenPresence = { value: new Map<number, { count: number; members: Array<{ data?: { cardData?: string } }> }>() };
+const mockScreenPresence = {
+	value: new Map<number, { count: number; members: Array<{ data?: { cardData?: string } }> }>(),
+};
 mockNuxtImport('useScreenStore', () => () => ({ screenPresence: mockScreenPresence.value }));
 
 const CardStub = defineComponent({ template: '<div><slot /></div>' });
 const NuxtLinkStub = defineComponent({ template: '<a><slot /></a>' });
 const UTooltipStub = defineComponent({
-	props: { text: { type: String, default: '' } },
+	props: {
+		text: { type: String, default: '' },
+	},
 	template: '<span :data-tooltip="text"><slot /></span>',
 });
 const UBadgeStub = defineComponent({ template: '<span><slot /></span>' });
@@ -44,7 +50,9 @@ const UIconStub = defineComponent({ template: '<i />' });
 const ScreenTypeBadgeStub = defineComponent({ template: '<span />' });
 const UButtonStub = defineComponent({
 	name: 'UButton',
-	props: { label: { type: String, default: '' } },
+	props: {
+		label: { type: String, default: '' },
+	},
 	emits: ['click'],
 	template: '<button type="button" @click="$emit(\'click\')">{{ label }}<slot /></button>',
 });
@@ -67,7 +75,9 @@ const UDropdownMenuStub = defineComponent({
 		},
 	},
 	setup(props) {
-		return { entries: computed(() => props.items.flat()) };
+		return {
+			entries: computed(() => props.items.flat()),
+		};
 	},
 	template: `<div>
 		<button
@@ -145,14 +155,25 @@ describe('screen list item — card data health badge', () => {
 	});
 
 	it('shows how many outputs report degraded card data, and says what is happening', async () => {
-		mockScreenPresence.value = new Map([[4, {
-			count: 3,
-			members: [
-				{ data: { cardData: 'degraded' } },
-				{ data: { cardData: 'degraded' } },
-				{ data: { cardData: 'complete' } },
+		mockScreenPresence.value = new Map([
+			[
+				4,
+				{
+					count: 3,
+					members: [
+						{
+							data: { cardData: 'degraded' },
+						},
+						{
+							data: { cardData: 'degraded' },
+						},
+						{
+							data: { cardData: 'complete' },
+						},
+					],
+				},
 			],
-		}]]);
+		]);
 
 		const wrapper = await mountComponent();
 
@@ -163,10 +184,19 @@ describe('screen list item — card data health badge', () => {
 	});
 
 	it('shows nothing when every reporting output is complete', async () => {
-		mockScreenPresence.value = new Map([[4, {
-			count: 1,
-			members: [{ data: { cardData: 'complete' } }],
-		}]]);
+		mockScreenPresence.value = new Map([
+			[
+				4,
+				{
+					count: 1,
+					members: [
+						{
+							data: { cardData: 'complete' },
+						},
+					],
+				},
+			],
+		]);
 
 		const wrapper = await mountComponent();
 
@@ -174,10 +204,17 @@ describe('screen list item — card data health badge', () => {
 	});
 
 	it('counts a silent output as saying nothing, not as degraded', async () => {
-		mockScreenPresence.value = new Map([[4, {
-			count: 1,
-			members: [{ data: {} }],
-		}]]);
+		mockScreenPresence.value = new Map([
+			[
+				4,
+				{
+					count: 1,
+					members: [
+						{ data: {} },
+					],
+				},
+			],
+		]);
 
 		const wrapper = await mountComponent();
 
@@ -204,7 +241,11 @@ describe('screen list item — handing out this Screen’s output', () => {
 	});
 
 	function stubOutputWindow() {
-		const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+		const outputWindow = {
+			opener: {} as unknown,
+			location: { href: '' },
+			close: vi.fn(),
+		};
 		vi.stubGlobal('open', vi.fn(() => outputWindow));
 		return outputWindow;
 	}
@@ -213,7 +254,11 @@ describe('screen list item — handing out this Screen’s output', () => {
 	function stubOutputWindows() {
 		const opened: Array<{ opener: unknown; location: { href: string }; close: () => void }> = [];
 		vi.stubGlobal('open', vi.fn(() => {
-			const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+			const outputWindow = {
+				opener: {} as unknown,
+				location: { href: '' },
+				close: vi.fn(),
+			};
 			opened.push(outputWindow);
 			return outputWindow;
 		}));

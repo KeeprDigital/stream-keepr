@@ -58,7 +58,9 @@ describe('importedMtgCardResolverService', () => {
 
 	it('returns unresolved when neither exact nor fuzzy lookup finds a match', async () => {
 		mockFetch
-			.mockResolvedValueOnce(createCollectionResponse([], [{ name: 'Totally Fake Card' }]) as any)
+			.mockResolvedValueOnce(createCollectionResponse([], [
+				{ name: 'Totally Fake Card' },
+			]) as any)
 			.mockResolvedValueOnce({ ok: false, statusText: 'Not Found' } as any);
 
 		const result = await importedMtgCardResolverService().resolveBatch(1, [
@@ -91,7 +93,9 @@ describe('importedMtgCardResolverService', () => {
 
 	it('does not downgrade a card when exact lookup misses and fuzzy lookup has an infrastructure failure', async () => {
 		mockFetch
-			.mockResolvedValueOnce(createCollectionResponse([], [{ name: 'Shock', set: 'm21' }]) as any)
+			.mockResolvedValueOnce(createCollectionResponse([], [
+				{ name: 'Shock', set: 'm21' },
+			]) as any)
 			.mockResolvedValue({
 				ok: false,
 				status: 503,

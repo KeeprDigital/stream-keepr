@@ -232,7 +232,12 @@ describe('featureMatchCommandSchema', () => {
 	});
 
 	it('requires baseSequence for a Batch — the sequence claim covers the whole save', () => {
-		const commands = [{ type: 'SetLife', payload: { player: 'player1', lifeTotal: 10 } }];
+		const commands = [
+			{
+				type: 'SetLife',
+				payload: { player: 'player1', lifeTotal: 10 },
+			},
+		];
 		expect(featureMatchCommandSchema.safeParse({
 			commandId: 'batch-unsequenced',
 			type: 'Batch',
@@ -255,11 +260,26 @@ describe('featureMatchCommandSchema', () => {
 		}).success;
 
 		// Relative commands keep their merge-retry semantics by staying standalone.
-		expect(batch([{ type: 'AdjustLife', payload: { player: 'player1', delta: -1 } }])).toBe(false);
+		expect(batch([
+			{
+				type: 'AdjustLife',
+				payload: { player: 'player1', delta: -1 },
+			},
+		])).toBe(false);
 		// Server-only snapshot corrections stay unreachable through a batch.
-		expect(batch([{ type: 'SnapshotCorrected', payload: { sourceSnapshot } }])).toBe(false);
+		expect(batch([
+			{
+				type: 'SnapshotCorrected',
+				payload: { sourceSnapshot },
+			},
+		])).toBe(false);
 		// A batch cannot nest a batch.
-		expect(batch([{ type: 'Batch', payload: { commands: [] } }])).toBe(false);
+		expect(batch([
+			{
+				type: 'Batch',
+				payload: { commands: [] },
+			},
+		])).toBe(false);
 		expect(batch([])).toBe(false);
 	});
 });

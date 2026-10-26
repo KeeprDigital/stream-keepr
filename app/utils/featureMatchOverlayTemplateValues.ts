@@ -1,7 +1,19 @@
 import type { Event, FeatureMatch, Match, Phase, Round } from '~/types';
 import { getGameConfig } from '~~/shared/config/games';
 
-export const FEATURE_MATCH_OVERLAY_TEMPLATE_TOKENS = ['name', 'record', 'deck', 'deckColors', 'pronouns', 'lgs', 'round', 'stage', 'table', 'format', 'eventName'] as const;
+export const FEATURE_MATCH_OVERLAY_TEMPLATE_TOKENS = [
+	'name',
+	'record',
+	'deck',
+	'deckColors',
+	'pronouns',
+	'lgs',
+	'round',
+	'stage',
+	'table',
+	'format',
+	'eventName',
+] as const;
 
 export interface FeatureMatchOverlayTemplateMetadataInput {
 	event: Pick<Event, 'name' | 'game'> | null | undefined;
@@ -38,8 +50,12 @@ export function buildFeatureMatchOverlayTemplateMetadataValues({
 	return {
 		round: roundName,
 		stage: phaseName || roundName,
-		table: tableNumber ? `Table ${tableNumber}` : '',
-		format: featureMatch?.formatName ?? featureMatch?.activeSession?.sourceSnapshot.formatName ?? (event?.game ? getGameConfig(event.game).label : ''),
+		table: tableNumber
+			? `Table ${tableNumber}`
+			: '',
+		format: featureMatch?.formatName ?? featureMatch?.activeSession?.sourceSnapshot.formatName ?? (event?.game
+			? getGameConfig(event.game).label
+			: ''),
 		eventName: event?.name ?? '',
 	};
 }

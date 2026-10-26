@@ -28,14 +28,24 @@ function mountEffect(params: Params = { shade: '#123456', count: 3 }) {
 		host,
 		delegate: delegate as unknown as SceneEffectDelegate<Params>,
 	}, params);
-	return { instance, delegate, camera, geometry, material, renderer: renderers[0] as StubRenderer, host };
+	return {
+		instance,
+		delegate,
+		camera,
+		geometry,
+		material,
+		renderer: renderers[0] as StubRenderer,
+		host,
+	};
 }
 
 describe('createSceneEffect', () => {
 	it('builds the scene once with the starting params and mounts its canvas', () => {
 		const { delegate, host, renderer } = mountEffect();
 		expect(delegate.build).toHaveBeenCalledTimes(1);
-		expect(delegate.build.mock.calls[0]![0]).toMatchObject({ params: { shade: '#123456', count: 3 } });
+		expect(delegate.build.mock.calls[0]![0]).toMatchObject({
+			params: { shade: '#123456', count: 3 },
+		});
 		expect(host.appendChild).toHaveBeenCalledWith(renderer.domElement);
 	});
 
@@ -44,7 +54,9 @@ describe('createSceneEffect', () => {
 		instance.setParams({ shade: '#654321', count: 5 });
 		expect(delegate.build).toHaveBeenCalledTimes(1);
 		expect(delegate.applyParams).toHaveBeenCalledTimes(1);
-		expect(delegate.applyParams.mock.calls[0]![0]).toMatchObject({ params: { shade: '#654321', count: 5 } });
+		expect(delegate.applyParams.mock.calls[0]![0]).toMatchObject({
+			params: { shade: '#654321', count: 5 },
+		});
 	});
 
 	it('updates the delegate with elapsed seconds before every render', () => {

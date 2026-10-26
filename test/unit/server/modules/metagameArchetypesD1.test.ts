@@ -51,7 +51,9 @@ async function stageEvent(name: string) {
 
 async function stageArchetypes(eventId: number, names: string[]) {
 	await insertAll(names, name => db.insert(schema.archetypes).values({ eventId, name }));
-	const rows = await db.query.archetypes.findMany({ where: (archetypes, { eq }) => eq(archetypes.eventId, eventId) });
+	const rows = await db.query.archetypes.findMany({
+		where: (archetypes, { eq }) => eq(archetypes.eventId, eventId),
+	});
 	return new Map(rows.map(row => [row.name, row.id]));
 }
 
@@ -85,20 +87,55 @@ beforeAll(async () => {
 	const idOf = (index: number) => ids.get(archetypeName(index))!;
 
 	const players: StagedPlayer[] = [
-		...[1, 2, 3, 4].map(position => ({ archetypeId: idOf(1), wins: 3, losses: 1, position })),
-		...[5, 6, 7].map(position => ({ archetypeId: idOf(2), wins: 1, losses: 1, position })),
-		...Array.from({ length: REPRESENTED - 2 }, (_, index) => ({ archetypeId: idOf(index + 3), wins: 1, losses: 1, position: null })),
-		...Array.from({ length: 5 }, () => ({ archetypeId: null, wins: 0, losses: 0, position: null })),
+		...[1, 2, 3, 4].map(position => ({
+			archetypeId: idOf(1),
+			wins: 3,
+			losses: 1,
+			position,
+		})),
+		...[5, 6, 7].map(position => ({
+			archetypeId: idOf(2),
+			wins: 1,
+			losses: 1,
+			position,
+		})),
+		...Array.from({ length: REPRESENTED - 2 }, (_, index) => ({
+			archetypeId: idOf(index + 3),
+			wins: 1,
+			losses: 1,
+			position: null,
+		})),
+		...Array.from({ length: 5 }, () => ({
+			archetypeId: null,
+			wins: 0,
+			losses: 0,
+			position: null,
+		})),
 	];
 	await stagePlayers(largeEventId, players);
 
 	const [bolt, guide, wrath] = [await stageCard('Lightning Bolt'), await stageCard('Goblin Guide'), await stageCard('Wrath of God')];
 	await db.insert(schema.archetypeCards).values([
-		{ archetypeId: idOf(1), cardId: guide!.id, sortOrder: 0 },
-		{ archetypeId: idOf(1), cardId: bolt!.id, sortOrder: 1 },
-		{ archetypeId: idOf(REPRESENTED), cardId: wrath!.id, sortOrder: 0 },
+		{
+			archetypeId: idOf(1),
+			cardId: guide!.id,
+			sortOrder: 0,
+		},
+		{
+			archetypeId: idOf(1),
+			cardId: bolt!.id,
+			sortOrder: 1,
+		},
+		{
+			archetypeId: idOf(REPRESENTED),
+			cardId: wrath!.id,
+			sortOrder: 0,
+		},
 	]);
-	keyCards = { first: ['Goblin Guide', 'Lightning Bolt'], last: ['Wrath of God'] };
+	keyCards = {
+		first: ['Goblin Guide', 'Lightning Bolt'],
+		last: ['Wrath of God'],
+	};
 });
 
 describe('the Metagame Archetype breakdown on D1', () => {
@@ -112,10 +149,27 @@ describe('the Metagame Archetype breakdown on D1', () => {
 				.toEqual(Array.from({ length: REPRESENTED }, (_, index) => archetypeName(index + 1)));
 
 			const [first, second, third] = breakdown.entries;
-			expect(first).toMatchObject({ count: 4, metaShare: 3.2, winRate: 75, avgPosition: 2.5 });
+			expect(first).toMatchObject({
+				count: 4,
+				metaShare: 3.2,
+				winRate: 75,
+				avgPosition: 2.5,
+			});
 			expect(first!.keyCards.map(card => card.name)).toEqual(keyCards.first);
-			expect(second).toMatchObject({ count: 3, metaShare: 2.4, winRate: 50, avgPosition: 6, keyCards: [] });
-			expect(third).toMatchObject({ count: 1, metaShare: 0.8, winRate: 50, avgPosition: null, keyCards: [] });
+			expect(second).toMatchObject({
+				count: 3,
+				metaShare: 2.4,
+				winRate: 50,
+				avgPosition: 6,
+				keyCards: [],
+			});
+			expect(third).toMatchObject({
+				count: 1,
+				metaShare: 0.8,
+				winRate: 50,
+				avgPosition: null,
+				keyCards: [],
+			});
 			expect(breakdown.entries.at(-1)!.keyCards.map(card => card.name)).toEqual(keyCards.last);
 		});
 
@@ -156,7 +210,12 @@ describe('the Metagame Archetype breakdown on D1', () => {
 		const eventId = await stageEvent('Empty Metagame');
 
 		expect(await metagameReadModel().getArchetypeBreakdown(eventId, { scope: 'all', limit: 5 }))
-			.toEqual({ entries: [], totalPlayers: 0, classifiedPlayers: 0, scope: 'all' });
+			.toEqual({
+				entries: [],
+				totalPlayers: 0,
+				classifiedPlayers: 0,
+				scope: 'all',
+			});
 	});
 
 	it('answers an ordinary small scope, naming only the Event\'s own Archetypes', async () => {
@@ -164,17 +223,47 @@ describe('the Metagame Archetype breakdown on D1', () => {
 		const ids = await stageArchetypes(eventId, ['Mono Red', 'Azorius Control']);
 		const elsewhere = await stageArchetypes(await stageEvent('Elsewhere'), ['Foreign']);
 		await stagePlayers(eventId, [
-			{ archetypeId: ids.get('Mono Red')!, wins: 2, losses: 0, position: 1 },
-			{ archetypeId: ids.get('Mono Red')!, wins: 0, losses: 2, position: 3 },
-			{ archetypeId: ids.get('Azorius Control')!, wins: 1, losses: 1, position: 2 },
-			{ archetypeId: elsewhere.get('Foreign')!, wins: 1, losses: 1, position: 4 },
+			{
+				archetypeId: ids.get('Mono Red')!,
+				wins: 2,
+				losses: 0,
+				position: 1,
+			},
+			{
+				archetypeId: ids.get('Mono Red')!,
+				wins: 0,
+				losses: 2,
+				position: 3,
+			},
+			{
+				archetypeId: ids.get('Azorius Control')!,
+				wins: 1,
+				losses: 1,
+				position: 2,
+			},
+			{
+				archetypeId: elsewhere.get('Foreign')!,
+				wins: 1,
+				losses: 1,
+				position: 4,
+			},
 		]);
 
 		const breakdown = await metagameReadModel().getArchetypeBreakdown(eventId, { scope: 'all', limit: 5 });
 
 		expect(breakdown.entries.map(({ name, count, winRate, avgPosition }) => ({ name, count, winRate, avgPosition }))).toEqual([
-			{ name: 'Mono Red', count: 2, winRate: 50, avgPosition: 2 },
-			{ name: 'Azorius Control', count: 1, winRate: 50, avgPosition: 2 },
+			{
+				name: 'Mono Red',
+				count: 2,
+				winRate: 50,
+				avgPosition: 2,
+			},
+			{
+				name: 'Azorius Control',
+				count: 1,
+				winRate: 50,
+				avgPosition: 2,
+			},
 		]);
 	});
 });

@@ -44,9 +44,14 @@ export function moveGraphicRectToAnchoredPosition(
 	anchor: GraphicAnchorPoint | undefined,
 ): Partial<GraphicRect> {
 	const point = resolveGraphicAnchorPoint(anchor);
-	if (axis === 'x')
-		return { x: roundGeometry(value - (rect.width * point.x)) };
-	return { y: roundGeometry(value - (rect.height * point.y)) };
+	if (axis === 'x') {
+		return {
+			x: roundGeometry(value - (rect.width * point.x)),
+		};
+	}
+	return {
+		y: roundGeometry(value - (rect.height * point.y)),
+	};
 }
 
 /** Resize a rectangle while its Graphic Anchor Point stays fixed. */
@@ -80,10 +85,20 @@ export function alignGraphicRect(
 	edge: 'start' | 'center' | 'end',
 	container: { width: number; height: number },
 ): Partial<GraphicRect> {
-	const total = axis === 'x' ? container.width : container.height;
-	const size = axis === 'x' ? rect.width : rect.height;
-	const start = edge === 'start' ? 0 : edge === 'end' ? total - size : (total - size) / 2;
-	return { [axis]: roundGeometry(start) };
+	const total = axis === 'x'
+		? container.width
+		: container.height;
+	const size = axis === 'x'
+		? rect.width
+		: rect.height;
+	const start = edge === 'start'
+		? 0
+		: edge === 'end'
+			? total - size
+			: (total - size) / 2;
+	return {
+		[axis]: roundGeometry(start),
+	};
 }
 
 /** Project canonical pixels into the Geometry Unit an author is working in. */
@@ -93,13 +108,18 @@ export function displayGeometryValue(
 	unit: GeometryUnit,
 	isPosition = false,
 ): number {
-	if (unit === 'percent')
-		return total > 0 ? roundGeometry((pixels / total) * 100) : 0;
+	if (unit === 'percent') {
+		return total > 0
+			? roundGeometry((pixels / total) * 100)
+			: 0;
+	}
 	if (unit === 'grid') {
 		if (total <= 0)
 			return 0;
 		const grid = (pixels / total) * 32;
-		return roundGeometry(isPosition ? grid - 16 : grid);
+		return roundGeometry(isPosition
+			? grid - 16
+			: grid);
 	}
 	return roundGeometry(pixels);
 }
@@ -109,7 +129,12 @@ export function displayGeometryValue(
  * the grid, and the arrows still step whole units in px and %.
  */
 export function geometryUnitInputStep(unit: GeometryUnit): { step: number; stepSnapping: boolean } {
-	return { step: unit === 'grid' ? 0.01 : 1, stepSnapping: unit === 'px' };
+	return {
+		step: unit === 'grid'
+			? 0.01
+			: 1,
+		stepSnapping: unit === 'px',
+	};
 }
 
 /** Read an authored value in any unit back into canonical pixels. */
@@ -123,7 +148,10 @@ export function parseGeometryValue(
 		return 0;
 	if (unit === 'percent')
 		return Math.round((value / 100) * total);
-	if (unit === 'grid')
-		return Math.round(((isPosition ? value + 16 : value) / 32) * total);
+	if (unit === 'grid') {
+		return Math.round(((isPosition
+			? value + 16
+			: value) / 32) * total);
+	}
 	return Math.round(value);
 }

@@ -19,13 +19,18 @@ import { squareShapeGeometry } from '~~/shared/modules/graphics';
 enableAutoUnmount(afterEach);
 
 const UFormFieldStub = defineComponent({
-	props: { label: { type: String, default: '' } },
+	props: {
+		label: { type: String, default: '' },
+	},
 	template: '<label><span>{{ label }}</span><slot /></label>',
 });
 const UInputStub = defineComponent({
 	name: 'UInput',
 	props: {
-		modelValue: { type: [String, Number], default: '' },
+		modelValue: {
+			type: [String, Number],
+			default: '',
+		},
 		type: { type: String, default: 'text' },
 		disabled: { type: Boolean, default: false },
 	},
@@ -54,8 +59,14 @@ const UInputNumberStub = defineComponent({
 const USelectStub = defineComponent({
 	name: 'USelect',
 	props: {
-		modelValue: { type: [String, Number, Boolean], default: undefined },
-		items: { type: Array as () => { label: string; value: string }[], default: () => [] },
+		modelValue: {
+			type: [String, Number, Boolean],
+			default: undefined,
+		},
+		items: {
+			type: Array as () => { label: string; value: string }[],
+			default: () => [],
+		},
 		disabled: { type: Boolean, default: false },
 	},
 	emits: ['update:modelValue'],
@@ -75,8 +86,20 @@ const USwitchStub = defineComponent({
 
 /** The draft the pickers offer from: two Palette Entries, a fill, and a geometry. */
 const DRAFT: GraphicStyleSetEntry[] = [
-	{ id: 'brand', kind: 'palette', name: 'Brand', schemaVersion: 1, value: { color: '#ff0044' } },
-	{ id: 'ink', kind: 'palette', name: 'Ink', schemaVersion: 1, value: { color: '#101014' } },
+	{
+		id: 'brand',
+		kind: 'palette',
+		name: 'Brand',
+		schemaVersion: 1,
+		value: { color: '#ff0044' },
+	},
+	{
+		id: 'ink',
+		kind: 'palette',
+		name: 'Ink',
+		schemaVersion: 1,
+		value: { color: '#101014' },
+	},
 	{
 		id: 'panel-fill',
 		kind: 'fill',
@@ -117,7 +140,12 @@ async function mountEditor(entry: GraphicStyleSetEntry, props: Record<string, un
 	const { default: StyleSetEntryEditor } = await import(componentPath);
 
 	return mount(StyleSetEntryEditor, {
-		props: { entry, entries: DRAFT, writable: true, ...props },
+		props: {
+			entry,
+			entries: DRAFT,
+			writable: true,
+			...props,
+		},
 		global: {
 			stubs: {
 				UFormField: UFormFieldStub,
@@ -194,7 +222,10 @@ describe('graphicsStyleSetEntryEditor', () => {
 
 		await font.setValue('mplantin');
 
-		expect(emittedValue(wrapper)).toEqual({ ...TYPOGRAPHY.value, font: { kind: 'application', fontId: 'mplantin' } });
+		expect(emittedValue(wrapper)).toEqual({
+			...TYPOGRAPHY.value,
+			font: { kind: 'application', fontId: 'mplantin' },
+		});
 	});
 
 	it('bounds a typography entry to what every typography accepts', async () => {
@@ -340,7 +371,10 @@ describe('graphicsStyleSetEntryEditor', () => {
 
 		const outlined = await mountEditor({
 			...surface,
-			value: { fillOpacity: 0.9, outline: { colorEntryId: 'brand', width: 2 } },
+			value: {
+				fillOpacity: 0.9,
+				outline: { colorEntryId: 'brand', width: 2 },
+			},
 		} as GraphicStyleSetEntry);
 		await outlined.get('[data-testid="style-entry-surface-outline"]').setValue(false);
 
@@ -353,7 +387,10 @@ describe('graphicsStyleSetEntryEditor', () => {
 			kind: 'shape-geometry',
 			name: 'Cut corner',
 			schemaVersion: 1,
-			value: { ...squareShapeGeometry(), topRight: { treatment: 'cut', size: 24 } },
+			value: {
+				...squareShapeGeometry(),
+				topRight: { treatment: 'cut', size: 24 },
+			},
 		};
 		const wrapper = await mountEditor(geometry);
 
@@ -364,7 +401,10 @@ describe('graphicsStyleSetEntryEditor', () => {
 
 		await sizes[0]!.setValue('40');
 
-		expect(emittedValue(wrapper)).toEqual({ ...squareShapeGeometry(), topRight: { treatment: 'cut', size: 40 } });
+		expect(emittedValue(wrapper)).toEqual({
+			...squareShapeGeometry(),
+			topRight: { treatment: 'cut', size: 40 },
+		});
 	});
 
 	it('initialises a Shape Geometry entry from a built-in preset, sized as a new Shape Graphic Item', async () => {
@@ -373,7 +413,10 @@ describe('graphicsStyleSetEntryEditor', () => {
 			kind: 'shape-geometry',
 			name: 'Cut corner',
 			schemaVersion: 1,
-			value: { ...squareShapeGeometry(), leftSlant: 12 },
+			value: {
+				...squareShapeGeometry(),
+				leftSlant: 12,
+			},
 		};
 		const wrapper = await mountEditor(geometry);
 
@@ -414,7 +457,11 @@ describe('graphicsStyleSetEntryEditor', () => {
 			kind: 'animation-recipe',
 			name: 'Drift',
 			schemaVersion: 1,
-			value: { duration: 400, easing: 'ease-out', fade: { opacity: 0 } },
+			value: {
+				duration: 400,
+				easing: 'ease-out',
+				fade: { opacity: 0 },
+			},
 		};
 		const wrapper = await mountEditor(recipe);
 
@@ -442,7 +489,11 @@ describe('graphicsStyleSetEntryEditor', () => {
 			kind: 'animation-recipe',
 			name: 'Rise',
 			schemaVersion: 1,
-			value: { duration: 400, easing: 'ease-out', slide: { direction: 'north', distanceMode: 'fixed', distance: 120 } },
+			value: {
+				duration: 400,
+				easing: 'ease-out',
+				slide: { direction: 'north', distanceMode: 'fixed', distance: 120 },
+			},
 		};
 		const wrapper = await mountEditor(recipe);
 		await flushPromises();
@@ -457,7 +508,13 @@ describe('graphicsStyleSetEntryEditor', () => {
 			kind: 'media-treatment',
 			name: 'Hero media',
 			schemaVersion: 1,
-			value: { fit: 'contain', focalPosition: { horizontal: 0.5, vertical: 0.5 }, opacity: 0.6, playbackRate: 2, loop: false },
+			value: {
+				fit: 'contain',
+				focalPosition: { horizontal: 0.5, vertical: 0.5 },
+				opacity: 0.6,
+				playbackRate: 2,
+				loop: false,
+			},
 		};
 		const wrapper = await mountEditor(treatment);
 

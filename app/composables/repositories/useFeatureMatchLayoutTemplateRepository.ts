@@ -154,7 +154,11 @@ export function useFeatureMatchLayoutTemplateRepository() {
 	): Promise<GraphicsIngestionOperation> => {
 		return await $fetch<GraphicsIngestionOperation>(
 			`${ingestion}/${operationId}/template-package-confirmation`,
-			{ method: 'POST', headers: apiHeaders.getHeaders(), body: { fingerprint } },
+			{
+				method: 'POST',
+				headers: apiHeaders.getHeaders(),
+				body: { fingerprint },
+			},
 		);
 	};
 
@@ -162,7 +166,10 @@ export function useFeatureMatchLayoutTemplateRepository() {
 	const installPackage = async (operationId: string): Promise<GraphicsIngestionOperation> => {
 		return await $fetch<GraphicsIngestionOperation>(
 			`${ingestion}/${operationId}/template-package-installation`,
-			{ method: 'POST', headers: apiHeaders.getHeaders() },
+			{
+				method: 'POST',
+				headers: apiHeaders.getHeaders(),
+			},
 		);
 	};
 

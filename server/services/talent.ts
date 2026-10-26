@@ -40,7 +40,9 @@ export function talentService() {
 			.insert(eventTalents)
 			.values({
 				...fields,
-				...(socialProfiles === undefined ? {} : socialProfileColumns(socialProfiles)),
+				...(socialProfiles === undefined
+					? {}
+					: socialProfileColumns(socialProfiles)),
 				eventId,
 			})
 			.returning();
@@ -62,7 +64,9 @@ export function talentService() {
 			.update(eventTalents)
 			.set({
 				...fields,
-				...(socialProfiles === undefined ? {} : socialProfileColumns(socialProfiles)),
+				...(socialProfiles === undefined
+					? {}
+					: socialProfileColumns(socialProfiles)),
 			})
 			.where(
 				and(

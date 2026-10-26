@@ -90,5 +90,13 @@ export function useTopCutModeData() {
 	const headerText = computed(() => config.value.headerText || phase.value?.name || 'Top Cut');
 	const isEmpty = computed(() => !loading.value && (!config.value.phaseId || bracket.value.columns.length === 0));
 
-	return { config, loading, error, isEmpty, headerText, phase, bracket };
+	return {
+		config,
+		loading,
+		error,
+		isEmpty,
+		headerText,
+		phase,
+		bracket,
+	};
 }

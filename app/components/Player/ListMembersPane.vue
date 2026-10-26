@@ -123,7 +123,10 @@ function addSelected() {
 		.map(id => playerMap.value.get(id))
 		.filter((p): p is Player => p !== undefined);
 
-	members.value = [...members.value, ...newPlayers];
+	members.value = [
+		...members.value,
+		...newPlayers,
+	];
 	selectedAvailable.value = new Set();
 }
 

@@ -200,7 +200,9 @@ describe('the Graphics Asset Library Capacity', () => {
 		});
 		await catalogue.recordCanonicalWrites({
 			operation,
-			contents: [{ digest: 'unreachable-digest', byteLength: 123 }],
+			contents: [
+				{ digest: 'unreachable-digest', byteLength: 123 },
+			],
 			recordedAt: operation.updatedAt,
 		});
 		await library.cancelGraphicsIngestion({

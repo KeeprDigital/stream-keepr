@@ -10,7 +10,11 @@ import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
 // What it does with them is its own composable's test; here they only have to
 // exist so a test can mount this card the way its page does.
 mockNuxtImport('useOverlay', () => () => ({
-	create: () => ({ open: () => ({ result: Promise.resolve(true) }) }),
+	create: () => ({
+		open: () => ({
+			result: Promise.resolve(true),
+		}),
+	}),
 }));
 mockNuxtImport('onBeforeRouteLeave', () => () => {});
 
@@ -25,7 +29,9 @@ function configEvent(overrides?: Parameters<typeof createMockEvent>[0]): Event {
 
 const UFormStub = defineComponent({
 	name: 'UForm',
-	props: { state: { type: Object, required: true } },
+	props: {
+		state: { type: Object, required: true },
+	},
 	emits: ['submit'],
 	template: '<form @submit.prevent="$emit(\'submit\')"><slot /></form>',
 });
@@ -37,20 +43,26 @@ const UCardStub = defineComponent({
 
 const UFormFieldStub = defineComponent({
 	name: 'UFormField',
-	props: { name: { type: String, required: false } },
+	props: {
+		name: { type: String, required: false },
+	},
 	template: '<label :data-field="name"><slot /></label>',
 });
 
 const USwitchStub = defineComponent({
 	name: 'USwitch',
-	props: { modelValue: { type: Boolean, required: false } },
+	props: {
+		modelValue: { type: Boolean, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input type="checkbox" :checked="modelValue" />',
 });
 
 const UInputStub = defineComponent({
 	name: 'UInput',
-	props: { modelValue: { type: String, required: false } },
+	props: {
+		modelValue: { type: String, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input :value="modelValue" />',
 });
@@ -84,14 +96,20 @@ const stubs = {
 
 // A detached button has no activation behaviour, so pressing a submit button
 // only submits its form once the tree is in the document.
-const mountOptions = { attachTo: document.body, global: { stubs } };
+const mountOptions = {
+	attachTo: document.body,
+	global: { stubs },
+};
 
 enableAutoUnmount(afterEach);
 
 async function mountComponent(event: Event = configEvent()) {
 	const { default: ConfigFeatureMatchSettings } = await import(componentPath);
 
-	return mount(ConfigFeatureMatchSettings, { ...mountOptions, props: { event } });
+	return mount(ConfigFeatureMatchSettings, {
+		...mountOptions,
+		props: { event },
+	});
 }
 
 type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
@@ -104,7 +122,10 @@ type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
 async function mountUnderGuard(event: Event = configEvent()) {
 	const { default: ConfigFeatureMatchSettings } = await import(componentPath);
 
-	return mountUnderPageGuard<Wrapper>(ConfigFeatureMatchSettings, { ...mountOptions, props: { event } });
+	return mountUnderPageGuard<Wrapper>(ConfigFeatureMatchSettings, {
+		...mountOptions,
+		props: { event },
+	});
 }
 
 function toggleFor(wrapper: Wrapper, field: string) {
@@ -202,7 +223,9 @@ describe('event config feature match settings', () => {
 		await flushPromises();
 
 		await toggleFor(wrapper, 'turnTrackingEnabled').setValue(true);
-		await wrapper.setProps({ event: configEvent({ standingsEnabled: false }) });
+		await wrapper.setProps({
+			event: configEvent({ standingsEnabled: false }),
+		});
 		await saveButton(wrapper).trigger('click');
 		await flushPromises();
 

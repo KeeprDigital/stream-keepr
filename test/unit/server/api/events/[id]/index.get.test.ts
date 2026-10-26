@@ -13,7 +13,9 @@ vi.mock('~~/server/mappers/event', () => ({
 	mapEventToResponse: mockMapEventToResponse,
 }));
 vi.mock('~~/server/schemas/api/event', () => ({
-	eventParamsSchema: { parse: (input: unknown) => input },
+	eventParamsSchema: {
+		parse: (input: unknown) => input,
+	},
 }));
 
 vi.stubGlobal('defineEventHandler', vi.fn(handler => handler));

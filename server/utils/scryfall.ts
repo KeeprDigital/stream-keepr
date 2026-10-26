@@ -25,7 +25,9 @@ export class ScryfallRequestError extends Error {
 		message: string,
 		options: { status?: number | null; retryable?: boolean; notFound?: boolean; cause?: unknown } = {},
 	) {
-		super(message, options.cause === undefined ? undefined : { cause: options.cause });
+		super(message, options.cause === undefined
+			? undefined
+			: { cause: options.cause });
 		this.name = 'ScryfallRequestError';
 		this.status = options.status ?? null;
 		this.retryable = options.retryable ?? false;
@@ -73,7 +75,9 @@ function isRetryableStatus(status: number): boolean {
 
 async function createScryfallResponseError(response: Response, prefix: string): Promise<ScryfallRequestError> {
 	await response.body?.cancel().catch(() => undefined);
-	const status = Number.isInteger(response.status) ? response.status : null;
+	const status = Number.isInteger(response.status)
+		? response.status
+		: null;
 	const notFound = status === 404 || response.statusText?.toLowerCase() === 'not found';
 	return new ScryfallRequestError(
 		`${prefix}: HTTP ${status ?? 'unknown'}`,
@@ -172,7 +176,9 @@ async function fetchScryfallJson(
 			else {
 				const timedOut = controller.signal.aborted;
 				failure = new ScryfallRequestError(
-					timedOut ? `${errorPrefix}: request timed out` : `${errorPrefix}: network request failed`,
+					timedOut
+						? `${errorPrefix}: request timed out`
+						: `${errorPrefix}: network request failed`,
 					{ retryable: true, cause: error },
 				);
 			}
@@ -335,7 +341,9 @@ async function fetchCardCollection(identifiers: CardIdentifier[]): Promise<Scryf
  * Create a lookup key for card identification
  */
 export function createCardKey(name: string, setCode: string | null): string {
-	return setCode ? `${name.toLowerCase()}|${setCode.toLowerCase()}` : name.toLowerCase();
+	return setCode
+		? `${name.toLowerCase()}|${setCode.toLowerCase()}`
+		: name.toLowerCase();
 }
 
 /**
@@ -425,7 +433,9 @@ export async function batchLookupScryfallIds(
 		}
 	}
 
-	const identifiers = [...uniqueCards.values()];
+	const identifiers = [
+		...uniqueCards.values(),
+	];
 	const totalBatches = Math.ceil(identifiers.length / COLLECTION_BATCH_SIZE);
 
 	// Process in batches of 75 (Scryfall limit)
@@ -491,9 +501,13 @@ export async function batchLookupScryfallIds(
 			}
 		}
 		catch (error) {
-			const status = error instanceof ScryfallRequestError ? error.status : null;
+			const status = error instanceof ScryfallRequestError
+				? error.status
+				: null;
 			const reason = error instanceof ScryfallRequestError
-				? `provider request failed${status === null ? '' : ` (HTTP ${status})`}`
+				? `provider request failed${status === null
+					? ''
+					: ` (HTTP ${status})`}`
 				: 'provider returned an invalid response';
 			const errorMsg = `Scryfall batch ${batchIndex}/${totalBatches} failed: ${reason}`;
 			console.error(JSON.stringify({

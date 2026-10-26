@@ -73,33 +73,40 @@ describe('playerDeckUnresolvedCardService', () => {
 		};
 		const orderBy = getChain('select').orderBy;
 		orderBy.mockResolvedValueOnce([row]);
-		orderBy.mockResolvedValueOnce([{ name: 'Swiss', formatExternalId: 'modern' }]);
+		orderBy.mockResolvedValueOnce([
+			{ name: 'Swiss', formatExternalId: 'modern' },
+		]);
 
 		const result = await playerDeckUnresolvedCardService().listByEventId(1);
 
-		expect(result).toEqual([{
-			id: row.id,
-			eventId: row.eventId,
-			playerId: row.playerId,
-			playerName: row.playerName,
-			deckId: row.deckId,
-			formatExternalId: row.formatExternalId,
-			deckName: row.deckName,
-			entryType: row.entryType,
-			originalName: row.originalName,
-			setCode: row.setCode,
-			quantity: row.quantity,
-			compartment: row.compartment,
-			sortOrder: row.sortOrder,
-			cardType: row.cardType,
-			createdAt: row.createdAt,
-			updatedAt: row.updatedAt,
-			phaseName: 'Swiss',
-		}]);
+		expect(result).toEqual([
+			{
+				id: row.id,
+				eventId: row.eventId,
+				playerId: row.playerId,
+				playerName: row.playerName,
+				deckId: row.deckId,
+				formatExternalId: row.formatExternalId,
+				deckName: row.deckName,
+				entryType: row.entryType,
+				originalName: row.originalName,
+				setCode: row.setCode,
+				quantity: row.quantity,
+				compartment: row.compartment,
+				sortOrder: row.sortOrder,
+				cardType: row.cardType,
+				createdAt: row.createdAt,
+				updatedAt: row.updatedAt,
+				phaseName: 'Swiss',
+			},
+		]);
 	});
 
 	it('lists matching unresolved entries within the event-owned deck set', async () => {
-		const rows = [{ id: 1 }, { id: 2 }];
+		const rows = [
+			{ id: 1 },
+			{ id: 2 },
+		];
 		getChain('select').orderBy.mockResolvedValue(rows);
 
 		const result = await playerDeckUnresolvedCardService().listMatchingEntries(1, 'lightnng bolt', 'm11', 'card');
@@ -110,28 +117,30 @@ describe('playerDeckUnresolvedCardService', () => {
 	it('shows reviewed archetype names in sync diagnostics', async () => {
 		const createdAt = new Date();
 		const orderBy = getChain('select').orderBy;
-		orderBy.mockResolvedValueOnce([{
-			id: 1,
-			eventId: 1,
-			playerId: 2,
-			playerName: 'Marcus',
-			deckId: 10,
-			formatExternalId: 'modern',
-			deckName: 'Imported Burn',
-			deckArchetypeId: 5,
-			reviewedAt: createdAt,
-			archetypeId: 5,
-			archetypeName: 'Reviewed Control',
-			entryType: 'card',
-			originalName: 'Lightnng Bolt',
-			setCode: null,
-			quantity: 4,
-			compartment: 'mainboard',
-			sortOrder: 0,
-			cardType: 'Instant',
-			createdAt,
-			updatedAt: createdAt,
-		}]);
+		orderBy.mockResolvedValueOnce([
+			{
+				id: 1,
+				eventId: 1,
+				playerId: 2,
+				playerName: 'Marcus',
+				deckId: 10,
+				formatExternalId: 'modern',
+				deckName: 'Imported Burn',
+				deckArchetypeId: 5,
+				reviewedAt: createdAt,
+				archetypeId: 5,
+				archetypeName: 'Reviewed Control',
+				entryType: 'card',
+				originalName: 'Lightnng Bolt',
+				setCode: null,
+				quantity: 4,
+				compartment: 'mainboard',
+				sortOrder: 0,
+				cardType: 'Instant',
+				createdAt,
+				updatedAt: createdAt,
+			},
+		]);
 		orderBy.mockResolvedValueOnce([]);
 
 		const [entry] = await playerDeckUnresolvedCardService().listByEventId(1);

@@ -25,13 +25,18 @@ describe('a Screen Mode config contract', () => {
 	});
 
 	it('refuses a server-validated field\'s every value in its own schema, so nothing shared mistakes it for validation', () => {
-		const contract = defineScreenModeConfigContract({ graphics: serverValidatedField<string[]>() }, { graphics: [] });
+		const contract = defineScreenModeConfigContract({
+			graphics: serverValidatedField<string[]>(),
+		}, { graphics: [] });
 
 		expect(contract.schema.safeParse({ graphics: [] }).success).toBe(false);
 	});
 
 	it('refuses defaults that do not match its schema', () => {
-		const shape = { topN: z.number().int().min(1), headerText: z.string().optional() };
+		const shape = {
+			topN: z.number().int().min(1),
+			headerText: z.string().optional(),
+		};
 
 		// @ts-expect-error — a default of the wrong type
 		defineScreenModeConfigContract(shape, { topN: '8' });
@@ -44,17 +49,26 @@ describe('a Screen Mode config contract', () => {
 	});
 
 	it('refuses a schema default, so a default lives only in the contract\'s defaults', () => {
-		// @ts-expect-error — a zod default would be a second copy, and leak into PATCHes
-		defineScreenModeConfigContract({ minPoints: z.number().default(9) }, { minPoints: 9 });
+		defineScreenModeConfigContract({
+			// @ts-expect-error — a zod default would be a second copy, and leak into PATCHes
+			minPoints: z.number().default(9),
+		}, { minPoints: 9 });
 	});
 
 	it('declares only a list field an authored stack', () => {
-		const shape = { graphics: z.array(z.string()), topN: z.number() };
+		const shape = {
+			graphics: z.array(z.string()),
+			topN: z.number(),
+		};
 
-		// @ts-expect-error — `topN` is not a stack
-		defineScreenModeConfigContract(shape, { graphics: [], topN: 8 }, { authoredStacks: ['topN'] });
+		defineScreenModeConfigContract(shape, { graphics: [], topN: 8 }, {
+			// @ts-expect-error — `topN` is not a stack
+			authoredStacks: ['topN'],
+		});
 
-		expect(defineScreenModeConfigContract(shape, { graphics: [], topN: 8 }, { authoredStacks: ['graphics'] }).authoredStacks)
+		expect(defineScreenModeConfigContract(shape, { graphics: [], topN: 8 }, {
+			authoredStacks: ['graphics'],
+		}).authoredStacks)
 			.toEqual(['graphics']);
 	});
 });

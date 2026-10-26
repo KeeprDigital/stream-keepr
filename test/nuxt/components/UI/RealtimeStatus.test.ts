@@ -8,7 +8,9 @@ const UPopoverStub = defineComponent({
 });
 
 const UIconStub = defineComponent({
-	props: { name: { type: String, required: true } },
+	props: {
+		name: { type: String, required: true },
+	},
 	template: '<i :data-icon="name" :class="$attrs.class" />',
 });
 
@@ -27,7 +29,9 @@ async function mountStatus() {
 	const { default: RealtimeStatus } = await import(componentPath);
 
 	return mount(RealtimeStatus, {
-		global: { stubs: { UPopover: UPopoverStub, UIcon: UIconStub } },
+		global: {
+			stubs: { UPopover: UPopoverStub, UIcon: UIconStub },
+		},
 	});
 }
 

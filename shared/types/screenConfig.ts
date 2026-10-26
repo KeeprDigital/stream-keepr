@@ -176,7 +176,13 @@ export interface ScreenVideoPlayback {
 	loop: boolean;
 }
 
-export const BACKGROUND_LAYER_TYPE_VALUES = ['color', 'gradient', 'image', 'video', 'animation'] as const;
+export const BACKGROUND_LAYER_TYPE_VALUES = [
+	'color',
+	'gradient',
+	'image',
+	'video',
+	'animation',
+] as const;
 export type BackgroundLayerType = typeof BACKGROUND_LAYER_TYPE_VALUES[number];
 
 /**
@@ -496,13 +502,44 @@ const MODE_RESET_PRESERVED_KEYS = {
 	'feature-match': ['featureMatchId'],
 	'feature-match-overlay': ['featureMatchId'],
 	'broadcast-graphics': [],
-	'standings': ['viewMode', 'topNCount', 'sliceStart', 'sliceEnd', 'playerListId', 'revealCount', 'roundId'],
-	'metagame': ['viewMode', 'scope', 'topN', 'minPoints', 'playerListId', 'archetypeFilter'],
-	'top-cards': ['scope', 'topN', 'playerListId', 'archetypeFilter'],
+	'standings': [
+		'viewMode',
+		'topNCount',
+		'sliceStart',
+		'sliceEnd',
+		'playerListId',
+		'revealCount',
+		'roundId',
+	],
+	'metagame': [
+		'viewMode',
+		'scope',
+		'topN',
+		'minPoints',
+		'playerListId',
+		'archetypeFilter',
+	],
+	'top-cards': [
+		'scope',
+		'topN',
+		'playerListId',
+		'archetypeFilter',
+	],
 	'player-history': ['playerId'],
 	'pairings': ['roundId'],
-	'archetype-spotlight': ['archetypeId', 'scope', 'topN', 'minPoints', 'playerListId'],
-	'head-to-head': ['playerSource', 'featureMatchId', 'player1Id', 'player2Id'],
+	'archetype-spotlight': [
+		'archetypeId',
+		'scope',
+		'topN',
+		'minPoints',
+		'playerListId',
+	],
+	'head-to-head': [
+		'playerSource',
+		'featureMatchId',
+		'player1Id',
+		'player2Id',
+	],
 } as const satisfies ModeResetPreservedKeysMap;
 
 // Helper to get default config for a mode
@@ -589,7 +626,10 @@ export function stripNullConfigKeys<T extends Record<string, unknown>>(config: T
 }
 
 export function mergeScreenConfig(currentConfig: ScreenConfig, partialConfig: Record<string, unknown>): ScreenConfig {
-	return stripNullConfigKeys({ ...currentConfig, ...partialConfig }) as ScreenConfig;
+	return stripNullConfigKeys({
+		...currentConfig,
+		...partialConfig,
+	}) as ScreenConfig;
 }
 
 export function mergeScreenModeConfig<M extends ScreenMode>(
@@ -601,6 +641,9 @@ export function mergeScreenModeConfig<M extends ScreenMode>(
 	// A write of a mode's config also drops what its contract no longer holds (#752).
 	return {
 		...currentConfigs,
-		[mode]: MODE_CONFIG_CONTRACTS[mode].withoutFormerFields(stripNullConfigKeys({ ...currentModeConfig, ...partialConfig })),
+		[mode]: MODE_CONFIG_CONTRACTS[mode].withoutFormerFields(stripNullConfigKeys({
+			...currentModeConfig,
+			...partialConfig,
+		})),
 	};
 }

@@ -28,7 +28,9 @@ export function logGraphicsStoreFailure(
 		console.warn(JSON.stringify({
 			message,
 			...context,
-			errorName: error instanceof Error ? error.name : null,
+			errorName: error instanceof Error
+				? error.name
+				: null,
 			errorCode: typeof code === 'string' || (typeof code === 'number' && Number.isFinite(code))
 				? code
 				: null,

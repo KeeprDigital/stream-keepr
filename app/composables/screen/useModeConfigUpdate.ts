@@ -56,5 +56,13 @@ export function useModeConfigUpdate<M extends ScreenMode>(
 		updateConfig(getDisplayResetForMode(mode, config.value, getServerTime()) as ScreenModeConfigPatch<M>);
 	}
 
-	return { config, saving, saveState, saveError, updateConfig, resetConfig, retry };
+	return {
+		config,
+		saving,
+		saveState,
+		saveError,
+		updateConfig,
+		resetConfig,
+		retry,
+	};
 }

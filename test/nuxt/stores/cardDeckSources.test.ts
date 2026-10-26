@@ -4,7 +4,9 @@ import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 
 // ── $fetch stub (used by searchFuzzyCardName, searchCardPrints, selectMeldCardPart) ──
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn().mockResolvedValue({ data: [] }) }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn().mockResolvedValue({ data: [] }),
+}));
 mockNuxtImport('$fetch', () => mockFetch);
 
 mockNuxtImport('useServerTime', () => () => ({
@@ -70,8 +72,16 @@ function createMockMtgCard(overrides?: Record<string, any>) {
 		name: 'Lightning Bolt',
 		set: 'lea',
 		layout: 'normal',
-		imageData: { front: { normal: 'http://example.com/card.jpg' }, back: null },
-		orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
+		imageData: {
+			front: { normal: 'http://example.com/card.jpg' },
+			back: null,
+		},
+		orientationData: {
+			flipable: false,
+			turnable: false,
+			rotateable: false,
+			counterRotateable: false,
+		},
 		displayData: {
 			flipped: false,
 			rotated: false,
@@ -117,7 +127,10 @@ describe('useCardStore deck sources and search', () => {
 		};
 		mockEventStoreState.eventId = 1;
 		mockEventStoreState.event = { id: 1, cardTimeout: 0 };
-		mockFetchScryfallCards.mockReset().mockResolvedValue({ cards: new Map(), degraded: false });
+		mockFetchScryfallCards.mockReset().mockResolvedValue({
+			cards: new Map(),
+			degraded: false,
+		});
 		mockBuildDeckListArrays.mockReset().mockReturnValue({ mainboard: [], sideboard: [] });
 	});
 
@@ -132,7 +145,11 @@ describe('useCardStore deck sources and search', () => {
 	describe('canUsePlayerDeckMode', () => {
 		it('returns false when no players have deck names', () => {
 			mockPlayerStoreState.players = [
-				{ id: 1, name: 'Alice', gameData: { type: 'mtg', deckName: null } },
+				{
+					id: 1,
+					name: 'Alice',
+					gameData: { type: 'mtg', deckName: null },
+				},
 			];
 			// canUsePlayerDeckMode checks gameData.deckName now
 			const playerStore = usePlayerStore() as any;
@@ -141,8 +158,16 @@ describe('useCardStore deck sources and search', () => {
 
 		it('returns true when at least one player has a deck name', () => {
 			mockPlayerStoreState.players = [
-				{ id: 1, name: 'Alice', gameData: { type: 'mtg', deckName: null } },
-				{ id: 2, name: 'Bob', gameData: { type: 'mtg', deckName: 'Mono Red' } },
+				{
+					id: 1,
+					name: 'Alice',
+					gameData: { type: 'mtg', deckName: null },
+				},
+				{
+					id: 2,
+					name: 'Bob',
+					gameData: { type: 'mtg', deckName: 'Mono Red' },
+				},
 			];
 			const playerStore = usePlayerStore() as any;
 			expect(playerStore.players.some((p: any) => p.gameData?.deckName)).toBe(true);
@@ -158,7 +183,14 @@ describe('useCardStore deck sources and search', () => {
 
 		it('sets playerDeckPlayerId', async () => {
 			mockFetchDeck.mockResolvedValue({ id: 1, cards: [] });
-			mockPlayerStoreState.players = [{ id: 42, name: 'Alice', gameData: { type: 'mtg', deckName: 'Burn' }, updatedAt: new Date() }];
+			mockPlayerStoreState.players = [
+				{
+					id: 42,
+					name: 'Alice',
+					gameData: { type: 'mtg', deckName: 'Burn' },
+					updatedAt: new Date(),
+				},
+			];
 			await store.loadPlayerDeck(42);
 			expect(store.playerDeckPlayerId).toBe(42);
 		});
@@ -169,7 +201,12 @@ describe('useCardStore deck sources and search', () => {
 	describe('clearPlayerDeck', () => {
 		it('resets player deck state', () => {
 			store.playerDeckPlayerId = 42;
-			store.playerDeckData = { playerName: 'Alice', deckList: null, mainboard: [], sideboard: [] } as any;
+			store.playerDeckData = {
+				playerName: 'Alice',
+				deckList: null,
+				mainboard: [],
+				sideboard: [],
+			} as any;
 
 			store.clearPlayerDeck();
 
@@ -206,7 +243,9 @@ describe('useCardStore deck sources and search', () => {
 	describe('searchFuzzyCardName', () => {
 		it('clears search for names shorter than 3 characters', async () => {
 			store.searching = true;
-			store.searchResults = [createMockMtgCard()];
+			store.searchResults = [
+				createMockMtgCard(),
+			];
 
 			await store.searchFuzzyCardName('ab');
 
@@ -221,7 +260,11 @@ describe('useCardStore deck sources and search', () => {
 
 			expect(mockFetch).toHaveBeenCalledWith(
 				expect.stringContaining('scryfall'),
-				expect.objectContaining({ query: expect.objectContaining({ q: expect.stringContaining('Lightning Bolt') }) }),
+				expect.objectContaining({
+					query: expect.objectContaining({
+						q: expect.stringContaining('Lightning Bolt'),
+					}),
+				}),
 			);
 			expect(store.searching).toBe(false);
 		});
@@ -235,9 +278,17 @@ describe('useCardStore deck sources and search', () => {
 
 			const oldSearch = store.searchFuzzyCardName('Lightning');
 			const newSearch = store.searchFuzzyCardName('Counterspell');
-			second.resolve({ data: [createScryfallCard('new', 'Counterspell')] });
+			second.resolve({
+				data: [
+					createScryfallCard('new', 'Counterspell'),
+				],
+			});
 			await newSearch;
-			first.resolve({ data: [createScryfallCard('old', 'Lightning Bolt')] });
+			first.resolve({
+				data: [
+					createScryfallCard('old', 'Lightning Bolt'),
+				],
+			});
 			await oldSearch;
 
 			expect(store.searchResults.map(card => card.name)).toEqual(['Counterspell']);
@@ -255,7 +306,9 @@ describe('useCardStore deck sources and search', () => {
 
 			expect(mockFetch).toHaveBeenCalledWith(
 				expect.stringContaining('scryfall'),
-				expect.objectContaining({ query: expect.objectContaining({ unique: 'prints' }) }),
+				expect.objectContaining({
+					query: expect.objectContaining({ unique: 'prints' }),
+				}),
 			);
 			expect(store.searching).toBe(false);
 		});
@@ -353,7 +406,9 @@ describe('useCardStore deck sources and search', () => {
 
 	describe('clearHistory', () => {
 		it('clears selection history', () => {
-			store.selectionHistory = [createMockMtgCard()] as any;
+			store.selectionHistory = [
+				createMockMtgCard(),
+			] as any;
 
 			store.clearHistory();
 
@@ -367,10 +422,21 @@ describe('useCardStore deck sources and search', () => {
 		it('does not fall back to a primary deck when the match snapshot explicitly has no deck', async () => {
 			mockFetchDeck.mockReset().mockResolvedValue(null);
 			mockPlayerStoreState.players = [
-				{ id: 42, name: 'Alice', gameData: { type: 'mtg', deckName: 'Primary Deck' }, updatedAt: new Date() },
+				{
+					id: 42,
+					name: 'Alice',
+					gameData: { type: 'mtg', deckName: 'Primary Deck' },
+					updatedAt: new Date(),
+				},
 			];
 			mockFeatureMatchStoreState.featureMatches = [
-				{ id: 1, player1Id: 42, player1Data: { name: 'Alice', deckId: null }, player2Id: null, player2Data: null },
+				{
+					id: 1,
+					player1Id: 42,
+					player1Data: { name: 'Alice', deckId: null },
+					player2Id: null,
+					player2Data: null,
+				},
 			] as any;
 
 			await store.loadMatchDeckLists(1);
@@ -383,11 +449,27 @@ describe('useCardStore deck sources and search', () => {
 			const updatedAt = new Date('2026-07-15T00:00:00.000Z');
 			mockFetchDeck.mockReset().mockResolvedValue(null);
 			mockPlayerStoreState.players = [
-				{ id: 41, name: 'Alice', gameData: null, updatedAt: new Date('2026-07-14T00:00:00.000Z') },
-				{ id: 42, name: 'Alice', gameData: null, updatedAt },
+				{
+					id: 41,
+					name: 'Alice',
+					gameData: null,
+					updatedAt: new Date('2026-07-14T00:00:00.000Z'),
+				},
+				{
+					id: 42,
+					name: 'Alice',
+					gameData: null,
+					updatedAt,
+				},
 			];
 			mockFeatureMatchStoreState.featureMatches = [
-				{ id: 1, player1Id: 42, player1Data: { name: 'Alice', deckId: 77 }, player2Id: null, player2Data: null },
+				{
+					id: 1,
+					player1Id: 42,
+					player1Data: { name: 'Alice', deckId: 77 },
+					player2Id: null,
+					player2Data: null,
+				},
 			] as any;
 
 			await store.loadMatchDeckLists(1);
@@ -398,10 +480,21 @@ describe('useCardStore deck sources and search', () => {
 		it('loads a historical deck by stable ids when the inactive player is absent from the active store', async () => {
 			mockFetchDeck.mockReset().mockResolvedValue(null);
 			mockPlayerStoreState.players = [
-				{ id: 41, name: 'Alice', gameData: null, updatedAt: new Date('2026-07-15T00:00:00.000Z') },
+				{
+					id: 41,
+					name: 'Alice',
+					gameData: null,
+					updatedAt: new Date('2026-07-15T00:00:00.000Z'),
+				},
 			];
 			mockFeatureMatchStoreState.featureMatches = [
-				{ id: 1, player1Id: 42, player1Data: { name: 'Alice', deckId: 77 }, player2Id: null, player2Data: null },
+				{
+					id: 1,
+					player1Id: 42,
+					player1Data: { name: 'Alice', deckId: 77 },
+					player2Id: null,
+					player2Data: null,
+				},
 			] as any;
 
 			await store.loadMatchDeckLists(1);
@@ -413,7 +506,13 @@ describe('useCardStore deck sources and search', () => {
 			mockFetchDeck.mockReset().mockResolvedValue(null);
 			mockPlayerStoreState.players = [];
 			mockFeatureMatchStoreState.featureMatches = [
-				{ id: 1, player1Id: 42, player1Data: { deckId: 77 }, player2Id: null, player2Data: null },
+				{
+					id: 1,
+					player1Id: 42,
+					player1Data: { deckId: 77 },
+					player2Id: null,
+					player2Data: null,
+				},
 			] as any;
 
 			await store.loadMatchDeckLists(1);
@@ -426,10 +525,21 @@ describe('useCardStore deck sources and search', () => {
 			const updatedAt = new Date('2026-07-15T00:00:00.000Z');
 			mockFetchDeck.mockReset().mockResolvedValue(null);
 			mockPlayerStoreState.players = [
-				{ id: 42, name: 'Alice', gameData: null, updatedAt },
+				{
+					id: 42,
+					name: 'Alice',
+					gameData: null,
+					updatedAt,
+				},
 			];
 			mockFeatureMatchStoreState.featureMatches = [
-				{ id: 1, player1Id: null, player1Data: { name: 'Alice', deckId: 77 }, player2Id: null, player2Data: null },
+				{
+					id: 1,
+					player1Id: null,
+					player1Data: { name: 'Alice', deckId: 77 },
+					player2Id: null,
+					player2Data: null,
+				},
 			] as any;
 
 			await store.loadMatchDeckLists(1);
@@ -453,8 +563,18 @@ describe('useCardStore deck sources and search', () => {
 
 	describe('clearMatchDeckLists', () => {
 		it('resets match deck list state', () => {
-			store.deckListPlayer1 = { playerName: 'Alice', deckList: null, mainboard: [], sideboard: [] } as any;
-			store.deckListPlayer2 = { playerName: 'Bob', deckList: null, mainboard: [], sideboard: [] } as any;
+			store.deckListPlayer1 = {
+				playerName: 'Alice',
+				deckList: null,
+				mainboard: [],
+				sideboard: [],
+			} as any;
+			store.deckListPlayer2 = {
+				playerName: 'Bob',
+				deckList: null,
+				mainboard: [],
+				sideboard: [],
+			} as any;
 			store.deckListFilter = 'Lightning';
 
 			store.clearMatchDeckLists();
@@ -470,10 +590,19 @@ describe('useCardStore deck sources and search', () => {
 	describe('canUseDeckListMode', () => {
 		it('returns false when an authoritative match snapshot explicitly has no deck', () => {
 			mockFeatureMatchStoreState.featureMatches = [
-				{ id: 1, player1Id: 1, player1Data: { name: 'Alice', deckId: null }, player2Data: null },
+				{
+					id: 1,
+					player1Id: 1,
+					player1Data: { name: 'Alice', deckId: null },
+					player2Data: null,
+				},
 			] as any;
 			mockPlayerStoreState.players = [
-				{ id: 1, name: 'Alice', gameData: { type: 'mtg', deckName: 'Primary Deck' } },
+				{
+					id: 1,
+					name: 'Alice',
+					gameData: { type: 'mtg', deckName: 'Primary Deck' },
+				},
 			] as any;
 
 			expect(store.canUseDeckListMode).toBe(false);
@@ -481,10 +610,18 @@ describe('useCardStore deck sources and search', () => {
 
 		it('returns false when no feature match players have a deckName in gameData', () => {
 			mockFeatureMatchStoreState.featureMatches = [
-				{ id: 1, player1Data: { name: 'Alice' }, player2Data: null },
+				{
+					id: 1,
+					player1Data: { name: 'Alice' },
+					player2Data: null,
+				},
 			] as any;
 			mockPlayerStoreState.players = [
-				{ id: 1, name: 'Alice', gameData: { type: 'mtg', deckName: null } },
+				{
+					id: 1,
+					name: 'Alice',
+					gameData: { type: 'mtg', deckName: null },
+				},
 			] as any;
 
 			expect(store.canUseDeckListMode).toBe(false);
@@ -492,10 +629,18 @@ describe('useCardStore deck sources and search', () => {
 
 		it('returns true when a feature match player has a deckName in gameData', () => {
 			mockFeatureMatchStoreState.featureMatches = [
-				{ id: 1, player1Data: { name: 'Alice' }, player2Data: null },
+				{
+					id: 1,
+					player1Data: { name: 'Alice' },
+					player2Data: null,
+				},
 			] as any;
 			mockPlayerStoreState.players = [
-				{ id: 1, name: 'alice', gameData: { type: 'mtg', deckName: 'Burn' } },
+				{
+					id: 1,
+					name: 'alice',
+					gameData: { type: 'mtg', deckName: 'Burn' },
+				},
 			] as any;
 
 			expect(store.canUseDeckListMode).toBe(true);
@@ -503,7 +648,11 @@ describe('useCardStore deck sources and search', () => {
 
 		it('returns true when the match snapshot carries an exact submitted deck', () => {
 			mockFeatureMatchStoreState.featureMatches = [
-				{ id: 1, player1Data: { name: 'Alice', deckId: 77 }, player2Data: null },
+				{
+					id: 1,
+					player1Data: { name: 'Alice', deckId: 77 },
+					player2Data: null,
+				},
 			] as any;
 			mockPlayerStoreState.players = [
 				{ id: 1, name: 'Alice', gameData: null },
@@ -514,7 +663,11 @@ describe('useCardStore deck sources and search', () => {
 
 		it('returns false when feature match player name is not found in players list', () => {
 			mockFeatureMatchStoreState.featureMatches = [
-				{ id: 1, player1Data: { name: 'Alice' }, player2Data: null },
+				{
+					id: 1,
+					player1Data: { name: 'Alice' },
+					player2Data: null,
+				},
 			] as any;
 			mockPlayerStoreState.players = [] as any;
 
@@ -527,10 +680,21 @@ describe('useCardStore deck sources and search', () => {
 	describe('degraded card data', () => {
 		function primeMatchup() {
 			mockPlayerStoreState.players = [
-				{ id: 42, name: 'Alice', gameData: { type: 'mtg', deckName: 'Burn' }, updatedAt: new Date('2026-08-20T00:00:00.000Z') },
+				{
+					id: 42,
+					name: 'Alice',
+					gameData: { type: 'mtg', deckName: 'Burn' },
+					updatedAt: new Date('2026-08-20T00:00:00.000Z'),
+				},
 			];
 			mockFeatureMatchStoreState.featureMatches = [
-				{ id: 1, player1Id: 42, player1Data: { name: 'Alice', deckId: 77 }, player2Id: null, player2Data: null },
+				{
+					id: 1,
+					player1Id: 42,
+					player1Data: { name: 'Alice', deckId: 77 },
+					player2Id: null,
+					player2Data: null,
+				},
 			] as any;
 		}
 
@@ -547,7 +711,15 @@ describe('useCardStore deck sources and search', () => {
 				isPrimary: true,
 				companion: null,
 				highlander: null,
-				cards: [{ name: 'Lightning Bolt', scryfallId: 'sc-1', quantity: 4, compartment: 'mainboard', cardType: 'Instant' }],
+				cards: [
+					{
+						name: 'Lightning Bolt',
+						scryfallId: 'sc-1',
+						quantity: 4,
+						compartment: 'mainboard',
+						cardType: 'Instant',
+					},
+				],
 			} as any;
 		}
 
@@ -557,7 +729,10 @@ describe('useCardStore deck sources and search', () => {
 
 		it('exposes a degraded matchup load and returns to complete on a clean load', async () => {
 			primeMatchup();
-			mockFetchScryfallCards.mockResolvedValueOnce({ cards: new Map(), degraded: true });
+			mockFetchScryfallCards.mockResolvedValueOnce({
+				cards: new Map(),
+				degraded: true,
+			});
 
 			await store.loadMatchDeckLists(1);
 
@@ -575,8 +750,14 @@ describe('useCardStore deck sources and search', () => {
 			try {
 				primeMatchup();
 				mockFetchScryfallCards
-					.mockResolvedValueOnce({ cards: new Map(), degraded: true })
-					.mockResolvedValue({ cards: new Map(), degraded: false });
+					.mockResolvedValueOnce({
+						cards: new Map(),
+						degraded: true,
+					})
+					.mockResolvedValue({
+						cards: new Map(),
+						degraded: false,
+					});
 
 				await store.loadMatchDeckLists(1);
 				expect(store.cardDataDegraded).toBe(true);
@@ -600,7 +781,10 @@ describe('useCardStore deck sources and search', () => {
 			vi.useFakeTimers();
 			try {
 				primeMatchup();
-				mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+				mockFetchScryfallCards.mockResolvedValue({
+					cards: new Map(),
+					degraded: true,
+				});
 
 				await store.loadMatchDeckLists(1);
 				const rendered = store.deckListPlayer1;
@@ -627,8 +811,14 @@ describe('useCardStore deck sources and search', () => {
 			try {
 				primeMatchup();
 				mockFetchScryfallCards
-					.mockResolvedValueOnce({ cards: new Map(), degraded: true })
-					.mockResolvedValue({ cards: new Map(), degraded: false });
+					.mockResolvedValueOnce({
+						cards: new Map(),
+						degraded: true,
+					})
+					.mockResolvedValue({
+						cards: new Map(),
+						degraded: false,
+					});
 
 				await store.loadMatchDeckLists(1);
 				expect(store.cardDataDegraded).toBe(true);
@@ -652,7 +842,10 @@ describe('useCardStore deck sources and search', () => {
 			vi.useFakeTimers();
 			try {
 				primeMatchup();
-				mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+				mockFetchScryfallCards.mockResolvedValue({
+					cards: new Map(),
+					degraded: true,
+				});
 
 				await store.loadMatchDeckLists(1);
 				expect(store.cardDataDegraded).toBe(true);
@@ -673,11 +866,22 @@ describe('useCardStore deck sources and search', () => {
 			vi.useFakeTimers();
 			try {
 				mockPlayerStoreState.players = [
-					{ id: 42, name: 'Alice', gameData: { type: 'mtg', deckName: 'Burn' }, updatedAt: new Date('2026-08-20T00:00:00.000Z') },
+					{
+						id: 42,
+						name: 'Alice',
+						gameData: { type: 'mtg', deckName: 'Burn' },
+						updatedAt: new Date('2026-08-20T00:00:00.000Z'),
+					},
 				];
 				mockFetchScryfallCards
-					.mockResolvedValueOnce({ cards: new Map(), degraded: true })
-					.mockResolvedValue({ cards: new Map(), degraded: false });
+					.mockResolvedValueOnce({
+						cards: new Map(),
+						degraded: true,
+					})
+					.mockResolvedValue({
+						cards: new Map(),
+						degraded: false,
+					});
 
 				await store.loadPlayerDeck(42);
 				expect(store.cardDataDegraded).toBe(true);
@@ -700,9 +904,17 @@ describe('useCardStore deck sources and search', () => {
 			vi.useFakeTimers();
 			try {
 				mockPlayerStoreState.players = [
-					{ id: 42, name: 'Alice', gameData: { type: 'mtg', deckName: 'Burn' }, updatedAt: new Date('2026-08-20T00:00:00.000Z') },
+					{
+						id: 42,
+						name: 'Alice',
+						gameData: { type: 'mtg', deckName: 'Burn' },
+						updatedAt: new Date('2026-08-20T00:00:00.000Z'),
+					},
 				];
-				mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+				mockFetchScryfallCards.mockResolvedValue({
+					cards: new Map(),
+					degraded: true,
+				});
 
 				await store.loadPlayerDeck(42);
 				expect(store.cardDataDegraded).toBe(true);
@@ -722,7 +934,10 @@ describe('useCardStore deck sources and search', () => {
 			vi.useFakeTimers();
 			try {
 				primeMatchup();
-				mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+				mockFetchScryfallCards.mockResolvedValue({
+					cards: new Map(),
+					degraded: true,
+				});
 
 				await store.loadMatchDeckLists(1);
 				await store.loadPlayerDeck(42);
@@ -748,7 +963,12 @@ describe('useCardStore deck sources and search', () => {
 				store.activeScreenId = 5;
 				store.activeCard = createMockMtgCard();
 
-				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: null, revision: 1 });
+				ablyCallbacks.card!['card:updated']!({
+					eventId: 1,
+					screenId: 5,
+					card: null,
+					revision: 1,
+				});
 
 				expect(store.activeCard).toBeNull();
 			});
@@ -759,7 +979,11 @@ describe('useCardStore deck sources and search', () => {
 				store.activeScreenId = 5;
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
-				ablyCallbacks.card!['card:preview']!({ eventId: 1, screenId: 5, card: createMockMtgCard() });
+				ablyCallbacks.card!['card:preview']!({
+					eventId: 1,
+					screenId: 5,
+					card: createMockMtgCard(),
+				});
 
 				expect(store.previewCard).toBeNull();
 			});

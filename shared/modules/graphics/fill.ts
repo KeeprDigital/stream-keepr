@@ -30,7 +30,9 @@ export interface ApplyGraphicFillEditOptions {
 }
 
 function currentFillColor(fill: GraphicFill): string {
-	return fill.type === 'solid' ? fill.color : (fill.stops[0]?.color ?? '');
+	return fill.type === 'solid'
+		? fill.color
+		: (fill.stops[0]?.color ?? '');
 }
 
 /**
@@ -64,23 +66,46 @@ export function applyGraphicFillEdit(
 					};
 		}
 		case 'solid-fill':
-			return fill.type === 'solid' ? { type: 'solid', color: edit.color } : fill;
+			return fill.type === 'solid'
+				? { type: 'solid', color: edit.color }
+				: fill;
 		case 'gradient-angle':
-			return fill.type === 'linear-gradient' ? { ...fill, angle: edit.angle } : fill;
+			return fill.type === 'linear-gradient'
+				? { ...fill, angle: edit.angle }
+				: fill;
 		case 'gradient-stop':
 			if (fill.type !== 'linear-gradient')
 				return fill;
 			return {
 				...fill,
-				stops: fill.stops.map((stop, index) => index === edit.index ? { ...stop, ...edit.patch } : stop),
+				stops: fill.stops.map((stop, index) => index === edit.index
+					? {
+							...stop,
+							...edit.patch,
+						}
+					: stop),
 			};
 		case 'stop-count': {
 			if (fill.type !== 'linear-gradient')
 				return fill;
-			if (edit.delta === 1 && fill.stops.length < MAX_GRAPHIC_FILL_STOPS)
-				return { ...fill, stops: [...fill.stops, { ...fill.stops[fill.stops.length - 1]!, position: 1 }] };
-			if (edit.delta === -1 && fill.stops.length > MIN_GRAPHIC_FILL_STOPS)
-				return { ...fill, stops: fill.stops.slice(0, -1) };
+			if (edit.delta === 1 && fill.stops.length < MAX_GRAPHIC_FILL_STOPS) {
+				return {
+					...fill,
+					stops: [
+						...fill.stops,
+						{
+							...fill.stops[fill.stops.length - 1]!,
+							position: 1,
+						},
+					],
+				};
+			}
+			if (edit.delta === -1 && fill.stops.length > MIN_GRAPHIC_FILL_STOPS) {
+				return {
+					...fill,
+					stops: fill.stops.slice(0, -1),
+				};
+			}
 			return fill;
 		}
 	}

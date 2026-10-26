@@ -151,7 +151,9 @@ export function writeTestArchive(
 		...body,
 		centralDirectory,
 		endRecord,
-		...(options.trailingBytes ? [options.trailingBytes] : []),
+		...(options.trailingBytes
+			? [options.trailingBytes]
+			: []),
 	]);
 }
 

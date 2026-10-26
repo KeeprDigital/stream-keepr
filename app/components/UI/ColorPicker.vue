@@ -34,7 +34,9 @@ const isHexColor = computed(() => HEX_COLOR_RE.test(rawValue.value));
 // Ensure valid hex for the picker
 const pickerValue = computed(() => {
 	const val = rawValue.value;
-	return HEX_COLOR_RE.test(val) ? val : '#000000';
+	return HEX_COLOR_RE.test(val)
+		? val
+		: '#000000';
 });
 
 const previewStyle = computed(() => {

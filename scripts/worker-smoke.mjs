@@ -35,7 +35,9 @@ export async function main() {
 	}
 	catch (error) {
 		process.stderr.write(formatWorkerSmokeFailure(error));
-		process.exitCode = error?.failureClass === 'interrupted' ? 130 : 1;
+		process.exitCode = error?.failureClass === 'interrupted'
+			? 130
+			: 1;
 	}
 	finally {
 		process.removeListener('SIGINT', onInterrupt);

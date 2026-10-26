@@ -53,7 +53,9 @@ const db = new Proxy(realDb, {
 			};
 		}
 		const value = Reflect.get(target, property, target);
-		return typeof value === 'function' ? value.bind(target) : value;
+		return typeof value === 'function'
+			? value.bind(target)
+			: value;
 	},
 });
 vi.doMock('~~/server/db', () => ({ db }));
@@ -84,7 +86,9 @@ vi.stubGlobal('createError', (input: { statusCode?: number; message?: string }) 
 // Admission is ADR-0022's and pinned elsewhere; this suite is about what a read does once admitted.
 async function admitScreenOutputRead(event: StubEvent) {
 	const eventId = Number(event.params.id);
-	const screen = await realDb.query.screens.findFirst({ where: eq(schema.screens.id, Number(event.params.screenId)) });
+	const screen = await realDb.query.screens.findFirst({
+		where: eq(schema.screens.id, Number(event.params.screenId)),
+	});
 	return { eventId, screen, reader: 'capability' };
 }
 vi.doMock('~~/server/utils/screenOutputRead', () => ({
@@ -112,7 +116,15 @@ const SAVED_AT = Date.UTC(2026, 9, 21, 12, 0, 0);
 const D = 5_000;
 
 function request(body?: unknown): H3Event {
-	return stubH3Event({ params: { id: String(eventId), screenId: String(screenId), slug: screenSlug }, body, context: {} });
+	return stubH3Event({
+		params: {
+			id: String(eventId),
+			screenId: String(screenId),
+			slug: screenSlug,
+		},
+		body,
+		context: {},
+	});
 }
 
 function card(id: string, timeoutDuration?: number, timeoutStartTimestamp = SAVED_AT) {
@@ -122,9 +134,23 @@ function card(id: string, timeoutDuration?: number, timeoutStartTimestamp = SAVE
 		set: 'lea',
 		layout: 'normal',
 		imageData: { front: null, back: null },
-		orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
-		displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
-		...(timeoutDuration === undefined ? {} : { timeoutData: { timeoutDuration, timeoutStartTimestamp } }),
+		orientationData: {
+			flipable: false,
+			turnable: false,
+			rotateable: false,
+			counterRotateable: false,
+		},
+		displayData: {
+			flipped: false,
+			rotated: false,
+			counterRotated: false,
+			turnedOver: false,
+		},
+		...(timeoutDuration === undefined
+			? {}
+			: {
+					timeoutData: { timeoutDuration, timeoutStartTimestamp },
+				}),
 	};
 }
 
@@ -132,7 +158,9 @@ const kvKey = () => `event:${eventId}:screen:${screenId}:card`;
 
 /** The Screen row's durable Card state, everything a write would move. */
 async function stored() {
-	const screen = await realDb.query.screens.findFirst({ where: eq(schema.screens.id, screenId) });
+	const screen = await realDb.query.screens.findFirst({
+		where: eq(schema.screens.id, screenId),
+	});
 	return {
 		cardId: (screen?.activeCard as { id?: string } | null)?.id ?? null,
 		version: screen!.activeCardVersion,
@@ -187,7 +215,10 @@ describe('saving a timed Card', () => {
 				type: 'card:updated',
 				data: expect.objectContaining({
 					screenId,
-					card: expect.objectContaining({ id: 'bolt', timeoutData: { timeoutDuration: D, timeoutStartTimestamp: SAVED_AT } }),
+					card: expect.objectContaining({
+						id: 'bolt',
+						timeoutData: { timeoutDuration: D, timeoutStartTimestamp: SAVED_AT },
+					}),
 				}),
 			},
 		]);
@@ -215,7 +246,9 @@ describe.each([
 		published.length = 0;
 
 		vi.setSystemTime(SAVED_AT + D - 1);
-		await expect(read(request())).resolves.toMatchObject({ card: { id: 'bolt' } });
+		await expect(read(request())).resolves.toMatchObject({
+			card: { id: 'bolt' },
+		});
 
 		expect(await stored()).toEqual(before);
 		expect(published).toEqual([]);
@@ -274,8 +307,12 @@ describe('a replacement saved just before the replaced Card expires', () => {
 		const replaced = await stored();
 
 		vi.setSystemTime(SAVED_AT + D);
-		await expect(getCard(request())).resolves.toMatchObject({ card: { id: 'counterspell' } });
-		await expect(getOutputCard(request())).resolves.toMatchObject({ card: { id: 'counterspell' } });
+		await expect(getCard(request())).resolves.toMatchObject({
+			card: { id: 'counterspell' },
+		});
+		await expect(getOutputCard(request())).resolves.toMatchObject({
+			card: { id: 'counterspell' },
+		});
 
 		expect(replaced).toMatchObject({ cardId: 'counterspell', version: 2 });
 		expect(await stored()).toEqual(replaced);
@@ -297,10 +334,22 @@ describe('the operator\'s explicit Clear', () => {
 });
 
 describe.each([
-	['the operator Screen list', async () => ((await listScreens(request())) as { screens: Array<{ id: number }> }).screens.find(screen => screen.id === screenId)],
-	['the operator Screen read', async () => await getScreen(request())],
-	['the Screen Output Screen read by id', async () => await getOutputScreen(request())],
-	['the Screen Output Screen read by slug', async () => await getOutputScreenBySlug(request())],
+	[
+		'the operator Screen list',
+		async () => ((await listScreens(request())) as { screens: Array<{ id: number }> }).screens.find(screen => screen.id === screenId),
+	],
+	[
+		'the operator Screen read',
+		async () => await getScreen(request()),
+	],
+	[
+		'the Screen Output Screen read by id',
+		async () => await getOutputScreen(request()),
+	],
+	[
+		'the Screen Output Screen read by slug',
+		async () => await getOutputScreenBySlug(request()),
+	],
 ])('%s', (_route, readScreen) => {
 	it('carries no Card and no Card revision, expired or not (scenario 9)', async () => {
 		await putCard(request(card('bolt', D)));
@@ -329,9 +378,26 @@ describe('the Card revision', () => {
 		await expect(putCard(request(card('counterspell')))).resolves.toEqual({ success: true, revision: 3 });
 
 		expect(published).toEqual([
-			{ type: 'card:updated', data: expect.objectContaining({ screenId, revision: 1, card: expect.objectContaining({ id: 'bolt' }) }) },
-			{ type: 'card:cleared', data: { screenId, revision: 2 } },
-			{ type: 'card:updated', data: expect.objectContaining({ screenId, revision: 3, card: expect.objectContaining({ id: 'counterspell' }) }) },
+			{
+				type: 'card:updated',
+				data: expect.objectContaining({
+					screenId,
+					revision: 1,
+					card: expect.objectContaining({ id: 'bolt' }),
+				}),
+			},
+			{
+				type: 'card:cleared',
+				data: { screenId, revision: 2 },
+			},
+			{
+				type: 'card:updated',
+				data: expect.objectContaining({
+					screenId,
+					revision: 3,
+					card: expect.objectContaining({ id: 'counterspell' }),
+				}),
+			},
 		]);
 	});
 
@@ -342,7 +408,10 @@ describe('the Card revision', () => {
 		await expect(read(request())).resolves.toEqual({ card: null, revision: 0 });
 
 		await putCard(request(card('bolt', D)));
-		await expect(read(request())).resolves.toEqual({ card: expect.objectContaining({ id: 'bolt' }), revision: 1 });
+		await expect(read(request())).resolves.toEqual({
+			card: expect.objectContaining({ id: 'bolt' }),
+			revision: 1,
+		});
 
 		vi.setSystemTime(SAVED_AT + D);
 		await expect(read(request())).resolves.toEqual({ card: null, revision: 1 });
@@ -355,7 +424,13 @@ describe('the Card revision', () => {
 		await putCard(request(card('bolt')));
 		afterCardRowLoaded = async () => void await putCard(request(card('counterspell')));
 
-		await expect(getCard(request())).resolves.toEqual({ card: expect.objectContaining({ id: 'bolt' }), revision: 1 });
-		expect(published.at(-1)).toMatchObject({ type: 'card:updated', data: { revision: 2 } });
+		await expect(getCard(request())).resolves.toEqual({
+			card: expect.objectContaining({ id: 'bolt' }),
+			revision: 1,
+		});
+		expect(published.at(-1)).toMatchObject({
+			type: 'card:updated',
+			data: { revision: 2 },
+		});
 	});
 });

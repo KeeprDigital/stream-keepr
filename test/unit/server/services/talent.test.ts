@@ -31,7 +31,10 @@ describe('talentService', () => {
 
 	describe('findByEventId', () => {
 		it('returns all talents for event', async () => {
-			const talents = [createMockTalent(), createMockTalent({ id: 2, name: 'Talent 2' })];
+			const talents = [
+				createMockTalent(),
+				createMockTalent({ id: 2, name: 'Talent 2' }),
+			];
 			getChain('select').where.mockResolvedValue(talents);
 
 			const result = await talentService().findByEventId(1);
@@ -93,7 +96,9 @@ describe('talentService', () => {
 		});
 
 		it('preserves Social Profiles when the map is omitted', async () => {
-			getChain('update').returning.mockResolvedValue([createMockTalent()]);
+			getChain('update').returning.mockResolvedValue([
+				createMockTalent(),
+			]);
 
 			await talentService().update(1, 1, { name: 'Updated' });
 
@@ -101,9 +106,13 @@ describe('talentService', () => {
 		});
 
 		it('replaces the complete Social Profile set when the map is supplied', async () => {
-			getChain('update').returning.mockResolvedValue([createMockTalent()]);
+			getChain('update').returning.mockResolvedValue([
+				createMockTalent(),
+			]);
 
-			await talentService().update(1, 1, { socialProfiles: { youtube: 'Caster' } });
+			await talentService().update(1, 1, {
+				socialProfiles: { youtube: 'Caster' },
+			});
 
 			expect(getChain('update').set).toHaveBeenCalledWith({
 				twitchHandle: null,
@@ -118,7 +127,9 @@ describe('talentService', () => {
 
 	describe('remove', () => {
 		it('returns true when deleted', async () => {
-			getChain('delete').returning.mockResolvedValue([createMockTalent()]);
+			getChain('delete').returning.mockResolvedValue([
+				createMockTalent(),
+			]);
 
 			const result = await talentService().remove(1, 1);
 

@@ -34,7 +34,12 @@ const usageStats = computed(() => {
 		return [];
 	const d = detail.value;
 	return [
-		{ label: 'Inclusion Rate', value: d.inclusionRate != null ? `${d.inclusionRate}%` : null },
+		{
+			label: 'Inclusion Rate',
+			value: d.inclusionRate != null
+				? `${d.inclusionRate}%`
+				: null,
+		},
 		{ label: 'Avg Copies', value: d.avgCopies },
 		{ label: 'Total Decks', value: d.totalDecks },
 		{ label: 'Archetypes', value: d.archetypes.length },

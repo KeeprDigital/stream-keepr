@@ -24,7 +24,9 @@ export function applySavedFeatureMatchAssignment(
 
 	const index = filtered.findIndex(existing => existing.id === saved.id || sameRoundSlot(existing, saved));
 	if (index >= 0) {
-		return filtered.map((existing, existingIndex) => existingIndex === index ? saved : existing);
+		return filtered.map((existing, existingIndex) => existingIndex === index
+			? saved
+			: existing);
 	}
 
 	return [...filtered, saved];

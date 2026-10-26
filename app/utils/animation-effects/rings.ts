@@ -210,5 +210,9 @@ export default function createRingsEffect(
 	host: HTMLElement,
 	params: AnimationEffectParams<'rings'>,
 ): AnimationEffectInstance<AnimationEffectParams<'rings'>> {
-	return createSceneEffect({ three: THREE, host, delegate: createRingsDelegate() }, params);
+	return createSceneEffect({
+		three: THREE,
+		host,
+		delegate: createRingsDelegate(),
+	}, params);
 }

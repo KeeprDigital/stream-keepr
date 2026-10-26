@@ -30,36 +30,57 @@ const replacement = value('image-asset', 'image-revision-2');
 const sting = value('video-asset', 'video-revision-1');
 
 function mediaInput(key: string, mediaKind: 'image' | 'silent-video' = 'image'): GraphicInputDeclaration {
-	return { type: 'media', key, label: key, required: false, updatePolicy: 'staged', mediaKind, default: null };
+	return {
+		type: 'media',
+		key,
+		label: key,
+		required: false,
+		updatePolicy: 'staged',
+		mediaKind,
+		default: null,
+	};
 }
 
 function config(inputs: GraphicInputDeclaration[]): BroadcastGraphicsModeConfig {
 	return {
-		graphics: [{
-			id: 'lower-third',
-			name: 'Lower Third',
-			items: [],
-			inputs,
-		} as unknown as BroadcastGraphicConfig],
+		graphics: [
+			{
+				id: 'lower-third',
+				name: 'Lower Third',
+				items: [],
+				inputs,
+			} as unknown as BroadcastGraphicConfig,
+		],
 	} as BroadcastGraphicsModeConfig;
 }
 
 function state(inputs: Record<string, unknown>): BroadcastGraphicsLiveState {
-	return { graphics: {}, inputs: { 'lower-third': inputs } } as unknown as BroadcastGraphicsLiveState;
+	return {
+		graphics: {},
+		inputs: { 'lower-third': inputs },
+	} as unknown as BroadcastGraphicsLiveState;
 }
 
 describe('broadcast Graphics Live Session Graphic Asset References', () => {
 	it('publishes an accepted media value, named by the Graphic Input that chose it', () => {
 		const references = broadcastGraphicsLiveSessionGraphicAssetReferences(
-			config([mediaInput('backdrop')]),
-			state({ working: {}, accepted: { backdrop: sponsor }, acceptedRevision: 1 }),
+			config([
+				mediaInput('backdrop'),
+			]),
+			state({
+				working: {},
+				accepted: { backdrop: sponsor },
+				acceptedRevision: 1,
+			}),
 		);
 
-		expect(references).toEqual([{
-			reference: { assetId: 'image-asset', revisionId: 'image-revision-1' },
-			ownerSlot: 'liveSession.lower-third.inputs.backdrop',
-			kind: 'image',
-		}]);
+		expect(references).toEqual([
+			{
+				reference: { assetId: 'image-asset', revisionId: 'image-revision-1' },
+				ownerSlot: 'liveSession.lower-third.inputs.backdrop',
+				kind: 'image',
+			},
+		]);
 	});
 
 	it('does not publish a staged value nothing has accepted', () => {
@@ -67,31 +88,53 @@ describe('broadcast Graphics Live Session Graphic Asset References', () => {
 		// not on air. A working value is an edit in progress, and Live Control shows it
 		// long before any acceptance — publishing it would open exactly that hole.
 		expect(broadcastGraphicsLiveSessionGraphicAssetReferences(
-			config([mediaInput('backdrop')]),
-			state({ working: { backdrop: sponsor }, accepted: {}, acceptedRevision: 0 }),
+			config([
+				mediaInput('backdrop'),
+			]),
+			state({
+				working: { backdrop: sponsor },
+				accepted: {},
+				acceptedRevision: 0,
+			}),
 		)).toEqual([]);
 	});
 
 	it('stops publishing a revision a later acceptance replaced', () => {
 		expect(broadcastGraphicsLiveSessionGraphicAssetReferences(
-			config([mediaInput('backdrop')]),
-			state({ working: {}, accepted: { backdrop: replacement }, acceptedRevision: 2 }),
-		)).toEqual([{
-			reference: { assetId: 'image-asset', revisionId: 'image-revision-2' },
-			ownerSlot: 'liveSession.lower-third.inputs.backdrop',
-			kind: 'image',
-		}]);
+			config([
+				mediaInput('backdrop'),
+			]),
+			state({
+				working: {},
+				accepted: { backdrop: replacement },
+				acceptedRevision: 2,
+			}),
+		)).toEqual([
+			{
+				reference: { assetId: 'image-asset', revisionId: 'image-revision-2' },
+				ownerSlot: 'liveSession.lower-third.inputs.backdrop',
+				kind: 'image',
+			},
+		]);
 	});
 
 	it('publishes an accepted silent-video value as its exact revision', () => {
 		expect(broadcastGraphicsLiveSessionGraphicAssetReferences(
-			config([mediaInput('sting', 'silent-video')]),
-			state({ working: {}, accepted: { sting }, acceptedRevision: 1 }),
-		)).toEqual([{
-			reference: { assetId: 'video-asset', revisionId: 'video-revision-1' },
-			ownerSlot: 'liveSession.lower-third.inputs.sting',
-			kind: 'silent-video',
-		}]);
+			config([
+				mediaInput('sting', 'silent-video'),
+			]),
+			state({
+				working: {},
+				accepted: { sting },
+				acceptedRevision: 1,
+			}),
+		)).toEqual([
+			{
+				reference: { assetId: 'video-asset', revisionId: 'video-revision-1' },
+				ownerSlot: 'liveSession.lower-third.inputs.sting',
+				kind: 'silent-video',
+			},
+		]);
 	});
 
 	it('publishes nothing for an accepted value whose Graphic Input is no longer declared', () => {
@@ -99,7 +142,11 @@ describe('broadcast Graphics Live Session Graphic Asset References', () => {
 		// later authored write leaves values behind. A Screen publishes what it declares.
 		expect(broadcastGraphicsLiveSessionGraphicAssetReferences(
 			config([]),
-			state({ working: {}, accepted: { backdrop: sponsor }, acceptedRevision: 1 }),
+			state({
+				working: {},
+				accepted: { backdrop: sponsor },
+				acceptedRevision: 1,
+			}),
 		)).toEqual([]);
 	});
 
@@ -111,7 +158,9 @@ describe('broadcast Graphics Live Session Graphic Asset References', () => {
 	 */
 	it('publishes nothing for a media Graphic Input holding something that is not a media value', () => {
 		expect(broadcastGraphicsLiveSessionGraphicAssetReferences(
-			config([mediaInput('backdrop')]),
+			config([
+				mediaInput('backdrop'),
+			]),
 			state({
 				working: {},
 				accepted: { backdrop: 'a value an earlier declaration left behind' },
@@ -122,8 +171,22 @@ describe('broadcast Graphics Live Session Graphic Asset References', () => {
 
 	it('publishes nothing for a non-media Graphic Input, whatever its accepted value looks like', () => {
 		expect(broadcastGraphicsLiveSessionGraphicAssetReferences(
-			config([{ type: 'text', key: 'name', label: 'Name', required: false, updatePolicy: 'staged', default: '', maxLength: 40 }]),
-			state({ working: {}, accepted: { name: sponsor as unknown as string }, acceptedRevision: 1 }),
+			config([
+				{
+					type: 'text',
+					key: 'name',
+					label: 'Name',
+					required: false,
+					updatePolicy: 'staged',
+					default: '',
+					maxLength: 40,
+				},
+			]),
+			state({
+				working: {},
+				accepted: { name: sponsor as unknown as string },
+				acceptedRevision: 1,
+			}),
 		)).toEqual([]);
 	});
 });

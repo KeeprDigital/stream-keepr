@@ -32,15 +32,49 @@ describe('the validator command adapter', () => {
 		const { execute, commands } = adapter();
 
 		await commands.deleteObject({ target: TARGET, key: 'some/key' });
-		await commands.triggerWorkflow({ target: TARGET, id: 'an-id', params: { a: 1 } });
+		await commands.triggerWorkflow({
+			target: TARGET,
+			id: 'an-id',
+			params: { a: 1 },
+		});
 		await commands.probeBucket({ target: TARGET });
 		await commands.probeWorkflow({ target: TARGET });
 
 		expect(execute.mock.calls.map(([argv]) => argv)).toEqual([
-			['r2', 'object', 'delete', 'a-staging-bucket/some/key', '--remote', '--config', TARGET.validatorConfigPath],
-			['workflows', 'trigger', 'a-workflow', '{"a":1}', '--id', 'an-id', '--config', TARGET.validatorConfigPath],
-			['r2', 'bucket', 'info', 'a-staging-bucket', '--config', TARGET.validatorConfigPath],
-			['workflows', 'describe', 'a-workflow', '--config', TARGET.validatorConfigPath],
+			[
+				'r2',
+				'object',
+				'delete',
+				'a-staging-bucket/some/key',
+				'--remote',
+				'--config',
+				TARGET.validatorConfigPath,
+			],
+			[
+				'workflows',
+				'trigger',
+				'a-workflow',
+				'{"a":1}',
+				'--id',
+				'an-id',
+				'--config',
+				TARGET.validatorConfigPath,
+			],
+			[
+				'r2',
+				'bucket',
+				'info',
+				'a-staging-bucket',
+				'--config',
+				TARGET.validatorConfigPath,
+			],
+			[
+				'workflows',
+				'describe',
+				'a-workflow',
+				'--config',
+				TARGET.validatorConfigPath,
+			],
 		]);
 		for (const [, options] of execute.mock.calls) {
 			expect(options.env.CLOUDFLARE_ACCOUNT_ID).toBe(TARGET.accountId);

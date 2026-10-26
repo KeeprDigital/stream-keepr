@@ -39,7 +39,12 @@ function healthyReport(overrides: Record<string, unknown> = {}) {
 			scenario,
 			...settled(),
 		})),
-		control: measurement({ mounted: true, compileFailures: 1, litPixels: 0, changedPixels: 0 }),
+		control: measurement({
+			mounted: true,
+			compileFailures: 1,
+			litPixels: 0,
+			changedPixels: 0,
+		}),
 		...overrides,
 	};
 }
@@ -61,7 +66,10 @@ function settled(overrides: Record<string, unknown> = {}) {
 /** The measurement of halo's settle, replaced with `overrides`. */
 function withSettle(overrides: Record<string, unknown>) {
 	const report = healthyReport();
-	report.settles = report.settles.map(entry => ({ ...entry, ...overrides }));
+	report.settles = report.settles.map(entry => ({
+		...entry,
+		...overrides,
+	}));
 	return report;
 }
 
@@ -73,7 +81,12 @@ function codes(report: Parameters<typeof judgeAnimationEffectReport>[0]) {
 function withScenario(effect: string, scenario: string, overrides: Record<string, unknown>) {
 	const report = healthyReport();
 	report.scenarios = report.scenarios.map(entry =>
-		entry.effect === effect && entry.scenario === scenario ? { ...entry, ...overrides } : entry);
+		entry.effect === effect && entry.scenario === scenario
+			? {
+					...entry,
+					...overrides,
+				}
+			: entry);
 	return report;
 }
 
@@ -96,7 +109,10 @@ describe('the animation effect scenario table', () => {
 		// The page spreads a scenario's params over the defaults without parsing
 		// them, so a key the schema no longer declares (a renamed param, #583)
 		// would mount the defaults under the extreme's name.
-		const scenarios = [...animationEffectProofScenarios(), ...animationEffectSettleScenarios()];
+		const scenarios = [
+			...animationEffectProofScenarios(),
+			...animationEffectSettleScenarios(),
+		];
 		for (const { effect, scenario, params } of scenarios) {
 			const outcome = ANIMATION_EFFECT_CATALOGUE[effect as keyof typeof ANIMATION_EFFECT_CATALOGUE].paramsSchema.safeParse(params);
 			expect(outcome.error?.issues, `${effect} ${scenario}`).toBeUndefined();
@@ -217,7 +233,9 @@ describe('judging an animation effect rendering proof', () => {
 
 	describe('the planted broken shader', () => {
 		it('refuses a run in which the broken shader compiled', () => {
-			const report = healthyReport({ control: measurement({ compileFailures: 0, litPixels: 0, changedPixels: 0 }) });
+			const report = healthyReport({
+				control: measurement({ compileFailures: 0, litPixels: 0, changedPixels: 0 }),
+			});
 
 			expect(judgeAnimationEffectReport(report)).toEqual([
 				{
@@ -228,13 +246,17 @@ describe('judging an animation effect rendering proof', () => {
 		});
 
 		it('refuses a run in which the broken shader still lit the frame', () => {
-			const report = healthyReport({ control: measurement({ compileFailures: 1, changedPixels: 0 }) });
+			const report = healthyReport({
+				control: measurement({ compileFailures: 1, changedPixels: 0 }),
+			});
 
 			expect(codes(report)).toEqual(['animation-effect-checks-not-biting']);
 		});
 
 		it('refuses a run in which the broken shader still animated', () => {
-			const report = healthyReport({ control: measurement({ compileFailures: 1, litPixels: 0 }) });
+			const report = healthyReport({
+				control: measurement({ compileFailures: 1, litPixels: 0 }),
+			});
 
 			expect(codes(report)).toEqual(['animation-effect-checks-not-biting']);
 		});
@@ -250,7 +272,12 @@ describe('judging an accumulating effect settling back to its background', () =>
 		expect(judgeAnimationEffectReport(withSettle({ residualPixels: 1, largestResidualChannel: 3 }))).toEqual([
 			{
 				code: 'animation-effect-trail-lingered',
-				detail: { effect: 'halo', scenario: 'settles-to-background', residual: 0.001, largestChannel: 3 },
+				detail: {
+					effect: 'halo',
+					scenario: 'settles-to-background',
+					residual: 0.001,
+					largestChannel: 3,
+				},
 			},
 		]);
 	});
@@ -293,12 +320,17 @@ describe('the expression the run polls', () => {
 	}
 
 	it('reads a page whose body has not been parsed yet as still working', () => {
-		expect(poll({ body: null, getElementById: () => null })).toBeUndefined();
+		expect(poll({
+			body: null,
+			getElementById: () => null,
+		})).toBeUndefined();
 	});
 
 	it('reads the report once the page says it is complete', () => {
 		expect(poll({
-			body: { dataset: { measurements: 'complete' } },
+			body: {
+				dataset: { measurements: 'complete' },
+			},
 			getElementById: () => ({ textContent: '{"backend":"swiftshader"}' }),
 		})).toBe('{"backend":"swiftshader"}');
 	});

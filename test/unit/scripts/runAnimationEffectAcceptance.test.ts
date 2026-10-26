@@ -20,7 +20,10 @@ let exitCodeBefore: typeof process.exitCode;
 beforeEach(() => {
 	exitCodeBefore = process.exitCode;
 	vi.mocked(bundleAnimationEffectPage).mockResolvedValue('void 0;');
-	vi.mocked(serveAcceptanceRoutes).mockResolvedValue({ origin: 'http://127.0.0.1:5', close: async () => {} });
+	vi.mocked(serveAcceptanceRoutes).mockResolvedValue({
+		origin: 'http://127.0.0.1:5',
+		close: async () => {},
+	});
 });
 
 afterEach(() => {
@@ -69,7 +72,10 @@ describe('the animation effect run\'s failure evidence', () => {
 		vi.mocked(observeChromiumValue).mockResolvedValue({
 			outcome: 'passed',
 			value: JSON.stringify({ backend: 'swiftshader', pageFailed: true, pageError: 'RangeError: Array buffer allocation failed\n    at x' }),
-			diagnostics: { console: ['error: WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost'], uncaught: [] },
+			diagnostics: {
+				console: ['error: WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost'],
+				uncaught: [],
+			},
 		});
 
 		expect(await printedFailure()).toContain([
@@ -82,7 +88,10 @@ describe('the animation effect run\'s failure evidence', () => {
 		vi.mocked(observeChromiumValue).mockResolvedValue({
 			outcome: 'passed',
 			value: '{"backend":',
-			diagnostics: { console: ['log: published'], uncaught: [] },
+			diagnostics: {
+				console: ['log: published'],
+				uncaught: [],
+			},
 		});
 
 		expect(await printedFailure()).toContain(

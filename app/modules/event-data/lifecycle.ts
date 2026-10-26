@@ -95,7 +95,9 @@ export function useEventDataLifecycle<
 			if (generation !== loadGeneration || currentEventId.value !== eventId)
 				return null;
 
-			const loaded = options.admit ? keepHeldWhereLeftBehind(data, options.admit) : data;
+			const loaded = options.admit
+				? keepHeldWhereLeftBehind(data, options.admit)
+				: data;
 			items.value = loaded;
 			hasFetched.value = true;
 			options.onLoad?.(loaded);
@@ -103,7 +105,9 @@ export function useEventDataLifecycle<
 		}
 		catch (caughtError) {
 			if (generation === loadGeneration) {
-				error.value = caughtError instanceof Error ? caughtError.message : `Failed to load ${options.entityLabel.toLowerCase()}`;
+				error.value = caughtError instanceof Error
+					? caughtError.message
+					: `Failed to load ${options.entityLabel.toLowerCase()}`;
 			}
 			return null;
 		}
@@ -118,7 +122,9 @@ export function useEventDataLifecycle<
 	 * is still the best this client has.
 	 */
 	function keepHeldWhereLeftBehind(data: T[], admit: (item: T) => boolean) {
-		return data.map(item => admit(item) ? item : getById(item.id) ?? item);
+		return data.map(item => admit(item)
+			? item
+			: getById(item.id) ?? item);
 	}
 
 	async function loadByEventId(eventId: number) {

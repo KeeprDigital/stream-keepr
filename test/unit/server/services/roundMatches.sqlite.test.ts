@@ -35,9 +35,24 @@ beforeAll(async () => {
 		{ eventId: otherEvent!.id, name: 'Swiss' },
 	]).returning({ id: schema.phases.id });
 	const [round, otherRound, foreignRound] = await db.insert(schema.rounds).values([
-		{ eventId, phaseId: phase!.id, name: 'Round 3', roundNumber: 3 },
-		{ eventId, phaseId: phase!.id, name: 'Round 4', roundNumber: 4 },
-		{ eventId: otherEvent!.id, phaseId: foreignPhase!.id, name: 'Round 3', roundNumber: 3 },
+		{
+			eventId,
+			phaseId: phase!.id,
+			name: 'Round 3',
+			roundNumber: 3,
+		},
+		{
+			eventId,
+			phaseId: phase!.id,
+			name: 'Round 4',
+			roundNumber: 4,
+		},
+		{
+			eventId: otherEvent!.id,
+			phaseId: foreignPhase!.id,
+			name: 'Round 3',
+			roundNumber: 3,
+		},
 	]).returning({ id: schema.rounds.id });
 	roundId = round!.id;
 	otherRoundId = otherRound!.id;
@@ -52,10 +67,51 @@ beforeAll(async () => {
 
 	await db.insert(schema.matches).values([
 		// Inserted out of table order, and with the bye first, so the order is the read's.
-		{ eventId, roundId, tableNumber: null, player1Id: carol, player1Data: { name: 'Carol' }, isBye: true, hasResult: true, player1GameWins: 2, player2GameWins: 0, sortOrder: 0 },
-		{ eventId, roundId, tableNumber: 12, player1Id: alice, player2Id: null, player1Data: { name: 'Stale Alice' }, player2Data: { name: 'Unlinked Dave' }, sortOrder: 1 },
-		{ eventId, roundId, tableNumber: 2, player1Id: bob, player2Id: alice, player1Data: { name: 'Bob' }, player2Data: { name: 'Alice' }, hasResult: true, player1GameWins: 2, player2GameWins: 1, gameDraws: 1, resultString: 'Bob won 2-1-1', sortOrder: 2 },
-		{ eventId, roundId: otherRoundId, tableNumber: 1, player1Id: alice, player2Id: bob, sortOrder: 0 },
+		{
+			eventId,
+			roundId,
+			tableNumber: null,
+			player1Id: carol,
+			player1Data: { name: 'Carol' },
+			isBye: true,
+			hasResult: true,
+			player1GameWins: 2,
+			player2GameWins: 0,
+			sortOrder: 0,
+		},
+		{
+			eventId,
+			roundId,
+			tableNumber: 12,
+			player1Id: alice,
+			player2Id: null,
+			player1Data: { name: 'Stale Alice' },
+			player2Data: { name: 'Unlinked Dave' },
+			sortOrder: 1,
+		},
+		{
+			eventId,
+			roundId,
+			tableNumber: 2,
+			player1Id: bob,
+			player2Id: alice,
+			player1Data: { name: 'Bob' },
+			player2Data: { name: 'Alice' },
+			hasResult: true,
+			player1GameWins: 2,
+			player2GameWins: 1,
+			gameDraws: 1,
+			resultString: 'Bob won 2-1-1',
+			sortOrder: 2,
+		},
+		{
+			eventId,
+			roundId: otherRoundId,
+			tableNumber: 1,
+			player1Id: alice,
+			player2Id: bob,
+			sortOrder: 0,
+		},
 	]);
 });
 
@@ -72,15 +128,31 @@ describe('findRoundMatches', () => {
 	it('names each side by its Player, or by the Match\'s own record of a side no Player holds', async () => {
 		const [table2, table12, bye] = (await findRoundMatches(eventId, roundId))!.matches;
 
-		expect(table2).toMatchObject({ player1: { id: bob, name: 'Bob' }, player2: { id: alice, name: 'Alice' } });
-		expect(table12).toMatchObject({ player1: { id: alice, name: 'Alice' }, player2: { id: null, name: 'Unlinked Dave' } });
-		expect(bye).toMatchObject({ player1: { id: carol, name: 'Carol' }, player2: null, isBye: true });
+		expect(table2).toMatchObject({
+			player1: { id: bob, name: 'Bob' },
+			player2: { id: alice, name: 'Alice' },
+		});
+		expect(table12).toMatchObject({
+			player1: { id: alice, name: 'Alice' },
+			player2: { id: null, name: 'Unlinked Dave' },
+		});
+		expect(bye).toMatchObject({
+			player1: { id: carol, name: 'Carol' },
+			player2: null,
+			isBye: true,
+		});
 	});
 
 	it('carries each Match\'s result, or none while it is pending', async () => {
 		const [table2, table12] = (await findRoundMatches(eventId, roundId))!.matches;
 
-		expect(table2).toMatchObject({ hasResult: true, player1GameWins: 2, player2GameWins: 1, gameDraws: 1, resultString: 'Bob won 2-1-1' });
+		expect(table2).toMatchObject({
+			hasResult: true,
+			player1GameWins: 2,
+			player2GameWins: 1,
+			gameDraws: 1,
+			resultString: 'Bob won 2-1-1',
+		});
 		expect(table12).toMatchObject({ hasResult: false, player1GameWins: null, player2GameWins: null });
 	});
 
@@ -89,7 +161,12 @@ describe('findRoundMatches', () => {
 	});
 
 	it('answers a Round without Matches with none', async () => {
-		const [empty] = await db.insert(schema.rounds).values({ eventId, phaseId: (await db.query.rounds.findFirst())!.phaseId, name: 'Round 5', roundNumber: 5 }).returning({ id: schema.rounds.id });
+		const [empty] = await db.insert(schema.rounds).values({
+			eventId,
+			phaseId: (await db.query.rounds.findFirst())!.phaseId,
+			name: 'Round 5',
+			roundNumber: 5,
+		}).returning({ id: schema.rounds.id });
 		expect((await findRoundMatches(eventId, empty!.id))?.matches).toEqual([]);
 	});
 });

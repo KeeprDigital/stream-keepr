@@ -105,7 +105,9 @@ export const SESSION_EXEMPT_API_PREFIXES: readonly string[] = [
  * getting a private route with no session.
  */
 function canonicalPath(pathname: string): string {
-	return pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+	return pathname.length > 1 && pathname.endsWith('/')
+		? pathname.slice(0, -1)
+		: pathname;
 }
 
 /**

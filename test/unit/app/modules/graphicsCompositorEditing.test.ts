@@ -37,7 +37,11 @@ const textItem: GraphicItemConfig = {
 
 function stack(): BroadcastGraphicConfig[] {
 	return [
-		{ id: 'lower-third', name: 'Lower Third', items: [textItem] },
+		{
+			id: 'lower-third',
+			name: 'Lower Third',
+			items: [textItem],
+		},
 		{ id: 'bug', name: 'Bug', items: [] },
 	];
 }
@@ -47,7 +51,12 @@ const GRAPHIC = { type: 'graphic', graphicId: 'lower-third' } as const;
 const CANVAS = { type: 'canvas' } as const;
 
 function state(overrides: Partial<CompositorEditingState> = {}): CompositorEditingState {
-	return { graphics: stack(), selectedTarget: ITEM, writable: true, ...overrides };
+	return {
+		graphics: stack(),
+		selectedTarget: ITEM,
+		writable: true,
+		...overrides,
+	};
 }
 
 const setFontSize: CompositorEdit = {
@@ -62,7 +71,9 @@ const rename: CompositorEdit = {
 
 function fontSizeOf(graphics: readonly BroadcastGraphicConfig[] | null) {
 	const item = graphics?.[0]?.items[0];
-	return item?.type === 'text' ? item.typography.fontSize : undefined;
+	return item?.type === 'text'
+		? item.typography.fontSize
+		: undefined;
 }
 
 function typographyRefOf(graphics: readonly BroadcastGraphicConfig[] | null) {
@@ -71,7 +82,13 @@ function typographyRefOf(graphics: readonly BroadcastGraphicConfig[] | null) {
 
 function entries(letterSpacing = 2): GraphicStyleSetEntry[] {
 	return [
-		{ id: 'brand', kind: 'palette', name: 'Brand', schemaVersion: 1, value: { color: '#ff0044' } },
+		{
+			id: 'brand',
+			kind: 'palette',
+			name: 'Brand',
+			schemaVersion: 1,
+			value: { color: '#ff0044' },
+		},
 		{
 			id: 'heading',
 			kind: 'typography',
@@ -109,20 +126,32 @@ function styleSet(published: GraphicStyleSetEntry[] = entries()): GraphicStyleAu
  * references leaves behind (#198).
  */
 function stranded(): BroadcastGraphicConfig[] {
-	return [applyGraphicStyleSet(
-		{
-			id: 'lower-third',
-			name: 'Lower Third',
-			styleSet: { styleSetId: 'show-style', revision: 1 },
-			items: [{ ...textItem, styleRefs: { typography: { entryId: 'heading' } } }],
-		},
-		resolveGraphicStyleSet(entries()),
-	)];
+	return [
+		applyGraphicStyleSet(
+			{
+				id: 'lower-third',
+				name: 'Lower Third',
+				styleSet: { styleSetId: 'show-style', revision: 1 },
+				items: [
+					{
+						...textItem,
+						styleRefs: {
+							typography: { entryId: 'heading' },
+						},
+					},
+				],
+			},
+			resolveGraphicStyleSet(entries()),
+		),
+	];
 }
 
 describe('the Graphics Authoring Lease', () => {
 	it('refuses every edit while this Session does not hold it', () => {
-		const refused = state({ writable: false, styleSet: styleSet() });
+		const refused = state({
+			writable: false,
+			styleSet: styleSet(),
+		});
 
 		expect(editCompositorStack(refused, setFontSize)).toBeNull();
 		expect(editCompositorStack({ ...refused, selectedTarget: GRAPHIC }, rename)).toBeNull();
@@ -187,7 +216,11 @@ describe('editing the stack whatever is selected', () => {
 
 describe('editing one named Broadcast Graphic whatever is selected', () => {
 	function hide(graphicId: string): CompositorEdit {
-		return { kind: 'named-graphic', graphicId, apply: graphic => ({ ...graphic, name: `${graphic.name} (hidden)` }) };
+		return {
+			kind: 'named-graphic',
+			graphicId,
+			apply: graphic => ({ ...graphic, name: `${graphic.name} (hidden)` }),
+		};
 	}
 
 	it('applies to the Broadcast Graphic it names, with anything or nothing selected', () => {
@@ -208,7 +241,9 @@ describe('editing one named Broadcast Graphic whatever is selected', () => {
 
 describe('replacing the stack', () => {
 	it('replaces only the edited Broadcast Graphic, in place', () => {
-		const before = state({ styleSet: styleSet() });
+		const before = state({
+			styleSet: styleSet(),
+		});
 		const next = editCompositorStack(before, setFontSize);
 
 		expect(next?.map(graphic => graphic.id)).toEqual(['lower-third', 'bug']);
@@ -216,15 +251,24 @@ describe('replacing the stack', () => {
 	});
 
 	it('answers nothing to commit for an edit that changes nothing', () => {
-		const frontmostForward: CompositorEdit = { kind: 'stack', apply: graphics => moveBroadcastGraphic(graphics, 'bug', 1) };
-		const unchanged: CompositorEdit = { kind: 'named-graphic', graphicId: 'bug', apply: graphic => graphic };
+		const frontmostForward: CompositorEdit = {
+			kind: 'stack',
+			apply: graphics => moveBroadcastGraphic(graphics, 'bug', 1),
+		};
+		const unchanged: CompositorEdit = {
+			kind: 'named-graphic',
+			graphicId: 'bug',
+			apply: graphic => graphic,
+		};
 
 		expect(editCompositorStack(state(), frontmostForward)).toBeNull();
 		expect(editCompositorStack(state(), unchanged)).toBeNull();
 	});
 
 	it('never changes the stack it was given', () => {
-		const before = state({ styleSet: styleSet() });
+		const before = state({
+			styleSet: styleSet(),
+		});
 		editCompositorStack(before, setFontSize);
 
 		expect(before.graphics).toEqual(stack());
@@ -233,9 +277,15 @@ describe('replacing the stack', () => {
 
 describe('re-capturing Graphic Style Set overrides', () => {
 	it('records a value edit as an override, judged against the stored graphic', () => {
-		const next = editCompositorStack(state({ graphics: stranded(), styleSet: styleSet() }), setFontSize);
+		const next = editCompositorStack(state({
+			graphics: stranded(),
+			styleSet: styleSet(),
+		}), setFontSize);
 
-		expect(typographyRefOf(next)).toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+		expect(typographyRefOf(next)).toEqual({
+			entryId: 'heading',
+			overrides: { fontSize: 30 },
+		});
 	});
 
 	/**
@@ -246,42 +296,85 @@ describe('re-capturing Graphic Style Set overrides', () => {
 	const resize = (graphic: BroadcastGraphicConfig) => patchGraphicTypography(graphic, 'name', { fontSize: 30 });
 	const everyValueEdit: Array<[string, GraphicsSelectionTarget, CompositorEdit]> = [
 		['an item edit', ITEM, setFontSize],
-		['a graphic edit', GRAPHIC, {
-			kind: 'author',
-			graphic: (graphics, graphicId) => graphics.map(graphic => graphic.id === graphicId ? resize(graphic) : graphic),
-		}],
-		['a stack edit', CANVAS, { kind: 'stack', apply: graphics => graphics.map(resize) }],
-		['an edit to a named Broadcast Graphic', CANVAS, { kind: 'named-graphic', graphicId: 'lower-third', apply: resize }],
+		[
+			'a graphic edit',
+			GRAPHIC,
+			{
+				kind: 'author',
+				graphic: (graphics, graphicId) => graphics.map(graphic => graphic.id === graphicId
+					? resize(graphic)
+					: graphic),
+			},
+		],
+		[
+			'a stack edit',
+			CANVAS,
+			{
+				kind: 'stack',
+				apply: graphics => graphics.map(resize),
+			},
+		],
+		[
+			'an edit to a named Broadcast Graphic',
+			CANVAS,
+			{ kind: 'named-graphic', graphicId: 'lower-third', apply: resize },
+		],
 	];
 
 	it.each(everyValueEdit)('re-captures %s, judged against the stored graphic', (_, selectedTarget, edit) => {
-		const next = editCompositorStack(state({ graphics: stranded(), selectedTarget, styleSet: styleSet() }), edit);
+		const next = editCompositorStack(state({
+			graphics: stranded(),
+			selectedTarget,
+			styleSet: styleSet(),
+		}), edit);
 
-		expect(typographyRefOf(next)).toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+		expect(typographyRefOf(next)).toEqual({
+			entryId: 'heading',
+			overrides: { fontSize: 30 },
+		});
 	});
 
 	it('judges a graphic against the loaded Style Set only when it is linked to that one', () => {
 		const [linked] = stranded();
-		const elsewhere = { ...linked!, id: 'elsewhere', styleSet: { styleSetId: 'another-style', revision: 1 } };
+		const elsewhere = {
+			...linked!,
+			id: 'elsewhere',
+			styleSet: { styleSetId: 'another-style', revision: 1 },
+		};
 
 		const next = editCompositorStack(
-			state({ graphics: [linked!, elsewhere], selectedTarget: CANVAS, styleSet: styleSet() }),
-			{ kind: 'stack', apply: graphics => graphics.map(resize) },
+			state({
+				graphics: [linked!, elsewhere],
+				selectedTarget: CANVAS,
+				styleSet: styleSet(),
+			}),
+			{
+				kind: 'stack',
+				apply: graphics => graphics.map(resize),
+			},
 		);
 
-		expect(next?.[0]?.items[0]?.styleRefs?.typography).toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+		expect(next?.[0]?.items[0]?.styleRefs?.typography).toEqual({
+			entryId: 'heading',
+			overrides: { fontSize: 30 },
+		});
 		expect(next?.[1]?.items[0]?.styleRefs?.typography).toEqual({ entryId: 'heading' });
 	});
 
 	it('records nothing on a slot the Style Set has a pending change in, and keeps the value', () => {
-		const next = editCompositorStack(state({ graphics: stranded(), styleSet: styleSet(entries(8)) }), setFontSize);
+		const next = editCompositorStack(state({
+			graphics: stranded(),
+			styleSet: styleSet(entries(8)),
+		}), setFontSize);
 
 		expect(typographyRefOf(next)).toEqual({ entryId: 'heading' });
 		expect(fontSizeOf(next)).toBe(30);
 	});
 
 	it('records nothing without a loaded Style Set, leaving the reference as it was', () => {
-		const next = editCompositorStack(state({ graphics: stranded() }), setFontSize);
+		const next = editCompositorStack(state({
+			graphics: stranded(),
+		}), setFontSize);
 
 		expect(typographyRefOf(next)).toEqual({ entryId: 'heading' });
 		expect(fontSizeOf(next)).toBe(30);
@@ -291,7 +384,9 @@ describe('re-capturing Graphic Style Set overrides', () => {
 describe('referencing a Graphic Style Set entry', () => {
 	it('binds the selected owner\'s slot and takes the entry\'s values, recording no override', () => {
 		const next = editCompositorStack(
-			state({ styleSet: styleSet() }),
+			state({
+				styleSet: styleSet(),
+			}),
 			{ kind: 'bind-style-ref', slot: 'typography', entryId: 'heading' },
 		);
 
@@ -300,19 +395,34 @@ describe('referencing a Graphic Style Set entry', () => {
 	});
 
 	it('keeps another owner\'s recorded override when it binds', () => {
-		const pinned = { entryId: 'heading', overrides: { fontSize: 30 } };
-		const graphics = [applyGraphicStyleSet(
-			{
-				id: 'lower-third',
-				name: 'Lower Third',
-				styleSet: { styleSetId: 'show-style', revision: PUBLISHED },
-				items: [textItem, { ...textItem, id: 'role', styleRefs: { typography: pinned } }],
-			},
-			resolveGraphicStyleSet(entries()),
-		)];
+		const pinned = {
+			entryId: 'heading',
+			overrides: { fontSize: 30 },
+		};
+		const graphics = [
+			applyGraphicStyleSet(
+				{
+					id: 'lower-third',
+					name: 'Lower Third',
+					styleSet: { styleSetId: 'show-style', revision: PUBLISHED },
+					items: [
+						textItem,
+						{
+							...textItem,
+							id: 'role',
+							styleRefs: { typography: pinned },
+						},
+					],
+				},
+				resolveGraphicStyleSet(entries()),
+			),
+		];
 
 		const next = editCompositorStack(
-			state({ graphics, styleSet: styleSet() }),
+			state({
+				graphics,
+				styleSet: styleSet(),
+			}),
 			{ kind: 'bind-style-ref', slot: 'typography', entryId: 'heading' },
 		);
 
@@ -326,7 +436,10 @@ describe('referencing a Graphic Style Set entry', () => {
 
 	it('unbinds a slot and keeps the value it holds', () => {
 		const next = editCompositorStack(
-			state({ graphics: stranded(), styleSet: styleSet() }),
+			state({
+				graphics: stranded(),
+				styleSet: styleSet(),
+			}),
 			{ kind: 'unbind-style-ref', slot: 'typography' },
 		);
 
@@ -354,7 +467,10 @@ describe('a panel editing through the module', () => {
 		const writable = ref(true);
 		const committed: BroadcastGraphicConfig[][] = [];
 		const { edit } = useCompositorEditing(() => state({ writable: writable.value }), graphics => committed.push(graphics));
-		const remove: CompositorEdit = { kind: 'stack', apply: graphics => graphics.filter(graphic => graphic.id !== 'bug') };
+		const remove: CompositorEdit = {
+			kind: 'stack',
+			apply: graphics => graphics.filter(graphic => graphic.id !== 'bug'),
+		};
 
 		expect(edit(remove)).toBe(true);
 		writable.value = false;
@@ -389,11 +505,18 @@ describe('every compositor panel', () => {
 	const directory = fileURLToPath(new URL('../../../../app/components/Graphics/Compositor', import.meta.url));
 	const panels = readdirSync(directory)
 		.filter(name => name.endsWith('.vue'))
-		.map(name => ({ name, source: readFileSync(join(directory, name), 'utf8') }))
+		.map(name => ({
+			name,
+			source: readFileSync(join(directory, name), 'utf8'),
+		}))
 		.filter(({ source }) => source.includes('\'update:graphics\''))
 		.map(({ name, source }) => {
 			const end = source.indexOf('</script>');
-			return { name, script: source.slice(0, end), template: source.slice(end) };
+			return {
+				name,
+				script: source.slice(0, end),
+				template: source.slice(end),
+			};
 		});
 
 	const COMMIT = /emit\('update:graphics'/g;

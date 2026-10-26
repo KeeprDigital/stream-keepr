@@ -45,8 +45,12 @@ vi.mock('~~/server/db/schema', () => ({
 }));
 
 vi.mock('~~/server/schemas/api/archetype', () => ({
-	archetypeParamsSchema: { parse: vi.fn(input => input) },
-	setArchetypeKeyCardsSchema: { parse: vi.fn(input => input) },
+	archetypeParamsSchema: {
+		parse: vi.fn(input => input),
+	},
+	setArchetypeKeyCardsSchema: {
+		parse: vi.fn(input => input),
+	},
 }));
 
 vi.mock('~~/server/services/archetype', () => ({

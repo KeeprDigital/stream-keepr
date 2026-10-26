@@ -28,7 +28,9 @@ const ISSUE_FAILED_COOKIE = 'stream_keepr_graphics_author_session_issue_failed';
 
 /** A request presenting exactly the named cookies. */
 function requestCarrying(...cookies: string[]) {
-	mockGetCookie.mockImplementation((_event, name: string) => cookies.includes(name) ? '1' : undefined);
+	mockGetCookie.mockImplementation((_event, name: string) => cookies.includes(name)
+		? '1'
+		: undefined);
 	return stubH3Event();
 }
 

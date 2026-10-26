@@ -151,7 +151,9 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 
 	function heldSession(slotId: number) {
 		const sessionId = sessionIdBySlotId.value.get(slotId);
-		return sessionId === undefined ? undefined : featureMatchSessions.value.get(sessionId);
+		return sessionId === undefined
+			? undefined
+			: featureMatchSessions.value.get(sessionId);
 	}
 
 	/**
@@ -238,7 +240,9 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		slot: OfferedSlot,
 		offer: (session: FeatureMatchSessionResponse) => { epochEnded: boolean },
 	): boolean {
-		return slot.activeSession ? !offer(slot.activeSession).epochEnded : !heldSession(slot.id);
+		return slot.activeSession
+			? !offer(slot.activeSession).epochEnded
+			: !heldSession(slot.id);
 	}
 
 	/**
@@ -321,8 +325,18 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 				return {
 					...current,
 					...fields,
-					player1: player1 ? { ...current.player1, ...player1 } : current.player1,
-					player2: player2 ? { ...current.player2, ...player2 } : current.player2,
+					player1: player1
+						? {
+								...current.player1,
+								...player1,
+							}
+						: current.player1,
+					player2: player2
+						? {
+								...current.player2,
+								...player2,
+							}
+						: current.player2,
 					// The clock field is the display reading, so the prediction runs
 					// the same adjustment the server's SetClock applies — writing the
 					// value into elapsedMs would show a countdown clock's complement.
@@ -346,7 +360,11 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			matchId,
 			current => ({
 				...current,
-				clock: { ...current.clock, isRunning: true, lastStartedAt: getServerTime() },
+				clock: {
+					...current.clock,
+					isRunning: true,
+					lastStartedAt: getServerTime(),
+				},
 			}),
 			() => repo.startClock(eventId, matchId).then(settleCommandResult),
 		);
@@ -384,12 +402,19 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			matchId,
 			current => ({
 				...current,
-				clock: { ...current.clock, elapsedMs: 0, isRunning: false, lastStartedAt: null },
+				clock: {
+					...current.clock,
+					elapsedMs: 0,
+					isRunning: false,
+					lastStartedAt: null,
+				},
 				overtime: undefined,
 			}),
 			() => repo.resetClock(eventId, matchId).then(settleCommandResult),
 			// `overtime` may already be unset — the server still clears it on reset.
-			{ serverOwns: ['overtime'] },
+			{
+				serverOwns: ['overtime'],
+			},
 		);
 	}
 
@@ -399,7 +424,12 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			matchId,
 			current => ({
 				...current,
-				clock: { ...current.clock, elapsedMs: 0, isRunning: true, lastStartedAt: getServerTime() },
+				clock: {
+					...current.clock,
+					elapsedMs: 0,
+					isRunning: true,
+					lastStartedAt: getServerTime(),
+				},
 			}),
 			() => repo.restartClock(eventId, matchId).then(settleCommandResult),
 		);
@@ -447,11 +477,17 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 
 		return optimistic.run(
 			`bulk:${action}`,
-			[...featureMatchStates.value.keys()],
+			[
+				...featureMatchStates.value.keys(),
+			],
 			state => computeBulkClockOptimistic(state, action, now, deltaMs, defaultDurationMs),
 			async () => cacheBulkUpdates((await repo.bulkClockAction(eventId, action, deltaMs))?.updates ?? undefined),
 			// 'reset' clears overtime server-side even when it is already unset.
-			action === 'reset' ? { serverOwns: ['overtime'] } : undefined,
+			action === 'reset'
+				? {
+						serverOwns: ['overtime'],
+					}
+				: undefined,
 		);
 	}
 
@@ -466,20 +502,54 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			case 'start':
 				return state.clock.isRunning
 					? null
-					: { ...state, clock: { ...state.clock, isRunning: true, lastStartedAt: now } };
+					: {
+							...state,
+							clock: { ...state.clock, isRunning: true, lastStartedAt: now },
+						};
 			case 'pause': {
 				if (!state.clock.isRunning)
 					return null;
-				const additionalElapsed = state.clock.lastStartedAt ? now - state.clock.lastStartedAt : 0;
-				return { ...state, clock: { ...state.clock, isRunning: false, elapsedMs: state.clock.elapsedMs + additionalElapsed, lastStartedAt: null } };
+				const additionalElapsed = state.clock.lastStartedAt
+					? now - state.clock.lastStartedAt
+					: 0;
+				return {
+					...state,
+					clock: {
+						...state.clock,
+						isRunning: false,
+						elapsedMs: state.clock.elapsedMs + additionalElapsed,
+						lastStartedAt: null,
+					},
+				};
 			}
 			case 'reset':
-				return { ...state, clock: { ...state.clock, elapsedMs: 0, isRunning: false, lastStartedAt: null, ...(defaultDurationMs !== undefined && { durationMs: defaultDurationMs }) }, overtime: undefined };
+				return {
+					...state,
+					clock: {
+						...state.clock,
+						elapsedMs: 0,
+						isRunning: false,
+						lastStartedAt: null,
+						...(defaultDurationMs !== undefined && { durationMs: defaultDurationMs }),
+					},
+					overtime: undefined,
+				};
 			case 'restart':
-				return { ...state, clock: { ...state.clock, elapsedMs: 0, isRunning: true, lastStartedAt: now } };
+				return {
+					...state,
+					clock: {
+						...state.clock,
+						elapsedMs: 0,
+						isRunning: true,
+						lastStartedAt: now,
+					},
+				};
 			case 'adjust':
 				return deltaMs !== undefined
-					? { ...state, clock: applyClockAdjustment(state.clock, now, { deltaDisplayMs: deltaMs }) }
+					? {
+							...state,
+							clock: applyClockAdjustment(state.clock, now, { deltaDisplayMs: deltaMs }),
+						}
 					: null;
 		}
 	}
@@ -500,7 +570,9 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		const now = getServerTime();
 		bulkAdjustBatch.enqueue(
 			'all',
-			[...featureMatchStates.value.keys()],
+			[
+				...featureMatchStates.value.keys(),
+			],
 			state => ({
 				...state,
 				clock: applyClockAdjustment(state.clock, now, { deltaDisplayMs: deltaMs }),
@@ -551,7 +623,9 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 					matchId,
 					player,
 					lifeDelta: (existing?.lifeDelta ?? 0) + (update.lifeDelta ?? 0),
-					intendedLifeTotal: hasAbsoluteLifeUpdate ? newLifeTotal : (existing?.intendedLifeTotal ?? null),
+					intendedLifeTotal: hasAbsoluteLifeUpdate
+						? newLifeTotal
+						: (existing?.intendedLifeTotal ?? null),
 					latestCounters: update.counters ?? existing?.latestCounters,
 					hasAbsoluteLifeUpdate,
 					hasCounterUpdate: !!update.counters || (existing?.hasCounterUpdate ?? false),
@@ -609,7 +683,9 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			() => repo.updateState(eventId, matchId, { turnNumber }).then(settleCommandResult),
 			// The server treats an explicit turn number as owning the field even
 			// when it matches the current value.
-			{ serverOwns: ['turnNumber'] },
+			{
+				serverOwns: ['turnNumber'],
+			},
 		);
 	}
 
@@ -617,9 +693,16 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		return optimistic.run(
 			`firstPlayer:${matchId}`,
 			matchId,
-			current => ({ ...current, firstPlayer: player, activePlayer: player, turnNumber: 1 }),
+			current => ({
+				...current,
+				firstPlayer: player,
+				activePlayer: player,
+				turnNumber: 1,
+			}),
 			() => repo.updateState(eventId, matchId, { firstPlayer: player, activePlayer: player, turnNumber: 1 }).then(settleCommandResult),
-			{ serverOwns: ['firstPlayer', 'activePlayer', 'turnNumber'] },
+			{
+				serverOwns: ['firstPlayer', 'activePlayer', 'turnNumber'],
+			},
 		);
 	}
 
@@ -765,9 +848,19 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			`swap:${matchId}`,
 			matchId,
 			(current) => {
-				const swappedActive = current.activePlayer ? otherFeatureMatchPlayer(current.activePlayer) : current.activePlayer;
-				const swappedFirst = current.firstPlayer ? otherFeatureMatchPlayer(current.firstPlayer) : current.firstPlayer;
-				return { ...current, player1: current.player2, player2: current.player1, activePlayer: swappedActive, firstPlayer: swappedFirst };
+				const swappedActive = current.activePlayer
+					? otherFeatureMatchPlayer(current.activePlayer)
+					: current.activePlayer;
+				const swappedFirst = current.firstPlayer
+					? otherFeatureMatchPlayer(current.firstPlayer)
+					: current.firstPlayer;
+				return {
+					...current,
+					player1: current.player2,
+					player2: current.player1,
+					activePlayer: swappedActive,
+					firstPlayer: swappedFirst,
+				};
 			},
 			() => repo.swapPlayers(eventId, matchId).then(settleCommandResult),
 		);

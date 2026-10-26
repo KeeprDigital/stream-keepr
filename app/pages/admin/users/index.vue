@@ -100,7 +100,9 @@ function openFormFor(user: AdministeredUser, kind: 'password' | 'ban') {
 	actionInput.password = '';
 	actionInput.reason = '';
 	actionError.value = null;
-	openAction.value = alreadyOpen ? null : { userId: user.id, kind };
+	openAction.value = alreadyOpen
+		? null
+		: { userId: user.id, kind };
 }
 
 function isFormOpen(userId: string, kind: 'password' | 'ban') {
@@ -159,7 +161,10 @@ async function invite() {
 		const created = await $fetch<CreatedUserAccount>('/api/admin/users', {
 			method: 'POST',
 			headers: administratorHeaders(),
-			body: { email: invitation.email.trim(), name: invitation.name.trim() },
+			body: {
+				email: invitation.email.trim(),
+				name: invitation.name.trim(),
+			},
 		});
 
 		showIssuedLink(created.user.email, created.passwordResetLink);
@@ -174,7 +179,10 @@ async function issueResetLink(user: AdministeredUser) {
 	await runAction(user.id, 'reset-link', async () => {
 		const issued = await $fetch<IssuedPasswordResetLink>(
 			`/api/admin/users/${user.id}/password-reset-link`,
-			{ method: 'POST', headers: administratorHeaders() },
+			{
+				method: 'POST',
+				headers: administratorHeaders(),
+			},
 		);
 		showIssuedLink(user.email, issued.passwordResetLink);
 		return `A new reset link for ${user.email} is ready to hand over. Using it will `
@@ -203,7 +211,9 @@ async function ban(user: AdministeredUser) {
 		const outcome = await $fetch<RevokedUserSessions>(`/api/admin/users/${user.id}/ban`, {
 			method: 'POST',
 			headers: administratorHeaders(),
-			body: reason ? { reason } : {},
+			body: reason
+				? { reason }
+				: {},
 		});
 		openAction.value = null;
 		actionInput.reason = '';
@@ -234,7 +244,9 @@ async function revokeSessions(user: AdministeredUser) {
 }
 
 function sessionCount(count: number) {
-	return count === 1 ? '1 session' : `${count} sessions`;
+	return count === 1
+		? '1 session'
+		: `${count} sessions`;
 }
 
 const hiddenAccountCount = computed(() =>

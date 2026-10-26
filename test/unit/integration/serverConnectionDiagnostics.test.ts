@@ -24,7 +24,9 @@ afterEach(async () => {
 
 function diagnostics() {
 	const lines: string[] = [];
-	cleanups.push(installServerConnectionDiagnostics({ write: line => lines.push(line) }));
+	cleanups.push(installServerConnectionDiagnostics({
+		write: line => lines.push(line),
+	}));
 	return lines;
 }
 
@@ -203,7 +205,12 @@ describe('the integration server\'s connection diagnostics', () => {
 
 		const failedAfterAnswer = await new Promise<boolean>((resolve) => {
 			let answered = false;
-			const request = httpRequest(`${origin}/api/parts/1`, { method: 'PUT', headers: { 'content-length': String(64 * 1024 * 1024) } }, (response) => {
+			const request = httpRequest(`${origin}/api/parts/1`, {
+				method: 'PUT',
+				headers: {
+					'content-length': String(64 * 1024 * 1024),
+				},
+			}, (response) => {
 				response.resume();
 				response.on('end', () => answered = true);
 			});

@@ -36,7 +36,9 @@ export class MeleeTransportError extends Error {
 		public readonly upstreamStatus: number | null = null,
 		options?: { cause?: unknown },
 	) {
-		super(message, options?.cause === undefined ? undefined : { cause: options.cause });
+		super(message, options?.cause === undefined
+			? undefined
+			: { cause: options.cause });
 		this.name = 'MeleeTransportError';
 	}
 }
@@ -247,7 +249,9 @@ export function createMeleeTransport(
 		outcome,
 		durationMs: elapsedMs(now, requestStartedAt),
 		attempt,
-		retryCount: outcome === 'retry' ? attempt : attempt - 1,
+		retryCount: outcome === 'retry'
+			? attempt
+			: attempt - 1,
 		status,
 		...details,
 	});
@@ -384,7 +388,9 @@ export function createMeleeTransport(
 				);
 			}
 
-			const status = Number.isInteger(response.status) ? response.status : null;
+			const status = Number.isInteger(response.status)
+				? response.status
+				: null;
 			if (!response.ok) {
 				const isRetryable = status !== null && RETRYABLE_STATUS_CODES.has(status);
 				if (isRetryable && attempt < maxAttempts) {
@@ -452,13 +458,17 @@ export function createMeleeTransport(
 
 			const parsed = schema.safeParse(raw);
 			if (!parsed.success) {
-				const validationIssues = [...new Set(parsed.error.issues.map((issue) => {
-					const path = issue.path
-						.map(segment => typeof segment === 'number' ? '[]' : String(segment))
-						.join('.')
-						.replaceAll('.[]', '[]');
-					return `${issue.code}:${path || '<root>'}`;
-				}))].slice(0, 10);
+				const validationIssues = [
+					...new Set(parsed.error.issues.map((issue) => {
+						const path = issue.path
+							.map(segment => typeof segment === 'number'
+								? '[]'
+								: String(segment))
+							.join('.')
+							.replaceAll('.[]', '[]');
+						return `${issue.code}:${path || '<root>'}`;
+					})),
+				].slice(0, 10);
 				log('error', logEntry(context, requestStartedAt, attempt, status, 'failure', {
 					failureCategory: 'schema_validation',
 					validationIssues,

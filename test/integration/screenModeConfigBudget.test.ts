@@ -135,7 +135,9 @@ function fatGraphicsStack(totalItems: number, graphics: number, totalInputs = 0)
 			name: 'N'.repeat(100),
 			items: Array.from({ length: take }, (_, i) => fatGraphicItem(`item-${g}-${i}`)),
 			...(takeInputs > 0
-				? { inputs: Array.from({ length: takeInputs }, (_, i) => fatGraphicInput(`g${g}input${i}`)) }
+				? {
+						inputs: Array.from({ length: takeInputs }, (_, i) => fatGraphicInput(`g${g}input${i}`)),
+					}
 				: {}),
 		};
 	});
@@ -179,17 +181,19 @@ function fatOverlayLayout() {
 	const gradient = 'G'.repeat(1000);
 	return {
 		frame: { backgroundColor: '#000000', opacity: 1, gradient },
-		sources: [{
-			id: 'overlay-source',
-			label: 'L'.repeat(100),
-			visible: true,
-			sourceRole: 'main' as const,
-			frameCutout: true,
-			x: 0,
-			y: 0,
-			width: 100,
-			height: 100,
-		}],
+		sources: [
+			{
+				id: 'overlay-source',
+				label: 'L'.repeat(100),
+				visible: true,
+				sourceRole: 'main' as const,
+				frameCutout: true,
+				x: 0,
+				y: 0,
+				width: 100,
+				height: 100,
+			},
+		],
 		composition: {
 			id: 'feature-match-layout',
 			name: 'Feature Match Layout',
@@ -275,15 +279,26 @@ describe('mode configuration byte total', () => {
 		// The full-config path has always enforced this. It is asserted here so the
 		// PATCH-path test below is a statement about parity rather than about bytes.
 		const modeConfigs = {
-			'broadcast-graphics': { graphics: fatGraphicsStack(STORABLE_STACK_ITEMS, 50, 60) },
-			'feature-match-overlay': { featureMatchId: null, presetId: 'full-table', layout: fatOverlayLayout() },
+			'broadcast-graphics': {
+				graphics: fatGraphicsStack(STORABLE_STACK_ITEMS, 50, 60),
+			},
+			'feature-match-overlay': {
+				featureMatchId: null,
+				presetId: 'full-table',
+				layout: fatOverlayLayout(),
+			},
 		};
 
 		expect(bytes(modeConfigs)).toBeGreaterThan(MAX_MODE_CONFIGS_BYTES);
 
 		const failure = await $fetch(`/api/events/${eventId}/screens`, {
 			method: 'POST',
-			body: { name: 'Oversized', slug: 'budget-oversized', currentMode: 'background', modeConfigs },
+			body: {
+				name: 'Oversized',
+				slug: 'budget-oversized',
+				currentMode: 'background',
+				modeConfigs,
+			},
 		}).then(() => null).catch((error: FetchFailure) => error);
 
 		expect(failure?.data?.statusCode).toBe(400);
@@ -297,13 +312,17 @@ describe('mode configuration byte total', () => {
 
 		const first = await patchConfig(
 			`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`,
-			{ graphics: fatGraphicsStack(STORABLE_STACK_ITEMS, 50, 60) },
+			{
+				graphics: fatGraphicsStack(STORABLE_STACK_ITEMS, 50, 60),
+			},
 		);
 		expect(first.ok).toBe(true);
 
 		const second = await patchConfig(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-			{ layout: fatOverlayLayout() },
+			{
+				layout: fatOverlayLayout(),
+			},
 		);
 
 		expect(second.ok).toBe(false);
@@ -322,7 +341,9 @@ describe('mode configuration byte total', () => {
 
 		const first = await patchConfig(
 			`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`,
-			{ graphics: fatGraphicsStack(20, 5, 6) },
+			{
+				graphics: fatGraphicsStack(20, 5, 6),
+			},
 		);
 		const second = await patchConfig(
 			`/api/events/${eventId}/screens/${screenId}/config/metagame`,

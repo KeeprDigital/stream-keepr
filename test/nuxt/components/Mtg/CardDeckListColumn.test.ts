@@ -8,7 +8,9 @@ const selectPreviewCard = vi.fn();
 
 mockNuxtImport('useCardStore', () => () => ({ selectPreviewCard }));
 mockNuxtImport('usePlayerStore', () => () => ({ players: [] }));
-mockNuxtImport('usePlayerDeckListModal', () => () => ({ openDeckLists: vi.fn() }));
+mockNuxtImport('usePlayerDeckListModal', () => () => ({
+	openDeckLists: vi.fn(),
+}));
 
 const CardDeckListSectionStub = defineComponent({
 	props: {
@@ -67,16 +69,22 @@ function createPlayerData(): MatchPlayerDeckData {
 		},
 		deckCounters: [],
 		deckTokens: [],
-		mainboard: [createCard('Consider', 'mainboard', 4)],
-		sideboard: [createCard('Negate', 'sideboard', 2)],
-		tokens: [{
-			id: 'treasure',
-			scryfallId: null,
-			name: 'Treasure',
-			typeLine: 'Token Artifact — Treasure',
-			uri: null,
-			mtgCard: null,
-		}],
+		mainboard: [
+			createCard('Consider', 'mainboard', 4),
+		],
+		sideboard: [
+			createCard('Negate', 'sideboard', 2),
+		],
+		tokens: [
+			{
+				id: 'treasure',
+				scryfallId: null,
+				name: 'Treasure',
+				typeLine: 'Token Artifact — Treasure',
+				uri: null,
+				mtgCard: null,
+			},
+		],
 	};
 }
 
@@ -111,7 +119,10 @@ async function mountSection(filter = '') {
 	return mount(CardDeckListSection, {
 		props: {
 			title: 'Mainboard',
-			cards: [resolvedCard, createCard('Opt', 'mainboard')],
+			cards: [
+				resolvedCard,
+				createCard('Opt', 'mainboard'),
+			],
 			filter,
 		},
 		global: {

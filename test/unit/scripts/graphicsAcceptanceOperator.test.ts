@@ -61,7 +61,10 @@ describe('how an acceptance run acquires an operator', () => {
 	});
 
 	it('bootstraps its own account when only a token is available', () => {
-		const plan = planFor({ env: { [BOOTSTRAP_TOKEN_NAME]: A_TOKEN }, newPassword: PASSWORD });
+		const plan = planFor({
+			env: { [BOOTSTRAP_TOKEN_NAME]: A_TOKEN },
+			newPassword: PASSWORD,
+		});
 
 		expect(plan).toEqual({
 			kind: 'bootstrap',
@@ -74,7 +77,10 @@ describe('how an acceptance run acquires an operator', () => {
 	it('takes the token from the checkout for a local run', () => {
 		// The ordinary local path: `.env` carries the token, which is
 		// why #396 made that name one a local run is checked for.
-		const plan = planFor({ supplied: { [BOOTSTRAP_TOKEN_NAME]: A_TOKEN }, newPassword: PASSWORD });
+		const plan = planFor({
+			supplied: { [BOOTSTRAP_TOKEN_NAME]: A_TOKEN },
+			newPassword: PASSWORD,
+		});
 
 		expect(plan).toMatchObject({ kind: 'bootstrap', bootstrapToken: A_TOKEN });
 	});
@@ -109,7 +115,10 @@ describe('how an acceptance run acquires an operator', () => {
 	});
 
 	it('refuses half a credential rather than signing in with an empty password', () => {
-		expect(() => planFor({ env: { [OPERATOR_EMAIL_ENV]: 'ops@keepr.digital' }, newPassword: PASSWORD }))
+		expect(() => planFor({
+			env: { [OPERATOR_EMAIL_ENV]: 'ops@keepr.digital' },
+			newPassword: PASSWORD,
+		}))
 			.toThrow(expect.objectContaining({ code: 'harness-operator-unavailable' }));
 	});
 
@@ -153,7 +162,12 @@ describe('how an acceptance run acquires an operator', () => {
  */
 describe('whether local secrets may reach an origin', () => {
 	it('says yes to a server on this machine', () => {
-		for (const origin of ['http://127.0.0.1:8787', 'http://localhost:3000', 'http://[::1]:8787', 'http://0.0.0.0:8787'])
+		for (const origin of [
+			'http://127.0.0.1:8787',
+			'http://localhost:3000',
+			'http://[::1]:8787',
+			'http://0.0.0.0:8787',
+		])
 			expect(isLoopbackOrigin(origin)).toBe(true);
 	});
 

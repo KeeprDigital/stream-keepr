@@ -47,8 +47,26 @@ function createSnapshot(overrides: Partial<FeatureMatchSourceSnapshot> = {}): Fe
 		playerDisplayMode: 'score',
 		game: 'mtg',
 		defaults: DEFAULT_FEATURE_MATCH_DEFAULTS,
-		player1: { playerId: 1, data: { name: 'Alice', wins: 3, losses: 1, draws: 0, gameData: { type: 'mtg', deckName: 'Burn', deckColors: 'R' } } },
-		player2: { playerId: 2, data: { name: 'Bob', wins: 2, losses: 2, draws: 0, gameData: { type: 'mtg', deckName: 'Control', deckColors: 'U' } } },
+		player1: {
+			playerId: 1,
+			data: {
+				name: 'Alice',
+				wins: 3,
+				losses: 1,
+				draws: 0,
+				gameData: { type: 'mtg', deckName: 'Burn', deckColors: 'R' },
+			},
+		},
+		player2: {
+			playerId: 2,
+			data: {
+				name: 'Bob',
+				wins: 2,
+				losses: 2,
+				draws: 0,
+				gameData: { type: 'mtg', deckName: 'Control', deckColors: 'U' },
+			},
+		},
 		createdAt: 1000,
 		...overrides,
 	};
@@ -132,12 +150,19 @@ describe('feature match session reducer', () => {
 
 		state = reduce(state, snapshot, 'AdjustLife', { player: 'player1', delta: -3 }).currentState;
 		state = reduce(state, snapshot, 'SetLife', { player: 'player2', lifeTotal: 7 }).currentState;
-		state = reduce(state, snapshot, 'SetCounters', { player: 'player1', counters: [{ type: 'poison', value: 2 }] }).currentState;
+		state = reduce(state, snapshot, 'SetCounters', {
+			player: 'player1',
+			counters: [
+				{ type: 'poison', value: 2 },
+			],
+		}).currentState;
 		state = reduce(state, snapshot, 'SetCardsKept', { player: 'player2', cardsKept: 5 }).currentState;
 
 		expect(state.player1.lifeTotal).toBe(17);
 		expect(state.player2.lifeTotal).toBe(7);
-		expect(state.player1.counters).toEqual([{ type: 'poison', value: 2 }]);
+		expect(state.player1.counters).toEqual([
+			{ type: 'poison', value: 2 },
+		]);
 		expect(state.player2.cardsKept).toBe(5);
 	});
 
@@ -342,7 +367,9 @@ describe('feature match session reducer', () => {
 		const once = reduce(createInitialFeatureMatchState(), createSnapshot(), 'SwapPlayers', {});
 		const twice = reduce(once.currentState, once.sourceSnapshot, 'SwapPlayers', {});
 
-		const result = reduce(twice.currentState, twice.sourceSnapshot, 'SnapshotCorrected', { sourceSnapshot: createSnapshot() });
+		const result = reduce(twice.currentState, twice.sourceSnapshot, 'SnapshotCorrected', {
+			sourceSnapshot: createSnapshot(),
+		});
 
 		expect(result.sourceSnapshot.player1.data?.name).toBe('Alice');
 		expect(result.sourceSnapshot.player2.data?.name).toBe('Bob');
@@ -354,23 +381,63 @@ describe('feature match session reducer', () => {
 
 		const result = reduce(state, snapshot, 'Batch', {
 			commands: [
-				{ type: 'SetLife', payload: { player: 'player1', lifeTotal: 12 } },
-				{ type: 'SetLife', payload: { player: 'player2', lifeTotal: 9 } },
-				{ type: 'SetCounters', payload: { player: 'player1', counters: [{ type: 'poison', value: 3 }] } },
-				{ type: 'SetCardsKept', payload: { player: 'player2', cardsKept: 6 } },
-				{ type: 'SetSideboardRevealed', payload: { player: 'player1', revealed: true } },
-				{ type: 'SetSideboardRevealed', payload: { player: 'player2', revealed: true } },
-				{ type: 'SetClock', payload: { at: 6000, targetMs: 30_000 } },
-				{ type: 'SetFirstPlayer', payload: { player: 'player2' } },
-				{ type: 'SetActivePlayer', payload: { player: 'player1' } },
-				{ type: 'SetTurnNumber', payload: { turnNumber: 4 } },
-				{ type: 'StartOvertime', payload: { totalTurns: 3 } },
+				{
+					type: 'SetLife',
+					payload: { player: 'player1', lifeTotal: 12 },
+				},
+				{
+					type: 'SetLife',
+					payload: { player: 'player2', lifeTotal: 9 },
+				},
+				{
+					type: 'SetCounters',
+					payload: {
+						player: 'player1',
+						counters: [
+							{ type: 'poison', value: 3 },
+						],
+					},
+				},
+				{
+					type: 'SetCardsKept',
+					payload: { player: 'player2', cardsKept: 6 },
+				},
+				{
+					type: 'SetSideboardRevealed',
+					payload: { player: 'player1', revealed: true },
+				},
+				{
+					type: 'SetSideboardRevealed',
+					payload: { player: 'player2', revealed: true },
+				},
+				{
+					type: 'SetClock',
+					payload: { at: 6000, targetMs: 30_000 },
+				},
+				{
+					type: 'SetFirstPlayer',
+					payload: { player: 'player2' },
+				},
+				{
+					type: 'SetActivePlayer',
+					payload: { player: 'player1' },
+				},
+				{
+					type: 'SetTurnNumber',
+					payload: { turnNumber: 4 },
+				},
+				{
+					type: 'StartOvertime',
+					payload: { totalTurns: 3 },
+				},
 			],
 		});
 
 		expect(result.currentState.player1.lifeTotal).toBe(12);
 		expect(result.currentState.player2.lifeTotal).toBe(9);
-		expect(result.currentState.player1.counters).toEqual([{ type: 'poison', value: 3 }]);
+		expect(result.currentState.player1.counters).toEqual([
+			{ type: 'poison', value: 3 },
+		]);
 		expect(result.currentState.player2.cardsKept).toBe(6);
 		expect(result.currentState.player1.sideboardRevealed).toBe(true);
 		expect(result.currentState.player2.sideboardRevealed).toBe(true);
@@ -389,8 +456,14 @@ describe('feature match session reducer', () => {
 		// same batch must land on top of it, exactly as the serial commands did.
 		const result = reduce(state, snapshot, 'Batch', {
 			commands: [
-				{ type: 'SelectFirstPlayer', payload: { player: 'player1' } },
-				{ type: 'SetTurnNumber', payload: { turnNumber: 7 } },
+				{
+					type: 'SelectFirstPlayer',
+					payload: { player: 'player1' },
+				},
+				{
+					type: 'SetTurnNumber',
+					payload: { turnNumber: 7 },
+				},
 			],
 		});
 
@@ -402,8 +475,14 @@ describe('feature match session reducer', () => {
 	it('stamps clock timestamps inside a Batch payload during normalization', () => {
 		const normalized = normalizeFeatureMatchSessionCommandPayload('Batch', {
 			commands: [
-				{ type: 'SetClock', payload: { targetMs: 30_000 } },
-				{ type: 'SetLife', payload: { player: 'player1', lifeTotal: 12 } },
+				{
+					type: 'SetClock',
+					payload: { targetMs: 30_000 },
+				},
+				{
+					type: 'SetLife',
+					payload: { player: 'player1', lifeTotal: 12 },
+				},
 			],
 		}, () => 4242) as { commands: { type: string; payload: Record<string, unknown> }[] };
 
@@ -415,21 +494,49 @@ describe('feature match session reducer', () => {
 		const snapshot = createSnapshot();
 		const started = createInitialFeatureMatchState();
 		const events: Array<[FeatureMatchCommandType | 'SessionStarted', Record<string, unknown>]> = [
-			['SessionStarted', { sourceSnapshot: snapshot, currentState: started }],
-			['AdjustLife', { player: 'player1', delta: -2 }],
-			['SetCounters', { player: 'player1', counters: [{ type: 'energy', value: 4 }] }],
-			['SelectFirstPlayer', { player: 'player2' }],
-			['StepTurn', { delta: 2 }],
-			['RecordGameWin', { player: 'player2', resetLife: false, resetCounters: false }],
+			[
+				'SessionStarted',
+				{ sourceSnapshot: snapshot, currentState: started },
+			],
+			[
+				'AdjustLife',
+				{ player: 'player1', delta: -2 },
+			],
+			[
+				'SetCounters',
+				{
+					player: 'player1',
+					counters: [
+						{ type: 'energy', value: 4 },
+					],
+				},
+			],
+			[
+				'SelectFirstPlayer',
+				{ player: 'player2' },
+			],
+			[
+				'StepTurn',
+				{ delta: 2 },
+			],
+			[
+				'RecordGameWin',
+				{ player: 'player2', resetLife: false, resetCounters: false },
+			],
 		];
 
 		const replayed = events.reduce(
 			(acc, [type, payload]) => reduce(acc.currentState, acc.sourceSnapshot, type, payload),
-			{ currentState: createInitialFeatureMatchState(), sourceSnapshot: snapshot },
+			{
+				currentState: createInitialFeatureMatchState(),
+				sourceSnapshot: snapshot,
+			},
 		);
 
 		expect(replayed.currentState.player1.lifeTotal).toBe(18);
-		expect(replayed.currentState.player1.counters).toEqual([{ type: 'energy', value: 4 }]);
+		expect(replayed.currentState.player1.counters).toEqual([
+			{ type: 'energy', value: 4 },
+		]);
 		expect(replayed.currentState.player2.gameWins).toBe(1);
 		expect(replayed.currentState.currentGame).toBe(2);
 	});
@@ -444,7 +551,11 @@ describe('feature match session state service', () => {
 	it('builds source snapshots from slot, event defaults, players, and slot overrides', async () => {
 		const slot = createSlot({
 			player1Id: 101,
-			player1Data: { name: 'Display Alice', deckId: 77, gameData: { type: 'mtg', deckName: 'Aggro' } },
+			player1Data: {
+				name: 'Display Alice',
+				deckId: 77,
+				gameData: { type: 'mtg', deckName: 'Aggro' },
+			},
 			player2Id: 202,
 		});
 		mockDb.query.players.findFirst
@@ -551,7 +662,9 @@ describe('feature match session state service', () => {
 		const snapshot = await featureMatchStateService().buildSourceSnapshot(
 			slot,
 			{ ...DEFAULT_FEATURE_MATCH_DEFAULTS, game: 'mtg' },
-			new Map([[101, player]]),
+			new Map([
+				[101, player],
+			]),
 		);
 
 		expect(snapshot.player1.data).toEqual(expect.objectContaining({
@@ -581,7 +694,9 @@ describe('feature match session state service', () => {
 		const snapshot = await featureMatchStateService().buildSourceSnapshot(
 			slot,
 			{ ...DEFAULT_FEATURE_MATCH_DEFAULTS, game: 'mtg' },
-			new Map([[101, player]]),
+			new Map([
+				[101, player],
+			]),
 		);
 
 		expect(snapshot.player1.data).toEqual(expect.objectContaining({
@@ -609,12 +724,14 @@ describe('feature match session state service', () => {
 		// closed milliseconds after it was inserted — everything downstream of this
 		// call, the SessionStarted announcement included, names the survivor.
 		expect(result).toBe(winner);
-		expect(mockPublishMessage.mock.calls.filter(isEventApplied)).toEqual([[
-			1,
-			'featureMatchSession:eventApplied',
-			expect.objectContaining({ slotId: 7, sessionId: winner.id, eventType: 'SessionStarted' }),
-			undefined,
-		]]);
+		expect(mockPublishMessage.mock.calls.filter(isEventApplied)).toEqual([
+			[
+				1,
+				'featureMatchSession:eventApplied',
+				expect.objectContaining({ slotId: 7, sessionId: winner.id, eventType: 'SessionStarted' }),
+				undefined,
+			],
+		]);
 	});
 
 	it('rejects reuse of a command ID for a different command', async () => {
@@ -662,7 +779,9 @@ describe('feature match session state service', () => {
 		await expect(featureMatchStateService().applyCommand(10, 1, {
 			commandId: 'wrong-snapshot',
 			type: 'SnapshotCorrected',
-			payload: { sourceSnapshot: createSnapshot({ eventId: 2, slotId: 5 }) },
+			payload: {
+				sourceSnapshot: createSnapshot({ eventId: 2, slotId: 5 }),
+			},
 			baseSequence: 3,
 		})).rejects.toMatchObject({
 			statusCode: 400,
@@ -684,7 +803,10 @@ describe('feature match session state service', () => {
 			.mockResolvedValueOnce(latest);
 		mockDb.batch
 			.mockResolvedValueOnce([undefined, []])
-			.mockResolvedValueOnce([undefined, [updated]]);
+			.mockResolvedValueOnce([
+				undefined,
+				[updated],
+			]);
 
 		const result = await featureMatchStateService().applyCommand(10, 1, {
 			commandId: 'cmd-merge',
@@ -709,7 +831,10 @@ describe('feature match session state service', () => {
 		});
 		const corrected = createSnapshot({
 			slotId: 5,
-			player1: { playerId: 1, data: { name: 'Renamed Alice' } },
+			player1: {
+				playerId: 1,
+				data: { name: 'Renamed Alice' },
+			},
 		});
 		const committed = createDbSession({
 			sequence: 5,
@@ -722,7 +847,10 @@ describe('feature match session state service', () => {
 			.mockResolvedValueOnce(advanced);
 		mockDb.batch
 			.mockResolvedValueOnce([undefined, []])
-			.mockResolvedValueOnce([undefined, [committed]]);
+			.mockResolvedValueOnce([
+				undefined,
+				[committed],
+			]);
 
 		const result = await featureMatchStateService().applyCommand(10, 1, {
 			commandId: 'cmd-snapshot-merge',
@@ -752,12 +880,20 @@ describe('feature match session state service', () => {
 			.mockResolvedValue([winner]);
 		mockDb.batch
 			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([[], [], [createDbSession({ id: 31, slotId: 7, sequence: 2 })]]);
+			.mockResolvedValueOnce([
+				[],
+				[],
+				[
+					createDbSession({ id: 31, slotId: 7, sequence: 2 }),
+				],
+			]);
 
 		const createCommand = vi.fn((session: DbFeatureMatchSession) => ({
 			commandId: 'cmd-reverse-sync',
 			type: 'SnapshotCorrected' as const,
-			payload: { sourceSnapshot: createSnapshot({ slotId: 7 }) },
+			payload: {
+				sourceSnapshot: createSnapshot({ slotId: 7 }),
+			},
 			baseSequence: session.sequence,
 		}));
 		const result = await featureMatchStateService().applyCommandToActiveSession(7, 1, createCommand);
@@ -776,7 +912,11 @@ describe('feature match session state service', () => {
 			mockDb.query.featureMatchSessions.findFirst.mockResolvedValue(session);
 			// The projection update is the batch's last statement; the receipt writes
 			// precede it.
-			mockDb.batch.mockResolvedValue([[], [], [updated]]);
+			mockDb.batch.mockResolvedValue([
+				[],
+				[],
+				[updated],
+			]);
 			return updated;
 		}
 

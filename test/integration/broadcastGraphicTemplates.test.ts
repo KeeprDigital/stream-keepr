@@ -44,7 +44,10 @@ const basePixelPng = Uint8Array.from(Buffer.from(
  * Owning a distinct digest is what makes the isolation mutual.
  */
 function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array<ArrayBuffer> {
-	const payload = Buffer.concat([Buffer.from('tEXt'), Buffer.from(`${keyword}\0`)]);
+	const payload = Buffer.concat([
+		Buffer.from('tEXt'),
+		Buffer.from(`${keyword}\0`),
+	]);
 	const length = Buffer.alloc(4);
 	length.writeUInt32BE(payload.byteLength - 4, 0);
 	const checksum = Buffer.alloc(4);
@@ -147,7 +150,9 @@ function mediaItem(id: string, asset?: { assetId: string; revisionId: string }) 
 		opacity: 1,
 		playbackRate: 1,
 		loop: true,
-		...(asset ? { asset } : {}),
+		...(asset
+			? { asset }
+			: {}),
 	};
 }
 
@@ -170,7 +175,9 @@ function groupItem(id: string, children: unknown[], animation?: unknown) {
 		clip: true,
 		geometry: SQUARE_GEOMETRY,
 		children,
-		...(animation ? { animation } : {}),
+		...(animation
+			? { animation }
+			: {}),
 	};
 }
 
@@ -187,10 +194,17 @@ async function request(
 	const response = await fetch(path, {
 		method: options.method ?? 'GET',
 		headers,
-		body: options.body === undefined ? undefined : JSON.stringify(options.body),
+		body: options.body === undefined
+			? undefined
+			: JSON.stringify(options.body),
 	});
 	const text = await response.text();
-	return { status: response.status, data: text ? JSON.parse(text) : null };
+	return {
+		status: response.status,
+		data: text
+			? JSON.parse(text)
+			: null,
+	};
 }
 
 /**
@@ -222,7 +236,11 @@ async function ingestImage(
 	});
 	const response = await fetch(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-		{ method: 'PUT', headers: { cookie }, body: pixelPng },
+		{
+			method: 'PUT',
+			headers: { cookie },
+			body: pixelPng,
+		},
 	);
 	const operation = await expectOperationResult(response);
 	return { assetId: operation.result.assetId, revisionId: operation.result.revisionId };
@@ -321,40 +339,73 @@ describe('broadcast Graphic Template library', () => {
 		// One authored Broadcast Graphic with everything a template has to carry: a
 		// Graphic Group with children, a pinned Media Graphic Item, typed Graphic
 		// Inputs, and the Graphic Source Selections and Bindings its author declared.
-		const authored = await patchStack(sourceEventId, sourceScreenId, [{
-			id: 'authored-lower-third',
-			name: 'Lower third',
-			items: [
-				shapeItem('backing'),
-				textItem('headline', 'Now playing: {player}'),
-				groupItem(
-					'badges',
-					[mediaItem('bug', asset), shapeItem('rule', { width: 4, height: 80 })],
-					{
-						enter: { duration: 300, easing: 'linear', delay: 0, fade: { opacity: 0 } },
-						stagger: { enter: { order: 'reverse-list', step: 50, itemIds: ['bug', 'rule'] } },
+		const authored = await patchStack(sourceEventId, sourceScreenId, [
+			{
+				id: 'authored-lower-third',
+				name: 'Lower third',
+				items: [
+					shapeItem('backing'),
+					textItem('headline', 'Now playing: {player}'),
+					groupItem(
+						'badges',
+						[
+							mediaItem('bug', asset),
+							shapeItem('rule', { width: 4, height: 80 }),
+						],
+						{
+							enter: {
+								duration: 300,
+								easing: 'linear',
+								delay: 0,
+								fade: { opacity: 0 },
+							},
+							stagger: {
+								enter: {
+									order: 'reverse-list',
+									step: 50,
+									itemIds: ['bug', 'rule'],
+								},
+							},
+						},
+					),
+				],
+				// Graphic Animation on both containers, each staggering its own direct items.
+				// A stale stagger id is ignored at projection rather than rejected, so a
+				// placement that failed to rewrite these would silently lose the choreography.
+				animation: {
+					enter: {
+						duration: 400,
+						easing: 'ease-out',
+						delay: 0,
+						fade: { opacity: 0 },
 					},
-				),
-			],
-			// Graphic Animation on both containers, each staggering its own direct items.
-			// A stale stagger id is ignored at projection rather than rejected, so a
-			// placement that failed to rewrite these would silently lose the choreography.
-			animation: {
-				enter: { duration: 400, easing: 'ease-out', delay: 0, fade: { opacity: 0 } },
-				stagger: { enter: { order: 'list', step: 80, itemIds: ['headline', 'backing'] } },
+					stagger: {
+						enter: {
+							order: 'list',
+							step: 80,
+							itemIds: ['headline', 'backing'],
+						},
+					},
+				},
+				inputs: [
+					{
+						type: 'text',
+						key: 'player',
+						label: 'Player',
+						required: true,
+						updatePolicy: 'staged',
+						default: 'Reid Duke',
+						maxLength: 40,
+					},
+				],
+				sources: [
+					{ key: 'player', label: 'Player', kind: 'player' },
+				],
+				bindings: [
+					{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.name' },
+				],
 			},
-			inputs: [{
-				type: 'text',
-				key: 'player',
-				label: 'Player',
-				required: true,
-				updatePolicy: 'staged',
-				default: 'Reid Duke',
-				maxLength: 40,
-			}],
-			sources: [{ key: 'player', label: 'Player', kind: 'player' }],
-			bindings: [{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.name' }],
-		}]);
+		]);
 		expect(authored.status).toBe(200);
 	});
 
@@ -404,7 +455,9 @@ describe('broadcast Graphic Template library', () => {
 		const missing = await request(TEMPLATES_PATH, {
 			method: 'POST',
 			cookie: authorCookie,
-			body: { source: { eventId: sourceEventId, screenId: sourceScreenId, graphicId: 'never-authored' } },
+			body: {
+				source: { eventId: sourceEventId, screenId: sourceScreenId, graphicId: 'never-authored' },
+			},
 		});
 
 		expect(missing.status).toBe(404);
@@ -416,7 +469,12 @@ describe('broadcast Graphic Template library', () => {
 		expect(listed.status).toBe(200);
 		const summaries = listed.data.templates as BroadcastGraphicTemplateSummary[];
 		const saved = summaries.find(summary => summary.id === templateId);
-		expect(saved).toMatchObject({ name: 'Lower third', revision: 1, itemCount: 5, inputCount: 1 });
+		expect(saved).toMatchObject({
+			name: 'Lower third',
+			revision: 1,
+			itemCount: 5,
+			inputCount: 1,
+		});
 		// A library listing is a browse, not a download: the composition itself is not
 		// in it.
 		expect(saved).not.toHaveProperty('document');
@@ -443,7 +501,9 @@ describe('broadcast Graphic Template library', () => {
 
 		const itemIds = stack.flatMap(graphic => graphic.items.flatMap(item => [
 			item.id,
-			...(item.type === 'group' ? item.children.map(child => child.id) : []),
+			...(item.type === 'group'
+				? item.children.map(child => child.id)
+				: []),
 		]));
 		expect(new Set(itemIds).size).toBe(itemIds.length);
 		expect(itemIds).not.toContain('backing');
@@ -477,23 +537,33 @@ describe('broadcast Graphic Template library', () => {
 			...graphicStagger.itemIds,
 			...group.animation!.stagger!.enter!.itemIds,
 		];
-		for (const authored of ['backing', 'headline', 'badges', 'bug', 'rule'])
+		for (const authored of [
+			'backing',
+			'headline',
+			'badges',
+			'bug',
+			'rule',
+		])
 			expect(staggered).not.toContain(authored);
 	});
 
 	it('carries each Graphic Input default as the placed copy\'s own initial manual value', async () => {
 		const [placed] = await authoredStack(otherEventId, otherScreenId);
 
-		expect(placed!.inputs).toEqual([{
-			type: 'text',
-			key: 'player',
-			label: 'Player',
-			required: true,
-			updatePolicy: 'staged',
-			default: 'Reid Duke',
-			maxLength: 40,
-		}]);
-		expect(placed!.sources).toEqual([{ key: 'player', label: 'Player', kind: 'player' }]);
+		expect(placed!.inputs).toEqual([
+			{
+				type: 'text',
+				key: 'player',
+				label: 'Player',
+				required: true,
+				updatePolicy: 'staged',
+				default: 'Reid Duke',
+				maxLength: 40,
+			},
+		]);
+		expect(placed!.sources).toEqual([
+			{ key: 'player', label: 'Player', kind: 'player' },
+		]);
 		expect(placed!.bindings).toEqual([
 			{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.name' },
 		]);
@@ -502,7 +572,9 @@ describe('broadcast Graphic Template library', () => {
 	it('places an authored Graphic Asset Reference its Screen Output can resolve', async () => {
 		const stack = await authoredStack(otherEventId, otherScreenId);
 		const placedMedia = stack[0]!.items
-			.flatMap(item => item.type === 'group' ? item.children : [])
+			.flatMap(item => item.type === 'group'
+				? item.children
+				: [])
 			.find(child => child.type === 'media') as MediaGraphicItemConfig;
 
 		expect(placedMedia.asset).toEqual(asset);
@@ -513,11 +585,15 @@ describe('broadcast Graphic Template library', () => {
 		// authored reference would leave the graphic's media unresolvable on air.
 		const { assetCapability } = await $fetch<{ assetCapability: string }>(
 			`/api/events/${otherEventId}/screens/${otherScreenId}/asset-capability`,
-			{ headers: { cookie: authorCookie } },
+			{
+				headers: { cookie: authorCookie },
+			},
 		);
 		const delivered = await fetch(
 			`/api/screen-output/screens/${otherScreenId}/assets/${placedMedia.asset!.assetId}/revisions/${placedMedia.asset!.revisionId}/content`,
-			{ headers: { authorization: `Bearer ${assetCapability}` } },
+			{
+				headers: { authorization: `Bearer ${assetCapability}` },
+			},
 		);
 		expect(delivered.status).toBe(200);
 
@@ -526,7 +602,9 @@ describe('broadcast Graphic Template library', () => {
 		const unreferenced = await ingestImage(otherEventId, 'template-library-unplaced', authorCookie);
 		const refused = await fetch(
 			`/api/screen-output/screens/${otherScreenId}/assets/${unreferenced.assetId}/revisions/${unreferenced.revisionId}/content`,
-			{ headers: { authorization: `Bearer ${assetCapability}` } },
+			{
+				headers: { authorization: `Bearer ${assetCapability}` },
+			},
 		);
 		expect(refused.status).toBe(404);
 	});
@@ -541,7 +619,9 @@ describe('broadcast Graphic Template library', () => {
 	it('names the Broadcast Graphic Template that pins an asset in its usage', async () => {
 		const usage = await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${asset.assetId}/usage`,
-			{ headers: { cookie: authorCookie } },
+			{
+				headers: { cookie: authorCookie },
+			},
 		);
 
 		expect(usage).toContainEqual(expect.objectContaining({
@@ -574,9 +654,15 @@ describe('broadcast Graphic Template library', () => {
 			...placed.animation,
 			stagger: undefined,
 		} as typeof placed.animation;
-		placed.inputs = [{ ...(placed.inputs![0] as any), default: 'Local value' }];
-		placed.sources = [{ key: 'player', label: 'Featured player', kind: 'player' }];
-		placed.bindings = [{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.pronouns' }];
+		placed.inputs = [
+			{ ...(placed.inputs![0] as any), default: 'Local value' },
+		];
+		placed.sources = [
+			{ key: 'player', label: 'Featured player', kind: 'player' },
+		];
+		placed.bindings = [
+			{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.pronouns' },
+		];
 		expect((await patchStack(otherEventId, otherScreenId, [placed, before[1]!])).status).toBe(200);
 
 		const template = await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie });
@@ -586,16 +672,24 @@ describe('broadcast Graphic Template library', () => {
 		expect(document.items).toHaveLength(3);
 		expect(document.inputs![0]!.default).toBe('Reid Duke');
 		// The template kept the source and binding it was authored with.
-		expect(document.sources).toEqual([{ key: 'player', label: 'Player', kind: 'player' }]);
+		expect(document.sources).toEqual([
+			{ key: 'player', label: 'Player', kind: 'player' },
+		]);
 		expect(document.bindings)
-			.toEqual([{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.name' }]);
+			.toEqual([
+				{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.name' },
+			]);
 
 		// And the copy's own edits survived the round trip rather than being silently
 		// dropped by a write path that does not carry them.
 		const edited = (await authoredStack(otherEventId, otherScreenId))[0]!;
-		expect(edited.sources).toEqual([{ key: 'player', label: 'Featured player', kind: 'player' }]);
+		expect(edited.sources).toEqual([
+			{ key: 'player', label: 'Featured player', kind: 'player' },
+		]);
 		expect(edited.bindings)
-			.toEqual([{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.pronouns' }]);
+			.toEqual([
+				{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.pronouns' },
+			]);
 
 		// Revising the template changes nothing about the copies already placed.
 		const revised = await request(`${TEMPLATES_PATH}/${templateId}`, {
@@ -606,7 +700,11 @@ describe('broadcast Graphic Template library', () => {
 				// Truncating the item list drops the staggered subset with it, the way
 				// `deleteGraphicItem` does: a stagger names no more items than its
 				// container holds.
-				document: { ...document, items: document.items.slice(0, 1), animation: { ...document.animation, stagger: undefined } },
+				document: {
+					...document,
+					items: document.items.slice(0, 1),
+					animation: { ...document.animation, stagger: undefined },
+				},
 				revision: await templateRevision(templateId),
 			},
 		});
@@ -655,7 +753,13 @@ describe('broadcast Graphic Template library', () => {
 			method: 'PATCH',
 			cookie: authorCookie,
 			body: {
-				document: { id: 'x', name: 'x', items: [{ type: 'text', id: 'a' }] },
+				document: {
+					id: 'x',
+					name: 'x',
+					items: [
+						{ type: 'text', id: 'a' },
+					],
+				},
 				revision: await templateRevision(templateId),
 			},
 		});
@@ -671,7 +775,10 @@ describe('broadcast Graphic Template library', () => {
 			method: 'PATCH',
 			cookie: authorCookie,
 			body: {
-				document: { ...document, items: [document.items[0]!, document.items[0]!] },
+				document: {
+					...document,
+					items: [document.items[0]!, document.items[0]!],
+				},
 				revision: await templateRevision(templateId),
 			},
 		});
@@ -680,7 +787,9 @@ describe('broadcast Graphic Template library', () => {
 	});
 
 	it('reports placing a template that does not exist as not found', async () => {
-		const missing = await place(otherEventId, otherScreenId, { templateId: randomUUID() }, authorCookie);
+		const missing = await place(otherEventId, otherScreenId, {
+			templateId: randomUUID(),
+		}, authorCookie);
 
 		expect(missing.status).toBe(404);
 	});
@@ -803,18 +912,25 @@ describe('broadcast Graphic Template library', () => {
 		// A Screen cannot normally hold one — its write path checks a newly chosen
 		// reference — so this is written straight into the stack the way an unlucky
 		// migration or a future import could.
-		const invented = { assetId: randomUUID(), revisionId: randomUUID() };
+		const invented = {
+			assetId: randomUUID(),
+			revisionId: randomUUID(),
+		};
 		const screen = await $fetch<ScreenResponse>(`/api/events/${sourceEventId}/screens`, {
 			method: 'POST',
 			body: { name: 'Phantom', slug: 'template-phantom-screen', currentMode: 'broadcast-graphics' },
 		});
 		const phantomConfig = JSON.stringify({
 			'broadcast-graphics': {
-				graphics: [{
-					id: 'phantom-graphic',
-					name: 'Phantom',
-					items: [mediaItem('ghost', invented)],
-				}],
+				graphics: [
+					{
+						id: 'phantom-graphic',
+						name: 'Phantom',
+						items: [
+							mediaItem('ghost', invented),
+						],
+					},
+				],
 			},
 		}).replace(/'/g, '\'\'');
 		await executeIntegrationD1(
@@ -824,7 +940,9 @@ describe('broadcast Graphic Template library', () => {
 		const refused = await request(TEMPLATES_PATH, {
 			method: 'POST',
 			cookie: authorCookie,
-			body: { source: { eventId: sourceEventId, screenId: screen.id, graphicId: 'phantom-graphic' } },
+			body: {
+				source: { eventId: sourceEventId, screenId: screen.id, graphicId: 'phantom-graphic' },
+			},
 		});
 
 		// Storing it would put a healthy-looking entry in the library whose reference
@@ -844,11 +962,15 @@ describe('broadcast Graphic Template library', () => {
 			method: 'POST',
 			body: { name: 'Retiring', slug: 'template-retiring-screen', currentMode: 'broadcast-graphics' },
 		});
-		expect((await patchStack(sourceEventId, sourceScreen.id, [{
-			id: 'retiring-graphic',
-			name: 'Retiring bug',
-			items: [mediaItem('brand-bug', retiredAsset)],
-		}])).status).toBe(200);
+		expect((await patchStack(sourceEventId, sourceScreen.id, [
+			{
+				id: 'retiring-graphic',
+				name: 'Retiring bug',
+				items: [
+					mediaItem('brand-bug', retiredAsset),
+				],
+			},
+		])).status).toBe(200);
 
 		const saved = await request(TEMPLATES_PATH, {
 			method: 'POST',
@@ -890,15 +1012,21 @@ describe('broadcast Graphic Template library', () => {
 			method: 'POST',
 			body: { name: 'Kinds', slug: 'template-kinds-screen', currentMode: 'broadcast-graphics' },
 		});
-		expect((await patchStack(sourceEventId, sourceScreen.id, [{
-			id: 'kinds-graphic',
-			name: 'Kinds',
-			items: [mediaItem('plate', retiring)],
-		}])).status).toBe(200);
+		expect((await patchStack(sourceEventId, sourceScreen.id, [
+			{
+				id: 'kinds-graphic',
+				name: 'Kinds',
+				items: [
+					mediaItem('plate', retiring),
+				],
+			},
+		])).status).toBe(200);
 		const saved = await request(TEMPLATES_PATH, {
 			method: 'POST',
 			cookie: authorCookie,
-			body: { source: { eventId: sourceEventId, screenId: sourceScreen.id, graphicId: 'kinds-graphic' } },
+			body: {
+				source: { eventId: sourceEventId, screenId: sourceScreen.id, graphicId: 'kinds-graphic' },
+			},
 		});
 		expect(saved.status).toBe(201);
 		const kindsTemplate = saved.data as BroadcastGraphicTemplateResponse;
@@ -909,7 +1037,14 @@ describe('broadcast Graphic Template library', () => {
 			body: {
 				document: {
 					...kindsTemplate.document,
-					items: [{ ...mediaItem('plate', retiring), mediaKind: 'silent-video', loop: true, playbackRate: 1 }],
+					items: [
+						{
+							...mediaItem('plate', retiring),
+							mediaKind: 'silent-video',
+							loop: true,
+							playbackRate: 1,
+						},
+					],
 				},
 				revision: kindsTemplate.revision,
 			},
@@ -919,13 +1054,19 @@ describe('broadcast Graphic Template library', () => {
 
 		const retire = await $fetch<GraphicAssetLifecycleActionOutcome>(
 			`/api/graphics-assets/${retiring.assetId}/lifecycle-actions`,
-			{ method: 'POST', headers: { cookie: authorCookie }, body: { action: 'retire' } },
+			{
+				method: 'POST',
+				headers: { cookie: authorCookie },
+				body: { action: 'retire' },
+			},
 		);
 		expect(retire).toMatchObject({
 			outcome: 'in-use',
-			usage: [expect.objectContaining({
-				owner: expect.objectContaining({ kind: 'broadcast-graphic-template', id: kindsTemplate.id, name: 'Kinds' }),
-			})],
+			usage: [
+				expect.objectContaining({
+					owner: expect.objectContaining({ kind: 'broadcast-graphic-template', id: kindsTemplate.id, name: 'Kinds' }),
+				}),
+			],
 		});
 		// Nothing a Screen holds is reported: the source Screen pins the asset too.
 		expect(retire.outcome === 'in-use' && retire.usage.map(entry => entry.owner.kind))

@@ -99,8 +99,11 @@ export function useCardSearchRuntime(state: CardSearchRuntimeState) {
 				signal: controller.signal,
 				timeout: SCRYFALL_CLIENT_TIMEOUT_MS,
 			});
-			if (generation === fuzzySearchGeneration)
-				state.searchResults.value = data ? data.data.map(card => cardParser(card)) : [];
+			if (generation === fuzzySearchGeneration) {
+				state.searchResults.value = data
+					? data.data.map(card => cardParser(card))
+					: [];
+			}
 		}
 		catch {
 			if (generation === fuzzySearchGeneration)

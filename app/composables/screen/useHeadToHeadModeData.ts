@@ -8,9 +8,13 @@ type HeldHeadToHead = ScreenOutputHeadToHeadResponse | null;
 /** What the configuration selects, as one comparable value; `null` while it selects nothing. */
 function selection(config: HeadToHeadModeConfig): string | null {
 	if (config.playerSource === 'players') {
-		return config.player1Id || config.player2Id ? `players:${config.player1Id ?? ''}:${config.player2Id ?? ''}` : null;
+		return config.player1Id || config.player2Id
+			? `players:${config.player1Id ?? ''}:${config.player2Id ?? ''}`
+			: null;
 	}
-	return config.featureMatchId ? `slot:${config.featureMatchId}` : null;
+	return config.featureMatchId
+		? `slot:${config.featureMatchId}`
+		: null;
 }
 
 /**
@@ -69,12 +73,16 @@ export function useHeadToHeadModeData() {
 		eventId,
 		source: () => {
 			const selected = selection(config.value);
-			return outputReads.scopeKey.value && selected ? `${outputReads.scopeKey.value}:${selected}` : null;
+			return outputReads.scopeKey.value && selected
+				? `${outputReads.scopeKey.value}:${selected}`
+				: null;
 		},
 		read: () => outputReads.headToHead(),
 		initialData: null,
 		errorMessage: 'Failed to load head-to-head',
-		dependsOn: headToHeadDependencies(() => config.value.playerSource === 'featureMatchSlot' ? config.value.featureMatchId ?? null : null),
+		dependsOn: headToHeadDependencies(() => config.value.playerSource === 'featureMatchSlot'
+			? config.value.featureMatchId ?? null
+			: null),
 	});
 	const loading = freshness.loading;
 	const error = freshness.error;
@@ -98,5 +106,16 @@ export function useHeadToHeadModeData() {
 		return formatPlayerRecord(record, eventStore.displayEvent);
 	}
 
-	return { config, loading, error, isEmpty, firstMeeting, headerText, player1, player2, earlierMatches, formatRecord };
+	return {
+		config,
+		loading,
+		error,
+		isEmpty,
+		firstMeeting,
+		headerText,
+		player1,
+		player2,
+		earlierMatches,
+		formatRecord,
+	};
 }

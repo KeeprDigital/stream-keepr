@@ -51,7 +51,12 @@ const commandRoutePath = fileURLToPath(
 
 /** The dev-mode Nitro error envelope, which is what the integration suite reads. */
 function nitroError(statusCode: number, message: string) {
-	return { error: true, statusCode, statusMessage: 'Server Error', message };
+	return {
+		error: true,
+		statusCode,
+		statusMessage: 'Server Error',
+		message,
+	};
 }
 
 /** The diagnosis as the lease suite calls it: against the Screen-command route. */
@@ -111,7 +116,9 @@ describe('diagnosing a rejected realtime publish', () => {
 		// raises three distinct 404s — would otherwise inherit this route's list and
 		// read every one of its legitimate refusals as a fabricated key.
 		const placementRefusal = nitroError(404, 'Layout placement not found');
-		const placementRefusals = [{ statusCode: 404, message: 'Layout placement not found' }];
+		const placementRefusals = [
+			{ statusCode: 404, message: 'Layout placement not found' },
+		];
 
 		expect(diagnoseRealtimePublishFailure(404, placementRefusal, placementRefusals)).toBeUndefined();
 		// The same body on a route that cannot raise it is still a diagnosis, so the
@@ -127,7 +134,9 @@ describe('diagnosing a rejected realtime publish', () => {
 		const locked = nitroError(403, 'Screen is locked');
 
 		expect(diagnose(403, locked)).toBeDefined();
-		expect(diagnoseRealtimePublishFailure(403, locked, [{ statusCode: 403, message: 'Screen is locked' }]))
+		expect(diagnoseRealtimePublishFailure(403, locked, [
+			{ statusCode: 403, message: 'Screen is locked' },
+		]))
 			.toBeUndefined();
 	});
 
@@ -150,7 +159,12 @@ describe('diagnosing a rejected realtime publish', () => {
 		// Nitro's production handler replaces an unhandled error's message with
 		// "Server Error", so the message cannot be required for the notice to fire —
 		// only for it to be suppressed.
-		const sanitised = { error: true, statusCode: 404, statusMessage: 'Server Error', message: 'Server Error' };
+		const sanitised = {
+			error: true,
+			statusCode: 404,
+			statusMessage: 'Server Error',
+			message: 'Server Error',
+		};
 
 		expect(diagnose(404, sanitised)).toContain(INTEGRATION_ABLY_API_KEY_ENV);
 	});
@@ -430,7 +444,13 @@ describe('the Screen-command route\'s own refusals', () => {
  * `test/unit/server/plugins/error-handler.test.ts`.
  */
 function scanned(statusCode: number | undefined, message: string | undefined): ScannedRefusal {
-	return { site: 'synthetic.ts:1', statusCode, message, carriesCause: false, source: 'createError({ ... })' };
+	return {
+		site: 'synthetic.ts:1',
+		statusCode,
+		message,
+		carriesCause: false,
+		source: 'createError({ ... })',
+	};
 }
 
 /**
@@ -443,7 +463,9 @@ function scanned(statusCode: number | undefined, message: string | undefined): S
  */
 describe('what the scan holds the route to', () => {
 	it('catches a route-grown 403, which the diagnosis would otherwise misread', () => {
-		const locked = [scanned(403, 'Screen is locked')];
+		const locked = [
+			scanned(403, 'Screen is locked'),
+		];
 
 		expect(inCredentialBand(locked)).toEqual(locked);
 		expect(unlistedRefusals(inCredentialBand(locked))).toEqual(locked);
@@ -453,7 +475,9 @@ describe('what the scan holds the route to', () => {
 		// 'Round not found' rather than 'Event not found': #292 made the latter a real
 		// listed refusal, and a fixture that collides with the list under test proves
 		// the opposite of what it was written to prove.
-		const missing = [scanned(404, 'Round not found')];
+		const missing = [
+			scanned(404, 'Round not found'),
+		];
 
 		expect(unlistedRefusals(inCredentialBand(missing))).toEqual(missing);
 	});
@@ -469,18 +493,32 @@ describe('what the scan holds the route to', () => {
 	});
 
 	it('excuses a banded refusal only at the status the list names it at', () => {
-		expect(unlistedRefusals([scanned(404, 'Screen not found')])).toEqual([]);
-		expect(unlistedRefusals([scanned(401, 'Screen not found')]))
-			.toEqual([scanned(401, 'Screen not found')]);
+		expect(unlistedRefusals([
+			scanned(404, 'Screen not found'),
+		])).toEqual([]);
+		expect(unlistedRefusals([
+			scanned(401, 'Screen not found'),
+		]))
+			.toEqual([
+				scanned(401, 'Screen not found'),
+			]);
 	});
 
 	it('holds a refusal it could not read to the same account as one it could', () => {
 		// #277: the half that makes an unreadable refusal safe. Neither half can match a
 		// listed pair, so the entry survives both filters and the check fails naming it.
-		expect(unlistedRefusals(inCredentialBand([scanned(undefined, 'Screen not found')])))
-			.toEqual([scanned(undefined, 'Screen not found')]);
-		expect(unlistedRefusals(inCredentialBand([scanned(404, undefined)])))
-			.toEqual([scanned(404, undefined)]);
+		expect(unlistedRefusals(inCredentialBand([
+			scanned(undefined, 'Screen not found'),
+		])))
+			.toEqual([
+				scanned(undefined, 'Screen not found'),
+			]);
+		expect(unlistedRefusals(inCredentialBand([
+			scanned(404, undefined),
+		])))
+			.toEqual([
+				scanned(404, undefined),
+			]);
 	});
 });
 
@@ -501,7 +539,9 @@ describe('what the scan can read out of a route', () => {
 
 	it('reads a refusal written as literals', () => {
 		expect(scan('createError({ statusCode: 403, message: \'Screen is locked\' });'))
-			.toEqual([expect.objectContaining({ statusCode: 403, message: 'Screen is locked' })]);
+			.toEqual([
+				expect.objectContaining({ statusCode: 403, message: 'Screen is locked' }),
+			]);
 	});
 
 	it('resolves a status held in a const, which used to be dropped entirely', () => {
@@ -509,7 +549,9 @@ describe('what the scan can read out of a route', () => {
 		// literal, and it survived the full runner set behind a `const`.
 		const refusals = scan('const FORBIDDEN = 403;\ncreateError({ statusCode: FORBIDDEN, message: \'Screen is locked\' });');
 
-		expect(refusals).toEqual([expect.objectContaining({ statusCode: 403, message: 'Screen is locked' })]);
+		expect(refusals).toEqual([
+			expect.objectContaining({ statusCode: 403, message: 'Screen is locked' }),
+		]);
 		expect(unlistedRefusals(inCredentialBand(refusals))).toEqual(refusals);
 	});
 
@@ -729,7 +771,9 @@ describe('the scan\'s reach through a route\'s imports', () => {
 		const entry = join(root, 'broken.ts');
 		writeFileSync(entry, 'import { gone } from \'./not-a-module\';\n');
 
-		expect(scanRouteRefusals(entry).unfollowedImports).toEqual([expect.stringContaining('./not-a-module')]);
+		expect(scanRouteRefusals(entry).unfollowedImports).toEqual([
+			expect.stringContaining('./not-a-module'),
+		]);
 	});
 
 	it('follows every path alias that reaches this repository, not only `~~/`', () => {
@@ -787,21 +831,47 @@ describe('the path aliases the scan follows', () => {
 		const prefixes = firstPartyPathAliases().map(alias => alias.prefix);
 
 		// The wildcard forms, which is what every import in this repository uses.
-		expect(prefixes).toEqual(expect.arrayContaining(['~~/', '@@/', '#shared/', '#server/', '~/', '@/']));
+		expect(prefixes).toEqual(expect.arrayContaining([
+			'~~/',
+			'@@/',
+			'#shared/',
+			'#server/',
+			'~/',
+			'@/',
+		]));
 		// The bare forms, which the hardcoded list did not have and could not follow.
-		expect(prefixes).toEqual(expect.arrayContaining(['~~', '@@', '#shared', '#server', '~', '@']));
+		expect(prefixes).toEqual(expect.arrayContaining([
+			'~~',
+			'@@',
+			'#shared',
+			'#server',
+			'~',
+			'@',
+		]));
 	});
 
 	it('excludes every alias that points outside this repository\'s own source', () => {
 		const prefixes = firstPartyPathAliases().map(alias => alias.prefix);
 
 		// Dependencies: following these is how the scan escapes into `node_modules`.
-		for (const dependency of ['h3', 'ofetch', 'nitropack', 'consola', '#ui', '#app'])
+		for (const dependency of [
+			'h3',
+			'ofetch',
+			'nitropack',
+			'consola',
+			'#ui',
+			'#app',
+		])
 			expect(prefixes).not.toContain(dependency);
 		// Nuxt's own generated virtual modules, which are not this repository's code
 		// either — and which live under `.nuxt/`, inside the repository, so the rule
 		// cannot be "is it under the repository root" alone.
-		for (const virtual of ['#imports', '#build', '#components', '#app-manifest'])
+		for (const virtual of [
+			'#imports',
+			'#build',
+			'#components',
+			'#app-manifest',
+		])
 			expect(prefixes).not.toContain(virtual);
 	});
 
@@ -825,7 +895,13 @@ describe('the path aliases the scan follows', () => {
 		// every first-party import reported as third-party — a graph of one file.
 		const directory = mkdtempSync(join(tmpdir(), 'issue292-aliases-'));
 		const tsconfig = join(directory, 'tsconfig.json');
-		writeFileSync(tsconfig, JSON.stringify({ compilerOptions: { paths: { h3: ['../node_modules/h3'] } } }));
+		writeFileSync(tsconfig, JSON.stringify({
+			compilerOptions: {
+				paths: {
+					h3: ['../node_modules/h3'],
+				},
+			},
+		}));
 
 		try {
 			expect(() => firstPartyPathAliases(tsconfig)).toThrow(/first-party/);
@@ -866,7 +942,9 @@ describe('the middleware the scan is given as entry points', () => {
 		try {
 			const found = serverMiddlewareFiles(directory);
 
-			expect(found).toEqual([join(directory, 'nested', 'deep.ts')]);
+			expect(found).toEqual([
+				join(directory, 'nested', 'deep.ts'),
+			]);
 		}
 		finally {
 			rmSync(directory, { recursive: true, force: true });

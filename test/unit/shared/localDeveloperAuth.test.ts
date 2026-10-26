@@ -11,7 +11,20 @@ describe('the Local Developer Session opt-in', () => {
 
 		// Environment variables arrive as strings, so a near miss is a misspelling
 		// rather than an intention, and the boundary stays where it was.
-		for (const value of [undefined, null, '', ' ', 'true ', 'false', 'TRUE', 'True', '1', 'yes', true, 1])
+		for (const value of [
+			undefined,
+			null,
+			'',
+			' ',
+			'true ',
+			'false',
+			'TRUE',
+			'True',
+			'1',
+			'yes',
+			true,
+			1,
+		])
 			expect(localAuthBypassEnabled(value)).toBe(false);
 	});
 

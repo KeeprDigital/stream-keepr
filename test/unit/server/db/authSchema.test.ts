@@ -34,7 +34,13 @@ const sqlTypeByFieldType: Record<string, string> = {
 describe('better Auth drizzle schema', () => {
 	it('exports one table per Better Auth model, under the model name', () => {
 		const modelNames = Object.values(tables).map(table => table.modelName).toSorted();
-		expect(modelNames).toEqual(['account', 'rateLimit', 'session', 'user', 'verification']);
+		expect(modelNames).toEqual([
+			'account',
+			'rateLimit',
+			'session',
+			'user',
+			'verification',
+		]);
 
 		for (const { modelName } of Object.values(tables)) {
 			const table = authSchema[modelName as keyof typeof authSchema];
@@ -57,7 +63,9 @@ describe('better Auth drizzle schema', () => {
 					'id',
 					...Object.entries(model.fields).map(([key, field]) => field.fieldName ?? key),
 				].toSorted();
-				expect([...columnsByKey.keys()].toSorted()).toEqual(expectedKeys);
+				expect([
+					...columnsByKey.keys(),
+				].toSorted()).toEqual(expectedKeys);
 			});
 
 			it('names id as the text primary key', () => {

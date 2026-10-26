@@ -48,7 +48,10 @@ const bestOfOptions = [
 
 const pointsSystemOptions = [
 	{ label: 'Disabled', value: null },
-	{ label: getPointsSystemLabel('7ph'), value: '7ph' },
+	{
+		label: getPointsSystemLabel('7ph'),
+		value: '7ph',
+	},
 ];
 
 const showPointsSystemNotice = computed(() =>
@@ -77,7 +80,9 @@ function submit() {
 		const { pointsSystem, ...matchDefaults } = changes;
 		emit('submit', {
 			...fromFeatureMatchDefaults(matchDefaults),
-			...('pointsSystem' in changes ? { pointsSystem } : {}),
+			...('pointsSystem' in changes
+				? { pointsSystem }
+				: {}),
 		} as UpdateEventInput);
 	}
 }

@@ -19,34 +19,38 @@ let eventId: number;
 function document(name = 'Lightning Bolt'): BroadcastDeckListCanonicalDocument {
 	return {
 		sourceText: `4 ${name}\nSideboard\n2 Pyroblast\nCompanion\n1 Jegantha, the Wellspring`,
-		mainboard: [{
-			canonicalName: name,
-			scryfallId: 'bolt-printing',
-			oracleId: 'bolt-oracle',
-			setCode: 'lea',
-			collectorNumber: '161',
-			cardType: 'Instant',
-			colors: 'R',
-			manaCost: '{R}',
-			manaValue: 1,
-			deckCounterTypes: [],
-			quantity: 4,
-			sortOrder: 0,
-		}],
-		sideboard: [{
-			canonicalName: 'Pyroblast',
-			scryfallId: 'pyroblast-printing',
-			oracleId: 'pyroblast-oracle',
-			setCode: 'ice',
-			collectorNumber: '213',
-			cardType: 'Instant',
-			colors: 'R',
-			manaCost: '{R}',
-			manaValue: 1,
-			deckCounterTypes: [],
-			quantity: 2,
-			sortOrder: 0,
-		}],
+		mainboard: [
+			{
+				canonicalName: name,
+				scryfallId: 'bolt-printing',
+				oracleId: 'bolt-oracle',
+				setCode: 'lea',
+				collectorNumber: '161',
+				cardType: 'Instant',
+				colors: 'R',
+				manaCost: '{R}',
+				manaValue: 1,
+				deckCounterTypes: [],
+				quantity: 4,
+				sortOrder: 0,
+			},
+		],
+		sideboard: [
+			{
+				canonicalName: 'Pyroblast',
+				scryfallId: 'pyroblast-printing',
+				oracleId: 'pyroblast-oracle',
+				setCode: 'ice',
+				collectorNumber: '213',
+				cardType: 'Instant',
+				colors: 'R',
+				manaCost: '{R}',
+				manaValue: 1,
+				deckCounterTypes: [],
+				quantity: 2,
+				sortOrder: 0,
+			},
+		],
 		companion: {
 			canonicalName: 'Jegantha, the Wellspring',
 			scryfallId: 'jegantha-printing',
@@ -112,7 +116,13 @@ describe('broadcastDeckListService', () => {
 
 		const summaries = await broadcastDeckListService().findByEventId(eventId);
 		expect(summaries).toEqual([
-			expect.objectContaining({ id: created.id, name: 'Burn', mainboardQuantity: 4, sideboardQuantity: 2, hasCompanion: true }),
+			expect.objectContaining({
+				id: created.id,
+				name: 'Burn',
+				mainboardQuantity: 4,
+				sideboardQuantity: 2,
+				hasCompanion: true,
+			}),
 		]);
 		expect(summaries[0]).not.toHaveProperty('sourceText');
 		expect(summaries[0]).not.toHaveProperty('entries');
@@ -125,7 +135,11 @@ describe('broadcastDeckListService', () => {
 
 		await expect(service.findById(created.id, eventId)).resolves.toMatchObject({
 			sourceText: document('Shock').sourceText,
-			entries: [expect.objectContaining({ canonicalName: 'Shock' }), expect.anything(), expect.anything()],
+			entries: [
+				expect.objectContaining({ canonicalName: 'Shock' }),
+				expect.anything(),
+				expect.anything(),
+			],
 		});
 
 		const reads = prepare.mock.calls.filter(([statement]) =>
@@ -199,7 +213,11 @@ describe('broadcastDeckListService', () => {
 				revision: 2,
 				name: 'Blue Control',
 				sourceText: replacement.sourceText,
-				entries: [expect.objectContaining({ canonicalName: 'Brainstorm' }), expect.anything(), expect.anything()],
+				entries: [
+					expect.objectContaining({ canonicalName: 'Brainstorm' }),
+					expect.anything(),
+					expect.anything(),
+				],
 			},
 		});
 
@@ -256,7 +274,10 @@ describe('broadcastDeckListService', () => {
 			name: 'Accepted revision',
 		});
 
-		expect(accepted).toMatchObject({ status: 'updated', item: { name: 'Accepted revision', revision: 2 } });
+		expect(accepted).toMatchObject({
+			status: 'updated',
+			item: { name: 'Accepted revision', revision: 2 },
+		});
 		expect(await service.findById(created.id, raceEvent!.id)).toMatchObject({ name: 'Peer revision', revision: 3 });
 		batch.mockRestore();
 	});

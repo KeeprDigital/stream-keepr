@@ -43,13 +43,21 @@ const title = computed(() => {
 	return route.meta?.title;
 });
 
-const colorModeItem = computed<NavigationMenuItem[]>(() => [{
-	label: colorMode.value === 'dark' ? 'Dark mode' : 'Light mode',
-	icon: colorMode.value === 'dark' ? 'i-lucide-moon' : 'i-lucide-sun',
-	onSelect: () => {
-		colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark';
+const colorModeItem = computed<NavigationMenuItem[]>(() => [
+	{
+		label: colorMode.value === 'dark'
+			? 'Dark mode'
+			: 'Light mode',
+		icon: colorMode.value === 'dark'
+			? 'i-lucide-moon'
+			: 'i-lucide-sun',
+		onSelect: () => {
+			colorMode.preference = colorMode.value === 'dark'
+				? 'light'
+				: 'dark';
+		},
 	},
-}]);
+]);
 
 const session = useAuthSession();
 const currentUser = session.user;
@@ -68,13 +76,15 @@ const toast = useToast();
  */
 const accountItems = computed<NavigationMenuItem[]>(() => isLocalDeveloperUser.value
 	? []
-	: [{
-			label: 'Sign out',
-			icon: 'i-lucide-log-out',
-			onSelect: () => {
-				void signOut();
+	: [
+			{
+				label: 'Sign out',
+				icon: 'i-lucide-log-out',
+				onSelect: () => {
+					void signOut();
+				},
 			},
-		}]);
+		]);
 
 /**
  * Navigating only after the server agreed the session is over. A sign-out that
@@ -147,13 +157,19 @@ const navGroups = computed<NavGroup[]>(() => {
 				{ label: 'Players', icon: 'i-lucide-users', to: `/event/${id}/players` },
 				{ label: 'Matches', icon: 'i-lucide-swords', to: `/event/${id}/matches` },
 				...(meleeEnabled.value
-					? [{ label: 'Metagame', icon: 'i-lucide-pie-chart', to: `/event/${id}/metagame` }]
+					? [
+							{ label: 'Metagame', icon: 'i-lucide-pie-chart', to: `/event/${id}/metagame` },
+						]
 					: []),
 				...(meleeEnabled.value
-					? [{ label: 'Archetype Review', icon: 'i-lucide-tags', to: `/event/${id}/archetype-review` }]
+					? [
+							{ label: 'Archetype Review', icon: 'i-lucide-tags', to: `/event/${id}/archetype-review` },
+						]
 					: []),
 				...(meleeEnabled.value && meleeConfigured.value
-					? [{ label: 'Sync', icon: 'i-lucide-refresh-cw', to: `/event/${id}/sync` }]
+					? [
+							{ label: 'Sync', icon: 'i-lucide-refresh-cw', to: `/event/${id}/sync` },
+						]
 					: []),
 			],
 		},
@@ -206,11 +222,17 @@ const navGroups = computed<NavGroup[]>(() => {
 });
 
 // Keep flat links for non-event pages
-const homeLinks = computed<NavigationMenuItem[]>(() => [{
-	label: 'Events',
-	icon: 'i-lucide-calendar',
-	to: '/',
-}, graphicsAssetLibraryItem(), graphicsOperationsCockpitItem(), graphicsAssetLibraryHealthItem(), userAdministrationItem()]);
+const homeLinks = computed<NavigationMenuItem[]>(() => [
+	{
+		label: 'Events',
+		icon: 'i-lucide-calendar',
+		to: '/',
+	},
+	graphicsAssetLibraryItem(),
+	graphicsOperationsCockpitItem(),
+	graphicsAssetLibraryHealthItem(),
+	userAdministrationItem(),
+]);
 </script>
 
 <template>

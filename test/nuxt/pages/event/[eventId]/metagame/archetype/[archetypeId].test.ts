@@ -16,7 +16,9 @@ function buildFullPath() {
 		Object.entries(route.query).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
 	).toString();
 
-	route.fullPath = queryString ? `${route.path}?${queryString}` : route.path;
+	route.fullPath = queryString
+		? `${route.path}?${queryString}`
+		: route.path;
 }
 
 const beforeEachHooks: Array<(...args: unknown[]) => unknown> = [];
@@ -52,8 +54,14 @@ const mockRouter = {
 	},
 	push: vi.fn(),
 	replace: vi.fn(async ({ query }: { query?: Record<string, unknown> }) => {
-		const from = { ...route, query: { ...route.query } };
-		const to = { ...route, query: { ...route.query } };
+		const from = {
+			...route,
+			query: { ...route.query },
+		};
+		const to = {
+			...route,
+			query: { ...route.query },
+		};
 
 		for (const handler of beforeEachHooks)
 			await handler(to, from);
@@ -107,7 +115,9 @@ const mockPlayerStore = reactive({
 	$reset: vi.fn(),
 });
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 mockNuxtImport('$fetch', () => mockFetch);
 
 mockNuxtImport('useRoute', () => () => route);
@@ -116,15 +126,33 @@ mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useMetagameStore', () => () => mockMetagameStore);
 mockNuxtImport('useToast', () => () => mockToast);
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
-mockNuxtImport('usePlayerListStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('usePhaseStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useRoundStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useMatchStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useFeatureMatchStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useFeatureMatchStateStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useScreenStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useCardStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useMeleeStore', () => () => ({ $reset: vi.fn() }));
+mockNuxtImport('usePlayerListStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('usePhaseStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('useRoundStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('useMatchStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('useFeatureMatchStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('useFeatureMatchStateStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('useScreenStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('useCardStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('useMeleeStore', () => () => ({
+	$reset: vi.fn(),
+}));
 mockNuxtImport('clearPlayerDeckCache', () => vi.fn());
 mockNuxtImport('navigateTo', () => vi.fn());
 
@@ -251,7 +279,9 @@ describe('archetype metagame detail page', () => {
 
 		expect(mockFetch).toHaveBeenCalledWith(
 			'/api/events/99/metagame/archetypes/8',
-			{ query: { scope: 'all', board: 'full' } },
+			{
+				query: { scope: 'all', board: 'full' },
+			},
 		);
 	});
 });

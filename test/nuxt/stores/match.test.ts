@@ -235,7 +235,9 @@ describe('useMatchStore', () => {
 				await store.loadMatchesByEventId(1);
 				store.matches = [];
 
-				ablyCallbacks.match!['match:created']!({ match: createMockMatch({ id: 10, eventId: 1 }) });
+				ablyCallbacks.match!['match:created']!({
+					match: createMockMatch({ id: 10, eventId: 1 }),
+				});
 
 				expect(store.matches).toHaveLength(0);
 			});
@@ -243,18 +245,26 @@ describe('useMatchStore', () => {
 
 		describe('match:updated', () => {
 			it('updates existing match from remote message', () => {
-				store.matches = [createMockMatch({ id: 10, tableNumber: 1 })];
+				store.matches = [
+					createMockMatch({ id: 10, tableNumber: 1 }),
+				];
 
-				ablyCallbacks.match!['match:updated']!({ match: createMockMatch({ id: 10, tableNumber: 5 }) });
+				ablyCallbacks.match!['match:updated']!({
+					match: createMockMatch({ id: 10, tableNumber: 5 }),
+				});
 
 				expect(store.matches[0]!.tableNumber).toBe(5);
 			});
 
 			it('skips when isSelfOrigin returns true', () => {
-				store.matches = [createMockMatch({ id: 10, tableNumber: 1 })];
+				store.matches = [
+					createMockMatch({ id: 10, tableNumber: 1 }),
+				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
-				ablyCallbacks.match!['match:updated']!({ match: createMockMatch({ id: 10, tableNumber: 5 }) });
+				ablyCallbacks.match!['match:updated']!({
+					match: createMockMatch({ id: 10, tableNumber: 5 }),
+				});
 
 				expect(store.matches[0]!.tableNumber).toBe(1);
 			});
@@ -262,7 +272,9 @@ describe('useMatchStore', () => {
 
 		describe('match:deleted', () => {
 			it('removes match from remote message', () => {
-				store.matches = [createMockMatch({ id: 10 })];
+				store.matches = [
+					createMockMatch({ id: 10 }),
+				];
 
 				ablyCallbacks.match!['match:deleted']!({ matchId: 10 });
 
@@ -270,7 +282,9 @@ describe('useMatchStore', () => {
 			});
 
 			it('skips when isSelfOrigin returns true', () => {
-				store.matches = [createMockMatch({ id: 10 })];
+				store.matches = [
+					createMockMatch({ id: 10 }),
+				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
 				ablyCallbacks.match!['match:deleted']!({ matchId: 10 });
@@ -284,7 +298,9 @@ describe('useMatchStore', () => {
 
 	describe('$reset', () => {
 		it('clears all state', () => {
-			store.matches = [createMockMatch()];
+			store.matches = [
+				createMockMatch(),
+			];
 			store.error = 'some error';
 
 			store.$reset();

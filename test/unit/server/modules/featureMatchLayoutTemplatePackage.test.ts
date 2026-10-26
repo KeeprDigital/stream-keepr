@@ -147,7 +147,13 @@ async function exportedPackage() {
 	const frameAsset = await ingestImage(sender, 'Frame backdrop');
 	const itemAsset = await ingestImage(sender, 'Sponsor logo');
 	const document = maximalFeatureMatchLayoutDocument({ frameAsset, itemAsset });
-	return { sender, frameAsset, itemAsset, document, archive: await exportLayout(sender, document) };
+	return {
+		sender,
+		frameAsset,
+		itemAsset,
+		document,
+		archive: await exportLayout(sender, document),
+	};
 }
 
 describe('a `.sklayout` Template Package crossing an installation boundary', () => {
@@ -356,7 +362,16 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		const { archive } = await exportedPackage();
 		const declared = readTemplatePackageParts(archive).manifest.applicationCapabilities.filter(declaration => declaration.capability === 'graphic-item-definition').map(declaration => declaration.identity);
 
-		expect(declared).toEqual(expect.arrayContaining(['source', 'group', 'text', 'media', 'clock', 'player-life', 'game-wins', 'deck-list']));
+		expect(declared).toEqual(expect.arrayContaining([
+			'source',
+			'group',
+			'text',
+			'media',
+			'clock',
+			'player-life',
+			'game-wins',
+			'deck-list',
+		]));
 	});
 
 	/**
@@ -394,7 +409,9 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		parts.template = {
 			...layout,
 			sources: layout.sources.map((source, index) =>
-				index === 0 ? { ...source, sourceRole: 'commentator-desk' } : source,
+				index === 0
+					? { ...source, sourceRole: 'commentator-desk' }
+					: source,
 			),
 		};
 
@@ -457,8 +474,16 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		// A font the registry does have is accepted for both kinds…
 		const knownFont = { ...unknownFont, identity: GRAPHIC_FONT_IDS[0] };
 		for (const [packageKind, document, requirements] of [
-			['skgraphic', graphic, broadcastGraphicTemplatePackageRequirements(graphic)],
-			['sklayout', layout, featureMatchLayoutTemplatePackageRequirements(layout)],
+			[
+				'skgraphic',
+				graphic,
+				broadcastGraphicTemplatePackageRequirements(graphic),
+			],
+			[
+				'sklayout',
+				layout,
+				featureMatchLayoutTemplatePackageRequirements(layout),
+			],
 		] as const) {
 			const accepted = await sender.exportTemplatePackage({
 				packageKind,

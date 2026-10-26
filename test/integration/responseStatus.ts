@@ -9,7 +9,10 @@ import { requestLedger } from './requestLedger';
  * fails in a `beforeAll`, where no test has (#687), so its message carries them.
  */
 function requestsSoFar(): string {
-	return ['requests:', ...requestLedger.report().map(line => `  ${line}`)].join('\n');
+	return [
+		'requests:',
+		...requestLedger.report().map(line => `  ${line}`),
+	].join('\n');
 }
 
 /**

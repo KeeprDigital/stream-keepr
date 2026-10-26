@@ -56,7 +56,10 @@ export async function betterAuthBootstrapPort(
 			// rather than anywhere the decision can see it, so exactly one line in
 			// this module knows the library's typing stops short of its own storage.
 			const { role } = found.user as { role?: string | null };
-			return { id: found.user.id, roles: decodeRoles(role) };
+			return {
+				id: found.user.id,
+				roles: decodeRoles(role),
+			};
 		},
 
 		createAdmin: async ({ email, password, name }) => {
@@ -65,13 +68,21 @@ export async function betterAuthBootstrapPort(
 			// `createUser`'s own check and it would refuse with 401. The token guard
 			// on the route is this call's authorization.
 			const { user } = await auth.api.createUser({
-				body: { email, password, name, role: ADMIN_ROLE },
+				body: {
+					email,
+					password,
+					name,
+					role: ADMIN_ROLE,
+				},
 			});
 			// The role is what was asked for rather than what came back: this
 			// response is typed without the admin plugin's fields, and reading it
 			// through a cast would be inventing a fact. The role is asserted where
 			// it can be — against the stored account, in the tests.
-			return { id: user.id, roles: [ADMIN_ROLE] };
+			return {
+				id: user.id,
+				roles: [ADMIN_ROLE],
+			};
 		},
 
 		// A user created for a future sign-in method — or by a version that stopped
@@ -81,7 +92,9 @@ export async function betterAuthBootstrapPort(
 		setPassword: async (userId, password) => setCredentialPassword(context, userId, password),
 
 		setRoles: async (userId, roles) => {
-			await context.internalAdapter.updateUser(userId, { role: encodeRoles(roles) });
+			await context.internalAdapter.updateUser(userId, {
+				role: encodeRoles(roles),
+			});
 		},
 	};
 }

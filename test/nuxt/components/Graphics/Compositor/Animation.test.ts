@@ -24,7 +24,10 @@ function shape(id: string): GraphicItemConfig {
 		width: 400,
 		height: 100,
 		geometry: squareShapeGeometry(),
-		surfaceStyle: { fill: { type: 'solid', color: '#0077a3' }, fillOpacity: 1 },
+		surfaceStyle: {
+			fill: { type: 'solid', color: '#0077a3' },
+			fillOpacity: 1,
+		},
 	};
 }
 
@@ -68,19 +71,32 @@ function group(id: string, childIds: string[]): GraphicGroupItemConfig {
 	};
 }
 
-function stack(items: GraphicItemConfig[] = [shape('bar'), shape('name')]): BroadcastGraphicConfig[] {
-	return [{ id: 'lower-third', name: 'Lower Third', items }];
+function stack(items: GraphicItemConfig[] = [
+	shape('bar'),
+	shape('name'),
+]): BroadcastGraphicConfig[] {
+	return [
+		{ id: 'lower-third', name: 'Lower Third', items },
+	];
 }
 
 const SlotOnlyStub = defineComponent({
-	props: { label: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+	},
 	template: '<div><span>{{ label }}</span><slot /></div>',
 });
 
 /** Every closed choice on the panel, recipe fields and phase scaffolding alike, is a select. */
 const USelectStub = defineComponent({
 	name: 'USelect',
-	props: { modelValue: { type: [String, Number], required: false }, items: { type: Array, required: false } },
+	props: {
+		modelValue: {
+			type: [String, Number],
+			required: false,
+		},
+		items: { type: Array, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<select :value="modelValue" />',
 });
@@ -102,7 +118,9 @@ const UInputNumberStub = defineComponent({
 
 const USwitchStub = defineComponent({
 	name: 'USwitch',
-	props: { modelValue: { type: Boolean, required: false } },
+	props: {
+		modelValue: { type: Boolean, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<button type="button" @click="$emit(\'update:modelValue\', !modelValue)" />',
 });
@@ -162,13 +180,19 @@ const ITEM_TARGET: GraphicsSelectionTarget = { type: 'item', graphicId: 'lower-t
 
 describe('graphicAnimationEditor', () => {
 	it('offers no controls for the canvas, which owns no animation', async () => {
-		const wrapper = await mountComponent({ graphics: stack(), selectedTarget: { type: 'canvas' } });
+		const wrapper = await mountComponent({
+			graphics: stack(),
+			selectedTarget: { type: 'canvas' },
+		});
 
 		expect(wrapper.find('[data-testid="graphic-animation-editor"]').exists()).toBe(false);
 	});
 
 	it('shows every lifecycle phase disabled for a newly authored Graphic Item', async () => {
-		const wrapper = await mountComponent({ graphics: stack(), selectedTarget: ITEM_TARGET });
+		const wrapper = await mountComponent({
+			graphics: stack(),
+			selectedTarget: ITEM_TARGET,
+		});
 
 		for (const phase of ['enter', 'on-screen', 'update', 'exit']) {
 			expect(switchField(wrapper, `animation-${phase}-enabled`)?.props('modelValue')).toBe(false);
@@ -178,13 +202,18 @@ describe('graphicAnimationEditor', () => {
 	});
 
 	it('enables one phase with its editable default recipe', async () => {
-		const wrapper = await mountComponent({ graphics: stack(), selectedTarget: ITEM_TARGET });
+		const wrapper = await mountComponent({
+			graphics: stack(),
+			selectedTarget: ITEM_TARGET,
+		});
 
 		switchField(wrapper, 'animation-enter-enabled')!.vm.$emit('update:modelValue', true);
 		await nextTick();
 
 		expect(emittedGraphics(wrapper)[0]?.items[0]?.animation)
-			.toEqual({ enter: createDefaultGraphicAnimationRecipe('enter') });
+			.toEqual({
+				enter: createDefaultGraphicAnimationRecipe('enter'),
+			});
 	});
 
 	it('disables one phase without disturbing another', async () => {
@@ -205,7 +234,9 @@ describe('graphicAnimationEditor', () => {
 
 	it('edits timing within the settled bounds it presents', async () => {
 		const graphics = stack();
-		graphics[0]!.items[0]!.animation = { enter: createDefaultGraphicAnimationRecipe('enter') };
+		graphics[0]!.items[0]!.animation = {
+			enter: createDefaultGraphicAnimationRecipe('enter'),
+		};
 		const wrapper = await mountComponent({ graphics, selectedTarget: ITEM_TARGET });
 
 		const duration = numberField(wrapper, 'animation-enter-duration')!;
@@ -219,7 +250,9 @@ describe('graphicAnimationEditor', () => {
 
 	it('bounds a delay to ten seconds, as the vocabulary does', async () => {
 		const graphics = stack();
-		graphics[0]!.items[0]!.animation = { enter: createDefaultGraphicAnimationRecipe('enter') };
+		graphics[0]!.items[0]!.animation = {
+			enter: createDefaultGraphicAnimationRecipe('enter'),
+		};
 		const wrapper = await mountComponent({ graphics, selectedTarget: ITEM_TARGET });
 
 		const delay = numberField(wrapper, 'animation-enter-delay')!;
@@ -229,7 +262,9 @@ describe('graphicAnimationEditor', () => {
 
 	it('adds and removes one channel without disturbing the recipe others', async () => {
 		const graphics = stack();
-		graphics[0]!.items[0]!.animation = { enter: createDefaultGraphicAnimationRecipe('enter') };
+		graphics[0]!.items[0]!.animation = {
+			enter: createDefaultGraphicAnimationRecipe('enter'),
+		};
 		const wrapper = await mountComponent({ graphics, selectedTarget: ITEM_TARGET });
 
 		switchField(wrapper, 'animation-enter-slide-enabled')!.vm.$emit('update:modelValue', true);
@@ -260,7 +295,12 @@ describe('graphicAnimationEditor', () => {
 	describe('a fixed slide distance in a Geometry Unit', () => {
 		function sliding<T extends { animation?: GraphicAnimation }>(owner: T, direction: 'east' | 'north', distance: number): T {
 			owner.animation = {
-				enter: { duration: 400, easing: 'linear', delay: 0, slide: { direction, distanceMode: 'fixed', distance } },
+				enter: {
+					duration: 400,
+					easing: 'linear',
+					delay: 0,
+					slide: { direction, distanceMode: 'fixed', distance },
+				},
 			};
 			return owner;
 		}
@@ -274,7 +314,12 @@ describe('graphicAnimationEditor', () => {
 		});
 
 		it('measures a top-level Graphic Item\'s slide against the canvas', async () => {
-			const wrapper = await mountComponent({ graphics: stack([sliding(shape('bar'), 'east', 192)]), selectedTarget: ITEM_TARGET });
+			const wrapper = await mountComponent({
+				graphics: stack([
+					sliding(shape('bar'), 'east', 192),
+				]),
+				selectedTarget: ITEM_TARGET,
+			});
 			await flushPromises();
 
 			expect(numberField(wrapper, 'animation-enter-slide-distance')!.props('modelValue')).toBe(10);
@@ -311,7 +356,12 @@ describe('graphicAnimationEditor', () => {
 	it('offers a scale origin independent of the Graphic Anchor Point', async () => {
 		const graphics = stack();
 		graphics[0]!.items[0]!.animation = {
-			enter: { duration: 400, easing: 'linear', delay: 0, scale: { factor: 0.8, origin: 'center' } },
+			enter: {
+				duration: 400,
+				easing: 'linear',
+				delay: 0,
+				scale: { factor: 0.8, origin: 'center' },
+			},
 		};
 		const wrapper = await mountComponent({ graphics, selectedTarget: ITEM_TARGET });
 
@@ -342,7 +392,9 @@ describe('graphicAnimationEditor', () => {
 
 	it('turns an indefinite repetition into a finite one', async () => {
 		const graphics = stack();
-		graphics[0]!.items[0]!.animation = { 'on-screen': createDefaultGraphicAnimationRecipe('on-screen') };
+		graphics[0]!.items[0]!.animation = {
+			'on-screen': createDefaultGraphicAnimationRecipe('on-screen'),
+		};
 		const wrapper = await mountComponent({ graphics, selectedTarget: ITEM_TARGET });
 
 		switchField(wrapper, 'animation-on-screen-repeat-indefinite')!.vm.$emit('update:modelValue', false);
@@ -353,14 +405,18 @@ describe('graphicAnimationEditor', () => {
 
 	it('initialises a recipe from a preset', async () => {
 		const graphics = stack();
-		graphics[0]!.items[0]!.animation = { enter: createDefaultGraphicAnimationRecipe('enter') };
+		graphics[0]!.items[0]!.animation = {
+			enter: createDefaultGraphicAnimationRecipe('enter'),
+		};
 		const wrapper = await mountComponent({ graphics, selectedTarget: ITEM_TARGET });
 
 		selectField(wrapper, 'animation-enter-preset')!.vm.$emit('update:modelValue', 'pop-in');
 		await nextTick();
 
 		expect(emittedGraphics(wrapper)[0]?.items[0]?.animation?.enter)
-			.toMatchObject({ scale: { factor: 0.8, origin: 'center' } });
+			.toMatchObject({
+				scale: { factor: 0.8, origin: 'center' },
+			});
 	});
 
 	it('never changes the Graphic Resting State of what it animates', async () => {
@@ -376,7 +432,10 @@ describe('graphicAnimationEditor', () => {
 	});
 
 	it('authors whole-graphic animation when the Broadcast Graphic is selected', async () => {
-		const wrapper = await mountComponent({ graphics: stack(), selectedTarget: GRAPHIC_TARGET });
+		const wrapper = await mountComponent({
+			graphics: stack(),
+			selectedTarget: GRAPHIC_TARGET,
+		});
 
 		switchField(wrapper, 'animation-exit-enabled')!.vm.$emit('update:modelValue', true);
 		await nextTick();
@@ -388,7 +447,11 @@ describe('graphicAnimationEditor', () => {
 	});
 
 	it('changes nothing at all while the session does not hold the authoring lease', async () => {
-		const wrapper = await mountComponent({ graphics: stack(), selectedTarget: ITEM_TARGET, writable: false });
+		const wrapper = await mountComponent({
+			graphics: stack(),
+			selectedTarget: ITEM_TARGET,
+			writable: false,
+		});
 
 		expect(wrapper.get('[data-testid="graphic-animation-editor"]').attributes('disabled')).toBeDefined();
 
@@ -402,8 +465,22 @@ describe('graphicAnimationEditor', () => {
 		const componentPath = '../../../../../app/components/Graphics/Compositor/Animation.vue';
 		const { default: Animation } = await import(componentPath);
 		const wrapper = mount(Animation, {
-			props: { graphics: stack(), selectedTarget: ITEM_TARGET, canvasWidth: 1920, canvasHeight: 1080 },
-			global: { stubs: { UFormField: SlotOnlyStub, USelect: USelectStub, UInputNumber: UInputNumberStub, USwitch: USwitchStub, UBadge: true, UIcon: true } },
+			props: {
+				graphics: stack(),
+				selectedTarget: ITEM_TARGET,
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			},
+			global: {
+				stubs: {
+					UFormField: SlotOnlyStub,
+					USelect: USelectStub,
+					UInputNumber: UInputNumberStub,
+					USwitch: USwitchStub,
+					UBadge: true,
+					UIcon: true,
+				},
+			},
 		});
 
 		expect(wrapper.get('[data-testid="graphic-animation-editor"]').attributes('disabled')).toBeDefined();
@@ -412,7 +489,10 @@ describe('graphicAnimationEditor', () => {
 
 describe('stagger authoring in the editor', () => {
 	it('offers a stagger on a Broadcast Graphic, over its own direct Graphic Items', async () => {
-		const wrapper = await mountComponent({ graphics: stack(), selectedTarget: GRAPHIC_TARGET });
+		const wrapper = await mountComponent({
+			graphics: stack(),
+			selectedTarget: GRAPHIC_TARGET,
+		});
 
 		switchField(wrapper, 'animation-enter-stagger-enabled')!.vm.$emit('update:modelValue', true);
 		await nextTick();
@@ -422,14 +502,25 @@ describe('stagger authoring in the editor', () => {
 	});
 
 	it('offers no stagger on a Graphic Item with no direct items of its own', async () => {
-		const wrapper = await mountComponent({ graphics: stack(), selectedTarget: ITEM_TARGET });
+		const wrapper = await mountComponent({
+			graphics: stack(),
+			selectedTarget: ITEM_TARGET,
+		});
 
 		expect(switchField(wrapper, 'animation-enter-stagger-enabled')).toBeUndefined();
 	});
 
 	it('offers a stagger on a Graphic Group, over its children', async () => {
 		const groupItem = group('cluster', ['one', 'two']);
-		groupItem.animation = { stagger: { enter: { order: 'list', step: 100, itemIds: ['one'] } } };
+		groupItem.animation = {
+			stagger: {
+				enter: {
+					order: 'list',
+					step: 100,
+					itemIds: ['one'],
+				},
+			},
+		};
 		const wrapper = await mountComponent({
 			graphics: stack([groupItem]),
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'cluster' },
@@ -448,7 +539,11 @@ describe('stagger authoring in the editor', () => {
 
 	it('selects the subset a stagger orders', async () => {
 		const graphics = stack();
-		graphics[0]!.animation = { stagger: { enter: { order: 'list', step: 100, itemIds: [] } } };
+		graphics[0]!.animation = {
+			stagger: {
+				enter: { order: 'list', step: 100, itemIds: [] },
+			},
+		};
 		const wrapper = await mountComponent({ graphics, selectedTarget: GRAPHIC_TARGET });
 
 		switchField(wrapper, 'animation-enter-stagger-member-name')!.vm.$emit('update:modelValue', true);
@@ -461,8 +556,16 @@ describe('stagger authoring in the editor', () => {
 		const graphics = stack();
 		graphics[0]!.animation = {
 			stagger: {
-				enter: { order: 'list', step: 100, itemIds: ['bar', 'name'] },
-				exit: { order: 'list', step: 100, itemIds: ['bar', 'name'] },
+				enter: {
+					order: 'list',
+					step: 100,
+					itemIds: ['bar', 'name'],
+				},
+				exit: {
+					order: 'list',
+					step: 100,
+					itemIds: ['bar', 'name'],
+				},
 			},
 		};
 		const wrapper = await mountComponent({ graphics, selectedTarget: GRAPHIC_TARGET });
@@ -477,14 +580,21 @@ describe('stagger authoring in the editor', () => {
 
 	it('bounds a stagger step to ten seconds', async () => {
 		const graphics = stack();
-		graphics[0]!.animation = { stagger: { enter: { order: 'list', step: 100, itemIds: [] } } };
+		graphics[0]!.animation = {
+			stagger: {
+				enter: { order: 'list', step: 100, itemIds: [] },
+			},
+		};
 		const wrapper = await mountComponent({ graphics, selectedTarget: GRAPHIC_TARGET });
 
 		expect(numberField(wrapper, 'animation-enter-stagger-step')?.props('max')).toBe(10000);
 	});
 
 	it('lets a container order its items without animating itself', async () => {
-		const wrapper = await mountComponent({ graphics: stack(), selectedTarget: GRAPHIC_TARGET });
+		const wrapper = await mountComponent({
+			graphics: stack(),
+			selectedTarget: GRAPHIC_TARGET,
+		});
 
 		switchField(wrapper, 'animation-enter-stagger-enabled')!.vm.$emit('update:modelValue', true);
 		await nextTick();

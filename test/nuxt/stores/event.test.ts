@@ -265,7 +265,10 @@ describe('useEventStore', () => {
 
 		it('skips adding talent when already present (no-duplicate guard)', async () => {
 			const talent = createMockTalent({ id: 10, eventId: 1 });
-			store.event = createEventResponse({ id: 1, talents: [talent] });
+			store.event = createEventResponse({
+				id: 1,
+				talents: [talent],
+			});
 			mockTalentRepo.create.mockResolvedValue(talent);
 
 			await store.addTalent({ name: talent.name });
@@ -277,7 +280,10 @@ describe('useEventStore', () => {
 	describe('updateTalent', () => {
 		it('optimistically updates talent then applies server response', async () => {
 			const talent = createMockTalent({ id: 10, eventId: 1 });
-			store.event = createEventResponse({ id: 1, talents: [talent] });
+			store.event = createEventResponse({
+				id: 1,
+				talents: [talent],
+			});
 
 			const updated = { ...talent, name: 'Updated Talent' };
 			mockTalentRepo.update.mockResolvedValue(updated);
@@ -298,7 +304,10 @@ describe('useEventStore', () => {
 	describe('removeTalent', () => {
 		it('removes talent from event', async () => {
 			const talent = createMockTalent({ id: 10, eventId: 1 });
-			store.event = createEventResponse({ id: 1, talents: [talent] });
+			store.event = createEventResponse({
+				id: 1,
+				talents: [talent],
+			});
 			mockTalentRepo.remove.mockResolvedValue({ success: true });
 
 			await store.removeTalent(10);
@@ -331,7 +340,9 @@ describe('useEventStore', () => {
 				store.event = createEventResponse({ id: 1, name: 'Old' });
 				store.eventsList = [store.event!];
 
-				ablyCallbacks.event!['event:updated']!({ event: { id: 1, name: 'Remote Update' } }, {});
+				ablyCallbacks.event!['event:updated']!({
+					event: { id: 1, name: 'Remote Update' },
+				}, {});
 
 				expect(store.event!.name).toBe('Remote Update');
 			});
@@ -340,7 +351,9 @@ describe('useEventStore', () => {
 				store.event = createEventResponse({ id: 1, name: 'Old' });
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
-				ablyCallbacks.event!['event:updated']!({ event: { id: 1, name: 'Remote Update' } }, {});
+				ablyCallbacks.event!['event:updated']!({
+					event: { id: 1, name: 'Remote Update' },
+				}, {});
 
 				expect(store.event!.name).toBe('Old');
 			});
@@ -360,7 +373,9 @@ describe('useEventStore', () => {
 				store.event = createEventResponse({ id: 1, talents: [] });
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
-				ablyCallbacks.event!['talent:created']!({ talent: createMockTalent({ id: 20, eventId: 1 }) }, {});
+				ablyCallbacks.event!['talent:created']!({
+					talent: createMockTalent({ id: 20, eventId: 1 }),
+				}, {});
 
 				expect(store.event!.talents).toHaveLength(0);
 			});
@@ -369,7 +384,10 @@ describe('useEventStore', () => {
 		describe('talent:deleted', () => {
 			it('removes talent from remote message', () => {
 				const talent = createMockTalent({ id: 20, eventId: 1 });
-				store.event = createEventResponse({ id: 1, talents: [talent] });
+				store.event = createEventResponse({
+					id: 1,
+					talents: [talent],
+				});
 
 				ablyCallbacks.event!['talent:deleted']!({ eventId: 1, talentId: 20 }, {});
 
@@ -380,9 +398,14 @@ describe('useEventStore', () => {
 		describe('talent:updated', () => {
 			it('updates existing talent from remote message', () => {
 				const talent = createMockTalent({ id: 10, eventId: 1, name: 'Original' });
-				store.event = createEventResponse({ id: 1, talents: [talent] });
+				store.event = createEventResponse({
+					id: 1,
+					talents: [talent],
+				});
 
-				ablyCallbacks.event!['talent:updated']!({ talent: { ...talent, name: 'Remote Update' } }, {});
+				ablyCallbacks.event!['talent:updated']!({
+					talent: { ...talent, name: 'Remote Update' },
+				}, {});
 
 				expect(store.event!.talents[0]!.name).toBe('Remote Update');
 			});
@@ -398,10 +421,15 @@ describe('useEventStore', () => {
 
 			it('skips when isSelfOrigin returns true', () => {
 				const talent = createMockTalent({ id: 10, eventId: 1, name: 'Original' });
-				store.event = createEventResponse({ id: 1, talents: [talent] });
+				store.event = createEventResponse({
+					id: 1,
+					talents: [talent],
+				});
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
-				ablyCallbacks.event!['talent:updated']!({ talent: { ...talent, name: 'Remote' } }, {});
+				ablyCallbacks.event!['talent:updated']!({
+					talent: { ...talent, name: 'Remote' },
+				}, {});
 
 				expect(store.event!.talents[0]!.name).toBe('Original');
 			});
@@ -566,8 +594,14 @@ describe('useEventStore', () => {
 		});
 
 		it.each([
-			['Event B', [2]],
-			['Event A, loaded again since', [2, 1]],
+			[
+				'Event B',
+				[2],
+			],
+			[
+				'Event A, loaded again since',
+				[2, 1],
+			],
 		])('a late failed save of Event A neither rolls back nor reports into %s', async (_, switches) => {
 			const eventA = createEventResponse({ id: 1, name: 'Event A' });
 			store.event = eventA;
@@ -580,7 +614,10 @@ describe('useEventStore', () => {
 				shown = createEventResponse({ id, name: `Event ${id} as loaded` });
 				await switchTo(shown);
 			}
-			save.reject(transportFailure({ status: 409, body: { message: 'Rounds have started' } }));
+			save.reject(transportFailure({
+				status: 409,
+				body: { message: 'Rounds have started' },
+			}));
 			await saving;
 
 			expect(store.event).toEqual(shown);
@@ -609,7 +646,10 @@ describe('useEventStore', () => {
 
 			const creating = store.createEvent({ name: 'New Event', game: 'mtg', featureMatchOrientation: 'horizontal' });
 			await switchTo(createEventResponse({ id: 2, name: 'Event B' }));
-			mockEventRepo.list.mockResolvedValueOnce([createEventResponse({ id: 2, name: 'Event B' }), created]);
+			mockEventRepo.list.mockResolvedValueOnce([
+				createEventResponse({ id: 2, name: 'Event B' }),
+				created,
+			]);
 			await store.loadEventsList();
 			create.resolve(created);
 			await creating;
@@ -635,8 +675,14 @@ describe('useEventStore', () => {
 		});
 
 		describe.each([
-			['Event B', [2]],
-			['Event A, loaded again since', [2, 1]],
+			[
+				'Event B',
+				[2],
+			],
+			[
+				'Event A, loaded again since',
+				[2, 1],
+			],
 		])('talent writes answered in %s', (_, switches) => {
 			const talent = createMockTalent({ id: 10, eventId: 1, name: 'Ana' });
 
@@ -644,7 +690,12 @@ describe('useEventStore', () => {
 			async function switchAway() {
 				let shown!: ReturnType<typeof createEventResponse>;
 				for (const id of switches) {
-					shown = createEventResponse({ id, talents: [createMockTalent({ id: 20 + id, eventId: id, name: 'Other' })] });
+					shown = createEventResponse({
+						id,
+						talents: [
+							createMockTalent({ id: 20 + id, eventId: id, name: 'Other' }),
+						],
+					});
 					await switchTo(shown);
 				}
 				return structuredClone(shown);
@@ -664,7 +715,10 @@ describe('useEventStore', () => {
 			});
 
 			it('a late Talent update changes nobody, whether it succeeds or fails', async () => {
-				store.event = createEventResponse({ id: 1, talents: [talent] });
+				store.event = createEventResponse({
+					id: 1,
+					talents: [talent],
+				});
 				const succeeded = deferred<typeof talent>();
 				const failed = deferred<never>();
 				mockTalentRepo.update
@@ -683,7 +737,10 @@ describe('useEventStore', () => {
 			});
 
 			it('a late failed Talent delete restores nobody', async () => {
-				store.event = createEventResponse({ id: 1, talents: [talent] });
+				store.event = createEventResponse({
+					id: 1,
+					talents: [talent],
+				});
 				const remove = deferred<never>();
 				mockTalentRepo.remove.mockReturnValueOnce(remove.promise);
 

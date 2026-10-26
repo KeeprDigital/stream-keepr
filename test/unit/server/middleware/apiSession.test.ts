@@ -46,7 +46,9 @@ const handler = (await import('~~/server/middleware/api-session')).default;
 /** A request for `path`, carrying the headers Better Auth would read a cookie from. */
 function request(path: string) {
 	mockGetRequestURL.mockReturnValue(new URL(`https://stream.example${path}`));
-	return stubH3Event({ headers: new Headers({ cookie: 'better-auth.session_token=a-token' }) });
+	return stubH3Event({
+		headers: new Headers({ cookie: 'better-auth.session_token=a-token' }),
+	});
 }
 
 describe('the API boundary middleware', () => {
@@ -78,7 +80,10 @@ describe('the API boundary middleware', () => {
 	});
 
 	it('admits a request that carries a session', async () => {
-		mockRequestUserSession.mockResolvedValue({ session: { id: 'a-session' }, user: { id: 'a-user' } });
+		mockRequestUserSession.mockResolvedValue({
+			session: { id: 'a-session' },
+			user: { id: 'a-user' },
+		});
 
 		await expect(handler(request('/api/events/1/players'))).resolves.toBeUndefined();
 		expect(mockRequestUserSession).toHaveBeenCalledOnce();

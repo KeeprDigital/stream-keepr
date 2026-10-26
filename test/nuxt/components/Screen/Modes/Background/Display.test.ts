@@ -85,7 +85,12 @@ describe('screenModesBackgroundDisplay', () => {
 	it('does not render a disabled layer', async () => {
 		config.value = {
 			layers: [
-				layer({ id: 'base', type: 'color', color: '#101010', enabled: false }),
+				layer({
+					id: 'base',
+					type: 'color',
+					color: '#101010',
+					enabled: false,
+				}),
 				layer({ id: 'grad', type: 'gradient', gradient: 'linear-gradient(#000, #123)' }),
 			],
 		};
@@ -99,7 +104,12 @@ describe('screenModesBackgroundDisplay', () => {
 	it('applies each layer’s own opacity to that layer alone', async () => {
 		config.value = {
 			layers: [
-				layer({ id: 'wash', type: 'color', color: '#101010', opacity: 0.35 }),
+				layer({
+					id: 'wash',
+					type: 'color',
+					color: '#101010',
+					opacity: 0.35,
+				}),
 			],
 		};
 
@@ -125,8 +135,18 @@ describe('screenModesBackgroundDisplay', () => {
 	it('renders a URL-sourced image layer directly and an asset-sourced one through the resolved content URL', async () => {
 		config.value = {
 			layers: [
-				layer({ id: 'remote', type: 'image', source: { kind: 'url', url: 'https://cdn.example.com/plates/one.png' }, fit: 'contain' } as Partial<BackgroundLayer> & Pick<BackgroundLayer, 'id' | 'type'>),
-				layer({ id: 'library', type: 'image', source: { kind: 'asset', assetId: 'asset-1', revisionId: 'revision-1' }, fit: 'cover' } as never),
+				layer({
+					id: 'remote',
+					type: 'image',
+					source: { kind: 'url', url: 'https://cdn.example.com/plates/one.png' },
+					fit: 'contain',
+				} as Partial<BackgroundLayer> & Pick<BackgroundLayer, 'id' | 'type'>),
+				layer({
+					id: 'library',
+					type: 'image',
+					source: { kind: 'asset', assetId: 'asset-1', revisionId: 'revision-1' },
+					fit: 'cover',
+				} as never),
 			],
 		};
 
@@ -169,7 +189,14 @@ describe('screenModesBackgroundDisplay', () => {
 	it('mounts an animation layer on the shared surface with its sparse params filled from the schema', async () => {
 		config.value = {
 			layers: [
-				layer({ id: 'anim', type: 'animation', animation: { effect: 'fog', params: { speed: 2 } } } as never),
+				layer({
+					id: 'anim',
+					type: 'animation',
+					animation: {
+						effect: 'fog',
+						params: { speed: 2 },
+					},
+				} as never),
 			],
 		};
 
@@ -183,7 +210,11 @@ describe('screenModesBackgroundDisplay', () => {
 	it('renders nothing for an animation layer naming an effect this build does not ship', async () => {
 		config.value = {
 			layers: [
-				layer({ id: 'anim', type: 'animation', animation: { effect: 'not-an-effect' } } as never),
+				layer({
+					id: 'anim',
+					type: 'animation',
+					animation: { effect: 'not-an-effect' },
+				} as never),
 			],
 		};
 

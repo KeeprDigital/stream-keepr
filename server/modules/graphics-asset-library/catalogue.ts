@@ -120,7 +120,9 @@ interface UsageRow {
 }
 
 function parseJson<T>(value: string | null): T | undefined {
-	return value === null ? undefined : JSON.parse(value) as T;
+	return value === null
+		? undefined
+		: JSON.parse(value) as T;
 }
 
 function operationFromRow(row: OperationRow): GraphicsIngestionOperation {
@@ -280,7 +282,9 @@ function usageSelect(options: { templatesOnly?: boolean } = {}) {
 			ON asset_reference.owner_kind = 'feature-match-layout-template'
 			AND feature_match_layout_template.id = asset_reference.owner_id
 		WHERE asset_reference.asset_id = ?
-			${options.templatesOnly ? `AND asset_reference.owner_kind IN (${TEMPLATE_OWNER_KIND_LIST})` : ''}
+			${options.templatesOnly
+				? `AND asset_reference.owner_kind IN (${TEMPLATE_OWNER_KIND_LIST})`
+				: ''}
 		ORDER BY asset_reference.owner_kind, asset_reference.owner_id,
 			asset_reference.owner_slot, asset_reference.id
 	`;
@@ -307,7 +311,9 @@ async function classifyLifecycleTransitionMiss(
 	const existing = await database.prepare(
 		'SELECT lifecycle_state FROM graphic_assets WHERE id = ?',
 	).bind(assetId).first();
-	return { outcome: existing ? 'not-allowed' : 'not-found' };
+	return {
+		outcome: existing ? 'not-allowed' : 'not-found',
+	};
 }
 
 function operationSelect(where: string) {
@@ -329,7 +335,9 @@ async function firstOperation(
 	...bindings: unknown[]
 ): Promise<GraphicsIngestionOperation | undefined> {
 	const row = await database.prepare(operationSelect(where)).bind(...bindings).first<OperationRow>();
-	return row ? operationFromRow(row) : undefined;
+	return row
+		? operationFromRow(row)
+		: undefined;
 }
 
 async function assertContentCompatible(
@@ -365,7 +373,9 @@ function releaseContentQuarantineStatement(
 	return database.prepare(`
 		DELETE FROM graphics_content_quarantine
 		WHERE digest IN ${valuesFromJsonArray()}
-		${publication ? `AND ${publication.guard}` : ''}
+		${publication
+			? `AND ${publication.guard}`
+			: ''}
 	`).bind(boundJsonArray(digests), ...(publication?.bindings ?? []));
 }
 
@@ -414,12 +424,18 @@ function updateOperationStatement(
 		operation.browserDecodeEvidence === undefined
 			? null
 			: JSON.stringify(operation.browserDecodeEvidence),
-		operation.report === undefined ? null : JSON.stringify(operation.report),
-		operation.result === undefined ? null : JSON.stringify(operation.result),
+		operation.report === undefined
+			? null
+			: JSON.stringify(operation.report),
+		operation.result === undefined
+			? null
+			: JSON.stringify(operation.result),
 		operation.templatePackageInstallation === undefined
 			? null
 			: JSON.stringify(operation.templatePackageInstallation),
-		operation.failure === undefined ? null : JSON.stringify(operation.failure),
+		operation.failure === undefined
+			? null
+			: JSON.stringify(operation.failure),
 		operation.canonicalCapacityOutcome === undefined
 			? null
 			: JSON.stringify(operation.canonicalCapacityOutcome),
@@ -427,7 +443,9 @@ function updateOperationStatement(
 		operation.stage,
 		operation.stage,
 		operation.stage,
-		operation.failure === undefined ? null : JSON.stringify(operation.failure),
+		operation.failure === undefined
+			? null
+			: JSON.stringify(operation.failure),
 		operation.id,
 		operation.initiatedBy,
 		new Date(expectedUpdatedAt).getTime(),
@@ -1075,8 +1093,12 @@ export function createD1GraphicsAssetCatalogue(
 		async installTemplatePackage(input) {
 			const publishedAt = new Date(input.publishedAt).getTime();
 			const createdAssetIds = input.created.map(asset => asset.assetId);
-			const reusedAssetIds = [...new Set(input.reused.map(asset => asset.assetId))];
-			const reusedRevisionIds = [...new Set(input.reused.map(asset => asset.revisionId))];
+			const reusedAssetIds = [
+				...new Set(input.reused.map(asset => asset.assetId)),
+			];
+			const reusedRevisionIds = [
+				...new Set(input.reused.map(asset => asset.revisionId)),
+			];
 			await Promise.all([
 				...input.created.map(asset => assertContentCompatible(database, {
 					digest: asset.sourceDigest,
@@ -1159,7 +1181,10 @@ export function createD1GraphicsAssetCatalogue(
 			})));
 			const references = JSON.stringify(input.references);
 			const associatedAssetIds = boundJsonArray([
-				...new Set([...createdAssetIds, ...reusedAssetIds]),
+				...new Set([
+					...createdAssetIds,
+					...reusedAssetIds,
+				]),
 			]);
 			const quarantineDigests = [
 				...new Set(input.created.flatMap(asset => [asset.sourceDigest, asset.thumbnailDigest])),
@@ -1270,19 +1295,21 @@ export function createD1GraphicsAssetCatalogue(
 					// An installation run inside an Event associates everything it
 					// touched with that Event. The association organises discovery and
 					// adds nothing to a reused asset's own metadata.
-					: [{
-							statement: database.prepare(`
+					: [
+							{
+								statement: database.prepare(`
 								INSERT OR IGNORE INTO graphic_asset_event_associations (asset_id, event_id, created_at)
 								SELECT value, ?, ?
 								FROM json_each(?)
 								WHERE ${guard}
 							`).bind(
-								input.operation.defaultEventId,
-								publishedAt,
-								associatedAssetIds,
-								...guardBindings,
-							),
-						}]),
+									input.operation.defaultEventId,
+									publishedAt,
+									associatedAssetIds,
+									...guardBindings,
+								),
+							},
+						]),
 				{
 					// The rewritten references pin exactly the revisions this
 					// transaction created or proved, so the join is the proof that no
@@ -1541,7 +1568,12 @@ export function createD1GraphicsAssetCatalogue(
 			// one stays legal from any stage, because by then the upload it named is
 			// already completed or aborted.
 			const state: GraphicsAssetMultipartState | null = input.uploadId
-				? { version: 1, uploadId: input.uploadId, cleanupPending: false, parts: [] }
+				? {
+						version: 1,
+						uploadId: input.uploadId,
+						cleanupPending: false,
+						parts: [],
+					}
 				: null;
 			const result = await database.prepare(`
 				UPDATE graphics_ingestion_operations
@@ -1855,16 +1887,20 @@ export function createD1GraphicsAssetCatalogue(
 			const statements: [D1PreparedStatement, ...D1PreparedStatement[]]
 				= input.operation.defaultEventId === undefined
 					? [clearWriteCandidates, updateOperation]
-					: [database.prepare(`
+					: [
+							database.prepare(`
 							INSERT OR IGNORE INTO graphic_asset_event_associations (asset_id, event_id, created_at)
 							SELECT ?, ?, ?
 							WHERE ${guard}
 						`).bind(
-							input.reusable.assetId,
-							input.operation.defaultEventId,
-							new Date(input.publishedAt).getTime(),
-							...guardBindings,
-						), clearWriteCandidates, updateOperation];
+								input.reusable.assetId,
+								input.operation.defaultEventId,
+								new Date(input.publishedAt).getTime(),
+								...guardBindings,
+							),
+							clearWriteCandidates,
+							updateOperation,
+						];
 			const results = await database.batch(statements);
 			if (results.some(result => !result.success))
 				throw new Error('Graphic Asset reuse transaction failed');
@@ -2046,7 +2082,9 @@ export function createD1GraphicsAssetCatalogue(
 					WHERE revision.id = ?
 				`).bind(
 					input.derivativeId,
-					input.report.facts.kind === 'silent-video' ? 'video-poster' : 'thumbnail',
+					input.report.facts.kind === 'silent-video'
+						? 'video-poster'
+						: 'thumbnail',
 					input.thumbnailDigest,
 					publishedAt,
 					input.revisionId,
@@ -2310,16 +2348,18 @@ export function createD1GraphicsAssetCatalogue(
 				),
 				...(input.operation.defaultEventId === undefined
 					? []
-					: [database.prepare(`
+					: [
+							database.prepare(`
 							INSERT INTO graphic_asset_event_associations (asset_id, event_id, created_at)
 							SELECT ?, ?, ?
 							WHERE ${guard}
 						`).bind(
-							input.assetId,
-							input.operation.defaultEventId,
-							new Date(input.publishedAt).getTime(),
-							...guardBindings,
-						)]),
+								input.assetId,
+								input.operation.defaultEventId,
+								new Date(input.publishedAt).getTime(),
+								...guardBindings,
+							),
+						]),
 				// Both of these reclaim state only a publication that actually happened
 				// has the right to reclaim, so both carry the guard. A failed publication
 				// that cleared its own write candidates would hand its unreachable bytes to

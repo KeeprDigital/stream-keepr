@@ -33,7 +33,9 @@ export function useScreenGraphicAssetContentUrls(
 	const resolutionKey = computed(() => [
 		screen.value?.id ?? '',
 		assetCapability?.value ?? '',
-		isPreview?.value === true ? 'preview' : 'live',
+		isPreview?.value === true
+			? 'preview'
+			: 'live',
 		// Sorted and de-duplicated: which revisions are resolvable is a set, so
 		// reordering a stack, or two items pinning one revision, is not a change.
 		...Array.from(new Set(toValue(references).map(referenceKey))).sort(),
@@ -61,7 +63,10 @@ export function useScreenGraphicAssetContentUrls(
 			}
 
 			const uniqueReferences = new Map(
-				currentReferences.map(reference => [referenceKey(reference), reference] as const),
+				currentReferences.map(reference => [
+					referenceKey(reference),
+					reference,
+				] as const),
 			);
 			const response = await fetch(screenOutputAssetCapabilitySessionPath(screenId), {
 				method: 'POST',
@@ -92,5 +97,8 @@ export function useScreenGraphicAssetContentUrls(
 		return contentUrls.value.get(referenceKey(reference)) ?? '';
 	}
 
-	return { contentUrl, contentUrlsSettled: readonly(contentUrlsSettled) };
+	return {
+		contentUrl,
+		contentUrlsSettled: readonly(contentUrlsSettled),
+	};
 }

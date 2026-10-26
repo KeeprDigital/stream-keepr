@@ -92,7 +92,9 @@ describe('uiColorPicker', () => {
 		expect(wrapper.emitted('update:modelValue')).toBeUndefined();
 
 		await input.setValue('#abcdef');
-		expect(wrapper.emitted('update:modelValue')).toEqual([['#abcdef']]);
+		expect(wrapper.emitted('update:modelValue')).toEqual([
+			['#abcdef'],
+		]);
 	});
 
 	it('cannot be opened while disabled', async () => {

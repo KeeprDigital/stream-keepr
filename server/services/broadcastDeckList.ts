@@ -40,14 +40,20 @@ function normalizedLabel(label: string | null | undefined): string | null | unde
 	if (label === undefined)
 		return undefined;
 	const trimmed = label?.trim() ?? '';
-	return trimmed.length === 0 ? null : trimmed;
+	return trimmed.length === 0
+		? null
+		: trimmed;
 }
 
 function documentEntries(document: BroadcastDeckListCanonicalDocument) {
 	return [
 		...document.mainboard.map(entry => ({ compartment: 'mainboard' as const, ...entry })),
 		...document.sideboard.map(entry => ({ compartment: 'sideboard' as const, ...entry })),
-		...(document.companion ? [{ compartment: 'companion' as const, ...document.companion }] : []),
+		...(document.companion
+			? [
+					{ compartment: 'companion' as const, ...document.companion },
+				]
+			: []),
 	];
 }
 
@@ -63,8 +69,12 @@ function entryInsertStatement(
 	const createdListIdentity = listId === null
 		? 'WITH created_list(id) AS MATERIALIZED (SELECT last_insert_rowid())'
 		: '';
-	const listIdSql = listId === null ? 'created_list.id' : '?';
-	const createdListJoin = listId === null ? ', created_list' : '';
+	const listIdSql = listId === null
+		? 'created_list.id'
+		: '?';
+	const createdListJoin = listId === null
+		? ', created_list'
+		: '';
 	const now = Date.now();
 	const rows = documentEntries(document);
 	return client.prepare(`
@@ -93,16 +103,22 @@ function entryInsertStatement(
 		FROM json_each(?)${createdListJoin}
 		${operationGuard}
 	`).bind(
-		...(listId === null ? [] : [listId]),
+		...(listId === null
+			? []
+			: [listId]),
 		now,
 		now,
 		JSON.stringify(rows),
-		...(options.operationVersion && listId !== null ? [listId, options.operationVersion] : []),
+		...(options.operationVersion && listId !== null
+			? [listId, options.operationVersion]
+			: []),
 	);
 }
 
 function isListNameConflict(error: unknown): boolean {
-	const message = error instanceof Error ? error.message : String(error);
+	const message = error instanceof Error
+		? error.message
+		: String(error);
 	return message.includes('broadcast_deck_lists.event_id')
 		&& message.includes('broadcast_deck_lists.normalized_name');
 }
@@ -230,13 +246,17 @@ export function broadcastDeckListService() {
 			return undefined;
 		return {
 			...first.list,
-			entries: rows.flatMap(row => row.entry ? [row.entry] : []),
+			entries: rows.flatMap(row => row.entry
+				? [row.entry]
+				: []),
 		};
 	};
 
 	const findById = async (id: number, eventId: number): Promise<BroadcastDeckListResponse | undefined> => {
 		const list = await findAggregateById(id, eventId);
-		return list ? mapBroadcastDeckListDetail(list) : undefined;
+		return list
+			? mapBroadcastDeckListDetail(list)
+			: undefined;
 	};
 
 	const findEventGame = async (eventId: number): Promise<'mtg' | 'op' | undefined> => {
@@ -329,7 +349,9 @@ export function broadcastDeckListService() {
 			bindings.push(normalizeColors(input.colors));
 		}
 
-		const operationVersion = document ? crypto.randomUUID() : null;
+		const operationVersion = document
+			? crypto.randomUUID()
+			: null;
 		if (document) {
 			setClauses.push('source_text = ?', 'operation_version = ?');
 			bindings.push(document.sourceText, operationVersion);
@@ -370,7 +392,9 @@ export function broadcastDeckListService() {
 		const stored = mapStoredDetail(results.at(-1) as D1Result<StoredDetailRow>);
 		if (results[0]?.meta.changes !== 1) {
 			const current = stored;
-			return current ? { status: 'conflict', current } : { status: 'missing' };
+			return current
+				? { status: 'conflict', current }
+				: { status: 'missing' };
 		}
 
 		const updated = stored;

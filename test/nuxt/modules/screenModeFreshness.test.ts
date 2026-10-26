@@ -47,7 +47,9 @@ function fakeTransport() {
 		},
 		/** The Event channel attached again having lost continuity. */
 		reattach: (eventId: number) => continuity.reattach(`event:${eventId}`),
-		listeners: () => [...handlers.values()].reduce((total, set) => total + set.size, 0),
+		listeners: () => [
+			...handlers.values(),
+		].reduce((total, set) => total + set.size, 0),
 	};
 }
 
@@ -59,19 +61,31 @@ function harness(dependsOn: ScreenModeDependencies<Held> = {}, { attached = [] a
 		realtime.attach(eventId);
 	const eventId = ref<number | null>(1);
 	const selection = ref<number | null>(7);
-	const read = vi.fn(async (): Promise<Held> => ({ ids: [selection.value!], label: `read ${read.mock.calls.length}` }));
+	const read = vi.fn(async (): Promise<Held> => ({
+		ids: [selection.value!],
+		label: `read ${read.mock.calls.length}`,
+	}));
 	const scope = effectScope();
 	scopes.push(scope);
 	const freshness = scope.run(() => useScreenModeFreshness<Held>({
 		eventId,
-		source: () => selection.value === null ? null : String(selection.value),
+		source: () => selection.value === null
+			? null
+			: String(selection.value),
 		read,
 		initialData: { ids: [], label: 'none' },
 		errorMessage: 'Failed to read',
 		dependsOn,
 		realtime: realtime.transport as unknown as ScreenModeFreshnessTransport,
 	}))!;
-	return { ...realtime, eventId, selection, read, freshness, scope };
+	return {
+		...realtime,
+		eventId,
+		selection,
+		read,
+		freshness,
+		scope,
+	};
 }
 
 describe('useScreenModeFreshness', () => {
@@ -90,7 +104,10 @@ describe('useScreenModeFreshness', () => {
 			await flushPromises();
 
 			expect(read).toHaveBeenCalledTimes(1);
-			expect(freshness.data.value).toEqual({ ids: [7], label: 'read 1' });
+			expect(freshness.data.value).toEqual({
+				ids: [7],
+				label: 'read 1',
+			});
 
 			selection.value = 9;
 			await flushPromises();
@@ -194,10 +211,16 @@ describe('useScreenModeFreshness', () => {
 			read.mockImplementationOnce(() => {
 				const served = published;
 				return new Promise((resolve) => {
-					answer = () => resolve({ ids: [7], label: served });
+					answer = () => resolve({
+						ids: [7],
+						label: served,
+					});
 				});
 			});
-			read.mockImplementation(async () => ({ ids: [7], label: published }));
+			read.mockImplementation(async () => ({
+				ids: [7],
+				label: published,
+			}));
 			for (const player of [1, 2, 3, 4]) {
 				published = `after player ${player}`;
 				deliver(1, 'player:updated', { player });
@@ -219,7 +242,10 @@ describe('useScreenModeFreshness', () => {
 			deliver(1, 'player:updated', {});
 			read.mockImplementationOnce(async () => {
 				deliver(1, 'player:updated', {});
-				return { ids: [7], label: 'follow-up' };
+				return {
+					ids: [7],
+					label: 'follow-up',
+				};
 			});
 			await flushPromises();
 
@@ -248,7 +274,10 @@ describe('useScreenModeFreshness', () => {
 
 			let answer!: () => void;
 			read.mockImplementationOnce(() => new Promise((resolve) => {
-				answer = () => resolve({ ids: [7], label: 'superseded' });
+				answer = () => resolve({
+					ids: [7],
+					label: 'superseded',
+				});
 			}));
 			deliver(1, 'player:updated', {});
 			await flushPromises();
@@ -442,7 +471,10 @@ describe('useScreenModeFreshness', () => {
 			expect(read).toHaveBeenCalledTimes(2);
 			expect(freshness.data.value.label).toBe('read 1');
 
-			answer({ ids: [7], label: 'authoritative' });
+			answer({
+				ids: [7],
+				label: 'authoritative',
+			});
 			await flushPromises();
 			expect(freshness.data.value.label).toBe('authoritative');
 		});
@@ -450,7 +482,10 @@ describe('useScreenModeFreshness', () => {
 		it('shows a change published after the connection came back but before its channel attached (#641)', async () => {
 			const { read, transport, reattach, freshness } = harness();
 			let published = 'before the drop';
-			read.mockImplementation(async () => ({ ids: [7], label: published }));
+			read.mockImplementation(async () => ({
+				ids: [7],
+				label: published,
+			}));
 			await flushPromises();
 
 			await dropAndComeBack(transport);
@@ -533,7 +568,10 @@ describe('useScreenModeFreshness', () => {
 			expect(freshness.data.value.label).toBe('read 1');
 
 			// Published while nothing listens on the channel, so never delivered.
-			read.mockImplementation(async () => ({ ids: [7], label: 'published before the attach' }));
+			read.mockImplementation(async () => ({
+				ids: [7],
+				label: 'published before the attach',
+			}));
 			attach(1);
 			await flushPromises();
 
@@ -548,7 +586,10 @@ describe('useScreenModeFreshness', () => {
 			watch(freshness.data, held => shown.push(held.label), { flush: 'sync' });
 			let answer!: () => void;
 			read.mockImplementationOnce(() => new Promise((resolve) => {
-				answer = () => resolve({ ids: [9], label: 'load' });
+				answer = () => resolve({
+					ids: [9],
+					label: 'load',
+				});
 			}));
 			selection.value = 9;
 			await flushPromises();
@@ -577,7 +618,9 @@ describe('useScreenModeFreshness', () => {
 		});
 
 		it('does not re-read when its channel was already attached before it read', async () => {
-			const { read, attach } = harness({}, { attached: [1] });
+			const { read, attach } = harness({}, {
+				attached: [1],
+			});
 			await flushPromises();
 
 			attach(1);

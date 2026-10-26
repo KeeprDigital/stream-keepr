@@ -8,7 +8,9 @@ const props = defineProps<{
 
 const eventStore = useEventStore();
 
-const sorting = ref([{ id: 'inclusionRate', desc: true }]);
+const sorting = ref([
+	{ id: 'inclusionRate', desc: true },
+]);
 
 const maxInclusionRate = computed(() =>
 	Math.max(...props.archetypes.map(a => a.inclusionRate), 1),
@@ -16,7 +18,11 @@ const maxInclusionRate = computed(() =>
 
 const columns: TableColumn<CardArchetypeEntry>[] = [
 	createNameColumn<CardArchetypeEntry>('Archetype'),
-	{ accessorKey: 'inclusionRate', header: createSortableHeader('Inclusion'), enableSorting: true },
+	{
+		accessorKey: 'inclusionRate',
+		header: createSortableHeader('Inclusion'),
+		enableSorting: true,
+	},
 	createDeckCountColumn<CardArchetypeEntry>(),
 	{ id: 'keyCard', header: '', enableSorting: false },
 ];

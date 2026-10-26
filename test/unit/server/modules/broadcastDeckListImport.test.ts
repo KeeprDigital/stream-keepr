@@ -181,7 +181,9 @@ describe('broadcast Deck List import', () => {
 
 		expect(result).toEqual({
 			ok: false,
-			errors: [expect.objectContaining({ lineNumber: 1, code: 'INVALID_QUANTITY' })],
+			errors: [
+				expect.objectContaining({ lineNumber: 1, code: 'INVALID_QUANTITY' }),
+			],
 		});
 	});
 
@@ -209,11 +211,15 @@ describe('broadcast Deck List import', () => {
 
 		expect(sourceTooLarge).toEqual({
 			ok: false,
-			errors: [expect.objectContaining({ code: 'SOURCE_TOO_LARGE' })],
+			errors: [
+				expect.objectContaining({ code: 'SOURCE_TOO_LARGE' }),
+			],
 		});
 		expect(tooManyLines).toEqual({
 			ok: false,
-			errors: [expect.objectContaining({ code: 'TOO_MANY_LINES' })],
+			errors: [
+				expect.objectContaining({ code: 'TOO_MANY_LINES' }),
+			],
 		});
 		expect(resolver.resolve).not.toHaveBeenCalled();
 	});
@@ -221,7 +227,10 @@ describe('broadcast Deck List import', () => {
 	it('accepts each exact safety boundary', async () => {
 		const sourceAtLimit = await importBroadcastDeckList(`1 ${'a'.repeat(65_534)}`, resolvingAllCards());
 		const linesAtLimit = await importBroadcastDeckList(
-			[...Array.from({ length: 499 }).fill(''), '1 Forest'].join('\n'),
+			[
+				...Array.from({ length: 499 }).fill(''),
+				'1 Forest',
+			].join('\n'),
 			resolvingAllCards(),
 		);
 		const rowsAtLimit = await importBroadcastDeckList(
@@ -239,7 +248,9 @@ describe('broadcast Deck List import', () => {
 		expect(mergedAtLimit).toEqual({
 			ok: true,
 			document: expect.objectContaining({
-				mainboard: [expect.objectContaining({ quantity: 999 })],
+				mainboard: [
+					expect.objectContaining({ quantity: 999 }),
+				],
 			}),
 		});
 	});
@@ -252,7 +263,9 @@ describe('broadcast Deck List import', () => {
 
 		expect(result).toEqual({
 			ok: false,
-			errors: [expect.objectContaining({ code: 'TOO_MANY_CARD_ROWS' })],
+			errors: [
+				expect.objectContaining({ code: 'TOO_MANY_CARD_ROWS' }),
+			],
 		});
 		expect(resolver.resolve).not.toHaveBeenCalled();
 	});
@@ -265,7 +278,9 @@ describe('broadcast Deck List import', () => {
 		expect(accepted.ok).toBe(true);
 		expect(refused).toEqual({
 			ok: false,
-			errors: [expect.objectContaining({ code: 'TOTAL_QUANTITY_EXCEEDED' })],
+			errors: [
+				expect.objectContaining({ code: 'TOTAL_QUANTITY_EXCEEDED' }),
+			],
 		});
 		expect(refusingResolver.resolve).not.toHaveBeenCalled();
 	});
@@ -277,17 +292,23 @@ describe('broadcast Deck List import', () => {
 
 		expect(empty).toEqual({
 			ok: false,
-			errors: [expect.objectContaining({ code: 'EMPTY_DECK_LIST' })],
+			errors: [
+				expect.objectContaining({ code: 'EMPTY_DECK_LIST' }),
+			],
 		});
 		expect(companionOnly).toEqual({
 			ok: false,
-			errors: [expect.objectContaining({ code: 'EMPTY_DECK_LIST' })],
+			errors: [
+				expect.objectContaining({ code: 'EMPTY_DECK_LIST' }),
+			],
 		});
 		expect(sideboardOnly).toEqual({
 			ok: true,
 			document: expect.objectContaining({
 				mainboard: [],
-				sideboard: [expect.objectContaining({ canonicalName: 'Duress', quantity: 2 })],
+				sideboard: [
+					expect.objectContaining({ canonicalName: 'Duress', quantity: 2 }),
+				],
 			}),
 		});
 	});
@@ -315,7 +336,9 @@ describe('broadcast Deck List import', () => {
 
 	it('continues resolving valid rows so one response contains every detectable bounded error', async () => {
 		const resolver: BroadcastDeckListCardResolver = {
-			resolve: vi.fn(async () => [{ status: 'unresolved' as const }]),
+			resolve: vi.fn(async () => [
+				{ status: 'unresolved' as const },
+			]),
 		};
 
 		const result = await importBroadcastDeckList('not a card row\n1 Missing Card', resolver);
@@ -331,7 +354,9 @@ describe('broadcast Deck List import', () => {
 
 	it('orders line errors by physical source line regardless of detection phase', async () => {
 		const resolver: BroadcastDeckListCardResolver = {
-			resolve: vi.fn(async () => [{ status: 'unresolved' as const }]),
+			resolve: vi.fn(async () => [
+				{ status: 'unresolved' as const },
+			]),
 		};
 
 		const result = await importBroadcastDeckList('1 Missing Card\nnot a card row', resolver);
@@ -339,7 +364,9 @@ describe('broadcast Deck List import', () => {
 		expect(result.ok).toBe(false);
 		if (result.ok)
 			return;
-		expect(result.errors.map(error => 'lineNumber' in error ? error.lineNumber : null)).toEqual([1, 2]);
+		expect(result.errors.map(error => 'lineNumber' in error
+			? error.lineNumber
+			: null)).toEqual([1, 2]);
 	});
 
 	it('merges only the same resolved printing in one compartment and preserves first-occurrence order', async () => {
@@ -377,7 +404,9 @@ describe('broadcast Deck List import', () => {
 
 		expect(result).toEqual({
 			ok: false,
-			errors: [expect.objectContaining({ code: 'MERGED_QUANTITY_EXCEEDED' })],
+			errors: [
+				expect.objectContaining({ code: 'MERGED_QUANTITY_EXCEEDED' }),
+			],
 		});
 	});
 });

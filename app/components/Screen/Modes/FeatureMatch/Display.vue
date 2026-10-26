@@ -67,7 +67,9 @@ const hasOvertime = computed(() => !!matchState.value?.overtime);
 const showOvertime = computed(() => hasOvertime.value && (config.value.showOvertime ?? true));
 
 const leftSide = computed(() => config.value.leftSidePlayer ?? 'player1');
-const rightSide = computed(() => leftSide.value === 'player1' ? 'player2' : 'player1');
+const rightSide = computed(() => leftSide.value === 'player1'
+	? 'player2'
+	: 'player1');
 
 const isVerticalArena = computed(() => eventStore.displayEvent?.featureMatchOrientation === 'vertical');
 const showSeatLabels = computed(() => config.value.showSeatLabels ?? true);
@@ -75,9 +77,14 @@ const showSeatLabels = computed(() => config.value.showSeatLabels ?? true);
 function seatLabelFor(side: PlayerSide): string | undefined {
 	if (!showSeatLabels.value)
 		return undefined;
-	if (isVerticalArena.value)
-		return side === 'player1' ? 'Top' : 'Bottom';
-	return side === 'player1' ? 'Left' : 'Right';
+	if (isVerticalArena.value) {
+		return side === 'player1'
+			? 'Top'
+			: 'Bottom';
+	}
+	return side === 'player1'
+		? 'Left'
+		: 'Right';
 }
 
 function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {

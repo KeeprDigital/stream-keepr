@@ -257,7 +257,12 @@ export function maximalBroadcastGraphicDocument(
 	};
 
 	document.animation = {
-		'enter': { duration: 400, easing: 'ease-out', delay: 100, fade: { opacity: 0 } },
+		'enter': {
+			duration: 400,
+			easing: 'ease-out',
+			delay: 100,
+			fade: { opacity: 0 },
+		},
 		'on-screen': {
 			duration: 800,
 			easing: 'linear',
@@ -266,7 +271,12 @@ export function maximalBroadcastGraphicDocument(
 			repeat: 3,
 			scale: { factor: 1.1, origin: 'center' },
 		},
-		'update': { duration: 250, easing: 'ease-in-out', delay: 0, fade: { opacity: 0.5 } },
+		'update': {
+			duration: 250,
+			easing: 'ease-in-out',
+			delay: 0,
+			fade: { opacity: 0.5 },
+		},
 		'exit': {
 			duration: 300,
 			easing: 'ease-in',
@@ -275,25 +285,65 @@ export function maximalBroadcastGraphicDocument(
 			reveal: { edge: 'left' },
 		},
 		'stagger': {
-			'enter': { order: 'list', step: 80, itemIds: ['headline', 'cluster'] },
-			'on-screen': { order: 'reverse-list', step: 40, itemIds: ['cluster'] },
-			'update': { order: 'list', step: 20, itemIds: ['headline'] },
+			'enter': {
+				order: 'list',
+				step: 80,
+				itemIds: ['headline', 'cluster'],
+			},
+			'on-screen': {
+				order: 'reverse-list',
+				step: 40,
+				itemIds: ['cluster'],
+			},
+			'update': {
+				order: 'list',
+				step: 20,
+				itemIds: ['headline'],
+			},
 			'exit': {
 				order: 'reverse-list',
 				step: 60,
-				itemIds: ['cluster', 'backdrop', 'social-icon', 'countdown', 'life', 'wins'],
+				itemIds: [
+					'cluster',
+					'backdrop',
+					'social-icon',
+					'countdown',
+					'life',
+					'wins',
+				],
 			},
 		},
 	};
 	group.animation = {
-		enter: { duration: 300, easing: 'linear', delay: 0, fade: { opacity: 0 } },
-		stagger: { enter: { order: 'list', step: 30, itemIds: ['child'] } },
+		enter: {
+			duration: 300,
+			easing: 'linear',
+			delay: 0,
+			fade: { opacity: 0 },
+		},
+		stagger: {
+			enter: {
+				order: 'list',
+				step: 30,
+				itemIds: ['child'],
+			},
+		},
 	};
 	headline.animation = {
-		exit: { duration: 150, easing: 'ease-in', delay: 50, fade: { opacity: 0 } },
+		exit: {
+			duration: 150,
+			easing: 'ease-in',
+			delay: 50,
+			fade: { opacity: 0 },
+		},
 	};
 	socialIcon.animation = {
-		enter: { duration: 180, easing: 'ease-out', delay: 20, scale: { factor: 0.8, origin: 'center' } },
+		enter: {
+			duration: 180,
+			easing: 'ease-out',
+			delay: 20,
+			scale: { factor: 0.8, origin: 'center' },
+		},
 	};
 	// All six Graphic Input types, because each is a separate branch of the wire
 	// vocabulary and a package carrying five of them proves nothing about the sixth.
@@ -333,7 +383,10 @@ export function maximalBroadcastGraphicDocument(
 			required: false,
 			updatePolicy: 'live',
 			default: 'left',
-			options: [{ value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }],
+			options: [
+				{ value: 'left', label: 'Left' },
+				{ value: 'right', label: 'Right' },
+			],
 		},
 		{
 			type: 'color',
@@ -363,19 +416,28 @@ export function maximalBroadcastGraphicDocument(
 	// optional `from` is covered by a relationship that really does yield `player`.
 	document.sources = [
 		{ key: 'match', label: 'Match', kind: 'match' },
-		{ key: 'player', label: 'Player', kind: 'player', from: { sourceKey: 'match', relation: 'player1' } },
+		{
+			key: 'player',
+			label: 'Player',
+			kind: 'player',
+			from: { sourceKey: 'match', relation: 'player1' },
+		},
 		{ key: 'talent', label: 'Talent', kind: 'talent' },
 	];
-	document.bindings = [{ inputKey: 'headline', sourceKey: 'player', fieldId: 'player.name' }];
-	document.socialProfileProjections = [{
-		key: 'talent-profile',
-		label: 'Talent Profile',
-		sourceKey: 'talent',
-		presentationGroupId: 'cluster',
-		dwellMs: 8_000,
-		transition: 'crossfade',
-		transitionDurationMs: 250,
-	}];
+	document.bindings = [
+		{ inputKey: 'headline', sourceKey: 'player', fieldId: 'player.name' },
+	];
+	document.socialProfileProjections = [
+		{
+			key: 'talent-profile',
+			label: 'Talent Profile',
+			sourceKey: 'talent',
+			presentationGroupId: 'cluster',
+			dwellMs: 8_000,
+			transition: 'crossfade',
+			transitionDurationMs: 250,
+		},
+	];
 
 	return document;
 }

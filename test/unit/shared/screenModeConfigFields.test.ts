@@ -41,7 +41,12 @@ describe('a config contract\'s editor fields', () => {
 			step: 0.1,
 			displayScale: 1,
 		});
-		expect(contract.fields.columns).toMatchObject({ control: 'number', min: 1, max: 12, step: undefined });
+		expect(contract.fields.columns).toMatchObject({
+			control: 'number',
+			min: 1,
+			max: 12,
+			step: undefined,
+		});
 		expect(contract.fields.maxTableWidth).toMatchObject({ control: 'number', min: 1, max: undefined });
 	});
 
@@ -51,7 +56,11 @@ describe('a config contract\'s editor fields', () => {
 
 	it('reads the control kind from the schema, and a string\'s from its metadata', () => {
 		expect(contract.fields.enabled).toMatchObject({ label: 'Enable Animation', control: 'toggle' });
-		expect(contract.fields.speed).toMatchObject({ label: 'Animation Speed', control: 'select', values: ['slow', 'normal', 'fast'] });
+		expect(contract.fields.speed).toMatchObject({
+			label: 'Animation Speed',
+			control: 'select',
+			values: ['slow', 'normal', 'fast'],
+		});
 		expect(contract.fields.textColor).toMatchObject({ label: 'Text Color', control: 'color' });
 		expect(contract.fields.headerText).toMatchObject({ label: 'Custom header text', control: 'text' });
 	});
@@ -64,8 +73,10 @@ describe('a config contract\'s editor fields', () => {
 
 	it('keeps defaults out of the schema: an editor field may still not carry a zod default', () => {
 		expect(() =>
-			// @ts-expect-error — a default lives only in the contract's defaults
-			defineScreenModeConfigContract({ topN: editorField(z.number().default(8), { label: 'Top N' }) }, { topN: 8 }),
+			defineScreenModeConfigContract({
+				// @ts-expect-error — a default lives only in the contract's defaults
+				topN: editorField(z.number().default(8), { label: 'Top N' }),
+			}, { topN: 8 }),
 		).toThrow();
 	});
 });
@@ -97,17 +108,30 @@ describe('a config contract\'s stored-fragment clamp', () => {
 	});
 
 	it('clamps inside a nested block and keeps the block\'s other keys', () => {
-		expect(contract.readStored({ board: { columns: 16, view: 'list' } })).toEqual({ board: { columns: 12, view: 'list' } });
+		expect(contract.readStored({
+			board: { columns: 16, view: 'list' },
+		})).toEqual({
+			board: { columns: 12, view: 'list' },
+		});
 	});
 
 	it('returns an in-range fragment as it is', () => {
-		const fragment = { scale: 1.5, board: { columns: 3 }, featureMatchId: 7 };
+		const fragment = {
+			scale: 1.5,
+			board: { columns: 3 },
+			featureMatchId: 7,
+		};
 
 		expect(contract.readStored(fragment)).toBe(fragment);
 	});
 
 	it('leaves what it cannot clamp to the reader: other types, exclusive bounds, and unknown keys', () => {
-		const fragment = { scale: 'big', featureMatchId: 0, label: 'too long', retired: 99 } as Record<string, unknown>;
+		const fragment = {
+			scale: 'big',
+			featureMatchId: 0,
+			label: 'too long',
+			retired: 99,
+		} as Record<string, unknown>;
 
 		expect(contract.readStored(fragment)).toEqual(fragment);
 	});

@@ -83,7 +83,15 @@ const metagameService = createMetagameReadModelImplementation;
 /** Chain where .where() or .orderBy() is the terminal (most common) */
 function makeSelectChain(resolvedValue: any[]) {
 	const chain: any = {};
-	const noopMethods = ['from', 'innerJoin', 'leftJoin', 'groupBy', 'having', 'limit', 'offset'];
+	const noopMethods = [
+		'from',
+		'innerJoin',
+		'leftJoin',
+		'groupBy',
+		'having',
+		'limit',
+		'offset',
+	];
 	for (const m of noopMethods) {
 		chain[m] = vi.fn().mockReturnValue(chain);
 	}
@@ -110,7 +118,9 @@ describe('metagameService', () => {
 	describe('getArchetypeBreakdown', () => {
 		it('returns empty entries with totalPlayers=0 when no players (scope=all)', async () => {
 			// scope='all': first select is the COUNT query
-			mockDb.select.mockReturnValueOnce(makeSelectChain([{ c: 0 }]));
+			mockDb.select.mockReturnValueOnce(makeSelectChain([
+				{ c: 0 },
+			]));
 
 			const result = await metagameService().getArchetypeBreakdown(1, 'all');
 			expect(result.totalPlayers).toBe(0);
@@ -121,7 +131,9 @@ describe('metagameService', () => {
 
 		it('returns empty when classifiedPlayers=0', async () => {
 			mockDb.select
-				.mockReturnValueOnce(makeSelectChain([{ c: 2 }])) // totalPlayers COUNT
+				.mockReturnValueOnce(makeSelectChain([
+					{ c: 2 },
+				])) // totalPlayers COUNT
 				.mockReturnValueOnce(makeSelectChain([])); // classifiedRows → empty
 
 			const result = await metagameService().getArchetypeBreakdown(1, 'all');
@@ -143,19 +155,65 @@ describe('metagameService', () => {
 			// 2. classifiedRows
 			// 3. archetypeRows
 			mockDb.select
-				.mockReturnValueOnce(makeSelectChain([{ c: 3 }]))
 				.mockReturnValueOnce(makeSelectChain([
-					{ archetypeId: 1, wins: 5, losses: 1, points: 15, position: 1, deckColors: 'R' },
-					{ archetypeId: 1, wins: 3, losses: 3, points: 9, position: 3, deckColors: 'R' },
-					{ archetypeId: 2, wins: 4, losses: 2, points: 12, position: 2, deckColors: 'WU' },
+					{ c: 3 },
 				]))
 				.mockReturnValueOnce(makeSelectChain([
-					{ id: 1, name: 'Mono Red', colors: 'R', eventId: 1 },
-					{ id: 2, name: 'Azorius Control', colors: 'WU', eventId: 1 },
+					{
+						archetypeId: 1,
+						wins: 5,
+						losses: 1,
+						points: 15,
+						position: 1,
+						deckColors: 'R',
+					},
+					{
+						archetypeId: 1,
+						wins: 3,
+						losses: 3,
+						points: 9,
+						position: 3,
+						deckColors: 'R',
+					},
+					{
+						archetypeId: 2,
+						wins: 4,
+						losses: 2,
+						points: 12,
+						position: 2,
+						deckColors: 'WU',
+					},
+				]))
+				.mockReturnValueOnce(makeSelectChain([
+					{
+						id: 1,
+						name: 'Mono Red',
+						colors: 'R',
+						eventId: 1,
+					},
+					{
+						id: 2,
+						name: 'Azorius Control',
+						colors: 'WU',
+						eventId: 1,
+					},
 				]));
 
 			mockGetKeyCardsByArchetypeIds.mockResolvedValue(new Map([
-				[1, [{ id: 10, name: 'Goblin Guide', game: 'mtg', scryfallId: null, cardType: null, colors: 'R', cmc: 1 }]],
+				[
+					1,
+					[
+						{
+							id: 10,
+							name: 'Goblin Guide',
+							game: 'mtg',
+							scryfallId: null,
+							cardType: null,
+							colors: 'R',
+							cmc: 1,
+						},
+					],
+				],
 			]));
 
 			const result = await metagameService().getArchetypeBreakdown(1, 'all');
@@ -173,15 +231,48 @@ describe('metagameService', () => {
 
 		it('sortBy=\'count\' → entries ordered by count descending', async () => {
 			mockDb.select
-				.mockReturnValueOnce(makeSelectChain([{ c: 3 }]))
 				.mockReturnValueOnce(makeSelectChain([
-					{ archetypeId: 1, wins: 5, losses: 1, points: 15, position: 1, deckColors: 'R' },
-					{ archetypeId: 1, wins: 3, losses: 3, points: 9, position: 3, deckColors: 'R' },
-					{ archetypeId: 2, wins: 4, losses: 2, points: 12, position: 2, deckColors: 'WU' },
+					{ c: 3 },
 				]))
 				.mockReturnValueOnce(makeSelectChain([
-					{ id: 1, name: 'Mono Red', colors: 'R', eventId: 1 },
-					{ id: 2, name: 'Azorius Control', colors: 'WU', eventId: 1 },
+					{
+						archetypeId: 1,
+						wins: 5,
+						losses: 1,
+						points: 15,
+						position: 1,
+						deckColors: 'R',
+					},
+					{
+						archetypeId: 1,
+						wins: 3,
+						losses: 3,
+						points: 9,
+						position: 3,
+						deckColors: 'R',
+					},
+					{
+						archetypeId: 2,
+						wins: 4,
+						losses: 2,
+						points: 12,
+						position: 2,
+						deckColors: 'WU',
+					},
+				]))
+				.mockReturnValueOnce(makeSelectChain([
+					{
+						id: 1,
+						name: 'Mono Red',
+						colors: 'R',
+						eventId: 1,
+					},
+					{
+						id: 2,
+						name: 'Azorius Control',
+						colors: 'WU',
+						eventId: 1,
+					},
 				]));
 
 			const result = await metagameService().getArchetypeBreakdown(1, 'all', 'count');
@@ -192,14 +283,40 @@ describe('metagameService', () => {
 
 		it('sortBy=\'winRate\' → entries ordered by winRate descending (nulls last)', async () => {
 			mockDb.select
-				.mockReturnValueOnce(makeSelectChain([{ c: 2 }]))
 				.mockReturnValueOnce(makeSelectChain([
-					{ archetypeId: 1, wins: 1, losses: 9, points: 3, position: 2, deckColors: 'R' },
-					{ archetypeId: 2, wins: 9, losses: 1, points: 27, position: 1, deckColors: 'WU' },
+					{ c: 2 },
 				]))
 				.mockReturnValueOnce(makeSelectChain([
-					{ id: 1, name: 'Mono Red', colors: 'R', eventId: 1 },
-					{ id: 2, name: 'Azorius Control', colors: 'WU', eventId: 1 },
+					{
+						archetypeId: 1,
+						wins: 1,
+						losses: 9,
+						points: 3,
+						position: 2,
+						deckColors: 'R',
+					},
+					{
+						archetypeId: 2,
+						wins: 9,
+						losses: 1,
+						points: 27,
+						position: 1,
+						deckColors: 'WU',
+					},
+				]))
+				.mockReturnValueOnce(makeSelectChain([
+					{
+						id: 1,
+						name: 'Mono Red',
+						colors: 'R',
+						eventId: 1,
+					},
+					{
+						id: 2,
+						name: 'Azorius Control',
+						colors: 'WU',
+						eventId: 1,
+					},
 				]));
 
 			const result = await metagameService().getArchetypeBreakdown(1, 'all', 'winRate');
@@ -211,14 +328,40 @@ describe('metagameService', () => {
 
 		it('uses archetype name as a stable tie-breaker when meta share ties', async () => {
 			mockDb.select
-				.mockReturnValueOnce(makeSelectChain([{ c: 2 }]))
 				.mockReturnValueOnce(makeSelectChain([
-					{ archetypeId: 1, wins: 1, losses: 1, points: 3, position: 2, deckColors: 'R' },
-					{ archetypeId: 2, wins: 1, losses: 1, points: 3, position: 1, deckColors: 'W' },
+					{ c: 2 },
 				]))
 				.mockReturnValueOnce(makeSelectChain([
-					{ id: 1, name: 'Zoo', colors: 'R', eventId: 1 },
-					{ id: 2, name: 'Affinity', colors: 'W', eventId: 1 },
+					{
+						archetypeId: 1,
+						wins: 1,
+						losses: 1,
+						points: 3,
+						position: 2,
+						deckColors: 'R',
+					},
+					{
+						archetypeId: 2,
+						wins: 1,
+						losses: 1,
+						points: 3,
+						position: 1,
+						deckColors: 'W',
+					},
+				]))
+				.mockReturnValueOnce(makeSelectChain([
+					{
+						id: 1,
+						name: 'Zoo',
+						colors: 'R',
+						eventId: 1,
+					},
+					{
+						id: 2,
+						name: 'Affinity',
+						colors: 'W',
+						eventId: 1,
+					},
 				]));
 
 			const result = await metagameService().getArchetypeBreakdown(1, 'all');
@@ -228,14 +371,40 @@ describe('metagameService', () => {
 
 		it('uses archetype name as a stable tie-breaker when win rate ties', async () => {
 			mockDb.select
-				.mockReturnValueOnce(makeSelectChain([{ c: 2 }]))
 				.mockReturnValueOnce(makeSelectChain([
-					{ archetypeId: 1, wins: 2, losses: 1, points: 6, position: 2, deckColors: 'R' },
-					{ archetypeId: 2, wins: 2, losses: 1, points: 9, position: 1, deckColors: 'W' },
+					{ c: 2 },
 				]))
 				.mockReturnValueOnce(makeSelectChain([
-					{ id: 1, name: 'Zoo', colors: 'R', eventId: 1 },
-					{ id: 2, name: 'Affinity', colors: 'W', eventId: 1 },
+					{
+						archetypeId: 1,
+						wins: 2,
+						losses: 1,
+						points: 6,
+						position: 2,
+						deckColors: 'R',
+					},
+					{
+						archetypeId: 2,
+						wins: 2,
+						losses: 1,
+						points: 9,
+						position: 1,
+						deckColors: 'W',
+					},
+				]))
+				.mockReturnValueOnce(makeSelectChain([
+					{
+						id: 1,
+						name: 'Zoo',
+						colors: 'R',
+						eventId: 1,
+					},
+					{
+						id: 2,
+						name: 'Affinity',
+						colors: 'W',
+						eventId: 1,
+					},
 				]));
 
 			const result = await metagameService().getArchetypeBreakdown(1, 'all', 'winRate');

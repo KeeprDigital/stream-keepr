@@ -21,7 +21,9 @@ const mockConfig = ref<FeatureMatchOverlayModeConfig>(structuredClone(DEFAULT_FE
 const mockOutputMode = ref<FeatureMatchOverlayOutput>('overlay');
 const mockPreviewGuides = ref(false);
 const mockPreviewSafeAreas = ref(false);
-const mockScreen = ref({ screenConfig: { width: 1920, height: 1080 } });
+const mockScreen = ref({
+	screenConfig: { width: 1920, height: 1080 },
+});
 const mockIsPreview = ref(false);
 const mockLoading = ref(false);
 const mockError = ref<string | null>(null);
@@ -77,7 +79,9 @@ mockNuxtImport('useFeatureMatchOverlaySideboardData', () => () => ({
 
 mockNuxtImport('useScreenGraphicAssetContentUrls', () => () => ({
 	contentUrl: (reference: { assetId: string; revisionId: string }) =>
-		mockContentUrlsCleared.value ? '' : `/private-assets/${reference.assetId}/${reference.revisionId}`,
+		mockContentUrlsCleared.value
+			? ''
+			: `/private-assets/${reference.assetId}/${reference.revisionId}`,
 	contentUrlsSettled: mockContentUrlsSettled,
 }));
 
@@ -105,12 +109,14 @@ describe('featureMatchOverlayDisplay', () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.composition = {
 				...createFeatureMatchLayoutComposition(),
-				items: [getGraphicItemDefinition('clock').createDefault({
-					id: 'clock',
-					label: 'Clock',
-					canvasWidth: 1920,
-					canvasHeight: 1080,
-				})],
+				items: [
+					getGraphicItemDefinition('clock').createDefault({
+						id: 'clock',
+						label: 'Clock',
+						canvasWidth: 1920,
+						canvasHeight: 1080,
+					}),
+				],
 			};
 			mockConfig.value = config;
 
@@ -153,18 +159,26 @@ describe('featureMatchOverlayDisplay', () => {
 
 		it('draws a Source Item glow in the Key Output too', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-			config.layout.sources = [{
-				id: 'glowing',
-				label: 'Glowing',
-				visible: true,
-				x: 100,
-				y: 50,
-				width: 400,
-				height: 200,
-				sourceRole: 'main',
-				frameCutout: false,
-				framingStyle: { borderVisible: true, borderColor: '#0077a3', borderWidth: 4, glowSize: 10, glowOpacity: 0.5 },
-			}];
+			config.layout.sources = [
+				{
+					id: 'glowing',
+					label: 'Glowing',
+					visible: true,
+					x: 100,
+					y: 50,
+					width: 400,
+					height: 200,
+					sourceRole: 'main',
+					frameCutout: false,
+					framingStyle: {
+						borderVisible: true,
+						borderColor: '#0077a3',
+						borderWidth: 4,
+						glowSize: 10,
+						glowOpacity: 0.5,
+					},
+				},
+			];
 			mockConfig.value = config;
 			mockOutputMode.value = 'key';
 
@@ -183,12 +197,14 @@ describe('featureMatchOverlayDisplay', () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.composition = {
 				...createFeatureMatchLayoutComposition(),
-				items: [getGraphicItemDefinition('clock').createDefault({
-					id: 'clock',
-					label: 'Clock',
-					canvasWidth: 1920,
-					canvasHeight: 1080,
-				})],
+				items: [
+					getGraphicItemDefinition('clock').createDefault({
+						id: 'clock',
+						label: 'Clock',
+						canvasWidth: 1920,
+						canvasHeight: 1080,
+					}),
+				],
 			};
 
 			for (const output of ['overlay', 'fill', 'key'] as const) {
@@ -223,12 +239,14 @@ describe('featureMatchOverlayDisplay', () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.composition = {
 				...createFeatureMatchLayoutComposition(),
-				items: [getGraphicItemDefinition('clock').createDefault({
-					id: 'clock',
-					label: 'Clock',
-					canvasWidth: 1920,
-					canvasHeight: 1080,
-				})],
+				items: [
+					getGraphicItemDefinition('clock').createDefault({
+						id: 'clock',
+						label: 'Clock',
+						canvasWidth: 1920,
+						canvasHeight: 1080,
+					}),
+				],
 			};
 			mockConfig.value = config;
 
@@ -271,19 +289,26 @@ describe('featureMatchOverlayDisplay', () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.composition = {
 				...createFeatureMatchLayoutComposition(),
-				items: [Object.assign(getGraphicItemDefinition('deck-list').createDefault({
-					id: 'deck',
-					label: 'Deck',
-					canvasWidth: 1920,
-					canvasHeight: 1080,
-				}), { view: 'grid' as const })],
+				items: [
+					Object.assign(getGraphicItemDefinition('deck-list').createDefault({
+						id: 'deck',
+						label: 'Deck',
+						canvasWidth: 1920,
+						canvasHeight: 1080,
+					}), { view: 'grid' as const }),
+				],
 			};
 			mockConfig.value = config;
 			mockMatchState.value = {
 				player1: { lifeTotal: 20, gameWins: 0, sideboardRevealed: true },
 				player2: { lifeTotal: 20, gameWins: 0, sideboardRevealed: true },
 			};
-			mockSideboards.value = { player1: [{ name: 'Duress', quantity: 2, imageUrl: null }], player2: null };
+			mockSideboards.value = {
+				player1: [
+					{ name: 'Duress', quantity: 2, imageUrl: null },
+				],
+				player2: null,
+			};
 
 			const wrapper = await mountComponent();
 
@@ -298,22 +323,36 @@ describe('featureMatchOverlayDisplay', () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.composition = {
 				...createFeatureMatchLayoutComposition(),
-				items: [Object.assign(getGraphicItemDefinition('deck-list').createDefault({
-					id: 'deck',
-					label: 'Deck',
-					canvasWidth: 1920,
-					canvasHeight: 1080,
-				}), {
-					view: 'grid' as const,
-					animation: { exit: { duration: 30, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } } },
-				})],
+				items: [
+					Object.assign(getGraphicItemDefinition('deck-list').createDefault({
+						id: 'deck',
+						label: 'Deck',
+						canvasWidth: 1920,
+						canvasHeight: 1080,
+					}), {
+						view: 'grid' as const,
+						animation: {
+							exit: {
+								duration: 30,
+								easing: 'linear' as const,
+								delay: 0,
+								fade: { opacity: 0 },
+							},
+						},
+					}),
+				],
 			};
 			mockConfig.value = config;
 			mockMatchState.value = {
 				player1: { lifeTotal: 20, gameWins: 0, sideboardRevealed: true },
 				player2: { lifeTotal: 20, gameWins: 0, sideboardRevealed: true },
 			};
-			mockSideboards.value = { player1: [{ name: 'Duress', quantity: 2, imageUrl: null }], player2: null };
+			mockSideboards.value = {
+				player1: [
+					{ name: 'Duress', quantity: 2, imageUrl: null },
+				],
+				player2: null,
+			};
 
 			const wrapper = await mountComponent();
 			expect(wrapper.find('[data-deck-card="Duress"]').exists()).toBe(true);
@@ -342,12 +381,14 @@ describe('featureMatchOverlayDisplay', () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.composition = {
 				...createFeatureMatchLayoutComposition(),
-				items: [getGraphicItemDefinition('clock').createDefault({
-					id: 'shared-clock',
-					label: 'Shared Clock',
-					canvasWidth: 1920,
-					canvasHeight: 1080,
-				})],
+				items: [
+					getGraphicItemDefinition('clock').createDefault({
+						id: 'shared-clock',
+						label: 'Shared Clock',
+						canvasWidth: 1920,
+						canvasHeight: 1080,
+					}),
+				],
 			};
 			return config;
 		}
@@ -480,7 +521,9 @@ describe('featureMatchOverlayDisplay', () => {
 			// from somewhere else.
 			window.dispatchEvent(new MessageEvent('message', {
 				origin: window.location.origin,
-				source: { postMessage: vi.fn() } as unknown as MessageEventSource,
+				source: {
+					postMessage: vi.fn(),
+				} as unknown as MessageEventSource,
 				data: { type: 'feature-match-overlay:selected-target', target },
 			}));
 			window.dispatchEvent(new MessageEvent('message', {
@@ -571,7 +614,10 @@ describe('featureMatchOverlayDisplay', () => {
 				window.dispatchEvent(new MessageEvent('message', {
 					origin: window.location.origin,
 					source: window.parent,
-					data: { type: 'feature-match-overlay:selected-target', target: { type: 'source', itemId: 'main-source' } },
+					data: {
+						type: 'feature-match-overlay:selected-target',
+						target: { type: 'source', itemId: 'main-source' },
+					},
 				}));
 				window.dispatchEvent(new MessageEvent('message', {
 					origin: window.location.origin,
@@ -609,7 +655,9 @@ describe('featureMatchOverlayDisplay', () => {
 		mockOutputMode.value = 'overlay';
 		mockPreviewGuides.value = false;
 		mockPreviewSafeAreas.value = false;
-		mockScreen.value = { screenConfig: { width: 1920, height: 1080 } };
+		mockScreen.value = {
+			screenConfig: { width: 1920, height: 1080 },
+		};
 		mockLoading.value = false;
 		mockError.value = null;
 		mockContentUrlsSettled.value = true;
@@ -631,7 +679,9 @@ describe('featureMatchOverlayDisplay', () => {
 	describe('the editor preview handshake', () => {
 		async function mountAnnouncing() {
 			const announced: unknown[] = [];
-			const parent = { postMessage: (message: unknown) => announced.push(message) };
+			const parent = {
+				postMessage: (message: unknown) => announced.push(message),
+			};
 			const originalParent = Object.getOwnPropertyDescriptor(window, 'parent');
 			Object.defineProperty(window, 'parent', { configurable: true, value: parent });
 
@@ -649,7 +699,9 @@ describe('featureMatchOverlayDisplay', () => {
 		it('tells the editor it is listening, as soon as it is', async () => {
 			mockIsPreview.value = true;
 
-			expect(await mountAnnouncing()).toEqual([{ type: GRAPHICS_PREVIEW_READY_MESSAGE }]);
+			expect(await mountAnnouncing()).toEqual([
+				{ type: GRAPHICS_PREVIEW_READY_MESSAGE },
+			]);
 		});
 
 		it('announces nothing from a live Screen Output, which has no editor to answer', async () => {
@@ -782,7 +834,9 @@ describe('featureMatchOverlayDisplay', () => {
 
 		it('omits a hidden Source Item entirely', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-			config.layout.sources = [{ ...config.layout.sources[0]!, id: 'hidden-source', visible: false }];
+			config.layout.sources = [
+				{ ...config.layout.sources[0]!, id: 'hidden-source', visible: false },
+			];
 			mockConfig.value = config;
 
 			const wrapper = await mountComponent();
@@ -800,20 +854,24 @@ describe('featureMatchOverlayDisplay', () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.composition = {
 				...createFeatureMatchLayoutComposition(),
-				items: [{
-					...getGraphicItemDefinition('media').createDefault({
-						id: 'motion-ident',
-						label: 'Motion ident',
-						canvasWidth: 1920,
-						canvasHeight: 1080,
-					}),
-					mediaKind: 'silent-video',
-					asset: {
-						assetId: 'video-asset' as never,
-						revisionId: 'video-revision-1' as never,
+				items: [
+					{
+						...getGraphicItemDefinition('media').createDefault({
+							id: 'motion-ident',
+							label: 'Motion ident',
+							canvasWidth: 1920,
+							canvasHeight: 1080,
+						}),
+						mediaKind: 'silent-video',
+						asset: {
+							assetId: 'video-asset' as never,
+							revisionId: 'video-revision-1' as never,
+						},
+						...(videoCompatibility
+							? { videoCompatibility }
+							: {}),
 					},
-					...(videoCompatibility ? { videoCompatibility } : {}),
-				}] as never,
+				] as never,
 			};
 			return config;
 		}
@@ -858,11 +916,20 @@ describe('featureMatchOverlayDisplay', () => {
 	 * URL is drawn as given.
 	 */
 	describe('the Frame’s own media', () => {
-		const loopVideo = { enabled: true, fit: 'contain' as const, opacity: 0.6, playbackRate: 2, loop: false };
+		const loopVideo = {
+			enabled: true,
+			fit: 'contain' as const,
+			opacity: 0.6,
+			playbackRate: 2,
+			loop: false,
+		};
 
 		function frameWith(frame: Partial<FeatureMatchOverlayModeConfig['layout']['frame']>) {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-			config.layout.frame = { ...config.layout.frame, ...frame };
+			config.layout.frame = {
+				...config.layout.frame,
+				...frame,
+			};
 			return config;
 		}
 
@@ -872,7 +939,9 @@ describe('featureMatchOverlayDisplay', () => {
 		}
 
 		it('draws a library-sourced Frame image from its exact revision content URL', async () => {
-			mockConfig.value = frameWith({ backgroundImage: { kind: 'asset', assetId: 'plate' as never, revisionId: 'plate-1' as never } });
+			mockConfig.value = frameWith({
+				backgroundImage: { kind: 'asset', assetId: 'plate' as never, revisionId: 'plate-1' as never },
+			});
 
 			const wrapper = await mountComponent();
 
@@ -880,7 +949,9 @@ describe('featureMatchOverlayDisplay', () => {
 		});
 
 		it('draws a Remote Media URL Frame image as given', async () => {
-			mockConfig.value = frameWith({ backgroundImage: { kind: 'url', url: 'https://cdn.example.com/plate.png' } });
+			mockConfig.value = frameWith({
+				backgroundImage: { kind: 'url', url: 'https://cdn.example.com/plate.png' },
+			});
 
 			const wrapper = await mountComponent();
 
@@ -889,20 +960,40 @@ describe('featureMatchOverlayDisplay', () => {
 
 		it('plays a library-sourced Frame video from its exact revision content URL', async () => {
 			mockConfig.value = frameWith({
-				mediaBackground: { ...loopVideo, source: { kind: 'asset', assetId: 'loop' as never, revisionId: 'loop-2' as never } },
+				mediaBackground: {
+					...loopVideo,
+					source: { kind: 'asset', assetId: 'loop' as never, revisionId: 'loop-2' as never },
+				},
 			});
 
-			expect(await frameVideo()).toEqual({ url: '/private-assets/loop/loop-2', fit: 'contain', opacity: 0.6, playbackRate: 2, loop: false });
+			expect(await frameVideo()).toEqual({
+				url: '/private-assets/loop/loop-2',
+				fit: 'contain',
+				opacity: 0.6,
+				playbackRate: 2,
+				loop: false,
+			});
 		});
 
 		it('plays a Remote Media URL Frame video as given', async () => {
-			mockConfig.value = frameWith({ mediaBackground: { ...loopVideo, source: { kind: 'url', url: '/video/loop.mp4' } } });
+			mockConfig.value = frameWith({
+				mediaBackground: {
+					...loopVideo,
+					source: { kind: 'url', url: '/video/loop.mp4' },
+				},
+			});
 
 			expect(await frameVideo()).toMatchObject({ url: '/video/loop.mp4' });
 		});
 
 		it('plays nothing for a disabled Frame video', async () => {
-			mockConfig.value = frameWith({ mediaBackground: { ...loopVideo, enabled: false, source: { kind: 'url', url: '/video/loop.mp4' } } });
+			mockConfig.value = frameWith({
+				mediaBackground: {
+					...loopVideo,
+					enabled: false,
+					source: { kind: 'url', url: '/video/loop.mp4' },
+				},
+			});
 
 			expect(await frameVideo()).toBeUndefined();
 		});
@@ -955,16 +1046,18 @@ describe('featureMatchOverlayDisplay', () => {
 			});
 			config.layout.composition = {
 				...createFeatureMatchLayoutComposition(),
-				items: [{
-					...nameplate,
-					typography: {
-						...DEFAULT_GRAPHIC_TYPOGRAPHY,
-						font: {
-							kind: 'asset',
-							reference: { assetId: 'font-asset', revisionId },
+				items: [
+					{
+						...nameplate,
+						typography: {
+							...DEFAULT_GRAPHIC_TYPOGRAPHY,
+							font: {
+								kind: 'asset',
+								reference: { assetId: 'font-asset', revisionId },
+							},
 						},
 					},
-				}] as never,
+				] as never,
 			};
 			if (backgroundColor !== undefined)
 				config.layout.frame.backgroundColor = backgroundColor;

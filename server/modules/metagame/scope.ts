@@ -63,12 +63,16 @@ export function playerScopeWhere(scope: PlayerScope): SQL {
 }
 
 export async function countScopedPlayers(scope: PlayerScope, extraCondition?: SQL) {
-	const conditions = [playerScopeWhere(scope)];
+	const conditions = [
+		playerScopeWhere(scope),
+	];
 	if (extraCondition)
 		conditions.push(extraCondition);
 
 	const [result] = await db
-		.select({ c: count() })
+		.select({
+			c: count(),
+		})
 		.from(players)
 		.where(and(...conditions));
 

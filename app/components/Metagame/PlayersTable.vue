@@ -20,7 +20,9 @@ const emit = defineEmits<{
 }>();
 
 const playerStore = usePlayerStore();
-const sorting = ref([{ id: 'position', desc: false }]);
+const sorting = ref([
+	{ id: 'position', desc: false },
+]);
 
 function resolvePlayer(entry: AnyPlayer): Player | null {
 	return playerStore.players.find(player => player.id === entry.id) ?? null;
@@ -57,20 +59,24 @@ const columns = computed<TableColumn<AnyPlayer>[]>(() => [
 		enableSorting: true,
 	},
 	...(props.showDeckName
-		? [{
-				id: 'deckName',
-				header: createSortableHeader('Deck'),
-				enableSorting: true,
-				accessorFn: (row: AnyPlayer) => (row as ArchetypePlayerEntry).deckName ?? '',
-			} as TableColumn<AnyPlayer>]
+		? [
+				{
+					id: 'deckName',
+					header: createSortableHeader('Deck'),
+					enableSorting: true,
+					accessorFn: (row: AnyPlayer) => (row as ArchetypePlayerEntry).deckName ?? '',
+				} as TableColumn<AnyPlayer>,
+			]
 		: []),
 	...(props.showCopies
-		? [{
-				id: 'copies',
-				header: createSortableHeader('Copies'),
-				enableSorting: true,
-				accessorFn: (row: AnyPlayer) => (row as CardPlayerEntry).quantity ?? 0,
-			} as TableColumn<AnyPlayer>]
+		? [
+				{
+					id: 'copies',
+					header: createSortableHeader('Copies'),
+					enableSorting: true,
+					accessorFn: (row: AnyPlayer) => (row as CardPlayerEntry).quantity ?? 0,
+				} as TableColumn<AnyPlayer>,
+			]
 		: []),
 	{
 		id: 'deckList',

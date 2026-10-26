@@ -446,7 +446,9 @@ export function playerDeckService() {
 		}
 
 		const companionSetRows = snapshots.flatMap(snapshot => snapshot.importedCompanion.action === 'set'
-			? [{ externalId: snapshot.deck.externalId, companionCardId: snapshot.importedCompanion.cardId }]
+			? [
+					{ externalId: snapshot.deck.externalId, companionCardId: snapshot.importedCompanion.cardId },
+				]
 			: []);
 		for (const payload of chunkJsonRows(companionSetRows)) {
 			queries.push(db
@@ -506,7 +508,9 @@ export function playerDeckService() {
 			const reviewed = primary != null && !reviewInvalidated && projection.reviewedAt != null && projection.archetypeName != null;
 			const gameData = primary
 				? {
-					...(projection.gameData?.type === 'mtg' ? projection.gameData : {}),
+					...(projection.gameData?.type === 'mtg'
+						? projection.gameData
+						: {}),
 					type: 'mtg',
 					deckName: reviewed ? projection.archetypeName : primary.deck.name,
 					deckColors: reviewed ? projection.archetypeColors : primary.deck.colors,
@@ -516,7 +520,9 @@ export function playerDeckService() {
 					: projection.gameData ?? null;
 			return {
 				playerId: replacement.playerId,
-				archetypeId: primary && !reviewInvalidated ? projection.archetypeId ?? null : null,
+				archetypeId: primary && !reviewInvalidated
+					? projection.archetypeId ?? null
+					: null,
 				gameData,
 			};
 		});
@@ -555,7 +561,9 @@ export function playerDeckService() {
 		const reviewed = projection.reviewedAt != null && projection.archetypeName != null;
 		const gameData = projection.deckId != null
 			? {
-				...(projection.gameData?.type === 'mtg' ? projection.gameData : {}),
+				...(projection.gameData?.type === 'mtg'
+					? projection.gameData
+					: {}),
 				type: 'mtg',
 				deckName: reviewed ? projection.archetypeName : projection.importedName,
 				deckColors: reviewed ? projection.archetypeColors : projection.importedColors,
@@ -600,7 +608,11 @@ export function playerDeckService() {
 
 		const [player] = await db
 			.update(players)
-			.set({ archetypeId, gameData, updatedAt: new Date() })
+			.set({
+				archetypeId,
+				gameData,
+				updatedAt: new Date(),
+			})
 			.where(and(eq(players.id, playerId), eq(players.eventId, eventId)))
 			.returning();
 
@@ -619,7 +631,9 @@ export function playerDeckService() {
 		eventId: number,
 		playerIds: number[],
 	): Promise<DbPlayer[]> => {
-		const uniqueIds = [...new Set(playerIds)];
+		const uniqueIds = [
+			...new Set(playerIds),
+		];
 		if (uniqueIds.length === 0)
 			return [];
 
@@ -662,7 +676,11 @@ export function playerDeckService() {
 			const { gameData, archetypeId } = computeArchetypeProjection(projection);
 			const [player] = await db
 				.update(players)
-				.set({ archetypeId, gameData, updatedAt: new Date() })
+				.set({
+					archetypeId,
+					gameData,
+					updatedAt: new Date(),
+				})
 				.where(and(eq(players.id, playerId), eq(players.eventId, eventId)))
 				.returning();
 
@@ -683,7 +701,9 @@ export function playerDeckService() {
 				eq(playerDecks.isPrimary, true),
 			));
 
-		return [...new Set(rows.map(row => row.playerId))];
+		return [
+			...new Set(rows.map(row => row.playerId)),
+		];
 	};
 
 	const listPlayerIdsByArchetype = async (eventId: number, archetypeId: number): Promise<number[]> => {
@@ -695,7 +715,9 @@ export function playerDeckService() {
 				eq(playerDecks.archetypeId, archetypeId),
 			));
 
-		return [...new Set(rows.map(row => row.playerId))];
+		return [
+			...new Set(rows.map(row => row.playerId)),
+		];
 	};
 
 	/**
@@ -707,7 +729,11 @@ export function playerDeckService() {
 	const buildClearReviewsByArchetypeQuery = (eventId: number, archetypeId: number) => {
 		return db
 			.update(playerDecks)
-			.set({ archetypeId: null, reviewedAt: null, updatedAt: new Date() })
+			.set({
+				archetypeId: null,
+				reviewedAt: null,
+				updatedAt: new Date(),
+			})
 			.where(and(
 				eq(playerDecks.eventId, eventId),
 				eq(playerDecks.archetypeId, archetypeId),
@@ -734,7 +760,11 @@ export function playerDeckService() {
 
 		const [deck] = await db
 			.update(playerDecks)
-			.set({ archetypeId, reviewedAt: new Date(), updatedAt: new Date() })
+			.set({
+				archetypeId,
+				reviewedAt: new Date(),
+				updatedAt: new Date(),
+			})
 			.where(and(
 				eq(playerDecks.id, deckId),
 				eq(playerDecks.eventId, eventId),

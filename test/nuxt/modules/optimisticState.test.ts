@@ -30,7 +30,12 @@ describe('optimistic-state module', () => {
 	});
 
 	function createTestSetup(flush = vi.fn(async (entry: any) => entry.payload)) {
-		const stateMap = ref(new Map<number, SlotState>([[1, { life1: 20, life2: 20, clockMs: 100 }]]));
+		const stateMap = ref(new Map<number, SlotState>([
+			[
+				1,
+				{ life1: 20, life2: 20, clockMs: 100 },
+			],
+		]));
 		const errorRef = ref<string | null>(null);
 
 		const optimistic = createOptimisticState<SlotState>({ stateMap, errorRef });
@@ -40,7 +45,14 @@ describe('optimistic-state module', () => {
 			maxWaitMs: 500,
 		});
 
-		return { stateMap, errorRef, flush, enqueue, run: optimistic.run, applyRemote: optimistic.applyRemote };
+		return {
+			stateMap,
+			errorRef,
+			flush,
+			enqueue,
+			run: optimistic.run,
+			applyRemote: optimistic.applyRemote,
+		};
 	}
 
 	describe('applyRemote during pending work', () => {
@@ -268,7 +280,9 @@ describe('optimistic-state module', () => {
 				1,
 				current => ({ ...current, life1: 21 }),
 				() => ({ life1: 21 }),
-				{ serverOwns: ['clockMs'] },
+				{
+					serverOwns: ['clockMs'],
+				},
 			);
 			vi.advanceTimersByTime(200);
 
@@ -296,11 +310,22 @@ describe('optimistic-state module', () => {
 		});
 
 		it('claims are shared across batches of the same instance', () => {
-			const stateMap = ref(new Map<number, SlotState>([[1, { life1: 20, life2: 20, clockMs: 100 }]]));
+			const stateMap = ref(new Map<number, SlotState>([
+				[
+					1,
+					{ life1: 20, life2: 20, clockMs: 100 },
+				],
+			]));
 			const errorRef = ref<string | null>(null);
 			const optimistic = createOptimisticState<SlotState>({ stateMap, errorRef });
-			const lifeBatch = optimistic.batch<Partial<SlotState>>({ flush: vi.fn(() => new Promise<SlotState>(() => {})), debounceMs: 100 });
-			const clockBatch = optimistic.batch<Partial<SlotState>>({ flush: vi.fn(() => new Promise<SlotState>(() => {})), debounceMs: 100 });
+			const lifeBatch = optimistic.batch<Partial<SlotState>>({
+				flush: vi.fn(() => new Promise<SlotState>(() => {})),
+				debounceMs: 100,
+			});
+			const clockBatch = optimistic.batch<Partial<SlotState>>({
+				flush: vi.fn(() => new Promise<SlotState>(() => {})),
+				debounceMs: 100,
+			});
 
 			lifeBatch.enqueue('life-1', 1, current => ({ ...current, life1: 21 }), () => ({ life1: 21 }));
 			clockBatch.enqueue('clock', 1, current => ({ ...current, clockMs: 110 }), () => ({ clockMs: 110 }));
@@ -314,8 +339,14 @@ describe('optimistic-state module', () => {
 	describe('multi-target entries (bulk actions)', () => {
 		function createBulkSetup(flush: (entry: any, controls: any) => Promise<ReadonlyMap<number, SlotState>>) {
 			const stateMap = ref(new Map<number, SlotState>([
-				[1, { life1: 20, life2: 20, clockMs: 100 }],
-				[2, { life1: 20, life2: 20, clockMs: 200 }],
+				[
+					1,
+					{ life1: 20, life2: 20, clockMs: 100 },
+				],
+				[
+					2,
+					{ life1: 20, life2: 20, clockMs: 200 },
+				],
 			]));
 			const errorRef = ref<string | null>(null);
 			const optimistic = createOptimisticState<SlotState>({ stateMap, errorRef });
@@ -345,8 +376,14 @@ describe('optimistic-state module', () => {
 
 			vi.advanceTimersByTime(200);
 			resolveFlush(new Map([
-				[1, { life1: 11, life2: 20, clockMs: 90 }],
-				[2, { life1: 20, life2: 20, clockMs: 190 }],
+				[
+					1,
+					{ life1: 11, life2: 20, clockMs: 90 },
+				],
+				[
+					2,
+					{ life1: 20, life2: 20, clockMs: 190 },
+				],
 			]));
 			await flushPromises();
 			expect(stateMap.value.get(1)).toEqual({ life1: 11, life2: 20, clockMs: 90 });
@@ -379,8 +416,14 @@ describe('optimistic-state module', () => {
 
 		it('run accepts multiple targets and skips ids whose optimistic change is null', async () => {
 			const stateMap = ref(new Map<number, SlotState>([
-				[1, { life1: 20, life2: 20, clockMs: 100 }],
-				[2, { life1: 20, life2: 20, clockMs: 200 }],
+				[
+					1,
+					{ life1: 20, life2: 20, clockMs: 100 },
+				],
+				[
+					2,
+					{ life1: 20, life2: 20, clockMs: 200 },
+				],
 			]));
 			const errorRef = ref<string | null>(null);
 			const optimistic = createOptimisticState<SlotState>({ stateMap, errorRef });
@@ -390,7 +433,9 @@ describe('optimistic-state module', () => {
 			void optimistic.run(
 				'bulk:set-clock',
 				[1, 2],
-				current => (current.clockMs === 200 ? null : { ...current, clockMs: 200 }),
+				current => (current.clockMs === 200
+					? null
+					: { ...current, clockMs: 200 }),
 				() => new Promise<ReadonlyMap<number, SlotState>>((resolve) => {
 					resolveApi = resolve;
 				}),
@@ -398,7 +443,12 @@ describe('optimistic-state module', () => {
 			expect(stateMap.value.get(1)!.clockMs).toBe(200);
 			expect(stateMap.value.get(2)!.clockMs).toBe(200);
 
-			resolveApi(new Map([[1, { life1: 20, life2: 20, clockMs: 200 }]]));
+			resolveApi(new Map([
+				[
+					1,
+					{ life1: 20, life2: 20, clockMs: 200 },
+				],
+			]));
 			await flushPromises();
 			expect(stateMap.value.get(1)).toEqual({ life1: 20, life2: 20, clockMs: 200 });
 			expect(stateMap.value.get(2)).toEqual({ life1: 20, life2: 20, clockMs: 200 });

@@ -115,7 +115,9 @@ describe('player list create modal', () => {
 		await flushPromises();
 
 		expect(mockPlayerListStore.createList).toHaveBeenCalledWith(1, { name: 'Top 8' });
-		expect(wrapper.emitted('created')).toEqual([[42]]);
+		expect(wrapper.emitted('created')).toEqual([
+			[42],
+		]);
 		expect(wrapper.emitted('close')).toEqual([[]]);
 	});
 });

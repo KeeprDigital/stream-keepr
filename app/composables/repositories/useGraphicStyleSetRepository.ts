@@ -87,7 +87,11 @@ export function useGraphicStyleSetRepository() {
 	): Promise<GraphicStyleSetResponse> => {
 		const response = await $fetch<{ styleSet: GraphicStyleSetResponse }>(
 			`${library}/${styleSetId}/entries/${entryId}`,
-			{ method: 'DELETE', headers: apiHeaders.getHeaders(), body: options },
+			{
+				method: 'DELETE',
+				headers: apiHeaders.getHeaders(),
+				body: options,
+			},
 		);
 		return response.styleSet;
 	};
@@ -174,7 +178,9 @@ export function useGraphicStyleSetRepository() {
 			query: {
 				resolution: options.resolution ?? 'preserve-identity',
 				sourceFileName: file.name,
-				...(options.fingerprint ? { fingerprint: options.fingerprint } : {}),
+				...(options.fingerprint
+					? { fingerprint: options.fingerprint }
+					: {}),
 			},
 			body: file,
 		});

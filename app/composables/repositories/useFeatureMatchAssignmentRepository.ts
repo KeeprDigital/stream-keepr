@@ -13,7 +13,11 @@ export function useFeatureMatchAssignmentRepository() {
 	const listByRound = async (eventId: number, roundId: number): Promise<FeatureMatchAssignment[]> => {
 		const response = await eventData.command<{ featureMatchAssignments: FeatureMatchAssignment[] }>(
 			{ eventId, resourcePath: 'feature-match-assignments' },
-			{ method: 'GET', query: { roundId }, includeHeaders: false },
+			{
+				method: 'GET',
+				query: { roundId },
+				includeHeaders: false,
+			},
 		);
 		return response.featureMatchAssignments;
 	};

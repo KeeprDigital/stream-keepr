@@ -90,9 +90,13 @@ const textEncoder = new TextEncoder();
 async function sha256Hex(bytes: Uint8Array | ArrayBuffer) {
 	const digest = await crypto.subtle.digest(
 		'SHA-256',
-		bytes instanceof Uint8Array ? bytes as unknown as BufferSource : bytes,
+		bytes instanceof Uint8Array
+			? bytes as unknown as BufferSource
+			: bytes,
 	);
-	return [...new Uint8Array(digest)]
+	return [
+		...new Uint8Array(digest),
+	]
 		.map(value => value.toString(16).padStart(2, '0'))
 		.join('');
 }
@@ -145,7 +149,9 @@ export class SilentVideoValidationWorkflow extends WorkflowEntrypoint<ValidatorE
 		};
 		const staged = await step.do(
 			'verify-staged-source',
-			{ retries: { limit: 4, delay: '5 seconds', backoff: 'exponential' } },
+			{
+				retries: { limit: 4, delay: '5 seconds', backoff: 'exponential' },
+			},
 			async () => {
 				const head = await this.env.GRAPHICS_ASSET_STAGING.head(stagedSourceKey(input.operationId));
 				if (!head)

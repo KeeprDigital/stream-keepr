@@ -8,5 +8,8 @@ import { ref } from 'vue';
  *   vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
  */
 export function useEditedScreenModeData() {
-	return { rowCount: ref(0), loading: ref(false) };
+	return {
+		rowCount: ref(0),
+		loading: ref(false),
+	};
 }

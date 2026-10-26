@@ -59,7 +59,9 @@ export async function requireSharedSecret(event: H3Event, surface: SharedSecretS
 		configuredToken = readConfiguredSecret(surface.configuredToken, surface.settingName);
 	}
 	catch (failure) {
-		throw failure instanceof ServiceConfigurationError ? unavailable(failure) : failure;
+		throw failure instanceof ServiceConfigurationError
+			? unavailable(failure)
+			: failure;
 	}
 	if (!configuredToken)
 		throw unavailable(new ServiceConfigurationError(surface.settingName, surface.unavailableClause));

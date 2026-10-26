@@ -46,25 +46,48 @@ function writeLayers(nextLayers: BackgroundLayer[]) {
 
 /** A new layer's starting values, per type. A new animation layer starts on fog. */
 function newLayer(type: BackgroundLayerType): BackgroundLayer {
-	const base = { id: randomUuid(), enabled: true, opacity: 1 };
+	const base = {
+		id: randomUuid(),
+		enabled: true,
+		opacity: 1,
+	};
 	switch (type) {
 		case 'color':
 			return { ...base, type, color: '#000000' };
 		case 'gradient':
 			return { ...base, type, gradient: 'linear-gradient(180deg, #0f172a 0%, #020617 100%)' };
 		case 'image':
-			return { ...base, type, source: { kind: 'url', url: '' }, fit: 'cover' };
+			return {
+				...base,
+				type,
+				source: { kind: 'url', url: '' },
+				fit: 'cover',
+			};
 		case 'video':
-			return { ...base, type, source: { kind: 'url', url: '' }, fit: 'cover', playbackRate: 1, loop: true };
+			return {
+				...base,
+				type,
+				source: { kind: 'url', url: '' },
+				fit: 'cover',
+				playbackRate: 1,
+				loop: true,
+			};
 		case 'animation':
-			return { ...base, type, animation: { effect: 'fog' } };
+			return {
+				...base,
+				type,
+				animation: { effect: 'fog' },
+			};
 	}
 }
 
 function addLayer() {
 	if (addLayerType.value === 'animation' && hasAnimationLayer.value)
 		return;
-	writeLayers([...props.layers, newLayer(addLayerType.value)]);
+	writeLayers([
+		...props.layers,
+		newLayer(addLayerType.value),
+	]);
 }
 
 function removeLayer(id: string) {
@@ -84,7 +107,12 @@ function moveLayer(id: string, direction: -1 | 1) {
 
 function patchLayer(id: string, updates: Partial<BackgroundLayer>) {
 	writeLayers(props.layers.map(layer =>
-		layer.id === id ? { ...layer, ...updates } as BackgroundLayer : layer,
+		layer.id === id
+			? {
+					...layer,
+					...updates,
+				} as BackgroundLayer
+			: layer,
 	));
 }
 

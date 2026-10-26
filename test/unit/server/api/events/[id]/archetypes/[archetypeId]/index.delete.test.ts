@@ -22,7 +22,9 @@ vi.mock('~~/server/db', () => ({
 }));
 
 vi.mock('~~/server/schemas/api/archetype', () => ({
-	archetypeParamsSchema: { parse: vi.fn(input => input) },
+	archetypeParamsSchema: {
+		parse: vi.fn(input => input),
+	},
 }));
 
 vi.mock('~~/server/services/archetype', () => ({
@@ -69,7 +71,12 @@ describe('delete /api/events/[id]/archetypes/[archetypeId]', () => {
 		mockListPrimaryPlayerIdsByArchetype.mockResolvedValue([2]);
 		mockBuildClearReviewsByArchetypeQuery.mockReturnValue('clear-query');
 		mockBuildRemoveQuery.mockReturnValue('remove-query');
-		mockDbBatch.mockResolvedValue([{}, [{ id: 11 }]]);
+		mockDbBatch.mockResolvedValue([
+			{},
+			[
+				{ id: 11 },
+			],
+		]);
 		mockReconcileDeckProjections.mockResolvedValue([]);
 		mockPublishPlayerSnapshotUpdates.mockResolvedValue([]);
 		mockArchetypeDeleted.mockResolvedValue(undefined);

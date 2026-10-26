@@ -45,7 +45,9 @@ const mockMatchRepository = {
 	getById: vi.fn(),
 };
 
-const mockToast = { add: vi.fn() };
+const mockToast = {
+	add: vi.fn(),
+};
 
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
@@ -54,7 +56,11 @@ mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('useFeatureMatchAssignmentStore', () => () => mockAssignmentStore);
 mockNuxtImport('useMatchRepository', () => () => mockMatchRepository);
 mockNuxtImport('useMatchStore', () => () => ({ matches: [] }));
-mockNuxtImport('useRoundStore', () => () => ({ isLoaded: true, getRoundById: vi.fn(), loadRoundsByEventId: vi.fn() }));
+mockNuxtImport('useRoundStore', () => () => ({
+	isLoaded: true,
+	getRoundById: vi.fn(),
+	loadRoundsByEventId: vi.fn(),
+}));
 mockNuxtImport('useToast', () => () => mockToast);
 // The page guard reaches for the overlay and the router when it installs itself.
 // What it does with them is its own composable's test; here they only have to
@@ -62,7 +68,11 @@ mockNuxtImport('useToast', () => () => mockToast);
 // itself is deliberately not mocked: mocked away, deleting the panel's registration
 // changed nothing this file could see.
 mockNuxtImport('useOverlay', () => () => ({
-	create: () => ({ open: () => ({ result: Promise.resolve(true) }) }),
+	create: () => ({
+		open: () => ({
+			result: Promise.resolve(true),
+		}),
+	}),
 }));
 mockNuxtImport('onBeforeRouteLeave', () => () => {});
 mockNuxtImport('useFeatureMatchDeckList', () => () => ({
@@ -162,7 +172,10 @@ const mountOptions = {
 async function mountComponent(overrides: Record<string, unknown> = {}) {
 	const { default: FeatureMatchPanel } = await import(componentPath);
 
-	return mount(FeatureMatchPanel, { ...mountOptions, props: mountProps(overrides) });
+	return mount(FeatureMatchPanel, {
+		...mountOptions,
+		props: mountProps(overrides),
+	});
 }
 
 type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
@@ -242,9 +255,16 @@ describe('featureMatchPanel setup save', () => {
 
 		await wrapper.get('[data-testid="edit-mode"]').trigger('click');
 		const player1Form = wrapper.findAllComponents(PlayerFormStub)[0]!;
-		player1Form.vm.$emit('update:modelValue', { ...player1Form.props('modelValue'), name: 'Alicia' });
+		player1Form.vm.$emit('update:modelValue', {
+			...player1Form.props('modelValue'),
+			name: 'Alicia',
+		});
 		await wrapper.setProps({
-			match: createMockFeatureMatch({ id: 1, eventId: 1, player1Data: { ...original, pronouns: 'they/them' } }) as any,
+			match: createMockFeatureMatch({
+				id: 1,
+				eventId: 1,
+				player1Data: { ...original, pronouns: 'they/them' },
+			}) as any,
 		});
 		await wrapper.get('button[data-label="Save"]').trigger('click');
 		await flushPromises();
@@ -290,7 +310,10 @@ describe('featureMatchPanel setup save', () => {
 		await wrapper.get('[data-testid="set-table"]').trigger('click');
 		await wrapper.get('button[data-label="Save"]').trigger('click');
 		const player1Form = wrapper.findAllComponents(PlayerFormStub)[0]!;
-		player1Form.vm.$emit('update:modelValue', { ...player1Form.props('modelValue'), name: 'Alicia' });
+		player1Form.vm.$emit('update:modelValue', {
+			...player1Form.props('modelValue'),
+			name: 'Alicia',
+		});
 		land();
 		await flushPromises();
 
@@ -318,16 +341,18 @@ describe('featureMatchPanel setup save', () => {
 	it('shows the Assignment Note as a compact strip immediately beneath the panel header', async () => {
 		const releaseRound = vi.fn();
 		mockAssignmentStore.consumeRound.mockReturnValueOnce(releaseRound);
-		mockAssignmentStore.assignments = [{
-			id: 9,
-			eventId: 1,
-			roundId: 3,
-			slotId: 1,
-			matchId: 7,
-			note: 'Watch the sideboard plan',
-			createdAt: new Date(),
-			updatedAt: new Date(),
-		}];
+		mockAssignmentStore.assignments = [
+			{
+				id: 9,
+				eventId: 1,
+				roundId: 3,
+				slotId: 1,
+				matchId: 7,
+				note: 'Watch the sideboard plan',
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		];
 		mockAssignmentStore.isRemoteChanged.mockReturnValue(true);
 		mockMatchRepository.getById.mockResolvedValue({ id: 7, roundId: 3 });
 
@@ -345,16 +370,18 @@ describe('featureMatchPanel setup save', () => {
 	});
 
 	it('shows no Assignment Note when the Event has Feature Match Notes switched off', async () => {
-		mockAssignmentStore.assignments = [{
-			id: 9,
-			eventId: 1,
-			roundId: 3,
-			slotId: 1,
-			matchId: 7,
-			note: 'Watch the sideboard plan',
-			createdAt: new Date(),
-			updatedAt: new Date(),
-		}];
+		mockAssignmentStore.assignments = [
+			{
+				id: 9,
+				eventId: 1,
+				roundId: 3,
+				slotId: 1,
+				matchId: 7,
+				note: 'Watch the sideboard plan',
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		];
 		mockMatchRepository.getById.mockResolvedValue({ id: 7, roundId: 3 });
 		mockEventStore.event.featureMatchNotesEnabled = false;
 
@@ -370,28 +397,33 @@ describe('featureMatchPanel setup save', () => {
 	});
 
 	it('resolves simultaneous Feature Match panels against their own Assignment Rounds', async () => {
-		mockAssignmentStore.assignments = [{
-			id: 9,
-			eventId: 1,
-			roundId: 3,
-			slotId: 1,
-			matchId: 7,
-			note: 'Round three Note',
-			createdAt: new Date(),
-			updatedAt: new Date(),
-		}, {
-			id: 10,
-			eventId: 1,
-			roundId: 4,
-			slotId: 2,
-			matchId: 8,
-			note: 'Round four Note',
-			createdAt: new Date(),
-			updatedAt: new Date(),
-		}];
+		mockAssignmentStore.assignments = [
+			{
+				id: 9,
+				eventId: 1,
+				roundId: 3,
+				slotId: 1,
+				matchId: 7,
+				note: 'Round three Note',
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			{
+				id: 10,
+				eventId: 1,
+				roundId: 4,
+				slotId: 2,
+				matchId: 8,
+				note: 'Round four Note',
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		];
 		mockMatchRepository.getById.mockImplementation(async (_eventId, matchId) => ({
 			id: matchId,
-			roundId: matchId === 7 ? 3 : 4,
+			roundId: matchId === 7
+				? 3
+				: 4,
 		}));
 
 		const roundThreePanel = await mountComponent({ id: 1, matchId: 7 });

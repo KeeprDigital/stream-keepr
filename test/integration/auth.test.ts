@@ -43,8 +43,12 @@ async function postJson(path: string, body: unknown, cookie?: string, origin: st
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
-			...(cookie ? { Cookie: cookie } : {}),
-			...(origin === null ? {} : { Origin: origin }),
+			...(cookie
+				? { Cookie: cookie }
+				: {}),
+			...(origin === null
+				? {}
+				: { Origin: origin }),
 		},
 		body: JSON.stringify(body),
 	});
@@ -85,16 +89,22 @@ async function sessionExpiry(token: string): Promise<number | undefined> {
 
 /** An ordinary private API read, presented with exactly this cookie. */
 async function ordinaryApiRequest(cookie: string) {
-	return fetch('/api/events', { headers: { Cookie: cookie } });
+	return fetch('/api/events', {
+		headers: { Cookie: cookie },
+	});
 }
 
 async function getSession(cookie: string) {
-	const response = await fetch('/api/auth/get-session', { headers: { Cookie: cookie } });
+	const response = await fetch('/api/auth/get-session', {
+		headers: { Cookie: cookie },
+	});
 	expect(response.status).toBe(200);
 	// A sessionless answer is the JSON literal `null`; an empty body means the
 	// same thing and must not read as a parse failure.
 	const text = await response.text();
-	return text ? JSON.parse(text) : null;
+	return text
+		? JSON.parse(text)
+		: null;
 }
 
 describe('auth foundation', () => {
@@ -296,7 +306,9 @@ describe('auth foundation', () => {
 		// The dead cookie is expired on the refusal too, now that a read's cookies
 		// reach the response whatever the boundary then answers.
 		expect(idle.headers.getSetCookie().filter(set => SESSION_TOKEN_COOKIE.test(set)))
-			.toEqual([expect.stringMatching(/Max-Age=0(;|$)/i)]);
+			.toEqual([
+				expect.stringMatching(/Max-Age=0(;|$)/i),
+			]);
 
 		const another = await postJson('/api/auth/sign-in/email', {
 			email: FIXTURE_EMAIL,

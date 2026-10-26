@@ -67,7 +67,10 @@ export function planGraphicStyleSetPublish(
 	if (issues.length > 0)
 		return { issues, affected: [] };
 
-	return { issues, affected: affectedTemplates(templates, resolution) };
+	return {
+		issues,
+		affected: affectedTemplates(templates, resolution),
+	};
 }
 
 /** Why one entry cannot be deleted the way the author asked. */
@@ -129,11 +132,17 @@ export function planGraphicStyleEntryDeletion(
 
 	const dependants = graphicStyleEntriesReferencing(styleSet.draft, entryId);
 
-	if (mode.mode === 'detach' && dependants.length > 0)
-		return { code: 'detach-would-break-entries', entryIds: dependants.map(entry => entry.id) };
+	if (mode.mode === 'detach' && dependants.length > 0) {
+		return {
+			code: 'detach-would-break-entries',
+			entryIds: dependants.map(entry => entry.id),
+		};
+	}
 
 	const rewriteEntry = (entry: GraphicStyleSetEntry): GraphicStyleSetEntry =>
-		mode.mode === 'replace' ? repointEntry(entry, entryId, mode.replacementEntryId) : entry;
+		mode.mode === 'replace'
+			? repointEntry(entry, entryId, mode.replacementEntryId)
+			: entry;
 
 	const nextDraft = styleSet.draft
 		.filter(entry => entry.id !== entryId)
@@ -182,19 +191,36 @@ function repointEntry(
 	entryId: string,
 	replacementEntryId: string,
 ): GraphicStyleSetEntry {
-	const swap = (id: string) => id === entryId ? replacementEntryId : id;
+	const swap = (id: string) => id === entryId
+		? replacementEntryId
+		: id;
 
 	switch (entry.kind) {
 		case 'typography':
-			return { ...entry, value: { ...entry.value, colorEntryId: swap(entry.value.colorEntryId) } };
+			return {
+				...entry,
+				value: {
+					...entry.value,
+					colorEntryId: swap(entry.value.colorEntryId),
+				},
+			};
 		case 'fill':
 			return entry.value.type === 'solid'
-				? { ...entry, value: { ...entry.value, colorEntryId: swap(entry.value.colorEntryId) } }
+				? {
+						...entry,
+						value: {
+							...entry.value,
+							colorEntryId: swap(entry.value.colorEntryId),
+						},
+					}
 				: {
 						...entry,
 						value: {
 							...entry.value,
-							stops: entry.value.stops.map(stop => ({ ...stop, colorEntryId: swap(stop.colorEntryId) })),
+							stops: entry.value.stops.map(stop => ({
+								...stop,
+								colorEntryId: swap(stop.colorEntryId),
+							})),
 						},
 					};
 		case 'surface-style':
@@ -202,12 +228,26 @@ function repointEntry(
 				...entry,
 				value: {
 					...entry.value,
-					...(entry.value.fillEntryId === undefined ? {} : { fillEntryId: swap(entry.value.fillEntryId) }),
+					...(entry.value.fillEntryId === undefined
+						? {}
+						: {
+								fillEntryId: swap(entry.value.fillEntryId),
+							}),
 					...(entry.value.outline
-						? { outline: { ...entry.value.outline, colorEntryId: swap(entry.value.outline.colorEntryId) } }
+						? {
+								outline: {
+									...entry.value.outline,
+									colorEntryId: swap(entry.value.outline.colorEntryId),
+								},
+							}
 						: {}),
 					...(entry.value.glow
-						? { glow: { ...entry.value.glow, colorEntryId: swap(entry.value.glow.colorEntryId) } }
+						? {
+								glow: {
+									...entry.value.glow,
+									colorEntryId: swap(entry.value.glow.colorEntryId),
+								},
+							}
 						: {}),
 				},
 			};
@@ -216,7 +256,10 @@ function repointEntry(
 				? entry
 				: {
 						...entry,
-						value: { ...entry.value, clipGeometryEntryId: swap(entry.value.clipGeometryEntryId) },
+						value: {
+							...entry.value,
+							clipGeometryEntryId: swap(entry.value.clipGeometryEntryId),
+						},
 					};
 		default:
 			return entry;
@@ -240,6 +283,8 @@ export function unresolvableGraphicStyleRefs(
 	published: readonly GraphicStyleSetEntry[] | null,
 ): string[] {
 	const resolution = resolveGraphicStyleSet(published ?? []);
-	return [...graphicStyleSetEntryIdsInDocument(document)]
+	return [
+		...graphicStyleSetEntryIdsInDocument(document),
+	]
 		.filter(entryId => !resolution.resolved.has(entryId));
 }

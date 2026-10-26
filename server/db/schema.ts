@@ -304,7 +304,9 @@ export const broadcastDeckLists = sqliteTable('broadcast_deck_lists', {
 export const broadcastDeckListEntries = sqliteTable('broadcast_deck_list_entries', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	listId: integer('list_id').references(() => broadcastDeckLists.id, { onDelete: 'cascade' }).notNull(),
-	compartment: text('compartment', { enum: ['mainboard', 'sideboard', 'companion'] }).notNull(),
+	compartment: text('compartment', {
+		enum: ['mainboard', 'sideboard', 'companion'],
+	}).notNull(),
 	quantity: integer('quantity').notNull(),
 	sortOrder: integer('sort_order').notNull(),
 	canonicalName: text('canonical_name').notNull(),
@@ -1013,13 +1015,22 @@ export const playerRoundStandingsRelations = relations(playerRoundStandings, ({ 
 }));
 
 export const playerListsRelations = relations(playerLists, ({ one, many }) => ({
-	event: one(events, { fields: [playerLists.eventId], references: [events.id] }),
+	event: one(events, {
+		fields: [playerLists.eventId],
+		references: [events.id],
+	}),
 	members: many(playerListMembers),
 }));
 
 export const playerListMembersRelations = relations(playerListMembers, ({ one }) => ({
-	list: one(playerLists, { fields: [playerListMembers.listId], references: [playerLists.id] }),
-	player: one(players, { fields: [playerListMembers.playerId], references: [players.id] }),
+	list: one(playerLists, {
+		fields: [playerListMembers.listId],
+		references: [playerLists.id],
+	}),
+	player: one(players, {
+		fields: [playerListMembers.playerId],
+		references: [players.id],
+	}),
 }));
 
 export const broadcastDeckListsRelations = relations(broadcastDeckLists, ({ one, many }) => ({

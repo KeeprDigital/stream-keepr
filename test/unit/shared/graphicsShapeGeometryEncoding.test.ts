@@ -25,14 +25,21 @@ import { describe, expect, it } from 'vitest';
  */
 
 const SCANNED_ROOTS = ['shared', 'app', 'server'].map(root => resolve(process.cwd(), root));
-const CORNER_KEYS = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft'];
+const CORNER_KEYS = [
+	'topLeft',
+	'topRight',
+	'bottomRight',
+	'bottomLeft',
+];
 
 function sourceFiles(directory: string): string[] {
 	return readdirSync(directory).flatMap((entry) => {
 		const path = join(directory, entry);
 		if (statSync(path).isDirectory())
 			return sourceFiles(path);
-		return path.endsWith('.ts') ? [path] : [];
+		return path.endsWith('.ts')
+			? [path]
+			: [];
 	});
 }
 

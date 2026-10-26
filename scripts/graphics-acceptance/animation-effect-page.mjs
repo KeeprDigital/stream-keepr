@@ -88,9 +88,13 @@ function detectBackend() {
 	if (!gl)
 		return 'unavailable';
 	const info = gl.getExtension('WEBGL_debug_renderer_info');
-	const renderer = String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+	const renderer = String(info
+		? gl.getParameter(info.UNMASKED_RENDERER_WEBGL)
+		: gl.getParameter(gl.RENDERER));
 	gl.getExtension('WEBGL_lose_context')?.loseContext();
-	return /swiftshader/i.test(renderer) ? 'swiftshader' : 'other';
+	return /swiftshader/i.test(renderer)
+		? 'swiftshader'
+		: 'other';
 }
 
 /**
@@ -151,11 +155,21 @@ function renderSchedule(frameRate) {
 	const last = seconds[seconds.length - 1];
 	// Counted in frames rather than accumulated in seconds: a running `+= step`
 	// drifts, and every sampled time here is recognised by value.
-	const stepped = Array.from({ length: Math.ceil(last * frameRate) }, (_, frame) => (frame + 1) / frameRate);
-	const times = [...new Set([...seconds, ...stepped.filter(elapsed => elapsed < last)])];
+	const stepped = Array.from({
+		length: Math.ceil(last * frameRate),
+	}, (_, frame) => (frame + 1) / frameRate);
+	const times = [
+		...new Set([
+			...seconds,
+			...stepped.filter(elapsed => elapsed < last),
+		]),
+	];
 	return times
 		.sort((first, second) => first - second)
-		.map(elapsed => ({ elapsed, sampled: seconds.includes(elapsed) }));
+		.map(elapsed => ({
+			elapsed,
+			sampled: seconds.includes(elapsed),
+		}));
 }
 
 /**
@@ -209,8 +223,12 @@ function measureScenario({ effect, scenario, frameRate, mount, compilation }) {
 		compileFailures: compilation.since(mark),
 		frames: frames.length,
 		totalPixels: counted[0]?.total ?? width * height,
-		litPixels: counted.length > 0 ? Math.min(...counted.map(frame => frame.lit)) : 0,
-		darkPixels: counted.length > 0 ? Math.min(...counted.map(frame => frame.dark)) : 0,
+		litPixels: counted.length > 0
+			? Math.min(...counted.map(frame => frame.lit))
+			: 0,
+		darkPixels: counted.length > 0
+			? Math.min(...counted.map(frame => frame.dark))
+			: 0,
 		// The least any sampled frame differs from the one before it, so every
 		// interval has to move rather than one lively pair carrying a dead one.
 		changedPixels: frames.length === seconds.length && frames.length > 1
@@ -302,14 +320,20 @@ function measureSettle({ effect, scenario, frameRate, defaults, params, duration
 	const mark = compilation.mark();
 	const drawnFrames = Math.round(seconds[seconds.length - 1] * frameRate);
 	const settledFrames = drawnFrames + Math.round(durationSeconds * frameRate);
-	const settledParams = { ...defaults, ...params };
+	const settledParams = {
+		...defaults,
+		...params,
+	};
 
 	const drawn = drawOnStage(stage => factory(stage, defaults), (instance, canvas) => {
 		stepFrames(instance, frameRate, 0, drawnFrames);
 		const lit = countFrame(captureFrame(canvas)).lit;
 		instance.setParams(settledParams);
 		stepFrames(instance, frameRate, drawnFrames, settledFrames);
-		return { lit, settled: captureFrame(canvas) };
+		return {
+			lit,
+			settled: captureFrame(canvas),
+		};
 	});
 	const fresh = drawOnStage(stage => factory(stage, settledParams), (instance, canvas) => {
 		instance.render(1 / frameRate);
@@ -330,7 +354,9 @@ function measureSettle({ effect, scenario, frameRate, defaults, params, duration
 		// has proven nothing faded.
 		residualPixels: compared?.residual ?? width * height,
 		largestResidualChannel: compared?.largest ?? 255,
-		referenceVariedPixels: fresh.captured ? countVariedPixels(fresh.captured) : width * height,
+		referenceVariedPixels: fresh.captured
+			? countVariedPixels(fresh.captured)
+			: width * height,
 	};
 }
 
@@ -339,7 +365,10 @@ async function measureEverything() {
 	const scenarios = [];
 	for (const scenario of animationEffectProofScenarios()) {
 		const factory = await loadAnimationEffect(scenario.effect);
-		const params = { ...animationEffectDefaultParams(scenario.effect), ...scenario.params };
+		const params = {
+			...animationEffectDefaultParams(scenario.effect),
+			...scenario.params,
+		};
 		scenarios.push(measureScenario({
 			effect: scenario.effect,
 			scenario: scenario.scenario,
@@ -374,7 +403,12 @@ async function measureEverything() {
 		compilation,
 	});
 
-	return { catalogue: [...ANIMATION_EFFECT_VALUES], scenarios, settles, control };
+	return {
+		catalogue: [...ANIMATION_EFFECT_VALUES],
+		scenarios,
+		settles,
+		control,
+	};
 }
 
 /**
@@ -394,17 +428,31 @@ function publish(report) {
 
 /** A run that reached no effects, in the shape Node judges every run in. */
 function nothingMeasured(backend, pageFailed, pageError) {
-	return { backend, pageFailed, pageError, catalogue: [], scenarios: [], settles: [], control: { mounted: false } };
+	return {
+		backend,
+		pageFailed,
+		pageError,
+		catalogue: [],
+		scenarios: [],
+		settles: [],
+		control: { mounted: false },
+	};
 }
 
 async function run() {
 	let backend = 'other';
 	try {
 		backend = detectBackend();
-		if (backend === 'unavailable')
+		if (backend === 'unavailable') {
 			publish(nothingMeasured(backend, false));
-		else
-			publish({ backend, pageFailed: false, ...await measureEverything() });
+		}
+		else {
+			publish({
+				backend,
+				pageFailed: false,
+				...await measureEverything(),
+			});
+		}
 	}
 	catch (error) {
 		// Whatever went wrong is the page's own plumbing rather than an effect's —

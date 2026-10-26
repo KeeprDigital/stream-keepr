@@ -30,7 +30,12 @@ const { ensureAdminAccount } = await import('~~/server/modules/admin-bootstrap')
 function throwawayAuth() {
 	return betterAuth({
 		...authStaticOptions,
-		database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
+		database: memoryAdapter({
+			user: [],
+			session: [],
+			account: [],
+			verification: [],
+		}),
 		secret: 'a-throwaway-secret-for-the-unit-suite',
 	}) as unknown as ServerAuth;
 }
@@ -51,7 +56,12 @@ describe('what Better Auth\'s admin API will do without a session', () => {
 		// the "a browser asked" case. The route's own token is this call's
 		// authorization.
 		const { user } = await auth.api.createUser({
-			body: { email: EMAIL, password: PASSWORD, name: 'First Admin', role: 'admin' },
+			body: {
+				email: EMAIL,
+				password: PASSWORD,
+				name: 'First Admin',
+				role: 'admin',
+			},
 		});
 
 		expect(user).toMatchObject({ email: EMAIL, role: 'admin' });
@@ -69,7 +79,12 @@ describe('what Better Auth\'s admin API will do without a session', () => {
 	 */
 	it('refuses to set a password, session or no session', async () => {
 		const { user } = await auth.api.createUser({
-			body: { email: EMAIL, password: PASSWORD, name: 'First Admin', role: 'admin' },
+			body: {
+				email: EMAIL,
+				password: PASSWORD,
+				name: 'First Admin',
+				role: 'admin',
+			},
 		});
 
 		await expect(auth.api.setUserPassword({
@@ -80,7 +95,9 @@ describe('what Better Auth\'s admin API will do without a session', () => {
 
 describe('the first-admin bootstrap against a real Better Auth', () => {
 	async function signIn(password: string) {
-		return auth.api.signInEmail({ body: { email: EMAIL, password } });
+		return auth.api.signInEmail({
+			body: { email: EMAIL, password },
+		});
 	}
 
 	it('creates an admin who can then sign in', async () => {

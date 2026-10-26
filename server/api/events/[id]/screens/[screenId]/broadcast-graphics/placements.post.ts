@@ -74,7 +74,9 @@ export default defineEventHandler(async (event) => {
 			graphicsAssets: () => graphicsAssetLibraryForEvent(event),
 			// The copy joins the front of the Graphic Layer Order, where a newly authored
 			// Broadcast Graphic also lands.
-			config: { graphics: [...existing, graphic] },
+			config: {
+				graphics: [...existing, graphic],
+			},
 			stateVersion: body.stateVersion,
 			originConnectionId: getOriginConnectionId(event),
 			authoringSessionId: await optionalBrowserSessionId(event),

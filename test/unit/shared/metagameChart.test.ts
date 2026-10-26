@@ -21,7 +21,12 @@ function entry(id: number, name: string, count: number, overrides: Partial<Arche
 }
 
 function breakdown(entries: ArchetypeBreakdownEntry[], classifiedPlayers: number): ArchetypeBreakdownResponse {
-	return { entries, totalPlayers: classifiedPlayers, classifiedPlayers, scope: 'all' };
+	return {
+		entries,
+		totalPlayers: classifiedPlayers,
+		classifiedPlayers,
+		scope: 'all',
+	};
 }
 
 describe('projectMetagameChart', () => {
@@ -55,18 +60,31 @@ describe('projectMetagameChart', () => {
 			entry(-1, 'Other', 4, { metaShare: 40 }),
 		], 10));
 
-		expect(bars.at(-1)).toMatchObject({ id: OTHER_ARCHETYPE_ID, name: 'Other', colorSlot: null, metaShare: 40 });
+		expect(bars.at(-1)).toMatchObject({
+			id: OTHER_ARCHETYPE_ID,
+			name: 'Other',
+			colorSlot: null,
+			metaShare: 40,
+		});
 		expect(bars[0]!.colorSlot).not.toBeNull();
 	});
 
 	it(`folds archetypes past the ${METAGAME_CHART_MAX_ARCHETYPES}th into Other, with the server's Other`, () => {
 		const named = Array.from({ length: 10 }, (_, index) => entry(index + 1, `Archetype ${index + 1}`, 1, { metaShare: 8.33 }));
-		const bars = projectMetagameChart(breakdown([...named, entry(-1, 'Other', 2, { metaShare: 16.67 })], 12));
+		const bars = projectMetagameChart(breakdown([
+			...named,
+			entry(-1, 'Other', 2, { metaShare: 16.67 }),
+		], 12));
 
 		expect(bars).toHaveLength(METAGAME_CHART_MAX_ARCHETYPES + 1);
 		expect(bars.slice(0, -1).map(bar => bar.name)).toEqual(named.slice(0, 8).map(item => item.name));
 		// Archetypes 9 and 10 (one Player each) join the server's Other (two Players): 4 of 12.
-		expect(bars.at(-1)).toMatchObject({ id: OTHER_ARCHETYPE_ID, name: 'Other', metaShare: 33.33, colorSlot: null });
+		expect(bars.at(-1)).toMatchObject({
+			id: OTHER_ARCHETYPE_ID,
+			name: 'Other',
+			metaShare: 33.33,
+			colorSlot: null,
+		});
 	});
 
 	it('gives every archetype on the chart a distinct colour', () => {
@@ -146,7 +164,14 @@ describe('metagameScreenQuery for the chart display', () => {
 
 		expect(metagameScreenQuery({ ...config, viewMode: 'chart' })).toEqual({
 			viewMode: 'archetype',
-			query: { scope: 'topN', topN: 16, sortBy: 'count', limit: 5, conversionMetric: 'minPoints', conversionThreshold: 12 },
+			query: {
+				scope: 'topN',
+				topN: 16,
+				sortBy: 'count',
+				limit: 5,
+				conversionMetric: 'minPoints',
+				conversionThreshold: 12,
+			},
 		});
 		expect(metagameScreenQuery({ ...config, viewMode: 'chart' }))
 			.toEqual(metagameScreenQuery({ ...config, viewMode: 'archetype' }));

@@ -248,7 +248,10 @@ export const DEFAULT_GRAPHIC_SURFACE_STYLE: GraphicSurfaceStyle = {
 
 /** A fresh copy, so no two items share one nested style object. */
 export function createDefaultGraphicSurfaceStyle(): GraphicSurfaceStyle {
-	return { ...DEFAULT_GRAPHIC_SURFACE_STYLE, fill: { ...DEFAULT_GRAPHIC_FILL } };
+	return {
+		...DEFAULT_GRAPHIC_SURFACE_STYLE,
+		fill: { ...DEFAULT_GRAPHIC_FILL },
+	};
 }
 
 /** A newly placed item occupies a predictable share of the host canvas. */
@@ -274,11 +277,15 @@ function defaultIconRect(options: GraphicItemDefaultsOptions) {
 
 /** A Graphic Fill in one phrase, for the authoring tree's item summaries. */
 export function graphicFillSummary(fill: GraphicFill): string {
-	return fill.type === 'solid' ? fill.color : `gradient • ${fill.stops.length} stops`;
+	return fill.type === 'solid'
+		? fill.color
+		: `gradient • ${fill.stops.length} stops`;
 }
 
 function surfaceSummary(style: GraphicSurfaceStyle | undefined): string {
-	return style ? graphicFillSummary(style.fill) : 'inherited style';
+	return style
+		? graphicFillSummary(style.fill)
+		: 'inherited style';
 }
 
 /** Whether a Game Wins Item renders win boxes, rather than its win count as text. */
@@ -288,7 +295,9 @@ function rendersWinBoxes(item: GameWinsGraphicItemConfig): boolean {
 
 /** The side a context-gated Definition reads, as an author names it. */
 function playerSideLabel(side: PlayerSide): string {
-	return side === 'player1' ? 'Player 1' : 'Player 2';
+	return side === 'player1'
+		? 'Player 1'
+		: 'Player 2';
 }
 
 const DEFINITIONS = {
@@ -311,7 +320,9 @@ const DEFINITIONS = {
 			overflowPolicy: 'ellipsis',
 			minFontSize: 24,
 		}),
-		summary: item => item.type === 'text' ? (item.text.trim() || 'Empty text') : 'Text',
+		summary: item => item.type === 'text'
+			? (item.text.trim() || 'Empty text')
+			: 'Text',
 	},
 	'shape': {
 		kind: 'shape',
@@ -366,7 +377,9 @@ const DEFINITIONS = {
 				return 'Media';
 			if (!item.asset)
 				return 'No Graphic Asset';
-			return `${item.mediaKind === 'silent-video' ? 'silent video' : 'image'} • ${item.fit}`;
+			return `${item.mediaKind === 'silent-video'
+				? 'silent video'
+				: 'image'} • ${item.fit}`;
 		},
 	},
 	'social-network-icon': {
@@ -467,7 +480,9 @@ const DEFINITIONS = {
 			lifeAnimationDurationMs: 420,
 			lifeAnimationAccentColor: '#ffffff',
 		}),
-		summary: item => item.type === 'player-life' ? `${playerSideLabel(item.playerSide)} life` : 'Life',
+		summary: item => item.type === 'player-life'
+			? `${playerSideLabel(item.playerSide)} life`
+			: 'Life',
 	},
 	'game-wins': {
 		kind: 'game-wins',
@@ -477,7 +492,10 @@ const DEFINITIONS = {
 		requiredContext: 'feature-match',
 		// Paints text only while it renders its win count, and a count cannot outgrow
 		// its bounds, so no Text Overflow Policy bounds it.
-		typography: { textOverflowPolicy: false, paintsText: item => item.displayMode === 'number' },
+		typography: {
+			textOverflowPolicy: false,
+			paintsText: item => item.displayMode === 'number',
+		},
 		// Its own surface frames the indicator in either display mode; the two box
 		// surfaces and the box geometry are on screen only while boxes are. A box
 		// geometry shapes one win box, so a preset sizes against the box.
@@ -486,7 +504,11 @@ const DEFINITIONS = {
 			boxSurfaceStyle: { paints: rendersWinBoxes },
 			wonBoxSurfaceStyle: { paints: rendersWinBoxes },
 		},
-		shapeGeometry: { slot: 'boxGeometry', paints: rendersWinBoxes, bounds: { width: 'boxWidth', height: 'boxHeight' } },
+		shapeGeometry: {
+			slot: 'boxGeometry',
+			paints: rendersWinBoxes,
+			bounds: { width: 'boxWidth', height: 'boxHeight' },
+		},
 		playerSide: true,
 		createDefault: options => ({
 			type: 'game-wins',
@@ -528,7 +550,10 @@ const DEFINITIONS = {
 		requiredContext: 'feature-match',
 		// Paints text only in its list view; the grid renders cards. Its overflow is a
 		// fixed shrink-then-clip rather than an authored Text Overflow Policy.
-		typography: { textOverflowPolicy: false, paintsText: item => item.view === 'list' },
+		typography: {
+			textOverflowPolicy: false,
+			paintsText: item => item.view === 'list',
+		},
 		playerSide: true,
 		createDefault: options => ({
 			type: 'deck-list',
@@ -612,7 +637,9 @@ export function paintedGraphicTypography(item: GraphicItemConfig): GraphicTypogr
 	const declaration = getGraphicItemDefinition(item.type).typography;
 	if (!declaration || !ownsGraphicTypography(item))
 		return null;
-	return declaration.paintsText === undefined || declaration.paintsText(item) ? item.typography : null;
+	return declaration.paintsText === undefined || declaration.paintsText(item)
+		? item.typography
+		: null;
 }
 
 function isPainted(declaration: GraphicDisplayDeclaration, item: GraphicItemConfig): boolean {
@@ -707,7 +734,9 @@ export function graphicShapeGeometry(item: GraphicItemConfig): OwnedShapeGeometr
 /** The Shape Geometry this item has on screen as it is displayed now: where the Inspector offers geometry controls. */
 export function paintedShapeGeometry(item: GraphicItemConfig): OwnedShapeGeometry | null {
 	const declaration = getGraphicItemDefinition(item.type).shapeGeometry;
-	return declaration && isPainted(declaration, item) ? graphicShapeGeometry(item) : null;
+	return declaration && isPainted(declaration, item)
+		? graphicShapeGeometry(item)
+		: null;
 }
 
 /** Whether this item reads one player side's live state: where the Inspector offers the Player, and what authoring accepts. */

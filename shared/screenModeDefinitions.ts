@@ -163,7 +163,9 @@ export function getScreenModeConfigurationPolicy(mode: ScreenMode): ScreenModeCo
 		containerControlPlacement: {
 			...DEFAULT_CONTAINER_CONTROL_PLACEMENT,
 			// A graphics host owns its canvas, so its dimension controls sit with the mode.
-			...(graphicsHost ? { dimensions: 'mode' as const } : {}),
+			...(graphicsHost
+				? { dimensions: 'mode' as const }
+				: {}),
 		},
 		dimensions: {
 			width: getScreenModeDimensionControl('width', host.defaultWidth),
@@ -172,7 +174,9 @@ export function getScreenModeConfigurationPolicy(mode: ScreenMode): ScreenModeCo
 		resetScreenConfigDefaults: fixedDimensions
 			? { width: host.defaultWidth, height: host.defaultHeight }
 			: undefined,
-		outputOptions: graphicsHost ? OPEN_SCREEN_OUTPUT_OPTIONS : [],
+		outputOptions: graphicsHost
+			? OPEN_SCREEN_OUTPUT_OPTIONS
+			: [],
 		fullWidthConfiguration: Boolean(graphicsHost),
 	};
 }
@@ -210,7 +214,10 @@ export function getDisplayResetForMode<M extends ScreenMode>(
 	const declaration = SCREEN_MODES[mode].pageRotation;
 	if (!declaration)
 		return display;
-	const reset: Partial<Record<keyof PageRotationConfig, unknown>> = { ...current, ...display };
+	const reset: Partial<Record<keyof PageRotationConfig, unknown>> = {
+		...current,
+		...display,
+	};
 	return pageRotationEdit(declaration, { autoPageEnabled: reset.autoPageEnabled === true }, display, now);
 }
 

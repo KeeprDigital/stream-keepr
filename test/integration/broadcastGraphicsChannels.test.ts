@@ -43,7 +43,10 @@ function member(id: string, channelId: string, incumbent = false): BroadcastGrap
 	return {
 		...integrationBroadcastGraphic(
 			id,
-			integrationGraphicAnimation({ enter: incumbent ? 50 : ENTER_MS, exit: EXIT_MS }),
+			integrationGraphicAnimation({
+				enter: incumbent ? 50 : ENTER_MS,
+				exit: EXIT_MS,
+			}),
 		),
 		channelId,
 	};
@@ -81,7 +84,11 @@ describe('broadcast graphics Graphic Channel handoffs', () => {
 		return await createGraphicsHarness(
 			eventId,
 			slug,
-			[member('a', 'thirds', true), member('b', 'thirds'), member('c', 'thirds')],
+			[
+				member('a', 'thirds', true),
+				member('b', 'thirds'),
+				member('c', 'thirds'),
+			],
 			[channel],
 		);
 	}
@@ -244,7 +251,10 @@ describe('broadcast graphics Graphic Channel handoffs', () => {
 				member('slate', 'slates'),
 				integrationBroadcastGraphic('bug', integrationGraphicAnimation({ enter: ENTER_MS, exit: EXIT_MS })),
 			],
-			[OUT_THEN_IN, { id: 'slates', name: 'Slates' }],
+			[
+				OUT_THEN_IN,
+				{ id: 'slates', name: 'Slates' },
+			],
 		);
 		await take(harness, 'a');
 		await take(harness, 'slate');
@@ -264,7 +274,10 @@ describe('broadcast graphics Graphic Channel handoffs', () => {
 		const harness = await createGraphicsHarness(
 			eventId,
 			'channel-undeclared',
-			[member('a', 'deleted', true), member('b', 'deleted')],
+			[
+				member('a', 'deleted', true),
+				member('b', 'deleted'),
+			],
 		);
 		await take(harness, 'a');
 		await settle();
@@ -280,7 +293,10 @@ describe('broadcast graphics Graphic Channel handoffs', () => {
 		const harness = await createGraphicsHarness(
 			eventId,
 			'channel-recovery',
-			[member('a', 'thirds', true), member('b', 'thirds')],
+			[
+				member('a', 'thirds', true),
+				member('b', 'thirds'),
+			],
 			[OUT_THEN_IN],
 		);
 		await take(harness, 'a');

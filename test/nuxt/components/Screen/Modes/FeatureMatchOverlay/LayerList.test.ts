@@ -15,14 +15,18 @@ import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatc
 const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
 
 const UButtonStub = defineComponent({
-	props: { disabled: { type: Boolean, required: false } },
+	props: {
+		disabled: { type: Boolean, required: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
 
 /** Every menu entry as a plain button, so the menu needs no opening. */
 const UDropdownMenuStub = defineComponent({
-	props: { items: { type: Array, required: true } },
+	props: {
+		items: { type: Array, required: true },
+	},
 	template: `
 		<div>
 			<slot />
@@ -46,19 +50,35 @@ function configWithItems(): FeatureMatchOverlayModeConfig {
 	composition = addGraphicItem(composition, { kind: 'shape', id: 'back', ...CANVAS }).graphic;
 	composition = addGraphicItem(composition, { kind: 'group', id: 'cluster', ...CANVAS }).graphic;
 	composition = addGraphicGroupChild(composition, { kind: 'text', groupId: 'cluster', id: 'child' }).graphic;
-	return { ...config, layout: { ...config.layout, composition } };
+	return {
+		...config,
+		layout: { ...config.layout, composition },
+	};
 }
 
 async function mountList() {
 	const config = ref(configWithItems());
 	const updateConfig = (patch: Partial<FeatureMatchOverlayModeConfig>) => {
-		config.value = { ...config.value, ...patch };
+		config.value = {
+			...config.value,
+			...patch,
+		};
 	};
-	const editor = useFeatureMatchLayoutEditor({ config, updateConfig, canvasWidth: 1920, canvasHeight: 1080 });
+	const editor = useFeatureMatchLayoutEditor({
+		config,
+		updateConfig,
+		canvasWidth: 1920,
+		canvasHeight: 1080,
+	});
 	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/LayerList.vue';
 	const { default: LayerList } = await import(componentPath);
 	const wrapper = mount(LayerList, {
-		props: { layout: config.value.layout, editor, canvasWidth: 1920, canvasHeight: 1080 },
+		props: {
+			layout: config.value.layout,
+			editor,
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+		},
 		global: {
 			stubs: {
 				UButton: UButtonStub,
@@ -82,7 +102,12 @@ describe('featureMatchOverlayLayerList', () => {
 		const { wrapper, config } = await mountList();
 
 		const sources = [...config.value.layout.sources].reverse().map(item => `source:${item.id}`);
-		expect(rowKeys(wrapper)).toEqual(['item:cluster', 'item:child', 'item:back', ...sources]);
+		expect(rowKeys(wrapper)).toEqual([
+			'item:cluster',
+			'item:child',
+			'item:back',
+			...sources,
+		]);
 		expect(wrapper.find('[data-testid="layer-canvas"]').exists()).toBe(true);
 	});
 

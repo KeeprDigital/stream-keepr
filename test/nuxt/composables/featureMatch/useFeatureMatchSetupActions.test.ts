@@ -7,7 +7,9 @@ const mockFeatureMatchStateStore = {
 	swapPlayers: vi.fn(),
 	resetMatch: vi.fn(),
 };
-const mockToast = { add: vi.fn() };
+const mockToast = {
+	add: vi.fn(),
+};
 
 mockNuxtImport('useEventStore', () => () => ({ eventId: 1 }));
 mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
@@ -109,8 +111,18 @@ describe('useFeatureMatchSetupActions', () => {
 				externalId: 'ext-001',
 				externalSource: 'melee',
 				tableNumber: playerOverrides.tableNumber ?? 3,
-				player1Data: { name: playerOverrides.p1Name ?? 'Alice', wins: 5, losses: 2, draws: 0 } as any,
-				player2Data: { name: playerOverrides.p2Name ?? 'Bob', wins: 4, losses: 3, draws: 0 } as any,
+				player1Data: {
+					name: playerOverrides.p1Name ?? 'Alice',
+					wins: 5,
+					losses: 2,
+					draws: 0,
+				} as any,
+				player2Data: {
+					name: playerOverrides.p2Name ?? 'Bob',
+					wins: 4,
+					losses: 3,
+					draws: 0,
+				} as any,
 			});
 		}
 
@@ -146,8 +158,14 @@ describe('useFeatureMatchSetupActions', () => {
 			const match = createMockMatch({
 				player1Id: 10,
 				player2Id: 20,
-				player1Data: { name: 'Alice', gameData: { type: 'mtg', deckName: 'Bogles', deckColors: 'GW' } } as any,
-				player2Data: { name: 'Bob', gameData: { type: 'mtg', deckName: 'Burn', deckColors: 'R' } } as any,
+				player1Data: {
+					name: 'Alice',
+					gameData: { type: 'mtg', deckName: 'Bogles', deckColors: 'GW' },
+				} as any,
+				player2Data: {
+					name: 'Bob',
+					gameData: { type: 'mtg', deckName: 'Burn', deckColors: 'R' },
+				} as any,
 			});
 			const { populateFromMelee, getDeckForCurrentPhase } = createSetup();
 

@@ -16,7 +16,9 @@ const PassThroughStub = defineComponent({
 
 const UInputNumberStub = defineComponent({
 	name: 'UInputNumber',
-	props: { modelValue: { type: Number, required: false } },
+	props: {
+		modelValue: { type: Number, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input type="number" :value="modelValue" />',
 });
@@ -31,12 +33,25 @@ async function mountBounds(anchor: FeatureMatchOverlayAnchorValue) {
 	const config: FeatureMatchOverlayModeConfig = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 	// An odd-sized 401×201 item at (100, 50) on a 1920×1080 canvas, so a
 	// centre anchor sits on a half pixel.
-	const item: FeatureMatchSourceItemConfig = { ...config.layout.sources[0]!, x: 100, y: 50, width: 401, height: 201, anchor };
+	const item: FeatureMatchSourceItemConfig = {
+		...config.layout.sources[0]!,
+		x: 100,
+		y: 50,
+		width: 401,
+		height: 201,
+		anchor,
+	};
 	config.layout.sources = [item];
 	const updateConfig = vi.fn();
 
 	const wrapper = mount(InspectorSource, {
-		props: { config, updateConfig, screenWidth: 1920, screenHeight: 1080, item },
+		props: {
+			config,
+			updateConfig,
+			screenWidth: 1920,
+			screenHeight: 1080,
+			item,
+		},
 		global: {
 			stubs: {
 				FeatureMatchOverlayControlSection: PassThroughStub,
@@ -83,12 +98,30 @@ async function mountBounds(anchor: FeatureMatchOverlayAnchorValue) {
 
 describe('feature Match Overlay Source Item bounds: align actions', () => {
 	const actions = [
-		['Hard left', { x: 0, y: 50 }],
-		['Center horizontally', { x: 759.5, y: 50 }],
-		['Hard right', { x: 1519, y: 50 }],
-		['Hard top', { x: 100, y: 0 }],
-		['Center vertically', { x: 100, y: 439.5 }],
-		['Hard bottom', { x: 100, y: 879 }],
+		[
+			'Hard left',
+			{ x: 0, y: 50 },
+		],
+		[
+			'Center horizontally',
+			{ x: 759.5, y: 50 },
+		],
+		[
+			'Hard right',
+			{ x: 1519, y: 50 },
+		],
+		[
+			'Hard top',
+			{ x: 100, y: 0 },
+		],
+		[
+			'Center vertically',
+			{ x: 100, y: 439.5 },
+		],
+		[
+			'Hard bottom',
+			{ x: 100, y: 879 },
+		],
 	] as const;
 	const cases = NINE_POINT_VALUES.flatMap(anchor => actions.map(([label, position]) => [anchor, label, position] as const));
 
@@ -104,7 +137,12 @@ describe('feature Match Overlay Source Item bounds: size entry', () => {
 		const { enter } = await mountBounds('top-left');
 
 		expect(await enter('Item width', 0)).toEqual({ x: 100, y: 50, width: 1, height: 201 });
-		expect(await enter('Item height', 99.6)).toEqual({ x: 100, y: 50, width: 401, height: 100 });
+		expect(await enter('Item height', 99.6)).toEqual({
+			x: 100,
+			y: 50,
+			width: 401,
+			height: 100,
+		});
 	});
 });
 
@@ -114,6 +152,11 @@ describe('feature Match Overlay Source Item bounds: linked width and height', ()
 		await link();
 
 		// 401×201 doubled is 802×402, with the bottom-right corner held at (501, 251).
-		expect(await enter('Item width', 802)).toEqual({ x: -301, y: -151, width: 802, height: 402 });
+		expect(await enter('Item width', 802)).toEqual({
+			x: -301,
+			y: -151,
+			width: 802,
+			height: 402,
+		});
 	});
 });

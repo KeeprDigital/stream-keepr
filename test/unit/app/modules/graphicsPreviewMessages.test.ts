@@ -17,7 +17,9 @@ const expectedFromPreview = { origin: 'https://keepr.test', source: previewWindo
 const expectedFromEditor = { origin: 'https://keepr.test', source: editorWindow };
 
 const state = {
-	graphics: [{ id: 'lower-third', name: 'Lower Third', items: [] }],
+	graphics: [
+		{ id: 'lower-third', name: 'Lower Third', items: [] },
+	],
 	selectedTarget: { type: 'canvas' },
 };
 
@@ -48,7 +50,13 @@ describe('graphicsPreviewMessages', () => {
 		expect(isGraphicsPreviewStateMessage({
 			origin: 'https://keepr.test',
 			source: editorWindow,
-			data: { type: GRAPHICS_PREVIEW_STATE_MESSAGE, state: { graphics: 'all', selectedTarget: { type: 'nowhere' } } },
+			data: {
+				type: GRAPHICS_PREVIEW_STATE_MESSAGE,
+				state: {
+					graphics: 'all',
+					selectedTarget: { type: 'nowhere' },
+				},
+			},
 		}, expectedFromEditor)).toBe(false);
 	});
 
@@ -56,7 +64,10 @@ describe('graphicsPreviewMessages', () => {
 		const message = {
 			origin: 'https://keepr.test',
 			source: previewWindow,
-			data: { type: GRAPHICS_PREVIEW_SELECT_MESSAGE, target: { type: 'item', graphicId: 'a', itemId: 'b' } },
+			data: {
+				type: GRAPHICS_PREVIEW_SELECT_MESSAGE,
+				target: { type: 'item', graphicId: 'a', itemId: 'b' },
+			},
 		};
 
 		expect(isGraphicsPreviewSelectMessage(message, expectedFromPreview)).toBe(true);
@@ -67,7 +78,10 @@ describe('graphicsPreviewMessages', () => {
 		expect(isGraphicsPreviewSelectMessage({
 			origin: 'https://keepr.test',
 			source: previewWindow,
-			data: { type: GRAPHICS_PREVIEW_SELECT_MESSAGE, target: { type: 'item', graphicId: 'a' } },
+			data: {
+				type: GRAPHICS_PREVIEW_SELECT_MESSAGE,
+				target: { type: 'item', graphicId: 'a' },
+			},
 		}, expectedFromPreview)).toBe(false);
 	});
 
@@ -75,7 +89,10 @@ describe('graphicsPreviewMessages', () => {
 		expect(isGraphicsPreviewSelectMessage({
 			origin: 'https://keepr.test',
 			source: null,
-			data: { type: GRAPHICS_PREVIEW_SELECT_MESSAGE, target: { type: 'canvas' } },
+			data: {
+				type: GRAPHICS_PREVIEW_SELECT_MESSAGE,
+				target: { type: 'canvas' },
+			},
 		}, { origin: 'https://keepr.test', source: null })).toBe(false);
 	});
 });
@@ -187,13 +204,21 @@ describe('readGraphicsPreviewAnimationPlan', () => {
 	it('still accepts a state message whose run is absent or malformed', () => {
 		// The working composition has to reach the preview either way; a bad run just
 		// means the preview holds its Graphic Resting State.
-		for (const animation of [undefined, null, { scope: 'phase' }]) {
+		for (const animation of [
+			undefined,
+			null,
+			{ scope: 'phase' },
+		]) {
 			const message = {
 				origin: 'https://keepr.test',
 				source: editorWindow,
 				data: {
 					type: GRAPHICS_PREVIEW_STATE_MESSAGE,
-					state: { graphics: [], selectedTarget: { type: 'canvas' }, animation },
+					state: {
+						graphics: [],
+						selectedTarget: { type: 'canvas' },
+						animation,
+					},
 				},
 			};
 
@@ -209,7 +234,11 @@ describe('readGraphicsPreviewAnimationPlan', () => {
 			source: editorWindow,
 			data: {
 				type: GRAPHICS_PREVIEW_STATE_MESSAGE,
-				state: { graphics: [], selectedTarget: { type: 'canvas' }, animation: { ...plan, startedAt: 5 } },
+				state: {
+					graphics: [],
+					selectedTarget: { type: 'canvas' },
+					animation: { ...plan, startedAt: 5 },
+				},
 			},
 		};
 
@@ -235,7 +264,11 @@ describe('readGraphicsPreviewAnimationPlan', () => {
 			expectedFromPreview,
 		)).toBe(false);
 		expect(isGraphicsPreviewReadyMessage(
-			{ origin: 'https://keepr.test', source: previewWindow, data: { type: GRAPHICS_PREVIEW_SELECT_MESSAGE } },
+			{
+				origin: 'https://keepr.test',
+				source: previewWindow,
+				data: { type: GRAPHICS_PREVIEW_SELECT_MESSAGE },
+			},
 			expectedFromPreview,
 		)).toBe(false);
 	});

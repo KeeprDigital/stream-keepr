@@ -151,7 +151,10 @@ export function createBroadcastGraphic(
 		items: [],
 	};
 
-	return { graphics: [...graphics, graphic], graphicId: graphic.id };
+	return {
+		graphics: [...graphics, graphic],
+		graphicId: graphic.id,
+	};
 }
 
 export function moveBroadcastGraphic(
@@ -174,14 +177,21 @@ export function patchBroadcastGraphic(
 	graphicId: string,
 	patch: Partial<Omit<BroadcastGraphicConfig, 'id'>>,
 ): BroadcastGraphicConfig[] {
-	return graphics.map(entry => entry.id === graphicId ? { ...entry, ...patch } : entry);
+	return graphics.map(entry => entry.id === graphicId
+		? {
+				...entry,
+				...patch,
+			}
+		: entry);
 }
 
 export function replaceBroadcastGraphic(
 	graphics: readonly BroadcastGraphicConfig[],
 	graphic: BroadcastGraphicConfig,
 ): BroadcastGraphicConfig[] {
-	return graphics.map(entry => entry.id === graphic.id ? graphic : entry);
+	return graphics.map(entry => entry.id === graphic.id
+		? graphic
+		: entry);
 }
 
 /* ────────────────────────────────────────────────
@@ -203,7 +213,9 @@ export function graphicInputKeyFromLabel(label: string, taken: readonly string[]
 		.replace(/[^a-z0-9]+/g, '-')
 		.replace(/^-+|-+$/g, '')
 		.slice(0, MAX_GRAPHIC_INPUT_KEY_LENGTH);
-	const base = GRAPHIC_INPUT_KEY_PATTERN.test(slug) ? slug : 'input';
+	const base = GRAPHIC_INPUT_KEY_PATTERN.test(slug)
+		? slug
+		: 'input';
 	const used = new Set(taken);
 	if (!used.has(base))
 		return base;
@@ -253,7 +265,10 @@ export function addGraphicInput(
 			label,
 		});
 
-		return { ...graphic, inputs: [...inputs, declaration] };
+		return {
+			...graphic,
+			inputs: [...inputs, declaration],
+		};
 	});
 }
 
@@ -281,7 +296,12 @@ export function patchGraphicInput(
 		? {
 				...graphic,
 				inputs: (graphic.inputs ?? []).map(input =>
-					input.key === key ? { ...input, ...patch } as GraphicInputDeclaration : input,
+					input.key === key
+						? {
+								...input,
+								...patch,
+							} as GraphicInputDeclaration
+						: input,
 				),
 			}
 		: graphic);
@@ -315,13 +335,22 @@ export function deleteGraphicInput(
 }
 
 function stripPlaceholderStyle<T extends GraphicItemConfig>(item: T, key: string): T {
-	if (item.type === 'group')
-		return { ...item, children: item.children.map(child => stripPlaceholderStyle(child, key)) };
+	if (item.type === 'group') {
+		return {
+			...item,
+			children: item.children.map(child => stripPlaceholderStyle(child, key)),
+		};
+	}
 	if (item.type !== 'text' || !item.placeholderStyles || !(key in item.placeholderStyles))
 		return item;
 
 	const { [key]: _removed, ...kept } = item.placeholderStyles;
-	return { ...item, placeholderStyles: Object.keys(kept).length > 0 ? kept : undefined };
+	return {
+		...item,
+		placeholderStyles: Object.keys(kept).length > 0
+			? kept
+			: undefined,
+	};
 }
 
 /**
@@ -352,7 +381,9 @@ export function setGraphicInputChoiceOptions(
 						? {
 								...input,
 								options,
-								default: options.some(option => option.value === input.default) ? input.default : null,
+								default: options.some(option => option.value === input.default)
+									? input.default
+									: null,
 							}
 						: input,
 				),
@@ -413,7 +444,10 @@ export function patchGraphicPlaceholderStyle(
 		if (patch === null)
 			return stripPlaceholderStyle(item, inputKey);
 
-		const merged = { ...item.placeholderStyles?.[inputKey], ...patch } as Record<string, unknown>;
+		const merged = {
+			...item.placeholderStyles?.[inputKey],
+			...patch,
+		} as Record<string, unknown>;
 		for (const key of Object.keys(merged)) {
 			if (merged[key] === undefined)
 				delete merged[key];
@@ -481,11 +515,14 @@ export function addGraphicSourceSelection(
 
 		return {
 			...graphic,
-			sources: [...sources, {
-				key: graphicInputKeyFromLabel(label, sources.map(source => source.key)),
-				label,
-				kind,
-			}],
+			sources: [
+				...sources,
+				{
+					key: graphicInputKeyFromLabel(label, sources.map(source => source.key)),
+					label,
+					kind,
+				},
+			],
 		};
 	});
 }
@@ -514,7 +551,12 @@ export function patchGraphicSourceSelection(
 		? {
 				...graphic,
 				sources: (graphic.sources ?? []).map(source =>
-					source.key === key ? { ...source, ...patch } : source,
+					source.key === key
+						? {
+								...source,
+								...patch,
+							}
+						: source,
 				),
 			}
 		: graphic);
@@ -624,7 +666,9 @@ export function setGraphicInputBinding(
 		return {
 			...graphic,
 			bindings: bindings.some(entry => entry.inputKey === binding.inputKey)
-				? bindings.map(entry => entry.inputKey === binding.inputKey ? binding : entry)
+				? bindings.map(entry => entry.inputKey === binding.inputKey
+						? binding
+						: entry)
 				: [...bindings, binding],
 		};
 	});
@@ -637,7 +681,10 @@ export function deleteGraphicInputBinding(
 	inputKey: string,
 ): BroadcastGraphicConfig[] {
 	return graphics.map(graphic => graphic.id === graphicId
-		? { ...graphic, bindings: (graphic.bindings ?? []).filter(binding => binding.inputKey !== inputKey) }
+		? {
+				...graphic,
+				bindings: (graphic.bindings ?? []).filter(binding => binding.inputKey !== inputKey),
+			}
 		: graphic);
 }
 
@@ -698,7 +745,10 @@ export function associateSocialProfileProjection(
 	};
 	return {
 		...graphic,
-		socialProfileProjections: [...(graphic.socialProfileProjections ?? []), projection],
+		socialProfileProjections: [
+			...(graphic.socialProfileProjections ?? []),
+			projection,
+		],
 	};
 }
 
@@ -739,25 +789,38 @@ export function addSocialProfileProjection(
 	}) as GraphicGroupItemConfig;
 	const icon = getGraphicItemDefinition('social-network-icon').createDefault({
 		id: options.iconItemId,
-		label: nextSequentialName('Social Network Icon', [...usedLabels(graphic), group.label]),
+		label: nextSequentialName('Social Network Icon', [
+			...usedLabels(graphic),
+			group.label,
+		]),
 		canvasWidth: group.width,
 		canvasHeight: group.height,
 	});
 	const handle = getGraphicItemDefinition('text').createDefault({
 		id: options.handleItemId,
-		label: nextSequentialName('Text', [...usedLabels(graphic), group.label, icon.label]),
+		label: nextSequentialName('Text', [
+			...usedLabels(graphic),
+			group.label,
+			icon.label,
+		]),
 		canvasWidth: group.width,
 		canvasHeight: group.height,
 	});
 	const withStarter: BroadcastGraphicConfig = {
 		...graphic,
-		items: [...graphic.items, {
-			...group,
-			children: [
-				{ ...icon, network: { projectionKey: options.projectionKey } },
-				{ ...handle, text: `{${options.projectionKey}.handle}` },
-			] as GraphicGroupChildConfig[],
-		}],
+		items: [
+			...graphic.items,
+			{
+				...group,
+				children: [
+					{
+						...icon,
+						network: { projectionKey: options.projectionKey },
+					},
+					{ ...handle, text: `{${options.projectionKey}.handle}` },
+				] as GraphicGroupChildConfig[],
+			},
+		],
 	};
 	return associateSocialProfileProjection(withStarter, options);
 }
@@ -791,7 +854,10 @@ export function patchSocialProfileProjection(
 	) {
 		return graphic;
 	}
-	const candidate = { ...current, ...patch };
+	const candidate = {
+		...current,
+		...patch,
+	};
 	const source = (graphic.sources ?? []).find(entry => entry.key === candidate.sourceKey);
 	const group = graphic.items.find(entry => entry.id === candidate.presentationGroupId);
 	const groupAssignedElsewhere = (graphic.socialProfileProjections ?? []).some(entry =>
@@ -819,7 +885,12 @@ export function patchSocialProfileProjection(
 	return {
 		...graphic,
 		socialProfileProjections: graphic.socialProfileProjections?.map(entry =>
-			entry.key === key ? { ...candidate, label: candidate.label.trim() } : entry,
+			entry.key === key
+				? {
+						...candidate,
+						label: candidate.label.trim(),
+					}
+				: entry,
 		),
 	};
 }
@@ -907,7 +978,9 @@ export function findGraphicItem(graphic: BroadcastGraphicConfig, itemId: string)
 
 /** Every Graphic Item of this Broadcast Graphic, groups before their children. */
 export function flattenGraphicItems(graphic: BroadcastGraphicConfig): GraphicItemConfig[] {
-	return graphic.items.flatMap(item => item.type === 'group' ? [item, ...item.children] : [item]);
+	return graphic.items.flatMap(item => item.type === 'group'
+		? [item, ...item.children]
+		: [item]);
 }
 
 /** Every label in use, so a new item's sequential name never collides. */
@@ -931,7 +1004,10 @@ export function addGraphicItem(
 	});
 
 	return {
-		graphic: { ...graphic, items: [...graphic.items, item] },
+		graphic: {
+			...graphic,
+			items: [...graphic.items, item],
+		},
 		itemId: item.id,
 	};
 }
@@ -965,13 +1041,21 @@ export function addGraphicGroupChild(
 	}) as GraphicGroupChildConfig;
 
 	return {
-		graphic: replaceGraphicItem(graphic, { ...group, children: [...group.children, child] }),
+		graphic: replaceGraphicItem(graphic, {
+			...group,
+			children: [...group.children, child],
+		}),
 		itemId: child.id,
 	};
 }
 
 function replaceGraphicItem(graphic: BroadcastGraphicConfig, item: GraphicItemConfig): BroadcastGraphicConfig {
-	return { ...graphic, items: graphic.items.map(entry => entry.id === item.id ? item : entry) };
+	return {
+		...graphic,
+		items: graphic.items.map(entry => entry.id === item.id
+			? item
+			: entry),
+	};
 }
 
 /** Move one Graphic Item within its own sibling list, top-level or in a group. */
@@ -1004,8 +1088,12 @@ export function moveGraphicItemToEdge(
 	const index = siblings.findIndex(sibling => sibling.id === itemId);
 	if (index < 0)
 		return graphic;
-	const delta = edge === 'front' ? siblings.length - 1 - index : -index;
-	return delta === 0 ? graphic : moveGraphicItem(graphic, itemId, delta);
+	const delta = edge === 'front'
+		? siblings.length - 1 - index
+		: -index;
+	return delta === 0
+		? graphic
+		: moveGraphicItem(graphic, itemId, delta);
 }
 
 /** How far a duplicate is offset from its original, so it reads as a second item. */
@@ -1068,13 +1156,19 @@ export function duplicateGraphicItem(
 		const index = group.children.findIndex(child => child.id === itemId);
 		const children = [...group.children];
 		children.splice(index + 1, 0, copy as GraphicGroupChildConfig);
-		return { graphic: replaceGraphicItem(graphic, { ...group, children }), itemId: copy.id };
+		return {
+			graphic: replaceGraphicItem(graphic, { ...group, children }),
+			itemId: copy.id,
+		};
 	}
 
 	const index = graphic.items.findIndex(item => item.id === itemId);
 	const items = [...graphic.items];
 	items.splice(index + 1, 0, copy);
-	return { graphic: { ...graphic, items }, itemId: copy.id };
+	return {
+		graphic: { ...graphic, items },
+		itemId: copy.id,
+	};
 }
 
 /**
@@ -1129,7 +1223,9 @@ function updateGraphicItem(
 			return {
 				...item,
 				children: item.children.map(child =>
-					child.id === itemId ? update(child) as GraphicGroupChildConfig : child,
+					child.id === itemId
+						? update(child) as GraphicGroupChildConfig
+						: child,
 				),
 			};
 		}),
@@ -1149,7 +1245,10 @@ export function patchGraphicItem(
 	itemId: string,
 	patch: Partial<GraphicItemConfig>,
 ): BroadcastGraphicConfig {
-	return updateGraphicItem(graphic, itemId, item => ({ ...item, ...patch } as GraphicItemConfig));
+	return updateGraphicItem(graphic, itemId, item => ({
+		...item,
+		...patch,
+	} as GraphicItemConfig));
 }
 
 /** Apply a nested merge to one item, and only when it is of an expected kind. */
@@ -1189,7 +1288,14 @@ export function patchShapeGeometry(
 ): BroadcastGraphicConfig {
 	return patchGraphicItemWhere(graphic, itemId, ownsShapeGeometry, (item) => {
 		const owned = graphicShapeGeometry(item);
-		return owned ? { [owned.slot]: { ...owned.geometry, ...patch } } : {};
+		return owned
+			? {
+					[owned.slot]: {
+						...owned.geometry,
+						...patch,
+					},
+				}
+			: {};
 	});
 }
 
@@ -1205,7 +1311,13 @@ export function patchShapeCorner(
 		if (!owned)
 			return {};
 		return {
-			[owned.slot]: { ...owned.geometry, [corner]: { ...owned.geometry[corner], ...patch } },
+			[owned.slot]: {
+				...owned.geometry,
+				[corner]: {
+					...owned.geometry[corner],
+					...patch,
+				},
+			},
 		};
 	});
 }
@@ -1244,7 +1356,9 @@ export function setMediaClipGeometry(
 	clipping: boolean,
 ): BroadcastGraphicConfig {
 	return patchGraphicItemGroup(graphic, itemId, ['media'], item => ({
-		clipGeometry: clipping ? (item.clipGeometry ?? squareShapeGeometry()) : undefined,
+		clipGeometry: clipping
+			? (item.clipGeometry ?? squareShapeGeometry())
+			: undefined,
 	}));
 }
 
@@ -1264,7 +1378,10 @@ export function patchMediaFocalPosition(
 	patch: Partial<GraphicFocalPosition>,
 ): BroadcastGraphicConfig {
 	return patchGraphicItemGroup(graphic, itemId, ['media'], item => ({
-		focalPosition: { ...item.focalPosition, ...patch },
+		focalPosition: {
+			...item.focalPosition,
+			...patch,
+		},
 	}));
 }
 
@@ -1339,7 +1456,10 @@ export function patchGraphicSurfaceStyle(
 	patch: Partial<GraphicSurfaceStyle>,
 	slot: GraphicSurfaceStyleSlot = 'surfaceStyle',
 ): BroadcastGraphicConfig {
-	return patchSurfaceStyleSlot(graphic, itemId, slot, style => ({ ...style, ...patch }));
+	return patchSurfaceStyleSlot(graphic, itemId, slot, style => ({
+		...style,
+		...patch,
+	}));
 }
 
 /**
@@ -1367,7 +1487,10 @@ export function patchGraphicGroupDefaultChildSurfaceStyle(
 	return patchGraphicItemWhere(graphic, itemId, item => ownsGraphicSurfaceStyle(item, 'defaultChildSurfaceStyle'), item => ({
 		defaultChildSurfaceStyle: patch === null
 			? undefined
-			: { ...(graphicSurfaceStyleAt(item, 'defaultChildSurfaceStyle') ?? createDefaultGraphicSurfaceStyle()), ...patch },
+			: {
+					...(graphicSurfaceStyleAt(item, 'defaultChildSurfaceStyle') ?? createDefaultGraphicSurfaceStyle()),
+					...patch,
+				},
 	}));
 }
 
@@ -1386,7 +1509,10 @@ function editGraphicFill(
 	edit: GraphicFillEdit,
 ): BroadcastGraphicConfig {
 	return patchSurfaceStyleSlot(graphic, itemId, slot, style =>
-		({ ...style, fill: applyGraphicFillEdit(style.fill, edit, ITEM_GRAPHIC_FILL_EDIT_OPTIONS) }));
+		({
+			...style,
+			fill: applyGraphicFillEdit(style.fill, edit, ITEM_GRAPHIC_FILL_EDIT_OPTIONS),
+		}));
 }
 
 /** Merge into a Graphic Surface Style's uniform outline, or remove it. */
@@ -1400,7 +1526,12 @@ export function patchGraphicOutline(
 		...style,
 		outline: patch === null
 			? undefined
-			: { color: '#ffffff', width: 2, ...style.outline, ...patch },
+			: {
+					color: '#ffffff',
+					width: 2,
+					...style.outline,
+					...patch,
+				},
 	}));
 }
 
@@ -1415,7 +1546,13 @@ export function patchGraphicGlow(
 		...style,
 		glow: patch === null
 			? undefined
-			: { color: '#00d9ff', size: 24, opacity: 0.8, ...style.glow, ...patch },
+			: {
+					color: '#00d9ff',
+					size: 24,
+					opacity: 0.8,
+					...style.glow,
+					...patch,
+				},
 	}));
 }
 
@@ -1443,7 +1580,10 @@ export function patchGraphicTypography(
 	patch: Partial<GraphicTypography>,
 ): BroadcastGraphicConfig {
 	return patchGraphicItemWhere(graphic, itemId, ownsGraphicTypography, item => ({
-		typography: { ...item.typography, ...patch },
+		typography: {
+			...item.typography,
+			...patch,
+		},
 	}));
 }
 
@@ -1582,7 +1722,13 @@ export function patchGraphicGroupChildSizing(
 		return graphic;
 
 	return patchGraphicItemGroup(graphic, itemId, GRAPHIC_GROUP_CHILD_KINDS, item => ({
-		sizing: { mode: 'fixed', size: item.width, weight: 1, ...item.sizing, ...patch },
+		sizing: {
+			mode: 'fixed',
+			size: item.width,
+			weight: 1,
+			...item.sizing,
+			...patch,
+		},
 	}));
 }
 
@@ -1649,10 +1795,16 @@ export function mergeGraphicAnimationRecipeChannel<
 	K extends GraphicAnimationChannelKey,
 >(recipe: R, channel: K, patch: Partial<GraphicAnimationChannels[K]> | null): R {
 	const next = { ...recipe };
-	if (patch === null)
+	if (patch === null) {
 		delete next[channel];
-	else
-		next[channel] = { ...GRAPHIC_ANIMATION_CHANNEL_DEFAULTS[channel], ...recipe[channel], ...patch } as R[K];
+	}
+	else {
+		next[channel] = {
+			...GRAPHIC_ANIMATION_CHANNEL_DEFAULTS[channel],
+			...recipe[channel],
+			...patch,
+		} as R[K];
+	}
 	return next;
 }
 
@@ -1702,7 +1854,10 @@ function mergeAnimationRecipe(
 	patch: Partial<GraphicOnScreenAnimationRecipe>,
 ): GraphicContainerAnimation | undefined {
 	const current = animation?.[phase] ?? createDefaultGraphicAnimationRecipe(phase);
-	return setAnimationRecipe(animation, phase, { ...current, ...patch } as GraphicAnimationRecipe);
+	return setAnimationRecipe(animation, phase, {
+		...current,
+		...patch,
+	} as GraphicAnimationRecipe);
 }
 
 /** Merge into one channel of one phase's recipe, or remove that channel. */
@@ -1766,7 +1921,12 @@ function withoutStaggeredItem(
 }
 
 /** The kinds that may own a Graphic Animation: every Graphic Item kind. */
-const ANIMATION_KINDS = ['text', 'shape', 'group', 'social-network-icon'] as const;
+const ANIMATION_KINDS = [
+	'text',
+	'shape',
+	'group',
+	'social-network-icon',
+] as const;
 
 /** Only a Graphic Group has direct Graphic Items of its own to stagger. */
 const STAGGER_KINDS = ['group'] as const;
@@ -1861,9 +2021,13 @@ export function toggleGraphicItemStaggerMember(
 	return patchGraphicItemGroup(graphic, groupId, STAGGER_KINDS, (item) => {
 		const current = item.animation?.stagger?.[phase]?.itemIds ?? [];
 		const itemIds = selected
-			? (current.includes(memberId) ? current : [...current, memberId])
+			? (current.includes(memberId)
+					? current
+					: [...current, memberId])
 			: current.filter(id => id !== memberId);
-		return { animation: mergeAnimationStagger(item.animation, phase, { itemIds }) };
+		return {
+			animation: mergeAnimationStagger(item.animation, phase, { itemIds }),
+		};
 	});
 }
 
@@ -1876,7 +2040,10 @@ export function setBroadcastGraphicAnimationRecipe(
 	recipe: GraphicAnimationRecipe | GraphicOnScreenAnimationRecipe | null,
 ): BroadcastGraphicConfig[] {
 	return graphics.map(entry => entry.id === graphicId
-		? { ...entry, animation: setAnimationRecipe(entry.animation, phase, recipe) }
+		? {
+				...entry,
+				animation: setAnimationRecipe(entry.animation, phase, recipe),
+			}
 		: entry);
 }
 
@@ -1895,7 +2062,10 @@ export function patchBroadcastGraphicAnimationRecipe<P extends GraphicAnimationP
 	patch: Partial<GraphicAnimationRecipeFor<P>>,
 ): BroadcastGraphicConfig[] {
 	return graphics.map(entry => entry.id === graphicId
-		? { ...entry, animation: mergeAnimationRecipe(entry.animation, phase, patch) }
+		? {
+				...entry,
+				animation: mergeAnimationRecipe(entry.animation, phase, patch),
+			}
 		: entry);
 }
 
@@ -1907,7 +2077,10 @@ export function patchBroadcastGraphicAnimationChannel<K extends GraphicAnimation
 	patch: Partial<GraphicAnimationChannels[K]> | null,
 ): BroadcastGraphicConfig[] {
 	return graphics.map(entry => entry.id === graphicId
-		? { ...entry, animation: mergeAnimationChannel(entry.animation, phase, channel, patch) }
+		? {
+				...entry,
+				animation: mergeAnimationChannel(entry.animation, phase, channel, patch),
+			}
 		: entry);
 }
 
@@ -1930,7 +2103,10 @@ export function patchBroadcastGraphicAnimationStagger(
 	patch: Partial<GraphicAnimationStagger> | null,
 ): BroadcastGraphicConfig[] {
 	return graphics.map(entry => entry.id === graphicId
-		? { ...entry, animation: mergeAnimationStagger(entry.animation, phase, patch) }
+		? {
+				...entry,
+				animation: mergeAnimationStagger(entry.animation, phase, patch),
+			}
 		: entry);
 }
 
@@ -1946,8 +2122,13 @@ export function toggleBroadcastGraphicStaggerMember(
 			return entry;
 		const current = entry.animation?.stagger?.[phase]?.itemIds ?? [];
 		const itemIds = selected
-			? (current.includes(memberId) ? current : [...current, memberId])
+			? (current.includes(memberId)
+					? current
+					: [...current, memberId])
 			: current.filter(id => id !== memberId);
-		return { ...entry, animation: mergeAnimationStagger(entry.animation, phase, { itemIds }) };
+		return {
+			...entry,
+			animation: mergeAnimationStagger(entry.animation, phase, { itemIds }),
+		};
 	});
 }

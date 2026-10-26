@@ -15,5 +15,7 @@ export function screenMediaSourceUrl(
 	if (source?.kind === 'url')
 		return source.url;
 	const reference = screenMediaSourceReference(source);
-	return reference ? contentUrl(reference) : '';
+	return reference
+		? contentUrl(reference)
+		: '';
 }

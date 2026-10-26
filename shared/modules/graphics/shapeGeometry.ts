@@ -70,10 +70,18 @@ function slantOffsets(width: number, geometry: ShapeGeometry) {
 	const right = clamp(geometry.rightSlant, -span, span);
 
 	const offsets = {
-		leftTop: left > 0 ? left : 0,
-		leftBottom: left < 0 ? -left : 0,
-		rightTop: right > 0 ? right : 0,
-		rightBottom: right < 0 ? -right : 0,
+		leftTop: left > 0
+			? left
+			: 0,
+		leftBottom: left < 0
+			? -left
+			: 0,
+		rightTop: right > 0
+			? right
+			: 0,
+		rightBottom: right < 0
+			? -right
+			: 0,
 	};
 
 	for (const edge of ['Top', 'Bottom'] as const) {
@@ -212,14 +220,21 @@ export function shapeGeometrySummary(geometry: ShapeGeometry): string {
 		parts.push('cut');
 	if (geometry.leftSlant !== 0 || geometry.rightSlant !== 0)
 		parts.push('slanted');
-	return parts.length > 0 ? parts.join(' • ') : 'rectangle';
+	return parts.length > 0
+		? parts.join(' • ')
+		: 'rectangle';
 }
 
 /* ────────────────────────────────────────────────
  * Presets
  * ──────────────────────────────────────────────── */
 
-export const SHAPE_GEOMETRY_PRESET_IDS = ['rectangle', 'rule', 'slanted-edge', 'corner-cut'] as const;
+export const SHAPE_GEOMETRY_PRESET_IDS = [
+	'rectangle',
+	'rule',
+	'slanted-edge',
+	'corner-cut',
+] as const;
 export type ShapeGeometryPresetId = typeof SHAPE_GEOMETRY_PRESET_IDS[number];
 
 export interface ShapeGeometryPresetResult {
@@ -257,13 +272,18 @@ const PRESETS: readonly ShapeGeometryPreset[] = [
 		id: 'rectangle',
 		label: 'Rectangle',
 		icon: 'i-lucide-square',
-		apply: () => ({ geometry: squareShapeGeometry() }),
+		apply: () => ({
+			geometry: squareShapeGeometry(),
+		}),
 	},
 	{
 		id: 'rule',
 		label: 'Rule',
 		icon: 'i-lucide-minus',
-		apply: () => ({ geometry: squareShapeGeometry(), height: GRAPHIC_RULE_PRESET_HEIGHT }),
+		apply: () => ({
+			geometry: squareShapeGeometry(),
+			height: GRAPHIC_RULE_PRESET_HEIGHT,
+		}),
 	},
 	{
 		id: 'slanted-edge',

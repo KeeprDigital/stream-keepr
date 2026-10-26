@@ -36,13 +36,18 @@ describe('createPlayerSchema', () => {
 
 	// name bounds
 	it('accepts name of exactly 200 characters', () => {
-		const result = createPlayerSchema.safeParse({ name: 'a'.repeat(200) });
+		const result = createPlayerSchema.safeParse({
+			name: 'a'.repeat(200),
+		});
 		expect(result.success).toBe(true);
 	});
 
 	// pronouns bounds
 	it('accepts pronouns of exactly 50 characters', () => {
-		const result = createPlayerSchema.safeParse({ ...validInput, pronouns: 'a'.repeat(50) });
+		const result = createPlayerSchema.safeParse({
+			...validInput,
+			pronouns: 'a'.repeat(50),
+		});
 		expect(result.success).toBe(true);
 	});
 
@@ -64,13 +69,19 @@ describe('createPlayerSchema', () => {
 
 	// lgs bounds
 	it('accepts lgs of exactly 200 characters', () => {
-		const result = createPlayerSchema.safeParse({ ...validInput, lgs: 'a'.repeat(200) });
+		const result = createPlayerSchema.safeParse({
+			...validInput,
+			lgs: 'a'.repeat(200),
+		});
 		expect(result.success).toBe(true);
 	});
 
 	// Melee identity is server-managed and never accepted on manual create
 	it('rejects externalId (unknown key on a strict schema)', () => {
-		const result = createPlayerSchema.safeParse({ ...validInput, externalId: 'a'.repeat(100) });
+		const result = createPlayerSchema.safeParse({
+			...validInput,
+			externalId: 'a'.repeat(100),
+		});
 		expect(result.success).toBe(false);
 	});
 

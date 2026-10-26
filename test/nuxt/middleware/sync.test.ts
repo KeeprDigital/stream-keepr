@@ -15,7 +15,9 @@ mockNuxtImport('defineNuxtRouteMiddleware', () => (fn: any) => fn);
 const { default: middleware } = await import('~/middleware/sync');
 
 function createRoute(eventId = '1') {
-	return { params: { eventId } } as any;
+	return {
+		params: { eventId },
+	} as any;
 }
 
 describe('sync middleware', () => {

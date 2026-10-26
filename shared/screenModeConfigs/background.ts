@@ -16,6 +16,8 @@ export const backgroundModeConfigContract = defineScreenModeConfigContract({
 	layers: serverValidatedField<BackgroundLayer[]>(),
 }, {
 	layers: [],
-}, { authoredStacks: ['layers'] });
+}, {
+	authoredStacks: ['layers'],
+});
 
 export type BackgroundModeConfig = ScreenModeConfigOf<typeof backgroundModeConfigContract>;

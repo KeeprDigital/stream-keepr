@@ -36,8 +36,20 @@ const PANEL = `panel-${runId}`;
 /** A whole, publishable draft: a palette, a typography entry, a fill, a surface. */
 function soundDraft(brandColor = '#ff0044', headingSize = 64) {
 	return [
-		{ id: BRAND, kind: 'palette', name: 'Brand', schemaVersion: 1, value: { color: brandColor } },
-		{ id: INK, kind: 'palette', name: 'Ink', schemaVersion: 1, value: { color: '#101014' } },
+		{
+			id: BRAND,
+			kind: 'palette',
+			name: 'Brand',
+			schemaVersion: 1,
+			value: { color: brandColor },
+		},
+		{
+			id: INK,
+			kind: 'palette',
+			name: 'Ink',
+			schemaVersion: 1,
+			value: { color: '#101014' },
+		},
 		{
 			id: HEADING,
 			kind: 'typography',
@@ -101,7 +113,9 @@ function textItem(id: string, typography: object, styleRefs?: object) {
 		typography,
 		overflowPolicy: 'shrink' as const,
 		minFontSize: 24,
-		...(styleRefs ? { styleRefs } : {}),
+		...(styleRefs
+			? { styleRefs }
+			: {}),
 	};
 }
 
@@ -125,10 +139,17 @@ async function request(
 	const response = await throughOneTransportFailure(() => fetch(path, {
 		method: options.method ?? 'GET',
 		headers,
-		body: options.body === undefined ? undefined : JSON.stringify(options.body),
+		body: options.body === undefined
+			? undefined
+			: JSON.stringify(options.body),
 	}));
 	const text = await response.text();
-	return { status: response.status, data: text ? JSON.parse(text) : null };
+	return {
+		status: response.status,
+		data: text
+			? JSON.parse(text)
+			: null,
+	};
 }
 
 const STYLE_SETS = '/api/graphics-style-sets';
@@ -290,7 +311,10 @@ describe('graphic Style Sets', () => {
 		const refused = await request(`${STYLE_SETS}/${styleSetId}/publish`, {
 			method: 'POST',
 			cookie: authorCookie,
-			body: { draftRevision: 1, padding: 'x'.repeat(5000) },
+			body: {
+				draftRevision: 1,
+				padding: 'x'.repeat(5000),
+			},
 		});
 
 		expect(refused.status).toBe(413);
@@ -350,22 +374,31 @@ describe('graphic Style Sets', () => {
 	it('saves a linked template whose properties are inherited from published entries', async () => {
 		// A Broadcast Graphic authored on a Screen: it stores its own resolved values and
 		// records where they came from.
-		expect((await patchStack([{
-			id: 'lower-third',
-			name: 'Lower third',
-			items: [
-				textItem('headline', headingTypography(), { typography: { entryId: HEADING } }),
-				textItem('subhead', headingTypography('#ff0044', 32), {
-					typography: { entryId: HEADING, overrides: { fontSize: 32 } },
-				}),
-			],
-			styleSet: { styleSetId, revision: 1 },
-		}])).status).toBe(200);
+		expect((await patchStack([
+			{
+				id: 'lower-third',
+				name: 'Lower third',
+				items: [
+					textItem('headline', headingTypography(), {
+						typography: { entryId: HEADING },
+					}),
+					textItem('subhead', headingTypography('#ff0044', 32), {
+						typography: {
+							entryId: HEADING,
+							overrides: { fontSize: 32 },
+						},
+					}),
+				],
+				styleSet: { styleSetId, revision: 1 },
+			},
+		])).status).toBe(200);
 
 		const saved = await request(TEMPLATES, {
 			method: 'POST',
 			cookie: authorCookie,
-			body: { source: { eventId, screenId, graphicId: 'lower-third' } },
+			body: {
+				source: { eventId, screenId, graphicId: 'lower-third' },
+			},
 		});
 
 		expect(saved.status).toBe(201);
@@ -378,17 +411,26 @@ describe('graphic Style Sets', () => {
 	it('refuses a template whose Graphic Style Set references do not resolve', async () => {
 		// Appended rather than replacing the stack: the authored Broadcast Graphic above
 		// stays on the Screen, because a later test proves the Style Set never moves it.
-		expect((await patchStack([...await screenStack(), {
-			id: 'dangling',
-			name: 'Dangling',
-			items: [textItem('headline', headingTypography(), { typography: { entryId: 'never-published' } })],
-			styleSet: { styleSetId, revision: 1 },
-		}])).status).toBe(200);
+		expect((await patchStack([
+			...await screenStack(),
+			{
+				id: 'dangling',
+				name: 'Dangling',
+				items: [
+					textItem('headline', headingTypography(), {
+						typography: { entryId: 'never-published' },
+					}),
+				],
+				styleSet: { styleSetId, revision: 1 },
+			},
+		])).status).toBe(200);
 
 		const refused = await request(TEMPLATES, {
 			method: 'POST',
 			cookie: authorCookie,
-			body: { source: { eventId, screenId, graphicId: 'dangling' } },
+			body: {
+				source: { eventId, screenId, graphicId: 'dangling' },
+			},
 		});
 
 		// Storing it would put an entry in the library that no publish, review, or
@@ -407,7 +449,9 @@ describe('graphic Style Sets', () => {
 
 	it('offers no update for a rename, because a rename changes no resolved value', async () => {
 		const renamed = soundDraft().map(entry =>
-			entry.id === HEADING ? { ...entry, name: 'Show heading' } : entry,
+			entry.id === HEADING
+				? { ...entry, name: 'Show heading' }
+				: entry,
 		);
 		expect((await saveDraft(renamed)).status).toBe(200);
 
@@ -424,7 +468,9 @@ describe('graphic Style Sets', () => {
 	it('offers an update when a referenced entry\'s transitive dependency changes', async () => {
 		// `heading` itself is untouched; the palette entry it links its colour to moved.
 		const recoloured = soundDraft('#00ff88').map(entry =>
-			entry.id === HEADING ? { ...entry, name: 'Show heading' } : entry,
+			entry.id === HEADING
+				? { ...entry, name: 'Show heading' }
+				: entry,
 		);
 		expect((await saveDraft(recoloured)).status).toBe(200);
 
@@ -485,7 +531,9 @@ describe('graphic Style Sets', () => {
 
 	it('preserves a previously resolved property as a new local override when review says so', async () => {
 		const larger = soundDraft('#00ff88', 96).map(entry =>
-			entry.id === HEADING ? { ...entry, name: 'Show heading' } : entry,
+			entry.id === HEADING
+				? { ...entry, name: 'Show heading' }
+				: entry,
 		);
 		expect((await saveDraft(larger)).status).toBe(200);
 		expect((await publish()).status).toBe(200);
@@ -522,7 +570,9 @@ describe('graphic Style Sets', () => {
 		const reviewedRevision = (await styleUpdate()).styleSet!.publishedRevision;
 
 		const republished = soundDraft('#2244ff', 96).map(entry =>
-			entry.id === HEADING ? { ...entry, name: 'Show heading' } : entry,
+			entry.id === HEADING
+				? { ...entry, name: 'Show heading' }
+				: entry,
 		);
 		expect((await saveDraft(republished)).status).toBe(200);
 		expect((await publish()).status).toBe(200);

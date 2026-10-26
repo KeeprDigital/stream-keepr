@@ -33,7 +33,9 @@ describe('useScreenGraphicAssetContentUrls', () => {
 		const Child = defineComponent({
 			setup() {
 				const { contentUrl } = useScreenGraphicAssetContentUrls([reference]);
-				return () => h('video', { src: contentUrl(reference) });
+				return () => h('video', {
+					src: contentUrl(reference),
+				});
 			},
 		});
 		const Parent = defineComponent({
@@ -72,7 +74,9 @@ describe('useScreenGraphicAssetContentUrls', () => {
 		const Child = defineComponent({
 			setup() {
 				const { contentUrl } = useScreenGraphicAssetContentUrls([reference]);
-				return () => h('video', { src: contentUrl(reference) });
+				return () => h('video', {
+					src: contentUrl(reference),
+				});
 			},
 		});
 		const showFirst = ref(true);
@@ -80,7 +84,9 @@ describe('useScreenGraphicAssetContentUrls', () => {
 			setup() {
 				provideScreenContext(context);
 				return () => h('div', [
-					showFirst.value ? h(Child, { key: 'first' }) : null,
+					showFirst.value
+						? h(Child, { key: 'first' })
+						: null,
 					h(Child, { key: 'second' }),
 				]);
 			},

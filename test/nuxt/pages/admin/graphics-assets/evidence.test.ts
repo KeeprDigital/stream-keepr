@@ -8,7 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { lastCallTo } from '~~/test/helpers/lastCallTo';
 
-const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+const { mockApiFetch } = vi.hoisted(() => ({
+	mockApiFetch: vi.fn(),
+}));
 
 mockNuxtImport('$fetch', () => mockApiFetch);
 
@@ -205,7 +207,9 @@ describe('the Graphics Asset Library Evidence ledger page', () => {
 
 		expect(mockApiFetch).toHaveBeenCalledWith(
 			'/api/admin/graphics-assets/evidence',
-			expect.objectContaining({ headers: { 'x-graphics-admin-token': 'admin-token' } }),
+			expect.objectContaining({
+				headers: { 'x-graphics-admin-token': 'admin-token' },
+			}),
 		);
 		const text = wrapper.text();
 		// Newest first: the Trash transition was recorded after the byte deletion.
@@ -241,7 +245,9 @@ describe('the Graphics Asset Library Evidence ledger page', () => {
 	it('shows an identity from before the cutover as the era it belongs to', async () => {
 		const anonymous = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
 		mockApiFetch.mockResolvedValue(ledger({
-			entries: [entry({ actor: anonymous })],
+			entries: [
+				entry({ actor: anonymous }),
+			],
 			actorNames: { [anonymous]: 'anonymous era' },
 		}));
 
@@ -258,7 +264,10 @@ describe('the Graphics Asset Library Evidence ledger page', () => {
 		await buttonNamed(wrapper, 'Apply')!.trigger('click');
 		await settle();
 
-		expect(lastQuery()).toMatchObject({ group: ['lifecycle'], limit: 25 });
+		expect(lastQuery()).toMatchObject({
+			group: ['lifecycle'],
+			limit: 25,
+		});
 		// A new question is asked from the top rather than from wherever the
 		// previous answer had been paged to.
 		expect(lastQuery().cursorId).toBeUndefined();

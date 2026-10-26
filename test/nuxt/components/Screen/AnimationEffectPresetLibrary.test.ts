@@ -7,7 +7,10 @@ const preset = {
 	id: 'preset-1',
 	name: 'Reusable fog',
 	revision: 3,
-	selection: { effect: 'fog', params: { speed: 0.4 } },
+	selection: {
+		effect: 'fog',
+		params: { speed: 0.4 },
+	},
 	createdAt: new Date(),
 	updatedAt: new Date(),
 };
@@ -29,7 +32,10 @@ const UButtonStub = defineComponent({
 	template: '<a v-if="to" :href="to"><slot /></a><button v-else type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
 
-async function mountLibrary(selection = { effect: 'caustics' as const, params: { speed: 0.7 } }) {
+async function mountLibrary(selection = {
+	effect: 'caustics' as const,
+	params: { speed: 0.7 },
+}) {
 	const { default: Library } = await import('../../../../app/components/Screen/AnimationEffectPresetLibrary.vue');
 	const wrapper = mount(Library, {
 		props: { selection },
@@ -58,7 +64,9 @@ describe('animation Effect Preset library editor', () => {
 		await wrapper.get('[data-testid="animation-effect-preset-select"]').setValue(preset.id);
 		await wrapper.get('[data-testid="animation-effect-preset-apply"]').trigger('click');
 
-		expect(wrapper.emitted('apply')).toEqual([[preset.selection]]);
+		expect(wrapper.emitted('apply')).toEqual([
+			[preset.selection],
+		]);
 		expect(wrapper.get('[data-testid="animation-effect-preset-export"]').attributes('href'))
 			.toBe(`/api/animation-effect-presets/${preset.id}/export`);
 	});
@@ -70,7 +78,10 @@ describe('animation Effect Preset library editor', () => {
 
 		expect(repository.create).toHaveBeenCalledWith({
 			name: 'Updated effect',
-			selection: { effect: 'caustics', params: { speed: 0.7 } },
+			selection: {
+				effect: 'caustics',
+				params: { speed: 0.7 },
+			},
 		});
 
 		await wrapper.get('[data-testid="animation-effect-preset-select"]').setValue(preset.id);
@@ -79,7 +90,10 @@ describe('animation Effect Preset library editor', () => {
 		expect(repository.update).toHaveBeenCalledWith(preset.id, {
 			name: 'Updated effect',
 			revision: 3,
-			selection: { effect: 'caustics', params: { speed: 0.7 } },
+			selection: {
+				effect: 'caustics',
+				params: { speed: 0.7 },
+			},
 		});
 	});
 
@@ -87,7 +101,9 @@ describe('animation Effect Preset library editor', () => {
 		const wrapper = await mountLibrary();
 		const input = wrapper.get('[data-testid="animation-effect-preset-import"]');
 		const file = new File(['portable preset'], 'shared.skeffect', { type: 'application/json' });
-		Object.defineProperty(input.element, 'files', { value: [file] });
+		Object.defineProperty(input.element, 'files', {
+			value: [file],
+		});
 
 		await input.trigger('change');
 		await flushPromises();

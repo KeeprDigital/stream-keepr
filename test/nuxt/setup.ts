@@ -85,7 +85,10 @@ vi.mock('ably', () => {
 	}
 
 	class InertClient {
-		auth = { authorize: async () => ({}) };
+		auth = {
+			authorize: async () => ({}),
+		};
+
 		connection = {
 			id: 'test-connection',
 			state: 'initialized',
@@ -104,5 +107,7 @@ vi.mock('ably', () => {
 		};
 	}
 
-	return { default: { Realtime: InertClient, Rest: InertClient } };
+	return {
+		default: { Realtime: InertClient, Rest: InertClient },
+	};
 });

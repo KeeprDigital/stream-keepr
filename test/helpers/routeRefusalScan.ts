@@ -139,7 +139,9 @@ function constantInitialisers(source: ts.SourceFile): Map<string, ts.Expression 
 			&& ts.isVariableDeclarationList(node.parent)
 			&& node.parent.getFirstToken()?.kind === ts.SyntaxKind.ConstKeyword
 		) {
-			constants.set(node.name.text, constants.has(node.name.text) ? undefined : node.initializer);
+			constants.set(node.name.text, constants.has(node.name.text)
+				? undefined
+				: node.initializer);
 		}
 		node.forEachChild(visit);
 	}
@@ -183,7 +185,9 @@ function literalValue(
 }
 
 function readNumber(expression: ts.Expression): number | undefined {
-	return ts.isNumericLiteral(expression) ? Number(expression.text) : undefined;
+	return ts.isNumericLiteral(expression)
+		? Number(expression.text)
+		: undefined;
 }
 
 function readString(expression: ts.Expression): string | undefined {
@@ -195,7 +199,9 @@ function readString(expression: ts.Expression): string | undefined {
 /** The call as one line, so a failure message stays readable. */
 function excerpt(node: ts.Node): string {
 	const text = node.getText().replace(/\s+/g, ' ').trim();
-	return text.length > 160 ? `${text.slice(0, 157)}...` : text;
+	return text.length > 160
+		? `${text.slice(0, 157)}...`
+		: text;
 }
 
 /**
@@ -214,7 +220,11 @@ export function scanSourceForRefusals(label: string, text: string): ScannedRefus
 	function visit(node: ts.Node) {
 		if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'createError') {
 			const site = `${label}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
-			refusals.push({ site, source: excerpt(node), ...readRefusal(node, constants) });
+			refusals.push({
+				site,
+				source: excerpt(node),
+				...readRefusal(node, constants),
+			});
 		}
 		node.forEachChild(visit);
 	}
@@ -383,10 +393,18 @@ export function firstPartyPathAliases(tsconfigPath: string = NUXT_TSCONFIG): rea
 		if (target === undefined)
 			continue;
 		const wildcard = key.endsWith('/*');
-		const resolved = resolve(base, target.endsWith('/*') ? target.slice(0, -2) : target);
+		const resolved = resolve(base, target.endsWith('/*')
+			? target.slice(0, -2)
+			: target);
 		if (!isFirstParty(resolved))
 			continue;
-		aliases.push({ prefix: wildcard ? `${key.slice(0, -2)}/` : key, target: resolved, wildcard });
+		aliases.push({
+			prefix: wildcard
+				? `${key.slice(0, -2)}/`
+				: key,
+			target: resolved,
+			wildcard,
+		});
 	}
 
 	if (aliases.length === 0) {
@@ -425,15 +443,20 @@ function resolveModule(specifier: string, fromFile: string): { file: string } | 
 		: specifier === candidate.prefix));
 
 	let base: string;
-	if (alias !== undefined)
-		base = alias.wildcard ? resolve(alias.target, specifier.slice(alias.prefix.length)) : alias.target;
-	else if (specifier.startsWith('.'))
+	if (alias !== undefined) {
+		base = alias.wildcard
+			? resolve(alias.target, specifier.slice(alias.prefix.length))
+			: alias.target;
+	}
+	else if (specifier.startsWith('.')) {
 		base = resolve(dirname(fromFile), specifier);
-	else
+	}
+	else {
 		// A bare or virtual specifier (`h3`, `ably`, `drizzle-orm`, `#imports`) is not the
 		// route's own code. A refusal from a dependency is not one this repository can
 		// list or rename.
 		return undefined;
+	}
 
 	for (const candidate of [`${base}.ts`, `${base}/index.ts`, base]) {
 		if (existsSync(candidate) && statSync(candidate).isFile())
@@ -475,7 +498,9 @@ function scanModule(file: string): ScannedModule {
 		const resolved = resolveModule(specifier.text, file);
 		if (resolved === undefined)
 			return;
-		imports.push('file' in resolved ? { file: resolved.file } : { unfollowed: `${site}: ${resolved.unfollowed}` });
+		imports.push('file' in resolved
+			? { file: resolved.file }
+			: { unfollowed: `${site}: ${resolved.unfollowed}` });
 	}
 
 	function visit(node: ts.Node) {
@@ -490,7 +515,11 @@ function scanModule(file: string): ScannedModule {
 	}
 	visit(source);
 
-	const scanned = { text, refusals: scanSourceForRefusals(label, text), imports };
+	const scanned = {
+		text,
+		refusals: scanSourceForRefusals(label, text),
+		imports,
+	};
 	scannedModules.set(file, scanned);
 	return scanned;
 }
@@ -621,7 +650,9 @@ export function serverMiddlewareFiles(directory: string = MIDDLEWARE_DIRECTORY):
 	// one directory down runs on every request exactly as a top-level one does, and a
 	// flat read would have skipped it in silence. Declaration files are excluded for the
 	// reason a type-only import is — they cannot carry a throw.
-	const files = existsSync(directory) ? typeScriptFilesUnder(directory) : [];
+	const files = existsSync(directory)
+		? typeScriptFilesUnder(directory)
+		: [];
 
 	if (files.length === 0) {
 		throw new Error(

@@ -35,7 +35,12 @@ async function mountComponent(props: Record<string, unknown>) {
 	return mount(CounterItem, {
 		props: {
 			counter: { type: 'poison', value: 3 },
-			config: { key: 'poison', label: 'Poison', shortLabel: 'Poison', icon: 'i-lucide-skull' },
+			config: {
+				key: 'poison',
+				label: 'Poison',
+				shortLabel: 'Poison',
+				icon: 'i-lucide-skull',
+			},
 			...props,
 		},
 		global: {

@@ -27,9 +27,15 @@ vi.stubGlobal('createError', (input: { statusCode: number; message: string; caus
 
 describe('the Graphics Asset Library public module', () => {
 	it('reports catalogue, staging, and canonical health as separate domain results', async () => {
-		const catalogue = { checkHealth: vi.fn().mockResolvedValue({ outcome: 'healthy' }) };
-		const staging = { checkHealth: vi.fn().mockResolvedValue({ outcome: 'healthy' }) };
-		const canonical = { checkHealth: vi.fn().mockResolvedValue({ outcome: 'healthy' }) };
+		const catalogue = {
+			checkHealth: vi.fn().mockResolvedValue({ outcome: 'healthy' }),
+		};
+		const staging = {
+			checkHealth: vi.fn().mockResolvedValue({ outcome: 'healthy' }),
+		};
+		const canonical = {
+			checkHealth: vi.fn().mockResolvedValue({ outcome: 'healthy' }),
+		};
 		const library = createGraphicsAssetLibrary({
 			catalogue,
 			staging,
@@ -52,14 +58,18 @@ describe('the Graphics Asset Library public module', () => {
 	});
 
 	it('keeps checking every component and returns retryable structured degradation', async () => {
-		const catalogue = { checkHealth: vi.fn().mockRejectedValue(new Error('D1 unavailable')) };
+		const catalogue = {
+			checkHealth: vi.fn().mockRejectedValue(new Error('D1 unavailable')),
+		};
 		const staging = {
 			checkHealth: vi.fn().mockResolvedValue({
 				outcome: 'unavailable',
 				reason: { code: 'transient-object-store-failure', retryable: true },
 			}),
 		};
-		const canonical = { checkHealth: vi.fn().mockResolvedValue({ outcome: 'healthy' }) };
+		const canonical = {
+			checkHealth: vi.fn().mockResolvedValue({ outcome: 'healthy' }),
+		};
 		const library = createGraphicsAssetLibrary({
 			catalogue,
 			staging,

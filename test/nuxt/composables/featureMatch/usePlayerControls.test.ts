@@ -31,7 +31,9 @@ describe('usePlayerControls', () => {
 	});
 
 	it('delegates updateCounters to store', () => {
-		const counters = [{ type: 'poison', value: 3 }];
+		const counters = [
+			{ type: 'poison', value: 3 },
+		];
 		const controls = usePlayerControls(10, 'player1');
 		controls.updateCounters(counters);
 		expect(mockStore.updatePlayerFeatureMatchState).toHaveBeenCalledWith(1, 10, 'player1', { counters });

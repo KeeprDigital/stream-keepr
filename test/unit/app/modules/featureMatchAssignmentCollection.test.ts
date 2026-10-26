@@ -26,7 +26,12 @@ describe('feature Match Assignment collection', () => {
 
 	it('removes the previous slot assignment for the same Match in the loaded Round', () => {
 		const oldSlot = assignment({ id: 1, slotId: 100, matchId: 1000 });
-		const otherRound = assignment({ id: 2, roundId: 11, slotId: 200, matchId: 1000 });
+		const otherRound = assignment({
+			id: 2,
+			roundId: 11,
+			slotId: 200,
+			matchId: 1000,
+		});
 		const saved = assignment({ id: 3, slotId: 300, matchId: 1000 });
 
 		expect(applySavedFeatureMatchAssignment([oldSlot, otherRound], saved)).toEqual([otherRound, saved]);
@@ -35,7 +40,12 @@ describe('feature Match Assignment collection', () => {
 	it('updates by assignment id while preserving uniqueness rules', () => {
 		const current = assignment({ id: 1, slotId: 100, matchId: 1000 });
 		const staleSameMatch = assignment({ id: 2, slotId: 200, matchId: 3000 });
-		const updated = assignment({ id: 1, slotId: 100, matchId: 3000, note: 'keep' });
+		const updated = assignment({
+			id: 1,
+			slotId: 100,
+			matchId: 3000,
+			note: 'keep',
+		});
 
 		expect(applyUpdatedFeatureMatchAssignment([current, staleSameMatch], 1, updated)).toEqual([updated]);
 	});

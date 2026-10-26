@@ -7,7 +7,9 @@ export function getOrdinalSuffix(n: number): string {
 	const v = n % 100;
 	const idx1 = (v - 20) % 10;
 	const idx2 = v;
-	return (idx1 >= 0 && idx1 < ORDINAL_SUFFIXES.length ? ORDINAL_SUFFIXES[idx1] : undefined) ?? ORDINAL_SUFFIXES[idx2] ?? ORDINAL_SUFFIXES[0]!;
+	return (idx1 >= 0 && idx1 < ORDINAL_SUFFIXES.length
+		? ORDINAL_SUFFIXES[idx1]
+		: undefined) ?? ORDINAL_SUFFIXES[idx2] ?? ORDINAL_SUFFIXES[0]!;
 }
 
 /**

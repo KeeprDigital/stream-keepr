@@ -37,14 +37,21 @@ describe('the testing guide (README.md § Testing)', () => {
 		expect(row).toBeDefined();
 		const listed = row!.match(/browser gates[^|]*/u)?.[0] ?? '';
 
-		expect([...listed.matchAll(/`([a-z-]+)`/gu)].map(match => match[1])).toEqual(browserGates);
+		expect([
+			...listed.matchAll(/`([a-z-]+)`/gu),
+		].map(match => match[1])).toEqual(browserGates);
 		// The negative control: Key matte was the gate the guide once left out.
 		expect(browserGates).toContain('key-matte');
 	});
 });
 
 /** The documents agents and maintainers navigate between. CHANGELOG.md is generated. */
-const NAVIGATED_DOCUMENTS = ['README.md', 'CONTEXT.md', 'DECISIONS.md', 'AGENTS.md'];
+const NAVIGATED_DOCUMENTS = [
+	'README.md',
+	'CONTEXT.md',
+	'DECISIONS.md',
+	'AGENTS.md',
+];
 
 /** Markdown without its fenced code blocks, which hold no heading or link. */
 function withoutFences(markdown: string): string {
@@ -64,7 +71,9 @@ function headingAnchors(markdown: string): Set<string> {
 		const slug = text!.toLowerCase().replace(/[^\p{L}\p{N}\p{M}\p{Pc}\- ]/gu, '').replace(/ /gu, '-');
 		const count = seen.get(slug) ?? 0;
 		seen.set(slug, count + 1);
-		anchors.add(count === 0 ? slug : `${slug}-${count}`);
+		anchors.add(count === 0
+			? slug
+			: `${slug}-${count}`);
 	}
 	return anchors;
 }
@@ -95,7 +104,9 @@ describe('local document references', () => {
 			const [path, anchor] = target!.split('#') as [string, string | undefined];
 			let document: string;
 			try {
-				document = readDocument(path === '' ? name : path);
+				document = readDocument(path === ''
+					? name
+					: path);
 			}
 			catch {
 				broken.push(target!);

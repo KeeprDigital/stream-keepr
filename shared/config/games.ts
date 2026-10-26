@@ -53,7 +53,9 @@ export function getGameConfig(game: Game): GameConfig {
 }
 
 export function getGameDefaults(game: Game): FeatureMatchDefaults {
-	return { ...(GAME_CONFIGS[game]?.defaults ?? DEFAULT_FEATURE_MATCH_DEFAULTS) };
+	return {
+		...(GAME_CONFIGS[game]?.defaults ?? DEFAULT_FEATURE_MATCH_DEFAULTS),
+	};
 }
 
 export function getCounterTypeConfigs(game: Game): CounterTypeConfig[] {

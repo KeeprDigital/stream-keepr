@@ -52,7 +52,11 @@ const useMockCardStore = defineStore('mock-card-controls', () => {
 	};
 });
 
-const noopResetStore = () => ({ $reset: vi.fn() });
+function noopResetStore() {
+	return {
+		$reset: vi.fn(),
+	};
+}
 
 const mockOverlay = {
 	create: vi.fn(() => ({
@@ -60,7 +64,11 @@ const mockOverlay = {
 	})),
 };
 
-mockNuxtImport('useEventStore', () => () => ({ loadEvent: vi.fn(), event: null, $reset: vi.fn() }));
+mockNuxtImport('useEventStore', () => () => ({
+	loadEvent: vi.fn(),
+	event: null,
+	$reset: vi.fn(),
+}));
 mockNuxtImport('usePlayerStore', () => () => noopResetStore());
 mockNuxtImport('useArchetypeStore', () => () => noopResetStore());
 mockNuxtImport('useMetagameStore', () => () => noopResetStore());
@@ -76,7 +84,9 @@ mockNuxtImport('clearPlayerDeckCache', () => vi.fn());
 mockNuxtImport('navigateTo', () => vi.fn());
 mockNuxtImport('useCardStore', () => () => {
 	const store = useMockCardStore();
-	return Object.assign(store, { $reset: vi.fn() });
+	return Object.assign(store, {
+		$reset: vi.fn(),
+	});
 });
 mockNuxtImport('useOverlay', () => () => mockOverlay);
 

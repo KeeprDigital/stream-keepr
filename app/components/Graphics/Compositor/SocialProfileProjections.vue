@@ -52,7 +52,9 @@ const { canAuthor, edit } = useCompositorEditing(
 	graphics => emit('update:graphics', graphics),
 );
 const selection = computed(() => resolveGraphicsSelection(props.graphics, props.selectedTarget));
-const selectedGraphic = computed(() => selection.value.kind === 'graphic' ? selection.value.graphic : null);
+const selectedGraphic = computed(() => selection.value.kind === 'graphic'
+	? selection.value.graphic
+	: null);
 const projections = computed(() => selectedGraphic.value?.socialProfileProjections ?? []);
 const screenProjectionCount = computed(() => props.graphics.reduce(
 	(total, graphic) => total + (graphic.socialProfileProjections?.length ?? 0),
@@ -69,7 +71,11 @@ const talentSources = computed(() => (selectedGraphic.value?.sources ?? []).filt
 
 const sourceOptions = computed(() => talentSources.value.map(source => ({
 	label: source.from
-		? `${source.label} (${source.from.relation === 'commentator1' ? 'Event Talent 1' : source.from.relation === 'commentator2' ? 'Event Talent 2' : 'derived'})`
+		? `${source.label} (${source.from.relation === 'commentator1'
+			? 'Event Talent 1'
+			: source.from.relation === 'commentator2'
+				? 'Event Talent 2'
+				: 'derived'})`
 		: `${source.label} (operator selected)`,
 	value: source.key,
 })));
@@ -148,7 +154,9 @@ function removeProjection(key: string, deletePresentationGroup: boolean) {
 }
 
 function consumerCount(key: string) {
-	return selectedGraphic.value ? socialProfileProjectionConsumerIds(selectedGraphic.value, key).length : 0;
+	return selectedGraphic.value
+		? socialProfileProjectionConsumerIds(selectedGraphic.value, key).length
+		: 0;
 }
 
 const TRANSITION_LABELS: Record<SocialProfileTransition, string> = {

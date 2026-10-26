@@ -6,20 +6,58 @@ import { canvasSnapLines, manipulateRect, nudgeRect } from '~~/app/modules/graph
  * stored top-left rectangle, in canvas pixels.
  */
 
-const RECT = { x: 100, y: 100, width: 200, height: 100 };
-const SNAP = { lines: canvasSnapLines({ width: 1920, height: 1080 }), threshold: 6 };
+const RECT = {
+	x: 100,
+	y: 100,
+	width: 200,
+	height: 100,
+};
+const SNAP = {
+	lines: canvasSnapLines({ width: 1920, height: 1080 }),
+	threshold: 6,
+};
 
 describe('canvas manipulation', () => {
 	it('moves a rectangle by the drag, in whole pixels', () => {
-		expect(manipulateRect(RECT, 'move', { x: 10.4, y: -20.6 }).rect).toEqual({ x: 110, y: 79, width: 200, height: 100 });
+		expect(manipulateRect(RECT, 'move', { x: 10.4, y: -20.6 }).rect).toEqual({
+			x: 110,
+			y: 79,
+			width: 200,
+			height: 100,
+		});
 	});
 
 	it('resizes from each edge and corner, keeping the opposite side where it was', () => {
-		expect(manipulateRect(RECT, 'e', { x: 50, y: 99 }).rect).toEqual({ x: 100, y: 100, width: 250, height: 100 });
-		expect(manipulateRect(RECT, 'w', { x: 50, y: 0 }).rect).toEqual({ x: 150, y: 100, width: 150, height: 100 });
-		expect(manipulateRect(RECT, 'n', { x: 0, y: -40 }).rect).toEqual({ x: 100, y: 60, width: 200, height: 140 });
-		expect(manipulateRect(RECT, 'se', { x: 10, y: 20 }).rect).toEqual({ x: 100, y: 100, width: 210, height: 120 });
-		expect(manipulateRect(RECT, 'nw', { x: 10, y: 20 }).rect).toEqual({ x: 110, y: 120, width: 190, height: 80 });
+		expect(manipulateRect(RECT, 'e', { x: 50, y: 99 }).rect).toEqual({
+			x: 100,
+			y: 100,
+			width: 250,
+			height: 100,
+		});
+		expect(manipulateRect(RECT, 'w', { x: 50, y: 0 }).rect).toEqual({
+			x: 150,
+			y: 100,
+			width: 150,
+			height: 100,
+		});
+		expect(manipulateRect(RECT, 'n', { x: 0, y: -40 }).rect).toEqual({
+			x: 100,
+			y: 60,
+			width: 200,
+			height: 140,
+		});
+		expect(manipulateRect(RECT, 'se', { x: 10, y: 20 }).rect).toEqual({
+			x: 100,
+			y: 100,
+			width: 210,
+			height: 120,
+		});
+		expect(manipulateRect(RECT, 'nw', { x: 10, y: 20 }).rect).toEqual({
+			x: 110,
+			y: 120,
+			width: 190,
+			height: 80,
+		});
 	});
 
 	it('never resizes below one pixel, however far the handle goes past the other side', () => {
@@ -28,10 +66,25 @@ describe('canvas manipulation', () => {
 	});
 
 	it('keeps the starting aspect ratio when asked', () => {
-		expect(manipulateRect(RECT, 'se', { x: 200, y: 0 }, { keepRatio: true }).rect).toEqual({ x: 100, y: 100, width: 400, height: 200 });
-		expect(manipulateRect(RECT, 'nw', { x: -200, y: 0 }, { keepRatio: true }).rect).toEqual({ x: -100, y: 0, width: 400, height: 200 });
+		expect(manipulateRect(RECT, 'se', { x: 200, y: 0 }, { keepRatio: true }).rect).toEqual({
+			x: 100,
+			y: 100,
+			width: 400,
+			height: 200,
+		});
+		expect(manipulateRect(RECT, 'nw', { x: -200, y: 0 }, { keepRatio: true }).rect).toEqual({
+			x: -100,
+			y: 0,
+			width: 400,
+			height: 200,
+		});
 		// An edge handle grows the other axis about the centre line.
-		expect(manipulateRect(RECT, 'e', { x: 200, y: 0 }, { keepRatio: true }).rect).toEqual({ x: 100, y: 50, width: 400, height: 200 });
+		expect(manipulateRect(RECT, 'e', { x: 200, y: 0 }, { keepRatio: true }).rect).toEqual({
+			x: 100,
+			y: 50,
+			width: 400,
+			height: 200,
+		});
 	});
 
 	it('snaps a moving edge or centre to the canvas edges and centre lines', () => {
@@ -56,6 +109,11 @@ describe('canvas manipulation', () => {
 	});
 
 	it('nudges by whole pixels', () => {
-		expect(nudgeRect(RECT, { x: -10, y: 1 })).toEqual({ x: 90, y: 101, width: 200, height: 100 });
+		expect(nudgeRect(RECT, { x: -10, y: 1 })).toEqual({
+			x: 90,
+			y: 101,
+			width: 200,
+			height: 100,
+		});
 	});
 });

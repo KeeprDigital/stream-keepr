@@ -61,15 +61,21 @@ function getDeckForCurrentPhase(
 	playerId: number | null,
 	playerData: PlayerSlotData | null | undefined,
 ): { name: string | null; colors: string | null } {
-	const defaultName = playerData?.gameData?.type === 'mtg' ? playerData.gameData.deckName ?? null : null;
-	const defaultColors = playerData?.gameData?.type === 'mtg' ? playerData.gameData.deckColors ?? null : null;
+	const defaultName = playerData?.gameData?.type === 'mtg'
+		? playerData.gameData.deckName ?? null
+		: null;
+	const defaultColors = playerData?.gameData?.type === 'mtg'
+		? playerData.gameData.deckColors ?? null
+		: null;
 	if (!playerId)
 		return { name: defaultName, colors: defaultColors };
 	const player = findPlayer(playerId);
 	if (!player)
 		return { name: defaultName, colors: defaultColors };
 	const deck = getActiveDeckForPlayer(player);
-	return deck ? { name: deck.name, colors: deck.colors } : { name: defaultName, colors: defaultColors };
+	return deck
+		? { name: deck.name, colors: deck.colors }
+		: { name: defaultName, colors: defaultColors };
 }
 
 const player1Deck = computed(() =>
@@ -144,7 +150,9 @@ function getScoreColor(side: 'player1' | 'player2') {
 		return 'info';
 	}
 
-	return winnerSide.value === side ? 'success' : 'neutral';
+	return winnerSide.value === side
+		? 'success'
+		: 'neutral';
 }
 </script>
 

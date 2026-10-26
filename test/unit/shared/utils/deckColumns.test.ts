@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { getDeckColumnCount, splitDeckGroupsIntoColumns } from '~~/shared/utils/deckColumns';
 
 function makeGroup(name: string, count: number) {
-	return [name, Array.from({ length: count }, (_, index) => index)] as const;
+	return [
+		name,
+		Array.from({ length: count }, (_, index) => index),
+	] as const;
 }
 
 describe('deckColumns', () => {

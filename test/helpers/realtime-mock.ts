@@ -78,7 +78,9 @@ export function createContinuitySignal() {
 			};
 		}),
 		reattach(channel: string) {
-			for (const handler of [...handlers.get(channel) ?? []])
+			for (const handler of [
+				...handlers.get(channel) ?? [],
+			])
 				handler();
 		},
 	};
@@ -108,7 +110,9 @@ export function createAttachSignal() {
 		}),
 		attach(channel: string) {
 			attached.add(channel);
-			const handlers = [...waiting.get(channel) ?? []];
+			const handlers = [
+				...waiting.get(channel) ?? [],
+			];
 			waiting.delete(channel);
 			for (const handler of handlers)
 				handler();

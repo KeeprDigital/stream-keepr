@@ -45,7 +45,9 @@ export function useEventRealtimeSession() {
 		(eventId) => {
 			// The transport scopes its token to the room's Event internally, so
 			// an event switch is just a room change.
-			realtime.setRoom(eventId ? eventRealtimeChannel(eventId) : null);
+			realtime.setRoom(eventId
+				? eventRealtimeChannel(eventId)
+				: null);
 		},
 		{ immediate: true },
 	);

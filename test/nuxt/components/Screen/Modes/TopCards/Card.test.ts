@@ -45,7 +45,10 @@ describe('screenTopCardsCard', () => {
 
 	it('falls back to the card name when there is no scryfall id', () => {
 		const wrapper = mount(Card, {
-			props: { ...baseProps, entry: { ...entry, scryfallId: null } },
+			props: {
+				...baseProps,
+				entry: { ...entry, scryfallId: null },
+			},
 		});
 
 		expect(wrapper.find('img').exists()).toBe(false);
@@ -61,7 +64,12 @@ describe('screenTopCardsCard', () => {
 
 	it('hides the rank badge, stat badge, and name when disabled', () => {
 		const wrapper = mount(Card, {
-			props: { ...baseProps, showRank: false, showName: false, statText: null },
+			props: {
+				...baseProps,
+				showRank: false,
+				showName: false,
+				statText: null,
+			},
 		});
 
 		expect(wrapper.find('[data-testid="top-cards-rank-badge"]').exists()).toBe(false);

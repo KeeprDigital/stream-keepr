@@ -53,7 +53,11 @@ export function createGraphicStyleEntry(options: {
 
 	switch (options.kind) {
 		case 'palette':
-			return { ...base, kind: 'palette', value: { color: '#ffffff' } };
+			return {
+				...base,
+				kind: 'palette',
+				value: { color: '#ffffff' },
+			};
 
 		case 'typography':
 			return palette
@@ -75,27 +79,48 @@ export function createGraphicStyleEntry(options: {
 
 		case 'fill':
 			return palette
-				? { ...base, kind: 'fill', value: { type: 'solid', colorEntryId: palette } }
+				? {
+						...base,
+						kind: 'fill',
+						value: { type: 'solid', colorEntryId: palette },
+					}
 				: null;
 
 		case 'surface-style':
-			return { ...base, kind: 'surface-style', value: { fillOpacity: 1 } };
+			return {
+				...base,
+				kind: 'surface-style',
+				value: { fillOpacity: 1 },
+			};
 
 		case 'media-treatment':
 			return {
 				...base,
 				kind: 'media-treatment',
-				value: { fit: 'cover', focalPosition: { horizontal: 0.5, vertical: 0.5 }, opacity: 1 },
+				value: {
+					fit: 'cover',
+					focalPosition: { horizontal: 0.5, vertical: 0.5 },
+					opacity: 1,
+				},
 			};
 
 		case 'shape-geometry':
-			return { ...base, kind: 'shape-geometry', value: squareShapeGeometry() };
+			return {
+				...base,
+				kind: 'shape-geometry',
+				value: squareShapeGeometry(),
+			};
 
 		case 'animation-recipe':
 			return {
 				...base,
 				kind: 'animation-recipe',
-				value: { duration: 300, easing: 'ease-out', delay: 0, fade: { opacity: 0 } },
+				value: {
+					duration: 300,
+					easing: 'ease-out',
+					delay: 0,
+					fade: { opacity: 0 },
+				},
 			};
 	}
 }
@@ -180,7 +205,9 @@ function patchOwnerRefs(
 				return item;
 			return {
 				...item,
-				children: item.children.map(child => child.id === itemId ? patched(child) : child),
+				children: item.children.map(child => child.id === itemId
+					? patched(child)
+					: child),
 			};
 		}),
 	};
@@ -200,7 +227,10 @@ export function bindGraphicStyleRef(
 	entryId: string,
 	resolution: GraphicStyleSetResolution,
 ): BroadcastGraphicConfig {
-	const bound = patchOwnerRefs(graphic, itemId, refs => ({ ...refs, [slot]: { entryId } }));
+	const bound = patchOwnerRefs(graphic, itemId, refs => ({
+		...refs,
+		[slot]: { entryId },
+	}));
 	return applyGraphicStyleSet(bound, resolution);
 }
 
@@ -294,7 +324,9 @@ export function recaptureGraphicStyleOverrides(
 	stored: BroadcastGraphicConfig,
 ): BroadcastGraphicConfig {
 	const reconciled = graphic.styleSet?.revision === publishedRevision;
-	const storedOwners = reconciled ? null : styleRefOwnerNodes(stored);
+	const storedOwners = reconciled
+		? null
+		: styleRefOwnerNodes(stored);
 
 	/** Whether this slot's deviations can be read as the author's own. */
 	function derivable(itemId: string | null, slot: GraphicStyleSlot): boolean {
@@ -354,7 +386,10 @@ export function recaptureGraphicStyleOverrides(
 			const updated = recaptured(item, item.id);
 			if (updated.type !== 'group')
 				return updated;
-			return { ...updated, children: updated.children.map(child => recaptured(child, child.id)) };
+			return {
+				...updated,
+				children: updated.children.map(child => recaptured(child, child.id)),
+			};
 		}),
 	};
 }
@@ -365,7 +400,9 @@ export function recaptureGraphicStyleOverrides(
  * Item and group child under its own id.
  */
 function styleRefOwnerNodes(graphic: BroadcastGraphicConfig): Map<string | null, GraphicStyleOwnerNode> {
-	const owners = new Map<string | null, GraphicStyleOwnerNode>([[null, graphic]]);
+	const owners = new Map<string | null, GraphicStyleOwnerNode>([
+		[null, graphic],
+	]);
 	for (const item of graphic.items) {
 		owners.set(item.id, item);
 		if (item.type === 'group') {

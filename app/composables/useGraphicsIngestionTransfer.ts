@@ -132,7 +132,11 @@ export function useGraphicsIngestionTransfer(options: {
 	): Promise<GraphicsIngestionOperation> => {
 		return await observeOperationRequest(operation.id, $fetch<GraphicsIngestionOperation>(
 			`${ingestion}/${operation.id}/content`,
-			{ method: 'PUT', headers: apiHeaders.getHeaders(), body: source },
+			{
+				method: 'PUT',
+				headers: apiHeaders.getHeaders(),
+				body: source,
+			},
 		));
 	};
 
@@ -142,7 +146,10 @@ export function useGraphicsIngestionTransfer(options: {
 	): Promise<GraphicsIngestionOperation> => {
 		const started = await $fetch<GraphicsIngestionOperation>(
 			`${ingestion}/${operation.id}/multipart`,
-			{ method: 'POST', headers: apiHeaders.getHeaders() },
+			{
+				method: 'POST',
+				headers: apiHeaders.getHeaders(),
+			},
 		);
 		observe(started);
 		if (!started.transfer)
@@ -168,7 +175,11 @@ export function useGraphicsIngestionTransfer(options: {
 					try {
 						observe(await $fetch<GraphicsIngestionOperation>(
 							`${ingestion}/${operation.id}/multipart/parts/${partNumber}`,
-							{ method: 'PUT', headers: apiHeaders.getHeaders(), body: part },
+							{
+								method: 'PUT',
+								headers: apiHeaders.getHeaders(),
+								body: part,
+							},
 						));
 						break;
 					}
@@ -200,7 +211,10 @@ export function useGraphicsIngestionTransfer(options: {
 
 		return await observeOperationRequest(operation.id, $fetch<GraphicsIngestionOperation>(
 			`${ingestion}/${operation.id}/multipart/complete`,
-			{ method: 'POST', headers: apiHeaders.getHeaders() },
+			{
+				method: 'POST',
+				headers: apiHeaders.getHeaders(),
+			},
 		));
 	};
 

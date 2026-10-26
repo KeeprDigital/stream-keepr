@@ -38,11 +38,35 @@ mockNuxtImport('useArchetypeSpotlightModeData', () => () => ({
 }));
 
 function pilot(id: number, name: string, position: number | null) {
-	return { id, name, position, points: 12, wins: 4, losses: 1, draws: 0 };
+	return {
+		id,
+		name,
+		position,
+		points: 12,
+		wins: 4,
+		losses: 1,
+		draws: 0,
+	};
 }
 
 function card(id: number, name: string, inclusionRate: number) {
-	return { id, name, cardType: 'Instant', scryfallId: null, colors: 'R', cmc: 1, manaCost: '{R}', inclusionRate, avgCopies: 4, totalCopies: 8, mainboardCount: 8, sideboardCount: 0, mainboardDeckCount: 2, sideboardDeckCount: 0, deckCount: 2 };
+	return {
+		id,
+		name,
+		cardType: 'Instant',
+		scryfallId: null,
+		colors: 'R',
+		cmc: 1,
+		manaCost: '{R}',
+		inclusionRate,
+		avgCopies: 4,
+		totalCopies: 8,
+		mainboardCount: 8,
+		sideboardCount: 0,
+		mainboardDeckCount: 2,
+		sideboardDeckCount: 0,
+		deckCount: 2,
+	};
 }
 
 async function mountComponent() {
@@ -56,7 +80,9 @@ async function mountComponent() {
 
 describe('screenModesArchetypeSpotlightDisplay', () => {
 	beforeEach(() => {
-		screen.value = { screenConfig: { primaryTextColor: '#123456', secondaryTextColor: '#654321' } };
+		screen.value = {
+			screenConfig: { primaryTextColor: '#123456', secondaryTextColor: '#654321' },
+		};
 		config.value = { archetypeId: 7, showHeader: true, rowsPerPage: 8 };
 		error.value = null;
 		isEmpty.value = false;
@@ -69,8 +95,14 @@ describe('screenModesArchetypeSpotlightDisplay', () => {
 			convertedCount: 1,
 			conversionRate: 50,
 		};
-		pageData.value = [pilot(11, 'Nadia Rivers', 1), pilot(12, 'Oskar Lind', null)];
-		topCards.value = [card(1, 'Lightning Bolt', 100), card(2, 'Skewer the Critics', 66.67)];
+		pageData.value = [
+			pilot(11, 'Nadia Rivers', 1),
+			pilot(12, 'Oskar Lind', null),
+		];
+		topCards.value = [
+			card(1, 'Lightning Bolt', 100),
+			card(2, 'Skewer the Critics', 66.67),
+		];
 		totalPages.value = 1;
 		currentPage.value = 1;
 		cannedRecords.clear();
@@ -88,7 +120,10 @@ describe('screenModesArchetypeSpotlightDisplay', () => {
 	it('shows the Archetype\'s pilot count, meta share and Conversion Rate for its target', async () => {
 		const stats = (await mountComponent()).findAll('.spotlight-stat');
 
-		expect(stats.map(stat => [stat.get('.stat-label').text(), stat.get('.stat-value').text()])).toEqual([
+		expect(stats.map(stat => [
+			stat.get('.stat-label').text(),
+			stat.get('.stat-value').text(),
+		])).toEqual([
 			['Pilots', '2'],
 			['Meta Share', '25%'],
 			['Conversion (Top 8)', '50% (1/2)'],
@@ -109,7 +144,11 @@ describe('screenModesArchetypeSpotlightDisplay', () => {
 
 		const rows = (await mountComponent()).findAll('.pilot-row');
 
-		expect(rows.map(row => [row.get('.pilot-position').text(), row.get('.pilot-name').text(), row.get('.pilot-record').text()])).toEqual([
+		expect(rows.map(row => [
+			row.get('.pilot-position').text(),
+			row.get('.pilot-name').text(),
+			row.get('.pilot-record').text(),
+		])).toEqual([
 			['1', 'Nadia Rivers', '7-0-1'],
 			['-', 'Oskar Lind', '3-3'],
 		]);

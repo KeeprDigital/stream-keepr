@@ -16,7 +16,10 @@ async function freshModule() {
 function openEditor(module: Awaited<ReturnType<typeof freshModule>>) {
 	const scope = effectScope();
 	const focusMode = scope.run(() => module.useEditorFocusModeHost())!;
-	return { focusMode, close: () => scope.stop() };
+	return {
+		focusMode,
+		close: () => scope.stop(),
+	};
 }
 
 describe('editor Focus Mode', () => {

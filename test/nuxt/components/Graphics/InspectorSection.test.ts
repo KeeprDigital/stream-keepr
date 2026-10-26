@@ -16,9 +16,18 @@ function shown(wrapper: ReturnType<typeof mountSection>, id = 'typography') {
 
 function mountSection(props: { id?: string; defaultOpen?: boolean; summary?: string } = {}) {
 	return mount(InspectorSection, {
-		props: { id: props.id ?? 'typography', title: 'Text style', summary: props.summary, defaultOpen: props.defaultOpen },
-		slots: { default: () => h('input', { 'data-testid': 'field' }) },
-		global: { stubs: { UIcon: true } },
+		props: {
+			id: props.id ?? 'typography',
+			title: 'Text style',
+			summary: props.summary,
+			defaultOpen: props.defaultOpen,
+		},
+		slots: {
+			default: () => h('input', { 'data-testid': 'field' }),
+		},
+		global: {
+			stubs: { UIcon: true },
+		},
 	});
 }
 

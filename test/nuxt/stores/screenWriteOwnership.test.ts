@@ -25,10 +25,17 @@ const mockRepo = {
 };
 
 mockNuxtImport('useScreenRepository', () => () => mockRepo);
-mockNuxtImport('useToast', () => () => ({ add: vi.fn() }));
+mockNuxtImport('useToast', () => () => ({
+	add: vi.fn(),
+}));
 
 function stateConflictFailure() {
-	return { statusCode: 409, data: { data: { code: STATE_CONFLICT_CODE } } };
+	return {
+		statusCode: 409,
+		data: {
+			data: { code: STATE_CONFLICT_CODE },
+		},
+	};
 }
 
 interface Served<T> {
@@ -69,7 +76,15 @@ describe('screen store writes and what overtakes them', () => {
 
 	describe('a write answered after a newer revision was held', () => {
 		it('keeps the newer revision a reload brought while a mode-configuration write was out', async () => {
-			store.screens = [createMockScreen({ id: 1, stateVersion: 1, modeConfigs: { metagame: { topN: 8 } } })];
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 1,
+					modeConfigs: {
+						metagame: { topN: 8 },
+					},
+				}),
+			];
 			const write = served();
 			mockRepo.updateModeConfig.mockReturnValueOnce(write.promise);
 
@@ -77,11 +92,24 @@ describe('screen store writes and what overtakes them', () => {
 			await sendPending();
 
 			// Another operator's write lands after this one and is announced.
-			const v3 = createMockScreen({ id: 1, stateVersion: 3, name: 'Renamed', modeConfigs: { metagame: { topN: 16 } } });
+			const v3 = createMockScreen({
+				id: 1,
+				stateVersion: 3,
+				name: 'Renamed',
+				modeConfigs: {
+					metagame: { topN: 16 },
+				},
+			});
 			mockRepo.getById.mockResolvedValueOnce(v3);
 			await store.applyRemoteUpdated({ eventId: 1, screenId: 1 } as never);
 
-			write.resolve(createMockScreen({ id: 1, stateVersion: 2, modeConfigs: { metagame: { topN: 16 } } }));
+			write.resolve(createMockScreen({
+				id: 1,
+				stateVersion: 2,
+				modeConfigs: {
+					metagame: { topN: 16 },
+				},
+			}));
 			const answered = await save;
 
 			expect(store.screens[0]!.stateVersion).toBe(3);
@@ -90,16 +118,31 @@ describe('screen store writes and what overtakes them', () => {
 		});
 
 		it('keeps the newer revision a reload brought while a Screen-configuration write was out', async () => {
-			store.screens = [createMockScreen({ id: 1, stateVersion: 1, screenConfig: { background: '#000' } })];
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 1,
+					screenConfig: { background: '#000' },
+				}),
+			];
 			const write = served();
 			mockRepo.updateScreenConfig.mockReturnValueOnce(write.promise);
 
 			const save = store.updateScreenConfig(1, 1, { background: '#fff' });
 			await sendPending();
-			mockRepo.getById.mockResolvedValueOnce(createMockScreen({ id: 1, stateVersion: 3, name: 'Renamed', screenConfig: { background: '#fff' } }));
+			mockRepo.getById.mockResolvedValueOnce(createMockScreen({
+				id: 1,
+				stateVersion: 3,
+				name: 'Renamed',
+				screenConfig: { background: '#fff' },
+			}));
 			await store.applyRemoteUpdated({ eventId: 1, screenId: 1 } as never);
 
-			write.resolve(createMockScreen({ id: 1, stateVersion: 2, screenConfig: { background: '#fff' } }));
+			write.resolve(createMockScreen({
+				id: 1,
+				stateVersion: 2,
+				screenConfig: { background: '#fff' },
+			}));
 			const answered = await save;
 
 			expect(store.screens[0]!).toMatchObject({ stateVersion: 3, name: 'Renamed' });
@@ -107,16 +150,28 @@ describe('screen store writes and what overtakes them', () => {
 		});
 
 		it('keeps the newer revision a reload brought while an ordinary Screen update was out', async () => {
-			store.screens = [createMockScreen({ id: 1, stateVersion: 1, name: 'One' })];
+			store.screens = [
+				createMockScreen({ id: 1, stateVersion: 1, name: 'One' }),
+			];
 			const write = served();
 			mockRepo.update.mockReturnValueOnce(write.promise);
 
 			const save = store.updateScreen(1, 1, { currentMode: 'card' });
 			await vi.advanceTimersByTimeAsync(0);
-			mockRepo.getById.mockResolvedValueOnce(createMockScreen({ id: 1, stateVersion: 3, name: 'Renamed', currentMode: 'card' }));
+			mockRepo.getById.mockResolvedValueOnce(createMockScreen({
+				id: 1,
+				stateVersion: 3,
+				name: 'Renamed',
+				currentMode: 'card',
+			}));
 			await store.applyRemoteUpdated({ eventId: 1, screenId: 1 } as never);
 
-			write.resolve(createMockScreen({ id: 1, stateVersion: 2, name: 'One', currentMode: 'card' }));
+			write.resolve(createMockScreen({
+				id: 1,
+				stateVersion: 2,
+				name: 'One',
+				currentMode: 'card',
+			}));
 			const answered = await save;
 
 			expect(store.screens[0]!).toMatchObject({ stateVersion: 3, name: 'Renamed', currentMode: 'card' });
@@ -124,7 +179,15 @@ describe('screen store writes and what overtakes them', () => {
 		});
 
 		it('keeps the newer revision when a conflict refresh answers with an older one, and retries onto the newest', async () => {
-			store.screens = [createMockScreen({ id: 1, stateVersion: 1, modeConfigs: { metagame: { topN: 8 } } })];
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 1,
+					modeConfigs: {
+						metagame: { topN: 8 },
+					},
+				}),
+			];
 			const refresh = served();
 			const retry = served();
 			mockRepo.updateModeConfig
@@ -132,19 +195,39 @@ describe('screen store writes and what overtakes them', () => {
 				.mockReturnValueOnce(retry.promise);
 			mockRepo.getById
 				.mockReturnValueOnce(refresh.promise)
-				.mockResolvedValueOnce(createMockScreen({ id: 1, stateVersion: 3, name: 'Renamed', modeConfigs: { metagame: { topN: 8 } } }));
+				.mockResolvedValueOnce(createMockScreen({
+					id: 1,
+					stateVersion: 3,
+					name: 'Renamed',
+					modeConfigs: {
+						metagame: { topN: 8 },
+					},
+				}));
 
 			const save = store.updateModeConfig(1, 1, 'metagame', { topN: 16 });
 			await sendPending();
 			// The announcement's reload lands before the conflict's own refresh.
 			await store.applyRemoteUpdated({ eventId: 1, screenId: 1 } as never);
-			refresh.resolve(createMockScreen({ id: 1, stateVersion: 2, modeConfigs: { metagame: { topN: 8 } } }));
+			refresh.resolve(createMockScreen({
+				id: 1,
+				stateVersion: 2,
+				modeConfigs: {
+					metagame: { topN: 8 },
+				},
+			}));
 			await vi.advanceTimersByTimeAsync(0);
 
 			expect(store.screens[0]!.stateVersion).toBe(3);
 			expect(store.screens[0]!.modeConfigs?.metagame).toEqual({ topN: 16 });
 			expect(mockRepo.updateModeConfig).toHaveBeenLastCalledWith(1, 1, 'metagame', { topN: 16 }, 3);
-			retry.resolve(createMockScreen({ id: 1, stateVersion: 4, name: 'Renamed', modeConfigs: { metagame: { topN: 16 } } }));
+			retry.resolve(createMockScreen({
+				id: 1,
+				stateVersion: 4,
+				name: 'Renamed',
+				modeConfigs: {
+					metagame: { topN: 16 },
+				},
+			}));
 			const answered = await save;
 			expect(answered?.stateVersion).toBe(4);
 			expect(store.screens[0]!).toMatchObject({ stateVersion: 4, name: 'Renamed' });
@@ -153,7 +236,16 @@ describe('screen store writes and what overtakes them', () => {
 
 	describe('what a write answers its caller with', () => {
 		it('is a server revision, never another write\'s unsettled fields', async () => {
-			store.screens = [createMockScreen({ id: 1, stateVersion: 1, name: 'One', modeConfigs: { metagame: { topN: 8 } } })];
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 1,
+					name: 'One',
+					modeConfigs: {
+						metagame: { topN: 8 },
+					},
+				}),
+			];
 			const write = served();
 			const rename = served();
 			mockRepo.updateModeConfig.mockReturnValueOnce(write.promise);
@@ -161,30 +253,66 @@ describe('screen store writes and what overtakes them', () => {
 
 			const save = store.updateModeConfig(1, 1, 'metagame', { topN: 16 });
 			await sendPending();
-			const v3 = createMockScreen({ id: 1, stateVersion: 3, name: 'One', modeConfigs: { metagame: { topN: 16 } } });
+			const v3 = createMockScreen({
+				id: 1,
+				stateVersion: 3,
+				name: 'One',
+				modeConfigs: {
+					metagame: { topN: 16 },
+				},
+			});
 			mockRepo.getById.mockResolvedValueOnce(v3);
 			await store.applyRemoteUpdated({ eventId: 1, screenId: 1 } as never);
 			// A rename queued behind the write, shown but not yet saved.
 			const renaming = store.updateScreen(1, 1, { name: 'Renamed' });
 			expect(store.screens[0]!.name).toBe('Renamed');
 
-			write.resolve(createMockScreen({ id: 1, stateVersion: 2, name: 'One', modeConfigs: { metagame: { topN: 16 } } }));
+			write.resolve(createMockScreen({
+				id: 1,
+				stateVersion: 2,
+				name: 'One',
+				modeConfigs: {
+					metagame: { topN: 16 },
+				},
+			}));
 			await expect(save).resolves.toEqual(v3);
 
-			rename.resolve(createMockScreen({ id: 1, stateVersion: 4, name: 'Renamed', modeConfigs: { metagame: { topN: 16 } } }));
+			rename.resolve(createMockScreen({
+				id: 1,
+				stateVersion: 4,
+				name: 'Renamed',
+				modeConfigs: {
+					metagame: { topN: 16 },
+				},
+			}));
 			await renaming;
 		});
 	});
 
 	describe('a failed write', () => {
 		it('rolls back only its own field, keeping a remote change that landed meanwhile', async () => {
-			store.screens = [createMockScreen({ id: 1, stateVersion: 1, modeConfigs: { metagame: { topN: 8 } } })];
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 1,
+					modeConfigs: {
+						metagame: { topN: 8 },
+					},
+				}),
+			];
 			const write = served();
 			mockRepo.updateModeConfig.mockReturnValueOnce(write.promise);
 
 			const save = store.updateModeConfig(1, 1, 'metagame', { topN: 16 });
 			await sendPending();
-			mockRepo.getById.mockResolvedValueOnce(createMockScreen({ id: 1, stateVersion: 2, name: 'Renamed', modeConfigs: { metagame: { topN: 8, minPoints: 3 } } }));
+			mockRepo.getById.mockResolvedValueOnce(createMockScreen({
+				id: 1,
+				stateVersion: 2,
+				name: 'Renamed',
+				modeConfigs: {
+					metagame: { topN: 8, minPoints: 3 },
+				},
+			}));
 			await store.applyRemoteUpdated({ eventId: 1, screenId: 1 } as never);
 			// The reload does not take back the edit still out.
 			expect(store.screens[0]!.modeConfigs?.metagame).toMatchObject({ topN: 16, minPoints: 3 });
@@ -197,11 +325,25 @@ describe('screen store writes and what overtakes them', () => {
 		});
 
 		it('keeps a newer local edit, of the same field or another, made while it was out', async () => {
-			store.screens = [createMockScreen({ id: 1, stateVersion: 1, modeConfigs: { metagame: { topN: 8, limit: 50 } } })];
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 1,
+					modeConfigs: {
+						metagame: { topN: 8, limit: 50 },
+					},
+				}),
+			];
 			const first = served();
 			mockRepo.updateModeConfig
 				.mockReturnValueOnce(first.promise)
-				.mockResolvedValueOnce(createMockScreen({ id: 1, stateVersion: 2, modeConfigs: { metagame: { topN: 32, limit: 20 } } }));
+				.mockResolvedValueOnce(createMockScreen({
+					id: 1,
+					stateVersion: 2,
+					modeConfigs: {
+						metagame: { topN: 32, limit: 20 },
+					},
+				}));
 
 			const firstSave = store.updateModeConfig(1, 1, 'metagame', { topN: 16 });
 			await sendPending();
@@ -217,7 +359,14 @@ describe('screen store writes and what overtakes them', () => {
 		});
 
 		it('rolls back an ordinary Screen update without taking back a configuration edit still out', async () => {
-			store.screens = [createMockScreen({ id: 1, stateVersion: 1, name: 'One', screenConfig: { background: '#000' } })];
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 1,
+					name: 'One',
+					screenConfig: { background: '#000' },
+				}),
+			];
 			const rename = served();
 			const config = served();
 			mockRepo.update.mockReturnValueOnce(rename.promise);
@@ -231,29 +380,53 @@ describe('screen store writes and what overtakes them', () => {
 			expect(store.screens[0]!.screenConfig).toEqual({ background: '#fff' });
 
 			await sendPending();
-			config.resolve(createMockScreen({ id: 1, stateVersion: 2, name: 'One', screenConfig: { background: '#fff' } }));
+			config.resolve(createMockScreen({
+				id: 1,
+				stateVersion: 2,
+				name: 'One',
+				screenConfig: { background: '#fff' },
+			}));
 			await Promise.allSettled([renaming, configuring]);
-			expect(store.screens[0]!).toMatchObject({ name: 'One', screenConfig: { background: '#fff' } });
+			expect(store.screens[0]!).toMatchObject({
+				name: 'One',
+				screenConfig: { background: '#fff' },
+			});
 		});
 	});
 
 	describe('a write of a Screen deleted meanwhile', () => {
 		it('does not bring the Screen back when it succeeds', async () => {
-			store.screens = [createMockScreen({ id: 1, stateVersion: 1, screenConfig: { background: '#000' } })];
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 1,
+					screenConfig: { background: '#000' },
+				}),
+			];
 			const write = served();
 			mockRepo.updateScreenConfig.mockReturnValueOnce(write.promise);
 
 			const save = store.updateScreenConfig(1, 1, { background: '#fff' });
 			await sendPending();
 			store.applyRemoteDeleted({ eventId: 1, screenId: 1 } as never);
-			write.resolve(createMockScreen({ id: 1, stateVersion: 2, screenConfig: { background: '#fff' } }));
+			write.resolve(createMockScreen({
+				id: 1,
+				stateVersion: 2,
+				screenConfig: { background: '#fff' },
+			}));
 			await save;
 
 			expect(store.screens).toEqual([]);
 		});
 
 		it('does not bring the Screen back when it fails', async () => {
-			store.screens = [createMockScreen({ id: 1, stateVersion: 1, screenConfig: { background: '#000' } })];
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 1,
+					screenConfig: { background: '#000' },
+				}),
+			];
 			const write = served();
 			mockRepo.updateScreenConfig.mockReturnValueOnce(write.promise);
 
@@ -270,20 +443,46 @@ describe('screen store writes and what overtakes them', () => {
 	describe('simultaneous edits of independent settings', () => {
 		it('settle without one erasing the other', async () => {
 			// A server holding one revision and refusing a write made against an older one.
-			let held = createMockScreen({ id: 1, stateVersion: 1, modeConfigs: { metagame: { topN: 8 } }, screenConfig: { background: '#000' } });
+			let held = createMockScreen({
+				id: 1,
+				stateVersion: 1,
+				modeConfigs: {
+					metagame: { topN: 8 },
+				},
+				screenConfig: { background: '#000' },
+			});
 			const commit = (version: number, change: Partial<Screen>) => {
 				if (version !== held.stateVersion)
 					return Promise.reject(stateConflictFailure());
-				held = { ...held, ...change, stateVersion: held.stateVersion + 1 };
+				held = {
+					...held,
+					...change,
+					stateVersion: held.stateVersion + 1,
+				};
 				return Promise.resolve(structuredClone(held));
 			};
 			mockRepo.getById.mockImplementation(async () => structuredClone(held));
 			mockRepo.updateModeConfig.mockImplementation(async (_e, _s, mode: 'metagame', patch, version: number) =>
-				commit(version, { modeConfigs: { ...held.modeConfigs, [mode]: { ...held.modeConfigs?.[mode], ...patch } } }));
+				commit(version, {
+					modeConfigs: {
+						...held.modeConfigs,
+						[mode]: {
+							...held.modeConfigs?.[mode],
+							...patch,
+						},
+					},
+				}));
 			mockRepo.updateScreenConfig.mockImplementation(async (_e, _s, patch, version: number) =>
-				commit(version, { screenConfig: { ...held.screenConfig, ...patch } }));
+				commit(version, {
+					screenConfig: {
+						...held.screenConfig,
+						...patch,
+					},
+				}));
 			mockRepo.update.mockImplementation(async (_e, _s, { stateVersion, ...change }) => commit(stateVersion, change));
-			store.screens = [structuredClone(held)];
+			store.screens = [
+				structuredClone(held),
+			];
 
 			const saves = Promise.all([
 				store.updateModeConfig(1, 1, 'metagame', { topN: 16 }),
@@ -294,7 +493,13 @@ describe('screen store writes and what overtakes them', () => {
 			await sendPending();
 			await saves;
 
-			expect(held).toMatchObject({ name: 'Renamed', modeConfigs: { metagame: { topN: 16, limit: 20 } }, screenConfig: { background: '#fff' } });
+			expect(held).toMatchObject({
+				name: 'Renamed',
+				modeConfigs: {
+					metagame: { topN: 16, limit: 20 },
+				},
+				screenConfig: { background: '#fff' },
+			});
 			expect(store.screens[0]!).toEqual(held);
 		});
 	});
@@ -304,7 +509,15 @@ describe('screen store writes and what overtakes them', () => {
 	 * Event 1 and its Screen, and touch nothing of Event 2's (ADR-0024).
 	 */
 	describe('a write that outlives its Event Lifetime', () => {
-		const eventTwoScreen = createMockScreen({ id: 1, eventId: 2, stateVersion: 7, name: 'Event two', modeConfigs: { metagame: { topN: 4 } } });
+		const eventTwoScreen = createMockScreen({
+			id: 1,
+			eventId: 2,
+			stateVersion: 7,
+			name: 'Event two',
+			modeConfigs: {
+				metagame: { topN: 4 },
+			},
+		});
 
 		async function moveToEventTwo() {
 			store.$reset();
@@ -313,7 +526,15 @@ describe('screen store writes and what overtakes them', () => {
 		}
 
 		it('sends a write queued behind one in flight at the revision that one answers with', async () => {
-			store.screens = [createMockScreen({ id: 1, stateVersion: 1, modeConfigs: { metagame: { topN: 8 } } })];
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 1,
+					modeConfigs: {
+						metagame: { topN: 8 },
+					},
+				}),
+			];
 			const first = served();
 			const second = served();
 			mockRepo.updateModeConfig
@@ -325,23 +546,49 @@ describe('screen store writes and what overtakes them', () => {
 			const secondSave = store.updateModeConfig(1, 1, 'metagame', { limit: 20 });
 			await moveToEventTwo();
 
-			first.resolve(createMockScreen({ id: 1, stateVersion: 2, modeConfigs: { metagame: { topN: 16 } } }));
+			first.resolve(createMockScreen({
+				id: 1,
+				stateVersion: 2,
+				modeConfigs: {
+					metagame: { topN: 16 },
+				},
+			}));
 			await expect(firstSave).resolves.toMatchObject({ stateVersion: 2 });
 			await vi.advanceTimersByTimeAsync(0);
 			expect(mockRepo.updateModeConfig).toHaveBeenLastCalledWith(1, 1, 'metagame', { limit: 20 }, 2);
-			second.resolve(createMockScreen({ id: 1, stateVersion: 3, modeConfigs: { metagame: { topN: 16, limit: 20 } } }));
+			second.resolve(createMockScreen({
+				id: 1,
+				stateVersion: 3,
+				modeConfigs: {
+					metagame: { topN: 16, limit: 20 },
+				},
+			}));
 			await expect(secondSave).resolves.toMatchObject({ stateVersion: 3 });
 
 			expect(store.screens).toEqual([eventTwoScreen]);
 		});
 
 		it('retries a lost race for its own Event at the revision the refresh found', async () => {
-			store.screens = [createMockScreen({ id: 1, stateVersion: 1, screenConfig: { background: '#000' } })];
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 1,
+					screenConfig: { background: '#000' },
+				}),
+			];
 			const conflict = served();
 			mockRepo.updateScreenConfig
 				.mockReturnValueOnce(conflict.promise)
-				.mockResolvedValueOnce(createMockScreen({ id: 1, stateVersion: 6, screenConfig: { background: '#fff' } }));
-			mockRepo.getById.mockResolvedValueOnce(createMockScreen({ id: 1, stateVersion: 5, screenConfig: { background: '#000' } }));
+				.mockResolvedValueOnce(createMockScreen({
+					id: 1,
+					stateVersion: 6,
+					screenConfig: { background: '#fff' },
+				}));
+			mockRepo.getById.mockResolvedValueOnce(createMockScreen({
+				id: 1,
+				stateVersion: 5,
+				screenConfig: { background: '#000' },
+			}));
 
 			const save = store.updateScreenConfig(1, 1, { background: '#fff' });
 			await sendPending();
@@ -355,7 +602,15 @@ describe('screen store writes and what overtakes them', () => {
 		});
 
 		it('rejects its caller when refused, and leaves the next Event its own state and error', async () => {
-			store.screens = [createMockScreen({ id: 1, stateVersion: 1, modeConfigs: { metagame: { topN: 8 } } })];
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 1,
+					modeConfigs: {
+						metagame: { topN: 8 },
+					},
+				}),
+			];
 			const write = served();
 			mockRepo.updateModeConfig.mockReturnValueOnce(write.promise);
 
@@ -370,7 +625,15 @@ describe('screen store writes and what overtakes them', () => {
 		});
 
 		it('changes nothing when the operator has come back to the same Event since', async () => {
-			store.screens = [createMockScreen({ id: 1, stateVersion: 1, modeConfigs: { metagame: { topN: 8 } } })];
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 1,
+					modeConfigs: {
+						metagame: { topN: 8 },
+					},
+				}),
+			];
 			const succeeded = served();
 			const failed = served();
 			mockRepo.updateModeConfig.mockReturnValueOnce(succeeded.promise);
@@ -382,11 +645,24 @@ describe('screen store writes and what overtakes them', () => {
 			await moveToEventTwo();
 			store.$reset();
 			// Event 1 loaded afresh, before either answer: it already holds the edit that will succeed.
-			const reloaded = createMockScreen({ id: 1, stateVersion: 2, name: 'Loaded again', modeConfigs: { metagame: { topN: 16 } } });
+			const reloaded = createMockScreen({
+				id: 1,
+				stateVersion: 2,
+				name: 'Loaded again',
+				modeConfigs: {
+					metagame: { topN: 16 },
+				},
+			});
 			mockRepo.list.mockResolvedValueOnce([reloaded]);
 			await store.loadScreensByEventId(1);
 
-			succeeded.resolve(createMockScreen({ id: 1, stateVersion: 2, modeConfigs: { metagame: { topN: 16 } } }));
+			succeeded.resolve(createMockScreen({
+				id: 1,
+				stateVersion: 2,
+				modeConfigs: {
+					metagame: { topN: 16 },
+				},
+			}));
 			failed.reject(new Error('Refused'));
 			await saving;
 			await expect(configuring).rejects.toThrow('Refused');
@@ -396,14 +672,24 @@ describe('screen store writes and what overtakes them', () => {
 		});
 
 		it('caches no late answer into the next Event, and answers its caller with it', async () => {
-			store.screens = [createMockScreen({ id: 1, stateVersion: 1, screenConfig: { background: '#000' } })];
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 1,
+					screenConfig: { background: '#000' },
+				}),
+			];
 			const write = served();
 			mockRepo.updateScreenConfig.mockReturnValueOnce(write.promise);
 
 			const save = store.updateScreenConfig(1, 1, { background: '#fff' });
 			await sendPending();
 			await moveToEventTwo();
-			const answer = createMockScreen({ id: 1, stateVersion: 2, screenConfig: { background: '#fff' } });
+			const answer = createMockScreen({
+				id: 1,
+				stateVersion: 2,
+				screenConfig: { background: '#fff' },
+			});
 			write.resolve(answer);
 
 			await expect(save).resolves.toEqual(answer);

@@ -129,7 +129,9 @@ describe('useScreenStore error reporting', () => {
 	it('reports a refused delete in the words the authority used, and puts the Screen back', async () => {
 		// The rollback runs off the substituted failure exactly as it ran off the raw
 		// one: what the wrapper changes is the prose, not whether the action failed.
-		store.screens = [createMockScreen({ id: 5, name: 'Main' })];
+		store.screens = [
+			createMockScreen({ id: 5, name: 'Main' }),
+		];
 		mockRepo.remove.mockRejectedValue(explainedRefusal(
 			409,
 			'Conflict',
@@ -149,7 +151,9 @@ describe('useScreenStore error reporting', () => {
 		// field. Substituting the failure inside the action is what puts the sentence
 		// on both paths.
 		vi.useFakeTimers();
-		store.screens = [createMockScreen({ id: 5, stateVersion: 1 })];
+		store.screens = [
+			createMockScreen({ id: 5, stateVersion: 1 }),
+		];
 		// Deliberately not a 409: that status is the conflict-retry's own signal, and
 		// what this row is about is the reporting seam, not the retry.
 		mockRepo.updateScreenConfig.mockRejectedValue(explainedRefusal(
@@ -180,7 +184,9 @@ describe('useScreenStore error reporting', () => {
 		// (#365). It almost certainly always did; unpinned is the defect, and a second
 		// queue is exactly the thing an edit can drift.
 		vi.useFakeTimers();
-		store.screens = [createMockScreen({ id: 5, stateVersion: 1 })];
+		store.screens = [
+			createMockScreen({ id: 5, stateVersion: 1 }),
+		];
 		// Not a 409, for the reason the row above gives: that status belongs to the
 		// conflict retry, and what this pins is the reporting seam.
 		mockRepo.updateModeConfig.mockRejectedValue(explainedRefusal(
@@ -208,7 +214,9 @@ describe('useScreenStore error reporting', () => {
 		// sentence instead. The fixture carries the state-conflict mark because since
 		// #381 only a marked 409 — a lost race — is retried at all; an unmarked one is a
 		// refusal, pinned in the config-and-realtime suite.
-		store.screens = [createMockScreen({ id: 5, name: 'Old', stateVersion: 1 })];
+		store.screens = [
+			createMockScreen({ id: 5, name: 'Old', stateVersion: 1 }),
+		];
 		mockRepo.update
 			.mockRejectedValueOnce(transportFailure({
 				status: 409,

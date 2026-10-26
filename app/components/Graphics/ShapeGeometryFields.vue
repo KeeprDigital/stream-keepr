@@ -48,20 +48,36 @@ const CORNERS: { key: ShapeCornerKey; label: string }[] = [
 ];
 
 const SLANTS = [
-	{ field: 'leftSlant', label: 'Left edge', ariaLabel: 'Left edge slant', testId: 'shape-left-slant' },
-	{ field: 'rightSlant', label: 'Right edge', ariaLabel: 'Right edge slant', testId: 'shape-right-slant' },
+	{
+		field: 'leftSlant',
+		label: 'Left edge',
+		ariaLabel: 'Left edge slant',
+		testId: 'shape-left-slant',
+	},
+	{
+		field: 'rightSlant',
+		label: 'Right edge',
+		ariaLabel: 'Right edge slant',
+		testId: 'shape-right-slant',
+	},
 ] as const;
 
 /** Whether a corner edit applies to all four. Editor state only; never stored. */
 const allCorners = ref(false);
 
 function updateCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
-	const next = { ...props.geometry[corner], ...fields };
+	const next = {
+		...props.geometry[corner],
+		...fields,
+	};
 	if (!allCorners.value) {
 		emit('update', { [corner]: next });
 		return;
 	}
-	emit('update', Object.fromEntries(CORNERS.map(({ key }) => [key, { ...next }])) as Partial<ShapeGeometry>);
+	emit('update', Object.fromEntries(CORNERS.map(({ key }) => [
+		key,
+		{ ...next },
+	])) as Partial<ShapeGeometry>);
 }
 </script>
 

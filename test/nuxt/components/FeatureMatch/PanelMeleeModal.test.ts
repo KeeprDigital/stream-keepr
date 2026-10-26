@@ -5,7 +5,12 @@ import { defineComponent, h, reactive } from 'vue';
 
 const mockMatchStore = reactive({
 	matches: [
-		{ id: 10, tableNumber: 3, player1Data: { name: 'Alice' }, player2Data: { name: 'Bob' } },
+		{
+			id: 10,
+			tableNumber: 3,
+			player1Data: { name: 'Alice' },
+			player2Data: { name: 'Bob' },
+		},
 	],
 });
 
@@ -77,7 +82,9 @@ describe('feature match melee populate modal', () => {
 		await wrapper.get('select').setValue('10');
 		fireEnter();
 
-		expect(wrapper.emitted('populate')).toEqual([[mockMatchStore.matches[0]]]);
+		expect(wrapper.emitted('populate')).toEqual([
+			[mockMatchStore.matches[0]],
+		]);
 		wrapper.unmount();
 	});
 });

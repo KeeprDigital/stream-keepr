@@ -166,7 +166,13 @@ export function resolveDeckBoards(config: Partial<DeckModeConfig>): ResolvedDeck
 	return {
 		board: config.board ?? DEFAULT_BOARD,
 		sideboardPlacement: config.sideboardPlacement ?? DEFAULT_SIDEBOARD_PLACEMENT,
-		mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, ...config.mainboard },
-		sideboard: { ...DEFAULT_SIDEBOARD_LAYOUT, ...config.sideboard },
+		mainboard: {
+			...DEFAULT_DECK_BOARD_LAYOUT,
+			...config.mainboard,
+		},
+		sideboard: {
+			...DEFAULT_SIDEBOARD_LAYOUT,
+			...config.sideboard,
+		},
 	};
 }

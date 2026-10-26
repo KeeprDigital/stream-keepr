@@ -29,7 +29,10 @@ const graphics: BroadcastGraphicConfig[] = [
 					leftSlant: 0,
 					rightSlant: 0,
 				},
-				surfaceStyle: { fill: { type: 'solid', color: '#000000' }, fillOpacity: 1 },
+				surfaceStyle: {
+					fill: { type: 'solid', color: '#000000' },
+					fillOpacity: 1,
+				},
 			},
 		],
 	},

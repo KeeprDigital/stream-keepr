@@ -13,7 +13,10 @@ import CanvasManipulationOverlay from '~/components/Graphics/CanvasManipulationO
 
 vi.mock('@vueuse/core', async importOriginal => ({
 	...await importOriginal<typeof import('@vueuse/core')>(),
-	useElementSize: () => ({ width: ref(960), height: ref(540) }),
+	useElementSize: () => ({
+		width: ref(960),
+		height: ref(540),
+	}),
 }));
 
 enableAutoUnmount(afterEach);
@@ -23,11 +26,22 @@ beforeAll(() => {
 	HTMLElement.prototype.setPointerCapture ??= () => {};
 });
 
-const RECT = { x: 100, y: 100, width: 200, height: 100 };
+const RECT = {
+	x: 100,
+	y: 100,
+	width: 200,
+	height: 100,
+};
 
 function mountOverlay(props: Partial<{ rect: typeof RECT | null; origin: { x: number; y: number } }> = {}) {
 	return mount(CanvasManipulationOverlay, {
-		props: { rect: RECT, canvasWidth: 1920, canvasHeight: 1080, label: 'Clock', ...props },
+		props: {
+			rect: RECT,
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+			label: 'Clock',
+			...props,
+		},
 	});
 }
 
@@ -35,8 +49,19 @@ type Wrapper = ReturnType<typeof mountOverlay>;
 
 async function drag(wrapper: Wrapper, selector: string, to: { x: number; y: number }, init: PointerEventInit = {}) {
 	const target = wrapper.get(selector);
-	await target.trigger('pointerdown', { button: 0, pointerId: 1, clientX: 0, clientY: 0, ...init });
-	await target.trigger('pointermove', { pointerId: 1, clientX: to.x, clientY: to.y, ...init });
+	await target.trigger('pointerdown', {
+		button: 0,
+		pointerId: 1,
+		clientX: 0,
+		clientY: 0,
+		...init,
+	});
+	await target.trigger('pointermove', {
+		pointerId: 1,
+		clientX: to.x,
+		clientY: to.y,
+		...init,
+	});
 	await target.trigger('pointerup', { pointerId: 1, clientX: to.x, clientY: to.y });
 }
 
@@ -63,7 +88,14 @@ describe('graphicsCanvasManipulationOverlay', () => {
 
 		await drag(wrapper, '[data-testid="canvas-manipulation-box"]', { x: 30, y: 10 });
 
-		expect(changes(wrapper)).toEqual([{ x: 160, y: 120, width: 200, height: 100 }]);
+		expect(changes(wrapper)).toEqual([
+			{
+				x: 160,
+				y: 120,
+				width: 200,
+				height: 100,
+			},
+		]);
 	});
 
 	it('resizes from a handle, keeping the opposite corner where it was', async () => {
@@ -71,7 +103,14 @@ describe('graphicsCanvasManipulationOverlay', () => {
 
 		await drag(wrapper, '[data-handle="se"]', { x: 20, y: 10 });
 
-		expect(changes(wrapper)).toEqual([{ x: 100, y: 100, width: 240, height: 120 }]);
+		expect(changes(wrapper)).toEqual([
+			{
+				x: 100,
+				y: 100,
+				width: 240,
+				height: 120,
+			},
+		]);
 	});
 
 	it('keeps the aspect ratio while Shift is held', async () => {
@@ -79,7 +118,12 @@ describe('graphicsCanvasManipulationOverlay', () => {
 
 		await drag(wrapper, '[data-handle="se"]', { x: 100, y: 0 }, { shiftKey: true });
 
-		expect(changes(wrapper).at(-1)).toEqual({ x: 100, y: 100, width: 400, height: 200 });
+		expect(changes(wrapper).at(-1)).toEqual({
+			x: 100,
+			y: 100,
+			width: 400,
+			height: 200,
+		});
 	});
 
 	it('snaps to a canvas edge, and lets Alt turn snapping off', async () => {
@@ -93,20 +137,34 @@ describe('graphicsCanvasManipulationOverlay', () => {
 	});
 
 	it('reports a rectangle in its container\'s pixels when the container is offset', async () => {
-		const wrapper = mountOverlay({ origin: { x: 400, y: 200 } });
+		const wrapper = mountOverlay({
+			origin: { x: 400, y: 200 },
+		});
 
 		expect(wrapper.get('[data-testid="canvas-manipulation-box"]').attributes('style')).toContain('left: 250px; top: 150px;');
 
 		await drag(wrapper, '[data-testid="canvas-manipulation-box"]', { x: 5, y: 5 });
 
-		expect(changes(wrapper)).toEqual([{ x: 110, y: 110, width: 200, height: 100 }]);
+		expect(changes(wrapper)).toEqual([
+			{
+				x: 110,
+				y: 110,
+				width: 200,
+				height: 100,
+			},
+		]);
 	});
 
 	it('tags every frame of one drag with the same gesture, and the next drag with a new one', async () => {
 		const wrapper = mountOverlay();
 		const box = '[data-testid="canvas-manipulation-box"]';
 
-		await wrapper.get(box).trigger('pointerdown', { button: 0, pointerId: 1, clientX: 0, clientY: 0 });
+		await wrapper.get(box).trigger('pointerdown', {
+			button: 0,
+			pointerId: 1,
+			clientX: 0,
+			clientY: 0,
+		});
 		await wrapper.get(box).trigger('pointermove', { pointerId: 1, clientX: 10, clientY: 0 });
 		await wrapper.get(box).trigger('pointermove', { pointerId: 1, clientX: 20, clientY: 0 });
 		await wrapper.get(box).trigger('pointerup', { pointerId: 1 });

@@ -140,7 +140,12 @@ describe('the approved remote HTTPS copy API', () => {
 			stage: 'failed',
 			transferredByteLength: 0,
 			failure: { code: 'remote-source-rejected', retryable: false },
-			report: { outcome: 'rejected', issues: [{ code }] },
+			report: {
+				outcome: 'rejected',
+				issues: [
+					{ code },
+				],
+			},
 		});
 		expect(JSON.stringify(operation)).not.toContain('secret');
 

@@ -16,8 +16,12 @@ describe('applyTalentUpdates', () => {
 		calls.removeTalent.mockResolvedValue(null);
 
 		await expect(applyTalentUpdates({
-			currentTalents: [{ id: 1, name: 'Alice' }],
-			requestedTalents: [{ name: 'Bob' }],
+			currentTalents: [
+				{ id: 1, name: 'Alice' },
+			],
+			requestedTalents: [
+				{ name: 'Bob' },
+			],
 			...calls,
 		})).rejects.toThrow('Failed to remove Alice');
 
@@ -32,8 +36,12 @@ describe('applyTalentUpdates', () => {
 		const calls = mutations();
 
 		await applyTalentUpdates({
-			currentTalents: [{ id: 1, name: 'Bob' }],
-			requestedTalents: [{ id: 1, name: 'Robert' }],
+			currentTalents: [
+				{ id: 1, name: 'Bob' },
+			],
+			requestedTalents: [
+				{ id: 1, name: 'Robert' },
+			],
 			...calls,
 		});
 
@@ -48,8 +56,13 @@ describe('applyTalentUpdates', () => {
 		calls.updateTalent.mockResolvedValue(null);
 
 		await expect(applyTalentUpdates({
-			currentTalents: [{ id: 1, name: 'Bob' }, { id: 2, name: 'Dana' }],
-			requestedTalents: [{ id: 1, name: 'Robert' }],
+			currentTalents: [
+				{ id: 1, name: 'Bob' },
+				{ id: 2, name: 'Dana' },
+			],
+			requestedTalents: [
+				{ id: 1, name: 'Robert' },
+			],
 			...calls,
 		})).rejects.toThrow('Failed to update Bob');
 
@@ -63,8 +76,13 @@ describe('applyTalentUpdates', () => {
 		const calls = mutations();
 
 		await applyTalentUpdates({
-			currentTalents: [{ id: 1, name: 'Bob' }, { id: 2, name: 'Bob' }],
-			requestedTalents: [{ id: 1, name: 'Bob' }],
+			currentTalents: [
+				{ id: 1, name: 'Bob' },
+				{ id: 2, name: 'Bob' },
+			],
+			requestedTalents: [
+				{ id: 1, name: 'Bob' },
+			],
 			...calls,
 		});
 
@@ -78,8 +96,13 @@ describe('applyTalentUpdates', () => {
 		const calls = mutations();
 
 		await applyTalentUpdates({
-			currentTalents: [{ id: 1, name: 'Bob' }, { id: 2, name: 'Bob' }],
-			requestedTalents: [{ id: 2, name: 'Bob' }],
+			currentTalents: [
+				{ id: 1, name: 'Bob' },
+				{ id: 2, name: 'Bob' },
+			],
+			requestedTalents: [
+				{ id: 2, name: 'Bob' },
+			],
 			...calls,
 		});
 
@@ -91,8 +114,14 @@ describe('applyTalentUpdates', () => {
 		const calls = mutations();
 
 		await applyTalentUpdates({
-			currentTalents: [{ id: 1, name: 'Bob' }, { id: 2, name: 'Bob' }],
-			requestedTalents: [{ id: 1, name: 'Bob' }, { id: 2, name: 'Bob' }],
+			currentTalents: [
+				{ id: 1, name: 'Bob' },
+				{ id: 2, name: 'Bob' },
+			],
+			requestedTalents: [
+				{ id: 1, name: 'Bob' },
+				{ id: 2, name: 'Bob' },
+			],
 			...calls,
 		});
 
@@ -105,8 +134,14 @@ describe('applyTalentUpdates', () => {
 		const calls = mutations();
 
 		await applyTalentUpdates({
-			currentTalents: [{ id: 1, name: 'Bob' }],
-			requestedTalents: [{ id: 1, name: 'Bob' }, { name: 'Bob' }, { name: 'Dana' }],
+			currentTalents: [
+				{ id: 1, name: 'Bob' },
+			],
+			requestedTalents: [
+				{ id: 1, name: 'Bob' },
+				{ name: 'Bob' },
+				{ name: 'Dana' },
+			],
 			...calls,
 		});
 
@@ -120,8 +155,16 @@ describe('applyTalentUpdates', () => {
 		const calls = mutations();
 
 		await applyTalentUpdates({
-			currentTalents: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }, { id: 3, name: 'Caspar' }],
-			requestedTalents: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Robert' }, { name: 'Dana' }],
+			currentTalents: [
+				{ id: 1, name: 'Alice' },
+				{ id: 2, name: 'Bob' },
+				{ id: 3, name: 'Caspar' },
+			],
+			requestedTalents: [
+				{ id: 1, name: 'Alice' },
+				{ id: 2, name: 'Robert' },
+				{ name: 'Dana' },
+			],
 			...calls,
 		});
 
@@ -140,8 +183,13 @@ describe('applyTalentUpdates', () => {
 		const calls = mutations();
 
 		await applyTalentUpdates({
-			currentTalents: [{ id: 1, name: 'Alice' }],
-			requestedTalents: [{ id: 1, name: 'Alice' }, { id: 7, name: 'Dana' }],
+			currentTalents: [
+				{ id: 1, name: 'Alice' },
+			],
+			requestedTalents: [
+				{ id: 1, name: 'Alice' },
+				{ id: 7, name: 'Dana' },
+			],
 			...calls,
 		});
 
@@ -155,8 +203,14 @@ describe('applyTalentUpdates', () => {
 		const calls = mutations();
 
 		await applyTalentUpdates({
-			currentTalents: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }],
-			requestedTalents: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }],
+			currentTalents: [
+				{ id: 1, name: 'Alice' },
+				{ id: 2, name: 'Bob' },
+			],
+			requestedTalents: [
+				{ id: 1, name: 'Alice' },
+				{ id: 2, name: 'Bob' },
+			],
 			...calls,
 		});
 
@@ -169,8 +223,20 @@ describe('applyTalentUpdates', () => {
 		const calls = mutations();
 
 		await applyTalentUpdates({
-			currentTalents: [{ id: 1, name: 'Alice', socialProfiles: { twitch: 'Old' } }],
-			requestedTalents: [{ id: 1, name: 'Alice', socialProfiles: { youtube: 'New' } }],
+			currentTalents: [
+				{
+					id: 1,
+					name: 'Alice',
+					socialProfiles: { twitch: 'Old' },
+				},
+			],
+			requestedTalents: [
+				{
+					id: 1,
+					name: 'Alice',
+					socialProfiles: { youtube: 'New' },
+				},
+			],
 			...calls,
 		});
 

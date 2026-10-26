@@ -18,22 +18,36 @@ import { isColumnVisible } from '~~/shared/screenModeConfigs/subShapes';
 export default defineEventHandler(async (event): Promise<ScreenOutputStandingsResponse> => {
 	const { eventId, config } = await requireScreenOutputModeRead(event, 'standings');
 
-	const listId = config.viewMode === 'watchlist' ? config.playerListId : null;
+	const listId = config.viewMode === 'watchlist'
+		? config.playerListId
+		: null;
 	const showsPositionChange = isColumnVisible(config.columns, 'positionChange');
 	const [players, round, roundStandings, list, previousRoundPositions] = await Promise.all([
 		playerService().findAll({ eventId }),
-		config.roundId ? roundService().findById(config.roundId, eventId) : null,
-		config.roundId ? playerRoundStandingsService().findByRoundId(eventId, config.roundId) : null,
-		listId ? playerListService().findById(listId, eventId) : null,
-		showsPositionChange ? playerRoundStandingsService().findPreviousRoundPositions(eventId, config.roundId ?? null) : null,
+		config.roundId
+			? roundService().findById(config.roundId, eventId)
+			: null,
+		config.roundId
+			? playerRoundStandingsService().findByRoundId(eventId, config.roundId)
+			: null,
+		listId
+			? playerListService().findById(listId, eventId)
+			: null,
+		showsPositionChange
+			? playerRoundStandingsService().findPreviousRoundPositions(eventId, config.roundId ?? null)
+			: null,
 	]);
 	// A watchlist whose list has since been deleted renders as no watchlist
 	// rather than refusing the whole Standings read.
-	const watchlistPlayerIds = list ? await playerListService().getMemberPlayerIds(list.id, eventId) : [];
+	const watchlistPlayerIds = list
+		? await playerListService().getMemberPlayerIds(list.id, eventId)
+		: [];
 
 	return {
 		players: players.map(mapPlayerToResponse),
-		round: round ? mapRoundToResponse(round) : null,
+		round: round
+			? mapRoundToResponse(round)
+			: null,
 		roundStandings: roundStandings?.map(standing => ({
 			playerId: standing.playerId,
 			wins: standing.wins,
@@ -42,7 +56,9 @@ export default defineEventHandler(async (event): Promise<ScreenOutputStandingsRe
 			position: standing.position,
 			points: standing.points,
 		})) ?? null,
-		watchlist: list ? { name: list.name, playerIds: watchlistPlayerIds } : null,
+		watchlist: list
+			? { name: list.name, playerIds: watchlistPlayerIds }
+			: null,
 		previousRoundPositions,
 	};
 });

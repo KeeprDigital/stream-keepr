@@ -42,8 +42,12 @@ export default defineEventHandler(async (event) => {
 	// rename is held to the rule as much as a new layout is (#614). A rename built on
 	// a stale revision is left to the compare-and-swap, so the author hears about the
 	// revision they missed first.
-	const stored = body.document ? undefined : await featureMatchLayoutTemplateService().findById(templateId);
-	const document = body.document ?? (stored?.revision === body.revision ? stored.document : undefined);
+	const stored = body.document
+		? undefined
+		: await featureMatchLayoutTemplateService().findById(templateId);
+	const document = body.document ?? (stored?.revision === body.revision
+		? stored.document
+		: undefined);
 	if (document)
 		await assertFeatureMatchLayoutTemplateReferencesSelectable(graphicsAssetLibraryForEvent(event), document);
 

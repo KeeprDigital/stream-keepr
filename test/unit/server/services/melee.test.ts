@@ -17,7 +17,12 @@ const credentials = {
 	eventId: 'event-123',
 };
 
-const eventData = { ID: 123, Name: 'Test Tournament', Game: 'Magic: The Gathering', Phases: [] };
+const eventData = {
+	ID: 123,
+	Name: 'Test Tournament',
+	Game: 'Magic: The Gathering',
+	Phases: [],
+};
 const mockSleep = vi.fn<(delayMs: number) => Promise<void>>();
 const mockLogger = {
 	info: vi.fn(),
@@ -258,7 +263,18 @@ describe('meleeService', () => {
 		});
 
 		it('rejects invalid UTF-8 response bytes as a parse failure', async () => {
-			const invalidUtf8Json = new Uint8Array([0x7B, 0x22, 0x78, 0x22, 0x3A, 0x22, 0xC3, 0x28, 0x22, 0x7D]);
+			const invalidUtf8Json = new Uint8Array([
+				0x7B,
+				0x22,
+				0x78,
+				0x22,
+				0x3A,
+				0x22,
+				0xC3,
+				0x28,
+				0x22,
+				0x7D,
+			]);
 			mockFetch.mockResolvedValue(new Response(invalidUtf8Json, { status: 200 }));
 
 			await expect(meleeService(credentials, transportOptions()).fetchEvent()).rejects.toMatchObject({
@@ -403,12 +419,27 @@ describe('meleeService', () => {
 			// PlayerName, PronounsDescription, Decklists are required by the Zod schema.
 			// RecordsFiltered is Melee's per-page record count; RecordsTotal is the
 			// collection total (observed live against melee.gg, 2026-08).
-			const player = (id: number) => ({ TeamId: id, PlayerName: `Player ${id}`, PronounsDescription: null, Decklists: [] });
-			const page1 = paginated([player(1)], { recordsTotal: 2, hasMore: true });
-			const page2 = paginated([player(2)], { page: 2, recordsTotal: 2 });
+			const player = (id: number) => ({
+				TeamId: id,
+				PlayerName: `Player ${id}`,
+				PronounsDescription: null,
+				Decklists: [],
+			});
+			const page1 = paginated([
+				player(1),
+			], { recordsTotal: 2, hasMore: true });
+			const page2 = paginated([
+				player(2),
+			], { page: 2, recordsTotal: 2 });
 			mockFetch
-				.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page1) })
-				.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page2) });
+				.mockResolvedValueOnce({
+					ok: true,
+					json: () => Promise.resolve(page1),
+				})
+				.mockResolvedValueOnce({
+					ok: true,
+					json: () => Promise.resolve(page2),
+				});
 
 			const result = await meleeService(credentials).fetchPlayers();
 
@@ -474,15 +505,24 @@ describe('meleeService', () => {
 		});
 
 		it('rejects pagination metadata that changes between pages', async () => {
-			const player = (id: number) => ({ TeamId: id, PlayerName: `Player ${id}`, PronounsDescription: null, Decklists: [] });
+			const player = (id: number) => ({
+				TeamId: id,
+				PlayerName: `Player ${id}`,
+				PronounsDescription: null,
+				Decklists: [],
+			});
 			mockFetch
 				.mockResolvedValueOnce({
 					ok: true,
-					json: () => Promise.resolve(paginated([player(1)], { recordsTotal: 2, hasMore: true })),
+					json: () => Promise.resolve(paginated([
+						player(1),
+					], { recordsTotal: 2, hasMore: true })),
 				})
 				.mockResolvedValueOnce({
 					ok: true,
-					json: () => Promise.resolve(paginated([player(2)], { page: 2, recordsTotal: 3 })),
+					json: () => Promise.resolve(paginated([
+						player(2),
+					], { page: 2, recordsTotal: 3 })),
 				});
 
 			await expect(meleeService(credentials).fetchPlayers()).rejects.toMatchObject({
@@ -492,10 +532,17 @@ describe('meleeService', () => {
 		});
 
 		it('rejects a page whose declared record count does not match its content', async () => {
-			const player = (id: number) => ({ TeamId: id, PlayerName: `Player ${id}`, PronounsDescription: null, Decklists: [] });
+			const player = (id: number) => ({
+				TeamId: id,
+				PlayerName: `Player ${id}`,
+				PronounsDescription: null,
+				Decklists: [],
+			});
 			mockFetch.mockResolvedValue({
 				ok: true,
-				json: () => Promise.resolve(paginated([player(1)], { recordsFiltered: 2, recordsTotal: 2 })),
+				json: () => Promise.resolve(paginated([
+					player(1),
+				], { recordsFiltered: 2, recordsTotal: 2 })),
 			});
 
 			await expect(meleeService(credentials).fetchPlayers()).rejects.toMatchObject({
@@ -505,10 +552,17 @@ describe('meleeService', () => {
 		});
 
 		it('rejects more pages declared after all records were received', async () => {
-			const player = (id: number) => ({ TeamId: id, PlayerName: `Player ${id}`, PronounsDescription: null, Decklists: [] });
+			const player = (id: number) => ({
+				TeamId: id,
+				PlayerName: `Player ${id}`,
+				PronounsDescription: null,
+				Decklists: [],
+			});
 			mockFetch.mockResolvedValue({
 				ok: true,
-				json: () => Promise.resolve(paginated([player(1)], { recordsTotal: 1, hasMore: true })),
+				json: () => Promise.resolve(paginated([
+					player(1),
+				], { recordsTotal: 1, hasMore: true })),
 			});
 
 			await expect(meleeService(credentials).fetchPlayers()).rejects.toMatchObject({
@@ -518,15 +572,24 @@ describe('meleeService', () => {
 		});
 
 		it('rejects a final page that does not contain every declared record', async () => {
-			const player = (id: number) => ({ TeamId: id, PlayerName: `Player ${id}`, PronounsDescription: null, Decklists: [] });
+			const player = (id: number) => ({
+				TeamId: id,
+				PlayerName: `Player ${id}`,
+				PronounsDescription: null,
+				Decklists: [],
+			});
 			mockFetch
 				.mockResolvedValueOnce({
 					ok: true,
-					json: () => Promise.resolve(paginated([player(1)], { recordsTotal: 3, hasMore: true })),
+					json: () => Promise.resolve(paginated([
+						player(1),
+					], { recordsTotal: 3, hasMore: true })),
 				})
 				.mockResolvedValueOnce({
 					ok: true,
-					json: () => Promise.resolve(paginated([player(2)], { page: 2, recordsTotal: 3 })),
+					json: () => Promise.resolve(paginated([
+						player(2),
+					], { page: 2, recordsTotal: 3 })),
 				});
 
 			await expect(meleeService(credentials).fetchPlayers()).rejects.toMatchObject({
@@ -538,7 +601,14 @@ describe('meleeService', () => {
 
 	describe('fetchCurrentStandings', () => {
 		it('returns all standings across pages', async () => {
-			const standing = { TeamId: 1, Rank: 1, Points: 9, MatchWins: 3, MatchLosses: 0, MatchDraws: 0 };
+			const standing = {
+				TeamId: 1,
+				Rank: 1,
+				Points: 9,
+				MatchWins: 3,
+				MatchLosses: 0,
+				MatchDraws: 0,
+			};
 			mockFetch.mockResolvedValue({
 				ok: true,
 				json: () => Promise.resolve(paginated([standing])),
@@ -562,7 +632,14 @@ describe('meleeService', () => {
 
 	describe('fetchStandingsByRound', () => {
 		it('returns standings for a specific round', async () => {
-			const standing = { TeamId: 1, Rank: 1, Points: 9, MatchWins: 3, MatchLosses: 0, MatchDraws: 0 };
+			const standing = {
+				TeamId: 1,
+				Rank: 1,
+				Points: 9,
+				MatchWins: 3,
+				MatchLosses: 0,
+				MatchDraws: 0,
+			};
 			mockFetch.mockResolvedValue({
 				ok: true,
 				json: () => Promise.resolve(paginated([standing])),
@@ -624,7 +701,12 @@ describe('meleeService', () => {
 				GameDraws: null,
 				ByeReason: null,
 				Competitors: [
-					{ TeamId: 1, SortOrder: 0, GameWins: null, Decklists: [] },
+					{
+						TeamId: 1,
+						SortOrder: 0,
+						GameWins: null,
+						Decklists: [],
+					},
 				],
 			};
 			mockFetch.mockResolvedValue({
@@ -642,8 +724,14 @@ describe('meleeService', () => {
 	describe('fetchMergedPlayers', () => {
 		it('fetches players and standings then maps them', async () => {
 			mockFetch
-				.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(paginated([])) })
-				.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(paginated([])) });
+				.mockResolvedValueOnce({
+					ok: true,
+					json: () => Promise.resolve(paginated([])),
+				})
+				.mockResolvedValueOnce({
+					ok: true,
+					json: () => Promise.resolve(paginated([])),
+				});
 
 			const result = await meleeService(credentials).fetchMergedPlayers();
 

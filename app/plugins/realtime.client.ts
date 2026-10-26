@@ -93,7 +93,9 @@ export default defineNuxtPlugin({
 					callback(null, tokenRequest);
 				}
 				catch (error) {
-					const message = error instanceof Error ? error.message : String(error);
+					const message = error instanceof Error
+						? error.message
+						: String(error);
 					callback(message, null);
 				}
 			},
@@ -124,7 +126,9 @@ export default defineNuxtPlugin({
 		const tokenError = ref<Error | null>(null);
 
 		function toError(err: unknown) {
-			return err instanceof Error ? err : new Error(String(err));
+			return err instanceof Error
+				? err
+				: new Error(String(err));
 		}
 
 		/**
@@ -412,7 +416,9 @@ export default defineNuxtPlugin({
 		 */
 		function watchContinuity(channelName: string, channel: Ably.RealtimeChannel) {
 			const watched: ChannelContinuity = {
-				state: isOutOfTouch(connectionSnapshot.connectionState) ? 'lost' : 'unstarted',
+				state: isOutOfTouch(connectionSnapshot.connectionState)
+					? 'lost'
+					: 'unstarted',
 				onLost: new Set(),
 				onNextAttach: new Set(),
 			};
@@ -525,7 +531,9 @@ export default defineNuxtPlugin({
 				ably.connection.close();
 			}
 			catch (err) {
-				const error = err instanceof Error ? err : new Error('Disconnection failed');
+				const error = err instanceof Error
+					? err
+					: new Error('Disconnection failed');
 				updateConnectionState('failed', error);
 				throw error;
 			}
@@ -772,7 +780,11 @@ export default defineNuxtPlugin({
 			if (presenceEntries.has(channelName))
 				return updatePresence(channelName, data);
 
-			const entry: PresenceEntry = { data, entered: false, dispose: () => {} };
+			const entry: PresenceEntry = {
+				data,
+				entered: false,
+				dispose: () => {},
+			};
 			presenceEntries.set(channelName, entry);
 			const held = holdSubscription({
 				label: `presence entry on ${channelName}`,

@@ -51,7 +51,9 @@ export function featureMatchSessionModule() {
 		// Opening announces the new Session and catches bindings up, as it does for
 		// every path that opens one.
 		const session = await stateService.createSessionForSlot(slotId, eventId, { originConnectionId });
-		return session ? mapFeatureMatchSessionToResponse(session) : null;
+		return session
+			? mapFeatureMatchSessionToResponse(session)
+			: null;
 	}
 
 	async function applyCommand(

@@ -63,7 +63,9 @@ function validationRequest(overrides: Partial<ValidationRequest> = {}): Validati
 }
 
 /** A request the server admits and rejects on its declared digest. */
-const MISMATCHED = validationRequest({ sourceDigest: 'f'.repeat(64) });
+const MISMATCHED = validationRequest({
+	sourceDigest: 'f'.repeat(64),
+});
 
 interface Response {
 	status: number;
@@ -182,7 +184,10 @@ function withinOrPending<T>(promise: Promise<T>, withinMs: number): Promise<T | 
 async function validate(request: ValidationRequest, body: Buffer = SOURCE): Promise<Response> {
 	const socket = await openConnection();
 	const response = responseOn(socket);
-	socket.write(Buffer.concat([Buffer.from(validationHead(request, body.byteLength)), body]));
+	socket.write(Buffer.concat([
+		Buffer.from(validationHead(request, body.byteLength)),
+		body,
+	]));
 	return response;
 }
 
@@ -250,7 +255,10 @@ describe('silent-video validation Container admission', { timeout: 60_000 }, () 
 		await startServer();
 		const first = await openConnection();
 		const second = await openConnection();
-		const responses = [responseOn(first), responseOn(second)];
+		const responses = [
+			responseOn(first),
+			responseOn(second),
+		];
 		// Both heads reach the server together, so the second arrives while the
 		// first is still setting up its workspace.
 		first.write(validationHead(MISMATCHED, SOURCE.byteLength));
@@ -261,7 +269,10 @@ describe('silent-video validation Container admission', { timeout: 60_000 }, () 
 		second.write(SOURCE);
 		const statuses = (await Promise.all(responses)).map(response => response.status);
 		expect(statuses.toSorted()).toEqual([200, 409]);
-		expect(early).toMatchObject({ status: 409, body: JSON.stringify({ error: 'validation already in progress' }) });
+		expect(early).toMatchObject({
+			status: 409,
+			body: JSON.stringify({ error: 'validation already in progress' }),
+		});
 	});
 
 	it('keeps a validation reserved through other requests turned away while it runs', async () => {
@@ -316,7 +327,9 @@ describe('silent-video validation Container admission', { timeout: 60_000 }, () 
 
 	it('admits a later validation after validation itself fails', async () => {
 		// The digest matches, so the server goes on to ffprobe, which it cannot find.
-		await startServer({ PATH: join(root, 'no-tooling') });
+		await startServer({
+			PATH: join(root, 'no-tooling'),
+		});
 		const response = await validate(validationRequest());
 		expect(response.status).toBe(500);
 		await expectAdmitsAnother();

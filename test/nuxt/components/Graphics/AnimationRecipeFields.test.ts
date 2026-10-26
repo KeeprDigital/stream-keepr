@@ -29,7 +29,10 @@ const USelectStub = defineComponent({
 	name: 'USelect',
 	props: {
 		modelValue: { type: String, required: false },
-		items: { type: Array as () => { label: string; value: string }[], default: () => [] },
+		items: {
+			type: Array as () => { label: string; value: string }[],
+			default: () => [],
+		},
 		disabled: { type: Boolean, required: false },
 	},
 	emits: ['update:modelValue'],
@@ -40,13 +43,18 @@ const USelectStub = defineComponent({
 
 const USwitchStub = defineComponent({
 	name: 'USwitch',
-	props: { modelValue: { type: Boolean, required: false }, disabled: { type: Boolean, required: false } },
+	props: {
+		modelValue: { type: Boolean, required: false },
+		disabled: { type: Boolean, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input type="checkbox" :checked="modelValue" :disabled="disabled" />',
 });
 
 const UButtonStub = defineComponent({
-	props: { label: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" @click="$emit(\'click\')">{{ label }}</button>',
 });
@@ -54,7 +62,10 @@ const UButtonStub = defineComponent({
 const global = {
 	stubs: {
 		UFormField: defineComponent({
-			props: { label: { type: String, required: false }, help: { type: String, required: false } },
+			props: {
+				label: { type: String, required: false },
+				help: { type: String, required: false },
+			},
 			template: '<div><label>{{ label }}</label><slot /><p v-if="help" class="help">{{ help }}</p></div>',
 		}),
 		UFieldGroup: defineComponent({ template: '<div><slot /></div>' }),
@@ -107,11 +118,20 @@ describe('graphic animation recipe fields', () => {
 		const wrapper = mountFields();
 
 		const duration = control(wrapper, 'UInputNumber', 'duration')!;
-		expect([duration.props('min'), duration.props('max')]).toEqual([50, 10000]);
+		expect([
+			duration.props('min'),
+			duration.props('max'),
+		]).toEqual([50, 10000]);
 		const delay = control(wrapper, 'UInputNumber', 'delay')!;
-		expect([delay.props('min'), delay.props('max')]).toEqual([0, 10000]);
+		expect([
+			delay.props('min'),
+			delay.props('max'),
+		]).toEqual([0, 10000]);
 		const distance = control(wrapper, 'UInputNumber', 'slide-distance')!;
-		expect([distance.props('min'), distance.props('max')]).toEqual([0, 10000]);
+		expect([
+			distance.props('min'),
+			distance.props('max'),
+		]).toEqual([0, 10000]);
 	});
 
 	it('falls back to the shortest duration when the field is cleared', async () => {
@@ -121,7 +141,14 @@ describe('graphic animation recipe fields', () => {
 		await enter(wrapper, 'UInputNumber', 'delay', undefined);
 
 		// Zero would be a duration the write refuses.
-		expect(wrapper.emitted('update')).toEqual([[{ duration: 50 }], [{ delay: 0 }]]);
+		expect(wrapper.emitted('update')).toEqual([
+			[
+				{ duration: 50 },
+			],
+			[
+				{ delay: 0 },
+			],
+		]);
 	});
 
 	it('shows a recipe with no delay of its own as starting immediately', () => {
@@ -157,7 +184,10 @@ describe('graphic animation recipe fields', () => {
 		await enter(wrapper, 'USwitch', 'slide-enabled', false);
 
 		// The host's merge fills a switched-on channel from its defaults.
-		expect(wrapper.emitted('channel')).toEqual([['fade', {}], ['slide', null]]);
+		expect(wrapper.emitted('channel')).toEqual([
+			['fade', {}],
+			['slide', null],
+		]);
 	});
 
 	it('emits one channel field at a time', async () => {
@@ -167,8 +197,14 @@ describe('graphic animation recipe fields', () => {
 		await enter(wrapper, 'UInputNumber', 'scale-factor', 1.2);
 
 		expect(wrapper.emitted('channel')).toEqual([
-			['slide', { distanceMode: 'clear-parent' }],
-			['scale', { factor: 1.2 }],
+			[
+				'slide',
+				{ distanceMode: 'clear-parent' },
+			],
+			[
+				'scale',
+				{ factor: 1.2 },
+			],
 		]);
 	});
 
@@ -178,12 +214,20 @@ describe('graphic animation recipe fields', () => {
 		await enter(wrapper, 'UInputNumber', 'scale-factor', undefined);
 
 		// Zero would be a scale from nothing, which nobody asked for by clearing the field.
-		expect(wrapper.emitted('channel')).toEqual([['scale', { factor: 1 }]]);
+		expect(wrapper.emitted('channel')).toEqual([
+			[
+				'scale',
+				{ factor: 1 },
+			],
+		]);
 	});
 
 	it('hides the slide distance while the slide clears its parent instead', () => {
 		const wrapper = mountFields({
-			recipe: { ...RECIPE, slide: { direction: 'north', distanceMode: 'clear-parent', distance: 0 } },
+			recipe: {
+				...RECIPE,
+				slide: { direction: 'north', distanceMode: 'clear-parent', distance: 0 },
+			},
 		});
 
 		expect(control(wrapper, 'UInputNumber', 'slide-distance')).toBeUndefined();
@@ -194,15 +238,28 @@ describe('graphic animation recipe fields', () => {
 		expect(control(mountFields(), 'UInputNumber', 'pause')).toBeUndefined();
 		expect(control(mountFields(), 'USwitch', 'repeat-indefinite')).toBeUndefined();
 
-		const cycling = mountFields({ cycling: true, recipe: { ...RECIPE, pause: 250, repeat: 3 } });
+		const cycling = mountFields({
+			cycling: true,
+			recipe: { ...RECIPE, pause: 250, repeat: 3 },
+		});
 		const pause = control(cycling, 'UInputNumber', 'pause')!;
-		expect([pause.props('modelValue'), pause.props('max')]).toEqual([250, 60000]);
+		expect([
+			pause.props('modelValue'),
+			pause.props('max'),
+		]).toEqual([250, 60000]);
 		const repeat = control(cycling, 'UInputNumber', 'repeat')!;
-		expect([repeat.props('modelValue'), repeat.props('min'), repeat.props('max')]).toEqual([3, 1, 100]);
+		expect([
+			repeat.props('modelValue'),
+			repeat.props('min'),
+			repeat.props('max'),
+		]).toEqual([3, 1, 100]);
 	});
 
 	it('will not ask for a repeat count while the recipe repeats indefinitely', async () => {
-		const wrapper = mountFields({ cycling: true, recipe: { ...RECIPE, pause: 0, repeat: 'indefinite' } });
+		const wrapper = mountFields({
+			cycling: true,
+			recipe: { ...RECIPE, pause: 0, repeat: 'indefinite' },
+		});
 
 		expect(control(wrapper, 'UInputNumber', 'repeat')!.props('disabled')).toBe(true);
 
@@ -211,14 +268,27 @@ describe('graphic animation recipe fields', () => {
 		await enter(wrapper, 'UInputNumber', 'repeat', 2.6);
 
 		// A whole count rather than nothing, which is a recipe the write accepts.
-		expect(wrapper.emitted('update')).toEqual([[{ repeat: 1 }], [{ pause: 0 }], [{ repeat: 3 }]]);
+		expect(wrapper.emitted('update')).toEqual([
+			[
+				{ repeat: 1 },
+			],
+			[
+				{ pause: 0 },
+			],
+			[
+				{ repeat: 3 },
+			],
+		]);
 	});
 
 	describe('slide distance in a Geometry Unit', () => {
 		const CANVAS: SlideParent = { width: 1920, height: 1080, name: 'canvas' };
 
 		function slideRecipe(direction: 'east' | 'north' | 'north-east', distance = 192): FieldsRecipe {
-			return { ...RECIPE, slide: { direction, distanceMode: 'fixed', distance } };
+			return {
+				...RECIPE,
+				slide: { direction, distanceMode: 'fixed', distance },
+			};
 		}
 
 		async function chooseUnit(wrapper: Wrapper, label: 'px' | '%' | '±16') {
@@ -235,7 +305,9 @@ describe('graphic animation recipe fields', () => {
 		});
 
 		it('stays in pixels, with no unit choice, without a parent to measure against', () => {
-			const wrapper = mountFields({ recipe: slideRecipe('east') });
+			const wrapper = mountFields({
+				recipe: slideRecipe('east'),
+			});
 
 			expect(wrapper.findAll('button').filter(button => ['px', '%', '±16'].includes(button.text()))).toEqual([]);
 			expect(control(wrapper, 'UInputNumber', 'slide-distance')!.props('modelValue')).toBe(192);
@@ -243,30 +315,53 @@ describe('graphic animation recipe fields', () => {
 		});
 
 		it('measures a horizontal slide against the parent width and emits pixels', async () => {
-			const wrapper = mountFields({ recipe: slideRecipe('east'), slideParent: CANVAS });
+			const wrapper = mountFields({
+				recipe: slideRecipe('east'),
+				slideParent: CANVAS,
+			});
 			await chooseUnit(wrapper, '%');
 
 			const distance = control(wrapper, 'UInputNumber', 'slide-distance')!;
-			expect([distance.props('modelValue'), distance.props('min'), distance.props('max')]).toEqual([10, 0, 520.83]);
+			expect([
+				distance.props('modelValue'),
+				distance.props('min'),
+				distance.props('max'),
+			]).toEqual([10, 0, 520.83]);
 			expect(help(wrapper)).toEqual(['% of canvas width']);
 
 			await enter(wrapper, 'UInputNumber', 'slide-distance', 25);
-			expect(wrapper.emitted('channel')).toEqual([['slide', { distance: 480 }]]);
+			expect(wrapper.emitted('channel')).toEqual([
+				[
+					'slide',
+					{ distance: 480 },
+				],
+			]);
 		});
 
 		it('measures a vertical slide against the parent height', async () => {
-			const wrapper = mountFields({ recipe: slideRecipe('north', 108), slideParent: { ...CANVAS, name: 'group' } });
+			const wrapper = mountFields({
+				recipe: slideRecipe('north', 108),
+				slideParent: { ...CANVAS, name: 'group' },
+			});
 			await chooseUnit(wrapper, '±16');
 
 			expect(control(wrapper, 'UInputNumber', 'slide-distance')!.props('modelValue')).toBe(3.2);
 			expect(help(wrapper)).toEqual(['32-unit grid across group height']);
 
 			await enter(wrapper, 'UInputNumber', 'slide-distance', 16);
-			expect(wrapper.emitted('channel')).toEqual([['slide', { distance: 540 }]]);
+			expect(wrapper.emitted('channel')).toEqual([
+				[
+					'slide',
+					{ distance: 540 },
+				],
+			]);
 		});
 
 		it('measures a diagonal slide against the parent\'s shorter side', async () => {
-			const wrapper = mountFields({ recipe: slideRecipe('north-east', 108), slideParent: CANVAS });
+			const wrapper = mountFields({
+				recipe: slideRecipe('north-east', 108),
+				slideParent: CANVAS,
+			});
 			await chooseUnit(wrapper, '%');
 
 			expect(control(wrapper, 'UInputNumber', 'slide-distance')!.props('modelValue')).toBe(10);
@@ -274,7 +369,10 @@ describe('graphic animation recipe fields', () => {
 		});
 
 		it('names no reference in pixels, and clamps an entry to what a write accepts', async () => {
-			const wrapper = mountFields({ recipe: slideRecipe('east'), slideParent: CANVAS });
+			const wrapper = mountFields({
+				recipe: slideRecipe('east'),
+				slideParent: CANVAS,
+			});
 			await flushPromises();
 
 			expect(help(wrapper)).toEqual([]);
@@ -282,11 +380,24 @@ describe('graphic animation recipe fields', () => {
 			await enter(wrapper, 'UInputNumber', 'slide-distance', 900);
 			await enter(wrapper, 'UInputNumber', 'slide-distance', undefined);
 
-			expect(wrapper.emitted('channel')).toEqual([['slide', { distance: 10000 }], ['slide', { distance: 0 }]]);
+			expect(wrapper.emitted('channel')).toEqual([
+				[
+					'slide',
+					{ distance: 10000 },
+				],
+				[
+					'slide',
+					{ distance: 0 },
+				],
+			]);
 		});
 
 		it('lets a reader who may not write still switch the unit they read in', async () => {
-			const wrapper = mountFields({ recipe: slideRecipe('east'), slideParent: CANVAS, disabled: true });
+			const wrapper = mountFields({
+				recipe: slideRecipe('east'),
+				slideParent: CANVAS,
+				disabled: true,
+			});
 			await chooseUnit(wrapper, '%');
 
 			expect(control(wrapper, 'UInputNumber', 'slide-distance')!.props('modelValue')).toBe(10);
@@ -295,7 +406,10 @@ describe('graphic animation recipe fields', () => {
 
 		it('opens in the Geometry Unit the geometry fields last used', async () => {
 			localStorage.setItem('editor-geometryUnit', 'percent');
-			const wrapper = mountFields({ recipe: slideRecipe('east'), slideParent: CANVAS });
+			const wrapper = mountFields({
+				recipe: slideRecipe('east'),
+				slideParent: CANVAS,
+			});
 			await flushPromises();
 
 			expect(control(wrapper, 'UInputNumber', 'slide-distance')!.props('modelValue')).toBe(10);
@@ -303,7 +417,11 @@ describe('graphic animation recipe fields', () => {
 	});
 
 	it('disables every field for a reader who may not write', () => {
-		const wrapper = mountFields({ cycling: true, disabled: true, recipe: { ...RECIPE, pause: 0, repeat: 2 } });
+		const wrapper = mountFields({
+			cycling: true,
+			disabled: true,
+			recipe: { ...RECIPE, pause: 0, repeat: 2 },
+		});
 
 		const controls = wrapper.findAll('input, select');
 		expect(controls.length).toBeGreaterThan(0);

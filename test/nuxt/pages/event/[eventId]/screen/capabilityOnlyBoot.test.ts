@@ -44,7 +44,9 @@ mockNuxtImport('$fetch', () => async (path: string, options: { headers?: Record<
 	if (!path.startsWith('/api/screen-output/') || authorization !== `Bearer ${capability}` || !answer)
 		throw unauthorized(path);
 	const value = answer();
-	return value instanceof Promise ? value : structuredClone(value);
+	return value instanceof Promise
+		? value
+		: structuredClone(value);
 });
 
 vi.mock('~/composables/core/useRealtime', async () => {
@@ -125,7 +127,9 @@ function screen(overrides: Record<string, unknown> = {}) {
 		name: 'Program',
 		currentMode: 'player-history',
 		screenConfig: { width: 1920, height: 1080 },
-		modeConfigs: { 'player-history': { playerId: 11 } },
+		modeConfigs: {
+			'player-history': { playerId: 11 },
+		},
 		stateVersion: 1,
 		...overrides,
 	};
@@ -133,32 +137,57 @@ function screen(overrides: Record<string, unknown> = {}) {
 
 function history(name: string, result: Record<string, unknown> = {}) {
 	return {
-		player: { id: 11, eventId: 42, name, updatedAt: '2026-10-17T00:00:00.000Z' },
-		history: [{
-			id: 1,
-			roundId: 31,
-			roundName: 'Round 1',
-			roundNumber: 1,
-			phaseName: 'Swiss',
-			tableNumber: 4,
-			opponentId: 12,
-			opponentName: 'Opponent Name',
-			opponentDeckName: null,
-			opponentDeckColors: null,
-			outcome: 'win',
-			playerGameWins: 2,
-			opponentGameWins: 0,
-			gameDraws: 0,
-			hasResult: true,
-			resultString: null,
-			...result,
-		}],
+		player: {
+			id: 11,
+			eventId: 42,
+			name,
+			updatedAt: '2026-10-17T00:00:00.000Z',
+		},
+		history: [
+			{
+				id: 1,
+				roundId: 31,
+				roundName: 'Round 1',
+				roundNumber: 1,
+				phaseName: 'Swiss',
+				tableNumber: 4,
+				opponentId: 12,
+				opponentName: 'Opponent Name',
+				opponentDeckName: null,
+				opponentDeckColors: null,
+				outcome: 'win',
+				playerGameWins: 2,
+				opponentGameWins: 0,
+				gameDraws: 0,
+				hasResult: true,
+				resultString: null,
+				...result,
+			},
+		],
 	};
 }
 
 function topCards(name: string) {
 	return {
-		entries: [{ id: 1, name, inclusionRate: 80, avgCopies: 4, totalCopies: 16, deckCount: 4, mainboardCount: 16, sideboardCount: 0, mainboardDeckCount: 4, sideboardDeckCount: 0, cardType: 'Instant', scryfallId: null, colors: 'R', cmc: 1, manaCost: '{R}' }],
+		entries: [
+			{
+				id: 1,
+				name,
+				inclusionRate: 80,
+				avgCopies: 4,
+				totalCopies: 16,
+				deckCount: 4,
+				mainboardCount: 16,
+				sideboardCount: 0,
+				mainboardDeckCount: 4,
+				sideboardDeckCount: 0,
+				cardType: 'Instant',
+				scryfallId: null,
+				colors: 'R',
+				cmc: 1,
+				manaCost: '{R}',
+			},
+		],
 		totalDecks: 5,
 		scope: 'all',
 	};
@@ -167,12 +196,33 @@ function topCards(name: string) {
 function metagame(archetype: string) {
 	return {
 		viewMode: 'archetype',
-		breakdown: { entries: [{ name: archetype, count: 2, metaShare: 100, colors: 'R' }], totalPlayers: 2, scope: 'all' },
+		breakdown: {
+			entries: [
+				{
+					name: archetype,
+					count: 2,
+					metaShare: 100,
+					colors: 'R',
+				},
+			],
+			totalPlayers: 2,
+			scope: 'all',
+		},
 	};
 }
 
-const pendingResult = { outcome: 'pending', hasResult: false, playerGameWins: null, opponentGameWins: null };
-const recordedLoss = { outcome: 'loss', hasResult: true, playerGameWins: 1, opponentGameWins: 2 };
+const pendingResult = {
+	outcome: 'pending',
+	hasResult: false,
+	playerGameWins: null,
+	opponentGameWins: null,
+};
+const recordedLoss = {
+	outcome: 'loss',
+	hasResult: true,
+	playerGameWins: 1,
+	opponentGameWins: 2,
+};
 
 /** The output's stand-in transport, with a hand to deliver Event messages and signal a reattach. */
 function realtime() {
@@ -221,10 +271,22 @@ describe('a capability-only Screen Output', () => {
 		api.requests = [];
 		api.screen = screen();
 		api.answers = new Map<string, () => unknown>([
-			['/api/screen-output/events/42/screens/slug/main', () => api.screen],
-			['/api/screen-output/events/42/screens/7', () => api.screen],
-			['/api/screen-output/events/42/screens/7/event', () => outputEvent],
-			['/api/screen-output/events/42/screens/7/player-history', () => history('First Player')],
+			[
+				'/api/screen-output/events/42/screens/slug/main',
+				() => api.screen,
+			],
+			[
+				'/api/screen-output/events/42/screens/7',
+				() => api.screen,
+			],
+			[
+				'/api/screen-output/events/42/screens/7/event',
+				() => outputEvent,
+			],
+			[
+				'/api/screen-output/events/42/screens/7/player-history',
+				() => history('First Player'),
+			],
 		]);
 		resetAllEventStores();
 		realtime().connectionState = 'connected';
@@ -244,7 +306,12 @@ describe('a capability-only Screen Output', () => {
 			text => text.includes('First Player'),
 		);
 
-		api.screen = screen({ stateVersion: 2, modeConfigs: { 'player-history': { playerId: 11, headerText: 'Changed Header' } } });
+		api.screen = screen({
+			stateVersion: 2,
+			modeConfigs: {
+				'player-history': { playerId: 11, headerText: 'Changed Header' },
+			},
+		});
 		realtime().attach('event:42');
 		await settleUntil(() => wrapper.text().includes('Changed Header'));
 
@@ -270,7 +337,12 @@ describe('a capability-only Screen Output', () => {
 			text => text.includes('First Player'),
 		);
 
-		api.screen = screen({ stateVersion: 2, modeConfigs: { 'player-history': { playerId: 11, headerText: 'Changed Header' } } });
+		api.screen = screen({
+			stateVersion: 2,
+			modeConfigs: {
+				'player-history': { playerId: 11, headerText: 'Changed Header' },
+			},
+		});
 		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => history('Second Name'));
 		await useScreenStore().applyRemoteUpdated({ eventId: 42, screenId: 7 } as never);
 		for (let round = 0; round < 100 && !wrapper.text().includes('Changed Header'); round++) {
@@ -295,7 +367,14 @@ describe('a capability-only Screen Output', () => {
 		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => history('First Player', recordedLoss));
 		realtime().deliver('event:42', 'match:updated', {
 			eventId: 42,
-			match: { id: 1, eventId: 42, roundId: 31, player1Id: 12, player2Id: 11, hasResult: true },
+			match: {
+				id: 1,
+				eventId: 42,
+				roundId: 31,
+				player1Id: 12,
+				player2Id: 11,
+				hasResult: true,
+			},
 		});
 		await settleUntil(() => wrapper.text().includes('LOSS'));
 
@@ -327,7 +406,12 @@ describe('a capability-only Screen Output', () => {
 	});
 
 	it('follows a deck review on a Most Played Cards output, with no roster or settings panel loaded', async () => {
-		api.screen = screen({ currentMode: 'top-cards', modeConfigs: { 'top-cards': { showCardNames: true } } });
+		api.screen = screen({
+			currentMode: 'top-cards',
+			modeConfigs: {
+				'top-cards': { showCardNames: true },
+			},
+		});
 		api.answers.set('/api/screen-output/events/42/screens/7/top-cards', () => topCards('Lightning Bolt'));
 		const wrapper = await mountOutput(
 			`/event/42/screen/main#asset-capability=${capability}`,
@@ -337,7 +421,10 @@ describe('a capability-only Screen Output', () => {
 		// Reviewed in another browser: no Player record, Screen configuration or
 		// roster changes, so only the aggregate's own invalidation says to re-read.
 		api.answers.set('/api/screen-output/events/42/screens/7/top-cards', () => topCards('Counterspell'));
-		realtime().deliver('event:42', 'playerDeck:reviewed', { eventId: 42, deck: { id: 3, playerId: 11 } });
+		realtime().deliver('event:42', 'playerDeck:reviewed', {
+			eventId: 42,
+			deck: { id: 3, playerId: 11 },
+		});
 		await settleUntil(() => wrapper.text().includes('Counterspell'));
 
 		expect(wrapper.text()).toContain('Counterspell');
@@ -346,7 +433,12 @@ describe('a capability-only Screen Output', () => {
 	});
 
 	it('follows membership of the Player List driving a Metagame output, with no roster or settings panel loaded', async () => {
-		api.screen = screen({ currentMode: 'metagame', modeConfigs: { metagame: { scope: 'playerList', playerListId: 5 } } });
+		api.screen = screen({
+			currentMode: 'metagame',
+			modeConfigs: {
+				metagame: { scope: 'playerList', playerListId: 5 },
+			},
+		});
 		api.answers.set('/api/screen-output/events/42/screens/7/metagame', () => metagame('Mono Red'));
 		const wrapper = await mountOutput(
 			`/event/42/screen/main#asset-capability=${capability}`,
@@ -354,7 +446,13 @@ describe('a capability-only Screen Output', () => {
 		);
 
 		api.answers.set('/api/screen-output/events/42/screens/7/metagame', () => metagame('Azorius Control'));
-		realtime().deliver('event:42', 'playerList:membersChanged', { eventId: 42, listId: 5, playerIds: [12], action: 'added', memberCount: 2 });
+		realtime().deliver('event:42', 'playerList:membersChanged', {
+			eventId: 42,
+			listId: 5,
+			playerIds: [12],
+			action: 'added',
+			memberCount: 2,
+		});
 		await settleUntil(() => wrapper.text().includes('Azorius Control'));
 
 		expect(wrapper.text()).toContain('Azorius Control');
@@ -363,7 +461,10 @@ describe('a capability-only Screen Output', () => {
 	});
 
 	it('shows a Metagame change missed while disconnected once its Event channel is attached again', async () => {
-		api.screen = screen({ currentMode: 'metagame', modeConfigs: { metagame: {} } });
+		api.screen = screen({
+			currentMode: 'metagame',
+			modeConfigs: { metagame: {} },
+		});
 		api.answers.set('/api/screen-output/events/42/screens/7/metagame', () => metagame('Mono Red'));
 		const wrapper = await mountOutput(
 			`/event/42/screen/main#asset-capability=${capability}`,
@@ -391,10 +492,26 @@ describe('a capability-only Screen Output', () => {
 				name: 'Lightning Bolt',
 				set: 'lea',
 				layout: 'normal',
-				imageData: { front: { small: 'https://example.com/s.jpg', normal: 'https://example.com/n.jpg' }, back: null },
-				orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
-				displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
-				timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 2000 },
+				imageData: {
+					front: { small: 'https://example.com/s.jpg', normal: 'https://example.com/n.jpg' },
+					back: null,
+				},
+				orientationData: {
+					flipable: false,
+					turnable: false,
+					rotateable: false,
+					counterRotateable: false,
+				},
+				displayData: {
+					flipped: false,
+					rotated: false,
+					counterRotated: false,
+					turnedOver: false,
+				},
+				timeoutData: {
+					timeoutStartTimestamp: Date.now(),
+					timeoutDuration: 2000,
+				},
 			},
 			revision: 1,
 		}));
@@ -422,7 +539,10 @@ describe('a capability-only Feature Match Overlay output', () => {
 	function overlayScreen() {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		config.featureMatchId = 11;
-		return screen({ currentMode: 'feature-match-overlay', modeConfigs: { 'feature-match-overlay': config } });
+		return screen({
+			currentMode: 'feature-match-overlay',
+			modeConfigs: { 'feature-match-overlay': config },
+		});
 	}
 
 	function session(id: number, sequence: number, lifeTotal: number, matchId = 300) {
@@ -433,7 +553,13 @@ describe('a capability-only Feature Match Overlay output', () => {
 			eventId: 42,
 			slotId: 11,
 			status: 'active',
-			sourceSnapshot: { eventId: 42, slotId: 11, matchId, player1: { name: 'Alice' }, player2: { name: 'Bob' } },
+			sourceSnapshot: {
+				eventId: 42,
+				slotId: 11,
+				matchId,
+				player1: { name: 'Alice' },
+				player2: { name: 'Bob' },
+			},
 			currentState,
 			sequence,
 			closedAt: null,
@@ -452,7 +578,15 @@ describe('a capability-only Feature Match Overlay output', () => {
 	function slotRead(activeSession: ReturnType<typeof session>, matchId = 300) {
 		const round = roundOfMatch[matchId]!;
 		return {
-			slot: { ...createWireMockFeatureMatch({ id: 11, eventId: 42, matchId, activeSessionId: activeSession.id }), activeSession },
+			slot: {
+				...createWireMockFeatureMatch({
+					id: 11,
+					eventId: 42,
+					matchId,
+					activeSessionId: activeSession.id,
+				}),
+				activeSession,
+			},
 			match: { id: matchId, eventId: 42, roundId: round.id },
 			round: { ...round, eventId: 42, phaseId: 5 },
 			phase: { id: 5, eventId: 42, name: 'Swiss' },
@@ -514,10 +648,22 @@ describe('a capability-only Feature Match Overlay output', () => {
 		api.requests = [];
 		api.screen = overlayScreen();
 		api.answers = new Map<string, () => unknown>([
-			['/api/screen-output/events/42/screens/slug/main', () => api.screen],
-			['/api/screen-output/events/42/screens/7', () => api.screen],
-			['/api/screen-output/events/42/screens/7/event', () => outputEvent],
-			[slotPath, () => slotRead(session(90, 3, 20))],
+			[
+				'/api/screen-output/events/42/screens/slug/main',
+				() => api.screen,
+			],
+			[
+				'/api/screen-output/events/42/screens/7',
+				() => api.screen,
+			],
+			[
+				'/api/screen-output/events/42/screens/7/event',
+				() => outputEvent,
+			],
+			[
+				slotPath,
+				() => slotRead(session(90, 3, 20)),
+			],
 		]);
 		resetAllEventStores();
 		realtime().connectionState = 'connected';

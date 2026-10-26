@@ -111,7 +111,9 @@ const selectedGroup = computed(() => {
 	const location = findGraphicItem(graphic, props.selectedTarget.itemId);
 	if (location?.group)
 		return location.group;
-	return location?.item.type === 'group' ? location.item : null;
+	return location?.item.type === 'group'
+		? location.item
+		: null;
 });
 
 interface TreeRow {
@@ -132,7 +134,12 @@ const itemRows = computed<TreeRow[]>(() => {
 	const rows: TreeRow[] = [];
 	for (let index = items.length - 1; index >= 0; index -= 1) {
 		const item = items[index]!;
-		rows.push({ item, depth: 0, index, siblingCount: items.length });
+		rows.push({
+			item,
+			depth: 0,
+			index,
+			siblingCount: items.length,
+		});
 		if (item.type !== 'group')
 			continue;
 		for (let childIndex = item.children.length - 1; childIndex >= 0; childIndex -= 1) {
@@ -169,7 +176,9 @@ function editStack(apply: (graphics: readonly BroadcastGraphicConfig[]) => Broad
  */
 function editShownGraphic(apply: (graphic: BroadcastGraphicConfig) => BroadcastGraphicConfig): string | null {
 	const graphicId = selectedGraphic.value?.id;
-	return graphicId !== undefined && edit({ kind: 'named-graphic', graphicId, apply }) ? graphicId : null;
+	return graphicId !== undefined && edit({ kind: 'named-graphic', graphicId, apply })
+		? graphicId
+		: null;
 }
 
 function addGraphic() {

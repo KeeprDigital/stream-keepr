@@ -7,12 +7,20 @@ export function cloneMtgCard(card: MtgCard): MtgCard {
 		set: card.set,
 		layout: card.layout,
 		imageData: {
-			front: card.imageData.front ? { ...card.imageData.front } : null,
-			back: card.imageData.back ? { ...card.imageData.back } : null,
+			front: card.imageData.front
+				? { ...card.imageData.front }
+				: null,
+			back: card.imageData.back
+				? { ...card.imageData.back }
+				: null,
 		},
 		orientationData: { ...card.orientationData },
 		displayData: { ...card.displayData },
-		meldData: card.meldData ? { ...card.meldData } : undefined,
-		timeoutData: card.timeoutData ? { ...card.timeoutData } : undefined,
+		meldData: card.meldData
+			? { ...card.meldData }
+			: undefined,
+		timeoutData: card.timeoutData
+			? { ...card.timeoutData }
+			: undefined,
 	};
 }

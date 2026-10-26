@@ -66,7 +66,9 @@ const ANONYMOUS_ERA_ACTOR = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0
  * bounded at 500 entries and D1 binds at most 100 parameters per statement.
  */
 export async function graphicsActorNames(actors: Iterable<string>): Promise<Record<string, string>> {
-	const asked = [...new Set(actors)].filter(actor => actor.length > 0);
+	const asked = [
+		...new Set(actors),
+	].filter(actor => actor.length > 0);
 	if (asked.length === 0)
 		return {};
 
@@ -97,7 +99,9 @@ export async function graphicsActorNames(actors: Iterable<string>): Promise<Reco
 
 	return Object.fromEntries(asked.map(actor => [
 		actor,
-		found.get(actor) ?? (ANONYMOUS_ERA_ACTOR.test(actor) ? ANONYMOUS_ERA_ACTOR_NAME : actor),
+		found.get(actor) ?? (ANONYMOUS_ERA_ACTOR.test(actor)
+			? ANONYMOUS_ERA_ACTOR_NAME
+			: actor),
 	]));
 }
 

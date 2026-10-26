@@ -92,7 +92,11 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 		);
 		const upload = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-			{ method: 'PUT', headers: { cookie: authorCookie }, body: pixelPng },
+			{
+				method: 'PUT',
+				headers: { cookie: authorCookie },
+				body: pixelPng,
+			},
 		);
 		const operation = await expectOperationResult(upload);
 		return { assetId: operation.result.assetId, revisionId: operation.result.revisionId };
@@ -142,15 +146,31 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 			screenId = screen.id;
 			capability = (await $fetch<{ assetCapability: string }>(
 				`/api/events/${eventId}/screens/${screenId}/asset-capability`,
-				{ headers: { cookie: authorCookie } },
+				{
+					headers: { cookie: authorCookie },
+				},
 			)).assetCapability;
 
 			await $fetch(`/api/events/${eventId}/screens/${screenId}/config/${mode}`, {
 				method: 'PATCH',
 				body: {
 					backgroundLayers: [
-						{ id: 'plate', type: 'image', enabled: true, opacity: 1, source: { kind: 'asset', ...reference }, fit: 'cover' },
-						{ id: 'remote', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url: 'https://example.com/plate.png' }, fit: 'cover' },
+						{
+							id: 'plate',
+							type: 'image',
+							enabled: true,
+							opacity: 1,
+							source: { kind: 'asset', ...reference },
+							fit: 'cover',
+						},
+						{
+							id: 'remote',
+							type: 'image',
+							enabled: true,
+							opacity: 1,
+							source: { kind: 'url', url: 'https://example.com/plate.png' },
+							fit: 'cover',
+						},
 					],
 				},
 			});
@@ -159,7 +179,9 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 		it('resolves the pinned revision on the Screen Output through its capability alone', async () => {
 			const delivered = await fetch(
 				`/api/screen-output/screens/${screenId}/assets/${reference.assetId}/revisions/${reference.revisionId}/content`,
-				{ headers: { authorization: `Bearer ${capability}` } },
+				{
+					headers: { authorization: `Bearer ${capability}` },
+				},
 			);
 
 			expect(delivered.status).toBe(200);
@@ -169,7 +191,9 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 		it('counts the revision as in use, under the layer that pins it, and refuses to trash it', async () => {
 			const usage = await $fetch<GraphicAssetUsage[]>(
 				`/api/graphics-assets/${reference.assetId}/usage`,
-				{ headers: { cookie: authorCookie } },
+				{
+					headers: { cookie: authorCookie },
+				},
 			);
 			expect(usage).toEqual([
 				expect.objectContaining({
@@ -185,7 +209,11 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 
 			const trashed = await $fetch<GraphicAssetLifecycleActionOutcome>(
 				`/api/graphics-assets/${reference.assetId}/lifecycle-actions`,
-				{ method: 'POST', headers: { cookie: authorCookie }, body: { action: 'trash' } },
+				{
+					method: 'POST',
+					headers: { cookie: authorCookie },
+					body: { action: 'trash' },
+				},
 			);
 			expect(trashed).toMatchObject({ outcome: 'in-use' });
 		});
@@ -198,7 +226,9 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 
 			const view = await $fetch<GraphicAssetRetentionView>(
 				`/api/graphics-assets/${reference.assetId}/retention`,
-				{ headers: { cookie: authorCookie } },
+				{
+					headers: { cookie: authorCookie },
+				},
 			);
 			expect(view.revisions).toContainEqual(expect.objectContaining({
 				revisionId: reference.revisionId,
@@ -207,7 +237,9 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 
 			const delivered = await fetch(
 				`/api/screen-output/screens/${screenId}/assets/${reference.assetId}/revisions/${reference.revisionId}/content`,
-				{ headers: { authorization: `Bearer ${capability}` } },
+				{
+					headers: { authorization: `Bearer ${capability}` },
+				},
 			);
 			expect(delivered.status).toBe(200);
 		});

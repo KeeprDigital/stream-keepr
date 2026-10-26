@@ -319,7 +319,9 @@ export function createD1GraphicsAssetRetentionCatalogue(
 				throw new Error('Graphics stranded staged input bytes could not be zeroed');
 			return {
 				released: zeroed.meta.changes === 1,
-				bytesFreed: zeroed.meta.changes === 1 ? before.staging_bytes : 0,
+				bytesFreed: zeroed.meta.changes === 1
+					? before.staging_bytes
+					: 0,
 			};
 		},
 		async listUnreleasedStagedInput(input) {
@@ -340,7 +342,9 @@ export function createD1GraphicsAssetRetentionCatalogue(
 				FROM graphics_ingestion_operations
 				WHERE id = ? AND ${UNRELEASED_STAGED_INPUT_SQL}
 			`).bind(operationId).first<UnreleasedStagedInputRow>();
-			return row ? unreleasedStagedInputFromRow(row) : undefined;
+			return row
+				? unreleasedStagedInputFromRow(row)
+				: undefined;
 		},
 		async countUnreleasedStagedInput() {
 			const row = await database.prepare(`
@@ -385,7 +389,9 @@ export function createD1GraphicsAssetRetentionCatalogue(
 				assetId: row.asset_id as GraphicAssetId,
 				revisionId: row.revision_id as GraphicAssetRevisionId,
 				revisionNumber: row.revision_number,
-				reason: row.reference_count > 0 ? 'referenced' : 'latest-revision',
+				reason: row.reference_count > 0
+					? 'referenced'
+					: 'latest-revision',
 				referenceCount: row.reference_count,
 			}));
 			const removal = await database.prepare(`
@@ -449,8 +455,12 @@ export function createD1GraphicsAssetRetentionCatalogue(
 			`).bind(
 				observedAt,
 				pruneAfter,
-				row.frozen === 1 ? observedAt : null,
-				row.frozen === 1 ? pruneAfter - observedAt : null,
+				row.frozen === 1
+					? observedAt
+					: null,
+				row.frozen === 1
+					? pruneAfter - observedAt
+					: null,
 				observedAt,
 				row.revision_id,
 			)) as [D1PreparedStatement, ...D1PreparedStatement[]];
@@ -597,7 +607,9 @@ export function createD1GraphicsAssetRetentionCatalogue(
 			const recoveryWindowPredicate = input.requireRecoveryWindowElapsed
 				? 'AND asset.trash_recoverable_until <= ?'
 				: '';
-			const recoveryWindowBindings = input.requireRecoveryWindowElapsed ? [purgedAt] : [];
+			const recoveryWindowBindings = input.requireRecoveryWindowElapsed
+				? [purgedAt]
+				: [];
 			// Removing the asset cascades its revisions, derivatives, retention
 			// rows, and Event associations. Persisted references are RESTRICT, so
 			// this transaction cannot commit against a reference that appeared
@@ -746,10 +758,12 @@ export function createD1GraphicsAssetRetentionCatalogue(
 					quarantinedAt,
 				)),
 				...(reachable.results.length > 0
-					? [database.prepare(`
+					? [
+							database.prepare(`
 							DELETE FROM graphics_content_quarantine
 							WHERE id IN ${valuesFromJsonArray()}
-						`).bind(boundJsonArray(reachable.results.map(row => row.id)))]
+						`).bind(boundJsonArray(reachable.results.map(row => row.id))),
+						]
 					: []),
 			];
 			if (statements.length > 0) {
@@ -928,7 +942,9 @@ export function createD1GraphicsAssetRetentionCatalogue(
 					: 'ORDER BY revision.asset_id, revision.revision_number'}
 				LIMIT ?
 			`).bind(
-				...(input.assetId === undefined ? [] : [input.assetId]),
+				...(input.assetId === undefined
+					? []
+					: [input.assetId]),
 				input.limit,
 			).all<RevisionRetentionRow>();
 			if (!result.success)
@@ -954,7 +970,9 @@ export function createD1GraphicsAssetRetentionCatalogue(
 					ON retention.revision_id = revision.id
 				WHERE revision.id = ?
 			`).bind(revisionId).first<RevisionRetentionRow>();
-			return row ? revisionRetentionFromRow(row) : undefined;
+			return row
+				? revisionRetentionFromRow(row)
+				: undefined;
 		},
 		async findGraphicAssetName(assetId) {
 			const row = await database.prepare(
@@ -1123,7 +1141,9 @@ export function createD1GraphicsAssetRetentionCatalogue(
 				entry.reason,
 				entry.correlationId,
 				JSON.stringify(entry.detail),
-				entry.expiresAt === null ? null : new Date(entry.expiresAt).getTime(),
+				entry.expiresAt === null
+					? null
+					: new Date(entry.expiresAt).getTime(),
 			)) as [D1PreparedStatement, ...D1PreparedStatement[]];
 			const results = await database.batch(statements);
 			if (results.some(result => !result.success))
@@ -1174,7 +1194,9 @@ export function createD1GraphicsAssetRetentionCatalogue(
 				SELECT id, recorded_at, category, actor, subject_kind, subject_id,
 					outcome, reason, correlation_id, detail, expires_at
 				FROM graphics_asset_evidence
-				${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
+				${conditions.length > 0
+					? `WHERE ${conditions.join(' AND ')}`
+					: ''}
 				ORDER BY recorded_at ${older ? 'DESC' : 'ASC'}, id ${older ? 'DESC' : 'ASC'}
 				LIMIT ${bind(input.limit)[0]}
 			`).bind(...bindings).all<EvidenceRow>();

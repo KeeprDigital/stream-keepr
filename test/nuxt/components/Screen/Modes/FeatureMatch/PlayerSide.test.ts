@@ -138,7 +138,9 @@ describe('screenFeatureMatchPlayerSide', () => {
 		mockRecord = undefined;
 		mockPlayer.counters = [];
 		mockPlayerDecks.mockReset();
-		mockUsePlayerDeckCounters.mockReset().mockImplementation(() => ({ availableCounterTypes: ref(undefined) }));
+		mockUsePlayerDeckCounters.mockReset().mockImplementation(() => ({
+			availableCounterTypes: ref(undefined),
+		}));
 	});
 
 	it('reads its Player\'s deck counters through the Screen Output read', async () => {
@@ -174,7 +176,9 @@ describe('screenFeatureMatchPlayerSide', () => {
 	it('uses three touch columns for the player-facing counter list', async () => {
 		showCounters = true;
 		allowCounterControls = true;
-		mockPlayer.counters = [{ type: 'poison', value: 1 }];
+		mockPlayer.counters = [
+			{ type: 'poison', value: 1 },
+		];
 
 		const wrapper = await mountComponent();
 
@@ -189,7 +193,9 @@ describe('screenFeatureMatchPlayerSide', () => {
 		allowGameWinControls = false;
 		allowCounterControls = false;
 		showCounters = true;
-		mockPlayer.counters = [{ type: 'poison', value: 1 }];
+		mockPlayer.counters = [
+			{ type: 'poison', value: 1 },
+		];
 
 		const wrapper = await mountComponent();
 

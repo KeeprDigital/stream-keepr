@@ -25,7 +25,9 @@ import {
 
 /** An error shaped the way `fetch` reports a socket failure: the code on `cause`. */
 function transportFailure(code: string) {
-	return Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error(code), { code }) });
+	return Object.assign(new TypeError('fetch failed'), {
+		cause: Object.assign(new Error(code), { code }),
+	});
 }
 
 describe('the integration suite\'s transport retry', () => {
