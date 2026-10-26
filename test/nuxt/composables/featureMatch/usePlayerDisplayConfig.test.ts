@@ -1,43 +1,47 @@
 import { describe, expect, it } from 'vitest';
 
+function read(display: ReturnType<typeof usePlayerDisplayConfig>) {
+	return Object.fromEntries(Object.entries(display).map(([key, value]) => [key, value.value]));
+}
+
 describe('usePlayerDisplayConfig', () => {
-	it('shows a Player\'s identity and controls, but not their record or LGS, unless configured', () => {
-		const defaults = usePlayerDisplayConfig(undefined);
-		const configured = usePlayerDisplayConfig({
+	it('shows a Player\'s identity, deck and controls, but not their record or LGS, by default', () => {
+		expect(read(usePlayerDisplayConfig(undefined))).toEqual({
+			showName: true,
+			showPronouns: true,
+			showDeckName: true,
+			showCounters: true,
+			showRecord: false,
+			showLgs: false,
+			showMulliganInfo: true,
+			allowLifeControls: true,
+			allowGameWinControls: true,
+			allowCounterControls: true,
+			mulliganPhase: false,
+			startingHandSize: 7,
+			activePlayerTrackingEnabled: false,
+			hasDeckList: false,
+			seatLabel: undefined,
+		});
+	});
+
+	it('reads what the config sets, following it as it changes', () => {
+		const config = ref<any>({ showName: false, showRecord: true, startingHandSize: 5 });
+		const display = usePlayerDisplayConfig(config);
+		expect(read(display)).toMatchObject({
 			showName: false,
 			showRecord: true,
-			allowLifeControls: false,
 			startingHandSize: 5,
+			showPronouns: true,
 		});
 
-		expect([
-			defaults.showName.value,
-			defaults.showRecord.value,
-			defaults.showLgs.value,
-			defaults.allowLifeControls.value,
-			defaults.startingHandSize.value,
-		])
-			.toEqual([true, false, false, true, 7]);
-		expect([
-			configured.showName.value,
-			configured.showRecord.value,
-			configured.allowLifeControls.value,
-			configured.startingHandSize.value,
-		])
-			.toEqual([false, true, false, 5]);
+		config.value = { showName: true };
+
+		expect(display.showName.value).toBe(true);
 	});
 
 	it('labels the seat from the config, else from the default it is given', () => {
 		expect(usePlayerDisplayConfig(undefined, 'Top').seatLabel.value).toBe('Top');
 		expect(usePlayerDisplayConfig({ seatLabel: 'Left' }, 'Top').seatLabel.value).toBe('Left');
-	});
-
-	it('follows a config that changes', () => {
-		const config = ref<any>({ showName: true });
-		const result = usePlayerDisplayConfig(config);
-
-		config.value = { showName: false };
-
-		expect(result.showName.value).toBe(false);
 	});
 });

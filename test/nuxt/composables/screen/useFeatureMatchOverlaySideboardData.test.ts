@@ -509,6 +509,43 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 		}
 	});
 
+	it('keeps the recovery cadence alive when a re-fetch itself fails mid-outage', async () => {
+		vi.useFakeTimers();
+		try {
+			config.value = overlayConfig([
+				deckListItem('player1'),
+			]);
+			match.value = slotMatch();
+			mockFetchScryfallCards
+				.mockResolvedValueOnce({
+					cards: new Map(),
+					degraded: true,
+				})
+				.mockRejectedValueOnce(new Error('network down'))
+				.mockResolvedValue({
+					cards: new Map(),
+					degraded: false,
+				});
+			mockBuildDeckListArrays.mockReturnValue({
+				mainboard: [],
+				sideboard: [
+					enrichedCard('Duress', null),
+				],
+			});
+
+			const { cardDataDegraded } = mountSideboardData();
+			await vi.advanceTimersByTimeAsync(0);
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(cardDataDegraded.value).toBe(true);
+
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(cardDataDegraded.value).toBe(false);
+		}
+		finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it('settles the degraded lifecycle when the last deck-list item is un-authored', async () => {
 		vi.useFakeTimers();
 		try {
