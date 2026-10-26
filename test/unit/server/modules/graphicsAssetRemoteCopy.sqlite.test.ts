@@ -3,7 +3,6 @@ import type {
 	InMemoryGraphicsStagingObjectStore,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
-import { Buffer } from 'node:buffer';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createGraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
@@ -14,12 +13,8 @@ import {
 import { graphicsObjectIdentity } from '~~/server/modules/graphics-asset-library/object-store';
 import { createGraphicsRemoteSourceFetcher } from '~~/server/modules/graphics-asset-library/remote-source';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { pixelPng as transparentPixelPng } from '~~/test/helpers/graphicsFixtures';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
-
-const transparentPixelPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-	'base64',
-));
 
 const SOURCE_URL = 'https://cdn.example.test/scoreboard.png';
 

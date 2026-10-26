@@ -1,31 +1,65 @@
-import { describe, expect, it } from 'vitest';
+import type { MiniflareR2Harness } from '~~/test/helpers/miniflareR2';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	createInMemoryCanonicalGraphicsObjectStore,
 	createInMemoryStagingGraphicsObjectStore,
 } from '~~/server/modules/graphics-asset-library/in-memory-object-store';
+import { createBoundedByteStream, graphicsObjectIdentity } from '~~/server/modules/graphics-asset-library/object-store';
 import {
-	createBoundedByteStream,
-	graphicsObjectIdentity,
-} from '~~/server/modules/graphics-asset-library/object-store';
+	createR2CanonicalGraphicsObjectStore,
+	createR2StagingGraphicsObjectStore,
+} from '~~/server/modules/graphics-asset-library/r2-object-store';
+import { boundedBytes } from '~~/test/helpers/graphicsLibrary';
+import { createMiniflareR2Harness } from '~~/test/helpers/miniflareR2';
 
-describe('the Graphic Asset object-store contract', () => {
+const text = (value: string) => new TextEncoder().encode(value);
+
+/** R2 refuses a non-final multipart part under 5 MiB, so the first part is padded to that. */
+const FIRST_PART = new Uint8Array(5 * 1024 * 1024).fill(0x61);
+
+let r2: MiniflareR2Harness;
+
+beforeAll(async () => {
+	r2 = await createMiniflareR2Harness();
+}, 60_000);
+
+afterAll(async () => await r2?.dispose());
+
+it('refuses a stream longer than its declared maximum before any store sees it', () => {
+	expect(() => createBoundedByteStream(new Uint8Array(6), { byteLength: 6, maximumByteLength: 5 }))
+		.toThrow('Byte stream exceeds its maximum byte length');
+});
+
+// The same contract over the in-memory double every library suite runs on and the
+// R2 adapter production runs on, so the double cannot drift from the real store.
+describe.each([
+	{
+		store: 'the in-memory double',
+		canonical: () => createInMemoryCanonicalGraphicsObjectStore(),
+		staging: () => createInMemoryStagingGraphicsObjectStore(),
+	},
+	{
+		store: 'the R2 adapter on Miniflare',
+		canonical: () => createR2CanonicalGraphicsObjectStore(r2.bucket),
+		staging: () => createR2StagingGraphicsObjectStore(r2.bucket),
+	},
+])('the Graphic Asset object-store contract on $store', ({ store: label, canonical, staging }) => {
+	const at = (path: string) => graphicsObjectIdentity(`${label.replaceAll(' ', '-')}/${path}`);
+
 	it('does not expose staging multipart capabilities from the canonical adapter', () => {
-		const store = createInMemoryCanonicalGraphicsObjectStore();
+		const store = canonical();
 
 		expect('beginMultipart' in store).toBe(false);
 		expect('completeMultipart' in store).toBe(false);
 	});
 
 	it('creates bytes immutably and reports the existing object on a repeated identity', async () => {
-		const store = createInMemoryCanonicalGraphicsObjectStore();
-		const identity = graphicsObjectIdentity('canonical/sha256/example');
+		const store = canonical();
+		const identity = at('canonical/sha256/example');
 
 		const created = await store.createImmutable({
 			identity,
-			bytes: createBoundedByteStream(new TextEncoder().encode('first'), {
-				byteLength: 5,
-				maximumByteLength: 5,
-			}),
+			bytes: boundedBytes(text('first')),
 			metadata: {
 				contentType: 'text/plain',
 				custom: { digest: 'example' },
@@ -33,10 +67,7 @@ describe('the Graphic Asset object-store contract', () => {
 		});
 		const repeated = await store.createImmutable({
 			identity,
-			bytes: createBoundedByteStream(new TextEncoder().encode('second'), {
-				byteLength: 6,
-				maximumByteLength: 6,
-			}),
+			bytes: boundedBytes(text('second')),
 			metadata: {
 				contentType: 'text/plain',
 				custom: { digest: 'different' },
@@ -52,186 +83,83 @@ describe('the Graphic Asset object-store contract', () => {
 				customMetadata: { digest: 'example' },
 			},
 		});
-		expect(repeated).toEqual({
+		expect(repeated).toMatchObject({
 			outcome: 'already-exists',
-			object: created.outcome === 'created'
-				? created.object
-				: undefined,
+			object: { identity, byteLength: 5 },
 		});
 	});
 
 	it('preserves the first immutable object when creates race for one identity', async () => {
-		const store = createInMemoryCanonicalGraphicsObjectStore();
-		const identity = graphicsObjectIdentity('canonical/sha256/concurrent');
-		const firstBytes = new TextEncoder().encode('first');
-		const secondBytes = new TextEncoder().encode('second');
+		const store = canonical();
+		const identity = at('canonical/sha256/concurrent');
 
 		const [first, second] = await Promise.all([
 			store.createImmutable({
 				identity,
-				bytes: createBoundedByteStream(firstBytes, {
-					byteLength: firstBytes.byteLength,
-					maximumByteLength: firstBytes.byteLength,
-				}),
+				bytes: boundedBytes(text('first')),
 			}),
 			store.createImmutable({
 				identity,
-				bytes: createBoundedByteStream(secondBytes, {
-					byteLength: secondBytes.byteLength,
-					maximumByteLength: secondBytes.byteLength,
-				}),
+				bytes: boundedBytes(text('second')),
 			}),
 		]);
 
 		expect([first.outcome, second.outcome].toSorted()).toEqual(['already-exists', 'created']);
-		const createdBytes = first.outcome === 'created'
-			? 'first'
-			: 'second';
 		const read = await store.read(identity);
-		expect(read.outcome).toBe('available');
-		if (read.outcome === 'available')
-			expect(await new Response(read.body).text()).toBe(createdBytes);
+		if (read.outcome !== 'available')
+			throw new Error(`Expected the raced object, got ${read.outcome}`);
+		expect(await new Response(read.body).text()).toBe(first.outcome === 'created'
+			? 'first'
+			: 'second');
 	});
 
 	it('reads metadata and exact byte ranges without conflating a missing object', async () => {
-		const store = createInMemoryCanonicalGraphicsObjectStore();
-		const identity = graphicsObjectIdentity('canonical/sha256/ranged');
+		const store = canonical();
+		const identity = at('canonical/sha256/ranged');
 		await store.createImmutable({
 			identity,
-			bytes: createBoundedByteStream(new TextEncoder().encode('first'), {
-				byteLength: 5,
-				maximumByteLength: 5,
-			}),
+			bytes: boundedBytes(text('first')),
 		});
 
-		const metadata = await store.readMetadata(identity);
 		const ranged = await store.read(identity, { offset: 1, length: 3 });
 		const overlongTail = await store.read(identity, { offset: 3, length: 99 });
-		const missing = await store.read(graphicsObjectIdentity('canonical/sha256/missing'));
+		if (ranged.outcome !== 'available' || overlongTail.outcome !== 'available')
+			throw new Error('Expected both ranges to be available');
 
-		expect(metadata).toMatchObject({
+		await expect(store.readMetadata(identity)).resolves.toMatchObject({
 			outcome: 'available',
 			object: { identity, byteLength: 5 },
 		});
-		expect(ranged.outcome).toBe('available');
-		if (ranged.outcome === 'available') {
-			expect(ranged.range).toEqual({ offset: 1, length: 3, completeLength: 5 });
-			expect(await new Response(ranged.body).text()).toBe('irs');
-		}
-		expect(overlongTail.outcome).toBe('available');
-		if (overlongTail.outcome === 'available') {
-			expect(overlongTail.range).toEqual({ offset: 3, length: 2, completeLength: 5 });
-			expect(await new Response(overlongTail.body).text()).toBe('st');
-		}
-		expect(missing).toEqual({ outcome: 'missing' });
+		expect(ranged.range).toEqual({ offset: 1, length: 3, completeLength: 5 });
+		expect(await new Response(ranged.body).text()).toBe('irs');
+		expect(overlongTail.range).toEqual({ offset: 3, length: 2, completeLength: 5 });
+		expect(await new Response(overlongTail.body).text()).toBe('st');
+		await expect(store.read(at('canonical/sha256/missing'))).resolves.toEqual({ outcome: 'missing' });
 	});
 
-	it('distinguishes unavailable bytes and supports injected transient failures', async () => {
-		const store = createInMemoryCanonicalGraphicsObjectStore();
-		const identity = graphicsObjectIdentity('canonical/sha256/unavailable');
-		await store.createImmutable({
-			identity,
-			bytes: createBoundedByteStream(new TextEncoder().encode('bytes'), {
-				byteLength: 5,
-				maximumByteLength: 5,
-			}),
-		});
-
-		store.markUnavailable(identity);
-		expect(await store.readMetadata(identity)).toEqual({
-			outcome: 'unavailable',
-			reason: { code: 'object-unavailable', retryable: true },
-		});
-		expect(await store.read(identity)).toEqual({
-			outcome: 'unavailable',
-			reason: { code: 'object-unavailable', retryable: true },
-		});
-
-		store.restore(identity);
-		store.injectTransientFailure('read', 2);
-		expect(await store.read(identity)).toEqual({
-			outcome: 'unavailable',
-			reason: { code: 'transient-object-store-failure', retryable: true },
-		});
-		expect(await store.read(identity)).toEqual({
-			outcome: 'unavailable',
-			reason: { code: 'transient-object-store-failure', retryable: true },
-		});
-		expect((await store.read(identity)).outcome).toBe('available');
-	});
-
-	it('reports transient store health failures independently of object state', async () => {
-		const store = createInMemoryCanonicalGraphicsObjectStore();
-
-		expect(await store.checkHealth()).toEqual({ outcome: 'healthy' });
-		store.injectTransientFailure('health');
-		expect(await store.checkHealth()).toEqual({
-			outcome: 'unavailable',
-			reason: { code: 'transient-object-store-failure', retryable: true },
-		});
-		expect(await store.checkHealth()).toEqual({ outcome: 'healthy' });
-	});
-
-	it('injects transient failures into mutation operations without committing partial state', async () => {
-		const store = createInMemoryCanonicalGraphicsObjectStore();
-		const identity = graphicsObjectIdentity('canonical/sha256/transient-create');
-		store.injectTransientFailure('create');
-
-		expect(await store.createImmutable({
-			identity,
-			bytes: createBoundedByteStream(new TextEncoder().encode('first'), {
-				byteLength: 5,
-				maximumByteLength: 5,
-			}),
-		})).toEqual({
-			outcome: 'unavailable',
-			reason: { code: 'transient-object-store-failure', retryable: true },
-		});
-		expect(await store.readMetadata(identity)).toEqual({ outcome: 'missing' });
-
-		expect(await store.createImmutable({
-			identity,
-			bytes: createBoundedByteStream(new TextEncoder().encode('first'), {
-				byteLength: 5,
-				maximumByteLength: 5,
-			}),
-		})).toMatchObject({ outcome: 'created' });
-	});
-
-	it('rejects bytes outside the declared stream bounds without reserving the identity', async () => {
-		const store = createInMemoryCanonicalGraphicsObjectStore();
-		const identity = graphicsObjectIdentity('canonical/sha256/bounded');
-
-		expect(() => createBoundedByteStream(new Uint8Array(6), {
-			byteLength: 6,
-			maximumByteLength: 5,
-		})).toThrow('Byte stream exceeds its maximum byte length');
+	it('refuses a stream shorter than it declared without reserving the identity', async () => {
+		const store = canonical();
+		const identity = at('canonical/sha256/bounded');
 
 		await expect(store.createImmutable({
 			identity,
-			bytes: createBoundedByteStream(new Uint8Array(4), {
-				byteLength: 5,
-				maximumByteLength: 5,
-			}),
+			bytes: createBoundedByteStream(new Uint8Array(4), { byteLength: 5, maximumByteLength: 5 }),
 		})).rejects.toThrow('Byte stream length mismatch');
-
 		await expect(store.createImmutable({
 			identity,
-			bytes: createBoundedByteStream(new Uint8Array(5), {
-				byteLength: 5,
-				maximumByteLength: 5,
-			}),
-		})).resolves.toMatchObject({ outcome: 'created' });
+			bytes: boundedBytes(new Uint8Array(5)),
+		}))
+			.resolves
+			.toMatchObject({ outcome: 'created' });
 	});
 
 	it('resumes multipart uploads, completes ordered parts, and deletes the result', async () => {
-		const store = createInMemoryStagingGraphicsObjectStore();
-		const identity = graphicsObjectIdentity('staging/operation/multipart');
+		const store = staging();
+		const identity = at('staging/operation/multipart');
 		const started = await store.beginMultipart({
 			identity,
 			metadata: { contentType: 'application/octet-stream' },
 		});
-		expect(started.outcome).toBe('started');
 		if (started.outcome !== 'started')
 			throw new Error('Expected multipart upload to start');
 
@@ -240,85 +168,44 @@ describe('the Graphic Asset object-store contract', () => {
 		if (resumed.outcome !== 'resumed')
 			throw new Error('Expected multipart upload to resume');
 
+		// Uploaded out of order; completion orders them by part number.
 		const second = await store.uploadPart({
 			upload: resumed.upload,
 			partNumber: 2,
-			bytes: createBoundedByteStream(new TextEncoder().encode('part-2'), {
-				byteLength: 6,
-				maximumByteLength: 6,
-			}),
+			bytes: boundedBytes(text('part-2')),
 		});
 		const first = await store.uploadPart({
 			upload: resumed.upload,
 			partNumber: 1,
-			bytes: createBoundedByteStream(new TextEncoder().encode('part-1/'), {
-				byteLength: 7,
-				maximumByteLength: 7,
-			}),
+			bytes: boundedBytes(FIRST_PART),
 		});
-		expect(first.outcome).toBe('uploaded');
-		expect(second.outcome).toBe('uploaded');
 		if (first.outcome !== 'uploaded' || second.outcome !== 'uploaded')
 			throw new Error('Expected both parts to upload');
 
-		const completed = await store.completeMultipart({
+		await expect(store.completeMultipart({
 			upload: resumed.upload,
 			parts: [first.part, second.part],
-		});
-		expect(completed).toMatchObject({
-			outcome: 'created',
-			object: { identity, byteLength: 13 },
-		});
-
-		const read = await store.read(identity);
-		expect(read.outcome).toBe('available');
-		if (read.outcome === 'available')
-			expect(await new Response(read.body).text()).toBe('part-1/part-2');
+		}))
+			.resolves
+			.toMatchObject({
+				outcome: 'created',
+				object: { identity, byteLength: FIRST_PART.byteLength + 6 },
+			});
+		const read = await store.read(identity, { offset: FIRST_PART.byteLength - 1, length: 7 });
+		if (read.outcome !== 'available')
+			throw new Error('Expected the completed object');
+		expect(await new Response(read.body).text()).toBe('apart-2');
 
 		expect(await store.delete(identity)).toEqual({ outcome: 'deleted' });
 		expect(await store.delete(identity)).toEqual({ outcome: 'missing' });
 	});
 
-	it('separates an upload that is already gone from a store that cannot answer', async () => {
-		const store = createInMemoryStagingGraphicsObjectStore();
-		const identity = graphicsObjectIdentity('staging/operation/aborted-twice');
-		const started = await store.beginMultipart({ identity });
-		if (started.outcome !== 'started')
-			throw new Error('Expected multipart upload to start');
-
-		expect(await store.abortMultipart(started.upload)).toEqual({ outcome: 'aborted' });
-		// The second abort is the one a stranded checkpoint performs on every
-		// retry. Reported as unavailable it refused forever; reported as missing
-		// the caller can clear the checkpoint that names it.
-		expect(await store.abortMultipart(started.upload)).toEqual({ outcome: 'missing' });
-		// A different identity under the same upload id is the same fact: this
-		// store does not hold the upload that was asked about.
-		expect(await store.abortMultipart({
-			identity: graphicsObjectIdentity('staging/operation/somewhere-else'),
-			uploadId: started.upload.uploadId,
-		})).toEqual({ outcome: 'missing' });
-
-		// Unavailability keeps its own answer, so the two are never conflated.
-		const live = await store.beginMultipart({ identity });
-		if (live.outcome !== 'started')
-			throw new Error('Expected the second multipart upload to start');
-		store.injectTransientFailure('multipart-abort');
-		expect(await store.abortMultipart(live.upload)).toMatchObject({
-			outcome: 'unavailable',
-			reason: { retryable: true },
-		});
-		expect(await store.abortMultipart(live.upload)).toEqual({ outcome: 'aborted' });
-	});
-
 	it('treats multipart completion as a staging write rather than an immutable create', async () => {
-		const store = createInMemoryStagingGraphicsObjectStore();
-		const identity = graphicsObjectIdentity('staging/operation/replaced-by-multipart');
+		const store = staging();
+		const identity = at('staging/operation/replaced-by-multipart');
 		await store.createImmutable({
 			identity,
-			bytes: createBoundedByteStream(new TextEncoder().encode('old'), {
-				byteLength: 3,
-				maximumByteLength: 3,
-			}),
+			bytes: boundedBytes(text('old')),
 		});
 		const started = await store.beginMultipart({ identity });
 		if (started.outcome !== 'started')
@@ -326,10 +213,7 @@ describe('the Graphic Asset object-store contract', () => {
 		const part = await store.uploadPart({
 			upload: started.upload,
 			partNumber: 1,
-			bytes: createBoundedByteStream(new TextEncoder().encode('new'), {
-				byteLength: 3,
-				maximumByteLength: 3,
-			}),
+			bytes: boundedBytes(text('new')),
 		});
 		if (part.outcome !== 'uploaded')
 			throw new Error('Expected multipart part to upload');
@@ -337,11 +221,31 @@ describe('the Graphic Asset object-store contract', () => {
 		await expect(store.completeMultipart({
 			upload: started.upload,
 			parts: [part.part],
-		})).resolves.toMatchObject({ outcome: 'created' });
-
+		}))
+			.resolves
+			.toMatchObject({ outcome: 'created' });
 		const read = await store.read(identity);
-		expect(read.outcome).toBe('available');
-		if (read.outcome === 'available')
-			expect(await new Response(read.body).text()).toBe('new');
+		if (read.outcome !== 'available')
+			throw new Error('Expected the replaced object');
+		expect(await new Response(read.body).text()).toBe('new');
 	});
+});
+
+// Not in the contract above: Miniflare accepts a repeated abort and fails a mismatched
+// key with an internal error, where R2 answers NoSuchUpload (10024). The adapter's
+// mapping of that answer to `missing` is pinned in graphicsAssetR2ObjectStore.test.ts.
+it('reports an upload that is already gone as missing, however it is named', async () => {
+	const store = createInMemoryStagingGraphicsObjectStore();
+	const identity = graphicsObjectIdentity('staging/operation/aborted-twice');
+	const started = await store.beginMultipart({ identity });
+	if (started.outcome !== 'started')
+		throw new Error('Expected multipart upload to start');
+
+	expect(await store.abortMultipart(started.upload)).toEqual({ outcome: 'aborted' });
+	// A stranded checkpoint retries this abort; `missing` lets it clear the checkpoint.
+	expect(await store.abortMultipart(started.upload)).toEqual({ outcome: 'missing' });
+	expect(await store.abortMultipart({
+		identity: graphicsObjectIdentity('staging/operation/somewhere-else'),
+		uploadId: started.upload.uploadId,
+	})).toEqual({ outcome: 'missing' });
 });

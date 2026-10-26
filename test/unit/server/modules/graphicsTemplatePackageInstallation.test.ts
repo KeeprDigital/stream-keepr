@@ -1,298 +1,58 @@
 import type { GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library';
 import type {
 	GraphicAsset,
-	GraphicAssetReference,
-	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
-import { Buffer } from 'node:buffer';
-import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import {
-	createGraphicsAssetLibrary,
 	createInMemoryGraphicsAssetCatalogue,
 } from '~~/server/modules/graphics-asset-library';
+
 import {
-	createInMemoryCanonicalGraphicsObjectStore,
-	createInMemoryStagingGraphicsObjectStore,
-} from '~~/server/modules/graphics-asset-library/in-memory-object-store';
-import {
-	createBoundedByteStream,
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
-import { collectStream } from '../../../helpers/storedZipArchive';
+import { digestOf, sixteenPixelPng, pixelPng as transparentPixelPng } from '~~/test/helpers/graphicsFixtures';
+import { webpPixel } from '~~/test/helpers/graphicsImageFixtures';
+import {
+	createPackageLibrary,
+	exportPackage,
+	ingestPackageImage as ingestImage,
+	ingestPackageStaticFont as ingestStaticFont,
+	installPackage as install,
+	installationOf,
+	preflightPackage as preflight,
+	replacePackageImage as replaceImage,
+} from '~~/test/helpers/templatePackageLibrary';
 import {
 	readTemplatePackageParts,
 	writeTemplatePackage,
 } from '../../../helpers/templatePackageArchive';
-import { acceptEveryTemplateDocument } from '../../../helpers/templatePackagePayload';
 
-/**
- * Template Package installation, through the Graphics Asset Library's public
- * module interface.
- *
- * Every test here is a transfer: one library exports, another receives. That is
- * the only way the provenance rules mean anything — an exact Graphic Asset
- * Origin, a related source revision, and a digest-only match are all statements
- * about what a *different* installation once held, and a single-library fixture
- * cannot tell them apart.
- */
+/** Each test is a transfer: one library exports, another receives, so provenance has something to mean. */
 
-const transparentPixelPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-	'base64',
-));
-const webpPixel = Uint8Array.from(Buffer.from(
-	'UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAEAdQlFKUp4CBiOh/AAA=',
-	'base64',
-));
-/** A second, unmistakably different still image: 16 by 16 rather than 1 by 1. */
-const sixteenPixelPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAABAAAAAQBPJcTWAAAAHUlEQVR4nGP8x8Dwn4ECwEKJ5lEDRg0YNWAwGQAAkU4CO63xbeIAAAAASUVORK5CYII=',
-	'base64',
-));
-
-function digestOf(bytes: Uint8Array) {
-	return createHash('sha256').update(bytes).digest('hex');
-}
-
-/**
- * Overrides one catalogue method for one call, so a failure the catalogue can
- * genuinely produce — a lost reservation, a transaction that does not commit —
- * can be observed at the public seam without contriving the race that causes it.
- */
+/** Overrides catalogue methods so a failure the catalogue can genuinely produce is observable at the seam. */
 type CatalogueFault = Partial<GraphicsAssetCatalogue>;
 
 function createLibrary(
 	label: string,
 	options: { canonicalLimitBytes?: number; fault?: () => CatalogueFault } = {},
 ) {
-	let nextIdentity = 0;
-	const canonical = createInMemoryCanonicalGraphicsObjectStore();
-	const staging = createInMemoryStagingGraphicsObjectStore();
 	const catalogue = createInMemoryGraphicsAssetCatalogue(options);
-	const library = createGraphicsAssetLibrary({
-		catalogue: new Proxy(catalogue, {
-			get(target, property, receiver) {
-				const override = options.fault?.()[property as keyof GraphicsAssetCatalogue];
-				return override ?? Reflect.get(target, property, receiver);
-			},
-		}),
-		staging,
-		canonical,
-		templatePayloads: acceptEveryTemplateDocument(),
-		now: () => new Date('2026-07-31T09:00:00.000Z'),
-		generateIdentity: () => `${label}-identity-${++nextIdentity}`,
-	});
 	return {
-		library,
+		...createPackageLibrary(label, {
+			catalogue: new Proxy(catalogue, {
+				get(target, property, receiver) {
+					const override = options.fault?.()[property as keyof GraphicsAssetCatalogue];
+					return override ?? Reflect.get(target, property, receiver);
+				},
+			}),
+			silentVideoPlaybackValidator: undefined,
+			now: () => new Date('2026-07-31T09:00:00.000Z'),
+		}),
 		catalogue,
-		canonical,
-		staging,
 	};
 }
 
 type Library = ReturnType<typeof createLibrary>['library'];
-
-let ingestionSequence = 0;
-
-async function ingestImage(
-	library: Library,
-	name: string,
-	bytes: Uint8Array = transparentPixelPng,
-	mime: 'image/png' | 'image/webp' = 'image/png',
-): Promise<GraphicAssetReference> {
-	const operation = await library.initiateGraphicsIngestion({
-		idempotencyKey: `ingest-${name}-${++ingestionSequence}`,
-		initiatedBy: 'package-author',
-		name,
-		sourceFileName: mime === 'image/png'
-			? `${name}.png`
-			: `${name}.webp`,
-		declaredMime: mime,
-		duplicateContentPolicy: 'create-separate',
-		browserDecodeEvidence: {
-			outcome: 'decoded',
-			sourceDigest: digestOf(bytes),
-			width: 1,
-			height: 1,
-		},
-		declaredByteLength: bytes.byteLength,
-	});
-	const completed = await library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: mime,
-		bytes: createBoundedByteStream(bytes, {
-			byteLength: bytes.byteLength,
-			maximumByteLength: bytes.byteLength,
-		}),
-	});
-	return {
-		assetId: completed.result!.assetId,
-		revisionId: completed.result!.revisionId,
-	};
-}
-
-async function ingestStaticFont(library: Library, name: string): Promise<GraphicAssetReference> {
-	const source = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
-	const operation = await library.initiateGraphicsIngestion({
-		idempotencyKey: `ingest-${name}-${++ingestionSequence}`,
-		initiatedBy: 'package-author',
-		name,
-		sourceFileName: 'mplantin.woff',
-		declaredMime: 'font/woff',
-		declaredByteLength: source.byteLength,
-	});
-	const awaitingEvidence = await library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: 'font/woff',
-		bytes: createBoundedByteStream(source, {
-			byteLength: source.byteLength,
-			maximumByteLength: 10 * 1024 * 1024,
-		}),
-	});
-	if (awaitingEvidence.report?.outcome !== 'accepted' || awaitingEvidence.report.facts.kind !== 'font')
-		throw new Error('Expected a validated font challenge');
-	const { facts } = awaitingEvidence.report;
-	const completed = await library.confirmFontBrowserEvidence({
-		operationId: awaitingEvidence.id,
-		initiatedBy: awaitingEvidence.initiatedBy,
-		evidence: {
-			outcome: 'font-loaded',
-			sourceDigest: facts.sha256,
-			challengeDigest: facts.browserChallenge.digest,
-			glyphProofs: facts.browserChallenge.codePoints.map(codePoint => ({
-				codePoint,
-				exactWithSansDigest: '1'.repeat(64),
-				exactWithMonoDigest: '1'.repeat(64),
-				sansFallbackDigest: '2'.repeat(64),
-				monoFallbackDigest: '3'.repeat(64),
-			})),
-		},
-	});
-	return {
-		assetId: completed.result!.assetId,
-		revisionId: completed.result!.revisionId,
-	};
-}
-
-/** Replaces one Graphic Asset's content, producing a second source revision. */
-async function replaceImage(
-	library: Library,
-	reference: GraphicAssetReference,
-	bytes: Uint8Array,
-	dimensions = { width: 16, height: 16 },
-): Promise<GraphicAssetReference> {
-	const operation = await library.initiateGraphicAssetReplacement({
-		assetId: reference.assetId,
-		idempotencyKey: `replace-${++ingestionSequence}`,
-		initiatedBy: 'package-author',
-		sourceFileName: 'replacement.png',
-		declaredMime: 'image/png',
-		browserDecodeEvidence: {
-			outcome: 'decoded',
-			sourceDigest: digestOf(bytes),
-			...dimensions,
-		},
-		declaredByteLength: bytes.byteLength,
-	});
-	const completed = await library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: 'image/png',
-		bytes: createBoundedByteStream(bytes, {
-			byteLength: bytes.byteLength,
-			maximumByteLength: bytes.byteLength,
-		}),
-	});
-	if (!completed.result)
-		throw new Error(`replacement did not publish: ${JSON.stringify(completed)}`);
-	return {
-		assetId: completed.result.assetId,
-		revisionId: completed.result.revisionId,
-	};
-}
-
-async function exportPackage(
-	library: Library,
-	input: {
-		document?: unknown;
-		assets: { slot: string; reference: GraphicAssetReference }[];
-		templateName?: string;
-		templateIdentity?: string;
-	},
-): Promise<Uint8Array> {
-	const result = await library.exportTemplatePackage({
-		packageKind: 'skgraphic',
-		template: {
-			identity: input.templateIdentity ?? 'template-1',
-			name: input.templateName ?? 'Lower third',
-			document: input.document ?? Object.fromEntries(
-				input.assets.map(asset => [asset.slot, asset.reference]),
-			),
-		},
-		assets: input.assets,
-	});
-	if (result.outcome !== 'exported')
-		throw new Error(`Expected an exported package, got ${JSON.stringify(result.report.issues)}`);
-	return await collectStream(result.package.open());
-}
-
-let preflightSequence = 0;
-
-async function preflight(
-	library: Library,
-	archive: Uint8Array,
-	options: { defaultEventId?: number } = {},
-) {
-	const operation = await library.initiateTemplatePackagePreflight({
-		idempotencyKey: `preflight-${++preflightSequence}`,
-		initiatedBy: 'package-author',
-		sourceFileName: 'lower-third.skgraphic',
-		declaredByteLength: archive.byteLength,
-		defaultEventId: options.defaultEventId,
-	});
-	return await library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		bytes: createBoundedByteStream(archive, {
-			byteLength: archive.byteLength,
-			maximumByteLength: archive.byteLength,
-		}),
-	});
-}
-
-/**
- * Preflights, accepts whatever the report asks the author to accept, and
- * installs. Confirmation is a step an author takes, so a fixture that skipped it
- * would prove installation works only for packages nobody had to agree to.
- */
-async function install(
-	library: Library,
-	archive: Uint8Array,
-	options: { defaultEventId?: number } = {},
-): Promise<GraphicsIngestionOperation> {
-	let operation = await preflight(library, archive, options);
-	if (operation.stage === 'awaiting-confirmation') {
-		operation = await library.confirmTemplatePackagePreflight({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-			fingerprint: operation.templatePackagePreflight!.fingerprint,
-		});
-	}
-	return await library.installTemplatePackage({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-	});
-}
-
-function installationOf(operation: GraphicsIngestionOperation) {
-	if (!operation.templatePackageInstallation)
-		throw new Error('Expected the operation to carry a Template Package installation result');
-	return operation.templatePackageInstallation;
-}
 
 async function activeAssets(library: Library): Promise<GraphicAsset[]> {
 	return await library.listGraphicAssets({});

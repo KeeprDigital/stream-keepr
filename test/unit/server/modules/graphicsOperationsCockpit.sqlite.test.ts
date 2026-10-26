@@ -1,52 +1,22 @@
 import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
+import type { TestGraphicsLibrary, TestGraphicsLibraryOptions } from '~~/test/helpers/graphicsLibrary';
 import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
-import { Buffer } from 'node:buffer';
-import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
+
+import { digestOf, pixelPng } from '~~/test/helpers/graphicsFixtures';
 import {
-	createInMemoryCanonicalGraphicsObjectStore,
-	createInMemoryStagingGraphicsObjectStore,
-} from '~~/server/modules/graphics-asset-library/in-memory-object-store';
-import {
-	createBoundedByteStream,
-	graphicsObjectIdentity,
-} from '~~/server/modules/graphics-asset-library/object-store';
+	canonicalIdentity,
+	createTestGraphicsLibrary,
+	DAY,
+	decodeEvidence,
+	HOUR,
+	ingestImage as ingestSharedImage,
+	publishedRevision,
+} from '~~/test/helpers/graphicsLibrary';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 const GIB = 1024 * 1024 * 1024;
-const HOUR = 60 * 60 * 1000;
-const DAY = 24 * HOUR;
-
-const pixelPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-	'base64',
-));
-
-function digestOf(bytes: Uint8Array) {
-	return createHash('sha256').update(bytes).digest('hex');
-}
-
-function canonicalIdentity(digest: string) {
-	return graphicsObjectIdentity(`sha256/${digest}`);
-}
-
-function decodeEvidence(bytes: Uint8Array) {
-	return {
-		outcome: 'decoded' as const,
-		sourceDigest: digestOf(bytes),
-		width: 1,
-		height: 1,
-	};
-}
-
-function boundedBytes(bytes: Uint8Array) {
-	return createBoundedByteStream(bytes, {
-		byteLength: bytes.byteLength,
-		maximumByteLength: bytes.byteLength,
-	});
-}
 
 let harness: SqliteD1Harness;
 
@@ -58,61 +28,19 @@ afterEach(async () => {
 	await harness.close();
 });
 
-function createCockpitLibrary(
-	dependencies: Partial<Parameters<typeof createGraphicsAssetLibrary>[0]> = {},
-) {
-	let currentTime = new Date('2026-07-30T00:00:00.000Z');
-	let nextIdentity = 0;
-	const staging = createInMemoryStagingGraphicsObjectStore();
-	const canonical = createInMemoryCanonicalGraphicsObjectStore();
-	const library = createGraphicsAssetLibrary({
+function createCockpitLibrary(dependencies: Partial<TestGraphicsLibraryOptions> = {}) {
+	return createTestGraphicsLibrary({
 		catalogue: createD1GraphicsAssetCatalogue(harness.database),
-		staging,
-		canonical,
-		now: () => currentTime,
-		generateIdentity: () => `cockpit-${++nextIdentity}`,
+		start: '2026-07-30T00:00:00.000Z',
+		identityPrefix: 'cockpit',
 		...dependencies,
 	});
-	return {
-		library,
-		staging,
-		canonical,
-		advance(milliseconds: number) {
-			currentTime = new Date(currentTime.getTime() + milliseconds);
-		},
-	};
 }
 
-type CockpitLibrary = ReturnType<typeof createCockpitLibrary>;
-
-async function ingestImage(
-	context: CockpitLibrary,
-	options: { idempotencyKey: string; name: string },
-): Promise<GraphicsIngestionOperation> {
-	const operation = await context.library.initiateGraphicsIngestion({
-		idempotencyKey: options.idempotencyKey,
-		initiatedBy: 'cockpit-author',
-		name: options.name,
-		sourceFileName: 'logo.png',
-		declaredMime: 'image/png',
-		browserDecodeEvidence: decodeEvidence(pixelPng),
-		declaredByteLength: pixelPng.byteLength,
-		duplicateContentPolicy: 'create-separate',
-	});
-	context.advance(1000);
-	return await context.library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: 'image/png',
-		bytes: boundedBytes(pixelPng),
-	});
+function ingestImage(context: TestGraphicsLibrary, options: { idempotencyKey: string; name: string }) {
+	return ingestSharedImage(context, { initiatedBy: 'cockpit-author', ...options });
 }
-
-function publishedAssetId(operation: GraphicsIngestionOperation) {
-	if (!operation.result)
-		throw new Error('The ingestion operation did not publish a Graphic Asset');
-	return operation.result.assetId;
-}
+const publishedAssetId = (operation: GraphicsIngestionOperation) => publishedRevision(operation).assetId;
 
 describe('the Operations Cockpit against a real catalogue', () => {
 	it('reports a settled library as safe, with the exact canonical quota boundaries', async () => {

@@ -4,50 +4,24 @@ import type {
 } from '~~/server/modules/graphics-asset-library/object-store';
 import type { GraphicsOperationalQueueId } from '~~/shared/utils/graphicsOperationalQueues';
 import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
-import { Buffer } from 'node:buffer';
-import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import {
-	createInMemoryCanonicalGraphicsObjectStore,
 	createInMemoryStagingGraphicsObjectStore,
 } from '~~/server/modules/graphics-asset-library/in-memory-object-store';
 import {
-	createBoundedByteStream,
 	graphicsObjectIdentity,
 	unavailableObjectStoreOutcome,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { evidenceOf } from '~~/test/helpers/graphicsEvidence';
+import { digestOf, replacementPng as otherPng, pixelPng } from '~~/test/helpers/graphicsFixtures';
+import { createTestGraphicsLibrary, DAY, HOUR, ingestImage, stagedSourceIdentity } from '~~/test/helpers/graphicsLibrary';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-/**
- * A terminal Graphics Ingestion Operation owes the release of its staged input
- * until the byte store confirms the deletes (#700). These run the real library
- * over the SQLite-backed catalogue with a staging store that refuses deletes on
- * demand, and observe only what the library, its capacity, its Operational
- * Queues and the stores themselves report.
- */
+/** A terminal operation owes the release of its staged input until the store confirms the deletes (#700). */
 
-const pixelPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-	'base64',
-));
-const emptyTextChunk = Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0x42, 0xC5, 0x85);
-const otherPng = Uint8Array.of(
-	...pixelPng.slice(0, -12),
-	...emptyTextChunk,
-	...pixelPng.slice(-12),
-);
 /** Declared as a PNG, but no decoder will accept it: a permanent rejection. */
 const notAPng = Uint8Array.from({ length: 64 }, (_, index) => (index * 37) % 251);
-
-const HOUR = 60 * 60 * 1000;
-const DAY = 24 * HOUR;
-
-function digestOf(bytes: Uint8Array) {
-	return createHash('sha256').update(bytes).digest('hex');
-}
 
 let harness: SqliteD1Harness;
 
@@ -58,8 +32,6 @@ beforeEach(async () => {
 afterEach(async () => await harness.close());
 
 function createLibrary() {
-	let currentTime = new Date('2026-10-21T00:00:00.000Z');
-	let nextIdentity = 0;
 	const store = createInMemoryStagingGraphicsObjectStore();
 	/** Identities whose deletes the store refuses, so one release can land partway. */
 	const refusedDeletes = new Set<GraphicsObjectIdentity>();
@@ -71,58 +43,23 @@ function createLibrary() {
 				: await store.delete(identity);
 		},
 	};
-	const canonical = createInMemoryCanonicalGraphicsObjectStore();
-	const library = createGraphicsAssetLibrary({
-		catalogue: createD1GraphicsAssetCatalogue(harness.database),
-		staging,
-		canonical,
-		now: () => currentTime,
-		generateIdentity: () => `terminal-release-${++nextIdentity}`,
-	});
 	return {
-		library,
-		staging,
+		...createTestGraphicsLibrary({
+			catalogue: createD1GraphicsAssetCatalogue(harness.database),
+			staging,
+			start: '2026-10-21T00:00:00.000Z',
+			identityPrefix: 'terminal-release',
+		}),
 		refusedDeletes,
-		canonical,
-		advance(milliseconds: number) {
-			currentTime = new Date(currentTime.getTime() + milliseconds);
-		},
 	};
 }
 
 type Context = ReturnType<typeof createLibrary>;
 
-async function ingest(
-	context: Context,
-	options: { idempotencyKey: string; bytes?: Uint8Array },
-) {
-	const bytes = options.bytes ?? pixelPng;
-	const operation = await context.library.initiateGraphicsIngestion({
-		idempotencyKey: options.idempotencyKey,
-		initiatedBy: 'release-author',
-		name: options.idempotencyKey,
-		sourceFileName: 'logo.png',
-		declaredMime: 'image/png',
-		browserDecodeEvidence: {
-			outcome: 'decoded',
-			sourceDigest: digestOf(bytes),
-			width: 1,
-			height: 1,
-		},
-		declaredByteLength: bytes.byteLength,
-		duplicateContentPolicy: 'create-separate',
-	});
-	context.advance(1000);
-	return await context.library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: 'image/png',
-		bytes: createBoundedByteStream(bytes, {
-			byteLength: bytes.byteLength,
-			maximumByteLength: bytes.byteLength,
-		}),
-	});
+function ingest(context: Context, options: { idempotencyKey: string; bytes?: Uint8Array }) {
+	return ingestImage(context, { initiatedBy: 'release-author', ...options });
 }
+const stagedSource = stagedSourceIdentity;
 
 /** A publication that fails retryably, so its staged source stays needed. */
 async function ingestRetryablyFailed(context: Context, idempotencyKey: string, bytes = pixelPng) {
@@ -133,10 +70,6 @@ async function ingestRetryablyFailed(context: Context, idempotencyKey: string, b
 		failure: { retryable: true },
 	});
 	return failed;
-}
-
-function stagedSource(operationId: string) {
-	return graphicsObjectIdentity(`ingestion/${operationId}/source`);
 }
 
 async function stagedBytesOnBooks(context: Context) {

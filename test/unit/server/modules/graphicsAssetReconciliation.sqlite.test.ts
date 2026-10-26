@@ -3,18 +3,13 @@ import type {
 	GraphicAssetId,
 	GraphicAssetRevisionId,
 	GraphicsDiscrepancy,
-	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
+import type { TestGraphicsLibrary, TestGraphicsLibraryOptions } from '~~/test/helpers/graphicsLibrary';
 import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
+
 import {
-	createInMemoryCanonicalGraphicsObjectStore,
-	createInMemoryStagingGraphicsObjectStore,
-} from '~~/server/modules/graphics-asset-library/in-memory-object-store';
-import {
-	createBoundedByteStream,
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { evidenceOf } from '~~/test/helpers/graphicsEvidence';
@@ -25,47 +20,19 @@ import {
 	sixteenPixelPng as sixteenPixelPosterPng,
 	vp9Webm,
 } from '~~/test/helpers/graphicsFixtures';
+import {
+	addScreenReference,
+	boundedBytes,
+	canonicalIdentity,
+	canonicalMetadata,
+	createTestGraphicsLibrary,
+	DAY,
+	ingestImage as ingestSharedImage,
+	publishedRevision,
+} from '~~/test/helpers/graphicsLibrary';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-const DAY = 24 * 60 * 60 * 1000;
-
-function canonicalIdentity(digest: string) {
-	return graphicsObjectIdentity(`sha256/${digest}`);
-}
-
-/**
- * Exactly what publication writes alongside canonical bytes: the media type and
- * the digest that owns the key, repeated as redundant integrity metadata.
- */
-function canonicalMetadata(digest: string) {
-	return {
-		contentType: 'image/png',
-		custom: { sha256: digest },
-	};
-}
-
-function decodeEvidence(bytes: Uint8Array) {
-	return {
-		outcome: 'decoded' as const,
-		sourceDigest: digestOf(bytes),
-		width: 1,
-		height: 1,
-	};
-}
-
-function boundedBytes(bytes: Uint8Array) {
-	return createBoundedByteStream(bytes, {
-		byteLength: bytes.byteLength,
-		maximumByteLength: bytes.byteLength,
-	});
-}
-
-/**
- * The pinned silent-video validation runtime as a controlled adapter, exactly
- * as the ingestion suites drive it. Regeneration must reach it the same way
- * ingestion does, so this double also proves the staged working copy is where
- * the runtime expects to find its source.
- */
+/** A validator that accepts every video and records which staged source it read. */
 function acceptEverySilentVideo(): SilentVideoPlaybackValidator & { stagedSources: string[] } {
 	const stagedSources: string[] = [];
 	return {
@@ -94,88 +61,22 @@ function acceptEverySilentVideo(): SilentVideoPlaybackValidator & { stagedSource
 
 let harness: SqliteD1Harness;
 
-function createReconciliationLibrary(
-	dependencies: Partial<Parameters<typeof createGraphicsAssetLibrary>[0]> = {},
-) {
-	let currentTime = new Date('2026-07-30T00:00:00.000Z');
-	let nextIdentity = 0;
-	const staging = createInMemoryStagingGraphicsObjectStore();
-	const canonical = createInMemoryCanonicalGraphicsObjectStore();
-	const library = createGraphicsAssetLibrary({
+function createReconciliationLibrary(dependencies: Partial<TestGraphicsLibraryOptions> = {}) {
+	return createTestGraphicsLibrary({
 		catalogue: createD1GraphicsAssetCatalogue(harness.database),
-		staging,
-		canonical,
-		now: () => currentTime,
-		generateIdentity: () => `reconciliation-${++nextIdentity}`,
+		start: '2026-07-30T00:00:00.000Z',
+		identityPrefix: 'reconciliation',
 		...dependencies,
 	});
-	return {
-		library,
-		staging,
-		canonical,
-		advance(milliseconds: number) {
-			currentTime = new Date(currentTime.getTime() + milliseconds);
-		},
-	};
 }
 
-type ReconciliationLibrary = ReturnType<typeof createReconciliationLibrary>;
-
-async function ingestImage(
-	context: ReconciliationLibrary,
-	options: { idempotencyKey: string; name: string; bytes?: Uint8Array },
-): Promise<GraphicsIngestionOperation> {
-	const bytes = options.bytes ?? pixelPng;
-	const operation = await context.library.initiateGraphicsIngestion({
-		idempotencyKey: options.idempotencyKey,
-		initiatedBy: 'reconciliation-author',
-		name: options.name,
-		sourceFileName: 'logo.png',
-		declaredMime: 'image/png',
-		browserDecodeEvidence: decodeEvidence(bytes),
-		declaredByteLength: bytes.byteLength,
-		duplicateContentPolicy: 'create-separate',
-	});
-	context.advance(1000);
-	return await context.library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: 'image/png',
-		bytes: boundedBytes(bytes),
-	});
+function ingestImage(context: TestGraphicsLibrary, options: { idempotencyKey: string; name: string; bytes?: Uint8Array }) {
+	return ingestSharedImage(context, { initiatedBy: 'reconciliation-author', ...options });
 }
-
-function publishedReference(operation: GraphicsIngestionOperation) {
-	const result = operation.result;
-	if (!result)
-		throw new Error('The ingestion operation did not publish a Graphic Asset');
-	return { assetId: result.assetId, revisionId: result.revisionId };
-}
-
-/**
- * References belong to graphics artifacts, not to the library, so tests create
- * them exactly as a Screen reference writer does and then observe what
- * reconciliation does — and does not do — to them.
- */
-async function addReference(input: {
-	referenceId: string;
-	assetId: GraphicAssetId;
-	revisionId: GraphicAssetRevisionId;
-}) {
-	await harness.client.execute({
-		sql: `
-			INSERT INTO graphic_asset_references (
-				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
-				event_id, created_at, updated_at
-			) VALUES (?, ?, ?, 'screen', '1', ?, NULL, 0, 0)
-		`,
-		args: [
-			input.referenceId,
-			input.assetId,
-			input.revisionId,
-			input.referenceId,
-		],
-	});
+const publishedReference = publishedRevision;
+/** Each reference sits in its own slot, named after it. */
+function addReference(input: { referenceId: string; assetId: GraphicAssetId; revisionId: GraphicAssetRevisionId }) {
+	return addScreenReference(harness, { ...input, ownerSlot: input.referenceId });
 }
 
 /** The digest of the deterministic thumbnail generated for one revision. */

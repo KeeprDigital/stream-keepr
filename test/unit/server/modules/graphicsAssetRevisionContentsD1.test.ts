@@ -11,13 +11,8 @@ import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
- * The set-wise revision content lookup, against genuine SQLite (#374).
- *
- * `findRevisionContents` exists so an authored save's selectability checks cost
- * one catalogue round-trip whatever the save's size, and the one thing it must
- * never do is answer differently from the singular `findRevisionContent` it
- * stands in for — so the pin here is parity, pair by pair, plus the set
- * semantics the docblock promises: duplicates fold, absences leave no hole.
+ * The set-wise revision content lookup (#374): parity with the singular lookup, pair by
+ * pair, and set semantics — duplicates fold, absences leave no hole.
  */
 
 let harness: SqliteD1Harness;
@@ -122,7 +117,7 @@ describe('findRevisionContents against genuine SQLite', () => {
 		}
 	});
 
-	it('answers an empty batch without touching the database', async () => {
+	it('answers an empty batch with no rows', async () => {
 		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
 		await expect(catalogue.findRevisionContents([])).resolves.toEqual([]);
 	});

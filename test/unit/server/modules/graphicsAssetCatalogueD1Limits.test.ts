@@ -14,17 +14,8 @@ import { D1_MAXIMUM_BOUND_PARAMETERS } from '~~/server/modules/graphics-asset-li
 import { TEMPLATE_PACKAGE_LIMITS } from '~~/shared/types/templatePackage';
 import { createMiniflareD1Harness } from '~~/test/helpers/miniflare-d1';
 
-/**
- * These run against a real D1 binding rather than the libSQL harness, because
- * the limit under test is one libSQL does not enforce: D1 rejects a query with
- * more than a hundred bound parameters outright, and every list here is sized
- * past that on purpose.
- *
- * A list bound more than once divides the ceiling, so the sizes below are
- * chosen to break every multiplier the catalogue uses — comfortably past a
- * hundred, and past a third of a hundred for the query that references its
- * list three times.
- */
+// Real D1 rejects a query over a hundred bound parameters; libSQL does not. Lists are
+// sized past the ceiling divided by the most times any query binds them.
 const OVER_THE_LIMIT = D1_MAXIMUM_BOUND_PARAMETERS * 3;
 
 function digests(count: number) {
@@ -97,10 +88,7 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 				() => 'content-deleted' as const,
 			),
 		})).resolves.toEqual([]);
-		// Every filter the ledger offers, bound at once on top of that same long
-		// category list. The list stays one bound value, so what fixes the
-		// statement's parameter count is how many filters exist rather than how
-		// long any one of them is.
+		// Every filter at once: the statement's size is fixed by the filter count, not list length.
 		await expect(catalogue.listGraphicsAssetEvidence({
 			limit: 10,
 			categories: Array.from(
@@ -128,14 +116,7 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 		})).resolves.toBe(0);
 	});
 
-	/**
-	 * A Template Package carries up to a hundred packaged revisions, and its
-	 * publication writes contents, assets, revisions, origins, derivatives,
-	 * associations, and references for every one of them in a single batch. That
-	 * is the largest list the module ever binds, and the settled limit sits
-	 * exactly at the parameter ceiling, so it is worth proving against real D1
-	 * rather than inferring.
-	 */
+	// The largest batch the module binds, at a limit that sits exactly on the parameter ceiling.
 	describe('a Template Package installation at the settled revision limit', () => {
 		const PACKAGED_REVISION_LIMIT = TEMPLATE_PACKAGE_LIMITS.maximumPackagedRevisionCount;
 
@@ -212,46 +193,8 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 			};
 		}
 
-		/**
-		 * Given a budget of its own because the default five seconds is one it was
-		 * never going to fit inside. #123 records five operators seeing this test
-		 * time out — never on an unloaded machine, and above roughly load 8 in
-		 * something like 8 of 60 runs — while the work itself is genuine: a hundred
-		 * identities, their revisions, derivatives and references, against real D1.
-		 * There is no waste to remove, so what it wanted was a budget something had
-		 * chosen it against.
-		 *
-		 * Measured rather than inherited, and pinned to when — every figure below is
-		 * one machine's, and the same machine disagreed with itself inside an
-		 * afternoon.
-		 *
-		 * Measured at 4a3c9ea on 2026-08-14: 1985 / 2158 / 2174 ms quiet at load ~3,
-		 * and 1966 / 1930 / 2066 / 2016 ms under deliberate parallel load — three unit
-		 * suites looping in sibling processes, at loads of 19.3, 18.0, 16.7 and 15.3.
-		 * Eight concurrent copies of *this file* cost more than any of that: 2391–2606
-		 * ms across sixteen runs, at a lower load average. Contention of the same
-		 * shape is dearer than a busier machine doing other work, which is worth
-		 * knowing before a slow run gets read as a regression.
-		 *
-		 * Then, roughly two and a half hours later on that same machine, this test's
-		 * reviewer measured 3117 / 3023 / 3185 ms — above every figure above,
-		 * including the loaded ones. So the honest summary is a range, not a number:
-		 * **roughly 1.9 to 3.2 seconds**, drifting with machine state nobody has
-		 * characterised. Treat any single measurement here as a reading, not a
-		 * constant.
-		 *
-		 * Nothing anyone has run here reproduces the five to ten seconds #123's
-		 * operators report; that range stays theirs, taken on machines running six to
-		 * eight worktrees' full suites.
-		 *
-		 * Against the worst figure anyone has measured — the reviewer's 3185 ms — a
-		 * minute is about **eighteen times** the cost, and that is the margin to
-		 * quote, because it is the one that survives the drift. The point of it is
-		 * that a failure here should mean the batch broke, not that the machine was
-		 * having a bad afternoon. The budget is load-bearing rather than decorative:
-		 * under `--testTimeout=1` this is the one test in the file that survives,
-		 * while its unbudgeted siblings die at 1 ms.
-		 */
+		// Genuine work against real D1, measured at roughly 1.9-3.2 s; a minute is ~18x the worst
+		// reading, so a timeout means the batch broke, not a slow machine (#123).
 		it('publishes a hundred created identities and their references at once', async () => {
 			const catalogue = createD1GraphicsAssetCatalogue(harness.database);
 			const operation = await claimedOperation(catalogue, 'install-created');

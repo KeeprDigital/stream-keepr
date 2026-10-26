@@ -20,47 +20,10 @@ import { testGraphicAssetId, testGraphicAssetRevisionId } from '~~/test/helpers/
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
- * The Broadcast Graphics Live Session reference index under a moving sequence.
- *
- * Every statement both reconciliation paths write is guarded on the Live Session
- * sequence the reference set was derived from:
- *
- * ```sql
- * AND EXISTS (SELECT 1 FROM broadcast_graphics_live_sessions
- *             WHERE id = ? AND screen_id = ? AND sequence = ? AND status = 'active')
- * ```
- *
- * That guard is the whole reason a superseded reconciliation applies **nothing**
- * rather than reinstating an older reference set over a newer one. Removing the
- * `sequence = ?` term left the entire integration suite green (#170), and PR #169
- * then built a bounded retry on top of the behaviour nothing was checking.
- *
- * ## Why this is a harness rather than a sequence of requests
- *
- * The guard only does anything in the window between a reconciliation deriving its
- * reference set and writing it. Nothing observable happens in that window, so it
- * cannot be reached by issuing commands one after another — the interleaving has to
- * be constructed. `beforeReferenceWrite` is that construction: it commits real
- * commands, through the real module, in exactly that window. Everything else is
- * genuine, including the SQL, which is why this runs against libSQL rather than
- * against a catalogue double — what a statement writes when its own condition is
- * false is precisely what is under test.
- *
- * ## What is asserted, and why it is not the rows
- *
- * The index exists so a Screen Output can fetch the media its Screen is publishing,
- * so every assertion here is that question, asked of the real authorizer: can this
- * Screen Output resolve this exact Graphic Asset Revision now? A test that read the
- * rows would pass just as happily with the index describing a show nobody is
- * watching.
- *
- * That is also the rule being pinned, stated in `CONTEXT.md`: *"A Broadcast Graphics
- * Screen publishes the exact Graphic Asset Revisions its authored configuration pins
- * and the media Graphic Input values its Broadcast Graphics Live Session has
- * accepted, and a value the Live Session no longer accepts stops being published in
- * the same moment it leaves air."* A superseded reconcile that wrote would break both
- * halves at once — publishing a value the Live Session has stopped accepting, and
- * unpublishing one it has.
+ * The Live Session reference index under a moving sequence. Every reconciliation write is
+ * guarded on the sequence it derived from, so a superseded one applies nothing (#170).
+ * `beforeReferenceWrite` commits real commands in the read-to-write window, and each
+ * assertion asks the real authorizer whether a Screen Output can resolve a revision now.
  */
 
 vi.stubGlobal('createError', (input: { statusCode?: number; message?: string }) =>
@@ -79,13 +42,7 @@ vi.doMock('~~/server/utils/ably', () => ({
 	getOriginConnectionId: () => undefined,
 }));
 
-/**
- * What commits in the window between a reconciliation's read and its write.
- *
- * Set by a test, fired once, and deliberately suppressed while it is running: the
- * commands it commits reconcile too, and a hook that re-entered on those would be
- * racing itself rather than the reconciliation under test.
- */
+/** Commits in the read-to-write window; fired once, and not re-entered by its own commands. */
 let beforeReferenceWrite: (() => Promise<void>) | undefined;
 let interleaving = false;
 
@@ -133,22 +90,10 @@ function clip(revisionId: string): MediaGraphicInputValue {
 /** A revision that exists but whose bytes the library cannot currently reach. */
 const UNREACHABLE_REVISION = 'revision-unreachable';
 
-/**
- * Revisions whose content has stopped being reachable since it was accepted.
- *
- * Emptied between tests. It exists so a scenario can reach the refusal on the playout
- * path, which is about a value the show is already carrying rather than one being
- * chosen — there is no way to select an already-accepted revision a second time.
- */
+/** Revisions whose content stopped resolving after acceptance, so the playout path meets a refusal. */
 const graphicsAssetLibraryOutage = new Set<string>();
 
-/**
- * The Graphics Asset Library, answering for exactly the revisions seeded below.
- *
- * Injected rather than faked at a lower seam because it is a declared dependency of
- * the operation under test: `Set Input` records the pinned revision's own facts on a
- * media value at the moment of selection, and that is the authority it asks.
- */
+/** The library `Set Input` asks for a pinned revision's facts, answering for the revisions seeded below. */
 const graphicsAssetLibrary = {
 	async inspectGraphicAssetRevision(input: { assetId: string; revisionId: string }): Promise<GraphicAssetReferenceStatus> {
 		if (input.revisionId === UNREACHABLE_REVISION || graphicsAssetLibraryOutage.has(input.revisionId))
@@ -164,13 +109,7 @@ const graphicsAssetLibrary = {
 const CLIP_A = 'clipA';
 const CLIP_B = 'clipB';
 
-/**
- * A media Graphic Input applied immediately.
- *
- * A live On-air Update Policy is what makes one `Set Input` move the accepted media
- * set, which is the only thing reconciliation follows — with a staged policy every
- * scenario here would need an `Update Graphic` behind it saying nothing extra.
- */
+/** A media Graphic Input on a live On-air Update Policy, so one `Set Input` moves the accepted set. */
 function mediaInput(key: string): GraphicInputDeclaration {
 	return {
 		key,
@@ -214,27 +153,13 @@ interface LiveSession {
 	out: () => Promise<void>;
 	setInput: (key: string, value: MediaGraphicInputValue | null) => Promise<void>;
 	republish: () => Promise<void>;
-	/**
-	 * The epoch ended the way only a failure ends one: the session marked ended and
-	 * the references it published left behind.
-	 *
-	 * Constructed rather than driven, for the same reason `beforeReferenceWrite` is.
-	 * Every path that ends an epoch clears the namespace in the commit that ends it
-	 * (#305), so a Screen holding orphaned rows is by definition a state no ordinary
-	 * sequence of commands reaches — and it is the only state the orphan repair
-	 * exists for.
-	 */
+	/** An epoch ended by failure, its published references left behind (#305): the state orphan repair is for. */
 	strandReferencesOfEndedEpoch: () => Promise<void>;
 	/** Whether this Screen's output may fetch this exact revision now. */
 	canResolve: (revisionId: string) => Promise<boolean>;
 }
 
-/**
- * One Event, one Broadcast Graphics Screen, and its open playout epoch.
- *
- * Built per test rather than shared, because each scenario drives the accepted media
- * set to a different place and the assertions are about which set survived.
- */
+/** One Event, one Broadcast Graphics Screen, and its open playout epoch, per test. */
 async function liveSession(): Promise<LiveSession> {
 	const { eventId, screenId, assetCapabilityDigest } = await seedBroadcastGraphicsScreen(db, {
 		stack: STACK,
@@ -324,12 +249,8 @@ afterAll(async () => await harness.close());
 
 describe('a Broadcast Graphics Live Session reconcile whose sequence moved underneath it', () => {
 	it('reinstates nothing over the reference set the commands that overtook it published', async () => {
-		// The defect stated as a show: an operator swaps a clip, two more commands land
-		// while that acceptance is still following itself into the index, and the index
-		// must describe the *latest* acceptance rather than whichever write happened to
-		// finish last. Without the sequence term, the superseded reconciliation deletes
-		// the whole namespace and reinstates the set it derived — so the Screen Output
-		// loses the clip that is actually on air and gains one that is not.
+		// Two commands land while a clip swap is still reconciling: the index must describe the
+		// latest acceptance, not whichever write finished last.
 		const live = await liveSession();
 		await live.take();
 		await live.setInput(CLIP_A, clip(REVISIONS[0]));
@@ -346,11 +267,7 @@ describe('a Broadcast Graphics Live Session reconcile whose sequence moved under
 	});
 
 	it('does not publish media the Live Session has since stopped accepting', async () => {
-		// The other half, and the worse one. Here the commands that overtook the
-		// reconciliation left the accepted media set *empty*, so the guard is the only
-		// thing standing between an ended selection and a Screen Output that can still
-		// fetch it. The slot is free, so an unguarded insert does not even collide —
-		// it simply republishes content the show has moved on from.
+		// The overtaking commands emptied the accepted set, so only the guard keeps the old clip unpublished.
 		const live = await liveSession();
 		await live.take();
 		await live.setInput(CLIP_A, clip(REVISIONS[0]));
@@ -368,16 +285,7 @@ describe('a Broadcast Graphics Live Session reconcile whose sequence moved under
 	});
 });
 
-/**
- * The other way a media selection reaches the index: it does not.
- *
- * A revision that stops resolving between the picker's question and the operator's
- * click is refused here, at the authority, and nothing is published for it. What the
- * refusal *says* is load-bearing rather than cosmetic: it travels as a bare 409 unless
- * it carries a code, and a bare 409 is exactly what an ended epoch looks like — so the
- * client reloads the session and restates the very command that was just refused,
- * then reports "playout action failed" (#203).
- */
+/** A revision the library refuses is not published, and the refusal carries a code so it is not read as an ended epoch (#203). */
 describe('a media selection the Graphics Asset Library refuses', () => {
 	it('names a revision that does not exist as a Missing Graphic Asset Reference', async () => {
 		const live = await liveSession();
@@ -448,11 +356,7 @@ describe('re-deriving what a Broadcast Graphics Live Session publishes after an 
 	});
 
 	it('says so when both passes lose the race, having applied nothing', async () => {
-		// The residual the module documents rather than claims to have closed. Two
-		// consecutive lost races exhaust the retry, and the one outcome where this
-		// demonstrably did not take is the one it reports — which is the only way an
-		// operator ever learns that what a Screen publishes and what it declares have
-		// come apart.
+		// Two consecutive lost races exhaust the retry, and that outcome is reported.
 		const live = await liveSession();
 		await live.take();
 		await live.setInput(CLIP_A, clip(REVISIONS[0]));
@@ -479,18 +383,7 @@ describe('re-deriving what a Broadcast Graphics Live Session publishes after an 
 	});
 
 	it('drops what a Screen with no epoch is still publishing', async () => {
-		// The repair rather than the reconcile, and the branch a reconcile reaches
-		// when it finds no running epoch: a Screen with no Live Session accepts
-		// nothing and therefore publishes nothing, so every surviving row is debris
-		// from an end that did not complete.
-		//
-		// It is a scenario rather than a row count because the failure it guards
-		// against is invisible in the module's shape. The repair executes a Drizzle
-		// statement builder by awaiting it, and a builder that is awaited and one
-		// that is merely built are the same expression to a reader — so a refactor
-		// that dropped the `await` would turn this into a silent no-op, leaving an
-		// ended show's media fetchable through the Screen's outputs for as long as
-		// the Screen stays in the mode. #320.
+		// With no running epoch every surviving row is debris, and the repair must actually run (#320).
 		const live = await liveSession();
 		await live.take();
 		await live.setInput(CLIP_A, clip(REVISIONS[0]));
