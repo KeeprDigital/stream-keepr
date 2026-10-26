@@ -1186,11 +1186,10 @@ describe('social profile transition projection', () => {
 	});
 
 	it('continues the exact automatic transition frame underneath Out and a Take reversal', () => {
-		const onAir = onAirWith({
-			profile: profileState(),
-		}, { startedAt: 1_000_000 });
+		const profile = profileState();
+		const onAir = onAirWith({ profile }, { startedAt: 1_000_000 });
 		const beforeOut = projectSocialProfilePresentation(
-			onAir.socialProfileProjections.lower.profile,
+			profile,
 			profileDeclaration,
 			{ onAir: true, now: 1_008_125 },
 		);
