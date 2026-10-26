@@ -484,6 +484,20 @@ describe('useStandingsModeData', () => {
 	});
 
 	describe('pages', () => {
+		it('writes an operator\'s page selection to the Screen', async () => {
+			mockInteractive.value = true;
+			mutableConfig.rowsPerPage = 3;
+			const { nextPage, prevPage } = await mountStandings();
+
+			nextPage();
+			prevPage();
+
+			expect(mockScreenStore.updateModeConfig.mock.calls.map(([, , mode, patch]) => [mode, patch])).toEqual([
+				['standings', { currentPage: 2 }],
+				['standings', { currentPage: 4 }],
+			]);
+		});
+
 		it('pages its rows by the configured page size', async () => {
 			Object.assign(mutableConfig, { rowsPerPage: 3, currentPage: 2 });
 
