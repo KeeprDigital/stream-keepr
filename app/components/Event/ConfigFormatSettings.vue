@@ -8,10 +8,6 @@ const props = defineProps<{
 	loading?: boolean;
 }>();
 
-const emit = defineEmits<{
-	submit: [data: UpdateEventInput];
-}>();
-
 const errors = ref<Record<string, string>>({});
 
 const initialData = computed(() => {
@@ -28,12 +24,12 @@ const initialData = computed(() => {
 	};
 });
 
-const { formData, isDirty, reset, getChanges } = useForm({
+const { formData, isDirty, reset, save } = useEventConfigForm({
 	initialData,
 	clearOnReset: errors,
+	validate,
+	toUpdate,
 });
-
-useRegisterDirtyState(isDirty);
 
 const clockTypeOptions = [
 	{ label: 'Countdown', value: 'countdown' },
@@ -74,22 +70,19 @@ function validate(): boolean {
 	return Object.keys(errors.value).length === 0;
 }
 
-function submit() {
-	if (validate()) {
-		const changes = getChanges();
-		const { pointsSystem, ...matchDefaults } = changes;
-		emit('submit', {
-			...fromFeatureMatchDefaults(matchDefaults),
-			...('pointsSystem' in changes
-				? { pointsSystem }
-				: {}),
-		} as UpdateEventInput);
-	}
+function toUpdate(changes: Partial<typeof initialData.value>): UpdateEventInput {
+	const { pointsSystem, ...matchDefaults } = changes;
+	return {
+		...fromFeatureMatchDefaults(matchDefaults),
+		...('pointsSystem' in changes
+			? { pointsSystem }
+			: {}),
+	} as UpdateEventInput;
 }
 </script>
 
 <template>
-	<UForm :state="formData" @submit="submit">
+	<UForm :state="formData" @submit="save">
 		<UCard variant="subtle">
 			<div class="w-full flex flex-col gap-4">
 				<UFormField

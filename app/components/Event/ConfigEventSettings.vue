@@ -1,13 +1,9 @@
 <script setup lang="ts">
-import type { Event, UpdateEventInput } from '~/types';
+import type { Event } from '~/types';
 
 const props = defineProps<{
 	event: Event;
 	loading?: boolean;
-}>();
-
-const emit = defineEmits<{
-	submit: [data: UpdateEventInput];
 }>();
 
 const errors = ref<Record<string, string>>({});
@@ -16,12 +12,12 @@ const initialData = computed(() => ({
 	name: props.event.name,
 }));
 
-const { formData, isDirty, reset, getChanges } = useForm({
+const { formData, isDirty, reset, save } = useEventConfigForm({
 	initialData,
 	clearOnReset: errors,
+	validate,
+	toUpdate: changes => changes,
 });
-
-useRegisterDirtyState(isDirty);
 
 function validate(): boolean {
 	errors.value = {};
@@ -30,16 +26,10 @@ function validate(): boolean {
 	}
 	return Object.keys(errors.value).length === 0;
 }
-
-function submit() {
-	if (validate()) {
-		emit('submit', getChanges());
-	}
-}
 </script>
 
 <template>
-	<UForm :state="formData" @submit="submit">
+	<UForm :state="formData" @submit="save">
 		<UCard variant="subtle">
 			<div class="w-full flex flex-col gap-4">
 				<UFormField

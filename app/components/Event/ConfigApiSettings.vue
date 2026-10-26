@@ -1,13 +1,9 @@
 <script setup lang="ts">
-import type { Event, UpdateEventInput } from '~/types';
+import type { Event } from '~/types';
 
 const props = defineProps<{
 	event: Event;
 	loading?: boolean;
-}>();
-
-const emit = defineEmits<{
-	submit: [data: UpdateEventInput];
 }>();
 
 const initialData = computed(() => ({
@@ -16,17 +12,14 @@ const initialData = computed(() => ({
 	displayPositionFormat: props.event.displayPositionFormat,
 }));
 
-const { formData, isDirty, reset, getChanges } = useForm({ initialData });
-
-useRegisterDirtyState(isDirty);
-
-function submit() {
-	emit('submit', getChanges());
-}
+const { formData, isDirty, reset, save } = useEventConfigForm({
+	initialData,
+	toUpdate: changes => changes,
+});
 </script>
 
 <template>
-	<UForm :state="formData" @submit="submit">
+	<UForm :state="formData" @submit="save">
 		<UCard variant="subtle">
 			<div class="w-full flex flex-col gap-4">
 				<UFormField
