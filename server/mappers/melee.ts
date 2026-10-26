@@ -304,7 +304,9 @@ function extractDeckColors(decklist: { Attributes?: Array<{ k: string; v: string
 }
 
 /**
- * Maps a MeleePlayer with optional standing to the format for database upsert
+ * Maps a MeleePlayer with optional standing to the format for database upsert.
+ * A Player without a standing, as every Player is until Melee reports Round 1,
+ * has played nothing: a 0-0-0 record with no points, and no position yet.
  */
 export function mapMeleePlayerToDb(
 	player: MeleePlayerParsed,
@@ -318,11 +320,11 @@ export function mapMeleePlayerToDb(
 		externalStatus: player.Status ?? null,
 		name: normalizeMeleePlayerName(player.PlayerName),
 		pronouns: player.PronounsDescription ?? null,
-		wins: standing?.MatchWins ?? null,
-		losses: standing?.MatchLosses ?? null,
-		draws: standing?.MatchDraws ?? null,
+		wins: standing?.MatchWins ?? 0,
+		losses: standing?.MatchLosses ?? 0,
+		draws: standing?.MatchDraws ?? 0,
 		position: standing?.Rank ?? null,
-		points: standing?.Points ?? null,
+		points: standing?.Points ?? 0,
 		deckLists: allDecklists,
 	};
 }

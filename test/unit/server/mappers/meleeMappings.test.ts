@@ -48,18 +48,20 @@ describe('mapMeleePlayersToDb', () => {
 		});
 	});
 
-	it('preserves a missing upstream status and standing as null', () => {
+	// Melee publishes no standings until a Round is reported, so in Round 1
+	// every Player has none: they have played nothing, and hold no position yet.
+	it('gives a Player without a standing a 0-0-0 record, no points, and no position', () => {
 		const [result] = mapMeleePlayersToDb([
 			meleePlayer(1),
 		], []);
 
 		expect(result).toMatchObject({
 			externalStatus: null,
-			wins: null,
-			losses: null,
-			draws: null,
+			wins: 0,
+			losses: 0,
+			draws: 0,
 			position: null,
-			points: null,
+			points: 0,
 		});
 	});
 
