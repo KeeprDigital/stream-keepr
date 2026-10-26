@@ -1408,6 +1408,8 @@ The #612 three-way merge keeps a local edit over a conflicting baseline. After a
 ### Consequences
 
 - A save's answer must reach the form's `initialData` before the save resolves. The stores do this, since each writes the answer before it resolves. A form whose baseline the save sets itself, such as the Melee integration card, assigns its `initialData` ref inside the save.
+- A guarded modal renders its own close button in the header's `actions` slot with `:close="false"`. Nuxt UI wraps its built-in close in reka-ui's `DialogClose`, which closes the dialog whatever the button's `onClick` does, so it cannot wait for `confirmDiscard`.
+- A guarded modal renders its own close button in the header's `actions` slot with `:close="false"`. Nuxt UI wraps its built-in close in reka-ui's `DialogClose`, which closes the dialog whatever the button's `onClick` does, so it cannot wait for `confirmDiscard`.
 - Talents keep their reset after a save. A staged Talent with no id merges in beside the one the save created (#612), so the card resets to the Event rather than settling.
 - `test/nuxt/composables/ui/useForm.test.ts` and `useEventConfigForm.test.ts` cover the settle. The Feature Match panel, Event Controls and Event settings card tests have the mocked store write back a normalized answer, and the form must read clean.
 

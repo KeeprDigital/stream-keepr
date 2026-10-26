@@ -17,6 +17,8 @@ const confirmOpen = vi.fn(() => ({
 }));
 let routeGuard: (() => Promise<boolean> | boolean) | null = null;
 const removeRouteGuard = vi.fn();
+/** What useOverlay listens on: the modal asking to close. */
+const overlayClose = vi.fn();
 
 mockNuxtImport('useEventStore', () => () => ({ eventId: 1 }));
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
@@ -25,11 +27,25 @@ mockNuxtImport('useOverlay', () => () => ({
 	create: () => ({ open: confirmOpen }),
 }));
 
+// As Nuxt UI's: the built-in close button sits inside reka-ui's DialogClose, so
+// pressing it closes the dialog whatever its own onClick does. A guard that
+// wants a say in closing has to render its own button in `actions`.
 const UModalStub = defineComponent({
 	props: {
-		close: { type: Object, required: false },
+		close: {
+			type: [Boolean, Object],
+			required: false,
+		},
 	},
-	template: '<div><button data-testid="modal-close" @click="close?.onClick?.()" /><slot name="body" /><slot name="footer" /></div>',
+	emits: ['update:open'],
+	template: `
+		<div>
+			<slot name="actions" />
+			<button v-if="close" aria-label="Close" @click="close?.onClick?.(); $emit('update:open', false)" />
+			<slot name="body" />
+			<slot name="footer" />
+		</div>
+	`,
 });
 
 const UFormStub = defineComponent({
@@ -64,6 +80,7 @@ enableAutoUnmount(afterEach);
 async function mountModal() {
 	const { default: ManageModal } = await import(componentPath);
 	return mount(ManageModal, {
+		attrs: { 'onUpdate:open': overlayClose },
 		props: {
 			player: createMockPlayer({
 				id: 7,
@@ -96,6 +113,11 @@ function editName(wrapper: Wrapper, name: string) {
 		...fields(wrapper).props('modelValue'),
 		name,
 	});
+}
+
+/** Whether the modal asked to close, by its own `close` or through the dialog. */
+function closed(wrapper: Wrapper) {
+	return (wrapper.emitted('close')?.length ?? 0) > 0 || overlayClose.mock.calls.some(([open]) => open === false);
 }
 
 function saveButton(wrapper: Wrapper) {
@@ -145,7 +167,7 @@ describe('player manage modal', () => {
 	it('closes without asking when nothing is unsaved', async () => {
 		const wrapper = await mountModal();
 
-		await wrapper.get('[data-testid="modal-close"]').trigger('click');
+		await wrapper.get('[aria-label="Close"]').trigger('click');
 		await flushPromises();
 
 		expect(confirmOpen).not.toHaveBeenCalled();
@@ -157,11 +179,11 @@ describe('player manage modal', () => {
 		editName(wrapper, 'Alicia');
 		await flushPromises();
 
-		await wrapper.get('[data-testid="modal-close"]').trigger('click');
+		await wrapper.get('[aria-label="Close"]').trigger('click');
 		await flushPromises();
 
 		expect(confirmOpen).toHaveBeenCalledTimes(1);
-		expect(wrapper.emitted('close')).toBeUndefined();
+		expect(closed(wrapper)).toBe(false);
 	});
 
 	it('closes on an unsaved edit once the operator discards it', async () => {
@@ -172,7 +194,7 @@ describe('player manage modal', () => {
 		editName(wrapper, 'Alicia');
 		await flushPromises();
 
-		await wrapper.get('[data-testid="modal-close"]').trigger('click');
+		await wrapper.get('[aria-label="Close"]').trigger('click');
 		await flushPromises();
 
 		expect(wrapper.emitted('close')).toHaveLength(1);

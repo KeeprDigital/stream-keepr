@@ -162,8 +162,21 @@ const isValid = computed(() => (formData.value.name?.trim().length ?? 0) > 0);
 		open
 		:dismissible="false"
 		title="Edit Player"
-		:close="{ onClick: handleCancel }"
+		:close="false"
 	>
+		<!-- The built-in close sits inside DialogClose and closes whatever its
+		onClick does, so this one asks first while an edit is unsaved. -->
+		<template #actions>
+			<UButton
+				icon="i-lucide-x"
+				color="neutral"
+				variant="ghost"
+				aria-label="Close"
+				class="absolute top-4 end-4"
+				@click="handleCancel"
+			/>
+		</template>
+
 		<template #body>
 			<UForm
 				:id="formId"
