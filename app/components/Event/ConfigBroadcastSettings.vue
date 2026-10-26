@@ -14,7 +14,7 @@ const initialData = computed(() => ({
 	cardTimeout: props.event.cardTimeout,
 }));
 
-const { formData, isDirty, reset, save } = useEventConfigForm({
+const { formData, isDirty, reset, save, saving } = useEventConfigForm({
 	initialData,
 	clearOnReset: errors,
 	validate,
@@ -81,7 +81,7 @@ function validate(): boolean {
 				</UFormField>
 			</div>
 			<template #footer>
-				<EventConfigFormFooter :is-dirty="isDirty" :loading="loading" @reset="reset" />
+				<EventConfigFormFooter :is-dirty="isDirty" :loading="loading || saving" @reset="reset" />
 			</template>
 		</UCard>
 	</UForm>

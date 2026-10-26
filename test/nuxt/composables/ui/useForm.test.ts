@@ -78,17 +78,6 @@ describe('useForm', () => {
 		expect(getChanges()).toEqual({});
 	});
 
-	it('updateOriginal updates both formData and originalFormData', () => {
-		const { formData, originalFormData, isDirty, updateOriginal } = useForm({
-			initialData: { name: 'Alice' },
-		});
-
-		updateOriginal({ name: 'Bob' });
-		expect(formData.value.name).toBe('Bob');
-		expect(originalFormData.value.name).toBe('Bob');
-		expect(isDirty.value).toBe(false);
-	});
-
 	it('deep clones initial data to prevent reference sharing', () => {
 		const initial = {
 			name: 'Alice',

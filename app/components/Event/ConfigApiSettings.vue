@@ -12,7 +12,7 @@ const initialData = computed(() => ({
 	displayPositionFormat: props.event.displayPositionFormat,
 }));
 
-const { formData, isDirty, reset, save } = useEventConfigForm({
+const { formData, isDirty, reset, save, saving } = useEventConfigForm({
 	initialData,
 	toUpdate: changes => changes,
 });
@@ -52,7 +52,7 @@ const { formData, isDirty, reset, save } = useEventConfigForm({
 				</UFormField>
 			</div>
 			<template #footer>
-				<EventConfigFormFooter :is-dirty="isDirty" :loading="loading" @reset="reset" />
+				<EventConfigFormFooter :is-dirty="isDirty" :loading="loading || saving" @reset="reset" />
 			</template>
 		</UCard>
 	</UForm>

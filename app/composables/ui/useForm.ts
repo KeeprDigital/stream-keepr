@@ -35,10 +35,6 @@ export interface UseFormReturn<T> {
 	 */
 	reset: () => void;
 	/**
-	 * Update the original data (useful when external data changes)
-	 */
-	updateOriginal: (data: T) => void;
-	/**
 	 * Get only the fields that have changed (for PATCH requests)
 	 * Returns DeepPartial<T> with only modified fields
 	 */
@@ -305,18 +301,11 @@ export function useForm<T extends Record<string, any>>(
 		return result;
 	};
 
-	const updateOriginal = (data: T) => {
-		const cloned = cloneData(data);
-		formData.value = cloned;
-		originalFormData.value = cloneData(cloned);
-	};
-
 	return {
 		formData,
 		originalFormData,
 		isDirty,
 		reset,
-		updateOriginal,
 		getChanges,
 		runSave,
 	};

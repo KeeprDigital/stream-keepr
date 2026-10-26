@@ -40,22 +40,47 @@ function playerToFormData(player: Player): PlayerData {
 	});
 }
 
-const { formData, isDirty, reset } = useForm<PlayerData>({
+const { formData, isDirty: isPlayerDirty, reset: resetPlayer } = useForm<PlayerData>({
 	initialData: playerToFormData(props.player),
 });
 
-// Game-specific data (extracted from player's gameData)
-const mtgGameData = ref<MtgPlayerGameData>(
-	(props.player.gameData as MtgPlayerGameData)?.type === 'mtg'
-		? { ...(props.player.gameData as MtgPlayerGameData) }
-		: { type: 'mtg', deckName: null, deckColors: null },
-);
+// Game-specific data (extracted from player's gameData), tracked as a form of
+// its own so a deck-only edit counts as a change.
+const { formData: gameDataForm, isDirty: isGameDataDirty, reset: resetGameData } = useForm({
+	initialData: {
+		mtg: (props.player.gameData as MtgPlayerGameData)?.type === 'mtg'
+			? { ...(props.player.gameData as MtgPlayerGameData) }
+			: { type: 'mtg', deckName: null, deckColors: null } as MtgPlayerGameData,
+		op: (props.player.gameData as OpPlayerGameData)?.type === 'op'
+			? { ...(props.player.gameData as OpPlayerGameData) }
+			: { type: 'op', leader: null } as OpPlayerGameData,
+	},
+});
 
-const opGameData = ref<OpPlayerGameData>(
-	(props.player.gameData as OpPlayerGameData)?.type === 'op'
-		? { ...(props.player.gameData as OpPlayerGameData) }
-		: { type: 'op', leader: null },
-);
+const mtgGameData = computed({
+	get: () => gameDataForm.value.mtg,
+	set: (value: MtgPlayerGameData) => {
+		gameDataForm.value.mtg = value;
+	},
+});
+
+const opGameData = computed({
+	get: () => gameDataForm.value.op,
+	set: (value: OpPlayerGameData) => {
+		gameDataForm.value.op = value;
+	},
+});
+
+const isDirty = computed(() => isPlayerDirty.value || isGameDataDirty.value);
+
+function reset() {
+	resetPlayer();
+	resetGameData();
+}
+
+/** Set once a save or delete lands: nothing is left to lose while the modal closes. */
+const settled = ref(false);
+const { confirmDiscard } = useModalUnsavedChanges(computed(() => isDirty.value && !settled.value));
 
 // ── Save ──
 
@@ -82,6 +107,7 @@ async function handleSave() {
 			success: { title: 'Player updated', color: 'success' },
 			error: { title: 'Failed to update player', color: 'error' },
 			onSuccess: () => {
+				settled.value = true;
 				emit('updated');
 				emit('close');
 			},
@@ -113,6 +139,7 @@ async function handleDelete() {
 			success: { title: 'Player deleted', color: 'success' },
 			error: { title: 'Failed to delete player', color: 'error' },
 			onSuccess: () => {
+				settled.value = true;
 				emit('deleted');
 				emit('close');
 			},
@@ -122,8 +149,9 @@ async function handleDelete() {
 
 // ── Close ──
 
-function handleCancel() {
-	emit('close');
+async function handleCancel() {
+	if (await confirmDiscard())
+		emit('close');
 }
 
 const isValid = computed(() => (formData.value.name?.trim().length ?? 0) > 0);

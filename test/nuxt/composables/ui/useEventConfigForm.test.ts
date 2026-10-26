@@ -96,6 +96,24 @@ describe('useEventConfigForm', () => {
 		expect(pageIsDirty()).toBe(false);
 	});
 
+	it('reports a save in flight and ignores another until it lands', async () => {
+		let land = () => {};
+		handleSubmit.mockImplementation(() => new Promise((resolve) => {
+			land = () => resolve(true);
+		}));
+		const { form } = mountForm();
+
+		form.formData.value.cardTimeout = 30;
+		const first = form.save();
+		expect(form.saving.value).toBe(true);
+		await form.save();
+		expect(handleSubmit).toHaveBeenCalledTimes(1);
+
+		land();
+		await first;
+		expect(form.saving.value).toBe(false);
+	});
+
 	it('refuses to save when validation fails', async () => {
 		const { form } = mountForm({
 			validate: () => false,

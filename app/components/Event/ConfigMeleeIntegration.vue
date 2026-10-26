@@ -24,7 +24,7 @@ const initialData = ref({
 	meleeClientSecret: '',
 });
 
-const { formData, originalFormData, isDirty, reset, updateOriginal } = useForm({
+const { formData, originalFormData, isDirty, reset, runSave } = useForm({
 	initialData,
 });
 
@@ -39,14 +39,14 @@ async function fetchConfig() {
 			error: false,
 			onSuccess: (config) => {
 				credentialsConfigured.value = config.meleeConfigured;
-				updateOriginal({
+				initialData.value = {
 					meleeEnabled: config.meleeEnabled,
 					meleeEventId: config.meleeEventId || '',
 					meleeClientId: config.meleeClientId || '',
 					// Server no longer returns meleeClientSecret — keep empty so the field is never pre-filled.
 					// Submitting an empty secret tells the server to preserve the existing stored value.
 					meleeClientSecret: '',
-				});
+				};
 			},
 			// One writer for one ref. `errorRef` used to be passed here too and its value
 			// never survived — `runRequest` writes it and then awaits `onFailure`, which
@@ -92,7 +92,16 @@ async function submit() {
 		}
 	}
 
-	await runRequest(
+	// What the server will hold once the save lands. It stores the fields as sent
+	// and never reads the secret back, so the secret field empties.
+	const saved = {
+		meleeEnabled: formData.value.meleeEnabled,
+		meleeEventId: formData.value.meleeEventId,
+		meleeClientId: formData.value.meleeClientId,
+		meleeClientSecret: '',
+	};
+
+	await runSave(() => runRequest(
 		async () => {
 			const { warnings = [], ...updatedEvent } = await eventRepo.updateMeleeConfig(props.eventId, {
 				meleeEnabled: formData.value.meleeEnabled,
@@ -119,9 +128,7 @@ async function submit() {
 					console.warn(`[Melee] Local data refresh failed after configuration reset for event ${props.eventId}`);
 				}
 			}
-			// Reset secret field and update original so isDirty resets correctly
-			formData.value.meleeClientSecret = '';
-			updateOriginal({ ...formData.value });
+			initialData.value = saved;
 			credentialsConfigured.value = updatedEvent.meleeConfigured;
 			return { localRefreshFailed, warnings };
 		},
@@ -150,7 +157,7 @@ async function submit() {
 				color: 'error',
 			},
 		},
-	);
+	));
 }
 
 onMounted(fetchConfig);

@@ -203,6 +203,26 @@ describe('event config event settings', () => {
 		expect(pageIsDirty()).toBe(false);
 	});
 
+	it('holds Save disabled and loading while the save is in flight', async () => {
+		let land = () => {};
+		handleSubmit.mockImplementation(() => new Promise((resolve) => {
+			land = () => resolve(true);
+		}));
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await nameField(wrapper).setValue('Regional Championship 2026');
+		await saveButton(wrapper).trigger('click');
+		await flushPromises();
+
+		expect(saveButton(wrapper).attributes('disabled')).toBeDefined();
+		expect(saveButton(wrapper).attributes('data-loading')).toBe('true');
+
+		land();
+		await flushPromises();
+		expect(saveButton(wrapper).attributes('data-loading')).toBe('false');
+	});
+
 	it('refuses to save a name the operator has emptied', async () => {
 		const wrapper = await mountComponent();
 		await flushPromises();

@@ -22,7 +22,7 @@ const initialData = computed(() => {
 	};
 });
 
-const { formData, isDirty, reset, save } = useEventConfigForm({
+const { formData, isDirty, reset, save, saving } = useEventConfigForm({
 	initialData,
 	toUpdate,
 });
@@ -132,7 +132,7 @@ function toUpdate(changes: Partial<typeof initialData.value>): UpdateEventInput 
 				</UFormField>
 			</div>
 			<template #footer>
-				<EventConfigFormFooter :is-dirty="isDirty" :loading="loading" @reset="reset" />
+				<EventConfigFormFooter :is-dirty="isDirty" :loading="loading || saving" @reset="reset" />
 			</template>
 		</UCard>
 	</UForm>
