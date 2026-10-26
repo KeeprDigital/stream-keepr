@@ -25,7 +25,8 @@ const isBestOfOne = computed(() => props.bestOf === 1);
 const isVertical = computed(() => props.orientation === 'vertical');
 const isTouchVertical = computed(() => props.touch && isVertical.value);
 const winsNeeded = computed(() => Math.ceil(props.bestOf / 2));
-const hasWon = computed(() => props.gameWins >= winsNeeded.value);
+// Decided by either Player's wins, so both sides stop offering a new one.
+const isMatchDecided = computed(() => featureMatchStateStore.featureMatchStates.get(props.matchId)?.isComplete ?? false);
 
 // Modal state
 const showModal = ref(false);
@@ -98,7 +99,7 @@ const winSlots = computed<WinSlot[]>(() =>
 		return {
 			position,
 			filled,
-			disabled: !filled && hasWon.value,
+			disabled: !filled && isMatchDecided.value,
 		};
 	}),
 );

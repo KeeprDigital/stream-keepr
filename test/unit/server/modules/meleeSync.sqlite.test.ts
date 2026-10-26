@@ -138,6 +138,20 @@ describe('syncing Players', () => {
 		expect(event.meleeSyncLeaseToken).toBeNull();
 	});
 
+	it('announces no Players change when the sync changed no Player', async () => {
+		const eventId = await createEvent();
+		melee.fetchMergedPlayers.mockResolvedValue([
+			meleePlayer('player-1', 'Alice'),
+		]);
+		await meleeSyncModule().syncPlayers(requestEvent, eventId);
+		publishMessage.mockClear();
+
+		const result = await meleeSyncModule().syncPlayers(requestEvent, eventId);
+
+		expect(result.success).toBe(true);
+		expect(published('melee:playersSynced')).toEqual([]);
+	});
+
 	it('announces the Feature Match Slots whose Players it changed, in one message', async () => {
 		const eventId = await createEvent();
 		const [player] = await db.insert(schema.players).values({

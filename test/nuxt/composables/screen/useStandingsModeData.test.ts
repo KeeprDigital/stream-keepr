@@ -261,6 +261,18 @@ describe('useStandingsModeData', () => {
 			expect(names(displayRows.value)).toEqual(expected);
 		});
 
+		it('orders tied and unplaced Players by id, whatever order the read answers them in', async () => {
+			serverPlayers = [
+				createMockPlayer({ id: 9, name: 'Ivy', position: null }),
+				createMockPlayer({ id: 4, name: 'Dee', position: 2 }),
+				createMockPlayer({ id: 7, name: 'Gus', position: null }),
+				createMockPlayer({ id: 5, name: 'Eve', position: 2 }),
+			];
+			const { displayRows } = await mountStandings();
+
+			expect(displayRows.value.map(row => row.id)).toEqual([4, 5, 7, 9]);
+		});
+
 		it('leaves Players without a position out of a slice', async () => {
 			Object.assign(mutableConfig, { viewMode: 'slice', sliceStart: 1, sliceEnd: 10 });
 			serverPlayers = [
@@ -423,13 +435,11 @@ describe('useStandingsModeData', () => {
 	});
 
 	describe('the empty state', () => {
-		it('is empty with no rows only once loading ends', async () => {
+		it('stays empty while an empty answer is re-read', async () => {
 			serverPlayers = [];
 			const { isEmpty, loading } = await mountStandings();
 
 			loading.value = true;
-			expect(isEmpty.value).toBe(false);
-			loading.value = false;
 			expect(isEmpty.value).toBe(true);
 		});
 

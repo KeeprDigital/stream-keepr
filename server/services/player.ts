@@ -87,7 +87,7 @@ function buildBulkPlayerUpsertQueries(
 		...grouped.values(),
 	].flatMap((group) => {
 		const example = group[0]!;
-		const set = {
+		const written = {
 			name: meleeValueUnlessManuallyEdited('name'),
 			...(example.pronouns !== undefined
 				? {
@@ -139,7 +139,22 @@ function buildBulkPlayerUpsertQueries(
 						lastSeenAt: sql.raw('excluded.last_seen_at'),
 					}
 				: {}),
-			updatedAt: writeAt,
+		};
+		// A Player's revision moves only when the write changes what they hold:
+		// each column against what this write puts there, so a manually edited
+		// field Melee disagrees with is no change. `lastSeenAt` moves on every
+		// sync by design, so it alone moves nothing: otherwise every Player
+		// re-announces a change on every Round sync.
+		const columns = getTableColumns(players);
+		const changed = sql.join(
+			(Object.keys(written) as Array<keyof typeof written>)
+				.filter(field => field !== 'lastSeenAt')
+				.map(field => sql`${sql.raw(`"players"."${columns[field].name}"`)} is not (${written[field]})`),
+			sql` or `,
+		);
+		const set = {
+			...written,
+			updatedAt: sql`case when ${changed} then ${writeAt.getTime()} else "players"."updated_at" end`,
 		};
 		return chunkJsonRows(group.map(data => ({
 			...data,
@@ -232,7 +247,7 @@ export function playerService() {
 								eq(players.isActive, true),
 							]),
 				))
-				.orderBy(sql`${players.position} IS NULL`, asc(players.position));
+				.orderBy(sql`${players.position} IS NULL`, asc(players.position), asc(players.id));
 		}
 
 		return await db
@@ -246,7 +261,7 @@ export function playerService() {
 							eq(players.isActive, true),
 						]),
 			))
-			.orderBy(sql`${players.position} IS NULL`, asc(players.position));
+			.orderBy(sql`${players.position} IS NULL`, asc(players.position), asc(players.id));
 	};
 
 	const create = async (eventId: number, data: CreatePlayerInput): Promise<DbPlayer> => {
@@ -384,15 +399,21 @@ export function playerService() {
 			existingQueries.length + upsertQueries.length,
 		).flat() as DbPlayer[];
 		const deactivatedRows = (batchResults.at(-1) ?? []) as Array<{ id: number }>;
-		const created = upsertedPlayers.filter((player) => {
+		let created = 0;
+		let updated = 0;
+		for (const player of upsertedPlayers) {
 			const key = playerIdentityKey(player);
-			return key == null || !existingKeys.has(key);
-		}).length;
+			if (key == null || !existingKeys.has(key))
+				created++;
+			// The upsert moves a revision only when it changed the Player.
+			else if (new Date(player.updatedAt).getTime() === seenAt.getTime())
+				updated++;
+		}
 
 		return {
 			players: upsertedPlayers,
 			created,
-			updated: upsertedPlayers.length - created,
+			updated,
 			deactivated: deactivatedRows.length,
 		};
 	};

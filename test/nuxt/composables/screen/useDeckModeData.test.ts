@@ -633,6 +633,9 @@ describe('useDeckModeData', () => {
 			expect(result.pendingSwapVersion.value).toBe(0);
 
 			updatedAt = '2026-08-21T01:00:00.000Z';
+			mockReadDeck.mockResolvedValue(createDeckResponse([
+				createDeckCard({ name: 'Brainstorm' }),
+			]));
 			deliver('player:updated', {
 				player: { id: 5, name: 'Alice', updatedAt },
 			});
@@ -814,6 +817,23 @@ describe('useDeckModeData', () => {
 			});
 			await flushPromises();
 			expect(mockPlayerDecks).toHaveBeenCalledTimes(3);
+		});
+
+		it('keeps an unchanged deck on program when only the Player revision moved', async () => {
+			// A Round sync refreshes Players' records, moving their revision but not their Deck List.
+			mockReadDeck.mockImplementation(async () => createDeckResponse([
+				createDeckCard({ name: 'Counterspell' }),
+			]));
+			const result = mountDeckModeData();
+			await flushPromises();
+
+			serverPlayer = { ...serverPlayer, updatedAt: AFTER_EDIT };
+			deliver('melee:playersSynced', { playerCount: 1 });
+			await flushPromises();
+
+			expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
+			expect(result.pendingSwapVersion.value).toBe(0);
+			expect(result.displayedDeckVersion.value).toBe(1);
 		});
 
 		describe('a resolved deck card, which moves no Player revision (#648)', () => {

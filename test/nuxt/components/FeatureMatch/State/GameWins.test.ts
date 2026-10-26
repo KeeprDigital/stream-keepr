@@ -85,6 +85,33 @@ describe('featureMatchGameWins', () => {
 		expect(playerControls.recordWin).not.toHaveBeenCalled();
 	});
 
+	it.each([
+		[
+			'the winner',
+			2,
+			['Undo win', 'Undo win'],
+			[],
+		],
+		[
+			'the loser',
+			1,
+			['Undo win', 'Record win'],
+			['Record win'],
+		],
+	])('offers %s no new win once the match is decided, but keeps undo', (_, gameWins, labels, disabled) => {
+		featureMatchStates.set(1, { currentGame: 4, isComplete: true });
+		const buttons = mountGameWins({ gameWins }).findAll('button[aria-label]');
+
+		expect(buttons.map(button => button.attributes('aria-label'))).toEqual(labels);
+		expect(buttons.filter(button => button.attributes('disabled') !== undefined).map(button => button.attributes('aria-label'))).toEqual(disabled);
+	});
+
+	it('offers a new win while the match is undecided', () => {
+		const buttons = mountGameWins({ gameWins: 1 }).findAll('button[aria-label]');
+
+		expect(buttons.every(button => button.attributes('disabled') === undefined)).toBe(true);
+	});
+
 	it('shows the win markers without controls when read-only', () => {
 		const wrapper = mountGameWins({ readonly: true });
 

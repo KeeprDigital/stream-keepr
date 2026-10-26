@@ -238,6 +238,13 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 	return {
 		data: display.data,
 		loading: display.loading,
+		/**
+		 * Whether what the mode holds is a read's answer, or it selects nothing:
+		 * false only while its first read is in flight. A mode judges "nothing to
+		 * show" by this, not by `loading`, so an empty rendering does not flash its
+		 * scaffold for the length of every re-read.
+		 */
+		answered: computed(() => display.hasDisplayedData.value || !display.loading.value),
 		error: display.error,
 	};
 }

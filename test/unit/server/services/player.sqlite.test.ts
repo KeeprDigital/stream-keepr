@@ -100,6 +100,54 @@ describe('reconcileMeleeSnapshot', () => {
 		]);
 	});
 
+	it('moves a Player\'s revision only when the sync changed what they hold', async () => {
+		const eventId = await stageEvent();
+		const player = {
+			externalId: 'revision-1',
+			externalStatus: 1,
+			name: 'Rev',
+			wins: 1,
+			losses: 0,
+		};
+		const at = (ms: number) => new Date(seenAt.getTime() + ms);
+		const held = async () => (await roster(eventId))[0]!;
+
+		await playerService().reconcileMeleeSnapshot(eventId, [player], seenAt);
+		expect(await playerService().reconcileMeleeSnapshot(eventId, [player], at(1000)))
+			.toMatchObject({ created: 0, updated: 0, deactivated: 0 });
+		expect(await held()).toMatchObject({
+			updatedAt: seenAt,
+			lastSeenAt: at(1000),
+		});
+
+		expect(await playerService().reconcileMeleeSnapshot(eventId, [
+			{ ...player, wins: 2 },
+		], at(2000)))
+			.toMatchObject({ updated: 1 });
+		expect((await held()).updatedAt).toEqual(at(2000));
+
+		// Melee still sends the name an operator replaced, which the sync leaves alone (ADR-0046).
+		await db.update(schema.players)
+			.set({
+				name: 'Renamed',
+				manuallyEditedFields: ['name'],
+				updatedAt: at(2000),
+			})
+			.where(eq(schema.players.eventId, eventId));
+		expect(await playerService().reconcileMeleeSnapshot(eventId, [
+			{ ...player, wins: 2 },
+		], at(2500)))
+			.toMatchObject({ updated: 0 });
+		expect((await held()).updatedAt).toEqual(at(2000));
+
+		// Missing from one sync, then back unchanged: the reactivation is a change.
+		await playerService().reconcileMeleeSnapshot(eventId, [], at(3000));
+		await playerService().reconcileMeleeSnapshot(eventId, [
+			{ ...player, wins: 2 },
+		], at(4000));
+		expect((await held()).updatedAt).toEqual(at(4000));
+	});
+
 	it('reactivates a returning Player', async () => {
 		const eventId = await stageEvent();
 		await playerService().reconcileMeleeSnapshot(eventId, [

@@ -53,6 +53,15 @@ describe('metagame card rules', () => {
 		expect(compareCardBreakdownEntries('inclusionRate', low, high)).toBeGreaterThan(0);
 		expect(compareCardBreakdownEntries('totalCopies', low, high)).toBeGreaterThan(0);
 	});
+
+	it('orders tied cards by name, so a re-read cannot reshuffle them', () => {
+		const tied = { ...row, deckCount: 3, totalCopies: 6 };
+		const bolt = toCardBreakdownEntry({ ...tied, cardId: 1, name: 'Lightning Bolt' }, 10, 'full');
+		const duress = toCardBreakdownEntry({ ...tied, cardId: 2, name: 'Duress' }, 10, 'full');
+
+		for (const sortBy of ['inclusionRate', 'avgCopies', 'totalCopies'] as const)
+			expect(compareCardBreakdownEntries(sortBy, bolt, duress)).toBeGreaterThan(0);
+	});
 });
 
 describe('createCardTypeBucketFilter', () => {
