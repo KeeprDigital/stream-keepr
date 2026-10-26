@@ -3,13 +3,7 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { ANIMATION_EFFECT_VALUES } from '~~/shared/animationEffects';
-
-const UFormFieldStub = defineComponent({
-	props: {
-		label: { type: String, required: false },
-	},
-	template: '<label :data-label="label"><slot /></label>',
-});
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 
 const UIColorPickerStub = defineComponent({
 	props: {
@@ -18,25 +12,6 @@ const UIColorPickerStub = defineComponent({
 	},
 	emits: ['update:modelValue'],
 	template: '<button type="button" data-testid="color-picker" @click="$emit(\'update:modelValue\', \'#123456\')">{{ modelValue }}</button>',
-});
-
-const UInputNumberStub = defineComponent({
-	props: {
-		modelValue: { type: Number, required: false },
-		min: { type: Number, required: false },
-		max: { type: Number, required: false },
-	},
-	emits: ['update:modelValue'],
-	template: '<input data-testid="u-input-number" type="number" :value="modelValue" :min="min" :max="max" @input="$emit(\'update:modelValue\', Number($event.target.value))" />',
-});
-
-const USelectStub = defineComponent({
-	props: {
-		modelValue: { type: String, required: false },
-		items: { type: Array, required: false },
-	},
-	emits: ['update:modelValue'],
-	template: '<select data-testid="u-select" :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items || []" :key="String(item.value ?? item)" :value="item.value ?? item">{{ item.label ?? item }}</option></select>',
 });
 
 const ScreenSettingsToggleStub = defineComponent({
@@ -59,11 +34,9 @@ async function mountComponent(selection: AnimationEffectSelection, onUpdate = vi
 		},
 		global: {
 			stubs: {
+				...nuxtUiStubs,
 				ScreenAnimationEffectPresetLibrary: true,
-				UFormField: UFormFieldStub,
 				UIColorPicker: UIColorPickerStub,
-				UInputNumber: UInputNumberStub,
-				USelect: USelectStub,
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
 			},
 		},
@@ -74,7 +47,7 @@ async function mountComponent(selection: AnimationEffectSelection, onUpdate = vi
 describe('screenAnimationEffectFields', () => {
 	it('offers every effect in the closed vocabulary, labelled from the catalogue', async () => {
 		const { wrapper } = await mountComponent({ effect: 'fog' });
-		const options = wrapper.findAll('[data-testid="u-select"] option');
+		const options = wrapper.findAll('select option');
 
 		expect(options.map(option => option.attributes('value'))).toEqual([...ANIMATION_EFFECT_VALUES]);
 		expect(options.map(option => option.text())).toContain('Fog');
@@ -86,7 +59,7 @@ describe('screenAnimationEffectFields', () => {
 			params: { speed: 2 } as never,
 		});
 
-		await wrapper.find('[data-testid="u-select"]').setValue('caustics');
+		await wrapper.find('select').setValue('caustics');
 
 		expect(onUpdate).toHaveBeenCalledWith({ effect: 'caustics' });
 	});
@@ -94,7 +67,7 @@ describe('screenAnimationEffectFields', () => {
 	it('renders the named effect’s params from its schema and writes the full bag back, pinning every current value', async () => {
 		const { wrapper, onUpdate } = await mountComponent({ effect: 'fog' });
 
-		const speedInput = wrapper.findAll('[data-testid="u-input-number"]').at(1)!;
+		const speedInput = wrapper.findAll('input[type="number"]').at(1)!;
 		await speedInput.setValue('2');
 
 		const selection = onUpdate.mock.calls.at(-1)?.[0] as { effect: string; params: Record<string, unknown> };
@@ -109,7 +82,7 @@ describe('screenAnimationEffectFields', () => {
 	it('clamps an out-of-range number to the schema bounds instead of writing it', async () => {
 		const { wrapper, onUpdate } = await mountComponent({ effect: 'fog' });
 
-		const speedInput = wrapper.findAll('[data-testid="u-input-number"]').at(1)!;
+		const speedInput = wrapper.findAll('input[type="number"]').at(1)!;
 		await speedInput.setValue('99');
 
 		const selection = onUpdate.mock.calls.at(-1)?.[0] as { params: Record<string, unknown> };

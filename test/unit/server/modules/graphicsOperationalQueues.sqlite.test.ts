@@ -5,8 +5,6 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import type { GraphicsOperationalQueueId } from '~~/shared/utils/graphicsOperationalQueues';
 import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
-import { Buffer } from 'node:buffer';
-import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createGraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
@@ -21,25 +19,16 @@ import {
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { evidenceOf } from '~~/test/helpers/graphicsEvidence';
+import {
+	digestOf,
+	pngWithTextChunks as paddedPng,
+	pixelPng,
+	replacementPng,
+} from '~~/test/helpers/graphicsFixtures';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
-
-const pixelPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-	'base64',
-));
-const emptyTextChunk = Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0x42, 0xC5, 0x85);
-const replacementPng = Uint8Array.of(
-	...pixelPng.slice(0, -12),
-	...emptyTextChunk,
-	...pixelPng.slice(-12),
-);
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
-
-function digestOf(bytes: Uint8Array) {
-	return createHash('sha256').update(bytes).digest('hex');
-}
 
 function canonicalIdentity(digest: string) {
 	return graphicsObjectIdentity(`sha256/${digest}`);
@@ -57,18 +46,6 @@ function boundedBytes(bytes: Uint8Array) {
 		byteLength: bytes.byteLength,
 		maximumByteLength: bytes.byteLength,
 	});
-}
-
-/** A distinct valid PNG per index, so each seeds its own content digest. */
-function paddedPng(index: number) {
-	const padding: number[] = [];
-	for (let repeat = 0; repeat < index; repeat++)
-		padding.push(...emptyTextChunk);
-	return Uint8Array.of(
-		...pixelPng.slice(0, -12),
-		...padding,
-		...pixelPng.slice(-12),
-	);
 }
 
 function decodeEvidence(bytes: Uint8Array) {

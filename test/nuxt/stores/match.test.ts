@@ -1,8 +1,8 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockMatch } from '~~/test/helpers/fixtures';
-import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 import { transportFailure } from '~~/test/helpers/transportFailure';
+import { realtimeHandlersFor } from '~~/test/nuxt/helpers/realtimeEventSession';
 
 // ── Mock Dependencies ──
 
@@ -15,16 +15,7 @@ const mockRepo = {
 	promote: vi.fn(),
 };
 
-const mockAbly = createMockRealtime();
-const mockIsSelfOrigin = vi.fn(() => false);
-
-const ablyCallbacks: Record<string, Record<string, (...args: unknown[]) => void>> = {};
-mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
-	ablyCallbacks[storeName] = callbacks;
-});
-
 mockNuxtImport('useMatchRepository', () => () => mockRepo);
-mockNuxtImport('useRealtime', () => () => mockAbly);
 /*
  * `useAsyncAction` is deliberately not mocked. The copy that stood here was
  * `async fn => fn()` — it never caught, so nothing in this suite could observe what
@@ -34,6 +25,8 @@ mockNuxtImport('useRealtime', () => () => mockAbly);
  */
 mockNuxtImport('useFeatureMatchStore', () => () => ({ featureMatches: [] }));
 
+const { deliver } = realtimeHandlersFor();
+
 describe('useMatchStore', () => {
 	let store: ReturnType<typeof useMatchStore>;
 
@@ -41,15 +34,6 @@ describe('useMatchStore', () => {
 		store = useMatchStore();
 		store.$reset();
 		vi.clearAllMocks();
-		mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
-			ablyCallbacks[storeName] = callbacks;
-		});
-		ablyCallbacks.match = {
-			'match:created': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteCreated(data as any),
-			'match:updated': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteUpdated(data as any),
-			'match:deleted': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteDeleted(data as any),
-			'round:matchesRefreshed': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteMatchesRefreshed(data as any),
-		};
 	});
 
 	// ── Loading ──
@@ -175,7 +159,7 @@ describe('useMatchStore', () => {
 
 				const match = createMockMatch({ id: 10, eventId: 1 });
 
-				ablyCallbacks.match!['match:created']!({ match });
+				deliver('match:created', { match });
 
 				expect(store.matches).toHaveLength(1);
 				expect(store.matches[0]!.id).toBe(10);
@@ -188,7 +172,7 @@ describe('useMatchStore', () => {
 
 				const match = createMockMatch({ id: 10, eventId: 1, roundId: 5 });
 
-				ablyCallbacks.match!['match:created']!({ match });
+				deliver('match:created', { match });
 
 				expect(store.matches).toHaveLength(1);
 			});
@@ -200,7 +184,7 @@ describe('useMatchStore', () => {
 
 				const match = createMockMatch({ id: 10, eventId: 1, roundId: 99 });
 
-				ablyCallbacks.match!['match:created']!({ match });
+				deliver('match:created', { match });
 
 				expect(store.matches).toHaveLength(0);
 			});
@@ -212,7 +196,7 @@ describe('useMatchStore', () => {
 
 				const match = createMockMatch({ id: 10, eventId: 999 });
 
-				ablyCallbacks.match!['match:created']!({ match });
+				deliver('match:created', { match });
 
 				expect(store.matches).toHaveLength(0);
 			});
@@ -224,22 +208,9 @@ describe('useMatchStore', () => {
 				const match = createMockMatch({ id: 10, eventId: 1 });
 				store.matches = [match];
 
-				ablyCallbacks.match!['match:created']!({ match });
+				deliver('match:created', { match });
 
 				expect(store.matches).toHaveLength(1);
-			});
-
-			it('skips when isSelfOrigin returns true', async () => {
-				mockIsSelfOrigin.mockReturnValueOnce(true);
-				mockRepo.list.mockResolvedValue([]);
-				await store.loadMatchesByEventId(1);
-				store.matches = [];
-
-				ablyCallbacks.match!['match:created']!({
-					match: createMockMatch({ id: 10, eventId: 1 }),
-				});
-
-				expect(store.matches).toHaveLength(0);
 			});
 		});
 
@@ -249,24 +220,11 @@ describe('useMatchStore', () => {
 					createMockMatch({ id: 10, tableNumber: 1 }),
 				];
 
-				ablyCallbacks.match!['match:updated']!({
+				deliver('match:updated', {
 					match: createMockMatch({ id: 10, tableNumber: 5 }),
 				});
 
 				expect(store.matches[0]!.tableNumber).toBe(5);
-			});
-
-			it('skips when isSelfOrigin returns true', () => {
-				store.matches = [
-					createMockMatch({ id: 10, tableNumber: 1 }),
-				];
-				mockIsSelfOrigin.mockReturnValueOnce(true);
-
-				ablyCallbacks.match!['match:updated']!({
-					match: createMockMatch({ id: 10, tableNumber: 5 }),
-				});
-
-				expect(store.matches[0]!.tableNumber).toBe(1);
 			});
 		});
 
@@ -276,21 +234,27 @@ describe('useMatchStore', () => {
 					createMockMatch({ id: 10 }),
 				];
 
-				ablyCallbacks.match!['match:deleted']!({ matchId: 10 });
+				deliver('match:deleted', { matchId: 10 });
 
 				expect(store.matches).toHaveLength(0);
 			});
+		});
 
-			it('skips when isSelfOrigin returns true', () => {
-				store.matches = [
-					createMockMatch({ id: 10 }),
-				];
-				mockIsSelfOrigin.mockReturnValueOnce(true);
+		it('ignores this client\'s own match messages, which it already applied', async () => {
+			mockRepo.list.mockResolvedValue([]);
+			await store.loadMatchesByEventId(1);
+			const held = createMockMatch({ id: 10, eventId: 1, tableNumber: 1 });
+			store.matches = [held];
 
-				ablyCallbacks.match!['match:deleted']!({ matchId: 10 });
+			deliver('match:created', {
+				match: createMockMatch({ id: 11, eventId: 1 }),
+			}, { fromSelf: true });
+			deliver('match:updated', {
+				match: { ...held, tableNumber: 5 },
+			}, { fromSelf: true });
+			deliver('match:deleted', { matchId: 10 }, { fromSelf: true });
 
-				expect(store.matches).toHaveLength(1);
-			});
+			expect(store.matches).toEqual([held]);
 		});
 	});
 

@@ -2,37 +2,16 @@ import type { EffectScope } from 'vue';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
 }));
 mockNuxtImport('$fetch', () => mockFetch);
 
-type Handler = (message: Record<string, unknown>) => void;
-const channelHandlers = new Map<string, Set<Handler>>();
-const continuity = createContinuitySignal();
-const mockRealtime = reactive({
-	connectionState: 'connected',
-	tokenError: null as Error | null,
-	onChannel: (channel: string, type: string, handler: Handler) => {
-		const key = `${channel}|${type}`;
-		if (!channelHandlers.has(key))
-			channelHandlers.set(key, new Set());
-		channelHandlers.get(key)!.add(handler);
-		return () => channelHandlers.get(key)!.delete(handler);
-	},
-	onContinuityLost: continuity.onContinuityLost,
-	onceAttached: vi.fn(() => () => {}),
-});
-
-/** An Event message, as the Event channel delivers it. */
-function deliver(type: string, payload: Record<string, unknown>) {
-	for (const handler of channelHandlers.get(`event:1|${type}`) ?? [])
-		handler({ eventId: 1, ...payload });
-}
-
-mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
+const realtime = createFakeEventChannel();
+const { deliver } = realtime;
+mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 
 const defaultConfig = {
 	scope: 'all' as 'all' | 'topN' | 'playerList',
@@ -100,8 +79,7 @@ describe('useTopCardsModeData', () => {
 		});
 		mockEventId.value = 1;
 		mockServerNow = 1_000_000;
-		mockRealtime.connectionState = 'connected';
-		mockRealtime.tokenError = null;
+		realtime.reset();
 		mockFetch.mockResolvedValue({ entries: [], totalDecks: 0, scope: 'all' });
 	});
 
@@ -424,7 +402,7 @@ describe('useTopCardsModeData', () => {
 		it('shows cards missed while disconnected once its channel is attached again', async () => {
 			const { entries } = await showingCards();
 
-			mockRealtime.connectionState = 'disconnected';
+			realtime.transport.connectionState = 'disconnected';
 			await nextTick();
 			mockFetch.mockResolvedValue({
 				entries: [
@@ -433,8 +411,8 @@ describe('useTopCardsModeData', () => {
 				totalDecks: 4,
 				scope: 'all',
 			});
-			mockRealtime.connectionState = 'connected';
-			continuity.reattach('event:1');
+			realtime.transport.connectionState = 'connected';
+			realtime.reattach();
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);

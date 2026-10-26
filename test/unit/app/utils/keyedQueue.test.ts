@@ -1,15 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createKeyedQueue } from '~~/app/utils/keyedQueue';
-
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (reason?: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
+import { deferred } from '~~/test/helpers/deferred';
 
 describe('createKeyedQueue', () => {
 	it('runs actions for the same key in FIFO order', async () => {
