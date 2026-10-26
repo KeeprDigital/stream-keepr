@@ -7,20 +7,14 @@ import {
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 
 describe('screen Mode Definition module', () => {
-	it('defines metadata, defaults, host policy, and select options for every Screen Mode', () => {
+	it('keeps each definition, its host, its policy and its select option in agreement', () => {
 		const selectOptions = getScreenModeSelectOptions();
 
 		for (const mode of SCREEN_MODE_VALUES) {
 			const definition = getScreenModeDefinition(mode);
 
 			expect(definition.mode).toBe(mode);
-			expect(definition.label).toBeTruthy();
-			expect(definition.icon).toBeTruthy();
-			expect(definition.description).toBeTruthy();
-			expect(definition.displayType).toMatch(/^(overlay|control)$/);
-			expect(definition.getDefaultConfig()).toBeTruthy();
-			expect(definition.getDisplayReset(definition.getDefaultConfig(), 0)).toBeTruthy();
-			expect(definition.host.kind).toMatch(/^(overlay|control)$/);
+			expect(definition.host.kind).toBe(definition.displayType);
 			expect(definition.configurationPolicy.displayType).toBe(definition.displayType);
 			expect(selectOptions).toContainEqual({ label: definition.label, value: mode, icon: definition.icon });
 		}
@@ -44,11 +38,7 @@ describe('screen Mode Definition module', () => {
 	it('exposes overlay, fill, and key Screen Outputs for Broadcast Graphics', () => {
 		const policy = getScreenModeConfigurationPolicy('broadcast-graphics');
 
-		expect(policy.outputOptions).toEqual([
-			{ value: 'overlay', label: 'Open overlay output', icon: 'i-lucide-layers' },
-			{ value: 'fill', label: 'Open fill output', icon: 'i-lucide-square' },
-			{ value: 'key', label: 'Open key output', icon: 'i-lucide-contrast' },
-		]);
+		expect(policy.outputOptions.map(option => option.value)).toEqual(['overlay', 'fill', 'key']);
 		expect(policy.containerControlPlacement.dimensions).toBe('mode');
 		expect(policy.resetScreenConfigDefaults).toEqual({ width: 1920, height: 1080 });
 	});

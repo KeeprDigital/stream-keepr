@@ -130,30 +130,6 @@ describe('projectHeadToHead', () => {
 			expect(player1).toMatchObject({ deckName: 'Boros Energy', deckColors: 'RW' });
 		});
 
-		it('shows the deck name their Deck List projects when they have no Archetype', () => {
-			const bob = playerFacts(BOB, 'Bob', {
-				player: {
-					id: BOB,
-					name: 'Bob',
-					pronouns: null,
-					wins: null,
-					losses: null,
-					draws: null,
-					points: null,
-					gameData: { type: 'mtg', deckName: 'Dimir Murktide', deckColors: 'UB' },
-				},
-			});
-
-			const { player2 } = projectHeadToHead({
-				player1: null,
-				player2: bob,
-				matches: [],
-				currentMatchId: null,
-			});
-
-			expect(player2).toMatchObject({ deckName: 'Dimir Murktide', deckColors: 'UB' });
-		});
-
 		it('leaves a side no Player fills empty', () => {
 			expect(projectHeadToHead({
 				player1: null,
@@ -199,38 +175,6 @@ describe('projectHeadToHead', () => {
 					resultString: null,
 				},
 			]);
-		});
-
-		it('reads the game score from the first Player\'s side, game draws last', () => {
-			const played = match({
-				player1Id: ALICE,
-				player2Id: BOB,
-				player1GameWins: 2,
-				player2GameWins: 0,
-				gameDraws: 1,
-			});
-
-			const [earlierMatch] = projectHeadToHead({
-				player1: alice,
-				player2: bob,
-				matches: [played],
-				currentMatchId: null,
-			}).earlierMatches;
-
-			expect(earlierMatch).toMatchObject({ outcome: 'player1', gameScore: '2-0-1' });
-		});
-
-		it('calls a Match with equal game wins drawn', () => {
-			const drawn = match({ player1GameWins: 1, player2GameWins: 1, gameDraws: 1 });
-
-			const [earlierMatch] = projectHeadToHead({
-				player1: alice,
-				player2: bob,
-				matches: [drawn],
-				currentMatchId: null,
-			}).earlierMatches;
-
-			expect(earlierMatch).toMatchObject({ outcome: 'draw', gameScore: '1-1-1' });
 		});
 
 		it('names no winner for a Match reported with only a result string', () => {

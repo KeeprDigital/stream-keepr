@@ -6,11 +6,7 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
 import { featureMatchOverlayGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 
 describe('media Graphic Item exact references', () => {
-	/**
-	 * A layout recorded before ADR-0020 still carries `videoCompatibility` on its
-	 * Media Graphic Items. Nothing about it reaches the reference: Chromium is the
-	 * only supported engine for transparent video, so there is nothing to check.
-	 */
+	/** A pre-ADR-0020 `videoCompatibility` field reaches nothing in the reference. */
 	it('indexes a silent-video item recorded before ADR-0020 as its exact revision alone', () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		config.layout.composition = {

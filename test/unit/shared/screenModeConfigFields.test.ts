@@ -3,11 +3,7 @@ import { z } from 'zod';
 import { defineScreenModeConfigContract } from '~~/shared/screenModeConfigs/contract';
 import { editorField } from '~~/shared/screenModeConfigs/fields';
 
-/**
- * A contract field carrying editor metadata (`editorField`, ADR-0037) is the one
- * source of its editor control's label, bounds and step, so an editor cannot offer
- * a range its contract refuses.
- */
+// A contract field's editor metadata (ADR-0037) is its control's only source of label, bounds and step.
 describe('a config contract\'s editor fields', () => {
 	const contract = defineScreenModeConfigContract({
 		scale: editorField(z.number().min(0.5).max(2).optional(), { label: 'Card Scale', step: 0.1 }),
@@ -81,11 +77,8 @@ describe('a config contract\'s editor fields', () => {
 	});
 });
 
-/**
- * Tightening a contract bound must not cost a Screen its stored config: a stored
- * value outside its field's bounds reads as the nearest bound, never as the
- * default, and never refuses the read (#498). Writes are still refused.
- */
+// A stored value outside tightened bounds reads as the nearest bound, never the default (#498).
+// Writes are still refused.
 describe('a config contract\'s stored-fragment clamp', () => {
 	const contract = defineScreenModeConfigContract({
 		scale: z.number().min(0.5).max(2).optional(),

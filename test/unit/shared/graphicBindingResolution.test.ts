@@ -11,14 +11,8 @@ import {
 	resolveGraphicSourceSelections,
 } from '~~/shared/modules/graphics';
 
-/**
- * Graphic Source Selections and Graphic Input Bindings resolving against Event Data.
- *
- * Stated as an operator would: they pick one Match and the lower third fills, a
- * derived Player reports what production committed to rather than what the
- * tournament has since become, and anything that cannot resolve resolves to nothing
- * at all rather than to the template's own default.
- */
+// Selections and bindings resolving against Event Data: a derived Player reports what
+// production committed to, and anything unresolvable resolves to nothing, not the default.
 
 const NAME_INPUT: GraphicInputDeclaration = {
 	type: 'text',

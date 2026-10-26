@@ -5,13 +5,7 @@ import {
 	passwordResetTokenFromHash,
 } from '~~/shared/utils/passwordResetLink';
 
-/**
- * The reset link's encoding (#399), both halves against each other.
- *
- * One writer on the server and one reader in the browser is the pair that stops
- * agreeing when an encoding is spelled out twice, which is why they share a
- * file and why the rows below mostly round-trip rather than assert a literal.
- */
+// The reset link's writer and reader, round-tripped against each other (#399).
 
 const TOKEN = 'a-token-long-enough-to-be-one';
 
@@ -45,11 +39,7 @@ describe('what is not a token', () => {
 	});
 
 	it('reads a token offered in a query string as no token', () => {
-		// The fail-safe direction, and pinned because the tempting "fix" is a query
-		// fallback. Better Auth's own `/reset-password/:token` callback redirects
-		// with `?token=`, so a link built through it would arrive this way — and
-		// accepting it would put the token back in the request logs the fragment
-		// exists to keep it out of.
+		// No query fallback: a `?token=` would put the token back in request logs.
 		expect(passwordResetTokenFromHash('?token=a-token-long-enough-to-be-one')).toBeNull();
 	});
 
