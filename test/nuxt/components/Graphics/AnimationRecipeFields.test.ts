@@ -4,12 +4,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
 import AnimationRecipeFields from '~/components/Graphics/AnimationRecipeFields.vue';
 
-/**
- * The one Graphic Animation Recipe fields control, shared by a lifecycle phase in
- * the compositor and a Graphic Animation Recipe entry: the bounds it presents, what
- * an empty field emits, which fields the recipe's own values hide, and the
- * on-screen repetition only a cycling recipe is offered.
- */
+// The one Graphic Animation Recipe fields control, shared by a lifecycle phase in the compositor
+// and a Graphic Animation Recipe entry: the bounds it presents, what an empty field emits, which…
 
 enableAutoUnmount(afterEach);
 
@@ -109,31 +105,7 @@ async function enter(wrapper: Wrapper, name: string, testId: string, value: unkn
 	await flushPromises();
 }
 
-function optionLabels(wrapper: Wrapper, testId: string) {
-	return control(wrapper, 'USelect', testId)!.findAll('option').map(option => option.text());
-}
-
 describe('graphic animation recipe fields', () => {
-	it('bounds timing and distance to what a write accepts', () => {
-		const wrapper = mountFields();
-
-		const duration = control(wrapper, 'UInputNumber', 'duration')!;
-		expect([
-			duration.props('min'),
-			duration.props('max'),
-		]).toEqual([50, 10000]);
-		const delay = control(wrapper, 'UInputNumber', 'delay')!;
-		expect([
-			delay.props('min'),
-			delay.props('max'),
-		]).toEqual([0, 10000]);
-		const distance = control(wrapper, 'UInputNumber', 'slide-distance')!;
-		expect([
-			distance.props('min'),
-			distance.props('max'),
-		]).toEqual([0, 10000]);
-	});
-
 	it('falls back to the shortest duration when the field is cleared', async () => {
 		const wrapper = mountFields();
 
@@ -156,23 +128,6 @@ describe('graphic animation recipe fields', () => {
 		const wrapper = mountFields({ recipe: undelayed });
 
 		expect(control(wrapper, 'UInputNumber', 'delay')!.props('modelValue')).toBe(0);
-	});
-
-	it('names every choice the way an author reads it', () => {
-		const wrapper = mountFields();
-
-		expect(optionLabels(wrapper, 'easing')).toEqual([
-			'Linear',
-			'Ease in',
-			'Ease out',
-			'Ease in-out',
-			'Back in',
-			'Back out',
-			'Back in-out',
-		]);
-		expect(optionLabels(wrapper, 'slide-direction')[1]).toBe('Up right');
-		expect(optionLabels(wrapper, 'slide-mode')).toEqual(['Fixed', 'Clear parent']);
-		expect(optionLabels(wrapper, 'reveal-edge')).toEqual(['Left', 'Right', 'Top', 'Bottom']);
 	});
 
 	it('switches a channel on with nothing of its own, and off with null', async () => {

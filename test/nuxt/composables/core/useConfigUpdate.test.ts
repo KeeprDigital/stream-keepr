@@ -1,5 +1,6 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '~~/test/helpers/deferred';
 
 const mockToast = {
 	add: vi.fn(),
@@ -42,38 +43,13 @@ describe('useConfigUpdate', () => {
 		};
 	}
 
-	function deferred<T = void>() {
-		let resolve!: (value: T | PromiseLike<T>) => void;
-		let reject!: (reason?: unknown) => void;
-		const promise = new Promise<T>((promiseResolve, promiseReject) => {
-			resolve = promiseResolve;
-			reject = promiseReject;
-		});
-		return { promise, resolve, reject };
-	}
-
-	it('returns merged config with defaults', () => {
-		const { config } = createTestSetup();
-		expect(config.value).toEqual({ color: 'red', size: 10 });
-	});
-
-	it('merges store config over defaults', () => {
-		const { config } = createTestSetup({ color: 'blue' });
-		expect(config.value.color).toBe('blue');
-		expect(config.value.size).toBe(10);
-	});
-
-	it('applies local overrides immediately on updateConfig', () => {
-		const { config, updateConfig } = createTestSetup();
+	it('shows the stored config over the defaults, and an edit at once while it saves', () => {
+		const { config, saving, updateConfig } = createTestSetup({ color: 'blue' });
+		expect(config.value).toEqual({ color: 'blue', size: 10 });
 
 		updateConfig({ color: 'green' });
+
 		expect(config.value.color).toBe('green');
-	});
-
-	it('sets saving to true when updateConfig is called', () => {
-		const { saving, updateConfig } = createTestSetup();
-
-		updateConfig({ color: 'green' });
 		expect(saving.value).toBe(true);
 	});
 
@@ -443,16 +419,7 @@ describe('useConfigUpdate', () => {
 		});
 	});
 
-	/*
-	 * Disposal used to cancel the pending write, and this suite pinned that (#308).
-	 *
-	 * Local-first is what made it silent: the edit is applied to `localOverrides` the
-	 * moment it is made, so the operator has already been shown it as saved. Navigate
-	 * away inside the three hundred milliseconds and the write that would have made
-	 * that true never happened — the setting reverts, and nothing anywhere says so.
-	 * A disposal is the last moment the intent exists, so it is the moment to spend
-	 * it, not the moment to discard it.
-	 */
+	// The operator was already shown the edit as saved, so leaving must send it, not drop it (#308).
 	it('flushes a pending debounced save when its component scope is disposed', async () => {
 		const scope = effectScope();
 		const saveToStore = vi.fn().mockResolvedValue({ ok: true });

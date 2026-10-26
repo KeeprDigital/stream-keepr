@@ -1,13 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import {
-	scryfallCardSchema,
-	scryfallCollectionResponseSchema,
-} from '~~/server/schemas/external/scryfall';
-
-// ── scryfallCardSchema ────────────────────────────────────────────────────────
+import { scryfallCardSchema } from '~~/server/schemas/external/scryfall';
 
 describe('scryfallCardSchema', () => {
-	const validCard = {
+	const card = {
 		id: 'f2a61a9f-6f33-44c9-be89-3c72a3e7c9e5',
 		name: 'Lightning Bolt',
 		set: 'lea',
@@ -17,100 +12,39 @@ describe('scryfallCardSchema', () => {
 		type_line: 'Instant',
 	};
 
-	it('accepts a valid card', () => {
-		expect(scryfallCardSchema.parse(validCard)).toEqual(validCard);
-	});
-
 	it('preserves collector identity for exact-printing lookups', () => {
-		expect(scryfallCardSchema.parse({ ...validCard, collector_number: '101★' }).collector_number).toBe('101★');
+		expect(scryfallCardSchema.parse({ ...card, collector_number: '101★' }).collector_number).toBe('101★');
 	});
 
-	it('passes through unknown fields (passthrough)', () => {
-		const result = scryfallCardSchema.parse({ ...validCard, oracle_text: 'Deal 3 damage.' });
-		expect(result).toHaveProperty('oracle_text', 'Deal 3 damage.');
-	});
-
-	it('accepts card without optional fields', () => {
-		const minimal = { id: 'f2a61a9f-6f33-44c9-be89-3c72a3e7c9e5', name: 'Plains', set: 'lea' };
-		expect(scryfallCardSchema.parse(minimal)).toEqual(minimal);
-	});
-
-	it('accepts double-faced card with card_faces', () => {
-		const dfcCard = {
-			...validCard,
-			name: 'Delver of Secrets // Insectile Aberration',
-			card_faces: [
-				{ mana_cost: '{U}' },
-				{ mana_cost: undefined },
-			],
-		};
-		const result = scryfallCardSchema.parse(dfcCard);
-		expect(result.name).toBe('Delver of Secrets // Insectile Aberration');
-		expect(result.card_faces).toEqual([
-			{ mana_cost: '{U}' },
-			{ mana_cost: undefined },
-		]);
-	});
-
-	it('accepts null cmc (tokens, emblems)', () => {
-		expect(scryfallCardSchema.parse({ ...validCard, cmc: null }).cmc).toBeNull();
-	});
-
-	it('accepts null color_identity', () => {
-		expect(scryfallCardSchema.parse({ ...validCard, color_identity: null }).color_identity).toBeNull();
-	});
-
-	it('accepts null type_line', () => {
-		expect(scryfallCardSchema.parse({ ...validCard, type_line: null }).type_line).toBeNull();
-	});
-
-	it('accepts null mana_cost on a card face', () => {
-		const dfcCard = {
-			...validCard,
-			card_faces: [
-				{ mana_cost: '{U}' },
-				{ mana_cost: null },
-			],
-		};
-		expect(scryfallCardSchema.parse(dfcCard).card_faces?.[1]?.mana_cost).toBeNull();
-	});
-});
-
-// ── scryfallCollectionResponseSchema ─────────────────────────────────────────
-
-describe('scryfallCollectionResponseSchema', () => {
-	const validResponse = {
-		object: 'list' as const,
-		not_found: [],
-		data: [
+	it.each([
+		[
+			'no optional fields (a basic land)',
+			{ id: card.id, name: 'Plains', set: 'lea' },
+		],
+		[
+			'null cmc (tokens, emblems)',
+			{ ...card, cmc: null },
+		],
+		[
+			'null color_identity',
+			{ ...card, color_identity: null },
+		],
+		[
+			'null type_line',
+			{ ...card, type_line: null },
+		],
+		[
+			'a card face with null or missing mana_cost',
 			{
-				id: 'f2a61a9f-6f33-44c9-be89-3c72a3e7c9e5',
-				name: 'Lightning Bolt',
-				set: 'lea',
+				...card,
+				card_faces: [
+					{ mana_cost: '{U}' },
+					{ mana_cost: null },
+					{},
+				],
 			},
 		],
-	};
-
-	it('accepts a valid collection response', () => {
-		expect(scryfallCollectionResponseSchema.parse(validResponse)).toEqual(validResponse);
-	});
-
-	it('accepts empty data array', () => {
-		expect(scryfallCollectionResponseSchema.parse({ ...validResponse, data: [] }).data).toEqual([]);
-	});
-
-	it('accepts not_found entries with extra fields (passthrough)', () => {
-		const result = scryfallCollectionResponseSchema.parse({
-			...validResponse,
-			not_found: [
-				{ name: 'Foo', set: 'bar' },
-			],
-		});
-		expect(result.not_found[0]).toHaveProperty('set', 'bar');
-	});
-
-	it('passes through extra top-level fields', () => {
-		const result = scryfallCollectionResponseSchema.parse({ ...validResponse, total_cards: 1 });
-		expect(result).toHaveProperty('total_cards', 1);
+	])('accepts what Scryfall sends for %s', (_case, upstream) => {
+		expect(scryfallCardSchema.parse(upstream)).toEqual(upstream);
 	});
 });

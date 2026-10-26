@@ -3,17 +3,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-/**
- * Cross-Event scoping proofs for the roster CRUD services (#468): Players,
- * Player Lists, Talents, Archetypes and Event Card Name Overrides.
- *
- * Two Events hold colliding data — the same Melee external ids, the same
- * archetype name, the same normalized card-name override — so any read that
- * loses its Event predicate answers with the other Event's rows. The Player
- * List membership probes go one step further and plant a genuinely foreign
- * membership row (the junction table carries no event_id of its own), which
- * only the join's `eq(players.eventId, …)` keeps off the roster.
- */
+// Two Events hold colliding roster data, so a read that loses its Event predicate answers
+// with the other Event's rows (#468). A planted foreign membership row tests the join itself.
 
 vi.stubGlobal('createError', (input: { statusCode?: number; message?: string }) =>
 	Object.assign(new Error(input.message ?? 'error'), input));

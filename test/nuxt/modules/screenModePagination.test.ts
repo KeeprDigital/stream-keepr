@@ -136,6 +136,43 @@ describe('useScreenModePagination (page rotation)', () => {
 		expect(persistRotationAnchor).not.toHaveBeenCalled();
 	});
 
+	it.each([
+		[
+			'wraps past the last page to the first',
+			3,
+			(p: ReturnType<typeof harness>['pagination']) => p.nextPage(),
+			1,
+		],
+		[
+			'wraps back from the first page to the last',
+			1,
+			(p: ReturnType<typeof harness>['pagination']) => p.prevPage(),
+			3,
+		],
+		[
+			'clamps a selection below the first page',
+			2,
+			(p: ReturnType<typeof harness>['pagination']) => p.setPage(0),
+			1,
+		],
+		[
+			'clamps a selection past the last page',
+			2,
+			(p: ReturnType<typeof harness>['pagination']) => p.setPage(100),
+			3,
+		],
+	])('manual selection %s', (_, currentPage, select, expected) => {
+		const { pagination, persistPage } = harness({ autoPageEnabled: false, currentPage });
+
+		select(pagination);
+
+		expect(persistPage).toHaveBeenCalledWith(expected);
+	});
+
+	it('shows one page with no rows', () => {
+		expect(harness({ autoPageEnabled: false, rowCount: 0 }).pagination.totalPages.value).toBe(1);
+	});
+
 	it('with auto-page off the persisted page drives the slice, clamped to the data', () => {
 		const { pagination } = harness({ autoPageEnabled: false, currentPage: 9, rowCount: 6 });
 		expect(pagination.currentPage.value).toBe(3);

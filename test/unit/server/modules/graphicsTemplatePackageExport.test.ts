@@ -1,20 +1,8 @@
-import type { SilentVideoPlaybackValidator } from '~~/server/modules/graphics-asset-library/silent-video-playback-validator';
 import type { GraphicAssetReference, GraphicAssetRevisionId } from '~~/shared/types/graphicsAsset';
 import type { TemplatePackageManifest } from '~~/shared/types/templatePackage';
-import { Buffer } from 'node:buffer';
-import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
+
 import {
-	createGraphicsAssetLibrary,
-	createInMemoryGraphicsAssetCatalogue,
-} from '~~/server/modules/graphics-asset-library';
-import {
-	createInMemoryCanonicalGraphicsObjectStore,
-	createInMemoryStagingGraphicsObjectStore,
-} from '~~/server/modules/graphics-asset-library/in-memory-object-store';
-import {
-	createBoundedByteStream,
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import {
@@ -23,191 +11,21 @@ import {
 } from '~~/shared/modules/graphics/itemDefinitions';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '~~/shared/types/screenConfig';
 import { TEMPLATE_PACKAGE_KINDS } from '~~/shared/types/templatePackage';
-import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import {
 	broadcastGraphicTemplatePackageRequirements,
 	featureMatchLayoutTemplatePackageRequirements,
 } from '~~/shared/utils/templatePackageRequirements';
+import { digestOf, pixelPng as transparentPixelPng } from '~~/test/helpers/graphicsFixtures';
+import { webpPixel } from '~~/test/helpers/graphicsImageFixtures';
+import {
+	createPackageLibrary,
+	ingestPackageImage as ingestImage,
+	ingestPackageSilentVideo as ingestSilentVideo,
+	ingestPackageStaticFont as ingestStaticFont,
+} from '~~/test/helpers/templatePackageLibrary';
 import { collectStream, readStoredZipArchive } from '../../../helpers/storedZipArchive';
 
-const transparentPixelPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-	'base64',
-));
-const webpPixel = Uint8Array.from(Buffer.from(
-	'UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAEAdQlFKUp4CBiOh/AAA=',
-	'base64',
-));
-
-function digestOf(bytes: Uint8Array) {
-	return createHash('sha256').update(bytes).digest('hex');
-}
-
-const sixteenPixelPosterPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAABAAAAAQBPJcTWAAAAHUlEQVR4nGP8x8Dwn4ECwEKJ5lEDRg0YNWAwGQAAkU4CO63xbeIAAAAASUVORK5CYII=',
-	'base64',
-));
-const vp9Webm = Uint8Array.from(Buffer.from(
-	'GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAIMEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggElTbuMU6uEHFO7a1OsggH27AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjIuMTIuMTAyV0GNTGF2ZjYyLjEyLjEwMkSJiECPQAAAAAAAFlSua8iuAQAAAAAAAD/XgQFzxYhkRqj8GKbqBJyBACK1nIN1bmSIgQCGhVZfVlA5g4EBI+ODhB3NZQDgkLCBELqBEJqBAlWwhFW5gQESVMNnQIBzc6BjwIBnyJpFo4dFTkNPREVSRIeNTGF2ZjYyLjEyLjEwMnNz2mPAi2PFiGRGqPwYpuoEZ8ilRaOHRU5DT0RFUkSHmExhdmM2Mi4yOC4xMDIgbGlidnB4LXZwOWfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDEuMDAwMDAwMDAwAB9DtnXG54EAo6yBAACAgkmDQgAA8AD2ADgkHBhCAAAwcAAASqf/+5CBv///CAg////7iYcAAKOTgQH0AIYAQJKcAElAAAMgAABCQBxTu2uRu4+zgQC3iveBAfGCAavwgQM=',
-	'base64',
-));
-
-/**
- * Playback validation is a controlled adapter here, exactly as the shared
- * ingestion suites drive it. Export never touches it; it exists only so a real
- * silent-video revision can be published and then required by a Template.
- */
-function acceptEverySilentVideo(): SilentVideoPlaybackValidator {
-	return {
-		validate: async input => ({
-			outcome: 'accepted' as const,
-			operationId: input.operationId,
-			idempotencyKey: input.idempotencyKey,
-			sourceDigest: input.sourceDigest,
-			factsDigest: input.factsDigest,
-			width: input.inspectedFacts.width,
-			height: input.inspectedFacts.height,
-			durationSeconds: input.inspectedFacts.durationSeconds,
-			posterTimeSeconds: input.inspectedFacts.posterTimeSeconds,
-			mutedInlinePlayback: true as const,
-			seeked: true as const,
-			transparencyRendered: false,
-			posterDigest: digestOf(sixteenPixelPosterPng),
-			poster: createBoundedByteStream(sixteenPixelPosterPng, {
-				byteLength: sixteenPixelPosterPng.byteLength,
-				maximumByteLength: MAX_SILENT_VIDEO_POSTER_BYTES,
-			}),
-		}),
-	};
-}
-
-function createExportLibrary() {
-	let nextIdentity = 0;
-	const canonical = createInMemoryCanonicalGraphicsObjectStore();
-	const library = createGraphicsAssetLibrary({
-		catalogue: createInMemoryGraphicsAssetCatalogue(),
-		staging: createInMemoryStagingGraphicsObjectStore(),
-		canonical,
-		silentVideoPlaybackValidator: acceptEverySilentVideo(),
-		now: () => new Date('2026-07-30T09:00:00.000Z'),
-		generateIdentity: () => `package-identity-${++nextIdentity}`,
-	});
-	return { library, canonical };
-}
-
-type ExportLibrary = ReturnType<typeof createExportLibrary>['library'];
-
-async function ingestImage(
-	library: ExportLibrary,
-	name: string,
-	bytes: Uint8Array,
-	mime: 'image/png' | 'image/webp' = 'image/png',
-): Promise<GraphicAssetReference> {
-	const operation = await library.initiateGraphicsIngestion({
-		idempotencyKey: `ingest-${name}`,
-		initiatedBy: 'package-author',
-		name,
-		sourceFileName: mime === 'image/png'
-			? `${name}.png`
-			: `${name}.webp`,
-		declaredMime: mime,
-		duplicateContentPolicy: 'create-separate',
-		browserDecodeEvidence: {
-			outcome: 'decoded',
-			sourceDigest: digestOf(bytes),
-			width: 1,
-			height: 1,
-		},
-		declaredByteLength: bytes.byteLength,
-	});
-	const completed = await library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: mime,
-		bytes: createBoundedByteStream(bytes, {
-			byteLength: bytes.byteLength,
-			maximumByteLength: bytes.byteLength,
-		}),
-	});
-	return {
-		assetId: completed.result!.assetId,
-		revisionId: completed.result!.revisionId,
-	};
-}
-
-async function ingestSilentVideo(
-	library: ExportLibrary,
-	name: string,
-): Promise<GraphicAssetReference> {
-	const operation = await library.initiateGraphicsIngestion({
-		idempotencyKey: `ingest-${name}`,
-		initiatedBy: 'package-author',
-		name,
-		sourceFileName: `${name}.webm`,
-		declaredMime: 'video/webm',
-		declaredByteLength: vp9Webm.byteLength,
-	});
-	const completed = await library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: 'video/webm',
-		bytes: createBoundedByteStream(vp9Webm, {
-			byteLength: vp9Webm.byteLength,
-			maximumByteLength: 250 * 1024 * 1024,
-		}),
-	});
-	return {
-		assetId: completed.result!.assetId,
-		revisionId: completed.result!.revisionId,
-	};
-}
-
-async function ingestStaticFont(
-	library: ExportLibrary,
-	name: string,
-): Promise<GraphicAssetReference> {
-	const source = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
-	const operation = await library.initiateGraphicsIngestion({
-		idempotencyKey: `ingest-${name}`,
-		initiatedBy: 'package-author',
-		name,
-		sourceFileName: 'mplantin.woff',
-		declaredMime: 'font/woff',
-		declaredByteLength: source.byteLength,
-	});
-	const awaitingEvidence = await library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: 'font/woff',
-		bytes: createBoundedByteStream(source, {
-			byteLength: source.byteLength,
-			maximumByteLength: 10 * 1024 * 1024,
-		}),
-	});
-	if (awaitingEvidence.report?.outcome !== 'accepted' || awaitingEvidence.report.facts.kind !== 'font')
-		throw new Error('Expected a validated font challenge');
-	const { facts } = awaitingEvidence.report;
-	const completed = await library.confirmFontBrowserEvidence({
-		operationId: awaitingEvidence.id,
-		initiatedBy: awaitingEvidence.initiatedBy,
-		evidence: {
-			outcome: 'font-loaded',
-			sourceDigest: facts.sha256,
-			challengeDigest: facts.browserChallenge.digest,
-			glyphProofs: facts.browserChallenge.codePoints.map(codePoint => ({
-				codePoint,
-				exactWithSansDigest: '1'.repeat(64),
-				exactWithMonoDigest: '1'.repeat(64),
-				sansFallbackDigest: '2'.repeat(64),
-				monoFallbackDigest: '3'.repeat(64),
-			})),
-		},
-	});
-	return {
-		assetId: completed.result!.assetId,
-		revisionId: completed.result!.revisionId,
-	};
-}
+const createExportLibrary = () => createPackageLibrary('package');
 
 describe('the Template Package export contract', () => {
 	it.each(TEMPLATE_PACKAGE_KINDS)(

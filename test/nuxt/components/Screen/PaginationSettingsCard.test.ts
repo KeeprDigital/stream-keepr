@@ -7,12 +7,7 @@ import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import PaginationSettingsCard from '~/components/Screen/PaginationSettingsCard.vue';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
-/**
- * The one Pagination card every paginated Screen Mode's settings render. It is
- * driven by the mode's Page Rotation declaration, so a mode naming its page
- * size field differently (Metagame `pageSize`) needs no special case, and it
- * writes only through the Page Rotation writes (ADR-0009, ADR-0039).
- */
+// The one Pagination card every paginated Screen Mode's settings render.
 
 // Server time is the Page Rotation's clock; fractional, like a real sync.
 mockNuxtImport('useServerTime', () => () => ({

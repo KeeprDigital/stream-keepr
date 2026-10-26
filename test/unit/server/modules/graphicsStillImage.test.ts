@@ -1,20 +1,7 @@
-import { Buffer } from 'node:buffer';
-import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { processStillImage } from '~~/server/modules/graphics-asset-library/still-image';
-
-const jpegPixel = Uint8Array.from(Buffer.from(
-	'/9j/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJtAEx7/2Q==',
-	'base64',
-));
-const webpPixel = Uint8Array.from(Buffer.from(
-	'UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAEAdQlFKUp4CBiOh/AAA=',
-	'base64',
-));
-
-function sha256(bytes: Uint8Array) {
-	return createHash('sha256').update(bytes).digest('hex');
-}
+import { digestOf } from '~~/test/helpers/graphicsFixtures';
+import { jpegPixel, webpPixel } from '~~/test/helpers/graphicsImageFixtures';
 
 function jpegSegment(marker: number, payload: Uint8Array) {
 	const length = payload.byteLength + 2;
@@ -116,7 +103,7 @@ describe('the still-image-v1 Graphic Asset Compatibility Profile', () => {
 				format,
 				canonicalMime,
 				byteLength: bytes.byteLength,
-				sha256: sha256(bytes),
+				sha256: digestOf(bytes),
 				width: 1,
 				height: 1,
 				pixelCount: 1,

@@ -1,20 +1,19 @@
-import type { BackgroundLayer, ModeConfigTypeMap } from '~~/shared/types/screenConfig';
+import type { ModeConfigTypeMap } from '~~/shared/types/screenConfig';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
-import { createMockScreen } from '../../../helpers/fixtures';
+import { createMockScreen } from '~~/test/helpers/fixtures';
+import Settings from '~/components/Screen/ModeBackgroundLayersSettings.vue';
 
 const config = ref<Partial<ModeConfigTypeMap['metagame']>>({});
 const updateConfig = vi.fn();
-const useModeConfigUpdateMock = vi.fn(() => ({
+mockNuxtImport('useModeConfigUpdate', () => () => ({
 	config: computed(() => config.value),
 	saving: computed(() => false),
 	updateConfig,
 	resetConfig: vi.fn(),
 }));
-
-mockNuxtImport('useModeConfigUpdate', () => (...args: unknown[]) => useModeConfigUpdateMock(...args as []));
 
 const EditorStub = defineComponent({
 	props: {
@@ -26,9 +25,6 @@ const EditorStub = defineComponent({
 });
 
 async function mountComponent() {
-	const componentPath = '../../../../app/components/Screen/ModeBackgroundLayersSettings.vue';
-	const { default: Settings } = await import(componentPath);
-
 	return mount(Settings, {
 		props: {
 			screen: createMockScreen({ currentMode: 'metagame' }),
@@ -48,36 +44,6 @@ describe('screenModeBackgroundLayersSettings', () => {
 	beforeEach(() => {
 		config.value = {};
 		updateConfig.mockClear();
-		useModeConfigUpdateMock.mockClear();
-	});
-
-	it('binds the configuration composable to the given mode', async () => {
-		await mountComponent();
-
-		expect(useModeConfigUpdateMock).toHaveBeenCalledWith(
-			expect.any(Function),
-			expect.any(Function),
-			'metagame',
-		);
-	});
-
-	it('hands the mode\'s own stack to the editor, absent as empty', async () => {
-		const wrapper = await mountComponent();
-		expect(wrapper.get('[data-testid="layers-editor"]').attributes('data-layer-count')).toBe('0');
-
-		config.value = {
-			backgroundLayers: [
-				{
-					id: 'wash',
-					type: 'color',
-					color: '#101010',
-					enabled: true,
-					opacity: 1,
-				},
-			] satisfies BackgroundLayer[],
-		};
-		const populated = await mountComponent();
-		expect(populated.get('[data-testid="layers-editor"]').attributes('data-layer-count')).toBe('1');
 	});
 
 	it('writes the editor\'s stack onto the mode\'s backgroundLayers key', async () => {

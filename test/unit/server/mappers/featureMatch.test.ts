@@ -1,70 +1,63 @@
+import type { DbFeatureMatchSession } from '~~/server/db/schema';
+import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import { describe, expect, it } from 'vitest';
-import { mapFeatureMatchToResponse } from '~~/server/mappers/featureMatch';
-import { createMockFeatureMatch } from '~~/test/helpers/fixtures';
+import { mapFeatureMatchSessionToStarted, mapFeatureMatchToResponse } from '~~/server/mappers/featureMatch';
+import { createMockFeatureMatch, createMockFeatureMatchState } from '~~/test/helpers/fixtures';
+
+function session(overrides?: Partial<DbFeatureMatchSession>): DbFeatureMatchSession {
+	return {
+		id: 30,
+		eventId: 1,
+		slotId: 7,
+		status: 'active',
+		sourceSnapshot: {
+			player1: { id: 100 },
+		} as unknown as FeatureMatchSourceSnapshot,
+		currentState: createMockFeatureMatchState(),
+		sequence: 4,
+		closedAt: null,
+		createdAt: '2026-03-10T08:00:00.000Z' as unknown as Date,
+		updatedAt: '2026-03-10T09:00:00.000Z' as unknown as Date,
+		...overrides,
+	};
+}
 
 describe('feature match mapper', () => {
-	describe('mapFeatureMatchToResponse', () => {
-		it('converts createdAt and updatedAt to Date instances', () => {
-			const match = createMockFeatureMatch({
-				createdAt: '2026-03-10T08:00:00.000Z' as unknown as Date,
-				updatedAt: '2026-03-10T09:30:00.000Z' as unknown as Date,
-			});
-			const result = mapFeatureMatchToResponse(match);
+	it('maps a Slot with no active Session to a null activeSession', () => {
+		expect(mapFeatureMatchToResponse(createMockFeatureMatch()).activeSession).toBeNull();
+		expect(mapFeatureMatchToResponse({
+			...createMockFeatureMatch(),
+			activeSession: null,
+		}).activeSession).toBeNull();
+	});
 
-			expect(result.createdAt).toBeInstanceOf(Date);
-			expect(result.updatedAt).toBeInstanceOf(Date);
-			expect(result.createdAt).toEqual(new Date('2026-03-10T08:00:00.000Z'));
-			expect(result.updatedAt).toEqual(new Date('2026-03-10T09:30:00.000Z'));
+	it('maps a Slot\'s active Session, timestamps included', () => {
+		const active = session();
+		const response = mapFeatureMatchToResponse({
+			...createMockFeatureMatch({ id: 7 }),
+			activeSession: active,
 		});
 
-		it('preserves Date objects that are already Date instances', () => {
-			const created = new Date('2026-01-01T00:00:00.000Z');
-			const updated = new Date('2026-01-02T00:00:00.000Z');
-			const match = createMockFeatureMatch({ createdAt: created, updatedAt: updated });
-			const result = mapFeatureMatchToResponse(match);
-
-			expect(result.createdAt).toBeInstanceOf(Date);
-			expect(result.updatedAt).toBeInstanceOf(Date);
-			expect(result.createdAt).toEqual(created);
-			expect(result.updatedAt).toEqual(updated);
+		expect(response.activeSession).toMatchObject({
+			id: 30,
+			slotId: 7,
+			sequence: 4,
+			currentState: active.currentState,
+			sourceSnapshot: active.sourceSnapshot,
 		});
+		expect(response.activeSession?.createdAt).toEqual(new Date('2026-03-10T08:00:00.000Z'));
+	});
 
-		it('preserves all match fields in the response', () => {
-			const match = createMockFeatureMatch({
-				id: 7,
-				eventId: 3,
-				bestOf: 5,
-				sortOrder: 2,
-				tableNumber: 10,
-				player1Id: 100,
-				player2Id: 200,
-				playerDisplayMode: 'score',
-			});
-			const result = mapFeatureMatchToResponse(match);
+	it('announces a new Session as SessionStarted carrying its whole snapshot (ADR-0026)', () => {
+		const started = session();
 
-			expect(result.id).toBe(7);
-			expect(result.eventId).toBe(3);
-			expect(result.bestOf).toBe(5);
-			expect(result.sortOrder).toBe(2);
-			expect(result.tableNumber).toBe(10);
-			expect(result.player1Id).toBe(100);
-			expect(result.player2Id).toBe(200);
-			expect(result.playerDisplayMode).toBe('score');
-		});
-
-		it('preserves null optional fields', () => {
-			const match = createMockFeatureMatch({
-				player1Id: null,
-				player2Id: null,
-				externalId: null,
-				tableNumber: null,
-			});
-			const result = mapFeatureMatchToResponse(match);
-
-			expect(result.player1Id).toBeNull();
-			expect(result.player2Id).toBeNull();
-			expect(result.externalId).toBeNull();
-			expect(result.tableNumber).toBeNull();
+		expect(mapFeatureMatchSessionToStarted(started)).toEqual({
+			slotId: 7,
+			sessionId: 30,
+			sequence: 4,
+			eventType: 'SessionStarted',
+			sourceSnapshot: started.sourceSnapshot,
+			currentState: started.currentState,
 		});
 	});
 });

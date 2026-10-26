@@ -381,82 +381,50 @@ describe('a harness printing evidence it cannot format', () => {
 		expect(observed.exitCode).toBe(1);
 	});
 
-	/**
-	 * The fallback may not become the leak. Anything reaching it that is not the
-	 * formatter talking has an unknown message — a Node error's carries the path
-	 * it was raised from — so only a message in the formatter's own shape is
-	 * printed, and everything else is reduced to the fact that a line could not
-	 * be built.
-	 */
-	it('does not echo an error that is not the formatter refusing a field', async () => {
+	// The fallback may not become the leak: only a message in the formatter's own shape,
+	// naming a field that is not path-shaped, is ever echoed.
+	it.each([
+		[
+			'a Node error carrying a path',
+			() => {
+				throw new Error(`ENOENT: no such file or directory, open '${REPOSITORY_ROOT}secret.txt'`);
+			},
+			REPOSITORY_ROOT,
+		],
+		[
+			'an error that merely carries no path',
+			() => {
+				throw new Error('boom');
+			},
+			'boom',
+		],
+	])('does not echo %s', async (_, getter, secret) => {
 		const observed = await observeHarness(() => runAcceptanceHarness({
 			harness: 'delivery-v1',
 			run: async () => ({
 				get checked() {
-					throw new Error(`ENOENT: no such file or directory, open '${REPOSITORY_ROOT}secret.txt'`);
+					return getter();
 				},
 			}),
 		}));
 
 		expect(observed.stdout).toBe('');
-		expect(observed.stderr).toBe(
-			'delivery-v1 acceptance failed:\n'
-			+ 'delivery-v1 evidence-report-refused\n',
-		);
-		expect(observed.exitCode).toBe(1);
-		expect(observed.stderr).not.toContain(REPOSITORY_ROOT);
-	});
-
-	/**
-	 * The half of that guard which asks whether the formatter is talking at all.
-	 * An error from anywhere else may say anything — including nothing
-	 * path-shaped — so "has no slash in it" is not what makes a message
-	 * printable, and a message that passes only that test must still be refused.
-	 */
-	it('does not echo a non-formatter error merely because it carries no path', async () => {
-		const observed = await observeHarness(() => runAcceptanceHarness({
-			harness: 'delivery-v1',
-			run: async () => ({
-				get checked() {
-					throw new Error('boom');
-				},
-			}),
-		}));
-
-		expect(observed.stderr).toBe(
-			'delivery-v1 acceptance failed:\n'
-			+ 'delivery-v1 evidence-report-refused\n',
-		);
-		expect(observed.stderr).not.toContain('boom');
+		expect(observed.stderr).toBe('delivery-v1 acceptance failed:\ndelivery-v1 evidence-report-refused\n');
+		expect(observed.stderr).not.toContain(secret);
 		expect(observed.exitCode).toBe(1);
 	});
 
-	/**
-	 * And the other half. A refusal's message is built from the harness name, a
-	 * leak code, and a **field name** — which is a literal chosen by whoever
-	 * wrote the detail, not a value the formatter checked. One shaped like a path
-	 * satisfies the formatter's own prefix and is exactly what must not be
-	 * printed, so being in the right shape is not sufficient either.
-	 */
 	it('does not echo a formatter-shaped message whose field name is path-shaped', async () => {
 		const observed = await observeHarness(() => runAcceptanceHarness({
 			harness: 'delivery-v1',
 			run: async () => ({ 'canonical/key': AN_OBJECT_KEY }),
 		}));
 
-		expect(observed.stderr).toBe(
-			'delivery-v1 acceptance failed:\n'
-			+ 'delivery-v1 evidence-report-refused\n',
-		);
+		expect(observed.stderr).toBe('delivery-v1 acceptance failed:\ndelivery-v1 evidence-report-refused\n');
 		expect(observed.stderr).not.toContain('canonical/key');
-		expect(observed.exitCode).toBe(1);
 	});
 
-	/**
-	 * The notes path prints through the same formatter and sits outside the run's
-	 * try exactly as the failure path does, so a note whose detail leaks could
-	 * take the harness down after every check had already passed.
-	 */
+	// A note prints outside the run's try too, so a leaking one must not fail a passed run.
 	it('degrades a note whose detail is refused, without failing the run', async () => {
 		const observed = await observeHarness(() => runAcceptanceHarness({
 			harness: 'delivery-v1',

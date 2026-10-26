@@ -158,12 +158,9 @@ describe('broadcastDeckListWriteModule', () => {
 		});
 
 		expect(mocks.importList).not.toHaveBeenCalled();
-		expect(mocks.service.update).toHaveBeenCalledWith(item.id, 1, { expectedRevision: 1, name: 'Renamed' }, undefined);
-		expect(mocks.publication.broadcastDeckListUpdated).toHaveBeenCalledWith({
-			eventId: 1,
-			entity: expect.objectContaining({ revision: 2 }),
-			originConnectionId: 'origin-1',
-		});
+		// No resolved Deck List rides with the write, so the saved cards stay as they were.
+		expect(mocks.service.update.mock.calls[0]?.[3]).toBeUndefined();
+		expect(mocks.publication.broadcastDeckListUpdated).toHaveBeenCalledWith(expect.objectContaining({ originConnectionId: 'origin-1' }));
 		expect(response).toMatchObject({ revision: 2 });
 	});
 

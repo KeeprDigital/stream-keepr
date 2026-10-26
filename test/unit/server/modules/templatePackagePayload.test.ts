@@ -29,18 +29,17 @@ function rejectionCodes(document: unknown) {
 }
 
 describe('the Template Package payload registry', () => {
-	/**
-	 * The envelope carries several artifacts and each one's payload decides what its
-	 * document has to be. A kind added to the envelope without an entry here would be
-	 * carried as unread data — a package installing a Template nothing can use, with
-	 * nothing anywhere reporting a problem.
-	 */
-	it('answers for every Template Package kind the envelope carries', () => {
-		for (const kind of TEMPLATE_PACKAGE_KINDS) {
-			const payload = templatePackagePayloads(kind);
-			expect(payload.packageKind).toBe(kind);
-			expect(typeof payload.readInstallableDocument).toBe('function');
-		}
+	// A kind without a reading payload would install its Template as unread data.
+	it.each(TEMPLATE_PACKAGE_KINDS)('reads and refuses a %s document', (kind) => {
+		const payload = templatePackagePayloads(kind);
+
+		expect(payload.packageKind).toBe(kind);
+		expect(payload.readInstallableDocument('not a document')).toMatchObject({
+			outcome: 'rejected',
+			issues: [
+				expect.objectContaining({ code: 'invalid-template-document' }),
+			],
+		});
 	});
 });
 
@@ -51,14 +50,8 @@ describe('the `.skgraphic` payload', () => {
 		expect(outcome.outcome).toBe('read');
 		if (outcome.outcome !== 'read')
 			return;
-		// Every Graphic Item Definition the document uses is named, a Graphic Group's
-		// children included: a receiver that never learned a child's Definition could
-		// accept a package holding a kind it cannot render.
-		//
-		// Compared against the shared vocabulary rather than a written list, so it also
-		// pins that the fixture still uses every kind. A Definition added to
-		// `GRAPHIC_ITEM_KINDS` and never placed in the fixture is a branch of the
-		// transfer nobody is holding to anything, and this is where that shows up.
+		// Every Definition used is named, Graphic Group children included; compared with the
+		// shared vocabulary so the fixture is also held to using every kind.
 		const definitions = [
 			...new Set(outcome.capabilities
 				.filter(requirement => requirement.capability === 'graphic-item-definition')
@@ -76,25 +69,13 @@ describe('the `.skgraphic` payload', () => {
 		)).toBe(true);
 	});
 
-	/**
-	 * The point of reading the document at all. A package whose Template is
-	 * well-formed JSON but not a Broadcast Graphic would otherwise install as a
-	 * Template that nothing can place, render, or repair.
-	 */
 	it('refuses a document that is not a Broadcast Graphic', () => {
 		expect(rejectionCodes({ backdrop: asset })).toEqual(['invalid-template-document']);
 		expect(rejectionCodes('a lower third')).toEqual(['invalid-template-document']);
 		expect(rejectionCodes(null)).toEqual(['invalid-template-document']);
 	});
 
-	/**
-	 * Placing a template rewrites its Graphic Item ids and rewrites every stagger
-	 * that names one, resolving an old id through one flat map across the top level
-	 * and every Graphic Group's children. A document with a colliding id makes that
-	 * map ambiguous, so a placement would rewrite one container's stagger onto
-	 * another container's item. The Screen's own write path refuses such a document;
-	 * this is the same refusal applied to one arriving from another installation.
-	 */
+	// Placement remaps ids through one flat map, so a collision would misdirect a stagger.
 	it('refuses a document whose Graphic Item ids collide across a Graphic Group', () => {
 		const document = maximalBroadcastGraphicDocument({ asset });
 		const group = document.items.find(item => item.type === 'group');
@@ -114,10 +95,6 @@ describe('the `.skgraphic` payload', () => {
 		expect(rejectionCodes(document)).toEqual(['invalid-template-document']);
 	});
 
-	/**
-	 * A rejection names the field rather than only the document, because an author
-	 * correcting a design on the *sending* installation has to know where to look.
-	 */
 	it('names the field responsible for a refusal', () => {
 		const document = maximalBroadcastGraphicDocument({ asset });
 		document.name = '';
@@ -129,12 +106,7 @@ describe('the `.skgraphic` payload', () => {
 	});
 });
 
-/**
- * A v1 package exported before ADR-0020 carries `videoCompatibility` on its media.
- * Both payloads read documents through the strict screen schemas, so the key has to
- * be accepted there — refused, every such package would stop installing — and
- * dropped from the typed document an installed Template is read back as.
- */
+/** A v1 package's `videoCompatibility` (pre ADR-0020) is accepted and dropped, not refused. */
 describe('a v1 package exported before ADR-0020', () => {
 	const layout = maximalFeatureMatchLayoutDocument({
 		frameAsset: testGraphicAssetReference('frame-asset', 'frame-revision'),
@@ -162,12 +134,7 @@ describe('a v1 package exported before ADR-0020', () => {
 	});
 });
 
-/**
- * A `.sklayout` carries a root-relative Remote Media URL as data (ADR-0021), so it
- * resolves against the receiving installation. The receiver reads it through the
- * same schema as its own Screens, so a package naming one of the receiver's
- * application routes, rather than media it serves, is refused at install (#582).
- */
+/** A root-relative Remote Media URL resolves on the receiver, so naming one of its routes is refused (ADR-0021, #582). */
 describe('a `.sklayout` whose Frame names a root-relative Remote Media URL', () => {
 	function withFrameVideoUrl(url: string) {
 		const layout = maximalFeatureMatchLayoutDocument({

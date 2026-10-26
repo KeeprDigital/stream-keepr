@@ -791,12 +791,7 @@ describe('what an operator may do to a waiting Broadcast Graphic', () => {
 		)).not.toThrow();
 	});
 
-	/**
-	 * A live On-air Update Policy input, and the reduction context that carries it.
-	 *
-	 * The same declaration a lower third's name would carry: bound to nothing, so its
-	 * working value is what an edit changes and what an acceptance would take.
-	 */
+	/** A live On-air Update Policy input bound to nothing, and the context that carries it. */
 	const LIVE_NAME = {
 		type: 'text',
 		key: 'name',

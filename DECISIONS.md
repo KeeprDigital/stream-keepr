@@ -88,7 +88,7 @@ Accepted · 2026-08-02 · [#168](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Measured cost
 
-Pinned in `test/unit/server/mappers/broadcastGraphicsCommandApplied.test.ts` against worst cases driven through the real reducer:
+Pinned in `test/unit/server/mappers/broadcastGraphicsCommandAppliedMeasurements.test.ts` against worst cases driven through the real reducer:
 
 | case                                                             | whole live state | change      |
 | ---------------------------------------------------------------- | ---------------- | ----------- |
@@ -197,7 +197,7 @@ What is given up is "the named cap binds first", only for configurations nobody 
 
 ### Consequences
 
-- The measurement is pinned with `toBe` in `broadcastGraphicsModeConfig.test.ts` in two arrangements — grouped (3,715,514, `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES`) and flat (3,712,876) — so "which worst case" stays a checked choice.
+- The measurement is pinned with `toBe` in `broadcastGraphicsModeConfigWorstCase.test.ts` in two arrangements — grouped (3,715,514, `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES`) and flat (3,712,876) — so "which worst case" stays a checked choice.
 - A ticket that adds vocabulary extends that builder and moves a visible constant. Moving the cap means re-deriving it here, not in a docblock.
 - `MAX_GRAPHIC_ITEM_ID_LENGTH` is also an import constraint: a Template Package document is proved against the Screen write-path schema, so ids over 64 characters are refused on install. Accepted — one bound on both paths keeps "a document that installs is one the write path accepts", and copy paths mint fresh uuids anyway.
 - `MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN` (60) binds first for any package whose graphics declare Live Control (two inputs each covers 30 of 50 graphics). Move that before this cap, and re-measure when you do.
@@ -1474,3 +1474,36 @@ The Melee upsert wrote `excluded.name` unconditionally, and `excluded.pronouns` 
 
 - **Never let Melee blank a field** (`coalesce(excluded.pronouns, players.pronouns)`). It keeps pronouns Melee lacks, but a non-empty Melee value still overwrites an edit, and a rename still reverts.
 - **Store Melee's value and the operator's side by side.** It supports a reset for free, but every reader of a Player would choose between two values. A list of edited fields answers the same question with one column.
+
+## ADR-0047: A Match Result is Melee's alone, and holds its Game Score whole
+
+Accepted · 2026-10-26
+
+### Decision
+
+**Only Melee Sync writes a Match Result.** `hasResult`, `player1GameWins`, `player2GameWins`, `gameDraws` and `isBye` are Melee-owned in `PROVENANCE_ENTITIES`, and the Match create and update schemas refuse them, so a manual Match write carrying one answers `400`. The Matches page's result modal is gone. A manual Match, including one ADR-0040 keeps, is a pairing with no result.
+
+**Melee Sync stores a whole Game Score.** Melee sends a side's `GameWins`, and a Match's `GameDraws`, as `null` rather than `0` when there were none: a 2-0 arrives as `2` and `null`. `mapMeleeMatchToDbRow` reads such a `null` as `0` on a reported Match that is not a bye, and stores no game wins or game draws for an unreported Match or a bye, whatever Melee sends. So every reported Match that is not a bye holds both sides' game wins and its game draws, and a reader can trust `hasResult`.
+
+**Melee's `ResultString` is no longer kept.** It is English from player 1's side ("Kim Fields won 2-0-0") that no Player-side reading can turn round, and it existed only as the fallback for a reported Match without game wins, which no longer occurs. Migration `0005` drops `matches.result_string`. Player history, Pairings, Head-to-Head and Top Cut Bracket read the Game Score; the stored `match.result` Graphic binding keeps its id and resolves the Game Score from player 1's side.
+
+**Migration `0005` brings stored Matches to the same shape.** It clears every result on a Match not from Melee, gives a reported Melee Match its missing zeros, and removes game wins and game draws from unreported Matches and byes.
+
+### Why
+
+A reported 2-0 read as pending. `readMatchFromPlayerSide` needs both sides' game wins to name a winner, so in a local Event about a third of reported Matches showed "Pending" in a Player's history beside Melee's "won 2-0-0" text in the Result column; Head-to-Head called them `reported` with no winner, and Top Cut Bracket advanced no one. Normalising where Melee's payload enters fixes every reader at once.
+
+Manual results were never meant to exist. A result entered by hand reached Player history, Pairings, Head-to-Head and Top Cut Bracket advancement while Melee's standings, which set every Player's record, never counted it, so the two disagreed.
+
+### Consequences
+
+- The migration clears results operators entered on manual Matches. They are not recoverable from the database afterwards.
+- Melee's `HasResult` stays the authority on whether a Match is reported. A Match Melee sends with `HasResult: false` and game draws (seen once locally, as "0-0-1 Draw") is unreported until Melee reports it.
+- `HeadToHeadOutcome` loses `reported` and an earlier Match's `gameScore` is never `null`.
+- `test/unit/server/mappers/meleeMappings.test.ts` pins the mapping, `test/unit/server/db/meleeOwnedMatchResultsMigration.sqlite.test.ts` the migration, and `test/integration/matches.test.ts` the refused manual writes.
+
+### Rejected alternatives
+
+- **Treat a `null` as `0` in each reader.** Player history, Pairings, Head-to-Head, Top Cut Bracket and the Graphic binding would each need the rule, and the next reader would miss it.
+- **Keep manual result entry for manual Matches.** Melee's standings would still never count those results, so a Player's record and their history would keep disagreeing.
+- **Keep `ResultString` for display.** It cannot be read from the second Player's side, and with a whole Game Score nothing needs it.

@@ -6,7 +6,8 @@
  *
  * Every column of every synced entity is classified exactly once:
  * - manualWritable: operators may write it
- * - meleeOwned: only Melee Sync may write it (identity + sync lifecycle)
+ * - meleeOwned: only Melee Sync may write it (identity + sync lifecycle, and
+ *   a Match's result: ADR-0047)
  * - serverManaged: only the server itself writes it (keys, timestamps,
  *   workflow pointers)
  *
@@ -84,15 +85,17 @@ export const PROVENANCE_ENTITIES = {
 			'player2Id',
 			'player1Data',
 			'player2Data',
+			'sortOrder',
+		],
+		meleeOwned: [
+			'externalId',
+			'externalSource',
 			'hasResult',
 			'player1GameWins',
 			'player2GameWins',
 			'gameDraws',
 			'isBye',
-			'resultString',
-			'sortOrder',
 		],
-		meleeOwned: ['externalId', 'externalSource'],
 		serverManaged: [
 			'id',
 			'eventId',

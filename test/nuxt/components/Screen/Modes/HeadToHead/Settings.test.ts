@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import Settings from '~/components/Screen/Modes/HeadToHead/Settings.vue';
 
 const mockConfig = ref<Record<string, any>>({});
 const mockUpdateConfig = vi.fn((patch: Record<string, unknown>) => {
@@ -53,9 +54,6 @@ const USelectStub = defineComponent({
 });
 
 async function mountComponent() {
-	const componentPath = '../../../../../../app/components/Screen/Modes/HeadToHead/Settings.vue';
-	const { default: Settings } = await import(componentPath);
-
 	const wrapper = mount(Settings, {
 		props: {
 			screen: { id: 1 } as Screen,

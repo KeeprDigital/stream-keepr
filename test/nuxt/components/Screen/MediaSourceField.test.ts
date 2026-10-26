@@ -2,6 +2,7 @@ import type { ScreenMediaSource } from '~~/shared/types/screenConfig';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import MediaSourceField from '~/components/Screen/MediaSourceField.vue';
 
 /**
@@ -10,23 +11,6 @@ import MediaSourceField from '~/components/Screen/MediaSourceField.vue';
  */
 
 enableAutoUnmount(afterEach);
-
-const USelectStub = defineComponent({
-	props: {
-		modelValue: { type: String, required: false },
-		items: { type: Array, required: false },
-	},
-	emits: ['update:modelValue'],
-	template: '<select data-testid="source-kind" :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items" :key="item.value" :value="item.value">{{ item.label }}</option></select>',
-});
-
-const UInputStub = defineComponent({
-	props: {
-		modelValue: { type: String, required: false },
-	},
-	emits: ['update:modelValue'],
-	template: '<input data-testid="source-url" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-});
 
 const FocusPickerStub = defineComponent({
 	name: 'GraphicsAssetFocusPicker',
@@ -40,17 +24,7 @@ const FocusPickerStub = defineComponent({
 
 const global = {
 	stubs: {
-		UFormField: defineComponent({
-			props: {
-				error: {
-					type: [String, Boolean],
-					required: false,
-				},
-			},
-			template: '<div><slot /><p v-if="typeof error === \'string\'" data-testid="field-error">{{ error }}</p></div>',
-		}),
-		USelect: USelectStub,
-		UInput: UInputStub,
+		...nuxtUiStubs,
 		GraphicsAssetFocusPicker: FocusPickerStub,
 	},
 };
@@ -73,7 +47,7 @@ describe('the Screen Media Source field', () => {
 	it('edits a Remote Media URL as typed', async () => {
 		const wrapper = mountField({ kind: 'url', url: '' });
 
-		await wrapper.find('[data-testid="source-url"]').setValue('https://cdn.example.com/loop.webm');
+		await wrapper.find('input').setValue('https://cdn.example.com/loop.webm');
 
 		expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([
 			{ kind: 'url', url: 'https://cdn.example.com/loop.webm' },
@@ -83,7 +57,7 @@ describe('the Screen Media Source field', () => {
 	it('refuses a root-relative path the application does not serve as media, and says where library media comes from', () => {
 		const wrapper = mountField({ kind: 'url', url: '/api/graphics-assets/plate/revisions/plate-1/content' });
 
-		const error = wrapper.find('[data-testid="field-error"]');
+		const error = wrapper.find('[data-error]');
 		expect(error.exists()).toBe(true);
 		expect(error.text()).toContain('/video/');
 		expect(error.text()).toContain('Asset library');
@@ -91,13 +65,13 @@ describe('the Screen Media Source field', () => {
 
 	it('shows no refusal for media the application serves, an HTTPS URL, or an unset URL', () => {
 		for (const url of ['/video/loop.mp4', 'https://cdn.example.com/loop.webm', ''])
-			expect(mountField({ kind: 'url', url }).find('[data-testid="field-error"]').exists(), url).toBe(false);
+			expect(mountField({ kind: 'url', url }).find('[data-error]').exists(), url).toBe(false);
 	});
 
 	it('offers the library without writing anything until an asset is chosen', async () => {
 		const wrapper = mountField({ kind: 'url', url: '' });
 
-		await wrapper.find('[data-testid="source-kind"]').setValue('asset');
+		await wrapper.find('select').setValue('asset');
 
 		// A library source with no revision is not storable, so the switch is UI state.
 		expect(wrapper.find('[data-testid="source-asset"]').attributes('data-asset-kind')).toBe('silent-video');
@@ -113,7 +87,7 @@ describe('the Screen Media Source field', () => {
 	it('starts a URL over when switching away from the library', async () => {
 		const wrapper = mountField(librarySource);
 
-		await wrapper.find('[data-testid="source-kind"]').setValue('url');
+		await wrapper.find('select').setValue('url');
 
 		expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([
 			{ kind: 'url', url: '' },
@@ -132,6 +106,6 @@ describe('the Screen Media Source field', () => {
 		const wrapper = mountField(undefined);
 
 		expect(wrapper.find('[data-testid="source-asset"]').exists()).toBe(true);
-		expect(wrapper.find('[data-testid="source-url"]').exists()).toBe(false);
+		expect(wrapper.find('input').exists()).toBe(false);
 	});
 });

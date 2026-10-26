@@ -83,14 +83,8 @@ describe('useRequestFeedback', () => {
 	});
 
 	/**
-	 * What a failed request is allowed to quote.
-	 *
-	 * Every one of these goes through `runRequest`'s catch, because that is the only way
-	 * a caller meets `getErrorMessage`: the failure it caught becomes `failure.message`,
-	 * and fifty-eight call sites turn that into a toast, an `errorRef`, or a field-level
-	 * save error. The rule is `failureSentence`'s (#245): a sub-500 body is the authority
-	 * answering this request and may be quoted; a 5xx body has had its prose replaced with
-	 * a placeholder on the way out and may not (#271).
+	 * What a failed request may quote, met through `runRequest` as every caller meets it: a
+	 * sub-500 body is quoted (#245); a sanitized 5xx body is not (#271).
 	 */
 	describe('getErrorMessage', () => {
 		async function reportedMessage(failure: unknown): Promise<string | null> {

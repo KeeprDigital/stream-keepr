@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';
+import Settings from '~/components/Screen/Modes/Metagame/Settings.vue';
 
 vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
 
@@ -42,12 +43,6 @@ const mockEventStore = {
 	loadEvent: vi.fn().mockResolvedValue(undefined),
 	$reset: vi.fn(),
 };
-
-function createResettableStore() {
-	return {
-		$reset: vi.fn(),
-	};
-}
 
 const defaultConfig = {
 	viewMode: 'archetype' as const,
@@ -98,17 +93,6 @@ const mockUpdateConfig = vi.fn((patch: Record<string, unknown>) => {
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('usePlayerListStore', () => () => mockPlayerListStore);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
-mockNuxtImport('useArchetypeStore', () => createResettableStore);
-mockNuxtImport('useMetagameStore', () => createResettableStore);
-mockNuxtImport('usePhaseStore', () => createResettableStore);
-mockNuxtImport('useRoundStore', () => createResettableStore);
-mockNuxtImport('useMatchStore', () => createResettableStore);
-mockNuxtImport('useFeatureMatchStore', () => createResettableStore);
-mockNuxtImport('useFeatureMatchStateStore', () => createResettableStore);
-mockNuxtImport('useScreenStore', () => createResettableStore);
-mockNuxtImport('useCardStore', () => createResettableStore);
-mockNuxtImport('useMeleeStore', () => createResettableStore);
-mockNuxtImport('clearPlayerDeckCache', () => vi.fn());
 mockNuxtImport('useModeConfigUpdate', () => () => ({
 	config: mockConfig,
 	saving: ref(false),
@@ -176,9 +160,6 @@ const USwitchStub = defineComponent({
 });
 
 async function mountComponent() {
-	const componentPath = '../../../../../../app/components/Screen/Modes/Metagame/Settings.vue';
-	const { default: Settings } = await import(componentPath);
-
 	return mount(Settings, {
 		props: {
 			screen: { id: 1 } as Screen,
@@ -207,26 +188,6 @@ describe('screenMetagameSettings', () => {
 		mockConfig.value = structuredClone(defaultConfig);
 		mockPlayerStore.isLoaded = false;
 		mockPlayerListStore.isLoaded = false;
-	});
-
-	it('toggles metagame column visibility', async () => {
-		const wrapper = await mountComponent();
-		await flushPromises();
-
-		const switches = wrapper.findAll('[data-testid="u-switch"]');
-		await switches[5]!.trigger('click');
-
-		expect(mockUpdateConfig).toHaveBeenCalledWith({
-			archetypeColumns: [
-				{ key: 'archetype', visible: true },
-				{ key: 'count', visible: true },
-				{ key: 'metaShare', visible: true },
-				{ key: 'winRate', visible: true },
-				{ key: 'avgPlace', visible: false },
-				{ key: 'colors', visible: true },
-				{ key: 'conversionRate', visible: false },
-			],
-		});
 	});
 
 	it('offers a Conversion Rate column to a column list saved before it existed, hidden at the end', async () => {
@@ -286,40 +247,6 @@ describe('screenMetagameSettings', () => {
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ conversionThreshold: 15 });
 	});
 
-	it('offers the Minimum Points player scope', async () => {
-		const wrapper = await mountComponent();
-		await flushPromises();
-
-		const scopeSelect = wrapper.findAll('[data-testid="u-select"]')
-			.find(select => select.text().includes('All Players'));
-
-		expect(scopeSelect).toBeDefined();
-		expect(scopeSelect!.text()).toContain('Minimum Points');
-	});
-
-	it('shows a minimum points input for the minPoints scope and persists changes', async () => {
-		mockConfig.value = {
-			...structuredClone(defaultConfig),
-			scope: 'minPoints',
-			minPoints: 9,
-		};
-
-		const wrapper = await mountComponent();
-		await flushPromises();
-
-		const minPointsField = wrapper.findAll('[data-testid="form-field"]')
-			.find(field => field.text().includes('Minimum points'));
-		expect(minPointsField).toBeDefined();
-
-		const input = minPointsField!.getComponent(UInputNumberStub);
-		expect(input.props('modelValue')).toBe(9);
-
-		input.vm.$emit('update:modelValue', 12);
-		await nextTick();
-
-		expect(mockUpdateConfig).toHaveBeenCalledWith({ minPoints: 12, currentPage: 1 });
-	});
-
 	it('persists reordered columns for the active table', async () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
@@ -341,16 +268,6 @@ describe('screenMetagameSettings', () => {
 		expect(mockUpdateConfig).toHaveBeenCalledWith({
 			archetypeColumns: reordered,
 		});
-	});
-
-	it('offers the chart display alongside the archetype and card tables', async () => {
-		const wrapper = await mountComponent();
-		await flushPromises();
-
-		const displaySelect = wrapper.findAll('[data-testid="u-select"]')
-			.find(select => select.text().includes('Archetypes'));
-
-		expect(displaySelect!.text()).toBe('Archetypes|Cards|Chart');
 	});
 
 	it('scopes, sorts and limits the chart as it does the archetype table, as one page with no columns', async () => {

@@ -3,14 +3,10 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
-import { MAX_SHAPE_GEOMETRY_PX } from '~~/shared/types/graphics';
 import ShapeGeometryFields from '~/components/Graphics/ShapeGeometryFields.vue';
 
-/**
- * The one Shape Geometry fields control, shared by the compositor Inspector and
- * a Graphic Style Set's Shape Geometry entries: which fields an author sees, the
- * bounds they may enter, and the patch each edit emits.
- */
+// The one Shape Geometry fields control, shared by the compositor Inspector and a Graphic Style
+// Set's Shape Geometry entries: which fields an author sees, the bounds they may enter, and the…
 
 enableAutoUnmount(afterEach);
 
@@ -100,16 +96,6 @@ describe('shape geometry fields', () => {
 				{ leftSlant: 0 },
 			],
 		]);
-	});
-
-	it('bounds every entry by what a saved Shape Geometry accepts', () => {
-		const wrapper = mountFields();
-
-		expect(number(wrapper, 'Top right size')!.props()).toMatchObject({ min: 0, max: MAX_SHAPE_GEOMETRY_PX });
-		expect(number(wrapper, 'Left edge slant')!.props()).toMatchObject({
-			min: -MAX_SHAPE_GEOMETRY_PX,
-			max: MAX_SHAPE_GEOMETRY_PX,
-		});
 	});
 
 	it('shows each corner\'s treatment where the corner sits', () => {

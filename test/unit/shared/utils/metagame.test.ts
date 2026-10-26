@@ -7,6 +7,8 @@ describe('metagame card type display helpers', () => {
 		expect(getCardTypeBucket('Land — Forest Island')).toBe('Land');
 		expect(getCardTypeBucket('Legendary Planeswalker — Ashiok')).toBe('Planeswalker');
 		expect(getCardTypeBucket('Enchantment Land — Urza\'s Saga')).toBe('Enchantment');
+		expect(getCardTypeBucket('Legendary Land')).toBe('Land');
+		expect(getCardTypeBucket('Creature // Land')).toBe('Creature');
 	});
 
 	it('supports metagame-specific land labeling without changing the bucket', () => {

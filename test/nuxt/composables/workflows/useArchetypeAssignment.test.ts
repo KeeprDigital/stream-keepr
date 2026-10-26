@@ -148,7 +148,7 @@ describe('useArchetypeAssignment', () => {
 	beforeEach(() => {
 		mockArchetypeStore.archetypes = [];
 		mockPlayerStore.players = [];
-		vi.clearAllMocks();
+
 		mockFindByName.mockReturnValue(undefined);
 		mockFindByNameAndColors.mockReturnValue(undefined);
 		mockReviewDeck.mockImplementation(async (_eventId, playerId, deckId, archetypeId) => ({
@@ -355,10 +355,7 @@ describe('useArchetypeAssignment', () => {
 			expect(isEditMode.value).toBe(false);
 		});
 
-		// Review entries are built from a client-side `$fetch`, which JSON round-trips
-		// the response — so `reviewedAt` arrives as an ISO string, never as the `Date`
-		// PlayerDeckResponse declares (#272, #284). `makeEntry` hands back a real Date,
-		// so isReviewedPlayerDeck has never been exercised on the wire shape.
+		// `$fetch` JSON round-trips the review entries, so `reviewedAt` arrives as a string (#272, #284).
 		it('is true when reviewedAt is the ISO string the wire delivers', () => {
 			const entry = JSON.parse(JSON.stringify(makeEntry({ archetypeId: 5, deckReviewed: true })));
 			expect(typeof entry.deck.reviewedAt).toBe('string');
@@ -390,79 +387,294 @@ describe('useArchetypeAssignment', () => {
 	// ── buttonLabel ──
 
 	describe('buttonLabel', () => {
-		it('returns \'Create & Assign\' when no matching archetype exists', () => {
-			mockFindByNameAndColors.mockReturnValue(undefined);
-			mockFindByName.mockReturnValue(undefined);
-			const opts = makeOptions(makeEntry({ archetypeId: null }));
-			const { nameInput, buttonLabel } = useArchetypeAssignment(opts);
-			nameInput.value = 'Brand New';
-			expect(buttonLabel.value).toBe('Create & Assign');
+		const control = makeArchetype({
+			name: 'Control',
+			colors: 'WU',
+			keyCards: [
+				makeKeyCard('Counterspell', 1),
+			],
 		});
 
-		it('returns \'Assign\' in classify mode with a matching archetype', () => {
-			const archetype = makeArchetype({ name: 'Control' });
-			mockFindByName.mockReturnValue(archetype);
-			mockFindByNameAndColors.mockReturnValue(archetype);
-			const opts = makeOptions(makeEntry({ archetypeId: null }));
-			const { nameInput, buttonLabel } = useArchetypeAssignment(opts);
-			nameInput.value = 'Control';
-			expect(buttonLabel.value).toBe('Assign');
-		});
+		it.each([
+			[
+				'Create & Assign',
+				'no Archetype matches',
+				{ byName: undefined, exact: undefined, reviewed: false },
+			],
+			[
+				'Assign',
+				'classifying into a matching Archetype',
+				{ byName: control, exact: control, reviewed: false },
+			],
+			[
+				'Update & Assign',
+				'classifying into a same-name Archetype of other colors',
+				{
+					byName: control,
+					exact: undefined,
+					colors: ['U', 'B'],
+					reviewed: false,
+				},
+			],
+			[
+				'Reassign',
+				'editing with no key card changes',
+				{
+					byName: control,
+					exact: control,
+					keyCards: ['Counterspell'],
+					reviewed: true,
+				},
+			],
+			[
+				'Update & Reassign',
+				'editing with key card changes',
+				{
+					byName: control,
+					exact: control,
+					keyCards: ['Wrath of God'],
+					reviewed: true,
+				},
+			],
+			[
+				'Update & Reassign',
+				'editing into a same-name Archetype of other colors',
+				{
+					byName: control,
+					exact: undefined,
+					colors: ['U', 'B'],
+					reviewed: true,
+				},
+			],
+		] as const)('reads %s when %s', (expected, _, scenario) => {
+			mockFindByName.mockReturnValue(scenario.byName);
+			mockFindByNameAndColors.mockReturnValue(scenario.exact);
+			const entry = makeEntry({
+				archetypeId: scenario.reviewed ? 5 : null,
+				deckReviewed: scenario.reviewed,
+			});
+			const { nameInput, colorsInput, selectedKeyCards, buttonLabel } = useArchetypeAssignment(makeOptions(entry));
 
-		it('returns \'Update & Assign\' in classify mode with same name but different colors', () => {
-			const archetype = makeArchetype({ name: 'Control', colors: 'WU' });
-			mockFindByName.mockReturnValue(archetype);
-			mockFindByNameAndColors.mockReturnValue(undefined);
-			const opts = makeOptions(makeEntry({ archetypeId: null }));
-			const { nameInput, colorsInput, buttonLabel } = useArchetypeAssignment(opts);
-			nameInput.value = 'Control';
-			colorsInput.value = ['U', 'B'];
-			expect(buttonLabel.value).toBe('Update & Assign');
-		});
+			nameInput.value = scenario.byName ? 'Control' : 'Brand New';
+			if ('colors' in scenario)
+				colorsInput.value = [...scenario.colors];
+			if ('keyCards' in scenario)
+				selectedKeyCards.value = new Set(scenario.keyCards);
 
-		it('returns \'Reassign\' in edit mode with no key card changes', () => {
+			expect(buttonLabel.value).toBe(expected);
+		});
+	});
+	// ── hasKeyCardChanges ──
+
+	describe('hasKeyCardChanges', () => {
+		it('is false when selected key cards match stored exactly', () => {
 			const archetype = makeArchetype({
-				name: 'Control',
 				keyCards: [
-					makeKeyCard('Counterspell', 1),
+					makeKeyCard('A', 1),
+					makeKeyCard('B', 2),
 				],
 			});
-			mockFindByName.mockReturnValue(archetype);
 			mockFindByNameAndColors.mockReturnValue(archetype);
-			const opts = makeOptions(makeEntry({ archetypeId: 5, deckReviewed: true }));
-			const { nameInput, selectedKeyCards, buttonLabel } = useArchetypeAssignment(opts);
-			nameInput.value = 'Control';
-			selectedKeyCards.value = new Set(['Counterspell']);
-			expect(buttonLabel.value).toBe('Reassign');
+			const opts = makeOptions();
+			const { nameInput, selectedKeyCards, hasKeyCardChanges } = useArchetypeAssignment(opts);
+			nameInput.value = 'Test';
+			selectedKeyCards.value = new Set(['A', 'B']);
+			expect(hasKeyCardChanges.value).toBe(false);
 		});
 
-		it('returns \'Update & Reassign\' in edit mode with key card changes', () => {
+		it('is true when a key card is added', () => {
 			const archetype = makeArchetype({
-				name: 'Control',
 				keyCards: [
-					makeKeyCard('Counterspell', 1),
+					makeKeyCard('A', 1),
 				],
 			});
-			mockFindByName.mockReturnValue(archetype);
 			mockFindByNameAndColors.mockReturnValue(archetype);
-			const opts = makeOptions(makeEntry({ archetypeId: 5, deckReviewed: true }));
-			const { nameInput, selectedKeyCards, buttonLabel } = useArchetypeAssignment(opts);
-			nameInput.value = 'Control';
-			selectedKeyCards.value = new Set(['Wrath of God']); // different from stored
-			expect(buttonLabel.value).toBe('Update & Reassign');
+			const opts = makeOptions();
+			const { nameInput, selectedKeyCards, hasKeyCardChanges } = useArchetypeAssignment(opts);
+			nameInput.value = 'Test';
+			selectedKeyCards.value = new Set(['A', 'B']);
+			expect(hasKeyCardChanges.value).toBe(true);
 		});
 
-		it('returns \'Update & Reassign\' in edit mode with same name but different colors', () => {
-			const archetype = makeArchetype({ name: 'Control', colors: 'WU' });
-			mockFindByName.mockReturnValue(archetype);
+		it('is true when cards differ in content but not count', () => {
+			const archetype = makeArchetype({
+				keyCards: [
+					makeKeyCard('A', 1),
+					makeKeyCard('B', 2),
+				],
+			});
+			mockFindByNameAndColors.mockReturnValue(archetype);
+			const opts = makeOptions();
+			const { nameInput, selectedKeyCards, hasKeyCardChanges } = useArchetypeAssignment(opts);
+			nameInput.value = 'Test';
+			selectedKeyCards.value = new Set(['A', 'C']); // same size, different content
+			expect(hasKeyCardChanges.value).toBe(true);
+		});
+
+		it('is false when no archetype is matched', () => {
 			mockFindByNameAndColors.mockReturnValue(undefined);
-			const opts = makeOptions(makeEntry({ archetypeId: 5, deckReviewed: true }));
-			const { nameInput, colorsInput, buttonLabel } = useArchetypeAssignment(opts);
-			nameInput.value = 'Control';
-			colorsInput.value = ['U', 'B'];
-			expect(buttonLabel.value).toBe('Update & Reassign');
+			const opts = makeOptions();
+			const { nameInput, hasKeyCardChanges } = useArchetypeAssignment(opts);
+			nameInput.value = 'Unknown';
+			expect(hasKeyCardChanges.value).toBe(false);
 		});
 	});
 
-	// ── hasKeyCardChanges ──
+	// ── toggleKeyCard ──
+
+	describe('toggleKeyCard', () => {
+		it('adds a card name when not already selected', () => {
+			const opts = makeOptions();
+			const { selectedKeyCards, toggleKeyCard } = useArchetypeAssignment(opts);
+			toggleKeyCard('Lightning Bolt');
+			expect(selectedKeyCards.value.has('Lightning Bolt')).toBe(true);
+		});
+
+		it('removes a card name when already selected', () => {
+			const opts = makeOptions();
+			const { selectedKeyCards, toggleKeyCard } = useArchetypeAssignment(opts);
+			selectedKeyCards.value.add('Lightning Bolt');
+			toggleKeyCard('Lightning Bolt');
+			expect(selectedKeyCards.value.has('Lightning Bolt')).toBe(false);
+		});
+	});
+
+	// ── selectArchetype ──
+
+	describe('selectArchetype', () => {
+		it('sets nameInput and colorsInput from archetype', () => {
+			const archetype = makeArchetype({ name: 'Azorius Control', colors: 'WU' });
+			const opts = makeOptions();
+			const { nameInput, colorsInput, selectArchetype } = useArchetypeAssignment(opts);
+
+			selectArchetype(archetype);
+
+			expect(nameInput.value).toBe('Azorius Control');
+			expect(colorsInput.value).toEqual(['W', 'U']);
+		});
+	});
+
+	// ── handleChipClick ──
+
+	describe('handleChipClick', () => {
+		it('classify mode (player has no archetypeId) → calls assignArchetype (updatePlayer called)', async () => {
+			const advance = vi.fn();
+			const archetype = makeArchetype({ id: 3, name: 'Aggro' });
+			const opts = makeOptions(makeEntry({ archetypeId: null, playerId: 5 }), advance);
+			const { handleChipClick } = useArchetypeAssignment(opts);
+
+			// handleChipClick is synchronous but calls async assignArchetype internally
+			handleChipClick(archetype);
+			await nextTick();
+			await nextTick();
+
+			expect(mockReviewDeck).toHaveBeenCalledWith(1, 5, 1, 3);
+			expect(advance).toHaveBeenCalledOnce();
+		});
+	});
+
+	// ── archetypeKeyCardMatches and sortedArchetypes ──
+
+	describe('archetypeKeyCardMatches and sortedArchetypes', () => {
+		it('archetypeKeyCardMatches includes arch with matching key card, excludes arch without', () => {
+			const archA = makeArchetype({
+				id: 1,
+				name: 'Arch A',
+				keyCards: [
+					makeKeyCard('Lightning Bolt', 1),
+				],
+			});
+			const archB = makeArchetype({
+				id: 2,
+				name: 'Arch B',
+				keyCards: [
+					makeKeyCard('Counterspell', 2),
+				],
+			});
+			mockArchetypeStore.archetypes = [archA, archB];
+
+			const opts = makeOptions(makeEntry(), undefined, undefined, [
+				{ name: 'Lightning Bolt', cardId: 1 },
+			]);
+			const { archetypeKeyCardMatches } = useArchetypeAssignment(opts);
+
+			expect(archetypeKeyCardMatches.value.has(1)).toBe(true);
+			expect(archetypeKeyCardMatches.value.has(2)).toBe(false);
+		});
+
+		it('sortedArchetypes orders by match count descending, then by player count descending', () => {
+			const archA = makeArchetype({
+				id: 1,
+				name: 'Arch A',
+				keyCards: [
+					makeKeyCard('Lightning Bolt', 1),
+				],
+			});
+			const archB = makeArchetype({ id: 2, name: 'Arch B', keyCards: [] });
+			const archC = makeArchetype({
+				id: 3,
+				name: 'Arch C',
+				keyCards: [
+					makeKeyCard('Counterspell', 2),
+				],
+			});
+			mockArchetypeStore.archetypes = [archA, archB, archC];
+
+			const playerCounts = new Map([
+				[1, 5],
+				[2, 10],
+				[3, 2],
+			]);
+			const opts = makeOptions(
+				makeEntry(),
+				undefined,
+				playerCounts,
+				[
+					{ name: 'Lightning Bolt', cardId: 1 },
+				],
+			);
+			const { sortedArchetypes } = useArchetypeAssignment(opts);
+
+			// archA: 1 match > archB/archC: 0 matches; archB: 10 players > archC: 2 players
+			const sorted = sortedArchetypes.value;
+			expect(sorted[0]!.id).toBe(1); // archA - 1 key card match
+			expect(sorted[1]!.id).toBe(2); // archB - 0 matches but 10 players
+			expect(sorted[2]!.id).toBe(3); // archC - 0 matches, 2 players
+		});
+	});
+
+	// ── currentEntry watcher ──
+
+	describe('currentEntry watcher', () => {
+		it('pre-populates nameInput/colorsInput/selectedKeyCards from assigned archetype when entry changes', async () => {
+			const keyCard = makeKeyCard('Goblin Guide', 1);
+			const archetype = makeArchetype({
+				id: 5,
+				name: 'Mono Red',
+				colors: 'R',
+				keyCards: [keyCard],
+			});
+			mockArchetypeStore.archetypes = [archetype];
+
+			const entryRef = ref<any>(null);
+			const opts = {
+				currentEntry: computed(() => entryRef.value),
+				activeDeck: ref<any>(null),
+				eventId: computed(() => 1 as number | null),
+				prepareAdvance: () => ({
+					commit: vi.fn(),
+					cancel: vi.fn(),
+				}),
+				archetypePlayerCounts: computed(() => new Map<number, number>()),
+			};
+			const { nameInput, colorsInput, selectedKeyCards } = useArchetypeAssignment(opts);
+
+			entryRef.value = makeEntry({ archetypeId: 5, deckName: 'Mono Red', deckColors: 'R' });
+			await nextTick();
+
+			expect(nameInput.value).toBe('Mono Red');
+			expect(colorsInput.value).toEqual(['R']);
+			expect(selectedKeyCards.value.has('Goblin Guide')).toBe(true);
+		});
+	});
 });

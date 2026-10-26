@@ -1,12 +1,8 @@
 import type { ServerAuth } from '~~/server/utils/auth';
-import { betterAuth } from 'better-auth';
-import { memoryAdapter } from 'better-auth/adapters/memory';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { authStaticOptions } from '~~/server/utils/authOptions';
+import { throwawayAuth as createThrowawayAuth } from '~~/test/helpers/throwawayAuth';
 
-// The port module imports `serverAuth`, which reaches the database binding at
-// module scope. Every test here passes its own instance in, so the stub only has
-// to exist.
+// The port imports `serverAuth`, which touches the database binding at module scope.
 vi.mock('~~/server/db', () => ({ db: {}, schema: {} }));
 vi.stubGlobal('createError', (input: { statusCode: number; message: string }) =>
 	Object.assign(new Error(input.message), input));
@@ -22,61 +18,18 @@ const {
 	unbanUserAccount,
 } = await import('~~/server/modules/user-administration');
 
-/**
- * The Better Auth half of user administration (#399), against a real Better
- * Auth configured exactly as this installation configures its own —
- * `authStaticOptions` is the same object the server passes — with an in-memory
- * store standing in for D1.
- *
- * This file exists because the port is written around a constraint that is a
- * fact about a pinned library rather than a design choice: **every endpoint the
- * admin plugin exposes sits behind an admin session**, and this surface is
- * gated by ADR-0010's shared `x-graphics-admin-token` and has no session at
- * all. The first describe block below establishes that from the library rather
- * than from reading its source, so a version bump that opens those endpoints —
- * or closes the one that is open — fails here, which is the moment to reread
- * `betterAuthPort.ts` rather than the moment an administrator cannot ban
- * somebody.
- *
- * Everything after it asserts through the paths that actually matter to an
- * operator — can this person sign in, is this link still good — because a row
- * that looks right while sign-in refuses it is a passing test over a locked-out
- * colleague.
+/*
+ * User administration (#399) against a real Better Auth configured as this
+ * installation configures it. Every admin-plugin endpoint needs an admin session
+ * this surface (ADR-0010's shared token) never has, so the port works through
+ * `auth.$context`; the first block records that from the library, and the last
+ * diffs our copy of the plugin's semantics against the plugin itself.
  */
 
 const ORIGIN = 'https://stream.keepr.digital';
 
-/**
- * The clock an administrator's request would carry, pinned — and pinned in both
- * places, which is the whole of it.
- *
- * `issuePasswordResetLinkForUser` derives a link's expiry from this `now`
- * (`now + PASSWORD_RESET_LINK_LIFETIME_SECONDS`), and the rows below redeem those
- * links against **a real Better Auth**, which checks the stored expiry against the
- * system clock. So the two clocks have to be the same one: `beforeEach` freezes
- * `Date` at this instant, and every link is therefore minted and redeemed at the
- * same moment on both sides. Deterministic, and unable to drift.
- *
- * Pinning only this one was a time bomb, and it went off. A literal date here with
- * a live system clock made the file pass on the day it was written and fail every
- * day after: twenty-four hours later every link it minted was already expired and
- * five rows failed with `Invalid token` — a suite going red with nothing changed,
- * pointing at the library, which is the one place the cause was not. Two fixes
- * landed for it in parallel and were merged together (#445, #447): the frozen
- * clock below, and a `new Date()` here, which made this docblock argue for a real
- * clock the fixture no longer used. The literal is back because freezing makes
- * determinism free; if the freeze ever goes, this has to become `new Date()` in
- * the same edit.
- *
- * The row that needs an expired link still mints its own, explicitly before this
- * instant (`new Date(Date.now() - 1000)`) — deliberate expiry, rather than expiry
- * by the calendar catching up with a fixture.
- *
- * `userAdministration.test.ts` pins its own literal `NOW` and needs no frozen
- * clock, because it asserts on the expiry it computes instead of handing it to
- * something that enforces it. The distinction is whether a real expiry check is
- * downstream.
- */
+// Frozen as the system clock too (beforeEach): Better Auth checks a link's stored
+// expiry against the real clock, so the two must agree (#445, #447).
 const CONTEXT = {
 	now: new Date('2026-08-18T09:00:00.000Z'),
 	origin: ORIGIN,
@@ -85,16 +38,7 @@ const EMAIL = 'operator@keepr.digital';
 const PASSWORD = 'a-long-enough-password';
 
 function throwawayAuth() {
-	return betterAuth({
-		...authStaticOptions,
-		database: memoryAdapter({
-			user: [],
-			session: [],
-			account: [],
-			verification: [],
-		}),
-		secret: 'a-throwaway-secret-for-the-unit-suite',
-	}) as unknown as ServerAuth;
+	return createThrowawayAuth() as unknown as ServerAuth;
 }
 
 let auth: ServerAuth;
@@ -133,18 +77,6 @@ async function signIn(email: string, password: string) {
 }
 
 describe('what Better Auth\'s admin API will do without a session', () => {
-	it('creates a user, which is the one operation the plugin admits', async () => {
-		// Sessionless is the *designed* path for a server-side call here:
-		// `createUser` refuses only when a request or headers arrive without a
-		// session, which is the "a browser asked" case. The route's own shared
-		// token is this call's authorization.
-		const { user } = await auth.api.createUser({
-			body: { email: EMAIL, password: PASSWORD, name: 'An Operator' },
-		});
-
-		expect(user).toMatchObject({ email: EMAIL });
-	});
-
 	it.each([
 		[
 			'banUser',
@@ -181,18 +113,11 @@ describe('what Better Auth\'s admin API will do without a session', () => {
 			}),
 		],
 	])('refuses %s, session or no session', async (_name, call) => {
-		// All six sit behind the plugin's `adminMiddleware`, which requires an
-		// admin session unconditionally. That is the whole reason this port goes
-		// through `auth.$context` instead — and it is a fact about the pinned
-		// version, so it is recorded rather than asserted from the source.
 		await expect(call()).rejects.toMatchObject({ status: 'UNAUTHORIZED' });
 	});
 
 	it('has no self-serve reset to reach around this surface with', async () => {
-		// ADR-0010's "no email sender" holding at the library's own boundary: with
-		// no `sendResetPassword` configured, `/request-password-reset` refuses, so
-		// the only way a reset token comes into existence is an administrator
-		// asking this surface for one.
+		// ADR-0010: no email sender, so only an administrator can mint a reset token.
 		await expect(auth.api.requestPasswordReset({
 			body: { email: EMAIL },
 		}))
@@ -205,8 +130,6 @@ describe('creating an account against a real Better Auth', () => {
 	it('leaves it with no working credential until the link is redeemed', async () => {
 		const created = await createUserAccount(await port(), { email: EMAIL, name: 'An Operator' }, CONTEXT);
 
-		// No password was chosen by anybody, so there is nothing to sign in with —
-		// which is the property the invite shape exists for.
 		await expect(signIn(EMAIL, PASSWORD)).rejects.toBeDefined();
 
 		await redeem(tokenFrom(created.passwordResetLink.url), PASSWORD);
@@ -215,9 +138,6 @@ describe('creating an account against a real Better Auth', () => {
 	});
 
 	it('gives the account Better Auth\'s default role rather than an admin one', async () => {
-		// Roles are out of ADR-0010's scope and nothing in this application reads
-		// one, but an invited operator silently becoming an admin would be a
-		// decision this surface is not entitled to make.
 		const created = await createUserAccount(await port(), { email: EMAIL, name: 'An Operator' }, CONTEXT);
 
 		expect(created.user.role).toBe('user');
@@ -233,17 +153,8 @@ describe('creating an account against a real Better Auth', () => {
 		expect(listing.total).toBe(2);
 		expect(listing.users.map(user => user.email).sort())
 			.toEqual(['operator@keepr.digital', 'second@keepr.digital']);
-		// A listing is the surface's front page and is read by a browser; a
-		// password hash on it would be the whole installation.
+		// No password hash reaches the browser.
 		expect(JSON.stringify(listing)).not.toContain('$');
-	});
-
-	it('reads the password bounds Better Auth is actually configured with', async () => {
-		const context = await auth.$context;
-		const configured = await port();
-
-		expect(configured.minPasswordLength).toBe(context.password.config.minPasswordLength);
-		expect(configured.maxPasswordLength).toBe(context.password.config.maxPasswordLength);
 	});
 });
 
@@ -259,19 +170,13 @@ describe('the reset link an administrator hands over', () => {
 		const token = tokenFrom(created.passwordResetLink.url);
 		await redeem(token, PASSWORD);
 
-		// `consumeVerificationValue` deletes the row it returns, so the second
-		// redemption has nothing to find. A link that stayed live would be a
-		// standing credential sitting in somebody's chat history.
 		await expect(redeem(token, 'a-different-password')).rejects.toBeDefined();
 		expect((await signIn(EMAIL, PASSWORD)).user.id).toBe(created.user.id);
 	});
 
 	it('is refused once its expiry has passed', async () => {
 		const { configured, created } = await invite();
-		// Minted expired rather than waiting a day: the expiry this installation
-		// chose is a value written onto the verification row, and what this
-		// establishes is that Better Auth's own consumption enforces it — which is
-		// the whole reason the module is entitled to call the link expiring.
+		// Minted already expired: Better Auth's own consumption enforces our expiry.
 		const token = await configured.issuePasswordResetToken(
 			created.user.id,
 			new Date(Date.now() - 1000),
@@ -289,17 +194,11 @@ describe('the reset link an administrator hands over', () => {
 		await redeem(tokenFrom(reissued.passwordResetLink.url), 'the-replacement-password');
 
 		expect((await signIn(EMAIL, 'the-replacement-password')).user.id).toBe(created.user.id);
-		// A forgotten password that still worked would leave whoever knew it
-		// holding the account.
 		await expect(signIn(EMAIL, PASSWORD)).rejects.toBeDefined();
 	});
 
 	it('ends every older session when it is redeemed', async () => {
-		// `revokeSessionsOnPasswordReset` (authOptions.ts). Without it a stolen
-		// session outlives the password it was stolen alongside: the account gets a
-		// new credential and the thief keeps the session, until an administrator
-		// separately remembers to revoke — the step people forget, and the only one
-		// that actually evicts anybody.
+		// `revokeSessionsOnPasswordReset`: a stolen session must not outlive its password.
 		const { configured, created } = await invite();
 		await setUserAccountPassword(configured, created.user.id, PASSWORD);
 		const session = await signIn(EMAIL, PASSWORD);
@@ -307,8 +206,7 @@ describe('the reset link an administrator hands over', () => {
 		expect(await context.internalAdapter.findSession(session.token)).not.toBeNull();
 
 		const issued = await issuePasswordResetLinkForUser(configured, created.user.id, CONTEXT);
-		// Issuing revokes nothing — a link an administrator sent and nobody opened
-		// must not sign its owner out.
+		// Issuing revokes nothing; only redeeming does.
 		expect(await context.internalAdapter.findSession(session.token)).not.toBeNull();
 
 		await redeem(tokenFrom(issued.passwordResetLink.url), 'the-replacement-password');
@@ -317,10 +215,7 @@ describe('the reset link an administrator hands over', () => {
 	});
 
 	it('leaves sessions alone when an administrator sets a password directly', async () => {
-		// The other half of the split: this path exists to hand somebody back in
-		// mid-show, where ending their sessions is the opposite of the point.
-		// Better Auth reads the option in `/reset-password` only, so the two paths
-		// differ by construction rather than by our remembering to make them.
+		// This path hands somebody back in mid-show, so their sessions stay.
 		const { configured, created } = await invite();
 		await setUserAccountPassword(configured, created.user.id, PASSWORD);
 		const session = await signIn(EMAIL, PASSWORD);
@@ -339,8 +234,7 @@ describe('the reset link an administrator hands over', () => {
 		expect(tokenFrom(second.passwordResetLink.url))
 			.not
 			.toBe(tokenFrom(created.passwordResetLink.url));
-		// The first is still good: an administrator who issued two has not
-		// silently invalidated the one they already handed over.
+		// Issuing a second does not invalidate the first.
 		await redeem(tokenFrom(created.passwordResetLink.url), PASSWORD);
 		expect((await signIn(EMAIL, PASSWORD)).user.id).toBe(created.user.id);
 	});
@@ -348,9 +242,7 @@ describe('the reset link an administrator hands over', () => {
 
 describe('setting a password outright', () => {
 	it('works on an account that has never had one', async () => {
-		// The invited account has no `credential` row at all, so this path has to
-		// create one — a reset reporting success over an account that still cannot
-		// sign in is the failure worth having a test for.
+		// An invited account has no credential row, so this has to create one.
 		const configured = await port();
 		const created = await createUserAccount(configured, { email: EMAIL, name: 'An Operator' }, CONTEXT);
 
@@ -388,8 +280,7 @@ describe('banning and revoking against a real Better Auth', () => {
 		const outcome = await banUserAccount(configured, created.user.id, 'Left the office');
 
 		expect(outcome).toMatchObject({ revokedSessionCount: 1 });
-		// Better Auth enforces a ban at session *creation*, so without this the
-		// banned operator keeps working for up to ADR-0010's seven days.
+		// Better Auth checks a ban only when a session is created.
 		expect(await context.internalAdapter.findSession(session.token)).toBeNull();
 		await expect(signIn(EMAIL, PASSWORD)).rejects.toMatchObject({ status: 'FORBIDDEN' });
 	});
@@ -421,8 +312,6 @@ describe('banning and revoking against a real Better Auth', () => {
 
 		expect(outcome).toMatchObject({ revokedSessionCount: 1 });
 		expect(await context.internalAdapter.findSession(session.token)).toBeNull();
-		// The laptop left open in the production office: the person signs straight
-		// back in on their own machine.
 		expect((await signIn(EMAIL, PASSWORD)).user.id).toBe(created.user.id);
 	});
 
@@ -435,11 +324,7 @@ describe('banning and revoking against a real Better Auth', () => {
 	});
 
 	it('does not count sessions that had already lapsed', async () => {
-		// Nothing prunes an expired session row, so a count taken without
-		// `onlyActiveSessions` reports sessions that ended by themselves weeks ago
-		// as sessions this action just ended. "Revoked 0" is how an administrator
-		// learns the compromise they are chasing is not live, and an inflated count
-		// tells them the opposite.
+		// Expired session rows are never pruned, so only live ones may be counted.
 		const { configured, created, session } = await signedInOperator();
 		const context = await auth.$context;
 		await context.internalAdapter.updateSession(session.token, {
@@ -451,23 +336,9 @@ describe('banning and revoking against a real Better Auth', () => {
 	});
 });
 
-/**
- * Our copy of the admin plugin's semantics, diffed against the plugin itself.
- *
- * The gap this closes. Because `adminMiddleware` wants an admin session this
- * surface has not got, ban, unban and set-password are re-implemented over
- * `auth.$context` — so the plugin's *semantics* (a ban ends sessions, an unban
- * clears the reason, a password set replaces rather than adds) are now this
- * repo's copy of them. Every test above asserts what our copy does. None of
- * them can notice the copy drifting away from the original, which is the whole
- * failure mode of copying: a version bump changes the plugin, our copy stays as
- * it was, and the suite still passes.
- *
- * So these run the plugin's own endpoint and ours against equivalent accounts
- * and compare the state each leaves behind. Calling the plugin needs the admin
- * session the surface cannot have — which the unit suite *can* mint, being
- * under no obligation to be the surface.
- */
+// ban, unban and set-password are re-implemented over `auth.$context`, so each is
+// diffed against the plugin's own endpoint (called with a minted admin session)
+// to catch our copy drifting on a library bump.
 describe('our copy of the plugin\'s semantics, against the plugin', () => {
 	const ADMIN_EMAIL = 'an-admin@keepr.digital';
 	const SUBJECT_EMAIL = 'subject@keepr.digital';
@@ -509,15 +380,7 @@ describe('our copy of the plugin\'s semantics, against the plugin', () => {
 		return accounts.map(account => account.providerId).sort();
 	}
 
-	/**
-	 * The ban-related state, normalized.
-	 *
-	 * `banExpires` is compared as `?? null` because the plugin leaves it
-	 * `undefined` where it sets no expiry and this port writes an explicit
-	 * `null` — the same fact spelled two ways, and the port writes the explicit
-	 * one deliberately, so a lifted-then-reapplied ban cannot inherit a stale
-	 * expiry. Anything else differing is a real divergence.
-	 */
+	/** `banExpires` is compared as `?? null`: the plugin leaves it undefined, the port writes null. */
 	async function banStateOf(userId: string) {
 		const context = await auth.$context;
 		const row = await context.internalAdapter.findUserById(userId) as {
@@ -543,14 +406,12 @@ describe('our copy of the plugin\'s semantics, against the plugin', () => {
 		});
 		const pluginState = await banStateOf(theirs.userId);
 
-		// The same starting state, down our code path instead.
 		auth = throwawayAuth();
 		const ours = await subject();
 		await banUserAccount(ours.configured, ours.userId, 'Left the office');
 
 		expect(await banStateOf(ours.userId)).toEqual(pluginState);
-		// Asserted absolutely as well as differentially, so a fault the two share
-		// cannot pass this by agreeing with each other.
+		// Absolute as well as differential, so a shared fault cannot agree with itself.
 		expect(pluginState).toMatchObject({ banned: true, banReason: 'Left the office', activeSessions: 0 });
 	});
 
@@ -591,8 +452,6 @@ describe('our copy of the plugin\'s semantics, against the plugin', () => {
 		const ours = await subject();
 		await setUserAccountPassword(ours.configured, ours.userId, 'the-replacement-password');
 
-		// The same account shape — one credential, replaced rather than added
-		// beside the old one — and the same answer at the sign-in path.
 		expect(await accountShapeOf(ours.userId)).toEqual(pluginAccounts);
 		expect((await signIn(SUBJECT_EMAIL, 'the-replacement-password')).user.id).toBe(ours.userId);
 		await expect(signIn(SUBJECT_EMAIL, PASSWORD)).rejects.toBeDefined();

@@ -163,7 +163,6 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 	}
 
 	beforeEach(() => {
-		vi.clearAllMocks();
 		reconnectResyncCallbacks.length = 0;
 		firstAttachCallbacks.length = 0;
 		mockEventId.value = 1;
@@ -545,6 +544,10 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 			]);
 			match.value = slotMatch();
 			mockFetchScryfallCards
+				.mockResolvedValueOnce({
+					cards: new Map(),
+					degraded: true,
+				})
 				.mockRejectedValueOnce(new Error('network down'))
 				.mockResolvedValue({
 					cards: new Map(),
@@ -556,28 +559,12 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 					enrichedCard('Duress', null),
 				],
 			});
-			// The first load's Scryfall batch reports degraded; nothing throws there.
-			mockFetchScryfallCards.mockReset();
-			mockFetchScryfallCards
-				.mockResolvedValueOnce({
-					cards: new Map(),
-					degraded: true,
-				})
-				.mockRejectedValueOnce(new Error('network down'))
-				.mockResolvedValue({
-					cards: new Map(),
-					degraded: false,
-				});
 
 			const { cardDataDegraded } = mountSideboardData();
 			await vi.advanceTimersByTimeAsync(0);
-			expect(cardDataDegraded.value).toBe(true);
-
-			// The outage takes the whole load down for one cadence tick.
 			await vi.advanceTimersByTimeAsync(60_000);
 			expect(cardDataDegraded.value).toBe(true);
 
-			// A failed re-fetch must not end the cadence: the next tick recovers.
 			await vi.advanceTimersByTimeAsync(60_000);
 			expect(cardDataDegraded.value).toBe(false);
 		}

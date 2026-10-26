@@ -17,20 +17,8 @@ const {
 	USER_LIST_CAP,
 } = await import('~~/server/modules/user-administration');
 
-/**
- * The user administration decisions (#399), against a port that is a plain
- * record rather than Better Auth.
- *
- * The split is the same one the first-admin bootstrap uses: everything that is
- * a *judgement* — what a duplicate email is, whether a ban ends sessions, what
- * a link's expiry is, which refusal an unknown account gets — is exercised
- * here, and the library contract those judgements rest on is exercised against
- * a real Better Auth in `userAdministrationPort.test.ts`.
- *
- * The fake port deliberately offers none of the courtesies the real one
- * happens to: `findByEmail` matches exactly what it was given, so a decision
- * that relied on Better Auth lowercasing for it fails here.
- */
+// The user administration decisions (#399) over a plain-record port that, unlike
+// Better Auth, does not lowercase emails; the library half is userAdministrationPort.
 
 const NOW = new Date('2026-08-18T09:00:00.000Z');
 const ORIGIN = 'https://stream.keepr.digital';
@@ -120,8 +108,6 @@ describe('listing the accounts an installation holds', () => {
 		const port = fakePort([
 			accountFor(),
 		]);
-		// A listing that reported `users.length` as the total would say an
-		// installation holds exactly as many accounts as it managed to show.
 		port.listUsers = async () => ({
 			users: [
 				accountFor(),
@@ -161,9 +147,7 @@ describe('creating an account', () => {
 		);
 
 		expect(created.user).toMatchObject({ email: 'new@keepr.digital', name: 'A New Operator' });
-		// Nothing in the create path may set a credential: the whole point of the
-		// invite shape is that the first password is chosen by the person who
-		// will use it, so no administrator is left holding one that works.
+		// The first password is chosen by its owner, never by an administrator.
 		expect(port.setPasswords).toEqual([]);
 		expect(port.issuedTokens).toEqual([
 			{
@@ -180,15 +164,12 @@ describe('creating an account', () => {
 			CONTEXT,
 		);
 
-		// The token rides in the fragment, which is what keeps it out of the
-		// access logs between the browser and the Worker.
+		// The token rides in the fragment, out of access logs.
 		expect(created.passwordResetLink.url)
 			.toBe(`${ORIGIN}/reset-password#token=token-for-${created.user.id}-1`);
 	});
 
 	it('joins a trailing-slash origin without doubling the slash', async () => {
-		// `https://host//reset-password` is a path this application does not serve,
-		// and an administrator would only find out after handing the link over.
 		const created = await createUserAccount(
 			port,
 			{ email: 'new@keepr.digital', name: 'A New Operator' },
@@ -223,9 +204,6 @@ describe('creating an account', () => {
 	it('refuses a second account for an email that already has one', async () => {
 		await createUserAccount(port, { email: 'new@keepr.digital', name: 'First' }, CONTEXT);
 
-		// 409 rather than the unique index's 500: what the administrator needs to
-		// hear is that this person already has an account, so what they want is a
-		// reset link.
 		await expect(createUserAccount(port, { email: 'New@Keepr.Digital', name: 'Second' }, CONTEXT))
 			.rejects
 			.toMatchObject({ statusCode: 409 });
@@ -233,8 +211,6 @@ describe('creating an account', () => {
 	});
 
 	it('refuses a name that is only whitespace', async () => {
-		// The name is what the Evidence Ledger resolves an actor to at read time,
-		// so a blank one is an account whose work is attributed to nothing.
 		await expect(createUserAccount(port, { email: 'new@keepr.digital', name: '   ' }, CONTEXT))
 			.rejects
 			.toMatchObject({ statusCode: 400 });
@@ -253,9 +229,7 @@ describe('issuing a reset link for an existing account', () => {
 
 		expect(issued.user.id).toBe('user-1');
 		expect(issued.passwordResetLink.url).toContain('#token=');
-		// Deliberately not a revocation: the common case is somebody who forgot a
-		// password they are not signed in with, and ending their sessions to
-		// answer it could sign an operator out of a control surface mid-show.
+		// Not a revocation: that could sign an operator out mid-show.
 		expect(port.revoked).toEqual([]);
 		expect(port.setPasswords).toEqual([]);
 	});
@@ -289,9 +263,7 @@ describe('setting a password outright', () => {
 	});
 
 	it('refuses a password shorter than Better Auth is configured to accept', async () => {
-		// The port sets the credential through Better Auth's internal hasher,
-		// which enforces neither bound — so without this the surface would happily
-		// store a password sign-in could never accept.
+		// Better Auth's internal hasher enforces neither bound.
 		await expect(setUserAccountPassword(port, 'user-1', 'short'))
 			.rejects
 			.toMatchObject({ statusCode: 400 });
@@ -324,9 +296,7 @@ describe('banning an account', () => {
 	});
 
 	it('ends every session the ban would otherwise leave running', async () => {
-		// Better Auth enforces a ban when a session is *created*, so a ban on its
-		// own stops the next sign-in and leaves whoever is already signed in
-		// working for up to the seven days ADR-0010 gives a session.
+		// Better Auth checks a ban only when a session is created.
 		const outcome = await banUserAccount(port, 'user-1', 'Left the production office');
 
 		expect(outcome).toMatchObject({ revokedSessionCount: 3 });
@@ -364,8 +334,6 @@ describe('revoking sessions on their own', () => {
 
 		const outcome = await revokeUserSessions(port, 'user-1');
 
-		// "Revoked 0" is a real answer: the compromise being chased is not a live
-		// session.
 		expect(outcome).toMatchObject({ revokedSessionCount: 2 });
 		expect(port.revoked).toEqual(['user-1']);
 	});

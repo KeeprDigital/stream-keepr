@@ -10,14 +10,7 @@ import {
 import { ACCEPTANCE_FAILURE_CODES } from '../../../scripts/graphics-acceptance/evidence.mjs';
 import { authoredPageRequest } from '../../../scripts/graphics-acceptance/installation.mjs';
 
-/**
- * The name Better Auth issues this installation's session under, over http.
- *
- * One identity reaches the browser since #398: it gets a request past the API
- * boundary *and* names the user whose Graphics Ingestion Operation is being
- * read. A page given none is answered 401 by every library route, which no
- * assertion inside the page can tell from a broken one.
- */
+/** The name Better Auth issues this installation's session under, over http (#398). */
 const COOKIE_NAME = 'better-auth.session_token';
 /**
  * Shaped like a real token rather than merely opaque: Better Auth signs the
@@ -28,21 +21,8 @@ const COOKIE_VALUE = '0f8b1c2d3e4f5a6b.7c8d9e0f1a2b3c4d';
 const COOKIE = `${COOKIE_NAME}=${COOKIE_VALUE}`;
 const SESSION_COOKIE = COOKIE;
 
-/**
- * The `--library` font gate stages an ingestion from Node and then reads it
- * back in a browser. A Graphics Ingestion Operation is owned by the user who
- * created it and is a `404` to any other (ADR-0010), so the browser has to
- * arrive carrying the harness's own session: the run that let the page mint its
- * own identity could not pass by construction (#276), and since #398 a page with
- * no session cannot even reach the route.
- *
- * The live shape of that fact — the browser reading the operation `200` as its
- * initiator — needs a running installation and a local Chromium. What is
- * checkable here is everything below that: the cookie the browser is handed,
- * which has to match the one the installation issued attribute for attribute
- * because a cookie stored under different rules is a different cookie for the
- * requests that matter, and the conversation that installs it.
- */
+// A Graphics Ingestion Operation is a 404 to anyone but its initiator (ADR-0010), so the
+// browser must carry the harness's own session, cookie attribute for attribute (#276).
 describe('the author session the acceptance browser is given', () => {
 	it('splits the pair the installation issued at its first separator', () => {
 		const cookie = browserCookie('http://127.0.0.1:8787/_acceptance/static-font-v1.html', COOKIE);
@@ -97,14 +77,7 @@ describe('the author session the acceptance browser is given', () => {
 
 const PAGE_URL = 'http://127.0.0.1:8787/_acceptance/static-font-v1.html?operation=op-1';
 
-/**
- * A page that records what it was asked to do.
- *
- * `openAuthoredPage` takes anything answering `command(method, params)`, which
- * is the whole of what it needs from a CDP connection — so the conversation it
- * holds is checkable without a browser. `Network.setCookie` answers the way
- * Chromium does unless a test says otherwise.
- */
+/** A CDP page that records its commands; `Network.setCookie` answers as Chromium does unless told otherwise. */
 function recordingPage(answers: Record<string, unknown> = {}) {
 	const commands: { method: string; params?: object }[] = [];
 	return {
@@ -122,14 +95,7 @@ function recordingPage(answers: Record<string, unknown> = {}) {
 	};
 }
 
-/**
- * The conversation that carries the harness's identity into the browser.
- *
- * The cookie helper above shapes the cookie; this is the part that decides it
- * is installed at all, before anything is navigated. Both halves have to hold —
- * a correctly shaped cookie set after the page has already loaded is the #276
- * defect with an extra step.
- */
+// The cookie must be installed before anything is navigated.
 describe('opening the acceptance page as the author that staged the ingestion', () => {
 	it('creates the target blank when it has cookies to install, and at the destination otherwise', () => {
 		expect(initialTarget(PAGE_URL, [COOKIE])).toBe('about:blank');
@@ -197,14 +163,7 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 		expect(page.methods()).not.toContain('Runtime.enable');
 	});
 
-	/**
-	 * The helper's own shape: a page opened for staged work carries the session
-	 * that staged it, as one expression rather than two arguments an edit can
-	 * separate. Its call site in `run-font-browser-acceptance.mjs` used to be
-	 * reachable by no unit runner — the module ran its harness at import — and
-	 * this test was the stand-in; since #345 the call site is pinned directly in
-	 * `runFontBrowserAcceptance.test.ts`, and this holds just the helper.
-	 */
+	// A page opened for staged work carries the session that staged it, as one expression.
 	it('pairs a staged page with the identity that staged it', () => {
 		const session = {
 			origin: 'http://127.0.0.1:8787',
@@ -231,21 +190,8 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 				.toBe('font-refused-face-loaded');
 		});
 
-		/**
-		 * Every code the shipped pages author has to survive the lookup, or the
-		 * mapping silently flattens real evidence into the generic failure. The
-		 * pages are read here rather than listed, so a page that starts naming a
-		 * code nobody published fails this rather than degrading in a run.
-		 *
-		 * The residual, stated because it is invisible from the result: the
-		 * regex sees single-quoted literals only, so a code written with double
-		 * quotes, built as a template literal, or reached through a variable is
-		 * missed — and missed quietly, since a smaller enumeration still passes.
-		 * Two of the three pages author no code at all (`silent-video-v1` and
-		 * `still-image-v1` publish only `dataset.result`), so a mistake in the
-		 * pattern would leave a plausible-looking set rather than an empty one.
-		 * The control below is what keeps that from reading as a pass.
-		 */
+		// Every code a shipped page authors must survive the lookup. The pages are read, not
+		// listed; the regex sees single-quoted literals only.
 		it('publishes every code the acceptance pages actually author', () => {
 			const authored = new Set<string>();
 			for (const page of ['static-font-v1', 'silent-video-v1', 'still-image-v1']) {

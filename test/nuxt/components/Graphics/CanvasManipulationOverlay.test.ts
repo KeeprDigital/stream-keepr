@@ -3,13 +3,8 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import CanvasManipulationOverlay from '~/components/Graphics/CanvasManipulationOverlay.vue';
 
-/**
- * The move and resize handles drawn over an editor preview: pointer movement on
- * the drawn preview, turned into canvas pixels and handed to the host.
- *
- * The preview is drawn at half size here, so every screen pixel is two canvas
- * pixels.
- */
+// The move and resize handles drawn over an editor preview: pointer movement on the drawn preview,
+// turned into canvas pixels and handed to the host.
 
 vi.mock('@vueuse/core', async importOriginal => ({
 	...await importOriginal<typeof import('@vueuse/core')>(),

@@ -8,107 +8,49 @@ import {
 	parseTimeInput,
 } from '~~/shared/utils/clock';
 
-// ──────────────── formatClockTime ────────────────
-
 describe('formatClockTime', () => {
-	it('formats zero milliseconds as 0:00', () => {
-		expect(formatClockTime(0)).toBe('0:00');
-	});
-
-	it('formats seconds only', () => {
-		expect(formatClockTime(30_000)).toBe('0:30');
-	});
-
-	it('formats minutes and seconds', () => {
-		expect(formatClockTime(150_000)).toBe('2:30');
-	});
-
-	it('pads seconds with leading zero', () => {
-		expect(formatClockTime(61_000)).toBe('1:01');
-	});
-
-	it('formats hours when total exceeds 60 minutes', () => {
-		expect(formatClockTime(3_661_000)).toBe('1:01:01');
-	});
-
-	it('pads minutes with leading zero in hour format', () => {
-		expect(formatClockTime(3_600_000)).toBe('1:00:00');
-	});
-
-	it('ignores sub-second precision (floors)', () => {
-		expect(formatClockTime(1_999)).toBe('0:01');
+	it.each([
+		[0, '0:00'],
+		[30_000, '0:30'],
+		[61_000, '1:01'],
+		[150_000, '2:30'],
+		[1_999, '0:01'],
+		[3_600_000, '1:00:00'],
+		[3_661_000, '1:01:01'],
+	])('formats %i ms as %s', (ms, expected) => {
+		expect(formatClockTime(ms)).toBe(expected);
 	});
 });
-
-// ──────────────── normalizeTimeInput ────────────────
 
 describe('normalizeTimeInput', () => {
-	it('returns null for empty string', () => {
-		expect(normalizeTimeInput('')).toBeNull();
+	it.each([
+		['12:34', '12:34'],
+		['1:23:45', '1:23:45'],
+		['75:00', '75:00'],
+		['5', '5:00'],
+		['45', '45:00'],
+		['530', '05:30'],
+		['1234', '12:34'],
+		['12345', '1:23:45'],
+		['123456', '12:34:56'],
+		['12.34', '12:34'],
+	])('reads %j as %s', (input, expected) => {
+		expect(normalizeTimeInput(input)).toBe(expected);
 	});
 
-	it('returns null for whitespace only', () => {
-		expect(normalizeTimeInput('   ')).toBeNull();
-	});
-
-	it('passes through valid mm:ss format', () => {
-		expect(normalizeTimeInput('12:34')).toBe('12:34');
-	});
-
-	it('passes through valid h:mm:ss format', () => {
-		expect(normalizeTimeInput('1:23:45')).toBe('1:23:45');
-	});
-
-	// Digit-only input by length
-	it('interprets 1 digit as minutes (e.g. "5" -> "5:00")', () => {
-		expect(normalizeTimeInput('5')).toBe('5:00');
-	});
-
-	it('interprets 2 digits as minutes (e.g. "45" -> "45:00")', () => {
-		expect(normalizeTimeInput('45')).toBe('45:00');
-	});
-
-	it('interprets 3 digits as m:ss (e.g. "530" -> "05:30")', () => {
-		expect(normalizeTimeInput('530')).toBe('05:30');
-	});
-
-	it('interprets 4 digits as mm:ss (e.g. "1234" -> "12:34")', () => {
-		expect(normalizeTimeInput('1234')).toBe('12:34');
-	});
-
-	it('interprets 5 digits as h:mm:ss (e.g. "12345" -> "1:23:45")', () => {
-		expect(normalizeTimeInput('12345')).toBe('1:23:45');
-	});
-
-	it('interprets 6 digits as hh:mm:ss (e.g. "123456" -> "12:34:56")', () => {
-		expect(normalizeTimeInput('123456')).toBe('12:34:56');
-	});
-
-	it('returns null for 7+ digits', () => {
-		expect(normalizeTimeInput('1234567')).toBeNull();
-	});
-
-	it('strips non-digit characters from numeric input', () => {
-		expect(normalizeTimeInput('12.34')).toBe('12:34');
-	});
-
-	it('rejects colon-form seconds of 60 or more', () => {
-		expect(normalizeTimeInput('5:99')).toBeNull();
-		expect(normalizeTimeInput('5:60')).toBeNull();
-		expect(normalizeTimeInput('1:23:99')).toBeNull();
-	});
-
-	it('rejects colon-form minutes of 60 or more when hours are present', () => {
-		expect(normalizeTimeInput('1:99:00')).toBeNull();
-		expect(normalizeTimeInput('1:60:00')).toBeNull();
-	});
-
-	it('still allows mm:ss minutes above 59 (no hours field to overflow into)', () => {
-		expect(normalizeTimeInput('75:00')).toBe('75:00');
+	it.each([
+		'',
+		'   ',
+		'1234567',
+		'5:60',
+		'5:99',
+		'1:23:99',
+		'1:60:00',
+		'1:99:00',
+	])('refuses %j', (input) => {
+		expect(normalizeTimeInput(input)).toBeNull();
 	});
 });
-
-// ──────────────── normalize/parse agreement ────────────────
 
 describe('normalizeTimeInput and parseTimeInput agree', () => {
 	it('accepts every string normalizeTimeInput returns as canonical', () => {
@@ -168,31 +110,17 @@ describe('normalizeTimeInput and parseTimeInput agree', () => {
 	});
 });
 
-// ──────────────── parseTimeInput ────────────────
-
 describe('parseTimeInput', () => {
-	it('returns null for empty input', () => {
-		expect(parseTimeInput('')).toBeNull();
-	});
-
-	it('parses mm:ss to milliseconds', () => {
-		expect(parseTimeInput('2:30')).toBe(150_000);
-	});
-
-	it('parses h:mm:ss to milliseconds', () => {
-		expect(parseTimeInput('1:00:00')).toBe(3_600_000);
-	});
-
-	it('parses digit-only input via normalization', () => {
-		expect(parseTimeInput('45')).toBe(2_700_000); // 45:00
-	});
-
-	it('returns null for invalid input', () => {
-		expect(parseTimeInput('abc')).toBeNull();
+	it.each([
+		['2:30', 150_000],
+		['1:00:00', 3_600_000],
+		['45', 2_700_000],
+		['', null],
+		['abc', null],
+	])('reads %j as %s ms', (input, expected) => {
+		expect(parseTimeInput(input)).toBe(expected);
 	});
 });
-
-// ──────────────── getEffectiveElapsedMs ────────────────
 
 describe('getEffectiveElapsedMs', () => {
 	it('returns elapsedMs when clock is stopped', () => {
@@ -232,8 +160,6 @@ describe('getEffectiveElapsedMs', () => {
 		expect(getEffectiveElapsedMs(clock, Date.now())).toBe(0);
 	});
 });
-
-// ──────────────── applyClockAdjustment ────────────────
 
 describe('applyClockAdjustment', () => {
 	const now = 1_000_000;

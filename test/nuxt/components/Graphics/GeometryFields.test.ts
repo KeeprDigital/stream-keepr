@@ -4,11 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import GeometryFields from '~/components/Graphics/GeometryFields.vue';
 
-/**
- * The one geometry fields control, shared by the compositor Inspector and Source
- * Item bounds: what an author sees in each Geometry Unit, and the canonical pixels
- * each entry, resize, and align action emits.
- */
+// The one geometry fields control, shared by the compositor Inspector and Source Item bounds: what
+// an author sees in each Geometry Unit, and the canonical pixels each entry, resize, and align…
 
 enableAutoUnmount(afterEach);
 

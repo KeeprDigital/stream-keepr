@@ -13,18 +13,7 @@ import { DEFAULT_DECK_BOARD_LAYOUT, getDefaultConfigForMode } from '~~/shared/ty
 
 vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
 
-/**
- * The guard against an editor drifting from its config contract (ADR-0037, #498).
- *
- * For every Screen Mode it mounts the mode's settings editor under each listed
- * config variant, drives every scalar control it renders, and reads which
- * contract field the control wrote. The field must carry editor metadata, and
- * the control's label, bounds, step and select options must be the contract's.
- * Every editor field must also be rendered by some variant. An Event Reference
- * picker (ADR-0038) is bespoke, so a control writing one is skipped. A mode whose
- * editor renders no scalar control is listed with its reason, and its contract
- * may declare no editor field.
- */
+// The guard against an editor drifting from its config contract (ADR-0037, #498).
 
 const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 	'background': 'its editor is the Background Layer stack, an authored stack',
@@ -32,11 +21,7 @@ const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 	'broadcast-graphics': 'its editor edits the authored graphics stack, the Graphic Channels list, and the Broadcast Graphics Background: one Animation Effect selection, a union field the shared Animation Effect editor edits from its catalogue schema',
 };
 
-/**
- * Values a contract's select field allows that its editor does not offer. An enum
- * value has no nearest value to clamp a stored one to, so #498 left these for a
- * maintainer to decide rather than tightening the contract.
- */
+// Values a contract's select field allows that its editor does not offer.
 const OPTIONS_NOT_OFFERED: Record<string, readonly string[]> = {
 	// Shared Metagame vocabulary: the Metagame page sorts by it; this editor never offered it.
 	'metagame.sortBy': ['conversionRate'],

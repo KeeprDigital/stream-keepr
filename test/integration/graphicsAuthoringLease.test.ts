@@ -302,12 +302,8 @@ describe('graphics Authoring Leases', () => {
 	// where a real Ably key is. The lease claim itself does not depend on Ably, and
 	// the half that does not is left unguarded so it still runs without the secret.
 	it.skipIf(!integrationRealtimeConfigured)('never restricts a Screen command while the Edit workspace is leased', async () => {
-		// The two assertions below carry a diagnosis rather than a bare status compare,
-		// because this is the one place in the suite where a configured-but-rejected
-		// Ably key surfaces: the route's only work is the publish, so its answer is
-		// whatever the publish did. Since #264 that is a 502 the server names itself
-		// rather than Ably's 404 worn as the route's own; either way a bare status
-		// compare here reads as a lease regression. See `realtimeDiagnosis`.
+		// The route's only work is the publish, so a rejected Ably key would read as a
+		// lease regression without the diagnosis as the failure message.
 
 		// The lease holder is session A; every live action below is another operator.
 		await askForLease(browserA);

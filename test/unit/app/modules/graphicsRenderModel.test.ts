@@ -1,607 +1,37 @@
 import type { CSSProperties } from 'vue';
 import type {
 	BroadcastGraphicConfig,
-	ClockGraphicItemConfig,
-	DeckListGraphicItemConfig,
-	GameWinsGraphicItemConfig,
-	GraphicGroupChildConfig,
-	GraphicGroupItemConfig,
 	GraphicInputDeclaration,
-	GraphicItemConfig,
-	GraphicSurfaceStyle,
-	MediaGraphicItemConfig,
-	PlayerLifeGraphicItemConfig,
-	ShapeGraphicItemConfig,
-	SocialNetworkIconGraphicItemConfig,
-	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
-import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicItemRenderDescriptor,
 	GraphicMediaRenderDescriptor,
 	GraphicsFeatureMatchContext,
-	GraphicSurfaceRenderDescriptor,
 } from '~/modules/graphics/renderModel';
 import { describe, expect, it } from 'vitest';
 import { featureMatchTokenDeclarations } from '~~/shared/featureMatchTokenCatalogue';
-import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition, squareShapeGeometry } from '~~/shared/modules/graphics';
+import { DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
 import { SUPPORTED_SOCIAL_NETWORKS } from '~~/shared/socialProfiles';
 import { MTG_CARD_BORDER_RADIUS } from '~~/shared/utils/card/size';
 import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
+import {
+	CANVAS,
+	clock,
+	compose,
+	contentUrl,
+	deckList,
+	gameWins,
+	graphic,
+	group,
+	media,
+	playerLife,
+	shape,
+	socialIcon,
+	surfaceStyle,
+	text,
+} from '~~/test/helpers/graphicsComposition';
+import { compositeKeyLuminance, graphicPaints, itemPaints, KEY_MEDIA_ALPHA_TO_WHITE, keyChannels } from '~~/test/helpers/keyMatte';
 import { resolveGraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
-
-function surfaceStyle(overrides: Partial<GraphicSurfaceStyle> = {}): GraphicSurfaceStyle {
-	return {
-		fill: { type: 'solid', color: '#0077a3' },
-		fillOpacity: 0.5,
-		...overrides,
-	};
-}
-
-function shape(id: string, overrides: Partial<ShapeGraphicItemConfig> = {}): ShapeGraphicItemConfig {
-	return {
-		type: 'shape',
-		id,
-		label: id,
-		visible: true,
-		anchor: 'top-left',
-		x: 10,
-		y: 20,
-		width: 300,
-		height: 100,
-		geometry: squareShapeGeometry(),
-		surfaceStyle: surfaceStyle(),
-		...overrides,
-	};
-}
-
-function text(id: string, overrides: Partial<TextGraphicItemConfig> = {}): TextGraphicItemConfig {
-	return {
-		type: 'text',
-		id,
-		label: id,
-		visible: true,
-		anchor: 'top-left',
-		x: 0,
-		y: 0,
-		width: 400,
-		height: 80,
-		text: 'Commentator',
-		typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY },
-		overflowPolicy: 'ellipsis',
-		minFontSize: 24,
-		...overrides,
-	};
-}
-
-const ASSET: GraphicAssetReference = {
-	assetId: 'asset-1' as GraphicAssetReference['assetId'],
-	revisionId: 'revision-7' as GraphicAssetReference['revisionId'],
-};
-
-/** Resolves exactly the way a Screen Output's capability-backed resolver does. */
-function contentUrl(reference: GraphicAssetReference): string {
-	return `/api/screen-output/screens/9/assets/${reference.assetId}/revisions/${reference.revisionId}/content`;
-}
-
-function media(id: string, overrides: Partial<MediaGraphicItemConfig> = {}): MediaGraphicItemConfig {
-	return {
-		type: 'media',
-		id,
-		label: id,
-		visible: true,
-		anchor: 'top-left',
-		x: 40,
-		y: 60,
-		width: 480,
-		height: 270,
-		asset: ASSET,
-		mediaKind: 'image',
-		fit: 'cover',
-		focalPosition: { horizontal: 0.5, vertical: 0.5 },
-		opacity: 1,
-		playbackRate: 1,
-		loop: true,
-		...overrides,
-	};
-}
-
-function socialIcon(
-	id: string,
-	overrides: Partial<SocialNetworkIconGraphicItemConfig> = {},
-): SocialNetworkIconGraphicItemConfig {
-	return {
-		type: 'social-network-icon',
-		id,
-		label: id,
-		visible: true,
-		anchor: 'top-left',
-		x: 10,
-		y: 20,
-		width: 64,
-		height: 64,
-		network: 'twitch',
-		color: '#9146ff',
-		opacity: 0.6,
-		...overrides,
-	};
-}
-
-function group(
-	id: string,
-	children: GraphicGroupChildConfig[],
-	overrides: Partial<GraphicGroupItemConfig> = {},
-): GraphicGroupItemConfig {
-	return {
-		type: 'group',
-		id,
-		label: id,
-		visible: true,
-		anchor: 'top-left',
-		x: 100,
-		y: 200,
-		width: 600,
-		height: 120,
-		arrangement: 'row',
-		padding: 0,
-		gap: 16,
-		align: 'stretch',
-		justify: 'start',
-		clip: false,
-		geometry: squareShapeGeometry(),
-		children,
-		...overrides,
-	};
-}
-
-function graphic(id: string, items: BroadcastGraphicConfig['items']): BroadcastGraphicConfig {
-	return { id, name: id, items };
-}
-
-/**
- * The context-gated kinds, built from their own Graphic Item Definitions rather
- * than from a literal: a default that drifts from the Definition would let these
- * tests pass against a shape no author can actually create.
- */
-function contextGated<K extends 'clock' | 'player-life' | 'game-wins' | 'deck-list'>(
-	kind: K,
-	id: string,
-	overrides: Partial<Extract<GraphicItemConfig, { type: K }>> = {},
-): Extract<GraphicItemConfig, { type: K }> {
-	const item = getGraphicItemDefinition(kind).createDefault({
-		id,
-		label: id,
-		canvasWidth: 1920,
-		canvasHeight: 1080,
-	});
-	return {
-		...item,
-		...overrides,
-	} as Extract<GraphicItemConfig, { type: K }>;
-}
-
-function clock(id: string, overrides: Partial<ClockGraphicItemConfig> = {}) {
-	return contextGated('clock', id, overrides);
-}
-function playerLife(id: string, overrides: Partial<PlayerLifeGraphicItemConfig> = {}) {
-	return contextGated('player-life', id, overrides);
-}
-function gameWins(id: string, overrides: Partial<GameWinsGraphicItemConfig> = {}) {
-	return contextGated('game-wins', id, overrides);
-}
-function deckList(id: string, overrides: Partial<DeckListGraphicItemConfig> = {}) {
-	return contextGated('deck-list', id, overrides);
-}
-
-/**
- * Stand-in for the browser's compositor: plain source-over of each painted
- * colour onto the backdrop, `C_out = C_src * a_src + C_dst * (1 - a_src)`,
- * written from the compositing rule rather than from this module. Returns the
- * resulting luminance, which for a Key Output is the composed alpha.
- *
- * Deliberately strict: a fill that is not pure white, or a backdrop that is not
- * black, produces a luminance that no longer equals the alpha union — which is
- * exactly the regression this guards against.
- */
-function compositeKeyLuminance(backdrop: unknown, paints: KeyPaint[]): number {
-	const base = keyChannels(String(backdrop ?? ''));
-	return paints.reduce<number>((destination, paint) => {
-		const source = keyChannels(paint.color);
-		const alpha = source.alpha * paint.opacity;
-		return (source.luminance * alpha) + (destination * (1 - alpha));
-	}, base.luminance * base.alpha);
-}
-
-function keyChannels(value: string): { luminance: number; alpha: number } {
-	const hex = /^#([\da-f]{6})([\da-f]{2})?$/i.exec(value.trim());
-	if (!hex)
-		throw new Error(`Key Output painted a colour this compositor cannot read: ${value}`);
-	const rgb = hex[1]!;
-	const red = Number.parseInt(rgb.slice(0, 2), 16) / 255;
-	const green = Number.parseInt(rgb.slice(2, 4), 16) / 255;
-	const blue = Number.parseInt(rgb.slice(4, 6), 16) / 255;
-	if (red !== green || green !== blue)
-		throw new Error(`Key Output must paint greyscale, got #${rgb}`);
-	return {
-		luminance: red,
-		alpha: hex[2] === undefined
-			? 1
-			: Number.parseInt(hex[2], 16) / 255,
-	};
-}
-
-interface KeyPaint {
-	color: string;
-	opacity: number;
-}
-
-const WHITE = /^#ffffff(?:[\da-f]{2})?$/i;
-
-/** The one filter the Key Output may carry: a white glow, and nothing else. */
-const WHITE_GLOW = /^drop-shadow\(0 0 [\d.]+px (#ffffff[\da-f]{2})\)$/i;
-
-/**
- * Anything that could be a colour, in any CSS form an authored value might reach.
- * Deliberately broad: a false positive fails loudly, which is the safe direction,
- * while a missed form would let colour into the matte unnoticed.
- */
-const COLOUR_TOKEN = /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)\([^)]*\)|\b(?:red|green|blue|black|cyan|magenta|yellow|orange|purple|pink|brown|gray|grey|silver|gold|teal|navy|olive|lime|aqua|fuchsia|maroon|rebeccapurple|currentcolor)\b/gi;
-
-/**
- * The one style key allowed to carry a colour. Every other key carrying one is an
- * unrecognised paint and fails.
- */
-const RECOGNISED_COLOUR_KEYS = new Set(['color']);
-
-/**
- * The one filter a Media Graphic Item's element may carry in the Key Output: the
- * alpha-as-white conversion, and nothing else.
- *
- * Written out rather than imported so the guard states the requirement
- * independently of the module it guards. A model that changed the conversion —
- * or dropped it — would still have to satisfy this exact string.
- */
-const KEY_MEDIA_ALPHA_TO_WHITE = 'brightness(0) invert(1)';
-
-/**
- * Every style property the render model is known to emit that cannot paint.
- *
- * This, rather than colour detection, is what keeps the guard closed against
- * property drift: a property that is not on this list fails whatever its value,
- * so a later addition reaching for `background`, `boxShadow`, or
- * `WebkitTextStroke` is caught by its key alone and never has to be recognised as
- * a colour first. #63 painted through `style.background`, so that drift is not
- * hypothetical. Adding a layout property here is the moment to ask whether it
- * paints.
- */
-const NON_PAINTING_KEYS = new Set([
-	'alignItems',
-	'alignSelf',
-	'boxSizing',
-	'clipPath',
-	'display',
-	'flex',
-	'flexDirection',
-	'fontFamily',
-	'fontSize',
-	'fontStyle',
-	'fontWeight',
-	'gap',
-	'height',
-	// Each half of a cross-transition fills the box the pair shares. Pure geometry: it
-	// says where an element is, not what colour anything is.
-	'inset',
-	'justifyContent',
-	'left',
-	'letterSpacing',
-	'lineHeight',
-	'margin',
-	'minHeight',
-	'minWidth',
-	// Graphic Animation and Media Graphic Items both need this one, and both
-	// arrived at it the same way. `opacity` scales an element's own alpha, which
-	// the matte identity is already stated over: it multiplies through exactly as
-	// a Graphic Group's opacity does, so it is a factor on existing paint rather
-	// than paint of its own.
-	'opacity',
-	'overflow',
-	'overflowWrap',
-	'padding',
-	'position',
-	'textAlign',
-	'textOverflow',
-	'textTransform',
-	'top',
-	'transform',
-	'transformOrigin',
-	'WebkitBoxOrient',
-	'WebkitLineClamp',
-	'whiteSpace',
-	'width',
-	// A Deck List Item's grid view lays its cards out; pure geometry, like the flex keys.
-	'alignContent',
-	'gridAutoRows',
-	'gridTemplateColumns',
-]);
-
-/**
- * The one mask the Key Output may carry: a hard-edged wipe in white at full and
- * zero alpha, and nothing else.
- *
- * A mask multiplies the element's alpha rather than adding paint, so it is not
- * pushed as a paint — but it is still required to be written in white, because a
- * mask that ever did paint must fail the same check as everything else, and
- * because an authored colour appearing here would mean a reveal had been
- * implemented as something other than a stencil.
- */
-const WHITE_WIPE_MASK = /^linear-gradient\(to (?:right|left|bottom|top), #ffffff 0 [\d.]+%, #ffffff00 [\d.]+%\)$/i;
-
-/**
- * Every colour one style object paints, and proof that it paints nothing else.
- *
- * Inverted on purpose. "Any colour I find must be white" passes whenever the
- * search misses a colour; this asserts instead that no unrecognised paint may
- * exist — an unknown key carrying a colour, or a filter that is not exactly one
- * white drop-shadow, throws rather than being quietly skipped.
- */
-function stylePaints(style: CSSProperties, path: string): KeyPaint[] {
-	const paints: KeyPaint[] = [];
-
-	for (const [key, value] of Object.entries(style)) {
-		if (value === undefined || value === null)
-			continue;
-
-		const text = String(value);
-
-		if (key === 'filter') {
-			const glow = WHITE_GLOW.exec(text);
-			if (!glow)
-				throw new Error(`${path}.filter must be exactly one white drop-shadow, got: ${text}`);
-			paints.push({ color: glow[1]!, opacity: 1 });
-			continue;
-		}
-
-		if (key === 'maskImage') {
-			if (!WHITE_WIPE_MASK.test(text))
-				throw new Error(`${path}.maskImage must be exactly one white wipe, got: ${text}`);
-			continue;
-		}
-
-		if (!RECOGNISED_COLOUR_KEYS.has(key) && !NON_PAINTING_KEYS.has(key))
-			throw new Error(`${path}.${key} is an unrecognised style property in the Key Output: ${text}`);
-
-		const tokens = text.match(COLOUR_TOKEN) ?? [];
-		if (tokens.length === 0)
-			continue;
-		if (!RECOGNISED_COLOUR_KEYS.has(key))
-			throw new Error(`${path}.${key} is an unrecognised paint in the Key Output: ${text}`);
-
-		for (const token of tokens) {
-			if (!WHITE.test(token))
-				throw new Error(`${path}.${key} must paint white, got: ${token}`);
-			paints.push({ color: token, opacity: 1 });
-		}
-	}
-
-	return paints;
-}
-
-/**
- * What a Media Graphic Item's element adds to the non-painting properties every
- * other descriptor may carry.
- *
- * Only the delta: `objectFit` and `objectPosition` are meaningless anywhere but on
- * a replaced element, so they stay out of the shared set — while the layout
- * properties and `opacity` a media element shares with every other item have one
- * home in `NON_PAINTING_KEYS`. A media element is checked against both sets, so a
- * property that paints is in neither and still fails by key alone.
- */
-const MEDIA_NON_PAINTING_KEYS = new Set([
-	// A Deck List card's art rounds its corners like the printed card. Like
-	// `clipPath`, it removes alpha at the corners and adds none.
-	'borderRadius',
-	'objectFit',
-	'objectPosition',
-]);
-
-/**
- * What one Media Graphic Item paints, and proof that it paints white.
- *
- * An image or video element cannot be recoloured by a CSS paint property, so the
- * check is inverted from the surface one: rather than asserting a colour is
- * white, it asserts the alpha-as-white conversion is present. Without it the
- * element paints the asset's own colours straight into the matte — which looks
- * perfect in the Overlay Output and silently corrupts the keyed feed, the exact
- * failure this guard exists to catch.
- *
- * An unresolved reference paints nothing, so it contributes no paint. A resolved
- * one contributes white at the element's opacity: the worst case for the matte,
- * a fully opaque region of the asset.
- */
-function mediaPaints(media: GraphicMediaRenderDescriptor, path: string): KeyPaint[] {
-	for (const [key, value] of Object.entries(media.style)) {
-		if (value === undefined || value === null)
-			continue;
-		const text = String(value);
-
-		if (key === 'filter') {
-			if (text !== KEY_MEDIA_ALPHA_TO_WHITE)
-				throw new Error(`${path}.media.filter must be exactly the alpha-as-white conversion, got: ${text}`);
-			continue;
-		}
-
-		if (!MEDIA_NON_PAINTING_KEYS.has(key) && !NON_PAINTING_KEYS.has(key))
-			throw new Error(`${path}.media.${key} is an unrecognised style property in the Key Output: ${text}`);
-		if ((text.match(COLOUR_TOKEN) ?? []).length > 0)
-			throw new Error(`${path}.media.${key} is an unrecognised paint in the Key Output: ${text}`);
-	}
-
-	if (media.src === '')
-		return [];
-	if (media.style.filter !== KEY_MEDIA_ALPHA_TO_WHITE)
-		throw new Error(`${path}.media paints its own colours into the Key Output instead of its alpha as white`);
-
-	return [
-		{
-			color: '#ffffff',
-			opacity: Number(media.style.opacity ?? 1),
-		},
-	];
-}
-
-/**
- * A Deck List card's art follows the same rule as a Media Graphic Item's
- * element: it cannot be recoloured by CSS, so the alpha-as-white conversion must
- * be present or the card paints its own colours straight into the matte.
- */
-function deckCardImagePaints(image: { src: string; style: CSSProperties }, path: string): KeyPaint[] {
-	for (const [key, value] of Object.entries(image.style)) {
-		if (value === undefined || value === null)
-			continue;
-		const text = String(value);
-
-		if (key === 'filter') {
-			if (text !== KEY_MEDIA_ALPHA_TO_WHITE)
-				throw new Error(`${path}.filter must be exactly the alpha-as-white conversion, got: ${text}`);
-			continue;
-		}
-
-		if (!MEDIA_NON_PAINTING_KEYS.has(key) && !NON_PAINTING_KEYS.has(key))
-			throw new Error(`${path}.${key} is an unrecognised style property in the Key Output: ${text}`);
-		if ((text.match(COLOUR_TOKEN) ?? []).length > 0)
-			throw new Error(`${path}.${key} is an unrecognised paint in the Key Output: ${text}`);
-	}
-
-	if (image.style.filter !== KEY_MEDIA_ALPHA_TO_WHITE)
-		throw new Error(`${path} paints its own colours into the Key Output instead of its alpha as white`);
-	return [
-		{ color: '#ffffff', opacity: 1 },
-	];
-}
-
-function surfacePaints(surface: GraphicSurfaceRenderDescriptor, path: string): KeyPaint[] {
-	const paints: KeyPaint[] = [];
-	const gradient = surface.fill.gradient;
-
-	if (gradient) {
-		for (const stop of gradient.stops) {
-			if (!WHITE.test(stop.color))
-				throw new Error(`${path} gradient stop must paint white, got: ${stop.color}`);
-			paints.push({ color: stop.color, opacity: stop.opacity * surface.fill.opacity });
-		}
-	}
-	else {
-		if (!WHITE.test(surface.fill.color))
-			throw new Error(`${path} fill must paint white, got: ${surface.fill.color}`);
-		paints.push({ color: surface.fill.color, opacity: surface.fill.opacity });
-	}
-
-	if (surface.outline) {
-		if (!WHITE.test(surface.outline.color))
-			throw new Error(`${path} outline must paint white, got: ${surface.outline.color}`);
-		paints.push({ color: surface.outline.color, opacity: 1 });
-	}
-
-	return paints;
-}
-
-/**
- * Every colour one Graphic Item paints, in paint order, proving as it goes that
- * the item paints nothing the matte identity does not allow.
- */
-function itemPaints(item: GraphicItemRenderDescriptor, prefix = ''): KeyPaint[] {
-	const path = `${prefix}${item.id}`;
-
-	return [
-		...stylePaints(item.style, path),
-		...(item.textStyle
-			? stylePaints(item.textStyle, `${path}.textStyle`)
-			: []),
-		// A Graphic Placeholder Style paints one run of a rendered Graphic Text
-		// Template, so it is a painting surface like any other and has to be walked.
-		// Leaving it out would let a placeholder style that later gained a background
-		// or a text stroke reach the matte unnoticed, and would keep a segment's own
-		// alpha out of the union arithmetic below.
-		...(item.textSegments ?? []).flatMap((segment, index) =>
-			segment.style
-				? stylePaints(segment.style, `${path}.textSegments[${index}]`)
-				: []),
-		// A Graphic Placeholder Style paints one run of a rendered Graphic Text
-		// Template, so it is a painting surface like any other and has to be walked.
-		// Leaving it out would let a placeholder style that later gained a background
-		// or a text stroke reach the matte unnoticed, and would keep a segment's own
-		// alpha out of the union arithmetic below.
-		...(item.surface
-			? surfacePaints(item.surface, path)
-			: []),
-		...(item.media
-			? mediaPaints(item.media, path)
-			: []),
-		...(item.icon
-			? stylePaints(item.icon.style, `${path}.icon`)
-			: []),
-		// A Deck List Item's grid cards are painted subtrees like any other: the cell box,
-		// the art or its placeholder surface and name, and the quantity badge.
-		...(item.deckList?.cards ?? []).flatMap((card, index) => [
-			...stylePaints(card.style, `${path}.deckList[${index}]`),
-			...(card.image
-				? deckCardImagePaints(card.image, `${path}.deckList[${index}].image`)
-				: []),
-			...(card.placeholder
-				? [
-						...surfacePaints(card.placeholder.surface, `${path}.deckList[${index}].placeholder`),
-						...stylePaints(card.placeholder.textStyle, `${path}.deckList[${index}].placeholder.text`),
-					]
-				: []),
-			...(card.badge
-				? stylePaints(card.badge.style, `${path}.deckList[${index}].badge`)
-				: []),
-		]),
-		...(item.children ?? []).flatMap(child => itemPaints(child, `${path}>`)),
-		// An update phase's two renderings are two painted subtrees, so both are walked.
-		// Leaving the outgoing one out would let the rendering being replaced reach the
-		// matte unchecked, and would keep its own alpha out of the union arithmetic.
-		...(item.crossTransition
-			? [
-					...itemPaints(item.crossTransition.outgoing, `${path}~outgoing>`),
-					...itemPaints(item.crossTransition.incoming, `${path}~incoming>`),
-				]
-			: []),
-		// Concurrent lifecycle phases wipe on two elements, because CSS allows one mask
-		// per element. The enclosing one is a painting surface like any other, so a
-		// composition that ever put a colour there has to fail the same check.
-		...(item.enclosed
-			? itemPaints(item.enclosed, `${path}~enclosed>`)
-			: []),
-	];
-}
-
-/** Every colour one composed Broadcast Graphic paints, its own wrappers included. */
-function graphicPaints(graphic: {
-	id: string;
-	style?: CSSProperties;
-	enclosingStyle?: CSSProperties;
-	items: GraphicItemRenderDescriptor[];
-	outgoing?: { style?: CSSProperties; items: GraphicItemRenderDescriptor[] };
-}): KeyPaint[] {
-	return [
-		...(graphic.enclosingStyle
-			? stylePaints(graphic.enclosingStyle, `${graphic.id}.enclosingStyle`)
-			: []),
-		...(graphic.style
-			? stylePaints(graphic.style, `${graphic.id}.style`)
-			: []),
-		...graphic.items.flatMap(item => itemPaints(item, `${graphic.id}>`)),
-		// The frame an update is leaving is a second painted subtree under the same
-		// enclosure, so it is walked for the same reason the pair inside an item is.
-		...(graphic.outgoing?.style
-			? stylePaints(graphic.outgoing.style, `${graphic.id}.outgoing.style`)
-			: []),
-		...(graphic.outgoing?.items ?? []).flatMap(item => itemPaints(item, `${graphic.id}~outgoing>`)),
-	];
-}
-
-const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
 
 describe('graphicsCompositionRenderModel', () => {
 	it('renders an empty composition transparent in the Overlay Output and black in Fill and Key', () => {
@@ -618,15 +48,9 @@ describe('graphicsCompositionRenderModel', () => {
 	});
 
 	it('paints the Screen Output backdrop for a root composition and never for a nested one', () => {
-		// The backdrop belongs to whichever element is the canvas root, and the two
-		// hosts differ. A Broadcast Graphics Screen mounts this model's canvas as its
-		// whole Display, so this is the only thing making its Fill and Key Outputs
-		// black — removing it outright would fix the nested host by breaking the root
-		// one. A Feature Match Overlay paints its own canvas and mounts this above the
-		// Frame, so a backdrop here would cover the entire host-owned layer.
-		//
-		// Pinned together in one place because the two are one decision: a change that
-		// satisfies either host alone is the bug this guards against.
+		// A Broadcast Graphics Screen mounts this canvas as its whole Display, so it needs the
+		// backdrop; a Feature Match Overlay mounts it above its Frame, which a backdrop would
+		// cover. One decision, so both hosts are pinned together.
 		for (const output of ['overlay', 'fill', 'key'] as const) {
 			const root = resolveGraphicsCompositionRenderModel({ output, graphics: [], ...CANVAS });
 			const nested = resolveGraphicsCompositionRenderModel({
@@ -686,36 +110,24 @@ describe('graphicsCompositionRenderModel', () => {
 	});
 
 	it('omits a hidden Graphic Item, and a hidden Graphic Group child, from the composed frame', () => {
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [
-					shape('shown'),
-					shape('hidden', { visible: false }),
-					group('cluster', [
-						shape('child-shown'),
-						shape('child-hidden', { visible: false }),
-					]),
-				]),
-			],
-			...CANVAS,
-		});
+		const model = compose([
+			shape('shown'),
+			shape('hidden', { visible: false }),
+			group('cluster', [
+				shape('child-shown'),
+				shape('child-hidden', { visible: false }),
+			]),
+		]);
 
 		expect(model.graphics[0]?.items.map(item => item.id)).toEqual(['shown', 'cluster']);
 		expect(model.graphics[0]?.items[1]?.children?.map(child => child.id)).toEqual(['child-shown']);
 	});
 
 	it('positions a Graphic Item from its stored top-left rectangle whatever its Graphic Anchor Point', () => {
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [
-					shape('corner'),
-					shape('centred', { anchor: 'center' }),
-				]),
-			],
-			...CANVAS,
-		});
+		const model = compose([
+			shape('corner'),
+			shape('centred', { anchor: 'center' }),
+		]);
 
 		for (const item of model.graphics[0]!.items) {
 			expect(item.style.left).toBe('10px');
@@ -726,21 +138,15 @@ describe('graphicsCompositionRenderModel', () => {
 	});
 
 	it('paints a Shape Graphic Item as its Shape Geometry path with its authored fill opacity', () => {
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [
-					shape('bar', {
-						geometry: {
-							...squareShapeGeometry(),
-							topRight: { treatment: 'cut', size: 24 },
-							rightSlant: 40,
-						},
-					}),
-				]),
-			],
-			...CANVAS,
-		});
+		const model = compose([
+			shape('bar', {
+				geometry: {
+					...squareShapeGeometry(),
+					topRight: { treatment: 'cut', size: 24 },
+					rightSlant: 40,
+				},
+			}),
+		]);
 
 		expect(model.graphics[0]?.items[0]?.surface).toMatchObject({
 			width: 300,
@@ -752,27 +158,21 @@ describe('graphicsCompositionRenderModel', () => {
 	});
 
 	it('paints a linear-gradient Graphic Fill as a gradient projected on the surface', () => {
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [
-					shape('bed', {
-						surfaceStyle: surfaceStyle({
-							fillOpacity: 1,
-							fill: {
-								type: 'linear-gradient',
-								angle: 90,
-								stops: [
-									{ color: '#080d12', position: 0, opacity: 0.97 },
-									{ color: '#1c272d', position: 1, opacity: 0.9 },
-								],
-							},
-						}),
-					}),
-				]),
-			],
-			...CANVAS,
-		});
+		const model = compose([
+			shape('bed', {
+				surfaceStyle: surfaceStyle({
+					fillOpacity: 1,
+					fill: {
+						type: 'linear-gradient',
+						angle: 90,
+						stops: [
+							{ color: '#080d12', position: 0, opacity: 0.97 },
+							{ color: '#1c272d', position: 1, opacity: 0.9 },
+						],
+					},
+				}),
+			}),
+		]);
 
 		const fill = model.graphics[0]?.items[0]?.surface?.fill;
 		expect(fill?.color).toBe('url(#graphic-fill-a-bed)');
@@ -791,63 +191,45 @@ describe('graphicsCompositionRenderModel', () => {
 	});
 
 	it('draws a uniform outline as an inner stroke of the same Shape Geometry path', () => {
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [
-					shape('bar', {
-						surfaceStyle: surfaceStyle({
-							outline: { color: '#00d9ff', width: 3 },
-						}),
-					}),
-				]),
-			],
-			...CANVAS,
-		});
+		const model = compose([
+			shape('bar', {
+				surfaceStyle: surfaceStyle({
+					outline: { color: '#00d9ff', width: 3 },
+				}),
+			}),
+		]);
 
 		const surface = model.graphics[0]?.items[0]?.surface;
 		expect(surface?.outline).toEqual({ color: '#00d9ff', width: 3, clipId: 'graphic-outline-a-bar' });
-		expect(surface?.path).toBe(model.graphics[0]?.items[0]?.surface?.path);
+		expect(surface?.path).toBe('M 0 0 L 300 0 L 300 100 L 0 100 Z');
 	});
 
 	it('omits an outline of zero width rather than painting a hairline', () => {
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [
-					shape('bar', {
-						surfaceStyle: surfaceStyle({
-							outline: { color: '#00d9ff', width: 0 },
-						}),
-					}),
-				]),
-			],
-			...CANVAS,
-		});
+		const model = compose([
+			shape('bar', {
+				surfaceStyle: surfaceStyle({
+					outline: { color: '#00d9ff', width: 0 },
+				}),
+			}),
+		]);
 
 		expect(model.graphics[0]?.items[0]?.surface?.outline).toBeUndefined();
 	});
 
 	it('renders a glow as a drop-shadow of the item at its authored colour and opacity', () => {
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [
-					shape('lit', {
-						surfaceStyle: surfaceStyle({
-							glow: { color: '#00d9ff', size: 24, opacity: 0.5 },
-						}),
-					}),
-					shape('unlit'),
-					shape('off', {
-						surfaceStyle: surfaceStyle({
-							glow: { color: '#00d9ff', size: 0, opacity: 1 },
-						}),
-					}),
-				]),
-			],
-			...CANVAS,
-		});
+		const model = compose([
+			shape('lit', {
+				surfaceStyle: surfaceStyle({
+					glow: { color: '#00d9ff', size: 24, opacity: 0.5 },
+				}),
+			}),
+			shape('unlit'),
+			shape('off', {
+				surfaceStyle: surfaceStyle({
+					glow: { color: '#00d9ff', size: 0, opacity: 1 },
+				}),
+			}),
+		]);
 
 		const [lit, unlit, off] = model.graphics[0]!.items;
 		expect(lit?.style.filter).toBe('drop-shadow(0 0 24px #00d9ff80)');
@@ -856,37 +238,25 @@ describe('graphicsCompositionRenderModel', () => {
 	});
 
 	it('keeps the opacity of a glow colour that is not hex, and paints it white at that opacity in the Key Output', () => {
-		const glowing = (output: 'fill' | 'key') => resolveGraphicsCompositionRenderModel({
-			output,
-			graphics: [
-				graphic('a', [
-					shape('lit', {
-						surfaceStyle: surfaceStyle({
-							glow: { color: 'rebeccapurple', size: 24, opacity: 0.5 },
-						}),
-					}),
-				]),
-			],
-			...CANVAS,
-		}).graphics[0]!.items[0]!.style.filter;
+		const glowing = (output: 'fill' | 'key') => compose([
+			shape('lit', {
+				surfaceStyle: surfaceStyle({
+					glow: { color: 'rebeccapurple', size: 24, opacity: 0.5 },
+				}),
+			}),
+		], { output }).graphics[0]!.items[0]!.style.filter;
 
 		expect(glowing('fill')).toBe('drop-shadow(0 0 24px color-mix(in srgb, rebeccapurple 50%, transparent))');
 		expect(glowing('key')).toBe('drop-shadow(0 0 24px #ffffff80)');
 	});
 
 	it('gives a Text Graphic Item its own Graphic Surface Style behind its text', () => {
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [
-					text('plain'),
-					text('badge', {
-						surfaceStyle: surfaceStyle({ fillOpacity: 1 }),
-					}),
-				]),
-			],
-			...CANVAS,
-		});
+		const model = compose([
+			text('plain'),
+			text('badge', {
+				surfaceStyle: surfaceStyle({ fillOpacity: 1 }),
+			}),
+		]);
 
 		const [plain, badge] = model.graphics[0]!.items;
 		expect(plain?.surface).toBeUndefined();
@@ -898,16 +268,10 @@ describe('graphicsCompositionRenderModel', () => {
 	});
 
 	it('rotates a canvas-positioned Graphic Item around its Graphic Anchor Point', () => {
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [
-					shape('tilted', { rotation: -6, anchor: 'bottom-left' }),
-					shape('straight', { rotation: 0 }),
-				]),
-			],
-			...CANVAS,
-		});
+		const model = compose([
+			shape('tilted', { rotation: -6, anchor: 'bottom-left' }),
+			shape('straight', { rotation: 0 }),
+		]);
 
 		expect(model.graphics[0]?.items[0]?.style).toMatchObject({
 			transform: 'rotate(-6deg)',
@@ -917,17 +281,11 @@ describe('graphicsCompositionRenderModel', () => {
 	});
 
 	it('never rotates a row or column Graphic Group child, which its group positions', () => {
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [
-					group('row', [
-						shape('child', { rotation: 30 }),
-					]),
-				]),
-			],
-			...CANVAS,
-		});
+		const model = compose([
+			group('row', [
+				shape('child', { rotation: 30 }),
+			]),
+		]);
 
 		expect(model.graphics[0]?.items[0]?.children?.[0]?.style.transform).toBeUndefined();
 	});
@@ -948,24 +306,12 @@ describe('graphicsCompositionRenderModel', () => {
 		});
 
 		it('keeps authored colour and opacity independent in Overlay and paints the same alpha white in Key', () => {
-			const overlay = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						socialIcon('twitch', { color: '#123456', opacity: 0.35 }),
-					]),
-				],
-				...CANVAS,
-			});
-			const key = resolveGraphicsCompositionRenderModel({
-				output: 'key',
-				graphics: [
-					graphic('a', [
-						socialIcon('twitch', { color: '#123456', opacity: 0.35 }),
-					]),
-				],
-				...CANVAS,
-			});
+			const overlay = compose([
+				socialIcon('twitch', { color: '#123456', opacity: 0.35 }),
+			]);
+			const key = compose([
+				socialIcon('twitch', { color: '#123456', opacity: 0.35 }),
+			], { output: 'key' });
 
 			expect(overlay.graphics[0]?.items[0]?.icon?.style).toMatchObject({ color: '#123456', opacity: 0.35 });
 			expect(key.graphics[0]?.items[0]?.icon?.style).toMatchObject({ color: '#ffffff', opacity: 0.35 });
@@ -973,17 +319,11 @@ describe('graphicsCompositionRenderModel', () => {
 
 		it('uses the ordinary row, column, and canvas Graphic Group placements', () => {
 			for (const arrangement of ['row', 'column', 'canvas'] as const) {
-				const model = resolveGraphicsCompositionRenderModel({
-					output: 'overlay',
-					graphics: [
-						graphic('a', [
-							group('cluster', [
-								socialIcon('icon'),
-							], { arrangement }),
-						]),
-					],
-					...CANVAS,
-				});
+				const model = compose([
+					group('cluster', [
+						socialIcon('icon'),
+					], { arrangement }),
+				]);
 
 				const child = model.graphics[0]?.items[0]?.children?.[0];
 				expect(child?.kind).toBe('social-network-icon');
@@ -1000,17 +340,11 @@ describe('graphicsCompositionRenderModel', () => {
 				['row', 'row'],
 				['column', 'column'],
 			] as const) {
-				const model = resolveGraphicsCompositionRenderModel({
-					output: 'overlay',
-					graphics: [
-						graphic('a', [
-							group('cluster', [
-								shape('one'),
-							], { arrangement, gap: 12, padding: 8 }),
-						]),
-					],
-					...CANVAS,
-				});
+				const model = compose([
+					group('cluster', [
+						shape('one'),
+					], { arrangement, gap: 12, padding: 8 }),
+				]);
 
 				expect(model.graphics[0]?.items[0]?.style).toMatchObject({
 					display: 'flex',
@@ -1020,39 +354,27 @@ describe('graphicsCompositionRenderModel', () => {
 				});
 			}
 
-			const canvas = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						group('cluster', [
-							shape('one'),
-						], { arrangement: 'canvas' }),
-					]),
-				],
-				...CANVAS,
-			});
+			const canvas = compose([
+				group('cluster', [
+					shape('one'),
+				], { arrangement: 'canvas' }),
+			]);
 
 			expect(canvas.graphics[0]?.items[0]?.style.display).toBeUndefined();
 		});
 
 		it('sizes a row child by fixed pixels or by weighted fill', () => {
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						group('cluster', [
-							shape('fixed', {
-								sizing: { mode: 'fixed', size: 220, weight: 1 },
-							}),
-							shape('filling', {
-								sizing: { mode: 'fill', size: 0, weight: 3 },
-							}),
-							shape('default'),
-						]),
-					]),
-				],
-				...CANVAS,
-			});
+			const model = compose([
+				group('cluster', [
+					shape('fixed', {
+						sizing: { mode: 'fixed', size: 220, weight: 1 },
+					}),
+					shape('filling', {
+						sizing: { mode: 'fill', size: 0, weight: 3 },
+					}),
+					shape('default'),
+				]),
+			]);
 
 			const children = model.graphics[0]!.items[0]!.children!;
 			expect(children[0]?.style.flex).toBe('0 0 220px');
@@ -1062,20 +384,14 @@ describe('graphicsCompositionRenderModel', () => {
 		});
 
 		it('applies its own alignment and justification to stacked children', () => {
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						group('cluster', [
-							shape('one'),
-						], {
-							align: 'center',
-							justify: 'space-between',
-						}),
-					]),
-				],
-				...CANVAS,
-			});
+			const model = compose([
+				group('cluster', [
+					shape('one'),
+				], {
+					align: 'center',
+					justify: 'space-between',
+				}),
+			]);
 
 			expect(model.graphics[0]?.items[0]?.style).toMatchObject({
 				alignItems: 'center',
@@ -1089,20 +405,14 @@ describe('graphicsCompositionRenderModel', () => {
 		});
 
 		it('places a canvas child absolutely inside its group, offset by the group padding', () => {
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						group('cluster', [
-							shape('badge', { x: 24, y: 8 }),
-						], {
-							arrangement: 'canvas',
-							padding: 10,
-						}),
-					]),
-				],
-				...CANVAS,
-			});
+			const model = compose([
+				group('cluster', [
+					shape('badge', { x: 24, y: 8 }),
+				], {
+					arrangement: 'canvas',
+					padding: 10,
+				}),
+			]);
 
 			expect(model.graphics[0]?.items[0]?.children?.[0]?.style).toMatchObject({
 				position: 'absolute',
@@ -1112,39 +422,21 @@ describe('graphicsCompositionRenderModel', () => {
 		});
 
 		it('clips children to its own Shape Geometry only when asked', () => {
-			const clipped = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						group('cluster', [], {
-							clip: true,
-							geometry: {
-								...squareShapeGeometry(),
-								rightSlant: 60,
-							},
-						}),
-					]),
-				],
-				...CANVAS,
-			});
-			const rectangular = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						group('cluster', [], { clip: true }),
-					]),
-				],
-				...CANVAS,
-			});
-			const open = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						group('cluster', []),
-					]),
-				],
-				...CANVAS,
-			});
+			const clipped = compose([
+				group('cluster', [], {
+					clip: true,
+					geometry: {
+						...squareShapeGeometry(),
+						rightSlant: 60,
+					},
+				}),
+			]);
+			const rectangular = compose([
+				group('cluster', [], { clip: true }),
+			]);
+			const open = compose([
+				group('cluster', []),
+			]);
 
 			expect(clipped.graphics[0]?.items[0]?.style.clipPath)
 				.toBe(`path('M 0 0 L 540 0 L 600 120 L 0 120 Z')`);
@@ -1156,28 +448,22 @@ describe('graphicsCompositionRenderModel', () => {
 		});
 
 		it('lends its local style default to children that have none of their own', () => {
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						group('cluster', [
-							shape('inherits', { surfaceStyle: undefined }),
-							shape('overrides', {
-								surfaceStyle: surfaceStyle({
-									fill: { type: 'solid', color: '#ff0000' },
-									fillOpacity: 1,
-								}),
-							}),
-						], {
-							defaultChildSurfaceStyle: {
-								fill: { type: 'solid', color: '#00ff00' },
-								fillOpacity: 0.25,
-							},
+			const model = compose([
+				group('cluster', [
+					shape('inherits', { surfaceStyle: undefined }),
+					shape('overrides', {
+						surfaceStyle: surfaceStyle({
+							fill: { type: 'solid', color: '#ff0000' },
+							fillOpacity: 1,
 						}),
-					]),
-				],
-				...CANVAS,
-			});
+					}),
+				], {
+					defaultChildSurfaceStyle: {
+						fill: { type: 'solid', color: '#00ff00' },
+						fillOpacity: 0.25,
+					},
+				}),
+			]);
 
 			const children = model.graphics[0]!.items[0]!.children!;
 			expect(children[0]?.surface?.fill).toMatchObject({ color: '#00ff00', opacity: 0.25 });
@@ -1185,36 +471,24 @@ describe('graphicsCompositionRenderModel', () => {
 		});
 
 		it('paints no surface for a child with no style of its own and no group default', () => {
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						group('cluster', [
-							shape('bare', { surfaceStyle: undefined }),
-						]),
-					]),
-				],
-				...CANVAS,
-			});
+			const model = compose([
+				group('cluster', [
+					shape('bare', { surfaceStyle: undefined }),
+				]),
+			]);
 
 			expect(model.graphics[0]?.items[0]?.children?.[0]?.surface).toBeUndefined();
 		});
 
 		it('forms one layer among its siblings, with its children inside it', () => {
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						shape('behind'),
-						group('cluster', [
-							text('name'),
-							shape('rule'),
-						]),
-						shape('in-front'),
-					]),
-				],
-				...CANVAS,
-			});
+			const model = compose([
+				shape('behind'),
+				group('cluster', [
+					text('name'),
+					shape('rule'),
+				]),
+				shape('in-front'),
+			]);
 
 			expect(model.graphics[0]?.items.map(item => item.id)).toEqual(['behind', 'cluster', 'in-front']);
 			expect(model.graphics[0]?.items[1]?.children?.map(child => child.id)).toEqual(['name', 'rule']);
@@ -1265,15 +539,8 @@ describe('graphicsCompositionRenderModel', () => {
 		});
 
 		it('ignores a composition"s own Graphic Inputs while the host supplies declarations', () => {
-			// The host supplies all of them or none: a Feature Match Overlay's vocabulary
-			// is its catalogue, not its catalogue plus whatever a stored graphic declares.
-			//
-			// The discriminator has to be the *default*, not a value. An explicit
-			// `inputValues` entry resolves the same under either declaration list, so a
-			// test that supplied one would assert nothing about which list was consulted
-			// — it would pass just as happily if the smuggled declaration had won.
-			// Withholding the value makes `substituteAuthoredDefaults` reach for a
-			// default, and the two lists disagree about what it is.
+			// The host supplies every declaration or none. The value is withheld so the
+			// lists are told apart by their defaults, which is where they disagree.
 			const declared: GraphicInputDeclaration = {
 				type: 'text',
 				key: 'player1Name',
@@ -1569,22 +836,15 @@ describe('graphicsCompositionRenderModel', () => {
 
 	describe('media Graphic Items', () => {
 		it('fits an asset inside the authored bounds at its focal position and opacity', () => {
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						media('cover'),
-						media('contained', {
-							fit: 'contain',
-							opacity: 0.4,
-							focalPosition: { horizontal: 0, vertical: 1 },
-						}),
-						media('filled', { fit: 'fill' }),
-					]),
-				],
-				graphicAssetContentUrl: contentUrl,
-				...CANVAS,
-			});
+			const model = compose([
+				media('cover'),
+				media('contained', {
+					fit: 'contain',
+					opacity: 0.4,
+					focalPosition: { horizontal: 0, vertical: 1 },
+				}),
+				media('filled', { fit: 'fill' }),
+			], { graphicAssetContentUrl: contentUrl });
 
 			const [cover, contained, filled] = model.graphics[0]!.items;
 			expect(cover?.kind).toBe('media');
@@ -1632,16 +892,9 @@ describe('graphicsCompositionRenderModel', () => {
 		});
 
 		it('paints nothing for an item with no asset pinned, and still occupies its bounds', () => {
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						media('empty', { asset: undefined }),
-					]),
-				],
-				graphicAssetContentUrl: contentUrl,
-				...CANVAS,
-			});
+			const model = compose([
+				media('empty', { asset: undefined }),
+			], { graphicAssetContentUrl: contentUrl });
 
 			const item = model.graphics[0]?.items[0];
 			expect(item?.media?.src).toBe('');
@@ -1657,20 +910,13 @@ describe('graphicsCompositionRenderModel', () => {
 			// Nothing in the model expresses a playback position: an element created
 			// when its graphic enters starts at zero, so "from its start" is a property
 			// of mounting the element rather than a value to carry.
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						media('sting', {
-							mediaKind: 'silent-video',
-							playbackRate: 0.5,
-							loop: false,
-						}),
-					]),
-				],
-				graphicAssetContentUrl: contentUrl,
-				...CANVAS,
-			});
+			const model = compose([
+				media('sting', {
+					mediaKind: 'silent-video',
+					playbackRate: 0.5,
+					loop: false,
+				}),
+			], { graphicAssetContentUrl: contentUrl });
 
 			expect(model.graphics[0]?.items[0]?.media).toMatchObject({
 				mediaKind: 'silent-video',
@@ -1689,45 +935,24 @@ describe('graphicsCompositionRenderModel', () => {
 		});
 
 		it('clips to an optional Shape Geometry, and to its own rectangle without one', () => {
-			const clipped = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						media('angled', {
-							width: 600,
-							height: 120,
-							clipGeometry: {
-								...squareShapeGeometry(),
-								rightSlant: 60,
-							},
-						}),
-					]),
-				],
-				graphicAssetContentUrl: contentUrl,
-				...CANVAS,
-			});
-			const rectangular = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						media('plain', {
-							clipGeometry: squareShapeGeometry(),
-						}),
-					]),
-				],
-				graphicAssetContentUrl: contentUrl,
-				...CANVAS,
-			});
-			const unclipped = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						media('plain'),
-					]),
-				],
-				graphicAssetContentUrl: contentUrl,
-				...CANVAS,
-			});
+			const clipped = compose([
+				media('angled', {
+					width: 600,
+					height: 120,
+					clipGeometry: {
+						...squareShapeGeometry(),
+						rightSlant: 60,
+					},
+				}),
+			], { graphicAssetContentUrl: contentUrl });
+			const rectangular = compose([
+				media('plain', {
+					clipGeometry: squareShapeGeometry(),
+				}),
+			], { graphicAssetContentUrl: contentUrl });
+			const unclipped = compose([
+				media('plain'),
+			], { graphicAssetContentUrl: contentUrl });
 
 			// The canonical Shape Geometry path, identical to the one a Shape Graphic
 			// Item of the same size and geometry draws.
@@ -1749,23 +974,16 @@ describe('graphicsCompositionRenderModel', () => {
 			};
 
 			function childStyle(overrides: Parameters<typeof group>[2], childOverrides = {}) {
-				const model = resolveGraphicsCompositionRenderModel({
-					output: 'overlay',
-					graphics: [
-						graphic('a', [
-							group('cluster', [
-								media('badge', {
-									width: 200,
-									height: 100,
-									clipGeometry: angled,
-									...childOverrides,
-								}),
-							], overrides),
-						]),
-					],
-					graphicAssetContentUrl: contentUrl,
-					...CANVAS,
-				});
+				const model = compose([
+					group('cluster', [
+						media('badge', {
+							width: 200,
+							height: 100,
+							clipGeometry: angled,
+							...childOverrides,
+						}),
+					], overrides),
+				], { graphicAssetContentUrl: contentUrl });
 				return model.graphics[0]!.items[0]!.children![0]!.style;
 			}
 
@@ -1828,16 +1046,9 @@ describe('graphicsCompositionRenderModel', () => {
 		});
 
 		it('paints no Graphic Surface Style and no glow of its own', () => {
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						media('logo'),
-					]),
-				],
-				graphicAssetContentUrl: contentUrl,
-				...CANVAS,
-			});
+			const model = compose([
+				media('logo'),
+			], { graphicAssetContentUrl: contentUrl });
 
 			expect(model.graphics[0]?.items[0]?.surface).toBeUndefined();
 			expect(model.graphics[0]?.items[0]?.style.filter).toBeUndefined();
@@ -1888,16 +1099,10 @@ describe('graphicsCompositionRenderModel', () => {
 
 	describe('key output', () => {
 		it('derives the Key Output as a grayscale alpha matte of the composed opacity', () => {
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'key',
-				graphics: [
-					graphic('a', [
-						shape('bar'),
-						text('name'),
-					]),
-				],
-				...CANVAS,
-			});
+			const model = compose([
+				shape('bar'),
+				text('name'),
+			], { output: 'key' });
 
 			expect(model.graphics[0]?.items[0]?.surface?.fill).toMatchObject({ color: '#ffffff', opacity: 0.5 });
 			expect(model.graphics[0]?.items[1]?.textStyle?.color).toBe('#ffffff');
@@ -1906,26 +1111,20 @@ describe('graphicsCompositionRenderModel', () => {
 		it('accumulates overlapping Graphic Items into their true combined alpha in the Key Output', () => {
 			// Two half-opaque items over the same bounds. Their true combined alpha is
 			// the alpha union 1 - (1 - a1)(1 - a2) = 0.75, independent of this module.
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'key',
-				graphics: [
-					graphic('a', [
-						shape('under', {
-							surfaceStyle: surfaceStyle({
-								fill: { type: 'solid', color: '#0077a3' },
-								fillOpacity: 0.5,
-							}),
-						}),
-						shape('over', {
-							surfaceStyle: surfaceStyle({
-								fill: { type: 'solid', color: '#ff0000' },
-								fillOpacity: 0.5,
-							}),
-						}),
-					]),
-				],
-				...CANVAS,
-			});
+			const model = compose([
+				shape('under', {
+					surfaceStyle: surfaceStyle({
+						fill: { type: 'solid', color: '#0077a3' },
+						fillOpacity: 0.5,
+					}),
+				}),
+				shape('over', {
+					surfaceStyle: surfaceStyle({
+						fill: { type: 'solid', color: '#ff0000' },
+						fillOpacity: 0.5,
+					}),
+				}),
+			], { output: 'key' });
 
 			const luminance = compositeKeyLuminance(
 				model.canvasStyle.background,
@@ -2051,17 +1250,10 @@ describe('graphicsCompositionRenderModel', () => {
 				},
 				bestOf: 3,
 			};
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'key',
-				graphics: [
-					graphic('a', [
-						deckList('side-grid', { view: 'grid' }),
-						deckList('side-list'),
-					]),
-				],
-				featureMatch,
-				...CANVAS,
-			});
+			const model = compose([
+				deckList('side-grid', { view: 'grid' }),
+				deckList('side-list'),
+			], { output: 'key', featureMatch });
 			const [gridItem, listItem] = model.graphics[0]!.items;
 
 			// Non-vacuous: the guard walks real cards, and they contribute paint.
@@ -2083,27 +1275,21 @@ describe('graphicsCompositionRenderModel', () => {
 		});
 
 		it('paints a gradient in the Key Output as white at each stop opacity', () => {
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'key',
-				graphics: [
-					graphic('a', [
-						shape('bed', {
-							surfaceStyle: surfaceStyle({
-								fillOpacity: 1,
-								fill: {
-									type: 'linear-gradient',
-									angle: 45,
-									stops: [
-										{ color: '#ff0000', position: 0, opacity: 0.25 },
-										{ color: '#00ff00', position: 1, opacity: 1 },
-									],
-								},
-							}),
-						}),
-					]),
-				],
-				...CANVAS,
-			});
+			const model = compose([
+				shape('bed', {
+					surfaceStyle: surfaceStyle({
+						fillOpacity: 1,
+						fill: {
+							type: 'linear-gradient',
+							angle: 45,
+							stops: [
+								{ color: '#ff0000', position: 0, opacity: 0.25 },
+								{ color: '#00ff00', position: 1, opacity: 1 },
+							],
+						},
+					}),
+				}),
+			], { output: 'key' });
 
 			expect(model.graphics[0]?.items[0]?.surface?.fill.gradient?.stops).toEqual([
 				{ offset: '0%', color: '#ffffff', opacity: 0.25 },
@@ -2118,24 +1304,12 @@ describe('graphicsCompositionRenderModel', () => {
 				glow: { color: '#ff51c7', size: 20, opacity: 0.5 },
 			});
 
-			const overlay = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						shape('bar', { surfaceStyle: authored }),
-					]),
-				],
-				...CANVAS,
-			});
-			const key = resolveGraphicsCompositionRenderModel({
-				output: 'key',
-				graphics: [
-					graphic('a', [
-						shape('bar', { surfaceStyle: authored }),
-					]),
-				],
-				...CANVAS,
-			});
+			const overlay = compose([
+				shape('bar', { surfaceStyle: authored }),
+			]);
+			const key = compose([
+				shape('bar', { surfaceStyle: authored }),
+			], { output: 'key' });
 
 			expect(overlay.graphics[0]?.items[0]?.surface?.outline?.color).toBe('#00d9ff');
 			expect(overlay.graphics[0]?.items[0]?.style.filter).toContain('#ff51c780');
@@ -2179,19 +1353,12 @@ describe('graphicsCompositionRenderModel', () => {
 			// A half-opaque media item over a half-opaque shape is the same 0.75 union as
 			// two half-opaque shapes. If media painted its own luminance instead, this
 			// number would move with the asset.
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'key',
-				graphics: [
-					graphic('a', [
-						shape('under', {
-							surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }),
-						}),
-						media('over', { opacity: 0.5 }),
-					]),
-				],
-				graphicAssetContentUrl: contentUrl,
-				...CANVAS,
-			});
+			const model = compose([
+				shape('under', {
+					surfaceStyle: surfaceStyle({ fillOpacity: 0.5 }),
+				}),
+				media('over', { opacity: 0.5 }),
+			], { output: 'key', graphicAssetContentUrl: contentUrl });
 
 			const luminance = compositeKeyLuminance(
 				model.canvasStyle.background,
@@ -2205,16 +1372,9 @@ describe('graphicsCompositionRenderModel', () => {
 			// An empty or unresolvable reference paints nothing, so it must add nothing
 			// to the matte either — an opaque white rectangle where content failed to
 			// load would key a hole in program.
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'key',
-				graphics: [
-					graphic('a', [
-						media('empty', { asset: undefined }),
-					]),
-				],
-				graphicAssetContentUrl: contentUrl,
-				...CANVAS,
-			});
+			const model = compose([
+				media('empty', { asset: undefined }),
+			], { output: 'key', graphicAssetContentUrl: contentUrl });
 
 			const luminance = compositeKeyLuminance(
 				model.canvasStyle.background,
@@ -2344,33 +1504,26 @@ describe('graphicsCompositionRenderModel', () => {
 				glow: { color: '#5c26ff', size: 30, opacity: 0.9 },
 			});
 
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'key',
-				graphics: [
-					graphic('a', [
-						shape('bed', { surfaceStyle: loud }),
-						text('name', {
-							surfaceStyle: loud,
-							typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, color: '#bd167f' },
-						}),
-						media('picture', {
-							clipGeometry: {
-								...squareShapeGeometry(),
-								leftSlant: 20,
-							},
-						}),
-						group('cluster', [
-							shape('child', { surfaceStyle: loud }),
-							text('child-name', {
-								typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, color: '#321048' },
-							}),
-							media('child-picture', { mediaKind: 'silent-video' }),
-						], { surfaceStyle: loud, defaultChildSurfaceStyle: loud }),
-					]),
-				],
-				graphicAssetContentUrl: contentUrl,
-				...CANVAS,
-			});
+			const model = compose([
+				shape('bed', { surfaceStyle: loud }),
+				text('name', {
+					surfaceStyle: loud,
+					typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, color: '#bd167f' },
+				}),
+				media('picture', {
+					clipGeometry: {
+						...squareShapeGeometry(),
+						leftSlant: 20,
+					},
+				}),
+				group('cluster', [
+					shape('child', { surfaceStyle: loud }),
+					text('child-name', {
+						typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, color: '#321048' },
+					}),
+					media('child-picture', { mediaKind: 'silent-video' }),
+				], { surfaceStyle: loud, defaultChildSurfaceStyle: loud }),
+			], { output: 'key', graphicAssetContentUrl: contentUrl });
 
 			// Exactly what the four items paint: a glow, three gradient stops and an
 			// outline each, plus one text colour each for the two text items, the
@@ -2384,17 +1537,11 @@ describe('graphicsCompositionRenderModel', () => {
 	});
 
 	it('clips every Text Overflow Policy inside the authored bounds', () => {
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [
-					text('clip', { overflowPolicy: 'clip' }),
-					text('ellipsis', { overflowPolicy: 'ellipsis' }),
-					text('shrink', { overflowPolicy: 'shrink', minFontSize: 30 }),
-				]),
-			],
-			...CANVAS,
-		});
+		const model = compose([
+			text('clip', { overflowPolicy: 'clip' }),
+			text('ellipsis', { overflowPolicy: 'ellipsis' }),
+			text('shrink', { overflowPolicy: 'shrink', minFontSize: 30 }),
+		]);
 
 		const [clip, ellipsis, shrink] = model.graphics[0]!.items;
 		for (const item of [clip, ellipsis, shrink])
@@ -2409,16 +1556,10 @@ describe('graphicsCompositionRenderModel', () => {
 	});
 
 	it('clamps ellipsis text to the whole lines that fit the authored height', () => {
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [
-					text('one-line', { height: 80 }),
-					text('two-lines', { height: 160 }),
-				]),
-			],
-			...CANVAS,
-		});
+		const model = compose([
+			text('one-line', { height: 80 }),
+			text('two-lines', { height: 160 }),
+		]);
 
 		// 64px at a 1.15 line height is a 73.6px line box.
 		expect(model.graphics[0]?.items[0]?.textStyle?.WebkitLineClamp).toBe(1);
@@ -2493,14 +1634,7 @@ describe('graphicsCompositionRenderModel', () => {
 			height: 1080,
 		});
 
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [outsideTitleSafe]),
-			],
-			safeAreaGuides: true,
-			...CANVAS,
-		});
+		const model = compose([outsideTitleSafe], { safeAreaGuides: true });
 
 		expect(model.graphics[0]?.items[0]?.style).toMatchObject({
 			left: '0px',
@@ -2535,21 +1669,14 @@ describe('graphicsCompositionRenderModel', () => {
 	});
 
 	it('guides a canvas Graphic Group child at its own place on the canvas', () => {
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [
-					group('canvas-cluster', [
-						shape('badge', { x: 20, y: 5 }),
-					], { arrangement: 'canvas', padding: 10 }),
-					group('row-cluster', [
-						shape('laid-out'),
-					]),
-				]),
-			],
-			itemGuides: true,
-			...CANVAS,
-		});
+		const model = compose([
+			group('canvas-cluster', [
+				shape('badge', { x: 20, y: 5 }),
+			], { arrangement: 'canvas', padding: 10 }),
+			group('row-cluster', [
+				shape('laid-out'),
+			]),
+		], { itemGuides: true });
 
 		// A row child's rectangle is decided by layout, so the model offers no guide.
 		expect(model.itemGuides.map(guide => guide.itemId)).toEqual(['canvas-cluster', 'badge', 'row-cluster']);
@@ -2777,12 +1904,8 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 		});
 
 		it('crosses one item inside its own box, so lower layers cannot occlude the old rendering', () => {
-			// The canonical lower third: an opaque panel behind an updating name. Drawing the
-			// old rendering as a separate canvas-wide layer would put it *behind* the
-			// incoming panel and the cross-transition would degrade to a cut — so the two
-			// renderings are overlaid inside the crossing item's own box instead, which is
-			// the one place Graphic Layer Order puts them both above the panel and below
-			// anything stacked on top.
+			// An opaque panel behind an updating name: both renderings sit inside the crossing
+			// item's own box, the one place Graphic Layer Order puts them above the panel.
 			const model = updating([
 				headlineGraphic([
 					shape('panel', {
@@ -2920,14 +2043,9 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 		});
 
 		it('crosses a nested Graphic Group child exactly once, inside its group\'s pair', () => {
-			// A group's rendered content is its children's, so a changed child makes the group
-			// changed too and both qualify to cross. Only the outermost one may: pairing the
-			// child again inside each half of the group's pair draws it four times, and inside
-			// the group's *outgoing* half both of the child's halves would resolve from the
-			// outgoing values — two copies of the old rendering at two motion states. A ghost
-			// for a slide, and the double alpha this whole mechanism exists to prevent for
-			// anything carrying a surface. One level of nesting is the deepest tree
-			// CONTEXT.md:509 allows, so this is the ordinary case rather than an exotic one.
+			// A changed child makes its group changed too, but only the outermost may cross:
+			// pairing the child again inside each half would draw it four times, two of them
+			// copies of the old rendering.
 			const model = updating([
 				headlineGraphic([
 					group('cluster', [
@@ -3017,14 +2135,8 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 		});
 
 		it('accumulates the outgoing rendering into the matte by the same identity as the incoming one', () => {
-			// The second rendering is a second painted element, so the question is whether
-			// it paints white at its own alpha like everything else. Two half-opaque
-			// surfaces union to 1 - (1 - 0.5)(1 - 0.5) = 0.75, independent of this module
-			// — and the outgoing copy has to reach that number rather than, say, keeping an
-			// authored colour that would leave the Key Output brighter or darker than the
-			// alpha it is supposed to be reporting. The fade factor is deliberately outside
-			// this arithmetic: element `opacity` multiplies through both outputs equally,
-			// which is why the harness treats it as a factor on paint rather than as paint.
+			// The outgoing rendering is a second painted element and must paint white at its
+			// own alpha: two half-opaque surfaces union to 1 - (1 - 0.5)(1 - 0.5) = 0.75.
 			const model = updating([
 				headlineGraphic(
 					[
@@ -4101,14 +3213,10 @@ describe('graphicsCompositionRenderModel per-item phase triggers', () => {
 		// is the per-item phase trigger (#492), the mechanism a host uses to play one
 		// item's authored recipes off a live-state edge while the composition itself
 		// has no lifecycle phase in play at all.
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [
-					shape('revealing', { animation: FADE_IN }),
-					shape('bystander', { animation: FADE_IN }),
-				]),
-			],
+		const model = compose([
+			shape('revealing', { animation: FADE_IN }),
+			shape('bystander', { animation: FADE_IN }),
+		], {
 			itemAnimation: {
 				a: {
 					revealing: [
@@ -4116,7 +3224,6 @@ describe('graphicsCompositionRenderModel per-item phase triggers', () => {
 					],
 				},
 			},
-			...CANVAS,
 		});
 		const [revealing, bystander] = model.graphics[0]!.items;
 
@@ -4184,15 +3291,11 @@ describe('graphicsCompositionRenderModel per-item phase triggers', () => {
 	it('reaches a Graphic Group child by its own id', () => {
 		// The reveal mechanism is per-item wherever the item lives: a Deck List
 		// authored inside a group plays its own recipes off the same trigger.
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [
-					group('cluster', [
-						shape('inner', { animation: FADE_IN }),
-					]),
-				]),
-			],
+		const model = compose([
+			group('cluster', [
+				shape('inner', { animation: FADE_IN }),
+			]),
+		], {
 			itemAnimation: {
 				a: {
 					inner: [
@@ -4200,7 +3303,6 @@ describe('graphicsCompositionRenderModel per-item phase triggers', () => {
 					],
 				},
 			},
-			...CANVAS,
 		});
 		const inner = model.graphics[0]!.items[0]!.children![0]!;
 
@@ -4211,13 +3313,9 @@ describe('graphicsCompositionRenderModel per-item phase triggers', () => {
 		// Authored `visible: false` short-circuits everything: no animation, no
 		// render. The live flag and its trigger cannot resurrect an item its author
 		// hid (ADR 0015).
-		const model = resolveGraphicsCompositionRenderModel({
-			output: 'overlay',
-			graphics: [
-				graphic('a', [
-					shape('hidden', { visible: false, animation: FADE_IN }),
-				]),
-			],
+		const model = compose([
+			shape('hidden', { visible: false, animation: FADE_IN }),
+		], {
 			itemAnimation: {
 				a: {
 					hidden: [
@@ -4225,7 +3323,6 @@ describe('graphicsCompositionRenderModel per-item phase triggers', () => {
 					],
 				},
 			},
-			...CANVAS,
 		});
 
 		expect(model.graphics[0]!.items).toEqual([]);
@@ -4236,16 +3333,9 @@ describe('graphicsCompositionRenderModel per-item phase triggers', () => {
 		// host that is late dropping a settled trigger changes no frame — the same
 		// indistinguishability the composition-lifecycle phases guarantee.
 		const at = (itemAnimation?: Record<string, Record<string, [{ phase: 'enter'; elapsed: number }]>>) =>
-			resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [
-					graphic('a', [
-						shape('bar', { animation: FADE_IN }),
-					]),
-				],
-				itemAnimation,
-				...CANVAS,
-			}).graphics[0]!.items[0]!;
+			compose([
+				shape('bar', { animation: FADE_IN }),
+			], { itemAnimation }).graphics[0]!.items[0]!;
 
 		expect(at({
 			a: {

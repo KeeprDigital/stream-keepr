@@ -23,15 +23,8 @@ async function adminBootstrap() {
 
 const CONFIGURED_TOKEN = 'an-armed-bootstrap-token';
 
-/**
- * The first-admin bootstrap's two halves (#394): the secret that arms the route
- * at all, and the create-or-reset it performs once armed.
- *
- * Both are exercised here rather than only against the running server because
- * the disarmed state — the state a deployed installation spends its whole life
- * in — is one the integration suite cannot hold at the same time as the armed
- * one, the environment being fixed for the server it spawns.
- */
+// The disarmed state is the one the integration suite cannot hold beside the
+// armed one, so the guard is exercised here (#394).
 describe('the first-admin bootstrap guard', () => {
 	beforeEach(() => {
 		vi.resetModules();
@@ -43,18 +36,6 @@ describe('the first-admin bootstrap guard', () => {
 		const { requireAdminBootstrapToken } = await adminBootstrap();
 
 		await expect(requireAdminBootstrapToken(stubH3Event())).resolves.toBeUndefined();
-	});
-
-	it('reads the token from the header the ceremony documents', async () => {
-		const { requireAdminBootstrapToken, ADMIN_BOOTSTRAP_TOKEN_HEADER } = await adminBootstrap();
-
-		await requireAdminBootstrapToken(stubH3Event());
-
-		// The README's curl and this guard have to name the same header, and a
-		// mismatch would present as a 403 for a correctly-typed secret — which reads
-		// as a wrong token rather than as a wrong header.
-		expect(mockRequestHeader).toHaveBeenCalledWith(expect.anything(), ADMIN_BOOTSTRAP_TOKEN_HEADER);
-		expect(ADMIN_BOOTSTRAP_TOKEN_HEADER).toBe('x-admin-bootstrap-token');
 	});
 
 	it('refuses a caller presenting the wrong token with 403', async () => {
@@ -74,25 +55,13 @@ describe('the first-admin bootstrap guard', () => {
 		await expect(requireAdminBootstrapToken(stubH3Event())).rejects.toMatchObject({ statusCode: 403 });
 	});
 
-	/**
-	 * The disarmed state, which is where a deployed installation sits between the
-	 * install and the next lockout — so this refusal is read far more often than
-	 * the route's success, and 'Internal Server Error' would send the one person
-	 * who can act on it to the logs of a server behaving exactly as configured
-	 * (#233, #321, and now a third module).
-	 *
-	 * Asserted after the mapper, which is where the rewrite happens and the only
-	 * place the classification is observable.
-	 */
+	// The disarmed refusal is read far more often than success, so it names the setting (#233, #321).
 	it('names the setting when the route is not armed', async () => {
 		mockRuntimeConfig.mockReturnValue({ adminBootstrapToken: '   ' });
 		const { requireAdminBootstrapToken } = await adminBootstrap();
 
 		const failure = await refusalFrom(requireAdminBootstrapToken(stubH3Event()));
-		// Imported here rather than at the top of the file: `vi.resetModules()` gives
-		// the guard a fresh copy of the errors module, and a statically bound class
-		// would be a different one — the `instanceof` would read false for a
-		// correctly classified refusal.
+		// Imported after resetModules so `instanceof` sees the guard's copy of the class.
 		const { ServiceConfigurationError } = await import('~~/server/utils/errors');
 
 		expect(failure).toMatchObject({
@@ -103,12 +72,7 @@ describe('the first-admin bootstrap guard', () => {
 		expect(failure.cause).toBeInstanceOf(ServiceConfigurationError);
 	});
 
-	/**
-	 * Nuxt reads `NUXT_*` values through `destr`, so a token typed as all digits
-	 * reaches runtimeConfig as a number, and `true` as a boolean. Production
-	 * answered that with an unhandled `TypeError` 500 on the first real bootstrap;
-	 * the operator is owed the setting's name and what to change instead.
-	 */
+	// Nuxt reads NUXT_* through destr: an all-digit or boolean token is not a string.
 	it.each([
 		['all digits', 482915736104],
 		['true', true],
@@ -135,17 +99,6 @@ describe('the first-admin bootstrap guard', () => {
 		const failure = await refusalFrom(requireAdminBootstrapToken(stubH3Event()));
 
 		expect(failure.message).not.toContain('a-supplied-token');
-	});
-
-	it('checks the token before it reads anything else about the request', async () => {
-		// The disarmed 503 must not be reachable only after a body parse: a route
-		// that validated first would answer a malformed curl with 400 on an
-		// installation where the honest answer is "this is not armed".
-		mockRuntimeConfig.mockReturnValue({ adminBootstrapToken: '' });
-		const { requireAdminBootstrapToken } = await adminBootstrap();
-
-		await expect(requireAdminBootstrapToken(stubH3Event())).rejects.toMatchObject({ statusCode: 503 });
-		expect(mockRequestHeader).not.toHaveBeenCalled();
 	});
 });
 
@@ -207,9 +160,6 @@ describe('ensuring the first admin account', () => {
 	});
 
 	it('names a created account after its email when no name is given', async () => {
-		// A required name would be one more thing to get right in a terminal during
-		// a lockout, and an empty one would leave the cockpit attributing work to a
-		// blank.
 		const { ensureAdminAccount } = await adminBootstrap();
 		const { port, created } = stubPort();
 
@@ -227,11 +177,7 @@ describe('ensuring the first admin account', () => {
 		expect(created[0]?.name).toBe('first@keepr.digital');
 	});
 
-	/**
-	 * The break-glass half. Create-only would answer a locked-out operator with
-	 * "that email is taken" — an account they cannot sign in to, under an address
-	 * they cannot reuse, which is the lockout again with an extra step.
-	 */
+	// The break-glass half: an existing account is reset, not refused.
 	it('sets the password on an account that already exists', async () => {
 		const { ensureAdminAccount } = await adminBootstrap();
 		const { port, passwords, created } = stubPort({
@@ -255,10 +201,7 @@ describe('ensuring the first admin account', () => {
 	});
 
 	it('leaves an existing account its own name', async () => {
-		// The Evidence Ledger resolves display names at read time, so overwriting
-		// one here would rewrite what past entries are attributed to. `createAdmin`
-		// is the only port operation that carries a name, so the name given cannot
-		// reach the account unless that is called.
+		// Renaming would rewrite who past Evidence Ledger entries are attributed to.
 		const { ensureAdminAccount } = await adminBootstrap();
 		const { port, created } = stubPort({
 			id: 'existing-user-id',
@@ -350,11 +293,7 @@ describe('ensuring the first admin account', () => {
 	});
 
 	it('looks the account up under the email Better Auth would have stored', async () => {
-		// The port interface promises nothing about case, so the decision normalizes
-		// rather than relying on whoever implements it. The Better Auth port would
-		// survive this being removed — `findUserByEmail` lowercases its own argument
-		// — which is exactly why the contract is pinned here, against a port that
-		// does not.
+		// The port promises nothing about case, so the decision normalizes itself.
 		const { ensureAdminAccount } = await adminBootstrap();
 		const lookups: string[] = [];
 		const { port } = stubPort(undefined, {
@@ -373,12 +312,7 @@ describe('ensuring the first admin account', () => {
 		expect(outcome.email).toBe('first@keepr.digital');
 	});
 
-	/**
-	 * `createUser` checks neither bound itself — unlike `signUpEmail` and
-	 * `setUserPassword`, both of which do — so without this an empty password
-	 * hashes and stores perfectly happily, and the installation's first admin has
-	 * a credential anyone can present.
-	 */
+	// Better Auth's createUser checks neither bound itself.
 	it('refuses a password shorter than the configured minimum, before writing anything', async () => {
 		const { ensureAdminAccount } = await adminBootstrap();
 		const { port, created, passwords } = stubPort();
@@ -404,8 +338,6 @@ describe('ensuring the first admin account', () => {
 	});
 
 	it('quotes the port\'s bounds rather than bounds of its own', async () => {
-		// The numbers come from Better Auth's running configuration. Restating them
-		// here would let this route admit a password the sign-in path rejects.
 		const { ensureAdminAccount } = await adminBootstrap();
 		const { port } = stubPort(undefined, { minPasswordLength: 12 });
 

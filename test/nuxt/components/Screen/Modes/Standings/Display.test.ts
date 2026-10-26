@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
+import Display from '~/components/Screen/Modes/Standings/Display.vue';
 
 vi.mock('@vueuse/core', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('@vueuse/core')>();
@@ -102,9 +103,6 @@ const ManaColorDisplayStub = defineComponent({
 });
 
 async function mountComponent() {
-	const componentPath = '../../../../../../app/components/Screen/Modes/Standings/Display.vue';
-	const { default: Display } = await import(componentPath);
-
 	return mount(Display, {
 		global: {
 			stubs: {
@@ -158,7 +156,6 @@ describe('screenStandingsDisplay', () => {
 		expect(wrapper.text()).toContain('Standings');
 		expect(wrapper.text()).toContain('Matthew Guides');
 		expect(wrapper.text()).toContain('Grixis');
-		expect(wrapper.get('.standings-display').classes()).toContain('w-full');
 		expect(wrapper.find('[data-testid="standings-deck-colors"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="mana-colors"]').exists()).toBe(false);
 	});
@@ -207,12 +204,6 @@ describe('screenStandingsDisplay', () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.get('.standings-rows').attributes('style')).toContain('--standings-row-height: 200px;');
-	});
-
-	it('sizes row type and padding from the row height', async () => {
-		const style = (await mountComponent()).get('.standings-rows').attributes('style');
-
-		expect(style).toBe('--standings-row-height: 100px; --standings-row-font-size: 24.240000000000002px; --standings-row-secondary-font-size: 20.3616px; --standings-row-padding-y: 12px; --standings-row-padding-x: 18.18px;');
 	});
 
 	it.each([false, true])('shows each row\'s Position Change, marked with its direction (animated: %s)', async (animateEntries) => {

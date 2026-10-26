@@ -65,11 +65,7 @@ describe('screen Output asset capability session', () => {
 		mockSetResponseHeader.mockReset();
 	});
 
-	/**
-	 * Every engine is answered alike (ADR-0020): the session opens, cookied, with
-	 * nothing forecast. The body stays an object so an output running a client
-	 * from before the change reads it as "nothing refused".
-	 */
+	// Every engine is answered alike (ADR-0020): the session opens, cookied, with nothing forecast.
 	it('opens the session with nothing forecast', async () => {
 		const session = await (await handler())(sessionRequest());
 
@@ -86,15 +82,7 @@ describe('screen Output asset capability session', () => {
 		expect(mockSetCookie).not.toHaveBeenCalled();
 	});
 
-	/**
-	 * #321. The refusal above was raised with no cause at all, so the sanitizer replaced
-	 * its sentence with 'Internal Server Error'. An output refused a session resolves no
-	 * content URL for anything the Screen publishes, so this is the whole of what an
-	 * operator staring at a blank output was given.
-	 *
-	 * Asserted after the mapper, which is the only place the rewrite happens: the row
-	 * above passes with the fix reverted and this one does not.
-	 */
+	// A refused session keeps its sentence through the mapper: it is all a blank output's operator is told (#321).
 	it('says the session store is what is unavailable, after the 5xx sanitizer', async () => {
 		mockAuthorizeCapability.mockRejectedValue(new Error('D1_ERROR: network error'));
 		const event = sessionRequest();
@@ -110,13 +98,7 @@ describe('screen Output asset capability session', () => {
 	});
 
 	it('keeps the store\'s own words out of the response and in the cause', async () => {
-		// The authorizer's exception names a binding and a provider, which is a fact
-		// about this server's insides. It is kept as the cause, where a debugger can
-		// reach it, and never becomes prose a caller is shown.
-		//
-		// Note where the assertion finds it: `cause.cause`, which is one level deeper
-		// than `errorLogFields` reads. So the failure log does not carry it either —
-		// that line names this class, not the store's refusal.
+		// The authorizer's exception stays on the cause, never in prose a caller is shown.
 		mockAuthorizeCapability.mockRejectedValue(new Error('D1_ERROR: network error'));
 
 		const failure = await refusalFrom((await handler())(sessionRequest()));

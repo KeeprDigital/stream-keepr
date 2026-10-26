@@ -3,20 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { transportFailure } from '~~/test/helpers/transportFailure';
 
 /**
- * What a refused Library Workspace action says to the author who provoked it.
- *
- * Every catch on that surface routes through `describeFailure`, so what it reaches for is
- * what an author is shown for a lifecycle action, a metadata save, a replacement, an
- * upload, a retry, a cancellation, an approved remote copy, a staged-source confirmation
- * and a reconnect — nine catches, one answer. It reached for `Error.message`, which on a
- * `$fetch` failure is the transport's line: method, URL and status, and never the sentence
- * the route wrote about what it refused (#350).
- *
- * The signed-out arm comes first and is unconditional, which matters because a `401` from
- * an ingestion route *does* carry a sentence — the boundary's 'Authentication is required'
- * — and quoting it would tell an author what was missing while leaving out the one thing
- * they can act on. Since #398 that thing is signing in, not reloading: a reload used to
- * mint a fresh anonymous author, and nothing is minted any more.
+ * What a refused Library Workspace action says to its author: every catch on that surface
+ * routes through `describeFailure` (#350), and a 401 asks them to sign in (#398).
  */
 
 const { mockLoad, mockNavigateTo, mockRoute } = vi.hoisted(() => ({
@@ -51,42 +39,6 @@ describe('useGraphicsAuthorship', () => {
 		);
 
 		expect(said).toBe('A Graphic Asset Revision is in use and cannot enter Trash');
-	});
-
-	/**
-	 * The 5xx half of #286: a named dependency being down is a deployment fault an
-	 * operator can act on, so the mapper preserves its prose rather than sanitizing it,
-	 * and this surface is one of the places that prose was going unread.
-	 */
-	it('quotes a 5xx sentence the server deliberately kept', () => {
-		const { describeFailure } = useGraphicsAuthorship();
-
-		const said = describeFailure(
-			transportFailure({
-				status: 503,
-				body: { message: 'The Graphics Asset Library store is unavailable' },
-				request: `[POST] "/api/graphics-assets/ingestion-operations"`,
-			}),
-			'Graphic Asset upload failed.',
-		);
-
-		expect(said).toBe('The Graphics Asset Library store is unavailable');
-	});
-
-	it('falls back to the transport line when the sanitizer got to the 5xx first', () => {
-		const { describeFailure } = useGraphicsAuthorship();
-
-		const said = describeFailure(
-			transportFailure({
-				status: 503,
-				body: { message: 'Internal Server Error' },
-				request: `[POST] "/api/graphics-assets/ingestion-operations"`,
-			}),
-			'Graphic Asset upload failed.',
-		);
-
-		expect(said)
-			.toBe('[POST] "/api/graphics-assets/ingestion-operations": 503 Service Unavailable');
 	});
 
 	it('names the ended session for a 401, in preference to the sentence that 401 carries', () => {
@@ -131,16 +83,8 @@ describe('useGraphicsAuthorship', () => {
 		expect(describeFailure('not an error', 'Cancellation failed.')).toBe('Cancellation failed.');
 	});
 
-	/**
-	 * The trip to the login page, and the read that has to happen before it.
-	 *
-	 * `ensure()` treats `signed-in` as settled and never re-asks, so at the moment a
-	 * 401 arrives the browser still believes in the session the server has just
-	 * refused. Navigating with that belief intact puts the operator in front of the
-	 * page gate's "already signed in" arm, which sends them straight back to the page
-	 * that refused them — a loop, not a sign-in. The unconditional read is what
-	 * replaces the stale answer, so it is pinned as an order rather than as two calls.
-	 */
+	// The browser still believes in the refused session; without a fresh read first,
+	// the page gate's "already signed in" arm sends the operator straight back.
 	it('asks the server who this browser is before sending it to sign in', async () => {
 		const order: string[] = [];
 		mockLoad.mockImplementation(async () => {

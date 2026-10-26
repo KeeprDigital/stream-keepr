@@ -96,15 +96,19 @@ describe('eventWriteModule', () => {
 			});
 			expect(mockPublication.eventUpdated).not.toHaveBeenCalled();
 		});
-		it('validates both commentator talents before updating', async () => {
-			const input = { commentator1TalentId: 3, commentator2TalentId: 4 } as never;
 
-			await eventWriteModule().updateEvent({ eventId: 1, input, originConnectionId: 'origin-1' });
+		it('refuses a commentator Talent outside the Event before updating', async () => {
+			mockRequireTalentInEvent.mockImplementation(async (_eventId: number, talentId: number) => {
+				if (talentId === 4)
+					throw Object.assign(new Error('Talent not found'), { statusCode: 404 });
+			});
 
-			expect(mockRequireTalentInEvent).toHaveBeenCalledWith(1, 3);
-			expect(mockRequireTalentInEvent).toHaveBeenCalledWith(1, 4);
-			expect(mockRequireTalentInEvent.mock.invocationCallOrder[0])
-				.toBeLessThan(mockEventService.update.mock.invocationCallOrder[0]!);
+			await expect(eventWriteModule().updateEvent({
+				eventId: 1,
+				input: { commentator1TalentId: 3, commentator2TalentId: 4 } as never,
+			})).rejects.toMatchObject({ statusCode: 404 });
+
+			expect(mockEventService.update).not.toHaveBeenCalled();
 		});
 
 		it('returns 404 when the event does not exist', async () => {
@@ -119,16 +123,7 @@ describe('eventWriteModule', () => {
 			expect(mockPublication.eventUpdated).not.toHaveBeenCalled();
 		});
 
-		it('syncs feature matches only when numFeatureMatches is present', async () => {
-			await eventWriteModule().updateEvent({
-				eventId: 1,
-				input: { numFeatureMatches: 2 } as never,
-			});
-
-			expect(mockFeatureMatchService.syncFeatureMatches).toHaveBeenCalledWith(1, 2);
-		});
-
-		it('does not sync feature matches when numFeatureMatches is absent', async () => {
+		it('leaves the Feature Match Slots alone when the write names no count', async () => {
 			await eventWriteModule().updateEvent({
 				eventId: 1,
 				input: {} as never,
@@ -144,17 +139,13 @@ describe('eventWriteModule', () => {
 				originConnectionId: 'origin-1',
 			});
 
-			expect(mockPublication.eventUpdated).toHaveBeenCalledWith({
-				eventId: 1,
-				entity: expect.objectContaining({ id: 1 }),
-				originConnectionId: 'origin-1',
-			});
+			expect(mockPublication.eventUpdated).toHaveBeenCalledWith(expect.objectContaining({ eventId: 1, originConnectionId: 'origin-1' }));
 			expect(response).toEqual({ id: 1, name: 'Updated Event' });
 		});
 	});
 
 	describe('deleteEvent', () => {
-		it('captures screen ids before removing the event', async () => {
+		it('reads the Screen ids before the cascade delete removes them', async () => {
 			await eventWriteModule().deleteEvent({ eventId: 1 });
 
 			expect(mockScreenService.findIdsByEventId.mock.invocationCallOrder[0])

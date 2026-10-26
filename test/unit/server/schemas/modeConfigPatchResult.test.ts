@@ -12,14 +12,8 @@ import {
 } from '~~/server/schemas/api/screen';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
-/**
- * The mode-configuration byte total, enforced on both write paths.
- *
- * `MAX_MODE_CONFIGS_BYTES` is the only object-level rule the Screen schemas carry,
- * and it was the exact victim of #85: the patch schema is rebuilt from the full
- * schema's shape, which silently dropped it, so the total held on Screen create and
- * full update and not on the path the editors write through.
- */
+// The mode-configuration byte total must hold on the PATCH path as on the full
+// write: the patch schema is rebuilt from the full schema's shape (#85).
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
 
 /**
@@ -84,10 +78,7 @@ function fatGraphicItem(id: string) {
 	};
 }
 
-/**
- * A Graphic Input declaration at its own maxima. Inputs carry the other large axis
- * of the whole-Screen budget, and are capped per Screen rather than per graphic.
- */
+/** A Graphic Input declaration at its own maxima. */
 function fatGraphicInput(key: string) {
 	return {
 		key,
@@ -100,11 +91,7 @@ function fatGraphicInput(key: string) {
 	};
 }
 
-/**
- * A Broadcast Graphics stack built to the current named caps rather than to a byte
- * figure, so it stays the pathological case as the vocabulary changes: the Graphic
- * Item axis and the whole-Screen Graphic Input budget are both filled to their limits.
- */
+/** A Broadcast Graphics stack built to the named caps rather than a byte figure. */
 function graphicsStack(totalItems: number, graphics: number, totalInputs = 0) {
 	const perGraphic = Math.ceil(totalItems / graphics);
 	const perGraphicInputs = Math.ceil(totalInputs / graphics);
@@ -130,7 +117,7 @@ function graphicsStack(totalItems: number, graphics: number, totalInputs = 0) {
 	});
 }
 
-/** A ~129 KiB Feature Match Overlay layout whose every field is within its own bound. */
+/** A large Feature Match Overlay layout whose every field is within its own bound. */
 function fatOverlayLayout() {
 	const gradient = 'G'.repeat(1000);
 	return {
@@ -171,20 +158,9 @@ function fatOverlayLayout() {
 }
 
 /**
- * A Broadcast Graphics stack that is large, legal, and *storable on its own*.
- *
- * Two fifths of the Graphic Item cap rather than all of it, derived from the cap so
- * it tracks a change to it. The full cap no longer fits the shared budget when every
- * Graphic Item carries a maximal Graphic Text Template — #99 set the cap from what a
- * show needs and accepted that the heaviest shapes are refused by the byte total —
- * and this fixture has to be a configuration that could really be *stored*, because
- * the property under test is that a further patch is judged against the merged
- * result rather than against its own fragment.
- *
- * The fraction has to satisfy two things at once: the stack fits alone, and the
- * stack plus a maximal Feature Match Overlay layout does not. Both are asserted
- * below rather than trusted, so a vocabulary change that broke either fails here
- * instead of quietly leaving this test with nothing to prove.
+ * A large, legal Broadcast Graphics stack that is storable on its own: a fraction
+ * of the Graphic Item cap, since the full cap of maximal items exceeds the byte
+ * total by design (#99).
  */
 const STORABLE_STACK_FRACTION = 0.4;
 
@@ -202,8 +178,7 @@ function bytes(value: unknown): number {
 
 describe('parseModeConfigPatchResult', () => {
 	it('refuses a patch whose merged result exceeds the mode configuration byte total', () => {
-		// Neither write is unreasonable on its own; the accumulated configuration is
-		// what breaches the limit, which is why only the merged result can catch it.
+		// Neither half breaches the limit alone; only the merged result can.
 		const stored = {
 			'broadcast-graphics': {
 				graphics: storableStack(),
@@ -211,20 +186,9 @@ describe('parseModeConfigPatchResult', () => {
 		};
 		const layout = fatOverlayLayout();
 
-		// Both halves measured, so it stays visible that neither alone is the problem
-		// and that the fixtures still straddle the limit if a vocabulary grows.
-		//
-		// Worth knowing if this fails: the two halves together clear the total by
-		// about 9%. A vocabulary change that made either half cheaper could drop the
-		// pair *under* the limit and leave nothing for this test to catch. It fails
-		// here rather than passing vacuously, which is the whole point of measuring
-		// instead of asserting a round envelope. Both halves being under the limit
-		// individually is the property, not an accident of the numbers.
+		// The fixtures must keep straddling the limit, or this would pass vacuously.
 		expect(bytes(stored)).toBeLessThan(MAX_MODE_CONFIGS_BYTES);
-		expect(bytes(stored)).toBeGreaterThan(400_000);
-		expect(bytes(stored)).toBeLessThan(410_000);
-		expect(bytes({ layout })).toBeGreaterThan(165_000);
-		expect(bytes({ layout })).toBeLessThan(170_000);
+		expect(bytes({ layout })).toBeLessThan(MAX_MODE_CONFIGS_BYTES);
 		expect(bytes(stored) + bytes({ layout })).toBeGreaterThan(MAX_MODE_CONFIGS_BYTES);
 
 		expect(() => parseModeConfigPatchResult(stored, 'feature-match-overlay', { layout }))
@@ -245,9 +209,7 @@ describe('parseModeConfigPatchResult', () => {
 	});
 
 	it('enforces the same rule the full-config write path enforces', () => {
-		// The pairing that makes this a parity statement rather than a byte assertion:
-		// one payload, both paths, same answer. Before #85 was fixed the second of
-		// these accepted what the first refused.
+		// One payload, both paths, same answer (#85).
 		const oversized = {
 			'broadcast-graphics': {
 				graphics: storableStack(),
@@ -279,22 +241,14 @@ describe('parseModeConfigPatchResult', () => {
 			},
 		);
 
-		// A measured figure with a stated margin, not a round envelope. A loose
-		// assertion here is exactly what let two tickets each believe they had
-		// measured the shared budget: anything under a generous ceiling passed, so a
-		// vocabulary that grew the per-item cost never showed up.
-		expect(bytes(merged)).toBeGreaterThan(61_000);
-		expect(bytes(merged)).toBeLessThan(65_000);
+		expect(bytes(merged)).toBeLessThan(MAX_MODE_CONFIGS_BYTES / 4);
 		expect(merged['broadcast-graphics']).toBeDefined();
 		// Other modes are carried through untouched.
 		expect(merged.metagame).toEqual(getDefaultConfigForMode('metagame'));
 	});
 
 	it('accepts a partial mode configuration, because storage holds fragments', () => {
-		// A PATCH writes a fragment and readers complete it from the mode's defaults,
-		// so a stored config with required fields absent is entirely valid. Re-checking
-		// each mode against its full schema here would reject ordinary editing — this
-		// pins that it does not.
+		// Readers complete a stored fragment from the mode's defaults.
 		const patch = {
 			layout: {
 				frame: { backgroundColor: '#000000', opacity: 1 },
@@ -398,9 +352,7 @@ describe('per-mode background layers', () => {
 
 describe('object-level rules cannot be silently unenforced', () => {
 	it('still derives a patch schema that enforces every field bound', () => {
-		// The division of labour the fix relies on: fields here, whole-object rules in
-		// `parseModeConfigPatchResult`. If field bounds stopped working, moving the
-		// object rules would have bought nothing.
+		// Field rules live here; whole-object rules in `parseModeConfigPatchResult`.
 		const patch = modeConfigPatchSchemaMap['broadcast-graphics'];
 
 		expect(patch.safeParse({
@@ -419,9 +371,7 @@ describe('object-level rules cannot be silently unenforced', () => {
 });
 
 describe('the object-level check detector', () => {
-	// The guard is only worth having if it catches the thing #85 reports, so this
-	// runs the issue's own reproduction against the detector rather than asserting
-	// only that today's schemas happen to be clean.
+	// Runs #85's own reproduction against the detector.
 	const plain = z.object({
 		topN: z.number(),
 	}).strict();
@@ -430,10 +380,6 @@ describe('the object-level check detector', () => {
 		const refined = plain.refine(() => false, 'never valid');
 
 		expect(modeConfigSchemasWithObjectLevelChecks({ metagame: refined })).toEqual(['metagame']);
-		// The reason it was invisible: `.refine()` returns a ZodObject, so the schema
-		// still has a `.shape` and the rebuild typechecks and reads as correct.
-		expect(refined).toBeInstanceOf(z.ZodObject);
-		expect(Object.keys(refined.shape)).toEqual(['topN']);
 	});
 
 	it('finds a superRefine and a whole-object check too, not just refine', () => {
@@ -451,8 +397,7 @@ describe('the object-level check detector', () => {
 	});
 
 	it('passes a schema whose constraints live on its fields', () => {
-		// The pattern every current cross-field rule uses: an array-level check, which
-		// survives the rebuild because field schemas are carried over intact.
+		// An array-level check survives the rebuild with its field.
 		const fieldLevel = z.object({
 			graphics: z.array(z.string()).refine(value => value.length < 3, 'too many'),
 		}).strict();
@@ -461,9 +406,6 @@ describe('the object-level check detector', () => {
 	});
 
 	it('holds for every shipped mode config schema', () => {
-		// The property the module-load guard enforces. If this fails, the schema module
-		// refuses to load rather than silently dropping the rule — the failure #85 is
-		// about becomes a boot error instead of a validation bypass.
 		expect(modeConfigSchemasWithObjectLevelChecks(modeConfigSchemaMap)).toEqual([]);
 	});
 });

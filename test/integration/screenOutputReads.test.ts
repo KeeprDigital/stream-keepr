@@ -3,6 +3,7 @@ import type { ScreenOutputFeatureMatchResponse, ScreenOutputHeadToHeadResponse, 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { $fetch, anonymousFetch } from './client';
 import { $fetchRaw } from './helpers';
+import { executeIntegrationD1 } from './integrationD1';
 
 /**
  * A Screen Output reads everything it renders with its Screen Output Asset
@@ -23,6 +24,20 @@ async function readJson<T>(response: Response): Promise<JsonResponse<T>> {
 			? JSON.parse(text)
 			: null) as T,
 	};
+}
+
+/**
+ * Record a Match Result as Melee Sync would. No manual write carries one
+ * (ADR-0047), so it goes into the isolated D1 database directly, mirroring the
+ * internal sync boundary.
+ */
+async function recordMeleeResult(matchId: number, [player1GameWins, player2GameWins]: [number, number]) {
+	await executeIntegrationD1(`
+		UPDATE matches
+		SET external_id = 'result-${matchId}', external_source = 'melee', has_result = 1,
+			player1_game_wins = ${player1GameWins}, player2_game_wins = ${player2GameWins}, game_draws = 0
+		WHERE id = ${matchId};
+	`);
 }
 
 function bearer(capability: string): HeadersInit {
@@ -538,10 +553,7 @@ describe('capability-only Screen Output reads', () => {
 				}),
 			]);
 
-			await $fetch(`/api/events/${eventId}/matches/${match.id}`, {
-				method: 'PATCH',
-				body: { hasResult: true, player1GameWins: 2, player2GameWins: 1 },
-			});
+			await recordMeleeResult(match.id, [2, 1]);
 			const reported = await pairings.read<ScreenOutputPairingsResponse>('pairings');
 			expect(reported.data.matches[0]).toMatchObject({ hasResult: true, player1GameWins: 2, player2GameWins: 1 });
 		});
@@ -571,10 +583,8 @@ describe('capability-only Screen Output reads', () => {
 				roundId: roundOne.id,
 				player1Id: bob.id,
 				player2Id: alice.id,
-				hasResult: true,
-				player1GameWins: 2,
-				player2GameWins: 1,
 			});
+			await recordMeleeResult(earlier.id, [2, 1]);
 			const upcoming = await match({
 				roundId: roundTwo.id,
 				tableNumber: 1,
@@ -679,10 +689,7 @@ describe('capability-only Screen Output reads', () => {
 				status: 'unreported',
 			});
 
-			await $fetch(`/api/events/${eventId}/matches/${semifinal.id}`, {
-				method: 'PATCH',
-				body: { hasResult: true, player1GameWins: 1, player2GameWins: 2 },
-			});
+			await recordMeleeResult(semifinal.id, [1, 2]);
 			const reported = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
 			expect(reported.data.bracket.columns[0]!.positions[0]).toMatchObject({
 				status: 'reported',

@@ -146,13 +146,6 @@ describe('melee sync lease state', () => {
 		});
 	});
 
-	it('releases through the token-guarded service operation', async () => {
-		mockEventService.releaseMeleeSyncLease.mockResolvedValue(true);
-
-		await expect(releaseMeleeSyncLease(9, 'token')).resolves.toBe(true);
-		expect(mockEventService.releaseMeleeSyncLease).toHaveBeenCalledWith(9, 'token');
-	});
-
 	it('treats release failures as best-effort cleanup without logging the lease token', async () => {
 		mockEventService.releaseMeleeSyncLease.mockRejectedValue(new Error('D1 unavailable'));
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

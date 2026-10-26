@@ -5,13 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, h } from 'vue';
 import FillFields from '~/components/Graphics/FillFields.vue';
 
-/**
- * The one Graphic Fill fields control, for a Graphic Item's own fill and a Graphic
- * Style Set fill entry: the same fields and the same edits for both, which differ
- * only in the colour picker. An item takes the default hex picker; a Style Set
- * entry passes a palette entry picker into the `color` slot, so its colours are
- * palette entry ids. Every behaviour below runs once for each use.
- */
+// The one Graphic Fill fields control, for a Graphic Item's own fill and a Graphic Style Set fill
+// entry: the same fields and the same edits for both, which differ only in the colour picker.
 
 enableAutoUnmount(afterEach);
 

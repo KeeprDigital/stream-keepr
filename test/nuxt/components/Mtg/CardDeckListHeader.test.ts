@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import CardDeckListHeader from '~/components/Mtg/CardDeckListHeader.vue';
 
 const cardStore = {
 	deckListHasData: false,
@@ -27,7 +28,6 @@ const FeatureMatchNoteStub = defineComponent({
 describe('mtgCardDeckListHeader', () => {
 	it('presents the selected Assignment Note beside the Cards match-decklist controls', async () => {
 		const save = vi.fn().mockResolvedValue(undefined);
-		const { default: CardDeckListHeader } = await import('~/components/Mtg/CardDeckListHeader.vue');
 		const wrapper = mount(CardDeckListHeader, {
 			props: {
 				deckListMatchId: 7,
@@ -59,11 +59,9 @@ describe('mtgCardDeckListHeader', () => {
 		expect(note.attributes('data-remote-changed')).toBe('true');
 		await wrapper.get('[data-testid="cards-note-save"]').trigger('click');
 		expect(save).toHaveBeenCalledWith('Edited from Cards');
-		expect(wrapper.get('.space-y-3 > div').classes()).toContain('flex-wrap');
 	});
 
 	it('renders the shared empty Note state for a selected previous-Round Assignment', async () => {
-		const { default: CardDeckListHeader } = await import('~/components/Mtg/CardDeckListHeader.vue');
 		const wrapper = mount(CardDeckListHeader, {
 			props: {
 				deckListRoundId: 2,

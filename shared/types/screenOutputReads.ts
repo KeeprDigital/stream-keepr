@@ -99,7 +99,6 @@ export interface ScreenOutputRoundMatch {
 	player1GameWins: number | null;
 	player2GameWins: number | null;
 	gameDraws: number | null;
-	resultString: string | null;
 }
 
 /** What a Pairings Screen renders from: its Round, and that Round's Matches in table order. */
@@ -129,18 +128,14 @@ export interface ScreenOutputHeadToHeadEarlierMatch {
 	roundName: string;
 	roundNumber: number;
 	phaseName: string;
-	/**
-	 * How it ended: won by the first or second Player, drawn, or reported with
-	 * only a result string, which names no winner a broadcast can show.
-	 */
+	/** How it ended: won by the first or second Player, or drawn. */
 	outcome: HeadToHeadOutcome;
-	/** Its Game Score from the first Player's side; `null` when only a result string was reported. */
-	gameScore: string | null;
-	resultString: string | null;
+	/** Its Game Score from the first Player's side. */
+	gameScore: string;
 }
 
 /** How an earlier Match between a Head-to-Head's two Players ended, from the first Player's side. */
-export type HeadToHeadOutcome = 'player1' | 'player2' | 'draw' | 'reported';
+export type HeadToHeadOutcome = 'player1' | 'player2' | 'draw';
 
 /** What a Head-to-Head Screen renders from: its two Players, and their earlier Matches oldest first. */
 export interface ScreenOutputHeadToHeadResponse {

@@ -12,15 +12,8 @@ import {
 	workingGraphicInputValues,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 
-/**
- * Two operators on one Broadcast Graphic.
- *
- * The settled rule is field-scoped: edits to different Graphic Inputs merge, and
- * an edit to the same Graphic Input that was built against a value another
- * operator has since replaced is rejected rather than silently overwriting it.
- * A Set Input therefore states the value it believes it is replacing — that
- * belief is its Field Ownership claim, and this is where it is honoured.
- */
+// Edits to different Graphic Inputs merge; an edit built against a value another operator
+// has since replaced is rejected (Field Ownership).
 
 const NAME: GraphicInputDeclaration = {
 	type: 'text',
@@ -45,13 +38,7 @@ const TITLE: GraphicInputDeclaration = {
 const DECLARATIONS = [NAME, TITLE];
 const GRAPHIC = 'lower-third';
 
-/**
- * A fixed authoritative clock, so nothing here depends on wall time.
- *
- * Set Input never reads it — it writes no playout record — but the reduction
- * context requires it, and supplying a real one keeps these cases honest if a
- * later reducer starts stamping input acceptance the way playout is stamped.
- */
+/** A fixed authoritative clock. */
 const T0 = 1_700_000_000_000;
 
 function setInput(

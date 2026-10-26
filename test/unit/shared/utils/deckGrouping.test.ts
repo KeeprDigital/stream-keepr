@@ -1,16 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { groupByType } from '~~/shared/utils/deckGrouping';
-import { getCardTypeBucket } from '~~/shared/utils/metagame';
 
 describe('deckGrouping', () => {
-	it('normalizes full canonical type lines into coarse deck buckets', () => {
-		expect(getCardTypeBucket('Legendary Creature — Dog')).toBe('Creature');
-		expect(getCardTypeBucket('Legendary Land')).toBe('Land');
-		expect(getCardTypeBucket('Land — Forest Island')).toBe('Land');
-		expect(getCardTypeBucket('Legendary Planeswalker — Oko')).toBe('Planeswalker');
-		expect(getCardTypeBucket('Creature // Land')).toBe('Creature');
-	});
-
 	it('groups cards by coarse buckets in stable deck order', () => {
 		const grouped = groupByType([
 			{

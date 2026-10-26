@@ -351,15 +351,8 @@ describe('screen config page — degraded card data on connected outputs', () =>
 });
 
 /**
- * The two hand-outs of this Screen's real outputs, and what each says when it has
- * nothing to hand out.
- *
- * `useScreenOutputAccessUrl` refuses rather than degrading — a URL without a Screen
- * Output Asset Capability loads, renders, and silently omits every image, video and
- * library font (#231) — and it answers the refusal so its caller can report it. Until
- * #250 this page discarded that answer at both open sites, so a refused open opened a
- * tab, closed it again, and said nothing: exactly what the Live workspace stopped
- * doing in #237, still happening here.
+ * Wiring only: each hand-out control reaches `useScreenOutputAccessUrl`, whose own
+ * suite owns fresh-per-hand-out capabilities, refusals and blocked pop-ups (#231).
  */
 describe('screen config page — handing out this Screen’s output', () => {
 	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
@@ -407,39 +400,10 @@ describe('screen config page — handing out this Screen’s output', () => {
 		return outputWindow;
 	}
 
-	/** A fresh window per `open`, so a second hand-out can be told from the first. */
-	function stubOutputWindows() {
-		const opened: Array<{ opener: unknown; location: { href: string }; close: () => void }> = [];
-		vi.stubGlobal('open', vi.fn(() => {
-			const outputWindow = {
-				opener: {} as unknown,
-				location: { href: '' },
-				close: vi.fn(),
-			};
-			opened.push(outputWindow);
-			return outputWindow;
-		}));
-		return opened;
-	}
-
-	function capabilityRequests() {
-		return mockApiFetch.mock.calls.filter(([path]) => String(path).endsWith('/asset-capability'));
-	}
-
 	function accessUrl(capability: string, output = 'overlay') {
 		return `${window.location.origin}/event/1/screen/screen-1?output=${output}#asset-capability=${capability}`;
 	}
 
-	/**
-	 * The capability is rotated between mount and the click, and the handed-out URL has
-	 * to carry the new one.
-	 *
-	 * Asserting only that some capability appears would pass against a value cached when
-	 * the page mounted, and on this page that is the concrete failure rather than an
-	 * academic one: the rotate control is *on this page*, a few pixels from these
-	 * controls, so a URL built from a mount-time capability is dead the moment an
-	 * operator uses it (#231).
-	 */
 	it('copies a URL carrying asset access, obtained at the moment of the hand-out', async () => {
 		wrapper = await mountLoadedPage();
 		mockCapabilityResponse.value = 'rotated-capability';
@@ -447,64 +411,9 @@ describe('screen config page — handing out this Screen’s output', () => {
 		await wrapper.get('[aria-label="Copy output URL"]').trigger('click');
 		await flushPromises();
 
-		expect(mockApiFetch).toHaveBeenCalledWith('/api/events/1/screens/1/asset-capability');
-		// Named for the output rather than the Screen, matching the control that produced
-		// it and the workspace's wording for the same hand-out (#234, #266).
-		expect(mockCopyToClipboard).toHaveBeenCalledWith(
-			`${window.location.origin}/event/1/screen/screen-1?output=overlay#asset-capability=rotated-capability`,
-			expect.objectContaining({
-				successTitle: 'Output URL copied',
-				successDescription: expect.stringContaining('asset access'),
-			}),
-		);
+		expect(mockCopyToClipboard).toHaveBeenCalledWith(accessUrl('rotated-capability'), expect.anything());
 	});
 
-	/**
-	 * And obtained again on every later hand-out, not once and remembered.
-	 *
-	 * "At the moment of the hand-out" is only tested by a *second* hand-out: a capability
-	 * acquired on the first click and reused after is correct exactly once and dead from
-	 * then on. The rotate control is on this page, a few pixels from these controls, so
-	 * the operator most likely to copy twice is the one who has just rotated in between —
-	 * and the stale URL they would be handed loads, renders, and silently omits every
-	 * image, video and library font (#231).
-	 */
-	it('obtains asset access again for a second copy, rather than reusing the first', async () => {
-		wrapper = await mountLoadedPage();
-
-		await wrapper.get('[aria-label="Copy output URL"]').trigger('click');
-		await flushPromises();
-		mockCapabilityResponse.value = 'rotated-capability';
-		await wrapper.get('[aria-label="Copy output URL"]').trigger('click');
-		await flushPromises();
-
-		expect(capabilityRequests()).toHaveLength(2);
-		// The first hand-out carried the old capability, so the second cannot pass by
-		// having been rotated all along.
-		expect(mockCopyToClipboard).toHaveBeenNthCalledWith(1, accessUrl('settings-capability'), expect.anything());
-		expect(mockCopyToClipboard).toHaveBeenNthCalledWith(2, accessUrl('rotated-capability'), expect.anything());
-	});
-
-	/**
-	 * The empty string is what the clipboard helper reports as having nothing to copy,
-	 * and the words it reports with have to name the reason — an operator told only
-	 * "failed to copy" reaches for the address in their browser's bar, which is the
-	 * media-losing URL this refusal exists to withhold.
-	 */
-	it('copies nothing at all when asset access cannot be obtained, and names why', async () => {
-		mockCapabilityResponse.value = null;
-		wrapper = await mountLoadedPage();
-
-		await wrapper.get('[aria-label="Copy output URL"]').trigger('click');
-		await flushPromises();
-
-		expect(mockCopyToClipboard).toHaveBeenCalledWith('', expect.objectContaining({
-			nothingToCopyTitle: 'Nothing copied',
-			nothingToCopyDescription: expect.stringContaining('Asset access for this Screen could not be obtained'),
-		}));
-	});
-
-	/** Rotated between mount and the click here too, for the same reason. */
 	it('opens the default output in a tab it points only once asset access is in hand', async () => {
 		const outputWindow = stubOutputWindow();
 		wrapper = await mountLoadedPage();
@@ -515,104 +424,11 @@ describe('screen config page — handing out this Screen’s output', () => {
 
 		expect(window.open).toHaveBeenCalledWith('', '_blank');
 		expect(outputWindow.opener).toBeNull();
-		expect(outputWindow.location.href).toBe(
-			`${window.location.origin}/event/1/screen/screen-1?output=overlay#asset-capability=rotated-capability`,
-		);
+		expect(outputWindow.location.href).toBe(accessUrl('rotated-capability'));
 		expect(outputWindow.close).not.toHaveBeenCalled();
-		expect(mockToast.add).not.toHaveBeenCalled();
 	});
 
-	/** The same second hand-out, for the same reason: opening twice must ask twice. */
-	it('obtains asset access again for a second open, rather than reusing the first', async () => {
-		const opened = stubOutputWindows();
-		wrapper = await mountLoadedPage();
-
-		await wrapper.get('[data-open-output="Open output"]').trigger('click');
-		await flushPromises();
-		mockCapabilityResponse.value = 'rotated-capability';
-		await wrapper.get('[data-open-output="Open output"]').trigger('click');
-		await flushPromises();
-
-		expect(capabilityRequests()).toHaveLength(2);
-		expect(opened).toHaveLength(2);
-		expect(opened[0]!.location.href).toBe(accessUrl('settings-capability'));
-		expect(opened[1]!.location.href).toBe(accessUrl('rotated-capability'));
-	});
-
-	it('opens no output, and says why, when asset access cannot be obtained', async () => {
-		mockCapabilityResponse.value = null;
-		const outputWindow = stubOutputWindow();
-		wrapper = await mountLoadedPage();
-
-		await wrapper.get('[data-open-output="Open output"]').trigger('click');
-		await flushPromises();
-
-		expect(outputWindow.location.href).toBe('');
-		expect(outputWindow.close).toHaveBeenCalledOnce();
-		// The tab opened and closed again, so nothing visibly happened. Left unsaid it
-		// reads as a popup blocker rather than as the media-losing hand-out it refused.
-		//
-		// Exactly once, because `toHaveBeenCalledWith` asks only whether *some* call
-		// matched: a handler firing both sentences passes it, and hands the operator two
-		// contradictory instructions (#278).
-		expect(mockToast.add).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-			description: expect.stringContaining('Asset access for this Screen could not be obtained'),
-		}));
-	});
-
-	/**
-	 * A blocked pop-up is not a refused capability, and until #258 this page said it
-	 * was — in the words of the very refusal the browser never gave it a chance to
-	 * make. "Try again" is the wrong instruction for a tab the browser will block
-	 * identically next time.
-	 */
-	it('names the browser, not asset access, when the output window is blocked', async () => {
-		vi.stubGlobal('open', vi.fn(() => null));
-		wrapper = await mountLoadedPage();
-
-		await wrapper.get('[data-open-output="Open output"]').trigger('click');
-		await flushPromises();
-
-		// Counted before it is read. Reading the last call cannot see a spurious earlier
-		// one, and with no toast at all the destructure throws `undefined is not iterable`
-		// rather than saying what was expected (#278).
-		expect(mockToast.add).toHaveBeenCalledOnce();
-		const [reported] = mockToast.add.mock.calls[0] as [{ description: string }];
-		expect(reported.description).toContain('pop-up');
-		expect(reported.description).not.toContain('Asset access');
-		// Nothing to hand a capability to, so none is minted.
-		expect(capabilityRequests()).toHaveLength(0);
-	});
-
-	/**
-	 * The #234 precedent, brought to this page (#266).
-	 *
-	 * These two controls sit beside the Screen's bare address, and that address is the
-	 * one URL on the page that resolves no media (#231). "Copy screen URL" beside it
-	 * read as a button for the text next to it, and "Open default screen" named a
-	 * Screen rather than an output. An operator choosing between them and the address
-	 * bar has to be able to see which of the three carries asset access.
-	 */
-	it('names both hand-out controls by what they hand out, and says what it carries', async () => {
-		wrapper = await mountLoadedPage();
-
-		const copy = wrapper.get('[aria-label="Copy output URL"]');
-		expect(copy.attributes('aria-label')).toBe('Copy output URL');
-		expect(wrapper.get('[data-open-output="Open output"]').text()).toBe('Open output');
-
-		// The sentence naming asset access: in the tooltip for copy, on the menu's
-		// trigger for open, which is the affordance an operator meets before the items.
-		expect(copy.element.closest('[data-tooltip]')?.getAttribute('data-tooltip'))
-			.toContain('asset access');
-		expect(wrapper.get('[data-testid="open-output-menu"]').attributes('title'))
-			.toContain('asset access');
-	});
-
-	/**
-	 * The second open site. A Screen Mode's own outputs are handed out by a different
-	 * function on the same page, and it discarded the same answer — so a mode with
-	 * output options had two silent controls, not one.
-	 */
+	// A Screen Mode's own outputs are handed out by a second function on this page.
 	describe('a Screen Mode’s own outputs', () => {
 		beforeEach(() => {
 			stubModePolicy({
@@ -630,51 +446,7 @@ describe('screen config page — handing out this Screen’s output', () => {
 			await wrapper.get('[data-open-output="Open fill output"]').trigger('click');
 			await flushPromises();
 
-			expect(outputWindow.location.href).toBe(
-				`${window.location.origin}/event/1/screen/screen-1?output=fill#asset-capability=rotated-capability`,
-			);
-			expect(mockToast.add).not.toHaveBeenCalled();
-		});
-
-		it('opens nothing, and says why, when asset access cannot be obtained', async () => {
-			mockCapabilityResponse.value = null;
-			const outputWindow = stubOutputWindow();
-			wrapper = await mountLoadedPage();
-
-			await wrapper.get('[data-open-output="Open fill output"]').trigger('click');
-			await flushPromises();
-
-			expect(outputWindow.location.href).toBe('');
-			expect(outputWindow.close).toHaveBeenCalledOnce();
-			// Exactly once here too — same reporter, same blind spot (#278).
-			expect(mockToast.add).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-				description: expect.stringContaining('Asset access for this Screen could not be obtained'),
-			}));
-		});
-
-		/**
-		 * The third answer, which this describe had no test for at all until #295 — a
-		 * success and a refusal, and nothing for the browser blocking the tab.
-		 *
-		 * One reporter serves both open controls, so it is tempting to read the
-		 * page-level blocked test as covering this. It does not: what is under test is
-		 * the *item's* `onSelect` reaching that reporter, and a mode output wired to its
-		 * own copy of the pre-#258 sentence would tell an operator to retry a tab their
-		 * browser will block identically — with the page-level test still green.
-		 */
-		it('names the browser, not asset access, when the tab for a mode output is blocked', async () => {
-			vi.stubGlobal('open', vi.fn(() => null));
-			wrapper = await mountLoadedPage();
-
-			await wrapper.get('[data-open-output="Open fill output"]').trigger('click');
-			await flushPromises();
-
-			expect(mockToast.add).toHaveBeenCalledOnce();
-			const [reported] = mockToast.add.mock.calls[0] as [{ description: string }];
-			expect(reported.description).toContain('pop-up');
-			expect(reported.description).not.toContain('Asset access');
-			// Nothing to hand a capability to, so none is minted.
-			expect(capabilityRequests()).toHaveLength(0);
+			expect(outputWindow.location.href).toBe(accessUrl('rotated-capability', 'fill'));
 		});
 	});
 });

@@ -1,4 +1,3 @@
-import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
@@ -11,25 +10,16 @@ import {
 	createInMemoryStagingGraphicsObjectStore,
 } from '~~/server/modules/graphics-asset-library/in-memory-object-store';
 import {
-	createBoundedByteStream,
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import {
 	DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES,
 	DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES,
 } from '~~/shared/types/graphicsAsset';
+import { pngWithTextChunks, pixelPng as transparentPixelPng } from '~~/test/helpers/graphicsFixtures';
+import { boundedBytes } from '~~/test/helpers/graphicsLibrary';
 
 describe('the Graphics Asset Library Capacity', () => {
-	const transparentPixelPng = Uint8Array.from(Buffer.from(
-		'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-		'base64',
-	));
-	const textChunk = Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0x42, 0xC5, 0x85);
-	const pngWithTextChunks = (count: number) => Uint8Array.from(Buffer.concat([
-		transparentPixelPng.slice(0, -12),
-		...Array.from<Uint8Array>({ length: count }).fill(textChunk),
-		transparentPixelPng.slice(-12),
-	]));
 	const browserDecodeEvidence = (bytes: Uint8Array) => ({
 		outcome: 'decoded' as const,
 		sourceDigest: createHash('sha256').update(bytes).digest('hex'),
@@ -159,10 +149,7 @@ describe('the Graphics Asset Library Capacity', () => {
 		const upload = library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
-			bytes: createBoundedByteStream(transparentPixelPng, {
-				byteLength: transparentPixelPng.byteLength,
-				maximumByteLength: transparentPixelPng.byteLength,
-			}),
+			bytes: boundedBytes(transparentPixelPng),
 		});
 
 		await canonicalStarted;
@@ -241,10 +228,7 @@ describe('the Graphics Asset Library Capacity', () => {
 		const blocked = await library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
-			bytes: createBoundedByteStream(transparentPixelPng, {
-				byteLength: transparentPixelPng.byteLength,
-				maximumByteLength: transparentPixelPng.byteLength,
-			}),
+			bytes: boundedBytes(transparentPixelPng),
 		});
 
 		expect(blocked).toMatchObject({
@@ -302,10 +286,7 @@ describe('the Graphics Asset Library Capacity', () => {
 		const answered = await library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
-			bytes: createBoundedByteStream(transparentPixelPng, {
-				byteLength: transparentPixelPng.byteLength,
-				maximumByteLength: transparentPixelPng.byteLength,
-			}),
+			bytes: boundedBytes(transparentPixelPng),
 		});
 
 		// The library holds nothing and its quota is untouched, so capacity was
@@ -337,10 +318,7 @@ describe('the Graphics Asset Library Capacity', () => {
 			return await library.uploadGraphicAsset({
 				operationId: operation.id,
 				initiatedBy: operation.initiatedBy,
-				bytes: createBoundedByteStream(transparentPixelPng, {
-					byteLength: transparentPixelPng.byteLength,
-					maximumByteLength: transparentPixelPng.byteLength,
-				}),
+				bytes: boundedBytes(transparentPixelPng),
 			});
 		};
 
@@ -405,10 +383,7 @@ describe('the Graphics Asset Library Capacity', () => {
 		await library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
-			bytes: createBoundedByteStream(transparentPixelPng, {
-				byteLength: transparentPixelPng.byteLength,
-				maximumByteLength: transparentPixelPng.byteLength,
-			}),
+			bytes: boundedBytes(transparentPixelPng),
 		});
 		const usedBytes = (await library.getCapacity()).canonical.usedBytes;
 
@@ -443,10 +418,7 @@ describe('the Graphics Asset Library Capacity', () => {
 			return await library.uploadGraphicAsset({
 				operationId: operation.id,
 				initiatedBy: operation.initiatedBy,
-				bytes: createBoundedByteStream(bytes, {
-					byteLength: bytes.byteLength,
-					maximumByteLength: bytes.byteLength,
-				}),
+				bytes: boundedBytes(bytes),
 			});
 		};
 		await upload('canonical-concurrency-foundation', transparentPixelPng);

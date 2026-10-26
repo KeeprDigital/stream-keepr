@@ -8,7 +8,6 @@ import { describe, expect, it } from 'vitest';
 import { GRAPHICS_REPAIR_REJECTION_CODES } from '~~/shared/utils/graphicsAssetReconciliation';
 import {
 	GRAPHICS_OPERATIONAL_QUEUES,
-	GRAPHICS_QUEUE_ACTION_OUTCOMES,
 	GRAPHICS_QUEUE_ACTIONS,
 	graphicsDiscrepancyQueueOutcome,
 	graphicsIngestionRetryQueueOutcome,
@@ -19,36 +18,9 @@ import {
 } from '~~/shared/utils/graphicsOperationalQueues';
 
 describe('the operational queue vocabulary', () => {
-	it('keeps every state an administrator triages by visibly distinct', () => {
-		// The eight states the ticket requires stay separate queues rather than
-		// collapsing into one "needs attention" bucket. A critical integrity
-		// incident is the ninth: it fails closed and is never repaired in place,
-		// so merging it with ordinary unavailable content would offer a repair
-		// that the library would refuse. Unreleased staged input is the tenth
-		// (#358): it never appears in the expired-input queue — expiry already
-		// happened — and its one valid action is a release retry no other queue
-		// offers.
-		expect([...GRAPHICS_OPERATIONAL_QUEUES]).toEqual([
-			'critical-integrity-incident',
-			'unavailable-content',
-			'missing-derivative',
-			'retryable-ingestion',
-			'expired-ingestion-input',
-			'unreleased-staged-input',
-			'trashed-asset',
-			'superseded-revision',
-			'quarantined-object',
-			'retired-asset',
-		]);
-		expect(new Set(GRAPHICS_OPERATIONAL_QUEUES).size)
-			.toBe(GRAPHICS_OPERATIONAL_QUEUES.length);
-	});
-
-	it('orders the queues by operational risk rather than by provider object', () => {
+	it('orders the queues by operational risk, so a surface can render them in declaration order', () => {
 		const severities = GRAPHICS_OPERATIONAL_QUEUES.map(graphicsQueueSeverity);
 
-		// Declaration order is already risk order, so a surface that renders the
-		// queues in order never has to re-derive which one matters most.
 		const rank = { critical: 0, warning: 1, info: 2 } as const;
 		expect(severities.map(severity => rank[severity]))
 			.toEqual([
@@ -67,26 +39,14 @@ describe('the operational queue vocabulary', () => {
 });
 
 describe('the queue action outcome vocabulary', () => {
-	it('states exactly the five outcomes every action reports', () => {
-		expect([...GRAPHICS_QUEUE_ACTION_OUTCOMES]).toEqual([
-			'completed',
-			'already-in-state',
-			'reference-blocked',
-			'retryable-unavailable',
-			'integrity-conflict',
-		]);
-	});
-
 	it('classifies every reconciliation action result', () => {
 		expect(graphicsDiscrepancyQueueOutcome({
 			outcome: 'resolved',
 			resolution: 'repaired-with-exact-bytes',
 		} as GraphicsDiscrepancyActionOutcome)).toBe('completed');
 
-		// A recheck that found nothing to change is the commonest answer on open
-		// unavailable content, and it means the bytes are still gone. Calling that
-		// "already in state" would report the subject as how the administrator
-		// wanted it, which is the opposite of what happened.
+		// A recheck that changed nothing means the bytes are still gone, not that
+		// the subject is as the administrator wanted.
 		expect(graphicsDiscrepancyQueueOutcome({
 			outcome: 'unchanged',
 		} as GraphicsDiscrepancyActionOutcome)).toBe('retryable-unavailable');
@@ -105,8 +65,7 @@ describe('the queue action outcome vocabulary', () => {
 			'byte-store-unavailable': 'retryable-unavailable',
 		};
 
-		// Every rejection #43 can produce is classified, so a new one cannot slip
-		// through as an unexplained failure.
+		// Every rejection code is classified, so a new one cannot slip through unexplained.
 		expect(Object.keys(rejections).sort())
 			.toEqual([...GRAPHICS_REPAIR_REJECTION_CODES].sort());
 

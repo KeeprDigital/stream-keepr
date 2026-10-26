@@ -61,7 +61,6 @@ export async function findMatchesByRound(eventId: number, roundIds: readonly num
 			player1GameWins: match.player1GameWins,
 			player2GameWins: match.player2GameWins,
 			gameDraws: match.gameDraws,
-			resultString: match.resultString,
 		});
 		byRound.set(match.roundId, roundMatches);
 	}

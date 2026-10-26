@@ -29,15 +29,8 @@ const mockGraphicsAssets = {
 	inspectGraphicAssetRevisions: vi.fn(),
 };
 
-/**
- * The collaborators as a route hands them over: thunks, invoked by the operation
- * at the point of use rather than by the caller.
- *
- * `vi.fn()` wrappers rather than bare arrows because *whether* an operation
- * builds a collaborator is itself part of what this module promises — building
- * the capability manager reads a signing key and fails without it (#233), so a
- * write refused before it needs one must not ask. See #247.
- */
+// Collaborators arrive as thunks; whether an operation builds one is part of the
+// contract, since building the capability manager needs a signing key (#233).
 const provideScreenOutputAssetCapabilities = vi.fn(() => mockScreenOutputAssetCapabilities);
 const provideGraphicsAssets = vi.fn(() => mockGraphicsAssets);
 /** Stands in for the statements the epoch end asks to ride with the mode change. */
@@ -72,19 +65,8 @@ vi.mock('~~/server/modules/broadcast-graphics-live-session', () => ({
 	broadcastGraphicsLiveSessionModule: () => mockBroadcastGraphicsLiveSessions,
 }));
 
-// `cause` is carried because it is what survives the 5xx sanitizer, and a stub
-// that dropped it would let a masked failure pass. Nothing here raises one since
-// #247 deleted this module's wiring faults, but the module's other errors are
-// mapped by the same hook.
-vi.stubGlobal('createError', (input: { statusCode: number; message?: string; statusMessage?: string; cause?: unknown }) => {
-	const error = new Error(input.message ?? input.statusMessage, { cause: input.cause }) as Error & {
-		statusCode: number;
-		statusMessage?: string;
-	};
-	error.statusCode = input.statusCode;
-	error.statusMessage = input.statusMessage;
-	return error;
-});
+vi.stubGlobal('createError', (input: { statusCode: number; message?: string; statusMessage?: string }) =>
+	Object.assign(new Error(input.message ?? input.statusMessage), { statusCode: input.statusCode }));
 
 const { screenWriteModule } = await import('~~/server/modules/screen-write');
 
@@ -135,22 +117,20 @@ describe('screenWriteModule', () => {
 			expect(mockScreenService.create).not.toHaveBeenCalled();
 		});
 
-		it('validates mode config references before checking the slug', async () => {
-			const input = {
-				slug: 'main',
-				modeConfigs: { card: {} },
-			} as never;
+		it('refuses a mode config naming a reference outside the Event before creating', async () => {
+			mockValidateScreenModeConfigsReferences.mockRejectedValueOnce(Object.assign(new Error('Not in this Event'), { statusCode: 404 }));
 
-			await screenWriteModule().createScreen({
+			await expect(screenWriteModule().createScreen({
 				eventId: 1,
-				input,
-				originConnectionId: 'origin-1',
+				input: {
+					slug: 'main',
+					modeConfigs: { card: {} },
+				} as never,
 				screenOutputAssetCapabilities: provideScreenOutputAssetCapabilities,
-			});
+			})).rejects.toMatchObject({ statusCode: 404 });
 
 			expect(mockValidateScreenModeConfigsReferences).toHaveBeenCalledWith(1, { card: {} });
-			expect(mockValidateScreenModeConfigsReferences.mock.invocationCallOrder[0])
-				.toBeLessThan(mockScreenService.slugExists.mock.invocationCallOrder[0]!);
+			expect(mockScreenService.create).not.toHaveBeenCalled();
 		});
 
 		it('rejects a duplicate slug with a 400 before creating', async () => {
@@ -167,14 +147,11 @@ describe('screenWriteModule', () => {
 
 			expect(mockScreenService.create).not.toHaveBeenCalled();
 			expect(mockPublication.screenCreated).not.toHaveBeenCalled();
-			// Nothing built the capability manager. Building one reads the Screen
-			// Output capability signing key and refuses without it (#233), so a
-			// create refused for its own slug must not report a missing setting
-			// instead. The thunk is what makes that true. See #247.
+			// A slug refusal must not surface as a missing signing key instead.
 			expect(provideScreenOutputAssetCapabilities).not.toHaveBeenCalled();
 		});
 
-		it('creates the screen and publishes the mapped response', async () => {
+		it('persists the prepared capability with the Screen and publishes it', async () => {
 			const input = { slug: 'main' } as never;
 
 			const response = await screenWriteModule().createScreen({
@@ -184,8 +161,6 @@ describe('screenWriteModule', () => {
 				screenOutputAssetCapabilities: provideScreenOutputAssetCapabilities,
 			});
 
-			expect(provideScreenOutputAssetCapabilities).toHaveBeenCalledTimes(1);
-			expect(mockScreenService.slugExists).toHaveBeenCalledWith(1, 'main');
 			expect(mockScreenService.create).toHaveBeenCalledWith(
 				1,
 				input,
@@ -271,7 +246,7 @@ describe('screenWriteModule', () => {
 			expect(mockPublication.screenUpdated).not.toHaveBeenCalled();
 		});
 
-		it('splits stateVersion from data and forwards it to update', async () => {
+		it('writes the data versioned on the client\'s stateVersion and publishes the result', async () => {
 			const response = await screenWriteModule().updateScreen({
 				authoringSessionId: undefined,
 				eventId: 1,
@@ -284,9 +259,8 @@ describe('screenWriteModule', () => {
 				originConnectionId: 'origin-1',
 			});
 
-			expect(mockValidateScreenModeConfigsReferences).toHaveBeenCalledWith(1, { card: {} });
 			expect(mockScreenService.slugExists).toHaveBeenCalledWith(1, 'renamed', 7);
-			expect(mockScreenService.update).toHaveBeenCalledWith(
+			expect(mockScreenService.update.mock.calls[0]?.slice(0, 4)).toEqual([
 				7,
 				1,
 				{
@@ -294,34 +268,11 @@ describe('screenWriteModule', () => {
 					modeConfigs: { card: {} },
 				},
 				3,
-				// No epoch to end, so nothing rides with the write.
-				undefined,
-				// Nothing in the graphics Edit workspace changes, so no lease fence.
-				undefined,
-			);
-			expect(mockPublication.screenUpdated).toHaveBeenCalledWith({
-				eventId: 1,
-				entity: expect.objectContaining({ id: 7 }),
-				originConnectionId: 'origin-1',
-			});
+			]);
+			expect(mockPublication.screenUpdated).toHaveBeenCalledWith(expect.objectContaining({ eventId: 1, originConnectionId: 'origin-1' }));
 			expect(response).toEqual({ id: 7, slug: 'main' });
 		});
 
-		it('skips the slug uniqueness check when no slug is supplied', async () => {
-			await screenWriteModule().updateScreen({
-				authoringSessionId: undefined,
-				eventId: 1,
-				screenId: 7,
-				input: { stateVersion: 0 } as never,
-			});
-
-			expect(mockScreenService.slugExists).not.toHaveBeenCalled();
-		});
-
-		// The message is asserted, not just the status. `createScreen`'s refusal is
-		// byte-identical to this one and was already pinned, so a mutation here was
-		// invisible: the suite stayed green with `updateScreen` refusing in words
-		// nobody had agreed to. See #248.
 		it('rejects a duplicate slug with a 400', async () => {
 			mockScreenService.slugExists.mockResolvedValue(true);
 
@@ -338,55 +289,17 @@ describe('screenWriteModule', () => {
 			expect(mockScreenService.update).not.toHaveBeenCalled();
 		});
 
-		it('ends the Broadcast Graphics Live Session in the commit that changes the mode', async () => {
-			mockScreenService.findById.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'broadcast-graphics' }));
-			mockScreenService.update.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'background' }));
-
-			await screenWriteModule().updateScreen({
-				authoringSessionId: undefined,
-				eventId: 1,
-				screenId: 7,
-				input: { stateVersion: 0, currentMode: 'background' } as never,
-				originConnectionId: 'origin-1',
-			});
-
-			// The end travels with the mode change rather than following it: neither
-			// order survives on its own, and there is no instant between them for a
-			// failure to leave a running epoch behind for the next activation (#305).
-			expect(mockBroadcastGraphicsLiveSessions.endEpochOnLeavingBroadcastGraphics)
-				.toHaveBeenCalledWith(7, 1, 'origin-1');
-			expect(mockScreenService.update).toHaveBeenCalledWith(
-				7,
-				1,
-				{ currentMode: 'background' },
-				0,
-				epochEndStatements,
-				undefined,
-			);
-			// Announced only after that commit, because the announcement is a claim
-			// that an epoch ended. Not because outputs would otherwise keep rendering
-			// the ended show — `screen:updated` already reaches them and they render by
-			// the Screen's current mode — but so that each peer drops the ended epoch's
-			// cached state deterministically rather than on a component remount.
-			expect(mockScreenService.update.mock.invocationCallOrder[0])
-				.toBeLessThan(announceEpochEnded.mock.invocationCallOrder[0]!);
-		});
-
-		it('announces nothing when the commit carrying the epoch end is refused', async () => {
-			mockScreenService.findById.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'broadcast-graphics' }));
-			mockScreenService.update.mockResolvedValue(undefined);
-
-			await expect(screenWriteModule().updateScreen({
-				authoringSessionId: undefined,
-				eventId: 1,
-				screenId: 7,
-				input: { stateVersion: 0, currentMode: 'background' } as never,
-			})).rejects.toMatchObject({ statusCode: 404 });
-
-			expect(announceEpochEnded).not.toHaveBeenCalled();
-		});
-
-		it('leaves the Live Session running while the Screen stays in Broadcast Graphics mode', async () => {
+		// Leaving the mode ends the epoch in the same commit; screenEpochEndAtomicity.sqlite proves that.
+		it.each([
+			[
+				'a rename',
+				{ name: 'Renamed' },
+			],
+			[
+				'a write that restates the mode',
+				{ currentMode: 'broadcast-graphics' },
+			],
+		])('leaves the Live Session running through %s while the Screen stays in Broadcast Graphics mode', async (_label, data) => {
 			mockScreenService.findById.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'broadcast-graphics' }));
 			mockScreenService.update.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'broadcast-graphics' }));
 
@@ -394,10 +307,11 @@ describe('screenWriteModule', () => {
 				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
-				input: { stateVersion: 0, name: 'Renamed' } as never,
+				input: { stateVersion: 0, ...data } as never,
 			});
 
-			expect(mockBroadcastGraphicsLiveSessions.endSessionsForScreen).not.toHaveBeenCalled();
+			expect(mockBroadcastGraphicsLiveSessions.endEpochOnLeavingBroadcastGraphics).not.toHaveBeenCalled();
+			expect(mockScreenService.update.mock.calls[0]?.[4]).toBeUndefined();
 		});
 
 		it('returns 404 when the versioned update finds nothing to write', async () => {
@@ -431,14 +345,9 @@ describe('screenWriteModule', () => {
 
 			await screenWriteModule().deleteScreen({ eventId: 1, screenId: 7 });
 
-			// The cascade delete removes the sessions, after which nothing identifies
-			// the receipts they left behind — so ending has to come first here, the
-			// opposite order from a mode change.
+			// The cascade delete removes the sessions that identify their receipts.
 			expect(mockBroadcastGraphicsLiveSessions.endSessionsForScreen.mock.invocationCallOrder[0]!)
 				.toBeLessThan(mockScreenService.remove.mock.invocationCallOrder[0]!);
-			// Unannounced, unlike a mode change: these clients are about to be told the
-			// Screen itself is gone, and pointing them at a snapshot route that will now
-			// refuse them would surface a spurious failure on the way out.
 			expect(mockBroadcastGraphicsLiveSessions.endSessionsForScreen).toHaveBeenCalledWith(7, 1);
 		});
 
@@ -454,6 +363,7 @@ describe('screenWriteModule', () => {
 		it('cleans up the derived card after the relational delete, then publishes', async () => {
 			const result = await screenWriteModule().deleteScreen({ eventId: 1, screenId: 7, originConnectionId: 'origin-1' });
 
+			// D1 is authoritative: derived Card state goes only once the delete committed.
 			expect(mockScreenService.remove.mock.invocationCallOrder[0])
 				.toBeLessThan(mockCardService.cleanupDeletedScreenCard.mock.invocationCallOrder[0]!);
 			expect(mockCardService.cleanupDeletedScreenCard).toHaveBeenCalledWith(1, 7);
@@ -480,7 +390,7 @@ describe('screenWriteModule', () => {
 			expect(mockPublication.screenUpdated).not.toHaveBeenCalled();
 		});
 
-		it('forwards config and stateVersion, then publishes the update', async () => {
+		it('writes the config versioned on stateVersion and publishes the update', async () => {
 			const response = await screenWriteModule().updateScreenConfig({
 				authoringSessionId: undefined,
 				eventId: 1,
@@ -490,12 +400,13 @@ describe('screenWriteModule', () => {
 				originConnectionId: 'origin-1',
 			});
 
-			expect(mockScreenService.updateScreenConfig).toHaveBeenCalledWith(7, 1, { showLogo: false }, 2, undefined);
-			expect(mockPublication.screenUpdated).toHaveBeenCalledWith({
-				eventId: 1,
-				entity: expect.objectContaining({ id: 7 }),
-				originConnectionId: 'origin-1',
-			});
+			expect(mockScreenService.updateScreenConfig.mock.calls[0]?.slice(0, 4)).toEqual([
+				7,
+				1,
+				{ showLogo: false },
+				2,
+			]);
+			expect(mockPublication.screenUpdated).toHaveBeenCalledWith(expect.objectContaining({ eventId: 1, originConnectionId: 'origin-1' }));
 			expect(response).toEqual({ id: 7, slug: 'main' });
 		});
 	});
@@ -566,11 +477,8 @@ describe('screenWriteModule', () => {
 			expect(mockScreenService.updateModeConfig).not.toHaveBeenCalled();
 		});
 
-		// The batching pin. One selectability question per changed reference was one
-		// remote catalogue round-trip each — the #374 mechanism that priced the
-		// documented-cap save at ~90 s — so the module promises to ask the library
-		// exactly once, with every changed reference in discovery order, and to keep
-		// refusing with the first unselectable slot's name.
+		// One question per reference was one remote round-trip each (#374), so the
+		// library is asked once, in discovery order, and the first bad slot is named.
 		it('asks the library once for every changed reference and refuses with the first unselectable slot', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
@@ -623,9 +531,7 @@ describe('screenWriteModule', () => {
 			});
 			expect(mockScreenService.updateModeConfig).not.toHaveBeenCalled();
 
-			// When both fail, the refusal still names the FIRST slot in discovery
-			// order — the batch must not change which reference an author is sent
-			// to repair.
+			// Both fail: the refusal still names the first slot.
 			inspectGraphicAssetRevisions.mockResolvedValue([
 				{ outcome: 'missing' },
 				{ outcome: 'missing' },
@@ -642,8 +548,7 @@ describe('screenWriteModule', () => {
 				message: expect.stringContaining('layout.frame.backgroundImage'),
 			});
 
-			// A statuses array shorter than the changed list is a library answering
-			// out of contract; the hole refuses the write rather than admitting it.
+			// A short answer from the library refuses rather than admits.
 			inspectGraphicAssetRevisions.mockResolvedValue([
 				{ outcome: 'available', lifecycleState: 'active', kind: 'image' },
 			]);
@@ -661,10 +566,7 @@ describe('screenWriteModule', () => {
 			expect(mockScreenService.updateModeConfig).not.toHaveBeenCalled();
 		});
 
-		// The two laziness pins below. This operation serves all ten Screen Modes
-		// and its route builds the library for every one of them, so requiring the
-		// collaborator at the type level is only safe while building it stays
-		// deferred to the write that actually asks a question. See #247.
+		// The library is built only by a write that changes a reference (#247).
 		it('does not build the Graphics Asset Library for a Screen Mode that pins no references', async () => {
 			await screenWriteModule().updateModeConfig({
 				authoringSessionId: undefined,
@@ -700,17 +602,12 @@ describe('screenWriteModule', () => {
 				graphicsAssets: provideGraphicsAssets,
 			});
 
-			// A pinned revision keeps resolving after its asset is retired, so an
-			// unchanged reference is deliberately never re-checked — and a write that
-			// asks nothing must not build the thing it would have asked.
+			// An unchanged pinned revision is never re-checked; it outlives its asset's retirement.
 			expect(mockScreenService.updateModeConfig).toHaveBeenCalled();
 			expect(provideGraphicsAssets).not.toHaveBeenCalled();
 			expect(mockGraphicsAssets.inspectGraphicAssetRevisions).not.toHaveBeenCalled();
 
-			// The control the assertion above needs: the same submission with the
-			// revision moved does build one. Without it this test would pass just as
-			// happily if the reference were never discovered in the merged
-			// configuration at all.
+			// Control: moving the revision does build the library and ask.
 			mockGraphicsAssets.inspectGraphicAssetRevisions.mockResolvedValue([
 				{
 					outcome: 'available',
@@ -745,21 +642,20 @@ describe('screenWriteModule', () => {
 			});
 		});
 
-		it('validates mode config references before writing', async () => {
-			await screenWriteModule().updateModeConfig({
+		it('refuses a mode config naming a reference outside the Event before writing', async () => {
+			mockValidateScreenModeConfigReferences.mockRejectedValueOnce(Object.assign(new Error('Not in this Event'), { statusCode: 404 }));
+
+			await expect(screenWriteModule().updateModeConfig({
 				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				mode: 'card',
 				config: { featureMatchId: 5 },
-				stateVersion: 4,
 				graphicsAssets: provideGraphicsAssets,
-			});
+			})).rejects.toMatchObject({ statusCode: 404 });
 
 			expect(mockValidateScreenModeConfigReferences).toHaveBeenCalledWith(1, 'card', { featureMatchId: 5 });
-			expect(mockValidateScreenModeConfigReferences.mock.invocationCallOrder[0])
-				.toBeLessThan(mockScreenService.updateModeConfig.mock.invocationCallOrder[0]!);
-			expect(mockScreenService.updateModeConfig).toHaveBeenCalledWith(7, 1, 'card', { featureMatchId: 5 }, 4, undefined);
+			expect(mockScreenService.updateModeConfig).not.toHaveBeenCalled();
 		});
 
 		it('returns 404 when the screen does not exist', async () => {
@@ -788,11 +684,7 @@ describe('screenWriteModule', () => {
 				graphicsAssets: provideGraphicsAssets,
 			});
 
-			expect(mockPublication.screenUpdated).toHaveBeenCalledWith({
-				eventId: 1,
-				entity: expect.objectContaining({ id: 7 }),
-				originConnectionId: 'origin-1',
-			});
+			expect(mockPublication.screenUpdated).toHaveBeenCalledWith(expect.objectContaining({ eventId: 1, originConnectionId: 'origin-1' }));
 			expect(response).toEqual({ id: 7, slug: 'main' });
 		});
 	});

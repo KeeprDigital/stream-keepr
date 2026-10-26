@@ -10,14 +10,8 @@ import {
 	resolveGraphicBindingField,
 } from '~~/shared/modules/graphics';
 
-/**
- * The Graphic Input Binding field catalog: what an operator may bind to, stated
- * once, curated, and typed.
- *
- * Every assertion here is about the catalog as an operator meets it — which fields
- * a source kind offers on this Event's game, what type each may bind to, and what
- * one resolves to from Event Data. Nothing asserts how a field is stored.
- */
+// The binding field catalog as an operator meets it: fields per source kind and game,
+// their types, and what each resolves to.
 
 const MTG_EVENT: NonNullable<GraphicBindingDataSet['event']> = {
 	name: 'Regional Championship',
@@ -272,22 +266,8 @@ describe('the fields one Graphic Input may bind to', () => {
 	});
 });
 
-/**
- * The empty set every resolution starts from, pinned as fresh per call.
- *
- * `server/services/graphicBindingData.ts` builds one request's set by assigning
- * straight into the sub-maps this factory returns — `Object.assign(data.players, …)`
- * and six siblings — so a call that handed back a shared object would leave one
- * Event's entities in the next Event's set. The bleed is silent and it reaches air:
- * a selection naming Player 7 in Event B finds `players.findById(7, eventB)`
- * undefined, assigns nothing over the id, and resolves to the Player Event A left
- * there (#366).
- *
- * Nothing else pins it. Measured on #361's row A3, replacing this factory's body
- * with a shared module-level object survived all 24 tests of the bindings
- * integration suite. The shape follows the `carriedForwardBroadcastGraphicsLiveState`
- * aliasing pin in `broadcastGraphicsRecovery.test.ts` (#348).
- */
+// Each resolution must start from fresh sub-maps: the server assigns into them, so a shared
+// set would leak one Event's entities into the next (#366).
 describe('the empty Graphic Binding Data Set a resolution starts from', () => {
 	it('gives every call its own set, and every sub-map its own object to be assigned into', () => {
 		const first = createEmptyGraphicBindingDataSet();
@@ -296,11 +276,7 @@ describe('the empty Graphic Binding Data Set a resolution starts from', () => {
 		// A memoized or hoisted-to-a-constant factory lands here.
 		expect(first).not.toBe(second);
 
-		// Sub-map identity is the stronger property and needs its own assertions: an
-		// edit that shared only the empty sub-maps would keep the two sets distinct
-		// and still bleed, because every write the consumer makes goes through them.
-		// Derived from the set itself so a sub-map added later is covered without
-		// this pin being revisited; the count guards against a loop over nothing.
+		// Sub-map identity is checked per map, derived from the set so new maps are covered.
 		type SubMap = Exclude<keyof GraphicBindingDataSet, 'event'>;
 		const subMaps = Object.keys(first).filter((key): key is SubMap => key !== 'event');
 		expect(subMaps.length, 'no sub-maps to check — the Data Set shape changed').toBeGreaterThan(0);

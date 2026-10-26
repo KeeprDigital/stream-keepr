@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent, reactive } from 'vue';
+import PlayersTable from '~/components/Metagame/PlayersTable.vue';
 
 const mockPlayerStore = reactive({
 	players: [] as Player[],
@@ -79,8 +80,6 @@ function makeEntry(overrides: Partial<ArchetypePlayerEntry> = {}): ArchetypePlay
 }
 
 async function mountComponent(players: ArchetypePlayerEntry[]) {
-	const { default: PlayersTable } = await import('~/components/Metagame/PlayersTable.vue');
-
 	return mount(PlayersTable, {
 		props: { players },
 		global: {

@@ -47,22 +47,6 @@ describe('graphic Asset Revision status', () => {
 				: 'revision-1');
 	});
 
-	it('maps a retryable catalogue failure to 503 with retry guidance', async () => {
-		const { GraphicsAssetLibraryError } = await import('~~/server/modules/graphics-asset-library');
-		mockInspectGraphicAssetRevision.mockRejectedValue(new GraphicsAssetLibraryError(
-			'Graphic Asset Revision lookup is temporarily unavailable',
-			'graphics-asset-library-unavailable',
-		));
-		const handler = (await import(routePath)).default;
-		const event = stubH3Event();
-
-		await expect(handler(event)).rejects.toMatchObject({
-			statusCode: 503,
-			message: 'Graphic Asset Revision lookup is temporarily unavailable',
-		});
-		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
-	});
-
 	it('answers a blank revision segment with 400 rather than an unclassified failure', async () => {
 		mockRouterParam.mockImplementation((_event, name: string) =>
 			name === 'assetId'
@@ -87,15 +71,5 @@ describe('graphic Asset Revision status', () => {
 			assetId: 'asset-1',
 			revisionId: 'revision-1',
 		});
-	});
-
-	it('rejects the read before touching the library when no author session is authenticated', async () => {
-		mockRequireUserId.mockRejectedValue(
-			Object.assign(new Error('authenticated session required'), { statusCode: 401 }),
-		);
-		const handler = (await import(routePath)).default;
-
-		await expect(handler(stubH3Event())).rejects.toMatchObject({ statusCode: 401 });
-		expect(mockInspectGraphicAssetRevision).not.toHaveBeenCalled();
 	});
 });

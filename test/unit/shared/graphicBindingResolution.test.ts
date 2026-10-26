@@ -1,4 +1,4 @@
-import type { GraphicBindingDataSet } from '~~/shared/modules/graphics';
+import type { GraphicBindingDataSet, GraphicBindingMatch } from '~~/shared/modules/graphics';
 import type {
 	GraphicInputBinding,
 	GraphicInputDeclaration,
@@ -6,19 +6,15 @@ import type {
 } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import {
+	createEmptyGraphicBindingDataSet,
 	isOperatorSelectedGraphicSource,
+	resolveGraphicBindingField,
 	resolveGraphicInputBindings,
 	resolveGraphicSourceSelections,
 } from '~~/shared/modules/graphics';
 
-/**
- * Graphic Source Selections and Graphic Input Bindings resolving against Event Data.
- *
- * Stated as an operator would: they pick one Match and the lower third fills, a
- * derived Player reports what production committed to rather than what the
- * tournament has since become, and anything that cannot resolve resolves to nothing
- * at all rather than to the template's own default.
- */
+// Selections and bindings resolving against Event Data: a derived Player reports what
+// production committed to, and anything unresolvable resolves to nothing, not the default.
 
 const NAME_INPUT: GraphicInputDeclaration = {
 	type: 'text',
@@ -365,5 +361,35 @@ describe('graphic Input Binding resolution', () => {
 		// Live scalar from the session's current state, identity from its source
 		// snapshot — including the table number, which the snapshot overrides.
 		expect(bound).toEqual({ life: 17, table: 'Table 9', name: 'Ava R.' });
+	});
+});
+
+describe('the Match result binding', () => {
+	const result = (match: Partial<GraphicBindingMatch>) =>
+		resolveGraphicBindingField('match', 'match.result', { roundId: 1, ...match }, createEmptyGraphicBindingDataSet());
+
+	it('reads a reported Match\'s Game Score from player 1\'s side', () => {
+		expect(result({
+			hasResult: true,
+			player1GameWins: 2,
+			player2GameWins: 0,
+			gameDraws: 0,
+		})).toBe('2-0');
+		expect(result({
+			hasResult: true,
+			player1GameWins: 1,
+			player2GameWins: 1,
+			gameDraws: 1,
+		})).toBe('1-1-1');
+	});
+
+	it('resolves nothing for an unreported Match or a bye', () => {
+		expect(result({ hasResult: false, player1GameWins: null, player2GameWins: null })).toBeUndefined();
+		expect(result({
+			hasResult: true,
+			isBye: true,
+			player1GameWins: null,
+			player2GameWins: null,
+		})).toBeUndefined();
 	});
 });

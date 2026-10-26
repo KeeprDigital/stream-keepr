@@ -1,34 +1,14 @@
 /**
- * Fails the Nuxt test that renders an icon the test client bundle lacks, with
- * the icon's name, instead of letting `@nuxt/icon` log it (#779).
+ * Fails the Nuxt test that renders an icon the test client bundle lacks, naming it,
+ * instead of letting `@nuxt/icon` log it late (#779). A late `[Icon] failed to load
+ * icon` warning is hidden by `silent: 'passed-only'` and, under load, surfaces as a
+ * misattributed `EnvironmentTeardownError` (#766, vitest-dev/vitest#11153).
  *
- * In tests `@nuxt/icon` has `provider: 'none'` and a scanned client bundle
- * (`nuxt.config.ts`). For a name outside the bundle its `loadIcon` falls through
- * to Iconify's `loadIcon`, which rejects a tick or more later, and the catch
- * logs `[Icon] failed to load icon` via `console.warn`. That line is hidden by
- * `silent: 'passed-only'`, may land in a later test, and under load lands at
- * worker teardown as `EnvironmentTeardownError: Closing rpc while
- * "onUserConsoleLog" was pending`, blamed on whatever file was running
- * (#766, vitest-dev/vitest#11153).
- *
- * The guard sits at that fall-through. `@nuxt/icon` calls Iconify's `loadIcon`
- * only after its own lookup of the bundle missed, and synchronously while the
- * icon renders, so the stand-in below records the name in the test that
- * rendered it and resolves without an icon: nothing rejects, nothing logs.
- * The `afterEach` here then fails that test, naming every unbundled icon; an
- * `afterAll` catches one rendered outside any test. Watching `console.warn`
- * instead would see the failure only after the rejection settles, which is
- * the late, misattributed signal this replaces.
- *
- * Its reach is `@nuxt/icon`'s default css mode, the only one the app uses. An
- * svg-mode icon (`mode="svg"`) loads through Iconify's own component, which
- * never calls the exported `loadIcon`: unbundled, it renders blank and logs
- * nothing, so it escapes this guard but cannot cause the teardown error.
- * Attribution is to the test running when the icon first renders; a re-render
- * that lands after its test ended is pinned on the next one.
- *
- * `vitest.nuxt.config.ts` runs this before the test-utils entry, so the mock
- * is in place before the app first imports `@nuxt/icon`.
+ * `@nuxt/icon` falls through to Iconify's `loadIcon` only when its bundle lookup
+ * misses, synchronously while rendering, so the stand-in below records the name in
+ * the test that rendered it and resolves without an icon. css mode only: an
+ * unbundled `mode="svg"` icon renders blank and logs nothing. `vitest.nuxt.config.ts`
+ * runs this before the test-utils entry, so the mock precedes `@nuxt/icon`.
  */
 
 import { afterAll, afterEach, expect, vi } from 'vitest';

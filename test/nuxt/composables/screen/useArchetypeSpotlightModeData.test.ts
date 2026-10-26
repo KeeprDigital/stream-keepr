@@ -3,7 +3,7 @@ import type { ScreenOutputArchetypePilot, ScreenOutputArchetypeSpotlightResponse
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 
 const defaultConfig = {
 	archetypeId: undefined as number | undefined,
@@ -35,31 +35,11 @@ const mockEventStore = reactive({ displayEvent: null as null | { displayRecordSe
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
 }));
-type Handler = (message: Record<string, unknown>) => void;
-const channelHandlers = new Map<string, Set<Handler>>();
-const continuity = createContinuitySignal();
-const mockRealtime = reactive({
-	connectionState: 'connected',
-	tokenError: null as Error | null,
-	onChannel: (channel: string, type: string, handler: Handler) => {
-		const key = `${channel}|${type}`;
-		if (!channelHandlers.has(key))
-			channelHandlers.set(key, new Set());
-		channelHandlers.get(key)!.add(handler);
-		return () => channelHandlers.get(key)!.delete(handler);
-	},
-	onContinuityLost: continuity.onContinuityLost,
-	onceAttached: vi.fn(() => () => {}),
-});
-
-/** An Event message, as the Event channel delivers it. */
-function deliver(type: string, payload: Record<string, unknown>) {
-	for (const handler of channelHandlers.get(`event:1|${type}`) ?? [])
-		handler({ eventId: 1, ...payload });
-}
+const realtime = createFakeEventChannel();
+const { deliver } = realtime;
 
 mockNuxtImport('$fetch', () => mockFetch);
-mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
+mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useScreenContext', () => () => ({
@@ -113,8 +93,7 @@ describe('useArchetypeSpotlightModeData', () => {
 		mockEventId.value = 1;
 		mockInteractive.value = false;
 		mockEventStore.displayEvent = null;
-		mockRealtime.connectionState = 'connected';
-		mockRealtime.tokenError = null;
+		realtime.reset();
 		mockFetch.mockReset();
 		mockScreenStore.updateModeConfig.mockReset();
 		vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -212,20 +191,10 @@ describe('useArchetypeSpotlightModeData', () => {
 		});
 	});
 
-	describe('formatRecord', () => {
-		it('hides zero draws by default', () => {
-			expect(makeSpotlight().formatRecord(pilot(1, 'A', 1, { wins: 5, losses: 2, draws: 0 }))).toBe('5-2');
-		});
+	it('formats a pilot\'s record with the Event\'s record settings', () => {
+		mockEventStore.displayEvent = { displayRecordSeparator: ' | ', displayHideZeroDraws: false };
 
-		it('follows the Event\'s record formatting', () => {
-			mockEventStore.displayEvent = { displayRecordSeparator: ' | ', displayHideZeroDraws: false };
-
-			expect(makeSpotlight().formatRecord(pilot(1, 'A', 1, { wins: 5, losses: 2, draws: 0 }))).toBe('5 | 2 | 0');
-		});
-
-		it('shows a draw count when there is one', () => {
-			expect(makeSpotlight().formatRecord(pilot(1, 'A', 1, { wins: 5, losses: 1, draws: 1 }))).toBe('5-1-1');
-		});
+		expect(makeSpotlight().formatRecord(pilot(1, 'A', 1, { wins: 5, losses: 2, draws: 0 }))).toBe('5 | 2 | 0');
 	});
 
 	it('pages pilots by the configured page size and current page', async () => {
@@ -341,11 +310,11 @@ describe('useArchetypeSpotlightModeData', () => {
 		it('shows a change missed while disconnected once its channel is attached again', async () => {
 			const { spotlight } = await showingSpotlight();
 
-			mockRealtime.connectionState = 'disconnected';
+			realtime.transport.connectionState = 'disconnected';
 			await nextTick();
 			mockFetch.mockResolvedValue(answer({ metaShare: 30 }));
-			mockRealtime.connectionState = 'connected';
-			continuity.reattach('event:1');
+			realtime.transport.connectionState = 'connected';
+			realtime.reattach();
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);

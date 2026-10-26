@@ -38,28 +38,12 @@ describe('useModeConfigUpdate', () => {
 		vi.useRealTimers();
 	});
 
-	it('returns config, saving, updateConfig, resetConfig', () => {
-		const result = useModeConfigUpdate(1, 1, 'feature-match');
-		expect(result).toHaveProperty('config');
-		expect(result).toHaveProperty('saving');
-		expect(result).toHaveProperty('updateConfig');
-		expect(result).toHaveProperty('resetConfig');
-	});
-
-	it('merges store mode config with defaults', () => {
-		const { config } = useModeConfigUpdate(1, 1, 'feature-match');
+	it('shows the stored config, then an edit at once, and saves the edit after the debounce', async () => {
+		const { config, updateConfig } = useModeConfigUpdate(1, 1, 'feature-match', { debounceMs: 100 });
 		expect(config.value.featureMatchId).toBe(5);
-	});
 
-	it('applies local overrides immediately on updateConfig', () => {
-		const { config, updateConfig } = useModeConfigUpdate(1, 1, 'feature-match');
 		updateConfig({ featureMatchId: 10 } as any);
 		expect(config.value.featureMatchId).toBe(10);
-	});
-
-	it('saves to store after debounce', async () => {
-		const { updateConfig } = useModeConfigUpdate(1, 1, 'feature-match', { debounceMs: 100 });
-		updateConfig({ featureMatchId: 10 } as any);
 
 		await vi.advanceTimersByTimeAsync(200);
 		expect(mockUpdateModeConfig).toHaveBeenCalledWith(1, 1, 'feature-match', { featureMatchId: 10 });

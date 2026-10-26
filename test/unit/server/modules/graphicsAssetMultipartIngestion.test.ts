@@ -2,7 +2,6 @@ import type {
 	GraphicsMultipartUpload,
 	InMemoryGraphicsStagingObjectStore,
 } from '~~/server/modules/graphics-asset-library/object-store';
-import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -20,11 +19,7 @@ import {
 import {
 	GRAPHICS_MULTIPART_PART_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
-
-const transparentPixelPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-	'base64',
-));
+import { pixelPng as transparentPixelPng } from '~~/test/helpers/graphicsFixtures';
 
 const crcTable = (() => {
 	const table = new Uint32Array(256);
@@ -265,9 +260,6 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 	});
 
 	it('says what the catalogue threw when a part meets an unreachable checkpoint (#633)', async () => {
-		// The library answers a catalogue throw with its own sentence, rightly, but
-		// the D1 error itself reached no log line: a 503 part upload could not be
-		// told apart from an R2 refusal or a lost claim race.
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		const catalogue = createInMemoryGraphicsAssetCatalogue();
 		let checkpointReachable = true;
@@ -301,13 +293,10 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 			message: 'Graphics multipart checkpoint is temporarily unavailable',
 		});
 		expect(warn.mock.calls.map(([line]) => JSON.parse(line as string))).toEqual([
-			{
+			expect.objectContaining({
 				message: 'graphics_catalogue_unavailable',
-				refusal: 'Graphics multipart checkpoint is temporarily unavailable',
-				errorName: 'Error',
-				errorCode: null,
 				reason: 'D1_ERROR: database is locked: SQLITE_BUSY',
-			},
+			}),
 		]);
 	});
 

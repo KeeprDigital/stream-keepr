@@ -6,7 +6,9 @@
  *   mockNuxtImport('useRealtime', () => () => createMockRealtime())
  */
 
+import type { RealtimeConnectionState } from '~/types/realtime';
 import { vi } from 'vitest';
+import { reactive } from 'vue';
 
 export interface MockRealtime {
 	// State
@@ -120,6 +122,56 @@ export function createAttachSignal() {
 		/** The channel detached: the next registration waits on its next attach. */
 		detach(channel: string) {
 			attached.delete(channel);
+		},
+	};
+}
+
+export type FakeChannelHandler = (message: Record<string, unknown>) => void;
+
+/**
+ * A stand-in transport whose Event channels the test drives: `deliver` a
+ * message, `attach`/`reattach` a channel, flip `transport.connectionState`.
+ * Pass `transport` where a composable takes one, or return it from a mocked
+ * `useRealtime`/`tryUseRealtime`. Event id defaults to 1 throughout.
+ */
+export function createFakeEventChannel() {
+	const handlers = new Map<string, Set<FakeChannelHandler>>();
+	const continuity = createContinuitySignal();
+	const attachment = createAttachSignal();
+	const transport = reactive({
+		connectionState: 'connected' as RealtimeConnectionState['connectionState'],
+		tokenError: null as Error | null,
+		onChannel: vi.fn((channel: string, type: string, handler: FakeChannelHandler) => {
+			const key = `${channel}|${type}`;
+			if (!handlers.has(key))
+				handlers.set(key, new Set());
+			handlers.get(key)!.add(handler);
+			return () => handlers.get(key)!.delete(handler);
+		}),
+		onContinuityLost: continuity.onContinuityLost,
+		onceAttached: attachment.onceAttached,
+	});
+	return {
+		transport,
+		/** An Event message of `type`, as the Event channel delivers it (`eventId` merged in). */
+		deliver(type: string, payload: Record<string, unknown> = {}, eventId = 1) {
+			for (const handler of [
+				...handlers.get(`event:${eventId}|${type}`) ?? [],
+			])
+				handler({ eventId, ...payload });
+		},
+		/** The Event channel attached: the first time, or again after a detach. */
+		attach: (eventId = 1) => attachment.attach(`event:${eventId}`),
+		/** The Event channel attached again having lost continuity. */
+		reattach: (eventId = 1) => continuity.reattach(`event:${eventId}`),
+		/** How many channel handlers are registered now, across every channel and type. */
+		listeners: () => [
+			...handlers.values(),
+		].reduce((total, set) => total + set.size, 0),
+		/** Back to connected with no token error; registrations are kept. */
+		reset() {
+			transport.connectionState = 'connected';
+			transport.tokenError = null;
 		},
 	};
 }

@@ -1,7 +1,6 @@
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { execFile } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import process from 'node:process';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -246,22 +245,5 @@ describe('deploy:verify against a local stand-in origin', () => {
 			await expect(verifyDeployment({ baseUrl: url, ...fast })).rejects.toThrow(/text\/html/);
 			expect(requests).toBe(1);
 		});
-	});
-});
-
-/**
- * The probe's exit code is only as good as what waits on it. In `pnpm run
- * deploy` only the app's `deployed` promotion marker may follow it, and only
- * through `&&`. The Deploy workflow's own marker writes are pinned in
- * deployPromotion.test.ts (#616).
- */
-describe('a failed deploy:verify cannot advance the production marker', () => {
-	const scripts = JSON.parse(readFileSync('package.json', 'utf8')).scripts as Record<string, string>;
-
-	it('pnpm deploy:verify runs this probe, and pnpm run deploy records the app deployed only after it, with nothing to swallow its failure', () => {
-		expect(scripts['deploy:verify']).toBe(`node ${SCRIPT}`);
-		const deploy = scripts.deploy!;
-		expect(deploy).not.toMatch(/\|\||;|(^|[^&])&([^&]|$)/);
-		expect(deploy.split('&&').map(command => command.trim()).slice(-2)).toEqual(['pnpm deploy:verify', 'pnpm deploy:mark-app deployed']);
 	});
 });

@@ -5,19 +5,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-/**
- * Cross-Event scoping proofs for the Screen and live-state services (#468):
- * Screens, the Screen Card, Broadcast Graphics Live Sessions, Feature Match
- * Slots and Sessions, Graphic Binding Data, and the player → match reverse
- * sync.
- *
- * Beyond the usual wrong-Event point reads, two probes plant genuinely foreign
- * references that only a scoped read keeps quiet: an Event 1 Slot whose
- * `activeSessionId` and `player1Id` both point into Event 2 (nothing in the
- * schema forbids it), and an Event 2 Slot pairing an Event 1 player — the
- * shape that would put another show's data on air if any of these reads lost
- * its Event predicate.
- */
+// Wrong-Event reads find nothing, and planted cross-Event references (a Slot pointing into
+// another Event) stay off air (#468).
 
 vi.stubGlobal('createError', (input: { statusCode?: number; message?: string }) =>
 	Object.assign(new Error(input.message ?? 'error'), input));

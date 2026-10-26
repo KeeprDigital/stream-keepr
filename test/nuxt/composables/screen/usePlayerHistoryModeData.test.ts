@@ -3,7 +3,7 @@ import type { PlayerMatchHistoryEntry } from '~/composables/screen/usePlayerHist
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 
 const defaultConfig = {
 	playerId: null as number | null,
@@ -31,31 +31,11 @@ const mockScreenStore = {
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
 }));
-type Handler = (message: Record<string, unknown>) => void;
-const channelHandlers = new Map<string, Set<Handler>>();
-const continuity = createContinuitySignal();
-const mockRealtime = reactive({
-	connectionState: 'connected',
-	tokenError: null as Error | null,
-	onChannel: (channel: string, type: string, handler: Handler) => {
-		const key = `${channel}|${type}`;
-		if (!channelHandlers.has(key))
-			channelHandlers.set(key, new Set());
-		channelHandlers.get(key)!.add(handler);
-		return () => channelHandlers.get(key)!.delete(handler);
-	},
-	onContinuityLost: continuity.onContinuityLost,
-	onceAttached: vi.fn(() => () => {}),
-});
-
-/** An Event message, as the Event channel delivers it. */
-function deliver(type: string, payload: Record<string, unknown>) {
-	for (const handler of channelHandlers.get(`event:1|${type}`) ?? [])
-		handler({ eventId: 1, ...payload });
-}
+const realtime = createFakeEventChannel();
+const { deliver } = realtime;
 
 mockNuxtImport('$fetch', () => mockFetch);
-mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
+mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
 mockNuxtImport('useScreenContext', () => () => ({
 	screen: ref({ id: 1, name: 'Test' }),
@@ -81,7 +61,6 @@ function historyEntry(overrides: Partial<PlayerMatchHistoryEntry> = {}): PlayerM
 		opponentGameWins: 1,
 		gameDraws: 0,
 		hasResult: true,
-		resultString: '2-1',
 		...overrides,
 	};
 }
@@ -111,8 +90,7 @@ describe('usePlayerHistoryModeData', () => {
 		});
 		mockEventId.value = 1;
 		mockInteractive.value = false;
-		mockRealtime.connectionState = 'connected';
-		mockRealtime.tokenError = null;
+		realtime.reset();
 		mockFetch.mockReset();
 		mockScreenStore.updateModeConfig.mockReset();
 		vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -285,16 +263,6 @@ describe('usePlayerHistoryModeData', () => {
 				}),
 				'DRAW 1-1-1',
 			],
-			[
-				'missing game counts',
-				historyEntry({ playerGameWins: null, opponentGameWins: null, resultString: '2-1' }),
-				'2-1',
-			],
-			[
-				'no result string at all',
-				historyEntry({ playerGameWins: null, opponentGameWins: null, resultString: null }),
-				'Result',
-			],
 		])('formats a %s', (_name, row, expected) => {
 			const { formatOutcome } = makePlayerHistoryModeData();
 
@@ -390,7 +358,6 @@ describe('usePlayerHistoryModeData', () => {
 			hasResult: false,
 			playerGameWins: null,
 			opponentGameWins: null,
-			resultString: null,
 		});
 		const recorded = historyEntry({
 			outcome: 'win',
@@ -539,14 +506,14 @@ describe('usePlayerHistoryModeData', () => {
 		it('shows a result missed while disconnected once its channel is attached again', async () => {
 			const { pageData, formatOutcome } = await showingPendingHistory();
 
-			mockRealtime.connectionState = 'disconnected';
+			realtime.transport.connectionState = 'disconnected';
 			await nextTick();
 			mockFetch.mockResolvedValue({
 				player: mockPlayer,
 				history: [recorded],
 			});
-			mockRealtime.connectionState = 'connected';
-			continuity.reattach('event:1');
+			realtime.transport.connectionState = 'connected';
+			realtime.reattach();
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);

@@ -11,7 +11,6 @@ const props = defineProps<{
 	featureMatchAssignment?: FeatureMatchAssignment | null;
 	featureMatchMenuItems: DropdownMenuItem[][];
 	promoting: boolean;
-	resultsEditable: boolean;
 	saveAssignmentNote?: (assignmentId: number, note: string) => Promise<unknown>;
 	assignmentNoteRemoteChanged?: boolean;
 }>();
@@ -19,7 +18,6 @@ const props = defineProps<{
 const emit = defineEmits<{
 	promote: [featureMatchId: number];
 	viewDeckList: [player: Player];
-	editResult: [match: Match];
 }>();
 
 const { getActiveDeckForPlayer } = usePlayerDeckCache();
@@ -132,6 +130,17 @@ const winnerSide = computed<'player1' | 'player2' | null>(() => {
 	return null;
 });
 
+/** Each side's result, exposed on its name as `data-outcome`. */
+function getPlayerOutcome(side: 'player1' | 'player2'): 'win' | 'loss' | 'draw' | undefined {
+	if (!props.match.hasResult)
+		return undefined;
+	if (isDraw.value)
+		return 'draw';
+	return winnerSide.value === side
+		? 'win'
+		: 'loss';
+}
+
 function getPlayerResultClasses(side: 'player1' | 'player2') {
 	if (!props.match.hasResult) {
 		return 'font-medium text-default';
@@ -214,7 +223,12 @@ function getScoreColor(side: 'player1' | 'player2') {
 				</UBadge>
 				<div class="match-player-stack items-end">
 					<div class="flex items-center justify-end gap-2 min-w-0">
-						<span data-testid="player1-name" class="truncate" :class="getPlayerResultClasses('player1')">{{ match.player1Data?.name || 'TBD' }}</span>
+						<span
+							data-testid="player1-name"
+							class="truncate"
+							:class="getPlayerResultClasses('player1')"
+							:data-outcome="getPlayerOutcome('player1')"
+						>{{ match.player1Data?.name || 'TBD' }}</span>
 						<UBadge
 							v-if="match.hasResult"
 							data-testid="player1-score"
@@ -265,7 +279,12 @@ function getScoreColor(side: 'player1' | 'player2') {
 						>
 							{{ player2GameWins }}
 						</UBadge>
-						<span data-testid="player2-name" class="truncate" :class="getPlayerResultClasses('player2')">{{ match.player2Data?.name || 'TBD' }}</span>
+						<span
+							data-testid="player2-name"
+							class="truncate"
+							:class="getPlayerResultClasses('player2')"
+							:data-outcome="getPlayerOutcome('player2')"
+						>{{ match.player2Data?.name || 'TBD' }}</span>
 					</div>
 					<span v-if="formatRecord(player2Record)" class="text-xs font-mono text-muted">{{ formatRecord(player2Record) }}</span>
 					<div v-if="player2Deck.name" class="flex items-center gap-1.5 justify-start min-w-0">
@@ -298,16 +317,6 @@ function getScoreColor(side: 'player1' | 'player2') {
 					<UIcon name="i-lucide-sticky-note" class="size-3.5 shrink-0" />
 					<span class="truncate">{{ assignmentNotePreview }}</span>
 				</div>
-				<UButton
-					v-if="resultsEditable && !isBye"
-					class="match-action-button"
-					size="xs"
-					variant="ghost"
-					color="neutral"
-					@click="emit('editResult', match)"
-				>
-					{{ match.hasResult ? 'Edit Result' : 'Enter Result' }}
-				</UButton>
 				<MatchNotePopover
 					v-if="featureMatchAssignment && assignmentNoteEnabled"
 					:note="assignmentNote"

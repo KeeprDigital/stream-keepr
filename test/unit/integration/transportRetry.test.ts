@@ -5,23 +5,7 @@ import {
 	throughOneTransportFailure,
 } from '~~/test/integration/transportRetry';
 
-/**
- * The integration suite's one retry, and the promise its first version broke.
- *
- * #396 put a deny-by-default boundary in front of `/api/**`, which widened a
- * latent race in `requestBodyLimits.test.ts`: the server answered 413 with the
- * request body still arriving, and the next request to reuse that pooled socket
- * died at the transport. That suite no longer needs it (#633);
- * `graphicStyleSets.test.ts` still uses it (see `transportRetry.ts`).
- *
- * The retry that answers it was first written in two places at once — a thunk
- * wrapper *and* an attempt inside `fetch`/`$fetch` — so a caller that wrapped a
- * replayable body got up to four attempts from two docblocks that each said one.
- * Nothing failed, because nothing checked. These rows are what check.
- *
- * `transportRetry.ts` imports nothing, which is what makes them possible: the rest
- * of the client reaches `@nuxt/test-utils/e2e` and needs a spawned server.
- */
+/** The integration client retries a transport failure exactly once, in exactly one place. */
 
 /** An error shaped the way `fetch` reports a socket failure: the code on `cause`. */
 function transportFailure(code: string) {

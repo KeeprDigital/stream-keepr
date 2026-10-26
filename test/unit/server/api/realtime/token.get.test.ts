@@ -1,20 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 
-/**
- * The realtime token's dual grant (#397, ADR-0010).
- *
- * Until this ticket the route handed **any** caller `clientId: '*'` over every
- * channel of any Event they named — the hole its place on the boundary's allowlist
- * was keeping open, since ADR-0010 exempts it only because a Screen Output has no
- * session to present. Three properties are pinned here, and each is a thing that
- * would be invisible from the response if it were wrong:
- *
- * - **no anonymous issuance** — a request with neither credential never reaches Ably;
- * - **the bearer's grant is narrowed** to its own Screen, and the Event is taken from
- *   the capability rather than from the query, so a bearer cannot name somebody else's;
- * - **the identity is pinned**, where the wildcard let a holder claim any.
- */
+// The realtime token (ADR-0010): never issued anonymously, a bearer's grant narrowed to its own
+// Screen with the Event taken from the capability, and the client identity pinned.
 
 const mockCreateTokenRequest = vi.fn();
 const mockGetAblyClient = vi.fn(() => ({

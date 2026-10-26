@@ -6,16 +6,7 @@ import * as schema from '~~/server/db/schema';
 import { chunkRowsWithinParameterBudget } from '~~/server/utils/db';
 import { createMiniflareD1Harness } from '~~/test/helpers/miniflare-d1';
 
-/**
- * Opening Feature Match Sessions for a set of Slots, on a real D1 (#728).
- *
- * Finding which Sessions a set of Slots owns once bound a parameter per Slot,
- * so it fitted D1's hundred-parameter limit only because an Event holds at most
- * fifty Slots. These call the service directly above a hundred Slots, past
- * that cap, so the lookups stay bounded whatever the cap becomes. The libSQL
- * harness the other service tests use accepts several hundred parameters, so
- * these run against a real D1 binding.
- */
+// Opening Sessions for more than a hundred Slots stays within D1's bound-parameter limit (#728).
 
 const harness: MiniflareD1Harness = await createMiniflareD1Harness();
 const db = drizzle(harness.database, { schema });

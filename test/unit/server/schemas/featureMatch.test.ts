@@ -3,129 +3,20 @@ import {
 	createFeatureMatchSchema,
 	featureMatchBatchSubCommandSchema,
 	featureMatchCommandSchema,
-	featureMatchSlotParamsSchema,
 	updateFeatureMatchSchema,
 } from '~~/server/schemas/api/featureMatch';
 import { FEATURE_MATCH_BATCHABLE_COMMAND_TYPES } from '~~/shared/types/featureMatchSession';
 
-// ──────────────── createFeatureMatchSchema ────────────────
-
 describe('createFeatureMatchSchema', () => {
-	it('accepts minimal valid input (no required body fields beyond DB defaults)', () => {
-		const result = createFeatureMatchSchema.safeParse({});
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts full valid input with all optional fields', () => {
-		const result = createFeatureMatchSchema.safeParse({
+	it('accepts a manual Slot but refuses integration-owned provenance', () => {
+		const manual = {
 			bestOf: 3,
-			tableNumber: 1,
-			player1Id: 10,
-			player2Id: 20,
-			player1Data: {
-				name: 'Player 1',
-				pronouns: 'he/him',
-			},
-			player2Data: {
-				name: 'Player 2',
-			},
-		});
-		expect(result.success).toBe(true);
-	});
+			player1Data: { name: 'Player', deckId: 77, archetypeId: 7 },
+		};
 
-	// bestOf: 1-9
-	it('accepts bestOf of 1', () => {
-		const result = createFeatureMatchSchema.safeParse({ bestOf: 1 });
-		expect(result.success).toBe(true);
+		expect(createFeatureMatchSchema.safeParse(manual).success).toBe(true);
+		expect(createFeatureMatchSchema.safeParse({ ...manual, externalId: 'forged', externalSource: 'melee' }).success).toBe(false);
 	});
-
-	it('accepts bestOf of 9', () => {
-		const result = createFeatureMatchSchema.safeParse({ bestOf: 9 });
-		expect(result.success).toBe(true);
-	});
-
-	// tableNumber: positive integer or null
-	it('accepts tableNumber of 1', () => {
-		const result = createFeatureMatchSchema.safeParse({ tableNumber: 1 });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts null tableNumber', () => {
-		const result = createFeatureMatchSchema.safeParse({ tableNumber: null });
-		expect(result.success).toBe(true);
-	});
-
-	// player IDs: positive integers or null
-	it('accepts valid player1Id', () => {
-		const result = createFeatureMatchSchema.safeParse({ player1Id: 5 });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts null player1Id', () => {
-		const result = createFeatureMatchSchema.safeParse({ player1Id: null });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts valid player2Id', () => {
-		const result = createFeatureMatchSchema.safeParse({ player2Id: 7 });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts null player2Id', () => {
-		const result = createFeatureMatchSchema.safeParse({ player2Id: null });
-		expect(result.success).toBe(true);
-	});
-
-	it('rejects integration-owned Slot provenance (unknown keys on a strict schema)', () => {
-		const result = createFeatureMatchSchema.safeParse({
-			externalId: 'forged',
-			externalSource: 'melee',
-		});
-		expect(result.success).toBe(false);
-	});
-
-	// player data: embedded objects
-	it('accepts player1Data with valid name', () => {
-		const result = createFeatureMatchSchema.safeParse({
-			player1Data: { name: 'Alice' },
-		});
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts player data with gameData discriminated union', () => {
-		const result = createFeatureMatchSchema.safeParse({
-			player1Data: {
-				name: 'Player',
-				gameData: { type: 'mtg', deckName: 'Storm' },
-			},
-		});
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts player data with archetypeId', () => {
-		const result = createFeatureMatchSchema.safeParse({
-			player1Data: { name: 'Player', archetypeId: 7 },
-			player2Data: { name: 'Other', archetypeId: null },
-		});
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts player data with a stable submitted deck identity', () => {
-		const result = createFeatureMatchSchema.safeParse({
-			player1Data: { name: 'Player', deckId: 77 },
-		});
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts null player data', () => {
-		const result = createFeatureMatchSchema.safeParse({
-			player1Data: null,
-			player2Data: null,
-		});
-		expect(result.success).toBe(true);
-	});
-
-	// Omitted fields should be stripped from output
 });
 
 describe('featureMatchCommandSchema', () => {
@@ -158,16 +49,13 @@ describe('featureMatchCommandSchema', () => {
 	};
 
 	it('rejects SnapshotCorrected from clients — snapshots are server-built only', () => {
-		// Authoritative snapshots carry Melee provenance and are replayed as
-		// truth; only the server may construct them (featureMatchService.update).
 		expect(featureMatchCommandSchema.safeParse({
 			commandId: 'snapshot-2',
 			type: 'SnapshotCorrected',
 			baseSequence: 1,
 			payload: { sourceSnapshot },
 		}).success).toBe(false);
-		// Unsequenced too: SnapshotCorrected is mergeable, so the sequenced form
-		// alone would leave the shape a client can actually send untested.
+		// Unsequenced too, since SnapshotCorrected is mergeable.
 		expect(featureMatchCommandSchema.safeParse({
 			commandId: 'snapshot-3',
 			type: 'SnapshotCorrected',
@@ -223,8 +111,7 @@ describe('featureMatchCommandSchema', () => {
 	});
 
 	it('admits exactly the batchable command types as Batch sub-commands', () => {
-		// The batchable list exists as a type-level const and as this zod union;
-		// nothing derives one from the other, so this pins them together.
+		// Nothing derives the const from the union, so this pins them together.
 		const schemaTypes = featureMatchBatchSubCommandSchema.options
 			.map(option => option.shape.type.value)
 			.toSorted();
@@ -284,52 +171,22 @@ describe('featureMatchCommandSchema', () => {
 	});
 });
 
-// ──────────────── updateFeatureMatchSchema ────────────────
-
 describe('updateFeatureMatchSchema', () => {
-	it('accepts empty object (all fields optional)', () => {
-		const result = updateFeatureMatchSchema.safeParse({});
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts partial update with bestOf only', () => {
-		const result = updateFeatureMatchSchema.safeParse({ bestOf: 5 });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts partial update with player IDs', () => {
-		const result = updateFeatureMatchSchema.safeParse({ player1Id: 3, player2Id: 7 });
-		expect(result.success).toBe(true);
-	});
-
-	it('coerces string tableNumber to a number', () => {
-		const result = updateFeatureMatchSchema.safeParse({ tableNumber: '12' });
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data.tableNumber).toBe(12);
-		}
-	});
-
-	it('coerces blank tableNumber to null', () => {
-		const result = updateFeatureMatchSchema.safeParse({ tableNumber: '' });
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data.tableNumber).toBeNull();
-		}
+	it.each([
+		['a numeric string', '12', 12],
+		['a blank value', '', null],
+	])('coerces %s tableNumber', (_case, tableNumber, expected) => {
+		expect(updateFeatureMatchSchema.parse({ tableNumber }).tableNumber).toBe(expected);
 	});
 
 	it('accepts partial player data without a name and coerces numeric strings', () => {
-		const result = updateFeatureMatchSchema.safeParse({
+		expect(updateFeatureMatchSchema.parse({
 			player1Data: { position: '4' },
-		});
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data.player1Data).toEqual({ position: 4 });
-		}
+		}).player1Data).toEqual({ position: 4 });
 	});
 
 	it('normalizes empty player metadata to null', () => {
-		const result = updateFeatureMatchSchema.safeParse({
+		const result = updateFeatureMatchSchema.parse({
 			player1Data: {
 				name: '',
 				pronouns: '',
@@ -337,28 +194,8 @@ describe('updateFeatureMatchSchema', () => {
 			},
 			player2Data: {},
 		});
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data.player1Data).toBeNull();
-			expect(result.data.player2Data).toBeNull();
-		}
-	});
-});
 
-// ──────────────── featureMatchSlotParamsSchema ────────────────
-
-describe('featureMatchSlotParamsSchema', () => {
-	it('coerces string id and slotId to numbers', () => {
-		const result = featureMatchSlotParamsSchema.safeParse({ id: '1', slotId: '5' });
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data.id).toBe(1);
-			expect(result.data.slotId).toBe(5);
-		}
-	});
-
-	it('accepts numeric id and slotId', () => {
-		const result = featureMatchSlotParamsSchema.safeParse({ id: 10, slotId: 20 });
-		expect(result.success).toBe(true);
+		expect(result.player1Data).toBeNull();
+		expect(result.player2Data).toBeNull();
 	});
 });

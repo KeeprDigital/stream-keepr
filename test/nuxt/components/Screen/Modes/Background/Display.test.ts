@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
+import Display from '~/components/Screen/Modes/Background/Display.vue';
 
 const config = ref<BackgroundModeConfig>({ layers: [] });
 
@@ -40,9 +41,6 @@ function layer(overrides: Partial<BackgroundLayer> & Pick<BackgroundLayer, 'id' 
 }
 
 async function mountComponent() {
-	const componentPath = '../../../../../../app/components/Screen/Modes/Background/Display.vue';
-	const { default: Display } = await import(componentPath);
-
 	return mount(Display, {
 		global: {
 			stubs: {

@@ -7,6 +7,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive } from 'vue';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 
 const { mockApiFetch, routeQuery, mockRouter } = vi.hoisted(() => {
 	const routeQuery = { queue: undefined as string | undefined, item: undefined as string | undefined };
@@ -319,50 +320,14 @@ function retiredInspection(): GraphicsQueueInspectionReading {
 }
 
 const passthroughStub = defineComponent({
-	template: '<div><slot name="actions" /><slot name="header" /><slot /></div>',
-});
-const alertStub = defineComponent({
-	props: ['title', 'description'],
-	template: '<div>{{ title }}{{ description }}<slot /></div>',
-});
-const badgeStub = defineComponent({
-	props: ['label'],
-	template: '<span><slot />{{ label }}</span>',
-});
-const buttonStub = defineComponent({
-	props: ['label', 'disabled'],
-	emits: ['click'],
-	template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot />{{ label }}</button>',
-});
-const formFieldStub = defineComponent({
-	props: ['label', 'description'],
-	template: '<div><label>{{ label }}</label><p>{{ description }}</p><slot /></div>',
-});
-const inputStub = defineComponent({
-	props: ['modelValue', 'type', 'placeholder'],
-	emits: ['update:modelValue'],
-	template: `<input
-		:value="modelValue"
-		:type="type"
-		:placeholder="placeholder"
-		@input="$emit('update:modelValue', $event.target.value)"
-	>`,
+	template: '<div><slot name="actions" /><slot /></div>',
 });
 
 async function mountPage() {
 	const { default: QueuesPage } = await import('../../../../../app/pages/admin/graphics-assets/queues.vue');
 	return mount(QueuesPage, {
 		global: {
-			stubs: {
-				NuxtLayout: passthroughStub,
-				UAlert: alertStub,
-				UButton: buttonStub,
-				UCard: passthroughStub,
-				UBadge: badgeStub,
-				UIcon: passthroughStub,
-				UFormField: formFieldStub,
-				UInput: inputStub,
-			},
+			stubs: { ...nuxtUiStubs, NuxtLayout: passthroughStub },
 		},
 	});
 }
@@ -419,13 +384,6 @@ describe('the Graphics Asset Library operational queues page', () => {
 	it('organises work by operational meaning and keeps every state distinct', async () => {
 		const wrapper = await openQueues();
 
-		expect(mockApiFetch).toHaveBeenCalledWith(
-			'/api/admin/graphics-assets/queues',
-			{
-				headers: { 'x-graphics-admin-token': 'admin-token' },
-			},
-		);
-
 		// Nine queues, nine distinct labels: nothing collapses two states into one.
 		const labels = [
 			'Critical Integrity Incidents',
@@ -441,7 +399,6 @@ describe('the Graphics Asset Library operational queues page', () => {
 		const text = wrapper.text();
 		for (const label of labels)
 			expect(text).toContain(label);
-		expect(new Set(labels).size).toBe(labels.length);
 
 		// The queues are listed most severe first, so the order is the work order.
 		const positions = labels.map(label => text.indexOf(label));

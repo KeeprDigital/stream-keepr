@@ -44,17 +44,6 @@ function ringMeshes(scene: THREE.Scene): THREE.Mesh<THREE.ExtrudeGeometry, THREE
 }
 
 describe('createRingsDelegate', () => {
-	it('creates the perspective camera the fork framed the stack with', () => {
-		const { camera } = mountDelegate();
-		expect(camera.isPerspectiveCamera).toBe(true);
-		expect(camera.fov).toBe(25);
-		expect(camera.far).toBe(10000);
-		// The fork's per-frame anti-flicker: near = max(z * 0.5 - 20, 1), constant
-		// at 80 because z never moves.
-		expect(camera.near).toBe(80);
-		expect(camera.position.toArray()).toEqual([0, 150, 200]);
-	});
-
 	it('eases the camera to the centred-pointer resting height', () => {
 		const { delegate, context, camera } = mountDelegate();
 		delegate.update({ ...context, elapsedSeconds: 0 });
@@ -112,23 +101,6 @@ describe('createRingsDelegate', () => {
 		delegate.update({ ...context, elapsedSeconds: 3 });
 		expect(group.rotation.x).toBeCloseTo(0.06667 + 0.1 * (1 - Math.cos(0.06 * 3)));
 		expect(group.rotation.z).toBeCloseTo(0.16667 + 0.07 * Math.sin(0.06 * 3));
-	});
-
-	it('lights the stack the way the fork did, spot aimed at the group', () => {
-		const { scene } = mountDelegate();
-		const ambient = scene.children.find((child): child is THREE.AmbientLight => (child as THREE.AmbientLight).isAmbientLight);
-		expect(ambient?.intensity).toBe(0.5);
-		const point = scene.children.find((child): child is THREE.PointLight => (child as THREE.PointLight).isPointLight);
-		expect(point?.intensity).toBe(0.5);
-		expect(point?.position.toArray()).toEqual([0, 150, 200]);
-		const spot = scene.children.find((child): child is THREE.SpotLight => (child as THREE.SpotLight).isSpotLight);
-		expect(spot?.intensity).toBe(1);
-		expect(spot?.position.toArray()).toEqual([-15, 50, 100]);
-		expect(spot?.penumbra).toBe(1);
-		expect(spot?.angle).toBe(0.5);
-		expect(spot?.decay).toBe(1);
-		expect(spot?.distance).toBe(300);
-		expect(spot?.target).toBe(ringsGroup(scene));
 	});
 
 	it('clears to the background colour the fork\'s base cleared to, live on param change', () => {

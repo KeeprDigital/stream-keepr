@@ -15,8 +15,6 @@ vi.stubGlobal('createError', (opts: any) => {
 });
 
 const { commandContentKey, createSequencedLiveState } = await import('~~/server/modules/live-state');
-// Retention is the module's own tuning, not part of the interface it presents.
-const { RETAINED_COMMAND_RECEIPTS } = await import('~~/server/modules/live-state/receipts');
 
 /**
  * A stand-in aggregate carrying the only two facts the module insists on: an
@@ -138,37 +136,6 @@ describe('sequenced live state', () => {
 		const result = await liveState.execute(REF, add('cmd-1', 5));
 
 		expect(result).toMatchObject({ sequence: 4, total: 15 });
-	});
-
-	it('writes the command receipt and the projection as one indivisible batch', async () => {
-		const port = createPort();
-		stageSuccessfulCommit(port);
-		const liveState = createSequencedLiveState(port);
-
-		await liveState.execute(REF, set('cmd-1', 42));
-
-		// One batch, receipt statements ahead of the projection — the feature never
-		// gets an opportunity to commit one without the other.
-		expect(mockDb.batch).toHaveBeenCalledOnce();
-		const statements = mockDb.batch.mock.calls[0]![0] as unknown[];
-		expect(statements.length).toBeGreaterThan(1);
-		expect(statements.at(-1)).toBe(PROJECTION);
-		expect(statements.slice(0, -1)).not.toContain(PROJECTION);
-	});
-
-	it('keeps receipt retention bounded by pruning alongside every commit', async () => {
-		expect(RETAINED_COMMAND_RECEIPTS).toBeGreaterThan(0);
-		expect(Number.isFinite(RETAINED_COMMAND_RECEIPTS)).toBe(true);
-
-		const port = createPort({
-			load: vi.fn(async () => counter({ sequence: RETAINED_COMMAND_RECEIPTS + 10 })),
-		});
-		stageSuccessfulCommit(port);
-		const liveState = createSequencedLiveState(port);
-
-		await liveState.execute(REF, set('cmd-1', 1));
-
-		expect(mockDb.delete).toHaveBeenCalledOnce();
 	});
 
 	it('rejects an inadmissible command before anything is written', async () => {

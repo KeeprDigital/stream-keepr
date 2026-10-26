@@ -11,19 +11,8 @@ import {
 	operatorUnavailableNotice,
 } from '../../../scripts/graphics-acceptance/operator.mjs';
 
-/**
- * How an acceptance run becomes somebody (#396).
- *
- * Every route in `routes.mjs` outside the Screen Output surface sits behind the
- * deny-by-default boundary, so a harness with no session proves nothing — and
- * proves it in the most misleading way available, since a 401 on the first
- * provisioning request reads as an unready installation.
- *
- * The decision is pure so it can be read in every state without an installation
- * in front of it. The state that matters most is the one no test could reach by
- * accident: a **deployed** run must not be able to take a local `.env`
- * secret and send it to a remote host.
- */
+// How an acceptance run becomes an operator behind the deny-by-default boundary
+// (#396). Above all, a deployed run must never send a local `.env` secret to a remote host.
 
 const A_TOKEN = 'a-bootstrap-token';
 const PASSWORD = 'a-generated-password';
@@ -107,18 +96,17 @@ describe('how an acceptance run acquires an operator', () => {
 		expect(plan).toMatchObject({ kind: 'bootstrap', bootstrapToken: A_TOKEN });
 	});
 
-	it('counts a blank as absent, the way every other reader here does', () => {
-		expect(() => planFor({
-			env: { [OPERATOR_EMAIL_ENV]: 'ops@keepr.digital', [OPERATOR_PASSWORD_ENV]: '   ', [BOOTSTRAP_TOKEN_NAME]: '' },
-			newPassword: PASSWORD,
-		})).toThrow(expect.objectContaining({ code: 'harness-operator-unavailable' }));
-	});
-
-	it('refuses half a credential rather than signing in with an empty password', () => {
-		expect(() => planFor({
-			env: { [OPERATOR_EMAIL_ENV]: 'ops@keepr.digital' },
-			newPassword: PASSWORD,
-		}))
+	it.each([
+		[
+			'blank values',
+			{ [OPERATOR_EMAIL_ENV]: 'ops@keepr.digital', [OPERATOR_PASSWORD_ENV]: '   ', [BOOTSTRAP_TOKEN_NAME]: '' },
+		],
+		[
+			'half a credential',
+			{ [OPERATOR_EMAIL_ENV]: 'ops@keepr.digital' },
+		],
+	])('refuses %s rather than signing in with an empty password', (_, env) => {
+		expect(() => planFor({ env, newPassword: PASSWORD }))
 			.toThrow(expect.objectContaining({ code: 'harness-operator-unavailable' }));
 	});
 
@@ -135,15 +123,7 @@ describe('how an acceptance run acquires an operator', () => {
 		expect(written.mock.calls[0]![0]).toBe(`${operatorUnavailableNotice({ deployed: false })}\n`);
 	});
 
-	it('owns its own account rather than a developer\'s, because ensure is create-or-reset', () => {
-		// A shared address would mean every acceptance run silently changed the
-		// password of the account somebody signs in with by hand.
-		expect(HARNESS_OPERATOR_EMAIL).toContain('acceptance');
-	});
-
 	it('generates a password rather than carrying one, so nothing in the repository is a credential', () => {
-		// A literal here would be a source-known password on an admin account, and
-		// ensure would arm it on whatever installation the run was pointed at.
 		const first = newOperatorPassword();
 
 		expect(first).not.toBe(newOperatorPassword());
@@ -151,46 +131,31 @@ describe('how an acceptance run acquires an operator', () => {
 	});
 });
 
-/**
- * Where a checkout's own secrets may travel, for the callers that have no
- * `--deployed` flag to decide it with.
- *
- * The measurement probes in `scripts/` take one mandatory origin and nothing else,
- * so for them the question really is about the host. The expensive direction is
- * unmistakable: reading `true` for a remote origin means presenting this
- * checkout's `.env` secret to somebody else's installation.
- */
+// Reading `true` for a remote origin would present this checkout's `.env` secret to it.
 describe('whether local secrets may reach an origin', () => {
-	it('says yes to a server on this machine', () => {
-		for (const origin of [
-			'http://127.0.0.1:8787',
-			'http://localhost:3000',
-			'http://[::1]:8787',
-			'http://0.0.0.0:8787',
-		])
+	it.each([
+		'http://127.0.0.1:8787',
+		'http://localhost:3000',
+		'http://[::1]:8787',
+		'http://0.0.0.0:8787',
+	])(
+		'says yes to %s, a server on this machine',
+		(origin) => {
 			expect(isLoopbackOrigin(origin)).toBe(true);
-	});
+		},
+	);
 
-	it('says no to anything else, including something that only looks local', () => {
-		for (const origin of [
-			'https://stream.keepr.digital',
-			'https://stream.example.workers.dev',
-			// A host whose *name* starts like a loopback address, which a prefix test
-			// would wave through.
-			'https://127.0.0.1.evil.example',
-			'https://localhost.evil.example',
-			'not-a-url',
-			'',
-		])
-			expect(isLoopbackOrigin(origin)).toBe(false);
+	it.each([
+		'https://stream.keepr.digital',
+		'https://127.0.0.1.evil.example',
+		'https://localhost.evil.example',
+		'not-a-url',
+		'',
+	])('says no to %j, including a host that only looks local', (origin) => {
+		expect(isLoopbackOrigin(origin)).toBe(false);
 	});
 });
 
-/**
- * The notice, read as prose in both modes — the #130 lesson applied again: a
- * sentence that sends its reader after a file that could not have helped is worse
- * than no sentence.
- */
 describe('what a run with no operator says', () => {
 	it('sends a local reader to the two gitignored files it is probably missing', () => {
 		const notice = operatorUnavailableNotice({ deployed: false });

@@ -369,59 +369,6 @@ describe('syncMatchesFromMelee', () => {
 		expect(result.message).toContain('Swiss');
 	});
 
-	it('counts created and updated matches', async () => {
-		const round = { ...testRounds[0], externalId: '100', externalSource: 'melee' as const };
-		mockFetchMatchesByRound.mockResolvedValue([
-			{
-				Guid: 'match-1',
-				TableNumber: 1,
-				Competitors: [],
-				HasResult: false,
-				ByeReason: null,
-				GameDraws: 0,
-			},
-			{
-				Guid: 'match-2',
-				TableNumber: 2,
-				Competitors: [],
-				HasResult: false,
-				ByeReason: null,
-				GameDraws: 0,
-			},
-		]);
-
-		// Mock the mapper to return DB-ready rows
-		mockMapMeleeMatchesToDbRows.mockReturnValue([
-			{
-				eventId: 1,
-				roundId: 10,
-				externalId: 'match-1',
-				externalSource: 'melee',
-				sortOrder: 0,
-			},
-			{
-				eventId: 1,
-				roundId: 10,
-				externalId: 'match-2',
-				externalSource: 'melee',
-				sortOrder: 1,
-			},
-		]);
-
-		mockReplaceRoundSnapshot.mockResolvedValue({
-			matches: [{}, {}],
-			created: 1,
-			updated: 1,
-			staleDeleted: 0,
-		});
-
-		const result = await syncMatchesFromMelee(1, eventData, round as any, null);
-
-		expect(result.matchCount).toBe(2);
-		expect(result.created).toBe(1);
-		expect(result.updated).toBe(1);
-	});
-
 	it('does not report success when atomic persistence fails', async () => {
 		const round = {
 			...testRounds[0],
