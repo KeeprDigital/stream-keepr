@@ -74,17 +74,17 @@ describe('diagnosing a rejected realtime publish', () => {
 		expect(notice).toContain(observed);
 	});
 
-	it.each([
+	it.each<[string, number, unknown]>([
 		[
 			'a success',
 			200,
 			{ ok: true },
 		],
-		...SCREEN_COMMAND_ROUTE_REFUSALS.map(refusal => [
+		...SCREEN_COMMAND_ROUTE_REFUSALS.map((refusal): [string, number, unknown] => [
 			`the route's own "${refusal.message}"`,
 			refusal.statusCode,
 			nitroError(refusal.statusCode, refusal.message),
-		] as const),
+		]),
 		[
 			'Nitro\'s unrouted miss',
 			404,

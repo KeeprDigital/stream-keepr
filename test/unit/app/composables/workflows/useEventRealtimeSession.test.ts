@@ -37,7 +37,7 @@ describe('useEventRealtimeSession', () => {
 		event: { id: 12 },
 	};
 	const eventStore = fakeStore(eventState);
-	const stores: Record<string, FakeStore> = {
+	const stores = {
 		useEventStore: eventStore,
 		usePlayerStore: fakeStore(),
 		usePlayerDeckStore: fakeStore(),
@@ -148,7 +148,7 @@ describe('useEventRealtimeSession', () => {
 		await vi.waitFor(() => {
 			expect(metagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
 			expect(playerStore.loadPlayersByEventId).toHaveBeenCalledWith(12);
-			expect(stores.usePlayerDeckStore!.loadByEventId).toHaveBeenCalledWith(12);
+			expect(stores.usePlayerDeckStore.loadByEventId).toHaveBeenCalledWith(12);
 			expect(featureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(12);
 		});
 	});
@@ -179,8 +179,8 @@ describe('useEventRealtimeSession', () => {
 		handlers['melee:roundSynced']!(roundMessage);
 
 		await vi.waitFor(() => {
-			expect(stores.useRoundStore!.loadRoundsByEventId).toHaveBeenCalledWith(12);
-			expect(stores.useMatchStore!.applyRemoteMatchesRefreshed).toHaveBeenCalledWith(roundMessage);
+			expect(stores.useRoundStore.loadRoundsByEventId).toHaveBeenCalledWith(12);
+			expect(stores.useMatchStore.applyRemoteMatchesRefreshed).toHaveBeenCalledWith(roundMessage);
 			expect(featureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(12);
 		});
 	});
@@ -211,8 +211,8 @@ describe('useEventRealtimeSession', () => {
 	describe('resync', () => {
 		function expectFullResync() {
 			expect(mockClearPlayerDeckCache).toHaveBeenCalledOnce();
-			expect(stores.useFeatureMatchAssignmentStore!.reloadConsumedRounds).toHaveBeenCalledOnce();
-			expect(stores.useBroadcastDeckListStore!.reloadAuthoritativeState).toHaveBeenCalledOnce();
+			expect(stores.useFeatureMatchAssignmentStore.reloadConsumedRounds).toHaveBeenCalledOnce();
+			expect(stores.useBroadcastDeckListStore.reloadAuthoritativeState).toHaveBeenCalledOnce();
 			expect(eventDataResync.resync).toHaveBeenCalledOnce();
 		}
 
