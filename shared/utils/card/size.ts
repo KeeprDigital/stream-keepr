@@ -1,3 +1,9 @@
+/**
+ * A Magic card's corner rounding, for inline styles that cannot take the
+ * `mtg-card` utility. Keep in step with `--mtg-card-radius` in main.css.
+ */
+export const MTG_CARD_BORDER_RADIUS = '4.75% / 4%';
+
 export function mtgCardSize(cardWidth: number, aspectRatio = 85 / 61) {
 	const cardHeight = cardWidth * aspectRatio;
 	const diagonal = Math.sqrt(cardWidth ** 2 + cardHeight ** 2);

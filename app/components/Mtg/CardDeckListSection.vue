@@ -132,9 +132,9 @@ const unresolvedCards = computed(() =>
 }
 
 .card-placeholder {
-	aspect-ratio: 61/85;
+	aspect-ratio: 61 / 85;
 	background: var(--ui-bg-elevated);
-	border-radius: 4.75%;
+	border-radius: var(--mtg-card-radius);
 	display: flex;
 	align-items: center;
 	justify-content: center;
