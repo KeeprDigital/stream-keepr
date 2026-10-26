@@ -6,9 +6,9 @@ export function useEventConfigSubmit() {
 
 	async function handleSubmit(data: UpdateEventInput) {
 		if (!eventStore.event)
-			return;
+			return null;
 
-		await runRequest(
+		return runRequest(
 			async () => {
 				const updated = await eventStore.updateEvent(data);
 				return updated === null

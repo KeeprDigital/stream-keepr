@@ -50,7 +50,7 @@ function handleClick(name: string) {
 			>
 				<!-- Card image -->
 				<div
-					class="aspect-[63/88] rounded-lg overflow-hidden border-2 transition-all duration-150"
+					class="mtg-card border-2 transition-all duration-150"
 					:class="[
 						isKeyCard(card.name)
 							? 'border-primary ring-2 ring-primary/30'

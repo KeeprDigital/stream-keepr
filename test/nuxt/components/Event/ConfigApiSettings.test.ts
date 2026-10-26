@@ -1,7 +1,7 @@
 import type { Event } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { createMockEvent } from '~~/test/helpers/fixtures';
 import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
@@ -17,6 +17,11 @@ mockNuxtImport('useOverlay', () => () => ({
 	}),
 }));
 mockNuxtImport('onBeforeRouteLeave', () => () => {});
+
+// The card saves through the Event config submit; what that does with the update
+// is its own composable's test.
+const handleSubmit = vi.fn(async (_update: object): Promise<unknown> => true);
+mockNuxtImport('useEventConfigSubmit', () => () => ({ handleSubmit }));
 
 /**
  * The factory returns a database row, which carries the Melee credential columns
@@ -152,14 +157,18 @@ function resetButton(wrapper: Wrapper) {
 	return wrapper.get('[data-label="Reset"]');
 }
 
-function submitted(wrapper: Wrapper) {
-	const events = wrapper.emitted('submit');
-	if (!events?.length)
-		throw new Error('The card emitted no submit');
-	return events.at(-1)![0];
+function submitted() {
+	const call = handleSubmit.mock.calls.at(-1);
+	if (!call)
+		throw new Error('The card saved nothing');
+	return call[0];
 }
 
 describe('event config api settings', () => {
+	beforeEach(() => {
+		handleSubmit.mockClear();
+	});
+
 	it('shows the display settings the event already carries', async () => {
 		const wrapper = await mountComponent(configEvent({
 			displayRecordSeparator: '/',
@@ -197,7 +206,7 @@ describe('event config api settings', () => {
 		await saveButton(wrapper).trigger('click');
 		await flushPromises();
 
-		expect(submitted(wrapper)).toEqual({
+		expect(submitted()).toEqual({
 			displayRecordSeparator: '/',
 			displayHideZeroDraws: false,
 		});
@@ -217,7 +226,7 @@ describe('event config api settings', () => {
 		await flushPromises();
 
 		expect(selectFor(wrapper, 'displayPositionFormat').props('modelValue')).toBe('number');
-		expect(submitted(wrapper)).toEqual({ displayHideZeroDraws: false });
+		expect(submitted()).toEqual({ displayHideZeroDraws: false });
 	});
 
 	it('offers a save only once the form has changed, and takes it back on reset', async () => {
@@ -233,6 +242,6 @@ describe('event config api settings', () => {
 
 		expect(hideZeroDrawsSwitch(wrapper).props('modelValue')).toBe(true);
 		expect(saveButton(wrapper).attributes('disabled')).toBeDefined();
-		expect(wrapper.emitted('submit')).toBeUndefined();
+		expect(handleSubmit).not.toHaveBeenCalled();
 	});
 });

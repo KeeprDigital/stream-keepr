@@ -25,7 +25,7 @@ function getCardImageUrl(card: DeckListCardWithData): string | null {
 		class="card-item relative"
 		:class="{ [sizeClass]: !dynamicSize }"
 	>
-		<div class="aspect-63/88 rounded-lg overflow-hidden bg-elevated">
+		<div class="mtg-card bg-elevated">
 			<NuxtImg
 				v-if="getCardImageUrl(card)"
 				:src="getCardImageUrl(card)!"

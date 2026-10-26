@@ -19,7 +19,6 @@ const eventStore = reactive({
 	addTalent: vi.fn(),
 	updateTalent: vi.fn(),
 });
-const handleSubmit = vi.fn();
 
 mockNuxtImport('useEventStore', () => () => eventStore);
 const resetTalentsForm = vi.fn();
@@ -36,7 +35,6 @@ mockNuxtImport('useRequestFeedback', () => () => ({
 		}
 	},
 }));
-mockNuxtImport('useEventConfigSubmit', () => () => ({ handleSubmit }));
 
 const BroadcastSettingsStub = defineComponent({
 	props: {

@@ -34,21 +34,20 @@ watch(() => props.scryfallId, () => {
 
 <template>
 	<div
-		class="shrink-0"
+		class="mtg-card shrink-0"
 		:class="[widthClass]"
-		style="aspect-ratio: 61/85"
 	>
 		<img
 			v-if="imageUrl && !imageError"
 			:src="imageUrl"
 			:alt="name ?? 'Card image'"
-			class="w-full h-full object-cover rounded-lg"
+			class="w-full h-full object-cover"
 			loading="lazy"
 			@error="imageError = true"
 		>
 		<div
 			v-else
-			class="w-full h-full rounded-lg bg-elevated border border-default flex items-center justify-center"
+			class="w-full h-full bg-elevated border border-default flex items-center justify-center"
 		>
 			<UIcon name="i-lucide-image-off" class="size-6 text-muted" />
 		</div>

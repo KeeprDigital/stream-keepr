@@ -44,6 +44,7 @@ import {
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
 import { SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '~~/shared/socialProfiles';
+import { MTG_CARD_BORDER_RADIUS } from '~~/shared/utils/card/size';
 import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
 import { clampOpacity, glowDropShadow, paintColour } from '~/modules/screen/outputPaint';
 import { graphicsSelectionGraphicId, graphicsSelectionKey } from './selection';
@@ -1523,6 +1524,7 @@ function deckListCardDescriptor(
 						width: '100%',
 						height: '100%',
 						objectFit: 'contain',
+						borderRadius: MTG_CARD_BORDER_RADIUS,
 						filter: output === 'key'
 							? KEY_MEDIA_ALPHA_TO_WHITE
 							: undefined,

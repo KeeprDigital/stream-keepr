@@ -16,7 +16,7 @@ describe('playerService JSON bulk SQLite integration', () => {
 			pronouns text, external_id text, external_source text, external_status integer,
 			is_active integer not null default 1, last_seen_at integer, wins integer, losses integer,
 			draws integer, position integer, points integer, archetype_id integer, lgs text,
-			game_data text, created_at integer not null default (unixepoch() * 1000),
+			game_data text, manually_edited_fields text, created_at integer not null default (unixepoch() * 1000),
 			updated_at integer not null default (unixepoch() * 1000),
 			unique (event_id, external_id, external_source)
 		)`);
@@ -83,6 +83,18 @@ describe('playerService JSON bulk SQLite integration', () => {
 			{ ...player, wins: 2 },
 		], new Date(firstSeen.getTime() + 2000));
 		expect(changed).toMatchObject({ created: 0, updated: 1, deactivated: 0 });
+		expect(await readRow()).toMatchObject({ updated_at: firstSeen.getTime() + 2000 });
+
+		// An operator renamed them; Melee still sends its name, which the sync
+		// leaves alone (ADR-0046), so nothing changed.
+		await client.execute({
+			sql: `update players set name = 'Renamed', manually_edited_fields = '["name"]' where external_id = ?`,
+			args: ['revision-1'],
+		});
+		const manual = await service.reconcileMeleeSnapshot(2, [
+			{ ...player, wins: 2 },
+		], new Date(firstSeen.getTime() + 2500));
+		expect(manual).toMatchObject({ created: 0, updated: 0, deactivated: 0 });
 		expect(await readRow()).toMatchObject({ updated_at: firstSeen.getTime() + 2000 });
 
 		// Missing from one sync, then back unchanged: the reactivation is a change.

@@ -1,6 +1,7 @@
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbPlayer, DbPlayerInsert, DbScreen } from '~~/server/db/schema';
 import type { CreatePlayerInput, UpdatePlayerInput } from '~~/shared/api';
+import type { PlayerManuallyEditedField } from '~~/shared/types/enums';
 
 import { and, asc, eq, getTableColumns, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
@@ -8,6 +9,7 @@ import { playerListMembers, playerLists, players } from '~~/server/db/schema';
 import { buildClearDeckSourcePlayersQuery } from '~~/server/services/screen';
 import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
 import { pickManualWritable } from '~~/server/utils/provenance';
+import { PLAYER_MANUALLY_EDITED_FIELD_VALUES } from '~~/shared/types/enums';
 
 /** Full insert data including eventId (used by sync/upsert operations). archetypeId excluded — set separately. */
 type PlayerInsertData = Omit<DbPlayerInsert, 'id' | 'createdAt' | 'updatedAt' | 'archetypeId'>;
@@ -25,6 +27,34 @@ export type MeleePlayerSnapshotData = Omit<
 	externalId: string;
 	externalStatus: number | null;
 };
+
+/** Melee's value for a field, unless an operator has edited it on this Player (ADR-0046). */
+function meleeValueUnlessManuallyEdited(field: PlayerManuallyEditedField) {
+	return sql`case
+		when exists (select 1 from json_each(coalesce(${players.manuallyEditedFields}, '[]')) where value = ${field})
+			then ${players[field]}
+		else ${sql.raw(`excluded.${players[field].name}`)}
+	end`;
+}
+
+/**
+ * Adds each Melee-imported field a manual write changes to the Player's
+ * manually edited fields. A field written with the value it already holds,
+ * as a whole-form save does, is not an edit.
+ */
+function markManuallyEditedFields(data: Partial<Pick<DbPlayer, PlayerManuallyEditedField>>) {
+	const changed = PLAYER_MANUALLY_EDITED_FIELD_VALUES
+		.filter(field => data[field] !== undefined)
+		.map(field => sql`select ${field} as value where ${players[field]} is not ${data[field] ?? null}`);
+	if (changed.length === 0)
+		return {};
+	return {
+		manuallyEditedFields: sql`(select json_group_array(value) from (
+			select value from json_each(coalesce(${players.manuallyEditedFields}, '[]'))
+			union ${sql.join(changed, sql` union `)}
+		))`,
+	};
+}
 
 function buildBulkPlayerUpsertQueries(
 	dataList: PlayerInsertData[],
@@ -58,10 +88,10 @@ function buildBulkPlayerUpsertQueries(
 	].flatMap((group) => {
 		const example = group[0]!;
 		const written = {
-			name: sql.raw('excluded.name'),
+			name: meleeValueUnlessManuallyEdited('name'),
 			...(example.pronouns !== undefined
 				? {
-						pronouns: sql.raw('excluded.pronouns'),
+						pronouns: meleeValueUnlessManuallyEdited('pronouns'),
 					}
 				: {}),
 			...(example.wins !== undefined
@@ -110,14 +140,16 @@ function buildBulkPlayerUpsertQueries(
 					}
 				: {}),
 		};
-		// A Player's revision moves only when the write changes what they hold.
-		// `lastSeenAt` moves on every sync by design, so it alone moves nothing:
-		// otherwise every Player re-announces a change on every Round sync.
+		// A Player's revision moves only when the write changes what they hold:
+		// each column against what this write puts there, so a manually edited
+		// field Melee disagrees with is no change. `lastSeenAt` moves on every
+		// sync by design, so it alone moves nothing: otherwise every Player
+		// re-announces a change on every Round sync.
 		const columns = getTableColumns(players);
 		const changed = sql.join(
 			(Object.keys(written) as Array<keyof typeof written>)
 				.filter(field => field !== 'lastSeenAt')
-				.map(field => sql.raw(`"players"."${columns[field].name}" is not excluded."${columns[field].name}"`)),
+				.map(field => sql`${sql.raw(`"players"."${columns[field].name}"`)} is not (${written[field]})`),
 			sql` or `,
 		);
 		const set = {
@@ -147,6 +179,7 @@ function buildBulkPlayerUpsertQueries(
 				archetypeId: sql`null`,
 				lgs: sql`json_extract(value, '$.lgs')`,
 				gameData: sql`json_extract(value, '$.gameData')`,
+				manuallyEditedFields: sql`null`,
 				createdAt: sql`${writeAtMs}`,
 				updatedAt: sql`${writeAtMs}`,
 			}, sql`from json_each(${payload}) where true`))
@@ -243,9 +276,13 @@ export function playerService() {
 	};
 
 	const update = async (id: number, eventId: number, data: UpdatePlayerInput): Promise<DbPlayer | undefined> => {
+		const manualData = pickManualWritable('players', data);
 		const [updatedPlayer] = await db
 			.update(players)
-			.set(pickManualWritable('players', data))
+			.set({
+				...manualData,
+				...markManuallyEditedFields(manualData),
+			})
 			.where(and(eq(players.id, id), eq(players.eventId, eventId)))
 			.returning();
 

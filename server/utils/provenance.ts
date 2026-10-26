@@ -46,6 +46,7 @@ export const PROVENANCE_ENTITIES = {
 		serverManaged: [
 			'id',
 			'eventId',
+			'manuallyEditedFields',
 			'createdAt',
 			'updatedAt',
 		],

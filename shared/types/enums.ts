@@ -7,6 +7,8 @@ export const POINTS_SYSTEM_VALUES = ['7ph'] as const;
 export const DECK_COMPANION_SOURCE_VALUES = ['manual', 'melee'] as const;
 export const FEATURE_MATCH_ORIENTATION_VALUES = ['horizontal', 'vertical'] as const;
 export const EXTERNAL_SOURCE_VALUES = ['melee', 'manual'] as const;
+/** The Melee-imported Player fields an operator's edit keeps from Melee Sync (ADR-0046). */
+export const PLAYER_MANUALLY_EDITED_FIELD_VALUES = ['name', 'pronouns'] as const;
 export const PLAYER_DISPLAY_MODE_VALUES = ['score', 'position'] as const;
 export const POSITION_FORMAT_VALUES = ['number', 'ordinal'] as const;
 export const DISPLAY_TYPE_VALUES = ['overlay', 'control'] as const;
@@ -144,6 +146,7 @@ export type DeckCompanionSource = typeof DECK_COMPANION_SOURCE_VALUES[number];
 export type ClockType = typeof CLOCK_TYPE_VALUES[number];
 export type FeatureMatchOrientation = typeof FEATURE_MATCH_ORIENTATION_VALUES[number];
 export type ExternalSource = typeof EXTERNAL_SOURCE_VALUES[number];
+export type PlayerManuallyEditedField = typeof PLAYER_MANUALLY_EDITED_FIELD_VALUES[number];
 export type PlayerDisplayMode = typeof PLAYER_DISPLAY_MODE_VALUES[number];
 export type PositionFormat = typeof POSITION_FORMAT_VALUES[number];
 export type DisplayType = typeof DISPLAY_TYPE_VALUES[number];

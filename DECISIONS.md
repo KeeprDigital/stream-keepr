@@ -1386,3 +1386,91 @@ Deployed installations store `topCut` in all three places, and a key left behind
 - **Rename the other keys to match their new labels** (`card`, `deck`, `top-cards`, `feature-match`). Each would take a migration of its own for no gain to an operator, who sees only the label.
 - **Refuse a former key with a clear error.** It costs as much code as accepting it, and a stale tab's full write would fail rather than land.
 - **Rewrite the baseline.** ADR-0019's squash was a one-time transition, and installations have applied `0000_baseline`.
+
+## ADR-0044: An operator form settles on what its save stored
+
+Accepted · 2026-10-26 · [#794](https://github.com/KeeprDigital/stream-keepr/pull/794)
+
+### Decision
+
+**A form save runs through `useForm`'s `runSave`.** It snapshots the form when the save is sent. Once the save resolves truthy, every value still as sent takes the baseline's, which the store has moved to the server's answer by then. A value the save normalized (trimmed, a blank read as null, numeric text as a number, an empty deck dropped) reads clean. A value edited while the save was in flight stays a change. A failed save, or one whose answer never reached the baseline, leaves the form alone.
+
+**An Event config card owns its save through `useEventConfigForm`.** It bundles `useForm`, the page's unsaved-changes registration and the save: validate, map the changes to an Event update, `runSave(handleSubmit)`, one at a time. A card no longer emits its changes for the page to save, because an emit cannot report whether the save landed.
+
+**`useForm` compares values regardless of object key order.** The #612 merge appends keys a new baseline adds, so the same values can arrive in another order.
+
+**A form in an overlay modal guards itself through `useModalUnsavedChanges`.** The modal renders outside the page, so it can neither register with the page's guard nor use `onBeforeRouteLeave`. It guards navigation through the router, a browser unload, and its own close through `confirmDiscard`.
+
+### Why
+
+The #612 three-way merge keeps a local edit over a conflicting baseline. After a save that normalized a value, the operator's raw value and the stored one conflict, so the form kept the raw value as unsaved. Saving a Feature Match Slot's setup with a trailing space showed the success toast while Save stayed enabled and leaving warned. The Event Controls holding text did the same. A form told to treat itself as saved instead (`updateOriginal`, now removed) marked an edit typed while the save was in flight as saved, and leaving lost it without a warning.
+
+### Consequences
+
+- A save's answer must reach the form's `initialData` before the save resolves. The stores do this, since each writes the answer before it resolves. A form whose baseline the save sets itself, such as the Melee integration card, assigns its `initialData` ref inside the save.
+- A guarded modal renders its own close button in the header's `actions` slot with `:close="false"`. Nuxt UI wraps its built-in close in reka-ui's `DialogClose`, which closes the dialog whatever the button's `onClick` does, so it cannot wait for `confirmDiscard`.
+- A guarded modal renders its own close button in the header's `actions` slot with `:close="false"`. Nuxt UI wraps its built-in close in reka-ui's `DialogClose`, which closes the dialog whatever the button's `onClick` does, so it cannot wait for `confirmDiscard`.
+- Talents keep their reset after a save. A staged Talent with no id merges in beside the one the save created (#612), so the card resets to the Event rather than settling.
+- `test/nuxt/composables/ui/useForm.test.ts` and `useEventConfigForm.test.ts` cover the settle. The Feature Match panel, Event Controls and Event settings card tests have the mocked store write back a normalized answer, and the form must read clean.
+
+### Rejected alternatives
+
+- **Settle automatically on any baseline that follows a submit.** An optimistic update followed by a rollback would replace a failed edit with the old value, so a retry would have nothing to send. Only the save knows whether it landed.
+- **Normalize in the form before comparing.** Each form would have to repeat the server's normalization, and drift between the two would bring the bug back.
+- **Settle on the save's answer rather than the baseline.** Each form would have to map the answer to its own shape. The stores already do that through `initialData`.
+
+## ADR-0045: A Slot setup edit to a seated Player's identity is a Player write
+
+Accepted · 2026-10-26
+
+### Decision
+
+**A Feature Match Slot setup save that edits a seated Player's name, pronouns or LGS writes those fields to the Player.** `featureMatchSlotWriteModule().updateSetup` compares each side's submitted `name`, `pronouns` and `lgs` with the Player seated there (the side's `playerNId` in the save, else the Slot's) and sends the differences through `playerUpdateModule().updatePlayer`. An omitted field was not edited and is left alone. A cleared name stays on the Slot only, because a Player always has one. A side with no Player seated has nothing to write.
+
+**Records, deck and archetype stay Slot snapshot fields.** A setup edit to wins, losses, draws, position, points, deck or archetype is held by the Slot only, and Melee Sync's standings reach it through Reverse Sync as before.
+
+**The Player write runs before the Slot write, and is published with no origin.** Its Reverse Sync rewrites every Slot seating the Player, the edited one included, from the Player; the Slot write that follows then lands the rest of the save on the edited Slot, so a record edited in the same save is not overwritten. The saving client applied only the Slot, so it must receive the Player's and the other Slots' messages too.
+
+### Why
+
+Reverse Sync rebuilds a Slot's player snapshot from the Player after every Player write and Melee Sync. An identity edit held only by the Slot was therefore lost to the next round "Sync Matches": an LGS typed in setup was cleared because the Player had none. An operator expects one edit to a featured Player to hold across the Event, so the Player has to hold it.
+
+### Consequences
+
+- The write-through is an ordinary manual Player write, so a name or pronouns it changes becomes a Manually Edited Field and holds through Melee Sync (ADR-0046). LGS is never imported and holds anyway.
+- A setup save that fails on the Slot write (a `409`, or the Slot deleted) has already written the Player. The Player's edit stands and the operator retries the Slot.
+- `test/unit/server/services/featureMatchSlotSetupSurvivesReverseSync.sqlite.test.ts` holds the round-sync case against SQLite; `test/unit/server/modules/featureMatchSlotWrite.test.ts` holds the order and the missing origin.
+
+### Rejected alternatives
+
+- **Freeze a Slot's snapshot at promotion.** Standings and reviewed-deck corrections would stop reaching a featured Match, and the setup form would still disagree with the Players page.
+- **Pin setup-edited fields on the Slot against Reverse Sync.** It keeps the LGS on one Slot, but the Player, other Slots and the next round still lack it, so the operator enters it again.
+
+## ADR-0046: Melee Sync keeps a Player field an operator edited
+
+Accepted · 2026-10-26
+
+### Decision
+
+**A Player records the Melee-imported fields an operator has edited, and Melee Sync stops writing them.** `players.manually_edited_fields` (migration `0004`) is a JSON list drawn from `PLAYER_MANUALLY_EDITED_FIELD_VALUES`, `name` and `pronouns`. `playerService().update`, the one manual Player write behind the Players page and a Slot setup's write-through (ADR-0045), adds a field to it in the same statement when the write changes that field's value. The Melee bulk upsert (`buildBulkPlayerUpsertQueries`), shared by the Players sync and the Deck List sync, keeps the Player's own value for each listed field and takes Melee's for the rest.
+
+**An edit is a change of value.** The Players page saves its whole form, so writing the value a field already holds marks nothing. Clearing a field is an edit: an operator who removes pronouns keeps them removed rather than taking Melee's.
+
+**Records stay Melee-owned.** Wins, losses, draws, position and points are not in the list: a manual edit to one lasts until the next sync, as before. LGS and game data are not imported, so they never needed it.
+
+**The column is server-managed.** It is classified so in `PROVENANCE_ENTITIES`, never accepted from a client, and not part of `PlayerResponse`.
+
+### Why
+
+The Melee upsert wrote `excluded.name` unconditionally, and `excluded.pronouns` as `null` whenever Melee held none. So an operator's rename or pronouns, from either surface, reverted at the next Players or Deck List sync, and Reverse Sync then carried the revert onto every Slot. An operator expects one edit to a Player to hold across the Event.
+
+### Consequences
+
+- Nothing hands a field back to Melee yet. A Player whose edited name later changes on Melee keeps the edited one until the field is removed from the list. A "reset to Melee" action is its own change.
+- Players imported before the migration have no list, which is read as empty, so they behave as before until edited.
+- `test/unit/server/services/playerManualEditsSurviveMeleeSync.sqlite.test.ts` covers both sync paths, a cleared field, an unchanged whole-form save, and an edit made in a Slot's setup.
+
+### Rejected alternatives
+
+- **Never let Melee blank a field** (`coalesce(excluded.pronouns, players.pronouns)`). It keeps pronouns Melee lacks, but a non-empty Melee value still overwrites an edit, and a rename still reverts.
+- **Store Melee's value and the operator's side by side.** It supports a reset for free, but every reader of a Player would choose between two values. A list of edited fields answers the same question with one column.

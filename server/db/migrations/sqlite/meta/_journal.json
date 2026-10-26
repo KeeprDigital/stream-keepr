@@ -29,6 +29,13 @@
       "when": 1792654016234,
       "tag": "0003_top_cut_screen_mode_key",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1792996775503,
+      "tag": "0004_player_manually_edited_fields",
+      "breakpoints": true
     }
   ]
 }
