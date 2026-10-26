@@ -1268,7 +1268,9 @@ describe('useDeckModeData', () => {
 			// A Round sync refreshes Players, so their record moves their revision
 			// while their Deck List stays as it was.
 			mockReadDeck.mockImplementation(async () =>
-				createDeckResponse([createDeckCard({ name: 'Counterspell' })]));
+				createDeckResponse([
+					createDeckCard({ name: 'Counterspell' }),
+				]));
 			mockPlayerId.value = 5;
 			const result = mountDeckModeData();
 			await flushPromises();
