@@ -37,54 +37,73 @@ mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
 mockNuxtImport('useMetagameStore', () => () => mockMetagameStore);
 mockNuxtImport('clearPlayerDeckCache', () => mockClearPlayerDeckCache);
 
+/** Rounds as structure reconciliation leaves them, applied when the rounds reload. */
+function roundsAfterReload(ids: number[]) {
+	mockRoundStore.loadRoundsByEventId.mockImplementation(async () => {
+		mockRoundStore.rounds = ids.map(id => ({ id }));
+	});
+}
+
 describe('useMeleeDataRefresh', () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
 		mockMatchStore.isLoaded = true;
 		mockMatchStore.loadedRoundId = null;
-		mockRoundStore.rounds = [];
+		mockRoundStore.rounds = [{ id: 8 }];
+		roundsAfterReload([8]);
 	});
 
-	it('refreshes structure, feature slots, and the current match scope together', async () => {
-		mockMatchStore.loadedRoundId = 8;
-		mockRoundStore.rounds = [
-			{ id: 8 },
-		];
-		const { refreshMeleeStructureData } = useMeleeDataRefresh();
+	describe('refreshMeleeStructureData', () => {
+		it('reloads the structure, the Feature Match slots and the Matches in the loaded Round', async () => {
+			mockMatchStore.loadedRoundId = 8;
 
-		await refreshMeleeStructureData(1);
+			await useMeleeDataRefresh().refreshMeleeStructureData(1);
 
-		expect(mockPhaseStore.loadPhasesByEventId).toHaveBeenCalledWith(1);
-		expect(mockRoundStore.loadRoundsByEventId).toHaveBeenCalledWith(1);
-		expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(1);
-		expect(mockMatchStore.loadMatchesByRoundId).toHaveBeenCalledWith(1, 8);
-		expect(mockMatchStore.loadMatchesByEventId).not.toHaveBeenCalled();
-		expect(mockClearPlayerDeckCache).toHaveBeenCalledOnce();
+			expect(mockClearPlayerDeckCache).toHaveBeenCalledOnce();
+			expect(mockPhaseStore.loadPhasesByEventId).toHaveBeenCalledWith(1);
+			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(1);
+			expect(mockMatchStore.loadMatchesByRoundId).toHaveBeenCalledWith(1, 8);
+			expect(mockMatchStore.loadMatchesByEventId).not.toHaveBeenCalled();
+		});
+
+		it('widens the Match scope to the Event when reconciliation deleted the loaded Round', async () => {
+			mockMatchStore.loadedRoundId = 8;
+			roundsAfterReload([9]);
+
+			await useMeleeDataRefresh().refreshMeleeStructureData(1);
+
+			expect(mockMatchStore.loadMatchesByEventId).toHaveBeenCalledWith(1);
+			expect(mockMatchStore.loadMatchesByRoundId).not.toHaveBeenCalled();
+		});
+
+		it('reloads every Match when none were scoped to a Round', async () => {
+			await useMeleeDataRefresh().refreshMeleeStructureData(1);
+
+			expect(mockMatchStore.loadMatchesByEventId).toHaveBeenCalledWith(1);
+		});
+
+		it('leaves Matches unloaded when nothing had loaded them', async () => {
+			mockMatchStore.isLoaded = false;
+
+			await useMeleeDataRefresh().refreshMeleeStructureData(1);
+
+			expect(mockMatchStore.loadMatchesByEventId).not.toHaveBeenCalled();
+			expect(mockMatchStore.loadMatchesByRoundId).not.toHaveBeenCalled();
+		});
 	});
 
-	it('resets a match scope whose round was deleted by structure reconciliation', async () => {
-		mockMatchStore.loadedRoundId = 8;
-		mockRoundStore.rounds = [];
-		const { refreshMeleeStructureData } = useMeleeDataRefresh();
-
-		await refreshMeleeStructureData(1);
-
-		expect(mockMatchStore.loadMatchesByEventId).toHaveBeenCalledWith(1);
-		expect(mockMatchStore.loadMatchesByRoundId).not.toHaveBeenCalled();
-	});
-
-	it('reloads every affected projection and invalidates derived caches after a destructive reset', async () => {
-		const { refreshAfterMeleeReset } = useMeleeDataRefresh();
-
-		await refreshAfterMeleeReset(1);
+	it('reloads every Melee projection and invalidates derived caches after a destructive reset', async () => {
+		await useMeleeDataRefresh().refreshAfterMeleeReset(1);
 
 		expect(mockMetagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
 		expect(mockClearPlayerDeckCache).toHaveBeenCalledOnce();
-		expect(mockPhaseStore.loadPhasesByEventId).toHaveBeenCalledWith(1);
-		expect(mockRoundStore.loadRoundsByEventId).toHaveBeenCalledWith(1);
-		expect(mockMatchStore.loadMatchesByEventId).toHaveBeenCalledWith(1);
-		expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
-		expect(mockPlayerDeckStore.loadByEventId).toHaveBeenCalledWith(1);
-		expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(1);
+		for (const load of [
+			mockPhaseStore.loadPhasesByEventId,
+			mockRoundStore.loadRoundsByEventId,
+			mockMatchStore.loadMatchesByEventId,
+			mockPlayerStore.loadPlayersByEventId,
+			mockPlayerDeckStore.loadByEventId,
+			mockFeatureMatchStore.loadFeatureMatchesByEventId,
+		])
+			expect(load).toHaveBeenCalledWith(1);
 	});
 });

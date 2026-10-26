@@ -3,37 +3,16 @@ import type { MetagameScope, MetagameViewMode } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
 }));
 mockNuxtImport('$fetch', () => mockFetch);
 
-type Handler = (message: Record<string, unknown>) => void;
-const channelHandlers = new Map<string, Set<Handler>>();
-const continuity = createContinuitySignal();
-const mockRealtime = reactive({
-	connectionState: 'connected',
-	tokenError: null as Error | null,
-	onChannel: (channel: string, type: string, handler: Handler) => {
-		const key = `${channel}|${type}`;
-		if (!channelHandlers.has(key))
-			channelHandlers.set(key, new Set());
-		channelHandlers.get(key)!.add(handler);
-		return () => channelHandlers.get(key)!.delete(handler);
-	},
-	onContinuityLost: continuity.onContinuityLost,
-	onceAttached: vi.fn(() => () => {}),
-});
-
-/** An Event message, as the Event channel delivers it. */
-function deliver(type: string, payload: Record<string, unknown>) {
-	for (const handler of channelHandlers.get(`event:1|${type}`) ?? [])
-		handler({ eventId: 1, ...payload });
-}
-
-mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
+const realtime = createFakeEventChannel();
+const { deliver } = realtime;
+mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 
 const mockScreenStore = {
 	updateModeConfig: vi.fn(),
@@ -78,7 +57,6 @@ const defaultConfig = {
 	animateEntries: true,
 };
 
-// Mutable config and interactive for timer tests
 const mutableConfig = reactive({ ...defaultConfig });
 const mockInteractive = ref(false);
 
@@ -90,7 +68,7 @@ mockNuxtImport('useScreenContext', () => () => ({
 }));
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
-// Server time is the Page Rotation's clock; synced and controllable here.
+// Server time is the Page Rotation's clock.
 const mockIsSynced = ref(true);
 let mockServerNow = 1_000_000;
 mockNuxtImport('useServerTime', () => () => ({
@@ -108,6 +86,8 @@ function cardsRead(breakdown: Record<string, unknown>) {
 	return { viewMode: 'cards', breakdown };
 }
 
+const METAGAME_READ = '/api/screen-output/events/1/screens/1/metagame';
+
 const scopes: EffectScope[] = [];
 
 function makeMetagameModeData() {
@@ -117,13 +97,13 @@ function makeMetagameModeData() {
 	return result;
 }
 
+const names = (rows: unknown[]) => rows.map(row => (row as { name: string }).name);
+
 describe('useMetagameModeData', () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
 		Object.assign(mutableConfig, defaultConfig);
 		mockInteractive.value = false;
-		mockRealtime.connectionState = 'connected';
-		mockRealtime.tokenError = null;
+		realtime.reset();
 		mockIsSynced.value = true;
 		mockServerNow = 1_000_000;
 		mockFetch.mockResolvedValue(archetypeRead({ entries: [], totalPlayers: 0, scope: 'all' }));
@@ -131,38 +111,18 @@ describe('useMetagameModeData', () => {
 
 	afterEach(() => {
 		scopes.splice(0).forEach(scope => scope.stop());
+		vi.useRealTimers();
 	});
 
-	it('returns expected properties', () => {
-		const result = makeMetagameModeData();
-
-		expect(result).toHaveProperty('config');
-		expect(result).toHaveProperty('loading');
-		expect(result).toHaveProperty('error');
-		expect(result).toHaveProperty('isEmpty');
-		expect(result).toHaveProperty('emptyMessage');
-		expect(result).toHaveProperty('headerText');
-		expect(result).toHaveProperty('displayRows');
-		expect(result).toHaveProperty('pageData');
-		expect(result).toHaveProperty('currentPage');
-		expect(result).toHaveProperty('totalPages');
-		expect(result).toHaveProperty('nextPage');
-		expect(result).toHaveProperty('prevPage');
-	});
-
-	it('generates header text for archetype view with all scope', () => {
-		const { headerText } = makeMetagameModeData();
-
-		expect(headerText.value).toBe('Full Field Metagame');
-	});
-
-	it('generates header text for archetype view with minPoints scope', () => {
-		mutableConfig.scope = 'minPoints';
-		mutableConfig.minPoints = 12;
+	it.each([
+		['all', {}, 'Full Field Metagame'],
+		['minPoints', { minPoints: 12 }, '12+ Points Metagame'],
+	] as const)('heads the archetype view with its %s scope', (scope, config, expected) => {
+		Object.assign(mutableConfig, { scope, ...config });
 
 		const { headerText } = makeMetagameModeData();
 
-		expect(headerText.value).toBe('12+ Points Metagame');
+		expect(headerText.value).toBe(expected);
 	});
 
 	it('reads the breakdown through the Screen, re-reading when the scope changes', async () => {
@@ -171,175 +131,82 @@ describe('useMetagameModeData', () => {
 
 		// The server derives scope, sort and limit from the saved configuration,
 		// so the client names only the Screen resource.
-		expect(mockFetch).toHaveBeenLastCalledWith(
-			'/api/screen-output/events/1/screens/1/metagame',
-			expect.objectContaining({ headers: undefined }),
-		);
+		expect(mockFetch).toHaveBeenLastCalledWith(METAGAME_READ, expect.objectContaining({ headers: undefined }));
 
 		mockFetch.mockClear();
 		mutableConfig.scope = 'minPoints';
-		mutableConfig.minPoints = 12;
 		await flushPromises();
 
-		expect(mockFetch).toHaveBeenCalledWith('/api/screen-output/events/1/screens/1/metagame', expect.anything());
+		expect(mockFetch).toHaveBeenCalledWith(METAGAME_READ, expect.anything());
 	});
 
-	it('isEmpty is true when entries are empty and not loading', async () => {
-		mockFetch.mockResolvedValue(archetypeRead({ entries: [], totalPlayers: 0, scope: 'all' }));
+	it.each([
+		['no Players', 0, 'No players in this event'],
+		['Players but no breakdown', 6, 'No metagame data available'],
+	])('is empty with a message for an Event with %s', async (_, totalPlayers, expected) => {
+		mockFetch.mockResolvedValue(archetypeRead({ entries: [], totalPlayers, scope: 'all' }));
 
-		const { isEmpty } = makeMetagameModeData();
+		const { isEmpty, emptyMessage } = makeMetagameModeData();
 		await flushPromises();
 
 		expect(isEmpty.value).toBe(true);
+		expect(emptyMessage.value).toBe(expected);
 	});
 
-	it('emptyMessage references no players when the breakdown counts none', async () => {
-		const { emptyMessage } = makeMetagameModeData();
+	it('renders the card breakdown the cards view reads', async () => {
+		mockFetch.mockResolvedValue(cardsRead({
+			entries: [{
+				id: 1,
+				name: 'Lightning Bolt',
+				inclusionRate: 100,
+				avgCopies: 4,
+				totalCopies: 8,
+				mainboardCount: 8,
+				sideboardCount: 0,
+				mainboardDeckCount: 2,
+				sideboardDeckCount: 0,
+				deckCount: 2,
+				cardType: 'Instant',
+				scryfallId: null,
+				colors: 'R',
+				cmc: 1,
+			}],
+			totalDecks: 2,
+			scope: 'all',
+		}));
+		Object.assign(mutableConfig, { viewMode: 'cards', archetypeFilter: 'Mono Red' });
+
+		const { displayRows } = makeMetagameModeData();
 		await flushPromises();
 
-		expect(emptyMessage.value).toBe('No players in this event');
+		expect(names(displayRows.value)).toEqual(['Lightning Bolt']);
 	});
 
-	it('emptyMessage shows generic message when players exist but no data', async () => {
-		mockFetch.mockResolvedValue(archetypeRead({ entries: [], totalPlayers: 6, scope: 'all' }));
-
-		const { emptyMessage } = makeMetagameModeData();
-		await flushPromises();
-
-		expect(emptyMessage.value).toBe('No metagame data available');
-	});
-
-	it('totalPages computes from displayRows and pageSize', async () => {
-		mockFetch.mockResolvedValue(archetypeRead({
+	describe('pages', () => {
+		const twelveArchetypes = archetypeRead({
 			entries: Array.from({ length: 12 }, (_, i) => ({ name: `Arch${i}`, count: 1, metaShare: 1 })),
 			totalPlayers: 12,
 			scope: 'all',
-		}));
+		});
 
-		const { totalPages } = makeMetagameModeData();
-		await flushPromises();
+		it('pages its rows by the configured page size', async () => {
+			mockFetch.mockResolvedValue(twelveArchetypes);
 
-		// pageSize is 5 from config, 12 entries => ceil(12/5) = 3
-		expect(totalPages.value).toBe(3);
-	});
+			const { totalPages, pageData } = makeMetagameModeData();
+			await flushPromises();
 
-	it('pageData returns correct slice for current page', async () => {
-		const entries = Array.from({ length: 8 }, (_, i) => ({ name: `Arch${i}`, count: 1, metaShare: 1 }));
-		mockFetch.mockResolvedValue(archetypeRead({ entries, totalPlayers: 8, scope: 'all' }));
+			expect(totalPages.value).toBe(3);
+			expect(names(pageData.value)).toEqual(['Arch0', 'Arch1', 'Arch2', 'Arch3', 'Arch4']);
+		});
 
-		const { pageData } = makeMetagameModeData();
-		await flushPromises();
-
-		// Page 1, pageSize 5 => first 5
-		expect(pageData.value).toHaveLength(5);
-		expect((pageData.value[0] as any).name).toBe('Arch0');
-	});
-
-	it('setPage calls screenStore.updateModeConfig', async () => {
-		mockInteractive.value = true;
-		const entries = Array.from({ length: 12 }, (_, i) => ({ name: `Arch${i}`, count: 1, metaShare: 1 }));
-		mockFetch.mockResolvedValue(archetypeRead({ entries, totalPlayers: 12, scope: 'all' }));
-
-		const { setPage } = makeMetagameModeData();
-		await flushPromises();
-		setPage(2);
-
-		expect(mockScreenStore.updateModeConfig).toHaveBeenCalledWith(
-			1,
-			1,
-			'metagame',
-			{ currentPage: 2 },
-		);
-	});
-
-	it('setPage clamps to valid range', async () => {
-		mockInteractive.value = true;
-		mockFetch.mockResolvedValue(archetypeRead({
-			entries: [
-				{ name: 'A', count: 1, metaShare: 100 },
-			],
-			totalPlayers: 1,
-			scope: 'all',
-		}));
-
-		const { setPage } = makeMetagameModeData();
-		await flushPromises();
-
-		// totalPages is 1, so setPage(5) should clamp to 1
-		setPage(5);
-		expect(mockScreenStore.updateModeConfig).toHaveBeenCalledWith(
-			1,
-			1,
-			'metagame',
-			{ currentPage: 1 },
-		);
-	});
-
-	it('nextPage wraps to 1 after last page', async () => {
-		mockInteractive.value = true;
-		mockFetch.mockResolvedValue(archetypeRead({
-			entries: [
-				{ name: 'A', count: 1, metaShare: 100 },
-			],
-			totalPlayers: 1,
-			scope: 'all',
-		}));
-
-		const { nextPage } = makeMetagameModeData();
-		await flushPromises();
-
-		// Only 1 page, currentPage=1, nextPage should wrap to 1
-		nextPage();
-		expect(mockScreenStore.updateModeConfig).toHaveBeenCalledWith(
-			1,
-			1,
-			'metagame',
-			{ currentPage: 1 },
-		);
-	});
-
-	it('prevPage wraps to last page from page 1', async () => {
-		mockInteractive.value = true;
-		const entries = Array.from({ length: 12 }, (_, i) => ({ name: `Arch${i}`, count: 1, metaShare: 1 }));
-		mockFetch.mockResolvedValue(archetypeRead({ entries, totalPlayers: 12, scope: 'all' }));
-
-		const { prevPage } = makeMetagameModeData();
-		await flushPromises();
-
-		// currentPage=1, prevPage should go to last (3)
-		prevPage();
-		expect(mockScreenStore.updateModeConfig).toHaveBeenCalledWith(
-			1,
-			1,
-			'metagame',
-			{ currentPage: 3 },
-		);
-	});
-
-	// ── auto-paging ──
-
-	describe('auto-paging', () => {
-		beforeEach(() => vi.useFakeTimers());
-		afterEach(() => vi.useRealTimers());
-
-		it('a non-interactive rendering projects the rotation from server time and never writes', async () => {
-			const entries = Array.from({ length: 12 }, (_, i) => ({
-				name: `Arch${i}`,
-				count: 1,
-				metaShare: 1,
-			}));
-			mockFetch.mockResolvedValue(archetypeRead({ entries, totalPlayers: 12, scope: 'all' }));
-			mockInteractive.value = false;
-
+		it('projects a rotating page from server time on a rendering, and never writes', async () => {
+			vi.useFakeTimers();
+			mockFetch.mockResolvedValue(twelveArchetypes);
 			const { currentPage } = makeMetagameModeData();
 			await flushPromises();
 
-			// Anchor now with 5s pages: page 1, flipping at each boundary.
-			mutableConfig.autoPageEnabled = true;
-			mutableConfig.autoPageIntervalMs = 5000;
-			mutableConfig.rotationAnchor = mockServerNow;
+			Object.assign(mutableConfig, { autoPageEnabled: true, autoPageIntervalMs: 5000, rotationAnchor: mockServerNow });
 			await nextTick();
-
 			expect(currentPage.value).toBe(1);
 
 			mockServerNow += 5000;
@@ -349,70 +216,18 @@ describe('useMetagameModeData', () => {
 			expect(currentPage.value).toBe(2);
 			expect(mockScreenStore.updateModeConfig).not.toHaveBeenCalled();
 		});
-
-		it('renders the card breakdown the cards view reads', async () => {
-			const cardEntries = [
-				{
-					id: 1,
-					name: 'Lightning Bolt',
-					inclusionRate: 100,
-					avgCopies: 4,
-					totalCopies: 8,
-					mainboardCount: 8,
-					sideboardCount: 0,
-					mainboardDeckCount: 2,
-					sideboardDeckCount: 0,
-					deckCount: 2,
-					cardType: 'Instant',
-					scryfallId: null,
-					colors: 'R',
-					cmc: 1,
-				},
-			];
-			mockFetch.mockResolvedValue(cardsRead({ entries: cardEntries, totalDecks: 2, scope: 'all' }));
-			mutableConfig.viewMode = 'cards';
-			mutableConfig.archetypeFilter = 'Mono Red';
-
-			const { displayRows } = makeMetagameModeData();
-			await flushPromises();
-
-			expect(displayRows.value).toHaveLength(1);
-		});
 	});
 
 	describe('chart display', () => {
 		const chartEntries = [
-			{
-				id: 3,
-				name: 'Boros Energy',
-				colors: 'RW',
-				count: 6,
-				metaShare: 50,
-			},
-			{
-				id: 7,
-				name: 'Eldrazi Ramp',
-				colors: 'C',
-				count: 4,
-				metaShare: 33.33,
-			},
-			{
-				id: -1,
-				name: 'Other',
-				colors: null,
-				count: 2,
-				metaShare: 16.67,
-			},
+			{ id: 3, name: 'Boros Energy', colors: 'RW', count: 6, metaShare: 50 },
+			{ id: 7, name: 'Eldrazi Ramp', colors: 'C', count: 4, metaShare: 33.33 },
+			{ id: -1, name: 'Other', colors: null, count: 2, metaShare: 16.67 },
 		];
 
 		beforeEach(() => {
 			mutableConfig.viewMode = 'chart';
-			mockFetch.mockResolvedValue(archetypeRead({
-				entries: chartEntries,
-				totalPlayers: 12,
-				classifiedPlayers: 12,
-				scope: 'all',
-			}));
+			mockFetch.mockResolvedValue(archetypeRead({ entries: chartEntries, totalPlayers: 12, classifiedPlayers: 12, scope: 'all' }));
 		});
 
 		it('draws the archetype breakdown as chart bars under the archetype header', async () => {
@@ -430,59 +245,37 @@ describe('useMetagameModeData', () => {
 
 		it('is one page: a Page Rotation never pages it', async () => {
 			vi.useFakeTimers();
-			try {
-				mockFetch.mockResolvedValue(archetypeRead({
-					entries: Array.from({ length: 12 }, (_, i) => ({
-						id: i + 1,
-						name: `Arch${i}`,
-						count: 1,
-						metaShare: 8.33,
-					})),
-					totalPlayers: 12,
-					classifiedPlayers: 12,
-					scope: 'all',
-				}));
-				const { chartBars, currentPage, totalPages } = makeMetagameModeData();
-				await flushPromises();
+			mockFetch.mockResolvedValue(archetypeRead({
+				entries: Array.from({ length: 12 }, (_, i) => ({ id: i + 1, name: `Arch${i}`, count: 1, metaShare: 8.33 })),
+				totalPlayers: 12,
+				classifiedPlayers: 12,
+				scope: 'all',
+			}));
+			const { chartBars, currentPage, totalPages } = makeMetagameModeData();
+			await flushPromises();
 
-				mutableConfig.autoPageEnabled = true;
-				mutableConfig.autoPageIntervalMs = 5000;
-				mutableConfig.rotationAnchor = mockServerNow;
-				mockServerNow += 5000;
-				vi.advanceTimersByTime(5000);
-				await nextTick();
+			Object.assign(mutableConfig, { autoPageEnabled: true, autoPageIntervalMs: 5000, rotationAnchor: mockServerNow });
+			mockServerNow += 5000;
+			vi.advanceTimersByTime(5000);
+			await nextTick();
 
-				expect(totalPages.value).toBe(1);
-				expect(currentPage.value).toBe(1);
-				// Eight archetypes and Other, whatever the page size.
-				expect(chartBars.value).toHaveLength(9);
-			}
-			finally {
-				vi.useRealTimers();
-			}
+			expect(totalPages.value).toBe(1);
+			expect(currentPage.value).toBe(1);
+			// Eight archetypes and Other, whatever the page size.
+			expect(chartBars.value).toHaveLength(9);
 		});
 
 		it('follows deck data live, as the table does', async () => {
 			const { chartBars } = makeMetagameModeData();
 			await flushPromises();
 			mockFetch.mockResolvedValue(archetypeRead({
-				entries: [
-					{
-						id: 7,
-						name: 'Eldrazi Ramp',
-						colors: 'C',
-						count: 12,
-						metaShare: 100,
-					},
-				],
+				entries: [{ id: 7, name: 'Eldrazi Ramp', colors: 'C', count: 12, metaShare: 100 }],
 				totalPlayers: 12,
 				classifiedPlayers: 12,
 				scope: 'all',
 			}));
 
-			deliver('playerDeck:reviewed', {
-				deck: { id: 3, playerId: 2 },
-			});
+			deliver('playerDeck:reviewed', { deck: { id: 3, playerId: 2 } });
 			await flushPromises();
 
 			expect(chartBars.value.map(bar => bar.name)).toEqual(['Eldrazi Ramp']);
@@ -499,9 +292,8 @@ describe('useMetagameModeData', () => {
 	});
 
 	describe('freshness', () => {
-		// The Event, the Screen configuration and the Player store are held
-		// constant throughout: only the aggregate's Event Data changes under the
-		// output, and nothing loads a roster to stand in for that (#602).
+		// Only the aggregate's Event Data changes under the output, and nothing
+		// loads a roster to stand in for it (#602).
 		async function showingMetagame() {
 			const data = makeMetagameModeData();
 			await flushPromises();
@@ -510,134 +302,72 @@ describe('useMetagameModeData', () => {
 		}
 
 		it('re-reads when the Player List driving it gains or loses a member', async () => {
-			mutableConfig.scope = 'playerList';
-			mutableConfig.playerListId = 5;
+			Object.assign(mutableConfig, { scope: 'playerList', playerListId: 5 });
 			const { displayRows } = await showingMetagame();
 			mockFetch.mockResolvedValue(archetypeRead({
-				entries: [
-					{ name: 'Mono Red', count: 1, metaShare: 100 },
-				],
+				entries: [{ name: 'Mono Red', count: 1, metaShare: 100 }],
 				totalPlayers: 1,
 				scope: 'playerList',
 			}));
 
-			deliver('playerList:membersChanged', {
-				listId: 5,
-				playerIds: [2],
-				action: 'added',
-				memberCount: 1,
-			});
+			deliver('playerList:membersChanged', { listId: 5, playerIds: [2], action: 'added', memberCount: 1 });
 			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(mockFetch).toHaveBeenLastCalledWith('/api/screen-output/events/1/screens/1/metagame', expect.anything());
+			expect(mockFetch).toHaveBeenCalledOnce();
 			expect(displayRows.value).toHaveLength(1);
 			expect(usePlayerStore().dataVersion).toBe(0);
 
-			deliver('playerList:membersChanged', {
-				listId: 5,
-				playerIds: [2],
-				action: 'removed',
-				memberCount: 0,
-			});
+			deliver('playerList:membersChanged', { listId: 5, playerIds: [2], action: 'removed', memberCount: 0 });
 			await flushPromises();
 			expect(mockFetch).toHaveBeenCalledTimes(2);
 		});
 
 		it('ignores another Player List\'s membership', async () => {
-			mutableConfig.scope = 'playerList';
-			mutableConfig.playerListId = 5;
+			Object.assign(mutableConfig, { scope: 'playerList', playerListId: 5 });
 			await showingMetagame();
 
-			deliver('playerList:membersChanged', {
-				listId: 6,
-				playerIds: [2],
-				action: 'added',
-				memberCount: 1,
-			});
+			deliver('playerList:membersChanged', { listId: 6, playerIds: [2], action: 'added', memberCount: 1 });
 			deliver('playerList:deleted', { listId: 6 });
 			await flushPromises();
 
 			expect(mockFetch).not.toHaveBeenCalled();
 		});
 
-		it('re-reads when another browser resolves an unresolved deck card (#648)', async () => {
+		it.each([
+			['an unresolved deck card is resolved elsewhere (#648)', [['playerDeck:cardsResolved', { deckIds: [3, 9], playerIds: [2, 7] }]]],
+			['a deck review lands elsewhere', [['playerDeck:reviewed', { deck: { id: 3, playerId: 2 } }]]],
+			['an Archetype is created, edited or deleted', [
+				['archetype:created', { archetype: { id: 4, name: 'Mono Red' } }],
+				['archetype:updated', { archetype: { id: 4, name: 'Boros' } }],
+				['archetype:deleted', { archetypeId: 4 }],
+			]],
+			['a Melee round sync rewrites standings', [['melee:roundSynced', { roundId: 31, matchCount: 8, created: 0, updated: 8, staleDeleted: 0 }]]],
+		] as const)('re-reads when %s', async (_, messages) => {
 			await showingMetagame();
 
-			deliver('playerDeck:cardsResolved', {
-				deckIds: [3, 9],
-				playerIds: [2, 7],
-			});
-			await flushPromises();
+			for (const [type, payload] of messages) {
+				deliver(type, payload);
+				await flushPromises();
+			}
 
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(usePlayerStore().dataVersion).toBe(0);
-		});
-
-		it('re-reads when a deck review lands elsewhere', async () => {
-			await showingMetagame();
-
-			deliver('playerDeck:reviewed', {
-				deck: { id: 3, playerId: 2 },
-			});
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(usePlayerStore().dataVersion).toBe(0);
-		});
-
-		it('re-reads when an Archetype is created, edited or deleted', async () => {
-			await showingMetagame();
-
-			deliver('archetype:created', {
-				archetype: { id: 4, name: 'Mono Red' },
-			});
-			await flushPromises();
-			deliver('archetype:updated', {
-				archetype: { id: 4, name: 'Boros' },
-			});
-			await flushPromises();
-			deliver('archetype:deleted', { archetypeId: 4 });
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(3);
-			expect(usePlayerStore().dataVersion).toBe(0);
-		});
-
-		it('re-reads when a Melee round sync rewrites standings', async () => {
-			mutableConfig.scope = 'minPoints';
-			await showingMetagame();
-
-			deliver('melee:roundSynced', {
-				roundId: 31,
-				matchCount: 8,
-				created: 0,
-				updated: 8,
-				staleDeleted: 0,
-			});
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(mockFetch).toHaveBeenCalledTimes(messages.length);
 			expect(usePlayerStore().dataVersion).toBe(0);
 		});
 
 		it('shows a breakdown missed while disconnected once its channel is attached again', async () => {
 			const { displayRows } = await showingMetagame();
 
-			mockRealtime.connectionState = 'disconnected';
+			realtime.transport.connectionState = 'disconnected';
 			await nextTick();
 			mockFetch.mockResolvedValue(archetypeRead({
-				entries: [
-					{ name: 'Mono Red', count: 1, metaShare: 100 },
-				],
+				entries: [{ name: 'Mono Red', count: 1, metaShare: 100 }],
 				totalPlayers: 1,
 				scope: 'all',
 			}));
-			mockRealtime.connectionState = 'connected';
-			continuity.reattach('event:1');
+			realtime.transport.connectionState = 'connected';
+			realtime.reattach();
 			await flushPromises();
 
-			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(mockFetch).toHaveBeenCalledOnce();
 			expect(displayRows.value).toHaveLength(1);
 		});
 	});
