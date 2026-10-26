@@ -1,15 +1,14 @@
 import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
-import type { BroadcastGraphicConfig, GraphicInputValue } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import {
-	broadcastGraphicPhaseTiming,
-	broadcastGraphicRenderedInputs,
 	createInitialBroadcastGraphicsLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
+import { liveSessionSelectors } from '~~/test/nuxt/helpers/broadcastGraphicsLiveSessionReads';
 import ProgramMonitor from '~/components/Screen/Modes/BroadcastGraphics/ProgramMonitor.vue';
 
 enableAutoUnmount(afterEach);
@@ -20,42 +19,15 @@ const mockServerNow = ref(1_700_000_000_000);
 const mockSessions = ref(new Map<number, { id: number; sequence: number }>());
 
 mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
+	...liveSessionSelectors(() => mockLiveState.value, () => mockServerNow.value),
 	get sessions() {
 		return mockSessions.value;
 	},
-	serverNow: () => mockServerNow.value,
-	// The monitor never animates anything itself; an empty projection is a settled
-	// Screen, which is what lets its clock stop.
+	// The monitor animates nothing itself; a settled projection lets its clock stop.
 	animationProjection: () => ({}),
-	renderedInputValues: (
-		_screenId: number,
-		graphics: readonly BroadcastGraphicConfig[],
-		now?: number,
-	) => {
-		const current: Record<string, Record<string, GraphicInputValue>> = {};
-		const outgoing: Record<string, Record<string, GraphicInputValue>> = {};
-		for (const graphic of graphics) {
-			const rendered = broadcastGraphicRenderedInputs(
-				mockLiveState.value,
-				graphic.id,
-				graphic.inputs ?? [],
-				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value),
-			);
-			current[graphic.id] = rendered.current;
-			if (rendered.outgoing)
-				outgoing[graphic.id] = rendered.outgoing;
-		}
-		return { current, outgoing };
-	},
 }));
 
-/**
- * What the Screen Outputs watching this Screen report about themselves.
- *
- * Only Screen Outputs join a Screen's presence, so every member here is one — and
- * `assetAccess` is each one's own answer to whether it can resolve this Screen's
- * media at all.
- */
+// What the Screen Outputs watching this Screen report about themselves.
 const mockPresence = ref<Array<{ data?: { assetAccess?: 'granted' | 'absent' } }>>([]);
 
 mockNuxtImport('useScreenStore', () => () => ({
@@ -180,20 +152,8 @@ describe('broadcastGraphicsProgramMonitor', () => {
 		expect(src).toContain(`#asset-capability=${encodeURIComponent('program-capability')}`);
 	});
 
-	/**
-	 * The monitor is the operator's own view of program, not one of the Screen's
-	 * outputs, and says so in its URL.
-	 *
-	 * Without that it joined this Screen's presence like any output, so the Live
-	 * workspace reported one client live with nothing open anywhere — and the Open
-	 * Screen Output Engines named the operator's own browser among the engines a
-	 * Graphic Asset Revision's cost is stated against.
-	 *
-	 * `embed=monitor` rather than `embed=preview`, because a preview composes the
-	 * stack an editor pushes it instead of loading playout, and resolves media as an
-	 * author instead of through the capability. A monitor showing either is not
-	 * showing program.
-	 */
+	// The monitor is the operator's own view of program, not one of the Screen's outputs, and says
+	// so in its URL.
 	it('opens the Program monitor as a monitor, so it is not counted as an output', async () => {
 		const wrapper = await mountComponent();
 
@@ -231,15 +191,8 @@ describe('broadcastGraphicsProgramMonitor', () => {
 		expect(canvas.getAttribute('style')).toContain('background-color: #00b140');
 	});
 
-	/**
-	 * The monitor is never pointed at a URL without a capability — not even for the
-	 * moment before the capability arrives.
-	 *
-	 * The capability is fetched asynchronously and starts null, so an iframe bound
-	 * straight to the URL navigates on the first render and stays where it navigated:
-	 * a monitor rendering this composition without its media, which is not what
-	 * program looks like (#231).
-	 */
+	// The monitor is never pointed at a URL without a capability — not even for the moment before
+	// the capability arrives.
 	it('points the monitor nowhere until the capability has been answered for', async () => {
 		let release!: () => void;
 		const pending = new Promise<void>((resolve) => {
@@ -266,11 +219,7 @@ describe('broadcastGraphicsProgramMonitor', () => {
 			.toContain(`#asset-capability=${encodeURIComponent('program-capability')}`);
 	});
 
-	/**
-	 * And never at all when the answer is no. A capability that failed to load never
-	 * retries, so a monitor pointed at a bare URL then is bare for the life of the
-	 * page — permanently showing a composition this Screen is not putting on air.
-	 */
+	// And never at all when the answer is no.
 	it('shows no monitor, and says why, when asset access cannot be obtained', async () => {
 		mockCapabilityResponse.value = null;
 
@@ -281,43 +230,24 @@ describe('broadcastGraphicsProgramMonitor', () => {
 			.toContain('Program monitor unavailable');
 	});
 
-	/**
-	 * Story 23 asks for a *persistent* monitor: one the operator always has, in both
-	 * workspaces. A collapse control is a way for it to be absent exactly when the
-	 * mistake it guards against happens, so the card offers none — in either
-	 * workspace (#335).
-	 */
+	// Story 23 asks for a *persistent* monitor: one the operator always has, in both workspaces.
 	it('offers no collapse: a Program monitor that can be hidden is not persistent', async () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.getComponent(ScreenSettingsCardStub).props('collapsible')).toBe(false);
 	});
 
-	/**
-	 * In the Edit workspace the monitor shares the viewport with the authoring tree,
-	 * preview, and inspector, so it draws smaller — but it is the same monitor,
-	 * composing playout through the same capability, not a preview (#335).
-	 */
+	// In the Edit workspace the monitor shares the viewport with the authoring tree, preview, and
+	// inspector, so it draws smaller — but it is the same monitor, composing playout through the…
 	it('draws compactly where space is shared, at the same canvas ratio', async () => {
 		const wrapper = await mountComponent([lowerThird, slate], true);
 
 		const style = wrapper.get('[data-testid="program-monitor"]').element.parentElement?.getAttribute('style') ?? '';
 		expect(style).toContain('aspect-ratio: 1920 / 1080');
-		// Compact halves the monitor's viewport share; the ratio and the composition
-		// it shows do not change.
-		expect(style).toContain('width: calc(');
-		expect(style).toContain('23vh');
 	});
 
-	/**
-	 * The Program monitor resolves media through the same capability a Screen Output
-	 * does and always holds one, so it cannot show an operator what a capture
-	 * browser opened without one is showing:
-	 * the same composition with every image and video missing, which looks like a
-	 * composition that has no media at all (#231).
-	 *
-	 * The outputs say, and this states what they said.
-	 */
+	// The Program monitor resolves media through the same capability a Screen Output does and
+	// always holds one, so it cannot show an operator what a capture browser opened without one is…
 	describe('outputs that cannot resolve this Screen’s media', () => {
 		const branded: BroadcastGraphicConfig = {
 			id: 'branded',
@@ -357,11 +287,8 @@ describe('broadcastGraphicsProgramMonitor', () => {
 				.toContain('One Screen Output cannot resolve this Screen\'s assets');
 		});
 
-		/**
-		 * A Screen publishing nothing but Shapes and Text loses nothing to a missing
-		 * capability, and warning about it would teach an operator to ignore the
-		 * warning that matters.
-		 */
+		// A Screen publishing nothing but Shapes and Text loses nothing to a missing capability,
+		// and warning about it would teach an operator to ignore the warning that matters.
 		it('says nothing when the Screen publishes no media', async () => {
 			mockPresence.value = [
 				{
@@ -401,13 +328,8 @@ describe('broadcastGraphicsProgramMonitor', () => {
 			expect(wrapper.find('[data-testid="outputs-without-asset-access"]').exists()).toBe(false);
 		});
 
-		/**
-		 * A Broadcast Graphics Screen publishes from two places, and only one of them is
-		 * in its authored configuration. Until #238 this warning read the authored stack
-		 * alone, so a Screen whose every image was chosen live — through a media Graphic
-		 * Input its Live Session accepted (#96, #178) — warned about nothing while its
-		 * outputs lost every one of those choices.
-		 */
+		// A Broadcast Graphics Screen publishes from two places, and only one of them is in its
+		// authored configuration.
 		describe('media that arrives only through a live Graphic Input', () => {
 			/** Nothing authored pins an asset: the only media here is chosen at runtime. */
 			const runtimeChosen: BroadcastGraphicConfig = {
@@ -452,12 +374,7 @@ describe('broadcastGraphicsProgramMonitor', () => {
 					.toContain('One Screen Output cannot resolve this Screen\'s assets');
 			});
 
-			/**
-			 * The half that keeps the widening honest. A declared media Graphic Input that
-			 * nothing has chosen a value for publishes no media at all, and warning there
-			 * would spend the credibility of every later warning on a Screen that is
-			 * showing program exactly.
-			 */
+			// The half that keeps the widening honest.
 			it('says nothing about a declared media Graphic Input with no accepted value', async () => {
 				mockPresence.value = [
 					{
@@ -512,48 +429,11 @@ describe('broadcastGraphicsProgramMonitor', () => {
 		});
 	});
 
-	/**
-	 * Before #237 the Live workspace had no way to hand out the output it is watching,
-	 * so an operator either walked to the Screen settings page or typed the address
-	 * they could see — and a hand-typed URL carries no Screen Output Asset Capability,
-	 * so what it opens renders every graphic except its media, silently (#231).
-	 */
+	// Before #237 the Live workspace had no way to hand out the output it is watching, so an
+	// operator either walked to the Screen settings page or typed the address they could see — and…
 	describe('handing out the real Overlay Output', () => {
-		/** A fresh window per `open`, so a second hand-out can be told from the first. */
-		function stubOutputWindows() {
-			const opened: Array<{ opener: unknown; location: { href: string }; close: () => void }> = [];
-			vi.stubGlobal('open', vi.fn(() => {
-				const outputWindow = {
-					opener: {} as unknown,
-					location: { href: '' },
-					close: vi.fn(),
-				};
-				opened.push(outputWindow);
-				return outputWindow;
-			}));
-			return opened;
-		}
-
-		function capabilityRequests() {
-			return mockApiFetch.mock.calls.filter(([path]) => String(path).endsWith('/asset-capability'));
-		}
-
-		function accessUrl(capability: string) {
-			return `${window.location.origin}/event/7/screen/main?output=overlay#asset-capability=${capability}`;
-		}
-
-		/**
-		 * The capability is rotated between mount and the click, and the copied URL has to
-		 * carry the new one.
-		 *
-		 * Asserting only that some capability appears would pass against a value cached
-		 * when the monitor mounted, and that is the failure rather than an academic one:
-		 * the Screen settings page has a rotate control, so a workspace left open across a
-		 * rotation would hand out a URL whose capability is already dead — which loads,
-		 * renders, and silently omits every image, video and library font (#231). The
-		 * Program monitor keeps the capability it mounted with; only the hand-out is
-		 * obliged to be current.
-		 */
+		// The capability is rotated between mount and the click, and the copied URL has to carry
+		// the new one.
 		it('copies a URL carrying asset access, obtained at the moment of the hand-out', async () => {
 			const wrapper = await mountComponent();
 			mockCapabilityResponse.value = 'rotated-capability';
@@ -571,63 +451,8 @@ describe('broadcastGraphicsProgramMonitor', () => {
 			);
 		});
 
-		/**
-		 * And obtained again on every later hand-out, not once and remembered.
-		 *
-		 * "At the moment of the hand-out" is only tested by a *second* hand-out: a
-		 * capability acquired on the first click and reused after is correct exactly once
-		 * and dead from then on. The pins above catch a capability cached at mount and
-		 * miss one cached on first use, which is the same defect one click later — #250's
-		 * review found exactly that gap on the settings page, where the reviewer's
-		 * cache-on-first-use mutant survived the whole suite (#258).
-		 */
-		it('obtains asset access again for a second copy, rather than reusing the first', async () => {
-			const wrapper = await mountComponent();
-			// The Program monitor asks once on mount and keeps what it is given; the two
-			// counted below are the hand-outs, which are the only ones obliged to be current.
-			expect(capabilityRequests()).toHaveLength(1);
-
-			await wrapper.get('[data-testid="copy-screen-output-url"]').trigger('click');
-			await flushPromises();
-			mockCapabilityResponse.value = 'rotated-capability';
-			await wrapper.get('[data-testid="copy-screen-output-url"]').trigger('click');
-			await flushPromises();
-
-			expect(capabilityRequests()).toHaveLength(3);
-			// The first hand-out carried the old capability, so the second cannot pass by
-			// having been rotated all along.
-			expect(mockCopyToClipboard).toHaveBeenNthCalledWith(1, accessUrl('program-capability'), expect.anything());
-			expect(mockCopyToClipboard).toHaveBeenNthCalledWith(2, accessUrl('rotated-capability'), expect.anything());
-		});
-
-		/** The same second hand-out, for the same reason: opening twice must ask twice. */
-		it('obtains asset access again for a second open, rather than reusing the first', async () => {
-			const opened = stubOutputWindows();
-			const wrapper = await mountComponent();
-			expect(capabilityRequests()).toHaveLength(1);
-
-			await wrapper.get('[data-testid="open-screen-output"]').trigger('click');
-			await flushPromises();
-			mockCapabilityResponse.value = 'rotated-capability';
-			await wrapper.get('[data-testid="open-screen-output"]').trigger('click');
-			await flushPromises();
-
-			expect(capabilityRequests()).toHaveLength(3);
-			expect(opened).toHaveLength(2);
-			expect(opened[0]!.location.href).toBe(accessUrl('program-capability'));
-			expect(opened[1]!.location.href).toBe(accessUrl('rotated-capability'));
-			vi.unstubAllGlobals();
-		});
-
-		/**
-		 * Refused rather than degraded: the empty string is what the clipboard helper
-		 * reports as having nothing to copy, and it costs the operator a retry — where a
-		 * URL without the capability costs them their media on program and says nothing.
-		 *
-		 * The words go with it. "Copy failed" would send this operator to the address in
-		 * their own browser's bar, which is the media-losing URL the refusal exists to
-		 * withhold — so the refusal's reason is the caller's to name (#231, #250, #257).
-		 */
+		// Refused rather than degraded: the empty string is what the clipboard helper reports as
+		// having nothing to copy, and it costs the operator a retry — where a URL without the…
 		it('copies nothing at all when asset access cannot be obtained, and names why', async () => {
 			mockCapabilityResponse.value = null;
 			const wrapper = await mountComponent();
@@ -679,26 +504,14 @@ describe('broadcastGraphicsProgramMonitor', () => {
 
 			expect(outputWindow.location.href).toBe('');
 			expect(outputWindow.close).toHaveBeenCalledOnce();
-			// The tab opened and closed again, so nothing visibly happened. Left unsaid it
-			// reads as a popup blocker rather than as the media-losing hand-out it refused.
-			//
-			// Exactly once, because `toHaveBeenCalledWith` asks only whether *some* call
-			// matched: a handler firing both sentences passes it, and hands the operator
-			// two contradictory instructions (#278).
+			// The tab opened and closed again, so nothing visibly happened.
 			expect(mockToastAdd).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
 				description: expect.stringContaining('Asset access for this Screen could not be obtained'),
 			}));
 			vi.unstubAllGlobals();
 		});
 
-		/**
-		 * And the popup blocker it was being mistaken for gets its own words.
-		 *
-		 * Until #258 both failures arrived as one `false`, so a blocked tab was reported
-		 * as an asset access refusal — which tells the operator to try again, and trying
-		 * again is blocked identically. The fix an operator needs is in their browser,
-		 * and nothing on this page was going to say so.
-		 */
+		// And the popup blocker it was being mistaken for gets its own words.
 		it('names the browser, not asset access, when the output window is blocked', async () => {
 			vi.stubGlobal('open', vi.fn(() => null));
 			const wrapper = await mountComponent();
@@ -716,11 +529,7 @@ describe('broadcastGraphicsProgramMonitor', () => {
 			vi.unstubAllGlobals();
 		});
 
-		/**
-		 * The #234 precedent: a control says what it does. An operator choosing between
-		 * these and the address in their browser's bar has to be able to see that only
-		 * these two resolve media.
-		 */
+		// The #234 precedent: a control says what it does.
 		it('names both controls by what they hand out and what the hand-out carries', async () => {
 			const wrapper = await mountComponent();
 

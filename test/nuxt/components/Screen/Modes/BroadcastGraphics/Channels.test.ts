@@ -6,13 +6,7 @@ import Channels from '~/components/Screen/Modes/BroadcastGraphics/Channels.vue';
 
 enableAutoUnmount(afterEach);
 
-/**
- * Graphic Channel authoring on a Broadcast Graphics Screen.
- *
- * The panel declares lanes and joins Broadcast Graphics to them. Every assertion
- * here is about the write it emits rather than about its markup, because the write
- * is what the Screen stores and what every reader then resolves membership from.
- */
+// Graphic Channel authoring on a Broadcast Graphics Screen.
 
 const UButtonStub = defineComponent({
 	props: {

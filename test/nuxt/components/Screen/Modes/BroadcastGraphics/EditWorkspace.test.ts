@@ -12,26 +12,14 @@ mockNuxtImport('useEventStore', () => () => ({
 	event: { id: 7, name: 'Regional', game: 'mtg' },
 }));
 
-/**
- * The playout facts the on-air badge reads (#373): the Live Session store's
- * on-air set, per test. The store itself is the Program monitor's authority and
- * has its own suite; here it only has to answer for the badge.
- */
+// The playout facts the on-air badge reads (#373): the Live Session store's on-air set, per test.
 const onAirIds = { value: [] as string[] };
 mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	onAirGraphicIds: () => onAirIds.value,
 }));
 mockNuxtImport('useBroadcastGraphicsPlayoutClock', () => () => ref(1_000));
 
-/**
- * Where the Broadcast Graphic Template library is allowed to appear.
- *
- * The Edit workspace is an authoring surface and carries the library; the Live
- * workspace and Live Control are operating surfaces and must carry no template
- * action at all. That split is asserted from both sides — here, and in the Live
- * workspace's own suite — because a template action reachable from Live Control
- * would put a structural change to the Screen one click from a live programme.
- */
+// Where the Broadcast Graphic Template library is allowed to appear.
 
 const lowerThird: BroadcastGraphicConfig = { id: 'lower-third', name: 'Lower Third', items: [] };
 const slate: BroadcastGraphicConfig = { id: 'slate', name: 'Slate', items: [] };
@@ -158,14 +146,8 @@ describe('broadcastGraphicsEditWorkspace', () => {
 		onAirIds.value = [];
 	});
 
-	/**
-	 * The sharpest collision guard an author has (#373): a Graphic Input with a
-	 * live On-air Update Policy applies an Edit-workspace change to program
-	 * immediately, so the graphic that would carry it is marked in the authoring
-	 * tree itself. The mark is binary and covers every state that composes into
-	 * the frame — entering, on-air, updating, exiting — because the author's
-	 * question is "can my edit touch program?", which is yes in all four.
-	 */
+	// The sharpest collision guard an author has (#373): a Graphic Input with a live On-air Update
+	// Policy applies an Edit-workspace change to program immediately, so the graphic that would…
 	it('marks the Broadcast Graphics that are on a program output, and only those', async () => {
 		onAirIds.value = ['slate'];
 		const wrapper = await mountWorkspace();
@@ -176,12 +158,7 @@ describe('broadcastGraphicsEditWorkspace', () => {
 		expect(wrapper.find('[data-graphic-id="lower-third"] [data-testid="graphic-on-air"]').exists()).toBe(false);
 	});
 
-	/**
-	 * Reconnect Resync's rule, applied to a badge: expose the disconnection
-	 * rather than act on it. While the realtime connection is down this client
-	 * cannot know what is on air, and a frozen or absent mark would read as
-	 * "not on air" on exactly the surface guarding live edits.
-	 */
+	// Reconnect Resync's rule, applied to a badge: expose the disconnection rather than act on it.
 	it('says playout is unknown on every graphic while the realtime connection is down', async () => {
 		onAirIds.value = ['slate'];
 		const wrapper = await mountWorkspace({ playoutDisconnected: true });
@@ -239,12 +216,8 @@ describe('broadcastGraphicsEditWorkspace', () => {
 		expect(panel.attributes('data-writable')).toBe('false');
 	});
 
-	/**
-	 * The inspector authors Graphic Input Bindings against a curated field catalog
-	 * that separates common fields from ones specific to this Event's game, so the
-	 * workspace has to tell it which game — otherwise an author would be offered a
-	 * field this Event can never resolve.
-	 */
+	// The inspector authors Graphic Input Bindings against a curated field catalog that separates
+	// common fields from ones specific to this Event's game, so the workspace has to tell it which…
 	it('tells the inspector which game this Event is played in', async () => {
 		const wrapper = await mountWorkspace();
 
@@ -282,12 +255,7 @@ describe('broadcastGraphicsEditWorkspace', () => {
 		expect(wrapper.emitted('update:socialProfileProjections')).toBeUndefined();
 	});
 
-	/**
-	 * The save's answer, on the surface where the question is asked (#381). A
-	 * first authored save of an ordinary show measured ~8.3 s against deployed
-	 * remote D1 (#374), and an author tempted to navigate away mid-save had
-	 * nothing here saying whether the write landed.
-	 */
+	// The save's answer, on the surface where the question is asked (#381).
 	describe('save state', () => {
 		it('says a save is in flight', async () => {
 			const wrapper = await mountWorkspace({ saveState: 'saving' });
@@ -336,15 +304,7 @@ describe('broadcastGraphicsEditWorkspace', () => {
 		});
 	});
 
-	/**
-	 * Who is holding the lease, as a person (#398, ADR-0010).
-	 *
-	 * A lease is held by a session, and "another session" — all this surface could
-	 * say while the holder was an anonymous cookie — is true and useless: what an
-	 * operator does next depends on whether that is a colleague to go and ask or
-	 * their own second window to close. The server resolves session → user, so the
-	 * editor is handed a name and never another browser's session id.
-	 */
+	// Who is holding the lease, as a person (#398, ADR-0010).
 	describe('the notice an observing session is shown', () => {
 		it('names the person holding the lease when the server resolved one', async () => {
 			const wrapper = await mountWorkspace({ writable: false, holderName: 'Marcus Angel' });
