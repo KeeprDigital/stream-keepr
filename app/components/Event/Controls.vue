@@ -35,11 +35,11 @@ const commentatorInitialData = computed(() => {
 	};
 });
 
-const { formData: holdingTextFormData, isDirty: isHoldingTextDirty, reset: resetHoldingText, getChanges: getHoldingTextChanges } = useForm({
+const { formData: holdingTextFormData, isDirty: isHoldingTextDirty, reset: resetHoldingText, getChanges: getHoldingTextChanges, runSave: runHoldingTextSave } = useForm({
 	initialData: holdingTextInitialData,
 });
 
-const { formData: commentatorFormData, isDirty: isCommentatorsDirty, reset: resetCommentators, getChanges: getCommentatorChanges } = useForm({
+const { formData: commentatorFormData, isDirty: isCommentatorsDirty, reset: resetCommentators, getChanges: getCommentatorChanges, runSave: runCommentatorSave } = useForm({
 	initialData: commentatorInitialData,
 });
 
@@ -149,7 +149,7 @@ async function saveHoldingTextSettings() {
 		? { holdingText: changes.holdingText?.trim() || null }
 		: {};
 
-	await runRequest(
+	await runHoldingTextSave(() => runRequest(
 		() => eventStore.updateEvent(updates),
 		{
 			loadingRef: holdingTextSaving,
@@ -159,7 +159,7 @@ async function saveHoldingTextSettings() {
 				console.error(error);
 			},
 		},
-	);
+	));
 }
 
 async function saveCommentatorSettings() {
@@ -174,7 +174,7 @@ async function saveCommentatorSettings() {
 	if ('commentator2TalentId' in changes)
 		updates.commentator2TalentId = changes.commentator2TalentId ?? null;
 
-	await runRequest(
+	await runCommentatorSave(() => runRequest(
 		() => eventStore.updateEvent(updates),
 		{
 			loadingRef: commentatorsSaving,
@@ -184,7 +184,7 @@ async function saveCommentatorSettings() {
 				console.error(error);
 			},
 		},
-	);
+	));
 }
 
 function swapCommentators() {
