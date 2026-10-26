@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { transportFailure } from '~~/test/helpers/transportFailure';
 import { clearNuxtState } from '#app';
+import FocusPicker from '~/components/GraphicsAsset/FocusPicker.vue';
 
 enableAutoUnmount(afterEach);
 
@@ -225,7 +226,6 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 	});
 
 	it('preserves Event context, shows verified facts, and returns one exact revision', async () => {
-		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
 		const wrapper = mount(FocusPicker, {
 			props: {
 				modelValue: undefined,
@@ -271,7 +271,6 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 	 */
 
 	async function mountPicker(props: { eventId: number; assetKind?: GraphicAsset['kind'][] }) {
-		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
 		return mount(FocusPicker, {
 			props: { fieldLabel: 'Frame image', ...props },
 			global: {
@@ -412,7 +411,6 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 
 	it('keeps a missing exact reference visible as a publication-blocking integrity failure', async () => {
 		mockApiFetch.mockResolvedValue({ outcome: 'missing' });
-		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
 		const wrapper = mount(FocusPicker, {
 			props: {
 				modelValue: {
@@ -445,7 +443,6 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 	 * to refuse it for and no open output to warn about.
 	 */
 	it('offers a transparent video like any other revision', async () => {
-		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
 		const wrapper = mount(FocusPicker, {
 			props: {
 				eventId: 7,
@@ -484,7 +481,6 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 	 */
 	it('withholds its own Clear for a host that owns one, while still reporting the pinned revision', async () => {
 		mockApiFetch.mockResolvedValue({ outcome: 'missing' });
-		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
 		const wrapper = mount(FocusPicker, {
 			props: {
 				modelValue: {
@@ -518,7 +514,6 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 
 	it('refreshes its exact-revision status when unavailable content is retried', async () => {
 		mockApiFetch.mockResolvedValue({ outcome: 'unavailable', retryable: true });
-		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
 		const wrapper = mount(FocusPicker, {
 			props: {
 				modelValue: {
@@ -559,7 +554,6 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 		mockApiFetch
 			.mockReturnValueOnce(new Promise(resolve => (resolveFirst = resolve)))
 			.mockReturnValueOnce(new Promise(resolve => (resolveSecond = resolve)));
-		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
 		const wrapper = mount(FocusPicker, {
 			props: {
 				modelValue: {
@@ -606,7 +600,6 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 	 * 5xx families whose prose the server preserves through sanitizing.
 	 */
 	async function mountWithListingFailure() {
-		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
 		const wrapper = mount(FocusPicker, {
 			props: { modelValue: undefined, eventId: 7, fieldLabel: 'Frame image' },
 			global: {

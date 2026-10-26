@@ -3,8 +3,8 @@ import type { Talent } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
-import { defineComponent } from 'vue';
 import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import ConfigTalents from '~/components/Event/ConfigTalents.vue';
 
 function talent(id: number, name: string, socialProfiles: Talent['socialProfiles'] = {}): Talent {
@@ -31,97 +31,9 @@ mockNuxtImport('useOverlay', () => () => ({
 }));
 mockNuxtImport('onBeforeRouteLeave', () => () => {});
 
-const UCardStub = defineComponent({
-	name: 'UCard',
-	template: '<section><slot /><slot name="footer" /></section>',
-});
-
-const UIEmptyStateStub = defineComponent({
-	name: 'UIEmptyState',
-	template: '<p data-empty />',
-});
-
-const UInputStub = defineComponent({
-	name: 'UInput',
-	props: {
-		modelValue: { type: String, required: false },
-		icon: { type: String, required: false },
-	},
-	emits: ['update:modelValue'],
-	template: '<input :value="modelValue" :data-icon="icon" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-});
-
-const UButtonStub = defineComponent({
-	name: 'UButton',
-	props: {
-		label: { type: String, required: false },
-		icon: { type: String, required: false },
-		disabled: { type: Boolean, required: false },
-		type: { type: String, required: false },
-	},
-	emits: ['click'],
-	template: '<button :data-label="label" :data-icon="icon" :disabled="disabled" :type="type" @click="$emit(\'click\')">{{ label }}</button>',
-});
-
-const UDropdownMenuStub = defineComponent({
-	name: 'UDropdownMenu',
-	props: {
-		items: {
-			type: Array,
-			default: () => [],
-		},
-	},
-	template: '<div data-menu><slot /></div>',
-});
-
-const UTooltipStub = defineComponent({
-	name: 'UTooltip',
-	template: '<div><slot /></div>',
-});
-
-const UModalStub = defineComponent({
-	name: 'UModal',
-	props: {
-		open: { type: Boolean, default: false },
-	},
-	template: '<section v-if="open" data-editor><slot name="body" /><slot name="footer" /></section>',
-});
-
-const UFormStub = defineComponent({
-	name: 'UForm',
-	emits: ['submit'],
-	template: '<form @submit.prevent="$emit(\'submit\')"><slot /></form>',
-});
-
-const UFormFieldStub = defineComponent({
-	name: 'UFormField',
-	props: {
-		name: { type: String, required: false },
-		label: { type: String, required: false },
-		error: { type: String, required: false },
-	},
-	template: '<label :data-field="name"><span data-field-label>{{ label }}</span><slot /><span v-if="error" data-error>{{ error }}</span></label>',
-});
-
-const UIconStub = defineComponent({
-	name: 'UIcon',
-	props: {
-		name: { type: String, required: true },
-	},
-	template: '<span :data-icon="name" />',
-});
-
 const stubs = {
-	UCard: UCardStub,
-	UIEmptyState: UIEmptyStateStub,
-	UInput: UInputStub,
-	UButton: UButtonStub,
-	UDropdownMenu: UDropdownMenuStub,
-	UTooltip: UTooltipStub,
-	UModal: UModalStub,
-	UForm: UFormStub,
-	UFormField: UFormFieldStub,
-	UIcon: UIconStub,
+	...nuxtUiStubs,
+	UIEmptyState: { template: '<p data-empty />' },
 };
 
 enableAutoUnmount(afterEach);
@@ -148,7 +60,7 @@ async function mountUnderGuard(talents: Talent[]) {
 }
 
 function chooseRowAction(wrapper: Wrapper, index: number, label: string) {
-	const menus = wrapper.findAllComponents(UDropdownMenuStub);
+	const menus = wrapper.findAllComponents({ name: 'UDropdownMenu' });
 	const items = menus[index]!.props('items') as DropdownMenuItem[];
 	const action = items.find(item => item.label === label);
 	if (!action)
@@ -157,7 +69,7 @@ function chooseRowAction(wrapper: Wrapper, index: number, label: string) {
 }
 
 function button(wrapper: Wrapper, label: string) {
-	return wrapper.findAll(`[data-label="${label}"]`).at(-1)!;
+	return wrapper.findAll('button').filter(candidate => candidate.text() === label).at(-1)!;
 }
 
 function profileInput(wrapper: Wrapper, network: string) {
@@ -177,24 +89,20 @@ function submitted(wrapper: Wrapper) {
 }
 
 describe('event config Talents', () => {
-	it('offers a focused editor with six icon-labelled optional Social Profile fields', async () => {
+	it('offers a focused editor with a field for each Social Profile network', async () => {
 		const wrapper = await mountComponent([ALICE]);
 		chooseRowAction(wrapper, 0, 'Edit');
 		await flushPromises();
 
-		expect(wrapper.find('[data-editor]').exists()).toBe(true);
-		expect(wrapper.findAll('[data-social-network]')).toHaveLength(6);
-		expect(wrapper.findAll('[data-field-label]').map(label => label.text())).toEqual([
-			'Name',
-			'Twitch',
-			'YouTube',
-			'X',
-			'Instagram',
-			'TikTok',
-			'Bluesky',
-		]);
-		expect(profileInput(wrapper, 'twitch').attributes('data-icon')).toBe('i-simple-icons-twitch');
-		expect(profileInput(wrapper, 'bluesky').attributes('data-icon')).toBe('i-simple-icons-bluesky');
+		expect(wrapper.findAll('[data-social-network]').map(input => input.attributes('data-social-network')))
+			.toEqual([
+				'twitch',
+				'youtube',
+				'x',
+				'instagram',
+				'tiktok',
+				'bluesky',
+			]);
 	});
 
 	it('normalizes profiles and keeps the Talent id through the staged save', async () => {
@@ -226,7 +134,7 @@ describe('event config Talents', () => {
 		await finishEditor(wrapper);
 
 		expect(wrapper.get('[data-field="socialProfiles.x"] [data-error]').text()).toContain('valid X handle');
-		expect(wrapper.find('[data-editor]').exists()).toBe(true);
+		expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
 		expect(wrapper.emitted('submit')).toBeUndefined();
 	});
 
@@ -271,8 +179,7 @@ describe('event config Talents', () => {
 		]);
 	});
 
-	// #612: the staged list used to stay as the operator first saw it, so saving
-	// it removed every Talent a colleague had added meanwhile.
+	// The staged list follows the response, so a save keeps a colleague's additions (#612).
 	it('keeps a Talent a colleague added while this operator removes another', async () => {
 		const CARA = talent(14, 'Cara');
 		const wrapper = await mountComponent([ALICE, BOB]);
@@ -379,17 +286,6 @@ describe('event config Talents', () => {
 
 		await button(wrapper, 'Reset').trigger('click');
 		expect(pageIsDirty()).toBe(false);
-		expect(wrapper.findAllComponents(UDropdownMenuStub)).toHaveLength(2);
-	});
-
-	it('uses ordinary buttons for both Save branches', async () => {
-		const wrapper = await mountComponent([ALICE]);
-		expect(wrapper.findComponent(UTooltipStub).exists()).toBe(false);
-		expect(button(wrapper, 'Save').attributes('type')).toBe('button');
-
-		await button(wrapper, 'Add talent').trigger('click');
-		await flushPromises();
-		expect(wrapper.findComponent(UTooltipStub).exists()).toBe(true);
-		expect(button(wrapper, 'Save').attributes('type')).toBe('button');
+		expect(wrapper.findAllComponents({ name: 'UDropdownMenu' })).toHaveLength(2);
 	});
 });

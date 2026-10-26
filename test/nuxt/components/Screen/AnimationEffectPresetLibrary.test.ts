@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
+import Library from '~/components/Screen/AnimationEffectPresetLibrary.vue';
 
 const preset = {
 	id: 'preset-1',
@@ -36,7 +37,6 @@ async function mountLibrary(selection = {
 	effect: 'caustics' as const,
 	params: { speed: 0.7 },
 }) {
-	const { default: Library } = await import('../../../../app/components/Screen/AnimationEffectPresetLibrary.vue');
 	const wrapper = mount(Library, {
 		props: { selection },
 		global: {

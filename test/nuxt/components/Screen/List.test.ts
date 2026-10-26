@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent } from 'vue';
+import ScreenList from '~/components/Screen/List.vue';
 import ScreenListItem from '~/components/Screen/ListItem.vue';
 
 /**
@@ -130,8 +131,6 @@ async function mountList(props: Partial<{
 	updatingScreenId: number | null;
 	connectedCounts: Map<number, number>;
 }> = {}) {
-	const { default: ScreenList } = await import('~/components/Screen/List.vue');
-
 	const wrapper = mount(ScreenList, {
 		props: {
 			loading: false,

@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import HighlanderSummary from '~/components/Mtg/HighlanderSummary.vue';
 
 const mockEventStore = {
@@ -17,24 +18,6 @@ const mockCardPreview = {
 
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useCardPreview', () => () => mockCardPreview);
-
-const UBadgeStub = defineComponent({
-	props: {
-		color: { type: String, required: false },
-	},
-	template: '<span data-testid="badge" :data-color="color"><slot /></span>',
-});
-
-const UAlertStub = defineComponent({
-	props: {
-		title: { type: String, required: false },
-	},
-	template: '<div data-testid="alert">{{ title }}<slot name="description" /></div>',
-});
-
-const UButtonStub = defineComponent({
-	template: '<button type="button"><slot /></button>',
-});
 
 const CardHoverPreviewStub = defineComponent({
 	template: '<div><slot /></div>',
@@ -78,9 +61,7 @@ async function mountComponent(props: { highlander?: HighlanderDeckSummary | null
 		},
 		global: {
 			stubs: {
-				UBadge: UBadgeStub,
-				UAlert: UAlertStub,
-				UButton: UButtonStub,
+				...nuxtUiStubs,
 				CardHoverPreview: CardHoverPreviewStub,
 			},
 		},
@@ -92,11 +73,20 @@ describe('highlanderSummary', () => {
 		vi.clearAllMocks();
 	});
 
-	it('keeps the full layout warnings in default mode', async () => {
+	it('explains an illegal deck: the singleton violation and the points over the cap', async () => {
 		const wrapper = await mountComponent();
 
+		expect(wrapper.text()).toContain('Illegal');
+		expect(wrapper.text()).toContain('Singleton violations: Mana Drain (2)');
+		expect(wrapper.text()).toContain('Points cap exceeded: 4/3 Points');
 		expect(wrapper.text()).toContain('Pointed Cards');
-		expect(wrapper.findAll('[data-testid="alert"]')).toHaveLength(1);
-		expect(wrapper.find('[data-testid="badge"]').attributes('data-color')).toBe('error');
+	});
+
+	it('keeps only the pointed cards when compact', async () => {
+		const wrapper = await mountComponent({ compact: true });
+
+		expect(wrapper.find('[data-alert]').exists()).toBe(false);
+		expect(wrapper.text()).not.toContain('Illegal');
+		expect(wrapper.get('[data-testid="highlander-compact-cards"]').text()).toContain('Lutri, the Spellchaser');
 	});
 });

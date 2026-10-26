@@ -1,48 +1,56 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import { defineComponent, reactive } from 'vue';
+import { reactive } from 'vue';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import CardHistory from '~/components/Mtg/CardHistory.vue';
 
-const selectPreviewCard = vi.fn();
 const cardStore = reactive({
 	selectionHistory: [
 		{
 			id: 'card-1',
 			name: 'Lightning Bolt',
-			displayData: { turnedOver: false },
+			displayData: { turnedOver: true },
 		},
 	],
-	selectPreviewCard,
+	selectPreviewCard: vi.fn(),
 	clearHistory: vi.fn(),
 });
 
 mockNuxtImport('useCardStore', () => () => cardStore);
 
-const UModalStub = defineComponent({
-	template: '<div><slot name="body" /><slot name="footer" /></div>',
-});
-
-const CardImageStub = defineComponent({
-	emits: ['selected'],
-	template: '<button type="button" data-testid="card" @keydown.enter="$emit(\'selected\', false)" />',
-});
-
-describe('mtgCardHistory', () => {
-	it('uses the card selected event so keyboard activation selects a card', async () => {
-		const { default: CardHistory } = await import('../../../../app/components/Mtg/CardHistory.vue');
-		const wrapper = mount(CardHistory, {
-			global: {
-				stubs: {
-					UModal: UModalStub,
-					UButton: true,
-					MtgCardImage: CardImageStub,
+function mountHistory() {
+	return mount(CardHistory, {
+		attrs: { open: true },
+		global: {
+			stubs: {
+				...nuxtUiStubs,
+				MtgCardImage: {
+					name: 'MtgCardImage',
+					emits: ['selected'],
+					template: '<div data-testid="card" />',
 				},
 			},
-		});
+		},
+	});
+}
 
-		await wrapper.get('[data-testid="card"]').trigger('keydown', { key: 'Enter' });
+describe('mtgCardHistory', () => {
+	it('previews a chosen card the way it was last shown, then closes', () => {
+		const wrapper = mountHistory();
 
-		expect(selectPreviewCard).toHaveBeenCalledWith(cardStore.selectionHistory[0], false);
+		wrapper.findComponent({ name: 'MtgCardImage' }).vm.$emit('selected');
+
+		expect(cardStore.selectPreviewCard).toHaveBeenCalledWith(cardStore.selectionHistory[0], true);
+		expect(wrapper.emitted('close')).toHaveLength(1);
+	});
+
+	it('clears the history, then closes', async () => {
+		const wrapper = mountHistory();
+
+		await wrapper.findAll('button').find(button => button.text() === 'Clear')!.trigger('click');
+
+		expect(cardStore.clearHistory).toHaveBeenCalledOnce();
 		expect(wrapper.emitted('close')).toHaveLength(1);
 	});
 });

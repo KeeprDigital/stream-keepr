@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import Settings from '~/components/Screen/Modes/TopCut/Settings.vue';
 
 /**
  * The Top Cut Bracket settings editor picks the Phase of the Screen's Event its bracket
@@ -78,7 +79,6 @@ const ScreenSettingsToggleStub = defineComponent({
 });
 
 async function mountEditor() {
-	const { default: Settings } = await import('../../../../../../app/components/Screen/Modes/TopCut/Settings.vue');
 	const wrapper = mount(Settings, {
 		props: {
 			screen: { id: 1 } as Screen,

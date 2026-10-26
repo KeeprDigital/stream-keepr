@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import FrameAnimation from '~/components/Screen/Modes/FeatureMatchOverlay/FrameAnimation.vue';
 
 const animationMocks = vi.hoisted(() => ({
 	loadAnimationEffect: vi.fn(),
@@ -35,7 +36,6 @@ function effectInstance() {
 }
 
 async function mountFrameAnimation(props: Record<string, unknown>) {
-	const { default: FrameAnimation } = await import('../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/FrameAnimation.vue');
 	return mount(FrameAnimation, {
 		props: {
 			canvasWidth: 1920,

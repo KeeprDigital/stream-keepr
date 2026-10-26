@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { NINE_POINT_VALUES } from '~~/shared/utils/ninePoints';
+import InspectorSource from '~/components/Screen/Modes/FeatureMatchOverlay/InspectorSource.vue';
 
 /**
  * A Source Item's Bounds section, with the real geometry fields and editor: what
@@ -29,7 +30,6 @@ const UButtonStub = defineComponent({
 });
 
 async function mountBounds(anchor: FeatureMatchOverlayAnchorValue) {
-	const { default: InspectorSource } = await import('~/components/Screen/Modes/FeatureMatchOverlay/InspectorSource.vue');
 	const config: FeatureMatchOverlayModeConfig = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 	// An odd-sized 401×201 item at (100, 50) on a 1920×1080 canvas, so a
 	// centre anchor sits on a half pixel.

@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import Settings from '~/components/Screen/Modes/Standings/Settings.vue';
 
 vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
 
@@ -63,7 +64,6 @@ const USwitchStub = defineComponent({
 });
 
 async function mountSettings() {
-	const { default: Settings } = await import('../../../../../../app/components/Screen/Modes/Standings/Settings.vue');
 	const wrapper = mount(Settings, {
 		props: {
 			screen: { id: 1 } as Screen,

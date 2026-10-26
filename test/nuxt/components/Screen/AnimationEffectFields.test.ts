@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { ANIMATION_EFFECT_VALUES } from '~~/shared/animationEffects';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import AnimationEffectFields from '~/components/Screen/AnimationEffectFields.vue';
 
 const UIColorPickerStub = defineComponent({
 	props: {
@@ -25,8 +26,6 @@ const ScreenSettingsToggleStub = defineComponent({
 });
 
 async function mountComponent(selection: AnimationEffectSelection, onUpdate = vi.fn()) {
-	const { default: AnimationEffectFields } = await import('../../../../app/components/Screen/AnimationEffectFields.vue');
-
 	const wrapper = mount(AnimationEffectFields, {
 		props: {
 			selection,

@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, h } from 'vue';
+import GameWinModal from '~/components/FeatureMatch/State/GameWinModal.vue';
 
 const UModalStub = defineComponent({
 	props: {
@@ -35,7 +36,6 @@ describe('feature match game win modal', () => {
 	});
 
 	it('confirms the primary action on Enter when open', async () => {
-		const { default: GameWinModal } = await import('~/components/FeatureMatch/State/GameWinModal.vue');
 		const wrapper = mount(GameWinModal, {
 			props: {
 				open: true,
@@ -66,7 +66,6 @@ describe('feature match game win modal', () => {
 	});
 
 	it('ignores Enter when closed', async () => {
-		const { default: GameWinModal } = await import('~/components/FeatureMatch/State/GameWinModal.vue');
 		const wrapper = mount(GameWinModal, {
 			props: {
 				open: false,

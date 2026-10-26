@@ -5,6 +5,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import Settings from '~/components/Screen/Modes/Pairings/Settings.vue';
 
 /**
  * The Pagination card's page count is the one the Screen Output renders: the
@@ -111,8 +112,6 @@ const UButtonStub = defineComponent({
 });
 
 async function mountSettings() {
-	const { default: Settings } = await import('../../../../../../app/components/Screen/Modes/Pairings/Settings.vue');
-
 	const wrapper = mount(Settings, {
 		props: {
 			screen: {
