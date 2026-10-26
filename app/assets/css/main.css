@@ -33,6 +33,21 @@
 	--font-display: var(--font-saira-condensed);
 	--font-body: var(--font-ibm-plex-sans);
 	--font-mono: var(--font-inconsolata);
+	/* Keep in step with MTG_CARD_BORDER_RADIUS in shared/utils/card/size.ts. */
+	--mtg-card-radius: 4.75% / 4%;
+}
+
+/*
+ * A flat Magic card face: Scryfall's image proportions and the printed card's
+ * rounded corners, clipping the image and any no-image fallback inside it.
+ * Width comes from the caller. A 3D card that turns over cannot clip
+ * (`overflow: hidden` flattens `preserve-3d`), so it rounds each face with
+ * `--mtg-card-radius` instead.
+ */
+@utility mtg-card {
+	aspect-ratio: 61 / 85;
+	border-radius: var(--mtg-card-radius);
+	overflow: hidden;
 }
 
 body {

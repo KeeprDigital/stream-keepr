@@ -76,7 +76,9 @@ const NON_PAINTING_KEYS = new Set([
 ]);
 
 /** Replaced-element properties, meaningless anywhere but on media. */
-const MEDIA_NON_PAINTING_KEYS = new Set(['objectFit', 'objectPosition']);
+// `borderRadius` rounds a Deck List card's art like the printed card: like
+// `clipPath`, it removes alpha at the corners and adds none.
+const MEDIA_NON_PAINTING_KEYS = new Set(['borderRadius', 'objectFit', 'objectPosition']);
 
 /** The one mask the Key Output may carry: a hard-edged white wipe, a stencil rather than paint. */
 const WHITE_WIPE_MASK = /^linear-gradient\(to (?:right|left|bottom|top), #ffffff 0 [\d.]+%, #ffffff00 [\d.]+%\)$/i;

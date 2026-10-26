@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DeckListCard } from '~~/shared/types/deckList';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
 	card: DeckListCard;
 	imageUrl: string | null;
 	isActive: boolean;
@@ -11,7 +11,9 @@ const props = defineProps<{
 	keyCard?: boolean;
 	/** Whether click-to-select key card mode is enabled */
 	selectable?: boolean;
-}>();
+}>(), {
+	showQuantity: true,
+});
 
 const emit = defineEmits<{
 	(e: 'preview', cardKey: string, open: boolean): void;
@@ -55,7 +57,7 @@ function handleClick() {
 				@keydown.enter.stop="handleClick"
 				@keydown.space.prevent.stop="handleClick"
 			>
-				<span v-if="showQuantity !== false" class="font-mono w-5 text-center shrink-0 text-muted">{{ card.quantity }}</span>
+				<span v-if="showQuantity" class="font-mono w-5 text-center shrink-0 text-muted">{{ card.quantity }}</span>
 				<span>{{ card.name }}</span>
 				<UBadge
 					v-if="card.highlanderPoints"

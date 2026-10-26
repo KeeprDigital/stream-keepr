@@ -131,6 +131,7 @@ export function createMockPlayer(overrides?: Partial<DbPlayer>): DbPlayer {
 		archetypeId: null,
 		lgs: null,
 		gameData: null,
+		manuallyEditedFields: null,
 		...defaultTimestamps(overrides),
 		...overrides,
 	};

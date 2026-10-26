@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { featureMatchTokenDeclarations } from '~~/shared/featureMatchTokenCatalogue';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
 import { SUPPORTED_SOCIAL_NETWORKS } from '~~/shared/socialProfiles';
+import { MTG_CARD_BORDER_RADIUS } from '~~/shared/utils/card/size';
 import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
 import {
 	CANVAS,
@@ -819,6 +820,8 @@ describe('graphicsCompositionRenderModel', () => {
 			// A card with art renders it contained, never cropped.
 			expect(cards[2]!.image?.src).toBe('https://cards.example/pithing-needle.jpg');
 			expect(cards[2]!.image?.style.objectFit).toBe('contain');
+			// Rounded like every other Magic card face, not square-cornered JPEG.
+			expect(cards[2]!.image?.style.borderRadius).toBe(MTG_CARD_BORDER_RADIUS);
 			expect(cards[2]!.placeholder).toBeUndefined();
 		});
 

@@ -70,6 +70,10 @@ The workflow that imports and refreshes Event structure, Players, Deck Lists, st
 The Melee-owned identity and lifecycle facts on a synced record: its external identity, sync status, activity, and last-seen time. Only Melee Sync writes Provenance; manual operator edits never carry it.
 _Avoid_: external fields, sync metadata.
 
+**Manually Edited Field**:
+A Melee-imported Player field, name or pronouns, that an operator has changed by hand, on the Players page or in a Feature Match Slot's setup. Melee Sync stops writing that field for that Player, blank or not, and keeps importing the rest. Writing the value a field already holds, as a whole-form save does, is not an edit (ADR-0046).
+_Avoid_: override, local override.
+
 **Talent**:
 An Event-scoped broadcast presenter or commentator who may be selected for production graphics.
 
@@ -109,7 +113,7 @@ The live state timeline for a Feature Match Slot.
 The workflow that promotes a Match into a Feature Match Slot for production controls and saves the Round-scoped Feature Match Assignment.
 
 **Reverse Sync**:
-The follow-on that copies Players' current data into every Feature Match Slot seating them, and into each such Slot's active Feature Match Session source snapshot. It runs after the Player write, Melee Sync or Feature Match Slot Promotion that caused it has committed, and announces nothing itself: its caller's own messages carry the result. A lost Session race is absorbed, and the next pass finds the same difference.
+The follow-on that copies Players' current data into every Feature Match Slot seating them, and into each such Slot's active Feature Match Session source snapshot. It runs after the Player write, Melee Sync or Feature Match Slot Promotion that caused it has committed, and announces nothing itself: its caller's own messages carry the result. A lost Session race is absorbed, and the next pass finds the same difference. A Slot setup edit to a seated Player's name, pronouns or LGS is a Player write, so Reverse Sync carries it rather than undoing it (ADR-0045).
 _Avoid_: player sync, match snapshot refresh.
 
 ### Screens

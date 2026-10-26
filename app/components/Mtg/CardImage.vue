@@ -135,10 +135,10 @@ onBeforeUnmount(() => {
 }
 
 .card-image {
-	aspect-ratio: 61/85;
+	aspect-ratio: 61 / 85;
 	perspective: 2000px;
 	position: relative;
-	border-radius: 4.75% / 4%;
+	border-radius: var(--mtg-card-radius);
 	width: 100%;
 	margin: 0 auto;
 
@@ -155,7 +155,7 @@ onBeforeUnmount(() => {
 			backface-visibility: hidden;
 
 			.image {
-				border-radius: 4.75% / 4%;
+				border-radius: var(--mtg-card-radius);
 				width: 100%;
 				height: 100%;
 				object-fit: cover;

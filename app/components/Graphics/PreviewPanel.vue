@@ -14,7 +14,7 @@ import { PREVIEW_ZOOM_OPTIONS } from '~/modules/graphics/previewControls';
  * and keeps its own state in sync. The `controls` slot adds host controls to the
  * toolbar; the default slot sits between the toolbar and the viewport.
  */
-const props = defineProps<{
+const props = withDefaults(defineProps<{
 	canvasWidth: number;
 	canvasHeight: number;
 	/** A solid colour behind the viewport; omitted, it shows transparency. */
@@ -23,7 +23,9 @@ const props = defineProps<{
 	fitHeight?: string;
 	/** Whether the panel can be collapsed. Default: true. */
 	collapsible?: boolean;
-}>();
+}>(), {
+	collapsible: true,
+});
 
 const output = defineModel<ScreenOutput>('output', { default: 'overlay' });
 const itemGuides = defineModel<boolean>('itemGuides', { default: true });
@@ -52,7 +54,7 @@ const viewportStyle = computed(() => [
 </script>
 
 <template>
-	<ScreenSettingsCard title="Preview" :default-open="true" :collapsible="collapsible !== false">
+	<ScreenSettingsCard title="Preview" :default-open="true" :collapsible="collapsible">
 		<template #actions="{ open }">
 			<div v-if="open" class="flex flex-wrap items-center gap-3">
 				<UFieldGroup size="sm">

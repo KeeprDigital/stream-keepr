@@ -10,9 +10,16 @@ enableAutoUnmount(afterEach);
 
 const SlotOnlyStub = defineComponent({ template: '<div><slot /></div>' });
 
+const ScreenSettingsCardStub = defineComponent({
+	props: {
+		collapsible: { type: Boolean, required: false },
+	},
+	template: '<section><slot name="actions" :open="true" /><slot /></section>',
+});
+
 const global = {
 	stubs: {
-		ScreenSettingsCard: defineComponent({ template: '<section><slot name="actions" :open="true" /><slot /></section>' }),
+		ScreenSettingsCard: ScreenSettingsCardStub,
 		UFormField: SlotOnlyStub,
 		UFieldGroup: SlotOnlyStub,
 		USwitch: defineComponent({
@@ -102,5 +109,10 @@ describe('graphicsPreviewPanel', () => {
 		expect(wrapper.find('[data-testid="host-control"]').exists()).toBe(true);
 		expect(wrapper.find('[data-testid="host-content"]').exists()).toBe(true);
 		expect(viewport(wrapper).querySelector('iframe')).not.toBeNull();
+	});
+
+	it('collapses by default, and stays open when the host says it cannot', () => {
+		expect(mountPanel().findComponent(ScreenSettingsCardStub).props('collapsible')).toBe(true);
+		expect(mountPanel({ collapsible: false }).findComponent(ScreenSettingsCardStub).props('collapsible')).toBe(false);
 	});
 });
