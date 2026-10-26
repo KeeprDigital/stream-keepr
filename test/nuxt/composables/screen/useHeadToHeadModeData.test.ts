@@ -79,7 +79,6 @@ function earlierMatch(overrides: Partial<ScreenOutputHeadToHeadEarlierMatch> = {
 		phaseName: 'Swiss',
 		outcome: 'player1',
 		gameScore: '2-1',
-		resultString: null,
 		...overrides,
 	};
 }

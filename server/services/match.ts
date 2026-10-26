@@ -10,12 +10,18 @@ import { observedSlotPairing } from '~~/server/services/featureMatch';
 import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
 import { pickManualWritable } from '~~/server/utils/provenance';
 
+/** A Match as Melee Sync writes one: with its result, which no manual write carries (ADR-0047). */
 export type MatchUpsertInput = Omit<CreateMatchInput, 'player1Data' | 'player2Data'> & {
 	eventId: number;
 	externalId?: string | null;
 	externalSource?: ExternalSource | null;
 	player1Data?: PlayerSlotData | null;
 	player2Data?: PlayerSlotData | null;
+	hasResult?: boolean;
+	player1GameWins?: number | null;
+	player2GameWins?: number | null;
+	gameDraws?: number | null;
+	isBye?: boolean;
 };
 
 /**
@@ -44,7 +50,6 @@ export function buildMatchUpsertQuery(data: MatchUpsertInput) {
 				player2GameWins: data.player2GameWins,
 				gameDraws: data.gameDraws,
 				isBye: data.isBye,
-				resultString: data.resultString,
 				sortOrder: data.sortOrder,
 				updatedAt: new Date(),
 			},

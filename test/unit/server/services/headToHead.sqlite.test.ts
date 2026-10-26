@@ -212,7 +212,6 @@ describe('findHeadToHead', () => {
 					phaseName: 'Swiss',
 					outcome: 'player1',
 					gameScore: '2-1',
-					resultString: null,
 				},
 				{
 					matchId: roundFiveMatch,
@@ -222,7 +221,6 @@ describe('findHeadToHead', () => {
 					phaseName: 'Swiss',
 					outcome: 'player2',
 					gameScore: '0-2',
-					resultString: null,
 				},
 			],
 		});

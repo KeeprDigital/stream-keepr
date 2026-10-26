@@ -18,7 +18,6 @@ export interface PlayerMatchHistoryEntry extends MatchSide {
 	opponentName: string;
 	opponentDeckName: string | null;
 	opponentDeckColors: string | null;
-	resultString: string | null;
 }
 
 interface PlayerHistory {
@@ -98,12 +97,10 @@ export function usePlayerHistoryModeData() {
 	function formatOutcome(row: PlayerMatchHistoryEntry) {
 		if (row.outcome === 'bye')
 			return 'BYE';
-		if (!row.hasResult)
-			return 'Pending';
 		const score = formatGameScore(row);
-		if (score)
-			return `${row.outcome.toUpperCase()} ${score}`;
-		return row.resultString ?? 'Result';
+		return score
+			? `${row.outcome.toUpperCase()} ${score}`
+			: 'Pending';
 	}
 
 	return {

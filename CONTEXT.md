@@ -16,11 +16,15 @@ A segment of an Event structure, such as Swiss or Top Cut.
 A unit of tournament play within a Phase, containing Matches and optional tournament-state metadata synced from Melee.
 
 **Match**:
-A pairing between Players in a Round, including results and records used for standings and broadcast workflows.
+A pairing between Players in a Round, with its Match Result and the records used for standings and broadcast workflows.
 _Avoid_: Feature Match when referring to the pairing.
 
+**Match Result**:
+Whether a Match is reported or a bye, and its game wins and game draws. Only Melee Sync records one; no operator enters, edits or clears it, so a manual Match never has one (ADR-0047).
+_Avoid_: score, for the whole result.
+
 **Game Score**:
-A Match's game wins and game draws read from one of its Players' side, theirs first: 2-1, or 1-1-1 with a game draw. A bye or an unreported Match has none.
+A Match's game wins and game draws read from one of its Players' side, theirs first: 2-1, or 1-1-1 with a game draw. Every reported Match that is not a bye has one; a bye or an unreported Match has none.
 
 **Round Standings**:
 The standings for Players as of a specific Round.
@@ -686,6 +690,7 @@ _Avoid_: Dummy data, test data
 - **Players**, **Phases**, **Rounds**, **Matches**, **Feature Match Slots**, and **Deck Lists** carry **Provenance** when they originate from **Melee Sync**
 - A **Phase** contains ordered **Rounds**; a **Round** contains zero or more **Matches** and **Feature Match Assignments**, and may have **Round Standings**
 - **Melee Sync** never removes a manual **Round** or **Match**: an imported **Phase** or **Round** that leaves Melee.gg, or that a Melee data reset would remove, while holding one is kept as a manual one, its **Provenance** cleared, and the operator is told which (ADR-0040)
+- A **Match Result** comes only from **Melee Sync**; a manual **Match**, including one kept under ADR-0040, has none, and no Player's record, history, Head-to-Head or **Top Cut Bracket** reads one an operator entered (ADR-0047)
 - A **Feature Match Slot** belongs to exactly one **Event** and may reference at most one current **Match**
 - A **Feature Match Assignment** connects exactly one **Match** to exactly one **Feature Match Slot** for exactly one **Round**, and may have one **Feature Match Note**
 - Within one **Round**, a **Match** and a **Feature Match Slot** each have at most one **Feature Match Assignment**

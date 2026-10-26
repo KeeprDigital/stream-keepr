@@ -84,7 +84,6 @@ function pairing(matchId: number): ScreenOutputRoundMatch {
 		player1GameWins: null,
 		player2GameWins: null,
 		gameDraws: null,
-		resultString: null,
 	};
 }
 

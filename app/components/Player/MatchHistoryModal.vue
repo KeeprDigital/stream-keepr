@@ -3,6 +3,7 @@ import type { TableColumn } from '@nuxt/ui';
 import type { PlayerMatchHistoryEntry } from '~/composables/screen/usePlayerHistoryModeData';
 import type { Player } from '~/types';
 import { getMtgGameData } from '~~/shared/utils/gameData';
+import { formatGameScore } from '~~/shared/utils/matchFromPlayerSide';
 
 const props = defineProps<{
 	player: Player;
@@ -63,17 +64,9 @@ const columns: TableColumn<PlayerMatchHistoryEntry>[] = [
 	},
 ];
 
+/** Its Game Score; a bye or a pending Match, which the Outcome names, has none. */
 function formatResult(row: PlayerMatchHistoryEntry) {
-	if (row.outcome === 'bye')
-		return 'BYE';
-	if (!row.hasResult)
-		return 'Pending';
-	if (row.playerGameWins != null && row.opponentGameWins != null) {
-		return `${row.playerGameWins}-${row.opponentGameWins}${row.gameDraws
-			? `-${row.gameDraws}`
-			: ''}`;
-	}
-	return row.resultString ?? 'Result';
+	return formatGameScore(row) ?? '—';
 }
 
 function outcomeLabel(outcome: PlayerMatchHistoryEntry['outcome']) {

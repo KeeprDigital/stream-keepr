@@ -115,9 +115,9 @@ export interface GraphicBindingMatch {
 	player2Data?: GraphicBindingPlayer | null;
 	hasResult?: boolean;
 	isBye?: boolean;
-	resultString?: string | null;
 	player1GameWins?: number | null;
 	player2GameWins?: number | null;
+	gameDraws?: number | null;
 }
 
 /**
@@ -522,7 +522,19 @@ const MATCH_FIELDS: readonly GraphicBindingField<GraphicBindingMatch>[] = [
 		label: 'Result',
 		type: 'text',
 		shape: 'atomic',
-		resolve: match => textOf(match.resultString),
+		// Its Game Score from player 1's side; a bye or an unreported Match has none.
+		resolve: (match) => {
+			if (!match.hasResult || match.isBye)
+				return undefined;
+			const first = numberOf(match.player1GameWins);
+			const second = numberOf(match.player2GameWins);
+			if (first === undefined || second === undefined)
+				return undefined;
+			const draws = numberOf(match.gameDraws);
+			return `${first}-${second}${draws
+				? `-${draws}`
+				: ''}`;
+		},
 	},
 	{
 		id: 'match.player1GameWins',

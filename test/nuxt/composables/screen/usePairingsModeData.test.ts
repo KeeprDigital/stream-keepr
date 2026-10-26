@@ -69,7 +69,6 @@ function pairing(overrides: Partial<ScreenOutputRoundMatch> = {}): ScreenOutputR
 		player1GameWins: null,
 		player2GameWins: null,
 		gameDraws: null,
-		resultString: null,
 		...overrides,
 	};
 }
@@ -253,16 +252,6 @@ describe('usePairingsModeData', () => {
 					gameDraws: 1,
 				}),
 				'1-1-1',
-			],
-			[
-				'result without game counts',
-				pairing({ hasResult: true, resultString: 'Intentional draw' }),
-				'Intentional draw',
-			],
-			[
-				'result with nothing to show',
-				pairing({ hasResult: true }),
-				'Result',
 			],
 		])('formats a %s', (_name, row, expected) => {
 			expect(makePairingsModeData().formatResult(row)).toBe(expected);

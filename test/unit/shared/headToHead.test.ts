@@ -41,7 +41,6 @@ function match(overrides: Partial<HeadToHeadMatchFacts> = {}): HeadToHeadMatchFa
 		gameDraws: 0,
 		isBye: false,
 		hasResult: true,
-		resultString: null,
 		...overrides,
 	};
 }
@@ -196,7 +195,6 @@ describe('projectHeadToHead', () => {
 					phaseName: 'Swiss',
 					outcome: 'player2',
 					gameScore: '1-2',
-					resultString: null,
 				},
 			]);
 		});
@@ -231,24 +229,6 @@ describe('projectHeadToHead', () => {
 			}).earlierMatches;
 
 			expect(earlierMatch).toMatchObject({ outcome: 'draw', gameScore: '1-1-1' });
-		});
-
-		it('names no winner for a Match reported with only a result string', () => {
-			const reported = match({
-				player1GameWins: null,
-				player2GameWins: null,
-				gameDraws: null,
-				resultString: 'Bob won',
-			});
-
-			const [earlierMatch] = projectHeadToHead({
-				player1: alice,
-				player2: bob,
-				matches: [reported],
-				currentMatchId: null,
-			}).earlierMatches;
-
-			expect(earlierMatch).toMatchObject({ outcome: 'reported', gameScore: null, resultString: 'Bob won' });
 		});
 
 		it('leaves out the Match the two are about to play, and any not yet reported', () => {

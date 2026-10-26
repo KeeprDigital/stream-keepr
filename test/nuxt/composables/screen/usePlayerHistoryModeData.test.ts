@@ -81,7 +81,6 @@ function historyEntry(overrides: Partial<PlayerMatchHistoryEntry> = {}): PlayerM
 		opponentGameWins: 1,
 		gameDraws: 0,
 		hasResult: true,
-		resultString: '2-1',
 		...overrides,
 	};
 }
@@ -285,16 +284,6 @@ describe('usePlayerHistoryModeData', () => {
 				}),
 				'DRAW 1-1-1',
 			],
-			[
-				'missing game counts',
-				historyEntry({ playerGameWins: null, opponentGameWins: null, resultString: '2-1' }),
-				'2-1',
-			],
-			[
-				'no result string at all',
-				historyEntry({ playerGameWins: null, opponentGameWins: null, resultString: null }),
-				'Result',
-			],
 		])('formats a %s', (_name, row, expected) => {
 			const { formatOutcome } = makePlayerHistoryModeData();
 
@@ -390,7 +379,6 @@ describe('usePlayerHistoryModeData', () => {
 			hasResult: false,
 			playerGameWins: null,
 			opponentGameWins: null,
-			resultString: null,
 		});
 		const recorded = historyEntry({
 			outcome: 'win',

@@ -11,7 +11,6 @@ const props = defineProps<{
 	featureMatchAssignment?: FeatureMatchAssignment | null;
 	featureMatchMenuItems: DropdownMenuItem[][];
 	promoting: boolean;
-	resultsEditable: boolean;
 	saveAssignmentNote?: (assignmentId: number, note: string) => Promise<unknown>;
 	assignmentNoteRemoteChanged?: boolean;
 }>();
@@ -19,7 +18,6 @@ const props = defineProps<{
 const emit = defineEmits<{
 	promote: [featureMatchId: number];
 	viewDeckList: [player: Player];
-	editResult: [match: Match];
 }>();
 
 const { getActiveDeckForPlayer } = usePlayerDeckCache();
@@ -298,16 +296,6 @@ function getScoreColor(side: 'player1' | 'player2') {
 					<UIcon name="i-lucide-sticky-note" class="size-3.5 shrink-0" />
 					<span class="truncate">{{ assignmentNotePreview }}</span>
 				</div>
-				<UButton
-					v-if="resultsEditable && !isBye"
-					class="match-action-button"
-					size="xs"
-					variant="ghost"
-					color="neutral"
-					@click="emit('editResult', match)"
-				>
-					{{ match.hasResult ? 'Edit Result' : 'Enter Result' }}
-				</UButton>
 				<MatchNotePopover
 					v-if="featureMatchAssignment && assignmentNoteEnabled"
 					:note="assignmentNote"

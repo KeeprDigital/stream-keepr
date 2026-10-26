@@ -58,7 +58,6 @@ async function mountComponent(
 			featureMatchLabel: null,
 			featureMatchMenuItems: [],
 			promoting: false,
-			resultsEditable: true,
 			...itemOverrides,
 		},
 		global: {
@@ -85,7 +84,6 @@ describe('matchListItem', () => {
 			hasResult: true,
 			player1GameWins: 2,
 			player2GameWins: 1,
-			resultString: '2-1',
 		});
 
 		expect(wrapper.get('[data-testid="player1-name"]').classes()).toContain('text-primary');
@@ -100,7 +98,6 @@ describe('matchListItem', () => {
 			hasResult: true,
 			player1GameWins: 0,
 			player2GameWins: 2,
-			resultString: '0-2',
 		});
 
 		expect(wrapper.get('[data-testid="player1-name"]').classes()).toContain('text-muted');
@@ -114,7 +111,6 @@ describe('matchListItem', () => {
 			player1GameWins: 1,
 			player2GameWins: 1,
 			gameDraws: 1,
-			resultString: '1-1-1',
 		});
 
 		expect(wrapper.get('[data-testid="player1-name"]').classes()).toContain('text-muted');
@@ -129,12 +125,25 @@ describe('matchListItem', () => {
 			hasResult: false,
 			player1GameWins: null,
 			player2GameWins: null,
-			resultString: null,
 		});
 
 		expect(wrapper.find('[data-testid="match-state"]').exists()).toBe(false);
 		expect(wrapper.get('[data-testid="player1-name"]').classes()).toContain('font-medium');
 		expect(wrapper.get('[data-testid="player2-name"]').classes()).toContain('font-medium');
+	});
+
+	// A Match's result is Melee's alone (ADR-0047), so a manual Match has none to enter.
+	it('offers no way to enter or edit a result', async () => {
+		const unreported = await mountComponent({ externalSource: 'manual', hasResult: false });
+		const reported = await mountComponent({
+			hasResult: true,
+			player1GameWins: 2,
+			player2GameWins: 0,
+			gameDraws: 0,
+		});
+
+		for (const wrapper of [unreported, reported])
+			expect(wrapper.text()).not.toMatch(/(Enter|Edit) Result/);
 	});
 
 	it('keeps the bye layout and copy', async () => {

@@ -384,7 +384,6 @@ export interface MatchResponse {
 	player2GameWins: number | null;
 	gameDraws: number | null;
 	isBye: boolean;
-	resultString: string | null;
 	sortOrder: number;
 	createdAt: Date;
 	updatedAt: Date;
@@ -397,12 +396,6 @@ export interface CreateMatchInput {
 	player2Id?: number | null;
 	player1Data?: ManualPlayerSlotData | null;
 	player2Data?: ManualPlayerSlotData | null;
-	hasResult?: boolean;
-	player1GameWins?: number | null;
-	player2GameWins?: number | null;
-	gameDraws?: number | null;
-	isBye?: boolean;
-	resultString?: string | null;
 	sortOrder?: number;
 }
 

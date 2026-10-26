@@ -357,7 +357,6 @@ export function createMockMatch(overrides?: Partial<DbMatch>): DbMatch {
 		player2GameWins: null,
 		gameDraws: null,
 		isBye: false,
-		resultString: null,
 		...defaultTimestamps(overrides),
 		...overrides,
 	} as DbMatch;

@@ -17,7 +17,3 @@ export function isMeleeManagedRound(round: RoundControlShape | null | undefined)
 
 	return round.externalSource === 'melee' && !!round.externalId;
 }
-
-export function isManualResultsRound(round: RoundControlShape | null | undefined) {
-	return !isMeleeManagedRound(round);
-}
