@@ -282,7 +282,9 @@ describe('mapMeleePlayersToDb', () => {
 		expect(result[0]!.deckLists).toBeUndefined();
 	});
 
-	it('maps standing fields when no standing exists for player', () => {
+	// Melee publishes no standings until a Round is reported, so in Round 1
+	// every Player has none: they have played nothing, and hold no position yet.
+	it('gives a Player without a standing a 0-0-0 record, no points, and no position', () => {
 		const players: MeleePlayerParsed[] = [
 			{
 				TeamId: 999,
@@ -293,11 +295,13 @@ describe('mapMeleePlayersToDb', () => {
 		];
 		const result = mapMeleePlayersToDb(players, []);
 
-		expect(result[0]!.wins).toBeNull();
-		expect(result[0]!.losses).toBeNull();
-		expect(result[0]!.draws).toBeNull();
-		expect(result[0]!.position).toBeNull();
-		expect(result[0]!.points).toBeNull();
+		expect(result[0]).toMatchObject({
+			wins: 0,
+			losses: 0,
+			draws: 0,
+			points: 0,
+			position: null,
+		});
 	});
 });
 
@@ -418,8 +422,8 @@ describe('mapMeleePlayerToDb', () => {
 		expect(result.externalSource).toBe('melee');
 		expect(result.name).toBe('Test Player');
 		expect(result.pronouns).toBe('they/them');
-		expect(result.wins).toBeNull();
-		expect(result.losses).toBeNull();
+		expect(result.wins).toBe(0);
+		expect(result.losses).toBe(0);
 		expect(result.position).toBeNull();
 	});
 
