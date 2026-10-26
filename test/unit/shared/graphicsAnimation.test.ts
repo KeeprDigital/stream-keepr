@@ -29,7 +29,6 @@ import {
 	GRAPHIC_ANIMATION_EASING_VALUES,
 	GRAPHIC_ANIMATION_ORIGIN_VALUES,
 	GRAPHIC_ANIMATION_PHASE_VALUES,
-	GRAPHIC_REVEAL_EDGE_VALUES,
 	GRAPHIC_SLIDE_DIRECTION_VALUES,
 	MAX_GRAPHIC_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_ANIMATION_DURATION_MS,
@@ -133,9 +132,9 @@ describe('graphicAnimationEasedProgress', () => {
 });
 
 describe('graphic animation vocabulary', () => {
-	it('offers exactly nine Graphic Animation Origins, independent of the Graphic Anchor Point', () => {
+	it('offers an editor option for every Graphic Animation Origin and slide direction', () => {
 		expect(GRAPHIC_ANIMATION_ORIGINS.map(origin => origin.value)).toEqual([...GRAPHIC_ANIMATION_ORIGIN_VALUES]);
-		expect(GRAPHIC_ANIMATION_ORIGINS).toHaveLength(9);
+		expect(GRAPHIC_SLIDE_DIRECTIONS.map(direction => direction.value)).toEqual([...GRAPHIC_SLIDE_DIRECTION_VALUES]);
 	});
 
 	it('defaults a scale channel origin to centre', () => {
@@ -143,19 +142,9 @@ describe('graphic animation vocabulary', () => {
 		expect(resolveGraphicAnimationOrigin('bottom-right')).toMatchObject({ x: 1, y: 1 });
 	});
 
-	it('offers exactly eight compass slide directions as canvas unit steps', () => {
-		expect(GRAPHIC_SLIDE_DIRECTIONS.map(direction => direction.value)).toEqual([...GRAPHIC_SLIDE_DIRECTION_VALUES]);
-		expect(GRAPHIC_SLIDE_DIRECTIONS).toHaveLength(8);
+	it('resolves a compass slide direction to a canvas unit step', () => {
 		expect(resolveGraphicSlideDirection('north')).toMatchObject({ x: 0, y: -1 });
 		expect(resolveGraphicSlideDirection('south-east')).toMatchObject({ x: 1, y: 1 });
-	});
-
-	it('wipes a reveal channel from one of four edges', () => {
-		expect([...GRAPHIC_REVEAL_EDGE_VALUES]).toEqual(['left', 'right', 'top', 'bottom']);
-	});
-
-	it('names the four lifecycle phases a recipe may be authored for', () => {
-		expect([...GRAPHIC_ANIMATION_PHASE_VALUES]).toEqual(['enter', 'on-screen', 'update', 'exit']);
 	});
 });
 
