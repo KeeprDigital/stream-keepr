@@ -371,6 +371,33 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 		expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
 	});
 
+	it('keeps the sideboards on program when only the Player revision moved', async () => {
+		serverPlayers.set(5, rosterPlayer(5, '2026-08-21T00:00:00.000Z'));
+		config.value = overlayConfig([
+			deckListItem('player1'),
+		]);
+		match.value = slotMatch();
+		mockBuildDeckListArrays.mockImplementation((cards: Array<{ name: string }>) => ({
+			mainboard: [],
+			sideboard: cards.map(card => enrichedCard(card.name, `https://img.test/${card.name}.jpg`)),
+		}));
+
+		const { sideboards } = mountSideboardData();
+		await flushPromises();
+		const onProgram = sideboards.value;
+
+		// An edit elsewhere on the Player: a new revision, the same Deck List.
+		announcePlayerUpdated(rosterPlayer(5, '2026-08-21T01:00:00.000Z'));
+		await flushPromises();
+		expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
+		expect(sideboards.value).toBe(onProgram);
+
+		// The revision just read is not news.
+		announcePlayerUpdated(rosterPlayer(5, '2026-08-21T01:00:00.000Z'));
+		await flushPromises();
+		expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
+	});
+
 	it('shows an edit announced while the first read is in flight, which that read missed', async () => {
 		serverPlayers.set(5, rosterPlayer(5, '2026-08-21T00:00:00.000Z'));
 		config.value = overlayConfig([
