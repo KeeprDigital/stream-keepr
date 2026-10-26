@@ -67,11 +67,8 @@ async function save(wrapper: Wrapper) {
 	await flushPromises();
 }
 
-/**
- * Submits the form itself: the shared `UInputNumber` stub carries native
- * min/max, so pressing Save on an out-of-range value is blocked by the browser's
- * own constraint validation before the card's validation can speak.
- */
+// Submits the form itself: the shared `UInputNumber` stub carries native min/max, so pressing Save
+// on an out-of-range value is blocked by the browser's own constraint validation before the card's…
 async function submitOutOfRange(wrapper: Wrapper) {
 	await wrapper.get('form').trigger('submit');
 	await flushPromises();

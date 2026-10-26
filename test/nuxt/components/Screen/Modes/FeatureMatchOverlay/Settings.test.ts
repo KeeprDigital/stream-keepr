@@ -548,11 +548,8 @@ describe('featureMatchOverlaySettings', () => {
 	});
 });
 
-/**
- * Editor Focus Mode (#744): the Feature Match Overlay editor is an Edit
- * workspace throughout, so its toolbar always offers the toggle, and only that
- * toggle exits — Escape stays the editor's own.
- */
+// Editor Focus Mode (#744): the Feature Match Overlay editor is an Edit workspace throughout, so
+// its toolbar always offers the toggle, and only that toggle exits — Escape stays the editor's own.
 describe('featureMatchOverlaySettings — Editor Focus Mode', () => {
 	const focusMode = useEditorFocusMode();
 

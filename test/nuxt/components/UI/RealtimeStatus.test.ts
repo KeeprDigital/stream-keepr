@@ -33,14 +33,7 @@ async function mountStatus() {
 	});
 }
 
-/**
- * The surface a token this client cannot mint has, now that it has one.
- *
- * A failed mint leaves the socket connected and the page looking healthy while
- * every channel for the Event the operator just switched to is unsubscribable.
- * Before #307 that was reported by a single `console.warn` — which is not a
- * surface anyone running a show is looking at — and recovered only by a reload.
- */
+// The surface a token this client cannot mint has, now that it has one.
 describe('uiRealtimeStatus', () => {
 	beforeEach(() => {
 		connectionState.value = 'connected';

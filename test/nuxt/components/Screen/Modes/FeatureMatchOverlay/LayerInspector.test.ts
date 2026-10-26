@@ -7,14 +7,7 @@ import { defineComponent } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import LayerInspector from '~/components/Screen/Modes/FeatureMatchOverlay/LayerInspector.vue';
 
-/**
- * The host-owned half of the Feature Match Overlay property panel: the Frame and
- * the Source Items.
- *
- * Nothing here authors a Graphic Item, and nothing here chooses what to edit: the
- * shared compositor's inspector edits Graphic Items, and the editor's one layer
- * list selects, adds, reorders, and removes — each covered by its own suite.
- */
+// The host-owned half of the Feature Match Overlay property panel: the Frame and the Source Items.
 
 const ScreenSettingsToggleStub = defineComponent({
 	props: {
