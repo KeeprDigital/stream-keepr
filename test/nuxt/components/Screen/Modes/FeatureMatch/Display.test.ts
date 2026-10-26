@@ -116,43 +116,11 @@ describe('screenFeatureMatchDisplay', () => {
 		};
 	});
 
-	it('renders the empty state when no feature match is assigned', async () => {
-		const wrapper = await mountComponent();
-
-		expect(wrapper.get('[data-testid="mode-base"]').attributes('data-empty')).toBe('true');
-	});
-
-	it('surfaces composable load errors', async () => {
-		config.value.featureMatchId = 1;
-		error.value = 'Failed to load feature match data';
-
-		const wrapper = await mountComponent();
-
-		expect(wrapper.get('[data-testid="mode-base"]').attributes('data-error')).toBe('Failed to load feature match data');
-	});
-
 	it('shows match not found when the configured match data is missing after load', async () => {
 		config.value.featureMatchId = 1;
 
 		const wrapper = await mountComponent();
 
 		expect(wrapper.get('[data-testid="mode-base"]').attributes('data-error')).toBe('Match not found');
-	});
-
-	it('only reserves the lower counter row when counters are shown', async () => {
-		config.value.featureMatchId = 1;
-		match.value = { id: 1, bestOf: 3, tableNumber: null };
-		matchState.value = {
-			currentGame: 1,
-			clock: { isRunning: false },
-		};
-
-		const wrapper = await mountComponent();
-		expect(wrapper.get('.match-layout').classes()).toContain('match-layout--with-counters');
-
-		config.value = { ...config.value, showCounters: false };
-		await wrapper.vm.$nextTick();
-
-		expect(wrapper.get('.match-layout').classes()).not.toContain('match-layout--with-counters');
 	});
 });

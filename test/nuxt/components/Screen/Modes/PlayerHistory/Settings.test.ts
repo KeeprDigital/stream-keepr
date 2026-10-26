@@ -85,31 +85,7 @@ describe('screenPlayerHistorySettings', () => {
 		};
 	});
 
-	it('offers opponent archetype and game score on a Screen that stored its columns before them', async () => {
-		const wrapper = await mountComponent();
-		await flushPromises();
-
-		const labels = wrapper.findAll('[data-testid="column-label"]').map(label => label.text());
-		expect(labels).toEqual([
-			'Outcome',
-			'Round',
-			'Opponent',
-			'Table',
-			'Opponent archetype',
-			'Game score',
-		]);
-		const switches = wrapper.findAll('[data-testid="column-row"] [data-testid="u-switch"]').map(toggle => toggle.text());
-		expect(switches).toEqual([
-			'true',
-			'true',
-			'true',
-			'false',
-			'false',
-			'false',
-		]);
-	});
-
-	it('enables a new column, keeping the stored order', async () => {
+	it('offers columns added after a Screen stored its list, enabling one in place', async () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 

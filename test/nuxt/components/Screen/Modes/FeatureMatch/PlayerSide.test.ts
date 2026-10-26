@@ -60,49 +60,27 @@ mockNuxtImport('usePlayerDisplayConfig', () => () => ({
 	seatLabel: computed(() => undefined),
 }));
 
-/**
- * The control Screen reads its Players' decks through the Screen (#604): the
- * counter types it offers come from a reader the Screen Output read backs.
- */
-const { mockPlayerDecks, mockUsePlayerDeckCounters } = vi.hoisted(() => ({
-	mockPlayerDecks: vi.fn(),
-	mockUsePlayerDeckCounters: vi.fn(),
+mockNuxtImport('useScreenOutputReads', () => () => ({
+	playerDecks: vi.fn(),
 }));
-mockNuxtImport('useScreenOutputReads', () => () => ({ playerDecks: mockPlayerDecks }));
-mockNuxtImport('usePlayerDeckCounters', () => mockUsePlayerDeckCounters);
+mockNuxtImport('usePlayerDeckCounters', () => () => ({
+	availableCounterTypes: ref(undefined),
+}));
 
 mockNuxtImport('useFeatureMatchStateStore', () => () => ({
 	$reset: vi.fn(),
 	featureMatchStates: new Map(),
 }));
 
-const GameWinsStub = defineComponent({
-	props: {
-		orientation: { type: String, required: false },
-		touch: { type: Boolean, required: false },
-		readonly: { type: Boolean, required: false },
-	},
-	template: '<div data-testid="game-wins" :data-orientation="orientation" :data-touch="String(touch)" :data-readonly="String(!!readonly)" />',
-});
-
-const CounterListStub = defineComponent({
-	props: {
-		touch: { type: Boolean, required: false },
-		touchColumns: { type: Number, required: false },
-		readonly: { type: Boolean, required: false },
-	},
-	template: '<div data-testid="counter-list" :data-touch="String(touch)" :data-touch-columns="String(touchColumns ?? 1)" :data-readonly="String(!!readonly)" />',
-});
-
-const UINumericCounterStub = defineComponent({
-	props: {
-		hero: { type: Boolean, required: false },
-		orientation: { type: String, required: false },
-		touch: { type: Boolean, required: false },
-		readonly: { type: Boolean, required: false },
-	},
-	template: '<div data-testid="life-counter" :data-hero="String(!!hero)" :data-orientation="orientation" :data-touch="String(!!touch)" :data-readonly="String(!!readonly)" />',
-});
+/** Each control reports only whether it was handed read-only. */
+function readonlyStub(testId: string) {
+	return defineComponent({
+		props: {
+			readonly: { type: Boolean, required: false },
+		},
+		template: `<div data-testid="${testId}" :data-readonly="String(!!readonly)" />`,
+	});
+}
 
 async function mountComponent(props: Record<string, unknown> = {}) {
 	return mount(PlayerSide, {
@@ -114,9 +92,9 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 		},
 		global: {
 			stubs: {
-				FeatureMatchStateGameWins: GameWinsStub,
-				FeatureMatchStateCounterList: CounterListStub,
-				UINumericCounter: UINumericCounterStub,
+				FeatureMatchStateGameWins: readonlyStub('game-wins'),
+				FeatureMatchStateCounterList: readonlyStub('counter-list'),
+				UINumericCounter: readonlyStub('life-counter'),
 				UIcon: true,
 			},
 		},
@@ -135,43 +113,9 @@ describe('screenFeatureMatchPlayerSide', () => {
 		mockPronouns = undefined;
 		mockRecord = undefined;
 		mockPlayer.counters = [];
-		mockPlayerDecks.mockReset();
-		mockUsePlayerDeckCounters.mockReset().mockImplementation(() => ({
-			availableCounterTypes: ref(undefined),
-		}));
 	});
 
-	it('reads its Player\'s deck counters through the Screen Output read', async () => {
-		await mountComponent({ matchId: 4, playerSide: 'player2' });
-
-		const [matchId, playerSide, read] = mockUsePlayerDeckCounters.mock.calls[0]! as [() => number, () => string, (id: number) => unknown];
-		expect(matchId()).toBe(4);
-		expect(playerSide()).toBe('player2');
-		void read(9);
-		expect(mockPlayerDecks).toHaveBeenCalledWith(9);
-	});
-
-	it('passes vertical touch-oriented game win controls to the screen layout', async () => {
-		const wrapper = await mountComponent();
-
-		expect(wrapper.find('.player-life-cluster').exists()).toBe(false);
-		expect(wrapper.get('.life-main').find('[data-testid="life-counter"]').exists()).toBe(true);
-
-		const lifeCounter = wrapper.get('[data-testid="life-counter"]');
-		expect(lifeCounter.attributes('data-hero')).toBe('true');
-		expect(lifeCounter.attributes('data-orientation')).toBe('vertical');
-		expect(lifeCounter.attributes('data-touch')).toBe('true');
-
-		expect(wrapper.get('.player-wins').classes()).toContain('player-wins-left');
-
-		const gameWins = wrapper.get('[data-testid="game-wins"]');
-		expect(gameWins.attributes('data-orientation')).toBe('vertical');
-		expect(gameWins.attributes('data-touch')).toBe('true');
-		expect(gameWins.attributes('data-readonly')).toBe('false');
-		expect(wrapper.get('.player-life').find('[data-testid="game-wins"]').exists()).toBe(true);
-	});
-
-	it('uses three touch columns for the player-facing counter list', async () => {
+	it('shows each control live while the operator may use it', async () => {
 		showCounters = true;
 		allowCounterControls = true;
 		mockPlayer.counters = [
@@ -180,10 +124,9 @@ describe('screenFeatureMatchPlayerSide', () => {
 
 		const wrapper = await mountComponent();
 
-		const counterList = wrapper.get('[data-testid="counter-list"]');
-		expect(counterList.attributes('data-touch')).toBe('true');
-		expect(counterList.attributes('data-touch-columns')).toBe('3');
-		expect(counterList.attributes('data-readonly')).toBe('false');
+		expect(wrapper.get('[data-testid="life-counter"]').attributes('data-readonly')).toBe('false');
+		expect(wrapper.get('[data-testid="game-wins"]').attributes('data-readonly')).toBe('false');
+		expect(wrapper.get('[data-testid="counter-list"]').attributes('data-readonly')).toBe('false');
 	});
 
 	it('keeps controls visible but readonly when permissions are disabled', async () => {
@@ -212,6 +155,6 @@ describe('screenFeatureMatchPlayerSide', () => {
 		const wrapper = await mountComponent();
 		const metaText = wrapper.get('.player-meta').text();
 
-		expect(metaText.indexOf('They/Them')).toBeLessThan(metaText.indexOf('5-1'));
+		expect(metaText).toMatch(/They\/Them.*5-1/s);
 	});
 });

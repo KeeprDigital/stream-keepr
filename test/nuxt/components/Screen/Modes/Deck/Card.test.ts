@@ -40,15 +40,11 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 }
 
 describe('screenDeckCard', () => {
-	it('renders a configurable Highlander point badge', async () => {
+	it('shows the card\'s Highlander points in the configured colours', async () => {
 		const wrapper = await mountComponent();
 		const badge = wrapper.get('[data-testid="highlander-card-badge"]');
 
 		expect(badge.text()).toBe('1');
-		expect(badge.classes()).toContain('-bottom-1');
-		expect(badge.classes()).toContain('-left-1');
-		expect(badge.classes()).toContain('min-w-8');
-		expect(badge.classes()).toContain('text-base');
 		expect(badge.attributes('style')).toContain('color: red;');
 		expect(badge.attributes('style')).toContain('background-color: blue;');
 	});

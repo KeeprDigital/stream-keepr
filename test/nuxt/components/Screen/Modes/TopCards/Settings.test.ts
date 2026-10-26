@@ -270,6 +270,7 @@ describe('screenTopCardsSettings', () => {
 		eventDataResync.reset();
 	});
 
+	// The rotation writes themselves are `rotationConfigWrites`' and the Pagination card's tests.
 	describe('page rotation', () => {
 		it('counts pages of whole grid rows from the cards the Screen reads and its columns', async () => {
 			mockConfig.value = {
@@ -302,33 +303,6 @@ describe('screenTopCardsSettings', () => {
 
 			// 7 cards in rows of 5 is 2 grid rows, one per page, as the Screen renders.
 			expect(wrapper.text()).toContain('Page 1 of 2');
-		});
-
-		it('restarts the rotation from page 1 when the rows per page change while it runs', async () => {
-			mockConfig.value = { ...mockConfig.value, autoPageEnabled: true };
-			const wrapper = await mountComponent();
-
-			numberInput(wrapper, 'Rows per page').vm.$emit('update:modelValue', 2);
-
-			expect(mockUpdateConfig).toHaveBeenCalledWith({ rowsPerPage: 2, currentPage: 1, rotationAnchor: 1_000_000 });
-		});
-
-		it('restarts the rotation when its interval changes, editing it in seconds', async () => {
-			mockConfig.value = { ...mockConfig.value, autoPageEnabled: true };
-			const wrapper = await mountComponent();
-
-			numberInput(wrapper, 'Interval (seconds)').vm.$emit('update:modelValue', 5);
-
-			expect(mockUpdateConfig).toHaveBeenCalledWith({ autoPageIntervalMs: 5000, rotationAnchor: 1_000_000 });
-		});
-
-		it('anchors the rotation when auto-page is switched on', async () => {
-			const wrapper = await mountComponent();
-
-			const toggle = wrapper.findAll('[data-testid="settings-toggle"]').find(item => item.text() === 'Auto-page');
-			await toggle!.trigger('click');
-
-			expect(mockUpdateConfig).toHaveBeenCalledWith({ autoPageEnabled: true, rotationAnchor: 1_000_000 });
 		});
 
 		it('returns to page 1 when the columns change which cards each page holds, without re-anchoring', async () => {

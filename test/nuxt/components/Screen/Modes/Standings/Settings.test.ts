@@ -87,12 +87,6 @@ describe('the Standings settings editor\'s columns', () => {
 		config.value = structuredClone(getDefaultConfigForMode('standings'));
 	});
 
-	it('offers the Position Change column', async () => {
-		const wrapper = await mountSettings();
-
-		expect(columnLabels(wrapper)).toContain('Position Change');
-	});
-
 	it('offers the Position Change column to a Screen whose stored columns predate it, and shows it on request', async () => {
 		config.value.columns = [
 			{ key: 'name', visible: true },
