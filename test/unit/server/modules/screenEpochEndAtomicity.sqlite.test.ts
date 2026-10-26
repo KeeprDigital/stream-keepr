@@ -19,38 +19,9 @@ import { createCommandIdSequence, seedBroadcastGraphicsScreen } from '~~/test/he
 import { testGraphicAssetId, testGraphicAssetRevisionId } from '~~/test/helpers/graphicsAssetIdentities';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-/**
- * A playout epoch ends with the write that causes it to end, or not at all.
- *
- * Two things end one: a Screen leaving Broadcast Graphics mode, and an operator
- * resetting live state. Both used to end it in a second write issued after the
- * first had already committed, and #305 records what that costs.
- *
- * **The mode change.** The end came after the mode change committed, deliberately —
- * so that a failed update could not blank a running show. But a failure the other
- * way round left the Screen out of the mode with its epoch still active, and
- * `ensureActiveSession` returns an active session exactly as it stands: the next
- * activation got the previous show's graphics back on air, contradicting the
- * documented contract that a fresh epoch has nothing on air. The operator's retry
- * did not repair it either — the mode change had moved the state version, so the
- * retry answered 409.
- *
- * **The reset.** The write clearing what the ended epoch published ran unguarded
- * after the batch that ended it, and the announcement ran after that. A failure in
- * the clear left an ended epoch's media still resolvable through the Screen's
- * outputs *and* skipped the epoch-ended announcement, so every peer went on
- * rendering a show that had finished.
- *
- * Both are now one commit, which is why the failure injections below are what they
- * are: there is no longer an instant between the two writes for a failure to land
- * in, so a failure has to be injected into the commit itself, and what is asserted
- * is that nothing moved rather than that the second half caught up.
- *
- * Run against libSQL because what is under test is what a batch does when one of
- * its statements fails and what a guarded statement does when its condition is
- * false. `broadcastGraphicsLiveReferencesD1.test.ts` establishes both halves of
- * that premise on a real D1 binding; this file builds shows on top of it.
- */
+// A playout epoch ends in the same commit as the write that ends it — a Screen
+// leaving Broadcast Graphics mode, or a live-state reset — or not at all (#305).
+// So failures are injected into that one commit, and nothing may move.
 
 vi.stubGlobal('createError', (input: { statusCode?: number; message?: string }) =>
 	Object.assign(new Error(input.message ?? 'error'), input));
@@ -105,11 +76,7 @@ const STACK: BroadcastGraphicsModeConfig = {
 	graphics: [SLATE],
 };
 
-/**
- * Answers for exactly the one revision seeded below. A declared dependency of
- * `applyCommand` rather than a seam: `Set Input` records the pinned revision's own
- * facts at the moment of selection, and this is the authority it asks.
- */
+/** Answers for the one revision seeded below; `Set Input` asks it at selection. */
 const graphicsAssetLibrary = {
 	async inspectGraphicAssetRevision(input: { revisionId: string }): Promise<GraphicAssetReferenceStatus> {
 		return input.revisionId === REVISION_ID
@@ -226,8 +193,7 @@ afterAll(async () => await harness.close());
 
 describe('a Screen leaving Broadcast Graphics mode', () => {
 	it('ends the epoch, clears what it published, and announces it', async () => {
-		// The control. Without it every failure injection below would be satisfied by
-		// a mode change that does nothing whatever happens.
+		// Control: the mode change does end the epoch.
 		await showOnAir();
 
 		await screenWriteModule().updateScreen({
@@ -245,11 +211,7 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 
 	it('leaves the mode unchanged when the write that ends the epoch fails', async () => {
 		const { sessionId } = await showOnAir();
-		// The failure the ticket is about, injected where it can now land: the one
-		// commit that carries both halves. Before they were folded together this
-		// rejected only the second, leaving the Screen out of the mode with its epoch
-		// still running — and the retry below answering 409 on a version that had
-		// already moved.
+		// Fail the one commit carrying both halves.
 		vi.spyOn(db, 'batch').mockRejectedValueOnce(new Error('epoch end failed'));
 
 		await expect(screenWriteModule().updateScreen({
@@ -268,8 +230,7 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 		expect(await publishesLiveSessionMedia()).toBe(true);
 		expect(epochEndedAnnouncements()).toHaveLength(0);
 
-		// And the operator's retry converges rather than conflicting, because the
-		// state version the failed attempt was written against still stands.
+		// The retry converges: the state version it was written against still stands.
 		await screenWriteModule().updateScreen({
 			authoringSessionId: undefined,
 			eventId,
@@ -291,9 +252,7 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 			input: { stateVersion: 0, currentMode: 'background' } as never,
 		})).rejects.toThrow();
 
-		// Whatever the failure left behind, the Screen's next activation of Broadcast
-		// Graphics gets a fresh epoch. This is the acceptance criterion stated as the
-		// show: leave the mode, come back, and find nothing on air.
+		// Leave the mode, come back, and find nothing on air.
 		await screenWriteModule().updateScreen({
 			authoringSessionId: undefined,
 			eventId,
@@ -313,9 +272,7 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 	});
 
 	it('leaves a running epoch alone when the mode change is refused for its state version', async () => {
-		// The guarantee the fold must not cost, and the one the old ordering bought:
-		// a batch applies every statement it holds, so an end riding with a refused
-		// mode change would blank a show nobody asked to stop.
+		// An end riding with a refused mode change must not blank the show.
 		const { sessionId } = await showOnAir();
 
 		await expect(screenWriteModule().updateScreen({
@@ -334,22 +291,7 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 });
 
 describe('an operator resetting live state', () => {
-	/**
-	 * Fails any clear of the Live Session's published references that the reset
-	 * executes on its own, outside a batch.
-	 *
-	 * The reset's defect was exactly such a statement: issued after the batch that
-	 * ended the epoch, unguarded, and followed by the announcement — so its failure
-	 * left an ended epoch's media resolvable and told nobody the epoch had ended.
-	 *
-	 * Scoped to the reset deliberately, because a standalone clear is not wrong
-	 * everywhere: `republishLiveSessionReferences` issues one as a repair for a Screen
-	 * with no epoch at all, where there is no commit to join and the write is
-	 * re-driven anyway. A reset performs no reconciliation, so the only standalone
-	 * clear it can make is the one this is about. Written as an injection rather than
-	 * as an assertion about the code so it keeps biting if the clear is ever lifted
-	 * back out of the commit.
-	 */
+	/** Fails a standalone clear of published references, the reset's old defect. */
 	function refuseStandaloneReferenceClears() {
 		const execute = harness.client.execute.bind(harness.client);
 		vi.spyOn(harness.client, 'execute').mockImplementation((async (statement: unknown) => {
@@ -393,8 +335,7 @@ describe('an operator resetting live state', () => {
 
 		await expect(module.resetLiveState({ eventId, screenId })).rejects.toThrow();
 
-		// An announcement is a claim that an epoch ended, so it may not outlive a
-		// commit that did not happen.
+		// No announcement for a commit that did not happen.
 		expect(epochEndedAnnouncements()).toHaveLength(0);
 		expect((await activeSession())?.id).toBe(sessionId);
 		expect(await onAirGraphics()).toEqual([SLATE.id]);

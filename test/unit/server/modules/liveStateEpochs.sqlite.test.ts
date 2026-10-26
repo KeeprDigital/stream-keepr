@@ -21,6 +21,7 @@ const db = drizzle(harness.database, { schema });
 vi.doMock('~~/server/db', () => ({ db }));
 
 const { createSequencedLiveEpochs, createSequencedLiveState } = await import('~~/server/modules/live-state');
+const { RETAINED_COMMAND_RECEIPTS } = await import('~~/server/modules/live-state/receipts');
 
 afterAll(async () => {
 	await harness.close();
@@ -215,5 +216,33 @@ describe('sequenced live epochs', () => {
 
 		expect(announce).not.toHaveBeenCalled();
 		expect(await epochPort.findActive({ lane: 1 })).toEqual([]);
+	});
+});
+
+describe('sequenced live state commits', () => {
+	it('writes no receipt when the projection it commits with fails', async () => {
+		const counter = await openFirst(1);
+		const failing = createSequencedLiveState({
+			...commandPort,
+			// total is NOT NULL, so the projection statement aborts the batch.
+			reduce: () => null as unknown as number,
+		});
+
+		await expect(failing.execute({ id: counter.id }, add('cmd-1', 5))).rejects.toThrow();
+
+		expect(await receiptCount(counter.id)).toBe(0);
+		expect((await commandPort.load({ id: counter.id }))?.sequence).toBe(1);
+	});
+
+	it('keeps a bounded window of receipts however many commands an aggregate takes', async () => {
+		const counter = await openFirst(1);
+
+		for (let index = 0; index < RETAINED_COMMAND_RECEIPTS + 10; index++)
+			await liveState.execute({ id: counter.id }, add(`cmd-${index}`, 1));
+
+		expect(await receiptCount(counter.id)).toBeLessThanOrEqual(RETAINED_COMMAND_RECEIPTS);
+		// The newest retry is still answered from its receipt rather than re-applied.
+		const retried = await liveState.execute({ id: counter.id }, add(`cmd-${RETAINED_COMMAND_RECEIPTS + 9}`, 1));
+		expect(retried.total).toBe(RETAINED_COMMAND_RECEIPTS + 10);
 	});
 });

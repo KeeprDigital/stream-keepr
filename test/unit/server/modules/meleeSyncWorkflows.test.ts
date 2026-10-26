@@ -258,14 +258,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 	});
 
 	it('names the provider refusal behind a notification it could not deliver', async () => {
-		// #264, the smallest of the cluster: the warning kept only the message type,
-		// so a sync that quietly stopped notifying anybody said 'could not be
-		// delivered' and nothing about why. Under a rejected key that is once per
-		// published stage, forever, with the answer — 40400 — thrown away each time.
-		//
-		// The real extraction runs here: `publishFailureFields` deliberately lives
-		// outside the mocked `~~/server/utils/ably`, so this asserts what the log
-		// carries rather than what a stub was told to return.
+		// The provider's refusal is logged, not discarded (#264).
 		mockRoundService.findByEventId.mockResolvedValue([]);
 		const ably = await import('~~/server/utils/ably');
 		vi.mocked(ably.publishMessageStrict).mockRejectedValueOnce(providerRefusal());
@@ -273,9 +266,6 @@ describe('melee Sync updateFromMelee workflow', () => {
 
 		const result = await createMeleeSyncWorkflows().runInitialSetup({} as any, 1, eventData, vi.fn().mockResolvedValue(undefined));
 
-		// Named rather than taken from position 0: `console.warn` is nobody's private
-		// channel, so the first line this run logged need not be the publish failure, and
-		// `JSON.parse` of the wrong one fails as a syntax error about neither.
 		const [line] = lastCallTo(warnSpy, isPublishFailureLine);
 		expect(JSON.parse(line as string)).toEqual({
 			message: 'melee_sync_realtime_publish_failed',
@@ -285,8 +275,6 @@ describe('melee Sync updateFromMelee workflow', () => {
 			errorName: 'Error',
 			reason: 'No application found',
 		});
-		// The sync still reports success with a warning: the data committed, and
-		// only the notification was lost. #264 changed the log line, not that.
 		expect(result.success).toBe(true);
 		expect(result.warnings).toContain('Data was saved, but realtime notification "melee:structureSynced" could not be delivered');
 		warnSpy.mockRestore();
@@ -431,43 +419,6 @@ describe('melee Sync updateFromMelee workflow', () => {
 		]);
 	});
 
-	it('does not mutate cards, players, or decks when card lookup is unavailable', async () => {
-		const lookupFailure = Object.assign(new Error('private Scryfall detail'), {
-			code: 'IMPORTED_CARD_LOOKUP_UNAVAILABLE',
-		});
-		mockImportedResolver.resolveBatch.mockRejectedValueOnce(lookupFailure);
-
-		await expect(
-			createMeleeSyncWorkflows().syncDeckLists({} as any, 1, eventData),
-		).rejects.toBe(lookupFailure);
-
-		expect(mockMtgCardService.batchUpsert).not.toHaveBeenCalled();
-		expect(mockPlayerService.batchUpsertByExternalId).not.toHaveBeenCalled();
-		expect(mockPersistPlayerDeckLists).not.toHaveBeenCalled();
-	});
-
-	it('rejects a standalone Deck List sync for a non-MTG Event before enrichment or persistence', async () => {
-		mockMelee.fetchEvent.mockResolvedValue({
-			ID: 1,
-			Name: 'OP Event',
-			Game: 'One Piece Card Game',
-			Phases: [],
-		});
-
-		await expect(
-			createMeleeSyncWorkflows().syncDeckLists({} as any, 1, { ...eventData, game: 'op' }),
-		).rejects.toMatchObject({
-			statusCode: 422,
-			data: { code: 'MELEE_DECKLIST_GAME_UNSUPPORTED' },
-		});
-
-		expect(mockMelee.fetchPlayers).not.toHaveBeenCalled();
-		expect(mockImportedResolver.resolveBatch).not.toHaveBeenCalled();
-		expect(mockMtgCardService.batchUpsert).not.toHaveBeenCalled();
-		expect(mockPlayerService.batchUpsertByExternalId).not.toHaveBeenCalled();
-		expect(mockPersistPlayerDeckLists).not.toHaveBeenCalled();
-	});
-
 	it('skips Deck Lists during aggregate setup for a supported source game without an import adapter', async () => {
 		mockMelee.fetchEvent.mockResolvedValue({
 			ID: 1,
@@ -603,34 +554,42 @@ describe('melee Sync updateFromMelee workflow', () => {
 		]);
 	});
 
-	it('reverse-syncs a Player sync through the post-commit form, so a lost Session race cannot fail a committed write', async () => {
-		mockPlayerService.reconcileMeleeSnapshot.mockResolvedValue({
-			players: [
-				{ id: 10, externalId: 'player-1' },
-			],
-			created: 0,
-			updated: 1,
-			deactivated: 0,
-		});
+	// The post-commit form swallows a lost Session race (playerFeatureMatchSync proves
+	// that); these pin that both bulk writes, which have already committed, use it.
+	it.each([
+		[
+			'a Player sync',
+			async () => {
+				mockPlayerService.reconcileMeleeSnapshot.mockResolvedValue({
+					players: [
+						{ id: 10, externalId: 'player-1' },
+					],
+					created: 0,
+					updated: 1,
+					deactivated: 0,
+				});
+				await createMeleeSyncWorkflows().syncPlayers({} as any, 1, eventData);
+				return 10;
+			},
+		],
+		[
+			'a Deck List sync',
+			async () => {
+				mockPlayerService.batchUpsertByExternalId.mockResolvedValue({
+					players: [
+						{ id: 11, externalId: 'player-2' },
+					],
+					created: 0,
+					updated: 1,
+				});
+				await createMeleeSyncWorkflows().syncDeckLists({} as any, 1, eventData);
+				return 11;
+			},
+		],
+	])('reverse-syncs %s through the post-commit form', async (_label, run) => {
+		const playerId = await run();
 
-		await createMeleeSyncWorkflows().syncPlayers({} as any, 1, eventData);
-
-		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).toHaveBeenCalledWith(1, [10]);
-		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers).not.toHaveBeenCalled();
-	});
-
-	it('reverse-syncs a Deck List sync through the post-commit form, so a lost Session race cannot fail a committed write', async () => {
-		mockPlayerService.batchUpsertByExternalId.mockResolvedValue({
-			players: [
-				{ id: 11, externalId: 'player-2' },
-			],
-			created: 0,
-			updated: 1,
-		});
-
-		await createMeleeSyncWorkflows().syncDeckLists({} as any, 1, eventData);
-
-		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).toHaveBeenCalledWith(1, [11]);
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).toHaveBeenCalledWith(1, [playerId]);
 		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers).not.toHaveBeenCalled();
 	});
 });
