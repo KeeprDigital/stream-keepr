@@ -48,7 +48,9 @@ describe('useMeleeDataRefresh', () => {
 	beforeEach(() => {
 		mockMatchStore.isLoaded = true;
 		mockMatchStore.loadedRoundId = null;
-		mockRoundStore.rounds = [{ id: 8 }];
+		mockRoundStore.rounds = [
+			{ id: 8 },
+		];
 		roundsAfterReload([8]);
 	});
 

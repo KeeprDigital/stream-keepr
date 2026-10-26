@@ -19,7 +19,11 @@ describe('useAsyncAction', () => {
 	});
 
 	it.each([
-		['an Error', new Error('test error'), 'test error'],
+		[
+			'an Error',
+			new Error('test error'),
+			'test error',
+		],
 		['anything else', 'string error', 'An error occurred'],
 	])('answers null for a throw of %s, reporting it and ending the load', async (_, thrown, message) => {
 		const { executeAction } = useAsyncAction();

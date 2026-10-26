@@ -4,8 +4,14 @@ import { describe, expect, it } from 'vitest';
 const mockMatches = [
 	{
 		id: 1,
-		player1Data: { name: 'Alice', gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' } },
-		player2Data: { name: 'Bob', gameData: { type: 'mtg', deckName: 'Mono Red', deckColors: 'R' } },
+		player1Data: {
+			name: 'Alice',
+			gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
+		},
+		player2Data: {
+			name: 'Bob',
+			gameData: { type: 'mtg', deckName: 'Mono Red', deckColors: 'R' },
+		},
 	},
 	{
 		id: 2,

@@ -1,12 +1,12 @@
 import type { MeleeUnresolvedDeckCardResponse } from '~~/shared/api';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { deferred } from '~~/test/helpers/deferred';
 import { nextTick, ref } from 'vue';
 import {
 	groupUnresolvedDeckCards,
 	useMeleeSyncUnresolvedDeckListResolution,
 } from '~~/app/modules/melee-sync/unresolvedDeckLists';
+import { deferred } from '~~/test/helpers/deferred';
 import { callsTo } from '~~/test/helpers/lastCallTo';
 
 /** Where the workflow looks a printed card name up (`unresolvedDeckLists.ts`). */
@@ -55,7 +55,6 @@ function unresolved(overrides: Partial<MeleeUnresolvedDeckCardResponse> = {}): M
 		...overrides,
 	};
 }
-
 
 async function flushAsyncWork() {
 	await Promise.resolve();

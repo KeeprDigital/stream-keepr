@@ -80,7 +80,9 @@ describe('useUnsavedChanges', () => {
 			['confirms', true],
 			['cancels', false],
 		])('asks before leaving a dirty page, and leaves only when the operator confirms (%s)', async (_, confirmed) => {
-			mockOpenFn.mockReturnValueOnce({ result: Promise.resolve(confirmed) });
+			mockOpenFn.mockReturnValueOnce({
+				result: Promise.resolve(confirmed),
+			});
 			const { registerDirtyState } = useUnsavedChanges();
 			registerDirtyState(ref(true));
 

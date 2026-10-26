@@ -25,7 +25,15 @@ const p2Data = {
 };
 
 function slot(overrides: Record<string, unknown> = {}) {
-	return { id: 1, bestOf: 3, player1Data: p1Data, player2Data: p2Data, playerDisplayMode: 'score', activeSession: null, ...overrides };
+	return {
+		id: 1,
+		bestOf: 3,
+		player1Data: p1Data,
+		player2Data: p2Data,
+		playerDisplayMode: 'score',
+		activeSession: null,
+		...overrides,
+	};
 }
 
 const mockMatches = ref<Record<string, unknown>[]>([]);
@@ -34,21 +42,44 @@ const mockRoster = ref<ReturnType<typeof createMockPlayer>[]>([]);
 
 mockNuxtImport('useFeatureMatchStore', () => () => ({ featureMatches: mockMatches.value }));
 mockNuxtImport('useFeatureMatchStateStore', () => () => ({
-	featureMatchStates: new Map([[1, createMockFeatureMatchState()]]),
+	featureMatchStates: new Map([
+		[
+			1,
+			createMockFeatureMatchState(),
+		],
+	]),
 }));
 mockNuxtImport('useEventStore', () => () => ({ event: mockEvent.value, displayEvent: mockEvent.value }));
 mockNuxtImport('usePlayerStore', () => () => ({ players: mockRoster.value }));
 
 describe('usePlayerFeatureMatchData', () => {
 	beforeEach(() => {
-		mockMatches.value = [slot()];
+		mockMatches.value = [
+			slot(),
+		];
 		mockEvent.value = createMockEvent();
 		mockRoster.value = [];
 	});
 
 	it.each([
-		['player1', { playerName: 'Alice', playerPronouns: 'she/her', playerLgs: 'Card Kingdom', deckName: 'Azorius Control' }],
-		['player2', { playerName: 'Bob', playerPronouns: 'he/him', playerLgs: undefined, deckName: 'Golgari Midrange' }],
+		[
+			'player1',
+			{
+				playerName: 'Alice',
+				playerPronouns: 'she/her',
+				playerLgs: 'Card Kingdom',
+				deckName: 'Azorius Control',
+			},
+		],
+		[
+			'player2',
+			{
+				playerName: 'Bob',
+				playerPronouns: 'he/him',
+				playerLgs: undefined,
+				deckName: 'Golgari Midrange',
+			},
+		],
 	] as const)('reads %s from the Slot', (side, expected) => {
 		const data = usePlayerFeatureMatchData(1, side);
 
@@ -63,16 +94,21 @@ describe('usePlayerFeatureMatchData', () => {
 	});
 
 	it('reads the active Session\'s source snapshot over the Slot', () => {
-		mockMatches.value = [slot({
-			activeSession: {
-				sourceSnapshot: {
-					bestOf: 5,
-					playerDisplayMode: 'position',
-					player1: { playerId: 9, data: { ...p1Data, name: 'Snapshot Alice', position: 2 } },
-					player2: null,
+		mockMatches.value = [
+			slot({
+				activeSession: {
+					sourceSnapshot: {
+						bestOf: 5,
+						playerDisplayMode: 'position',
+						player1: {
+							playerId: 9,
+							data: { ...p1Data, name: 'Snapshot Alice', position: 2 },
+						},
+						player2: null,
+					},
 				},
-			},
-		})];
+			}),
+		];
 		mockEvent.value = createMockEvent({ displayPositionFormat: 'ordinal' });
 
 		const data = usePlayerFeatureMatchData(1, 'player1');
@@ -95,8 +131,16 @@ describe('usePlayerFeatureMatchData', () => {
 	});
 
 	it('reads the deck name from the roster Player the Slot seats', () => {
-		mockMatches.value = [slot({ player1Id: 21 })];
-		mockRoster.value = [createMockPlayer({ id: 21, name: 'Alice', gameData: { type: 'mtg', deckName: 'Reviewed Deck' } })];
+		mockMatches.value = [
+			slot({ player1Id: 21 }),
+		];
+		mockRoster.value = [
+			createMockPlayer({
+				id: 21,
+				name: 'Alice',
+				gameData: { type: 'mtg', deckName: 'Reviewed Deck' },
+			}),
+		];
 
 		expect(usePlayerFeatureMatchData(1, 'player1').deckName.value).toBe('Reviewed Deck');
 	});
@@ -123,7 +167,12 @@ describe('usePlayerFeatureMatchData', () => {
 		['ordinal', 'N/A', 'N/A'],
 		['ordinal', null, undefined],
 	])('shows a position record in %s format: %j → %j', (format, position, expected) => {
-		mockMatches.value = [slot({ playerDisplayMode: 'position', player1Data: { ...p1Data, position } })];
+		mockMatches.value = [
+			slot({
+				playerDisplayMode: 'position',
+				player1Data: { ...p1Data, position },
+			}),
+		];
 		mockEvent.value = createMockEvent({ displayPositionFormat: format as any });
 
 		expect(usePlayerFeatureMatchData(1, 'player1').playerRecord.value).toBe(expected);

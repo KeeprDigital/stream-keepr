@@ -1,8 +1,8 @@
 import type { ScreenDisplaySession } from '~/modules/screen/displaySession';
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deferred } from '~~/test/helpers/deferred';
 import { defineComponent, h, nextTick, reactive, watch } from 'vue';
+import { deferred } from '~~/test/helpers/deferred';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { createAttachSignal, createContinuitySignal } from '~~/test/helpers/realtime-mock';
 import { SCREEN_OUTPUT_LOAD_RETRY_MS, useScreenDisplaySession } from '~/modules/screen/displaySession';
@@ -10,7 +10,6 @@ import { SCREEN_OUTPUT_LOAD_RETRY_MS, useScreenDisplaySession } from '~/modules/
 function flushPromises() {
 	return new Promise(resolve => setTimeout(resolve, 0));
 }
-
 
 function createRoute(query: Record<string, unknown> = {}, hash = '') {
 	return reactive({

@@ -3,11 +3,27 @@ import { describe, expect, it } from 'vitest';
 describe('usePlayerDisplayConfig', () => {
 	it('shows a Player\'s identity and controls, but not their record or LGS, unless configured', () => {
 		const defaults = usePlayerDisplayConfig(undefined);
-		const configured = usePlayerDisplayConfig({ showName: false, showRecord: true, allowLifeControls: false, startingHandSize: 5 });
+		const configured = usePlayerDisplayConfig({
+			showName: false,
+			showRecord: true,
+			allowLifeControls: false,
+			startingHandSize: 5,
+		});
 
-		expect([defaults.showName.value, defaults.showRecord.value, defaults.showLgs.value, defaults.allowLifeControls.value, defaults.startingHandSize.value])
+		expect([
+			defaults.showName.value,
+			defaults.showRecord.value,
+			defaults.showLgs.value,
+			defaults.allowLifeControls.value,
+			defaults.startingHandSize.value,
+		])
 			.toEqual([true, false, false, true, 7]);
-		expect([configured.showName.value, configured.showRecord.value, configured.allowLifeControls.value, configured.startingHandSize.value])
+		expect([
+			configured.showName.value,
+			configured.showRecord.value,
+			configured.allowLifeControls.value,
+			configured.startingHandSize.value,
+		])
 			.toEqual([false, true, false, 5]);
 	});
 

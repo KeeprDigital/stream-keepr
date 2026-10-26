@@ -9,7 +9,6 @@ const { mockFetch } = vi.hoisted(() => ({
 
 mockNuxtImport('$fetch', () => mockFetch);
 
-
 function mountCapability(eventId: Ref<number>, screenId: Ref<number | undefined>) {
 	let result!: ReturnType<typeof useScreenOutputAssetCapability>;
 	const wrapper = mount(defineComponent({

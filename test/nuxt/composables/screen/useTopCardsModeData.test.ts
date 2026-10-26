@@ -88,9 +88,21 @@ describe('useTopCardsModeData', () => {
 
 	it.each([
 		['the full field', {}, 'Most Played Cards'],
-		['the Top N scope', { scope: 'topN', topN: 8 }, 'Top 8 Most Played Cards'],
-		['the archetype filter', { archetypeFilter: 'Mono Red' }, 'Most Played Cards: Mono Red'],
-		['a custom header', { headerText: 'The Chase Cards' }, 'The Chase Cards'],
+		[
+			'the Top N scope',
+			{ scope: 'topN', topN: 8 },
+			'Top 8 Most Played Cards',
+		],
+		[
+			'the archetype filter',
+			{ archetypeFilter: 'Mono Red' },
+			'Most Played Cards: Mono Red',
+		],
+		[
+			'a custom header',
+			{ headerText: 'The Chase Cards' },
+			'The Chase Cards',
+		],
 	] as const)('heads the grid with %s', (_, config, expected) => {
 		Object.assign(mutableConfig, config);
 
@@ -98,7 +110,11 @@ describe('useTopCardsModeData', () => {
 	});
 
 	it('reads the card breakdown through the Screen', async () => {
-		mockFetch.mockResolvedValue({ entries: rankedCards(1), totalDecks: 5, scope: 'all' });
+		mockFetch.mockResolvedValue({
+			entries: rankedCards(1),
+			totalDecks: 5,
+			scope: 'all',
+		});
 		const { entries } = makeTopCardsModeData();
 		await flushPromises();
 

@@ -116,7 +116,11 @@ describe('useMetagameModeData', () => {
 
 	it.each([
 		['all', {}, 'Full Field Metagame'],
-		['minPoints', { minPoints: 12 }, '12+ Points Metagame'],
+		[
+			'minPoints',
+			{ minPoints: 12 },
+			'12+ Points Metagame',
+		],
 	] as const)('heads the archetype view with its %s scope', (scope, config, expected) => {
 		Object.assign(mutableConfig, { scope, ...config });
 
@@ -155,22 +159,24 @@ describe('useMetagameModeData', () => {
 
 	it('renders the card breakdown the cards view reads', async () => {
 		mockFetch.mockResolvedValue(cardsRead({
-			entries: [{
-				id: 1,
-				name: 'Lightning Bolt',
-				inclusionRate: 100,
-				avgCopies: 4,
-				totalCopies: 8,
-				mainboardCount: 8,
-				sideboardCount: 0,
-				mainboardDeckCount: 2,
-				sideboardDeckCount: 0,
-				deckCount: 2,
-				cardType: 'Instant',
-				scryfallId: null,
-				colors: 'R',
-				cmc: 1,
-			}],
+			entries: [
+				{
+					id: 1,
+					name: 'Lightning Bolt',
+					inclusionRate: 100,
+					avgCopies: 4,
+					totalCopies: 8,
+					mainboardCount: 8,
+					sideboardCount: 0,
+					mainboardDeckCount: 2,
+					sideboardDeckCount: 0,
+					deckCount: 2,
+					cardType: 'Instant',
+					scryfallId: null,
+					colors: 'R',
+					cmc: 1,
+				},
+			],
 			totalDecks: 2,
 			scope: 'all',
 		}));
@@ -196,7 +202,13 @@ describe('useMetagameModeData', () => {
 			await flushPromises();
 
 			expect(totalPages.value).toBe(3);
-			expect(names(pageData.value)).toEqual(['Arch0', 'Arch1', 'Arch2', 'Arch3', 'Arch4']);
+			expect(names(pageData.value)).toEqual([
+				'Arch0',
+				'Arch1',
+				'Arch2',
+				'Arch3',
+				'Arch4',
+			]);
 		});
 
 		it('projects a rotating page from server time on a rendering, and never writes', async () => {
@@ -220,14 +232,37 @@ describe('useMetagameModeData', () => {
 
 	describe('chart display', () => {
 		const chartEntries = [
-			{ id: 3, name: 'Boros Energy', colors: 'RW', count: 6, metaShare: 50 },
-			{ id: 7, name: 'Eldrazi Ramp', colors: 'C', count: 4, metaShare: 33.33 },
-			{ id: -1, name: 'Other', colors: null, count: 2, metaShare: 16.67 },
+			{
+				id: 3,
+				name: 'Boros Energy',
+				colors: 'RW',
+				count: 6,
+				metaShare: 50,
+			},
+			{
+				id: 7,
+				name: 'Eldrazi Ramp',
+				colors: 'C',
+				count: 4,
+				metaShare: 33.33,
+			},
+			{
+				id: -1,
+				name: 'Other',
+				colors: null,
+				count: 2,
+				metaShare: 16.67,
+			},
 		];
 
 		beforeEach(() => {
 			mutableConfig.viewMode = 'chart';
-			mockFetch.mockResolvedValue(archetypeRead({ entries: chartEntries, totalPlayers: 12, classifiedPlayers: 12, scope: 'all' }));
+			mockFetch.mockResolvedValue(archetypeRead({
+				entries: chartEntries,
+				totalPlayers: 12,
+				classifiedPlayers: 12,
+				scope: 'all',
+			}));
 		});
 
 		it('draws the archetype breakdown as chart bars under the archetype header', async () => {
@@ -246,7 +281,12 @@ describe('useMetagameModeData', () => {
 		it('is one page: a Page Rotation never pages it', async () => {
 			vi.useFakeTimers();
 			mockFetch.mockResolvedValue(archetypeRead({
-				entries: Array.from({ length: 12 }, (_, i) => ({ id: i + 1, name: `Arch${i}`, count: 1, metaShare: 8.33 })),
+				entries: Array.from({ length: 12 }, (_, i) => ({
+					id: i + 1,
+					name: `Arch${i}`,
+					count: 1,
+					metaShare: 8.33,
+				})),
 				totalPlayers: 12,
 				classifiedPlayers: 12,
 				scope: 'all',
@@ -269,13 +309,23 @@ describe('useMetagameModeData', () => {
 			const { chartBars } = makeMetagameModeData();
 			await flushPromises();
 			mockFetch.mockResolvedValue(archetypeRead({
-				entries: [{ id: 7, name: 'Eldrazi Ramp', colors: 'C', count: 12, metaShare: 100 }],
+				entries: [
+					{
+						id: 7,
+						name: 'Eldrazi Ramp',
+						colors: 'C',
+						count: 12,
+						metaShare: 100,
+					},
+				],
 				totalPlayers: 12,
 				classifiedPlayers: 12,
 				scope: 'all',
 			}));
 
-			deliver('playerDeck:reviewed', { deck: { id: 3, playerId: 2 } });
+			deliver('playerDeck:reviewed', {
+				deck: { id: 3, playerId: 2 },
+			});
 			await flushPromises();
 
 			expect(chartBars.value.map(bar => bar.name)).toEqual(['Eldrazi Ramp']);
@@ -305,18 +355,30 @@ describe('useMetagameModeData', () => {
 			Object.assign(mutableConfig, { scope: 'playerList', playerListId: 5 });
 			const { displayRows } = await showingMetagame();
 			mockFetch.mockResolvedValue(archetypeRead({
-				entries: [{ name: 'Mono Red', count: 1, metaShare: 100 }],
+				entries: [
+					{ name: 'Mono Red', count: 1, metaShare: 100 },
+				],
 				totalPlayers: 1,
 				scope: 'playerList',
 			}));
 
-			deliver('playerList:membersChanged', { listId: 5, playerIds: [2], action: 'added', memberCount: 1 });
+			deliver('playerList:membersChanged', {
+				listId: 5,
+				playerIds: [2],
+				action: 'added',
+				memberCount: 1,
+			});
 			await flushPromises();
 			expect(mockFetch).toHaveBeenCalledOnce();
 			expect(displayRows.value).toHaveLength(1);
 			expect(usePlayerStore().dataVersion).toBe(0);
 
-			deliver('playerList:membersChanged', { listId: 5, playerIds: [2], action: 'removed', memberCount: 0 });
+			deliver('playerList:membersChanged', {
+				listId: 5,
+				playerIds: [2],
+				action: 'removed',
+				memberCount: 0,
+			});
 			await flushPromises();
 			expect(mockFetch).toHaveBeenCalledTimes(2);
 		});
@@ -325,7 +387,12 @@ describe('useMetagameModeData', () => {
 			Object.assign(mutableConfig, { scope: 'playerList', playerListId: 5 });
 			await showingMetagame();
 
-			deliver('playerList:membersChanged', { listId: 6, playerIds: [2], action: 'added', memberCount: 1 });
+			deliver('playerList:membersChanged', {
+				listId: 6,
+				playerIds: [2],
+				action: 'added',
+				memberCount: 1,
+			});
 			deliver('playerList:deleted', { listId: 6 });
 			await flushPromises();
 
@@ -333,14 +400,65 @@ describe('useMetagameModeData', () => {
 		});
 
 		it.each([
-			['an unresolved deck card is resolved elsewhere (#648)', [['playerDeck:cardsResolved', { deckIds: [3, 9], playerIds: [2, 7] }]]],
-			['a deck review lands elsewhere', [['playerDeck:reviewed', { deck: { id: 3, playerId: 2 } }]]],
-			['an Archetype is created, edited or deleted', [
-				['archetype:created', { archetype: { id: 4, name: 'Mono Red' } }],
-				['archetype:updated', { archetype: { id: 4, name: 'Boros' } }],
-				['archetype:deleted', { archetypeId: 4 }],
-			]],
-			['a Melee round sync rewrites standings', [['melee:roundSynced', { roundId: 31, matchCount: 8, created: 0, updated: 8, staleDeleted: 0 }]]],
+			[
+				'an unresolved deck card is resolved elsewhere (#648)',
+				[
+					[
+						'playerDeck:cardsResolved',
+						{
+							deckIds: [3, 9],
+							playerIds: [2, 7],
+						},
+					],
+				],
+			],
+			[
+				'a deck review lands elsewhere',
+				[
+					[
+						'playerDeck:reviewed',
+						{
+							deck: { id: 3, playerId: 2 },
+						},
+					],
+				],
+			],
+			[
+				'an Archetype is created, edited or deleted',
+				[
+					[
+						'archetype:created',
+						{
+							archetype: { id: 4, name: 'Mono Red' },
+						},
+					],
+					[
+						'archetype:updated',
+						{
+							archetype: { id: 4, name: 'Boros' },
+						},
+					],
+					[
+						'archetype:deleted',
+						{ archetypeId: 4 },
+					],
+				],
+			],
+			[
+				'a Melee round sync rewrites standings',
+				[
+					[
+						'melee:roundSynced',
+						{
+							roundId: 31,
+							matchCount: 8,
+							created: 0,
+							updated: 8,
+							staleDeleted: 0,
+						},
+					],
+				],
+			],
 		] as const)('re-reads when %s', async (_, messages) => {
 			await showingMetagame();
 
@@ -359,7 +477,9 @@ describe('useMetagameModeData', () => {
 			realtime.transport.connectionState = 'disconnected';
 			await nextTick();
 			mockFetch.mockResolvedValue(archetypeRead({
-				entries: [{ name: 'Mono Red', count: 1, metaShare: 100 }],
+				entries: [
+					{ name: 'Mono Red', count: 1, metaShare: 100 },
+				],
 				totalPlayers: 1,
 				scope: 'all',
 			}));

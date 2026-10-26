@@ -34,7 +34,15 @@ describe('useStoreHelpers', () => {
 			const onSuccess = vi.fn();
 			const errorRef = ref<string | null>(null);
 
-			const result = optimisticUpdate({ items, id: 2, updates: { name: 'Predicted' }, apiCall: () => call.promise, errorRef, entityLabel: 'Item', onSuccess });
+			const result = optimisticUpdate({
+				items,
+				id: 2,
+				updates: { name: 'Predicted' },
+				apiCall: () => call.promise,
+				errorRef,
+				entityLabel: 'Item',
+				onSuccess,
+			});
 			expect(items.value.map(item => item.name)).toEqual(['A', 'Predicted', 'C']);
 
 			call.resolve({ id: 2, name: 'From API' });
@@ -73,7 +81,14 @@ describe('useStoreHelpers', () => {
 			const call = deferred();
 			const onSuccess = vi.fn();
 
-			const result = optimisticDelete({ items, id: 1, apiCall: () => call.promise, errorRef: ref(null), entityLabel: 'Item', onSuccess });
+			const result = optimisticDelete({
+				items,
+				id: 1,
+				apiCall: () => call.promise,
+				errorRef: ref(null),
+				entityLabel: 'Item',
+				onSuccess,
+			});
 			expect(items.value.map(item => item.id)).toEqual([2]);
 
 			call.resolve();
@@ -111,7 +126,14 @@ describe('useStoreHelpers', () => {
 		const apiCall = vi.fn();
 		const errorRef = ref<string | null>(null);
 
-		const result = await (helpers[helper] as (options: object) => Promise<unknown>)({ items: itemsOf('A'), id: 999, updates: {}, apiCall, errorRef, entityLabel });
+		const result = await (helpers[helper] as (options: object) => Promise<unknown>)({
+			items: itemsOf('A'),
+			id: 999,
+			updates: {},
+			apiCall,
+			errorRef,
+			entityLabel,
+		});
 
 		expect(result).toBeNull();
 		expect(errorRef.value).toBe(`${entityLabel} not found`);

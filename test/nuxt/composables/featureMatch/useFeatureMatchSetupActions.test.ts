@@ -34,12 +34,14 @@ function createSetup() {
 	};
 }
 
-const seats = (formData: ReturnType<typeof createSetup>['formData']) => [
-	formData.value.player1Id,
-	formData.value.player1Data.name,
-	formData.value.player2Id,
-	formData.value.player2Data.name,
-];
+function seats(formData: ReturnType<typeof createSetup>['formData']) {
+	return [
+		formData.value.player1Id,
+		formData.value.player1Data.name,
+		formData.value.player2Id,
+		formData.value.player2Data.name,
+	];
+}
 
 describe('useFeatureMatchSetupActions', () => {
 	beforeEach(() => {
@@ -101,8 +103,14 @@ describe('useFeatureMatchSetupActions', () => {
 				externalId: 'ext-001',
 				externalSource: 'melee',
 				tableNumber: 7,
-				player1Data: { name: 'Alice', gameData: { type: 'mtg', deckName: 'Bogles', deckColors: 'GW' } } as any,
-				player2Data: { name: 'Bob', gameData: { type: 'mtg', deckName: 'Burn', deckColors: 'R' } } as any,
+				player1Data: {
+					name: 'Alice',
+					gameData: { type: 'mtg', deckName: 'Bogles', deckColors: 'GW' },
+				} as any,
+				player2Data: {
+					name: 'Bob',
+					gameData: { type: 'mtg', deckName: 'Burn', deckColors: 'R' },
+				} as any,
 			});
 		}
 

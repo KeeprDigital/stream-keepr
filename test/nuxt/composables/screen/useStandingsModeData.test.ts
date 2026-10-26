@@ -48,10 +48,25 @@ const players = ([
 	['Ivan', 0, 6, 0, 0],
 	['Jane', 0, 6, 0, 0],
 ] as const).map(([name, wins, losses, draws, points], index) =>
-	createMockPlayer({ id: index + 1, name, position: index + 1, wins, losses, draws, points }));
+	createMockPlayer({
+		id: index + 1,
+		name,
+		position: index + 1,
+		wins,
+		losses,
+		draws,
+		points,
+	}));
 
 function standing(playerId: number, position: number, wins: number, losses: number, points: number) {
-	return { playerId, position, wins, losses, draws: 0, points };
+	return {
+		playerId,
+		position,
+		wins,
+		losses,
+		draws: 0,
+		points,
+	};
 }
 
 /** The roster the server holds; the Standings read answers it. */
@@ -59,17 +74,25 @@ let serverPlayers = [...players];
 
 /** An operator's loaded, stale Player store: a rendering must never read its roster (#603). */
 const mockPlayerStore = reactive({
-	players: [createMockPlayer({ id: 99, name: 'Stale Store Player', position: 1 })],
+	players: [
+		createMockPlayer({ id: 99, name: 'Stale Store Player', position: 1 }),
+	],
 	isLoaded: true,
 	loadPlayersFrom: vi.fn(),
 });
-const mockScreenStore = { updateModeConfig: vi.fn() };
-const mockEventStore = reactive({ displayEvent: createMockEvent() });
+const mockScreenStore = {
+	updateModeConfig: vi.fn(),
+};
+const mockEventStore = reactive({
+	displayEvent: createMockEvent(),
+});
 const mockEventId = ref<number | null>(1);
 const mockInteractive = ref(false);
 const mockIsSynced = ref(true);
 let mockServerNow = 1_000_000;
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 const realtime = createFakeEventChannel();
 const { deliver } = realtime;
 
@@ -166,7 +189,9 @@ describe('useStandingsModeData', () => {
 		});
 
 		it('renders the roster the Standings read answers, never the Player store\'s', async () => {
-			serverPlayers = [createMockPlayer({ id: 21, name: 'Read Player', position: 1 })];
+			serverPlayers = [
+				createMockPlayer({ id: 21, name: 'Read Player', position: 1 }),
+			];
 
 			const { displayRows } = await mountStandings();
 
@@ -177,12 +202,57 @@ describe('useStandingsModeData', () => {
 
 	describe('displayRows', () => {
 		it.each([
-			['all', {}, ['Alice', 'Bob', 'Charlie', 'Diana', 'Ethan', 'Fiona', 'George', 'Helen', 'Ivan', 'Jane']],
-			['topN', { topNCount: 3 }, ['Alice', 'Bob', 'Charlie']],
-			['slice', { sliceStart: 3, sliceEnd: 5 }, ['Charlie', 'Diana', 'Ethan']],
-			['reveal bottom-up', { viewMode: 'reveal', revealCount: 8, revealedCount: 3, revealOrder: 'bottomUp' }, ['Fiona', 'George', 'Helen']],
-			['reveal top-down', { viewMode: 'reveal', revealCount: 8, revealedCount: 3, revealOrder: 'topDown' }, ['Alice', 'Bob', 'Charlie']],
-			['reveal before anything is revealed', { viewMode: 'reveal', revealedCount: 0 }, []],
+			[
+				'all',
+				{},
+				[
+					'Alice',
+					'Bob',
+					'Charlie',
+					'Diana',
+					'Ethan',
+					'Fiona',
+					'George',
+					'Helen',
+					'Ivan',
+					'Jane',
+				],
+			],
+			[
+				'topN',
+				{ topNCount: 3 },
+				['Alice', 'Bob', 'Charlie'],
+			],
+			[
+				'slice',
+				{ sliceStart: 3, sliceEnd: 5 },
+				['Charlie', 'Diana', 'Ethan'],
+			],
+			[
+				'reveal bottom-up',
+				{
+					viewMode: 'reveal',
+					revealCount: 8,
+					revealedCount: 3,
+					revealOrder: 'bottomUp',
+				},
+				['Fiona', 'George', 'Helen'],
+			],
+			[
+				'reveal top-down',
+				{
+					viewMode: 'reveal',
+					revealCount: 8,
+					revealedCount: 3,
+					revealOrder: 'topDown',
+				},
+				['Alice', 'Bob', 'Charlie'],
+			],
+			[
+				'reveal before anything is revealed',
+				{ viewMode: 'reveal', revealedCount: 0 },
+				[],
+			],
 		] as const)('shows the %s view', async (viewMode, view, expected) => {
 			Object.assign(mutableConfig, { viewMode, ...view });
 
@@ -193,7 +263,10 @@ describe('useStandingsModeData', () => {
 
 		it('leaves Players without a position out of a slice', async () => {
 			Object.assign(mutableConfig, { viewMode: 'slice', sliceStart: 1, sliceEnd: 10 });
-			serverPlayers = [...players, createMockPlayer({ id: 99, name: 'NoPos', position: null })];
+			serverPlayers = [
+				...players,
+				createMockPlayer({ id: 99, name: 'NoPos', position: null }),
+			];
 
 			const { displayRows } = await mountStandings();
 
@@ -202,7 +275,12 @@ describe('useStandingsModeData', () => {
 
 		it('filters to the watchlist members the read answers', async () => {
 			Object.assign(mutableConfig, { viewMode: 'watchlist', playerListId: 42 });
-			answerReads({ watchlist: { name: 'VIPs', playerIds: [2, 4] } });
+			answerReads({
+				watchlist: {
+					name: 'VIPs',
+					playerIds: [2, 4],
+				},
+			});
 
 			const { displayRows } = await mountStandings();
 
@@ -213,7 +291,10 @@ describe('useStandingsModeData', () => {
 			mutableConfig.roundId = 7;
 			answerReads({
 				round: createMockRound({ id: 7, name: 'Round 7' }),
-				roundStandings: [standing(3, 1, 5, 0, 15), standing(1, 2, 4, 1, 12)],
+				roundStandings: [
+					standing(3, 1, 5, 0, 15),
+					standing(1, 2, 4, 1, 12),
+				],
 			});
 
 			const { displayRows } = await mountStandings();
@@ -225,14 +306,61 @@ describe('useStandingsModeData', () => {
 
 	describe('headerText', () => {
 		it.each([
-			['the custom header when one is set', { headerText: 'Custom Header' }, {}, 'Custom Header'],
-			['"Standings" for all', { viewMode: 'all' }, {}, 'Standings'],
-			['the count for topN', { viewMode: 'topN', topNCount: 16 }, {}, 'Top 16 Standings'],
-			['the range for a slice', { viewMode: 'slice', sliceStart: 9, sliceEnd: 16 }, {}, 'Standings (9-16)'],
-			['the list\'s name for a watchlist', { viewMode: 'watchlist', playerListId: 42 }, { watchlist: { name: 'VIPs', playerIds: [] } }, 'VIPs'],
-			['a fallback for a watchlist the read does not answer', { viewMode: 'watchlist', playerListId: 999 }, {}, 'Players to Watch'],
-			['the count for a reveal', { viewMode: 'reveal', revealCount: 8 }, {}, 'Top 8'],
-			['the selected Round', { roundId: 4 }, { round: createMockRound({ id: 4, name: 'Round 4' }), roundStandings: [standing(1, 1, 5, 0, 15)] }, 'End of Round 4'],
+			[
+				'the custom header when one is set',
+				{ headerText: 'Custom Header' },
+				{},
+				'Custom Header',
+			],
+			[
+				'"Standings" for all',
+				{ viewMode: 'all' },
+				{},
+				'Standings',
+			],
+			[
+				'the count for topN',
+				{ viewMode: 'topN', topNCount: 16 },
+				{},
+				'Top 16 Standings',
+			],
+			[
+				'the range for a slice',
+				{ viewMode: 'slice', sliceStart: 9, sliceEnd: 16 },
+				{},
+				'Standings (9-16)',
+			],
+			[
+				'the list\'s name for a watchlist',
+				{ viewMode: 'watchlist', playerListId: 42 },
+				{
+					watchlist: { name: 'VIPs', playerIds: [] },
+				},
+				'VIPs',
+			],
+			[
+				'a fallback for a watchlist the read does not answer',
+				{ viewMode: 'watchlist', playerListId: 999 },
+				{},
+				'Players to Watch',
+			],
+			[
+				'the count for a reveal',
+				{ viewMode: 'reveal', revealCount: 8 },
+				{},
+				'Top 8',
+			],
+			[
+				'the selected Round',
+				{ roundId: 4 },
+				{
+					round: createMockRound({ id: 4, name: 'Round 4' }),
+					roundStandings: [
+						standing(1, 1, 5, 0, 15),
+					],
+				},
+				'End of Round 4',
+			],
 		])('reads %s', async (_, config, read, expected) => {
 			Object.assign(mutableConfig, config);
 			answerReads(read);
@@ -258,15 +386,25 @@ describe('useStandingsModeData', () => {
 	});
 
 	describe('formatCell', () => {
-		const deckPlayer = createMockPlayer({ gameData: { type: 'mtg', deckName: 'Mono Red', deckColors: 'R' } });
+		const deckPlayer = createMockPlayer({
+			gameData: { type: 'mtg', deckName: 'Mono Red', deckColors: 'R' },
+		});
 
 		it.each([
 			['position', players[0], '1'],
-			['position', createMockPlayer({ position: null }), '-'],
+			[
+				'position',
+				createMockPlayer({ position: null }),
+				'-',
+			],
 			['name', players[1], 'Bob'],
 			['record', players[3], '3-3-1'],
 			['points', players[0], '15'],
-			['points', createMockPlayer({ points: null }), '-'],
+			[
+				'points',
+				createMockPlayer({ points: null }),
+				'-',
+			],
 			['deck', deckPlayer, 'Mono Red'],
 			['deck', players[0], '-'],
 		] as const)('formats %s as %j', async (column, player, expected) => {
@@ -305,11 +443,36 @@ describe('useStandingsModeData', () => {
 		});
 
 		it.each([
-			['a watchlist with no list', { viewMode: 'watchlist', playerListId: null }, {}, 'Select a player list in settings'],
-			['an empty watchlist', { viewMode: 'watchlist', playerListId: 42 }, {}, 'No players in this list'],
-			['a reveal before anything is revealed', { viewMode: 'reveal', revealedCount: 0 }, {}, 'Waiting for reveal...'],
-			['a Round with no snapshot', { roundId: 8 }, { roundStandings: [] }, 'No standings snapshot available for this round'],
-			['no standings at all', { viewMode: 'all' }, { players: [] }, 'No standings data available'],
+			[
+				'a watchlist with no list',
+				{ viewMode: 'watchlist', playerListId: null },
+				{},
+				'Select a player list in settings',
+			],
+			[
+				'an empty watchlist',
+				{ viewMode: 'watchlist', playerListId: 42 },
+				{},
+				'No players in this list',
+			],
+			[
+				'a reveal before anything is revealed',
+				{ viewMode: 'reveal', revealedCount: 0 },
+				{},
+				'Waiting for reveal...',
+			],
+			[
+				'a Round with no snapshot',
+				{ roundId: 8 },
+				{ roundStandings: [] },
+				'No standings snapshot available for this round',
+			],
+			[
+				'no standings at all',
+				{ viewMode: 'all' },
+				{ players: [] },
+				'No standings data available',
+			],
 		])('explains %s', async (_, config, read, expected) => {
 			Object.assign(mutableConfig, config);
 			answerReads(read);
@@ -358,7 +521,9 @@ describe('useStandingsModeData', () => {
 			const { displayRows } = await mountStandings();
 			mockFetch.mockClear();
 
-			serverPlayers = serverPlayers.map(p => p.id === 2 ? { ...p, wins: 5, points: 15 } : p);
+			serverPlayers = serverPlayers.map(p => p.id === 2
+				? { ...p, wins: 5, points: 15 }
+				: p);
 			deliver('player:updated', { player: serverPlayers[1] });
 			await flushPromises();
 
@@ -383,37 +548,68 @@ describe('useStandingsModeData', () => {
 
 		it('follows the watchlist\'s membership and name, and no other list', async () => {
 			Object.assign(mutableConfig, { viewMode: 'watchlist', playerListId: 42 });
-			let watchlist = { name: 'VIPs', playerIds: [2, 4] };
+			let watchlist = {
+				name: 'VIPs',
+				playerIds: [2, 4],
+			};
 			mockFetch.mockImplementation(async () => standingsRead({ watchlist }));
 			const { displayRows, headerText } = await mountStandings();
 			mockFetch.mockClear();
 
-			deliver('playerList:membersChanged', { listId: 7, playerIds: [1], action: 'added', memberCount: 1 });
+			deliver('playerList:membersChanged', {
+				listId: 7,
+				playerIds: [1],
+				action: 'added',
+				memberCount: 1,
+			});
 			await flushPromises();
 			expect(mockFetch).not.toHaveBeenCalled();
 
-			watchlist = { name: 'VIPs', playerIds: [2] };
-			deliver('playerList:membersChanged', { listId: 42, playerIds: [4], action: 'removed', memberCount: 1 });
+			watchlist = {
+				name: 'VIPs',
+				playerIds: [2],
+			};
+			deliver('playerList:membersChanged', {
+				listId: 42,
+				playerIds: [4],
+				action: 'removed',
+				memberCount: 1,
+			});
 			await flushPromises();
 			expect(names(displayRows.value)).toEqual(['Bob']);
 
-			watchlist = { name: 'Feature Players', playerIds: [2] };
-			deliver('playerList:updated', { playerList: { id: 42, name: 'Feature Players' } });
+			watchlist = {
+				name: 'Feature Players',
+				playerIds: [2],
+			};
+			deliver('playerList:updated', {
+				playerList: { id: 42, name: 'Feature Players' },
+			});
 			await flushPromises();
 			expect(headerText.value).toBe('Feature Players');
 		});
 
 		it('follows a Melee sync of the standings it shows', async () => {
 			mutableConfig.roundId = 7;
-			let roundStandings = [standing(1, 1, 4, 1, 12)];
+			let roundStandings = [
+				standing(1, 1, 4, 1, 12),
+			];
 			mockFetch.mockImplementation(async () => standingsRead({
 				round: createMockRound({ id: 7, name: 'Round 7' }),
 				roundStandings,
 			}));
 			const { displayRows } = await mountStandings();
 
-			roundStandings = [standing(1, 1, 5, 1, 15)];
-			deliver('melee:roundSynced', { roundId: 7, matchCount: 8, created: 0, updated: 8, staleDeleted: 0 });
+			roundStandings = [
+				standing(1, 1, 5, 1, 15),
+			];
+			deliver('melee:roundSynced', {
+				roundId: 7,
+				matchCount: 8,
+				created: 0,
+				updated: 8,
+				staleDeleted: 0,
+			});
 			await flushPromises();
 
 			expect(displayRows.value[0]!.wins).toBe(5);
@@ -427,7 +623,9 @@ describe('useStandingsModeData', () => {
 			await nextTick();
 			// Missed while disconnected: a result, an addition and a deletion.
 			serverPlayers = [
-				...serverPlayers.filter(p => p.id !== 1).map(p => p.id === 2 ? { ...p, position: 1, wins: 5 } : p),
+				...serverPlayers.filter(p => p.id !== 1).map(p => p.id === 2
+					? { ...p, position: 1, wins: 5 }
+					: p),
 				createMockPlayer({ id: 11, name: 'Kim', position: 11 }),
 			];
 			realtime.transport.connectionState = 'connected';
@@ -455,7 +653,9 @@ describe('useStandingsModeData', () => {
 			expect(displayRows.value).toHaveLength(10);
 			expect(isEmpty.value).toBe(false);
 
-			answer(standingsRead({ players: serverPlayers.slice(0, 2) }));
+			answer(standingsRead({
+				players: serverPlayers.slice(0, 2),
+			}));
 			await flushPromises();
 			expect(displayRows.value).toHaveLength(2);
 		});
@@ -470,7 +670,12 @@ describe('useStandingsModeData', () => {
 		// Round 7's Round Standings, measured against Round 6's.
 		const roundSeven = {
 			round: createMockRound({ id: 7, name: 'Round 7' }),
-			roundStandings: [standing(3, 1, 5, 0, 15), standing(1, 2, 4, 1, 12), standing(2, 3, 4, 1, 12), standing(4, 4, 3, 2, 9)],
+			roundStandings: [
+				standing(3, 1, 5, 0, 15),
+				standing(1, 2, 4, 1, 12),
+				standing(2, 3, 4, 1, 12),
+				standing(4, 4, 3, 2, 9),
+			],
 			previousRoundPositions: {
 				roundId: 6,
 				positions: [
@@ -481,7 +686,10 @@ describe('useStandingsModeData', () => {
 			},
 		};
 		const positionChanges = (result: Awaited<ReturnType<typeof mountStandings>>) =>
-			result.pageData.value.map(player => [player.name, result.formatCell(player, 'positionChange')]);
+			result.pageData.value.map(player => [
+				player.name,
+				result.formatCell(player, 'positionChange'),
+			]);
 
 		beforeEach(() => {
 			Object.assign(mutableConfig, { columns: withPositionChange, roundId: 7 });
@@ -509,13 +717,46 @@ describe('useStandingsModeData', () => {
 		});
 
 		it.each([
-			['watchlist', { playerListId: 42 }, [['Alice', '▼1'], ['Diana', 'new']]],
-			['topN', { topNCount: 2 }, [['Charlie', '▲3'], ['Alice', '▼1']]],
-			['slice', { sliceStart: 2, sliceEnd: 3 }, [['Alice', '▼1'], ['Bob', '–']]],
-			['reveal', { revealCount: 4, revealedCount: 1, revealOrder: 'bottomUp' }, [['Diana', 'new']]],
+			[
+				'watchlist',
+				{ playerListId: 42 },
+				[
+					['Alice', '▼1'],
+					['Diana', 'new'],
+				],
+			],
+			[
+				'topN',
+				{ topNCount: 2 },
+				[
+					['Charlie', '▲3'],
+					['Alice', '▼1'],
+				],
+			],
+			[
+				'slice',
+				{ sliceStart: 2, sliceEnd: 3 },
+				[
+					['Alice', '▼1'],
+					['Bob', '–'],
+				],
+			],
+			[
+				'reveal',
+				{ revealCount: 4, revealedCount: 1, revealOrder: 'bottomUp' },
+				[
+					['Diana', 'new'],
+				],
+			],
 		] as const)('keeps each Player\'s Position Change in the %s view', async (viewMode, view, expected) => {
 			Object.assign(mutableConfig, { viewMode, ...view });
-			answerReads({ ...roundSeven, watchlist: { name: 'VIPs', playerIds: [1, 4] } });
+			answerReads({
+				...roundSeven,
+				watchlist: {
+					name: 'VIPs',
+					playerIds: [1, 4],
+				},
+			});
 
 			const result = await mountStandings();
 
@@ -537,9 +778,13 @@ describe('useStandingsModeData', () => {
 			await mountStandings();
 			mockFetch.mockClear();
 
-			deliver('round:updated', { round: createMockRound({ id: 3, name: 'Round 3' }) });
+			deliver('round:updated', {
+				round: createMockRound({ id: 3, name: 'Round 3' }),
+			});
 			await flushPromises();
-			deliver('phase:updated', { phase: { id: 1 } });
+			deliver('phase:updated', {
+				phase: { id: 1 },
+			});
 			await flushPromises();
 			deliver('round:deleted', { roundId: 6 });
 			await flushPromises();
@@ -552,8 +797,12 @@ describe('useStandingsModeData', () => {
 			await mountStandings();
 			mockFetch.mockClear();
 
-			deliver('round:updated', { round: createMockRound({ id: 3, name: 'Round 3' }) });
-			deliver('phase:updated', { phase: { id: 1 } });
+			deliver('round:updated', {
+				round: createMockRound({ id: 3, name: 'Round 3' }),
+			});
+			deliver('phase:updated', {
+				phase: { id: 1 },
+			});
 			await flushPromises();
 
 			expect(mockFetch).not.toHaveBeenCalled();

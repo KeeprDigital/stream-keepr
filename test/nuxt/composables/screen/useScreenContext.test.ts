@@ -56,7 +56,11 @@ describe('useScreenModeConfig', () => {
 	});
 
 	it('reads what the Screen stores, completed with the mode\'s defaults', () => {
-		const modeConfigs = { deck: { deckSource: { type: 'player', playerId: 5 } } } as any;
+		const modeConfigs = {
+			deck: {
+				deckSource: { type: 'player', playerId: 5 },
+			},
+		} as any;
 		const context = screenContext(createMockScreen({ modeConfigs }));
 
 		const config = withScreenContext(context, () => useScreenModeConfig('deck'));

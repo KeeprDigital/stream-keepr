@@ -17,7 +17,15 @@ describe('screen mode host', () => {
 	it('sizes, pads, aligns and scales a fixed-size overlay to its window', () => {
 		const host = resolveScreenModeHost({
 			mode: 'card',
-			screenConfig: { width: 1280, height: 720, paddingX: 32, paddingY: 16, background: '#101010', horizontalAlign: 'right', verticalAlign: 'bottom' },
+			screenConfig: {
+				width: 1280,
+				height: 720,
+				paddingX: 32,
+				paddingY: 16,
+				background: '#101010',
+				horizontalAlign: 'right',
+				verticalAlign: 'bottom',
+			},
 			viewportWidth: 640,
 			viewportHeight: 360,
 		});
@@ -36,16 +44,32 @@ describe('screen mode host', () => {
 	});
 
 	it('fills the window with an overlay that has no fixed size, unscaled', () => {
-		const host = resolveScreenModeHost({ mode: 'deck', screenConfig: {}, viewportWidth: 1920, viewportHeight: 1080 });
+		const host = resolveScreenModeHost({
+			mode: 'deck',
+			screenConfig: {},
+			viewportWidth: 1920,
+			viewportHeight: 1080,
+		});
 
-		expect(host.containerStyle).toMatchObject({ width: '100%', height: '100%', justifyItems: 'center', alignItems: 'center' });
+		expect(host.containerStyle).toMatchObject({
+			width: '100%',
+			height: '100%',
+			justifyItems: 'center',
+			alignItems: 'center',
+		});
 		expect(host.containerStyle).not.toHaveProperty('transform');
 	});
 
 	it('hosts the Feature Match Overlay at 1920×1080 without the Screen\'s padding or background', () => {
 		const host = resolveScreenModeHost({
 			mode: 'feature-match-overlay',
-			screenConfig: { paddingX: 64, paddingY: 32, background: '#ff00ff', horizontalAlign: 'left', verticalAlign: 'top' },
+			screenConfig: {
+				paddingX: 64,
+				paddingY: 32,
+				background: '#ff00ff',
+				horizontalAlign: 'left',
+				verticalAlign: 'top',
+			},
 		});
 
 		expect(getScreenModeHostDefinition('feature-match-overlay')).toMatchObject({
@@ -55,19 +79,36 @@ describe('screen mode host', () => {
 			useScreenBackground: false,
 			useScreenAlignment: true,
 		});
-		expect(host.containerStyle).toMatchObject({ width: '1920px', height: '1080px', padding: '0px 0px', justifyItems: 'start', alignItems: 'start' });
+		expect(host.containerStyle).toMatchObject({
+			width: '1920px',
+			height: '1080px',
+			padding: '0px 0px',
+			justifyItems: 'start',
+			alignItems: 'start',
+		});
 		expect(host.containerStyle).not.toHaveProperty('background');
 	});
 
 	it('hosts Broadcast Graphics transparently, scaling its whole canvas uniformly', () => {
 		const host = resolveScreenModeHost({
 			mode: 'broadcast-graphics',
-			screenConfig: { paddingX: 64, paddingY: 32, background: '#ff00ff', horizontalAlign: 'left', verticalAlign: 'top' },
+			screenConfig: {
+				paddingX: 64,
+				paddingY: 32,
+				background: '#ff00ff',
+				horizontalAlign: 'left',
+				verticalAlign: 'top',
+			},
 			viewportWidth: 960,
 			viewportHeight: 540,
 		});
 
-		expect(host.containerStyle).toMatchObject({ width: '1920px', height: '1080px', padding: '0px 0px', transform: 'translate(0px, 0px) scale(0.5)' });
+		expect(host.containerStyle).toMatchObject({
+			width: '1920px',
+			height: '1080px',
+			padding: '0px 0px',
+			transform: 'translate(0px, 0px) scale(0.5)',
+		});
 		expect(host.containerStyle).not.toHaveProperty('background');
 		expect(host.containerStyle).not.toHaveProperty('justifyItems');
 	});
@@ -86,15 +127,28 @@ describe('screen mode host', () => {
 	});
 
 	it('never scales a mode whose host does not register viewport-fit scaling', () => {
-		const host = resolveScreenModeHost({ mode: 'feature-match', screenConfig: { width: 1920, height: 1080 }, viewportWidth: 800, viewportHeight: 600 });
+		const host = resolveScreenModeHost({
+			mode: 'feature-match',
+			screenConfig: { width: 1920, height: 1080 },
+			viewportWidth: 800,
+			viewportHeight: 600,
+		});
 
 		expect(host.kind).toBe('control');
 		expect(host.containerStyle).not.toHaveProperty('transform');
 	});
 
 	it('pads a control host and follows its color mode', () => {
-		const systemDark = resolveScreenModeHost({ mode: 'feature-match', screenConfig: { paddingX: 20, paddingY: 12, colorMode: 'system' }, preferredDark: true });
-		const explicitLight = resolveScreenModeHost({ mode: 'feature-match', screenConfig: { colorMode: 'light' }, preferredDark: true });
+		const systemDark = resolveScreenModeHost({
+			mode: 'feature-match',
+			screenConfig: { paddingX: 20, paddingY: 12, colorMode: 'system' },
+			preferredDark: true,
+		});
+		const explicitLight = resolveScreenModeHost({
+			mode: 'feature-match',
+			screenConfig: { colorMode: 'light' },
+			preferredDark: true,
+		});
 
 		expect(systemDark).toMatchObject({
 			kind: 'control',
@@ -111,9 +165,22 @@ describe('screen mode host', () => {
 		it('offers a pixel-exact Feature Match Overlay with fill and key outputs, its container controls in the container', () => {
 			expect(getScreenModeConfigurationPolicy('feature-match-overlay')).toMatchObject({
 				displayType: 'overlay',
-				containerControls: { dimensions: true, padding: false, textColors: false, background: false },
-				containerControlPlacement: { dimensions: 'mode', padding: 'container', textColors: 'container', background: 'container' },
-				dimensions: { width: { defaultValue: 1920 }, height: { defaultValue: 1080 } },
+				containerControls: {
+					dimensions: true,
+					padding: false,
+					textColors: false,
+					background: false,
+				},
+				containerControlPlacement: {
+					dimensions: 'mode',
+					padding: 'container',
+					textColors: 'container',
+					background: 'container',
+				},
+				dimensions: {
+					width: { defaultValue: 1920 },
+					height: { defaultValue: 1080 },
+				},
 				resetScreenConfigDefaults: { width: 1920, height: 1080 },
 			});
 			expect(getScreenModeConfigurationPolicy('feature-match-overlay').outputOptions.map(option => option.value)).toEqual(['overlay', 'fill', 'key']);
@@ -124,8 +191,16 @@ describe('screen mode host', () => {
 
 			expect(policy).toMatchObject({
 				displayType: 'overlay',
-				containerControls: { dimensions: true, padding: true, textColors: true, background: true },
-				dimensions: { width: { defaultValue: null }, height: { defaultValue: null } },
+				containerControls: {
+					dimensions: true,
+					padding: true,
+					textColors: true,
+					background: true,
+				},
+				dimensions: {
+					width: { defaultValue: null },
+					height: { defaultValue: null },
+				},
 				outputOptions: [],
 			});
 			expect(policy.resetScreenConfigDefaults).toBeUndefined();

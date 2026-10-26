@@ -387,19 +387,72 @@ describe('useArchetypeAssignment', () => {
 	// ── buttonLabel ──
 
 	describe('buttonLabel', () => {
-		const control = makeArchetype({ name: 'Control', colors: 'WU', keyCards: [makeKeyCard('Counterspell', 1)] });
+		const control = makeArchetype({
+			name: 'Control',
+			colors: 'WU',
+			keyCards: [
+				makeKeyCard('Counterspell', 1),
+			],
+		});
 
 		it.each([
-			['Create & Assign', 'no Archetype matches', { byName: undefined, exact: undefined, reviewed: false }],
-			['Assign', 'classifying into a matching Archetype', { byName: control, exact: control, reviewed: false }],
-			['Update & Assign', 'classifying into a same-name Archetype of other colors', { byName: control, exact: undefined, colors: ['U', 'B'], reviewed: false }],
-			['Reassign', 'editing with no key card changes', { byName: control, exact: control, keyCards: ['Counterspell'], reviewed: true }],
-			['Update & Reassign', 'editing with key card changes', { byName: control, exact: control, keyCards: ['Wrath of God'], reviewed: true }],
-			['Update & Reassign', 'editing into a same-name Archetype of other colors', { byName: control, exact: undefined, colors: ['U', 'B'], reviewed: true }],
+			[
+				'Create & Assign',
+				'no Archetype matches',
+				{ byName: undefined, exact: undefined, reviewed: false },
+			],
+			[
+				'Assign',
+				'classifying into a matching Archetype',
+				{ byName: control, exact: control, reviewed: false },
+			],
+			[
+				'Update & Assign',
+				'classifying into a same-name Archetype of other colors',
+				{
+					byName: control,
+					exact: undefined,
+					colors: ['U', 'B'],
+					reviewed: false,
+				},
+			],
+			[
+				'Reassign',
+				'editing with no key card changes',
+				{
+					byName: control,
+					exact: control,
+					keyCards: ['Counterspell'],
+					reviewed: true,
+				},
+			],
+			[
+				'Update & Reassign',
+				'editing with key card changes',
+				{
+					byName: control,
+					exact: control,
+					keyCards: ['Wrath of God'],
+					reviewed: true,
+				},
+			],
+			[
+				'Update & Reassign',
+				'editing into a same-name Archetype of other colors',
+				{
+					byName: control,
+					exact: undefined,
+					colors: ['U', 'B'],
+					reviewed: true,
+				},
+			],
 		] as const)('reads %s when %s', (expected, _, scenario) => {
 			mockFindByName.mockReturnValue(scenario.byName);
 			mockFindByNameAndColors.mockReturnValue(scenario.exact);
-			const entry = makeEntry({ archetypeId: scenario.reviewed ? 5 : null, deckReviewed: scenario.reviewed });
+			const entry = makeEntry({
+				archetypeId: scenario.reviewed ? 5 : null,
+				deckReviewed: scenario.reviewed,
+			});
 			const { nameInput, colorsInput, selectedKeyCards, buttonLabel } = useArchetypeAssignment(makeOptions(entry));
 
 			nameInput.value = scenario.byName ? 'Control' : 'Brand New';

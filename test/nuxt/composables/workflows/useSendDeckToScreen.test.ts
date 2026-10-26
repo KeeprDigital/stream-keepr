@@ -26,8 +26,16 @@ mockNuxtImport('useScreenStore', () => () => mockScreenStore);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useToast', () => () => mockToast);
 
-const playerWithDeck = { id: 42, name: 'Test', gameData: { type: 'mtg', deckName: 'Mono Red' } } as any;
-const deckSourceOf = (playerId: number) => ({ deckSource: { type: 'player', playerId } });
+const playerWithDeck = {
+	id: 42,
+	name: 'Test',
+	gameData: { type: 'mtg', deckName: 'Mono Red' },
+} as any;
+function deckSourceOf(playerId: number) {
+	return {
+		deckSource: { type: 'player', playerId },
+	};
+}
 
 describe('useSendDeckToScreen', () => {
 	beforeEach(() => {
@@ -65,7 +73,10 @@ describe('useSendDeckToScreen', () => {
 		it('offers nothing for a Player without a deck', () => {
 			const { createSendDeckItems } = useSendDeckToScreen();
 
-			expect(createSendDeckItems({ ...playerWithDeck, gameData: { type: 'mtg', deckName: null } })).toEqual([]);
+			expect(createSendDeckItems({
+				...playerWithDeck,
+				gameData: { type: 'mtg', deckName: null },
+			})).toEqual([]);
 		});
 
 		it('offers nothing when no Screen is in Deck mode', () => {

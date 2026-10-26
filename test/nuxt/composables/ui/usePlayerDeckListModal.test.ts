@@ -17,14 +17,30 @@ const deckCache = {
 };
 
 function deckList(name: string) {
-	return { deckId: 1, externalId: `deck-${name}`, formatExternalId: 'modern', phaseIds: [1], phaseName: null, name, colors: 'R', isPrimary: true, cards: [] };
+	return {
+		deckId: 1,
+		externalId: `deck-${name}`,
+		formatExternalId: 'modern',
+		phaseIds: [1],
+		phaseName: null,
+		name,
+		colors: 'R',
+		isPrimary: true,
+		cards: [],
+	};
 }
 
 mockNuxtImport('useOverlay', () => () => overlay);
 mockNuxtImport('useEventStore', () => () => eventStore);
 mockNuxtImport('usePlayerDeckCache', () => () => deckCache);
 
-const player = (id: number, name: string) => ({ id, name, updatedAt: new Date('2026-02-01') }) as never;
+function player(id: number, name: string) {
+	return ({
+		id,
+		name,
+		updatedAt: new Date('2026-02-01'),
+	}) as never;
+}
 
 describe('usePlayerDeckListModal', () => {
 	beforeEach(() => {
@@ -34,17 +50,26 @@ describe('usePlayerDeckListModal', () => {
 	});
 
 	it('shows a Player\'s cached deck lists at once, fetching nothing', async () => {
-		const cached = [deckList('Main')];
+		const cached = [
+			deckList('Main'),
+		];
 		deckCache.getDeckLists.mockReturnValue(cached);
 
 		await usePlayerDeckListModal().openPlayerDeckList(player(7, 'Alice'));
 
-		expect(modal.open).toHaveBeenCalledWith({ playerName: 'Alice', playerId: 7, deckLists: cached, loading: false });
+		expect(modal.open).toHaveBeenCalledWith({
+			playerName: 'Alice',
+			playerId: 7,
+			deckLists: cached,
+			loading: false,
+		});
 		expect(deckCache.fetchDecks).not.toHaveBeenCalled();
 	});
 
 	it('opens loading for an uncached Player, then fills in what the fetch brought', async () => {
-		const fetched = [deckList('Fetched')];
+		const fetched = [
+			deckList('Fetched'),
+		];
 		deckCache.getDeckLists.mockReturnValueOnce([]).mockReturnValueOnce(fetched);
 
 		await usePlayerDeckListModal().openPlayerDeckList(player(8, 'Bob'));

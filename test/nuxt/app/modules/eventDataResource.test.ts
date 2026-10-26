@@ -22,12 +22,19 @@ describe('useEventDataResource', () => {
 	});
 
 	it('lists an Event\'s resource, normalized to its items', async () => {
-		mockFetch.mockResolvedValue({ players: [{ id: 1 }], total: 1 });
+		mockFetch.mockResolvedValue({
+			players: [
+				{ id: 1 },
+			],
+			total: 1,
+		});
 
 		const items = await useEventDataResource({ resourcePath: 'players', eventScoped: true }).list(1);
 
 		expect(mockFetch).toHaveBeenCalledWith('/api/events/1/players');
-		expect(items).toEqual([{ id: 1 }]);
+		expect(items).toEqual([
+			{ id: 1 },
+		]);
 	});
 
 	it('lists a resource outside any Event', async () => {
@@ -37,14 +44,42 @@ describe('useEventDataResource', () => {
 	});
 
 	it.each([
-		['reads one', (repo: ReturnType<typeof useEventDataResource>) => repo.getById(1, 42), '/api/events/1/players/42', undefined],
-		['creates', (repo: ReturnType<typeof useEventDataResource>) => repo.create(1, { name: 'New' }), '/api/events/1/players', { method: 'POST', body: { name: 'New' } }],
-		['updates', (repo: ReturnType<typeof useEventDataResource>) => repo.update(1, 42, { name: 'Renamed' }), '/api/events/1/players/42', { method: 'PATCH', body: { name: 'Renamed' } }],
-		['removes', (repo: ReturnType<typeof useEventDataResource>) => repo.remove(1, 42), '/api/events/1/players/42', { method: 'DELETE' }],
+		[
+			'reads one',
+			(repo: ReturnType<typeof useEventDataResource>) => repo.getById(1, 42),
+			'/api/events/1/players/42',
+			undefined,
+		],
+		[
+			'creates',
+			(repo: ReturnType<typeof useEventDataResource>) => repo.create(1, { name: 'New' }),
+			'/api/events/1/players',
+			{
+				method: 'POST',
+				body: { name: 'New' },
+			},
+		],
+		[
+			'updates',
+			(repo: ReturnType<typeof useEventDataResource>) => repo.update(1, 42, { name: 'Renamed' }),
+			'/api/events/1/players/42',
+			{
+				method: 'PATCH',
+				body: { name: 'Renamed' },
+			},
+		],
+		[
+			'removes',
+			(repo: ReturnType<typeof useEventDataResource>) => repo.remove(1, 42),
+			'/api/events/1/players/42',
+			{ method: 'DELETE' },
+		],
 	])('%s through the resource path', async (_, call, path, options) => {
 		await call(useEventDataResource({ resourcePath: 'players', eventScoped: true }));
 
-		expect(mockFetch).toHaveBeenCalledWith(...(options ? [path, options] : [path]));
+		expect(mockFetch).toHaveBeenCalledWith(...(options
+			? [path, options]
+			: [path]));
 	});
 
 	it('sends realtime-origin headers with a write when asked to', async () => {

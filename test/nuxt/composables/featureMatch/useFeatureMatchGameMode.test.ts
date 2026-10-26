@@ -16,7 +16,9 @@ const mockFeatureMatchStateStore = {
 
 const mockOverlay = {
 	create: vi.fn(() => ({
-		open: vi.fn(() => ({ result: Promise.resolve(false) })),
+		open: vi.fn(() => ({
+			result: Promise.resolve(false),
+		})),
 	})),
 };
 
@@ -46,7 +48,14 @@ mockNuxtImport('useToast', () => () => mockToast);
 mockNuxtImport('useIntervalFn', () => (fn: any, interval: any, options?: any) => realUseIntervalFn(fn, interval, options));
 
 function countdown(elapsedMs: number, type: 'countdown' | 'countup' = 'countdown') {
-	return { type, durationMs: 60000, elapsedMs, isRunning: false, lastStartedAt: null, countUpAfterCountdown: false };
+	return {
+		type,
+		durationMs: 60000,
+		elapsedMs,
+		isRunning: false,
+		lastStartedAt: null,
+		countUpAfterCountdown: false,
+	};
 }
 
 describe('useFeatureMatchGameMode', () => {
@@ -55,7 +64,10 @@ describe('useFeatureMatchGameMode', () => {
 	});
 
 	function track(overrides: Record<string, boolean>) {
-		mockEventData.value = createMockEvent({ ...trackingEverything, ...overrides });
+		mockEventData.value = createMockEvent({
+			...trackingEverything,
+			...overrides,
+		});
 	}
 
 	function createSetup(stateOverrides: Partial<FeatureMatchState> | null = {}) {
@@ -70,11 +82,36 @@ describe('useFeatureMatchGameMode', () => {
 
 	describe('the mulligan phase', () => {
 		it.each([
-			['before turn 1', {}, { turnNumber: 0, firstPlayer: null, activePlayer: null }, true],
-			['from turn 1', {}, { turnNumber: 1 }, false],
-			['without a Session state', {}, null, false],
-			['with mulligan tracking off', { featureMatchDefaultMulliganTrackingEnabled: false }, { turnNumber: 0 }, false],
-			['with turn and active-player tracking off', { featureMatchDefaultTurnTrackingEnabled: false, featureMatchDefaultActivePlayerTrackingEnabled: false }, { turnNumber: 0 }, false],
+			[
+				'before turn 1',
+				{},
+				{ turnNumber: 0, firstPlayer: null, activePlayer: null },
+				true,
+			],
+			[
+				'from turn 1',
+				{},
+				{ turnNumber: 1 },
+				false,
+			],
+			[
+				'without a Session state',
+				{},
+				null,
+				false,
+			],
+			[
+				'with mulligan tracking off',
+				{ featureMatchDefaultMulliganTrackingEnabled: false },
+				{ turnNumber: 0 },
+				false,
+			],
+			[
+				'with turn and active-player tracking off',
+				{ featureMatchDefaultTurnTrackingEnabled: false, featureMatchDefaultActivePlayerTrackingEnabled: false },
+				{ turnNumber: 0 },
+				false,
+			],
 		] as const)('is %s: %#', (_, tracking, state, expected) => {
 			track(tracking);
 
@@ -84,9 +121,24 @@ describe('useFeatureMatchGameMode', () => {
 
 	describe('the turn counter', () => {
 		it.each([
-			['asks for a first player while none is chosen', {}, { firstPlayer: null }, 'selection'],
-			['counts once a first player is chosen', {}, { firstPlayer: 'player1' }, 'counter'],
-			['counts without active-player tracking', { featureMatchDefaultActivePlayerTrackingEnabled: false }, { firstPlayer: null }, 'counter'],
+			[
+				'asks for a first player while none is chosen',
+				{},
+				{ firstPlayer: null },
+				'selection',
+			],
+			[
+				'counts once a first player is chosen',
+				{},
+				{ firstPlayer: 'player1' },
+				'counter',
+			],
+			[
+				'counts without active-player tracking',
+				{ featureMatchDefaultActivePlayerTrackingEnabled: false },
+				{ firstPlayer: null },
+				'counter',
+			],
 		] as const)('%s', (_, tracking, state, expected) => {
 			track(tracking);
 
@@ -94,9 +146,24 @@ describe('useFeatureMatchGameMode', () => {
 		});
 
 		it.each([
-			['with a Session and tracking', {}, {}, true],
-			['without a Session state', {}, null, false],
-			['with turn and active-player tracking off', { featureMatchDefaultTurnTrackingEnabled: false, featureMatchDefaultActivePlayerTrackingEnabled: false }, {}, false],
+			[
+				'with a Session and tracking',
+				{},
+				{},
+				true,
+			],
+			[
+				'without a Session state',
+				{},
+				null,
+				false,
+			],
+			[
+				'with turn and active-player tracking off',
+				{ featureMatchDefaultTurnTrackingEnabled: false, featureMatchDefaultActivePlayerTrackingEnabled: false },
+				{},
+				false,
+			],
 		] as const)('shows %s: %#', (_, tracking, state, expected) => {
 			track(tracking);
 
@@ -105,7 +172,11 @@ describe('useFeatureMatchGameMode', () => {
 
 		it.each([
 			['the turn number with turn tracking', {}, 'Turn 3'],
-			['"Active" with active-player tracking only', { featureMatchDefaultTurnTrackingEnabled: false }, 'Active'],
+			[
+				'"Active" with active-player tracking only',
+				{ featureMatchDefaultTurnTrackingEnabled: false },
+				'Active',
+			],
 		])('labels itself with %s', (_, tracking, expected) => {
 			track(tracking);
 
@@ -113,9 +184,24 @@ describe('useFeatureMatchGameMode', () => {
 		});
 
 		it.each([
-			['the first half of turn 1', { activePlayer: 'player1', turnNumber: 1 }, true, 1],
-			['the second half of turn 1', { activePlayer: 'player2', turnNumber: 1 }, false, 2],
-			['a later turn', { activePlayer: 'player1', turnNumber: 2 }, false, 1],
+			[
+				'the first half of turn 1',
+				{ activePlayer: 'player1', turnNumber: 1 },
+				true,
+				1,
+			],
+			[
+				'the second half of turn 1',
+				{ activePlayer: 'player2', turnNumber: 1 },
+				false,
+				2,
+			],
+			[
+				'a later turn',
+				{ activePlayer: 'player1', turnNumber: 2 },
+				false,
+				1,
+			],
 		] as const)('steps back from %s only when there is somewhere to go', (_, state, disabled, half) => {
 			const mode = createSetup({ firstPlayer: 'player1', ...state });
 
@@ -124,8 +210,14 @@ describe('useFeatureMatchGameMode', () => {
 		});
 
 		it.each([
-			['no first player', { firstPlayer: null, activePlayer: null }],
-			['no active player', { firstPlayer: 'player1', activePlayer: null }],
+			[
+				'no first player',
+				{ firstPlayer: null, activePlayer: null },
+			],
+			[
+				'no active player',
+				{ firstPlayer: 'player1', activePlayer: null },
+			],
 		] as const)('cannot step back with %s', (_, state) => {
 			expect(createSetup(state).stepBackDisabled.value).toBe(true);
 		});
@@ -153,18 +245,34 @@ describe('useFeatureMatchGameMode', () => {
 
 	describe('the clock', () => {
 		it.each([
-			['a count-up clock', countdown(5000, 'countup'), false],
-			['a countdown with time left', countdown(30000), false],
-			['a countdown that ran out', countdown(60000), true],
+			[
+				'a count-up clock',
+				countdown(5000, 'countup'),
+				false,
+			],
+			[
+				'a countdown with time left',
+				countdown(30000),
+				false,
+			],
+			[
+				'a countdown that ran out',
+				countdown(60000),
+				true,
+			],
 		])('expires for %s only when a countdown runs out', (_, clock, expected) => {
 			expect(createSetup({ clock }).isClockExpired.value).toBe(expected);
 		});
 
 		it('starts overtime with the Event\'s extra turns when the countdown runs out', async () => {
-			const state = shallowRef(createMockFeatureMatchState({ clock: countdown(0) }));
+			const state = shallowRef(createMockFeatureMatchState({
+				clock: countdown(0),
+			}));
 			useFeatureMatchGameMode(10, computed(() => state.value as FeatureMatchState));
 
-			state.value = createMockFeatureMatchState({ clock: countdown(60001) });
+			state.value = createMockFeatureMatchState({
+				clock: countdown(60001),
+			});
 			await nextTick();
 
 			expect(mockFeatureMatchStateStore.startOvertime).toHaveBeenCalledWith(1, 10, 5);
@@ -173,7 +281,11 @@ describe('useFeatureMatchGameMode', () => {
 
 	describe('resetting a game', () => {
 		it('resets the game once the operator confirms', async () => {
-			mockOverlay.create.mockReturnValueOnce({ open: vi.fn(() => ({ result: Promise.resolve(true) })) });
+			mockOverlay.create.mockReturnValueOnce({
+				open: vi.fn(() => ({
+					result: Promise.resolve(true),
+				})),
+			});
 
 			await createSetup().handleResetGame();
 
@@ -209,9 +321,15 @@ describe('useFeatureMatchGameMode', () => {
 			const mode = createSetup();
 			mode.editStateOpen.value = true;
 
-			await mode.handleEditStateSave({ turnNumber: 7, player1: { lifeTotal: 12 } });
+			await mode.handleEditStateSave({
+				turnNumber: 7,
+				player1: { lifeTotal: 12 },
+			});
 
-			expect(mockFeatureMatchStateStore.updateState).toHaveBeenCalledExactlyOnceWith(1, 10, { turnNumber: 7, player1: { lifeTotal: 12 } });
+			expect(mockFeatureMatchStateStore.updateState).toHaveBeenCalledExactlyOnceWith(1, 10, {
+				turnNumber: 7,
+				player1: { lifeTotal: 12 },
+			});
 			expect(mode.editStateOpen.value).toBe(false);
 		});
 
