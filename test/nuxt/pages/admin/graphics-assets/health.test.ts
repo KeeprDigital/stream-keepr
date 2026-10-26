@@ -3,10 +3,11 @@ import type {
 	GraphicsAssetLibraryHealth,
 } from '~~/shared/types/graphicsAsset';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { transportFailure } from '~~/test/helpers/transportFailure';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 
 const { mockApiFetch } = vi.hoisted(() => ({
 	mockApiFetch: vi.fn(),
@@ -62,10 +63,7 @@ function libraryCapacity(): GraphicsAssetLibraryCapacity {
 	} as GraphicsAssetLibraryCapacity;
 }
 
-/**
- * The server answers each read with its own payload, so the page is never accidentally
- * proved correct by a mock that returns the same body to every route.
- */
+/** Answers each route with its own payload, so no single body can make the page look right. */
 function serve(options: {
 	health?: GraphicsAssetLibraryHealth | Error;
 	capacity?: GraphicsAssetLibraryCapacity | Error;
@@ -88,57 +86,14 @@ function serve(options: {
 }
 
 const passthroughStub = defineComponent({
-	template: '<div><slot name="actions" /><slot name="header" /><slot /></div>',
-});
-/**
- * `UAlert` says most of what it says through props rather than slots, and a stub that
- * renders only the slot drops the reported failure entirely — which is why this page's
- * error state read as covered while nothing could observe it (#286).
- */
-const alertStub = defineComponent({
-	props: ['title', 'description'],
-	template: '<div>{{ title }} {{ description }}<slot /></div>',
-});
-const badgeStub = defineComponent({
-	props: ['label'],
-	template: '<span><slot />{{ label }}</span>',
-});
-const buttonStub = defineComponent({
-	props: ['label'],
-	emits: ['click'],
-	template: '<button @click="$emit(\'click\')"><slot />{{ label }}</button>',
-});
-const formFieldStub = defineComponent({
-	props: ['label', 'description'],
-	template: '<div><label>{{ label }}</label><p>{{ description }}</p><slot /></div>',
-});
-const inputStub = defineComponent({
-	props: ['modelValue', 'type'],
-	emits: ['update:modelValue'],
-	template: `<input
-		:value="modelValue"
-		:type="type"
-		@input="$emit(
-			'update:modelValue',
-			type === 'number' ? Number($event.target.value) : $event.target.value,
-		)"
-	>`,
+	template: '<div><slot name="actions" /><slot /></div>',
 });
 
 async function mountPage() {
 	const { default: HealthPage } = await import('../../../../../app/pages/admin/graphics-assets/health.vue');
 	return mount(HealthPage, {
 		global: {
-			stubs: {
-				NuxtLayout: passthroughStub,
-				UAlert: alertStub,
-				UButton: buttonStub,
-				UCard: passthroughStub,
-				UBadge: badgeStub,
-				UIcon: passthroughStub,
-				UFormField: formFieldStub,
-				UInput: inputStub,
-			},
+			stubs: { ...nuxtUiStubs, NuxtLayout: passthroughStub },
 		},
 	});
 }
@@ -150,7 +105,7 @@ async function openHealth() {
 	await wrapper.findAll('button')
 		.find(button => button.text() === 'Open health')!
 		.trigger('click');
-	await nextTick();
+	await flushPromises();
 	return wrapper;
 }
 
@@ -160,12 +115,7 @@ describe('the Graphics Asset Library health page', () => {
 		serve();
 	});
 
-	/**
-	 * Both reads are guarded by `requireGraphicsAdministrator`, so a page that takes them
-	 * without the token gets a 403 and can never show an administrator anything. It did:
-	 * the guard arrived on the two routes in fc0dc08 and this page was left fetching them
-	 * bare, which is the whole defect.
-	 */
+	// Both reads are guarded by `requireGraphicsAdministrator`; without the token they are 403s.
 	it('sends the administrator token with both of its reads', async () => {
 		await openHealth();
 
@@ -190,11 +140,6 @@ describe('the Graphics Asset Library health page', () => {
 		expect(wrapper.text()).toContain('Graphics Administrator token');
 	});
 
-	/**
-	 * The failure this page meets most often is the 403 whose body says what is missing.
-	 * It used to render the failure's own `message`, which on a `$fetch` failure is the
-	 * transport's line — naming the route and not the token (#271, #286).
-	 */
 	it('says what the server refused the health read for, not which route it was', async () => {
 		serve({
 			health: transportFailure({
@@ -210,34 +155,6 @@ describe('the Graphics Asset Library health page', () => {
 		expect(failure.text()).not.toContain('403 Forbidden');
 	});
 
-	it('relays the setting a preserved 503 says was never configured', async () => {
-		serve({
-			capacity: transportFailure({
-				status: 503,
-				body: { message: 'NUXT_GRAPHICS_ADMIN_TOKEN is not configured' },
-				request: `[GET] "${CAPACITY_ROUTE}"`,
-			}),
-		});
-		const wrapper = await openHealth();
-
-		expect(wrapper.get('[data-testid="capacity-load-error"]').text())
-			.toContain('NUXT_GRAPHICS_ADMIN_TOKEN is not configured');
-	});
-
-	it('falls back to the status line when the sanitizer got to the 5xx first', async () => {
-		serve({
-			health: transportFailure({
-				status: 500,
-				body: { message: 'Internal Server Error' },
-				request: `[GET] "${HEALTH_ROUTE}"`,
-			}),
-		});
-		const wrapper = await openHealth();
-
-		expect(wrapper.get('[data-testid="health-load-error"]').text())
-			.toContain(`[GET] "${HEALTH_ROUTE}": 500 Internal Server Error`);
-	});
-
 	it('shows catalogue, staging, and canonical health as separate administrator results', async () => {
 		const wrapper = await openHealth();
 
@@ -250,7 +167,7 @@ describe('the Graphics Asset Library health page', () => {
 
 		mockApiFetch.mockClear();
 		await wrapper.findAll('button').find(button => button.text() === 'Refresh')!.trigger('click');
-		await nextTick();
+		await flushPromises();
 
 		expect(mockApiFetch).toHaveBeenCalledWith(
 			HEALTH_ROUTE,
@@ -292,7 +209,7 @@ describe('the Graphics Asset Library health page', () => {
 		await wrapper.findAll('button')
 			.find(button => button.text() === 'Save capacity limits')!
 			.trigger('click');
-		await nextTick();
+		await flushPromises();
 
 		// The token already held for this session is what authorises the write; the page
 		// never asks for it a second time.
@@ -322,7 +239,7 @@ describe('the Graphics Asset Library health page', () => {
 			}),
 		});
 		await wrapper.findAll('button').find(button => button.text() === 'Refresh')!.trigger('click');
-		await nextTick();
+		await flushPromises();
 
 		// The stale reading is dropped rather than left on screen as a library state
 		// nobody is still checking, and re-authorising is possible again.

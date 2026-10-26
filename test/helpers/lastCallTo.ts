@@ -1,94 +1,19 @@
 /**
- * The calls a test means, chosen by name rather than taken by position.
+ * The calls a test means, chosen by name rather than taken by position (#273, #280, #342).
  *
- * Two functions live here rather than the one this file is named for: `lastCallTo`
- * answers "which call", and `callsTo` below answers "which calls, and how many". The name
- * stayed at the older function's in #342, on the argument that a rename buys a reader
- * nothing this sentence does not — weighed against an import edit in every file that reads
- * from this path, at a moment when sibling branches held test files. Note what that
- * argument is worth: #342's own sweep took the importers from seven files to thirteen, so
- * the branch that declined the rename is the branch that made it dearer.
- *
- * A mock's call list belongs to the mock, not to the test — anything else sharing the
- * subject writes into it too. #273 proved the consequence in situ: `evidence.test.ts`
- * mocks `$fetch`, Nuxt's global route middleware starts a clock sync through the same
- * `$fetch`, and two `/api/time` samples land on every mount (#123). A read that takes
- * the last call gets a stray's arguments; a `toHaveBeenCalled` guard in front of it
- * passes, because a call does exist — just not the one under test. So this helper
- * **selects** before it takes the last, and the selector is the point of it.
- *
- * The second half is legibility. The shape it replaces is `mock.calls.at(-1)![1]`,
- * whose failure when nothing was recorded is `TypeError: Cannot read properties of
- * undefined` — a message that names neither the mock nor the expectation, and that
- * reads as a type crash in whatever branch happens to be running when one of #123's
- * load flakes fires. Here the same case is a named error that says what was wanted and
- * lists what arrived instead, which is usually enough to tell a flake from a defect
- * without re-running anything.
+ * A mock's call list belongs to the mock, not the test: a shared subject (a global
+ * `$fetch`, a `console` spy) records strays too, so `mock.calls.at(-1)` can read the
+ * wrong call and still pass. These helpers select before they read, and fail with a
+ * named error listing what arrived instead of `Cannot read properties of undefined`.
+ * Leave the selector off only for a purpose-built mock the code under test alone calls.
  *
  * ```ts
  * const [, options] = lastCallTo(mockApiFetch, '/api/admin/graphics-assets/evidence');
- * const [line] = lastCallTo(errorSpy, isPublishFailureLine);
+ * const [first, retried] = callsTo(mockRepository.sendCommand, 2).map(call => call[3]);
  * ```
- *
- * The selector is optional, and leaving it off is honest only where the mock has
- * exactly one caller — a purpose-built port method, say, that nothing but the code
- * under test can reach. Where a subject is shared (a global `$fetch`, a `console`
- * spy), name the call: the unselected form cannot tell a stray from a subject, which
- * is the defect this file exists to prevent.
- *
- * **A sweep for `!` does not find every site this replaces.** #280 found its four by
- * searching for the bang, and that search is blind to the same defect written without
- * one — `spy.mock.calls.map(...)` followed by `[0]` on the result. The index is
- * unchecked, the empty case is the identical `Cannot read properties of undefined`, and
- * no `!` appears anywhere in it, so it survived both #273 and #280 untouched.
- * `ably.test.ts` carried the instance #300 closed; #330 then found three more in a
- * **destructuring** spelling — `const [first, second] = mock.calls.map(…)`, which has
- * no index in it either — in `broadcastGraphicsLiveSession.test.ts`. Those wanted
- * `callsTo` rather than this function, for the reason below.
- *
- * **#342 ran the sweep this paragraph used to ask for** — every shape, indexed or `.at()`
- * or destructured, bang or no bang, `.map()` in between or not. Its census lives on the
- * issue rather than here, with the grep, the tip it was taken at and the judgement for
- * each file: a count in a docblock is right on the day it is written and quietly wrong
- * afterwards. What generalises, and is worth carrying here, is which sites the sweep
- * converted. Convert where either holds:
- *
- * - **Something other than the code under test writes to the subject.** A
- *   `mockNuxtImport('$fetch')` mock is the standing example, because the clock sync's
- *   `/api/time` samples are recorded there (#123) — as is a `console` spy, and a module
- *   mock that records every message a module publishes, where `.at(-1)` follows whichever
- *   announcement happened to be last rather than the one under test. It is the mock's
- *   declaration that decides this and not the suite's environment: in
- *   `test/nuxt/pages/event/[eventId]/screen/[screenSlug].test.ts`, where `$fetch` is left
- *   real and a *global* `fetch` is stubbed, the stub's own record holds nothing but the
- *   page's request, while the run reports "Server time sync unavailable" — so the sync
- *   ran and every sample failed somewhere short of the stub. That second half was
- *   observed on a forced-failure run of that suite; `silent: 'passed-only'` suppresses
- *   the line when it passes. Where inside `$fetch` the samples die was not established.
- * - **The subject of the read is the relationship between two calls**, where the count
- *   belongs at the read rather than in a `toHaveBeenCalledTimes` a few lines above it.
- *   That is `callsTo`'s case, below.
- *
- * Most sites are neither, and stay as they are: purpose-built mocks with one caller — a DB
- * or port double, a prop callback, a toast a component's own suite counts before it reads.
- * There the unselected form says what it means, and its failure is loud rather than quiet:
- * a missing call makes the read `undefined`, and `expect(undefined).not.toHaveProperty(…)`
- * does not pass vacuously the way one might fear — it throws `TypeError: Cannot convert
- * undefined or null to object`. Worth having checked, since the opposite would have made
- * every `calls[0]?.[n]` site urgent rather than merely inelegant.
- *
- * Filed as #280, generalising the guard #273 built for one site; swept in #342.
  */
 
-/**
- * The part of a Vitest mock this reads.
- *
- * Structural rather than `MockInstance`, because its call sites hand it three different
- * things — `vi.fn()`, `vi.spyOn(...)` and `vi.mocked(port.method)` — and the argument
- * tuple is what needs to survive to the caller, not the mock's own type. (How many sites
- * that is belongs on #342 with the rest of the census, not in a sentence nobody will
- * revisit when the next one lands.)
- */
+/** The part of a Vitest mock this reads: `vi.fn()`, `vi.spyOn()` and `vi.mocked()` all fit. */
 interface CallRecorder<Args extends unknown[]> {
 	mock: { calls: Args[] };
 }
@@ -124,49 +49,9 @@ export function lastCallTo<Args extends unknown[]>(
 }
 
 /**
- * The calls a test means to compare against each other, and a refusal if there are not
- * exactly as many as it thinks.
- *
- * `lastCallTo` answers "which call", which is the wrong question for a test whose whole
- * subject is the **relationship between two** calls — that a retry reuses the first
- * attempt's command id, that two presses do not share one. Those read
- * `const [first, second] = mock.calls.map(…)`, and the count is the thing nothing
- * checks: on a run that recorded one call `second` is `undefined`, so
- * `expect(first).not.toBe(second)` passes while the second command was never sent, and
- * on a run that recorded none `expect(retried).toBe(first)` compares `undefined` to
- * `undefined` and passes too. Both are #273/#280's defect in the direction that hides
- * best — a vacuous pass rather than a `TypeError` — and #330 found three of them in one
- * file.
- *
- * So `expected` is required and is the point of the function. A count asserted here
- * cannot drift from the destructuring it guards, which is what happens when a
- * `toHaveBeenCalledTimes` sits a few lines above and someone later adds a selector, an
- * argument, or a third call.
- *
- * ```ts
- * const [first, retried] = callsTo(mockRepository.sendCommand, 2).map(call => call[3]);
- * ```
- *
- * **A positional read of what this returns is safe in a way `mock.calls[1]!` is not, and
- * the compiler cannot tell the difference.** At run time the count has already been
- * enforced, so index 0 and index 1 of a `callsTo(mock, 2)` result exist or nothing
- * downstream runs at all — the refusal above happens first. To the type system it is still
- * an unchecked indexed read, so under `noUncheckedIndexedAccess` it compiles only where the
- * element type is `any` (an untyped `vi.fn()`, as in the example above) and otherwise wants
- * `!` or a guard. The bang that buys is a formality, not the blindness this file exists to
- * remove: `mock.calls[1]!` asserts a call nobody counted, `callsTo(mock, 2)[1]!` asserts one
- * this function refuses to let be missing.
- *
- * That leaves three honest shapes, in order of preference: assert on the mapped list and
- * index nothing (`expect(calls.map(…)).toEqual([…])`); destructure the mapped list where
- * comparing two calls is the whole subject; bang the read where neither reads well. #342
- * learned the middle one the hard way — it wrote a cast into the `.map` callback, which
- * restored a real element type and reported `TS18048` twice over, and **both times only the
- * Nuxt typecheck program said so**: the suite, the single-file run and eslint were silent.
- *
- * The selector carries `lastCallTo`'s meaning unchanged: name the call where anything
- * else can reach the subject, and leave it off only for a purpose-built mock the code
- * under test is the sole caller of.
+ * The calls a test compares against each other, refused unless there are exactly
+ * `expected` of them. Destructuring `mock.calls.map(…)` checks no count, so a missing
+ * second call reads as `undefined` and `expect(first).not.toBe(second)` passes vacuously.
  */
 export function callsTo<Args extends unknown[]>(
 	mock: CallRecorder<Args>,
@@ -211,13 +96,7 @@ function describeSelector<Args extends unknown[]>(select?: CallSelector<Args>): 
 	return `a call matching ${select.name || 'the given matcher'}`;
 }
 
-/**
- * What arrived instead. The listed calls are the most recent ones, which is the useful
- * end for both callers, for two different reasons: `lastCallTo` takes the last match, so
- * a stray that displaced the call it wanted is right there — and `callsTo` reports a
- * count, where the tail is what the run just added and the earlier calls are elided
- * rather than blamed.
- */
+/** What arrived instead: the most recent calls, earlier ones elided. */
 function describeCalls(calls: unknown[][]): string {
 	if (calls.length === 0)
 		return 'none';
@@ -238,11 +117,7 @@ function renderFirstArgument(call: unknown[]): string {
 		: rendered;
 }
 
-/**
- * A rendering that cannot itself throw. The message is a diagnostic for a test that
- * has already failed, so a circular payload or a hostile getter must degrade to
- * something readable rather than replace the named error with its own.
- */
+/** A rendering that cannot itself throw, so the diagnostic survives a circular payload. */
 function safeStringify(value: unknown): string {
 	try {
 		return JSON.stringify(value) ?? String(value);

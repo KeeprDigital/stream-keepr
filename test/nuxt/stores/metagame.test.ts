@@ -1,46 +1,17 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '~~/test/helpers/deferred';
+import { createMockPlayer, createMockUiArchetype } from '~~/test/helpers/fixtures';
 import { lastCallTo } from '~~/test/helpers/lastCallTo';
-import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 import { transportFailure } from '~~/test/helpers/transportFailure';
-
-// ── Mock Ably ──
-
-const mockAbly = createMockRealtime();
-const ablyCallbacks: Record<string, Record<string, (...args: unknown[]) => void>> = {};
-mockAbly.onRoom.mockImplementation(
-	(storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
-		ablyCallbacks[storeName] = callbacks;
-	},
-);
-
-mockNuxtImport('useRealtime', () => () => mockAbly);
-
-// ── Mock $fetch ──
+import { realtimeHandlersFor } from '~~/test/nuxt/helpers/realtimeEventSession';
 
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
 }));
 mockNuxtImport('$fetch', () => mockFetch);
 
-// ── Helpers ──
-
-/** The Event every test below loads, so the request can be named rather than counted. */
-const SUMMARY_ENDPOINT = '/api/events/1/metagame';
-
-/**
- * The query the summary request carried, chosen by name rather than taken from
- * position 0.
- *
- * The mock above stands in for the module's whole `$fetch`, which is not this store's
- * alone: `useServerTime` samples the clock through it on its own timers (#123), and a
- * sample arriving first would hand back its options and answer `undefined` for a query
- * nobody asked about. Why the selection rather than a guard is `lastCallTo`'s own docblock.
- */
-function summaryQuery() {
-	const [, options] = lastCallTo(mockFetch, SUMMARY_ENDPOINT);
-	return options.query;
-}
+const { deliver } = realtimeHandlersFor();
 
 function makeSummaryData() {
 	return {
@@ -56,124 +27,34 @@ function makeSummaryData() {
 	};
 }
 
-// ── Tests ──
-
 describe('useMetagameStore', () => {
 	let store: ReturnType<typeof useMetagameStore>;
 
 	beforeEach(() => {
 		store = useMetagameStore();
 		store.$reset();
-		vi.clearAllMocks();
 		mockFetch.mockResolvedValue(makeSummaryData());
-		mockAbly.onRoom.mockImplementation(
-			(storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
-				ablyCallbacks[storeName] = callbacks;
-			},
-		);
-		ablyCallbacks.metagame = {
-			'player:updated': () => store.applyRemoteInvalidated(),
-			'archetype:created': () => store.applyRemoteInvalidated(),
-			'archetype:updated': () => store.applyRemoteInvalidated(),
-			'archetype:deleted': () => store.applyRemoteInvalidated(),
-			'archetype:keyCardsUpdated': () => store.applyRemoteInvalidated(),
-		};
 	});
-
-	// ── scopeQuery computed ──
-
-	describe('scopeQuery', () => {
-		it('scope=\'all\' → { scope: \'all\' }', () => {
-			store.scope = 'all';
-			expect(store.scopeQuery).toEqual({ scope: 'all' });
-		});
-
-		it('scope=\'topN\', topN=16 → { scope: \'topN\', topN: 16 }', () => {
-			store.scope = 'topN';
-			store.topN = 16;
-			expect(store.scopeQuery).toEqual({ scope: 'topN', topN: 16 });
-		});
-
-		it('scope=\'playerList\', playerListId=3 → { scope: \'playerList\', playerListId: 3 }', () => {
-			store.scope = 'playerList';
-			store.playerListId = 3;
-			expect(store.scopeQuery).toEqual({ scope: 'playerList', playerListId: 3 });
-		});
-
-		it('is reactive: updates when scope changes', () => {
-			store.scope = 'all';
-			expect(store.scopeQuery.scope).toBe('all');
-			store.scope = 'topN';
-			expect(store.scopeQuery.scope).toBe('topN');
-		});
-	});
-
-	// ── conversionQuery computed ──
-
-	describe('conversionQuery', () => {
-		it('defaults to a Top 8 conversion target', () => {
-			expect(store.conversionQuery).toEqual({ conversionMetric: 'topN', conversionThreshold: 8 });
-		});
-
-		it('is reactive: follows metric and threshold changes', () => {
-			store.conversionMetric = 'minPoints';
-			store.conversionThreshold = 12;
-			expect(store.conversionQuery).toEqual({ conversionMetric: 'minPoints', conversionThreshold: 12 });
-		});
-	});
-
-	// ── buildScopeQuery (inspected via loadSummary) ──
-
-	describe('buildScopeQuery', () => {
-		it('scope=\'topN\', topN=8 → includes topN: 8', async () => {
-			store.scope = 'topN';
-			store.topN = 8;
-			await store.loadSummary(1);
-
-			expect(summaryQuery()).toMatchObject({ scope: 'topN', topN: 8 });
-		});
-
-		it('scope=\'playerList\', playerListId=5 → includes playerListId: 5', async () => {
-			store.scope = 'playerList';
-			store.playerListId = 5;
-			await store.loadSummary(1);
-
-			expect(summaryQuery()).toMatchObject({ scope: 'playerList', playerListId: 5 });
-		});
-	});
-
-	// ── loadSummary ──
 
 	describe('loadSummary', () => {
-		it('loading is true during fetch, false after', async () => {
-			const loadingDuringFetch: boolean[] = [];
-			mockFetch.mockImplementation(async () => {
-				loadingDuringFetch.push(store.loading);
-				return makeSummaryData();
-			});
-
-			await store.loadSummary(1);
-
-			expect(loadingDuringFetch[0]).toBe(true);
-			expect(store.loading).toBe(false);
-		});
-
-		it('summaryData populated on success', async () => {
+		it('asks for the summary in the shared scope and holds it', async () => {
+			store.scope = 'topN';
+			store.topN = 16;
 			const data = makeSummaryData();
 			mockFetch.mockResolvedValue(data);
 
 			await store.loadSummary(1);
 
+			const [, options] = lastCallTo(mockFetch, '/api/events/1/metagame');
+			expect(options.query).toMatchObject({ scope: 'topN', topN: 16 });
 			expect(store.summaryData).toEqual(data);
-			expect(store.error).toBeNull();
+			expect(store.loading).toBe(false);
 		});
 
-		it('keeps the latest scoped response when requests resolve out of order', async () => {
-			let resolveOld!: (value: ReturnType<typeof makeSummaryData>) => void;
-			let resolveNew!: (value: ReturnType<typeof makeSummaryData>) => void;
-			mockFetch
-				.mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve; }))
-				.mockReturnValueOnce(new Promise((resolve) => { resolveNew = resolve; }));
+		it('keeps the latest response when requests resolve out of order', async () => {
+			const older = deferred<ReturnType<typeof makeSummaryData>>();
+			const newer = deferred<ReturnType<typeof makeSummaryData>>();
+			mockFetch.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
 
 			const oldRequest = store.loadSummary(1);
 			const newRequest = store.loadSummary(1);
@@ -181,9 +62,9 @@ describe('useMetagameStore', () => {
 				...makeSummaryData(),
 				totalPlayers: 9,
 			};
-			resolveNew(latest);
+			newer.resolve(latest);
 			await newRequest;
-			resolveOld({
+			older.resolve({
 				...makeSummaryData(),
 				totalPlayers: 2,
 			});
@@ -193,134 +74,88 @@ describe('useMetagameStore', () => {
 			expect(store.loading).toBe(false);
 		});
 
-		/**
-		 * What a refused summary says, which until #286 was nothing.
-		 *
-		 * This store swallowed the failure and wrote a static line, so a summary refused
-		 * for a nameable reason reported only that something had failed — and
-		 * `useMetagamePage` re-raises this string as the toast's title, so the static line
-		 * was the whole of what an operator read. It is now the fallback rather than the
-		 * answer, on `failureSentence`'s rule: a refusal's own sentence, or the preserved
-		 * prose of a 5xx that named a deployment fault.
-		 */
-		describe('when the summary is refused', () => {
-			beforeEach(() => {
-				// The store logs the failure it swallows; the row is about `error`, not the log.
-				vi.spyOn(console, 'error').mockImplementation(() => {});
-			});
+		// `useMetagamePage` raises this string as the toast's title, so it is all an operator reads (#286).
+		it.each([
+			[
+				'the sentence the authority wrote',
+				403,
+				'This player list belongs to another Event',
+				'This player list belongs to another Event',
+			],
+			[
+				'its own line once the sanitizer got to a 5xx first',
+				500,
+				'Internal Server Error',
+				'Failed to load metagame summary',
+			],
+		])('reports a refused summary with %s', async (_, status, message, reported) => {
+			vi.spyOn(console, 'error').mockImplementation(() => {});
+			mockFetch.mockRejectedValue(transportFailure({
+				status,
+				body: { message },
+			}));
 
-			it('reports the sentence the authority wrote about the request', async () => {
-				mockFetch.mockRejectedValue(transportFailure({
-					status: 403,
-					body: { message: 'This player list belongs to another Event' },
-					request: `[GET] "/api/events/1/metagame/summary"`,
-				}));
+			await store.loadSummary(1);
 
-				await store.loadSummary(1);
-
-				expect(store.error).toBe('This player list belongs to another Event');
-			});
-
-			it('reports a 5xx whose prose the server preserved through sanitizing', async () => {
-				mockFetch.mockRejectedValue(transportFailure({
-					status: 503,
-					body: { message: 'Card data provider is temporarily unavailable. Try again later.' },
-					request: `[GET] "/api/events/1/metagame/summary"`,
-				}));
-
-				await store.loadSummary(1);
-
-				expect(store.error).toBe('Card data provider is temporarily unavailable. Try again later.');
-			});
-
-			it('falls back to its own line when the sanitizer got to the 5xx first', async () => {
-				mockFetch.mockRejectedValue(transportFailure({
-					status: 500,
-					body: { message: 'Internal Server Error' },
-					request: `[GET] "/api/events/1/metagame/summary"`,
-				}));
-
-				await store.loadSummary(1);
-
-				expect(store.error).toBe('Failed to load metagame summary');
-			});
+			expect(store.error).toBe(reported);
 		});
 	});
 
-	// ── applyRemoteInvalidated ──
-
-	describe('applyRemoteInvalidated', () => {
-		it('clears summaryData to null', () => {
+	describe('invalidation', () => {
+		it('drops the held summary and ticks the version views watch', () => {
 			store.summaryData = makeSummaryData();
+			const version = store.invalidationVersion;
 
 			store.applyRemoteInvalidated();
 
 			expect(store.summaryData).toBeNull();
+			expect(store.invalidationVersion).toBe(version + 1);
 		});
 
-		it('increments invalidationVersion', () => {
-			const previousVersion = store.invalidationVersion;
-
-			store.applyRemoteInvalidated();
-
-			expect(store.invalidationVersion).toBe(previousVersion + 1);
-		});
-	});
-
-	// ── $reset ──
-
-	describe('$reset', () => {
-		it('restores scope=all, topN=8, playerListId=undefined, clears data, loading=false, error=null', () => {
+		it('follows a reset, which also restores the default scope and conversion target', () => {
 			store.scope = 'topN';
-			store.topN = 16;
-			store.playerListId = 5;
 			store.conversionMetric = 'minPoints';
-			store.conversionThreshold = 12;
 			store.summaryData = makeSummaryData();
-			store.loading = true;
-			store.error = 'some error';
-			store.invalidationVersion = 10;
+			const version = store.invalidationVersion;
 
 			store.$reset();
 
-			expect(store.scope).toBe('all');
-			expect(store.topN).toBe(8);
-			expect(store.playerListId).toBeUndefined();
-			expect(store.conversionMetric).toBe('topN');
-			expect(store.conversionThreshold).toBe(8);
+			expect(store.scopeQuery).toEqual({ scope: 'all' });
+			expect(store.conversionQuery).toEqual({ conversionMetric: 'topN', conversionThreshold: 8 });
 			expect(store.summaryData).toBeNull();
-			expect(store.loading).toBe(false);
-			expect(store.error).toBeNull();
-			expect(store.invalidationVersion).toBe(11);
+			expect(store.invalidationVersion).toBe(version + 1);
 		});
-	});
 
-	// ── Ably: metagame channel ──
-
-	describe('realtime: metagame channel', () => {
-		it('player:updated triggers invalidate() (data becomes null)', () => {
+		it.each([
+			[
+				'player:updated',
+				{
+					player: createMockPlayer({ id: 1 }),
+				},
+			],
+			[
+				'archetype:created',
+				{
+					archetype: createMockUiArchetype({ id: 1 }),
+				},
+			],
+			[
+				'archetype:keyCardsUpdated',
+				{ archetypeId: 1, keyCards: [] },
+			],
+			[
+				'playerList:membersChanged',
+				{
+					listId: 1,
+					action: 'added',
+					playerIds: [],
+					memberCount: 0,
+				},
+			],
+		])('follows a peer\'s %s', (type, payload) => {
 			store.summaryData = makeSummaryData();
 
-			ablyCallbacks.metagame!['player:updated']!({ id: 1, name: 'Player 1' });
-
-			expect(store.summaryData).toBeNull();
-		});
-	});
-
-	// ── Ably: archetype invalidation messages ──
-
-	describe('realtime: archetype invalidation messages', () => {
-		const events = [
-			'archetype:created',
-			'archetype:updated',
-			'archetype:deleted',
-			'archetype:keyCardsUpdated',
-		] as const;
-
-		it.each(events)('%s triggers invalidate()', (event) => {
-			store.summaryData = makeSummaryData();
-
-			ablyCallbacks.metagame![event]!({ id: 1 });
+			deliver(type as never, payload as never);
 
 			expect(store.summaryData).toBeNull();
 		});

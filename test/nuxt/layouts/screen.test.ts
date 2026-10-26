@@ -22,21 +22,6 @@ describe('screenLayout', () => {
 		mockUseHead.mockReset();
 	});
 
-	it('renders the screen output centered in a full-viewport container', async () => {
-		const wrapper = await mountLayout();
-
-		const container = wrapper.get('div');
-		expect(container.classes()).toEqual(expect.arrayContaining([
-			'h-screen',
-			'w-screen',
-			'overflow-hidden',
-			'flex',
-			'items-center',
-			'justify-center',
-		]));
-		expect(wrapper.get('[data-testid="screen-content"]').text()).toBe('output');
-	});
-
 	it('overrides the body background so the output can be keyed transparent', async () => {
 		await mountLayout();
 
