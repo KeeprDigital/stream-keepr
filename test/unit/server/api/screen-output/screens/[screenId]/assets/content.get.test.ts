@@ -13,7 +13,9 @@ vi.mock('~~/server/modules/screen-output-assets/runtime', () => ({
 
 vi.mock('~~/server/utils/screenOutputCapabilityAuthorization', () => ({
 	bearerScreenOutputCapability: (value: string | undefined) =>
-		value === undefined ? undefined : value.replace('Bearer ', ''),
+		value === undefined
+			? undefined
+			: value.replace('Bearer ', ''),
 }));
 
 vi.stubGlobal('defineEventHandler', vi.fn(handler => handler));
@@ -44,7 +46,9 @@ async function handler() {
 }
 
 function outputRequest() {
-	return stubH3Event({ headers: { authorization: 'Bearer opaque_capability' } });
+	return stubH3Event({
+		headers: { authorization: 'Bearer opaque_capability' },
+	});
 }
 
 /**

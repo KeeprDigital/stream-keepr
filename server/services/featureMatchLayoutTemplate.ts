@@ -219,7 +219,9 @@ export function featureMatchLayoutTemplateService() {
 					${REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE}
 			`).bind(
 				patch.name ?? existing.name,
-				patch.description === undefined ? existing.description : patch.description,
+				patch.description === undefined
+					? existing.description
+					: patch.description,
 				JSON.stringify(document),
 				referenceVersion,
 				now,
@@ -264,5 +266,11 @@ export function featureMatchLayoutTemplateService() {
 		return results[1]?.meta.changes === 1;
 	};
 
-	return { findAll, findById, create, update, remove };
+	return {
+		findAll,
+		findById,
+		create,
+		update,
+		remove,
+	};
 }

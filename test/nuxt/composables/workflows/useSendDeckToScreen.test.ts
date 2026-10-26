@@ -2,7 +2,9 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockUpdateModeConfig = vi.fn();
-const mockToast = { add: vi.fn() };
+const mockToast = {
+	add: vi.fn(),
+};
 
 const mockScreenStore = {
 	screens: [
@@ -81,14 +83,24 @@ describe('useSendDeckToScreen', () => {
 
 	it('createSendDeckItems returns empty for player without deckName in gameData', () => {
 		const { createSendDeckItems } = useSendDeckToScreen();
-		const items = createSendDeckItems({ id: 1, name: 'Test', gameData: { type: 'mtg', deckName: null } } as any);
+		const items = createSendDeckItems({
+			id: 1,
+			name: 'Test',
+			gameData: { type: 'mtg', deckName: null },
+		} as any);
 		expect(items).toEqual([]);
 	});
 
 	it('createSendDeckItems returns single item for one deck screen', () => {
-		mockScreenStore.screens = [{ id: 1, name: 'Screen 1', currentMode: 'deck' }];
+		mockScreenStore.screens = [
+			{ id: 1, name: 'Screen 1', currentMode: 'deck' },
+		];
 		const { createSendDeckItems } = useSendDeckToScreen();
-		const items = createSendDeckItems({ id: 1, name: 'Test', gameData: { type: 'mtg', deckName: 'Mono Red' } } as any);
+		const items = createSendDeckItems({
+			id: 1,
+			name: 'Test',
+			gameData: { type: 'mtg', deckName: 'Mono Red' },
+		} as any);
 		expect(items).toHaveLength(1);
 		expect(items[0]).toHaveProperty('label', 'Send Deck to Screen');
 	});
@@ -99,7 +111,11 @@ describe('useSendDeckToScreen', () => {
 			{ id: 2, name: 'S2', currentMode: 'deck' },
 		];
 		const { createSendDeckItems } = useSendDeckToScreen();
-		const items = createSendDeckItems({ id: 1, name: 'Test', gameData: { type: 'mtg', deckName: 'Mono Red' } } as any);
+		const items = createSendDeckItems({
+			id: 1,
+			name: 'Test',
+			gameData: { type: 'mtg', deckName: 'Mono Red' },
+		} as any);
 		expect(items).toHaveLength(1);
 		expect(items[0]).toHaveProperty('children');
 	});

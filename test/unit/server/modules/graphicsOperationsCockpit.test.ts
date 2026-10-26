@@ -71,8 +71,12 @@ function cockpitCatalogue(openCounts: Partial<Record<GraphicsDiscrepancyKind, nu
 function libraryWith(openCounts: Partial<Record<GraphicsDiscrepancyKind, number>>) {
 	return createGraphicsAssetLibrary({
 		catalogue: cockpitCatalogue(openCounts) as never,
-		staging: { checkHealth: vi.fn().mockResolvedValue({ outcome: 'healthy' }) },
-		canonical: { checkHealth: vi.fn().mockResolvedValue({ outcome: 'healthy' }) },
+		staging: {
+			checkHealth: vi.fn().mockResolvedValue({ outcome: 'healthy' }),
+		},
+		canonical: {
+			checkHealth: vi.fn().mockResolvedValue({ outcome: 'healthy' }),
+		},
 		now: () => new Date('2026-07-30T09:00:00.000Z'),
 	});
 }
@@ -80,9 +84,15 @@ function libraryWith(openCounts: Partial<Record<GraphicsDiscrepancyKind, number>
 describe('the Operations Cockpit reading', () => {
 	it('still answers whether the library is safe when the catalogue cannot answer', async () => {
 		const library = createGraphicsAssetLibrary({
-			catalogue: { checkHealth: vi.fn().mockRejectedValue(new Error('D1 unavailable')) },
-			staging: { checkHealth: vi.fn().mockResolvedValue({ outcome: 'healthy' }) },
-			canonical: { checkHealth: vi.fn().mockResolvedValue({ outcome: 'healthy' }) },
+			catalogue: {
+				checkHealth: vi.fn().mockRejectedValue(new Error('D1 unavailable')),
+			},
+			staging: {
+				checkHealth: vi.fn().mockResolvedValue({ outcome: 'healthy' }),
+			},
+			canonical: {
+				checkHealth: vi.fn().mockResolvedValue({ outcome: 'healthy' }),
+			},
 			now: () => new Date('2026-07-30T09:00:00.000Z'),
 		});
 

@@ -22,7 +22,9 @@ const mockScreenStore = reactive({
 
 const mockOverlay = {
 	create: vi.fn(() => ({
-		open: vi.fn(() => ({ result: Promise.resolve(false) })),
+		open: vi.fn(() => ({
+			result: Promise.resolve(false),
+		})),
 		patch: vi.fn(),
 	})),
 };
@@ -33,7 +35,12 @@ const initialLoading = ref(false);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
 mockNuxtImport('useOverlay', () => () => mockOverlay);
-mockNuxtImport('useEventPageLoading', () => () => ({ eventId, initialLoading, initialError: ref(null), retry: vi.fn() }));
+mockNuxtImport('useEventPageLoading', () => () => ({
+	eventId,
+	initialLoading,
+	initialError: ref(null),
+	retry: vi.fn(),
+}));
 
 const NuxtLayoutStub = defineComponent({
 	template: `
@@ -103,7 +110,9 @@ describe('screens page', () => {
 	});
 
 	it('shows the navbar add action once screens exist', async () => {
-		mockScreenStore.screens = [{ id: 3, name: 'Main Overlay' }];
+		mockScreenStore.screens = [
+			{ id: 3, name: 'Main Overlay' },
+		];
 
 		const wrapper = await mountPage();
 
@@ -111,7 +120,9 @@ describe('screens page', () => {
 	});
 
 	it('tracks presence subscriptions when the screens array mutates in place', async () => {
-		mockScreenStore.screens = [{ id: 1, name: 'Main Overlay' }];
+		mockScreenStore.screens = [
+			{ id: 1, name: 'Main Overlay' },
+		];
 
 		await mountPage();
 		expect(mockScreenStore.subscribeToScreenPresence).toHaveBeenCalledWith(1);

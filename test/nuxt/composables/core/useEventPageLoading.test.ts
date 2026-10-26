@@ -10,20 +10,48 @@ const mockEventStore = reactive({
 	$reset: vi.fn(),
 });
 mockNuxtImport('useEventStore', () => () => mockEventStore);
-const mockPlayerStore = reactive({ isLoaded: true, loadPlayersByEventId: vi.fn(), $reset: vi.fn() });
-const mockRoundStore = reactive({ isLoaded: true, loadRoundsByEventId: vi.fn(), $reset: vi.fn() });
+const mockPlayerStore = reactive({
+	isLoaded: true,
+	loadPlayersByEventId: vi.fn(),
+	$reset: vi.fn(),
+});
+const mockRoundStore = reactive({
+	isLoaded: true,
+	loadRoundsByEventId: vi.fn(),
+	$reset: vi.fn(),
+});
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
-mockNuxtImport('useArchetypeStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useMetagameStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('usePlayerListStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('usePhaseStore', () => () => ({ $reset: vi.fn() }));
+mockNuxtImport('useArchetypeStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('useMetagameStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('usePlayerListStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('usePhaseStore', () => () => ({
+	$reset: vi.fn(),
+}));
 mockNuxtImport('useRoundStore', () => () => mockRoundStore);
-mockNuxtImport('useMatchStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useFeatureMatchStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useFeatureMatchStateStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useScreenStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useCardStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useMeleeStore', () => () => ({ $reset: vi.fn() }));
+mockNuxtImport('useMatchStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('useFeatureMatchStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('useFeatureMatchStateStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('useScreenStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('useCardStore', () => () => ({
+	$reset: vi.fn(),
+}));
+mockNuxtImport('useMeleeStore', () => () => ({
+	$reset: vi.fn(),
+}));
 mockNuxtImport('clearPlayerDeckCache', () => () => {});
 
 async function flushPromises() {
@@ -63,8 +91,16 @@ describe('useEventPageLoading', () => {
 
 	it('returns initialLoading true when some entries are not loaded', () => {
 		const entries = [
-			{ consumes: 'players' as const, isLoaded: () => false, load: vi.fn() },
-			{ consumes: 'rounds' as const, isLoaded: () => true, load: vi.fn() },
+			{
+				consumes: 'players' as const,
+				isLoaded: () => false,
+				load: vi.fn(),
+			},
+			{
+				consumes: 'rounds' as const,
+				isLoaded: () => true,
+				load: vi.fn(),
+			},
 		];
 		const { initialLoading } = usePage(entries);
 		expect(initialLoading.value).toBe(true);
@@ -72,8 +108,16 @@ describe('useEventPageLoading', () => {
 
 	it('returns initialLoading false when all entries are loaded and no load is running', async () => {
 		const entries = [
-			{ consumes: 'rounds' as const, isLoaded: () => true, load: vi.fn() },
-			{ consumes: 'rounds' as const, isLoaded: () => true, load: vi.fn() },
+			{
+				consumes: 'rounds' as const,
+				isLoaded: () => true,
+				load: vi.fn(),
+			},
+			{
+				consumes: 'rounds' as const,
+				isLoaded: () => true,
+				load: vi.fn(),
+			},
 		];
 		const { initialLoading } = usePage(entries);
 		await flushPromises();
@@ -84,7 +128,13 @@ describe('useEventPageLoading', () => {
 		const afterLoad = vi.fn().mockResolvedValue(undefined);
 		const load = vi.fn().mockResolvedValue(undefined);
 
-		usePage([{ consumes: 'players', isLoaded: () => false, load }], afterLoad);
+		usePage([
+			{
+				consumes: 'players',
+				isLoaded: () => false,
+				load,
+			},
+		], afterLoad);
 		await flushPromises();
 
 		expect(load).toHaveBeenCalledWith(1);
@@ -99,7 +149,9 @@ describe('useEventPageLoading', () => {
 			loadedEventId = id;
 		});
 
-		usePage([{ consumes: 'players', isLoaded, load }]);
+		usePage([
+			{ consumes: 'players', isLoaded, load },
+		]);
 		await flushPromises();
 
 		mockEventStore.eventId = 2;
@@ -116,7 +168,11 @@ describe('useEventPageLoading', () => {
 		}));
 
 		const { initialLoading } = usePage([
-			{ consumes: 'rounds' as const, isLoaded: () => true, load: vi.fn() },
+			{
+				consumes: 'rounds' as const,
+				isLoaded: () => true,
+				load: vi.fn(),
+			},
 		], afterLoad);
 		await flushPromises();
 
@@ -140,7 +196,11 @@ describe('useEventPageLoading', () => {
 			});
 
 		const { initialLoading, initialError, retry } = usePage([
-			{ consumes: 'players', isLoaded: () => loaded, load },
+			{
+				consumes: 'players',
+				isLoaded: () => loaded,
+				load,
+			},
 		]);
 		await flushPromises();
 
@@ -163,7 +223,13 @@ describe('useEventPageLoading', () => {
 			.mockReturnValueOnce(first)
 			.mockResolvedValueOnce([]);
 
-		const { initialError } = usePage([{ consumes: 'players', isLoaded: () => false, load }], afterLoad);
+		const { initialError } = usePage([
+			{
+				consumes: 'players',
+				isLoaded: () => false,
+				load,
+			},
+		], afterLoad);
 		await flushPromises();
 		mockEventStore.eventId = 2;
 		await flushPromises();
@@ -177,8 +243,16 @@ describe('useEventPageLoading', () => {
 
 	it('re-reads the collections a mounted page consumes on Reconnect Resync, and stops once it is gone (#610)', async () => {
 		usePage([
-			{ consumes: 'players', isLoaded: () => true, load: vi.fn() },
-			{ consumes: 'rounds', isLoaded: () => true, load: vi.fn() },
+			{
+				consumes: 'players',
+				isLoaded: () => true,
+				load: vi.fn(),
+			},
+			{
+				consumes: 'rounds',
+				isLoaded: () => true,
+				load: vi.fn(),
+			},
 		]);
 		await flushPromises();
 
@@ -196,7 +270,13 @@ describe('useEventPageLoading', () => {
 		await eventDataResync.resync();
 		vi.clearAllMocks();
 
-		usePage([{ consumes: 'players', isLoaded: () => true, load: vi.fn() }]);
+		usePage([
+			{
+				consumes: 'players',
+				isLoaded: () => true,
+				load: vi.fn(),
+			},
+		]);
 		await flushPromises();
 
 		expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);

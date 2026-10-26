@@ -70,7 +70,9 @@ describe('matchService', () => {
 
 	describe('findByRoundId', () => {
 		it('returns matches for a specific round', async () => {
-			const matches = [createMockMatch({ roundId: 5 })];
+			const matches = [
+				createMockMatch({ roundId: 5 }),
+			];
 			getChain('select').orderBy.mockResolvedValue(matches);
 
 			const result = await matchService().findByRoundId(1, 5);
@@ -92,7 +94,9 @@ describe('matchService', () => {
 		it('returns newly created match with auto sort order', async () => {
 			const newMatch = createMockMatch({ sortOrder: 3 });
 			// First select chain: getMaxSortOrder query
-			getChain('select').where.mockResolvedValue([{ max: 2 }]);
+			getChain('select').where.mockResolvedValue([
+				{ max: 2 },
+			]);
 			// After resetDbMocks, we need a fresh insert chain — but the same chain is reused
 			getChain('insert').returning.mockResolvedValue([newMatch]);
 
@@ -108,7 +112,9 @@ describe('matchService', () => {
 
 		it('uses provided sortOrder when specified', async () => {
 			const newMatch = createMockMatch({ sortOrder: 10 });
-			getChain('select').where.mockResolvedValue([{ max: 5 }]);
+			getChain('select').where.mockResolvedValue([
+				{ max: 5 },
+			]);
 			getChain('insert').returning.mockResolvedValue([newMatch]);
 
 			const result = await matchService().create(1, { roundId: 1, sortOrder: 10 } as any);
@@ -118,7 +124,9 @@ describe('matchService', () => {
 
 		it('defaults max sort order to -1 when no matches exist', async () => {
 			const newMatch = createMockMatch({ sortOrder: 0 });
-			getChain('select').where.mockResolvedValue([{ max: -1 }]);
+			getChain('select').where.mockResolvedValue([
+				{ max: -1 },
+			]);
 			getChain('insert').returning.mockResolvedValue([newMatch]);
 
 			const result = await matchService().create(1, { roundId: 1 } as any);
@@ -137,8 +145,12 @@ describe('matchService', () => {
 		});
 
 		it('strips unclassified and server-managed keys before inserting', async () => {
-			getChain('select').where.mockResolvedValue([{ max: 2 }]);
-			getChain('insert').returning.mockResolvedValue([createMockMatch()]);
+			getChain('select').where.mockResolvedValue([
+				{ max: 2 },
+			]);
+			getChain('insert').returning.mockResolvedValue([
+				createMockMatch(),
+			]);
 
 			await matchService().create(1, {
 				roundId: 1,
@@ -162,7 +174,9 @@ describe('matchService', () => {
 		});
 
 		it('strips forged Melee provenance before writing', async () => {
-			getChain('update').returning.mockResolvedValue([createMockMatch()]);
+			getChain('update').returning.mockResolvedValue([
+				createMockMatch(),
+			]);
 
 			await matchService().update(1, 1, {
 				tableNumber: 9,
@@ -176,7 +190,9 @@ describe('matchService', () => {
 
 	describe('remove', () => {
 		it('returns true when match deleted', async () => {
-			getChain('delete').returning.mockResolvedValue([createMockMatch()]);
+			getChain('delete').returning.mockResolvedValue([
+				createMockMatch(),
+			]);
 
 			const result = await matchService().remove(1, 1);
 

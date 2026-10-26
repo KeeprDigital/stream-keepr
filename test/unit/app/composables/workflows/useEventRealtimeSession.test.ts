@@ -331,7 +331,10 @@ describe('useEventRealtimeSession', () => {
 			'playerList:deleted',
 			'playerList:membersChanged',
 		]);
-		const testedTypes = [...Object.keys(directStoreHandlers), ...extraHandledTypes].sort();
+		const testedTypes = [
+			...Object.keys(directStoreHandlers),
+			...extraHandledTypes,
+		].sort();
 
 		expect(testedTypes).toEqual(Object.keys(handlers).sort());
 
@@ -368,8 +371,16 @@ describe('useEventRealtimeSession', () => {
 			phaseCount: 2,
 			roundCount: 8,
 			changes: {
-				phases: { created: [1], updated: [], deleted: [] },
-				rounds: { created: [], updated: [2], deleted: [] },
+				phases: {
+					created: [1],
+					updated: [],
+					deleted: [],
+				},
+				rounds: {
+					created: [],
+					updated: [2],
+					deleted: [],
+				},
 			},
 		});
 		await vi.waitFor(() => {
@@ -383,7 +394,10 @@ describe('useEventRealtimeSession', () => {
 		});
 
 		vi.clearAllMocks();
-		handlers['melee:featureMatchesSynced']!({ ...message, slotIds: [4, 5] });
+		handlers['melee:featureMatchesSynced']!({
+			...message,
+			slotIds: [4, 5],
+		});
 		await vi.waitFor(() => {
 			expect(featureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(12);
 		});

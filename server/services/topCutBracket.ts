@@ -39,7 +39,9 @@ async function findDecks(eventId: number, playerIds: readonly number[]): Promise
 	const byPlayer = new Map<number, NamedPlayerDeckIdentity>();
 	for (const row of rows) {
 		const { name, colors } = resolvePlayerDeckIdentity(
-			row.archetypeName == null ? null : { name: row.archetypeName, colors: row.archetypeColors },
+			row.archetypeName == null
+				? null
+				: { name: row.archetypeName, colors: row.archetypeColors },
 			row.gameData,
 		);
 		if (name)
@@ -51,7 +53,9 @@ async function findDecks(eventId: number, playerIds: readonly number[]): Promise
 /** Every Player of the Event these Matches seat. */
 function seatedPlayerIds(matchesByRound: ReadonlyMap<number, readonly ScreenOutputRoundMatch[]>): number[] {
 	const ids = new Set<number>();
-	for (const match of [...matchesByRound.values()].flat()) {
+	for (const match of [
+		...matchesByRound.values(),
+	].flat()) {
 		for (const side of [match.player1, match.player2]) {
 			if (side?.id != null)
 				ids.add(side.id);
@@ -75,22 +79,30 @@ export async function findPhaseBracket(
 	phaseId: number | undefined,
 	details: TopCutEntrantDetails = {},
 ): Promise<ScreenOutputTopCutResponse> {
-	const phase = phaseId ? await phaseService().findById(phaseId, eventId) : undefined;
+	const phase = phaseId
+		? await phaseService().findById(phaseId, eventId)
+		: undefined;
 	if (!phase)
 		return { phase: null, bracket: EMPTY_TOP_CUT_BRACKET };
 
 	const rounds = await roundService().findByPhaseId(phase.id, eventId);
 	const matchesByRound = await findMatchesByRound(eventId, rounds.map(round => round.id));
 	const [seeds, decks] = await Promise.all([
-		details.showSeeds ? findSeeds(eventId, phase.id) : null,
-		details.showArchetypes ? findDecks(eventId, seatedPlayerIds(matchesByRound)) : null,
+		details.showSeeds
+			? findSeeds(eventId, phase.id)
+			: null,
+		details.showArchetypes
+			? findDecks(eventId, seatedPlayerIds(matchesByRound))
+			: null,
 	]);
 
 	function entrant(side: ScreenOutputMatchSide | null): BracketEntrant | null {
 		if (!side)
 			return null;
 		const seated: BracketEntrant = { playerId: side.id, name: side.name };
-		const of = <T>(byPlayer: Map<number, T>) => side.id == null ? null : byPlayer.get(side.id) ?? null;
+		const of = <T>(byPlayer: Map<number, T>) => side.id == null
+			? null
+			: byPlayer.get(side.id) ?? null;
 		if (seeds)
 			seated.seed = of(seeds);
 		if (decks)
@@ -114,5 +126,8 @@ export async function findPhaseBracket(
 		})),
 	}));
 
-	return { phase: mapPhaseToResponse(phase), bracket: deriveTopCutBracket(bracketRounds) };
+	return {
+		phase: mapPhaseToResponse(phase),
+		bracket: deriveTopCutBracket(bracketRounds),
+	};
 }

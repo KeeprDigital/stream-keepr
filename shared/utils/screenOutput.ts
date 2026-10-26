@@ -28,8 +28,12 @@ export const SCREEN_EMBED_VALUES: ScreenEmbed[] = ['preview', 'monitor'];
  * is silently wrong about it.
  */
 export function parseScreenEmbed(value: unknown): ScreenEmbed | null {
-	const raw = Array.isArray(value) ? value[0] : value;
-	return SCREEN_EMBED_VALUES.includes(raw as ScreenEmbed) ? raw as ScreenEmbed : null;
+	const raw = Array.isArray(value)
+		? value[0]
+		: value;
+	return SCREEN_EMBED_VALUES.includes(raw as ScreenEmbed)
+		? raw as ScreenEmbed
+		: null;
 }
 
 /**
@@ -37,7 +41,9 @@ export function parseScreenEmbed(value: unknown): ScreenEmbed | null {
  * omitted or invalid selection renders the Overlay Output.
  */
 export function parseScreenOutput(value: unknown): { output: ScreenOutput; warning: string | null } {
-	const raw = Array.isArray(value) ? value[0] : value;
+	const raw = Array.isArray(value)
+		? value[0]
+		: value;
 	if (raw === undefined || raw === null || raw === '')
 		return { output: 'overlay', warning: null };
 	if (raw === 'overlay' || raw === 'fill' || raw === 'key')
@@ -63,12 +69,16 @@ export function screenOutputCompositesOverBlack(output: ScreenOutput): boolean {
 
 /** The CSS background of the composed canvas for a Screen Output. */
 export function screenOutputCanvasBackground(output: ScreenOutput): string {
-	return screenOutputCompositesOverBlack(output) ? SCREEN_OUTPUT_BLACK : 'transparent';
+	return screenOutputCompositesOverBlack(output)
+		? SCREEN_OUTPUT_BLACK
+		: 'transparent';
 }
 
 /** The capture background for a Screen Output; omitted for the transparent Overlay Output. */
 export function screenOutputBackground(output: ScreenOutput): string | undefined {
-	return screenOutputCompositesOverBlack(output) ? SCREEN_OUTPUT_BLACK : undefined;
+	return screenOutputCompositesOverBlack(output)
+		? SCREEN_OUTPUT_BLACK
+		: undefined;
 }
 
 export interface ScreenOutputPathOptions {
@@ -136,7 +146,9 @@ export const SCREEN_OUTPUT_ASSET_CAPABILITY_PATTERN = /^[\w-]{20,200}$/;
  */
 export function screenOutputAssetCapabilityFromHash(hash: string): string | null {
 	const value = new URLSearchParams(hash.replace(/^#/, '')).get('asset-capability');
-	return value && SCREEN_OUTPUT_ASSET_CAPABILITY_PATTERN.test(value) ? value : null;
+	return value && SCREEN_OUTPUT_ASSET_CAPABILITY_PATTERN.test(value)
+		? value
+		: null;
 }
 
 /**
@@ -151,7 +163,9 @@ export function screenOutputAssetCapabilityFromHash(hash: string): string | null
 export function screenOutputCapabilityHeaders(
 	assetCapability: string | null | undefined,
 ): { authorization: string } | undefined {
-	return assetCapability ? { authorization: `Bearer ${assetCapability}` } : undefined;
+	return assetCapability
+		? { authorization: `Bearer ${assetCapability}` }
+		: undefined;
 }
 
 /**

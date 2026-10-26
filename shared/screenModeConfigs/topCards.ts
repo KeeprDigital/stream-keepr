@@ -114,6 +114,8 @@ function topCardsGridRowCount(cardCount: number, columns: number): number {
 /** `cards` laid out as the grid's rows of `columns` cards, the last row possibly short. */
 export function topCardsGridRows<T>(cards: readonly T[], columns: number): T[][] {
 	const width = Math.max(1, columns);
-	return Array.from({ length: topCardsGridRowCount(cards.length, width) }, (_, row) =>
+	return Array.from({
+		length: topCardsGridRowCount(cards.length, width),
+	}, (_, row) =>
 		cards.slice(row * width, (row + 1) * width));
 }

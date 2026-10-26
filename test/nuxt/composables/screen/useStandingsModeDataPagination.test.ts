@@ -39,16 +39,96 @@ const mutableConfig = reactive({ ...defaultConfig });
 // ── Players ──
 
 const players = [
-	createMockPlayer({ id: 1, name: 'Alice', position: 1, wins: 5, losses: 1, draws: 0, points: 15 }),
-	createMockPlayer({ id: 2, name: 'Bob', position: 2, wins: 4, losses: 2, draws: 0, points: 12 }),
-	createMockPlayer({ id: 3, name: 'Charlie', position: 3, wins: 3, losses: 3, draws: 0, points: 9 }),
-	createMockPlayer({ id: 4, name: 'Diana', position: 4, wins: 3, losses: 3, draws: 1, points: 10 }),
-	createMockPlayer({ id: 5, name: 'Ethan', position: 5, wins: 2, losses: 4, draws: 0, points: 6 }),
-	createMockPlayer({ id: 6, name: 'Fiona', position: 6, wins: 1, losses: 5, draws: 0, points: 3 }),
-	createMockPlayer({ id: 7, name: 'George', position: 7, wins: 1, losses: 5, draws: 1, points: 4 }),
-	createMockPlayer({ id: 8, name: 'Helen', position: 8, wins: 0, losses: 6, draws: 0, points: 0 }),
-	createMockPlayer({ id: 9, name: 'Ivan', position: 9, wins: 0, losses: 6, draws: 0, points: 0 }),
-	createMockPlayer({ id: 10, name: 'Jane', position: 10, wins: 0, losses: 6, draws: 0, points: 0 }),
+	createMockPlayer({
+		id: 1,
+		name: 'Alice',
+		position: 1,
+		wins: 5,
+		losses: 1,
+		draws: 0,
+		points: 15,
+	}),
+	createMockPlayer({
+		id: 2,
+		name: 'Bob',
+		position: 2,
+		wins: 4,
+		losses: 2,
+		draws: 0,
+		points: 12,
+	}),
+	createMockPlayer({
+		id: 3,
+		name: 'Charlie',
+		position: 3,
+		wins: 3,
+		losses: 3,
+		draws: 0,
+		points: 9,
+	}),
+	createMockPlayer({
+		id: 4,
+		name: 'Diana',
+		position: 4,
+		wins: 3,
+		losses: 3,
+		draws: 1,
+		points: 10,
+	}),
+	createMockPlayer({
+		id: 5,
+		name: 'Ethan',
+		position: 5,
+		wins: 2,
+		losses: 4,
+		draws: 0,
+		points: 6,
+	}),
+	createMockPlayer({
+		id: 6,
+		name: 'Fiona',
+		position: 6,
+		wins: 1,
+		losses: 5,
+		draws: 0,
+		points: 3,
+	}),
+	createMockPlayer({
+		id: 7,
+		name: 'George',
+		position: 7,
+		wins: 1,
+		losses: 5,
+		draws: 1,
+		points: 4,
+	}),
+	createMockPlayer({
+		id: 8,
+		name: 'Helen',
+		position: 8,
+		wins: 0,
+		losses: 6,
+		draws: 0,
+		points: 0,
+	}),
+	createMockPlayer({
+		id: 9,
+		name: 'Ivan',
+		position: 9,
+		wins: 0,
+		losses: 6,
+		draws: 0,
+		points: 0,
+	}),
+	createMockPlayer({
+		id: 10,
+		name: 'Jane',
+		position: 10,
+		wins: 0,
+		losses: 6,
+		draws: 0,
+		points: 0,
+	}),
 ];
 
 // ── Mocks ──
@@ -67,7 +147,9 @@ const mockEventStore = reactive({
 // Mutable eventId and interactive for null-eventId and timer tests
 const mockEventId = ref<number | null>(1);
 const mockInteractiveStandings = ref(false);
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 
 mockNuxtImport('$fetch', () => mockFetch);
 
@@ -91,7 +173,14 @@ mockNuxtImport('useServerTime', () => () => ({
 
 /** The Standings Screen Output read's answer; by default, the roster as it stands. */
 function standingsRead(overrides: Record<string, unknown> = {}) {
-	return { players: [...serverPlayers], round: null, roundStandings: null, watchlist: null, previousRoundPositions: null, ...overrides };
+	return {
+		players: [...serverPlayers],
+		round: null,
+		roundStandings: null,
+		watchlist: null,
+		previousRoundPositions: null,
+		...overrides,
+	};
 }
 
 const STANDINGS_READ = '/api/screen-output/events/1/screens/1/standings';
@@ -410,7 +499,12 @@ describe('useStandingsModeData pagination and formatting', () => {
 		it('filters to the watchlist members the read answers', async () => {
 			mutableConfig.viewMode = 'watchlist';
 			mutableConfig.playerListId = 42;
-			mockFetch.mockImplementation(async () => standingsRead({ watchlist: { name: 'VIPs', playerIds: [1, 3] } }));
+			mockFetch.mockImplementation(async () => standingsRead({
+				watchlist: {
+					name: 'VIPs',
+					playerIds: [1, 3],
+				},
+			}));
 
 			const { displayRows } = await makeStandings();
 

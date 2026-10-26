@@ -33,7 +33,10 @@ export function useBroadcastGraphicsLiveSessionSync(
 	}
 
 	watch(
-		() => [toValue(eventId), toValue(screenId)] as const,
+		() => [
+			toValue(eventId),
+			toValue(screenId),
+		] as const,
 		() => reload(),
 		{ immediate: true },
 	);

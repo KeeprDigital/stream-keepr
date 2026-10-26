@@ -13,13 +13,22 @@ import { createRingsDelegate, RINGS_PALETTE } from '~/utils/animation-effects/ri
  */
 
 function mountDelegate(overrides: Partial<AnimationEffectParams<'rings'>> = {}) {
-	const params = { ...animationEffectDefaultParams('rings'), ...overrides };
+	const params = {
+		...animationEffectDefaultParams('rings'),
+		...overrides,
+	};
 	const delegate = createRingsDelegate();
 	const scene = new THREE.Scene();
 	const camera = delegate.createCamera(THREE, { width: 800, height: 450 });
 	const context = { three: THREE, scene, camera };
 	delegate.build({ ...context, params });
-	return { delegate, scene, camera: camera as THREE.PerspectiveCamera, context, params };
+	return {
+		delegate,
+		scene,
+		camera: camera as THREE.PerspectiveCamera,
+		context,
+		params,
+	};
 }
 
 function ringsGroup(scene: THREE.Scene): THREE.Group {
@@ -125,7 +134,10 @@ describe('createRingsDelegate', () => {
 	it('clears to the background colour the fork\'s base cleared to, live on param change', () => {
 		const { scene, delegate, context, params } = mountDelegate();
 		expect((scene.background as THREE.Color).getHexString()).toBe(params.backgroundColor.slice(1));
-		delegate.applyParams({ ...context, params: { backgroundColor: '#224466' } });
+		delegate.applyParams({
+			...context,
+			params: { backgroundColor: '#224466' },
+		});
 		expect((scene.background as THREE.Color).getHexString()).toBe('224466');
 	});
 });

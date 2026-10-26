@@ -41,7 +41,9 @@ const { active: editorFocus } = useEditorFocusMode();
 
 const screenModeConfigurationPolicy = computed(() => {
 	const mode = screen.value?.currentMode;
-	return mode ? getScreenModeConfigurationPolicy(mode) : null;
+	return mode
+		? getScreenModeConfigurationPolicy(mode)
+		: null;
 });
 const usesFullWidthConfiguration = computed(() => screenModeConfigurationPolicy.value?.fullWidthConfiguration === true);
 const isControlScreen = computed(() => screenModeConfigurationPolicy.value?.displayType === 'control');
@@ -59,7 +61,9 @@ const hasContainerSettings = computed(() => {
 });
 
 // Connected count from presence
-const connectedCount = computed(() => screen.value ? screenStore.getConnectedCount(screen.value.id) : 0);
+const connectedCount = computed(() => screen.value
+	? screenStore.getConnectedCount(screen.value.id)
+	: 0);
 
 // Outputs self-reporting degraded card data through presence (#465). They are
 // already re-fetching on their own; this row is where the operator learns that
@@ -76,7 +80,9 @@ const modeSettingsComponent = computed(() => {
 // The current mode, when it carries its own Background Layers stack.
 const backgroundLayersMode = computed<BackgroundLayersCapableMode | null>(() => {
 	const mode = screen.value?.currentMode;
-	return mode && screenModeSupportsBackgroundLayers(mode) ? mode : null;
+	return mode && screenModeSupportsBackgroundLayers(mode)
+		? mode
+		: null;
 });
 
 // Screen-level config (container settings: background, width, height)
@@ -321,13 +327,17 @@ function openOutputInNewTab(output: FeatureMatchOverlayOutput) {
  * each named by the output it is.
  */
 const openOutputItems = computed(() => [
-	[{ label: 'Open output', icon: 'i-lucide-external-link', onSelect: openInNewTab }],
+	[
+		{ label: 'Open output', icon: 'i-lucide-external-link', onSelect: openInNewTab },
+	],
 	...(screenModeConfigurationPolicy.value?.outputOptions.length
-		? [screenModeConfigurationPolicy.value.outputOptions.map(option => ({
-				label: option.label,
-				icon: option.icon,
-				onSelect: () => openOutputInNewTab(option.value),
-			}))]
+		? [
+				screenModeConfigurationPolicy.value.outputOptions.map(option => ({
+					label: option.label,
+					icon: option.icon,
+					onSelect: () => openOutputInNewTab(option.value),
+				})),
+			]
 		: []),
 ]);
 

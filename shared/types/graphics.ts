@@ -133,7 +133,12 @@ export function applicationGraphicFont(fontId: GraphicApplicationFontId): Graphi
 	return { kind: 'application', fontId };
 }
 
-export const GRAPHIC_TEXT_TRANSFORM_VALUES = ['none', 'uppercase', 'lowercase', 'capitalize'] as const;
+export const GRAPHIC_TEXT_TRANSFORM_VALUES = [
+	'none',
+	'uppercase',
+	'lowercase',
+	'capitalize',
+] as const;
 export type GraphicTextTransform = typeof GRAPHIC_TEXT_TRANSFORM_VALUES[number];
 
 export const GRAPHIC_TEXT_ALIGN_VALUES = ['left', 'center', 'right'] as const;
@@ -274,7 +279,12 @@ export interface ShapeCorner {
 	size: number;
 }
 
-export const SHAPE_CORNER_KEYS = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft'] as const;
+export const SHAPE_CORNER_KEYS = [
+	'topLeft',
+	'topRight',
+	'bottomRight',
+	'bottomLeft',
+] as const;
 export type ShapeCornerKey = typeof SHAPE_CORNER_KEYS[number];
 
 /**
@@ -513,7 +523,14 @@ export interface GraphicContainerAnimation extends GraphicAnimation {
  * ──────────────────────────────────────────────── */
 
 /** The declared type of a Graphic Input. */
-export const GRAPHIC_INPUT_TYPE_VALUES = ['text', 'number', 'toggle', 'choice', 'color', 'media'] as const;
+export const GRAPHIC_INPUT_TYPE_VALUES = [
+	'text',
+	'number',
+	'toggle',
+	'choice',
+	'color',
+	'media',
+] as const;
 
 export type GraphicInputType = typeof GRAPHIC_INPUT_TYPE_VALUES[number];
 
@@ -961,7 +978,12 @@ export type GraphicGroupArrangement = typeof GRAPHIC_GROUP_ARRANGEMENT_VALUES[nu
 export const GRAPHIC_GROUP_ALIGN_VALUES = ['start', 'center', 'end', 'stretch'] as const;
 export type GraphicGroupAlign = typeof GRAPHIC_GROUP_ALIGN_VALUES[number];
 
-export const GRAPHIC_GROUP_JUSTIFY_VALUES = ['start', 'center', 'end', 'space-between'] as const;
+export const GRAPHIC_GROUP_JUSTIFY_VALUES = [
+	'start',
+	'center',
+	'end',
+	'space-between',
+] as const;
 export type GraphicGroupJustify = typeof GRAPHIC_GROUP_JUSTIFY_VALUES[number];
 
 /**

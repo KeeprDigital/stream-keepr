@@ -26,7 +26,9 @@ describe('json payload limits', () => {
 	});
 
 	it('throws a 413 for oversized persisted payloads', () => {
-		expect(() => assertJsonPayloadSize({ value: 'x'.repeat(100) }, 16, 'Config')).toThrowError(
+		expect(() => assertJsonPayloadSize({
+			value: 'x'.repeat(100),
+		}, 16, 'Config')).toThrowError(
 			expect.objectContaining({ statusCode: 413, statusMessage: 'Payload Too Large' }),
 		);
 	});

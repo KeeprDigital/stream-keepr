@@ -47,7 +47,9 @@ const props = defineProps<{
 const emit = defineEmits<{ edit: [edit: GraphicSurfaceStyleEdit] }>();
 
 function testId(suffix: string): string {
-	return props.testIdPrefix ? `${props.testIdPrefix}-${suffix}` : suffix;
+	return props.testIdPrefix
+		? `${props.testIdPrefix}-${suffix}`
+		: suffix;
 }
 
 /** An outline or glow always has a colour, so a cleared one is white. */

@@ -127,7 +127,9 @@ export function editCompositorStack(
 	if (!canAuthorCompositor(state))
 		return null;
 	const next = applyEdit(state, edit);
-	return next && !isSameStack(state.graphics, next) ? recaptureEditedGraphics(state, next) : null;
+	return next && !isSameStack(state.graphics, next)
+		? recaptureEditedGraphics(state, next)
+		: null;
 }
 
 /**
@@ -145,7 +147,9 @@ function applyEdit(state: CompositorEditingState, edit: CompositorEdit): Broadca
 			return edit.apply(state.graphics);
 		case 'named-graphic': {
 			const graphic = state.graphics.find(candidate => candidate.id === edit.graphicId);
-			return graphic ? replaceBroadcastGraphic(state.graphics, edit.apply(graphic)) : null;
+			return graphic
+				? replaceBroadcastGraphic(state.graphics, edit.apply(graphic))
+				: null;
 		}
 		default:
 			return applySelectionEdit(state, resolveGraphicsSelection(state.graphics, state.selectedTarget), edit);
@@ -159,13 +163,20 @@ function applySelectionEdit(
 ): BroadcastGraphicConfig[] | null {
 	if (selection.kind !== 'graphic' && selection.kind !== 'item')
 		return null;
-	const ownerId = selection.kind === 'item' ? selection.item.id : null;
+	const ownerId = selection.kind === 'item'
+		? selection.item.id
+		: null;
 
 	switch (edit.kind) {
 		case 'author':
-			if (selection.kind === 'graphic')
-				return edit.graphic ? edit.graphic(state.graphics, selection.graphic.id) : null;
-			return edit.item ? replaceBroadcastGraphic(state.graphics, edit.item(selection.graphic, selection.item.id)) : null;
+			if (selection.kind === 'graphic') {
+				return edit.graphic
+					? edit.graphic(state.graphics, selection.graphic.id)
+					: null;
+			}
+			return edit.item
+				? replaceBroadcastGraphic(state.graphics, edit.item(selection.graphic, selection.item.id))
+				: null;
 		case 'bind-style-ref':
 			return state.styleSet
 				? replaceBroadcastGraphic(
@@ -237,11 +248,17 @@ export function useCompositorEditing(
 		edit,
 		/** Apply one authoring operation to the selected Graphic Item. */
 		editItem<A extends unknown[]>(operation: GraphicItemOperation<A>, ...args: A): boolean {
-			return edit({ kind: 'author', item: (graphic, itemId) => operation(graphic, itemId, ...args) });
+			return edit({
+				kind: 'author',
+				item: (graphic, itemId) => operation(graphic, itemId, ...args),
+			});
 		},
 		/** Apply one authoring operation to the selected Broadcast Graphic. */
 		editGraphic<A extends unknown[]>(operation: BroadcastGraphicOperation<A>, ...args: A): boolean {
-			return edit({ kind: 'author', graphic: (graphics, graphicId) => operation(graphics, graphicId, ...args) });
+			return edit({
+				kind: 'author',
+				graphic: (graphics, graphicId) => operation(graphics, graphicId, ...args),
+			});
 		},
 		/** Reference one Graphic Style Set entry from a slot of the selected owner. */
 		bindStyleRef(slot: GraphicStyleSlot, entryId: string): boolean {

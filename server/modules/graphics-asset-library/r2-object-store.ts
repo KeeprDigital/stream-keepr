@@ -92,7 +92,10 @@ function createR2ObjectStoreAccess(bucket: R2Bucket) {
 			try {
 				const object = await bucket.head(identity);
 				return object
-					? { outcome: 'available' as const, object: mapR2Object(object) }
+					? {
+							outcome: 'available' as const,
+							object: mapR2Object(object),
+						}
 					: { outcome: 'missing' as const };
 			}
 			catch (error) {
@@ -102,7 +105,9 @@ function createR2ObjectStoreAccess(bucket: R2Bucket) {
 		async read(identity: GraphicsObjectIdentity, requestedRange?: { offset: number; length: number }) {
 			validateRequestedRange(requestedRange);
 			try {
-				const object = await bucket.get(identity, requestedRange ? { range: requestedRange } : undefined);
+				const object = await bucket.get(identity, requestedRange
+					? { range: requestedRange }
+					: undefined);
 				if (!object)
 					return { outcome: 'missing' as const };
 
@@ -201,12 +206,19 @@ async function createImmutable(
 			await transfer?.catch(() => undefined);
 			throw error;
 		}
-		if (object)
-			return { outcome: 'created', object: mapR2Object(object) };
+		if (object) {
+			return {
+				outcome: 'created',
+				object: mapR2Object(object),
+			};
+		}
 
 		const existing = await bucket.head(input.identity);
 		return existing
-			? { outcome: 'already-exists', object: mapR2Object(existing) }
+			? {
+					outcome: 'already-exists',
+					object: mapR2Object(existing),
+				}
 			: unavailableObjectStoreOutcome();
 	}
 	catch (error) {
@@ -318,7 +330,10 @@ export function createR2StagingGraphicsObjectStore(bucket: R2Bucket): GraphicsSt
 						partNumber: part.partNumber,
 						etag: part.partIdentity,
 					})));
-				return { outcome: 'created', object: mapR2Object(object) };
+				return {
+					outcome: 'created',
+					object: mapR2Object(object),
+				};
 			}
 			catch (error) {
 				return loggedUnavailable('completeMultipart', error);

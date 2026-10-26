@@ -56,14 +56,20 @@ export default withNuxt(
 	{
 		files: ['**/*.vue'],
 		rules: {
-			'vue/block-order': ['error', {
-				order: ['script', 'template', 'style'],
-			}],
+			'vue/block-order': [
+				'error',
+				{
+					order: ['script', 'template', 'style'],
+				},
+			],
 			'vue/no-multiple-template-root': 'off',
-			'vue/max-attributes-per-line': ['error', {
-				singleline: { max: 3 },
-				multiline: { max: 1 },
-			}],
+			'vue/max-attributes-per-line': [
+				'error',
+				{
+					singleline: { max: 3 },
+					multiline: { max: 1 },
+				},
+			],
 		},
 	},
 	{

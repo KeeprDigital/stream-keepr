@@ -117,20 +117,38 @@ export const ANIMATION_EFFECT_PROOF_FRAME = Object.freeze({
 export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 	caustics: {
 		extremes: [
-			{ name: 'max-intensity', params: { intensity: 2 } },
-			{ name: 'max-scale', params: { scale: 2 } },
+			{
+				name: 'max-intensity',
+				params: { intensity: 2 },
+			},
+			{
+				name: 'max-scale',
+				params: { scale: 2 },
+			},
 		],
 	},
 	cells: {
 		extremes: [
-			{ name: 'min-scale', params: { scale: 0.1 } },
-			{ name: 'max-scale', params: { scale: 1.65 } },
+			{
+				name: 'min-scale',
+				params: { scale: 0.1 },
+			},
+			{
+				name: 'max-scale',
+				params: { scale: 1.65 },
+			},
 		],
 	},
 	dots: {
 		extremes: [
-			{ name: 'dense-field', params: { spacing: 5, size: 0.5 } },
-			{ name: 'lines-off', params: { showLines: false, size: 20 } },
+			{
+				name: 'dense-field',
+				params: { spacing: 5, size: 0.5 },
+			},
+			{
+				name: 'lines-off',
+				params: { showLines: false, size: 20 },
+			},
 		],
 	},
 	ember: {
@@ -139,22 +157,40 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 		// below the shared floor and is what the effect is.
 		floors: { minLitFraction: 0.0015 },
 		extremes: [
-			{ name: 'max-density', params: { density: 3 } },
+			{
+				name: 'max-density',
+				params: { density: 3 },
+			},
 			// Size 5 is the capped-halo path (#473): an ember's glow at the top of
 			// the range reaches the edge of the neighbourhood a fragment gathers.
-			{ name: 'max-size', params: { size: 5 } },
+			{
+				name: 'max-size',
+				params: { size: 5 },
+			},
 		],
 	},
 	fog: {
 		extremes: [
-			{ name: 'max-softness', params: { softness: 0.95 } },
-			{ name: 'min-scale', params: { scale: 0.35 } },
+			{
+				name: 'max-softness',
+				params: { softness: 0.95 },
+			},
+			{
+				name: 'min-scale',
+				params: { scale: 0.35 },
+			},
 		],
 	},
 	globe: {
 		extremes: [
-			{ name: 'max-size', params: { size: 5 } },
-			{ name: 'markers-off', params: { showPoints: false } },
+			{
+				name: 'max-size',
+				params: { size: 5 },
+			},
+			{
+				name: 'markers-off',
+				params: { showPoints: false },
+			},
 		],
 	},
 	halo: {
@@ -165,8 +201,14 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 		// is the one effect whose clock is stepped frame by frame.
 		frameRate: 30,
 		extremes: [
-			{ name: 'max-size', params: { size: 5 } },
-			{ name: 'max-petal-depth', params: { petalDepth: 4 } },
+			{
+				name: 'max-size',
+				params: { size: 5 },
+			},
+			{
+				name: 'max-petal-depth',
+				params: { petalDepth: 4 },
+			},
 		],
 		// The smear has to fade all the way out. Carrying the ring out of frame
 		// leaves nothing feeding it, so every pixel should be back to the
@@ -174,14 +216,30 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 		// feedback buffers, with residue still on screen at eight (#502); twelve
 		// leaves room. The 8-bit fade does round to nothing near black, but the
 		// shader's outward zoom carries that residue out of frame first.
-		settle: { name: 'settles-to-background', params: { centerX: 1 }, durationSeconds: 12 },
+		settle: {
+			name: 'settles-to-background',
+			params: { centerX: 1 },
+			durationSeconds: 12,
+		},
 	},
 	inkmap: {
 		extremes: [
-			{ name: 'low-coverage', params: { coverage: 0.2, contours: 8 } },
-			{ name: 'high-coverage', params: { coverage: 0.8, contours: 0 } },
-			{ name: 'min-scale', params: { scale: 0.35 } },
-			{ name: 'max-scale', params: { scale: 2 } },
+			{
+				name: 'low-coverage',
+				params: { coverage: 0.2, contours: 8 },
+			},
+			{
+				name: 'high-coverage',
+				params: { coverage: 0.8, contours: 0 },
+			},
+			{
+				name: 'min-scale',
+				params: { scale: 0.35 },
+			},
+			{
+				name: 'max-scale',
+				params: { scale: 2 },
+			},
 		],
 	},
 	net: {
@@ -197,13 +255,22 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 				// actually run, which is what `defaults` above measures.
 				floors: { minDarkFraction: 0.05 },
 			},
-			{ name: 'markers-off', params: { showPoints: false } },
+			{
+				name: 'markers-off',
+				params: { showPoints: false },
+			},
 		],
 	},
 	ridgelines: {
 		extremes: [
-			{ name: 'min-relief', params: { ridges: 3, relief: 0.2 } },
-			{ name: 'max-relief', params: { ridges: 12, relief: 2 } },
+			{
+				name: 'min-relief',
+				params: { ridges: 3, relief: 0.2 },
+			},
+			{
+				name: 'max-relief',
+				params: { ridges: 12, relief: 2 },
+			},
 		],
 	},
 	rings: {
@@ -214,30 +281,60 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 	},
 	ripple: {
 		extremes: [
-			{ name: 'max-swing-and-size', params: { swingSpeed: 12, size: 4 } },
-			{ name: 'no-swing-or-drift', params: { swingSpeed: 0, drift: 0 } },
+			{
+				name: 'max-swing-and-size',
+				params: { swingSpeed: 12, size: 4 },
+			},
+			{
+				name: 'no-swing-or-drift',
+				params: { swingSpeed: 0, drift: 0 },
+			},
 		],
 	},
 	shards: {
 		extremes: [
-			{ name: 'min-scale', params: { scale: 0.5, intensity: 2 } },
-			{ name: 'max-scale', params: { scale: 3 } },
-			{ name: 'min-intensity', params: { intensity: 0.5 } },
-			{ name: 'max-intensity', params: { intensity: 2 } },
+			{
+				name: 'min-scale',
+				params: { scale: 0.5, intensity: 2 },
+			},
+			{
+				name: 'max-scale',
+				params: { scale: 3 },
+			},
+			{
+				name: 'min-intensity',
+				params: { intensity: 0.5 },
+			},
+			{
+				name: 'max-intensity',
+				params: { intensity: 2 },
+			},
 		],
 	},
 	waves: {
 		extremes: [
 			// The water plane leaves the frame's far corners uncovered at low scale,
 			// which is why `backgroundColor` survived the port at all (#473).
-			{ name: 'min-scale', params: { scale: 0.6, waveHeight: 50 } },
-			{ name: 'max-scale', params: { scale: 3.5 } },
+			{
+				name: 'min-scale',
+				params: { scale: 0.6, waveHeight: 50 },
+			},
+			{
+				name: 'max-scale',
+				params: { scale: 3.5 },
+			},
 		],
 	},
 	weave: {
 		extremes: [
-			{ name: 'thin-threads', params: { thickness: 0.2, scale: 0.35 } },
-			{ name: 'thick-threads', params: { thickness: 0.9, scale: 2 } },
+			{
+				name: 'thin-threads',
+				params: { thickness: 0.2, scale: 0.35 },
+			},
+			{
+				name: 'thick-threads',
+				params: { thickness: 0.9, scale: 2 },
+			},
 		],
 	},
 });
@@ -290,16 +387,28 @@ export const ANIMATION_EFFECT_PROOF_KNOWN_GOOD = 'fog';
  */
 export function animationEffectProofScenarios() {
 	return Object.entries(ANIMATION_EFFECT_PROOF_SCENARIOS).flatMap(([effect, entry]) => {
-		const effectFloors = { ...ANIMATION_EFFECT_PROOF_FLOORS, ...entry.floors };
+		const effectFloors = {
+			...ANIMATION_EFFECT_PROOF_FLOORS,
+			...entry.floors,
+		};
 		const frameRate = entry.frameRate ?? 0;
 		return [
-			{ effect, scenario: 'defaults', params: {}, frameRate, floors: effectFloors },
+			{
+				effect,
+				scenario: 'defaults',
+				params: {},
+				frameRate,
+				floors: effectFloors,
+			},
 			...entry.extremes.map(extreme => ({
 				effect,
 				scenario: extreme.name,
 				params: extreme.params,
 				frameRate,
-				floors: { ...effectFloors, ...extreme.floors },
+				floors: {
+					...effectFloors,
+					...extreme.floors,
+				},
 			})),
 		];
 	});
@@ -326,13 +435,15 @@ export function animationEffectSettleScenarios() {
 	return Object.entries(ANIMATION_EFFECT_PROOF_SCENARIOS).flatMap(([effect, entry]) => {
 		if (!entry.settle)
 			return [];
-		return [{
-			effect,
-			scenario: entry.settle.name,
-			params: entry.settle.params,
-			frameRate: entry.frameRate,
-			durationSeconds: entry.settle.durationSeconds,
-			floors: { minLitFraction: entry.floors?.minLitFraction ?? ANIMATION_EFFECT_PROOF_FLOORS.minLitFraction },
-		}];
+		return [
+			{
+				effect,
+				scenario: entry.settle.name,
+				params: entry.settle.params,
+				frameRate: entry.frameRate,
+				durationSeconds: entry.settle.durationSeconds,
+				floors: { minLitFraction: entry.floors?.minLitFraction ?? ANIMATION_EFFECT_PROOF_FLOORS.minLitFraction },
+			},
+		];
 	});
 }

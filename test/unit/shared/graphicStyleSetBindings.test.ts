@@ -46,7 +46,13 @@ function entry<T extends GraphicStyleSetEntry['kind']>(
 	id: string,
 	value: Extract<GraphicStyleSetEntry, { kind: T }>['value'],
 ): GraphicStyleSetEntry {
-	return { id, kind, name: id, schemaVersion: 1, value } as GraphicStyleSetEntry;
+	return {
+		id,
+		kind,
+		name: id,
+		schemaVersion: 1,
+		value,
+	} as GraphicStyleSetEntry;
 }
 
 const TYPOGRAPHY = {
@@ -236,7 +242,13 @@ describe('gRAPHIC_STYLE_SLOT_OWNED_KEYS', () => {
 
 describe('applyGraphicStyleSet', () => {
 	it('writes a typography entry\'s resolved properties into the item and leaves the item-specific ones alone', () => {
-		const composition = graphic([textItem({ styleRefs: { typography: { entryId: 'heading' } } })]);
+		const composition = graphic([
+			textItem({
+				styleRefs: {
+					typography: { entryId: 'heading' },
+				},
+			}),
+		]);
 
 		const applied = applyGraphicStyleSet(composition, resolveGraphicStyleSet(styleSet()));
 
@@ -257,9 +269,16 @@ describe('applyGraphicStyleSet', () => {
 	});
 
 	it('preserves a local property-level override on top of the entry', () => {
-		const composition = graphic([textItem({
-			styleRefs: { typography: { entryId: 'heading', overrides: { fontSize: 32 } } },
-		})]);
+		const composition = graphic([
+			textItem({
+				styleRefs: {
+					typography: {
+						entryId: 'heading',
+						overrides: { fontSize: 32 },
+					},
+				},
+			}),
+		]);
 
 		const applied = applyGraphicStyleSet(composition, resolveGraphicStyleSet(styleSet('#ff0044', 96)));
 
@@ -289,7 +308,9 @@ describe('applyGraphicStyleSet', () => {
 				fillOpacity: 0.9,
 				glow: { color: '#ff0044', size: 8, opacity: 0.5 },
 			},
-			styleRefs: { surfaceStyle: { entryId: 'panel' } },
+			styleRefs: {
+				surfaceStyle: { entryId: 'panel' },
+			},
 		};
 		const withoutGlow = styleSet().map(candidate => candidate.id === 'panel'
 			? entry('surface-style', 'panel', { fillEntryId: 'panel-fill', fillOpacity: 0.9 })
@@ -306,12 +327,22 @@ describe('applyGraphicStyleSet', () => {
 	it('keeps the item\'s own fill when the Graphic Surface Style entry names no Graphic Fill entry', () => {
 		const outlineOnly = [
 			...styleSet(),
-			entry('surface-style', 'edge', { fillOpacity: 1, outline: { colorEntryId: 'brand', width: 4 } }),
+			entry('surface-style', 'edge', {
+				fillOpacity: 1,
+				outline: { colorEntryId: 'brand', width: 4 },
+			}),
 		];
-		const composition = graphic([textItem({
-			surfaceStyle: { fill: { type: 'solid', color: '#00ff88' }, fillOpacity: 1 },
-			styleRefs: { surfaceStyle: { entryId: 'edge' } },
-		})]);
+		const composition = graphic([
+			textItem({
+				surfaceStyle: {
+					fill: { type: 'solid', color: '#00ff88' },
+					fillOpacity: 1,
+				},
+				styleRefs: {
+					surfaceStyle: { entryId: 'edge' },
+				},
+			}),
+		]);
 
 		const applied = applyGraphicStyleSet(composition, resolveGraphicStyleSet(outlineOnly));
 
@@ -327,13 +358,18 @@ describe('applyGraphicStyleSet', () => {
 			...styleSet(),
 			entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' }),
 		];
-		const composition = graphic([textItem({
-			surfaceStyle: { fill: { type: 'solid', color: '#000000' }, fillOpacity: 1 },
-			styleRefs: {
-				'surfaceStyle': { entryId: 'panel' },
-				'surfaceStyle.fill': { entryId: 'accent-fill' },
-			},
-		})]);
+		const composition = graphic([
+			textItem({
+				surfaceStyle: {
+					fill: { type: 'solid', color: '#000000' },
+					fillOpacity: 1,
+				},
+				styleRefs: {
+					'surfaceStyle': { entryId: 'panel' },
+					'surfaceStyle.fill': { entryId: 'accent-fill' },
+				},
+			}),
+		]);
 
 		const applied = applyGraphicStyleSet(composition, resolveGraphicStyleSet(entries));
 
@@ -347,8 +383,18 @@ describe('applyGraphicStyleSet', () => {
 
 	it('writes a Graphic Animation Recipe entry into the phase its slot names, without on-screen repetition', () => {
 		const composition = graphic(
-			[textItem({ styleRefs: { 'animation.enter': { entryId: 'rise' } } })],
-			{ styleRefs: { 'animation.exit': { entryId: 'rise' } } },
+			[
+				textItem({
+					styleRefs: {
+						'animation.enter': { entryId: 'rise' },
+					},
+				}),
+			],
+			{
+				styleRefs: {
+					'animation.exit': { entryId: 'rise' },
+				},
+			},
 		);
 
 		const applied = applyGraphicStyleSet(composition, resolveGraphicStyleSet(styleSet()));
@@ -377,7 +423,13 @@ describe('applyGraphicStyleSet', () => {
 				repeat: 'indefinite',
 			}),
 		];
-		const composition = graphic([textItem({ styleRefs: { 'animation.on-screen': { entryId: 'pulse' } } })]);
+		const composition = graphic([
+			textItem({
+				styleRefs: {
+					'animation.on-screen': { entryId: 'pulse' },
+				},
+			}),
+		]);
 
 		const applied = applyGraphicStyleSet(composition, resolveGraphicStyleSet(pulsing));
 
@@ -386,17 +438,28 @@ describe('applyGraphicStyleSet', () => {
 	});
 
 	it('leaves a reference the Style Set can no longer honour exactly as it is', () => {
-		const composition = graphic([textItem({ styleRefs: { typography: { entryId: 'heading' } } })]);
+		const composition = graphic([
+			textItem({
+				styleRefs: {
+					typography: { entryId: 'heading' },
+				},
+			}),
+		]);
 
 		// A Style Set that failed to load must not quietly turn a linked composition local.
 		const applied = applyGraphicStyleSet(composition, resolveGraphicStyleSet([]));
 
 		expect(headlineOf(applied).typography).toEqual(TYPOGRAPHY);
-		expect(headlineOf(applied).styleRefs).toEqual({ typography: { entryId: 'heading' } });
+		expect(headlineOf(applied).styleRefs).toEqual({
+			typography: { entryId: 'heading' },
+		});
 	});
 
 	it('inherits each of a Game Wins item\'s three surfaces independently', () => {
-		const surface = { fill: { type: 'solid' as const, color: '#000000' }, fillOpacity: 1 };
+		const surface = {
+			fill: { type: 'solid' as const, color: '#000000' },
+			fillOpacity: 1,
+		};
 		const gameWins: GraphicItemConfig = {
 			type: 'game-wins',
 			id: 'wins',
@@ -439,7 +502,9 @@ describe('applyGraphicStyleSet', () => {
 		expect(item.boxSurfaceStyle).toEqual(surface);
 		expect(item.surfaceStyle).toBeUndefined();
 		// And its win-box geometry, which shapes one box rather than the indicator.
-		expect(item.boxGeometry).toMatchObject({ topRight: { treatment: 'cut', size: 24 } });
+		expect(item.boxGeometry).toMatchObject({
+			topRight: { treatment: 'cut', size: 24 },
+		});
 	});
 
 	it('ignores a reference in a slot the Graphic Item cannot hold', () => {
@@ -459,7 +524,9 @@ describe('applyGraphicStyleSet', () => {
 			opacity: 1,
 			playbackRate: 1,
 			loop: true,
-			styleRefs: { typography: { entryId: 'heading' } },
+			styleRefs: {
+				typography: { entryId: 'heading' },
+			},
 		};
 
 		const applied = applyGraphicStyleSet(graphic([media]), resolveGraphicStyleSet(styleSet()));
@@ -468,7 +535,13 @@ describe('applyGraphicStyleSet', () => {
 	});
 
 	it('records the revision the composition has been reconciled to', () => {
-		const composition = graphic([textItem({ styleRefs: { typography: { entryId: 'heading' } } })]);
+		const composition = graphic([
+			textItem({
+				styleRefs: {
+					typography: { entryId: 'heading' },
+				},
+			}),
+		]);
 
 		const applied = applyGraphicStyleSet(composition, resolveGraphicStyleSet(styleSet()), { revision: 7 });
 
@@ -476,15 +549,21 @@ describe('applyGraphicStyleSet', () => {
 	});
 
 	it('preserves the previously resolved property as a new local override when review says so', () => {
-		const composition = graphic([textItem({
-			typography: { ...TYPOGRAPHY, fontSize: 64, color: '#ff0044' },
-			styleRefs: { typography: { entryId: 'heading' } },
-		})]);
+		const composition = graphic([
+			textItem({
+				typography: { ...TYPOGRAPHY, fontSize: 64, color: '#ff0044' },
+				styleRefs: {
+					typography: { entryId: 'heading' },
+				},
+			}),
+		]);
 
 		const applied = applyGraphicStyleSet(
 			composition,
 			resolveGraphicStyleSet(styleSet('#00ff88', 96)),
-			{ decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' } },
+			{
+				decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' },
+			},
 		);
 
 		// The property did not move…
@@ -508,15 +587,24 @@ describe('applyGraphicStyleSet', () => {
 	it('pins only the keys the author deviates in, not the whole property group', () => {
 		// Behind the published revision, an author's own edit records no override — so
 		// what they wrote lives inline and nothing but this decision preserves it.
-		const composition = graphic([textItem({
-			typography: { ...inheritedTypography(), fontSize: 30 },
-			styleRefs: { typography: { entryId: 'heading' } },
-		})]);
+		const composition = graphic([
+			textItem({
+				typography: {
+					...inheritedTypography(),
+					fontSize: 30,
+				},
+				styleRefs: {
+					typography: { entryId: 'heading' },
+				},
+			}),
+		]);
 
 		const applied = applyGraphicStyleSet(
 			composition,
 			resolveGraphicStyleSet(styleSet('#ff0044', 99)),
-			{ decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' } },
+			{
+				decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' },
+			},
 		);
 
 		// The one key the author wrote, and only it. Everything else keeps inheriting, so
@@ -525,17 +613,29 @@ describe('applyGraphicStyleSet', () => {
 	});
 
 	it('keeps an override the author already had when a different key moves', () => {
-		const composition = graphic([textItem({
-			typography: { ...inheritedTypography(), fontSize: 30 },
-			styleRefs: { typography: { entryId: 'heading', overrides: { fontSize: 30 } } },
-		})]);
+		const composition = graphic([
+			textItem({
+				typography: {
+					...inheritedTypography(),
+					fontSize: 30,
+				},
+				styleRefs: {
+					typography: {
+						entryId: 'heading',
+						overrides: { fontSize: 30 },
+					},
+				},
+			}),
+		]);
 
 		// The palette moves the typography entry's colour; the size the author already
 		// pinned does not move at all.
 		const applied = applyGraphicStyleSet(
 			composition,
 			resolveGraphicStyleSet(styleSet('#00ff88')),
-			{ decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' } },
+			{
+				decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' },
+			},
 		);
 
 		// Both are the author's: one they had pinned, one they are pinning now. Narrowing
@@ -547,15 +647,24 @@ describe('applyGraphicStyleSet', () => {
 	/** A slot the author has kept offers nothing further, which is what settles it. */
 	it('leaves no update outstanding on a slot the author kept', () => {
 		const republished = styleSet('#ff0044', 99);
-		const composition = graphic([textItem({
-			typography: { ...inheritedTypography(), fontSize: 30 },
-			styleRefs: { typography: { entryId: 'heading' } },
-		})]);
+		const composition = graphic([
+			textItem({
+				typography: {
+					...inheritedTypography(),
+					fontSize: 30,
+				},
+				styleRefs: {
+					typography: { entryId: 'heading' },
+				},
+			}),
+		]);
 
 		const applied = applyGraphicStyleSet(
 			composition,
 			resolveGraphicStyleSet(republished),
-			{ decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' } },
+			{
+				decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' },
+			},
 		);
 
 		expect(graphicStyleUpdateChanges(applied, resolveGraphicStyleSet(republished))).toEqual([]);
@@ -573,16 +682,28 @@ describe('applyGraphicStyleSet', () => {
 	 * is exactly what that would break.
 	 */
 	it('keeps a pin the republished entry happens to agree with', () => {
-		const composition = graphic([textItem({
-			typography: { ...inheritedTypography(), fontSize: 30 },
-			styleRefs: { typography: { entryId: 'heading', overrides: { fontSize: 30 } } },
-		})]);
+		const composition = graphic([
+			textItem({
+				typography: {
+					...inheritedTypography(),
+					fontSize: 30,
+				},
+				styleRefs: {
+					typography: {
+						entryId: 'heading',
+						overrides: { fontSize: 30 },
+					},
+				},
+			}),
+		]);
 
 		// The republished entry moves the colour and lands on the author's own size.
 		const applied = applyGraphicStyleSet(
 			composition,
 			resolveGraphicStyleSet(styleSet('#00ff88', 30)),
-			{ decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' } },
+			{
+				decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' },
+			},
 		);
 
 		expect(headlineOf(applied).styleRefs?.typography?.overrides)
@@ -600,15 +721,24 @@ describe('applyGraphicStyleSet', () => {
 	 * entry resolves to is already what is stored.
 	 */
 	it('pins nothing when a slot holds the entry and only a stale override disagrees', () => {
-		const composition = graphic([textItem({
-			typography: inheritedTypography(),
-			styleRefs: { typography: { entryId: 'heading', overrides: { fontSize: 999 } } },
-		})]);
+		const composition = graphic([
+			textItem({
+				typography: inheritedTypography(),
+				styleRefs: {
+					typography: {
+						entryId: 'heading',
+						overrides: { fontSize: 999 },
+					},
+				},
+			}),
+		]);
 
 		const applied = applyGraphicStyleSet(
 			composition,
 			resolveGraphicStyleSet(styleSet()),
-			{ decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' } },
+			{
+				decisions: { [graphicStyleChangeKey('headline', 'typography')]: 'keep-as-override' },
+			},
 		);
 
 		expect(headlineOf(applied).styleRefs?.typography?.overrides).toEqual({});
@@ -628,19 +758,34 @@ describe('applyGraphicStyleSet', () => {
 	});
 
 	it('keeps a Graphic Fill slot\'s value by letting go of the reference', () => {
-		const entries = [...styleSet(), entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' })];
+		const entries = [
+			...styleSet(),
+			entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' }),
+		];
 		const composition = applyGraphicStyleSet(
-			graphic([textItem({
-				surfaceStyle: { fill: { type: 'solid', color: '#000000' }, fillOpacity: 1 },
-				styleRefs: { 'surfaceStyle.fill': { entryId: 'accent-fill' } },
-			})]),
+			graphic([
+				textItem({
+					surfaceStyle: {
+						fill: { type: 'solid', color: '#000000' },
+						fillOpacity: 1,
+					},
+					styleRefs: {
+						'surfaceStyle.fill': { entryId: 'accent-fill' },
+					},
+				}),
+			]),
 			resolveGraphicStyleSet(entries),
 		);
 
 		const applied = applyGraphicStyleSet(
 			composition,
-			resolveGraphicStyleSet([...styleSet('#00ff88'), entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' })]),
-			{ decisions: { [graphicStyleChangeKey('headline', 'surfaceStyle.fill')]: 'keep-as-override' } },
+			resolveGraphicStyleSet([
+				...styleSet('#00ff88'),
+				entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' }),
+			]),
+			{
+				decisions: { [graphicStyleChangeKey('headline', 'surfaceStyle.fill')]: 'keep-as-override' },
+			},
 		);
 
 		// A Graphic Fill has no partial to record a deviation in, so keeping it means the
@@ -650,12 +795,21 @@ describe('applyGraphicStyleSet', () => {
 		expect(headlineOf(applied).styleRefs?.['surfaceStyle.fill']).toBeUndefined();
 		expect(graphicStyleUpdateChanges(
 			applied,
-			resolveGraphicStyleSet([...styleSet('#00ff88'), entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' })]),
+			resolveGraphicStyleSet([
+				...styleSet('#00ff88'),
+				entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' }),
+			]),
 		)).toEqual([]);
 	});
 
 	it('never mutates the composition it was given', () => {
-		const composition = graphic([textItem({ styleRefs: { typography: { entryId: 'heading' } } })]);
+		const composition = graphic([
+			textItem({
+				styleRefs: {
+					typography: { entryId: 'heading' },
+				},
+			}),
+		]);
 
 		applyGraphicStyleSet(composition, resolveGraphicStyleSet(styleSet()));
 
@@ -666,7 +820,13 @@ describe('applyGraphicStyleSet', () => {
 describe('graphicStyleUpdateChanges', () => {
 	function applied(entries: GraphicStyleSetEntry[]): BroadcastGraphicConfig {
 		return applyGraphicStyleSet(
-			graphic([textItem({ styleRefs: { typography: { entryId: 'heading' } } })]),
+			graphic([
+				textItem({
+					styleRefs: {
+						typography: { entryId: 'heading' },
+					},
+				}),
+			]),
 			resolveGraphicStyleSet(entries),
 		);
 	}
@@ -681,7 +841,9 @@ describe('graphicStyleUpdateChanges', () => {
 		const entries = styleSet();
 		const composition = applied(entries);
 		const renamed = entries.map(candidate =>
-			candidate.id === 'heading' ? { ...candidate, name: 'Show heading' } : candidate,
+			candidate.id === 'heading'
+				? { ...candidate, name: 'Show heading' }
+				: candidate,
 		);
 
 		expect(graphicStyleUpdateChanges(composition, resolveGraphicStyleSet(renamed))).toEqual([]);
@@ -730,7 +892,16 @@ describe('graphicStyleUpdateChanges', () => {
 	it('offers nothing for a key the author has claimed as an override', () => {
 		const entries = styleSet();
 		const composition = applyGraphicStyleSet(
-			graphic([textItem({ styleRefs: { typography: { entryId: 'heading', overrides: { fontSize: 32 } } } })]),
+			graphic([
+				textItem({
+					styleRefs: {
+						typography: {
+							entryId: 'heading',
+							overrides: { fontSize: 32 },
+						},
+					},
+				}),
+			]),
 			resolveGraphicStyleSet(entries),
 		);
 
@@ -753,7 +924,13 @@ describe('graphicStyleUpdateChanges', () => {
 describe('detachGraphicStyleRefs', () => {
 	it('drops the reference and keeps the value it produced', () => {
 		const composition = applyGraphicStyleSet(
-			graphic([textItem({ styleRefs: { typography: { entryId: 'heading' } } })]),
+			graphic([
+				textItem({
+					styleRefs: {
+						typography: { entryId: 'heading' },
+					},
+				}),
+			]),
 			resolveGraphicStyleSet(styleSet()),
 		);
 
@@ -764,22 +941,36 @@ describe('detachGraphicStyleRefs', () => {
 	});
 
 	it('leaves references to other entries in place', () => {
-		const composition = graphic([textItem({
-			styleRefs: {
-				'typography': { entryId: 'heading' },
-				'animation.enter': { entryId: 'rise' },
-			},
-		})]);
+		const composition = graphic([
+			textItem({
+				styleRefs: {
+					'typography': { entryId: 'heading' },
+					'animation.enter': { entryId: 'rise' },
+				},
+			}),
+		]);
 
 		const detached = detachGraphicStyleRefs(composition, ['heading']);
 
-		expect(headlineOf(detached).styleRefs).toEqual({ 'animation.enter': { entryId: 'rise' } });
+		expect(headlineOf(detached).styleRefs).toEqual({
+			'animation.enter': { entryId: 'rise' },
+		});
 	});
 
 	it('detaches from the Style Set entirely when no entries are named', () => {
 		const composition = graphic(
-			[textItem({ styleRefs: { typography: { entryId: 'heading' } } })],
-			{ styleRefs: { 'animation.enter': { entryId: 'rise' } } },
+			[
+				textItem({
+					styleRefs: {
+						typography: { entryId: 'heading' },
+					},
+				}),
+			],
+			{
+				styleRefs: {
+					'animation.enter': { entryId: 'rise' },
+				},
+			},
 		);
 
 		const detached = detachGraphicStyleRefs(composition, null);
@@ -794,21 +985,39 @@ describe('detachGraphicStyleRefs', () => {
 
 describe('replaceGraphicStyleRefs', () => {
 	it('repoints every reference to one entry and carries the overrides with it', () => {
-		const composition = graphic([textItem({
-			styleRefs: { typography: { entryId: 'heading', overrides: { fontSize: 32 } } },
-		})]);
+		const composition = graphic([
+			textItem({
+				styleRefs: {
+					typography: {
+						entryId: 'heading',
+						overrides: { fontSize: 32 },
+					},
+				},
+			}),
+		]);
 
 		const replaced = replaceGraphicStyleRefs(composition, 'heading', 'subheading');
 
 		expect(headlineOf(replaced).styleRefs?.typography)
-			.toEqual({ entryId: 'subheading', overrides: { fontSize: 32 } });
+			.toEqual({
+				entryId: 'subheading',
+				overrides: { fontSize: 32 },
+			});
 	});
 });
 
 describe('captureGraphicStyleOverrides', () => {
 	it('turns an edit to an inherited property into an explicit override', () => {
 		const resolution = resolveGraphicStyleSet(styleSet());
-		const edited = { ...TYPOGRAPHY, fontSize: 30, fontWeight: 800, textTransform: 'uppercase' as const, letterSpacing: 2, lineHeight: 1, color: '#ff0044' };
+		const edited = {
+			...TYPOGRAPHY,
+			fontSize: 30,
+			fontWeight: 800,
+			textTransform: 'uppercase' as const,
+			letterSpacing: 2,
+			lineHeight: 1,
+			color: '#ff0044',
+		};
 
 		expect(captureGraphicStyleOverrides(resolution, 'typography', 'heading', edited))
 			.toEqual({ fontSize: 30 });
@@ -831,7 +1040,10 @@ describe('captureGraphicStyleOverrides', () => {
 });
 
 describe('recaptureGraphicStyleOverrides', () => {
-	const withAccentFill = [...styleSet(), entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' })];
+	const withAccentFill = [
+		...styleSet(),
+		entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' }),
+	];
 	/**
 	 * The revision every composition here is linked at, and the one the editor is
 	 * holding while the two agree.
@@ -841,16 +1053,26 @@ describe('recaptureGraphicStyleOverrides', () => {
 	 * The same Style Set after a publish this composition has *not* been reconciled to.
 	 * `brand` moved, so both the typography entry's colour and the Graphic Fill do.
 	 */
-	const republished = [...styleSet('#00ff88'), entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' })];
+	const republished = [
+		...styleSet('#00ff88'),
+		entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' }),
+	];
 	const AHEAD = LINKED + 1;
 
 	/** One composition whose Graphic Fill is inherited from `accent-fill`. */
 	function boundFill(): BroadcastGraphicConfig {
 		return applyGraphicStyleSet(
-			graphic([textItem({
-				surfaceStyle: { fill: { type: 'solid', color: '#000000' }, fillOpacity: 1 },
-				styleRefs: { 'surfaceStyle.fill': { entryId: 'accent-fill' } },
-			})]),
+			graphic([
+				textItem({
+					surfaceStyle: {
+						fill: { type: 'solid', color: '#000000' },
+						fillOpacity: 1,
+					},
+					styleRefs: {
+						'surfaceStyle.fill': { entryId: 'accent-fill' },
+					},
+				}),
+			]),
 			resolveGraphicStyleSet(withAccentFill),
 		);
 	}
@@ -858,13 +1080,18 @@ describe('recaptureGraphicStyleOverrides', () => {
 	/** One composition inheriting both a typography entry and a Graphic Fill. */
 	function boundBoth(): BroadcastGraphicConfig {
 		return applyGraphicStyleSet(
-			graphic([textItem({
-				surfaceStyle: { fill: { type: 'solid', color: '#000000' }, fillOpacity: 1 },
-				styleRefs: {
-					'typography': { entryId: 'heading' },
-					'surfaceStyle.fill': { entryId: 'accent-fill' },
-				},
-			})]),
+			graphic([
+				textItem({
+					surfaceStyle: {
+						fill: { type: 'solid', color: '#000000' },
+						fillOpacity: 1,
+					},
+					styleRefs: {
+						'typography': { entryId: 'heading' },
+						'surfaceStyle.fill': { entryId: 'accent-fill' },
+					},
+				}),
+			]),
 			resolveGraphicStyleSet(withAccentFill),
 		);
 	}
@@ -874,7 +1101,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 		return {
 			...composition,
 			items: composition.items.map(item => item.type === 'text'
-				? { ...item, typography: { ...item.typography, fontSize } }
+				? {
+						...item,
+						typography: { ...item.typography, fontSize },
+					}
 				: item),
 		};
 	}
@@ -890,7 +1120,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 		return {
 			...composition,
 			items: composition.items.map(item => item.id === 'headline' && item.type === 'text'
-				? { ...item, typography: { ...item.typography, textAlign } }
+				? {
+						...item,
+						typography: { ...item.typography, textAlign },
+					}
 				: item),
 		};
 	}
@@ -904,7 +1137,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 					return item;
 				return {
 					...item,
-					surfaceStyle: { ...item.surfaceStyle!, fill: { type: 'solid' as const, color } },
+					surfaceStyle: {
+						...item.surfaceStyle!,
+						fill: { type: 'solid' as const, color },
+					},
 				};
 			}),
 		};
@@ -913,7 +1149,13 @@ describe('recaptureGraphicStyleOverrides', () => {
 	it('turns an edit to an inherited typography property into an explicit override', () => {
 		const resolution = resolveGraphicStyleSet(styleSet());
 		const composition = applyGraphicStyleSet(
-			graphic([textItem({ styleRefs: { typography: { entryId: 'heading' } } })]),
+			graphic([
+				textItem({
+					styleRefs: {
+						typography: { entryId: 'heading' },
+					},
+				}),
+			]),
 			resolution,
 		);
 
@@ -925,7 +1167,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 		);
 
 		expect(headlineOf(recaptured).styleRefs?.typography)
-			.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+			.toEqual({
+				entryId: 'heading',
+				overrides: { fontSize: 30 },
+			});
 	});
 
 	it('lets go of a Graphic Fill reference the author has painted over', () => {
@@ -1008,15 +1253,22 @@ describe('recaptureGraphicStyleOverrides', () => {
 		const wholeGroup = Object.fromEntries(
 			GRAPHIC_STYLE_SLOT_OWNED_KEYS.typography.map(key => [key, inStep[key as keyof typeof inStep]]),
 		);
-		const overPinned = graphic([textItem({
-			typography: inStep,
-			styleRefs: { typography: { entryId: 'heading', overrides: wholeGroup } },
-		})]);
+		const overPinned = graphic([
+			textItem({
+				typography: inStep,
+				styleRefs: {
+					typography: { entryId: 'heading', overrides: wholeGroup },
+				},
+			}),
+		]);
 
 		const recaptured = recaptureGraphicStyleOverrides(editFontSize(overPinned, 30), resolution, LINKED, overPinned);
 
 		expect(headlineOf(recaptured).styleRefs?.typography)
-			.toEqual({ entryId: 'heading', overrides: { ...wholeGroup, fontSize: 30 } });
+			.toEqual({
+				entryId: 'heading',
+				overrides: { ...wholeGroup, fontSize: 30 },
+			});
 		// Still eight keys wide, so every one of them goes on inheriting nothing. That is
 		// the cost ADR-0006's Consequences names rather than the narrowing it used to.
 		expect(Object.keys(headlineOf(recaptured).styleRefs!.typography!.overrides!)).toHaveLength(8);
@@ -1038,10 +1290,14 @@ describe('recaptureGraphicStyleOverrides', () => {
 		const wholeGroup = Object.fromEntries(
 			GRAPHIC_STYLE_SLOT_OWNED_KEYS.typography.map(key => [key, inStep[key as keyof typeof inStep]]),
 		);
-		const overPinned = graphic([textItem({
-			typography: inStep,
-			styleRefs: { typography: { entryId: 'heading', overrides: wholeGroup } },
-		})]);
+		const overPinned = graphic([
+			textItem({
+				typography: inStep,
+				styleRefs: {
+					typography: { entryId: 'heading', overrides: wholeGroup },
+				},
+			}),
+		]);
 
 		const moved = recaptureGraphicStyleOverrides(editFontSize(overPinned, 30), resolution, LINKED, overPinned);
 		// Back onto the entry's own size, which is what `styleSet()` resolves `heading` to.
@@ -1063,17 +1319,19 @@ describe('recaptureGraphicStyleOverrides', () => {
 	 */
 	it('clears an over-broad pin when the slot is unbound and bound again', () => {
 		const inStep = inheritedTypography();
-		const overPinned = graphic([textItem({
-			typography: inStep,
-			styleRefs: {
-				typography: {
-					entryId: 'heading',
-					overrides: Object.fromEntries(
-						GRAPHIC_STYLE_SLOT_OWNED_KEYS.typography.map(key => [key, inStep[key as keyof typeof inStep]]),
-					),
+		const overPinned = graphic([
+			textItem({
+				typography: inStep,
+				styleRefs: {
+					typography: {
+						entryId: 'heading',
+						overrides: Object.fromEntries(
+							GRAPHIC_STYLE_SLOT_OWNED_KEYS.typography.map(key => [key, inStep[key as keyof typeof inStep]]),
+						),
+					},
 				},
-			},
-		})]);
+			}),
+		]);
 		const republished = resolveGraphicStyleSet(styleSet('#ff0044', 99));
 
 		const rebound = bindGraphicStyleRef(
@@ -1097,10 +1355,20 @@ describe('recaptureGraphicStyleOverrides', () => {
 	 * resolution cannot honour is left in place rather than dropped.
 	 */
 	it('keeps the overrides recorded on a reference the Style Set can no longer honour', () => {
-		const composition = graphic([textItem({
-			typography: { ...inheritedTypography(), fontSize: 30 },
-			styleRefs: { typography: { entryId: 'heading', overrides: { fontSize: 30 } } },
-		})]);
+		const composition = graphic([
+			textItem({
+				typography: {
+					...inheritedTypography(),
+					fontSize: 30,
+				},
+				styleRefs: {
+					typography: {
+						entryId: 'heading',
+						overrides: { fontSize: 30 },
+					},
+				},
+			}),
+		]);
 
 		const recaptured = recaptureGraphicStyleOverrides(
 			editTextAlign(composition, 'center'),
@@ -1110,7 +1378,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 		);
 
 		expect(headlineOf(recaptured).styleRefs?.typography)
-			.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+			.toEqual({
+				entryId: 'heading',
+				overrides: { fontSize: 30 },
+			});
 	});
 
 	it('keeps a Graphic Fill reference the Style Set can no longer honour', () => {
@@ -1187,7 +1458,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 			);
 
 			expect(headlineOf(recaptured).styleRefs?.typography)
-				.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+				.toEqual({
+					entryId: 'heading',
+					overrides: { fontSize: 30 },
+				});
 		});
 	});
 
@@ -1208,10 +1482,14 @@ describe('recaptureGraphicStyleOverrides', () => {
 
 		/** In step with `styleSet()`'s `heading`, and recorded three revisions behind it. */
 		function stranded(): BroadcastGraphicConfig {
-			return graphic([textItem({
-				typography: inheritedTypography(),
-				styleRefs: { typography: { entryId: 'heading' } },
-			})]);
+			return graphic([
+				textItem({
+					typography: inheritedTypography(),
+					styleRefs: {
+						typography: { entryId: 'heading' },
+					},
+				}),
+			]);
 		}
 
 		it('records the author\'s edit as an explicit override', () => {
@@ -1225,7 +1503,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 			);
 
 			expect(headlineOf(recaptured).styleRefs?.typography)
-				.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+				.toEqual({
+					entryId: 'heading',
+					overrides: { fontSize: 30 },
+				});
 		});
 
 		/**
@@ -1265,15 +1546,23 @@ describe('recaptureGraphicStyleOverrides', () => {
 		it('still leaves a slot the Style Set has a pending change in', () => {
 			// `accent-fill` moved off `brand` and onto `ink`, which reaches the fill and
 			// nothing else: `heading` still resolves to exactly what the item holds.
-			const fillMoved = [...styleSet(), entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'ink' })];
-			const composition = graphic([textItem({
-				typography: inheritedTypography(),
-				surfaceStyle: { fill: { type: 'solid', color: '#ff0044' }, fillOpacity: 1 },
-				styleRefs: {
-					'typography': { entryId: 'heading' },
-					'surfaceStyle.fill': { entryId: 'accent-fill' },
-				},
-			})]);
+			const fillMoved = [
+				...styleSet(),
+				entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'ink' }),
+			];
+			const composition = graphic([
+				textItem({
+					typography: inheritedTypography(),
+					surfaceStyle: {
+						fill: { type: 'solid', color: '#ff0044' },
+						fillOpacity: 1,
+					},
+					styleRefs: {
+						'typography': { entryId: 'heading' },
+						'surfaceStyle.fill': { entryId: 'accent-fill' },
+					},
+				}),
+			]);
 
 			const recaptured = recaptureGraphicStyleOverrides(
 				editFontSize(composition, 30),
@@ -1283,7 +1572,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 			);
 
 			expect(headlineOf(recaptured).styleRefs?.typography)
-				.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+				.toEqual({
+					entryId: 'heading',
+					overrides: { fontSize: 30 },
+				});
 			// The fill's pending change is untouched and still reviewable — severing the
 			// reference here would settle an update nobody reviewed.
 			expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toEqual({ entryId: 'accent-fill' });
@@ -1312,10 +1604,14 @@ describe('recaptureGraphicStyleOverrides', () => {
 
 		/** A composition carrying the author's recorded size pin, made the way one is. */
 		function pinned(): BroadcastGraphicConfig {
-			const composition = graphic([textItem({
-				typography: inheritedTypography(),
-				styleRefs: { typography: { entryId: 'heading' } },
-			})]);
+			const composition = graphic([
+				textItem({
+					typography: inheritedTypography(),
+					styleRefs: {
+						typography: { entryId: 'heading' },
+					},
+				}),
+			]);
 			const recorded = recaptureGraphicStyleOverrides(
 				editFontSize(composition, PINNED_SIZE),
 				resolveGraphicStyleSet(styleSet()),
@@ -1323,7 +1619,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 				composition,
 			);
 			expect(headlineOf(recorded).styleRefs?.typography)
-				.toEqual({ entryId: 'heading', overrides: { fontSize: PINNED_SIZE } });
+				.toEqual({
+					entryId: 'heading',
+					overrides: { fontSize: PINNED_SIZE },
+				});
 			return recorded;
 		}
 
@@ -1338,7 +1637,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 			);
 
 			expect(headlineOf(recaptured).styleRefs?.typography)
-				.toEqual({ entryId: 'heading', overrides: { fontSize: PINNED_SIZE } });
+				.toEqual({
+					entryId: 'heading',
+					overrides: { fontSize: PINNED_SIZE },
+				});
 		});
 
 		it('keeps the pin once the composition is reconciled to the publish that landed on it', () => {
@@ -1352,7 +1654,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 			);
 
 			expect(headlineOf(recaptured).styleRefs?.typography)
-				.toEqual({ entryId: 'heading', overrides: { fontSize: PINNED_SIZE } });
+				.toEqual({
+					entryId: 'heading',
+					overrides: { fontSize: PINNED_SIZE },
+				});
 		});
 
 		/**
@@ -1363,19 +1668,28 @@ describe('recaptureGraphicStyleOverrides', () => {
 			const stored = pinned();
 			const withSubtitle = {
 				...stored,
-				items: [...stored.items, textItem({ id: 'subtitle', label: 'Subtitle' })],
+				items: [
+					...stored.items,
+					textItem({ id: 'subtitle', label: 'Subtitle' }),
+				],
 			};
 			const elsewhere = {
 				...withSubtitle,
 				items: withSubtitle.items.map(item => item.id === 'subtitle' && item.type === 'text'
-					? { ...item, typography: { ...item.typography, fontSize: 12 } }
+					? {
+							...item,
+							typography: { ...item.typography, fontSize: 12 },
+						}
 					: item),
 			};
 
 			const recaptured = recaptureGraphicStyleOverrides(elsewhere, coincident, COINCIDENT, withSubtitle);
 
 			expect(headlineOf(recaptured).styleRefs?.typography)
-				.toEqual({ entryId: 'heading', overrides: { fontSize: PINNED_SIZE } });
+				.toEqual({
+					entryId: 'heading',
+					overrides: { fontSize: PINNED_SIZE },
+				});
 		});
 
 		/**
@@ -1441,7 +1755,10 @@ describe('recaptureGraphicStyleOverrides', () => {
 			// the claim is stale and the deviation the edit created replaces it.
 			const moved = recaptureGraphicStyleOverrides(editFontSize(stored, 48), coincident, COINCIDENT, stored);
 			expect(headlineOf(moved).styleRefs?.typography)
-				.toEqual({ entryId: 'heading', overrides: { fontSize: 48 } });
+				.toEqual({
+					entryId: 'heading',
+					overrides: { fontSize: 48 },
+				});
 
 			// And back onto what the entry resolves to, which leaves nothing recorded.
 			const released = recaptureGraphicStyleOverrides(
@@ -1481,10 +1798,14 @@ describe('recaptureGraphicStyleOverrides', () => {
 
 		/** A slot bound to `heading`, in step, holding the entry's own size. */
 		function inStepAtTypedSize(): BroadcastGraphicConfig {
-			return graphic([textItem({
-				typography: inheritedTypography('#ff0044', TYPED_SIZE),
-				styleRefs: { typography: { entryId: 'heading' } },
-			})]);
+			return graphic([
+				textItem({
+					typography: inheritedTypography('#ff0044', TYPED_SIZE),
+					styleRefs: {
+						typography: { entryId: 'heading' },
+					},
+				}),
+			]);
 		}
 
 		it('records nothing, and the next republish takes the property', () => {
@@ -1566,13 +1887,26 @@ describe('graphicStyleSetEntryIdsInDocument', () => {
 			justify: 'start',
 			clip: false,
 			geometry: squareShapeGeometry(),
-			children: [textItem({ id: 'child', styleRefs: { typography: { entryId: 'heading' } } })],
-			styleRefs: { geometry: { entryId: 'cut-corner' } },
+			children: [
+				textItem({
+					id: 'child',
+					styleRefs: {
+						typography: { entryId: 'heading' },
+					},
+				}),
+			],
+			styleRefs: {
+				geometry: { entryId: 'cut-corner' },
+			},
 		};
 
 		const ids = graphicStyleSetEntryIdsInDocument(graphic(
 			[group],
-			{ styleRefs: { 'animation.enter': { entryId: 'rise' } } },
+			{
+				styleRefs: {
+					'animation.enter': { entryId: 'rise' },
+				},
+			},
 		));
 
 		expect([...ids].sort()).toEqual(['cut-corner', 'heading', 'rise']);

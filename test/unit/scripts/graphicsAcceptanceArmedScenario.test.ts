@@ -22,8 +22,18 @@ describe('an armed fault-injection scenario', () => {
 	});
 
 	const scenario = {
-		warm: { eventId: 1, assetId: 'gaa-warm', contentDigest: 'a'.repeat(64), content: [1, 2, 3] },
-		cold: { eventId: 2, assetId: 'gaa-cold', contentDigest: 'b'.repeat(64), content: [4, 5, 6] },
+		warm: {
+			eventId: 1,
+			assetId: 'gaa-warm',
+			contentDigest: 'a'.repeat(64),
+			content: [1, 2, 3],
+		},
+		cold: {
+			eventId: 2,
+			assetId: 'gaa-cold',
+			contentDigest: 'b'.repeat(64),
+			content: [4, 5, 6],
+		},
 	};
 
 	it('round-trips what the fault run needs to reach the same identities', async () => {

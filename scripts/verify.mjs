@@ -35,38 +35,96 @@ import { main as reapStrandedWorkerd } from './reap-workerd.mjs';
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const logDirectory = fileURLToPath(new URL('../node_modules/.cache/verify/', import.meta.url));
 
-const FIRST_STAGE = ['lint', 'typecheck:app', 'typecheck:test', 'typecheck:validator', 'test:unit:coverage', 'test:nuxt:coverage'];
+const FIRST_STAGE = [
+	'lint',
+	'typecheck:app',
+	'typecheck:test',
+	'typecheck:validator',
+	'test:unit:coverage',
+	'test:nuxt:coverage',
+];
 
 /** Gate name → the command it runs, the gates that must pass first, and any extra environment. */
 export const GATES = {
-	'prepare': { command: ['exec', 'nuxt', 'prepare'], after: [] },
-	'lint': { command: ['run', 'lint'], after: ['prepare'] },
-	'typecheck:app': { command: ['run', 'typecheck:app'], after: ['prepare'] },
+	'prepare': {
+		command: ['exec', 'nuxt', 'prepare'],
+		after: [],
+	},
+	'lint': {
+		command: ['run', 'lint'],
+		after: ['prepare'],
+	},
+	'typecheck:app': {
+		command: ['run', 'typecheck:app'],
+		after: ['prepare'],
+	},
 	// Chained rather than side by side: each vitest suite already uses every core,
 	// and two at once starve CPU-bound tests into their timeouts.
-	'typecheck:test': { command: ['run', 'typecheck:test'], after: ['typecheck:app'] },
+	'typecheck:test': {
+		command: ['run', 'typecheck:test'],
+		after: ['typecheck:app'],
+	},
 	// The silent-video validator is its own Worker with its own standalone
 	// program and bundle (#618): neither reads `.nuxt`, so both start at once.
 	// About a second each, they finish while lint is still running.
-	'typecheck:validator': { command: ['run', 'typecheck:validator'], after: [] },
-	'validator:dry-run': { command: ['run', 'validator:dry-run'], after: [] },
-	'test:unit:coverage': { command: ['run', 'test:unit:coverage'], after: ['prepare'] },
-	'test:nuxt:coverage': { command: ['run', 'test:nuxt:coverage'], after: ['test:unit:coverage'] },
+	'typecheck:validator': {
+		command: ['run', 'typecheck:validator'],
+		after: [],
+	},
+	'validator:dry-run': {
+		command: ['run', 'validator:dry-run'],
+		after: [],
+	},
+	'test:unit:coverage': {
+		command: ['run', 'test:unit:coverage'],
+		after: ['prepare'],
+	},
+	'test:nuxt:coverage': {
+		command: ['run', 'test:nuxt:coverage'],
+		after: ['test:unit:coverage'],
+	},
 
-	'test:integration': { command: ['run', 'test:integration', '--run'], after: FIRST_STAGE },
-	'test:local-auth': { command: ['run', 'test:local-auth'], after: FIRST_STAGE },
-	'accept:still-images': { command: ['run', 'accept', 'still-images'], after: FIRST_STAGE },
-	'accept:silent-video': { command: ['run', 'accept', 'silent-video'], after: ['accept:still-images'] },
-	'accept:fonts': { command: ['run', 'accept', 'fonts'], after: ['accept:silent-video'] },
-	'accept:animation-effects': { command: ['run', 'accept', 'animation-effects'], after: ['accept:fonts'] },
-	'accept:key-matte': { command: ['run', 'accept', 'key-matte'], after: ['accept:animation-effects'] },
+	'test:integration': {
+		command: ['run', 'test:integration', '--run'],
+		after: FIRST_STAGE,
+	},
+	'test:local-auth': {
+		command: ['run', 'test:local-auth'],
+		after: FIRST_STAGE,
+	},
+	'accept:still-images': {
+		command: ['run', 'accept', 'still-images'],
+		after: FIRST_STAGE,
+	},
+	'accept:silent-video': {
+		command: ['run', 'accept', 'silent-video'],
+		after: ['accept:still-images'],
+	},
+	'accept:fonts': {
+		command: ['run', 'accept', 'fonts'],
+		after: ['accept:silent-video'],
+	},
+	'accept:animation-effects': {
+		command: ['run', 'accept', 'animation-effects'],
+		after: ['accept:fonts'],
+	},
+	'accept:key-matte': {
+		command: ['run', 'accept', 'key-matte'],
+		after: ['accept:animation-effects'],
+	},
 	'build': {
 		command: ['run', 'build'],
 		after: ['prepare'],
 		env: { STREAM_KEEPR_BUILD_DIR: 'node_modules/.cache/nuxt-build' },
 	},
-	'worker:dry-run': { command: ['run', 'worker:dry-run'], after: ['build'] },
-	'worker:smoke': { command: ['run', 'worker:smoke'], after: ['worker:dry-run'] },
+	'worker:dry-run': {
+		command: ['run', 'worker:dry-run'],
+		after: ['build'],
+	},
+	'worker:smoke': {
+		command: ['run', 'worker:smoke'],
+		after: ['worker:dry-run'],
+	},
 };
 
 const LOG_TAIL_LINES = 80;
@@ -145,7 +203,11 @@ export async function main(argv = process.argv) {
 			cwd: repositoryRoot,
 			detached: true,
 			stdio: ['ignore', 'pipe', 'pipe'],
-			env: { ...process.env, FORCE_COLOR: '1', ...gate.env },
+			env: {
+				...process.env,
+				FORCE_COLOR: '1',
+				...gate.env,
+			},
 		});
 		child.stdout.pipe(log, { end: false });
 		child.stderr.pipe(log, { end: false });
@@ -163,7 +225,13 @@ export async function main(argv = process.argv) {
 				return;
 			}
 			if (!failure) {
-				failure = { name, elapsed, logPath, reason: signal ?? `exit ${code}`, stoppedAt: Date.now() };
+				failure = {
+					name,
+					elapsed,
+					logPath,
+					reason: signal ?? `exit ${code}`,
+					stoppedAt: Date.now(),
+				};
 				for (const other of running.values())
 					signalGroup(other, 'SIGINT');
 			}
@@ -173,7 +241,11 @@ export async function main(argv = process.argv) {
 	}
 
 	const interrupt = () => {
-		failure ??= { name: 'verify', reason: 'interrupted', stoppedAt: Date.now() };
+		failure ??= {
+			name: 'verify',
+			reason: 'interrupted',
+			stoppedAt: Date.now(),
+		};
 		for (const child of running.values())
 			signalGroup(child, 'SIGINT');
 	};
@@ -206,7 +278,9 @@ export async function main(argv = process.argv) {
 		else {
 			process.stderr.write(`\n  ✗ ${failure.reason}\n`);
 		}
-		process.exitCode = failure.reason === 'interrupted' ? 130 : 1;
+		process.exitCode = failure.reason === 'interrupted'
+			? 130
+			: 1;
 		return;
 	}
 

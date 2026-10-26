@@ -95,7 +95,9 @@ async function readExact(
 		return undefined;
 	}
 	const bytes = await source.read(offset, length);
-	return bytes.byteLength === length ? bytes : undefined;
+	return bytes.byteLength === length
+		? bytes
+		: undefined;
 }
 
 interface CentralDirectoryEntry {
@@ -153,10 +155,20 @@ function parseCentralDirectory(
 	const entries: CentralDirectoryEntry[] = [];
 	let cursor = 0;
 	for (let index = 0; index < entryCount; index += 1) {
-		if (cursor + CENTRAL_HEADER_BYTES > bytes.byteLength)
-			return { issues: [malformed(`Central directory ends before entry ${index + 1}`)] };
-		if (data.getUint32(cursor, true) !== CENTRAL_HEADER_SIGNATURE)
-			return { issues: [malformed(`Central directory entry ${index + 1} has no header signature`)] };
+		if (cursor + CENTRAL_HEADER_BYTES > bytes.byteLength) {
+			return {
+				issues: [
+					malformed(`Central directory ends before entry ${index + 1}`),
+				],
+			};
+		}
+		if (data.getUint32(cursor, true) !== CENTRAL_HEADER_SIGNATURE) {
+			return {
+				issues: [
+					malformed(`Central directory entry ${index + 1} has no header signature`),
+				],
+			};
+		}
 		const flags = data.getUint16(cursor + 8, true);
 		const method = data.getUint16(cursor + 10, true);
 		const crc32 = data.getUint32(cursor + 16, true);
@@ -169,14 +181,29 @@ function parseCentralDirectory(
 		const externalAttributes = data.getUint32(cursor + 38, true);
 		const localHeaderOffset = data.getUint32(cursor + 42, true);
 		const nameEnd = cursor + CENTRAL_HEADER_BYTES + nameLength;
-		if (nameEnd > bytes.byteLength)
-			return { issues: [malformed(`Central directory entry ${index + 1} declares a name beyond the directory`)] };
-		if (diskStart !== 0)
-			return { issues: [malformed(`Package entry ${index + 1} claims to live on another disk`)] };
+		if (nameEnd > bytes.byteLength) {
+			return {
+				issues: [
+					malformed(`Central directory entry ${index + 1} declares a name beyond the directory`),
+				],
+			};
+		}
+		if (diskStart !== 0) {
+			return {
+				issues: [
+					malformed(`Package entry ${index + 1} claims to live on another disk`),
+				],
+			};
+		}
 		// An extra field or comment is space the manifest never declared, and the
 		// exporter emits neither, so their presence is refused rather than skipped.
-		if (extraLength !== 0 || commentLength !== 0)
-			return { issues: [malformed(`Package entry ${index + 1} carries an undeclared extra field or comment`)] };
+		if (extraLength !== 0 || commentLength !== 0) {
+			return {
+				issues: [
+					malformed(`Package entry ${index + 1} carries an undeclared extra field or comment`),
+				],
+			};
+		}
 		const name = new TextDecoder('utf-8', { fatal: false })
 			.decode(bytes.subarray(cursor + CENTRAL_HEADER_BYTES, nameEnd));
 		entries.push({
@@ -191,8 +218,13 @@ function parseCentralDirectory(
 		});
 		cursor = nameEnd;
 	}
-	if (cursor !== bytes.byteLength)
-		return { issues: [malformed('Central directory carries bytes beyond its declared entries')] };
+	if (cursor !== bytes.byteLength) {
+		return {
+			issues: [
+				malformed('Central directory carries bytes beyond its declared entries'),
+			],
+		};
+	}
 	return { entries };
 }
 
@@ -207,13 +239,21 @@ export async function readTemplatePackageArchive(
 	if (source.byteLength > TEMPLATE_PACKAGE_LIMITS.maximumArchiveByteLength) {
 		return {
 			outcome: 'rejected',
-			issues: [templatePackagePreflightIssue('package-archive-limit-exceeded', {
-				message: `The received archive is ${source.byteLength} bytes, beyond the ${TEMPLATE_PACKAGE_LIMITS.maximumArchiveByteLength}-byte limit`,
-			})],
+			issues: [
+				templatePackagePreflightIssue('package-archive-limit-exceeded', {
+					message: `The received archive is ${source.byteLength} bytes, beyond the ${TEMPLATE_PACKAGE_LIMITS.maximumArchiveByteLength}-byte limit`,
+				}),
+			],
 		};
 	}
-	if (source.byteLength < END_OF_CENTRAL_DIRECTORY_BYTES)
-		return { outcome: 'rejected', issues: [malformed('The received archive is too short to be a package')] };
+	if (source.byteLength < END_OF_CENTRAL_DIRECTORY_BYTES) {
+		return {
+			outcome: 'rejected',
+			issues: [
+				malformed('The received archive is too short to be a package'),
+			],
+		};
+	}
 
 	// The end record must be the final 22 bytes. Allowing an archive comment
 	// would allow arbitrary trailing content no manifest ever declared.
@@ -222,13 +262,21 @@ export async function readTemplatePackageArchive(
 		source.byteLength - END_OF_CENTRAL_DIRECTORY_BYTES,
 		END_OF_CENTRAL_DIRECTORY_BYTES,
 	);
-	if (!endRecord)
-		return { outcome: 'rejected', issues: [malformed('The archive has no readable end-of-central-directory record')] };
+	if (!endRecord) {
+		return {
+			outcome: 'rejected',
+			issues: [
+				malformed('The archive has no readable end-of-central-directory record'),
+			],
+		};
+	}
 	const endView = view(endRecord);
 	if (endView.getUint32(0, true) !== END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
 		return {
 			outcome: 'rejected',
-			issues: [malformed('The archive does not end with its central directory record')],
+			issues: [
+				malformed('The archive does not end with its central directory record'),
+			],
 		};
 	}
 	if (
@@ -238,20 +286,36 @@ export async function readTemplatePackageArchive(
 	) {
 		return {
 			outcome: 'rejected',
-			issues: [malformed('The archive is split across disks or carries a comment')],
+			issues: [
+				malformed('The archive is split across disks or carries a comment'),
+			],
 		};
 	}
 	const entryCount = endView.getUint16(8, true);
-	if (entryCount !== endView.getUint16(10, true))
-		return { outcome: 'rejected', issues: [malformed('The archive disagrees with itself about how many entries it holds')] };
-	if (entryCount === 0)
-		return { outcome: 'rejected', issues: [malformed('The archive declares no entries')] };
+	if (entryCount !== endView.getUint16(10, true)) {
+		return {
+			outcome: 'rejected',
+			issues: [
+				malformed('The archive disagrees with itself about how many entries it holds'),
+			],
+		};
+	}
+	if (entryCount === 0) {
+		return {
+			outcome: 'rejected',
+			issues: [
+				malformed('The archive declares no entries'),
+			],
+		};
+	}
 	if (entryCount > TEMPLATE_PACKAGE_LIMITS.maximumEntryCount) {
 		return {
 			outcome: 'rejected',
-			issues: [templatePackagePreflightIssue('package-entry-limit-exceeded', {
-				message: `The archive declares ${entryCount} entries, beyond the ${TEMPLATE_PACKAGE_LIMITS.maximumEntryCount}-entry limit`,
-			})],
+			issues: [
+				templatePackagePreflightIssue('package-entry-limit-exceeded', {
+					message: `The archive declares ${entryCount} entries, beyond the ${TEMPLATE_PACKAGE_LIMITS.maximumEntryCount}-entry limit`,
+				}),
+			],
 		};
 	}
 	const centralDirectoryByteLength = endView.getUint32(12, true);
@@ -263,7 +327,9 @@ export async function readTemplatePackageArchive(
 	) {
 		return {
 			outcome: 'rejected',
-			issues: [malformed('The central directory does not end where the end record begins')],
+			issues: [
+				malformed('The central directory does not end where the end record begins'),
+			],
 		};
 	}
 	const centralDirectory = await readExact(
@@ -271,8 +337,14 @@ export async function readTemplatePackageArchive(
 		centralDirectoryOffset,
 		centralDirectoryByteLength,
 	);
-	if (!centralDirectory)
-		return { outcome: 'rejected', issues: [malformed('The central directory could not be read')] };
+	if (!centralDirectory) {
+		return {
+			outcome: 'rejected',
+			issues: [
+				malformed('The central directory could not be read'),
+			],
+		};
+	}
 
 	const parsed = parseCentralDirectory(centralDirectory, entryCount);
 	if ('issues' in parsed)
@@ -428,10 +500,12 @@ export async function readTemplatePackageArchive(
 		if (entry.dataOffset - headerByteLength !== expectedOffset) {
 			return {
 				outcome: 'rejected',
-				issues: [templatePackagePreflightIssue('undeclared-package-entry', {
-					subject: entry.name,
-					message: 'The archive carries bytes between entries that no entry declares',
-				})],
+				issues: [
+					templatePackagePreflightIssue('undeclared-package-entry', {
+						subject: entry.name,
+						message: 'The archive carries bytes between entries that no entry declares',
+					}),
+				],
 			};
 		}
 		expectedOffset = entry.dataOffset
@@ -441,10 +515,12 @@ export async function readTemplatePackageArchive(
 	if (expectedOffset !== centralDirectoryOffset) {
 		return {
 			outcome: 'rejected',
-			issues: [templatePackagePreflightIssue('undeclared-package-entry', {
-				subject: ordered.at(-1)?.name,
-				message: 'The archive carries bytes before its central directory that no entry declares',
-			})],
+			issues: [
+				templatePackagePreflightIssue('undeclared-package-entry', {
+					subject: ordered.at(-1)?.name,
+					message: 'The archive carries bytes before its central directory that no entry declares',
+				}),
+			],
 		};
 	}
 

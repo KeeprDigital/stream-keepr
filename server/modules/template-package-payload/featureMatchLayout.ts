@@ -66,7 +66,9 @@ function readFeatureMatchLayoutDocument(document: unknown):
 	const reported = problems.slice(0, MAXIMUM_REPORTED_SCHEMA_ISSUES).map(problem =>
 		issue(
 			'invalid-template-document',
-			problem.path.length > 0 ? problem.path.join('.') : undefined,
+			problem.path.length > 0
+				? problem.path.join('.')
+				: undefined,
 			problem.message,
 		),
 	);
@@ -112,5 +114,7 @@ export function readInstalledFeatureMatchLayoutDocument(
 	document: unknown,
 ): FeatureMatchLayoutConfig | undefined {
 	const read = readFeatureMatchLayoutDocument(document);
-	return read.outcome === 'read' ? read.document : undefined;
+	return read.outcome === 'read'
+		? read.document
+		: undefined;
 }

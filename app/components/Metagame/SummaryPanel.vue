@@ -21,7 +21,9 @@ const scopeLabel = computed(() => {
 
 	if (metagameStore.scope === 'playerList' && metagameStore.playerListId != null) {
 		const list = playerListStore.lists.find(entry => entry.id === metagameStore.playerListId);
-		return list ? `Player List: ${list.name}` : `Player List #${metagameStore.playerListId}`;
+		return list
+			? `Player List: ${list.name}`
+			: `Player List #${metagameStore.playerListId}`;
 	}
 
 	return 'All Players';

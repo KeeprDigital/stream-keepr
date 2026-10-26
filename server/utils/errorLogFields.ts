@@ -27,7 +27,9 @@ function errorCodeOf(code: unknown): string | number | null {
 	if (typeof code === 'string')
 		return code;
 
-	return typeof code === 'number' && Number.isFinite(code) ? code : null;
+	return typeof code === 'number' && Number.isFinite(code)
+		? code
+		: null;
 }
 
 /**
@@ -81,7 +83,9 @@ export function errorLogFields(error: LoggedNitroError, path: string | undefined
 		message: 'api_request_failed',
 		path: path ?? null,
 		statusCode: error.statusCode,
-		errorName: typeof causeRecord?.name === 'string' ? causeRecord.name : error.name,
+		errorName: typeof causeRecord?.name === 'string'
+			? causeRecord.name
+			: error.name,
 		errorCode: nearestCauseCode(cause),
 		unhandled: error.unhandled ?? false,
 	};

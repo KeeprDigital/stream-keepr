@@ -45,11 +45,15 @@ const mockScreenStore = reactive({
 	})),
 });
 
-const mockToast = { add: vi.fn() };
+const mockToast = {
+	add: vi.fn(),
+};
 
 /** What the Screen Output Asset Capability endpoint issues, if anything. */
 const mockCapabilityResponse = { value: null as string | null };
-const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+const { mockApiFetch } = vi.hoisted(() => ({
+	mockApiFetch: vi.fn(),
+}));
 
 /** What the copy control reports through, and what it was handed. */
 const mockCopyToClipboard = vi.fn();
@@ -63,13 +67,17 @@ mockNuxtImport('useCopyToClipboard', () => () => ({ copyToClipboard: mockCopyToC
 
 /** The layout's slots, and whether the page asked it for Editor Focus Mode. */
 const NuxtLayoutStub = defineComponent({
-	props: { editorFocus: { type: Boolean, default: false } },
+	props: {
+		editorFocus: { type: Boolean, default: false },
+	},
 	template: '<div data-testid="layout" :data-focus="String(editorFocus)"><slot name="navbar-center" /><slot name="actions" /><slot /></div>',
 });
 
 /** A Screen-level settings card, named by its title. */
 const ScreenSettingsCardStub = defineComponent({
-	props: { title: { type: String, default: '' } },
+	props: {
+		title: { type: String, default: '' },
+	},
 	template: '<section :data-settings-card="title"><slot /></section>',
 });
 
@@ -93,13 +101,17 @@ const SlotStub = defineComponent({
  * rather than on the button, so a naming test has no way to read it otherwise (#266).
  */
 const UTooltipStub = defineComponent({
-	props: { text: { type: String, default: '' } },
+	props: {
+		text: { type: String, default: '' },
+	},
 	template: '<div :data-tooltip="text"><slot /></div>',
 });
 
 const UButtonStub = defineComponent({
 	name: 'UButton',
-	props: { label: { type: String, default: '' } },
+	props: {
+		label: { type: String, default: '' },
+	},
 	emits: ['click'],
 	template: '<button type="button" @click="$emit(\'click\')">{{ label }}<slot /></button>',
 });
@@ -116,7 +128,9 @@ const UDropdownMenuStub = defineComponent({
 		},
 	},
 	setup(props) {
-		return { entries: computed(() => props.items.flat()) };
+		return {
+			entries: computed(() => props.items.flat()),
+		};
 	},
 	template: `<div>
 		<button
@@ -284,13 +298,24 @@ describe('screen config page — degraded card data on connected outputs', () =>
 	}
 
 	it('warns about the outputs currently reporting degraded card data', async () => {
-		mockScreenStore.screenPresence = new Map([[1, {
-			count: 2,
-			members: [
-				{ clientId: 'a', data: { screenId: 1, cardData: 'degraded' } },
-				{ clientId: 'b', data: { screenId: 1, cardData: 'complete' } },
+		mockScreenStore.screenPresence = new Map([
+			[
+				1,
+				{
+					count: 2,
+					members: [
+						{
+							clientId: 'a',
+							data: { screenId: 1, cardData: 'degraded' },
+						},
+						{
+							clientId: 'b',
+							data: { screenId: 1, cardData: 'complete' },
+						},
+					],
+				},
 			],
-		}]]);
+		]);
 
 		const page = await mountLoadedPage();
 
@@ -298,15 +323,26 @@ describe('screen config page — degraded card data on connected outputs', () =>
 	});
 
 	it('says nothing while every reporting output is complete or silent', async () => {
-		mockScreenStore.screenPresence = new Map([[1, {
-			count: 2,
-			members: [
-				{ clientId: 'a', data: { screenId: 1, cardData: 'complete' } },
-				// An output that predates the field is silent about its card data,
-				// not degraded.
-				{ clientId: 'b', data: { screenId: 1 } },
+		mockScreenStore.screenPresence = new Map([
+			[
+				1,
+				{
+					count: 2,
+					members: [
+						{
+							clientId: 'a',
+							data: { screenId: 1, cardData: 'complete' },
+						},
+						// An output that predates the field is silent about its card data,
+						// not degraded.
+						{
+							clientId: 'b',
+							data: { screenId: 1 },
+						},
+					],
+				},
 			],
-		}]]);
+		]);
 
 		const page = await mountLoadedPage();
 
@@ -362,7 +398,11 @@ describe('screen config page — handing out this Screen’s output', () => {
 	}
 
 	function stubOutputWindow() {
-		const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+		const outputWindow = {
+			opener: {} as unknown,
+			location: { href: '' },
+			close: vi.fn(),
+		};
 		vi.stubGlobal('open', vi.fn(() => outputWindow));
 		return outputWindow;
 	}
@@ -371,7 +411,11 @@ describe('screen config page — handing out this Screen’s output', () => {
 	function stubOutputWindows() {
 		const opened: Array<{ opener: unknown; location: { href: string }; close: () => void }> = [];
 		vi.stubGlobal('open', vi.fn(() => {
-			const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+			const outputWindow = {
+				opener: {} as unknown,
+				location: { href: '' },
+				close: vi.fn(),
+			};
 			opened.push(outputWindow);
 			return outputWindow;
 		}));
@@ -572,7 +616,9 @@ describe('screen config page — handing out this Screen’s output', () => {
 	describe('a Screen Mode’s own outputs', () => {
 		beforeEach(() => {
 			stubModePolicy({
-				outputOptions: [{ label: 'Open fill output', icon: 'i-lucide-square', value: 'fill' }],
+				outputOptions: [
+					{ label: 'Open fill output', icon: 'i-lucide-square', value: 'fill' },
+				],
 			});
 		});
 

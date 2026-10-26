@@ -43,7 +43,9 @@ const displayType = computed(() => getScreenModeDisplayType(props.screen.current
 // a badge, so one glance down the index covers every Screen.
 const degradedCardDataCount = useScreenOutputCardDataHealth(() => props.screen.id);
 const degradedCardDataTooltip = computed(() =>
-	`Card data incomplete on ${degradedCardDataCount.value} ${degradedCardDataCount.value === 1 ? 'output' : 'outputs'} — re-fetching until Scryfall answers`,
+	`Card data incomplete on ${degradedCardDataCount.value} ${degradedCardDataCount.value === 1
+		? 'output'
+		: 'outputs'} — re-fetching until Scryfall answers`,
 );
 
 function accessUrlOptions() {

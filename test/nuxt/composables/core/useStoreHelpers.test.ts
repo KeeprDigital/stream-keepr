@@ -35,7 +35,9 @@ describe('useStoreHelpers', () => {
 	describe('optimisticUpdate', () => {
 		it('applies updates optimistically and returns API result', async () => {
 			const { optimisticUpdate } = useStoreHelpers();
-			const items = createTestItems([{ id: 1, name: 'Original' }]);
+			const items = createTestItems([
+				{ id: 1, name: 'Original' },
+			]);
 			const apiResult = { id: 1, name: 'FromAPI' };
 			const apiCall = vi.fn().mockResolvedValue(apiResult);
 			const errorRef = ref<string | null>(null);
@@ -56,7 +58,9 @@ describe('useStoreHelpers', () => {
 
 		it('applies updates immediately before API call resolves', async () => {
 			const { optimisticUpdate } = useStoreHelpers();
-			const items = createTestItems([{ id: 1, name: 'Original' }]);
+			const items = createTestItems([
+				{ id: 1, name: 'Original' },
+			]);
 			let nameDuringApiCall = '';
 
 			const apiCall = vi.fn().mockImplementation(async () => {
@@ -78,7 +82,9 @@ describe('useStoreHelpers', () => {
 
 		it('returns null and sets error when item not found', async () => {
 			const { optimisticUpdate } = useStoreHelpers();
-			const items = createTestItems([{ id: 1, name: 'A' }]);
+			const items = createTestItems([
+				{ id: 1, name: 'A' },
+			]);
 			const errorRef = ref<string | null>(null);
 
 			const result = await optimisticUpdate({
@@ -96,7 +102,9 @@ describe('useStoreHelpers', () => {
 
 		it('calls onSuccess after successful API call', async () => {
 			const { optimisticUpdate } = useStoreHelpers();
-			const items = createTestItems([{ id: 1, name: 'A' }]);
+			const items = createTestItems([
+				{ id: 1, name: 'A' },
+			]);
 			const onSuccess = vi.fn();
 
 			await optimisticUpdate({
@@ -146,7 +154,9 @@ describe('useStoreHelpers', () => {
 		 */
 		it('rolls the prediction back and reports the failure when the API call is refused', async () => {
 			const { optimisticUpdate } = useStoreHelpers();
-			const items = createTestItems([{ id: 1, name: 'Original' }]);
+			const items = createTestItems([
+				{ id: 1, name: 'Original' },
+			]);
 			const errorRef = ref<string | null>(null);
 
 			const result = await optimisticUpdate({
@@ -196,7 +206,10 @@ describe('useStoreHelpers', () => {
 
 		it('removes item immediately before API resolves', async () => {
 			const { optimisticDelete } = useStoreHelpers();
-			const items = createTestItems([{ id: 1, name: 'A' }, { id: 2, name: 'B' }]);
+			const items = createTestItems([
+				{ id: 1, name: 'A' },
+				{ id: 2, name: 'B' },
+			]);
 			let lengthDuringApiCall = 0;
 
 			const apiCall = vi.fn().mockImplementation(async () => {
@@ -216,7 +229,9 @@ describe('useStoreHelpers', () => {
 
 		it('returns null and sets error when item not found', async () => {
 			const { optimisticDelete } = useStoreHelpers();
-			const items = createTestItems([{ id: 1, name: 'A' }]);
+			const items = createTestItems([
+				{ id: 1, name: 'A' },
+			]);
 			const errorRef = ref<string | null>(null);
 
 			const result = await optimisticDelete({
@@ -233,7 +248,9 @@ describe('useStoreHelpers', () => {
 
 		it('calls onSuccess after successful API call', async () => {
 			const { optimisticDelete } = useStoreHelpers();
-			const items = createTestItems([{ id: 1, name: 'A' }]);
+			const items = createTestItems([
+				{ id: 1, name: 'A' },
+			]);
 			const onSuccess = vi.fn();
 
 			await optimisticDelete({

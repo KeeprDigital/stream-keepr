@@ -46,12 +46,34 @@ describe('buildMetagameFacts', () => {
 			totalDecks: 16,
 			archetypes: [
 				makeArchetype(),
-				makeArchetype({ id: 2, name: 'Domain Ramp', count: 8, metaShare: 16, winRate: 68.2 }),
-				makeArchetype({ id: 3, name: 'Mono Red', count: 5, metaShare: 10, winRate: 54.5 }),
+				makeArchetype({
+					id: 2,
+					name: 'Domain Ramp',
+					count: 8,
+					metaShare: 16,
+					winRate: 68.2,
+				}),
+				makeArchetype({
+					id: 3,
+					name: 'Mono Red',
+					count: 5,
+					metaShare: 10,
+					winRate: 54.5,
+				}),
 			],
 			cards: [
 				makeCard(),
-				makeCard({ id: 2, name: 'Counterspell', inclusionRate: 55, avgCopies: 3.8, deckCount: 8, mainboardCount: 19, sideboardCount: 6, mainboardDeckCount: 5, sideboardDeckCount: 5 }),
+				makeCard({
+					id: 2,
+					name: 'Counterspell',
+					inclusionRate: 55,
+					avgCopies: 3.8,
+					deckCount: 8,
+					mainboardCount: 19,
+					sideboardCount: 6,
+					mainboardDeckCount: 5,
+					sideboardDeckCount: 5,
+				}),
 			],
 		});
 
@@ -108,7 +130,9 @@ describe('buildMetagameFacts', () => {
 			totalPlayers: 8,
 			classifiedPlayers: 8,
 			totalDecks: 0,
-			archetypes: [makeArchetype({ count: 8, metaShare: 100, winRate: 60 })],
+			archetypes: [
+				makeArchetype({ count: 8, metaShare: 100, winRate: 60 }),
+			],
 			cards: [],
 		});
 

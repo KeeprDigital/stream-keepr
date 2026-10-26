@@ -60,7 +60,9 @@ describe('error-handler mapping logic', () => {
 			// the string-only guard this replaces logged `null` for precisely the
 			// failure the field exists to name. A rejected key then spent an outbound
 			// request per Screen mutation with nothing in the log to say why.
-			expect(errorLogFields(failed({ cause: providerRefusal() }), '/api/events/1')).toMatchObject({
+			expect(errorLogFields(failed({
+				cause: providerRefusal(),
+			}), '/api/events/1')).toMatchObject({
 				// A genuine `ErrorInfo` never assigns `name`, so the sibling field
 				// reports the inherited 'Error' and identifies nothing. The code is the
 				// only thing in the line that can name the refusal.
@@ -71,7 +73,9 @@ describe('error-handler mapping logic', () => {
 
 		it('still carries a provider code that arrives as a string', () => {
 			// Node's own convention, and the shape the previous guard was written for.
-			expect(errorLogFields(failed({ cause: { name: 'SystemError', code: 'ENOENT' } }), '/api/events/1'))
+			expect(errorLogFields(failed({
+				cause: { name: 'SystemError', code: 'ENOENT' },
+			}), '/api/events/1'))
 				.toMatchObject({ errorName: 'SystemError', errorCode: 'ENOENT' });
 		});
 
@@ -79,18 +83,28 @@ describe('error-handler mapping logic', () => {
 			// The Ably transport builds `Number(headers['x-ably-errorcode'])` for a
 			// response carrying no Ably error body, so NaN is a shape that reaches
 			// here. #253 guards the same value the same way in the publish log.
-			expect(errorLogFields(failed({ cause: new ErrorInfoShaped('', Number.NaN, 502) }), '/api/events/1'))
+			expect(errorLogFields(failed({
+				cause: new ErrorInfoShaped('', Number.NaN, 502),
+			}), '/api/events/1'))
 				.toMatchObject({ errorCode: null });
-			expect(errorLogFields(failed({ cause: new ErrorInfoShaped('', Number.POSITIVE_INFINITY, 502) }), '/api/events/1'))
+			expect(errorLogFields(failed({
+				cause: new ErrorInfoShaped('', Number.POSITIVE_INFINITY, 502),
+			}), '/api/events/1'))
 				.toMatchObject({ errorCode: null });
 		});
 
 		it('reports a code that is neither string nor number as absent', () => {
 			// Widening the guard must not turn it into no guard: an object or a
 			// boolean in `code` is not an identifier anyone can look up.
-			expect(errorLogFields(failed({ cause: { code: { value: 40400 } } }), '/api/events/1'))
+			expect(errorLogFields(failed({
+				cause: {
+					code: { value: 40400 },
+				},
+			}), '/api/events/1'))
 				.toMatchObject({ errorCode: null });
-			expect(errorLogFields(failed({ cause: { code: true } }), '/api/events/1'))
+			expect(errorLogFields(failed({
+				cause: { code: true },
+			}), '/api/events/1'))
 				.toMatchObject({ errorCode: null });
 		});
 
@@ -113,7 +127,11 @@ describe('error-handler mapping logic', () => {
 			// A domain error's own code is the classification; the store code under it
 			// is only the fallback for a level that classifies nothing.
 			const error = failed({
-				cause: { name: 'GraphicsAssetLibraryError', code: 'invalid-ingestion-input', cause: { code: 'ENOENT' } },
+				cause: {
+					name: 'GraphicsAssetLibraryError',
+					code: 'invalid-ingestion-input',
+					cause: { code: 'ENOENT' },
+				},
 			});
 			expect(errorLogFields(error, '/api/events/1')).toMatchObject({
 				errorName: 'GraphicsAssetLibraryError',
@@ -124,7 +142,12 @@ describe('error-handler mapping logic', () => {
 		it('skips an invalid code and keeps walking', () => {
 			// An object in `code` is not an identifier anyone can look up; the number
 			// beneath it is.
-			expect(errorLogFields(failed({ cause: { code: { value: 1 }, cause: { code: 40400 } } }), '/api/events/1'))
+			expect(errorLogFields(failed({
+				cause: {
+					code: { value: 1 },
+					cause: { code: 40400 },
+				},
+			}), '/api/events/1'))
 				.toMatchObject({ errorCode: 40400 });
 		});
 
@@ -134,7 +157,9 @@ describe('error-handler mapping logic', () => {
 			expect(errorLogFields(failed({ cause: cyclic }), '/api/events/1'))
 				.toMatchObject({ errorCode: null });
 
-			const tooDeep = [...Array.from({ length: 5 })].reduce<object>(
+			const tooDeep = [
+				...Array.from({ length: 5 }),
+			].reduce<object>(
 				cause => ({ cause }),
 				{ code: 'BURIED' },
 			);
@@ -231,7 +256,11 @@ describe('error-handler mapping logic', () => {
 		it('survives the 5xx sanitizer that every other server error meets', () => {
 			// The sanitizer runs last and rewrites any unmapped 5xx. This asserts
 			// the mapping is reached, not merely that a 503 comes out.
-			const sanitized = { statusCode: 503, message: 'signing key missing', cause: new Error('signing key missing') };
+			const sanitized = {
+				statusCode: 503,
+				message: 'signing key missing',
+				cause: new Error('signing key missing'),
+			};
 
 			mapPublicNitroError(sanitized);
 
@@ -383,7 +412,10 @@ describe('error-handler mapping logic', () => {
 			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'Scryfall batch leaked detail',
-				cause: { code: 'IMPORTED_CARD_LOOKUP_UNAVAILABLE', details: ['private upstream body'] },
+				cause: {
+					code: 'IMPORTED_CARD_LOOKUP_UNAVAILABLE',
+					details: ['private upstream body'],
+				},
 			};
 			mapPublicNitroError(error);
 			expect(error).toMatchObject({
@@ -745,7 +777,12 @@ describe('error-handler mapping logic', () => {
 		];
 
 		it.each(preserved)('says something an operator can act on for $family', ({ cause, sentence }) => {
-			const error: MappableNitroError = { statusCode: 500, message: 'Something went wrong', cause, unhandled: true };
+			const error: MappableNitroError = {
+				statusCode: 500,
+				message: 'Something went wrong',
+				cause,
+				unhandled: true,
+			};
 
 			mapPublicNitroError(error);
 

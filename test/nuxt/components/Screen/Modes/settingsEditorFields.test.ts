@@ -46,15 +46,27 @@ const OPTIONS_NOT_OFFERED: Record<string, readonly string[]> = {
 
 /** Each mode's editor, and the config variants that between them render every scalar control. */
 const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Record<string, unknown>[] }>> = {
-	'card': { editor: 'Card', variants: [{}] },
-	'feature-match': { editor: 'FeatureMatch', variants: [{}] },
+	'card': {
+		editor: 'Card',
+		variants: [{}],
+	},
+	'feature-match': {
+		editor: 'FeatureMatch',
+		variants: [{}],
+	},
 	// Each board in each view: the defaults show a grid Mainboard and a stacked Sideboard.
 	'deck': {
 		editor: 'Deck',
 		variants: [
 			{},
-			{ mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'list' }, sideboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'grid' } },
-			{ mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'stack' }, sideboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'list' } },
+			{
+				mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'list' },
+				sideboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'grid' },
+			},
+			{
+				mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'stack' },
+				sideboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'list' },
+			},
 		],
 	},
 	// Each view mode's settings; the archetype colours show with the deck column.
@@ -63,7 +75,13 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 		variants: [
 			{ viewMode: 'topN' },
 			{ viewMode: 'slice' },
-			{ viewMode: 'reveal', autoPageEnabled: true, columns: [{ key: 'deck', visible: true }] },
+			{
+				viewMode: 'reveal',
+				autoPageEnabled: true,
+				columns: [
+					{ key: 'deck', visible: true },
+				],
+			},
 		],
 	},
 	// Each scope's and each view's settings, and the conversion target a shown Conversion Rate column asks for.
@@ -72,21 +90,53 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 		variants: [
 			{ scope: 'topN', autoPageEnabled: true },
 			{ scope: 'minPoints', viewMode: 'cards' },
-			{ archetypeColumns: [{ key: 'archetype', visible: true }, { key: 'conversionRate', visible: true }] },
+			{
+				archetypeColumns: [
+					{ key: 'archetype', visible: true },
+					{ key: 'conversionRate', visible: true },
+				],
+			},
 		],
 	},
-	'player-history': { editor: 'PlayerHistory', variants: [{ autoPageEnabled: true }] },
-	'pairings': { editor: 'Pairings', variants: [{ autoPageEnabled: true }] },
+	'player-history': {
+		editor: 'PlayerHistory',
+		variants: [
+			{ autoPageEnabled: true },
+		],
+	},
+	'pairings': {
+		editor: 'Pairings',
+		variants: [
+			{ autoPageEnabled: true },
+		],
+	},
 	// Each scope's own field, and auto-page.
 	'archetype-spotlight': {
 		editor: 'ArchetypeSpotlight',
-		variants: [{ scope: 'topN', autoPageEnabled: true }, { scope: 'minPoints' }],
+		variants: [
+			{ scope: 'topN', autoPageEnabled: true },
+			{ scope: 'minPoints' },
+		],
 	},
 	// The Slot binding and the two Player pickers: both are Event References, so only the source and header are scalar.
-	'head-to-head': { editor: 'HeadToHead', variants: [{}, { playerSource: 'players' }] },
-	'top-cut': { editor: 'TopCut', variants: [{}] },
+	'head-to-head': {
+		editor: 'HeadToHead',
+		variants: [
+			{},
+			{ playerSource: 'players' },
+		],
+	},
+	'top-cut': {
+		editor: 'TopCut',
+		variants: [{}],
+	},
 	// The Top N scope, a fixed card size, and auto-page.
-	'top-cards': { editor: 'TopCards', variants: [{ scope: 'topN', dynamicCardSize: false, autoPageEnabled: true }] },
+	'top-cards': {
+		editor: 'TopCards',
+		variants: [
+			{ scope: 'topN', dynamicCardSize: false, autoPageEnabled: true },
+		],
+	},
 };
 
 // ── The editor's environment ──
@@ -96,7 +146,10 @@ const writes: Record<string, unknown>[] = [];
 
 function saveConfig(patch: Record<string, unknown>) {
 	writes.push(patch);
-	config.value = { ...config.value, ...patch };
+	config.value = {
+		...config.value,
+		...patch,
+	};
 }
 
 mockNuxtImport('useModeConfigUpdate', () => () => ({
@@ -117,18 +170,57 @@ vi.mock('~/composables/screen/useScreenConfigUpdate', () => ({
 	}),
 }));
 
-const loaded = { isLoaded: true, $reset: vi.fn() };
-mockNuxtImport('usePlayerStore', () => () => ({ ...loaded, players: [], loadPlayersByEventId: vi.fn() }));
+const loaded = {
+	isLoaded: true,
+	$reset: vi.fn(),
+};
+mockNuxtImport('usePlayerStore', () => () => ({
+	...loaded,
+	players: [],
+	loadPlayersByEventId: vi.fn(),
+}));
 // One Player List, so every scope that needs one is offered.
-mockNuxtImport('usePlayerListStore', () => () => ({ ...loaded, lists: [{ id: 7, name: 'Feature Table', memberCount: 4 }], loadByEventId: vi.fn() }));
-mockNuxtImport('useRoundStore', () => () => ({ ...loaded, rounds: [], loadRoundsByEventId: vi.fn() }));
-mockNuxtImport('useArchetypeStore', () => () => ({ ...loaded, archetypes: [], loadByEventId: vi.fn() }));
-mockNuxtImport('usePhaseStore', () => () => ({ ...loaded, phases: [], loadPhasesByEventId: vi.fn() }));
-mockNuxtImport('useFeatureMatchStore', () => () => ({ ...loaded, loadFeatureMatchesByEventId: vi.fn() }));
-mockNuxtImport('useFeatureMatchStateStore', () => () => ({ ...loaded, loadState: vi.fn() }));
-mockNuxtImport('useBroadcastDeckListStore', () => () => ({ summaries: [], loadCollection: vi.fn() }));
-mockNuxtImport('useEventStore', () => () => ({ event: { id: 1, game: 'mtg' }, $reset: vi.fn() }));
-mockNuxtImport('usePlayerDeckCache', () => () => ({ fetchDeck: vi.fn() }));
+mockNuxtImport('usePlayerListStore', () => () => ({
+	...loaded,
+	lists: [
+		{ id: 7, name: 'Feature Table', memberCount: 4 },
+	],
+	loadByEventId: vi.fn(),
+}));
+mockNuxtImport('useRoundStore', () => () => ({
+	...loaded,
+	rounds: [],
+	loadRoundsByEventId: vi.fn(),
+}));
+mockNuxtImport('useArchetypeStore', () => () => ({
+	...loaded,
+	archetypes: [],
+	loadByEventId: vi.fn(),
+}));
+mockNuxtImport('usePhaseStore', () => () => ({
+	...loaded,
+	phases: [],
+	loadPhasesByEventId: vi.fn(),
+}));
+mockNuxtImport('useFeatureMatchStore', () => () => ({
+	...loaded,
+	loadFeatureMatchesByEventId: vi.fn(),
+}));
+mockNuxtImport('useFeatureMatchStateStore', () => () => ({
+	...loaded,
+	loadState: vi.fn(),
+}));
+mockNuxtImport('useBroadcastDeckListStore', () => () => ({
+	summaries: [],
+	loadCollection: vi.fn(),
+}));
+mockNuxtImport('useEventStore', () => () => ({
+	event: { id: 1, game: 'mtg' },
+	$reset: vi.fn(),
+}));
+mockNuxtImport('usePlayerDeckCache', () => () => ({
+	fetchDeck: vi.fn(),
+}));
 mockNuxtImport('useFeatureMatchMenuItems', () => () => ref([]));
 
 // ── Control stubs: each renders one driveable control carrying what it offers ──
@@ -136,7 +228,9 @@ mockNuxtImport('useFeatureMatchMenuItems', () => () => ref([]));
 const FIELD_LABEL = Symbol('form-field-label');
 
 const UFormFieldStub = defineComponent({
-	props: { label: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+	},
 	setup(props, { slots }) {
 		provide(FIELD_LABEL, () => props.label);
 		return () => h('div', slots.default?.());
@@ -169,7 +263,9 @@ function controlStub(kind: ControlKind, next: (props: Record<string, any>) => un
 				'data-min': props.min,
 				'data-max': props.max,
 				'data-step': props.step,
-				'data-values': props.items ? JSON.stringify((props.items as OptionItem[]).map(item => item.value)) : undefined,
+				'data-values': props.items
+					? JSON.stringify((props.items as OptionItem[]).map(item => item.value))
+					: undefined,
 				'onClick': () => emit('update:modelValue', next(props)),
 			});
 		},
@@ -182,13 +278,17 @@ function differentItem(props: Record<string, any>) {
 }
 
 const stubs = {
-	ScreenSettingsCard: defineComponent({ setup: (_, { slots }) => () => h('section', slots.default?.()) }),
+	ScreenSettingsCard: defineComponent({
+		setup: (_, { slots }) => () => h('section', slots.default?.()),
+	}),
 	ScreenSettingsToggle: controlStub('toggle', props => !props.modelValue),
 	UFormField: UFormFieldStub,
 	UInputNumber: controlStub('number', props => (Number(props.modelValue) || 0) + 1),
 	USelect: controlStub('select', differentItem),
 	UISegmentedTabs: controlStub('select', differentItem),
-	UINinePointPicker: controlStub('select', props => (props.modelValue === 'bottom-left' ? 'bottom-right' : 'bottom-left')),
+	UINinePointPicker: controlStub('select', props => (props.modelValue === 'bottom-left'
+		? 'bottom-right'
+		: 'bottom-left')),
 	UIColorPicker: controlStub('color', () => '#010203'),
 	UInput: controlStub('text', () => 'Guard'),
 	UTabs: true,
@@ -246,13 +346,18 @@ function contractEditorFields(mode: ScreenMode): Map<string, ScreenModeConfigFie
 }
 
 function numberAttr(value: string | undefined): number | undefined {
-	return value === undefined ? undefined : Number(value);
+	return value === undefined
+		? undefined
+		: Number(value);
 }
 
 async function mountEditor(editor: string) {
 	const { default: Settings } = await import(`../../../../../app/components/Screen/Modes/${editor}/Settings.vue`);
 	const wrapper = mount(Settings, {
-		props: { screen: { id: 1 } as Screen, eventId: 1 },
+		props: {
+			screen: { id: 1 } as Screen,
+			eventId: 1,
+		},
 		global: { stubs },
 	});
 	await flushPromises();
@@ -282,7 +387,10 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 		const rendered = new Set<string>();
 
 		for (const variant of entry.variants) {
-			const initial = { ...getDefaultConfigForMode(mode), ...variant } as Record<string, unknown>;
+			const initial = {
+				...getDefaultConfigForMode(mode),
+				...variant,
+			} as Record<string, unknown>;
 			config.value = structuredClone(initial);
 			const wrapper = await mountEditor(entry.editor);
 			const count = wrapper.findAll('[data-guard-control]').length;
@@ -310,12 +418,18 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 				// Labelled by its field, visibly or, inside a group of controls, by its accessible name.
 				expect([label, ariaLabel], `${where}: label`).toContain(field!.label);
 				if (field!.control === 'number') {
-					expect({ min: numberAttr(min), max: numberAttr(max), step: numberAttr(step) }, `${where}: bounds`)
+					expect({
+						min: numberAttr(min),
+						max: numberAttr(max),
+						step: numberAttr(step),
+					}, `${where}: bounds`)
 						.toEqual({ min: field!.min, max: field!.max, step: field!.step });
 				}
 				if (field!.control === 'select' && values) {
 					const notOffered = OPTIONS_NOT_OFFERED[`${mode}.${key}`] ?? [];
-					expect([...new Set(JSON.parse(values) as string[])].sort(), `${where}: options`)
+					expect([
+						...new Set(JSON.parse(values) as string[]),
+					].sort(), `${where}: options`)
 						.toEqual(field!.values!.filter(value => !notOffered.includes(value)).sort());
 				}
 				rendered.add(key);
@@ -323,6 +437,8 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 			wrapper.unmount();
 		}
 
-		expect([...fields.keys()].filter(key => !rendered.has(key)), `${mode} editor fields never rendered`).toEqual([]);
+		expect([
+			...fields.keys(),
+		].filter(key => !rendered.has(key)), `${mode} editor fields never rendered`).toEqual([]);
 	});
 });

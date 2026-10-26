@@ -78,7 +78,9 @@ export function playerDeckUnresolvedCardService() {
 		return rows.map((row) => {
 			const reviewed = row.archetypeName != null && hasReviewedPlayerDeckDetails(
 				{ archetypeId: row.deckArchetypeId, reviewedAt: row.reviewedAt },
-				row.archetypeId == null ? null : { id: row.archetypeId },
+				row.archetypeId == null
+					? null
+					: { id: row.archetypeId },
 			);
 			const {
 				deckArchetypeId: _deckArchetypeId,

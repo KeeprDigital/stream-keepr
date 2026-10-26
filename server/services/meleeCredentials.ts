@@ -38,7 +38,9 @@ function optionalConfigString(value: unknown): string {
 	if (typeof value === 'string')
 		return value.trim();
 
-	return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
+	return typeof value === 'number' && Number.isFinite(value)
+		? String(value)
+		: '';
 }
 
 /**
@@ -159,7 +161,9 @@ export function meleeKeyringConfigurationFaultSentence(cause: unknown): string |
 	if (!cause || typeof cause !== 'object' || !('code' in cause))
 		return null;
 	const code = (cause as { code: unknown }).code;
-	return typeof code === 'string' ? KEYRING_CONFIGURATION_FAULT_SENTENCES[code] ?? null : null;
+	return typeof code === 'string'
+		? KEYRING_CONFIGURATION_FAULT_SENTENCES[code] ?? null
+		: null;
 }
 
 /** Encrypt a newly supplied client secret before it crosses the persistence boundary. */

@@ -29,7 +29,9 @@ export function wasmModulePlugin(name: string): Plugin {
 			if (source.startsWith(virtualPrefix) || !wasmRequest.test(source))
 				return null;
 			const resolved = await this.resolve(source.replace(/\?.*$/, ''), importer, { skipSelf: true });
-			return resolved ? `${virtualPrefix}${resolved.id}` : null;
+			return resolved
+				? `${virtualPrefix}${resolved.id}`
+				: null;
 		},
 		async load(id) {
 			if (!id.startsWith(virtualPrefix))
@@ -38,7 +40,9 @@ export function wasmModulePlugin(name: string): Plugin {
 			while (fileName.startsWith(virtualPrefix))
 				fileName = fileName.slice(virtualPrefix.length);
 			const encoded = (await readFile(
-				fileName.startsWith('file:') ? new URL(fileName) : fileName,
+				fileName.startsWith('file:')
+					? new URL(fileName)
+					: fileName,
 			)).toString('base64');
 			return `
 				const bytes = Uint8Array.from(atob('${encoded}'), character => character.charCodeAt(0));

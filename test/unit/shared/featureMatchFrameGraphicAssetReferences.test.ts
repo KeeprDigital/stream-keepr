@@ -10,7 +10,10 @@ function asset(assetId: string, revisionId: string): ScreenMediaSource {
 
 function layoutWithFrame(frame: Partial<FeatureMatchLayoutConfig['frame']>): FeatureMatchLayoutConfig {
 	const layout = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout);
-	layout.frame = { ...layout.frame, ...frame };
+	layout.frame = {
+		...layout.frame,
+		...frame,
+	};
 	layout.composition.items = [];
 	return layout;
 }
@@ -24,19 +27,35 @@ describe('the Feature Match Overlay Frame’s own media references', () => {
 	it('publishes a library-sourced Frame image and Frame video, each named by its slot', () => {
 		const references = featureMatchLayoutGraphicAssetReferences(layoutWithFrame({
 			backgroundImage: asset('plate', 'plate-1'),
-			mediaBackground: { ...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG, enabled: true, source: asset('loop', 'loop-2') },
+			mediaBackground: {
+				...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG,
+				enabled: true,
+				source: asset('loop', 'loop-2'),
+			},
 		}));
 
 		expect(references).toEqual([
-			{ reference: { assetId: 'plate', revisionId: 'plate-1' }, ownerSlot: 'layout.frame.backgroundImage', kind: 'image' },
-			{ reference: { assetId: 'loop', revisionId: 'loop-2' }, ownerSlot: 'layout.frame.mediaBackground.source', kind: 'silent-video' },
+			{
+				reference: { assetId: 'plate', revisionId: 'plate-1' },
+				ownerSlot: 'layout.frame.backgroundImage',
+				kind: 'image',
+			},
+			{
+				reference: { assetId: 'loop', revisionId: 'loop-2' },
+				ownerSlot: 'layout.frame.mediaBackground.source',
+				kind: 'silent-video',
+			},
 		]);
 	});
 
 	it('publishes nothing for Remote Media URLs', () => {
 		const references = featureMatchLayoutGraphicAssetReferences(layoutWithFrame({
 			backgroundImage: { kind: 'url', url: 'https://cdn.example.com/plate.png' },
-			mediaBackground: { ...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG, enabled: true, source: { kind: 'url', url: '/video/loop.mp4' } },
+			mediaBackground: {
+				...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG,
+				enabled: true,
+				source: { kind: 'url', url: '/video/loop.mp4' },
+			},
 		}));
 
 		expect(references).toEqual([]);
@@ -46,7 +65,11 @@ describe('the Feature Match Overlay Frame’s own media references', () => {
 		// As a disabled Background Layer: a display state, so the pinned revision
 		// stays resolvable for the re-enable.
 		const references = featureMatchLayoutGraphicAssetReferences(layoutWithFrame({
-			mediaBackground: { ...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG, enabled: false, source: asset('loop', 'loop-2') },
+			mediaBackground: {
+				...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG,
+				enabled: false,
+				source: asset('loop', 'loop-2'),
+			},
 		}));
 
 		expect(references.map(item => item.ownerSlot)).toEqual(['layout.frame.mediaBackground.source']);

@@ -116,7 +116,9 @@ export function broadcastGraphicsCommandAppliedPayload(
 		commandType: result.commandType,
 	};
 
-	const change = previous ? broadcastGraphicsLiveStateChange(previous, result.currentState) : null;
+	const change = previous
+		? broadcastGraphicsLiveStateChange(previous, result.currentState)
+		: null;
 	if (change === null)
 		return announcement;
 
@@ -128,5 +130,7 @@ export function broadcastGraphicsCommandAppliedPayload(
 		originConnectionId,
 	);
 
-	return bytes <= MAX_REALTIME_MESSAGE_BYTES ? carried : announcement;
+	return bytes <= MAX_REALTIME_MESSAGE_BYTES
+		? carried
+		: announcement;
 }

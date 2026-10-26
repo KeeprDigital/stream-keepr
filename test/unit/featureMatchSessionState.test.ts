@@ -66,7 +66,10 @@ describe('feature match session turn and overtime rules', () => {
 	});
 
 	it('preserves the historical turn-zero transition and rewind boundary', () => {
-		const state = { ...turnState(), turnNumber: 0 };
+		const state = {
+			...turnState(),
+			turnNumber: 0,
+		};
 		const otherPlayerAtTurnZero = applyFeatureMatchTurnStep(state, 1);
 
 		expect(otherPlayerAtTurnZero).toMatchObject({

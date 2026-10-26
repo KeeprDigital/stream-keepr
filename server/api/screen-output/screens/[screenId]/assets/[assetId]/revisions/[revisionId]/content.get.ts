@@ -11,7 +11,9 @@ const paramsSchema = z.object({
 });
 
 function cookieCapability(value: string | undefined): string | undefined {
-	return /^[\w-]{20,200}$/.test(value ?? '') ? value : undefined;
+	return /^[\w-]{20,200}$/.test(value ?? '')
+		? value
+		: undefined;
 }
 
 export default defineEventHandler(async (event) => {

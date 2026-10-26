@@ -18,7 +18,9 @@ import { graphicsAuthoringLeaseModule } from './index';
  */
 
 export function graphicsTemplateLeaseRef(templateId: string): GraphicsAuthoringLeaseRef {
-	return { artifact: graphicsTemplateArtifact(templateId) };
+	return {
+		artifact: graphicsTemplateArtifact(templateId),
+	};
 }
 
 /**

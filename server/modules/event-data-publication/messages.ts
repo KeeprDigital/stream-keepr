@@ -21,13 +21,34 @@ type MessageOf<T extends MessageType> = Extract<EventDataMessage, { type: T }>;
  */
 export const featureMatchMessages = {
 	slotUpdated: (slot: DbFeatureMatchWithSession): MessageOf<'featureMatch:updated'> =>
-		({ type: 'featureMatch:updated', payload: { featureMatch: mapFeatureMatchToResponse(slot) } }),
+		({
+			type: 'featureMatch:updated',
+			payload: {
+				featureMatch: mapFeatureMatchToResponse(slot),
+			},
+		}),
 	assignmentCreated: (assignment: DbFeatureMatchAssignment): MessageOf<'featureMatchAssignment:created'> =>
-		({ type: 'featureMatchAssignment:created', payload: { featureMatchAssignment: mapFeatureMatchAssignmentToResponse(assignment) } }),
+		({
+			type: 'featureMatchAssignment:created',
+			payload: {
+				featureMatchAssignment: mapFeatureMatchAssignmentToResponse(assignment),
+			},
+		}),
 	assignmentUpdated: (assignment: DbFeatureMatchAssignment): MessageOf<'featureMatchAssignment:updated'> =>
-		({ type: 'featureMatchAssignment:updated', payload: { featureMatchAssignment: mapFeatureMatchAssignmentToResponse(assignment) } }),
+		({
+			type: 'featureMatchAssignment:updated',
+			payload: {
+				featureMatchAssignment: mapFeatureMatchAssignmentToResponse(assignment),
+			},
+		}),
 	assignmentDeleted: (id: number): MessageOf<'featureMatchAssignment:deleted'> =>
-		({ type: 'featureMatchAssignment:deleted', payload: { featureMatchAssignmentId: id } }),
+		({
+			type: 'featureMatchAssignment:deleted',
+			payload: { featureMatchAssignmentId: id },
+		}),
 	sessionStarted: (session: DbFeatureMatchSession): MessageOf<'featureMatchSession:eventApplied'> =>
-		({ type: 'featureMatchSession:eventApplied', payload: mapFeatureMatchSessionToStarted(session) }),
+		({
+			type: 'featureMatchSession:eventApplied',
+			payload: mapFeatureMatchSessionToStarted(session),
+		}),
 };

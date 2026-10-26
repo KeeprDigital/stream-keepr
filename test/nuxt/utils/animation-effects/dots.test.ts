@@ -11,13 +11,22 @@ import { createDotsDelegate } from '~/utils/animation-effects/dots';
  */
 
 function mountDelegate(overrides: Partial<AnimationEffectParams<'dots'>> = {}) {
-	const params = { ...animationEffectDefaultParams('dots'), ...overrides };
+	const params = {
+		...animationEffectDefaultParams('dots'),
+		...overrides,
+	};
 	const delegate = createDotsDelegate();
 	const scene = new THREE.Scene();
 	const camera = delegate.createCamera(THREE, { width: 800, height: 450 });
 	const context = { three: THREE, scene, camera };
 	delegate.build({ ...context, params });
-	return { delegate, scene, camera: camera as THREE.PerspectiveCamera, context, params };
+	return {
+		delegate,
+		scene,
+		camera: camera as THREE.PerspectiveCamera,
+		context,
+		params,
+	};
 }
 
 function starField(scene: THREE.Scene): THREE.Points {
@@ -133,14 +142,26 @@ describe('createDotsDelegate', () => {
 	it('clears to the background colour the fork\'s base cleared to', () => {
 		const { scene, delegate, context, params } = mountDelegate();
 		expect((scene.background as THREE.Color).getHexString()).toBe(params.backgroundColor.slice(1));
-		delegate.applyParams({ ...context, params: { ...params, backgroundColor: '#224466' } });
+		delegate.applyParams({
+			...context,
+			params: { ...params, backgroundColor: '#224466' },
+		});
 		expect((scene.background as THREE.Color).getHexString()).toBe('224466');
 	});
 
 	it('applies colours, size, and spacing to the live scene without a rebuild', () => {
 		const { delegate, scene, context, params } = mountDelegate();
 		const stars = starField(scene);
-		delegate.applyParams({ ...context, params: { ...params, dotColor: '#123456', lineColor: '#654321', size: 7, spacing: 50 } });
+		delegate.applyParams({
+			...context,
+			params: {
+				...params,
+				dotColor: '#123456',
+				lineColor: '#654321',
+				size: 7,
+				spacing: 50,
+			},
+		});
 		const material = stars.material as THREE.PointsMaterial;
 		expect(material.color.getHexString()).toBe('123456');
 		expect(material.size).toBe(7);
@@ -153,9 +174,15 @@ describe('createDotsDelegate', () => {
 	it('adds and removes the line segments as showLines toggles live', () => {
 		const { delegate, scene, context, params } = mountDelegate();
 		expect(linesMesh(scene)).toBeDefined();
-		delegate.applyParams({ ...context, params: { ...params, showLines: false } });
+		delegate.applyParams({
+			...context,
+			params: { ...params, showLines: false },
+		});
 		expect(linesMesh(scene)).toBeUndefined();
-		delegate.applyParams({ ...context, params: { ...params, showLines: true } });
+		delegate.applyParams({
+			...context,
+			params: { ...params, showLines: true },
+		});
 		expect(linesMesh(scene)).toBeDefined();
 	});
 });

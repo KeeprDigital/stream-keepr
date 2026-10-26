@@ -78,5 +78,11 @@ export function animationEffectPresetService() {
 		return removed.length === 1;
 	};
 
-	return { findAll, findById, create, update, remove };
+	return {
+		findAll,
+		findById,
+		create,
+		update,
+		remove,
+	};
 }

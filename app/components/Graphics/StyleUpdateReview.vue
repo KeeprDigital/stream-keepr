@@ -85,7 +85,9 @@ async function refresh() {
 	}
 	catch (caught) {
 		review.value = null;
-		error.value = caught instanceof Error ? caught.message : 'The style update could not be read';
+		error.value = caught instanceof Error
+			? caught.message
+			: 'The style update could not be read';
 	}
 	finally {
 		busy.value = false;

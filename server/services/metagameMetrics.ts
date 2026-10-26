@@ -35,7 +35,11 @@ export function computeBoardScopedCardMetrics(
 	return {
 		deckCount,
 		totalCopies,
-		inclusionRate: totalDecks > 0 ? Math.round((deckCount / totalDecks) * 10000) / 100 : 0,
-		avgCopies: deckCount > 0 ? Math.round((totalCopies / deckCount) * 100) / 100 : 0,
+		inclusionRate: totalDecks > 0
+			? Math.round((deckCount / totalDecks) * 10000) / 100
+			: 0,
+		avgCopies: deckCount > 0
+			? Math.round((totalCopies / deckCount) * 100) / 100
+			: 0,
 	};
 }

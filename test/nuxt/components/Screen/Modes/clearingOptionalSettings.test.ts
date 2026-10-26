@@ -26,24 +26,70 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	saveError: ref(null),
 	updateConfig: (patch: Record<string, unknown>) => {
 		writes.push(patch);
-		config.value = { ...config.value, ...patch };
+		config.value = {
+			...config.value,
+			...patch,
+		};
 	},
 	resetConfig: vi.fn(),
 	retry: vi.fn(),
 }));
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn(async () => ({ history: [], matches: [] })) }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(async () => ({ history: [], matches: [] })),
+}));
 mockNuxtImport('$fetch', () => mockFetch);
 
-const loaded = { isLoaded: true, $reset: vi.fn() };
-mockNuxtImport('usePlayerStore', () => () => ({ ...loaded, players: [{ id: 5, name: 'Ada' }], loadPlayersByEventId: vi.fn() }));
-mockNuxtImport('usePlayerListStore', () => () => ({ ...loaded, lists: [{ id: 7, name: 'Feature Table', memberCount: 4 }], loadByEventId: vi.fn() }));
-mockNuxtImport('useRoundStore', () => () => ({ ...loaded, rounds: [{ id: 31, name: 'Round 4' }], loadRoundsByEventId: vi.fn() }));
-mockNuxtImport('useArchetypeStore', () => () => ({ ...loaded, archetypes: [{ id: 4, name: 'Mono Red' }], loadByEventId: vi.fn() }));
-mockNuxtImport('usePhaseStore', () => () => ({ ...loaded, phases: [{ id: 3, name: 'Top 8', sortOrder: 1 }], loadPhasesByEventId: vi.fn() }));
-mockNuxtImport('useEventStore', () => () => ({ event: { id: 1, game: 'mtg' }, $reset: vi.fn() }));
-mockNuxtImport('useFeatureMatchStore', () => () => ({ ...loaded, loadFeatureMatchesByEventId: vi.fn() }));
-mockNuxtImport('useFeatureMatchMenuItems', () => () => ref([{ label: 'Table 1', value: 4 }]));
+const loaded = {
+	isLoaded: true,
+	$reset: vi.fn(),
+};
+mockNuxtImport('usePlayerStore', () => () => ({
+	...loaded,
+	players: [
+		{ id: 5, name: 'Ada' },
+	],
+	loadPlayersByEventId: vi.fn(),
+}));
+mockNuxtImport('usePlayerListStore', () => () => ({
+	...loaded,
+	lists: [
+		{ id: 7, name: 'Feature Table', memberCount: 4 },
+	],
+	loadByEventId: vi.fn(),
+}));
+mockNuxtImport('useRoundStore', () => () => ({
+	...loaded,
+	rounds: [
+		{ id: 31, name: 'Round 4' },
+	],
+	loadRoundsByEventId: vi.fn(),
+}));
+mockNuxtImport('useArchetypeStore', () => () => ({
+	...loaded,
+	archetypes: [
+		{ id: 4, name: 'Mono Red' },
+	],
+	loadByEventId: vi.fn(),
+}));
+mockNuxtImport('usePhaseStore', () => () => ({
+	...loaded,
+	phases: [
+		{ id: 3, name: 'Top 8', sortOrder: 1 },
+	],
+	loadPhasesByEventId: vi.fn(),
+}));
+mockNuxtImport('useEventStore', () => () => ({
+	event: { id: 1, game: 'mtg' },
+	$reset: vi.fn(),
+}));
+mockNuxtImport('useFeatureMatchStore', () => () => ({
+	...loaded,
+	loadFeatureMatchesByEventId: vi.fn(),
+}));
+mockNuxtImport('useFeatureMatchMenuItems', () => () => ref([
+	{ label: 'Table 1', value: 4 },
+]));
 
 // ── Controls, each found by the label of the form field around it ──
 
@@ -51,7 +97,9 @@ const FIELD_LABEL = Symbol('form-field-label');
 const clearers = new Map<string, () => void>();
 
 const UFormFieldStub = defineComponent({
-	props: { label: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+	},
 	setup(props, { slots }) {
 		provide(FIELD_LABEL, () => props.label);
 		return () => h('div', slots.default?.());
@@ -62,7 +110,9 @@ const UFormFieldStub = defineComponent({
 function clearableStub(cleared: unknown) {
 	return defineComponent({
 		inheritAttrs: false,
-		props: { modelValue: { type: null, required: false } },
+		props: {
+			modelValue: { type: null, required: false },
+		},
 		emits: ['update:modelValue'],
 		setup(_, { emit }) {
 			const label = inject<() => string | undefined>(FIELD_LABEL, () => undefined)();
@@ -83,10 +133,15 @@ afterEach(() => {
 async function mountEditor(editor: string) {
 	const { default: Settings } = await import(`../../../../../app/components/Screen/Modes/${editor}/Settings.vue`);
 	const wrapper = mount(Settings, {
-		props: { screen: { id: 1 } as Screen, eventId: 1 },
+		props: {
+			screen: { id: 1 } as Screen,
+			eventId: 1,
+		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: defineComponent({ setup: (_, { slots }) => () => h('section', slots.default?.()) }),
+				ScreenSettingsCard: defineComponent({
+					setup: (_, { slots }) => () => h('section', slots.default?.()),
+				}),
 				ScreenSettingsToggle: true,
 				ScreenColumnConfigEditor: true,
 				ScreenColumnVisibilityList: true,
@@ -112,45 +167,90 @@ async function mountEditor(editor: string) {
 type ClearableField = [label: string, field: string, storedValue: unknown];
 
 describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
-	['Metagame', 'metagame', { viewMode: 'cards', scope: 'playerList' }, [
-		['Archetype filter', 'archetypeFilter', 'Rakdos Midrange'],
-		['Custom header text', 'headerText', 'Day 2 Metagame'],
-		['Select list', 'playerListId', 7],
-	]],
-	['TopCards', 'top-cards', { scope: 'playerList' }, [
-		['Archetype filter', 'archetypeFilter', 'Azorius Control'],
-		['Custom header text', 'headerText', 'Top Cards'],
-		['Select list', 'playerListId', 7],
-	]],
-	['Standings', 'standings', { viewMode: 'watchlist' }, [
-		['Custom header text', 'headerText', 'Final Standings'],
-		['Select list', 'playerListId', 7],
-	]],
-	['PlayerHistory', 'player-history', {}, [
-		['Custom header text', 'headerText', 'Match History'],
-		['Player', 'playerId', 5],
-	]],
-	['Pairings', 'pairings', {}, [
-		['Custom header text', 'headerText', 'Top Tables'],
-		['Round', 'roundId', 31],
-	]],
-	['HeadToHead', 'head-to-head', {}, [
-		['Custom header text', 'headerText', 'Feature Match Preview'],
-		['Feature Match Slot', 'featureMatchId', 4],
-	]],
-	['HeadToHead', 'head-to-head', { playerSource: 'players' }, [
-		['First Player', 'player1Id', 7],
-		['Second Player', 'player2Id', 8],
-	]],
-	['TopCut', 'top-cut', {}, [
-		['Custom header text', 'headerText', 'Championship Bracket'],
-		['Phase', 'phaseId', 3],
-	]],
-	['ArchetypeSpotlight', 'archetype-spotlight', { scope: 'playerList' }, [
-		['Custom header text', 'headerText', 'Deck to Beat'],
-		['Archetype', 'archetypeId', 4],
-		['Select list', 'playerListId', 7],
-	]],
+	[
+		'Metagame',
+		'metagame',
+		{ viewMode: 'cards', scope: 'playerList' },
+		[
+			['Archetype filter', 'archetypeFilter', 'Rakdos Midrange'],
+			['Custom header text', 'headerText', 'Day 2 Metagame'],
+			['Select list', 'playerListId', 7],
+		],
+	],
+	[
+		'TopCards',
+		'top-cards',
+		{ scope: 'playerList' },
+		[
+			['Archetype filter', 'archetypeFilter', 'Azorius Control'],
+			['Custom header text', 'headerText', 'Top Cards'],
+			['Select list', 'playerListId', 7],
+		],
+	],
+	[
+		'Standings',
+		'standings',
+		{ viewMode: 'watchlist' },
+		[
+			['Custom header text', 'headerText', 'Final Standings'],
+			['Select list', 'playerListId', 7],
+		],
+	],
+	[
+		'PlayerHistory',
+		'player-history',
+		{},
+		[
+			['Custom header text', 'headerText', 'Match History'],
+			['Player', 'playerId', 5],
+		],
+	],
+	[
+		'Pairings',
+		'pairings',
+		{},
+		[
+			['Custom header text', 'headerText', 'Top Tables'],
+			['Round', 'roundId', 31],
+		],
+	],
+	[
+		'HeadToHead',
+		'head-to-head',
+		{},
+		[
+			['Custom header text', 'headerText', 'Feature Match Preview'],
+			['Feature Match Slot', 'featureMatchId', 4],
+		],
+	],
+	[
+		'HeadToHead',
+		'head-to-head',
+		{ playerSource: 'players' },
+		[
+			['First Player', 'player1Id', 7],
+			['Second Player', 'player2Id', 8],
+		],
+	],
+	[
+		'TopCut',
+		'top-cut',
+		{},
+		[
+			['Custom header text', 'headerText', 'Championship Bracket'],
+			['Phase', 'phaseId', 3],
+		],
+	],
+	[
+		'ArchetypeSpotlight',
+		'archetype-spotlight',
+		{ scope: 'playerList' },
+		[
+			['Custom header text', 'headerText', 'Deck to Beat'],
+			['Archetype', 'archetypeId', 4],
+			['Select list', 'playerListId', 7],
+		],
+	],
 ])('the %s settings editor', (editor, mode, variant, fields) => {
 	beforeEach(() => {
 		writes.length = 0;
@@ -158,7 +258,12 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 	});
 
 	it.each(fields)('writes a cleared "%s" as the null that deletes %s', async (label, field, storedValue) => {
-		config.value = { ...getDefaultConfigForMode(mode), showHeader: true, ...variant, [field]: storedValue };
+		config.value = {
+			...getDefaultConfigForMode(mode),
+			showHeader: true,
+			...variant,
+			[field]: storedValue,
+		};
 		await mountEditor(editor);
 
 		const clear = clearers.get(label);

@@ -94,7 +94,9 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		if (index === -1)
 			return;
 
-		const swapIndex = direction === 'up' ? index - 1 : index + 1;
+		const swapIndex = direction === 'up'
+			? index - 1
+			: index + 1;
 		if (swapIndex < 0 || swapIndex >= featureMatches.value.length)
 			return;
 

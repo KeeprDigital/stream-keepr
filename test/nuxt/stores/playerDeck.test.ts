@@ -1,7 +1,9 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 mockNuxtImport('$fetch', () => mockFetch);
 
 const mockReviewDeck = vi.fn();
@@ -10,10 +12,16 @@ const mockApplyArchetypeDeleted = vi.fn();
 const mockApplyReviewedDeck = vi.fn();
 const mockClearCachedDeck = vi.fn();
 const mockPlayerStore = reactive({ players: [] as any[] });
-const mockMetagameStore = { applyRemoteInvalidated: vi.fn() };
-const mockFeatureMatchStore = { loadFeatureMatchesByEventId: vi.fn() };
+const mockMetagameStore = {
+	applyRemoteInvalidated: vi.fn(),
+};
+const mockFeatureMatchStore = {
+	loadFeatureMatchesByEventId: vi.fn(),
+};
 
-mockNuxtImport('useApiHeaders', () => () => ({ getHeaders: () => ({}) }));
+mockNuxtImport('useApiHeaders', () => () => ({
+	getHeaders: () => ({}),
+}));
 mockNuxtImport('usePlayerDeckCache', () => () => ({
 	reviewDeck: mockReviewDeck,
 	applyArchetypeUpdated: mockApplyArchetypeUpdated,
@@ -57,7 +65,9 @@ describe('usePlayerDeckStore', () => {
 
 	it('loads stable submitted deck summaries for the review queue', async () => {
 		const importedDeck = deck();
-		mockFetch.mockResolvedValue({ decks: [importedDeck] });
+		mockFetch.mockResolvedValue({
+			decks: [importedDeck],
+		});
 		const store = usePlayerDeckStore();
 
 		await store.loadByEventId(1);
@@ -67,7 +77,10 @@ describe('usePlayerDeckStore', () => {
 	});
 
 	it('stores deck review state and updates the primary player projection', async () => {
-		const reviewedDeck = deck({ archetypeId: 5, reviewedAt: new Date() });
+		const reviewedDeck = deck({
+			archetypeId: 5,
+			reviewedAt: new Date(),
+		});
 		const player = { id: 2, archetypeId: null };
 		mockPlayerStore.players = [player];
 		mockReviewDeck.mockResolvedValue({
@@ -75,7 +88,9 @@ describe('usePlayerDeckStore', () => {
 			player: { id: 2, archetypeId: 5 },
 		});
 		const store = usePlayerDeckStore();
-		store.decks = [deck()] as any;
+		store.decks = [
+			deck(),
+		] as any;
 
 		await store.reviewDeck(1, 2, 10, 5);
 
@@ -87,8 +102,13 @@ describe('usePlayerDeckStore', () => {
 
 	it('applies reviews received from another realtime client', () => {
 		const store = usePlayerDeckStore();
-		store.decks = [deck()] as any;
-		const reviewedDeck = deck({ archetypeId: 5, reviewedAt: new Date() });
+		store.decks = [
+			deck(),
+		] as any;
+		const reviewedDeck = deck({
+			archetypeId: 5,
+			reviewedAt: new Date(),
+		});
 
 		store.applyRemoteReviewed({ deck: reviewedDeck as any });
 
@@ -98,10 +118,16 @@ describe('usePlayerDeckStore', () => {
 
 	it('drops the cached Deck Lists of every Player whose cards another client resolved, and only theirs (#648)', () => {
 		const store = usePlayerDeckStore();
-		const summaries = [deck(), deck({ id: 11, playerId: 3 })];
+		const summaries = [
+			deck(),
+			deck({ id: 11, playerId: 3 }),
+		];
 		store.decks = structuredClone(summaries) as any;
 
-		store.applyRemoteCardsResolved({ deckIds: [10], playerIds: [2] });
+		store.applyRemoteCardsResolved({
+			deckIds: [10],
+			playerIds: [2],
+		});
 
 		expect(mockClearCachedDeck).toHaveBeenCalledOnce();
 		expect(mockClearCachedDeck).toHaveBeenCalledWith(2);
@@ -117,7 +143,14 @@ describe('usePlayerDeckStore', () => {
 		};
 		mockPlayerStore.players = [player];
 		const store = usePlayerDeckStore();
-		store.decks = [deck({ archetypeId: 5, reviewedAt: new Date(), name: 'Old Name', colors: 'U' })] as any;
+		store.decks = [
+			deck({
+				archetypeId: 5,
+				reviewedAt: new Date(),
+				name: 'Old Name',
+				colors: 'U',
+			}),
+		] as any;
 
 		store.applyArchetypeUpdated({ id: 5, name: 'Reviewed Control', colors: 'WU' } as any);
 
@@ -137,7 +170,14 @@ describe('usePlayerDeckStore', () => {
 		};
 		mockPlayerStore.players = [player];
 		const store = usePlayerDeckStore();
-		store.decks = [deck({ archetypeId: 5, reviewedAt: new Date(), name: 'Reviewed Control', colors: 'WU' })] as any;
+		store.decks = [
+			deck({
+				archetypeId: 5,
+				reviewedAt: new Date(),
+				name: 'Reviewed Control',
+				colors: 'WU',
+			}),
+		] as any;
 
 		store.applyArchetypeDeleted(5);
 
@@ -161,12 +201,20 @@ describe('usePlayerDeckStore', () => {
 	 * Feature Match Slots (ADR-0024).
 	 */
 	describe.each([
-		['Event B', [2]],
-		['Event A, loaded again since', [2, 1]],
+		[
+			'Event B',
+			[2],
+		],
+		[
+			'Event A, loaded again since',
+			[2, 1],
+		],
 	])('a Deck review answered after the operator moved on to %s', (_, switches) => {
 		it('changes nothing and follows up on nothing', async () => {
 			const store = usePlayerDeckStore();
-			store.decks = [deck()] as any;
+			store.decks = [
+				deck(),
+			] as any;
 			const review = deferred<unknown>();
 			mockReviewDeck.mockReturnValueOnce(review.promise);
 
@@ -174,13 +222,23 @@ describe('usePlayerDeckStore', () => {
 			let shown!: ReturnType<typeof deck>[];
 			for (const eventId of switches) {
 				store.$reset();
-				shown = [deck({ eventId, name: `Loaded for ${eventId}` })];
-				mockFetch.mockResolvedValueOnce({ decks: structuredClone(shown) });
+				shown = [
+					deck({ eventId, name: `Loaded for ${eventId}` }),
+				];
+				mockFetch.mockResolvedValueOnce({
+					decks: structuredClone(shown),
+				});
 				await store.loadByEventId(eventId);
 			}
 			const player = { id: 2, archetypeId: null };
 			mockPlayerStore.players = [player];
-			review.resolve({ deck: deck({ archetypeId: 5, reviewedAt: new Date() }), player: { id: 2, archetypeId: 5 } });
+			review.resolve({
+				deck: deck({
+					archetypeId: 5,
+					reviewedAt: new Date(),
+				}),
+				player: { id: 2, archetypeId: 5 },
+			});
 			await reviewing;
 
 			expect(store.decks).toEqual(shown);

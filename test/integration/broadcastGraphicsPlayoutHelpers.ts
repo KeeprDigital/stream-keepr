@@ -38,33 +38,39 @@ export function integrationBroadcastGraphicWithInputs(
 		id,
 		name: `Graphic ${id}`,
 		inputs,
-		...(animation === undefined ? {} : { animation }),
-		items: [{
-			id: `${id}-text`,
-			label: 'Name',
-			type: 'text',
-			visible: true,
-			anchor: 'top-left',
-			x: 0,
-			y: 0,
-			width: 600,
-			height: 120,
-			text: '{name} — {title}',
-			typography: {
-				font: { kind: 'application', fontId: 'inter' },
-				fontSize: 48,
-				fontWeight: 700,
-				fontStyle: 'normal',
-				textTransform: 'none',
-				letterSpacing: 0,
-				lineHeight: 1.2,
-				textAlign: 'left',
-				color: '#ffffff',
+		...(animation === undefined
+			? {}
+			: { animation }),
+		items: [
+			{
+				id: `${id}-text`,
+				label: 'Name',
+				type: 'text',
+				visible: true,
+				anchor: 'top-left',
+				x: 0,
+				y: 0,
+				width: 600,
+				height: 120,
+				text: '{name} — {title}',
+				typography: {
+					font: { kind: 'application', fontId: 'inter' },
+					fontSize: 48,
+					fontWeight: 700,
+					fontStyle: 'normal',
+					textTransform: 'none',
+					letterSpacing: 0,
+					lineHeight: 1.2,
+					textAlign: 'left',
+					color: '#ffffff',
+				},
+				overflowPolicy: 'ellipsis',
+				minFontSize: 24,
+				placeholderStyles: {
+					title: { fontWeight: 300 },
+				},
 			},
-			overflowPolicy: 'ellipsis',
-			minFontSize: 24,
-			placeholderStyles: { title: { fontWeight: 300 } },
-		}],
+		],
 	};
 }
 
@@ -85,15 +91,33 @@ export function integrationGraphicAnimation(
 	});
 
 	return {
-		...(durations.enter === undefined ? {} : { enter: recipe(durations.enter) }),
-		...(durations.update === undefined ? {} : { update: recipe(durations.update) }),
-		...(durations.exit === undefined ? {} : { exit: recipe(durations.exit) }),
+		...(durations.enter === undefined
+			? {}
+			: {
+					enter: recipe(durations.enter),
+				}),
+		...(durations.update === undefined
+			? {}
+			: {
+					update: recipe(durations.update),
+				}),
+		...(durations.exit === undefined
+			? {}
+			: {
+					exit: recipe(durations.exit),
+				}),
 		// An on-screen recipe cycles rather than travelling once, so it carries a pause and
 		// a repetition the finite phases have no use for. Indefinite, because that is the
 		// case an exit has to be able to interrupt at any point in the excursion.
 		...(durations.onScreen === undefined
 			? {}
-			: { 'on-screen': { ...recipe(durations.onScreen), pause: 0, repeat: 'indefinite' as const } }),
+			: {
+					'on-screen': {
+						...recipe(durations.onScreen),
+						pause: 0,
+						repeat: 'indefinite' as const,
+					},
+				}),
 	};
 }
 
@@ -110,7 +134,11 @@ export function integrationBroadcastGraphicWithBindings(
 	sources: BroadcastGraphicConfig['sources'],
 	bindings: BroadcastGraphicConfig['bindings'],
 ): BroadcastGraphicConfig {
-	return { ...integrationBroadcastGraphicWithInputs(id, inputs), sources, bindings };
+	return {
+		...integrationBroadcastGraphicWithInputs(id, inputs),
+		sources,
+		bindings,
+	};
 }
 
 /** A text Graphic Input, staged and optional unless stated otherwise. */
@@ -177,29 +205,36 @@ export function integrationBroadcastGraphic(
 	return {
 		id,
 		name: `Graphic ${id}`,
-		...(animation === undefined ? {} : { animation }),
-		items: [{
-			id: `${id}-shape`,
-			label: 'Panel',
-			type: 'shape',
-			visible: true,
-			anchor: 'top-left',
-			x: 0,
-			y: 0,
-			width: 400,
-			height: 200,
-			// Written out rather than built from the shared factory: the integration
-			// project resolves no `~~` alias, so only type imports cross this boundary.
-			geometry: {
-				topLeft: SQUARE_CORNER,
-				topRight: SQUARE_CORNER,
-				bottomRight: SQUARE_CORNER,
-				bottomLeft: SQUARE_CORNER,
-				leftSlant: 0,
-				rightSlant: 0,
+		...(animation === undefined
+			? {}
+			: { animation }),
+		items: [
+			{
+				id: `${id}-shape`,
+				label: 'Panel',
+				type: 'shape',
+				visible: true,
+				anchor: 'top-left',
+				x: 0,
+				y: 0,
+				width: 400,
+				height: 200,
+				// Written out rather than built from the shared factory: the integration
+				// project resolves no `~~` alias, so only type imports cross this boundary.
+				geometry: {
+					topLeft: SQUARE_CORNER,
+					topRight: SQUARE_CORNER,
+					bottomRight: SQUARE_CORNER,
+					bottomLeft: SQUARE_CORNER,
+					leftSlant: 0,
+					rightSlant: 0,
+				},
+				surfaceStyle: {
+					fill: { type: 'solid', color: '#101014' },
+					fillOpacity: 1,
+				},
 			},
-			surfaceStyle: { fill: { type: 'solid', color: '#101014' }, fillOpacity: 1 },
-		}],
+		],
 	};
 }
 
@@ -216,7 +251,12 @@ export async function createBroadcastGraphicsScreen(
 			slug,
 			currentMode: 'broadcast-graphics',
 			modeConfigs: {
-				'broadcast-graphics': { graphics, ...(channels === undefined ? {} : { channels }) },
+				'broadcast-graphics': {
+					graphics,
+					...(channels === undefined
+						? {}
+						: { channels }),
+				},
 			},
 		},
 	});

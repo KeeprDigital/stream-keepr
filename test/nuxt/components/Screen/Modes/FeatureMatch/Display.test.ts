@@ -144,7 +144,10 @@ describe('screenFeatureMatchDisplay', () => {
 	it('only reserves the lower counter row when counters are shown', async () => {
 		config.value.featureMatchId = 1;
 		match.value = { id: 1, bestOf: 3, tableNumber: null };
-		matchState.value = { currentGame: 1, clock: { isRunning: false } };
+		matchState.value = {
+			currentGame: 1,
+			clock: { isRunning: false },
+		};
 
 		const wrapper = await mountComponent();
 		expect(wrapper.get('.match-layout').classes()).toContain('match-layout--with-counters');

@@ -155,7 +155,12 @@ export async function ensureAdminAccount(
 			password: request.password,
 			name: request.name?.trim() || email,
 		});
-		return { outcome: 'created', userId: created.id, email, grantedAdminRole: true };
+		return {
+			outcome: 'created',
+			userId: created.id,
+			email,
+			grantedAdminRole: true,
+		};
 	}
 
 	await port.setPassword(existing.id, request.password);
@@ -167,5 +172,10 @@ export async function ensureAdminAccount(
 		await port.setRoles(existing.id, [...existing.roles, ADMIN_ROLE]);
 	}
 
-	return { outcome: 'updated', userId: existing.id, email, grantedAdminRole };
+	return {
+		outcome: 'updated',
+		userId: existing.id,
+		email,
+		grantedAdminRole,
+	};
 }

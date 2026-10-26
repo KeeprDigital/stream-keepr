@@ -12,7 +12,10 @@ function document(overrides: Record<string, unknown> = {}) {
 		kind: ANIMATION_EFFECT_PRESET_DOCUMENT_KIND,
 		formatVersion: ANIMATION_EFFECT_PRESET_FORMAT_VERSION,
 		name: 'Slow cyan fog',
-		selection: { effect: 'fog', params: { speed: 0.4 } },
+		selection: {
+			effect: 'fog',
+			params: { speed: 0.4 },
+		},
 		...overrides,
 	});
 }
@@ -21,14 +24,20 @@ describe('the portable Animation Effect Preset document', () => {
 	it('encodes the versioned document that a second installation can decode', () => {
 		const encoded = encodeAnimationEffectPresetDocument({
 			name: 'Slow cyan fog',
-			selection: { effect: 'fog', params: { speed: 0.4 } },
+			selection: {
+				effect: 'fog',
+				params: { speed: 0.4 },
+			},
 		});
 
 		expect(JSON.parse(encoded)).toMatchObject({
 			kind: ANIMATION_EFFECT_PRESET_DOCUMENT_KIND,
 			formatVersion: ANIMATION_EFFECT_PRESET_FORMAT_VERSION,
 			name: 'Slow cyan fog',
-			selection: { effect: 'fog', params: expect.objectContaining({ speed: 0.4 }) },
+			selection: {
+				effect: 'fog',
+				params: expect.objectContaining({ speed: 0.4 }),
+			},
 		});
 		expect(decodeAnimationEffectPresetDocument(encoded)).toMatchObject({ success: true });
 	});
@@ -40,16 +49,40 @@ describe('the portable Animation Effect Preset document', () => {
 			success: true,
 			data: {
 				name: 'Slow cyan fog',
-				selection: { effect: 'fog', params: expect.objectContaining({ speed: 0.4 }) },
+				selection: {
+					effect: 'fog',
+					params: expect.objectContaining({ speed: 0.4 }),
+				},
 			},
 		});
 	});
 
 	it.each([
-		['another format version', { formatVersion: 2 }],
-		['a host field', { selection: { effect: 'fog', enabled: true } }],
-		['an unshipped effect', { selection: { effect: 'aurora' } }],
-		['an invalid effect parameter', { selection: { effect: 'fog', params: { speed: 99 } } }],
+		[
+			'another format version',
+			{ formatVersion: 2 },
+		],
+		[
+			'a host field',
+			{
+				selection: { effect: 'fog', enabled: true },
+			},
+		],
+		[
+			'an unshipped effect',
+			{
+				selection: { effect: 'aurora' },
+			},
+		],
+		[
+			'an invalid effect parameter',
+			{
+				selection: {
+					effect: 'fog',
+					params: { speed: 99 },
+				},
+			},
+		],
 	])('refuses %s', (_case, overrides) => {
 		expect(decodeAnimationEffectPresetDocument(document(overrides))).toMatchObject({
 			success: false,

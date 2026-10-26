@@ -16,9 +16,15 @@ describe('useScreenOutputCardDataHealth', () => {
 		mockScreenPresence.value.set(7, {
 			count: 3,
 			members: [
-				{ data: { cardData: 'degraded' } },
-				{ data: { cardData: 'complete' } },
-				{ data: { cardData: 'degraded' } },
+				{
+					data: { cardData: 'degraded' },
+				},
+				{
+					data: { cardData: 'complete' },
+				},
+				{
+					data: { cardData: 'degraded' },
+				},
 			],
 		});
 
@@ -28,7 +34,10 @@ describe('useScreenOutputCardDataHealth', () => {
 	it('treats an output reporting nothing as silent, not as degraded', () => {
 		mockScreenPresence.value.set(7, {
 			count: 2,
-			members: [{ data: {} }, {}],
+			members: [
+				{ data: {} },
+				{},
+			],
 		});
 
 		expect(useScreenOutputCardDataHealth(7).value).toBe(0);
@@ -39,8 +48,22 @@ describe('useScreenOutputCardDataHealth', () => {
 	});
 
 	it('scopes the count to the asked-for Screen', () => {
-		mockScreenPresence.value.set(7, { count: 1, members: [{ data: { cardData: 'degraded' } }] });
-		mockScreenPresence.value.set(8, { count: 1, members: [{ data: { cardData: 'complete' } }] });
+		mockScreenPresence.value.set(7, {
+			count: 1,
+			members: [
+				{
+					data: { cardData: 'degraded' },
+				},
+			],
+		});
+		mockScreenPresence.value.set(8, {
+			count: 1,
+			members: [
+				{
+					data: { cardData: 'complete' },
+				},
+			],
+		});
 
 		expect(useScreenOutputCardDataHealth(8).value).toBe(0);
 	});

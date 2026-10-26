@@ -21,7 +21,9 @@ const player2 = alias(players, 'match_player2');
 function matchSide(joinedName: string | null, playerId: number | null, slot: PlayerSlotData | null): ScreenOutputMatchSide | null {
 	if (joinedName != null && playerId != null)
 		return { id: playerId, name: joinedName };
-	return slot?.name ? { id: null, name: slot.name } : null;
+	return slot?.name
+		? { id: null, name: slot.name }
+		: null;
 }
 
 /**
@@ -78,5 +80,8 @@ export async function findRoundMatches(eventId: number, roundId: number): Promis
 		return null;
 
 	const byRound = await findMatchesByRound(eventId, [roundId]);
-	return { round: mapRoundToResponse(round), matches: byRound.get(roundId) ?? [] };
+	return {
+		round: mapRoundToResponse(round),
+		matches: byRound.get(roundId) ?? [],
+	};
 }

@@ -63,7 +63,9 @@ mockNuxtImport('useOverlay', () => () => ({
 	create: () => ({
 		open: (...args: unknown[]) => {
 			mockConfirmOpen(...args);
-			return { result: Promise.resolve(mockConfirmResult.value) };
+			return {
+				result: Promise.resolve(mockConfirmResult.value),
+			};
 		},
 	}),
 }));
@@ -85,7 +87,9 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	channelContexts: (
 		graphics: readonly BroadcastGraphicConfig[],
 		channels: readonly GraphicChannelConfig[] | undefined,
-	) => (channels?.length ? broadcastGraphicChannelContexts({ graphics, channels }) : {}),
+	) => (channels?.length
+		? broadcastGraphicChannelContexts({ graphics, channels })
+		: {}),
 	isPending: (_screenId: number, graphicId: string) => mockPendingGraphicIds.value.includes(graphicId),
 	playoutState: (
 		_screenId: number,
@@ -96,7 +100,9 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	) => broadcastGraphicPlayoutState(
 		mockLiveState.value,
 		graphicId,
-		graphic ? broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value, channel) : undefined,
+		graphic
+			? broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value, channel)
+			: undefined,
 	),
 	onAirGraphicIds: (
 		_screenId: number,
@@ -104,7 +110,9 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 		now?: number,
 		channels?: readonly GraphicChannelConfig[],
 	) => {
-		const contexts = channels?.length ? broadcastGraphicChannelContexts({ graphics, channels }) : {};
+		const contexts = channels?.length
+			? broadcastGraphicChannelContexts({ graphics, channels })
+			: {};
 		return onAirBroadcastGraphicIds(
 			mockLiveState.value,
 			graphics,
@@ -121,7 +129,9 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 		now?: number,
 		channels?: readonly GraphicChannelConfig[],
 	) => {
-		const contexts = channels?.length ? broadcastGraphicChannelContexts({ graphics, channels }) : {};
+		const contexts = channels?.length
+			? broadcastGraphicChannelContexts({ graphics, channels })
+			: {};
 		return Object.fromEntries(graphics.flatMap((graphic) => {
 			const projection = broadcastGraphicPhaseProjections(
 				mockLiveState.value,
@@ -130,7 +140,11 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 			);
 			// Empty means settled, and the real store leaves a settled graphic out of the
 			// map entirely so "is anything moving?" stays one question about the map's size.
-			return projection.length > 0 ? [[graphic.id, projection]] : [];
+			return projection.length > 0
+				? [
+						[graphic.id, projection],
+					]
+				: [];
 		}));
 	},
 	inputTraces: (_screenId: number, graphic: BroadcastGraphicConfig) =>
@@ -183,7 +197,12 @@ const mockPresence = ref<Array<{ data?: { assetAccess?: 'granted' | 'absent' } }
 
 mockNuxtImport('useScreenStore', () => () => ({
 	get screenPresence() {
-		return new Map([[3, { count: mockPresence.value.length, members: mockPresence.value }]]);
+		return new Map([
+			[
+				3,
+				{ count: mockPresence.value.length, members: mockPresence.value },
+			],
+		]);
 	},
 }));
 
@@ -193,22 +212,31 @@ const mockReferenceStatus = ref<GraphicAssetReferenceStatus>({
 	lifecycleState: 'active',
 	kind: 'image',
 });
-const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+const { mockApiFetch } = vi.hoisted(() => ({
+	mockApiFetch: vi.fn(),
+}));
 
 mockNuxtImport('$fetch', () => mockApiFetch);
 
 const UAlertStub = defineComponent({
-	props: { title: { type: String, required: false }, description: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+		description: { type: String, required: false },
+	},
 	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span></div>',
 });
 
 const ScreenSettingsCardStub = defineComponent({
-	props: { title: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+	},
 	template: '<section><h2>{{ title }}</h2><slot name="actions" :open="true" /><slot /></section>',
 });
 
 const UIEmptyStateStub = defineComponent({
-	props: { title: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+	},
 	template: '<div data-testid="empty-state">{{ title }}</div>',
 });
 
@@ -217,7 +245,9 @@ const UIconStub = defineComponent({ template: '<i />' });
 const UFieldGroupStub = defineComponent({ template: '<div><slot /></div>' });
 const UButtonStub = defineComponent({
 	name: 'UButton',
-	props: { disabled: { type: Boolean, default: false } },
+	props: {
+		disabled: { type: Boolean, default: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
@@ -302,17 +332,23 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		const wrapper = await mountComponent([
 			{
 				...slate,
-				inputs: [{
-					type: 'text',
-					key: 'name',
-					label: 'Name',
-					required: false,
-					updatePolicy: 'staged',
-					default: '',
-					maxLength: 200,
-				}],
-				sources: [{ key: 'player', label: 'Player', kind: 'player' }],
-				bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+				inputs: [
+					{
+						type: 'text',
+						key: 'name',
+						label: 'Name',
+						required: false,
+						updatePolicy: 'staged',
+						default: '',
+						maxLength: 200,
+					},
+				],
+				sources: [
+					{ key: 'player', label: 'Player', kind: 'player' },
+				],
+				bindings: [
+					{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+				],
 			},
 		], 'slate');
 
@@ -330,7 +366,12 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('lists every placed Broadcast Graphic with its Graphic Playout State', async () => {
-		mockLiveState.value = { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} };
+		mockLiveState.value = {
+			playout: {
+				slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+			},
+			inputs: {},
+		};
 
 		const wrapper = await mountComponent();
 
@@ -347,7 +388,12 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('takes a Broadcast Graphic off air', async () => {
-		mockLiveState.value = { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} };
+		mockLiveState.value = {
+			playout: {
+				slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+			},
+			inputs: {},
+		};
 		const wrapper = await mountComponent();
 
 		await entryFor(wrapper, 'slate').get('[data-testid="playout-out"]').trigger('click');
@@ -366,7 +412,12 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('keeps both actions available so a repeat converges on the operator’s latest intent', async () => {
-		mockLiveState.value = { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} };
+		mockLiveState.value = {
+			playout: {
+				slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+			},
+			inputs: {},
+		};
 		const wrapper = await mountComponent();
 		const entry = entryFor(wrapper, 'slate');
 
@@ -375,7 +426,13 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 	});
 
 	it('reports how many Broadcast Graphics are on air', async () => {
-		mockLiveState.value = { playout: { 'slate': { onAir: true, effectiveStartedAt: 0, cut: false }, 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} };
+		mockLiveState.value = {
+			playout: {
+				'slate': { onAir: true, effectiveStartedAt: 0, cut: false },
+				'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false },
+			},
+			inputs: {},
+		};
 
 		const wrapper = await mountComponent();
 
@@ -481,7 +538,9 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 
 		await entryFor(wrapper, 'slate').get('[data-testid="playout-select"]').trigger('click');
 
-		expect(wrapper.emitted('select')).toEqual([['slate']]);
+		expect(wrapper.emitted('select')).toEqual([
+			['slate'],
+		]);
 		expect(mockTake).not.toHaveBeenCalled();
 	});
 
@@ -498,24 +557,26 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		const withMedia: BroadcastGraphicConfig = {
 			id: 'slate',
 			name: 'Slate',
-			items: [{
-				type: 'media',
-				id: 'logo',
-				label: 'Sponsor',
-				visible: true,
-				anchor: 'top-left',
-				x: 0,
-				y: 0,
-				width: 100,
-				height: 100,
-				asset: { assetId: 'asset-1' as never, revisionId: 'revision-1' as never },
-				mediaKind: 'image',
-				fit: 'cover',
-				focalPosition: { horizontal: 0.5, vertical: 0.5 },
-				opacity: 1,
-				playbackRate: 1,
-				loop: true,
-			}],
+			items: [
+				{
+					type: 'media',
+					id: 'logo',
+					label: 'Sponsor',
+					visible: true,
+					anchor: 'top-left',
+					x: 0,
+					y: 0,
+					width: 100,
+					height: 100,
+					asset: { assetId: 'asset-1' as never, revisionId: 'revision-1' as never },
+					mediaKind: 'image',
+					fit: 'cover',
+					focalPosition: { horizontal: 0.5, vertical: 0.5 },
+					opacity: 1,
+					playbackRate: 1,
+					loop: true,
+				},
+			],
 		};
 
 		it('blocks Take on a Broadcast Graphic whose Graphic Asset Reference is missing, and says which item', async () => {
@@ -537,7 +598,12 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 
 		it('keeps Out available on an invalidated Broadcast Graphic, so it can leave air', async () => {
 			mockReferenceStatus.value = { outcome: 'missing' };
-			mockLiveState.value = { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} };
+			mockLiveState.value = {
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+				},
+				inputs: {},
+			};
 
 			const wrapper = await mountComponent([lowerThird, withMedia]);
 
@@ -584,7 +650,10 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 
 			// A new stack array with the same pinned revision, as an unrelated edit yields.
 			await wrapper.setProps({
-				graphics: [{ ...lowerThird, name: 'Renamed' }, { ...withMedia }],
+				graphics: [
+					{ ...lowerThird, name: 'Renamed' },
+					{ ...withMedia },
+				],
 			});
 
 			expect(entryFor(wrapper, 'slate').get('[data-testid="playout-take"]').attributes('disabled'))
@@ -621,7 +690,12 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 			const wrapper = await mountComponent();
 
 			const entry = entryFor(wrapper, 'slate');
-			for (const action of ['playout-take', 'playout-cut-take', 'playout-out', 'playout-cut-out'])
+			for (const action of [
+				'playout-take',
+				'playout-cut-take',
+				'playout-out',
+				'playout-cut-out',
+			])
 				expect(entry.get(`[data-testid="${action}"]`).attributes('disabled')).toBeDefined();
 		});
 
@@ -656,7 +730,12 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		it('holds its last known state rather than blanking the stack', async () => {
 			// Live Control shows the same thing a disconnected output shows: what was last
 			// accepted. A dropped websocket is not news about what is on air.
-			mockLiveState.value = { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} };
+			mockLiveState.value = {
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+				},
+				inputs: {},
+			};
 			const wrapper = await mountComponent();
 
 			mockConnectionState.value = 'disconnected';
@@ -739,8 +818,18 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		});
 	});
 	describe('a rundown organised by Graphic Channel', () => {
-		const alpha: BroadcastGraphicConfig = { id: 'alpha', name: 'Alpha', items: [], channelId: 'thirds' };
-		const bravo: BroadcastGraphicConfig = { id: 'bravo', name: 'Bravo', items: [], channelId: 'thirds' };
+		const alpha: BroadcastGraphicConfig = {
+			id: 'alpha',
+			name: 'Alpha',
+			items: [],
+			channelId: 'thirds',
+		};
+		const bravo: BroadcastGraphicConfig = {
+			id: 'bravo',
+			name: 'Bravo',
+			items: [],
+			channelId: 'thirds',
+		};
 		const thirds: GraphicChannelConfig = { id: 'thirds', name: 'Lower thirds', handoff: 'out-then-in' };
 
 		it('groups each Graphic Channel\'s members together and names its Handoff Policy', async () => {
@@ -758,7 +847,9 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		});
 
 		it('states a Graphic Channel that declares no policy as Overlap', async () => {
-			const wrapper = await mountComponent([alpha, bravo], null, [{ id: 'thirds', name: 'Lower thirds' }]);
+			const wrapper = await mountComponent([alpha, bravo], null, [
+				{ id: 'thirds', name: 'Lower thirds' },
+			]);
 
 			expect(wrapper.get('[data-testid="playout-channel-policy"]').text()).toBe('Overlap');
 		});
@@ -786,9 +877,19 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 				name,
 				items: [],
 				channelId: 'thirds',
-				animation: { exit: { duration: 500, easing: 'linear', delay: 0, fade: { opacity: 0 } } },
+				animation: {
+					exit: {
+						duration: 500,
+						easing: 'linear',
+						delay: 0,
+						fade: { opacity: 0 },
+					},
+				},
 			});
-			const wrapper = await mountComponent([animated('alpha', 'Alpha'), animated('bravo', 'Bravo')], null, [thirds]);
+			const wrapper = await mountComponent([
+				animated('alpha', 'Alpha'),
+				animated('bravo', 'Bravo'),
+			], null, [thirds]);
 
 			expect(entryFor(wrapper, 'bravo').attributes('data-playout-state')).toBe('waiting');
 			expect(entryFor(wrapper, 'alpha').attributes('data-playout-state')).toBe('exiting');

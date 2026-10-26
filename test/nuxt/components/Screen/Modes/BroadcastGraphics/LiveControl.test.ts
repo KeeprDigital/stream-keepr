@@ -35,7 +35,9 @@ const mockSupersededInputKeys = ref<string[]>([]);
 /** Why the last edit to one Graphic Input was refused, as the store holds it. */
 const mockInputRefusals = ref<Record<string, string>>({});
 /** The Graphics Asset Library's answer about one exact revision. */
-const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+const { mockApiFetch } = vi.hoisted(() => ({
+	mockApiFetch: vi.fn(),
+}));
 
 mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	setInput: mockSetInput,
@@ -81,41 +83,65 @@ mockNuxtImport('useGraphicBindingData', () => () => ({
 }));
 
 const ScreenSettingsCardStub = defineComponent({
-	props: { title: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+	},
 	template: '<section><h2>{{ title }}</h2><slot /></section>',
 });
 const UIEmptyStateStub = defineComponent({
-	props: { title: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+	},
 	template: '<div data-testid="empty-state">{{ title }}</div>',
 });
 const UAlertStub = defineComponent({
-	props: { title: { type: String, required: false }, description: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+		description: { type: String, required: false },
+	},
 	template: '<div>{{ title }} {{ description }}</div>',
 });
 const UBadgeStub = defineComponent({ template: '<span><slot /></span>' });
 const UFieldGroupStub = defineComponent({ template: '<div><slot /></div>' });
 const UButtonStub = defineComponent({
-	props: { disabled: { type: Boolean, default: false } },
+	props: {
+		disabled: { type: Boolean, default: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
 const UInputStub = defineComponent({
-	props: { modelValue: { type: [String, Number], default: '' } },
+	props: {
+		modelValue: {
+			type: [String, Number],
+			default: '',
+		},
+	},
 	emits: ['update:modelValue', 'blur'],
 	template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" @blur="$emit(\'blur\')" >',
 });
 const UInputNumberStub = defineComponent({
-	props: { modelValue: { type: Number, default: undefined } },
+	props: {
+		modelValue: { type: Number, default: undefined },
+	},
 	emits: ['update:modelValue'],
 	template: '<input type="number" :value="modelValue" @input="$emit(\'update:modelValue\', Number($event.target.value))" >',
 });
 const USwitchStub = defineComponent({
-	props: { modelValue: { type: Boolean, default: false } },
+	props: {
+		modelValue: { type: Boolean, default: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', !modelValue)" >',
 });
 const USelectStub = defineComponent({
-	props: { modelValue: { type: String, default: undefined }, items: { type: Array, default: () => [] } },
+	props: {
+		modelValue: { type: String, default: undefined },
+		items: {
+			type: Array,
+			default: () => [],
+		},
+	},
 	emits: ['update:modelValue'],
 	template: '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items" :key="item.value" :value="item.value">{{ item.label }}</option></select>',
 });
@@ -141,7 +167,10 @@ const GraphicsAssetFocusPickerStub = defineComponent({
 		modelValue: { type: Object, default: undefined },
 		eventId: { type: Number, required: true },
 		fieldLabel: { type: String, required: true },
-		assetKind: { type: [String, Array], default: 'image' },
+		assetKind: {
+			type: [String, Array],
+			default: 'image',
+		},
 		disabled: { type: Boolean, default: false },
 		clearable: { type: Boolean, default: true },
 	},
@@ -190,7 +219,13 @@ const BADGE: GraphicInputDeclaration = {
 };
 
 function graphic(inputs: GraphicInputDeclaration[], overrides: Partial<BroadcastGraphicConfig> = {}): BroadcastGraphicConfig {
-	return { id: 'lower-third', name: 'Lower Third', items: [], inputs, ...overrides };
+	return {
+		id: 'lower-third',
+		name: 'Lower Third',
+		items: [],
+		inputs,
+		...overrides,
+	};
 }
 
 async function mountComponent(
@@ -259,11 +294,52 @@ describe('broadcastGraphicsLiveControl', () => {
 	it('generates one type-appropriate field for each declared Graphic Input', async () => {
 		const wrapper = await mountComponent(graphic([
 			NAME,
-			{ type: 'number', key: 'score', label: 'Score', required: false, updatePolicy: 'live', default: 0, integer: true },
-			{ type: 'toggle', key: 'flag', label: 'Flag', required: false, updatePolicy: 'staged', default: false },
-			{ type: 'choice', key: 'side', label: 'Side', required: false, updatePolicy: 'staged', default: 'left', options: [{ value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }] },
-			{ type: 'color', key: 'accent', label: 'Accent', required: false, updatePolicy: 'staged', default: '#00d9ff' },
-			{ type: 'media', key: 'badge', label: 'Badge', required: false, updatePolicy: 'staged', default: null, mediaKind: 'image' },
+			{
+				type: 'number',
+				key: 'score',
+				label: 'Score',
+				required: false,
+				updatePolicy: 'live',
+				default: 0,
+				integer: true,
+			},
+			{
+				type: 'toggle',
+				key: 'flag',
+				label: 'Flag',
+				required: false,
+				updatePolicy: 'staged',
+				default: false,
+			},
+			{
+				type: 'choice',
+				key: 'side',
+				label: 'Side',
+				required: false,
+				updatePolicy: 'staged',
+				default: 'left',
+				options: [
+					{ value: 'left', label: 'Left' },
+					{ value: 'right', label: 'Right' },
+				],
+			},
+			{
+				type: 'color',
+				key: 'accent',
+				label: 'Accent',
+				required: false,
+				updatePolicy: 'staged',
+				default: '#00d9ff',
+			},
+			{
+				type: 'media',
+				key: 'badge',
+				label: 'Badge',
+				required: false,
+				updatePolicy: 'staged',
+				default: null,
+				mediaKind: 'image',
+			},
 		]));
 
 		expect(wrapper.findAll('[data-graphic-input]')).toHaveLength(6);
@@ -284,27 +360,43 @@ describe('broadcastGraphicsLiveControl', () => {
 		mockLiveState.value = {
 			...createInitialBroadcastGraphicsLiveState(),
 			socialProfileProjections: {
-				'lower-third': { profile: {
-					talent: { id: 7, name: 'Ava Reed' },
-					acceptedProfiles: [
-						{ network: 'twitch', networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
-						{ network: 'x', networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
-					],
-					currentNetwork: 'twitch',
-				} },
+				'lower-third': {
+					profile: {
+						talent: { id: 7, name: 'Ava Reed' },
+						acceptedProfiles: [
+							{
+								network: 'twitch',
+								networkLabel: 'Twitch',
+								handle: 'AvaLive',
+								profileUrl: 'https://www.twitch.tv/AvaLive',
+							},
+							{
+								network: 'x',
+								networkLabel: 'X',
+								handle: 'AvaCasts',
+								profileUrl: 'https://x.com/AvaCasts',
+							},
+						],
+						currentNetwork: 'twitch',
+					},
+				},
 			},
 		};
 		const wrapper = await mountComponent(graphic([], {
-			sources: [{ key: 'talent', label: 'Talent', kind: 'talent' }],
-			socialProfileProjections: [{
-				key: 'profile',
-				label: 'Social Profile',
-				sourceKey: 'talent',
-				presentationGroupId: 'profile-group',
-				dwellMs: 8_000,
-				transition: 'crossfade',
-				transitionDurationMs: 250,
-			}],
+			sources: [
+				{ key: 'talent', label: 'Talent', kind: 'talent' },
+			],
+			socialProfileProjections: [
+				{
+					key: 'profile',
+					label: 'Social Profile',
+					sourceKey: 'talent',
+					presentationGroupId: 'profile-group',
+					dwellMs: 8_000,
+					transition: 'crossfade',
+					transitionDurationMs: 250,
+				},
+			],
 		}));
 		const control = wrapper.get('[data-social-profile-projection="profile"]');
 
@@ -330,38 +422,55 @@ describe('broadcastGraphicsLiveControl', () => {
 
 	it('labels staged Social Profile changes separately and offers Update without exposing pending-only choices', async () => {
 		mockLiveState.value = {
-			playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
+			playout: {
+				'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false },
+			},
 			inputs: {},
-			sources: { 'lower-third': { talent: 7 } },
+			sources: {
+				'lower-third': { talent: 7 },
+			},
 			socialProfileProjections: {
-				'lower-third': { profile: {
-					talent: { id: 7, name: 'Ava Reed' },
-					acceptedProfiles: [{
-						network: 'twitch',
-						networkLabel: 'Twitch',
-						handle: 'AcceptedLive',
-						profileUrl: 'https://www.twitch.tv/AcceptedLive',
-					}],
-					currentNetwork: 'twitch',
-				} },
+				'lower-third': {
+					profile: {
+						talent: { id: 7, name: 'Ava Reed' },
+						acceptedProfiles: [
+							{
+								network: 'twitch',
+								networkLabel: 'Twitch',
+								handle: 'AcceptedLive',
+								profileUrl: 'https://www.twitch.tv/AcceptedLive',
+							},
+						],
+						currentNetwork: 'twitch',
+					},
+				},
 			},
 		};
 		mockBindingData.value = {
 			...createEmptyGraphicBindingDataSet(),
-			talents: { 7: { name: 'Ava Reed', socialProfiles: { youtube: 'PendingOnly' } } },
+			talents: {
+				7: {
+					name: 'Ava Reed',
+					socialProfiles: { youtube: 'PendingOnly' },
+				},
+			},
 		};
 		const wrapper = await mountComponent(graphic([], {
-			sources: [{ key: 'talent', label: 'Talent', kind: 'talent' }],
-			socialProfileProjections: [{
-				key: 'profile',
-				label: 'Social Profile',
-				sourceKey: 'talent',
-				presentationGroupId: 'profile-group',
-				dwellMs: 8_000,
-				transition: 'crossfade',
-				transitionDurationMs: 250,
-				updatePolicy: 'staged',
-			}],
+			sources: [
+				{ key: 'talent', label: 'Talent', kind: 'talent' },
+			],
+			socialProfileProjections: [
+				{
+					key: 'profile',
+					label: 'Social Profile',
+					sourceKey: 'talent',
+					presentationGroupId: 'profile-group',
+					dwellMs: 8_000,
+					transition: 'crossfade',
+					transitionDurationMs: 250,
+					updatePolicy: 'staged',
+				},
+			],
 		}), 'on-air');
 
 		const control = wrapper.get('[data-social-profile-projection="profile"]');
@@ -375,26 +484,40 @@ describe('broadcastGraphicsLiveControl', () => {
 		mockLiveState.value = {
 			...createInitialBroadcastGraphicsLiveState(),
 			socialProfileProjections: {
-				'lower-third': { profile: {
-					talent: { id: 7, name: 'Ava Reed' },
-					acceptedProfiles: [
-						{ network: 'twitch', networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
-						{ network: 'x', networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
-					],
-					currentNetwork: 'twitch',
-				} },
+				'lower-third': {
+					profile: {
+						talent: { id: 7, name: 'Ava Reed' },
+						acceptedProfiles: [
+							{
+								network: 'twitch',
+								networkLabel: 'Twitch',
+								handle: 'AvaLive',
+								profileUrl: 'https://www.twitch.tv/AvaLive',
+							},
+							{
+								network: 'x',
+								networkLabel: 'X',
+								handle: 'AvaCasts',
+								profileUrl: 'https://x.com/AvaCasts',
+							},
+						],
+						currentNetwork: 'twitch',
+					},
+				},
 			},
 		};
 		const wrapper = await mountComponent(graphic([], {
-			socialProfileProjections: [{
-				key: 'profile',
-				label: 'Social Profile',
-				sourceKey: 'talent',
-				presentationGroupId: 'profile-group',
-				dwellMs: 8_000,
-				transition: 'crossfade',
-				transitionDurationMs: 250,
-			}],
+			socialProfileProjections: [
+				{
+					key: 'profile',
+					label: 'Social Profile',
+					sourceKey: 'talent',
+					presentationGroupId: 'profile-group',
+					dwellMs: 8_000,
+					transition: 'crossfade',
+					transitionDurationMs: 250,
+				},
+			],
 		}), 'on-air', false, true);
 		const control = wrapper.get('[data-social-profile-projection="profile"]');
 
@@ -407,28 +530,46 @@ describe('broadcastGraphicsLiveControl', () => {
 
 	it.each([
 		['zero', [], undefined, 'Unavailable'],
-		['one', [{ network: 'twitch' as const, networkLabel: 'Twitch', handle: 'SoloLive', profileUrl: 'https://www.twitch.tv/SoloLive' }], 'twitch', 'Available'],
+		[
+			'one',
+			[
+				{
+					network: 'twitch' as const,
+					networkLabel: 'Twitch',
+					handle: 'SoloLive',
+					profileUrl: 'https://www.twitch.tv/SoloLive',
+				},
+			],
+			'twitch',
+			'Available',
+		],
 	] as const)('disables stepping for %s populated Social Profiles', async (_case, acceptedProfiles, currentNetwork, status) => {
 		mockLiveState.value = {
 			...createInitialBroadcastGraphicsLiveState(),
 			socialProfileProjections: {
-				'lower-third': { profile: {
-					talent: { id: 7, name: 'Solo Caster' },
-					acceptedProfiles: [...acceptedProfiles],
-					...(currentNetwork ? { currentNetwork } : {}),
-				} },
+				'lower-third': {
+					profile: {
+						talent: { id: 7, name: 'Solo Caster' },
+						acceptedProfiles: [...acceptedProfiles],
+						...(currentNetwork
+							? { currentNetwork }
+							: {}),
+					},
+				},
 			},
 		};
 		const wrapper = await mountComponent(graphic([], {
-			socialProfileProjections: [{
-				key: 'profile',
-				label: 'Social Profile',
-				sourceKey: 'talent',
-				presentationGroupId: 'profile-group',
-				dwellMs: 8_000,
-				transition: 'crossfade',
-				transitionDurationMs: 250,
-			}],
+			socialProfileProjections: [
+				{
+					key: 'profile',
+					label: 'Social Profile',
+					sourceKey: 'talent',
+					presentationGroupId: 'profile-group',
+					dwellMs: 8_000,
+					transition: 'crossfade',
+					transitionDurationMs: 250,
+				},
+			],
 		}));
 		const control = wrapper.get('[data-social-profile-projection="profile"]');
 
@@ -436,17 +577,31 @@ describe('broadcastGraphicsLiveControl', () => {
 		expect(control.get('[data-testid="live-control-social-profile-previous-profile"]').attributes('disabled')).toBeDefined();
 		expect(control.get('[data-testid="live-control-social-profile-next-profile"]').attributes('disabled')).toBeDefined();
 		expect(control.get('[data-testid="live-control-social-profile-profile"]').attributes('disabled'))
-			.toBe(acceptedProfiles.length === 0 ? '' : undefined);
+			.toBe(acceptedProfiles.length === 0
+				? ''
+				: undefined);
 	});
 
 	it('shows the latest bound value, the staged value, and the accepted on-air value apart', async () => {
 		mockLiveState.value = {
-			playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
-			inputs: { 'lower-third': { working: { name: 'Ava Reed' }, accepted: { name: 'Unnamed' }, acceptedRevision: 1 } },
+			playout: {
+				'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false },
+			},
+			inputs: {
+				'lower-third': {
+					working: { name: 'Ava Reed' },
+					accepted: { name: 'Unnamed' },
+					acceptedRevision: 1,
+				},
+			},
 		};
 
 		const wrapper = await mountComponent(
-			graphic([NAME], { bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }] }),
+			graphic([NAME], {
+				bindings: [
+					{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+				],
+			}),
 			'on-air',
 		);
 		const field = wrapper.get('[data-graphic-input="name"]');
@@ -464,7 +619,10 @@ describe('broadcastGraphicsLiveControl', () => {
 	it('generates one picker for each operator-selected Graphic Source Selection', async () => {
 		mockBindingData.value = {
 			...createEmptyGraphicBindingDataSet(),
-			players: { 1: { name: 'Ava Reed' }, 2: { name: 'Sam Ortiz' } },
+			players: {
+				1: { name: 'Ava Reed' },
+				2: { name: 'Sam Ortiz' },
+			},
 		};
 
 		const wrapper = await mountComponent(graphic([NAME], {
@@ -473,7 +631,12 @@ describe('broadcastGraphicsLiveControl', () => {
 				// Neither of these is picked: the current Event is the Screen's own, and a
 				// derived selection follows the one above it.
 				{ key: 'event', label: 'Event', kind: 'event' },
-				{ key: 'archetype', label: 'Archetype', kind: 'archetype', from: { sourceKey: 'player', relation: 'archetype' } },
+				{
+					key: 'archetype',
+					label: 'Archetype',
+					kind: 'archetype',
+					from: { sourceKey: 'player', relation: 'archetype' },
+				},
 			],
 		}));
 
@@ -484,10 +647,14 @@ describe('broadcastGraphicsLiveControl', () => {
 	it('selects and clears a Graphic Source Selection through the authoritative command', async () => {
 		mockBindingData.value = {
 			...createEmptyGraphicBindingDataSet(),
-			players: { 1: { name: 'Ava Reed' } },
+			players: {
+				1: { name: 'Ava Reed' },
+			},
 		};
 		const wrapper = await mountComponent(graphic([NAME], {
-			sources: [{ key: 'player', label: 'Player', kind: 'player' }],
+			sources: [
+				{ key: 'player', label: 'Player', kind: 'player' },
+			],
 		}));
 
 		await wrapper.get('[data-testid="live-control-source-player"]').setValue('1');
@@ -501,18 +668,28 @@ describe('broadcastGraphicsLiveControl', () => {
 
 	it('shows a bound value and edits it as a Graphic Input Override', async () => {
 		mockLiveState.value = {
-			playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
+			playout: {
+				'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false },
+			},
 			inputs: {},
-			sources: { 'lower-third': { player: 1 } },
+			sources: {
+				'lower-third': { player: 1 },
+			},
 		};
 		mockBindingData.value = {
 			...createEmptyGraphicBindingDataSet(),
 			event: { name: 'Regional', game: 'mtg' },
-			players: { 1: { name: 'Ava Reed' } },
+			players: {
+				1: { name: 'Ava Reed' },
+			},
 		};
 		const bound = graphic([NAME], {
-			sources: [{ key: 'player', label: 'Player', kind: 'player' }],
-			bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+			sources: [
+				{ key: 'player', label: 'Player', kind: 'player' },
+			],
+			bindings: [
+				{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+			],
 		});
 
 		const wrapper = await mountComponent(bound, 'on-air');
@@ -538,25 +715,39 @@ describe('broadcastGraphicsLiveControl', () => {
 
 	it('shows the moved bound value without issuing a command for it', async () => {
 		mockLiveState.value = {
-			playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
+			playout: {
+				'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false },
+			},
 			inputs: {},
-			sources: { 'lower-third': { player: 1 } },
+			sources: {
+				'lower-third': { player: 1 },
+			},
 		};
 		mockBindingData.value = {
 			...createEmptyGraphicBindingDataSet(),
 			event: { name: 'Regional', game: 'mtg' },
-			players: { 1: { name: 'Ava Reed' } },
+			players: {
+				1: { name: 'Ava Reed' },
+			},
 		};
 
-		const wrapper = await mountComponent(graphic([{ ...NAME, updatePolicy: 'live' }], {
-			sources: [{ key: 'player', label: 'Player', kind: 'player' }],
-			bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+		const wrapper = await mountComponent(graphic([
+			{ ...NAME, updatePolicy: 'live' },
+		], {
+			sources: [
+				{ key: 'player', label: 'Player', kind: 'player' },
+			],
+			bindings: [
+				{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+			],
 		}), 'on-air');
 
 		// The Realtime Event Session moved the Player under the running show.
 		mockBindingData.value = {
 			...mockBindingData.value,
-			players: { 1: { name: 'Ava Reed-Marsh' } },
+			players: {
+				1: { name: 'Ava Reed-Marsh' },
+			},
 		};
 		await flushPromises();
 
@@ -576,24 +767,36 @@ describe('broadcastGraphicsLiveControl', () => {
 
 	it('leaves a staged binding to show as pending rather than accepting it', async () => {
 		mockLiveState.value = {
-			playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
+			playout: {
+				'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false },
+			},
 			inputs: {},
-			sources: { 'lower-third': { player: 1 } },
+			sources: {
+				'lower-third': { player: 1 },
+			},
 		};
 		mockBindingData.value = {
 			...createEmptyGraphicBindingDataSet(),
 			event: { name: 'Regional', game: 'mtg' },
-			players: { 1: { name: 'Ava Reed' } },
+			players: {
+				1: { name: 'Ava Reed' },
+			},
 		};
 
 		const wrapper = await mountComponent(graphic([NAME], {
-			sources: [{ key: 'player', label: 'Player', kind: 'player' }],
-			bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+			sources: [
+				{ key: 'player', label: 'Player', kind: 'player' },
+			],
+			bindings: [
+				{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+			],
 		}), 'on-air');
 
 		mockBindingData.value = {
 			...mockBindingData.value,
-			players: { 1: { name: 'Ava Reed-Marsh' } },
+			players: {
+				1: { name: 'Ava Reed-Marsh' },
+			},
 		};
 		await flushPromises();
 
@@ -611,7 +814,9 @@ describe('broadcastGraphicsLiveControl', () => {
 
 	it('shows an override masking its binding, and clears it back to the bound value', async () => {
 		mockLiveState.value = {
-			playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
+			playout: {
+				'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false },
+			},
 			inputs: {
 				'lower-third': {
 					working: {},
@@ -620,17 +825,25 @@ describe('broadcastGraphicsLiveControl', () => {
 					acceptedRevision: 1,
 				},
 			},
-			sources: { 'lower-third': { player: 1 } },
+			sources: {
+				'lower-third': { player: 1 },
+			},
 		};
 		mockBindingData.value = {
 			...createEmptyGraphicBindingDataSet(),
 			event: { name: 'Regional', game: 'mtg' },
-			players: { 1: { name: 'Ava Reed' } },
+			players: {
+				1: { name: 'Ava Reed' },
+			},
 		};
 
 		const wrapper = await mountComponent(graphic([NAME], {
-			sources: [{ key: 'player', label: 'Player', kind: 'player' }],
-			bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+			sources: [
+				{ key: 'player', label: 'Player', kind: 'player' },
+			],
+			bindings: [
+				{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+			],
 		}), 'on-air');
 		const field = wrapper.get('[data-graphic-input="name"]');
 
@@ -659,7 +872,14 @@ describe('broadcastGraphicsLiveControl', () => {
 
 	it('writes a discrete control the moment it changes', async () => {
 		const wrapper = await mountComponent(graphic([
-			{ type: 'toggle', key: 'flag', label: 'Flag', required: false, updatePolicy: 'staged', default: false },
+			{
+				type: 'toggle',
+				key: 'flag',
+				label: 'Flag',
+				required: false,
+				updatePolicy: 'staged',
+				default: false,
+			},
 		]));
 
 		await wrapper.get('[data-testid="live-control-field-flag"]').trigger('change');
@@ -671,7 +891,13 @@ describe('broadcastGraphicsLiveControl', () => {
 	it('shows no Update Graphic action while the Broadcast Graphic is off', async () => {
 		mockLiveState.value = {
 			playout: {},
-			inputs: { 'lower-third': { working: { name: 'Ava Reed' }, accepted: {}, acceptedRevision: 0 } },
+			inputs: {
+				'lower-third': {
+					working: { name: 'Ava Reed' },
+					accepted: {},
+					acceptedRevision: 0,
+				},
+			},
 		};
 
 		const wrapper = await mountComponent(graphic([NAME]), 'off');
@@ -682,8 +908,16 @@ describe('broadcastGraphicsLiveControl', () => {
 
 	it('accepts the staged set through Update Graphic, and immediately through its Cut variant', async () => {
 		mockLiveState.value = {
-			playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
-			inputs: { 'lower-third': { working: { name: 'Ava Reed' }, accepted: { name: 'Unnamed' }, acceptedRevision: 1 } },
+			playout: {
+				'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false },
+			},
+			inputs: {
+				'lower-third': {
+					working: { name: 'Ava Reed' },
+					accepted: { name: 'Unnamed' },
+					acceptedRevision: 1,
+				},
+			},
 		};
 
 		const wrapper = await mountComponent(graphic([NAME]), 'on-air');
@@ -697,8 +931,16 @@ describe('broadcastGraphicsLiveControl', () => {
 
 	it('offers no acceptance while nothing is staged', async () => {
 		mockLiveState.value = {
-			playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
-			inputs: { 'lower-third': { working: { name: 'Ava Reed' }, accepted: { name: 'Ava Reed' }, acceptedRevision: 1 } },
+			playout: {
+				'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false },
+			},
+			inputs: {
+				'lower-third': {
+					working: { name: 'Ava Reed' },
+					accepted: { name: 'Ava Reed' },
+					acceptedRevision: 1,
+				},
+			},
 		};
 
 		const wrapper = await mountComponent(graphic([NAME]), 'on-air');
@@ -708,8 +950,18 @@ describe('broadcastGraphicsLiveControl', () => {
 
 	it('reports a value that violates its constraints as unavailable, and shows what the operator entered', async () => {
 		mockLiveState.value = {
-			playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
-			inputs: { 'lower-third': { working: { name: 'A'.repeat(50) }, accepted: { name: 'Ava Reed' }, acceptedRevision: 1 } },
+			playout: {
+				'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false },
+			},
+			inputs: {
+				'lower-third': {
+					working: {
+						name: 'A'.repeat(50),
+					},
+					accepted: { name: 'Ava Reed' },
+					acceptedRevision: 1,
+				},
+			},
 		};
 
 		const wrapper = await mountComponent(graphic([NAME]), 'on-air');
@@ -735,7 +987,13 @@ describe('broadcastGraphicsLiveControl', () => {
 	it('shows no Take warning once every required Graphic Input has a value', async () => {
 		mockLiveState.value = {
 			playout: {},
-			inputs: { 'lower-third': { working: { title: 'Champion' }, accepted: {}, acceptedRevision: 0 } },
+			inputs: {
+				'lower-third': {
+					working: { title: 'Champion' },
+					accepted: {},
+					acceptedRevision: 0,
+				},
+			},
 		};
 
 		const wrapper = await mountComponent(graphic([NAME, TITLE]), 'off');
@@ -750,7 +1008,12 @@ describe('broadcastGraphicsLiveControl', () => {
 		it('offers the Graphics Asset Library, restricted to the kind the Graphic Input declares', async () => {
 			const wrapper = await mountComponent(graphic([
 				BADGE,
-				{ ...BADGE, key: 'sting', label: 'Sting', mediaKind: 'silent-video' },
+				{
+					...BADGE,
+					key: 'sting',
+					label: 'Sting',
+					mediaKind: 'silent-video',
+				},
 			]));
 
 			expect(wrapper.find('[data-testid="live-control-media-badge"]').exists()).toBe(true);
@@ -788,7 +1051,9 @@ describe('broadcastGraphicsLiveControl', () => {
 
 		it('shows the chosen revision as staged, leaving what is on air alone until Update Graphic', async () => {
 			mockLiveState.value = {
-				playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
+				playout: {
+					'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false },
+				},
 				inputs: {
 					'lower-third': {
 						working: { badge: CHOSEN },
@@ -929,7 +1194,11 @@ describe('broadcastGraphicsLiveControl', () => {
 			mockLiveState.value = {
 				playout: {},
 				inputs: {
-					'lower-third': { working: { badge: PINNED }, accepted: {}, acceptedRevision: 0 },
+					'lower-third': {
+						working: { badge: PINNED },
+						accepted: {},
+						acceptedRevision: 0,
+					},
 				},
 			};
 
@@ -992,7 +1261,13 @@ describe('broadcastGraphicsLiveControl', () => {
 			await wrapper.get('[data-testid="live-control-media-badge"]').trigger('click');
 			// The next Broadcast Graphic declares the same Graphic Input key, so a write
 			// that escaped would land on it rather than fail to find a field.
-			await wrapper.setProps({ graphic: { ...graphic([BADGE]), id: 'sting', name: 'Sting' } });
+			await wrapper.setProps({
+				graphic: {
+					...graphic([BADGE]),
+					id: 'sting',
+					name: 'Sting',
+				},
+			});
 			answer({ outcome: 'available', lifecycleState: 'active', kind: 'image' });
 			await flushPromises();
 
@@ -1022,7 +1297,11 @@ describe('broadcastGraphicsLiveControl', () => {
 			expect(wrapper.find('[data-testid="live-control-media-refused-badge"]').exists()).toBe(true);
 
 			await wrapper.setProps({
-				graphic: { ...graphic([BADGE]), id: 'sting', name: 'Sting' },
+				graphic: {
+					...graphic([BADGE]),
+					id: 'sting',
+					name: 'Sting',
+				},
 			});
 			await flushPromises();
 
@@ -1042,7 +1321,13 @@ describe('broadcastGraphicsLiveControl', () => {
 		it('is reported as refreshed rather than as the operator’s own accepted edit', async () => {
 			mockLiveState.value = {
 				playout: {},
-				inputs: { 'lower-third': { working: { name: 'Ben Cole' }, accepted: {}, acceptedRevision: 0 } },
+				inputs: {
+					'lower-third': {
+						working: { name: 'Ben Cole' },
+						accepted: {},
+						acceptedRevision: 0,
+					},
+				},
 			};
 			mockSupersededInputKeys.value = ['name'];
 
@@ -1071,7 +1356,13 @@ describe('broadcastGraphicsLiveControl', () => {
 
 			mockLiveState.value = {
 				playout: {},
-				inputs: { 'lower-third': { working: { name: 'Ben Cole' }, accepted: {}, acceptedRevision: 0 } },
+				inputs: {
+					'lower-third': {
+						working: { name: 'Ben Cole' },
+						accepted: {},
+						acceptedRevision: 0,
+					},
+				},
 			};
 			mockSupersededInputKeys.value = ['name'];
 			await flushPromises();
@@ -1096,8 +1387,16 @@ describe('broadcastGraphicsLiveControl', () => {
 
 		it('withholds Update Graphic even with a staged set waiting', async () => {
 			mockLiveState.value = {
-				playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
-				inputs: { 'lower-third': { working: { name: 'Ava Reed' }, accepted: { name: 'Unnamed' }, acceptedRevision: 1 } },
+				playout: {
+					'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false },
+				},
+				inputs: {
+					'lower-third': {
+						working: { name: 'Ava Reed' },
+						accepted: { name: 'Unnamed' },
+						acceptedRevision: 1,
+					},
+				},
 			};
 
 			const wrapper = await mountComponent(graphic([NAME]), 'on-air', true);

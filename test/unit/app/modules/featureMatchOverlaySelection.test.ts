@@ -12,7 +12,17 @@ function layoutOf(sources: FeatureMatchSourceItemConfig[]): FeatureMatchLayoutCo
 	return { ...base.layout, sources };
 }
 
-const sourceItem: FeatureMatchSourceItemConfig = { id: 's1', label: 'Source', visible: true, x: 0, y: 0, width: 100, height: 100, sourceRole: 'main', frameCutout: true };
+const sourceItem: FeatureMatchSourceItemConfig = {
+	id: 's1',
+	label: 'Source',
+	visible: true,
+	x: 0,
+	y: 0,
+	width: 100,
+	height: 100,
+	sourceRole: 'main',
+	frameCutout: true,
+};
 
 describe('feature-match-overlay selection', () => {
 	describe('resolveFeatureMatchOverlaySelection', () => {
@@ -24,7 +34,10 @@ describe('feature-match-overlay selection', () => {
 
 		it('resolves a source target to its Source Item', () => {
 			expect(resolveFeatureMatchOverlaySelection(layout, { type: 'source', itemId: 's1' }))
-				.toMatchObject({ kind: 'source', item: { id: 's1' } });
+				.toMatchObject({
+					kind: 'source',
+					item: { id: 's1' },
+				});
 		});
 
 		it('resolves missing ids to the missing kind', () => {

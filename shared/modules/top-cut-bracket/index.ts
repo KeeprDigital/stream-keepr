@@ -110,7 +110,9 @@ function pendingColumnName(positionCount: number): string {
 }
 
 function sameEntrant(a: BracketEntrant, b: BracketEntrant): boolean {
-	return a.playerId != null && b.playerId != null ? a.playerId === b.playerId : a.name === b.name;
+	return a.playerId != null && b.playerId != null
+		? a.playerId === b.playerId
+		: a.name === b.name;
 }
 
 function seats(match: BracketMatchInput, entrant: BracketEntrant): boolean {
@@ -125,11 +127,16 @@ function inTableOrder(matches: readonly BracketMatchInput[]): BracketMatchInput[
 
 /** Which side won: a bye's seated side, or the side with more game wins. */
 function matchWinner(match: BracketMatchInput): 0 | 1 | null {
-	if (match.isBye)
-		return match.player1 || !match.player2 ? 0 : 1;
+	if (match.isBye) {
+		return match.player1 || !match.player2
+			? 0
+			: 1;
+	}
 	if (!match.hasResult || match.player1GameWins == null || match.player2GameWins == null || match.player1GameWins === match.player2GameWins)
 		return null;
-	return match.player1GameWins > match.player2GameWins ? 0 : 1;
+	return match.player1GameWins > match.player2GameWins
+		? 0
+		: 1;
 }
 
 function matchPosition(match: BracketMatchInput): BracketPosition {
@@ -140,20 +147,40 @@ function matchPosition(match: BracketMatchInput): BracketPosition {
 		gameWins: [match.player1GameWins, match.player2GameWins],
 		gameDraws: match.gameDraws,
 		winner: matchWinner(match),
-		status: match.isBye ? 'bye' : match.hasResult ? 'reported' : 'unreported',
+		status: match.isBye
+			? 'bye'
+			: match.hasResult ? 'reported' : 'unreported',
 	};
 }
 
 function awaitingPosition(entrants: [BracketEntrant | null, BracketEntrant | null]): BracketPosition {
-	return { matchId: null, tableNumber: null, entrants, gameWins: [null, null], gameDraws: null, winner: null, status: 'awaiting' };
+	return {
+		matchId: null,
+		tableNumber: null,
+		entrants,
+		gameWins: [null, null],
+		gameDraws: null,
+		winner: null,
+		status: 'awaiting',
+	};
 }
 
 function byePosition(entrant: BracketEntrant): BracketPosition {
-	return { matchId: null, tableNumber: null, entrants: [entrant, null], gameWins: [null, null], gameDraws: null, winner: 0, status: 'bye' };
+	return {
+		matchId: null,
+		tableNumber: null,
+		entrants: [entrant, null],
+		gameWins: [null, null],
+		gameDraws: null,
+		winner: 0,
+		status: 'bye',
+	};
 }
 
 function advancing(position: BracketPosition | undefined): BracketEntrant | null {
-	return position?.winner == null ? null : position.entrants[position.winner];
+	return position?.winner == null
+		? null
+		: position.entrants[position.winner];
 }
 
 /**
@@ -217,7 +244,9 @@ function firstColumnEntries(rounds: readonly BracketRoundInput[]): number {
  */
 export function deriveTopCutBracket(rounds: readonly BracketRoundInput[]): TopCutBracket {
 	const entries = firstColumnEntries(rounds);
-	const columnCount = entries > 0 ? Math.log2(nextPowerOfTwo(entries)) + 1 : rounds.length;
+	const columnCount = entries > 0
+		? Math.log2(nextPowerOfTwo(entries)) + 1
+		: rounds.length;
 	if (columnCount === 0)
 		return EMPTY_TOP_CUT_BRACKET;
 
@@ -234,12 +263,17 @@ export function deriveTopCutBracket(rounds: readonly BracketRoundInput[]): TopCu
 			if (match)
 				return matchPosition(match);
 			const entrants: BracketPosition['entrants'] = previous
-				? [advancing(previous[position * 2]), advancing(previous[position * 2 + 1])]
+				? [
+						advancing(previous[position * 2]),
+						advancing(previous[position * 2 + 1]),
+					]
 				: [null, null];
 			if (!entrants[0] && !entrants[1]) {
 				// A Round that leaves a bye out: the next Round seats a Player here no Match feeds.
 				const next = placed[column + 1]?.[Math.floor(position / 2)];
-				const seeded = next && (position % 2 === 0 ? next.player1 : next.player2);
+				const seeded = next && (position % 2 === 0
+					? next.player1
+					: next.player2);
 				if (seeded)
 					return byePosition(seeded);
 			}
@@ -252,6 +286,8 @@ export function deriveTopCutBracket(rounds: readonly BracketRoundInput[]): TopCu
 	return {
 		size: positionCounts[0]! * 2,
 		columns,
-		champion: final.length === 1 ? advancing(final[0]) : null,
+		champion: final.length === 1
+			? advancing(final[0])
+			: null,
 	};
 }

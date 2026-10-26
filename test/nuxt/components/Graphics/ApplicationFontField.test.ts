@@ -14,7 +14,10 @@ const USelectStub = defineComponent({
 	name: 'USelect',
 	props: {
 		modelValue: { type: String, required: false },
-		items: { type: Array, default: () => [] },
+		items: {
+			type: Array,
+			default: () => [],
+		},
 		disabled: { type: Boolean, required: false },
 	},
 	emits: ['update:modelValue'],
@@ -22,7 +25,9 @@ const USelectStub = defineComponent({
 });
 
 const UFormFieldStub = defineComponent({
-	props: { label: { type: String, default: '' } },
+	props: {
+		label: { type: String, default: '' },
+	},
 	template: '<div :data-label="label"><slot /></div>',
 });
 
@@ -61,7 +66,9 @@ describe('application font field', () => {
 
 		selects(wrapper)[0]!.vm.$emit('update:modelValue', 'mplantin');
 
-		expect(wrapper.emitted('update:fontId')).toEqual([['mplantin']]);
+		expect(wrapper.emitted('update:fontId')).toEqual([
+			['mplantin'],
+		]);
 	});
 
 	it('is read-only for an observer', () => {

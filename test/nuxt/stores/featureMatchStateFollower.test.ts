@@ -24,7 +24,9 @@ vi.mock('~/modules/feature-match-session/client', () => ({
 	useFeatureMatchSessionClient: () => mockRepo,
 }));
 
-mockNuxtImport('useServerTime', () => () => ({ getServerTime: () => 1000000 }));
+mockNuxtImport('useServerTime', () => () => ({
+	getServerTime: () => 1000000,
+}));
 
 const EVENT_ID = 1;
 const SLOT_ID = 100;
@@ -62,8 +64,18 @@ function sourceSnapshot(): FeatureMatchSourceSnapshot {
 
 function state(player1: { life?: number; revealed?: boolean } = {}, player2: { life?: number; revealed?: boolean } = {}, extra: Partial<FeatureMatchState> = {}) {
 	return createMockFeatureMatchState({
-		player1: { lifeTotal: player1.life ?? 20, gameWins: 0, counters: [], sideboardRevealed: player1.revealed ?? false },
-		player2: { lifeTotal: player2.life ?? 20, gameWins: 0, counters: [], sideboardRevealed: player2.revealed ?? false },
+		player1: {
+			lifeTotal: player1.life ?? 20,
+			gameWins: 0,
+			counters: [],
+			sideboardRevealed: player1.revealed ?? false,
+		},
+		player2: {
+			lifeTotal: player2.life ?? 20,
+			gameWins: 0,
+			counters: [],
+			sideboardRevealed: player2.revealed ?? false,
+		},
 		...extra,
 	});
 }
@@ -84,7 +96,11 @@ function session(currentState: FeatureMatchState, sequence: number, id = 500): F
 }
 
 function commandResult(currentState: FeatureMatchState, sequence: number, id = 500) {
-	return { featureMatchState: currentState, session: session(currentState, sequence, id), sequence };
+	return {
+		featureMatchState: currentState,
+		session: session(currentState, sequence, id),
+		sequence,
+	};
 }
 
 function eventApplied(currentState: FeatureMatchState, sequence: number, sessionId = 500): MessageData<'featureMatchSession:eventApplied'> {
@@ -206,7 +222,10 @@ describe('the Feature Match Session client follows its aggregate', () => {
 	it('never lets a Slot carrying an older sequence move its Session backwards', async () => {
 		await store.applyRemoteSessionEvent(eventApplied(state({ life: 18 }), 1));
 
-		store.offerSlotSession({ id: SLOT_ID, activeSession: session(state({ life: 20 }), 0) });
+		store.offerSlotSession({
+			id: SLOT_ID,
+			activeSession: session(state({ life: 20 }), 0),
+		});
 
 		expect(rendered().player1.lifeTotal).toBe(18);
 		expect(store.sessionSequenceBySlotId.get(SLOT_ID)).toBe(1);
@@ -217,7 +236,10 @@ describe('the Feature Match Session client follows its aggregate', () => {
 		mockRepo.ensureSession.mockReturnValueOnce(loading.promise);
 
 		const load = store.loadState(EVENT_ID, SLOT_ID);
-		store.offerSlotSession({ id: SLOT_ID, activeSession: session(state({ life: 18 }), 4) });
+		store.offerSlotSession({
+			id: SLOT_ID,
+			activeSession: session(state({ life: 18 }), 4),
+		});
 		loading.resolve(session(state({ life: 16 }), 5));
 		await load;
 

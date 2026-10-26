@@ -54,7 +54,9 @@ describe('the Graphic Asset object-store contract', () => {
 		});
 		expect(repeated).toEqual({
 			outcome: 'already-exists',
-			object: created.outcome === 'created' ? created.object : undefined,
+			object: created.outcome === 'created'
+				? created.object
+				: undefined,
 		});
 	});
 
@@ -82,7 +84,9 @@ describe('the Graphic Asset object-store contract', () => {
 		]);
 
 		expect([first.outcome, second.outcome].toSorted()).toEqual(['already-exists', 'created']);
-		const createdBytes = first.outcome === 'created' ? 'first' : 'second';
+		const createdBytes = first.outcome === 'created'
+			? 'first'
+			: 'second';
 		const read = await store.read(identity);
 		expect(read.outcome).toBe('available');
 		if (read.outcome === 'available')

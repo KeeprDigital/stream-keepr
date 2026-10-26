@@ -37,7 +37,12 @@ describe('getDefaultConfigForMode', () => {
 
 describe('getDisplayDefaultsForMode', () => {
 	it('returns every display default and leaves the Event Reference the Screen points at', () => {
-		expect(getDisplayDefaultsForMode('top-cut')).toEqual({ showSeeds: false, showArchetypes: false, showHeader: true, headerText: undefined });
+		expect(getDisplayDefaultsForMode('top-cut')).toEqual({
+			showSeeds: false,
+			showArchetypes: false,
+			showHeader: true,
+			headerText: undefined,
+		});
 	});
 
 	it('preserves the authored Background Layer stack on a display reset', () => {
@@ -80,7 +85,13 @@ describe('getDisplayDefaultsForMode', () => {
 	it('preserves the complete Broadcast source while resetting Deck display settings', () => {
 		const source = { type: 'broadcast' as const, broadcastDeckListId: 73 };
 		const reset = mergeScreenModeConfig(
-			{ deck: { ...getDefaultConfigForMode('deck'), deckSource: source, showDeckName: false } },
+			{
+				deck: {
+					...getDefaultConfigForMode('deck'),
+					deckSource: source,
+					showDeckName: false,
+				},
+			},
 			'deck',
 			getDisplayDefaultsForMode('deck'),
 		);
@@ -107,7 +118,10 @@ describe('resolveDeckBoards', () => {
 		});
 
 		expect(resolved.board).toBe('sideboard');
-		expect(resolved.sideboard).toEqual({ ...getDefaultConfigForMode('deck').sideboard, columns: 6 });
+		expect(resolved.sideboard).toEqual({
+			...getDefaultConfigForMode('deck').sideboard,
+			columns: 6,
+		});
 		expect(resolved.mainboard).toEqual(getDefaultConfigForMode('deck').mainboard);
 	});
 });

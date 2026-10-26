@@ -84,12 +84,16 @@ export function usePlayerDeckCounters(
 			let deck: PlayerDeckResponse | null;
 			if (readAsScreenOutput) {
 				const playerId = playerLocator.value.id;
-				const read = playerId ? await readAsScreenOutput(playerId).catch(() => null) : null;
+				const read = playerId
+					? await readAsScreenOutput(playerId).catch(() => null)
+					: null;
 				if (currentRequestId !== requestId) {
 					return;
 				}
 				player = read?.player ?? null;
-				deck = read ? selectPlayerDeck(read.decks) : null;
+				deck = read
+					? selectPlayerDeck(read.decks)
+					: null;
 				if (player && player.updatedAt !== matchedPlayer.value?.updatedAt)
 					playerStore.holdPlayer(player);
 				if (!player || !getMtgGameData(player.gameData).deckName) {
@@ -98,7 +102,9 @@ export function usePlayerDeckCounters(
 			}
 			else {
 				player = matchedPlayer.value
-					?? (playerLocator.value.id ? await playerStore.getPlayerById(eventId, playerLocator.value.id) : null);
+					?? (playerLocator.value.id
+						? await playerStore.getPlayerById(eventId, playerLocator.value.id)
+						: null);
 				if (currentRequestId !== requestId) {
 					return;
 				}

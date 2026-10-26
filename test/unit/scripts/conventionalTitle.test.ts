@@ -3,7 +3,9 @@ import { checkTitles, isConventionalTitle } from '../../../scripts/conventional-
 
 const BASE = 'a'.repeat(40);
 const HEAD = 'b'.repeat(40);
-const group = { merge_group: { base_sha: BASE, head_sha: HEAD } };
+const group = {
+	merge_group: { base_sha: BASE, head_sha: HEAD },
+};
 
 describe('a Conventional Commit title', () => {
 	it.each([
@@ -35,8 +37,12 @@ describe('what the check reads for each event', () => {
 	};
 
 	it('a PR: its title', async () => {
-		await expect(checkTitles('pull_request', { pull_request: { title: 'fix(screen): hold the slug' } }, noCompare)).resolves.toEqual([]);
-		await expect(checkTitles('pull_request', { pull_request: { title: 'Hold the slug' } }, noCompare)).resolves.toEqual([
+		await expect(checkTitles('pull_request', {
+			pull_request: { title: 'fix(screen): hold the slug' },
+		}, noCompare)).resolves.toEqual([]);
+		await expect(checkTitles('pull_request', {
+			pull_request: { title: 'Hold the slug' },
+		}, noCompare)).resolves.toEqual([
 			'PR title "Hold the slug" is not a Conventional Commit.',
 		]);
 	});
@@ -51,7 +57,9 @@ describe('what the check reads for each event', () => {
 		await expect(checkTitles('merge_group', group, compare)).resolves.toEqual([
 			'Commit subject "Update README.md (#2)" is not a Conventional Commit.',
 		]);
-		expect(asked).toEqual([[BASE, HEAD]]);
+		expect(asked).toEqual([
+			[BASE, HEAD],
+		]);
 	});
 
 	it('a merge group of conventional squash commits passes', async () => {
@@ -62,7 +70,9 @@ describe('what the check reads for each event', () => {
 		await expect(checkTitles('merge_group', group, async () => [])).resolves.toEqual([
 			`No commits between ${BASE} and ${HEAD}: nothing shows what the group lands.`,
 		]);
-		await expect(checkTitles('merge_group', { merge_group: { head_sha: HEAD } }, noCompare)).resolves.toEqual([
+		await expect(checkTitles('merge_group', {
+			merge_group: { head_sha: HEAD },
+		}, noCompare)).resolves.toEqual([
 			'The merge_group event names no base and head commit.',
 		]);
 		await expect(checkTitles('push', {}, noCompare)).resolves.toEqual(['No title to check on a push event.']);

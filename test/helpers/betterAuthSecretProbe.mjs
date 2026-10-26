@@ -42,8 +42,15 @@ async function main() {
 		const auth = betterAuth({
 			// Stated so the only warnings on the channel are the secret's own.
 			baseURL: 'http://localhost:3000',
-			database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
-			...(secret === undefined ? {} : { secret }),
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+			}),
+			...(secret === undefined
+				? {}
+				: { secret }),
 			logger: {
 				log: (level, message) => {
 					if (level === 'warn' || level === 'error')

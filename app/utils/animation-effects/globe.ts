@@ -60,8 +60,12 @@ export function createGlobeDelegate(): SceneEffectDelegate<AnimationEffectParams
 		dotGeometry?.dispose();
 		dotMaterial?.dispose();
 
-		dotGeometry = current.showPoints ? new three.SphereGeometry(0.25, 12, 12) : undefined;
-		dotMaterial = current.showPoints ? new three.MeshLambertMaterial({ color: current.lineColor }) : undefined;
+		dotGeometry = current.showPoints
+			? new three.SphereGeometry(0.25, 12, 12)
+			: undefined;
+		dotMaterial = current.showPoints
+			? new three.MeshLambertMaterial({ color: current.lineColor })
+			: undefined;
 
 		positions = [];
 		const n = current.points;
@@ -141,7 +145,26 @@ export function createGlobeDelegate(): SceneEffectDelegate<AnimationEffectParams
 
 			// The pole lines: the axis, and four azimuths of field-line verticals
 			// shrinking outward through the fork's height table.
-			const poleHeights = [17.9, 12, 8, 5, 3, 2, 1.5, 1.1, 0.8, 0.6, 0.45, 0.3, 0.2, 0.1, 0.05, 0.03, 0.02, 0.01];
+			const poleHeights = [
+				17.9,
+				12,
+				8,
+				5,
+				3,
+				2,
+				1.5,
+				1.1,
+				0.8,
+				0.6,
+				0.45,
+				0.3,
+				0.2,
+				0.1,
+				0.05,
+				0.03,
+				0.02,
+				0.01,
+			];
 			const polePoints: THREE.Vector3[] = [
 				new three.Vector3(0, 30, 0),
 				new three.Vector3(0, -30, 0),
@@ -211,5 +234,9 @@ export default function createGlobeEffect(
 	host: HTMLElement,
 	params: AnimationEffectParams<'globe'>,
 ): AnimationEffectInstance<AnimationEffectParams<'globe'>> {
-	return createSceneEffect({ three: THREE, host, delegate: createGlobeDelegate() }, params);
+	return createSceneEffect({
+		three: THREE,
+		host,
+		delegate: createGlobeDelegate(),
+	}, params);
 }

@@ -131,7 +131,9 @@ const onAirGraphicIds = computed(() => new Set(sessionStore.onAirGraphicIds(
 
 /** One edited Broadcast Graphic back into the Screen's stack. */
 function replaceSelectedGraphic(graphic: BroadcastGraphicConfig) {
-	emit('update:graphics', props.graphics.map(entry => entry.id === graphic.id ? graphic : entry));
+	emit('update:graphics', props.graphics.map(entry => entry.id === graphic.id
+		? graphic
+		: entry));
 }
 
 /** A placement is a new Broadcast Graphic, and the author is put straight on it. */

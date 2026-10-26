@@ -114,8 +114,13 @@ function readPackagedAsset(
 	index: number,
 ): { asset: TemplatePackageAsset } | { issues: TemplatePackagePreflightIssue[] } {
 	const subject = `packagedAssets[${index}]`;
-	if (!isPlainObject(value))
-		return { issues: [invalidManifest('Packaged asset is not an object', subject)] };
+	if (!isPlainObject(value)) {
+		return {
+			issues: [
+				invalidManifest('Packaged asset is not an object', subject),
+			],
+		};
+	}
 	const issues: TemplatePackagePreflightIssue[] = [];
 	const { packagedId, name, kind, origin, integrity, facts, compatibilityProfile, content, requiredBy } = value;
 
@@ -181,29 +186,45 @@ function readPackagedAsset(
  * mapping is proposed from a package whose own declarations are unusable.
  */
 export function readTemplatePackageManifest(value: unknown): ReadTemplatePackageManifestOutcome {
-	if (!isPlainObject(value))
-		return { outcome: 'rejected', issues: [invalidManifest('The package manifest is not an object')] };
+	if (!isPlainObject(value)) {
+		return {
+			outcome: 'rejected',
+			issues: [
+				invalidManifest('The package manifest is not an object'),
+			],
+		};
+	}
 
 	const receivedSchemaVersion = value.schemaVersion;
-	if (!Number.isSafeInteger(receivedSchemaVersion) || (receivedSchemaVersion as number) <= 0)
-		return { outcome: 'rejected', issues: [invalidManifest('The package manifest declares no usable schema version')] };
+	if (!Number.isSafeInteger(receivedSchemaVersion) || (receivedSchemaVersion as number) <= 0) {
+		return {
+			outcome: 'rejected',
+			issues: [
+				invalidManifest('The package manifest declares no usable schema version'),
+			],
+		};
+	}
 	const schemaVersion = receivedSchemaVersion as number;
 	// An unrecognised future schema is refused rather than guessed at: a receiver
 	// that ignored what it could not read would install an incomplete Template.
 	if (schemaVersion > TEMPLATE_PACKAGE_SCHEMA_VERSION) {
 		return {
 			outcome: 'rejected',
-			issues: [templatePackagePreflightIssue('unsupported-package-schema-version', {
-				message: `The package declares schema version ${schemaVersion}, which is newer than the version ${TEMPLATE_PACKAGE_SCHEMA_VERSION} this installation reads`,
-			})],
+			issues: [
+				templatePackagePreflightIssue('unsupported-package-schema-version', {
+					message: `The package declares schema version ${schemaVersion}, which is newer than the version ${TEMPLATE_PACKAGE_SCHEMA_VERSION} this installation reads`,
+				}),
+			],
 		};
 	}
 	if (schemaVersion < TEMPLATE_PACKAGE_MINIMUM_MIGRATABLE_SCHEMA_VERSION) {
 		return {
 			outcome: 'rejected',
-			issues: [templatePackagePreflightIssue('package-migration-unavailable', {
-				message: `This installation cannot migrate a package from schema version ${schemaVersion}`,
-			})],
+			issues: [
+				templatePackagePreflightIssue('package-migration-unavailable', {
+					message: `This installation cannot migrate a package from schema version ${schemaVersion}`,
+				}),
+			],
 		};
 	}
 
@@ -215,9 +236,11 @@ export function readTemplatePackageManifest(value: unknown): ReadTemplatePackage
 	if (typeof packageKind !== 'string' || !(TEMPLATE_PACKAGE_KINDS as readonly string[]).includes(packageKind)) {
 		return {
 			outcome: 'rejected',
-			issues: [templatePackagePreflightIssue('unsupported-package-artifact', {
-				message: 'The package does not declare a supported artifact type',
-			})],
+			issues: [
+				templatePackagePreflightIssue('unsupported-package-artifact', {
+					message: 'The package does not declare a supported artifact type',
+				}),
+			],
 		};
 	}
 	const kind = packageKind as TemplatePackageKind;
@@ -422,18 +445,48 @@ export function inspectTemplatePackageEntries(
  * their own leading bytes rather than by what the manifest called them.
  */
 const ARCHIVE_SIGNATURES: readonly { offset: number; bytes: readonly number[] }[] = [
-	{ offset: 0, bytes: [0x50, 0x4B, 0x03, 0x04] },
-	{ offset: 0, bytes: [0x50, 0x4B, 0x05, 0x06] },
-	{ offset: 0, bytes: [0x50, 0x4B, 0x07, 0x08] },
-	{ offset: 0, bytes: [0x1F, 0x8B] },
-	{ offset: 0, bytes: [0x42, 0x5A, 0x68] },
-	{ offset: 0, bytes: [0xFD, 0x37, 0x7A, 0x58, 0x5A] },
-	{ offset: 0, bytes: [0x28, 0xB5, 0x2F, 0xFD] },
-	{ offset: 0, bytes: [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C] },
-	{ offset: 0, bytes: [0x52, 0x61, 0x72, 0x21] },
+	{
+		offset: 0,
+		bytes: [0x50, 0x4B, 0x03, 0x04],
+	},
+	{
+		offset: 0,
+		bytes: [0x50, 0x4B, 0x05, 0x06],
+	},
+	{
+		offset: 0,
+		bytes: [0x50, 0x4B, 0x07, 0x08],
+	},
+	{
+		offset: 0,
+		bytes: [0x1F, 0x8B],
+	},
+	{
+		offset: 0,
+		bytes: [0x42, 0x5A, 0x68],
+	},
+	{
+		offset: 0,
+		bytes: [0xFD, 0x37, 0x7A, 0x58, 0x5A],
+	},
+	{
+		offset: 0,
+		bytes: [0x28, 0xB5, 0x2F, 0xFD],
+	},
+	{
+		offset: 0,
+		bytes: [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C],
+	},
+	{
+		offset: 0,
+		bytes: [0x52, 0x61, 0x72, 0x21],
+	},
 	// A tar has no header magic at all: `ustar` sits at byte 257 of its first
 	// 512-byte block, after the name, mode, owner, size, and mtime fields.
-	{ offset: 257, bytes: [0x75, 0x73, 0x74, 0x61, 0x72] },
+	{
+		offset: 257,
+		bytes: [0x75, 0x73, 0x74, 0x61, 0x72],
+	},
 ];
 
 /**
@@ -524,7 +577,9 @@ export function templatePackageMappingProposal(
 			issues.push(templatePackagePreflightIssue('graphic-asset-origin-not-referenceable', {
 				subject: asset.packagedId,
 				message: `"${input.originMatch.name}" is ${
-					input.originMatch.lifecycleState === 'retired' ? 'Retired' : 'in Trash'
+					input.originMatch.lifecycleState === 'retired'
+						? 'Retired'
+						: 'in Trash'
 				} here, so this package cannot reference the revision it reuses`,
 			}));
 		}
@@ -687,7 +742,9 @@ export function templatePackagePreflightFingerprintMaterial(
 }
 
 function issueOrder(issue: TemplatePackagePreflightIssue) {
-	return `${issue.severity === 'error' ? '0' : '1'} ${issue.subject ?? ''} ${issue.code}`;
+	return `${issue.severity === 'error'
+		? '0'
+		: '1'} ${issue.subject ?? ''} ${issue.code}`;
 }
 
 /**

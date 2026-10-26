@@ -33,7 +33,10 @@ export function useScreenOutputAssetCapability(
 	const loads = createGuardedSequence();
 
 	watch(
-		() => ({ eventId: toValue(eventId), screenId: toValue(screenId) }),
+		() => ({
+			eventId: toValue(eventId),
+			screenId: toValue(screenId),
+		}),
 		async ({ eventId: currentEventId, screenId: currentScreenId }) => {
 			const flight = loads.begin();
 			assetCapability.value = null;
@@ -65,5 +68,8 @@ export function useScreenOutputAssetCapability(
 		loads.supersede();
 	});
 
-	return { assetCapability: readonly(assetCapability), assetCapabilitySettled: readonly(settled) };
+	return {
+		assetCapability: readonly(assetCapability),
+		assetCapabilitySettled: readonly(settled),
+	};
 }

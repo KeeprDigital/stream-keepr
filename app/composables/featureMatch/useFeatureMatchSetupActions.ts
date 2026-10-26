@@ -96,8 +96,16 @@ export function useFeatureMatchSetupActions(deps: FeatureMatchSetupDeps) {
 		const sourceRound = roundStore.getRoundById(match.roundId);
 		const defaultFormatName = getGameConfig(eventStore.event?.game ?? 'mtg').label;
 
-		const player1Deck = getDeckForCurrentPhase(match.player1Id, p1Data?.gameData?.type === 'mtg' ? p1Data.gameData.deckName ?? null : null, p1Data?.gameData?.type === 'mtg' ? p1Data.gameData.deckColors ?? null : null);
-		const player2Deck = getDeckForCurrentPhase(match.player2Id, p2Data?.gameData?.type === 'mtg' ? p2Data.gameData.deckName ?? null : null, p2Data?.gameData?.type === 'mtg' ? p2Data.gameData.deckColors ?? null : null);
+		const player1Deck = getDeckForCurrentPhase(match.player1Id, p1Data?.gameData?.type === 'mtg'
+			? p1Data.gameData.deckName ?? null
+			: null, p1Data?.gameData?.type === 'mtg'
+			? p1Data.gameData.deckColors ?? null
+			: null);
+		const player2Deck = getDeckForCurrentPhase(match.player2Id, p2Data?.gameData?.type === 'mtg'
+			? p2Data.gameData.deckName ?? null
+			: null, p2Data?.gameData?.type === 'mtg'
+			? p2Data.gameData.deckColors ?? null
+			: null);
 
 		formData.value = {
 			...formData.value,

@@ -24,11 +24,15 @@ const mockFeatureMatchStateStore = {
 
 const mockOverlay = {
 	create: vi.fn(() => ({
-		open: vi.fn(() => ({ result: Promise.resolve(false) })),
+		open: vi.fn(() => ({
+			result: Promise.resolve(false),
+		})),
 	})),
 };
 
-const mockToast = { add: vi.fn() };
+const mockToast = {
+	add: vi.fn(),
+};
 
 const mockEventData = ref(createMockEvent({
 	featureMatchDefaultTurnTrackingEnabled: true,
@@ -395,7 +399,9 @@ describe('useFeatureMatchGameMode', () => {
 
 	describe('handleResetGame', () => {
 		it('calls resetMatch with type: game when confirmed', async () => {
-			const mockOpen = vi.fn(() => ({ result: Promise.resolve(true) }));
+			const mockOpen = vi.fn(() => ({
+				result: Promise.resolve(true),
+			}));
 			mockOverlay.create.mockReturnValueOnce({ open: mockOpen });
 			const mode = createSetup();
 
@@ -439,12 +445,18 @@ describe('useFeatureMatchGameMode', () => {
 			const mode = createSetup();
 			mode.editStateOpen.value = true;
 
-			await mode.handleEditStateSave({ turnNumber: 7, player1: { lifeTotal: 12 } });
+			await mode.handleEditStateSave({
+				turnNumber: 7,
+				player1: { lifeTotal: 12 },
+			});
 
 			expect(mockFeatureMatchStateStore.updateState).toHaveBeenCalledExactlyOnceWith(
 				1,
 				10,
-				{ turnNumber: 7, player1: { lifeTotal: 12 } },
+				{
+					turnNumber: 7,
+					player1: { lifeTotal: 12 },
+				},
 			);
 			expect(mode.editStateOpen.value).toBe(false);
 		});
@@ -507,11 +519,15 @@ describe('useFeatureMatchGameMode', () => {
 		}
 
 		it('calls startOvertime when clock transitions to expired', async () => {
-			const stateRef = shallowRef(createMockFeatureMatchState({ clock: createActiveClock() }));
+			const stateRef = shallowRef(createMockFeatureMatchState({
+				clock: createActiveClock(),
+			}));
 			const matchState = computed(() => stateRef.value as FeatureMatchState);
 			useFeatureMatchGameMode(10, matchState);
 
-			stateRef.value = createMockFeatureMatchState({ clock: createExpiredClock() });
+			stateRef.value = createMockFeatureMatchState({
+				clock: createExpiredClock(),
+			});
 			await nextTick();
 
 			expect(mockFeatureMatchStateStore.startOvertime).toHaveBeenCalledWith(1, 10, 5);

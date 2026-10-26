@@ -12,7 +12,9 @@ const UBadgeStub = defineComponent({
 });
 
 const UInputStub = defineComponent({
-	props: { modelValue: { type: String, required: false } },
+	props: {
+		modelValue: { type: String, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 });
@@ -43,7 +45,12 @@ function makeEntry(overrides?: Partial<TokenRequirementEntry>): TokenRequirement
 		deckCount: 2,
 		sourceCardCount: 1,
 		sourceCards: [
-			{ id: 10, name: 'Surveyor Saga', scryfallId: 'source-10', cardType: 'Enchantment' },
+			{
+				id: 10,
+				name: 'Surveyor Saga',
+				scryfallId: 'source-10',
+				cardType: 'Enchantment',
+			},
 		],
 		...overrides,
 	};
@@ -64,7 +71,14 @@ async function mountComponent() {
 					name: 'Reflection',
 					typeLine: 'Token Creature - Reflection',
 					deckCount: 1,
-					sourceCards: [{ id: 11, name: 'Mirror Spell', scryfallId: 'source-11', cardType: 'Sorcery' }],
+					sourceCards: [
+						{
+							id: 11,
+							name: 'Mirror Spell',
+							scryfallId: 'source-11',
+							cardType: 'Sorcery',
+						},
+					],
 				}),
 			]);
 

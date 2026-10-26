@@ -182,15 +182,33 @@ const ORIGIN_CONNECTION_ID = 'live-control-connection';
 const PEER_CONNECTION_ID = 'peer-connection';
 
 const STACK: BroadcastGraphicsModeConfig = {
-	graphics: [{
-		id: GRAPHIC_ID,
-		name: 'Lower third',
-		items: [],
-		inputs: [
-			{ key: HEADLINE, label: 'Headline', type: 'text', required: false, updatePolicy: 'staged', default: '', maxLength: 200 },
-			{ key: TICKER, label: 'Ticker', type: 'text', required: false, updatePolicy: 'live', default: '', maxLength: 200 },
-		],
-	}],
+	graphics: [
+		{
+			id: GRAPHIC_ID,
+			name: 'Lower third',
+			items: [],
+			inputs: [
+				{
+					key: HEADLINE,
+					label: 'Headline',
+					type: 'text',
+					required: false,
+					updatePolicy: 'staged',
+					default: '',
+					maxLength: 200,
+				},
+				{
+					key: TICKER,
+					label: 'Ticker',
+					type: 'text',
+					required: false,
+					updatePolicy: 'live',
+					default: '',
+					maxLength: 200,
+				},
+			],
+		},
+	],
 };
 
 let eventId: number;
@@ -258,8 +276,16 @@ async function issue(
 
 	await commandRoute({
 		context: {
-			params: { id: String(eventId), screenId: String(screenId), sessionId: String(sessionId) },
-			body: { commandId: nextCommandId(), type, payload },
+			params: {
+				id: String(eventId),
+				screenId: String(screenId),
+				sessionId: String(sessionId),
+			},
+			body: {
+				commandId: nextCommandId(),
+				type,
+				payload,
+			},
 			headers: { 'x-realtime-connection-id': ORIGIN_CONNECTION_ID },
 		},
 	} as unknown as H3Event);

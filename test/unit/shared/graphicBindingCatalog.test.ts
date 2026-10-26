@@ -87,19 +87,84 @@ describe('graphic Input Binding field catalog', () => {
 			type: field.type,
 			shape: field.shape,
 		}))).toEqual([
-			{ id: 'talent.name', label: 'Name', type: 'text', shape: 'atomic' },
-			{ id: 'talent.twitchHandle', label: 'Twitch handle', type: 'text', shape: 'atomic' },
-			{ id: 'talent.twitchProfileUrl', label: 'Twitch profile URL', type: 'text', shape: 'formatted' },
-			{ id: 'talent.youtubeHandle', label: 'YouTube handle', type: 'text', shape: 'atomic' },
-			{ id: 'talent.youtubeProfileUrl', label: 'YouTube profile URL', type: 'text', shape: 'formatted' },
-			{ id: 'talent.xHandle', label: 'X handle', type: 'text', shape: 'atomic' },
-			{ id: 'talent.xProfileUrl', label: 'X profile URL', type: 'text', shape: 'formatted' },
-			{ id: 'talent.instagramHandle', label: 'Instagram handle', type: 'text', shape: 'atomic' },
-			{ id: 'talent.instagramProfileUrl', label: 'Instagram profile URL', type: 'text', shape: 'formatted' },
-			{ id: 'talent.tiktokHandle', label: 'TikTok handle', type: 'text', shape: 'atomic' },
-			{ id: 'talent.tiktokProfileUrl', label: 'TikTok profile URL', type: 'text', shape: 'formatted' },
-			{ id: 'talent.blueskyHandle', label: 'Bluesky handle', type: 'text', shape: 'atomic' },
-			{ id: 'talent.blueskyProfileUrl', label: 'Bluesky profile URL', type: 'text', shape: 'formatted' },
+			{
+				id: 'talent.name',
+				label: 'Name',
+				type: 'text',
+				shape: 'atomic',
+			},
+			{
+				id: 'talent.twitchHandle',
+				label: 'Twitch handle',
+				type: 'text',
+				shape: 'atomic',
+			},
+			{
+				id: 'talent.twitchProfileUrl',
+				label: 'Twitch profile URL',
+				type: 'text',
+				shape: 'formatted',
+			},
+			{
+				id: 'talent.youtubeHandle',
+				label: 'YouTube handle',
+				type: 'text',
+				shape: 'atomic',
+			},
+			{
+				id: 'talent.youtubeProfileUrl',
+				label: 'YouTube profile URL',
+				type: 'text',
+				shape: 'formatted',
+			},
+			{
+				id: 'talent.xHandle',
+				label: 'X handle',
+				type: 'text',
+				shape: 'atomic',
+			},
+			{
+				id: 'talent.xProfileUrl',
+				label: 'X profile URL',
+				type: 'text',
+				shape: 'formatted',
+			},
+			{
+				id: 'talent.instagramHandle',
+				label: 'Instagram handle',
+				type: 'text',
+				shape: 'atomic',
+			},
+			{
+				id: 'talent.instagramProfileUrl',
+				label: 'Instagram profile URL',
+				type: 'text',
+				shape: 'formatted',
+			},
+			{
+				id: 'talent.tiktokHandle',
+				label: 'TikTok handle',
+				type: 'text',
+				shape: 'atomic',
+			},
+			{
+				id: 'talent.tiktokProfileUrl',
+				label: 'TikTok profile URL',
+				type: 'text',
+				shape: 'formatted',
+			},
+			{
+				id: 'talent.blueskyHandle',
+				label: 'Bluesky handle',
+				type: 'text',
+				shape: 'atomic',
+			},
+			{
+				id: 'talent.blueskyProfileUrl',
+				label: 'Bluesky profile URL',
+				type: 'text',
+				shape: 'formatted',
+			},
 		]);
 
 		expect(bindableGraphicBindingFields('talent', 'text', 'mtg').common).toHaveLength(13);
@@ -131,7 +196,12 @@ describe('graphic Input Binding field catalog', () => {
 	});
 
 	it('formats a Player record with the Event\'s own broadcast separator', () => {
-		const player = { name: 'Ava Reed', wins: 4, losses: 1, draws: 0 };
+		const player = {
+			name: 'Ava Reed',
+			wins: 4,
+			losses: 1,
+			draws: 0,
+		};
 
 		expect(resolveGraphicBindingField('player', 'player.record', player, dataSet())).toBe('4-1');
 		expect(resolveGraphicBindingField('player', 'player.record', player, dataSet({
@@ -157,7 +227,11 @@ describe('graphic Input Binding field catalog', () => {
 	});
 
 	it('reads a Player\'s Archetype name through the Event\'s Archetypes', () => {
-		const data = dataSet({ archetypes: { 12: { name: 'Azorius Control', colors: 'WU' } } });
+		const data = dataSet({
+			archetypes: {
+				12: { name: 'Azorius Control', colors: 'WU' },
+			},
+		});
 
 		expect(resolveGraphicBindingField('player', 'player.archetypeName', { name: 'Ava', archetypeId: 12 }, data))
 			.toBe('Azorius Control');
@@ -232,7 +306,9 @@ describe('the empty Graphic Binding Data Set a resolution starts from', () => {
 		expect(subMaps.length, 'no sub-maps to check — the Data Set shape changed').toBeGreaterThan(0);
 
 		for (const subMap of subMaps) {
-			Object.assign(first[subMap], { 7: { name: `Event A ${subMap}` } });
+			Object.assign(first[subMap], {
+				7: { name: `Event A ${subMap}` },
+			});
 			expect(second[subMap], `${subMap} is shared between two Data Sets`).toEqual({});
 		}
 	});

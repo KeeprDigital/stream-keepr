@@ -39,7 +39,9 @@ async function publishEventUpdate(requestEvent: H3Event, eventId: number) {
 	await publishMessage(
 		eventId,
 		'event:updated',
-		{ event: mapEventToResponse(updatedEvent as DbEvent & { talents: DbEventTalent[] }) },
+		{
+			event: mapEventToResponse(updatedEvent as DbEvent & { talents: DbEventTalent[] }),
+		},
 		getOriginConnectionId(requestEvent),
 	);
 }

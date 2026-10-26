@@ -45,7 +45,10 @@ export function armedRepresentation(representation) {
 }
 
 export function restoreArmedRepresentation(stored) {
-	return screenOutputRepresentation({ ...stored, content: Uint8Array.from(stored.content) });
+	return screenOutputRepresentation({
+		...stored,
+		content: Uint8Array.from(stored.content),
+	});
 }
 
 /** Written 0600: it carries live capabilities for two Screen Outputs. */

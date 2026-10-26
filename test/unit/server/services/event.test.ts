@@ -35,7 +35,12 @@ vi.mock('~~/server/services/meleeCredentials', () => ({
 const structureRemovalQuery = { kind: 'structure-removal-query' };
 const buildRemoveImportedStructureQueries = vi.fn(() => ({
 	queries: [structureRemovalQuery],
-	readOutcome: () => ({ keptPhases: [], keptRounds: [], deletedPhaseIds: [], deletedRoundIds: [] }),
+	readOutcome: () => ({
+		keptPhases: [],
+		keptRounds: [],
+		deletedPhaseIds: [],
+		deletedRoundIds: [],
+	}),
 }));
 vi.mock('~~/server/services/importedStructure', () => ({
 	buildRemoveImportedStructureQueries,
@@ -59,7 +64,10 @@ describe('eventService', () => {
 		it('returns event with talents when found', async () => {
 			const event = createMockEvent();
 			const talent = createMockTalent();
-			const eventWithTalents = { ...event, talents: [talent] };
+			const eventWithTalents = {
+				...event,
+				talents: [talent],
+			};
 			mockDb.query.events.findFirst.mockResolvedValue(eventWithTalents);
 
 			const result = await eventService().findById(1);
@@ -71,7 +79,10 @@ describe('eventService', () => {
 
 	describe('findAll', () => {
 		it('returns all events', async () => {
-			const events = [createMockEvent(), createMockEvent({ id: 2, name: 'Event 2' })];
+			const events = [
+				createMockEvent(),
+				createMockEvent({ id: 2, name: 'Event 2' }),
+			];
 			getChain('select').where.mockResolvedValue(events);
 
 			const result = await eventService().findAll();
@@ -128,7 +139,9 @@ describe('eventService', () => {
 		});
 
 		it('lets an explicit event setting override the selected-game policy', async () => {
-			getChain('insert').returning.mockResolvedValue([createMockEvent({ game: 'op' })]);
+			getChain('insert').returning.mockResolvedValue([
+				createMockEvent({ game: 'op' }),
+			]);
 
 			await eventService().create({
 				name: 'Custom One Piece Event',
@@ -153,12 +166,17 @@ describe('eventService', () => {
 
 			const result = await eventService().update(1, { name: 'Updated' } as any);
 
-			expect(result).toEqual({ ...updatedEvent, talents: [talent] });
+			expect(result).toEqual({
+				...updatedEvent,
+				talents: [talent],
+			});
 		});
 
 		it('marks decklist sync stale when enabling a points system', async () => {
 			mockDb.query.events.findFirst.mockResolvedValue(createMockEvent({ pointsSystem: null }));
-			getChain('update').returning.mockResolvedValue([createMockEvent({ pointsSystem: '7ph', lastDecklistsSyncedAt: null })]);
+			getChain('update').returning.mockResolvedValue([
+				createMockEvent({ pointsSystem: '7ph', lastDecklistsSyncedAt: null }),
+			]);
 			getChain('select').where.mockResolvedValue([]);
 
 			await eventService().update(1, { pointsSystem: '7ph' } as any);
@@ -312,7 +330,9 @@ describe('eventService', () => {
 
 	describe('remove', () => {
 		it('returns true when event deleted', async () => {
-			getChain('delete').returning.mockResolvedValue([createMockEvent()]);
+			getChain('delete').returning.mockResolvedValue([
+				createMockEvent(),
+			]);
 
 			const result = await eventService().remove(1);
 
@@ -330,7 +350,9 @@ describe('eventService', () => {
 
 	describe('updateSyncMetadata', () => {
 		it('returns true when sync metadata is updated', async () => {
-			getChain('update').returning.mockResolvedValue([{ id: 1 }]);
+			getChain('update').returning.mockResolvedValue([
+				{ id: 1 },
+			]);
 
 			const result = await eventService().updateSyncMetadata(1, {
 				lastSyncError: 'sync failed',
@@ -365,7 +387,9 @@ describe('eventService', () => {
 		};
 
 		it('atomically acquires an available lease', async () => {
-			getChain('update').returning.mockResolvedValue([{ id: 1 }]);
+			getChain('update').returning.mockResolvedValue([
+				{ id: 1 },
+			]);
 
 			const result = await eventService().tryAcquireMeleeSyncLease(input);
 
@@ -381,7 +405,9 @@ describe('eventService', () => {
 		});
 
 		it('recovers an expired lease when the first compare-and-set races', async () => {
-			getChain('update').returning.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 1 }]);
+			getChain('update').returning.mockResolvedValueOnce([]).mockResolvedValueOnce([
+				{ id: 1 },
+			]);
 			mockDb.query.events.findFirst.mockResolvedValue({
 				meleeSyncLeaseToken: 'expired-token',
 				meleeSyncLeaseCommand: 'players',
@@ -411,11 +437,15 @@ describe('eventService', () => {
 				acquired: false,
 				activeLease: { command: 'decklists', expiresAt },
 			});
-			expect(result).not.toEqual(expect.objectContaining({ token: expect.anything() }));
+			expect(result).not.toEqual(expect.objectContaining({
+				token: expect.anything(),
+			}));
 		});
 
 		it('conditionally releases only the owning token', async () => {
-			getChain('update').returning.mockResolvedValue([{ id: 1 }]);
+			getChain('update').returning.mockResolvedValue([
+				{ id: 1 },
+			]);
 
 			const released = await eventService().releaseMeleeSyncLease(1, 'owning-token');
 
@@ -428,7 +458,9 @@ describe('eventService', () => {
 		});
 
 		it('renews only the token that still owns the lease', async () => {
-			getChain('update').returning.mockResolvedValue([{ id: 1 }]);
+			getChain('update').returning.mockResolvedValue([
+				{ id: 1 },
+			]);
 			const renewedUntil = new Date('2026-01-01T00:20:00.000Z');
 
 			const renewed = await eventService().renewMeleeSyncLease(1, 'owning-token', renewedUntil);

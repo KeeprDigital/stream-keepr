@@ -188,7 +188,9 @@ export function graphicsAuthoringLeaseModule() {
 			return state;
 
 		const holderName = await sessionHolderName(record.holderSessionId);
-		return holderName === null ? state : { ...state, holderName };
+		return holderName === null
+			? state
+			: { ...state, holderName };
 	}
 
 	/**
@@ -235,14 +237,20 @@ export function graphicsAuthoringLeaseModule() {
 		if (resolution.outcome === 'renew') {
 			const renewed = await db
 				.update(graphicsAuthoringLeases)
-				.set({ expiresAt: new Date(expiresAt) })
+				.set({
+					expiresAt: new Date(expiresAt),
+				})
 				.where(and(
 					artifactCondition(artifact),
 					eq(graphicsAuthoringLeases.holderSessionId, sessionId),
 				))
 				.returning();
-			if (renewed.length > 0)
-				return { lease: stateOf(artifact, renewed[0], sessionId, now), outcome: 'renew' };
+			if (renewed.length > 0) {
+				return {
+					lease: stateOf(artifact, renewed[0], sessionId, now),
+					outcome: 'renew',
+				};
+			}
 			return await acquireAfterRace(params);
 		}
 
@@ -273,8 +281,12 @@ export function graphicsAuthoringLeaseModule() {
 			})
 			.where(claimable)
 			.returning();
-		if (claimed.length > 0)
-			return { lease: stateOf(artifact, claimed[0], sessionId, now), outcome: resolution.outcome };
+		if (claimed.length > 0) {
+			return {
+				lease: stateOf(artifact, claimed[0], sessionId, now),
+				outcome: resolution.outcome,
+			};
+		}
 
 		// No row to claim: insert one, and let the unique artifact index decide the
 		// race against another session inserting at the same instant.
@@ -290,8 +302,12 @@ export function graphicsAuthoringLeaseModule() {
 					expiresAt: new Date(expiresAt),
 				})
 				.returning();
-			if (inserted)
-				return { lease: stateOf(artifact, inserted, sessionId, now), outcome: resolution.outcome };
+			if (inserted) {
+				return {
+					lease: stateOf(artifact, inserted, sessionId, now),
+					outcome: resolution.outcome,
+				};
+			}
 		}
 		catch {
 			// Lost the insert race; fall through to re-resolve against the winner.
@@ -350,5 +366,11 @@ export function graphicsAuthoringLeaseModule() {
 		return await describe(ref, sessionId);
 	}
 
-	return { describe, requireWritable, fenceRefused, acquire, release };
+	return {
+		describe,
+		requireWritable,
+		fenceRefused,
+		acquire,
+		release,
+	};
 }

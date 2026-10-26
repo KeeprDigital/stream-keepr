@@ -23,7 +23,9 @@ function rejectionCodes(document: unknown) {
 	const outcome = read(document);
 	if (outcome.outcome !== 'rejected')
 		throw new Error('Expected the document to be refused');
-	return [...new Set(outcome.issues.map(issue => issue.code))];
+	return [
+		...new Set(outcome.issues.map(issue => issue.code)),
+	];
 }
 
 describe('the Template Package payload registry', () => {
@@ -57,9 +59,11 @@ describe('the `.skgraphic` payload', () => {
 		// pins that the fixture still uses every kind. A Definition added to
 		// `GRAPHIC_ITEM_KINDS` and never placed in the fixture is a branch of the
 		// transfer nobody is holding to anything, and this is where that shows up.
-		const definitions = [...new Set(outcome.capabilities
-			.filter(requirement => requirement.capability === 'graphic-item-definition')
-			.map(requirement => requirement.identity))]
+		const definitions = [
+			...new Set(outcome.capabilities
+				.filter(requirement => requirement.capability === 'graphic-item-definition')
+				.map(requirement => requirement.identity)),
+		]
 			.sort();
 		expect(definitions).toEqual([...GRAPHIC_ITEM_KINDS].sort());
 		expect(outcome.capabilities.some(requirement =>
@@ -170,7 +174,14 @@ describe('a `.sklayout` whose Frame names a root-relative Remote Media URL', () 
 			frameAsset: testGraphicAssetReference('frame-asset', 'frame-revision'),
 			itemAsset: asset,
 		});
-		layout.frame.mediaBackground = { enabled: true, source: { kind: 'url', url }, fit: 'cover', opacity: 1, playbackRate: 1, loop: true };
+		layout.frame.mediaBackground = {
+			enabled: true,
+			source: { kind: 'url', url },
+			fit: 'cover',
+			opacity: 1,
+			playbackRate: 1,
+			loop: true,
+		};
 		return layout;
 	}
 
@@ -185,10 +196,12 @@ describe('a `.sklayout` whose Frame names a root-relative Remote Media URL', () 
 		if (outcome.outcome !== 'rejected')
 			throw new Error('Expected the document to be refused');
 
-		expect(outcome.issues).toEqual([expect.objectContaining({
-			code: 'invalid-template-document',
-			subject: 'frame.mediaBackground.source.url',
-			message: expect.stringContaining('/video/'),
-		})]);
+		expect(outcome.issues).toEqual([
+			expect.objectContaining({
+				code: 'invalid-template-document',
+				subject: 'frame.mediaBackground.source.url',
+				message: expect.stringContaining('/video/'),
+			}),
+		]);
 	});
 });

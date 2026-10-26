@@ -38,7 +38,10 @@ export function useMetagamePage(
 	}
 
 	async function fetchPageData() {
-		await Promise.all([fetchSummary(), fetchSection()]);
+		await Promise.all([
+			fetchSummary(),
+			fetchSection(),
+		]);
 	}
 
 	watch(

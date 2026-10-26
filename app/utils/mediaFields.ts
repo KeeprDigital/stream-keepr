@@ -48,7 +48,11 @@ export function resolveMediaFieldsPatch(patch: MediaFieldsPatch): ResolvedMediaF
 	const { opacity, playbackRate, ...rest } = patch;
 	return {
 		...rest,
-		...(opacity === undefined ? {} : { opacity: opacity ?? MEDIA_FIELD_DEFAULTS.opacity }),
-		...(playbackRate === undefined ? {} : { playbackRate: playbackRate ?? MEDIA_FIELD_DEFAULTS.playbackRate }),
+		...(opacity === undefined
+			? {}
+			: { opacity: opacity ?? MEDIA_FIELD_DEFAULTS.opacity }),
+		...(playbackRate === undefined
+			? {}
+			: { playbackRate: playbackRate ?? MEDIA_FIELD_DEFAULTS.playbackRate }),
 	};
 }

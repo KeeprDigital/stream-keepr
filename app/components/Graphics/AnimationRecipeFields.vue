@@ -135,7 +135,9 @@ const slideReference = computed(() => {
 	if (!parent || !slide)
 		return null;
 	const reference = graphicSlideDistanceReference(parent, slide.direction);
-	return reference.span > 0 ? { ...reference, name: parent.name } : null;
+	return reference.span > 0
+		? { ...reference, name: parent.name }
+		: null;
 });
 
 /** Pixels whenever there is no parent to measure a relative unit against. */
@@ -154,12 +156,16 @@ const slideDistanceHelp = computed(() => {
 	if (!reference || slideUnit.value === 'px')
 		return undefined;
 	const measured = `${reference.name} ${SLIDE_DIMENSION_LABELS[reference.dimension]}`;
-	return slideUnit.value === 'percent' ? `% of ${measured}` : `32-unit grid across ${measured}`;
+	return slideUnit.value === 'percent'
+		? `% of ${measured}`
+		: `32-unit grid across ${measured}`;
 });
 
 function updateSlideDistance(value: number | null | undefined) {
 	const pixels = parseGeometryValue(value ?? 0, slideReference.value?.span ?? 0, slideUnit.value);
-	emit('channel', 'slide', { distance: Math.min(MAX_GRAPHIC_SLIDE_DISTANCE_PX, Math.max(0, pixels)) });
+	emit('channel', 'slide', {
+		distance: Math.min(MAX_GRAPHIC_SLIDE_DISTANCE_PX, Math.max(0, pixels)),
+	});
 }
 
 function testId(field: string) {

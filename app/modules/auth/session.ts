@@ -111,7 +111,10 @@ export function useAuthSession() {
 				return { status: 'unavailable', user: null };
 
 			const found = answer.data?.user ?? null;
-			return { status: found ? 'signed-in' : 'signed-out', user: found };
+			return {
+				status: found ? 'signed-in' : 'signed-out',
+				user: found,
+			};
 		}
 		catch {
 			return { status: 'unavailable', user: null };
@@ -179,7 +182,10 @@ export function useAuthSession() {
 	 */
 	async function signIn(email: string, password: string): Promise<AuthAttempt> {
 		try {
-			const answer = await authClient.signIn.email({ email: email.trim(), password });
+			const answer = await authClient.signIn.email({
+				email: email.trim(),
+				password,
+			});
 
 			if (answer.error)
 				return { ok: false, message: answer.error.message ?? SIGN_IN_FAILED_MESSAGE };

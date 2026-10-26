@@ -20,26 +20,34 @@ function stops(count: number, color: Record<string, string>) {
 
 function itemAccepts(count: number) {
 	return broadcastGraphicsModeConfigSchema.safeParse({
-		graphics: [{
-			id: 'a',
-			name: 'A',
-			items: [{
-				type: 'shape',
-				id: 'bed',
-				label: 'Bed',
-				visible: true,
-				anchor: 'top-left',
-				x: 0,
-				y: 0,
-				width: 100,
-				height: 100,
-				geometry: squareShapeGeometry(),
-				surfaceStyle: {
-					fill: { type: 'linear-gradient', angle: 90, stops: stops(count, { color: '#ffffff' }) },
-					fillOpacity: 1,
-				},
-			}],
-		}],
+		graphics: [
+			{
+				id: 'a',
+				name: 'A',
+				items: [
+					{
+						type: 'shape',
+						id: 'bed',
+						label: 'Bed',
+						visible: true,
+						anchor: 'top-left',
+						x: 0,
+						y: 0,
+						width: 100,
+						height: 100,
+						geometry: squareShapeGeometry(),
+						surfaceStyle: {
+							fill: {
+								type: 'linear-gradient',
+								angle: 90,
+								stops: stops(count, { color: '#ffffff' }),
+							},
+							fillOpacity: 1,
+						},
+					},
+				],
+			},
+		],
 	}).success;
 }
 
@@ -49,7 +57,11 @@ function entryAccepts(count: number) {
 		kind: 'fill',
 		name: 'Accent fill',
 		schemaVersion: 1,
-		value: { type: 'linear-gradient', angle: 90, stops: stops(count, { colorEntryId: 'brand' }) },
+		value: {
+			type: 'linear-gradient',
+			angle: 90,
+			stops: stops(count, { colorEntryId: 'brand' }),
+		},
 	}).success;
 }
 

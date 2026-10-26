@@ -410,8 +410,16 @@ describe('event Data publication module', () => {
 			phaseCount: 2,
 			roundCount: 8,
 			changes: {
-				phases: { created: [2], updated: [3], deleted: [] },
-				rounds: { created: [4], updated: [5], deleted: [6] },
+				phases: {
+					created: [2],
+					updated: [3],
+					deleted: [],
+				},
+				rounds: {
+					created: [4],
+					updated: [5],
+					deleted: [6],
+				},
 			},
 		});
 
@@ -455,8 +463,16 @@ describe('event Data publication module', () => {
 			phaseCount: 2,
 			roundCount: 8,
 			changes: {
-				phases: { created: [2], updated: [3], deleted: [] },
-				rounds: { created: [4], updated: [5], deleted: [6] },
+				phases: {
+					created: [2],
+					updated: [3],
+					deleted: [],
+				},
+				rounds: {
+					created: [4],
+					updated: [5],
+					deleted: [6],
+				},
 			},
 		}, 'origin-1');
 		expect(mockPublishMessageStrict).toHaveBeenCalledWith(1, 'melee:featureMatchesSynced', {
@@ -497,7 +513,9 @@ describe('event Data publication module', () => {
 		const updated = await publication.archetypeUpdated({
 			eventId: 1,
 			entity: createArchetype({ name: 'Mono-Red Aggro', colors: 'R' }) as any,
-			keyCards: [createKeyCard({ id: 13, name: 'Monastery Swiftspear', sortOrder: 0 }) as any],
+			keyCards: [
+				createKeyCard({ id: 13, name: 'Monastery Swiftspear', sortOrder: 0 }) as any,
+			],
 			originConnectionId: 'origin-1',
 		});
 		await publication.archetypeDeleted({
@@ -508,7 +526,9 @@ describe('event Data publication module', () => {
 		const keyCards = await publication.archetypeKeyCardsUpdated({
 			eventId: 1,
 			archetypeId: 11,
-			keyCards: [createKeyCard({ sortOrder: 2 }) as any],
+			keyCards: [
+				createKeyCard({ sortOrder: 2 }) as any,
+			],
 			originConnectionId: 'origin-1',
 		});
 
@@ -516,10 +536,17 @@ describe('event Data publication module', () => {
 		expect(updated).toEqual(expect.objectContaining({
 			id: 11,
 			name: 'Mono-Red Aggro',
-			keyCards: [expect.objectContaining({ id: 13, name: 'Monastery Swiftspear' })],
+			keyCards: [
+				expect.objectContaining({ id: 13, name: 'Monastery Swiftspear' }),
+			],
 		}));
 		expect(keyCards).toEqual([
-			expect.objectContaining({ archetypeId: 11, id: 12, name: 'Sleight of Hand', sortOrder: 2 }),
+			expect.objectContaining({
+				archetypeId: 11,
+				id: 12,
+				name: 'Sleight of Hand',
+				sortOrder: 2,
+			}),
 		]);
 		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'archetype:created', {
 			archetype: expect.objectContaining({ id: 11, name: 'Izzet Prowess', keyCards: [] }),
@@ -528,7 +555,9 @@ describe('event Data publication module', () => {
 			archetype: expect.objectContaining({
 				id: 11,
 				name: 'Mono-Red Aggro',
-				keyCards: [expect.objectContaining({ id: 13, name: 'Monastery Swiftspear' })],
+				keyCards: [
+					expect.objectContaining({ id: 13, name: 'Monastery Swiftspear' }),
+				],
 			}),
 		}, 'origin-1');
 		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'archetype:deleted', {
@@ -536,7 +565,14 @@ describe('event Data publication module', () => {
 		}, 'origin-1');
 		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'archetype:keyCardsUpdated', {
 			archetypeId: 11,
-			keyCards: [expect.objectContaining({ archetypeId: 11, id: 12, name: 'Sleight of Hand', sortOrder: 2 })],
+			keyCards: [
+				expect.objectContaining({
+					archetypeId: 11,
+					id: 12,
+					name: 'Sleight of Hand',
+					sortOrder: 2,
+				}),
+			],
 		}, 'origin-1');
 	});
 
@@ -820,11 +856,18 @@ describe('event Data publication module', () => {
 			return createScreen({
 				modeConfigs: {
 					'broadcast-graphics': {
-						graphics: [{
-							id: 'lower-third',
-							name: 'Lower third',
-							items: [{ id: 'bed', text: 'T'.repeat(MAX_MODE_CONFIGS_BYTES - 200) }],
-						}],
+						graphics: [
+							{
+								id: 'lower-third',
+								name: 'Lower third',
+								items: [
+									{
+										id: 'bed',
+										text: 'T'.repeat(MAX_MODE_CONFIGS_BYTES - 200),
+									},
+								],
+							},
+						],
 					},
 				},
 			});
@@ -947,7 +990,9 @@ describe('event Data publication module', () => {
 			// until some later command forced a reload.
 			expect(mockPublishMessage).toHaveBeenCalledWith(1, 'round:updated', expect.anything(), 'origin-1');
 			expect(mockRefreshBindings).not.toHaveBeenCalledWith(expect.objectContaining({ originConnectionId: 'origin-1' }));
-			expect(mockRefreshBindings.mock.calls).toEqual([[1]]);
+			expect(mockRefreshBindings.mock.calls).toEqual([
+				[1],
+			]);
 		});
 
 		it('catches them up on a Melee Sync, which reports a count rather than each entity', async () => {
@@ -966,14 +1011,19 @@ describe('event Data publication module', () => {
 			]);
 			const publication = eventDataPublicationModule();
 
-			const published = await publication.featureMatchSlotsUpdated({ eventId: 1, slotIds: [4, 5, 6] });
+			const published = await publication.featureMatchSlotsUpdated({
+				eventId: 1,
+				slotIds: [4, 5, 6],
+			});
 
 			// Every Slot is announced, because each message names one Slot. Re-resolution is
 			// per Event, so fifty Slots moving in one operation is one Event Data change as
 			// far as a Graphic Input Binding is concerned — sweeping per Slot would repeat
 			// the whole Event's work fifty times inside one request.
 			expect(published).toHaveLength(3);
-			expect(mockRefreshBindings.mock.calls).toEqual([[1]]);
+			expect(mockRefreshBindings.mock.calls).toEqual([
+				[1],
+			]);
 		});
 
 		it('leaves them alone for a change no Graphic Input Binding can read', async () => {
@@ -982,8 +1032,14 @@ describe('event Data publication module', () => {
 			// A Screen and a Player List are Event-scoped, but no Graphic Source Selection
 			// names either, so re-resolving on them would be work that can never change a
 			// value — on every Screen in the Event, every time one is saved.
-			await publication.screenUpdated({ eventId: 1, entity: createScreen() as any });
-			await publication.playerListUpdated({ eventId: 1, entity: createPlayerList() as any });
+			await publication.screenUpdated({
+				eventId: 1,
+				entity: createScreen() as any,
+			});
+			await publication.playerListUpdated({
+				eventId: 1,
+				entity: createPlayerList() as any,
+			});
 
 			expect(mockRefreshBindings).not.toHaveBeenCalled();
 		});

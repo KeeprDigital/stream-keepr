@@ -36,7 +36,9 @@ export function featureMatchAssignmentModule() {
 			assignments.findByRoundAndSlot(eventId, assignmentInput.roundId, assignmentInput.slotId),
 			assignments.findByRoundAndMatch(eventId, assignmentInput.roundId, assignmentInput.matchId),
 		]);
-		const displacedAssignment = existingAtSlot?.matchId !== assignmentInput.matchId ? existingAtSlot : undefined;
+		const displacedAssignment = existingAtSlot?.matchId !== assignmentInput.matchId
+			? existingAtSlot
+			: undefined;
 		const hasExactConfirmation = displacedAssignment
 			? hasExactNoteDiscardConfirmation(displacedAssignment, confirmedNoteDiscards)
 			: false;

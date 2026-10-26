@@ -6,8 +6,12 @@ const { screen } = useScreenContext();
 const { config, error, isEmpty, firstMeeting, headerText, player1, player2, earlierMatches, formatRecord } = useHeadToHeadModeData();
 
 const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
-const primaryTextStyle = computed(() => screenConfig.value.primaryTextColor ? { color: screenConfig.value.primaryTextColor } : {});
-const secondaryTextStyle = computed(() => screenConfig.value.secondaryTextColor ? { color: screenConfig.value.secondaryTextColor } : { opacity: '0.75' });
+const primaryTextStyle = computed(() => screenConfig.value.primaryTextColor
+	? { color: screenConfig.value.primaryTextColor }
+	: {});
+const secondaryTextStyle = computed(() => screenConfig.value.secondaryTextColor
+	? { color: screenConfig.value.secondaryTextColor }
+	: { opacity: '0.75' });
 const displayStyle = computed(() => ({
 	'--broadcast-table-primary-text': screenConfig.value.primaryTextColor ?? '#ffffff',
 	'--broadcast-table-secondary-text': screenConfig.value.secondaryTextColor ?? 'rgba(255, 255, 255, 0.72)',

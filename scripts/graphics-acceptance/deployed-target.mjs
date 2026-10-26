@@ -75,7 +75,11 @@ export function parseJsonc(text) {
 export async function loadCommittedInstallation() {
 	const [app, validator] = await Promise.all([APP_CONFIG, VALIDATOR_CONFIG].map(async url =>
 		parseJsonc(await readFile(url, 'utf8'))));
-	return { app, validator, validatorConfigPath: fileURLToPath(VALIDATOR_CONFIG) };
+	return {
+		app,
+		validator,
+		validatorConfigPath: fileURLToPath(VALIDATOR_CONFIG),
+	};
 }
 
 function inconsistent(reason) {
@@ -93,7 +97,9 @@ export function stagingBucketOf(config) {
 
 /** Every host the app's config serves, from its `routes`. */
 function servedHosts(app) {
-	return (app.routes ?? []).map(route => (typeof route === 'string' ? route : route.pattern)).filter(Boolean).map(pattern => pattern.replace(/\/.*$/, '').toLowerCase());
+	return (app.routes ?? []).map(route => (typeof route === 'string'
+		? route
+		: route.pattern)).filter(Boolean).map(pattern => pattern.replace(/\/.*$/, '').toLowerCase());
 }
 
 /**
@@ -114,8 +120,13 @@ export function resolveDeployedTarget({ env, installation, requireOperator = tru
 	const origin = acceptanceOrigin({ deployed: true, env });
 	// Called for its refusal: it throws, with its notice, when no operator is
 	// available. A cleanup retry signs in as nobody, so it does not ask.
-	if (requireOperator)
-		operatorCredentialPlan({ deployed: true, env, newPassword: newOperatorPassword() });
+	if (requireOperator) {
+		operatorCredentialPlan({
+			deployed: true,
+			env,
+			newPassword: newOperatorPassword(),
+		});
+	}
 
 	const accountId = env[ACCOUNT_ID_ENV]?.trim();
 	if (!accountId)
@@ -151,5 +162,11 @@ export function resolveDeployedTarget({ env, installation, requireOperator = tru
 	if (!workflow)
 		throw inconsistent('workflow-unconfigured');
 
-	return { origin, accountId, stagingBucket, workflow, validatorConfigPath };
+	return {
+		origin,
+		accountId,
+		stagingBucket,
+		workflow,
+		validatorConfigPath,
+	};
 }

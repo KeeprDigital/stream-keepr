@@ -102,12 +102,17 @@ export function useForm<T extends Record<string, any>>(
 		}
 
 		return Object.fromEntries(
-			Object.entries(data).map(([key, value]) => [key, cloneData(value)]),
+			Object.entries(data).map(([key, value]) => [
+				key,
+				cloneData(value),
+			]),
 		) as D;
 	};
 
 	const getInitialValue = (): T => {
-		return isRef(initialData) ? cloneData(initialData.value) : cloneData(initialData);
+		return isRef(initialData)
+			? cloneData(initialData.value)
+			: cloneData(initialData);
 	};
 
 	const formData = ref<T>(getInitialValue()) as Ref<T>;
@@ -174,7 +179,9 @@ export function useForm<T extends Record<string, any>>(
 					merged.push(row);
 			}
 			else {
-				merged.push(before && after ? mergeValue(row, before, after) : row);
+				merged.push(before && after
+					? mergeValue(row, before, after)
+					: row);
 			}
 		}
 
@@ -206,7 +213,10 @@ export function useForm<T extends Record<string, any>>(
 			return local;
 
 		const merged: Record<string, unknown> = {};
-		for (const key of new Set([...Object.keys(local), ...Object.keys(next)])) {
+		for (const key of new Set([
+			...Object.keys(local),
+			...Object.keys(next),
+		])) {
 			const value = mergeValue(local[key], previous[key], next[key]);
 			if (value !== undefined || Object.hasOwn(next, key))
 				merged[key] = value;

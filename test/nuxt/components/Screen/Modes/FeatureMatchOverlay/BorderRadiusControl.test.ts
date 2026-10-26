@@ -19,7 +19,11 @@ describe('border radius control', () => {
 					UFormField: defineComponent({ template: '<div><slot /></div>' }),
 					UInputNumber: defineComponent({
 						name: 'UInputNumber',
-						props: { modelValue: { type: Number, required: false }, min: { type: Number, required: false }, max: { type: Number, required: false } },
+						props: {
+							modelValue: { type: Number, required: false },
+							min: { type: Number, required: false },
+							max: { type: Number, required: false },
+						},
 						template: '<input type="number" />',
 					}),
 				},

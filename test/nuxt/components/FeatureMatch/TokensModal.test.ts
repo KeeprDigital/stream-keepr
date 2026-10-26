@@ -68,7 +68,13 @@ function makeDeck(cardName: string, tokenName = 'Map') {
 				manaCost: '{1}{W}',
 				deckCounterTypes: [],
 				deckTokens: [
-					{ id: tokenName.toLowerCase(), scryfallId: tokenName.toLowerCase(), name: tokenName, typeLine: 'Token Artifact - Map', uri: null },
+					{
+						id: tokenName.toLowerCase(),
+						scryfallId: tokenName.toLowerCase(),
+						name: tokenName,
+						typeLine: 'Token Artifact - Map',
+						uri: null,
+					},
 				],
 				quantity: 4,
 				compartment: 'mainboard',
@@ -130,7 +136,9 @@ describe('featureMatchTokensModal', () => {
 
 		await wrapper.get('button').trigger('click');
 
-		expect(wrapper.emitted('update:open')).toEqual([[false]]);
+		expect(wrapper.emitted('update:open')).toEqual([
+			[false],
+		]);
 	});
 
 	it('keeps loaded token content while closing', async () => {

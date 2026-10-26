@@ -27,7 +27,13 @@ function createHarness() {
 		onReset,
 	});
 
-	return { repository, lifecycle, loadedRoundId, onMutation, onReset };
+	return {
+		repository,
+		lifecycle,
+		loadedRoundId,
+		onMutation,
+		onReset,
+	};
 }
 
 function deferred<T>() {
@@ -47,7 +53,9 @@ describe('event data lifecycle module', () => {
 
 	it('loads Event-scoped items and owns loaded state', async () => {
 		const harness = createHarness();
-		const data = [{ id: 1, eventId: 10, name: 'One' }];
+		const data = [
+			{ id: 1, eventId: 10, name: 'One' },
+		];
 		harness.repository.list.mockResolvedValue(data);
 
 		await harness.lifecycle.loadByEventId(10);
@@ -67,13 +75,19 @@ describe('event data lifecycle module', () => {
 
 		const firstLoad = harness.lifecycle.loadByEventId(10);
 		const secondLoad = harness.lifecycle.loadByEventId(20);
-		second.resolve([{ id: 2, eventId: 20, name: 'Current' }]);
+		second.resolve([
+			{ id: 2, eventId: 20, name: 'Current' },
+		]);
 		await secondLoad;
-		first.resolve([{ id: 1, eventId: 10, name: 'Stale' }]);
+		first.resolve([
+			{ id: 1, eventId: 10, name: 'Stale' },
+		]);
 		await firstLoad;
 
 		expect(harness.lifecycle.currentEventId.value).toBe(20);
-		expect(harness.lifecycle.items.value).toEqual([{ id: 2, eventId: 20, name: 'Current' }]);
+		expect(harness.lifecycle.items.value).toEqual([
+			{ id: 2, eventId: 20, name: 'Current' },
+		]);
 	});
 
 	it('invalidates an in-flight load when reset', async () => {
@@ -83,7 +97,9 @@ describe('event data lifecycle module', () => {
 
 		const load = harness.lifecycle.loadByEventId(10);
 		harness.lifecycle.reset();
-		pending.resolve([{ id: 1, eventId: 10, name: 'Stale' }]);
+		pending.resolve([
+			{ id: 1, eventId: 10, name: 'Stale' },
+		]);
 		await load;
 
 		expect(harness.lifecycle.currentEventId.value).toBeNull();
@@ -114,7 +130,9 @@ describe('event data lifecycle module', () => {
 		await harness.lifecycle.update(10, 1, { name: 'Updated' });
 		await harness.lifecycle.remove(10, 2);
 
-		expect(harness.lifecycle.items.value).toEqual([{ id: 1, eventId: 10, name: 'Updated' }]);
+		expect(harness.lifecycle.items.value).toEqual([
+			{ id: 1, eventId: 10, name: 'Updated' },
+		]);
 		expect(harness.onMutation).toHaveBeenCalledTimes(3);
 	});
 
@@ -134,12 +152,39 @@ describe('event data lifecycle module', () => {
 		harness.lifecycle.currentEventId.value = 10;
 		harness.loadedRoundId.value = 5;
 
-		harness.lifecycle.applyRemoteCreated({ id: 1, eventId: 99, roundId: 5, name: 'Wrong event' });
-		harness.lifecycle.applyRemoteCreated({ id: 2, eventId: 10, roundId: 6, name: 'Wrong round' });
-		harness.lifecycle.applyRemoteCreated({ id: 3, eventId: 10, roundId: 5, name: 'Right scope' });
-		harness.lifecycle.applyRemoteUpdated({ id: 3, eventId: 10, roundId: 6, name: 'Stale update' });
+		harness.lifecycle.applyRemoteCreated({
+			id: 1,
+			eventId: 99,
+			roundId: 5,
+			name: 'Wrong event',
+		});
+		harness.lifecycle.applyRemoteCreated({
+			id: 2,
+			eventId: 10,
+			roundId: 6,
+			name: 'Wrong round',
+		});
+		harness.lifecycle.applyRemoteCreated({
+			id: 3,
+			eventId: 10,
+			roundId: 5,
+			name: 'Right scope',
+		});
+		harness.lifecycle.applyRemoteUpdated({
+			id: 3,
+			eventId: 10,
+			roundId: 6,
+			name: 'Stale update',
+		});
 
-		expect(harness.lifecycle.items.value).toEqual([{ id: 3, eventId: 10, roundId: 5, name: 'Right scope' }]);
+		expect(harness.lifecycle.items.value).toEqual([
+			{
+				id: 3,
+				eventId: 10,
+				roundId: 5,
+				name: 'Right scope',
+			},
+		]);
 		expect(harness.onMutation).toHaveBeenCalledOnce();
 	});
 
@@ -161,8 +206,14 @@ describe('event data lifecycle module', () => {
 	 * lifetime of its own even though its id is the one the write named (#606).
 	 */
 	describe.each([
-		['Event B', [20]],
-		['Event A, loaded again since', [20, 10]],
+		[
+			'Event B',
+			[20],
+		],
+		[
+			'Event A, loaded again since',
+			[20, 10],
+		],
 	])('a write answered after the collection moved on to %s', (_, switches) => {
 		const original = { id: 1, eventId: 10, name: 'One' };
 
@@ -173,7 +224,9 @@ describe('event data lifecycle module', () => {
 		async function switchAway(harness: ReturnType<typeof createHarness>) {
 			let shown!: Item[];
 			for (const eventId of switches) {
-				shown = [{ id: 1, eventId, name: `One as loaded for ${eventId}` }];
+				shown = [
+					{ id: 1, eventId, name: `One as loaded for ${eventId}` },
+				];
 				harness.lifecycle.reset();
 				harness.repository.list.mockResolvedValueOnce(structuredClone(shown));
 				await harness.lifecycle.loadByEventId(eventId);
@@ -232,7 +285,10 @@ describe('event data lifecycle module', () => {
 
 		it('a late delete removes nothing and its failure restores nothing', async () => {
 			const harness = createHarness();
-			harness.lifecycle.items.value = [original, { id: 2, eventId: 10, name: 'Two' }];
+			harness.lifecycle.items.value = [
+				original,
+				{ id: 2, eventId: 10, name: 'Two' },
+			];
 			const succeeded = deferred<unknown>();
 			const failed = deferred<never>();
 			harness.repository.remove
@@ -253,13 +309,21 @@ describe('event data lifecycle module', () => {
 	});
 
 	it('leaves behind a loaded or answered item its store does not admit', async () => {
-		const repository = { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() };
+		const repository = {
+			list: vi.fn(),
+			create: vi.fn(),
+			update: vi.fn(),
+			remove: vi.fn(),
+		};
 		const lifecycle = useEventDataLifecycle<Item, { name: string }, { name: string }>({
 			repository,
 			entityLabel: 'Item',
 			admit: item => item.name !== 'Behind',
 		});
-		const held = [{ id: 1, eventId: 10, name: 'Held' }, { id: 2, eventId: 10, name: 'Held' }];
+		const held = [
+			{ id: 1, eventId: 10, name: 'Held' },
+			{ id: 2, eventId: 10, name: 'Held' },
+		];
 		repository.list.mockResolvedValueOnce(held);
 		await lifecycle.loadByEventId(10);
 
@@ -282,7 +346,9 @@ describe('event data lifecycle module', () => {
 
 	it('resets lifecycle state and calls reset hook', async () => {
 		const harness = createHarness();
-		harness.repository.list.mockResolvedValue([{ id: 1, eventId: 10, name: 'One' }]);
+		harness.repository.list.mockResolvedValue([
+			{ id: 1, eventId: 10, name: 'One' },
+		]);
 		await harness.lifecycle.loadByEventId(10);
 
 		harness.lifecycle.reset();

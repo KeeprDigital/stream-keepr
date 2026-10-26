@@ -130,7 +130,10 @@ export function maximalFeatureMatchLayoutDocument(
 			letterSpacing: 2,
 			color: '#ffcc00',
 		},
-		player1Deck: { font: { kind: 'application', fontId: 'saira-condensed' }, fontSize: 32 },
+		player1Deck: {
+			font: { kind: 'application', fontId: 'saira-condensed' },
+			fontSize: 32,
+		},
 	};
 	name.surfaceStyle = maximalSurfaceStyle();
 	name.rotation = -2;
@@ -183,7 +186,12 @@ export function maximalFeatureMatchLayoutDocument(
 	};
 
 	composition.animation = {
-		'enter': { duration: 400, easing: 'ease-out', delay: 100, fade: { opacity: 0 } },
+		'enter': {
+			duration: 400,
+			easing: 'ease-out',
+			delay: 100,
+			fade: { opacity: 0 },
+		},
 		'on-screen': {
 			duration: 800,
 			easing: 'linear',
@@ -192,7 +200,12 @@ export function maximalFeatureMatchLayoutDocument(
 			repeat: 3,
 			scale: { factor: 1.1, origin: 'center' },
 		},
-		'update': { duration: 250, easing: 'ease-in-out', delay: 0, fade: { opacity: 0.5 } },
+		'update': {
+			duration: 250,
+			easing: 'ease-in-out',
+			delay: 0,
+			fade: { opacity: 0.5 },
+		},
 		'exit': {
 			duration: 300,
 			easing: 'ease-in',
@@ -201,18 +214,56 @@ export function maximalFeatureMatchLayoutDocument(
 			reveal: { edge: 'left' },
 		},
 		'stagger': {
-			'enter': { order: 'list', step: 80, itemIds: ['player1-name', 'cluster'] },
-			'on-screen': { order: 'reverse-list', step: 40, itemIds: ['cluster'] },
-			'update': { order: 'list', step: 20, itemIds: ['player1-name'] },
-			'exit': { order: 'reverse-list', step: 60, itemIds: ['cluster', 'backdrop', 'clock', 'life', 'wins'] },
+			'enter': {
+				order: 'list',
+				step: 80,
+				itemIds: ['player1-name', 'cluster'],
+			},
+			'on-screen': {
+				order: 'reverse-list',
+				step: 40,
+				itemIds: ['cluster'],
+			},
+			'update': {
+				order: 'list',
+				step: 20,
+				itemIds: ['player1-name'],
+			},
+			'exit': {
+				order: 'reverse-list',
+				step: 60,
+				itemIds: [
+					'cluster',
+					'backdrop',
+					'clock',
+					'life',
+					'wins',
+				],
+			},
 		},
 	};
 	group.animation = {
-		enter: { duration: 300, easing: 'linear', delay: 0, fade: { opacity: 0 } },
-		stagger: { enter: { order: 'list', step: 30, itemIds: ['child'] } },
+		enter: {
+			duration: 300,
+			easing: 'linear',
+			delay: 0,
+			fade: { opacity: 0 },
+		},
+		stagger: {
+			enter: {
+				order: 'list',
+				step: 30,
+				itemIds: ['child'],
+			},
+		},
 	};
 	name.animation = {
-		exit: { duration: 150, easing: 'ease-in', delay: 50, fade: { opacity: 0 } },
+		exit: {
+			duration: 150,
+			easing: 'ease-in',
+			delay: 50,
+			fade: { opacity: 0 },
+		},
 	};
 
 	return {

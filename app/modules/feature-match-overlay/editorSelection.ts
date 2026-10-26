@@ -24,7 +24,9 @@ export const CANVAS_SELECTION: FeatureMatchLayoutEditorSelection = { type: 'canv
 
 /** The host-owned projection: a Source Item, or the canvas for anything else. */
 export function hostSelectionTarget(selection: FeatureMatchLayoutEditorSelection): FeatureMatchOverlaySelectionTarget {
-	return selection.type === 'source' ? { type: 'source', itemId: selection.itemId } : { type: 'canvas' };
+	return selection.type === 'source'
+		? { type: 'source', itemId: selection.itemId }
+		: { type: 'canvas' };
 }
 
 /** The shared compositor's projection: a Graphic Item, or the canvas for anything else. */
@@ -36,16 +38,22 @@ export function compositorSelectionTarget(selection: FeatureMatchLayoutEditorSel
 
 /** A host-owned target, as an editor selection. */
 export function fromHostSelectionTarget(target: FeatureMatchOverlaySelectionTarget): FeatureMatchLayoutEditorSelection {
-	return target.type === 'source' ? { type: 'source', itemId: target.itemId } : CANVAS_SELECTION;
+	return target.type === 'source'
+		? { type: 'source', itemId: target.itemId }
+		: CANVAS_SELECTION;
 }
 
 /** A shared compositor target, as an editor selection. A whole-composition target is the canvas. */
 export function fromCompositorSelectionTarget(target: GraphicsSelectionTarget): FeatureMatchLayoutEditorSelection {
-	return target.type === 'item' ? { type: 'item', itemId: target.itemId } : CANVAS_SELECTION;
+	return target.type === 'item'
+		? { type: 'item', itemId: target.itemId }
+		: CANVAS_SELECTION;
 }
 
 export function editorSelectionKey(selection: FeatureMatchLayoutEditorSelection): string {
-	return selection.type === 'canvas' ? 'canvas' : `${selection.type}:${selection.itemId}`;
+	return selection.type === 'canvas'
+		? 'canvas'
+		: `${selection.type}:${selection.itemId}`;
 }
 
 /** Whether the selection still names something in this layout. */
@@ -91,14 +99,23 @@ export function editorSelectionFrame(
 
 	if (selection.type === 'source') {
 		const item = layout.sources.find(candidate => candidate.id === selection.itemId);
-		return item ? { rect: pickRect(item), origin: { x: 0, y: 0 } } : null;
+		return item
+			? {
+					rect: pickRect(item),
+					origin: { x: 0, y: 0 },
+				}
+			: null;
 	}
 
 	const location = findGraphicItem(layout.composition, selection.itemId);
 	if (!location || (location.item.rotation ?? 0) % 360 !== 0)
 		return null;
-	if (!location.group)
-		return { rect: pickRect(location.item), origin: { x: 0, y: 0 } };
+	if (!location.group) {
+		return {
+			rect: pickRect(location.item),
+			origin: { x: 0, y: 0 },
+		};
+	}
 	if (location.group.arrangement !== 'canvas')
 		return null;
 	const padding = Math.max(0, location.group.padding);
@@ -109,5 +126,10 @@ export function editorSelectionFrame(
 }
 
 function pickRect(rect: GraphicRect): GraphicRect {
-	return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+	return {
+		x: rect.x,
+		y: rect.y,
+		width: rect.width,
+		height: rect.height,
+	};
 }

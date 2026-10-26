@@ -38,7 +38,10 @@ describe('feature match session extended behavior', () => {
 		});
 		expect(result.currentState.player2.lifeTotal).toBe(16);
 
-		const counters = [{ type: 'poison', value: 3 }, { type: 'energy', value: 5 }];
+		const counters = [
+			{ type: 'poison', value: 3 },
+			{ type: 'energy', value: 5 },
+		];
 		result = await harness.send({
 			commandId: commandId('set-counters'),
 			type: 'SetCounters',
@@ -274,7 +277,10 @@ describe('feature match session extended behavior', () => {
 			};
 		}>(
 			`/api/events/${eventId}/feature-match-slots/${harness.slot.id}/setup`,
-			{ method: 'PATCH', body: { bestOf: 5 } },
+			{
+				method: 'PATCH',
+				body: { bestOf: 5 },
+			},
 		);
 
 		expect(updatedSlot.activeSession.sourceSnapshot.bestOf).toBe(5);

@@ -1,7 +1,9 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockToast = { add: vi.fn() };
+const mockToast = {
+	add: vi.fn(),
+};
 mockNuxtImport('useToast', () => () => mockToast);
 
 describe('useConfigUpdate', () => {
@@ -31,7 +33,13 @@ describe('useConfigUpdate', () => {
 			errorMessage: 'Test error',
 		});
 
-		return { config, saving, updateConfig, storeConfig, saveToStore };
+		return {
+			config,
+			saving,
+			updateConfig,
+			storeConfig,
+			saveToStore,
+		};
 	}
 
 	function deferred<T = void>() {
@@ -151,7 +159,10 @@ describe('useConfigUpdate', () => {
 		const saveToStore = vi.fn()
 			.mockResolvedValueOnce(null)
 			.mockImplementationOnce(async (updates: Partial<TestConfig>) => {
-				storeConfig.value = { ...storeConfig.value, ...updates };
+				storeConfig.value = {
+					...storeConfig.value,
+					...updates,
+				};
 				return { ok: true };
 			});
 
@@ -193,7 +204,12 @@ describe('useConfigUpdate', () => {
 				debounceMs: 100,
 				errorMessage: 'Test error',
 			});
-			return { saveState, saveError, updateConfig, retry };
+			return {
+				saveState,
+				saveError,
+				updateConfig,
+				retry,
+			};
 		}
 
 		it('is idle before any edit, saving while one is pending, and committed once the flush lands', async () => {
@@ -282,7 +298,10 @@ describe('useConfigUpdate', () => {
 		function createPersistingSetup() {
 			const storeConfig = ref<Partial<TestConfig>>({});
 			const saveToStore = vi.fn(async (updates: Partial<TestConfig>): Promise<unknown> => {
-				storeConfig.value = { ...storeConfig.value, ...updates };
+				storeConfig.value = {
+					...storeConfig.value,
+					...updates,
+				};
 				return { ok: true };
 			});
 			const api = useConfigUpdate<TestConfig>({

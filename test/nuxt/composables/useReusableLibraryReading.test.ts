@@ -88,7 +88,10 @@ describe('useReusableLibraryReading', () => {
 	});
 
 	it('lets a caller inspect the caught value before the message is derived', async () => {
-		const caught = transportFailure({ status: 422, body: { message: 'Cannot be published.' } });
+		const caught = transportFailure({
+			status: 422,
+			body: { message: 'Cannot be published.' },
+		});
 		mockRead.mockRejectedValue(caught);
 		const inspectFailure = vi.fn();
 
@@ -100,7 +103,10 @@ describe('useReusableLibraryReading', () => {
 
 	it('keeps the refusal message through the re-read that follows a refused write', async () => {
 		mockRead
-			.mockRejectedValueOnce(transportFailure({ status: 409, body: { message: 'Write refused.' } }))
+			.mockRejectedValueOnce(transportFailure({
+				status: 409,
+				body: { message: 'Write refused.' },
+			}))
 			.mockResolvedValue(['fresh']);
 
 		const { reading } = mountReading();
@@ -121,7 +127,10 @@ describe('useReusableLibraryReading', () => {
 	it('keeps the previous entries when a refresh fails', async () => {
 		mockRead
 			.mockResolvedValueOnce(['kept'])
-			.mockRejectedValueOnce(transportFailure({ status: 409, body: { message: 'Later refusal.' } }));
+			.mockRejectedValueOnce(transportFailure({
+				status: 409,
+				body: { message: 'Later refusal.' },
+			}));
 
 		const { reading } = mountReading();
 		await flushPromises();

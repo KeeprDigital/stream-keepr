@@ -218,7 +218,9 @@ export function useBroadcastGraphicsModeData() {
 	watch(
 		() => {
 			const screenId = screen.value?.id;
-			const session = screenId ? sessionStore.sessions.get(screenId) : undefined;
+			const session = screenId
+				? sessionStore.sessions.get(screenId)
+				: undefined;
 			return session
 				? `${session.id}:${session.sequence}:${sessionStore.clockSynchronized}`
 				: null;
@@ -265,7 +267,11 @@ export function useBroadcastGraphicsModeData() {
 			// concurrent pair live playout can — but it answers in the same shape, because the
 			// compositor has one way of being told what to draw.
 			const position = graphicAnimationTimelineAt(previewTimeline.value, previewElapsed.value);
-			return position ? { [plan.graphicId]: [position] } : {};
+			return position
+				? {
+						[plan.graphicId]: [position],
+					}
+				: {};
 		}
 
 		const screenId = screen.value?.id;
@@ -315,7 +321,9 @@ export function useBroadcastGraphicsModeData() {
 	// A new run token restarts the clock; that is the only thing that does. Editing
 	// the composition mid-run changes what is projected without disturbing when.
 	watch(
-		() => (previewPlan.value ? `${previewPlan.value.graphicId}:${previewPlan.value.run}` : null),
+		() => (previewPlan.value
+			? `${previewPlan.value.graphicId}:${previewPlan.value.run}`
+			: null),
 		(token) => {
 			stopPreviewClock();
 			previewElapsed.value = 0;
@@ -360,7 +368,9 @@ export function useBroadcastGraphicsModeData() {
 			onCleanup(sessionStore.readSessionAsScreenOutput(screenId, () => outputReads.liveSession()));
 	}, { immediate: true });
 	useBroadcastGraphicsLiveSessionSync(
-		() => (isPreview?.value ? undefined : eventId.value ?? undefined),
+		() => (isPreview?.value
+			? undefined
+			: eventId.value ?? undefined),
 		() => (isPreview?.value ? undefined : screen.value?.id),
 	);
 

@@ -34,7 +34,9 @@ export function useArchetypeAssignment({
 	// ── Derived state ──
 
 	/** A deck is in edit mode once this stable submitted deck has been reviewed. */
-	const isEditMode = computed(() => currentEntry.value ? isReviewedPlayerDeck(currentEntry.value.deck) : false);
+	const isEditMode = computed(() => currentEntry.value
+		? isReviewedPlayerDeck(currentEntry.value.deck)
+		: false);
 
 	const existingArchetypeByName = computed(() => {
 		const name = nameInput.value.trim();
@@ -166,7 +168,9 @@ export function useArchetypeAssignment({
 		if (!eventId.value)
 			throw new Error('Event not loaded');
 
-		const colors = colorsInput.value.length > 0 ? colorsInput.value.join('') : null;
+		const colors = colorsInput.value.length > 0
+			? colorsInput.value.join('')
+			: null;
 		const updated = await archetypeStore.updateArchetype(eventId.value, archetype.id, { colors });
 		if (!updated)
 			throw new Error(archetypeStore.error ?? 'Failed to update archetype');
@@ -207,7 +211,9 @@ export function useArchetypeAssignment({
 
 	function selectArchetype(archetype: Archetype) {
 		nameInput.value = archetype.name;
-		colorsInput.value = archetype.colors ? archetype.colors.split('') : [];
+		colorsInput.value = archetype.colors
+			? archetype.colors.split('')
+			: [];
 	}
 
 	function handleChipClick(archetype: Archetype) {
@@ -228,7 +234,9 @@ export function useArchetypeAssignment({
 
 		await runRequest(async () => {
 			const name = nameInput.value.trim();
-			const colors = colorsInput.value.length > 0 ? colorsInput.value.join('') : null;
+			const colors = colorsInput.value.length > 0
+				? colorsInput.value.join('')
+				: null;
 
 			const existing = matchesExistingArchetype.value;
 			if (existing) {

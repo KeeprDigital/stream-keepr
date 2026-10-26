@@ -15,7 +15,12 @@ mockNuxtImport('useCardStore', () => () => cardStore);
 mockNuxtImport('useFeatureMatchMenuItems', () => () => ref([]));
 
 const FeatureMatchNoteStub = defineComponent({
-	props: ['note', 'noteKey', 'remoteChanged', 'save'],
+	props: [
+		'note',
+		'noteKey',
+		'remoteChanged',
+		'save',
+	],
 	template: '<div data-testid="cards-production-note" :data-note="note" :data-remote-changed="String(remoteChanged)"><button data-testid="cards-note-save" @click="save(\'Edited from Cards\')">Save</button></div>',
 });
 

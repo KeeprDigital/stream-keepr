@@ -22,7 +22,11 @@ const route = '/api/screen-output/screens/:screenId/assets/:assetId/revisions/:r
 const bytes = Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
 function observed(status: number, headers: Record<string, string>, body = new Uint8Array()) {
-	return { status, headers: new Headers(headers), bytes: body };
+	return {
+		status,
+		headers: new Headers(headers),
+		bytes: body,
+	};
 }
 
 const capabilityHeaders = {
@@ -116,14 +120,26 @@ describe('graphics staging delivery assertions', () => {
 				{ ...capabilityHeaders, 'content-length': '4', 'content-range': 'bytes 2-5/10' },
 				bytes.slice(2, 6),
 			),
-			{ route, start: 2, end: 5, byteLength: 10, bytes: bytes.slice(2, 6) },
+			{
+				route,
+				start: 2,
+				end: 5,
+				byteLength: 10,
+				bytes: bytes.slice(2, 6),
+			},
 		)).toEqual([]);
 	});
 
 	it('rejects a byte range answered with the whole representation', () => {
 		expect(codes(checkRangeRead(
 			observed(200, capabilityHeaders, bytes),
-			{ route, start: 2, end: 5, byteLength: 10, bytes: bytes.slice(2, 6) },
+			{
+				route,
+				start: 2,
+				end: 5,
+				byteLength: 10,
+				bytes: bytes.slice(2, 6),
+			},
 		))).toContain('delivery-range-status-unexpected');
 		expect(codes(checkRangeRead(
 			observed(
@@ -131,7 +147,13 @@ describe('graphics staging delivery assertions', () => {
 				{ ...capabilityHeaders, 'content-length': '4', 'content-range': 'bytes 0-3/10' },
 				bytes.slice(2, 6),
 			),
-			{ route, start: 2, end: 5, byteLength: 10, bytes: bytes.slice(2, 6) },
+			{
+				route,
+				start: 2,
+				end: 5,
+				byteLength: 10,
+				bytes: bytes.slice(2, 6),
+			},
 		))).toEqual(['delivery-content-range-unexpected']);
 	});
 
@@ -295,7 +317,12 @@ describe('checkStillImagePublication', () => {
 			stage: 'completed',
 			report: {
 				outcome: 'accepted',
-				facts: { format: 'jpeg', width: 1, height: 1, byteLength: 120 },
+				facts: {
+					format: 'jpeg',
+					width: 1,
+					height: 1,
+					byteLength: 120,
+				},
 			},
 			result: { assetId: 'asset', revisionId: 'revision' },
 			...overrides,
@@ -313,18 +340,25 @@ describe('checkStillImagePublication', () => {
 		// boundary (#302).
 		const failures = checkStillImagePublication({
 			stage: 'failed',
-			report: { outcome: 'rejected', issues: [{ code: 'incomplete-jpeg-frame' }] },
+			report: {
+				outcome: 'rejected',
+				issues: [
+					{ code: 'incomplete-jpeg-frame' },
+				],
+			},
 			failure: { code: 'validation-failed', retryable: false },
 		}, { format: 'jpeg', byteLength: 120 });
-		expect(failures).toEqual([{
-			code: 'still-image-ingestion-refused',
-			detail: {
-				format: 'jpeg',
-				stage: 'failed',
-				outcome: 'rejected',
-				issues: 'incomplete-jpeg-frame',
+		expect(failures).toEqual([
+			{
+				code: 'still-image-ingestion-refused',
+				detail: {
+					format: 'jpeg',
+					stage: 'failed',
+					outcome: 'rejected',
+					issues: 'incomplete-jpeg-frame',
+				},
 			},
-		}]);
+		]);
 	});
 
 	it('names the absent halves of a refusal that never produced a report', () => {
@@ -335,10 +369,17 @@ describe('checkStillImagePublication', () => {
 			{ stage: 'failed' },
 			{ format: 'webp', byteLength: 120 },
 		);
-		expect(failures).toEqual([{
-			code: 'still-image-ingestion-refused',
-			detail: { format: 'webp', stage: 'failed', outcome: 'absent', issues: 'none' },
-		}]);
+		expect(failures).toEqual([
+			{
+				code: 'still-image-ingestion-refused',
+				detail: {
+					format: 'webp',
+					stage: 'failed',
+					outcome: 'absent',
+					issues: 'none',
+				},
+			},
+		]);
 	});
 
 	it('reports which published facts disagree with the sent source', () => {
@@ -346,14 +387,21 @@ describe('checkStillImagePublication', () => {
 			settledOperation({
 				report: {
 					outcome: 'accepted',
-					facts: { format: 'jpeg', width: 2, height: 1, byteLength: 119 },
+					facts: {
+						format: 'jpeg',
+						width: 2,
+						height: 1,
+						byteLength: 119,
+					},
 				},
 			}),
 			{ format: 'jpeg', byteLength: 120 },
 		);
-		expect(failures).toEqual([{
-			code: 'still-image-ingestion-facts-unexpected',
-			detail: { format: 'jpeg', fields: 'width,byteLength' },
-		}]);
+		expect(failures).toEqual([
+			{
+				code: 'still-image-ingestion-facts-unexpected',
+				detail: { format: 'jpeg', fields: 'width,byteLength' },
+			},
+		]);
 	});
 });

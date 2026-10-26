@@ -57,7 +57,9 @@ export class DeployVerifyFailure extends Error {
 
 function excerpt(text) {
 	const flat = text.replace(/\s+/g, ' ').trim();
-	return JSON.stringify(flat.length > 120 ? `${flat.slice(0, 120)}…` : flat);
+	return JSON.stringify(flat.length > 120
+		? `${flat.slice(0, 120)}…`
+		: flat);
 }
 
 /**
@@ -85,7 +87,12 @@ async function probe(url, { fetchRequest, timeoutMs, signal }) {
 	let response;
 	try {
 		const timeout = AbortSignal.timeout(timeoutMs);
-		response = await fetchRequest(url, { redirect: 'manual', signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+		response = await fetchRequest(url, {
+			redirect: 'manual',
+			signal: signal
+				? AbortSignal.any([signal, timeout])
+				: timeout,
+		});
 	}
 	catch (error) {
 		if (signal?.aborted)
@@ -114,7 +121,9 @@ async function probe(url, { fetchRequest, timeoutMs, signal }) {
 	catch {
 		throw new DeployVerifyFailure(`${url} answered ${status} with a body that is not valid JSON: ${excerpt(text)}`);
 	}
-	const serverTime = body !== null && typeof body === 'object' && !Array.isArray(body) ? body.serverTime : undefined;
+	const serverTime = body !== null && typeof body === 'object' && !Array.isArray(body)
+		? body.serverTime
+		: undefined;
 	if (!Number.isSafeInteger(serverTime) || serverTime <= 0)
 		throw new DeployVerifyFailure(`${url} answered ${status} with JSON that is not { serverTime: <epoch milliseconds> }: ${excerpt(text)}`);
 	return { url, serverTime };

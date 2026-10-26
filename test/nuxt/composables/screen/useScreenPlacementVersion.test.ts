@@ -43,7 +43,9 @@ describe('useScreenPlacementVersion', () => {
 
 		expect(version.value).toBe(12);
 
-		mockScreenStore.screens = [{ id: 1, stateVersion: 13 }];
+		mockScreenStore.screens = [
+			{ id: 1, stateVersion: 13 },
+		];
 
 		expect(version.value).toBe(13);
 	});

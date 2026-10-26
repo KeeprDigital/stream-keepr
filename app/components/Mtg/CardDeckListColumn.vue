@@ -24,7 +24,10 @@ function openDeckListModal() {
 }
 const highlanderImageUrlsByCardName = computed<Record<string, string | null>>(() => {
 	const imageUrls: Record<string, string | null> = {};
-	for (const card of [...(props.playerData?.mainboard ?? []), ...(props.playerData?.sideboard ?? [])]) {
+	for (const card of [
+		...(props.playerData?.mainboard ?? []),
+		...(props.playerData?.sideboard ?? []),
+	]) {
 		imageUrls[card.name] = card.mtgCard?.imageData?.front?.normal ?? null;
 	}
 	if (props.playerData?.deckList?.companion) {

@@ -63,11 +63,21 @@ export function createShaderPlaneEffect<Params>(
 
 	const uniforms: Record<string, { value: unknown }> = {
 		iTime: { value: 0 },
-		iResolution: { value: new three.Vector2(1, 1) },
-		...feedbackTargets ? { iBuffer: { value: feedbackTargets.read.texture } } : {},
+		iResolution: {
+			value: new three.Vector2(1, 1),
+		},
+		...feedbackTargets
+			? {
+					iBuffer: { value: feedbackTargets.read.texture },
+				}
+			: {},
 	};
 	for (const [key, value] of Object.entries(options.uniforms(params))) {
-		uniforms[key] = { value: typeof value === 'string' ? new three.Color(value) : value };
+		uniforms[key] = {
+			value: typeof value === 'string'
+				? new three.Color(value)
+				: value,
+		};
 	}
 
 	const material = new three.ShaderMaterial({

@@ -75,7 +75,9 @@ export function buildArchetypeBreakdownQuery(
 	return {
 		...buildMetagameScopeQuery(scope),
 		sortBy: options.sortBy ?? 'metaShare',
-		...(options.limit != null ? { limit: options.limit } : {}),
+		...(options.limit != null
+			? { limit: options.limit }
+			: {}),
 		...buildConversionQuery(options),
 	};
 }
@@ -90,10 +92,20 @@ export function buildCardBreakdownQuery(
 		...buildMetagameScopeQuery(scope),
 		sortBy: options.sortBy ?? 'inclusionRate',
 		limit: options.limit ?? 50,
-		...(options.board ? { board: options.board } : {}),
-		...(options.archetypeId != null ? { archetypeId: options.archetypeId } : {}),
-		...(archetype ? { archetype } : {}),
-		...(options.excludeTypes?.length ? { excludeTypes: options.excludeTypes.join(',') } : {}),
+		...(options.board
+			? { board: options.board }
+			: {}),
+		...(options.archetypeId != null
+			? { archetypeId: options.archetypeId }
+			: {}),
+		...(archetype
+			? { archetype }
+			: {}),
+		...(options.excludeTypes?.length
+			? {
+					excludeTypes: options.excludeTypes.join(','),
+				}
+			: {}),
 	};
 }
 
@@ -103,7 +115,9 @@ export function buildArchetypeDetailQuery(
 ) {
 	return {
 		...buildMetagameScopeQuery(scope),
-		...(options.board ? { board: options.board } : {}),
+		...(options.board
+			? { board: options.board }
+			: {}),
 		...buildConversionQuery(options),
 	};
 }

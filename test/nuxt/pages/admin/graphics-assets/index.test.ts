@@ -4,7 +4,9 @@ import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 
-const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+const { mockApiFetch } = vi.hoisted(() => ({
+	mockApiFetch: vi.fn(),
+}));
 
 mockNuxtImport('$fetch', () => mockApiFetch);
 
@@ -271,7 +273,9 @@ describe('the Graphics Asset Library Operations cockpit page', () => {
 
 		expect(mockApiFetch).toHaveBeenCalledWith(
 			'/api/admin/graphics-assets/operations-cockpit',
-			{ headers: { 'x-graphics-admin-token': 'admin-token' } },
+			{
+				headers: { 'x-graphics-admin-token': 'admin-token' },
+			},
 		);
 
 		expect(wrapper.text()).toContain('D1 catalogue');
@@ -438,12 +442,17 @@ describe('the Graphics Asset Library Operations cockpit page', () => {
 
 		expect(mockApiFetch).toHaveBeenCalledWith(
 			'/api/admin/graphics-assets/reconciliation',
-			{ method: 'POST', headers: { 'x-graphics-admin-token': 'admin-token' } },
+			{
+				method: 'POST',
+				headers: { 'x-graphics-admin-token': 'admin-token' },
+			},
 		);
 		// The reading is taken again from the server rather than patched locally.
 		expect(mockApiFetch).toHaveBeenCalledWith(
 			'/api/admin/graphics-assets/operations-cockpit',
-			{ headers: { 'x-graphics-admin-token': 'admin-token' } },
+			{
+				headers: { 'x-graphics-admin-token': 'admin-token' },
+			},
 		);
 	});
 
@@ -462,12 +471,14 @@ describe('the Graphics Asset Library Operations cockpit page', () => {
 			},
 			alerts: {
 				countsBySeverity: { critical: 1, warning: 0, info: 0 },
-				open: [{
-					code: 'catalogue-unavailable',
-					severity: 'critical',
-					openCount: 1,
-					persistent: false,
-				}],
+				open: [
+					{
+						code: 'catalogue-unavailable',
+						severity: 'critical',
+						openCount: 1,
+						persistent: false,
+					},
+				],
 			},
 			// Empty rather than absent: a reading that carries no operations names
 			// nobody, and the route still says so (#398).

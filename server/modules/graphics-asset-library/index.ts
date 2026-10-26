@@ -1366,7 +1366,9 @@ export function createGraphicsAssetLibrary(
 						comparableFacts(input.sourceFacts),
 					) as GraphicAssetSilentVideoFacts,
 				},
-				{ id: reconciliationWorkingCopyOperationId(input.discrepancyId) } as GraphicsIngestionOperation,
+				{
+					id: reconciliationWorkingCopyOperationId(input.discrepancyId),
+				} as GraphicsIngestionOperation,
 			);
 			return { outcome: 'generated', bytes: trusted.derivative };
 		}
@@ -2092,7 +2094,9 @@ export function createGraphicsAssetLibrary(
 			}
 			if (evidence.outcome === 'font-rejected') {
 				validationError(
-					evidence.stage === 'load' ? 'browser-font-load-failed' : 'browser-font-render-failed',
+					evidence.stage === 'load'
+						? 'browser-font-load-failed'
+						: 'browser-font-render-failed',
 					evidence.stage === 'load'
 						? 'The representative browser could not load the exact font bytes.'
 						: 'The representative browser could not render covered glyphs without fallback.',
@@ -2228,7 +2232,10 @@ export function createGraphicsAssetLibrary(
 			return { outcome: 'not-terminal' };
 		try {
 			return await releaseTerminalStagedInput(
-				{ catalogue: requireCatalogue(), staging: requireStaging() },
+				{
+					catalogue: requireCatalogue(),
+					staging: requireStaging(),
+				},
 				{ operationId: operation.id, initiatedBy: operation.initiatedBy },
 			);
 		}
@@ -2595,7 +2602,9 @@ export function createGraphicsAssetLibrary(
 				continue;
 			undeclared.set(key, requirement);
 		}
-		return [...undeclared.values()].map(requirement =>
+		return [
+			...undeclared.values(),
+		].map(requirement =>
 			templatePackagePreflightIssue('unsupported-application-capability', {
 				subject: requirement.slot,
 				message: `The Template requires ${requirement.capability} "${requirement.identity}", which the package never declares`,
@@ -2658,7 +2667,9 @@ export function createGraphicsAssetLibrary(
 		const archiveByteLength = operation.declaredByteLength;
 		const issues: TemplatePackagePreflightIssue[] = [];
 		const decoder = new TextDecoder('utf-8', { fatal: true });
-		const material: StagedTemplatePackageMaterial = { contents: new Map() };
+		const material: StagedTemplatePackageMaterial = {
+			contents: new Map(),
+		};
 
 		function finish(
 			reportIssues: readonly TemplatePackagePreflightIssue[],
@@ -2742,10 +2753,12 @@ export function createGraphicsAssetLibrary(
 		const manifestEntry = entryByName.get(TEMPLATE_PACKAGE_MANIFEST_ENTRY);
 		if (!manifestEntry) {
 			return {
-				report: await finish([templatePackagePreflightIssue('missing-package-entry', {
-					subject: TEMPLATE_PACKAGE_MANIFEST_ENTRY,
-					message: 'The archive carries no package manifest',
-				})]),
+				report: await finish([
+					templatePackagePreflightIssue('missing-package-entry', {
+						subject: TEMPLATE_PACKAGE_MANIFEST_ENTRY,
+						message: 'The archive carries no package manifest',
+					}),
+				]),
 				derivatives: [],
 				material,
 			};
@@ -2753,10 +2766,12 @@ export function createGraphicsAssetLibrary(
 		const manifestValue = await readEntryDocument(manifestEntry);
 		if (manifestValue === undefined) {
 			return {
-				report: await finish([templatePackagePreflightIssue('invalid-package-manifest', {
-					subject: TEMPLATE_PACKAGE_MANIFEST_ENTRY,
-					message: 'The package manifest is not readable JSON within the size a manifest may occupy',
-				})]),
+				report: await finish([
+					templatePackagePreflightIssue('invalid-package-manifest', {
+						subject: TEMPLATE_PACKAGE_MANIFEST_ENTRY,
+						message: 'The package manifest is not readable JSON within the size a manifest may occupy',
+					}),
+				]),
 				derivatives: [],
 				material,
 			};
@@ -2809,7 +2824,9 @@ export function createGraphicsAssetLibrary(
 			issues.push(templatePackagePreflightIssue('unsupported-package-artifact', {
 				subject: operation.sourceFileName,
 				message: `A ${manifest.packageKind} package must be received as a "${extension}" file, but this one arrived as "${
-					receivedExtension.startsWith('.') ? receivedExtension : 'a file with no extension'
+					receivedExtension.startsWith('.')
+						? receivedExtension
+						: 'a file with no extension'
 				}"`,
 			}));
 		}
@@ -3103,7 +3120,9 @@ export function createGraphicsAssetLibrary(
 		}
 
 		const compatibilityProfiles = [
-			...new Set([...validated.values()].map(content => content.compatibilityProfile)),
+			...new Set([
+				...validated.values(),
+			].map(content => content.compatibilityProfile)),
 		];
 		return {
 			report: await finish(issues, {
@@ -3377,10 +3396,13 @@ export function createGraphicsAssetLibrary(
 				material.templateDocument,
 				templatePackageLocalReferences(
 					report.mappings,
-					new Map(created.map(asset => [asset.packagedId, {
-						assetId: asset.assetId,
-						revisionId: asset.revisionId,
-					}])),
+					new Map(created.map(asset => [
+						asset.packagedId,
+						{
+							assetId: asset.assetId,
+							revisionId: asset.revisionId,
+						},
+					])),
 				),
 			);
 			if (rewrite.unmapped.length > 0) {
@@ -4767,11 +4789,13 @@ export function createGraphicsAssetLibrary(
 				}, {
 					outcome: 'rejected',
 					compatibilityProfile: sourcePolicy.compatibilityProfile,
-					issues: [{
-						severity: 'error',
-						code: sourcePolicy.conflictingMimeCode,
-						message: `Initiated MIME ${initiatedMime} conflicts with transfer MIME ${transferMime}.`,
-					}],
+					issues: [
+						{
+							severity: 'error',
+							code: sourcePolicy.conflictingMimeCode,
+							message: `Initiated MIME ${initiatedMime} conflicts with transfer MIME ${transferMime}.`,
+						},
+					],
 				});
 			}
 
@@ -4932,11 +4956,13 @@ export function createGraphicsAssetLibrary(
 				}, {
 					outcome: 'rejected',
 					compatibilityProfile: policy.compatibilityProfile,
-					issues: [{
-						severity: 'error',
-						code: opened.rejection.code,
-						message: opened.rejection.message,
-					}],
+					issues: [
+						{
+							severity: 'error',
+							code: opened.rejection.code,
+							message: opened.rejection.message,
+						},
+					],
 				});
 			}
 
@@ -4998,7 +5024,9 @@ export function createGraphicsAssetLibrary(
 				}, {
 					outcome: 'rejected',
 					compatibilityProfile: policy.compatibilityProfile,
-					issues: [{ severity: 'error', ...rejection }],
+					issues: [
+						{ severity: 'error', ...rejection },
+					],
 				});
 			}
 			const authoritative = await catalogueRequest(
@@ -5150,7 +5178,9 @@ export function createGraphicsAssetLibrary(
 			return await catalogueRequest(
 				() => requireCatalogue().listGraphicAssets(
 					input.search ?? '',
-					[...new Set(lifecycleStates)],
+					[
+						...new Set(lifecycleStates),
+					],
 				),
 				'Graphic Asset discovery is temporarily unavailable',
 			);
@@ -5223,10 +5253,14 @@ export function createGraphicsAssetLibrary(
 			await recordLifecycleTransition({
 				assetId: input.assetId,
 				transition: 'trashed',
-				from: trashed?.state === 'trashed' ? trashed.priorState : 'active',
+				from: trashed?.state === 'trashed'
+					? trashed.priorState
+					: 'active',
 				to: 'trashed',
 				actor: input.actor ?? GRAPHICS_RETENTION_ACTOR,
-				deadline: trashed?.state === 'trashed' ? trashed.recoverableUntil : undefined,
+				deadline: trashed?.state === 'trashed'
+					? trashed.recoverableUntil
+					: undefined,
 			});
 			return { outcome: 'trashed', asset: transition.asset };
 		},
@@ -5283,7 +5317,9 @@ export function createGraphicsAssetLibrary(
 				() => requireCatalogue().updateGraphicAsset({
 					assetId: input.assetId,
 					name,
-					eventIds: [...new Set(input.eventIds)].sort((left, right) => left - right),
+					eventIds: [
+						...new Set(input.eventIds),
+					].sort((left, right) => left - right),
 					updatedAt: timestamp(),
 				}),
 				'Graphic Asset metadata could not be updated',
@@ -5518,8 +5554,12 @@ export function createGraphicsAssetLibrary(
 			});
 			// Limits are measured before a byte is written, so a package that would
 			// exceed the envelope never produces a partial archive.
-			if (issues.length > 0 || plan.issues.length > 0)
-				return rejected([...issues, ...plan.issues], plan.totals);
+			if (issues.length > 0 || plan.issues.length > 0) {
+				return rejected([
+					...issues,
+					...plan.issues,
+				], plan.totals);
+			}
 
 			return {
 				outcome: 'exported',

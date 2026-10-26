@@ -165,7 +165,9 @@ const LOCAL_DEVELOPER_EXPIRES_AT = new Date('9999-12-31T23:59:59.999Z');
  */
 function localDeveloperSession(event: H3Event): NonNullable<UserSession> {
 	const presented = getCookie(event, LOCAL_DEVELOPER_SESSION_COOKIE);
-	const token = presented && LOCAL_SESSION_TOKEN.test(presented) ? presented : crypto.randomUUID();
+	const token = presented && LOCAL_SESSION_TOKEN.test(presented)
+		? presented
+		: crypto.randomUUID();
 
 	if (token !== presented) {
 		setCookie(event, LOCAL_DEVELOPER_SESSION_COOKIE, token, {

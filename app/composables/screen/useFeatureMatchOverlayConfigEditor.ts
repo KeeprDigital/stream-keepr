@@ -37,7 +37,12 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 	}
 
 	function updateLayout(layoutUpdates: Partial<FeatureMatchOverlayModeConfig['layout']>) {
-		updateConfig({ layout: { ...layout(), ...layoutUpdates } });
+		updateConfig({
+			layout: {
+				...layout(),
+				...layoutUpdates,
+			},
+		});
 	}
 
 	function patchFrame(updates: Partial<FeatureMatchLayoutFrameConfig>) {

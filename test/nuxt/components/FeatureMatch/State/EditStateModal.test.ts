@@ -22,7 +22,9 @@ const UButtonStub = defineComponent({
 });
 
 const UInputStub = defineComponent({
-	props: { modelValue: [String, Number] },
+	props: {
+		modelValue: [String, Number],
+	},
 	emits: ['update:modelValue'],
 	template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)">',
 });
@@ -30,7 +32,10 @@ const UInputStub = defineComponent({
 const USelectStub = defineComponent({
 	props: {
 		modelValue: String,
-		items: { type: Array, default: () => [] },
+		items: {
+			type: Array,
+			default: () => [],
+		},
 	},
 	emits: ['update:modelValue'],
 	template: `<select :value="modelValue" @change="$emit('update:modelValue', $event.target.value)">
@@ -128,7 +133,13 @@ describe('feature match edit state modal', () => {
 
 	it('includes cards kept only when set, and never claims an untouched field', async () => {
 		const wrapper = await mountModal({}, {
-			player2: { lifeTotal: 20, gameWins: 0, counters: [], cardsKept: 6, sideboardRevealed: false },
+			player2: {
+				lifeTotal: 20,
+				gameWins: 0,
+				counters: [],
+				cardsKept: 6,
+				sideboardRevealed: false,
+			},
 		});
 
 		await wrapper.get('[data-testid="state-cards-player1"]').setValue('5');
@@ -145,7 +156,9 @@ describe('feature match edit state modal', () => {
 		await wrapper.get('[data-testid="state-save"]').trigger('click');
 
 		expect(wrapper.emitted('save')).toBeUndefined();
-		expect(wrapper.emitted('update:open')).toEqual([[false]]);
+		expect(wrapper.emitted('update:open')).toEqual([
+			[false],
+		]);
 	});
 
 	it('disables Save while the clock input cannot be parsed', async () => {

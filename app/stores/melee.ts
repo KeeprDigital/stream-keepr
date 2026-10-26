@@ -91,11 +91,15 @@ export const useMeleeStore = defineStore('melee', () => {
 	}
 
 	function committedOperationStatus(refreshErrors: string[]): MeleeOperationStatus {
-		return refreshErrors.length > 0 ? 'warning' : 'success';
+		return refreshErrors.length > 0
+			? 'warning'
+			: 'success';
 	}
 
 	function committedOperationTitle(title: string, refreshErrors: string[]): string {
-		return refreshErrors.length > 0 ? `${title} — Reload Needed` : title;
+		return refreshErrors.length > 0
+			? `${title} — Reload Needed`
+			: title;
 	}
 
 	function committedOperationDescription(description: string, refreshErrors: string[]): string {
@@ -106,7 +110,11 @@ export const useMeleeStore = defineStore('melee', () => {
 
 	function committedOperationDetails(details: string[], refreshErrors: string[]): string[] {
 		return refreshErrors.length > 0
-			? [...details, 'Source changes committed successfully.', ...refreshErrors]
+			? [
+					...details,
+					'Source changes committed successfully.',
+					...refreshErrors,
+				]
 			: details;
 	}
 
@@ -203,7 +211,10 @@ export const useMeleeStore = defineStore('melee', () => {
 			return [];
 		const eventId = eventStore.eventId;
 		return refreshLocalProjection([
-			{ label: 'event status', run: () => eventStore.loadEvent(eventId) },
+			{
+				label: 'event status',
+				run: () => eventStore.loadEvent(eventId),
+			},
 		]);
 	}
 
@@ -291,14 +302,21 @@ export const useMeleeStore = defineStore('melee', () => {
 				loadingRef: config.loadingRef,
 				errorRef: error,
 				flight,
-				onError: config.steps ? () => { config.steps!.fail(); } : undefined,
+				onError: config.steps
+					? () => { config.steps!.fail(); }
+					: undefined,
 			},
 		);
 
 		if (flight.stale) {
 			return response && config.isSuccess(response)
 				? { status: 'success', response, projectionRefreshErrors }
-				: { status: 'failure', response: response ?? null, error: config.failureDescription(response ?? null), projectionRefreshErrors };
+				: {
+						status: 'failure',
+						response: response ?? null,
+						error: config.failureDescription(response ?? null),
+						projectionRefreshErrors,
+					};
 		}
 
 		if (!response)
@@ -322,9 +340,18 @@ export const useMeleeStore = defineStore('melee', () => {
 			status: 'error',
 			title: config.failureTitle,
 			description: failureError,
-			...(config.failureDetails ? { details: config.failureDetails(projectionRefreshErrors) } : {}),
+			...(config.failureDetails
+				? {
+						details: config.failureDetails(projectionRefreshErrors),
+					}
+				: {}),
 		});
-		return { status: 'failure', response: response ?? null, error: failureError, projectionRefreshErrors };
+		return {
+			status: 'failure',
+			response: response ?? null,
+			error: failureError,
+			projectionRefreshErrors,
+		};
 	}
 
 	async function updateFromMeleeOnce(options: { includeDeckLists?: boolean; advanceRound?: boolean } = {}): Promise<{ success: boolean; error?: string }> {
@@ -340,12 +367,30 @@ export const useMeleeStore = defineStore('melee', () => {
 			},
 			apiCall: eventId => eventRepo.updateFromMelee(eventId, options),
 			refreshTasks: eventId => [
-				{ label: 'metagame cache', run: () => metagameStore.applyRemoteInvalidated() },
-				{ label: 'deck cache', run: () => clearPlayerDeckCache() },
-				{ label: 'event status', run: () => eventStore.loadEvent(eventId) },
-				{ label: 'players', run: () => playerStore.loadPlayersByEventId(eventId) },
-				{ label: 'deck lists', run: () => playerDeckStore.loadByEventId(eventId) },
-				{ label: 'event structure', run: () => refreshMeleeStructureData(eventId) },
+				{
+					label: 'metagame cache',
+					run: () => metagameStore.applyRemoteInvalidated(),
+				},
+				{
+					label: 'deck cache',
+					run: () => clearPlayerDeckCache(),
+				},
+				{
+					label: 'event status',
+					run: () => eventStore.loadEvent(eventId),
+				},
+				{
+					label: 'players',
+					run: () => playerStore.loadPlayersByEventId(eventId),
+				},
+				{
+					label: 'deck lists',
+					run: () => playerDeckStore.loadByEventId(eventId),
+				},
+				{
+					label: 'event structure',
+					run: () => refreshMeleeStructureData(eventId),
+				},
 			],
 			isSuccess: result => result.success,
 			successContent: (result) => {
@@ -356,11 +401,25 @@ export const useMeleeStore = defineStore('melee', () => {
 						? `${result.advancedRound.name} imported from Melee.gg`
 						: 'Event data refreshed from Melee.gg',
 					details: [
-						`${result.players.created + result.players.updated} player change${result.players.created + result.players.updated !== 1 ? 's' : ''}`,
-						...(result.deckLists ? [`${result.deckLists.deckLists} deck list${result.deckLists.deckLists !== 1 ? 's' : ''}`] : []),
-						...(result.refreshedRound ? [`Refreshed ${result.refreshedRound.name}`] : []),
-						...(result.advancedRound ? [`Imported ${result.advancedRound.name}`] : []),
-						...(totalMatches > 0 ? [`${totalMatches} match${totalMatches !== 1 ? 'es' : ''}`] : []),
+						`${result.players.created + result.players.updated} player change${result.players.created + result.players.updated !== 1
+							? 's'
+							: ''}`,
+						...(result.deckLists
+							? [`${result.deckLists.deckLists} deck list${result.deckLists.deckLists !== 1
+									? 's'
+									: ''}`]
+							: []),
+						...(result.refreshedRound
+							? [`Refreshed ${result.refreshedRound.name}`]
+							: []),
+						...(result.advancedRound
+							? [`Imported ${result.advancedRound.name}`]
+							: []),
+						...(totalMatches > 0
+							? [`${totalMatches} match${totalMatches !== 1
+									? 'es'
+									: ''}`]
+							: []),
 						...(result.warnings ?? []),
 					],
 				};
@@ -385,16 +444,26 @@ export const useMeleeStore = defineStore('melee', () => {
 			guardSetsError: true,
 			apiCall: eventId => eventRepo.syncMelee(eventId),
 			refreshTasks: eventId => [
-				{ label: 'event status', run: () => eventStore.loadEvent(eventId) },
-				{ label: 'event structure', run: () => refreshMeleeStructureData(eventId) },
+				{
+					label: 'event status',
+					run: () => eventStore.loadEvent(eventId),
+				},
+				{
+					label: 'event structure',
+					run: () => refreshMeleeStructureData(eventId),
+				},
 			],
 			isSuccess: response => response.success,
 			successContent: response => ({
 				title: 'Event Synced',
 				description: `Synced event structure for ${response.event.name}`,
 				details: [
-					`${response.phases} phase${response.phases !== 1 ? 's' : ''}`,
-					`${response.rounds} round${response.rounds !== 1 ? 's' : ''}`,
+					`${response.phases} phase${response.phases !== 1
+						? 's'
+						: ''}`,
+					`${response.rounds} round${response.rounds !== 1
+						? 's'
+						: ''}`,
 					...(response.warnings ?? []),
 				],
 			}),
@@ -418,10 +487,22 @@ export const useMeleeStore = defineStore('melee', () => {
 			guardSetsError: true,
 			apiCall: eventId => eventRepo.syncPlayers(eventId),
 			refreshTasks: eventId => [
-				{ label: 'metagame cache', run: () => metagameStore.applyRemoteInvalidated() },
-				{ label: 'event status', run: () => eventStore.loadEvent(eventId) },
-				{ label: 'players', run: () => playerStore.loadPlayersByEventId(eventId) },
-				{ label: 'feature matches', run: () => featureMatchStore.loadFeatureMatchesByEventId(eventId) },
+				{
+					label: 'metagame cache',
+					run: () => metagameStore.applyRemoteInvalidated(),
+				},
+				{
+					label: 'event status',
+					run: () => eventStore.loadEvent(eventId),
+				},
+				{
+					label: 'players',
+					run: () => playerStore.loadPlayersByEventId(eventId),
+				},
+				{
+					label: 'feature matches',
+					run: () => featureMatchStore.loadFeatureMatchesByEventId(eventId),
+				},
 			],
 			isSuccess: response => response.success,
 			successContent: (response) => {
@@ -429,11 +510,15 @@ export const useMeleeStore = defineStore('melee', () => {
 				const total = response.results.created + response.results.updated + deactivated;
 				return {
 					title: 'Players Synced',
-					description: `${total} player change${total !== 1 ? 's' : ''} applied`,
+					description: `${total} player change${total !== 1
+						? 's'
+						: ''} applied`,
 					details: [
 						`${response.results.created} created`,
 						`${response.results.updated} updated`,
-						...(deactivated > 0 ? [`${deactivated} deactivated`] : []),
+						...(deactivated > 0
+							? [`${deactivated} deactivated`]
+							: []),
 						...(response.warnings ?? []),
 					],
 				};
@@ -458,26 +543,53 @@ export const useMeleeStore = defineStore('melee', () => {
 			guardSetsError: true,
 			apiCall: eventId => eventRepo.syncDecklists(eventId),
 			refreshTasks: eventId => [
-				{ label: 'metagame cache', run: () => metagameStore.applyRemoteInvalidated() },
-				{ label: 'deck cache', run: () => clearPlayerDeckCache() },
-				{ label: 'event status', run: () => eventStore.loadEvent(eventId) },
-				{ label: 'players', run: () => playerStore.loadPlayersByEventId(eventId) },
-				{ label: 'deck lists', run: () => playerDeckStore.loadByEventId(eventId) },
-				{ label: 'feature matches', run: () => featureMatchStore.loadFeatureMatchesByEventId(eventId) },
+				{
+					label: 'metagame cache',
+					run: () => metagameStore.applyRemoteInvalidated(),
+				},
+				{
+					label: 'deck cache',
+					run: () => clearPlayerDeckCache(),
+				},
+				{
+					label: 'event status',
+					run: () => eventStore.loadEvent(eventId),
+				},
+				{
+					label: 'players',
+					run: () => playerStore.loadPlayersByEventId(eventId),
+				},
+				{
+					label: 'deck lists',
+					run: () => playerDeckStore.loadByEventId(eventId),
+				},
+				{
+					label: 'feature matches',
+					run: () => featureMatchStore.loadFeatureMatchesByEventId(eventId),
+				},
 			],
 			isSuccess: response => response.success,
 			successContent: (response) => {
 				const details = [
-					`${response.results.deckLists} deck list${response.results.deckLists !== 1 ? 's' : ''}`,
-					`${response.results.players} player${response.results.players !== 1 ? 's' : ''}`,
+					`${response.results.deckLists} deck list${response.results.deckLists !== 1
+						? 's'
+						: ''}`,
+					`${response.results.players} player${response.results.players !== 1
+						? 's'
+						: ''}`,
 					`${response.results.uniqueCards} unique cards`,
 				];
-				if (response.results.unresolvedCards > 0)
-					details.push(`${response.results.unresolvedCards} unresolved deck entr${response.results.unresolvedCards === 1 ? 'y' : 'ies'}`);
+				if (response.results.unresolvedCards > 0) {
+					details.push(`${response.results.unresolvedCards} unresolved deck entr${response.results.unresolvedCards === 1
+						? 'y'
+						: 'ies'}`);
+				}
 				details.push(...(response.warnings ?? []));
 				return {
 					title: 'Deck Lists Synced',
-					description: `${response.results.deckLists} deck list${response.results.deckLists !== 1 ? 's' : ''} synced`,
+					description: `${response.results.deckLists} deck list${response.results.deckLists !== 1
+						? 's'
+						: ''} synced`,
 					details,
 				};
 			},
@@ -514,12 +626,30 @@ export const useMeleeStore = defineStore('melee', () => {
 			// The canonical Round command also refreshes/deactivates Players. Its
 			// aggregate realtime messages exclude this originating connection.
 			refreshTasks: (eventId, response) => [
-				{ label: 'metagame cache', run: () => metagameStore.applyRemoteInvalidated() },
-				{ label: 'event status', run: () => eventStore.loadEvent(eventId) },
-				{ label: 'players', run: () => playerStore.loadPlayersByEventId(eventId) },
-				{ label: 'rounds', run: () => roundStore.loadRoundsByEventId(eventId) },
-				{ label: 'feature matches', run: () => featureMatchStore.loadFeatureMatchesByEventId(eventId) },
-				{ label: 'matches', run: () => refreshLoadedMatches(eventId, [response.round.id]) },
+				{
+					label: 'metagame cache',
+					run: () => metagameStore.applyRemoteInvalidated(),
+				},
+				{
+					label: 'event status',
+					run: () => eventStore.loadEvent(eventId),
+				},
+				{
+					label: 'players',
+					run: () => playerStore.loadPlayersByEventId(eventId),
+				},
+				{
+					label: 'rounds',
+					run: () => roundStore.loadRoundsByEventId(eventId),
+				},
+				{
+					label: 'feature matches',
+					run: () => featureMatchStore.loadFeatureMatchesByEventId(eventId),
+				},
+				{
+					label: 'matches',
+					run: () => refreshLoadedMatches(eventId, [response.round.id]),
+				},
 			],
 			isSuccess: () => true,
 			successContent: response => ({
@@ -581,14 +711,38 @@ export const useMeleeStore = defineStore('melee', () => {
 			},
 			apiCall: (eventId: number) => eventRepo.runInitialSetup(eventId),
 			refreshTasks: eventId => [
-				{ label: 'metagame cache', run: () => metagameStore.applyRemoteInvalidated() },
-				{ label: 'deck cache', run: () => clearPlayerDeckCache() },
-				{ label: 'event status', run: () => eventStore.loadEvent(eventId) },
-				{ label: 'phases', run: () => phaseStore.loadPhasesByEventId(eventId) },
-				{ label: 'rounds', run: () => roundStore.loadRoundsByEventId(eventId) },
-				{ label: 'players', run: () => playerStore.loadPlayersByEventId(eventId) },
-				{ label: 'deck lists', run: () => playerDeckStore.loadByEventId(eventId) },
-				{ label: 'feature matches', run: () => featureMatchStore.loadFeatureMatchesByEventId(eventId) },
+				{
+					label: 'metagame cache',
+					run: () => metagameStore.applyRemoteInvalidated(),
+				},
+				{
+					label: 'deck cache',
+					run: () => clearPlayerDeckCache(),
+				},
+				{
+					label: 'event status',
+					run: () => eventStore.loadEvent(eventId),
+				},
+				{
+					label: 'phases',
+					run: () => phaseStore.loadPhasesByEventId(eventId),
+				},
+				{
+					label: 'rounds',
+					run: () => roundStore.loadRoundsByEventId(eventId),
+				},
+				{
+					label: 'players',
+					run: () => playerStore.loadPlayersByEventId(eventId),
+				},
+				{
+					label: 'deck lists',
+					run: () => playerDeckStore.loadByEventId(eventId),
+				},
+				{
+					label: 'feature matches',
+					run: () => featureMatchStore.loadFeatureMatchesByEventId(eventId),
+				},
 			],
 			isSuccess: response => response.success,
 			successContent: response => ({

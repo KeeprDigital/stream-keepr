@@ -35,40 +35,50 @@ describe('mtgCardService JSON bulk SQLite integration', () => {
 
 	it('executes insert/conflict CTEs, preserves absent fields, and replaces supplied JSON arrays', async () => {
 		const service = mtgCardService();
-		await service.batchUpsert([{
-			name: 'Integration Bolt',
-			game: 'mtg',
-			scryfallId: 'keep-me',
-			colors: 'R',
-			deckCounterTypes: ['charge'],
-			deckTokens: [{
-				id: 'old-token',
-				scryfallId: null,
-				name: 'Old Token',
-				typeLine: null,
-				uri: null,
-			}],
-		}]);
+		await service.batchUpsert([
+			{
+				name: 'Integration Bolt',
+				game: 'mtg',
+				scryfallId: 'keep-me',
+				colors: 'R',
+				deckCounterTypes: ['charge'],
+				deckTokens: [
+					{
+						id: 'old-token',
+						scryfallId: null,
+						name: 'Old Token',
+						typeLine: null,
+						uri: null,
+					},
+				],
+			},
+		]);
 
-		const result = await service.batchUpsert([{
-			name: 'Integration Bolt',
-			game: 'mtg',
-			colors: 'U',
-			deckCounterTypes: ['energy'],
-			deckTokens: [{
-				id: 'new-token',
-				scryfallId: 'new-token',
-				name: 'New Token',
-				typeLine: 'Token Creature',
-				uri: null,
-			}],
-		}]);
+		const result = await service.batchUpsert([
+			{
+				name: 'Integration Bolt',
+				game: 'mtg',
+				colors: 'U',
+				deckCounterTypes: ['energy'],
+				deckTokens: [
+					{
+						id: 'new-token',
+						scryfallId: 'new-token',
+						name: 'New Token',
+						typeLine: 'Token Creature',
+						uri: null,
+					},
+				],
+			},
+		]);
 
 		expect(result.get('integration bolt')).toMatchObject({
 			scryfallId: 'keep-me',
 			colors: 'U',
 			deckCounterTypes: ['energy'],
-			deckTokens: [expect.objectContaining({ id: 'new-token', name: 'New Token' })],
+			deckTokens: [
+				expect.objectContaining({ id: 'new-token', name: 'New Token' }),
+			],
 		});
 	});
 });

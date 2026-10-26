@@ -34,8 +34,12 @@ const mockEventRepo = {
 	updateMeleeConfig: vi.fn(),
 };
 
-const mockToast = { add: vi.fn() };
-const mockOverlay = { create: vi.fn() };
+const mockToast = {
+	add: vi.fn(),
+};
+const mockOverlay = {
+	create: vi.fn(),
+};
 const mockRefreshAfterMeleeReset = vi.fn();
 
 mockNuxtImport('useEventStore', () => () => mockEventStore);
@@ -60,7 +64,9 @@ const UCardStub = defineComponent({
 });
 
 const UFormFieldStub = defineComponent({
-	props: { name: { type: String, required: false } },
+	props: {
+		name: { type: String, required: false },
+	},
 	template: '<label :data-field="name"><slot /></label>',
 });
 
@@ -79,7 +85,10 @@ const UButtonStub = defineComponent({
 
 const UInputStub = defineComponent({
 	props: {
-		modelValue: { type: [String, Number], required: false },
+		modelValue: {
+			type: [String, Number],
+			required: false,
+		},
 	},
 	emits: ['update:modelValue'],
 	template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)">',
@@ -176,7 +185,9 @@ describe('configMeleeIntegration', () => {
 	});
 
 	it('requires destructive confirmation before disabling a loaded integration', async () => {
-		const open = vi.fn().mockReturnValue({ result: Promise.resolve(false) });
+		const open = vi.fn().mockReturnValue({
+			result: Promise.resolve(false),
+		});
 		mockOverlay.create.mockReturnValue({ open });
 		const wrapper = await mountComponent();
 		await flushPromises();
@@ -193,7 +204,9 @@ describe('configMeleeIntegration', () => {
 	});
 
 	it('requires destructive confirmation before changing a loaded Melee event', async () => {
-		const open = vi.fn().mockReturnValue({ result: Promise.resolve(false) });
+		const open = vi.fn().mockReturnValue({
+			result: Promise.resolve(false),
+		});
 		mockOverlay.create.mockReturnValue({ open });
 		const wrapper = await mountComponent();
 		await flushPromises();
@@ -210,7 +223,9 @@ describe('configMeleeIntegration', () => {
 	});
 
 	it('refreshes all local Melee-derived data after a confirmed destructive change', async () => {
-		const open = vi.fn().mockReturnValue({ result: Promise.resolve(true) });
+		const open = vi.fn().mockReturnValue({
+			result: Promise.resolve(true),
+		});
 		mockOverlay.create.mockReturnValue({ open });
 		const wrapper = await mountComponent();
 		await flushPromises();
@@ -228,10 +243,15 @@ describe('configMeleeIntegration', () => {
 	});
 
 	it('names the imported structure a reset kept for its manual Rounds or Matches, without storing it on the Event', async () => {
-		const open = vi.fn().mockReturnValue({ result: Promise.resolve(true) });
+		const open = vi.fn().mockReturnValue({
+			result: Promise.resolve(true),
+		});
 		mockOverlay.create.mockReturnValue({ open });
 		const kept = 'Phase "Swiss" was imported from Melee.gg and holds manual Rounds or Matches, so it was kept as a manual Phase';
-		mockEventRepo.updateMeleeConfig.mockResolvedValue({ meleeConfigured: false, warnings: [kept] });
+		mockEventRepo.updateMeleeConfig.mockResolvedValue({
+			meleeConfigured: false,
+			warnings: [kept],
+		});
 		const wrapper = await mountComponent();
 		await flushPromises();
 
@@ -250,7 +270,9 @@ describe('configMeleeIntegration', () => {
 	});
 
 	it('keeps a committed destructive change successful when the local refresh fails', async () => {
-		const open = vi.fn().mockReturnValue({ result: Promise.resolve(true) });
+		const open = vi.fn().mockReturnValue({
+			result: Promise.resolve(true),
+		});
 		mockOverlay.create.mockReturnValue({ open });
 		mockRefreshAfterMeleeReset.mockRejectedValueOnce(new Error('reload failed'));
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

@@ -3,14 +3,19 @@ const { isSynced, lastSyncedAt, serverTimeOffset } = useServerTime();
 
 const timeAgo = useTimeAgo(
 	computed(() => lastSyncedAt.value ?? Date.now()),
-	{ showSecond: true, scheduler: tick => useIntervalFn(tick, 1000) },
+	{
+		showSecond: true,
+		scheduler: tick => useIntervalFn(tick, 1000),
+	},
 );
 
 const statusIcon = computed(() => (isSynced.value ? 'i-lucide-clock-3' : 'i-lucide-clock-alert'));
 
 const offsetLabel = computed(() => {
 	const ms = Math.round(serverTimeOffset.value);
-	const sign = ms >= 0 ? '+' : '';
+	const sign = ms >= 0
+		? '+'
+		: '';
 	return `${sign}${ms}ms`;
 });
 </script>

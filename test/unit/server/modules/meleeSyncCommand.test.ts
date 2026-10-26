@@ -100,7 +100,13 @@ describe('melee sync command boundary', () => {
 	it('loads credentials only after acquiring the command lease', async () => {
 		mockWorkflows.syncPlayers.mockResolvedValue({
 			success: true,
-			results: { created: 0, updated: 1, deactivated: 0, matchesUpdated: 0, errors: [] },
+			results: {
+				created: 0,
+				updated: 1,
+				deactivated: 0,
+				matchesUpdated: 0,
+				errors: [],
+			},
 		});
 
 		await meleeSyncModule().syncPlayers(requestEvent, 1);
@@ -117,7 +123,13 @@ describe('melee sync command boundary', () => {
 		mockWorkflows.syncPlayers.mockResolvedValue({
 			success: true,
 			warnings: ['Player notification delayed'],
-			results: { created: 0, updated: 1, deactivated: 0, matchesUpdated: 0, errors: [] },
+			results: {
+				created: 0,
+				updated: 1,
+				deactivated: 0,
+				matchesUpdated: 0,
+				errors: [],
+			},
 		});
 		mockWorkflows.syncRoundMatches.mockResolvedValue({
 			success: true,
@@ -147,7 +159,13 @@ describe('melee sync command boundary', () => {
 			success: true,
 			message: 'Initial Melee.gg setup completed',
 			steps: ['structure', 'players', 'decklists'],
-			players: { created: 3, updated: 0, deactivated: 0, matchesUpdated: 0, errors: [] },
+			players: {
+				created: 3,
+				updated: 0,
+				deactivated: 0,
+				matchesUpdated: 0,
+				errors: [],
+			},
 			deckLists: { players: 3, deckLists: 3 },
 		});
 
@@ -311,7 +329,13 @@ describe('melee sync command boundary', () => {
 		const roundError = new Error('Melee Round Matches unavailable');
 		mockWorkflows.syncPlayers.mockResolvedValue({
 			success: true,
-			results: { created: 0, updated: 2, deactivated: 0, matchesUpdated: 0, errors: [] },
+			results: {
+				created: 0,
+				updated: 2,
+				deactivated: 0,
+				matchesUpdated: 0,
+				errors: [],
+			},
 		});
 		mockWorkflows.syncRoundMatches.mockRejectedValue(roundError);
 
@@ -450,7 +474,9 @@ describe('melee sync command boundary', () => {
 		expect(mockRecordSuccess).toHaveBeenCalledWith(
 			requestEvent,
 			1,
-			{ lastPlayersSyncedAt: expect.any(Date) },
+			{
+				lastPlayersSyncedAt: expect.any(Date),
+			},
 			'lease-token',
 		);
 		expect(mockRecordFailure).not.toHaveBeenCalled();

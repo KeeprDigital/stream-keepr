@@ -78,8 +78,12 @@ export function createDnsOverHttpsRemoteHostResolver(
 			if (ipv4.outcome === 'unavailable' || ipv6.outcome === 'unavailable')
 				return { outcome: 'unavailable' };
 			const addresses = [
-				...ipv4.outcome === 'answered' ? ipv4.addresses : [],
-				...ipv6.outcome === 'answered' ? ipv6.addresses : [],
+				...ipv4.outcome === 'answered'
+					? ipv4.addresses
+					: [],
+				...ipv6.outcome === 'answered'
+					? ipv6.addresses
+					: [],
 			];
 			return addresses.length > 0
 				? { outcome: 'resolved', addresses }

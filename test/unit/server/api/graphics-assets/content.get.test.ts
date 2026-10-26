@@ -24,7 +24,9 @@ vi.mock('~~/server/modules/graphics-asset-library/runtime', () => ({
 
 vi.stubGlobal('defineEventHandler', vi.fn(handler => handler));
 vi.stubGlobal('getRouterParam', vi.fn((_event, name: string) =>
-	name === 'assetId' ? 'asset-1' : 'revision-1'));
+	name === 'assetId'
+		? 'asset-1'
+		: 'revision-1'));
 vi.stubGlobal('setResponseHeader', mockSetResponseHeader);
 vi.stubGlobal('getRequestHeader', vi.fn((event: { headers?: Record<string, string> }, name: string) =>
 	event.headers?.[name]));
@@ -78,7 +80,9 @@ describe('authenticated exact Graphic Asset Revision content delivery', () => {
 		expect(response.headers.get('content-length')).toBe('1000');
 		expect(response.headers.get('cache-control')).toBe('private, max-age=0, must-revalidate');
 		expect(mockResolveGraphicAssetRevision).toHaveBeenCalledWith(
-			expect.not.objectContaining({ range: expect.anything() }),
+			expect.not.objectContaining({
+				range: expect.anything(),
+			}),
 		);
 	});
 
@@ -113,7 +117,9 @@ describe('authenticated exact Graphic Asset Revision content delivery', () => {
 		expect(response.headers.get('content-range')).toBe('bytes 100-199/1000');
 		expect(response.headers.get('content-length')).toBe('100');
 		expect(mockResolveGraphicAssetRevision).toHaveBeenLastCalledWith(
-			expect.objectContaining({ range: { offset: 100, length: 100 } }),
+			expect.objectContaining({
+				range: { offset: 100, length: 100 },
+			}),
 		);
 	});
 
@@ -152,7 +158,9 @@ describe('authenticated exact Graphic Asset Revision content delivery', () => {
 
 		expect(response.status).toBe(200);
 		expect(mockResolveGraphicAssetRevision).toHaveBeenLastCalledWith(
-			expect.not.objectContaining({ range: expect.anything() }),
+			expect.not.objectContaining({
+				range: expect.anything(),
+			}),
 		);
 	});
 
@@ -229,7 +237,9 @@ describe('authenticated exact Graphic Asset Revision content delivery', () => {
 		const failure = await refusalFrom(handler(event));
 
 		expect(mockResolveGraphicAssetRevision).toHaveBeenLastCalledWith(
-			expect.objectContaining({ range: { offset: 100, length: 100 } }),
+			expect.objectContaining({
+				range: { offset: 100, length: 100 },
+			}),
 		);
 		expect(failure).toMatchObject({
 			statusCode: 503,

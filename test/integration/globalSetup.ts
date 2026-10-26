@@ -27,7 +27,9 @@ import './disable-fs-watch.mjs';
 async function assertIntegrationServerReady(server: IntegrationServer) {
 	const request = (path: string, init?: RequestInit) => fetch(new URL(path, server.url), init);
 	const cookie = await signInAsOperator(request, server.url);
-	const response = await request('/api/events', { headers: { cookie } });
+	const response = await request('/api/events', {
+		headers: { cookie },
+	});
 	if (!response.ok) {
 		const detail = await response.text();
 		throw new Error(
@@ -59,14 +61,18 @@ async function startReadyServer(persistDir: string, port: number, firstEventId: 
  */
 async function startIntegrationServers(): Promise<IntegrationServer[]> {
 	const persistDirs = Array.from(
-		{ length: integrationServerCount() },
+		{
+			length: integrationServerCount(),
+		},
 		(_, index) => integrationServerPersistDir(index + 1),
 	);
 	const ports = await freePorts(persistDirs.length);
 	const firstEventIds = integrationEventIdBlocks(persistDirs.length);
 	const started = await Promise.allSettled(persistDirs.map((persistDir, index) =>
 		startReadyServer(persistDir, ports[index]!, firstEventIds[index]!)));
-	const servers = started.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
+	const servers = started.flatMap(result => result.status === 'fulfilled'
+		? [result.value]
+		: []);
 	const failed = started.find(result => result.status === 'rejected');
 	if (failed) {
 		await Promise.all(servers.map(server => server.stop()));

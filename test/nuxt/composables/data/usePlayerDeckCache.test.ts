@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockPlayer } from '~~/test/helpers/fixtures';
 import { clearPlayerDeckCache, usePlayerDeckCache } from '~/composables/data/usePlayerDeckCache';
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 mockNuxtImport('$fetch', () => mockFetch);
 
 function card(overrides: Partial<PlayerDeckCardEntry> = {}): PlayerDeckCardEntry {
@@ -48,7 +50,9 @@ function deck(overrides: Partial<PlayerDeckResponse> = {}): PlayerDeckResponse {
 	};
 }
 
-function collection(decks: PlayerDeckResponse[] = [deck()], selectedDeckId = decks[0]?.id ?? null): PlayerDeckCollectionResponse {
+function collection(decks: PlayerDeckResponse[] = [
+	deck(),
+], selectedDeckId = decks[0]?.id ?? null): PlayerDeckCollectionResponse {
 	return { decks, selectedDeckId };
 }
 
@@ -59,9 +63,18 @@ describe('usePlayerDeckCache', () => {
 	});
 
 	it('fetches the deck collection and returns its selected deck', async () => {
-		const response = collection([deck({ cards: [card({ name: 'Lightning Bolt', quantity: 4 })] })]);
+		const response = collection([
+			deck({
+				cards: [
+					card({ name: 'Lightning Bolt', quantity: 4 }),
+				],
+			}),
+		]);
 		mockFetch.mockResolvedValueOnce(response);
-		const player = createMockPlayer({ id: 1, updatedAt: new Date('2026-01-01') });
+		const player = createMockPlayer({
+			id: 1,
+			updatedAt: new Date('2026-01-01'),
+		});
 
 		const result = await usePlayerDeckCache().fetchDeck(player.id, 1, player.updatedAt);
 
@@ -122,14 +135,27 @@ describe('usePlayerDeckCache', () => {
 	});
 
 	it('selects the deck whose format applies to a phase', async () => {
-		const primary = deck({ id: 10, phaseIds: [1], isPrimary: true });
-		const finals = deck({ id: 20, externalId: 'deck-20', phaseIds: [2], phaseName: 'Finals', isPrimary: false, sortOrder: 1 });
+		const primary = deck({
+			id: 10,
+			phaseIds: [1],
+			isPrimary: true,
+		});
+		const finals = deck({
+			id: 20,
+			externalId: 'deck-20',
+			phaseIds: [2],
+			phaseName: 'Finals',
+			isPrimary: false,
+			sortOrder: 1,
+		});
 		mockFetch.mockResolvedValueOnce(collection([primary, finals], primary.id));
 
 		const result = await usePlayerDeckCache().fetchDeck(1, 1, new Date('2026-01-01'), { phaseId: 2 });
 
 		expect(result?.id).toBe(20);
-		expect(mockFetch).toHaveBeenCalledWith('/api/events/1/players/1/decks', { query: { phaseId: 2 } });
+		expect(mockFetch).toHaveBeenCalledWith('/api/events/1/players/1/decks', {
+			query: { phaseId: 2 },
+		});
 	});
 
 	it('clears cached collections', async () => {
@@ -150,14 +176,18 @@ describe('usePlayerDeckCache', () => {
 		mockFetch.mockReturnValueOnce(new Promise<PlayerDeckCollectionResponse>((resolve) => {
 			resolveFetch = resolve;
 		}));
-		mockFetch.mockResolvedValue(collection([deck({ name: 'After' })]));
+		mockFetch.mockResolvedValue(collection([
+			deck({ name: 'After' }),
+		]));
 		const cache = usePlayerDeckCache();
 		const updatedAt = new Date('2026-01-01');
 
 		// Served before a resolution committed, delivered after it was announced.
 		const stale = cache.fetchDeck(1, 1, updatedAt);
 		clearPlayerDeckCache();
-		resolveFetch(collection([deck({ name: 'Before' })]));
+		resolveFetch(collection([
+			deck({ name: 'Before' }),
+		]));
 		await stale;
 
 		expect(cache.getCachedDeck(1)).toBeNull();
@@ -169,13 +199,17 @@ describe('usePlayerDeckCache', () => {
 		mockFetch.mockReturnValueOnce(new Promise<PlayerDeckCollectionResponse>((resolve) => {
 			resolveFetch = resolve;
 		}));
-		mockFetch.mockResolvedValue(collection([deck({ name: 'After' })]));
+		mockFetch.mockResolvedValue(collection([
+			deck({ name: 'After' }),
+		]));
 		const cache = usePlayerDeckCache();
 		const updatedAt = new Date('2026-01-01');
 
 		const stale = cache.fetchDeck(1, 1, updatedAt);
 		cache.clearCachedDeck(1);
-		resolveFetch(collection([deck({ name: 'Before' })]));
+		resolveFetch(collection([
+			deck({ name: 'Before' }),
+		]));
 		await stale;
 
 		expect(cache.getCachedDeck(1)).toBeNull();
@@ -183,7 +217,13 @@ describe('usePlayerDeckCache', () => {
 	});
 
 	it('updates cached display details after review without replacing submitted deck content', async () => {
-		const importedDeck = deck({ name: 'Imported Name', submittedName: 'Imported Name', cards: [card()] });
+		const importedDeck = deck({
+			name: 'Imported Name',
+			submittedName: 'Imported Name',
+			cards: [
+				card(),
+			],
+		});
 		mockFetch.mockResolvedValueOnce(collection([importedDeck]));
 		const cache = usePlayerDeckCache();
 		await cache.fetchDecks(1, 1, new Date('2026-01-01'));
@@ -220,19 +260,51 @@ describe('usePlayerDeckCache', () => {
 	});
 
 	it('builds every submitted deck list from normalized deck metadata', async () => {
-		const highlander = { status: 'legal' as const, system: '7ph' as const, points: 1, maxPoints: 8, hasReserveListCards: false, pointedCards: [], duplicateCards: [], unknownCards: [] };
+		const highlander = {
+			status: 'legal' as const,
+			system: '7ph' as const,
+			points: 1,
+			maxPoints: 8,
+			hasReserveListCards: false,
+			pointedCards: [],
+			duplicateCards: [],
+			unknownCards: [],
+		};
 		const primary = deck({
 			name: 'Control',
 			colors: 'U',
 			highlander,
 			cards: [
-				card({ cardType: 'Creature — Human', quantity: 4, manaCost: '{U}', cmc: 1 }),
-				card({ cardId: 2, cardType: 'Instant', quantity: 3, manaCost: '{U}{U}', cmc: 2 }),
+				card({
+					cardType: 'Creature — Human',
+					quantity: 4,
+					manaCost: '{U}',
+					cmc: 1,
+				}),
+				card({
+					cardId: 2,
+					cardType: 'Instant',
+					quantity: 3,
+					manaCost: '{U}{U}',
+					cmc: 2,
+				}),
 				card({ cardId: 3, cardType: 'Basic Land', quantity: 24 }),
-				card({ cardId: 4, cardType: 'Instant', quantity: 2, compartment: 'sideboard' }),
+				card({
+					cardId: 4,
+					cardType: 'Instant',
+					quantity: 2,
+					compartment: 'sideboard',
+				}),
 			],
 		});
-		const finals = deck({ id: 20, externalId: 'deck-20', phaseIds: [2], name: 'Finals Deck', isPrimary: false, sortOrder: 1 });
+		const finals = deck({
+			id: 20,
+			externalId: 'deck-20',
+			phaseIds: [2],
+			name: 'Finals Deck',
+			isPrimary: false,
+			sortOrder: 1,
+		});
 		mockFetch.mockResolvedValueOnce(collection([primary, finals]));
 		const cache = usePlayerDeckCache();
 		const player = createMockPlayer({ id: 1 });
@@ -241,7 +313,12 @@ describe('usePlayerDeckCache', () => {
 		const lists = cache.getDeckLists(player);
 
 		expect(lists).toHaveLength(2);
-		expect(lists[0]).toMatchObject({ deckId: 10, name: 'Control', colors: 'U', isPrimary: true });
+		expect(lists[0]).toMatchObject({
+			deckId: 10,
+			name: 'Control',
+			colors: 'U',
+			isPrimary: true,
+		});
 		expect(lists[0]!.stats).toMatchObject({ creatures: 4, instants: 3, lands: 24 });
 		expect(lists[0]!.pips?.U).toBe(10);
 		expect(lists[0]!.curve).toMatchObject({ 1: 4, 2: 3 });

@@ -41,9 +41,24 @@ beforeAll(async () => {
 
 	// Inserted out of Round order, so the order is the read's.
 	const [semifinals, quarterfinals, swissRound] = await db.insert(schema.rounds).values([
-		{ eventId, phaseId: topCutId, name: 'Semifinals', roundNumber: 2 },
-		{ eventId, phaseId: topCutId, name: 'Quarterfinals', roundNumber: 1 },
-		{ eventId, phaseId: swissId, name: 'Round 1', roundNumber: 1 },
+		{
+			eventId,
+			phaseId: topCutId,
+			name: 'Semifinals',
+			roundNumber: 2,
+		},
+		{
+			eventId,
+			phaseId: topCutId,
+			name: 'Quarterfinals',
+			roundNumber: 1,
+		},
+		{
+			eventId,
+			phaseId: swissId,
+			name: 'Round 1',
+			roundNumber: 1,
+		},
 	]).returning({ id: schema.rounds.id });
 	semifinalsId = semifinals!.id;
 	quarterfinalsId = quarterfinals!.id;
@@ -57,29 +72,91 @@ beforeAll(async () => {
 		Array.from({ length: 8 }, (_, index) => ({
 			eventId,
 			name: `Seed ${index + 1}`,
-			archetypeId: index === 0 ? archetype!.id : null,
-			gameData: index === 1 ? { type: 'mtg' as const, deckName: 'Mono-Green Landfall', deckColors: 'G' } : null,
+			archetypeId: index === 0
+				? archetype!.id
+				: null,
+			gameData: index === 1
+				? { type: 'mtg' as const, deckName: 'Mono-Green Landfall', deckColors: 'G' }
+				: null,
 		})),
 	).returning({ id: schema.players.id });
 	playerIds.push(...players.map(row => row.id));
 	const seed = (n: number) => playerIds[n - 1]!;
 
 	await db.insert(schema.matches).values([
-		{ eventId, roundId: quarterfinalsId, tableNumber: 2, player1Id: seed(4), player2Id: seed(5), hasResult: true, player1GameWins: 0, player2GameWins: 2 },
-		{ eventId, roundId: quarterfinalsId, tableNumber: 1, player1Id: seed(1), player2Id: seed(8), player1Data: { name: 'Stale Seed 1' }, hasResult: true, player1GameWins: 2, player2GameWins: 1 },
-		{ eventId, roundId: quarterfinalsId, tableNumber: 3, player1Id: seed(2), player2Id: seed(7) },
+		{
+			eventId,
+			roundId: quarterfinalsId,
+			tableNumber: 2,
+			player1Id: seed(4),
+			player2Id: seed(5),
+			hasResult: true,
+			player1GameWins: 0,
+			player2GameWins: 2,
+		},
+		{
+			eventId,
+			roundId: quarterfinalsId,
+			tableNumber: 1,
+			player1Id: seed(1),
+			player2Id: seed(8),
+			player1Data: { name: 'Stale Seed 1' },
+			hasResult: true,
+			player1GameWins: 2,
+			player2GameWins: 1,
+		},
+		{
+			eventId,
+			roundId: quarterfinalsId,
+			tableNumber: 3,
+			player1Id: seed(2),
+			player2Id: seed(7),
+		},
 		// A side no Player of the Event holds, named only by the Match's own record.
-		{ eventId, roundId: quarterfinalsId, tableNumber: 4, player1Id: seed(3), player2Data: { name: 'Unlinked Sixth' } },
-		{ eventId, roundId: semifinalsId, tableNumber: 1, player1Id: seed(1), player2Id: seed(5) },
-		{ eventId, roundId: swissRound!.id, tableNumber: 1, player1Id: seed(1), player2Id: seed(2) },
+		{
+			eventId,
+			roundId: quarterfinalsId,
+			tableNumber: 4,
+			player1Id: seed(3),
+			player2Data: { name: 'Unlinked Sixth' },
+		},
+		{
+			eventId,
+			roundId: semifinalsId,
+			tableNumber: 1,
+			player1Id: seed(1),
+			player2Id: seed(5),
+		},
+		{
+			eventId,
+			roundId: swissRound!.id,
+			tableNumber: 1,
+			player1Id: seed(1),
+			player2Id: seed(2),
+		},
 	]);
 
 	// The last Swiss Round's Round Standings seed the Top 8; Seed 8 has no position
 	// there. The Top 8's own Round Standings are not seeds.
 	await db.insert(schema.playerRoundStandings).values([
-		...[1, 2, 3, 4, 5, 6, 7].map(n => ({ eventId, roundId: swissRound!.id, playerId: seed(n), position: n })),
-		{ eventId, roundId: swissRound!.id, playerId: seed(8), position: null },
-		...[1, 2, 3, 4, 5, 6, 7, 8].map(n => ({ eventId, roundId: quarterfinalsId, playerId: seed(n), position: 9 - n })),
+		...[1, 2, 3, 4, 5, 6, 7].map(n => ({
+			eventId,
+			roundId: swissRound!.id,
+			playerId: seed(n),
+			position: n,
+		})),
+		{
+			eventId,
+			roundId: swissRound!.id,
+			playerId: seed(8),
+			position: null,
+		},
+		...[1, 2, 3, 4, 5, 6, 7, 8].map(n => ({
+			eventId,
+			roundId: quarterfinalsId,
+			playerId: seed(n),
+			position: 9 - n,
+		})),
 	]);
 });
 
@@ -97,15 +174,29 @@ describe('findPhaseBracket', () => {
 			[null, 'Final'],
 		]);
 		expect(result.bracket.columns.map(column => column.positions.map(position => position.entrants.map(entrant => entrant?.name ?? null)))).toEqual([
-			[['Seed 1', 'Seed 8'], ['Seed 4', 'Seed 5'], ['Seed 2', 'Seed 7'], ['Seed 3', 'Unlinked Sixth']],
-			[['Seed 1', 'Seed 5'], [null, null]],
-			[[null, null]],
+			[
+				['Seed 1', 'Seed 8'],
+				['Seed 4', 'Seed 5'],
+				['Seed 2', 'Seed 7'],
+				['Seed 3', 'Unlinked Sixth'],
+			],
+			[
+				['Seed 1', 'Seed 5'],
+				[null, null],
+			],
+			[
+				[null, null],
+			],
 		]);
 		expect(result.bracket.columns[0]!.positions[3]!.entrants).toEqual([
 			{ playerId: playerIds[2], name: 'Seed 3' },
 			{ playerId: null, name: 'Unlinked Sixth' },
 		]);
-		expect(result.bracket.columns[0]!.positions[0]).toMatchObject({ status: 'reported', winner: 0, gameWins: [2, 1] });
+		expect(result.bracket.columns[0]!.positions[0]).toMatchObject({
+			status: 'reported',
+			winner: 0,
+			gameWins: [2, 1],
+		});
 	});
 
 	it('leaves seeds and Archetypes out unless asked for', async () => {
@@ -119,9 +210,19 @@ describe('findPhaseBracket', () => {
 		const result = await findPhaseBracket(eventId, topCutId, { showSeeds: true });
 
 		expect(result.bracket.columns.map(column => column.positions.map(position => position.entrants.map(entrant => entrant?.seed ?? null)))).toEqual([
-			[[1, null], [4, 5], [2, 7], [3, null]],
-			[[1, 5], [null, null]],
-			[[null, null]],
+			[
+				[1, null],
+				[4, 5],
+				[2, 7],
+				[3, null],
+			],
+			[
+				[1, 5],
+				[null, null],
+			],
+			[
+				[null, null],
+			],
 		]);
 	});
 
@@ -129,9 +230,15 @@ describe('findPhaseBracket', () => {
 		const result = await findPhaseBracket(eventId, topCutId, { showArchetypes: true });
 
 		expect(result.bracket.columns[0]!.positions.map(position => position.entrants.map(entrant => entrant?.deck ?? null))).toEqual([
-			[{ name: 'Izzet Prowess', colors: 'UR' }, null],
+			[
+				{ name: 'Izzet Prowess', colors: 'UR' },
+				null,
+			],
 			[null, null],
-			[{ name: 'Mono-Green Landfall', colors: 'G' }, null],
+			[
+				{ name: 'Mono-Green Landfall', colors: 'G' },
+				null,
+			],
 			[null, null],
 		]);
 	});

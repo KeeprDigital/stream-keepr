@@ -24,14 +24,26 @@ export default defineEventHandler(async (event): Promise<ScreenOutputFeatureMatc
 	const { slotId } = await getValidatedRouterParams(event, paramsSchema.parse);
 	const { eventId, slot } = await requireScreenOutputFeatureMatchSlot(event, slotId);
 
-	const match = slot.matchId ? await matchService().findById(slot.matchId, eventId) : undefined;
-	const round = match ? await roundService().findById(match.roundId, eventId) : undefined;
-	const phase = round ? await phaseService().findById(round.phaseId, eventId) : undefined;
+	const match = slot.matchId
+		? await matchService().findById(slot.matchId, eventId)
+		: undefined;
+	const round = match
+		? await roundService().findById(match.roundId, eventId)
+		: undefined;
+	const phase = round
+		? await phaseService().findById(round.phaseId, eventId)
+		: undefined;
 
 	return {
 		slot: mapFeatureMatchToResponse(slot),
-		match: match ? mapMatchToResponse(match) : null,
-		round: round ? mapRoundToResponse(round) : null,
-		phase: phase ? mapPhaseToResponse(phase) : null,
+		match: match
+			? mapMatchToResponse(match)
+			: null,
+		round: round
+			? mapRoundToResponse(round)
+			: null,
+		phase: phase
+			? mapPhaseToResponse(phase)
+			: null,
 	};
 });

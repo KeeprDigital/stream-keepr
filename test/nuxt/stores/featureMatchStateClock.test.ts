@@ -61,7 +61,9 @@ vi.mock('@vueuse/core', async () => {
 });
 
 // useEventStore mock for bulkClockAction
-const mockEventStore = { event: { featureMatchDefaultClockDuration: 50 } };
+const mockEventStore = {
+	event: { featureMatchDefaultClockDuration: 50 },
+};
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 
 describe('useFeatureMatchStateStore clock actions', () => {
@@ -104,7 +106,10 @@ describe('useFeatureMatchStateStore clock actions', () => {
 	}
 
 	function commandResult(state: FeatureMatchState = createMockFeatureMatchState(), session?: Partial<FeatureMatchSessionResponse>) {
-		const responseSession = { ...createSession(state), ...session };
+		const responseSession = {
+			...createSession(state),
+			...session,
+		};
 		return {
 			featureMatchState: state,
 			session: responseSession,
@@ -134,7 +139,14 @@ describe('useFeatureMatchStateStore clock actions', () => {
 		it('optimistically sets isRunning true and lastStartedAt', async () => {
 			seedState();
 			const started = createMockFeatureMatchState({
-				clock: { type: 'countdown', durationMs: 3000000, elapsedMs: 0, isRunning: true, lastStartedAt: 1000000, countUpAfterCountdown: false },
+				clock: {
+					type: 'countdown',
+					durationMs: 3000000,
+					elapsedMs: 0,
+					isRunning: true,
+					lastStartedAt: 1000000,
+					countUpAfterCountdown: false,
+				},
 			});
 			mockRepo.startClock.mockResolvedValue(commandResult(started));
 
@@ -148,11 +160,25 @@ describe('useFeatureMatchStateStore clock actions', () => {
 	describe('pauseClock', () => {
 		it('optimistically sets isRunning false and accumulates elapsed', async () => {
 			seedState({
-				clock: { type: 'countdown', durationMs: 3000000, elapsedMs: 1000, isRunning: true, lastStartedAt: 999000, countUpAfterCountdown: false },
+				clock: {
+					type: 'countdown',
+					durationMs: 3000000,
+					elapsedMs: 1000,
+					isRunning: true,
+					lastStartedAt: 999000,
+					countUpAfterCountdown: false,
+				},
 			});
 			// getServerTime returns 1000000, so additional elapsed = 1000000 - 999000 = 1000
 			const paused = createMockFeatureMatchState({
-				clock: { type: 'countdown', durationMs: 3000000, elapsedMs: 2000, isRunning: false, lastStartedAt: null, countUpAfterCountdown: false },
+				clock: {
+					type: 'countdown',
+					durationMs: 3000000,
+					elapsedMs: 2000,
+					isRunning: false,
+					lastStartedAt: null,
+					countUpAfterCountdown: false,
+				},
 			});
 			mockRepo.pauseClock.mockResolvedValue(commandResult(paused));
 
@@ -165,7 +191,14 @@ describe('useFeatureMatchStateStore clock actions', () => {
 	describe('resetClock', () => {
 		it('optimistically resets elapsed to 0 and clears overtime', async () => {
 			seedState({
-				clock: { type: 'countdown', durationMs: 3000000, elapsedMs: 50000, isRunning: false, lastStartedAt: null, countUpAfterCountdown: false },
+				clock: {
+					type: 'countdown',
+					durationMs: 3000000,
+					elapsedMs: 50000,
+					isRunning: false,
+					lastStartedAt: null,
+					countUpAfterCountdown: false,
+				},
 				overtime: { active: true, turnsRemaining: 3, totalTurns: 5 },
 			});
 			const reset = createMockFeatureMatchState();
@@ -182,10 +215,24 @@ describe('useFeatureMatchStateStore clock actions', () => {
 	describe('restartClock', () => {
 		it('optimistically resets elapsed to 0 and starts running', async () => {
 			seedState({
-				clock: { type: 'countdown', durationMs: 3000000, elapsedMs: 50000, isRunning: false, lastStartedAt: null, countUpAfterCountdown: false },
+				clock: {
+					type: 'countdown',
+					durationMs: 3000000,
+					elapsedMs: 50000,
+					isRunning: false,
+					lastStartedAt: null,
+					countUpAfterCountdown: false,
+				},
 			});
 			const restarted = createMockFeatureMatchState({
-				clock: { type: 'countdown', durationMs: 3000000, elapsedMs: 0, isRunning: true, lastStartedAt: 1000000, countUpAfterCountdown: false },
+				clock: {
+					type: 'countdown',
+					durationMs: 3000000,
+					elapsedMs: 0,
+					isRunning: true,
+					lastStartedAt: 1000000,
+					countUpAfterCountdown: false,
+				},
 			});
 			mockRepo.restartClock.mockResolvedValue(commandResult(restarted));
 
@@ -200,7 +247,14 @@ describe('useFeatureMatchStateStore clock actions', () => {
 	describe('adjustClock', () => {
 		it('applies optimistic clock adjustment via batch', () => {
 			seedState({
-				clock: { type: 'countdown', durationMs: 3000000, elapsedMs: 0, isRunning: false, lastStartedAt: null, countUpAfterCountdown: false },
+				clock: {
+					type: 'countdown',
+					durationMs: 3000000,
+					elapsedMs: 0,
+					isRunning: false,
+					lastStartedAt: null,
+					countUpAfterCountdown: false,
+				},
 			});
 
 			store.adjustClock(EVENT_ID, MATCH_ID, 60000);
@@ -215,10 +269,24 @@ describe('useFeatureMatchStateStore clock actions', () => {
 	describe('setClock', () => {
 		it('optimistically sets clock to target via applyClockAdjustment', async () => {
 			seedState({
-				clock: { type: 'countup', durationMs: 0, elapsedMs: 10000, isRunning: false, lastStartedAt: null, countUpAfterCountdown: false },
+				clock: {
+					type: 'countup',
+					durationMs: 0,
+					elapsedMs: 10000,
+					isRunning: false,
+					lastStartedAt: null,
+					countUpAfterCountdown: false,
+				},
 			});
 			const serverState = createMockFeatureMatchState({
-				clock: { type: 'countup', durationMs: 0, elapsedMs: 60000, isRunning: false, lastStartedAt: null, countUpAfterCountdown: false },
+				clock: {
+					type: 'countup',
+					durationMs: 0,
+					elapsedMs: 60000,
+					isRunning: false,
+					lastStartedAt: null,
+					countUpAfterCountdown: false,
+				},
 			});
 			mockRepo.setClock.mockResolvedValue(commandResult(serverState));
 
@@ -233,10 +301,24 @@ describe('useFeatureMatchStateStore clock actions', () => {
 	describe('bulkClockAction', () => {
 		it('start: applies optimistic start to all non-running clocks', async () => {
 			const stopped = seedState({
-				clock: { type: 'countdown', durationMs: 3000000, elapsedMs: 0, isRunning: false, lastStartedAt: null, countUpAfterCountdown: false },
+				clock: {
+					type: 'countdown',
+					durationMs: 3000000,
+					elapsedMs: 0,
+					isRunning: false,
+					lastStartedAt: null,
+					countUpAfterCountdown: false,
+				},
 			}, 100);
 			seedState({
-				clock: { type: 'countdown', durationMs: 3000000, elapsedMs: 0, isRunning: true, lastStartedAt: 999000, countUpAfterCountdown: false },
+				clock: {
+					type: 'countdown',
+					durationMs: 3000000,
+					elapsedMs: 0,
+					isRunning: true,
+					lastStartedAt: 999000,
+					countUpAfterCountdown: false,
+				},
 			}, 200);
 
 			mockRepo.bulkClockAction.mockResolvedValue({
@@ -244,7 +326,10 @@ describe('useFeatureMatchStateStore clock actions', () => {
 					{
 						featureMatchId: 100,
 						...commandResult(
-							{ ...stopped, clock: { ...stopped.clock, isRunning: true, lastStartedAt: 1000000 } },
+							{
+								...stopped,
+								clock: { ...stopped.clock, isRunning: true, lastStartedAt: 1000000 },
+							},
 							{ slotId: 100 },
 						),
 					},
@@ -259,10 +344,24 @@ describe('useFeatureMatchStateStore clock actions', () => {
 
 		it('pause: applies optimistic pause to all running clocks', async () => {
 			seedState({
-				clock: { type: 'countdown', durationMs: 3000000, elapsedMs: 1000, isRunning: true, lastStartedAt: 999000, countUpAfterCountdown: false },
+				clock: {
+					type: 'countdown',
+					durationMs: 3000000,
+					elapsedMs: 1000,
+					isRunning: true,
+					lastStartedAt: 999000,
+					countUpAfterCountdown: false,
+				},
 			}, 100);
 			seedState({
-				clock: { type: 'countdown', durationMs: 3000000, elapsedMs: 0, isRunning: false, lastStartedAt: null, countUpAfterCountdown: false },
+				clock: {
+					type: 'countdown',
+					durationMs: 3000000,
+					elapsedMs: 0,
+					isRunning: false,
+					lastStartedAt: null,
+					countUpAfterCountdown: false,
+				},
 			}, 200);
 
 			mockRepo.bulkClockAction.mockResolvedValue({ updates: [] });
@@ -277,7 +376,14 @@ describe('useFeatureMatchStateStore clock actions', () => {
 
 		it('reset: resets all clocks and clears overtime', async () => {
 			seedState({
-				clock: { type: 'countdown', durationMs: 3000000, elapsedMs: 50000, isRunning: true, lastStartedAt: 999000, countUpAfterCountdown: false },
+				clock: {
+					type: 'countdown',
+					durationMs: 3000000,
+					elapsedMs: 50000,
+					isRunning: true,
+					lastStartedAt: 999000,
+					countUpAfterCountdown: false,
+				},
 				overtime: { active: true, turnsRemaining: 3, totalTurns: 5 },
 			}, 100);
 
@@ -293,7 +399,14 @@ describe('useFeatureMatchStateStore clock actions', () => {
 
 		it('restart: resets and starts all clocks', async () => {
 			seedState({
-				clock: { type: 'countdown', durationMs: 3000000, elapsedMs: 50000, isRunning: false, lastStartedAt: null, countUpAfterCountdown: false },
+				clock: {
+					type: 'countdown',
+					durationMs: 3000000,
+					elapsedMs: 50000,
+					isRunning: false,
+					lastStartedAt: null,
+					countUpAfterCountdown: false,
+				},
 			}, 100);
 
 			mockRepo.bulkClockAction.mockResolvedValue({ updates: [] });
@@ -309,10 +422,24 @@ describe('useFeatureMatchStateStore clock actions', () => {
 	describe('adjustAllClocks', () => {
 		it('applies optimistic adjustment to all clocks', () => {
 			seedState({
-				clock: { type: 'countdown', durationMs: 3000000, elapsedMs: 0, isRunning: false, lastStartedAt: null, countUpAfterCountdown: false },
+				clock: {
+					type: 'countdown',
+					durationMs: 3000000,
+					elapsedMs: 0,
+					isRunning: false,
+					lastStartedAt: null,
+					countUpAfterCountdown: false,
+				},
 			}, 100);
 			seedState({
-				clock: { type: 'countdown', durationMs: 3000000, elapsedMs: 0, isRunning: false, lastStartedAt: null, countUpAfterCountdown: false },
+				clock: {
+					type: 'countdown',
+					durationMs: 3000000,
+					elapsedMs: 0,
+					isRunning: false,
+					lastStartedAt: null,
+					countUpAfterCountdown: false,
+				},
 			}, 200);
 
 			// Mock bulkClockAction for the debounced flush

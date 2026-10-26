@@ -15,7 +15,9 @@ const {
 	togglePreviewPin,
 } = useCardPreview();
 
-const syncPath = computed(() => eventStore.eventId ? `/event/${eventStore.eventId}/sync` : null);
+const syncPath = computed(() => eventStore.eventId
+	? `/event/${eventStore.eventId}/sync`
+	: null);
 
 function getImageUrl(cardName: string): string | null {
 	return props.imageUrlsByCardName?.[cardName] ?? null;

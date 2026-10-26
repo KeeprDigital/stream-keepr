@@ -47,25 +47,57 @@ async function seedEvent(name: string, sortOrder: number): Promise<SeededEvent> 
 	// Identical external identities and round numbers in both Events: every
 	// predicate except the Event scope matches both rows.
 	const [phase] = await db.insert(schema.phases)
-		.values({ eventId, name: `${name} Swiss`, sortOrder, externalId: 'phase-shared', externalSource: 'melee' })
+		.values({
+			eventId,
+			name: `${name} Swiss`,
+			sortOrder,
+			externalId: 'phase-shared',
+			externalSource: 'melee',
+		})
 		.returning({ id: schema.phases.id });
 	const [round] = await db.insert(schema.rounds)
-		.values({ eventId, phaseId: phase!.id, name: 'Round 1', roundNumber: 1, externalId: 'round-shared', externalSource: 'melee' })
+		.values({
+			eventId,
+			phaseId: phase!.id,
+			name: 'Round 1',
+			roundNumber: 1,
+			externalId: 'round-shared',
+			externalSource: 'melee',
+		})
 		.returning({ id: schema.rounds.id });
 	const [player] = await db.insert(schema.players)
 		.values({ eventId, name: `${name} Player` })
 		.returning({ id: schema.players.id });
 	const [match] = await db.insert(schema.matches)
-		.values({ eventId, roundId: round!.id, externalId: 'match-shared', externalSource: 'melee', sortOrder, player1Id: player!.id })
+		.values({
+			eventId,
+			roundId: round!.id,
+			externalId: 'match-shared',
+			externalSource: 'melee',
+			sortOrder,
+			player1Id: player!.id,
+		})
 		.returning({ id: schema.matches.id });
 	const [slot] = await db.insert(schema.featureMatches)
 		.values({ eventId, externalId: 'match-shared', externalSource: 'melee' })
 		.returning({ id: schema.featureMatches.id });
 	const [assignment] = await db.insert(schema.featureMatchAssignments)
-		.values({ eventId, roundId: round!.id, slotId: slot!.id, matchId: match!.id, note: `${name} note` })
+		.values({
+			eventId,
+			roundId: round!.id,
+			slotId: slot!.id,
+			matchId: match!.id,
+			note: `${name} note`,
+		})
 		.returning({ id: schema.featureMatchAssignments.id });
 	await db.insert(schema.playerRoundStandings)
-		.values({ eventId, playerId: player!.id, roundId: round!.id, wins: sortOrder, position: 1 });
+		.values({
+			eventId,
+			playerId: player!.id,
+			roundId: round!.id,
+			wins: sortOrder,
+			position: 1,
+		});
 
 	return {
 		eventId,
@@ -176,7 +208,9 @@ describe('matchService event scoping', () => {
 describe('buildMatchPromotionPlan event scoping', () => {
 	it('never clears another Event\'s Slot holding the same external identity', async () => {
 		const match = await matchService().findById(one.matchId, one.eventId);
-		const slotOne = (await db.query.featureMatches.findFirst({ where: (table, { eq }) => eq(table.id, one.slotId) }))!;
+		const slotOne = (await db.query.featureMatches.findFirst({
+			where: (table, { eq }) => eq(table.id, one.slotId),
+		}))!;
 
 		// Event 2's Slot advertises the identical externalId/externalSource pair.
 		const plan = await buildMatchPromotionPlan(one.eventId, one.slotId, match!, slotOne);

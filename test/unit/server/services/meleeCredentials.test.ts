@@ -18,7 +18,9 @@ describe('melee credential runtime service', () => {
 		mockRuntimeConfig.mockReset().mockReturnValue({
 			meleeCredentialEncryptionKey: base64Key(2),
 			meleeCredentialEncryptionKeyVersion: 'v2',
-			meleeCredentialEncryptionPreviousKeys: JSON.stringify({ v1: base64Key(1) }),
+			meleeCredentialEncryptionPreviousKeys: JSON.stringify({
+				v1: base64Key(1),
+			}),
 		});
 	});
 
@@ -86,7 +88,9 @@ describe('melee credential runtime service', () => {
 			meleeCredentialEncryptionKey: base64Key(2),
 			meleeCredentialEncryptionKeyVersion: 'v2',
 			// The JSON in `.env.example`, after destr.
-			meleeCredentialEncryptionPreviousKeys: { 1: base64Key(1) },
+			meleeCredentialEncryptionPreviousKeys: {
+				1: base64Key(1),
+			},
 		});
 
 		const keyring = getMeleeCredentialKeyring();
@@ -103,7 +107,12 @@ describe('melee credential runtime service', () => {
 	 * are read; everything else still refuses by name.
 	 */
 	it.each([
-		['an array', [base64Key(1)]],
+		[
+			'an array',
+			[
+				base64Key(1),
+			],
+		],
 		['a bare number', 1],
 		['a boolean', true],
 	])('still refuses previous keys handed over as %s', (_shape, configuredValue) => {

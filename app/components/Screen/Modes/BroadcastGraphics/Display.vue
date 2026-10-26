@@ -41,7 +41,10 @@ const backgroundPlan = computed<AnimationEffectRenderPlan & { opacity: number } 
 	const config = background.value;
 	if (!config || !config.enabled || resolvedOutput.value === 'key')
 		return null;
-	return { ...animationEffectRenderPlan(config), opacity: config.opacity };
+	return {
+		...animationEffectRenderPlan(config),
+		opacity: config.opacity,
+	};
 });
 const canvasDefaults = getScreenModeGraphicsCanvas('broadcast-graphics');
 const canvasWidth = computed(() => screen?.value?.screenConfig?.width ?? canvasDefaults.width);
@@ -60,7 +63,9 @@ const canvasHeight = computed(() => screen?.value?.screenConfig?.height ?? canva
  * video from being torn down and restarted mid-air.
  */
 const indexedGraphicAssetReferences = computed(() =>
-	broadcastGraphicsGraphicAssetReferences({ graphics: [...graphics.value] }),
+	broadcastGraphicsGraphicAssetReferences({
+		graphics: [...graphics.value],
+	}),
 );
 const graphicAssetReferences = computed(() =>
 	indexedGraphicAssetReferences.value.map(item => item.reference),

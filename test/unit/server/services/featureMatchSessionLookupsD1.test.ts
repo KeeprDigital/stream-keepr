@@ -53,7 +53,12 @@ beforeEach(() => {
  */
 async function eventWithSlots(count: number) {
 	const [event] = await db.insert(schema.events)
-		.values({ name: `Slots ${count}`, game: 'mtg', featureMatchOrientation: 'horizontal', numFeatureMatches: Math.min(count, 50) })
+		.values({
+			name: `Slots ${count}`,
+			game: 'mtg',
+			featureMatchOrientation: 'horizontal',
+			numFeatureMatches: Math.min(count, 50),
+		})
 		.returning();
 	const rows = Array.from({ length: count }, (_, sortOrder) => ({ eventId: event!.id, sortOrder }));
 	const insertSlots = (chunk: typeof rows) => db.insert(schema.featureMatches).values(chunk);
@@ -61,15 +66,22 @@ async function eventWithSlots(count: number) {
 		await insertSlots(chunk);
 	const slots = await db.query.featureMatches.findMany({
 		where: eq(schema.featureMatches.eventId, event!.id),
-		orderBy: [asc(schema.featureMatches.id)],
+		orderBy: [
+			asc(schema.featureMatches.id),
+		],
 	});
-	return { eventId: event!.id, slotIds: slots.map(slot => slot.id) };
+	return {
+		eventId: event!.id,
+		slotIds: slots.map(slot => slot.id),
+	};
 }
 
 async function sessionsOf(eventId: number) {
 	return await db.query.featureMatchSessions.findMany({
 		where: eq(schema.featureMatchSessions.eventId, eventId),
-		orderBy: [asc(schema.featureMatchSessions.id)],
+		orderBy: [
+			asc(schema.featureMatchSessions.id),
+		],
 	});
 }
 
@@ -87,10 +99,17 @@ async function expectEachSlotOwnsItsSession(
 	slotIds: readonly number[],
 	opened: Map<number, schema.DbFeatureMatchSession>,
 ) {
-	expect([...opened.keys()].sort((a, b) => a - b)).toEqual(slotIds);
+	expect([
+		...opened.keys(),
+	].sort((a, b) => a - b)).toEqual(slotIds);
 	const linked = await activeSessionIdsBySlot(eventId);
 	for (const slotId of slotIds) {
-		expect(opened.get(slotId)).toMatchObject({ slotId, eventId, status: 'active', sequence: 1 });
+		expect(opened.get(slotId)).toMatchObject({
+			slotId,
+			eventId,
+			status: 'active',
+			sequence: 1,
+		});
 		expect(linked.get(slotId)).toBe(opened.get(slotId)!.id);
 	}
 }

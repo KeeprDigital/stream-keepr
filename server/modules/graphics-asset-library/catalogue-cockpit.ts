@@ -147,7 +147,9 @@ function deadlineGroup(row: {
 		count: row.group_count,
 		...(row.next_deadline === null
 			? {}
-			: { nextDeadline: new Date(row.next_deadline).toISOString() }),
+			: {
+					nextDeadline: new Date(row.next_deadline).toISOString(),
+				}),
 	};
 }
 
@@ -298,7 +300,9 @@ export function createD1GraphicsOperationsCockpitCatalogue(
 				FROM graphics_ingestion_operations
 				WHERE id = ?2 AND ${UNFINISHED_SQL}
 			`).bind(new Date(input.now).getTime(), input.operationId).first<AttentionRow>();
-			return row ? attentionItem(row) : undefined;
+			return row
+				? attentionItem(row)
+				: undefined;
 		},
 		async summariseRetentionDeadlines(): Promise<GraphicsRetentionDeadlineSummary> {
 			const [lifecycle, revisions, quarantine, stagedInput] = await database.batch([

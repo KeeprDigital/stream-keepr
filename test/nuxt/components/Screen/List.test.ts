@@ -31,10 +31,16 @@ enableAutoUnmount(afterEach);
  * `$fetch` is the exception, and not because of the card: it is the module's `$fetch`, so
  * `useServerTime`'s clock sync records calls here that no card made (#123, #342).
  */
-const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+const { mockApiFetch } = vi.hoisted(() => ({
+	mockApiFetch: vi.fn(),
+}));
 mockNuxtImport('$fetch', () => mockApiFetch);
-mockNuxtImport('useCopyToClipboard', () => () => ({ copyToClipboard: vi.fn() }));
-mockNuxtImport('useToast', () => () => ({ add: vi.fn() }));
+mockNuxtImport('useCopyToClipboard', () => () => ({
+	copyToClipboard: vi.fn(),
+}));
+mockNuxtImport('useToast', () => () => ({
+	add: vi.fn(),
+}));
 mockNuxtImport('navigateTo', () => vi.fn());
 
 const UCardStub = defineComponent({ template: '<div><slot /></div>' });
@@ -46,7 +52,9 @@ const UILoadingSpinnerStub = defineComponent({ template: '<div data-testid="load
 
 /** `loading` reaches the DOM, because that is the only place a busy card shows. */
 const UButtonStub = defineComponent({
-	props: { loading: { type: Boolean, default: false } },
+	props: {
+		loading: { type: Boolean, default: false },
+	},
 	template: '<button type="button" :data-loading="String(loading)"><slot /></button>',
 });
 
@@ -59,7 +67,9 @@ const UDropdownMenuStub = defineComponent({
 		},
 	},
 	setup(props) {
-		return { entries: computed(() => props.items.flat()) };
+		return {
+			entries: computed(() => props.items.flat()),
+		};
 	},
 	template: `<div>
 		<button
@@ -86,13 +96,31 @@ function makeScreen(fields: Pick<Screen, 'id' | 'name' | 'slug' | 'currentMode'>
 }
 
 const screens = [
-	makeScreen({ id: 4, name: 'Stage Left', slug: 'stage-left', currentMode: 'background' }),
-	makeScreen({ id: 7, name: 'Stage Right', slug: 'stage-right', currentMode: 'standings' }),
-	makeScreen({ id: 11, name: 'Feature Table', slug: 'feature-table', currentMode: 'card' }),
+	makeScreen({
+		id: 4,
+		name: 'Stage Left',
+		slug: 'stage-left',
+		currentMode: 'background',
+	}),
+	makeScreen({
+		id: 7,
+		name: 'Stage Right',
+		slug: 'stage-right',
+		currentMode: 'standings',
+	}),
+	makeScreen({
+		id: 11,
+		name: 'Feature Table',
+		slug: 'feature-table',
+		currentMode: 'card',
+	}),
 ];
 
 /** Screen 7 is deliberately absent: a Screen nobody is watching has no entry at all. */
-const connectedCounts = new Map([[4, 3], [11, 9]]);
+const connectedCounts = new Map([
+	[4, 3],
+	[11, 9],
+]);
 
 async function mountList(props: Partial<{
 	loading: boolean;
@@ -294,7 +322,9 @@ describe('screen list — the cards it composes, and the Screen each one is for'
 
 		await cards(wrapper)[1]!.get('[data-menu-item="Edit Screen"]').trigger('click');
 
-		expect(wrapper.emitted('editScreen')).toEqual([[screens[1]]]);
+		expect(wrapper.emitted('editScreen')).toEqual([
+			[screens[1]],
+		]);
 	});
 
 	it('reports a delete against the Screen whose card asked for it', async () => {
@@ -302,7 +332,9 @@ describe('screen list — the cards it composes, and the Screen each one is for'
 
 		await cards(wrapper)[2]!.get('[data-menu-item="Delete Screen"]').trigger('click');
 
-		expect(wrapper.emitted('deleteScreen')).toEqual([[screens[2]]]);
+		expect(wrapper.emitted('deleteScreen')).toEqual([
+			[screens[2]],
+		]);
 	});
 
 	/**
@@ -316,7 +348,9 @@ describe('screen list — the cards it composes, and the Screen each one is for'
 
 		await cards(wrapper)[2]!.get('[data-menu-item="Standings"]').trigger('click');
 
-		expect(wrapper.emitted('setMode')).toEqual([[screens[2], 'standings']]);
+		expect(wrapper.emitted('setMode')).toEqual([
+			[screens[2], 'standings'],
+		]);
 	});
 
 	it('reports a command with both the Screen and the command chosen', async () => {
@@ -324,7 +358,9 @@ describe('screen list — the cards it composes, and the Screen each one is for'
 
 		await cards(wrapper)[1]!.get('[data-menu-item="Identify"]').trigger('click');
 
-		expect(wrapper.emitted('sendCommand')).toEqual([[screens[1], 'identify']]);
+		expect(wrapper.emitted('sendCommand')).toEqual([
+			[screens[1], 'identify'],
+		]);
 	});
 
 	/**

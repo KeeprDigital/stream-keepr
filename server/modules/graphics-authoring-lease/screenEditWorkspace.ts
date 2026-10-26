@@ -16,7 +16,10 @@ import { graphicsAuthoringLeaseModule } from './index';
  */
 
 export function screenEditWorkspaceLeaseRef(eventId: number, screenId: number): GraphicsAuthoringLeaseRef {
-	return { artifact: screenEditWorkspaceArtifact(screenId), eventId };
+	return {
+		artifact: screenEditWorkspaceArtifact(screenId),
+		eventId,
+	};
 }
 
 /**
@@ -32,7 +35,10 @@ export async function admitScreenGraphicsEditWrite(
 	screenId: number,
 	sessionId: string | undefined,
 ): Promise<GraphicsAuthoringLeaseFence> {
-	const fence = { ...screenEditWorkspaceLeaseRef(eventId, screenId), sessionId };
+	const fence = {
+		...screenEditWorkspaceLeaseRef(eventId, screenId),
+		sessionId,
+	};
 	await graphicsAuthoringLeaseModule().requireWritable(fence, sessionId);
 	return fence;
 }

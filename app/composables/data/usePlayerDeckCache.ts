@@ -31,7 +31,9 @@ function dropStamp(playerId: number) {
 }
 
 function updatedAtKey(updatedAt: Date | string) {
-	return typeof updatedAt === 'string' ? updatedAt : updatedAt.toISOString();
+	return typeof updatedAt === 'string'
+		? updatedAt
+		: updatedAt.toISOString();
 }
 
 /**
@@ -110,12 +112,16 @@ export function usePlayerDeckCache() {
 		selection: PlayerDeckSelection = {},
 	): Promise<PlayerDeckResponse | null> {
 		const collection = await fetchDecks(playerId, eventId, updatedAt, selection);
-		return collection ? selectPlayerDeck(collection, selection) : null;
+		return collection
+			? selectPlayerDeck(collection, selection)
+			: null;
 	}
 
 	function getCachedDeck(playerId: number, selection: PlayerDeckSelection = {}): PlayerDeckResponse | null {
 		const collection = cache.get(playerId)?.collection;
-		return collection ? selectPlayerDeck(collection, selection) : null;
+		return collection
+			? selectPlayerDeck(collection, selection)
+			: null;
 	}
 
 	function clearCachedDeck(playerId: number) {
@@ -135,7 +141,10 @@ export function usePlayerDeckCache() {
 	): Promise<PlayerDeckReviewResponse> {
 		const result = await $fetch<PlayerDeckReviewResponse>(
 			`/api/events/${eventId}/players/${playerId}/decks/${deckId}/review`,
-			{ method: 'PATCH', body: { archetypeId } },
+			{
+				method: 'PATCH',
+				body: { archetypeId },
+			},
 		);
 		const cachedDeck = cache.get(playerId)?.collection.decks.find(deck => deck.id === deckId);
 		if (cachedDeck) {

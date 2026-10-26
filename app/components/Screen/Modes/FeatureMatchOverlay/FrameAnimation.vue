@@ -28,7 +28,9 @@ const hostStyle = computed(() => ({
 
 const renderPlan = computed<AnimationEffectRenderPlan | null>(() => {
 	const config = parsedAnimation.value;
-	return config ? animationEffectRenderPlan(config) : null;
+	return config
+		? animationEffectRenderPlan(config)
+		: null;
 });
 </script>
 

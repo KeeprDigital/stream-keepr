@@ -75,7 +75,9 @@ describe('featureMatchCounterList', () => {
 
 	it('uses derived available counter types when provided', async () => {
 		const wrapper = await mountComponent({
-			counters: [{ type: 'energy', value: 2 }],
+			counters: [
+				{ type: 'energy', value: 2 },
+			],
 			availableCounterTypes: [
 				{ key: 'energy', label: 'Energy', icon: 'i-mdi-lightning-bolt' },
 				{ key: 'poison', label: 'Poison', icon: 'i-mdi-skull' },

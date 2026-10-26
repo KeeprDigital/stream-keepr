@@ -26,28 +26,47 @@ describe('chunkArray', () => {
 	});
 
 	it('array smaller than chunk size returns one chunk', () => {
-		expect(chunkArray([1, 2, 3], 10)).toEqual([[1, 2, 3]]);
+		expect(chunkArray([1, 2, 3], 10)).toEqual([
+			[1, 2, 3],
+		]);
 	});
 
 	it('array exactly equal to chunk size returns one chunk', () => {
-		expect(chunkArray([1, 2, 3], 3)).toEqual([[1, 2, 3]]);
+		expect(chunkArray([1, 2, 3], 3)).toEqual([
+			[1, 2, 3],
+		]);
 	});
 
 	it('array with exact multiple of chunk size returns correct chunks', () => {
-		expect(chunkArray([1, 2, 3, 4, 5, 6], 2)).toEqual([[1, 2], [3, 4], [5, 6]]);
+		expect(chunkArray([1, 2, 3, 4, 5, 6], 2)).toEqual([
+			[1, 2],
+			[3, 4],
+			[5, 6],
+		]);
 	});
 
 	it('array with remainder produces correct last chunk', () => {
 		const result = chunkArray([1, 2, 3, 4, 5], 2);
-		expect(result).toEqual([[1, 2], [3, 4], [5]]);
+		expect(result).toEqual([
+			[1, 2],
+			[3, 4],
+			[5],
+		]);
 	});
 
 	it('chunk size of 1 puts each element in its own chunk', () => {
-		expect(chunkArray([1, 2, 3], 1)).toEqual([[1], [2], [3]]);
+		expect(chunkArray([1, 2, 3], 1)).toEqual([
+			[1],
+			[2],
+			[3],
+		]);
 	});
 
 	it('preserves element types (strings)', () => {
-		expect(chunkArray(['a', 'b', 'c'], 2)).toEqual([['a', 'b'], ['c']]);
+		expect(chunkArray(['a', 'b', 'c'], 2)).toEqual([
+			['a', 'b'],
+			['c'],
+		]);
 	});
 
 	it('all chunk values concatenated equal the original array', () => {
@@ -80,7 +99,9 @@ describe('maxInsertChunkSize', () => {
 describe('chunkRowsWithinParameterBudget', () => {
 	/** A statement binding each row's own parameters, as a multi-row insert does. */
 	const statementFor = (rows: { params: number }[]) => ({
-		toSQL: () => ({ params: rows.flatMap(row => Array.from({ length: row.params }).fill(0)) }),
+		toSQL: () => ({
+			params: rows.flatMap(row => Array.from({ length: row.params }).fill(0)),
+		}),
 	});
 	const rowsOf = (count: number, params: number) => Array.from({ length: count }, () => ({ params }));
 
@@ -103,7 +124,10 @@ describe('chunkRowsWithinParameterBudget', () => {
 	});
 
 	it('refuses a group whose later rows bind more than the first did', () => {
-		const rows = [{ params: 1 }, ...rowsOf(20, 10)];
+		const rows = [
+			{ params: 1 },
+			...rowsOf(20, 10),
+		];
 
 		expect(() => chunkRowsWithinParameterBudget(rows, statementFor)).toThrow(/a group binds/);
 	});
@@ -119,7 +143,14 @@ describe('chunkJsonRows', () => {
 	});
 
 	it('chunks by serialized UTF-8 byte size without splitting a row', () => {
-		const chunks = chunkJsonRows([{ value: 'é'.repeat(10) }, { value: 'é'.repeat(10) }], {
+		const chunks = chunkJsonRows([
+			{
+				value: 'é'.repeat(10),
+			},
+			{
+				value: 'é'.repeat(10),
+			},
+		], {
 			maxRows: 100,
 			maxBytes: 40,
 		});
@@ -129,7 +160,11 @@ describe('chunkJsonRows', () => {
 	});
 
 	it('rejects a single row larger than the configured payload ceiling', () => {
-		expect(() => chunkJsonRows([{ value: 'x'.repeat(100) }], { maxBytes: 20 }))
+		expect(() => chunkJsonRows([
+			{
+				value: 'x'.repeat(100),
+			},
+		], { maxBytes: 20 }))
 			.toThrow('one row exceeds');
 	});
 });

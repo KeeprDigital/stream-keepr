@@ -45,45 +45,68 @@ mockNuxtImport('useGraphicStyleSetRepository', () => () => ({
 }));
 
 const ScreenSettingsCardStub = defineComponent({
-	props: { title: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+	},
 	template: '<section><h2>{{ title }}</h2><slot /></section>',
 });
 const UIEmptyStateStub = defineComponent({
-	props: { title: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+	},
 	template: '<div data-testid="empty-state">{{ title }}</div>',
 });
 const UAlertStub = defineComponent({
-	props: { title: { type: String, required: false }, description: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+		description: { type: String, required: false },
+	},
 	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span><slot /></div>',
 });
 const UBadgeStub = defineComponent({ template: '<span><slot /></span>' });
 const UIconStub = defineComponent({ template: '<i />' });
 const UButtonStub = defineComponent({
 	name: 'UButton',
-	props: { disabled: { type: Boolean, default: false } },
+	props: {
+		disabled: { type: Boolean, default: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
 const UInputStub = defineComponent({
 	name: 'UInput',
-	props: { modelValue: { type: [String, Number], default: '' } },
+	props: {
+		modelValue: {
+			type: [String, Number],
+			default: '',
+		},
+	},
 	emits: ['update:modelValue', 'change'],
 	template: '<input :value="modelValue" @change="$emit(\'change\', $event)" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 });
 const USelectStub = defineComponent({
 	name: 'USelect',
-	props: { modelValue: { type: [String, Number, Boolean], default: undefined } },
+	props: {
+		modelValue: {
+			type: [String, Number, Boolean],
+			default: undefined,
+		},
+	},
 	emits: ['update:modelValue'],
 	template: '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><slot /></select>',
 });
 const USwitchStub = defineComponent({
 	name: 'USwitch',
-	props: { modelValue: { type: Boolean, default: false } },
+	props: {
+		modelValue: { type: Boolean, default: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)" />',
 });
 const UFormFieldStub = defineComponent({
-	props: { label: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+	},
 	template: '<label><span>{{ label }}</span><slot /></label>',
 });
 
@@ -115,7 +138,9 @@ const lowerThird: BroadcastGraphicConfig = {
 			},
 			overflowPolicy: 'shrink',
 			minFontSize: 24,
-			styleRefs: { typography: { entryId: 'heading' } },
+			styleRefs: {
+				typography: { entryId: 'heading' },
+			},
 		},
 	],
 	styleSet: { styleSetId: 'style-1', revision: 3 },
@@ -144,7 +169,12 @@ function response(overrides: Partial<GraphicStyleSetResponse> = {}): GraphicStyl
 		schemaVersion: 1,
 		value: { color: '#ff0044' },
 	};
-	return { ...summary(), draft: [brand], published: [brand], ...overrides };
+	return {
+		...summary(),
+		draft: [brand],
+		published: [brand],
+		...overrides,
+	};
 }
 
 function preflightReport(
@@ -155,7 +185,11 @@ function preflightReport(
 		checkedAt: '2026-07-31T00:00:00.000Z',
 		fingerprint: 'a'.repeat(64),
 		schema: { received: 1, supported: 1, migrated: false },
-		provenance: { sourceStyleSetId: 'style-1', sourceRevision: 3, contentDigest: 'b'.repeat(64) },
+		provenance: {
+			sourceStyleSetId: 'style-1',
+			sourceRevision: 3,
+			contentDigest: 'b'.repeat(64),
+		},
 		styleSetName: 'Show style',
 		styleSetEntryCount: 1,
 		resolution: 'preserve-identity',
@@ -172,12 +206,19 @@ function preflightReport(
 
 /** A `.skstyle` archive as the file picker hands one over. */
 function packageFile() {
-	return new File([new Uint8Array([1, 2, 3])], 'show-style.skstyle');
+	return new File([
+		new Uint8Array([1, 2, 3]),
+	], 'show-style.skstyle');
 }
 
 async function choosePackage(wrapper: Awaited<ReturnType<typeof mountLibrary>>) {
 	const input = wrapper.get<HTMLInputElement>('[data-testid="style-set-import-input"]');
-	Object.defineProperty(input.element, 'files', { value: [packageFile()], configurable: true });
+	Object.defineProperty(input.element, 'files', {
+		value: [
+			packageFile(),
+		],
+		configurable: true,
+	});
 	await input.trigger('change');
 	await flushPromises();
 }
@@ -210,15 +251,32 @@ async function mountLibrary(props: Record<string, unknown> = {}) {
 describe('graphicsStyleSetLibrary', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockList.mockResolvedValue([summary()]);
+		mockList.mockResolvedValue([
+			summary(),
+		]);
 		mockGet.mockResolvedValue(response());
-		mockCreate.mockResolvedValue(response({ id: 'style-2', name: 'New style', revision: 0, published: null }));
+		mockCreate.mockResolvedValue(response({
+			id: 'style-2',
+			name: 'New style',
+			revision: 0,
+			published: null,
+		}));
 		mockUpdate.mockResolvedValue(response({ draftRevision: 10 }));
 		mockPublish.mockResolvedValue({
 			styleSet: response({ revision: 4, draftRevision: 10 }),
 			affectedTemplates: [
-				{ id: 'template-1', name: 'Lower third', revision: 6, styleChanged: true },
-				{ id: 'template-2', name: 'Slate', revision: 2, styleChanged: false },
+				{
+					id: 'template-1',
+					name: 'Lower third',
+					revision: 6,
+					styleChanged: true,
+				},
+				{
+					id: 'template-2',
+					name: 'Slate',
+					revision: 2,
+					styleChanged: false,
+				},
 			],
 		});
 		mockDeleteEntry.mockResolvedValue(response());
@@ -242,7 +300,9 @@ describe('graphicsStyleSetLibrary', () => {
 	});
 
 	it('reports a Style Set with unpublished draft changes', async () => {
-		mockList.mockResolvedValue([summary({ hasUnpublishedChanges: true })]);
+		mockList.mockResolvedValue([
+			summary({ hasUnpublishedChanges: true }),
+		]);
 
 		const wrapper = await mountLibrary();
 
@@ -250,7 +310,9 @@ describe('graphicsStyleSetLibrary', () => {
 	});
 
 	it('links the selected Broadcast Graphic without adopting anything', async () => {
-		mockList.mockResolvedValue([summary({ id: 'style-9', name: 'Other style' })]);
+		mockList.mockResolvedValue([
+			summary({ id: 'style-9', name: 'Other style' }),
+		]);
 
 		const wrapper = await mountLibrary({
 			selectedGraphic: { ...lowerThird, styleSet: undefined },
@@ -267,7 +329,9 @@ describe('graphicsStyleSetLibrary', () => {
 	});
 
 	it('drops the previous Style Set\'s references when switching the link', async () => {
-		mockList.mockResolvedValue([summary({ id: 'style-9', name: 'Other style' })]);
+		mockList.mockResolvedValue([
+			summary({ id: 'style-9', name: 'Other style' }),
+		]);
 
 		// Already linked to `style-1`, with an item referencing one of its entries.
 		const wrapper = await mountLibrary();
@@ -284,9 +348,13 @@ describe('graphicsStyleSetLibrary', () => {
 	});
 
 	it('will not link to a Style Set that has never been published', async () => {
-		mockList.mockResolvedValue([summary({ id: 'style-9', revision: 0 })]);
+		mockList.mockResolvedValue([
+			summary({ id: 'style-9', revision: 0 }),
+		]);
 
-		const wrapper = await mountLibrary({ selectedGraphic: { ...lowerThird, styleSet: undefined } });
+		const wrapper = await mountLibrary({
+			selectedGraphic: { ...lowerThird, styleSet: undefined },
+		});
 
 		expect(wrapper.get<HTMLButtonElement>('[data-testid="style-set-link"]').element.disabled).toBe(true);
 	});
@@ -325,8 +393,18 @@ describe('graphicsStyleSetLibrary', () => {
 				message: 'This Graphic Style Set draft cannot be published',
 				data: {
 					issues: [
-						{ code: 'entry-reference-missing', entryId: 'heading', entryName: 'Heading', message: 'Heading references an entry that does not exist' },
-						{ code: 'entry-font-unavailable', entryId: 'caption', entryName: 'Caption', message: 'Caption names a font this installation does not have' },
+						{
+							code: 'entry-reference-missing',
+							entryId: 'heading',
+							entryName: 'Heading',
+							message: 'Heading references an entry that does not exist',
+						},
+						{
+							code: 'entry-font-unavailable',
+							entryId: 'caption',
+							entryName: 'Caption',
+							message: 'Caption names a font this installation does not have',
+						},
 					],
 				},
 			},
@@ -455,12 +533,14 @@ describe('graphicsStyleSetLibrary', () => {
 			outcome: 'ready',
 			installedRevision: 3,
 			installedDraftRevision: 9,
-			issues: [{
-				code: 'graphic-style-set-name-differs',
-				severity: 'warning',
-				message: 'The package calls this Graphic Style Set “Season look”; this library records it as “Show style”',
-				remediation: 'This library keeps the name it already records; the packaged name is not applied. Rename it here if the two libraries should agree.',
-			}],
+			issues: [
+				{
+					code: 'graphic-style-set-name-differs',
+					severity: 'warning',
+					message: 'The package calls this Graphic Style Set “Season look”; this library records it as “Show style”',
+					remediation: 'This library keeps the name it already records; the packaged name is not applied. Rename it here if the two libraries should agree.',
+				},
+			],
 		});
 		mockInspectPackage.mockResolvedValue(alreadyInstalled);
 		mockInstallPackage.mockResolvedValue({
@@ -492,13 +572,22 @@ describe('graphicsStyleSetLibrary', () => {
 			disposition: 'update-installed',
 			outcome: 'requires-confirmation',
 			installedRevision: 3,
-			affectedTemplates: [{ id: 'template-1', name: 'Lower third', revision: 6, styleChanged: true }],
-			issues: [{
-				code: 'graphic-style-set-revision-updated',
-				severity: 'warning',
-				message: 'This will publish revision 4 over the installed revision 3',
-				remediation: 'Every linked template is offered the change as an available style update.',
-			}],
+			affectedTemplates: [
+				{
+					id: 'template-1',
+					name: 'Lower third',
+					revision: 6,
+					styleChanged: true,
+				},
+			],
+			issues: [
+				{
+					code: 'graphic-style-set-revision-updated',
+					severity: 'warning',
+					message: 'This will publish revision 4 over the installed revision 3',
+					remediation: 'Every linked template is offered the change as an available style update.',
+				},
+			],
 		}));
 
 		const wrapper = await mountLibrary();
@@ -523,24 +612,28 @@ describe('graphicsStyleSetLibrary', () => {
 		mockInspectPackage.mockResolvedValueOnce(preflightReport({
 			disposition: 'rejected',
 			outcome: 'rejected',
-			issues: [{
-				code: 'graphic-style-set-revision-conflict',
-				severity: 'error',
-				message: 'Revision 3 of this Graphic Style Set is already installed with different entries',
-				remediation: 'Install it as an independent copy.',
-			}],
+			issues: [
+				{
+					code: 'graphic-style-set-revision-conflict',
+					severity: 'error',
+					message: 'Revision 3 of this Graphic Style Set is already installed with different entries',
+					remediation: 'Install it as an independent copy.',
+				},
+			],
 		}));
 		mockInspectPackage.mockResolvedValueOnce(preflightReport({
 			resolution: 'independent-copy',
 			disposition: 'install-independent-copy',
 			outcome: 'requires-confirmation',
 			fingerprint: 'c'.repeat(64),
-			issues: [{
-				code: 'graphic-style-set-installed-as-copy',
-				severity: 'warning',
-				message: '“Show style” will be installed as an independent Graphic Style Set with a new identity',
-				remediation: 'Nothing links to the copy until a template selects entries from it.',
-			}],
+			issues: [
+				{
+					code: 'graphic-style-set-installed-as-copy',
+					severity: 'warning',
+					message: '“Show style” will be installed as an independent Graphic Style Set with a new identity',
+					remediation: 'Nothing links to the copy until a template selects entries from it.',
+				},
+			],
 		}));
 
 		const wrapper = await mountLibrary();
@@ -567,12 +660,14 @@ describe('graphicsStyleSetLibrary', () => {
 		mockInspectPackage.mockResolvedValue(preflightReport({
 			disposition: 'rejected',
 			outcome: 'rejected',
-			issues: [{
-				code: 'unsupported-application-capability',
-				severity: 'error',
-				message: 'This installation does not provide application font "aurora"',
-				remediation: 'Update this installation.',
-			}],
+			issues: [
+				{
+					code: 'unsupported-application-capability',
+					severity: 'error',
+					message: 'This installation does not provide application font "aurora"',
+					remediation: 'Update this installation.',
+				},
+			],
 		}));
 
 		const wrapper = await mountLibrary();

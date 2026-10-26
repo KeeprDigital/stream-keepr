@@ -143,7 +143,9 @@ export function createBroadcastDeckListScryfallResolver(options: {
 	return {
 		async resolve(requests): Promise<readonly BroadcastDeckListCardResolution[]> {
 			const prepared = requests.map((request) => {
-				const setCode = request.setCode ? request.setCode.toLowerCase() : null;
+				const setCode = request.setCode
+					? request.setCode.toLowerCase()
+					: null;
 				const canonicalName = overrides.get(overrideKey(request.name, setCode))
 					?? overrides.get(overrideKey(request.name, null))
 					?? request.name;
@@ -153,9 +155,16 @@ export function createBroadcastDeckListScryfallResolver(options: {
 					collectorNumber: request.collectorNumber,
 				} satisfies BroadcastDeckListCardResolutionRequest;
 			});
-			const unique = new Map(prepared.map(request => [resolutionKey(request), request]));
-			const named = [...unique.values()].filter(request => request.collectorNumber === null);
-			const collectors = [...unique.values()].filter(request => request.collectorNumber !== null);
+			const unique = new Map(prepared.map(request => [
+				resolutionKey(request),
+				request,
+			]));
+			const named = [
+				...unique.values(),
+			].filter(request => request.collectorNumber === null);
+			const collectors = [
+				...unique.values(),
+			].filter(request => request.collectorNumber !== null);
 
 			try {
 				const namedCards = await scryfall.lookupByName(named.map(request => ({
@@ -171,7 +180,10 @@ export function createBroadcastDeckListScryfallResolver(options: {
 				return prepared.map((request) => {
 					const card = cards.get(resolutionKey(request)) ?? null;
 					return card && isExactPrinting(card, request)
-						? { status: 'resolved' as const, card: canonicalCard(card) }
+						? {
+								status: 'resolved' as const,
+								card: canonicalCard(card),
+							}
 						: { status: 'unresolved' as const };
 				});
 			}

@@ -22,7 +22,9 @@ export function useFeatureMatchOverlayModeData() {
 	 * their unsaved edits, and reading the guides flag here meant switching guides
 	 * off silently swapped the preview back to the saved configuration.
 	 */
-	const config = computed(() => isPreview?.value && previewConfigOverride.value ? previewConfigOverride.value : storedConfig.value);
+	const config = computed(() => isPreview?.value && previewConfigOverride.value
+		? previewConfigOverride.value
+		: storedConfig.value);
 	const eventStore = useEventStore();
 
 	/**
@@ -81,5 +83,16 @@ export function useFeatureMatchOverlayModeData() {
 	 */
 	const usesSampleDataset = computed(() => Boolean(isPreview?.value) && !config.value.featureMatchId);
 
-	return { config, match, matchState, sourceMatch, round, phase, event: computed(() => eventStore.displayEvent), usesSampleDataset, loading, error };
+	return {
+		config,
+		match,
+		matchState,
+		sourceMatch,
+		round,
+		phase,
+		event: computed(() => eventStore.displayEvent),
+		usesSampleDataset,
+		loading,
+		error,
+	};
 }

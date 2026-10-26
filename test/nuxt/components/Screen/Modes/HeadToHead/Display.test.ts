@@ -28,15 +28,38 @@ mockNuxtImport('useHeadToHeadModeData', () => () => ({
 	player1: computed(() => player1.value),
 	player2: computed(() => player2.value),
 	earlierMatches: computed(() => earlierMatches.value),
-	formatRecord: (record: any) => record.wins == null ? null : `${record.wins} wins`,
+	formatRecord: (record: any) => record.wins == null
+		? null
+		: `${record.wins} wins`,
 }));
 
 function side(id: number, name: string, overrides: Record<string, unknown> = {}) {
-	return { id, name, pronouns: null, wins: 4, losses: 1, draws: 0, points: 12, deckName: null, deckColors: null, ...overrides };
+	return {
+		id,
+		name,
+		pronouns: null,
+		wins: 4,
+		losses: 1,
+		draws: 0,
+		points: 12,
+		deckName: null,
+		deckColors: null,
+		...overrides,
+	};
 }
 
 function earlierMatch(overrides: Record<string, unknown> = {}) {
-	return { matchId: 20, roundId: 31, roundName: 'Round 2', roundNumber: 2, phaseName: 'Swiss', outcome: 'player1', gameScore: '2-1', resultString: null, ...overrides };
+	return {
+		matchId: 20,
+		roundId: 31,
+		roundName: 'Round 2',
+		roundNumber: 2,
+		phaseName: 'Swiss',
+		outcome: 'player1',
+		gameScore: '2-1',
+		resultString: null,
+		...overrides,
+	};
 }
 
 async function mountComponent() {
@@ -45,12 +68,23 @@ async function mountComponent() {
 
 	// ScreenModeBase is left real so the empty case asserts the broadcast
 	// contract itself: that state renders nothing at all.
-	return mount(Display, { global: { stubs: { MtgManaColorDisplay: { props: ['colors'], template: '<span class="mana">{{ colors }}</span>' } } } });
+	return mount(Display, {
+		global: {
+			stubs: {
+				MtgManaColorDisplay: {
+					props: ['colors'],
+					template: '<span class="mana">{{ colors }}</span>',
+				},
+			},
+		},
+	});
 }
 
 describe('screenModesHeadToHeadDisplay', () => {
 	beforeEach(() => {
-		screen.value = { screenConfig: { primaryTextColor: '#123456', secondaryTextColor: '#654321' } };
+		screen.value = {
+			screenConfig: { primaryTextColor: '#123456', secondaryTextColor: '#654321' },
+		};
 		config.value = { playerSource: 'featureMatchSlot', featureMatchId: 4, showHeader: true };
 		error.value = null;
 		isEmpty.value = false;
@@ -58,7 +92,9 @@ describe('screenModesHeadToHeadDisplay', () => {
 		headerText.value = 'Head to Head';
 		player1.value = side(7, 'Nadia Rivers', { pronouns: 'she/her', deckName: 'Boros Energy', deckColors: 'RW' });
 		player2.value = side(8, 'Oskar Lind', { points: 9 });
-		earlierMatches.value = [earlierMatch()];
+		earlierMatches.value = [
+			earlierMatch(),
+		];
 	});
 
 	it('shows the header, and hides it when the mode config disables it', async () => {
@@ -85,7 +121,12 @@ describe('screenModesHeadToHeadDisplay', () => {
 	});
 
 	it('leaves out a record and points a Player does not have yet', async () => {
-		player2.value = side(8, 'Oskar Lind', { wins: null, losses: null, draws: null, points: null });
+		player2.value = side(8, 'Oskar Lind', {
+			wins: null,
+			losses: null,
+			draws: null,
+			points: null,
+		});
 
 		const second = (await mountComponent()).findAll('.head-to-head-player')[1]!;
 
@@ -101,9 +142,24 @@ describe('screenModesHeadToHeadDisplay', () => {
 
 	it('lists earlier Matches with their Round, winner and game score', async () => {
 		earlierMatches.value = [
-			earlierMatch({ matchId: 20, roundName: 'Round 2', outcome: 'player1', gameScore: '2-1' }),
-			earlierMatch({ matchId: 21, roundName: 'Round 5', outcome: 'player2', gameScore: '0-2' }),
-			earlierMatch({ matchId: 22, roundName: 'Quarterfinal', outcome: 'draw', gameScore: '1-1-1' }),
+			earlierMatch({
+				matchId: 20,
+				roundName: 'Round 2',
+				outcome: 'player1',
+				gameScore: '2-1',
+			}),
+			earlierMatch({
+				matchId: 21,
+				roundName: 'Round 5',
+				outcome: 'player2',
+				gameScore: '0-2',
+			}),
+			earlierMatch({
+				matchId: 22,
+				roundName: 'Quarterfinal',
+				outcome: 'draw',
+				gameScore: '1-1-1',
+			}),
 		];
 
 		const rows = (await mountComponent()).findAll('.earlier-match');
@@ -114,7 +170,9 @@ describe('screenModesHeadToHeadDisplay', () => {
 	});
 
 	it('shows the result as reported for a Match reported without game wins, naming no winner', async () => {
-		earlierMatches.value = [earlierMatch({ outcome: 'reported', gameScore: null, resultString: 'Oskar Lind won' })];
+		earlierMatches.value = [
+			earlierMatch({ outcome: 'reported', gameScore: null, resultString: 'Oskar Lind won' }),
+		];
 
 		const row = (await mountComponent()).get('.earlier-match');
 

@@ -24,13 +24,23 @@ const emit = defineEmits<{
 
 const overlay = useOverlay();
 
-const SORTABLE_FIELDS = new Set<MetagameSortBy>(['count', 'winRate', 'metaShare', 'conversionRate']);
+const SORTABLE_FIELDS = new Set<MetagameSortBy>([
+	'count',
+	'winRate',
+	'metaShare',
+	'conversionRate',
+]);
 
-const sorting = ref([{ id: props.sortBy, desc: true }]);
+const sorting = ref([
+	{ id: props.sortBy, desc: true },
+]);
 
 watch(() => props.sortBy, (sortBy) => {
-	if (sorting.value[0]?.id !== sortBy)
-		sorting.value = [{ id: sortBy, desc: true }];
+	if (sorting.value[0]?.id !== sortBy) {
+		sorting.value = [
+			{ id: sortBy, desc: true },
+		];
+	}
 });
 
 watch(sorting, (value) => {
@@ -40,12 +50,36 @@ watch(sorting, (value) => {
 }, { deep: true });
 
 const columns: TableColumn<ArchetypeBreakdownEntry>[] = [
-	{ accessorKey: 'name', header: createSortableHeader('Archetype'), enableSorting: true },
-	{ accessorKey: 'count', header: createSortableHeader('Count'), enableSorting: true },
-	{ accessorKey: 'metaShare', header: createSortableHeader('Share'), enableSorting: true },
-	{ accessorKey: 'winRate', header: createSortableHeader('Win Rate'), enableSorting: true },
-	{ accessorKey: 'avgPosition', header: createSortableHeader('Avg Place'), enableSorting: true },
-	{ accessorKey: 'conversionRate', header: createSortableHeader('Conversion'), enableSorting: true },
+	{
+		accessorKey: 'name',
+		header: createSortableHeader('Archetype'),
+		enableSorting: true,
+	},
+	{
+		accessorKey: 'count',
+		header: createSortableHeader('Count'),
+		enableSorting: true,
+	},
+	{
+		accessorKey: 'metaShare',
+		header: createSortableHeader('Share'),
+		enableSorting: true,
+	},
+	{
+		accessorKey: 'winRate',
+		header: createSortableHeader('Win Rate'),
+		enableSorting: true,
+	},
+	{
+		accessorKey: 'avgPosition',
+		header: createSortableHeader('Avg Place'),
+		enableSorting: true,
+	},
+	{
+		accessorKey: 'conversionRate',
+		header: createSortableHeader('Conversion'),
+		enableSorting: true,
+	},
 	{ id: 'actions', header: '', enableSorting: false },
 ];
 

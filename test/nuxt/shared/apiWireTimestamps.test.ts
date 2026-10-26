@@ -14,7 +14,9 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
  */
 describe('api response timestamps at the wire boundary', () => {
 	it('is JSON, so a mapper-produced Date arrives as an ISO string', () => {
-		const produced = { updatedAt: new Date('2026-08-07T00:44:52.000Z') };
+		const produced = {
+			updatedAt: new Date('2026-08-07T00:44:52.000Z'),
+		};
 
 		const received = JSON.parse(JSON.stringify(produced));
 

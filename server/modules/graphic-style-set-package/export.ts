@@ -121,9 +121,11 @@ export async function exportGraphicStyleSetPackage(input: {
 
 	const snapshot = graphicStyleSetPackageSnapshot(input.styleSet);
 	if (!snapshot) {
-		return reject([exportIssue('graphic-style-set-never-published', {
-			message: 'This Graphic Style Set has never been published, so there is nothing to freeze',
-		})]);
+		return reject([
+			exportIssue('graphic-style-set-never-published', {
+				message: 'This Graphic Style Set has never been published, so there is nothing to freeze',
+			}),
+		]);
 	}
 
 	const issues: GraphicStyleSetPackageExportIssue[] = [];

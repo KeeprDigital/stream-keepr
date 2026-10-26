@@ -50,7 +50,10 @@ describe('broadcastGraphicTemplateDocument', () => {
 	});
 
 	it('leaves Graphic Channel membership behind on the Screen it was saved from', () => {
-		const document = broadcastGraphicTemplateDocument({ ...composed(), channelId: 'lower-thirds' });
+		const document = broadcastGraphicTemplateDocument({
+			...composed(),
+			channelId: 'lower-thirds',
+		});
 
 		expect(document.channelId).toBeUndefined();
 	});
@@ -69,9 +72,16 @@ describe('broadcastGraphicTemplateDocument', () => {
 
 describe('placeBroadcastGraphicTemplate', () => {
 	it('places a copy under a new Broadcast Graphic identity', () => {
-		const template = { id: 'template-1', name: 'Lower third', document: composed() };
+		const template = {
+			id: 'template-1',
+			name: 'Lower third',
+			document: composed(),
+		};
 
-		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+		});
 
 		expect(placed.id).toBe('new-1');
 		expect(placed.name).toBe('Lower third');
@@ -81,18 +91,31 @@ describe('placeBroadcastGraphicTemplate', () => {
 		const template = {
 			id: 'template-1',
 			name: 'Lower third',
-			document: { ...composed(), channelId: 'lower-thirds' },
+			document: {
+				...composed(),
+				channelId: 'lower-thirds',
+			},
 		};
 
-		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+		});
 
 		expect(placed.channelId).toBeUndefined();
 	});
 
 	it('regenerates every Graphic Item id, including a Graphic Group\'s children', () => {
-		const template = { id: 'template-1', name: 'Lower third', document: composed() };
+		const template = {
+			id: 'template-1',
+			name: 'Lower third',
+			document: composed(),
+		};
 
-		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+		});
 
 		const placedIds = [
 			...placed.items.map(item => item.id),
@@ -106,18 +129,23 @@ describe('placeBroadcastGraphicTemplate', () => {
 
 	it('copies each Graphic Input default as the placed graphic\'s own initial value', () => {
 		const document = composed();
-		document.inputs = [{
-			type: 'text',
-			key: 'headline',
-			label: 'Headline',
-			required: true,
-			updatePolicy: 'staged',
-			default: 'Match point',
-			maxLength: 60,
-		}];
+		document.inputs = [
+			{
+				type: 'text',
+				key: 'headline',
+				label: 'Headline',
+				required: true,
+				updatePolicy: 'staged',
+				default: 'Match point',
+				maxLength: 60,
+			},
+		];
 		const template = { id: 'template-1', name: 'Lower third', document };
 
-		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+		});
 
 		expect(placed.inputs).toEqual(document.inputs);
 		placed.inputs![0]!.default = 'Edited on the Screen';
@@ -126,11 +154,18 @@ describe('placeBroadcastGraphicTemplate', () => {
 
 	it('gives the placed copy independently editable Graphic Source Selections and Graphic Input Bindings', () => {
 		const document = composed();
-		document.sources = [{ key: 'player', label: 'Player', kind: 'player' }];
-		document.bindings = [{ inputKey: 'headline', sourceKey: 'player', fieldId: 'player.displayName' }];
+		document.sources = [
+			{ key: 'player', label: 'Player', kind: 'player' },
+		];
+		document.bindings = [
+			{ inputKey: 'headline', sourceKey: 'player', fieldId: 'player.displayName' },
+		];
 		const template = { id: 'template-1', name: 'Lower third', document };
 
-		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+		});
 		placed.sources![0]!.label = 'Winner';
 		placed.bindings!.push({ inputKey: 'other', sourceKey: 'player', fieldId: 'player.pronouns' });
 
@@ -140,24 +175,36 @@ describe('placeBroadcastGraphicTemplate', () => {
 
 	it('retains a fixed Talent Social Profile binding without embedding Event Talent data', () => {
 		const document = composed();
-		document.inputs = [{
-			type: 'text',
-			key: 'social',
-			label: 'Twitch handle',
-			required: false,
-			updatePolicy: 'staged',
-			default: '',
-			maxLength: 100,
-		}];
+		document.inputs = [
+			{
+				type: 'text',
+				key: 'social',
+				label: 'Twitch handle',
+				required: false,
+				updatePolicy: 'staged',
+				default: '',
+				maxLength: 100,
+			},
+		];
 		document.sources = [
 			{ key: 'event', label: 'Current Event', kind: 'event' },
-			{ key: 'talent1', label: 'Talent 1', kind: 'talent', from: { sourceKey: 'event', relation: 'commentator1' } },
+			{
+				key: 'talent1',
+				label: 'Talent 1',
+				kind: 'talent',
+				from: { sourceKey: 'event', relation: 'commentator1' },
+			},
 		];
-		document.bindings = [{ inputKey: 'social', sourceKey: 'talent1', fieldId: 'talent.twitchHandle' }];
+		document.bindings = [
+			{ inputKey: 'social', sourceKey: 'talent1', fieldId: 'talent.twitchHandle' },
+		];
 
 		const placed = placeBroadcastGraphicTemplate(
 			{ id: 'template-1', name: 'Social lower third', document },
-			{ generateId: sequentialIds(), existing: [] },
+			{
+				generateId: sequentialIds(),
+				existing: [],
+			},
 		);
 
 		expect(placed.sources).toEqual(document.sources);
@@ -167,27 +214,36 @@ describe('placeBroadcastGraphicTemplate', () => {
 
 	it('places Social Profile Projections onto the copied Presentation Group identities', () => {
 		const document = composed();
-		document.sources = [{ key: 'talent', label: 'Talent', kind: 'talent' }];
-		document.socialProfileProjections = [{
-			key: 'profile',
-			label: 'Profile',
-			sourceKey: 'talent',
-			presentationGroupId: 'cluster',
-			updatePolicy: 'live',
-			dwellMs: 8_000,
-			transition: 'crossfade',
-			transitionDurationMs: 250,
-		}];
+		document.sources = [
+			{ key: 'talent', label: 'Talent', kind: 'talent' },
+		];
+		document.socialProfileProjections = [
+			{
+				key: 'profile',
+				label: 'Profile',
+				sourceKey: 'talent',
+				presentationGroupId: 'cluster',
+				updatePolicy: 'live',
+				dwellMs: 8_000,
+				transition: 'crossfade',
+				transitionDurationMs: 250,
+			},
+		];
 
 		const placed = placeBroadcastGraphicTemplate(
 			{ id: 'template-1', name: 'Social lower third', document },
-			{ generateId: sequentialIds(), existing: [] },
+			{
+				generateId: sequentialIds(),
+				existing: [],
+			},
 		);
 
-		expect(placed.socialProfileProjections).toEqual([{
-			...document.socialProfileProjections[0],
-			presentationGroupId: groupOf(placed).id,
-		}]);
+		expect(placed.socialProfileProjections).toEqual([
+			{
+				...document.socialProfileProjections[0],
+				presentationGroupId: groupOf(placed).id,
+			},
+		]);
 		expect(placed.socialProfileProjections![0]!.presentationGroupId).not.toBe('cluster');
 		expect(placed.socialProfileProjections![0]!.updatePolicy).toBe('live');
 		expect(placed.sources).toEqual(document.sources);
@@ -201,7 +257,10 @@ describe('placeBroadcastGraphicTemplate', () => {
 		item.asset = testGraphicAssetReference('asset-1', 'revision-1');
 		const template = { id: 'template-1', name: 'Lower third', document: media };
 
-		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+		});
 
 		const placedMedia = placed.items.find(entry => entry.type === 'media') as MediaGraphicItemConfig;
 		expect(placedMedia.asset).toEqual({ assetId: 'asset-1', revisionId: 'revision-1' });
@@ -223,7 +282,10 @@ describe('placeBroadcastGraphicTemplate', () => {
 			document: broadcastGraphicTemplateDocument(authored),
 		};
 
-		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+		});
 		const placedIcon = placed.items.find(
 			entry => entry.type === 'social-network-icon',
 		) as SocialNetworkIconGraphicItemConfig;
@@ -240,11 +302,21 @@ describe('placeBroadcastGraphicTemplate', () => {
 	});
 
 	it('names the copy distinctly when the Screen already carries the template\'s name', () => {
-		const template = { id: 'template-1', name: 'Lower third', document: composed() };
+		const template = {
+			id: 'template-1',
+			name: 'Lower third',
+			document: composed(),
+		};
 
 		const placed = placeBroadcastGraphicTemplate(template, {
 			generateId: sequentialIds(),
-			existing: [graphic('a'), { ...graphic('b'), name: 'Lower third' }],
+			existing: [
+				graphic('a'),
+				{
+					...graphic('b'),
+					name: 'Lower third',
+				},
+			],
 		});
 
 		expect(placed.name).not.toBe('Lower third');
@@ -255,7 +327,10 @@ describe('placeBroadcastGraphicTemplate', () => {
 		const document = composed();
 		const template = { id: 'template-1', name: 'Lower third', document };
 
-		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+		});
 		placed.items.pop();
 		groupOf(placed).children[0]!.label = 'edited';
 
@@ -265,13 +340,28 @@ describe('placeBroadcastGraphicTemplate', () => {
 
 	it('carries the whole-graphic and per-item Graphic Animation of the template', () => {
 		const document = composed();
-		document.animation = { enter: { duration: 400, easing: 'ease-out', delay: 0, fade: { opacity: 0 } } };
+		document.animation = {
+			enter: {
+				duration: 400,
+				easing: 'ease-out',
+				delay: 0,
+				fade: { opacity: 0 },
+			},
+		};
 		document.items[1]!.animation = {
-			enter: { duration: 300, easing: 'linear', delay: 100, fade: { opacity: 0 } },
+			enter: {
+				duration: 300,
+				easing: 'linear',
+				delay: 100,
+				fade: { opacity: 0 },
+			},
 		};
 		const template = { id: 'template-1', name: 'Lower third', document };
 
-		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+		});
 
 		expect(placed.animation).toEqual(document.animation);
 		expect(placed.items[1]!.animation).toEqual(document.items[1]!.animation);
@@ -285,14 +375,37 @@ describe('placeBroadcastGraphicTemplate', () => {
 		// this array's own order carries no meaning. It is written this way so the
 		// assertion below pins each entry's mapping rather than a coincidence of order.
 		document.animation = {
-			enter: { duration: 400, easing: 'ease-out', delay: 0, fade: { opacity: 0 } },
-			stagger: { enter: { order: 'list', step: 80, itemIds: ['headline', 'cluster'] } },
-			exit: { duration: 200, easing: 'ease-in', delay: 0, fade: { opacity: 0 } },
+			enter: {
+				duration: 400,
+				easing: 'ease-out',
+				delay: 0,
+				fade: { opacity: 0 },
+			},
+			stagger: {
+				enter: {
+					order: 'list',
+					step: 80,
+					itemIds: ['headline', 'cluster'],
+				},
+			},
+			exit: {
+				duration: 200,
+				easing: 'ease-in',
+				delay: 0,
+				fade: { opacity: 0 },
+			},
 		};
-		document.animation.stagger!.exit = { order: 'reverse-list', step: 60, itemIds: ['cluster'] };
+		document.animation.stagger!.exit = {
+			order: 'reverse-list',
+			step: 60,
+			itemIds: ['cluster'],
+		};
 		const template = { id: 'template-1', name: 'Lower third', document };
 
-		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+		});
 
 		const [cluster, headline] = placed.items.map(item => item.id);
 		const enter = placed.animation!.stagger!.enter as GraphicAnimationStagger;
@@ -309,12 +422,26 @@ describe('placeBroadcastGraphicTemplate', () => {
 		const document = composed();
 		const group = groupOf(document);
 		group.animation = {
-			enter: { duration: 300, easing: 'linear', delay: 0, fade: { opacity: 0 } },
-			stagger: { enter: { order: 'reverse-list', step: 50, itemIds: ['child'] } },
+			enter: {
+				duration: 300,
+				easing: 'linear',
+				delay: 0,
+				fade: { opacity: 0 },
+			},
+			stagger: {
+				enter: {
+					order: 'reverse-list',
+					step: 50,
+					itemIds: ['child'],
+				},
+			},
 		};
 		const template = { id: 'template-1', name: 'Lower third', document };
 
-		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+		});
 
 		const placedGroup = groupOf(placed);
 		expect(placedGroup.animation!.stagger!.enter!.itemIds)
@@ -326,12 +453,26 @@ describe('placeBroadcastGraphicTemplate', () => {
 	it('drops a staggered id that names no Graphic Item of the template', () => {
 		const document = composed();
 		document.animation = {
-			enter: { duration: 400, easing: 'ease-out', delay: 0, fade: { opacity: 0 } },
-			stagger: { enter: { order: 'list', step: 80, itemIds: ['headline', 'deleted-long-ago'] } },
+			enter: {
+				duration: 400,
+				easing: 'ease-out',
+				delay: 0,
+				fade: { opacity: 0 },
+			},
+			stagger: {
+				enter: {
+					order: 'list',
+					step: 80,
+					itemIds: ['headline', 'deleted-long-ago'],
+				},
+			},
 		};
 		const template = { id: 'template-1', name: 'Lower third', document };
 
-		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+		});
 
 		// An id that named nothing was already ignored at projection; carrying it into
 		// the copy would preserve a reference to an item that never existed there.
@@ -341,11 +482,20 @@ describe('placeBroadcastGraphicTemplate', () => {
 	it('leaves no empty Graphic Animation behind when every staggered id was stale', () => {
 		const document = composed();
 		document.animation = {
-			stagger: { enter: { order: 'list', step: 80, itemIds: ['deleted-long-ago'] } },
+			stagger: {
+				enter: {
+					order: 'list',
+					step: 80,
+					itemIds: ['deleted-long-ago'],
+				},
+			},
 		};
 		const template = { id: 'template-1', name: 'Lower third', document };
 
-		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+		});
 
 		// The key is absent rather than present-and-undefined: this shape is persisted
 		// as JSON, where the two are indistinguishable, and compared in memory, where
@@ -359,12 +509,25 @@ describe('placeBroadcastGraphicTemplate', () => {
 		// while making a placed graphic's animation editable through the template.
 		const document = composed();
 		document.animation = {
-			enter: { duration: 400, easing: 'ease-out', delay: 0, fade: { opacity: 0 } },
-			exit: { duration: 200, easing: 'ease-in', delay: 0, fade: { opacity: 0 } },
+			enter: {
+				duration: 400,
+				easing: 'ease-out',
+				delay: 0,
+				fade: { opacity: 0 },
+			},
+			exit: {
+				duration: 200,
+				easing: 'ease-in',
+				delay: 0,
+				fade: { opacity: 0 },
+			},
 		};
 		const template = { id: 'template-1', name: 'Lower third', document };
 
-		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+		});
 
 		expect(placed.animation).not.toBe(document.animation);
 		expect(placed.animation!.enter).not.toBe(document.animation.enter);
@@ -375,12 +538,26 @@ describe('placeBroadcastGraphicTemplate', () => {
 	it('shares no object with the template document when a stagger is rewritten', () => {
 		const document = composed();
 		document.animation = {
-			enter: { duration: 400, easing: 'ease-out', delay: 0, fade: { opacity: 0 } },
-			stagger: { enter: { order: 'list', step: 80, itemIds: ['headline'] } },
+			enter: {
+				duration: 400,
+				easing: 'ease-out',
+				delay: 0,
+				fade: { opacity: 0 },
+			},
+			stagger: {
+				enter: {
+					order: 'list',
+					step: 80,
+					itemIds: ['headline'],
+				},
+			},
 		};
 		const template = { id: 'template-1', name: 'Lower third', document };
 
-		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+		});
 		placed.animation!.enter!.duration = 1;
 		placed.animation!.stagger!.enter!.step = 1;
 
@@ -392,11 +569,20 @@ describe('placeBroadcastGraphicTemplate', () => {
 		const document = composed();
 		const group = groupOf(document);
 		group.animation = {
-			stagger: { enter: { order: 'list', step: 50, itemIds: ['deleted-long-ago'] } },
+			stagger: {
+				enter: {
+					order: 'list',
+					step: 50,
+					itemIds: ['deleted-long-ago'],
+				},
+			},
 		};
 		const template = { id: 'template-1', name: 'Lower third', document };
 
-		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: sequentialIds(),
+			existing: [],
+		});
 
 		expect('animation' in groupOf(placed)).toBe(false);
 	});
@@ -439,7 +625,12 @@ describe('placeBroadcastGraphicTemplate', () => {
 	it('carries every field of a maximally populated document except what it rewrites', () => {
 		const document = composed();
 		document.animation = {
-			'enter': { duration: 400, easing: 'ease-out', delay: 100, fade: { opacity: 0 } },
+			'enter': {
+				duration: 400,
+				easing: 'ease-out',
+				delay: 100,
+				fade: { opacity: 0 },
+			},
 			'on-screen': {
 				duration: 800,
 				easing: 'linear',
@@ -448,7 +639,12 @@ describe('placeBroadcastGraphicTemplate', () => {
 				repeat: 3,
 				scale: { factor: 1.1, origin: 'center' },
 			},
-			'update': { duration: 250, easing: 'ease-in-out', delay: 0, fade: { opacity: 0.5 } },
+			'update': {
+				duration: 250,
+				easing: 'ease-in-out',
+				delay: 0,
+				fade: { opacity: 0.5 },
+			},
 			'exit': {
 				duration: 300,
 				easing: 'ease-in',
@@ -457,18 +653,50 @@ describe('placeBroadcastGraphicTemplate', () => {
 				reveal: { edge: 'left' },
 			},
 			'stagger': {
-				'enter': { order: 'list', step: 80, itemIds: ['headline', 'cluster'] },
-				'on-screen': { order: 'reverse-list', step: 40, itemIds: ['cluster'] },
-				'update': { order: 'list', step: 20, itemIds: ['headline'] },
-				'exit': { order: 'reverse-list', step: 60, itemIds: ['cluster', 'headline'] },
+				'enter': {
+					order: 'list',
+					step: 80,
+					itemIds: ['headline', 'cluster'],
+				},
+				'on-screen': {
+					order: 'reverse-list',
+					step: 40,
+					itemIds: ['cluster'],
+				},
+				'update': {
+					order: 'list',
+					step: 20,
+					itemIds: ['headline'],
+				},
+				'exit': {
+					order: 'reverse-list',
+					step: 60,
+					itemIds: ['cluster', 'headline'],
+				},
 			},
 		};
 		groupOf(document).animation = {
-			enter: { duration: 300, easing: 'linear', delay: 0, fade: { opacity: 0 } },
-			stagger: { enter: { order: 'list', step: 30, itemIds: ['child'] } },
+			enter: {
+				duration: 300,
+				easing: 'linear',
+				delay: 0,
+				fade: { opacity: 0 },
+			},
+			stagger: {
+				enter: {
+					order: 'list',
+					step: 30,
+					itemIds: ['child'],
+				},
+			},
 		};
 		document.items[1]!.animation = {
-			exit: { duration: 150, easing: 'ease-in', delay: 50, fade: { opacity: 0 } },
+			exit: {
+				duration: 150,
+				easing: 'ease-in',
+				delay: 50,
+				fade: { opacity: 0 },
+			},
 		};
 		document.inputs = [
 			{
@@ -487,11 +715,18 @@ describe('placeBroadcastGraphicTemplate', () => {
 				required: false,
 				updatePolicy: 'live',
 				default: 'left',
-				options: [{ value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }],
+				options: [
+					{ value: 'left', label: 'Left' },
+					{ value: 'right', label: 'Right' },
+				],
 			},
 		];
-		document.sources = [{ key: 'player', label: 'Player', kind: 'player' }];
-		document.bindings = [{ inputKey: 'headline', sourceKey: 'player', fieldId: 'player.displayName' }];
+		document.sources = [
+			{ key: 'player', label: 'Player', kind: 'player' },
+		];
+		document.bindings = [
+			{ inputKey: 'headline', sourceKey: 'player', fieldId: 'player.displayName' },
+		];
 		const template = { id: 'template-1', name: 'Lower third', document };
 		const idMap = new Map<string, string>();
 
@@ -508,7 +743,13 @@ describe('placeBroadcastGraphicTemplate', () => {
 				? {
 						...animation,
 						stagger: Object.fromEntries(Object.entries(animation.stagger).map(
-							([phase, entry]) => [phase, { ...(entry as any), itemIds: rewriteIds((entry as any).itemIds) }],
+							([phase, entry]) => [
+								phase,
+								{
+									...(entry as any),
+									itemIds: rewriteIds((entry as any).itemIds),
+								},
+							],
 						)),
 					}
 				: animation;
@@ -521,7 +762,10 @@ describe('placeBroadcastGraphicTemplate', () => {
 				name: template.name,
 				animation: rewriteStagger(source.animation),
 				items: source.items.map((item) => {
-					const copied: any = { ...structuredClone(item), id: idMap.get(item.id) };
+					const copied: any = {
+						...structuredClone(item),
+						id: idMap.get(item.id),
+					};
 					if (copied.type === 'group') {
 						copied.children = (item as any).children.map((child: any) => ({
 							...structuredClone(child),
@@ -541,11 +785,18 @@ describe('placeBroadcastGraphicTemplate', () => {
 	});
 
 	it('places two copies of one template with no Graphic Item id in common', () => {
-		const template = { id: 'template-1', name: 'Lower third', document: composed() };
+		const template = {
+			id: 'template-1',
+			name: 'Lower third',
+			document: composed(),
+		};
 		const generateId = sequentialIds();
 
 		const first = placeBroadcastGraphicTemplate(template, { generateId, existing: [] });
-		const second = placeBroadcastGraphicTemplate(template, { generateId, existing: [first] });
+		const second = placeBroadcastGraphicTemplate(template, {
+			generateId,
+			existing: [first],
+		});
 
 		const ids = (config: BroadcastGraphicConfig) => [
 			config.id,

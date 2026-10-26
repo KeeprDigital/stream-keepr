@@ -159,7 +159,9 @@ function byDeadline(
 		return 1;
 	if (second.deadline === undefined)
 		return -1;
-	return first.deadline < second.deadline ? -1 : 1;
+	return first.deadline < second.deadline
+		? -1
+		: 1;
 }
 
 /**
@@ -181,7 +183,9 @@ function buildQueue(
 		id,
 		severity: graphicsQueueSeverity(id),
 		totalCount,
-		...(ordered[0]?.deadline === undefined ? {} : { nextDeadline: ordered[0].deadline }),
+		...(ordered[0]?.deadline === undefined
+			? {}
+			: { nextDeadline: ordered[0].deadline }),
 		items: ordered,
 	};
 }
@@ -214,7 +218,9 @@ function discrepancyItem(discrepancy: GraphicsDiscrepancy): GraphicsOperationalQ
 		queue,
 		subject: { kind: 'graphics-discrepancy', id: discrepancy.id },
 		title: discrepancyTitle(discrepancy),
-		...(discrepancy.quarantine ? { deadline: discrepancy.quarantine.deleteAfter } : {}),
+		...(discrepancy.quarantine
+			? { deadline: discrepancy.quarantine.deleteAfter }
+			: {}),
 		referenceCount: discrepancy.affectedUsage
 			.reduce((total, usage) => total + usage.referenceCount, 0),
 		// Carried through unchanged: the library decides which actions are valid
@@ -274,7 +280,9 @@ function ingestionItem(
 		title: item.name,
 		deadline: item.inputExpiresAt,
 		// Expired staged input cannot be resumed: a new operation is required.
-		actions: queue === 'retryable-ingestion' ? ['retry-ingestion'] : [],
+		actions: queue === 'retryable-ingestion'
+			? ['retry-ingestion']
+			: [],
 	};
 }
 
@@ -457,7 +465,9 @@ export function createGraphicsOperationalQueues(
 					...base,
 					subject: item.subject,
 					title: item.title,
-					...(item.deadline === undefined ? {} : { deadline: item.deadline }),
+					...(item.deadline === undefined
+						? {}
+						: { deadline: item.deadline }),
 					referenceCount: item.referenceCount ?? 0,
 					actions: item.actions,
 					detail: { kind: 'graphics-discrepancy', discrepancy },
@@ -470,7 +480,9 @@ export function createGraphicsOperationalQueues(
 				const retention = await dependencies.inspectRetention(assetId);
 				if (!retention)
 					notFound('Graphic Asset not found');
-				const expected = input.queue === 'trashed-asset' ? 'trashed' : 'retired';
+				const expected = input.queue === 'trashed-asset'
+					? 'trashed'
+					: 'retired';
 				if (retention.lifecycle.state !== expected)
 					notFound('Graphic Asset is no longer in that queue');
 				const [usage, name] = await Promise.all([
@@ -561,7 +573,9 @@ export function createGraphicsOperationalQueues(
 				...base,
 				subject: item.subject,
 				title: item.title,
-				...(item.deadline === undefined ? {} : { deadline: item.deadline }),
+				...(item.deadline === undefined
+					? {}
+					: { deadline: item.deadline }),
 				referenceCount: 0,
 				actions: item.actions,
 				detail: { kind: 'graphics-ingestion-operation', operation },

@@ -2,7 +2,9 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { THEME_KEY } from 'vue-echarts';
 
-const { mockTheme } = vi.hoisted(() => ({ mockTheme: { marker: 'echarts-theme' } }));
+const { mockTheme } = vi.hoisted(() => ({
+	mockTheme: { marker: 'echarts-theme' },
+}));
 
 mockNuxtImport('useEChartsTheme', () => () => mockTheme);
 
@@ -11,7 +13,9 @@ describe('echartsThemePlugin', () => {
 		const { default: plugin } = await import('~/plugins/echarts-theme.client');
 		const provide = vi.fn();
 
-		(plugin as unknown as (nuxtApp: unknown) => void)({ vueApp: { provide } });
+		(plugin as unknown as (nuxtApp: unknown) => void)({
+			vueApp: { provide },
+		});
 
 		expect(provide).toHaveBeenCalledWith(THEME_KEY, mockTheme);
 	});

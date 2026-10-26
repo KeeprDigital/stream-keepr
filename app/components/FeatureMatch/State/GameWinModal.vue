@@ -47,7 +47,9 @@ function handleConfirm() {
 	emit('update:open', false);
 }
 
-useEnterToSubmit(handleConfirm, { disabled: () => !props.open });
+useEnterToSubmit(handleConfirm, {
+	disabled: () => !props.open,
+});
 </script>
 
 <template>

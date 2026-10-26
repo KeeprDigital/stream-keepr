@@ -101,24 +101,43 @@ function instantFrom(local: string) {
 	if (!local)
 		return undefined;
 	const parsed = new Date(local);
-	return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+	return Number.isNaN(parsed.getTime())
+		? undefined
+		: parsed.toISOString();
 }
 
 function evidenceQuery() {
 	const question = applied.value;
 	return {
 		limit: PAGE_LIMIT,
-		...(question.groups.length > 0 ? { group: question.groups } : {}),
-		...(question.subjectKind && question.subjectId.trim()
-			? { subjectKind: question.subjectKind, subjectId: question.subjectId.trim() }
+		...(question.groups.length > 0
+			? { group: question.groups }
 			: {}),
-		...(question.actor.trim() ? { actor: question.actor.trim() } : {}),
-		...(question.correlationId.trim() ? { correlationId: question.correlationId.trim() } : {}),
+		...(question.subjectKind && question.subjectId.trim()
+			? {
+					subjectKind: question.subjectKind,
+					subjectId: question.subjectId.trim(),
+				}
+			: {}),
+		...(question.actor.trim()
+			? {
+					actor: question.actor.trim(),
+				}
+			: {}),
+		...(question.correlationId.trim()
+			? {
+					correlationId: question.correlationId.trim(),
+				}
+			: {}),
 		...(instantFrom(question.recordedFrom)
-			? { recordedFrom: instantFrom(question.recordedFrom) }
+			? {
+					recordedFrom: instantFrom(question.recordedFrom),
+				}
 			: {}),
 		...(instantFrom(question.recordedUntil)
-			? { recordedUntil: instantFrom(question.recordedUntil) }
+			? {
+					recordedUntil: instantFrom(question.recordedUntil),
+				}
 			: {}),
 		...(cursor.value
 			? {
@@ -140,7 +159,10 @@ const {
 } = useGraphicsAdminReading<GraphicsAssetEvidenceReading>({
 	read: async headers => await $fetch<GraphicsAssetEvidenceReading>(
 		'/api/admin/graphics-assets/evidence',
-		{ headers, query: evidenceQuery() },
+		{
+			headers,
+			query: evidenceQuery(),
+		},
 	),
 	failureMessage: 'The Evidence ledger could not be read.',
 });
@@ -150,7 +172,10 @@ const {
  * from the newest end rather than from wherever the previous answer was paged.
  */
 async function applyFilters() {
-	applied.value = { ...draft.value, groups: [...draft.value.groups] };
+	applied.value = {
+		...draft.value,
+		groups: [...draft.value.groups],
+	};
 	cursor.value = null;
 	direction.value = 'older';
 	await loadLedger();
@@ -238,11 +263,22 @@ function measurements(entry: GraphicsAssetEvidenceEntry) {
 			: { label: 'Revisions', value: `${detail.revisionCount}` },
 		detail.bytesFreed === undefined
 			? null
-			: { label: 'Bytes freed', value: formatByteCount(detail.bytesFreed) },
+			: {
+					label: 'Bytes freed',
+					value: formatByteCount(detail.bytesFreed),
+				},
 		detail.bytesReserved === undefined
 			? null
-			: { label: 'Bytes reserved', value: formatByteCount(detail.bytesReserved) },
-		detail.deadline ? { label: 'Deadline', value: formatInstant(detail.deadline) } : null,
+			: {
+					label: 'Bytes reserved',
+					value: formatByteCount(detail.bytesReserved),
+				},
+		detail.deadline
+			? {
+					label: 'Deadline',
+					value: formatInstant(detail.deadline),
+				}
+			: null,
 		detail.canonicalPressure
 			? {
 					label: 'Quota at the time',
@@ -257,12 +293,18 @@ function measurements(entry: GraphicsAssetEvidenceEntry) {
 					}`,
 				}
 			: null,
-		detail.operationId ? { label: 'Operation', value: detail.operationId } : null,
+		detail.operationId
+			? { label: 'Operation', value: detail.operationId }
+			: null,
 		detail.discrepancyKind
 			? { label: 'Disagreement', value: detail.discrepancyKind }
 			: null,
-		detail.reasonCode ? { label: 'Reason code', value: detail.reasonCode } : null,
-		detail.rejectionCode ? { label: 'Refused because', value: detail.rejectionCode } : null,
+		detail.reasonCode
+			? { label: 'Reason code', value: detail.reasonCode }
+			: null,
+		detail.rejectionCode
+			? { label: 'Refused because', value: detail.rejectionCode }
+			: null,
 		detail.affectedRevisionCount === undefined
 			? null
 			: { label: 'Revisions affected', value: `${detail.affectedRevisionCount}` },

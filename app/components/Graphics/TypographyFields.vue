@@ -49,10 +49,42 @@ const emit = defineEmits<{ update: [patch: Partial<TypographyFieldValues>] }>();
 const BASE_OPTION = { label: 'Same as base', value: 'base' } as const;
 
 const NUMBER_FIELDS = [
-	{ key: 'fontSize', label: 'Size', ariaLabel: 'Font size', testId: 'size', min: MIN_GRAPHIC_FONT_SIZE, max: MAX_GRAPHIC_FONT_SIZE, step: undefined },
-	{ key: 'fontWeight', label: 'Weight', ariaLabel: 'Font weight', testId: 'weight', min: MIN_GRAPHIC_FONT_WEIGHT, max: MAX_GRAPHIC_FONT_WEIGHT, step: undefined },
-	{ key: 'letterSpacing', label: 'Letter spacing', ariaLabel: 'Letter spacing', testId: 'letter-spacing', min: MIN_GRAPHIC_LETTER_SPACING, max: MAX_GRAPHIC_LETTER_SPACING, step: undefined },
-	{ key: 'lineHeight', label: 'Line height', ariaLabel: 'Line height', testId: 'line-height', min: MIN_GRAPHIC_LINE_HEIGHT, max: MAX_GRAPHIC_LINE_HEIGHT, step: 0.05 },
+	{
+		key: 'fontSize',
+		label: 'Size',
+		ariaLabel: 'Font size',
+		testId: 'size',
+		min: MIN_GRAPHIC_FONT_SIZE,
+		max: MAX_GRAPHIC_FONT_SIZE,
+		step: undefined,
+	},
+	{
+		key: 'fontWeight',
+		label: 'Weight',
+		ariaLabel: 'Font weight',
+		testId: 'weight',
+		min: MIN_GRAPHIC_FONT_WEIGHT,
+		max: MAX_GRAPHIC_FONT_WEIGHT,
+		step: undefined,
+	},
+	{
+		key: 'letterSpacing',
+		label: 'Letter spacing',
+		ariaLabel: 'Letter spacing',
+		testId: 'letter-spacing',
+		min: MIN_GRAPHIC_LETTER_SPACING,
+		max: MAX_GRAPHIC_LETTER_SPACING,
+		step: undefined,
+	},
+	{
+		key: 'lineHeight',
+		label: 'Line height',
+		ariaLabel: 'Line height',
+		testId: 'line-height',
+		min: MIN_GRAPHIC_LINE_HEIGHT,
+		max: MAX_GRAPHIC_LINE_HEIGHT,
+		step: 0.05,
+	},
 ] as const satisfies ReadonlyArray<{ key: NumericKey; label: string; ariaLabel: string; testId: string; min: number; max: number; step: number | undefined }>;
 
 /** Line height lays out the whole block, so a placeholder's run cannot set it. */
@@ -61,26 +93,46 @@ const numberFields = computed(() => props.inheritable
 	: NUMBER_FIELDS);
 
 const fontStyleOptions = computed(() => [
-	...(props.inheritable ? [BASE_OPTION] : []),
-	...GRAPHIC_FONT_STYLE_VALUES.map(value => ({ label: optionLabel(value), value })),
+	...(props.inheritable
+		? [BASE_OPTION]
+		: []),
+	...GRAPHIC_FONT_STYLE_VALUES.map(value => ({
+		label: optionLabel(value),
+		value,
+	})),
 ]);
 
 const caseOptions = computed(() => [
-	...(props.inheritable ? [BASE_OPTION] : []),
-	...GRAPHIC_TEXT_TRANSFORM_VALUES.map(value => ({ label: optionLabel(value), value })),
+	...(props.inheritable
+		? [BASE_OPTION]
+		: []),
+	...GRAPHIC_TEXT_TRANSFORM_VALUES.map(value => ({
+		label: optionLabel(value),
+		value,
+	})),
 ]);
 
 function updateNumber(field: typeof NUMBER_FIELDS[number], value: number | null | undefined) {
 	if (value === null || value === undefined || !Number.isFinite(value)) {
-		emit('update', { [field.key]: props.inheritable ? undefined : DEFAULT_GRAPHIC_TYPOGRAPHY[field.key] });
+		emit('update', {
+			[field.key]: props.inheritable ? undefined : DEFAULT_GRAPHIC_TYPOGRAPHY[field.key],
+		});
 		return;
 	}
 	const bounded = Math.min(field.max, Math.max(field.min, value));
-	emit('update', { [field.key]: field.key === 'fontWeight' ? Math.round(bounded) : bounded });
+	emit('update', {
+		[field.key]: field.key === 'fontWeight'
+			? Math.round(bounded)
+			: bounded,
+	});
 }
 
 function updateChoice(key: 'fontStyle' | 'textTransform', value: string) {
-	emit('update', { [key]: value === BASE_OPTION.value ? undefined : value });
+	emit('update', {
+		[key]: value === BASE_OPTION.value
+			? undefined
+			: value,
+	});
 }
 
 /** An unset choice reads as "same as base" in the inheritable mode, the only one it can be unset in. */

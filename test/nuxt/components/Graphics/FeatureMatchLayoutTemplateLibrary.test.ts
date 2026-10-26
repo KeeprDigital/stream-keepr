@@ -31,7 +31,9 @@ mockNuxtImport('useFeatureMatchLayoutTemplateRepository', () => () => ({
 }));
 
 const mockGetScreenById = vi.fn();
-const mockScreens = ref<Array<{ id: number; stateVersion: number }>>([{ id: 3, stateVersion: 12 }]);
+const mockScreens = ref<Array<{ id: number; stateVersion: number }>>([
+	{ id: 3, stateVersion: 12 },
+]);
 
 mockNuxtImport('useScreenStore', () => () => ({
 	getScreenById: mockGetScreenById,
@@ -41,27 +43,38 @@ mockNuxtImport('useScreenStore', () => () => ({
 }));
 
 const ScreenSettingsCardStub = defineComponent({
-	props: { title: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+	},
 	template: '<section><h2>{{ title }}</h2><slot /></section>',
 });
 const UIEmptyStateStub = defineComponent({
-	props: { title: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+	},
 	template: '<div data-testid="empty-state">{{ title }}</div>',
 });
 const UAlertStub = defineComponent({
-	props: { title: { type: String, required: false }, description: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+		description: { type: String, required: false },
+	},
 	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span><slot /></div>',
 });
 const UIconStub = defineComponent({ template: '<i />' });
 const UButtonStub = defineComponent({
 	name: 'UButton',
-	props: { disabled: { type: Boolean, default: false } },
+	props: {
+		disabled: { type: Boolean, default: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
 const UInputStub = defineComponent({
 	name: 'UInput',
-	props: { modelValue: { type: String, default: '' } },
+	props: {
+		modelValue: { type: String, default: '' },
+	},
 	emits: ['update:modelValue', 'change', 'blur'],
 	template: '<input :value="modelValue" @change="$emit(\'change\', $event)" @blur="$emit(\'blur\', $event)" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 });
@@ -100,8 +113,13 @@ function receivedPackage(
  */
 async function chooseImportFile(wrapper: { get: (selector: string) => any }) {
 	const input = wrapper.get('[data-testid="layout-template-import-input"]');
-	const file = new File([new Uint8Array([1, 2, 3])], 'neon-feature-match.sklayout');
-	Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
+	const file = new File([
+		new Uint8Array([1, 2, 3]),
+	], 'neon-feature-match.sklayout');
+	Object.defineProperty(input.element, 'files', {
+		value: [file],
+		configurable: true,
+	});
 	await input.trigger('change');
 	await flushPromises();
 }
@@ -135,12 +153,24 @@ async function mountLibrary(props: Record<string, unknown> = {}) {
 describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockList.mockResolvedValue([summary()]);
-		mockSave.mockResolvedValue({ ...summary() });
-		mockUpdate.mockResolvedValue({ ...summary(), name: 'Renamed' });
-		mockPlace.mockResolvedValue({ screen: { id: 3 }, layout: {} });
+		mockList.mockResolvedValue([
+			summary(),
+		]);
+		mockSave.mockResolvedValue({
+			...summary(),
+		});
+		mockUpdate.mockResolvedValue({
+			...summary(),
+			name: 'Renamed',
+		});
+		mockPlace.mockResolvedValue({
+			screen: { id: 3 },
+			layout: {},
+		});
 		mockRemove.mockResolvedValue(undefined);
-		mockScreens.value = [{ id: 3, stateVersion: 12 }];
+		mockScreens.value = [
+			{ id: 3, stateVersion: 12 },
+		];
 	});
 
 	it('browses the installation library', async () => {
@@ -212,7 +242,9 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 	 * a control that lies.
 	 */
 	it('offers no rename or delete on a layout a Template Package installed', async () => {
-		mockList.mockResolvedValue([summary({ authored: false })]);
+		mockList.mockResolvedValue([
+			summary({ authored: false }),
+		]);
 
 		const wrapper = await mountLibrary();
 
@@ -287,7 +319,9 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 	it('pauses on a package that needs confirming, and installs only when confirmed', async () => {
 		mockReceivePackage.mockResolvedValue(receivedPackage('awaiting-confirmation', {
 			outcome: 'requires-confirmation',
-			issues: [{ code: 'graphic-asset-name-differs', message: 'A name differs', remediation: 'Review it' }],
+			issues: [
+				{ code: 'graphic-asset-name-differs', message: 'A name differs', remediation: 'Review it' },
+			],
 		}));
 		mockConfirmPackage.mockResolvedValue(receivedPackage('awaiting-installation'));
 		mockInstallPackage.mockResolvedValue({ id: 'operation-1', stage: 'completed' });
@@ -309,11 +343,13 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 	it('reports a rejected package without offering to install it', async () => {
 		mockReceivePackage.mockResolvedValue(receivedPackage('failed', {
 			outcome: 'rejected',
-			issues: [{
-				code: 'unsupported-application-capability',
-				message: 'This installation does not provide host-vocabulary "feature-match/source-role/desk"',
-				remediation: 'Export from a matching installation',
-			}],
+			issues: [
+				{
+					code: 'unsupported-application-capability',
+					message: 'This installation does not provide host-vocabulary "feature-match/source-role/desk"',
+					remediation: 'Export from a matching installation',
+				},
+			],
 		}));
 
 		const wrapper = await mountLibrary();

@@ -56,7 +56,9 @@ export function graphicsCatalogueClient(): D1Database {
 		get(_target, property) {
 			const client = resolve();
 			const value = Reflect.get(client as object, property);
-			return typeof value === 'function' ? value.bind(client) : value;
+			return typeof value === 'function'
+				? value.bind(client)
+				: value;
 		},
 		has: (_target, property) => Reflect.has(resolve() as object, property),
 		ownKeys: () => Reflect.ownKeys(resolve() as object),

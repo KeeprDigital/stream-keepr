@@ -153,7 +153,9 @@ export function screenService() {
 						eq(screens.id, id),
 						eq(screens.eventId, eventId),
 						eq(screens.stateVersion, currentVersion),
-						leaseFence ? graphicsAuthoringLeaseFenceCondition(leaseFence, Date.now()) : undefined,
+						leaseFence
+							? graphicsAuthoringLeaseFenceCondition(leaseFence, Date.now())
+							: undefined,
 					))
 					.returning(),
 				...companions,

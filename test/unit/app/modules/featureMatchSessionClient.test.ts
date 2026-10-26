@@ -79,8 +79,18 @@ describe('feature Match Session client module', () => {
 	it('sends a multi-field state update as one Batch command in one round trip', async () => {
 		const client = useFeatureMatchSessionClient();
 		await client.updateState(1, 2, {
-			player1: { lifeTotal: 12, counters: [{ type: 'poison', value: 3 }] },
-			player2: { lifeTotal: 9, cardsKept: 6, counters: [], sideboardRevealed: true },
+			player1: {
+				lifeTotal: 12,
+				counters: [
+					{ type: 'poison', value: 3 },
+				],
+			},
+			player2: {
+				lifeTotal: 9,
+				cardsKept: 6,
+				counters: [],
+				sideboardRevealed: true,
+			},
 			clock: { targetDisplayMs: 30_000 },
 			firstPlayer: 'player2',
 			activePlayer: 'player1',
@@ -98,17 +108,55 @@ describe('feature Match Session client module', () => {
 			baseSequence: 4,
 			payload: {
 				commands: [
-					{ type: 'SetLife', payload: { player: 'player1', lifeTotal: 12 } },
-					{ type: 'SetCounters', payload: { player: 'player1', counters: [{ type: 'poison', value: 3 }] } },
-					{ type: 'SetLife', payload: { player: 'player2', lifeTotal: 9 } },
-					{ type: 'SetCounters', payload: { player: 'player2', counters: [] } },
-					{ type: 'SetCardsKept', payload: { player: 'player2', cardsKept: 6 } },
-					{ type: 'SetSideboardRevealed', payload: { player: 'player2', revealed: true } },
-					{ type: 'SetClock', payload: { targetMs: 30_000 } },
-					{ type: 'SetFirstPlayer', payload: { player: 'player2' } },
-					{ type: 'SetActivePlayer', payload: { player: 'player1' } },
-					{ type: 'SetTurnNumber', payload: { turnNumber: 4 } },
-					{ type: 'StartOvertime', payload: { totalTurns: 3 } },
+					{
+						type: 'SetLife',
+						payload: { player: 'player1', lifeTotal: 12 },
+					},
+					{
+						type: 'SetCounters',
+						payload: {
+							player: 'player1',
+							counters: [
+								{ type: 'poison', value: 3 },
+							],
+						},
+					},
+					{
+						type: 'SetLife',
+						payload: { player: 'player2', lifeTotal: 9 },
+					},
+					{
+						type: 'SetCounters',
+						payload: { player: 'player2', counters: [] },
+					},
+					{
+						type: 'SetCardsKept',
+						payload: { player: 'player2', cardsKept: 6 },
+					},
+					{
+						type: 'SetSideboardRevealed',
+						payload: { player: 'player2', revealed: true },
+					},
+					{
+						type: 'SetClock',
+						payload: { targetMs: 30_000 },
+					},
+					{
+						type: 'SetFirstPlayer',
+						payload: { player: 'player2' },
+					},
+					{
+						type: 'SetActivePlayer',
+						payload: { player: 'player1' },
+					},
+					{
+						type: 'SetTurnNumber',
+						payload: { turnNumber: 4 },
+					},
+					{
+						type: 'StartOvertime',
+						payload: { totalTurns: 3 },
+					},
 				],
 			},
 		}));
@@ -127,8 +175,14 @@ describe('feature Match Session client module', () => {
 			baseSequence: 4,
 			payload: {
 				commands: [
-					{ type: 'SetSideboardRevealed', payload: { player: 'player1', revealed: true } },
-					{ type: 'SetSideboardRevealed', payload: { player: 'player2', revealed: true } },
+					{
+						type: 'SetSideboardRevealed',
+						payload: { player: 'player1', revealed: true },
+					},
+					{
+						type: 'SetSideboardRevealed',
+						payload: { player: 'player2', revealed: true },
+					},
 				],
 			},
 		}));
@@ -169,7 +223,10 @@ describe('feature Match Session client module', () => {
 
 	it('orchestrates bulk clock actions from slot sessions', async () => {
 		repository.listSlots.mockResolvedValue([
-			{ id: 2, activeSession: createSession() },
+			{
+				id: 2,
+				activeSession: createSession(),
+			},
 			{ id: 3, activeSession: null },
 		]);
 		repository.sendCommand.mockResolvedValue(commandResult());

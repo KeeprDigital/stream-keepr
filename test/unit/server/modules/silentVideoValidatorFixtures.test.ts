@@ -21,7 +21,9 @@ describe('silent-video validator acceptance fixtures', () => {
 		for (const [name, fixture] of Object.entries(fixtures)) {
 			const bytes = Uint8Array.from(atob(fixture.base64), character => character.charCodeAt(0));
 			const processed = await processSilentVideo(bytes, {
-				sourceFileName: fixture.facts.canonicalMime === 'video/mp4' ? `${name}.mp4` : `${name}.webm`,
+				sourceFileName: fixture.facts.canonicalMime === 'video/mp4'
+					? `${name}.mp4`
+					: `${name}.webm`,
 				declaredMime: fixture.facts.canonicalMime,
 			});
 			expect(processed.report.outcome).toBe('accepted');

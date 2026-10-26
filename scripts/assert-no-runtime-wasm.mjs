@@ -111,14 +111,23 @@ export function runtimeWasmScan(directory) {
 
 	let files;
 	try {
-		files = [...scannableFiles(directory)];
+		files = [
+			...scannableFiles(directory),
+		];
 	}
 	catch (error) {
-		return { ok: false, lines: [`assert-no-runtime-wasm: cannot read ${directory} — ${error.message}`] };
+		return {
+			ok: false,
+			lines: [`assert-no-runtime-wasm: cannot read ${directory} — ${error.message}`],
+		};
 	}
 
-	if (files.length === 0)
-		return { ok: false, lines: [`assert-no-runtime-wasm: nothing to scan under ${directory}. A scan of nothing is not a pass.`] };
+	if (files.length === 0) {
+		return {
+			ok: false,
+			lines: [`assert-no-runtime-wasm: nothing to scan under ${directory}. A scan of nothing is not a pass.`],
+		};
+	}
 
 	const found = [];
 	for (const file of files) {
@@ -156,7 +165,9 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.a
 			process.stderr.write(`assert-no-runtime-wasm: ${failure}\n`);
 		if (broken.length === 0)
 			process.stdout.write('assert-no-runtime-wasm: self-test passed — the guard finds a planted regression and ignores Emscripten\'s `instanceof`.\n');
-		process.exit(broken.length === 0 ? 0 : 1);
+		process.exit(broken.length === 0
+			? 0
+			: 1);
 	}
 
 	if (!target) {

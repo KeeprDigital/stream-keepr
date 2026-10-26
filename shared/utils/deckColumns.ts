@@ -54,7 +54,9 @@ export function splitDeckGroupsIntoColumns<T>(
 
 	function evaluate(splitPoints: number[]) {
 		const columnHeights = splitPoints.map((end, index) => {
-			const start = index === 0 ? 0 : (splitPoints[index - 1] ?? 0);
+			const start = index === 0
+				? 0
+				: (splitPoints[index - 1] ?? 0);
 			return getColumnHeight(prefixSums, start, end);
 		});
 

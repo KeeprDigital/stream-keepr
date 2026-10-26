@@ -45,11 +45,15 @@ export function useMetagameModeData() {
 	// ── Response data ──
 	const archetypeData = computed<ArchetypeBreakdownResponse | null>(() => {
 		const read = freshness.data.value;
-		return read && read.viewMode !== 'cards' ? read.breakdown : null;
+		return read && read.viewMode !== 'cards'
+			? read.breakdown
+			: null;
 	});
 	const cardData = computed<CardBreakdownResponse | null>(() => {
 		const read = freshness.data.value;
-		return read?.viewMode === 'cards' ? read.breakdown : null;
+		return read?.viewMode === 'cards'
+			? read.breakdown
+			: null;
 	});
 
 	// ── Active data based on viewMode ──
@@ -96,7 +100,9 @@ export function useMetagameModeData() {
 		const data = activeData.value;
 		if (!data)
 			return [];
-		return 'entries' in data ? data.entries : [];
+		return 'entries' in data
+			? data.entries
+			: [];
 	});
 
 	// ── Chart ──
@@ -111,7 +117,9 @@ export function useMetagameModeData() {
 	// A chart is one page: it draws every bar at once (Other folds the rest),
 	// so it gives the Page Rotation nothing to page.
 	const pagedRows = computed<MetagameDisplayRow[]>(() =>
-		config.value.viewMode === 'chart' ? [] : displayRows.value,
+		config.value.viewMode === 'chart'
+			? []
+			: displayRows.value,
 	);
 	const {
 		rowCount,

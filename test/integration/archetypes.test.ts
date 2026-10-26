@@ -162,7 +162,10 @@ describe('archetypes API', () => {
 		it('pATCH /archetypes/:id/cards with empty cardIds clears key cards', async () => {
 			const data = (await $fetch(
 				`/api/events/${eventId}/archetypes/${keyCardArchetypeId}/cards`,
-				{ method: 'PATCH', body: { cardIds: [] } },
+				{
+					method: 'PATCH',
+					body: { cardIds: [] },
+				},
 			)) as any;
 
 			expect(data).toHaveProperty('keyCards');
@@ -175,7 +178,9 @@ describe('archetypes API', () => {
 				`/api/events/${eventId}/archetypes/${keyCardArchetypeId}/cards`,
 				{
 					method: 'PATCH',
-					body: { cardIds: [1, 2, 3, 4, 5, 6] },
+					body: {
+						cardIds: [1, 2, 3, 4, 5, 6],
+					},
 					ignoreResponseError: true,
 				},
 			);
@@ -208,7 +213,10 @@ describe('archetypes API', () => {
 		it('pATCH archetype response includes keyCards', async () => {
 			const data = (await $fetch(
 				`/api/events/${eventId}/archetypes/${keyCardArchetypeId}`,
-				{ method: 'PATCH', body: { name: 'Key Cards Test Updated' } },
+				{
+					method: 'PATCH',
+					body: { name: 'Key Cards Test Updated' },
+				},
 			)) as any;
 
 			expect(data).toHaveProperty('keyCards');

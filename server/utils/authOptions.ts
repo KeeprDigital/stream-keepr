@@ -96,7 +96,9 @@ export const authStaticOptions = {
 		expiresIn: AUTH_SESSION_EXPIRES_IN_SECONDS,
 		updateAge: AUTH_SESSION_UPDATE_AGE_SECONDS,
 	},
-	plugins: [admin()],
+	plugins: [
+		admin(),
+	],
 	/**
 	 * The multi-host form, because this installation genuinely has more than one
 	 * hostname and a single string would be wrong at four of them (#410).

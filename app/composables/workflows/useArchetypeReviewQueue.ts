@@ -48,12 +48,18 @@ export function useArchetypeReviewQueue() {
 		}
 
 		entries.sort((a, b) => {
-			const aReviewed = isDeckReviewed(a) ? 1 : 0;
-			const bReviewed = isDeckReviewed(b) ? 1 : 0;
+			const aReviewed = isDeckReviewed(a)
+				? 1
+				: 0;
+			const bReviewed = isDeckReviewed(b)
+				? 1
+				: 0;
 			if (aReviewed !== bReviewed)
 				return aReviewed - bReviewed;
 			const byName = a.displayName.localeCompare(b.displayName);
-			return byName !== 0 ? byName : a.player.name.localeCompare(b.player.name);
+			return byName !== 0
+				? byName
+				: a.player.name.localeCompare(b.player.name);
 		});
 
 		return entries;

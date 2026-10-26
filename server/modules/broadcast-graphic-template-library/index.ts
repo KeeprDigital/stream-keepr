@@ -157,7 +157,9 @@ export async function findBroadcastGraphicTemplateLibraryEntry(
 	// A Feature Match Layout Template is a real Installed Graphics Template and a
 	// perfectly valid identity — it is simply not an entry in *this* library, and
 	// answering with it would hand a caller a document it cannot place.
-	return installed?.kind === 'broadcast-graphic' ? installedEntry(installed) : undefined;
+	return installed?.kind === 'broadcast-graphic'
+		? installedEntry(installed)
+		: undefined;
 }
 
 export function broadcastGraphicTemplateLibrarySummary(

@@ -10,7 +10,9 @@ const mockApiHeaders = {
 };
 mockNuxtImport('useApiHeaders', () => () => mockApiHeaders);
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 mockNuxtImport('$fetch', () => mockFetch);
 
 describe('useEventDataResource', () => {
@@ -46,7 +48,9 @@ describe('useEventDataResource', () => {
 	describe('list', () => {
 		it('returns array responses directly', async () => {
 			const repo = useEventDataResource({ resourcePath: 'players' });
-			const players = [{ id: 1, name: 'A' }];
+			const players = [
+				{ id: 1, name: 'A' },
+			];
 			mockFetch.mockResolvedValue(players);
 			const result = await repo.list(1);
 			expect(result).toEqual(players);
@@ -54,9 +58,16 @@ describe('useEventDataResource', () => {
 
 		it('extracts items from object responses using resourcePath key', async () => {
 			const repo = useEventDataResource({ resourcePath: 'players' });
-			mockFetch.mockResolvedValue({ players: [{ id: 1 }], total: 1 });
+			mockFetch.mockResolvedValue({
+				players: [
+					{ id: 1 },
+				],
+				total: 1,
+			});
 			const result = await repo.list(1);
-			expect(result).toEqual([{ id: 1 }]);
+			expect(result).toEqual([
+				{ id: 1 },
+			]);
 		});
 
 		it('returns empty array for unrecognized response shapes', async () => {

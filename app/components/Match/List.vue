@@ -55,7 +55,9 @@ function getFeatureMatchLabel(matchId: number): string | null {
 	const assignment = getFeatureMatchAssignment(matchId);
 	if (assignment) {
 		const assignedSlotIndex = props.featureMatches.findIndex(slot => slot.id === assignment.slotId);
-		return assignedSlotIndex === -1 ? 'Featured' : `Featured ${assignedSlotIndex + 1}`;
+		return assignedSlotIndex === -1
+			? 'Featured'
+			: `Featured ${assignedSlotIndex + 1}`;
 	}
 
 	const liveSlotIndex = props.featureMatches.findIndex(slot => slot.matchId === matchId);
@@ -68,15 +70,17 @@ function getFeatureMatchMenuItems(matchId: number): DropdownMenuItem[][] {
 	if (featureMatchItems.value.length === 0)
 		return [];
 
-	return [featureMatchItems.value.map(item => ({
-		label: item.label,
-		icon: 'i-lucide-tv' as const,
-		player1DeckName: item.player1DeckName,
-		player1Colors: item.player1Colors,
-		player2DeckName: item.player2DeckName,
-		player2Colors: item.player2Colors,
-		onSelect: () => handlePromote(item.value, matchId),
-	}))];
+	return [
+		featureMatchItems.value.map(item => ({
+			label: item.label,
+			icon: 'i-lucide-tv' as const,
+			player1DeckName: item.player1DeckName,
+			player1Colors: item.player1Colors,
+			player2DeckName: item.player2DeckName,
+			player2Colors: item.player2Colors,
+			onSelect: () => handlePromote(item.value, matchId),
+		})),
+	];
 }
 
 function handlePromote(featureMatchId: number, matchId: number) {

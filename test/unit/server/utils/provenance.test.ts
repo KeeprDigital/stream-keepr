@@ -3,7 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { featureMatchSlots, matches, phases, players, rounds } from '~~/server/db/schema';
 import { pickManualWritable, PROVENANCE_ENTITIES } from '~~/server/utils/provenance';
 
-const TABLES = { players, phases, rounds, matches, featureMatchSlots } as const;
+const TABLES = {
+	players,
+	phases,
+	rounds,
+	matches,
+	featureMatchSlots,
+} as const;
 
 describe('provenance', () => {
 	describe('column classification', () => {

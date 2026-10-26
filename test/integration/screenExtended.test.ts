@@ -363,34 +363,63 @@ describe('screens extended API', () => {
 			textAlign: 'left',
 			color: '#ffffff',
 		};
-		const graphics = [{
-			id: 'lower-third',
-			name: 'Lower Third',
-			inputs: [
-				{ type: 'text', key: 'name', label: 'Name', required: true, updatePolicy: 'staged', default: 'Unnamed', maxLength: 40 },
-				{ type: 'choice', key: 'side', label: 'Side', required: false, updatePolicy: 'live', default: 'left', options: [{ value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }] },
-			],
-			sources: [{ key: 'player', label: 'Player', kind: 'player' }],
-			// A Graphic Input Binding names a field from the binding catalog, so this is a
-			// catalog field id rather than an arbitrary property path.
-			bindings: [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
-			items: [{
-				type: 'text',
-				id: 'name-line',
-				label: 'Name line',
-				visible: true,
-				anchor: 'top-left',
-				x: 0,
-				y: 0,
-				width: 600,
-				height: 120,
-				text: '{name} — {side}',
-				typography,
-				overflowPolicy: 'ellipsis',
-				minFontSize: 24,
-				placeholderStyles: { side: { fontWeight: 300, color: '#00d9ff' } },
-			}],
-		}];
+		const graphics = [
+			{
+				id: 'lower-third',
+				name: 'Lower Third',
+				inputs: [
+					{
+						type: 'text',
+						key: 'name',
+						label: 'Name',
+						required: true,
+						updatePolicy: 'staged',
+						default: 'Unnamed',
+						maxLength: 40,
+					},
+					{
+						type: 'choice',
+						key: 'side',
+						label: 'Side',
+						required: false,
+						updatePolicy: 'live',
+						default: 'left',
+						options: [
+							{ value: 'left', label: 'Left' },
+							{ value: 'right', label: 'Right' },
+						],
+					},
+				],
+				sources: [
+					{ key: 'player', label: 'Player', kind: 'player' },
+				],
+				// A Graphic Input Binding names a field from the binding catalog, so this is a
+				// catalog field id rather than an arbitrary property path.
+				bindings: [
+					{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+				],
+				items: [
+					{
+						type: 'text',
+						id: 'name-line',
+						label: 'Name line',
+						visible: true,
+						anchor: 'top-left',
+						x: 0,
+						y: 0,
+						width: 600,
+						height: 120,
+						text: '{name} — {side}',
+						typography,
+						overflowPolicy: 'ellipsis',
+						minFontSize: 24,
+						placeholderStyles: {
+							side: { fontWeight: 300, color: '#00d9ff' },
+						},
+					},
+				],
+			},
+		];
 
 		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
 			method: 'PATCH',
@@ -401,8 +430,23 @@ describe('screens extended API', () => {
 	});
 
 	it('refuses two Graphic Inputs sharing one key on the editor patch path', async () => {
-		const input = { type: 'text', key: 'name', label: 'Name', required: false, updatePolicy: 'staged', default: '', maxLength: 40 };
-		const graphics = [{ id: 'lower-third', name: 'Lower Third', items: [], inputs: [input, input] }];
+		const input = {
+			type: 'text',
+			key: 'name',
+			label: 'Name',
+			required: false,
+			updatePolicy: 'staged',
+			default: '',
+			maxLength: 40,
+		};
+		const graphics = [
+			{
+				id: 'lower-third',
+				name: 'Lower Third',
+				items: [],
+				inputs: [input, input],
+			},
+		];
 
 		const failure = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
 			method: 'PATCH',
@@ -414,7 +458,9 @@ describe('screens extended API', () => {
 	});
 
 	it('refuses to delete the authored Broadcast Graphics stack with a null patch', async () => {
-		const graphics = [{ id: 'keep-me', name: 'Keep Me', items: [] }];
+		const graphics = [
+			{ id: 'keep-me', name: 'Keep Me', items: [] },
+		];
 		await $fetch(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
 			method: 'PATCH',
 			body: { graphics },
@@ -433,11 +479,25 @@ describe('screens extended API', () => {
 		await expect($fetch(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
 			method: 'PATCH',
 			body: {
-				graphics: [{
-					id: 'invalid',
-					name: 'Invalid',
-					items: [{ type: 'media', id: 'logo', label: 'Media 1', visible: true, anchor: 'top-left', x: 0, y: 0, width: 10, height: 10 }],
-				}],
+				graphics: [
+					{
+						id: 'invalid',
+						name: 'Invalid',
+						items: [
+							{
+								type: 'media',
+								id: 'logo',
+								label: 'Media 1',
+								visible: true,
+								anchor: 'top-left',
+								x: 0,
+								y: 0,
+								width: 10,
+								height: 10,
+							},
+						],
+					},
+				],
 			},
 		})).rejects.toThrow();
 	});

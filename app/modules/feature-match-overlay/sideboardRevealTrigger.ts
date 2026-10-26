@@ -82,7 +82,14 @@ export function applySideboardRevealEdge(
 			const recipe = item.animation?.[phase];
 			if (!recipe)
 				return [];
-			return [{ itemId: item.id, phase, startedAt: now, endsAt: now + graphicAnimationRecipeEndMs(recipe) }];
+			return [
+				{
+					itemId: item.id,
+					phase,
+					startedAt: now,
+					endsAt: now + graphicAnimationRecipeEndMs(recipe),
+				},
+			];
 		}),
 	];
 }

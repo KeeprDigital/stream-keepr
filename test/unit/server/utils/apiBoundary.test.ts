@@ -92,7 +92,13 @@ describe('which API paths require a session', () => {
 		// Pages and assets are unavoidably public under `ssr: false`, and are
 		// gated client-side as UX. The one that would matter if it were wrong is
 		// the SPA shell, since the whole application is served from it.
-		for (const path of ['/', '/login', '/event/12/screen/main', '/_nuxt/entry.js', '/favicon.ico'])
+		for (const path of [
+			'/',
+			'/login',
+			'/event/12/screen/main',
+			'/_nuxt/entry.js',
+			'/favicon.ico',
+		])
 			expect(apiPathRequiresSession(path)).toBe(false);
 	});
 

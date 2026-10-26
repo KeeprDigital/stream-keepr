@@ -13,7 +13,15 @@ vi.stubGlobal('createError', (opts: any) => {
 
 const { playerListService } = await import('~~/server/services/playerList');
 
-const SELECT_CHAIN_METHODS = ['from', 'where', 'limit', 'orderBy', 'innerJoin', 'leftJoin', 'groupBy'] as const;
+const SELECT_CHAIN_METHODS = [
+	'from',
+	'where',
+	'limit',
+	'orderBy',
+	'innerJoin',
+	'leftJoin',
+	'groupBy',
+] as const;
 
 function createSelectChain() {
 	const chain = {} as Record<typeof SELECT_CHAIN_METHODS[number], ReturnType<typeof vi.fn>>;
@@ -33,7 +41,12 @@ describe('playerListService', () => {
 
 	describe('findByEventId', () => {
 		it('returns lists with member counts', async () => {
-			const lists = [{ ...createMockPlayerList(), memberCount: 3 }];
+			const lists = [
+				{
+					...createMockPlayerList(),
+					memberCount: 3,
+				},
+			];
 			getChain('select').orderBy.mockResolvedValue(lists);
 
 			const result = await playerListService().findByEventId(1);
@@ -100,7 +113,9 @@ describe('playerListService', () => {
 
 	describe('remove', () => {
 		it('returns true when deleted', async () => {
-			getChain('delete').returning.mockResolvedValue([createMockPlayerList()]);
+			getChain('delete').returning.mockResolvedValue([
+				createMockPlayerList(),
+			]);
 
 			const result = await playerListService().remove(1, 1);
 
@@ -122,9 +137,14 @@ describe('playerListService', () => {
 			const listChain = createSelectChain();
 			listChain.limit.mockResolvedValueOnce([list]);
 			const validationChain = createSelectChain();
-			validationChain.where.mockResolvedValueOnce([{ id: 5 }, { id: 6 }]);
+			validationChain.where.mockResolvedValueOnce([
+				{ id: 5 },
+				{ id: 6 },
+			]);
 			const maxChain = createSelectChain();
-			maxChain.where.mockResolvedValueOnce([{ maxOrder: 2 }]);
+			maxChain.where.mockResolvedValueOnce([
+				{ maxOrder: 2 },
+			]);
 			mockDb.select
 				.mockReset()
 				.mockReturnValueOnce(listChain)
@@ -133,8 +153,18 @@ describe('playerListService', () => {
 			// The JSON expansion inserts all rows with one bound payload.
 			mockDb.batch.mockResolvedValue([
 				[
-					{ id: 10, listId: 1, playerId: 5, sortOrder: 3 },
-					{ id: 11, listId: 1, playerId: 6, sortOrder: 4 },
+					{
+						id: 10,
+						listId: 1,
+						playerId: 5,
+						sortOrder: 3,
+					},
+					{
+						id: 11,
+						listId: 1,
+						playerId: 6,
+						sortOrder: 4,
+					},
 				],
 			]);
 
@@ -150,22 +180,28 @@ describe('playerListService', () => {
 		it('validates and inserts the 500-ID API maximum without exhausting D1 bindings', async () => {
 			const playerIds = Array.from({ length: 500 }, (_, index) => index + 1);
 			const listChain = createSelectChain();
-			listChain.limit.mockResolvedValueOnce([createMockPlayerList()]);
+			listChain.limit.mockResolvedValueOnce([
+				createMockPlayerList(),
+			]);
 			const validationChain = createSelectChain();
 			validationChain.where.mockResolvedValueOnce(playerIds.map(id => ({ id })));
 			const maxChain = createSelectChain();
-			maxChain.where.mockResolvedValueOnce([{ maxOrder: null }]);
+			maxChain.where.mockResolvedValueOnce([
+				{ maxOrder: null },
+			]);
 			mockDb.select
 				.mockReset()
 				.mockReturnValueOnce(listChain)
 				.mockReturnValueOnce(validationChain)
 				.mockReturnValueOnce(maxChain);
-			mockDb.batch.mockResolvedValueOnce([playerIds.map((playerId, sortOrder) => ({
-				id: sortOrder + 1,
-				listId: 1,
-				playerId,
-				sortOrder,
-			}))]);
+			mockDb.batch.mockResolvedValueOnce([
+				playerIds.map((playerId, sortOrder) => ({
+					id: sortOrder + 1,
+					listId: 1,
+					playerId,
+					sortOrder,
+				})),
+			]);
 
 			const result = await playerListService().addMembers(1, 1, playerIds);
 
@@ -180,16 +216,27 @@ describe('playerListService', () => {
 			const listChain = createSelectChain();
 			listChain.limit.mockResolvedValueOnce([list]);
 			const validationChain = createSelectChain();
-			validationChain.where.mockResolvedValueOnce([{ id: 5 }]);
+			validationChain.where.mockResolvedValueOnce([
+				{ id: 5 },
+			]);
 			const maxChain = createSelectChain();
-			maxChain.where.mockResolvedValueOnce([{ maxOrder: null }]);
+			maxChain.where.mockResolvedValueOnce([
+				{ maxOrder: null },
+			]);
 			mockDb.select
 				.mockReset()
 				.mockReturnValueOnce(listChain)
 				.mockReturnValueOnce(validationChain)
 				.mockReturnValueOnce(maxChain);
 			mockDb.batch.mockResolvedValue([
-				[{ id: 10, listId: 1, playerId: 5, sortOrder: 0 }],
+				[
+					{
+						id: 10,
+						listId: 1,
+						playerId: 5,
+						sortOrder: 0,
+					},
+				],
 			]);
 
 			const result = await playerListService().addMembers(1, 1, [5]);
@@ -204,9 +251,13 @@ describe('playerListService', () => {
 			const listChain = createSelectChain();
 			listChain.limit.mockResolvedValueOnce([list]);
 			const validationChain = createSelectChain();
-			validationChain.where.mockResolvedValueOnce([{ id: 5 }]);
+			validationChain.where.mockResolvedValueOnce([
+				{ id: 5 },
+			]);
 			mockDb.select.mockReset().mockReturnValueOnce(listChain).mockReturnValueOnce(validationChain);
-			getChain('delete').returning.mockResolvedValue([{ id: 1, listId: 1, playerId: 5 }]);
+			getChain('delete').returning.mockResolvedValue([
+				{ id: 1, listId: 1, playerId: 5 },
+			]);
 
 			const result = await playerListService().removeMember(1, 1, 5);
 
@@ -218,7 +269,9 @@ describe('playerListService', () => {
 			const listChain = createSelectChain();
 			listChain.limit.mockResolvedValueOnce([list]);
 			const validationChain = createSelectChain();
-			validationChain.where.mockResolvedValueOnce([{ id: 999 }]);
+			validationChain.where.mockResolvedValueOnce([
+				{ id: 999 },
+			]);
 			mockDb.select.mockReset().mockReturnValueOnce(listChain).mockReturnValueOnce(validationChain);
 			getChain('delete').returning.mockResolvedValue([]);
 
@@ -234,11 +287,17 @@ describe('playerListService', () => {
 			const listChain = createSelectChain();
 			listChain.limit.mockResolvedValueOnce([list]);
 			const validationChain = createSelectChain();
-			validationChain.where.mockResolvedValueOnce([{ id: 5 }, { id: 6 }]);
+			validationChain.where.mockResolvedValueOnce([
+				{ id: 5 },
+				{ id: 6 },
+			]);
 			mockDb.select.mockReset().mockReturnValueOnce(listChain).mockReturnValueOnce(validationChain);
 			// batchRemoveMembers now uses db.batch; each inner array is the returning() for one DELETE chunk
 			mockDb.batch.mockResolvedValueOnce([
-				[{ id: 1, listId: 1, playerId: 5 }, { id: 2, listId: 1, playerId: 6 }],
+				[
+					{ id: 1, listId: 1, playerId: 5 },
+					{ id: 2, listId: 1, playerId: 6 },
+				],
 			]);
 
 			const result = await playerListService().batchRemoveMembers(1, 1, [5, 6]);
@@ -252,7 +311,9 @@ describe('playerListService', () => {
 			const listChain = createSelectChain();
 			listChain.limit.mockResolvedValueOnce([list]);
 			const validationChain = createSelectChain();
-			validationChain.where.mockResolvedValueOnce([{ id: 999 }]);
+			validationChain.where.mockResolvedValueOnce([
+				{ id: 999 },
+			]);
 			mockDb.select.mockReset().mockReturnValueOnce(listChain).mockReturnValueOnce(validationChain);
 			getChain('delete').returning.mockResolvedValue([]);
 
@@ -264,8 +325,13 @@ describe('playerListService', () => {
 
 	describe('getMemberPlayerIds', () => {
 		it('returns array of player IDs', async () => {
-			getChain('select').limit.mockResolvedValue([createMockPlayerList()]);
-			getChain('select').orderBy.mockResolvedValue([{ playerId: 10 }, { playerId: 20 }]);
+			getChain('select').limit.mockResolvedValue([
+				createMockPlayerList(),
+			]);
+			getChain('select').orderBy.mockResolvedValue([
+				{ playerId: 10 },
+				{ playerId: 20 },
+			]);
 
 			const result = await playerListService().getMemberPlayerIds(1, 1);
 
@@ -273,7 +339,9 @@ describe('playerListService', () => {
 		});
 
 		it('returns empty array when no members', async () => {
-			getChain('select').limit.mockResolvedValue([createMockPlayerList()]);
+			getChain('select').limit.mockResolvedValue([
+				createMockPlayerList(),
+			]);
 			getChain('select').orderBy.mockResolvedValue([]);
 
 			const result = await playerListService().getMemberPlayerIds(1, 1);
@@ -284,7 +352,9 @@ describe('playerListService', () => {
 
 	describe('getMemberCount', () => {
 		it('returns the current number of members for a list', async () => {
-			getChain('select').where.mockResolvedValue([{ memberCount: 4 }]);
+			getChain('select').where.mockResolvedValue([
+				{ memberCount: 4 },
+			]);
 
 			const result = await playerListService().getMemberCount(1, 1);
 
@@ -299,7 +369,9 @@ describe('playerListService', () => {
 				{ id: 1, name: 'Player 1', eventId: 1 },
 				{ id: 2, name: 'Player 2', eventId: 1 },
 			];
-			getChain('select').limit.mockResolvedValue([createMockPlayerList()]);
+			getChain('select').limit.mockResolvedValue([
+				createMockPlayerList(),
+			]);
 			getChain('select').orderBy.mockResolvedValue(members);
 
 			const result = await playerListService().getMembers(1, 1);
@@ -309,7 +381,9 @@ describe('playerListService', () => {
 		});
 
 		it('returns empty array when no members', async () => {
-			getChain('select').limit.mockResolvedValue([createMockPlayerList()]);
+			getChain('select').limit.mockResolvedValue([
+				createMockPlayerList(),
+			]);
 			getChain('select').orderBy.mockResolvedValue([]);
 
 			const result = await playerListService().getMembers(1, 1);
@@ -324,7 +398,11 @@ describe('playerListService', () => {
 			const listChain = createSelectChain();
 			listChain.limit.mockResolvedValueOnce([list]);
 			const membersChain = createSelectChain();
-			membersChain.orderBy.mockResolvedValueOnce([{ playerId: 10 }, { playerId: 20 }, { playerId: 30 }]);
+			membersChain.orderBy.mockResolvedValueOnce([
+				{ playerId: 10 },
+				{ playerId: 20 },
+				{ playerId: 30 },
+			]);
 			mockDb.select.mockReset().mockReturnValueOnce(listChain).mockReturnValueOnce(membersChain);
 
 			const result = await playerListService().reorderMembers(1, 1, [20, 10, 30]);
@@ -336,9 +414,15 @@ describe('playerListService', () => {
 
 		it('rejects a subset instead of silently assigning partial order', async () => {
 			const listChain = createSelectChain();
-			listChain.limit.mockResolvedValueOnce([createMockPlayerList()]);
+			listChain.limit.mockResolvedValueOnce([
+				createMockPlayerList(),
+			]);
 			const membersChain = createSelectChain();
-			membersChain.orderBy.mockResolvedValueOnce([{ playerId: 10 }, { playerId: 20 }, { playerId: 30 }]);
+			membersChain.orderBy.mockResolvedValueOnce([
+				{ playerId: 10 },
+				{ playerId: 20 },
+				{ playerId: 30 },
+			]);
 			mockDb.select.mockReset().mockReturnValueOnce(listChain).mockReturnValueOnce(membersChain);
 
 			await expect(playerListService().reorderMembers(1, 1, [20, 10])).rejects.toMatchObject({
@@ -350,9 +434,15 @@ describe('playerListService', () => {
 
 		it('rejects a duplicated member even when the payload length matches', async () => {
 			const listChain = createSelectChain();
-			listChain.limit.mockResolvedValueOnce([createMockPlayerList()]);
+			listChain.limit.mockResolvedValueOnce([
+				createMockPlayerList(),
+			]);
 			const membersChain = createSelectChain();
-			membersChain.orderBy.mockResolvedValueOnce([{ playerId: 10 }, { playerId: 20 }, { playerId: 30 }]);
+			membersChain.orderBy.mockResolvedValueOnce([
+				{ playerId: 10 },
+				{ playerId: 20 },
+				{ playerId: 30 },
+			]);
 			mockDb.select.mockReset().mockReturnValueOnce(listChain).mockReturnValueOnce(membersChain);
 
 			await expect(playerListService().reorderMembers(1, 1, [20, 20, 30])).rejects.toMatchObject({

@@ -352,7 +352,10 @@ export function localConfigurationLogLine(
 	if (missing.length === 0)
 		return undefined;
 
-	return { level: 'warn', message: localConfigurationBootNotice(missing) };
+	return {
+		level: 'warn',
+		message: localConfigurationBootNotice(missing),
+	};
 }
 
 /** The warning an intentionally unauthenticated development server emits. */

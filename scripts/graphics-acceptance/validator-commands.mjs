@@ -59,7 +59,11 @@ function stripAnsi(text) {
  */
 export function executeWrangler(argumentList, { cwd, env }) {
 	return new Promise((resolve, reject) => {
-		const child = spawn('npx', ['wrangler', ...argumentList], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+		const child = spawn('npx', ['wrangler', ...argumentList], {
+			cwd,
+			env,
+			stdio: ['ignore', 'pipe', 'pipe'],
+		});
 		let stdout = '';
 		child.stdout.setEncoding('utf8').on('data', chunk => stdout += chunk);
 		child.stderr.resume();
@@ -76,9 +80,16 @@ export function parseInstanceDescription(text) {
 	const status = text.match(/^Status:[^\S\n]+(\S[^\n]*)$/m)?.[1]?.trim() ?? '';
 	if (!status.includes('Complete'))
 		return { status };
-	const raw = [...text.matchAll(/^\s+Output:\s+("(?:\\.|[^"\\])*")$/gm)].at(-1)?.[1];
+	const raw = [
+		...text.matchAll(/^\s+Output:\s+("(?:\\.|[^"\\])*")$/gm),
+	].at(-1)?.[1];
 	try {
-		return { status, output: raw ? JSON.parse(JSON.parse(raw)) : undefined };
+		return {
+			status,
+			output: raw
+				? JSON.parse(JSON.parse(raw))
+				: undefined,
+		};
 	}
 	catch {
 		return { status, output: undefined };
@@ -110,7 +121,9 @@ export function createWranglerCommands({ repoRoot, execute = executeWrangler, ba
 		return stripAnsi(stdout);
 	}
 
-	const storage = target => target.local ? ['--local', '--persist-to', target.local] : ['--remote'];
+	const storage = target => target.local
+		? ['--local', '--persist-to', target.local]
+		: ['--remote'];
 	const objectPath = (target, key) => `${target.stagingBucket}/${key}`;
 
 	async function withWorkspace(use) {
@@ -125,7 +138,12 @@ export function createWranglerCommands({ repoRoot, execute = executeWrangler, ba
 
 	return {
 		async probeBucket({ target }) {
-			await wrangler('bucket-info', target, ['r2', 'bucket', 'info', target.stagingBucket]);
+			await wrangler('bucket-info', target, [
+				'r2',
+				'bucket',
+				'info',
+				target.stagingBucket,
+			]);
 		},
 		async probeWorkflow({ target }) {
 			await wrangler('workflow-describe', target, ['workflows', 'describe', target.workflow]);
@@ -148,16 +166,37 @@ export function createWranglerCommands({ repoRoot, execute = executeWrangler, ba
 		},
 		async getObject({ target, key }) {
 			return await withWorkspace(async (file) => {
-				await wrangler('get', target, ['r2', 'object', 'get', objectPath(target, key), '--file', file, ...storage(target)]);
+				await wrangler('get', target, [
+					'r2',
+					'object',
+					'get',
+					objectPath(target, key),
+					'--file',
+					file,
+					...storage(target),
+				]);
 				return await readFile(file);
 			});
 		},
 		/** R2 deletes are idempotent: an absent key deletes successfully, which is what makes a retry safe. */
 		async deleteObject({ target, key }) {
-			await wrangler('delete', target, ['r2', 'object', 'delete', objectPath(target, key), ...storage(target)]);
+			await wrangler('delete', target, [
+				'r2',
+				'object',
+				'delete',
+				objectPath(target, key),
+				...storage(target),
+			]);
 		},
 		async triggerWorkflow({ target, id, params }) {
-			await wrangler('trigger', target, ['workflows', 'trigger', target.workflow, JSON.stringify(params), '--id', id]);
+			await wrangler('trigger', target, [
+				'workflows',
+				'trigger',
+				target.workflow,
+				JSON.stringify(params),
+				'--id',
+				id,
+			]);
 		},
 		async describeInstance({ target, id }) {
 			return parseInstanceDescription(await wrangler('describe', target, [

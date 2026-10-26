@@ -64,7 +64,9 @@ export async function applyTalentUpdates<T>(options: TalentUpdateOptions<T>) {
 	const talentsToUpdate: Array<{ current: TalentSummary; requested: RequestedTalent }> = [];
 
 	for (const requested of options.requestedTalents) {
-		const current = requested.id === undefined ? undefined : currentById.get(requested.id);
+		const current = requested.id === undefined
+			? undefined
+			: currentById.get(requested.id);
 
 		// An id with no talent behind it is an entry whose talent went away while the
 		// operator was editing. Their list is what they asked the event to be, so the

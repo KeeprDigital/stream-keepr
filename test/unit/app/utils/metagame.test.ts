@@ -43,11 +43,16 @@ describe('maxMetaShare', () => {
 	});
 
 	it('returns the value when only one entry exists', () => {
-		expect(maxMetaShare([{ metaShare: 42 }])).toBe(42);
+		expect(maxMetaShare([
+			{ metaShare: 42 },
+		])).toBe(42);
 	});
 
 	it('returns 1 when all metaShare values are 0', () => {
-		const entries = [{ metaShare: 0 }, { metaShare: 0 }];
+		const entries = [
+			{ metaShare: 0 },
+			{ metaShare: 0 },
+		];
 		expect(maxMetaShare(entries)).toBe(1);
 	});
 

@@ -48,10 +48,12 @@ function getPlayerActiveDeck(player: Player) {
 }
 
 // Sorting state
-const sorting = ref<Array<{ id: string; desc: boolean }>>([{
-	id: 'position',
-	desc: false,
-}]);
+const sorting = ref<Array<{ id: string; desc: boolean }>>([
+	{
+		id: 'position',
+		desc: false,
+	},
+]);
 
 // Row selection state (TanStack managed)
 const rowSelection = ref<RowSelectionState>({});
@@ -105,11 +107,13 @@ function getRowMenuItems(player: Player): DropdownMenuItem[][] {
 	// Send deck to screen
 	if (getMtgGameData(player.gameData).deckName && hasDeckScreens.value) {
 		if (deckScreens.value.length === 1) {
-			groups.push([{
-				label: 'Send Deck to Screen',
-				icon: 'i-lucide-send' as const,
-				onSelect: () => emit('sendDeckToScreen', player.id),
-			}]);
+			groups.push([
+				{
+					label: 'Send Deck to Screen',
+					icon: 'i-lucide-send' as const,
+					onSelect: () => emit('sendDeckToScreen', player.id),
+				},
+			]);
 		}
 		else {
 			groups.push(deckScreens.value.map(screen => ({
@@ -120,20 +124,24 @@ function getRowMenuItems(player: Player): DropdownMenuItem[][] {
 		}
 	}
 
-	groups.push([{
-		label: 'View Match History',
-		icon: 'i-lucide-history' as const,
-		onSelect: () => emit('viewMatchHistory', player),
-	}]);
+	groups.push([
+		{
+			label: 'View Match History',
+			icon: 'i-lucide-history' as const,
+			onSelect: () => emit('viewMatchHistory', player),
+		},
+	]);
 
 	// Send match history to screen
 	if (hasPlayerHistoryScreens.value) {
 		if (playerHistoryScreens.value.length === 1) {
-			groups.push([{
-				label: 'Send Match History to Screen',
-				icon: 'i-lucide-history' as const,
-				onSelect: () => emit('sendMatchHistoryToScreen', player.id),
-			}]);
+			groups.push([
+				{
+					label: 'Send Match History to Screen',
+					icon: 'i-lucide-history' as const,
+					onSelect: () => emit('sendMatchHistoryToScreen', player.id),
+				},
+			]);
 		}
 		else {
 			groups.push(playerHistoryScreens.value.map(screen => ({
@@ -169,7 +177,9 @@ function getRowMenuItems(player: Player): DropdownMenuItem[][] {
 const activeDropdownPlayerId = ref<number | null>(null);
 
 function toggleDropdown(playerId: number) {
-	activeDropdownPlayerId.value = activeDropdownPlayerId.value === playerId ? null : playerId;
+	activeDropdownPlayerId.value = activeDropdownPlayerId.value === playerId
+		? null
+		: playerId;
 }
 
 // Static table config (avoid re-allocation on every render)

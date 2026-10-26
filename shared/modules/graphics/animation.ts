@@ -75,14 +75,54 @@ export interface GraphicSlideDirectionDefinition {
  * 100 pixels" clears 100 pixels of each edge it has to clear.
  */
 export const GRAPHIC_SLIDE_DIRECTIONS: readonly GraphicSlideDirectionDefinition[] = [
-	{ value: 'north', label: 'Up', x: 0, y: -1 },
-	{ value: 'north-east', label: 'Up right', x: 1, y: -1 },
-	{ value: 'east', label: 'Right', x: 1, y: 0 },
-	{ value: 'south-east', label: 'Down right', x: 1, y: 1 },
-	{ value: 'south', label: 'Down', x: 0, y: 1 },
-	{ value: 'south-west', label: 'Down left', x: -1, y: 1 },
-	{ value: 'west', label: 'Left', x: -1, y: 0 },
-	{ value: 'north-west', label: 'Up left', x: -1, y: -1 },
+	{
+		value: 'north',
+		label: 'Up',
+		x: 0,
+		y: -1,
+	},
+	{
+		value: 'north-east',
+		label: 'Up right',
+		x: 1,
+		y: -1,
+	},
+	{
+		value: 'east',
+		label: 'Right',
+		x: 1,
+		y: 0,
+	},
+	{
+		value: 'south-east',
+		label: 'Down right',
+		x: 1,
+		y: 1,
+	},
+	{
+		value: 'south',
+		label: 'Down',
+		x: 0,
+		y: 1,
+	},
+	{
+		value: 'south-west',
+		label: 'Down left',
+		x: -1,
+		y: 1,
+	},
+	{
+		value: 'west',
+		label: 'Left',
+		x: -1,
+		y: 0,
+	},
+	{
+		value: 'north-west',
+		label: 'Up left',
+		x: -1,
+		y: -1,
+	},
 ];
 
 export function resolveGraphicSlideDirection(
@@ -139,7 +179,9 @@ export function graphicAnimationEasedProgress(easing: GraphicAnimationEasing, pr
 		case 'ease-out':
 			return 1 - ((1 - t) ** 2);
 		case 'ease-in-out':
-			return t < 0.5 ? 2 * t * t : 1 - (2 * ((1 - t) ** 2));
+			return t < 0.5
+				? 2 * t * t
+				: 1 - (2 * ((1 - t) ** 2));
 		case 'back-in':
 			return ((BACK_OVERSHOOT + 1) * t * t * t) - (BACK_OVERSHOOT * t * t);
 		case 'back-out':
@@ -175,7 +217,9 @@ export function graphicAnimationStaggerOffset(
 		return 0;
 
 	const selected = directItemIds.filter(id => stagger.itemIds.includes(id));
-	const ordered = stagger.order === 'reverse-list' ? [...selected].reverse() : selected;
+	const ordered = stagger.order === 'reverse-list'
+		? [...selected].reverse()
+		: selected;
 	const index = ordered.indexOf(itemId);
 	if (index < 0)
 		return 0;
@@ -247,7 +291,9 @@ export function broadcastGraphicPhaseDurationMs(
 	const topLevelIds = graphic.items.map(item => item.id);
 	const graphicStagger = graphicAnimationStagger(graphic.animation, phase);
 
-	let latest = own ? graphicAnimationRecipeEndMs(own) : 0;
+	let latest = own
+		? graphicAnimationRecipeEndMs(own)
+		: 0;
 
 	for (const item of graphic.items) {
 		const offset = graphicAnimationStaggerOffset(graphicStagger, topLevelIds, item.id);
@@ -343,8 +389,12 @@ export function createDefaultGraphicAnimationRecipe(
 	}
 
 	return {
-		duration: phase === 'exit' ? 300 : 400,
-		easing: phase === 'exit' ? 'ease-in' : 'ease-out',
+		duration: phase === 'exit'
+			? 300
+			: 400,
+		easing: phase === 'exit'
+			? 'ease-in'
+			: 'ease-out',
 		delay: 0,
 		fade: { opacity: 0 },
 	};
@@ -370,7 +420,12 @@ export const GRAPHIC_ANIMATION_PRESETS: readonly GraphicAnimationPreset[] = [
 		id: 'fade-in',
 		label: 'Fade in',
 		phase: 'enter',
-		create: () => ({ duration: 400, easing: 'ease-out', delay: 0, fade: { opacity: 0 } }),
+		create: () => ({
+			duration: 400,
+			easing: 'ease-out',
+			delay: 0,
+			fade: { opacity: 0 },
+		}),
 	},
 	{
 		id: 'slide-up-in',
@@ -388,7 +443,12 @@ export const GRAPHIC_ANIMATION_PRESETS: readonly GraphicAnimationPreset[] = [
 		id: 'wipe-in',
 		label: 'Wipe in from left',
 		phase: 'enter',
-		create: () => ({ duration: 450, easing: 'ease-in-out', delay: 0, reveal: { edge: 'left' } }),
+		create: () => ({
+			duration: 450,
+			easing: 'ease-in-out',
+			delay: 0,
+			reveal: { edge: 'left' },
+		}),
 	},
 	{
 		id: 'pop-in',
@@ -443,19 +503,34 @@ export const GRAPHIC_ANIMATION_PRESETS: readonly GraphicAnimationPreset[] = [
 		id: 'cross-fade',
 		label: 'Cross fade',
 		phase: 'update',
-		create: () => ({ duration: 300, easing: 'linear', delay: 0, fade: { opacity: 0 } }),
+		create: () => ({
+			duration: 300,
+			easing: 'linear',
+			delay: 0,
+			fade: { opacity: 0 },
+		}),
 	},
 	{
 		id: 'update-wipe',
 		label: 'Wipe across',
 		phase: 'update',
-		create: () => ({ duration: 400, easing: 'ease-in-out', delay: 0, reveal: { edge: 'left' } }),
+		create: () => ({
+			duration: 400,
+			easing: 'ease-in-out',
+			delay: 0,
+			reveal: { edge: 'left' },
+		}),
 	},
 	{
 		id: 'fade-out',
 		label: 'Fade out',
 		phase: 'exit',
-		create: () => ({ duration: 300, easing: 'ease-in', delay: 0, fade: { opacity: 0 } }),
+		create: () => ({
+			duration: 300,
+			easing: 'ease-in',
+			delay: 0,
+			fade: { opacity: 0 },
+		}),
 	},
 	{
 		id: 'slide-down-out',
@@ -473,7 +548,12 @@ export const GRAPHIC_ANIMATION_PRESETS: readonly GraphicAnimationPreset[] = [
 		id: 'wipe-out',
 		label: 'Wipe out to right',
 		phase: 'exit',
-		create: () => ({ duration: 400, easing: 'ease-in-out', delay: 0, reveal: { edge: 'right' } }),
+		create: () => ({
+			duration: 400,
+			easing: 'ease-in-out',
+			delay: 0,
+			reveal: { edge: 'right' },
+		}),
 	},
 ];
 
@@ -498,7 +578,9 @@ export function clampGraphicAnimationDuration(value: number): number {
 export function graphicAnimationOwners(
 	graphic: Pick<BroadcastGraphicConfig, 'items'>,
 ): GraphicItemConfig[] {
-	return graphic.items.flatMap(item => item.type === 'group' ? [item, ...item.children] : [item]);
+	return graphic.items.flatMap(item => item.type === 'group'
+		? [item, ...item.children]
+		: [item]);
 }
 
 /* ────────────────────────────────────────────────
@@ -600,7 +682,9 @@ export function graphicClearParentDistance(
 	if (step.y < 0)
 		requirements.push(Math.max(0, rect.y + rect.height));
 
-	return requirements.length === 0 ? 0 : Math.min(...requirements);
+	return requirements.length === 0
+		? 0
+		: Math.min(...requirements);
 }
 
 /** Which of its parent's dimensions a fixed slide distance is measured against. */
@@ -617,8 +701,12 @@ export function graphicSlideDistanceReference(
 	direction: GraphicSlideDirection,
 ): { dimension: GraphicSlideDistanceDimension; span: number } {
 	const step = resolveGraphicSlideDirection(direction);
-	if (step.x !== 0 && step.y !== 0)
-		return { dimension: 'shorter-side', span: Math.min(parent.width, parent.height) };
+	if (step.x !== 0 && step.y !== 0) {
+		return {
+			dimension: 'shorter-side',
+			span: Math.min(parent.width, parent.height),
+		};
+	}
 	return step.x !== 0
 		? { dimension: 'width', span: parent.width }
 		: { dimension: 'height', span: parent.height };
@@ -680,7 +768,9 @@ function onScreenExcursion(recipe: GraphicOnScreenAnimationRecipe, elapsed: numb
 	// cycle is what keeps the turn at exactly the full excursion and both ends exactly
 	// at rest — easing a triangle as one curve would land the turn short.
 	const travel = withinCycle / duration;
-	const leg = travel <= 0.5 ? travel * 2 : (1 - travel) * 2;
+	const leg = travel <= 0.5
+		? travel * 2
+		: (1 - travel) * 2;
 	return graphicAnimationEasedProgress(recipe.easing, leg);
 }
 
@@ -714,7 +804,9 @@ export function graphicAnimationExcursion(input: GraphicAnimationProjectionInput
 	// `resolveGraphicAnimationValues` is where the two are turned into one value —
 	// there is nothing here for a caller to combine, and nothing that can be projected
 	// out of step with its counterpart.
-	return input.phase === 'exit' ? eased : 1 - eased;
+	return input.phase === 'exit'
+		? eased
+		: 1 - eased;
 }
 
 /**
@@ -796,7 +888,10 @@ export function resolveGraphicAnimationValues(input: GraphicAnimationProjectionI
 	// final frame instead of being gone.
 	if (input.phase === 'update') {
 		const outgoing = ownerValues(recipe, input, 1 - excursion, 1, true);
-		return { ...ownerValues(recipe, input, excursion, -1, false), outgoing };
+		return {
+			...ownerValues(recipe, input, excursion, -1, false),
+			outgoing,
+		};
 	}
 
 	// A settled phase is indistinguishable from no animation at all. That is the
@@ -875,7 +970,10 @@ export function broadcastGraphicOnScreenRunMs(
 	const owners: (GraphicAnimation | undefined)[] = [
 		graphic.animation,
 		...graphic.items.flatMap(item => item.type === 'group'
-			? [item.animation, ...item.children.map(child => child.animation)]
+			? [
+					item.animation,
+					...item.children.map(child => child.animation),
+				]
 			: [item.animation]),
 	];
 
@@ -949,7 +1047,9 @@ export function graphicAnimationTimelineAt(
 	if (segments.length === 0)
 		return null;
 
-	const position = Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0;
+	const position = Number.isFinite(elapsed)
+		? Math.max(0, elapsed)
+		: 0;
 	let consumed = 0;
 
 	for (const segment of segments) {

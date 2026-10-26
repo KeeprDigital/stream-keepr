@@ -75,7 +75,9 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		}
 
 		// Legacy/manual snapshots may only have retained display data.
-		return playerName ? findPlayerByName(playerName) : undefined;
+		return playerName
+			? findPlayerByName(playerName)
+			: undefined;
 	}
 
 	function resolveMatchPlayerLabel(
@@ -91,7 +93,9 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		// A historical match can outlive the active-player projection. Stable IDs
 		// are still sufficient to load its exact submitted deck, so retain a
 		// deterministic label for card-screen display rather than dropping it.
-		return playerId != null && deckId != null ? `Player ${playerId}` : undefined;
+		return playerId != null && deckId != null
+			? `Player ${playerId}`
+			: undefined;
 	}
 
 	async function resolvePlayerDeckResponse(
@@ -105,7 +109,9 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		if (deckId === null)
 			return null;
 
-		const resolvedPlayerId = player?.id ?? (deckId != null ? playerId : null);
+		const resolvedPlayerId = player?.id ?? (deckId != null
+			? playerId
+			: null);
 		if (resolvedPlayerId == null || (deckId === undefined && !getMtgGameData(player?.gameData).deckName))
 			return null;
 
@@ -122,7 +128,9 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 			player?.updatedAt ?? `match-deck:${deckId}`,
 			deckId !== undefined
 				? { deckId }
-				: selectedRound ? { phaseId: selectedRound.phaseId } : {},
+				: selectedRound
+					? { phaseId: selectedRound.phaseId }
+					: {},
 		);
 	}
 
@@ -197,8 +205,18 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 				},
 				back: null,
 			},
-			orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
-			displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
+			orientationData: {
+				flipable: false,
+				turnable: false,
+				rotateable: false,
+				counterRotateable: false,
+			},
+			displayData: {
+				flipped: false,
+				rotated: false,
+				counterRotated: false,
+				turnedOver: false,
+			},
 			deckCounterTypes: [],
 			deckTokens: [],
 		};
@@ -290,8 +308,12 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 			const p1Name = resolveMatchPlayerLabel(player1Name, p1, player1Id, player1DeckId);
 			const p2Name = resolveMatchPlayerLabel(player2Name, p2, player2Id, player2DeckId);
 			const [p1DeckResponse, p2DeckResponse] = await Promise.all([
-				p1Name ? resolvePlayerDeckResponse(p1, player1Id, player1DeckId) : null,
-				p2Name ? resolvePlayerDeckResponse(p2, player2Id, player2DeckId) : null,
+				p1Name
+					? resolvePlayerDeckResponse(p1, player1Id, player1DeckId)
+					: null,
+				p2Name
+					? resolvePlayerDeckResponse(p2, player2Id, player2DeckId)
+					: null,
 			]);
 
 			const p1Cards = toDeckListCards(p1DeckResponse);
@@ -299,10 +321,16 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 
 			// Batch fetch all cards from both players in one go — a single degraded
 			// flag covers the combined load.
-			const allCards = [...p1Cards, ...p2Cards];
+			const allCards = [
+				...p1Cards,
+				...p2Cards,
+			];
 			const { cards: cardDataMap, degraded } = allCards.length > 0
 				? await fetchScryfallCards(allCards)
-				: { cards: new Map<string, MtgCard>(), degraded: false };
+				: {
+						cards: new Map<string, MtgCard>(),
+						degraded: false,
+					};
 
 			if (flight.stale) {
 				return;
@@ -355,7 +383,14 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		player2DeckId?: number | null,
 	) {
 		await runMatchupDeckListLoad(
-			{ player1Name, player2Name, player1Id, player2Id, player1DeckId, player2DeckId },
+			{
+				player1Name,
+				player2Name,
+				player1Id,
+				player2Id,
+				player1DeckId,
+				player2DeckId,
+			},
 			{ silent: false },
 		);
 	}
@@ -430,7 +465,10 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 			const deckCards = toDeckListCards(deckResponse);
 			const { cards: cardDataMap, degraded } = deckCards.length > 0
 				? await fetchScryfallCards(deckCards)
-				: { cards: new Map<string, MtgCard>(), degraded: false };
+				: {
+						cards: new Map<string, MtgCard>(),
+						degraded: false,
+					};
 
 			if (flight.stale) {
 				return;

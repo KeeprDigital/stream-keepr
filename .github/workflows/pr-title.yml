@@ -39,12 +39,12 @@ jobs:
         with:
           sparse-checkout: |
             scripts/conventional-title.mjs
-            .node-version
+            package.json
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version-file: .node-version
+          node-version-file: package.json
       # The title is contributor-controlled text: the script reads it from the
       # event payload, never through an expression in this file.
       - name: Check the title, or in the queue every commit subject it lands

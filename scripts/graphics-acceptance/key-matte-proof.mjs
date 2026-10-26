@@ -77,8 +77,15 @@ async function evaluate(page, expression) {
  */
 export async function observeKeyMatte(page, { timeoutMs = KEY_MATTE_PROOF_TIMEOUT_MS } = {}) {
 	const { width, height } = KEY_MATTE_PROOF_VIEWPORT;
-	await page.command('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
-	await page.command('Emulation.setDefaultBackgroundColorOverride', { color: { r: 0, g: 0, b: 0, a: 0 } });
+	await page.command('Emulation.setDeviceMetricsOverride', {
+		width,
+		height,
+		deviceScaleFactor: 1,
+		mobile: false,
+	});
+	await page.command('Emulation.setDefaultBackgroundColorOverride', {
+		color: { r: 0, g: 0, b: 0, a: 0 },
+	});
 
 	const deadline = Date.now() + timeoutMs;
 	while (await evaluate(page, `document.body?.dataset.ready === 'true'`) !== true) {
@@ -110,12 +117,24 @@ export async function observeKeyMatte(page, { timeoutMs = KEY_MATTE_PROOF_TIMEOU
  */
 export function judgeKeyMatteScene(scene, floors = KEY_MATTE_PROOF_FLOORS) {
 	const failures = [];
-	if (!(scene.maxMatteError <= floors.maxMatteError))
-		failures.push({ code: 'key-matte-diverges-from-fill', detail: { scene: scene.name, measured: scene.maxMatteError } });
-	if (!(scene.greyPixels >= floors.minGreyPixels))
-		failures.push({ code: 'key-matte-glow-not-grey', detail: { scene: scene.name, measured: scene.greyPixels } });
-	if (!(scene.maxChroma <= floors.maxChroma))
-		failures.push({ code: 'key-matte-not-grayscale', detail: { scene: scene.name, measured: scene.maxChroma } });
+	if (!(scene.maxMatteError <= floors.maxMatteError)) {
+		failures.push({
+			code: 'key-matte-diverges-from-fill',
+			detail: { scene: scene.name, measured: scene.maxMatteError },
+		});
+	}
+	if (!(scene.greyPixels >= floors.minGreyPixels)) {
+		failures.push({
+			code: 'key-matte-glow-not-grey',
+			detail: { scene: scene.name, measured: scene.greyPixels },
+		});
+	}
+	if (!(scene.maxChroma <= floors.maxChroma)) {
+		failures.push({
+			code: 'key-matte-not-grayscale',
+			detail: { scene: scene.name, measured: scene.maxChroma },
+		});
+	}
 	return failures;
 }
 
@@ -129,15 +148,28 @@ export function judgeKeyMatteReport(report) {
 	const failures = [];
 	for (const name of KEY_MATTE_PROOF_HOSTS) {
 		const scene = scenes.get(name);
-		if (!scene)
-			failures.push({ code: 'key-matte-scene-missing', detail: { scene: name } });
-		else
+		if (!scene) {
+			failures.push({
+				code: 'key-matte-scene-missing',
+				detail: { scene: name },
+			});
+		}
+		else {
 			failures.push(...judgeKeyMatteScene(scene));
+		}
 	}
 	const control = scenes.get(KEY_MATTE_PROOF_CONTROL);
-	if (!control)
-		failures.push({ code: 'key-matte-scene-missing', detail: { scene: KEY_MATTE_PROOF_CONTROL } });
-	else if (!judgeKeyMatteScene(control).some(failure => failure.code === 'key-matte-diverges-from-fill'))
-		failures.push({ code: 'key-matte-checks-not-biting', detail: { scene: KEY_MATTE_PROOF_CONTROL } });
+	if (!control) {
+		failures.push({
+			code: 'key-matte-scene-missing',
+			detail: { scene: KEY_MATTE_PROOF_CONTROL },
+		});
+	}
+	else if (!judgeKeyMatteScene(control).some(failure => failure.code === 'key-matte-diverges-from-fill')) {
+		failures.push({
+			code: 'key-matte-checks-not-biting',
+			detail: { scene: KEY_MATTE_PROOF_CONTROL },
+		});
+	}
 	return failures;
 }

@@ -116,11 +116,17 @@ function projectEarlierMatches(facts: HeadToHeadFacts, player1Id: number, player
  * Round Standings keeps current.
  */
 export function projectHeadToHead(facts: HeadToHeadFacts): ScreenOutputHeadToHeadResponse {
-	const player1 = facts.player1 ? projectPlayer(facts.player1) : null;
-	const player2 = facts.player2 ? projectPlayer(facts.player2) : null;
+	const player1 = facts.player1
+		? projectPlayer(facts.player1)
+		: null;
+	const player2 = facts.player2
+		? projectPlayer(facts.player2)
+		: null;
 	return {
 		player1,
 		player2,
-		earlierMatches: player1 && player2 ? projectEarlierMatches(facts, player1.id, player2.id) : [],
+		earlierMatches: player1 && player2
+			? projectEarlierMatches(facts, player1.id, player2.id)
+			: [],
 	};
 }

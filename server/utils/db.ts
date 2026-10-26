@@ -111,7 +111,9 @@ export function chunkRowsWithinParameterBudget<T>(
 	if (perRow > D1_MAX_PARAMS)
 		throw new Error(`chunkRowsWithinParameterBudget: one row binds ${perRow} parameters, over D1's ${D1_MAX_PARAMS}`);
 
-	const chunks = chunkArray([...rows], perRow === 0 ? rows.length : maxInsertChunkSize(perRow));
+	const chunks = chunkArray([...rows], perRow === 0
+		? rows.length
+		: maxInsertChunkSize(perRow));
 	for (const chunk of chunks) {
 		const params = paramsOf(chunk);
 		if (params > D1_MAX_PARAMS)
@@ -170,7 +172,9 @@ export function selectForInsert<TTable extends SQLiteTable>(
 		throw new Error(`selectForInsert: missing expressions for columns: ${missing.join(', ')}`);
 	const unknown = [...provided].filter(key => !expected.has(key));
 	if (unknown.length > 0) {
-		const labelled = unknown.map(key => key in allColumns ? `${key} (generated — not insertable)` : key);
+		const labelled = unknown.map(key => key in allColumns
+			? `${key} (generated — not insertable)`
+			: key);
 		throw new Error(`selectForInsert: unknown or non-insertable columns: ${labelled.join(', ')}`);
 	}
 
@@ -212,7 +216,9 @@ export function chunkJsonRows<T>(
 		if (serializedBytes + 2 > maxBytes)
 			throw new Error(`chunkJsonRows: one row exceeds the ${maxBytes}-byte payload limit`);
 
-		const nextBytes = byteLength + serializedBytes + (entries.length > 0 ? 1 : 0);
+		const nextBytes = byteLength + serializedBytes + (entries.length > 0
+			? 1
+			: 0);
 		if (entries.length > 0 && (entries.length >= maxRows || nextBytes > maxBytes)) {
 			chunks.push(`[${entries.join(',')}]`);
 			entries = [];
@@ -220,7 +226,9 @@ export function chunkJsonRows<T>(
 		}
 
 		entries.push(serialized);
-		byteLength += serializedBytes + (entries.length > 1 ? 1 : 0);
+		byteLength += serializedBytes + (entries.length > 1
+			? 1
+			: 0);
 	}
 
 	if (entries.length > 0)
@@ -238,5 +246,7 @@ export function observedValue<TColumn extends SQLiteColumn>(
 	column: TColumn,
 	value: TColumn['_']['data'] | null,
 ) {
-	return value === null ? isNull(column) : eq(column, value);
+	return value === null
+		? isNull(column)
+		: eq(column, value);
 }

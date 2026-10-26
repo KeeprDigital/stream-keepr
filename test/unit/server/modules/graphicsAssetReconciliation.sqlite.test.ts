@@ -58,7 +58,10 @@ function canonicalIdentity(digest: string) {
  * the digest that owns the key, repeated as redundant integrity metadata.
  */
 function canonicalMetadata(digest: string) {
-	return { contentType: 'image/png', custom: { sha256: digest } };
+	return {
+		contentType: 'image/png',
+		custom: { sha256: digest },
+	};
 }
 
 function decodeEvidence(bytes: Uint8Array) {
@@ -186,7 +189,12 @@ async function addReference(input: {
 				event_id, created_at, updated_at
 			) VALUES (?, ?, ?, 'screen', '1', ?, NULL, 0, 0)
 		`,
-		args: [input.referenceId, input.assetId, input.revisionId, input.referenceId],
+		args: [
+			input.referenceId,
+			input.assetId,
+			input.revisionId,
+			input.referenceId,
+		],
 	});
 }
 
@@ -198,7 +206,7 @@ async function thumbnailDigest(revisionId: GraphicAssetRevisionId) {
 	});
 	const digest = result.rows[0]?.content_digest;
 	if (typeof digest !== 'string')
-		throw new Error('The revision has no Graphics Derivative');
+		throw new TypeError('The revision has no Graphics Derivative');
 	return digest;
 }
 
@@ -696,7 +704,12 @@ describe('graphics asset reconciliation', () => {
 			await context.canonical.createImmutable({
 				identity,
 				bytes: boundedBytes(pixelPng),
-				metadata: { contentType: 'image/jpeg', custom: { sha256: digestOf(pixelPng) } },
+				metadata: {
+					contentType: 'image/jpeg',
+					custom: {
+						sha256: digestOf(pixelPng),
+					},
+				},
 			});
 			await context.library.runGraphicsReconciliation();
 			const isolated = openDiscrepancy(
@@ -747,7 +760,11 @@ describe('graphics asset reconciliation', () => {
 						id, digest, byte_length, origin, quarantined_at, delete_after, created_at
 					) VALUES ('quarantined-copy', ?, ?, 'orphaned-content', 0, ?, 0)
 				`,
-				args: [digestOf(pixelPng), pixelPng.byteLength, Date.now() + 7 * DAY],
+				args: [
+					digestOf(pixelPng),
+					pixelPng.byteLength,
+					Date.now() + 7 * DAY,
+				],
 			});
 
 			const discrepancy = openDiscrepancy(

@@ -99,7 +99,10 @@ export const usePlayerListStore = defineStore('playerList', () => {
 	function applyRemoteUpdated(data: MessageData<'playerList:updated'>) {
 		const index = lists.value.findIndex(l => l.id === data.playerList.id);
 		if (index !== -1) {
-			lists.value[index] = { ...lists.value[index]!, ...data.playerList };
+			lists.value[index] = {
+				...lists.value[index]!,
+				...data.playerList,
+			};
 		}
 	}
 

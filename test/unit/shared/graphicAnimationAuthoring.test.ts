@@ -69,7 +69,10 @@ function group(id: string, children: string[]): GraphicGroupItemConfig {
 	};
 }
 
-function graphic(items: GraphicItemConfig[] = [shape('bar'), shape('name')]): BroadcastGraphicConfig {
+function graphic(items: GraphicItemConfig[] = [
+	shape('bar'),
+	shape('name'),
+]): BroadcastGraphicConfig {
 	return { id: 'lower-third', name: 'Lower third', items };
 }
 
@@ -94,7 +97,9 @@ describe('graphic item animation authoring', () => {
 
 		const enabled = enableGraphicItemAnimationPhase(base, 'bar', 'enter');
 
-		expect(itemAnimation(enabled, 'bar')).toEqual({ enter: createDefaultGraphicAnimationRecipe('enter') });
+		expect(itemAnimation(enabled, 'bar')).toEqual({
+			enter: createDefaultGraphicAnimationRecipe('enter'),
+		});
 	});
 
 	it('drops the animation entirely when its last recipe is removed', () => {
@@ -136,7 +141,9 @@ describe('graphic item animation authoring', () => {
 		let next = patchGraphicItemAnimationChannel(graphic(), 'bar', 'enter', 'reveal', { edge: 'top' });
 		next = patchGraphicItemAnimationChannel(next, 'bar', 'enter', 'fade', null);
 
-		expect(itemAnimation(next, 'bar')?.enter).toMatchObject({ reveal: { edge: 'top' } });
+		expect(itemAnimation(next, 'bar')?.enter).toMatchObject({
+			reveal: { edge: 'top' },
+		});
 		expect(itemAnimation(next, 'bar')?.enter?.fade).toBeUndefined();
 	});
 
@@ -144,7 +151,10 @@ describe('graphic item animation authoring', () => {
 		const next = applyGraphicItemAnimationPreset(graphic(), 'bar', 'enter', 'pop-in');
 		const recipe = itemAnimation(next, 'bar')?.enter;
 
-		expect(recipe).toMatchObject({ scale: { factor: 0.8, origin: 'center' }, easing: 'back-out' });
+		expect(recipe).toMatchObject({
+			scale: { factor: 0.8, origin: 'center' },
+			easing: 'back-out',
+		});
 
 		// Editable: the next merge changes it like any other recipe.
 		const edited = patchGraphicItemAnimationChannel(next, 'bar', 'enter', 'scale', { factor: 1.4 });
@@ -179,7 +189,9 @@ describe('graphic item animation authoring', () => {
 
 describe('stagger authoring', () => {
 	it('staggers a selected subset of a Graphic Group direct items', () => {
-		const base = graphic([group('cluster', ['one', 'two', 'three'])]);
+		const base = graphic([
+			group('cluster', ['one', 'two', 'three']),
+		]);
 		let next = patchGraphicItemAnimationStagger(base, 'cluster', 'enter', { step: 80 });
 		next = toggleGraphicItemStaggerMember(next, 'cluster', 'enter', 'one', true);
 		next = toggleGraphicItemStaggerMember(next, 'cluster', 'enter', 'three', true);
@@ -192,7 +204,9 @@ describe('stagger authoring', () => {
 	});
 
 	it('reverses a stagger for one phase without touching another', () => {
-		let next = patchBroadcastGraphicAnimationStagger([graphic()], 'lower-third', 'enter', {
+		let next = patchBroadcastGraphicAnimationStagger([
+			graphic(),
+		], 'lower-third', 'enter', {
 			order: 'list',
 			itemIds: ['bar', 'name'],
 		});
@@ -206,14 +220,18 @@ describe('stagger authoring', () => {
 	});
 
 	it('keeps a stagger with no recipe of its own, because a container may only order its items', () => {
-		const next = toggleBroadcastGraphicStaggerMember([graphic()], 'lower-third', 'enter', 'bar', true);
+		const next = toggleBroadcastGraphicStaggerMember([
+			graphic(),
+		], 'lower-third', 'enter', 'bar', true);
 
 		expect(next[0]?.animation?.enter).toBeUndefined();
 		expect(next[0]?.animation?.stagger?.enter?.itemIds).toEqual(['bar']);
 	});
 
 	it('drops the animation when the last stagger and recipe are both gone', () => {
-		let next = toggleBroadcastGraphicStaggerMember([graphic()], 'lower-third', 'enter', 'bar', true);
+		let next = toggleBroadcastGraphicStaggerMember([
+			graphic(),
+		], 'lower-third', 'enter', 'bar', true);
 		next = patchBroadcastGraphicAnimationStagger(next, 'lower-third', 'enter', null);
 
 		expect(next[0]?.animation).toBeUndefined();
@@ -226,20 +244,28 @@ describe('stagger authoring', () => {
 	});
 
 	it('drops a deleted Graphic Item from every stagger subset that named it', () => {
-		let next = patchBroadcastGraphicAnimationStagger([graphic()], 'lower-third', 'enter', {
+		let next = patchBroadcastGraphicAnimationStagger([
+			graphic(),
+		], 'lower-third', 'enter', {
 			itemIds: ['bar', 'name'],
 		});
 		const deleted = deleteGraphicItem(next[0]!, 'name');
 
 		expect(deleted.animation?.stagger?.enter?.itemIds).toEqual(['bar']);
 
-		next = patchBroadcastGraphicAnimationStagger([deleted], 'lower-third', 'enter', { itemIds: ['bar'] });
+		next = patchBroadcastGraphicAnimationStagger([deleted], 'lower-third', 'enter', {
+			itemIds: ['bar'],
+		});
 		expect(deleteGraphicItem(next[0]!, 'bar').animation).toBeUndefined();
 	});
 
 	it('drops a deleted Graphic Group child from its group stagger subset', () => {
-		const base = graphic([group('cluster', ['one', 'two'])]);
-		const staggered = patchGraphicItemAnimationStagger(base, 'cluster', 'enter', { itemIds: ['one', 'two'] });
+		const base = graphic([
+			group('cluster', ['one', 'two']),
+		]);
+		const staggered = patchGraphicItemAnimationStagger(base, 'cluster', 'enter', {
+			itemIds: ['one', 'two'],
+		});
 		const deleted = deleteGraphicItem(staggered, 'two');
 
 		expect(containerAnimation(deleted, 'cluster')?.stagger?.enter?.itemIds).toEqual(['one']);
@@ -248,7 +274,10 @@ describe('stagger authoring', () => {
 
 describe('whole-graphic animation authoring', () => {
 	it('enables and clears a whole-graphic phase over the Screen stack', () => {
-		const stack = [graphic(), { id: 'bug', name: 'Bug', items: [] }];
+		const stack = [
+			graphic(),
+			{ id: 'bug', name: 'Bug', items: [] },
+		];
 		const enabled = enableBroadcastGraphicAnimationPhase(stack, 'lower-third', 'exit');
 
 		expect(enabled[0]?.animation?.exit).toEqual(createDefaultGraphicAnimationRecipe('exit'));
@@ -260,7 +289,9 @@ describe('whole-graphic animation authoring', () => {
 	});
 
 	it('merges a whole-graphic recipe and its channels without dropping siblings', () => {
-		let stack = applyBroadcastGraphicAnimationPreset([graphic()], 'lower-third', 'enter', 'slide-up-in');
+		let stack = applyBroadcastGraphicAnimationPreset([
+			graphic(),
+		], 'lower-third', 'enter', 'slide-up-in');
 		stack = patchBroadcastGraphicAnimationRecipe(stack, 'lower-third', 'enter', { easing: 'linear' });
 		stack = patchBroadcastGraphicAnimationChannel(stack, 'lower-third', 'enter', 'slide', { distance: 999 });
 
@@ -272,14 +303,18 @@ describe('whole-graphic animation authoring', () => {
 	});
 
 	it('keeps an on-screen recipe repetition and pause through a merge', () => {
-		let stack = enableBroadcastGraphicAnimationPhase([graphic()], 'lower-third', 'on-screen');
+		let stack = enableBroadcastGraphicAnimationPhase([
+			graphic(),
+		], 'lower-third', 'on-screen');
 		stack = patchBroadcastGraphicAnimationRecipe(stack, 'lower-third', 'on-screen', { repeat: 4 });
 
 		expect(stack[0]?.animation?.['on-screen']).toMatchObject({ repeat: 4, pause: 1000 });
 	});
 
 	it('leaves the authored items untouched, so a recipe never changes the resting composition', () => {
-		const stack = [graphic()];
+		const stack = [
+			graphic(),
+		];
 		const next = applyBroadcastGraphicAnimationPreset(stack, 'lower-third', 'enter', 'fade-in');
 
 		expect(next[0]?.items).toEqual(stack[0]?.items);
@@ -290,7 +325,12 @@ describe('one channel merge for every recipe', () => {
 	it('switches a channel on with its editable default, keeping the recipe\'s other fields', () => {
 		// A Graphic Animation Recipe entry carries no delay and the on-screen defaults;
 		// the merge keeps whatever the recipe holds beside the channel.
-		const recipe: AnimationRecipeGraphicStyleEntryValue = { duration: 400, easing: 'linear', pause: 500, repeat: 3 };
+		const recipe: AnimationRecipeGraphicStyleEntryValue = {
+			duration: 400,
+			easing: 'linear',
+			pause: 500,
+			repeat: 3,
+		};
 
 		expect(mergeGraphicAnimationRecipeChannel(recipe, 'slide', {})).toEqual({
 			...recipe,
@@ -311,7 +351,11 @@ describe('one channel merge for every recipe', () => {
 	});
 
 	it('deletes a channel switched off rather than leaving an undefined key behind', () => {
-		const recipe = { duration: 400, easing: 'linear' as const, fade: { opacity: 0 } };
+		const recipe = {
+			duration: 400,
+			easing: 'linear' as const,
+			fade: { opacity: 0 },
+		};
 
 		const next = mergeGraphicAnimationRecipeChannel(recipe, 'fade', null);
 

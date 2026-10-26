@@ -1,7 +1,9 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockUseEventRealtimeSession } = vi.hoisted(() => ({ mockUseEventRealtimeSession: vi.fn() }));
+const { mockUseEventRealtimeSession } = vi.hoisted(() => ({
+	mockUseEventRealtimeSession: vi.fn(),
+}));
 
 mockNuxtImport('useEventRealtimeSession', () => mockUseEventRealtimeSession);
 

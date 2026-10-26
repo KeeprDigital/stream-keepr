@@ -2,7 +2,9 @@ import type { PlayerSide } from '~~/shared/types/enums';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 
 export function otherFeatureMatchPlayer(player: PlayerSide): PlayerSide {
-	return player === 'player1' ? 'player2' : 'player1';
+	return player === 'player1'
+		? 'player2'
+		: 'player1';
 }
 
 export function applyFeatureMatchTurnStep(state: FeatureMatchState, delta: number): FeatureMatchState {
@@ -16,7 +18,9 @@ export function applyFeatureMatchTurnStep(state: FeatureMatchState, delta: numbe
 	let turnNumber: number;
 	let activePlayer: PlayerSide;
 	if (state.turnNumber <= 0) {
-		const zeroTurnPosition = state.activePlayer === state.firstPlayer ? 0 : 1;
+		const zeroTurnPosition = state.activePlayer === state.firstPlayer
+			? 0
+			: 1;
 		if (requestedDelta <= 0) {
 			turnNumber = 0;
 			activePlayer = requestedDelta < 0 && zeroTurnPosition === 1
@@ -42,7 +46,9 @@ export function applyFeatureMatchTurnStep(state: FeatureMatchState, delta: numbe
 	}
 	else {
 		const currentIndex = (state.turnNumber - 1) * 2
-			+ (state.activePlayer === state.firstPlayer ? 0 : 1);
+			+ (state.activePlayer === state.firstPlayer
+				? 0
+				: 1);
 		const nextIndex = Math.max(0, currentIndex + requestedDelta);
 		turnNumber = Math.floor(nextIndex / 2) + 1;
 		activePlayer = nextIndex % 2 === 0

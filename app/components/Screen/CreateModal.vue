@@ -24,7 +24,9 @@ const isSubmitting = ref(false);
 
 const isEditMode = computed(() => !!props.editScreen);
 const modalTitle = computed(() => isEditMode.value ? 'Edit Screen' : 'Create Screen');
-const formId = computed(() => props.editScreen ? `edit-screen-${props.editScreen.id}-form` : 'create-screen-form');
+const formId = computed(() => props.editScreen
+	? `edit-screen-${props.editScreen.id}-form`
+	: 'create-screen-form');
 
 const formData = ref<CreateScreenInput>({
 	name: props.editScreen?.name ?? '',

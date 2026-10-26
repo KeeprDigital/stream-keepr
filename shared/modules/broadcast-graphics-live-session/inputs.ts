@@ -119,7 +119,12 @@ export type NormalizedBroadcastGraphicInputsState
 		& Pick<BroadcastGraphicInputsState, 'updateFrom' | 'pendingUpdateFrom'>;
 
 export function createInitialBroadcastGraphicInputsState(): NormalizedBroadcastGraphicInputsState {
-	return { working: {}, overrides: {}, accepted: {}, acceptedRevision: 0 };
+	return {
+		working: {},
+		overrides: {},
+		accepted: {},
+		acceptedRevision: 0,
+	};
 }
 
 /** One Graphic Input's value with the judgement of whether it can be shown. */
@@ -229,8 +234,12 @@ export function broadcastGraphicInputsState(
 		overrides: stored.overrides ?? {},
 		accepted: stored.accepted ?? {},
 		acceptedRevision: stored.acceptedRevision ?? 0,
-		...(stored.updateFrom ? { updateFrom: stored.updateFrom } : {}),
-		...(stored.pendingUpdateFrom ? { pendingUpdateFrom: stored.pendingUpdateFrom } : {}),
+		...(stored.updateFrom
+			? { updateFrom: stored.updateFrom }
+			: {}),
+		...(stored.pendingUpdateFrom
+			? { pendingUpdateFrom: stored.pendingUpdateFrom }
+			: {}),
 	};
 }
 
@@ -248,7 +257,9 @@ function resolveValues(
 ): GraphicInputValues {
 	return Object.fromEntries(declarations.map(declaration => [
 		declaration.key,
-		declaration.key in stored ? stored[declaration.key]! : declaration.default,
+		declaration.key in stored
+			? stored[declaration.key]!
+			: declaration.default,
 	]));
 }
 
@@ -272,7 +283,10 @@ export function resolveGraphicInputValues(
  * counts as a change rather than being passed over.
  */
 export function sameGraphicInputValues(left: GraphicInputValues, right: GraphicInputValues): boolean {
-	const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+	const keys = new Set([
+		...Object.keys(left),
+		...Object.keys(right),
+	]);
 	for (const key of keys) {
 		if (!sameGraphicInputValue(left[key] ?? null, right[key] ?? null))
 			return false;
@@ -351,7 +365,9 @@ export function effectiveGraphicInputValue(
 	}
 
 	return {
-		value: declaration.key in inputs.working ? inputs.working[declaration.key]! : declaration.default,
+		value: declaration.key in inputs.working
+			? inputs.working[declaration.key]!
+			: declaration.default,
 		source: 'manual',
 	};
 }

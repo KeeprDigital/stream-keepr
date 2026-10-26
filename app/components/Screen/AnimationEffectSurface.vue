@@ -110,7 +110,12 @@ async function mountAnimation() {
 	startLoop();
 }
 
-watch([() => props.effect, () => props.params, () => props.width, () => props.height], () => {
+watch([
+	() => props.effect,
+	() => props.params,
+	() => props.width,
+	() => props.height,
+], () => {
 	void mountAnimation();
 }, { deep: true });
 

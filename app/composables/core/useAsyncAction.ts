@@ -37,7 +37,9 @@ export function useAsyncAction() {
 			return result;
 		}
 		catch (e) {
-			const errorMessage = e instanceof Error ? e.message : 'An error occurred';
+			const errorMessage = e instanceof Error
+				? e.message
+				: 'An error occurred';
 
 			if (errorRef && flight.current) {
 				errorRef.value = errorMessage;

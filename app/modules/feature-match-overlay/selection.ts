@@ -27,12 +27,16 @@ export function resolveFeatureMatchOverlaySelection(
 		return { kind: 'canvas' };
 
 	const item = layout.sources.find(candidate => candidate.id === target.itemId);
-	return item ? { kind: 'source', item } : { kind: 'missing' };
+	return item
+		? { kind: 'source', item }
+		: { kind: 'missing' };
 }
 
 /** Stable identity key for a selection target (tree nodes, comparisons). */
 export function featureMatchOverlaySelectionKey(target: FeatureMatchOverlaySelectionTarget): string {
-	return target.type === 'canvas' ? 'canvas' : `source:${target.itemId}`;
+	return target.type === 'canvas'
+		? 'canvas'
+		: `source:${target.itemId}`;
 }
 
 /** Runtime guard for selection targets crossing a postMessage boundary. */

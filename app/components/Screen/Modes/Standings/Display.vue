@@ -46,14 +46,18 @@ function getCellStyle(key: StandingsColumnKey, player: Player) {
 			// A climb or a drop shows in its own colour; everything else reads
 			// as secondary text.
 			const { kind } = positionChangeOf(player);
-			return kind === 'up' || kind === 'down' ? {} : secondaryTextStyle.value;
+			return kind === 'up' || kind === 'down'
+				? {}
+				: secondaryTextStyle.value;
 		}
 	}
 }
 
 /** A Position Change cell's direction, which its colour reads from. */
 function positionChangeKind(key: StandingsColumnKey, player: Player) {
-	return key === 'positionChange' ? positionChangeOf(player).kind : undefined;
+	return key === 'positionChange'
+		? positionChangeOf(player).kind
+		: undefined;
 }
 
 function getDeckColors(player: Player) {
@@ -79,7 +83,9 @@ const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef')
 
 const contentStyle = computed(() => ({
 	'width': '100%',
-	'maxWidth': config.value.maxTableWidth ? `${config.value.maxTableWidth}px` : undefined,
+	'maxWidth': config.value.maxTableWidth
+		? `${config.value.maxTableWidth}px`
+		: undefined,
 	'marginInline': config.value.maxTableWidth ? 'auto' : undefined,
 	'--broadcast-table-primary-text': screenConfig.value.primaryTextColor ?? '#ffffff',
 	'--broadcast-table-secondary-text': screenConfig.value.secondaryTextColor ?? 'rgba(255, 255, 255, 0.72)',

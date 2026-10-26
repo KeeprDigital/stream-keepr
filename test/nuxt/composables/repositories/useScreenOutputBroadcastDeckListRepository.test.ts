@@ -1,7 +1,9 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 
 mockNuxtImport('$fetch', () => mockFetch);
 
@@ -19,7 +21,9 @@ describe('useScreenOutputBroadcastDeckListRepository', () => {
 			.toMatchObject({ id: 23, revision: 4 });
 		expect(mockFetch).toHaveBeenCalledWith(
 			'/api/screen-output/events/5/screens/7/broadcast-deck-list',
-			{ headers: { authorization: 'Bearer a-screen-output-capability-token' } },
+			{
+				headers: { authorization: 'Bearer a-screen-output-capability-token' },
+			},
 		);
 	});
 

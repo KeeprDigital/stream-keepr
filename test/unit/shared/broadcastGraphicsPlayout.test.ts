@@ -39,7 +39,10 @@ function take(
 ): BroadcastGraphicsLiveState {
 	return applyBroadcastGraphicsCommand(
 		state,
-		{ type: 'Take', payload: { graphicId, cut } },
+		{
+			type: 'Take',
+			payload: { graphicId, cut },
+		},
 		{ ...NO_INPUTS, acceptedAt },
 	);
 }
@@ -52,7 +55,10 @@ function out(
 ): BroadcastGraphicsLiveState {
 	return applyBroadcastGraphicsCommand(
 		state,
-		{ type: 'Out', payload: { graphicId, cut } },
+		{
+			type: 'Out',
+			payload: { graphicId, cut },
+		},
 		{ ...NO_INPUTS, acceptedAt },
 	);
 }
@@ -66,7 +72,9 @@ describe('broadcastGraphicsPlayout', () => {
 		const state = createInitialBroadcastGraphicsLiveState();
 
 		expect(broadcastGraphicPlayoutState(state, 'lower-third')).toBe('off');
-		expect(onAirBroadcastGraphicIds(state, [graphic('lower-third')])).toEqual([]);
+		expect(onAirBroadcastGraphicIds(state, [
+			graphic('lower-third'),
+		])).toEqual([]);
 	});
 
 	it('takes a Broadcast Graphic to on-air and outs it back to off', () => {
@@ -124,7 +132,11 @@ describe('broadcastGraphicsPlayout', () => {
 	});
 
 	it('reports concurrent on-air Broadcast Graphics in authored stack order, not take order', () => {
-		const stack = [graphic('back'), graphic('middle'), graphic('front')];
+		const stack = [
+			graphic('back'),
+			graphic('middle'),
+			graphic('front'),
+		];
 		let state = createInitialBroadcastGraphicsLiveState();
 		state = take(state, 'front');
 		state = take(state, 'back');
@@ -137,7 +149,9 @@ describe('broadcastGraphicsPlayout', () => {
 		state = take(state, 'deleted');
 		state = take(state, 'kept');
 
-		expect(onAirBroadcastGraphicIds(state, [graphic('kept')])).toEqual(['kept']);
+		expect(onAirBroadcastGraphicIds(state, [
+			graphic('kept'),
+		])).toEqual(['kept']);
 	});
 });
 
@@ -175,7 +189,12 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 		expect(Object.keys(persisted.playout.slate!).toSorted()).toEqual(['cut', 'effectiveStartedAt', 'onAir']);
 		expect(persisted.playout.slate).toEqual({ onAir: true, effectiveStartedAt: T0, cut: false });
 		expect(Object.keys(persisted.inputs.slate!).toSorted())
-			.toEqual(['accepted', 'acceptedRevision', 'overrides', 'working']);
+			.toEqual([
+				'accepted',
+				'acceptedRevision',
+				'overrides',
+				'working',
+			]);
 	});
 
 	it('adds a scheduled reversal completion only to an intent that actually interrupted a phase', () => {
@@ -212,7 +231,12 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 		const reversed = out(entering, 'slate', false, T0 + 300);
 
 		expect(Object.keys(reversed.playout.slate!).toSorted())
-			.toEqual(['cut', 'effectiveStartedAt', 'onAir', 'reversalCompletesAt']);
+			.toEqual([
+				'cut',
+				'effectiveStartedAt',
+				'onAir',
+				'reversalCompletesAt',
+			]);
 		expect(reversed.playout.slate).toEqual({
 			onAir: false,
 			effectiveStartedAt: T0 + 300,
@@ -252,25 +276,42 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 			default: '',
 			maxLength: 80,
 		};
-		const context = { inputs: [declaration], durations: TIMING };
+		const context = {
+			inputs: [declaration],
+			durations: TIMING,
+		};
 		let state = applyBroadcastGraphicsCommand(
 			createInitialBroadcastGraphicsLiveState(),
-			{ type: 'Take', payload: { graphicId: 'slate', cut: false } },
+			{
+				type: 'Take',
+				payload: { graphicId: 'slate', cut: false },
+			},
 			{ ...context, acceptedAt: T0 },
 		);
 		state = applyBroadcastGraphicsCommand(
 			state,
-			{ type: 'Set Input', payload: { graphicId: 'slate', inputKey: 'headline', value: 'next' } },
+			{
+				type: 'Set Input',
+				payload: { graphicId: 'slate', inputKey: 'headline', value: 'next' },
+			},
 			{ ...context, acceptedAt: T0 + 2000 },
 		);
 		state = applyBroadcastGraphicsCommand(
 			state,
-			{ type: 'Update Graphic', payload: { graphicId: 'slate', cut: false, basedOnAcceptedRevision: 1 } },
+			{
+				type: 'Update Graphic',
+				payload: { graphicId: 'slate', cut: false, basedOnAcceptedRevision: 1 },
+			},
 			{ ...context, acceptedAt: T0 + 2000 },
 		);
 
 		expect(Object.keys(state.playout.slate!).toSorted())
-			.toEqual(['cut', 'effectiveStartedAt', 'onAir', 'updateStartedAt']);
+			.toEqual([
+				'cut',
+				'effectiveStartedAt',
+				'onAir',
+				'updateStartedAt',
+			]);
 		// The rendering it transitions away from is stored beside the accepted values it
 		// is made of, because an output that joins mid-update has to have both.
 		//
@@ -280,14 +321,22 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 		// assertion: only one update is in flight, so a second outgoing rendering would
 		// mean the chain had been lengthened rather than replaced.
 		expect(Object.keys(state.inputs.slate!).toSorted())
-			.toEqual(['accepted', 'acceptedRevision', 'overrides', 'updateFrom', 'working']);
+			.toEqual([
+				'accepted',
+				'acceptedRevision',
+				'overrides',
+				'updateFrom',
+				'working',
+			]);
 
 		const recovered: BroadcastGraphicsLiveState = JSON.parse(JSON.stringify(state));
 		const hoursLater = T0 + (4 * 60 * 60 * 1000);
 		expect(broadcastGraphicPlayoutState(recovered, 'slate', at(hoursLater))).toBe('on-air');
 		expect(broadcastGraphicPhaseProjections(recovered, 'slate', at(hoursLater))).toEqual([]);
 		expect(broadcastGraphicRenderedInputs(recovered, 'slate', [declaration], at(hoursLater)))
-			.toEqual({ current: { headline: 'next' } });
+			.toEqual({
+				current: { headline: 'next' },
+			});
 	});
 
 	it('stores no lifecycle phase, so there is nothing for recovery to resume', () => {
@@ -296,7 +345,15 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 
 		for (const persisted of [entering, reversing]) {
 			const serialized = JSON.stringify(persisted);
-			for (const phase of ['waiting', 'entering', 'on-air', 'updating', 'exiting', 'phase', 'state'])
+			for (const phase of [
+				'waiting',
+				'entering',
+				'on-air',
+				'updating',
+				'exiting',
+				'phase',
+				'state',
+			])
 				expect(serialized).not.toContain(phase);
 		}
 	});
@@ -309,7 +366,9 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 		const recovered: BroadcastGraphicsLiveState = JSON.parse(JSON.stringify(persisted));
 
 		expect(broadcastGraphicPlayoutState(recovered, 'slate')).toBe('on-air');
-		expect(onAirBroadcastGraphicIds(recovered, [graphic('slate')])).toEqual(['slate']);
+		expect(onAirBroadcastGraphicIds(recovered, [
+			graphic('slate'),
+		])).toEqual(['slate']);
 	});
 
 	it('settles a graphic taken before a restart rather than replaying its entrance', () => {
@@ -330,7 +389,9 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 		// An output that opens 400ms into a one-second enter joins 400ms in, and one
 		// that opens after it joins settled. Neither starts from zero.
 		expect(broadcastGraphicPhaseProjections(taken, 'slate', at(T0 + 400)))
-			.toEqual([{ phase: 'enter', elapsed: 400 }]);
+			.toEqual([
+				{ phase: 'enter', elapsed: 400 },
+			]);
 		expect(broadcastGraphicPhaseProjections(taken, 'slate', at(T0 + 1500))).toEqual([]);
 	});
 
@@ -346,7 +407,9 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 		expect(duplicate.playout.slate).toBe(first.playout.slate);
 		expect(duplicate.playout.slate!.effectiveStartedAt).toBe(T0);
 		expect(broadcastGraphicPhaseProjections(duplicate, 'slate', at(T0 + 600)))
-			.toEqual([{ phase: 'enter', elapsed: 600 }]);
+			.toEqual([
+				{ phase: 'enter', elapsed: 600 },
+			]);
 	});
 
 	it('starts a new phase when the intent actually changes', () => {
@@ -354,7 +417,9 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 		const outed = out(taken, 'slate', false, T0 + 5000);
 
 		expect(broadcastGraphicPhaseProjections(outed, 'slate', at(T0 + 5200)))
-			.toEqual([{ phase: 'exit', elapsed: 200 }]);
+			.toEqual([
+				{ phase: 'exit', elapsed: 200 },
+			]);
 	});
 
 	it('never replays an entrance when a plain Take follows a Cut Take', () => {
@@ -380,7 +445,9 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 
 		expect(state.playout.slate).toBe(cut.playout.slate);
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 5000))).toBe('off');
-		expect(onAirBroadcastGraphicIds(state, [graphic('slate')], at(T0 + 5000))).toEqual([]);
+		expect(onAirBroadcastGraphicIds(state, [
+			graphic('slate'),
+		], at(T0 + 5000))).toEqual([]);
 	});
 
 	it('still lets Cut settle a phase that is already running', () => {
@@ -443,7 +510,10 @@ describe('deriving a lifecycle phase from the authoritative effective start time
 		const taken = take(createInitialBroadcastGraphicsLiveState(), 'slate');
 
 		expect(broadcastGraphicPlayoutState(taken, 'slate', { now: T0, durations: {} })).toBe('on-air');
-		expect(broadcastGraphicPlayoutState(taken, 'slate', { now: T0, durations: { enter: 0 } })).toBe('on-air');
+		expect(broadcastGraphicPlayoutState(taken, 'slate', {
+			now: T0,
+			durations: { enter: 0 },
+		})).toBe('on-air');
 	});
 
 	it('completes a Cut phase immediately, without changing the target it reaches', () => {
@@ -456,7 +526,9 @@ describe('deriving a lifecycle phase from the authoritative effective start time
 	it('keeps an exiting Broadcast Graphic on program until its exit completes', () => {
 		// A graphic leaves the frame when its exit finishes, not when Out is accepted.
 		const outed = out(take(createInitialBroadcastGraphicsLiveState(), 'slate'), 'slate', false, T0 + 5000);
-		const stack = [graphic('slate')];
+		const stack = [
+			graphic('slate'),
+		];
 
 		expect(onAirBroadcastGraphicIds(outed, stack, at(T0 + 5200))).toEqual(['slate']);
 		expect(onAirBroadcastGraphicIds(outed, stack, at(T0 + 5600))).toEqual([]);
@@ -467,7 +539,10 @@ describe('deriving a lifecycle phase from the authoritative effective start time
 		state = take(state, 'front', false, T0);
 		state = take(state, 'back', false, T0 + 100);
 
-		expect(onAirBroadcastGraphicIds(state, [graphic('back'), graphic('front')], at(T0 + 200)))
+		expect(onAirBroadcastGraphicIds(state, [
+			graphic('back'),
+			graphic('front'),
+		], at(T0 + 200)))
 			.toEqual(['back', 'front']);
 	});
 
@@ -476,7 +551,9 @@ describe('deriving a lifecycle phase from the authoritative effective start time
 		// time slightly ahead of the reader's own clock.
 		const taken = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0 + 40);
 
-		expect(broadcastGraphicPhaseProjections(taken, 'slate', at(T0))).toEqual([{ phase: 'enter', elapsed: 0 }]);
+		expect(broadcastGraphicPhaseProjections(taken, 'slate', at(T0))).toEqual([
+			{ phase: 'enter', elapsed: 0 },
+		]);
 	});
 });
 
@@ -496,7 +573,9 @@ describe('the clock an output does not own', () => {
 		const minuteBehind = T0 + 5000 - 60_000;
 
 		expect(broadcastGraphicPlayoutState(outed, 'slate', at(minuteBehind))).toBe('off');
-		expect(onAirBroadcastGraphicIds(outed, [graphic('slate')], at(minuteBehind))).toEqual([]);
+		expect(onAirBroadcastGraphicIds(outed, [
+			graphic('slate'),
+		], at(minuteBehind))).toEqual([]);
 	});
 
 	it('settles rather than pinning an entrance when the reader is further behind than the phase lasts', () => {
@@ -522,7 +601,9 @@ describe('the clock an output does not own', () => {
 
 		expect(broadcastGraphicPhaseProjections(state, 'slate')).toEqual([]);
 		expect(broadcastGraphicPlayoutState(state, 'slate')).toBe('off');
-		expect(onAirBroadcastGraphicIds(state, [graphic('slate')])).toEqual([]);
+		expect(onAirBroadcastGraphicIds(state, [
+			graphic('slate'),
+		])).toEqual([]);
 	});
 
 	it('bounds a reversal by the phase it reverses rather than by the skew', () => {
@@ -543,9 +624,13 @@ describe('reversing an interruption from the currently rendered state', () => {
 		// 300ms into a one-second entrance, so the reversal starts from 300ms of enter
 		// and unwinds it to zero over the next 300ms: the same recipe, played backwards.
 		expect(broadcastGraphicPhaseProjections(reversed, 'slate', at(T0 + 300)))
-			.toEqual([{ phase: 'enter', elapsed: 300 }]);
+			.toEqual([
+				{ phase: 'enter', elapsed: 300 },
+			]);
 		expect(broadcastGraphicPhaseProjections(reversed, 'slate', at(T0 + 400)))
-			.toEqual([{ phase: 'enter', elapsed: 200 }]);
+			.toEqual([
+				{ phase: 'enter', elapsed: 200 },
+			]);
 		expect(broadcastGraphicPlayoutState(reversed, 'slate', at(T0 + 400))).toBe('exiting');
 
 		// And it is off the moment the reversal lands, not a frame later.
@@ -561,7 +646,9 @@ describe('reversing an interruption from the currently rendered state', () => {
 		// 200ms into a half-second exit: the exit unwinds over 200ms and the graphic is
 		// back at its Graphic Resting State, on air, without playing an entrance.
 		expect(broadcastGraphicPhaseProjections(reversed, 'slate', at(T0 + 5200)))
-			.toEqual([{ phase: 'exit', elapsed: 200 }]);
+			.toEqual([
+				{ phase: 'exit', elapsed: 200 },
+			]);
 		expect(broadcastGraphicPlayoutState(reversed, 'slate', at(T0 + 5300))).toBe('entering');
 		expect(broadcastGraphicPlayoutState(reversed, 'slate', at(T0 + 5400))).toBe('on-air');
 		expect(broadcastGraphicPhaseProjections(reversed, 'slate', at(T0 + 5400))).toEqual([]);
@@ -574,10 +661,14 @@ describe('reversing an interruption from the currently rendered state', () => {
 		const resumed = take(reversing, 'slate', false, T0 + 500);
 
 		expect(broadcastGraphicPhaseProjections(resumed, 'slate', at(T0 + 500)))
-			.toEqual([{ phase: 'enter', elapsed: 300 }]);
+			.toEqual([
+				{ phase: 'enter', elapsed: 300 },
+			]);
 		// It runs on from there rather than restarting: 300ms rendered plus 200ms more.
 		expect(broadcastGraphicPhaseProjections(resumed, 'slate', at(T0 + 700)))
-			.toEqual([{ phase: 'enter', elapsed: 500 }]);
+			.toEqual([
+				{ phase: 'enter', elapsed: 500 },
+			]);
 		expect(broadcastGraphicPlayoutState(resumed, 'slate', at(T0 + 1200))).toBe('on-air');
 	});
 
@@ -587,7 +678,9 @@ describe('reversing an interruption from the currently rendered state', () => {
 
 		expect(outed.playout.slate).toEqual({ onAir: false, effectiveStartedAt: T0 + 5000, cut: false });
 		expect(broadcastGraphicPhaseProjections(outed, 'slate', at(T0 + 5100)))
-			.toEqual([{ phase: 'exit', elapsed: 100 }]);
+			.toEqual([
+				{ phase: 'exit', elapsed: 100 },
+			]);
 	});
 
 	it('does not reverse a Cut phase, because a Cut phase was never in flight', () => {
@@ -596,7 +689,9 @@ describe('reversing an interruption from the currently rendered state', () => {
 
 		expect(outed.playout.slate!.reversalCompletesAt).toBeUndefined();
 		expect(broadcastGraphicPhaseProjections(outed, 'slate', at(T0 + 200)))
-			.toEqual([{ phase: 'exit', elapsed: 100 }]);
+			.toEqual([
+				{ phase: 'exit', elapsed: 100 },
+			]);
 	});
 
 	it('lets Cut Out settle a reversal that is still unwinding', () => {
@@ -619,7 +714,9 @@ describe('reversing an interruption from the currently rendered state', () => {
 	it('composes a reversing Broadcast Graphic until its reversal completes', () => {
 		const entering = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
 		const reversed = out(entering, 'slate', false, T0 + 300);
-		const stack = [graphic('slate')];
+		const stack = [
+			graphic('slate'),
+		];
 
 		expect(onAirBroadcastGraphicIds(reversed, stack, at(T0 + 500))).toEqual(['slate']);
 		expect(onAirBroadcastGraphicIds(reversed, stack, at(T0 + 700))).toEqual([]);
@@ -637,7 +734,10 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		maxLength: 80,
 	};
 
-	const CONTEXT = { inputs: [HEADLINE], durations: TIMING };
+	const CONTEXT = {
+		inputs: [HEADLINE],
+		durations: TIMING,
+	};
 
 	function apply(
 		state: BroadcastGraphicsLiveState,
@@ -648,7 +748,10 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 	}
 
 	function edit(state: BroadcastGraphicsLiveState, value: string, acceptedAt: number) {
-		return apply(state, { type: 'Set Input', payload: { graphicId: 'slate', inputKey: 'headline', value } }, acceptedAt);
+		return apply(state, {
+			type: 'Set Input',
+			payload: { graphicId: 'slate', inputKey: 'headline', value },
+		}, acceptedAt);
 	}
 
 	function accept(state: BroadcastGraphicsLiveState, acceptedAt: number, cut = false) {
@@ -663,7 +766,10 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 	}
 
 	function taken(acceptedAt = T0) {
-		return apply(createInitialBroadcastGraphicsLiveState(), { type: 'Take', payload: { graphicId: 'slate', cut: false } }, acceptedAt);
+		return apply(createInitialBroadcastGraphicsLiveState(), {
+			type: 'Take',
+			payload: { graphicId: 'slate', cut: false },
+		}, acceptedAt);
 	}
 
 	function rendered(state: BroadcastGraphicsLiveState, now: number) {
@@ -673,7 +779,10 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 	/** On air and settled: enter is over, nothing pending. */
 	function settledOnAir(headline: string) {
 		let state = edit(createInitialBroadcastGraphicsLiveState(), headline, T0 - 10);
-		state = apply(state, { type: 'Take', payload: { graphicId: 'slate', cut: false } }, T0);
+		state = apply(state, {
+			type: 'Take',
+			payload: { graphicId: 'slate', cut: false },
+		}, T0);
 		return state;
 	}
 
@@ -686,7 +795,9 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 2399))).toBe('updating');
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 2400))).toBe('on-air');
 		expect(broadcastGraphicPhaseProjections(state, 'slate', at(T0 + 2100)))
-			.toEqual([{ phase: 'update', elapsed: 100 }]);
+			.toEqual([
+				{ phase: 'update', elapsed: 100 },
+			]);
 	});
 
 	it('cross-transitions the old and the new rendering, and only during the update', () => {
@@ -701,7 +812,9 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 			outgoing: { headline: 'first' },
 		});
 		// Once the phase is over there is one rendering again, and it is the new one.
-		expect(rendered(state, T0 + 2400)).toEqual({ current: { headline: 'second' } });
+		expect(rendered(state, T0 + 2400)).toEqual({
+			current: { headline: 'second' },
+		});
 	});
 
 	it('coalesces every acceptance during enter into one update after enter completes', () => {
@@ -714,7 +827,9 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		// Still entering, so program shows the rendering it entered with and neither
 		// acceptance has animated.
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 300))).toBe('entering');
-		expect(rendered(state, T0 + 300)).toEqual({ current: { headline: '' } });
+		expect(rendered(state, T0 + 300)).toEqual({
+			current: { headline: '' },
+		});
 
 		// One update, starting when the entrance completes, going straight to the latest
 		// accepted values — the intermediate acceptance never gets its own animation.
@@ -750,7 +865,9 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 2500))).toBe('updating');
 		// Two transitions and no more: the chain is bounded however many acceptances arrive.
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 2800))).toBe('on-air');
-		expect(rendered(state, T0 + 2800)).toEqual({ current: { headline: 'fourth' } });
+		expect(rendered(state, T0 + 2800)).toEqual({
+			current: { headline: 'fourth' },
+		});
 	});
 
 	it('never rolls back accepted values when an update is interrupted', () => {
@@ -793,8 +910,12 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 
 		// The update completes on its own schedule while the exit carries on.
 		expect(broadcastGraphicPhaseProjections(state, 'slate', at(T0 + 2450)))
-			.toEqual([{ phase: 'exit', elapsed: 350 }]);
-		expect(rendered(state, T0 + 2450)).toEqual({ current: { headline: 'second' } });
+			.toEqual([
+				{ phase: 'exit', elapsed: 350 },
+			]);
+		expect(rendered(state, T0 + 2450)).toEqual({
+			current: { headline: 'second' },
+		});
 		expect(acceptedGraphicInputValues(state, 'slate', [HEADLINE])).toEqual({ headline: 'second' });
 	});
 
@@ -817,9 +938,13 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 			outgoing: { headline: 'first' },
 		});
 		// And nothing hands over to the pending rendering when it completes.
-		expect(rendered(state, T0 + 2500)).toEqual({ current: { headline: 'second' } });
+		expect(rendered(state, T0 + 2500)).toEqual({
+			current: { headline: 'second' },
+		});
 		expect(broadcastGraphicPhaseProjections(state, 'slate', at(T0 + 2500)))
-			.toEqual([{ phase: 'exit', elapsed: 300 }]);
+			.toEqual([
+				{ phase: 'exit', elapsed: 300 },
+			]);
 		// Interrupting an update never rolls back what it accepted.
 		expect(acceptedGraphicInputValues(state, 'slate', [HEADLINE])).toEqual({ headline: 'third' });
 	});
@@ -834,7 +959,10 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		state = edit(state, 'second', T0 + 2000);
 		state = accept(state, T0 + 2000);
 		state = out(state, 'slate', false, T0 + 2100);
-		state = apply(state, { type: 'Take', payload: { graphicId: 'slate', cut: false } }, T0 + 2200);
+		state = apply(state, {
+			type: 'Take',
+			payload: { graphicId: 'slate', cut: false },
+		}, T0 + 2200);
 
 		expect(broadcastGraphicPhaseProjections(state, 'slate', at(T0 + 2200))).toEqual([
 			{ phase: 'update', elapsed: 200 },
@@ -862,7 +990,10 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		state = edit(state, 'third', T0 + 2100);
 		state = accept(state, T0 + 2100);
 		state = out(state, 'slate', false, T0 + 2200);
-		state = apply(state, { type: 'Take', payload: { graphicId: 'slate', cut: false } }, T0 + 2300);
+		state = apply(state, {
+			type: 'Take',
+			payload: { graphicId: 'slate', cut: false },
+		}, T0 + 2300);
 
 		// The transition the exit kept finishes first, on the schedule it always had.
 		expect(rendered(state, T0 + 2300)).toEqual({
@@ -874,7 +1005,9 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 			current: { headline: 'third' },
 			outgoing: { headline: 'second' },
 		});
-		expect(rendered(state, T0 + 2900)).toEqual({ current: { headline: 'third' } });
+		expect(rendered(state, T0 + 2900)).toEqual({
+			current: { headline: 'third' },
+		});
 	});
 
 	it('holds the discarded rendering only until the graphic leaves', () => {
@@ -889,8 +1022,12 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		state = accept(state, T0 + 2100);
 		state = out(state, 'slate', false, T0 + 2200);
 
-		expect(rendered(state, T0 + 2500)).toEqual({ current: { headline: 'second' } });
-		expect(rendered(state, T0 + 2700)).toEqual({ current: { headline: 'third' } });
+		expect(rendered(state, T0 + 2500)).toEqual({
+			current: { headline: 'second' },
+		});
+		expect(rendered(state, T0 + 2700)).toEqual({
+			current: { headline: 'third' },
+		});
 	});
 
 	it('discards an update that had not begun, because there is no transition to finish', () => {
@@ -904,8 +1041,12 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 
 		expect(state.playout.slate!.updateStartedAt).toBeUndefined();
 		expect(broadcastGraphicPhaseProjections(state, 'slate', at(T0 + 400)))
-			.toEqual([{ phase: 'enter', elapsed: 200 }]);
-		expect(rendered(state, T0 + 1200)).toEqual({ current: { headline: 'second' } });
+			.toEqual([
+				{ phase: 'enter', elapsed: 200 },
+			]);
+		expect(rendered(state, T0 + 1200)).toEqual({
+			current: { headline: 'second' },
+		});
 	});
 
 	it('carries nothing out of a Cut Out, because nothing renders an animation that was skipped', () => {
@@ -916,7 +1057,9 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 
 		expect(state.playout.slate!.updateStartedAt).toBeUndefined();
 		expect(broadcastGraphicPhaseProjections(state, 'slate', at(T0 + 2100))).toEqual([]);
-		expect(rendered(state, T0 + 2100)).toEqual({ current: { headline: 'second' } });
+		expect(rendered(state, T0 + 2100)).toEqual({
+			current: { headline: 'second' },
+		});
 	});
 
 	it('settles both concurrent phases after a restart, without replaying either', () => {
@@ -930,7 +1073,9 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 
 		expect(broadcastGraphicPlayoutState(recovered, 'slate', at(hoursLater))).toBe('off');
 		expect(broadcastGraphicPhaseProjections(recovered, 'slate', at(hoursLater))).toEqual([]);
-		expect(onAirBroadcastGraphicIds(recovered, [graphic('slate')], at(hoursLater))).toEqual([]);
+		expect(onAirBroadcastGraphicIds(recovered, [
+			graphic('slate'),
+		], at(hoursLater))).toEqual([]);
 	});
 
 	it('never carries a stale pending rendering into a later update', () => {
@@ -952,7 +1097,9 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 			current: { headline: 'fourth' },
 			outgoing: { headline: 'third' },
 		});
-		expect(rendered(state, T0 + 5400)).toEqual({ current: { headline: 'fourth' } });
+		expect(rendered(state, T0 + 5400)).toEqual({
+			current: { headline: 'fourth' },
+		});
 	});
 
 	it('shows a Cut Update immediately, without an update phase', () => {
@@ -962,7 +1109,9 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 
 		expect(state.playout.slate!.updateStartedAt).toBeUndefined();
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 2000))).toBe('on-air');
-		expect(rendered(state, T0 + 2000)).toEqual({ current: { headline: 'second' } });
+		expect(rendered(state, T0 + 2000)).toEqual({
+			current: { headline: 'second' },
+		});
 	});
 
 	it('swaps a Cut Update during enter into the current animated state, keeping the enter schedule', () => {
@@ -973,9 +1122,13 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		// The entrance carries on from where it was, on its original schedule.
 		expect(state.playout.slate!.effectiveStartedAt).toBe(T0);
 		expect(broadcastGraphicPhaseProjections(state, 'slate', at(T0 + 400)))
-			.toEqual([{ phase: 'enter', elapsed: 400 }]);
+			.toEqual([
+				{ phase: 'enter', elapsed: 400 },
+			]);
 		// The new rendering is showing already, and nothing is left pending for it.
-		expect(rendered(state, T0 + 400)).toEqual({ current: { headline: 'second' } });
+		expect(rendered(state, T0 + 400)).toEqual({
+			current: { headline: 'second' },
+		});
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 1100))).toBe('on-air');
 	});
 
@@ -1003,8 +1156,12 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		state = accept(state, T0 + 100);
 
 		// Deferred to T0 + 1000. A reader half a minute behind cannot still be waiting.
-		expect(rendered(state, T0 + 500)).toEqual({ current: { headline: '' } });
-		expect(rendered(state, T0 - 30_000)).toEqual({ current: { headline: 'second' } });
+		expect(rendered(state, T0 + 500)).toEqual({
+			current: { headline: '' },
+		});
+		expect(rendered(state, T0 - 30_000)).toEqual({
+			current: { headline: 'second' },
+		});
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 - 30_000))).toBe('on-air');
 	});
 
@@ -1015,33 +1172,50 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		// the content it is halfway through revealing would cut. So the animation gives way
 		// and the new rendering is simply what is on screen.
 		const live: GraphicInputDeclaration = { ...HEADLINE, key: 'ticker', updatePolicy: 'live' };
-		const context = { inputs: [HEADLINE, live], durations: TIMING };
+		const context = {
+			inputs: [HEADLINE, live],
+			durations: TIMING,
+		};
 		let state = applyBroadcastGraphicsCommand(
 			createInitialBroadcastGraphicsLiveState(),
-			{ type: 'Take', payload: { graphicId: 'slate', cut: false } },
+			{
+				type: 'Take',
+				payload: { graphicId: 'slate', cut: false },
+			},
 			{ ...context, acceptedAt: T0 },
 		);
 		state = applyBroadcastGraphicsCommand(
 			state,
-			{ type: 'Set Input', payload: { graphicId: 'slate', inputKey: 'headline', value: 'second' } },
+			{
+				type: 'Set Input',
+				payload: { graphicId: 'slate', inputKey: 'headline', value: 'second' },
+			},
 			{ ...context, acceptedAt: T0 + 2000 },
 		);
 		state = applyBroadcastGraphicsCommand(
 			state,
-			{ type: 'Update Graphic', payload: { graphicId: 'slate', cut: false, basedOnAcceptedRevision: 1 } },
+			{
+				type: 'Update Graphic',
+				payload: { graphicId: 'slate', cut: false, basedOnAcceptedRevision: 1 },
+			},
 			{ ...context, acceptedAt: T0 + 2000 },
 		);
 		expect(state.playout.slate!.updateStartedAt).toBe(T0 + 2000);
 
 		state = applyBroadcastGraphicsCommand(
 			state,
-			{ type: 'Set Input', payload: { graphicId: 'slate', inputKey: 'ticker', value: 'now' } },
+			{
+				type: 'Set Input',
+				payload: { graphicId: 'slate', inputKey: 'ticker', value: 'now' },
+			},
 			{ ...context, acceptedAt: T0 + 2100 },
 		);
 
 		expect(state.playout.slate!.updateStartedAt).toBeUndefined();
 		expect(broadcastGraphicRenderedInputs(state, 'slate', [HEADLINE, live], at(T0 + 2100)))
-			.toEqual({ current: { headline: 'second', ticker: 'now' } });
+			.toEqual({
+				current: { headline: 'second', ticker: 'now' },
+			});
 		// A live acceptance still does not count as an acceptance of the staged set, so a
 		// colleague's pending Update Graphic is not invalidated by it.
 		expect(broadcastGraphicInputsState(state, 'slate').acceptedRevision).toBe(2);
@@ -1051,10 +1225,15 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 		let state = settledOnAir('first');
 		state = out(state, 'slate', false, T0 + 2000);
 		state = edit(state, 'second', T0 + 3000);
-		state = apply(state, { type: 'Take', payload: { graphicId: 'slate', cut: false } }, T0 + 4000);
+		state = apply(state, {
+			type: 'Take',
+			payload: { graphicId: 'slate', cut: false },
+		}, T0 + 4000);
 
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 4100))).toBe('entering');
-		expect(rendered(state, T0 + 4100)).toEqual({ current: { headline: 'second' } });
+		expect(rendered(state, T0 + 4100)).toEqual({
+			current: { headline: 'second' },
+		});
 		expect(broadcastGraphicPlayoutState(state, 'slate', at(T0 + 5100))).toBe('on-air');
 	});
 
@@ -1068,7 +1247,9 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 
 		expect(broadcastGraphicPlayoutState(recovered, 'slate', at(hoursLater))).toBe('on-air');
 		expect(broadcastGraphicPhaseProjections(recovered, 'slate', at(hoursLater))).toEqual([]);
-		expect(rendered(recovered, hoursLater)).toEqual({ current: { headline: 'second' } });
+		expect(rendered(recovered, hoursLater)).toEqual({
+			current: { headline: 'second' },
+		});
 	});
 });
 
@@ -1081,9 +1262,13 @@ describe('on-screen cycling on air', () => {
 		const state = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
 
 		expect(broadcastGraphicPhaseProjections(state, 'slate', atCycling(T0 + 500)))
-			.toEqual([{ phase: 'enter', elapsed: 500 }]);
+			.toEqual([
+				{ phase: 'enter', elapsed: 500 },
+			]);
 		expect(broadcastGraphicPhaseProjections(state, 'slate', atCycling(T0 + 1600)))
-			.toEqual([{ phase: 'on-screen', elapsed: 600 }]);
+			.toEqual([
+				{ phase: 'on-screen', elapsed: 600 },
+			]);
 		expect(broadcastGraphicPlayoutState(state, 'slate', atCycling(T0 + 1600))).toBe('on-air');
 	});
 
@@ -1091,7 +1276,9 @@ describe('on-screen cycling on air', () => {
 		const state = take(createInitialBroadcastGraphicsLiveState(), 'slate', true, T0);
 
 		expect(broadcastGraphicPhaseProjections(state, 'slate', atCycling(T0 + 200)))
-			.toEqual([{ phase: 'on-screen', elapsed: 200 }]);
+			.toEqual([
+				{ phase: 'on-screen', elapsed: 200 },
+			]);
 	});
 
 	it('projects nothing for a graphic that authored no on-screen recipe', () => {
@@ -1104,8 +1291,16 @@ describe('on-screen cycling on air', () => {
 	function outCycling(state: BroadcastGraphicsLiveState, acceptedAt: number, cut = false) {
 		return applyBroadcastGraphicsCommand(
 			state,
-			{ type: 'Out', payload: { graphicId: 'slate', cut } },
-			{ inputs: [], durations: TIMING, onScreen: true, acceptedAt },
+			{
+				type: 'Out',
+				payload: { graphicId: 'slate', cut },
+			},
+			{
+				inputs: [],
+				durations: TIMING,
+				onScreen: true,
+				acceptedAt,
+			},
 		);
 	}
 
@@ -1140,7 +1335,9 @@ describe('on-screen cycling on air', () => {
 		expect(broadcastGraphicPhaseProjections(state, 'slate', atCycling(T0 + 3000))).toEqual([]);
 		expect(broadcastGraphicPhaseProjections(state, 'slate', atCycling(T0 + (4 * 60 * 60 * 1000))))
 			.toEqual([]);
-		expect(onAirBroadcastGraphicIds(state, [graphic('slate')], atCycling(T0 + 3000))).toEqual([]);
+		expect(onAirBroadcastGraphicIds(state, [
+			graphic('slate'),
+		], atCycling(T0 + 3000))).toEqual([]);
 	});
 
 	it('keeps cycling running when a Take reverses the exit it was running under', () => {
@@ -1159,7 +1356,9 @@ describe('on-screen cycling on air', () => {
 		// And it runs on from the same origin once the reversal lands, rather than
 		// restarting the cycle from its beginning.
 		expect(broadcastGraphicPhaseProjections(state, 'slate', atCycling(T0 + 2800)))
-			.toEqual([{ phase: 'on-screen', elapsed: 1800 }]);
+			.toEqual([
+				{ phase: 'on-screen', elapsed: 1800 },
+			]);
 	});
 
 	it('grows the durable record only for a graphic that was actually cycling', () => {
@@ -1170,11 +1369,21 @@ describe('on-screen cycling on air', () => {
 		const taken = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
 
 		expect(Object.keys(outCycling(taken, T0 + 300).playout.slate!).toSorted())
-			.toEqual(['cut', 'effectiveStartedAt', 'onAir', 'reversalCompletesAt']);
+			.toEqual([
+				'cut',
+				'effectiveStartedAt',
+				'onAir',
+				'reversalCompletesAt',
+			]);
 		expect(Object.keys(out(taken, 'slate', false, T0 + 2500).playout.slate!).toSorted())
 			.toEqual(['cut', 'effectiveStartedAt', 'onAir']);
 		expect(Object.keys(outCycling(taken, T0 + 2500).playout.slate!).toSorted())
-			.toEqual(['cut', 'cyclingStartedAt', 'effectiveStartedAt', 'onAir']);
+			.toEqual([
+				'cut',
+				'cyclingStartedAt',
+				'effectiveStartedAt',
+				'onAir',
+			]);
 	});
 });
 
@@ -1195,17 +1404,33 @@ describe('the bound on how many lifecycle phases are in play at once', () => {
 			default: '',
 			maxLength: 80,
 		};
-		const context = { inputs: [declaration], durations: TIMING, onScreen: true };
+		const context = {
+			inputs: [declaration],
+			durations: TIMING,
+			onScreen: true,
+		};
 		const apply = (
 			state: BroadcastGraphicsLiveState,
 			command: Parameters<typeof applyBroadcastGraphicsCommand>[1],
 			acceptedAt: number,
 		) => applyBroadcastGraphicsCommand(state, command, { ...context, acceptedAt });
 
-		let state = apply(createInitialBroadcastGraphicsLiveState(), { type: 'Take', payload: { graphicId: 'slate' } }, T0);
-		state = apply(state, { type: 'Set Input', payload: { graphicId: 'slate', inputKey: 'headline', value: 'next' } }, T0 + 2000);
-		state = apply(state, { type: 'Update Graphic', payload: { graphicId: 'slate', basedOnAcceptedRevision: 1 } }, T0 + 2000);
-		state = apply(state, { type: 'Out', payload: { graphicId: 'slate' } }, T0 + 2100);
+		let state = apply(createInitialBroadcastGraphicsLiveState(), {
+			type: 'Take',
+			payload: { graphicId: 'slate' },
+		}, T0);
+		state = apply(state, {
+			type: 'Set Input',
+			payload: { graphicId: 'slate', inputKey: 'headline', value: 'next' },
+		}, T0 + 2000);
+		state = apply(state, {
+			type: 'Update Graphic',
+			payload: { graphicId: 'slate', basedOnAcceptedRevision: 1 },
+		}, T0 + 2000);
+		state = apply(state, {
+			type: 'Out',
+			payload: { graphicId: 'slate' },
+		}, T0 + 2100);
 
 		// The whole lifecycle of that graphic, sampled every 50ms across every phase it can
 		// reach, on a Screen that authored all four.

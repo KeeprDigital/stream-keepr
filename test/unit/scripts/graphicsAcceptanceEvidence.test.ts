@@ -49,8 +49,14 @@ async function observeHarness(invoke: () => Promise<void>) {
 describe('graphics staging acceptance evidence', () => {
 	it('reports one stable code and the observed mismatch per failure', () => {
 		expect(evidence().report([
-			{ code: 'delivery-status-unexpected', detail: { expected: 200, actual: 503 } },
-			{ code: 'delivery-validator-not-strong', detail: { shape: 'weak' } },
+			{
+				code: 'delivery-status-unexpected',
+				detail: { expected: 200, actual: 503 },
+			},
+			{
+				code: 'delivery-validator-not-strong',
+				detail: { shape: 'weak' },
+			},
 		])).toBe(
 			'delivery-v1 delivery-status-unexpected expected=200 actual=503\n'
 			+ 'delivery-v1 delivery-validator-not-strong shape=weak',
@@ -58,50 +64,70 @@ describe('graphics staging acceptance evidence', () => {
 	});
 
 	it('refuses a code outside the stable registry', () => {
-		expect(() => evidence().report([{ code: 'delivery-went-wrong', detail: {} }]))
+		expect(() => evidence().report([
+			{ code: 'delivery-went-wrong', detail: {} },
+		]))
 			.toThrow('delivery-v1 evidence-unknown-code');
 	});
 
 	it('refuses to print a registered secret', () => {
 		const capability = 'PN7yQ0hVn3wKq2ZLb8sVdT1cRj4mXaGe9uFhBzYo0Ss';
 		expect(() => evidence([capability]).report([
-			{ code: 'delivery-authorization-skipped', detail: { capability } },
+			{
+				code: 'delivery-authorization-skipped',
+				detail: { capability },
+			},
 		])).toThrow('delivery-v1 evidence-secret-leak field=capability');
 	});
 
 	it('refuses to print a full delivery URL', () => {
-		expect(() => evidence().report([{
-			code: 'delivery-status-unexpected',
-			detail: { route: 'https://stream.example.workers.dev/api/screen-output/screens/1' },
-		}])).toThrow('delivery-v1 evidence-url-leak field=route');
+		expect(() => evidence().report([
+			{
+				code: 'delivery-status-unexpected',
+				detail: { route: 'https://stream.example.workers.dev/api/screen-output/screens/1' },
+			},
+		])).toThrow('delivery-v1 evidence-url-leak field=route');
 	});
 
 	it('refuses to print a source filename or object key', () => {
 		expect(() => evidence().report([
-			{ code: 'delivery-body-mismatch', detail: { source: 'sponsor-logo.png' } },
+			{
+				code: 'delivery-body-mismatch',
+				detail: { source: 'sponsor-logo.png' },
+			},
 		])).toThrow('delivery-v1 evidence-filename-leak field=source');
 		expect(() => evidence().report([
-			{ code: 'delivery-body-mismatch', detail: { key: 'canonical/8f2b1c4d9e7a6b5c4d3e2f1a0b9c8d7e' } },
+			{
+				code: 'delivery-body-mismatch',
+				detail: { key: 'canonical/8f2b1c4d9e7a6b5c4d3e2f1a0b9c8d7e' },
+			},
 		])).toThrow('delivery-v1 evidence-opaque-token-leak field=key');
 	});
 
 	it('refuses a detail value too long to read at a glance', () => {
 		expect(() => evidence().report([
-			{ code: 'delivery-status-unexpected', detail: { note: 'x '.repeat(80) } },
+			{
+				code: 'delivery-status-unexpected',
+				detail: {
+					note: 'x '.repeat(80),
+				},
+			},
 		])).toThrow('delivery-v1 evidence-detail-too-long field=note');
 	});
 
 	it('keeps route labels, header values, and counts', () => {
-		expect(evidence().report([{
-			code: 'delivery-content-range-unexpected',
-			detail: {
-				route: deliveryRouteLabel(
-					'https://stream.example.workers.dev/api/screen-output/screens/12/assets/gaa-1/revisions/gar-9/content',
-				),
-				expected: 'bytes 8-15/95',
-				actual: 'bytes 0-94/95',
+		expect(evidence().report([
+			{
+				code: 'delivery-content-range-unexpected',
+				detail: {
+					route: deliveryRouteLabel(
+						'https://stream.example.workers.dev/api/screen-output/screens/12/assets/gaa-1/revisions/gar-9/content',
+					),
+					expected: 'bytes 8-15/95',
+					actual: 'bytes 0-94/95',
+				},
 			},
-		}])).toBe(
+		])).toBe(
 			'delivery-v1 delivery-content-range-unexpected '
 			+ 'route=/api/screen-output/screens/:screenId/assets/:assetId/revisions/:revisionId/content '
 			+ 'expected=bytes 8-15/95 actual=bytes 0-94/95',
@@ -128,10 +154,12 @@ describe('graphics staging acceptance evidence', () => {
 	});
 
 	it('refuses a raw request path even when it is handed one as detail', () => {
-		expect(() => evidence().report([{
-			code: 'harness-precondition-unmet',
-			detail: { route: '/api/graphics-assets/0d5f5d2e4a114d4f9a2a/revisions/gar-9/content' },
-		}])).toThrow('delivery-v1 evidence-opaque-token-leak field=route');
+		expect(() => evidence().report([
+			{
+				code: 'harness-precondition-unmet',
+				detail: { route: '/api/graphics-assets/0d5f5d2e4a114d4f9a2a/revisions/gar-9/content' },
+			},
+		])).toThrow('delivery-v1 evidence-opaque-token-leak field=route');
 	});
 
 	it('publishes every code it will ever print', () => {
@@ -151,10 +179,12 @@ describe('graphics staging acceptance evidence', () => {
 	 * which name to set could not be printed at all (#275).
 	 */
 	it('keeps an environment-variable name, which is words rather than a token', () => {
-		expect(evidence().report([{
-			code: 'harness-precondition-unmet',
-			detail: { reason: 'STREAM_KEEPR_BROWSER_ACCEPTANCE_URL is unset' },
-		}])).toBe(
+		expect(evidence().report([
+			{
+				code: 'harness-precondition-unmet',
+				detail: { reason: 'STREAM_KEEPR_BROWSER_ACCEPTANCE_URL is unset' },
+			},
+		])).toBe(
 			'delivery-v1 harness-precondition-unmet '
 			+ 'reason=STREAM_KEEPR_BROWSER_ACCEPTANCE_URL is unset',
 		);
@@ -169,13 +199,22 @@ describe('graphics staging acceptance evidence', () => {
 	 */
 	it('still refuses a token that merely contains an underscore', () => {
 		expect(() => evidence().report([
-			{ code: 'delivery-body-mismatch', detail: { key: 'PN7yQ0hVn3wKq2_Lb8sVdT1cRj4mXaGe9uFhBzYo0Ss' } },
+			{
+				code: 'delivery-body-mismatch',
+				detail: { key: 'PN7yQ0hVn3wKq2_Lb8sVdT1cRj4mXaGe9uFhBzYo0Ss' },
+			},
 		])).toThrow('delivery-v1 evidence-opaque-token-leak field=key');
 		expect(() => evidence().report([
-			{ code: 'delivery-body-mismatch', detail: { key: 'PN7yQ0hVn3wKq2_Lb8sVdT1cRj4m_XaGe9uFhBzYo0S' } },
+			{
+				code: 'delivery-body-mismatch',
+				detail: { key: 'PN7yQ0hVn3wKq2_Lb8sVdT1cRj4m_XaGe9uFhBzYo0S' },
+			},
 		])).toThrow('delivery-v1 evidence-opaque-token-leak field=key');
 		expect(() => evidence().report([
-			{ code: 'delivery-body-mismatch', detail: { key: 'REVISION_8F2B1C4D9E7A6B5C4D3E2F1A0B9C8D7E' } },
+			{
+				code: 'delivery-body-mismatch',
+				detail: { key: 'REVISION_8F2B1C4D9E7A6B5C4D3E2F1A0B9C8D7E' },
+			},
 		])).toThrow('delivery-v1 evidence-opaque-token-leak field=key');
 	});
 });
@@ -190,7 +229,14 @@ describe('graphics staging acceptance evidence', () => {
  */
 describe('page text as evidence', () => {
 	function printable(text: string) {
-		return evidence().report([{ code: 'animation-effect-page-failed', detail: { thrown: pageTextEvidence(text) } }]);
+		return evidence().report([
+			{
+				code: 'animation-effect-page-failed',
+				detail: {
+					thrown: pageTextEvidence(text),
+				},
+			},
+		]);
 	}
 
 	it('keeps the message of an ordinary error and drops its stack', () => {
@@ -266,8 +312,14 @@ describe('a harness printing evidence it cannot format', () => {
 			harness: 'delivery-v1',
 			run: async ({ record }) => {
 				record([
-					{ code: 'delivery-body-mismatch', detail: { key: AN_OBJECT_KEY } },
-					{ code: 'delivery-status-unexpected', detail: { expected: 200, actual: 503 } },
+					{
+						code: 'delivery-body-mismatch',
+						detail: { key: AN_OBJECT_KEY },
+					},
+					{
+						code: 'delivery-status-unexpected',
+						detail: { expected: 200, actual: 503 },
+					},
 				]);
 			},
 		}));
@@ -292,7 +344,12 @@ describe('a harness printing evidence it cannot format', () => {
 		const observed = await observeHarness(() => runAcceptanceHarness({
 			harness: 'static-font-v1',
 			run: async ({ record }) => {
-				record([{ code: 'https://attacker.example/?stolen=1', detail: { page: 'static-font-v1' } }]);
+				record([
+					{
+						code: 'https://attacker.example/?stolen=1',
+						detail: { page: 'static-font-v1' },
+					},
+				]);
 			},
 		}));
 
@@ -404,7 +461,10 @@ describe('a harness printing evidence it cannot format', () => {
 		const observed = await observeHarness(() => runAcceptanceHarness({
 			harness: 'delivery-v1',
 			run: async ({ note }) => {
-				note({ code: 'delivery-cache-never-hit', detail: { key: AN_OBJECT_KEY } });
+				note({
+					code: 'delivery-cache-never-hit',
+					detail: { key: AN_OBJECT_KEY },
+				});
 			},
 		}));
 

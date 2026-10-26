@@ -74,11 +74,31 @@ const selectedScreenMatchId = computed<number | null>(() => {
 });
 
 const { initialLoading, initialError, retry } = useEventPageLoading([
-	{ consumes: 'featureMatchSlots', isLoaded: () => featureMatchStore.isLoaded, load: id => featureMatchStore.loadFeatureMatchesByEventId(id) },
-	{ consumes: 'phases', isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
-	{ consumes: 'players', isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
-	{ consumes: 'rounds', isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },
-	{ consumes: 'screens', isLoaded: () => screenStore.isLoaded, load: id => screenStore.loadScreensByEventId(id) },
+	{
+		consumes: 'featureMatchSlots',
+		isLoaded: () => featureMatchStore.isLoaded,
+		load: id => featureMatchStore.loadFeatureMatchesByEventId(id),
+	},
+	{
+		consumes: 'phases',
+		isLoaded: () => phaseStore.isLoaded,
+		load: id => phaseStore.loadPhasesByEventId(id),
+	},
+	{
+		consumes: 'players',
+		isLoaded: () => playerStore.isLoaded,
+		load: id => playerStore.loadPlayersByEventId(id),
+	},
+	{
+		consumes: 'rounds',
+		isLoaded: () => roundStore.isLoaded,
+		load: id => roundStore.loadRoundsByEventId(id),
+	},
+	{
+		consumes: 'screens',
+		isLoaded: () => screenStore.isLoaded,
+		load: id => screenStore.loadScreensByEventId(id),
+	},
 ], async () => {
 	syncSelectedScreen();
 	await syncCardScope();
@@ -150,13 +170,23 @@ const matchOptions = computed(() => {
 			const slotIndex = assignment
 				? featureMatches.findIndex(slot => slot.id === assignment.slotId)
 				: -1;
-			const slotLabel = slotIndex >= 0 ? `Feature ${slotIndex + 1}: ` : '';
-			const player1 = match.player1Id ? playerStore.players.find(player => player.id === match.player1Id) : null;
-			const player2 = match.player2Id ? playerStore.players.find(player => player.id === match.player2Id) : null;
+			const slotLabel = slotIndex >= 0
+				? `Feature ${slotIndex + 1}: `
+				: '';
+			const player1 = match.player1Id
+				? playerStore.players.find(player => player.id === match.player1Id)
+				: null;
+			const player2 = match.player2Id
+				? playerStore.players.find(player => player.id === match.player2Id)
+				: null;
 			const player1Fallback = getMtgGameData(match.player1Data?.gameData);
 			const player2Fallback = getMtgGameData(match.player2Data?.gameData);
-			const p1 = player1 ? getMtgGameData(player1.gameData) : player1Fallback;
-			const p2 = player2 ? getMtgGameData(player2.gameData) : player2Fallback;
+			const p1 = player1
+				? getMtgGameData(player1.gameData)
+				: player1Fallback;
+			const p2 = player2
+				? getMtgGameData(player2.gameData)
+				: player2Fallback;
 			return {
 				label: `${slotLabel}${match.player1Data?.name ?? 'TBD'} vs ${match.player2Data?.name ?? 'TBD'}`,
 				value: match.id,
@@ -171,7 +201,9 @@ const matchOptions = computed(() => {
 });
 
 const selectedDeckListMatch = computed(() =>
-	deckListMatchId.value ? matchStore.matches.find(match => match.id === deckListMatchId.value) ?? null : null,
+	deckListMatchId.value
+		? matchStore.matches.find(match => match.id === deckListMatchId.value) ?? null
+		: null,
 );
 const selectedDeckListAssignment = computed(() => {
 	if (!deckListRoundId.value || !deckListMatchId.value)
@@ -198,7 +230,10 @@ watch(roundOptions, (options) => {
 		deckListRoundId.value = options[0].value;
 }, { immediate: true });
 
-watch([() => eventStore.eventId, deckListRoundId], async ([eventId, roundId], _, onCleanup) => {
+watch([
+	() => eventStore.eventId,
+	deckListRoundId,
+], async ([eventId, roundId], _, onCleanup) => {
 	if (!eventId || !roundId)
 		return;
 	const releaseRound = assignmentStore.consumeRound(eventId, roundId);

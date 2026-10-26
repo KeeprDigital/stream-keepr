@@ -67,7 +67,12 @@ describe('pnpm accept', () => {
 			await main(['node', 'accept.mjs', 'nope']);
 			expect(process.exitCode).toBe(2);
 			process.exitCode = undefined;
-			await main(['node', 'accept.mjs', 'animation-effects', '--deployed']);
+			await main([
+				'node',
+				'accept.mjs',
+				'animation-effects',
+				'--deployed',
+			]);
 			expect(process.exitCode).toBe(2);
 		}
 		finally {
@@ -95,7 +100,11 @@ describe('pnpm accept', () => {
 			});
 			try {
 				await main(['node', 'accept.mjs', 'deployed'], { env, runHarness });
-				return { exitCode: process.exitCode, runHarness, stderr: written.join('') };
+				return {
+					exitCode: process.exitCode,
+					runHarness,
+					stderr: written.join(''),
+				};
 			}
 			finally {
 				process.exitCode = exitCode;
@@ -131,7 +140,12 @@ describe('pnpm accept', () => {
 				await expect(main(['node', 'accept.mjs', 'deployed'], { env: complete }))
 					.rejects
 					.toThrow(/without a runHarness/u);
-				await expect(main(['node', 'accept.mjs', 'silent-video-validator', '--deployed']))
+				await expect(main([
+					'node',
+					'accept.mjs',
+					'silent-video-validator',
+					'--deployed',
+				]))
 					.rejects
 					.toThrow(/without a runHarness/u);
 			}
@@ -158,7 +172,10 @@ describe('pnpm accept', () => {
 			const { exitCode, runHarness } = await deployDay(complete);
 
 			expect(exitCode).toBeUndefined();
-			expect(runHarness.mock.calls).toEqual(DEPLOY_DAY.map(name => [name, ['--deployed']]));
+			expect(runHarness.mock.calls).toEqual(DEPLOY_DAY.map(name => [
+				name,
+				['--deployed'],
+			]));
 		});
 	});
 });

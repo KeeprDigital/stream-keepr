@@ -79,10 +79,17 @@ describe('graphics Authoring Leases', () => {
 		const response = await fetch(path, {
 			method: options.method ?? 'GET',
 			headers,
-			body: options.body === undefined ? undefined : JSON.stringify(options.body),
+			body: options.body === undefined
+				? undefined
+				: JSON.stringify(options.body),
 		});
 		const text = await response.text();
-		return { status: response.status, data: text ? JSON.parse(text) : null };
+		return {
+			status: response.status,
+			data: text
+				? JSON.parse(text)
+				: null,
+		};
 	}
 
 	async function askForLease(
@@ -250,10 +257,14 @@ describe('graphics Authoring Leases', () => {
 	it('accepts the holder\'s authoring write and refuses an observer\'s', async () => {
 		await askForLease(browserA);
 
-		const accepted = await patchStack(browserA, [graphic('holder-stack')]);
+		const accepted = await patchStack(browserA, [
+			graphic('holder-stack'),
+		]);
 		expect(accepted.status).toBe(200);
 
-		const refused = await patchStack(browserB, [graphic('observer-stack')]);
+		const refused = await patchStack(browserB, [
+			graphic('observer-stack'),
+		]);
 		expect(refused.status).toBe(409);
 
 		expect((await authoredStack()).map(entry => entry.id)).toEqual(['holder-stack']);
@@ -261,7 +272,10 @@ describe('graphics Authoring Leases', () => {
 
 	it('lets an observer read every accepted authoring change', async () => {
 		await askForLease(browserA);
-		await patchStack(browserA, [graphic('holder-stack'), graphic('second-graphic')]);
+		await patchStack(browserA, [
+			graphic('holder-stack'),
+			graphic('second-graphic'),
+		]);
 
 		const screen = await request(`/api/events/${eventId}/screens/${screenId}`, { cookie: browserB });
 
@@ -401,13 +415,19 @@ describe('graphics Authoring Leases', () => {
 
 	it('refuses an observer\'s stack edit through the generic Screen write', async () => {
 		await askForLease(browserA);
-		await patchStack(browserA, [graphic('holder-stack')]);
+		await patchStack(browserA, [
+			graphic('holder-stack'),
+		]);
 		const before = await currentScreen();
 
 		const refused = await patchScreen(browserB, {
 			modeConfigs: {
 				...before.modeConfigs,
-				'broadcast-graphics': { graphics: [graphic('observer-stack')] },
+				'broadcast-graphics': {
+					graphics: [
+						graphic('observer-stack'),
+					],
+				},
 			},
 		});
 
@@ -420,7 +440,9 @@ describe('graphics Authoring Leases', () => {
 		// What the Edit Screen dialog sends: the name it changed, and the mode
 		// configuration exactly as it read it.
 		await askForLease(browserA);
-		await patchStack(browserA, [graphic('holder-stack')]);
+		await patchStack(browserA, [
+			graphic('holder-stack'),
+		]);
 		const before = await currentScreen();
 
 		const renamed = await patchScreen(browserB, {
@@ -437,7 +459,13 @@ describe('graphics Authoring Leases', () => {
 		await askForLease(browserA);
 
 		const accepted = await patchScreen(browserA, {
-			modeConfigs: { 'broadcast-graphics': { graphics: [graphic('holder-generic')] } },
+			modeConfigs: {
+				'broadcast-graphics': {
+					graphics: [
+						graphic('holder-generic'),
+					],
+				},
+			},
 		});
 
 		expect(accepted.status).toBe(200);
@@ -458,8 +486,12 @@ describe('graphics Authoring Leases', () => {
 		expect(displaced.data.outcome).toBe('observe');
 		expect(displaced.data.lease.writable).toBe(false);
 
-		expect((await patchStack(browserA, [graphic('stale-author')])).status).toBe(409);
-		expect((await patchStack(browserB, [graphic('new-author')])).status).toBe(200);
+		expect((await patchStack(browserA, [
+			graphic('stale-author'),
+		])).status).toBe(409);
+		expect((await patchStack(browserB, [
+			graphic('new-author'),
+		])).status).toBe(200);
 	});
 
 	it('ignores a release from a session that does not hold the lease', async () => {
@@ -500,7 +532,9 @@ describe('graphics Authoring Leases', () => {
 	});
 
 	it('leaves an unleased Edit workspace writable by anyone', async () => {
-		expect((await patchStack(undefined, [graphic('unleased')])).status).toBe(200);
+		expect((await patchStack(undefined, [
+			graphic('unleased'),
+		])).status).toBe(200);
 		expect((await authoredStack()).map(entry => entry.id)).toEqual(['unleased']);
 		expect((await patchCanvas(undefined, 900)).status).toBe(200);
 	});

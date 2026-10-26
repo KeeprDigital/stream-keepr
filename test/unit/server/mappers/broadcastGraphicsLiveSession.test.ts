@@ -34,8 +34,16 @@ function row(currentState: unknown): DbBroadcastGraphicsLiveSession {
 describe('mapBroadcastGraphicsLiveSessionToResponse', () => {
 	it('reports no fault and passes live state through when it reads normally', () => {
 		const state = {
-			playout: { slate: { onAir: true } },
-			inputs: { slate: { working: { name: 'Ava' }, accepted: { name: 'Ava' }, acceptedRevision: 1 } },
+			playout: {
+				slate: { onAir: true },
+			},
+			inputs: {
+				slate: {
+					working: { name: 'Ava' },
+					accepted: { name: 'Ava' },
+					acceptedRevision: 1,
+				},
+			},
 		};
 
 		const mapped = mapBroadcastGraphicsLiveSessionToResponse(row(state));
@@ -45,7 +53,10 @@ describe('mapBroadcastGraphicsLiveSessionToResponse', () => {
 	});
 
 	it('replaces live state it cannot read with one that has nothing on air', () => {
-		const mapped = mapBroadcastGraphicsLiveSessionToResponse(row({ playout: { slate: 'yes' }, inputs: {} }));
+		const mapped = mapBroadcastGraphicsLiveSessionToResponse(row({
+			playout: { slate: 'yes' },
+			inputs: {},
+		}));
 
 		expect(mapped.recoveryFault?.reason).toBe('corrupt');
 		expect(mapped.currentState).toEqual({ playout: {}, inputs: {}, sources: {} });
@@ -78,7 +89,10 @@ describe('mapBroadcastGraphicsCommandResult', () => {
 		// handed a recovered snapshot alongside the raw unreadable state and apply the
 		// latter as authoritative — so this is the invariant, not an implementation
 		// detail: whatever a reader is told is on air must be one answer.
-		const result = mapBroadcastGraphicsCommandResult(row({ playout: { slate: 'yes' }, inputs: {} }), 'Take');
+		const result = mapBroadcastGraphicsCommandResult(row({
+			playout: { slate: 'yes' },
+			inputs: {},
+		}), 'Take');
 
 		expect(result.currentState).toEqual(result.session.currentState);
 		expect(result.currentState).toEqual({ playout: {}, inputs: {}, sources: {} });
@@ -87,11 +101,21 @@ describe('mapBroadcastGraphicsCommandResult', () => {
 
 	it('carries the epoch identity, sequence, and command the caller needs to correlate it', () => {
 		const result = mapBroadcastGraphicsCommandResult(
-			row({ playout: { slate: { onAir: true } }, inputs: {} }),
+			row({
+				playout: {
+					slate: { onAir: true },
+				},
+				inputs: {},
+			}),
 			'Out',
 		);
 
-		expect(result).toMatchObject({ screenId: 7, sessionId: 12, sequence: 4, commandType: 'Out' });
+		expect(result).toMatchObject({
+			screenId: 7,
+			sessionId: 12,
+			sequence: 4,
+			commandType: 'Out',
+		});
 		expect(result.currentState.playout.slate).toEqual({ onAir: true });
 		expect(result.session.recoveryFault).toBeNull();
 	});

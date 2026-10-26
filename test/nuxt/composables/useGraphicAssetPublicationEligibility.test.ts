@@ -3,7 +3,9 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 
 mockNuxtImport('$fetch', () => mockFetch);
 
@@ -43,14 +45,27 @@ function overlayConfig(layout: Record<string, unknown> = {}): FeatureMatchOverla
 const BACKGROUND_SLOT = 'layout.frame.backgroundImage';
 
 function configWithBackground() {
-	return overlayConfig({ frame: { backgroundImage: { kind: 'asset', assetId: 'asset-1', revisionId: 'rev-1' } } });
+	return overlayConfig({
+		frame: {
+			backgroundImage: { kind: 'asset', assetId: 'asset-1', revisionId: 'rev-1' },
+		},
+	});
 }
 
 function configWithBackgroundAndLogo() {
 	return overlayConfig({
-		frame: { backgroundImage: { kind: 'asset', assetId: 'asset-1', revisionId: 'rev-1' } },
+		frame: {
+			backgroundImage: { kind: 'asset', assetId: 'asset-1', revisionId: 'rev-1' },
+		},
 		composition: {
-			items: [{ id: 'logo', type: 'media', mediaKind: 'image', asset: { assetId: 'asset-2', revisionId: 'rev-2' } }],
+			items: [
+				{
+					id: 'logo',
+					type: 'media',
+					mediaKind: 'image',
+					asset: { assetId: 'asset-2', revisionId: 'rev-2' },
+				},
+			],
 			inputs: [],
 		},
 	});
@@ -107,7 +122,10 @@ describe('useGraphicAssetPublicationEligibility', () => {
 		const { eligibility, blocked, reason } = mountEligibility(ref(configWithBackground()));
 		await flushPromises();
 
-		expect(eligibility.value).toEqual({ outcome: 'missing', ownerSlots: [BACKGROUND_SLOT] });
+		expect(eligibility.value).toEqual({
+			outcome: 'missing',
+			ownerSlots: [BACKGROUND_SLOT],
+		});
 		expect(blocked.value).toBe(true);
 		expect(reason.value).toContain('missing');
 	});
@@ -118,7 +136,10 @@ describe('useGraphicAssetPublicationEligibility', () => {
 		const { eligibility, reason } = mountEligibility(ref(configWithBackground()));
 		await flushPromises();
 
-		expect(eligibility.value).toEqual({ outcome: 'unavailable', ownerSlots: [BACKGROUND_SLOT] });
+		expect(eligibility.value).toEqual({
+			outcome: 'unavailable',
+			ownerSlots: [BACKGROUND_SLOT],
+		});
 		expect(reason.value).toContain('temporarily unavailable');
 	});
 
@@ -129,7 +150,10 @@ describe('useGraphicAssetPublicationEligibility', () => {
 		const { eligibility } = mountEligibility(ref(configWithBackgroundAndLogo()));
 		await flushPromises();
 
-		expect(eligibility.value).toEqual({ outcome: 'missing', ownerSlots: [BACKGROUND_SLOT] });
+		expect(eligibility.value).toEqual({
+			outcome: 'missing',
+			ownerSlots: [BACKGROUND_SLOT],
+		});
 	});
 
 	it('re-checks on retry and recovers once the library answers', async () => {

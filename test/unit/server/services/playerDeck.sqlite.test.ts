@@ -57,7 +57,16 @@ describe('playerDeckService JSON bulk SQLite integration', () => {
 		}
 		await client.execute({
 			sql: 'insert into players (event_id, name, game_data) values (?, ?, ?)',
-			args: [1, 'Deck Player', JSON.stringify({ type: 'mtg', deckName: 'Old', deckColors: 'R', customField: 'keep' })],
+			args: [
+				1,
+				'Deck Player',
+				JSON.stringify({
+					type: 'mtg',
+					deckName: 'Old',
+					deckColors: 'R',
+					customField: 'keep',
+				}),
+			],
 		});
 	});
 
@@ -65,31 +74,47 @@ describe('playerDeckService JSON bulk SQLite integration', () => {
 
 	it('persists a complete deck snapshot, then clears only deck projection fields for an empty snapshot', async () => {
 		const service = playerDeckService();
-		await service.replaceMeleeDecksForEvent(1, [{ playerId: 1, snapshots: [{
-			deck: {
-				eventId: 1,
+		await service.replaceMeleeDecksForEvent(1, [
+			{
 				playerId: 1,
-				externalId: 'deck-1',
-				formatExternalId: 'modern',
-				name: 'Bulk Deck',
-				colors: 'UG',
-				sortOrder: 0,
-				isPrimary: true,
+				snapshots: [
+					{
+						deck: {
+							eventId: 1,
+							playerId: 1,
+							externalId: 'deck-1',
+							formatExternalId: 'modern',
+							name: 'Bulk Deck',
+							colors: 'UG',
+							sortOrder: 0,
+							isPrimary: true,
+						},
+						cards: [
+							{
+								cardId: 7,
+								quantity: 4,
+								compartment: 'mainboard',
+								sortOrder: 0,
+							},
+						],
+						unresolvedCards: [
+							{
+								entryType: 'card',
+								originalName: 'Mystery',
+								normalizedOriginalName: 'mystery',
+								setCode: null,
+								normalizedSetCode: '',
+								quantity: 1,
+								compartment: 'sideboard',
+								sortOrder: 1,
+								cardType: null,
+							},
+						],
+						importedCompanion: { action: 'set', cardId: 7 },
+					},
+				],
 			},
-			cards: [{ cardId: 7, quantity: 4, compartment: 'mainboard', sortOrder: 0 }],
-			unresolvedCards: [{
-				entryType: 'card',
-				originalName: 'Mystery',
-				normalizedOriginalName: 'mystery',
-				setCode: null,
-				normalizedSetCode: '',
-				quantity: 1,
-				compartment: 'sideboard',
-				sortOrder: 1,
-				cardType: null,
-			}],
-			importedCompanion: { action: 'set', cardId: 7 },
-		}] }]);
+		]);
 
 		const deck = await client.execute('select name, colors, is_primary from player_decks');
 		const playerAfterInsert = await client.execute('select game_data from players where id = 1');
@@ -103,7 +128,9 @@ describe('playerDeckService JSON bulk SQLite integration', () => {
 		expect((await client.execute('select count(*) as count from player_deck_unresolved_cards')).rows[0]!.count).toBe(1);
 		expect((await client.execute('select count(*) as count from player_deck_companions')).rows[0]!.count).toBe(1);
 
-		await service.replaceMeleeDecksForEvent(1, [{ playerId: 1, snapshots: [] }]);
+		await service.replaceMeleeDecksForEvent(1, [
+			{ playerId: 1, snapshots: [] },
+		]);
 
 		const playerAfterClear = await client.execute('select archetype_id, game_data from players where id = 1');
 		expect((await client.execute('select count(*) as count from player_decks')).rows[0]!.count).toBe(0);
@@ -119,7 +146,11 @@ describe('playerDeckService JSON bulk SQLite integration', () => {
 	it('preserves an unchanged deck review but clears it when the submitted contents change', async () => {
 		const playerResult = await client.execute({
 			sql: 'insert into players (event_id, name, game_data) values (?, ?, ?)',
-			args: [1, 'Reviewed Player', JSON.stringify({ type: 'mtg', deckName: null, deckColors: null })],
+			args: [
+				1,
+				'Reviewed Player',
+				JSON.stringify({ type: 'mtg', deckName: null, deckColors: null }),
+			],
 		});
 		const archetypeResult = await client.execute({
 			sql: 'insert into archetypes (event_id, name, colors) values (?, ?, ?)',
@@ -128,23 +159,37 @@ describe('playerDeckService JSON bulk SQLite integration', () => {
 		const playerId = Number(playerResult.lastInsertRowid);
 		const archetypeId = Number(archetypeResult.lastInsertRowid);
 		const service = playerDeckService();
-		const replacement = (quantity: number, sortOrder = 0, companionCardId?: number) => [{ playerId, snapshots: [{
-			deck: {
-				eventId: 1,
+		const replacement = (quantity: number, sortOrder = 0, companionCardId?: number) => [
+			{
 				playerId,
-				externalId: 'reviewed-deck',
-				formatExternalId: 'modern',
-				name: 'Imported Control',
-				colors: 'WU',
-				sortOrder: 0,
-				isPrimary: true,
+				snapshots: [
+					{
+						deck: {
+							eventId: 1,
+							playerId,
+							externalId: 'reviewed-deck',
+							formatExternalId: 'modern',
+							name: 'Imported Control',
+							colors: 'WU',
+							sortOrder: 0,
+							isPrimary: true,
+						},
+						cards: [
+							{
+								cardId: 7,
+								quantity,
+								compartment: 'mainboard' as const,
+								sortOrder,
+							},
+						],
+						unresolvedCards: [],
+						importedCompanion: companionCardId == null
+							? { action: 'clear' as const }
+							: { action: 'set' as const, cardId: companionCardId },
+					},
+				],
 			},
-			cards: [{ cardId: 7, quantity, compartment: 'mainboard' as const, sortOrder }],
-			unresolvedCards: [],
-			importedCompanion: companionCardId == null
-				? { action: 'clear' as const }
-				: { action: 'set' as const, cardId: companionCardId },
-		}] }];
+		];
 
 		await service.replaceMeleeDecksForEvent(1, replacement(4, 9));
 		const [deck] = await service.listByPlayer(1, playerId);
@@ -153,7 +198,10 @@ describe('playerDeckService JSON bulk SQLite integration', () => {
 
 		await service.replaceMeleeDecksForEvent(1, replacement(4));
 		const [unchangedDeck] = await service.listByPlayer(1, playerId);
-		expect(unchangedDeck).toMatchObject({ archetypeId, reviewedAt: expect.any(Date) });
+		expect(unchangedDeck).toMatchObject({
+			archetypeId,
+			reviewedAt: expect.any(Date),
+		});
 
 		await service.replaceMeleeDecksForEvent(1, replacement(3));
 		const [changedDeck] = await service.listByPlayer(1, playerId);
@@ -176,6 +224,9 @@ describe('playerDeckService JSON bulk SQLite integration', () => {
 		await service.reviewDeck(1, playerId, deckWithNewCompanion!.id, archetypeId);
 		await service.replaceMeleeDecksForEvent(1, replacement(3, 4, 8));
 		const [deckWithUnchangedCompanion] = await service.listByPlayer(1, playerId);
-		expect(deckWithUnchangedCompanion).toMatchObject({ archetypeId, reviewedAt: expect.any(Date) });
+		expect(deckWithUnchangedCompanion).toMatchObject({
+			archetypeId,
+			reviewedAt: expect.any(Date),
+		});
 	});
 });

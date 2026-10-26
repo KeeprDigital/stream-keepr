@@ -84,7 +84,12 @@ function createLibrary(
 		now: () => new Date('2026-07-31T09:00:00.000Z'),
 		generateIdentity: () => `${label}-identity-${++nextIdentity}`,
 	});
-	return { library, catalogue, canonical, staging };
+	return {
+		library,
+		catalogue,
+		canonical,
+		staging,
+	};
 }
 
 type Library = ReturnType<typeof createLibrary>['library'];
@@ -101,7 +106,9 @@ async function ingestImage(
 		idempotencyKey: `ingest-${name}-${++ingestionSequence}`,
 		initiatedBy: 'package-author',
 		name,
-		sourceFileName: mime === 'image/png' ? `${name}.png` : `${name}.webp`,
+		sourceFileName: mime === 'image/png'
+			? `${name}.png`
+			: `${name}.webp`,
 		declaredMime: mime,
 		duplicateContentPolicy: 'create-separate',
 		browserDecodeEvidence: {
@@ -296,7 +303,9 @@ describe('the Template Package installation contract', () => {
 		const { library: sender } = createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const archive = await exportPackage(sender, {
-			assets: [{ slot: 'backdrop', reference: backdrop }],
+			assets: [
+				{ slot: 'backdrop', reference: backdrop },
+			],
 		});
 
 		const { library: receiver, canonical } = createLibrary('receiver');
@@ -322,13 +331,15 @@ describe('the Template Package installation contract', () => {
 		});
 		expect(template.name).toBe('Lower third');
 		expect(template.sourceTemplateIdentity).toBe('template-1');
-		expect(template.references).toEqual([{
-			ownerSlot: 'backdrop',
-			reference: {
-				assetId: installation.assets[0]!.assetId,
-				revisionId: installation.assets[0]!.revisionId,
+		expect(template.references).toEqual([
+			{
+				ownerSlot: 'backdrop',
+				reference: {
+					assetId: installation.assets[0]!.assetId,
+					revisionId: installation.assets[0]!.revisionId,
+				},
 			},
-		}]);
+		]);
 		expect(template.document).toEqual({
 			backdrop: {
 				assetId: installation.assets[0]!.assetId,
@@ -365,7 +376,9 @@ describe('the Template Package installation contract', () => {
 		const { library } = createLibrary('sender');
 		const backdrop = await ingestImage(library, 'Backdrop');
 		const archive = await exportPackage(library, {
-			assets: [{ slot: 'backdrop', reference: backdrop }],
+			assets: [
+				{ slot: 'backdrop', reference: backdrop },
+			],
 		});
 
 		// The library curates its own name for the asset after the export.
@@ -378,14 +391,16 @@ describe('the Template Package installation contract', () => {
 		const completed = await install(library, archive);
 		const installation = installationOf(completed);
 
-		expect(installation.assets).toEqual([expect.objectContaining({
-			outcome: 'reused',
-			basis: 'exact-origin',
-			assetId: backdrop.assetId,
-			revisionId: backdrop.revisionId,
-			// Reuse reports the library's own record, not the packaged snapshot.
-			name: 'Backdrop (approved)',
-		})]);
+		expect(installation.assets).toEqual([
+			expect.objectContaining({
+				outcome: 'reused',
+				basis: 'exact-origin',
+				assetId: backdrop.assetId,
+				revisionId: backdrop.revisionId,
+				// Reuse reports the library's own record, not the packaged snapshot.
+				name: 'Backdrop (approved)',
+			}),
+		]);
 		// No second identity was created, and the curated name survived.
 		const assets = await activeAssets(library);
 		expect(assets).toHaveLength(1);
@@ -395,14 +410,18 @@ describe('the Template Package installation contract', () => {
 		const template = await library.inspectInstalledGraphicsTemplate({
 			templateId: installation.templateId,
 		});
-		expect(template.references).toEqual([{ ownerSlot: 'backdrop', reference: backdrop }]);
+		expect(template.references).toEqual([
+			{ ownerSlot: 'backdrop', reference: backdrop },
+		]);
 	});
 
 	it('recognises an exact origin it recorded on a previous installation', async () => {
 		const { library: sender } = createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const archive = await exportPackage(sender, {
-			assets: [{ slot: 'backdrop', reference: backdrop }],
+			assets: [
+				{ slot: 'backdrop', reference: backdrop },
+			],
 		});
 
 		const { library: receiver } = createLibrary('receiver');
@@ -413,12 +432,14 @@ describe('the Template Package installation contract', () => {
 		// Origin the first one recorded, which is the only trace of the sender the
 		// receiver keeps.
 		const second = installationOf(await install(receiver, archive));
-		expect(second.assets).toEqual([expect.objectContaining({
-			outcome: 'reused',
-			basis: 'exact-origin',
-			assetId: first.assets[0]!.assetId,
-			revisionId: first.assets[0]!.revisionId,
-		})]);
+		expect(second.assets).toEqual([
+			expect.objectContaining({
+				outcome: 'reused',
+				basis: 'exact-origin',
+				assetId: first.assets[0]!.assetId,
+				revisionId: first.assets[0]!.revisionId,
+			}),
+		]);
 		expect(await activeAssets(receiver)).toHaveLength(1);
 		// Each installation is its own independent Template copy.
 		expect(second.templateId).not.toBe(first.templateId);
@@ -428,11 +449,15 @@ describe('the Template Package installation contract', () => {
 		const { library: sender } = createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const firstArchive = await exportPackage(sender, {
-			assets: [{ slot: 'backdrop', reference: backdrop }],
+			assets: [
+				{ slot: 'backdrop', reference: backdrop },
+			],
 		});
 		const replaced = await replaceImage(sender, backdrop, sixteenPixelPng);
 		const secondArchive = await exportPackage(sender, {
-			assets: [{ slot: 'backdrop', reference: replaced }],
+			assets: [
+				{ slot: 'backdrop', reference: replaced },
+			],
 		});
 
 		const { library: receiver } = createLibrary('receiver');
@@ -455,7 +480,9 @@ describe('the Template Package installation contract', () => {
 		const { library: sender } = createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const archive = await exportPackage(sender, {
-			assets: [{ slot: 'backdrop', reference: backdrop }],
+			assets: [
+				{ slot: 'backdrop', reference: backdrop },
+			],
 		});
 
 		const { library: receiver, canonical } = createLibrary('receiver');
@@ -525,7 +552,11 @@ describe('the Template Package installation contract', () => {
 				name: 'Lower third',
 				items: [
 					{ media: backdrop },
-					{ layers: [{ media: badge }] },
+					{
+						layers: [
+							{ media: badge },
+						],
+					},
 				],
 			},
 		});
@@ -547,12 +578,14 @@ describe('the Template Package installation contract', () => {
 					},
 				},
 				{
-					layers: [{
-						media: {
-							assetId: byName.get('Badge')!.assetId,
-							revisionId: byName.get('Badge')!.revisionId,
+					layers: [
+						{
+							media: {
+								assetId: byName.get('Badge')!.assetId,
+								revisionId: byName.get('Badge')!.revisionId,
+							},
 						},
-					}],
+					],
 				},
 			],
 		});
@@ -569,7 +602,9 @@ describe('the Template Package installation contract', () => {
 		const { library: sender } = createLibrary('sender');
 		const face = await ingestStaticFont(sender, 'Face');
 		const archive = await exportPackage(sender, {
-			assets: [{ slot: 'face', reference: face }],
+			assets: [
+				{ slot: 'face', reference: face },
+			],
 		});
 
 		const { library: receiver } = createLibrary('receiver');
@@ -591,7 +626,9 @@ describe('the Template Package installation contract', () => {
 		const { library } = createLibrary('sender');
 		const face = await ingestStaticFont(library, 'Face');
 		const archive = await exportPackage(library, {
-			assets: [{ slot: 'face', reference: face }],
+			assets: [
+				{ slot: 'face', reference: face },
+			],
 		});
 
 		const installation = installationOf(await install(library, archive));
@@ -608,7 +645,9 @@ describe('the Template Package installation contract', () => {
 		const { library: sender } = createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const archive = await exportPackage(sender, {
-			assets: [{ slot: 'backdrop', reference: backdrop }],
+			assets: [
+				{ slot: 'backdrop', reference: backdrop },
+			],
 		});
 
 		const { library: receiver } = createLibrary('receiver');
@@ -626,7 +665,9 @@ describe('the Template Package installation contract', () => {
 		const { library: sender } = createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const archive = await exportPackage(sender, {
-			assets: [{ slot: 'backdrop', reference: backdrop }],
+			assets: [
+				{ slot: 'backdrop', reference: backdrop },
+			],
 		});
 
 		const { library: receiver } = createLibrary('receiver');
@@ -634,14 +675,16 @@ describe('the Template Package installation contract', () => {
 		const installed = installation.assets[0]!;
 
 		const usage = await receiver.listGraphicAssetUsage({ assetId: installed.assetId });
-		expect(usage).toEqual([expect.objectContaining({
-			reference: { assetId: installed.assetId, revisionId: installed.revisionId },
-			owner: expect.objectContaining({
-				kind: 'installed-graphics-template',
-				id: installation.templateId,
-				slot: 'backdrop',
+		expect(usage).toEqual([
+			expect.objectContaining({
+				reference: { assetId: installed.assetId, revisionId: installed.revisionId },
+				owner: expect.objectContaining({
+					kind: 'installed-graphics-template',
+					id: installation.templateId,
+					slot: 'backdrop',
+				}),
 			}),
-		})]);
+		]);
 		// A referenced asset cannot enter Trash, which is the invariant the
 		// reference exists to protect.
 		const trashed = await receiver.trashGraphicAsset({ assetId: installed.assetId });
@@ -653,7 +696,9 @@ describe('the Template Package installation contract', () => {
 			const { library: sender } = createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
-				assets: [{ slot: 'backdrop', reference: backdrop }],
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+				],
 			});
 
 			const { library: receiver, canonical } = createLibrary('receiver');
@@ -691,7 +736,9 @@ describe('the Template Package installation contract', () => {
 			const { library } = createLibrary('sender');
 			const backdrop = await ingestImage(library, 'Backdrop');
 			const archive = await exportPackage(library, {
-				assets: [{ slot: 'backdrop', reference: backdrop }],
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+				],
 			});
 
 			const resting = await preflight(library, archive);
@@ -740,7 +787,9 @@ describe('the Template Package installation contract', () => {
 			const { library: sender } = createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
-				assets: [{ slot: 'backdrop', reference: backdrop }],
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+				],
 			});
 
 			const { library: receiver } = createLibrary('receiver');
@@ -769,7 +818,9 @@ describe('the Template Package installation contract', () => {
 			const { library: sender } = createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
-				assets: [{ slot: 'backdrop', reference: backdrop }],
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+				],
 			});
 
 			const { library: receiver } = createLibrary('receiver');
@@ -801,7 +852,9 @@ describe('the Template Package installation contract', () => {
 			const { library: sender } = createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
-				assets: [{ slot: 'backdrop', reference: backdrop }],
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+				],
 			});
 
 			const { library: receiver } = createLibrary('receiver');
@@ -831,7 +884,9 @@ describe('the Template Package installation contract', () => {
 			const { library: sender } = createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
-				assets: [{ slot: 'backdrop', reference: backdrop }],
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+				],
 			});
 
 			const { library: receiver } = createLibrary('receiver');
@@ -874,7 +929,9 @@ describe('the Template Package installation contract', () => {
 			const { library: sender } = createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
-				assets: [{ slot: 'backdrop', reference: backdrop }],
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+				],
 			});
 
 			const { library: receiver } = createLibrary('receiver');
@@ -894,7 +951,9 @@ describe('the Template Package installation contract', () => {
 			const { library: sender } = createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
-				assets: [{ slot: 'backdrop', reference: backdrop }],
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+				],
 			});
 
 			// The report was computed against a library with room. The reservation
@@ -951,7 +1010,9 @@ describe('the Template Package installation contract', () => {
 			const { library: sender } = createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
-				assets: [{ slot: 'backdrop', reference: backdrop }],
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+				],
 			});
 
 			let catalogueFails = false;
@@ -996,7 +1057,9 @@ describe('the Template Package installation contract', () => {
 			const { library: sender } = createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
-				assets: [{ slot: 'backdrop', reference: backdrop }],
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+				],
 			});
 
 			// Room to stage and preflight the package, but not to keep its bytes.
@@ -1075,7 +1138,9 @@ describe('the Template Package installation contract', () => {
 			const { library } = createLibrary('sender');
 			const backdrop = await ingestImage(library, 'Backdrop');
 			const archive = await exportPackage(library, {
-				assets: [{ slot: 'backdrop', reference: backdrop }],
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+				],
 			});
 			// Retirement hides an asset from discovery and stops it taking new
 			// references, so a proposal to reuse it could never be installed.
@@ -1127,7 +1192,14 @@ describe('the Template Package installation contract', () => {
 			const [first, second] = parts.manifest.packagedAssets;
 			parts.manifest.packagedAssets = [
 				first!,
-				{ ...second!, origin: { ...second!.origin, ...first!.origin, digest: second!.origin.digest } },
+				{
+					...second!,
+					origin: {
+						...second!.origin,
+						...first!.origin,
+						digest: second!.origin.digest,
+					},
+				},
 			];
 
 			const { library: receiver } = createLibrary('receiver');
@@ -1143,7 +1215,9 @@ describe('the Template Package installation contract', () => {
 			const { library: sender } = createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
-				assets: [{ slot: 'backdrop', reference: backdrop }],
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+				],
 			});
 
 			const { library: receiver } = createLibrary('receiver');

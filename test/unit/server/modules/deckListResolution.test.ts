@@ -91,9 +91,18 @@ describe('deck List Resolution server module', () => {
 		mockPlayerDeckUnresolvedCardService.findById.mockResolvedValue(createUnresolvedEntry());
 		mockPlayerDeckUnresolvedCardService.listMatchingEntries.mockResolvedValue([
 			createUnresolvedEntry({ id: 11, deckId: 101, sortOrder: 2 }),
-			createUnresolvedEntry({ id: 12, deckId: 102, quantity: 1, compartment: null, sortOrder: 8 }),
+			createUnresolvedEntry({
+				id: 12,
+				deckId: 102,
+				quantity: 1,
+				compartment: null,
+				sortOrder: 8,
+			}),
 		]);
-		mockPlayerDeckService.findManyByIds.mockResolvedValue([{ id: 101, playerId: 7 }, { id: 102, playerId: 8 }]);
+		mockPlayerDeckService.findManyByIds.mockResolvedValue([
+			{ id: 101, playerId: 7 },
+			{ id: 102, playerId: 8 },
+		]);
 		mockFetchScryfallCardById.mockResolvedValue({
 			id: '11111111-1111-4111-8111-111111111111',
 			name: 'Lightning Bolt',
@@ -103,7 +112,15 @@ describe('deck List Resolution server module', () => {
 			cmc: 1,
 			manaCost: '{R}',
 			deckCounterTypes: ['charge'],
-			deckTokens: [{ id: 'treasure', scryfallId: null, name: 'Treasure', typeLine: 'Token Artifact', uri: null }],
+			deckTokens: [
+				{
+					id: 'treasure',
+					scryfallId: null,
+					name: 'Treasure',
+					typeLine: 'Token Artifact',
+					uri: null,
+				},
+			],
 		});
 	});
 
@@ -127,12 +144,16 @@ describe('deck List Resolution server module', () => {
 			game: 'mtg',
 			scryfallId: '11111111-1111-4111-8111-111111111111',
 			deckCounterTypes: ['charge'],
-			deckTokens: [expect.objectContaining({ id: 'treasure', name: 'Treasure' })],
+			deckTokens: [
+				expect.objectContaining({ id: 'treasure', name: 'Treasure' }),
+			],
 		}));
 		expect(getChain('insert').onConflictDoUpdate.mock.calls[0]![0]).toEqual(expect.objectContaining({
 			set: expect.objectContaining({
 				deckCounterTypes: ['charge'],
-				deckTokens: [expect.objectContaining({ id: 'treasure', name: 'Treasure' })],
+				deckTokens: [
+					expect.objectContaining({ id: 'treasure', name: 'Treasure' }),
+				],
 			}),
 		}));
 		expect(getChain('insert').values).toHaveBeenNthCalledWith(2, expect.objectContaining({
@@ -154,8 +175,12 @@ describe('deck List Resolution server module', () => {
 		mockPlayerDeckUnresolvedCardService.listMatchingEntries.mockResolvedValue([
 			createUnresolvedEntry({ id: 20, entryType: 'companion' }),
 		]);
-		mockPlayerDeckService.findManyByIds.mockResolvedValue([{ id: 101 }]);
-		getChain('select').limit.mockResolvedValue([{ id: 501 }]);
+		mockPlayerDeckService.findManyByIds.mockResolvedValue([
+			{ id: 101 },
+		]);
+		getChain('select').limit.mockResolvedValue([
+			{ id: 501 },
+		]);
 		mockPlayerDeckCompanionService.shouldSyncImportedCompanion.mockRejectedValue(
 			new MockDeckCompanionValidationError('Imported companion requires an open sideboard slot or an existing sideboard copy.'),
 		);
@@ -201,7 +226,10 @@ describe('deck List Resolution server module', () => {
 
 	it('names a Player once however many of their Deck Lists held the entry', async () => {
 		getChain('select').where.mockResolvedValue([]);
-		mockPlayerDeckService.findManyByIds.mockResolvedValue([{ id: 101, playerId: 7 }, { id: 102, playerId: 7 }]);
+		mockPlayerDeckService.findManyByIds.mockResolvedValue([
+			{ id: 101, playerId: 7 },
+			{ id: 102, playerId: 7 },
+		]);
 
 		await deckListResolutionModule().resolveUnresolvedDeckCard({
 			eventId: 1,
@@ -221,8 +249,12 @@ describe('deck List Resolution server module', () => {
 		mockPlayerDeckUnresolvedCardService.listMatchingEntries.mockResolvedValue([
 			createUnresolvedEntry({ id: 20, entryType: 'companion' }),
 		]);
-		mockPlayerDeckService.findManyByIds.mockResolvedValue([{ id: 101 }]);
-		getChain('select').limit.mockResolvedValue([{ id: 501 }]);
+		mockPlayerDeckService.findManyByIds.mockResolvedValue([
+			{ id: 101 },
+		]);
+		getChain('select').limit.mockResolvedValue([
+			{ id: 501 },
+		]);
 		mockPlayerDeckCompanionService.shouldSyncImportedCompanion.mockResolvedValue(false);
 
 		await deckListResolutionModule().resolveUnresolvedDeckCard({
@@ -238,7 +270,9 @@ describe('deck List Resolution server module', () => {
 	});
 
 	it('rejects matching entries that reference players outside the Event', async () => {
-		mockPlayerDeckService.findManyByIds.mockResolvedValue([{ id: 101 }]);
+		mockPlayerDeckService.findManyByIds.mockResolvedValue([
+			{ id: 101 },
+		]);
 
 		await expect(deckListResolutionModule().resolveUnresolvedDeckCard({
 			eventId: 1,
@@ -347,13 +381,32 @@ describe('deck List Resolution server module', () => {
 
 	it('merges pre-existing duplicate card rows inside the same retry-safe batch', async () => {
 		getChain('select').where.mockResolvedValue([
-			{ id: 31, deckId: 101, quantity: 2, compartment: 'mainboard', sortOrder: 0 },
-			{ id: 32, deckId: 101, quantity: 1, compartment: 'mainboard', sortOrder: 4 },
+			{
+				id: 31,
+				deckId: 101,
+				quantity: 2,
+				compartment: 'mainboard',
+				sortOrder: 0,
+			},
+			{
+				id: 32,
+				deckId: 101,
+				quantity: 1,
+				compartment: 'mainboard',
+				sortOrder: 4,
+			},
 		]);
 		mockPlayerDeckUnresolvedCardService.listMatchingEntries.mockResolvedValue([
-			createUnresolvedEntry({ id: 11, deckId: 101, quantity: 4, sortOrder: 2 }),
+			createUnresolvedEntry({
+				id: 11,
+				deckId: 101,
+				quantity: 4,
+				sortOrder: 2,
+			}),
 		]);
-		mockPlayerDeckService.findManyByIds.mockResolvedValue([{ id: 101 }]);
+		mockPlayerDeckService.findManyByIds.mockResolvedValue([
+			{ id: 101 },
+		]);
 
 		await deckListResolutionModule().resolveUnresolvedDeckCard({
 			eventId: 1,

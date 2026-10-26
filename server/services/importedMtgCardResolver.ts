@@ -83,7 +83,9 @@ function buildOverrideResolution(
 }
 
 function lookupErrorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
+	return error instanceof Error
+		? error.message
+		: String(error);
 }
 
 export function importedMtgCardResolverService() {
@@ -157,8 +159,11 @@ export function importedMtgCardResolverService() {
 				fuzzyData = await fetchScryfallCardByName({ fuzzy: card.name, setCode: card.setCode });
 			}
 			catch (error) {
-				if (!isScryfallNotFoundError(error))
-					throw new ImportedMtgCardLookupError([lookupErrorMessage(error)]);
+				if (!isScryfallNotFoundError(error)) {
+					throw new ImportedMtgCardLookupError([
+						lookupErrorMessage(error),
+					]);
+				}
 			}
 
 			if (!fuzzyData && card.setCode) {
@@ -166,8 +171,11 @@ export function importedMtgCardResolverService() {
 					fuzzyData = await fetchScryfallCardByName({ fuzzy: card.name });
 				}
 				catch (error) {
-					if (!isScryfallNotFoundError(error))
-						throw new ImportedMtgCardLookupError([lookupErrorMessage(error)]);
+					if (!isScryfallNotFoundError(error)) {
+						throw new ImportedMtgCardLookupError([
+							lookupErrorMessage(error),
+						]);
+					}
 					fuzzyData = null;
 				}
 			}

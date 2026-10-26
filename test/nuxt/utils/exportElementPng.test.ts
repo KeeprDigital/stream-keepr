@@ -46,7 +46,10 @@ describe('waitForElementExportReadiness', () => {
 		const image = document.createElement('img');
 		image.src = 'https://example.test/logo.png';
 		Object.defineProperty(image, 'complete', { configurable: true, value: false });
-		Object.defineProperty(image, 'decode', { configurable: true, value: vi.fn().mockResolvedValue(undefined) });
+		Object.defineProperty(image, 'decode', {
+			configurable: true,
+			value: vi.fn().mockResolvedValue(undefined),
+		});
 		element.appendChild(image);
 		document.body.appendChild(element);
 
@@ -67,7 +70,10 @@ describe('inlineExportImageSources', () => {
 		const target = source.cloneNode(true) as HTMLElement;
 		vi.stubGlobal('fetch', vi.fn(async () => new Response(
 			new Uint8Array([1, 2, 3]),
-			{ status: 200, headers: { 'content-type': 'image/png' } },
+			{
+				status: 200,
+				headers: { 'content-type': 'image/png' },
+			},
 		)));
 
 		await inlineExportImageSources(source, target);
@@ -91,7 +97,10 @@ describe('inlineExportStyleUrls', () => {
 		);
 		vi.stubGlobal('fetch', vi.fn(async () => new Response(
 			new Uint8Array([1, 2, 3]),
-			{ status: 200, headers: { 'content-type': 'image/png' } },
+			{
+				status: 200,
+				headers: { 'content-type': 'image/png' },
+			},
 		)));
 
 		await inlineExportStyleUrls(element);
@@ -107,14 +116,19 @@ describe('inlineExportFontSources', () => {
 	it('defines asset-backed font families from embedded revision bytes', async () => {
 		const element = document.createElement('div');
 		const text = document.createElement('p');
-		text.dataset.exportFontSources = JSON.stringify([{
-			family: 'stream-keepr-asset-font',
-			url: '/screen-output/screens/4/assets/font/revisions/1/content',
-		}]);
+		text.dataset.exportFontSources = JSON.stringify([
+			{
+				family: 'stream-keepr-asset-font',
+				url: '/screen-output/screens/4/assets/font/revisions/1/content',
+			},
+		]);
 		element.appendChild(text);
 		vi.stubGlobal('fetch', vi.fn(async () => new Response(
 			new Uint8Array([1, 2, 3]),
-			{ status: 200, headers: { 'content-type': 'font/woff2' } },
+			{
+				status: 200,
+				headers: { 'content-type': 'font/woff2' },
+			},
 		)));
 
 		await inlineExportFontSources(element);

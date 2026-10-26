@@ -96,15 +96,23 @@ export function useFeatureMatchOverlaySideboardData(
 	const { fetchScryfallCards, buildDeckListArrays } = useScryfallBatch();
 
 	const sideboards = ref<FeatureMatchOverlaySideboards>({ player1: null, player2: null });
-	let displayed: SideboardSourceState = { sideboards: { player1: null, player2: null }, stamps: { player1: null, player2: null } };
+	let displayed: SideboardSourceState = {
+		sideboards: { player1: null, player2: null },
+		stamps: { player1: null, player2: null },
+	};
 
 	const requests = computed<Record<PlayerSide, SideRequest | null>>(() => {
 		const result: Record<PlayerSide, SideRequest | null> = { player1: null, player2: null };
 		for (const side of PLAYER_SIDES) {
-			const playerId = side === 'player1' ? match.value?.player1Id : match.value?.player2Id;
+			const playerId = side === 'player1'
+				? match.value?.player1Id
+				: match.value?.player2Id;
 			if (playerId == null || !hasDeckListItem(config.value, side))
 				continue;
-			result[side] = { playerId, deckId: snapshotDeckId(match.value, playerId) };
+			result[side] = {
+				playerId,
+				deckId: snapshotDeckId(match.value, playerId),
+			};
 		}
 		return result;
 	});
@@ -137,7 +145,9 @@ export function useFeatureMatchOverlaySideboardData(
 			return { cards: null, degraded: false, stamp: null };
 
 		// The Player and their decks come through the Screen (#604).
-		const read = await outputReads.playerDecks(request.playerId, request.deckId != null ? { deckId: request.deckId } : {})
+		const read = await outputReads.playerDecks(request.playerId, request.deckId != null
+			? { deckId: request.deckId }
+			: {})
 			.catch(() => null);
 		if (!read)
 			return { cards: null, degraded: false, stamp: `${request.playerId}::none` };
@@ -146,8 +156,12 @@ export function useFeatureMatchOverlaySideboardData(
 		const updatedAtMs = new Date(player.updatedAt).getTime();
 		// A pinned deck the collection no longer holds falls back to the
 		// collection's own selection ladder rather than rendering nothing.
-		const deck = selectPlayerDeck(read.decks, request.deckId != null ? { deckId: request.deckId } : {})
-			?? (request.deckId != null ? selectPlayerDeck(read.decks) : null);
+		const deck = selectPlayerDeck(read.decks, request.deckId != null
+			? { deckId: request.deckId }
+			: {})
+		?? (request.deckId != null
+			? selectPlayerDeck(read.decks)
+			: null);
 		if (!deck)
 			return { cards: null, degraded: false, stamp: `${request.playerId}:${updatedAtMs}:none` };
 
@@ -191,7 +205,10 @@ export function useFeatureMatchOverlaySideboardData(
 			// Nothing to fetch: settle the recovery lifecycle rather than leaving a
 			// degraded report or a pending re-fetch standing for a cleared surface.
 			degradedRefetch.settle();
-			displayed = { sideboards: { player1: null, player2: null }, stamps: { player1: null, player2: null } };
+			displayed = {
+				sideboards: { player1: null, player2: null },
+				stamps: { player1: null, player2: null },
+			};
 			sideboards.value = displayed.sideboards;
 			return;
 		}
@@ -230,10 +247,14 @@ export function useFeatureMatchOverlaySideboardData(
 	watch(
 		() => {
 			const current = requests.value;
-			const parts: string[] = [String(eventId.value ?? '')];
+			const parts: string[] = [
+				String(eventId.value ?? ''),
+			];
 			for (const side of PLAYER_SIDES) {
 				const request = current[side];
-				parts.push(request ? `${request.playerId}:${request.deckId ?? ''}` : '');
+				parts.push(request
+					? `${request.playerId}:${request.deckId ?? ''}`
+					: '');
 			}
 			return parts.join('|');
 		},

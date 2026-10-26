@@ -38,7 +38,10 @@ mockNuxtImport('useGraphicStyleSetRepository', () => () => ({
 }));
 
 const UAlertStub = defineComponent({
-	props: { title: { type: String, required: false }, description: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+		description: { type: String, required: false },
+	},
 	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span></div>',
 });
 const UBadgeStub = defineComponent({ template: '<span><slot /></span>' });
@@ -93,7 +96,12 @@ function changes(): GraphicStyleUpdateChange[] {
 
 function review(overrides: Partial<GraphicStyleUpdateReview> = {}): GraphicStyleUpdateReview {
 	return {
-		styleSet: { id: 'style-1', name: 'Show style', linkedRevision: 3, publishedRevision: 7 },
+		styleSet: {
+			id: 'style-1',
+			name: 'Show style',
+			linkedRevision: 3,
+			publishedRevision: 7,
+		},
 		available: true,
 		changes: changes(),
 		...overrides,
@@ -105,8 +113,14 @@ async function mountReview(props: Record<string, unknown> = {}) {
 	const { default: StyleUpdateReview } = await import(componentPath);
 
 	const wrapper = mount(StyleUpdateReview, {
-		props: { template: template(), writable: true, ...props },
-		global: { stubs: { UAlert: UAlertStub, UBadge: UBadgeStub, UButton: UButtonStub } },
+		props: {
+			template: template(),
+			writable: true,
+			...props,
+		},
+		global: {
+			stubs: { UAlert: UAlertStub, UBadge: UBadgeStub, UButton: UButtonStub },
+		},
 	});
 	await flushPromises();
 	return wrapper;
@@ -192,21 +206,25 @@ describe('graphicsStyleUpdateReview', () => {
 	/** A property both sides already agree on is not part of the answer, so it is not shown. */
 	it('shows only the properties that would actually move', async () => {
 		mockReviewTemplateUpdate.mockResolvedValue(review({
-			changes: [{
-				ownerItemId: 'headline',
-				ownerLabel: 'Headline',
-				slot: 'typography',
-				entryId: 'heading',
-				entryName: 'Show heading',
-				current: { fontSize: 30, fontWeight: 800, color: '#ffffff' },
-				next: { fontSize: 99, fontWeight: 800, color: '#ffffff' },
-			}],
+			changes: [
+				{
+					ownerItemId: 'headline',
+					ownerLabel: 'Headline',
+					slot: 'typography',
+					entryId: 'heading',
+					entryName: 'Show heading',
+					current: { fontSize: 30, fontWeight: 800, color: '#ffffff' },
+					next: { fontSize: 99, fontWeight: 800, color: '#ffffff' },
+				},
+			],
 		}));
 
 		const wrapper = await mountReview();
 		await expand(wrapper);
 
-		expect(movedProperties(wrapper)).toEqual([{ key: 'fontSize', current: '30', next: '99' }]);
+		expect(movedProperties(wrapper)).toEqual([
+			{ key: 'fontSize', current: '30', next: '99' },
+		]);
 	});
 
 	/**
@@ -219,25 +237,34 @@ describe('graphicsStyleUpdateReview', () => {
 	 */
 	it('says when a property is not set, and shows a value that is not a scalar whole', async () => {
 		mockReviewTemplateUpdate.mockResolvedValue(review({
-			changes: [{
-				ownerItemId: 'bug',
-				ownerLabel: 'Sponsor bug',
-				slot: 'media',
-				entryId: 'framed',
-				entryName: 'Framed media',
-				current: { opacity: 1 },
-				next: { opacity: 1, clipGeometry: { topLeft: { treatment: 'cut', size: 24 } } },
-			}],
+			changes: [
+				{
+					ownerItemId: 'bug',
+					ownerLabel: 'Sponsor bug',
+					slot: 'media',
+					entryId: 'framed',
+					entryName: 'Framed media',
+					current: { opacity: 1 },
+					next: {
+						opacity: 1,
+						clipGeometry: {
+							topLeft: { treatment: 'cut', size: 24 },
+						},
+					},
+				},
+			],
 		}));
 
 		const wrapper = await mountReview();
 		await expand(wrapper);
 
-		expect(movedProperties(wrapper)).toEqual([{
-			key: 'clipGeometry',
-			current: 'not set',
-			next: '{"topLeft":{"treatment":"cut","size":24}}',
-		}]);
+		expect(movedProperties(wrapper)).toEqual([
+			{
+				key: 'clipGeometry',
+				current: 'not set',
+				next: '{"topLeft":{"treatment":"cut","size":24}}',
+			},
+		]);
 	});
 
 	/**
@@ -406,7 +433,9 @@ describe('graphicsStyleUpdateReview', () => {
 		await wrapper.findAll('[data-testid="style-update-keep"]')[0]!.trigger('click');
 		expect(mockReviewTemplateUpdate).toHaveBeenCalledTimes(1);
 
-		await wrapper.setProps({ template: template({ revision: 5 }) });
+		await wrapper.setProps({
+			template: template({ revision: 5 }),
+		});
 		await flushPromises();
 
 		expect(mockReviewTemplateUpdate).toHaveBeenCalledTimes(2);

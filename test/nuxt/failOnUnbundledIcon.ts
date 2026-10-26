@@ -56,7 +56,9 @@ export function assertEveryIconBundled(): void {
 	if (unbundled.length === 0)
 		return;
 	const icons = unbundled.splice(0)
-		.map(({ name, testName }) => testName ? `\`${name}\` (rendered in "${testName}")` : `\`${name}\``)
+		.map(({ name, testName }) => testName
+			? `\`${name}\` (rendered in "${testName}")`
+			: `\`${name}\``)
 		.join(', ');
 	throw new Error(
 		`Icon not in the test client bundle: ${icons}. Name it where `

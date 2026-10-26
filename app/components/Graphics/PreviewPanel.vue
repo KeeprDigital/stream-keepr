@@ -45,7 +45,9 @@ const viewportStyle = computed(() => [
 				height: `${props.canvasHeight * Number(zoom.value)}px`,
 				maxWidth: 'none',
 			},
-	props.background ? { backgroundColor: props.background } : {},
+	props.background
+		? { backgroundColor: props.background }
+		: {},
 ]);
 </script>
 

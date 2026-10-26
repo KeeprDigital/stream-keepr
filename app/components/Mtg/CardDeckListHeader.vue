@@ -19,7 +19,10 @@ const featureMatchOptions = useFeatureMatchMenuItems();
 const matchOptions = computed(() => props.matchOptions ?? featureMatchOptions.value);
 
 // When picker selection changes, load either a round-specific match or the live feature-match slot.
-watch([deckListMatchId, () => props.selectedMatch], async ([matchId, selectedMatch]) => {
+watch([
+	deckListMatchId,
+	() => props.selectedMatch,
+], async ([matchId, selectedMatch]) => {
 	if (!matchId) {
 		cardStore.clearMatchDeckLists();
 		return;

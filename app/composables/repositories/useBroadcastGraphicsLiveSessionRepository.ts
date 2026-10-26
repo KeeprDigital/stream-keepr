@@ -48,7 +48,10 @@ export function useBroadcastGraphicsLiveSessionRepository() {
 	): Promise<BroadcastGraphicsLiveSessionResponse> => {
 		return await $fetch<BroadcastGraphicsLiveSessionResponse>(
 			`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/live-session/reset`,
-			{ method: 'POST', headers: apiHeaders.getHeaders() },
+			{
+				method: 'POST',
+				headers: apiHeaders.getHeaders(),
+			},
 		);
 	};
 

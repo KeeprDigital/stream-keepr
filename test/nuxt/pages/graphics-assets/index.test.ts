@@ -109,26 +109,30 @@ const completedJpegOperation: GraphicsIngestionOperation = {
 	},
 };
 
-const assets = ref<GraphicAsset[]>([{
-	id: 'asset-1' as never,
-	name: 'Scoreboard logo',
-	kind: 'image',
-	revisionId: 'revision-1' as never,
-	revisionNumber: 1,
-	revisions: [{
-		id: 'revision-1' as never,
+const assets = ref<GraphicAsset[]>([
+	{
+		id: 'asset-1' as never,
+		name: 'Scoreboard logo',
+		kind: 'image',
+		revisionId: 'revision-1' as never,
 		revisionNumber: 1,
+		revisions: [
+			{
+				id: 'revision-1' as never,
+				revisionNumber: 1,
+				facts: completedOperation.report!.outcome === 'accepted'
+					? completedOperation.report!.facts
+					: {} as never,
+			},
+		],
+		lifecycle: { state: 'active' },
 		facts: completedOperation.report!.outcome === 'accepted'
 			? completedOperation.report!.facts
 			: {} as never,
-	}],
-	lifecycle: { state: 'active' },
-	facts: completedOperation.report!.outcome === 'accepted'
-		? completedOperation.report!.facts
-		: {} as never,
-	eventIds: [7],
-	operation: completedOperation,
-}]);
+		eventIds: [7],
+		operation: completedOperation,
+	},
+]);
 const capacity = ref<GraphicsAssetLibraryCapacity>({
 	canonical: {
 		limitBytes: 100,
@@ -167,10 +171,16 @@ const listingError = ref<unknown>(null);
 const capacityLoadError = ref<unknown>(null);
 
 mockNuxtImport('useFetch', () => (path: string) => ({
-	data: path === '/api/graphics-assets/capacity' ? capacity : assets,
+	data: path === '/api/graphics-assets/capacity'
+		? capacity
+		: assets,
 	status: ref('success'),
-	error: path === '/api/graphics-assets/capacity' ? capacityLoadError : listingError,
-	refresh: path === '/api/graphics-assets/capacity' ? mockCapacityRefresh : mockRefresh,
+	error: path === '/api/graphics-assets/capacity'
+		? capacityLoadError
+		: listingError,
+	refresh: path === '/api/graphics-assets/capacity'
+		? mockCapacityRefresh
+		: mockRefresh,
 }));
 
 const passthroughStub = defineComponent({
@@ -237,26 +247,30 @@ describe('the Graphics Asset Library Workspace', () => {
 	beforeEach(() => {
 		listingError.value = null;
 		capacityLoadError.value = null;
-		assets.value = [{
-			id: 'asset-1' as never,
-			name: 'Scoreboard logo',
-			kind: 'image',
-			revisionId: 'revision-1' as never,
-			revisionNumber: 1,
-			revisions: [{
-				id: 'revision-1' as never,
+		assets.value = [
+			{
+				id: 'asset-1' as never,
+				name: 'Scoreboard logo',
+				kind: 'image',
+				revisionId: 'revision-1' as never,
 				revisionNumber: 1,
+				revisions: [
+					{
+						id: 'revision-1' as never,
+						revisionNumber: 1,
+						facts: completedOperation.report!.outcome === 'accepted'
+							? completedOperation.report!.facts
+							: {} as never,
+					},
+				],
+				lifecycle: { state: 'active' },
 				facts: completedOperation.report!.outcome === 'accepted'
 					? completedOperation.report!.facts
 					: {} as never,
-			}],
-			lifecycle: { state: 'active' },
-			facts: completedOperation.report!.outcome === 'accepted'
-				? completedOperation.report!.facts
-				: {} as never,
-			eventIds: [7],
-			operation: completedOperation,
-		}];
+				eventIds: [7],
+				operation: completedOperation,
+			},
+		];
 		mockApiFetch.mockReset();
 		mockBrowserDecode.mockReset();
 		mockBrowserDecode.mockResolvedValue({
@@ -297,20 +311,22 @@ describe('the Graphics Asset Library Workspace', () => {
 	});
 
 	it('inspects each exact Graphic Asset Revision with the owning graphics artifact and Event context', async () => {
-		const usage: GraphicAssetUsage[] = [{
-			id: 'usage-1',
-			reference: {
-				assetId: 'asset-1' as never,
-				revisionId: 'revision-older' as never,
+		const usage: GraphicAssetUsage[] = [
+			{
+				id: 'usage-1',
+				reference: {
+					assetId: 'asset-1' as never,
+					revisionId: 'revision-older' as never,
+				},
+				owner: {
+					kind: 'screen',
+					id: '42',
+					name: 'Main Feature Match',
+					slot: 'layout.frame.backgroundImage',
+					eventId: 7,
+				},
 			},
-			owner: {
-				kind: 'screen',
-				id: '42',
-				name: 'Main Feature Match',
-				slot: 'layout.frame.backgroundImage',
-				eventId: 7,
-			},
-		}];
+		];
 		mockApiFetch.mockResolvedValueOnce(usage);
 		const wrapper = await mountPage();
 
@@ -518,11 +534,13 @@ describe('the Graphics Asset Library Workspace', () => {
 			transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
 			transfer: {
 				...started.transfer!,
-				completedParts: [{
-					partNumber: 1,
-					partIdentity: 'operation-1:1' as never,
-					byteLength: GRAPHICS_MULTIPART_PART_BYTES,
-				}],
+				completedParts: [
+					{
+						partNumber: 1,
+						partIdentity: 'operation-1:1' as never,
+						byteLength: GRAPHICS_MULTIPART_PART_BYTES,
+					},
+				],
 			},
 		};
 		const ready: GraphicsIngestionOperation = {
@@ -598,11 +616,13 @@ describe('the Graphics Asset Library Workspace', () => {
 				maximumPartAttempts: 3,
 				partCount: 2,
 				cleanupPending: false,
-				completedParts: [{
-					partNumber: 1,
-					partIdentity: 'operation-1:1' as never,
-					byteLength: GRAPHICS_MULTIPART_PART_BYTES,
-				}],
+				completedParts: [
+					{
+						partNumber: 1,
+						partIdentity: 'operation-1:1' as never,
+						byteLength: GRAPHICS_MULTIPART_PART_BYTES,
+					},
+				],
 			},
 		};
 		const cancelled: GraphicsIngestionOperation = {
@@ -617,7 +637,9 @@ describe('the Graphics Asset Library Workspace', () => {
 		};
 		localStorage.setItem('graphics-asset-ingestion-operation', active.id);
 		mockApiFetch.mockImplementation((_path: string, options?: { method?: string }) =>
-			Promise.resolve(options?.method === 'DELETE' ? cancelled : active));
+			Promise.resolve(options?.method === 'DELETE'
+				? cancelled
+				: active));
 
 		const wrapper = await mountPage();
 		await flushPromises();
@@ -637,7 +659,9 @@ describe('the Graphics Asset Library Workspace', () => {
 
 	it('preserves the server validation report when malformed input cannot be accepted', async () => {
 		const wrapper = await mountPage();
-		const malformed = new File([new TextEncoder().encode('not a jpeg')], 'malformed.jpg', {
+		const malformed = new File([
+			new TextEncoder().encode('not a jpeg'),
+		], 'malformed.jpg', {
 			type: 'image/jpeg',
 		});
 		mockBrowserDecode.mockResolvedValueOnce({
@@ -659,11 +683,13 @@ describe('the Graphics Asset Library Workspace', () => {
 			report: {
 				outcome: 'rejected',
 				compatibilityProfile: 'still-image-v1',
-				issues: [{
-					severity: 'error',
-					code: 'unsupported-image-format',
-					message: 'Source bytes are not a supported image.',
-				}],
+				issues: [
+					{
+						severity: 'error',
+						code: 'unsupported-image-format',
+						message: 'Source bytes are not a supported image.',
+					},
+				],
 			},
 			failure: {
 				code: 'validation-failed',
@@ -672,7 +698,9 @@ describe('the Graphics Asset Library Workspace', () => {
 			},
 		};
 		mockApiFetch.mockImplementation((_path: string, request?: { method?: string }) =>
-			Promise.resolve(request?.method === 'PUT' ? failed : created));
+			Promise.resolve(request?.method === 'PUT'
+				? failed
+				: created));
 
 		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', malformed);
 		await flushPromises();
@@ -697,7 +725,9 @@ describe('the Graphics Asset Library Workspace', () => {
 
 	it('reuses the persisted initiation identity when the first response is lost', async () => {
 		const wrapper = await mountPage();
-		const file = new File([new Uint8Array(68)], 'reconnect.png', { type: 'image/png' });
+		const file = new File([
+			new Uint8Array(68),
+		], 'reconnect.png', { type: 'image/png' });
 		const createdOperation = {
 			...completedOperation,
 			stage: 'created' as const,
@@ -774,7 +804,9 @@ describe('the Graphics Asset Library Workspace', () => {
 
 	it('lets an author explicitly request a separate Graphic Asset identity', async () => {
 		const wrapper = await mountPage();
-		const file = new File([new Uint8Array(68)], 'separate.png', { type: 'image/png' });
+		const file = new File([
+			new Uint8Array(68),
+		], 'separate.png', { type: 'image/png' });
 		mockApiFetch.mockRejectedValue(new Error('Stop after initiation'));
 
 		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
@@ -795,19 +827,21 @@ describe('the Graphics Asset Library Workspace', () => {
 
 	// ADR-0034: a saved template holds Retire back, and the refusal names it.
 	it('names the saved templates that hold back a retirement', async () => {
-		const usage: GraphicAssetUsage[] = [{
-			id: 'usage-template',
-			reference: {
-				assetId: 'asset-1' as never,
-				revisionId: 'revision-1' as never,
+		const usage: GraphicAssetUsage[] = [
+			{
+				id: 'usage-template',
+				reference: {
+					assetId: 'asset-1' as never,
+					revisionId: 'revision-1' as never,
+				},
+				owner: {
+					kind: 'broadcast-graphic-template',
+					id: 'template-1',
+					name: 'Lower third',
+					slot: 'graphics.lower-third.items.plate.asset',
+				},
 			},
-			owner: {
-				kind: 'broadcast-graphic-template',
-				id: 'template-1',
-				name: 'Lower third',
-				slot: 'graphics.lower-third.items.plate.asset',
-			},
-		}];
+		];
 		mockApiFetch.mockResolvedValueOnce({ outcome: 'in-use', usage });
 		const wrapper = await mountPage();
 
@@ -820,20 +854,22 @@ describe('the Graphics Asset Library Workspace', () => {
 	});
 
 	it('exposes reversible retirement and Trash actions with blocked usage and recovery facts', async () => {
-		const usage: GraphicAssetUsage[] = [{
-			id: 'usage-lifecycle',
-			reference: {
-				assetId: 'asset-1' as never,
-				revisionId: 'revision-1' as never,
+		const usage: GraphicAssetUsage[] = [
+			{
+				id: 'usage-lifecycle',
+				reference: {
+					assetId: 'asset-1' as never,
+					revisionId: 'revision-1' as never,
+				},
+				owner: {
+					kind: 'screen',
+					id: '42',
+					name: 'Main output',
+					slot: 'layout.frame.backgroundImage',
+					eventId: 7,
+				},
 			},
-			owner: {
-				kind: 'screen',
-				id: '42',
-				name: 'Main output',
-				slot: 'layout.frame.backgroundImage',
-				eventId: 7,
-			},
-		}];
+		];
 		mockApiFetch
 			.mockResolvedValueOnce({
 				outcome: 'retired',
@@ -859,7 +895,10 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(mockApiFetch).toHaveBeenNthCalledWith(
 			1,
 			'/api/graphics-assets/asset-1/lifecycle-actions',
-			{ method: 'POST', body: { action: 'retire' } },
+			{
+				method: 'POST',
+				body: { action: 'retire' },
+			},
 		);
 
 		const trash = wrapper.findAll('button')
@@ -869,20 +908,25 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(mockApiFetch).toHaveBeenNthCalledWith(
 			2,
 			'/api/graphics-assets/asset-1/lifecycle-actions',
-			{ method: 'POST', body: { action: 'trash' } },
+			{
+				method: 'POST',
+				body: { action: 'trash' },
+			},
 		);
 		expect(wrapper.text()).toContain('Main output');
 		expect(wrapper.text()).toContain('cannot enter Trash');
 
-		assets.value = [{
-			...assets.value[0]!,
-			lifecycle: {
-				state: 'trashed',
-				priorState: 'retired',
-				trashedAt: '2026-07-28T00:00:00.000Z',
-				recoverableUntil: '2026-08-27T00:00:00.000Z',
+		assets.value = [
+			{
+				...assets.value[0]!,
+				lifecycle: {
+					state: 'trashed',
+					priorState: 'retired',
+					trashedAt: '2026-07-28T00:00:00.000Z',
+					recoverableUntil: '2026-08-27T00:00:00.000Z',
+				},
 			},
-		}];
+		];
 		await flushPromises();
 		expect(wrapper.text()).toContain('Trash');
 		expect(wrapper.text()).toContain('Previously Retired');
@@ -898,7 +942,10 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(mockApiFetch).toHaveBeenNthCalledWith(
 			3,
 			'/api/graphics-assets/asset-1/lifecycle-actions',
-			{ method: 'POST', body: { action: 'restore' } },
+			{
+				method: 'POST',
+				body: { action: 'restore' },
+			},
 		);
 	});
 
@@ -1013,16 +1060,23 @@ describe('the Graphics Asset Library Workspace', () => {
 			report: {
 				outcome: 'rejected',
 				compatibilityProfile: 'still-image-v1',
-				issues: [{
-					severity: 'error',
-					code: 'remote-source-destination-not-public',
-					message: 'https://cdn.example.com does not name a public internet destination.',
-				}],
+				issues: [
+					{
+						severity: 'error',
+						code: 'remote-source-destination-not-public',
+						message: 'https://cdn.example.com does not name a public internet destination.',
+					},
+				],
 			},
 			result: undefined,
 		};
 		mockApiFetch
-			.mockResolvedValueOnce({ ...rejected, stage: 'created', failure: undefined, report: undefined })
+			.mockResolvedValueOnce({
+				...rejected,
+				stage: 'created',
+				failure: undefined,
+				report: undefined,
+			})
 			.mockResolvedValueOnce(rejected);
 		const wrapper = await mountPage();
 
@@ -1103,7 +1157,10 @@ describe('the Graphics Asset Library Workspace', () => {
 		);
 		expect(mockApiFetch).toHaveBeenLastCalledWith(
 			'/api/graphics-assets/ingestion-operations/operation-reconnected/browser-evidence',
-			{ method: 'POST', body: expect.objectContaining({ outcome: 'decoded' }) },
+			{
+				method: 'POST',
+				body: expect.objectContaining({ outcome: 'decoded' }),
+			},
 		);
 		expect(wrapper.text()).toContain('Published');
 	});
@@ -1212,7 +1269,9 @@ describe('the Graphics Asset Library Workspace', () => {
 	 */
 	it('says why an upload was refused rather than naming the route', async () => {
 		const wrapper = await mountPage();
-		const file = new File([new Uint8Array(68)], 'new-scoreboard.png', { type: 'image/png' });
+		const file = new File([
+			new Uint8Array(68),
+		], 'new-scoreboard.png', { type: 'image/png' });
 		mockApiFetch.mockRejectedValue(transportFailure({
 			status: 409,
 			body: { message: 'A Graphic Asset already holds this exact content' },
@@ -1361,7 +1420,9 @@ describe('the Graphics Asset Library Workspace', () => {
 
 		wrapper.getComponent(fileUploadStub).vm.$emit(
 			'update:modelValue',
-			new File([new Uint8Array(8)], 'match-report.pdf', { type: 'application/pdf' }),
+			new File([
+				new Uint8Array(8),
+			], 'match-report.pdf', { type: 'application/pdf' }),
 		);
 		await flushPromises();
 
@@ -1534,7 +1595,9 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		mockApiFetch.mockImplementation((path: string) => {
 			if (path.includes('/multipart/parts/'))
 				return Promise.reject(endedSession());
-			return Promise.resolve(path.endsWith('/multipart') ? started : created);
+			return Promise.resolve(path.endsWith('/multipart')
+				? started
+				: created);
 		});
 
 		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);

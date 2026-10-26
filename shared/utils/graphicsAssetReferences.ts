@@ -306,7 +306,9 @@ function backgroundLayerStackGraphicAssetReferences(
 		appendScreenMediaSourceReference(
 			references,
 			layer.source,
-			layer.type === 'video' ? 'silent-video' : 'image',
+			layer.type === 'video'
+				? 'silent-video'
+				: 'image',
 			`${slotRoot}.${layer.id}.source`,
 		);
 	}

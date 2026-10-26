@@ -40,6 +40,11 @@ export default defineConfig(async (env) => {
 	// which mounts the app that prints Vue's Suspense notice; see the file.
 	// The credential guard first of all, before anything can start a child (#619).
 	// The icon guard also ahead of the entry, so its mock precedes `@nuxt/icon`.
-	config.test!.setupFiles = ['./test/helpers/blockCloudflareCredentials.ts', './test/nuxt/quietSuspenseNotice.ts', './test/nuxt/failOnUnbundledIcon.ts', ...[config.test!.setupFiles ?? []].flat()];
+	config.test!.setupFiles = [
+		'./test/helpers/blockCloudflareCredentials.ts',
+		'./test/nuxt/quietSuspenseNotice.ts',
+		'./test/nuxt/failOnUnbundledIcon.ts',
+		...[config.test!.setupFiles ?? []].flat(),
+	];
 	return config;
 });

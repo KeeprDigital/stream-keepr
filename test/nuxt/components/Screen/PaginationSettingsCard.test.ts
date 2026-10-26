@@ -22,13 +22,19 @@ mockNuxtImport('useServerTime', () => () => ({
 }));
 
 const ScreenSettingsToggleStub = defineComponent({
-	props: { label: { type: String, required: true }, modelValue: { type: Boolean, required: false } },
+	props: {
+		label: { type: String, required: true },
+		modelValue: { type: Boolean, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<button type="button" data-testid="settings-toggle" @click="$emit(\'update:modelValue\', !modelValue)">{{ label }}</button>',
 });
 
 const UFormFieldStub = defineComponent({
-	props: { label: { type: String, required: false }, description: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+		description: { type: String, required: false },
+	},
 	template: '<div data-testid="form-field"><span>{{ label }}</span><span>{{ description }}</span><slot /></div>',
 });
 
@@ -43,7 +49,10 @@ const UInputNumberStub = defineComponent({
 });
 
 const UButtonStub = defineComponent({
-	props: { label: { type: String, required: false }, disabled: { type: Boolean, required: false } },
+	props: {
+		label: { type: String, required: false },
+		disabled: { type: Boolean, required: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
 });
@@ -56,9 +65,15 @@ interface Harness {
 }
 
 function mountCard({ mode, config: overrides, rowCount, loading }: Harness) {
-	const config = ref<Record<string, any>>({ ...getDefaultConfigForMode(mode), ...overrides });
+	const config = ref<Record<string, any>>({
+		...getDefaultConfigForMode(mode),
+		...overrides,
+	});
 	const saveConfig = vi.fn((patch: Record<string, unknown>) => {
-		config.value = { ...config.value, ...patch };
+		config.value = {
+			...config.value,
+			...patch,
+		};
 	});
 	const Host = defineComponent({
 		setup() {
@@ -79,7 +94,10 @@ function mountCard({ mode, config: overrides, rowCount, loading }: Harness) {
 	const wrapper = mount(Host, {
 		global: {
 			stubs: {
-				ScreenSettingsCard: { props: ['title'], template: '<section><h2>{{ title }}</h2><slot /></section>' },
+				ScreenSettingsCard: {
+					props: ['title'],
+					template: '<section><h2>{{ title }}</h2><slot /></section>',
+				},
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
 				UFormField: UFormFieldStub,
 				UInputNumber: UInputNumberStub,
@@ -109,7 +127,11 @@ describe('the shared Pagination settings card', () => {
 	});
 
 	it('edits the page size field the mode declares, with its contract label and bounds', () => {
-		const { wrapper, saveConfig } = mountCard({ mode: 'metagame', config: { pageSize: 6, currentPage: 2 }, rowCount: 20 });
+		const { wrapper, saveConfig } = mountCard({
+			mode: 'metagame',
+			config: { pageSize: 6, currentPage: 2 },
+			rowCount: 20,
+		});
 
 		const pageSize = numberInput(wrapper, 'Rows per page');
 		expect(pageSize.props()).toMatchObject({ modelValue: 6, min: 1, max: 100 });
@@ -121,7 +143,11 @@ describe('the shared Pagination settings card', () => {
 	});
 
 	it('restarts a running rotation from page 1 when the page size changes', () => {
-		const { wrapper, saveConfig } = mountCard({ mode: 'standings', config: { autoPageEnabled: true }, rowCount: 20 });
+		const { wrapper, saveConfig } = mountCard({
+			mode: 'standings',
+			config: { autoPageEnabled: true },
+			rowCount: 20,
+		});
 
 		numberInput(wrapper, 'Rows per page').vm.$emit('update:modelValue', 4);
 
@@ -129,7 +155,11 @@ describe('the shared Pagination settings card', () => {
 	});
 
 	it('anchors the rotation when auto-page is switched on, and shows its interval in seconds', async () => {
-		const { wrapper, saveConfig } = mountCard({ mode: 'pairings', config: { autoPageEnabled: false }, rowCount: 20 });
+		const { wrapper, saveConfig } = mountCard({
+			mode: 'pairings',
+			config: { autoPageEnabled: false },
+			rowCount: 20,
+		});
 		expect(wrapper.text()).not.toContain('Interval (seconds)');
 
 		await wrapper.get('[data-testid="settings-toggle"]').trigger('click');
@@ -139,7 +169,11 @@ describe('the shared Pagination settings card', () => {
 	});
 
 	it('writes an interval edit in milliseconds, restarting the running rotation', () => {
-		const { wrapper, saveConfig } = mountCard({ mode: 'player-history', config: { autoPageEnabled: true, currentPage: 2 }, rowCount: 20 });
+		const { wrapper, saveConfig } = mountCard({
+			mode: 'player-history',
+			config: { autoPageEnabled: true, currentPage: 2 },
+			rowCount: 20,
+		});
 
 		numberInput(wrapper, 'Interval (seconds)').vm.$emit('update:modelValue', 5);
 
@@ -147,7 +181,11 @@ describe('the shared Pagination settings card', () => {
 	});
 
 	it('counts pages from the row count it is given and selects pages manually, wrapping at the ends', async () => {
-		const { wrapper, saveConfig } = mountCard({ mode: 'metagame', config: { pageSize: 5, currentPage: 1 }, rowCount: 12 });
+		const { wrapper, saveConfig } = mountCard({
+			mode: 'metagame',
+			config: { pageSize: 5, currentPage: 1 },
+			rowCount: 12,
+		});
 		expect(wrapper.text()).toContain('Page 1 of 3');
 
 		await button(wrapper, 'Next').trigger('click');
@@ -160,10 +198,19 @@ describe('the shared Pagination settings card', () => {
 	});
 
 	it('disables manual selection with only one page or while the rows load', () => {
-		const onePage = mountCard({ mode: 'archetype-spotlight', config: { rowsPerPage: 8 }, rowCount: 8 });
+		const onePage = mountCard({
+			mode: 'archetype-spotlight',
+			config: { rowsPerPage: 8 },
+			rowCount: 8,
+		});
 		expect(button(onePage.wrapper, 'Next').attributes('disabled')).toBeDefined();
 
-		const loading = mountCard({ mode: 'archetype-spotlight', config: { rowsPerPage: 2 }, rowCount: 8, loading: true });
+		const loading = mountCard({
+			mode: 'archetype-spotlight',
+			config: { rowsPerPage: 2 },
+			rowCount: 8,
+			loading: true,
+		});
 		expect(loading.wrapper.text()).toContain('Page 1 of 4');
 		expect(button(loading.wrapper, 'Previous').attributes('disabled')).toBeDefined();
 		expect(button(loading.wrapper, 'Next').attributes('disabled')).toBeDefined();

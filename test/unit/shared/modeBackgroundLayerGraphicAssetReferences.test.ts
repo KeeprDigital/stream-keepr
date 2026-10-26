@@ -43,7 +43,12 @@ function assetVideoLayer(id: string): BackgroundLayer {
 describe.each(MODES_WITH_A_BACKGROUND_LAYER_STACK)('the %s mode’s own Background Layer stack', (mode) => {
 	it('publishes one reference per asset-sourced media layer, named by the mode and the layer that pins it', () => {
 		const references = screenModeGraphicAssetReferences(mode, {
-			[mode]: { backgroundLayers: [assetImageLayer('plate'), assetVideoLayer('loop')] },
+			[mode]: {
+				backgroundLayers: [
+					assetImageLayer('plate'),
+					assetVideoLayer('loop'),
+				],
+			},
 		});
 
 		expect(references).toEqual([
@@ -64,11 +69,45 @@ describe.each(MODES_WITH_A_BACKGROUND_LAYER_STACK)('the %s mode’s own Backgrou
 		const references = screenModeGraphicAssetReferences(mode, {
 			[mode]: {
 				backgroundLayers: [
-					{ id: 'wash', type: 'color', enabled: true, opacity: 1, color: '#0b1020' },
-					{ id: 'grad', type: 'gradient', enabled: true, opacity: 1, gradient: 'linear-gradient(#000, #123)' },
-					{ id: 'plate', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url: 'https://example.com/plate.png' }, fit: 'cover' },
-					{ id: 'loop', type: 'video', enabled: true, opacity: 1, source: { kind: 'url', url: 'https://example.com/loop.webm' }, fit: 'cover', playbackRate: 1, loop: true },
-					{ id: 'anim', type: 'animation', enabled: true, opacity: 1, animation: { effect: 'fog' } },
+					{
+						id: 'wash',
+						type: 'color',
+						enabled: true,
+						opacity: 1,
+						color: '#0b1020',
+					},
+					{
+						id: 'grad',
+						type: 'gradient',
+						enabled: true,
+						opacity: 1,
+						gradient: 'linear-gradient(#000, #123)',
+					},
+					{
+						id: 'plate',
+						type: 'image',
+						enabled: true,
+						opacity: 1,
+						source: { kind: 'url', url: 'https://example.com/plate.png' },
+						fit: 'cover',
+					},
+					{
+						id: 'loop',
+						type: 'video',
+						enabled: true,
+						opacity: 1,
+						source: { kind: 'url', url: 'https://example.com/loop.webm' },
+						fit: 'cover',
+						playbackRate: 1,
+						loop: true,
+					},
+					{
+						id: 'anim',
+						type: 'animation',
+						enabled: true,
+						opacity: 1,
+						animation: { effect: 'fog' },
+					},
 				],
 			},
 		});
@@ -89,7 +128,11 @@ describe.each(MODES_WITH_A_BACKGROUND_LAYER_STACK)('the %s mode’s own Backgrou
 		// alone cannot keep them apart: a Card write scoped to it would delete the
 		// Deck stack's rows, and a Card output would resolve them.
 		const references = screenModeGraphicAssetReferences(mode, {
-			[mode]: { backgroundLayers: [assetImageLayer('plate')] },
+			[mode]: {
+				backgroundLayers: [
+					assetImageLayer('plate'),
+				],
+			},
 		});
 
 		expect(references).toHaveLength(1);
@@ -105,7 +148,14 @@ describe.each(MODES_WITH_A_BACKGROUND_LAYER_STACK)('the %s mode’s own Backgrou
 		const others = Object.fromEntries(
 			MODES_WITH_A_BACKGROUND_LAYER_STACK
 				.filter(other => other !== mode)
-				.map(other => [other, { backgroundLayers: [assetImageLayer(`${other}-plate`)] }]),
+				.map(other => [
+					other,
+					{
+						backgroundLayers: [
+							assetImageLayer(`${other}-plate`),
+						],
+					},
+				]),
 		);
 
 		expect(screenModeGraphicAssetReferences(mode, others)).toEqual([]);

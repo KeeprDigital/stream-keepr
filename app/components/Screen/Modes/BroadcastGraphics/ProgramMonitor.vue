@@ -96,7 +96,9 @@ const { assetCapability, assetCapabilitySettled } = useScreenOutputAssetCapabili
  */
 const outputsWithoutAssetAccess = useScreenOutputAssetAccess(() => props.screen.id);
 const publishesMedia = computed(() =>
-	broadcastGraphicsGraphicAssetReferences({ graphics: [...props.graphics] }).length > 0
+	broadcastGraphicsGraphicAssetReferences({
+		graphics: [...props.graphics],
+	}).length > 0
 	|| broadcastGraphicsRenderedInputGraphicAssetReferences(
 		props.graphics,
 		sessionStore.renderedInputValues(props.screen.id, props.graphics, now.value),

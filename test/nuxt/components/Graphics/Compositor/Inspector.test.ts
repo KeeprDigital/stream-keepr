@@ -43,7 +43,10 @@ const shapeItem: GraphicItemConfig = {
 	width: 400,
 	height: 100,
 	geometry: squareShapeGeometry(),
-	surfaceStyle: { fill: { type: 'solid', color: '#0077a3' }, fillOpacity: 1 },
+	surfaceStyle: {
+		fill: { type: 'solid', color: '#0077a3' },
+		fillOpacity: 1,
+	},
 };
 
 const groupItem: GraphicGroupItemConfig = {
@@ -70,7 +73,11 @@ function groupWith(
 	children: GraphicGroupItemConfig['children'],
 	overrides: Partial<GraphicGroupItemConfig> = {},
 ): GraphicGroupItemConfig {
-	return { ...groupItem, children, ...overrides };
+	return {
+		...groupItem,
+		children,
+		...overrides,
+	};
 }
 
 const textItem: GraphicItemConfig = {
@@ -124,7 +131,9 @@ const socialNetworkIconItem: GraphicItemConfig = {
 };
 
 function stack(items: GraphicItemConfig[]): BroadcastGraphicConfig[] {
-	return [{ id: 'lower-third', name: 'Lower Third', items }];
+	return [
+		{ id: 'lower-third', name: 'Lower Third', items },
+	];
 }
 
 /**
@@ -134,7 +143,9 @@ function stack(items: GraphicItemConfig[]): BroadcastGraphicConfig[] {
  * size", and a control is only correctly labelled if the label is on that control.
  */
 const SlotOnlyStub = defineComponent({
-	props: { label: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+	},
 	template: '<div :data-label="label"><span>{{ label }}</span><slot /></div>',
 });
 
@@ -145,35 +156,49 @@ const UCollapsibleStub = defineComponent({
 
 const USelectStub = defineComponent({
 	name: 'USelect',
-	props: { modelValue: { type: [String, Number], required: false }, items: { type: Array, required: false } },
+	props: {
+		modelValue: {
+			type: [String, Number],
+			required: false,
+		},
+		items: { type: Array, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<select :value="modelValue" />',
 });
 
 const UInputNumberStub = defineComponent({
 	name: 'UInputNumber',
-	props: { modelValue: { type: Number, required: false } },
+	props: {
+		modelValue: { type: Number, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input type="number" :value="modelValue" />',
 });
 
 const UInputStub = defineComponent({
 	name: 'UInput',
-	props: { modelValue: { type: String, required: false } },
+	props: {
+		modelValue: { type: String, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input :value="modelValue" />',
 });
 
 const UButtonStub = defineComponent({
 	name: 'UButton',
-	props: { disabled: { type: Boolean, required: false } },
+	props: {
+		disabled: { type: Boolean, required: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
 
 const USwitchStub = defineComponent({
 	name: 'USwitch',
-	props: { modelValue: { type: Boolean, required: false } },
+	props: {
+		modelValue: { type: Boolean, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<button type="button" @click="$emit(\'update:modelValue\', !modelValue)" />',
 });
@@ -207,7 +232,10 @@ const GraphicsAssetFocusPickerStub = defineComponent({
 		modelValue: { type: Object, required: false },
 		eventId: { type: Number, required: false },
 		fieldLabel: { type: String, required: false },
-		assetKind: { type: [String, Array], required: false },
+		assetKind: {
+			type: [String, Array],
+			required: false,
+		},
 	},
 	emits: ['update:modelValue', 'select'],
 	template: '<div v-bind="$attrs" :data-testid="$attrs[\'data-testid\'] ?? \'media-asset-picker\'" :data-field-label="fieldLabel" :data-asset-id="modelValue?.assetId" />',
@@ -282,7 +310,9 @@ function itemOf(graphics: BroadcastGraphicConfig[], index = 0) {
 
 function childOf(graphics: BroadcastGraphicConfig[], index = 0) {
 	const group = graphics[0]?.items[0];
-	return group?.type === 'group' ? group.children[index] : undefined;
+	return group?.type === 'group'
+		? group.children[index]
+		: undefined;
 }
 
 /**
@@ -353,7 +383,10 @@ function numberFieldByTestId(wrapper: Awaited<ReturnType<typeof mountComponent>>
 
 describe('graphicsCompositorInspector', () => {
 	it('offers no Graphic Item controls while the canvas is selected', async () => {
-		const wrapper = await mountComponent({ graphics: stack([shapeItem]), selectedTarget: { type: 'canvas' } });
+		const wrapper = await mountComponent({
+			graphics: stack([shapeItem]),
+			selectedTarget: { type: 'canvas' },
+		});
 
 		expect(wrapper.find('[data-testid="graphic-item-label"]').exists()).toBe(false);
 		expect(wrapper.text()).toContain('1920x1080');
@@ -416,17 +449,27 @@ describe('graphicsCompositorInspector', () => {
 		await nextTick();
 
 		// 400×100 is 4:1, so 200 wide is 50 high, still centred on (300, 250).
-		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ x: 200, y: 225, width: 200, height: 50 });
+		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({
+			x: 200,
+			y: 225,
+			width: 200,
+			height: 50,
+		});
 	});
 
 	it('does not carry a width and height link over to the next selected item', async () => {
 		const wrapper = await mountComponent({
-			graphics: stack([shapeItem, { ...shapeItem, id: 'other', anchor: 'top-left' }]),
+			graphics: stack([
+				shapeItem,
+				{ ...shapeItem, id: 'other', anchor: 'top-left' },
+			]),
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
 		await wrapper.get('button[aria-label="Link width and height"]').trigger('click');
-		await wrapper.setProps({ selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'other' } });
+		await wrapper.setProps({
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'other' },
+		});
 		numberField(wrapper, 'Item width')?.vm.$emit('update:modelValue', 200);
 		await nextTick();
 
@@ -435,7 +478,9 @@ describe('graphicsCompositorInspector', () => {
 
 	it('offers no width and height link for a row Graphic Group child, whose group sizes it', async () => {
 		const wrapper = await mountComponent({
-			graphics: stack([groupWith([shapeItem])]),
+			graphics: stack([
+				groupWith([shapeItem]),
+			]),
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
@@ -450,7 +495,9 @@ describe('graphicsCompositorInspector', () => {
 		expect(ellipsis.find('[data-testid="text-min-font-size"]').exists()).toBe(false);
 
 		const shrink = await mountComponent({
-			graphics: stack([{ ...textItem, overflowPolicy: 'shrink' }]),
+			graphics: stack([
+				{ ...textItem, overflowPolicy: 'shrink' },
+			]),
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 		});
 		expect(shrink.find('[data-testid="text-min-font-size"]').exists()).toBe(true);
@@ -548,7 +595,9 @@ describe('graphicsCompositorInspector', () => {
 		numberField(wrapper, 'Right edge slant')?.vm.$emit('update:modelValue', 48);
 		await nextTick();
 
-		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ geometry: { rightSlant: 48 } });
+		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({
+			geometry: { rightSlant: 48 },
+		});
 	});
 
 	it('initialises a Shape Geometry from a preset', async () => {
@@ -561,7 +610,10 @@ describe('graphicsCompositorInspector', () => {
 		await nextTick();
 
 		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({
-			geometry: { topRight: { treatment: 'cut' }, bottomLeft: { treatment: 'cut' } },
+			geometry: {
+				topRight: { treatment: 'cut' },
+				bottomLeft: { treatment: 'cut' },
+			},
 		});
 	});
 
@@ -576,7 +628,9 @@ describe('graphicsCompositorInspector', () => {
 
 		const withGradient = emittedGraphics(gradient);
 		expect(itemOf(withGradient)).toMatchObject({
-			surfaceStyle: { fill: { type: 'linear-gradient', angle: 90 } },
+			surfaceStyle: {
+				fill: { type: 'linear-gradient', angle: 90 },
+			},
 		});
 
 		const stops = await mountComponent({
@@ -597,20 +651,22 @@ describe('graphicsCompositorInspector', () => {
 
 	it('adds and removes gradient stops within the bounds of the vocabulary', async () => {
 		const wrapper = await mountComponent({
-			graphics: stack([{
-				...shapeItem,
-				surfaceStyle: {
-					fill: {
-						type: 'linear-gradient',
-						angle: 90,
-						stops: [
-							{ color: '#000000', position: 0, opacity: 1 },
-							{ color: '#ffffff', position: 1, opacity: 1 },
-						],
+			graphics: stack([
+				{
+					...shapeItem,
+					surfaceStyle: {
+						fill: {
+							type: 'linear-gradient',
+							angle: 90,
+							stops: [
+								{ color: '#000000', position: 0, opacity: 1 },
+								{ color: '#ffffff', position: 1, opacity: 1 },
+							],
+						},
+						fillOpacity: 1,
 					},
-					fillOpacity: 1,
 				},
-			}]),
+			]),
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
@@ -636,14 +692,16 @@ describe('graphicsCompositorInspector', () => {
 		expect(surfaceOf(emittedGraphics(wrapper, 1))?.glow).toMatchObject({ size: 24 });
 
 		const styled = await mountComponent({
-			graphics: stack([{
-				...shapeItem,
-				surfaceStyle: {
-					fill: { type: 'solid', color: '#0077a3' },
-					fillOpacity: 1,
-					outline: { color: '#ffffff', width: 4 },
+			graphics: stack([
+				{
+					...shapeItem,
+					surfaceStyle: {
+						fill: { type: 'solid', color: '#0077a3' },
+						fillOpacity: 1,
+						outline: { color: '#ffffff', width: 4 },
+					},
 				},
-			}]),
+			]),
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
@@ -682,7 +740,9 @@ describe('graphicsCompositorInspector', () => {
 
 	it('offers main-axis sizing instead of a coordinate for a row Graphic Group child', async () => {
 		const wrapper = await mountComponent({
-			graphics: stack([groupWith([shapeItem])]),
+			graphics: stack([
+				groupWith([shapeItem]),
+			]),
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
@@ -693,15 +753,26 @@ describe('graphicsCompositorInspector', () => {
 		selectField(wrapper, 'graphic-group-child-sizing-mode')?.vm.$emit('update:modelValue', 'fill');
 		await nextTick();
 
-		expect(childOf(emittedGraphics(wrapper))).toMatchObject({ sizing: { mode: 'fill' } });
+		expect(childOf(emittedGraphics(wrapper))).toMatchObject({
+			sizing: { mode: 'fill' },
+		});
 	});
 
 	it('projects a canvas Graphic Group child coordinate against its group bounds', async () => {
 		const wrapper = await mountComponent({
-			graphics: stack([groupWith(
-				[{ ...shapeItem, anchor: 'top-left', x: 400, y: 100 }],
-				{ arrangement: 'canvas' },
-			)]),
+			graphics: stack([
+				groupWith(
+					[
+						{
+							...shapeItem,
+							anchor: 'top-left',
+							x: 400,
+							y: 100,
+						},
+					],
+					{ arrangement: 'canvas' },
+				),
+			]),
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
@@ -725,10 +796,20 @@ describe('graphicsCompositorInspector', () => {
 
 	it('aligns a canvas Graphic Group child\'s edge with its group bounds', async () => {
 		const wrapper = await mountComponent({
-			graphics: stack([groupWith(
-				[{ ...shapeItem, x: 100, y: 20, width: 300, height: 60 }],
-				{ arrangement: 'canvas' },
-			)]),
+			graphics: stack([
+				groupWith(
+					[
+						{
+							...shapeItem,
+							x: 100,
+							y: 20,
+							width: 300,
+							height: 60,
+						},
+					],
+					{ arrangement: 'canvas' },
+				),
+			]),
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
@@ -742,7 +823,9 @@ describe('graphicsCompositorInspector', () => {
 
 	it('offers no align actions for a row Graphic Group child, whose group positions it', async () => {
 		const wrapper = await mountComponent({
-			graphics: stack([groupWith([shapeItem])]),
+			graphics: stack([
+				groupWith([shapeItem]),
+			]),
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
@@ -752,10 +835,19 @@ describe('graphicsCompositorInspector', () => {
 
 	it('lets a Graphic Group child override the local style default of its group', async () => {
 		const wrapper = await mountComponent({
-			graphics: stack([groupWith(
-				[{ ...shapeItem, surfaceStyle: undefined }],
-				{ defaultChildSurfaceStyle: { fill: { type: 'solid', color: '#00ff00' }, fillOpacity: 0.5 } },
-			)]),
+			graphics: stack([
+				groupWith(
+					[
+						{ ...shapeItem, surfaceStyle: undefined },
+					],
+					{
+						defaultChildSurfaceStyle: {
+							fill: { type: 'solid', color: '#00ff00' },
+							fillOpacity: 0.5,
+						},
+					},
+				),
+			]),
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
@@ -770,7 +862,12 @@ describe('graphicsCompositorInspector', () => {
 	describe('media Graphic Items', () => {
 		function mountMedia(overrides: Partial<Extract<GraphicItemConfig, { type: 'media' }>> = {}, writable = true) {
 			return mountComponent({
-				graphics: stack([{ ...mediaItem, ...overrides } as GraphicItemConfig]),
+				graphics: stack([
+					{
+						...mediaItem,
+						...overrides,
+					} as GraphicItemConfig,
+				]),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'logo' },
 				writable,
 			});
@@ -843,7 +940,9 @@ describe('graphicsCompositorInspector', () => {
 			await switchField(unclipped, 'media-clip-enabled')?.trigger('click');
 			expect(mediaOf(emittedGraphics(unclipped)).clipGeometry).toBeDefined();
 
-			const clipped = await mountMedia({ clipGeometry: squareShapeGeometry() });
+			const clipped = await mountMedia({
+				clipGeometry: squareShapeGeometry(),
+			});
 			expect(clipped.find('[data-testid="shape-corner-topLeft"]').exists()).toBe(true);
 
 			// The canonical Shape Geometry controls, editing the clip in place.
@@ -858,7 +957,11 @@ describe('graphicsCompositorInspector', () => {
 
 			picker.vm.$emit(
 				'select',
-				{ id: 'asset-2', kind: 'silent-video', facts: { kind: 'silent-video', targetCompatibility: 'chromium-transparency' } },
+				{
+					id: 'asset-2',
+					kind: 'silent-video',
+					facts: { kind: 'silent-video', targetCompatibility: 'chromium-transparency' },
+				},
 				{ assetId: 'asset-2', revisionId: 'revision-3' },
 			);
 			await nextTick();
@@ -947,7 +1050,9 @@ describe('graphicsCompositorInspector', () => {
 
 		it('never writes a Player through a read-only session', async () => {
 			const wrapper = await mountComponent({
-				graphics: stack([contextItem('player-life')]),
+				graphics: stack([
+					contextItem('player-life'),
+				]),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'player-life' },
 				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 				writable: false,
@@ -994,15 +1099,38 @@ describe('graphicsCompositorInspector', () => {
 
 		it('binds the icon to the current network of one declared projection', async () => {
 			const wrapper = await mountComponent({
-				graphics: stack([groupWith(
-					[{ ...socialNetworkIconItem, network: { projectionKey: 'left-profile' } }],
-					{ id: 'left-group' },
-				)])
+				graphics: stack([
+					groupWith(
+						[
+							{
+								...socialNetworkIconItem,
+								network: { projectionKey: 'left-profile' },
+							},
+						],
+						{ id: 'left-group' },
+					),
+				])
 					.map(graphic => ({
 						...graphic,
 						socialProfileProjections: [
-							{ key: 'left-profile', label: 'Left profile', sourceKey: 'left', presentationGroupId: 'left-group', dwellMs: 8_000, transition: 'crossfade', transitionDurationMs: 250 },
-							{ key: 'right-profile', label: 'Right profile', sourceKey: 'right', presentationGroupId: 'right-group', dwellMs: 8_000, transition: 'crossfade', transitionDurationMs: 250 },
+							{
+								key: 'left-profile',
+								label: 'Left profile',
+								sourceKey: 'left',
+								presentationGroupId: 'left-group',
+								dwellMs: 8_000,
+								transition: 'crossfade',
+								transitionDurationMs: 250,
+							},
+							{
+								key: 'right-profile',
+								label: 'Right profile',
+								sourceKey: 'right',
+								presentationGroupId: 'right-group',
+								dwellMs: 8_000,
+								transition: 'crossfade',
+								transitionDurationMs: 250,
+							},
 						],
 					})),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'social-icon' },
@@ -1018,15 +1146,32 @@ describe('graphicsCompositorInspector', () => {
 
 			selectField(wrapper, 'social-network-icon-projection')?.vm.$emit('update:modelValue', 'left-profile');
 			await nextTick();
-			expect(childOf(emittedGraphics(wrapper))).toMatchObject({ network: { projectionKey: 'left-profile' } });
+			expect(childOf(emittedGraphics(wrapper))).toMatchObject({
+				network: { projectionKey: 'left-profile' },
+			});
 		});
 
 		it('reports a dynamic icon outside its projection Presentation Group', async () => {
 			const wrapper = await mountComponent({
-				graphics: stack([{ ...socialNetworkIconItem, network: { projectionKey: 'profile' } }])
+				graphics: stack([
+					{
+						...socialNetworkIconItem,
+						network: { projectionKey: 'profile' },
+					},
+				])
 					.map(graphic => ({
 						...graphic,
-						socialProfileProjections: [{ key: 'profile', label: 'Profile', sourceKey: 'talent', presentationGroupId: 'group', dwellMs: 8_000, transition: 'crossfade', transitionDurationMs: 250 }],
+						socialProfileProjections: [
+							{
+								key: 'profile',
+								label: 'Profile',
+								sourceKey: 'talent',
+								presentationGroupId: 'group',
+								dwellMs: 8_000,
+								transition: 'crossfade',
+								transitionDurationMs: 250,
+							},
+						],
 					})),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'social-icon' },
 			});
@@ -1043,7 +1188,9 @@ describe('graphicsCompositorInspector', () => {
 			await nextTick();
 			expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ color: '#ffcc00', opacity: 0.75 });
 
-			await wrapper.setProps({ graphics: emittedGraphics(wrapper) });
+			await wrapper.setProps({
+				graphics: emittedGraphics(wrapper),
+			});
 			numberFieldByTestId(wrapper, 'social-network-icon-opacity')?.vm.$emit('update:modelValue', 0.4);
 			await nextTick();
 			expect(itemOf(emittedGraphics(wrapper, 1))).toMatchObject({ color: '#ffcc00', opacity: 0.4 });
@@ -1132,7 +1279,9 @@ describe('graphicsCompositorInspector', () => {
 			// graphic's own declarations would leave every Feature Match placeholder
 			// unstyleable, because a Feature Match Overlay declares none.
 			const wrapper = await mountComponent({
-				graphics: stack([{ ...textItem, text: 'Hi {player1Name}' } as GraphicItemConfig]),
+				graphics: stack([
+					{ ...textItem, text: 'Hi {player1Name}' } as GraphicItemConfig,
+				]),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 			});
@@ -1144,10 +1293,12 @@ describe('graphicsCompositorInspector', () => {
 
 		it('styles a player name independently from the player record', async () => {
 			const wrapper = await mountComponent({
-				graphics: stack([{
-					...textItem,
-					text: '{player1Name}\n{player1Record}',
-				} as GraphicItemConfig]),
+				graphics: stack([
+					{
+						...textItem,
+						text: '{player1Name}\n{player1Record}',
+					} as GraphicItemConfig,
+				]),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 			});
@@ -1163,7 +1314,9 @@ describe('graphicsCompositorInspector', () => {
 			await nextTick();
 
 			const styled = itemOf(emittedGraphics(wrapper));
-			expect(styled?.type === 'text' ? styled.placeholderStyles : undefined).toEqual({
+			expect(styled?.type === 'text'
+				? styled.placeholderStyles
+				: undefined).toEqual({
 				player1Name: { fontStyle: 'italic' },
 			});
 		});
@@ -1173,7 +1326,9 @@ describe('graphicsCompositorInspector', () => {
 			// side into the key. Nothing resolves it, so styling it would style something
 			// that renders nothing.
 			const wrapper = await mountComponent({
-				graphics: stack([{ ...textItem, text: 'Hi {name}' } as GraphicItemConfig]),
+				graphics: stack([
+					{ ...textItem, text: 'Hi {name}' } as GraphicItemConfig,
+				]),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 			});
@@ -1190,7 +1345,10 @@ describe('graphicsCompositorInspector', () => {
 	 */
 	describe('placeholders a Graphic Text Template names', () => {
 		function namedInput(key: string, label: string): GraphicInputDeclaration {
-			return { ...textInput(key), label };
+			return {
+				...textInput(key),
+				label,
+			};
 		}
 
 		function unresolvedNotice(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
@@ -1199,8 +1357,15 @@ describe('graphicsCompositorInspector', () => {
 
 		it('names a placeholder nothing declares, and the keys that would have worked', async () => {
 			const wrapper = await mountComponent({
-				graphics: stack([{ ...textItem, text: 'Hi {leftName}' } as GraphicItemConfig])
-					.map(graphic => ({ ...graphic, inputs: [namedInput('input-1', 'leftName')] })),
+				graphics: stack([
+					{ ...textItem, text: 'Hi {leftName}' } as GraphicItemConfig,
+				])
+					.map(graphic => ({
+						...graphic,
+						inputs: [
+							namedInput('input-1', 'leftName'),
+						],
+					})),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
@@ -1211,7 +1376,9 @@ describe('graphicsCompositorInspector', () => {
 
 		it('says so plainly when the composition has declared nothing at all', async () => {
 			const wrapper = await mountComponent({
-				graphics: stack([{ ...textItem, text: 'Hi {leftName}' } as GraphicItemConfig]),
+				graphics: stack([
+					{ ...textItem, text: 'Hi {leftName}' } as GraphicItemConfig,
+				]),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
@@ -1220,8 +1387,15 @@ describe('graphicsCompositorInspector', () => {
 
 		it('stays silent while every placeholder resolves', async () => {
 			const wrapper = await mountComponent({
-				graphics: stack([{ ...textItem, text: 'Hi {input-1}' } as GraphicItemConfig])
-					.map(graphic => ({ ...graphic, inputs: [namedInput('input-1', 'leftName')] })),
+				graphics: stack([
+					{ ...textItem, text: 'Hi {input-1}' } as GraphicItemConfig,
+				])
+					.map(graphic => ({
+						...graphic,
+						inputs: [
+							namedInput('input-1', 'leftName'),
+						],
+					})),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
@@ -1233,7 +1407,12 @@ describe('graphicsCompositorInspector', () => {
 			// looking while editing the text, and had to be retyped from memory.
 			const wrapper = await mountComponent({
 				graphics: stack([textItem])
-					.map(graphic => ({ ...graphic, inputs: [namedInput('input-1', 'leftName')] })),
+					.map(graphic => ({
+						...graphic,
+						inputs: [
+							namedInput('input-1', 'leftName'),
+						],
+					})),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
@@ -1251,18 +1430,24 @@ describe('graphicsCompositorInspector', () => {
 
 		it('offers each projection read-only value separately from editable Graphic Inputs', async () => {
 			const wrapper = await mountComponent({
-				graphics: stack([groupWith([textItem], { id: 'profile-group' })]).map(graphic => ({
+				graphics: stack([
+					groupWith([textItem], { id: 'profile-group' }),
+				]).map(graphic => ({
 					...graphic,
-					inputs: [namedInput('title', 'Title')],
-					socialProfileProjections: [{
-						key: 'talent-profile',
-						label: 'Talent profile',
-						sourceKey: 'talent',
-						presentationGroupId: 'profile-group',
-						dwellMs: 8_000,
-						transition: 'crossfade',
-						transitionDurationMs: 250,
-					}],
+					inputs: [
+						namedInput('title', 'Title'),
+					],
+					socialProfileProjections: [
+						{
+							key: 'talent-profile',
+							label: 'Talent profile',
+							sourceKey: 'talent',
+							presentationGroupId: 'profile-group',
+							dwellMs: 8_000,
+							transition: 'crossfade',
+							transitionDurationMs: 250,
+						},
+					],
 				})),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
@@ -1302,7 +1487,12 @@ describe('graphicsCompositorInspector', () => {
 
 	it('edits a declared Graphic Input’s label, requiredness, and On-air Update Policy', async () => {
 		const wrapper = await mountComponent({
-			graphics: stack([]).map(graphic => ({ ...graphic, inputs: [textInput('name')] })),
+			graphics: stack([]).map(graphic => ({
+				...graphic,
+				inputs: [
+					textInput('name'),
+				],
+			})),
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
 
@@ -1323,7 +1513,12 @@ describe('graphicsCompositorInspector', () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({
 				...graphic,
-				inputs: [choiceInput('side', [{ value: 'l', label: 'Left' }, { value: 'r', label: 'Right' }])],
+				inputs: [
+					choiceInput('side', [
+						{ value: 'l', label: 'Left' },
+						{ value: 'r', label: 'Right' },
+					]),
+				],
 			})),
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
@@ -1346,7 +1541,11 @@ describe('graphicsCompositorInspector', () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({
 				...graphic,
-				inputs: [choiceInput('side', [{ value: 'l', label: 'Left' }], 'l')],
+				inputs: [
+					choiceInput('side', [
+						{ value: 'l', label: 'Left' },
+					], 'l'),
+				],
 			})),
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
@@ -1363,7 +1562,11 @@ describe('graphicsCompositorInspector', () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({
 				...graphic,
-				inputs: [choiceInput('side', [{ value: 'l', label: 'Left' }])],
+				inputs: [
+					choiceInput('side', [
+						{ value: 'l', label: 'Left' },
+					]),
+				],
 			})),
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
@@ -1383,7 +1586,12 @@ describe('graphicsCompositorInspector', () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({
 				...graphic,
-				inputs: [choiceInput('side', [{ value: 'l', label: 'Left' }, { value: 'r', label: 'Right' }], 'r')],
+				inputs: [
+					choiceInput('side', [
+						{ value: 'l', label: 'Left' },
+						{ value: 'r', label: 'Right' },
+					], 'r'),
+				],
 			})),
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
@@ -1396,7 +1604,12 @@ describe('graphicsCompositorInspector', () => {
 
 		// A default outside its options is a value the input reports unavailable, so the
 		// graphic would start on something it can never show.
-		expect(declarationOf(wrapper)).toMatchObject({ options: [{ value: 'l', label: 'Left' }], default: null });
+		expect(declarationOf(wrapper)).toMatchObject({
+			options: [
+				{ value: 'l', label: 'Left' },
+			],
+			default: null,
+		});
 	});
 
 	/**
@@ -1407,7 +1620,12 @@ describe('graphicsCompositorInspector', () => {
 	 */
 	it('declares which media a media Graphic Input accepts', async () => {
 		const wrapper = await mountComponent({
-			graphics: stack([]).map(graphic => ({ ...graphic, inputs: [mediaInput('sting')] })),
+			graphics: stack([]).map(graphic => ({
+				...graphic,
+				inputs: [
+					mediaInput('sting'),
+				],
+			})),
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
 
@@ -1431,7 +1649,9 @@ describe('graphicsCompositorInspector', () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({
 				...graphic,
-				inputs: [mediaInput('sting', { mediaKind: 'silent-video' })],
+				inputs: [
+					mediaInput('sting', { mediaKind: 'silent-video' }),
+				],
 			})),
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
@@ -1447,7 +1667,9 @@ describe('graphicsCompositorInspector', () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({
 				...graphic,
-				inputs: [mediaInput('sting', { mediaKind: 'silent-video' })],
+				inputs: [
+					mediaInput('sting', { mediaKind: 'silent-video' }),
+				],
 			})),
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
@@ -1460,7 +1682,11 @@ describe('graphicsCompositorInspector', () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({
 				...graphic,
-				inputs: [mediaInput('sting', { default: { assetId: 'asset-1' as never, revisionId: 'revision-1' as never } })],
+				inputs: [
+					mediaInput('sting', {
+						default: { assetId: 'asset-1' as never, revisionId: 'revision-1' as never },
+					}),
+				],
 			})),
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
@@ -1476,14 +1702,20 @@ describe('graphicsCompositorInspector', () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({
 				...graphic,
-				inputs: [mediaInput('sting', { mediaKind: 'silent-video' })],
+				inputs: [
+					mediaInput('sting', { mediaKind: 'silent-video' }),
+				],
 			})),
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
 
 		wrapper.getComponent(GraphicsAssetFocusPickerStub).vm.$emit(
 			'select',
-			{ id: 'asset-2', kind: 'silent-video', facts: { kind: 'silent-video', targetCompatibility: 'chromium-transparency' } },
+			{
+				id: 'asset-2',
+				kind: 'silent-video',
+				facts: { kind: 'silent-video', targetCompatibility: 'chromium-transparency' },
+			},
 			{ assetId: 'asset-2', revisionId: 'revision-3' },
 		);
 		await nextTick();
@@ -1498,7 +1730,11 @@ describe('graphicsCompositorInspector', () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({
 				...graphic,
-				inputs: [mediaInput('sting', { default: { assetId: 'asset-1' as never, revisionId: 'revision-1' as never } })],
+				inputs: [
+					mediaInput('sting', {
+						default: { assetId: 'asset-1' as never, revisionId: 'revision-1' as never },
+					}),
+				],
 			})),
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
@@ -1511,7 +1747,12 @@ describe('graphicsCompositorInspector', () => {
 
 	it('writes nothing when an author clears a Graphic Input’s label', async () => {
 		const wrapper = await mountComponent({
-			graphics: stack([]).map(graphic => ({ ...graphic, inputs: [textInput('name')] })),
+			graphics: stack([]).map(graphic => ({
+				...graphic,
+				inputs: [
+					textInput('name'),
+				],
+			})),
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
 
@@ -1528,7 +1769,12 @@ describe('graphicsCompositorInspector', () => {
 
 	it('shows the stable key a Graphic Text Template would name, and offers no way to edit it', async () => {
 		const wrapper = await mountComponent({
-			graphics: stack([]).map(graphic => ({ ...graphic, inputs: [textInput('name')] })),
+			graphics: stack([]).map(graphic => ({
+				...graphic,
+				inputs: [
+					textInput('name'),
+				],
+			})),
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
 
@@ -1538,12 +1784,18 @@ describe('graphicsCompositorInspector', () => {
 
 	it('offers a Graphic Placeholder Style for each declared input its template names', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{
-				id: 'lower-third',
-				name: 'Lower Third',
-				inputs: [textInput('name')],
-				items: [{ ...textItem, text: '{name} — {undeclared}' }],
-			}],
+			graphics: [
+				{
+					id: 'lower-third',
+					name: 'Lower Third',
+					inputs: [
+						textInput('name'),
+					],
+					items: [
+						{ ...textItem, text: '{name} — {undeclared}' },
+					],
+				},
+			],
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 		});
 
@@ -1554,12 +1806,24 @@ describe('graphicsCompositorInspector', () => {
 
 	it('overrides one placeholder’s typography and returns it to the item’s base', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{
-				id: 'lower-third',
-				name: 'Lower Third',
-				inputs: [textInput('name')],
-				items: [{ ...textItem, text: '{name}', placeholderStyles: { name: { fontWeight: 300 } } }],
-			}],
+			graphics: [
+				{
+					id: 'lower-third',
+					name: 'Lower Third',
+					inputs: [
+						textInput('name'),
+					],
+					items: [
+						{
+							...textItem,
+							text: '{name}',
+							placeholderStyles: {
+								name: { fontWeight: 300 },
+							},
+						},
+					],
+				},
+			],
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 		});
 
@@ -1572,21 +1836,39 @@ describe('graphicsCompositorInspector', () => {
 		await nextTick();
 
 		const styled = itemOf(emittedGraphics(wrapper, 0));
-		expect(styled?.type === 'text' ? styled.placeholderStyles : undefined)
-			.toEqual({ name: { fontWeight: 300, fontSize: 24 } });
+		expect(styled?.type === 'text'
+			? styled.placeholderStyles
+			: undefined)
+			.toEqual({
+				name: { fontWeight: 300, fontSize: 24 },
+			});
 
 		const cleared = itemOf(emittedGraphics(wrapper, 1));
-		expect(cleared?.type === 'text' ? cleared.placeholderStyles : undefined).toBeUndefined();
+		expect(cleared?.type === 'text'
+			? cleared.placeholderStyles
+			: undefined).toBeUndefined();
 	});
 
 	it('sets one placeholder’s case and letter spacing, and offers it no line height', async () => {
 		const wrapper = await mountComponent({
-			graphics: [{
-				id: 'lower-third',
-				name: 'Lower Third',
-				inputs: [textInput('name')],
-				items: [{ ...textItem, text: '{name}', placeholderStyles: { name: { fontWeight: 300 } } }],
-			}],
+			graphics: [
+				{
+					id: 'lower-third',
+					name: 'Lower Third',
+					inputs: [
+						textInput('name'),
+					],
+					items: [
+						{
+							...textItem,
+							text: '{name}',
+							placeholderStyles: {
+								name: { fontWeight: 300 },
+							},
+						},
+					],
+				},
+			],
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 		});
 		const placeholder = wrapper.find('[data-graphic-placeholder-style="name"]');
@@ -1601,14 +1883,24 @@ describe('graphicsCompositorInspector', () => {
 		await nextTick();
 
 		const cased = itemOf(emittedGraphics(wrapper, 0));
-		expect(cased?.type === 'text' ? cased.placeholderStyles : undefined)
-			.toEqual({ name: { fontWeight: 300, textTransform: 'uppercase' } });
+		expect(cased?.type === 'text'
+			? cased.placeholderStyles
+			: undefined)
+			.toEqual({
+				name: { fontWeight: 300, textTransform: 'uppercase' },
+			});
 		const spaced = itemOf(emittedGraphics(wrapper, 1));
-		expect(spaced?.type === 'text' ? spaced.placeholderStyles : undefined)
-			.toEqual({ name: { fontWeight: 300, letterSpacing: 4 } });
+		expect(spaced?.type === 'text'
+			? spaced.placeholderStyles
+			: undefined)
+			.toEqual({
+				name: { fontWeight: 300, letterSpacing: 4 },
+			});
 		// A cleared weight is the item's base weight again, and nothing else was set.
 		const cleared = itemOf(emittedGraphics(wrapper, 2));
-		expect(cleared?.type === 'text' ? cleared.placeholderStyles : undefined).toBeUndefined();
+		expect(cleared?.type === 'text'
+			? cleared.placeholderStyles
+			: undefined).toBeUndefined();
 	});
 
 	/**
@@ -1626,7 +1918,9 @@ describe('graphicsCompositorInspector', () => {
 
 		function typographyOf(graphics: BroadcastGraphicConfig[]) {
 			const item = itemOf(graphics);
-			return item?.type === 'text' ? item.typography : undefined;
+			return item?.type === 'text'
+				? item.typography
+				: undefined;
 		}
 
 		/**
@@ -1728,7 +2022,10 @@ describe('graphicsCompositorInspector', () => {
 			await nextTick();
 
 			expect(typographyOf(emittedGraphics(wrapper, 0))?.font)
-				.toEqual({ kind: 'asset', reference: { assetId: 'font-1', revisionId: 'font-revision-2' } });
+				.toEqual({
+					kind: 'asset',
+					reference: { assetId: 'font-1', revisionId: 'font-revision-2' },
+				});
 		});
 
 		/**
@@ -1738,13 +2035,18 @@ describe('graphicsCompositorInspector', () => {
 		 */
 		it('returns to an application font rather than to none', async () => {
 			const wrapper = await mountComponent({
-				graphics: stack([{
-					...textItem,
-					typography: {
-						...DEFAULT_GRAPHIC_TYPOGRAPHY,
-						font: { kind: 'asset', reference: { assetId: 'font-1', revisionId: 'font-revision-2' } },
-					},
-				} as GraphicItemConfig]),
+				graphics: stack([
+					{
+						...textItem,
+						typography: {
+							...DEFAULT_GRAPHIC_TYPOGRAPHY,
+							font: {
+								kind: 'asset',
+								reference: { assetId: 'font-1', revisionId: 'font-revision-2' },
+							},
+						},
+					} as GraphicItemConfig,
+				]),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
@@ -1766,13 +2068,18 @@ describe('graphicsCompositorInspector', () => {
 		 */
 		it('returns to an application font when the picker unpins the revision', async () => {
 			const wrapper = await mountComponent({
-				graphics: stack([{
-					...textItem,
-					typography: {
-						...DEFAULT_GRAPHIC_TYPOGRAPHY,
-						font: { kind: 'asset', reference: { assetId: 'font-1', revisionId: 'font-revision-2' } },
-					},
-				} as GraphicItemConfig]),
+				graphics: stack([
+					{
+						...textItem,
+						typography: {
+							...DEFAULT_GRAPHIC_TYPOGRAPHY,
+							font: {
+								kind: 'asset',
+								reference: { assetId: 'font-1', revisionId: 'font-revision-2' },
+							},
+						},
+					} as GraphicItemConfig,
+				]),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
@@ -1799,12 +2106,24 @@ describe('graphicsCompositorInspector', () => {
 		function placeholderTextGraphic(
 			placeholderStyles?: Record<string, Record<string, unknown>>,
 		): BroadcastGraphicConfig[] {
-			return [{
-				id: 'lower-third',
-				name: 'Lower Third',
-				inputs: [textInput('name')],
-				items: [{ ...textItem, text: '{name}', ...(placeholderStyles ? { placeholderStyles } : {}) } as GraphicItemConfig],
-			}];
+			return [
+				{
+					id: 'lower-third',
+					name: 'Lower Third',
+					inputs: [
+						textInput('name'),
+					],
+					items: [
+						{
+							...textItem,
+							text: '{name}',
+							...(placeholderStyles
+								? { placeholderStyles }
+								: {}),
+						} as GraphicItemConfig,
+					],
+				},
+			];
 		}
 
 		function placeholderFontPicker(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
@@ -1814,7 +2133,9 @@ describe('graphicsCompositorInspector', () => {
 
 		function placeholderStylesOf(graphics: BroadcastGraphicConfig[]) {
 			const item = itemOf(graphics);
-			return item?.type === 'text' ? item.placeholderStyles : undefined;
+			return item?.type === 'text'
+				? item.placeholderStyles
+				: undefined;
 		}
 
 		/**
@@ -1827,7 +2148,9 @@ describe('graphicsCompositorInspector', () => {
 		 */
 		it('offers a placeholder the third answer its optional font has', async () => {
 			const wrapper = await mountComponent({
-				graphics: placeholderTextGraphic({ name: { fontWeight: 300 } }),
+				graphics: placeholderTextGraphic({
+					name: { fontWeight: 300 },
+				}),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
@@ -1852,7 +2175,9 @@ describe('graphicsCompositorInspector', () => {
 
 		it('chooses an application font for one placeholder', async () => {
 			const wrapper = await mountComponent({
-				graphics: placeholderTextGraphic({ name: { fontWeight: 300 } }),
+				graphics: placeholderTextGraphic({
+					name: { fontWeight: 300 },
+				}),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
@@ -1866,7 +2191,12 @@ describe('graphicsCompositorInspector', () => {
 			await nextTick();
 
 			expect(placeholderStylesOf(emittedGraphics(wrapper, 1)))
-				.toEqual({ name: { fontWeight: 300, font: { kind: 'application', fontId: 'saira-condensed' } } });
+				.toEqual({
+					name: {
+						fontWeight: 300,
+						font: { kind: 'application', fontId: 'saira-condensed' },
+					},
+				});
 		});
 
 		/**
@@ -1909,7 +2239,12 @@ describe('graphicsCompositorInspector', () => {
 			await nextTick();
 
 			expect(placeholderStylesOf(emittedGraphics(wrapper, 0))).toEqual({
-				name: { font: { kind: 'asset', reference: { assetId: 'font-1', revisionId: 'font-revision-2' } } },
+				name: {
+					font: {
+						kind: 'asset',
+						reference: { assetId: 'font-1', revisionId: 'font-revision-2' },
+					},
+				},
 			});
 		});
 
@@ -1923,7 +2258,10 @@ describe('graphicsCompositorInspector', () => {
 				graphics: placeholderTextGraphic({
 					name: {
 						fontWeight: 300,
-						font: { kind: 'asset', reference: { assetId: 'font-1', revisionId: 'font-revision-2' } },
+						font: {
+							kind: 'asset',
+							reference: { assetId: 'font-1', revisionId: 'font-revision-2' },
+						},
 					},
 				}),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
@@ -1938,13 +2276,17 @@ describe('graphicsCompositorInspector', () => {
 				.$emit('update:modelValue', 'base');
 			await nextTick();
 
-			expect(placeholderStylesOf(emittedGraphics(wrapper, 0))).toEqual({ name: { fontWeight: 300 } });
+			expect(placeholderStylesOf(emittedGraphics(wrapper, 0))).toEqual({
+				name: { fontWeight: 300 },
+			});
 		});
 
 		/** A placeholder that has chosen no font of its own says so, and offers no picker. */
 		it('starts every placeholder on the item’s base font', async () => {
 			const wrapper = await mountComponent({
-				graphics: placeholderTextGraphic({ name: { fontWeight: 300 } }),
+				graphics: placeholderTextGraphic({
+					name: { fontWeight: 300 },
+				}),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
@@ -1966,7 +2308,10 @@ describe('graphicsCompositorInspector', () => {
 				graphics: placeholderTextGraphic({
 					name: {
 						fontWeight: 300,
-						font: { kind: 'asset', reference: { assetId: 'font-1', revisionId: 'font-revision-2' } },
+						font: {
+							kind: 'asset',
+							reference: { assetId: 'font-1', revisionId: 'font-revision-2' },
+						},
 					},
 				}),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
@@ -1975,7 +2320,9 @@ describe('graphicsCompositorInspector', () => {
 			placeholderFontPicker(wrapper)?.vm.$emit('update:modelValue', undefined);
 			await nextTick();
 
-			expect(placeholderStylesOf(emittedGraphics(wrapper, 0))).toEqual({ name: { fontWeight: 300 } });
+			expect(placeholderStylesOf(emittedGraphics(wrapper, 0))).toEqual({
+				name: { fontWeight: 300 },
+			});
 			expect(selectField(wrapper, 'graphic-placeholder-style-font-source')?.props('modelValue'))
 				.toBe('asset');
 		});
@@ -1994,12 +2341,19 @@ describe('graphicsCompositorInspector', () => {
 				text: '{name}',
 			} as GraphicItemConfig;
 			const wrapper = await mountComponent({
-				graphics: [{
-					id: 'lower-third',
-					name: 'Lower Third',
-					inputs: [textInput('name')],
-					items: [{ ...textItem, text: '{name}' } as GraphicItemConfig, second],
-				}],
+				graphics: [
+					{
+						id: 'lower-third',
+						name: 'Lower Third',
+						inputs: [
+							textInput('name'),
+						],
+						items: [
+							{ ...textItem, text: '{name}' } as GraphicItemConfig,
+							second,
+						],
+					},
+				],
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
@@ -2023,7 +2377,9 @@ describe('graphicsCompositorInspector', () => {
 		it('drops a Graphic Placeholder Style whose last property it removes', async () => {
 			const wrapper = await mountComponent({
 				graphics: placeholderTextGraphic({
-					name: { font: { kind: 'application', fontId: 'inter' } },
+					name: {
+						font: { kind: 'application', fontId: 'inter' },
+					},
 				}),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
@@ -2047,7 +2403,12 @@ describe('graphicsCompositorInspector', () => {
 	 */
 	it('authors Graphic Source Selections beside the Graphic Inputs they feed', async () => {
 		const wrapper = await mountComponent({
-			graphics: stack([]).map(graphic => ({ ...graphic, inputs: [textInput('name')] })),
+			graphics: stack([]).map(graphic => ({
+				...graphic,
+				inputs: [
+					textInput('name'),
+				],
+			})),
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
 
@@ -2059,7 +2420,9 @@ describe('graphicsCompositorInspector', () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({
 				...graphic,
-				sources: [{ key: 'talent', label: 'Talent', kind: 'talent' }],
+				sources: [
+					{ key: 'talent', label: 'Talent', kind: 'talent' },
+				],
 			})),
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
@@ -2104,12 +2467,14 @@ describe('graphicsCompositorInspector', () => {
 		 * that can supply the context these Definitions require.
 		 */
 		function featureMatchStack(kind: 'clock' | 'player-life' | 'game-wins' | 'deck-list') {
-			return stack([getGraphicItemDefinition(kind).createDefault({
-				id: kind,
-				label: kind,
-				canvasWidth: 1920,
-				canvasHeight: 1080,
-			})]);
+			return stack([
+				getGraphicItemDefinition(kind).createDefault({
+					id: kind,
+					label: kind,
+					canvasWidth: 1920,
+					canvasHeight: 1080,
+				}),
+			]);
 		}
 
 		function mountKind(kind: 'clock' | 'player-life' | 'game-wins' | 'deck-list', graphics = featureMatchStack(kind)) {
@@ -2225,7 +2590,9 @@ describe('graphicsCompositorInspector', () => {
 				canvasHeight: 200,
 			});
 			const wrapper = await mountComponent({
-				graphics: stack([groupWith([clock as never])]),
+				graphics: stack([
+					groupWith([clock as never]),
+				]),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'clock' },
 				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 			});
@@ -2233,7 +2600,9 @@ describe('graphicsCompositorInspector', () => {
 			selectField(wrapper, 'graphic-group-child-sizing-mode')?.vm.$emit('update:modelValue', 'fill');
 			await nextTick();
 
-			expect(childOf(emittedGraphics(wrapper))).toMatchObject({ sizing: { mode: 'fill' } });
+			expect(childOf(emittedGraphics(wrapper))).toMatchObject({
+				sizing: { mode: 'fill' },
+			});
 		});
 
 		it('offers no win box or life-change control to a kind that has none', async () => {
@@ -2278,12 +2647,17 @@ function placedRow(row: DefinitionRow, overrides: Partial<GraphicItemConfig> = {
 		canvasWidth: 1920,
 		canvasHeight: 1080,
 	});
-	return { ...(row.variant?.(placed) ?? placed), ...overrides } as GraphicItemConfig;
+	return {
+		...(row.variant?.(placed) ?? placed),
+		...overrides,
+	} as GraphicItemConfig;
 }
 
 function mountDefinition(row: DefinitionRow, overrides: Partial<GraphicItemConfig> = {}) {
 	return mountComponent({
-		graphics: stack([placedRow(row, overrides)]),
+		graphics: stack([
+			placedRow(row, overrides),
+		]),
 		selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'item' },
 		contract: contractFor(row.kind),
 	});
@@ -2296,14 +2670,54 @@ describe('typography and the Text Overflow Policy for every Graphic Item Definit
 	}
 
 	const ROWS: Row[] = [
-		{ name: 'text', kind: 'text', typography: true, textOverflowPolicy: true },
-		{ name: 'shape', kind: 'shape', typography: false, textOverflowPolicy: false },
-		{ name: 'media', kind: 'media', typography: false, textOverflowPolicy: false },
-		{ name: 'social-network-icon', kind: 'social-network-icon', typography: false, textOverflowPolicy: false },
-		{ name: 'group', kind: 'group', typography: false, textOverflowPolicy: false },
-		{ name: 'clock', kind: 'clock', typography: true, textOverflowPolicy: true },
-		{ name: 'player-life', kind: 'player-life', typography: true, textOverflowPolicy: true },
-		{ name: 'game-wins as boxes', kind: 'game-wins', typography: false, textOverflowPolicy: false },
+		{
+			name: 'text',
+			kind: 'text',
+			typography: true,
+			textOverflowPolicy: true,
+		},
+		{
+			name: 'shape',
+			kind: 'shape',
+			typography: false,
+			textOverflowPolicy: false,
+		},
+		{
+			name: 'media',
+			kind: 'media',
+			typography: false,
+			textOverflowPolicy: false,
+		},
+		{
+			name: 'social-network-icon',
+			kind: 'social-network-icon',
+			typography: false,
+			textOverflowPolicy: false,
+		},
+		{
+			name: 'group',
+			kind: 'group',
+			typography: false,
+			textOverflowPolicy: false,
+		},
+		{
+			name: 'clock',
+			kind: 'clock',
+			typography: true,
+			textOverflowPolicy: true,
+		},
+		{
+			name: 'player-life',
+			kind: 'player-life',
+			typography: true,
+			textOverflowPolicy: true,
+		},
+		{
+			name: 'game-wins as boxes',
+			kind: 'game-wins',
+			typography: false,
+			textOverflowPolicy: false,
+		},
 		{
 			name: 'game-wins as a number',
 			kind: 'game-wins',
@@ -2311,7 +2725,12 @@ describe('typography and the Text Overflow Policy for every Graphic Item Definit
 			typography: true,
 			textOverflowPolicy: false,
 		},
-		{ name: 'deck-list as a list', kind: 'deck-list', typography: true, textOverflowPolicy: false },
+		{
+			name: 'deck-list as a list',
+			kind: 'deck-list',
+			typography: true,
+			textOverflowPolicy: false,
+		},
 		{
 			name: 'deck-list as a grid',
 			kind: 'deck-list',
@@ -2326,7 +2745,9 @@ describe('typography and the Text Overflow Policy for every Graphic Item Definit
 	}
 
 	it('covers every Definition', () => {
-		expect([...new Set(ROWS.map(row => row.kind))].sort()).toEqual([...GRAPHIC_ITEM_KINDS].sort());
+		expect([
+			...new Set(ROWS.map(row => row.kind)),
+		].sort()).toEqual([...GRAPHIC_ITEM_KINDS].sort());
 	});
 
 	it.each(ROWS)('offers $name exactly the typography it paints with', async (row) => {
@@ -2388,22 +2809,74 @@ describe('surfaces, Shape Geometry, and the Player for every Graphic Item Defini
 	const WIN_BOX = 'Win box Shape Geometry';
 
 	const ROWS: Row[] = [
-		{ name: 'text', kind: 'text', ownSurface: true, boxSurfaces: [], geometry: null, playerSide: false },
-		{ name: 'shape', kind: 'shape', ownSurface: true, boxSurfaces: [], geometry: { slot: 'geometry', title: SHAPE }, playerSide: false },
-		{ name: 'media, unclipped', kind: 'media', ownSurface: false, boxSurfaces: [], geometry: null, playerSide: false },
+		{
+			name: 'text',
+			kind: 'text',
+			ownSurface: true,
+			boxSurfaces: [],
+			geometry: null,
+			playerSide: false,
+		},
+		{
+			name: 'shape',
+			kind: 'shape',
+			ownSurface: true,
+			boxSurfaces: [],
+			geometry: { slot: 'geometry', title: SHAPE },
+			playerSide: false,
+		},
+		{
+			name: 'media, unclipped',
+			kind: 'media',
+			ownSurface: false,
+			boxSurfaces: [],
+			geometry: null,
+			playerSide: false,
+		},
 		{
 			name: 'media, clipped',
 			kind: 'media',
-			variant: item => ({ ...item, clipGeometry: squareShapeGeometry() }) as GraphicItemConfig,
+			variant: item => ({
+				...item,
+				clipGeometry: squareShapeGeometry(),
+			}) as GraphicItemConfig,
 			ownSurface: false,
 			boxSurfaces: [],
 			geometry: { slot: 'clipGeometry', title: SHAPE },
 			playerSide: false,
 		},
-		{ name: 'social-network-icon', kind: 'social-network-icon', ownSurface: false, boxSurfaces: [], geometry: null, playerSide: false },
-		{ name: 'group', kind: 'group', ownSurface: true, boxSurfaces: [], geometry: { slot: 'geometry', title: SHAPE }, playerSide: false },
-		{ name: 'clock', kind: 'clock', ownSurface: true, boxSurfaces: [], geometry: null, playerSide: false },
-		{ name: 'player-life', kind: 'player-life', ownSurface: true, boxSurfaces: [], geometry: null, playerSide: true },
+		{
+			name: 'social-network-icon',
+			kind: 'social-network-icon',
+			ownSurface: false,
+			boxSurfaces: [],
+			geometry: null,
+			playerSide: false,
+		},
+		{
+			name: 'group',
+			kind: 'group',
+			ownSurface: true,
+			boxSurfaces: [],
+			geometry: { slot: 'geometry', title: SHAPE },
+			playerSide: false,
+		},
+		{
+			name: 'clock',
+			kind: 'clock',
+			ownSurface: true,
+			boxSurfaces: [],
+			geometry: null,
+			playerSide: false,
+		},
+		{
+			name: 'player-life',
+			kind: 'player-life',
+			ownSurface: true,
+			boxSurfaces: [],
+			geometry: null,
+			playerSide: true,
+		},
 		{
 			name: 'game-wins as boxes',
 			kind: 'game-wins',
@@ -2421,7 +2894,14 @@ describe('surfaces, Shape Geometry, and the Player for every Graphic Item Defini
 			geometry: null,
 			playerSide: true,
 		},
-		{ name: 'deck-list', kind: 'deck-list', ownSurface: false, boxSurfaces: [], geometry: null, playerSide: true },
+		{
+			name: 'deck-list',
+			kind: 'deck-list',
+			ownSurface: false,
+			boxSurfaces: [],
+			geometry: null,
+			playerSide: true,
+		},
 	];
 
 	const BOX_TEST_ID_PREFIX: Record<BoxSurfaceSlot, string> = {
@@ -2430,7 +2910,9 @@ describe('surfaces, Shape Geometry, and the Player for every Graphic Item Defini
 	};
 
 	it('covers every Definition', () => {
-		expect([...new Set(ROWS.map(row => row.kind))].sort()).toEqual([...GRAPHIC_ITEM_KINDS].sort());
+		expect([
+			...new Set(ROWS.map(row => row.kind)),
+		].sort()).toEqual([...GRAPHIC_ITEM_KINDS].sort());
 	});
 
 	it.each(ROWS)('offers $name the Player only where it reads one', async (row) => {
@@ -2512,7 +2994,13 @@ describe('surfaces, Shape Geometry, and the Player for every Graphic Item Defini
 describe('recording a Graphic Style Set override from a property edit', () => {
 	function entries(letterSpacing = 2): GraphicStyleSetEntry[] {
 		return [
-			{ id: 'brand', kind: 'palette', name: 'Brand', schemaVersion: 1, value: { color: '#ff0044' } },
+			{
+				id: 'brand',
+				kind: 'palette',
+				name: 'Brand',
+				schemaVersion: 1,
+				value: { color: '#ff0044' },
+			},
 			{
 				id: 'heading',
 				kind: 'typography',
@@ -2551,15 +3039,24 @@ describe('recording a Graphic Style Set override from a property edit', () => {
 	 * so never moves the number.
 	 */
 	function stranded(): BroadcastGraphicConfig[] {
-		return [applyGraphicStyleSet(
-			{
-				id: 'lower-third',
-				name: 'Lower Third',
-				styleSet: { styleSetId: 'show-style', revision: 1 },
-				items: [{ ...textItem, styleRefs: { typography: { entryId: 'heading' } } }],
-			},
-			resolveGraphicStyleSet(entries()),
-		)];
+		return [
+			applyGraphicStyleSet(
+				{
+					id: 'lower-third',
+					name: 'Lower Third',
+					styleSet: { styleSetId: 'show-style', revision: 1 },
+					items: [
+						{
+							...textItem,
+							styleRefs: {
+								typography: { entryId: 'heading' },
+							},
+						},
+					],
+				},
+				resolveGraphicStyleSet(entries()),
+			),
+		];
 	}
 
 	const SELECTED: GraphicsSelectionTarget = { type: 'item', graphicId: 'lower-third', itemId: 'name' };
@@ -2575,7 +3072,10 @@ describe('recording a Graphic Style Set override from a property edit', () => {
 		await nextTick();
 
 		expect(itemOf(emittedGraphics(wrapper, 0))?.styleRefs?.typography)
-			.toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+			.toEqual({
+				entryId: 'heading',
+				overrides: { fontSize: 30 },
+			});
 	});
 
 	it('records nothing on a slot the Style Set has a pending change in', async () => {

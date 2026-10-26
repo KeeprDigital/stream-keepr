@@ -11,7 +11,9 @@ async function mountCard(props: {
 	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/Background.vue';
 	const { default: Background } = await import(componentPath);
 
-	return mount(Background, { props: { writable: true, ...props } });
+	return mount(Background, {
+		props: { writable: true, ...props },
+	});
 }
 
 type Emitted = Array<[BroadcastGraphicsBackgroundConfig | undefined]>;
@@ -46,7 +48,12 @@ describe('screenModesBroadcastGraphicsBackground', () => {
 		// Switching off is a display state, not a removal: an author toggling it back
 		// on gets the design they tuned, not the shipped starting point.
 		const wrapper = await mountCard({
-			background: { enabled: true, effect: 'caustics', opacity: 0.4, params: { speed: 2 } },
+			background: {
+				enabled: true,
+				effect: 'caustics',
+				opacity: 0.4,
+				params: { speed: 2 },
+			},
 		});
 
 		await toggleEnabled(wrapper, false);
@@ -61,7 +68,12 @@ describe('screenModesBroadcastGraphicsBackground', () => {
 
 	it('writes a new opacity without disturbing the selection', async () => {
 		const wrapper = await mountCard({
-			background: { enabled: true, effect: 'fog', opacity: 0.4, params: { speed: 2 } },
+			background: {
+				enabled: true,
+				effect: 'fog',
+				opacity: 0.4,
+				params: { speed: 2 },
+			},
 		});
 
 		await setOpacity(wrapper, '0.25');
@@ -76,7 +88,12 @@ describe('screenModesBroadcastGraphicsBackground', () => {
 
 	it('takes a whole selection from the shared Animation Effect fields, keeping its own host fields', async () => {
 		const wrapper = await mountCard({
-			background: { enabled: true, effect: 'fog', opacity: 0.4, params: { speed: 2 } },
+			background: {
+				enabled: true,
+				effect: 'fog',
+				opacity: 0.4,
+				params: { speed: 2 },
+			},
 		});
 
 		wrapper.getComponent({ name: 'ScreenAnimationEffectFields' })

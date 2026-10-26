@@ -7,7 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /** Enough of a D1 binding for Drizzle to wrap; nothing here runs a query. */
 function binding(): D1Database {
-	return { prepare: vi.fn(), batch: vi.fn(), exec: vi.fn(), dump: vi.fn() } as unknown as D1Database;
+	return {
+		prepare: vi.fn(),
+		batch: vi.fn(),
+		exec: vi.fn(),
+		dump: vi.fn(),
+	} as unknown as D1Database;
 }
 
 async function freshModule() {
@@ -45,10 +50,18 @@ describe('the database client', () => {
 	});
 
 	it('knows every table, including the auth and Graphics Asset Library schemas kept in their own files', async () => {
-		(globalThis as { __env__?: unknown }).__env__ = { DB: binding() };
+		(globalThis as { __env__?: unknown }).__env__ = {
+			DB: binding(),
+		};
 		const { db, schema } = await freshModule();
 
-		expect(Object.keys(db.query)).toEqual(expect.arrayContaining(['events', 'screens', 'user', 'session', 'graphicAssets']));
+		expect(Object.keys(db.query)).toEqual(expect.arrayContaining([
+			'events',
+			'screens',
+			'user',
+			'session',
+			'graphicAssets',
+		]));
 		expect(schema).toHaveProperty('user');
 		expect(schema).toHaveProperty('graphicAssets');
 		expect(schema).toHaveProperty('events');

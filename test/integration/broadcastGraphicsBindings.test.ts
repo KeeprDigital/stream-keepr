@@ -41,7 +41,9 @@ function graphicWith(
 	sources: GraphicSourceSelectionDeclaration[] = [PLAYER_SOURCE],
 	bindings = [NAME_BINDING],
 ) {
-	return [integrationBroadcastGraphicWithBindings(GRAPHIC, inputs, sources, bindings)];
+	return [
+		integrationBroadcastGraphicWithBindings(GRAPHIC, inputs, sources, bindings),
+	];
 }
 
 describe('broadcast graphics Event Data binding API', () => {
@@ -58,12 +60,22 @@ describe('broadcast graphics Event Data binding API', () => {
 
 		const ava = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
 			method: 'POST',
-			body: { name: 'Ava Reed', wins: 4, losses: 1, draws: 0 },
+			body: {
+				name: 'Ava Reed',
+				wins: 4,
+				losses: 1,
+				draws: 0,
+			},
 		});
 		avaId = ava.id;
 		const sam = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
 			method: 'POST',
-			body: { name: 'Sam Ortiz', wins: 3, losses: 2, draws: 0 },
+			body: {
+				name: 'Sam Ortiz',
+				wins: 3,
+				losses: 2,
+				draws: 0,
+			},
 		});
 		samId = sam.id;
 	});
@@ -113,7 +125,11 @@ describe('broadcast graphics Event Data binding API', () => {
 			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${harness.session().id}/commands`,
 			{
 				method: 'POST',
-				body: { commandId: playoutCommandId('bind-blocked'), type: 'Take', payload: { graphicId: GRAPHIC } },
+				body: {
+					commandId: playoutCommandId('bind-blocked'),
+					type: 'Take',
+					payload: { graphicId: GRAPHIC },
+				},
 				ignoreResponseError: true,
 			},
 		);
@@ -128,7 +144,11 @@ describe('broadcast graphics Event Data binding API', () => {
 	it('holds a staged bound change until Update Graphic accepts it', async () => {
 		const harness = await createGraphicsHarness(eventId, 'bind-staged', graphicWith([NAME]));
 		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', avaId);
-		await harness.send({ commandId: playoutCommandId('bind-take2'), type: 'Take', payload: { graphicId: GRAPHIC } });
+		await harness.send({
+			commandId: playoutCommandId('bind-take2'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
 
 		const reselected = await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', samId);
 
@@ -149,7 +169,11 @@ describe('broadcast graphics Event Data binding API', () => {
 	it('applies a live-policy bound change the moment the selection changes', async () => {
 		const harness = await createGraphicsHarness(eventId, 'bind-live', graphicWith([LIVE_NAME]));
 		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', avaId);
-		await harness.send({ commandId: playoutCommandId('bind-take3'), type: 'Take', payload: { graphicId: GRAPHIC } });
+		await harness.send({
+			commandId: playoutCommandId('bind-take3'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
 
 		const reselected = await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', samId);
 
@@ -159,7 +183,11 @@ describe('broadcast graphics Event Data binding API', () => {
 	it('holds the last accepted value on air when the selection is cleared', async () => {
 		const harness = await createGraphicsHarness(eventId, 'bind-stale', graphicWith([REQUIRED_NAME]));
 		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', avaId);
-		await harness.send({ commandId: playoutCommandId('bind-take4'), type: 'Take', payload: { graphicId: GRAPHIC } });
+		await harness.send({
+			commandId: playoutCommandId('bind-take4'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
 
 		const cleared = await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', null);
 
@@ -171,8 +199,16 @@ describe('broadcast graphics Event Data binding API', () => {
 	it('refuses to take a graphic again once a required binding has stopped resolving', async () => {
 		const harness = await createGraphicsHarness(eventId, 'bind-retake-blocked', graphicWith([REQUIRED_NAME]));
 		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', avaId);
-		await harness.send({ commandId: playoutCommandId('bind-take8'), type: 'Take', payload: { graphicId: GRAPHIC } });
-		await harness.send({ commandId: playoutCommandId('bind-out2'), type: 'Out', payload: { graphicId: GRAPHIC } });
+		await harness.send({
+			commandId: playoutCommandId('bind-take8'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
+		await harness.send({
+			commandId: playoutCommandId('bind-out2'),
+			type: 'Out',
+			payload: { graphicId: GRAPHIC },
+		});
 		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', null);
 
 		// It was legitimately on air with Ava Reed, and that value is still stored. Taking
@@ -182,7 +218,11 @@ describe('broadcast graphics Event Data binding API', () => {
 			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${harness.session().id}/commands`,
 			{
 				method: 'POST',
-				body: { commandId: playoutCommandId('bind-retake'), type: 'Take', payload: { graphicId: GRAPHIC } },
+				body: {
+					commandId: playoutCommandId('bind-retake'),
+					type: 'Take',
+					payload: { graphicId: GRAPHIC },
+				},
 				ignoreResponseError: true,
 			},
 		);
@@ -217,7 +257,11 @@ describe('broadcast graphics Event Data binding API', () => {
 	it('masks a binding with an override and resumes the current bound value when cleared', async () => {
 		const harness = await createGraphicsHarness(eventId, 'bind-override', graphicWith([LIVE_NAME]));
 		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', avaId);
-		await harness.send({ commandId: playoutCommandId('bind-take5'), type: 'Take', payload: { graphicId: GRAPHIC } });
+		await harness.send({
+			commandId: playoutCommandId('bind-take5'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
 
 		const overridden = await setBroadcastGraphicOverride(harness, GRAPHIC, 'name', 'Ava "Riptide" Reed');
 
@@ -237,8 +281,16 @@ describe('broadcast graphics Event Data binding API', () => {
 		const harness = await createGraphicsHarness(eventId, 'bind-override-persists', graphicWith([NAME]));
 		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', avaId);
 		await setBroadcastGraphicOverride(harness, GRAPHIC, 'name', 'Ava "Riptide" Reed');
-		await harness.send({ commandId: playoutCommandId('bind-take6'), type: 'Take', payload: { graphicId: GRAPHIC } });
-		await harness.send({ commandId: playoutCommandId('bind-out'), type: 'Out', payload: { graphicId: GRAPHIC } });
+		await harness.send({
+			commandId: playoutCommandId('bind-take6'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
+		await harness.send({
+			commandId: playoutCommandId('bind-out'),
+			type: 'Out',
+			payload: { graphicId: GRAPHIC },
+		});
 		const retaken = await harness.send({
 			commandId: playoutCommandId('bind-retake'),
 			type: 'Take',
@@ -262,11 +314,20 @@ describe('broadcast graphics Event Data binding API', () => {
 	it('re-resolves a live-policy binding on air after the Event Data behind it changes', async () => {
 		const renamed = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
 			method: 'POST',
-			body: { name: 'Rae Okonjo', wins: 2, losses: 0, draws: 0 },
+			body: {
+				name: 'Rae Okonjo',
+				wins: 2,
+				losses: 0,
+				draws: 0,
+			},
 		});
 		const harness = await createGraphicsHarness(eventId, 'bind-reresolve', graphicWith([LIVE_NAME]));
 		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', renamed.id);
-		await harness.send({ commandId: playoutCommandId('bind-take7'), type: 'Take', payload: { graphicId: GRAPHIC } });
+		await harness.send({
+			commandId: playoutCommandId('bind-take7'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
 
 		await $fetch(`/api/events/${eventId}/players/${renamed.id}`, {
 			method: 'PATCH',
@@ -319,8 +380,18 @@ describe('broadcast graphics Event Data binding API', () => {
 				tableNumber: 12,
 				player1Id: avaId,
 				player2Id: samId,
-				player1Data: { name: 'Ava R.', wins: 4, losses: 1, draws: 0 },
-				player2Data: { name: 'Sam O.', wins: 3, losses: 2, draws: 0 },
+				player1Data: {
+					name: 'Ava R.',
+					wins: 4,
+					losses: 1,
+					draws: 0,
+				},
+				player2Data: {
+					name: 'Sam O.',
+					wins: 3,
+					losses: 2,
+					draws: 0,
+				},
 			},
 		});
 
@@ -328,7 +399,12 @@ describe('broadcast graphics Event Data binding API', () => {
 			[NAME, RECORD],
 			[
 				{ key: 'match', label: 'Match', kind: 'match' },
-				{ key: 'p1', label: 'Player 1', kind: 'player', from: { sourceKey: 'match', relation: 'player1' } },
+				{
+					key: 'p1',
+					label: 'Player 1',
+					kind: 'player',
+					from: { sourceKey: 'match', relation: 'player1' },
+				},
 			],
 			[
 				{ inputKey: 'name', sourceKey: 'p1', fieldId: 'player.name' },
@@ -357,7 +433,9 @@ describe('broadcast graphics Event Data binding API', () => {
 				currentMode: 'broadcast-graphics',
 				modeConfigs: {
 					'broadcast-graphics': {
-						graphics: graphicWith([NAME], [PLAYER_SOURCE], [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.inventedField' }]),
+						graphics: graphicWith([NAME], [PLAYER_SOURCE], [
+							{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.inventedField' },
+						]),
 					},
 				},
 			},
@@ -381,7 +459,12 @@ describe('broadcast graphics Event Data binding API', () => {
 							[
 								PLAYER_SOURCE,
 								// A Player has no `player1`: nothing an operator could ever fix.
-								{ key: 'p1', label: 'Player 1', kind: 'player', from: { sourceKey: 'player', relation: 'player1' } },
+								{
+									key: 'p1',
+									label: 'Player 1',
+									kind: 'player',
+									from: { sourceKey: 'player', relation: 'player1' },
+								},
 							],
 							[NAME_BINDING],
 						),
@@ -417,7 +500,10 @@ describe('broadcast graphics re-resolution driven by Event Data', () => {
 	}
 
 	async function rename(playerId: number, name: string): Promise<void> {
-		await $fetch(`/api/events/${eventId}/players/${playerId}`, { method: 'PATCH', body: { name } });
+		await $fetch(`/api/events/${eventId}/players/${playerId}`, {
+			method: 'PATCH',
+			body: { name },
+		});
 	}
 
 	/** One placed Broadcast Graphic whose name is bound to its own Player selection. */
@@ -426,7 +512,9 @@ describe('broadcast graphics re-resolution driven by Event Data', () => {
 			id,
 			inputs,
 			[PLAYER_SOURCE],
-			[{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }],
+			[
+				{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+			],
 		);
 	}
 
@@ -455,8 +543,16 @@ describe('broadcast graphics re-resolution driven by Event Data', () => {
 
 		await selectBroadcastGraphicSource(harness, 'lead', 'player', first);
 		await selectBroadcastGraphicSource(harness, 'second', 'player', second);
-		await harness.send({ commandId: playoutCommandId('rr-take-lead'), type: 'Take', payload: { graphicId: 'lead' } });
-		await harness.send({ commandId: playoutCommandId('rr-take-second'), type: 'Take', payload: { graphicId: 'second' } });
+		await harness.send({
+			commandId: playoutCommandId('rr-take-lead'),
+			type: 'Take',
+			payload: { graphicId: 'lead' },
+		});
+		await harness.send({
+			commandId: playoutCommandId('rr-take-second'),
+			type: 'Take',
+			payload: { graphicId: 'second' },
+		});
 
 		await rename(first, 'Nia Fontaine-Cole');
 		await rename(second, 'Theo Vasquez Jr');
@@ -471,10 +567,16 @@ describe('broadcast graphics re-resolution driven by Event Data', () => {
 
 	it('leaves a staged Graphic Input pending rather than putting it on air', async () => {
 		const playerId = await createPlayer('Odile Brandt');
-		const harness = await createGraphicsHarness(eventId, 're-resolve-staged', [boundGraphic('lead', [NAME])]);
+		const harness = await createGraphicsHarness(eventId, 're-resolve-staged', [
+			boundGraphic('lead', [NAME]),
+		]);
 
 		await selectBroadcastGraphicSource(harness, 'lead', 'player', playerId);
-		await harness.send({ commandId: playoutCommandId('rr-take-staged'), type: 'Take', payload: { graphicId: 'lead' } });
+		await harness.send({
+			commandId: playoutCommandId('rr-take-staged'),
+			type: 'Take',
+			payload: { graphicId: 'lead' },
+		});
 
 		await rename(playerId, 'Odile Brandt-Reyes');
 		const reloaded = await harness.reload();
@@ -486,10 +588,16 @@ describe('broadcast graphics re-resolution driven by Event Data', () => {
 
 	it('never overwrites a Graphic Input Override with a re-resolved value', async () => {
 		const playerId = await createPlayer('Priya Raghunathan');
-		const harness = await createGraphicsHarness(eventId, 're-resolve-override', [boundGraphic('lead', [LIVE_NAME])]);
+		const harness = await createGraphicsHarness(eventId, 're-resolve-override', [
+			boundGraphic('lead', [LIVE_NAME]),
+		]);
 
 		await selectBroadcastGraphicSource(harness, 'lead', 'player', playerId);
-		await harness.send({ commandId: playoutCommandId('rr-take-override'), type: 'Take', payload: { graphicId: 'lead' } });
+		await harness.send({
+			commandId: playoutCommandId('rr-take-override'),
+			type: 'Take',
+			payload: { graphicId: 'lead' },
+		});
 		await setBroadcastGraphicOverride(harness, 'lead', 'name', 'Priya R.');
 
 		await rename(playerId, 'Priya Raghunathan-Singh');
@@ -502,7 +610,9 @@ describe('broadcast graphics re-resolution driven by Event Data', () => {
 
 	it('changes nothing about a Broadcast Graphic that is off air', async () => {
 		const playerId = await createPlayer('Wendell Achebe');
-		const harness = await createGraphicsHarness(eventId, 're-resolve-off', [boundGraphic('lead', [LIVE_NAME])]);
+		const harness = await createGraphicsHarness(eventId, 're-resolve-off', [
+			boundGraphic('lead', [LIVE_NAME]),
+		]);
 
 		await selectBroadcastGraphicSource(harness, 'lead', 'player', playerId);
 
@@ -553,17 +663,26 @@ describe('broadcast graphics binding to the Event, its Talents, and its game', (
 		// operator picks the third.
 		const talent2 = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
 			method: 'POST',
-			body: { name: 'Rhys Delacroix', socialProfiles: { bluesky: 'rhys.bsky.social' } },
+			body: {
+				name: 'Rhys Delacroix',
+				socialProfiles: { bluesky: 'rhys.bsky.social' },
+			},
 		});
 		talent2Id = talent2.id;
 		const named = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
 			method: 'POST',
-			body: { name: 'Imani Okoye', socialProfiles: { twitch: 'ImaniLive' } },
+			body: {
+				name: 'Imani Okoye',
+				socialProfiles: { twitch: 'ImaniLive' },
+			},
 		});
 		talent1Id = named.id;
 		const picked = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
 			method: 'POST',
-			body: { name: 'Noor Haddad', socialProfiles: { youtube: 'NoorOnAir' } },
+			body: {
+				name: 'Noor Haddad',
+				socialProfiles: { youtube: 'NoorOnAir' },
+			},
 		});
 		pickedTalentId = picked.id;
 
@@ -598,7 +717,9 @@ describe('broadcast graphics binding to the Event, its Talents, and its game', (
 		const harness = await createGraphicsHarness(eventId, 'bind-event-kind', graphicWith(
 			[NAME],
 			[EVENT_SOURCE],
-			[{ inputKey: 'name', sourceKey: 'event', fieldId: 'event.name' }],
+			[
+				{ inputKey: 'name', sourceKey: 'event', fieldId: 'event.name' },
+			],
 		));
 
 		const taken = await harness.send({
@@ -615,9 +736,16 @@ describe('broadcast graphics binding to the Event, its Talents, and its game', (
 			[NAME],
 			[
 				EVENT_SOURCE,
-				{ key: 'talent1', label: 'Talent 1', kind: 'talent', from: { sourceKey: 'event', relation: 'commentator1' } },
+				{
+					key: 'talent1',
+					label: 'Talent 1',
+					kind: 'talent',
+					from: { sourceKey: 'event', relation: 'commentator1' },
+				},
 			],
-			[{ inputKey: 'name', sourceKey: 'talent1', fieldId: 'talent.name' }],
+			[
+				{ inputKey: 'name', sourceKey: 'talent1', fieldId: 'talent.name' },
+			],
 		));
 
 		const taken = await harness.send({
@@ -634,8 +762,12 @@ describe('broadcast graphics binding to the Event, its Talents, and its game', (
 	it('resolves a Talent the operator picks for themselves', async () => {
 		const harness = await createGraphicsHarness(eventId, 'bind-talent-kind', graphicWith(
 			[NAME],
-			[{ key: 'talent', label: 'Talent', kind: 'talent' }],
-			[{ inputKey: 'name', sourceKey: 'talent', fieldId: 'talent.name' }],
+			[
+				{ key: 'talent', label: 'Talent', kind: 'talent' },
+			],
+			[
+				{ inputKey: 'name', sourceKey: 'talent', fieldId: 'talent.name' },
+			],
 		));
 
 		// Neither the Talent the Event names as Talent 1 nor the one it lists first, so
@@ -653,7 +785,9 @@ describe('broadcast graphics binding to the Event, its Talents, and its game', (
 	it('resolves fixed Social Profile handles and canonical URLs from a directly selected Talent', async () => {
 		const harness = await createGraphicsHarness(eventId, 'bind-talent-social-direct', graphicWith(
 			[NAME, PROFILE_URL],
-			[{ key: 'talent', label: 'Talent', kind: 'talent' }],
+			[
+				{ key: 'talent', label: 'Talent', kind: 'talent' },
+			],
 			[
 				{ inputKey: 'name', sourceKey: 'talent', fieldId: 'talent.youtubeHandle' },
 				{ inputKey: 'title', sourceKey: 'talent', fieldId: 'talent.youtubeProfileUrl' },
@@ -678,8 +812,18 @@ describe('broadcast graphics binding to the Event, its Talents, and its game', (
 			[NAME, PROFILE_URL],
 			[
 				EVENT_SOURCE,
-				{ key: 'talent1', label: 'Talent 1', kind: 'talent', from: { sourceKey: 'event', relation: 'commentator1' } },
-				{ key: 'talent2', label: 'Talent 2', kind: 'talent', from: { sourceKey: 'event', relation: 'commentator2' } },
+				{
+					key: 'talent1',
+					label: 'Talent 1',
+					kind: 'talent',
+					from: { sourceKey: 'event', relation: 'commentator1' },
+				},
+				{
+					key: 'talent2',
+					label: 'Talent 2',
+					kind: 'talent',
+					from: { sourceKey: 'event', relation: 'commentator2' },
+				},
 			],
 			[
 				{ inputKey: 'name', sourceKey: 'talent1', fieldId: 'talent.twitchHandle' },
@@ -702,8 +846,12 @@ describe('broadcast graphics binding to the Event, its Talents, and its game', (
 	it('makes a missing fixed Social Profile unavailable instead of substituting a default', async () => {
 		const harness = await createGraphicsHarness(eventId, 'bind-talent-social-missing', graphicWith(
 			[NAME],
-			[{ key: 'talent', label: 'Talent', kind: 'talent' }],
-			[{ inputKey: 'name', sourceKey: 'talent', fieldId: 'talent.twitchHandle' }],
+			[
+				{ key: 'talent', label: 'Talent', kind: 'talent' },
+			],
+			[
+				{ inputKey: 'name', sourceKey: 'talent', fieldId: 'talent.twitchHandle' },
+			],
 		));
 
 		await selectBroadcastGraphicSource(harness, GRAPHIC, 'talent', pickedTalentId);
@@ -719,11 +867,16 @@ describe('broadcast graphics binding to the Event, its Talents, and its game', (
 	it('re-resolves profile edits with existing live and staged On-air Update Policies', async () => {
 		const talent = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
 			method: 'POST',
-			body: { name: 'Marisol Vega', socialProfiles: { instagram: 'MarisolCasts' } },
+			body: {
+				name: 'Marisol Vega',
+				socialProfiles: { instagram: 'MarisolCasts' },
+			},
 		});
 		const harness = await createGraphicsHarness(eventId, 'bind-talent-social-edit', graphicWith(
 			[LIVE_NAME, PROFILE_URL],
-			[{ key: 'talent', label: 'Talent', kind: 'talent' }],
+			[
+				{ key: 'talent', label: 'Talent', kind: 'talent' },
+			],
 			[
 				{ inputKey: 'name', sourceKey: 'talent', fieldId: 'talent.instagramHandle' },
 				{ inputKey: 'title', sourceKey: 'talent', fieldId: 'talent.instagramProfileUrl' },
@@ -739,7 +892,9 @@ describe('broadcast graphics binding to the Event, its Talents, and its game', (
 
 		await $fetch(`/api/events/${eventId}/talents/${talent.id}`, {
 			method: 'PATCH',
-			body: { socialProfiles: { instagram: 'MarisolOnAir' } },
+			body: {
+				socialProfiles: { instagram: 'MarisolOnAir' },
+			},
 		});
 		const reloaded = await harness.reload();
 

@@ -15,8 +15,18 @@ function createCard(overrides: Record<string, unknown> = {}) {
 		set: 'lea',
 		layout: 'normal',
 		imageData: { front: null, back: null },
-		orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
-		displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
+		orientationData: {
+			flipable: false,
+			turnable: false,
+			rotateable: false,
+			counterRotateable: false,
+		},
+		displayData: {
+			flipped: false,
+			rotated: false,
+			counterRotated: false,
+			turnedOver: false,
+		},
 		...overrides,
 	};
 }

@@ -140,7 +140,12 @@ describe('event integrity and melee reset', () => {
 
 		const updatedEvent = await $fetch(`/api/events/${event.id}/melee-config`, {
 			method: 'PUT',
-			body: { meleeEnabled: false, meleeEventId: null, meleeClientId: null, meleeClientSecret: null },
+			body: {
+				meleeEnabled: false,
+				meleeEventId: null,
+				meleeClientId: null,
+				meleeClientSecret: null,
+			},
 		});
 
 		expect(updatedEvent.warnings).toEqual([
@@ -151,8 +156,14 @@ describe('event integrity and melee reset', () => {
 			$fetch(`/api/events/${event.id}/rounds`),
 			$fetch(`/api/events/${event.id}/matches`),
 		]);
-		expect(phases.phases).toEqual([expect.objectContaining({ id: phase.id, externalId: null, externalSource: 'manual' })]);
-		expect(rounds.rounds).toEqual([expect.objectContaining({ id: manualRound.id, phaseId: phase.id, externalSource: 'manual' })]);
-		expect(matches.matches).toEqual([expect.objectContaining({ id: manualMatch.id, roundId: manualRound.id })]);
+		expect(phases.phases).toEqual([
+			expect.objectContaining({ id: phase.id, externalId: null, externalSource: 'manual' }),
+		]);
+		expect(rounds.rounds).toEqual([
+			expect.objectContaining({ id: manualRound.id, phaseId: phase.id, externalSource: 'manual' }),
+		]);
+		expect(matches.matches).toEqual([
+			expect.objectContaining({ id: manualMatch.id, roundId: manualRound.id }),
+		]);
 	});
 });

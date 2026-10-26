@@ -10,7 +10,9 @@ export function playerListService() {
 		if (playerIds.length === 0)
 			return;
 
-		const uniquePlayerIds = [...new Set(playerIds)];
+		const uniquePlayerIds = [
+			...new Set(playerIds),
+		];
 		const existingPlayers: Array<{ id: number }> = [];
 		for (const payload of chunkJsonRows(uniquePlayerIds)) {
 			existingPlayers.push(...await db
@@ -110,7 +112,9 @@ export function playerListService() {
 
 		// Get current max sortOrder for this list
 		const [maxResult] = await db
-			.select({ maxOrder: max(playerListMembers.sortOrder) })
+			.select({
+				maxOrder: max(playerListMembers.sortOrder),
+			})
 			.from(playerListMembers)
 			.where(eq(playerListMembers.listId, listId));
 		const startOrder = (maxResult?.maxOrder ?? -1) + 1;
@@ -164,7 +168,9 @@ export function playerListService() {
 		}
 
 		return await db
-			.select({ ...getTableColumns(players) })
+			.select({
+				...getTableColumns(players),
+			})
 			.from(playerListMembers)
 			.innerJoin(players, eq(playerListMembers.playerId, players.id))
 			.where(and(

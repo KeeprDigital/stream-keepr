@@ -34,7 +34,11 @@ describe('deciding whether the validator deploys', () => {
 	});
 
 	it('skips when the deployed validator has the target fingerprint', () => {
-		const decision = decideValidatorDeploy({ mode: 'auto', targetFingerprint: FINGERPRINT_A, markerText: deployedMarker(FINGERPRINT_A) });
+		const decision = decideValidatorDeploy({
+			mode: 'auto',
+			targetFingerprint: FINGERPRINT_A,
+			markerText: deployedMarker(FINGERPRINT_A),
+		});
 
 		expect(decision.deploy).toBe(false);
 		expect(decision.reason).toContain('unchanged');
@@ -42,7 +46,11 @@ describe('deciding whether the validator deploys', () => {
 	});
 
 	it('deploys when the target fingerprint differs from the deployed one', () => {
-		const decision = decideValidatorDeploy({ mode: 'auto', targetFingerprint: FINGERPRINT_B, markerText: deployedMarker(FINGERPRINT_A) });
+		const decision = decideValidatorDeploy({
+			mode: 'auto',
+			targetFingerprint: FINGERPRINT_B,
+			markerText: deployedMarker(FINGERPRINT_A),
+		});
 
 		expect(decision.deploy).toBe(true);
 		expect(decision.reason).toContain('changed');
@@ -51,11 +59,26 @@ describe('deciding whether the validator deploys', () => {
 	it.each([
 		['an empty message (a lightweight tag)', ''],
 		['a message without the marker header', 'Release v1.4.0\n'],
-		['a garbled field line', deployedMarker(FINGERPRINT_A).replace('state: deployed', 'state deployed')],
-		['another component\'s marker', deployedMarker(FINGERPRINT_A).replace('component: validator', 'component: app')],
-		['an unknown state', deployedMarker(FINGERPRINT_A).replace('state: deployed', 'state: rolled-back')],
-		['an unknown fingerprint', deployedMarker('unknown')],
-		['a fingerprint of an unknown scheme', deployedMarker(`md5:${'a'.repeat(32)}`)],
+		[
+			'a garbled field line',
+			deployedMarker(FINGERPRINT_A).replace('state: deployed', 'state deployed'),
+		],
+		[
+			'another component\'s marker',
+			deployedMarker(FINGERPRINT_A).replace('component: validator', 'component: app'),
+		],
+		[
+			'an unknown state',
+			deployedMarker(FINGERPRINT_A).replace('state: deployed', 'state: rolled-back'),
+		],
+		[
+			'an unknown fingerprint',
+			deployedMarker('unknown'),
+		],
+		[
+			'a fingerprint of an unknown scheme',
+			deployedMarker(`md5:${'a'.repeat(32)}`),
+		],
 	])('deploys when the marker is unreadable: %s', (_case, markerText) => {
 		const decision = decideValidatorDeploy({ mode: 'auto', targetFingerprint: FINGERPRINT_A, markerText });
 
@@ -85,7 +108,11 @@ describe('deciding whether the validator deploys', () => {
 	});
 
 	it('deploys when the target could not be fingerprinted', () => {
-		const decision = decideValidatorDeploy({ mode: 'auto', targetFingerprint: undefined, markerText: deployedMarker(FINGERPRINT_A) });
+		const decision = decideValidatorDeploy({
+			mode: 'auto',
+			targetFingerprint: undefined,
+			markerText: deployedMarker(FINGERPRINT_A),
+		});
 
 		expect(decision.deploy).toBe(true);
 		expect(decision.reason).toContain('could not be fingerprinted');
@@ -137,8 +164,14 @@ describe('fingerprinting the validator', () => {
 	const bundle = bundler('// node_modules/@cloudflare/containers@0.3.7\nexport default {};\n');
 
 	it('is the same for the same inputs in different checkouts, ignoring source maps and wrangler\'s README', () => {
-		const first = fingerprintValidator({ root: checkout(), bundle });
-		const second = fingerprintValidator({ root: checkout(), bundle });
+		const first = fingerprintValidator({
+			root: checkout(),
+			bundle,
+		});
+		const second = fingerprintValidator({
+			root: checkout(),
+			bundle,
+		});
 
 		expect(first).toMatch(/^sha256:[0-9a-f]{64}$/);
 		expect(second).toBe(first);
@@ -147,7 +180,10 @@ describe('fingerprinting the validator', () => {
 	it('changes on a dependency-only change: the validator folder is untouched but the bundle differs', () => {
 		const root = checkout();
 		const before = fingerprintValidator({ root, bundle });
-		const after = fingerprintValidator({ root, bundle: bundler('// node_modules/@cloudflare/containers@0.3.8\nexport default {};\n') });
+		const after = fingerprintValidator({
+			root,
+			bundle: bundler('// node_modules/@cloudflare/containers@0.3.8\nexport default {};\n'),
+		});
 
 		expect(after).not.toBe(before);
 	});
@@ -185,7 +221,10 @@ describe('fingerprinting the validator', () => {
 			throw new Error('could not bundle the validator: boom');
 		};
 
-		expect(() => fingerprintValidator({ root: checkout(), bundle: failing })).toThrow(/boom/);
+		expect(() => fingerprintValidator({
+			root: checkout(),
+			bundle: failing,
+		})).toThrow(/boom/);
 	});
 });
 
@@ -195,10 +234,22 @@ interface Release {
 	validator: string;
 }
 
-const A: Release = { commit: 'a'.repeat(40), validator: FINGERPRINT_A };
-const A_PATCH: Release = { commit: 'c'.repeat(40), validator: FINGERPRINT_A };
-const B: Release = { commit: 'b'.repeat(40), validator: FINGERPRINT_B };
-const C: Release = { commit: 'd'.repeat(40), validator: `sha256:${'d'.repeat(64)}` };
+const A: Release = {
+	commit: 'a'.repeat(40),
+	validator: FINGERPRINT_A,
+};
+const A_PATCH: Release = {
+	commit: 'c'.repeat(40),
+	validator: FINGERPRINT_A,
+};
+const B: Release = {
+	commit: 'b'.repeat(40),
+	validator: FINGERPRINT_B,
+};
+const C: Release = {
+	commit: 'd'.repeat(40),
+	validator: `sha256:${'d'.repeat(64)}`,
+};
 
 function quiet() {}
 
@@ -245,15 +296,31 @@ function world() {
 	/** One Deploy workflow run of `release`. */
 	function dispatch(release: Release, options: { mode?: 'auto' | 'always' | 'never'; fail?: 'validator' | 'app' } = {}) {
 		checkOut(release);
-		return promote({ store, mode: options.mode ?? 'auto', ...commands(release, options.fail), source: 'actions', log: quiet });
+		return promote({
+			store,
+			mode: options.mode ?? 'auto',
+			...commands(release, options.fail),
+			source: 'actions',
+			log: quiet,
+		});
 	}
 
 	function marker(name: 'production' | 'production-validator') {
 		const tag = tags.get(name);
-		return tag && { tagged: tag.commit, ...parseMarker(tag.message) };
+		return tag && {
+			tagged: tag.commit,
+			...parseMarker(tag.message),
+		};
 	}
 
-	return { store, production, checkOut, commands, dispatch, marker };
+	return {
+		store,
+		production,
+		checkOut,
+		commands,
+		dispatch,
+		marker,
+	};
 }
 
 describe('promoting a release', () => {
@@ -264,8 +331,23 @@ describe('promoting a release', () => {
 
 		expect(result.validator.deploy).toBe(true);
 		expect(w.production).toEqual({ app: A.commit, validator: A.validator });
-		expect(w.marker('production-validator')).toEqual({ tagged: A.commit, component: 'validator', state: 'deployed', commit: A.commit, worktree: 'clean', fingerprint: A.validator, source: 'actions' });
-		expect(w.marker('production')).toEqual({ tagged: A.commit, component: 'app', state: 'deployed', commit: A.commit, worktree: 'clean', source: 'actions' });
+		expect(w.marker('production-validator')).toEqual({
+			tagged: A.commit,
+			component: 'validator',
+			state: 'deployed',
+			commit: A.commit,
+			worktree: 'clean',
+			fingerprint: A.validator,
+			source: 'actions',
+		});
+		expect(w.marker('production')).toEqual({
+			tagged: A.commit,
+			component: 'app',
+			state: 'deployed',
+			commit: A.commit,
+			worktree: 'clean',
+			source: 'actions',
+		});
 	});
 
 	it('skips the validator when its build inputs are unchanged, and leaves its marker on the release that deployed it', () => {
@@ -325,13 +407,29 @@ describe('promoting a release', () => {
 		// The operator deploys C from a local checkout with uncommitted changes.
 		w.checkOut(C, { dirty: true });
 		const local = w.commands(C);
-		promoteValidator({ store: w.store, fingerprint: local.fingerprint, deploy: local.deployValidator, source: 'local' });
+		promoteValidator({
+			store: w.store,
+			fingerprint: local.fingerprint,
+			deploy: local.deployValidator,
+			source: 'local',
+		});
 		markApp({ store: w.store, state: 'pending', source: 'local' });
 		local.deployApp();
 		markApp({ store: w.store, state: 'deployed', source: 'local' });
 
-		expect(w.marker('production-validator')).toMatchObject({ commit: C.commit, state: 'deployed', fingerprint: C.validator, worktree: 'dirty', source: 'local' });
-		expect(w.marker('production')).toMatchObject({ commit: C.commit, state: 'deployed', worktree: 'dirty', source: 'local' });
+		expect(w.marker('production-validator')).toMatchObject({
+			commit: C.commit,
+			state: 'deployed',
+			fingerprint: C.validator,
+			worktree: 'dirty',
+			source: 'local',
+		});
+		expect(w.marker('production')).toMatchObject({
+			commit: C.commit,
+			state: 'deployed',
+			worktree: 'dirty',
+			source: 'local',
+		});
 
 		const result = w.dispatch(B);
 
@@ -342,13 +440,21 @@ describe('promoting a release', () => {
 	it('never deploys when its pending marker cannot be written', () => {
 		const w = world();
 		let deployed = false;
-		const store = { ...w.store, write: () => {
-			throw new Error('marker write refused');
-		} };
+		const store = {
+			...w.store,
+			write: () => {
+				throw new Error('marker write refused');
+			},
+		};
 
-		expect(() => promoteValidator({ store, fingerprint: () => A.validator, deploy: () => {
-			deployed = true;
-		}, source: 'local' })).toThrow(/marker write refused/);
+		expect(() => promoteValidator({
+			store,
+			fingerprint: () => A.validator,
+			deploy: () => {
+				deployed = true;
+			},
+			source: 'local',
+		})).toThrow(/marker write refused/);
 		expect(deployed).toBe(false);
 	});
 
@@ -358,7 +464,13 @@ describe('promoting a release', () => {
 			throw new Error('could not bundle the validator');
 		};
 
-		promoteValidator({ store: w.store, fingerprint: failing, deploy: () => {}, source: 'local', log: quiet });
+		promoteValidator({
+			store: w.store,
+			fingerprint: failing,
+			deploy: () => {},
+			source: 'local',
+			log: quiet,
+		});
 
 		expect(w.marker('production-validator')).toMatchObject({ state: 'deployed', fingerprint: 'unknown' });
 		expect(w.dispatch(A).validator.deploy).toBe(true);
@@ -385,7 +497,12 @@ describe('the git marker store', () => {
 	function fakeGit(answers: Record<string, string> = {}) {
 		const calls: { args: string[]; input?: string }[] = [];
 		const git = (args: string[], options: { input?: string } = {}) => {
-			calls.push({ args, ...(options.input === undefined ? {} : { input: options.input }) });
+			calls.push({
+				args,
+				...(options.input === undefined
+					? {}
+					: { input: options.input }),
+			});
 			return answers[args.join(' ')] ?? '';
 		};
 		return { git, calls };
@@ -395,7 +512,14 @@ describe('the git marker store', () => {
 		const { git, calls } = fakeGit();
 
 		expect(gitMarkerStore({ git }).read('production-validator')).toBeUndefined();
-		expect(calls.map(call => call.args)).toEqual([['ls-remote', '--tags', 'origin', 'refs/tags/production-validator']]);
+		expect(calls.map(call => call.args)).toEqual([
+			[
+				'ls-remote',
+				'--tags',
+				'origin',
+				'refs/tags/production-validator',
+			],
+		]);
 	});
 
 	it('reads the remote\'s marker, replacing any stale local copy of the tag', () => {
@@ -407,7 +531,12 @@ describe('the git marker store', () => {
 		});
 
 		expect(gitMarkerStore({ git }).read('production-validator')).toBe(message);
-		expect(calls.map(call => call.args)).toContainEqual(['fetch', '--no-tags', 'origin', '+refs/tags/production-validator:refs/tags/production-validator']);
+		expect(calls.map(call => call.args)).toContainEqual([
+			'fetch',
+			'--no-tags',
+			'origin',
+			'+refs/tags/production-validator:refs/tags/production-validator',
+		]);
 	});
 
 	it('reads a lightweight tag (the pre-#616 production tag) as an empty, unreadable message', () => {
@@ -426,8 +555,20 @@ describe('the git marker store', () => {
 		gitMarkerStore({ git }).write('production-validator', COMMIT_A, message);
 
 		expect(calls).toEqual([
-			{ args: ['tag', '--force', '--annotate', '--file=-', 'production-validator', COMMIT_A], input: message },
-			{ args: ['push', 'origin', '+refs/tags/production-validator:refs/tags/production-validator'] },
+			{
+				args: [
+					'tag',
+					'--force',
+					'--annotate',
+					'--file=-',
+					'production-validator',
+					COMMIT_A,
+				],
+				input: message,
+			},
+			{
+				args: ['push', 'origin', '+refs/tags/production-validator:refs/tags/production-validator'],
+			},
 		]);
 	});
 
@@ -445,8 +586,16 @@ describe('describing a marker', () => {
 	it.each([
 		['a missing marker', undefined, 'missing'],
 		['a lightweight tag', '', 'unreadable'],
-		['a confirmed validator deploy', deployedMarker(FINGERPRINT_A), `deployed ${COMMIT_A} (fingerprint ${FINGERPRINT_A}, clean worktree, from local)`],
-		['an unconfirmed one', deployedMarker(FINGERPRINT_A).replace('state: deployed', 'state: pending'), `pending (started, never confirmed) ${COMMIT_A}`],
+		[
+			'a confirmed validator deploy',
+			deployedMarker(FINGERPRINT_A),
+			`deployed ${COMMIT_A} (fingerprint ${FINGERPRINT_A}, clean worktree, from local)`,
+		],
+		[
+			'an unconfirmed one',
+			deployedMarker(FINGERPRINT_A).replace('state: deployed', 'state: pending'),
+			`pending (started, never confirmed) ${COMMIT_A}`,
+		],
 	])('%s', (_case, text, expected) => {
 		expect(describeMarker(text)).toContain(expected);
 	});
@@ -494,7 +643,9 @@ describe('the deploy commands and workflow are wired through the markers', () =>
 		expect(steps[tooling]).toMatch(/persist-credentials: false/);
 		expect(steps[promoteStep]).toMatch(/INPUT_VALIDATOR: \$\{\{ inputs\.validator \}\}/);
 		expect(release).toBeGreaterThanOrEqual(0);
-		expect([release, tooling, install, promoteStep]).toEqual([...[release, tooling, install, promoteStep]].sort((a, b) => a - b));
+		expect([release, tooling, install, promoteStep]).toEqual([
+			...[release, tooling, install, promoteStep],
+		].sort((a, b) => a - b));
 		// A step-level `if:` replaces the implicit `success()`; `continue-on-error` lets a failure through.
 		expect(steps[promoteStep]).not.toMatch(/^\s+(if|continue-on-error):/m);
 	});
@@ -522,7 +673,11 @@ describe('the deploy commands and workflow are wired through the markers', () =>
 	it('the command line refuses an unknown command or mode before touching git', () => {
 		// An empty PATH: any git or wrangler the script tried to spawn would fail to start.
 		const env = { ...process.env, PATH: '', CLOUDFLARE_API_TOKEN: 'blocked-by-test-guard' };
-		for (const args of [['promote', 'sometimes'], ['mark-app', 'confirmed'], ['bogus']]) {
+		for (const args of [
+			['promote', 'sometimes'],
+			['mark-app', 'confirmed'],
+			['bogus'],
+		]) {
 			const result = spawnSync(process.execPath, ['scripts/deploy-promotion.mjs', ...args], { env, encoding: 'utf8' });
 
 			expect(result.status).toBe(2);

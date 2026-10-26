@@ -98,7 +98,11 @@ export function decidePromotion(pre: PromotionPreState, committed: PromotionComm
 
 			const clearedSlots = pre.clearedSlotIds.flatMap((id) => {
 				const slot = slotsById.get(id);
-				return slot ? [featureMatchMessages.slotUpdated(slot)] : [];
+				return slot
+					? [
+							featureMatchMessages.slotUpdated(slot),
+						]
+					: [];
 			});
 			const promoted = featureMatchMessages.slotUpdated(promotedSlot);
 			const displaced = pre.displacedAssignment && pre.displacedAssignment.id !== assignment.id
@@ -112,13 +116,19 @@ export function decidePromotion(pre: PromotionPreState, committed: PromotionComm
 				pre.continuedAssignment
 					? featureMatchMessages.assignmentUpdated(assignment)
 					: featureMatchMessages.assignmentCreated(assignment),
-				...(displaced ? [featureMatchMessages.assignmentDeleted(displaced.id)] : []),
+				...(displaced
+					? [
+							featureMatchMessages.assignmentDeleted(displaced.id),
+						]
+					: []),
 				...clearedSlots,
 				promoted,
 			];
 
 			return {
-				outcome: promotedSlot.matchId === pre.matchId ? 'won' : 'won-then-moved',
+				outcome: promotedSlot.matchId === pre.matchId
+					? 'won'
+					: 'won-then-moved',
 				messages,
 				// Answered as things are now, so this operator's client cannot overwrite
 				// a move it has already applied with what this promotion committed.

@@ -23,35 +23,48 @@ const BASE = {
 
 function withText(typography: Record<string, unknown>, placeholderStyle?: Record<string, unknown>) {
 	return broadcastGraphicsModeConfigSchema.safeParse({
-		graphics: [{
-			id: 'a',
-			name: 'A',
-			inputs: [{
-				type: 'text',
-				key: 'name',
-				label: 'Name',
-				required: false,
-				updatePolicy: 'staged',
-				default: '',
-				maxLength: 100,
-			}],
-			items: [{
-				type: 'text',
-				id: 'name',
-				label: 'Text 1',
-				visible: true,
-				anchor: 'top-left',
-				x: 0,
-				y: 0,
-				width: 10,
-				height: 10,
-				text: '{name}',
-				typography: { ...BASE, ...typography },
-				overflowPolicy: 'ellipsis',
-				minFontSize: 24,
-				...(placeholderStyle ? { placeholderStyles: { name: placeholderStyle } } : {}),
-			}],
-		}],
+		graphics: [
+			{
+				id: 'a',
+				name: 'A',
+				inputs: [
+					{
+						type: 'text',
+						key: 'name',
+						label: 'Name',
+						required: false,
+						updatePolicy: 'staged',
+						default: '',
+						maxLength: 100,
+					},
+				],
+				items: [
+					{
+						type: 'text',
+						id: 'name',
+						label: 'Text 1',
+						visible: true,
+						anchor: 'top-left',
+						x: 0,
+						y: 0,
+						width: 10,
+						height: 10,
+						text: '{name}',
+						typography: {
+							...BASE,
+							...typography,
+						},
+						overflowPolicy: 'ellipsis',
+						minFontSize: 24,
+						...(placeholderStyle
+							? {
+									placeholderStyles: { name: placeholderStyle },
+								}
+							: {}),
+					},
+				],
+			},
+		],
 	}).success;
 }
 

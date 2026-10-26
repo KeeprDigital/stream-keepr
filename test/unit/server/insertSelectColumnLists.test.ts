@@ -32,7 +32,9 @@ function sourceFiles(directory: string): string[] {
 		const path = join(directory, entry.name);
 		if (entry.isDirectory())
 			return sourceFiles(path);
-		return entry.name.endsWith('.ts') ? [path] : [];
+		return entry.name.endsWith('.ts')
+			? [path]
+			: [];
 	});
 }
 

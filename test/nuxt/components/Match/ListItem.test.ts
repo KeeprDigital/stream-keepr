@@ -27,7 +27,12 @@ const UDropdownMenuStub = defineComponent({
 });
 
 const MatchNotePopoverStub = defineComponent({
-	props: ['note', 'noteKey', 'save', 'remoteChanged'],
+	props: [
+		'note',
+		'noteKey',
+		'save',
+		'remoteChanged',
+	],
 	template: '<div data-testid="match-note-popover" :data-note="note" :data-remote-changed="String(remoteChanged)"><slot /><button data-testid="match-note-save" @click="save(\'Edited from Matches\')">Save Note</button></div>',
 });
 

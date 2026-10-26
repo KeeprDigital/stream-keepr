@@ -196,8 +196,15 @@ export async function updateMeleeConfiguration({ eventId, input, originConnectio
 		}
 		// The reset keeps imported structure still holding manual Rounds or
 		// Matches (ADR-0040); the answer names each one, as a sync's does.
-		const warnings = resetReason ? describeKeptStructure(updated.keptStructure, resetReason) : [];
-		return { ...response, ...(warnings.length > 0 ? { warnings } : {}) };
+		const warnings = resetReason
+			? describeKeptStructure(updated.keptStructure, resetReason)
+			: [];
+		return {
+			...response,
+			...(warnings.length > 0
+				? { warnings }
+				: {}),
+		};
 	}
 	finally {
 		try {

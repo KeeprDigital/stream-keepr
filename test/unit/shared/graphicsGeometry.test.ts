@@ -8,7 +8,12 @@ import {
 	resizeGraphicRectFromAnchor,
 } from '~~/shared/modules/graphics';
 
-const rect = { x: 100, y: 200, width: 400, height: 100 };
+const rect = {
+	x: 100,
+	y: 200,
+	width: 400,
+	height: 100,
+};
 
 describe('graphicsGeometry', () => {
 	it('reports the coordinate of the selected Graphic Anchor Point', () => {
@@ -26,7 +31,12 @@ describe('graphicsGeometry', () => {
 		const resized = resizeGraphicRectFromAnchor(rect, { width: 200, height: 50 }, 'center');
 
 		expect(anchoredGraphicPosition(resized, 'center')).toEqual(anchoredGraphicPosition(rect, 'center'));
-		expect(resized).toEqual({ x: 200, y: 225, width: 200, height: 50 });
+		expect(resized).toEqual({
+			x: 200,
+			y: 225,
+			width: 200,
+			height: 50,
+		});
 	});
 
 	it('leaves the top-left corner alone when resizing from the top-left anchor', () => {
@@ -74,15 +84,35 @@ describe('graphicsGeometry', () => {
 	});
 
 	it('rounds a resized width and height to whole pixels around the anchor', () => {
-		const odd = { x: 100, y: 50, width: 321, height: 181 };
+		const odd = {
+			x: 100,
+			y: 50,
+			width: 321,
+			height: 181,
+		};
 
-		expect(resizeGraphicRectFromAnchor(odd, { width: 400.4 }, 'right')).toEqual({ x: 21, y: 50, width: 400, height: 181 });
-		expect(resizeGraphicRectFromAnchor(odd, { height: 200.4 }, 'bottom')).toEqual({ x: 100, y: 31, width: 321, height: 200 });
+		expect(resizeGraphicRectFromAnchor(odd, { width: 400.4 }, 'right')).toEqual({
+			x: 21,
+			y: 50,
+			width: 400,
+			height: 181,
+		});
+		expect(resizeGraphicRectFromAnchor(odd, { height: 200.4 }, 'bottom')).toEqual({
+			x: 100,
+			y: 31,
+			width: 321,
+			height: 200,
+		});
 	});
 
 	it('aligns a rectangle\'s edge or centre with its container\'s, whatever its anchor', () => {
 		// A 401×201 item on a 1920×1080 canvas.
-		const item = { x: 100, y: 50, width: 401, height: 201 };
+		const item = {
+			x: 100,
+			y: 50,
+			width: 401,
+			height: 201,
+		};
 		const canvas = { width: 1920, height: 1080 };
 
 		expect(alignGraphicRect(item, 'x', 'start', canvas)).toEqual({ x: 0 });

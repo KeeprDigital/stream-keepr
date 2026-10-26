@@ -57,7 +57,9 @@ function onDescriptionChanged(event: Event) {
 	const next = (event.target as HTMLInputElement).value.trim();
 	if (next === (props.description ?? ''))
 		return;
-	emit('describe', next.length === 0 ? null : next);
+	emit('describe', next.length === 0
+		? null
+		: next);
 }
 </script>
 

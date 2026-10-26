@@ -74,7 +74,9 @@ export function collectImportedDeckCards(players: MappedMeleePlayer[]): { cards:
 export function createImportedCardResolver(resolutionMap: CardResolutionMap) {
 	return (name: string, setCode: string | null) => {
 		const resolution = resolutionMap.get(createCardKey(name, setCode));
-		return resolution?.status === 'resolved' ? resolution : null;
+		return resolution?.status === 'resolved'
+			? resolution
+			: null;
 	};
 }
 

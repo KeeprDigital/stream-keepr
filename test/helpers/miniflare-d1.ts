@@ -54,7 +54,9 @@ export async function createMiniflareD1Harness(): Promise<MiniflareD1Harness> {
 	writeFileSync(configPath, JSON.stringify({
 		name: 'stream-keepr-d1-limits',
 		...deployedCompatibility(),
-		d1_databases: [{ binding: 'DB', database_name: 'limits', database_id: 'limits' }],
+		d1_databases: [
+			{ binding: 'DB', database_name: 'limits', database_id: 'limits' },
+		],
 	}));
 
 	const proxy = await getPlatformProxy<{ DB: D1Database }>({

@@ -37,7 +37,13 @@ describe('graphicItemDefinitions', () => {
 		const definitions = graphicItemDefinitionsForHost(BROADCAST_GRAPHICS_HOST_CONTRACT);
 
 		expect(definitions.map(definition => definition.kind))
-			.toEqual(['text', 'shape', 'media', 'social-network-icon', 'group']);
+			.toEqual([
+				'text',
+				'shape',
+				'media',
+				'social-network-icon',
+				'group',
+			]);
 	});
 
 	it('never offers a Graphic Group inside a Graphic Group', () => {
@@ -46,7 +52,12 @@ describe('graphicItemDefinitions', () => {
 		const definitions = graphicGroupChildDefinitionsForHost(BROADCAST_GRAPHICS_HOST_CONTRACT);
 
 		expect(definitions.map(definition => definition.kind))
-			.toEqual(['text', 'shape', 'media', 'social-network-icon']);
+			.toEqual([
+				'text',
+				'shape',
+				'media',
+				'social-network-icon',
+			]);
 	});
 
 	it('withholds a Definition whose required context the Host Contract cannot supply', () => {
@@ -69,7 +80,16 @@ describe('graphicItemDefinitions', () => {
 		const definitions = graphicItemDefinitionsForHost(FEATURE_MATCH_OVERLAY_HOST_CONTRACT);
 
 		expect(definitions.map(definition => definition.kind))
-			.toEqual(['text', 'shape', 'media', 'group', 'clock', 'player-life', 'game-wins', 'deck-list']);
+			.toEqual([
+				'text',
+				'shape',
+				'media',
+				'group',
+				'clock',
+				'player-life',
+				'game-wins',
+				'deck-list',
+			]);
 	});
 
 	it('offers the context-gated Definitions inside a Graphic Group too', () => {
@@ -79,11 +99,24 @@ describe('graphicItemDefinitions', () => {
 		const definitions = graphicGroupChildDefinitionsForHost(FEATURE_MATCH_OVERLAY_HOST_CONTRACT);
 
 		expect(definitions.map(definition => definition.kind))
-			.toEqual(['text', 'shape', 'media', 'clock', 'player-life', 'game-wins', 'deck-list']);
+			.toEqual([
+				'text',
+				'shape',
+				'media',
+				'clock',
+				'player-life',
+				'game-wins',
+				'deck-list',
+			]);
 	});
 
 	it('requires the Feature Match context for the Clock, Player Life, Game Wins, and Deck List Definitions', () => {
-		for (const kind of ['clock', 'player-life', 'game-wins', 'deck-list'] as const)
+		for (const kind of [
+			'clock',
+			'player-life',
+			'game-wins',
+			'deck-list',
+		] as const)
 			expect(getGraphicItemDefinition(kind).requiredContext).toBe('feature-match');
 
 		// The base kinds compose from nothing a host has to supply, so they require
@@ -102,7 +135,12 @@ describe('graphicItemDefinitions', () => {
 			canvasHeight: 1080,
 		});
 
-		expect(item).toMatchObject({ type: 'clock', visible: true, anchor: 'top-left', overflowPolicy: 'clip' });
+		expect(item).toMatchObject({
+			type: 'clock',
+			visible: true,
+			anchor: 'top-left',
+			overflowPolicy: 'clip',
+		});
 		expect(item.type === 'clock' && item.typography.textAlign).toBe('center');
 		expect(graphicItemSummary(item)).toBe('Feature Match clock');
 	});
@@ -270,7 +308,12 @@ describe('graphicItemDefinitions', () => {
 		// therefore whether Graphic Inputs are declared. Instant-apply write
 		// semantics is deliberately not among them — both hosts already write
 		// instantly, so a field for it would have no reader.
-		const fields = ['composition', 'contextKinds', 'hostId', 'textValues'];
+		const fields = [
+			'composition',
+			'contextKinds',
+			'hostId',
+			'textValues',
+		];
 
 		expect(Object.keys(BROADCAST_GRAPHICS_HOST_CONTRACT).sort()).toEqual(fields);
 		expect(Object.keys(FEATURE_MATCH_OVERLAY_HOST_CONTRACT).sort()).toEqual(fields);
@@ -382,11 +425,20 @@ describe('graphicItemDefinitions', () => {
 		};
 
 		function placed(kind: GraphicItemKind): GraphicItemConfig {
-			return getGraphicItemDefinition(kind).createDefault({ id: kind, label: kind, canvasWidth: 1920, canvasHeight: 1080 });
+			return getGraphicItemDefinition(kind).createDefault({
+				id: kind,
+				label: kind,
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			});
 		}
 
 		function composition(item: GraphicItemConfig): BroadcastGraphicConfig {
-			return { id: 'graphic', name: 'Graphic', items: [item] };
+			return {
+				id: 'graphic',
+				name: 'Graphic',
+				items: [item],
+			};
 		}
 
 		it('covers every Definition', () => {
@@ -430,7 +482,12 @@ describe('graphicItemDefinitions', () => {
 
 			for (const kind of ['text', 'clock', 'player-life'] as const)
 				expect(paintedGraphicTypography(placed(kind))).not.toBeNull();
-			for (const kind of ['shape', 'media', 'social-network-icon', 'group'] as const)
+			for (const kind of [
+				'shape',
+				'media',
+				'social-network-icon',
+				'group',
+			] as const)
 				expect(paintedGraphicTypography(placed(kind))).toBeNull();
 		});
 	});
@@ -439,7 +496,12 @@ describe('graphicItemDefinitions', () => {
 		type SurfaceSlot = 'surfaceStyle' | 'defaultChildSurfaceStyle' | 'boxSurfaceStyle' | 'wonBoxSurfaceStyle';
 		type GeometrySlot = 'geometry' | 'clipGeometry' | 'boxGeometry';
 
-		const SURFACE_SLOTS: readonly SurfaceSlot[] = ['surfaceStyle', 'defaultChildSurfaceStyle', 'boxSurfaceStyle', 'wonBoxSurfaceStyle'];
+		const SURFACE_SLOTS: readonly SurfaceSlot[] = [
+			'surfaceStyle',
+			'defaultChildSurfaceStyle',
+			'boxSurfaceStyle',
+			'wonBoxSurfaceStyle',
+		];
 		const GEOMETRY_SLOTS: readonly GeometrySlot[] = ['geometry', 'clipGeometry', 'boxGeometry'];
 
 		/**
@@ -450,13 +512,33 @@ describe('graphicItemDefinitions', () => {
 		 * win boxes with theirs.
 		 */
 		const OWNS: Record<GraphicItemKind, { surfaces: SurfaceSlot[]; geometry: GeometrySlot | null; playerSide: boolean }> = {
-			'text': { surfaces: ['surfaceStyle'], geometry: null, playerSide: false },
-			'shape': { surfaces: ['surfaceStyle'], geometry: 'geometry', playerSide: false },
+			'text': {
+				surfaces: ['surfaceStyle'],
+				geometry: null,
+				playerSide: false,
+			},
+			'shape': {
+				surfaces: ['surfaceStyle'],
+				geometry: 'geometry',
+				playerSide: false,
+			},
 			'media': { surfaces: [], geometry: 'clipGeometry', playerSide: false },
 			'social-network-icon': { surfaces: [], geometry: null, playerSide: false },
-			'group': { surfaces: ['surfaceStyle', 'defaultChildSurfaceStyle'], geometry: 'geometry', playerSide: false },
-			'clock': { surfaces: ['surfaceStyle'], geometry: null, playerSide: false },
-			'player-life': { surfaces: ['surfaceStyle'], geometry: null, playerSide: true },
+			'group': {
+				surfaces: ['surfaceStyle', 'defaultChildSurfaceStyle'],
+				geometry: 'geometry',
+				playerSide: false,
+			},
+			'clock': {
+				surfaces: ['surfaceStyle'],
+				geometry: null,
+				playerSide: false,
+			},
+			'player-life': {
+				surfaces: ['surfaceStyle'],
+				geometry: null,
+				playerSide: true,
+			},
 			'game-wins': {
 				surfaces: ['surfaceStyle', 'boxSurfaceStyle', 'wonBoxSurfaceStyle'],
 				geometry: 'boxGeometry',
@@ -466,13 +548,27 @@ describe('graphicItemDefinitions', () => {
 		};
 
 		function placed(kind: GraphicItemKind): GraphicItemConfig {
-			const item = getGraphicItemDefinition(kind).createDefault({ id: kind, label: kind, canvasWidth: 1920, canvasHeight: 1080 });
+			const item = getGraphicItemDefinition(kind).createDefault({
+				id: kind,
+				label: kind,
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			});
 			// A Media Graphic Item holds its clipping geometry only once clipping is on.
-			return item.type === 'media' ? { ...item, clipGeometry: squareShapeGeometry() } : item;
+			return item.type === 'media'
+				? {
+						...item,
+						clipGeometry: squareShapeGeometry(),
+					}
+				: item;
 		}
 
 		function composition(item: GraphicItemConfig): BroadcastGraphicConfig {
-			return { id: 'graphic', name: 'Graphic', items: [item] };
+			return {
+				id: 'graphic',
+				name: 'Graphic',
+				items: [item],
+			};
 		}
 
 		it('covers every Definition', () => {
@@ -501,8 +597,11 @@ describe('graphicItemDefinitions', () => {
 				expect(graphicStyleOwnerSupportsSlot(item, slot), slot).toBe(owns.geometry === slot);
 			const shaped = patchShapeGeometry(graphic, kind, { leftSlant: 12 });
 			expect(shaped !== graphic).toBe(owns.geometry !== null);
-			if (owns.geometry !== null)
-				expect(shaped.items[0]).toMatchObject({ [owns.geometry]: { leftSlant: 12 } });
+			if (owns.geometry !== null) {
+				expect(shaped.items[0]).toMatchObject({
+					[owns.geometry]: { leftSlant: 12 },
+				});
+			}
 
 			expect(ownsPlayerSide(item)).toBe(owns.playerSide);
 			expect('playerSide' in item).toBe(owns.playerSide);
@@ -530,14 +629,24 @@ describe('graphicItemDefinitions', () => {
 		});
 
 		it('offers an item without a surface of its own the control that gives it one', () => {
-			const text = getGraphicItemDefinition('text').createDefault({ id: 'text', label: 'Text', canvasWidth: 1920, canvasHeight: 1080 });
+			const text = getGraphicItemDefinition('text').createDefault({
+				id: 'text',
+				label: 'Text',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			});
 
 			expect(paintedGraphicSurfaceStyles(text)).toEqual({ surfaceStyle: null });
 			expect(paintedGraphicSurfaceStyles(placed('deck-list'))).toEqual({});
 		});
 
 		it('offers a Media Graphic Item Shape Geometry controls only while it clips', () => {
-			const unclipped = getGraphicItemDefinition('media').createDefault({ id: 'media', label: 'Media', canvasWidth: 1920, canvasHeight: 1080 });
+			const unclipped = getGraphicItemDefinition('media').createDefault({
+				id: 'media',
+				label: 'Media',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			});
 
 			expect(paintedShapeGeometry(unclipped)).toBeNull();
 			expect(patchShapeGeometry(composition(unclipped), 'media', { leftSlant: 12 }).items[0]).toEqual(unclipped);

@@ -98,7 +98,11 @@ describe('screens API', () => {
 			'top-cut': { showHeader: false },
 			'feature-match': { showClock: false },
 			'feature-match-overlay': { presetId: 'full-table' },
-			'broadcast-graphics': { channels: [{ id: 'lower-thirds', name: 'Lower Thirds' }] },
+			'broadcast-graphics': {
+				channels: [
+					{ id: 'lower-thirds', name: 'Lower Thirds' },
+				],
+			},
 			'metagame': { topN: 16 },
 			'top-cards': { limit: 12 },
 			'player-history': { rowsPerPage: 5 },

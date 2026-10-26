@@ -25,7 +25,9 @@ const savedConfig = {
 const mockConfig = ref<Record<string, any>>({ ...savedConfig });
 const mockUpdateConfig = vi.fn();
 const mockSaving = ref(false);
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 
 type Handler = (message: Record<string, unknown>) => void;
 const channelHandlers = new Map<string, Set<Handler>>();
@@ -58,7 +60,9 @@ mockNuxtImport('useServerTime', () => () => ({
 	getServerTime: () => 1_000_000,
 }));
 mockNuxtImport('useRoundStore', () => () => ({
-	rounds: [{ id: 31, name: 'Round 4' }],
+	rounds: [
+		{ id: 31, name: 'Round 4' },
+	],
 	isLoaded: true,
 	loadRoundsByEventId: vi.fn(),
 }));
@@ -86,13 +90,22 @@ function pairing(matchId: number): ScreenOutputRoundMatch {
 
 function pairingsOf(count: number) {
 	return {
-		round: { id: 31, eventId: 1, phaseId: 3, name: 'Round 4', roundNumber: 4 },
+		round: {
+			id: 31,
+			eventId: 1,
+			phaseId: 3,
+			name: 'Round 4',
+			roundNumber: 4,
+		},
 		matches: Array.from({ length: count }, (_, index) => pairing(index + 1)),
 	};
 }
 
 const UButtonStub = defineComponent({
-	props: { label: { type: String, required: false }, disabled: { type: Boolean, required: false } },
+	props: {
+		label: { type: String, required: false },
+		disabled: { type: Boolean, required: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
 });
@@ -102,7 +115,10 @@ async function mountSettings() {
 
 	const wrapper = mount(Settings, {
 		props: {
-			screen: { id: 1, modeConfigs: { pairings: savedConfig } } as unknown as Screen,
+			screen: {
+				id: 1,
+				modeConfigs: { pairings: savedConfig },
+			} as unknown as Screen,
 			eventId: 1,
 		},
 		global: {
@@ -150,7 +166,9 @@ describe('screenModesPairingsSettings', () => {
 		expect(wrapper.text()).toContain('Page 1 of 1');
 
 		mockFetch.mockResolvedValue(pairingsOf(17));
-		deliver('match:created', { match: { id: 99, roundId: 31 } });
+		deliver('match:created', {
+			match: { id: 99, roundId: 31 },
+		});
 		await flushPromises();
 
 		expect(wrapper.text()).toContain('Page 1 of 3');
@@ -164,7 +182,14 @@ describe('screenModesPairingsSettings', () => {
 		// The store shows the edit at once, but the server reads the Round it holds
 		// until the save lands, so the editor waits for it.
 		mockSaving.value = true;
-		await wrapper.setProps({ screen: { id: 1, modeConfigs: { pairings: { ...savedConfig, roundId: 32 } } } as unknown as Screen });
+		await wrapper.setProps({
+			screen: {
+				id: 1,
+				modeConfigs: {
+					pairings: { ...savedConfig, roundId: 32 },
+				},
+			} as unknown as Screen,
+		});
 		await flushPromises();
 		expect(mockFetch).toHaveBeenCalledTimes(1);
 

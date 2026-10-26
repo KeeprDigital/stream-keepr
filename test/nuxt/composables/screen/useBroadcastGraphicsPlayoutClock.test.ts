@@ -6,7 +6,9 @@ import { defineComponent, h, nextTick, ref } from 'vue';
 const clockSynchronized = ref(false);
 const session = { id: 55, sequence: 1 };
 const sessionStore = {
-	sessions: new Map([[7, session]]),
+	sessions: new Map([
+		[7, session],
+	]),
 	get clockSynchronized() {
 		return clockSynchronized.value;
 	},

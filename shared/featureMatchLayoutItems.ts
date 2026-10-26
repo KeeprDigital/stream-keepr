@@ -77,11 +77,23 @@ export function surfaceStyle(
 	fill: GraphicFill,
 	extras: Partial<Omit<GraphicSurfaceStyle, 'fill'>> = {},
 ): GraphicSurfaceStyle {
-	return { fill, fillOpacity: extras.fillOpacity ?? 1, ...(extras.outline ? { outline: extras.outline } : {}), ...(extras.glow ? { glow: extras.glow } : {}) };
+	return {
+		fill,
+		fillOpacity: extras.fillOpacity ?? 1,
+		...(extras.outline
+			? { outline: extras.outline }
+			: {}),
+		...(extras.glow
+			? { glow: extras.glow }
+			: {}),
+	};
 }
 
 export function typography(overrides: Partial<GraphicTypography> = {}): GraphicTypography {
-	return { ...DEFAULT_GRAPHIC_TYPOGRAPHY, ...overrides };
+	return {
+		...DEFAULT_GRAPHIC_TYPOGRAPHY,
+		...overrides,
+	};
 }
 
 export function textItem(
@@ -100,7 +112,9 @@ export function textItem(
 		typography: item.typography,
 		overflowPolicy: item.overflowPolicy ?? 'ellipsis',
 		minFontSize: item.minFontSize ?? 16,
-		...(item.surfaceStyle ? { surfaceStyle: item.surfaceStyle } : {}),
+		...(item.surfaceStyle
+			? { surfaceStyle: item.surfaceStyle }
+			: {}),
 	};
 }
 
@@ -149,7 +163,9 @@ export function clockItem(
 		typography: item.typography,
 		overflowPolicy: 'clip',
 		minFontSize: 16,
-		...(item.surfaceStyle ? { surfaceStyle: item.surfaceStyle } : {}),
+		...(item.surfaceStyle
+			? { surfaceStyle: item.surfaceStyle }
+			: {}),
 	};
 }
 
@@ -171,7 +187,9 @@ export function playerLifeItem(
 		lifeAnimation: 'glow',
 		lifeAnimationDurationMs: 420,
 		lifeAnimationAccentColor: item.accentColor ?? '#ffffff',
-		...(item.surfaceStyle ? { surfaceStyle: item.surfaceStyle } : {}),
+		...(item.surfaceStyle
+			? { surfaceStyle: item.surfaceStyle }
+			: {}),
 	};
 }
 
@@ -197,9 +215,19 @@ export function gameWinsItem(
 		boxWidth: item.boxWidth,
 		boxHeight: item.boxHeight,
 		boxGap: item.boxGap,
-		boxGeometry: item.boxRadius ? roundedShapeGeometry(item.boxRadius) : squareShapeGeometry(),
-		boxSurfaceStyle: { fill: solidFill('#000000'), fillOpacity: 0, outline },
-		wonBoxSurfaceStyle: { fill: solidFill(item.wonColor), fillOpacity: 1, outline },
+		boxGeometry: item.boxRadius
+			? roundedShapeGeometry(item.boxRadius)
+			: squareShapeGeometry(),
+		boxSurfaceStyle: {
+			fill: solidFill('#000000'),
+			fillOpacity: 0,
+			outline,
+		},
+		wonBoxSurfaceStyle: {
+			fill: solidFill(item.wonColor),
+			fillOpacity: 1,
+			outline,
+		},
 		typography: typography({ textAlign: 'center' }),
 	};
 }
@@ -221,7 +249,9 @@ export function groupItem(
 		justify: 'start',
 		clip: item.clip ?? true,
 		geometry: squareShapeGeometry(),
-		...(item.surfaceStyle ? { surfaceStyle: item.surfaceStyle } : {}),
+		...(item.surfaceStyle
+			? { surfaceStyle: item.surfaceStyle }
+			: {}),
 		children: item.children,
 	};
 }
@@ -248,12 +278,37 @@ export function edgeRuleItem(
 ): ShapeGraphicItemConfig {
 	const { bounds, thickness, edge } = item;
 	const rect = edge === 'top'
-		? { x: bounds.x, y: bounds.y, width: bounds.width, height: thickness }
+		? {
+				x: bounds.x,
+				y: bounds.y,
+				width: bounds.width,
+				height: thickness,
+			}
 		: edge === 'bottom'
-			? { x: bounds.x, y: bounds.y + bounds.height - thickness, width: bounds.width, height: thickness }
+			? {
+					x: bounds.x,
+					y: bounds.y + bounds.height - thickness,
+					width: bounds.width,
+					height: thickness,
+				}
 			: edge === 'left'
-				? { x: bounds.x, y: bounds.y, width: thickness, height: bounds.height }
-				: { x: bounds.x + bounds.width - thickness, y: bounds.y, width: thickness, height: bounds.height };
+				? {
+						x: bounds.x,
+						y: bounds.y,
+						width: thickness,
+						height: bounds.height,
+					}
+				: {
+						x: bounds.x + bounds.width - thickness,
+						y: bounds.y,
+						width: thickness,
+						height: bounds.height,
+					};
 
-	return shapeItem({ id: item.id, label: item.label, ...rect, surfaceStyle: item.surfaceStyle });
+	return shapeItem({
+		id: item.id,
+		label: item.label,
+		...rect,
+		surfaceStyle: item.surfaceStyle,
+	});
 }

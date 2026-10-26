@@ -159,7 +159,9 @@ export function meleeRoundSnapshotService() {
 
 		const existingExternalIds = new Set(
 			(batchResults.slice(0, existingMatchQueries.length).flat() as Array<{ externalId: string | null }>)
-				.flatMap(row => row.externalId == null ? [] : [row.externalId]),
+				.flatMap(row => row.externalId == null
+					? []
+					: [row.externalId]),
 		);
 		const matchBatchResults = batchResults.slice(
 			existingMatchQueries.length,

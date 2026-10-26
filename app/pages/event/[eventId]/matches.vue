@@ -26,7 +26,9 @@ const route = useRoute();
 
 function parseRoundId(value: unknown): number | undefined {
 	const parsed = Number(value);
-	return Number.isFinite(parsed) ? parsed : undefined;
+	return Number.isFinite(parsed)
+		? parsed
+		: undefined;
 }
 
 function getMostRecentSyncedRoundId() {
@@ -72,7 +74,9 @@ const roundOptions = computed(() =>
 const hasRounds = computed(() => roundStore.rounds.length > 0);
 const hasSelectableRounds = computed(() => roundOptions.value.length > 0);
 const hasMatches = computed(() => matchStore.matches.length > 0);
-const selectedRound = computed(() => viewedRoundId.value ? roundStore.getRoundById(viewedRoundId.value) : undefined);
+const selectedRound = computed(() => viewedRoundId.value
+	? roundStore.getRoundById(viewedRoundId.value)
+	: undefined);
 const selectedRoundBestOf = computed(() => toFeatureMatchDefaults(eventStore.event).bestOf);
 const isSelectedRoundManualResults = computed(() => isManualResultsRound(selectedRound.value));
 const canCreateMatches = computed(() => !!selectedRound.value && isSelectedRoundManualResults.value);
@@ -84,10 +88,26 @@ const {
 	initialError: storesError,
 	retry: retryStores,
 } = useEventPageLoading([
-	{ consumes: 'featureMatchSlots', isLoaded: () => featureMatchStore.isLoaded, load: id => featureMatchStore.loadFeatureMatchesByEventId(id) },
-	{ consumes: 'players', isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
-	{ consumes: 'phases', isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
-	{ consumes: 'rounds', isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },
+	{
+		consumes: 'featureMatchSlots',
+		isLoaded: () => featureMatchStore.isLoaded,
+		load: id => featureMatchStore.loadFeatureMatchesByEventId(id),
+	},
+	{
+		consumes: 'players',
+		isLoaded: () => playerStore.isLoaded,
+		load: id => playerStore.loadPlayersByEventId(id),
+	},
+	{
+		consumes: 'phases',
+		isLoaded: () => phaseStore.isLoaded,
+		load: id => phaseStore.loadPhasesByEventId(id),
+	},
+	{
+		consumes: 'rounds',
+		isLoaded: () => roundStore.isLoaded,
+		load: id => roundStore.loadRoundsByEventId(id),
+	},
 ]);
 
 // Matches load per viewed Round below, in whichever scope the store holds.

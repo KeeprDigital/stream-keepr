@@ -8,7 +8,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { transportFailure } from '~~/test/helpers/transportFailure';
 
-const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+const { mockApiFetch } = vi.hoisted(() => ({
+	mockApiFetch: vi.fn(),
+}));
 
 mockNuxtImport('$fetch', () => mockApiFetch);
 
@@ -72,11 +74,16 @@ function serve(options: {
 	const health = options.health ?? libraryHealth();
 	const capacity = options.capacity ?? libraryCapacity();
 	mockApiFetch.mockImplementation((url: string, init?: { method?: string }) => {
-		if (url === HEALTH_ROUTE)
-			return health instanceof Error ? Promise.reject(health) : Promise.resolve(health);
+		if (url === HEALTH_ROUTE) {
+			return health instanceof Error
+				? Promise.reject(health)
+				: Promise.resolve(health);
+		}
 		if (init?.method === 'PUT')
 			return Promise.resolve(options.saved ?? capacity);
-		return capacity instanceof Error ? Promise.reject(capacity) : Promise.resolve(capacity);
+		return capacity instanceof Error
+			? Promise.reject(capacity)
+			: Promise.resolve(capacity);
 	});
 }
 
@@ -164,11 +171,15 @@ describe('the Graphics Asset Library health page', () => {
 
 		expect(mockApiFetch).toHaveBeenCalledWith(
 			HEALTH_ROUTE,
-			{ headers: { 'x-graphics-admin-token': 'admin-token' } },
+			{
+				headers: { 'x-graphics-admin-token': 'admin-token' },
+			},
 		);
 		expect(mockApiFetch).toHaveBeenCalledWith(
 			CAPACITY_ROUTE,
-			{ headers: { 'x-graphics-admin-token': 'admin-token' } },
+			{
+				headers: { 'x-graphics-admin-token': 'admin-token' },
+			},
 		);
 	});
 
@@ -243,7 +254,9 @@ describe('the Graphics Asset Library health page', () => {
 
 		expect(mockApiFetch).toHaveBeenCalledWith(
 			HEALTH_ROUTE,
-			{ headers: { 'x-graphics-admin-token': 'admin-token' } },
+			{
+				headers: { 'x-graphics-admin-token': 'admin-token' },
+			},
 		);
 	});
 
@@ -251,8 +264,14 @@ describe('the Graphics Asset Library health page', () => {
 		serve({
 			saved: {
 				...libraryCapacity(),
-				canonical: { ...libraryCapacity().canonical, limitBytes: 120 * GIB },
-				staging: { ...libraryCapacity().staging, limitBytes: 12 * GIB },
+				canonical: {
+					...libraryCapacity().canonical,
+					limitBytes: 120 * GIB,
+				},
+				staging: {
+					...libraryCapacity().staging,
+					limitBytes: 12 * GIB,
+				},
 			} as GraphicsAssetLibraryCapacity,
 		});
 		const wrapper = await openHealth();

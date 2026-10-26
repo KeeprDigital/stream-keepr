@@ -57,7 +57,10 @@ function rawConnection() {
 				const length = Number(declared);
 				if (received.length >= headerEnd + 4 + length) {
 					received = received.subarray(headerEnd + 4 + length);
-					return { status: Number(headers.split(' ', 2)[1]), headers };
+					return {
+						status: Number(headers.split(' ', 2)[1]),
+						headers,
+					};
 				}
 			}
 			if (ended)
@@ -73,7 +76,11 @@ function rawConnection() {
 			socket.write(body);
 	}
 
-	return { send, nextResponse, close: () => socket.destroy() };
+	return {
+		send,
+		nextResponse,
+		close: () => socket.destroy(),
+	};
 }
 
 describe('an early answer\'s connection', () => {
@@ -87,13 +94,23 @@ describe('an early answer\'s connection', () => {
 				idempotencyKey: 'integration-early-answer-connection',
 				name: 'Early answer connection',
 				declaredMime: 'image/png',
-				browserDecodeEvidence: { outcome: 'rejected', sourceDigest: createHash('sha256').update(bytes).digest('hex') },
+				browserDecodeEvidence: {
+					outcome: 'rejected',
+					sourceDigest: createHash('sha256').update(bytes).digest('hex'),
+				},
 				declaredByteLength: bytes.byteLength,
 			}),
 		});
 		const base = `/api/graphics-assets/ingestion-operations/${initiated.id}`;
-		await $fetch(`${base}/multipart`, { method: 'POST', headers: { cookie } });
-		await expectResponseStatus(await fetch(`${base}/multipart/parts/1`, { method: 'PUT', headers: { cookie }, body: firstPart }), 200);
+		await $fetch(`${base}/multipart`, {
+			method: 'POST',
+			headers: { cookie },
+		});
+		await expectResponseStatus(await fetch(`${base}/multipart/parts/1`, {
+			method: 'PUT',
+			headers: { cookie },
+			body: firstPart,
+		}), 200);
 
 		const connection = rawConnection();
 		try {
@@ -109,7 +126,10 @@ describe('an early answer\'s connection', () => {
 		finally {
 			connection.close();
 			// Leave no staged transfer behind for the next file on this server.
-			await $fetch(base, { method: 'DELETE', headers: { cookie } });
+			await $fetch(base, {
+				method: 'DELETE',
+				headers: { cookie },
+			});
 		}
 	}, 30_000);
 

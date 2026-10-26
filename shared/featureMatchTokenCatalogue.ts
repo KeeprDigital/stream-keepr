@@ -84,7 +84,9 @@ function playerTokens(side: 1 | 2): FeatureMatchToken[] {
 	return PLAYER_TOKENS.map(token => ({
 		key: `player${side}${token.suffix}`,
 		label: `Player ${side} ${token.label}`,
-		...(token.presentation ? { presentation: token.presentation } : {}),
+		...(token.presentation
+			? { presentation: token.presentation }
+			: {}),
 	}));
 }
 
@@ -131,7 +133,11 @@ export function featureMatchTokenDeclarations(): TextGraphicInputDeclaration[] {
 export function featureMatchTokenPresentations(): Readonly<Record<string, GraphicsHostTokenPresentation>> {
 	return Object.fromEntries(
 		FEATURE_MATCH_TOKEN_CATALOGUE.flatMap(token =>
-			token.presentation ? [[token.key, token.presentation] as const] : []),
+			token.presentation
+				? [
+						[token.key, token.presentation] as const,
+					]
+				: []),
 	);
 }
 

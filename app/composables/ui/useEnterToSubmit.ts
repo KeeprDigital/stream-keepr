@@ -65,7 +65,9 @@ export function useEnterToSubmit(
 		callback();
 	}
 
-	const doc = typeof document !== 'undefined' ? document : null;
+	const doc = typeof document !== 'undefined'
+		? document
+		: null;
 	if (!doc)
 		return;
 

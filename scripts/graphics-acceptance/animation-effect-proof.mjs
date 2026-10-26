@@ -100,7 +100,9 @@ export const ANIMATION_EFFECT_PROOF_EXPRESSION = `document.body?.dataset.measure
 	: undefined`;
 
 function fraction(part, whole) {
-	return whole > 0 ? part / whole : 0;
+	return whole > 0
+		? part / whole
+		: 0;
 }
 
 /** Fractions are evidence, so they print at the precision they were judged at. */
@@ -121,8 +123,11 @@ function measured(value) {
  */
 export function judgeAnimationEffectScenario(measurement, floors) {
 	const where = { effect: measurement.effect, scenario: measurement.scenario };
-	if (!measurement.mounted)
-		return [{ code: 'animation-effect-mount-failed', detail: where }];
+	if (!measurement.mounted) {
+		return [
+			{ code: 'animation-effect-mount-failed', detail: where },
+		];
+	}
 
 	const failures = [];
 	if (measurement.compileFailures > 0) {
@@ -133,16 +138,40 @@ export function judgeAnimationEffectScenario(measurement, floors) {
 	}
 
 	const lit = fraction(measurement.litPixels, measurement.totalPixels);
-	if (lit < floors.minLitFraction)
-		failures.push({ code: 'animation-effect-frame-unlit', detail: { ...where, lit: measured(lit), floor: floors.minLitFraction } });
+	if (lit < floors.minLitFraction) {
+		failures.push({
+			code: 'animation-effect-frame-unlit',
+			detail: {
+				...where,
+				lit: measured(lit),
+				floor: floors.minLitFraction,
+			},
+		});
+	}
 
 	const dark = fraction(measurement.darkPixels, measurement.totalPixels);
-	if (dark < floors.minDarkFraction)
-		failures.push({ code: 'animation-effect-frame-washed-out', detail: { ...where, dark: measured(dark), floor: floors.minDarkFraction } });
+	if (dark < floors.minDarkFraction) {
+		failures.push({
+			code: 'animation-effect-frame-washed-out',
+			detail: {
+				...where,
+				dark: measured(dark),
+				floor: floors.minDarkFraction,
+			},
+		});
+	}
 
 	const changed = fraction(measurement.changedPixels, measurement.totalPixels);
-	if (changed < floors.minChangedFraction)
-		failures.push({ code: 'animation-effect-frame-static', detail: { ...where, changed: measured(changed), floor: floors.minChangedFraction } });
+	if (changed < floors.minChangedFraction) {
+		failures.push({
+			code: 'animation-effect-frame-static',
+			detail: {
+				...where,
+				changed: measured(changed),
+				floor: floors.minChangedFraction,
+			},
+		});
+	}
 
 	return failures;
 }
@@ -154,8 +183,11 @@ export function judgeAnimationEffectScenario(measurement, floors) {
  */
 export function judgeAnimationEffectSettle(measurement, floors) {
 	const where = { effect: measurement.effect, scenario: measurement.scenario };
-	if (!measurement.mounted)
-		return [{ code: 'animation-effect-mount-failed', detail: where }];
+	if (!measurement.mounted) {
+		return [
+			{ code: 'animation-effect-mount-failed', detail: where },
+		];
+	}
 
 	const failures = [];
 	if (measurement.compileFailures > 0) {
@@ -166,15 +198,26 @@ export function judgeAnimationEffectSettle(measurement, floors) {
 	}
 
 	const lit = fraction(measurement.litPixels, measurement.totalPixels);
-	if (lit < floors.minLitFraction)
-		failures.push({ code: 'animation-effect-settle-unproven', detail: { ...where, lit: measured(lit), floor: floors.minLitFraction } });
+	if (lit < floors.minLitFraction) {
+		failures.push({
+			code: 'animation-effect-settle-unproven',
+			detail: {
+				...where,
+				lit: measured(lit),
+				floor: floors.minLitFraction,
+			},
+		});
+	}
 
 	// The reference stands in for the background colour, so it has to be one:
 	// a fresh mount that drew anything would hide the same residue in itself.
 	if (measurement.referenceVariedPixels > 0) {
 		failures.push({
 			code: 'animation-effect-settle-unproven',
-			detail: { ...where, reference: measured(fraction(measurement.referenceVariedPixels, measurement.totalPixels)) },
+			detail: {
+				...where,
+				reference: measured(fraction(measurement.referenceVariedPixels, measurement.totalPixels)),
+			},
 		});
 	}
 
@@ -246,24 +289,47 @@ function checksTheControlTripped(control) {
  * control did not render.
  */
 export function judgeAnimationEffectReport(report) {
-	if (report.backend === 'unavailable')
-		return [{ code: 'animation-effect-webgl-unavailable' }];
-	if (report.backend !== 'swiftshader')
-		return [{ code: 'animation-effect-backend-unexpected', detail: { backend: report.backend } }];
+	if (report.backend === 'unavailable') {
+		return [
+			{ code: 'animation-effect-webgl-unavailable' },
+		];
+	}
+	if (report.backend !== 'swiftshader') {
+		return [
+			{
+				code: 'animation-effect-backend-unexpected',
+				detail: { backend: report.backend },
+			},
+		];
+	}
 
 	const failures = [];
 	// What the page caught, reduced: its text is page-authored (#687).
-	if (report.pageFailed)
-		failures.push({ code: 'animation-effect-page-failed', detail: { source: 'page', thrown: pageTextEvidence(report.pageError) } });
+	if (report.pageFailed) {
+		failures.push({
+			code: 'animation-effect-page-failed',
+			detail: {
+				source: 'page',
+				thrown: pageTextEvidence(report.pageError),
+			},
+		});
+	}
 
 	// The catalogue the bundle saw, against the one the table covers: an effect
 	// shipped without a scenario here would otherwise be proven by nobody, and
 	// silently.
 	const covered = new Set(Object.keys(ANIMATION_EFFECT_PROOF_SCENARIOS));
 	const shipped = new Set(report.catalogue ?? []);
-	for (const effect of new Set([...covered, ...shipped])) {
-		if (!covered.has(effect) || !shipped.has(effect))
-			failures.push({ code: 'animation-effect-catalogue-uncovered', detail: { effect } });
+	for (const effect of new Set([
+		...covered,
+		...shipped,
+	])) {
+		if (!covered.has(effect) || !shipped.has(effect)) {
+			failures.push({
+				code: 'animation-effect-catalogue-uncovered',
+				detail: { effect },
+			});
+		}
 	}
 
 	const measurements = new Map(
@@ -322,8 +388,12 @@ export function judgeAnimationEffectReport(report) {
 	// broken effect past too.
 	const tripped = checksTheControlTripped(report.control ?? { mounted: false });
 	for (const check of CONTROL_MUST_TRIP) {
-		if (!tripped.has(check))
-			failures.push({ code: 'animation-effect-checks-not-biting', detail: { check } });
+		if (!tripped.has(check)) {
+			failures.push({
+				code: 'animation-effect-checks-not-biting',
+				detail: { check },
+			});
+		}
 	}
 
 	return failures;

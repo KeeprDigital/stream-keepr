@@ -19,7 +19,10 @@ import {
  * have to answer the same question.
  */
 function repeatable<Value extends string>(values: readonly [Value, ...Value[]]) {
-	return z.union([z.enum(values), z.array(z.enum(values))]).optional();
+	return z.union([
+		z.enum(values),
+		z.array(z.enum(values)),
+	]).optional();
 }
 
 /**
@@ -66,14 +69,22 @@ export default defineEventHandler(async (event): Promise<GraphicsAssetEvidenceRe
 		// category is one question asked in two vocabularies rather than two
 		// filters that would then have to agree with each other.
 		const categories = [
-			...(query.category === undefined ? [] : [query.category].flat()),
+			...(query.category === undefined
+				? []
+				: [query.category].flat()),
 			...graphicsEvidenceCategoriesForGroups(
-				query.group === undefined ? [] : [query.group].flat(),
+				query.group === undefined
+					? []
+					: [query.group].flat(),
 			),
 		];
 		const page = await graphicsAssetLibraryForEvent(event).listGraphicsAssetEvidence({
 			limit: query.limit,
-			categories: categories.length === 0 ? undefined : [...new Set(categories)],
+			categories: categories.length === 0
+				? undefined
+				: [
+						...new Set(categories),
+					],
 			subject: query.subjectKind === undefined || query.subjectId === undefined
 				? undefined
 				: { kind: query.subjectKind, id: query.subjectId },

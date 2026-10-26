@@ -28,9 +28,13 @@ const defaultConfig = {
 const mutableConfig = reactive({ ...defaultConfig });
 const mockEventId = ref<number | null>(1);
 const mockInteractive = ref(false);
-const mockScreenStore = { updateModeConfig: vi.fn() };
+const mockScreenStore = {
+	updateModeConfig: vi.fn(),
+};
 const mockEventStore = reactive({ displayEvent: null as null | { displayRecordSeparator?: string; displayHideZeroDraws?: boolean } });
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 type Handler = (message: Record<string, unknown>) => void;
 const channelHandlers = new Map<string, Set<Handler>>();
 const continuity = createContinuitySignal();
@@ -66,7 +70,16 @@ mockNuxtImport('useScreenContext', () => () => ({
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
 function pilot(id: number, name: string, position: number | null, overrides: Partial<ScreenOutputArchetypePilot> = {}): ScreenOutputArchetypePilot {
-	return { id, name, position, points: 12, wins: 4, losses: 1, draws: 0, ...overrides };
+	return {
+		id,
+		name,
+		position,
+		points: 12,
+		wins: 4,
+		losses: 1,
+		draws: 0,
+		...overrides,
+	};
 }
 
 function answer(overrides: Partial<ScreenOutputArchetypeSpotlightResponse> = {}): ScreenOutputArchetypeSpotlightResponse {
@@ -76,7 +89,10 @@ function answer(overrides: Partial<ScreenOutputArchetypeSpotlightResponse> = {})
 		metaShare: 25,
 		convertedCount: 1,
 		conversionRate: 50,
-		pilots: [pilot(11, 'Nadia Rivers', 1), pilot(12, 'Oskar Lind', 6)],
+		pilots: [
+			pilot(11, 'Nadia Rivers', 1),
+			pilot(12, 'Oskar Lind', 6),
+		],
 		topCards: [],
 		...overrides,
 	};
@@ -248,9 +264,16 @@ describe('useArchetypeSpotlightModeData', () => {
 
 		it('shows a pilot\'s new standing without reload', async () => {
 			const { pageData } = await showingSpotlight();
-			mockFetch.mockResolvedValue(answer({ pilots: [pilot(11, 'Nadia Rivers', 1, { wins: 5 }), pilot(12, 'Oskar Lind', 6)] }));
+			mockFetch.mockResolvedValue(answer({
+				pilots: [
+					pilot(11, 'Nadia Rivers', 1, { wins: 5 }),
+					pilot(12, 'Oskar Lind', 6),
+				],
+			}));
 
-			deliver('player:updated', { player: { id: 11 } });
+			deliver('player:updated', {
+				player: { id: 11 },
+			});
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -261,12 +284,31 @@ describe('useArchetypeSpotlightModeData', () => {
 			await showingSpotlight();
 
 			for (const [type, payload] of [
-				['playerDeck:reviewed', { playerId: 11 }],
-				['playerDeck:cardsResolved', { deckIds: [3] }],
-				['archetype:updated', { archetype: { id: 7 } }],
-				['archetype:keyCardsUpdated', { archetypeId: 7 }],
+				[
+					'playerDeck:reviewed',
+					{ playerId: 11 },
+				],
+				[
+					'playerDeck:cardsResolved',
+					{
+						deckIds: [3],
+					},
+				],
+				[
+					'archetype:updated',
+					{
+						archetype: { id: 7 },
+					},
+				],
+				[
+					'archetype:keyCardsUpdated',
+					{ archetypeId: 7 },
+				],
 				['melee:decklistsSynced', {}],
-				['melee:roundSynced', { roundId: 31 }],
+				[
+					'melee:roundSynced',
+					{ roundId: 31 },
+				],
 			] as const) {
 				deliver(type, payload);
 				await flushPromises();

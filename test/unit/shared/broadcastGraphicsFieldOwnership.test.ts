@@ -62,7 +62,15 @@ function setInput(
 ): BroadcastGraphicsLiveState {
 	return applyBroadcastGraphicsCommand(
 		state,
-		{ type: 'Set Input', payload: { graphicId: GRAPHIC, inputKey, value, basedOn } } as BroadcastGraphicsCommandInput,
+		{
+			type: 'Set Input',
+			payload: {
+				graphicId: GRAPHIC,
+				inputKey,
+				value,
+				basedOn,
+			},
+		} as BroadcastGraphicsCommandInput,
 		{ inputs: DECLARATIONS, acceptedAt: T0 },
 	);
 }
@@ -110,7 +118,10 @@ describe('broadcastGraphicsFieldOwnership', () => {
 		const first = setInput(createInitialBroadcastGraphicsLiveState(), 'name', 'Ava Reed', { value: 'Unnamed' });
 
 		expect(() => setInput(first, 'name', 'Ben Cole', { value: 'Unnamed' }))
-			.toThrow(expect.objectContaining({ code: 'stale-input-edit', inputKeys: ['name'] }));
+			.toThrow(expect.objectContaining({
+				code: 'stale-input-edit',
+				inputKeys: ['name'],
+			}));
 	});
 
 	it('merges concurrent edits to different Graphic Inputs', () => {
@@ -155,8 +166,14 @@ describe('broadcastGraphicsFieldOwnership', () => {
 		const pinned = { assetId: 'asset-1', revisionId: 'rev-1' };
 		const state = applyBroadcastGraphicsCommand(
 			createInitialBroadcastGraphicsLiveState(),
-			{ type: 'Set Input', payload: { graphicId: GRAPHIC, inputKey: 'badge', value: pinned } } as BroadcastGraphicsCommandInput,
-			{ inputs: [media], acceptedAt: T0 },
+			{
+				type: 'Set Input',
+				payload: { graphicId: GRAPHIC, inputKey: 'badge', value: pinned },
+			} as BroadcastGraphicsCommandInput,
+			{
+				inputs: [media],
+				acceptedAt: T0,
+			},
 		);
 
 		// A structurally equal reference is the same claim even though it is a
@@ -169,10 +186,15 @@ describe('broadcastGraphicsFieldOwnership', () => {
 					graphicId: GRAPHIC,
 					inputKey: 'badge',
 					value: null,
-					basedOn: { value: { assetId: 'asset-1', revisionId: 'rev-1' } },
+					basedOn: {
+						value: { assetId: 'asset-1', revisionId: 'rev-1' },
+					},
 				},
 			} as BroadcastGraphicsCommandInput,
-			{ inputs: [media], acceptedAt: T0 },
+			{
+				inputs: [media],
+				acceptedAt: T0,
+			},
 		)).not.toThrow();
 	});
 
@@ -185,7 +207,9 @@ describe('broadcastGraphicsFieldOwnership', () => {
 				GRAPHIC,
 				{ inputs: DECLARATIONS },
 				{},
-				{ supersededInputKeys: ['name'] },
+				{
+					supersededInputKeys: ['name'],
+				},
 			);
 
 			expect(name!.status).toBe('superseded');
@@ -200,7 +224,9 @@ describe('broadcastGraphicsFieldOwnership', () => {
 				GRAPHIC,
 				{ inputs: DECLARATIONS },
 				{},
-				{ supersededInputKeys: ['name'] },
+				{
+					supersededInputKeys: ['name'],
+				},
 			);
 
 			// Superseded is a fact about whose edit won, not about the value: the operator

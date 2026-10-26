@@ -86,8 +86,15 @@ export async function setCredentialPassword(
 	const hashedPassword = await context.password.hash(password);
 	const accounts = await context.internalAdapter.findAccounts(userId);
 
-	if (accounts.some(account => account.providerId === 'credential'))
+	if (accounts.some(account => account.providerId === 'credential')) {
 		await context.internalAdapter.updatePassword(userId, hashedPassword);
-	else
-		await context.internalAdapter.createAccount({ userId, providerId: 'credential', accountId: userId, password: hashedPassword });
+	}
+	else {
+		await context.internalAdapter.createAccount({
+			userId,
+			providerId: 'credential',
+			accountId: userId,
+			password: hashedPassword,
+		});
+	}
 }

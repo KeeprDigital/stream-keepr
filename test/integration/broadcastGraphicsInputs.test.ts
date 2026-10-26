@@ -27,7 +27,9 @@ const TITLE = integrationTextInput('title', { required: true });
 const LIVE_SUBTITLE = integrationTextInput('subtitle', { updatePolicy: 'live' });
 
 function graphicWith(inputs: GraphicInputDeclaration[]) {
-	return [integrationBroadcastGraphicWithInputs(GRAPHIC, inputs)];
+	return [
+		integrationBroadcastGraphicWithInputs(GRAPHIC, inputs),
+	];
 }
 
 describe('broadcast graphics Graphic Input command API', () => {
@@ -52,11 +54,53 @@ describe('broadcast graphics Graphic Input command API', () => {
 		const harness = await createGraphicsHarness(eventId, 'inputs-declare', graphicWith([
 			NAME,
 			integrationTextInput('title'),
-			{ type: 'number', key: 'score', label: 'Score', required: false, updatePolicy: 'live', default: 0, integer: true, min: 0 },
-			{ type: 'toggle', key: 'flag', label: 'Flag', required: false, updatePolicy: 'staged', default: false },
-			{ type: 'choice', key: 'side', label: 'Side', required: false, updatePolicy: 'staged', default: 'left', options: [{ value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }] },
-			{ type: 'color', key: 'accent', label: 'Accent', required: false, updatePolicy: 'staged', default: '#00d9ff' },
-			{ type: 'media', key: 'badge', label: 'Badge', required: false, updatePolicy: 'staged', default: null, mediaKind: 'image' },
+			{
+				type: 'number',
+				key: 'score',
+				label: 'Score',
+				required: false,
+				updatePolicy: 'live',
+				default: 0,
+				integer: true,
+				min: 0,
+			},
+			{
+				type: 'toggle',
+				key: 'flag',
+				label: 'Flag',
+				required: false,
+				updatePolicy: 'staged',
+				default: false,
+			},
+			{
+				type: 'choice',
+				key: 'side',
+				label: 'Side',
+				required: false,
+				updatePolicy: 'staged',
+				default: 'left',
+				options: [
+					{ value: 'left', label: 'Left' },
+					{ value: 'right', label: 'Right' },
+				],
+			},
+			{
+				type: 'color',
+				key: 'accent',
+				label: 'Accent',
+				required: false,
+				updatePolicy: 'staged',
+				default: '#00d9ff',
+			},
+			{
+				type: 'media',
+				key: 'badge',
+				label: 'Badge',
+				required: false,
+				updatePolicy: 'staged',
+				default: null,
+				mediaKind: 'image',
+			},
 		]));
 
 		const screen = await $fetch<{ modeConfigs: Record<string, { graphics: Array<{ inputs?: unknown[] }> }> }>(
@@ -95,8 +139,15 @@ describe('broadcast graphics Graphic Input command API', () => {
 	});
 
 	it('keeps a staged edit off air until Update Graphic accepts the complete set', async () => {
-		const harness = await createGraphicsHarness(eventId, 'inputs-update', graphicWith([NAME, integrationTextInput('title')]));
-		await harness.send({ commandId: playoutCommandId('take'), type: 'Take', payload: { graphicId: GRAPHIC } });
+		const harness = await createGraphicsHarness(eventId, 'inputs-update', graphicWith([
+			NAME,
+			integrationTextInput('title'),
+		]));
+		await harness.send({
+			commandId: playoutCommandId('take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
 
 		await setBroadcastGraphicInput(harness, GRAPHIC, 'name', 'Ava Reed');
 		const staged = await setBroadcastGraphicInput(harness, GRAPHIC, 'title', 'Champion');
@@ -137,7 +188,11 @@ describe('broadcast graphics Graphic Input command API', () => {
 
 	it('rejects an acceptance another operator has already superseded', async () => {
 		const harness = await createGraphicsHarness(eventId, 'inputs-stale', graphicWith([NAME]));
-		await harness.send({ commandId: playoutCommandId('take'), type: 'Take', payload: { graphicId: GRAPHIC } });
+		await harness.send({
+			commandId: playoutCommandId('take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
 		const staged = await setBroadcastGraphicInput(harness, GRAPHIC, 'name', 'First');
 		const revision = staged.currentState.inputs[GRAPHIC]!.acceptedRevision;
 
@@ -177,7 +232,11 @@ describe('broadcast graphics Graphic Input command API', () => {
 		// and the command reached the server twice. Accepting a staged set twice is a
 		// genuine double-apply, unlike a repeated Take.
 		const harness = await createGraphicsHarness(eventId, 'inputs-retry', graphicWith([NAME]));
-		await harness.send({ commandId: playoutCommandId('take'), type: 'Take', payload: { graphicId: GRAPHIC } });
+		await harness.send({
+			commandId: playoutCommandId('take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
 		const staged = await setBroadcastGraphicInput(harness, GRAPHIC, 'name', 'Ava Reed');
 		const command = {
 			commandId: playoutCommandId('update-once'),
@@ -198,7 +257,11 @@ describe('broadcast graphics Graphic Input command API', () => {
 
 	it('reaches the same accepted state for Cut Update as for Update Graphic', async () => {
 		const harness = await createGraphicsHarness(eventId, 'inputs-cut-update', graphicWith([NAME]));
-		await harness.send({ commandId: playoutCommandId('take'), type: 'Take', payload: { graphicId: GRAPHIC } });
+		await harness.send({
+			commandId: playoutCommandId('take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
 		const staged = await setBroadcastGraphicInput(harness, GRAPHIC, 'name', 'Ava Reed');
 
 		const cut = await harness.send({
@@ -221,7 +284,11 @@ describe('broadcast graphics Graphic Input command API', () => {
 			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${harness.session().id}/commands`,
 			{
 				method: 'POST',
-				body: { commandId: playoutCommandId('blocked-take'), type: 'Take', payload: { graphicId: GRAPHIC } },
+				body: {
+					commandId: playoutCommandId('blocked-take'),
+					type: 'Take',
+					payload: { graphicId: GRAPHIC },
+				},
 				ignoreResponseError: true,
 			},
 		);
@@ -249,7 +316,11 @@ describe('broadcast graphics Graphic Input command API', () => {
 
 	it('stores a value that violates its declared bound rather than coercing it, and never accepts it', async () => {
 		const harness = await createGraphicsHarness(eventId, 'inputs-unavailable', graphicWith([NAME]));
-		await harness.send({ commandId: playoutCommandId('take'), type: 'Take', payload: { graphicId: GRAPHIC } });
+		await harness.send({
+			commandId: playoutCommandId('take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
 		const good = await setBroadcastGraphicInput(harness, GRAPHIC, 'name', 'Ava Reed');
 		await harness.send({
 			commandId: playoutCommandId('update-good'),
@@ -281,7 +352,11 @@ describe('broadcast graphics Graphic Input command API', () => {
 
 	it('applies a live On-air Update Policy edit to an on-air graphic without an Update Graphic', async () => {
 		const harness = await createGraphicsHarness(eventId, 'inputs-live-policy', graphicWith([NAME, LIVE_SUBTITLE]));
-		await harness.send({ commandId: playoutCommandId('take'), type: 'Take', payload: { graphicId: GRAPHIC } });
+		await harness.send({
+			commandId: playoutCommandId('take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
 
 		const edited = await setBroadcastGraphicInput(harness, GRAPHIC, 'subtitle', 'On the call');
 
@@ -313,7 +388,11 @@ describe('broadcast graphics Graphic Input command API', () => {
 	it('survives reload with its accepted values, settled rather than replayed', async () => {
 		const harness = await createGraphicsHarness(eventId, 'inputs-durable', graphicWith([NAME]));
 		await setBroadcastGraphicInput(harness, GRAPHIC, 'name', 'Ava Reed');
-		await harness.send({ commandId: playoutCommandId('take'), type: 'Take', payload: { graphicId: GRAPHIC } });
+		await harness.send({
+			commandId: playoutCommandId('take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
 
 		const reloaded = await harness.reload();
 

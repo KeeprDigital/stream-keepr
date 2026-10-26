@@ -96,10 +96,14 @@ const SLATE: BroadcastGraphicConfig = {
 	id: 'slate',
 	name: 'Slate',
 	items: [],
-	inputs: [mediaInput(CLIP)],
+	inputs: [
+		mediaInput(CLIP),
+	],
 };
 
-const STACK: BroadcastGraphicsModeConfig = { graphics: [SLATE] };
+const STACK: BroadcastGraphicsModeConfig = {
+	graphics: [SLATE],
+};
 
 /**
  * Answers for exactly the one revision seeded below. A declared dependency of
@@ -117,7 +121,11 @@ const graphicsAssetLibrary = {
 const nextCommandId = createCommandIdSequence();
 
 function command(type: BroadcastGraphicsCommand['type'], payload: Record<string, unknown>): BroadcastGraphicsCommand {
-	return { commandId: nextCommandId(), type, payload } as unknown as BroadcastGraphicsCommand;
+	return {
+		commandId: nextCommandId(),
+		type,
+		payload,
+	} as unknown as BroadcastGraphicsCommand;
 }
 
 let eventId: number;
@@ -156,7 +164,9 @@ async function showOnAir() {
 }
 
 async function screenRow() {
-	return await db.query.screens.findFirst({ where: eq(schema.screens.id, screenId) });
+	return await db.query.screens.findFirst({
+		where: eq(schema.screens.id, screenId),
+	});
 }
 
 async function activeSession() {
@@ -343,7 +353,9 @@ describe('an operator resetting live state', () => {
 	function refuseStandaloneReferenceClears() {
 		const execute = harness.client.execute.bind(harness.client);
 		vi.spyOn(harness.client, 'execute').mockImplementation((async (statement: unknown) => {
-			const sql = typeof statement === 'string' ? statement : (statement as { sql: string }).sql;
+			const sql = typeof statement === 'string'
+				? statement
+				: (statement as { sql: string }).sql;
 			if (/delete\s+from\s+graphic_asset_references/i.test(sql))
 				throw new Error('Live Session references were cleared outside the commit that ended the epoch');
 			return await execute(statement as never);
@@ -359,7 +371,9 @@ describe('an operator resetting live state', () => {
 		expect(await onAirGraphics()).toEqual([]);
 		expect(await publishesLiveSessionMedia()).toBe(false);
 		expect(epochEndedAnnouncements()).toEqual([
-			expect.objectContaining({ payload: expect.objectContaining({ screenId, sessionId }) }),
+			expect.objectContaining({
+				payload: expect.objectContaining({ screenId, sessionId }),
+			}),
 		]);
 	});
 

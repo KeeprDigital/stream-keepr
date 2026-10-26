@@ -114,7 +114,10 @@ describe('featureMatchService', () => {
 
 	describe('findByEventId', () => {
 		it('returns all matches for event', async () => {
-			const matches = [createMockFeatureMatch(), createMockFeatureMatch({ id: 2 })];
+			const matches = [
+				createMockFeatureMatch(),
+				createMockFeatureMatch({ id: 2 }),
+			];
 			mockDb.query.featureMatches.findMany.mockResolvedValue(matches.map(match => ({ ...match, activeSession: null })));
 
 			const result = await featureMatchService().findByEventId(1);
@@ -262,7 +265,9 @@ describe('featureMatchService', () => {
 
 	describe('remove', () => {
 		it('returns true when deleted', async () => {
-			getChain('delete').returning.mockResolvedValue([createMockFeatureMatch()]);
+			getChain('delete').returning.mockResolvedValue([
+				createMockFeatureMatch(),
+			]);
 
 			const result = await featureMatchService().remove(1, 1);
 
@@ -296,7 +301,9 @@ describe('featureMatchService', () => {
 
 	describe('countByEventId', () => {
 		it('returns count of matches', async () => {
-			getChain('select').where.mockResolvedValue([{ count: 5 }]);
+			getChain('select').where.mockResolvedValue([
+				{ count: 5 },
+			]);
 
 			const result = await featureMatchService().countByEventId(1);
 
@@ -304,7 +311,9 @@ describe('featureMatchService', () => {
 		});
 
 		it('returns 0 when no matches', async () => {
-			getChain('select').where.mockResolvedValue([{ count: 0 }]);
+			getChain('select').where.mockResolvedValue([
+				{ count: 0 },
+			]);
 
 			const result = await featureMatchService().countByEventId(1);
 
@@ -319,17 +328,24 @@ describe('featureMatchService', () => {
 		 */
 		function insertsCommitAsOneBatch(created: ReturnType<typeof createMockFeatureMatch>[]) {
 			const insert = getChain('insert');
-			Object.assign(insert, { toSQL: () => ({ params: [] }) });
+			Object.assign(insert, {
+				toSQL: () => ({ params: [] }),
+			});
 			insert.returning.mockReturnValue(insert);
 			mockDb.batch.mockResolvedValueOnce([created]);
 		}
 
 		it('creates matches when target > current', async () => {
 			mockDb.query.featureMatches.findMany.mockResolvedValueOnce([]);
-			const created = [createMockFeatureMatch({ id: 1 }), createMockFeatureMatch({ id: 2 })];
+			const created = [
+				createMockFeatureMatch({ id: 1 }),
+				createMockFeatureMatch({ id: 2 }),
+			];
 			insertsCommitAsOneBatch(created);
 			// Session creation for each created match uses update chain
-			getChain('update').returning.mockResolvedValue([{ state: {}, stateVersion: 0 }]);
+			getChain('update').returning.mockResolvedValue([
+				{ state: {}, stateVersion: 0 },
+			]);
 
 			const result = await featureMatchService().syncFeatureMatches(1, 2);
 
@@ -369,7 +385,9 @@ describe('featureMatchService', () => {
 
 		it('surfaces the session failure when the compensating delete also fails, attaching the delete failure', async () => {
 			mockDb.query.featureMatches.findMany.mockResolvedValueOnce([]);
-			insertsCommitAsOneBatch([createMockFeatureMatch({ id: 1 })]);
+			insertsCommitAsOneBatch([
+				createMockFeatureMatch({ id: 1 }),
+			]);
 			const sessionFailure = new Error('session failed');
 			featureMatchStateServiceMocks.openSessionsForSlots.mockRejectedValueOnce(sessionFailure);
 			const deleteFailure = new Error('delete failed');
@@ -381,7 +399,12 @@ describe('featureMatchService', () => {
 		});
 
 		it('returns empty arrays when target === current', async () => {
-			mockDb.query.featureMatches.findMany.mockResolvedValueOnce([{ ...createMockFeatureMatch(), activeSession: null }]);
+			mockDb.query.featureMatches.findMany.mockResolvedValueOnce([
+				{
+					...createMockFeatureMatch(),
+					activeSession: null,
+				},
+			]);
 
 			const result = await featureMatchService().syncFeatureMatches(1, 1);
 

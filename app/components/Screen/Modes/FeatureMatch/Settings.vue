@@ -19,14 +19,18 @@ const fields = screenModeConfigContract('feature-match').fields;
 
 const identityLabel = computed(() => {
 	const game = eventStore.event?.game;
-	return game ? getPlayerIdentityLabel(game) : 'Deck';
+	return game
+		? getPlayerIdentityLabel(game)
+		: 'Deck';
 });
 
 // Event-level feature gates
 const matchDefaults = computed(() => toFeatureMatchDefaults(eventStore.event));
 const hasCounterTypes = computed(() => {
 	const game = eventStore.event?.game;
-	return game ? getCounterTypeConfigs(game).length > 0 : false;
+	return game
+		? getCounterTypeConfigs(game).length > 0
+		: false;
 });
 const hasTurnTracking = computed(
 	() => matchDefaults.value.turnTrackingEnabled || matchDefaults.value.activePlayerTrackingEnabled,

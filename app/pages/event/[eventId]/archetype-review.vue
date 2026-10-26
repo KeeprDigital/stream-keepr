@@ -19,9 +19,21 @@ const {
 	initialError,
 	retry,
 } = useEventPageLoading([
-	{ consumes: 'players', isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
-	{ consumes: 'archetypes', isLoaded: () => archetypeStore.isLoaded, load: id => archetypeStore.loadByEventId(id) },
-	{ consumes: 'playerDecks', isLoaded: () => playerDeckStore.isLoaded, load: id => playerDeckStore.loadByEventId(id) },
+	{
+		consumes: 'players',
+		isLoaded: () => playerStore.isLoaded,
+		load: id => playerStore.loadPlayersByEventId(id),
+	},
+	{
+		consumes: 'archetypes',
+		isLoaded: () => archetypeStore.isLoaded,
+		load: id => archetypeStore.loadByEventId(id),
+	},
+	{
+		consumes: 'playerDecks',
+		isLoaded: () => playerDeckStore.isLoaded,
+		load: id => playerDeckStore.loadByEventId(id),
+	},
 ]);
 
 // ── Queue ──
@@ -47,14 +59,27 @@ const {
 function handleJumpToDeck(deckId: number) {
 	if (!jumpToDeck(deckId) || !loadedEventId.value)
 		return;
-	void router.replace({ path: `/event/${loadedEventId.value}/archetype-review`, query: { deckId: String(deckId) } });
+	void router.replace({
+		path: `/event/${loadedEventId.value}/archetype-review`,
+		query: {
+			deckId: String(deckId),
+		},
+	});
 }
 
-watch([initialLoading, allEntries, () => route.query.deckId], ([loading]) => {
+watch([
+	initialLoading,
+	allEntries,
+	() => route.query.deckId,
+], ([loading]) => {
 	if (loading)
 		return;
-	const rawDeckId = Array.isArray(route.query.deckId) ? route.query.deckId[0] : route.query.deckId;
-	const deckId = rawDeckId ? Number(rawDeckId) : null;
+	const rawDeckId = Array.isArray(route.query.deckId)
+		? route.query.deckId[0]
+		: route.query.deckId;
+	const deckId = rawDeckId
+		? Number(rawDeckId)
+		: null;
 	if (deckId && Number.isFinite(deckId)) {
 		jumpToDeck(deckId);
 	}

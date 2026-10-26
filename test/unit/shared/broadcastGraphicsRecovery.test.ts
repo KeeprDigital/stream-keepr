@@ -26,8 +26,17 @@ describe('broadcastGraphicsRecovery', () => {
 
 		it('reports no fault for a state carrying accepted playout and Graphic Inputs', () => {
 			const state = {
-				playout: { slate: { onAir: true }, bug: { onAir: false } },
-				inputs: { slate: { working: { name: 'Ava' }, accepted: { name: 'Ava' }, acceptedRevision: 2 } },
+				playout: {
+					slate: { onAir: true },
+					bug: { onAir: false },
+				},
+				inputs: {
+					slate: {
+						working: { name: 'Ava' },
+						accepted: { name: 'Ava' },
+						acceptedRevision: 2,
+					},
+				},
 			};
 
 			expect(broadcastGraphicsRecoveryFault(state)).toBeNull();
@@ -49,7 +58,10 @@ describe('broadcastGraphicsRecovery', () => {
 			// record under test is the real one.
 			const persisted = JSON.parse(JSON.stringify(applyBroadcastGraphicsCommand(
 				createInitialBroadcastGraphicsLiveState(),
-				{ type: 'Take', payload: { graphicId: 'slate' } },
+				{
+					type: 'Take',
+					payload: { graphicId: 'slate' },
+				},
 				{ inputs: [], acceptedAt: 1_700_000_000_000 },
 			)));
 
@@ -58,7 +70,9 @@ describe('broadcastGraphicsRecovery', () => {
 			// And it really does carry the animation timing this validator must not judge.
 			expect(Object.keys(persisted.playout.slate).toSorted())
 				.toEqual(['cut', 'effectiveStartedAt', 'onAir']);
-			expect(onAirBroadcastGraphicIds(persisted, [{ id: 'slate' }])).toEqual(['slate']);
+			expect(onAirBroadcastGraphicIds(persisted, [
+				{ id: 'slate' },
+			])).toEqual(['slate']);
 		});
 
 		it('passes through fields it does not interpret rather than calling them a fault', () => {
@@ -67,7 +81,9 @@ describe('broadcastGraphicsRecovery', () => {
 			// such addition into a recovery fault on every reader that had not caught up,
 			// so the validator judges only what it reads.
 			const state = {
-				playout: { slate: { onAir: true, effectiveStartedAt: 1_700_000_000_000, cut: false } },
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: 1_700_000_000_000, cut: false },
+				},
 				inputs: {},
 				channels: { lower: 'slate' },
 			};
@@ -88,19 +104,36 @@ describe('broadcastGraphicsRecovery', () => {
 						profile: {
 							talent: { id: 7, name: 'Ava Reed' },
 							acceptedProfiles: [
-								{ network: 'twitch', networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
-								{ network: 'x', networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
+								{
+									network: 'twitch',
+									networkLabel: 'Twitch',
+									handle: 'AvaLive',
+									profileUrl: 'https://www.twitch.tv/AvaLive',
+								},
+								{
+									network: 'x',
+									networkLabel: 'X',
+									handle: 'AvaCasts',
+									profileUrl: 'https://x.com/AvaCasts',
+								},
 							],
 							currentNetwork: 'x',
 							manualNetwork: 'x',
 							automatic: true,
 							rotationAnchor: { network: 'x', anchoredAt: 123_456 },
-							updateFrom: [{
-								values: { network: 'twitch', networkLabel: 'Twitch', handle: 'Before', profileUrl: 'https://www.twitch.tv/Before' },
-								opacity: 0.5,
-								offsetX: 0,
-								offsetY: 0,
-							}],
+							updateFrom: [
+								{
+									values: {
+										network: 'twitch',
+										networkLabel: 'Twitch',
+										handle: 'Before',
+										profileUrl: 'https://www.twitch.tv/Before',
+									},
+									opacity: 0.5,
+									offsetX: 0,
+									offsetY: 0,
+								},
+							],
 							pendingUpdateFrom: [],
 						},
 					},
@@ -124,7 +157,10 @@ describe('broadcastGraphicsRecovery', () => {
 			const recovered = recoveredBroadcastGraphicsLiveState(null);
 
 			expect(recovered).toEqual(createInitialBroadcastGraphicsLiveState());
-			expect(onAirBroadcastGraphicIds(recovered, [{ id: 'slate' }, { id: 'bug' }])).toEqual([]);
+			expect(onAirBroadcastGraphicIds(recovered, [
+				{ id: 'slate' },
+				{ id: 'bug' },
+			])).toEqual([]);
 		});
 	});
 
@@ -132,33 +168,82 @@ describe('broadcastGraphicsRecovery', () => {
 		it.each([
 			['a string', '{"playout":'],
 			['a number', 7],
-			['an array', [{ onAir: true }]],
-			['a non-object playout map', { playout: 'slate', inputs: {} }],
-			['a non-object inputs map', { playout: {}, inputs: 3 }],
-			['a non-object playout record', { playout: { slate: true }, inputs: {} }],
-			['a non-object inputs record', { playout: {}, inputs: { slate: 'Ava' } }],
-			['a non-object working map', { playout: {}, inputs: { slate: { working: 'Ava', accepted: {} } } }],
-			['a non-object Social Profile Projection map', {
-				playout: {},
-				inputs: {},
-				socialProfileProjections: [],
-			}],
-			['a non-object Social Profile Projection record', {
-				playout: {},
-				inputs: {},
-				socialProfileProjections: { lower: { profile: null } },
-			}],
-			['a non-array accepted Social Profile set', {
-				playout: {},
-				inputs: {},
-				socialProfileProjections: { lower: { profile: { acceptedProfiles: {} } } },
-			}],
+			[
+				'an array',
+				[
+					{ onAir: true },
+				],
+			],
+			[
+				'a non-object playout map',
+				{ playout: 'slate', inputs: {} },
+			],
+			[
+				'a non-object inputs map',
+				{ playout: {}, inputs: 3 },
+			],
+			[
+				'a non-object playout record',
+				{
+					playout: { slate: true },
+					inputs: {},
+				},
+			],
+			[
+				'a non-object inputs record',
+				{
+					playout: {},
+					inputs: { slate: 'Ava' },
+				},
+			],
+			[
+				'a non-object working map',
+				{
+					playout: {},
+					inputs: {
+						slate: { working: 'Ava', accepted: {} },
+					},
+				},
+			],
+			[
+				'a non-object Social Profile Projection map',
+				{
+					playout: {},
+					inputs: {},
+					socialProfileProjections: [],
+				},
+			],
+			[
+				'a non-object Social Profile Projection record',
+				{
+					playout: {},
+					inputs: {},
+					socialProfileProjections: {
+						lower: { profile: null },
+					},
+				},
+			],
+			[
+				'a non-array accepted Social Profile set',
+				{
+					playout: {},
+					inputs: {},
+					socialProfileProjections: {
+						lower: {
+							profile: { acceptedProfiles: {} },
+						},
+					},
+				},
+			],
 		])('reports %s as corrupt', (_label, raw) => {
 			expect(broadcastGraphicsRecoveryFault(raw)?.reason).toBe('corrupt');
 		});
 
 		it('names what could not be read, so the fault is diagnosable rather than just fatal', () => {
-			const fault = broadcastGraphicsRecoveryFault({ playout: { slate: true }, inputs: {} });
+			const fault = broadcastGraphicsRecoveryFault({
+				playout: { slate: true },
+				inputs: {},
+			});
 
 			expect(fault?.detail).toMatch(/slate/);
 		});
@@ -167,203 +252,414 @@ describe('broadcastGraphicsRecovery', () => {
 			// Half-trusting a corrupt state is the failure mode this exists to prevent:
 			// program would show whichever graphics happened to survive parsing.
 			const recovered = recoveredBroadcastGraphicsLiveState({
-				playout: { good: { onAir: true }, bad: 'yes' },
+				playout: {
+					good: { onAir: true },
+					bad: 'yes',
+				},
 				inputs: {},
 			});
 
-			expect(onAirBroadcastGraphicIds(recovered, [{ id: 'good' }, { id: 'bad' }])).toEqual([]);
+			expect(onAirBroadcastGraphicIds(recovered, [
+				{ id: 'good' },
+				{ id: 'bad' },
+			])).toEqual([]);
 		});
 	});
 
 	describe('incompatible durable live state', () => {
 		it.each([
-			['an on-air intent that is not a boolean', { playout: { slate: { onAir: 'yes' } }, inputs: {} }],
-			['an acceptance revision that is not a number', {
-				playout: {},
-				inputs: { slate: { working: {}, accepted: {}, acceptedRevision: '4' } },
-			}],
-			['a Cut modifier that is not a boolean', {
-				playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: 'yes' } },
-				inputs: {},
-			}],
+			[
+				'an on-air intent that is not a boolean',
+				{
+					playout: {
+						slate: { onAir: 'yes' },
+					},
+					inputs: {},
+				},
+			],
+			[
+				'an acceptance revision that is not a number',
+				{
+					playout: {},
+					inputs: {
+						slate: { working: {}, accepted: {}, acceptedRevision: '4' },
+					},
+				},
+			],
+			[
+				'a Cut modifier that is not a boolean',
+				{
+					playout: {
+						slate: { onAir: true, effectiveStartedAt: 0, cut: 'yes' },
+					},
+					inputs: {},
+				},
+			],
 			// Not a number at all, which is corruption rather than staleness: an old start
 			// time settles at the Graphic Resting State by itself, while a non-numeric one
 			// makes every phase comparison NaN-false and resolves a phase nobody predicted.
-			['an animation start time that is not a number', {
-				playout: { slate: { onAir: true, effectiveStartedAt: 'soon', cut: false } },
-				inputs: {},
-			}],
+			[
+				'an animation start time that is not a number',
+				{
+					playout: {
+						slate: { onAir: true, effectiveStartedAt: 'soon', cut: false },
+					},
+					inputs: {},
+				},
+			],
 			// A Graphic Source Selection stores an entity id and nothing else — clearing
 			// one deletes its key rather than storing an empty value — so anything that is
 			// not a number came from a vocabulary this build cannot read. Left unjudged it
 			// would not fail loudly: the selection would resolve no entity, and every
 			// Graphic Input Binding reading it would go quietly unavailable on air.
-			['a Graphic Source Selection that does not name an entity', {
-				playout: {},
-				inputs: {},
-				sources: { slate: { player: 'ava' } },
-			}],
-			['a Graphic Source Selection that is empty rather than absent', {
-				playout: {},
-				inputs: {},
-				sources: { slate: { player: null } },
-			}],
-			['more accepted Social Profiles than the six-network catalog', {
-				playout: {},
-				inputs: {},
-				socialProfileProjections: { lower: { profile: {
-					acceptedProfiles: Array.from({ length: 7 }, () => ({
-						network: 'twitch',
-						networkLabel: 'Twitch',
-						handle: 'Ava',
-						profileUrl: 'https://www.twitch.tv/Ava',
-					})),
-				} } },
-			}],
-			['a current Social Profile outside the accepted set', {
-				playout: {},
-				inputs: {},
-				socialProfileProjections: { lower: { profile: {
-					acceptedProfiles: [{ network: 'twitch', networkLabel: 'Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' }],
-					currentNetwork: 'x',
-				} } },
-			}],
-			['a Social Profile tuple with a mismatched label', {
-				playout: {},
-				inputs: {},
-				socialProfileProjections: { lower: { profile: {
-					acceptedProfiles: [{ network: 'twitch', networkLabel: 'YouTube', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' }],
-				} } },
-			}],
-			['a Graphic Update Social Profile snapshot that is not canonical', {
-				playout: {},
-				inputs: {},
-				socialProfileProjections: { lower: { profile: {
-					acceptedProfiles: [],
-					updateFrom: [{
-						values: { network: 'twitch', networkLabel: 'Not Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' },
-						opacity: 1,
-						offsetX: 0,
-						offsetY: 0,
-					}],
-				} } },
-			}],
-			['accepted Social Profiles outside catalog order', {
-				playout: {},
-				inputs: {},
-				socialProfileProjections: { lower: { profile: {
-					acceptedProfiles: [
-						{ network: 'x', networkLabel: 'X', handle: 'AvaX', profileUrl: 'https://x.com/AvaX' },
-						{ network: 'twitch', networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
-					],
-				} } },
-			}],
-			['accepted Social Profiles without their Talent identity', {
-				playout: {},
-				inputs: {},
-				socialProfileProjections: { lower: { profile: {
-					acceptedProfiles: [
-						{ network: 'twitch', networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
-					],
-					currentNetwork: 'twitch',
-				} } },
-			}],
-			['a manual Social Profile without its Talent identity', {
-				playout: {},
-				inputs: {},
-				socialProfileProjections: { lower: { profile: {
-					acceptedProfiles: [],
-					manualNetwork: 'twitch',
-				} } },
-			}],
-			['an Automatic value that is not boolean', {
-				playout: {},
-				inputs: {},
-				socialProfileProjections: { lower: { profile: {
-					talent: { id: 7, name: 'Ava' },
-					acceptedProfiles: [{ network: 'twitch', networkLabel: 'Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' }],
-					currentNetwork: 'twitch',
-					automatic: 'yes',
-				} } },
-			}],
-			['a rotation anchor outside the accepted set', {
-				playout: {},
-				inputs: {},
-				socialProfileProjections: { lower: { profile: {
-					talent: { id: 7, name: 'Ava' },
-					acceptedProfiles: [{ network: 'twitch', networkLabel: 'Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' }],
-					currentNetwork: 'twitch',
-					automatic: true,
-					rotationAnchor: { network: 'x', anchoredAt: 123_456 },
-				} } },
-			}],
-			['a rotation anchor instant that is not numeric', {
-				playout: {},
-				inputs: {},
-				socialProfileProjections: { lower: { profile: {
-					talent: { id: 7, name: 'Ava' },
-					acceptedProfiles: [{ network: 'twitch', networkLabel: 'Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' }],
-					currentNetwork: 'twitch',
-					automatic: true,
-					rotationAnchor: { network: 'twitch', anchoredAt: 'later' },
-				} } },
-			}],
-			['an unbounded interrupted Social Profile visual', {
-				playout: {},
-				inputs: {},
-				socialProfileProjections: { lower: { profile: {
-					acceptedProfiles: [],
-					transitionAnchor: {
-						startedAt: 123_456,
-						from: Array.from({ length: 13 }, (_, index) => ({
-							values: { network: 'twitch', networkLabel: 'Twitch', handle: `Ava${index}`, profileUrl: `https://www.twitch.tv/Ava${index}` },
-							opacity: 1,
-							offsetX: 0,
-							offsetY: 0,
-						})),
+			[
+				'a Graphic Source Selection that does not name an entity',
+				{
+					playout: {},
+					inputs: {},
+					sources: {
+						slate: { player: 'ava' },
 					},
-				} } },
-			}],
-			['an interrupted Social Profile tuple that is not canonical', {
-				playout: {},
-				inputs: {},
-				socialProfileProjections: { lower: { profile: {
-					acceptedProfiles: [],
-					transitionAnchor: {
-						startedAt: 123_456,
-						from: [{
-							values: { network: 'twitch', networkLabel: 'Not Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' },
-							opacity: 1,
-							offsetX: 0,
-							offsetY: 0,
-						}],
+				},
+			],
+			[
+				'a Graphic Source Selection that is empty rather than absent',
+				{
+					playout: {},
+					inputs: {},
+					sources: {
+						slate: { player: null },
 					},
-				} } },
-			}],
-			['a duplicate correlated tuple in an interrupted Social Profile visual', {
-				playout: {},
-				inputs: {},
-				socialProfileProjections: { lower: { profile: {
-					acceptedProfiles: [],
-					transitionAnchor: {
-						startedAt: 123_456,
-						from: Array.from({ length: 2 }, () => ({
-							values: { network: 'twitch', networkLabel: 'Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' },
-							opacity: 1,
-							offsetX: 0,
-							offsetY: 0,
-						})),
+				},
+			],
+			[
+				'more accepted Social Profiles than the six-network catalog',
+				{
+					playout: {},
+					inputs: {},
+					socialProfileProjections: {
+						lower: {
+							profile: {
+								acceptedProfiles: Array.from({ length: 7 }, () => ({
+									network: 'twitch',
+									networkLabel: 'Twitch',
+									handle: 'Ava',
+									profileUrl: 'https://www.twitch.tv/Ava',
+								})),
+							},
+						},
 					},
-				} } },
-			}],
+				},
+			],
+			[
+				'a current Social Profile outside the accepted set',
+				{
+					playout: {},
+					inputs: {},
+					socialProfileProjections: {
+						lower: {
+							profile: {
+								acceptedProfiles: [
+									{
+										network: 'twitch',
+										networkLabel: 'Twitch',
+										handle: 'Ava',
+										profileUrl: 'https://www.twitch.tv/Ava',
+									},
+								],
+								currentNetwork: 'x',
+							},
+						},
+					},
+				},
+			],
+			[
+				'a Social Profile tuple with a mismatched label',
+				{
+					playout: {},
+					inputs: {},
+					socialProfileProjections: {
+						lower: {
+							profile: {
+								acceptedProfiles: [
+									{
+										network: 'twitch',
+										networkLabel: 'YouTube',
+										handle: 'Ava',
+										profileUrl: 'https://www.twitch.tv/Ava',
+									},
+								],
+							},
+						},
+					},
+				},
+			],
+			[
+				'a Graphic Update Social Profile snapshot that is not canonical',
+				{
+					playout: {},
+					inputs: {},
+					socialProfileProjections: {
+						lower: {
+							profile: {
+								acceptedProfiles: [],
+								updateFrom: [
+									{
+										values: {
+											network: 'twitch',
+											networkLabel: 'Not Twitch',
+											handle: 'Ava',
+											profileUrl: 'https://www.twitch.tv/Ava',
+										},
+										opacity: 1,
+										offsetX: 0,
+										offsetY: 0,
+									},
+								],
+							},
+						},
+					},
+				},
+			],
+			[
+				'accepted Social Profiles outside catalog order',
+				{
+					playout: {},
+					inputs: {},
+					socialProfileProjections: {
+						lower: {
+							profile: {
+								acceptedProfiles: [
+									{
+										network: 'x',
+										networkLabel: 'X',
+										handle: 'AvaX',
+										profileUrl: 'https://x.com/AvaX',
+									},
+									{
+										network: 'twitch',
+										networkLabel: 'Twitch',
+										handle: 'AvaLive',
+										profileUrl: 'https://www.twitch.tv/AvaLive',
+									},
+								],
+							},
+						},
+					},
+				},
+			],
+			[
+				'accepted Social Profiles without their Talent identity',
+				{
+					playout: {},
+					inputs: {},
+					socialProfileProjections: {
+						lower: {
+							profile: {
+								acceptedProfiles: [
+									{
+										network: 'twitch',
+										networkLabel: 'Twitch',
+										handle: 'AvaLive',
+										profileUrl: 'https://www.twitch.tv/AvaLive',
+									},
+								],
+								currentNetwork: 'twitch',
+							},
+						},
+					},
+				},
+			],
+			[
+				'a manual Social Profile without its Talent identity',
+				{
+					playout: {},
+					inputs: {},
+					socialProfileProjections: {
+						lower: {
+							profile: {
+								acceptedProfiles: [],
+								manualNetwork: 'twitch',
+							},
+						},
+					},
+				},
+			],
+			[
+				'an Automatic value that is not boolean',
+				{
+					playout: {},
+					inputs: {},
+					socialProfileProjections: {
+						lower: {
+							profile: {
+								talent: { id: 7, name: 'Ava' },
+								acceptedProfiles: [
+									{
+										network: 'twitch',
+										networkLabel: 'Twitch',
+										handle: 'Ava',
+										profileUrl: 'https://www.twitch.tv/Ava',
+									},
+								],
+								currentNetwork: 'twitch',
+								automatic: 'yes',
+							},
+						},
+					},
+				},
+			],
+			[
+				'a rotation anchor outside the accepted set',
+				{
+					playout: {},
+					inputs: {},
+					socialProfileProjections: {
+						lower: {
+							profile: {
+								talent: { id: 7, name: 'Ava' },
+								acceptedProfiles: [
+									{
+										network: 'twitch',
+										networkLabel: 'Twitch',
+										handle: 'Ava',
+										profileUrl: 'https://www.twitch.tv/Ava',
+									},
+								],
+								currentNetwork: 'twitch',
+								automatic: true,
+								rotationAnchor: { network: 'x', anchoredAt: 123_456 },
+							},
+						},
+					},
+				},
+			],
+			[
+				'a rotation anchor instant that is not numeric',
+				{
+					playout: {},
+					inputs: {},
+					socialProfileProjections: {
+						lower: {
+							profile: {
+								talent: { id: 7, name: 'Ava' },
+								acceptedProfiles: [
+									{
+										network: 'twitch',
+										networkLabel: 'Twitch',
+										handle: 'Ava',
+										profileUrl: 'https://www.twitch.tv/Ava',
+									},
+								],
+								currentNetwork: 'twitch',
+								automatic: true,
+								rotationAnchor: { network: 'twitch', anchoredAt: 'later' },
+							},
+						},
+					},
+				},
+			],
+			[
+				'an unbounded interrupted Social Profile visual',
+				{
+					playout: {},
+					inputs: {},
+					socialProfileProjections: {
+						lower: {
+							profile: {
+								acceptedProfiles: [],
+								transitionAnchor: {
+									startedAt: 123_456,
+									from: Array.from({ length: 13 }, (_, index) => ({
+										values: {
+											network: 'twitch',
+											networkLabel: 'Twitch',
+											handle: `Ava${index}`,
+											profileUrl: `https://www.twitch.tv/Ava${index}`,
+										},
+										opacity: 1,
+										offsetX: 0,
+										offsetY: 0,
+									})),
+								},
+							},
+						},
+					},
+				},
+			],
+			[
+				'an interrupted Social Profile tuple that is not canonical',
+				{
+					playout: {},
+					inputs: {},
+					socialProfileProjections: {
+						lower: {
+							profile: {
+								acceptedProfiles: [],
+								transitionAnchor: {
+									startedAt: 123_456,
+									from: [
+										{
+											values: {
+												network: 'twitch',
+												networkLabel: 'Not Twitch',
+												handle: 'Ava',
+												profileUrl: 'https://www.twitch.tv/Ava',
+											},
+											opacity: 1,
+											offsetX: 0,
+											offsetY: 0,
+										},
+									],
+								},
+							},
+						},
+					},
+				},
+			],
+			[
+				'a duplicate correlated tuple in an interrupted Social Profile visual',
+				{
+					playout: {},
+					inputs: {},
+					socialProfileProjections: {
+						lower: {
+							profile: {
+								acceptedProfiles: [],
+								transitionAnchor: {
+									startedAt: 123_456,
+									from: Array.from({ length: 2 }, () => ({
+										values: {
+											network: 'twitch',
+											networkLabel: 'Twitch',
+											handle: 'Ava',
+											profileUrl: 'https://www.twitch.tv/Ava',
+										},
+										opacity: 1,
+										offsetX: 0,
+										offsetY: 0,
+									})),
+								},
+							},
+						},
+					},
+				},
+			],
 		])('reports %s as incompatible', (_label, raw) => {
 			expect(broadcastGraphicsRecoveryFault(raw)?.reason).toBe('incompatible');
 		});
 
 		it('recovers with nothing on air', () => {
-			const recovered = recoveredBroadcastGraphicsLiveState({ playout: { slate: { onAir: 'yes' } }, inputs: {} });
+			const recovered = recoveredBroadcastGraphicsLiveState({
+				playout: {
+					slate: { onAir: 'yes' },
+				},
+				inputs: {},
+			});
 
-			expect(onAirBroadcastGraphicIds(recovered, [{ id: 'slate' }])).toEqual([]);
+			expect(onAirBroadcastGraphicIds(recovered, [
+				{ id: 'slate' },
+			])).toEqual([]);
 		});
 
 		it('trusts a long-stale animation start time rather than calling it a fault', () => {
@@ -372,29 +668,55 @@ describe('broadcastGraphicsRecovery', () => {
 			// monotone and saturating and therefore settles it at the Graphic Resting
 			// State by itself. Faulting it here would blank a show that is running
 			// correctly — which is the opposite of what recovery is for.
-			const ancient = { playout: { slate: { onAir: true, effectiveStartedAt: 1, cut: false } }, inputs: {} };
+			const ancient = {
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: 1, cut: false },
+				},
+				inputs: {},
+			};
 
 			expect(broadcastGraphicsRecoveryFault(ancient)).toBeNull();
-			expect(onAirBroadcastGraphicIds(recoveredBroadcastGraphicsLiveState(ancient), [{ id: 'slate' }]))
+			expect(onAirBroadcastGraphicIds(recoveredBroadcastGraphicsLiveState(ancient), [
+				{ id: 'slate' },
+			]))
 				.toEqual(['slate']);
 		});
 
 		it('accepts a bounded correlated Social Profile Transition anchor and legacy state without one', () => {
-			const legacy = { playout: {}, inputs: {}, socialProfileProjections: { lower: { profile: { acceptedProfiles: [] } } } };
+			const legacy = {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: {
+					lower: {
+						profile: { acceptedProfiles: [] },
+					},
+				},
+			};
 			const transitioning = {
 				...legacy,
-				socialProfileProjections: { lower: { profile: {
-					acceptedProfiles: [],
-					transitionAnchor: {
-						startedAt: 123_456,
-						from: [{
-							values: { network: 'twitch', networkLabel: 'Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' },
-							opacity: 0.5,
-							offsetX: -50,
-							offsetY: 0,
-						}],
+				socialProfileProjections: {
+					lower: {
+						profile: {
+							acceptedProfiles: [],
+							transitionAnchor: {
+								startedAt: 123_456,
+								from: [
+									{
+										values: {
+											network: 'twitch',
+											networkLabel: 'Twitch',
+											handle: 'Ava',
+											profileUrl: 'https://www.twitch.tv/Ava',
+										},
+										opacity: 0.5,
+										offsetX: -50,
+										offsetY: 0,
+									},
+								],
+							},
+						},
 					},
-				} } },
+				},
 			};
 
 			expect(broadcastGraphicsRecoveryFault(legacy)).toBeNull();
@@ -405,18 +727,27 @@ describe('broadcastGraphicsRecovery', () => {
 			const transitioning = {
 				playout: {},
 				inputs: {},
-				socialProfileProjections: { lower: { profile: {
-					acceptedProfiles: [],
-					transitionAnchor: {
-						startedAt: 123_456,
-						from: ['OldAva', 'NewAva'].map(handle => ({
-							values: { network: 'twitch', networkLabel: 'Twitch', handle, profileUrl: `https://www.twitch.tv/${handle}` },
-							opacity: 0.5,
-							offsetX: 0,
-							offsetY: 0,
-						})),
+				socialProfileProjections: {
+					lower: {
+						profile: {
+							acceptedProfiles: [],
+							transitionAnchor: {
+								startedAt: 123_456,
+								from: ['OldAva', 'NewAva'].map(handle => ({
+									values: {
+										network: 'twitch',
+										networkLabel: 'Twitch',
+										handle,
+										profileUrl: `https://www.twitch.tv/${handle}`,
+									},
+									opacity: 0.5,
+									offsetX: 0,
+									offsetY: 0,
+								})),
+							},
+						},
 					},
-				} } },
+				},
 			};
 
 			expect(broadcastGraphicsRecoveryFault(transitioning)).toBeNull();
@@ -425,8 +756,17 @@ describe('broadcastGraphicsRecovery', () => {
 
 	describe('what survives ending one epoch and opening the next', () => {
 		const ended = {
-			playout: { slate: { onAir: true }, bug: { onAir: true } },
-			inputs: { slate: { working: { name: 'Ava' }, accepted: { name: 'Ava' }, acceptedRevision: 3 } },
+			playout: {
+				slate: { onAir: true },
+				bug: { onAir: true },
+			},
+			inputs: {
+				slate: {
+					working: { name: 'Ava' },
+					accepted: { name: 'Ava' },
+					acceptedRevision: 3,
+				},
+			},
 		};
 
 		it('carries prepared working values forward while turning every graphic off', () => {
@@ -438,18 +778,30 @@ describe('broadcastGraphicsRecovery', () => {
 
 			expect(next.playout).toEqual({});
 			expect(next.inputs.slate?.working).toEqual({ name: 'Ava' });
-			expect(onAirBroadcastGraphicIds(next, [{ id: 'slate' }, { id: 'bug' }])).toEqual([]);
+			expect(onAirBroadcastGraphicIds(next, [
+				{ id: 'slate' },
+				{ id: 'bug' },
+			])).toEqual([]);
 		});
 
 		it('drops manual Social Profile Projection state at the epoch boundary', () => {
 			const next = carriedForwardBroadcastGraphicsLiveState({
 				...ended,
 				socialProfileProjections: {
-					lower: { profile: {
-						acceptedProfiles: [{ network: 'twitch', networkLabel: 'Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' }],
-						currentNetwork: 'twitch',
-						manualNetwork: 'twitch',
-					} },
+					lower: {
+						profile: {
+							acceptedProfiles: [
+								{
+									network: 'twitch',
+									networkLabel: 'Twitch',
+									handle: 'Ava',
+									profileUrl: 'https://www.twitch.tv/Ava',
+								},
+							],
+							currentNetwork: 'twitch',
+							manualNetwork: 'twitch',
+						},
+					},
 				},
 			});
 
@@ -458,7 +810,9 @@ describe('broadcastGraphicsRecovery', () => {
 
 		const endedWithBinding = {
 			...ended,
-			sources: { slate: { player: 7 } },
+			sources: {
+				slate: { player: 7 },
+			},
 			inputs: {
 				slate: {
 					working: { name: 'Ava' },
@@ -476,7 +830,9 @@ describe('broadcastGraphicsRecovery', () => {
 			// than wrong. It is also the control that costs most to redo.
 			const next = carriedForwardBroadcastGraphicsLiveState(endedWithBinding);
 
-			expect(next.sources).toEqual({ slate: { player: 7 } });
+			expect(next.sources).toEqual({
+				slate: { player: 7 },
+			});
 			expect(next.inputs.slate?.working).toEqual({ name: 'Ava' });
 			// And still nothing on air, and still no acceptance.
 			expect(next.playout).toEqual({});
@@ -508,11 +864,16 @@ describe('broadcastGraphicsRecovery', () => {
 				default: 'Unnamed',
 				maxLength: 40,
 			};
-			const bindings = [{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' }];
+			const bindings = [
+				{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+			];
 
 			const taken = applyBroadcastGraphicsCommand(
 				next,
-				{ type: 'Take', payload: { graphicId: 'slate' } },
+				{
+					type: 'Take',
+					payload: { graphicId: 'slate' },
+				},
 				{
 					inputs: [declaration],
 					bindings,
@@ -549,21 +910,40 @@ describe('broadcastGraphicsRecovery', () => {
 				maxLength: 10,
 			};
 			const next = carriedForwardBroadcastGraphicsLiveState({
-				playout: { slate: { onAir: true } },
-				inputs: { slate: { working: { name: 'A'.repeat(50) }, accepted: { name: 'Ava' }, acceptedRevision: 2 } },
+				playout: {
+					slate: { onAir: true },
+				},
+				inputs: {
+					slate: {
+						working: {
+							name: 'A'.repeat(50),
+						},
+						accepted: { name: 'Ava' },
+						acceptedRevision: 2,
+					},
+				},
 			});
 
 			// The settled rule, asserted through the gate itself rather than through the
 			// shape: a required unavailable Graphic Input prevents a Take.
 			expect(() => applyBroadcastGraphicsCommand(
 				next,
-				{ type: 'Take', payload: { graphicId: 'slate' } },
-				{ inputs: [required], acceptedAt: 1_700_000_000_000 },
+				{
+					type: 'Take',
+					payload: { graphicId: 'slate' },
+				},
+				{
+					inputs: [required],
+					acceptedAt: 1_700_000_000_000,
+				},
 			)).toThrow(expect.objectContaining({ code: 'required-input-unavailable' }));
 		});
 
 		it('carries nothing forward from state it cannot trust', () => {
-			expect(carriedForwardBroadcastGraphicsLiveState({ playout: 'slate', inputs: { a: 1 } }))
+			expect(carriedForwardBroadcastGraphicsLiveState({
+				playout: 'slate',
+				inputs: { a: 1 },
+			}))
 				.toEqual(createInitialBroadcastGraphicsLiveState());
 		});
 
@@ -584,10 +964,16 @@ describe('broadcastGraphicsRecovery', () => {
 		it('gives every graphic and every epoch its own state to be assigned into', () => {
 			const first = carriedForwardBroadcastGraphicsLiveState({
 				inputs: {
-					slate: { working: { name: 'Ava' } },
-					bug: { working: { name: 'Sam' } },
+					slate: {
+						working: { name: 'Ava' },
+					},
+					bug: {
+						working: { name: 'Sam' },
+					},
 				},
-				sources: { slate: { player: 7 } },
+				sources: {
+					slate: { player: 7 },
+				},
 			});
 			const second = carriedForwardBroadcastGraphicsLiveState({ inputs: {} });
 
@@ -604,7 +990,9 @@ describe('broadcastGraphicsRecovery', () => {
 			// returned a shared constant, building `second` would empty the selections
 			// `first` carried.
 			expect(first).not.toBe(second);
-			expect(first.sources).toEqual({ slate: { player: 7 } });
+			expect(first.sources).toEqual({
+				slate: { player: 7 },
+			});
 			expect(second.sources).toEqual({});
 		});
 	});

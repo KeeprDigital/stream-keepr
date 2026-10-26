@@ -23,7 +23,11 @@ function assetImageLayer(id: string, overrides: Partial<Extract<BackgroundLayer,
 		type: 'image',
 		enabled: true,
 		opacity: 1,
-		source: { kind: 'asset', assetId: assetId('asset-1'), revisionId: revisionId('revision-1') },
+		source: {
+			kind: 'asset',
+			assetId: assetId('asset-1'),
+			revisionId: revisionId('revision-1'),
+		},
 		fit: 'cover',
 		...overrides,
 	};
@@ -35,7 +39,11 @@ function assetVideoLayer(id: string): BackgroundLayer {
 		type: 'video',
 		enabled: true,
 		opacity: 1,
-		source: { kind: 'asset', assetId: assetId('asset-2'), revisionId: revisionId('revision-2') },
+		source: {
+			kind: 'asset',
+			assetId: assetId('asset-2'),
+			revisionId: revisionId('revision-2'),
+		},
 		fit: 'cover',
 		playbackRate: 1,
 		loop: true,
@@ -69,10 +77,35 @@ describe('backgroundGraphicAssetReferences', () => {
 
 	it('publishes nothing for layers that pin no library revision', () => {
 		const references = backgroundGraphicAssetReferences(config([
-			{ id: 'wash', type: 'color', enabled: true, opacity: 1, color: '#0b1020' },
-			{ id: 'grad', type: 'gradient', enabled: true, opacity: 1, gradient: 'linear-gradient(#000, #123)' },
-			{ id: 'remote', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url: 'https://cdn.example.com/plate.png' }, fit: 'cover' },
-			{ id: 'anim', type: 'animation', enabled: true, opacity: 1, animation: { effect: 'fog' } },
+			{
+				id: 'wash',
+				type: 'color',
+				enabled: true,
+				opacity: 1,
+				color: '#0b1020',
+			},
+			{
+				id: 'grad',
+				type: 'gradient',
+				enabled: true,
+				opacity: 1,
+				gradient: 'linear-gradient(#000, #123)',
+			},
+			{
+				id: 'remote',
+				type: 'image',
+				enabled: true,
+				opacity: 1,
+				source: { kind: 'url', url: 'https://cdn.example.com/plate.png' },
+				fit: 'cover',
+			},
+			{
+				id: 'anim',
+				type: 'animation',
+				enabled: true,
+				opacity: 1,
+				animation: { effect: 'fog' },
+			},
 		]));
 
 		expect(references).toEqual([]);
@@ -89,7 +122,10 @@ describe('backgroundGraphicAssetReferences', () => {
 	});
 
 	it('keeps owner slots stable when the stack is reordered', () => {
-		const layers = [assetImageLayer('plate'), assetVideoLayer('loop')];
+		const layers = [
+			assetImageLayer('plate'),
+			assetVideoLayer('loop'),
+		];
 		const forward = backgroundGraphicAssetReferences(config(layers));
 		const reversed = backgroundGraphicAssetReferences(config([...layers].reverse()));
 
@@ -109,7 +145,11 @@ describe('backgroundGraphicAssetReferences', () => {
 	});
 
 	it('dispatches from the shared mode dispatcher, and answers nothing with no configuration', () => {
-		const modeConfigs = { background: config([assetImageLayer('plate')]) };
+		const modeConfigs = {
+			background: config([
+				assetImageLayer('plate'),
+			]),
+		};
 
 		expect(screenModeGraphicAssetReferences('background', modeConfigs)).toHaveLength(1);
 		expect(screenModeGraphicAssetReferences('background', undefined)).toEqual([]);
@@ -132,7 +172,14 @@ describe('a plain overlay mode’s own Background Layer stack', () => {
 			[mode]: {
 				backgroundLayers: [
 					assetImageLayer('plate'),
-					{ id: 'remote', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url: 'https://cdn.example.com/plate.png' }, fit: 'cover' },
+					{
+						id: 'remote',
+						type: 'image',
+						enabled: true,
+						opacity: 1,
+						source: { kind: 'url', url: 'https://cdn.example.com/plate.png' },
+						fit: 'cover',
+					},
 				],
 			},
 		} as GraphicAssetReferencingScreenModeConfigs;
@@ -151,7 +198,11 @@ describe('a plain overlay mode’s own Background Layer stack', () => {
 		// The field name is shared, so the namespace has to carry the mode: a Deck
 		// write scoping its delete to `backgroundLayers.` would clear the Card's rows.
 		const modeConfigs = {
-			card: { backgroundLayers: [assetImageLayer('plate')] },
+			card: {
+				backgroundLayers: [
+					assetImageLayer('plate'),
+				],
+			},
 		} as GraphicAssetReferencingScreenModeConfigs;
 
 		expect(screenModeGraphicAssetReferences('deck', modeConfigs)).toEqual([]);

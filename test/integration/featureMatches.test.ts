@@ -224,7 +224,12 @@ describe('feature match slots API', () => {
 	it('normalizes Assignment Note whitespace and treats an empty saved value as no Note', async () => {
 		const sourceMatch = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
-			body: { roundId, tableNumber: 44, player1Data: { name: 'Plain' }, player2Data: { name: 'Text' } },
+			body: {
+				roundId,
+				tableNumber: 44,
+				player1Data: { name: 'Plain' },
+				player2Data: { name: 'Text' },
+			},
 		});
 		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
 			method: 'POST',
@@ -251,11 +256,21 @@ describe('feature match slots API', () => {
 	it('refuses a promotion that would discard a Note before changing any Assignment or Slot', async () => {
 		const notedMatch = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
-			body: { roundId, tableNumber: 45, player1Data: { name: 'Noted' }, player2Data: { name: 'Match' } },
+			body: {
+				roundId,
+				tableNumber: 45,
+				player1Data: { name: 'Noted' },
+				player2Data: { name: 'Match' },
+			},
 		});
 		const replacementMatch = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
-			body: { roundId, tableNumber: 46, player1Data: { name: 'New' }, player2Data: { name: 'Match' } },
+			body: {
+				roundId,
+				tableNumber: 46,
+				player1Data: { name: 'New' },
+				player2Data: { name: 'Match' },
+			},
 		});
 		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
 			method: 'POST',
@@ -278,10 +293,12 @@ describe('feature match slots API', () => {
 		expect(refused.status).toBe(409);
 		expect(refused._data.data).toMatchObject({
 			code: 'feature-match-note-discard-required',
-			assignments: [{
-				assignment: { id: noted.id, matchId: notedMatch.id, note: 'Do not lose this' },
-				match: { id: notedMatch.id, tableNumber: 45 },
-			}],
+			assignments: [
+				{
+					assignment: { id: noted.id, matchId: notedMatch.id, note: 'Do not lose this' },
+					match: { id: notedMatch.id, tableNumber: 45 },
+				},
+			],
 		});
 
 		const slots = await $fetch(`/api/events/${eventId}/feature-match-slots`);
@@ -289,7 +306,9 @@ describe('feature match slots API', () => {
 			matchId: notedMatch.id,
 			activeSessionId: promoted.promotedSlot.activeSessionId,
 		});
-		const assignments = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId } });
+		const assignments = await $fetch(`/api/events/${eventId}/feature-match-assignments`, {
+			query: { roundId },
+		});
 		expect(assignments.featureMatchAssignments).toContainEqual(expect.objectContaining({
 			id: noted.id,
 			matchId: notedMatch.id,
@@ -300,11 +319,21 @@ describe('feature match slots API', () => {
 	it('protects the direct Assignment save endpoint with the same exact Note discard confirmation', async () => {
 		const notedMatch = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
-			body: { roundId, tableNumber: 78, player1Data: { name: 'Direct' }, player2Data: { name: 'Note' } },
+			body: {
+				roundId,
+				tableNumber: 78,
+				player1Data: { name: 'Direct' },
+				player2Data: { name: 'Note' },
+			},
 		});
 		const replacementMatch = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
-			body: { roundId, tableNumber: 79, player1Data: { name: 'Direct' }, player2Data: { name: 'Replacement' } },
+			body: {
+				roundId,
+				tableNumber: 79,
+				player1Data: { name: 'Direct' },
+				player2Data: { name: 'Replacement' },
+			},
 		});
 		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
 			method: 'POST',
@@ -326,7 +355,11 @@ describe('feature match slots API', () => {
 		expect(refused.status).toBe(409);
 		expect(refused._data.data).toMatchObject({
 			code: 'feature-match-note-discard-required',
-			assignments: [{ assignment: { id: reviewed.id, note: 'Protect direct saves too' } }],
+			assignments: [
+				{
+					assignment: { id: reviewed.id, note: 'Protect direct saves too' },
+				},
+			],
 		});
 
 		const replaced = await $fetch(`/api/events/${eventId}/feature-match-assignments`, {
@@ -335,7 +368,9 @@ describe('feature match slots API', () => {
 				roundId,
 				slotId: slot.id,
 				matchId: replacementMatch.id,
-				confirmedNoteDiscards: [{ assignmentId: reviewed.id, updatedAt: reviewed.updatedAt }],
+				confirmedNoteDiscards: [
+					{ assignmentId: reviewed.id, updatedAt: reviewed.updatedAt },
+				],
 			},
 		});
 		expect(replaced).toMatchObject({
@@ -349,11 +384,21 @@ describe('feature match slots API', () => {
 	it('retries a destructive replacement only with the exact Assignment version the user reviewed', async () => {
 		const notedMatch = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
-			body: { roundId, tableNumber: 47, player1Data: { name: 'Reviewed' }, player2Data: { name: 'Note' } },
+			body: {
+				roundId,
+				tableNumber: 47,
+				player1Data: { name: 'Reviewed' },
+				player2Data: { name: 'Note' },
+			},
 		});
 		const replacementMatch = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
-			body: { roundId, tableNumber: 48, player1Data: { name: 'Replacement' }, player2Data: { name: 'Match' } },
+			body: {
+				roundId,
+				tableNumber: 48,
+				player1Data: { name: 'Replacement' },
+				player2Data: { name: 'Match' },
+			},
 		});
 		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
 			method: 'POST',
@@ -372,7 +417,9 @@ describe('feature match slots API', () => {
 			method: 'POST',
 			body: {
 				matchId: replacementMatch.id,
-				confirmedNoteDiscards: [{ assignmentId: reviewed.id, updatedAt: reviewed.updatedAt }],
+				confirmedNoteDiscards: [
+					{ assignmentId: reviewed.id, updatedAt: reviewed.updatedAt },
+				],
 			},
 		});
 
@@ -388,11 +435,21 @@ describe('feature match slots API', () => {
 	it('refuses a stale discard confirmation with the current Note and leaves the reassignment untouched', async () => {
 		const notedMatch = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
-			body: { roundId, tableNumber: 49, player1Data: { name: 'Changed' }, player2Data: { name: 'Note' } },
+			body: {
+				roundId,
+				tableNumber: 49,
+				player1Data: { name: 'Changed' },
+				player2Data: { name: 'Note' },
+			},
 		});
 		const replacementMatch = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
-			body: { roundId, tableNumber: 50, player1Data: { name: 'Waiting' }, player2Data: { name: 'Match' } },
+			body: {
+				roundId,
+				tableNumber: 50,
+				player1Data: { name: 'Waiting' },
+				player2Data: { name: 'Match' },
+			},
 		});
 		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
 			method: 'POST',
@@ -415,7 +472,9 @@ describe('feature match slots API', () => {
 			method: 'POST',
 			body: {
 				matchId: replacementMatch.id,
-				confirmedNoteDiscards: [{ assignmentId: reviewed.id, updatedAt: reviewed.updatedAt }],
+				confirmedNoteDiscards: [
+					{ assignmentId: reviewed.id, updatedAt: reviewed.updatedAt },
+				],
 			},
 		});
 
@@ -434,15 +493,31 @@ describe('feature match slots API', () => {
 	it('moves a continuing Assignment with its Note and confirms only the displaced destination Note', async () => {
 		const incomingMatch = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
-			body: { roundId, tableNumber: 51, player1Data: { name: 'Incoming' }, player2Data: { name: 'Match' } },
+			body: {
+				roundId,
+				tableNumber: 51,
+				player1Data: { name: 'Incoming' },
+				player2Data: { name: 'Match' },
+			},
 		});
 		const displacedMatch = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
-			body: { roundId, tableNumber: 52, player1Data: { name: 'Displaced' }, player2Data: { name: 'Match' } },
+			body: {
+				roundId,
+				tableNumber: 52,
+				player1Data: { name: 'Displaced' },
+				player2Data: { name: 'Match' },
+			},
 		});
 		const [sourceSlot, destinationSlot] = await Promise.all([
-			$fetch(`/api/events/${eventId}/feature-match-slots`, { method: 'POST', body: { bestOf: 3 } }),
-			$fetch(`/api/events/${eventId}/feature-match-slots`, { method: 'POST', body: { bestOf: 3 } }),
+			$fetch(`/api/events/${eventId}/feature-match-slots`, {
+				method: 'POST',
+				body: { bestOf: 3 },
+			}),
+			$fetch(`/api/events/${eventId}/feature-match-slots`, {
+				method: 'POST',
+				body: { bestOf: 3 },
+			}),
 		]);
 		const incomingPromotion = await $fetch(`/api/events/${eventId}/feature-match-slots/${sourceSlot.id}/promote`, {
 			method: 'POST',
@@ -476,7 +551,9 @@ describe('feature match slots API', () => {
 			method: 'POST',
 			body: {
 				matchId: incomingMatch.id,
-				confirmedNoteDiscards: [{ assignmentId: displacedAssignment.id, updatedAt: displacedAssignment.updatedAt }],
+				confirmedNoteDiscards: [
+					{ assignmentId: displacedAssignment.id, updatedAt: displacedAssignment.updatedAt },
+				],
 			},
 		});
 		expect(moved.assignment).toMatchObject({
@@ -485,7 +562,9 @@ describe('feature match slots API', () => {
 			matchId: incomingMatch.id,
 			note: 'Carry this Note',
 		});
-		const assignments = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId } });
+		const assignments = await $fetch(`/api/events/${eventId}/feature-match-assignments`, {
+			query: { roundId },
+		});
 		expect(assignments.featureMatchAssignments.some((assignment: { id: number }) => assignment.id === displacedAssignment.id)).toBe(false);
 	});
 
@@ -496,11 +575,21 @@ describe('feature match slots API', () => {
 		});
 		const previousMatch = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
-			body: { roundId: previousRound.id, tableNumber: 53, player1Data: { name: 'Previous' }, player2Data: { name: 'Round' } },
+			body: {
+				roundId: previousRound.id,
+				tableNumber: 53,
+				player1Data: { name: 'Previous' },
+				player2Data: { name: 'Round' },
+			},
 		});
 		const currentMatch = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
-			body: { roundId, tableNumber: 54, player1Data: { name: 'Current' }, player2Data: { name: 'Round' } },
+			body: {
+				roundId,
+				tableNumber: 54,
+				player1Data: { name: 'Current' },
+				player2Data: { name: 'Round' },
+			},
 		});
 		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
 			method: 'POST',
@@ -520,7 +609,9 @@ describe('feature match slots API', () => {
 			body: { matchId: currentMatch.id },
 		});
 
-		const retained = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId: previousRound.id } });
+		const retained = await $fetch(`/api/events/${eventId}/feature-match-assignments`, {
+			query: { roundId: previousRound.id },
+		});
 		expect(retained.featureMatchAssignments).toContainEqual(expect.objectContaining({
 			id: notedPrevious.id,
 			matchId: previousMatch.id,
@@ -531,11 +622,21 @@ describe('feature match slots API', () => {
 	it('promotes atomically: slot, assignment, and a fresh session land together, and re-promotion stays consistent', async () => {
 		const matchA = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
-			body: { roundId, tableNumber: 5, player1Data: { name: 'Carol' }, player2Data: { name: 'Dave' } },
+			body: {
+				roundId,
+				tableNumber: 5,
+				player1Data: { name: 'Carol' },
+				player2Data: { name: 'Dave' },
+			},
 		});
 		const matchB = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
-			body: { roundId, tableNumber: 6, player1Data: { name: 'Erin' }, player2Data: { name: 'Frank' } },
+			body: {
+				roundId,
+				tableNumber: 6,
+				player1Data: { name: 'Erin' },
+				player2Data: { name: 'Frank' },
+			},
 		});
 		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
 			method: 'POST',
@@ -550,7 +651,11 @@ describe('feature match slots API', () => {
 
 		// The slot references the match, a fresh session (sequence 1) exists for it,
 		// and the assignment row exists — all as a single observable outcome.
-		expect(first.promotedSlot).toMatchObject({ id: slot.id, matchId: matchA.id, player1Data: { name: 'Carol' } });
+		expect(first.promotedSlot).toMatchObject({
+			id: slot.id,
+			matchId: matchA.id,
+			player1Data: { name: 'Carol' },
+		});
 		expect(first.promotedSlot.activeSession).toMatchObject({ slotId: slot.id, status: 'active', sequence: 1 });
 		expect(first.assignment).toMatchObject({ roundId, slotId: slot.id, matchId: matchA.id });
 		const firstSessionId = first!.promotedSlot!.activeSession!.id;
@@ -561,7 +666,9 @@ describe('feature match slots API', () => {
 		expect(storedA).toMatchObject({ matchId: matchA.id });
 		expect(storedA!.activeSession).toMatchObject({ id: firstSessionId, status: 'active', sequence: 1 });
 
-		const assignmentsA = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId } });
+		const assignmentsA = await $fetch(`/api/events/${eventId}/feature-match-assignments`, {
+			query: { roundId },
+		});
 		const rowsForSlotA = assignmentsA.featureMatchAssignments.filter((a: { slotId: number }) => a.slotId === slot.id);
 		expect(rowsForSlotA).toHaveLength(1);
 		expect(rowsForSlotA[0]).toMatchObject({ matchId: matchA.id });
@@ -572,14 +679,20 @@ describe('feature match slots API', () => {
 			body: { matchId: matchB.id },
 		});
 
-		expect(second.promotedSlot).toMatchObject({ id: slot.id, matchId: matchB.id, player1Data: { name: 'Erin' } });
+		expect(second.promotedSlot).toMatchObject({
+			id: slot.id,
+			matchId: matchB.id,
+			player1Data: { name: 'Erin' },
+		});
 		// A brand-new session replaced the previous one.
 		expect(second.promotedSlot.activeSession).toMatchObject({ slotId: slot.id, status: 'active', sequence: 1 });
 		expect(second!.promotedSlot!.activeSession!.id).not.toBe(firstSessionId);
 		expect(second.assignment).toMatchObject({ roundId, slotId: slot.id, matchId: matchB.id });
 
 		// Exactly one assignment for the slot, now pointing at match B.
-		const assignmentsB = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId } });
+		const assignmentsB = await $fetch(`/api/events/${eventId}/feature-match-assignments`, {
+			query: { roundId },
+		});
 		const rowsForSlotB = assignmentsB.featureMatchAssignments.filter((a: { slotId: number }) => a.slotId === slot.id);
 		expect(rowsForSlotB).toHaveLength(1);
 		expect(rowsForSlotB[0]).toMatchObject({ matchId: matchB.id });
@@ -588,11 +701,22 @@ describe('feature match slots API', () => {
 	it('lets only one of two simultaneous promotions of one Match take it', async () => {
 		const contested = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
-			body: { roundId, tableNumber: 77, player1Data: { name: 'Gina' }, player2Data: { name: 'Hank' } },
+			body: {
+				roundId,
+				tableNumber: 77,
+				player1Data: { name: 'Gina' },
+				player2Data: { name: 'Hank' },
+			},
 		});
 		const [lane1, lane2] = await Promise.all([
-			$fetch(`/api/events/${eventId}/feature-match-slots`, { method: 'POST', body: { bestOf: 3 } }),
-			$fetch(`/api/events/${eventId}/feature-match-slots`, { method: 'POST', body: { bestOf: 3 } }),
+			$fetch(`/api/events/${eventId}/feature-match-slots`, {
+				method: 'POST',
+				body: { bestOf: 3 },
+			}),
+			$fetch(`/api/events/${eventId}/feature-match-slots`, {
+				method: 'POST',
+				body: { bestOf: 3 },
+			}),
 		]);
 
 		const responses = await Promise.all([
@@ -632,7 +756,11 @@ describe('feature match slots API', () => {
 		expect(otherSlotAfter).toMatchObject({ id: otherSlotBefore.id, matchId: null });
 		if (movedOffOther) {
 			expect(otherSlotAfter.activeSessionId).not.toBe(otherSlotBefore.activeSessionId);
-			expect(otherSlotAfter.activeSession).toMatchObject({ status: 'active', sequence: 1, sourceSnapshot: { matchId: null } });
+			expect(otherSlotAfter.activeSession).toMatchObject({
+				status: 'active',
+				sequence: 1,
+				sourceSnapshot: { matchId: null },
+			});
 		}
 		else {
 			expect(otherSlotAfter.activeSessionId).toBe(otherSlotBefore.activeSessionId);
@@ -652,10 +780,14 @@ describe('feature match slots API', () => {
 			// error hook stamps actually serializes through Nitro.
 			expect(other._data.data).toEqual({ code: 'state-conflict' });
 		}
-		const assignments = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId } });
+		const assignments = await $fetch(`/api/events/${eventId}/feature-match-assignments`, {
+			query: { roundId },
+		});
 		expect(assignments.featureMatchAssignments.filter(
 			(assignment: { matchId: number }) => assignment.matchId === contested.id,
-		)).toEqual([expect.objectContaining({ slotId: winner.id })]);
+		)).toEqual([
+			expect.objectContaining({ slotId: winner.id }),
+		]);
 	});
 
 	it('keeps a Player rename and a concurrent operator command from cancelling each other', async () => {
@@ -712,7 +844,10 @@ describe('feature match slots API', () => {
 					},
 				},
 			));
-			renameProgress = await Promise.race([renaming, Promise.resolve(inFlight)]);
+			renameProgress = await Promise.race([
+				renaming,
+				Promise.resolve(inFlight),
+			]);
 		} while (renameProgress === inFlight && commands.length < maxTicks);
 		const renamed = await renaming;
 
@@ -841,7 +976,12 @@ describe('feature match slots API', () => {
 		it('creates an Event with fifty Slots', async () => {
 			const event = await $fetch('/api/events', {
 				method: 'POST',
-				body: { name: 'Integration Fifty Slots Event', game: 'mtg', featureMatchOrientation: 'horizontal', numFeatureMatches: 50 },
+				body: {
+					name: 'Integration Fifty Slots Event',
+					game: 'mtg',
+					featureMatchOrientation: 'horizontal',
+					numFeatureMatches: 50,
+				},
 			});
 
 			try {
@@ -864,14 +1004,20 @@ describe('feature match slots API', () => {
 			try {
 				const [first] = (await $fetch(`/api/events/${event.id}/feature-match-slots`)).featureMatchSlots;
 
-				const grown = await $fetch(`/api/events/${event.id}`, { method: 'PATCH', body: { numFeatureMatches: 40 } });
+				const grown = await $fetch(`/api/events/${event.id}`, {
+					method: 'PATCH',
+					body: { numFeatureMatches: 40 },
+				});
 				expect(grown.numFeatureMatches).toBe(40);
 				const increased = await $fetch(`/api/events/${event.id}/feature-match-slots`);
 				expect(increased.featureMatchSlots).toHaveLength(40);
 				expectInitialisedInOrder(increased.featureMatchSlots);
 				expect(increased.featureMatchSlots[0]!.id).toBe(first!.id);
 
-				await $fetch(`/api/events/${event.id}`, { method: 'PATCH', body: { numFeatureMatches: 3 } });
+				await $fetch(`/api/events/${event.id}`, {
+					method: 'PATCH',
+					body: { numFeatureMatches: 3 },
+				});
 				const decreased = await $fetch(`/api/events/${event.id}/feature-match-slots`);
 				expect(decreased.featureMatchSlots.map(slot => slot.id))
 					.toEqual(increased.featureMatchSlots.slice(0, 3).map(slot => slot.id));

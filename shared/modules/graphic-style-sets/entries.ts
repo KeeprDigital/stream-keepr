@@ -96,10 +96,14 @@ export interface GraphicStyleEntryReference {
 export function graphicStyleEntryReferences(entry: GraphicStyleSetEntry): GraphicStyleEntryReference[] {
 	switch (entry.kind) {
 		case 'typography':
-			return [{ entryId: entry.value.colorEntryId, requiredKind: 'palette' }];
+			return [
+				{ entryId: entry.value.colorEntryId, requiredKind: 'palette' },
+			];
 		case 'fill':
 			return entry.value.type === 'solid'
-				? [{ entryId: entry.value.colorEntryId, requiredKind: 'palette' }]
+				? [
+						{ entryId: entry.value.colorEntryId, requiredKind: 'palette' },
+					]
 				: entry.value.stops.map(stop => ({ entryId: stop.colorEntryId, requiredKind: 'palette' as const }));
 		case 'surface-style': {
 			const references: GraphicStyleEntryReference[] = [];
@@ -114,7 +118,9 @@ export function graphicStyleEntryReferences(entry: GraphicStyleSetEntry): Graphi
 		case 'media-treatment':
 			return entry.value.clipGeometryEntryId === undefined
 				? []
-				: [{ entryId: entry.value.clipGeometryEntryId, requiredKind: 'shape-geometry' }];
+				: [
+						{ entryId: entry.value.clipGeometryEntryId, requiredKind: 'shape-geometry' },
+					];
 		case 'palette':
 		case 'shape-geometry':
 		case 'animation-recipe':
@@ -135,10 +141,26 @@ function resolveAnimationRecipe(value: AnimationRecipeGraphicStyleEntryValue): G
 		duration: value.duration,
 		easing: value.easing,
 		delay: value.delay ?? 0,
-		...(value.fade ? { fade: { ...value.fade } } : {}),
-		...(value.slide ? { slide: { ...value.slide } } : {}),
-		...(value.scale ? { scale: { ...value.scale } } : {}),
-		...(value.reveal ? { reveal: { ...value.reveal } } : {}),
+		...(value.fade
+			? {
+					fade: { ...value.fade },
+				}
+			: {}),
+		...(value.slide
+			? {
+					slide: { ...value.slide },
+				}
+			: {}),
+		...(value.scale
+			? {
+					scale: { ...value.scale },
+				}
+			: {}),
+		...(value.reveal
+			? {
+					reveal: { ...value.reveal },
+				}
+			: {}),
 		pause: value.pause ?? 0,
 		repeat: value.repeat ?? 1,
 	};
@@ -154,7 +176,9 @@ function issue(
 		code,
 		entryId: entry.id,
 		entryName: entry.name,
-		...(referencedEntryId === undefined ? {} : { referencedEntryId }),
+		...(referencedEntryId === undefined
+			? {}
+			: { referencedEntryId }),
 		message,
 	};
 }
@@ -234,7 +258,9 @@ export function resolveGraphicStyleSet(
 
 	function followPalette(entry: GraphicStyleSetEntry, entryId: string): string | null {
 		const value = follow(entry, { entryId, requiredKind: 'palette' });
-		return value?.kind === 'palette' ? value.value : null;
+		return value?.kind === 'palette'
+			? value.value
+			: null;
 	}
 
 	function resolveValue(entry: GraphicStyleSetEntry): ResolvedGraphicStyleValue | null {
@@ -252,10 +278,16 @@ export function resolveGraphicStyleSet(
 				return { kind: 'palette', value: entry.value.color };
 
 			case 'shape-geometry':
-				return { kind: 'shape-geometry', value: structuredClone(entry.value) };
+				return {
+					kind: 'shape-geometry',
+					value: structuredClone(entry.value),
+				};
 
 			case 'animation-recipe':
-				return { kind: 'animation-recipe', value: resolveAnimationRecipe(entry.value) };
+				return {
+					kind: 'animation-recipe',
+					value: resolveAnimationRecipe(entry.value),
+				};
 
 			case 'typography': {
 				if (!(GRAPHIC_FONT_IDS as readonly string[]).includes(entry.value.font.fontId)) {
@@ -270,13 +302,21 @@ export function resolveGraphicStyleSet(
 				if (color === null)
 					return null;
 				const { colorEntryId: _linked, ...typography } = entry.value;
-				return { kind: 'typography', value: { ...typography, color } };
+				return {
+					kind: 'typography',
+					value: { ...typography, color },
+				};
 			}
 
 			case 'fill': {
 				if (entry.value.type === 'solid') {
 					const color = followPalette(entry, entry.value.colorEntryId);
-					return color === null ? null : { kind: 'fill', value: { type: 'solid', color } };
+					return color === null
+						? null
+						: {
+								kind: 'fill',
+								value: { type: 'solid', color },
+							};
 				}
 				const stops = entry.value.stops.map(stop => ({
 					color: followPalette(entry, stop.colorEntryId),
@@ -324,8 +364,12 @@ export function resolveGraphicStyleSet(
 					fit: entry.value.fit,
 					focalPosition: { ...entry.value.focalPosition },
 					opacity: entry.value.opacity,
-					...(entry.value.playbackRate === undefined ? {} : { playbackRate: entry.value.playbackRate }),
-					...(entry.value.loop === undefined ? {} : { loop: entry.value.loop }),
+					...(entry.value.playbackRate === undefined
+						? {}
+						: { playbackRate: entry.value.playbackRate }),
+					...(entry.value.loop === undefined
+						? {}
+						: { loop: entry.value.loop }),
 				};
 				if (entry.value.clipGeometryEntryId !== undefined) {
 					const geometry = follow(entry, {

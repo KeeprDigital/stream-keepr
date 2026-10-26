@@ -39,11 +39,17 @@ describe('scryfallCardSchema', () => {
 		const dfcCard = {
 			...validCard,
 			name: 'Delver of Secrets // Insectile Aberration',
-			card_faces: [{ mana_cost: '{U}' }, { mana_cost: undefined }],
+			card_faces: [
+				{ mana_cost: '{U}' },
+				{ mana_cost: undefined },
+			],
 		};
 		const result = scryfallCardSchema.parse(dfcCard);
 		expect(result.name).toBe('Delver of Secrets // Insectile Aberration');
-		expect(result.card_faces).toEqual([{ mana_cost: '{U}' }, { mana_cost: undefined }]);
+		expect(result.card_faces).toEqual([
+			{ mana_cost: '{U}' },
+			{ mana_cost: undefined },
+		]);
 	});
 
 	it('accepts null cmc (tokens, emblems)', () => {
@@ -61,7 +67,10 @@ describe('scryfallCardSchema', () => {
 	it('accepts null mana_cost on a card face', () => {
 		const dfcCard = {
 			...validCard,
-			card_faces: [{ mana_cost: '{U}' }, { mana_cost: null }],
+			card_faces: [
+				{ mana_cost: '{U}' },
+				{ mana_cost: null },
+			],
 		};
 		expect(scryfallCardSchema.parse(dfcCard).card_faces?.[1]?.mana_cost).toBeNull();
 	});
@@ -93,7 +102,9 @@ describe('scryfallCollectionResponseSchema', () => {
 	it('accepts not_found entries with extra fields (passthrough)', () => {
 		const result = scryfallCollectionResponseSchema.parse({
 			...validResponse,
-			not_found: [{ name: 'Foo', set: 'bar' }],
+			not_found: [
+				{ name: 'Foo', set: 'bar' },
+			],
 		});
 		expect(result.not_found[0]).toHaveProperty('set', 'bar');
 	});

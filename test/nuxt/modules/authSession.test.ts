@@ -121,7 +121,10 @@ describe('useAuthSession ensure', () => {
 		});
 
 		const session = await freshSession();
-		const both = Promise.all([session.ensure(), session.ensure()]);
+		const both = Promise.all([
+			session.ensure(),
+			session.ensure(),
+		]);
 		release?.();
 		await both;
 
@@ -152,7 +155,9 @@ describe('useAuthSession supersession', () => {
 	it('does not let a session read that was already in the air undo a sign-in', async () => {
 		const release = heldGetSession({ data: null, error: null });
 		mockSignInEmail.mockResolvedValue({
-			data: { user: { id: 'usr_1', email: 'operator@example.test', name: 'Operator' } },
+			data: {
+				user: { id: 'usr_1', email: 'operator@example.test', name: 'Operator' },
+			},
 			error: null,
 		});
 
@@ -168,14 +173,19 @@ describe('useAuthSession supersession', () => {
 
 	it('does not let a session read that was already in the air undo a sign-out', async () => {
 		mockSignInEmail.mockResolvedValue({
-			data: { user: { id: 'usr_1', email: 'operator@example.test', name: 'Operator' } },
+			data: {
+				user: { id: 'usr_1', email: 'operator@example.test', name: 'Operator' },
+			},
 			error: null,
 		});
 		const session = await freshSession();
 		await session.signIn('operator@example.test', 'correct horse');
 
 		const release = heldGetSession(sessionAnswer());
-		mockSignOut.mockResolvedValue({ data: { success: true }, error: null });
+		mockSignOut.mockResolvedValue({
+			data: { success: true },
+			error: null,
+		});
 
 		const reading = session.load();
 		await session.signOut();
@@ -196,7 +206,9 @@ describe('useAuthSession signIn', () => {
 
 	it('signs in and settles the session without asking the server again', async () => {
 		mockSignInEmail.mockResolvedValue({
-			data: { user: { id: 'usr_1', email: 'operator@example.test', name: 'Operator' } },
+			data: {
+				user: { id: 'usr_1', email: 'operator@example.test', name: 'Operator' },
+			},
 			error: null,
 		});
 
@@ -210,7 +222,12 @@ describe('useAuthSession signIn', () => {
 	});
 
 	it('sends the address without the whitespace an autofill left on it', async () => {
-		mockSignInEmail.mockResolvedValue({ data: { user: { id: 'usr_1', email: 'a@b.test', name: 'A' } }, error: null });
+		mockSignInEmail.mockResolvedValue({
+			data: {
+				user: { id: 'usr_1', email: 'a@b.test', name: 'A' },
+			},
+			error: null,
+		});
 
 		const session = await freshSession();
 		await session.signIn('  operator@example.test  ', 'correct horse');
@@ -255,7 +272,9 @@ describe('useAuthSession signOut', () => {
 
 	async function signedInSession() {
 		mockSignInEmail.mockResolvedValue({
-			data: { user: { id: 'usr_1', email: 'operator@example.test', name: 'Operator' } },
+			data: {
+				user: { id: 'usr_1', email: 'operator@example.test', name: 'Operator' },
+			},
 			error: null,
 		});
 		const session = await freshSession();
@@ -265,7 +284,10 @@ describe('useAuthSession signOut', () => {
 
 	it('ends the session and forgets who held it', async () => {
 		const session = await signedInSession();
-		mockSignOut.mockResolvedValue({ data: { success: true }, error: null });
+		mockSignOut.mockResolvedValue({
+			data: { success: true },
+			error: null,
+		});
 
 		const result = await session.signOut();
 
@@ -276,7 +298,10 @@ describe('useAuthSession signOut', () => {
 
 	it('does not claim to be signed out when the server never agreed', async () => {
 		const session = await signedInSession();
-		mockSignOut.mockResolvedValue({ data: null, error: { status: 503, message: 'Service Unavailable' } });
+		mockSignOut.mockResolvedValue({
+			data: null,
+			error: { status: 503, message: 'Service Unavailable' },
+		});
 
 		const result = await session.signOut();
 
@@ -288,7 +313,10 @@ describe('useAuthSession signOut', () => {
 
 	it('asks the server again after a sign-out that did not land', async () => {
 		const session = await signedInSession();
-		mockSignOut.mockResolvedValue({ data: null, error: { status: 503, message: 'Service Unavailable' } });
+		mockSignOut.mockResolvedValue({
+			data: null,
+			error: { status: 503, message: 'Service Unavailable' },
+		});
 		mockGetSession.mockResolvedValue(sessionAnswer());
 
 		await session.signOut();

@@ -103,7 +103,12 @@ async function stageEvent(): Promise<Stage> {
 		.values({ eventId, name: 'Swiss', sortOrder: 0 })
 		.returning();
 	const [round] = await db.insert(schema.rounds)
-		.values({ eventId, phaseId: phase!.id, name: 'Round 1', roundNumber: 1 })
+		.values({
+			eventId,
+			phaseId: phase!.id,
+			name: 'Round 1',
+			roundNumber: 1,
+		})
 		.returning();
 	const players = await db.insert(schema.players).values([
 		{ eventId, name: 'Mia' },
@@ -112,8 +117,22 @@ async function stageEvent(): Promise<Stage> {
 		{ eventId, name: 'Ned' },
 	]).returning();
 	const [matchM, matchN] = await db.insert(schema.matches).values([
-		{ eventId, roundId: round!.id, tableNumber: 1, player1Id: players[0]!.id, player2Id: players[1]!.id, sortOrder: 0 },
-		{ eventId, roundId: round!.id, tableNumber: 2, player1Id: players[2]!.id, player2Id: players[3]!.id, sortOrder: 1 },
+		{
+			eventId,
+			roundId: round!.id,
+			tableNumber: 1,
+			player1Id: players[0]!.id,
+			player2Id: players[1]!.id,
+			sortOrder: 0,
+		},
+		{
+			eventId,
+			roundId: round!.id,
+			tableNumber: 2,
+			player1Id: players[2]!.id,
+			player2Id: players[3]!.id,
+			sortOrder: 1,
+		},
 	]).returning();
 
 	const slots = featureMatchService();
@@ -138,7 +157,9 @@ function promote(stage: Stage, slotId: number, matchId: number) {
 }
 
 async function slotRow(slotId: number) {
-	return await db.query.featureMatches.findFirst({ where: (slots, { eq }) => eq(slots.id, slotId) });
+	return await db.query.featureMatches.findFirst({
+		where: (slots, { eq }) => eq(slots.id, slotId),
+	});
 }
 
 async function assignmentsOf(stage: Stage) {
@@ -217,8 +238,16 @@ describe('feature Match Slot Promotion histories that still resolve', () => {
 
 		const moved = await promote(stage, stage.slot2, stage.matchM);
 
-		expect(moved.promotedSlot).toMatchObject({ id: stage.slot2, matchId: stage.matchM, tableNumber: 1, roundName: 'Round 1', formatName: null });
-		expect(moved.clearedSlots).toEqual([expect.objectContaining({ id: stage.slot1, matchId: null })]);
+		expect(moved.promotedSlot).toMatchObject({
+			id: stage.slot2,
+			matchId: stage.matchM,
+			tableNumber: 1,
+			roundName: 'Round 1',
+			formatName: null,
+		});
+		expect(moved.clearedSlots).toEqual([
+			expect.objectContaining({ id: stage.slot1, matchId: null }),
+		]);
 		expect(moved.assignment).toMatchObject({ id: first.assignment.id, slotId: stage.slot2, note: 'Watch the sideboard' });
 
 		const slot1 = await slotRow(stage.slot1);
@@ -290,7 +319,9 @@ describe('feature Match Slot Promotion histories that still resolve', () => {
 		expect(refreshBroadcastGraphicsBindings).not.toHaveBeenCalled();
 
 		expect(mover?.promotedSlot).toMatchObject({ id: stage.slot1, matchId: stage.matchM });
-		expect(mover?.clearedSlots).toEqual([expect.objectContaining({ id: stage.slot2, matchId: null })]);
+		expect(mover?.clearedSlots).toEqual([
+			expect.objectContaining({ id: stage.slot2, matchId: null }),
+		]);
 		const slot2 = await slotRow(stage.slot2);
 		expect(slot2?.matchId).toBeNull();
 		const clearedSession = await db.query.featureMatchSessions.findFirst({
@@ -327,7 +358,10 @@ describe('feature Match Slot Promotion publication', () => {
 		const moved = await promote(stage, stage.slot2, stage.matchM);
 
 		const bySlot = (a: { id: number }, b: { id: number }) => a.id - b.id;
-		expect(moved.clearedSlots.map(slot => ({ id: slot.id })).sort(bySlot)).toEqual([{ id: stage.slot1 }, { id: slot3.id }].sort(bySlot));
+		expect(moved.clearedSlots.map(slot => ({ id: slot.id })).sort(bySlot)).toEqual([
+			{ id: stage.slot1 },
+			{ id: slot3.id },
+		].sort(bySlot));
 		expect(refreshBroadcastGraphicsBindings).toHaveBeenCalledOnce();
 		expect(refreshBroadcastGraphicsBindings).toHaveBeenCalledWith(stage.eventId);
 		const messages = published();
@@ -344,7 +378,9 @@ describe('feature Match Slot Promotion publication', () => {
 		expect(messages.slice(0, 3).map(message => message.payload.slotId).sort()).toEqual([stage.slot1, stage.slot2, slot3.id].sort());
 		expect(messages.slice(0, 3).every(message => message.payload.eventType === 'SessionStarted')).toBe(true);
 		// The promoted Slot last, carrying the Session the response answers with.
-		expect(messages[6]!.payload).toMatchObject({ featureMatch: { id: stage.slot2, matchId: stage.matchM, activeSessionId: moved.promotedSlot.activeSessionId } });
+		expect(messages[6]!.payload).toMatchObject({
+			featureMatch: { id: stage.slot2, matchId: stage.matchM, activeSessionId: moved.promotedSlot.activeSessionId },
+		});
 		// Re-resolved once everything it reads has been announced.
 		expect(refreshBroadcastGraphicsBindings.mock.invocationCallOrder[0]).toBeGreaterThan(publishMessage.mock.invocationCallOrder.at(-1)!);
 	});
@@ -364,20 +400,27 @@ describe('feature Match Slot Promotion around its batch', () => {
 
 	it('publishes the promoted players\' latest data, which the Reverse Sync applied after the commit', async () => {
 		const stage = await stageEvent();
-		const match = await db.query.matches.findFirst({ where: (matches, { eq }) => eq(matches.id, stage.matchM) });
+		const match = await db.query.matches.findFirst({
+			where: (matches, { eq }) => eq(matches.id, stage.matchM),
+		});
 		await db.update(schema.players).set({ name: 'Mia Renamed' }).where(eq(schema.players.id, match!.player1Id!));
 
 		const promoted = await promote(stage, stage.slot1, stage.matchM);
 
 		expect(promoted.promotedSlot.player1Data).toMatchObject({ name: 'Mia Renamed' });
 		expect(published().at(-1)!.payload).toMatchObject({
-			featureMatch: { id: stage.slot1, player1Data: { name: 'Mia Renamed' } },
+			featureMatch: {
+				id: stage.slot1,
+				player1Data: { name: 'Mia Renamed' },
+			},
 		});
 	});
 
 	it('publishes a committed promotion even when its Reverse Sync faults, then answers with the fault', async () => {
 		const stage = await stageEvent();
-		const match = await db.query.matches.findFirst({ where: (matches, { eq }) => eq(matches.id, stage.matchM) });
+		const match = await db.query.matches.findFirst({
+			where: (matches, { eq }) => eq(matches.id, stage.matchM),
+		});
 		await db.update(schema.players).set({ name: 'Mia Renamed' }).where(eq(schema.players.id, match!.player1Id!));
 		faultAfterNextBatch = true;
 
@@ -390,7 +433,9 @@ describe('feature Match Slot Promotion around its batch', () => {
 			'featureMatchAssignment:created',
 			'featureMatch:updated',
 		]);
-		expect(published().at(-1)!.payload).toMatchObject({ featureMatch: { id: stage.slot1, matchId: stage.matchM } });
+		expect(published().at(-1)!.payload).toMatchObject({
+			featureMatch: { id: stage.slot1, matchId: stage.matchM },
+		});
 		expect(refreshBroadcastGraphicsBindings).toHaveBeenCalledOnce();
 		expect((await slotRow(stage.slot1))?.matchId).toBe(stage.matchM);
 	});
@@ -399,7 +444,13 @@ describe('feature Match Slot Promotion around its batch', () => {
 		const stage = await stageEvent();
 		beforeNextBatch = async () => {
 			await db.insert(schema.featureMatchAssignments)
-				.values({ eventId: stage.eventId, roundId: stage.roundId, slotId: stage.slot1, matchId: stage.matchN, note: 'Feature this next' });
+				.values({
+					eventId: stage.eventId,
+					roundId: stage.roundId,
+					slotId: stage.slot1,
+					matchId: stage.matchN,
+					note: 'Feature this next',
+				});
 		};
 
 		await expect(promote(stage, stage.slot1, stage.matchM)).rejects.toMatchObject({
@@ -418,7 +469,10 @@ describe('feature Match Slot Promotion around its batch', () => {
 		const stage = await stageEvent();
 		const first = await promote(stage, stage.slot1, stage.matchN);
 		await db.update(schema.featureMatchAssignments)
-			.set({ note: null, updatedAt: new Date(Date.now() + 1000) })
+			.set({
+				note: null,
+				updatedAt: new Date(Date.now() + 1000),
+			})
 			.where(eq(schema.featureMatchAssignments.id, first.assignment.id));
 		const before = await promotionState(stage);
 		publishMessage.mockClear();
@@ -427,7 +481,12 @@ describe('feature Match Slot Promotion around its batch', () => {
 			eventId: stage.eventId,
 			slotId: stage.slot1,
 			matchId: stage.matchM,
-			confirmedNoteDiscards: [{ assignmentId: first.assignment.id, updatedAt: new Date(first.assignment.updatedAt) }],
+			confirmedNoteDiscards: [
+				{
+					assignmentId: first.assignment.id,
+					updatedAt: new Date(first.assignment.updatedAt),
+				},
+			],
 		})).rejects.toMatchObject({ statusCode: 409 });
 
 		expect(await promotionState(stage)).toEqual(before);
@@ -449,7 +508,9 @@ describe('feature Match Slot Promotion around its batch', () => {
 			eventId: stage.eventId,
 			slotId: stage.slot1,
 			matchId: stage.matchM,
-			confirmedNoteDiscards: [{ assignmentId: noted!.id, updatedAt: noted!.updatedAt }],
+			confirmedNoteDiscards: [
+				{ assignmentId: noted!.id, updatedAt: noted!.updatedAt },
+			],
 		})).rejects.toMatchObject({ statusCode: 409, name: 'StateConflictError' });
 
 		expect((await slotRow(stage.slot1))?.matchId).toBe(stage.matchN);

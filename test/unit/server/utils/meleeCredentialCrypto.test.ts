@@ -10,7 +10,9 @@ function base64Key(fill: number): string {
 	return btoa(String.fromCharCode(...new Uint8Array(32).fill(fill)));
 }
 
-function keyring(activeKeyVersion = 'v1', keys: Record<string, string> = { v1: base64Key(1) }) {
+function keyring(activeKeyVersion = 'v1', keys: Record<string, string> = {
+	v1: base64Key(1),
+}) {
 	return {
 		activeKeyVersion,
 		keys: new Map(Object.entries(keys)),
@@ -120,7 +122,9 @@ describe('melee credential crypto', () => {
 	});
 
 	it('rejects keys that are not base64-encoded 256-bit values', async () => {
-		const encryption = encryptMeleeCredential('secret', keyring('bad', { bad: btoa('too-short') }));
+		const encryption = encryptMeleeCredential('secret', keyring('bad', {
+			bad: btoa('too-short'),
+		}));
 
 		await expect(encryption).rejects.toMatchObject({ code: 'MELEE_CREDENTIAL_INVALID_KEY' });
 	});

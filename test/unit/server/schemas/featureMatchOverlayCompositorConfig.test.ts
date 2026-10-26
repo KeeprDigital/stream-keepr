@@ -21,7 +21,13 @@ function configWith(items: GraphicItemConfig[]) {
 	const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 	return {
 		...config,
-		layout: { ...config.layout, composition: { ...createFeatureMatchLayoutComposition(), items } },
+		layout: {
+			...config.layout,
+			composition: {
+				...createFeatureMatchLayoutComposition(),
+				items,
+			},
+		},
 	};
 }
 
@@ -36,7 +42,9 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		// Every layout write re-sends the whole stored layout, so a border tweak on
 		// an installation with a pre-Animation-Effect-rebuild config carries the old
 		// flat bag with it. The edit lands and the animation resets (ADR-0014).
-		const config = configWith([item('text', 'name')]);
+		const config = configWith([
+			item('text', 'name'),
+		]);
 		const parsed = featureMatchOverlayModeConfigSchema.safeParse({
 			...config,
 			layout: {
@@ -63,7 +71,9 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 	});
 
 	it('refuses a current-shape frame animation naming an effect outside the closed vocabulary', () => {
-		const config = configWith([item('text', 'name')]);
+		const config = configWith([
+			item('text', 'name'),
+		]);
 		const parsed = featureMatchOverlayModeConfigSchema.safeParse({
 			...config,
 			layout: {
@@ -96,7 +106,9 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		// shape refuses it now rather than versioning around it later.
 		const sideboard = item('deck-list', 'sideboard');
 		const parsed = featureMatchOverlayModeConfigSchema.safeParse(
-			configWith([{ ...sideboard, board: 'sideboard' } as unknown as GraphicItemConfig]),
+			configWith([
+				{ ...sideboard, board: 'sideboard' } as unknown as GraphicItemConfig,
+			]),
 		);
 
 		expect(parsed.success).toBe(false);
@@ -105,7 +117,9 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 	it('refuses a Deck List view outside the closed vocabulary', () => {
 		const sideboard = item('deck-list', 'sideboard');
 		const parsed = featureMatchOverlayModeConfigSchema.safeParse(
-			configWith([{ ...sideboard, view: 'stack' } as unknown as GraphicItemConfig]),
+			configWith([
+				{ ...sideboard, view: 'stack' } as unknown as GraphicItemConfig,
+			]),
 		);
 
 		expect(parsed.success).toBe(false);
@@ -115,22 +129,26 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		// The Host Contract says a Feature Match Overlay binds a fixed token catalogue
 		// instead of declaring inputs. Accepting the field would store declarations
 		// nothing resolves and nothing can accept — there is no Update Graphic here.
-		const config = configWith([item('text', 'name')]);
+		const config = configWith([
+			item('text', 'name'),
+		]);
 		const parsed = featureMatchOverlayModeConfigSchema.safeParse({
 			...config,
 			layout: {
 				...config.layout,
 				composition: {
 					...config.layout.composition,
-					inputs: [{
-						type: 'text',
-						key: 'name',
-						label: 'Name',
-						required: false,
-						updatePolicy: 'staged',
-						default: '',
-						maxLength: 40,
-					}],
+					inputs: [
+						{
+							type: 'text',
+							key: 'name',
+							label: 'Name',
+							required: false,
+							updatePolicy: 'staged',
+							default: '',
+							maxLength: 40,
+						},
+					],
 				},
 			},
 		});
@@ -142,7 +160,10 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		// Every authoring operation addresses an item by id alone, so a duplicate would
 		// edit, move, or delete the wrong item.
 		const parsed = featureMatchOverlayModeConfigSchema.safeParse(
-			configWith([item('text', 'name'), item('clock', 'name')]),
+			configWith([
+				item('text', 'name'),
+				item('clock', 'name'),
+			]),
 		);
 
 		expect(parsed.success).toBe(false);
@@ -151,7 +172,9 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 	it('refuses a Game Wins Item carrying the legacy border width instead of a Shape Geometry', () => {
 		const wins = item('game-wins', 'wins');
 		const parsed = featureMatchOverlayModeConfigSchema.safeParse(
-			configWith([{ ...wins, boxBorderWidth: 2 } as unknown as GraphicItemConfig]),
+			configWith([
+				{ ...wins, boxBorderWidth: 2 } as unknown as GraphicItemConfig,
+			]),
 		);
 
 		expect(parsed.success).toBe(false);
@@ -160,12 +183,16 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 	it('bounds a Player Life change animation to a duration an operator can read', () => {
 		const life = item('player-life', 'life');
 		const tooLong = featureMatchOverlayModeConfigSchema.safeParse(
-			configWith([{ ...life, lifeAnimationDurationMs: 9000 } as GraphicItemConfig]),
+			configWith([
+				{ ...life, lifeAnimationDurationMs: 9000 } as GraphicItemConfig,
+			]),
 		);
 
 		expect(tooLong.success).toBe(false);
 		expect(featureMatchOverlayModeConfigSchema.safeParse(
-			configWith([{ ...life, lifeAnimationDurationMs: 3000 } as GraphicItemConfig]),
+			configWith([
+				{ ...life, lifeAnimationDurationMs: 3000 } as GraphicItemConfig,
+			]),
 		).success).toBe(true);
 	});
 
@@ -182,7 +209,11 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		const parsed = featureMatchOverlayModeConfigSchema.safeParse(configWith([
 			{
 				...group,
-				children: [item('player-life', 'life'), item('game-wins', 'wins'), item('deck-list', 'sideboard')],
+				children: [
+					item('player-life', 'life'),
+					item('game-wins', 'wins'),
+					item('deck-list', 'sideboard'),
+				],
 			} as GraphicItemConfig,
 		]));
 
@@ -221,7 +252,9 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		// The same rule the Broadcast Graphics containers carry, on the same shared
 		// vocabulary: a stagger orders a subset of its container's own items.
 		const staggered = (ids: number) => {
-			const config = configWith([item('text', 'name')]);
+			const config = configWith([
+				item('text', 'name'),
+			]);
 			return featureMatchOverlayModeConfigSchema.safeParse({
 				...config,
 				layout: {

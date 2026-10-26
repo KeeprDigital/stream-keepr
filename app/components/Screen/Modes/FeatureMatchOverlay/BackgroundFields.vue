@@ -34,7 +34,9 @@ function updateGradient(value: string | number | undefined) {
 }
 
 function updateOpacity(value: number | null | undefined) {
-	emit('update', { opacity: Number(value ?? 0) });
+	emit('update', {
+		opacity: Number(value ?? 0),
+	});
 }
 </script>
 

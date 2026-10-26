@@ -150,7 +150,10 @@ export function featureMatchStateService() {
 			: false;
 
 		if (!playerId) {
-			return { playerId: null, data: hasSlotData ? data : null };
+			return {
+				playerId: null,
+				data: hasSlotData ? data : null,
+			};
 		}
 
 		const player = preloadedPlayers
@@ -160,16 +163,24 @@ export function featureMatchStateService() {
 				});
 
 		if (!player) {
-			return { playerId, data: hasSlotData ? data : null };
+			return {
+				playerId,
+				data: hasSlotData ? data : null,
+			};
 		}
 
 		const playerData = playerToSnapshotData(player);
-		const overrides = data ? compactSnapshotOverrides(data) : {};
+		const overrides = data
+			? compactSnapshotOverrides(data)
+			: {};
 
 		return {
 			playerId,
 			data: hasSlotData
-				? { ...playerData, ...overrides }
+				? {
+						...playerData,
+						...overrides,
+					}
 				: playerData,
 		};
 	};
@@ -249,7 +260,9 @@ export function featureMatchStateService() {
 			),
 			// Announcements follow this order, so it is Slot order by contract
 			// rather than whichever plan the lookup happens to get.
-			orderBy: [asc(featureMatchSessions.slotId)],
+			orderBy: [
+				asc(featureMatchSessions.slotId),
+			],
 		});
 	};
 
@@ -392,7 +405,11 @@ export function featureMatchStateService() {
 			};
 		}));
 		return await sessionEpochs.replace(
-			{ eventId, slotIds: slots.map(slot => slot.id), slotCondition: options.slotCondition },
+			{
+				eventId,
+				slotIds: slots.map(slot => slot.id),
+				slotCondition: options.slotCondition,
+			},
 			openings,
 		);
 	};
@@ -429,7 +446,10 @@ export function featureMatchStateService() {
 		const replacement = await buildSessionReplacement(eventId, slots, { defaults: options.defaults });
 		await sessionEpochs.commit(replacement, { originConnectionId: options.originConnectionId });
 
-		const active = await findActiveSessions({ eventId, slotIds: slots.map(slot => slot.id) });
+		const active = await findActiveSessions({
+			eventId,
+			slotIds: slots.map(slot => slot.id),
+		});
 		if (active.length < slots.length)
 			throw new Error('Failed to create feature match session');
 		return new Map(active.map(session => [session.slotId, session]));
@@ -494,7 +514,9 @@ export function featureMatchStateService() {
 				throw createError({
 					statusCode: 409,
 					message: 'Feature match session has advanced',
-					data: { session: mapFeatureMatchSessionToResponse(session) },
+					data: {
+						session: mapFeatureMatchSessionToResponse(session),
+					},
 				});
 			}
 		},

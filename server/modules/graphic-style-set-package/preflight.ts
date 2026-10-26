@@ -111,7 +111,9 @@ export interface GraphicStyleSetPackagePreflightOutcome {
 }
 
 function issueOrder(issue: GraphicStyleSetPackagePreflightIssue) {
-	return `${issue.severity === 'error' ? '0' : '1'} ${issue.subject ?? ''} ${issue.code}`;
+	return `${issue.severity === 'error'
+		? '0'
+		: '1'} ${issue.subject ?? ''} ${issue.code}`;
 }
 
 /**
@@ -422,7 +424,9 @@ export async function graphicStyleSetPackagePreflight(
 		const problems = parsed.error.issues;
 		for (const problem of problems.slice(0, MAXIMUM_REPORTED_SCHEMA_ISSUES)) {
 			issues.push(graphicStyleSetPackageIssue('invalid-graphic-style-set-document', {
-				subject: problem.path.length > 0 ? problem.path.join('.') : undefined,
+				subject: problem.path.length > 0
+					? problem.path.join('.')
+					: undefined,
 				message: problem.message,
 			}));
 		}
@@ -481,7 +485,9 @@ export async function graphicStyleSetPackagePreflight(
 	if (publishIssues.length > 0) {
 		issues.push(graphicStyleSetPackageIssue('graphic-style-set-unpublishable', {
 			message: `The packaged Graphic Style Set has ${publishIssues.length} ${
-				publishIssues.length === 1 ? 'entry that does not' : 'entries that do not'
+				publishIssues.length === 1
+					? 'entry that does not'
+					: 'entries that do not'
 			} resolve on this installation`,
 		}));
 	}
@@ -502,7 +508,9 @@ export async function graphicStyleSetPackagePreflight(
 	// deliberately not decided here: preflight is a pure read, and a report that named
 	// an identity would name a different one on every retry and never keep a
 	// confirmation valid.
-	targetStyleSetId = disposition === 'install-independent-copy' ? undefined : snapshot.id;
+	targetStyleSetId = disposition === 'install-independent-copy'
+		? undefined
+		: snapshot.id;
 
 	if (disposition === 'update-installed') {
 		affectedTemplates = await input.findLinkedTemplates(snapshot.id, snapshot.entries);

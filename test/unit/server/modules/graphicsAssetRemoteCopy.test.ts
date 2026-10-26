@@ -143,7 +143,9 @@ function createRemoteHost(options: {
 					...(hop.contentLength === null
 						? {}
 						: { 'content-length': hop.contentLength ?? String(payload.byteLength) }),
-					...(hop.contentType ? { 'content-type': hop.contentType } : {}),
+					...(hop.contentType
+						? { 'content-type': hop.contentType }
+						: {}),
 				},
 			});
 		},
@@ -169,7 +171,13 @@ function createLibrary(
 		generateIdentity: () => `identity-${++nextIdentity}`,
 		now: () => new Date('2026-07-30T04:00:00.000Z'),
 	});
-	return { library, staging, canonical, catalogue, remote };
+	return {
+		library,
+		staging,
+		canonical,
+		catalogue,
+		remote,
+	};
 }
 
 /**
@@ -221,7 +229,14 @@ async function strandRemoteCopyMultipartUpload(idempotencyKey: string) {
 		initiatedBy: operation.initiatedBy,
 		sourceUrl: 'https://cdn.example.test/scoreboard.png',
 	});
-	return { library, catalogue, staging, operation, failed, uploadId };
+	return {
+		library,
+		catalogue,
+		staging,
+		operation,
+		failed,
+		uploadId,
+	};
 }
 
 describe('approved remote HTTPS copy through the Graphics Asset Library public module', () => {
@@ -280,7 +295,10 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		expect(completed).toMatchObject({
 			stage: 'completed',
 			result: { outcome: 'published' },
-			report: { outcome: 'accepted', facts: { browserDecodable: true } },
+			report: {
+				outcome: 'accepted',
+				facts: { browserDecodable: true },
+			},
 		});
 
 		const assets = await library.listGraphicAssets({});
@@ -366,7 +384,12 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			stage: 'failed',
 			transferredByteLength: 0,
 			failure: { code: 'remote-source-rejected', retryable: false },
-			report: { outcome: 'rejected', issues: [{ code }] },
+			report: {
+				outcome: 'rejected',
+				issues: [
+					{ code },
+				],
+			},
 		});
 		expect(remote.requests).toEqual([]);
 		await expect(library.listGraphicAssets({})).resolves.toEqual([]);
@@ -405,7 +428,9 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		label,
 	}) => {
 		const { library, remote } = createLibrary({
-			addresses: { 'cdn.example.test': [...addresses] },
+			addresses: {
+				'cdn.example.test': [...addresses],
+			},
 		});
 		const operation = await library.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: `remote-dns-${label}`,
@@ -425,14 +450,18 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			failure: { code: 'remote-source-rejected', retryable: false },
 			report: {
 				outcome: 'rejected',
-				issues: [{ code: 'remote-source-destination-not-public' }],
+				issues: [
+					{ code: 'remote-source-destination-not-public' },
+				],
 			},
 		});
 		expect(remote.requests).toEqual([]);
 	});
 
 	it('rejects a hostname with no public DNS result', async () => {
-		const { library } = createLibrary({ unresolvable: ['cdn.example.test'] });
+		const { library } = createLibrary({
+			unresolvable: ['cdn.example.test'],
+		});
 		const operation = await library.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-nxdomain',
 			initiatedBy: 'graphics-author-1',
@@ -448,7 +477,9 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			stage: 'failed',
 			report: {
 				outcome: 'rejected',
-				issues: [{ code: 'remote-source-destination-not-public' }],
+				issues: [
+					{ code: 'remote-source-destination-not-public' },
+				],
 			},
 		});
 	});
@@ -489,7 +520,9 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			failure: { code: 'remote-source-rejected', retryable: false },
 			report: {
 				outcome: 'rejected',
-				issues: [{ code: 'remote-source-destination-not-public' }],
+				issues: [
+					{ code: 'remote-source-destination-not-public' },
+				],
 			},
 		});
 		expect(remote.requests.map(request => request.url)).toEqual([
@@ -526,7 +559,9 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			stage: 'failed',
 			report: {
 				outcome: 'rejected',
-				issues: [{ code: 'remote-source-not-https' }],
+				issues: [
+					{ code: 'remote-source-not-https' },
+				],
 			},
 		});
 	});
@@ -558,7 +593,9 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			stage: 'failed',
 			report: {
 				outcome: 'rejected',
-				issues: [{ code: 'remote-source-redirect-limit-exceeded' }],
+				issues: [
+					{ code: 'remote-source-redirect-limit-exceeded' },
+				],
 			},
 		});
 		expect(remote.requests.map(request => request.url)).toEqual([
@@ -664,12 +701,16 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	it.each([
 		{
 			label: 'a length above the still-image limit',
-			hop: { contentLength: String(26 * 1024 * 1024) },
+			hop: {
+				contentLength: String(26 * 1024 * 1024),
+			},
 			code: 'remote-source-length-exceeded',
 		},
 		{
 			label: 'fewer bytes than it declared',
-			hop: { contentLength: String(transparentPixelPng.byteLength + 5) },
+			hop: {
+				contentLength: String(transparentPixelPng.byteLength + 5),
+			},
 			code: 'remote-source-length-mismatch',
 		},
 	] as const)('rejects a remote source that returns $label', async ({ hop, code }) => {
@@ -697,7 +738,12 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		expect(failed).toMatchObject({
 			stage: 'failed',
 			failure: { code: 'remote-source-rejected', retryable: false },
-			report: { outcome: 'rejected', issues: [{ code }] },
+			report: {
+				outcome: 'rejected',
+				issues: [
+					{ code },
+				],
+			},
 		});
 		// A reported byte count must name the length the source actually declared.
 		const reported = failed.report?.outcome === 'rejected'
@@ -777,7 +823,9 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			failure: { code: 'remote-source-rejected', retryable: false },
 			report: {
 				outcome: 'rejected',
-				issues: [{ code: 'remote-source-length-exceeded' }],
+				issues: [
+					{ code: 'remote-source-length-exceeded' },
+				],
 			},
 		});
 		await expect(
@@ -809,7 +857,9 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			stage: 'failed',
 			report: {
 				outcome: 'rejected',
-				issues: [{ code: 'remote-source-not-retrievable' }],
+				issues: [
+					{ code: 'remote-source-not-retrievable' },
+				],
 			},
 		});
 	});
@@ -1202,7 +1252,9 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			failure: { code: 'remote-source-rejected', retryable: false },
 			report: {
 				outcome: 'rejected',
-				issues: [{ code: 'remote-source-not-retrievable' }],
+				issues: [
+					{ code: 'remote-source-not-retrievable' },
+				],
 			},
 		});
 	});

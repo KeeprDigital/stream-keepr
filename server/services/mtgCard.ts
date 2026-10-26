@@ -21,7 +21,9 @@ export function mtgCardService() {
 		for (const input of inputs) {
 			dedupedMap.set(input.name.toLowerCase(), input);
 		}
-		const deduped = [...dedupedMap.values()];
+		const deduped = [
+			...dedupedMap.values(),
+		];
 		const writeAt = new Date();
 		const writeAtMs = writeAt.getTime();
 		const updateFields = [
@@ -36,23 +38,59 @@ export function mtgCardService() {
 		] as const;
 		const grouped = new Map<string, UpsertCardInput[]>();
 		for (const input of deduped) {
-			const mask = updateFields.map(field => input[field] != null ? '1' : '0').join('');
+			const mask = updateFields.map(field => input[field] != null
+				? '1'
+				: '0').join('');
 			const rows = grouped.get(mask) ?? [];
 			rows.push(input);
 			grouped.set(mask, rows);
 		}
 
-		const queries = [...grouped.values()].flatMap((group) => {
+		const queries = [
+			...grouped.values(),
+		].flatMap((group) => {
 			const example = group[0]!;
 			const set = {
-				...(example.scryfallId != null ? { scryfallId: sql.raw('excluded.scryfall_id') } : {}),
-				...(example.oracleId != null ? { oracleId: sql.raw('excluded.oracle_id') } : {}),
-				...(example.cardType != null ? { cardType: sql.raw('excluded.card_type') } : {}),
-				...(example.colors != null ? { colors: sql.raw('excluded.colors') } : {}),
-				...(example.cmc != null ? { cmc: sql.raw('excluded.cmc') } : {}),
-				...(example.manaCost != null ? { manaCost: sql.raw('excluded.mana_cost') } : {}),
-				...(example.deckCounterTypes != null ? { deckCounterTypes: sql.raw('excluded.deck_counter_types') } : {}),
-				...(example.deckTokens != null ? { deckTokens: sql.raw('excluded.deck_tokens') } : {}),
+				...(example.scryfallId != null
+					? {
+							scryfallId: sql.raw('excluded.scryfall_id'),
+						}
+					: {}),
+				...(example.oracleId != null
+					? {
+							oracleId: sql.raw('excluded.oracle_id'),
+						}
+					: {}),
+				...(example.cardType != null
+					? {
+							cardType: sql.raw('excluded.card_type'),
+						}
+					: {}),
+				...(example.colors != null
+					? {
+							colors: sql.raw('excluded.colors'),
+						}
+					: {}),
+				...(example.cmc != null
+					? {
+							cmc: sql.raw('excluded.cmc'),
+						}
+					: {}),
+				...(example.manaCost != null
+					? {
+							manaCost: sql.raw('excluded.mana_cost'),
+						}
+					: {}),
+				...(example.deckCounterTypes != null
+					? {
+							deckCounterTypes: sql.raw('excluded.deck_counter_types'),
+						}
+					: {}),
+				...(example.deckTokens != null
+					? {
+							deckTokens: sql.raw('excluded.deck_tokens'),
+						}
+					: {}),
 				updatedAt: writeAt,
 			};
 			return chunkJsonRows(group.map(input => ({ ...input, game: input.game ?? 'mtg' }))).map(payload => db

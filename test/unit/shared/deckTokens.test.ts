@@ -6,8 +6,20 @@ describe('deck token derivation', () => {
 		expect(deriveDeckTokensFromScryfallCard({
 			all_parts: [
 				{ id: 'source', component: 'combo_piece', name: 'Source Card' },
-				{ id: 'treasure-token', component: 'token', name: 'Treasure Token', type_line: 'Token Artifact — Treasure', uri: 'https://api.scryfall.com/cards/treasure-token' },
-				{ id: 'soldier-token', component: 'token', name: 'Soldier Token', type_line: 'Token Creature — Soldier', uri: 'https://api.scryfall.com/cards/soldier-token' },
+				{
+					id: 'treasure-token',
+					component: 'token',
+					name: 'Treasure Token',
+					type_line: 'Token Artifact — Treasure',
+					uri: 'https://api.scryfall.com/cards/treasure-token',
+				},
+				{
+					id: 'soldier-token',
+					component: 'token',
+					name: 'Soldier Token',
+					type_line: 'Token Creature — Soldier',
+					uri: 'https://api.scryfall.com/cards/soldier-token',
+				},
 			],
 		})).toEqual([
 			{
@@ -29,12 +41,42 @@ describe('deck token derivation', () => {
 
 	it('deduplicates tokens by name', () => {
 		expect(uniqueDeckTokens([
-			{ id: 'treasure-a', scryfallId: 'treasure-a', name: 'Treasure Token', typeLine: 'Token Artifact — Treasure', uri: null },
-			{ id: 'treasure-b', scryfallId: 'treasure-b', name: 'Treasure Token', typeLine: 'Token Artifact — Treasure', uri: null },
-			{ id: 'clue', scryfallId: 'clue', name: 'Clue Token', typeLine: 'Token Artifact — Clue', uri: null },
+			{
+				id: 'treasure-a',
+				scryfallId: 'treasure-a',
+				name: 'Treasure Token',
+				typeLine: 'Token Artifact — Treasure',
+				uri: null,
+			},
+			{
+				id: 'treasure-b',
+				scryfallId: 'treasure-b',
+				name: 'Treasure Token',
+				typeLine: 'Token Artifact — Treasure',
+				uri: null,
+			},
+			{
+				id: 'clue',
+				scryfallId: 'clue',
+				name: 'Clue Token',
+				typeLine: 'Token Artifact — Clue',
+				uri: null,
+			},
 		])).toEqual([
-			{ id: 'clue', scryfallId: 'clue', name: 'Clue Token', typeLine: 'Token Artifact — Clue', uri: null },
-			{ id: 'treasure-a', scryfallId: 'treasure-a', name: 'Treasure Token', typeLine: 'Token Artifact — Treasure', uri: null },
+			{
+				id: 'clue',
+				scryfallId: 'clue',
+				name: 'Clue Token',
+				typeLine: 'Token Artifact — Clue',
+				uri: null,
+			},
+			{
+				id: 'treasure-a',
+				scryfallId: 'treasure-a',
+				name: 'Treasure Token',
+				typeLine: 'Token Artifact — Treasure',
+				uri: null,
+			},
 		]);
 	});
 });

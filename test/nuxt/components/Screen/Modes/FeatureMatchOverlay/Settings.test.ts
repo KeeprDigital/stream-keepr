@@ -22,7 +22,9 @@ const mockUpdateScreenConfig = vi.fn((patch: Record<string, unknown>) => {
 		...patch,
 	};
 });
-const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+const { mockApiFetch } = vi.hoisted(() => ({
+	mockApiFetch: vi.fn(),
+}));
 
 const mockFeatureMatchStore = {
 	loadFeatureMatchesByEventId: vi.fn().mockResolvedValue(undefined),
@@ -42,8 +44,15 @@ const mockScreenStore = {
 /** A remote Screen update as the store applies it: listeners run, then the store changes, then `after`. */
 function applyRemoteUpdate(screenId: number, change: () => void) {
 	const afters: Array<() => void> = [];
-	for (const listener of [...actionListeners])
-		listener({ name: 'applyRemoteUpdated', args: [{ eventId: 1, screenId }], after: callback => afters.push(callback) });
+	for (const listener of [...actionListeners]) {
+		listener({
+			name: 'applyRemoteUpdated',
+			args: [
+				{ eventId: 1, screenId },
+			],
+			after: callback => afters.push(callback),
+		});
+	}
 	change();
 	for (const callback of afters)
 		callback();
@@ -121,7 +130,9 @@ const PreviewOutputAsideStub = defineComponent({
 });
 
 const UModalStub = defineComponent({
-	props: { open: { type: Boolean, required: false } },
+	props: {
+		open: { type: Boolean, required: false },
+	},
 	template: '<div v-if="open" data-testid="modal"><slot name="content" /></div>',
 });
 
@@ -146,7 +157,9 @@ const UFieldGroupStub = defineComponent({
 });
 
 const UButtonStub = defineComponent({
-	props: { disabled: { type: Boolean, required: false } },
+	props: {
+		disabled: { type: Boolean, required: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
@@ -203,7 +216,12 @@ function preview(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
 }
 
 async function press(key: string, init: KeyboardEventInit = {}) {
-	window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
+	window.dispatchEvent(new KeyboardEvent('keydown', {
+		key,
+		bubbles: true,
+		cancelable: true,
+		...init,
+	}));
 	await nextTick();
 }
 
@@ -337,7 +355,12 @@ describe('featureMatchOverlaySettings', () => {
 			await nextTick();
 
 			expect(JSON.parse(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-frame')!)).toEqual({
-				rect: { x: source.x, y: source.y, width: source.width, height: source.height },
+				rect: {
+					x: source.x,
+					y: source.y,
+					width: source.width,
+					height: source.height,
+				},
 				origin: { x: 0, y: 0 },
 			});
 		});
@@ -350,7 +373,10 @@ describe('featureMatchOverlaySettings', () => {
 			await nextTick();
 			mockConfig.value = {
 				...mockConfig.value,
-				layout: { ...mockConfig.value.layout, sources: mockConfig.value.layout.sources.filter(item => item.id !== 'main-source') },
+				layout: {
+					...mockConfig.value.layout,
+					sources: mockConfig.value.layout.sources.filter(item => item.id !== 'main-source'),
+				},
 			};
 			await nextTick();
 
@@ -474,7 +500,13 @@ describe('featureMatchOverlaySettings', () => {
 			expect(wrapper.get('[data-testid="layout-undo"]').attributes('disabled')).toBeUndefined();
 
 			applyRemoteUpdate(1, () => {
-				mockConfig.value = { ...mockConfig.value, layout: { ...mockConfig.value.layout, frame: { ...mockConfig.value.layout.frame, backgroundColor: '#ff0000' } } };
+				mockConfig.value = {
+					...mockConfig.value,
+					layout: {
+						...mockConfig.value.layout,
+						frame: { ...mockConfig.value.layout.frame, backgroundColor: '#ff0000' },
+					},
+				};
 			});
 			await nextTick();
 
@@ -489,7 +521,10 @@ describe('featureMatchOverlaySettings', () => {
 
 			applyRemoteUpdate(1, () => {});
 			applyRemoteUpdate(2, () => {
-				mockConfig.value = { ...mockConfig.value, layout: { ...mockConfig.value.layout, sources: [] } };
+				mockConfig.value = {
+					...mockConfig.value,
+					layout: { ...mockConfig.value.layout, sources: [] },
+				};
 			});
 			await nextTick();
 

@@ -59,13 +59,20 @@ const mockPresence = ref<Array<{ data?: { assetAccess?: 'granted' | 'absent' } }
 
 mockNuxtImport('useScreenStore', () => () => ({
 	get screenPresence() {
-		return new Map([[3, { count: mockPresence.value.length, members: mockPresence.value }]]);
+		return new Map([
+			[
+				3,
+				{ count: mockPresence.value.length, members: mockPresence.value },
+			],
+		]);
 	},
 }));
 
 /** What the Screen Output Asset Capability endpoint issues, if anything. */
 const mockCapabilityResponse = ref<string | null>('program-capability');
-const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+const { mockApiFetch } = vi.hoisted(() => ({
+	mockApiFetch: vi.fn(),
+}));
 
 mockNuxtImport('$fetch', () => mockApiFetch);
 
@@ -77,7 +84,10 @@ mockNuxtImport('useCopyToClipboard', () => () => ({ copyToClipboard: mockCopyToC
 mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
 
 const UAlertStub = defineComponent({
-	props: { title: { type: String, required: false }, description: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+		description: { type: String, required: false },
+	},
 	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span></div>',
 });
 
@@ -93,13 +103,21 @@ const ScreenSettingsCardStub = defineComponent({
 const UFieldGroupStub = defineComponent({ template: '<div><slot /></div>' });
 const USelectStub = defineComponent({
 	name: 'USelect',
-	props: { modelValue: { type: String, required: false }, items: { type: Array, default: () => [] } },
+	props: {
+		modelValue: { type: String, required: false },
+		items: {
+			type: Array,
+			default: () => [],
+		},
+	},
 	emits: ['update:modelValue'],
 	template: '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items" :key="item.value" :value="item.value">{{ item.label }}</option></select>',
 });
 const UButtonStub = defineComponent({
 	name: 'UButton',
-	props: { disabled: { type: Boolean, default: false } },
+	props: {
+		disabled: { type: Boolean, default: false },
+	},
 	emits: ['click'],
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
@@ -306,28 +324,34 @@ describe('broadcastGraphicsProgramMonitor', () => {
 		const branded: BroadcastGraphicConfig = {
 			id: 'branded',
 			name: 'Branded slate',
-			items: [{
-				type: 'media',
-				id: 'wordmark',
-				label: 'Wordmark',
-				visible: true,
-				anchor: 'top-left',
-				x: 0,
-				y: 0,
-				width: 480,
-				height: 270,
-				asset: { assetId: 'brand-asset' as never, revisionId: 'brand-revision-2' as never },
-				mediaKind: 'image',
-				fit: 'contain',
-				focalPosition: { horizontal: 0.5, vertical: 0.5 },
-				opacity: 1,
-				playbackRate: 1,
-				loop: false,
-			}],
+			items: [
+				{
+					type: 'media',
+					id: 'wordmark',
+					label: 'Wordmark',
+					visible: true,
+					anchor: 'top-left',
+					x: 0,
+					y: 0,
+					width: 480,
+					height: 270,
+					asset: { assetId: 'brand-asset' as never, revisionId: 'brand-revision-2' as never },
+					mediaKind: 'image',
+					fit: 'contain',
+					focalPosition: { horizontal: 0.5, vertical: 0.5 },
+					opacity: 1,
+					playbackRate: 1,
+					loop: false,
+				},
+			],
 		};
 
 		it('names an output that reported it cannot', async () => {
-			mockPresence.value = [{ data: { assetAccess: 'absent' } }];
+			mockPresence.value = [
+				{
+					data: { assetAccess: 'absent' },
+				},
+			];
 
 			const wrapper = await mountComponent([branded]);
 
@@ -341,7 +365,11 @@ describe('broadcastGraphicsProgramMonitor', () => {
 		 * warning that matters.
 		 */
 		it('says nothing when the Screen publishes no media', async () => {
-			mockPresence.value = [{ data: { assetAccess: 'absent' } }];
+			mockPresence.value = [
+				{
+					data: { assetAccess: 'absent' },
+				},
+			];
 
 			const wrapper = await mountComponent([lowerThird]);
 
@@ -353,7 +381,10 @@ describe('broadcastGraphicsProgramMonitor', () => {
 		 * lacking it, and a silence is not a fault to put in front of an operator.
 		 */
 		it('says nothing about an output that reported nothing', async () => {
-			mockPresence.value = [{ data: {} }, {}];
+			mockPresence.value = [
+				{ data: {} },
+				{},
+			];
 
 			const wrapper = await mountComponent([branded]);
 
@@ -361,7 +392,11 @@ describe('broadcastGraphicsProgramMonitor', () => {
 		});
 
 		it('says nothing when every open output holds its capability', async () => {
-			mockPresence.value = [{ data: { assetAccess: 'granted' } }];
+			mockPresence.value = [
+				{
+					data: { assetAccess: 'granted' },
+				},
+			];
 
 			const wrapper = await mountComponent([branded]);
 
@@ -381,26 +416,34 @@ describe('broadcastGraphicsProgramMonitor', () => {
 				id: 'promo',
 				name: 'Promo',
 				items: [],
-				inputs: [{
-					type: 'media',
-					key: 'backdrop',
-					label: 'Backdrop',
-					required: false,
-					updatePolicy: 'staged',
-					mediaKind: 'image',
-					default: null,
-				}],
+				inputs: [
+					{
+						type: 'media',
+						key: 'backdrop',
+						label: 'Backdrop',
+						required: false,
+						updatePolicy: 'staged',
+						mediaKind: 'image',
+						default: null,
+					},
+				],
 			};
 
 			function accepted(value: Record<string, unknown>) {
 				return {
 					playout: {},
-					inputs: { promo: { working: {}, accepted: value, acceptedRevision: 1 } },
+					inputs: {
+						promo: { working: {}, accepted: value, acceptedRevision: 1 },
+					},
 				} as unknown as BroadcastGraphicsLiveState;
 			}
 
 			it('warns about an output that cannot resolve a value the operator chose live', async () => {
-				mockPresence.value = [{ data: { assetAccess: 'absent' } }];
+				mockPresence.value = [
+					{
+						data: { assetAccess: 'absent' },
+					},
+				];
 				mockLiveState.value = accepted({
 					backdrop: { assetId: 'chosen-asset', revisionId: 'chosen-revision-1' },
 				});
@@ -418,7 +461,11 @@ describe('broadcastGraphicsProgramMonitor', () => {
 			 * showing program exactly.
 			 */
 			it('says nothing about a declared media Graphic Input with no accepted value', async () => {
-				mockPresence.value = [{ data: { assetAccess: 'absent' } }];
+				mockPresence.value = [
+					{
+						data: { assetAccess: 'absent' },
+					},
+				];
 				mockLiveState.value = accepted({});
 
 				const wrapper = await mountComponent([runtimeChosen]);
@@ -427,30 +474,40 @@ describe('broadcastGraphicsProgramMonitor', () => {
 			});
 
 			it('says nothing about a non-media Graphic Input, whatever its accepted value holds', async () => {
-				mockPresence.value = [{ data: { assetAccess: 'absent' } }];
+				mockPresence.value = [
+					{
+						data: { assetAccess: 'absent' },
+					},
+				];
 				mockLiveState.value = {
 					playout: {},
 					inputs: {
 						promo: {
 							working: {},
-							accepted: { title: { assetId: 'chosen-asset', revisionId: 'chosen-revision-1' } },
+							accepted: {
+								title: { assetId: 'chosen-asset', revisionId: 'chosen-revision-1' },
+							},
 							acceptedRevision: 1,
 						},
 					},
 				} as unknown as BroadcastGraphicsLiveState;
 
-				const wrapper = await mountComponent([{
-					...runtimeChosen,
-					inputs: [{
-						type: 'text',
-						key: 'title',
-						label: 'Title',
-						required: false,
-						updatePolicy: 'staged',
-						default: '',
-						maxLength: 40,
-					}],
-				}]);
+				const wrapper = await mountComponent([
+					{
+						...runtimeChosen,
+						inputs: [
+							{
+								type: 'text',
+								key: 'title',
+								label: 'Title',
+								required: false,
+								updatePolicy: 'staged',
+								default: '',
+								maxLength: 40,
+							},
+						],
+					},
+				]);
 
 				expect(wrapper.find('[data-testid="outputs-without-asset-access"]').exists()).toBe(false);
 			});
@@ -468,7 +525,11 @@ describe('broadcastGraphicsProgramMonitor', () => {
 		function stubOutputWindows() {
 			const opened: Array<{ opener: unknown; location: { href: string }; close: () => void }> = [];
 			vi.stubGlobal('open', vi.fn(() => {
-				const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+				const outputWindow = {
+					opener: {} as unknown,
+					location: { href: '' },
+					close: vi.fn(),
+				};
 				opened.push(outputWindow);
 				return outputWindow;
 			}));
@@ -584,7 +645,11 @@ describe('broadcastGraphicsProgramMonitor', () => {
 
 		/** Rotated between mount and the click here too, for the same reason. */
 		it('opens the output in a tab it points only once asset access is in hand', async () => {
-			const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+			const outputWindow = {
+				opener: {} as unknown,
+				location: { href: '' },
+				close: vi.fn(),
+			};
 			vi.stubGlobal('open', vi.fn(() => outputWindow));
 			const wrapper = await mountComponent();
 			mockCapabilityResponse.value = 'rotated-capability';
@@ -603,7 +668,11 @@ describe('broadcastGraphicsProgramMonitor', () => {
 
 		it('opens no output, and says why, when asset access cannot be obtained', async () => {
 			mockCapabilityResponse.value = null;
-			const outputWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+			const outputWindow = {
+				opener: {} as unknown,
+				location: { href: '' },
+				close: vi.fn(),
+			};
 			vi.stubGlobal('open', vi.fn(() => outputWindow));
 			const wrapper = await mountComponent();
 

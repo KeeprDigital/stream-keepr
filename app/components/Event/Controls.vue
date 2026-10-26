@@ -105,7 +105,9 @@ async function handleCreateCommentator(name: string, commentatorNumber: 1 | 2) {
 
 	const existing = findTalentNamed(trimmedName);
 	if (existing) {
-		const otherNumber = commentatorNumber === 1 ? 2 : 1;
+		const otherNumber = commentatorNumber === 1
+			? 2
+			: 1;
 		const otherId = commentatorFormData.value[`commentator${otherNumber}TalentId`];
 		const other = event.value.talents.find(talent => talent.id === otherId);
 

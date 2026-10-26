@@ -30,7 +30,9 @@ const mockEventStore = reactive({
 	addTalent: vi.fn(),
 });
 
-const mockToast = { add: vi.fn() };
+const mockToast = {
+	add: vi.fn(),
+};
 
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useToast', () => () => mockToast);
@@ -39,32 +41,44 @@ mockNuxtImport('useToast', () => () => mockToast);
 // What it does with them is its own composable's test; here they only have to
 // exist so a test can mount this component the way its page does.
 mockNuxtImport('useOverlay', () => () => ({
-	create: () => ({ open: () => ({ result: Promise.resolve(true) }) }),
+	create: () => ({
+		open: () => ({
+			result: Promise.resolve(true),
+		}),
+	}),
 }));
 mockNuxtImport('onBeforeRouteLeave', () => () => {});
 
 const UFormStub = defineComponent({
 	name: 'UForm',
-	props: { state: { type: Object, required: true } },
+	props: {
+		state: { type: Object, required: true },
+	},
 	emits: ['submit'],
 	template: '<form :data-fields="Object.keys(state).join(\' \')" @submit.prevent="$emit(\'submit\')"><slot /></form>',
 });
 
 const UCardStub = defineComponent({
 	name: 'UCard',
-	props: { title: { type: String, required: false } },
+	props: {
+		title: { type: String, required: false },
+	},
 	template: '<section><slot name="header" /><slot /><slot name="footer" /></section>',
 });
 
 const UFormFieldStub = defineComponent({
 	name: 'UFormField',
-	props: { name: { type: String, required: false } },
+	props: {
+		name: { type: String, required: false },
+	},
 	template: '<label :data-field="name"><slot /></label>',
 });
 
 const UTextareaStub = defineComponent({
 	name: 'UTextarea',
-	props: { modelValue: { type: String, required: false } },
+	props: {
+		modelValue: { type: String, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<textarea :value="modelValue" />',
 });
@@ -73,7 +87,10 @@ const USelectMenuStub = defineComponent({
 	name: 'USelectMenu',
 	props: {
 		modelValue: { type: Number, required: false },
-		items: { type: Array, default: () => [] },
+		items: {
+			type: Array,
+			default: () => [],
+		},
 	},
 	emits: ['update:modelValue', 'create'],
 	template: '<select :value="modelValue" />',
@@ -108,7 +125,10 @@ const stubs = {
 
 // A detached button has no activation behaviour, so pressing a submit button
 // only submits its form once the tree is in the document.
-const mountOptions = { attachTo: document.body, global: { stubs } };
+const mountOptions = {
+	attachTo: document.body,
+	global: { stubs },
+};
 
 enableAutoUnmount(afterEach);
 
@@ -206,8 +226,14 @@ describe('event controls', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		expect(commentatorField(wrapper, 1).props('items')).toEqual([{ label: 'Alice', value: ALICE.id }, { label: 'Caspar', value: CASPAR.id }]);
-		expect(commentatorField(wrapper, 2).props('items')).toEqual([{ label: 'Briony', value: BRIONY.id }, { label: 'Caspar', value: CASPAR.id }]);
+		expect(commentatorField(wrapper, 1).props('items')).toEqual([
+			{ label: 'Alice', value: ALICE.id },
+			{ label: 'Caspar', value: CASPAR.id },
+		]);
+		expect(commentatorField(wrapper, 2).props('items')).toEqual([
+			{ label: 'Briony', value: BRIONY.id },
+			{ label: 'Caspar', value: CASPAR.id },
+		]);
 	});
 
 	// Two talents whose names differ only in case are two rows in the database and
@@ -223,7 +249,9 @@ describe('event controls', () => {
 		await flushPromises();
 
 		expect(commentatorField(wrapper, 1).props('modelValue')).toBe(ALICE.id);
-		expect(commentatorField(wrapper, 2).props('items')).toEqual([{ label: 'Caspar', value: CASPAR.id }]);
+		expect(commentatorField(wrapper, 2).props('items')).toEqual([
+			{ label: 'Caspar', value: CASPAR.id },
+		]);
 		expect(commentatorField(wrapper, 1).props('items')).toHaveLength(3);
 	});
 
@@ -327,7 +355,10 @@ describe('event controls', () => {
 		await flushPromises();
 
 		await commentatorField(wrapper, 1).setValue(CASPAR.id);
-		mockEventStore.event = { ...loadedEvent({ commentator2TalentId: DANA.id }), talents: [CASPAR, ALICE, BRIONY, DANA] };
+		mockEventStore.event = {
+			...loadedEvent({ commentator2TalentId: DANA.id }),
+			talents: [CASPAR, ALICE, BRIONY, DANA],
+		};
 		await flushPromises();
 
 		expect(commentatorField(wrapper, 2).props('modelValue')).toBe(DANA.id);

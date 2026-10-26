@@ -40,7 +40,15 @@ export function projectArchetypeSpotlight(
 		convertedCount: detail.convertedCount,
 		conversionRate: detail.conversionRate,
 		pilots: detail.players
-			.map(({ id, name, position, points, wins, losses, draws }) => ({ id, name, position, points, wins, losses, draws }))
+			.map(({ id, name, position, points, wins, losses, draws }) => ({
+				id,
+				name,
+				position,
+				points,
+				wins,
+				losses,
+				draws,
+			}))
 			.sort(byPosition),
 		topCards: detail.cardBreakdown
 			.filter(entry => includesCardType(entry.cardType))

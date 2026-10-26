@@ -51,7 +51,9 @@ export interface ScreenOutputRead {
 export async function requireScreenOutputRead(event: H3Event): Promise<ScreenOutputRead> {
 	const { id: eventId, screenId } = await getValidatedRouterParams(event, screenOutputReadParamsSchema.parse);
 	const screen = await screenService().findById(screenId, eventId);
-	const reader = screen ? await screenOutputReader(event, screen) : null;
+	const reader = screen
+		? await screenOutputReader(event, screen)
+		: null;
 	if (!screen || !reader)
 		screenOutputReadNotFound();
 
@@ -71,7 +73,10 @@ export async function requireScreenOutputModeRead<M extends ScreenMode>(event: H
 	if (read.reader === 'capability' && read.screen.currentMode !== mode)
 		screenOutputReadNotFound();
 
-	return { ...read, config: screenOutputModeConfig(read.screen, mode) };
+	return {
+		...read,
+		config: screenOutputModeConfig(read.screen, mode),
+	};
 }
 
 /** The saved configuration of one mode, completed with its defaults as an output renders it. */
@@ -112,10 +117,14 @@ export async function requireScreenOutputFeatureMatchSlot(event: H3Event, slotId
 export async function screenOutputPublishedPlayerIds(screen: DbScreen, eventId: number): Promise<number[]> {
 	if (screen.currentMode === 'deck') {
 		const source = screenOutputModeConfig(screen, 'deck').deckSource;
-		return source.type === 'player' && source.playerId !== null ? [source.playerId] : [];
+		return source.type === 'player' && source.playerId !== null
+			? [source.playerId]
+			: [];
 	}
 
 	const slotId = screenOutputFeatureMatchSlotId(screen);
-	const slot = slotId ? await featureMatchService().findById(slotId, eventId) : undefined;
+	const slot = slotId
+		? await featureMatchService().findById(slotId, eventId)
+		: undefined;
 	return [slot?.player1Id, slot?.player2Id].filter((id): id is number => id != null);
 }

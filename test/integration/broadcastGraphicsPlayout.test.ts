@@ -109,13 +109,21 @@ describe('broadcast graphics playout command API', () => {
 		const harness = await createPlayoutHarness(eventId, 'playout-reused-id', ['a', 'b']);
 		const reusedId = playoutCommandId('reused');
 
-		await harness.send({ commandId: reusedId, type: 'Take', payload: { graphicId: 'a' } });
+		await harness.send({
+			commandId: reusedId,
+			type: 'Take',
+			payload: { graphicId: 'a' },
+		});
 
 		const res = await $fetchRaw(
 			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${harness.session().id}/commands`,
 			{
 				method: 'POST',
-				body: { commandId: reusedId, type: 'Take', payload: { graphicId: 'b' } },
+				body: {
+					commandId: reusedId,
+					type: 'Take',
+					payload: { graphicId: 'b' },
+				},
 				ignoreResponseError: true,
 			},
 		);
@@ -162,8 +170,16 @@ describe('broadcast graphics playout command API', () => {
 	it('keeps concurrent Broadcast Graphics on air independently', async () => {
 		const harness = await createPlayoutHarness(eventId, 'playout-concurrent', ['back', 'front']);
 
-		await harness.send({ commandId: playoutCommandId('take-front'), type: 'Take', payload: { graphicId: 'front' } });
-		const result = await harness.send({ commandId: playoutCommandId('take-back'), type: 'Take', payload: { graphicId: 'back' } });
+		await harness.send({
+			commandId: playoutCommandId('take-front'),
+			type: 'Take',
+			payload: { graphicId: 'front' },
+		});
+		const result = await harness.send({
+			commandId: playoutCommandId('take-back'),
+			type: 'Take',
+			payload: { graphicId: 'back' },
+		});
 
 		expect(result.currentState.playout).toMatchObject({
 			front: { onAir: true },
@@ -219,7 +235,11 @@ describe('broadcast graphics playout command API', () => {
 			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${harness.session().id}/commands`,
 			{
 				method: 'POST',
-				body: { commandId: playoutCommandId('unknown'), type: 'Take', payload: { graphicId: 'nope' } },
+				body: {
+					commandId: playoutCommandId('unknown'),
+					type: 'Take',
+					payload: { graphicId: 'nope' },
+				},
 				ignoreResponseError: true,
 			},
 		);
@@ -230,7 +250,11 @@ describe('broadcast graphics playout command API', () => {
 	it('ends the Live Session when the Screen leaves Broadcast Graphics mode and rejects its stale commands', async () => {
 		const harness = await createPlayoutHarness(eventId, 'playout-epoch', ['a']);
 		const endedSessionId = harness.session().id;
-		await harness.send({ commandId: playoutCommandId('epoch-take'), type: 'Take', payload: { graphicId: 'a' } });
+		await harness.send({
+			commandId: playoutCommandId('epoch-take'),
+			type: 'Take',
+			payload: { graphicId: 'a' },
+		});
 
 		await setScreenMode(eventId, harness.screen.id, 'background');
 		await setScreenMode(eventId, harness.screen.id, 'broadcast-graphics');
@@ -246,7 +270,11 @@ describe('broadcast graphics playout command API', () => {
 			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${endedSessionId}/commands`,
 			{
 				method: 'POST',
-				body: { commandId: playoutCommandId('epoch-stale'), type: 'Out', payload: { graphicId: 'a' } },
+				body: {
+					commandId: playoutCommandId('epoch-stale'),
+					type: 'Out',
+					payload: { graphicId: 'a' },
+				},
 				ignoreResponseError: true,
 			},
 		);
@@ -271,7 +299,9 @@ describe('broadcast graphics playout command API', () => {
 		const screen = await createBroadcastGraphicsScreen(
 			eventId,
 			'playout-single-epoch',
-			[integrationBroadcastGraphic('a')],
+			[
+				integrationBroadcastGraphic('a'),
+			],
 		);
 
 		const opened = await Promise.all(
@@ -365,7 +395,12 @@ describe('broadcast graphics live playout animation', () => {
 		const startedAt = taken.currentState.playout.a!.effectiveStartedAt;
 
 		expect(Object.keys(record).toSorted())
-			.toEqual(['cut', 'effectiveStartedAt', 'onAir', 'reversalCompletesAt']);
+			.toEqual([
+				'cut',
+				'effectiveStartedAt',
+				'onAir',
+				'reversalCompletesAt',
+			]);
 		// The reversal unwinds exactly as much of the entrance as had played, so it
 		// completes as far after Out as Out was after Take.
 		expect(record.reversalCompletesAt!).toBe(record.effectiveStartedAt + (record.effectiveStartedAt - startedAt));
@@ -401,7 +436,10 @@ describe('broadcast graphics live playout animation', () => {
 		const harness = await createGraphicsHarness(eventId, 'playout-coalesce', [
 			integrationBroadcastGraphicWithInputs(
 				'a',
-				[integrationTextInput('name'), integrationTextInput('title')],
+				[
+					integrationTextInput('name'),
+					integrationTextInput('title'),
+				],
 				integrationGraphicAnimation({ enter: 5000, update: 1000 }),
 			),
 		]);
@@ -440,7 +478,10 @@ describe('broadcast graphics live playout animation', () => {
 		const harness = await createGraphicsHarness(eventId, 'playout-pending', [
 			integrationBroadcastGraphicWithInputs(
 				'a',
-				[integrationTextInput('name'), integrationTextInput('title')],
+				[
+					integrationTextInput('name'),
+					integrationTextInput('title'),
+				],
 				integrationGraphicAnimation({ update: 5000 }),
 			),
 		]);
@@ -482,7 +523,10 @@ describe('broadcast graphics live playout animation', () => {
 		const harness = await createGraphicsHarness(eventId, 'playout-cut-update', [
 			integrationBroadcastGraphicWithInputs(
 				'a',
-				[integrationTextInput('name'), integrationTextInput('title')],
+				[
+					integrationTextInput('name'),
+					integrationTextInput('title'),
+				],
 				integrationGraphicAnimation({ enter: 5000, update: 1000 }),
 			),
 		]);
@@ -516,7 +560,10 @@ describe('broadcast graphics live playout animation', () => {
 		const harness = await createGraphicsHarness(eventId, 'playout-exit-discards', [
 			integrationBroadcastGraphicWithInputs(
 				'a',
-				[integrationTextInput('name'), integrationTextInput('title')],
+				[
+					integrationTextInput('name'),
+					integrationTextInput('title'),
+				],
 				integrationGraphicAnimation({ update: 5000, exit: 5000 }),
 			),
 		]);
@@ -567,7 +614,9 @@ describe('broadcast graphics live playout animation', () => {
 		const harness = await createGraphicsHarness(eventId, 'playout-exit-cycling', [
 			integrationBroadcastGraphicWithInputs(
 				'a',
-				[integrationTextInput('name')],
+				[
+					integrationTextInput('name'),
+				],
 				integrationGraphicAnimation({ onScreen: 5000, exit: 5000 }),
 			),
 		]);
@@ -599,7 +648,10 @@ describe('broadcast graphics live playout animation', () => {
 		const harness = await createGraphicsHarness(eventId, 'playout-reload-schedule', [
 			integrationBroadcastGraphicWithInputs(
 				'a',
-				[integrationTextInput('name'), integrationTextInput('title')],
+				[
+					integrationTextInput('name'),
+					integrationTextInput('title'),
+				],
 				integrationGraphicAnimation({ enter: 5000, update: 5000 }),
 			),
 		]);

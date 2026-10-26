@@ -11,7 +11,14 @@ import {
 // ── meleeDecklistRecordSchema ─────────────────────────────────────────────────
 
 describe('meleeDecklistRecordSchema', () => {
-	const validRecord = { l: 'lightning-bolt', n: 'Lightning Bolt', s: 'lea', q: 4, c: 0, t: 'Instant' };
+	const validRecord = {
+		l: 'lightning-bolt',
+		n: 'Lightning Bolt',
+		s: 'lea',
+		q: 4,
+		c: 0,
+		t: 'Instant',
+	};
 
 	it('accepts a valid record', () => {
 		expect(meleeDecklistRecordSchema.parse(validRecord)).toEqual(validRecord);
@@ -72,7 +79,10 @@ describe('meleePlayerSchema', () => {
 	});
 
 	it('rejects oversized consumed player strings', () => {
-		expect(meleePlayerSchema.safeParse({ ...validPlayer, PronounsDescription: 'x'.repeat(201) }).success).toBe(false);
+		expect(meleePlayerSchema.safeParse({
+			...validPlayer,
+			PronounsDescription: 'x'.repeat(201),
+		}).success).toBe(false);
 	});
 });
 
@@ -109,7 +119,12 @@ describe('meleeMatchSchema', () => {
 		GameDraws: 0,
 		ByeReason: null,
 		Competitors: [
-			{ TeamId: 1, SortOrder: 0, GameWins: 2, Decklists: [] },
+			{
+				TeamId: 1,
+				SortOrder: 0,
+				GameWins: 2,
+				Decklists: [],
+			},
 		],
 	};
 
@@ -132,7 +147,12 @@ describe('meleeMatchSchema', () => {
 			GameDraws: null,
 			ByeReason: null,
 			Competitors: [
-				{ TeamId: 1, SortOrder: 0, GameWins: null, Decklists: [] },
+				{
+					TeamId: 1,
+					SortOrder: 0,
+					GameWins: null,
+					Decklists: [],
+				},
 			],
 		});
 
@@ -144,12 +164,16 @@ describe('meleeMatchSchema', () => {
 		const result = meleeMatchSchema.parse({
 			...validMatch,
 			FormatId: 'standard',
-			Competitors: [{
-				TeamId: 1,
-				SortOrder: 0,
-				GameWins: null,
-				Decklists: [{ DecklistId: 'deck-guid', PlayerId: 10, FormatId: 'standard' }],
-			}],
+			Competitors: [
+				{
+					TeamId: 1,
+					SortOrder: 0,
+					GameWins: null,
+					Decklists: [
+						{ DecklistId: 'deck-guid', PlayerId: 10, FormatId: 'standard' },
+					],
+				},
+			],
 		});
 
 		expect(result.FormatId).toBe('standard');
@@ -157,8 +181,14 @@ describe('meleeMatchSchema', () => {
 	});
 
 	it('rejects oversized persisted match identifiers and result text', () => {
-		expect(meleeMatchSchema.safeParse({ ...validMatch, Guid: 'x'.repeat(101) }).success).toBe(false);
-		expect(meleeMatchSchema.safeParse({ ...validMatch, ResultString: 'x'.repeat(1_001) }).success).toBe(false);
+		expect(meleeMatchSchema.safeParse({
+			...validMatch,
+			Guid: 'x'.repeat(101),
+		}).success).toBe(false);
+		expect(meleeMatchSchema.safeParse({
+			...validMatch,
+			ResultString: 'x'.repeat(1_001),
+		}).success).toBe(false);
 	});
 });
 
@@ -170,7 +200,15 @@ describe('meleeEventSchema', () => {
 		Name: 'GP Melbourne',
 		Game: 'Magic: The Gathering',
 		Phases: [
-			{ ID: 1, Name: 'Swiss', FormatId: 'modern', SortOrder: 0, Rounds: [{ ID: 101, Name: 'Round 1', SortOrder: 0 }] },
+			{
+				ID: 1,
+				Name: 'Swiss',
+				FormatId: 'modern',
+				SortOrder: 0,
+				Rounds: [
+					{ ID: 101, Name: 'Round 1', SortOrder: 0 },
+				],
+			},
 		],
 	};
 
@@ -184,16 +222,27 @@ describe('meleeEventSchema', () => {
 	});
 
 	it('rejects oversized event structure names', () => {
-		expect(meleeEventSchema.safeParse({ ...validEvent, Name: 'x'.repeat(201) }).success).toBe(false);
 		expect(meleeEventSchema.safeParse({
 			...validEvent,
-			Phases: [{ ...validEvent.Phases[0], Name: 'x'.repeat(201) }],
+			Name: 'x'.repeat(201),
+		}).success).toBe(false);
+		expect(meleeEventSchema.safeParse({
+			...validEvent,
+			Phases: [
+				{
+					...validEvent.Phases[0],
+					Name: 'x'.repeat(201),
+				},
+			],
 		}).success).toBe(false);
 	});
 
 	it('requires a bounded upstream game name', () => {
 		expect(meleeEventSchema.safeParse({ ...validEvent, Game: '' }).success).toBe(false);
-		expect(meleeEventSchema.safeParse({ ...validEvent, Game: 'x'.repeat(101) }).success).toBe(false);
+		expect(meleeEventSchema.safeParse({
+			...validEvent,
+			Game: 'x'.repeat(101),
+		}).success).toBe(false);
 	});
 });
 
@@ -208,7 +257,14 @@ describe('meleeApiResponseSchema', () => {
 			RecordsFiltered: 1,
 			RecordsTotal: 1,
 			Content: [
-				{ TeamId: 1, Rank: 1, Points: 18, MatchWins: 6, MatchLosses: 0, MatchDraws: 0 },
+				{
+					TeamId: 1,
+					Rank: 1,
+					Points: 18,
+					MatchWins: 6,
+					MatchLosses: 0,
+					MatchDraws: 0,
+				},
 			],
 			HasMore: false,
 		};

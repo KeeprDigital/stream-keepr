@@ -395,7 +395,9 @@ export function eventDataPublicationModule() {
 	}
 
 	async function featureMatchAssignmentDeleted({ eventId, id, originConnectionId }: DeletedPublicationInput) {
-		await publishEventDataMessages(eventId, [featureMatchMessages.assignmentDeleted(id)], originConnectionId);
+		await publishEventDataMessages(eventId, [
+			featureMatchMessages.assignmentDeleted(id),
+		], originConnectionId);
 	}
 
 	/*
@@ -441,7 +443,11 @@ export function eventDataPublicationModule() {
 		const slotsById = new Map(slots.map(slot => [slot.id, slot]));
 		const messages = slotIds.flatMap((slotId) => {
 			const slot = slotsById.get(slotId);
-			return slot ? [featureMatchMessages.slotUpdated(slot)] : [];
+			return slot
+				? [
+						featureMatchMessages.slotUpdated(slot),
+					]
+				: [];
 		});
 
 		// Announced one by one, because each message names one Slot, and caught up once,

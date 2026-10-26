@@ -105,7 +105,9 @@ function createPreparedStatement(client: Client, sql: string, args: unknown[]) {
 			const [row] = plainRows<Record<string, unknown>>(result);
 			if (!row)
 				return null;
-			return (column === undefined ? row : row[column]) as T;
+			return (column === undefined
+				? row
+				: row[column]) as T;
 		},
 		async run<T>() {
 			return d1Result<T>(await client.execute(toStatement({ sql, args })));

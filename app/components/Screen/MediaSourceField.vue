@@ -39,7 +39,9 @@ const SOURCE_KIND_OPTIONS = [
  */
 const draftKind = ref<'asset' | 'url'>();
 const kind = computed(() => draftKind.value ?? props.modelValue?.kind ?? 'asset');
-const url = computed(() => props.modelValue?.kind === 'url' ? props.modelValue.url : '');
+const url = computed(() => props.modelValue?.kind === 'url'
+	? props.modelValue.url
+	: '');
 /**
  * The server's own rule, shown as the author types: a refused URL would otherwise
  * surface only as a failed save of the whole stack or layout (#582).

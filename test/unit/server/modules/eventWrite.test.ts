@@ -57,7 +57,10 @@ describe('eventWriteModule', () => {
 		mockEventService.update.mockResolvedValue(createMockEvent({ id: 1, numFeatureMatches: 2 }));
 		mockEventService.findById.mockResolvedValue(createMockEvent({ id: 1, game: 'mtg' }));
 		mockEventService.remove.mockResolvedValue(true);
-		mockScreenService.findIdsByEventId.mockResolvedValue([{ id: 10 }, { id: 11 }]);
+		mockScreenService.findIdsByEventId.mockResolvedValue([
+			{ id: 10 },
+			{ id: 11 },
+		]);
 		mockPublication.eventUpdated.mockResolvedValue({ id: 1, name: 'Updated Event' });
 		mockPublication.eventDeleted.mockResolvedValue(undefined);
 	});
@@ -77,7 +80,10 @@ describe('eventWriteModule', () => {
 		});
 
 		it('returns every affected Screen when disabling is refused', async () => {
-			const screens = [{ id: 2, name: 'Alpha' }, { id: 8, name: 'Stage' }];
+			const screens = [
+				{ id: 2, name: 'Alpha' },
+				{ id: 8, name: 'Stage' },
+			];
 			mockEventService.update.mockRejectedValueOnce(new BroadcastDeckListsInUseError(screens));
 
 			await expect(eventWriteModule().updateEvent({

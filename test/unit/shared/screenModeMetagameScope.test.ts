@@ -11,14 +11,41 @@ import { SCREEN_MODES, screenModeConfigContract } from '~~/shared/screenModes';
 
 const SCOPED_MODES = [
 	// Most Played Cards never offered Minimum Points, so it carries no minimum to scope by.
-	{ mode: 'metagame', scopeFields: ['scope', 'topN', 'minPoints', 'playerListId'], archetypeFilter: true },
-	{ mode: 'top-cards', scopeFields: ['scope', 'topN', 'playerListId'], archetypeFilter: true },
-	{ mode: 'archetype-spotlight', scopeFields: ['scope', 'topN', 'minPoints', 'playerListId'], archetypeFilter: false },
+	{
+		mode: 'metagame',
+		scopeFields: [
+			'scope',
+			'topN',
+			'minPoints',
+			'playerListId',
+		],
+		archetypeFilter: true,
+	},
+	{
+		mode: 'top-cards',
+		scopeFields: ['scope', 'topN', 'playerListId'],
+		archetypeFilter: true,
+	},
+	{
+		mode: 'archetype-spotlight',
+		scopeFields: [
+			'scope',
+			'topN',
+			'minPoints',
+			'playerListId',
+		],
+		archetypeFilter: false,
+	},
 ] as const satisfies ReadonlyArray<{ mode: ScreenMode; scopeFields: readonly (keyof typeof metagameScopeShape)[]; archetypeFilter: boolean }>;
 
 describe('the Metagame Scope', () => {
 	it('defaults to every Player, with Top 8 and 9 points ready for their scopes', () => {
-		expect(DEFAULT_METAGAME_SCOPE).toEqual({ scope: 'all', topN: 8, minPoints: 9, playerListId: undefined });
+		expect(DEFAULT_METAGAME_SCOPE).toEqual({
+			scope: 'all',
+			topN: 8,
+			minPoints: 9,
+			playerListId: undefined,
+		});
 	});
 
 	describe.each(SCOPED_MODES)('$mode', ({ mode, scopeFields, archetypeFilter }) => {

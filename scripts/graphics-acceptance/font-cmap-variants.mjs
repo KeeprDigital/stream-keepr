@@ -64,5 +64,7 @@ export function withCmapLanguages(source, languageForPlatform) {
  * cannot establish, since a rule with or without the exemption rejects that.
  */
 export function macintoshCmapLanguage(platformId) {
-	return platformId === 1 ? 1 : 0;
+	return platformId === 1
+		? 1
+		: 0;
 }

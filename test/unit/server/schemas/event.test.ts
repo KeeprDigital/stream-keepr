@@ -64,13 +64,19 @@ describe('createEventSchema', () => {
 	// name bounds
 
 	it('accepts name of exactly 200 characters', () => {
-		const result = createEventSchema.safeParse({ ...validInput, name: 'a'.repeat(200) });
+		const result = createEventSchema.safeParse({
+			...validInput,
+			name: 'a'.repeat(200),
+		});
 		expect(result.success).toBe(true);
 	});
 
 	// description bounds
 	it('accepts description of exactly 5000 characters', () => {
-		const result = createEventSchema.safeParse({ ...validInput, description: 'a'.repeat(5000) });
+		const result = createEventSchema.safeParse({
+			...validInput,
+			description: 'a'.repeat(5000),
+		});
 		expect(result.success).toBe(true);
 	});
 
@@ -81,7 +87,10 @@ describe('createEventSchema', () => {
 
 	// holdingText bounds
 	it('accepts holdingText of exactly 1000 characters', () => {
-		const result = createEventSchema.safeParse({ ...validInput, holdingText: 'a'.repeat(1000) });
+		const result = createEventSchema.safeParse({
+			...validInput,
+			holdingText: 'a'.repeat(1000),
+		});
 		expect(result.success).toBe(true);
 	});
 
@@ -162,7 +171,10 @@ describe('createEventSchema', () => {
 	// featureMatchDefaultExtraTurnsLabel bounds
 
 	it('accepts featureMatchDefaultExtraTurnsLabel of exactly 100 characters', () => {
-		const result = createEventSchema.safeParse({ ...validInput, featureMatchDefaultExtraTurnsLabel: 'a'.repeat(100) });
+		const result = createEventSchema.safeParse({
+			...validInput,
+			featureMatchDefaultExtraTurnsLabel: 'a'.repeat(100),
+		});
 		expect(result.success).toBe(true);
 	});
 

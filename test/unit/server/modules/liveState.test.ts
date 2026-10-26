@@ -42,7 +42,12 @@ interface CounterCommand {
 type CounterPort = SequencedLiveStatePort<CounterRef, Counter, CounterCommand, Counter, Counter>;
 
 function counter(overrides: Partial<Counter> = {}): Counter {
-	return { id: 7, sequence: 3, total: 10, ...overrides };
+	return {
+		id: 7,
+		sequence: 3,
+		total: 10,
+		...overrides,
+	};
 }
 
 const REF: CounterRef = { id: 7, eventId: 1 };
@@ -64,7 +69,9 @@ function createPort(overrides: Partial<CounterPort> = {}): CounterPort {
 		isMergeable: command => command.type === 'Add',
 		reduce: (aggregate, command) => ({
 			...aggregate,
-			total: command.type === 'Add' ? aggregate.total + command.payload.amount : command.payload.amount,
+			total: command.type === 'Add'
+				? aggregate.total + command.payload.amount
+				: command.payload.amount,
 		}),
 		casGuard: aggregate => sql`from counters where id = ${aggregate.id} and sequence = ${aggregate.sequence}`,
 		projection: vi.fn(() => PROJECTION),
@@ -86,7 +93,13 @@ function stageSuccessfulCommit(port: CounterPort): void {
 		// under test. What it buys is the named error: read inside a callback, an
 		// empty call list used to surface as a TypeError with no subject in it (#280).
 		const [input] = lastCallTo(vi.mocked(port.projection));
-		return [[], [], [{ ...input.reduction, sequence: input.nextSequence }]];
+		return [
+			[],
+			[],
+			[
+				{ ...input.reduction, sequence: input.nextSequence },
+			],
+		];
 	});
 }
 
@@ -96,11 +109,19 @@ function stageLostRace(): void {
 }
 
 function add(commandId: string, amount: number): CounterCommand {
-	return { commandId, type: 'Add', payload: { amount } };
+	return {
+		commandId,
+		type: 'Add',
+		payload: { amount },
+	};
 }
 
 function set(commandId: string, amount: number): CounterCommand {
-	return { commandId, type: 'Set', payload: { amount } };
+	return {
+		commandId,
+		type: 'Set',
+		payload: { amount },
+	};
 }
 
 describe('sequenced live state', () => {
@@ -139,7 +160,9 @@ describe('sequenced live state', () => {
 		expect(RETAINED_COMMAND_RECEIPTS).toBeGreaterThan(0);
 		expect(Number.isFinite(RETAINED_COMMAND_RECEIPTS)).toBe(true);
 
-		const port = createPort({ load: vi.fn(async () => counter({ sequence: RETAINED_COMMAND_RECEIPTS + 10 })) });
+		const port = createPort({
+			load: vi.fn(async () => counter({ sequence: RETAINED_COMMAND_RECEIPTS + 10 })),
+		});
 		stageSuccessfulCommit(port);
 		const liveState = createSequencedLiveState(port);
 
@@ -164,7 +187,9 @@ describe('sequenced live state', () => {
 	});
 
 	it('reports a missing aggregate as not found', async () => {
-		const port = createPort({ load: vi.fn(async () => undefined) });
+		const port = createPort({
+			load: vi.fn(async () => undefined),
+		});
 		const liveState = createSequencedLiveState(port);
 
 		await expect(liveState.execute(REF, set('cmd-1', 1))).rejects.toMatchObject({
@@ -188,7 +213,9 @@ describe('sequenced live state', () => {
 				contentKey: commandContentKey('Add', { amount: 5 }),
 			});
 			// The aggregate has moved on since the command committed.
-			const port = createPort({ load: vi.fn(async () => counter({ sequence: 9, total: 40 })) });
+			const port = createPort({
+				load: vi.fn(async () => counter({ sequence: 9, total: 40 })),
+			});
 			const liveState = createSequencedLiveState(port);
 
 			const result = await liveState.execute(REF, add('cmd-1', 5));
@@ -229,14 +256,18 @@ describe('sequenced live state', () => {
 				commandType: 'Add',
 				contentKey: commandContentKey('Add', { amount: 5 }),
 			});
-			const port = createPort({ load: vi.fn(async () => undefined) });
+			const port = createPort({
+				load: vi.fn(async () => undefined),
+			});
 			const liveState = createSequencedLiveState(port);
 
 			await expect(liveState.execute(REF, add('cmd-1', 5))).rejects.toMatchObject({ statusCode: 404 });
 		});
 
 		it('resolves a command ID that lands concurrently as a retry rather than an error', async () => {
-			const port = createPort({ load: vi.fn(async () => counter({ sequence: 4, total: 42 })) });
+			const port = createPort({
+				load: vi.fn(async () => counter({ sequence: 4, total: 42 })),
+			});
 			mockDb.batch.mockImplementation(async () => {
 				// The receipt's unique index is what turns the race into a failure.
 				mockDb.query.liveStateCommandReceipts.findFirst.mockResolvedValue({
@@ -372,7 +403,9 @@ describe('sequenced live state', () => {
 
 			expect(port.publish).toHaveBeenCalledWith(
 				expect.anything(),
-				expect.objectContaining({ previous: counter({ sequence: 3, total: 10 }) }),
+				expect.objectContaining({
+					previous: counter({ sequence: 3, total: 10 }),
+				}),
 			);
 		});
 
@@ -389,7 +422,13 @@ describe('sequenced live state', () => {
 				.mockResolvedValueOnce([[], [], []])
 				.mockImplementation(async () => {
 					const [input] = lastCallTo(vi.mocked(port.projection));
-					return [[], [], [{ ...input.reduction, sequence: input.nextSequence }]];
+					return [
+						[],
+						[],
+						[
+							{ ...input.reduction, sequence: input.nextSequence },
+						],
+					];
 				});
 			const liveState = createSequencedLiveState(port);
 
@@ -397,7 +436,9 @@ describe('sequenced live state', () => {
 
 			expect(port.publish).toHaveBeenCalledWith(
 				expect.anything(),
-				expect.objectContaining({ previous: counter({ sequence: 4, total: 100 }) }),
+				expect.objectContaining({
+					previous: counter({ sequence: 4, total: 100 }),
+				}),
 			);
 		});
 
@@ -407,7 +448,9 @@ describe('sequenced live state', () => {
 			// the one this attempt loaded. A difference measured from that stale load
 			// would omit an entry changed and changed back in between, and a peer sitting
 			// between the two would apply it and keep the value the store no longer has.
-			const port = createPort({ load: vi.fn(async () => counter({ sequence: 9, total: 42 })) });
+			const port = createPort({
+				load: vi.fn(async () => counter({ sequence: 9, total: 42 })),
+			});
 			mockDb.batch.mockImplementation(async () => {
 				mockDb.query.liveStateCommandReceipts.findFirst.mockResolvedValue({
 					commandType: 'Set',

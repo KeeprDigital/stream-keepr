@@ -29,7 +29,10 @@ const USelectStub = defineComponent({
 	name: 'USelect',
 	props: {
 		modelValue: { type: String, required: false },
-		items: { type: Array, default: () => [] },
+		items: {
+			type: Array,
+			default: () => [],
+		},
 		disabled: { type: Boolean, required: false },
 	},
 	emits: ['update:modelValue'],
@@ -99,7 +102,10 @@ describe('typography fields', () => {
 		const wrapper = mountFields();
 		const bounds = (label: string) => {
 			const field = numberField(wrapper, label)!;
-			return [field.props('min'), field.props('max')];
+			return [
+				field.props('min'),
+				field.props('max'),
+			];
 		};
 
 		expect(bounds('Font size')).toEqual([1, 600]);
@@ -142,14 +148,20 @@ describe('typography fields', () => {
 		});
 
 		it('returns a cleared field to the base typography rather than a value', async () => {
-			const wrapper = mountFields({ inheritable: true, typography: { fontSize: 24, letterSpacing: 2 } });
+			const wrapper = mountFields({
+				inheritable: true,
+				typography: { fontSize: 24, letterSpacing: 2 },
+			});
 
 			expect(await enter(wrapper, 'Font size', null)).toEqual({ fontSize: undefined });
 			expect(await enter(wrapper, 'Letter spacing', null)).toEqual({ letterSpacing: undefined });
 		});
 
 		it('offers "same as base" for style and case, and shows it for an unset one', async () => {
-			const wrapper = mountFields({ inheritable: true, typography: { textTransform: 'uppercase' } });
+			const wrapper = mountFields({
+				inheritable: true,
+				typography: { textTransform: 'uppercase' },
+			});
 
 			expect(selectField(wrapper, 'type-font-style')?.props('modelValue')).toBe('base');
 			expect(selectField(wrapper, 'type-case')?.props('modelValue')).toBe('uppercase');

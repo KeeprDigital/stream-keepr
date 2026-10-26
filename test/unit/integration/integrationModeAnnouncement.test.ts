@@ -26,10 +26,14 @@ const ANNOUNCEMENT = 'announceIntegrationMode';
 const FIXTURE_ENTRY_POINT = 'startIntegrationServers';
 
 function calledFunctionName(node: ts.Node): string | undefined {
-	const call = ts.isAwaitExpression(node) ? node.expression : node;
+	const call = ts.isAwaitExpression(node)
+		? node.expression
+		: node;
 	if (!ts.isCallExpression(call))
 		return undefined;
-	return ts.isIdentifier(call.expression) ? call.expression.text : undefined;
+	return ts.isIdentifier(call.expression)
+		? call.expression.text
+		: undefined;
 }
 
 /** Every top-level call in `setup`'s body, in source order, by name. */
@@ -48,7 +52,9 @@ function setupCallOrder(source: ts.SourceFile): string[] {
 			return calledFunctionName(statement.expression) ?? [];
 		if (ts.isVariableStatement(statement)) {
 			return statement.declarationList.declarations.flatMap(declaration =>
-				declaration.initializer ? calledFunctionName(declaration.initializer) ?? [] : [],
+				declaration.initializer
+					? calledFunctionName(declaration.initializer) ?? []
+					: [],
 			);
 		}
 		return [];

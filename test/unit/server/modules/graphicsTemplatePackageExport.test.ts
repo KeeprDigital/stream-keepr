@@ -107,7 +107,9 @@ async function ingestImage(
 		idempotencyKey: `ingest-${name}`,
 		initiatedBy: 'package-author',
 		name,
-		sourceFileName: mime === 'image/png' ? `${name}.png` : `${name}.webp`,
+		sourceFileName: mime === 'image/png'
+			? `${name}.png`
+			: `${name}.webp`,
 		declaredMime: mime,
 		duplicateContentPolicy: 'create-separate',
 		browserDecodeEvidence: {
@@ -221,7 +223,9 @@ describe('the Template Package export contract', () => {
 					name: 'Lower third',
 					document: { backdrop },
 				},
-				assets: [{ slot: 'backdrop', reference: backdrop }],
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+				],
 			});
 
 			expect(result.outcome).toBe('exported');
@@ -365,13 +369,25 @@ describe('the Template Package export contract', () => {
 				name: 'Application typography',
 				document: {
 					items: [
-						{ type: 'text', typography: { font: { kind: 'application', fontId: 'inter' } } },
-						{ type: 'text', typography: { font: { kind: 'application', fontId: 'inter' } } },
+						{
+							type: 'text',
+							typography: {
+								font: { kind: 'application', fontId: 'inter' },
+							},
+						},
+						{
+							type: 'text',
+							typography: {
+								font: { kind: 'application', fontId: 'inter' },
+							},
+						},
 					],
 					logo,
 				},
 			},
-			assets: [{ slot: 'logo', reference: logo }],
+			assets: [
+				{ slot: 'logo', reference: logo },
+			],
 			capabilities: [
 				{ slot: 'items[0].typography.font', capability: 'application-font', identity: 'inter' },
 				{ slot: 'items[1].typography.font', capability: 'application-font', identity: 'inter' },
@@ -439,31 +455,50 @@ describe('the Template Package export contract', () => {
 	it.each([
 		[
 			'a remote resource',
-			{ frame: { mediaBackground: { enabled: true, source: { kind: 'url', url: 'https://cdn.example.com/loop.mp4' } } } },
+			{
+				frame: {
+					mediaBackground: {
+						enabled: true,
+						source: { kind: 'url', url: 'https://cdn.example.com/loop.mp4' },
+					},
+				},
+			},
 			'remote-resource-dependency',
 			'frame.mediaBackground.source.url',
 		],
 		[
 			'a Remote Media URL for the Frame image',
-			{ frame: { backgroundImage: { kind: 'url', url: 'https://cdn.example.com/plate.png' } } },
+			{
+				frame: {
+					backgroundImage: { kind: 'url', url: 'https://cdn.example.com/plate.png' },
+				},
+			},
 			'remote-resource-dependency',
 			'frame.backgroundImage.url',
 		],
 		[
 			'a protocol-relative resource',
-			{ frame: { backgroundUrl: '//cdn.example.com/loop.mp4' } },
+			{
+				frame: { backgroundUrl: '//cdn.example.com/loop.mp4' },
+			},
 			'remote-resource-dependency',
 			'frame.backgroundUrl',
 		],
 		[
 			'an inline payload',
-			{ frame: { backgroundImage: 'data:image/png;base64,iVBORw0KGgo=' } },
+			{
+				frame: { backgroundImage: 'data:image/png;base64,iVBORw0KGgo=' },
+			},
 			'undeclared-graphic-asset-dependency',
 			'frame.backgroundImage',
 		],
 		[
 			'executable content',
-			{ items: [{ label: '<script>fetch("/steal")</script>' }] },
+			{
+				items: [
+					{ label: '<script>fetch("/steal")</script>' },
+				],
+			},
 			'executable-template-content',
 			'items[0].label',
 		],
@@ -496,10 +531,16 @@ describe('the Template Package export contract', () => {
 				name: 'Undeclared dependency',
 				document: {
 					frame: { backgroundImage: declared },
-					items: [{ media: { source: smuggled } }],
+					items: [
+						{
+							media: { source: smuggled },
+						},
+					],
 				},
 			},
-			assets: [{ slot: 'frame.backgroundImage', reference: declared }],
+			assets: [
+				{ slot: 'frame.backgroundImage', reference: declared },
+			],
 		});
 
 		expect(result.outcome).toBe('rejected');
@@ -519,7 +560,11 @@ describe('the Template Package export contract', () => {
 		const loop = await ingestSilentVideo(library, 'Frame loop');
 		const layout = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout);
 		layout.frame.backgroundImage = { kind: 'asset', ...plate };
-		layout.frame.mediaBackground = { ...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG, enabled: true, source: { kind: 'asset', ...loop } };
+		layout.frame.mediaBackground = {
+			...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG,
+			enabled: true,
+			source: { kind: 'asset', ...loop },
+		};
 		const requirements = featureMatchLayoutTemplatePackageRequirements(layout);
 
 		const result = await library.exportTemplatePackage({
@@ -581,8 +626,14 @@ describe('the Template Package export contract', () => {
 
 		const result = await library.exportTemplatePackage({
 			packageKind: 'sklayout',
-			template: { identity: 'template-11', name: 'Wrong kind', document: { video: image } },
-			assets: [{ slot: 'video', reference: image, expectedKind: 'silent-video' }],
+			template: {
+				identity: 'template-11',
+				name: 'Wrong kind',
+				document: { video: image },
+			},
+			assets: [
+				{ slot: 'video', reference: image, expectedKind: 'silent-video' },
+			],
 		});
 
 		expect(result.outcome).toBe('rejected');
@@ -624,54 +675,56 @@ describe('the Template Package export contract', () => {
 		const graphic = {
 			id: 'stacked-lower-third',
 			name: 'Stacked lower third',
-			items: [{
-				id: 'stack',
-				type: 'group' as const,
-				label: 'Stack',
-				visible: true,
-				anchor: 'top-left' as const,
-				x: 0,
-				y: 0,
-				width: 800,
-				height: 200,
-				arrangement: 'column' as const,
-				padding: 0,
-				gap: 8,
-				align: 'start' as const,
-				justify: 'start' as const,
-				clip: false,
-				geometry: { cornerRadius: 0 },
-				children: [
-					{
-						id: 'nested-headline',
-						type: 'text' as const,
-						label: 'Headline',
-						visible: true,
-						anchor: 'top-left' as const,
-						x: 0,
-						y: 0,
-						width: 800,
-						height: 100,
-						text: 'Semifinal',
-						overflowPolicy: 'ellipsis' as const,
-						minFontSize: 24,
-						typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY },
-					},
-					{
-						id: 'nested-rule',
-						type: 'shape' as const,
-						label: 'Rule',
-						visible: true,
-						anchor: 'top-left' as const,
-						x: 0,
-						y: 108,
-						width: 800,
-						height: 4,
-						geometry: { cornerRadius: 0 },
-						surfaceStyle: { ...DEFAULT_GRAPHIC_SURFACE_STYLE },
-					},
-				],
-			}],
+			items: [
+				{
+					id: 'stack',
+					type: 'group' as const,
+					label: 'Stack',
+					visible: true,
+					anchor: 'top-left' as const,
+					x: 0,
+					y: 0,
+					width: 800,
+					height: 200,
+					arrangement: 'column' as const,
+					padding: 0,
+					gap: 8,
+					align: 'start' as const,
+					justify: 'start' as const,
+					clip: false,
+					geometry: { cornerRadius: 0 },
+					children: [
+						{
+							id: 'nested-headline',
+							type: 'text' as const,
+							label: 'Headline',
+							visible: true,
+							anchor: 'top-left' as const,
+							x: 0,
+							y: 0,
+							width: 800,
+							height: 100,
+							text: 'Semifinal',
+							overflowPolicy: 'ellipsis' as const,
+							minFontSize: 24,
+							typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY },
+						},
+						{
+							id: 'nested-rule',
+							type: 'shape' as const,
+							label: 'Rule',
+							visible: true,
+							anchor: 'top-left' as const,
+							x: 0,
+							y: 108,
+							width: 800,
+							height: 4,
+							geometry: { cornerRadius: 0 },
+							surfaceStyle: { ...DEFAULT_GRAPHIC_SURFACE_STYLE },
+						},
+					],
+				},
+			],
 		};
 
 		const requirements = broadcastGraphicTemplatePackageRequirements(
@@ -741,22 +794,24 @@ describe('the Template Package export contract', () => {
 					justify: 'start' as const,
 					clip: false,
 					geometry: { cornerRadius: 0 },
-					children: [{
-						id: 'nested-insert',
-						type: 'media' as const,
-						label: 'Insert',
-						visible: true,
-						anchor: 'top-left' as const,
-						x: 0,
-						y: 0,
-						width: 400,
-						height: 200,
-						asset: insert,
-						mediaKind: 'image' as const,
-						fit: 'contain' as const,
-						focalPosition: { x: 0.5, y: 0.5 },
-						opacity: 1,
-					}],
+					children: [
+						{
+							id: 'nested-insert',
+							type: 'media' as const,
+							label: 'Insert',
+							visible: true,
+							anchor: 'top-left' as const,
+							x: 0,
+							y: 0,
+							width: 400,
+							height: 200,
+							asset: insert,
+							mediaKind: 'image' as const,
+							fit: 'contain' as const,
+							focalPosition: { x: 0.5, y: 0.5 },
+							opacity: 1,
+						},
+					],
 				},
 			],
 		};
@@ -795,12 +850,14 @@ describe('the Template Package export contract', () => {
 				identity: 'template-13',
 				name: 'Authored copy',
 				document: {
-					items: [{
-						id: 'headline',
-						type: 'text',
-						label: 'Call to action',
-						text: 'Visit https://team.example.com for the full bracket',
-					}],
+					items: [
+						{
+							id: 'headline',
+							type: 'text',
+							label: 'Call to action',
+							text: 'Visit https://team.example.com for the full bracket',
+						},
+					],
 				},
 			},
 			assets: [],
@@ -813,16 +870,77 @@ describe('the Template Package export contract', () => {
 	it('still blocks a remote resource in a position a renderer would fetch', async () => {
 		const { library } = createExportLibrary();
 		const cases = [
-			['frame.mediaBackground.url', { frame: { mediaBackground: { url: 'https://cdn.example.com/loop.mp4' } } }],
-			['items[0].posterUrl', { items: [{ posterUrl: 'https://cdn.example.com/poster.png' }] }],
-			['frame.gradient', { frame: { gradient: 'linear-gradient(#000, url(https://cdn.example.com/x.png))' } }],
-			['items[0].sources[0]', { items: [{ sources: ['https://cdn.example.com/a.mp4'] }] }],
-			['frame.backgroundUrl', { frame: { backgroundUrl: '//cdn.example.com/loop.mp4' } }],
+			[
+				'frame.mediaBackground.url',
+				{
+					frame: {
+						mediaBackground: { url: 'https://cdn.example.com/loop.mp4' },
+					},
+				},
+			],
+			[
+				'items[0].posterUrl',
+				{
+					items: [
+						{ posterUrl: 'https://cdn.example.com/poster.png' },
+					],
+				},
+			],
+			[
+				'frame.gradient',
+				{
+					frame: { gradient: 'linear-gradient(#000, url(https://cdn.example.com/x.png))' },
+				},
+			],
+			[
+				'items[0].sources[0]',
+				{
+					items: [
+						{
+							sources: ['https://cdn.example.com/a.mp4'],
+						},
+					],
+				},
+			],
+			[
+				'frame.backgroundUrl',
+				{
+					frame: { backgroundUrl: '//cdn.example.com/loop.mp4' },
+				},
+			],
 			// A resource field is one whatever convention named it.
-			['items[0].image_url', { items: [{ image_url: 'https://cdn.example.com/a.png' }] }],
-			['items[0].IMAGE_URL', { items: [{ IMAGE_URL: 'https://cdn.example.com/b.png' }] }],
-			['items[0].image-url', { items: [{ 'image-url': 'https://cdn.example.com/c.png' }] }],
-			['items[0].srcset', { items: [{ srcset: 'https://cdn.example.com/d.png 2x' }] }],
+			[
+				'items[0].image_url',
+				{
+					items: [
+						{ image_url: 'https://cdn.example.com/a.png' },
+					],
+				},
+			],
+			[
+				'items[0].IMAGE_URL',
+				{
+					items: [
+						{ IMAGE_URL: 'https://cdn.example.com/b.png' },
+					],
+				},
+			],
+			[
+				'items[0].image-url',
+				{
+					items: [
+						{ 'image-url': 'https://cdn.example.com/c.png' },
+					],
+				},
+			],
+			[
+				'items[0].srcset',
+				{
+					items: [
+						{ srcset: 'https://cdn.example.com/d.png 2x' },
+					],
+				},
+			],
 		] as const;
 
 		for (const [slot, document] of cases) {
@@ -843,11 +961,30 @@ describe('the Template Package export contract', () => {
 	it('blocks an inline payload wherever it was authored', async () => {
 		const { library } = createExportLibrary();
 		const cases = [
-			['frame.backgroundImage', { frame: { backgroundImage: 'data:image/png;base64,iVBORw0KGgo=' } }],
+			[
+				'frame.backgroundImage',
+				{
+					frame: { backgroundImage: 'data:image/png;base64,iVBORw0KGgo=' },
+				},
+			],
 			// Not a resource-shaped field: an inline payload is refused anyway,
 			// because a package carries no undeclared files.
-			['items[0].label', { items: [{ label: 'data:image/png;base64,iVBORw0KGgo=' }] }],
-			['items[0].caption', { items: [{ caption: 'blob:https://example.com/9f3c' }] }],
+			[
+				'items[0].label',
+				{
+					items: [
+						{ label: 'data:image/png;base64,iVBORw0KGgo=' },
+					],
+				},
+			],
+			[
+				'items[0].caption',
+				{
+					items: [
+						{ caption: 'blob:https://example.com/9f3c' },
+					],
+				},
+			],
 		] as const;
 
 		for (const [slot, document] of cases) {
@@ -901,8 +1038,14 @@ describe('the Template Package export contract', () => {
 		for (const packageKind of TEMPLATE_PACKAGE_KINDS) {
 			const result = await library.exportTemplatePackage({
 				packageKind,
-				template: { identity: `template-9-${packageKind}`, name: 'Provider independence', document: { logo } },
-				assets: [{ slot: 'logo', reference: logo }],
+				template: {
+					identity: `template-9-${packageKind}`,
+					name: 'Provider independence',
+					document: { logo },
+				},
+				assets: [
+					{ slot: 'logo', reference: logo },
+				],
 			});
 			expect(result.outcome).toBe('exported');
 			if (result.outcome !== 'exported')

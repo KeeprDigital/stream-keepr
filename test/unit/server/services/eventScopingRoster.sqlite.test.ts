@@ -47,7 +47,14 @@ async function seedEvent(name: string): Promise<SeededEvent> {
 	const eventId = event!.id;
 
 	const [player] = await db.insert(schema.players)
-		.values({ eventId, name: `${name} Player`, externalId: 'player-shared', externalSource: 'melee', isActive: true, lastSeenAt: new Date('2026-08-01T00:00:00Z') })
+		.values({
+			eventId,
+			name: `${name} Player`,
+			externalId: 'player-shared',
+			externalSource: 'melee',
+			isActive: true,
+			lastSeenAt: new Date('2026-08-01T00:00:00Z'),
+		})
 		.returning({ id: schema.players.id });
 	const [list] = await db.insert(schema.playerLists)
 		.values({ eventId, name: 'Shared List Name' })
@@ -60,7 +67,12 @@ async function seedEvent(name: string): Promise<SeededEvent> {
 		.values({ eventId, name: 'Shared Archetype' })
 		.returning({ id: schema.archetypes.id });
 	const [override] = await db.insert(schema.eventCardNameOverrides)
-		.values({ eventId, inputName: 'Ragavan', normalizedInputName: 'ragavan', resolvedCardId: cardId })
+		.values({
+			eventId,
+			inputName: 'Ragavan',
+			normalizedInputName: 'ragavan',
+			resolvedCardId: cardId,
+		})
 		.returning({ id: schema.eventCardNameOverrides.id });
 
 	return {

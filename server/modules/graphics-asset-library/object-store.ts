@@ -265,7 +265,9 @@ export function boundedByteStreamWithDeadline(
 		...bytes,
 		body: bytes.body.pipeThrough(
 			new TransformStream<Uint8Array, Uint8Array>(),
-			{ signal: AbortSignal.timeout(timeoutMilliseconds) },
+			{
+				signal: AbortSignal.timeout(timeoutMilliseconds),
+			},
 		),
 	};
 }

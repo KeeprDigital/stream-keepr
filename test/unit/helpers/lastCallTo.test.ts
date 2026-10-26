@@ -23,8 +23,12 @@ const CLOCK = '/api/time';
 
 function recordedFetch() {
 	const mock = vi.fn();
-	mock(LEDGER, { query: { page: 1 } });
-	mock(LEDGER, { query: { page: 2 } });
+	mock(LEDGER, {
+		query: { page: 1 },
+	});
+	mock(LEDGER, {
+		query: { page: 2 },
+	});
 	mock(CLOCK, { retry: 1 });
 	return mock;
 }
@@ -34,7 +38,9 @@ describe('lastCallTo', () => {
 		it('takes the last call to the named endpoint, not the last call', () => {
 			const [, options] = lastCallTo(recordedFetch(), LEDGER);
 
-			expect(options).toEqual({ query: { page: 2 } });
+			expect(options).toEqual({
+				query: { page: 2 },
+			});
 		});
 
 		it('names the endpoint and lists what arrived when nothing matched', () => {
@@ -151,13 +157,19 @@ describe('callsTo', () => {
 	it('hands back exactly the calls the test destructures, in the order they were made', () => {
 		const [first, second] = callsTo(recordedFetch(), 2, LEDGER);
 
-		expect(first?.[1]).toEqual({ query: { page: 1 } });
-		expect(second?.[1]).toEqual({ query: { page: 2 } });
+		expect(first?.[1]).toEqual({
+			query: { page: 1 },
+		});
+		expect(second?.[1]).toEqual({
+			query: { page: 2 },
+		});
 	});
 
 	it('refuses a list shorter than the test thinks, which is how a vacuous pass happens', () => {
 		const mock = vi.fn();
-		mock(LEDGER, { query: { page: 1 } });
+		mock(LEDGER, {
+			query: { page: 1 },
+		});
 
 		expect(() => callsTo(mock, 2, LEDGER)).toThrow(
 			`expected 2 calls to ${LEDGER}, got 1; recorded only ["${LEDGER}"]`,

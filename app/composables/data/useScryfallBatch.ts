@@ -83,7 +83,9 @@ export function useScryfallBatch() {
 
 		// Batch fetch by scryfall ID (collection endpoint, max 75 per request)
 		if (cardsWithIds.length > 0) {
-			const uniqueIds = [...new Set(cardsWithIds.map(c => c.scryfallId!))];
+			const uniqueIds = [
+				...new Set(cardsWithIds.map(c => c.scryfallId!)),
+			];
 			const batches: Array<{ id: string }[]> = [];
 			for (let i = 0; i < uniqueIds.length; i += SCRYFALL_COLLECTION_BATCH_SIZE) {
 				batches.push(uniqueIds.slice(i, i + SCRYFALL_COLLECTION_BATCH_SIZE).map(id => ({ id })));
@@ -93,7 +95,11 @@ export function useScryfallBatch() {
 				try {
 					const response = await fetchWithRetry(() => $fetch<ScryfallList.Cards>(
 						'https://api.scryfall.com/cards/collection',
-						{ method: 'POST', body: { identifiers: batch }, timeout: SCRYFALL_CLIENT_TIMEOUT_MS },
+						{
+							method: 'POST',
+							body: { identifiers: batch },
+							timeout: SCRYFALL_CLIENT_TIMEOUT_MS,
+						},
 					));
 					for (const card of response.data) {
 						cardDataMap.set(card.id, {
@@ -114,14 +120,19 @@ export function useScryfallBatch() {
 		// Fuzzy name search for cards without IDs
 		// Store results keyed by both scryfall ID and the original card name
 		// so buildDeckListArrays can resolve them via the name-based key
-		const uniqueNames = [...new Set(cardsWithoutIds.map(c => c.name))];
+		const uniqueNames = [
+			...new Set(cardsWithoutIds.map(c => c.name)),
+		];
 		for (let index = 0; index < uniqueNames.length; index += SCRYFALL_FUZZY_CONCURRENCY) {
 			const chunk = uniqueNames.slice(index, index + SCRYFALL_FUZZY_CONCURRENCY);
 			await Promise.all(chunk.map(async (name) => {
 				try {
 					const response = await fetchWithRetry(() => $fetch<ScryfallCard.Any>(
 						'https://api.scryfall.com/cards/named',
-						{ query: { fuzzy: name }, timeout: SCRYFALL_CLIENT_TIMEOUT_MS },
+						{
+							query: { fuzzy: name },
+							timeout: SCRYFALL_CLIENT_TIMEOUT_MS,
+						},
 					), isNotFound);
 					const parsed = {
 						...cardParser(response),

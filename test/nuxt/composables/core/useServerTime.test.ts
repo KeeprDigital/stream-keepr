@@ -1,7 +1,9 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 mockNuxtImport('$fetch', () => mockFetch);
 // The shared setup (test/nuxt/setup.ts) stubs `useServerTime` for every suite;
 // this file is the one that tests the real composable, so it opts back in.

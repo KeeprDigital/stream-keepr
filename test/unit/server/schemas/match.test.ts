@@ -87,7 +87,12 @@ describe('createMatchSchema', () => {
 	it('accepts valid player1Data object', () => {
 		const result = createMatchSchema.safeParse({
 			...validInput,
-			player1Data: { name: 'Alice', pronouns: 'she/her', wins: 3, losses: 1 },
+			player1Data: {
+				name: 'Alice',
+				pronouns: 'she/her',
+				wins: 3,
+				losses: 1,
+			},
 		});
 		expect(result.success).toBe(true);
 	});

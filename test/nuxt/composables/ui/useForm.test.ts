@@ -6,7 +6,9 @@ describe('useForm', () => {
 	});
 
 	it('initializes formData from static initialData', () => {
-		const { formData } = useForm({ initialData: { name: 'Alice', age: 30 } });
+		const { formData } = useForm({
+			initialData: { name: 'Alice', age: 30 },
+		});
 		expect(formData.value).toEqual({ name: 'Alice', age: 30 });
 	});
 
@@ -17,7 +19,9 @@ describe('useForm', () => {
 	});
 
 	it('reports isDirty when formData changes', () => {
-		const { formData, isDirty } = useForm({ initialData: { name: 'Alice' } });
+		const { formData, isDirty } = useForm({
+			initialData: { name: 'Alice' },
+		});
 		expect(isDirty.value).toBe(false);
 
 		formData.value.name = 'Bob';
@@ -25,7 +29,9 @@ describe('useForm', () => {
 	});
 
 	it('reports isDirty as false after reset', () => {
-		const { formData, isDirty, reset } = useForm({ initialData: { name: 'Alice' } });
+		const { formData, isDirty, reset } = useForm({
+			initialData: { name: 'Alice' },
+		});
 		formData.value.name = 'Bob';
 		expect(isDirty.value).toBe(true);
 
@@ -47,7 +53,10 @@ describe('useForm', () => {
 
 	it('calls onReset callback', () => {
 		const onReset = vi.fn();
-		const { reset } = useForm({ initialData: { name: '' }, onReset });
+		const { reset } = useForm({
+			initialData: { name: '' },
+			onReset,
+		});
 		reset();
 		expect(onReset).toHaveBeenCalledOnce();
 	});
@@ -63,7 +72,9 @@ describe('useForm', () => {
 	});
 
 	it('getChanges returns empty object when no changes', () => {
-		const { getChanges } = useForm({ initialData: { name: 'Alice' } });
+		const { getChanges } = useForm({
+			initialData: { name: 'Alice' },
+		});
 		expect(getChanges()).toEqual({});
 	});
 
@@ -79,7 +90,10 @@ describe('useForm', () => {
 	});
 
 	it('deep clones initial data to prevent reference sharing', () => {
-		const initial = { name: 'Alice', meta: { role: 'admin' } };
+		const initial = {
+			name: 'Alice',
+			meta: { role: 'admin' },
+		};
 		const { formData, originalFormData } = useForm({ initialData: initial });
 
 		formData.value.meta.role = 'user';
@@ -163,26 +177,43 @@ describe('useForm', () => {
 		});
 
 		it('merges nested objects per key, so a submitted object carries the remote sibling', async () => {
-			const initial = ref({ player1Data: { name: 'Alice', deckName: 'Burn' } });
+			const initial = ref({
+				player1Data: { name: 'Alice', deckName: 'Burn' },
+			});
 			const { formData, getChanges } = useForm({ initialData: initial });
 
 			formData.value.player1Data.name = 'Alicia';
-			initial.value = { player1Data: { name: 'Alice', deckName: 'Control' } };
+			initial.value = {
+				player1Data: { name: 'Alice', deckName: 'Control' },
+			};
 			await nextTick();
 
-			expect(getChanges()).toEqual({ player1Data: { name: 'Alicia', deckName: 'Control' } });
+			expect(getChanges()).toEqual({
+				player1Data: { name: 'Alicia', deckName: 'Control' },
+			});
 		});
 
 		it('treats an edited array as one value and keeps it whole', async () => {
-			const initial = ref({ tags: ['a', 'b'], title: 'x' });
+			const initial = ref({
+				tags: ['a', 'b'],
+				title: 'x',
+			});
 			const { formData, getChanges } = useForm({ initialData: initial });
 
 			formData.value.tags.push('c');
-			initial.value = { tags: ['a', 'z'], title: 'y' };
+			initial.value = {
+				tags: ['a', 'z'],
+				title: 'y',
+			};
 			await nextTick();
 
-			expect(formData.value).toEqual({ tags: ['a', 'b', 'c'], title: 'y' });
-			expect(getChanges()).toEqual({ tags: ['a', 'b', 'c'] });
+			expect(formData.value).toEqual({
+				tags: ['a', 'b', 'c'],
+				title: 'y',
+			});
+			expect(getChanges()).toEqual({
+				tags: ['a', 'b', 'c'],
+			});
 		});
 
 		it('merges rows carrying an id one row at a time', async () => {
@@ -214,14 +245,19 @@ describe('useForm', () => {
 		});
 
 		it('keeps a row edited locally that a colleague removed', async () => {
-			const initial = ref([{ id: 1, name: 'Alice' }, { id: 2, name: 'Briony' }]);
+			const initial = ref([
+				{ id: 1, name: 'Alice' },
+				{ id: 2, name: 'Briony' },
+			]);
 			const { formData } = useForm({ initialData: initial });
 
 			formData.value[0]!.name = 'Alicia';
 			initial.value = [];
 			await nextTick();
 
-			expect(formData.value).toEqual([{ id: 1, name: 'Alicia' }]);
+			expect(formData.value).toEqual([
+				{ id: 1, name: 'Alicia' },
+			]);
 		});
 
 		it('takes remote changes while a save is in flight and settles clean on its answer', async () => {

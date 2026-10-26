@@ -85,7 +85,13 @@ describe('metagame API', () => {
 		// p4 is unclassified (no archetypeId)
 		await $fetch(`/api/events/${eventId}/players`, {
 			method: 'POST',
-			body: { name: 'Player 4', wins: 2, losses: 4, position: 4, points: 6 },
+			body: {
+				name: 'Player 4',
+				wins: 2,
+				losses: 4,
+				position: 4,
+				points: 6,
+			},
 		});
 
 		// Create a player list with p1 and p2
@@ -97,7 +103,9 @@ describe('metagame API', () => {
 
 		await $fetch(`/api/events/${eventId}/player-lists/${playerListId}/members`, {
 			method: 'POST',
-			body: { playerIds: [p1.id, p2.id] },
+			body: {
+				playerIds: [p1.id, p2.id],
+			},
 		});
 
 		// Create a second event with enough players to exceed the old 50-ID limit.
@@ -409,7 +417,12 @@ describe('metagame API', () => {
 			await configure({ archetypeId: archetypeId1, conversionMetric: 'topN', conversionThreshold: 2 });
 			const whole = await outputSpotlight();
 			const page = (await $fetch(`/api/events/${eventId}/metagame/archetypes/${archetypeId1}`, {
-				query: { scope: 'all', board: 'full', conversionMetric: 'topN', conversionThreshold: 2 },
+				query: {
+					scope: 'all',
+					board: 'full',
+					conversionMetric: 'topN',
+					conversionThreshold: 2,
+				},
 			})) as any;
 			expect(whole.status).toBe(200);
 			expect(whole.data).toMatchObject({
@@ -421,15 +434,31 @@ describe('metagame API', () => {
 			});
 			expect(whole.data).toMatchObject({ playerCount: 2, convertedCount: 1, conversionRate: 50 });
 			expect(whole.data.pilots).toEqual([
-				expect.objectContaining({ name: 'Player 1', position: 1, wins: 5, losses: 1 }),
-				expect.objectContaining({ name: 'Player 3', position: 3, wins: 3, losses: 3 }),
+				expect.objectContaining({
+					name: 'Player 1',
+					position: 1,
+					wins: 5,
+					losses: 1,
+				}),
+				expect.objectContaining({
+					name: 'Player 3',
+					position: 3,
+					wins: 3,
+					losses: 3,
+				}),
 			]);
 
 			// A Player List scope narrows the pilots and the numbers, as on the page.
 			await configure({ scope: 'playerList', playerListId });
 			const listed = await outputSpotlight();
 			const listedPage = (await $fetch(`/api/events/${eventId}/metagame/archetypes/${archetypeId1}`, {
-				query: { scope: 'playerList', playerListId, board: 'full', conversionMetric: 'topN', conversionThreshold: 2 },
+				query: {
+					scope: 'playerList',
+					playerListId,
+					board: 'full',
+					conversionMetric: 'topN',
+					conversionThreshold: 2,
+				},
 			})) as any;
 			expect(listed.data).toMatchObject({ playerCount: listedPage.playerCount, metaShare: listedPage.metaShare, conversionRate: listedPage.conversionRate });
 			expect(listed.data.pilots.map((pilot: { name: string }) => pilot.name)).toEqual(['Player 1']);
@@ -523,7 +552,9 @@ describe('metagame reads with a hundred and more represented Archetypes', () => 
 	});
 
 	it('answers the operator summary', async () => {
-		const summary = await $fetch(`/api/events/${eventId}/metagame`, { query: { scope: 'all' } });
+		const summary = await $fetch(`/api/events/${eventId}/metagame`, {
+			query: { scope: 'all' },
+		});
 
 		expect(summary).toMatchObject({
 			totalPlayers: REPRESENTED + 5,
@@ -535,12 +566,16 @@ describe('metagame reads with a hundred and more represented Archetypes', () => 
 	});
 
 	it('answers the full operator breakdown and a small requested limit', async () => {
-		const full = await $fetch(`/api/events/${eventId}/metagame/archetypes`, { query: { scope: 'all' } });
+		const full = await $fetch(`/api/events/${eventId}/metagame/archetypes`, {
+			query: { scope: 'all' },
+		});
 		expect(full.entries.map(entry => entry.name))
 			.toEqual(Array.from({ length: REPRESENTED }, (_, index) => archetypeName(index + 1)));
 		expect(full.entries[0]).toMatchObject({ count: 4, winRate: 50 });
 
-		const limited = await $fetch(`/api/events/${eventId}/metagame/archetypes`, { query: { scope: 'all', limit: 5 } });
+		const limited = await $fetch(`/api/events/${eventId}/metagame/archetypes`, {
+			query: { scope: 'all', limit: 5 },
+		});
 		expect(limited.entries.map(entry => entry.name)).toEqual([1, 2, 3, 4, 5].map(archetypeName).concat('Other'));
 		expect(limited.entries.at(-1)).toMatchObject({ id: -1, count: REPRESENTED - 5, winRate: 50 });
 	});
@@ -575,7 +610,13 @@ describe('metagame reads with a hundred and more represented Archetypes', () => 
 			data: {
 				viewMode: 'archetype',
 				breakdown: await $fetch(`/api/events/${eventId}/metagame/archetypes`, {
-					query: { scope: 'all', sortBy: 'metaShare', limit: 5, conversionMetric: 'topN', conversionThreshold: 8 },
+					query: {
+						scope: 'all',
+						sortBy: 'metaShare',
+						limit: 5,
+						conversionMetric: 'topN',
+						conversionThreshold: 8,
+					},
 				}),
 			},
 		});
@@ -585,7 +626,12 @@ describe('metagame reads with a hundred and more represented Archetypes', () => 
 		await configure({ archetypeLimit: null, conversionMetric: 'minPoints', conversionThreshold: 3 });
 		const converted = await outputBreakdown();
 		const page = await $fetch(`/api/events/${eventId}/metagame/archetypes`, {
-			query: { scope: 'all', sortBy: 'metaShare', conversionMetric: 'minPoints', conversionThreshold: 3 },
+			query: {
+				scope: 'all',
+				sortBy: 'metaShare',
+				conversionMetric: 'minPoints',
+				conversionThreshold: 3,
+			},
 		});
 		expect(converted.data.breakdown).toEqual(page);
 		expect(page.entries.some(entry => entry.conversionRate != null)).toBe(true);

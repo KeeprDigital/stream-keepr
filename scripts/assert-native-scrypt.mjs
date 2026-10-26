@@ -101,14 +101,23 @@ export function nativeScryptScan(directory) {
 
 	let files;
 	try {
-		files = [...sourceMapFiles(directory)];
+		files = [
+			...sourceMapFiles(directory),
+		];
 	}
 	catch (error) {
-		return { ok: false, lines: [`assert-native-scrypt: cannot read ${directory} — ${error.message}`] };
+		return {
+			ok: false,
+			lines: [`assert-native-scrypt: cannot read ${directory} — ${error.message}`],
+		};
 	}
 
-	if (files.length === 0)
-		return { ok: false, lines: [`assert-native-scrypt: no source maps under ${directory}. A scan of nothing is not a pass.`] };
+	if (files.length === 0) {
+		return {
+			ok: false,
+			lines: [`assert-native-scrypt: no source maps under ${directory}. A scan of nothing is not a pass.`],
+		};
+	}
 
 	const nativeSites = [];
 	const fallbackSites = [];
@@ -168,7 +177,9 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.a
 			process.stderr.write(`assert-native-scrypt: ${failure}\n`);
 		if (broken.length === 0)
 			process.stdout.write('assert-native-scrypt: self-test passed — the guard reports a planted fallback and accepts the native module.\n');
-		process.exit(broken.length === 0 ? 0 : 1);
+		process.exit(broken.length === 0
+			? 0
+			: 1);
 	}
 
 	if (!target) {

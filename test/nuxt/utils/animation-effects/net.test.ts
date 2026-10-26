@@ -11,13 +11,22 @@ import { createNetDelegate } from '~/utils/animation-effects/net';
  */
 
 function mountDelegate(overrides: Partial<AnimationEffectParams<'net'>> = {}) {
-	const params = { ...animationEffectDefaultParams('net'), ...overrides };
+	const params = {
+		...animationEffectDefaultParams('net'),
+		...overrides,
+	};
 	const delegate = createNetDelegate();
 	const scene = new THREE.Scene();
 	const camera = delegate.createCamera(THREE, { width: 800, height: 450 });
 	const context = { three: THREE, scene, camera };
 	delegate.build({ ...context, params });
-	return { delegate, scene, camera: camera as THREE.PerspectiveCamera, context, params };
+	return {
+		delegate,
+		scene,
+		camera: camera as THREE.PerspectiveCamera,
+		context,
+		params,
+	};
 }
 
 function netGroup(scene: THREE.Scene): THREE.Group {
@@ -56,7 +65,11 @@ describe('createNetDelegate', () => {
 		const { scene, params } = mountDelegate();
 		const dots = dotMeshes(scene);
 		expect(dots.length).toBe(11 * 11 * 2);
-		for (const dot of [dots[0]!, dots[100]!, dots.at(-1)!]) {
+		for (const dot of [
+			dots[0]!,
+			dots[100]!,
+			dots.at(-1)!,
+		]) {
 			expect(dot.geometry.parameters.radius).toBe(0.25);
 			expect(dot.material.color.getHexString()).toBe(params.lineColor.slice(1));
 			expect(Math.abs(dot.position.y)).toBeLessThanOrEqual(18);
@@ -94,7 +107,10 @@ describe('createNetDelegate', () => {
 		expect(drawn).toBeGreaterThan(0);
 		expect(drawn % 2).toBe(0);
 		const position = lines.geometry.getAttribute('position') as THREE.BufferAttribute;
-		for (const segment of [0, Math.floor(drawn / 4)]) {
+		for (const segment of [
+			0,
+			Math.floor(drawn / 4),
+		]) {
 			const a = new THREE.Vector3().fromBufferAttribute(position, segment * 2);
 			const b = new THREE.Vector3().fromBufferAttribute(position, segment * 2 + 1);
 			expect(a.distanceTo(b)).toBeLessThan(22);
@@ -121,7 +137,10 @@ describe('createNetDelegate', () => {
 		const lines = linesMesh(scene);
 		delegate.update({ ...context, elapsedSeconds: 1 });
 		const atDefault = lines.geometry.drawRange.count;
-		delegate.applyParams({ ...context, params: { ...params, connectionDistance: 1 } });
+		delegate.applyParams({
+			...context,
+			params: { ...params, connectionDistance: 1 },
+		});
 		delegate.update({ ...context, elapsedSeconds: 1 });
 		expect(lines.geometry.drawRange.count).toBeLessThan(atDefault);
 	});
@@ -165,21 +184,33 @@ describe('createNetDelegate', () => {
 
 	it('applies colours live, and rebuilds the field when its construction params change', () => {
 		const { delegate, scene, context, params } = mountDelegate();
-		delegate.applyParams({ ...context, params: { ...params, lineColor: '#123456', backgroundColor: '#224466' } });
+		delegate.applyParams({
+			...context,
+			params: { ...params, lineColor: '#123456', backgroundColor: '#224466' },
+		});
 		expect((scene.background as THREE.Color).getHexString()).toBe('224466');
 		expect(dotMeshes(scene)[0]!.material.color.getHexString()).toBe('123456');
 
-		delegate.applyParams({ ...context, params: { ...params, points: 4 } });
+		delegate.applyParams({
+			...context,
+			params: { ...params, points: 4 },
+		});
 		expect(dotMeshes(scene).length).toBe(5 * 5 * 2);
 
-		delegate.applyParams({ ...context, params: { ...params, points: 4, showPoints: false } });
+		delegate.applyParams({
+			...context,
+			params: { ...params, points: 4, showPoints: false },
+		});
 		expect(dotMeshes(scene).length).toBe(0);
 	});
 
 	it('recomputes the blending choice live, as a fresh mount of the same params would', () => {
 		const { delegate, scene, context, params } = mountDelegate();
 		expect(linesMesh(scene).material.blending).toBe(THREE.AdditiveBlending);
-		delegate.applyParams({ ...context, params: { ...params, lineColor: '#111111', backgroundColor: '#ffffff' } });
+		delegate.applyParams({
+			...context,
+			params: { ...params, lineColor: '#111111', backgroundColor: '#ffffff' },
+		});
 		expect(linesMesh(scene).material.blending).toBe(THREE.NormalBlending);
 	});
 });

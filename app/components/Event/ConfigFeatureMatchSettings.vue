@@ -36,9 +36,18 @@ function submit() {
 	const changes = getChanges();
 	const { pronounsEnabled, standingsEnabled, lgsEnabled, tableNumberEnabled, featureMatchNotesEnabled, ...matchDefaults } = changes;
 	const eventToggles = Object.fromEntries(
-		Object.entries({ pronounsEnabled, standingsEnabled, lgsEnabled, tableNumberEnabled, featureMatchNotesEnabled }).filter(([key]) => key in changes),
+		Object.entries({
+			pronounsEnabled,
+			standingsEnabled,
+			lgsEnabled,
+			tableNumberEnabled,
+			featureMatchNotesEnabled,
+		}).filter(([key]) => key in changes),
 	);
-	emit('submit', { ...eventToggles, ...fromFeatureMatchDefaults(matchDefaults) } as UpdateEventInput);
+	emit('submit', {
+		...eventToggles,
+		...fromFeatureMatchDefaults(matchDefaults),
+	} as UpdateEventInput);
 }
 </script>
 

@@ -165,7 +165,9 @@ function setSocialProfileAutomatic(projectionKey: string, automatic: boolean) {
 function socialProfileTiming(control: typeof socialProfileProjectionControls.value[number]): string {
 	const { dwellMs, transition, transitionDurationMs } = control.declaration;
 	const dwell = dwellMs % 1000 === 0
-		? `${dwellMs / 1000} ${dwellMs === 1000 ? 'second' : 'seconds'}`
+		? `${dwellMs / 1000} ${dwellMs === 1000
+			? 'second'
+			: 'seconds'}`
 		: `${dwellMs} ms`;
 	const transitionLabel = transition[0]!.toUpperCase() + transition.slice(1);
 	return `${dwell} · ${transitionLabel} · ${transitionDurationMs} ms`;
@@ -266,7 +268,9 @@ function editDraft(key: string, value: GraphicInputValue) {
  * is exactly what `fieldValue` puts in the control, for both kinds of input.
  */
 function commit(key: string, value?: GraphicInputValue) {
-	const next = value === undefined ? drafts.value[key] : value;
+	const next = value === undefined
+		? drafts.value[key]
+		: value;
 	if (next === undefined)
 		return;
 
@@ -317,7 +321,9 @@ function clearOverride(key: string) {
  */
 function selectionIdOf(value: unknown): number | null {
 	const id = Number(value);
-	return Number.isInteger(id) && id > 0 ? id : null;
+	return Number.isInteger(id) && id > 0
+		? id
+		: null;
 }
 
 /** Why the last revision an operator chose for one media Graphic Input was not written. */
@@ -374,8 +380,12 @@ function mediaRefusal(inputKey: string): string | undefined {
 	if (mediaRefusals.value[inputKey])
 		return mediaRefusals.value[inputKey];
 	const code = sessionStore.inputRefusal(props.screen.id, props.graphic.id, inputKey);
-	const outcome = code === undefined ? undefined : graphicAssetRefusalOutcome(code);
-	return outcome === undefined ? undefined : MEDIA_REFUSALS[outcome];
+	const outcome = code === undefined
+		? undefined
+		: graphicAssetRefusalOutcome(code);
+	return outcome === undefined
+		? undefined
+		: MEDIA_REFUSALS[outcome];
 }
 
 /**
@@ -429,7 +439,9 @@ function refuseMedia(key: string, reason: string) {
 
 /** The media kind a Graphic Input declares, which is the only kind its picker offers. */
 function mediaKindOf(trace: GraphicInputTrace): GraphicMediaKind {
-	return trace.declaration.type === 'media' ? trace.declaration.mediaKind : 'image';
+	return trace.declaration.type === 'media'
+		? trace.declaration.mediaKind
+		: 'image';
 }
 
 /**
@@ -445,7 +457,9 @@ function mediaKindOf(trace: GraphicInputTrace): GraphicMediaKind {
  */
 function mediaValueOf(trace: GraphicInputTrace): GraphicAssetReference | undefined {
 	const value = fieldValue(trace);
-	return isMediaGraphicInputValue(value) ? value : undefined;
+	return isMediaGraphicInputValue(value)
+		? value
+		: undefined;
 }
 
 function selectSource(sourceKey: string, selectionId: number | null) {
@@ -468,8 +482,11 @@ function displayValue(trace: GraphicInputTrace, value: GraphicInputValue): strin
 		return '—';
 	if (trace.declaration.type === 'toggle')
 		return value ? 'On' : 'Off';
-	if (trace.declaration.type === 'media')
-		return typeof value === 'object' ? `${value.assetId}@${value.revisionId}` : '—';
+	if (trace.declaration.type === 'media') {
+		return typeof value === 'object'
+			? `${value.assetId}@${value.revisionId}`
+			: '—';
+	}
 	return graphicInputTextValue(trace.declaration, value) || String(value);
 }
 

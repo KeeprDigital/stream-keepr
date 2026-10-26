@@ -17,7 +17,9 @@ const defaultConfig = {
 
 const mutableConfig = reactive({ ...defaultConfig });
 const mockEventId = ref<number | null>(1);
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 type Handler = (message: Record<string, unknown>) => void;
 const channelHandlers = new Map<string, Set<Handler>>();
 const continuity = createContinuitySignal();
@@ -50,17 +52,44 @@ mockNuxtImport('useScreenContext', () => () => ({
 }));
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
-const phase = { id: 3, eventId: 1, name: 'Top 8', sortOrder: 1 };
+const phase = {
+	id: 3,
+	eventId: 1,
+	name: 'Top 8',
+	sortOrder: 1,
+};
 
 /** A Top 4 whose Semifinals (Round 31, Matches 101 and 102) seat Players 7 to 10. */
-const bracket: TopCutBracket = deriveTopCutBracket([{
-	roundId: 31,
-	name: 'Semifinals',
-	matches: [
-		{ matchId: 101, tableNumber: 1, player1: { playerId: 7, name: 'Nadia' }, player2: { playerId: 8, name: 'Oskar' }, isBye: false, hasResult: true, player1GameWins: 2, player2GameWins: 0, gameDraws: 0 },
-		{ matchId: 102, tableNumber: 2, player1: { playerId: 9, name: 'Pia' }, player2: { playerId: 10, name: 'Quinn' }, isBye: false, hasResult: false, player1GameWins: null, player2GameWins: null, gameDraws: null },
-	],
-}]);
+const bracket: TopCutBracket = deriveTopCutBracket([
+	{
+		roundId: 31,
+		name: 'Semifinals',
+		matches: [
+			{
+				matchId: 101,
+				tableNumber: 1,
+				player1: { playerId: 7, name: 'Nadia' },
+				player2: { playerId: 8, name: 'Oskar' },
+				isBye: false,
+				hasResult: true,
+				player1GameWins: 2,
+				player2GameWins: 0,
+				gameDraws: 0,
+			},
+			{
+				matchId: 102,
+				tableNumber: 2,
+				player1: { playerId: 9, name: 'Pia' },
+				player2: { playerId: 10, name: 'Quinn' },
+				isBye: false,
+				hasResult: false,
+				player1GameWins: null,
+				player2GameWins: null,
+				gameDraws: null,
+			},
+		],
+	},
+]);
 
 function answer(overrides: Partial<ScreenOutputTopCutResponse> = {}): ScreenOutputTopCutResponse {
 	return { phase: phase as ScreenOutputTopCutResponse['phase'], bracket, ...overrides };
@@ -112,7 +141,9 @@ describe('useTopCutModeData', () => {
 
 	it('is empty while the Phase holds no Rounds, or is gone', async () => {
 		mutableConfig.phaseId = 3;
-		mockFetch.mockResolvedValue(answer({ bracket: { size: 0, columns: [], champion: null } }));
+		mockFetch.mockResolvedValue(answer({
+			bracket: { size: 0, columns: [], champion: null },
+		}));
 
 		const { isEmpty } = makeTopCutModeData();
 		await flushPromises();
@@ -158,17 +189,75 @@ describe('useTopCutModeData', () => {
 		}
 
 		it.each([
-			['a result reported in a Round it shows', 'match:updated', { match: { id: 102, roundId: 31 } }],
-			['a Match paired in a Round it shows', 'match:created', { match: { id: 103, roundId: 31 } }],
-			['a Match deleted from it', 'match:deleted', { matchId: 101 }],
-			['a Match moved out of it', 'match:updated', { match: { id: 101, roundId: 99 } }],
-			['a Round added to its Phase', 'round:created', { round: { id: 32, phaseId: 3 } }],
-			['a Round of it renamed', 'round:updated', { round: { id: 31, phaseId: 3 } }],
-			['a Round of it deleted', 'round:deleted', { roundId: 31 }],
-			['a Round of it re-synced from Melee', 'melee:roundSynced', { roundId: 31 }],
-			['its Phase renamed', 'phase:updated', { phase: { id: 3 } }],
-			['its Phase deleted', 'phase:deleted', { phaseId: 3 }],
-			['an entrant renamed', 'player:updated', { player: { id: 9 } }],
+			[
+				'a result reported in a Round it shows',
+				'match:updated',
+				{
+					match: { id: 102, roundId: 31 },
+				},
+			],
+			[
+				'a Match paired in a Round it shows',
+				'match:created',
+				{
+					match: { id: 103, roundId: 31 },
+				},
+			],
+			[
+				'a Match deleted from it',
+				'match:deleted',
+				{ matchId: 101 },
+			],
+			[
+				'a Match moved out of it',
+				'match:updated',
+				{
+					match: { id: 101, roundId: 99 },
+				},
+			],
+			[
+				'a Round added to its Phase',
+				'round:created',
+				{
+					round: { id: 32, phaseId: 3 },
+				},
+			],
+			[
+				'a Round of it renamed',
+				'round:updated',
+				{
+					round: { id: 31, phaseId: 3 },
+				},
+			],
+			[
+				'a Round of it deleted',
+				'round:deleted',
+				{ roundId: 31 },
+			],
+			[
+				'a Round of it re-synced from Melee',
+				'melee:roundSynced',
+				{ roundId: 31 },
+			],
+			[
+				'its Phase renamed',
+				'phase:updated',
+				{
+					phase: { id: 3 },
+				},
+			],
+			[
+				'its Phase deleted',
+				'phase:deleted',
+				{ phaseId: 3 },
+			],
+			[
+				'an entrant renamed',
+				'player:updated',
+				{
+					player: { id: 9 },
+				},
+			],
 			['Melee\'s structure synced', 'melee:structureSynced', {}],
 		])('re-reads on %s', async (_, type, payload) => {
 			await following();
@@ -179,10 +268,34 @@ describe('useTopCutModeData', () => {
 		});
 
 		it.each([
-			['a result in a Round it does not show', 'match:updated', { match: { id: 500, roundId: 40 } }],
-			['a Round added to another Phase', 'round:created', { round: { id: 41, phaseId: 4 } }],
-			['another Phase renamed', 'phase:updated', { phase: { id: 4 } }],
-			['a Player it does not seat renamed', 'player:updated', { player: { id: 50 } }],
+			[
+				'a result in a Round it does not show',
+				'match:updated',
+				{
+					match: { id: 500, roundId: 40 },
+				},
+			],
+			[
+				'a Round added to another Phase',
+				'round:created',
+				{
+					round: { id: 41, phaseId: 4 },
+				},
+			],
+			[
+				'another Phase renamed',
+				'phase:updated',
+				{
+					phase: { id: 4 },
+				},
+			],
+			[
+				'a Player it does not seat renamed',
+				'player:updated',
+				{
+					player: { id: 50 },
+				},
+			],
 		])('does not re-read on %s', async (_, type, payload) => {
 			await following();
 			deliver(type, payload);
@@ -194,18 +307,52 @@ describe('useTopCutModeData', () => {
 		// Seeds come from Round Standings before the Phase, which a sync of any
 		// Round may write, and any Round or Phase edit may reorder.
 		const seedChanges = [
-			['an earlier Round re-synced from Melee', 'melee:roundSynced', { roundId: 20 }],
-			['an earlier Round renumbered', 'round:updated', { round: { id: 20, phaseId: 2 } }],
-			['an earlier Round deleted', 'round:deleted', { roundId: 20 }],
-			['another Phase reordered', 'phase:updated', { phase: { id: 2 } }],
-			['another Phase deleted', 'phase:deleted', { phaseId: 2 }],
+			[
+				'an earlier Round re-synced from Melee',
+				'melee:roundSynced',
+				{ roundId: 20 },
+			],
+			[
+				'an earlier Round renumbered',
+				'round:updated',
+				{
+					round: { id: 20, phaseId: 2 },
+				},
+			],
+			[
+				'an earlier Round deleted',
+				'round:deleted',
+				{ roundId: 20 },
+			],
+			[
+				'another Phase reordered',
+				'phase:updated',
+				{
+					phase: { id: 2 },
+				},
+			],
+			[
+				'another Phase deleted',
+				'phase:deleted',
+				{ phaseId: 2 },
+			],
 		] as const;
 
 		// An Archetype is named by its Archetype or a Deck List, neither of which
 		// is a Player message.
 		const archetypeChanges = [
-			['an Archetype renamed', 'archetype:updated', { archetype: { id: 5 } }],
-			['an Archetype deleted', 'archetype:deleted', { archetypeId: 5 }],
+			[
+				'an Archetype renamed',
+				'archetype:updated',
+				{
+					archetype: { id: 5 },
+				},
+			],
+			[
+				'an Archetype deleted',
+				'archetype:deleted',
+				{ archetypeId: 5 },
+			],
 			['Melee\'s Deck Lists synced', 'melee:decklistsSynced', {}],
 		] as const;
 
@@ -225,7 +372,10 @@ describe('useTopCutModeData', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(1);
 		});
 
-		it.each([...seedChanges, ...archetypeChanges])('does not re-read on %s while neither shows', async (_, type, payload) => {
+		it.each([
+			...seedChanges,
+			...archetypeChanges,
+		])('does not re-read on %s while neither shows', async (_, type, payload) => {
 			await following();
 			deliver(type, payload);
 			await flushPromises();

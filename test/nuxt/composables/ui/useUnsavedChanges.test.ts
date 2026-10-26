@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Capture the route leave guard callback so tests can invoke it directly
 let capturedRouteLeaveGuard: (() => Promise<boolean>) | null = null;
-const mockOpenFn = vi.fn(() => ({ result: Promise.resolve(true) }));
+const mockOpenFn = vi.fn(() => ({
+	result: Promise.resolve(true),
+}));
 const mockOverlay = {
 	create: vi.fn(() => ({
 		open: mockOpenFn,
@@ -19,7 +21,9 @@ describe('useUnsavedChanges', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		capturedRouteLeaveGuard = null;
-		mockOpenFn.mockReturnValue({ result: Promise.resolve(true) });
+		mockOpenFn.mockReturnValue({
+			result: Promise.resolve(true),
+		});
 	});
 
 	it('returns isDirty, registerDirtyState, and bypassGuard', () => {
@@ -89,7 +93,9 @@ describe('useUnsavedChanges', () => {
 		});
 
 		it('allows navigation when user confirms', async () => {
-			mockOpenFn.mockReturnValueOnce({ result: Promise.resolve(true) });
+			mockOpenFn.mockReturnValueOnce({
+				result: Promise.resolve(true),
+			});
 			const { registerDirtyState } = useUnsavedChanges();
 			registerDirtyState(ref(true));
 
@@ -99,7 +105,9 @@ describe('useUnsavedChanges', () => {
 		});
 
 		it('blocks navigation when user cancels', async () => {
-			mockOpenFn.mockReturnValueOnce({ result: Promise.resolve(false) });
+			mockOpenFn.mockReturnValueOnce({
+				result: Promise.resolve(false),
+			});
 			const { registerDirtyState } = useUnsavedChanges();
 			registerDirtyState(ref(true));
 

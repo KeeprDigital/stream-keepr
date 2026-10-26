@@ -25,7 +25,10 @@ describe('playerService', () => {
 
 	describe('findAll', () => {
 		it('returns players for event', async () => {
-			const players = [createMockPlayer(), createMockPlayer({ id: 2 })];
+			const players = [
+				createMockPlayer(),
+				createMockPlayer({ id: 2 }),
+			];
 			getChain('select').orderBy.mockResolvedValue(players);
 
 			const result = await playerService().findAll({ eventId: 1 });
@@ -34,7 +37,9 @@ describe('playerService', () => {
 		});
 
 		it('returns players filtered by listId using innerJoin', async () => {
-			const players = [createMockPlayer()];
+			const players = [
+				createMockPlayer(),
+			];
 			getChain('select').orderBy.mockResolvedValue(players);
 
 			const result = await playerService().findAll({ eventId: 1, listId: 5 });
@@ -55,7 +60,9 @@ describe('playerService', () => {
 		});
 
 		it('strips forged Melee provenance before inserting', async () => {
-			getChain('insert').returning.mockResolvedValue([createMockPlayer()]);
+			getChain('insert').returning.mockResolvedValue([
+				createMockPlayer(),
+			]);
 
 			await playerService().create(7, {
 				name: 'Forger',
@@ -79,7 +86,9 @@ describe('playerService', () => {
 		});
 
 		it('strips forged Melee provenance before writing', async () => {
-			getChain('update').returning.mockResolvedValue([createMockPlayer()]);
+			getChain('update').returning.mockResolvedValue([
+				createMockPlayer(),
+			]);
 
 			await playerService().update(1, 1, {
 				name: 'Forger',
@@ -97,11 +106,19 @@ describe('playerService', () => {
 	describe('remove', () => {
 		it('reports the deletion with the Screens whose Deck Source it cleared', async () => {
 			const screen = { id: 4 };
-			mockDb.batch.mockResolvedValue([[screen], [{ id: 1 }]]);
+			mockDb.batch.mockResolvedValue([
+				[screen],
+				[
+					{ id: 1 },
+				],
+			]);
 
 			const result = await playerService().remove(1, 1);
 
-			expect(result).toEqual({ deleted: true, clearedScreens: [screen] });
+			expect(result).toEqual({
+				deleted: true,
+				clearedScreens: [screen],
+			});
 		});
 
 		it('reports a missing Player as not deleted', async () => {
@@ -116,16 +133,40 @@ describe('playerService', () => {
 	describe('batchUpsertByExternalId', () => {
 		it('batch upserts multiple players', async () => {
 			const now = new Date();
-			const p1 = createMockPlayer({ id: 1, externalId: 'e1', externalSource: 'melee', createdAt: now, updatedAt: now });
-			const p2 = createMockPlayer({ id: 2, externalId: 'e2', externalSource: 'melee', createdAt: now, updatedAt: new Date(now.getTime() + 1000) });
+			const p1 = createMockPlayer({
+				id: 1,
+				externalId: 'e1',
+				externalSource: 'melee',
+				createdAt: now,
+				updatedAt: now,
+			});
+			const p2 = createMockPlayer({
+				id: 2,
+				externalId: 'e2',
+				externalSource: 'melee',
+				createdAt: now,
+				updatedAt: new Date(now.getTime() + 1000),
+			});
 			mockDb.batch.mockResolvedValue([
-				[{ eventId: 1, externalId: 'e2', externalSource: 'melee' }],
+				[
+					{ eventId: 1, externalId: 'e2', externalSource: 'melee' },
+				],
 				[p1, p2],
 			]);
 
 			const result = await playerService().batchUpsertByExternalId([
-				{ eventId: 1, name: 'P1', externalId: 'e1', externalSource: 'melee' } as any,
-				{ eventId: 1, name: 'P2', externalId: 'e2', externalSource: 'melee' } as any,
+				{
+					eventId: 1,
+					name: 'P1',
+					externalId: 'e1',
+					externalSource: 'melee',
+				} as any,
+				{
+					eventId: 1,
+					name: 'P2',
+					externalId: 'e2',
+					externalSource: 'melee',
+				} as any,
 			]);
 
 			expect(result.players).toHaveLength(2);
@@ -150,16 +191,22 @@ describe('playerService', () => {
 				updatedAt: seenAt,
 			});
 			mockDb.batch.mockResolvedValue([
-				[{ eventId: 1, externalId: 'team-1', externalSource: 'melee' }],
+				[
+					{ eventId: 1, externalId: 'team-1', externalSource: 'melee' },
+				],
 				[activePlayer],
-				[{ id: 9 }],
+				[
+					{ id: 9 },
+				],
 			]);
 
-			const result = await playerService().reconcileMeleeSnapshot(1, [{
-				externalId: 'team-1',
-				externalStatus: 7,
-				name: 'Active Player',
-			}], seenAt);
+			const result = await playerService().reconcileMeleeSnapshot(1, [
+				{
+					externalId: 'team-1',
+					externalStatus: 7,
+					name: 'Active Player',
+				},
+			], seenAt);
 
 			expect(result).toEqual({
 				players: [activePlayer],
@@ -176,7 +223,12 @@ describe('playerService', () => {
 		});
 
 		it('deactivates all existing Melee players for a complete empty snapshot', async () => {
-			mockDb.batch.mockResolvedValue([[{ id: 4 }, { id: 5 }]]);
+			mockDb.batch.mockResolvedValue([
+				[
+					{ id: 4 },
+					{ id: 5 },
+				],
+			]);
 
 			const result = await playerService().reconcileMeleeSnapshot(
 				1,
@@ -207,16 +259,20 @@ describe('playerService', () => {
 				updatedAt: seenAt,
 			});
 			mockDb.batch.mockResolvedValue([
-				[{ eventId: 1, externalId: 'returning-player', externalSource: 'melee' }],
+				[
+					{ eventId: 1, externalId: 'returning-player', externalSource: 'melee' },
+				],
 				[returningPlayer],
 				[],
 			]);
 
-			const result = await playerService().reconcileMeleeSnapshot(1, [{
-				externalId: 'returning-player',
-				externalStatus: 9,
-				name: 'Returning Player',
-			}], seenAt);
+			const result = await playerService().reconcileMeleeSnapshot(1, [
+				{
+					externalId: 'returning-player',
+					externalStatus: 9,
+					name: 'Returning Player',
+				},
+			], seenAt);
 
 			expect(result).toEqual({
 				players: [returningPlayer],
@@ -232,11 +288,13 @@ describe('playerService', () => {
 		it('surfaces a snapshot batch failure without partial fallback writes', async () => {
 			mockDb.batch.mockRejectedValue(new Error('player snapshot rolled back'));
 
-			await expect(playerService().reconcileMeleeSnapshot(1, [{
-				externalId: 'team-1',
-				externalStatus: null,
-				name: 'Player One',
-			}], new Date('2026-07-15T09:00:00.000Z'))).rejects.toThrow('player snapshot rolled back');
+			await expect(playerService().reconcileMeleeSnapshot(1, [
+				{
+					externalId: 'team-1',
+					externalStatus: null,
+					name: 'Player One',
+				},
+			], new Date('2026-07-15T09:00:00.000Z'))).rejects.toThrow('player snapshot rolled back');
 
 			expect(mockDb.batch).toHaveBeenCalledOnce();
 		});

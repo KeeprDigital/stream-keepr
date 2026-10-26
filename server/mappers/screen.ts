@@ -22,5 +22,8 @@ export function mapScreenToResponse(screen: DbScreen): ScreenResponse {
 		graphicAssetReferenceVersion: _graphicAssetReferenceVersion,
 		...publicScreen
 	} = screen;
-	return mapTimestamps({ ...publicScreen, modeConfigs: clampStoredModeConfigs(publicScreen.modeConfigs) });
+	return mapTimestamps({
+		...publicScreen,
+		modeConfigs: clampStoredModeConfigs(publicScreen.modeConfigs),
+	});
 }

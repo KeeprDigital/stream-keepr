@@ -59,7 +59,9 @@ async function readPlayerFacts(eventId: number, playerId: number | null): Promis
 
 	return {
 		player: row.player,
-		archetype: row.archetypeName == null ? null : { name: row.archetypeName, colors: row.archetypeColors },
+		archetype: row.archetypeName == null
+			? null
+			: { name: row.archetypeName, colors: row.archetypeColors },
 		latestStanding: latestStanding ?? null,
 	};
 }
@@ -85,7 +87,10 @@ async function readMatchesBetween(eventId: number, player1Id: number, player2Id:
 			),
 		));
 
-	return rows.map(({ match, ...playedIn }) => ({ ...match, ...playedIn }));
+	return rows.map(({ match, ...playedIn }) => ({
+		...match,
+		...playedIn,
+	}));
 }
 
 /**
@@ -101,7 +106,14 @@ export async function findHeadToHead(eventId: number, config: HeadToHeadModeConf
 		readPlayerFacts(eventId, sides.player1Id),
 		readPlayerFacts(eventId, sides.player2Id),
 	]);
-	const matchesBetween = player1 && player2 ? await readMatchesBetween(eventId, player1.player.id, player2.player.id) : [];
+	const matchesBetween = player1 && player2
+		? await readMatchesBetween(eventId, player1.player.id, player2.player.id)
+		: [];
 
-	return projectHeadToHead({ player1, player2, matches: matchesBetween, currentMatchId: sides.currentMatchId });
+	return projectHeadToHead({
+		player1,
+		player2,
+		matches: matchesBetween,
+		currentMatchId: sides.currentMatchId,
+	});
 }

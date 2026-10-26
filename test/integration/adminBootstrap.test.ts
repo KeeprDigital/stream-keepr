@@ -48,7 +48,10 @@ async function signIn(email: string, password: string) {
 		// `Origin` because a browser sends one and this request stands in for one:
 		// Better Auth's CSRF defence is live against the mounted handler since
 		// #410, and `auth.test.ts` is where what it refuses is asserted.
-		headers: { 'Content-Type': 'application/json', 'Origin': url('/') },
+		headers: {
+			'Content-Type': 'application/json',
+			'Origin': url('/'),
+		},
 		body: JSON.stringify({ email, password }),
 	});
 }
@@ -61,7 +64,9 @@ async function sessionFrom(signInResponse: Awaited<ReturnType<typeof signIn>>) {
 		.join('; ');
 	expect(cookie).toContain('better-auth.session_token=');
 
-	const response = await fetch('/api/auth/get-session', { headers: { Cookie: cookie } });
+	const response = await fetch('/api/auth/get-session', {
+		headers: { Cookie: cookie },
+	});
 	expect(response.status).toBe(200);
 	return await response.json() as { user: { id: string; email: string; role?: string | null } };
 }
@@ -129,7 +134,10 @@ describe('first-admin bootstrap', () => {
 	});
 
 	it('finds the same account whatever case the operator typed the email in', async () => {
-		const response = await ensureAdmin({ email: EMAIL.toUpperCase(), password: RECOVERY_PASSWORD });
+		const response = await ensureAdmin({
+			email: EMAIL.toUpperCase(),
+			password: RECOVERY_PASSWORD,
+		});
 
 		expect(response.status).toBe(200);
 		// One account, reported under the email it is keyed on rather than the one
@@ -160,7 +168,9 @@ describe('first-admin bootstrap', () => {
 		// Worker, which is why the handler is `.post.ts` and takes a body.
 		const response = await fetch(
 			`${ROUTE}?email=query@keepr.digital&password=${PASSWORD}`,
-			{ headers: { 'x-admin-bootstrap-token': INTEGRATION_ADMIN_BOOTSTRAP_TOKEN } },
+			{
+				headers: { 'x-admin-bootstrap-token': INTEGRATION_ADMIN_BOOTSTRAP_TOKEN },
+			},
 		);
 
 		// Not 405: under `ssr: false` an unmatched path is answered by the SPA

@@ -17,7 +17,9 @@ vi.doMock('~~/server/modules/event-data-publication', () => ({
 	eventDataPublicationModule: () => mockPublication,
 }));
 vi.doMock('~~/server/services/card', () => ({
-	cardService: () => ({ cleanupDeletedScreenCard: vi.fn() }),
+	cardService: () => ({
+		cleanupDeletedScreenCard: vi.fn(),
+	}),
 }));
 
 const { broadcastDeckListService } = await import('~~/server/services/broadcastDeckList');
@@ -38,12 +40,26 @@ function capability(suffix: string) {
 		assetCapabilityDigest: `digest-${suffix}`,
 	};
 }
-const provideUnusedGraphicsAssets = () => ({ inspectGraphicAssetRevisions: vi.fn() });
+function provideUnusedGraphicsAssets() {
+	return {
+		inspectGraphicAssetRevisions: vi.fn(),
+	};
+}
 
 beforeAll(async () => {
 	const [event, otherEvent] = await db.insert(schema.events).values([
-		{ name: 'Source Event', game: 'mtg', featureMatchOrientation: 'horizontal', broadcastDeckListsEnabled: true },
-		{ name: 'Other Event', game: 'mtg', featureMatchOrientation: 'horizontal', broadcastDeckListsEnabled: true },
+		{
+			name: 'Source Event',
+			game: 'mtg',
+			featureMatchOrientation: 'horizontal',
+			broadcastDeckListsEnabled: true,
+		},
+		{
+			name: 'Other Event',
+			game: 'mtg',
+			featureMatchOrientation: 'horizontal',
+			broadcastDeckListsEnabled: true,
+		},
 	]).returning({ id: schema.events.id });
 	eventId = event!.id;
 	otherEventId = otherEvent!.id;
@@ -73,13 +89,21 @@ describe('deck source write invariants', () => {
 		await expect(screenService().create(eventId, {
 			name: 'Cross Player',
 			slug: 'cross-player',
-			modeConfigs: { deck: { deckSource: { type: 'player', playerId: otherPlayer!.id } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId: otherPlayer!.id },
+				},
+			},
 		} as never, capability('cross-player'))).rejects.toMatchObject({ statusCode: 409, code: 'SCREEN_DECK_SOURCE_CONFLICT' });
 
 		await expect(screenService().create(eventId, {
 			name: 'Cross List',
 			slug: 'cross-list',
-			modeConfigs: { deck: { deckSource: { type: 'broadcast', broadcastDeckListId: otherList!.id } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'broadcast', broadcastDeckListId: otherList!.id },
+				},
+			},
 		} as never, capability('cross-list'))).rejects.toMatchObject({ statusCode: 409, code: 'SCREEN_DECK_SOURCE_CONFLICT' });
 	});
 
@@ -88,18 +112,29 @@ describe('deck source write invariants', () => {
 			name: 'Zulu',
 			slug: 'zulu-source',
 			currentMode: 'card',
-			modeConfigs: { deck: { deckSource: { type: 'broadcast', broadcastDeckListId: listId } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'broadcast', broadcastDeckListId: listId },
+				},
+			},
 		} as never, capability('zulu'));
 		await screenService().create(eventId, {
 			name: 'Alpha',
 			slug: 'alpha-source',
 			currentMode: 'background',
-			modeConfigs: { deck: { deckSource: { type: 'broadcast', broadcastDeckListId: listId } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'broadcast', broadcastDeckListId: listId },
+				},
+			},
 		} as never, capability('alpha'));
 
 		await expect(broadcastDeckListService().remove(listId, eventId, 1)).resolves.toMatchObject({
 			status: 'in-use',
-			screens: [{ name: 'Alpha' }, { name: 'Zulu' }],
+			screens: [
+				{ name: 'Alpha' },
+				{ name: 'Zulu' },
+			],
 		});
 		expect(await broadcastDeckListService().findById(listId, eventId)).toBeDefined();
 	});
@@ -114,7 +149,11 @@ describe('deck source write invariants', () => {
 		const screen = await screenService().create(eventId, {
 			name: 'Delete Race',
 			slug: 'delete-race',
-			modeConfigs: { deck: { deckSource: { type: 'player', playerId } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId },
+				},
+			},
 		} as never, capability('delete-race'));
 
 		await expect(broadcastDeckListService().remove(list!.id, eventId, 1)).resolves.toEqual({ status: 'deleted' });
@@ -135,7 +174,11 @@ describe('deck source write invariants', () => {
 		const screen = await screenService().create(eventId, {
 			name: 'Route Delete Race',
 			slug: 'route-delete-race',
-			modeConfigs: { deck: { deckSource: { type: 'player', playerId } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId },
+				},
+			},
 		} as never, capability('route-delete-race'));
 
 		await expect(broadcastDeckListService().remove(list!.id, eventId, 1)).resolves.toEqual({ status: 'deleted' });
@@ -144,7 +187,9 @@ describe('deck source write invariants', () => {
 			eventId,
 			screenId: screen.id,
 			mode: 'deck',
-			config: { deckSource: { type: 'broadcast', broadcastDeckListId: list!.id } },
+			config: {
+				deckSource: { type: 'broadcast', broadcastDeckListId: list!.id },
+			},
 			stateVersion: screen.stateVersion,
 			graphicsAssets: provideUnusedGraphicsAssets,
 		})).rejects.toMatchObject({ statusCode: 409, code: 'SCREEN_DECK_SOURCE_CONFLICT' });
@@ -163,7 +208,11 @@ describe('deck source write invariants', () => {
 		const screen = await screenService().create(eventId, {
 			name: 'Generic Update',
 			slug: 'generic-update',
-			modeConfigs: { deck: { deckSource: { type: 'player', playerId } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId },
+				},
+			},
 		} as never, capability('generic-update'));
 
 		await expect(screenWriteModule().updateScreen({
@@ -172,7 +221,11 @@ describe('deck source write invariants', () => {
 			screenId: screen.id,
 			input: {
 				stateVersion: screen.stateVersion,
-				modeConfigs: { deck: { deckSource: { type: 'broadcast', broadcastDeckListId: otherList!.id } } },
+				modeConfigs: {
+					deck: {
+						deckSource: { type: 'broadcast', broadcastDeckListId: otherList!.id },
+					},
+				},
 			} as never,
 		})).rejects.toMatchObject({ statusCode: 409, code: 'SCREEN_DECK_SOURCE_CONFLICT' });
 		expect((await screenService().findById(screen.id, eventId))?.modeConfigs?.deck?.deckSource)
@@ -184,7 +237,11 @@ describe('deck source write invariants', () => {
 		const screen = await screenService().create(eventId, {
 			name: 'Player Regression',
 			slug: 'player-regression',
-			modeConfigs: { deck: { deckSource: { type: 'player', playerId: null } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId: null },
+				},
+			},
 		} as never, capability('player-regression'));
 
 		const accepted = await screenWriteModule().updateModeConfig({
@@ -192,7 +249,9 @@ describe('deck source write invariants', () => {
 			eventId,
 			screenId: screen.id,
 			mode: 'deck',
-			config: { deckSource: { type: 'player', playerId } },
+			config: {
+				deckSource: { type: 'player', playerId },
+			},
 			stateVersion: screen.stateVersion,
 			originConnectionId: 'player-origin',
 			graphicsAssets: provideUnusedGraphicsAssets,
@@ -211,7 +270,9 @@ describe('deck source write invariants', () => {
 			eventId,
 			screenId: screen.id,
 			mode: 'deck',
-			config: { deckSource: { type: 'player', playerId: null } },
+			config: {
+				deckSource: { type: 'player', playerId: null },
+			},
 			stateVersion: screen.stateVersion,
 			graphicsAssets: provideUnusedGraphicsAssets,
 		})).rejects.toMatchObject({ statusCode: 409 });
@@ -225,14 +286,19 @@ describe('deck source write invariants', () => {
 			.rejects
 			.toEqual(expect.objectContaining<Partial<BroadcastDeckListsInUseError>>({
 				name: 'BroadcastDeckListsInUseError',
-				screens: [expect.objectContaining({ name: 'Alpha' }), expect.objectContaining({ name: 'Zulu' })],
+				screens: [
+					expect.objectContaining({ name: 'Alpha' }),
+					expect.objectContaining({ name: 'Zulu' }),
+				],
 			}));
 
 		await db.update(schema.screens).set({ modeConfigs: null }).where(eq(schema.screens.eventId, eventId));
 		await expect(eventService().update(eventId, { broadcastDeckListsEnabled: false }))
 			.resolves
 			.toMatchObject({ broadcastDeckListsEnabled: false });
-		const [listCount] = await db.select({ value: count() }).from(schema.broadcastDeckLists).where(eq(schema.broadcastDeckLists.eventId, eventId));
+		const [listCount] = await db.select({
+			value: count(),
+		}).from(schema.broadcastDeckLists).where(eq(schema.broadcastDeckLists.eventId, eventId));
 		expect(listCount?.value).toBeGreaterThan(0);
 	});
 
@@ -240,7 +306,11 @@ describe('deck source write invariants', () => {
 		const screen = await screenService().create(eventId, {
 			name: 'Disable Race',
 			slug: 'disable-race',
-			modeConfigs: { deck: { deckSource: { type: 'player', playerId } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId },
+				},
+			},
 		} as never, capability('disable-race'));
 
 		await expect(screenService().updateModeConfig(screen.id, eventId, 'deck', {
@@ -258,12 +328,20 @@ describe('deleting the Player a Deck Source selects (#651)', () => {
 			name: 'Selects Deleted',
 			slug: 'selects-deleted',
 			currentMode: 'deck',
-			modeConfigs: { deck: { deckSource: { type: 'player', playerId: deleted!.id } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId: deleted!.id },
+				},
+			},
 		} as never, capability('selects-deleted'));
 		const bystander = await screenService().create(eventId, {
 			name: 'Selects Other',
 			slug: 'selects-other',
-			modeConfigs: { deck: { deckSource: { type: 'player', playerId } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId },
+				},
+			},
 		} as never, capability('selects-other'));
 		mockPublication.screenUpdated.mockClear();
 
@@ -273,7 +351,11 @@ describe('deleting the Player a Deck Source selects (#651)', () => {
 
 		await expect(screenService().updateModeConfig(selecting.id, eventId, 'standings', { headerText: 'After delete' }))
 			.resolves
-			.toMatchObject({ modeConfigs: { standings: expect.objectContaining({ headerText: 'After delete' }) } });
+			.toMatchObject({
+				modeConfigs: {
+					standings: expect.objectContaining({ headerText: 'After delete' }),
+				},
+			});
 		const later = await screenService().findById(selecting.id, eventId);
 		expect(later?.modeConfigs?.deck?.deckSource).toEqual({ type: 'player', playerId: null });
 		expect(later?.stateVersion).toBe(selecting.stateVersion + 2);
@@ -286,7 +368,11 @@ describe('deleting the Player a Deck Source selects (#651)', () => {
 		expect(mockPublication.screenUpdated.mock.calls[0]?.[0]).not.toHaveProperty('originConnectionId');
 		expect(await screenService().findById(bystander.id, eventId)).toMatchObject({
 			stateVersion: bystander.stateVersion,
-			modeConfigs: { deck: { deckSource: { type: 'player', playerId } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId },
+				},
+			},
 		});
 	});
 
@@ -300,23 +386,41 @@ describe('deleting the Player a Deck Source selects (#651)', () => {
 		const selecting = await screenService().create(eventId, {
 			name: 'Selects Imported',
 			slug: 'selects-imported',
-			modeConfigs: { deck: { deckSource: { type: 'player', playerId: imported!.id } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId: imported!.id },
+				},
+			},
 		} as never, capability('selects-imported'));
 		const manual = await screenService().create(eventId, {
 			name: 'Selects Manual',
 			slug: 'selects-manual',
-			modeConfigs: { deck: { deckSource: { type: 'player', playerId } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId },
+				},
+			},
 		} as never, capability('selects-manual'));
 
 		const reset = await eventService().updateMeleeConfig(eventId, { meleeEnabled: false, meleeEventId: null, meleeClientId: null });
 
-		expect(reset?.clearedScreens).toEqual([expect.objectContaining({ id: selecting.id, stateVersion: selecting.stateVersion + 1 })]);
+		expect(reset?.clearedScreens).toEqual([
+			expect.objectContaining({ id: selecting.id, stateVersion: selecting.stateVersion + 1 }),
+		]);
 		expect(await screenService().findById(selecting.id, eventId)).toMatchObject({
-			modeConfigs: { deck: { deckSource: { type: 'player', playerId: null } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId: null },
+				},
+			},
 		});
 		expect(await screenService().findById(manual.id, eventId)).toMatchObject({
 			stateVersion: manual.stateVersion,
-			modeConfigs: { deck: { deckSource: { type: 'player', playerId } } },
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId },
+				},
+			},
 		});
 		await expect(screenService().updateModeConfig(selecting.id, eventId, 'standings', { headerText: 'After reset' }))
 			.resolves

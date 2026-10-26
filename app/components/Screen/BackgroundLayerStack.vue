@@ -27,7 +27,9 @@ const assetReferences = computed<GraphicAssetReference[]>(() =>
 		if (layer.type !== 'image' && layer.type !== 'video')
 			return [];
 		const reference = screenMediaSourceReference(layer.source);
-		return reference ? [reference] : [];
+		return reference
+			? [reference]
+			: [];
 	}),
 );
 
@@ -51,7 +53,9 @@ interface BackgroundLayerView {
 function layerView(layer: BackgroundLayer): BackgroundLayerView {
 	const view: BackgroundLayerView = {
 		id: layer.id,
-		style: { opacity: Math.max(0, Math.min(1, layer.opacity)) },
+		style: {
+			opacity: Math.max(0, Math.min(1, layer.opacity)),
+		},
 	};
 	switch (layer.type) {
 		case 'color':

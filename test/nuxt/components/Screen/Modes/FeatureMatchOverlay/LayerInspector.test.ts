@@ -40,7 +40,10 @@ const UFormFieldStub = defineComponent({
 
 const UInputStub = defineComponent({
 	props: {
-		modelValue: { type: [String, Number], required: false },
+		modelValue: {
+			type: [String, Number],
+			required: false,
+		},
 	},
 	template: '<div data-testid="u-input">{{ modelValue }}</div>',
 });
@@ -83,7 +86,9 @@ async function mountComponent(overrides: Partial<{
 				FeatureMatchOverlayFrameStyleCard: defineComponent({ template: '<div data-testid="frame-style-card" />' }),
 				GraphicsGeometryFields: GeometryFieldsStub,
 				FeatureMatchOverlaySourceFramingStyleFields: defineComponent({
-					props: { framingStyle: { type: Object, required: false } },
+					props: {
+						framingStyle: { type: Object, required: false },
+					},
 					emits: ['update'],
 					template: '<button type="button" data-testid="source-framing-style" :data-framing-style="JSON.stringify(framingStyle)" @click="$emit(\'update\', { borderWidth: 6 })" />',
 				}),
@@ -103,7 +108,9 @@ describe('featureMatchOverlayLayerInspector', () => {
 	});
 
 	it('edits the Frame when the Canvas is selected', async () => {
-		const wrapper = await mountComponent({ selectedTarget: { type: 'canvas' } });
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'canvas' },
+		});
 
 		expect(wrapper.find('[data-testid="frame-style-card"]').exists()).toBe(true);
 		expect(wrapper.text()).toContain('1920×1080 frame and background');
@@ -134,8 +141,12 @@ describe('featureMatchOverlayLayerInspector', () => {
 		await wrapper.find('[data-testid="source-remove"]').trigger('click');
 
 		// The editor owns the layer list and the selection, so it does both.
-		expect(wrapper.emitted('duplicate')).toEqual([['main-source']]);
-		expect(wrapper.emitted('remove')).toEqual([['main-source']]);
+		expect(wrapper.emitted('duplicate')).toEqual([
+			['main-source'],
+		]);
+		expect(wrapper.emitted('remove')).toEqual([
+			['main-source'],
+		]);
 		expect(updateConfig).not.toHaveBeenCalled();
 	});
 

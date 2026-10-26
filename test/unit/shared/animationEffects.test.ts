@@ -28,7 +28,23 @@ const PRE_REBUILD_FLAT_BAG = {
 
 describe('animationEffects catalogue', () => {
 	it('names every effect in the closed vocabulary exactly once', () => {
-		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'inkmap', 'net', 'ridgelines', 'rings', 'ripple', 'shards', 'waves', 'weave']);
+		expect(ANIMATION_EFFECT_VALUES).toEqual([
+			'caustics',
+			'cells',
+			'dots',
+			'ember',
+			'fog',
+			'globe',
+			'halo',
+			'inkmap',
+			'net',
+			'ridgelines',
+			'rings',
+			'ripple',
+			'shards',
+			'waves',
+			'weave',
+		]);
 	});
 
 	it('ships ridgelines under its designed defaults', () => {
@@ -127,12 +143,42 @@ describe('animationEffects catalogue', () => {
 		expect(animationEffectParamFields('ripple')).toEqual(expect.arrayContaining([
 			// The fork's "Ripple scale" scaled no feature: it sets how fast each
 			// ring's lights swing back and forth round it.
-			expect.objectContaining({ key: 'swingSpeed', label: 'Swing speed', min: 0, max: 12 }),
-			expect.objectContaining({ key: 'size', label: 'Ring size', min: 0, max: 4 }),
-			expect.objectContaining({ key: 'drift', label: 'Ring drift', min: 0, max: 4 }),
-			expect.objectContaining({ key: 'centerX', label: 'Center X', min: -1, max: 1 }),
-			expect.objectContaining({ key: 'centerY', label: 'Center Y', min: -1, max: 1 }),
-			expect.objectContaining({ key: 'frequency', label: 'Ripple frequency', min: 0, max: 4 }),
+			expect.objectContaining({
+				key: 'swingSpeed',
+				label: 'Swing speed',
+				min: 0,
+				max: 12,
+			}),
+			expect.objectContaining({
+				key: 'size',
+				label: 'Ring size',
+				min: 0,
+				max: 4,
+			}),
+			expect.objectContaining({
+				key: 'drift',
+				label: 'Ring drift',
+				min: 0,
+				max: 4,
+			}),
+			expect.objectContaining({
+				key: 'centerX',
+				label: 'Center X',
+				min: -1,
+				max: 1,
+			}),
+			expect.objectContaining({
+				key: 'centerY',
+				label: 'Center Y',
+				min: -1,
+				max: 1,
+			}),
+			expect.objectContaining({
+				key: 'frequency',
+				label: 'Ripple frequency',
+				min: 0,
+				max: 4,
+			}),
 		]));
 	});
 
@@ -396,8 +442,14 @@ describe('animationEffectSelectionSchema', () => {
 	});
 
 	it('re-proves a stored selection: parsed through, or null for anything this build does not ship', () => {
-		expect(parseAnimationEffectSelection({ effect: 'fog', params: { speed: 2 } }))
-			.toMatchObject({ effect: 'fog', params: expect.objectContaining({ speed: 2, softness: 0.55 }) });
+		expect(parseAnimationEffectSelection({
+			effect: 'fog',
+			params: { speed: 2 },
+		}))
+			.toMatchObject({
+				effect: 'fog',
+				params: expect.objectContaining({ speed: 2, softness: 0.55 }),
+			});
 		expect(parseAnimationEffectSelection({ effect: 'not-an-effect' })).toBeNull();
 		expect(parseAnimationEffectSelection(undefined)).toBeNull();
 	});
@@ -435,8 +487,14 @@ describe('animation effect host unions', () => {
 		for (const effect of ANIMATION_EFFECT_VALUES) {
 			const expected = animationEffectDefaultParams(effect);
 			expect(animationEffectSelectionSchema.parse({ effect, params: {} }).params).toEqual(expected);
-			for (const schema of [featureMatchOverlayFrameAnimationConfigSchema, broadcastGraphicsBackgroundConfigSchema])
-				expect(schema.parse({ effect, params: {}, enabled: true, opacity: 1 }).params).toEqual(expected);
+			for (const schema of [featureMatchOverlayFrameAnimationConfigSchema, broadcastGraphicsBackgroundConfigSchema]) {
+				expect(schema.parse({
+					effect,
+					params: {},
+					enabled: true,
+					opacity: 1,
+				}).params).toEqual(expected);
+			}
 		}
 	});
 });
@@ -480,10 +538,18 @@ describe('featureMatchOverlayFrameAnimationConfigSchema', () => {
 
 describe('storedFrameAnimationConfigSchema', () => {
 	it('passes a current-shape config through untouched', () => {
-		const config = { enabled: true, effect: 'fog', opacity: 0.5, params: { speed: 2 } };
+		const config = {
+			enabled: true,
+			effect: 'fog',
+			opacity: 0.5,
+			params: { speed: 2 },
+		};
 		const outcome = storedFrameAnimationConfigSchema.safeParse(config);
 		expect(outcome.success).toBe(true);
-		expect(outcome.data).toMatchObject({ effect: 'fog', params: expect.objectContaining({ speed: 2 }) });
+		expect(outcome.data).toMatchObject({
+			effect: 'fog',
+			params: expect.objectContaining({ speed: 2 }),
+		});
 	});
 
 	it('resets a pre-rebuild flat bag to no animation instead of refusing the write that carries it', () => {
@@ -553,7 +619,12 @@ describe('broadcastGraphicsBackgroundConfigSchema', () => {
 	});
 
 	it('re-proves a stored background: parsed through with defaults filled, or null for anything this build does not ship', () => {
-		expect(parseBroadcastGraphicsBackgroundConfig({ enabled: true, effect: 'fog', opacity: 0.4, params: { speed: 2 } }))
+		expect(parseBroadcastGraphicsBackgroundConfig({
+			enabled: true,
+			effect: 'fog',
+			opacity: 0.4,
+			params: { speed: 2 },
+		}))
 			.toMatchObject({
 				enabled: true,
 				effect: 'fog',

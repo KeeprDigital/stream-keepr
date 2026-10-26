@@ -25,7 +25,12 @@ function item(kind: 'text' | 'clock' | 'player-life' | 'game-wins', id: string):
 }
 
 function layout(items: GraphicItemConfig[]): Pick<FeatureMatchLayoutConfig, 'composition'> {
-	return { composition: { ...createFeatureMatchLayoutComposition(), items } };
+	return {
+		composition: {
+			...createFeatureMatchLayoutComposition(),
+			items,
+		},
+	};
 }
 
 describe('featureMatchLayoutComposition', () => {
@@ -43,7 +48,9 @@ describe('featureMatchLayoutComposition', () => {
 	it('passes the one composition to the compositor as a stack of one', () => {
 		// A Feature Match Overlay renders exactly one Feature Match Layout, and the
 		// shared render model composes a stack. One is a stack.
-		expect(featureMatchLayoutStack(layout([item('text', 'name')]))).toHaveLength(1);
+		expect(featureMatchLayoutStack(layout([
+			item('text', 'name'),
+		]))).toHaveLength(1);
 	});
 
 	it('keeps the composition id stable, because it scopes every minted element id', () => {
@@ -59,7 +66,9 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 		// no Take or Out, so nothing selects and no empty set means "nothing on air".
 		const model = resolveFeatureMatchOverlayCompositorRenderModel({
 			output: 'overlay',
-			layout: layout([item('text', 'name')]),
+			layout: layout([
+				item('text', 'name'),
+			]),
 			...CANVAS,
 		});
 
@@ -70,7 +79,12 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 	it('resolves a Graphic Text Template against the Feature Match token catalogue', () => {
 		const model = resolveFeatureMatchOverlayCompositorRenderModel({
 			output: 'overlay',
-			layout: layout([{ ...item('text', 'name'), text: '{player1Name}' } as GraphicItemConfig]),
+			layout: layout([
+				{
+					...item('text', 'name'),
+					text: '{player1Name}',
+				} as GraphicItemConfig,
+			]),
 			tokenValues: { player1Name: 'Alice' },
 			...CANVAS,
 		});
@@ -109,11 +123,25 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 	it('renders the context-gated Items from the supplied session state', () => {
 		const model = resolveFeatureMatchOverlayCompositorRenderModel({
 			output: 'overlay',
-			layout: layout([item('clock', 'clock'), item('player-life', 'life'), item('game-wins', 'wins')]),
+			layout: layout([
+				item('clock', 'clock'),
+				item('player-life', 'life'),
+				item('game-wins', 'wins'),
+			]),
 			featureMatch: {
 				clockDisplayTime: '4:31',
-				player1: { lifeTotal: 12, gameWins: 2, sideboard: null, sideboardRevealed: true },
-				player2: { lifeTotal: 20, gameWins: 0, sideboard: null, sideboardRevealed: true },
+				player1: {
+					lifeTotal: 12,
+					gameWins: 2,
+					sideboard: null,
+					sideboardRevealed: true,
+				},
+				player2: {
+					lifeTotal: 20,
+					gameWins: 0,
+					sideboard: null,
+					sideboardRevealed: true,
+				},
 				bestOf: 3,
 			},
 			...CANVAS,
@@ -177,7 +205,10 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 		for (const output of ['overlay', 'fill', 'key'] as const) {
 			const model = resolveFeatureMatchOverlayCompositorRenderModel({
 				output,
-				layout: layout([item('clock', 'clock'), item('game-wins', 'wins')]),
+				layout: layout([
+					item('clock', 'clock'),
+					item('game-wins', 'wins'),
+				]),
 				selectedTarget: { type: 'item', graphicId: FEATURE_MATCH_LAYOUT_COMPOSITION_ID, itemId: 'clock' },
 				...CANVAS,
 			});
@@ -193,12 +224,23 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 		// stable id the same way it nests the token values.
 		const withEnter = {
 			...item('text', 'name'),
-			animation: { enter: { duration: 400, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } } },
+			animation: {
+				enter: {
+					duration: 400,
+					easing: 'linear' as const,
+					delay: 0,
+					fade: { opacity: 0 },
+				},
+			},
 		} as GraphicItemConfig;
 		const model = resolveFeatureMatchOverlayCompositorRenderModel({
 			output: 'overlay',
 			layout: layout([withEnter]),
-			itemAnimation: { name: [{ phase: 'enter', elapsed: 200 }] },
+			itemAnimation: {
+				name: [
+					{ phase: 'enter', elapsed: 200 },
+				],
+			},
 			...CANVAS,
 		});
 
@@ -218,17 +260,31 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 				canvasWidth: 1920,
 				canvasHeight: 1080,
 			}),
-			animation: { exit: { duration: 400, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } } },
+			animation: {
+				exit: {
+					duration: 400,
+					easing: 'linear' as const,
+					delay: 0,
+					fade: { opacity: 0 },
+				},
+			},
 		} as GraphicItemConfig;
 		const hidden = {
 			clockDisplayTime: '0:00',
 			player1: {
 				lifeTotal: null,
 				gameWins: 0,
-				sideboard: [{ name: 'Rest in Peace', quantity: 2, imageUrl: null }],
+				sideboard: [
+					{ name: 'Rest in Peace', quantity: 2, imageUrl: null },
+				],
 				sideboardRevealed: false,
 			},
-			player2: { lifeTotal: null, gameWins: 0, sideboard: null, sideboardRevealed: false },
+			player2: {
+				lifeTotal: null,
+				gameWins: 0,
+				sideboard: null,
+				sideboardRevealed: false,
+			},
 			bestOf: 3,
 		};
 		const at = (itemAnimation?: { 'side-1': [{ phase: 'exit'; elapsed: number }] }) =>
@@ -240,7 +296,11 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 				...CANVAS,
 			}).graphics[0]!.items[0]!;
 
-		const leaving = at({ 'side-1': [{ phase: 'exit', elapsed: 200 }] });
+		const leaving = at({
+			'side-1': [
+				{ phase: 'exit', elapsed: 200 },
+			],
+		});
 		expect(leaving.text).toContain('Rest in Peace');
 		expect(leaving.style.opacity).toBe(0.5);
 
@@ -250,7 +310,10 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 	it('guides every shared Graphic Item and marks the selected one, when asked', () => {
 		const model = resolveFeatureMatchOverlayCompositorRenderModel({
 			output: 'overlay',
-			layout: layout([item('clock', 'clock'), item('game-wins', 'wins')]),
+			layout: layout([
+				item('clock', 'clock'),
+				item('game-wins', 'wins'),
+			]),
 			itemGuides: true,
 			safeAreaGuides: true,
 			selectedTarget: { type: 'item', graphicId: FEATURE_MATCH_LAYOUT_COMPOSITION_ID, itemId: 'wins' },
@@ -268,16 +331,38 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 
 describe('featureMatchTokenValues', () => {
 	const HOST_STATE = {
-		event: { name: 'Regional', game: 'mtg' as const, displayRecordSeparator: '-', displayHideZeroDraws: true },
+		event: {
+			name: 'Regional',
+			game: 'mtg' as const,
+			displayRecordSeparator: '-',
+			displayHideZeroDraws: true,
+		},
 		featureMatch: {
 			bestOf: 3,
 			tableNumber: 4,
 			roundName: 'Round 5',
 			formatName: 'Modern',
-			player1Data: { name: 'Alice', pronouns: 'she/her', lgs: 'Card Shop', wins: 4, losses: 1, draws: 0 },
-			player2Data: { name: 'Bo', pronouns: 'they/them', lgs: 'Game Den', wins: 3, losses: 2, draws: 1 },
+			player1Data: {
+				name: 'Alice',
+				pronouns: 'she/her',
+				lgs: 'Card Shop',
+				wins: 4,
+				losses: 1,
+				draws: 0,
+			},
+			player2Data: {
+				name: 'Bo',
+				pronouns: 'they/them',
+				lgs: 'Game Den',
+				wins: 3,
+				losses: 2,
+				draws: 1,
+			},
 		},
-		matchState: { player1: { lifeTotal: 12, gameWins: 2 }, player2: { lifeTotal: 20, gameWins: 0 } },
+		matchState: {
+			player1: { lifeTotal: 12, gameWins: 2 },
+			player2: { lifeTotal: 20, gameWins: 0 },
+		},
 		sourceMatch: null,
 		round: { name: 'Round 5' },
 		phase: { name: 'Swiss' },
@@ -322,7 +407,10 @@ describe('featureMatchTokenValues', () => {
 	it('leaves an absent record empty rather than reporting nothing as 0-0', () => {
 		const values = featureMatchTokenValues({
 			...HOST_STATE,
-			featureMatch: { ...HOST_STATE.featureMatch, player1Data: { name: 'Alice' } },
+			featureMatch: {
+				...HOST_STATE.featureMatch,
+				player1Data: { name: 'Alice' },
+			},
 		} as typeof HOST_STATE);
 
 		expect(values.player1Record).toBe('');
@@ -346,14 +434,27 @@ describe('featureMatchGraphicsContext', () => {
 		// A Match promoted into the Slot mid-session must not change how many win boxes
 		// the session in progress draws.
 		const context = featureMatchGraphicsContext({
-			featureMatch: { bestOf: 3, activeSession: { sourceSnapshot: { bestOf: 5 } } },
-			matchState: { player1: { lifeTotal: 12, gameWins: 2, sideboardRevealed: true }, player2: { lifeTotal: 20, gameWins: 0, sideboardRevealed: false } },
+			featureMatch: {
+				bestOf: 3,
+				activeSession: {
+					sourceSnapshot: { bestOf: 5 },
+				},
+			},
+			matchState: {
+				player1: { lifeTotal: 12, gameWins: 2, sideboardRevealed: true },
+				player2: { lifeTotal: 20, gameWins: 0, sideboardRevealed: false },
+			},
 			displayTime: '4:31',
 		} as unknown as Parameters<typeof featureMatchGraphicsContext>[0]);
 
 		expect(context.bestOf).toBe(5);
 		// No resolved deck data supplied: `null`, never a placeholder sideboard.
-		expect(context.player1).toEqual({ lifeTotal: 12, gameWins: 2, sideboard: null, sideboardRevealed: true });
+		expect(context.player1).toEqual({
+			lifeTotal: 12,
+			gameWins: 2,
+			sideboard: null,
+			sideboardRevealed: true,
+		});
 		expect(context.player2.sideboardRevealed).toBe(false);
 	});
 
@@ -372,14 +473,21 @@ describe('featureMatchGraphicsContext', () => {
 		// The host resolves sideboard cards client-side; the context carries them
 		// per side without the render model ever seeing the full MTG card type.
 		const deckData = {
-			player1: [{ name: 'Counterspell', quantity: 2, imageUrl: 'https://img.test/counterspell.jpg' }],
+			player1: [
+				{ name: 'Counterspell', quantity: 2, imageUrl: 'https://img.test/counterspell.jpg' },
+			],
 			// `null` art is a card that resolved without an image: the placeholder
 			// rendering, not an absent sideboard.
-			player2: [{ name: 'Duress', quantity: 3, imageUrl: null }],
+			player2: [
+				{ name: 'Duress', quantity: 3, imageUrl: null },
+			],
 		};
 		const context = featureMatchGraphicsContext({
 			featureMatch: null,
-			matchState: { player1: { lifeTotal: 12, gameWins: 2, sideboardRevealed: true }, player2: { lifeTotal: 20, gameWins: 0, sideboardRevealed: false } },
+			matchState: {
+				player1: { lifeTotal: 12, gameWins: 2, sideboardRevealed: true },
+				player2: { lifeTotal: 20, gameWins: 0, sideboardRevealed: false },
+			},
 			displayTime: '4:31',
 		} as unknown as Parameters<typeof featureMatchGraphicsContext>[0], deckData);
 
@@ -426,7 +534,10 @@ describe('featureMatchGraphicsContext', () => {
 
 		const legacy = featureMatchGraphicsContext({
 			featureMatch: null,
-			matchState: { player1: { lifeTotal: 20, gameWins: 0 }, player2: { lifeTotal: 20, gameWins: 0 } },
+			matchState: {
+				player1: { lifeTotal: 20, gameWins: 0 },
+				player2: { lifeTotal: 20, gameWins: 0 },
+			},
 			displayTime: '0:00',
 		} as unknown as Parameters<typeof featureMatchGraphicsContext>[0]);
 		expect(legacy.player1.sideboardRevealed).toBe(false);

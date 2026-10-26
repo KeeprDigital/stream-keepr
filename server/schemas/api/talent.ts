@@ -20,7 +20,9 @@ function socialProfileField(network: Parameters<typeof normalizeSocialProfileInp
 		catch (error) {
 			context.addIssue({
 				code: 'custom',
-				message: error instanceof SocialProfileInputError ? error.message : 'Invalid Social Profile',
+				message: error instanceof SocialProfileInputError
+					? error.message
+					: 'Invalid Social Profile',
 			});
 			return z.NEVER;
 		}

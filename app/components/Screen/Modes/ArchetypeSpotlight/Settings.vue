@@ -61,7 +61,11 @@ const boardOptions = [
 // The Archetype's pilots the Screen pages, read and followed as its Screen Output reads and follows them, so
 // the page count is the one it renders (#780).
 const { rowCount, loading: loadingPilots } = useEditedScreenModeData(
-	{ screen: () => props.screen, eventId: () => props.eventId, saving: () => saving.value },
+	{
+		screen: () => props.screen,
+		eventId: () => props.eventId,
+		saving: () => saving.value,
+	},
 	useArchetypeSpotlightModeData,
 );
 
@@ -69,7 +73,12 @@ const { rowCount, loading: loadingPilots } = useEditedScreenModeData(
 // Every edit below goes through its `updateConfig`, which restarts the
 // rotation from page 1 when the edit changes the rotation's shape. An edit
 // changing which pilots show returns to page 1 as well.
-const rotation = useRotationConfigWrites({ mode: 'archetype-spotlight', config, rowCount, saveConfig });
+const rotation = useRotationConfigWrites({
+	mode: 'archetype-spotlight',
+	config,
+	rowCount,
+	saveConfig,
+});
 const { updateConfig } = rotation;
 
 function isTypeExcluded(bucket: CardTypeBucket): boolean {
@@ -85,7 +94,9 @@ function toggleType(bucket: CardTypeBucket) {
 }
 
 function typeLabel(bucket: CardTypeBucket): string {
-	return bucket === 'Land' ? 'Nonbasic Land' : bucket;
+	return bucket === 'Land'
+		? 'Nonbasic Land'
+		: bucket;
 }
 </script>
 

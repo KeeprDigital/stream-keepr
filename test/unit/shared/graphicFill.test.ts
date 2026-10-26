@@ -56,7 +56,11 @@ describe('applyGraphicFillEdit', () => {
 
 	it('edits one stop and the angle without disturbing the others', () => {
 		const angled = applyGraphicFillEdit(gradient, { kind: 'gradient-angle', angle: 135 });
-		const next = applyGraphicFillEdit(angled, { kind: 'gradient-stop', index: 1, patch: { opacity: 0.4 } });
+		const next = applyGraphicFillEdit(angled, {
+			kind: 'gradient-stop',
+			index: 1,
+			patch: { opacity: 0.4 },
+		});
 
 		expect(next).toEqual({
 			type: 'linear-gradient',
@@ -91,7 +95,11 @@ describe('applyGraphicFillEdit', () => {
 
 		const gradientEntry = applyGraphicStyleFillEntryEdit(entry, { kind: 'fill-kind', fillKind: 'linear-gradient' });
 		const grown = applyGraphicStyleFillEntryEdit(
-			applyGraphicStyleFillEntryEdit(gradientEntry, { kind: 'gradient-stop', index: 1, patch: { color: 'ink' } }),
+			applyGraphicStyleFillEntryEdit(gradientEntry, {
+				kind: 'gradient-stop',
+				index: 1,
+				patch: { color: 'ink' },
+			}),
 			{ kind: 'stop-count', delta: 1 },
 		);
 

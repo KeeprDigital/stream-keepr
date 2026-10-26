@@ -20,7 +20,9 @@ const mockFeatureMatchStore = {
 
 const mockState = createMockFeatureMatchState();
 const mockFeatureMatchStateStore = {
-	featureMatchStates: new Map([[1, mockState]]),
+	featureMatchStates: new Map([
+		[1, mockState],
+	]),
 	loadState: vi.fn(),
 	readSessionsAsScreenOutput: vi.fn((_read: (slotId: number) => Promise<unknown>) => vi.fn()),
 	currentEventId: null as number | null,
@@ -29,7 +31,12 @@ const mockFeatureMatchStateStore = {
 /** The Slot each Screen Output read answers, by Slot id. */
 function slotRead(slotId: number) {
 	return {
-		slot: { id: slotId, player1Data: { name: 'A' }, player2Data: { name: 'B' }, activeSession: { id: 70 + slotId, slotId } },
+		slot: {
+			id: slotId,
+			player1Data: { name: 'A' },
+			player2Data: { name: 'B' },
+			activeSession: { id: 70 + slotId, slotId },
+		},
 		match: null,
 		round: null,
 		phase: null,
@@ -57,7 +64,13 @@ mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
 mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useScreenContext', () => () => ({
-	screen: ref({ id: 1, name: 'Test', modeConfigs: { 'feature-match': { featureMatchId: 1 } } }),
+	screen: ref({
+		id: 1,
+		name: 'Test',
+		modeConfigs: {
+			'feature-match': { featureMatchId: 1 },
+		},
+	}),
 	eventId: computed(() => mockEventId.value),
 	interactive: ref(false),
 }));
@@ -87,11 +100,15 @@ describe('useFeatureMatchModeData', () => {
 				throw new Error(`unexpected request ${path}`);
 			return slotRead(slotId);
 		});
-		mockFeatureMatchStateStore.featureMatchStates = new Map([[1, mockState]]);
+		mockFeatureMatchStateStore.featureMatchStates = new Map([
+			[1, mockState],
+		]);
 		mockFeatureMatchStateStore.currentEventId = null;
 		mockFeatureMatchStateStore.loadState.mockImplementation(async (eventId: number, matchId: number) => {
 			mockFeatureMatchStateStore.currentEventId = eventId;
-			const nextState = matchId === 1 ? mockState : createMockFeatureMatchState();
+			const nextState = matchId === 1
+				? mockState
+				: createMockFeatureMatchState();
 			mockFeatureMatchStateStore.featureMatchStates.set(matchId, nextState);
 			return nextState;
 		});

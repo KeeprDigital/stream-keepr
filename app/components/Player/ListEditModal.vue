@@ -74,7 +74,9 @@ async function handleSave() {
 	await runRequest(async () => {
 		// Save name if changed
 		if (nameIsDirty.value && nameIsValid.value) {
-			const updated = await playerListStore.updateList(eventId, props.listId, { name: listName.value.trim() });
+			const updated = await playerListStore.updateList(eventId, props.listId, {
+				name: listName.value.trim(),
+			});
 			if (!updated)
 				throw new Error('Failed to update the list name');
 			originalName.value = listName.value.trim();
@@ -136,15 +138,17 @@ async function handleDelete() {
 
 // ── Footer Menu ──
 
-const footerMenuItems = computed(() => [[
-	{
-		label: 'Delete List',
-		icon: 'i-lucide-trash-2',
-		color: 'error' as const,
-		loading: deleting.value,
-		onSelect: handleDelete,
-	},
-]]);
+const footerMenuItems = computed(() => [
+	[
+		{
+			label: 'Delete List',
+			icon: 'i-lucide-trash-2',
+			color: 'error' as const,
+			loading: deleting.value,
+			onSelect: handleDelete,
+		},
+	],
+]);
 
 // ── Close ──
 

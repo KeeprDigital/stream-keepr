@@ -33,7 +33,9 @@ export default defineNitroPlugin((nitroApp) => {
 			console.error(JSON.stringify({
 				message: 'graphics_reconciliation_sweep_failed',
 				cron: controller.cron,
-				errorName: error instanceof Error ? error.name : null,
+				errorName: error instanceof Error
+					? error.name
+					: null,
 			}));
 		}
 	});

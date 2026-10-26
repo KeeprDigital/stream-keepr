@@ -43,7 +43,9 @@ async function signIn(headers: Record<string, string>) {
 
 	return {
 		status: response.status,
-		code: text ? (JSON.parse(text) as { code?: string }).code : undefined,
+		code: text
+			? (JSON.parse(text) as { code?: string }).code
+			: undefined,
 	};
 }
 
@@ -52,7 +54,9 @@ beforeEach(async () => {
 	// Sign-up is disabled by design, so the account arrives the way every account
 	// in this installation does: created server-side. Same path the first-admin
 	// bootstrap takes.
-	await auth.api.createUser({ body: { email: EMAIL, password: PASSWORD, name: 'Origin Check' } });
+	await auth.api.createUser({
+		body: { email: EMAIL, password: PASSWORD, name: 'Origin Check' },
+	});
 });
 
 describe('the origin check, under the environment the tests themselves run in', () => {

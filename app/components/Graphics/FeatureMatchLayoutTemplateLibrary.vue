@@ -103,7 +103,9 @@ async function save() {
 function askToPlace(templateId: string) {
 	if (!canAuthor.value)
 		return;
-	pendingPlaceId.value = pendingPlaceId.value === templateId ? null : templateId;
+	pendingPlaceId.value = pendingPlaceId.value === templateId
+		? null
+		: templateId;
 }
 
 function cancelPlace() {

@@ -172,8 +172,9 @@ Releases and deploys are decided in
 
 ## Setup
 
-Use Node 24 LTS (24.11+; `.node-version` pins CI's exact version) and the pnpm
-version pinned in `package.json`.
+Use the Node and pnpm versions `package.json` pins (`devEngines.runtime` and
+`packageManager`); CI reads both from there. A pnpm-installed global `node`
+follows the pin inside the project.
 
 ```bash
 pnpm install

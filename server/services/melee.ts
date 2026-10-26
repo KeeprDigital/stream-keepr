@@ -88,7 +88,9 @@ export function meleeService(credentials: MeleeCredentials, options: MeleeServic
 		while (hasMore && page <= MAX_PAGES) {
 			// ignoreCache bypasses Melee's response cache; without it, list
 			// responses may serve stale standings/pairings during a live event.
-			const url = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}page=${page}&pageSize=${pageSize}&ignoreCache=true`;
+			const url = `${baseUrl}${baseUrl.includes('?')
+				? '&'
+				: '?'}page=${page}&pageSize=${pageSize}&ignoreCache=true`;
 			const response = await fetchWithAuth(url, pageSchema, { endpoint, page });
 			// Melee's RecordsFiltered is the record count of the current page, not
 			// the DataTables-style collection total; RecordsTotal carries the

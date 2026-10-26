@@ -25,11 +25,22 @@ function card(overrides: {
 describe('calculateDeckStats', () => {
 	it('returns all-zero stats for an empty array', () => {
 		const stats = calculateDeckStats([]);
-		expect(stats).toEqual({ creatures: 0, instants: 0, sorceries: 0, enchantments: 0, artifacts: 0, planeswalkers: 0, lands: 0, other: 0 });
+		expect(stats).toEqual({
+			creatures: 0,
+			instants: 0,
+			sorceries: 0,
+			enchantments: 0,
+			artifacts: 0,
+			planeswalkers: 0,
+			lands: 0,
+			other: 0,
+		});
 	});
 
 	it('counts creatures by quantity', () => {
-		const stats = calculateDeckStats([card({ cardType: 'Creature — Elf', quantity: 4 })]);
+		const stats = calculateDeckStats([
+			card({ cardType: 'Creature — Elf', quantity: 4 }),
+		]);
 		expect(stats.creatures).toBe(4);
 		expect(stats.other).toBe(0);
 	});
@@ -65,17 +76,23 @@ describe('calculateDeckStats', () => {
 	});
 
 	it('falls through to "other" for unknown types', () => {
-		const stats = calculateDeckStats([card({ cardType: 'Battle', quantity: 1 })]);
+		const stats = calculateDeckStats([
+			card({ cardType: 'Battle', quantity: 1 }),
+		]);
 		expect(stats.other).toBe(1);
 	});
 
 	it('ignores cards with null cardType', () => {
-		const stats = calculateDeckStats([card({ cardType: null, quantity: 2 })]);
+		const stats = calculateDeckStats([
+			card({ cardType: null, quantity: 2 }),
+		]);
 		expect(Object.values(stats).every(v => v === 0)).toBe(true);
 	});
 
 	it('handles Artifact Creature as creature (first match wins)', () => {
-		const stats = calculateDeckStats([card({ cardType: 'Artifact Creature — Robot', quantity: 1 })]);
+		const stats = calculateDeckStats([
+			card({ cardType: 'Artifact Creature — Robot', quantity: 1 }),
+		]);
 		// "creature" appears before "artifact" in the chain, so it's counted as creature
 		expect(stats.creatures).toBe(1);
 		expect(stats.artifacts).toBe(0);
@@ -90,45 +107,61 @@ describe('calculateDeckPips', () => {
 	});
 
 	it('counts simple colored pips', () => {
-		const pips = calculateDeckPips([card({ manaCost: '{W}{W}{1}', quantity: 1 })]);
+		const pips = calculateDeckPips([
+			card({ manaCost: '{W}{W}{1}', quantity: 1 }),
+		]);
 		expect(pips.W).toBe(2);
 		expect(pips.U).toBe(0);
 	});
 
 	it('multiplies pips by card quantity', () => {
-		const pips = calculateDeckPips([card({ manaCost: '{R}', quantity: 4 })]);
+		const pips = calculateDeckPips([
+			card({ manaCost: '{R}', quantity: 4 }),
+		]);
 		expect(pips.R).toBe(4);
 	});
 
 	it('handles hybrid mana (W/U) — counts both parts', () => {
-		const pips = calculateDeckPips([card({ manaCost: '{W/U}', quantity: 1 })]);
+		const pips = calculateDeckPips([
+			card({ manaCost: '{W/U}', quantity: 1 }),
+		]);
 		expect(pips.W).toBe(1);
 		expect(pips.U).toBe(1);
 	});
 
 	it('handles Phyrexian mana (W/P) — counts color part only', () => {
-		const pips = calculateDeckPips([card({ manaCost: '{W/P}', quantity: 1 })]);
+		const pips = calculateDeckPips([
+			card({ manaCost: '{W/P}', quantity: 1 }),
+		]);
 		expect(pips.W).toBe(1);
 		expect(pips.C).toBe(0);
 	});
 
 	it('handles colorless {C} pips', () => {
-		const pips = calculateDeckPips([card({ manaCost: '{C}{C}', quantity: 2 })]);
+		const pips = calculateDeckPips([
+			card({ manaCost: '{C}{C}', quantity: 2 }),
+		]);
 		expect(pips.C).toBe(4);
 	});
 
 	it('skips cards with no manaCost', () => {
-		const pips = calculateDeckPips([card({ manaCost: null, quantity: 4 })]);
+		const pips = calculateDeckPips([
+			card({ manaCost: null, quantity: 4 }),
+		]);
 		expect(Object.values(pips).every(v => v === 0)).toBe(true);
 	});
 
 	it('skips sideboard cards', () => {
-		const pips = calculateDeckPips([card({ manaCost: '{U}{U}', quantity: 4, compartment: 'sideboard' })]);
+		const pips = calculateDeckPips([
+			card({ manaCost: '{U}{U}', quantity: 4, compartment: 'sideboard' }),
+		]);
 		expect(pips.U).toBe(0);
 	});
 
 	it('ignores generic mana costs like {1}, {2}, {X}', () => {
-		const pips = calculateDeckPips([card({ manaCost: '{3}{U}', quantity: 1 })]);
+		const pips = calculateDeckPips([
+			card({ manaCost: '{3}{U}', quantity: 1 }),
+		]);
 		expect(pips.U).toBe(1);
 		expect(pips.C).toBe(0);
 	});
@@ -211,7 +244,9 @@ describe('calculateDeckCurve', () => {
 
 	it('floors fractional cmc values', () => {
 		// Split cards like Delver have cmc 0 on one face, computed differently by Scryfall
-		const curve = calculateDeckCurve([card({ cmc: 1.5, quantity: 1 })]);
+		const curve = calculateDeckCurve([
+			card({ cmc: 1.5, quantity: 1 }),
+		]);
 		expect(curve[1]).toBe(1);
 	});
 });

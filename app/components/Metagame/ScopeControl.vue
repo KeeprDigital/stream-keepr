@@ -44,8 +44,11 @@ const customTopN = ref(false);
 
 // Derive current combined value
 const currentValue = computed(() => {
-	if (props.scope === 'topN')
-		return !customTopN.value && TOP_N_PRESETS.includes(props.topN) ? `topN:${props.topN}` : 'topN';
+	if (props.scope === 'topN') {
+		return !customTopN.value && TOP_N_PRESETS.includes(props.topN)
+			? `topN:${props.topN}`
+			: 'topN';
+	}
 	if (props.scope === 'minPoints')
 		return 'minPoints';
 	if (props.scope === 'playerList' && props.playerListId)

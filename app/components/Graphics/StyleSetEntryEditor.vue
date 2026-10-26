@@ -49,7 +49,10 @@ const mediaTreatment = computed<MediaFieldsValue | undefined>(() => props.entry.
 
 /** Merge into the entry's value, so a single-field edit never drops its siblings. */
 function patch(fields: Record<string, unknown>) {
-	emit('update:value', { ...(props.entry.value as object), ...fields } as GraphicStyleSetEntry['value']);
+	emit('update:value', {
+		...(props.entry.value as object),
+		...fields,
+	} as GraphicStyleSetEntry['value']);
 }
 
 /** One channel of a Graphic Animation Recipe entry, through the compositor's own merge. */
@@ -78,12 +81,30 @@ function editSurfaceBorderGlow(edit: BorderGlowEdit) {
 	const value = props.entry.value as SurfaceStyleGraphicStyleEntryValue;
 	const firstPaletteEntryId = paletteOptions.value[0]?.value ?? '';
 	const { color, ...fields } = edit.patch ?? {};
-	const colorEntry = color === undefined ? {} : { colorEntryId: color };
+	const colorEntry = color === undefined
+		? {}
+		: { colorEntryId: color };
 	if (edit.kind === 'border') {
-		patch({ outline: edit.patch ? { ...(value.outline ?? { colorEntryId: firstPaletteEntryId, width: 2 }), ...fields, ...colorEntry } : undefined });
+		patch({
+			outline: edit.patch
+				? {
+						...(value.outline ?? { colorEntryId: firstPaletteEntryId, width: 2 }),
+						...fields,
+						...colorEntry,
+					}
+				: undefined,
+		});
 		return;
 	}
-	patch({ glow: edit.patch ? { ...(value.glow ?? { colorEntryId: firstPaletteEntryId, size: 8, opacity: 0.5 }), ...fields, ...colorEntry } : undefined });
+	patch({
+		glow: edit.patch
+			? {
+					...(value.glow ?? { colorEntryId: firstPaletteEntryId, size: 8, opacity: 0.5 }),
+					...fields,
+					...colorEntry,
+				}
+			: undefined,
+	});
 }
 
 /**
@@ -92,7 +113,12 @@ function editSurfaceBorderGlow(edit: BorderGlowEdit) {
  */
 const SHAPE_GEOMETRY_PRESET_BOUNDS: ShapeGeometrySize = (() => {
 	const { width, height } = getGraphicItemDefinition('shape')
-		.createDefault({ id: 'shape', label: 'Shape', canvasWidth: 1920, canvasHeight: 1080 });
+		.createDefault({
+			id: 'shape',
+			label: 'Shape',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+		});
 	return { width, height };
 })();
 

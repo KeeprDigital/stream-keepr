@@ -46,7 +46,9 @@ function transferFacts(partCount: number, heldPartNumbers: number[] = []) {
 function unavailable(retryAfter: string) {
 	return Object.assign(new Error('Service Unavailable'), {
 		statusCode: 503,
-		response: { headers: new Headers({ 'retry-after': retryAfter }) },
+		response: {
+			headers: new Headers({ 'retry-after': retryAfter }),
+		},
 	});
 }
 
@@ -82,8 +84,11 @@ async function throughEveryWait<T>(start: () => Promise<T>): Promise<T> {
 function refusingPartTwo(refusals: number, failure: () => unknown) {
 	let refused = 0;
 	mockFetch.mockImplementation(async (path: string) => {
-		if (path.endsWith('/multipart'))
-			return operation({ transfer: transferFacts(2) });
+		if (path.endsWith('/multipart')) {
+			return operation({
+				transfer: transferFacts(2),
+			});
+		}
 		if (path.endsWith('/multipart/parts/2') && refused++ < refusals)
 			throw failure();
 		return operation({ stage: 'completed' });
@@ -146,8 +151,11 @@ describe('useGraphicsIngestionTransfer', () => {
 	it('sends a source longer than one request may carry as a resumable multipart transfer', async () => {
 		const completed = operation({ stage: 'completed' });
 		mockFetch.mockImplementation(async (path: string) => {
-			if (path.endsWith('/multipart'))
-				return operation({ transfer: transferFacts(2) });
+			if (path.endsWith('/multipart')) {
+				return operation({
+					transfer: transferFacts(2),
+				});
+			}
 			if (path.endsWith('/multipart/complete'))
 				return completed;
 			return operation();
@@ -171,8 +179,11 @@ describe('useGraphicsIngestionTransfer', () => {
 
 	it('sends only the parts the library does not already hold', async () => {
 		mockFetch.mockImplementation(async (path: string) => {
-			if (path.endsWith('/multipart'))
-				return operation({ transfer: transferFacts(2, [1]) });
+			if (path.endsWith('/multipart')) {
+				return operation({
+					transfer: transferFacts(2, [1]),
+				});
+			}
 			return operation();
 		});
 
@@ -193,8 +204,11 @@ describe('useGraphicsIngestionTransfer', () => {
 
 	it('re-sends a part the transport lost, and gives up once its attempts are spent', async () => {
 		mockFetch.mockImplementation(async (path: string) => {
-			if (path.endsWith('/multipart'))
-				return operation({ transfer: transferFacts(2) });
+			if (path.endsWith('/multipart')) {
+				return operation({
+					transfer: transferFacts(2),
+				});
+			}
 			if (path.endsWith('/multipart/parts/2'))
 				throw new Error('Connection reset');
 			return operation();
@@ -219,8 +233,11 @@ describe('useGraphicsIngestionTransfer', () => {
 	 */
 	it('stops rather than retrying when the browser is no longer signed in', async () => {
 		mockFetch.mockImplementation(async (path: string) => {
-			if (path.endsWith('/multipart'))
-				return operation({ transfer: transferFacts(2) });
+			if (path.endsWith('/multipart')) {
+				return operation({
+					transfer: transferFacts(2),
+				});
+			}
 			if (path.endsWith('/multipart/parts/2'))
 				throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
 			return operation();
@@ -243,8 +260,11 @@ describe('useGraphicsIngestionTransfer', () => {
 	 */
 	it('fails a part immediately on a refusal a retry cannot change', async () => {
 		mockFetch.mockImplementation(async (path: string) => {
-			if (path.endsWith('/multipart'))
-				return operation({ transfer: transferFacts(2) });
+			if (path.endsWith('/multipart')) {
+				return operation({
+					transfer: transferFacts(2),
+				});
+			}
 			if (path.endsWith('/multipart/parts/2'))
 				throw Object.assign(new Error('Payload Too Large'), { statusCode: 413 });
 			return operation();
@@ -261,8 +281,11 @@ describe('useGraphicsIngestionTransfer', () => {
 
 	it.each([408, 429, 503])('spends the attempt budget on a %i, which a retry can outlive', async (status) => {
 		mockFetch.mockImplementation(async (path: string) => {
-			if (path.endsWith('/multipart'))
-				return operation({ transfer: transferFacts(2) });
+			if (path.endsWith('/multipart')) {
+				return operation({
+					transfer: transferFacts(2),
+				});
+			}
 			if (path.endsWith('/multipart/parts/2'))
 				throw Object.assign(new Error(`Refused with ${status}`), { statusCode: status });
 			return operation();
@@ -351,8 +374,12 @@ describe('useGraphicsIngestionTransfer', () => {
 	 */
 	it('reports the started transfer and each part checkpoint to its observer', async () => {
 		mockFetch.mockImplementation(async (path: string) => {
-			if (path.endsWith('/multipart'))
-				return operation({ transfer: transferFacts(2), transferredByteLength: 0 });
+			if (path.endsWith('/multipart')) {
+				return operation({
+					transfer: transferFacts(2),
+					transferredByteLength: 0,
+				});
+			}
 			if (path.includes('/multipart/parts/1'))
 				return operation({ transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES });
 			if (path.includes('/multipart/parts/2'))
@@ -418,8 +445,11 @@ describe('useGraphicsIngestionTransfer', () => {
 		try {
 			let settle!: (operation: GraphicsIngestionOperation) => void;
 			mockFetch.mockImplementation((path: string, request?: { method?: string }) => {
-				if (path.endsWith('/multipart'))
-					return Promise.resolve(operation({ transfer: transferFacts(1) }));
+				if (path.endsWith('/multipart')) {
+					return Promise.resolve(operation({
+						transfer: transferFacts(1),
+					}));
+				}
 				if (path.endsWith('/multipart/complete')) {
 					return new Promise<GraphicsIngestionOperation>((resolve) => {
 						settle = resolve;

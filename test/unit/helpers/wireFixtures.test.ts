@@ -55,7 +55,9 @@ describe('wire-shaped fixtures', () => {
 	});
 
 	it('turns an overridden Date into the string the wire would carry', () => {
-		const wire = createWireMockRound({ lastSyncedAt: new Date('2026-04-09T10:00:00.000Z') });
+		const wire = createWireMockRound({
+			lastSyncedAt: new Date('2026-04-09T10:00:00.000Z'),
+		});
 
 		expect(wire.lastSyncedAt).toBe('2026-04-09T10:00:00.000Z');
 		expect(typeof wire.lastSyncedAt).toBe('string');
@@ -80,7 +82,11 @@ describe('wire-shaped fixtures', () => {
 		// The escape hatch: a suite's own literal or a store's seeded state asks the same
 		// question, and hand-rolling `JSON.parse(JSON.stringify(...))` per suite is how the
 		// shape drifts between them.
-		const wire = toWire({ event: createMockEvent({ lastEventSyncedAt: new Date('2026-04-09T10:05:00.000Z') }) });
+		const wire = toWire({
+			event: createMockEvent({
+				lastEventSyncedAt: new Date('2026-04-09T10:05:00.000Z'),
+			}),
+		});
 
 		expect(wire.event.lastEventSyncedAt).toBe('2026-04-09T10:05:00.000Z');
 		expect(wire.event.createdAt).toBe('2026-01-01T00:00:00.000Z');

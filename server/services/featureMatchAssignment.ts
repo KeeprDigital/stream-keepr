@@ -27,7 +27,9 @@ export function buildUpsertAssignmentQueries(eventId: number, input: CreateFeatu
 		db.update(featureMatchAssignments)
 			.set({
 				slotId: input.slotId,
-				...(input.note !== undefined ? { note: input.note } : {}),
+				...(input.note !== undefined
+					? { note: input.note }
+					: {}),
 				updatedAt: new Date(),
 			})
 			.where(and(
@@ -96,7 +98,9 @@ export function buildAssignmentDisplacementGuardQuery(
 }
 
 export function isAssignmentDisplacementGuardViolation(error: unknown): boolean {
-	const message = error instanceof Error ? error.message : '';
+	const message = error instanceof Error
+		? error.message
+		: '';
 	return message.includes('NOT NULL constraint failed: feature_match_assignments.event_id');
 }
 
@@ -167,7 +171,10 @@ export function featureMatchAssignmentService() {
 
 		const [updated] = await db
 			.update(featureMatchAssignments)
-			.set({ ...input, updatedAt: new Date() })
+			.set({
+				...input,
+				updatedAt: new Date(),
+			})
 			.where(and(eq(featureMatchAssignments.eventId, eventId), eq(featureMatchAssignments.id, assignmentId)))
 			.returning();
 		return updated;
@@ -181,5 +188,13 @@ export function featureMatchAssignmentService() {
 		return deleted.length > 0;
 	};
 
-	return { findById, findByRound, findByRoundAndSlot, findByRoundAndMatch, upsert, update, remove };
+	return {
+		findById,
+		findByRound,
+		findByRoundAndSlot,
+		findByRoundAndMatch,
+		upsert,
+		update,
+		remove,
+	};
 }

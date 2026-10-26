@@ -31,7 +31,10 @@ const NAME: GraphicInputDeclaration = {
 };
 
 function context(acceptedAt = 1_000) {
-	return { inputs: [NAME], acceptedAt };
+	return {
+		inputs: [NAME],
+		acceptedAt,
+	};
 }
 
 /** One command reduced, then described and re-applied by a peer holding `before`. */
@@ -43,15 +46,27 @@ function converges(
 	const after = applyBroadcastGraphicsCommand(before, command, context(acceptedAt));
 	const change = broadcastGraphicsLiveStateChange(before, after);
 	expect(change).not.toBeNull();
-	return { after, change: change!, applied: changedBroadcastGraphicsLiveState(before, change!) };
+	return {
+		after,
+		change: change!,
+		applied: changedBroadcastGraphicsLiveState(before, change!),
+	};
 }
 
 describe('broadcastGraphicsLiveStateChange', () => {
 	it('carries only the Broadcast Graphic a Take addressed, and converges on the committed state', () => {
 		const before = {
 			...createInitialBroadcastGraphicsLiveState(),
-			playout: { bug: { onAir: true, effectiveStartedAt: 5, cut: false } },
-			inputs: { bug: { working: { name: 'Bug' }, accepted: { name: 'Bug' }, acceptedRevision: 1 } },
+			playout: {
+				bug: { onAir: true, effectiveStartedAt: 5, cut: false },
+			},
+			inputs: {
+				bug: {
+					working: { name: 'Bug' },
+					accepted: { name: 'Bug' },
+					acceptedRevision: 1,
+				},
+			},
 		};
 
 		const { after, change, applied } = converges(before, {
@@ -70,8 +85,16 @@ describe('broadcastGraphicsLiveStateChange', () => {
 		const before = {
 			...createInitialBroadcastGraphicsLiveState(),
 			inputs: {
-				slate: { working: { name: 'Ava' }, accepted: {}, acceptedRevision: 0 },
-				bug: { working: { name: 'Ben' }, accepted: {}, acceptedRevision: 0 },
+				slate: {
+					working: { name: 'Ava' },
+					accepted: {},
+					acceptedRevision: 0,
+				},
+				bug: {
+					working: { name: 'Ben' },
+					accepted: {},
+					acceptedRevision: 0,
+				},
 			},
 		};
 
@@ -92,8 +115,18 @@ describe('broadcastGraphicsLiveStateChange', () => {
 				lower: {
 					profile: {
 						acceptedProfiles: [
-							{ network: 'twitch' as const, networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
-							{ network: 'x' as const, networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
+							{
+								network: 'twitch' as const,
+								networkLabel: 'Twitch',
+								handle: 'AvaLive',
+								profileUrl: 'https://www.twitch.tv/AvaLive',
+							},
+							{
+								network: 'x' as const,
+								networkLabel: 'X',
+								handle: 'AvaCasts',
+								profileUrl: 'https://x.com/AvaCasts',
+							},
 						],
 						currentNetwork: 'twitch' as const,
 					},
@@ -106,7 +139,9 @@ describe('broadcastGraphicsLiveStateChange', () => {
 		}, {
 			inputs: [],
 			acceptedAt: 1_000,
-			socialProfileProjections: [{ key: 'profile' } as never],
+			socialProfileProjections: [
+				{ key: 'profile' } as never,
+			],
 		});
 		const change = broadcastGraphicsLiveStateChange(before, after);
 
@@ -119,7 +154,9 @@ describe('broadcastGraphicsLiveStateChange', () => {
 	it('describes nothing when a command left the live state exactly as it was', () => {
 		const before = {
 			...createInitialBroadcastGraphicsLiveState(),
-			playout: { slate: { onAir: false, effectiveStartedAt: 5, cut: false } },
+			playout: {
+				slate: { onAir: false, effectiveStartedAt: 5, cut: false },
+			},
 		};
 
 		const change = broadcastGraphicsLiveStateChange(before, before);
@@ -131,15 +168,29 @@ describe('broadcastGraphicsLiveStateChange', () => {
 	it('removes a Broadcast Graphic a peer holds that the committed state no longer has', () => {
 		const before = {
 			...createInitialBroadcastGraphicsLiveState(),
-			playout: { slate: { onAir: true, effectiveStartedAt: 5, cut: false } },
-			inputs: { slate: { working: { name: 'Ava' }, accepted: {}, acceptedRevision: 0 } },
-			sources: { slate: { player: 7 } },
+			playout: {
+				slate: { onAir: true, effectiveStartedAt: 5, cut: false },
+			},
+			inputs: {
+				slate: {
+					working: { name: 'Ava' },
+					accepted: {},
+					acceptedRevision: 0,
+				},
+			},
+			sources: {
+				slate: { player: 7 },
+			},
 		};
 		const after = createInitialBroadcastGraphicsLiveState();
 
 		const change = broadcastGraphicsLiveStateChange(before, after);
 
-		expect(change).toEqual({ playout: { slate: null }, inputs: { slate: null }, sources: { slate: null } });
+		expect(change).toEqual({
+			playout: { slate: null },
+			inputs: { slate: null },
+			sources: { slate: null },
+		});
 		expect(changedBroadcastGraphicsLiveState(before, change!)).toEqual(after);
 	});
 
@@ -152,13 +203,19 @@ describe('broadcastGraphicsLiveStateChange', () => {
 			},
 		};
 
-		const after = applyBroadcastGraphicsCommand(before, { type: 'Out', payload: { graphicId: 'lower1' } }, {
+		const after = applyBroadcastGraphicsCommand(before, {
+			type: 'Out',
+			payload: { graphicId: 'lower1' },
+		}, {
 			inputs: [],
 			acceptedAt: 1_000,
 			durations: { enter: 500, exit: 500, update: 0 },
 			channel: {
 				handoff: 'out-then-in',
-				members: [{ graphicId: 'lower1' }, { graphicId: 'lower2' }],
+				members: [
+					{ graphicId: 'lower1' },
+					{ graphicId: 'lower2' },
+				],
 			},
 		} as Parameters<typeof applyBroadcastGraphicsCommand>[2]);
 		const change = broadcastGraphicsLiveStateChange(before, after);
@@ -171,7 +228,10 @@ describe('broadcastGraphicsLiveStateChange', () => {
 		// A field this build does not know about: live state passes unknown fields
 		// through untouched, so a difference may sit somewhere this description has
 		// no room for. Answering null is what sends the peer to the snapshot.
-		const after = { ...createInitialBroadcastGraphicsLiveState(), epoch: 'later' } as never;
+		const after = {
+			...createInitialBroadcastGraphicsLiveState(),
+			epoch: 'later',
+		} as never;
 
 		expect(broadcastGraphicsLiveStateChange(before, after)).toBeNull();
 	});
@@ -208,7 +268,11 @@ describe('a live state carrying an entry that is null', () => {
 
 	it('converges when a null Graphic Source Selection record stops being there', () => {
 		expect(converged(
-			{ playout: {}, inputs: {}, sources: { slate: null } },
+			{
+				playout: {},
+				inputs: {},
+				sources: { slate: null },
+			},
 			{ playout: {}, inputs: {}, sources: {} },
 		)).toBe(true);
 	});
@@ -216,7 +280,11 @@ describe('a live state carrying an entry that is null', () => {
 	it('converges when a null Graphic Source Selection record appears', () => {
 		expect(converged(
 			{ playout: {}, inputs: {}, sources: {} },
-			{ playout: {}, inputs: {}, sources: { slate: null } },
+			{
+				playout: {},
+				inputs: {},
+				sources: { slate: null },
+			},
 		)).toBe(true);
 	});
 
@@ -227,7 +295,11 @@ describe('a live state carrying an entry that is null', () => {
 		// this pair of tests exists to keep fixed if another map is ever described.
 		expect(broadcastGraphicsLiveStateChange(
 			{ playout: {}, inputs: {}, sources: {} },
-			{ playout: {}, inputs: {}, sources: { slate: null } } as never,
+			{
+				playout: {},
+				inputs: {},
+				sources: { slate: null },
+			} as never,
 		)).toBeNull();
 	});
 });

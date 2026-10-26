@@ -46,7 +46,9 @@ export function useScreenFeatureMatchSlot<T>(options: ScreenFeatureMatchSlotOpti
 		eventId,
 		source: () => {
 			const slotId = options.slotId();
-			return outputReads.scopeKey.value && slotId ? `${outputReads.scopeKey.value}:${slotId}` : null;
+			return outputReads.scopeKey.value && slotId
+				? `${outputReads.scopeKey.value}:${slotId}`
+				: null;
 		},
 		read: async (): Promise<T> => {
 			const slotId = options.slotId()!;
@@ -54,8 +56,11 @@ export function useScreenFeatureMatchSlot<T>(options: ScreenFeatureMatchSlotOpti
 			// A Slot read before a newer promotion or clearing is left behind whole,
 			// so nothing it says replaces what is shown — unless what is shown
 			// belongs to the Slot this mode has just left.
-			if (!featureMatchStore.holdFeatureMatch(read.slot))
-				return keptSlotId === slotId ? freshness.data.value : options.initialData;
+			if (!featureMatchStore.holdFeatureMatch(read.slot)) {
+				return keptSlotId === slotId
+					? freshness.data.value
+					: options.initialData;
+			}
 			keptSlotId = slotId;
 			return options.keep(read);
 		},
@@ -66,12 +71,16 @@ export function useScreenFeatureMatchSlot<T>(options: ScreenFeatureMatchSlotOpti
 
 	const slot = computed<FeatureMatch | null>(() => {
 		const slotId = options.slotId();
-		return slotId ? featureMatchStore.featureMatches.find(held => held.id === slotId) ?? null : null;
+		return slotId
+			? featureMatchStore.featureMatches.find(held => held.id === slotId) ?? null
+			: null;
 	});
 
 	const state = computed<FeatureMatchState | null>(() => {
 		const slotId = options.slotId();
-		return slotId ? featureMatchStateStore.featureMatchStates.get(slotId) ?? null : null;
+		return slotId
+			? featureMatchStateStore.featureMatchStates.get(slotId) ?? null
+			: null;
 	});
 
 	return {

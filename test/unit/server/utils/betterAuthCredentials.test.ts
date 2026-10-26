@@ -60,7 +60,9 @@ describe('writing the credential', () => {
 
 		return {
 			context: {
-				password: { hash: vi.fn(async (value: string) => `hashed:${value}`) },
+				password: {
+					hash: vi.fn(async (value: string) => `hashed:${value}`),
+				},
 				internalAdapter: {
 					findAccounts: vi.fn(async () => accounts),
 					updatePassword,
@@ -73,7 +75,9 @@ describe('writing the credential', () => {
 	}
 
 	it('updates the credential an account already has', async () => {
-		const { context, updatePassword, createAccount } = fakeContext([{ providerId: 'credential' }]);
+		const { context, updatePassword, createAccount } = fakeContext([
+			{ providerId: 'credential' },
+		]);
 
 		await setCredentialPassword(context as never, 'user-1', 'a-long-enough-password');
 
@@ -99,7 +103,9 @@ describe('writing the credential', () => {
 	});
 
 	it('creates one where the account holds only some other provider', async () => {
-		const { context, createAccount } = fakeContext([{ providerId: 'google' }]);
+		const { context, createAccount } = fakeContext([
+			{ providerId: 'google' },
+		]);
 
 		await setCredentialPassword(context as never, 'user-1', 'a-long-enough-password');
 
@@ -107,7 +113,9 @@ describe('writing the credential', () => {
 	});
 
 	it('never stores the password as given', async () => {
-		const { context, updatePassword } = fakeContext([{ providerId: 'credential' }]);
+		const { context, updatePassword } = fakeContext([
+			{ providerId: 'credential' },
+		]);
 
 		await setCredentialPassword(context as never, 'user-1', 'a-long-enough-password');
 

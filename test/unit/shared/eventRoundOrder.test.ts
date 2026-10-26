@@ -59,7 +59,10 @@ describe('seedingRoundId', () => {
 		];
 
 		expect(seedingRoundId(rounds, SWISS)).toBeNull();
-		expect(seedingRoundId([round(11, SWISS, false), round(31, TOP_CUT, false)], TOP_CUT)).toBeNull();
+		expect(seedingRoundId([
+			round(11, SWISS, false),
+			round(31, TOP_CUT, false),
+		], TOP_CUT)).toBeNull();
 		expect(seedingRoundId(rounds, TOP_CUT)).toBeNull();
 	});
 });

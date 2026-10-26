@@ -57,11 +57,13 @@ const assets = ref<GraphicAsset[]>([
 		kind: 'image',
 		revisionId: 'revision-shared-1' as never,
 		revisionNumber: 1,
-		revisions: [{
-			id: 'revision-shared-1' as never,
-			revisionNumber: 1,
-			facts: {} as never,
-		}],
+		revisions: [
+			{
+				id: 'revision-shared-1' as never,
+				revisionNumber: 1,
+				facts: {} as never,
+			},
+		],
 		lifecycle: { state: 'active' },
 		eventIds: [8],
 		facts: {
@@ -88,11 +90,13 @@ const assets = ref<GraphicAsset[]>([
 		kind: 'silent-video',
 		revisionId: 'revision-alpha-video-1' as never,
 		revisionNumber: 1,
-		revisions: [{
-			id: 'revision-alpha-video-1' as never,
-			revisionNumber: 1,
-			facts: {} as never,
-		}],
+		revisions: [
+			{
+				id: 'revision-alpha-video-1' as never,
+				revisionNumber: 1,
+				facts: {} as never,
+			},
+		],
 		lifecycle: { state: 'active' },
 		eventIds: [7],
 		facts: {
@@ -132,11 +136,13 @@ const assets = ref<GraphicAsset[]>([
 		kind: 'font',
 		revisionId: 'revision-shared-font-1' as never,
 		revisionNumber: 1,
-		revisions: [{
-			id: 'revision-shared-font-1' as never,
-			revisionNumber: 1,
-			facts: {} as never,
-		}],
+		revisions: [
+			{
+				id: 'revision-shared-font-1' as never,
+				revisionNumber: 1,
+				facts: {} as never,
+			},
+		],
 		lifecycle: { state: 'active' },
 		eventIds: [8],
 		facts: {
@@ -162,7 +168,9 @@ const assets = ref<GraphicAsset[]>([
 		operation: {} as never,
 	},
 ]);
-const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+const { mockApiFetch } = vi.hoisted(() => ({
+	mockApiFetch: vi.fn(),
+}));
 
 /**
  * The failure the library listing can meet, settable per test.
@@ -248,9 +256,11 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 		expect(wrapper.text()).toContain('Shared logo');
 		await wrapper.get('[data-testid="select-asset-shared"]').trigger('click');
 
-		expect(wrapper.emitted('update:modelValue')).toEqual([[
-			{ assetId: 'asset-shared', revisionId: 'revision-shared-1' },
-		]]);
+		expect(wrapper.emitted('update:modelValue')).toEqual([
+			[
+				{ assetId: 'asset-shared', revisionId: 'revision-shared-1' },
+			],
+		]);
 	});
 
 	/*
@@ -367,7 +377,10 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 	 * agreement, and leaves nothing to keep in the right order.
 	 */
 	it('says the same sentence when the Event scope is holding back exactly one', async () => {
-		const wrapper = await mountPicker({ eventId: 99, assetKind: ['font'] });
+		const wrapper = await mountPicker({
+			eventId: 99,
+			assetKind: ['font'],
+		});
 		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
 		await wrapper.get('[data-testid="graphic-asset-scope-event"]').trigger('click');
 
@@ -376,7 +389,10 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 	});
 
 	it('says nothing about a wider library when the wider library is what is showing', async () => {
-		const wrapper = await mountPicker({ eventId: 99, assetKind: ['silent-video'] });
+		const wrapper = await mountPicker({
+			eventId: 99,
+			assetKind: ['silent-video'],
+		});
 		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
 		await wrapper.get('[data-testid="graphic-asset-scope-library"]').trigger('click');
 

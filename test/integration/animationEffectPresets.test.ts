@@ -29,7 +29,10 @@ describe('the installation Animation Effect Preset library', () => {
 				method: 'POST',
 				body: {
 					name,
-					selection: { effect: 'fog', params: { speed: 0.4 } },
+					selection: {
+						effect: 'fog',
+						params: { speed: 0.4 },
+					},
 				},
 			});
 			presetId = created.id;
@@ -37,7 +40,10 @@ describe('the installation Animation Effect Preset library', () => {
 			expect(created).toMatchObject({
 				name,
 				revision: 1,
-				selection: { effect: 'fog', params: expect.objectContaining({ speed: 0.4 }) },
+				selection: {
+					effect: 'fog',
+					params: expect.objectContaining({ speed: 0.4 }),
+				},
 			});
 
 			const collection = await $fetch<{ presets: AnimationEffectPresetResponse[] }>(library);
@@ -51,14 +57,20 @@ describe('the installation Animation Effect Preset library', () => {
 				body: {
 					revision: 1,
 					name: `${name} revised`,
-					selection: { effect: 'caustics', params: { speed: 0.7 } },
+					selection: {
+						effect: 'caustics',
+						params: { speed: 0.7 },
+					},
 				},
 			});
 			expect(updated).toMatchObject({
 				id: presetId,
 				name: `${name} revised`,
 				revision: 2,
-				selection: { effect: 'caustics', params: expect.objectContaining({ speed: 0.7 }) },
+				selection: {
+					effect: 'caustics',
+					params: expect.objectContaining({ speed: 0.7 }),
+				},
 			});
 
 			const stale = await fetch(`${library}/${presetId}`, {
@@ -85,7 +97,13 @@ describe('the installation Animation Effect Preset library', () => {
 		try {
 			const created = await $fetch<AnimationEffectPresetResponse>(library, {
 				method: 'POST',
-				body: { name, selection: { effect: 'caustics', params: { speed: 0.65 } } },
+				body: {
+					name,
+					selection: {
+						effect: 'caustics',
+						params: { speed: 0.65 },
+					},
+				},
 			});
 			ids.push(created.id);
 
@@ -148,7 +166,9 @@ describe('the installation Animation Effect Preset library', () => {
 		const oversizedResponse = await fetch(`${library}/imports`, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ document: ' '.repeat(MAX_ANIMATION_EFFECT_PRESET_DOCUMENT_BYTES + 1) }),
+			body: JSON.stringify({
+				document: ' '.repeat(MAX_ANIMATION_EFFECT_PRESET_DOCUMENT_BYTES + 1),
+			}),
 		});
 		expect(oversizedResponse.status).toBe(413);
 
@@ -169,8 +189,12 @@ describe('the installation Animation Effect Preset library', () => {
 		] as const) {
 			const response = await anonymousFetch(path, {
 				method,
-				headers: method === 'POST' ? { 'content-type': 'application/json' } : undefined,
-				body: method === 'POST' ? '{}' : undefined,
+				headers: method === 'POST'
+					? { 'content-type': 'application/json' }
+					: undefined,
+				body: method === 'POST'
+					? '{}'
+					: undefined,
 			});
 			expect(response.status).toBe(401);
 		}

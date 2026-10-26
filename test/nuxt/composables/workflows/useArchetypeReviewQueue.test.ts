@@ -111,16 +111,22 @@ describe('useArchetypeReviewQueue', () => {
 			const gameData = player.gameData;
 			if (gameData?.type !== 'mtg' || !gameData.deckName)
 				return [];
-			return [{
-				id: index + 1,
-				eventId: 1,
-				playerId: player.id,
-				name: gameData.deckName,
-				colors: gameData.deckColors ?? '',
-				archetypeId: gameData.deckReviewed ? player.archetypeId ?? 999 : player.archetypeId,
-				reviewedAt: gameData.deckReviewed ? new Date() : null,
-				isPrimary: true,
-			}];
+			return [
+				{
+					id: index + 1,
+					eventId: 1,
+					playerId: player.id,
+					name: gameData.deckName,
+					colors: gameData.deckColors ?? '',
+					archetypeId: gameData.deckReviewed
+						? player.archetypeId ?? 999
+						: player.archetypeId,
+					reviewedAt: gameData.deckReviewed
+						? new Date()
+						: null,
+					isPrimary: true,
+				},
+			];
 		});
 	}
 
@@ -157,8 +163,14 @@ describe('useArchetypeReviewQueue', () => {
 		it('excludes MTG players with no deckName', () => {
 			mockPlayerStore.players = [
 				mtgPlayer(1, 'Deck A'),
-				{ ...mtgPlayer(2, 'ignored'), gameData: { type: 'mtg', deckName: null } },
-				{ ...mtgPlayer(3, 'ignored'), gameData: { type: 'mtg' } },
+				{
+					...mtgPlayer(2, 'ignored'),
+					gameData: { type: 'mtg', deckName: null },
+				},
+				{
+					...mtgPlayer(3, 'ignored'),
+					gameData: { type: 'mtg' },
+				},
 			];
 			const { allEntries } = makeQueue();
 			expect(allEntries.value).toHaveLength(1);
@@ -172,11 +184,25 @@ describe('useArchetypeReviewQueue', () => {
 		});
 
 		it('queues multiple submitted decks for one player independently', () => {
-			mockPlayerStore.players = [mtgPlayer(1, 'Primary')];
+			mockPlayerStore.players = [
+				mtgPlayer(1, 'Primary'),
+			];
 			const { allEntries, reviewedCount } = makeQueue();
 			mockPlayerDeckStore.decks = [
-				{ ...mockPlayerDeckStore.decks[0], id: 10, name: 'Primary', reviewedAt: null },
-				{ ...mockPlayerDeckStore.decks[0], id: 20, name: 'Finals', archetypeId: 5, reviewedAt: new Date(), isPrimary: false },
+				{
+					...mockPlayerDeckStore.decks[0],
+					id: 10,
+					name: 'Primary',
+					reviewedAt: null,
+				},
+				{
+					...mockPlayerDeckStore.decks[0],
+					id: 20,
+					name: 'Finals',
+					archetypeId: 5,
+					reviewedAt: new Date(),
+					isPrimary: false,
+				},
 			];
 
 			expect(allEntries.value.map(entry => entry.deck.id)).toEqual([10, 20]);
@@ -339,7 +365,9 @@ describe('useArchetypeReviewQueue', () => {
 		});
 
 		it('excludes players without an archetypeId', () => {
-			mockArchetypeStore.archetypes = [{ id: 1, name: 'Control' }];
+			mockArchetypeStore.archetypes = [
+				{ id: 1, name: 'Control' },
+			];
 			mockPlayerStore.players = [
 				mtgPlayer(1, 'Control', { archetypeId: null }),
 			];
@@ -376,7 +404,9 @@ describe('useArchetypeReviewQueue', () => {
 
 		it('fetchDeck called when currentEntry changes', async () => {
 			mockDeckCache.fetchDeck.mockResolvedValue(null);
-			mockPlayerStore.players = [mtgPlayer(1, 'Deck A')];
+			mockPlayerStore.players = [
+				mtgPlayer(1, 'Deck A'),
+			];
 
 			makeQueue();
 			await nextTick();
@@ -420,9 +450,26 @@ describe('useArchetypeReviewQueue', () => {
 		});
 
 		it('activeDeck populated after fetch resolves', async () => {
-			const mockDeck = { id: 1, cards: [{ cardId: 1, name: 'Lightning Bolt', scryfallId: null, cardType: 'Instant', colors: 'R', cmc: 1, quantity: 4, compartment: 'mainboard', sortOrder: 0 }] };
+			const mockDeck = {
+				id: 1,
+				cards: [
+					{
+						cardId: 1,
+						name: 'Lightning Bolt',
+						scryfallId: null,
+						cardType: 'Instant',
+						colors: 'R',
+						cmc: 1,
+						quantity: 4,
+						compartment: 'mainboard',
+						sortOrder: 0,
+					},
+				],
+			};
 			mockDeckCache.fetchDeck.mockResolvedValue(mockDeck);
-			mockPlayerStore.players = [mtgPlayer(1, 'Deck A')];
+			mockPlayerStore.players = [
+				mtgPlayer(1, 'Deck A'),
+			];
 
 			const { activeDeck, queueFilter } = makeQueue();
 			queueFilter.value = 'all';
@@ -434,7 +481,10 @@ describe('useArchetypeReviewQueue', () => {
 
 		it('prepareAdvance pins the current deck until commit in unreviewed queue', async () => {
 			mockDeckCache.fetchDeck.mockResolvedValue({ id: 1, cards: [] });
-			mockPlayerStore.players = [mtgPlayer(1, 'Deck A'), mtgPlayer(2, 'Deck B')];
+			mockPlayerStore.players = [
+				mtgPlayer(1, 'Deck A'),
+				mtgPlayer(2, 'Deck B'),
+			];
 
 			const { currentEntry, prepareAdvance } = makeQueue();
 			await nextTick();

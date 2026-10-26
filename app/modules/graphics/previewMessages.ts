@@ -213,19 +213,26 @@ export function readGraphicsPreviewState(state: GraphicsPreviewState): GraphicsP
 	const socialProfileValues = state.socialProfileValues ?? Object.fromEntries(
 		state.graphics.flatMap(graphic => (graphic.socialProfileProjections ?? []).length === 0
 			? []
-			: [[graphic.id, Object.fromEntries(graphic.socialProfileProjections!.map(projection => [
-					projection.key,
-					{
-						network: 'twitch' as const,
-						networkLabel: SUPPORTED_SOCIAL_NETWORK_BY_KEY.twitch.label,
-						handle: 'example',
-						profileUrl: canonicalSocialProfileUrl('twitch', 'example'),
-					},
-				]))]]),
+			: [
+					[
+						graphic.id,
+						Object.fromEntries(graphic.socialProfileProjections!.map(projection => [
+							projection.key,
+							{
+								network: 'twitch' as const,
+								networkLabel: SUPPORTED_SOCIAL_NETWORK_BY_KEY.twitch.label,
+								handle: 'example',
+								profileUrl: canonicalSocialProfileUrl('twitch', 'example'),
+							},
+						])),
+					],
+				]),
 	);
 	return {
 		...state,
-		...(Object.keys(socialProfileValues).length > 0 ? { socialProfileValues } : {}),
+		...(Object.keys(socialProfileValues).length > 0
+			? { socialProfileValues }
+			: {}),
 		animation: state.animation === undefined || state.animation === null
 			? null
 			: readGraphicsPreviewAnimationPlan(state.animation),

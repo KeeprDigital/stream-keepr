@@ -22,5 +22,8 @@ export function useGraphicAssetPickerScope() {
 		chosen.value = scope;
 	}
 
-	return { chosen: readonly(chosen), choose };
+	return {
+		chosen: readonly(chosen),
+		choose,
+	};
 }

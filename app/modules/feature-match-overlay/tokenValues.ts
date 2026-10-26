@@ -44,10 +44,19 @@ export interface FeatureMatchOverlayHostStateInput {
 }
 
 /** The per-player token suffixes, in the order the catalogue generates them. */
-const PLAYER_VALUE_KEYS = ['Name', 'Record', 'Deck', 'DeckColors', 'Pronouns', 'Lgs'] as const;
+const PLAYER_VALUE_KEYS = [
+	'Name',
+	'Record',
+	'Deck',
+	'DeckColors',
+	'Pronouns',
+	'Lgs',
+] as const;
 
 function playerData(input: FeatureMatchOverlayHostStateInput, side: PlayerSide) {
-	return side === 'player1' ? input.featureMatch?.player1Data : input.featureMatch?.player2Data;
+	return side === 'player1'
+		? input.featureMatch?.player1Data
+		: input.featureMatch?.player2Data;
 }
 
 /**

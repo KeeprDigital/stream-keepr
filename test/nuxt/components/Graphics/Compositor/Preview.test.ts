@@ -10,23 +10,27 @@ import {
 
 enableAutoUnmount(afterEach);
 
-const graphics = [{
-	id: 'lower-third',
-	name: 'Lower Third',
-	items: [{
-		type: 'shape' as const,
-		id: 'bar',
-		label: 'Shape 1',
-		visible: true,
-		anchor: 'top-left' as const,
-		x: 0,
-		y: 0,
-		width: 100,
-		height: 40,
-		geometry: { cornerRadius: 0 },
-		surfaceStyle: { fill: '#0077a3', fillOpacity: 1 },
-	}],
-}];
+const graphics = [
+	{
+		id: 'lower-third',
+		name: 'Lower Third',
+		items: [
+			{
+				type: 'shape' as const,
+				id: 'bar',
+				label: 'Shape 1',
+				visible: true,
+				anchor: 'top-left' as const,
+				x: 0,
+				y: 0,
+				width: 100,
+				height: 40,
+				geometry: { cornerRadius: 0 },
+				surfaceStyle: { fill: '#0077a3', fillOpacity: 1 },
+			},
+		],
+	},
+];
 
 const ScreenSettingsCardStub = defineComponent({
 	template: '<section><slot name="actions" :open="true" /><slot /></section>',
@@ -36,28 +40,47 @@ const SlotOnlyStub = defineComponent({ template: '<div><slot /></div>' });
 
 const USwitchStub = defineComponent({
 	name: 'USwitch',
-	props: { modelValue: { type: Boolean, required: false } },
+	props: {
+		modelValue: { type: Boolean, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<button type="button" @click="$emit(\'update:modelValue\', !modelValue)" />',
 });
 
 const USelectMenuStub = defineComponent({
 	name: 'USelectMenu',
-	props: { modelValue: { type: [String, Number], required: false }, items: { type: Array, default: () => [] } },
+	props: {
+		modelValue: {
+			type: [String, Number],
+			required: false,
+		},
+		items: {
+			type: Array,
+			default: () => [],
+		},
+	},
 	emits: ['update:modelValue'],
 	template: '<select @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items" :key="String(item.value)" :value="item.value">{{ item.label }}</option></select>',
 });
 
 const USelectStub = defineComponent({
 	name: 'USelect',
-	props: { modelValue: { type: String, required: false }, items: { type: Array, default: () => [] } },
+	props: {
+		modelValue: { type: String, required: false },
+		items: {
+			type: Array,
+			default: () => [],
+		},
+	},
 	emits: ['update:modelValue'],
 	template: '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items" :key="item.value" :value="item.value">{{ item.label }}</option></select>',
 });
 
 const UInputStub = defineComponent({
 	name: 'UInput',
-	props: { modelValue: { type: String, required: false } },
+	props: {
+		modelValue: { type: String, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)">',
 });
@@ -75,7 +98,11 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 	return mount(Preview, {
 		props: {
 			eventId: 1,
-			screen: { id: 1, slug: 'main', screenConfig: { width: 1920, height: 1080 } } as Screen,
+			screen: {
+				id: 1,
+				slug: 'main',
+				screenConfig: { width: 1920, height: 1080 },
+			} as Screen,
 			graphics,
 			selectedTarget: { type: 'canvas' },
 			canvasWidth: 1920,
@@ -99,24 +126,30 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 
 describe('graphicsCompositorPreview', () => {
 	it('previews each projection with non-persisted network and long-handle samples', async () => {
-		const projectedGraphics = [{
-			...graphics[0]!,
-			socialProfileProjections: [{
-				key: 'talent-profile',
-				label: 'Talent profile',
-				sourceKey: 'talent',
-				presentationGroupId: 'profile-group',
-				dwellMs: 8_000,
-				transition: 'crossfade' as const,
-				transitionDurationMs: 250,
-			}],
-		}];
+		const projectedGraphics = [
+			{
+				...graphics[0]!,
+				socialProfileProjections: [
+					{
+						key: 'talent-profile',
+						label: 'Talent profile',
+						sourceKey: 'talent',
+						presentationGroupId: 'profile-group',
+						dwellMs: 8_000,
+						transition: 'crossfade' as const,
+						transitionDurationMs: 250,
+					},
+				],
+			},
+		];
 		const wrapper = await mountComponent({ graphics: projectedGraphics });
 		const frame = wrapper.get('iframe').element;
 		const posted: Array<{ state: Record<string, unknown> }> = [];
 		Object.defineProperty(frame, 'contentWindow', {
 			configurable: true,
-			value: { postMessage: (message: unknown) => posted.push(message as never) },
+			value: {
+				postMessage: (message: unknown) => posted.push(message as never),
+			},
 		});
 
 		const sample = wrapper.get('[data-social-profile-sample="talent-profile"]');
@@ -231,7 +264,9 @@ describe('graphicsCompositorPreview', () => {
 		const posted: unknown[] = [];
 		Object.defineProperty(frame, 'contentWindow', {
 			configurable: true,
-			value: { postMessage: (message: unknown) => posted.push(message) },
+			value: {
+				postMessage: (message: unknown) => posted.push(message),
+			},
 		});
 
 		await wrapper.get('iframe').trigger('load');
@@ -239,7 +274,9 @@ describe('graphicsCompositorPreview', () => {
 		expect(posted).toHaveLength(1);
 		expect(posted[0]).toMatchObject({
 			type: GRAPHICS_PREVIEW_STATE_MESSAGE,
-			state: { selectedTarget: { type: 'canvas' } },
+			state: {
+				selectedTarget: { type: 'canvas' },
+			},
 		});
 		expect((posted[0] as { state: { graphics: unknown[] } }).state.graphics).toHaveLength(1);
 	});
@@ -257,7 +294,10 @@ describe('graphicsCompositorPreview', () => {
 		const posted: unknown[] = [];
 		Object.defineProperty(frame, 'contentWindow', {
 			configurable: true,
-			value: { postMessage: (message: unknown) => posted.push(message), self: true },
+			value: {
+				postMessage: (message: unknown) => posted.push(message),
+				self: true,
+			},
 		});
 
 		// No `load` at all: the frame speaks first, which is the case the handshake
@@ -279,7 +319,9 @@ describe('graphicsCompositorPreview', () => {
 		const posted: unknown[] = [];
 		Object.defineProperty(frame, 'contentWindow', {
 			configurable: true,
-			value: { postMessage: (message: unknown) => posted.push(message) },
+			value: {
+				postMessage: (message: unknown) => posted.push(message),
+			},
 		});
 
 		window.dispatchEvent(new MessageEvent('message', {
@@ -315,7 +357,10 @@ describe('graphicsCompositorPreview', () => {
 		window.dispatchEvent(new MessageEvent('message', {
 			origin: 'https://elsewhere.test',
 			source: window,
-			data: { type: GRAPHICS_PREVIEW_SELECT_MESSAGE, target: { type: 'canvas' } },
+			data: {
+				type: GRAPHICS_PREVIEW_SELECT_MESSAGE,
+				target: { type: 'canvas' },
+			},
 		}));
 		await nextTick();
 
@@ -329,7 +374,9 @@ describe('graphicAnimationPreview', () => {
 		const messages: Array<{ type: string; state: Record<string, unknown> }> = [];
 		Object.defineProperty(frame, 'contentWindow', {
 			configurable: true,
-			value: { postMessage: (message: unknown) => messages.push(message as never) },
+			value: {
+				postMessage: (message: unknown) => messages.push(message as never),
+			},
 		});
 		return messages;
 	}
@@ -339,7 +386,9 @@ describe('graphicAnimationPreview', () => {
 	}
 
 	it('composes at the Graphic Resting State until an author starts a run', async () => {
-		const wrapper = await mountComponent({ selectedTarget: { type: 'graphic', graphicId: 'lower-third' } });
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
 		const messages = posted(wrapper);
 
 		await wrapper.get('iframe').trigger('load');
@@ -350,7 +399,9 @@ describe('graphicAnimationPreview', () => {
 	});
 
 	it('plays one lifecycle phase of the Broadcast Graphic under authoring', async () => {
-		const wrapper = await mountComponent({ selectedTarget: { type: 'graphic', graphicId: 'lower-third' } });
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
 		const messages = posted(wrapper);
 
 		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
@@ -378,7 +429,9 @@ describe('graphicAnimationPreview', () => {
 	});
 
 	it('offers no run at all with no Broadcast Graphic selected', async () => {
-		const wrapper = await mountComponent({ selectedTarget: { type: 'canvas' } });
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'canvas' },
+		});
 
 		expect(wrapper.find('[data-testid="animation-preview-hint"]').exists()).toBe(true);
 
@@ -390,7 +443,9 @@ describe('graphicAnimationPreview', () => {
 	});
 
 	it('plays a full lifecycle from the selected phase onwards', async () => {
-		const wrapper = await mountComponent({ selectedTarget: { type: 'graphic', graphicId: 'lower-third' } });
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
 		const messages = posted(wrapper);
 
 		await wrapper.get('[data-testid="animation-preview-scope-lifecycle"]').trigger('click');
@@ -401,7 +456,9 @@ describe('graphicAnimationPreview', () => {
 	});
 
 	it('varies playback speed and loops an on-screen cycle', async () => {
-		const wrapper = await mountComponent({ selectedTarget: { type: 'graphic', graphicId: 'lower-third' } });
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
 		const messages = posted(wrapper);
 
 		await wrapper.get('[data-testid="animation-preview-speed-0.25"]').trigger('click');
@@ -413,7 +470,9 @@ describe('graphicAnimationPreview', () => {
 	});
 
 	it('restarts a run with a new token rather than a time, so there is no playhead', async () => {
-		const wrapper = await mountComponent({ selectedTarget: { type: 'graphic', graphicId: 'lower-third' } });
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
 		const messages = posted(wrapper);
 
 		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
@@ -430,7 +489,9 @@ describe('graphicAnimationPreview', () => {
 	});
 
 	it('stops a run back to the Graphic Resting State', async () => {
-		const wrapper = await mountComponent({ selectedTarget: { type: 'graphic', graphicId: 'lower-third' } });
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
 		const messages = posted(wrapper);
 
 		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
@@ -442,12 +503,16 @@ describe('graphicAnimationPreview', () => {
 	});
 
 	it('stops a run when the author selects a different Broadcast Graphic', async () => {
-		const wrapper = await mountComponent({ selectedTarget: { type: 'graphic', graphicId: 'lower-third' } });
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
 		const messages = posted(wrapper);
 
 		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
 		await nextTick();
-		await wrapper.setProps({ selectedTarget: { type: 'graphic', graphicId: 'bug' } });
+		await wrapper.setProps({
+			selectedTarget: { type: 'graphic', graphicId: 'bug' },
+		});
 		await nextTick();
 
 		expect(latestPlan(messages)).toBeNull();
@@ -457,7 +522,9 @@ describe('graphicAnimationPreview', () => {
 		// Gating, stated as a property of the surface: the preview's whole channel is
 		// one postMessage to the frame it embedded. It emits no configuration update,
 		// so there is nothing for a caller to persist, and it addresses no other window.
-		const wrapper = await mountComponent({ selectedTarget: { type: 'graphic', graphicId: 'lower-third' } });
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
 		const messages = posted(wrapper);
 
 		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');

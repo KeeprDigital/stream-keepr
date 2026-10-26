@@ -59,7 +59,9 @@ afterEach(() => {
 
 /** Start the runner fixture and read the stand-in's pid and profile from it. */
 async function startRunner(...args: string[]) {
-	const runner = spawn(process.execPath, [RUNNER, STUBBORN_CHROME, ...args], { stdio: ['ignore', 'pipe', 'inherit'] });
+	const runner = spawn(process.execPath, [RUNNER, STUBBORN_CHROME, ...args], {
+		stdio: ['ignore', 'pipe', 'inherit'],
+	});
 	runners.add(runner);
 	const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(resolve =>
 		runner.once('exit', (code, signal) => resolve({ code, signal })));
@@ -74,7 +76,12 @@ async function startRunner(...args: string[]) {
 		runner.once('exit', () => reject(new Error(`runner exited before launching: ${output}`)));
 	});
 	strays.add(launched.pid);
-	return { runner, exited, printed: () => output, ...launched };
+	return {
+		runner,
+		exited,
+		printed: () => output,
+		...launched,
+	};
 }
 
 /** The stand-in, launched through the real launcher with a short SIGTERM grace. */

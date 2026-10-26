@@ -20,7 +20,10 @@ const basePixelPng = Uint8Array.from(Buffer.from(
 ));
 /** Appends a valid ancillary text chunk so this suite owns a distinct digest. */
 function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array<ArrayBuffer> {
-	const payload = Buffer.concat([Buffer.from('tEXt'), Buffer.from(`${keyword}\0`)]);
+	const payload = Buffer.concat([
+		Buffer.from('tEXt'),
+		Buffer.from(`${keyword}\0`),
+	]);
 	const length = Buffer.alloc(4);
 	length.writeUInt32BE(payload.byteLength - 4, 0);
 	const checksum = Buffer.alloc(4);
@@ -84,7 +87,11 @@ describe('template Package export through the API boundary', () => {
 		});
 		const response = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-			{ method: 'PUT', headers: { cookie: graphicsAuthorCookie }, body: packagePixelPng },
+			{
+				method: 'PUT',
+				headers: { cookie: graphicsAuthorCookie },
+				body: packagePixelPng,
+			},
 		);
 		operation = await expectOperationResult(response);
 	});
@@ -107,12 +114,17 @@ describe('template Package export through the API boundary', () => {
 		// package proves both halves of the rule: declared capability, embedded asset.
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: config.layout } },
+			{
+				method: 'PATCH',
+				body: { layout: config.layout },
+			},
 		);
 
 		const response = await fetch(
 			`/api/events/${eventId}/screens/${screenId}/template-packages/feature-match-layout`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 
 		expect(response.status).toBe(200);
@@ -178,7 +190,9 @@ describe('template Package export through the API boundary', () => {
 
 		const response = await fetch(
 			`/api/events/${eventId}/screens/${fragmentScreen.id}/template-packages/feature-match-layout`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 
 		expect(response.status).toBe(200);
@@ -214,7 +228,9 @@ describe('template Package export through the API boundary', () => {
 
 		const response = await fetch(
 			`/api/events/${eventId}/screens/${danglingScreen.id}/template-packages/feature-match-layout`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 
 		expect(response.status).toBe(409);
@@ -233,7 +249,10 @@ describe('template Package export through the API boundary', () => {
 	it('streams a .skgraphic package declaring application capabilities without duplicating them', async () => {
 		const talent = await $fetch(`/api/events/${eventId}/talents`, {
 			method: 'POST',
-			body: { name: 'Package Talent', socialProfiles: { twitch: 'MustNotTravel' } },
+			body: {
+				name: 'Package Talent',
+				socialProfiles: { twitch: 'MustNotTravel' },
+			},
 		});
 		await $fetch(`/api/events/${eventId}`, {
 			method: 'PATCH',
@@ -252,49 +271,62 @@ describe('template Package export through the API boundary', () => {
 			{
 				method: 'PATCH',
 				body: {
-					graphics: [{
-						id: 'lower-third',
-						name: 'Lower third',
-						items: [{
-							id: 'headline',
-							type: 'text',
-							label: 'Headline',
-							visible: true,
-							anchor: 'top-left',
-							x: 100,
-							y: 900,
-							width: 800,
-							height: 120,
-							text: '{social}',
-							overflowPolicy: 'ellipsis',
-							minFontSize: 24,
-							typography: {
-								font: { kind: 'application', fontId: 'inter' },
-								fontSize: 64,
-								fontWeight: 700,
-								fontStyle: 'normal',
-								textTransform: 'none',
-								letterSpacing: 0,
-								lineHeight: 1.15,
-								textAlign: 'left',
-								color: '#ffffff',
-							},
-						}],
-						inputs: [{
-							type: 'text',
-							key: 'social',
-							label: 'Twitch handle',
-							required: false,
-							updatePolicy: 'staged',
-							default: '',
-							maxLength: 100,
-						}],
-						sources: [
-							{ key: 'event', label: 'Current Event', kind: 'event' },
-							{ key: 'talent1', label: 'Talent 1', kind: 'talent', from: { sourceKey: 'event', relation: 'commentator1' } },
-						],
-						bindings: [{ inputKey: 'social', sourceKey: 'talent1', fieldId: 'talent.twitchHandle' }],
-					}],
+					graphics: [
+						{
+							id: 'lower-third',
+							name: 'Lower third',
+							items: [
+								{
+									id: 'headline',
+									type: 'text',
+									label: 'Headline',
+									visible: true,
+									anchor: 'top-left',
+									x: 100,
+									y: 900,
+									width: 800,
+									height: 120,
+									text: '{social}',
+									overflowPolicy: 'ellipsis',
+									minFontSize: 24,
+									typography: {
+										font: { kind: 'application', fontId: 'inter' },
+										fontSize: 64,
+										fontWeight: 700,
+										fontStyle: 'normal',
+										textTransform: 'none',
+										letterSpacing: 0,
+										lineHeight: 1.15,
+										textAlign: 'left',
+										color: '#ffffff',
+									},
+								},
+							],
+							inputs: [
+								{
+									type: 'text',
+									key: 'social',
+									label: 'Twitch handle',
+									required: false,
+									updatePolicy: 'staged',
+									default: '',
+									maxLength: 100,
+								},
+							],
+							sources: [
+								{ key: 'event', label: 'Current Event', kind: 'event' },
+								{
+									key: 'talent1',
+									label: 'Talent 1',
+									kind: 'talent',
+									from: { sourceKey: 'event', relation: 'commentator1' },
+								},
+							],
+							bindings: [
+								{ inputKey: 'social', sourceKey: 'talent1', fieldId: 'talent.twitchHandle' },
+							],
+						},
+					],
 				},
 			},
 		);
@@ -302,7 +334,9 @@ describe('template Package export through the API boundary', () => {
 
 		const response = await fetch(
 			`/api/events/${eventId}/screens/${graphicsScreen.id}/template-packages/broadcast-graphic/lower-third`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 
 		expect(response.status).toBe(200);
@@ -329,7 +363,12 @@ describe('template Package export through the API boundary', () => {
 		expect(template.items).toHaveLength(1);
 		expect(template.sources).toEqual([
 			{ key: 'event', label: 'Current Event', kind: 'event' },
-			{ key: 'talent1', label: 'Talent 1', kind: 'talent', from: { sourceKey: 'event', relation: 'commentator1' } },
+			{
+				key: 'talent1',
+				label: 'Talent 1',
+				kind: 'talent',
+				from: { sourceKey: 'event', relation: 'commentator1' },
+			},
 		]);
 		expect(template.bindings).toEqual([
 			{ inputKey: 'social', sourceKey: 'talent1', fieldId: 'talent.twitchHandle' },
@@ -343,7 +382,9 @@ describe('template Package export through the API boundary', () => {
 	it('returns 404 for a Broadcast Graphic that is not on the Screen', async () => {
 		const response = await fetch(
 			`/api/events/${eventId}/screens/${screenId}/template-packages/broadcast-graphic/not-authored`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 		expect(response.status).toBe(404);
 	});

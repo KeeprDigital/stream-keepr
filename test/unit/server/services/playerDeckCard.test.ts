@@ -78,23 +78,27 @@ describe('playerDeckCardService', () => {
 
 	it('returns normalized deck metadata, matching phases, cards, and selected identity', async () => {
 		const orderBy = getChain('select').orderBy;
-		orderBy.mockResolvedValueOnce([{
-			deckId: 10,
-			cardId: 1,
-			name: 'Lightning Bolt',
-			scryfallId: null,
-			oracleId: 'oracle-bolt',
-			cardType: 'Instant',
-			colors: 'R',
-			cmc: 1,
-			manaCost: '{R}',
-			deckCounterTypes: [],
-			deckTokens: [],
-			quantity: 4,
-			compartment: 'mainboard',
-			sortOrder: 0,
-		}]);
-		orderBy.mockResolvedValueOnce([{ id: 3, name: 'Swiss', formatExternalId: 'modern' }]);
+		orderBy.mockResolvedValueOnce([
+			{
+				deckId: 10,
+				cardId: 1,
+				name: 'Lightning Bolt',
+				scryfallId: null,
+				oracleId: 'oracle-bolt',
+				cardType: 'Instant',
+				colors: 'R',
+				cmc: 1,
+				manaCost: '{R}',
+				deckCounterTypes: [],
+				deckTokens: [],
+				quantity: 4,
+				compartment: 'mainboard',
+				sortOrder: 0,
+			},
+		]);
+		orderBy.mockResolvedValueOnce([
+			{ id: 3, name: 'Swiss', formatExternalId: 'modern' },
+		]);
 
 		const result = await playerDeckCardService().getPlayerDecks(1, 2);
 
@@ -114,19 +118,23 @@ describe('playerDeckCardService', () => {
 
 	it('uses reviewed archetype details while retaining submitted Melee metadata', async () => {
 		const reviewedAt = new Date('2026-07-15T00:00:00.000Z');
-		mockPlayerDeckService.listByPlayer.mockResolvedValue([{
-			...deckRow,
-			name: 'Imported Burn',
-			colors: 'R',
-			archetypeId: 5,
-			reviewedAt,
-		}]);
-		mockFindArchetypesByIds.mockResolvedValue([{
-			id: 5,
-			eventId: 1,
-			name: 'Jeskai Control',
-			colors: 'WUR',
-		}]);
+		mockPlayerDeckService.listByPlayer.mockResolvedValue([
+			{
+				...deckRow,
+				name: 'Imported Burn',
+				colors: 'R',
+				archetypeId: 5,
+				reviewedAt,
+			},
+		]);
+		mockFindArchetypesByIds.mockResolvedValue([
+			{
+				id: 5,
+				eventId: 1,
+				name: 'Jeskai Control',
+				colors: 'WUR',
+			},
+		]);
 		getChain('select').orderBy.mockResolvedValue([]);
 
 		const result = await playerDeckCardService().getPlayerDecks(1, 2);

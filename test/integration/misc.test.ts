@@ -45,7 +45,12 @@ describe('misc API endpoints', () => {
 		// Create a player with wins/losses set
 		const player = await $fetch(`/api/events/${eventId}/players`, {
 			method: 'POST',
-			body: { name: 'Standings Player', wins: 2, losses: 1, position: 1 },
+			body: {
+				name: 'Standings Player',
+				wins: 2,
+				losses: 1,
+				position: 1,
+			},
 		});
 
 		const data = await $fetch(`/api/events/${eventId}/standings`);

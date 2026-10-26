@@ -59,7 +59,9 @@ describe('broadcast layout template metadata values', () => {
 			event: { name: 'Local Open', game: 'mtg' },
 			featureMatch: {
 				tableNumber: null,
-				activeSession: { sourceSnapshot: { tableNumber: 9 } },
+				activeSession: {
+					sourceSnapshot: { tableNumber: 9 },
+				},
 			} as any,
 			sourceMatch: null,
 			round: null,

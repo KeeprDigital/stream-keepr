@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ServiceConfigurationError } from '~~/server/utils/errors';
 
-vi.mock('~~/server/db', () => ({ db: { $client: {} } }));
+vi.mock('~~/server/db', () => ({
+	db: { $client: {} },
+}));
 
 vi.stubGlobal('createError', (input: { statusCode: number; message: string }) =>
 	Object.assign(new Error(input.message), input));

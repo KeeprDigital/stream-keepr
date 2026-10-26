@@ -19,13 +19,22 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
 
 function configWith(sources: FeatureMatchSourceItemConfig[]): FeatureMatchOverlayModeConfig {
 	const base = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-	return { ...base, layout: { ...base.layout, sources } };
+	return {
+		...base,
+		layout: { ...base.layout, sources },
+	};
 }
 
 function frameModel(output: FeatureMatchOverlayOutput, frame: Partial<FeatureMatchOverlayFrameConfig>) {
 	const base = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 	return resolveFeatureMatchOverlayRenderModel({
-		config: { ...base, layout: { ...base.layout, frame: { backgroundColor: '#101820', opacity: 0.9, ...frame } } },
+		config: {
+			...base,
+			layout: {
+				...base.layout,
+				frame: { backgroundColor: '#101820', opacity: 0.9, ...frame },
+			},
+		},
 		output,
 		frameGlowFilterId: 'frame-glow',
 	}).frame;
@@ -49,7 +58,9 @@ function source(overrides: Partial<FeatureMatchSourceItemConfig> = {}): FeatureM
 describe('feature match overlay host render model', () => {
 	it('places each visible Source Item at its authored rectangle', () => {
 		const model = resolveFeatureMatchOverlayRenderModel({
-			config: configWith([source()]),
+			config: configWith([
+				source(),
+			]),
 			output: 'overlay',
 		});
 
@@ -64,7 +75,9 @@ describe('feature match overlay host render model', () => {
 
 	it('omits a hidden Source Item and its cutout', () => {
 		const model = resolveFeatureMatchOverlayRenderModel({
-			config: configWith([source({ visible: false })]),
+			config: configWith([
+				source({ visible: false }),
+			]),
 			output: 'overlay',
 		});
 
@@ -74,11 +87,15 @@ describe('feature match overlay host render model', () => {
 
 	it('cuts a Source Item through the Frame only when it asks to', () => {
 		const cutting = resolveFeatureMatchOverlayRenderModel({
-			config: configWith([source()]),
+			config: configWith([
+				source(),
+			]),
 			output: 'overlay',
 		});
 		const solid = resolveFeatureMatchOverlayRenderModel({
-			config: configWith([source({ frameCutout: false })]),
+			config: configWith([
+				source({ frameCutout: false }),
+			]),
 			output: 'overlay',
 		});
 
@@ -88,9 +105,16 @@ describe('feature match overlay host render model', () => {
 
 	it('keeps per-side border visibility, which the host layer did not drop', () => {
 		const model = resolveFeatureMatchOverlayRenderModel({
-			config: configWith([source({
-				framingStyle: { borderVisible: true, borderColor: '#ffffff', borderWidth: 3, borderLeftVisible: false },
-			})]),
+			config: configWith([
+				source({
+					framingStyle: {
+						borderVisible: true,
+						borderColor: '#ffffff',
+						borderWidth: 3,
+						borderLeftVisible: false,
+					},
+				}),
+			]),
 			output: 'overlay',
 		});
 
@@ -114,11 +138,15 @@ describe('feature match overlay host render model', () => {
 			glowOpacity: 0.5,
 		};
 		const overlay = resolveFeatureMatchOverlayRenderModel({
-			config: configWith([source({ framingStyle })]),
+			config: configWith([
+				source({ framingStyle }),
+			]),
 			output: 'overlay',
 		});
 		const key = resolveFeatureMatchOverlayRenderModel({
-			config: configWith([source({ framingStyle })]),
+			config: configWith([
+				source({ framingStyle }),
+			]),
 			output: 'key',
 		});
 
@@ -150,9 +178,16 @@ describe('feature match overlay host render model', () => {
 	});
 
 	it('glows in the border colour at three-quarter opacity when the glow has neither of its own', () => {
-		const framingStyle = { borderVisible: true, borderColor: '#0077a3', borderWidth: 2, glowSize: 6 };
+		const framingStyle = {
+			borderVisible: true,
+			borderColor: '#0077a3',
+			borderWidth: 2,
+			glowSize: 6,
+		};
 		const glowFilter = (output: 'fill' | 'key') => resolveFeatureMatchOverlayRenderModel({
-			config: configWith([source({ framingStyle })]),
+			config: configWith([
+				source({ framingStyle }),
+			]),
 			output,
 		}).sourceItems[0]!.glowStyle?.filter;
 
@@ -162,16 +197,18 @@ describe('feature match overlay host render model', () => {
 
 	it('keeps the opacity of a colour that is not hex', () => {
 		const model = resolveFeatureMatchOverlayRenderModel({
-			config: configWith([source({
-				framingStyle: {
-					backgroundColor: 'rebeccapurple',
-					backgroundOpacity: 0.5,
-					borderVisible: true,
-					glowColor: 'rgb(255, 81, 199)',
-					glowSize: 10,
-					glowOpacity: 0.25,
-				},
-			})]),
+			config: configWith([
+				source({
+					framingStyle: {
+						backgroundColor: 'rebeccapurple',
+						backgroundOpacity: 0.5,
+						borderVisible: true,
+						glowColor: 'rgb(255, 81, 199)',
+						glowSize: 10,
+						glowOpacity: 0.25,
+					},
+				}),
+			]),
 			output: 'fill',
 		});
 
@@ -192,7 +229,11 @@ describe('feature match overlay host render model', () => {
 		};
 		const maskFor = (glowPosition: 'inside' | 'outside') => {
 			const model = resolveFeatureMatchOverlayRenderModel({
-				config: configWith([source({ framingStyle: { ...framingStyle, glowPosition } })]),
+				config: configWith([
+					source({
+						framingStyle: { ...framingStyle, glowPosition },
+					}),
+				]),
 				output: 'overlay',
 			});
 			return decodeURIComponent(String(model.sourceItems[0]!.glowContainerStyle!.maskImage));
@@ -213,17 +254,27 @@ describe('feature match overlay host render model', () => {
 		// Item paints the string the Frame beside it still paints.
 		const gradient = 'linear-gradient(90deg, #b80054, #7f22f6)';
 		const model = resolveFeatureMatchOverlayRenderModel({
-			config: configWith([source({ framingStyle: { backgroundGradient: gradient } })]),
+			config: configWith([
+				source({
+					framingStyle: { backgroundGradient: gradient },
+				}),
+			]),
 			output: 'overlay',
 		});
 		const overBase = resolveFeatureMatchOverlayRenderModel({
-			config: configWith([source({
-				framingStyle: { backgroundGradient: gradient, backgroundColor: '#001122', backgroundOpacity: 0.5 },
-			})]),
+			config: configWith([
+				source({
+					framingStyle: { backgroundGradient: gradient, backgroundColor: '#001122', backgroundOpacity: 0.5 },
+				}),
+			]),
 			output: 'overlay',
 		});
 		const key = resolveFeatureMatchOverlayRenderModel({
-			config: configWith([source({ framingStyle: { backgroundGradient: gradient } })]),
+			config: configWith([
+				source({
+					framingStyle: { backgroundGradient: gradient },
+				}),
+			]),
 			output: 'key',
 		});
 
@@ -236,10 +287,17 @@ describe('feature match overlay host render model', () => {
 
 	it('paints the Key Output in white and the Fill Output over black', () => {
 		const key = resolveFeatureMatchOverlayRenderModel({
-			config: configWith([source({ framingStyle: { borderVisible: true, borderColor: '#0077a3', borderWidth: 4 } })]),
+			config: configWith([
+				source({
+					framingStyle: { borderVisible: true, borderColor: '#0077a3', borderWidth: 4 },
+				}),
+			]),
 			output: 'key',
 		});
-		const fill = resolveFeatureMatchOverlayRenderModel({ config: configWith([]), output: 'fill' });
+		const fill = resolveFeatureMatchOverlayRenderModel({
+			config: configWith([]),
+			output: 'fill',
+		});
 
 		expect(key.sourceItems[0]!.style.borderTop).toBe('4px solid #ffffff');
 		expect(key.frame.fill).toBe('#ffffff');
@@ -247,7 +305,10 @@ describe('feature match overlay host render model', () => {
 	});
 
 	it('renders an overlay canvas transparent', () => {
-		const model = resolveFeatureMatchOverlayRenderModel({ config: configWith([]), output: 'overlay' });
+		const model = resolveFeatureMatchOverlayRenderModel({
+			config: configWith([]),
+			output: 'overlay',
+		});
 
 		expect(model.canvasStyle.background).toBe('transparent');
 	});
@@ -284,7 +345,12 @@ describe('feature match overlay host render model', () => {
 		});
 
 		it('glows its border at the glow colour and opacity, and white at that opacity in the Key Output', () => {
-			const glowing = { ...bordered, glowColor: '#ff51c7', glowSize: 12, glowOpacity: 0.5 };
+			const glowing = {
+				...bordered,
+				glowColor: '#ff51c7',
+				glowSize: 12,
+				glowOpacity: 0.5,
+			};
 
 			expect(frameModel('fill', glowing).border?.glow).toEqual({
 				filterId: 'frame-glow',

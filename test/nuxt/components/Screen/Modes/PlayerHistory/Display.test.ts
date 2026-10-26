@@ -116,8 +116,16 @@ describe('screenModesPlayerHistoryDisplay', () => {
 		error.value = null;
 		isEmpty.value = false;
 		headerText.value = 'Nadia Rivers Match History';
-		player.value = { name: 'Nadia Rivers', wins: 12, losses: 2, draws: 1, position: 3 };
-		pageData.value = [historyRow()];
+		player.value = {
+			name: 'Nadia Rivers',
+			wins: 12,
+			losses: 2,
+			draws: 1,
+			position: 3,
+		};
+		pageData.value = [
+			historyRow(),
+		];
 	});
 
 	it('renders the header with the player record and position', async () => {
@@ -130,7 +138,13 @@ describe('screenModesPlayerHistoryDisplay', () => {
 	});
 
 	it('omits zero draws and a missing position from the record line', async () => {
-		player.value = { name: 'Nadia Rivers', wins: 4, losses: 0, draws: 0, position: null };
+		player.value = {
+			name: 'Nadia Rivers',
+			wins: 4,
+			losses: 0,
+			draws: 0,
+			position: null,
+		};
 
 		const wrapper = await mountComponent();
 
@@ -161,7 +175,15 @@ describe('screenModesPlayerHistoryDisplay', () => {
 	it('renders every visible column for each history row', async () => {
 		pageData.value = [
 			historyRow(),
-			historyRow({ id: 2, roundName: 'Round 2', tableNumber: null, opponentName: 'Sam Ortiz', outcome: 'loss', playerGameWins: 0, opponentGameWins: 2 }),
+			historyRow({
+				id: 2,
+				roundName: 'Round 2',
+				tableNumber: null,
+				opponentName: 'Sam Ortiz',
+				outcome: 'loss',
+				playerGameWins: 0,
+				opponentGameWins: 2,
+			}),
 		];
 
 		const wrapper = await mountComponent();
@@ -202,10 +224,35 @@ describe('screenModesPlayerHistoryDisplay', () => {
 	});
 
 	it.each([
-		['bye', historyRow({ outcome: 'bye' }), 'outcome-win', 'BYE'],
-		['loss', historyRow({ outcome: 'loss', playerGameWins: 0, opponentGameWins: 2 }), 'outcome-loss', 'LOSS'],
-		['draw', historyRow({ outcome: 'draw', playerGameWins: 1, opponentGameWins: 1, gameDraws: 1 }), 'outcome-draw', 'DRAW'],
-		['pending', historyRow({ outcome: 'pending', hasResult: false }), 'outcome-pending', 'Pending'],
+		[
+			'bye',
+			historyRow({ outcome: 'bye' }),
+			'outcome-win',
+			'BYE',
+		],
+		[
+			'loss',
+			historyRow({ outcome: 'loss', playerGameWins: 0, opponentGameWins: 2 }),
+			'outcome-loss',
+			'LOSS',
+		],
+		[
+			'draw',
+			historyRow({
+				outcome: 'draw',
+				playerGameWins: 1,
+				opponentGameWins: 1,
+				gameDraws: 1,
+			}),
+			'outcome-draw',
+			'DRAW',
+		],
+		[
+			'pending',
+			historyRow({ outcome: 'pending', hasResult: false }),
+			'outcome-pending',
+			'Pending',
+		],
 	])('badges a %s outcome with its state class', async (_name, row, expectedClass, expectedLabel) => {
 		pageData.value = [row];
 
@@ -217,7 +264,9 @@ describe('screenModesPlayerHistoryDisplay', () => {
 	});
 
 	it('leaves the score segment off an unscored outcome', async () => {
-		pageData.value = [historyRow({ outcome: 'bye' })];
+		pageData.value = [
+			historyRow({ outcome: 'bye' }),
+		];
 
 		const wrapper = await mountComponent();
 
@@ -232,7 +281,9 @@ describe('screenModesPlayerHistoryDisplay', () => {
 	});
 
 	it('omits the deck line when the opponent deck is unknown', async () => {
-		pageData.value = [historyRow({ opponentDeckName: null, opponentDeckColors: null })];
+		pageData.value = [
+			historyRow({ opponentDeckName: null, opponentDeckColors: null }),
+		];
 
 		const wrapper = await mountComponent();
 
@@ -242,7 +293,10 @@ describe('screenModesPlayerHistoryDisplay', () => {
 
 	describe('opponent archetype and game score columns', () => {
 		function showingColumns(...keys: string[]) {
-			config.value = { ...config.value, columns: keys.map(key => ({ key, visible: true })) };
+			config.value = {
+				...config.value,
+				columns: keys.map(key => ({ key, visible: true })),
+			};
 		}
 
 		it('shows the opponent\'s archetype with its colors in its own column', async () => {
@@ -257,7 +311,9 @@ describe('screenModesPlayerHistoryDisplay', () => {
 
 		it('leaves the archetype column blank when the opponent has none', async () => {
 			showingColumns('opponent', 'opponentArchetype');
-			pageData.value = [historyRow({ opponentDeckName: null, opponentDeckColors: null })];
+			pageData.value = [
+				historyRow({ opponentDeckName: null, opponentDeckColors: null }),
+			];
 
 			const wrapper = await mountComponent();
 
@@ -275,11 +331,46 @@ describe('screenModesPlayerHistoryDisplay', () => {
 		});
 
 		it.each([
-			['a win', historyRow(), '2-1'],
-			['a loss', historyRow({ outcome: 'loss', playerGameWins: 0, opponentGameWins: 2 }), '0-2'],
-			['a game draw', historyRow({ outcome: 'draw', playerGameWins: 1, opponentGameWins: 1, gameDraws: 1 }), '1-1-1'],
-			['a bye', historyRow({ outcome: 'bye', opponentName: 'BYE', playerGameWins: 2, opponentGameWins: 0 }), ''],
-			['an unreported Match', historyRow({ outcome: 'pending', hasResult: false, playerGameWins: null, opponentGameWins: null }), ''],
+			[
+				'a win',
+				historyRow(),
+				'2-1',
+			],
+			[
+				'a loss',
+				historyRow({ outcome: 'loss', playerGameWins: 0, opponentGameWins: 2 }),
+				'0-2',
+			],
+			[
+				'a game draw',
+				historyRow({
+					outcome: 'draw',
+					playerGameWins: 1,
+					opponentGameWins: 1,
+					gameDraws: 1,
+				}),
+				'1-1-1',
+			],
+			[
+				'a bye',
+				historyRow({
+					outcome: 'bye',
+					opponentName: 'BYE',
+					playerGameWins: 2,
+					opponentGameWins: 0,
+				}),
+				'',
+			],
+			[
+				'an unreported Match',
+				historyRow({
+					outcome: 'pending',
+					hasResult: false,
+					playerGameWins: null,
+					opponentGameWins: null,
+				}),
+				'',
+			],
 		])('scores %s from the history Player\'s side', async (_name, row, expected) => {
 			showingColumns('opponent', 'gameScore');
 			pageData.value = [row];

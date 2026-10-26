@@ -98,8 +98,20 @@ async function retirePlate() {
 
 function entries(): GraphicStyleSetEntry[] {
 	return [
-		{ id: 'ink', kind: 'palette', name: 'Ink', schemaVersion: 1, value: { color: '#101014' } },
-		{ id: 'brand', kind: 'palette', name: 'Brand', schemaVersion: 1, value: { color: '#ff0044' } },
+		{
+			id: 'ink',
+			kind: 'palette',
+			name: 'Ink',
+			schemaVersion: 1,
+			value: { color: '#101014' },
+		},
+		{
+			id: 'brand',
+			kind: 'palette',
+			name: 'Brand',
+			schemaVersion: 1,
+			value: { color: '#ff0044' },
+		},
 	];
 }
 
@@ -108,9 +120,13 @@ function linkedDocument(): BroadcastGraphicConfig {
 	return {
 		id: TEMPLATE_ID,
 		name: 'Lower third',
-		items: [plate()],
+		items: [
+			plate(),
+		],
 		styleSet: { styleSetId: STYLE_SET_ID, revision: 1 },
-		styleRefs: { 'animation.enter': { entryId: 'brand' } },
+		styleRefs: {
+			'animation.enter': { entryId: 'brand' },
+		},
 	};
 }
 
@@ -119,14 +135,22 @@ function entryDetachedDocument(): BroadcastGraphicConfig {
 	return {
 		id: TEMPLATE_ID,
 		name: 'Lower third',
-		items: [plate()],
+		items: [
+			plate(),
+		],
 		styleSet: { styleSetId: STYLE_SET_ID, revision: 1 },
 	};
 }
 
 /** What deleting the whole Style Set leaves: no reference and no provenance. */
 function detachedDocument(): BroadcastGraphicConfig {
-	return { id: TEMPLATE_ID, name: 'Lower third', items: [plate()] };
+	return {
+		id: TEMPLATE_ID,
+		name: 'Lower third',
+		items: [
+			plate(),
+		],
+	};
 }
 
 async function styleSetRow() {
@@ -172,13 +196,24 @@ describe('graphicStyleSetService library-wide operations', () => {
 		await client.execute({
 			sql: `insert into graphic_style_sets (id, name, description, revision, draft_revision, draft, published, published_at)
 				values (?, ?, null, 1, 2, ?, ?, 1000)`,
-			args: [STYLE_SET_ID, 'Show style', JSON.stringify(entries()), JSON.stringify(entries())],
+			args: [
+				STYLE_SET_ID,
+				'Show style',
+				JSON.stringify(entries()),
+				JSON.stringify(entries()),
+			],
 		});
 		await client.execute({
 			sql: `insert into broadcast_graphic_templates
 				(id, name, revision, document, graphic_asset_reference_version, style_set_id, style_set_revision)
 				values (?, ?, ?, ?, 'stamp', ?, 1)`,
-			args: [TEMPLATE_ID, 'Lower third', TEMPLATE_REVISION, JSON.stringify(linkedDocument()), STYLE_SET_ID],
+			args: [
+				TEMPLATE_ID,
+				'Lower third',
+				TEMPLATE_REVISION,
+				JSON.stringify(linkedDocument()),
+				STYLE_SET_ID,
+			],
 		});
 		await indexTemplateReference();
 	});
@@ -190,7 +225,13 @@ describe('graphicStyleSetService library-wide operations', () => {
 			draftRevision: 2,
 			draft: entries().filter(entry => entry.id !== 'brand'),
 			published: entries().filter(entry => entry.id !== 'brand'),
-			rewrites: [{ id: TEMPLATE_ID, revision: TEMPLATE_REVISION, document: entryDetachedDocument() }],
+			rewrites: [
+				{
+					id: TEMPLATE_ID,
+					revision: TEMPLATE_REVISION,
+					document: entryDetachedDocument(),
+				},
+			],
 		});
 
 		expect(updated?.draft.map(entry => entry.id)).toEqual(['ink']);
@@ -213,7 +254,13 @@ describe('graphicStyleSetService library-wide operations', () => {
 			draft: entries().filter(entry => entry.id !== 'brand'),
 			published: entries().filter(entry => entry.id !== 'brand'),
 			// Read at a revision another session has since moved past.
-			rewrites: [{ id: TEMPLATE_ID, revision: TEMPLATE_REVISION - 1, document: entryDetachedDocument() }],
+			rewrites: [
+				{
+					id: TEMPLATE_ID,
+					revision: TEMPLATE_REVISION - 1,
+					document: entryDetachedDocument(),
+				},
+			],
 		})).rejects.toThrow(GraphicStyleSetRevisionConflict);
 
 		const styleSet = await styleSetRow();
@@ -232,7 +279,13 @@ describe('graphicStyleSetService library-wide operations', () => {
 	it('deletes a Style Set and detaches its templates as one operation', async () => {
 		const removed = await graphicStyleSetService().remove(STYLE_SET_ID, {
 			draftRevision: 2,
-			rewrites: [{ id: TEMPLATE_ID, revision: TEMPLATE_REVISION, document: detachedDocument() }],
+			rewrites: [
+				{
+					id: TEMPLATE_ID,
+					revision: TEMPLATE_REVISION,
+					document: detachedDocument(),
+				},
+			],
 		});
 
 		expect(removed).toBe(true);
@@ -252,7 +305,13 @@ describe('graphicStyleSetService library-wide operations', () => {
 	it('keeps the Style Set when a template it would detach has moved on', async () => {
 		const removed = await graphicStyleSetService().remove(STYLE_SET_ID, {
 			draftRevision: 2,
-			rewrites: [{ id: TEMPLATE_ID, revision: TEMPLATE_REVISION - 1, document: detachedDocument() }],
+			rewrites: [
+				{
+					id: TEMPLATE_ID,
+					revision: TEMPLATE_REVISION - 1,
+					document: detachedDocument(),
+				},
+			],
 		});
 
 		expect(removed).toBe(false);
@@ -272,12 +331,24 @@ describe('graphicStyleSetService library-wide operations', () => {
 			draftRevision: 1,
 			draft: entries().filter(entry => entry.id !== 'brand'),
 			published: entries().filter(entry => entry.id !== 'brand'),
-			rewrites: [{ id: TEMPLATE_ID, revision: TEMPLATE_REVISION, document: entryDetachedDocument() }],
+			rewrites: [
+				{
+					id: TEMPLATE_ID,
+					revision: TEMPLATE_REVISION,
+					document: entryDetachedDocument(),
+				},
+			],
 		})).rejects.toThrow(GraphicStyleSetRevisionConflict);
 
 		expect(await graphicStyleSetService().remove(STYLE_SET_ID, {
 			draftRevision: 1,
-			rewrites: [{ id: TEMPLATE_ID, revision: TEMPLATE_REVISION, document: detachedDocument() }],
+			rewrites: [
+				{
+					id: TEMPLATE_ID,
+					revision: TEMPLATE_REVISION,
+					document: detachedDocument(),
+				},
+			],
 		})).toBe(false);
 
 		expect((await styleSetRow())?.draft_revision).toBe(2);
@@ -292,7 +363,13 @@ describe('graphicStyleSetService library-wide operations', () => {
 			draftRevision: 2,
 			draft: entries().filter(entry => entry.id !== 'brand'),
 			published: entries().filter(entry => entry.id !== 'brand'),
-			rewrites: [{ id: TEMPLATE_ID, revision: TEMPLATE_REVISION, document: entryDetachedDocument() }],
+			rewrites: [
+				{
+					id: TEMPLATE_ID,
+					revision: TEMPLATE_REVISION,
+					document: entryDetachedDocument(),
+				},
+			],
 		});
 
 		expect(await indexedTemplateSlots()).toEqual([PLATE_SLOT]);
@@ -305,7 +382,13 @@ describe('graphicStyleSetService library-wide operations', () => {
 			draftRevision: 2,
 			draft: entries().filter(entry => entry.id !== 'brand'),
 			published: entries().filter(entry => entry.id !== 'brand'),
-			rewrites: [{ id: TEMPLATE_ID, revision: TEMPLATE_REVISION, document: entryDetachedDocument() }],
+			rewrites: [
+				{
+					id: TEMPLATE_ID,
+					revision: TEMPLATE_REVISION,
+					document: entryDetachedDocument(),
+				},
+			],
 		})).rejects.toThrow(GraphicStyleSetTemplateReferenceConflict);
 
 		const styleSet = await styleSetRow();
@@ -322,7 +405,13 @@ describe('graphicStyleSetService library-wide operations', () => {
 
 		await expect(graphicStyleSetService().remove(STYLE_SET_ID, {
 			draftRevision: 2,
-			rewrites: [{ id: TEMPLATE_ID, revision: TEMPLATE_REVISION, document: detachedDocument() }],
+			rewrites: [
+				{
+					id: TEMPLATE_ID,
+					revision: TEMPLATE_REVISION,
+					document: detachedDocument(),
+				},
+			],
 		})).rejects.toThrow(GraphicStyleSetTemplateReferenceConflict);
 
 		expect((await styleSetRow())?.id).toBe(STYLE_SET_ID);
@@ -333,12 +422,20 @@ describe('graphicStyleSetService library-wide operations', () => {
 
 	it('refuses the whole deletion when one of several rewritten templates is refused, leaving the clean one alone', async () => {
 		const cleanId = 'score-bug';
-		const cleanDocument = (): BroadcastGraphicConfig => ({ ...linkedDocument(), id: cleanId, items: [] });
+		const cleanDocument = (): BroadcastGraphicConfig => ({
+			...linkedDocument(),
+			id: cleanId,
+			items: [],
+		});
 		await client.execute({
 			sql: `insert into broadcast_graphic_templates
 				(id, name, revision, document, graphic_asset_reference_version, style_set_id, style_set_revision)
 				values (?, 'Score bug', 1, ?, 'stamp', ?, 1)`,
-			args: [cleanId, JSON.stringify(cleanDocument()), STYLE_SET_ID],
+			args: [
+				cleanId,
+				JSON.stringify(cleanDocument()),
+				STYLE_SET_ID,
+			],
 		});
 		await retirePlate();
 
@@ -347,8 +444,19 @@ describe('graphicStyleSetService library-wide operations', () => {
 			draft: entries().filter(entry => entry.id !== 'brand'),
 			published: entries().filter(entry => entry.id !== 'brand'),
 			rewrites: [
-				{ id: cleanId, revision: 1, document: { ...cleanDocument(), styleRefs: undefined } },
-				{ id: TEMPLATE_ID, revision: TEMPLATE_REVISION, document: entryDetachedDocument() },
+				{
+					id: cleanId,
+					revision: 1,
+					document: {
+						...cleanDocument(),
+						styleRefs: undefined,
+					},
+				},
+				{
+					id: TEMPLATE_ID,
+					revision: TEMPLATE_REVISION,
+					document: entryDetachedDocument(),
+				},
 			],
 		})).rejects.toThrow(GraphicStyleSetTemplateReferenceConflict);
 

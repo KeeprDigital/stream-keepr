@@ -88,7 +88,10 @@ describe('createScreenSchema', () => {
 	});
 
 	it('accepts slug of exactly 50 characters', () => {
-		const result = createScreenSchema.safeParse({ ...validInput, slug: 'a'.repeat(50) });
+		const result = createScreenSchema.safeParse({
+			...validInput,
+			slug: 'a'.repeat(50),
+		});
 		expect(result.success).toBe(true);
 	});
 
@@ -237,14 +240,21 @@ describe('deckModeConfigSchema', () => {
 	it('requires the canonical discriminated source and rejects the legacy key', () => {
 		expect(deckModeConfigSchema.safeParse({ ...validConfig, deckSource: undefined }).success).toBe(false);
 		expect(deckModeConfigSchema.safeParse({ ...validConfig, playerId: 1 }).success).toBe(false);
-		expect(deckModeConfigSchema.safeParse({ ...validConfig, deckSource: { type: 'invalid', playerId: 1 } }).success).toBe(false);
+		expect(deckModeConfigSchema.safeParse({
+			...validConfig,
+			deckSource: { type: 'invalid', playerId: 1 },
+		}).success).toBe(false);
 	});
 
 	it('takes its Deck Source in a PATCH only as the canonical source, refusing the retired playerId shorthand', () => {
 		// The Deck PATCH form is derived from the contract like every other mode's
 		// (#588): no client sends `playerId` since #514, so it is an unknown key.
-		expect(modeConfigPatchSchemaMap.deck.parse({ deckSource: { type: 'player', playerId: 3 } }))
-			.toEqual({ deckSource: { type: 'player', playerId: 3 } });
+		expect(modeConfigPatchSchemaMap.deck.parse({
+			deckSource: { type: 'player', playerId: 3 },
+		}))
+			.toEqual({
+				deckSource: { type: 'player', playerId: 3 },
+			});
 		expect(modeConfigPatchSchemaMap.deck.safeParse({ playerId: null, showDeckName: false }).success).toBe(false);
 		expect(modeConfigPatchSchemaMap.deck.safeParse({
 			playerId: 1,
@@ -364,23 +374,27 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 				...preset.config,
 			});
 
-			expect(result.success, `${preset.id}: ${result.success ? '' : JSON.stringify(result.error.issues)}`).toBe(true);
+			expect(result.success, `${preset.id}: ${result.success
+				? ''
+				: JSON.stringify(result.error.issues)}`).toBe(true);
 		}
 	});
 
 	it('rejects the legacy widget list, which no longer exists', () => {
 		const legacy = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
-		legacy.layout.items = [{
-			id: 'legacy-widget',
-			type: 'widget',
-			label: 'Legacy',
-			visible: true,
-			x: 0,
-			y: 0,
-			width: 100,
-			height: 40,
-			widget: { type: 'text', template: '{name}' },
-		}];
+		legacy.layout.items = [
+			{
+				id: 'legacy-widget',
+				type: 'widget',
+				label: 'Legacy',
+				visible: true,
+				x: 0,
+				y: 0,
+				width: 100,
+				height: 40,
+				widget: { type: 'text', template: '{name}' },
+			},
+		];
 
 		expect(featureMatchOverlayModeConfigSchema.safeParse(legacy).success).toBe(false);
 	});
@@ -422,15 +436,17 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 
 	it('rejects Graphic Inputs on a Feature Match Layout composition, which binds host tokens instead', () => {
 		const declaring = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
-		declaring.layout.composition.inputs = [{
-			type: 'text',
-			key: 'headline',
-			label: 'Headline',
-			required: false,
-			updatePolicy: 'staged',
-			default: '',
-			maxLength: 40,
-		}];
+		declaring.layout.composition.inputs = [
+			{
+				type: 'text',
+				key: 'headline',
+				label: 'Headline',
+				required: false,
+				updatePolicy: 'staged',
+				default: '',
+				maxLength: 40,
+			},
+		];
 
 		expect(featureMatchOverlayModeConfigSchema.safeParse(declaring).success).toBe(false);
 	});
@@ -479,7 +495,13 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		};
 	}
 
-	const frameVideo = { enabled: true, fit: 'cover', opacity: 0.75, playbackRate: 0.5, loop: true };
+	const frameVideo = {
+		enabled: true,
+		fit: 'cover',
+		opacity: 0.75,
+		playbackRate: 0.5,
+		loop: true,
+	};
 
 	it('takes a Screen Media Source for the Frame video, from either source', () => {
 		for (const source of [
@@ -530,7 +552,14 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 	describe('the Frame video playback rate', () => {
 		function withRate(playbackRate: number) {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-			config.layout.frame.mediaBackground = { enabled: true, source: { kind: 'url', url: '/video/loop.mp4' }, fit: 'cover', opacity: 1, playbackRate, loop: true };
+			config.layout.frame.mediaBackground = {
+				enabled: true,
+				source: { kind: 'url', url: '/video/loop.mp4' },
+				fit: 'cover',
+				opacity: 1,
+				playbackRate,
+				loop: true,
+			};
 			return config;
 		}
 
@@ -554,21 +583,76 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 
 	it('accepts partial top-level Feature Match Overlay patches but validates nested values', () => {
 		expect(modeConfigPatchSchemaMap['feature-match-overlay'].safeParse({ featureMatchId: null }).success).toBe(true);
-		expect(modeConfigPatchSchemaMap['feature-match-overlay'].safeParse({ layout: { sources: [] } }).success).toBe(false);
+		expect(modeConfigPatchSchemaMap['feature-match-overlay'].safeParse({
+			layout: { sources: [] },
+		}).success).toBe(false);
 	});
 });
 
 describe('backgroundModeConfigSchema', () => {
-	const colorLayer = { id: 'wash', type: 'color', enabled: true, opacity: 0.4, color: '#0b1020' };
-	const gradientLayer = { id: 'grad', type: 'gradient', enabled: true, opacity: 1, gradient: 'linear-gradient(180deg, #000, #123)' };
-	const urlImageLayer = { id: 'img-url', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url: 'https://cdn.example.com/plate.png' }, fit: 'cover' };
-	const assetImageLayer = { id: 'img-asset', type: 'image', enabled: true, opacity: 1, source: { kind: 'asset', assetId: 'asset-1', revisionId: 'rev-1' }, fit: 'contain' };
-	const assetVideoLayer = { id: 'vid-asset', type: 'video', enabled: true, opacity: 1, source: { kind: 'asset', assetId: 'asset-2', revisionId: 'rev-2', videoCompatibility: 'all-supported' }, fit: 'fill', playbackRate: 1.25, loop: true };
-	const animationLayer = { id: 'anim', type: 'animation', enabled: true, opacity: 0.6, animation: { effect: 'fog' } };
+	const colorLayer = {
+		id: 'wash',
+		type: 'color',
+		enabled: true,
+		opacity: 0.4,
+		color: '#0b1020',
+	};
+	const gradientLayer = {
+		id: 'grad',
+		type: 'gradient',
+		enabled: true,
+		opacity: 1,
+		gradient: 'linear-gradient(180deg, #000, #123)',
+	};
+	const urlImageLayer = {
+		id: 'img-url',
+		type: 'image',
+		enabled: true,
+		opacity: 1,
+		source: { kind: 'url', url: 'https://cdn.example.com/plate.png' },
+		fit: 'cover',
+	};
+	const assetImageLayer = {
+		id: 'img-asset',
+		type: 'image',
+		enabled: true,
+		opacity: 1,
+		source: { kind: 'asset', assetId: 'asset-1', revisionId: 'rev-1' },
+		fit: 'contain',
+	};
+	const assetVideoLayer = {
+		id: 'vid-asset',
+		type: 'video',
+		enabled: true,
+		opacity: 1,
+		source: {
+			kind: 'asset',
+			assetId: 'asset-2',
+			revisionId: 'rev-2',
+			videoCompatibility: 'all-supported',
+		},
+		fit: 'fill',
+		playbackRate: 1.25,
+		loop: true,
+	};
+	const animationLayer = {
+		id: 'anim',
+		type: 'animation',
+		enabled: true,
+		opacity: 0.6,
+		animation: { effect: 'fog' },
+	};
 
 	it('accepts an ordered stack of every layer type', () => {
 		const result = backgroundModeConfigSchema.safeParse({
-			layers: [gradientLayer, animationLayer, urlImageLayer, assetImageLayer, assetVideoLayer, colorLayer],
+			layers: [
+				gradientLayer,
+				animationLayer,
+				urlImageLayer,
+				assetImageLayer,
+				assetVideoLayer,
+				colorLayer,
+			],
 		});
 		expect(result.success).toBe(true);
 	});
@@ -579,66 +663,130 @@ describe('backgroundModeConfigSchema', () => {
 
 	it('refuses a second animation layer: one WebGL context per memory-tight OBS source', () => {
 		const result = backgroundModeConfigSchema.safeParse({
-			layers: [animationLayer, { ...animationLayer, id: 'anim-2', enabled: false }],
+			layers: [
+				animationLayer,
+				{ ...animationLayer, id: 'anim-2', enabled: false },
+			],
 		});
 		expect(result.success).toBe(false);
 	});
 
 	it('validates an animation layer selection against the named effect, and refuses one outside the vocabulary', () => {
 		expect(backgroundModeConfigSchema.safeParse({
-			layers: [{ ...animationLayer, animation: { effect: 'fog', params: { speed: 2 } } }],
+			layers: [
+				{
+					...animationLayer,
+					animation: {
+						effect: 'fog',
+						params: { speed: 2 },
+					},
+				},
+			],
 		}).success).toBe(true);
 		expect(backgroundModeConfigSchema.safeParse({
-			layers: [{ ...animationLayer, animation: { effect: 'not-an-effect' } }],
+			layers: [
+				{
+					...animationLayer,
+					animation: { effect: 'not-an-effect' },
+				},
+			],
 		}).success).toBe(false);
 		expect(backgroundModeConfigSchema.safeParse({
-			layers: [{ ...animationLayer, animation: { effect: 'fog', params: { lightColor: '#7dd3fc' } } }],
+			layers: [
+				{
+					...animationLayer,
+					animation: {
+						effect: 'fog',
+						params: { lightColor: '#7dd3fc' },
+					},
+				},
+			],
 		}).success).toBe(false);
 	});
 
 	it('refuses a layer outside the closed type vocabulary and any unknown key', () => {
 		expect(backgroundModeConfigSchema.safeParse({
-			layers: [{ id: 'x', type: 'starfield', enabled: true, opacity: 1 }],
+			layers: [
+				{
+					id: 'x',
+					type: 'starfield',
+					enabled: true,
+					opacity: 1,
+				},
+			],
 		}).success).toBe(false);
 		expect(backgroundModeConfigSchema.safeParse({
-			layers: [{ ...colorLayer, mouseDriftEnabled: true }],
+			layers: [
+				{ ...colorLayer, mouseDriftEnabled: true },
+			],
 		}).success).toBe(false);
 	});
 
 	it('refuses an out-of-range layer opacity', () => {
 		expect(backgroundModeConfigSchema.safeParse({
-			layers: [{ ...colorLayer, opacity: 1.5 }],
+			layers: [
+				{ ...colorLayer, opacity: 1.5 },
+			],
 		}).success).toBe(false);
 	});
 
 	it('refuses an unsafe media URL source', () => {
 		expect(backgroundModeConfigSchema.safeParse({
 
-			layers: [{ ...urlImageLayer, source: { kind: 'url', url: 'javascript:alert(1)' } }],
+			layers: [
+				{
+					...urlImageLayer,
+					source: { kind: 'url', url: 'javascript:alert(1)' },
+				},
+			],
 		}).success).toBe(false);
 	});
 
 	it('takes a Remote Media URL over HTTPS only, by the same rule as the Frame', () => {
 		expect(backgroundModeConfigSchema.safeParse({
-			layers: [{ ...urlImageLayer, source: { kind: 'url', url: 'https://cdn.example.com/plate.png' } }],
+			layers: [
+				{
+					...urlImageLayer,
+					source: { kind: 'url', url: 'https://cdn.example.com/plate.png' },
+				},
+			],
 		}).success).toBe(true);
 		expect(backgroundModeConfigSchema.safeParse({
-			layers: [{ ...urlImageLayer, source: { kind: 'url', url: 'http://cdn.example.com/plate.png' } }],
+			layers: [
+				{
+					...urlImageLayer,
+					source: { kind: 'url', url: 'http://cdn.example.com/plate.png' },
+				},
+			],
 		}).success).toBe(false);
 	});
 
 	it('bounds a video layer\'s playback rate to 0.25–4, as a Media Graphic Item\'s is', () => {
-		for (const playbackRate of [0.25, 4])
-			expect(backgroundModeConfigSchema.safeParse({ layers: [{ ...assetVideoLayer, playbackRate }] }).success, String(playbackRate)).toBe(true);
-		for (const playbackRate of [0, 0.05, 20])
-			expect(backgroundModeConfigSchema.safeParse({ layers: [{ ...assetVideoLayer, playbackRate }] }).success, String(playbackRate)).toBe(false);
+		for (const playbackRate of [0.25, 4]) {
+			expect(backgroundModeConfigSchema.safeParse({
+				layers: [
+					{ ...assetVideoLayer, playbackRate },
+				],
+			}).success, String(playbackRate)).toBe(true);
+		}
+		for (const playbackRate of [0, 0.05, 20]) {
+			expect(backgroundModeConfigSchema.safeParse({
+				layers: [
+					{ ...assetVideoLayer, playbackRate },
+				],
+			}).success, String(playbackRate)).toBe(false);
+		}
 	});
 
 	it('clamps a playback rate the earlier 0.1–16 bounds stored, so an unrelated layer edit still saves', () => {
 		// The editor writes the whole stack: an edit to the colour layer re-sends the
 		// stored video layer beside it.
 		const result = modeConfigPatchSchemaMap.background.parse({
-			layers: [{ ...colorLayer, opacity: 0.9 }, { ...assetVideoLayer, playbackRate: 8 }, { ...assetVideoLayer, id: 'vid-slow', playbackRate: 0.1 }],
+			layers: [
+				{ ...colorLayer, opacity: 0.9 },
+				{ ...assetVideoLayer, playbackRate: 8 },
+				{ ...assetVideoLayer, id: 'vid-slow', playbackRate: 0.1 },
+			],
 		}) as { layers: Array<{ playbackRate?: number }> };
 
 		expect(result.layers.map(layer => layer.playbackRate)).toEqual([undefined, 4, 0.25]);
@@ -646,7 +794,10 @@ describe('backgroundModeConfigSchema', () => {
 
 	it('enforces the one-animation-layer rule on the PATCH path too, because it lives on the layers field', () => {
 		expect(modeConfigPatchSchemaMap.background.safeParse({
-			layers: [animationLayer, { ...animationLayer, id: 'anim-2' }],
+			layers: [
+				animationLayer,
+				{ ...animationLayer, id: 'anim-2' },
+			],
 		}).success).toBe(false);
 		expect(modeConfigPatchSchemaMap.background.safeParse({
 			layers: [animationLayer],
@@ -663,22 +814,61 @@ describe('backgroundModeConfigSchema', () => {
  */
 describe('a root-relative Remote Media URL', () => {
 	const hosts: Array<[string, (url: string) => boolean]> = [
-		['a Background Screen image layer', url => backgroundModeConfigSchema.safeParse({
-			layers: [{ id: 'plate', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url }, fit: 'cover' }],
-		}).success],
-		['a plain overlay mode\'s video layer', url => modeConfigPatchSchemaMap.standings.safeParse({
-			backgroundLayers: [{ id: 'loop', type: 'video', enabled: true, opacity: 1, source: { kind: 'url', url }, fit: 'cover', playbackRate: 1, loop: true }],
-		}).success],
-		['the Frame image', (url) => {
-			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-			config.layout.frame.backgroundImage = { kind: 'url', url };
-			return featureMatchOverlayModeConfigSchema.safeParse(config).success;
-		}],
-		['the Frame video', (url) => {
-			const layout = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout);
-			layout.frame.mediaBackground = { enabled: true, source: { kind: 'url', url }, fit: 'cover', opacity: 1, playbackRate: 1, loop: true };
-			return featureMatchLayoutConfigSchema.safeParse(layout).success;
-		}],
+		[
+			'a Background Screen image layer',
+			url => backgroundModeConfigSchema.safeParse({
+				layers: [
+					{
+						id: 'plate',
+						type: 'image',
+						enabled: true,
+						opacity: 1,
+						source: { kind: 'url', url },
+						fit: 'cover',
+					},
+				],
+			}).success,
+		],
+		[
+			'a plain overlay mode\'s video layer',
+			url => modeConfigPatchSchemaMap.standings.safeParse({
+				backgroundLayers: [
+					{
+						id: 'loop',
+						type: 'video',
+						enabled: true,
+						opacity: 1,
+						source: { kind: 'url', url },
+						fit: 'cover',
+						playbackRate: 1,
+						loop: true,
+					},
+				],
+			}).success,
+		],
+		[
+			'the Frame image',
+			(url) => {
+				const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+				config.layout.frame.backgroundImage = { kind: 'url', url };
+				return featureMatchOverlayModeConfigSchema.safeParse(config).success;
+			},
+		],
+		[
+			'the Frame video',
+			(url) => {
+				const layout = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout);
+				layout.frame.mediaBackground = {
+					enabled: true,
+					source: { kind: 'url', url },
+					fit: 'cover',
+					opacity: 1,
+					playbackRate: 1,
+					loop: true,
+				};
+				return featureMatchLayoutConfigSchema.safeParse(layout).success;
+			},
+		],
 	];
 
 	it.each(hosts)('is taken under /video/ by %s', (_host, accepts) => {
@@ -750,9 +940,25 @@ describe('a root-relative Remote Media URL', () => {
  */
 describe('documents recorded before ADR-0020', () => {
 	it('reads a Background Layer video source that still carries videoCompatibility, and drops the key', () => {
-		const source = { kind: 'asset', assetId: 'asset-2', revisionId: 'rev-2', videoCompatibility: 'chromium-transparency' };
+		const source = {
+			kind: 'asset',
+			assetId: 'asset-2',
+			revisionId: 'rev-2',
+			videoCompatibility: 'chromium-transparency',
+		};
 		const result = backgroundModeConfigSchema.safeParse({
-			layers: [{ id: 'vid', type: 'video', enabled: true, opacity: 1, source, fit: 'fill', playbackRate: 1, loop: true }],
+			layers: [
+				{
+					id: 'vid',
+					type: 'video',
+					enabled: true,
+					opacity: 1,
+					source,
+					fit: 'fill',
+					playbackRate: 1,
+					loop: true,
+				},
+			],
 		});
 
 		expect(result.success).toBe(true);
@@ -784,7 +990,11 @@ describe('modeConfigPatchSchemaMap', () => {
 	it('accepts null to clear the Deck Source back to no Player', () => {
 		const patch = modeConfigPatchSchemaMap.deck.parse({ deckSource: null }) as Record<string, unknown>;
 		const stored = parseModeConfigPatchResult(
-			{ deck: { deckSource: { type: 'broadcast', broadcastDeckListId: 7 } } } as ModeConfigsMap,
+			{
+				deck: {
+					deckSource: { type: 'broadcast', broadcastDeckListId: 7 },
+				},
+			} as ModeConfigsMap,
 			'deck',
 			patch,
 		);
@@ -936,7 +1146,11 @@ describe('metagameModeConfigSchema', () => {
 	const conversionTarget = { conversionMetric: 'topN' as const, conversionThreshold: 8 };
 
 	it('accepts valid metagame config with column arrays', () => {
-		const result = metagameModeConfigSchema.safeParse({ ...validConfig, ...conversionTarget, minPoints: 9 });
+		const result = metagameModeConfigSchema.safeParse({
+			...validConfig,
+			...conversionTarget,
+			minPoints: 9,
+		});
 		expect(result.success).toBe(true);
 	});
 
@@ -952,7 +1166,10 @@ describe('metagameModeConfigSchema', () => {
 	});
 
 	it('accepts a Conversion Rate column and refuses a conversion threshold out of bounds', () => {
-		const archetypeColumns = [...validConfig.archetypeColumns, { key: 'conversionRate', visible: true }];
+		const archetypeColumns = [
+			...validConfig.archetypeColumns,
+			{ key: 'conversionRate', visible: true },
+		];
 		expect(modeConfigPatchSchemaMap.metagame.parse({ archetypeColumns, conversionMetric: 'minPoints', conversionThreshold: 12 }))
 			.toEqual({ archetypeColumns, conversionMetric: 'minPoints', conversionThreshold: 12 });
 		expect(modeConfigPatchSchemaMap.metagame.safeParse({ conversionThreshold: 1000 }).success).toBe(false);
@@ -960,7 +1177,12 @@ describe('metagameModeConfigSchema', () => {
 	});
 
 	it('accepts the minPoints scope with explicit minPoints', () => {
-		const result = metagameModeConfigSchema.safeParse({ ...validConfig, ...conversionTarget, scope: 'minPoints', minPoints: 12 });
+		const result = metagameModeConfigSchema.safeParse({
+			...validConfig,
+			...conversionTarget,
+			scope: 'minPoints',
+			minPoints: 12,
+		});
 		expect(result.success).toBe(true);
 		if (result.success)
 			expect(result.data.minPoints).toBe(12);
@@ -972,9 +1194,19 @@ describe('metagameModeConfigSchema', () => {
 	});
 
 	it('offers the chart display alongside the archetype and card tables, and nothing else', () => {
-		expect(metagameModeConfigSchema.safeParse({ ...validConfig, ...conversionTarget, minPoints: 9, viewMode: 'chart' }).success).toBe(true);
+		expect(metagameModeConfigSchema.safeParse({
+			...validConfig,
+			...conversionTarget,
+			minPoints: 9,
+			viewMode: 'chart',
+		}).success).toBe(true);
 		expect(modeConfigPatchSchemaMap.metagame.parse({ viewMode: 'chart' })).toEqual({ viewMode: 'chart' });
-		expect(metagameModeConfigSchema.safeParse({ ...validConfig, ...conversionTarget, minPoints: 9, viewMode: 'pie' }).success).toBe(false);
+		expect(metagameModeConfigSchema.safeParse({
+			...validConfig,
+			...conversionTarget,
+			minPoints: 9,
+			viewMode: 'pie',
+		}).success).toBe(false);
 	});
 });
 
@@ -1011,7 +1243,10 @@ describe('topCardsModeConfigSchema', () => {
 	});
 
 	it('rejects an unknown excluded card type', () => {
-		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, excludedCardTypes: ['Tribal'] }).success).toBe(false);
+		expect(topCardsModeConfigSchema.safeParse({
+			...validConfig,
+			excludedCardTypes: ['Tribal'],
+		}).success).toBe(false);
 	});
 
 	it('rejects a limit above the grid cap', () => {
@@ -1099,7 +1334,12 @@ describe('archetypeSpotlightModeConfigSchema', () => {
 	});
 
 	it('takes the Metagame scope vocabulary', () => {
-		for (const scope of ['all', 'topN', 'minPoints', 'playerList'])
+		for (const scope of [
+			'all',
+			'topN',
+			'minPoints',
+			'playerList',
+		])
 			expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, scope }).success).toBe(true);
 		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, scope: 'everyone' }).success).toBe(false);
 	});
@@ -1112,7 +1352,10 @@ describe('archetypeSpotlightModeConfigSchema', () => {
 	});
 
 	it('refuses an unknown excluded card type', () => {
-		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, excludedCardTypes: ['Tribal'] }).success).toBe(false);
+		expect(archetypeSpotlightModeConfigSchema.safeParse({
+			...defaults,
+			excludedCardTypes: ['Tribal'],
+		}).success).toBe(false);
 	});
 
 	it('takes a cleared Archetype as the deletion that reads as none', () => {
@@ -1139,7 +1382,12 @@ describe('headToHeadModeConfigSchema', () => {
 
 	it('takes its Players from a Feature Match Slot or from two picked Players, and nothing else', () => {
 		expect(headToHeadModeConfigSchema.safeParse({ ...defaults, playerSource: 'featureMatchSlot', featureMatchId: 4 }).success).toBe(true);
-		expect(headToHeadModeConfigSchema.safeParse({ ...defaults, playerSource: 'players', player1Id: 11, player2Id: 12 }).success).toBe(true);
+		expect(headToHeadModeConfigSchema.safeParse({
+			...defaults,
+			playerSource: 'players',
+			player1Id: 11,
+			player2Id: 12,
+		}).success).toBe(true);
 		expect(headToHeadModeConfigSchema.safeParse({ ...defaults, playerSource: 'round' }).success).toBe(false);
 	});
 
@@ -1156,7 +1404,12 @@ describe('headToHeadModeConfigSchema', () => {
 
 	it('keeps which Players it shows through a display reset', () => {
 		const reset = getDisplayDefaultsForMode('head-to-head');
-		for (const field of ['playerSource', 'featureMatchId', 'player1Id', 'player2Id'])
+		for (const field of [
+			'playerSource',
+			'featureMatchId',
+			'player1Id',
+			'player2Id',
+		])
 			expect(reset).not.toHaveProperty(field);
 	});
 });

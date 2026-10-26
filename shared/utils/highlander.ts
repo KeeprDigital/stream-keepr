@@ -48,11 +48,14 @@ function getPointEntries(system: PointsSystem): Map<string, PointEntry> {
 	switch (system) {
 		case '7ph':
 			return new Map(
-				SEVEN_POINT_HIGHLANDER.entries.map(entry => [entry.oracleId, {
-					name: entry.name,
-					points: entry.points,
-					pointedAs: entry.pointedAs,
-				}]),
+				SEVEN_POINT_HIGHLANDER.entries.map(entry => [
+					entry.oracleId,
+					{
+						name: entry.name,
+						points: entry.points,
+						pointedAs: entry.pointedAs,
+					},
+				]),
 			);
 	}
 }
@@ -131,7 +134,10 @@ export function evaluateHighlanderDeck(
 
 	for (const card of deckCards) {
 		if (!card.oracleId) {
-			unknownByName.set(card.name, new Set([...(unknownByName.get(card.name) ?? []), 'oracleId']));
+			unknownByName.set(card.name, new Set([
+				...(unknownByName.get(card.name) ?? []),
+				'oracleId',
+			]));
 		}
 
 		if (card.oracleId) {
@@ -182,11 +188,16 @@ export function evaluateHighlanderDeck(
 		}
 	}
 	else if (companion && !companion.oracleId) {
-		unknownByName.set(companion.name, new Set([...(unknownByName.get(companion.name) ?? []), 'oracleId']));
+		unknownByName.set(companion.name, new Set([
+			...(unknownByName.get(companion.name) ?? []),
+			'oracleId',
+		]));
 	}
 
 	const unknownCards = sortUnknownCards(
-		[...unknownByName.entries()].map(([name, missing]) => ({
+		[
+			...unknownByName.entries(),
+		].map(([name, missing]) => ({
 			name,
 			missing: [...missing].sort(),
 		})),
@@ -202,7 +213,9 @@ export function evaluateHighlanderDeck(
 			? 7
 			: 8;
 	const duplicateCards = sortDuplicateCards(
-		[...oracleGroups.values()]
+		[
+			...oracleGroups.values(),
+		]
 			.filter(group => !group.isBasicLand && group.quantity > 1)
 			.map(group => ({ name: group.name, quantity: group.quantity })),
 	);
@@ -219,7 +232,9 @@ export function evaluateHighlanderDeck(
 		points,
 		maxPoints,
 		hasReserveListCards,
-		pointedCards: sortPointedCards([...pointedCards.values()]),
+		pointedCards: sortPointedCards([
+			...pointedCards.values(),
+		]),
 		duplicateCards,
 		unknownCards,
 	};
@@ -235,7 +250,9 @@ export function formatHighlanderPointsLabel(highlander: HighlanderDeckSummary): 
 export function formatHighlanderIssueSummary(highlander: HighlanderDeckSummary): string {
 	const parts: string[] = [];
 	if (highlander.duplicateCards.length > 0) {
-		parts.push(`${highlander.duplicateCards.length} duplicate${highlander.duplicateCards.length === 1 ? '' : 's'}`);
+		parts.push(`${highlander.duplicateCards.length} duplicate${highlander.duplicateCards.length === 1
+			? ''
+			: 's'}`);
 	}
 	if (highlander.maxPoints != null && highlander.points > highlander.maxPoints) {
 		parts.push(`${highlander.points}/${highlander.maxPoints} Points`);

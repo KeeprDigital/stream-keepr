@@ -11,13 +11,22 @@ import { createGlobeDelegate } from '~/utils/animation-effects/globe';
  */
 
 function mountDelegate(overrides: Partial<AnimationEffectParams<'globe'>> = {}) {
-	const params = { ...animationEffectDefaultParams('globe'), ...overrides };
+	const params = {
+		...animationEffectDefaultParams('globe'),
+		...overrides,
+	};
 	const delegate = createGlobeDelegate();
 	const scene = new THREE.Scene();
 	const camera = delegate.createCamera(THREE, { width: 800, height: 450 });
 	const context = { three: THREE, scene, camera };
 	delegate.build({ ...context, params });
-	return { delegate, scene, camera: camera as THREE.PerspectiveCamera, context, params };
+	return {
+		delegate,
+		scene,
+		camera: camera as THREE.PerspectiveCamera,
+		context,
+		params,
+	};
 }
 
 function groupAt(scene: THREE.Scene, x: number): THREE.Group {
@@ -76,7 +85,11 @@ describe('createGlobeDelegate', () => {
 		const { delegate, scene, context } = mountDelegate();
 		const dots = fieldDots(scene);
 		delegate.update({ ...context, elapsedSeconds: 2 });
-		for (const dot of [dots[0]!, dots[60]!, dots.at(-1)!]) {
+		for (const dot of [
+			dots[0]!,
+			dots[60]!,
+			dots.at(-1)!,
+		]) {
 			expect(dot.position.y).toBeCloseTo(
 				2 * Math.sin(dot.position.x / 10 + 0.6 * 2 + dot.position.z / 20),
 			);
@@ -134,7 +147,15 @@ describe('createGlobeDelegate', () => {
 
 	it('applies colours live, and rebuilds what a construction param change requires', () => {
 		const { delegate, scene, context, params } = mountDelegate();
-		delegate.applyParams({ ...context, params: { ...params, lineColor: '#123456', accentColor: '#654321', backgroundColor: '#224466' } });
+		delegate.applyParams({
+			...context,
+			params: {
+				...params,
+				lineColor: '#123456',
+				accentColor: '#654321',
+				backgroundColor: '#224466',
+			},
+		});
 		expect((scene.background as THREE.Color).getHexString()).toBe('224466');
 		const { sphere, ball, poles } = globeLineSegments(scene);
 		expect(sphere.material.color.getHexString()).toBe('123456');
@@ -142,12 +163,18 @@ describe('createGlobeDelegate', () => {
 		expect(poles.material.color.getHexString()).toBe('654321');
 		expect(fieldDots(scene)[0]!.material.color.getHexString()).toBe('123456');
 
-		delegate.applyParams({ ...context, params: { ...params, size: 2 } });
+		delegate.applyParams({
+			...context,
+			params: { ...params, size: 2 },
+		});
 		const rebuilt = globeLineSegments(scene).sphere;
 		rebuilt.geometry.computeBoundingSphere();
 		expect(rebuilt.geometry.boundingSphere!.radius).toBeCloseTo(36, 0);
 
-		delegate.applyParams({ ...context, params: { ...params, size: 2, points: 4 } });
+		delegate.applyParams({
+			...context,
+			params: { ...params, size: 2, points: 4 },
+		});
 		expect(fieldDots(scene).length).toBe(5 * 5);
 		delegate.update({ ...context, elapsedSeconds: 1 });
 	});

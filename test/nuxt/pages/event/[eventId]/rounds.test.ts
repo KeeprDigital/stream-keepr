@@ -35,7 +35,9 @@ const mockToast = {
 
 const mockOverlay = {
 	create: vi.fn(() => ({
-		open: vi.fn(() => ({ result: Promise.resolve(false) })),
+		open: vi.fn(() => ({
+			result: Promise.resolve(false),
+		})),
 	})),
 };
 
@@ -48,7 +50,12 @@ mockNuxtImport('useRoundStore', () => () => mockRoundStore);
 mockNuxtImport('useMeleeStore', () => () => mockMeleeStore);
 mockNuxtImport('useToast', () => () => mockToast);
 mockNuxtImport('useOverlay', () => () => mockOverlay);
-mockNuxtImport('useEventPageLoading', () => () => ({ eventId, initialLoading, initialError: ref(null), retry: vi.fn() }));
+mockNuxtImport('useEventPageLoading', () => () => ({
+	eventId,
+	initialLoading,
+	initialError: ref(null),
+	retry: vi.fn(),
+}));
 mockNuxtImport('navigateTo', () => vi.fn());
 
 const NuxtLayoutStub = defineComponent({
@@ -129,7 +136,9 @@ describe('rounds page', () => {
 	});
 
 	it('shows the navbar add action once phases exist', async () => {
-		mockPhaseStore.phases = [{ id: 1, name: 'Swiss', sortOrder: 0 }];
+		mockPhaseStore.phases = [
+			{ id: 1, name: 'Swiss', sortOrder: 0 },
+		];
 
 		const wrapper = await mountPage();
 

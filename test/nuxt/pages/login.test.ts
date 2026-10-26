@@ -26,7 +26,9 @@ const UFormStub = defineComponent({
 });
 
 const UFormFieldStub = defineComponent({
-	props: { label: { type: String, default: '' } },
+	props: {
+		label: { type: String, default: '' },
+	},
 	template: '<label>{{ label }}<slot /></label>',
 });
 
@@ -49,7 +51,9 @@ const UButtonStub = defineComponent({
 });
 
 const UAlertStub = defineComponent({
-	props: { description: { type: String, default: '' } },
+	props: {
+		description: { type: String, default: '' },
+	},
 	template: '<div data-testid="refusal">{{ description }}</div>',
 });
 

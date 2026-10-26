@@ -31,7 +31,9 @@ function mapSource(
 	updater: (item: FeatureMatchSourceItemConfig) => FeatureMatchSourceItemConfig,
 ): FeatureMatchLayoutConfig {
 	const index = layout.sources.findIndex(item => item.id === id);
-	const item = index >= 0 ? layout.sources[index]! : undefined;
+	const item = index >= 0
+		? layout.sources[index]!
+		: undefined;
 	if (!item)
 		return layout;
 	const updated = updater(item);
@@ -45,22 +47,39 @@ function mapSource(
 // ──────────────── Frame ────────────────
 
 export function patchFrame(layout: FeatureMatchLayoutConfig, updates: Partial<FeatureMatchLayoutFrameConfig>): FeatureMatchLayoutConfig {
-	return { ...layout, frame: { ...layout.frame, ...updates } };
+	return {
+		...layout,
+		frame: {
+			...layout.frame,
+			...updates,
+		},
+	};
 }
 
 // ──────────────── Source Items ────────────────
 
 export function patchSource(layout: FeatureMatchLayoutConfig, id: string, updates: Partial<FeatureMatchSourceItemConfig>): FeatureMatchLayoutConfig {
-	return mapSource(layout, id, item => ({ ...item, ...updates }));
+	return mapSource(layout, id, item => ({
+		...item,
+		...updates,
+	}));
 }
 
 export function patchSourceFramingStyle(layout: FeatureMatchLayoutConfig, id: string, updates: Partial<FeatureMatchSourceFramingStyle>): FeatureMatchLayoutConfig {
-	return mapSource(layout, id, item => ({ ...item, framingStyle: { ...(item.framingStyle ?? {}), ...updates } }));
+	return mapSource(layout, id, item => ({
+		...item,
+		framingStyle: {
+			...(item.framingStyle ?? {}),
+			...updates,
+		},
+	}));
 }
 
 export function removeSource(layout: FeatureMatchLayoutConfig, id: string): FeatureMatchLayoutConfig {
 	const sources = layout.sources.filter(item => item.id !== id);
-	return sources.length === layout.sources.length ? layout : withSources(layout, sources);
+	return sources.length === layout.sources.length
+		? layout
+		: withSources(layout, sources);
 }
 
 // ──────────────── Graphic Layer Order ────────────────
@@ -86,7 +105,9 @@ export function setSourceOrder(layout: FeatureMatchLayoutConfig, id: string, ord
 		return layout;
 	const targetIndex = Math.max(0, Math.min(layout.sources.length - 1, Math.trunc(order)));
 	const sources = moveArrayEntry(layout.sources, currentIndex, targetIndex);
-	return sources === layout.sources ? layout : withSources(layout, sources);
+	return sources === layout.sources
+		? layout
+		: withSources(layout, sources);
 }
 
 export function moveSourceOrder(layout: FeatureMatchLayoutConfig, id: string, direction: -1 | 1): FeatureMatchLayoutConfig {
@@ -109,7 +130,13 @@ export function bringSourceToFront(layout: FeatureMatchLayoutConfig, id: string)
 /** Create a new Source Item. Returns the new layout and the item's id. */
 export function createSourceItem(layout: FeatureMatchLayoutConfig): { layout: FeatureMatchLayoutConfig; id: string } {
 	const id = nextId('source');
-	return { layout: withSources(layout, [...layout.sources, createFeatureMatchSourceItem(id)]), id };
+	return {
+		layout: withSources(layout, [
+			...layout.sources,
+			createFeatureMatchSourceItem(id),
+		]),
+		id,
+	};
 }
 
 /** How far a duplicated Source Item is offset from its original. */
@@ -122,7 +149,9 @@ export const SOURCE_ITEM_DUPLICATE_OFFSET = 20;
  */
 export function duplicateSource(layout: FeatureMatchLayoutConfig, id: string): { layout: FeatureMatchLayoutConfig; id: string } {
 	const index = layout.sources.findIndex(item => item.id === id);
-	const original = index >= 0 ? layout.sources[index]! : undefined;
+	const original = index >= 0
+		? layout.sources[index]!
+		: undefined;
 	if (!original)
 		return { layout, id: '' };
 
@@ -140,5 +169,8 @@ export function duplicateSource(layout: FeatureMatchLayoutConfig, id: string): {
 	};
 	const sources = [...layout.sources];
 	sources.splice(index + 1, 0, copy);
-	return { layout: withSources(layout, sources), id: copy.id };
+	return {
+		layout: withSources(layout, sources),
+		id: copy.id,
+	};
 }

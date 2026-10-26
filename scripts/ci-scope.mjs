@@ -87,14 +87,21 @@ export function diffRange(eventName, event) {
 
 /** @param {string[]} args */
 function git(args) {
-	return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
+	return execFileSync('git', args, {
+		encoding: 'utf8',
+		stdio: ['ignore', 'pipe', 'inherit'],
+	});
 }
 
 async function main() {
 	const eventName = process.env.GITHUB_EVENT_NAME ?? '';
-	const event = process.env.GITHUB_EVENT_PATH ? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')) : {};
+	const event = process.env.GITHUB_EVENT_PATH
+		? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'))
+		: {};
 	const range = diffRange(eventName, event);
-	const verified = eventName === 'merge_group' && range ? await verifiedRunOnGitHub(range.head) : undefined;
+	const verified = eventName === 'merge_group' && range
+		? await verifiedRunOnGitHub(range.head)
+		: undefined;
 	if (verified) {
 		console.log('code=false bundle=false');
 		if (process.env.GITHUB_OUTPUT)
@@ -108,13 +115,27 @@ async function main() {
 	}
 	else {
 		try {
-			if (range.fetch)
-				git(['fetch', '--no-tags', '--depth=1', 'origin', range.fetch]);
-			changed = git(['diff', '--name-only', range.base, range.head]).split('\n').filter(Boolean);
+			if (range.fetch) {
+				git([
+					'fetch',
+					'--no-tags',
+					'--depth=1',
+					'origin',
+					range.fetch,
+				]);
+			}
+			changed = git([
+				'diff',
+				'--name-only',
+				range.base,
+				range.head,
+			]).split('\n').filter(Boolean);
 			console.log(`Changed between ${range.base} and ${range.head}:\n${changed.join('\n')}`);
 		}
 		catch (error) {
-			console.log(`::warning::Could not diff ${range.base}..${range.head} (${error instanceof Error ? error.message : error}): running everything.`);
+			console.log(`::warning::Could not diff ${range.base}..${range.head} (${error instanceof Error
+				? error.message
+				: error}): running everything.`);
 			changed = [];
 		}
 	}

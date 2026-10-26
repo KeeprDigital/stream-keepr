@@ -33,7 +33,9 @@ export default defineEventHandler(async (event) => {
 	}
 
 	const link = template.document.styleSet;
-	const styleSet = link ? await graphicStyleSetService().findById(link.styleSetId) : undefined;
+	const styleSet = link
+		? await graphicStyleSetService().findById(link.styleSetId)
+		: undefined;
 
 	return graphicStyleUpdateReview(
 		template.document,

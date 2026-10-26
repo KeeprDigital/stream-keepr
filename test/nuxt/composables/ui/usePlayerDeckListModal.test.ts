@@ -43,7 +43,9 @@ describe('usePlayerDeckListModal', () => {
 	});
 
 	it('opens explicit deck lists without forcing loading', () => {
-		const deckLists = [deckList()];
+		const deckLists = [
+			deckList(),
+		];
 		const { openDeckLists } = usePlayerDeckListModal();
 
 		openDeckLists({ playerName: 'Alice', playerId: 7, deckLists });
@@ -58,7 +60,16 @@ describe('usePlayerDeckListModal', () => {
 	});
 
 	it('patches the modal after fetching a missing player deck', async () => {
-		const fetchedDeckLists = [deckList({ deckId: 2, externalId: 'deck-2', phaseIds: [2], phaseName: 'Finals', name: 'Fetched', colors: 'G' })];
+		const fetchedDeckLists = [
+			deckList({
+				deckId: 2,
+				externalId: 'deck-2',
+				phaseIds: [2],
+				phaseName: 'Finals',
+				name: 'Fetched',
+				colors: 'G',
+			}),
+		];
 		deckCache.getDeckLists
 			.mockReturnValueOnce([])
 			.mockReturnValueOnce(fetchedDeckLists);

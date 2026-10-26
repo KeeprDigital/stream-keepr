@@ -386,11 +386,13 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		expect(reconnected).toMatchObject({
 			transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
 			transfer: {
-				completedParts: [{
-					partNumber: 1,
-					partIdentity: `${initiated.id}:1`,
-					byteLength: GRAPHICS_MULTIPART_PART_BYTES,
-				}],
+				completedParts: [
+					{
+						partNumber: 1,
+						partIdentity: `${initiated.id}:1`,
+						byteLength: GRAPHICS_MULTIPART_PART_BYTES,
+					},
+				],
 			},
 		});
 		const resumed = await $fetch<GraphicsIngestionOperation>(
@@ -408,7 +410,11 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 
 		const finalResponse = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/parts/2`,
-			{ method: 'PUT', headers: authorHeaders, body: bytes.subarray(GRAPHICS_MULTIPART_PART_BYTES) },
+			{
+				method: 'PUT',
+				headers: authorHeaders,
+				body: bytes.subarray(GRAPHICS_MULTIPART_PART_BYTES),
+			},
 		);
 		await expectResponseStatus(finalResponse, 200);
 		const ready = await finalResponse.json() as GraphicsIngestionOperation;
@@ -424,7 +430,9 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			transferredByteLength: bytes.byteLength,
 			report: {
 				outcome: 'rejected',
-				issues: [{ code: 'unsupported-image-format' }],
+				issues: [
+					{ code: 'unsupported-image-format' },
+				],
 			},
 			failure: { code: 'validation-failed', retryable: false },
 		});
@@ -506,7 +514,9 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			report: {
 				outcome: 'rejected',
 				compatibilityProfile: 'still-image-v1',
-				issues: [{ code: 'unsupported-image-format' }],
+				issues: [
+					{ code: 'unsupported-image-format' },
+				],
 			},
 			failure: { code: 'validation-failed', retryable: false },
 		});
@@ -547,7 +557,9 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			stage: 'failed',
 			report: {
 				outcome: 'rejected',
-				issues: [{ code: 'conflicting-image-mime' }],
+				issues: [
+					{ code: 'conflicting-image-mime' },
+				],
 			},
 			failure: { code: 'validation-failed', retryable: false },
 		});
@@ -580,7 +592,9 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			stage: 'failed',
 			report: {
 				outcome: 'rejected',
-				issues: [{ code: 'conflicting-image-mime' }],
+				issues: [
+					{ code: 'conflicting-image-mime' },
+				],
 			},
 			failure: { code: 'validation-failed', retryable: false },
 		});
@@ -669,7 +683,9 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			stage: 'failed',
 			report: {
 				outcome: 'rejected',
-				issues: [{ code }],
+				issues: [
+					{ code },
+				],
 			},
 			failure: { code: 'validation-failed', retryable: false },
 		});
@@ -834,10 +850,12 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			headers: authorHeaders,
 			query: { search: 'Integration MPlantin' },
 		});
-		expect(discovered).toMatchObject([{
-			kind: 'font',
-			revisionId: completed.result!.revisionId,
-		}]);
+		expect(discovered).toMatchObject([
+			{
+				kind: 'font',
+				revisionId: completed.result!.revisionId,
+			},
+		]);
 		const content = await fetch(
 			`/api/graphics-assets/${completed.result!.assetId}/revisions/${completed.result!.revisionId}/content`,
 			{ headers: authorHeaders },

@@ -26,29 +26,58 @@ export function usePlayerListRepository() {
 
 	const addMembers = async (eventId: number, listId: number, playerIds: number[]) => {
 		return await eventData.command<{ added: number; memberCount: number }, { playerIds: number[] }>(
-			{ eventId, resourcePath: 'player-lists', resourceId: listId, suffix: 'members' },
-			{ method: 'POST', body: { playerIds } },
+			{
+				eventId,
+				resourcePath: 'player-lists',
+				resourceId: listId,
+				suffix: 'members',
+			},
+			{
+				method: 'POST',
+				body: { playerIds },
+			},
 		);
 	};
 
 	const removeMember = async (eventId: number, listId: number, playerId: number) => {
 		return await eventData.command<{ success: boolean; memberCount: number }>(
-			{ eventId, resourcePath: 'player-lists', resourceId: listId, suffix: `members/${playerId}` },
+			{
+				eventId,
+				resourcePath: 'player-lists',
+				resourceId: listId,
+				suffix: `members/${playerId}`,
+			},
 			{ method: 'DELETE' },
 		);
 	};
 
 	const batchRemoveMembers = async (eventId: number, listId: number, playerIds: number[]) => {
 		return await eventData.command<{ removed: number; memberCount: number }, { playerIds: number[] }>(
-			{ eventId, resourcePath: 'player-lists', resourceId: listId, suffix: 'members/batch-remove' },
-			{ method: 'POST', body: { playerIds } },
+			{
+				eventId,
+				resourcePath: 'player-lists',
+				resourceId: listId,
+				suffix: 'members/batch-remove',
+			},
+			{
+				method: 'POST',
+				body: { playerIds },
+			},
 		);
 	};
 
 	const reorderMembers = async (eventId: number, listId: number, playerIds: number[]) => {
 		return await eventData.command<{ reordered: number; memberCount: number }, { playerIds: number[] }>(
-			{ eventId, resourcePath: 'player-lists', resourceId: listId, suffix: 'members/reorder' },
-			{ method: 'PUT', body: { playerIds } },
+			{
+				eventId,
+				resourcePath: 'player-lists',
+				resourceId: listId,
+				suffix: 'members/reorder',
+			},
+			{
+				method: 'PUT',
+				body: { playerIds },
+			},
 		);
 	};
 
@@ -59,5 +88,16 @@ export function usePlayerListRepository() {
 		return response.memberIds;
 	};
 
-	return { list: base.list, getById, create: base.create, update: base.update, remove: base.remove, addMembers, removeMember, batchRemoveMembers, reorderMembers, getMemberIds };
+	return {
+		list: base.list,
+		getById,
+		create: base.create,
+		update: base.update,
+		remove: base.remove,
+		addMembers,
+		removeMember,
+		batchRemoveMembers,
+		reorderMembers,
+		getMemberIds,
+	};
 }

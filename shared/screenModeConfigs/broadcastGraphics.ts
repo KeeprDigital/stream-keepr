@@ -71,6 +71,8 @@ export const broadcastGraphicsModeConfigContract = defineScreenModeConfigContrac
 	background: broadcastGraphicsBackgroundConfigSchema.optional(),
 }, {
 	graphics: [],
-}, { authoredStacks: ['graphics'] });
+}, {
+	authoredStacks: ['graphics'],
+});
 
 export type BroadcastGraphicsModeConfig = ScreenModeConfigOf<typeof broadcastGraphicsModeConfigContract>;

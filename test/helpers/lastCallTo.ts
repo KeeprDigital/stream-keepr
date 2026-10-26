@@ -185,7 +185,9 @@ export function callsTo<Args extends unknown[]>(
 
 /** `describeSelector`'s wording for a count rather than for one call. */
 function describeExpectedCalls<Args extends unknown[]>(select: CallSelector<Args> | undefined, count: number): string {
-	const noun = count === 1 ? 'call' : 'calls';
+	const noun = count === 1
+		? 'call'
+		: 'calls';
 	if (select === undefined)
 		return noun;
 	if (typeof select === 'string')

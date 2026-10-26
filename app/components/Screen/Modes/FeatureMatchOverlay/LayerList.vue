@@ -108,11 +108,13 @@ const addMenu = computed<DropdownMenuItem[][]>(() => {
 			icon: definition.icon,
 			onSelect: () => props.editor.addItem(definition.kind),
 		})),
-		[{
-			label: 'Source Item',
-			icon: FEATURE_MATCH_SOURCE_ITEM_ICON,
-			onSelect: () => props.editor.addSource(),
-		}],
+		[
+			{
+				label: 'Source Item',
+				icon: FEATURE_MATCH_SOURCE_ITEM_ICON,
+				onSelect: () => props.editor.addSource(),
+			},
+		],
 	];
 	const group = props.editor.selectedGroup.value;
 	if (group) {
@@ -131,14 +133,35 @@ const addMenu = computed<DropdownMenuItem[][]>(() => {
 function rowMenu(row: LayerRow): DropdownMenuItem[][] {
 	return [
 		[
-			{ label: 'Duplicate', icon: 'i-lucide-copy', kbds: ['meta', 'd'], onSelect: () => props.editor.duplicate(row.target) },
+			{
+				label: 'Duplicate',
+				icon: 'i-lucide-copy',
+				kbds: ['meta', 'd'],
+				onSelect: () => props.editor.duplicate(row.target),
+			},
 		],
 		[
-			{ label: 'Bring to front', icon: 'i-lucide-bring-to-front', disabled: !row.canMoveForward, onSelect: () => props.editor.moveToEdge(row.target, 'front') },
-			{ label: 'Send to back', icon: 'i-lucide-send-to-back', disabled: !row.canMoveBackward, onSelect: () => props.editor.moveToEdge(row.target, 'back') },
+			{
+				label: 'Bring to front',
+				icon: 'i-lucide-bring-to-front',
+				disabled: !row.canMoveForward,
+				onSelect: () => props.editor.moveToEdge(row.target, 'front'),
+			},
+			{
+				label: 'Send to back',
+				icon: 'i-lucide-send-to-back',
+				disabled: !row.canMoveBackward,
+				onSelect: () => props.editor.moveToEdge(row.target, 'back'),
+			},
 		],
 		[
-			{ label: 'Delete', icon: 'i-lucide-trash-2', color: 'error', kbds: ['delete'], onSelect: () => props.editor.remove(row.target) },
+			{
+				label: 'Delete',
+				icon: 'i-lucide-trash-2',
+				color: 'error',
+				kbds: ['delete'],
+				onSelect: () => props.editor.remove(row.target),
+			},
 		],
 	];
 }
@@ -193,7 +216,9 @@ const draft = ref('');
 let renameInput: HTMLInputElement | null = null;
 
 function setRenameInput(element: unknown) {
-	renameInput = element instanceof HTMLInputElement ? element : null;
+	renameInput = element instanceof HTMLInputElement
+		? element
+		: null;
 }
 
 function startRename(row: LayerRow) {
@@ -239,7 +264,10 @@ function cancelRename() {
 }
 
 /** A row that leaves the list mid-rename takes its rename with it. */
-watch(() => [...itemRows.value, ...sourceRows.value].map(row => row.key), (keys) => {
+watch(() => [
+	...itemRows.value,
+	...sourceRows.value,
+].map(row => row.key), (keys) => {
 	if (renaming.value && !keys.includes(renaming.value.key))
 		endRename();
 });

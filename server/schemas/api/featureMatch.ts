@@ -15,14 +15,18 @@ function blankStringToNull(value: unknown) {
 	if (typeof value !== 'string')
 		return value;
 	const trimmed = value.trim();
-	return trimmed.length > 0 ? trimmed : null;
+	return trimmed.length > 0
+		? trimmed
+		: null;
 }
 
 function blankStringToUndefined(value: unknown) {
 	if (typeof value !== 'string')
 		return value;
 	const trimmed = value.trim();
-	return trimmed.length > 0 ? trimmed : undefined;
+	return trimmed.length > 0
+		? trimmed
+		: undefined;
 }
 
 function nullableStringSchema(max: number) {
@@ -79,7 +83,9 @@ const createFeatureMatchPlayerDataSchema = z
 	.strict();
 
 const updateFeatureMatchPlayerDataSchema = z.preprocess(
-	value => value === '' ? null : value,
+	value => value === ''
+		? null
+		: value,
 	z
 		.object({
 			name: nullableStringSchema(200),
@@ -96,7 +102,9 @@ const updateFeatureMatchPlayerDataSchema = z.preprocess(
 			gameData: playerGameDataSchema.nullable().optional(),
 		})
 		.strict()
-		.transform(data => hasMeaningfulValue(data) ? data : null)
+		.transform(data => hasMeaningfulValue(data)
+			? data
+			: null)
 		.nullable()
 		.optional(),
 );
@@ -189,29 +197,49 @@ const counterSchema = z
 // Payloads shared between the standalone command union and the Batch
 // sub-command union, so the two cannot drift.
 const setLifePayloadSchema = z
-	.object({ player: playerSideSchema, lifeTotal: z.number().int() })
+	.object({
+		player: playerSideSchema,
+		lifeTotal: z.number().int(),
+	})
 	.strict();
 const setCountersPayloadSchema = z
-	.object({ player: playerSideSchema, counters: z.array(counterSchema) })
+	.object({
+		player: playerSideSchema,
+		counters: z.array(counterSchema),
+	})
 	.strict();
 const setCardsKeptPayloadSchema = z
-	.object({ player: playerSideSchema, cardsKept: z.number().int().nonnegative() })
+	.object({
+		player: playerSideSchema,
+		cardsKept: z.number().int().nonnegative(),
+	})
 	.strict();
 const setSideboardRevealedPayloadSchema = z
-	.object({ player: playerSideSchema, revealed: z.boolean() })
+	.object({
+		player: playerSideSchema,
+		revealed: z.boolean(),
+	})
 	.strict();
 const setClockPayloadSchema = z
-	.object({ targetMs: z.number().int().nonnegative() })
+	.object({
+		targetMs: z.number().int().nonnegative(),
+	})
 	.strict();
 const firstPlayerPayloadSchema = z.object({ player: playerSideSchema }).strict();
 const setActivePlayerPayloadSchema = z
-	.object({ player: playerSideSchema.nullable() })
+	.object({
+		player: playerSideSchema.nullable(),
+	})
 	.strict();
 const setTurnNumberPayloadSchema = z
-	.object({ turnNumber: z.number().int().nonnegative() })
+	.object({
+		turnNumber: z.number().int().nonnegative(),
+	})
 	.strict();
 const startOvertimePayloadSchema = z
-	.object({ totalTurns: z.number().int().positive() })
+	.object({
+		totalTurns: z.number().int().positive(),
+	})
 	.strict();
 
 // Batch carries absolute setters only — see FEATURE_MATCH_BATCHABLE_COMMAND_TYPES.
@@ -219,16 +247,46 @@ const startOvertimePayloadSchema = z
 // receipt and sequence claim cover the whole save. Exported so a test can pin
 // this union's membership to FEATURE_MATCH_BATCHABLE_COMMAND_TYPES.
 export const featureMatchBatchSubCommandSchema = z.discriminatedUnion('type', [
-	z.object({ type: z.literal('SetLife'), payload: setLifePayloadSchema }).strict(),
-	z.object({ type: z.literal('SetCounters'), payload: setCountersPayloadSchema }).strict(),
-	z.object({ type: z.literal('SetCardsKept'), payload: setCardsKeptPayloadSchema }).strict(),
-	z.object({ type: z.literal('SetSideboardRevealed'), payload: setSideboardRevealedPayloadSchema }).strict(),
-	z.object({ type: z.literal('SetClock'), payload: setClockPayloadSchema }).strict(),
-	z.object({ type: z.literal('SelectFirstPlayer'), payload: firstPlayerPayloadSchema }).strict(),
-	z.object({ type: z.literal('SetFirstPlayer'), payload: firstPlayerPayloadSchema }).strict(),
-	z.object({ type: z.literal('SetActivePlayer'), payload: setActivePlayerPayloadSchema }).strict(),
-	z.object({ type: z.literal('SetTurnNumber'), payload: setTurnNumberPayloadSchema }).strict(),
-	z.object({ type: z.literal('StartOvertime'), payload: startOvertimePayloadSchema }).strict(),
+	z.object({
+		type: z.literal('SetLife'),
+		payload: setLifePayloadSchema,
+	}).strict(),
+	z.object({
+		type: z.literal('SetCounters'),
+		payload: setCountersPayloadSchema,
+	}).strict(),
+	z.object({
+		type: z.literal('SetCardsKept'),
+		payload: setCardsKeptPayloadSchema,
+	}).strict(),
+	z.object({
+		type: z.literal('SetSideboardRevealed'),
+		payload: setSideboardRevealedPayloadSchema,
+	}).strict(),
+	z.object({
+		type: z.literal('SetClock'),
+		payload: setClockPayloadSchema,
+	}).strict(),
+	z.object({
+		type: z.literal('SelectFirstPlayer'),
+		payload: firstPlayerPayloadSchema,
+	}).strict(),
+	z.object({
+		type: z.literal('SetFirstPlayer'),
+		payload: firstPlayerPayloadSchema,
+	}).strict(),
+	z.object({
+		type: z.literal('SetActivePlayer'),
+		payload: setActivePlayerPayloadSchema,
+	}).strict(),
+	z.object({
+		type: z.literal('SetTurnNumber'),
+		payload: setTurnNumberPayloadSchema,
+	}).strict(),
+	z.object({
+		type: z.literal('StartOvertime'),
+		payload: startOvertimePayloadSchema,
+	}).strict(),
 ]);
 // SnapshotCorrected is deliberately absent from the client command schema:
 // authoritative snapshots carry Melee provenance and are replayed as truth,
@@ -240,7 +298,10 @@ export const featureMatchCommandSchema = z.discriminatedUnion('type', [
 			...commandBaseSchema,
 			type: z.literal('AdjustLife'),
 			payload: z
-				.object({ player: playerSideSchema, delta: z.number().int() })
+				.object({
+					player: playerSideSchema,
+					delta: z.number().int(),
+				})
 				.strict(),
 		})
 		.strict(),
@@ -276,7 +337,9 @@ export const featureMatchCommandSchema = z.discriminatedUnion('type', [
 		.object({
 			...commandBaseSchema,
 			type: z.literal('AdjustClock'),
-			payload: z.object({ deltaMs: z.number().int() }).strict(),
+			payload: z.object({
+				deltaMs: z.number().int(),
+			}).strict(),
 		})
 		.strict(),
 	z
@@ -305,7 +368,9 @@ export const featureMatchCommandSchema = z.discriminatedUnion('type', [
 			...commandBaseSchema,
 			type: z.literal('ResetClock'),
 			payload: z
-				.object({ durationMs: z.number().int().nonnegative().optional() })
+				.object({
+					durationMs: z.number().int().nonnegative().optional(),
+				})
 				.strict(),
 		})
 		.strict(),
@@ -429,7 +494,9 @@ export const featureMatchCommandSchema = z.discriminatedUnion('type', [
 			...commandBaseSchema,
 			type: z.literal('Batch'),
 			payload: z
-				.object({ commands: z.array(featureMatchBatchSubCommandSchema).min(1).max(20) })
+				.object({
+					commands: z.array(featureMatchBatchSubCommandSchema).min(1).max(20),
+				})
 				.strict(),
 		})
 		.strict(),

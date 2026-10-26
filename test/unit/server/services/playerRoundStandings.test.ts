@@ -21,7 +21,17 @@ describe('playerRoundStandingsService', () => {
 	describe('findByRoundId', () => {
 		it('returns standings for a round', async () => {
 			const standings = [
-				{ id: 1, eventId: 1, playerId: 1, roundId: 1, wins: 3, losses: 0, draws: 0, position: 1, points: 9 },
+				{
+					id: 1,
+					eventId: 1,
+					playerId: 1,
+					roundId: 1,
+					wins: 3,
+					losses: 0,
+					draws: 0,
+					position: 1,
+					points: 9,
+				},
 			];
 			getChain('select').orderBy.mockResolvedValue(standings);
 

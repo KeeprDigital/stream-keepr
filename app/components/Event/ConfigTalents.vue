@@ -44,7 +44,9 @@ function isEditingRow(row: TalentRow | undefined) {
 	const target = editingRow.value;
 	if (!row || !target)
 		return false;
-	return target.id !== undefined ? row.id === target.id : toRaw(row) === target;
+	return target.id !== undefined
+		? row.id === target.id
+		: toRaw(row) === target;
 }
 
 function rowFromTalent(talent: Talent): TalentRow {
@@ -141,7 +143,9 @@ function saveTalentEdit() {
 	const current = talentsData.value[index] ?? row;
 	const staged: TalentRow = {
 		...current,
-		name: value.name === opened.name ? current.name : name,
+		name: value.name === opened.name
+			? current.name
+			: name,
 		socialProfiles: {},
 	};
 	for (const network of SUPPORTED_SOCIAL_NETWORKS) {

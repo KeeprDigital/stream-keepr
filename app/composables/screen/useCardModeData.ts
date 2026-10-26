@@ -42,7 +42,9 @@ export function useCardModeData() {
 	// reconnection and while realtime is degraded (#610).
 	const freshness = useScreenModeFreshness<null>({
 		eventId,
-		source: () => screenId.value === null ? null : String(screenId.value),
+		source: () => screenId.value === null
+			? null
+			: String(screenId.value),
 		// A failed read is this module's to retry, so it fails here too (#726). A
 		// superseded one does not: something newer already reached the Card.
 		read: async () => {

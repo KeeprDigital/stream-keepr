@@ -91,14 +91,54 @@ mockNuxtImport('useMetagameStore', () => () => mockMetagameStore);
 
 // Test round data — now DB-shaped rounds with phaseId, status, lastSyncedAt
 const testRounds = [
-	{ id: 10, phaseId: 1, externalId: '100', externalSource: 'melee', name: 'Round 1', roundNumber: 1, status: 'upcoming', lastSyncedAt: null, eventId: 1 },
-	{ id: 20, phaseId: 1, externalId: '200', externalSource: 'melee', name: 'Round 2', roundNumber: 2, status: 'upcoming', lastSyncedAt: null, eventId: 1 },
-	{ id: 30, phaseId: 2, externalId: '300', externalSource: 'melee', name: 'Quarterfinals', roundNumber: 1, status: 'upcoming', lastSyncedAt: null, eventId: 1 },
+	{
+		id: 10,
+		phaseId: 1,
+		externalId: '100',
+		externalSource: 'melee',
+		name: 'Round 1',
+		roundNumber: 1,
+		status: 'upcoming',
+		lastSyncedAt: null,
+		eventId: 1,
+	},
+	{
+		id: 20,
+		phaseId: 1,
+		externalId: '200',
+		externalSource: 'melee',
+		name: 'Round 2',
+		roundNumber: 2,
+		status: 'upcoming',
+		lastSyncedAt: null,
+		eventId: 1,
+	},
+	{
+		id: 30,
+		phaseId: 2,
+		externalId: '300',
+		externalSource: 'melee',
+		name: 'Quarterfinals',
+		roundNumber: 1,
+		status: 'upcoming',
+		lastSyncedAt: null,
+		eventId: 1,
+	},
 ];
 
 const testPhases = [
-	{ id: 1, name: 'Swiss', sortOrder: 0, eventId: 1 },
-	{ id: 2, name: 'Top 8', sortOrder: 1, eventId: 1 },
+	{
+		id: 1,
+		name: 'Swiss',
+		sortOrder: 0,
+		eventId: 1,
+	},
+	{
+		id: 2,
+		name: 'Top 8',
+		sortOrder: 1,
+		eventId: 1,
+	},
 ];
 
 const initialSetupResponse = {
@@ -108,8 +148,19 @@ const initialSetupResponse = {
 	event: { name: 'Test Event' },
 	phases: 2,
 	rounds: 7,
-	players: { created: 4, updated: 0, deactivated: 0, matchesUpdated: 0, errors: [] },
-	deckLists: { players: 4, deckLists: 4, uniqueCards: 40, updated: 4 },
+	players: {
+		created: 4,
+		updated: 0,
+		deactivated: 0,
+		matchesUpdated: 0,
+		errors: [],
+	},
+	deckLists: {
+		players: 4,
+		deckLists: 4,
+		uniqueCards: 40,
+		updated: 4,
+	},
 	warnings: [],
 };
 
@@ -191,7 +242,10 @@ describe('useMeleeStore', () => {
 
 		it('returns next unsynced round when some are synced', () => {
 			setRoundsAndPhases();
-			mockRoundStore.rounds[0] = { ...testRounds[0], lastSyncedAt: new Date() };
+			mockRoundStore.rounds[0] = {
+				...testRounds[0],
+				lastSyncedAt: new Date(),
+			};
 			expect(store.nextUnsyncedRound).toEqual(testRounds[1]);
 		});
 	});
@@ -211,7 +265,10 @@ describe('useMeleeStore', () => {
 
 		it('returns true when all rounds are synced', () => {
 			setRoundsAndPhases();
-			mockRoundStore.rounds = testRounds.map(r => ({ ...r, lastSyncedAt: new Date() }));
+			mockRoundStore.rounds = testRounds.map(r => ({
+				...r,
+				lastSyncedAt: new Date(),
+			}));
 			expect(store.allRoundsSynced).toBe(true);
 		});
 	});
@@ -219,7 +276,10 @@ describe('useMeleeStore', () => {
 	describe('syncedRoundCount', () => {
 		it('returns count of synced rounds', () => {
 			setRoundsAndPhases();
-			mockRoundStore.rounds[0] = { ...testRounds[0], lastSyncedAt: new Date() };
+			mockRoundStore.rounds[0] = {
+				...testRounds[0],
+				lastSyncedAt: new Date(),
+			};
 			expect(store.syncedRoundCount).toBe(1);
 		});
 	});
@@ -227,9 +287,25 @@ describe('useMeleeStore', () => {
 	it('excludes local, foreign-source, and manual-override rounds from sync progress', () => {
 		setRoundsAndPhases();
 		mockRoundStore.rounds.push(
-			{ ...testRounds[0], id: 40, externalId: null, externalSource: null },
-			{ ...testRounds[0], id: 50, externalId: 'other-50', externalSource: 'other' },
-			{ ...testRounds[0], id: 60, externalId: 'melee-60', externalSource: 'melee', controlMode: 'manual_override' },
+			{
+				...testRounds[0],
+				id: 40,
+				externalId: null,
+				externalSource: null,
+			},
+			{
+				...testRounds[0],
+				id: 50,
+				externalId: 'other-50',
+				externalSource: 'other',
+			},
+			{
+				...testRounds[0],
+				id: 60,
+				externalId: 'melee-60',
+				externalSource: 'melee',
+				controlMode: 'manual_override',
+			},
 		);
 
 		expect(store.availableRounds.map(round => round.id)).toEqual([10, 20, 30]);
@@ -300,7 +376,13 @@ describe('useMeleeStore', () => {
 			setEvent();
 			mockEventRepo.syncPlayers.mockResolvedValue({
 				success: true,
-				results: { created: 2, updated: 3, deactivated: 1, matchesUpdated: 0, errors: [] },
+				results: {
+					created: 2,
+					updated: 3,
+					deactivated: 1,
+					matchesUpdated: 0,
+					errors: [],
+				},
 				warnings: ['Player notification could not be delivered'],
 			});
 
@@ -322,15 +404,42 @@ describe('useMeleeStore', () => {
 		it('calls the unified repo action and reloads event-scoped data', async () => {
 			setEvent();
 			mockMatchStore.loadedRoundId = 10;
-			mockRoundStore.rounds = [{ id: 10 }] as any;
+			mockRoundStore.rounds = [
+				{ id: 10 },
+			] as any;
 			mockEventRepo.updateFromMelee.mockResolvedValue({
 				success: true,
 				warnings: ['Round notification could not be delivered'],
 				steps: ['players', 'previous-round', 'next-round'],
-				players: { created: 1, updated: 2, deactivated: 0, matchesUpdated: 0, errors: [] },
+				players: {
+					created: 1,
+					updated: 2,
+					deactivated: 0,
+					matchesUpdated: 0,
+					errors: [],
+				},
 				deckLists: null,
-				rounds: [{ role: 'next', round: { id: 10, name: 'Round 1', roundNumber: 1, phaseId: 1 }, matchCount: 24, created: 20, updated: 4, staleDeleted: 0 }],
-				advancedRound: { id: 10, name: 'Round 1', roundNumber: 1, phaseId: 1 },
+				rounds: [
+					{
+						role: 'next',
+						round: {
+							id: 10,
+							name: 'Round 1',
+							roundNumber: 1,
+							phaseId: 1,
+						},
+						matchCount: 24,
+						created: 20,
+						updated: 4,
+						staleDeleted: 0,
+					},
+				],
+				advancedRound: {
+					id: 10,
+					name: 'Round 1',
+					roundNumber: 1,
+					phaseId: 1,
+				},
 				refreshedRound: null,
 			});
 
@@ -365,7 +474,15 @@ describe('useMeleeStore', () => {
 			const runningDuringUpdate: boolean[] = [];
 			mockEventRepo.updateFromMelee.mockImplementation(async () => {
 				runningDuringUpdate.push(store.updatingFromMelee);
-				return { success: true, steps: ['players'], players: { created: 0, updated: 0, errors: [] }, deckLists: null, rounds: [], advancedRound: null, refreshedRound: null };
+				return {
+					success: true,
+					steps: ['players'],
+					players: { created: 0, updated: 0, errors: [] },
+					deckLists: null,
+					rounds: [],
+					advancedRound: null,
+					refreshedRound: null,
+				};
 			});
 
 			await store.updateFromMelee();
@@ -389,7 +506,13 @@ describe('useMeleeStore', () => {
 				success: true,
 				warnings: [],
 				steps: ['players'],
-				players: { created: 0, updated: 0, deactivated: 0, matchesUpdated: 0, errors: [] },
+				players: {
+					created: 0,
+					updated: 0,
+					deactivated: 0,
+					matchesUpdated: 0,
+					errors: [],
+				},
 				deckLists: null,
 				rounds: [],
 				advancedRound: null,
@@ -408,7 +531,13 @@ describe('useMeleeStore', () => {
 				success: true,
 				warnings: [],
 				steps: ['players'],
-				players: { created: 1, updated: 0, deactivated: 0, matchesUpdated: 0, errors: [] },
+				players: {
+					created: 1,
+					updated: 0,
+					deactivated: 0,
+					matchesUpdated: 0,
+					errors: [],
+				},
 				deckLists: null,
 				rounds: [],
 				advancedRound: null,
@@ -434,7 +563,12 @@ describe('useMeleeStore', () => {
 			mockMatchStore.loadedRoundId = 20;
 			mockEventRepo.syncSpecificRound.mockResolvedValue({
 				success: true,
-				round: { id: 20, name: 'Round 2', roundNumber: 2, phaseId: 1 },
+				round: {
+					id: 20,
+					name: 'Round 2',
+					roundNumber: 2,
+					phaseId: 1,
+				},
 				matchCount: 11,
 				created: 10,
 				updated: 1,
@@ -463,7 +597,13 @@ describe('useMeleeStore', () => {
 				success: true,
 				warnings: [],
 				steps: ['players'],
-				players: { created: 0, updated: 0, deactivated: 0, matchesUpdated: 0, errors: [] },
+				players: {
+					created: 0,
+					updated: 0,
+					deactivated: 0,
+					matchesUpdated: 0,
+					errors: [],
+				},
 				deckLists: null,
 				rounds: [],
 				advancedRound: null,
@@ -485,7 +625,12 @@ describe('useMeleeStore', () => {
 
 			resolveRound({
 				success: true,
-				round: { id: 20, name: 'Round 2', roundNumber: 2, phaseId: 1 },
+				round: {
+					id: 20,
+					name: 'Round 2',
+					roundNumber: 2,
+					phaseId: 1,
+				},
 				matchCount: 1,
 				created: 1,
 				updated: 0,
@@ -501,7 +646,12 @@ describe('useMeleeStore', () => {
 			setEvent();
 			mockEventRepo.syncDecklists.mockResolvedValue({
 				success: true,
-				results: { players: 4, deckLists: 5, uniqueCards: 40, updated: 4 },
+				results: {
+					players: 4,
+					deckLists: 5,
+					uniqueCards: 40,
+					updated: 4,
+				},
 				warnings: ['One deck entry remains unresolved'],
 			});
 
@@ -671,8 +821,14 @@ describe('useMeleeStore', () => {
 	 * operation started there (ADR-0024).
 	 */
 	describe.each([
-		['Event B', [2]],
-		['Event A, loaded again since', [2, 1]],
+		[
+			'Event B',
+			[2],
+		],
+		[
+			'Event A, loaded again since',
+			[2, 1],
+		],
 	])('an operation answered after the operator moved on to %s', (_, switches) => {
 		function switchAway() {
 			for (const eventId of switches) {
@@ -688,7 +844,12 @@ describe('useMeleeStore', () => {
 
 			const syncing = store.syncEvent();
 			switchAway();
-			sync.resolve({ success: true, event: { name: 'Test Event' }, phases: 2, rounds: 7 });
+			sync.resolve({
+				success: true,
+				event: { name: 'Test Event' },
+				phases: 2,
+				rounds: 7,
+			});
 			await syncing;
 
 			expect(mockEventState.loadEvent).not.toHaveBeenCalled();
@@ -718,16 +879,28 @@ describe('useMeleeStore', () => {
 			const earlier = deferred<unknown>();
 			mockEventRepo.syncMelee
 				.mockReturnValueOnce(earlier.promise)
-				.mockResolvedValueOnce({ success: true, event: { name: 'Current Event' }, phases: 1, rounds: 1 });
+				.mockResolvedValueOnce({
+					success: true,
+					event: { name: 'Current Event' },
+					phases: 1,
+					rounds: 1,
+				});
 
 			const earlierSync = store.syncEvent();
 			switchAway();
 			const currentSync = await store.syncEvent();
-			earlier.resolve({ success: true, event: { name: 'Earlier Event' }, phases: 2, rounds: 7 });
+			earlier.resolve({
+				success: true,
+				event: { name: 'Earlier Event' },
+				phases: 2,
+				rounds: 7,
+			});
 			await earlierSync;
 
 			expect(mockEventRepo.syncMelee).toHaveBeenLastCalledWith(switches.at(-1));
-			expect(currentSync).toEqual(expect.objectContaining({ event: { name: 'Current Event' } }));
+			expect(currentSync).toEqual(expect.objectContaining({
+				event: { name: 'Current Event' },
+			}));
 			expect(store.lastOperation?.description).toBe('Synced event structure for Current Event');
 		});
 	});

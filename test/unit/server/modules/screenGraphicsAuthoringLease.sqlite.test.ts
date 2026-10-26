@@ -35,7 +35,13 @@ const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
 
 // The lease names its holder through the auth tables, as the real `~~/server/db` does.
-vi.doMock('~~/server/db', () => ({ db, schema: { ...schema, ...authSchema } }));
+vi.doMock('~~/server/db', () => ({
+	db,
+	schema: {
+		...schema,
+		...authSchema,
+	},
+}));
 vi.doMock('~~/server/utils/ably', () => ({
 	publishMessage: async () => {},
 	publishMessageStrict: async () => {},
@@ -59,7 +65,9 @@ let eventId: number;
 let screenId: number;
 
 async function screenRow() {
-	return await db.query.screens.findFirst({ where: eq(schema.screens.id, screenId) });
+	return await db.query.screens.findFirst({
+		where: eq(schema.screens.id, screenId),
+	});
 }
 
 async function authoredStack(): Promise<string[]> {
@@ -76,7 +84,10 @@ async function lease(sessionId: string, takeover = false) {
 }
 
 function fenceFor(sessionId: string | undefined) {
-	return { ...screenEditWorkspaceLeaseRef(eventId, screenId), sessionId };
+	return {
+		...screenEditWorkspaceLeaseRef(eventId, screenId),
+		sessionId,
+	};
 }
 
 beforeAll(async () => {
@@ -97,11 +108,19 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-	const seeded = await seedBroadcastGraphicsScreen(db, { stack: { graphics: [graphic('authored')] } });
+	const seeded = await seedBroadcastGraphicsScreen(db, {
+		stack: {
+			graphics: [
+				graphic('authored'),
+			],
+		},
+	});
 	eventId = seeded.eventId;
 	screenId = seeded.screenId;
 	await db.update(schema.screens)
-		.set({ screenConfig: { width: 1920, height: 1080 } })
+		.set({
+			screenConfig: { width: 1920, height: 1080 },
+		})
 		.where(eq(schema.screens.id, screenId));
 });
 
@@ -115,7 +134,11 @@ describe('the commit-time lease fence', () => {
 			screenId,
 			eventId,
 			'broadcast-graphics',
-			{ graphics: [graphic('intruder')] },
+			{
+				graphics: [
+					graphic('intruder'),
+				],
+			},
 			0,
 			fenceFor(OTHER),
 		)).rejects.toMatchObject({ statusCode: 409 });
@@ -132,7 +155,11 @@ describe('the commit-time lease fence', () => {
 			screenId,
 			eventId,
 			'broadcast-graphics',
-			{ graphics: [graphic('holder')] },
+			{
+				graphics: [
+					graphic('holder'),
+				],
+			},
 			0,
 			fenceFor(HOLDER),
 		);
@@ -177,7 +204,13 @@ describe('a generic Screen write while the Edit workspace is leased', () => {
 		await lease(HOLDER);
 
 		await expect(genericWrite(OTHER, {
-			modeConfigs: { 'broadcast-graphics': { graphics: [graphic('intruder')] } },
+			modeConfigs: {
+				'broadcast-graphics': {
+					graphics: [
+						graphic('intruder'),
+					],
+				},
+			},
 		})).rejects.toMatchObject({ statusCode: 409 });
 
 		expect(await authoredStack()).toEqual(['authored']);
@@ -211,7 +244,13 @@ describe('a generic Screen write while the Edit workspace is leased', () => {
 		await lease(HOLDER);
 
 		await genericWrite(HOLDER, {
-			modeConfigs: { 'broadcast-graphics': { graphics: [graphic('holder')] } },
+			modeConfigs: {
+				'broadcast-graphics': {
+					graphics: [
+						graphic('holder'),
+					],
+				},
+			},
 		});
 
 		expect(await authoredStack()).toEqual(['holder']);
@@ -233,15 +272,17 @@ describe('a takeover between admission and commit', () => {
 		await lease(HOLDER);
 		const plated: BroadcastGraphicConfig = {
 			...graphic('plated'),
-			inputs: [{
-				key: 'plate',
-				label: 'Plate',
-				type: 'media',
-				required: false,
-				updatePolicy: 'live',
-				default: testGraphicAssetReference('asset-plate', 'revision-one'),
-				mediaKind: 'image',
-			}],
+			inputs: [
+				{
+					key: 'plate',
+					label: 'Plate',
+					type: 'media',
+					required: false,
+					updatePolicy: 'live',
+					default: testGraphicAssetReference('asset-plate', 'revision-one'),
+					mediaKind: 'image',
+				},
+			],
 		};
 
 		let tookOver = false;
@@ -249,7 +290,9 @@ describe('a takeover between admission and commit', () => {
 			async inspectGraphicAssetRevisions(): Promise<GraphicAssetReferenceStatus[]> {
 				await lease(OTHER, true);
 				tookOver = true;
-				return [{ outcome: 'available', lifecycleState: 'active', kind: 'image' }];
+				return [
+					{ outcome: 'available', lifecycleState: 'active', kind: 'image' },
+				];
 			},
 		};
 
@@ -257,7 +300,9 @@ describe('a takeover between admission and commit', () => {
 			eventId,
 			screenId,
 			mode: 'broadcast-graphics',
-			config: { graphics: [plated] },
+			config: {
+				graphics: [plated],
+			},
 			stateVersion: 0,
 			graphicsAssets: () => graphicsAssets,
 			authoringSessionId: HOLDER,

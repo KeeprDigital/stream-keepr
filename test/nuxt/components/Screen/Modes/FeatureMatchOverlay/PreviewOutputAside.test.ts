@@ -10,7 +10,9 @@ import { GRAPHICS_PREVIEW_READY_MESSAGE } from '~/modules/graphics/previewMessag
 const mockCopyToClipboard = vi.fn();
 const mockToastAdd = vi.fn();
 /** What the Screen Output Asset Capability endpoint issues, if anything. */
-const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+const { mockApiFetch } = vi.hoisted(() => ({
+	mockApiFetch: vi.fn(),
+}));
 
 mockNuxtImport('useCopyToClipboard', () => () => ({ copyToClipboard: mockCopyToClipboard }));
 mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
@@ -41,7 +43,9 @@ const UPopoverStub = defineComponent({
 
 const USwitchStub = defineComponent({
 	name: 'USwitch',
-	props: { modelValue: { type: Boolean, required: false } },
+	props: {
+		modelValue: { type: Boolean, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<button type="button" @click="$emit(\'update:modelValue\', !modelValue)" />',
 });
@@ -112,7 +116,9 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 			// mounted. The count that matters is of capability requests, and it is one —
 			// a second request obtains a capability that is then handed to nobody.
 			expect(mockApiFetch.mock.calls.filter(([url]) => String(url).includes('asset-capability')))
-				.toEqual([['/api/events/1/screens/1/asset-capability']]);
+				.toEqual([
+					['/api/events/1/screens/1/asset-capability'],
+				]);
 			// Counted, not merely matched. `toHaveBeenCalledWith` asks whether *some* call
 			// looked right, so a handler that copies twice passed it while the operator was
 			// told the URL had been copied twice over. The refusal test below counts its own
@@ -157,7 +163,11 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 		 * and is missing every asset the Screen publishes.
 		 */
 		it('points a PNG capture at a URL carrying the capability', async () => {
-			const captureWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+			const captureWindow = {
+				opener: {} as unknown,
+				location: { href: '' },
+				close: vi.fn(),
+			};
 			const openWindow = vi.fn(() => captureWindow);
 			vi.stubGlobal('open', openWindow);
 			const wrapper = await mountComponent();
@@ -184,7 +194,11 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 
 		it('refuses the capture, and says so, when the capability cannot be obtained', async () => {
 			mockApiFetch.mockRejectedValue(new Error('unavailable'));
-			const captureWindow = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+			const captureWindow = {
+				opener: {} as unknown,
+				location: { href: '' },
+				close: vi.fn(),
+			};
 			vi.stubGlobal('open', vi.fn(() => captureWindow));
 			const wrapper = await mountComponent();
 
@@ -252,26 +266,39 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 			data: { type: 'feature-match-overlay:select', target },
 		}));
 		await nextTick();
-		expect(wrapper.emitted('selectTarget')).toEqual([[target]]);
+		expect(wrapper.emitted('selectTarget')).toEqual([
+			[target],
+		]);
 
 		window.dispatchEvent(new MessageEvent('message', {
 			origin: window.location.origin,
 			source: null,
-			data: { type: 'feature-match-overlay:select', target: { type: 'source', itemId: 'spoofed' } },
+			data: {
+				type: 'feature-match-overlay:select',
+				target: { type: 'source', itemId: 'spoofed' },
+			},
 		}));
 		window.dispatchEvent(new MessageEvent('message', {
 			origin: 'https://example.invalid',
 			source: previewWindow,
-			data: { type: 'feature-match-overlay:select', target: { type: 'source', itemId: 'spoofed' } },
+			data: {
+				type: 'feature-match-overlay:select',
+				target: { type: 'source', itemId: 'spoofed' },
+			},
 		}));
 		window.dispatchEvent(new MessageEvent('message', {
 			origin: window.location.origin,
 			source: previewWindow,
-			data: { type: 'feature-match-overlay:select', target: { type: 'unsupported' } },
+			data: {
+				type: 'feature-match-overlay:select',
+				target: { type: 'unsupported' },
+			},
 		}));
 		await nextTick();
 
-		expect(wrapper.emitted('selectTarget')).toEqual([[target]]);
+		expect(wrapper.emitted('selectTarget')).toEqual([
+			[target],
+		]);
 	});
 
 	it('accepts a shared Graphic Item selection only from its own same-origin preview frame', async () => {
@@ -287,26 +314,39 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 			data: { type: 'graphics-compositor:select', target },
 		}));
 		await nextTick();
-		expect(wrapper.emitted('selectCompositorTarget')).toEqual([[target]]);
+		expect(wrapper.emitted('selectCompositorTarget')).toEqual([
+			[target],
+		]);
 
 		window.dispatchEvent(new MessageEvent('message', {
 			origin: 'https://example.invalid',
 			source: previewWindow,
-			data: { type: 'graphics-compositor:select', target: { type: 'item', graphicId: 'g', itemId: 'spoofed' } },
+			data: {
+				type: 'graphics-compositor:select',
+				target: { type: 'item', graphicId: 'g', itemId: 'spoofed' },
+			},
 		}));
 		window.dispatchEvent(new MessageEvent('message', {
 			origin: window.location.origin,
 			source: null,
-			data: { type: 'graphics-compositor:select', target: { type: 'item', graphicId: 'g', itemId: 'spoofed' } },
+			data: {
+				type: 'graphics-compositor:select',
+				target: { type: 'item', graphicId: 'g', itemId: 'spoofed' },
+			},
 		}));
 		window.dispatchEvent(new MessageEvent('message', {
 			origin: window.location.origin,
 			source: previewWindow,
-			data: { type: 'graphics-compositor:select', target: { type: 'item', graphicId: 'g' } },
+			data: {
+				type: 'graphics-compositor:select',
+				target: { type: 'item', graphicId: 'g' },
+			},
 		}));
 		await nextTick();
 
-		expect(wrapper.emitted('selectCompositorTarget')).toEqual([[target]]);
+		expect(wrapper.emitted('selectCompositorTarget')).toEqual([
+			[target],
+		]);
 	});
 
 	/**
@@ -325,12 +365,18 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 		window.dispatchEvent(new MessageEvent('message', {
 			origin: window.location.origin,
 			source: null,
-			data: { type: 'feature-match-overlay:select', target: { type: 'source', itemId: 'spoofed' } },
+			data: {
+				type: 'feature-match-overlay:select',
+				target: { type: 'source', itemId: 'spoofed' },
+			},
 		}));
 		window.dispatchEvent(new MessageEvent('message', {
 			origin: window.location.origin,
 			source: null,
-			data: { type: 'graphics-compositor:select', target: { type: 'item', graphicId: 'g', itemId: 'spoofed' } },
+			data: {
+				type: 'graphics-compositor:select',
+				target: { type: 'item', graphicId: 'g', itemId: 'spoofed' },
+			},
 		}));
 		await nextTick();
 
@@ -358,7 +404,9 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 		]);
 
 		postMessage.mockClear();
-		await wrapper.setProps({ compositorTarget: { type: 'item', graphicId: 'feature-match-layout', itemId: 'wins' } });
+		await wrapper.setProps({
+			compositorTarget: { type: 'item', graphicId: 'feature-match-layout', itemId: 'wins' },
+		});
 		await nextTick();
 
 		expect(postMessage).toHaveBeenCalledWith({
@@ -411,7 +459,9 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 		// A window this aside never embedded, rather than this one: the file leaves
 		// its mounted components alive, and `window` is the frame several of them
 		// were given, so announcing as `window` would be announcing to those too.
-		const stranger = { postMessage: vi.fn() } as unknown as MessageEventSource;
+		const stranger = {
+			postMessage: vi.fn(),
+		} as unknown as MessageEventSource;
 
 		window.dispatchEvent(new MessageEvent('message', {
 			origin: window.location.origin,

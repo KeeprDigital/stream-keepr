@@ -95,7 +95,9 @@ export async function prepareIntegrationD1(persistDir?: string, { firstEventId }
 					.bind(firstEventId - 1),
 			]);
 		}
-	}, persistDir === undefined ? undefined : resolveIntegrationWranglerPersistDir(process.cwd(), persistDir));
+	}, persistDir === undefined
+		? undefined
+		: resolveIntegrationWranglerPersistDir(process.cwd(), persistDir));
 }
 
 /** Execute controlled fixture SQL against the isolated integration database. */

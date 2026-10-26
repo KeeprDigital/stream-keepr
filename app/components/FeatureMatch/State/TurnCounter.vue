@@ -41,11 +41,15 @@ const labelClass = computed(() => {
 });
 
 const leftIcon = computed(() =>
-	props.mode === 'selection' ? 'i-lucide-arrow-left' : 'i-lucide-minus',
+	props.mode === 'selection'
+		? 'i-lucide-arrow-left'
+		: 'i-lucide-minus',
 );
 
 const rightIcon = computed(() =>
-	props.mode === 'selection' ? 'i-lucide-arrow-right' : 'i-lucide-plus',
+	props.mode === 'selection'
+		? 'i-lucide-arrow-right'
+		: 'i-lucide-plus',
 );
 
 function handleLeft() {

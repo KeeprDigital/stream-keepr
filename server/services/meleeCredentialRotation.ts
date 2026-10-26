@@ -16,7 +16,10 @@ export async function rewrapMeleeClientSecret(
 	const protectedValue = await protectMeleeClientSecret(plaintext);
 	const updated = await db
 		.update(events)
-		.set({ meleeClientSecret: protectedValue, updatedAt: new Date() })
+		.set({
+			meleeClientSecret: protectedValue,
+			updatedAt: new Date(),
+		})
 		.where(and(
 			eq(events.id, eventId),
 			eq(events.meleeClientSecret, expectedStoredValue),

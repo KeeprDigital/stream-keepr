@@ -17,7 +17,12 @@ interface JsonResponse<T = unknown> {
 
 async function readJson<T>(response: Response): Promise<JsonResponse<T>> {
 	const text = await response.text();
-	return { status: response.status, data: (text ? JSON.parse(text) : null) as T };
+	return {
+		status: response.status,
+		data: (text
+			? JSON.parse(text)
+			: null) as T,
+	};
 }
 
 function bearer(capability: string): HeadersInit {
@@ -31,12 +36,16 @@ describe('capability-only Screen Output reads', () => {
 	let neighbourCapability: string;
 
 	function outputPath(resource: string, screenId = screen.id) {
-		return `/api/screen-output/events/${eventId}/screens/${screenId}${resource ? `/${resource}` : ''}`;
+		return `/api/screen-output/events/${eventId}/screens/${screenId}${resource
+			? `/${resource}`
+			: ''}`;
 	}
 
 	async function asOutput<T>(resource: string, credential: string | null = capability): Promise<JsonResponse<T>> {
 		return await readJson<T>(await anonymousFetch(outputPath(resource), {
-			headers: credential ? bearer(credential) : undefined,
+			headers: credential
+				? bearer(credential)
+				: undefined,
 		}));
 	}
 
@@ -72,7 +81,9 @@ describe('capability-only Screen Output reads', () => {
 			},
 			async read<T>(resource: string, credential: string | null = ownCapability, query = '') {
 				return await readJson<T>(await anonymousFetch(`${outputPath(resource, created.id)}${query}`, {
-					headers: credential ? bearer(credential) : undefined,
+					headers: credential
+						? bearer(credential)
+						: undefined,
 				}));
 			},
 		};
@@ -125,7 +136,14 @@ describe('capability-only Screen Output reads', () => {
 				featureMatchOrientation: 'vertical',
 				displayRecordSeparator: '/',
 			});
-			for (const operatorOnly of ['meleeConfigured', 'meleeEventId', 'lastSyncError', 'lastPlayersSyncedAt', 'talents', 'description'])
+			for (const operatorOnly of [
+				'meleeConfigured',
+				'meleeEventId',
+				'lastSyncError',
+				'lastPlayersSyncedAt',
+				'talents',
+				'description',
+			])
 				expect(data).not.toHaveProperty(operatorOnly);
 		});
 
@@ -134,7 +152,9 @@ describe('capability-only Screen Output reads', () => {
 			['another Screen\'s capability', 'neighbour'],
 			['a malformed bearer', 'not a capability'],
 		] as const)('refuses %s with the one non-enumerating 404', async (_case, credential) => {
-			const presented = credential === 'neighbour' ? neighbourCapability : credential;
+			const presented = credential === 'neighbour'
+				? neighbourCapability
+				: credential;
 			const { status, data } = await asOutput<{ message?: string }>('event', presented);
 
 			expect(status).toBe(404);
@@ -142,7 +162,9 @@ describe('capability-only Screen Output reads', () => {
 		});
 
 		it('keeps the ordinary Event read private', async () => {
-			const response = await anonymousFetch(`/api/events/${eventId}`, { headers: bearer(capability) });
+			const response = await anonymousFetch(`/api/events/${eventId}`, {
+				headers: bearer(capability),
+			});
 			expect(response.status).toBe(401);
 		});
 	});
@@ -152,9 +174,14 @@ describe('capability-only Screen Output reads', () => {
 			const output = await outputScreen('background');
 			const lookup = async () => await readJson<ScreenResponse>(await anonymousFetch(
 				`/api/screen-output/events/${eventId}/screens/slug/${output.screen.slug}`,
-				{ headers: bearer(output.capability) },
+				{
+					headers: bearer(output.capability),
+				},
 			));
-			const player = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, { method: 'POST', body: { name: 'Later Player' } });
+			const player = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name: 'Later Player' },
+			});
 
 			const booted = await lookup();
 			expect(booted.status).toBe(200);
@@ -175,7 +202,9 @@ describe('capability-only Screen Output reads', () => {
 			const refreshed = await lookup();
 			expect(refreshed.data).toMatchObject({
 				currentMode: 'player-history',
-				modeConfigs: { 'player-history': { playerId: player.id } },
+				modeConfigs: {
+					'player-history': { playerId: player.id },
+				},
 			});
 			expect((await output.read<{ player: { id: number } }>('player-history')).data.player.id).toBe(player.id);
 		});
@@ -202,9 +231,22 @@ describe('capability-only Screen Output reads', () => {
 					name: 'Lightning Bolt',
 					set: 'lea',
 					layout: 'normal',
-					imageData: { front: { small: 'https://example.com/s.jpg', normal: 'https://example.com/n.jpg' }, back: null },
-					orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
-					displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
+					imageData: {
+						front: { small: 'https://example.com/s.jpg', normal: 'https://example.com/n.jpg' },
+						back: null,
+					},
+					orientationData: {
+						flipable: false,
+						turnable: false,
+						rotateable: false,
+						counterRotateable: false,
+					},
+					displayData: {
+						flipped: false,
+						rotated: false,
+						counterRotated: false,
+						turnedOver: false,
+					},
 				},
 			});
 
@@ -239,11 +281,28 @@ describe('capability-only Screen Output reads', () => {
 
 	describe('standings', () => {
 		it('reads the roster, the fixed Round and the watchlist the saved configuration names', async () => {
-			const alpha = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, { method: 'POST', body: { name: 'Standings Alpha' } });
-			const beta = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, { method: 'POST', body: { name: 'Standings Beta' } });
-			const list = await $fetch<{ id: number }>(`/api/events/${eventId}/player-lists`, { method: 'POST', body: { name: 'Watch' } });
-			await $fetch(`/api/events/${eventId}/player-lists/${list.id}/members`, { method: 'POST', body: { playerIds: [beta.id] } });
-			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, { method: 'POST', body: { name: 'Swiss' } });
+			const alpha = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name: 'Standings Alpha' },
+			});
+			const beta = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name: 'Standings Beta' },
+			});
+			const list = await $fetch<{ id: number }>(`/api/events/${eventId}/player-lists`, {
+				method: 'POST',
+				body: { name: 'Watch' },
+			});
+			await $fetch(`/api/events/${eventId}/player-lists/${list.id}/members`, {
+				method: 'POST',
+				body: {
+					playerIds: [beta.id],
+				},
+			});
+			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, {
+				method: 'POST',
+				body: { name: 'Swiss' },
+			});
 			const round = await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
 				method: 'POST',
 				body: { phaseId: phase.id, name: 'Round 1', roundNumber: 1 },
@@ -255,7 +314,12 @@ describe('capability-only Screen Output reads', () => {
 
 			expect(current.status).toBe(200);
 			expect(current.data.players.map(player => player.id)).toEqual(expect.arrayContaining([alpha.id, beta.id]));
-			expect(current.data).toMatchObject({ round: null, roundStandings: null, watchlist: null, previousRoundPositions: null });
+			expect(current.data).toMatchObject({
+				round: null,
+				roundStandings: null,
+				watchlist: null,
+				previousRoundPositions: null,
+			});
 
 			await setModeConfig('standings', { viewMode: 'watchlist', playerListId: list.id, roundId: round.id });
 			const fixed = await asOutput<ScreenOutputStandingsResponse>('standings');
@@ -263,13 +327,19 @@ describe('capability-only Screen Output reads', () => {
 			expect(fixed.data).toMatchObject({
 				round: { id: round.id, name: 'Round 1' },
 				roundStandings: [],
-				watchlist: { name: 'Watch', playerIds: [beta.id] },
+				watchlist: {
+					name: 'Watch',
+					playerIds: [beta.id],
+				},
 			});
 			expect((await asOutput('standings', null)).status).toBe(404);
 		});
 
 		it('measures a Position Change column against nothing when no earlier Round holds Round Standings', async () => {
-			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, { method: 'POST', body: { name: 'Position Change Swiss' } });
+			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, {
+				method: 'POST',
+				body: { name: 'Position Change Swiss' },
+			});
 			const round = await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
 				method: 'POST',
 				body: { phaseId: phase.id, name: 'Round 1', roundNumber: 1 },
@@ -279,12 +349,18 @@ describe('capability-only Screen Output reads', () => {
 			await setModeConfig('standings', {
 				viewMode: 'all',
 				roundId: round.id,
-				columns: [{ key: 'name', visible: true }, { key: 'positionChange', visible: true }],
+				columns: [
+					{ key: 'name', visible: true },
+					{ key: 'positionChange', visible: true },
+				],
 			});
 			const read = await asOutput<ScreenOutputStandingsResponse>('standings');
 
 			expect(read.status).toBe(200);
-			expect(read.data).toMatchObject({ round: { id: round.id }, previousRoundPositions: null });
+			expect(read.data).toMatchObject({
+				round: { id: round.id },
+				previousRoundPositions: null,
+			});
 		});
 	});
 
@@ -293,15 +369,25 @@ describe('capability-only Screen Output reads', () => {
 			await setMode('metagame');
 			await setModeConfig('metagame', { viewMode: 'archetype', scope: 'all' });
 			const archetypes = await asOutput<{ viewMode: string; breakdown: unknown }>('metagame');
-			const operatorArchetypes = await $fetch(`/api/events/${eventId}/metagame/archetypes`, { query: { scope: 'all', sortBy: 'metaShare' } });
+			const operatorArchetypes = await $fetch(`/api/events/${eventId}/metagame/archetypes`, {
+				query: { scope: 'all', sortBy: 'metaShare' },
+			});
 
-			expect(archetypes).toEqual({ status: 200, data: { viewMode: 'archetype', breakdown: operatorArchetypes } });
+			expect(archetypes).toEqual({
+				status: 200,
+				data: { viewMode: 'archetype', breakdown: operatorArchetypes },
+			});
 
 			await setModeConfig('metagame', { viewMode: 'cards', limit: 7 });
 			const cards = await asOutput<{ viewMode: string; breakdown: unknown }>('metagame');
-			const operatorCards = await $fetch(`/api/events/${eventId}/metagame/cards`, { query: { scope: 'all', sortBy: 'inclusionRate', limit: 7 } });
+			const operatorCards = await $fetch(`/api/events/${eventId}/metagame/cards`, {
+				query: { scope: 'all', sortBy: 'inclusionRate', limit: 7 },
+			});
 
-			expect(cards).toEqual({ status: 200, data: { viewMode: 'cards', breakdown: operatorCards } });
+			expect(cards).toEqual({
+				status: 200,
+				data: { viewMode: 'cards', breakdown: operatorCards },
+			});
 		});
 
 		it('reads the card breakdown the saved Most Played Cards configuration renders', async () => {
@@ -317,9 +403,18 @@ describe('capability-only Screen Output reads', () => {
 
 	describe('feature Match', () => {
 		it('reads the shown Slot and its Players\' decks, and nothing the Screen does not show', async () => {
-			const playerOne = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, { method: 'POST', body: { name: 'Slot Player One' } });
-			const playerTwo = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, { method: 'POST', body: { name: 'Slot Player Two' } });
-			const bystander = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, { method: 'POST', body: { name: 'Bystander' } });
+			const playerOne = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name: 'Slot Player One' },
+			});
+			const playerTwo = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name: 'Slot Player Two' },
+			});
+			const bystander = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name: 'Bystander' },
+			});
 			const shown = await $fetch<{ id: number }>(`/api/events/${eventId}/feature-match-slots`, {
 				method: 'POST',
 				body: { player1Id: playerOne.id, player2Id: playerTwo.id },
@@ -339,7 +434,10 @@ describe('capability-only Screen Output reads', () => {
 
 			const decks = await overlay.read<ScreenOutputPlayerDecksResponse>(`players/${playerTwo.id}/decks`);
 			expect(decks.status).toBe(200);
-			expect(decks.data).toMatchObject({ player: { id: playerTwo.id, name: 'Slot Player Two' }, decks: { decks: [] } });
+			expect(decks.data).toMatchObject({
+				player: { id: playerTwo.id, name: 'Slot Player Two' },
+				decks: { decks: [] },
+			});
 
 			expect((await overlay.read(`feature-match-slots/${hidden.id}`)).status).toBe(404);
 			expect((await overlay.read(`players/${bystander.id}/decks`)).status).toBe(404);
@@ -360,12 +458,17 @@ describe('capability-only Screen Output reads', () => {
 
 	describe('deck', () => {
 		it('reads the selected Player\'s decks only while the Deck List mode selects them', async () => {
-			const selected = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, { method: 'POST', body: { name: 'Deck Player' } });
+			const selected = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name: 'Deck Player' },
+			});
 			const deck = await outputScreen('deck');
 
 			expect((await deck.read(`players/${selected.id}/decks`)).status).toBe(404);
 
-			await deck.configure({ deckSource: { type: 'player', playerId: selected.id } });
+			await deck.configure({
+				deckSource: { type: 'player', playerId: selected.id },
+			});
 			const read = await deck.read<ScreenOutputPlayerDecksResponse>(`players/${selected.id}/decks`);
 
 			expect(read.status).toBe(200);
@@ -400,14 +503,22 @@ describe('capability-only Screen Output reads', () => {
 
 	describe('pairings', () => {
 		it('reads the Matches of the Round the Screen names, with each result as last reported', async () => {
-			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, { method: 'POST', body: { name: 'Pairings Swiss' } });
+			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, {
+				method: 'POST',
+				body: { name: 'Pairings Swiss' },
+			});
 			const round = await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
 				method: 'POST',
 				body: { phaseId: phase.id, name: 'Pairings Round', roundNumber: 1 },
 			});
 			const match = await $fetch<{ id: number }>(`/api/events/${eventId}/matches`, {
 				method: 'POST',
-				body: { roundId: round.id, tableNumber: 7, player1Data: { name: 'Alice' }, player2Data: { name: 'Bob' } },
+				body: {
+					roundId: round.id,
+					tableNumber: 7,
+					player1Data: { name: 'Alice' },
+					player2Data: { name: 'Bob' },
+				},
 			});
 			const pairings = await outputScreen('pairings');
 
@@ -417,13 +528,15 @@ describe('capability-only Screen Output reads', () => {
 			const pending = await pairings.read<ScreenOutputPairingsResponse>('pairings');
 			expect(pending.status).toBe(200);
 			expect(pending.data.round).toMatchObject({ id: round.id, name: 'Pairings Round' });
-			expect(pending.data.matches).toEqual([expect.objectContaining({
-				matchId: match.id,
-				tableNumber: 7,
-				player1: { id: null, name: 'Alice' },
-				player2: { id: null, name: 'Bob' },
-				hasResult: false,
-			})]);
+			expect(pending.data.matches).toEqual([
+				expect.objectContaining({
+					matchId: match.id,
+					tableNumber: 7,
+					player1: { id: null, name: 'Alice' },
+					player2: { id: null, name: 'Bob' },
+					hasResult: false,
+				}),
+			]);
 
 			await $fetch(`/api/events/${eventId}/matches/${match.id}`, {
 				method: 'PATCH',
@@ -436,11 +549,17 @@ describe('capability-only Screen Output reads', () => {
 
 	describe('head-to-head', () => {
 		it('reads the two Players its Feature Match Slot seats, and follows the Slot to its next Match', async () => {
-			const player = async (name: string) => await $fetch<{ id: number }>(`/api/events/${eventId}/players`, { method: 'POST', body: { name } });
+			const player = async (name: string) => await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name },
+			});
 			const alice = await player('H2H Alice');
 			const bob = await player('H2H Bob');
 			const carol = await player('H2H Carol');
-			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, { method: 'POST', body: { name: 'H2H Swiss' } });
+			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, {
+				method: 'POST',
+				body: { name: 'H2H Swiss' },
+			});
 			const round = async (roundNumber: number) => await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
 				method: 'POST',
 				body: { phaseId: phase.id, name: `H2H Round ${roundNumber}`, roundNumber },
@@ -448,11 +567,34 @@ describe('capability-only Screen Output reads', () => {
 			const roundOne = await round(1);
 			const roundTwo = await round(2);
 			const match = async (body: Record<string, unknown>) => await $fetch<{ id: number }>(`/api/events/${eventId}/matches`, { method: 'POST', body });
-			const earlier = await match({ roundId: roundOne.id, player1Id: bob.id, player2Id: alice.id, hasResult: true, player1GameWins: 2, player2GameWins: 1 });
-			const upcoming = await match({ roundId: roundTwo.id, tableNumber: 1, player1Id: alice.id, player2Id: bob.id });
-			const next = await match({ roundId: roundTwo.id, tableNumber: 2, player1Id: carol.id, player2Id: alice.id });
-			const slot = await $fetch<{ id: number }>(`/api/events/${eventId}/feature-match-slots`, { method: 'POST', body: { bestOf: 3 } });
-			await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, { method: 'POST', body: { matchId: upcoming.id } });
+			const earlier = await match({
+				roundId: roundOne.id,
+				player1Id: bob.id,
+				player2Id: alice.id,
+				hasResult: true,
+				player1GameWins: 2,
+				player2GameWins: 1,
+			});
+			const upcoming = await match({
+				roundId: roundTwo.id,
+				tableNumber: 1,
+				player1Id: alice.id,
+				player2Id: bob.id,
+			});
+			const next = await match({
+				roundId: roundTwo.id,
+				tableNumber: 2,
+				player1Id: carol.id,
+				player2Id: alice.id,
+			});
+			const slot = await $fetch<{ id: number }>(`/api/events/${eventId}/feature-match-slots`, {
+				method: 'POST',
+				body: { bestOf: 3 },
+			});
+			await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+				method: 'POST',
+				body: { matchId: upcoming.id },
+			});
 
 			const headToHead = await outputScreen('head-to-head');
 			await headToHead.configure({ playerSource: 'featureMatchSlot', featureMatchId: slot.id });
@@ -461,9 +603,19 @@ describe('capability-only Screen Output reads', () => {
 			expect(before.status).toBe(200);
 			expect(before.data.player1).toMatchObject({ id: alice.id, name: 'H2H Alice' });
 			expect(before.data.player2).toMatchObject({ id: bob.id, name: 'H2H Bob' });
-			expect(before.data.earlierMatches).toEqual([expect.objectContaining({ matchId: earlier.id, roundName: 'H2H Round 1', outcome: 'player2', gameScore: '1-2' })]);
+			expect(before.data.earlierMatches).toEqual([
+				expect.objectContaining({
+					matchId: earlier.id,
+					roundName: 'H2H Round 1',
+					outcome: 'player2',
+					gameScore: '1-2',
+				}),
+			]);
 
-			await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, { method: 'POST', body: { matchId: next.id } });
+			await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+				method: 'POST',
+				body: { matchId: next.id },
+			});
 			const after = await headToHead.read<ScreenOutputHeadToHeadResponse>('head-to-head');
 			expect(after.data.player1).toMatchObject({ id: carol.id });
 			expect(after.data.player2).toMatchObject({ id: alice.id });
@@ -475,24 +627,40 @@ describe('capability-only Screen Output reads', () => {
 
 	describe('top Cut', () => {
 		it('reads the bracket of the Phase the Screen names, with each result as last reported', async () => {
-			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, { method: 'POST', body: { name: 'Top 4' } });
+			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, {
+				method: 'POST',
+				body: { name: 'Top 4' },
+			});
 			const round = await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
 				method: 'POST',
 				body: { phaseId: phase.id, name: 'Top 4 Semifinals', roundNumber: 1 },
 			});
 			const semifinal = await $fetch<{ id: number }>(`/api/events/${eventId}/matches`, {
 				method: 'POST',
-				body: { roundId: round.id, tableNumber: 1, player1Data: { name: 'Alice' }, player2Data: { name: 'Bob' } },
+				body: {
+					roundId: round.id,
+					tableNumber: 1,
+					player1Data: { name: 'Alice' },
+					player2Data: { name: 'Bob' },
+				},
 			});
 			await $fetch(`/api/events/${eventId}/matches`, {
 				method: 'POST',
-				body: { roundId: round.id, tableNumber: 2, player1Data: { name: 'Cara' }, player2Data: { name: 'Dan' } },
+				body: {
+					roundId: round.id,
+					tableNumber: 2,
+					player1Data: { name: 'Cara' },
+					player2Data: { name: 'Dan' },
+				},
 			});
 			const topCut = await outputScreen('top-cut');
 
 			const unconfigured = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
 			expect(unconfigured.status).toBe(200);
-			expect(unconfigured.data).toEqual({ phase: null, bracket: { size: 0, columns: [], champion: null } });
+			expect(unconfigured.data).toEqual({
+				phase: null,
+				bracket: { size: 0, columns: [], champion: null },
+			});
 
 			await topCut.configure({ phaseId: phase.id });
 			const pending = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
@@ -504,7 +672,10 @@ describe('capability-only Screen Output reads', () => {
 			]);
 			expect(pending.data.bracket.columns[0]!.positions[0]).toMatchObject({
 				matchId: semifinal.id,
-				entrants: [{ playerId: null, name: 'Alice' }, { playerId: null, name: 'Bob' }],
+				entrants: [
+					{ playerId: null, name: 'Alice' },
+					{ playerId: null, name: 'Bob' },
+				],
 				status: 'unreported',
 			});
 
@@ -513,16 +684,33 @@ describe('capability-only Screen Output reads', () => {
 				body: { hasResult: true, player1GameWins: 1, player2GameWins: 2 },
 			});
 			const reported = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
-			expect(reported.data.bracket.columns[0]!.positions[0]).toMatchObject({ status: 'reported', winner: 1, gameWins: [1, 2] });
-			expect(reported.data.bracket.columns[1]!.positions[0]!.entrants).toEqual([{ playerId: null, name: 'Bob' }, null]);
+			expect(reported.data.bracket.columns[0]!.positions[0]).toMatchObject({
+				status: 'reported',
+				winner: 1,
+				gameWins: [1, 2],
+			});
+			expect(reported.data.bracket.columns[1]!.positions[0]!.entrants).toEqual([
+				{ playerId: null, name: 'Bob' },
+				null,
+			]);
 
 			// Seeds and Archetypes are read only while the Screen shows them (#759);
 			// a side no Player holds has neither.
 			await topCut.configure({ showSeeds: true, showArchetypes: true });
 			const detailed = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
 			expect(detailed.data.bracket.columns[0]!.positions[0]!.entrants).toEqual([
-				{ playerId: null, name: 'Alice', seed: null, deck: null },
-				{ playerId: null, name: 'Bob', seed: null, deck: null },
+				{
+					playerId: null,
+					name: 'Alice',
+					seed: null,
+					deck: null,
+				},
+				{
+					playerId: null,
+					name: 'Bob',
+					seed: null,
+					deck: null,
+				},
 			]);
 		});
 
@@ -532,7 +720,10 @@ describe('capability-only Screen Output reads', () => {
 				body: { name: 'Top Cut Other Event', game: 'mtg', featureMatchOrientation: 'vertical' },
 			});
 			try {
-				const foreignPhase = await $fetch<{ id: number }>(`/api/events/${otherEvent.id}/phases`, { method: 'POST', body: { name: 'Foreign Top 8' } });
+				const foreignPhase = await $fetch<{ id: number }>(`/api/events/${otherEvent.id}/phases`, {
+					method: 'POST',
+					body: { name: 'Foreign Top 8' },
+				});
 				const res = await $fetchRaw(`/api/events/${eventId}/screens/${screen.id}/config/top-cut`, {
 					method: 'PATCH',
 					body: { phaseId: foreignPhase.id },

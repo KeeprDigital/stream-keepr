@@ -160,7 +160,11 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 				updatedAt: new Date(1_000).toISOString(),
 			});
 			return await catalogue.updateIngestionOperation(
-				{ ...created, stage: 'publishing', updatedAt: new Date(2_000).toISOString() },
+				{
+					...created,
+					stage: 'publishing',
+					updatedAt: new Date(2_000).toISOString(),
+				},
 				created.updatedAt,
 			);
 		}

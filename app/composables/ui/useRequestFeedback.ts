@@ -26,7 +26,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function readString(value: unknown): string | null {
-	return typeof value === 'string' && value.trim().length > 0 ? value : null;
+	return typeof value === 'string' && value.trim().length > 0
+		? value
+		: null;
 }
 
 function readRecordString(record: Record<string, unknown>, key: string): string | null {
@@ -59,7 +61,9 @@ function resolveToast<TPayload>(
 
 	if (typeof option === 'function') {
 		const resolved = option(payload);
-		return resolved === false ? null : resolved ?? null;
+		return resolved === false
+			? null
+			: resolved ?? null;
 	}
 
 	return option ?? null;
@@ -149,7 +153,9 @@ export function useRequestFeedback() {
 			isSuccess,
 			latestKey,
 		} = options;
-		const flight = latestKey === undefined ? unguarded : requests.begin(latestKey);
+		const flight = latestKey === undefined
+			? unguarded
+			: requests.begin(latestKey);
 
 		if (loadingRef)
 			loadingRef.value = true;
@@ -160,7 +166,9 @@ export function useRequestFeedback() {
 			const result = await action();
 			if (flight.stale)
 				return null;
-			const succeeded = isSuccess ? isSuccess(result) : isDefaultSuccess(result);
+			const succeeded = isSuccess
+				? isSuccess(result)
+				: isDefaultSuccess(result);
 
 			if (!succeeded) {
 				const failure = {

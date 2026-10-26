@@ -1,7 +1,9 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 mockNuxtImport('$fetch', () => mockFetch);
 
 // Mock cardParser from shared utils
@@ -38,11 +40,21 @@ describe('useScryfallBatch', () => {
 
 	it('fetches cards with scryfallId via collection endpoint', async () => {
 		mockFetch.mockResolvedValueOnce({
-			data: [{
-				id: 'abc-123',
-				name: 'Lightning Bolt',
-				all_parts: [{ id: 'treasure', component: 'token', name: 'Treasure Token', type_line: 'Token Artifact — Treasure', uri: 'https://api.scryfall.com/cards/treasure' }],
-			}],
+			data: [
+				{
+					id: 'abc-123',
+					name: 'Lightning Bolt',
+					all_parts: [
+						{
+							id: 'treasure',
+							component: 'token',
+							name: 'Treasure Token',
+							type_line: 'Token Artifact — Treasure',
+							uri: 'https://api.scryfall.com/cards/treasure',
+						},
+					],
+				},
+			],
 		});
 
 		const batch = useScryfallBatch();
@@ -55,13 +67,15 @@ describe('useScryfallBatch', () => {
 			expect.objectContaining({ method: 'POST' }),
 		);
 		expect(result.cards.has('abc-123')).toBe(true);
-		expect(result.cards.get('abc-123')?.deckTokens).toEqual([{
-			id: 'treasure',
-			scryfallId: 'treasure',
-			name: 'Treasure Token',
-			typeLine: 'Token Artifact — Treasure',
-			uri: 'https://api.scryfall.com/cards/treasure',
-		}]);
+		expect(result.cards.get('abc-123')?.deckTokens).toEqual([
+			{
+				id: 'treasure',
+				scryfallId: 'treasure',
+				name: 'Treasure Token',
+				typeLine: 'Token Artifact — Treasure',
+				uri: 'https://api.scryfall.com/cards/treasure',
+			},
+		]);
 	});
 
 	it('fetches cards without scryfallId via fuzzy name search', async () => {
@@ -77,7 +91,9 @@ describe('useScryfallBatch', () => {
 
 		expect(mockFetch).toHaveBeenCalledWith(
 			'https://api.scryfall.com/cards/named',
-			expect.objectContaining({ query: { fuzzy: 'Counterspell' } }),
+			expect.objectContaining({
+				query: { fuzzy: 'Counterspell' },
+			}),
 		);
 		expect(result.cards.has('xyz-789')).toBe(true);
 		expect(result.cards.has('name:counterspell')).toBe(true);
@@ -95,7 +111,10 @@ describe('useScryfallBatch', () => {
 			maximumActiveRequests = Math.max(maximumActiveRequests, activeRequests);
 			await requestGate;
 			activeRequests--;
-			return { id: options.query.fuzzy.toLowerCase(), name: options.query.fuzzy };
+			return {
+				id: options.query.fuzzy.toLowerCase(),
+				name: options.query.fuzzy,
+			};
 		});
 
 		const batch = useScryfallBatch();
@@ -118,7 +137,11 @@ describe('useScryfallBatch', () => {
 			mockFetch
 				.mockRejectedValueOnce(new Error('scryfall 503'))
 				.mockRejectedValueOnce(new Error('scryfall 503'))
-				.mockResolvedValueOnce({ data: [{ id: 'abc-123', name: 'Lightning Bolt' }] });
+				.mockResolvedValueOnce({
+					data: [
+						{ id: 'abc-123', name: 'Lightning Bolt' },
+					],
+				});
 
 			const batch = useScryfallBatch();
 			const request = batch.fetchScryfallCards([
@@ -158,7 +181,11 @@ describe('useScryfallBatch', () => {
 				.mockRejectedValueOnce(new Error('scryfall 503'))
 				.mockRejectedValueOnce(new Error('scryfall 503'))
 				.mockRejectedValueOnce(new Error('scryfall 503'))
-				.mockResolvedValueOnce({ data: [{ id: 'id-75', name: 'Card 75' }] });
+				.mockResolvedValueOnce({
+					data: [
+						{ id: 'id-75', name: 'Card 75' },
+					],
+				});
 
 			const batch = useScryfallBatch();
 			const request = batch.fetchScryfallCards(cards);
@@ -217,8 +244,18 @@ describe('useScryfallBatch', () => {
 		cardDataMap.set('abc', { id: 'abc', name: 'Bolt', imageUri: '' });
 
 		const cards = [
-			createCard({ name: 'Bolt', scryfallId: 'abc', quantity: 4, compartment: 'mainboard' }),
-			createCard({ name: 'Bolt', scryfallId: 'abc', quantity: 2, compartment: 'sideboard' }),
+			createCard({
+				name: 'Bolt',
+				scryfallId: 'abc',
+				quantity: 4,
+				compartment: 'mainboard',
+			}),
+			createCard({
+				name: 'Bolt',
+				scryfallId: 'abc',
+				quantity: 2,
+				compartment: 'sideboard',
+			}),
 		];
 
 		const { mainboard, sideboard } = batch.buildDeckListArrays(cards, cardDataMap);
@@ -232,7 +269,12 @@ describe('useScryfallBatch', () => {
 		const cardDataMap = new Map<string, any>();
 
 		const cards = [
-			createCard({ name: 'Unknown', scryfallId: 'missing', quantity: 1, compartment: 'mainboard' }),
+			createCard({
+				name: 'Unknown',
+				scryfallId: 'missing',
+				quantity: 1,
+				compartment: 'mainboard',
+			}),
 		];
 
 		const { mainboard } = batch.buildDeckListArrays(cards, cardDataMap);

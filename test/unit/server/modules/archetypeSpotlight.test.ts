@@ -3,7 +3,17 @@ import { describe, expect, it } from 'vitest';
 import { projectArchetypeSpotlight } from '~~/server/modules/metagame/archetypeSpotlight';
 
 function pilot(id: number, name: string, position: number | null, record: [number, number, number] = [3, 1, 0]): ArchetypePlayerEntry {
-	return { id, name, deckName: 'Mono Red', position, points: record[0] * 3 + record[2], wins: record[0], losses: record[1], draws: record[2], colors: 'R' };
+	return {
+		id,
+		name,
+		deckName: 'Mono Red',
+		position,
+		points: record[0] * 3 + record[2],
+		wins: record[0],
+		losses: record[1],
+		draws: record[2],
+		colors: 'R',
+	};
 }
 
 function card(id: number, name: string, cardType: string, inclusionRate: number): CardBreakdownEntry {
@@ -69,14 +79,41 @@ describe('projectArchetypeSpotlight', () => {
 		const { pilots } = projectArchetypeSpotlight(detail, { cardLimit: 10, excludedCardTypes: [] });
 
 		expect(pilots).toEqual([
-			{ id: 13, name: 'First Fran', position: 1, points: 22, wins: 7, losses: 0, draws: 1 },
-			{ id: 12, name: 'Second Sam', position: 8, points: 16, wins: 5, losses: 2, draws: 1 },
-			{ id: 11, name: 'Unplaced Ursula', position: null, points: 0, wins: 0, losses: 0, draws: 0 },
+			{
+				id: 13,
+				name: 'First Fran',
+				position: 1,
+				points: 22,
+				wins: 7,
+				losses: 0,
+				draws: 1,
+			},
+			{
+				id: 12,
+				name: 'Second Sam',
+				position: 8,
+				points: 16,
+				wins: 5,
+				losses: 2,
+				draws: 1,
+			},
+			{
+				id: 11,
+				name: 'Unplaced Ursula',
+				position: null,
+				points: 0,
+				wins: 0,
+				losses: 0,
+				draws: 0,
+			},
 		]);
 	});
 
 	it('shows the most-included cards, up to the card limit, after dropping excluded card types', () => {
-		const { topCards } = projectArchetypeSpotlight(detail, { cardLimit: 3, excludedCardTypes: ['Land'] });
+		const { topCards } = projectArchetypeSpotlight(detail, {
+			cardLimit: 3,
+			excludedCardTypes: ['Land'],
+		});
 
 		expect(topCards.map(entry => entry.name)).toEqual(['Monastery Swiftspear', 'Lightning Bolt', 'Eidolon of the Great Revel']);
 		expect(topCards[2]).toMatchObject({ inclusionRate: 66.67 });

@@ -18,9 +18,13 @@ const {
 	toggleType,
 	resetFilters,
 	filteredEntries,
-} = useMetagameCardFilters(computed(() => props.entries), { defaultExcludedTypes: ['Land'] });
+} = useMetagameCardFilters(computed(() => props.entries), {
+	defaultExcludedTypes: ['Land'],
+});
 
-const sorting = ref([{ id: 'coOccurrenceRate', desc: true }]);
+const sorting = ref([
+	{ id: 'coOccurrenceRate', desc: true },
+]);
 
 const maxCoOccurrenceRate = computed(() =>
 	Math.max(...filteredEntries.value.map(e => e.coOccurrenceRate), 1),
@@ -30,7 +34,11 @@ const columns: TableColumn<CardCoOccurrenceEntry>[] = [
 	createNameColumn<CardCoOccurrenceEntry>(),
 	createManaCostColumn<CardCoOccurrenceEntry>(),
 	createCardTypeColumn<CardCoOccurrenceEntry>(),
-	{ accessorKey: 'coOccurrenceRate', header: createSortableHeader('Co-occurrence'), enableSorting: true },
+	{
+		accessorKey: 'coOccurrenceRate',
+		header: createSortableHeader('Co-occurrence'),
+		enableSorting: true,
+	},
 	createDeckCountColumn<CardCoOccurrenceEntry>(),
 ];
 </script>

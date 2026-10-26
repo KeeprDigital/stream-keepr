@@ -53,7 +53,9 @@ export function borderGlowFieldsValue(
 					sides: Object.fromEntries(BORDER_SIDES.map(side => [side, style[SIDE_FIELDS[side]]])),
 				}
 			: null,
-		glow: glow ? { ...glow, position: style.glowPosition } : null,
+		glow: glow
+			? { ...glow, position: style.glowPosition }
+			: null,
 	};
 }
 
@@ -83,7 +85,9 @@ export function borderGlowStyleUpdates(edit: BorderGlowEdit): Partial<FeatureMat
 	return {
 		...(Object.keys(edit.patch).length === 0 && { glowSize: GLOW_SIZE_ON }),
 		...('color' in edit.patch && { glowColor: color }),
-		...(size !== undefined && { glowSize: Math.max(MIN_GLOW_SIZE, size) }),
+		...(size !== undefined && {
+			glowSize: Math.max(MIN_GLOW_SIZE, size),
+		}),
 		...(opacity !== undefined && { glowOpacity: opacity }),
 		...(position !== undefined && { glowPosition: position }),
 	};

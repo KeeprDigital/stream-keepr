@@ -2,7 +2,9 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockUseHead } = vi.hoisted(() => ({ mockUseHead: vi.fn() }));
+const { mockUseHead } = vi.hoisted(() => ({
+	mockUseHead: vi.fn(),
+}));
 
 mockNuxtImport('useHead', () => mockUseHead);
 
@@ -24,7 +26,14 @@ describe('screenLayout', () => {
 		const wrapper = await mountLayout();
 
 		const container = wrapper.get('div');
-		expect(container.classes()).toEqual(expect.arrayContaining(['h-screen', 'w-screen', 'overflow-hidden', 'flex', 'items-center', 'justify-center']));
+		expect(container.classes()).toEqual(expect.arrayContaining([
+			'h-screen',
+			'w-screen',
+			'overflow-hidden',
+			'flex',
+			'items-center',
+			'justify-center',
+		]));
 		expect(wrapper.get('[data-testid="screen-content"]').text()).toBe('output');
 	});
 

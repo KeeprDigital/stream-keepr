@@ -35,7 +35,9 @@ const focalPosition = computed(() => props.media.focalPosition ?? { horizontal: 
 
 /** A cleared focal axis returns to the centre. */
 function updateFocal(axis: 'horizontal' | 'vertical', value: number | null | undefined) {
-	emit('update', { focalPosition: { ...focalPosition.value, [axis]: value ?? 0.5 } });
+	emit('update', {
+		focalPosition: { ...focalPosition.value, [axis]: value ?? 0.5 },
+	});
 }
 </script>
 

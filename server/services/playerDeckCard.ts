@@ -59,12 +59,16 @@ export function playerDeckCardService() {
 			deckSvc.selectFromDecks(eventId, deckRows, selection),
 			archetypeService().findManyByIds(
 				eventId,
-				deckRows.flatMap(deck => deck.reviewedAt != null && deck.archetypeId != null ? [deck.archetypeId] : []),
+				deckRows.flatMap(deck => deck.reviewedAt != null && deck.archetypeId != null
+					? [deck.archetypeId]
+					: []),
 			),
 		]);
 		const archetypesById = new Map(reviewedArchetypes.map(archetype => [archetype.id, archetype]));
 
-		const pointsByOracleId = pointsSystem ? getPointsByOracleId(pointsSystem) : new Map<string, number>();
+		const pointsByOracleId = pointsSystem
+			? getPointsByOracleId(pointsSystem)
+			: new Map<string, number>();
 		const cardsByDeckId = new Map<number, typeof cardRows>();
 		for (const row of cardRows) {
 			const existing = cardsByDeckId.get(row.deckId) ?? [];
@@ -89,7 +93,9 @@ export function playerDeckCardService() {
 				quantity: row.quantity,
 				compartment: row.compartment,
 				sortOrder: row.sortOrder,
-				highlanderPoints: row.oracleId ? pointsByOracleId.get(row.oracleId) ?? null : null,
+				highlanderPoints: row.oracleId
+					? pointsByOracleId.get(row.oracleId) ?? null
+					: null,
 			}));
 			const highlander = pointsSystem
 				? evaluateHighlanderDeck(
@@ -101,12 +107,16 @@ export function playerDeckCardService() {
 							quantity: row.quantity,
 							compartment: row.compartment,
 						})),
-						companion ? { name: companion.name, oracleId: companion.oracleId } : null,
+						companion
+							? { name: companion.name, oracleId: companion.oracleId }
+							: null,
 					)
 				: undefined;
 			const details = resolvePlayerDeckDetails(
 				deck,
-				deck.archetypeId == null ? null : archetypesById.get(deck.archetypeId),
+				deck.archetypeId == null
+					? null
+					: archetypesById.get(deck.archetypeId),
 			);
 
 			return {
@@ -123,7 +133,9 @@ export function playerDeckCardService() {
 				reviewedAt: deck.reviewedAt,
 				cards: deckCards,
 				companion,
-				...(highlander ? { highlander } : {}),
+				...(highlander
+					? { highlander }
+					: {}),
 			};
 		}));
 

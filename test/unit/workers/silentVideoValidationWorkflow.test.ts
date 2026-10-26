@@ -65,7 +65,12 @@ function validationParams() {
 	const factsDigest = createHash('sha256').update(JSON.stringify(facts)).digest('hex');
 	return {
 		operationId,
-		idempotencyKey: ['silent-video-playback-v1', operationId, facts.sha256, factsDigest].join(':'),
+		idempotencyKey: [
+			'silent-video-playback-v1',
+			operationId,
+			facts.sha256,
+			factsDigest,
+		].join(':'),
 		sourceDigest: facts.sha256,
 		sourceByteLength: facts.byteLength,
 		sourceContentType: facts.canonicalMime,
@@ -127,7 +132,10 @@ async function runWorkflow(answers: (() => Response)[]) {
 	const { env, containerRequests } = validatorEnv(answers);
 	const step = retryingStep();
 	const workflow = new SilentVideoValidationWorkflow({}, env);
-	const outcome = workflow.run({ payload: validationParams(), instanceId: '00000000aa' }, step);
+	const outcome = workflow.run({
+		payload: validationParams(),
+		instanceId: '00000000aa',
+	}, step);
 	return { outcome, step, containerRequests };
 }
 

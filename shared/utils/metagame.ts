@@ -2,7 +2,17 @@ export function getFrontFaceCardType(cardType: string | null | undefined): strin
 	return (cardType ?? '').split(' // ')[0]?.trim() ?? '';
 }
 
-export const CARD_TYPE_BUCKET_ORDER = ['Creature', 'Planeswalker', 'Battle', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Land', 'Other'] as const;
+export const CARD_TYPE_BUCKET_ORDER = [
+	'Creature',
+	'Planeswalker',
+	'Battle',
+	'Instant',
+	'Sorcery',
+	'Artifact',
+	'Enchantment',
+	'Land',
+	'Other',
+] as const;
 
 export type CardTypeBucket = typeof CARD_TYPE_BUCKET_ORDER[number];
 

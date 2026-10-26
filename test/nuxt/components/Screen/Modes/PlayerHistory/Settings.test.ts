@@ -20,10 +20,18 @@ vi.mock('vue-draggable-plus', () => ({
 
 const mockConfig = ref<Record<string, any>>({});
 const mockUpdateConfig = vi.fn((patch: Record<string, unknown>) => {
-	mockConfig.value = { ...mockConfig.value, ...patch };
+	mockConfig.value = {
+		...mockConfig.value,
+		...patch,
+	};
 });
 
-mockNuxtImport('usePlayerStore', () => () => ({ players: [], isLoaded: true, loadPlayersByEventId: vi.fn(), $reset: vi.fn() }));
+mockNuxtImport('usePlayerStore', () => () => ({
+	players: [],
+	isLoaded: true,
+	loadPlayersByEventId: vi.fn(),
+	$reset: vi.fn(),
+}));
 mockNuxtImport('useModeConfigUpdate', () => () => ({
 	config: mockConfig,
 	saving: ref(false),
@@ -44,7 +52,10 @@ async function mountComponent() {
 	const { default: Settings } = await import(componentPath);
 
 	return mount(Settings, {
-		props: { screen: { id: 1 } as Screen, eventId: 1 },
+		props: {
+			screen: { id: 1 } as Screen,
+			eventId: 1,
+		},
 		global: {
 			stubs: {
 				USwitch: USwitchStub,
@@ -70,7 +81,10 @@ const storedBeforeNewColumns = [
 describe('screenPlayerHistorySettings', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockConfig.value = { ...getDefaultConfigForMode('player-history'), columns: storedBeforeNewColumns };
+		mockConfig.value = {
+			...getDefaultConfigForMode('player-history'),
+			columns: storedBeforeNewColumns,
+		};
 	});
 
 	it('offers opponent archetype and game score on a Screen that stored its columns before them', async () => {
@@ -78,9 +92,23 @@ describe('screenPlayerHistorySettings', () => {
 		await flushPromises();
 
 		const labels = wrapper.findAll('[data-testid="column-label"]').map(label => label.text());
-		expect(labels).toEqual(['Outcome', 'Round', 'Opponent', 'Table', 'Opponent archetype', 'Game score']);
+		expect(labels).toEqual([
+			'Outcome',
+			'Round',
+			'Opponent',
+			'Table',
+			'Opponent archetype',
+			'Game score',
+		]);
 		const switches = wrapper.findAll('[data-testid="column-row"] [data-testid="u-switch"]').map(toggle => toggle.text());
-		expect(switches).toEqual(['true', 'true', 'true', 'false', 'false', 'false']);
+		expect(switches).toEqual([
+			'true',
+			'true',
+			'true',
+			'false',
+			'false',
+			'false',
+		]);
 	});
 
 	it('enables a new column, keeping the stored order', async () => {

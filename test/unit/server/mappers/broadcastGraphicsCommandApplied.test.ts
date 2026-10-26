@@ -120,7 +120,9 @@ function spread(total: number, carriers: number, perGraphic: number): number[] {
 		{ length: MAX_BROADCAST_GRAPHICS_PER_SCREEN },
 		(_, index) => index >= carriers
 			? 0
-			: Math.floor(total / carriers) + (index < total % carriers ? 1 : 0),
+			: Math.floor(total / carriers) + (index < total % carriers
+				? 1
+				: 0),
 	);
 }
 
@@ -181,20 +183,39 @@ function liveStateAtCaps(
 			durations: { enter: 0, update: 10_000, exit: 500 },
 		} satisfies Omit<BroadcastGraphicsReductionContext, 'acceptedAt'>;
 
-		for (const sourceKey of sourceKeys.slice(0, sourceCounts[index]!))
-			state = reduce(state, { type: 'Select Source', payload: { graphicId, sourceKey, selectionId: 999_999 } }, context, 900);
+		for (const sourceKey of sourceKeys.slice(0, sourceCounts[index]!)) {
+			state = reduce(state, {
+				type: 'Select Source',
+				payload: { graphicId, sourceKey, selectionId: 999_999 },
+			}, context, 900);
+		}
 
-		state = reduce(state, { type: 'Take', payload: { graphicId } }, context, 1_000);
+		state = reduce(state, {
+			type: 'Take',
+			payload: { graphicId },
+		}, context, 1_000);
 
 		resolved = `2${authored.slice(1)}`;
-		state = reduce(state, { type: 'Update Graphic', payload: { graphicId, basedOnAcceptedRevision: 1 } }, context, 1_100);
+		state = reduce(state, {
+			type: 'Update Graphic',
+			payload: { graphicId, basedOnAcceptedRevision: 1 },
+		}, context, 1_100);
 
 		resolved = `3${authored.slice(1)}`;
-		state = reduce(state, { type: 'Update Graphic', payload: { graphicId, basedOnAcceptedRevision: 2 } }, context, 1_200);
+		state = reduce(state, {
+			type: 'Update Graphic',
+			payload: { graphicId, basedOnAcceptedRevision: 2 },
+		}, context, 1_200);
 
 		for (const key of keys) {
-			state = reduce(state, { type: 'Set Override', payload: { graphicId, inputKey: key, value: wire } }, context, 1_300);
-			state = reduce(state, { type: 'Set Input', payload: { graphicId, inputKey: key, value: wire } }, context, 1_300);
+			state = reduce(state, {
+				type: 'Set Override',
+				payload: { graphicId, inputKey: key, value: wire },
+			}, context, 1_300);
+			state = reduce(state, {
+				type: 'Set Input',
+				payload: { graphicId, inputKey: key, value: wire },
+			}, context, 1_300);
 		}
 	});
 
@@ -206,13 +227,16 @@ function liveStateAtCaps(
 	// happens to leave.
 	return {
 		...state,
-		playout: Object.fromEntries(Object.entries(state.playout).map(([graphicId, record]) => [graphicId, {
-			...record,
-			cut: true,
-			reversalCompletesAt: 1_999_999_999_999,
-			updateStartedAt: 1_999_999_999_999,
-			cyclingStartedAt: 1_999_999_999_999,
-		}])),
+		playout: Object.fromEntries(Object.entries(state.playout).map(([graphicId, record]) => [
+			graphicId,
+			{
+				...record,
+				cut: true,
+				reversalCompletesAt: 1_999_999_999_999,
+				updateStartedAt: 1_999_999_999_999,
+				cyclingStartedAt: 1_999_999_999_999,
+			},
+		])),
 	};
 }
 
@@ -279,28 +303,69 @@ function fullyFilledState(count: number, padding: readonly number[] = []) {
 	const paddingKeys = inputKeys(count + padding.length).slice(count);
 	let resolved = '1'.repeat(MAX_GRAPHIC_TEXT_LENGTH);
 	const context = (): Omit<BroadcastGraphicsReductionContext, 'acceptedAt'> => ({
-		inputs: declarations([...keys, ...paddingKeys]),
-		sources: [{ key: keys[0]!, label: keys[0]!, kind: 'player' as const }],
+		inputs: declarations([
+			...keys,
+			...paddingKeys,
+		]),
+		sources: [
+			{ key: keys[0]!, label: keys[0]!, kind: 'player' as const },
+		],
 		bindings: keys.map(key => ({ inputKey: key, sourceKey: keys[0]!, fieldId: 'name' })),
 		resolveBindings: () => Object.fromEntries(keys.map(key => [key, resolved])),
 		durations: { enter: 0, update: 10_000, exit: 500 },
 	});
 
 	let state = createInitialBroadcastGraphicsLiveState();
-	state = reduce(state, { type: 'Take', payload: { graphicId } }, context(), 1_000);
+	state = reduce(state, {
+		type: 'Take',
+		payload: { graphicId },
+	}, context(), 1_000);
 	resolved = '2'.repeat(MAX_GRAPHIC_TEXT_LENGTH);
-	state = reduce(state, { type: 'Update Graphic', payload: { graphicId, basedOnAcceptedRevision: 1 } }, context(), 1_100);
+	state = reduce(state, {
+		type: 'Update Graphic',
+		payload: { graphicId, basedOnAcceptedRevision: 1 },
+	}, context(), 1_100);
 	resolved = '3'.repeat(MAX_GRAPHIC_TEXT_LENGTH);
-	state = reduce(state, { type: 'Update Graphic', payload: { graphicId, basedOnAcceptedRevision: 2 } }, context(), 1_200);
+	state = reduce(state, {
+		type: 'Update Graphic',
+		payload: { graphicId, basedOnAcceptedRevision: 2 },
+	}, context(), 1_200);
 	for (const key of keys) {
-		state = reduce(state, { type: 'Set Override', payload: { graphicId, inputKey: key, value: 'w'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH) } }, context(), 1_300);
-		state = reduce(state, { type: 'Set Input', payload: { graphicId, inputKey: key, value: 'w'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH) } }, context(), 1_300);
+		state = reduce(state, {
+			type: 'Set Override',
+			payload: {
+				graphicId,
+				inputKey: key,
+				value: 'w'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH),
+			},
+		}, context(), 1_300);
+		state = reduce(state, {
+			type: 'Set Input',
+			payload: {
+				graphicId,
+				inputKey: key,
+				value: 'w'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH),
+			},
+		}, context(), 1_300);
 	}
 	paddingKeys.forEach((key, index) => {
-		state = reduce(state, { type: 'Set Input', payload: { graphicId, inputKey: key, value: 'p'.repeat(padding[index]!) } }, context(), 1_350);
+		state = reduce(state, {
+			type: 'Set Input',
+			payload: {
+				graphicId,
+				inputKey: key,
+				value: 'p'.repeat(padding[index]!),
+			},
+		}, context(), 1_350);
 	});
 
-	return { graphicId, keys, paddingKeys, context, state };
+	return {
+		graphicId,
+		keys,
+		paddingKeys,
+		context,
+		state,
+	};
 }
 
 /** One Graphic Input edit on a fully-filled Broadcast Graphic, as it is published. */
@@ -308,7 +373,11 @@ function fullyFilled(count: number) {
 	const { graphicId, keys, context, state } = fullyFilledState(count);
 	const after = reduce(state, {
 		type: 'Set Input',
-		payload: { graphicId, inputKey: keys[0]!, value: 'x'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH) },
+		payload: {
+			graphicId,
+			inputKey: keys[0]!,
+			value: 'x'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH),
+		},
 	}, context(), 1_400);
 
 	return payloadFor(state, after, 'Set Input');
@@ -327,9 +396,16 @@ function atTheCarryingBoundary() {
 		const { graphicId, keys, context, state } = fullyFilledState(11, [MAX_GRAPHIC_INPUT_VALUE_LENGTH, MAX_GRAPHIC_INPUT_VALUE_LENGTH, padding]);
 		const command = {
 			type: 'Set Input',
-			payload: { graphicId, inputKey: keys[0]!, value: 'x'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH) },
+			payload: {
+				graphicId,
+				inputKey: keys[0]!,
+				value: 'x'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH),
+			},
 		} as const;
-		const after = applyBroadcastGraphicsCommand(state, command, { ...context(), acceptedAt: 1_400 });
+		const after = applyBroadcastGraphicsCommand(state, command, {
+			...context(),
+			acceptedAt: 1_400,
+		});
 		return payloadFor(state, after, 'Set Input').change !== undefined;
 	};
 
@@ -351,7 +427,11 @@ function atTheCarryingBoundary() {
 		state,
 		command: {
 			type: 'Set Input',
-			payload: { graphicId, inputKey: keys[0]!, value: 'x'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH) },
+			payload: {
+				graphicId,
+				inputKey: keys[0]!,
+				value: 'x'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH),
+			},
 		} as BroadcastGraphicsCommandInput,
 		context: context(),
 	};
@@ -376,7 +456,13 @@ describe('the commandApplied notification at the largest live session the caps a
 		expect(inputCount).toBe(MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN);
 		expect(sourceCount).toBe(MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN);
 		for (const inputs of filled) {
-			for (const map of ['working', 'overrides', 'accepted', 'updateFrom', 'pendingUpdateFrom'] as const)
+			for (const map of [
+				'working',
+				'overrides',
+				'accepted',
+				'updateFrom',
+				'pendingUpdateFrom',
+			] as const)
 				expect(Object.keys(inputs[map] ?? {})).toHaveLength(Object.keys(inputs.working).length);
 		}
 	});
@@ -441,7 +527,12 @@ describe('the commandApplied notification at the largest live session the caps a
 		// Out changes a playout record and nothing else, so it stays a few hundred bytes
 		// at the largest live session that exists — and an operator taking a graphic off
 		// air never waits for a snapshot, on any show.
-		const after = applyBroadcastGraphicsCommand(worst, { type: 'Out', payload: { graphicId: richestGraphicId(worst) } }, {
+		const after = applyBroadcastGraphicsCommand(worst, {
+			type: 'Out',
+			payload: {
+				graphicId: richestGraphicId(worst),
+			},
+		}, {
 			inputs: [],
 			acceptedAt: 2_000,
 			durations: { enter: 0, update: 10_000, exit: 500 },
@@ -465,16 +556,38 @@ describe('the commandApplied notification at the largest live session the caps a
 			const keys = Object.keys(state.inputs[graphicId]!.working);
 			const context = {
 				inputs: declarations(keys),
-				sources: [{ key: keys[0]!, label: keys[0]!, kind: 'player' as const }],
+				sources: [
+					{ key: keys[0]!, label: keys[0]!, kind: 'player' as const },
+				],
 				bindings: keys.map(key => ({ inputKey: key, sourceKey: keys[0]!, fieldId: 'name' })),
 				durations: { enter: 0, update: 10_000, exit: 500 },
 			};
 
 			const commands: BroadcastGraphicsCommandInput[] = [
-				{ type: 'Out', payload: { graphicId } },
-				{ type: 'Set Input', payload: { graphicId, inputKey: keys[0]!, value: 'x'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH) } },
-				{ type: 'Set Override', payload: { graphicId, inputKey: keys[0]!, value: 'x'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH) } },
-				{ type: 'Select Source', payload: { graphicId, sourceKey: keys[0]!, selectionId: 1 } },
+				{
+					type: 'Out',
+					payload: { graphicId },
+				},
+				{
+					type: 'Set Input',
+					payload: {
+						graphicId,
+						inputKey: keys[0]!,
+						value: 'x'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH),
+					},
+				},
+				{
+					type: 'Set Override',
+					payload: {
+						graphicId,
+						inputKey: keys[0]!,
+						value: 'x'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH),
+					},
+				},
+				{
+					type: 'Select Source',
+					payload: { graphicId, sourceKey: keys[0]!, selectionId: 1 },
+				},
 			];
 
 			for (const command of commands) {
@@ -495,7 +608,11 @@ describe('the commandApplied notification at the largest live session the caps a
 		const keys = Object.keys(concentrated.inputs[graphicId]!.working);
 		const after = applyBroadcastGraphicsCommand(concentrated, {
 			type: 'Set Input',
-			payload: { graphicId, inputKey: keys[0]!, value: 'x'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH) },
+			payload: {
+				graphicId,
+				inputKey: keys[0]!,
+				value: 'x'.repeat(MAX_GRAPHIC_INPUT_VALUE_LENGTH),
+			},
 		}, {
 			inputs: declarations(keys),
 			acceptedAt: 2_000,
@@ -529,13 +646,24 @@ describe('the commandApplied notification at the largest live session the caps a
 
 describe('broadcastGraphicsCommandAppliedPayload', () => {
 	const before: BroadcastGraphicsLiveState = {
-		playout: { bug: { onAir: true, effectiveStartedAt: 5, cut: false } },
-		inputs: { bug: { working: { name: 'Bug' }, accepted: { name: 'Bug' }, acceptedRevision: 1 } },
+		playout: {
+			bug: { onAir: true, effectiveStartedAt: 5, cut: false },
+		},
+		inputs: {
+			bug: {
+				working: { name: 'Bug' },
+				accepted: { name: 'Bug' },
+				acceptedRevision: 1,
+			},
+		},
 		sources: {},
 	};
 
 	it('carries a change a peer can apply to land on exactly the committed state', () => {
-		const after = applyBroadcastGraphicsCommand(before, { type: 'Take', payload: { graphicId: 'slate' } }, {
+		const after = applyBroadcastGraphicsCommand(before, {
+			type: 'Take',
+			payload: { graphicId: 'slate' },
+		}, {
 			inputs: [],
 			acceptedAt: 1_000,
 		});
@@ -549,7 +677,12 @@ describe('broadcastGraphicsCommandAppliedPayload', () => {
 	it('names the epoch and sequence a peer decides from, whether or not it carries a change', () => {
 		const payload = payloadFor(undefined, before, 'Out');
 
-		expect(payload).toMatchObject({ screenId: 7, sessionId: 12, sequence: 4, commandType: 'Out' });
+		expect(payload).toMatchObject({
+			screenId: 7,
+			sessionId: 12,
+			sequence: 4,
+			commandType: 'Out',
+		});
 		expect(payload.change).toBeUndefined();
 	});
 
@@ -599,9 +732,15 @@ describe('the cost of carrying the change', () => {
 	 */
 	function retaken(count: number) {
 		const { graphicId, context, state } = fullyFilledState(count);
-		const off = reduce(state, { type: 'Out', payload: { graphicId, cut: true } }, context(), 1_400);
+		const off = reduce(state, {
+			type: 'Out',
+			payload: { graphicId, cut: true },
+		}, context(), 1_400);
 
-		return payloadFor(off, reduce(off, { type: 'Take', payload: { graphicId } }, context(), 1_500), 'Take');
+		return payloadFor(off, reduce(off, {
+			type: 'Take',
+			payload: { graphicId },
+		}, context(), 1_500), 'Take');
 	}
 
 	it('carries a Take up to fourteen maximal Graphic Inputs on one Broadcast Graphic', () => {
@@ -655,9 +794,20 @@ describe('the cost of carrying the change', () => {
 		let state = createInitialBroadcastGraphicsLiveState();
 		for (let index = 0; index < 6; index++) {
 			const graphicId = `graphic-${index}`;
-			for (const key of keys)
-				state = reduce(state, { type: 'Set Input', payload: { graphicId, inputKey: key, value: 'v'.repeat(60) } }, context, 1_000);
-			state = reduce(state, { type: 'Take', payload: { graphicId } }, context, 1_000);
+			for (const key of keys) {
+				state = reduce(state, {
+					type: 'Set Input',
+					payload: {
+						graphicId,
+						inputKey: key,
+						value: 'v'.repeat(60),
+					},
+				}, context, 1_000);
+			}
+			state = reduce(state, {
+				type: 'Take',
+				payload: { graphicId },
+			}, context, 1_000);
 		}
 
 		return { state, keys, context };
@@ -675,7 +825,11 @@ describe('the cost of carrying the change', () => {
 		} as never);
 		const edit = payloadFor(state, reduce(state, {
 			type: 'Set Input',
-			payload: { graphicId: 'graphic-0', inputKey: keys[0]!, value: 'q'.repeat(60) },
+			payload: {
+				graphicId: 'graphic-0',
+				inputKey: keys[0]!,
+				value: 'q'.repeat(60),
+			},
 		}, context, 2_000), 'Set Input');
 		const off = payloadFor(state, reduce(state, {
 			type: 'Out',

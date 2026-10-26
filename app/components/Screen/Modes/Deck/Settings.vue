@@ -65,8 +65,11 @@ const broadcastDeckListOptions = computed(() => [
 const isBroadcastSource = computed(() => config.value.deckSource.type === 'broadcast');
 
 function selectBroadcastDeckList(listId: number | null) {
-	if (listId !== null)
-		updateConfig({ deckSource: { type: 'broadcast', broadcastDeckListId: listId } });
+	if (listId !== null) {
+		updateConfig({
+			deckSource: { type: 'broadcast', broadcastDeckListId: listId },
+		});
+	}
 }
 
 watch(() => config.value.deckSource.type, (source) => {
@@ -95,7 +98,9 @@ onMounted(async () => {
 		await Promise.allSettled([
 			playerStore.loadPlayersByEventId(props.eventId),
 			...(broadcastDeckListsEnabled.value
-				? [broadcastDeckListStore.loadCollection(props.eventId)]
+				? [
+						broadcastDeckListStore.loadCollection(props.eventId),
+					]
 				: []),
 		]);
 	}
@@ -112,7 +117,9 @@ const playerOptions = computed(() => {
 		...playersWithDecks.value.map((p) => {
 			const deckName = getMtgGameData(p.gameData).deckName;
 			return {
-				label: `${p.name}${deckName ? ` - ${deckName}` : ''}`,
+				label: `${p.name}${deckName
+					? ` - ${deckName}`
+					: ''}`,
 				value: p.id,
 			};
 		}),
@@ -158,7 +165,12 @@ const boardSections = computed<BoardSection[]>(() => {
 // The mode-config PATCH replaces a board block wholesale, so every knob change
 // writes the complete resolved block back.
 function updateBoardLayout(key: BoardKey, patch: Partial<DeckBoardLayoutConfig>) {
-	updateConfig({ [key]: { ...resolvedBoards.value[key], ...patch } });
+	updateConfig({
+		[key]: {
+			...resolvedBoards.value[key],
+			...patch,
+		},
+	});
 }
 
 // Empty-sideboard hint (#477/#478): the output renders nothing for an empty
@@ -170,7 +182,10 @@ const selectedPlayerId = computed(() => config.value.deckSource.type === 'player
 	? config.value.deckSource.playerId
 	: null);
 
-watch([selectedPlayerId, () => playerStore.players], async ([playerId]) => {
+watch([
+	selectedPlayerId,
+	() => playerStore.players,
+], async ([playerId]) => {
 	const flight = sideboardLookup.begin();
 	sideboardEmpty.value = false;
 	if (!playerId) {

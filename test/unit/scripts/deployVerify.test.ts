@@ -43,7 +43,12 @@ describe('deploy:verify against a local stand-in origin', () => {
 				env: { ...process.env, STREAM_KEEPR_DEPLOY_HEALTH_URL: healthUrl },
 				timeout: 20_000,
 			}, (error, stdout, stderr) => {
-				resolve({ code: error ? (error.code as number) ?? 1 : 0, output: `${stdout}${stderr}` });
+				resolve({
+					code: error
+						? (error.code as number) ?? 1
+						: 0,
+					output: `${stdout}${stderr}`,
+				});
 			});
 		});
 	}
@@ -52,7 +57,9 @@ describe('deploy:verify against a local stand-in origin', () => {
 		const requested: string[] = [];
 		const url = await origin((request, response) => {
 			requested.push(request.url ?? '');
-			json({ serverTime: Date.now() })(request, response);
+			json({
+				serverTime: Date.now(),
+			})(request, response);
 		});
 
 		const { code, output } = await runScript(`${url}/`);
@@ -67,8 +74,11 @@ describe('deploy:verify against a local stand-in origin', () => {
 		const requested: string[] = [];
 		const url = await origin((request, response) => {
 			requested.push(request.url ?? '');
-			if (request.url === '/login')
-				return json({ serverTime: Date.now() })(request, response);
+			if (request.url === '/login') {
+				return json({
+					serverTime: Date.now(),
+				})(request, response);
+			}
 			response.writeHead(302, { location: '/login' });
 			response.end();
 		});
@@ -111,11 +121,28 @@ describe('deploy:verify against a local stand-in origin', () => {
 	it.each([
 		['an empty object', {}],
 		['a JSON null', null],
-		['an array', [{ serverTime: 1_760_000_000_000 }]],
-		['a string serverTime', { serverTime: '1760000000000' }],
-		['a fractional serverTime', { serverTime: 1_760_000_000_000.5 }],
-		['a non-positive serverTime', { serverTime: 0 }],
-		['a JSON error envelope', { statusCode: 503, message: 'Service Unavailable' }],
+		[
+			'an array',
+			[
+				{ serverTime: 1_760_000_000_000 },
+			],
+		],
+		[
+			'a string serverTime',
+			{ serverTime: '1760000000000' },
+		],
+		[
+			'a fractional serverTime',
+			{ serverTime: 1_760_000_000_000.5 },
+		],
+		[
+			'a non-positive serverTime',
+			{ serverTime: 0 },
+		],
+		[
+			'a JSON error envelope',
+			{ statusCode: 503, message: 'Service Unavailable' },
+		],
 	])('fails a JSON body of the wrong shape: %s', async (_name, body) => {
 		const url = await origin(json(body));
 
@@ -127,7 +154,9 @@ describe('deploy:verify against a local stand-in origin', () => {
 	});
 
 	it.each([201, 203, 401, 404])('fails status %i even with a clock-reading body', async (status) => {
-		const url = await origin(json({ serverTime: Date.now() }, status));
+		const url = await origin(json({
+			serverTime: Date.now(),
+		}, status));
 
 		const { code, output } = await runScript(url);
 
@@ -136,7 +165,13 @@ describe('deploy:verify against a local stand-in origin', () => {
 		expect(output).not.toContain('liveness only');
 	});
 
-	it.each(['not a url', 'ftp://127.0.0.1', '127.0.0.1:3000', 'http://127.0.0.1:9/?preview=1', 'http://127.0.0.1:9/#top'])('refuses the target %j without probing anything', async (target) => {
+	it.each([
+		'not a url',
+		'ftp://127.0.0.1',
+		'127.0.0.1:3000',
+		'http://127.0.0.1:9/?preview=1',
+		'http://127.0.0.1:9/#top',
+	])('refuses the target %j without probing anything', async (target) => {
 		const { code, output } = await runScript(target);
 
 		expect(code).not.toBe(0);
@@ -172,7 +207,9 @@ describe('deploy:verify against a local stand-in origin', () => {
 					response.writeHead(503);
 					return response.end();
 				}
-				json({ serverTime: Date.now() })(request, response);
+				json({
+					serverTime: Date.now(),
+				})(request, response);
 			});
 
 			await expect(verifyDeployment({ baseUrl: url, ...fast })).resolves.toMatchObject({ url: `${url}/api/time` });
@@ -180,7 +217,9 @@ describe('deploy:verify against a local stand-in origin', () => {
 		});
 
 		it('fails an origin nothing is listening on', async () => {
-			const url = await origin(json({ serverTime: Date.now() }));
+			const url = await origin(json({
+				serverTime: Date.now(),
+			}));
 			await new Promise(resolve => servers.pop()!.close(resolve));
 
 			await expect(verifyDeployment({ baseUrl: url, ...fast })).rejects.toThrow(DeployVerifyFailure);

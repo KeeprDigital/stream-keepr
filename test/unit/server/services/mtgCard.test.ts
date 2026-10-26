@@ -48,7 +48,9 @@ describe('mtgCardService', () => {
 	describe('batchUpsert', () => {
 		it('deduplicates by lowercase name (two same-name inputs → one query)', async () => {
 			const card = createMockCard({ name: 'Lightning Bolt' });
-			mockDb.batch.mockResolvedValue([[card]]);
+			mockDb.batch.mockResolvedValue([
+				[card],
+			]);
 
 			await mtgCardService().batchUpsert([
 				{ name: 'Lightning Bolt', game: 'mtg' },
@@ -61,9 +63,13 @@ describe('mtgCardService', () => {
 
 		it('returned Map is keyed by lowercase name', async () => {
 			const card = createMockCard({ name: 'Lightning Bolt' });
-			mockDb.batch.mockResolvedValue([[card]]);
+			mockDb.batch.mockResolvedValue([
+				[card],
+			]);
 
-			const result = await mtgCardService().batchUpsert([{ name: 'Lightning Bolt', game: 'mtg' }]);
+			const result = await mtgCardService().batchUpsert([
+				{ name: 'Lightning Bolt', game: 'mtg' },
+			]);
 
 			expect(result.has('lightning bolt')).toBe(true);
 			expect(result.get('lightning bolt')).toEqual(card);
@@ -71,9 +77,13 @@ describe('mtgCardService', () => {
 
 		it('calls db.batch', async () => {
 			const card = createMockCard({ name: 'Shock' });
-			mockDb.batch.mockResolvedValue([[card]]);
+			mockDb.batch.mockResolvedValue([
+				[card],
+			]);
 
-			await mtgCardService().batchUpsert([{ name: 'Shock', game: 'mtg' }]);
+			await mtgCardService().batchUpsert([
+				{ name: 'Shock', game: 'mtg' },
+			]);
 
 			expect(mockDb.batch).toHaveBeenCalledOnce();
 		});

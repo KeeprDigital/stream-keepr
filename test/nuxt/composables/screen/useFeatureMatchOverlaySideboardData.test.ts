@@ -19,7 +19,15 @@ const mockReadDeck = vi.fn();
 const mockPlayerDecks = vi.fn(async (playerId: number, selection: { deckId?: number } = {}) => {
 	const player = serverPlayers.get(playerId) ?? rosterPlayer(playerId);
 	const deck = await mockReadDeck(playerId, selection);
-	return { player, decks: { decks: deck ? [deck] : [], selectedDeckId: deck?.id ?? null } };
+	return {
+		player,
+		decks: {
+			decks: deck
+				? [deck]
+				: [],
+			selectedDeckId: deck?.id ?? null,
+		},
+	};
 });
 const mockFetchScryfallCards = vi.fn();
 const mockBuildDeckListArrays = vi.fn();
@@ -39,7 +47,9 @@ mockNuxtImport('useReconnectResync', () => (resync: () => void, _eventId: unknow
 	reconnectResyncCallbacks.push(resync);
 	if (options.onFirstAttach)
 		firstAttachCallbacks.push(options.onFirstAttach);
-	return { disconnected: ref(false) };
+	return {
+		disconnected: ref(false),
+	};
 });
 mockNuxtImport('useScreenContext', () => () => ({
 	screen: ref(null),
@@ -59,7 +69,11 @@ function announcePlayerUpdated(player: Record<string, unknown>) {
 /** Another browser resolved an unresolved deck card; no Player revision moves (#648). */
 function announceCardsResolved(playerIds: number[]) {
 	const call = mockOnChannel.mock.calls.find(([, type]) => type === 'playerDeck:cardsResolved');
-	call?.[2]({ eventId: 1, deckIds: playerIds.map(id => id * 10), playerIds } as never);
+	call?.[2]({
+		eventId: 1,
+		deckIds: playerIds.map(id => id * 10),
+		playerIds,
+	} as never);
 }
 
 function deckListItem(playerSide: 'player1' | 'player2', id = `deck-${playerSide}`) {
@@ -72,7 +86,9 @@ function groupItem(children: Array<Record<string, unknown>>) {
 
 function overlayConfig(items: Array<Record<string, unknown>>): FeatureMatchOverlayModeConfig {
 	return {
-		layout: { composition: { id: 'composition', name: 'Feature Match Layout', items } },
+		layout: {
+			composition: { id: 'composition', name: 'Feature Match Layout', items },
+		},
 	} as unknown as FeatureMatchOverlayModeConfig;
 }
 
@@ -121,7 +137,13 @@ function enrichedCard(name: string, imageUrl: string | null, overrides: Record<s
 		compartment: 'sideboard',
 		cardType: 'Instant',
 		scryfallId: `scryfall-${name}`,
-		mtgCard: imageUrl === null ? null : { imageData: { front: { normal: imageUrl } } },
+		mtgCard: imageUrl === null
+			? null
+			: {
+					imageData: {
+						front: { normal: imageUrl },
+					},
+				},
 		...overrides,
 	};
 }
@@ -149,8 +171,13 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 		serverPlayers.clear();
 		config.value = overlayConfig([]);
 		match.value = null;
-		mockReadDeck.mockResolvedValue(deckResponse([sideboardCard('Duress')]));
-		mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: false });
+		mockReadDeck.mockResolvedValue(deckResponse([
+			sideboardCard('Duress'),
+		]));
+		mockFetchScryfallCards.mockResolvedValue({
+			cards: new Map(),
+			degraded: false,
+		});
 		mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
 	});
 
@@ -180,8 +207,13 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 						sideboardCard('Counterspell', { compartment: 'mainboard' }),
 						sideboardCard('Obscure Card'),
 					])
-				: deckResponse([sideboardCard('Anything')]));
-		mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: false });
+				: deckResponse([
+						sideboardCard('Anything'),
+					]));
+		mockFetchScryfallCards.mockResolvedValue({
+			cards: new Map(),
+			degraded: false,
+		});
 		mockBuildDeckListArrays.mockReturnValue({
 			mainboard: [],
 			sideboard: [
@@ -190,7 +222,9 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 				enrichedCard('Obscure Card', null),
 			],
 		});
-		config.value = overlayConfig([deckListItem('player1')]);
+		config.value = overlayConfig([
+			deckListItem('player1'),
+		]);
 		match.value = slotMatch();
 
 		const { sideboards } = mountSideboardData();
@@ -216,10 +250,15 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 	it('reports an empty sideboard as [] and an unresolved deck as null, without touching Scryfall', async () => {
 		mockReadDeck.mockImplementation(async (playerId: number) =>
 			playerId === 5
-				? deckResponse([sideboardCard('Counterspell', { compartment: 'mainboard' })])
+				? deckResponse([
+						sideboardCard('Counterspell', { compartment: 'mainboard' }),
+					])
 				// Player 6 has no deck the read can answer.
 				: null);
-		config.value = overlayConfig([deckListItem('player1'), deckListItem('player2')]);
+		config.value = overlayConfig([
+			deckListItem('player1'),
+			deckListItem('player2'),
+		]);
 		match.value = slotMatch();
 
 		const { sideboards } = mountSideboardData();
@@ -230,7 +269,11 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 	});
 
 	it('finds a deck-list item authored inside a Graphic Group', async () => {
-		config.value = overlayConfig([groupItem([deckListItem('player2')])]);
+		config.value = overlayConfig([
+			groupItem([
+				deckListItem('player2'),
+			]),
+		]);
 		match.value = slotMatch();
 
 		mountSideboardData();
@@ -241,14 +284,22 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 	});
 
 	it('pins the session snapshot"s deckId first, matched by player across a swap', async () => {
-		config.value = overlayConfig([deckListItem('player1')]);
+		config.value = overlayConfig([
+			deckListItem('player1'),
+		]);
 		match.value = slotMatch({
 			activeSession: {
 				sourceSnapshot: {
 					// The session was swapped: the Slot's player 5 sits on the
 					// snapshot's player2 side. The deck pin belongs to the player.
-					player1: { playerId: 6, data: { deckId: 40 } },
-					player2: { playerId: 5, data: { deckId: 30 } },
+					player1: {
+						playerId: 6,
+						data: { deckId: 40 },
+					},
+					player2: {
+						playerId: 5,
+						data: { deckId: 30 },
+					},
 				},
 			},
 		});
@@ -260,27 +311,48 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 	});
 
 	it('falls back to the collection"s own ladder when the pinned deck is gone', async () => {
-		config.value = overlayConfig([deckListItem('player1')]);
+		config.value = overlayConfig([
+			deckListItem('player1'),
+		]);
 		match.value = slotMatch({
-			activeSession: { sourceSnapshot: { player1: { playerId: 5, data: { deckId: 999 } }, player2: { playerId: null, data: null } } },
+			activeSession: {
+				sourceSnapshot: {
+					player1: {
+						playerId: 5,
+						data: { deckId: 999 },
+					},
+					player2: { playerId: null, data: null },
+				},
+			},
 		});
 		// The collection no longer holds deck 999; it answers its own selection.
-		mockReadDeck.mockResolvedValue(deckResponse([sideboardCard('Duress')], { id: 10 }));
-		mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [enrichedCard('Duress', 'https://img.test/duress.jpg')] });
+		mockReadDeck.mockResolvedValue(deckResponse([
+			sideboardCard('Duress'),
+		], { id: 10 }));
+		mockBuildDeckListArrays.mockReturnValue({
+			mainboard: [],
+			sideboard: [
+				enrichedCard('Duress', 'https://img.test/duress.jpg'),
+			],
+		});
 
 		const { sideboards } = mountSideboardData();
 		await flushPromises();
 
 		expect(mockPlayerDecks).toHaveBeenCalledTimes(1);
 		expect(mockPlayerDecks).toHaveBeenCalledWith(5, { deckId: 999 });
-		expect(sideboards.value.player1).toEqual([{ name: 'Duress', quantity: 2, imageUrl: 'https://img.test/duress.jpg' }]);
+		expect(sideboards.value.player1).toEqual([
+			{ name: 'Duress', quantity: 2, imageUrl: 'https://img.test/duress.jpg' },
+		]);
 	});
 
 	it('re-fetches when a player:updated announces a revision other than the one on screen', async () => {
 		// Live-follow: the announcement rolls `updatedAt` past the displayed
 		// stamp, and the refreshed deck flows through the ordinary load.
 		serverPlayers.set(5, rosterPlayer(5, '2026-08-21T00:00:00.000Z'));
-		config.value = overlayConfig([deckListItem('player1')]);
+		config.value = overlayConfig([
+			deckListItem('player1'),
+		]);
 		match.value = slotMatch();
 
 		mountSideboardData();
@@ -301,14 +373,20 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 
 	it('shows an edit announced while the first read is in flight, which that read missed', async () => {
 		serverPlayers.set(5, rosterPlayer(5, '2026-08-21T00:00:00.000Z'));
-		config.value = overlayConfig([deckListItem('player1')]);
+		config.value = overlayConfig([
+			deckListItem('player1'),
+		]);
 		match.value = slotMatch();
 		// The first read is served before the edit and delivered after it.
 		let releaseFirstRead!: () => void;
 		mockReadDeck.mockImplementationOnce(() => new Promise((resolve) => {
-			releaseFirstRead = () => resolve(deckResponse([sideboardCard('Duress')]));
+			releaseFirstRead = () => resolve(deckResponse([
+				sideboardCard('Duress'),
+			]));
 		}));
-		mockReadDeck.mockResolvedValue(deckResponse([sideboardCard('Negate')]));
+		mockReadDeck.mockResolvedValue(deckResponse([
+			sideboardCard('Negate'),
+		]));
 		mockBuildDeckListArrays.mockImplementation((cards: Array<{ name: string }>) => ({
 			mainboard: [],
 			sideboard: cards.map(card => enrichedCard(card.name, `https://img.test/${card.name}.jpg`)),
@@ -322,7 +400,9 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 		await flushPromises();
 
 		expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
-		expect(sideboards.value.player1).toEqual([{ name: 'Negate', quantity: 2, imageUrl: 'https://img.test/Negate.jpg' }]);
+		expect(sideboards.value.player1).toEqual([
+			{ name: 'Negate', quantity: 2, imageUrl: 'https://img.test/Negate.jpg' },
+		]);
 	});
 
 	describe('a resolved deck card, which moves no Player revision (#648)', () => {
@@ -334,13 +414,19 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 		});
 
 		it('re-reads a side whose Player\'s Deck Lists were rewritten, and not for another Player', async () => {
-			config.value = overlayConfig([deckListItem('player1')]);
+			config.value = overlayConfig([
+				deckListItem('player1'),
+			]);
 			match.value = slotMatch();
 			const { sideboards } = mountSideboardData();
 			await flushPromises();
-			expect(sideboards.value.player1).toEqual([{ name: 'Duress', quantity: 2, imageUrl: 'https://img.test/Duress.jpg' }]);
+			expect(sideboards.value.player1).toEqual([
+				{ name: 'Duress', quantity: 2, imageUrl: 'https://img.test/Duress.jpg' },
+			]);
 
-			mockReadDeck.mockResolvedValue(deckResponse([sideboardCard('Negate')]));
+			mockReadDeck.mockResolvedValue(deckResponse([
+				sideboardCard('Negate'),
+			]));
 			announceCardsResolved([9]);
 			await flushPromises();
 			expect(mockPlayerDecks).toHaveBeenCalledTimes(1);
@@ -349,33 +435,57 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 			await flushPromises();
 
 			expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
-			expect(sideboards.value.player1).toEqual([{ name: 'Negate', quantity: 2, imageUrl: 'https://img.test/Negate.jpg' }]);
+			expect(sideboards.value.player1).toEqual([
+				{ name: 'Negate', quantity: 2, imageUrl: 'https://img.test/Negate.jpg' },
+			]);
 		});
 
 		it('swaps in the rewritten sideboard even while its card data is still degraded', async () => {
-			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
-			config.value = overlayConfig([deckListItem('player1')]);
+			mockFetchScryfallCards.mockResolvedValue({
+				cards: new Map(),
+				degraded: true,
+			});
+			config.value = overlayConfig([
+				deckListItem('player1'),
+			]);
 			match.value = slotMatch();
 			const { sideboards } = mountSideboardData();
 			await flushPromises();
 
-			mockReadDeck.mockResolvedValue(deckResponse([sideboardCard('Negate')]));
+			mockReadDeck.mockResolvedValue(deckResponse([
+				sideboardCard('Negate'),
+			]));
 			announceCardsResolved([5]);
 			await flushPromises();
 
-			expect(sideboards.value.player1).toEqual([{ name: 'Negate', quantity: 2, imageUrl: 'https://img.test/Negate.jpg' }]);
+			expect(sideboards.value.player1).toEqual([
+				{ name: 'Negate', quantity: 2, imageUrl: 'https://img.test/Negate.jpg' },
+			]);
 		});
 	});
 
 	it('re-fetches degraded card data on the shared cadence and reports health both ways', async () => {
 		vi.useFakeTimers();
 		try {
-			config.value = overlayConfig([deckListItem('player1')]);
+			config.value = overlayConfig([
+				deckListItem('player1'),
+			]);
 			match.value = slotMatch();
 			mockFetchScryfallCards
-				.mockResolvedValueOnce({ cards: new Map(), degraded: true })
-				.mockResolvedValue({ cards: new Map(), degraded: false });
-			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [enrichedCard('Duress', null)] });
+				.mockResolvedValueOnce({
+					cards: new Map(),
+					degraded: true,
+				})
+				.mockResolvedValue({
+					cards: new Map(),
+					degraded: false,
+				});
+			mockBuildDeckListArrays.mockReturnValue({
+				mainboard: [],
+				sideboard: [
+					enrichedCard('Duress', null),
+				],
+			});
 
 			const { cardDataDegraded } = mountSideboardData();
 			await vi.advanceTimersByTimeAsync(0);
@@ -403,18 +513,34 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 	it('keeps the recovery cadence alive when a re-fetch itself fails mid-outage', async () => {
 		vi.useFakeTimers();
 		try {
-			config.value = overlayConfig([deckListItem('player1')]);
+			config.value = overlayConfig([
+				deckListItem('player1'),
+			]);
 			match.value = slotMatch();
 			mockFetchScryfallCards
 				.mockRejectedValueOnce(new Error('network down'))
-				.mockResolvedValue({ cards: new Map(), degraded: false });
-			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [enrichedCard('Duress', null)] });
+				.mockResolvedValue({
+					cards: new Map(),
+					degraded: false,
+				});
+			mockBuildDeckListArrays.mockReturnValue({
+				mainboard: [],
+				sideboard: [
+					enrichedCard('Duress', null),
+				],
+			});
 			// The first load's Scryfall batch reports degraded; nothing throws there.
 			mockFetchScryfallCards.mockReset();
 			mockFetchScryfallCards
-				.mockResolvedValueOnce({ cards: new Map(), degraded: true })
+				.mockResolvedValueOnce({
+					cards: new Map(),
+					degraded: true,
+				})
 				.mockRejectedValueOnce(new Error('network down'))
-				.mockResolvedValue({ cards: new Map(), degraded: false });
+				.mockResolvedValue({
+					cards: new Map(),
+					degraded: false,
+				});
 
 			const { cardDataDegraded } = mountSideboardData();
 			await vi.advanceTimersByTimeAsync(0);
@@ -436,10 +562,20 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 	it('settles the degraded lifecycle when the last deck-list item is un-authored', async () => {
 		vi.useFakeTimers();
 		try {
-			config.value = overlayConfig([deckListItem('player1')]);
+			config.value = overlayConfig([
+				deckListItem('player1'),
+			]);
 			match.value = slotMatch();
-			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
-			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [enrichedCard('Duress', null)] });
+			mockFetchScryfallCards.mockResolvedValue({
+				cards: new Map(),
+				degraded: true,
+			});
+			mockBuildDeckListArrays.mockReturnValue({
+				mainboard: [],
+				sideboard: [
+					enrichedCard('Duress', null),
+				],
+			});
 
 			const { sideboards, cardDataDegraded } = mountSideboardData();
 			await vi.advanceTimersByTimeAsync(0);
@@ -465,7 +601,9 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 	it('re-reads its sides on reconnect while a side is authored, and only then', async () => {
 		// Nothing arrives late after a suspended connection (#307): the missed
 		// `player:updated` is gone, so coming back re-reads through the Screen.
-		config.value = overlayConfig([deckListItem('player1')]);
+		config.value = overlayConfig([
+			deckListItem('player1'),
+		]);
 		match.value = slotMatch();
 
 		mountSideboardData();
@@ -487,15 +625,24 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 	});
 
 	it('shows an edit published between its first read and its Event channel\'s first attach (#733)', async () => {
-		config.value = overlayConfig([deckListItem('player1')]);
+		config.value = overlayConfig([
+			deckListItem('player1'),
+		]);
 		match.value = slotMatch();
 		const { sideboards } = mountSideboardData();
 		await flushPromises();
 		expect(firstAttachCallbacks).toHaveLength(1);
 
 		// Published while nothing listened on the channel, so never heard.
-		mockReadDeck.mockResolvedValue(deckResponse([sideboardCard('Negate')]));
-		mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [enrichedCard('Negate', null)] });
+		mockReadDeck.mockResolvedValue(deckResponse([
+			sideboardCard('Negate'),
+		]));
+		mockBuildDeckListArrays.mockReturnValue({
+			mainboard: [],
+			sideboard: [
+				enrichedCard('Negate', null),
+			],
+		});
 		firstAttachCallbacks[0]!();
 		await flushPromises();
 
@@ -504,10 +651,20 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 	});
 
 	it('clears a standing degraded report on teardown', async () => {
-		config.value = overlayConfig([deckListItem('player1')]);
+		config.value = overlayConfig([
+			deckListItem('player1'),
+		]);
 		match.value = slotMatch();
-		mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
-		mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [enrichedCard('Duress', null)] });
+		mockFetchScryfallCards.mockResolvedValue({
+			cards: new Map(),
+			degraded: true,
+		});
+		mockBuildDeckListArrays.mockReturnValue({
+			mainboard: [],
+			sideboard: [
+				enrichedCard('Duress', null),
+			],
+		});
 
 		mountSideboardData();
 		await flushPromises();

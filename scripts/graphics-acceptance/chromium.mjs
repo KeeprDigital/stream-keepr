@@ -48,7 +48,9 @@ export function verdictFailureCode(verdict) {
 		return 'browser-driver-unavailable';
 	if (verdict.outcome === 'timed-out')
 		return 'browser-acceptance-timed-out';
-	return PUBLISHED_CODES.has(verdict.code) ? verdict.code : 'browser-acceptance-failed';
+	return PUBLISHED_CODES.has(verdict.code)
+		? verdict.code
+		: 'browser-acceptance-failed';
 }
 
 export function chromiumCandidates() {
@@ -91,7 +93,9 @@ export async function serveAcceptanceRoutes(routes) {
 	return {
 		origin: `http://127.0.0.1:${address.port}`,
 		close: () => new Promise((resolve, reject) =>
-			server.close(error => error ? reject(error) : resolve())),
+			server.close(error => error
+				? reject(error)
+				: resolve())),
 	};
 }
 
@@ -117,11 +121,16 @@ async function connect(webSocketUrl) {
 	});
 	return {
 		close: () => socket.close(),
-		on: (method, listener) => listeners.set(method, [...listeners.get(method) ?? [], listener]),
+		on: (method, listener) => listeners.set(method, [
+			...listeners.get(method) ?? [],
+			listener,
+		]),
 		command: (method, params = {}) => new Promise((resolve, reject) => {
 			const id = ++nextId;
 			pending.set(id, payload =>
-				payload.error ? reject(new Error(payload.error.message)) : resolve(payload.result));
+				payload.error
+					? reject(new Error(payload.error.message))
+					: resolve(payload.result));
 			socket.send(JSON.stringify({ id, method, params }));
 		}),
 	};
@@ -156,7 +165,10 @@ export function collectPageDiagnostics(page) {
 		keep(kept.uncaught, exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown');
 	});
 	return {
-		read: () => ({ console: [...kept.console], uncaught: [...kept.uncaught] }),
+		read: () => ({
+			console: [...kept.console],
+			uncaught: [...kept.uncaught],
+		}),
 	};
 }
 
@@ -231,7 +243,12 @@ async function terminate(browser) {
 async function removeProfile(profile) {
 	// Chromium keeps writing its profile until it is gone, so removing the
 	// directory before it exits races with its own shutdown.
-	await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+	await rm(profile, {
+		recursive: true,
+		force: true,
+		maxRetries: 5,
+		retryDelay: 100,
+	})
 		.catch(() => undefined);
 }
 
@@ -377,7 +394,9 @@ export async function launchChromium(candidate, extraArgs, {
 		'--remote-allow-origins=*',
 		`--user-data-dir=${profile}`,
 		...extraArgs,
-	], { stdio: ['ignore', 'ignore', 'pipe'] });
+	], {
+		stdio: ['ignore', 'ignore', 'pipe'],
+	});
 	const browser = { child, profile, terminateGraceMs };
 	if (child.pid !== undefined)
 		track(browser);
@@ -418,7 +437,9 @@ export async function launchChromium(candidate, extraArgs, {
 			// nothing is left to announce it.
 			child.once('exit', (code, signalName) => {
 				clearTimeout(timeout);
-				const status = signalName ? `killed by ${signalName}` : `exited with code ${code}`;
+				const status = signalName
+					? `killed by ${signalName}`
+					: `exited with code ${code}`;
 				reject(new StartupFailure(
 					`Chromium ${status} before announcing its DevTools endpoint.`,
 					`${status} after ${Date.now() - startedAt} ms`,
@@ -435,13 +456,22 @@ export async function launchChromium(candidate, extraArgs, {
 			throw error;
 		}
 		// `exit` can come before the last of stderr has been read.
-		await Promise.race([stderrEnded, new Promise(resolve => setTimeout(resolve, STDERR_DRAIN_MS))]);
+		await Promise.race([
+			stderrEnded,
+			new Promise(resolve => setTimeout(resolve, STDERR_DRAIN_MS)),
+		]);
 		const activePort = await readFile(join(profile, 'DevToolsActivePort'), 'utf8').then(
 			text => `DevToolsActivePort: ${text.trim().split('\n').join(' ')}`,
 			() => 'no DevToolsActivePort',
 		);
 		await removeProfile(profile);
-		throw new Error(startupReport(error, { candidate, pid: child.pid, stopped, activePort, errorOutput }));
+		throw new Error(startupReport(error, {
+			candidate,
+			pid: child.pid,
+			stopped,
+			activePort,
+			errorOutput,
+		}));
 	}
 	if (!endpoint) {
 		await terminate(browser);
@@ -566,7 +596,9 @@ export function browserCookie(url, pair) {
  * @param {readonly string[]} [cookies]
  */
 export function initialTarget(url, cookies) {
-	return cookies !== undefined && cookies.length > 0 ? 'about:blank' : url;
+	return cookies !== undefined && cookies.length > 0
+		? 'about:blank'
+		: url;
 }
 
 /**
@@ -633,8 +665,14 @@ export async function observeChromiumVerdict({
 				returnByValue: true,
 			});
 			const { dataset = {}, detail } = JSON.parse(evaluated.result?.value ?? '{}');
-			if (dataset.result === 'passed' || dataset.result === 'failed')
-				return { outcome: dataset.result, code: dataset.code, detail, dataset };
+			if (dataset.result === 'passed' || dataset.result === 'failed') {
+				return {
+					outcome: dataset.result,
+					code: dataset.code,
+					detail,
+					dataset,
+				};
+			}
 			await new Promise(resolve => setTimeout(resolve, 100));
 		}
 		return { outcome: 'timed-out' };
@@ -673,11 +711,19 @@ export async function observeChromiumValue({
 					diagnostics: diagnostics.read(),
 				};
 			}
-			if (Object.hasOwn(evaluated.result ?? {}, 'value'))
-				return { outcome: 'passed', value: evaluated.result.value, diagnostics: diagnostics.read() };
+			if (Object.hasOwn(evaluated.result ?? {}, 'value')) {
+				return {
+					outcome: 'passed',
+					value: evaluated.result.value,
+					diagnostics: diagnostics.read(),
+				};
+			}
 			await new Promise(resolve => setTimeout(resolve, 100));
 		}
-		return { outcome: 'timed-out', diagnostics: diagnostics.read() };
+		return {
+			outcome: 'timed-out',
+			diagnostics: diagnostics.read(),
+		};
 	});
 }
 

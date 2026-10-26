@@ -11,8 +11,16 @@ vi.mock('../../../scripts/graphics-acceptance/harness.mjs', () => ({
  */
 const SCRIPTS: ReadonlyArray<readonly [script: string, harness: string, args?: string[]]> = [
 	['run-animation-effect-rendering-acceptance', 'animation-effect-v1'],
-	['run-browser-page-acceptance', 'silent-video-v1', ['silent-video']],
-	['run-browser-page-acceptance', 'still-image-v1', ['still-images']],
+	[
+		'run-browser-page-acceptance',
+		'silent-video-v1',
+		['silent-video'],
+	],
+	[
+		'run-browser-page-acceptance',
+		'still-image-v1',
+		['still-images'],
+	],
 	['run-font-browser-acceptance', 'static-font-v1'],
 	['run-graphics-delivery-acceptance', 'graphics-delivery-v1'],
 	['run-graphics-package-acceptance', 'graphics-package-v1'],

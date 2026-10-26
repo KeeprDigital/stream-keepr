@@ -10,29 +10,33 @@ function renderModel(overrides: Partial<Parameters<typeof resolveGraphicsComposi
 		output: 'overlay',
 		canvasWidth: 1920,
 		canvasHeight: 1080,
-		graphics: [{
-			id: 'lower-third',
-			name: 'Lower third',
-			items: [{
-				type: 'shape',
-				id: 'plate',
-				label: 'Plate',
-				visible: true,
-				anchor: 'top-left',
-				x: 0,
-				y: 0,
-				width: 100,
-				height: 100,
-				geometry: {
-					topLeft: { treatment: 'square', size: 0 },
-					topRight: { treatment: 'square', size: 0 },
-					bottomRight: { treatment: 'square', size: 0 },
-					bottomLeft: { treatment: 'square', size: 0 },
-					leftSlant: 0,
-					rightSlant: 0,
-				},
-			}],
-		}],
+		graphics: [
+			{
+				id: 'lower-third',
+				name: 'Lower third',
+				items: [
+					{
+						type: 'shape',
+						id: 'plate',
+						label: 'Plate',
+						visible: true,
+						anchor: 'top-left',
+						x: 0,
+						y: 0,
+						width: 100,
+						height: 100,
+						geometry: {
+							topLeft: { treatment: 'square', size: 0 },
+							topRight: { treatment: 'square', size: 0 },
+							bottomRight: { treatment: 'square', size: 0 },
+							bottomLeft: { treatment: 'square', size: 0 },
+							leftSlant: 0,
+							rightSlant: 0,
+						},
+					},
+				],
+			},
+		],
 		visibleGraphicIds: ['lower-third'],
 		...overrides,
 	});
@@ -42,7 +46,12 @@ async function mountCanvas(slots: Record<string, string> = {}) {
 	const componentPath = '../../../../../app/components/Graphics/Compositor/Canvas.vue';
 	const { default: Canvas } = await import(componentPath);
 
-	return mount(Canvas, { props: { render: renderModel() }, slots });
+	return mount(Canvas, {
+		props: {
+			render: renderModel(),
+		},
+		slots,
+	});
 }
 
 describe('graphics compositor canvas backdrop', () => {

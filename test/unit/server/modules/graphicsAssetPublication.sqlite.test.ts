@@ -250,7 +250,10 @@ describe('an ordinary ingestion publication that holds its claim', () => {
 		// committed row can say the terminal transition actually landed.
 		await expect(catalogue.getIngestionOperation(operation.id, operation.initiatedBy))
 			.resolves
-			.toMatchObject({ stage: 'completed', result: { outcome: 'reused' } });
+			.toMatchObject({
+				stage: 'completed',
+				result: { outcome: 'reused' },
+			});
 	});
 
 	it('spends the write candidates of a replacement no-op that holds its claim', async () => {
@@ -274,7 +277,10 @@ describe('an ordinary ingestion publication that holds its claim', () => {
 		// Same reason as the reuse arm above: the return value is built, not read.
 		await expect(catalogue.getIngestionOperation(operation.id, operation.initiatedBy))
 			.resolves
-			.toMatchObject({ stage: 'completed', result: { outcome: 'replacement-noop' } });
+			.toMatchObject({
+				stage: 'completed',
+				result: { outcome: 'replacement-noop' },
+			});
 	});
 
 	/**
@@ -312,7 +318,9 @@ describe('an ordinary ingestion publication that holds its claim', () => {
 		expect(associations.rows.map(row => ({
 			assetId: row.asset_id,
 			eventId: Number(row.event_id),
-		}))).toEqual([{ assetId: 'event-reused-asset', eventId: DEFAULT_EVENT_ID }]);
+		}))).toEqual([
+			{ assetId: 'event-reused-asset', eventId: DEFAULT_EVENT_ID },
+		]);
 		expect(await countOf('graphics_canonical_write_candidates')).toBe(0);
 	});
 });
@@ -326,7 +334,10 @@ describe('an ordinary ingestion publication that lost its claim', () => {
 		// Another attempt moved the operation on, so this one is publishing
 		// against a claim it no longer holds.
 		await expect(catalogue.publishGraphicAsset({
-			operation: { ...operation, updatedAt: new Date(9_000).toISOString() },
+			operation: {
+				...operation,
+				updatedAt: new Date(9_000).toISOString(),
+			},
 			report: acceptedReport(SOURCE_DIGEST),
 			assetId: graphicAssetId('lost-claim-asset'),
 			revisionId: graphicAssetRevisionId('lost-claim-revision'),
@@ -372,7 +383,10 @@ describe('an ordinary ingestion publication that lost its claim', () => {
 		]);
 
 		await expect(catalogue.publishGraphicAssetReplacement({
-			operation: { ...replacement, updatedAt: new Date(9_000).toISOString() },
+			operation: {
+				...replacement,
+				updatedAt: new Date(9_000).toISOString(),
+			},
 			targetAssetId: target,
 			report: acceptedReport(REPLACEMENT_DIGEST),
 			assetId: target,
@@ -407,7 +421,11 @@ describe('an ordinary ingestion publication that lost its claim', () => {
 
 		// The attempt that won the race completes the operation first.
 		await catalogue.updateIngestionOperation(
-			{ ...operation, stage: 'completed', updatedAt: new Date(5_000).toISOString() },
+			{
+				...operation,
+				stage: 'completed',
+				updatedAt: new Date(5_000).toISOString(),
+			},
 			operation.updatedAt,
 		);
 
@@ -434,7 +452,10 @@ describe('an ordinary ingestion publication that lost its claim', () => {
 		// The snapshot this attempt holds is older than the row, which is what an
 		// attempt resuming after another one moved the operation on is holding.
 		await expect(catalogue.completeGraphicAssetReplacementNoop({
-			operation: { ...operation, updatedAt: new Date(9_000).toISOString() },
+			operation: {
+				...operation,
+				updatedAt: new Date(9_000).toISOString(),
+			},
 			current,
 			completedAt: new Date(4_000).toISOString(),
 		})).rejects.toThrow(/lost its claim/i);
@@ -527,7 +548,10 @@ describe('an ordinary ingestion publication that lost its claim', () => {
 		await arrangeReclaimableState(catalogue, operation, [SOURCE_DIGEST, THUMBNAIL_DIGEST]);
 
 		await expect(catalogue.reuseGraphicAsset({
-			operation: { ...operation, updatedAt: new Date(9_000).toISOString() },
+			operation: {
+				...operation,
+				updatedAt: new Date(9_000).toISOString(),
+			},
 			reusable: reused,
 			publishedAt: new Date(4_000).toISOString(),
 		})).rejects.toThrow(/lost its claim/i);
@@ -549,7 +573,10 @@ describe('reserving canonical capacity for an ordinary publication', () => {
 		// The library has every byte of its quota free, so capacity cannot be
 		// what refuses this: the only thing left is the claim.
 		const reservation = await catalogue.reserveGraphicAssetPublication({
-			operation: { ...operation, updatedAt: new Date(9_000).toISOString() },
+			operation: {
+				...operation,
+				updatedAt: new Date(9_000).toISOString(),
+			},
 			sourceDigest: SOURCE_DIGEST,
 			sourceByteLength: 70,
 			thumbnailDigest: THUMBNAIL_DIGEST,

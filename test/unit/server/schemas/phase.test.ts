@@ -37,7 +37,10 @@ describe('createPhaseSchema', () => {
 	});
 
 	it('accepts name of exactly 200 characters', () => {
-		const result = createPhaseSchema.safeParse({ ...validInput, name: 'a'.repeat(200) });
+		const result = createPhaseSchema.safeParse({
+			...validInput,
+			name: 'a'.repeat(200),
+		});
 		expect(result.success).toBe(true);
 	});
 
@@ -86,7 +89,9 @@ describe('updatePhaseSchema', () => {
 	// Same constraints as create
 
 	it('accepts name of exactly 200 characters', () => {
-		const result = updatePhaseSchema.safeParse({ name: 'a'.repeat(200) });
+		const result = updatePhaseSchema.safeParse({
+			name: 'a'.repeat(200),
+		});
 		expect(result.success).toBe(true);
 	});
 

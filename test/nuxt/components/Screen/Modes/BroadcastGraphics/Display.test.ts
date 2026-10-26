@@ -68,7 +68,10 @@ const bar: ShapeGraphicItemConfig = {
 	width: 900,
 	height: 120,
 	geometry: squareShapeGeometry(),
-	surfaceStyle: { fill: { type: 'solid', color: '#0077a3' }, fillOpacity: 1 },
+	surfaceStyle: {
+		fill: { type: 'solid', color: '#0077a3' },
+		fillOpacity: 1,
+	},
 };
 
 /**
@@ -108,7 +111,10 @@ const mockPlayout = ref<BroadcastGraphicsLiveState['playout'] | null>(null);
 function mockState(): BroadcastGraphicsLiveState {
 	return {
 		playout: mockPlayout.value ?? Object.fromEntries(
-			mockOnAirGraphicIds.value.map(id => [id, { onAir: true, effectiveStartedAt: 0, cut: false }]),
+			mockOnAirGraphicIds.value.map(id => [
+				id,
+				{ onAir: true, effectiveStartedAt: 0, cut: false },
+			]),
 		),
 		inputs: mockAcceptedInputs.value.inputs,
 		sources: mockAcceptedInputs.value.sources,
@@ -147,7 +153,12 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	// Every selector delegates to the real shared module rather than reimplementing it,
 	// so these tests cannot pass on behaviour the Screen Output does not actually use.
 	get sessions() {
-		return new Map([[mockScreen.value?.id ?? 0, { id: 55, sequence: mockSessionSequence.value }]]);
+		return new Map([
+			[
+				mockScreen.value?.id ?? 0,
+				{ id: 55, sequence: mockSessionSequence.value },
+			],
+		]);
 	},
 	serverNow: () => mockServerNow.value,
 	onAirGraphicIds: (
@@ -175,7 +186,11 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 			);
 			// Empty means settled, and the real store leaves a settled graphic out of the
 			// map entirely so "is anything moving?" stays one question about the map's size.
-			return projection.length > 0 ? [[graphic.id, projection]] : [];
+			return projection.length > 0
+				? [
+						[graphic.id, projection],
+					]
+				: [];
 		})),
 	renderedInputValues: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) => {
 		const current: Record<string, Record<string, unknown>> = {};
@@ -229,9 +244,17 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 				mockState().socialProfileProjections?.[graphic.id] ?? {},
 			).flatMap(([projectionKey, projection]) => {
 				const current = projection.acceptedProfiles.find(profile => profile.network === projection.currentNetwork);
-				return current ? [[projectionKey, current]] : [];
+				return current
+					? [
+							[projectionKey, current],
+						]
+					: [];
 			}));
-			return Object.keys(values).length > 0 ? [[graphic.id, values]] : [];
+			return Object.keys(values).length > 0
+				? [
+						[graphic.id, values],
+					]
+				: [];
 		})),
 	socialProfilePresentations: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) =>
 		Object.fromEntries(graphics.flatMap((graphic) => {
@@ -240,13 +263,22 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 			const presentations = Object.fromEntries(Object.entries(projections).flatMap(([key, projection]) => {
 				const declaration = declarations.get(key);
 				return declaration
-					? [[key, projectSocialProfilePresentation(projection, declaration, {
-							onAir: mockState().playout[graphic.id]?.onAir === true,
-							now: now ?? mockServerNow.value,
-						})]]
+					? [
+							[
+								key,
+								projectSocialProfilePresentation(projection, declaration, {
+									onAir: mockState().playout[graphic.id]?.onAir === true,
+									now: now ?? mockServerNow.value,
+								}),
+							],
+						]
 					: [];
 			}));
-			return Object.keys(presentations).length > 0 ? [[graphic.id, presentations]] : [];
+			return Object.keys(presentations).length > 0
+				? [
+						[graphic.id, presentations],
+					]
+				: [];
 		})),
 	playoutState: (
 		_screenId: number,
@@ -256,7 +288,9 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	) => broadcastGraphicPlayoutState(
 		mockState(),
 		graphicId,
-		graphic ? broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value) : undefined,
+		graphic
+			? broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value)
+			: undefined,
 	),
 	loadSession: (eventId: number, screenId: number) => mockLoadSession.value(eventId, screenId),
 	readSessionAsScreenOutput: (screenId: number, read: () => Promise<unknown>) => {
@@ -273,26 +307,33 @@ const lowerThird: BroadcastGraphicConfig = {
 const socialGraphic: BroadcastGraphicConfig = {
 	id: 'social',
 	name: 'Social',
-	items: [{
-		type: 'social-network-icon',
-		id: 'social-icon',
-		label: 'Instagram',
-		visible: true,
-		anchor: 'top-left',
-		x: 100,
-		y: 100,
-		width: 120,
-		height: 120,
-		network: 'instagram',
-		color: '#e1306c',
-		opacity: 0.72,
-	}],
+	items: [
+		{
+			type: 'social-network-icon',
+			id: 'social-icon',
+			label: 'Instagram',
+			visible: true,
+			anchor: 'top-left',
+			x: 100,
+			y: 100,
+			width: 120,
+			height: 120,
+			network: 'instagram',
+			color: '#e1306c',
+			opacity: 0.72,
+		},
+	],
 };
 
 function projectedSocialGraphic(): BroadcastGraphicConfig {
 	let graphic = addGraphicItem(
 		{ id: 'projected-social', name: 'Projected Social', items: [] },
-		{ kind: 'group', id: 'profile-group', canvasWidth: 1920, canvasHeight: 1080 },
+		{
+			kind: 'group',
+			id: 'profile-group',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+		},
 	).graphic;
 	graphic = addGraphicGroupChild(graphic, {
 		kind: 'text',
@@ -307,16 +348,20 @@ function projectedSocialGraphic(): BroadcastGraphicConfig {
 	const group = graphic.items[0] as GraphicGroupItemConfig;
 	(group.children[0] as TextGraphicItemConfig).text = '{profile.networkLabel} — @{profile.handle}';
 	(group.children[1] as SocialNetworkIconGraphicItemConfig).network = { projectionKey: 'profile' };
-	graphic.sources = [{ key: 'talent', label: 'Talent', kind: 'talent' }];
-	graphic.socialProfileProjections = [{
-		key: 'profile',
-		label: 'Social Profile',
-		sourceKey: 'talent',
-		presentationGroupId: 'profile-group',
-		dwellMs: 8_000,
-		transition: 'crossfade',
-		transitionDurationMs: 250,
-	}];
+	graphic.sources = [
+		{ key: 'talent', label: 'Talent', kind: 'talent' },
+	];
+	graphic.socialProfileProjections = [
+		{
+			key: 'profile',
+			label: 'Social Profile',
+			sourceKey: 'talent',
+			presentationGroupId: 'profile-group',
+			dwellMs: 8_000,
+			transition: 'crossfade',
+			transitionDurationMs: 250,
+		},
+	];
 	return graphic;
 }
 
@@ -324,30 +369,34 @@ function projectedSocialGraphic(): BroadcastGraphicConfig {
 const templated: BroadcastGraphicConfig = {
 	id: 'templated',
 	name: 'Name line',
-	inputs: [{
-		type: 'text',
-		key: 'name',
-		label: 'Name',
-		required: false,
-		updatePolicy: 'staged',
-		default: 'Unnamed',
-		maxLength: 20,
-	}],
-	items: [{
-		type: 'text',
-		id: 'name-line',
-		label: 'Name line',
-		visible: true,
-		anchor: 'top-left',
-		x: 0,
-		y: 0,
-		width: 600,
-		height: 120,
-		text: 'Live: {name}',
-		typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY },
-		overflowPolicy: 'ellipsis',
-		minFontSize: 24,
-	}],
+	inputs: [
+		{
+			type: 'text',
+			key: 'name',
+			label: 'Name',
+			required: false,
+			updatePolicy: 'staged',
+			default: 'Unnamed',
+			maxLength: 20,
+		},
+	],
+	items: [
+		{
+			type: 'text',
+			id: 'name-line',
+			label: 'Name line',
+			visible: true,
+			anchor: 'top-left',
+			x: 0,
+			y: 0,
+			width: 600,
+			height: 120,
+			text: 'Live: {name}',
+			typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY },
+			overflowPolicy: 'ellipsis',
+			minFontSize: 24,
+		},
+	],
 };
 
 function screenWithStack(graphics: BroadcastGraphicConfig[] = [], channels?: GraphicChannelConfig[]): Screen {
@@ -356,7 +405,14 @@ function screenWithStack(graphics: BroadcastGraphicConfig[] = [], channels?: Gra
 		slug: 'main',
 		screenConfig: { width: 1920, height: 1080 },
 		modeConfigs: graphics.length
-			? { 'broadcast-graphics': { graphics, ...(channels ? { channels } : {}) } }
+			? {
+					'broadcast-graphics': {
+						graphics,
+						...(channels
+							? { channels }
+							: {}),
+					},
+				}
 			: {},
 	} as Screen;
 }
@@ -367,7 +423,9 @@ function screenWithBackground(background: unknown, graphics: BroadcastGraphicCon
 		id: 1,
 		slug: 'main',
 		screenConfig: { width: 1920, height: 1080 },
-		modeConfigs: { 'broadcast-graphics': { graphics, background } },
+		modeConfigs: {
+			'broadcast-graphics': { graphics, background },
+		},
 	} as Screen;
 }
 
@@ -384,7 +442,9 @@ async function mountComponent() {
 	const { default: Display } = await import(componentPath);
 
 	return mount(Display, {
-		global: { stubs: { ScreenAnimationEffectSurface: AnimationSurfaceStub } },
+		global: {
+			stubs: { ScreenAnimationEffectSurface: AnimationSurfaceStub },
+		},
 	});
 }
 
@@ -407,18 +467,20 @@ function pushPreviewState(graphics: BroadcastGraphicConfig[] = [lowerThird], ani
 /** A Broadcast Graphic whose bar fades and slides in over four seconds. */
 const animatedLowerThird: BroadcastGraphicConfig = {
 	...lowerThird,
-	items: [{
-		...bar,
-		animation: {
-			enter: {
-				duration: 4000,
-				easing: 'linear',
-				delay: 0,
-				fade: { opacity: 0 },
-				slide: { direction: 'south', distanceMode: 'fixed', distance: 120 },
+	items: [
+		{
+			...bar,
+			animation: {
+				enter: {
+					duration: 4000,
+					easing: 'linear',
+					delay: 0,
+					fade: { opacity: 0 },
+					slide: { direction: 'south', distanceMode: 'fixed', distance: 120 },
+				},
 			},
 		},
-	}],
+	],
 };
 
 function previewPlan(overrides: Record<string, unknown> = {}) {
@@ -554,13 +616,25 @@ describe('broadcastGraphicsDisplay', () => {
 		mockAcceptedInputs.value = {
 			...createInitialBroadcastGraphicsLiveState(),
 			socialProfileProjections: {
-				[graphic.id]: { profile: {
-					acceptedProfiles: [
-						{ network: 'twitch', networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
-						{ network: 'x', networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
-					],
-					currentNetwork: 'x',
-				} },
+				[graphic.id]: {
+					profile: {
+						acceptedProfiles: [
+							{
+								network: 'twitch',
+								networkLabel: 'Twitch',
+								handle: 'AvaLive',
+								profileUrl: 'https://www.twitch.tv/AvaLive',
+							},
+							{
+								network: 'x',
+								networkLabel: 'X',
+								handle: 'AvaCasts',
+								profileUrl: 'https://x.com/AvaCasts',
+							},
+						],
+						currentNetwork: 'x',
+					},
+				},
 			},
 		};
 
@@ -579,40 +653,61 @@ describe('broadcastGraphicsDisplay', () => {
 		const updateAt = 1_700_000_000_000;
 		const graphic = projectedSocialGraphic();
 		graphic.items[0]!.animation = {
-			update: { duration: 1000, easing: 'linear', delay: 0, fade: { opacity: 0 } },
+			update: {
+				duration: 1000,
+				easing: 'linear',
+				delay: 0,
+				fade: { opacity: 0 },
+			},
 		};
 		mockScreen.value = screenWithStack([graphic]);
 		mockOnAirGraphicIds.value = [graphic.id];
 		mockServerNow.value = updateAt;
 		mockPlayout.value = {
-			[graphic.id]: { onAir: true, effectiveStartedAt: updateAt - 10_000, cut: false, updateStartedAt: updateAt - 500 },
+			[graphic.id]: {
+				onAir: true,
+				effectiveStartedAt: updateAt - 10_000,
+				cut: false,
+				updateStartedAt: updateAt - 500,
+			},
 		};
 		mockAcceptedInputs.value = {
 			...createInitialBroadcastGraphicsLiveState(),
 			inputs: {
-				[graphic.id]: { working: {}, accepted: {}, acceptedRevision: 2, updateFrom: {} },
+				[graphic.id]: {
+					working: {},
+					accepted: {},
+					acceptedRevision: 2,
+					updateFrom: {},
+				},
 			},
 			socialProfileProjections: {
-				[graphic.id]: { profile: {
-					acceptedProfiles: [{
-						network: 'youtube',
-						networkLabel: 'YouTube',
-						handle: 'After',
-						profileUrl: 'https://www.youtube.com/@After',
-					}],
-					currentNetwork: 'youtube',
-					updateFrom: [{
-						values: {
-							network: 'twitch',
-							networkLabel: 'Twitch',
-							handle: 'Before',
-							profileUrl: 'https://www.twitch.tv/Before',
-						},
-						opacity: 1,
-						offsetX: 0,
-						offsetY: 0,
-					}],
-				} },
+				[graphic.id]: {
+					profile: {
+						acceptedProfiles: [
+							{
+								network: 'youtube',
+								networkLabel: 'YouTube',
+								handle: 'After',
+								profileUrl: 'https://www.youtube.com/@After',
+							},
+						],
+						currentNetwork: 'youtube',
+						updateFrom: [
+							{
+								values: {
+									network: 'twitch',
+									networkLabel: 'Twitch',
+									handle: 'Before',
+									profileUrl: 'https://www.twitch.tv/Before',
+								},
+								opacity: 1,
+								offsetX: 0,
+								offsetY: 0,
+							},
+						],
+					},
+				},
 			},
 		};
 
@@ -634,15 +729,27 @@ describe('broadcastGraphicsDisplay', () => {
 		mockAcceptedInputs.value = {
 			...createInitialBroadcastGraphicsLiveState(),
 			socialProfileProjections: {
-				[graphic.id]: { profile: {
-					acceptedProfiles: [
-						{ network: 'twitch', networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
-						{ network: 'x', networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
-					],
-					currentNetwork: 'twitch',
-					automatic: true,
-					rotationAnchor: { network: 'twitch', anchoredAt: 1_000_000 },
-				} },
+				[graphic.id]: {
+					profile: {
+						acceptedProfiles: [
+							{
+								network: 'twitch',
+								networkLabel: 'Twitch',
+								handle: 'AvaLive',
+								profileUrl: 'https://www.twitch.tv/AvaLive',
+							},
+							{
+								network: 'x',
+								networkLabel: 'X',
+								handle: 'AvaCasts',
+								profileUrl: 'https://x.com/AvaCasts',
+							},
+						],
+						currentNetwork: 'twitch',
+						automatic: true,
+						rotationAnchor: { network: 'twitch', anchoredAt: 1_000_000 },
+					},
+				},
 			},
 		};
 
@@ -687,10 +794,14 @@ describe('broadcastGraphicsDisplay', () => {
 
 		await mountComponent();
 
-		expect(loads).toEqual([[1, 1]]);
+		expect(loads).toEqual([
+			[1, 1],
+		]);
 		liveSessionReads.length = 0;
 		await mockSessionReaders.get(1)?.();
-		expect(liveSessionReads).toEqual([{ eventId: 1, screenId: 1, assetCapability: 'capability-token' }]);
+		expect(liveSessionReads).toEqual([
+			{ eventId: 1, screenId: 1, assetCapability: 'capability-token' },
+		]);
 	});
 
 	it('never loads a playout snapshot for an embedded editor preview', async () => {
@@ -724,7 +835,9 @@ describe('broadcastGraphicsDisplay', () => {
 	it('tells the editor it is listening, as soon as it is', async () => {
 		mockIsPreview.value = true;
 		const announced: unknown[] = [];
-		const parent = { postMessage: (message: unknown) => announced.push(message) };
+		const parent = {
+			postMessage: (message: unknown) => announced.push(message),
+		};
 		const originalParent = Object.getOwnPropertyDescriptor(window, 'parent');
 		Object.defineProperty(window, 'parent', { configurable: true, value: parent });
 
@@ -736,7 +849,9 @@ describe('broadcastGraphicsDisplay', () => {
 				Object.defineProperty(window, 'parent', originalParent);
 		}
 
-		expect(announced).toEqual([{ type: GRAPHICS_PREVIEW_READY_MESSAGE }]);
+		expect(announced).toEqual([
+			{ type: GRAPHICS_PREVIEW_READY_MESSAGE },
+		]);
 	});
 
 	it('announces nothing when it is its own parent, having nobody to tell', async () => {
@@ -759,7 +874,9 @@ describe('broadcastGraphicsDisplay', () => {
 
 	it('announces nothing from a live Screen Output, which has no editor to answer', async () => {
 		const announced: unknown[] = [];
-		const parent = { postMessage: (message: unknown) => announced.push(message) };
+		const parent = {
+			postMessage: (message: unknown) => announced.push(message),
+		};
 		const originalParent = Object.getOwnPropertyDescriptor(window, 'parent');
 		Object.defineProperty(window, 'parent', { configurable: true, value: parent });
 
@@ -858,15 +975,20 @@ describe('broadcastGraphicsDisplay', () => {
 		mockIsPreview.value = true;
 		const outlined: BroadcastGraphicConfig = {
 			...lowerThird,
-			items: [{
-				...bar,
-				geometry: { ...squareShapeGeometry(), rightSlant: 60 },
-				surfaceStyle: {
-					fill: { type: 'solid', color: '#0077a3' },
-					fillOpacity: 1,
-					outline: { color: '#00d9ff', width: 3 },
+			items: [
+				{
+					...bar,
+					geometry: {
+						...squareShapeGeometry(),
+						rightSlant: 60,
+					},
+					surfaceStyle: {
+						fill: { type: 'solid', color: '#0077a3' },
+						fillOpacity: 1,
+						outline: { color: '#00d9ff', width: 3 },
+					},
 				},
-			}],
+			],
 		};
 
 		const wrapper = await mountComponent();
@@ -903,14 +1025,25 @@ describe('broadcastGraphicsDisplay', () => {
 		};
 
 		function withMedia(overrides: Partial<MediaGraphicItemConfig> = {}): BroadcastGraphicConfig {
-			return { id: 'lower-third', name: 'Lower Third', items: [{ ...logo, ...overrides }] };
+			return {
+				id: 'lower-third',
+				name: 'Lower Third',
+				items: [
+					{
+						...logo,
+						...overrides,
+					},
+				],
+			};
 		}
 
 		it('renders an image fitted at its focal position and opacity', async () => {
 			mockIsPreview.value = true;
 
 			const wrapper = await mountComponent();
-			await pushPreviewState([withMedia()]);
+			await pushPreviewState([
+				withMedia(),
+			]);
 
 			const image = wrapper.get('[data-graphic-item-kind="media"] img');
 			expect(image.attributes('style')).toContain('object-fit: cover');
@@ -926,7 +1059,9 @@ describe('broadcastGraphicsDisplay', () => {
 			mockIsPreview.value = true;
 
 			const wrapper = await mountComponent();
-			await pushPreviewState([withMedia({ mediaKind: 'silent-video', loop: false, playbackRate: 2 })]);
+			await pushPreviewState([
+				withMedia({ mediaKind: 'silent-video', loop: false, playbackRate: 2 }),
+			]);
 
 			const video = wrapper.get('[data-graphic-item-kind="media"] video');
 			// Silent by construction rather than by an authored control: the asset is a
@@ -944,10 +1079,14 @@ describe('broadcastGraphicsDisplay', () => {
 			mockIsPreview.value = true;
 
 			const wrapper = await mountComponent();
-			await pushPreviewState([withMedia({ id: 'a', mediaKind: 'silent-video', loop: true })]);
+			await pushPreviewState([
+				withMedia({ id: 'a', mediaKind: 'silent-video', loop: true }),
+			]);
 			expect(wrapper.get('[data-graphic-item-kind="media"] video').attributes('loop')).toBeDefined();
 
-			await pushPreviewState([withMedia({ id: 'b', mediaKind: 'silent-video', loop: false })]);
+			await pushPreviewState([
+				withMedia({ id: 'b', mediaKind: 'silent-video', loop: false }),
+			]);
 			expect(wrapper.get('[data-graphic-item-kind="media"] video').attributes('loop')).toBeUndefined();
 		});
 
@@ -956,7 +1095,9 @@ describe('broadcastGraphicsDisplay', () => {
 			// media element. A stack edit that changes no revision must not do that: it
 			// would restart an on-air video from zero.
 			mockAssetCapability.value = 'capability-token';
-			mockScreen.value = screenWithStack([withMedia()]);
+			mockScreen.value = screenWithStack([
+				withMedia(),
+			]);
 			mockOnAirGraphicIds.value = ['lower-third'];
 
 			const wrapper = await mountComponent();
@@ -966,11 +1107,15 @@ describe('broadcastGraphicsDisplay', () => {
 			expect(before).not.toBe('');
 
 			// Same pinned revision, different authored geometry.
-			mockScreen.value = screenWithStack([{
-				id: 'lower-third',
-				name: 'Lower Third',
-				items: [{ ...logo, x: 99 }],
-			}]);
+			mockScreen.value = screenWithStack([
+				{
+					id: 'lower-third',
+					name: 'Lower Third',
+					items: [
+						{ ...logo, x: 99 },
+					],
+				},
+			]);
 			await flushPromises();
 			await nextTick();
 
@@ -987,7 +1132,9 @@ describe('broadcastGraphicsDisplay', () => {
 			mockOutputMode.value = 'key';
 
 			const wrapper = await mountComponent();
-			await pushPreviewState([withMedia()]);
+			await pushPreviewState([
+				withMedia(),
+			]);
 
 			// Colour removed, alpha untouched: the matte stays a true alpha matte.
 			expect(wrapper.get('[data-graphic-item-kind="media"] img').attributes('style'))
@@ -998,7 +1145,9 @@ describe('broadcastGraphicsDisplay', () => {
 			mockIsPreview.value = true;
 
 			const wrapper = await mountComponent();
-			await pushPreviewState([withMedia({ asset: undefined })]);
+			await pushPreviewState([
+				withMedia({ asset: undefined }),
+			]);
 
 			const item = wrapper.get('[data-graphic-item-kind="media"]');
 			expect(item.find('img').exists()).toBe(false);
@@ -1009,7 +1158,9 @@ describe('broadcastGraphicsDisplay', () => {
 			// The whole point of the capability: an output URL is never a hole through
 			// which the Graphics Asset Library can be browsed.
 			mockAssetCapability.value = 'capability-token';
-			mockScreen.value = screenWithStack([withMedia()]);
+			mockScreen.value = screenWithStack([
+				withMedia(),
+			]);
 			mockOnAirGraphicIds.value = ['lower-third'];
 
 			const wrapper = await mountComponent();
@@ -1027,7 +1178,9 @@ describe('broadcastGraphicsDisplay', () => {
 		 */
 		it('plays a silent video on a live output, whatever the browser', async () => {
 			mockAssetCapability.value = 'capability-token';
-			mockScreen.value = screenWithStack([withMedia({ mediaKind: 'silent-video' })]);
+			mockScreen.value = screenWithStack([
+				withMedia({ mediaKind: 'silent-video' }),
+			]);
 			mockOnAirGraphicIds.value = ['lower-third'];
 
 			const wrapper = await mountComponent();
@@ -1084,27 +1237,29 @@ describe('broadcastGraphicsDisplay', () => {
 			return {
 				id: 'lower-third',
 				name: 'Lower Third',
-				items: [{
-					type: 'text',
-					id: 'name-line',
-					label: 'Name line',
-					visible: true,
-					anchor: 'top-left',
-					x: 0,
-					y: 0,
-					width: 600,
-					height: 120,
-					text,
-					typography: {
-						...DEFAULT_GRAPHIC_TYPOGRAPHY,
-						font: {
-							kind: 'asset',
-							reference: { assetId: fontAssetId, revisionId: revisionId as GraphicAssetRevisionId },
+				items: [
+					{
+						type: 'text',
+						id: 'name-line',
+						label: 'Name line',
+						visible: true,
+						anchor: 'top-left',
+						x: 0,
+						y: 0,
+						width: 600,
+						height: 120,
+						text,
+						typography: {
+							...DEFAULT_GRAPHIC_TYPOGRAPHY,
+							font: {
+								kind: 'asset',
+								reference: { assetId: fontAssetId, revisionId: revisionId as GraphicAssetRevisionId },
+							},
 						},
+						overflowPolicy: 'ellipsis',
+						minFontSize: 24,
 					},
-					overflowPolicy: 'ellipsis',
-					minFontSize: 24,
-				}],
+				],
 			};
 		}
 
@@ -1116,27 +1271,29 @@ describe('broadcastGraphicsDisplay', () => {
 			return {
 				id: 'sponsor',
 				name: 'Sponsor',
-				items: [{
-					type: 'media',
-					id: 'logo',
-					label: 'Sponsor',
-					visible: true,
-					anchor: 'top-left',
-					x: 40,
-					y: 60,
-					width: 480,
-					height: 270,
-					asset: {
-						assetId: 'image-asset' as GraphicAssetId,
-						revisionId: 'image-revision-1' as GraphicAssetRevisionId,
+				items: [
+					{
+						type: 'media',
+						id: 'logo',
+						label: 'Sponsor',
+						visible: true,
+						anchor: 'top-left',
+						x: 40,
+						y: 60,
+						width: 480,
+						height: 270,
+						asset: {
+							assetId: 'image-asset' as GraphicAssetId,
+							revisionId: 'image-revision-1' as GraphicAssetRevisionId,
+						},
+						mediaKind: 'image',
+						fit: 'cover',
+						focalPosition: { horizontal: 0.5, vertical: 0.5 },
+						opacity: 1,
+						playbackRate: 1,
+						loop: false,
 					},
-					mediaKind: 'image',
-					fit: 'cover',
-					focalPosition: { horizontal: 0.5, vertical: 0.5 },
-					opacity: 1,
-					playbackRate: 1,
-					loop: false,
-				}],
+				],
 			};
 		}
 
@@ -1161,7 +1318,9 @@ describe('broadcastGraphicsDisplay', () => {
 			});
 
 			const wrapper = await mountComponent();
-			await pushPreviewState([withLibraryFont()]);
+			await pushPreviewState([
+				withLibraryFont(),
+			]);
 
 			// The family is derived from the exact revision, so two revisions of one font
 			// are two families and a pinned reference always paints the bytes it pinned.
@@ -1176,7 +1335,9 @@ describe('broadcastGraphicsDisplay', () => {
 			// shown while loading flashes the wrong typeface on air and reflows when the
 			// real one arrives. Blank is the lesser failure, and it is legible.
 			mockAssetCapability.value = 'capability-token';
-			mockScreen.value = screenWithStack([withLibraryFont()]);
+			mockScreen.value = screenWithStack([
+				withLibraryFont(),
+			]);
 			let finishLoad!: () => void;
 			const loaded = new Promise<void>((resolve) => {
 				finishLoad = resolve;
@@ -1209,7 +1370,9 @@ describe('broadcastGraphicsDisplay', () => {
 			// A font is content like any other, so a live output reaches it by exactly the
 			// route its images take and by no other.
 			mockAssetCapability.value = 'capability-token';
-			mockScreen.value = screenWithStack([withLibraryFont()]);
+			mockScreen.value = screenWithStack([
+				withLibraryFont(),
+			]);
 			const sources: string[] = [];
 			vi.stubGlobal('FontFace', class {
 				constructor(public family: string, public source: string) {
@@ -1237,7 +1400,9 @@ describe('broadcastGraphicsDisplay', () => {
 			// blank output with nothing to read off it. `data-font-error` is what tells
 			// the two apart.
 			mockAssetCapability.value = 'capability-token';
-			mockScreen.value = screenWithStack([withLibraryFont()]);
+			mockScreen.value = screenWithStack([
+				withLibraryFont(),
+			]);
 			vi.stubGlobal('FontFace', class {
 				constructor(public family: string, public source: string) {}
 				async load(): Promise<never> {
@@ -1265,7 +1430,9 @@ describe('broadcastGraphicsDisplay', () => {
 		 */
 		it('keeps a settled canvas visible when a stack change pins no different font', async () => {
 			mockAssetCapability.value = 'capability-token';
-			mockScreen.value = screenWithStack([withLibraryFont()]);
+			mockScreen.value = screenWithStack([
+				withLibraryFont(),
+			]);
 			mockOnAirGraphicIds.value = ['lower-third'];
 			const { registered } = stubRecordingFontFace();
 
@@ -1279,7 +1446,9 @@ describe('broadcastGraphicsDisplay', () => {
 			expect(settled).toEqual(['stream-keepr-graphic-asset-font-asset-font-revision-2']);
 
 			// The same font, different rendered text: an Update Graphic-shaped change.
-			mockScreen.value = screenWithStack([withLibraryFont({ text: 'Player Two' })]);
+			mockScreen.value = screenWithStack([
+				withLibraryFont({ text: 'Player Two' }),
+			]);
 			await nextTick();
 
 			const canvas = wrapper.get('.graphics-compositor-canvas');
@@ -1306,7 +1475,9 @@ describe('broadcastGraphicsDisplay', () => {
 		 */
 		it('keeps a settled canvas visible when a Take brings on an asset of another kind', async () => {
 			mockAssetCapability.value = 'capability-token';
-			mockScreen.value = screenWithStack([withLibraryFont()]);
+			mockScreen.value = screenWithStack([
+				withLibraryFont(),
+			]);
 			mockOnAirGraphicIds.value = ['lower-third'];
 			const { registered } = stubRecordingFontFace();
 
@@ -1320,7 +1491,10 @@ describe('broadcastGraphicsDisplay', () => {
 			expect(settled).toEqual(['stream-keepr-graphic-asset-font-asset-font-revision-2']);
 			expect(capabilitySessionRequests).toHaveLength(1);
 
-			mockScreen.value = screenWithStack([withLibraryFont(), withImage()]);
+			mockScreen.value = screenWithStack([
+				withLibraryFont(),
+				withImage(),
+			]);
 			await nextTick();
 
 			const canvas = wrapper.get('.graphics-compositor-canvas');
@@ -1349,7 +1523,9 @@ describe('broadcastGraphicsDisplay', () => {
 		 */
 		it('retries a font that failed to load when content-URL resolution runs again', async () => {
 			mockAssetCapability.value = 'capability-token';
-			mockScreen.value = screenWithStack([withLibraryFont()]);
+			mockScreen.value = screenWithStack([
+				withLibraryFont(),
+			]);
 			mockOnAirGraphicIds.value = ['lower-third'];
 			let failLoads = true;
 			vi.stubGlobal('FontFace', class {
@@ -1369,7 +1545,10 @@ describe('broadcastGraphicsDisplay', () => {
 			});
 
 			failLoads = false;
-			mockScreen.value = screenWithStack([withLibraryFont(), withImage()]);
+			mockScreen.value = screenWithStack([
+				withLibraryFont(),
+				withImage(),
+			]);
 
 			await vi.waitFor(() => {
 				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
@@ -1392,7 +1571,9 @@ describe('broadcastGraphicsDisplay', () => {
 		 */
 		it('does not retry a failed font load for a stack change that names no asset', async () => {
 			mockAssetCapability.value = 'capability-token';
-			mockScreen.value = screenWithStack([withLibraryFont()]);
+			mockScreen.value = screenWithStack([
+				withLibraryFont(),
+			]);
 			mockOnAirGraphicIds.value = ['lower-third'];
 			let failLoads = true;
 			vi.stubGlobal('FontFace', class {
@@ -1414,7 +1595,9 @@ describe('broadcastGraphicsDisplay', () => {
 			failLoads = false;
 			// Same pinned revision, different rendered text: the Update Graphic-shaped
 			// change, which leaves the Screen's asset reference set exactly where it was.
-			mockScreen.value = screenWithStack([withLibraryFont({ text: 'Player Two' })]);
+			mockScreen.value = screenWithStack([
+				withLibraryFont({ text: 'Player Two' }),
+			]);
 			await nextTick();
 			await flushPromises();
 			await nextTick();
@@ -1443,13 +1626,17 @@ describe('broadcastGraphicsDisplay', () => {
 			const { registered, gate } = stubRecordingFontFace();
 
 			const wrapper = await mountComponent();
-			await pushPreviewState([withLibraryFont()]);
+			await pushPreviewState([
+				withLibraryFont(),
+			]);
 			await vi.waitFor(() => {
 				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
 			});
 
 			const release = gate();
-			await pushPreviewState([withLibraryFont({ revisionId: 'font-revision-3' })]);
+			await pushPreviewState([
+				withLibraryFont({ revisionId: 'font-revision-3' }),
+			]);
 
 			const canvas = wrapper.get('.graphics-compositor-canvas');
 			expect(canvas.attributes('data-font-ready')).toBe('false');
@@ -1474,31 +1661,35 @@ describe('broadcastGraphicsDisplay', () => {
 		const grouped: BroadcastGraphicConfig = {
 			id: 'lower-third',
 			name: 'Lower Third',
-			items: [{
-				type: 'group',
-				id: 'cluster',
-				label: 'Name block',
-				visible: true,
-				anchor: 'top-left',
-				x: 100,
-				y: 800,
-				width: 900,
-				height: 120,
-				arrangement: 'row',
-				padding: 12,
-				gap: 8,
-				align: 'stretch',
-				justify: 'start',
-				clip: true,
-				geometry: squareShapeGeometry(),
-				children: [{
-					...bar,
-					id: 'child',
-					x: 0,
-					y: 0,
-					sizing: { mode: 'fill', size: 0, weight: 1 },
-				}],
-			}],
+			items: [
+				{
+					type: 'group',
+					id: 'cluster',
+					label: 'Name block',
+					visible: true,
+					anchor: 'top-left',
+					x: 100,
+					y: 800,
+					width: 900,
+					height: 120,
+					arrangement: 'row',
+					padding: 12,
+					gap: 8,
+					align: 'stretch',
+					justify: 'start',
+					clip: true,
+					geometry: squareShapeGeometry(),
+					children: [
+						{
+							...bar,
+							id: 'child',
+							x: 0,
+							y: 0,
+							sizing: { mode: 'fill', size: 0, weight: 1 },
+						},
+					],
+				},
+			],
 		};
 
 		const wrapper = await mountComponent();
@@ -1519,8 +1710,16 @@ describe('broadcastGraphicsDisplay', () => {
 		mockScreen.value = screenWithStack([templated]);
 		mockOnAirGraphicIds.value = ['templated'];
 		mockAcceptedInputs.value = {
-			playout: { templated: { onAir: true, effectiveStartedAt: 0, cut: false } },
-			inputs: { templated: { working: { name: 'Half typed' }, accepted: { name: 'Ava Reed' }, acceptedRevision: 1 } },
+			playout: {
+				templated: { onAir: true, effectiveStartedAt: 0, cut: false },
+			},
+			inputs: {
+				templated: {
+					working: { name: 'Half typed' },
+					accepted: { name: 'Ava Reed' },
+					acceptedRevision: 1,
+				},
+			},
 		};
 
 		const wrapper = await mountComponent();
@@ -1530,7 +1729,12 @@ describe('broadcastGraphicsDisplay', () => {
 	});
 
 	describe('a Broadcast Graphic in two lifecycle phases at once', () => {
-		const CROSS_FADE = { duration: 400, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } };
+		const CROSS_FADE = {
+			duration: 400,
+			easing: 'linear' as const,
+			delay: 0,
+			fade: { opacity: 0 },
+		};
 
 		/** Exiting for 200ms of 400ms, with an update that began at the same instant. */
 		function exitingMidUpdate() {
@@ -1556,11 +1760,16 @@ describe('broadcastGraphicsDisplay', () => {
 		}
 
 		it('draws the crossing pair beneath the exit rather than cutting to the new rendering', async () => {
-			mockScreen.value = screenWithStack([{
-				...templated,
-				items: templated.items.map(item => ({ ...item, animation: { update: CROSS_FADE } })),
-				animation: { exit: CROSS_FADE },
-			}]);
+			mockScreen.value = screenWithStack([
+				{
+					...templated,
+					items: templated.items.map(item => ({
+						...item,
+						animation: { update: CROSS_FADE },
+					})),
+					animation: { exit: CROSS_FADE },
+				},
+			]);
 			exitingMidUpdate();
 
 			const wrapper = await mountComponent();
@@ -1575,10 +1784,12 @@ describe('broadcastGraphicsDisplay', () => {
 		});
 
 		it('encloses both frames of a whole-graphic update in the exit running over them', async () => {
-			mockScreen.value = screenWithStack([{
-				...templated,
-				animation: { update: CROSS_FADE, exit: CROSS_FADE },
-			}]);
+			mockScreen.value = screenWithStack([
+				{
+					...templated,
+					animation: { update: CROSS_FADE, exit: CROSS_FADE },
+				},
+			]);
 			exitingMidUpdate();
 
 			const wrapper = await mountComponent();
@@ -1600,23 +1811,32 @@ describe('broadcastGraphicsDisplay', () => {
 			// an element of its own and stays a mask — which is also what keeps the Key
 			// Output's alpha matte intact, because nesting masks multiplies alpha rather than
 			// painting anything.
-			mockScreen.value = screenWithStack([{
-				...lowerThird,
-				items: [{
-					...bar,
-					animation: {
-						'on-screen': {
-							duration: 800,
-							easing: 'linear',
-							delay: 0,
-							pause: 0,
-							repeat: GRAPHIC_ANIMATION_REPEAT_INDEFINITE,
-							reveal: { edge: 'top' },
+			mockScreen.value = screenWithStack([
+				{
+					...lowerThird,
+					items: [
+						{
+							...bar,
+							animation: {
+								'on-screen': {
+									duration: 800,
+									easing: 'linear',
+									delay: 0,
+									pause: 0,
+									repeat: GRAPHIC_ANIMATION_REPEAT_INDEFINITE,
+									reveal: { edge: 'top' },
+								},
+								'exit': {
+									duration: 400,
+									easing: 'linear',
+									delay: 0,
+									reveal: { edge: 'left' },
+								},
+							},
 						},
-						'exit': { duration: 400, easing: 'linear', delay: 0, reveal: { edge: 'left' } },
-					},
-				}],
-			}]);
+					],
+				},
+			]);
 			mockPlayout.value = {
 				'lower-third': {
 					onAir: false,
@@ -1693,12 +1913,19 @@ describe('graphicAnimationPreview in a Screen Output frame', () => {
 	it('runs an exit phase from the Graphic Resting State outwards', async () => {
 		const exiting: BroadcastGraphicConfig = {
 			...lowerThird,
-			items: [{
-				...bar,
-				animation: {
-					exit: { duration: 4000, easing: 'linear', delay: 0, reveal: { edge: 'right' } },
+			items: [
+				{
+					...bar,
+					animation: {
+						exit: {
+							duration: 4000,
+							easing: 'linear',
+							delay: 0,
+							reveal: { edge: 'right' },
+						},
+					},
 				},
-			}],
+			],
 		};
 
 		const wrapper = await mountComponent();
@@ -1766,19 +1993,26 @@ describe('live playout animation in a Screen Output', () => {
 	/** A four-second fade-and-slide entrance and a two-second wipe out. */
 	const ANIMATED: BroadcastGraphicConfig = {
 		...lowerThird,
-		items: [{
-			...bar,
-			animation: {
-				enter: {
-					duration: 4000,
-					easing: 'linear',
-					delay: 0,
-					fade: { opacity: 0 },
-					slide: { direction: 'south', distanceMode: 'fixed', distance: 120 },
+		items: [
+			{
+				...bar,
+				animation: {
+					enter: {
+						duration: 4000,
+						easing: 'linear',
+						delay: 0,
+						fade: { opacity: 0 },
+						slide: { direction: 'south', distanceMode: 'fixed', distance: 120 },
+					},
+					exit: {
+						duration: 2000,
+						easing: 'linear',
+						delay: 0,
+						fade: { opacity: 0 },
+					},
 				},
-				exit: { duration: 2000, easing: 'linear', delay: 0, fade: { opacity: 0 } },
 			},
-		}],
+		],
 	};
 
 	const T0 = 1_700_000_000_000;
@@ -1802,7 +2036,9 @@ describe('live playout animation in a Screen Output', () => {
 	it('joins an entrance already in progress rather than replaying it from the beginning', async () => {
 		// A capture browser opened, or reconnected, one second into a four-second
 		// entrance. The frame it draws is the frame every other output is drawing.
-		mockPlayout.value = { 'lower-third': { onAir: true, effectiveStartedAt: T0 - 1000, cut: false } };
+		mockPlayout.value = {
+			'lower-third': { onAir: true, effectiveStartedAt: T0 - 1000, cut: false },
+		};
 
 		const wrapper = await mountComponent();
 
@@ -1812,7 +2048,9 @@ describe('live playout animation in a Screen Output', () => {
 	});
 
 	it('settles a Broadcast Graphic whose entrance is long over, without animating it', async () => {
-		mockPlayout.value = { 'lower-third': { onAir: true, effectiveStartedAt: T0 - 4_000_000, cut: false } };
+		mockPlayout.value = {
+			'lower-third': { onAir: true, effectiveStartedAt: T0 - 4_000_000, cut: false },
+		};
 
 		const wrapper = await mountComponent();
 
@@ -1821,7 +2059,9 @@ describe('live playout animation in a Screen Output', () => {
 	});
 
 	it('settles a Cut Take immediately, with no entrance at all', async () => {
-		mockPlayout.value = { 'lower-third': { onAir: true, effectiveStartedAt: T0, cut: true } };
+		mockPlayout.value = {
+			'lower-third': { onAir: true, effectiveStartedAt: T0, cut: true },
+		};
 
 		const wrapper = await mountComponent();
 
@@ -1830,7 +2070,9 @@ describe('live playout animation in a Screen Output', () => {
 	});
 
 	it('keeps an exiting Broadcast Graphic on program until its exit completes', async () => {
-		mockPlayout.value = { 'lower-third': { onAir: false, effectiveStartedAt: T0 - 1000, cut: false } };
+		mockPlayout.value = {
+			'lower-third': { onAir: false, effectiveStartedAt: T0 - 1000, cut: false },
+		};
 
 		const wrapper = await mountComponent();
 
@@ -1839,7 +2081,9 @@ describe('live playout animation in a Screen Output', () => {
 	});
 
 	it('removes an exiting Broadcast Graphic from program once its exit has completed', async () => {
-		mockPlayout.value = { 'lower-third': { onAir: false, effectiveStartedAt: T0 - 3000, cut: false } };
+		mockPlayout.value = {
+			'lower-third': { onAir: false, effectiveStartedAt: T0 - 3000, cut: false },
+		};
 
 		const wrapper = await mountComponent();
 
@@ -1870,7 +2114,12 @@ describe('live playout animation in a Screen Output', () => {
 	describe('a Graphic Channel the Screen Output is composed against', () => {
 		const CHANNEL: GraphicChannelConfig = { id: 'thirds', name: 'Lower thirds', handoff: 'out-then-in' };
 		const outgoing: BroadcastGraphicConfig = { ...ANIMATED, channelId: 'thirds' };
-		const incoming: BroadcastGraphicConfig = { ...ANIMATED, id: 'bug', name: 'Bug', channelId: 'thirds' };
+		const incoming: BroadcastGraphicConfig = {
+			...ANIMATED,
+			id: 'bug',
+			name: 'Bug',
+			channelId: 'thirds',
+		};
 
 		/**
 		 * An Out then in handoff one second in: the outgoing exit has another second to
@@ -1911,14 +2160,28 @@ describe('live playout animation in a Screen Output', () => {
 	it('draws both renderings while an update cross-transitions, and only then', async () => {
 		const updating: BroadcastGraphicConfig = {
 			...templated,
-			items: [{
-				...templated.items[0]!,
-				animation: { update: { duration: 1000, easing: 'linear', delay: 0, fade: { opacity: 0 } } },
-			}],
+			items: [
+				{
+					...templated.items[0]!,
+					animation: {
+						update: {
+							duration: 1000,
+							easing: 'linear',
+							delay: 0,
+							fade: { opacity: 0 },
+						},
+					},
+				},
+			],
 		};
 		mockScreen.value = screenWithStack([updating]);
 		mockPlayout.value = {
-			templated: { onAir: true, effectiveStartedAt: T0 - 10_000, cut: false, updateStartedAt: T0 - 500 },
+			templated: {
+				onAir: true,
+				effectiveStartedAt: T0 - 10_000,
+				cut: false,
+				updateStartedAt: T0 - 500,
+			},
 		};
 		mockAcceptedInputs.value = {
 			playout: {},
@@ -1945,14 +2208,28 @@ describe('live playout animation in a Screen Output', () => {
 	it('draws one rendering once the update has completed', async () => {
 		const updating: BroadcastGraphicConfig = {
 			...templated,
-			items: [{
-				...templated.items[0]!,
-				animation: { update: { duration: 1000, easing: 'linear', delay: 0, fade: { opacity: 0 } } },
-			}],
+			items: [
+				{
+					...templated.items[0]!,
+					animation: {
+						update: {
+							duration: 1000,
+							easing: 'linear',
+							delay: 0,
+							fade: { opacity: 0 },
+						},
+					},
+				},
+			],
 		};
 		mockScreen.value = screenWithStack([updating]);
 		mockPlayout.value = {
-			templated: { onAir: true, effectiveStartedAt: T0 - 10_000, cut: false, updateStartedAt: T0 - 5000 },
+			templated: {
+				onAir: true,
+				effectiveStartedAt: T0 - 10_000,
+				cut: false,
+				updateStartedAt: T0 - 5000,
+			},
 		};
 		mockAcceptedInputs.value = {
 			playout: {},
@@ -1975,19 +2252,36 @@ describe('live playout animation in a Screen Output', () => {
 	it('shows the rendering it entered with while an acceptance coalesces behind the entrance', async () => {
 		const updating: BroadcastGraphicConfig = {
 			...templated,
-			items: [{
-				...templated.items[0]!,
-				animation: {
-					enter: { duration: 4000, easing: 'linear', delay: 0, fade: { opacity: 0 } },
-					update: { duration: 1000, easing: 'linear', delay: 0, fade: { opacity: 0 } },
+			items: [
+				{
+					...templated.items[0]!,
+					animation: {
+						enter: {
+							duration: 4000,
+							easing: 'linear',
+							delay: 0,
+							fade: { opacity: 0 },
+						},
+						update: {
+							duration: 1000,
+							easing: 'linear',
+							delay: 0,
+							fade: { opacity: 0 },
+						},
+					},
 				},
-			}],
+			],
 		};
 		mockScreen.value = screenWithStack([updating]);
 		// Taken one second ago with "Before"; an acceptance of "After" is scheduled for
 		// the instant the entrance completes, three seconds from now.
 		mockPlayout.value = {
-			templated: { onAir: true, effectiveStartedAt: T0 - 1000, cut: false, updateStartedAt: T0 + 3000 },
+			templated: {
+				onAir: true,
+				effectiveStartedAt: T0 - 1000,
+				cut: false,
+				updateStartedAt: T0 + 3000,
+			},
 		};
 		mockAcceptedInputs.value = {
 			playout: {},
@@ -2007,7 +2301,12 @@ describe('live playout animation in a Screen Output', () => {
 		expect(wrapper.find('[data-graphic-item-cross-transition="name-line"]').exists()).toBe(false);
 	});
 	describe('broadcast graphics background', () => {
-		const fogBackground = { enabled: true, effect: 'fog', opacity: 0.4, params: { speed: 2 } };
+		const fogBackground = {
+			enabled: true,
+			effect: 'fog',
+			opacity: 0.4,
+			params: { speed: 2 },
+		};
 
 		it('mounts the authored background on the shared surface, with its sparse params filled from the schema', async () => {
 			mockScreen.value = screenWithBackground(fogBackground);

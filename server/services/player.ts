@@ -45,26 +45,70 @@ function buildBulkPlayerUpsertQueries(
 	] as const;
 	const grouped = new Map<string, PlayerInsertData[]>();
 	for (const data of dataList) {
-		const mask = updateFields.map(field => data[field] !== undefined ? '1' : '0').join('');
+		const mask = updateFields.map(field => data[field] !== undefined
+			? '1'
+			: '0').join('');
 		const rows = grouped.get(mask) ?? [];
 		rows.push(data);
 		grouped.set(mask, rows);
 	}
 
-	return [...grouped.values()].flatMap((group) => {
+	return [
+		...grouped.values(),
+	].flatMap((group) => {
 		const example = group[0]!;
 		const set = {
 			name: sql.raw('excluded.name'),
-			...(example.pronouns !== undefined ? { pronouns: sql.raw('excluded.pronouns') } : {}),
-			...(example.wins !== undefined ? { wins: sql.raw('excluded.wins') } : {}),
-			...(example.losses !== undefined ? { losses: sql.raw('excluded.losses') } : {}),
-			...(example.draws !== undefined ? { draws: sql.raw('excluded.draws') } : {}),
-			...(example.position !== undefined ? { position: sql.raw('excluded.position') } : {}),
-			...(example.points !== undefined ? { points: sql.raw('excluded.points') } : {}),
-			...(example.gameData !== undefined ? { gameData: sql.raw('excluded.game_data') } : {}),
-			...(example.externalStatus !== undefined ? { externalStatus: sql.raw('excluded.external_status') } : {}),
-			...(example.isActive !== undefined ? { isActive: sql.raw('excluded.is_active') } : {}),
-			...(example.lastSeenAt !== undefined ? { lastSeenAt: sql.raw('excluded.last_seen_at') } : {}),
+			...(example.pronouns !== undefined
+				? {
+						pronouns: sql.raw('excluded.pronouns'),
+					}
+				: {}),
+			...(example.wins !== undefined
+				? {
+						wins: sql.raw('excluded.wins'),
+					}
+				: {}),
+			...(example.losses !== undefined
+				? {
+						losses: sql.raw('excluded.losses'),
+					}
+				: {}),
+			...(example.draws !== undefined
+				? {
+						draws: sql.raw('excluded.draws'),
+					}
+				: {}),
+			...(example.position !== undefined
+				? {
+						position: sql.raw('excluded.position'),
+					}
+				: {}),
+			...(example.points !== undefined
+				? {
+						points: sql.raw('excluded.points'),
+					}
+				: {}),
+			...(example.gameData !== undefined
+				? {
+						gameData: sql.raw('excluded.game_data'),
+					}
+				: {}),
+			...(example.externalStatus !== undefined
+				? {
+						externalStatus: sql.raw('excluded.external_status'),
+					}
+				: {}),
+			...(example.isActive !== undefined
+				? {
+						isActive: sql.raw('excluded.is_active'),
+					}
+				: {}),
+			...(example.lastSeenAt !== undefined
+				? {
+						lastSeenAt: sql.raw('excluded.last_seen_at'),
+					}
+				: {}),
 			updatedAt: writeAt,
 		};
 		return chunkJsonRows(group.map(data => ({
@@ -109,7 +153,9 @@ function playerIdentityKey(row: Pick<PlayerInsertData, 'eventId' | 'externalId' 
 
 function buildExistingPlayerQueries(dataList: PlayerInsertData[]): BatchItem<'sqlite'>[] {
 	const identities = dataList.flatMap(data => data.externalId && data.externalSource
-		? [{ eventId: data.eventId, externalId: data.externalId, externalSource: data.externalSource }]
+		? [
+				{ eventId: data.eventId, externalId: data.externalId, externalSource: data.externalSource },
+			]
 		: []);
 	return chunkJsonRows(identities).map(payload => db
 		.select({
@@ -139,7 +185,9 @@ export function playerService() {
 
 		if (params.listId) {
 			return await db
-				.select({ ...getTableColumns(players) })
+				.select({
+					...getTableColumns(players),
+				})
 				.from(players)
 				.innerJoin(playerListMembers, eq(players.id, playerListMembers.playerId))
 				.innerJoin(playerLists, eq(playerListMembers.listId, playerLists.id))
@@ -147,7 +195,11 @@ export function playerService() {
 					eq(players.eventId, params.eventId),
 					eq(playerListMembers.listId, params.listId),
 					eq(playerLists.eventId, params.eventId),
-					...(params.includeInactive ? [] : [eq(players.isActive, true)]),
+					...(params.includeInactive
+						? []
+						: [
+								eq(players.isActive, true),
+							]),
 				))
 				.orderBy(sql`${players.position} IS NULL`, asc(players.position));
 		}
@@ -157,13 +209,20 @@ export function playerService() {
 			.from(players)
 			.where(and(
 				eq(players.eventId, params.eventId),
-				...(params.includeInactive ? [] : [eq(players.isActive, true)]),
+				...(params.includeInactive
+					? []
+					: [
+							eq(players.isActive, true),
+						]),
 			))
 			.orderBy(sql`${players.position} IS NULL`, asc(players.position));
 	};
 
 	const create = async (eventId: number, data: CreatePlayerInput): Promise<DbPlayer> => {
-		const [newPlayer] = await db.insert(players).values({ ...pickManualWritable('players', data), eventId }).returning();
+		const [newPlayer] = await db.insert(players).values({
+			...pickManualWritable('players', data),
+			eventId,
+		}).returning();
 		if (!newPlayer) {
 			throw new Error('Failed to create player');
 		}
@@ -207,7 +266,10 @@ export function playerService() {
 
 		const existingQueries = buildExistingPlayerQueries(dataList);
 		const upsertQueries = buildBulkPlayerUpsertQueries(dataList, new Date());
-		const queries = [...existingQueries, ...upsertQueries];
+		const queries = [
+			...existingQueries,
+			...upsertQueries,
+		];
 
 		// Execute all queries in a single batch (atomic in D1)
 		// Cast needed because batch expects a non-empty tuple type
@@ -272,7 +334,11 @@ export function playerService() {
 				or(isNull(players.lastSeenAt), ne(players.lastSeenAt, seenAt)),
 			))
 			.returning({ id: players.id });
-		const queries = [...existingQueries, ...upsertQueries, deactivateMissingQuery];
+		const queries = [
+			...existingQueries,
+			...upsertQueries,
+			deactivateMissingQuery,
+		];
 		const batchResults = await db.batch(queries as [typeof queries[0], ...typeof queries]);
 		const existingKeys = new Set(
 			(batchResults.slice(0, existingQueries.length).flat() as PlayerInsertData[])

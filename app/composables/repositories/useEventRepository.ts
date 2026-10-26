@@ -107,7 +107,10 @@ export function useEventRepository() {
 	const syncSpecificRound = async (id: number, roundId: number): Promise<SyncRoundResponse> => {
 		return await eventData.command<SyncRoundResponse, { roundId: number }>(
 			{ eventId: id, resourcePath: 'melee', suffix: 'sync-round' },
-			{ method: 'POST', body: { roundId } },
+			{
+				method: 'POST',
+				body: { roundId },
+			},
 		);
 	};
 

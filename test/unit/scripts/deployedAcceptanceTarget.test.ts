@@ -27,18 +27,26 @@ const COMPLETE_ENV = {
 };
 
 const APP = {
-	routes: [{ pattern: 'stream.keepr.digital', custom_domain: true }],
+	routes: [
+		{ pattern: 'stream.keepr.digital', custom_domain: true },
+	],
 	r2_buckets: [
 		{ binding: 'GRAPHICS_ASSET_STAGING', bucket_name: 'stream-graphics-asset-staging' },
 		{ binding: 'GRAPHICS_ASSET_CANONICAL', bucket_name: 'stream-graphics-asset-canonical' },
 	],
-	services: [{ binding: 'SILENT_VIDEO_PLAYBACK_VALIDATOR', service: 'stream-silent-video-validator' }],
+	services: [
+		{ binding: 'SILENT_VIDEO_PLAYBACK_VALIDATOR', service: 'stream-silent-video-validator' },
+	],
 };
 
 const VALIDATOR = {
 	name: 'stream-silent-video-validator',
-	r2_buckets: [{ binding: 'GRAPHICS_ASSET_STAGING', bucket_name: 'stream-graphics-asset-staging' }],
-	workflows: [{ name: 'silent-video-validation', binding: 'SILENT_VIDEO_VALIDATION_WORKFLOW' }],
+	r2_buckets: [
+		{ binding: 'GRAPHICS_ASSET_STAGING', bucket_name: 'stream-graphics-asset-staging' },
+	],
+	workflows: [
+		{ name: 'silent-video-validation', binding: 'SILENT_VIDEO_VALIDATION_WORKFLOW' },
+	],
 };
 
 function resolve(env: Record<string, string | undefined>, overrides: { app?: object; validator?: object } = {}) {
@@ -84,7 +92,10 @@ describe('the deployed acceptance target', () => {
 				detail: { reason: 'CLOUDFLARE_ACCOUNT_ID is unset' },
 			}));
 		expect(() => resolve({ ...COMPLETE_ENV, [ACCOUNT_ID_ENV]: 'not-an-account' }))
-			.toThrow(expect.objectContaining({ code: 'harness-target-inconsistent', detail: { reason: 'account-malformed' } }));
+			.toThrow(expect.objectContaining({
+				code: 'harness-target-inconsistent',
+				detail: { reason: 'account-malformed' },
+			}));
 	});
 
 	it('refuses an alternate URL, so retargeting it cannot leave the validator writing production', () => {
@@ -97,18 +108,42 @@ describe('the deployed acceptance target', () => {
 
 	it('refuses an installation whose validator stages elsewhere than its app', () => {
 		expect(() => resolve(COMPLETE_ENV, {
-			validator: { ...VALIDATOR, r2_buckets: [{ binding: 'GRAPHICS_ASSET_STAGING', bucket_name: 'other' }] },
-		})).toThrow(expect.objectContaining({ detail: { reason: 'staging-bucket-mismatch' } }));
-		expect(() => resolve(COMPLETE_ENV, { validator: { ...VALIDATOR, name: 'some-other-validator' } }))
-			.toThrow(expect.objectContaining({ detail: { reason: 'validator-service-mismatch' } }));
-		expect(() => resolve(COMPLETE_ENV, { validator: { ...VALIDATOR, workflows: [] } }))
-			.toThrow(expect.objectContaining({ detail: { reason: 'workflow-unconfigured' } }));
+			validator: {
+				...VALIDATOR,
+				r2_buckets: [
+					{ binding: 'GRAPHICS_ASSET_STAGING', bucket_name: 'other' },
+				],
+			},
+		})).toThrow(expect.objectContaining({
+			detail: { reason: 'staging-bucket-mismatch' },
+		}));
+		expect(() => resolve(COMPLETE_ENV, {
+			validator: { ...VALIDATOR, name: 'some-other-validator' },
+		}))
+			.toThrow(expect.objectContaining({
+				detail: { reason: 'validator-service-mismatch' },
+			}));
+		expect(() => resolve(COMPLETE_ENV, {
+			validator: { ...VALIDATOR, workflows: [] },
+		}))
+			.toThrow(expect.objectContaining({
+				detail: { reason: 'workflow-unconfigured' },
+			}));
 	});
 
 	it('refuses an account the installation\'s own config contradicts', () => {
-		expect(() => resolve(COMPLETE_ENV, { app: { ...APP, account_id: 'f'.repeat(32) } }))
-			.toThrow(expect.objectContaining({ detail: { reason: 'account-mismatch' } }));
-		expect(resolve(COMPLETE_ENV, { validator: { ...VALIDATOR, account_id: ACCOUNT } }).accountId).toBe(ACCOUNT);
+		expect(() => resolve(COMPLETE_ENV, {
+			app: {
+				...APP,
+				account_id: 'f'.repeat(32),
+			},
+		}))
+			.toThrow(expect.objectContaining({
+				detail: { reason: 'account-mismatch' },
+			}));
+		expect(resolve(COMPLETE_ENV, {
+			validator: { ...VALIDATOR, account_id: ACCOUNT },
+		}).accountId).toBe(ACCOUNT);
 	});
 
 	it('resolves the committed production installation', async () => {
@@ -125,6 +160,9 @@ describe('the deployed acceptance target', () => {
 
 describe('reading a Wrangler config', () => {
 	it('drops comments and trailing commas, and leaves strings alone', () => {
-		expect(parseJsonc('{\n\t// a comment\n\t"a": "x // y", /* b */ "b": [1, 2,],\n}')).toEqual({ a: 'x // y', b: [1, 2] });
+		expect(parseJsonc('{\n\t// a comment\n\t"a": "x // y", /* b */ "b": [1, 2,],\n}')).toEqual({
+			a: 'x // y',
+			b: [1, 2],
+		});
 	});
 });

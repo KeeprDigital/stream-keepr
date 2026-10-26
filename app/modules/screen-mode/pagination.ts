@@ -127,11 +127,15 @@ export function useScreenModePagination<TRow>(options: ScreenModePaginationOptio
 	}
 
 	function nextPage() {
-		setPage(currentPage.value < totalPages.value ? currentPage.value + 1 : 1);
+		setPage(currentPage.value < totalPages.value
+			? currentPage.value + 1
+			: 1);
 	}
 
 	function prevPage() {
-		setPage(currentPage.value > 1 ? currentPage.value - 1 : totalPages.value);
+		setPage(currentPage.value > 1
+			? currentPage.value - 1
+			: totalPages.value);
 	}
 
 	return {

@@ -161,7 +161,13 @@ watch(selectedFile, (file) => {
 const selectionError = computed(() => {
 	if (!selectedFile.value)
 		return null;
-	const supportedMime = ['image/png', 'image/jpeg', 'image/webp', 'video/mp4', 'video/webm'].includes(selectedFile.value.type);
+	const supportedMime = [
+		'image/png',
+		'image/jpeg',
+		'image/webp',
+		'video/mp4',
+		'video/webm',
+	].includes(selectedFile.value.type);
 	const sourceKind = graphicAssetSourceKind({
 		sourceFileName: selectedFile.value.name,
 		declaredMime: selectedFile.value.type,
@@ -377,7 +383,9 @@ function templatePackageInstallationLabel(
 	installation: NonNullable<GraphicsIngestionOperation['templatePackageInstallation']>,
 ) {
 	return `Installed Template "${installation.templateName}" with ${installation.assets.length} Graphic Asset ${
-		installation.assets.length === 1 ? 'Revision' : 'Revisions'
+		installation.assets.length === 1
+			? 'Revision'
+			: 'Revisions'
 	}`;
 }
 
@@ -408,13 +416,18 @@ async function runLifecycleAction(
 	try {
 		const outcome = await $fetch<GraphicAssetLifecycleActionOutcome>(
 			`/api/graphics-assets/${asset.id}/lifecycle-actions`,
-			{ method: 'POST', body: { action } },
+			{
+				method: 'POST',
+				body: { action },
+			},
 		);
 		if (outcome.outcome === 'in-use') {
 			usageByAssetId[asset.id] = outcome.usage;
 			lifecycleErrorByAssetId[asset.id] = action === 'retire'
 				? `This Graphic Asset cannot be retired while a saved template references it: ${
-					[...new Set(outcome.usage.map(item => item.owner.name ?? item.owner.id))].join(', ')
+					[
+						...new Set(outcome.usage.map(item => item.owner.name ?? item.owner.id)),
+					].join(', ')
 				}.`
 				: 'This Graphic Asset cannot enter Trash while any Graphic Asset Revision is in use.';
 			return;
@@ -696,7 +709,10 @@ async function sendRemoteSourceCopy(
 		operation.id,
 		$fetch<GraphicsIngestionOperation>(
 			`/api/graphics-assets/ingestion-operations/${operation.id}/remote-copy`,
-			{ method: 'POST', body: { sourceUrl } },
+			{
+				method: 'POST',
+				body: { sourceUrl },
+			},
 		),
 	);
 	return await confirmStagedGraphicAssetSource(copied);

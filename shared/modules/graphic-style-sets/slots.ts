@@ -113,7 +113,9 @@ export type GraphicStyleOwnerNode = GraphicItemConfig | BroadcastGraphicConfig;
 
 /** The Graphic Item kind of an owner, or null for a Broadcast Graphic. */
 function ownerKind(owner: GraphicStyleOwnerNode): GraphicItemConfig['type'] | null {
-	return 'type' in owner ? owner.type : null;
+	return 'type' in owner
+		? owner.type
+		: null;
 }
 
 /**
@@ -181,7 +183,9 @@ export function readGraphicStyleSlot(
 	const item = owner as GraphicItemConfig;
 	switch (slot) {
 		case 'typography':
-			return ownsGraphicTypography(item) ? item.typography : undefined;
+			return ownsGraphicTypography(item)
+				? item.typography
+				: undefined;
 		case 'surfaceStyle':
 		case 'defaultChildSurfaceStyle':
 		case 'boxSurfaceStyle':
@@ -201,7 +205,9 @@ export function readGraphicStyleSlot(
 						fit: item.fit,
 						focalPosition: item.focalPosition,
 						opacity: item.opacity,
-						...(item.clipGeometry === undefined ? {} : { clipGeometry: item.clipGeometry }),
+						...(item.clipGeometry === undefined
+							? {}
+							: { clipGeometry: item.clipGeometry }),
 						playbackRate: item.playbackRate,
 						loop: item.loop,
 					}
@@ -213,7 +219,9 @@ export function readGraphicStyleSlot(
 
 /** The surface an item already has, or a fresh default for one that has none. */
 function baseSurface(current: GraphicSurfaceStyle | undefined): GraphicSurfaceStyle {
-	return current ? { ...current } : createDefaultGraphicSurfaceStyle();
+	return current
+		? { ...current }
+		: createDefaultGraphicSurfaceStyle();
 }
 
 /**
@@ -232,8 +240,12 @@ export function writeGraphicStyleSlot<T extends GraphicStyleOwnerNode>(
 		return owner;
 
 	const phase = graphicStyleSlotPhase(slot);
-	if (phase)
-		return { ...owner, animation: { ...owner.animation, [phase]: value } };
+	if (phase) {
+		return {
+			...owner,
+			animation: { ...owner.animation, [phase]: value },
+		};
+	}
 
 	const item = owner as unknown as GraphicItemConfig;
 	switch (slot) {
@@ -245,7 +257,9 @@ export function writeGraphicStyleSlot<T extends GraphicStyleOwnerNode>(
 			return {
 				...item,
 				surfaceStyle: {
-					...baseSurface('surfaceStyle' in item ? item.surfaceStyle : undefined),
+					...baseSurface('surfaceStyle' in item
+						? item.surfaceStyle
+						: undefined),
 					fill: value,
 				},
 			} as unknown as T;

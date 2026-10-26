@@ -71,7 +71,12 @@ export default defineEventHandler(async (event) => {
 			statusCode: 409,
 			statusMessage: 'Conflict',
 			message: refusalMessage(plan),
-			data: { code: plan.code, ...('entryIds' in plan ? { entryIds: plan.entryIds } : {}) },
+			data: {
+				code: plan.code,
+				...('entryIds' in plan
+					? { entryIds: plan.entryIds }
+					: {}),
+			},
 		});
 	}
 

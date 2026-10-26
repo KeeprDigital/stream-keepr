@@ -192,13 +192,17 @@ export function graphicsDiscrepancyQueueOutcome(
 export function graphicsLifecycleQueueOutcome(
 	outcome: GraphicAssetLifecycleActionOutcome,
 ): GraphicsQueueActionOutcome {
-	return outcome.outcome === 'in-use' ? 'reference-blocked' : 'completed';
+	return outcome.outcome === 'in-use'
+		? 'reference-blocked'
+		: 'completed';
 }
 
 export function graphicsPurgeQueueOutcome(
 	outcome: GraphicAssetPurgeOutcome,
 ): GraphicsQueueActionOutcome {
-	return outcome.outcome === 'in-use' ? 'reference-blocked' : 'completed';
+	return outcome.outcome === 'in-use'
+		? 'reference-blocked'
+		: 'completed';
 }
 
 /**

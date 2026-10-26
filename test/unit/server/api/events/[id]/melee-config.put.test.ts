@@ -83,8 +83,19 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 			meleeClientId: ' client-id ',
 		});
 		mockFindEvent.mockReset()
-			.mockResolvedValueOnce({ id: 1, game: 'mtg', meleeEnabled: true, meleeEventId: '123', meleeClientSecret: 'stored-envelope' })
-			.mockResolvedValueOnce({ id: 1, meleeEnabled: true, meleeEventId: '123', meleeClientSecret: 'new-envelope' });
+			.mockResolvedValueOnce({
+				id: 1,
+				game: 'mtg',
+				meleeEnabled: true,
+				meleeEventId: '123',
+				meleeClientSecret: 'stored-envelope',
+			})
+			.mockResolvedValueOnce({
+				id: 1,
+				meleeEnabled: true,
+				meleeEventId: '123',
+				meleeClientSecret: 'new-envelope',
+			});
 		mockUpdateMeleeConfig.mockReset().mockResolvedValue({ clearedScreens: [], keptStructure: noKeptStructure });
 		mockFetchMeleeEvent.mockReset().mockResolvedValue({ ID: 123, Game: 'Magic: The Gathering' });
 		mockRequireMeleeIntegration.mockReset().mockResolvedValue({
@@ -133,8 +144,19 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 			meleeClientId: 'client-id',
 		});
 		mockFindEvent.mockReset()
-			.mockResolvedValueOnce({ id: 1, game: 'mtg', meleeEnabled: true, meleeEventId: '123', meleeClientSecret: 'stored-envelope' })
-			.mockResolvedValueOnce({ id: 1, meleeEnabled: true, meleeEventId: '456', meleeClientSecret: 'new-envelope' });
+			.mockResolvedValueOnce({
+				id: 1,
+				game: 'mtg',
+				meleeEnabled: true,
+				meleeEventId: '123',
+				meleeClientSecret: 'stored-envelope',
+			})
+			.mockResolvedValueOnce({
+				id: 1,
+				meleeEnabled: true,
+				meleeEventId: '456',
+				meleeClientSecret: 'new-envelope',
+			});
 		mockRequireMeleeIntegration.mockResolvedValue({
 			clientId: 'client-id',
 			clientSecret: 'decrypted-client-secret',
@@ -158,8 +180,18 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 			meleeClientId: null,
 		});
 		mockFindEvent.mockReset()
-			.mockResolvedValueOnce({ id: 1, meleeEnabled: true, meleeEventId: '123', meleeClientSecret: 'stored-envelope' })
-			.mockResolvedValueOnce({ id: 1, meleeEnabled: false, meleeEventId: null, meleeClientSecret: null });
+			.mockResolvedValueOnce({
+				id: 1,
+				meleeEnabled: true,
+				meleeEventId: '123',
+				meleeClientSecret: 'stored-envelope',
+			})
+			.mockResolvedValueOnce({
+				id: 1,
+				meleeEnabled: false,
+				meleeEventId: null,
+				meleeClientSecret: null,
+			});
 
 		await expect(handler({} as any)).resolves.toEqual({ id: 1, meleeConfigured: true });
 
@@ -178,13 +210,32 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 			meleeClientId: null,
 		});
 		mockFindEvent.mockReset()
-			.mockResolvedValueOnce({ id: 1, meleeEnabled: true, meleeEventId: '123', meleeClientSecret: 'stored-envelope' })
-			.mockResolvedValueOnce({ id: 1, meleeEnabled: false, meleeEventId: null, meleeClientSecret: null });
+			.mockResolvedValueOnce({
+				id: 1,
+				meleeEnabled: true,
+				meleeEventId: '123',
+				meleeClientSecret: 'stored-envelope',
+			})
+			.mockResolvedValueOnce({
+				id: 1,
+				meleeEnabled: false,
+				meleeEventId: null,
+				meleeClientSecret: null,
+			});
 		mockUpdateMeleeConfig.mockResolvedValue({
 			clearedScreens: [],
 			keptStructure: {
-				keptPhases: [{ id: 4, name: 'Swiss' }],
-				keptRounds: [{ id: 9, name: 'Round 3', phaseId: 5, phaseName: 'Top Cut' }],
+				keptPhases: [
+					{ id: 4, name: 'Swiss' },
+				],
+				keptRounds: [
+					{
+						id: 9,
+						name: 'Round 3',
+						phaseId: 5,
+						phaseName: 'Top Cut',
+					},
+				],
 			},
 		});
 
@@ -205,10 +256,23 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 			meleeClientId: null,
 		});
 		mockFindEvent.mockReset()
-			.mockResolvedValueOnce({ id: 1, meleeEnabled: true, meleeEventId: '123', meleeClientSecret: 'stored-envelope' })
-			.mockResolvedValueOnce({ id: 1, meleeEnabled: false, meleeEventId: null, meleeClientSecret: null });
+			.mockResolvedValueOnce({
+				id: 1,
+				meleeEnabled: true,
+				meleeEventId: '123',
+				meleeClientSecret: 'stored-envelope',
+			})
+			.mockResolvedValueOnce({
+				id: 1,
+				meleeEnabled: false,
+				meleeEventId: null,
+				meleeClientSecret: null,
+			});
 		const cleared = { id: 7, eventId: 1, stateVersion: 3 };
-		mockUpdateMeleeConfig.mockResolvedValue({ clearedScreens: [cleared], keptStructure: noKeptStructure });
+		mockUpdateMeleeConfig.mockResolvedValue({
+			clearedScreens: [cleared],
+			keptStructure: noKeptStructure,
+		});
 
 		await expect(handler({} as any)).resolves.toEqual({ id: 1, meleeConfigured: true });
 

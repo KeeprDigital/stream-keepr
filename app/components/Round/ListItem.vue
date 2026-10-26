@@ -19,10 +19,20 @@ const emit = defineEmits<{
 
 const menuItems = computed<DropdownMenuItem[][]>(() => {
 	const round = props.round;
-	const items: DropdownMenuItem[][] = [[
-		{ label: 'Review Matches', icon: 'i-lucide-swords', onSelect: () => navigateTo(`/event/${props.eventId}/matches?roundId=${round.id}`) },
-		{ label: 'Edit Round', icon: 'i-lucide-pencil', onSelect: () => emit('editRound', round) },
-	]];
+	const items: DropdownMenuItem[][] = [
+		[
+			{
+				label: 'Review Matches',
+				icon: 'i-lucide-swords',
+				onSelect: () => navigateTo(`/event/${props.eventId}/matches?roundId=${round.id}`),
+			},
+			{
+				label: 'Edit Round',
+				icon: 'i-lucide-pencil',
+				onSelect: () => emit('editRound', round),
+			},
+		],
+	];
 
 	if (isMeleeManagedRound(round) && round.lastSyncedAt) {
 		items[0]!.push({
@@ -33,15 +43,24 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
 	}
 
 	if (props.isMeleeEvent && round.externalSource === 'melee' && !isManualOverrideRound(round)) {
-		items.push([{
-			label: 'Switch to Manual Override',
-			icon: 'i-lucide-pencil-ruler',
-			color: 'warning' as const,
-			onSelect: () => emit('enableManualOverride', round),
-		}]);
+		items.push([
+			{
+				label: 'Switch to Manual Override',
+				icon: 'i-lucide-pencil-ruler',
+				color: 'warning' as const,
+				onSelect: () => emit('enableManualOverride', round),
+			},
+		]);
 	}
 
-	items.push([{ label: 'Delete Round', icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: () => emit('deleteRound', round) }]);
+	items.push([
+		{
+			label: 'Delete Round',
+			icon: 'i-lucide-trash-2',
+			color: 'error' as const,
+			onSelect: () => emit('deleteRound', round),
+		},
+	]);
 	return items;
 });
 </script>

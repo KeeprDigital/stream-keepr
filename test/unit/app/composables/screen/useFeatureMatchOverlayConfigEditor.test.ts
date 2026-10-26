@@ -26,9 +26,15 @@ function sourceItem(overrides: Partial<FeatureMatchSourceItemConfig> = {}): Feat
 
 function createEditor(sources: FeatureMatchSourceItemConfig[]) {
 	const base = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-	const config = ref<FeatureMatchOverlayModeConfig>({ ...base, layout: { ...base.layout, sources } });
+	const config = ref<FeatureMatchOverlayModeConfig>({
+		...base,
+		layout: { ...base.layout, sources },
+	});
 	const updateConfig = vi.fn((partial: Partial<FeatureMatchOverlayModeConfig>) => {
-		config.value = { ...config.value, ...partial };
+		config.value = {
+			...config.value,
+			...partial,
+		};
 	});
 	const editor = useFeatureMatchOverlayConfigEditor({
 		config,
@@ -39,7 +45,9 @@ function createEditor(sources: FeatureMatchSourceItemConfig[]) {
 
 describe('useFeatureMatchOverlayConfigEditor', () => {
 	it('submits the whole updated layout for an id-addressed Source Item patch', () => {
-		const { config, updateConfig, editor } = createEditor([sourceItem()]);
+		const { config, updateConfig, editor } = createEditor([
+			sourceItem(),
+		]);
 
 		editor.updateSource('s1', { label: 'Renamed' });
 
@@ -49,7 +57,9 @@ describe('useFeatureMatchOverlayConfigEditor', () => {
 	});
 
 	it('submits nothing when the mutation cannot apply', () => {
-		const { updateConfig, editor } = createEditor([sourceItem()]);
+		const { updateConfig, editor } = createEditor([
+			sourceItem(),
+		]);
 
 		editor.updateSource('missing', { label: 'x' });
 		editor.updateSourceFramingStyle('missing', { borderWidth: 2 });

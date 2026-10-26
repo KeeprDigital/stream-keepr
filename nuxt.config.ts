@@ -38,7 +38,9 @@ export default defineNuxtConfig({
 	// own (`scripts/verify.mjs`).
 	...(isIntegration
 		? { buildDir: `${integrationWranglerPersistDir}/nuxt` }
-		: process.env.STREAM_KEEPR_BUILD_DIR ? { buildDir: process.env.STREAM_KEEPR_BUILD_DIR } : {}),
+		: process.env.STREAM_KEEPR_BUILD_DIR
+			? { buildDir: process.env.STREAM_KEEPR_BUILD_DIR }
+			: {}),
 
 	runtimeConfig: {
 		ablyApiKey: '',
@@ -98,7 +100,9 @@ export default defineNuxtConfig({
 		// Component tests have no Nuxt icon endpoint. Requiring the client bundle
 		// there makes a missing local vector fail visibly instead of falling back to
 		// a network request the test environment cannot serve.
-		provider: process.env.NODE_ENV === 'test' ? 'none' : undefined,
+		provider: process.env.NODE_ENV === 'test'
+			? 'none'
+			: undefined,
 		clientBundle: {
 			icons: supportedSocialNetworkIcons,
 			// So the bundle holds every icon the app names: a component test that
@@ -219,7 +223,9 @@ export default defineNuxtConfig({
 			},
 			dev: {
 				configPath: 'wrangler.dev.jsonc',
-				...(isIntegration ? { persistDir: integrationWranglerPersistDir } : {}),
+				...(isIntegration
+					? { persistDir: integrationWranglerPersistDir }
+					: {}),
 			},
 		},
 	},
@@ -244,7 +250,12 @@ export default defineNuxtConfig({
 	vite: {
 		// Each integration server optimises dependencies into its own cache: they
 		// start together, and one shared cache is rewritten under the others' pages.
-		...(isIntegration ? { server: { hmr: false, watch: null }, cacheDir: `${integrationWranglerPersistDir}/vite` } : {}),
+		...(isIntegration
+			? {
+					server: { hmr: false, watch: null },
+					cacheDir: `${integrationWranglerPersistDir}/vite`,
+				}
+			: {}),
 		optimizeDeps: {
 			include: [
 				'ably',

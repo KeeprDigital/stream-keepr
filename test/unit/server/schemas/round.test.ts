@@ -34,7 +34,10 @@ describe('createRoundSchema', () => {
 	// name bounds
 
 	it('accepts name of exactly 200 characters', () => {
-		const result = createRoundSchema.safeParse({ ...validInput, name: 'a'.repeat(200) });
+		const result = createRoundSchema.safeParse({
+			...validInput,
+			name: 'a'.repeat(200),
+		});
 		expect(result.success).toBe(true);
 	});
 
@@ -84,7 +87,9 @@ describe('updateRoundSchema', () => {
 	// Same constraints as create
 
 	it('accepts name of exactly 200 characters', () => {
-		const result = updateRoundSchema.safeParse({ name: 'a'.repeat(200) });
+		const result = updateRoundSchema.safeParse({
+			name: 'a'.repeat(200),
+		});
 		expect(result.success).toBe(true);
 	});
 

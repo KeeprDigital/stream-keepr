@@ -61,7 +61,10 @@ function createRemoteCopyLibrary() {
 		remoteSource: createGraphicsRemoteSourceFetcher({
 			resolver: {
 				async resolve() {
-					return { outcome: 'resolved', addresses: ['93.184.216.34'] };
+					return {
+						outcome: 'resolved',
+						addresses: ['93.184.216.34'],
+					};
 				},
 			},
 			// No declared length, so the copy discovers it while reading.
@@ -72,7 +75,12 @@ function createRemoteCopyLibrary() {
 		now: () => new Date('2026-07-30T04:00:00.000Z'),
 		generateIdentity: () => `identity-${++nextIdentity}`,
 	});
-	return { library, catalogue, staging, uploadIds };
+	return {
+		library,
+		catalogue,
+		staging,
+		uploadIds,
+	};
 }
 
 /**

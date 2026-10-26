@@ -37,15 +37,21 @@ const availableSections = computed<DetailSection[]>(() => {
 });
 
 const sectionTabs = computed<TabsItem[]>(() => availableSections.value.map(section => ({
-	label: section === 'cards' ? 'Cards' : 'Players',
+	label: section === 'cards'
+		? 'Cards'
+		: 'Players',
 	value: section,
 })));
 
 const showSectionTabs = computed(() => availableSections.value.length > 1);
 
 function parseSectionTab(tab: unknown): DetailSection | null {
-	const value = Array.isArray(tab) ? tab[0] : tab;
-	return value === 'cards' || value === 'players' ? value : null;
+	const value = Array.isArray(tab)
+		? tab[0]
+		: tab;
+	return value === 'cards' || value === 'players'
+		? value
+		: null;
 }
 
 const requestedSection = computed(() => parseSectionTab(route.query.tab));
@@ -96,8 +102,18 @@ const stats = computed(() => {
 		return [];
 	return [
 		{ label: 'Players', value: detail.value.playerCount },
-		{ label: 'Meta Share', value: detail.value.metaShare != null ? `${detail.value.metaShare}%` : null },
-		{ label: 'Win Rate', value: detail.value.winRate != null ? `${detail.value.winRate}%` : null },
+		{
+			label: 'Meta Share',
+			value: detail.value.metaShare != null
+				? `${detail.value.metaShare}%`
+				: null,
+		},
+		{
+			label: 'Win Rate',
+			value: detail.value.winRate != null
+				? `${detail.value.winRate}%`
+				: null,
+		},
 		{ label: 'Avg Place', value: detail.value.avgPosition },
 		{
 			label: `Conversion (${conversionLabel.value})`,

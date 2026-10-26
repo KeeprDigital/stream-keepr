@@ -77,7 +77,9 @@ export class StubRenderTarget {
 export class StubRenderer {
 	domElement = {
 		style: {} as Record<string, string>,
-		classList: { add: vi.fn() },
+		classList: {
+			add: vi.fn(),
+		},
 		remove: vi.fn(),
 	};
 

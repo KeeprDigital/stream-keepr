@@ -11,7 +11,9 @@ export function useBroadcastDeckListRepository() {
 	const path = (eventId: number, listId?: number) => ({
 		eventId,
 		resourcePath: 'broadcast-deck-lists',
-		...(listId ? { resourceId: listId } : {}),
+		...(listId
+			? { resourceId: listId }
+			: {}),
 	});
 
 	const list = async (eventId: number) => {
@@ -50,9 +52,18 @@ export function useBroadcastDeckListRepository() {
 	const remove = async (eventId: number, listId: number, expectedRevision: number) => {
 		return await eventData.command<{ success: true }, { expectedRevision: number }>(
 			path(eventId, listId),
-			{ method: 'DELETE', body: { expectedRevision } },
+			{
+				method: 'DELETE',
+				body: { expectedRevision },
+			},
 		);
 	};
 
-	return { list, getById, create, update, remove };
+	return {
+		list,
+		getById,
+		create,
+		update,
+		remove,
+	};
 }

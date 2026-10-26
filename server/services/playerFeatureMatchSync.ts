@@ -69,9 +69,17 @@ export function playerFeatureMatchSyncService() {
 		playersById: Map<number, DbPlayer>;
 		commit: () => Promise<void>;
 	}> {
-		const uniqueIds = [...new Set(playerIds)];
-		if (uniqueIds.length === 0)
-			return { updatedMatchIds: [], updatedSlots: [], playersById: new Map(), commit: async () => {} };
+		const uniqueIds = [
+			...new Set(playerIds),
+		];
+		if (uniqueIds.length === 0) {
+			return {
+				updatedMatchIds: [],
+				updatedSlots: [],
+				playersById: new Map(),
+				commit: async () => {},
+			};
+		}
 
 		const affectedById = new Map<number, DbFeatureMatch & { formatExternalId: string | null }>();
 		for (const payload of chunkJsonRows(uniqueIds)) {
@@ -111,14 +119,24 @@ export function playerFeatureMatchSyncService() {
 			for (const row of rows)
 				affectedById.set(row.id, row);
 		}
-		const affectedMatches = [...affectedById.values()];
-		if (affectedMatches.length === 0)
-			return { updatedMatchIds: [], updatedSlots: [], playersById: new Map(), commit: async () => {} };
+		const affectedMatches = [
+			...affectedById.values(),
+		];
+		if (affectedMatches.length === 0) {
+			return {
+				updatedMatchIds: [],
+				updatedSlots: [],
+				playersById: new Map(),
+				commit: async () => {},
+			};
+		}
 
 		const targetIds = new Set(uniqueIds);
-		const referencedPlayerIds = [...new Set(affectedMatches.flatMap(match =>
-			[match.player1Id, match.player2Id].filter((id): id is number => id != null),
-		))];
+		const referencedPlayerIds = [
+			...new Set(affectedMatches.flatMap(match =>
+				[match.player1Id, match.player2Id].filter((id): id is number => id != null),
+			)),
+		];
 		const loadedPlayers: DbPlayer[] = [];
 		for (const payload of chunkJsonRows(referencedPlayerIds)) {
 			loadedPlayers.push(...await db
@@ -150,9 +168,13 @@ export function playerFeatureMatchSyncService() {
 			decksByPlayerId.set(deck.playerId, rows);
 		}
 
-		const reviewedArchetypeIds = [...new Set(deckRows.flatMap(deck =>
-			deck.reviewedAt != null && deck.archetypeId != null ? [deck.archetypeId] : [],
-		))];
+		const reviewedArchetypeIds = [
+			...new Set(deckRows.flatMap(deck =>
+				deck.reviewedAt != null && deck.archetypeId != null
+					? [deck.archetypeId]
+					: [],
+			)),
+		];
 		const archetypesById = new Map<number, { id: number; name: string; colors: string | null }>();
 		for (const payload of chunkJsonRows(reviewedArchetypeIds)) {
 			const rows = await db
@@ -178,13 +200,17 @@ export function playerFeatureMatchSyncService() {
 				player2Data?: PlayerSlotData;
 			} = { slot: match as DbFeatureMatch };
 			for (const side of [1, 2] as const) {
-				const playerId = side === 1 ? match.player1Id : match.player2Id;
+				const playerId = side === 1
+					? match.player1Id
+					: match.player2Id;
 				if (playerId == null || !targetIds.has(playerId))
 					continue;
 				const player = playersById.get(playerId);
 				if (!player)
 					continue;
-				const existingData = side === 1 ? match.player1Data : match.player2Data;
+				const existingData = side === 1
+					? match.player1Data
+					: match.player2Data;
 				const playerDeckRows = decksByPlayerId.get(playerId) ?? [];
 				const hasDeckIdentity = existingData != null && Object.hasOwn(existingData, 'deckId');
 				const selectedDeck = hasDeckIdentity
@@ -229,7 +255,9 @@ export function playerFeatureMatchSyncService() {
 					: applyMatchDeckSnapshot(
 							playerToMatchData(player),
 							selectedDeck,
-							selectedDeck?.archetypeId == null ? null : archetypesById.get(selectedDeck.archetypeId),
+							selectedDeck?.archetypeId == null
+								? null
+								: archetypesById.get(selectedDeck.archetypeId),
 							{
 								expectsMtgDeck: playerDeckRows.length > 0
 									|| existingData?.gameData?.type === 'mtg',
@@ -245,8 +273,14 @@ export function playerFeatureMatchSyncService() {
 			if (next.player1Data !== undefined || next.player2Data !== undefined)
 				changed.set(match.id, next);
 		}
-		if (changed.size === 0)
-			return { updatedMatchIds: [], updatedSlots: [], playersById, commit: async () => {} };
+		if (changed.size === 0) {
+			return {
+				updatedMatchIds: [],
+				updatedSlots: [],
+				playersById,
+				commit: async () => {},
+			};
+		}
 
 		const now = new Date();
 		const updateQueries = chunkJsonRows([...changed].map(([id, update]) => ({
@@ -274,14 +308,22 @@ export function playerFeatureMatchSyncService() {
 				))
 				.returning({ id: featureMatches.id });
 		});
-		const updatedSlots = [...changed.values()].map(({ slot, player1Data, player2Data }) => ({
+		const updatedSlots = [
+			...changed.values(),
+		].map(({ slot, player1Data, player2Data }) => ({
 			...slot,
-			...(player1Data === undefined ? {} : { player1Data }),
-			...(player2Data === undefined ? {} : { player2Data }),
+			...(player1Data === undefined
+				? {}
+				: { player1Data }),
+			...(player2Data === undefined
+				? {}
+				: { player2Data }),
 			updatedAt: now,
 		}));
 		return {
-			updatedMatchIds: [...changed.keys()],
+			updatedMatchIds: [
+				...changed.keys(),
+			],
 			updatedSlots,
 			playersById,
 			commit: async () => {
@@ -301,7 +343,9 @@ export function playerFeatureMatchSyncService() {
 
 		const { updatedMatchIds, updatedSlots, playersById, commit } = await refreshMatchesFromPlayers(eventId, playerIds);
 		const state = featureMatchStateService();
-		const defaults = updatedSlots.length > 0 ? await state.loadEventDefaults(eventId) : undefined;
+		const defaults = updatedSlots.length > 0
+			? await state.loadEventDefaults(eventId)
+			: undefined;
 		// Correct active-session snapshots before advancing the durable slot rows.
 		// If any session CAS fails, all slots remain at their previous snapshot and
 		// the next retry will detect the same delta instead of permanently skipping

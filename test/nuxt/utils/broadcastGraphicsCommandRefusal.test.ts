@@ -110,7 +110,10 @@ describe('the domain refusal a failed Broadcast Graphics command carries', () =>
 		// Dropping the refusal because its prose went missing would trade a vague message
 		// for a wrong one — a refusal reported as a failure of the action.
 		const refusal = broadcastGraphicsCommandRefusal(
-			failedCommand({ statusCode: 409, data: { code: 'missing-asset-reference' } }),
+			failedCommand({
+				statusCode: 409,
+				data: { code: 'missing-asset-reference' },
+			}),
 		);
 
 		expect(refusal?.code).toBe('missing-asset-reference');

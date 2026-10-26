@@ -22,5 +22,7 @@ export default defineEventHandler(async (event) => {
 	await requireUserId(event);
 	const entries = await listBroadcastGraphicTemplateLibrary(event);
 
-	return { templates: entries.map(broadcastGraphicTemplateLibrarySummary) };
+	return {
+		templates: entries.map(broadcastGraphicTemplateLibrarySummary),
+	};
 });

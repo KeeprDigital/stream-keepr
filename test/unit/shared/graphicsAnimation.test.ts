@@ -46,7 +46,12 @@ const GEOMETRY = {
 };
 
 function recipe(overrides: Partial<GraphicAnimationRecipe> = {}): GraphicAnimationRecipe {
-	return { duration: 400, easing: 'linear', delay: 0, ...overrides };
+	return {
+		duration: 400,
+		easing: 'linear',
+		delay: 0,
+		...overrides,
+	};
 }
 
 function shape(id: string, overrides: Partial<GraphicItemConfig> = {}): GraphicItemConfig {
@@ -89,7 +94,12 @@ function group(id: string, children: GraphicItemConfig[], overrides: Partial<Gra
 }
 
 function graphic(items: GraphicItemConfig[], animation?: BroadcastGraphicConfig['animation']): BroadcastGraphicConfig {
-	return { id: 'lower-third', name: 'Lower third', items, animation };
+	return {
+		id: 'lower-third',
+		name: 'Lower third',
+		items,
+		animation,
+	};
 }
 
 describe('graphicAnimationEasedProgress', () => {
@@ -153,7 +163,11 @@ describe('graphicAnimationStaggerOffset', () => {
 	const direct = ['a', 'b', 'c', 'd'];
 
 	it('adds ordered offsets in list order to the selected subset only', () => {
-		const stagger = { order: 'list' as const, step: 100, itemIds: ['a', 'c'] };
+		const stagger = {
+			order: 'list' as const,
+			step: 100,
+			itemIds: ['a', 'c'],
+		};
 
 		expect(graphicAnimationStaggerOffset(stagger, direct, 'a')).toBe(0);
 		expect(graphicAnimationStaggerOffset(stagger, direct, 'c')).toBe(100);
@@ -171,7 +185,11 @@ describe('graphicAnimationStaggerOffset', () => {
 	});
 
 	it('ignores an id that no longer names a direct Graphic Item without leaving a gap', () => {
-		const stagger = { order: 'list' as const, step: 50, itemIds: ['a', 'deleted', 'c'] };
+		const stagger = {
+			order: 'list' as const,
+			step: 50,
+			itemIds: ['a', 'deleted', 'c'],
+		};
 
 		expect(graphicAnimationStaggerOffset(stagger, direct, 'a')).toBe(0);
 		expect(graphicAnimationStaggerOffset(stagger, direct, 'c')).toBe(50);
@@ -187,17 +205,30 @@ describe('broadcastGraphicPhaseDurationMs', () => {
 	it('completes a phase immediately when nothing is authored for it', () => {
 		// A missing recipe makes its owner change immediately, which is the same
 		// arithmetic Cut relies on rather than a special case beside it.
-		for (const phase of GRAPHIC_ANIMATION_PHASE_VALUES)
-			expect(broadcastGraphicPhaseDurationMs(graphic([shape('bar')]), phase)).toBe(0);
+		for (const phase of GRAPHIC_ANIMATION_PHASE_VALUES) {
+			expect(broadcastGraphicPhaseDurationMs(graphic([
+				shape('bar'),
+			]), phase)).toBe(0);
+		}
 	});
 
 	it('completes a finite phase after its latest delayed recipe completes', () => {
 		const composition = graphic(
 			[
-				shape('bar', { animation: { enter: recipe({ duration: 400 }) } }),
-				shape('name', { animation: { enter: recipe({ duration: 300, delay: 600 }) } }),
+				shape('bar', {
+					animation: {
+						enter: recipe({ duration: 400 }),
+					},
+				}),
+				shape('name', {
+					animation: {
+						enter: recipe({ duration: 300, delay: 600 }),
+					},
+				}),
 			],
-			{ enter: recipe({ duration: 200 }) },
+			{
+				enter: recipe({ duration: 200 }),
+			},
 		);
 
 		expect(broadcastGraphicPhaseDurationMs(composition, 'enter')).toBe(900);
@@ -206,8 +237,16 @@ describe('broadcastGraphicPhaseDurationMs', () => {
 	it('measures every delay from one shared phase start, never from another recipe', () => {
 		// Two 400ms recipes, one delayed 400ms: sequential chaining would give 1200.
 		const composition = graphic([
-			shape('a', { animation: { enter: recipe({ duration: 400 }) } }),
-			shape('b', { animation: { enter: recipe({ duration: 400, delay: 400 }) } }),
+			shape('a', {
+				animation: {
+					enter: recipe({ duration: 400 }),
+				},
+			}),
+			shape('b', {
+				animation: {
+					enter: recipe({ duration: 400, delay: 400 }),
+				},
+			}),
 		]);
 
 		expect(broadcastGraphicPhaseDurationMs(composition, 'enter')).toBe(800);
@@ -216,11 +255,31 @@ describe('broadcastGraphicPhaseDurationMs', () => {
 	it('adds a stagger offset on top of each item own delay', () => {
 		const composition = graphic(
 			[
-				shape('a', { animation: { enter: recipe({ duration: 200, delay: 100 }) } }),
-				shape('b', { animation: { enter: recipe({ duration: 200, delay: 100 }) } }),
-				shape('c', { animation: { enter: recipe({ duration: 200, delay: 100 }) } }),
+				shape('a', {
+					animation: {
+						enter: recipe({ duration: 200, delay: 100 }),
+					},
+				}),
+				shape('b', {
+					animation: {
+						enter: recipe({ duration: 200, delay: 100 }),
+					},
+				}),
+				shape('c', {
+					animation: {
+						enter: recipe({ duration: 200, delay: 100 }),
+					},
+				}),
 			],
-			{ stagger: { enter: { order: 'list', step: 150, itemIds: ['a', 'b', 'c'] } } },
+			{
+				stagger: {
+					enter: {
+						order: 'list',
+						step: 150,
+						itemIds: ['a', 'b', 'c'],
+					},
+				},
+			},
 		);
 
 		// The last staggered item: 100 delay + 300 offset + 200 duration.
@@ -234,13 +293,39 @@ describe('broadcastGraphicPhaseDurationMs', () => {
 				group(
 					'cluster',
 					[
-						shape('one', { animation: { enter: recipe({ duration: 100 }) } }),
-						shape('two', { animation: { enter: recipe({ duration: 100 }) } }),
+						shape('one', {
+							animation: {
+								enter: recipe({ duration: 100 }),
+							},
+						}),
+						shape('two', {
+							animation: {
+								enter: recipe({ duration: 100 }),
+							},
+						}),
 					],
-					{ animation: { stagger: { enter: { order: 'list', step: 50, itemIds: ['one', 'two'] } } } },
+					{
+						animation: {
+							stagger: {
+								enter: {
+									order: 'list',
+									step: 50,
+									itemIds: ['one', 'two'],
+								},
+							},
+						},
+					},
 				),
 			],
-			{ stagger: { enter: { order: 'list', step: 1000, itemIds: ['bed', 'cluster'] } } },
+			{
+				stagger: {
+					enter: {
+						order: 'list',
+						step: 1000,
+						itemIds: ['bed', 'cluster'],
+					},
+				},
+			},
 		);
 
 		// `cluster` is second in the graphic stagger (1000), `two` second in its
@@ -250,10 +335,22 @@ describe('broadcastGraphicPhaseDurationMs', () => {
 
 	it('never lets an on-screen recipe gate a lifecycle phase, indefinite or not', () => {
 		const indefinite = graphic([], {
-			'on-screen': { duration: 2000, easing: 'linear', delay: 0, pause: 500, repeat: 'indefinite' },
+			'on-screen': {
+				duration: 2000,
+				easing: 'linear',
+				delay: 0,
+				pause: 500,
+				repeat: 'indefinite',
+			},
 		});
 		const finite = graphic([], {
-			'on-screen': { duration: 2000, easing: 'linear', delay: 0, pause: 500, repeat: 3 },
+			'on-screen': {
+				duration: 2000,
+				easing: 'linear',
+				delay: 0,
+				pause: 500,
+				repeat: 3,
+			},
 		});
 
 		expect(broadcastGraphicPhaseDurationMs(indefinite, 'on-screen')).toBe(0);
@@ -261,8 +358,18 @@ describe('broadcastGraphicPhaseDurationMs', () => {
 	});
 
 	it('reports whether a phase has any authored recipe at all', () => {
-		const bare = graphic([shape('bar')]);
-		const withChild = graphic([group('cluster', [shape('one', { animation: { exit: recipe() } })])]);
+		const bare = graphic([
+			shape('bar'),
+		]);
+		const withChild = graphic([
+			group('cluster', [
+				shape('one', {
+					animation: {
+						exit: recipe(),
+					},
+				}),
+			]),
+		]);
 
 		expect(broadcastGraphicHasPhaseAnimation(bare, 'enter')).toBe(false);
 		expect(broadcastGraphicHasPhaseAnimation(withChild, 'exit')).toBe(true);
@@ -291,7 +398,9 @@ describe('graphic animation presets', () => {
 		const preset = getGraphicAnimationPreset('slide-up-in')!;
 		const created = preset.create();
 
-		expect(created).toMatchObject({ slide: { direction: 'south', distanceMode: 'fixed' } });
+		expect(created).toMatchObject({
+			slide: { direction: 'south', distanceMode: 'fixed' },
+		});
 		// A preset is a shortcut, not a persisted type: the recipe carries no preset id.
 		expect(Object.keys(created)).not.toContain('presetId');
 		expect(Object.keys(created)).not.toContain('preset');
@@ -338,7 +447,13 @@ describe('graphic animation presets', () => {
 describe('lifecycle timelines', () => {
 	const enter = recipe({ duration: 400 });
 	const exit = recipe({ duration: 300 });
-	const cycle = { duration: 1000, easing: 'linear' as const, delay: 0, pause: 500, repeat: 3 };
+	const cycle = {
+		duration: 1000,
+		easing: 'linear' as const,
+		delay: 0,
+		pause: 500,
+		repeat: 3,
+	};
 
 	it('runs each phase where the previous one ended', () => {
 		const composition = graphic([], { 'enter': enter, 'on-screen': cycle, 'exit': exit });
@@ -362,7 +477,13 @@ describe('lifecycle timelines', () => {
 
 	it('bounds an indefinite on-screen recipe so a lifecycle run can reach its exit', () => {
 		const indefinite = graphic([], {
-			'on-screen': { duration: 1000, easing: 'linear', delay: 0, pause: 0, repeat: 'indefinite' },
+			'on-screen': {
+				duration: 1000,
+				easing: 'linear',
+				delay: 0,
+				pause: 0,
+				repeat: 'indefinite',
+			},
 		});
 
 		// Two bounded cycles: enough to show cycling repeats without accumulating.
@@ -377,8 +498,16 @@ describe('lifecycle timelines', () => {
 
 	it('takes the longest on-screen recipe among the graphic and its items', () => {
 		const composition = graphic([
-			shape('a', { animation: { 'on-screen': { ...cycle, repeat: 1 } } }),
-			shape('b', { animation: { 'on-screen': { ...cycle, repeat: 5 } } }),
+			shape('a', {
+				animation: {
+					'on-screen': { ...cycle, repeat: 1 },
+				},
+			}),
+			shape('b', {
+				animation: {
+					'on-screen': { ...cycle, repeat: 5 },
+				},
+			}),
 		]);
 
 		expect(broadcastGraphicOnScreenRunMs(composition)).toBe(7500);

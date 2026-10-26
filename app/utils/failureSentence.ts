@@ -43,7 +43,9 @@ export function failureSentence(caught: unknown): string | undefined {
 		return undefined;
 
 	const message = (caught as { data?: { message?: unknown } } | null)?.data?.message;
-	return typeof message === 'string' && message.length > 0 ? message : undefined;
+	return typeof message === 'string' && message.length > 0
+		? message
+		: undefined;
 }
 
 /**
@@ -136,7 +138,9 @@ function preservedServerSentence(caught: unknown): string | undefined {
 	if (typeof message !== 'string' || message.length === 0)
 		return undefined;
 
-	return SANITIZED_SERVER_MESSAGES.includes(message) ? undefined : message;
+	return SANITIZED_SERVER_MESSAGES.includes(message)
+		? undefined
+		: message;
 }
 
 /**
@@ -206,7 +210,9 @@ export function isSanitizedFailure(caught: unknown): boolean {
 export function reportedMessage(caught: unknown, fallback: string): string;
 export function reportedMessage(caught: unknown, fallback?: string): string | undefined;
 export function reportedMessage(caught: unknown, fallback?: string): string | undefined {
-	return failureSentence(caught) ?? (caught instanceof Error ? caught.message : fallback);
+	return failureSentence(caught) ?? (caught instanceof Error
+		? caught.message
+		: fallback);
 }
 
 /**
@@ -236,6 +242,8 @@ export async function withFailureSentence<T>(action: () => Promise<T>): Promise<
 	}
 	catch (failure) {
 		const sentence = failureSentence(failure);
-		throw sentence === undefined ? failure : new Error(sentence, { cause: failure });
+		throw sentence === undefined
+			? failure
+			: new Error(sentence, { cause: failure });
 	}
 }

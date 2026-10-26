@@ -25,7 +25,9 @@ export function archetypeService() {
 	};
 
 	const findManyByIds = async (eventId: number, ids: number[]): Promise<DbArchetype[]> => {
-		const uniqueIds = [...new Set(ids)];
+		const uniqueIds = [
+			...new Set(ids),
+		];
 		if (uniqueIds.length === 0)
 			return [];
 

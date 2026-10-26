@@ -192,7 +192,9 @@ export function createSequencedLiveState<TRef, TAggregate, TCommand extends Sequ
 	 */
 	async function currentSnapshot(ref: TRef, commandType: string): Promise<TResult | undefined> {
 		const latest = await port.load(ref);
-		return latest ? port.toResult(latest, commandType) : undefined;
+		return latest
+			? port.toResult(latest, commandType)
+			: undefined;
 	}
 
 	/**
@@ -244,7 +246,10 @@ export function createSequencedLiveState<TRef, TAggregate, TCommand extends Sequ
 			if (!committed)
 				throw new StateConflictError(port.aggregateLabel, port.aggregateIdOf(ref));
 
-			return { result: port.toResult(committed, command.type), previous: aggregate };
+			return {
+				result: port.toResult(committed, command.type),
+				previous: aggregate,
+			};
 		}
 		catch (error) {
 			// A concurrent writer may have committed this very command ID between the

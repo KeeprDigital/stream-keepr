@@ -66,7 +66,12 @@ describe('feature Match Session server module', () => {
 
 		const response = await featureMatchSessionModule().createSessionForSlot(2, 1, 'origin-1');
 
-		expect(response).toMatchObject({ id: 10, sequence: 1, sourceSnapshot: snapshot, currentState });
+		expect(response).toMatchObject({
+			id: 10,
+			sequence: 1,
+			sourceSnapshot: snapshot,
+			currentState,
+		});
 		// Every path that opens a Session announces it the same way (#593), so the
 		// route seam only names whose request it was; `featureMatchSessionOpeners`
 		// pins the announcement itself.
@@ -105,6 +110,8 @@ describe('feature Match Session server module', () => {
 		// The session command carries the operator's origin so their own client does not
 		// echo it; the re-resolution carries none, because nobody issued it and the
 		// operator's client is as uninformed about it as every other.
-		expect(mockRefreshBindings.mock.calls).toEqual([[1]]);
+		expect(mockRefreshBindings.mock.calls).toEqual([
+			[1],
+		]);
 	});
 });

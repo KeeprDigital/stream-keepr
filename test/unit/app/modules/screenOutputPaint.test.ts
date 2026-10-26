@@ -51,7 +51,12 @@ describe('screen output paint', () => {
 		});
 
 		it('keeps its own colour and opacity when it has them', () => {
-			expect(borderGlow({ borderColor: '#0077a3', glowColor: '#ff0000', glowSize: 7, glowOpacity: 0.5 }))
+			expect(borderGlow({
+				borderColor: '#0077a3',
+				glowColor: '#ff0000',
+				glowSize: 7,
+				glowOpacity: 0.5,
+			}))
 				.toEqual({ color: '#ff0000', size: 7, opacity: 0.5 });
 		});
 	});
@@ -70,7 +75,11 @@ describe('screen output paint', () => {
 		});
 
 		it('paints nothing for a glow without size or opacity', () => {
-			for (const off of [undefined, { ...glow, size: 0 }, { ...glow, opacity: 0 }]) {
+			for (const off of [
+				undefined,
+				{ ...glow, size: 0 },
+				{ ...glow, opacity: 0 },
+			]) {
 				expect(glowDropShadow('key', off)).toBeUndefined();
 				expect(glowFlood('key', off)).toBeUndefined();
 			}

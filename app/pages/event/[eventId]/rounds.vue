@@ -18,14 +18,26 @@ const { runRequest } = useRequestFeedback();
 const isMeleeEvent = computed(() => !!eventStore.event?.meleeEnabled);
 
 const { eventId, initialLoading, initialError, retry } = useEventPageLoading([
-	{ consumes: 'phases', isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
-	{ consumes: 'rounds', isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },
+	{
+		consumes: 'phases',
+		isLoaded: () => phaseStore.isLoaded,
+		load: id => phaseStore.loadPhasesByEventId(id),
+	},
+	{
+		consumes: 'rounds',
+		isLoaded: () => roundStore.isLoaded,
+		load: id => roundStore.loadRoundsByEventId(id),
+	},
 ]);
 
 const totalPhases = computed(() => phaseStore.phases.length);
 const totalRounds = computed(() => roundStore.rounds.length);
 const hasPhases = computed(() => totalPhases.value > 0);
-const pageState = computed(() => initialError.value ? 'ready' : initialLoading.value ? 'loading' : (hasPhases.value ? 'ready' : 'empty'));
+const pageState = computed(() => initialError.value
+	? 'ready'
+	: initialLoading.value
+		? 'loading'
+		: (hasPhases.value ? 'ready' : 'empty'));
 
 async function handleAddPhase() {
 	if (!eventId.value)
@@ -56,7 +68,9 @@ async function handleDeletePhase(phase: Phase) {
 	const confirmed = await modal.open({
 		title: 'Delete Phase',
 		message: roundCount > 0
-			? `Delete "${phase.name}" and its ${roundCount} round${roundCount !== 1 ? 's' : ''}?`
+			? `Delete "${phase.name}" and its ${roundCount} round${roundCount !== 1
+				? 's'
+				: ''}?`
 			: `Delete "${phase.name}"?`,
 		description: 'This action cannot be undone.',
 		confirmLabel: 'Delete',
@@ -153,7 +167,10 @@ async function handleEnableManualOverride(round: Round) {
 	if (!confirmed)
 		return;
 	await runRequest(async () => {
-		await $fetch(`/api/events/${eventId.value}/rounds/${round.id}/state/manual-override`, { method: 'POST', headers: useApiHeaders().getHeaders() });
+		await $fetch(`/api/events/${eventId.value}/rounds/${round.id}/state/manual-override`, {
+			method: 'POST',
+			headers: useApiHeaders().getHeaders(),
+		});
 		await roundStore.loadRoundsByEventId(eventId.value!);
 		return true;
 	}, {

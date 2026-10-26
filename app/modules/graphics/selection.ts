@@ -35,7 +35,14 @@ export function resolveGraphicsSelection(
 		return { kind: 'graphic', graphic };
 
 	const location = findGraphicItem(graphic, target.itemId);
-	return location ? { kind: 'item', graphic, item: location.item, group: location.group } : { kind: 'missing' };
+	return location
+		? {
+				kind: 'item',
+				graphic,
+				item: location.item,
+				group: location.group,
+			}
+		: { kind: 'missing' };
 }
 
 /** Stable identity key for a selection target (tree nodes, comparisons). */
@@ -63,5 +70,7 @@ export function isGraphicsSelectionTarget(value: unknown): value is GraphicsSele
 
 /** The Broadcast Graphic a target points into, if any. */
 export function graphicsSelectionGraphicId(target: GraphicsSelectionTarget): string | null {
-	return target.type === 'canvas' ? null : target.graphicId;
+	return target.type === 'canvas'
+		? null
+		: target.graphicId;
 }

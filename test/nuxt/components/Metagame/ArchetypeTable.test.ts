@@ -53,7 +53,9 @@ async function mountComponent() {
 
 			return {
 				loading,
-				entries: [makeEntry()],
+				entries: [
+					makeEntry(),
+				],
 			};
 		},
 		template: `

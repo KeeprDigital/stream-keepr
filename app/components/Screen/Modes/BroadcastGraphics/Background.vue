@@ -55,7 +55,10 @@ function write(next: BroadcastGraphicsBackgroundConfig) {
 }
 
 function updateEnabledOrOpacity(updates: Partial<Pick<BroadcastGraphicsBackgroundConfig, 'enabled' | 'opacity'>>) {
-	write({ ...background.value, ...updates });
+	write({
+		...background.value,
+		...updates,
+	});
 }
 
 /**

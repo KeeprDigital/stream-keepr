@@ -44,7 +44,12 @@ export function toPlayerData(input: PlayerSlotData): PlayerData {
 	return {
 		...DEFAULT_PLAYER_DATA,
 		...Object.fromEntries(
-			Object.entries(input).map(([k, v]) => [k, v === null ? undefined : v]),
+			Object.entries(input).map(([k, v]) => [
+				k,
+				v === null
+					? undefined
+					: v,
+			]),
 		),
 	} as PlayerData;
 }
@@ -52,7 +57,12 @@ export function toPlayerData(input: PlayerSlotData): PlayerData {
 /** Convert feature-match form data (undefined) back to slot metadata shape (null). */
 export function toPlayerSlotData(data: PlayerData): PlayerSlotData {
 	return Object.fromEntries(
-		Object.entries(data).map(([k, v]) => [k, v === undefined ? null : v]),
+		Object.entries(data).map(([k, v]) => [
+			k,
+			v === undefined
+				? null
+				: v,
+		]),
 	) as unknown as PlayerSlotData;
 }
 

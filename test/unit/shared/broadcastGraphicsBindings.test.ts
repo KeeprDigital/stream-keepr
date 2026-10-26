@@ -67,7 +67,9 @@ function context(
 		acceptedAt: 1_700_000_000_000,
 		resolveBindings: (selections): Record<string, GraphicInputValue> => {
 			const name = PLAYERS[selections.player ?? -1];
-			return name === undefined ? {} : { name };
+			return name === undefined
+				? {}
+				: { name };
 		},
 		...overrides,
 	};
@@ -82,15 +84,24 @@ function reduce(
 }
 
 function selectPlayer(state: BroadcastGraphicsLiveState, id: number | null, ctx?: BroadcastGraphicsReductionContext) {
-	return reduce(state, { type: 'Select Source', payload: { graphicId: GRAPHIC, sourceKey: 'player', selectionId: id } }, ctx);
+	return reduce(state, {
+		type: 'Select Source',
+		payload: { graphicId: GRAPHIC, sourceKey: 'player', selectionId: id },
+	}, ctx);
 }
 
 function take(state: BroadcastGraphicsLiveState, ctx?: BroadcastGraphicsReductionContext) {
-	return reduce(state, { type: 'Take', payload: { graphicId: GRAPHIC } }, ctx);
+	return reduce(state, {
+		type: 'Take',
+		payload: { graphicId: GRAPHIC },
+	}, ctx);
 }
 
 function setOverride(state: BroadcastGraphicsLiveState, value: GraphicInputValue, ctx?: BroadcastGraphicsReductionContext) {
-	return reduce(state, { type: 'Set Override', payload: { graphicId: GRAPHIC, inputKey: 'name', value } }, ctx);
+	return reduce(state, {
+		type: 'Set Override',
+		payload: { graphicId: GRAPHIC, inputKey: 'name', value },
+	}, ctx);
 }
 
 function setOverrideClaiming(
@@ -101,7 +112,15 @@ function setOverrideClaiming(
 ) {
 	return reduce(
 		state,
-		{ type: 'Set Override', payload: { graphicId: GRAPHIC, inputKey: 'name', value, basedOn: { value: basedOn } } },
+		{
+			type: 'Set Override',
+			payload: {
+				graphicId: GRAPHIC,
+				inputKey: 'name',
+				value,
+				basedOn: { value: basedOn },
+			},
+		},
 		ctx,
 	);
 }
@@ -114,13 +133,24 @@ function setInputClaiming(
 ) {
 	return reduce(
 		state,
-		{ type: 'Set Input', payload: { graphicId: GRAPHIC, inputKey: 'name', value, basedOn: { value: basedOn } } },
+		{
+			type: 'Set Input',
+			payload: {
+				graphicId: GRAPHIC,
+				inputKey: 'name',
+				value,
+				basedOn: { value: basedOn },
+			},
+		},
 		ctx,
 	);
 }
 
 function updateGraphic(state: BroadcastGraphicsLiveState, basedOnAcceptedRevision: number, ctx?: BroadcastGraphicsReductionContext) {
-	return reduce(state, { type: 'Update Graphic', payload: { graphicId: GRAPHIC, basedOnAcceptedRevision } }, ctx);
+	return reduce(state, {
+		type: 'Update Graphic',
+		payload: { graphicId: GRAPHIC, basedOnAcceptedRevision },
+	}, ctx);
 }
 
 function traces(state: BroadcastGraphicsLiveState, ctx: BroadcastGraphicsReductionContext = context(), onAir = false) {
@@ -160,7 +190,10 @@ describe('graphic Source Selection commands', () => {
 	it('refuses a selection the Broadcast Graphic does not declare', () => {
 		const failure = rejection(() => reduce(
 			createInitialBroadcastGraphicsLiveState(),
-			{ type: 'Select Source', payload: { graphicId: GRAPHIC, sourceKey: 'ghost', selectionId: 1 } },
+			{
+				type: 'Select Source',
+				payload: { graphicId: GRAPHIC, sourceKey: 'ghost', selectionId: 1 },
+			},
 		));
 
 		expect(failure.code).toBe('unknown-source');
@@ -168,11 +201,22 @@ describe('graphic Source Selection commands', () => {
 
 	it('refuses a selection nobody picks, because it follows another', () => {
 		const derived = context({
-			sources: [PLAYER_SOURCE, { key: 'archetype', label: 'Archetype', kind: 'archetype', from: { sourceKey: 'player', relation: 'archetype' } }],
+			sources: [
+				PLAYER_SOURCE,
+				{
+					key: 'archetype',
+					label: 'Archetype',
+					kind: 'archetype',
+					from: { sourceKey: 'player', relation: 'archetype' },
+				},
+			],
 		});
 		const failure = rejection(() => reduce(
 			createInitialBroadcastGraphicsLiveState(),
-			{ type: 'Select Source', payload: { graphicId: GRAPHIC, sourceKey: 'archetype', selectionId: 1 } },
+			{
+				type: 'Select Source',
+				payload: { graphicId: GRAPHIC, sourceKey: 'archetype', selectionId: 1 },
+			},
 			derived,
 		));
 
@@ -201,7 +245,9 @@ describe('bound Graphic Inputs on air', () => {
 	});
 
 	it('blocks Take while a required bound Graphic Input resolves nothing, and names it', () => {
-		const required = context({ inputs: [REQUIRED_NAME] });
+		const required = context({
+			inputs: [REQUIRED_NAME],
+		});
 		const failure = rejection(() => take(createInitialBroadcastGraphicsLiveState(), required));
 
 		expect(failure.code).toBe('required-input-unavailable');
@@ -209,7 +255,9 @@ describe('bound Graphic Inputs on air', () => {
 	});
 
 	it('takes the graphic on air once its required binding resolves', () => {
-		const required = context({ inputs: [REQUIRED_NAME] });
+		const required = context({
+			inputs: [REQUIRED_NAME],
+		});
 		const state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, required), required);
 
 		expect(acceptedGraphicInputValues(state, GRAPHIC, [REQUIRED_NAME])).toEqual({ name: 'Ava Reed' });
@@ -230,7 +278,9 @@ describe('bound Graphic Inputs on air', () => {
 	});
 
 	it('applies a live-policy bound change the moment the selection changes', () => {
-		const live = context({ inputs: [LIVE_NAME] });
+		const live = context({
+			inputs: [LIVE_NAME],
+		});
 		let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live), live);
 		state = selectPlayer(state, 2, live);
 
@@ -241,7 +291,9 @@ describe('bound Graphic Inputs on air', () => {
 	});
 
 	it('holds the last accepted value, marked stale, when a required binding stops resolving on air', () => {
-		const required = context({ inputs: [REQUIRED_NAME] });
+		const required = context({
+			inputs: [REQUIRED_NAME],
+		});
 		let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, required), required);
 		state = selectPlayer(state, null, required);
 
@@ -256,9 +308,14 @@ describe('bound Graphic Inputs on air', () => {
 	});
 
 	it('reports unavailable rather than stale while the graphic is off', () => {
-		const required = context({ inputs: [REQUIRED_NAME] });
+		const required = context({
+			inputs: [REQUIRED_NAME],
+		});
 		let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, required), required);
-		state = reduce(state, { type: 'Out', payload: { graphicId: GRAPHIC } }, required);
+		state = reduce(state, {
+			type: 'Out',
+			payload: { graphicId: GRAPHIC },
+		}, required);
 		state = selectPlayer(state, null, required);
 
 		const [trace] = traces(state, required, false);
@@ -271,9 +328,14 @@ describe('bound Graphic Inputs on air', () => {
 	});
 
 	it('refuses to take a graphic again once a required binding has stopped resolving', () => {
-		const required = context({ inputs: [REQUIRED_NAME] });
+		const required = context({
+			inputs: [REQUIRED_NAME],
+		});
 		let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, required), required);
-		state = reduce(state, { type: 'Out', payload: { graphicId: GRAPHIC } }, required);
+		state = reduce(state, {
+			type: 'Out',
+			payload: { graphicId: GRAPHIC },
+		}, required);
 		state = selectPlayer(state, null, required);
 
 		// The value it was last on air with belonged to a Player nobody has selected any
@@ -292,7 +354,10 @@ describe('bound Graphic Inputs on air', () => {
 
 		expect(broadcastGraphicInputsState(state, GRAPHIC).accepted).toEqual({ name: 'Ava Reed' });
 
-		state = reduce(state, { type: 'Out', payload: { graphicId: GRAPHIC } });
+		state = reduce(state, {
+			type: 'Out',
+			payload: { graphicId: GRAPHIC },
+		});
 		state = selectPlayer(state, null);
 		state = take(state);
 
@@ -307,56 +372,84 @@ describe('re-resolving after an Event Data change', () => {
 	function renamed(inputs: readonly GraphicInputDeclaration[] = [LIVE_NAME]) {
 		return context({
 			inputs,
-			resolveBindings: (selections): Record<string, GraphicInputValue> => (selections.player === 1 ? { name: 'Ava Reed-Marsh' } : {}),
+			resolveBindings: (selections): Record<string, GraphicInputValue> => (selections.player === 1
+				? { name: 'Ava Reed-Marsh' }
+				: {}),
 		});
 	}
 
 	it('applies the re-resolved value immediately for a live On-air Update Policy input', () => {
-		const live = context({ inputs: [LIVE_NAME] });
+		const live = context({
+			inputs: [LIVE_NAME],
+		});
 		let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live), live);
 
 		expect(broadcastGraphicInputsState(state, GRAPHIC).accepted).toEqual({ name: 'Ava Reed' });
 
 		// Event Data moved without anyone issuing an operator action.
-		state = reduce(state, { type: 'Resolve Bindings', payload: { graphicId: GRAPHIC } }, renamed());
+		state = reduce(state, {
+			type: 'Resolve Bindings',
+			payload: { graphicId: GRAPHIC },
+		}, renamed());
 
 		expect(broadcastGraphicInputsState(state, GRAPHIC).accepted).toEqual({ name: 'Ava Reed-Marsh' });
 	});
 
 	it('leaves a staged input pending rather than accepting it', () => {
 		let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1));
-		state = reduce(state, { type: 'Resolve Bindings', payload: { graphicId: GRAPHIC } }, renamed([NAME]));
+		state = reduce(state, {
+			type: 'Resolve Bindings',
+			payload: { graphicId: GRAPHIC },
+		}, renamed([NAME]));
 
 		expect(broadcastGraphicInputsState(state, GRAPHIC).accepted).toEqual({ name: 'Ava Reed' });
 		expect(traces(state, renamed([NAME]), true)[0]).toMatchObject({ pending: true, status: 'pending' });
 	});
 
 	it('changes nothing while the Broadcast Graphic is off air', () => {
-		const live = context({ inputs: [LIVE_NAME] });
+		const live = context({
+			inputs: [LIVE_NAME],
+		});
 		const off = selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live);
 
-		const resolved = reduce(off, { type: 'Resolve Bindings', payload: { graphicId: GRAPHIC } }, renamed());
+		const resolved = reduce(off, {
+			type: 'Resolve Bindings',
+			payload: { graphicId: GRAPHIC },
+		}, renamed());
 
 		expect(broadcastGraphicInputsState(resolved, GRAPHIC).accepted).toEqual({});
 	});
 
 	it('reaches the same state however many times it is delivered', () => {
-		const live = context({ inputs: [LIVE_NAME] });
+		const live = context({
+			inputs: [LIVE_NAME],
+		});
 		let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live), live);
-		state = reduce(state, { type: 'Resolve Bindings', payload: { graphicId: GRAPHIC } }, renamed());
+		state = reduce(state, {
+			type: 'Resolve Bindings',
+			payload: { graphicId: GRAPHIC },
+		}, renamed());
 		const once = broadcastGraphicInputsState(state, GRAPHIC);
 
-		state = reduce(state, { type: 'Resolve Bindings', payload: { graphicId: GRAPHIC } }, renamed());
+		state = reduce(state, {
+			type: 'Resolve Bindings',
+			payload: { graphicId: GRAPHIC },
+		}, renamed());
 
 		// Two Live Controls watching the same change both send it, so it has to converge.
 		expect(broadcastGraphicInputsState(state, GRAPHIC)).toEqual(once);
 	});
 
 	it('does not accept a re-resolved value an override is masking', () => {
-		const live = context({ inputs: [LIVE_NAME] });
+		const live = context({
+			inputs: [LIVE_NAME],
+		});
 		let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live), live);
 		state = setOverride(state, 'Ava "Riptide" Reed', live);
-		state = reduce(state, { type: 'Resolve Bindings', payload: { graphicId: GRAPHIC } }, renamed());
+		state = reduce(state, {
+			type: 'Resolve Bindings',
+			payload: { graphicId: GRAPHIC },
+		}, renamed());
 
 		expect(broadcastGraphicInputsState(state, GRAPHIC).accepted).toEqual({ name: 'Ava "Riptide" Reed' });
 	});
@@ -375,14 +468,18 @@ describe('re-resolving after an Event Data change', () => {
 		}
 
 		it('is due when a live-policy bound value has moved under an on-air graphic', () => {
-			const live = context({ inputs: [LIVE_NAME] });
+			const live = context({
+				inputs: [LIVE_NAME],
+			});
 			const state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live), live);
 
 			expect(due(state, renamed())).toBe(true);
 		});
 
 		it('is not due when the same Event Data resolves the same value', () => {
-			const live = context({ inputs: [LIVE_NAME] });
+			const live = context({
+				inputs: [LIVE_NAME],
+			});
 			const state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live), live);
 
 			// The value on air already is the value the binding resolves. Answering "due"
@@ -399,14 +496,18 @@ describe('re-resolving after an Event Data change', () => {
 		});
 
 		it('is not due while the Broadcast Graphic is off air', () => {
-			const live = context({ inputs: [LIVE_NAME] });
+			const live = context({
+				inputs: [LIVE_NAME],
+			});
 			const off = selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live);
 
 			expect(due(off, renamed())).toBe(false);
 		});
 
 		it('is not due while a Graphic Input Override masks the binding', () => {
-			const live = context({ inputs: [LIVE_NAME] });
+			const live = context({
+				inputs: [LIVE_NAME],
+			});
 			let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live), live);
 			state = setOverride(state, 'Ava "Riptide" Reed', live);
 
@@ -414,9 +515,14 @@ describe('re-resolving after an Event Data change', () => {
 		});
 
 		it('is not due when the binding has stopped resolving, because program holds what it has', () => {
-			const live = context({ inputs: [LIVE_NAME] });
+			const live = context({
+				inputs: [LIVE_NAME],
+			});
 			const state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live), live);
-			const deleted = context({ inputs: [LIVE_NAME], resolveBindings: () => ({}) });
+			const deleted = context({
+				inputs: [LIVE_NAME],
+				resolveBindings: () => ({}),
+			});
 
 			// A deleted Player does not blank a lower third: an unavailable value is passed
 			// over rather than accepted, so there is nothing to write.
@@ -424,14 +530,29 @@ describe('re-resolving after an Event Data change', () => {
 		});
 
 		it('answers what applying the command would actually do, in every case', () => {
-			const live = context({ inputs: [LIVE_NAME] });
+			const live = context({
+				inputs: [LIVE_NAME],
+			});
 			const on = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live), live);
 			const off = selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live);
 
-			for (const [state, ctx] of [[on, renamed()], [on, live], [off, renamed()]] as const) {
+			for (const [state, ctx] of [
+				[
+					on,
+					renamed(),
+				],
+				[on, live],
+				[
+					off,
+					renamed(),
+				],
+			] as const) {
 				const before = broadcastGraphicInputsState(state, GRAPHIC).accepted;
 				const after = broadcastGraphicInputsState(
-					reduce(state, { type: 'Resolve Bindings', payload: { graphicId: GRAPHIC } }, ctx),
+					reduce(state, {
+						type: 'Resolve Bindings',
+						payload: { graphicId: GRAPHIC },
+					}, ctx),
 					GRAPHIC,
 				).accepted;
 
@@ -534,21 +655,28 @@ describe('graphic Input Overrides', () => {
 	it('persists across a hide and show cycle until it is cleared', () => {
 		let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1));
 		state = setOverride(state, 'Ava "Riptide" Reed');
-		state = reduce(state, { type: 'Out', payload: { graphicId: GRAPHIC } });
+		state = reduce(state, {
+			type: 'Out',
+			payload: { graphicId: GRAPHIC },
+		});
 		state = take(state);
 
 		expect(broadcastGraphicInputsState(state, GRAPHIC).accepted).toEqual({ name: 'Ava "Riptide" Reed' });
 	});
 
 	it('lets an override rescue a required Graphic Input whose binding resolves nothing', () => {
-		const required = context({ inputs: [REQUIRED_NAME] });
+		const required = context({
+			inputs: [REQUIRED_NAME],
+		});
 		const state = take(setOverride(createInitialBroadcastGraphicsLiveState(), 'Ava Reed', required), required);
 
 		expect(broadcastGraphicInputsState(state, GRAPHIC).accepted).toEqual({ name: 'Ava Reed' });
 	});
 
 	it('applies a live-policy override immediately on an on-air graphic', () => {
-		const live = context({ inputs: [LIVE_NAME] });
+		const live = context({
+			inputs: [LIVE_NAME],
+		});
 		let state = take(selectPlayer(createInitialBroadcastGraphicsLiveState(), 1, live), live);
 		state = setOverride(state, 'Ava "Riptide" Reed', live);
 
@@ -581,7 +709,10 @@ describe('graphic Input Overrides', () => {
 	it('refuses an override naming a Graphic Input the Broadcast Graphic does not declare', () => {
 		const failure = rejection(() => reduce(
 			createInitialBroadcastGraphicsLiveState(),
-			{ type: 'Set Override', payload: { graphicId: GRAPHIC, inputKey: 'ghost', value: 'x' } },
+			{
+				type: 'Set Override',
+				payload: { graphicId: GRAPHIC, inputKey: 'ghost', value: 'x' },
+			},
 		));
 
 		expect(failure.code).toBe('unknown-input');

@@ -20,7 +20,12 @@ export function useArchetypeSpotlightModeData() {
 		source: () => {
 			const request = archetypeSpotlightScreenQuery(config.value);
 			return outputReads.scopeKey.value && request
-				? JSON.stringify([outputReads.scopeKey.value, request, config.value.cardLimit, config.value.excludedCardTypes])
+				? JSON.stringify([
+						outputReads.scopeKey.value,
+						request,
+						config.value.cardLimit,
+						config.value.excludedCardTypes,
+					])
 				: null;
 		},
 		read: () => outputReads.archetypeSpotlight(),
@@ -31,7 +36,9 @@ export function useArchetypeSpotlightModeData() {
 	});
 	const loading = freshness.loading;
 	const error = freshness.error;
-	const spotlight = computed(() => config.value.archetypeId != null ? freshness.data.value : null);
+	const spotlight = computed(() => config.value.archetypeId != null
+		? freshness.data.value
+		: null);
 	const pilots = computed(() => spotlight.value?.pilots ?? []);
 	const topCards = computed(() => spotlight.value?.topCards ?? []);
 
@@ -53,7 +60,9 @@ export function useArchetypeSpotlightModeData() {
 		const name = spotlight.value?.archetype.name;
 		if (!name)
 			return 'Archetype Spotlight';
-		return scopeLabel.value ? `${scopeLabel.value} Spotlight: ${name}` : `Spotlight: ${name}`;
+		return scopeLabel.value
+			? `${scopeLabel.value} Spotlight: ${name}`
+			: `Spotlight: ${name}`;
 	});
 
 	/** The conversion target, named as the app's archetype page names it. */

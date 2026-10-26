@@ -22,7 +22,9 @@ export function previousStandingsRoundId(rounds: readonly EventRound[], roundId:
 	if (roundId == null)
 		return withStandings(rounds.length).at(-2)?.id ?? null;
 	const index = rounds.findIndex(round => round.id === roundId);
-	return index > 0 ? withStandings(index).at(-1)?.id ?? null : null;
+	return index > 0
+		? withStandings(index).at(-1)?.id ?? null
+		: null;
 }
 
 /**
@@ -33,5 +35,7 @@ export function previousStandingsRoundId(rounds: readonly EventRound[], roundId:
  */
 export function seedingRoundId(rounds: readonly EventRound[], phaseId: number): number | null {
 	const first = rounds.find(round => round.phaseId === phaseId);
-	return first ? previousStandingsRoundId(rounds, first.id) : null;
+	return first
+		? previousStandingsRoundId(rounds, first.id)
+		: null;
 }

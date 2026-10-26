@@ -21,13 +21,22 @@ export const metagameQuerySchema = z.object({
 	playerListId: z.coerce.number().int().positive().optional(),
 }).refine(
 	data => data.scope !== 'topN' || data.topN != null,
-	{ message: 'topN is required when scope is topN', path: ['topN'] },
+	{
+		message: 'topN is required when scope is topN',
+		path: ['topN'],
+	},
 ).refine(
 	data => data.scope !== 'minPoints' || data.minPoints != null,
-	{ message: 'minPoints is required when scope is minPoints', path: ['minPoints'] },
+	{
+		message: 'minPoints is required when scope is minPoints',
+		path: ['minPoints'],
+	},
 ).refine(
 	data => data.scope !== 'playerList' || data.playerListId != null,
-	{ message: 'playerListId is required when scope is playerList', path: ['playerListId'] },
+	{
+		message: 'playerListId is required when scope is playerList',
+		path: ['playerListId'],
+	},
 );
 
 export const boardSelectionSchema = z.enum(BOARD_SELECTION_VALUES).default('full');
@@ -68,7 +77,10 @@ export const metagameConversionQuerySchema = z.object({
 	conversionThreshold: z.coerce.number().int().min(0).max(999).optional(),
 }).refine(
 	data => (data.conversionMetric == null) === (data.conversionThreshold == null),
-	{ message: 'conversionMetric and conversionThreshold must be provided together', path: ['conversionThreshold'] },
+	{
+		message: 'conversionMetric and conversionThreshold must be provided together',
+		path: ['conversionThreshold'],
+	},
 );
 
 export const metagameArchetypesQuerySchema = metagameQuerySchema.and(z.object({

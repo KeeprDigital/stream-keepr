@@ -11,7 +11,12 @@ import { createMockRealtime } from '~~/test/helpers/realtime-mock';
  * absorbed by a refresh-and-retry; an unmarked 409 is a refusal (#381).
  */
 function stateConflictFailure() {
-	return { statusCode: 409, data: { data: { code: STATE_CONFLICT_CODE } } };
+	return {
+		statusCode: 409,
+		data: {
+			data: { code: STATE_CONFLICT_CODE },
+		},
+	};
 }
 
 // ── Mock Dependencies ──
@@ -29,7 +34,9 @@ const mockRepo = {
 
 const mockAbly = createMockRealtime();
 const mockIsSelfOrigin = vi.fn(() => false);
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 
 const ablyCallbacks: Record<string, Record<string, (...args: unknown[]) => void>> = {};
 mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
@@ -52,7 +59,9 @@ mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string,
 mockNuxtImport('useScreenRepository', () => () => mockRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
 mockNuxtImport('$fetch', () => mockFetch);
-mockNuxtImport('useToast', () => () => ({ add: vi.fn() }));
+mockNuxtImport('useToast', () => () => ({
+	add: vi.fn(),
+}));
 
 describe('useScreenStore config and realtime', () => {
 	let store: ReturnType<typeof useScreenStore>;
@@ -85,13 +94,17 @@ describe('useScreenStore config and realtime', () => {
 		it('optimistically merges config and strips nulls', async () => {
 			const screen = createMockScreen({
 				id: 1,
-				modeConfigs: { card: { featureMatchId: 1, scale: 1.5 } },
+				modeConfigs: {
+					card: { featureMatchId: 1, scale: 1.5 },
+				},
 			});
 			store.screens = [screen];
 
 			const updated = createMockScreen({
 				id: 1,
-				modeConfigs: { card: { featureMatchId: 1, scale: 2.0 } },
+				modeConfigs: {
+					card: { featureMatchId: 1, scale: 2.0 },
+				},
 			});
 			mockRepo.updateModeConfig.mockResolvedValue(updated);
 
@@ -103,25 +116,39 @@ describe('useScreenStore config and realtime', () => {
 		it('strips null values from optimistic config', async () => {
 			const screen = createMockScreen({
 				id: 1,
-				modeConfigs: { card: { featureMatchId: 1, scale: 1.5 } },
+				modeConfigs: {
+					card: { featureMatchId: 1, scale: 1.5 },
+				},
 			});
 			store.screens = [screen];
 
 			// During optimistic update, the merged config should not contain null keys
-			const updated = createMockScreen({ id: 1, modeConfigs: { card: { scale: 1.5 } } });
+			const updated = createMockScreen({
+				id: 1,
+				modeConfigs: {
+					card: { scale: 1.5 },
+				},
+			});
 			mockRepo.updateModeConfig.mockResolvedValue(updated);
 
 			await store.updateModeConfig(1, 1, 'card', { featureMatchId: null as any });
 
 			// Server response prevails
-			expect(store.screens[0]!.modeConfigs).toEqual({ card: { scale: 1.5 } });
+			expect(store.screens[0]!.modeConfigs).toEqual({
+				card: { scale: 1.5 },
+			});
 		});
 
 		it('updates activeScreen if matching', async () => {
 			const screen = createMockScreen({ id: 1, modeConfigs: {} });
 			store.screens = [screen];
 			store.activeScreen = screen;
-			const updated = createMockScreen({ id: 1, modeConfigs: { background: { layers: [] } } });
+			const updated = createMockScreen({
+				id: 1,
+				modeConfigs: {
+					background: { layers: [] },
+				},
+			});
 			mockRepo.updateModeConfig.mockResolvedValue(updated);
 
 			await store.updateModeConfig(1, 1, 'background', {});
@@ -131,14 +158,28 @@ describe('useScreenStore config and realtime', () => {
 
 		it('batches rapid mode config patches into one write per mode', async () => {
 			vi.useFakeTimers();
-			const screen = createMockScreen({ id: 1, modeConfigs: { card: { scale: 1 } }, stateVersion: 2 });
+			const screen = createMockScreen({
+				id: 1,
+				modeConfigs: {
+					card: { scale: 1 },
+				},
+				stateVersion: 2,
+			});
 			store.screens = [screen];
-			const updated = createMockScreen({ id: 1, modeConfigs: { card: { scale: 2, animationEnabled: false } }, stateVersion: 3 });
+			const updated = createMockScreen({
+				id: 1,
+				modeConfigs: {
+					card: { scale: 2, animationEnabled: false },
+				},
+				stateVersion: 3,
+			});
 			mockRepo.updateModeConfig.mockResolvedValue(updated);
 
 			const first = store.updateModeConfig(1, 1, 'card', { scale: 2 });
 			const second = store.updateModeConfig(1, 1, 'card', { animationEnabled: false });
-			expect(store.screens[0]!.modeConfigs).toEqual({ card: { scale: 2, animationEnabled: false } });
+			expect(store.screens[0]!.modeConfigs).toEqual({
+				card: { scale: 2, animationEnabled: false },
+			});
 			expect(mockRepo.updateModeConfig).not.toHaveBeenCalled();
 
 			await vi.advanceTimersByTimeAsync(300);
@@ -152,7 +193,12 @@ describe('useScreenStore config and realtime', () => {
 		it('uses default config for mode when no existing config', async () => {
 			const screen = createMockScreen({ id: 1, modeConfigs: null });
 			store.screens = [screen];
-			const updated = createMockScreen({ id: 1, modeConfigs: { background: { layers: [] } } });
+			const updated = createMockScreen({
+				id: 1,
+				modeConfigs: {
+					background: { layers: [] },
+				},
+			});
 			mockRepo.updateModeConfig.mockResolvedValue(updated);
 
 			await store.updateModeConfig(1, 1, 'background', {});
@@ -183,7 +229,11 @@ describe('useScreenStore config and realtime', () => {
 		});
 
 		it('rejects a failed save and rolls back the optimistic config', async () => {
-			const screen = createMockScreen({ id: 1, screenConfig: { background: '#000' }, stateVersion: 2 });
+			const screen = createMockScreen({
+				id: 1,
+				screenConfig: { background: '#000' },
+				stateVersion: 2,
+			});
 			store.screens = [screen];
 			mockRepo.updateScreenConfig.mockRejectedValue(new Error('Save failed'));
 
@@ -198,9 +248,17 @@ describe('useScreenStore config and realtime', () => {
 
 		it('batches rapid screen config patches into one write', async () => {
 			vi.useFakeTimers();
-			const screen = createMockScreen({ id: 1, screenConfig: { background: '#000' }, stateVersion: 2 });
+			const screen = createMockScreen({
+				id: 1,
+				screenConfig: { background: '#000' },
+				stateVersion: 2,
+			});
 			store.screens = [screen];
-			const updated = createMockScreen({ id: 1, screenConfig: { background: '#fff', width: 1920 }, stateVersion: 3 });
+			const updated = createMockScreen({
+				id: 1,
+				screenConfig: { background: '#fff', width: 1920 },
+				stateVersion: 3,
+			});
 			mockRepo.updateScreenConfig.mockResolvedValue(updated);
 
 			const first = store.updateScreenConfig(1, 1, { width: 1920 });
@@ -228,7 +286,11 @@ describe('useScreenStore config and realtime', () => {
 			const screen = createMockScreen({ id: 1, screenConfig: {}, stateVersion: 2 });
 			store.screens = [screen];
 			mockRepo.updateScreenConfig.mockResolvedValue(
-				createMockScreen({ id: 1, screenConfig: { width: 1920 }, stateVersion: 3 }),
+				createMockScreen({
+					id: 1,
+					screenConfig: { width: 1920 },
+					stateVersion: 3,
+				}),
 			);
 
 			const write = store.updateScreenConfig(1, 1, { width: 1920 });
@@ -250,7 +312,10 @@ describe('useScreenStore config and realtime', () => {
 			});
 			store.screens = [screen];
 
-			const updated = createMockScreen({ id: 1, screenConfig: { width: 1920 } });
+			const updated = createMockScreen({
+				id: 1,
+				screenConfig: { width: 1920 },
+			});
 			mockRepo.updateScreenConfig.mockResolvedValue(updated);
 
 			await store.updateScreenConfig(1, 1, { background: null });
@@ -262,7 +327,10 @@ describe('useScreenStore config and realtime', () => {
 			const screen = createMockScreen({ id: 1, screenConfig: {} });
 			store.screens = [screen];
 			store.activeScreen = screen;
-			const updated = createMockScreen({ id: 1, screenConfig: { width: 1920 } });
+			const updated = createMockScreen({
+				id: 1,
+				screenConfig: { width: 1920 },
+			});
 			mockRepo.updateScreenConfig.mockResolvedValue(updated);
 
 			await store.updateScreenConfig(1, 1, { width: 1920 });
@@ -272,8 +340,16 @@ describe('useScreenStore config and realtime', () => {
 
 		it('refreshes and retries once when a batched screen config write conflicts', async () => {
 			const stale = createMockScreen({ id: 1, screenConfig: {}, stateVersion: 2 });
-			const fresh = createMockScreen({ id: 1, screenConfig: { height: 1080 }, stateVersion: 3 });
-			const updated = createMockScreen({ id: 1, screenConfig: { height: 1080, width: 1920 }, stateVersion: 4 });
+			const fresh = createMockScreen({
+				id: 1,
+				screenConfig: { height: 1080 },
+				stateVersion: 3,
+			});
+			const updated = createMockScreen({
+				id: 1,
+				screenConfig: { height: 1080, width: 1920 },
+				stateVersion: 4,
+			});
 			store.screens = [stale];
 			mockRepo.updateScreenConfig
 				.mockRejectedValueOnce(stateConflictFailure())
@@ -348,7 +424,9 @@ describe('useScreenStore config and realtime', () => {
 			});
 
 			it('caches the loaded Screen once, so an already-known Screen is not duplicated', async () => {
-				store.screens = [createMockScreen({ id: 10 })];
+				store.screens = [
+					createMockScreen({ id: 10 }),
+				];
 				store.currentEventId = 1;
 				mockRepo.getById.mockResolvedValue(createMockScreen({ id: 10, name: 'Remote' }));
 
@@ -382,7 +460,9 @@ describe('useScreenStore config and realtime', () => {
 
 		describe('screen:updated', () => {
 			it('reloads the announced Screen from the API', async () => {
-				store.screens = [createMockScreen({ id: 10, name: 'Old' })];
+				store.screens = [
+					createMockScreen({ id: 10, name: 'Old' }),
+				];
 				mockRepo.getById.mockResolvedValue(createMockScreen({ id: 10, name: 'New' }));
 
 				await ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 10 });
@@ -414,7 +494,9 @@ describe('useScreenStore config and realtime', () => {
 			});
 
 			it('ignores a Screen this client neither holds nor collects', async () => {
-				store.screens = [createMockScreen({ id: 10 })];
+				store.screens = [
+					createMockScreen({ id: 10 }),
+				];
 				store.currentEventId = null;
 
 				await ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 99 });
@@ -423,7 +505,9 @@ describe('useScreenStore config and realtime', () => {
 			});
 
 			it('skips when isSelfOrigin returns true', async () => {
-				store.screens = [createMockScreen({ id: 10, name: 'Old' })];
+				store.screens = [
+					createMockScreen({ id: 10, name: 'Old' }),
+				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
 				await ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 10 });
@@ -434,7 +518,9 @@ describe('useScreenStore config and realtime', () => {
 
 			it('keeps the latest answer when two changes are announced in quick succession', async () => {
 				// Two loads for one Screen race; the earlier answer must not land last.
-				store.screens = [createMockScreen({ id: 10, name: 'Old' })];
+				store.screens = [
+					createMockScreen({ id: 10, name: 'Old' }),
+				];
 				let releaseFirst: (screen: unknown) => void = () => {};
 				mockRepo.getById
 					.mockReturnValueOnce(new Promise((resolve) => {
@@ -454,7 +540,9 @@ describe('useScreenStore config and realtime', () => {
 				// Leaving the Event supersedes the write flights; a reload in flight has to
 				// be superseded with them, or an answer for the Event just left lands in a
 				// store that has been cleared and puts a Screen back that nobody asked for.
-				store.screens = [createMockScreen({ id: 10, name: 'Old' })];
+				store.screens = [
+					createMockScreen({ id: 10, name: 'Old' }),
+				];
 				let release: (screen: unknown) => void = () => {};
 				mockRepo.getById.mockReturnValue(new Promise((resolve) => {
 					release = resolve;
@@ -478,7 +566,11 @@ describe('useScreenStore config and realtime', () => {
 				// by fake timers, the reload's answer by its own resolver — so the ordering
 				// under test is the test's, never the machine's.
 				vi.useFakeTimers();
-				const cached = createMockScreen({ id: 10, screenConfig: { width: 100 }, stateVersion: 3 });
+				const cached = createMockScreen({
+					id: 10,
+					screenConfig: { width: 100 },
+					stateVersion: 3,
+				});
 				store.screens = [cached];
 				store.activeScreen = cached;
 
@@ -488,7 +580,11 @@ describe('useScreenStore config and realtime', () => {
 				}));
 				const reload = ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 10 });
 
-				const saved = createMockScreen({ id: 10, screenConfig: { width: 1920 }, stateVersion: 4 });
+				const saved = createMockScreen({
+					id: 10,
+					screenConfig: { width: 1920 },
+					stateVersion: 4,
+				});
 				mockRepo.updateScreenConfig.mockResolvedValue(saved);
 				const save = store.updateScreenConfig(1, 10, { width: 1920 });
 				await vi.advanceTimersByTimeAsync(300);
@@ -497,7 +593,11 @@ describe('useScreenStore config and realtime', () => {
 
 				// Served before that save committed, so it answers with the revision the
 				// save superseded.
-				serveAnnouncedReload(createMockScreen({ id: 10, screenConfig: { width: 100 }, stateVersion: 3 }));
+				serveAnnouncedReload(createMockScreen({
+					id: 10,
+					screenConfig: { width: 100 },
+					stateVersion: 3,
+				}));
 				await reload;
 
 				expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
@@ -511,8 +611,18 @@ describe('useScreenStore config and realtime', () => {
 				// onto it, and settled at 5 — all while the announce's own GET was still
 				// out. That GET's answer is a revision older than what the client holds.
 				vi.useFakeTimers();
-				store.screens = [createMockScreen({ id: 10, screenConfig: { width: 100 }, stateVersion: 3 })];
-				const remote = createMockScreen({ id: 10, screenConfig: { width: 100, background: '#fff' }, stateVersion: 4 });
+				store.screens = [
+					createMockScreen({
+						id: 10,
+						screenConfig: { width: 100 },
+						stateVersion: 3,
+					}),
+				];
+				const remote = createMockScreen({
+					id: 10,
+					screenConfig: { width: 100, background: '#fff' },
+					stateVersion: 4,
+				});
 
 				let serveAnnouncedReload: (screen: unknown) => void = () => {};
 				mockRepo.getById
@@ -522,7 +632,11 @@ describe('useScreenStore config and realtime', () => {
 					.mockResolvedValue(remote);
 				const reload = ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 10 });
 
-				const merged = createMockScreen({ id: 10, screenConfig: { width: 1920, background: '#fff' }, stateVersion: 5 });
+				const merged = createMockScreen({
+					id: 10,
+					screenConfig: { width: 1920, background: '#fff' },
+					stateVersion: 5,
+				});
 				mockRepo.updateScreenConfig
 					.mockRejectedValueOnce(stateConflictFailure())
 					.mockResolvedValueOnce(merged);
@@ -540,7 +654,9 @@ describe('useScreenStore config and realtime', () => {
 			});
 
 			it('leaves the cached Screen alone when the reload fails', async () => {
-				store.screens = [createMockScreen({ id: 10, name: 'Old' })];
+				store.screens = [
+					createMockScreen({ id: 10, name: 'Old' }),
+				];
 				mockRepo.getById.mockRejectedValue(new Error('offline'));
 
 				await ablyCallbacks.screen!['screen:updated']!({ eventId: 1, screenId: 10 });
@@ -552,7 +668,9 @@ describe('useScreenStore config and realtime', () => {
 
 		describe('screen:deleted', () => {
 			it('removes screen from remote message', () => {
-				store.screens = [createMockScreen({ id: 10 })];
+				store.screens = [
+					createMockScreen({ id: 10 }),
+				];
 
 				ablyCallbacks.screen!['screen:deleted']!({ screenId: 10 });
 
@@ -570,7 +688,9 @@ describe('useScreenStore config and realtime', () => {
 			});
 
 			it('skips when isSelfOrigin returns true', () => {
-				store.screens = [createMockScreen({ id: 10 })];
+				store.screens = [
+					createMockScreen({ id: 10 }),
+				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
 				ablyCallbacks.screen!['screen:deleted']!({ screenId: 10 });
@@ -589,7 +709,12 @@ describe('useScreenStore config and realtime', () => {
 			});
 
 			it('returns count from screenPresence map', () => {
-				store.screenPresence = new Map([[1, { count: 3, members: [] }]]);
+				store.screenPresence = new Map([
+					[
+						1,
+						{ count: 3, members: [] },
+					],
+				]);
 
 				expect(store.getConnectedCount(1)).toBe(3);
 			});
@@ -638,9 +763,19 @@ describe('useScreenStore config and realtime', () => {
 
 		beforeEach(() => {
 			vi.useFakeTimers();
-			store.screens = [createMockScreen({ id: 1, stateVersion: 2, screenConfig: { background: '#000' } })];
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 2,
+					screenConfig: { background: '#000' },
+				}),
+			];
 			mockRepo.updateScreenConfig.mockResolvedValue(
-				createMockScreen({ id: 1, stateVersion: 3, screenConfig: { background: '#fff' } }),
+				createMockScreen({
+					id: 1,
+					stateVersion: 3,
+					screenConfig: { background: '#fff' },
+				}),
 			);
 		});
 
@@ -687,7 +822,9 @@ describe('useScreenStore config and realtime', () => {
 
 	describe('$reset', () => {
 		it('clears all state', () => {
-			store.screens = [createMockScreen()];
+			store.screens = [
+				createMockScreen(),
+			];
 			store.activeScreen = createMockScreen();
 			store.error = 'some error';
 			store.currentEventId = 1;
@@ -703,7 +840,12 @@ describe('useScreenStore config and realtime', () => {
 		});
 
 		it('clears screenPresence map', () => {
-			store.screenPresence = new Map([[1, { count: 2, members: [] }]]);
+			store.screenPresence = new Map([
+				[
+					1,
+					{ count: 2, members: [] },
+				],
+			]);
 
 			store.$reset();
 

@@ -21,13 +21,26 @@ describe('featureMatchTokenCatalogue', () => {
 			.filter(key => key.startsWith(`player${side}`))
 			.map(key => key.slice(`player${side}`.length));
 
-		expect(forSide(1)).toEqual(['Name', 'Record', 'Deck', 'DeckColors', 'Pronouns', 'Lgs']);
+		expect(forSide(1)).toEqual([
+			'Name',
+			'Record',
+			'Deck',
+			'DeckColors',
+			'Pronouns',
+			'Lgs',
+		]);
 		expect(forSide(2)).toEqual(forSide(1));
 	});
 
 	it('carries the Match, Round, and Event tokens beside the per-player ones', () => {
 		expect(FEATURE_MATCH_TOKEN_KEYS.filter(key => !key.startsWith('player')))
-			.toEqual(['round', 'stage', 'table', 'format', 'eventName']);
+			.toEqual([
+				'round',
+				'stage',
+				'table',
+				'format',
+				'eventName',
+			]);
 	});
 
 	it('gives every token a distinct key', () => {

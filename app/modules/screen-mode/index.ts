@@ -130,8 +130,12 @@ export function resolveScreenModeHost(options: ResolveScreenModeHostOptions): Re
 	const config = options.screenConfig;
 
 	if (host.kind === 'control') {
-		const paddingX = host.useScreenPadding ? (config.paddingX ?? 0) : 0;
-		const paddingY = host.useScreenPadding ? (config.paddingY ?? 0) : 0;
+		const paddingX = host.useScreenPadding
+			? (config.paddingX ?? 0)
+			: 0;
+		const paddingY = host.useScreenPadding
+			? (config.paddingY ?? 0)
+			: 0;
 		const theme = resolveScreenModeHostTheme(host, config, options.preferredDark);
 
 		return {
@@ -140,19 +144,31 @@ export function resolveScreenModeHost(options: ResolveScreenModeHostOptions): Re
 			containerStyle: {
 				padding: `${paddingY}px ${paddingX}px`,
 			},
-			wrapperClass: theme ? [theme] : [],
-			wrapperStyle: theme ? { colorScheme: theme } : {},
+			wrapperClass: theme
+				? [theme]
+				: [],
+			wrapperStyle: theme
+				? { colorScheme: theme }
+				: {},
 			provideOverlayContainer: false,
 		};
 	}
 
 	const width = config.width ?? host.defaultWidth;
 	const height = config.height ?? host.defaultHeight;
-	const paddingX = host.useScreenPadding ? (config.paddingX ?? 0) : 0;
-	const paddingY = host.useScreenPadding ? (config.paddingY ?? 0) : 0;
+	const paddingX = host.useScreenPadding
+		? (config.paddingX ?? 0)
+		: 0;
+	const paddingY = host.useScreenPadding
+		? (config.paddingY ?? 0)
+		: 0;
 	const style: CSSProperties = {
-		width: width ? `${width}px` : '100%',
-		height: height ? `${height}px` : '100%',
+		width: width
+			? `${width}px`
+			: '100%',
+		height: height
+			? `${height}px`
+			: '100%',
 		flexShrink: '0',
 		padding: `${paddingY}px ${paddingX}px`,
 	};

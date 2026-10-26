@@ -72,8 +72,12 @@ export function createNetDelegate(): SceneEffectDelegate<AnimationEffectParams<'
 		dotGeometry?.dispose();
 		dotMaterial?.dispose();
 
-		dotGeometry = current.showPoints ? new three.SphereGeometry(0.25, 12, 12) : undefined;
-		dotMaterial = current.showPoints ? new three.MeshLambertMaterial({ color: current.lineColor }) : undefined;
+		dotGeometry = current.showPoints
+			? new three.SphereGeometry(0.25, 12, 12)
+			: undefined;
+		dotMaterial = current.showPoints
+			? new three.MeshLambertMaterial({ color: current.lineColor })
+			: undefined;
 
 		points = [];
 		positions = [];
@@ -150,5 +154,9 @@ export default function createNetEffect(
 	host: HTMLElement,
 	params: AnimationEffectParams<'net'>,
 ): AnimationEffectInstance<AnimationEffectParams<'net'>> {
-	return createSceneEffect({ three: THREE, host, delegate: createNetDelegate() }, params);
+	return createSceneEffect({
+		three: THREE,
+		host,
+		delegate: createNetDelegate(),
+	}, params);
 }

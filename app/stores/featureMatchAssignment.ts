@@ -35,7 +35,9 @@ export const useFeatureMatchAssignmentStore = defineStore('featureMatchAssignmen
 	const lifetimes = createGuardedSequence();
 	let lifetime = lifetimes.begin();
 
-	const assignments = computed(() => [...assignmentsByRound.value.values()].flat());
+	const assignments = computed(() => [
+		...assignmentsByRound.value.values(),
+	].flat());
 
 	function assignmentsForRound(roundId: number): FeatureMatchAssignment[] {
 		return assignmentsByRound.value.get(roundId) ?? [];
@@ -89,8 +91,11 @@ export const useFeatureMatchAssignmentStore = defineStore('featureMatchAssignmen
 			return loaded;
 		}
 		catch (cause) {
-			if (flight.current)
-				error.value = cause instanceof Error ? cause.message : 'Failed to load feature match assignments';
+			if (flight.current) {
+				error.value = cause instanceof Error
+					? cause.message
+					: 'Failed to load feature match assignments';
+			}
 			return null;
 		}
 		finally {
@@ -111,8 +116,11 @@ export const useFeatureMatchAssignmentStore = defineStore('featureMatchAssignmen
 					replaceRound(roundId, loaded);
 			}
 			catch (cause) {
-				if (flight.current)
-					error.value = cause instanceof Error ? cause.message : 'Failed to reload feature match assignments';
+				if (flight.current) {
+					error.value = cause instanceof Error
+						? cause.message
+						: 'Failed to reload feature match assignments';
+				}
 			}
 		}));
 	}

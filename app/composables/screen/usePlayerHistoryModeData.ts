@@ -85,9 +85,13 @@ export function usePlayerHistoryModeData() {
 	const player = computed(() => freshness.data.value.player);
 	const rows = computed(() => freshness.data.value.rows);
 
-	const headerText = computed(() => config.value.headerText || (player.value ? `${player.value.name} Match History` : 'Player Match History'));
+	const headerText = computed(() => config.value.headerText || (player.value
+		? `${player.value.name} Match History`
+		: 'Player Match History'));
 	const isEmpty = computed(() => !loading.value && (!config.value.playerId || rows.value.length === 0));
-	const emptyMessage = computed(() => !config.value.playerId ? 'Select a player to show match history.' : 'No matches found for this player.');
+	const emptyMessage = computed(() => !config.value.playerId
+		? 'Select a player to show match history.'
+		: 'No matches found for this player.');
 
 	const { pageData, rowCount } = usePaginatedScreenMode({ mode: 'player-history', config, rows });
 
@@ -102,5 +106,16 @@ export function usePlayerHistoryModeData() {
 		return row.resultString ?? 'Result';
 	}
 
-	return { config, loading, error, isEmpty, emptyMessage, headerText, pageData, rowCount, player, formatOutcome };
+	return {
+		config,
+		loading,
+		error,
+		isEmpty,
+		emptyMessage,
+		headerText,
+		pageData,
+		rowCount,
+		player,
+		formatOutcome,
+	};
 }

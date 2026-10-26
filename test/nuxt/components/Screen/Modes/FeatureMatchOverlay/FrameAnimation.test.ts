@@ -53,7 +53,9 @@ describe('featureMatchOverlayFrameAnimation', () => {
 	it('masks the composited canvas itself instead of its SVG foreignObject ancestor', async () => {
 		animationMocks.loadAnimationEffect.mockResolvedValue(() => effectInstance());
 
-		const wrapper = await mountFrameAnimation({ animation: animation('fog') });
+		const wrapper = await mountFrameAnimation({
+			animation: animation('fog'),
+		});
 		await flushPromises();
 
 		expect(wrapper.get('foreignObject').attributes('mask')).toBeUndefined();
@@ -71,12 +73,18 @@ describe('featureMatchOverlayFrameAnimation', () => {
 		const oldFactory = vi.fn(() => effectInstance());
 		const newInstance = effectInstance();
 		const newFactory = vi.fn(() => newInstance);
-		animationMocks.loadAnimationEffect.mockImplementation((effect: string) => effect === 'fog' ? oldLoad.promise : newLoad.promise);
+		animationMocks.loadAnimationEffect.mockImplementation((effect: string) => effect === 'fog'
+			? oldLoad.promise
+			: newLoad.promise);
 
-		const wrapper = await mountFrameAnimation({ animation: animation('fog') });
+		const wrapper = await mountFrameAnimation({
+			animation: animation('fog'),
+		});
 		await flushPromises();
 
-		await wrapper.setProps({ animation: animation('caustics') });
+		await wrapper.setProps({
+			animation: animation('caustics'),
+		});
 		newLoad.resolve(newFactory);
 		await flushPromises();
 		oldLoad.resolve(oldFactory);
@@ -94,7 +102,9 @@ describe('featureMatchOverlayFrameAnimation', () => {
 		const factory = vi.fn(() => instance);
 		animationMocks.loadAnimationEffect.mockResolvedValue(factory);
 
-		const wrapper = await mountFrameAnimation({ animation: animation('fog') });
+		const wrapper = await mountFrameAnimation({
+			animation: animation('fog'),
+		});
 		await flushPromises();
 
 		expect(animationMocks.loadAnimationEffect).toHaveBeenCalledWith('fog');
@@ -112,10 +122,17 @@ describe('featureMatchOverlayFrameAnimation', () => {
 		const factory = vi.fn(() => instance);
 		animationMocks.loadAnimationEffect.mockResolvedValue(factory);
 
-		const wrapper = await mountFrameAnimation({ animation: animation('fog') });
+		const wrapper = await mountFrameAnimation({
+			animation: animation('fog'),
+		});
 		await flushPromises();
 
-		await wrapper.setProps({ animation: { ...animation('fog'), params: { speed: 2 } } });
+		await wrapper.setProps({
+			animation: {
+				...animation('fog'),
+				params: { speed: 2 },
+			},
+		});
 		await flushPromises();
 
 		expect(factory).toHaveBeenCalledOnce();
@@ -146,7 +163,10 @@ describe('featureMatchOverlayFrameAnimation', () => {
 	});
 
 	it('renders nothing on the key output', async () => {
-		const wrapper = await mountFrameAnimation({ animation: animation('fog'), output: 'key' });
+		const wrapper = await mountFrameAnimation({
+			animation: animation('fog'),
+			output: 'key',
+		});
 		await flushPromises();
 
 		expect(animationMocks.loadAnimationEffect).not.toHaveBeenCalled();

@@ -33,10 +33,14 @@ function summary(item: BroadcastDeckListResponse): BroadcastDeckListSummaryRespo
 
 const first = detail();
 const store = reactive({
-	summaries: [summary(first)] as BroadcastDeckListSummaryResponse[],
+	summaries: [
+		summary(first),
+	] as BroadcastDeckListSummaryResponse[],
 	loading: false,
 	error: null as string | null,
-	details: new Map([[first.id, first]]) as Map<number, BroadcastDeckListResponse>,
+	details: new Map([
+		[first.id, first],
+	]) as Map<number, BroadcastDeckListResponse>,
 	loadCollection: vi.fn(),
 	loadDetail: vi.fn(async (_eventId: number, listId: number) => store.details.get(listId) ?? null),
 	consumeDetail: vi.fn(() => vi.fn()),
@@ -66,24 +70,39 @@ const UButtonStub = defineComponent({
 	template: '<button :type="type || \'button\'" :form="form" :data-label="label" :disabled="disabled" :data-loading="loading" @click="$emit(\'click\')"><slot>{{ label }}</slot></button>',
 });
 const UInputStub = defineComponent({
-	props: { modelValue: { type: String, required: false }, name: { type: String, required: false } },
+	props: {
+		modelValue: { type: String, required: false },
+		name: { type: String, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<input :data-name="name" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)">',
 });
 const UTextareaStub = defineComponent({
-	props: { modelValue: { type: String, required: false }, name: { type: String, required: false } },
+	props: {
+		modelValue: { type: String, required: false },
+		name: { type: String, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<textarea :data-name="name" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 });
 const USwitchStub = defineComponent({
-	props: { modelValue: { type: Boolean, required: false }, disabled: { type: Boolean, required: false } },
+	props: {
+		modelValue: { type: Boolean, required: false },
+		disabled: { type: Boolean, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<button type="button" data-testid="feature-switch" :data-value="String(modelValue)" :disabled="disabled" @click="$emit(\'update:modelValue\', !modelValue)" />',
 });
 const UCheckboxGroupStub = defineComponent({
 	props: {
-		modelValue: { type: Array, default: () => [] },
-		items: { type: Array, default: () => [] },
+		modelValue: {
+			type: Array,
+			default: () => [],
+		},
+		items: {
+			type: Array,
+			default: () => [],
+		},
 		legend: { type: String, required: false },
 		name: { type: String, required: false },
 	},
@@ -145,7 +164,10 @@ function event(overrides: Partial<Event> = {}): Event {
 async function mountComponent(value: Event = event()) {
 	eventStore.event = value;
 	const { default: Component } = await import('../../../../app/components/Event/BroadcastDeckListLibrary.vue');
-	return mount(Component, { props: { event: value }, global: { stubs } });
+	return mount(Component, {
+		props: { event: value },
+		global: { stubs },
+	});
 }
 
 function button(wrapper: Awaited<ReturnType<typeof mountComponent>>, label: string) {
@@ -159,8 +181,12 @@ async function submitEditor(wrapper: Awaited<ReturnType<typeof mountComponent>>)
 describe('event Broadcast Deck List library', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		store.summaries = [summary(first)];
-		store.details = new Map([[first.id, first]]);
+		store.summaries = [
+			summary(first),
+		];
+		store.details = new Map([
+			[first.id, first],
+		]);
 		store.error = null;
 		store.loadCollection.mockResolvedValue(store.summaries);
 		store.createList.mockResolvedValue(first);
@@ -168,7 +194,10 @@ describe('event Broadcast Deck List library', () => {
 		store.removeList.mockResolvedValue({ success: true });
 		eventStore.updateEvent.mockImplementation(async (updates: Partial<Event>) => {
 			eventStore.error = null;
-			eventStore.event = { ...eventStore.event!, ...updates };
+			eventStore.event = {
+				...eventStore.event!,
+				...updates,
+			};
 			return eventStore.event;
 		});
 	});
@@ -245,10 +274,23 @@ describe('event Broadcast Deck List library', () => {
 			status: 422,
 			body: {
 				message: 'Broadcast Deck List source is invalid',
-				data: { code: 'BROADCAST_DECK_LIST_INVALID', errors: [
-					{ lineNumber: 2, code: 'INVALID_CARD_LINE', message: 'Expected a quantity', sourceText: 'Island' },
-					{ lineNumber: 4, code: 'UNRESOLVED_CARD', message: 'Could not resolve card', sourceText: '1 Nope' },
-				] },
+				data: {
+					code: 'BROADCAST_DECK_LIST_INVALID',
+					errors: [
+						{
+							lineNumber: 2,
+							code: 'INVALID_CARD_LINE',
+							message: 'Expected a quantity',
+							sourceText: 'Island',
+						},
+						{
+							lineNumber: 4,
+							code: 'UNRESOLVED_CARD',
+							message: 'Could not resolve card',
+							sourceText: '1 Nope',
+						},
+					],
+				},
 			},
 		});
 		store.createList.mockRejectedValue(new Error('Broadcast Deck List source is invalid', { cause: failure }));
@@ -271,7 +313,10 @@ describe('event Broadcast Deck List library', () => {
 		store.updateList.mockRejectedValueOnce(new Error('Broadcast Deck List changed since it was loaded', {
 			cause: transportFailure({
 				status: 409,
-				body: { message: 'Broadcast Deck List changed since it was loaded', data: { code: 'BROADCAST_DECK_LIST_REVISION_CONFLICT', current } },
+				body: {
+					message: 'Broadcast Deck List changed since it was loaded',
+					data: { code: 'BROADCAST_DECK_LIST_REVISION_CONFLICT', current },
+				},
 			}),
 		}));
 		const wrapper = await mountComponent();
@@ -330,7 +375,10 @@ describe('event Broadcast Deck List library', () => {
 		store.updateList.mockRejectedValueOnce(new Error('Broadcast Deck List changed since it was loaded', {
 			cause: transportFailure({
 				status: 409,
-				body: { message: 'Broadcast Deck List changed since it was loaded', data: { code: 'BROADCAST_DECK_LIST_REVISION_CONFLICT', current } },
+				body: {
+					message: 'Broadcast Deck List changed since it was loaded',
+					data: { code: 'BROADCAST_DECK_LIST_REVISION_CONFLICT', current },
+				},
 			}),
 		}));
 		const wrapper = await mountComponent();
@@ -356,7 +404,10 @@ describe('event Broadcast Deck List library', () => {
 		store.createList.mockRejectedValue(new Error('Card data provider is temporarily unavailable', {
 			cause: transportFailure({
 				status: 503,
-				body: { message: 'Card data provider is temporarily unavailable', data: { code: 'BROADCAST_DECK_LIST_CARD_PROVIDER_UNAVAILABLE', retryable: true } },
+				body: {
+					message: 'Card data provider is temporarily unavailable',
+					data: { code: 'BROADCAST_DECK_LIST_CARD_PROVIDER_UNAVAILABLE', retryable: true },
+				},
 			}),
 		}));
 		const wrapper = await mountComponent();
@@ -380,7 +431,9 @@ describe('event Broadcast Deck List library', () => {
 				data: {
 					code: 'BROADCAST_DECK_LIST_INVALID',
 					retryable: true,
-					errors: [{ code: 'LEAKED_DETAIL', message: 'Leaked detail' }],
+					errors: [
+						{ code: 'LEAKED_DETAIL', message: 'Leaked detail' },
+					],
 				},
 			},
 		}));
@@ -405,7 +458,10 @@ describe('event Broadcast Deck List library', () => {
 					message: 'Broadcast Deck List is selected by Screens: Alpha, Studio',
 					data: {
 						code: 'BROADCAST_DECK_LIST_IN_USE',
-						screens: [{ id: 2, name: 'Alpha' }, { id: 4, name: 'Studio' }],
+						screens: [
+							{ id: 2, name: 'Alpha' },
+							{ id: 4, name: 'Studio' },
+						],
 					},
 				},
 			}),
@@ -459,7 +515,9 @@ describe('event Broadcast Deck List library', () => {
 		expect(wrapper.text()).toContain('Broadcast Deck Lists cannot be disabled while selected by Screen: Program');
 		expect(wrapper.get('[data-testid="feature-switch"]').attributes('data-value')).toBe('true');
 
-		store.summaries = [summary(detail({ id: 22, name: 'Remote Deck', revision: 3 }))];
+		store.summaries = [
+			summary(detail({ id: 22, name: 'Remote Deck', revision: 3 })),
+		];
 		await flushPromises();
 		expect(wrapper.findAll('li').filter(item => item.text().includes('Remote Deck'))).toHaveLength(1);
 		expect(wrapper.text()).not.toContain('Azorius');

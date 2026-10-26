@@ -28,12 +28,20 @@ const UInputNumberStub = defineComponent({
 
 const global = {
 	stubs: {
-		UFormField: defineComponent({ props: { label: { type: String, default: '' } }, template: '<label><span>{{ label }}</span><slot /></label>' }),
+		UFormField: defineComponent({
+			props: {
+				label: { type: String, default: '' },
+			},
+			template: '<label><span>{{ label }}</span><slot /></label>',
+		}),
 		UInputNumber: UInputNumberStub,
 	},
 };
 
-const cutTopRight: ShapeGeometry = { ...squareShapeGeometry(), topRight: { treatment: 'cut', size: 24 } };
+const cutTopRight: ShapeGeometry = {
+	...squareShapeGeometry(),
+	topRight: { treatment: 'cut', size: 24 },
+};
 
 function mountFields(props: { geometry?: ShapeGeometry; disabled?: boolean } = {}) {
 	return mount(ShapeGeometryFields, {
@@ -64,8 +72,16 @@ describe('shape geometry fields', () => {
 		await flushPromises();
 
 		expect(wrapper.emitted('update')).toEqual([
-			[{ topRight: { treatment: 'cut', size: 40 } }],
-			[{ topLeft: { treatment: 'rounded', size: 0 } }],
+			[
+				{
+					topRight: { treatment: 'cut', size: 40 },
+				},
+			],
+			[
+				{
+					topLeft: { treatment: 'rounded', size: 0 },
+				},
+			],
 		]);
 	});
 
@@ -76,7 +92,14 @@ describe('shape geometry fields', () => {
 		number(wrapper, 'Left edge slant')!.vm.$emit('update:modelValue', null);
 		await flushPromises();
 
-		expect(wrapper.emitted('update')).toEqual([[{ rightSlant: -48 }], [{ leftSlant: 0 }]]);
+		expect(wrapper.emitted('update')).toEqual([
+			[
+				{ rightSlant: -48 },
+			],
+			[
+				{ leftSlant: 0 },
+			],
+		]);
 	});
 
 	it('bounds every entry by what a saved Shape Geometry accepts', () => {
@@ -103,7 +126,16 @@ describe('shape geometry fields', () => {
 		await wrapper.get('[data-testid="shape-corner-bottomLeft"] [data-treatment-option="rounded"]').trigger('click');
 
 		const rounded = { treatment: 'rounded', size: 0 };
-		expect(wrapper.emitted('update')).toEqual([[{ topLeft: rounded, topRight: rounded, bottomLeft: rounded, bottomRight: rounded }]]);
+		expect(wrapper.emitted('update')).toEqual([
+			[
+				{
+					topLeft: rounded,
+					topRight: rounded,
+					bottomLeft: rounded,
+					bottomRight: rounded,
+				},
+			],
+		]);
 	});
 
 	it('hands the chosen preset to its host, which knows the bounds it applies to', async () => {
@@ -112,7 +144,9 @@ describe('shape geometry fields', () => {
 		await wrapper.get('[data-testid="shape-geometry-preset-corner-cut"]').trigger('click');
 		await flushPromises();
 
-		expect(wrapper.emitted('preset')).toEqual([['corner-cut']]);
+		expect(wrapper.emitted('preset')).toEqual([
+			['corner-cut'],
+		]);
 		expect(wrapper.emitted('update')).toBeUndefined();
 	});
 

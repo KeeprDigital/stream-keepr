@@ -33,7 +33,13 @@ const HEADING = `heading-${runId}`;
 
 function draft(fontSize = 64): GraphicStyleSetEntry[] {
 	return [
-		{ id: BRAND, kind: 'palette', name: 'Brand', schemaVersion: 1, value: { color: '#ff0044' } },
+		{
+			id: BRAND,
+			kind: 'palette',
+			name: 'Brand',
+			schemaVersion: 1,
+			value: { color: '#ff0044' },
+		},
 		{
 			id: HEADING,
 			kind: 'typography',
@@ -69,10 +75,17 @@ async function request(
 	const response = await fetch(path, {
 		method: options.method ?? 'GET',
 		headers,
-		body: options.body === undefined ? undefined : JSON.stringify(options.body),
+		body: options.body === undefined
+			? undefined
+			: JSON.stringify(options.body),
 	});
 	const text = await response.text();
-	return { status: response.status, data: text ? JSON.parse(text) : null };
+	return {
+		status: response.status,
+		data: text
+			? JSON.parse(text)
+			: null,
+	};
 }
 
 describe('graphic Style Set Packages', () => {
@@ -106,7 +119,9 @@ describe('graphic Style Set Packages', () => {
 	}
 
 	async function exportPackage(id = styleSetId) {
-		return await fetch(`${STYLE_SETS}/${id}/package`, { headers: { cookie: authorCookie } });
+		return await fetch(`${STYLE_SETS}/${id}/package`, {
+			headers: { cookie: authorCookie },
+		});
 	}
 
 	async function sendPackage(
@@ -122,7 +137,12 @@ describe('graphic Style Set Packages', () => {
 			body: archive,
 		});
 		const text = await response.text();
-		return { status: response.status, data: text ? JSON.parse(text) : null };
+		return {
+			status: response.status,
+			data: text
+				? JSON.parse(text)
+				: null,
+		};
 	}
 
 	async function remove(id: string) {
@@ -158,7 +178,9 @@ describe('graphic Style Set Packages', () => {
 
 		expect(response.status).toBe(409);
 		const body = await response.json() as { data: { issues: { code: string }[] } };
-		expect(body.data.issues).toMatchObject([{ code: 'graphic-style-set-never-published' }]);
+		expect(body.data.issues).toMatchObject([
+			{ code: 'graphic-style-set-never-published' },
+		]);
 	});
 
 	it('exports the published revision as a `.skstyle` archive of exactly two documents', async () => {
@@ -185,7 +207,9 @@ describe('graphic Style Set Packages', () => {
 			packageKind: 'skstyle',
 			artifactKind: 'graphic-style-set',
 			styleSet: { identity: styleSetId, revision: 1, entryCount: 2 },
-			applicationCapabilities: [{ capability: 'application-font', identity: 'inter' }],
+			applicationCapabilities: [
+				{ capability: 'application-font', identity: 'inter' },
+			],
 		});
 		expect(archive.json(GRAPHIC_STYLE_SET_PACKAGE_STYLE_SET_ENTRY)).toMatchObject({
 			id: styleSetId,
@@ -222,7 +246,9 @@ describe('graphic Style Set Packages', () => {
 
 		expect(refused.status).toBe(422);
 		expect(refused.data.data.report.issues)
-			.toMatchObject([{ code: 'graphic-style-set-revision-superseded', severity: 'error' }]);
+			.toMatchObject([
+				{ code: 'graphic-style-set-revision-superseded', severity: 'error' },
+			]);
 		expect((await styleSet()).revision).toBe(2);
 	});
 
@@ -280,7 +306,9 @@ describe('graphic Style Set Packages', () => {
 		const report = unconfirmed.data.data.report as GraphicStyleSetPackagePreflightReport;
 		expect(report.disposition).toBe('update-installed');
 		expect(report.issues)
-			.toMatchObject([{ code: 'graphic-style-set-revision-updated', severity: 'warning' }]);
+			.toMatchObject([
+				{ code: 'graphic-style-set-revision-updated', severity: 'warning' },
+			]);
 		expect((await styleSet()).revision).toBe(1);
 
 		const confirmed = await sendPackage(

@@ -76,8 +76,12 @@ export async function runCompensation(originalFailure: unknown, compensation: ()
 	catch (compensationFailure) {
 		console.error(JSON.stringify({
 			message: 'compensation_failed',
-			errorName: compensationFailure instanceof Error ? compensationFailure.name : null,
-			errorMessage: compensationFailure instanceof Error ? compensationFailure.message : String(compensationFailure),
+			errorName: compensationFailure instanceof Error
+				? compensationFailure.name
+				: null,
+			errorMessage: compensationFailure instanceof Error
+				? compensationFailure.message
+				: String(compensationFailure),
 		}));
 		if (originalFailure && typeof originalFailure === 'object')
 			(originalFailure as { compensationFailure?: unknown }).compensationFailure = compensationFailure;
@@ -146,7 +150,9 @@ interface ErrorWithPublicMetadata {
  * rows that are sent to every connected dashboard.
  */
 export function toPublicOperationalError(error: unknown): string {
-	const candidate = error && typeof error === 'object' ? error as ErrorWithPublicMetadata : null;
+	const candidate = error && typeof error === 'object'
+		? error as ErrorWithPublicMetadata
+		: null;
 	if (candidate?.code === 'IMPORTED_CARD_LOOKUP_UNAVAILABLE') {
 		return 'Card data provider is temporarily unavailable. Existing deck data was preserved; retry the sync.';
 	}
@@ -154,7 +160,9 @@ export function toPublicOperationalError(error: unknown): string {
 		return 'This Melee team tournament cannot be synced because the application currently supports individual-player tournaments only.';
 	}
 
-	const statusCode = isError(candidate) ? candidate.statusCode : null;
+	const statusCode = isError(candidate)
+		? candidate.statusCode
+		: null;
 	if (statusCode !== null && statusCode >= 400 && statusCode < 500 && typeof candidate?.message === 'string') {
 		return candidate.message.slice(0, 500);
 	}

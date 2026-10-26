@@ -56,5 +56,12 @@ export function useAnimationEffectPresetRepository() {
 
 	const exportUrl = (presetId: string): string => `${library}/${presetId}/export`;
 
-	return { list, create, update, remove, importDocument, exportUrl };
+	return {
+		list,
+		create,
+		update,
+		remove,
+		importDocument,
+		exportUrl,
+	};
 }

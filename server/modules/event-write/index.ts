@@ -55,7 +55,9 @@ export function eventWriteModule() {
 				const names = error.screens.map(screen => screen.name).join(', ');
 				throw createError({
 					statusCode: 409,
-					message: `Broadcast Deck Lists cannot be disabled while selected by ${error.screens.length === 1 ? 'Screen' : 'Screens'}: ${names}`,
+					message: `Broadcast Deck Lists cannot be disabled while selected by ${error.screens.length === 1
+						? 'Screen'
+						: 'Screens'}: ${names}`,
 					data: { code: BROADCAST_DECK_LISTS_IN_USE, screens: error.screens },
 				});
 			}

@@ -18,7 +18,9 @@ mockNuxtImport('useRealtime', () => () => mockAbly);
 
 // ── Mock $fetch ──
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 mockNuxtImport('$fetch', () => mockFetch);
 
 // ── Helpers ──
@@ -175,10 +177,16 @@ describe('useMetagameStore', () => {
 
 			const oldRequest = store.loadSummary(1);
 			const newRequest = store.loadSummary(1);
-			const latest = { ...makeSummaryData(), totalPlayers: 9 };
+			const latest = {
+				...makeSummaryData(),
+				totalPlayers: 9,
+			};
 			resolveNew(latest);
 			await newRequest;
-			resolveOld({ ...makeSummaryData(), totalPlayers: 2 });
+			resolveOld({
+				...makeSummaryData(),
+				totalPlayers: 2,
+			});
 			await oldRequest;
 
 			expect(store.summaryData).toEqual(latest);
@@ -302,7 +310,12 @@ describe('useMetagameStore', () => {
 	// ── Ably: archetype invalidation messages ──
 
 	describe('realtime: archetype invalidation messages', () => {
-		const events = ['archetype:created', 'archetype:updated', 'archetype:deleted', 'archetype:keyCardsUpdated'] as const;
+		const events = [
+			'archetype:created',
+			'archetype:updated',
+			'archetype:deleted',
+			'archetype:keyCardsUpdated',
+		] as const;
 
 		it.each(events)('%s triggers invalidate()', (event) => {
 			store.summaryData = makeSummaryData();

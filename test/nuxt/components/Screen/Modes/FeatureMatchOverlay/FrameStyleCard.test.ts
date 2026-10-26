@@ -23,7 +23,10 @@ const UIColorPickerStub = defineComponent({
 
 const UInputStub = defineComponent({
 	props: {
-		modelValue: { type: [String, Number], required: false },
+		modelValue: {
+			type: [String, Number],
+			required: false,
+		},
 	},
 	emits: ['update:modelValue'],
 	template: '<input data-testid="u-input" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
@@ -39,7 +42,10 @@ const UInputNumberStub = defineComponent({
 
 const USelectStub = defineComponent({
 	props: {
-		modelValue: { type: [String, Number, Boolean], required: false },
+		modelValue: {
+			type: [String, Number, Boolean],
+			required: false,
+		},
 		items: { type: Array, required: false },
 	},
 	emits: ['update:modelValue'],
@@ -65,7 +71,9 @@ const ControlSectionStub = defineComponent({
 
 const USwitchStub = defineComponent({
 	name: 'USwitch',
-	props: { modelValue: { type: Boolean, required: false } },
+	props: {
+		modelValue: { type: Boolean, required: false },
+	},
 	emits: ['update:modelValue'],
 	template: '<button type="button" role="switch" :aria-checked="String(modelValue)" @click="$emit(\'update:modelValue\', !modelValue)" />',
 });

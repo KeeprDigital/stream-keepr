@@ -14,7 +14,7 @@
  * `build/localConfiguration.ts` rather than restated. That file is a build module
  * and these are `.mjs` scripts, which is a real seam and not a stylistic one; it is
  * crossed by importing the `.ts` directly, which Node does natively — type
- * stripping has been on by default since 22.18, and `.node-version` pins 24.
+ * stripping has been on by default since 22.18, and `package.json` pins 26.
  * `localConfiguration.ts` is erasable-syntax-only (`as const satisfies`,
  * `export type`), so nothing there needs a transform. A third copy of the
  * list is what the ticket asked us not to write, and the drift pin in
@@ -173,7 +173,9 @@ export function suppliedNames(sources) {
 	for (const source of sources) {
 		if (source === null || source === undefined)
 			continue;
-		const entries = typeof source === 'string' ? parseDotenv(source) : Object.entries(source);
+		const entries = typeof source === 'string'
+			? parseDotenv(source)
+			: Object.entries(source);
 		for (const [name, value] of entries) {
 			if (typeof value === 'string' && value.trim().length > 0)
 				supplied[name] ??= value;
@@ -201,7 +203,13 @@ export function suppliedNames(sources) {
 export function localAcceptanceConfiguration({ deployed, env = {}, readSources }) {
 	if (deployed)
 		return { checked: false, missing: [] };
-	return { checked: true, missing: missingLocalAcceptanceNames(suppliedNames([env, ...readSources()])) };
+	return {
+		checked: true,
+		missing: missingLocalAcceptanceNames(suppliedNames([
+			env,
+			...readSources(),
+		])),
+	};
 }
 
 /**
@@ -237,7 +245,9 @@ export function localConfigurationNotice(missing) {
 	const unnamed = LOCAL_ACCEPTANCE_UNREACHED_NUXT_NAMES.filter(name => !missing.includes(name));
 	const unreached = unnamed.length === 0
 		? ''
-		: `${sentenceList(unnamed, 'and')} ${unnamed.length === 1 ? 'is' : 'are'} not checked here and a blank one `
+		: `${sentenceList(unnamed, 'and')} ${unnamed.length === 1
+			? 'is'
+			: 'are'} not checked here and a blank one `
 			+ 'is not what stopped this: no route an acceptance run calls reads it. ';
 
 	return `Nothing this checkout can give a local installation sets ${names}, so ${consequence} `
@@ -308,12 +318,20 @@ export function previewStagingPlan({ source, existing, stale, bypassActive = fal
 		);
 	}
 
-	if (source === null && !bypassActive)
-		return { stage: false, body: null, removeStale: stale, lines };
+	if (source === null && !bypassActive) {
+		return {
+			stage: false,
+			body: null,
+			removeStale: stale,
+			lines,
+		};
+	}
 
 	const base = source ?? '';
 	const body = bypassActive
-		? `${base.endsWith('\n') || base.length === 0 ? base : `${base}\n`}${LOCAL_AUTH_BYPASS_NAME}=${LOCAL_AUTH_BYPASS_ENABLED_VALUE}\n`
+		? `${base.endsWith('\n') || base.length === 0
+			? base
+			: `${base}\n`}${LOCAL_AUTH_BYPASS_NAME}=${LOCAL_AUTH_BYPASS_ENABLED_VALUE}\n`
 		: base;
 
 	if (existing !== null && existing !== body) {
@@ -337,7 +355,12 @@ export function previewStagingPlan({ source, existing, stale, bypassActive = fal
 		);
 	}
 
-	return { stage: true, body, removeStale: stale, lines };
+	return {
+		stage: true,
+		body,
+		removeStale: stale,
+		lines,
+	};
 }
 
 /**

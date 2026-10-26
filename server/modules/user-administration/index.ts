@@ -114,7 +114,10 @@ export interface UserAdministrationContext {
  * disagree about where a reset link points.
  */
 export function userAdministrationContext(event: H3Event): UserAdministrationContext {
-	return { now: new Date(), origin: getRequestURL(event).origin };
+	return {
+		now: new Date(),
+		origin: getRequestURL(event).origin,
+	};
 }
 
 /**
@@ -137,7 +140,11 @@ export interface CreateUserAccountRequest {
 export async function listUserAccounts(port: UserAdministrationPort): Promise<AdministeredUserList> {
 	const { users, total } = await port.listUsers(USER_LIST_CAP);
 
-	return { users: [...users], total, cap: USER_LIST_CAP };
+	return {
+		users: [...users],
+		total,
+		cap: USER_LIST_CAP,
+	};
 }
 
 /**

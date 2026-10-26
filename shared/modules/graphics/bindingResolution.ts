@@ -185,7 +185,9 @@ function matchSidePlayer(
 	match: GraphicBindingMatch,
 	relation: 'player1' | 'player2',
 ): GraphicBindingPlayer | undefined {
-	const data = relation === 'player1' ? match.player1Data : match.player2Data;
+	const data = relation === 'player1'
+		? match.player1Data
+		: match.player2Data;
 	return data ?? undefined;
 }
 
@@ -202,10 +204,14 @@ function slotSidePlayer(
 ): GraphicBindingPlayer | undefined {
 	const snapshot = slot.activeSession?.sourceSnapshot;
 	if (snapshot) {
-		const side = relation === 'player1' ? snapshot.player1 : snapshot.player2;
+		const side = relation === 'player1'
+			? snapshot.player1
+			: snapshot.player2;
 		return side?.data ?? undefined;
 	}
-	const data = relation === 'player1' ? slot.player1Data : slot.player2Data;
+	const data = relation === 'player1'
+		? slot.player1Data
+		: slot.player2Data;
 	return data ?? undefined;
 }
 
@@ -230,7 +236,9 @@ function followRelation(
 			const event = data.event;
 			if (!event)
 				return undefined;
-			const talentId = relation === 'commentator1' ? event.commentator1TalentId : event.commentator2TalentId;
+			const talentId = relation === 'commentator1'
+				? event.commentator1TalentId
+				: event.commentator2TalentId;
 			return entityById(data.talents, talentId);
 		}
 		case 'player': {
@@ -305,8 +313,13 @@ export function resolveGraphicSourceSelections(
 		declaration: GraphicSourceSelectionDeclaration,
 		visiting: ReadonlySet<string>,
 	): ResolvedGraphicSource {
-		if (!declaration.from)
-			return { key: declaration.key, kind: declaration.kind, entity: selectedEntity(declaration, selections, data) };
+		if (!declaration.from) {
+			return {
+				key: declaration.key,
+				kind: declaration.kind,
+				entity: selectedEntity(declaration, selections, data),
+			};
+		}
 
 		// Unreachable while the relation table stays acyclic — the kind check below
 		// refuses any loop first — and kept deliberately, because a future relation whose

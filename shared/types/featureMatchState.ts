@@ -138,7 +138,9 @@ export function resetPlayerFeatureMatchStateForNewGame(
 	return {
 		...player,
 		lifeTotal: startingLife,
-		counters: resetCounters ? [] : player.counters,
+		counters: resetCounters
+			? []
+			: player.counters,
 		cardsKept: undefined,
 	};
 }

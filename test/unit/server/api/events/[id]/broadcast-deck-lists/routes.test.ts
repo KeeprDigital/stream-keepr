@@ -18,7 +18,9 @@ vi.stubGlobal('readValidatedBody', readValidatedBody);
 vi.stubGlobal('setResponseStatus', setResponseStatus);
 vi.stubGlobal('createError', (input: Record<string, unknown>) => Object.assign(new Error(String(input.message)), input));
 
-vi.mock('~~/server/schemas/api/event', () => ({ eventParamsSchema: { parse } }));
+vi.mock('~~/server/schemas/api/event', () => ({
+	eventParamsSchema: { parse },
+}));
 vi.mock('~~/server/schemas/api/broadcastDeckList', () => ({
 	broadcastDeckListParamsSchema: { parse },
 	createBroadcastDeckListSchema: { parse },
@@ -48,10 +50,17 @@ describe('broadcast Deck List routes', () => {
 
 	it('returns bounded Event-scoped summaries and an Event-scoped detail', async () => {
 		const event = stubH3Event();
-		findByEventId.mockResolvedValue([{ id: 11 }]);
+		findByEventId.mockResolvedValue([
+			{ id: 11 },
+		]);
 		findById.mockResolvedValue({ id: 11, sourceText: '1 Island' });
 
-		await expect(collectionHandler(event)).resolves.toEqual({ broadcastDeckLists: [{ id: 11 }], total: 1 });
+		await expect(collectionHandler(event)).resolves.toEqual({
+			broadcastDeckLists: [
+				{ id: 11 },
+			],
+			total: 1,
+		});
 		await expect(detailHandler(event)).resolves.toEqual({ id: 11, sourceText: '1 Island' });
 		expect(findByEventId).toHaveBeenCalledWith(7);
 		expect(findById).toHaveBeenCalledWith(11, 7);

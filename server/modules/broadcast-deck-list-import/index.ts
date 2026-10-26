@@ -118,7 +118,12 @@ function lineError(
 	message: string,
 	sourceText: string,
 ): BroadcastDeckListImportLineError {
-	return { lineNumber, code, message, sourceText };
+	return {
+		lineNumber,
+		code,
+		message,
+		sourceText,
+	};
 }
 
 function orderedErrors(errors: readonly BroadcastDeckListImportError[]): BroadcastDeckListImportError[] {
@@ -126,12 +131,17 @@ function orderedErrors(errors: readonly BroadcastDeckListImportError[]): Broadca
 		.filter((error): error is BroadcastDeckListImportLineError => 'lineNumber' in error)
 		.toSorted((left, right) => left.lineNumber - right.lineNumber);
 	const listErrors = errors.filter((error): error is BroadcastDeckListImportListError => !('lineNumber' in error));
-	return [...lineErrors, ...listErrors];
+	return [
+		...lineErrors,
+		...listErrors,
+	];
 }
 
 function quantityToken(sourceText: string): string | null {
 	const separatorIndex = sourceText.indexOf(' ');
-	return separatorIndex < 0 ? null : sourceText.slice(0, separatorIndex);
+	return separatorIndex < 0
+		? null
+		: sourceText.slice(0, separatorIndex);
 }
 
 function parseCardRow(
@@ -148,7 +158,9 @@ function parseCardRow(
 	}
 
 	const token = quantityToken(sourceText);
-	const quantityMatch = token === null ? null : /^(\d+)x?$/i.exec(token);
+	const quantityMatch = token === null
+		? null
+		: /^(\d+)x?$/i.exec(token);
 	if (!quantityMatch) {
 		return /^[+-]?\d/.test(sourceText)
 			? lineError(lineNumber, 'INVALID_QUANTITY', 'Quantity must be a whole number from 1 through 999', sourceText)
@@ -175,7 +187,9 @@ function parseCardRow(
 	const penultimateToken = cardTokens.at(-2) ?? '';
 	const setOnlyMatch = /^\(([a-z\d]{1,20})\)$/i.exec(lastToken);
 	const setAndCollectorMatch = /^\(([a-z\d]{1,20})\)$/i.exec(penultimateToken);
-	const printingTokenCount = setOnlyMatch ? 1 : setAndCollectorMatch ? 2 : 0;
+	const printingTokenCount = setOnlyMatch
+		? 1
+		: setAndCollectorMatch ? 2 : 0;
 	const setCode = setOnlyMatch?.[1] ?? setAndCollectorMatch?.[1] ?? null;
 	const collectorNumber = setAndCollectorMatch ? lastToken : null;
 	const name = printingTokenCount === 0
@@ -200,18 +214,25 @@ export async function importBroadcastDeckList(
 	if (new TextEncoder().encode(source).byteLength > 64 * 1024) {
 		return {
 			ok: false,
-			errors: [{ code: 'SOURCE_TOO_LARGE', message: 'Source text must not exceed 64 KiB' }],
+			errors: [
+				{ code: 'SOURCE_TOO_LARGE', message: 'Source text must not exceed 64 KiB' },
+			],
 		};
 	}
 	const physicalLines = source.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n');
 	if (physicalLines.length > 500) {
 		return {
 			ok: false,
-			errors: [{ code: 'TOO_MANY_LINES', message: 'Source text must not exceed 500 physical lines' }],
+			errors: [
+				{ code: 'TOO_MANY_LINES', message: 'Source text must not exceed 500 physical lines' },
+			],
 		};
 	}
 	const normalizedLines = physicalLines
-		.map((sourceText, index) => ({ lineNumber: index + 1, sourceText: sourceText.trim() }))
+		.map((sourceText, index) => ({
+			lineNumber: index + 1,
+			sourceText: sourceText.trim(),
+		}))
 		.filter(line => line.sourceText.length > 0);
 	const sourceText = normalizedLines.map(line => line.sourceText).join('\n');
 	let compartment: BroadcastDeckListCompartment = 'mainboard';
@@ -258,8 +279,12 @@ export async function importBroadcastDeckList(
 		blocksResolution = true;
 	}
 
-	if (blocksResolution || rows.length === 0)
-		return { ok: false, errors: orderedErrors(errors) };
+	if (blocksResolution || rows.length === 0) {
+		return {
+			ok: false,
+			errors: orderedErrors(errors),
+		};
+	}
 
 	const resolutions = await resolver.resolve(rows.map(row => ({
 		name: row.name,
@@ -286,7 +311,9 @@ export async function importBroadcastDeckList(
 			continue;
 		}
 
-		const target = row.compartment === 'mainboard' ? mainboard : sideboard;
+		const target = row.compartment === 'mainboard'
+			? mainboard
+			: sideboard;
 		if (row.compartment !== 'companion') {
 			const existing = target.find(entry => entry.scryfallId === resolution.card.scryfallId);
 			if (existing) {
@@ -305,7 +332,9 @@ export async function importBroadcastDeckList(
 		const entry = {
 			...resolution.card,
 			quantity: row.quantity,
-			sortOrder: row.compartment === 'companion' ? 0 : target.length,
+			sortOrder: row.compartment === 'companion'
+				? 0
+				: target.length,
 		};
 		if (row.compartment === 'companion')
 			companion = entry;
@@ -313,12 +342,21 @@ export async function importBroadcastDeckList(
 			target.push(entry);
 	}
 
-	if (errors.length > 0)
-		return { ok: false, errors: orderedErrors(errors) };
+	if (errors.length > 0) {
+		return {
+			ok: false,
+			errors: orderedErrors(errors),
+		};
+	}
 
 	return {
 		ok: true,
-		document: { sourceText, mainboard, sideboard, companion },
+		document: {
+			sourceText,
+			mainboard,
+			sideboard,
+			companion,
+		},
 	};
 }
 

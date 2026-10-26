@@ -98,7 +98,12 @@ const operationRoutes: AuthorisedRoute[] = [
 		label: 'submitting browser decode evidence',
 		method: 'POST',
 		path: id => `/api/graphics-assets/ingestion-operations/${id}/browser-evidence`,
-		json: { outcome: 'decoded', sourceDigest: digest, width: 1, height: 1 },
+		json: {
+			outcome: 'decoded',
+			sourceDigest: digest,
+			width: 1,
+			height: 1,
+		},
 	},
 	{
 		label: 'submitting font browser evidence',
@@ -150,7 +155,9 @@ const operationRoutes: AuthorisedRoute[] = [
 		label: 'confirming a Template Package Preflight Report',
 		method: 'POST',
 		path: id => `/api/graphics-assets/ingestion-operations/${id}/template-package-confirmation`,
-		json: { fingerprint: '0'.repeat(64) },
+		json: {
+			fingerprint: '0'.repeat(64),
+		},
 	},
 	{
 		label: 'installing a confirmed Template Package',
@@ -214,7 +221,9 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 					idempotencyKey,
 					name,
 					declaredByteLength: transparentPixelPng.byteLength,
-					...defaultEventId === undefined ? {} : { defaultEventId },
+					...defaultEventId === undefined
+						? {}
+						: { defaultEventId },
 					browserDecodeEvidence: {
 						outcome: 'decoded',
 						sourceDigest: digest,
@@ -379,7 +388,12 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
 				headers: { cookie: authorCookie },
 				query: { search: 'Authorisation lifecycle subject' },
-			})).resolves.toMatchObject([{ id: assetId, lifecycle: { state: 'active' } }]);
+			})).resolves.toMatchObject([
+				{
+					id: assetId,
+					lifecycle: { state: 'active' },
+				},
+			]);
 		});
 	});
 
@@ -432,7 +446,9 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 				const operationId = scopingProbes.get(route.label)!;
 				await expect($fetch<GraphicsIngestionOperation>(
 					`/api/graphics-assets/ingestion-operations/${operationId}`,
-					{ headers: { cookie: authorCookie, ...UNHONOURED_AUTHOR_ID_HEADER } },
+					{
+						headers: { cookie: authorCookie, ...UNHONOURED_AUTHOR_ID_HEADER },
+					},
 				)).resolves.toMatchObject({ id: operationId, stage: 'awaiting-confirmation' });
 			}
 		});
@@ -441,7 +457,9 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			const operationId = scopingProbes.get('reading provisional staged bytes')!;
 			const response = await fetch(
 				`/api/graphics-assets/ingestion-operations/${operationId}/staged-source`,
-				{ headers: { cookie: authorCookie, ...UNHONOURED_AUTHOR_ID_HEADER } },
+				{
+					headers: { cookie: authorCookie, ...UNHONOURED_AUTHOR_ID_HEADER },
+				},
 			);
 			expect(response.status).toBe(200);
 			expect(new Uint8Array(await response.arrayBuffer())).toEqual(fontBytes);
@@ -498,7 +516,10 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			interruptedId = initiated.id;
 			const started = await $fetch<GraphicsIngestionOperation>(
 				`/api/graphics-assets/ingestion-operations/${interruptedId}/multipart`,
-				{ method: 'POST', headers: { cookie: authorCookie } },
+				{
+					method: 'POST',
+					headers: { cookie: authorCookie },
+				},
 			);
 			expect(started.transfer?.partCount).toBe(2);
 			const firstPart = await fetch(
@@ -539,7 +560,9 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 
 			await expect($fetch<GraphicsIngestionOperation>(
 				`/api/graphics-assets/ingestion-operations/${interruptedId}`,
-				{ headers: { cookie: secondBrowser } },
+				{
+					headers: { cookie: secondBrowser },
+				},
 			)).resolves.toMatchObject({
 				id: interruptedId,
 				stage: 'transferring',
@@ -550,16 +573,20 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 		it('loses nothing at all, checkpoint included', async () => {
 			await expect($fetch<GraphicsIngestionOperation>(
 				`/api/graphics-assets/ingestion-operations/${interruptedId}`,
-				{ headers: { cookie: authorCookie } },
+				{
+					headers: { cookie: authorCookie },
+				},
 			)).resolves.toMatchObject({
 				stage: 'transferring',
 				transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
 				transfer: {
-					completedParts: [{
-						partNumber: 1,
-						partIdentity: `${interruptedId}:1`,
-						byteLength: GRAPHICS_MULTIPART_PART_BYTES,
-					}],
+					completedParts: [
+						{
+							partNumber: 1,
+							partIdentity: `${interruptedId}:1`,
+							byteLength: GRAPHICS_MULTIPART_PART_BYTES,
+						},
+					],
 				},
 			});
 		});
@@ -585,7 +612,10 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 
 			const completion = await fetch(
 				`/api/graphics-assets/ingestion-operations/${interruptedId}/multipart/complete`,
-				{ method: 'POST', headers: { cookie: authorCookie } },
+				{
+					method: 'POST',
+					headers: { cookie: authorCookie },
+				},
 			);
 			expect(completion.status).toBe(200);
 			expect(await completion.json()).toMatchObject({
@@ -609,7 +639,9 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 		for (const [label, operationId] of scopingProbes) {
 			const operation = await $fetch<GraphicsIngestionOperation>(
 				`/api/graphics-assets/ingestion-operations/${operationId}`,
-				{ headers: { cookie: authorCookie } },
+				{
+					headers: { cookie: authorCookie },
+				},
 			);
 			expect(operation.stage, `scoping probe for ${label}`).toBe('awaiting-confirmation');
 		}

@@ -16,10 +16,30 @@ function digestOf(bytes: Uint8Array) {
 
 describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 	it.each([
-		['TTF', 'public/fonts/mana.ttf', 'font/ttf', 'ttf'],
-		['WOFF', 'public/fonts/mplantin.woff', 'font/woff', 'woff'],
-		['WOFF2', 'public/fonts/mana.woff2', 'font/woff2', 'woff2'],
-		['OTF', 'node_modules/mana-font/docs/fonts/beleren.otf', 'font/otf', 'otf'],
+		[
+			'TTF',
+			'public/fonts/mana.ttf',
+			'font/ttf',
+			'ttf',
+		],
+		[
+			'WOFF',
+			'public/fonts/mplantin.woff',
+			'font/woff',
+			'woff',
+		],
+		[
+			'WOFF2',
+			'public/fonts/mana.woff2',
+			'font/woff2',
+			'woff2',
+		],
+		[
+			'OTF',
+			'node_modules/mana-font/docs/fonts/beleren.otf',
+			'font/otf',
+			'otf',
+		],
 	] as const)('accepts one bounded static outline %s face', async (_, path, mime, format) => {
 		const bytes = new Uint8Array(await readFile(path));
 		const processed = await processStaticFont(bytes, {
@@ -53,10 +73,26 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 	});
 
 	it.each([
-		['collection', Uint8Array.of(0x74, 0x74, 0x63, 0x66, 0, 1, 0, 0), 'font-collection-not-supported'],
-		['EOT', Uint8Array.of(8, 0, 0, 0, 0x4C, 0x50, 0, 0), 'unsupported-font-format'],
-		['SVG', new TextEncoder().encode('<svg><font /></svg>'), 'font-svg-not-supported'],
-		['malformed sfnt', Uint8Array.of(0, 1, 0, 0, 0, 1), 'font-table-invalid'],
+		[
+			'collection',
+			Uint8Array.of(0x74, 0x74, 0x63, 0x66, 0, 1, 0, 0),
+			'font-collection-not-supported',
+		],
+		[
+			'EOT',
+			Uint8Array.of(8, 0, 0, 0, 0x4C, 0x50, 0, 0),
+			'unsupported-font-format',
+		],
+		[
+			'SVG',
+			new TextEncoder().encode('<svg><font /></svg>'),
+			'font-svg-not-supported',
+		],
+		[
+			'malformed sfnt',
+			Uint8Array.of(0, 1, 0, 0, 0, 1),
+			'font-table-invalid',
+		],
 	] as const)('rejects %s with a stable report code', async (_, bytes, code) => {
 		await expect(processStaticFont(bytes, {})).rejects.toMatchObject({
 			issue: { code },
@@ -95,7 +131,9 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 		await expect(processStaticFont(bytes, {
 			sourceFileName: 'unsupported.ttf',
 			declaredMime: 'font/ttf',
-		})).rejects.toMatchObject({ issue: { code } });
+		})).rejects.toMatchObject({
+			issue: { code },
+		});
 	});
 
 	it('enforces source and expanded SFNT size limits independently', async () => {
@@ -200,7 +238,9 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 		const source = new Uint8Array(await readFile('public/fonts/mplantin.ttf'));
 
 		await expect(processTtf(
-			withCmapLanguages(source, platform => (platform === 3 ? 1 : 0)),
+			withCmapLanguages(source, platform => (platform === 3
+				? 1
+				: 0)),
 		)).rejects.toMatchObject({
 			issue: { code: 'font-cmap-language-invalid' },
 		});

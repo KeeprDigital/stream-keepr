@@ -26,10 +26,16 @@ const mockReplace = vi.fn((location: { query: Record<string, unknown> }) => {
 	return Promise.resolve();
 });
 const mockUpdateConfig = vi.fn((patch: Record<string, unknown>) => {
-	mockConfig.value = { ...mockConfig.value, ...patch } as BroadcastGraphicsModeConfig;
+	mockConfig.value = {
+		...mockConfig.value,
+		...patch,
+	} as BroadcastGraphicsModeConfig;
 });
 const mockUpdateScreenConfig = vi.fn((patch: Record<string, unknown>) => {
-	mockScreenConfig.value = { ...mockScreenConfig.value, ...patch };
+	mockScreenConfig.value = {
+		...mockScreenConfig.value,
+		...patch,
+	};
 });
 
 mockNuxtImport('useRoute', () => () => mockRoute);
@@ -39,7 +45,9 @@ mockNuxtImport('useRouter', () => () => ({
 	beforeEach: () => () => {},
 	beforeResolve: () => () => {},
 }));
-mockNuxtImport('useScreenStore', () => () => ({ updateScreenConfig: vi.fn().mockResolvedValue(undefined) }));
+mockNuxtImport('useScreenStore', () => () => ({
+	updateScreenConfig: vi.fn().mockResolvedValue(undefined),
+}));
 const mockSaveState = ref<'idle' | 'saving' | 'committed' | 'failed'>('idle');
 const mockSaveError = ref<string | null>(null);
 const mockRetry = vi.fn();
@@ -102,7 +110,12 @@ const EditWorkspaceStub = defineComponent({
 		saveState: { type: String, default: 'idle' },
 		saveError: { type: String, default: null },
 	},
-	emits: ['update:graphics', 'update:selectedTarget', 'takeOver', 'retrySave'],
+	emits: [
+		'update:graphics',
+		'update:selectedTarget',
+		'takeOver',
+		'retrySave',
+	],
 	template: `<div
 		data-testid="edit-workspace"
 		:data-selected-graphic="selectedGraphicId ?? ''"
@@ -141,7 +154,9 @@ const ProgramMonitorStub = defineComponent({
 });
 
 const UFormFieldStub = defineComponent({
-	props: { label: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+	},
 	template: '<div><span>{{ label }}</span><slot /></div>',
 });
 
@@ -169,7 +184,11 @@ async function mountComponent() {
 
 	return mount(Settings, {
 		props: {
-			screen: { id: 1, slug: 'main', screenConfig: { width: 1920, height: 1080 } } as Screen,
+			screen: {
+				id: 1,
+				slug: 'main',
+				screenConfig: { width: 1920, height: 1080 },
+			} as Screen,
 			eventId: 1,
 		},
 		global: {
@@ -279,7 +298,9 @@ describe('broadcastGraphicsSettings', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		const next = [{ id: 'bug', name: 'Bug', items: [] }];
+		const next = [
+			{ id: 'bug', name: 'Bug', items: [] },
+		];
 		wrapper.getComponent(EditWorkspaceStub).vm.$emit('update:graphics', next);
 		await nextTick();
 
@@ -309,7 +330,9 @@ describe('broadcastGraphicsSettings', () => {
 		expect(workspace.attributes('data-writable')).toBe('false');
 		expect(workspace.attributes('data-can-take-over')).toBe('true');
 
-		wrapper.getComponent(EditWorkspaceStub).vm.$emit('update:graphics', [{ id: 'bug', name: 'Bug', items: [] }]);
+		wrapper.getComponent(EditWorkspaceStub).vm.$emit('update:graphics', [
+			{ id: 'bug', name: 'Bug', items: [] },
+		]);
 		await nextTick();
 
 		expect(mockUpdateConfig).not.toHaveBeenCalled();

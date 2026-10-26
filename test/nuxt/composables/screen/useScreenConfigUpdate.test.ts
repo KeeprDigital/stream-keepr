@@ -2,10 +2,17 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockUpdateScreenConfig = vi.fn();
-const mockToast = { add: vi.fn() };
+const mockToast = {
+	add: vi.fn(),
+};
 
 const mockScreenStore = {
-	screens: [{ id: 1, screenConfig: { background: '#000' } }],
+	screens: [
+		{
+			id: 1,
+			screenConfig: { background: '#000' },
+		},
+	],
 	updateScreenConfig: mockUpdateScreenConfig,
 };
 

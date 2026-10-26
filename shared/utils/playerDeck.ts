@@ -28,9 +28,15 @@ export function createPlayerDeckList(
 		colors: deckResponse.colors,
 		isPrimary: deckResponse.isPrimary,
 		cards: deckResponse.cards as unknown as PlayerDeckList['cards'],
-		...(options.stats ? { stats: options.stats } : {}),
-		...(options.pips ? { pips: options.pips } : {}),
-		...(options.curve ? { curve: options.curve } : {}),
+		...(options.stats
+			? { stats: options.stats }
+			: {}),
+		...(options.pips
+			? { pips: options.pips }
+			: {}),
+		...(options.curve
+			? { curve: options.curve }
+			: {}),
 		companion: deckResponse.companion ?? null,
 		highlander: deckResponse.highlander,
 	};
@@ -46,7 +52,10 @@ export function createDeckLookupCards<T extends DeckLookupCardLike>(
 	companion?: Pick<DeckCompanion, 'name' | 'scryfallId'> | null,
 ): Array<Pick<DeckLookupCardLike, 'name' | 'scryfallId'>> {
 	return companion
-		? [...cards, { name: companion.name, scryfallId: companion.scryfallId }]
+		? [
+				...cards,
+				{ name: companion.name, scryfallId: companion.scryfallId },
+			]
 		: cards;
 }
 

@@ -156,7 +156,10 @@ describe('the surfaces the boundary exempts', () => {
 		// — a signed-out browser still says where it came from.
 		const { status, message } = await anonymous('/api/auth/sign-in/email', {
 			method: 'POST',
-			headers: { 'content-type': 'application/json', 'origin': url('/') },
+			headers: {
+				'content-type': 'application/json',
+				'origin': url('/'),
+			},
 			body: JSON.stringify({ email: 'nobody@keepr.digital', password: 'not-a-password' }),
 		});
 

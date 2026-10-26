@@ -92,7 +92,9 @@ describe('events page', () => {
 	});
 
 	it('shows the navbar create action once events exist', async () => {
-		mockEventStore.eventsList = [{ id: 1, name: 'Regional Championship' }];
+		mockEventStore.eventsList = [
+			{ id: 1, name: 'Regional Championship' },
+		];
 
 		const wrapper = await mountPage();
 		await flushPromises();

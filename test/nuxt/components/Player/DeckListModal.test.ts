@@ -14,7 +14,9 @@ mockNuxtImport('useSendDeckToScreen', () => () => ({
 }));
 
 mockNuxtImport('useScryfallBatch', () => () => ({
-	fetchScryfallCards: vi.fn(async () => ({ cards: new Map() })),
+	fetchScryfallCards: vi.fn(async () => ({
+		cards: new Map(),
+	})),
 }));
 
 const UModalStub = defineComponent({
@@ -58,7 +60,9 @@ describe('player deck list modal', () => {
 		// so the modal receives deep reactive proxies rather than plain objects.
 		const overlayProps = reactive({
 			playerName: 'Marcus',
-			deckLists: [makeDeckList()],
+			deckLists: [
+				makeDeckList(),
+			],
 		});
 
 		const wrapper = mount(DeckListModal, {

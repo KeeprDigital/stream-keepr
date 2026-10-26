@@ -54,7 +54,10 @@ describe('an integration server\'s early answer', () => {
 		const port = await serve((request, response) => {
 			if (request.url === '/api/parts/1') {
 				// A hop that never drains, as Nitro's proxy is once the worker has answered.
-				request.pipe(new Writable({ highWaterMark: 1, write: () => {} }));
+				request.pipe(new Writable({
+					highWaterMark: 1,
+					write: () => {},
+				}));
 				response.end('already held');
 				return;
 			}

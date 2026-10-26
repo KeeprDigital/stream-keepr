@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 
 const mocks = vi.hoisted(() => ({
-	toast: { add: vi.fn() },
+	toast: {
+		add: vi.fn(),
+	},
 }));
 
 mockNuxtImport('useToast', () => () => mocks.toast);
@@ -15,7 +17,9 @@ const execCommand = vi.fn<(command: string) => boolean>();
 
 function stubClipboardApi(present: boolean) {
 	Object.defineProperty(navigator, 'clipboard', {
-		value: present ? { writeText } : undefined,
+		value: present
+			? { writeText }
+			: undefined,
 		configurable: true,
 		writable: true,
 	});

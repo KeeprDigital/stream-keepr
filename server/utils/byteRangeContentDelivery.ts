@@ -42,7 +42,9 @@ export function requestedByteRange(
 	}
 
 	const start = Number(match[1]);
-	const requestedEnd = match[2] ? Number(match[2]) : byteLength - 1;
+	const requestedEnd = match[2]
+		? Number(match[2])
+		: byteLength - 1;
 	if (
 		!Number.isSafeInteger(start)
 		|| !Number.isSafeInteger(requestedEnd)

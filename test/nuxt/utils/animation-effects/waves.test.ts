@@ -13,13 +13,22 @@ import { createWavesDelegate } from '~/utils/animation-effects/waves';
  */
 
 function mountDelegate(overrides: Partial<AnimationEffectParams<'waves'>> = {}) {
-	const params = { ...animationEffectDefaultParams('waves'), ...overrides };
+	const params = {
+		...animationEffectDefaultParams('waves'),
+		...overrides,
+	};
 	const delegate = createWavesDelegate();
 	const scene = new THREE.Scene();
 	const camera = delegate.createCamera(THREE, { width: 800, height: 450 });
 	const context = { three: THREE, scene, camera };
 	delegate.build({ ...context, params });
-	return { delegate, scene, camera: camera as THREE.PerspectiveCamera, context, params };
+	return {
+		delegate,
+		scene,
+		camera: camera as THREE.PerspectiveCamera,
+		context,
+		params,
+	};
 }
 
 function wavesMesh(scene: THREE.Scene): THREE.Mesh {
@@ -97,7 +106,10 @@ describe('createWavesDelegate', () => {
 	it('clears to the background colour the fork\'s base cleared to, where the plane leaves the frame', () => {
 		const { scene, delegate, context, params } = mountDelegate();
 		expect((scene.background as THREE.Color).getHexString()).toBe(params.backgroundColor.slice(1));
-		delegate.applyParams({ ...context, params: { ...params, backgroundColor: '#224466' } });
+		delegate.applyParams({
+			...context,
+			params: { ...params, backgroundColor: '#224466' },
+		});
 		expect((scene.background as THREE.Color).getHexString()).toBe('224466');
 	});
 
@@ -146,7 +158,15 @@ describe('createWavesDelegate', () => {
 	it('applies colour, shininess, and scale to the live scene without a rebuild', () => {
 		const { delegate, scene, camera, context, params } = mountDelegate({ scale: 1 });
 		const material = wavesMesh(scene).material as THREE.MeshPhongMaterial;
-		delegate.applyParams({ ...context, params: { ...params, waveColor: '#123456', shininess: 75, scale: 2 } });
+		delegate.applyParams({
+			...context,
+			params: {
+				...params,
+				waveColor: '#123456',
+				shininess: 75,
+				scale: 2,
+			},
+		});
 		expect(material.color.getHexString()).toBe('123456');
 		expect(material.shininess).toBe(75);
 		expect(camera.position.x).toBeCloseTo(240 / 1.7);
@@ -159,7 +179,10 @@ describe('createWavesDelegate', () => {
 		const position = wavesMesh(scene).geometry.getAttribute('position') as THREE.BufferAttribute;
 		const restHeights = Array.from({ length: position.count }, (_, index) => position.getY(index));
 
-		delegate.applyParams({ ...context, params: { ...params, waveHeight: 0 } });
+		delegate.applyParams({
+			...context,
+			params: { ...params, waveHeight: 0 },
+		});
 		delegate.update({ ...context, elapsedSeconds: 2 });
 		for (const index of [0, 500, position.count - 1])
 			expect(position.getY(index)).toBeCloseTo(restHeights[index]!);

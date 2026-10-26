@@ -78,7 +78,9 @@ describe('playerUpdateModule', () => {
 		});
 		mockPublication.playerDeckReviewed.mockResolvedValue({ id: 21, playerId: 5 });
 		mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit.mockImplementation(
-			async (_eventId: number, playerIds: number[]) => playerIds.length === 1 ? [11, 12] : [21, 22],
+			async (_eventId: number, playerIds: number[]) => playerIds.length === 1
+				? [11, 12]
+				: [21, 22],
 		);
 	});
 
@@ -173,7 +175,9 @@ describe('playerUpdateModule', () => {
 		await playerUpdateModule().updatePlayer({
 			eventId: 1,
 			playerId: 5,
-			input: { gameData: { type: 'mtg', deckName: 'Manual Override', deckColors: 'R' } },
+			input: {
+				gameData: { type: 'mtg', deckName: 'Manual Override', deckColors: 'R' },
+			},
 		});
 
 		expect(mockPlayerDeckService.reconcilePrimaryArchetype).toHaveBeenCalledWith(1, 5, { reviewedOnly: true });

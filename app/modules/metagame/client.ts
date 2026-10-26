@@ -32,7 +32,9 @@ export function useMetagameClient() {
 	const loadSummary = (eventId: number, scope: MetagameScopeInput) => {
 		return $fetch<MetagameSummaryResponse>(
 			`/api/events/${eventId}/metagame`,
-			{ query: buildMetagameScopeQuery(scope) },
+			{
+				query: buildMetagameScopeQuery(scope),
+			},
 		);
 	};
 
@@ -43,7 +45,9 @@ export function useMetagameClient() {
 	) => {
 		return $fetch<ArchetypeBreakdownResponse>(
 			`/api/events/${eventId}/metagame/archetypes`,
-			{ query: buildArchetypeBreakdownQuery(scope, options) },
+			{
+				query: buildArchetypeBreakdownQuery(scope, options),
+			},
 		);
 	};
 
@@ -54,7 +58,9 @@ export function useMetagameClient() {
 	) => {
 		return $fetch<CardBreakdownResponse>(
 			`/api/events/${eventId}/metagame/cards`,
-			{ query: buildCardBreakdownQuery(scope, options) },
+			{
+				query: buildCardBreakdownQuery(scope, options),
+			},
 		);
 	};
 
@@ -66,7 +72,9 @@ export function useMetagameClient() {
 	) => {
 		return $fetch<ArchetypeDetailResponse>(
 			`/api/events/${eventId}/metagame/archetypes/${archetypeId}`,
-			{ query: buildArchetypeDetailQuery(scope, options) },
+			{
+				query: buildArchetypeDetailQuery(scope, options),
+			},
 		);
 	};
 
@@ -77,14 +85,18 @@ export function useMetagameClient() {
 	) => {
 		return $fetch<CardDetailResponse>(
 			`/api/events/${eventId}/metagame/cards/${cardId}`,
-			{ query: buildMetagameScopeQuery(scope) },
+			{
+				query: buildMetagameScopeQuery(scope),
+			},
 		);
 	};
 
 	const loadTokenRequirements = (eventId: number, scope: MetagameScopeInput) => {
 		return $fetch<TokenRequirementsResponse>(
 			`/api/events/${eventId}/metagame/tokens`,
-			{ query: buildMetagameScopeQuery(scope) },
+			{
+				query: buildMetagameScopeQuery(scope),
+			},
 		);
 	};
 

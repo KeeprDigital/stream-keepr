@@ -70,17 +70,25 @@ const emit = defineEmits<{
 }>();
 
 const SOURCE_OPTIONS = computed<{ label: string; value: GraphicFontSource }[]>(() => [
-	...(props.optional ? [{ label: 'Same as base', value: 'base' as const }] : []),
+	...(props.optional
+		? [
+				{ label: 'Same as base', value: 'base' as const },
+			]
+		: []),
 	{ label: 'Application font', value: 'application' },
 	{ label: 'Library font', value: 'asset' },
 ]);
 
 const applicationFontId = computed(() =>
-	props.font?.kind === 'application' ? props.font.fontId : undefined,
+	props.font?.kind === 'application'
+		? props.font.fontId
+		: undefined,
 );
 
 const assetReference = computed(() =>
-	props.font?.kind === 'asset' ? props.font.reference : undefined,
+	props.font?.kind === 'asset'
+		? props.font.reference
+		: undefined,
 );
 </script>
 

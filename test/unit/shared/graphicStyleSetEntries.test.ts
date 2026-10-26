@@ -23,7 +23,13 @@ function entry<T extends GraphicStyleSetEntry['kind']>(
 	value: Extract<GraphicStyleSetEntry, { kind: T }>['value'],
 	name = id,
 ): GraphicStyleSetEntry {
-	return { id, kind, name, schemaVersion: 1, value } as GraphicStyleSetEntry;
+	return {
+		id,
+		kind,
+		name,
+		schemaVersion: 1,
+		value,
+	} as GraphicStyleSetEntry;
 }
 
 const brand = entry('palette', 'brand', { color: '#ff0044' });
@@ -51,7 +57,9 @@ const panel = entry('surface-style', 'panel', {
 describe('graphicStyleEntryReferences', () => {
 	it('names every entry another entry depends on, with the kind that reference demands', () => {
 		expect(graphicStyleEntryReferences(heading))
-			.toEqual([{ entryId: 'brand', requiredKind: 'palette' }]);
+			.toEqual([
+				{ entryId: 'brand', requiredKind: 'palette' },
+			]);
 		expect(graphicStyleEntryReferences(panel)).toEqual([
 			{ entryId: 'panel-fill', requiredKind: 'fill' },
 			{ entryId: 'brand', requiredKind: 'palette' },
@@ -115,10 +123,14 @@ describe('resolveGraphicStyleSet', () => {
 		// The Graphic Surface Style entry never names `ink`; it names the Graphic Fill
 		// entry that does. That indirection is exactly what a transitive dependency is.
 		expect(before.resolved.get('panel')).toMatchObject({
-			value: { fill: { type: 'solid', color: '#101014' } },
+			value: {
+				fill: { type: 'solid', color: '#101014' },
+			},
 		});
 		expect(after.resolved.get('panel')).toMatchObject({
-			value: { fill: { type: 'solid', color: '#000000' } },
+			value: {
+				fill: { type: 'solid', color: '#000000' },
+			},
 		});
 	});
 
@@ -135,7 +147,10 @@ describe('resolveGraphicStyleSet', () => {
 		// the one it already has, because a Graphic Surface Style always has a fill.
 		expect(resolution.resolved.get('edge')).toEqual({
 			kind: 'surface-style',
-			value: { fillOpacity: 1, outline: { color: '#ff0044', width: 4 } },
+			value: {
+				fillOpacity: 1,
+				outline: { color: '#ff0044', width: 4 },
+			},
 		});
 	});
 
@@ -155,28 +170,38 @@ describe('resolveGraphicStyleSet', () => {
 
 		expect(resolution.resolved.get('portrait')).toMatchObject({
 			kind: 'media-treatment',
-			value: { clipGeometry: { topLeft: { treatment: 'rounded', size: 12 } } },
+			value: {
+				clipGeometry: {
+					topLeft: { treatment: 'rounded', size: 12 },
+				},
+			},
 		});
 	});
 
 	it('gives a Graphic Animation Recipe entry a delay of zero when its author set none', () => {
-		const resolution = resolveGraphicStyleSet([entry('animation-recipe', 'rise', {
-			duration: 300,
-			easing: 'ease-out',
-			slide: { direction: 'north', distanceMode: 'fixed', distance: 40 },
-		})]);
+		const resolution = resolveGraphicStyleSet([
+			entry('animation-recipe', 'rise', {
+				duration: 300,
+				easing: 'ease-out',
+				slide: { direction: 'north', distanceMode: 'fixed', distance: 40 },
+			}),
+		]);
 
-		expect(resolution.resolved.get('rise')).toMatchObject({ value: { delay: 0 } });
+		expect(resolution.resolved.get('rise')).toMatchObject({
+			value: { delay: 0 },
+		});
 	});
 
 	it('reports a reference to an entry that does not exist', () => {
 		const resolution = resolveGraphicStyleSet([heading]);
 
-		expect(resolution.issues).toEqual([expect.objectContaining({
-			code: 'entry-reference-missing',
-			entryId: 'heading',
-			referencedEntryId: 'brand',
-		})]);
+		expect(resolution.issues).toEqual([
+			expect.objectContaining({
+				code: 'entry-reference-missing',
+				entryId: 'heading',
+				referencedEntryId: 'brand',
+			}),
+		]);
 		expect(resolution.resolved.has('heading')).toBe(false);
 	});
 
@@ -186,11 +211,13 @@ describe('resolveGraphicStyleSet', () => {
 			heading,
 		]);
 
-		expect(resolution.issues).toEqual([expect.objectContaining({
-			code: 'entry-reference-kind-mismatch',
-			entryId: 'heading',
-			referencedEntryId: 'brand',
-		})]);
+		expect(resolution.issues).toEqual([
+			expect.objectContaining({
+				code: 'entry-reference-kind-mismatch',
+				entryId: 'heading',
+				referencedEntryId: 'brand',
+			}),
+		]);
 	});
 
 	it('refuses a reference that would close a cycle before the cycle can form', () => {
@@ -271,24 +298,36 @@ describe('resolveGraphicStyleSet', () => {
 	});
 
 	it('refuses an entry stored in a schema version this build does not read', () => {
-		const resolution = resolveGraphicStyleSet([{ ...brand, schemaVersion: 2 }]);
+		const resolution = resolveGraphicStyleSet([
+			{ ...brand, schemaVersion: 2 },
+		]);
 
-		expect(resolution.issues).toEqual([expect.objectContaining({
-			code: 'entry-schema-unsupported',
-			entryId: 'brand',
-		})]);
+		expect(resolution.issues).toEqual([
+			expect.objectContaining({
+				code: 'entry-schema-unsupported',
+				entryId: 'brand',
+			}),
+		]);
 	});
 
 	it('refuses a typography entry naming a font this installation does not have', () => {
 		const resolution = resolveGraphicStyleSet([
 			brand,
-			{ ...heading, value: { ...heading.value, font: { kind: 'application', fontId: 'not-a-font' } } } as unknown as GraphicStyleSetEntry,
+			{
+				...heading,
+				value: {
+					...heading.value,
+					font: { kind: 'application', fontId: 'not-a-font' },
+				},
+			} as unknown as GraphicStyleSetEntry,
 		]);
 
-		expect(resolution.issues).toEqual([expect.objectContaining({
-			code: 'entry-font-unavailable',
-			entryId: 'heading',
-		})]);
+		expect(resolution.issues).toEqual([
+			expect.objectContaining({
+				code: 'entry-font-unavailable',
+				entryId: 'heading',
+			}),
+		]);
 	});
 
 	it('resolves every sound entry even while another is broken', () => {

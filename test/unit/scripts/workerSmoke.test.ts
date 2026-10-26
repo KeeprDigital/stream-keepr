@@ -191,7 +191,9 @@ describe('the built Worker smoke runner', () => {
 			.mockImplementationOnce(() => exitedProcess(0))
 			.mockImplementationOnce(() => worker);
 		const fetchRequest = vi.fn()
-			.mockResolvedValueOnce(Response.json({ serverTime: Date.now() }))
+			.mockResolvedValueOnce(Response.json({
+				serverTime: Date.now(),
+			}))
 			.mockResolvedValueOnce(Response.json({ events: [] }));
 
 		await expect(runWorkerSmoke({ repositoryRoot, spawnProcess, fetchRequest })).rejects.toMatchObject({
@@ -212,7 +214,10 @@ describe('the built Worker smoke runner', () => {
 			new Response(null, { status: 401 }),
 			new Response(null, { status: 401 }),
 			new Response(null, { status: 401 }),
-			new Response('{}', { status: 429, headers: { 'x-retry-after': '10' } }),
+			new Response('{}', {
+				status: 429,
+				headers: { 'x-retry-after': '10' },
+			}),
 			new Response('{}', { status: 200 }),
 		];
 		return answers.map((answer, index) => overrides[index] ?? answer);
@@ -229,19 +234,27 @@ describe('the built Worker smoke runner', () => {
 			.mockImplementationOnce(() => livingProcess());
 		const fetchRequest = vi.fn();
 		for (const answer of [
-			Response.json({ serverTime: Date.now() }),
+			Response.json({
+				serverTime: Date.now(),
+			}),
 			new Response(null, { status: 401 }),
 			Response.json({ outcome: 'created' }),
 			...answers,
 		]) {
 			fetchRequest.mockResolvedValueOnce(answer);
 		}
-		return { run: runWorkerSmoke({ repositoryRoot, spawnProcess, fetchRequest }), fetchRequest };
+		return {
+			run: runWorkerSmoke({ repositoryRoot, spawnProcess, fetchRequest }),
+			fetchRequest,
+		};
 	}
 
 	/** Answers the rate-limit scenario with `scenario`, then fails the next probe with a 500. */
 	async function rateLimitAnswering(scenario: Response[]) {
-		const { run, fetchRequest } = await bootstrappedWorkerAnswering([...scenario, new Response(null, { status: 500 })]);
+		const { run, fetchRequest } = await bootstrappedWorkerAnswering([
+			...scenario,
+			new Response(null, { status: 500 }),
+		]);
 		return { outcome: await run.catch(error => error), fetchRequest };
 	}
 
@@ -250,7 +263,9 @@ describe('the built Worker smoke runner', () => {
 	 * did before `rateLimit` was stated: every attempt reached the password check.
 	 */
 	it('refuses a Worker that admits a fourth sign-in attempt from one client', async () => {
-		const { outcome } = await rateLimitAnswering(rateLimitScenario({ 3: new Response(null, { status: 401 }) }));
+		const { outcome } = await rateLimitAnswering(rateLimitScenario({
+			3: new Response(null, { status: 401 }),
+		}));
 
 		expect(outcome).toMatchObject({
 			probe: 'auth-rate-limit-refusal',
@@ -260,19 +275,25 @@ describe('the built Worker smoke runner', () => {
 	});
 
 	it('refuses a Worker that limits a client it should not have limited yet', async () => {
-		const { outcome } = await rateLimitAnswering(rateLimitScenario({ 2: new Response(null, { status: 429 }) }));
+		const { outcome } = await rateLimitAnswering(rateLimitScenario({
+			2: new Response(null, { status: 429 }),
+		}));
 
 		expect(outcome).toMatchObject({ probe: 'auth-rate-limit-admitted', failureClass: 'unexpected-status' });
 	});
 
 	it('refuses a 429 that names no retry delay', async () => {
-		const { outcome } = await rateLimitAnswering(rateLimitScenario({ 3: new Response('{}', { status: 429 }) }));
+		const { outcome } = await rateLimitAnswering(rateLimitScenario({
+			3: new Response('{}', { status: 429 }),
+		}));
 
 		expect(outcome).toMatchObject({ probe: 'auth-rate-limit-refusal', failureClass: 'unexpected-body' });
 	});
 
 	it('refuses a Worker whose limit also refuses an independent client', async () => {
-		const { outcome } = await rateLimitAnswering(rateLimitScenario({ 4: new Response(null, { status: 429 }) }));
+		const { outcome } = await rateLimitAnswering(rateLimitScenario({
+			4: new Response(null, { status: 429 }),
+		}));
 
 		expect(outcome).toMatchObject({
 			probe: 'auth-rate-limit-independent-client',
@@ -285,7 +306,10 @@ describe('the built Worker smoke runner', () => {
 		const { outcome, fetchRequest } = await rateLimitAnswering(rateLimitScenario());
 
 		// The first probe after the scenario is the origin refusal, answered 500 here.
-		expect(outcome).toMatchObject({ probe: 'auth-origin-refusal', detail: { actual: 500 } });
+		expect(outcome).toMatchObject({
+			probe: 'auth-origin-refusal',
+			detail: { actual: 500 },
+		});
 		const headers = fetchRequest.mock.calls.slice(3).map(([, init]) => new Headers(init?.headers));
 		const limited = headers.slice(0, 4);
 		const independent = headers[4]!;
@@ -354,14 +378,18 @@ describe('the built Worker smoke runner', () => {
 	});
 
 	it('escalates cleanup to SIGKILL and waits for the child exit', async () => {
-		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+		vi.useFakeTimers({
+			toFake: ['setTimeout', 'clearTimeout'],
+		});
 		const repositoryRoot = await builtRepository();
 		const worker = stubbornProcess();
 		const spawnProcess = vi.fn()
 			.mockImplementationOnce(() => exitedProcess(0))
 			.mockImplementationOnce(() => worker);
 		const fetchRequest = vi.fn()
-			.mockResolvedValueOnce(Response.json({ serverTime: Date.now() }))
+			.mockResolvedValueOnce(Response.json({
+				serverTime: Date.now(),
+			}))
 			.mockResolvedValueOnce(Response.json({ events: [] }));
 		const outcome = runWorkerSmoke({ repositoryRoot, spawnProcess, fetchRequest }).catch(error => error);
 
@@ -458,7 +486,9 @@ describe('the built Worker smoke runner', () => {
 		expect(Object.keys(selectGates(['--quick']))).toContain('typecheck:validator');
 
 		const ci = await readFile(join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
-		const steps = [...ci.matchAll(/run: (pnpm .+)$/gmu)].map(match => match[1]!);
+		const steps = [
+			...ci.matchAll(/run: (pnpm .+)$/gmu),
+		].map(match => match[1]!);
 		expect(steps).toEqual(expect.arrayContaining(['pnpm typecheck', 'pnpm validator:dry-run']));
 	});
 
@@ -500,7 +530,9 @@ describe('the built Worker smoke runner', () => {
 		// so a gate added to verify must be added to ci.yml too.
 		const repositoryRoot = join(import.meta.dirname, '../../..');
 		const ci = await readFile(join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
-		const steps = [...ci.matchAll(/run: (pnpm .+)$/gmu)].map(match => match[1]!);
+		const steps = [
+			...ci.matchAll(/run: (pnpm .+)$/gmu),
+		].map(match => match[1]!);
 		const { selectGates } = await import('../../../scripts/verify.mjs');
 		const commands = Object.entries(selectGates(['--tests']))
 			.filter(([name]) => name !== 'prepare')

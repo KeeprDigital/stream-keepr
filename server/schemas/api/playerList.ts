@@ -5,14 +5,24 @@ import { playerLists } from '~~/server/db/schema';
 // ── Player List CRUD Schemas ──
 
 export const createPlayerListSchema = createInsertSchema(playerLists)
-	.omit({ id: true, eventId: true, createdAt: true, updatedAt: true })
+	.omit({
+		id: true,
+		eventId: true,
+		createdAt: true,
+		updatedAt: true,
+	})
 	.extend({
 		name: z.string().min(1).max(200),
 	})
 	.strict();
 
 export const updatePlayerListSchema = createUpdateSchema(playerLists)
-	.omit({ id: true, eventId: true, createdAt: true, updatedAt: true })
+	.omit({
+		id: true,
+		eventId: true,
+		createdAt: true,
+		updatedAt: true,
+	})
 	.extend({
 		name: z.string().min(1).max(200).optional(),
 	})

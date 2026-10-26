@@ -115,7 +115,12 @@ function childBoxes(bytes: Uint8Array, parent: IsoBox) {
 
 function validateMp4TopLevelStructure(boxes: readonly IsoBox[]) {
 	const harmlessPadding = new Set(['free', 'skip']);
-	const allowed = new Set(['ftyp', 'moov', 'mdat', ...harmlessPadding]);
+	const allowed = new Set([
+		'ftyp',
+		'moov',
+		'mdat',
+		...harmlessPadding,
+	]);
 	const unsupported = boxes.find(box => !allowed.has(box.type));
 	if (unsupported) {
 		validationError(
@@ -166,11 +171,15 @@ function h264SpsFacts(nal: Uint8Array) {
 			if (leadingZeros > 31)
 				validationError('unsupported-video-profile', 'AVC SPS exponential code is unbounded.');
 		}
-		return (2 ** leadingZeros - 1) + (leadingZeros ? bits(leadingZeros) : 0);
+		return (2 ** leadingZeros - 1) + (leadingZeros
+			? bits(leadingZeros)
+			: 0);
 	};
 	const signedExpGolomb = () => {
 		const code = unsignedExpGolomb();
-		return code % 2 === 0 ? -(code / 2) : (code + 1) / 2;
+		return code % 2 === 0
+			? -(code / 2)
+			: (code + 1) / 2;
 	};
 	const profile = bits(8);
 	bits(8); // constraint flags
@@ -179,7 +188,21 @@ function h264SpsFacts(nal: Uint8Array) {
 	let chromaFormat = 1;
 	let bitDepthLuma = 8;
 	let bitDepthChroma = 8;
-	if ([100, 110, 122, 244, 44, 83, 86, 118, 128, 138, 139, 134, 135].includes(profile)) {
+	if ([
+		100,
+		110,
+		122,
+		244,
+		44,
+		83,
+		86,
+		118,
+		128,
+		138,
+		139,
+		134,
+		135,
+	].includes(profile)) {
 		chromaFormat = unsignedExpGolomb();
 		if (chromaFormat === 3)
 			bit();
@@ -249,8 +272,12 @@ function h264SpsFacts(nal: Uint8Array) {
 			}
 		}
 	}
-	const cropUnitX = chromaFormat === 0 ? 1 : 2;
-	const cropUnitY = (chromaFormat === 0 ? 1 : 2) * (frameOnly ? 1 : 2);
+	const cropUnitX = chromaFormat === 0
+		? 1
+		: 2;
+	const cropUnitY = (chromaFormat === 0
+		? 1
+		: 2) * (frameOnly ? 1 : 2);
 	return {
 		profile,
 		bitDepthLuma,
@@ -269,7 +296,9 @@ function validateVideoDeclarations(
 	const extension = declarations.sourceFileName?.trim().toLocaleLowerCase().match(/\.([^.]+)$/)?.[1];
 	if (extension && extension !== format)
 		validationError('conflicting-video-extension', `.${extension} conflicts with inspected ${format.toUpperCase()} content.`);
-	const canonicalMime = format === 'mp4' ? 'video/mp4' : 'video/webm';
+	const canonicalMime = format === 'mp4'
+		? 'video/mp4'
+		: 'video/webm';
 	if (declarations.declaredMime?.trim().toLocaleLowerCase() !== undefined
 		&& declarations.declaredMime?.trim().toLocaleLowerCase() !== canonicalMime) {
 		validationError('conflicting-video-mime', `${declarations.declaredMime} conflicts with inspected ${canonicalMime} content.`);
@@ -291,7 +320,17 @@ function mp4TrackFacts(
 	if (tkhdVersion !== 0)
 		validationError('unsupported-video-profile', 'Only bounded version-zero MP4 track headers are supported.');
 	const matrixOffset = tkhd.dataStart + 40;
-	const expectedMatrix = [0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000];
+	const expectedMatrix = [
+		0x00010000,
+		0,
+		0,
+		0,
+		0x00010000,
+		0,
+		0,
+		0,
+		0x40000000,
+	];
 	for (let index = 0; index < expectedMatrix.length; index++) {
 		if (view.getInt32(matrixOffset + index * 4) !== expectedMatrix[index])
 			validationError('unsupported-video-transform', 'MP4 track rotation, scaling, or translation is not supported.');
@@ -506,7 +545,9 @@ function mp4TrackFacts(
 	const chunkCount = u32(view, chunks.dataStart + 4);
 	if (chunkCount > frameCount)
 		validationError('video-index-incomplete', 'MP4 chunk count exceeds the bounded sample timeline.');
-	const chunkOffsetLength = chunks.type === 'co64' ? 8 : 4;
+	const chunkOffsetLength = chunks.type === 'co64'
+		? 8
+		: 4;
 	if (chunks.dataStart + 8 + chunkCount * chunkOffsetLength !== chunks.end)
 		validationError('video-index-incomplete', 'MP4 chunk offsets are incomplete.');
 	const chunkOffsets: number[] = [];
@@ -590,7 +631,12 @@ function mp4TrackFacts(
 	) {
 		validationError('malformed-video-timeline', 'MP4 movie duration conflicts with its media timeline.');
 	}
-	return { width, height, durationSeconds, frameCount };
+	return {
+		width,
+		height,
+		durationSeconds,
+		frameCount,
+	};
 }
 
 function inspectMp4(
@@ -607,7 +653,15 @@ function inspectMp4(
 	const ftyp = oneBox(top, 'ftyp');
 	if (ftyp.end - ftyp.dataStart < 8 || (ftyp.end - ftyp.dataStart - 8) % 4 !== 0)
 		validationError('malformed-video', 'MP4 file-type declaration is malformed.');
-	const mp4Brands = new Set(['isom', 'iso2', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1']);
+	const mp4Brands = new Set([
+		'isom',
+		'iso2',
+		'iso5',
+		'iso6',
+		'mp41',
+		'mp42',
+		'avc1',
+	]);
 	const majorBrand = ascii(bytes, ftyp.dataStart, 4);
 	if (!mp4Brands.has(majorBrand))
 		validationError('unsupported-video-format', 'ISO-BMFF file type is not an MP4-compatible brand.');
@@ -626,7 +680,17 @@ function inspectMp4(
 	if (movieTimescale === 0 || movieDurationUnits === 0)
 		validationError('malformed-video-timeline', 'MP4 movie duration and timescale must be positive.');
 	const movieMatrixOffset = mvhd.dataStart + 36;
-	const expectedMovieMatrix = [0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000];
+	const expectedMovieMatrix = [
+		0x00010000,
+		0,
+		0,
+		0,
+		0x00010000,
+		0,
+		0,
+		0,
+		0x40000000,
+	];
 	for (let index = 0; index < expectedMovieMatrix.length; index++) {
 		if (u32(view, movieMatrixOffset + index * 4) !== expectedMovieMatrix[index])
 			validationError('unsupported-video-transform', 'MP4 movie transforms are not supported.');
@@ -662,7 +726,9 @@ function ebmlVint(bytes: Uint8Array, offset: number, preserveMarker: boolean) {
 	}
 	if (length > 8 || offset + length > bytes.byteLength)
 		validationError('malformed-video', 'WebM contains an invalid variable integer.');
-	let value = preserveMarker ? bytes[offset]! : bytes[offset]! & (mask - 1);
+	let value = preserveMarker
+		? bytes[offset]!
+		: bytes[offset]! & (mask - 1);
 	for (let index = 1; index < length; index++)
 		value = value * 256 + bytes[offset + index]!;
 	const unknown = !preserveMarker && value === 2 ** (7 * length) - 1;
@@ -675,10 +741,17 @@ function ebmlElements(bytes: Uint8Array, start: number, end: number) {
 		const id = ebmlVint(bytes, offset, true);
 		const size = ebmlVint(bytes, offset + id.length, false);
 		const dataStart = offset + id.length + size.length;
-		const elementEnd = size.unknown ? end : dataStart + size.value;
+		const elementEnd = size.unknown
+			? end
+			: dataStart + size.value;
 		if (elementEnd > end || elementEnd < dataStart)
 			validationError('video-index-incomplete', 'WebM element size exceeds the available source bytes.');
-		elements.push({ id: id.value, start: offset, dataStart, end: elementEnd });
+		elements.push({
+			id: id.value,
+			start: offset,
+			dataStart,
+			end: elementEnd,
+		});
 		offset = elementEnd;
 	}
 	return elements;
@@ -945,10 +1018,17 @@ async function readEbmlElementHeader(
 	const size = ebmlVint(header, id.length, false);
 	const headerLength = id.length + size.length;
 	const dataStart = offset + headerLength;
-	const elementEnd = size.unknown ? end : dataStart + size.value;
+	const elementEnd = size.unknown
+		? end
+		: dataStart + size.value;
 	if (elementEnd > end || elementEnd < dataStart)
 		validationError('video-index-incomplete', 'WebM element size exceeds the exact source length.');
-	return { id: id.value, start: offset, dataStart, end: elementEnd };
+	return {
+		id: id.value,
+		start: offset,
+		dataStart,
+		end: elementEnd,
+	};
 }
 
 async function scanEbmlElements(
@@ -1023,7 +1103,9 @@ async function vp9FrameRanges(
 		: (await reader.readExact(payloadStart + payloadLength - 1, 1))[0]!;
 	if ((trailing & 0xE0) !== 0xC0) {
 		return {
-			ranges: [{ start: payloadStart, length: payloadLength }],
+			ranges: [
+				{ start: payloadStart, length: payloadLength },
+			],
 			prefix,
 		};
 	}
@@ -1103,7 +1185,9 @@ async function inspectWebmRandomAccess(
 	const infoChildren = ebmlChildren(infoBytes, info);
 	const durationElement = oneEbml(infoChildren, 0x4489);
 	const scaleElement = infoChildren.find(element => element.id === 0x2AD7B1);
-	const timecodeScale = scaleElement ? ebmlUnsigned(infoBytes, scaleElement) : 1_000_000;
+	const timecodeScale = scaleElement
+		? ebmlUnsigned(infoBytes, scaleElement)
+		: 1_000_000;
 	const durationSeconds = ebmlFloat(infoBytes, durationElement) * timecodeScale / 1_000_000_000;
 
 	const tracksElement = oneEbml(children, 0x1654AE6B);
@@ -1140,7 +1224,11 @@ async function inspectWebmRandomAccess(
 		const bitDepth = colourChildren.find(element => element.id === 0x55B2);
 		if (bitDepth && ebmlUnsigned(tracksBytes, bitDepth) !== 8)
 			validationError('unsupported-video-profile', 'VP9 video must be 8-bit.');
-		for (const [id, label] of [[0x55BB, 'primaries'], [0x55BA, 'transfer'], [0x55B1, 'matrix']] as const) {
+		for (const [id, label] of [
+			[0x55BB, 'primaries'],
+			[0x55BA, 'transfer'],
+			[0x55B1, 'matrix'],
+		] as const) {
 			const element = colourChildren.find(candidate => candidate.id === id);
 			if (element && ![1, 2].includes(ebmlUnsigned(tracksBytes, element)))
 				validationError('unsupported-video-profile', `WebM ${label} signalling is outside 8-bit SDR BT.709.`);
@@ -1364,7 +1452,13 @@ async function inspectWebmRandomAccess(
 		validationError('video-index-incomplete', 'WebM Cues must index the initial random-access cluster.');
 	if (indexedClusters.size !== clusterIndex.size)
 		validationError('video-index-incomplete', 'WebM Cues must cover every random-access cluster.');
-	return { width, height, durationSeconds, frameCount, hasAlpha };
+	return {
+		width,
+		height,
+		durationSeconds,
+		frameCount,
+		hasAlpha,
+	};
 }
 
 function acceptedSilentVideo(

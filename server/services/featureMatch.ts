@@ -50,7 +50,11 @@ export async function buildClearImportedMatchDataQueries(
 		));
 
 	if (importedSlots.length === 0) {
-		return { queries: [], clearedSlotCount: 0, settle: async () => {} };
+		return {
+			queries: [],
+			clearedSlotCount: 0,
+			settle: async () => {},
+		};
 	}
 
 	const resetAt = new Date();
@@ -155,7 +159,9 @@ export function featureMatchService() {
 				eq(featureMatches.eventId, eventId),
 			),
 		});
-		return slot ? await withActiveSession(slot) : undefined;
+		return slot
+			? await withActiveSession(slot)
+			: undefined;
 	};
 
 	const findByEventId = async (eventId: number) => {
@@ -233,11 +239,21 @@ export function featureMatchService() {
 
 	function desiredIdentity(current: DbFeatureMatch, data: FeatureMatchIdentityInput): PairingIdentity {
 		return {
-			matchId: data.matchId === undefined ? current.matchId ?? null : data.matchId ?? null,
-			externalId: data.externalId === undefined ? current.externalId ?? null : data.externalId ?? null,
-			externalSource: data.externalSource === undefined ? current.externalSource ?? null : data.externalSource ?? null,
-			player1Id: data.player1Id === undefined ? current.player1Id ?? null : data.player1Id ?? null,
-			player2Id: data.player2Id === undefined ? current.player2Id ?? null : data.player2Id ?? null,
+			matchId: data.matchId === undefined
+				? current.matchId ?? null
+				: data.matchId ?? null,
+			externalId: data.externalId === undefined
+				? current.externalId ?? null
+				: data.externalId ?? null,
+			externalSource: data.externalSource === undefined
+				? current.externalSource ?? null
+				: data.externalSource ?? null,
+			player1Id: data.player1Id === undefined
+				? current.player1Id ?? null
+				: data.player1Id ?? null,
+			player2Id: data.player2Id === undefined
+				? current.player2Id ?? null
+				: data.player2Id ?? null,
 		};
 	}
 
@@ -289,7 +305,10 @@ export function featureMatchService() {
 		const provenance = manualData.matchId !== undefined
 			? await resolveMatchProvenance(eventId, manualData.matchId)
 			: {};
-		const shouldCreateSession = await shouldCreateSessionForIdentityChange(current, { ...manualData, ...provenance });
+		const shouldCreateSession = await shouldCreateSessionForIdentityChange(current, {
+			...manualData,
+			...provenance,
+		});
 
 		// Compare-and-swap on everything the create-session-vs-correct decision
 		// read: the pairing identity and the active Session pointer. A concurrent
@@ -298,7 +317,10 @@ export function featureMatchService() {
 		// it was computed from — the loser re-reads and retries instead.
 		const [updatedMatch] = await db
 			.update(featureMatches)
-			.set({ ...manualData, ...provenance })
+			.set({
+				...manualData,
+				...provenance,
+			})
 			.where(
 				and(
 					eq(featureMatches.id, id),
@@ -399,7 +421,9 @@ export function featureMatchService() {
 			// all, in statements each within D1's bound-parameter limit (#702).
 			const insertSlots = (rows: typeof newMatches) => db.insert(featureMatches).values(rows).returning();
 			const [firstInsert, ...restInserts] = chunkRowsWithinParameterBudget(newMatches, insertSlots).map(insertSlots);
-			const createdMatches = firstInsert ? (await db.batch([firstInsert, ...restInserts])).flat() : [];
+			const createdMatches = firstInsert
+				? (await db.batch([firstInsert, ...restInserts])).flat()
+				: [];
 			created.push(...createdMatches);
 
 			// Initialize state for created matches in one commit, reusing event defaults
@@ -485,7 +509,9 @@ export function featureMatchService() {
 			throw createError({ statusCode: 400, message: 'Feature match is already last' });
 		}
 
-		const swapIndex = direction === 'up' ? index - 1 : index + 1;
+		const swapIndex = direction === 'up'
+			? index - 1
+			: index + 1;
 		const current = allMatches[index]!;
 		const neighbor = allMatches[swapIndex]!;
 

@@ -15,14 +15,18 @@ import type { ScreenOutput } from '~~/shared/types/screenConfig';
  */
 
 export function clampOpacity(value: number): number {
-	return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 1));
+	return Math.max(0, Math.min(1, Number.isFinite(value)
+		? value
+		: 1));
 }
 
 const HEX_COLOUR = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i;
 
 /** A Key Output paints opacity, never colour. */
 export function paintColour(output: ScreenOutput, colour: string): string {
-	return output === 'key' ? '#ffffff' : colour;
+	return output === 'key'
+		? '#ffffff'
+		: colour;
 }
 
 /**

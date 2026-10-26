@@ -58,7 +58,9 @@ export async function assertGraphicsTemplateReferencesSelectable(
 	references: readonly ScreenGraphicAssetReference[],
 	artifact: GraphicsTemplateArtifact,
 ): Promise<void> {
-	await assertGraphicsTemplatesReferencesSelectable(library, [{ references }], artifact);
+	await assertGraphicsTemplatesReferencesSelectable(library, [
+		{ references },
+	], artifact);
 }
 
 /**
@@ -85,12 +87,16 @@ export async function assertGraphicsTemplatesReferencesSelectable(
 	const refusals = templates.flatMap((template) => {
 		const refused = template.references.flatMap((item, index) => {
 			const reason = refusal(item, statuses[offset + index]);
-			return reason === null ? [] : [`${item.ownerSlot} (${reason})`];
+			return reason === null
+				? []
+				: [`${item.ownerSlot} (${reason})`];
 		});
 		offset += template.references.length;
 		if (refused.length === 0)
 			return [];
-		const subject = template.name === undefined ? artifact : `${artifact} "${template.name}"`;
+		const subject = template.name === undefined
+			? artifact
+			: `${artifact} "${template.name}"`;
 		return [`${subject} cannot reference these Graphic Asset Revisions: ${refused.join(', ')}`];
 	});
 

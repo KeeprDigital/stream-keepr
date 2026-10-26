@@ -36,7 +36,9 @@ vi.mock('~/stores/screen', async () => {
 			return holder.screen;
 		},
 	});
-	return { useScreenStore: () => store };
+	return {
+		useScreenStore: () => store,
+	};
 });
 
 /**
@@ -70,7 +72,12 @@ vi.mock('~/composables/repositories/useScreenOutputReadRepository', () => ({
 }));
 
 vi.mock('~/composables/core/useRealtime', () => {
-	const transport = { connectionId: 'connection-1', connectionState: 'connected', onContinuityLost: () => () => {}, onceAttached: () => () => {} };
+	const transport = {
+		connectionId: 'connection-1',
+		connectionState: 'connected',
+		onContinuityLost: () => () => {},
+		onceAttached: () => () => {},
+	};
 	return {
 		useRealtime: () => transport,
 		tryUseRealtime: () => transport,
@@ -95,7 +102,12 @@ vi.mock('~/composables/screen/useScreenRealtimeSession', () => ({
 const serverNow = 1_700_000_000_000;
 
 mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
-	sessions: new Map([[7, { id: 55, sequence: 1 }]]),
+	sessions: new Map([
+		[
+			7,
+			{ id: 55, sequence: 1 },
+		],
+	]),
 	serverNow: () => serverNow,
 	// Everything the Screen publishes is on air: what this test is about is whether a
 	// composed graphic's media resolves, not which graphics compose.
@@ -145,7 +157,11 @@ function screenWithAuthoredMedia() {
 		name: 'Program',
 		currentMode: 'broadcast-graphics',
 		screenConfig: { width: 1920, height: 1080 },
-		modeConfigs: { 'broadcast-graphics': { graphics: [strip] } },
+		modeConfigs: {
+			'broadcast-graphics': {
+				graphics: [strip],
+			},
+		},
 	};
 }
 
@@ -239,11 +255,15 @@ describe('screen output route', () => {
 	 */
 	it('reports its asset access to the Screen when it joins presence', async () => {
 		await mountOutputRoute(`/event/42/screen/main#asset-capability=${capability}`);
-		expect(holder.presenceData).toEqual([expect.objectContaining({ assetAccess: 'granted' })]);
+		expect(holder.presenceData).toEqual([
+			expect.objectContaining({ assetAccess: 'granted' }),
+		]);
 
 		holder.presenceData = [];
 		await mountOutputRoute('/event/42/screen/main');
-		expect(holder.presenceData).toEqual([expect.objectContaining({ assetAccess: 'absent' })]);
+		expect(holder.presenceData).toEqual([
+			expect.objectContaining({ assetAccess: 'absent' }),
+		]);
 	});
 
 	/**

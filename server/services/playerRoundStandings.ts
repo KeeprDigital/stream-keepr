@@ -52,7 +52,10 @@ export function playerRoundStandingsService() {
 			.innerJoin(phases, eq(phases.id, rounds.phaseId))
 			.where(eq(rounds.eventId, eventId))
 			.orderBy(phases.sortOrder, rounds.roundNumber, rounds.id);
-		return ordered.map(round => ({ ...round, hasStandings: Boolean(round.hasStandings) }));
+		return ordered.map(round => ({
+			...round,
+			hasStandings: Boolean(round.hasStandings),
+		}));
 	};
 
 	const findRoundPositions = async (eventId: number, roundId: number | null): Promise<RoundStandingPositions | null> => {

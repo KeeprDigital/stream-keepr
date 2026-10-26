@@ -87,10 +87,17 @@ describe('reaping orphaned workerd processes', () => {
 			signals.push([pid, signal]);
 		};
 
-		const reaped = await reapOrphanedWorkerd({ psOutput, checkoutRoots, kill, sleep: async () => {} });
+		const reaped = await reapOrphanedWorkerd({
+			psOutput,
+			checkoutRoots,
+			kill,
+			sleep: async () => {},
+		});
 
 		expect(reaped).toEqual([61019]);
-		expect(signals).toEqual([[61019, 'SIGTERM']]);
+		expect(signals).toEqual([
+			[61019, 'SIGTERM'],
+		]);
 	});
 
 	it('escalates to SIGKILL when an orphan survives SIGTERM', async () => {
@@ -100,9 +107,17 @@ describe('reaping orphaned workerd processes', () => {
 				signals.push([pid, signal]);
 		};
 
-		await reapOrphanedWorkerd({ psOutput, checkoutRoots, kill, sleep: async () => {} });
+		await reapOrphanedWorkerd({
+			psOutput,
+			checkoutRoots,
+			kill,
+			sleep: async () => {},
+		});
 
-		expect(signals).toEqual([[61019, 'SIGTERM'], [61019, 'SIGKILL']]);
+		expect(signals).toEqual([
+			[61019, 'SIGTERM'],
+			[61019, 'SIGKILL'],
+		]);
 	});
 
 	it('neither reports nor escalates an orphan that exited before it was signalled', async () => {
@@ -112,10 +127,17 @@ describe('reaping orphaned workerd processes', () => {
 			throw Object.assign(new Error('gone'), { code: 'ESRCH' });
 		};
 
-		const reaped = await reapOrphanedWorkerd({ psOutput, checkoutRoots, kill, sleep: async () => {} });
+		const reaped = await reapOrphanedWorkerd({
+			psOutput,
+			checkoutRoots,
+			kill,
+			sleep: async () => {},
+		});
 
 		expect(reaped).toEqual([]);
-		expect(signals).toEqual([[61019, 'SIGTERM']]);
+		expect(signals).toEqual([
+			[61019, 'SIGTERM'],
+		]);
 	});
 
 	it('reaps nothing and skips the grace wait when no orphans exist', async () => {
@@ -212,7 +234,12 @@ describe('selecting leaked acceptance Chrome', () => {
 		});
 
 		expect(reaped).toEqual([81000, 81001]);
-		expect(signals).toEqual([[81000, 'SIGTERM'], [81001, 'SIGTERM'], [81000, 'SIGKILL'], [81001, 'SIGKILL']]);
+		expect(signals).toEqual([
+			[81000, 'SIGTERM'],
+			[81001, 'SIGTERM'],
+			[81000, 'SIGKILL'],
+			[81001, 'SIGKILL'],
+		]);
 	});
 });
 

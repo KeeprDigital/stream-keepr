@@ -115,7 +115,9 @@ function recordingPage(answers: Record<string, unknown> = {}) {
 			commands.push({ method, params });
 			if (method in answers)
 				return answers[method];
-			return method === 'Network.setCookie' ? { success: true } : {};
+			return method === 'Network.setCookie'
+				? { success: true }
+				: {};
 		},
 	};
 }
@@ -139,7 +141,10 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 	it('installs every cookie before it navigates, and enables the runtime last', async () => {
 		const page = recordingPage();
 
-		await openAuthoredPage(page, { url: PAGE_URL, cookies: [SESSION_COOKIE, COOKIE] });
+		await openAuthoredPage(page, {
+			url: PAGE_URL,
+			cookies: [SESSION_COOKIE, COOKIE],
+		});
 
 		expect(page.methods()).toEqual([
 			'Network.enable',
@@ -152,7 +157,10 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 		// list exists to prevent — and it is the kind that reads as a working page
 		// right up to the request that needs the other.
 		expect(page.commands.filter(({ method }) => method === 'Network.setCookie').map(({ params }) => params))
-			.toEqual([browserCookie(PAGE_URL, SESSION_COOKIE), browserCookie(PAGE_URL, COOKIE)]);
+			.toEqual([
+				browserCookie(PAGE_URL, SESSION_COOKIE),
+				browserCookie(PAGE_URL, COOKIE),
+			]);
 		expect(page.paramsFor('Page.navigate')).toEqual({ url: PAGE_URL });
 	});
 
@@ -175,9 +183,14 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 	 * the gate would fail later as a font that would not load.
 	 */
 	it('fails with a named cause when the browser refuses the cookie', async () => {
-		const page = recordingPage({ 'Network.setCookie': { success: false } });
+		const page = recordingPage({
+			'Network.setCookie': { success: false },
+		});
 
-		const opening = openAuthoredPage(page, { url: PAGE_URL, cookies: [COOKIE] });
+		const opening = openAuthoredPage(page, {
+			url: PAGE_URL,
+			cookies: [COOKIE],
+		});
 
 		await expect(opening).rejects.toMatchObject({ code: 'author-session-cookie-refused' });
 		expect(page.methods()).not.toContain('Page.navigate');
@@ -305,9 +318,25 @@ describe('the page diagnostics a run keeps', () => {
 		const page = eventPage();
 		const diagnostics = collectPageDiagnostics(page);
 
-		page.emit('Runtime.consoleAPICalled', { type: 'warning', args: [{ type: 'string', value: 'THREE.WebGLProgram:' }, { type: 'number', value: 3 }] });
-		page.emit('Runtime.consoleAPICalled', { type: 'error', args: [{ type: 'object', description: 'Error: shader failed' }] });
-		page.emit('Runtime.exceptionThrown', { exceptionDetails: { text: 'Uncaught', exception: { description: 'TypeError: x is undefined\n    at y' } } });
+		page.emit('Runtime.consoleAPICalled', {
+			type: 'warning',
+			args: [
+				{ type: 'string', value: 'THREE.WebGLProgram:' },
+				{ type: 'number', value: 3 },
+			],
+		});
+		page.emit('Runtime.consoleAPICalled', {
+			type: 'error',
+			args: [
+				{ type: 'object', description: 'Error: shader failed' },
+			],
+		});
+		page.emit('Runtime.exceptionThrown', {
+			exceptionDetails: {
+				text: 'Uncaught',
+				exception: { description: 'TypeError: x is undefined\n    at y' },
+			},
+		});
 
 		expect(diagnostics.read()).toEqual({
 			console: ['warning: THREE.WebGLProgram: 3', 'error: Error: shader failed'],
@@ -319,9 +348,21 @@ describe('the page diagnostics a run keeps', () => {
 		const page = eventPage();
 		const diagnostics = collectPageDiagnostics(page);
 
-		for (let index = 0; index < 50; index += 1)
-			page.emit('Runtime.consoleAPICalled', { type: 'log', args: [{ type: 'number', value: index }] });
+		for (let index = 0; index < 50; index += 1) {
+			page.emit('Runtime.consoleAPICalled', {
+				type: 'log',
+				args: [
+					{ type: 'number', value: index },
+				],
+			});
+		}
 
-		expect(diagnostics.read().console).toEqual(['log: 45', 'log: 46', 'log: 47', 'log: 48', 'log: 49']);
+		expect(diagnostics.read().console).toEqual([
+			'log: 45',
+			'log: 46',
+			'log: 47',
+			'log: 48',
+			'log: 49',
+		]);
 	});
 });

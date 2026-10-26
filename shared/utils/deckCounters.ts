@@ -60,7 +60,13 @@ export function deriveDeckCounterTypesFromScryfallCard(card: ScryfallCardLike): 
 }
 
 export function uniqueDeckCounterTypes(counterTypes: Iterable<string | null | undefined>): DeckCounterType[] {
-	const supported: DeckCounterType[] = ['poison', 'energy', 'storm', 'experience', 'rad'];
+	const supported: DeckCounterType[] = [
+		'poison',
+		'energy',
+		'storm',
+		'experience',
+		'rad',
+	];
 	const selected = new Set(counterTypes);
 	return supported.filter(type => selected.has(type));
 }

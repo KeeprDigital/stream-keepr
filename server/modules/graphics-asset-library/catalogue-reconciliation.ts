@@ -194,9 +194,15 @@ function discrepancyFromRow(row: DiscrepancyRow): GraphicsDiscrepancyRecord {
 		id: row.id,
 		kind: row.kind,
 		subjectKey: row.subject_key,
-		...(row.digest ? { digest: row.digest } : {}),
-		...(row.object_key ? { objectKey: row.object_key } : {}),
-		...(row.derivative_id ? { derivativeId: row.derivative_id as GraphicsDerivativeId } : {}),
+		...(row.digest
+			? { digest: row.digest }
+			: {}),
+		...(row.object_key
+			? { objectKey: row.object_key }
+			: {}),
+		...(row.derivative_id
+			? { derivativeId: row.derivative_id as GraphicsDerivativeId }
+			: {}),
 		state: row.state,
 		reasonCode: row.reason_code,
 		isolated: row.isolated === 1,
@@ -204,12 +210,22 @@ function discrepancyFromRow(row: DiscrepancyRow): GraphicsDiscrepancyRecord {
 		observed: JSON.parse(row.observed) as GraphicsDiscrepancy['observed'],
 		detectedAt: new Date(row.detected_at).toISOString(),
 		lastCheckedAt: new Date(row.last_checked_at).toISOString(),
-		...(row.resolved_at === null ? {} : { resolvedAt: new Date(row.resolved_at).toISOString() }),
-		...(row.resolution ? { resolution: row.resolution } : {}),
-		...(row.working_copy_key ? { workingCopyKey: row.working_copy_key } : {}),
+		...(row.resolved_at === null
+			? {}
+			: {
+					resolvedAt: new Date(row.resolved_at).toISOString(),
+				}),
+		...(row.resolution
+			? { resolution: row.resolution }
+			: {}),
+		...(row.working_copy_key
+			? { workingCopyKey: row.working_copy_key }
+			: {}),
 		...(row.working_copy_since === null
 			? {}
-			: { workingCopySince: new Date(row.working_copy_since).toISOString() }),
+			: {
+					workingCopySince: new Date(row.working_copy_since).toISOString(),
+				}),
 		correlationId: row.correlation_id,
 	};
 }
@@ -236,7 +252,9 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 			SELECT ${DISCREPANCY_COLUMNS} FROM graphics_discrepancies
 			WHERE kind = ? AND subject_key = ? AND state = 'open'
 		`).bind(kind, subjectKey).first<DiscrepancyRow>();
-		return row ? discrepancyFromRow(row) : undefined;
+		return row
+			? discrepancyFromRow(row)
+			: undefined;
 	}
 
 	return {
@@ -258,7 +276,9 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 				${EXPECTED_CONTENT_SELECT}
 				WHERE contents.digest = ?
 			`).bind(input.digest).first<ExpectedContentRow>();
-			return row ? expectedContentFromRow(row) : undefined;
+			return row
+				? expectedContentFromRow(row)
+				: undefined;
 		},
 		async findExpectedContents(input) {
 			if (input.digests.length === 0)
@@ -269,7 +289,10 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 			`).bind(boundJsonArray(input.digests)).all<ExpectedContentRow>();
 			if (!result.success)
 				throw new Error('Expected Graphic Asset Content could not be read');
-			return new Map(result.results.map(row => [row.digest, expectedContentFromRow(row)]));
+			return new Map(result.results.map(row => [
+				row.digest,
+				expectedContentFromRow(row),
+			]));
 		},
 		async listContentUsageForDigests(input) {
 			if (input.digests.length === 0)
@@ -322,10 +345,13 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 			}>();
 			if (!result.success)
 				throw new Error('Quarantined Graphic Asset Content could not be read');
-			return new Map(result.results.map(row => [row.digest, {
-				quarantinedAt: new Date(row.quarantined_at).toISOString(),
-				deleteAfter: new Date(row.delete_after).toISOString(),
-			}]));
+			return new Map(result.results.map(row => [
+				row.digest,
+				{
+					quarantinedAt: new Date(row.quarantined_at).toISOString(),
+					deleteAfter: new Date(row.delete_after).toISOString(),
+				},
+			]));
 		},
 		async hasOpenIsolatedIncident(input) {
 			return Boolean(await database.prepare(`
@@ -461,7 +487,9 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 			return result.meta.changes === 1;
 		},
 		async listContentUsage(input) {
-			return (await this.listContentUsageForDigests({ digests: [input.digest] }))
+			return (await this.listContentUsageForDigests({
+				digests: [input.digest],
+			}))
 				.get(input.digest) ?? [];
 		},
 		async openDiscrepancy(input) {
@@ -520,14 +548,20 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 			const row = await database.prepare(`
 				SELECT ${DISCREPANCY_COLUMNS} FROM graphics_discrepancies WHERE id = ?
 			`).bind(input.id).first<DiscrepancyRow>();
-			return row ? discrepancyFromRow(row) : undefined;
+			return row
+				? discrepancyFromRow(row)
+				: undefined;
 		},
 		async listDiscrepancies(input) {
 			const states = input.states ?? [];
 			const kinds = input.kinds ?? [];
 			const predicates = [
-				...(states.length > 0 ? [`state IN (${states.map(() => '?').join(', ')})`] : []),
-				...(kinds.length > 0 ? [`kind IN (${kinds.map(() => '?').join(', ')})`] : []),
+				...(states.length > 0
+					? [`state IN (${states.map(() => '?').join(', ')})`]
+					: []),
+				...(kinds.length > 0
+					? [`kind IN (${kinds.map(() => '?').join(', ')})`]
+					: []),
 			];
 			/**
 			 * Newest-first is right when the question is what just went wrong. It is
@@ -544,7 +578,9 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 				: 'isolated DESC, detected_at DESC, id DESC';
 			const result = await database.prepare(`
 				SELECT ${DISCREPANCY_COLUMNS} FROM graphics_discrepancies
-				${predicates.length > 0 ? `WHERE ${predicates.join(' AND ')}` : ''}
+				${predicates.length > 0
+					? `WHERE ${predicates.join(' AND ')}`
+					: ''}
 				ORDER BY ${order}
 				LIMIT ?
 			`).bind(...states, ...kinds, input.limit).all<DiscrepancyRow>();
@@ -681,19 +717,27 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 			if (!row)
 				return {};
 			return {
-				...(row.canonical_scan_cursor ? { canonicalScanCursor: row.canonical_scan_cursor } : {}),
+				...(row.canonical_scan_cursor
+					? { canonicalScanCursor: row.canonical_scan_cursor }
+					: {}),
 				...(row.canonical_scan_started_at === null
 					? {}
-					: { canonicalScanStartedAt: new Date(row.canonical_scan_started_at).toISOString() }),
+					: {
+							canonicalScanStartedAt: new Date(row.canonical_scan_started_at).toISOString(),
+						}),
 				...(row.last_sweep_correlation_id
 					? { lastSweepCorrelationId: row.last_sweep_correlation_id }
 					: {}),
 				...(row.last_sweep_started_at === null
 					? {}
-					: { lastSweepStartedAt: new Date(row.last_sweep_started_at).toISOString() }),
+					: {
+							lastSweepStartedAt: new Date(row.last_sweep_started_at).toISOString(),
+						}),
 				...(row.last_sweep_completed_at === null
 					? {}
-					: { lastSweepCompletedAt: new Date(row.last_sweep_completed_at).toISOString() }),
+					: {
+							lastSweepCompletedAt: new Date(row.last_sweep_completed_at).toISOString(),
+						}),
 			};
 		},
 		async recordCanonicalScanProgress(input) {
@@ -707,7 +751,9 @@ export function createD1GraphicsAssetReconciliationCatalogue(
 					WHERE id = 1
 				`).bind(
 					input.cursor ?? null,
-					input.startedAt === undefined ? null : new Date(input.startedAt).getTime(),
+					input.startedAt === undefined
+						? null
+						: new Date(input.startedAt).getTime(),
 				),
 			]);
 			if (results.some(result => !result.success))

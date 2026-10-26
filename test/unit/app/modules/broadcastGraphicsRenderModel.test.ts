@@ -8,19 +8,24 @@ function graphic(id: string): BroadcastGraphicConfig {
 	return {
 		id,
 		name: id,
-		items: [{
-			type: 'shape',
-			id: `${id}-shape`,
-			label: 'Shape 1',
-			visible: true,
-			anchor: 'top-left',
-			x: 0,
-			y: 0,
-			width: 100,
-			height: 100,
-			geometry: squareShapeGeometry(),
-			surfaceStyle: { fill: { type: 'solid', color: '#ffffff' }, fillOpacity: 1 },
-		}],
+		items: [
+			{
+				type: 'shape',
+				id: `${id}-shape`,
+				label: 'Shape 1',
+				visible: true,
+				anchor: 'top-left',
+				x: 0,
+				y: 0,
+				width: 100,
+				height: 100,
+				geometry: squareShapeGeometry(),
+				surfaceStyle: {
+					fill: { type: 'solid', color: '#ffffff' },
+					fillOpacity: 1,
+				},
+			},
+		],
 	};
 }
 
@@ -35,44 +40,64 @@ function input(overrides: Partial<BroadcastGraphicsRenderModelInput> = {}): Broa
 }
 
 const TEMPLATE_INPUTS: GraphicInputDeclaration[] = [
-	{ type: 'text', key: 'name', label: 'Name', required: false, updatePolicy: 'staged', default: 'Unnamed', maxLength: 20 },
-	{ type: 'text', key: 'title', label: 'Title', required: false, updatePolicy: 'staged', default: '', maxLength: 20 },
+	{
+		type: 'text',
+		key: 'name',
+		label: 'Name',
+		required: false,
+		updatePolicy: 'staged',
+		default: 'Unnamed',
+		maxLength: 20,
+	},
+	{
+		type: 'text',
+		key: 'title',
+		label: 'Title',
+		required: false,
+		updatePolicy: 'staged',
+		default: '',
+		maxLength: 20,
+	},
 ];
 
 /** A Broadcast Graphic whose Text Graphic Item renders a Graphic Text Template. */
 function templateGraphic(
-	placeholderStyles: Record<string, GraphicPlaceholderStyle> = { title: { fontWeight: 300, fontSize: 24 } },
+	placeholderStyles: Record<string, GraphicPlaceholderStyle> = {
+		title: { fontWeight: 300, fontSize: 24 },
+	},
 ): BroadcastGraphicConfig {
 	return {
 		id: 'lower-third',
 		name: 'Lower Third',
 		inputs: TEMPLATE_INPUTS,
-		items: [{
-			type: 'text',
-			id: 'name-line',
-			label: 'Name line',
-			visible: true,
-			anchor: 'top-left',
-			x: 0,
-			y: 0,
-			width: 600,
-			height: 120,
-			text: '{name} — {title}',
-			typography: {
-				font: { kind: 'application', fontId: 'inter' },
-				fontSize: 48,
-				fontWeight: 700,
-				fontStyle: 'normal',
-				textTransform: 'none',
-				letterSpacing: 0,
-				lineHeight: 1.2,
-				textAlign: 'left',
-				color: '#ffffff',
+		items: [
+			{
+				type: 'text',
+				id: 'name-line',
+				label: 'Name line',
+				visible: true,
+				anchor: 'top-left',
+				x: 0,
+				y: 0,
+				width: 600,
+				height: 120,
+				text: '{name} — {title}',
+				typography: {
+					font: { kind: 'application', fontId: 'inter' },
+					fontSize: 48,
+					fontWeight: 700,
+					fontStyle: 'normal',
+					textTransform: 'none',
+					letterSpacing: 0,
+					lineHeight: 1.2,
+					textAlign: 'left',
+					color: '#ffffff',
+				},
+				overflowPolicy: 'ellipsis',
+				minFontSize: 24,
+				placeholderStyles,
 			},
-			overflowPolicy: 'ellipsis',
-			minFontSize: 24,
-			placeholderStyles,
-		}],
+		],
 	};
 }
 
@@ -107,14 +132,22 @@ describe('broadcast Graphics render model', () => {
 	});
 
 	it('renders an authored but off-air Broadcast Graphic on no Screen Output', () => {
-		const model = resolveBroadcastGraphicsRenderModel(input({ graphics: [graphic('lower-third')] }));
+		const model = resolveBroadcastGraphicsRenderModel(input({
+			graphics: [
+				graphic('lower-third'),
+			],
+		}));
 
 		expect(model.graphics).toEqual([]);
 	});
 
 	it('composes only the on-air Broadcast Graphics, in authored Screen stack order', () => {
 		const model = resolveBroadcastGraphicsRenderModel(input({
-			graphics: [graphic('back'), graphic('middle'), graphic('front')],
+			graphics: [
+				graphic('back'),
+				graphic('middle'),
+				graphic('front'),
+			],
 			onAirGraphicIds: ['front', 'back'],
 		}));
 
@@ -129,8 +162,14 @@ describe('broadcast Graphics render model', () => {
 		const model = resolveBroadcastGraphicsRenderModel(input({
 			graphics: [
 				graphic('back'),
-				{ ...graphic('middle'), channelId: 'thirds' },
-				{ ...graphic('front'), channelId: 'slates' },
+				{
+					...graphic('middle'),
+					channelId: 'thirds',
+				},
+				{
+					...graphic('front'),
+					channelId: 'slates',
+				},
 			],
 			onAirGraphicIds: ['middle', 'front', 'back'],
 		}));
@@ -140,7 +179,9 @@ describe('broadcast Graphics render model', () => {
 
 	it('keeps advisory guides out of a Screen Output that does not ask for them', () => {
 		const model = resolveBroadcastGraphicsRenderModel(input({
-			graphics: [graphic('lower-third')],
+			graphics: [
+				graphic('lower-third'),
+			],
 			onAirGraphicIds: ['lower-third'],
 		}));
 
@@ -150,9 +191,13 @@ describe('broadcast Graphics render model', () => {
 
 	it('renders a Graphic Text Template from the accepted on-air Graphic Input values', () => {
 		const model = resolveBroadcastGraphicsRenderModel(input({
-			graphics: [templateGraphic()],
+			graphics: [
+				templateGraphic(),
+			],
 			onAirGraphicIds: ['lower-third'],
-			inputValues: { 'lower-third': { name: 'Ava Reed', title: 'Champion' } },
+			inputValues: {
+				'lower-third': { name: 'Ava Reed', title: 'Champion' },
+			},
 		}));
 
 		expect(model.graphics[0]!.items[0]!.text).toBe('Ava Reed — Champion');
@@ -162,7 +207,9 @@ describe('broadcast Graphics render model', () => {
 		// An editor preview composes the authored stack with no playout behind it, so an
 		// author sees the design as they authored it.
 		const model = resolveBroadcastGraphicsRenderModel(input({
-			graphics: [templateGraphic()],
+			graphics: [
+				templateGraphic(),
+			],
 			onAirGraphicIds: ['lower-third'],
 			substituteAuthoredDefaults: true,
 		}));
@@ -176,9 +223,13 @@ describe('broadcast Graphics render model', () => {
 		// value was unavailable — and the authored default is placeholder text that must
 		// never reach program looking like live data.
 		const model = resolveBroadcastGraphicsRenderModel(input({
-			graphics: [templateGraphic()],
+			graphics: [
+				templateGraphic(),
+			],
 			onAirGraphicIds: ['lower-third'],
-			inputValues: { 'lower-third': { title: 'Champion' } },
+			inputValues: {
+				'lower-third': { title: 'Champion' },
+			},
 		}));
 
 		expect(model.graphics[0]!.items[0]!.text).toBe(' — Champion');
@@ -188,7 +239,9 @@ describe('broadcast Graphics render model', () => {
 		// Forgetting to declare which situation this is must fail towards a missing
 		// value, never a fabricated one.
 		const model = resolveBroadcastGraphicsRenderModel(input({
-			graphics: [templateGraphic()],
+			graphics: [
+				templateGraphic(),
+			],
 			onAirGraphicIds: ['lower-third'],
 		}));
 
@@ -198,9 +251,16 @@ describe('broadcast Graphics render model', () => {
 	it('renders nothing for a value that violates its declared constraints', () => {
 		// Unavailable rather than coerced: the literal text around it still renders.
 		const model = resolveBroadcastGraphicsRenderModel(input({
-			graphics: [templateGraphic()],
+			graphics: [
+				templateGraphic(),
+			],
 			onAirGraphicIds: ['lower-third'],
-			inputValues: { 'lower-third': { name: 'A'.repeat(50), title: 'Champion' } },
+			inputValues: {
+				'lower-third': {
+					name: 'A'.repeat(50),
+					title: 'Champion',
+				},
+			},
 		}));
 
 		expect(model.graphics[0]!.items[0]!.text).toBe(' — Champion');
@@ -208,9 +268,13 @@ describe('broadcast Graphics render model', () => {
 
 	it('gives one placeholder its own Graphic Placeholder Style and leaves the literal text alone', () => {
 		const model = resolveBroadcastGraphicsRenderModel(input({
-			graphics: [templateGraphic()],
+			graphics: [
+				templateGraphic(),
+			],
 			onAirGraphicIds: ['lower-third'],
-			inputValues: { 'lower-third': { name: 'Ava Reed', title: 'Champion' } },
+			inputValues: {
+				'lower-third': { name: 'Ava Reed', title: 'Champion' },
+			},
 		}));
 		const segments = model.graphics[0]!.items[0]!.textSegments!;
 
@@ -227,9 +291,15 @@ describe('broadcast Graphics render model', () => {
 		// stops accumulating correctly.
 		const model = resolveBroadcastGraphicsRenderModel(input({
 			output: 'key',
-			graphics: [templateGraphic({ title: { color: '#ff0000' } })],
+			graphics: [
+				templateGraphic({
+					title: { color: '#ff0000' },
+				}),
+			],
 			onAirGraphicIds: ['lower-third'],
-			inputValues: { 'lower-third': { name: 'Ava Reed', title: 'Champion' } },
+			inputValues: {
+				'lower-third': { name: 'Ava Reed', title: 'Champion' },
+			},
 		}));
 
 		expect(model.graphics[0]!.items[0]!.textSegments![2]!.style).toEqual({ color: '#ffffff' });

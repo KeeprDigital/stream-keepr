@@ -36,9 +36,21 @@ let serverRevision = 0;
 function hasRevision(answer: unknown): answer is { revision: number } {
 	return typeof answer === 'object' && answer !== null && 'revision' in answer;
 }
-const asWrite = (answer: unknown) => hasRevision(answer) ? answer : { success: true, revision: ++serverRevision };
-const asRead = (answer: unknown) => hasRevision(answer) ? answer : { card: answer, revision: serverRevision };
-const asAnnouncement = (data: any) => hasRevision(data) ? data : { ...data, revision: ++serverRevision };
+function asWrite(answer: unknown) {
+	return hasRevision(answer)
+		? answer
+		: { success: true, revision: ++serverRevision };
+}
+function asRead(answer: unknown) {
+	return hasRevision(answer)
+		? answer
+		: { card: answer, revision: serverRevision };
+}
+function asAnnouncement(data: any) {
+	return hasRevision(data)
+		? data
+		: { ...data, revision: ++serverRevision };
+}
 
 const mockAbly = createMockRealtime();
 const mockIsSelfOrigin = vi.fn(() => false);
@@ -62,7 +74,10 @@ mockNuxtImport('useCardRepository', () => () => ({
 mockNuxtImport('useRealtime', () => () => mockAbly);
 mockNuxtImport('useEventStore', () => () => mockEventStoreState);
 mockNuxtImport('useScryfallBatch', () => () => ({
-	fetchScryfallCards: vi.fn().mockResolvedValue({ cards: new Map(), degraded: false }),
+	fetchScryfallCards: vi.fn().mockResolvedValue({
+		cards: new Map(),
+		degraded: false,
+	}),
 	buildDeckListArrays: vi.fn().mockReturnValue({ mainboard: [], sideboard: [] }),
 }));
 const mockFetchDeck = vi.fn().mockResolvedValue(null);
@@ -93,8 +108,16 @@ function createMockMtgCard(overrides?: Record<string, any>) {
 		name: 'Lightning Bolt',
 		set: 'lea',
 		layout: 'normal',
-		imageData: { front: { normal: 'http://example.com/card.jpg' }, back: null },
-		orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
+		imageData: {
+			front: { normal: 'http://example.com/card.jpg' },
+			back: null,
+		},
+		orientationData: {
+			flipable: false,
+			turnable: false,
+			rotateable: false,
+			counterRotateable: false,
+		},
 		displayData: {
 			flipped: false,
 			rotated: false,
@@ -105,7 +128,12 @@ function createMockMtgCard(overrides?: Record<string, any>) {
 	} as any;
 }
 
-const unavailable = () => transportFailure({ status: 503, body: { message: 'Unavailable' } });
+function unavailable() {
+	return transportFailure({
+		status: 503,
+		body: { message: 'Unavailable' },
+	});
+}
 
 describe('useCardStore', () => {
 	let store: ReturnType<typeof useCardStore>;
@@ -201,13 +229,20 @@ describe('useCardStore', () => {
 			store.activeScreenId = 5;
 			mockCardRepo.getScreenCard.mockResolvedValue(createMockMtgCard({
 				id: 'x',
-				timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 },
+				timeoutData: {
+					timeoutStartTimestamp: Date.now(),
+					timeoutDuration: 1_000,
+				},
 			}));
 			await store.loadActiveCard();
 
 			await vi.advanceTimersByTimeAsync(1_000);
 			expect(store.activeCard).toBeNull();
-			ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: createMockMtgCard({ id: 'y' }) });
+			ablyCallbacks.card!['card:updated']!({
+				eventId: 1,
+				screenId: 5,
+				card: createMockMtgCard({ id: 'y' }),
+			});
 
 			expect(store.activeCard?.id).toBe('y');
 			expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
@@ -283,7 +318,11 @@ describe('useCardStore', () => {
 			const read = deferredRead();
 			const loading = store.loadActiveCard();
 
-			ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: newCard() });
+			ablyCallbacks.card!['card:updated']!({
+				eventId: 1,
+				screenId: 5,
+				card: newCard(),
+			});
 			read.resolve(oldCard());
 			await loading;
 
@@ -378,9 +417,16 @@ describe('useCardStore', () => {
 			const read = deferredRead();
 			const loading = store.loadActiveCard();
 
-			ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: newCard() });
+			ablyCallbacks.card!['card:updated']!({
+				eventId: 1,
+				screenId: 5,
+				card: newCard(),
+			});
 			read.resolve(oldCard({
-				timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 },
+				timeoutData: {
+					timeoutStartTimestamp: Date.now(),
+					timeoutDuration: 1_000,
+				},
 			}));
 			await loading;
 			await vi.advanceTimersByTimeAsync(1_000);
@@ -394,7 +440,12 @@ describe('useCardStore', () => {
 			vi.useFakeTimers();
 			store.setActiveScreen(5);
 			mockCardRepo.saveScreenCard.mockResolvedValue(undefined);
-			const timed = oldCard({ timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 } });
+			const timed = oldCard({
+				timeoutData: {
+					timeoutStartTimestamp: Date.now(),
+					timeoutDuration: 1_000,
+				},
+			});
 			await store.saveActiveCard(timed);
 			const read = deferredRead();
 			const loading = store.loadActiveCard();
@@ -414,8 +465,15 @@ describe('useCardStore', () => {
 			const read = deferredRead();
 			const loading = store.loadActiveCard();
 
-			ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: newCard() });
-			read.reject(transportFailure({ status: 503, body: { message: 'Unavailable' } }));
+			ablyCallbacks.card!['card:updated']!({
+				eventId: 1,
+				screenId: 5,
+				card: newCard(),
+			});
+			read.reject(transportFailure({
+				status: 503,
+				body: { message: 'Unavailable' },
+			}));
 			await loading;
 
 			expect(store.error).toBeNull();
@@ -433,7 +491,11 @@ describe('useCardStore', () => {
 			const loading = store.loadActiveCard();
 			const saving = store.saveActiveCard(newCard());
 
-			ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: newCard() });
+			ablyCallbacks.card!['card:updated']!({
+				eventId: 1,
+				screenId: 5,
+				card: newCard(),
+			});
 			read.resolve(oldCard());
 			await loading;
 			expect(store.loading).toBe(true);
@@ -461,7 +523,11 @@ describe('useCardStore', () => {
 				store.setActiveScreen(5);
 				const loading = store.loadActiveCard();
 
-				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: newCard() });
+				ablyCallbacks.card!['card:updated']!({
+					eventId: 1,
+					screenId: 5,
+					card: newCard(),
+				});
 				resolve(oldCard());
 				await loading;
 
@@ -478,8 +544,17 @@ describe('useCardStore', () => {
 				store.setActiveScreen(5);
 				const loading = store.loadActiveCard();
 
-				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: newCard() });
-				resolve(oldCard({ timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 } }));
+				ablyCallbacks.card!['card:updated']!({
+					eventId: 1,
+					screenId: 5,
+					card: newCard(),
+				});
+				resolve(oldCard({
+					timeoutData: {
+						timeoutStartTimestamp: Date.now(),
+						timeoutDuration: 1_000,
+					},
+				}));
 				await loading;
 				await vi.advanceTimersByTimeAsync(1_000);
 
@@ -490,7 +565,10 @@ describe('useCardStore', () => {
 			it('still hides its current read\'s Card locally once it expires', async () => {
 				vi.useFakeTimers();
 				mockOutputRead.mockResolvedValueOnce(createMockMtgCard({
-					timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 },
+					timeoutData: {
+						timeoutStartTimestamp: Date.now(),
+						timeoutDuration: 1_000,
+					},
 				}));
 				store.setActiveScreen(5);
 
@@ -573,7 +651,10 @@ describe('useCardStore', () => {
 			const read = deferred<ReturnType<typeof newCard>>();
 			mockCardRepo.getScreenCard.mockReturnValueOnce(read.promise);
 			const loading = store.loadActiveCard();
-			save.reject(transportFailure({ status: 409, body: { message: 'Another operator is showing a card on this Screen' } }));
+			save.reject(transportFailure({
+				status: 409,
+				body: { message: 'Another operator is showing a card on this Screen' },
+			}));
 			await saving;
 
 			expect(store.error).toBeNull();
@@ -671,7 +752,11 @@ describe('useCardStore', () => {
 			it('keeps a realtime Card heard while its DELETE was out', async () => {
 				const fail = clearThatFails();
 
-				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: newCard() });
+				ablyCallbacks.card!['card:updated']!({
+					eventId: 1,
+					screenId: 5,
+					card: newCard(),
+				});
 				await fail();
 
 				expect(store.activeCard?.id).toBe('new');
@@ -713,7 +798,10 @@ describe('useCardStore', () => {
 				mockCardRepo.saveScreenCard.mockResolvedValueOnce(undefined);
 				await store.saveActiveCard(createMockMtgCard({
 					id: 'timed',
-					timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 },
+					timeoutData: {
+						timeoutStartTimestamp: Date.now(),
+						timeoutDuration: 1_000,
+					},
 				}));
 				const fail = clearThatFails();
 
@@ -754,7 +842,12 @@ describe('useCardStore', () => {
 		const committed = (revision: number) => ({ success: true, revision });
 		const read = (card: ReturnType<typeof createMockMtgCard> | null, revision: number) => ({ card, revision });
 		const updated = (card: ReturnType<typeof createMockMtgCard> | null, revision: number) =>
-			ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card, revision });
+			ablyCallbacks.card!['card:updated']!({
+				eventId: 1,
+				screenId: 5,
+				card,
+				revision,
+			});
 		const cleared = (revision: number) => ablyCallbacks.card!['card:cleared']!({ eventId: 1, screenId: 5, revision });
 		const ours = () => createMockMtgCard({ id: 'ours', name: 'Our Card' });
 		const theirs = () => createMockMtgCard({ id: 'theirs', name: 'Their Card' });
@@ -907,7 +1000,10 @@ describe('useCardStore', () => {
 
 		beforeEach(async () => {
 			store.setActiveScreen(5);
-			mockCardRepo.getScreenCard.mockResolvedValueOnce({ card: createMockMtgCard(), revision: 1 });
+			mockCardRepo.getScreenCard.mockResolvedValueOnce({
+				card: createMockMtgCard(),
+				revision: 1,
+			});
 			await store.loadActiveCard();
 		});
 
@@ -993,12 +1089,23 @@ describe('useCardStore', () => {
 				eventId: 1,
 				screenId: 5,
 				revision: 2,
-				card: createMockMtgCard({ id: 'theirs', displayData: { flipped: true, rotated: true, turnedOver: false, counterRotated: false } }),
+				card: createMockMtgCard({
+					id: 'theirs',
+					displayData: {
+						flipped: true,
+						rotated: true,
+						turnedOver: false,
+						counterRotated: false,
+					},
+				}),
 			});
 			save.reject(unavailable());
 			await controlling;
 
-			expect(store.activeCard).toMatchObject({ id: 'theirs', displayData: { flipped: true, rotated: true } });
+			expect(store.activeCard).toMatchObject({
+				id: 'theirs',
+				displayData: { flipped: true, rotated: true },
+			});
 		});
 
 		it('puts nothing back once the operator has moved to another Screen', async () => {
@@ -1049,7 +1156,11 @@ describe('useCardStore', () => {
 			}));
 			const reread = storeReloaders().card();
 
-			ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: createMockMtgCard({ id: 'new' }) });
+			ablyCallbacks.card!['card:updated']!({
+				eventId: 1,
+				screenId: 5,
+				card: createMockMtgCard({ id: 'new' }),
+			});
 			resolve(createMockMtgCard());
 
 			await expect(reread).resolves.toBe(false);
@@ -1089,7 +1200,10 @@ describe('useCardStore', () => {
 			store.activeScreenId = 5;
 			mockCardRepo.saveScreenCard.mockResolvedValue(undefined);
 			await store.saveActiveCard(createMockMtgCard({
-				timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 },
+				timeoutData: {
+					timeoutStartTimestamp: Date.now(),
+					timeoutDuration: 1_000,
+				},
 			}));
 
 			const replacement = createMockMtgCard({ id: 'card-2', name: 'Counterspell' });
@@ -1218,7 +1332,9 @@ describe('useCardStore', () => {
 	describe('clearSearch', () => {
 		it('clears search state', () => {
 			store.searching = true;
-			store.searchResults = [createMockMtgCard()];
+			store.searchResults = [
+				createMockMtgCard(),
+			];
 
 			store.clearSearch();
 
@@ -1291,7 +1407,11 @@ describe('useCardStore', () => {
 				store.activeScreenId = 5;
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
-				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: createMockMtgCard() });
+				ablyCallbacks.card!['card:updated']!({
+					eventId: 1,
+					screenId: 5,
+					card: createMockMtgCard(),
+				});
 
 				expect(store.activeCard).toBeNull();
 			});
@@ -1299,7 +1419,11 @@ describe('useCardStore', () => {
 			it('skips when screenId does not match', () => {
 				store.activeScreenId = 5;
 
-				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 99, card: createMockMtgCard() });
+				ablyCallbacks.card!['card:updated']!({
+					eventId: 1,
+					screenId: 99,
+					card: createMockMtgCard(),
+				});
 
 				expect(store.activeCard).toBeNull();
 			});
@@ -1308,7 +1432,10 @@ describe('useCardStore', () => {
 				vi.useFakeTimers();
 				store.activeScreenId = 5;
 				const card = createMockMtgCard({
-					timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 },
+					timeoutData: {
+						timeoutStartTimestamp: Date.now(),
+						timeoutDuration: 1_000,
+					},
 				});
 
 				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card });
@@ -1344,7 +1471,10 @@ describe('useCardStore', () => {
 					eventId: 1,
 					screenId: 5,
 					card: createMockMtgCard({
-						timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 },
+						timeoutData: {
+							timeoutStartTimestamp: Date.now(),
+							timeoutDuration: 1_000,
+						},
 					}),
 				});
 
@@ -1393,7 +1523,14 @@ describe('useCardStore', () => {
 
 		it('returns false when display data differs', () => {
 			store.activeCard = createMockMtgCard();
-			store.previewCard = createMockMtgCard({ displayData: { flipped: true, rotated: false, turnedOver: false, counterRotated: false } });
+			store.previewCard = createMockMtgCard({
+				displayData: {
+					flipped: true,
+					rotated: false,
+					turnedOver: false,
+					counterRotated: false,
+				},
+			});
 
 			expect(store.cardsMatch).toBe(false);
 		});
@@ -1409,7 +1546,9 @@ describe('useCardStore', () => {
 			store.cardPageMode = 'match-decklist';
 			store.deckListRoundId = 12;
 			store.deckListMatchId = 34;
-			store.searchResults = [createMockMtgCard()];
+			store.searchResults = [
+				createMockMtgCard(),
+			];
 			store.error = 'some error';
 
 			store.$reset();
@@ -1428,7 +1567,12 @@ describe('useCardStore', () => {
 
 		it('clears player deck state', () => {
 			store.playerDeckPlayerId = 42;
-			store.playerDeckData = { playerName: 'Alice', deckList: null, mainboard: [], sideboard: [] } as any;
+			store.playerDeckData = {
+				playerName: 'Alice',
+				deckList: null,
+				mainboard: [],
+				sideboard: [],
+			} as any;
 
 			store.$reset();
 

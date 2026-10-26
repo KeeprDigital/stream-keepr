@@ -75,7 +75,12 @@ export interface BroadcastGraphicsLiveStateChange {
 }
 
 /** The maps a change describes. Everything else in live state is passed through. */
-const CHANGED_MAPS = ['playout', 'inputs', 'sources', 'socialProfileProjections'] as const;
+const CHANGED_MAPS = [
+	'playout',
+	'inputs',
+	'sources',
+	'socialProfileProjections',
+] as const;
 
 type LiveStateMap = typeof CHANGED_MAPS[number];
 
@@ -138,7 +143,10 @@ export function broadcastGraphicsLiveStateChange(
 		const to = mapOf(after, map);
 		const entries: BroadcastGraphicsLiveStateEntries<unknown> = {};
 
-		for (const graphicId of new Set([...Object.keys(from), ...Object.keys(to)])) {
+		for (const graphicId of new Set([
+			...Object.keys(from),
+			...Object.keys(to),
+		])) {
 			// The no-null rule this description depends on is enforced by recovery, one
 			// module away, and it was once enforced for two of these three maps — which
 			// made a null Graphic Source Selection record indistinguishable from an
@@ -149,7 +157,9 @@ export function broadcastGraphicsLiveStateChange(
 				return null;
 			if (same(from[graphicId], to[graphicId]))
 				continue;
-			entries[graphicId] = to[graphicId] === undefined ? null : to[graphicId];
+			entries[graphicId] = to[graphicId] === undefined
+				? null
+				: to[graphicId];
 		}
 
 		if (Object.keys(entries).length > 0)

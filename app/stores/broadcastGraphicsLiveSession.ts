@@ -194,7 +194,9 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 			if (key.startsWith(`${screenId}:`))
 				supersededInputs.value.delete(key);
 		}
-		for (const key of [...refusedInputs.value.keys()]) {
+		for (const key of [
+			...refusedInputs.value.keys(),
+		]) {
 			if (key.startsWith(`${screenId}:`))
 				refusedInputs.value.delete(key);
 		}
@@ -309,7 +311,9 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		now: number,
 		channel?: BroadcastGraphicChannelContext,
 	): BroadcastGraphicPhaseTiming | undefined {
-		return isClockSynced.value ? broadcastGraphicPhaseTiming(graphic, now, channel) : undefined;
+		return isClockSynced.value
+			? broadcastGraphicPhaseTiming(graphic, now, channel)
+			: undefined;
 	}
 
 	/**
@@ -353,7 +357,9 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		graphics: readonly BroadcastGraphicConfig[],
 		channels: readonly GraphicChannelConfig[] | undefined,
 	): Record<string, BroadcastGraphicChannelContext> {
-		return channels?.length ? broadcastGraphicChannelContexts({ graphics, channels }) : {};
+		return channels?.length
+			? broadcastGraphicChannelContexts({ graphics, channels })
+			: {};
 	}
 
 	/**
@@ -378,7 +384,9 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		return broadcastGraphicPlayoutState(
 			liveState(screenId),
 			graphicId,
-			graphic ? timingFor(graphic, now ?? serverNow(), channel) : undefined,
+			graphic
+				? timingFor(graphic, now ?? serverNow(), channel)
+				: undefined,
 		);
 	}
 
@@ -680,7 +688,11 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		graphicId: string,
 		cut: boolean,
 	): BroadcastGraphicsCommand {
-		return { commandId: randomCommandId(type), type, payload: { graphicId, cut } };
+		return {
+			commandId: randomCommandId(type),
+			type,
+			payload: { graphicId, cut },
+		};
 	}
 
 	/** Take a Broadcast Graphic on air; `cut` skips its enter animation once one exists. */
@@ -727,12 +739,16 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 
 		const current = projectSocialProfileRotation(projection, declaration, {
 			onAir: state.playout[graphicId]?.onAir === true,
-			now: isClockSynced.value ? now ?? serverNow() : undefined,
+			now: isClockSynced.value
+				? now ?? serverNow()
+				: undefined,
 		}).current?.network;
 		return {
 			...projection,
 			automatic: projection.automatic !== false,
-			...(current === undefined ? {} : { currentNetwork: current }),
+			...(current === undefined
+				? {}
+				: { currentNetwork: current }),
 		};
 	}
 
@@ -747,9 +763,15 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 			const values = socialProfileProjectionValues(
 				state,
 				graphic,
-				isClockSynced.value ? now ?? serverNow() : undefined,
+				isClockSynced.value
+					? now ?? serverNow()
+					: undefined,
 			);
-			return Object.keys(values).length > 0 ? [[graphic.id, values]] : [];
+			return Object.keys(values).length > 0
+				? [
+						[graphic.id, values],
+					]
+				: [];
 		}));
 	}
 
@@ -764,9 +786,15 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 			const presentations = socialProfilePresentationProjections(
 				state,
 				graphic,
-				isClockSynced.value ? now ?? serverNow() : undefined,
+				isClockSynced.value
+					? now ?? serverNow()
+					: undefined,
 			);
-			return Object.keys(presentations).length > 0 ? [[graphic.id, presentations]] : [];
+			return Object.keys(presentations).length > 0
+				? [
+						[graphic.id, presentations],
+					]
+				: [];
 		}));
 	}
 
@@ -909,7 +937,12 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 			{
 				commandId: randomCommandId('Set Input'),
 				type: 'Set Input',
-				payload: { graphicId, inputKey, value, basedOn: { value: basedOnValue } },
+				payload: {
+					graphicId,
+					inputKey,
+					value,
+					basedOn: { value: basedOnValue },
+				},
 			},
 			async (code) => {
 				refusedInputs.value.set(inputKeyOf(screenId, graphicId, inputKey), code);
@@ -960,7 +993,11 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 					graphicId,
 					inputKey,
 					value,
-					...(basedOnValue === undefined ? {} : { basedOn: { value: basedOnValue } }),
+					...(basedOnValue === undefined
+						? {}
+						: {
+								basedOn: { value: basedOnValue },
+							}),
 				},
 			},
 			async (code) => {

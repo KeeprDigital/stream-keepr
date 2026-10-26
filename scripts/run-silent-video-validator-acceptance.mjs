@@ -119,7 +119,9 @@ function stageFixture(commands, target, name, operationId) {
  * a word of the shape the validator uses travels.
  */
 function stageWord(stage) {
-	return typeof stage === 'string' && /^[a-z][a-z-]{0,31}$/.test(stage) ? stage : 'unrecognised';
+	return typeof stage === 'string' && /^[a-z][a-z-]{0,31}$/.test(stage)
+		? stage
+		: 'unrecognised';
 }
 
 /** The first field of a settled output that is not an exact acceptance of `input`. */
@@ -191,7 +193,11 @@ async function driveServiceBinding(baseUrl, fixture, operationId, name) {
 		}
 		if (response.status === 422) {
 			const body = await response.json();
-			return { outcome: 'rejected', stage: stageWord(body?.stage), input };
+			return {
+				outcome: 'rejected',
+				stage: stageWord(body?.stage),
+				input,
+			};
 		}
 		if (!response.ok)
 			throw new AcceptanceFailure('validator-settled-unsuccessfully', { fixture: name, status: response.status });
@@ -213,7 +219,10 @@ function startLocalValidator({ validatorConfigPath, persistTo, port, repoRoot })
 		persistTo,
 		'--port',
 		String(port),
-	], { cwd: repoRoot, stdio: ['ignore', 'pipe', 'pipe'] });
+	], {
+		cwd: repoRoot,
+		stdio: ['ignore', 'pipe', 'pipe'],
+	});
 	const ready = new Promise((resolve, reject) => {
 		const timeout = setTimeout(
 			() => reject(new AcceptanceFailure('validator-runtime-unavailable', { reason: 'not-ready-is-docker-running' })),
@@ -253,14 +262,25 @@ async function runLocalAcceptance({ record }, { commands, installation, repoRoot
 	};
 	const port = 8987;
 	const suffix = Date.now().toString(36);
-	const plan = FIXTURE_NAMES.map(name => [name, operationIdFor(suffix, name)]);
+	const plan = FIXTURE_NAMES.map(name => [
+		name,
+		operationIdFor(suffix, name),
+	]);
 	// The tampered case declares WebM facts against staged MP4 bytes.
 	const tamperedOperation = `acceptance-${suffix}-tampered`;
 	let validator;
 	try {
-		for (const [name, operationId] of [...plan, ['h264Mp4', tamperedOperation]])
+		for (const [name, operationId] of [
+			...plan,
+			['h264Mp4', tamperedOperation],
+		])
 			await stageFixture(commands, target, name, operationId);
-		validator = startValidator({ validatorConfigPath: target.validatorConfigPath, persistTo, port, repoRoot });
+		validator = startValidator({
+			validatorConfigPath: target.validatorConfigPath,
+			persistTo,
+			port,
+			repoRoot,
+		});
 		await validator.ready;
 		const baseUrl = `http://127.0.0.1:${port}`;
 		for (const [name, operationId] of plan) {
@@ -325,7 +345,12 @@ async function runDeployedFixture({ commands, manifest, target, pollIntervalMs }
 			output = settled;
 		}
 		else if (status.includes('Errored') || status.includes('Terminated')) {
-			throw new AcceptanceFailure('validator-settled-unsuccessfully', { fixture: name, status: status.includes('Errored') ? 'errored' : 'terminated' });
+			throw new AcceptanceFailure('validator-settled-unsuccessfully', {
+				fixture: name,
+				status: status.includes('Errored')
+					? 'errored'
+					: 'terminated',
+			});
 		}
 		else {
 			await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
@@ -363,7 +388,12 @@ async function runDeployedAcceptance(context, dependencies) {
 		if (drained.remaining > 0) {
 			process.stderr.write('Some staged objects could not be deleted, or a Workflow had not settled; they are '
 				+ 'listed in the cleanup manifest. Retry with `pnpm accept silent-video-validator --deployed --cleanup`.\n');
-			context.record([{ code: 'harness-cleanup-incomplete', detail: { remaining: drained.remaining } }]);
+			context.record([
+				{
+					code: 'harness-cleanup-incomplete',
+					detail: { remaining: drained.remaining },
+				},
+			]);
 		}
 	}
 	return { fixtures: FIXTURE_NAMES.length, cleaned };
@@ -380,7 +410,14 @@ async function runDeployedCleanup(context, { env, installation, manifest, comman
 	assertManifestTarget(left, target);
 	manifest.resume(left);
 	const { cleaned, remaining } = await drainCleanupManifest({ manifest, commands, target });
-	context.record(remaining > 0 ? [{ code: 'harness-cleanup-incomplete', detail: { remaining } }] : []);
+	context.record(remaining > 0
+		? [
+				{
+					code: 'harness-cleanup-incomplete',
+					detail: { remaining },
+				},
+			]
+		: []);
 	return { cleaned };
 }
 

@@ -200,5 +200,13 @@ export function createLiveStateFollower<K, S extends LiveStateSnapshot, N extend
 		loads.supersedeAll();
 	}
 
-	return { acceptSnapshot, acceptCommandResult, acceptRead, load, notify, end, reset };
+	return {
+		acceptSnapshot,
+		acceptCommandResult,
+		acceptRead,
+		load,
+		notify,
+		end,
+		reset,
+	};
 }

@@ -13,14 +13,18 @@ export default defineEventHandler(async (event) => {
 	const decks = await playerDeckService().listByEvent(eventId);
 	const reviewedArchetypes = await archetypeService().findManyByIds(
 		eventId,
-		decks.flatMap(deck => deck.reviewedAt != null && deck.archetypeId != null ? [deck.archetypeId] : []),
+		decks.flatMap(deck => deck.reviewedAt != null && deck.archetypeId != null
+			? [deck.archetypeId]
+			: []),
 	);
 	const archetypesById = new Map(reviewedArchetypes.map(archetype => [archetype.id, archetype]));
 
 	return {
 		decks: decks.map(deck => mapPlayerDeckSummary(
 			deck,
-			deck.archetypeId == null ? null : archetypesById.get(deck.archetypeId),
+			deck.archetypeId == null
+				? null
+				: archetypesById.get(deck.archetypeId),
 		)),
 	};
 });

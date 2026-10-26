@@ -25,8 +25,12 @@ const defaultConfig = {
 const mutableConfig = reactive({ ...defaultConfig });
 const mockEventId = ref<number | null>(1);
 const mockInteractive = ref(false);
-const mockScreenStore = { updateModeConfig: vi.fn() };
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const mockScreenStore = {
+	updateModeConfig: vi.fn(),
+};
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 type Handler = (message: Record<string, unknown>) => void;
 const channelHandlers = new Map<string, Set<Handler>>();
 const continuity = createContinuitySignal();
@@ -82,7 +86,14 @@ function historyEntry(overrides: Partial<PlayerMatchHistoryEntry> = {}): PlayerM
 	};
 }
 
-const mockPlayer = { id: 7, name: 'Nadia Rivers', wins: 12, losses: 2, draws: 1, position: 3 };
+const mockPlayer = {
+	id: 7,
+	name: 'Nadia Rivers',
+	wins: 12,
+	losses: 2,
+	draws: 1,
+	position: 3,
+};
 
 const scopes: EffectScope[] = [];
 
@@ -95,7 +106,9 @@ function makePlayerHistoryModeData() {
 
 describe('usePlayerHistoryModeData', () => {
 	beforeEach(() => {
-		Object.assign(mutableConfig, defaultConfig, { columns: defaultConfig.columns.map(column => ({ ...column })) });
+		Object.assign(mutableConfig, defaultConfig, {
+			columns: defaultConfig.columns.map(column => ({ ...column })),
+		});
 		mockEventId.value = 1;
 		mockInteractive.value = false;
 		mockRealtime.connectionState = 'connected';
@@ -111,7 +124,12 @@ describe('usePlayerHistoryModeData', () => {
 
 	it('reads the configured player\'s match history through the Screen', async () => {
 		mutableConfig.playerId = 7;
-		mockFetch.mockResolvedValue({ player: mockPlayer, history: [historyEntry()] });
+		mockFetch.mockResolvedValue({
+			player: mockPlayer,
+			history: [
+				historyEntry(),
+			],
+		});
 
 		const { player, pageData, isEmpty, error } = makePlayerHistoryModeData();
 		await flushPromises();
@@ -146,7 +164,12 @@ describe('usePlayerHistoryModeData', () => {
 
 	it('re-reads when the selected player changes', async () => {
 		mutableConfig.playerId = 7;
-		mockFetch.mockResolvedValue({ player: mockPlayer, history: [historyEntry()] });
+		mockFetch.mockResolvedValue({
+			player: mockPlayer,
+			history: [
+				historyEntry(),
+			],
+		});
 
 		makePlayerHistoryModeData();
 		await flushPromises();
@@ -185,7 +208,12 @@ describe('usePlayerHistoryModeData', () => {
 		it('prefers the configured header', async () => {
 			mutableConfig.playerId = 7;
 			mutableConfig.headerText = 'Feature Player';
-			mockFetch.mockResolvedValue({ player: mockPlayer, history: [historyEntry()] });
+			mockFetch.mockResolvedValue({
+				player: mockPlayer,
+				history: [
+					historyEntry(),
+				],
+			});
 
 			const { headerText } = makePlayerHistoryModeData();
 			await flushPromises();
@@ -195,7 +223,12 @@ describe('usePlayerHistoryModeData', () => {
 
 		it('names the loaded player when no header is configured', async () => {
 			mutableConfig.playerId = 7;
-			mockFetch.mockResolvedValue({ player: mockPlayer, history: [historyEntry()] });
+			mockFetch.mockResolvedValue({
+				player: mockPlayer,
+				history: [
+					historyEntry(),
+				],
+			});
 
 			const { headerText } = makePlayerHistoryModeData();
 			await flushPromises();
@@ -212,13 +245,56 @@ describe('usePlayerHistoryModeData', () => {
 
 	describe('formatOutcome', () => {
 		it.each([
-			['bye', historyEntry({ outcome: 'bye' }), 'BYE'],
-			['pending', historyEntry({ outcome: 'pending', hasResult: false }), 'Pending'],
-			['scored win', historyEntry({ outcome: 'win', playerGameWins: 2, opponentGameWins: 1, gameDraws: 0 }), 'WIN 2-1'],
-			['scored loss', historyEntry({ outcome: 'loss', playerGameWins: 0, opponentGameWins: 2, gameDraws: 0 }), 'LOSS 0-2'],
-			['scored draw with game draws', historyEntry({ outcome: 'draw', playerGameWins: 1, opponentGameWins: 1, gameDraws: 1 }), 'DRAW 1-1-1'],
-			['missing game counts', historyEntry({ playerGameWins: null, opponentGameWins: null, resultString: '2-1' }), '2-1'],
-			['no result string at all', historyEntry({ playerGameWins: null, opponentGameWins: null, resultString: null }), 'Result'],
+			[
+				'bye',
+				historyEntry({ outcome: 'bye' }),
+				'BYE',
+			],
+			[
+				'pending',
+				historyEntry({ outcome: 'pending', hasResult: false }),
+				'Pending',
+			],
+			[
+				'scored win',
+				historyEntry({
+					outcome: 'win',
+					playerGameWins: 2,
+					opponentGameWins: 1,
+					gameDraws: 0,
+				}),
+				'WIN 2-1',
+			],
+			[
+				'scored loss',
+				historyEntry({
+					outcome: 'loss',
+					playerGameWins: 0,
+					opponentGameWins: 2,
+					gameDraws: 0,
+				}),
+				'LOSS 0-2',
+			],
+			[
+				'scored draw with game draws',
+				historyEntry({
+					outcome: 'draw',
+					playerGameWins: 1,
+					opponentGameWins: 1,
+					gameDraws: 1,
+				}),
+				'DRAW 1-1-1',
+			],
+			[
+				'missing game counts',
+				historyEntry({ playerGameWins: null, opponentGameWins: null, resultString: '2-1' }),
+				'2-1',
+			],
+			[
+				'no result string at all',
+				historyEntry({ playerGameWins: null, opponentGameWins: null, resultString: null }),
+				'Result',
+			],
 		])('formats a %s', (_name, row, expected) => {
 			const { formatOutcome } = makePlayerHistoryModeData();
 
@@ -246,7 +322,12 @@ describe('usePlayerHistoryModeData', () => {
 
 	it('keeps displayed data and stays quiet when a later load fails', async () => {
 		mutableConfig.playerId = 7;
-		mockFetch.mockResolvedValueOnce({ player: mockPlayer, history: [historyEntry()] });
+		mockFetch.mockResolvedValueOnce({
+			player: mockPlayer,
+			history: [
+				historyEntry(),
+			],
+		});
 
 		const { error, player, pageData } = makePlayerHistoryModeData();
 		await flushPromises();
@@ -269,7 +350,10 @@ describe('usePlayerHistoryModeData', () => {
 		mockInteractive.value = true;
 		mockFetch.mockResolvedValue({
 			player: mockPlayer,
-			history: [historyEntry({ id: 1 }), historyEntry({ id: 2 })],
+			history: [
+				historyEntry({ id: 1 }),
+				historyEntry({ id: 2 }),
+			],
 		});
 
 		const { pageData } = makePlayerHistoryModeData();
@@ -301,12 +385,26 @@ describe('usePlayerHistoryModeData', () => {
 	describe('freshness', () => {
 		// The Event, the selected Player and the Screen configuration are held
 		// constant throughout: only Event Data changes under the output (#601).
-		const pending = historyEntry({ outcome: 'pending', hasResult: false, playerGameWins: null, opponentGameWins: null, resultString: null });
-		const recorded = historyEntry({ outcome: 'win', hasResult: true, playerGameWins: 2, opponentGameWins: 0 });
+		const pending = historyEntry({
+			outcome: 'pending',
+			hasResult: false,
+			playerGameWins: null,
+			opponentGameWins: null,
+			resultString: null,
+		});
+		const recorded = historyEntry({
+			outcome: 'win',
+			hasResult: true,
+			playerGameWins: 2,
+			opponentGameWins: 0,
+		});
 
 		async function showingPendingHistory() {
 			mutableConfig.playerId = 7;
-			mockFetch.mockResolvedValue({ player: mockPlayer, history: [pending] });
+			mockFetch.mockResolvedValue({
+				player: mockPlayer,
+				history: [pending],
+			});
 			const data = makePlayerHistoryModeData();
 			await flushPromises();
 			expect(data.formatOutcome(data.pageData.value[0]!)).toBe('Pending');
@@ -315,14 +413,25 @@ describe('usePlayerHistoryModeData', () => {
 		}
 
 		function match(overrides: Record<string, unknown> = {}) {
-			return { id: 1, roundId: 31, player1Id: 7, player2Id: 2, ...overrides };
+			return {
+				id: 1,
+				roundId: 31,
+				player1Id: 7,
+				player2Id: 2,
+				...overrides,
+			};
 		}
 
 		it('shows a Match result recorded elsewhere', async () => {
 			const { pageData, formatOutcome } = await showingPendingHistory();
-			mockFetch.mockResolvedValue({ player: mockPlayer, history: [recorded] });
+			mockFetch.mockResolvedValue({
+				player: mockPlayer,
+				history: [recorded],
+			});
 
-			deliver('match:updated', { match: match({ hasResult: true }) });
+			deliver('match:updated', {
+				match: match({ hasResult: true }),
+			});
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -332,7 +441,14 @@ describe('usePlayerHistoryModeData', () => {
 		it('picks up a new Match for the selected Player', async () => {
 			await showingPendingHistory();
 
-			deliver('match:created', { match: match({ id: 5, roundId: 32, player1Id: 3, player2Id: 7 }) });
+			deliver('match:created', {
+				match: match({
+					id: 5,
+					roundId: 32,
+					player1Id: 3,
+					player2Id: 7,
+				}),
+			});
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -343,7 +459,9 @@ describe('usePlayerHistoryModeData', () => {
 
 			deliver('match:deleted', { matchId: 1 });
 			await flushPromises();
-			deliver('match:updated', { match: match({ player1Id: 3, player2Id: 4 }) });
+			deliver('match:updated', {
+				match: match({ player1Id: 3, player2Id: 4 }),
+			});
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -352,7 +470,9 @@ describe('usePlayerHistoryModeData', () => {
 		it('ignores Matches that are neither held nor the Player\'s', async () => {
 			await showingPendingHistory();
 
-			deliver('match:updated', { match: match({ id: 9, player1Id: 3, player2Id: 4 }) });
+			deliver('match:updated', {
+				match: match({ id: 9, player1Id: 3, player2Id: 4 }),
+			});
 			deliver('match:deleted', { matchId: 9 });
 			await flushPromises();
 
@@ -362,33 +482,52 @@ describe('usePlayerHistoryModeData', () => {
 		it('re-reads when a held Round changes, and not for another Round', async () => {
 			await showingPendingHistory();
 
-			deliver('round:updated', { round: { id: 40 } });
+			deliver('round:updated', {
+				round: { id: 40 },
+			});
 			deliver('round:deleted', { roundId: 40 });
 			await flushPromises();
 			expect(mockFetch).not.toHaveBeenCalled();
 
-			deliver('round:updated', { round: { id: 31 } });
+			deliver('round:updated', {
+				round: { id: 31 },
+			});
 			await flushPromises();
 			expect(mockFetch).toHaveBeenCalledTimes(1);
 
-			deliver('round:matchesRefreshed', { roundId: 40, matchCount: 8, created: 1, updated: 0, staleDeleted: 0 });
+			deliver('round:matchesRefreshed', {
+				roundId: 40,
+				matchCount: 8,
+				created: 1,
+				updated: 0,
+				staleDeleted: 0,
+			});
 			await flushPromises();
 			expect(mockFetch).toHaveBeenCalledTimes(2);
 		});
 
 		it('follows an edit to the selected Player\'s record or an opponent\'s, and no one else\'s', async () => {
 			const { player } = await showingPendingHistory();
-			mockFetch.mockResolvedValue({ player: { ...mockPlayer, wins: 13 }, history: [pending] });
+			mockFetch.mockResolvedValue({
+				player: { ...mockPlayer, wins: 13 },
+				history: [pending],
+			});
 
-			deliver('player:updated', { player: { id: 5 } });
+			deliver('player:updated', {
+				player: { id: 5 },
+			});
 			await flushPromises();
 			expect(mockFetch).not.toHaveBeenCalled();
 
-			deliver('player:updated', { player: { id: 7 } });
+			deliver('player:updated', {
+				player: { id: 7 },
+			});
 			await flushPromises();
 			expect(player.value?.wins).toBe(13);
 
-			deliver('player:updated', { player: { id: 2 } });
+			deliver('player:updated', {
+				player: { id: 2 },
+			});
 			await flushPromises();
 			expect(mockFetch).toHaveBeenCalledTimes(2);
 
@@ -402,7 +541,10 @@ describe('usePlayerHistoryModeData', () => {
 
 			mockRealtime.connectionState = 'disconnected';
 			await nextTick();
-			mockFetch.mockResolvedValue({ player: mockPlayer, history: [recorded] });
+			mockFetch.mockResolvedValue({
+				player: mockPlayer,
+				history: [recorded],
+			});
 			mockRealtime.connectionState = 'connected';
 			continuity.reattach('event:1');
 			await flushPromises();

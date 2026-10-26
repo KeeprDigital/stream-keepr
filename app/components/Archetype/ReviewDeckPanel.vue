@@ -50,7 +50,9 @@ function getCompanionImageUrl() {
 }
 
 function getCompanionPreviewKey() {
-	return props.activeDeck?.companion ? `companion-${props.activeDeck.companion.name}` : 'companion';
+	return props.activeDeck?.companion
+		? `companion-${props.activeDeck.companion.name}`
+		: 'companion';
 }
 
 const cards = computed(() => props.activeDeck?.cards ?? []);
@@ -99,8 +101,12 @@ const sideboardGroupContainer = ref<HTMLElement | null>(null);
 const { width: mainboardGroupWidth } = useElementSize(mainboardGroupContainer);
 const { width: sideboardGroupWidth } = useElementSize(sideboardGroupContainer);
 
-const mainboardGroups = computed(() => [...mainboardByType.value.entries()]);
-const sideboardGroups = computed(() => [...sideboardByType.value.entries()]);
+const mainboardGroups = computed(() => [
+	...mainboardByType.value.entries(),
+]);
+const sideboardGroups = computed(() => [
+	...sideboardByType.value.entries(),
+]);
 
 function getDeckTypeGridStyle(columnCount: number) {
 	return {
@@ -140,7 +146,9 @@ const sideboardGridStyle = computed(() => getDeckTypeGridStyle(sideboardColumns.
 
 const curveData = computed(() => calculateDeckCurve(mainboardCards.value));
 const deckStats = computed(() =>
-	mainboardCards.value.length ? calculateDeckStats(mainboardCards.value) : null,
+	mainboardCards.value.length
+		? calculateDeckStats(mainboardCards.value)
+		: null,
 );
 const pipData = computed(() => formatPips(calculateDeckPips(cards.value)));
 </script>

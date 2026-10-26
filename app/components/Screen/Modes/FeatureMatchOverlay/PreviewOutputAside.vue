@@ -66,7 +66,9 @@ const itemGuides = ref(true);
 const safeAreaGuides = ref(false);
 const previewFrame = ref<HTMLIFrameElement | null>(null);
 
-const outputBaseUrl = computed(() => import.meta.client ? window.location.origin : requestUrl.origin);
+const outputBaseUrl = computed(() => import.meta.client
+	? window.location.origin
+	: requestUrl.origin);
 const previewUrl = computed(() => screenOutputPath({
 	eventId: props.eventId,
 	screenSlug: props.screen.slug,

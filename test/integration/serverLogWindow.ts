@@ -58,7 +58,10 @@ export function createServerLogWindow(path: string, options: { maximumLines?: nu
 			const lines = text.split('\n').filter(Boolean);
 			const elided = lines.length - maximumLines;
 			return elided > 0
-				? [`… ${elided} earlier lines`, ...lines.slice(elided)]
+				? [
+						`… ${elided} earlier lines`,
+						...lines.slice(elided),
+					]
 				: lines;
 		},
 	};

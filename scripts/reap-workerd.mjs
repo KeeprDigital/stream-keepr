@@ -38,7 +38,11 @@ function processTable(psOutput) {
 		.split('\n')
 		.map((line) => {
 			const match = line.trim().match(/^(\d+)\s+(\d+)\s+(\S.*)$/);
-			return match && { pid: Number(match[1]), parentPid: Number(match[2]), command: match[3] };
+			return match && {
+				pid: Number(match[1]),
+				parentPid: Number(match[2]),
+				command: match[3],
+			};
 		})
 		.filter(Boolean);
 }
@@ -61,7 +65,9 @@ const TERMINATION_GRACE_MS = 2000;
  * whose runner is still alive is that run's to stop.
  */
 export function selectLeakedAcceptanceChrome(psOutput, checkoutRoots) {
-	const prefixes = [...new Set(checkoutRoots.map(root => acceptanceProfilePrefix(checkoutProfileMarker(root))))];
+	const prefixes = [
+		...new Set(checkoutRoots.map(root => acceptanceProfilePrefix(checkoutProfileMarker(root)))),
+	];
 	const marked = command => prefixes.some(prefix => new RegExp(`--user-data-dir=\\S*/${prefix}`).test(command));
 	const table = processTable(psOutput);
 	const selected = new Set(table
@@ -124,7 +130,11 @@ export async function reapLeakedAcceptanceChrome({ psOutput, checkoutRoots, kill
  * because the executable path workerd runs under has its symlinks resolved.
  */
 export function discoverCheckoutRoots(cwd) {
-	const git = (...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+	const git = (...args) => execFileSync('git', args, {
+		cwd,
+		encoding: 'utf8',
+		stdio: ['ignore', 'pipe', 'ignore'],
+	});
 	const realPathOrSame = (path) => {
 		try {
 			return realpathSync(path);
@@ -148,7 +158,12 @@ export function discoverCheckoutRoots(cwd) {
 		}
 		catch {}
 	}
-	return [...new Set(roots.flatMap(root => [root, realPathOrSame(root)]))];
+	return [
+		...new Set(roots.flatMap(root => [
+			root,
+			realPathOrSame(root),
+		])),
+	];
 }
 
 export async function main() {

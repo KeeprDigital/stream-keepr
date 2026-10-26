@@ -26,7 +26,10 @@ const basePixelPng = Uint8Array.from(Buffer.from(
 
 /** Appends a valid ancillary text chunk so this suite owns a distinct digest. */
 function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array<ArrayBuffer> {
-	const payload = Buffer.concat([Buffer.from('tEXt'), Buffer.from(`${keyword}\0`)]);
+	const payload = Buffer.concat([
+		Buffer.from('tEXt'),
+		Buffer.from(`${keyword}\0`),
+	]);
 	const length = Buffer.alloc(4);
 	length.writeUInt32BE(payload.byteLength - 4, 0);
 	const checksum = Buffer.alloc(4);
@@ -77,7 +80,10 @@ async function receivePackage(archive: Uint8Array<ArrayBuffer>) {
 async function installPackage(operationId: string) {
 	return await $fetch<GraphicsIngestionOperation>(
 		`/api/graphics-assets/ingestion-operations/${operationId}/template-package-installation`,
-		{ method: 'POST', headers: { cookie: await operatorSessionCookie() } },
+		{
+			method: 'POST',
+			headers: { cookie: await operatorSessionCookie() },
+		},
 	);
 }
 
@@ -145,11 +151,16 @@ describe('template Package installation through the API boundary', () => {
 		config.layout.frame.backgroundImage = { kind: 'asset', ...reference } as never;
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: config.layout } },
+			{
+				method: 'PATCH',
+				body: { layout: config.layout },
+			},
 		);
 		const exported = await fetch(
 			`/api/events/${eventId}/screens/${screenId}/template-packages/feature-match-layout`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 		expect(exported.status).toBe(200);
 		exportedPackage = await collectStream(exported.body!);
@@ -168,16 +179,18 @@ describe('template Package installation through the API boundary', () => {
 		// one, alongside the exact origin it exported itself.
 		const parts = readTemplatePackageParts(exportedPackage);
 		const packaged = parts.manifest.packagedAssets[0]!;
-		parts.manifest.packagedAssets = [{
-			...packaged,
-			packagedId: 'packaged-asset-0002',
-			name: 'Imported sponsor logo',
-			origin: {
-				...packaged.origin,
-				sourceAssetId: testGraphicAssetId('a-source-asset-never-seen-here'),
-				sourceRevisionId: testGraphicAssetRevisionId('a-source-revision-never-seen-here'),
+		parts.manifest.packagedAssets = [
+			{
+				...packaged,
+				packagedId: 'packaged-asset-0002',
+				name: 'Imported sponsor logo',
+				origin: {
+					...packaged.origin,
+					sourceAssetId: testGraphicAssetId('a-source-asset-never-seen-here'),
+					sourceRevisionId: testGraphicAssetRevisionId('a-source-revision-never-seen-here'),
+				},
 			},
-		}];
+		];
 		parts.template = {
 			...(parts.template as Record<string, unknown>),
 			frame: {
@@ -213,23 +226,29 @@ describe('template Package installation through the API boundary', () => {
 		expect(completed.stage).toBe('completed');
 		const installation = completed.templatePackageInstallation!;
 		expect(installation.templateKind).toBe('feature-match-layout');
-		expect(installation.assets).toEqual([expect.objectContaining({
-			outcome: 'created',
-			basis: 'shared-content-digest',
-			name: 'Imported sponsor logo',
-			compatibilityProfile: 'still-image-v1',
-		})]);
+		expect(installation.assets).toEqual([
+			expect.objectContaining({
+				outcome: 'created',
+				basis: 'shared-content-digest',
+				name: 'Imported sponsor logo',
+				compatibilityProfile: 'still-image-v1',
+			}),
+		]);
 		const installed = installation.assets[0]!;
 
 		// The Template, its rewritten reference, and the new Graphic Asset all
 		// became visible together.
 		const template = await $fetch<InstalledGraphicsTemplate>(
 			`/api/graphics-assets/installed-templates/${installation.templateId}`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
-		expect(template.references).toEqual([expect.objectContaining({
-			reference: { assetId: installed.assetId, revisionId: installed.revisionId },
-		})]);
+		expect(template.references).toEqual([
+			expect.objectContaining({
+				reference: { assetId: installed.assetId, revisionId: installed.revisionId },
+			}),
+		]);
 		expect(JSON.stringify(template.document)).toContain(installed.revisionId);
 		expect(JSON.stringify(template.document))
 			.not
@@ -242,16 +261,20 @@ describe('template Package installation through the API boundary', () => {
 		// The installed revision resolves, and its reference is real usage.
 		const content = await fetch(
 			`/api/graphics-assets/${installed.assetId}/revisions/${installed.revisionId}/content`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 		expect(content.status).toBe(200);
 		const usage = await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${installed.assetId}/usage`,
 			{ headers: authorHeaders },
 		);
-		expect(usage).toEqual([expect.objectContaining({
-			owner: expect.objectContaining({ kind: 'installed-graphics-template' }),
-		})]);
+		expect(usage).toEqual([
+			expect.objectContaining({
+				owner: expect.objectContaining({ kind: 'installed-graphics-template' }),
+			}),
+		]);
 
 		// Installing again answers with the result that already committed rather
 		// than publishing a second copy.
@@ -270,12 +293,14 @@ describe('template Package installation through the API boundary', () => {
 
 		expect(completed.stage).toBe('completed');
 		const installation = completed.templatePackageInstallation!;
-		expect(installation.assets).toEqual([expect.objectContaining({
-			outcome: 'reused',
-			basis: 'exact-origin',
-			assetId: reference.assetId,
-			revisionId: reference.revisionId,
-		})]);
+		expect(installation.assets).toEqual([
+			expect.objectContaining({
+				outcome: 'reused',
+				basis: 'exact-origin',
+				assetId: reference.assetId,
+				revisionId: reference.revisionId,
+			}),
+		]);
 
 		// The reused asset kept its own name, revisions, and facts.
 		const after = await libraryAssets();
@@ -309,9 +334,13 @@ describe('template Package installation through the API boundary', () => {
 
 		const template = await $fetch<InstalledGraphicsTemplate>(
 			`/api/graphics-assets/installed-templates/${installation.templateId}`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
-		expect(template.references).toEqual([expect.objectContaining({ reference })]);
+		expect(template.references).toEqual([
+			expect.objectContaining({ reference }),
+		]);
 	});
 
 	it('leaves nothing discoverable when a package is cancelled before installation', async () => {
@@ -336,10 +365,15 @@ describe('template Package installation through the API boundary', () => {
 	it('refuses to install a proposal whose warnings nobody accepted', async () => {
 		const parts = readTemplatePackageParts(exportedPackage);
 		const packaged = parts.manifest.packagedAssets[0]!;
-		parts.manifest.packagedAssets = [{
-			...packaged,
-			origin: { ...packaged.origin, sourceRevisionId: testGraphicAssetRevisionId('another-unseen-revision') },
-		}];
+		parts.manifest.packagedAssets = [
+			{
+				...packaged,
+				origin: {
+					...packaged.origin,
+					sourceRevisionId: testGraphicAssetRevisionId('another-unseen-revision'),
+				},
+			},
+		];
 		parts.template = {
 			...(parts.template as Record<string, unknown>),
 			frame: {

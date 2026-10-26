@@ -276,12 +276,16 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 		const flight = reads.begin();
 		const outcome = await state.executeAction(
 			async (): Promise<CardReadOutcome> => {
-				const answer = await whileLoading(async () => screenOutputRead ? await screenOutputRead() : await getScreenCard(eventId, screenId));
+				const answer = await whileLoading(async () => screenOutputRead
+					? await screenOutputRead()
+					: await getScreenCard(eventId, screenId));
 				// Something newer reached the Card while this read was out, or is held
 				// already: it lands nothing.
 				if (!stillSelected(flight, eventId, screenId))
 					return 'superseded';
-				return acceptIfNewer(answer) ? 'landed' : 'superseded';
+				return acceptIfNewer(answer)
+					? 'landed'
+					: 'superseded';
 			},
 			// A superseded read's failure describes nothing still held.
 			{ errorRef: state.error, flight },
@@ -395,5 +399,8 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 
 /** A copy of `card` with one display field set; the Card itself is left as it was. */
 function withDisplayField(card: MtgCard, field: keyof MtgCardDisplayData, value: boolean): MtgCard {
-	return { ...card, displayData: { ...card.displayData, [field]: value } };
+	return {
+		...card,
+		displayData: { ...card.displayData, [field]: value },
+	};
 }

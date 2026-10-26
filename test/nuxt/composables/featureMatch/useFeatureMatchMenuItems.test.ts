@@ -16,7 +16,10 @@ const mockMatches = [
 	{
 		id: 2,
 		player1Data: { name: 'Charlie', gameData: null },
-		player2Data: { name: 'Diana', gameData: { type: 'mtg', deckName: 'Golgari Midrange', deckColors: 'BG' } },
+		player2Data: {
+			name: 'Diana',
+			gameData: { type: 'mtg', deckName: 'Golgari Midrange', deckColors: 'BG' },
+		},
 	},
 	{
 		id: 3,

@@ -10,7 +10,9 @@ const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screen
 /** Each column's positions in the pairs whose winners meet in the next column. */
 const columns = computed(() => bracket.value.columns.map(column => ({
 	...column,
-	pairs: Array.from({ length: Math.ceil(column.positions.length / 2) }, (_, index) => column.positions.slice(index * 2, index * 2 + 2)),
+	pairs: Array.from({
+		length: Math.ceil(column.positions.length / 2),
+	}, (_, index) => column.positions.slice(index * 2, index * 2 + 2)),
 })));
 
 // The first column seats the most Matches, so it sets the type size that keeps
@@ -25,7 +27,9 @@ const layoutStyle = computed(() => ({
 }));
 
 function entrantLabel(position: BracketPosition, side: 0 | 1): string {
-	return position.entrants[side]?.name ?? (position.status === 'bye' ? 'Bye' : 'TBD');
+	return position.entrants[side]?.name ?? (position.status === 'bye'
+		? 'Bye'
+		: 'TBD');
 }
 
 function entrantClass(position: BracketPosition, side: 0 | 1) {

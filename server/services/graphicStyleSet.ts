@@ -87,7 +87,9 @@ export function graphicStyleSetService() {
 	};
 
 	const findById = async (id: string): Promise<DbGraphicStyleSet | undefined> => {
-		return await db.query.graphicStyleSets.findFirst({ where: eq(graphicStyleSets.id, id) });
+		return await db.query.graphicStyleSets.findFirst({
+			where: eq(graphicStyleSets.id, id),
+		});
 	};
 
 	/**
@@ -149,7 +151,9 @@ export function graphicStyleSetService() {
 			WHERE id = ? AND draft_revision = ?
 		`).bind(
 			patch.name ?? existing.name,
-			patch.description === undefined ? existing.description : patch.description,
+			patch.description === undefined
+				? existing.description
+				: patch.description,
 			JSON.stringify(patch.draft ?? existing.draft),
 			Date.now(),
 			id,
@@ -456,7 +460,10 @@ export function graphicStyleSetService() {
 
 		const client = db.$client;
 		const now = Date.now();
-		const operation = { styleSetId: id, version: crypto.randomUUID() };
+		const operation = {
+			styleSetId: id,
+			version: crypto.randomUUID(),
+		};
 		const referenceFacts = rewriteReferenceFacts(options.rewrites);
 		const [changed] = await client.batch([
 			client.prepare(`
@@ -472,7 +479,9 @@ export function graphicStyleSetService() {
 					${REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE}
 			`).bind(
 				JSON.stringify(options.draft),
-				options.published === null ? null : JSON.stringify(options.published),
+				options.published === null
+					? null
+					: JSON.stringify(options.published),
 				operation.version,
 				now,
 				id,
@@ -512,7 +521,10 @@ export function graphicStyleSetService() {
 		options: { draftRevision: number; rewrites: readonly GraphicsTemplateRewrite[] },
 	): Promise<boolean> => {
 		const client = db.$client;
-		const operation = { styleSetId: id, version: crypto.randomUUID() };
+		const operation = {
+			styleSetId: id,
+			version: crypto.randomUUID(),
+		};
 		const referenceFacts = rewriteReferenceFacts(options.rewrites);
 		const results = await client.batch([
 			// Every precondition the whole operation has, on one statement, before anything

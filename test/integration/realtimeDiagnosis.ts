@@ -232,6 +232,8 @@ export function diagnoseRealtimePublishFailure(
 	if (message !== undefined && (isRouteRefusal || message.startsWith(UNROUTED_MESSAGE_PREFIX)))
 		return undefined;
 
-	const observed = message === undefined ? `HTTP ${status}` : `HTTP ${status} — ${message}`;
+	const observed = message === undefined
+		? `HTTP ${status}`
+		: `HTTP ${status} — ${message}`;
 	return `${INTEGRATION_REALTIME_PUBLISH_REJECTED_NOTICE} Observed: ${observed}.`;
 }

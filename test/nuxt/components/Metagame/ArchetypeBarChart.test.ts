@@ -58,7 +58,12 @@ describe('metagameArchetypeBarChart', () => {
 	it('keeps the chart mounted while loading and emits selection on click', async () => {
 		const wrapper = await mountComponent([
 			makeEntry(),
-			makeEntry({ id: 2, name: 'Mono Red', count: 7, metaShare: 20 }),
+			makeEntry({
+				id: 2,
+				name: 'Mono Red',
+				count: 7,
+				metaShare: 20,
+			}),
 		], true);
 
 		expect(wrapper.findComponent(VChartStub).exists()).toBe(true);
@@ -66,6 +71,8 @@ describe('metagameArchetypeBarChart', () => {
 
 		await wrapper.getComponent(VChartStub).trigger('click');
 
-		expect(wrapper.emitted('select')).toEqual([['Mono Red']]);
+		expect(wrapper.emitted('select')).toEqual([
+			['Mono Red'],
+		]);
 	});
 });

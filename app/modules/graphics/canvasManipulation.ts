@@ -11,7 +11,16 @@ import type { GraphicRect } from '~~/shared/types/graphics';
 
 export type ManipulationHandle = 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
-export const RESIZE_HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const satisfies readonly ManipulationHandle[];
+export const RESIZE_HANDLES = [
+	'nw',
+	'n',
+	'ne',
+	'e',
+	'se',
+	's',
+	'sw',
+	'w',
+] as const satisfies readonly ManipulationHandle[];
 
 /** The smallest a rectangle is ever resized to, in canvas pixels. */
 const MIN_SIZE = 1;
@@ -82,7 +91,10 @@ function moveRect(start: GraphicRect, delta: { x: number; y: number }, options: 
 			snapped.y = snapY.line;
 		}
 	}
-	return { rect: round({ ...start, x, y }), snapped };
+	return {
+		rect: round({ ...start, x, y }),
+		snapped,
+	};
 }
 
 function resizeRect(
@@ -108,10 +120,22 @@ function resizeRect(
 		bottom = Math.max(bottom + delta.y, top + MIN_SIZE);
 
 	if (snap) {
-		const horizontal = handle.includes('w') ? 'left' : handle.includes('e') ? 'right' : undefined;
-		const vertical = handle.includes('n') ? 'top' : handle.includes('s') ? 'bottom' : undefined;
+		const horizontal = handle.includes('w')
+			? 'left'
+			: handle.includes('e')
+				? 'right'
+				: undefined;
+		const vertical = handle.includes('n')
+			? 'top'
+			: handle.includes('s')
+				? 'bottom'
+				: undefined;
 		if (horizontal) {
-			const edge = nearest([horizontal === 'left' ? left : right], snap.lines.x, snap.threshold);
+			const edge = nearest([
+				horizontal === 'left'
+					? left
+					: right,
+			], snap.lines.x, snap.threshold);
 			if (edge) {
 				if (horizontal === 'left')
 					left = Math.min(left + edge.offset, right - MIN_SIZE);
@@ -121,7 +145,11 @@ function resizeRect(
 			}
 		}
 		if (vertical) {
-			const edge = nearest([vertical === 'top' ? top : bottom], snap.lines.y, snap.threshold);
+			const edge = nearest([
+				vertical === 'top'
+					? top
+					: bottom,
+			], snap.lines.y, snap.threshold);
 			if (edge) {
 				if (vertical === 'top')
 					top = Math.min(top + edge.offset, bottom - MIN_SIZE);
@@ -132,7 +160,12 @@ function resizeRect(
 		}
 	}
 
-	let rect: GraphicRect = { x: left, y: top, width: right - left, height: bottom - top };
+	let rect: GraphicRect = {
+		x: left,
+		y: top,
+		width: right - left,
+		height: bottom - top,
+	};
 
 	// A corner keeps the ratio by following whichever axis moved further; an edge
 	// handle keeps it by growing the other axis about the rectangle's centre line.
@@ -142,21 +175,32 @@ function resizeRect(
 		const widthLeads = corner
 			? Math.abs(rect.width - start.width) / start.width >= Math.abs(rect.height - start.height) / start.height
 			: handle === 'e' || handle === 'w';
-		const width = widthLeads ? rect.width : rect.height * ratio;
-		const height = widthLeads ? rect.width / ratio : rect.height;
+		const width = widthLeads
+			? rect.width
+			: rect.height * ratio;
+		const height = widthLeads
+			? rect.width / ratio
+			: rect.height;
 		const x = handle.includes('w')
 			? right - width
-			: corner || handle === 'e' ? left : start.x + (start.width - width) / 2;
+			: corner || handle === 'e'
+				? left
+				: start.x + (start.width - width) / 2;
 		const y = handle.includes('n')
 			? bottom - height
-			: corner || handle === 's' ? top : start.y + (start.height - height) / 2;
+			: corner || handle === 's'
+				? top
+				: start.y + (start.height - height) / 2;
 		rect = { x, y, width, height };
 		// A kept ratio decides the size, so a snap it overrode is not shown.
 		delete snapped.x;
 		delete snapped.y;
 	}
 
-	return { rect: round(rect), snapped };
+	return {
+		rect: round(rect),
+		snapped,
+	};
 }
 
 /** The rectangle a drag from `handle` by `delta` canvas pixels produces. */
@@ -173,5 +217,9 @@ export function manipulateRect(
 
 /** The rectangle an arrow-key nudge produces. */
 export function nudgeRect(rect: GraphicRect, delta: { x: number; y: number }): GraphicRect {
-	return { ...rect, x: Math.round(rect.x + delta.x), y: Math.round(rect.y + delta.y) };
+	return {
+		...rect,
+		x: Math.round(rect.x + delta.x),
+		y: Math.round(rect.y + delta.y),
+	};
 }

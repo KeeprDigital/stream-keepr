@@ -106,7 +106,11 @@ const commandPort: SequencedLiveStatePort<{ id: number }, Counter, CounterComman
 const liveState = createSequencedLiveState(commandPort);
 
 function add(commandId: string, amount: number): CounterCommand {
-	return { commandId, type: 'Add', payload: { amount } };
+	return {
+		commandId,
+		type: 'Add',
+		payload: { amount },
+	};
 }
 
 async function openFirst(lane: number, total = 0): Promise<Counter> {
@@ -182,7 +186,12 @@ describe('sequenced live epochs', () => {
 
 		expect(announce).toHaveBeenCalledTimes(1);
 		expect(announce).toHaveBeenCalledWith(
-			{ ended: [expect.objectContaining({ id: first.id })], opened: change.opened },
+			{
+				ended: [
+					expect.objectContaining({ id: first.id }),
+				],
+				opened: change.opened,
+			},
 			{ originConnectionId: 'origin' },
 		);
 	});

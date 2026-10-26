@@ -55,7 +55,11 @@ function fakeSession() {
  */
 function harnessContext() {
 	return {
-		evidence: { addSecret: vi.fn(), report: vi.fn(), passed: vi.fn() },
+		evidence: {
+			addSecret: vi.fn(),
+			report: vi.fn(),
+			passed: vi.fn(),
+		},
 		record: vi.fn(),
 		note: vi.fn(),
 		checks: () => 0,
@@ -114,7 +118,10 @@ describe('the font acceptance run', () => {
 	});
 
 	it('gives the loopback run no author identity, because it reads no library route', async () => {
-		const local = { origin: 'http://127.0.0.1:41234', close: vi.fn() };
+		const local = {
+			origin: 'http://127.0.0.1:41234',
+			close: vi.fn(),
+		};
 		vi.mocked(serveAcceptanceRoutes).mockResolvedValue(local);
 		vi.mocked(observeChromiumVerdict).mockResolvedValue({ outcome: 'passed' });
 		const { evidence, ...rest } = harnessContext();

@@ -32,7 +32,11 @@ const {
 	initialError,
 	retry,
 } = useEventPageLoading([
-	{ consumes: 'screens', isLoaded: () => screenStore.isLoaded, load: id => screenStore.loadScreensByEventId(id) },
+	{
+		consumes: 'screens',
+		isLoaded: () => screenStore.isLoaded,
+		load: id => screenStore.loadScreensByEventId(id),
+	},
 ]);
 
 const showScreenList = computed(() => hasScreens.value || loading.value || !!error.value || !!initialError.value);

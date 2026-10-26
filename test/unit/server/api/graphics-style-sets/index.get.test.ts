@@ -27,7 +27,9 @@ describe('graphic Style Set browsing', () => {
 	beforeEach(() => {
 		vi.resetModules();
 		mockRequireUserId.mockReset().mockResolvedValue('author-1');
-		mockFindAll.mockReset().mockResolvedValue([{ id: 'style-set-1' }]);
+		mockFindAll.mockReset().mockResolvedValue([
+			{ id: 'style-set-1' },
+		]);
 	});
 
 	it('rejects the listing before touching the service without a graphics author session', async () => {
@@ -46,6 +48,10 @@ describe('graphic Style Set browsing', () => {
 	it('returns the summaries when the session is present', async () => {
 		const handler = (await import('../../../../../server/api/graphics-style-sets/index.get')).default;
 
-		await expect(handler(stubH3Event({}))).resolves.toEqual({ styleSets: [{ id: 'style-set-1' }] });
+		await expect(handler(stubH3Event({}))).resolves.toEqual({
+			styleSets: [
+				{ id: 'style-set-1' },
+			],
+		});
 	});
 });

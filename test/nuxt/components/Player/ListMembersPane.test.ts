@@ -20,7 +20,9 @@ const UButtonStub = defineComponent({
 });
 
 const VueDraggableStub = defineComponent({
-	props: { modelValue: { type: Array, required: true } },
+	props: {
+		modelValue: { type: Array, required: true },
+	},
 	template: '<div><slot /></div>',
 });
 

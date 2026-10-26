@@ -24,7 +24,14 @@ describe('mapMeleePlayersToDb', () => {
 			},
 		];
 		const standings: MeleeStandingParsed[] = [
-			{ TeamId: 100, MatchWins: 5, MatchLosses: 2, MatchDraws: 0, Points: 15, Rank: 1 },
+			{
+				TeamId: 100,
+				MatchWins: 5,
+				MatchLosses: 2,
+				MatchDraws: 0,
+				Points: 15,
+				Rank: 1,
+			},
 		];
 		const result = mapMeleePlayersToDb(players, standings);
 
@@ -45,7 +52,12 @@ describe('mapMeleePlayersToDb', () => {
 
 	it('preserves a missing upstream status as null', () => {
 		const result = mapMeleePlayersToDb([
-			{ TeamId: 1, PlayerName: 'Player', PronounsDescription: null, Decklists: [] },
+			{
+				TeamId: 1,
+				PlayerName: 'Player',
+				PronounsDescription: null,
+				Decklists: [],
+			},
 		], []);
 
 		expect(result[0]?.externalStatus).toBeNull();
@@ -53,14 +65,34 @@ describe('mapMeleePlayersToDb', () => {
 
 	it('rejects team payloads that would collapse multiple players into one TeamId', () => {
 		expect(() => mapMeleePlayersToDb([
-			{ TeamId: 10, PlayerName: 'Team Member One', PronounsDescription: null, Decklists: [] },
-			{ TeamId: 10, PlayerName: 'Team Member Two', PronounsDescription: null, Decklists: [] },
+			{
+				TeamId: 10,
+				PlayerName: 'Team Member One',
+				PronounsDescription: null,
+				Decklists: [],
+			},
+			{
+				TeamId: 10,
+				PlayerName: 'Team Member Two',
+				PronounsDescription: null,
+				Decklists: [],
+			},
 		], [])).toThrowError(UnsupportedMeleeTeamPayloadError);
 
 		try {
 			mapMeleePlayersToDb([
-				{ TeamId: 10, PlayerName: 'Team Member One', PronounsDescription: null, Decklists: [] },
-				{ TeamId: 10, PlayerName: 'Team Member Two', PronounsDescription: null, Decklists: [] },
+				{
+					TeamId: 10,
+					PlayerName: 'Team Member One',
+					PronounsDescription: null,
+					Decklists: [],
+				},
+				{
+					TeamId: 10,
+					PlayerName: 'Team Member Two',
+					PronounsDescription: null,
+					Decklists: [],
+				},
 			], []);
 		}
 		catch (error) {
@@ -73,24 +105,81 @@ describe('mapMeleePlayersToDb', () => {
 
 	it('rejects duplicate TeamIds in the current standings snapshot', () => {
 		expect(() => mapMeleePlayersToDb(
-			[{ TeamId: 10, PlayerName: 'Player', PronounsDescription: null, Decklists: [] }],
 			[
-				{ TeamId: 10, MatchWins: 3, MatchLosses: 0, MatchDraws: 0, Points: 9, Rank: 1 },
-				{ TeamId: 10, MatchWins: 2, MatchLosses: 1, MatchDraws: 0, Points: 6, Rank: 2 },
+				{
+					TeamId: 10,
+					PlayerName: 'Player',
+					PronounsDescription: null,
+					Decklists: [],
+				},
+			],
+			[
+				{
+					TeamId: 10,
+					MatchWins: 3,
+					MatchLosses: 0,
+					MatchDraws: 0,
+					Points: 9,
+					Rank: 1,
+				},
+				{
+					TeamId: 10,
+					MatchWins: 2,
+					MatchLosses: 1,
+					MatchDraws: 0,
+					Points: 6,
+					Rank: 2,
+				},
 			],
 		)).toThrow('Duplicate current Melee standing TeamId: 10');
 	});
 
 	it('sorts players by position (rank)', () => {
 		const players: MeleePlayerParsed[] = [
-			{ TeamId: 1, PlayerName: 'Third', PronounsDescription: null, Decklists: [] },
-			{ TeamId: 2, PlayerName: 'First', PronounsDescription: null, Decklists: [] },
-			{ TeamId: 3, PlayerName: 'Second', PronounsDescription: null, Decklists: [] },
+			{
+				TeamId: 1,
+				PlayerName: 'Third',
+				PronounsDescription: null,
+				Decklists: [],
+			},
+			{
+				TeamId: 2,
+				PlayerName: 'First',
+				PronounsDescription: null,
+				Decklists: [],
+			},
+			{
+				TeamId: 3,
+				PlayerName: 'Second',
+				PronounsDescription: null,
+				Decklists: [],
+			},
 		];
 		const standings: MeleeStandingParsed[] = [
-			{ TeamId: 1, MatchWins: 3, MatchLosses: 4, MatchDraws: 0, Points: 9, Rank: 3 },
-			{ TeamId: 2, MatchWins: 6, MatchLosses: 1, MatchDraws: 0, Points: 18, Rank: 1 },
-			{ TeamId: 3, MatchWins: 5, MatchLosses: 2, MatchDraws: 0, Points: 15, Rank: 2 },
+			{
+				TeamId: 1,
+				MatchWins: 3,
+				MatchLosses: 4,
+				MatchDraws: 0,
+				Points: 9,
+				Rank: 3,
+			},
+			{
+				TeamId: 2,
+				MatchWins: 6,
+				MatchLosses: 1,
+				MatchDraws: 0,
+				Points: 18,
+				Rank: 1,
+			},
+			{
+				TeamId: 3,
+				MatchWins: 5,
+				MatchLosses: 2,
+				MatchDraws: 0,
+				Points: 15,
+				Rank: 2,
+			},
 		];
 		const result = mapMeleePlayersToDb(players, standings);
 
@@ -100,11 +189,28 @@ describe('mapMeleePlayersToDb', () => {
 
 	it('places players without standings at the end', () => {
 		const players: MeleePlayerParsed[] = [
-			{ TeamId: 1, PlayerName: 'No Ranking', PronounsDescription: null, Decklists: [] },
-			{ TeamId: 2, PlayerName: 'Ranked', PronounsDescription: null, Decklists: [] },
+			{
+				TeamId: 1,
+				PlayerName: 'No Ranking',
+				PronounsDescription: null,
+				Decklists: [],
+			},
+			{
+				TeamId: 2,
+				PlayerName: 'Ranked',
+				PronounsDescription: null,
+				Decklists: [],
+			},
 		];
 		const standings: MeleeStandingParsed[] = [
-			{ TeamId: 2, MatchWins: 3, MatchLosses: 0, MatchDraws: 0, Points: 9, Rank: 1 },
+			{
+				TeamId: 2,
+				MatchWins: 3,
+				MatchLosses: 0,
+				MatchDraws: 0,
+				Points: 9,
+				Rank: 1,
+			},
 		];
 		const result = mapMeleePlayersToDb(players, standings);
 
@@ -116,7 +222,12 @@ describe('mapMeleePlayersToDb', () => {
 
 	it('converts TeamId to string for externalId', () => {
 		const players: MeleePlayerParsed[] = [
-			{ TeamId: 42, PlayerName: 'Player', PronounsDescription: null, Decklists: [] },
+			{
+				TeamId: 42,
+				PlayerName: 'Player',
+				PronounsDescription: null,
+				Decklists: [],
+			},
 		];
 		const result = mapMeleePlayersToDb(players, []);
 
@@ -125,8 +236,18 @@ describe('mapMeleePlayersToDb', () => {
 
 	it('sets externalSource to melee for all players', () => {
 		const players: MeleePlayerParsed[] = [
-			{ TeamId: 1, PlayerName: 'A', PronounsDescription: null, Decklists: [] },
-			{ TeamId: 2, PlayerName: 'B', PronounsDescription: null, Decklists: [] },
+			{
+				TeamId: 1,
+				PlayerName: 'A',
+				PronounsDescription: null,
+				Decklists: [],
+			},
+			{
+				TeamId: 2,
+				PlayerName: 'B',
+				PronounsDescription: null,
+				Decklists: [],
+			},
 		];
 		const result = mapMeleePlayersToDb(players, []);
 
@@ -135,7 +256,12 @@ describe('mapMeleePlayersToDb', () => {
 
 	it('maps null pronouns when not provided', () => {
 		const players: MeleePlayerParsed[] = [
-			{ TeamId: 1, PlayerName: 'Player', PronounsDescription: null, Decklists: [] },
+			{
+				TeamId: 1,
+				PlayerName: 'Player',
+				PronounsDescription: null,
+				Decklists: [],
+			},
 		];
 		const result = mapMeleePlayersToDb(players, []);
 
@@ -144,7 +270,12 @@ describe('mapMeleePlayersToDb', () => {
 
 	it('sets deckLists to undefined when player has no decklists', () => {
 		const players: MeleePlayerParsed[] = [
-			{ TeamId: 1, PlayerName: 'Player', PronounsDescription: null, Decklists: [] },
+			{
+				TeamId: 1,
+				PlayerName: 'Player',
+				PronounsDescription: null,
+				Decklists: [],
+			},
 		];
 		const result = mapMeleePlayersToDb(players, []);
 
@@ -153,7 +284,12 @@ describe('mapMeleePlayersToDb', () => {
 
 	it('maps standing fields when no standing exists for player', () => {
 		const players: MeleePlayerParsed[] = [
-			{ TeamId: 999, PlayerName: 'Unranked', PronounsDescription: null, Decklists: [] },
+			{
+				TeamId: 999,
+				PlayerName: 'Unranked',
+				PronounsDescription: null,
+				Decklists: [],
+			},
 		];
 		const result = mapMeleePlayersToDb(players, []);
 
@@ -181,18 +317,27 @@ describe('parseAllDecklists', () => {
 	});
 
 	it('parses decklists into ParsedDeckList format', () => {
-		const decklists = [{
-			Guid: 'deck-42',
-			FormatId: '42',
-			DecklistName: 'Azorius Control',
-			Records: [
-				{ l: 'teferi', n: 'Teferi', s: 'WAR', q: 4, c: 0, t: 'Planeswalker' },
-			],
-			Attributes: [
-				{ k: 'COLOR_WHITE', v: 'True', p: null },
-				{ k: 'COLOR_BLUE', v: 'True', p: null },
-			],
-		}];
+		const decklists = [
+			{
+				Guid: 'deck-42',
+				FormatId: '42',
+				DecklistName: 'Azorius Control',
+				Records: [
+					{
+						l: 'teferi',
+						n: 'Teferi',
+						s: 'WAR',
+						q: 4,
+						c: 0,
+						t: 'Planeswalker',
+					},
+				],
+				Attributes: [
+					{ k: 'COLOR_WHITE', v: 'True', p: null },
+					{ k: 'COLOR_BLUE', v: 'True', p: null },
+				],
+			},
+		];
 
 		const result = parseAllDecklists(decklists as any);
 
@@ -206,16 +351,32 @@ describe('parseAllDecklists', () => {
 	});
 
 	it('parses companion records into companion metadata', () => {
-		const decklists = [{
-			Guid: 'deck-companion',
-			FormatId: '42',
-			DecklistName: 'Izzet Control (Lutri)',
-			Records: [
-				{ l: 'bolt', n: 'Lightning Bolt', s: null, q: 1, c: 0, t: 'Instant' },
-				{ l: 'lutri', n: 'Lutri, the Spellchaser', s: null, q: 1, c: 4, t: 'Creature' },
-			],
-			Attributes: [],
-		}];
+		const decklists = [
+			{
+				Guid: 'deck-companion',
+				FormatId: '42',
+				DecklistName: 'Izzet Control (Lutri)',
+				Records: [
+					{
+						l: 'bolt',
+						n: 'Lightning Bolt',
+						s: null,
+						q: 1,
+						c: 0,
+						t: 'Instant',
+					},
+					{
+						l: 'lutri',
+						n: 'Lutri, the Spellchaser',
+						s: null,
+						q: 1,
+						c: 4,
+						t: 'Creature',
+					},
+				],
+				Attributes: [],
+			},
+		];
 
 		const result = parseAllDecklists(decklists as any);
 
@@ -224,13 +385,15 @@ describe('parseAllDecklists', () => {
 	});
 
 	it('maps colorless decks to C', () => {
-		const decklists = [{
-			Guid: 'deck-colourless',
-			FormatId: '1',
-			DecklistName: 'Colorless Eldrazi',
-			Records: [],
-			Attributes: [],
-		}];
+		const decklists = [
+			{
+				Guid: 'deck-colourless',
+				FormatId: '1',
+				DecklistName: 'Colorless Eldrazi',
+				Records: [],
+				Attributes: [],
+			},
+		];
 
 		const result = parseAllDecklists(decklists as any);
 
@@ -316,8 +479,22 @@ function createMatchContext(overrides: Partial<MatchMapperContext> = {}): MatchM
 describe('mapMeleeMatchesToDbRows', () => {
 	it('maps matches with eventId and sorts by table number', () => {
 		const meleeMatches: Partial<MeleeMatchParsed>[] = [
-			{ Guid: 'match-2', TableNumber: 2, Competitors: [], HasResult: true, ByeReason: null, GameDraws: 0 },
-			{ Guid: 'match-1', TableNumber: 1, Competitors: [], HasResult: true, ByeReason: null, GameDraws: 0 },
+			{
+				Guid: 'match-2',
+				TableNumber: 2,
+				Competitors: [],
+				HasResult: true,
+				ByeReason: null,
+				GameDraws: 0,
+			},
+			{
+				Guid: 'match-1',
+				TableNumber: 1,
+				Competitors: [],
+				HasResult: true,
+				ByeReason: null,
+				GameDraws: 0,
+			},
 		];
 		const context = createMatchContext();
 
@@ -333,8 +510,22 @@ describe('mapMeleeMatchesToDbRows', () => {
 
 	it('sorts byes (null table number) to the end', () => {
 		const meleeMatches: Partial<MeleeMatchParsed>[] = [
-			{ Guid: 'bye', TableNumber: 0, Competitors: [], HasResult: false, ByeReason: 1, GameDraws: 0 },
-			{ Guid: 'match-1', TableNumber: 1, Competitors: [], HasResult: true, ByeReason: null, GameDraws: 0 },
+			{
+				Guid: 'bye',
+				TableNumber: 0,
+				Competitors: [],
+				HasResult: false,
+				ByeReason: 1,
+				GameDraws: 0,
+			},
+			{
+				Guid: 'match-1',
+				TableNumber: 1,
+				Competitors: [],
+				HasResult: true,
+				ByeReason: null,
+				GameDraws: 0,
+			},
 		];
 		const context = createMatchContext();
 
@@ -347,9 +538,30 @@ describe('mapMeleeMatchesToDbRows', () => {
 
 	it('assigns sequential sortOrder', () => {
 		const meleeMatches: Partial<MeleeMatchParsed>[] = [
-			{ Guid: 'a', TableNumber: 1, Competitors: [], HasResult: true, ByeReason: null, GameDraws: 0 },
-			{ Guid: 'b', TableNumber: 2, Competitors: [], HasResult: true, ByeReason: null, GameDraws: 0 },
-			{ Guid: 'c', TableNumber: 3, Competitors: [], HasResult: true, ByeReason: null, GameDraws: 0 },
+			{
+				Guid: 'a',
+				TableNumber: 1,
+				Competitors: [],
+				HasResult: true,
+				ByeReason: null,
+				GameDraws: 0,
+			},
+			{
+				Guid: 'b',
+				TableNumber: 2,
+				Competitors: [],
+				HasResult: true,
+				ByeReason: null,
+				GameDraws: 0,
+			},
+			{
+				Guid: 'c',
+				TableNumber: 3,
+				Competitors: [],
+				HasResult: true,
+				ByeReason: null,
+				GameDraws: 0,
+			},
 		];
 		const context = createMatchContext();
 
@@ -369,50 +581,82 @@ describe('mapMeleeMatchesToDbRows', () => {
 	});
 
 	it('rejects unpaired partial Matches while preserving explicit completed and bye records', () => {
-		const player = { id: 11, name: 'Player', externalId: '1', externalSource: 'melee' } as any;
+		const player = {
+			id: 11,
+			name: 'Player',
+			externalId: '1',
+			externalSource: 'melee',
+		} as any;
 		const context = createMatchContext({
-			playerMap: new Map([[externalIdentityKey('melee', '1'), player]]),
+			playerMap: new Map([
+				[
+					externalIdentityKey('melee', '1'),
+					player,
+				],
+			]),
 		});
 
-		expect(() => mapMeleeMatchesToDbRows([{
-			Guid: 'empty-pending',
-			TableNumber: null,
-			Competitors: [],
-			HasResult: false,
-			ResultString: null,
-			GameDraws: null,
-			ByeReason: null,
-		}], 10, 1, context)).toThrow('not paired or explicitly completed');
+		expect(() => mapMeleeMatchesToDbRows([
+			{
+				Guid: 'empty-pending',
+				TableNumber: null,
+				Competitors: [],
+				HasResult: false,
+				ResultString: null,
+				GameDraws: null,
+				ByeReason: null,
+			},
+		], 10, 1, context)).toThrow('not paired or explicitly completed');
 
-		expect(() => mapMeleeMatchesToDbRows([{
-			Guid: 'one-sided-pending',
-			TableNumber: null,
-			Competitors: [{ TeamId: 1, SortOrder: 0, GameWins: null, Decklists: [] }],
-			HasResult: false,
-			ResultString: null,
-			GameDraws: null,
-			ByeReason: null,
-		}], 10, 1, context)).toThrow('not paired or explicitly completed');
+		expect(() => mapMeleeMatchesToDbRows([
+			{
+				Guid: 'one-sided-pending',
+				TableNumber: null,
+				Competitors: [
+					{
+						TeamId: 1,
+						SortOrder: 0,
+						GameWins: null,
+						Decklists: [],
+					},
+				],
+				HasResult: false,
+				ResultString: null,
+				GameDraws: null,
+				ByeReason: null,
+			},
+		], 10, 1, context)).toThrow('not paired or explicitly completed');
 
-		expect(mapMeleeMatchesToDbRows([{
-			Guid: 'empty-completed',
-			TableNumber: null,
-			Competitors: [],
-			HasResult: true,
-			ResultString: 'Completed administratively',
-			GameDraws: null,
-			ByeReason: null,
-		}], 10, 1, context)).toHaveLength(1);
+		expect(mapMeleeMatchesToDbRows([
+			{
+				Guid: 'empty-completed',
+				TableNumber: null,
+				Competitors: [],
+				HasResult: true,
+				ResultString: 'Completed administratively',
+				GameDraws: null,
+				ByeReason: null,
+			},
+		], 10, 1, context)).toHaveLength(1);
 
-		expect(mapMeleeMatchesToDbRows([{
-			Guid: 'explicit-bye',
-			TableNumber: null,
-			Competitors: [{ TeamId: 1, SortOrder: 0, GameWins: null, Decklists: [] }],
-			HasResult: false,
-			ResultString: null,
-			GameDraws: null,
-			ByeReason: 1,
-		}], 10, 1, context)).toHaveLength(1);
+		expect(mapMeleeMatchesToDbRows([
+			{
+				Guid: 'explicit-bye',
+				TableNumber: null,
+				Competitors: [
+					{
+						TeamId: 1,
+						SortOrder: 0,
+						GameWins: null,
+						Decklists: [],
+					},
+				],
+				HasResult: false,
+				ResultString: null,
+				GameDraws: null,
+				ByeReason: 1,
+			},
+		], 10, 1, context)).toHaveLength(1);
 	});
 
 	it('rejects unsupported or ambiguous competitor cardinality', () => {
@@ -437,23 +681,37 @@ describe('mapMeleeMatchesToDbRows', () => {
 			ByeReason: null,
 		};
 
-		expect(() => mapMeleeMatchesToDbRows([{
-			...base,
-			Competitors: players.map((player, index) => ({
-				TeamId: Number(player.externalId),
-				SortOrder: index,
-				GameWins: null,
-				Decklists: [],
-			})),
-		}], 10, 1, context)).toThrow('at most two are supported');
+		expect(() => mapMeleeMatchesToDbRows([
+			{
+				...base,
+				Competitors: players.map((player, index) => ({
+					TeamId: Number(player.externalId),
+					SortOrder: index,
+					GameWins: null,
+					Decklists: [],
+				})),
+			},
+		], 10, 1, context)).toThrow('at most two are supported');
 
-		expect(() => mapMeleeMatchesToDbRows([{
-			...base,
-			Competitors: [
-				{ TeamId: 1, SortOrder: 0, GameWins: null, Decklists: [] },
-				{ TeamId: 1, SortOrder: 1, GameWins: null, Decklists: [] },
-			],
-		}], 10, 1, context)).toThrow('duplicate competitor 1');
+		expect(() => mapMeleeMatchesToDbRows([
+			{
+				...base,
+				Competitors: [
+					{
+						TeamId: 1,
+						SortOrder: 0,
+						GameWins: null,
+						Decklists: [],
+					},
+					{
+						TeamId: 1,
+						SortOrder: 1,
+						GameWins: null,
+						Decklists: [],
+					},
+				],
+			},
+		], 10, 1, context)).toThrow('duplicate competitor 1');
 	});
 
 	it('rejects duplicate Match identities and unknown required participants', () => {
@@ -472,35 +730,76 @@ describe('mapMeleeMatchesToDbRows', () => {
 			completedEmptyMatch,
 		], 10, 1, createMatchContext())).toThrow('Duplicate Melee Match external identity');
 
-		expect(() => mapMeleeMatchesToDbRows([{
-			...completedEmptyMatch,
-			Guid: 'unknown-player',
-			Competitors: [{ TeamId: 999, SortOrder: 0, GameWins: null, Decklists: [] }],
-			ByeReason: 1,
-		}], 10, 1, createMatchContext())).toThrow('unknown Melee participant 999');
+		expect(() => mapMeleeMatchesToDbRows([
+			{
+				...completedEmptyMatch,
+				Guid: 'unknown-player',
+				Competitors: [
+					{
+						TeamId: 999,
+						SortOrder: 0,
+						GameWins: null,
+						Decklists: [],
+					},
+				],
+				ByeReason: 1,
+			},
+		], 10, 1, createMatchContext())).toThrow('unknown Melee participant 999');
 	});
 
 	it('uses competitor SortOrder for player and score assignment', () => {
-		const firstPlayer = { id: 11, name: 'First', pronouns: null, externalId: '1', externalSource: 'melee', gameData: null } as any;
-		const secondPlayer = { id: 22, name: 'Second', pronouns: null, externalId: '2', externalSource: 'melee', gameData: null } as any;
+		const firstPlayer = {
+			id: 11,
+			name: 'First',
+			pronouns: null,
+			externalId: '1',
+			externalSource: 'melee',
+			gameData: null,
+		} as any;
+		const secondPlayer = {
+			id: 22,
+			name: 'Second',
+			pronouns: null,
+			externalId: '2',
+			externalSource: 'melee',
+			gameData: null,
+		} as any;
 		const context = createMatchContext({
 			playerMap: new Map([
-				[externalIdentityKey('melee', '1'), firstPlayer],
-				[externalIdentityKey('melee', '2'), secondPlayer],
+				[
+					externalIdentityKey('melee', '1'),
+					firstPlayer,
+				],
+				[
+					externalIdentityKey('melee', '2'),
+					secondPlayer,
+				],
 			]),
 		});
-		const matches = [{
-			Guid: 'ordered-match',
-			TableNumber: 1,
-			HasResult: true,
-			ResultString: '2-1',
-			GameDraws: 0,
-			ByeReason: null,
-			Competitors: [
-				{ TeamId: 2, SortOrder: 2, GameWins: 1, Decklists: [] },
-				{ TeamId: 1, SortOrder: 1, GameWins: 2, Decklists: [] },
-			],
-		}];
+		const matches = [
+			{
+				Guid: 'ordered-match',
+				TableNumber: 1,
+				HasResult: true,
+				ResultString: '2-1',
+				GameDraws: 0,
+				ByeReason: null,
+				Competitors: [
+					{
+						TeamId: 2,
+						SortOrder: 2,
+						GameWins: 1,
+						Decklists: [],
+					},
+					{
+						TeamId: 1,
+						SortOrder: 1,
+						GameWins: 2,
+						Decklists: [],
+					},
+				],
+			},
+		];
 
 		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
 
@@ -548,25 +847,46 @@ describe('mapMeleeMatchesToDbRows', () => {
 			reviewedAt: null,
 		} as any;
 		const context = createMatchContext({
-			playerMap: new Map([[externalIdentityKey('melee', '1'), player]]),
-			playerDecksByPlayerId: new Map([[11, [otherDeck, exactDeck]]]),
-			archetypesById: new Map([[7, { id: 7, name: 'Reviewed Control', colors: 'WU' }]]),
+			playerMap: new Map([
+				[
+					externalIdentityKey('melee', '1'),
+					player,
+				],
+			]),
+			playerDecksByPlayerId: new Map([
+				[
+					11,
+					[otherDeck, exactDeck],
+				],
+			]),
+			archetypesById: new Map([
+				[
+					7,
+					{ id: 7, name: 'Reviewed Control', colors: 'WU' },
+				],
+			]),
 			roundFormatExternalId: 'standard',
 		});
-		const matches = [{
-			Guid: 'match-exact',
-			TableNumber: 1,
-			HasResult: false,
-			ResultString: null,
-			GameDraws: 0,
-			ByeReason: 1,
-			Competitors: [{
-				TeamId: 1,
-				SortOrder: 1,
-				GameWins: null,
-				Decklists: [{ DecklistId: 'deck-exact', PlayerId: 1, FormatId: 'standard' }],
-			}],
-		}];
+		const matches = [
+			{
+				Guid: 'match-exact',
+				TableNumber: 1,
+				HasResult: false,
+				ResultString: null,
+				GameDraws: 0,
+				ByeReason: 1,
+				Competitors: [
+					{
+						TeamId: 1,
+						SortOrder: 1,
+						GameWins: null,
+						Decklists: [
+							{ DecklistId: 'deck-exact', PlayerId: 1, FormatId: 'standard' },
+						],
+					},
+				],
+			},
+		];
 
 		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
 
@@ -579,29 +899,70 @@ describe('mapMeleeMatchesToDbRows', () => {
 	});
 
 	it('uses a format fallback deterministically and warns when an exact reference is unavailable', () => {
-		const player = { id: 11, name: 'Alice', externalId: '1', externalSource: 'melee', gameData: null } as any;
-		const laterDeck = { id: 202, playerId: 11, externalId: 'later', externalSource: 'melee', formatExternalId: 'modern', name: 'Later', colors: 'R', sortOrder: 5, isPrimary: false, archetypeId: null, reviewedAt: null } as any;
-		const firstDeck = { ...laterDeck, id: 201, externalId: 'first', name: 'First', colors: 'U', sortOrder: 1 } as any;
+		const player = {
+			id: 11,
+			name: 'Alice',
+			externalId: '1',
+			externalSource: 'melee',
+			gameData: null,
+		} as any;
+		const laterDeck = {
+			id: 202,
+			playerId: 11,
+			externalId: 'later',
+			externalSource: 'melee',
+			formatExternalId: 'modern',
+			name: 'Later',
+			colors: 'R',
+			sortOrder: 5,
+			isPrimary: false,
+			archetypeId: null,
+			reviewedAt: null,
+		} as any;
+		const firstDeck = {
+			...laterDeck,
+			id: 201,
+			externalId: 'first',
+			name: 'First',
+			colors: 'U',
+			sortOrder: 1,
+		} as any;
 		const context = createMatchContext({
-			playerMap: new Map([[externalIdentityKey('melee', '1'), player]]),
-			playerDecksByPlayerId: new Map([[11, [laterDeck, firstDeck]]]),
+			playerMap: new Map([
+				[
+					externalIdentityKey('melee', '1'),
+					player,
+				],
+			]),
+			playerDecksByPlayerId: new Map([
+				[
+					11,
+					[laterDeck, firstDeck],
+				],
+			]),
 			roundFormatExternalId: 'standard',
 		});
-		const matches = [{
-			Guid: 'match-format',
-			TableNumber: 1,
-			HasResult: false,
-			ResultString: null,
-			GameDraws: 0,
-			ByeReason: 1,
-			FormatId: 'pioneer',
-			Competitors: [{
-				TeamId: 1,
-				SortOrder: 1,
-				GameWins: null,
-				Decklists: [{ DecklistId: 'missing-deck', PlayerId: 1, FormatId: 'modern' }],
-			}],
-		}];
+		const matches = [
+			{
+				Guid: 'match-format',
+				TableNumber: 1,
+				HasResult: false,
+				ResultString: null,
+				GameDraws: 0,
+				ByeReason: 1,
+				FormatId: 'pioneer',
+				Competitors: [
+					{
+						TeamId: 1,
+						SortOrder: 1,
+						GameWins: null,
+						Decklists: [
+							{ DecklistId: 'missing-deck', PlayerId: 1, FormatId: 'modern' },
+						],
+					},
+				],
+			},
+		];
 
 		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
 
@@ -617,29 +978,71 @@ describe('mapMeleeMatchesToDbRows', () => {
 	});
 
 	it('uses the Match format before a different phase format when the competitor format has no deck', () => {
-		const player = { id: 11, name: 'Alice', externalId: '1', externalSource: 'melee', gameData: null } as any;
-		const matchFormatDeck = { id: 301, playerId: 11, externalId: 'modern', externalSource: 'melee', formatExternalId: 'modern', name: 'Modern Deck', colors: 'R', sortOrder: 2, isPrimary: false, archetypeId: null, reviewedAt: null } as any;
-		const phaseFormatDeck = { ...matchFormatDeck, id: 302, externalId: 'standard', formatExternalId: 'standard', name: 'Standard Deck', colors: 'U', sortOrder: 0 } as any;
+		const player = {
+			id: 11,
+			name: 'Alice',
+			externalId: '1',
+			externalSource: 'melee',
+			gameData: null,
+		} as any;
+		const matchFormatDeck = {
+			id: 301,
+			playerId: 11,
+			externalId: 'modern',
+			externalSource: 'melee',
+			formatExternalId: 'modern',
+			name: 'Modern Deck',
+			colors: 'R',
+			sortOrder: 2,
+			isPrimary: false,
+			archetypeId: null,
+			reviewedAt: null,
+		} as any;
+		const phaseFormatDeck = {
+			...matchFormatDeck,
+			id: 302,
+			externalId: 'standard',
+			formatExternalId: 'standard',
+			name: 'Standard Deck',
+			colors: 'U',
+			sortOrder: 0,
+		} as any;
 		const context = createMatchContext({
-			playerMap: new Map([[externalIdentityKey('melee', '1'), player]]),
-			playerDecksByPlayerId: new Map([[11, [phaseFormatDeck, matchFormatDeck]]]),
+			playerMap: new Map([
+				[
+					externalIdentityKey('melee', '1'),
+					player,
+				],
+			]),
+			playerDecksByPlayerId: new Map([
+				[
+					11,
+					[phaseFormatDeck, matchFormatDeck],
+				],
+			]),
 			roundFormatExternalId: 'standard',
 		});
-		const matches = [{
-			Guid: 'match-specific-format',
-			TableNumber: 1,
-			HasResult: false,
-			ResultString: null,
-			GameDraws: 0,
-			ByeReason: 1,
-			FormatId: 'modern',
-			Competitors: [{
-				TeamId: 1,
-				SortOrder: 1,
-				GameWins: null,
-				Decklists: [{ DecklistId: 'missing-deck', PlayerId: 1, FormatId: 'legacy' }],
-			}],
-		}];
+		const matches = [
+			{
+				Guid: 'match-specific-format',
+				TableNumber: 1,
+				HasResult: false,
+				ResultString: null,
+				GameDraws: 0,
+				ByeReason: 1,
+				FormatId: 'modern',
+				Competitors: [
+					{
+						TeamId: 1,
+						SortOrder: 1,
+						GameWins: null,
+						Decklists: [
+							{ DecklistId: 'missing-deck', PlayerId: 1, FormatId: 'legacy' },
+						],
+					},
+				],
+			},
+		];
 
 		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
 
@@ -653,7 +1056,13 @@ describe('mapMeleeMatchesToDbRows', () => {
 	});
 
 	it('uses the primary deck as the final fallback and emits a warning', () => {
-		const player = { id: 11, name: 'Alice', externalId: '1', externalSource: 'melee', gameData: null } as any;
+		const player = {
+			id: 11,
+			name: 'Alice',
+			externalId: '1',
+			externalSource: 'melee',
+			gameData: null,
+		} as any;
 		const primaryDeck = {
 			id: 401,
 			playerId: 11,
@@ -668,24 +1077,40 @@ describe('mapMeleeMatchesToDbRows', () => {
 			reviewedAt: null,
 		} as any;
 		const context = createMatchContext({
-			playerMap: new Map([[externalIdentityKey('melee', '1'), player]]),
-			playerDecksByPlayerId: new Map([[11, [primaryDeck]]]),
+			playerMap: new Map([
+				[
+					externalIdentityKey('melee', '1'),
+					player,
+				],
+			]),
+			playerDecksByPlayerId: new Map([
+				[
+					11,
+					[primaryDeck],
+				],
+			]),
 			roundFormatExternalId: 'standard',
 		});
-		const matches = [{
-			Guid: 'match-primary',
-			TableNumber: 1,
-			HasResult: false,
-			ResultString: null,
-			GameDraws: 0,
-			ByeReason: 1,
-			Competitors: [{
-				TeamId: 1,
-				SortOrder: 1,
-				GameWins: null,
-				Decklists: [{ DecklistId: 'missing-deck', PlayerId: 1, FormatId: 'standard' }],
-			}],
-		}];
+		const matches = [
+			{
+				Guid: 'match-primary',
+				TableNumber: 1,
+				HasResult: false,
+				ResultString: null,
+				GameDraws: 0,
+				ByeReason: 1,
+				Competitors: [
+					{
+						TeamId: 1,
+						SortOrder: 1,
+						GameWins: null,
+						Decklists: [
+							{ DecklistId: 'missing-deck', PlayerId: 1, FormatId: 'standard' },
+						],
+					},
+				],
+			},
+		];
 
 		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
 
@@ -707,13 +1132,52 @@ describe('mapMeleeMatchesToDbRows', () => {
 			archetypeId: 9,
 			gameData: { type: 'mtg', deckName: 'Primary Leak', deckColors: 'R' },
 		} as any;
-		const offFormatDeck = { id: 301, playerId: 11, externalId: 'legacy', externalSource: 'melee', formatExternalId: 'legacy', name: 'Legacy', colors: 'B', sortOrder: 0, isPrimary: false, archetypeId: 9, reviewedAt: new Date() } as any;
+		const offFormatDeck = {
+			id: 301,
+			playerId: 11,
+			externalId: 'legacy',
+			externalSource: 'melee',
+			formatExternalId: 'legacy',
+			name: 'Legacy',
+			colors: 'B',
+			sortOrder: 0,
+			isPrimary: false,
+			archetypeId: 9,
+			reviewedAt: new Date(),
+		} as any;
 		const context = createMatchContext({
-			playerMap: new Map([[externalIdentityKey('melee', '1'), player]]),
-			playerDecksByPlayerId: new Map([[11, [offFormatDeck]]]),
+			playerMap: new Map([
+				[
+					externalIdentityKey('melee', '1'),
+					player,
+				],
+			]),
+			playerDecksByPlayerId: new Map([
+				[
+					11,
+					[offFormatDeck],
+				],
+			]),
 			roundFormatExternalId: 'standard',
 		});
-		const matches = [{ Guid: 'match-missing', TableNumber: 1, HasResult: false, ResultString: null, GameDraws: 0, ByeReason: 1, Competitors: [{ TeamId: 1, SortOrder: 1, GameWins: null, Decklists: [] }] }];
+		const matches = [
+			{
+				Guid: 'match-missing',
+				TableNumber: 1,
+				HasResult: false,
+				ResultString: null,
+				GameDraws: 0,
+				ByeReason: 1,
+				Competitors: [
+					{
+						TeamId: 1,
+						SortOrder: 1,
+						GameWins: null,
+						Decklists: [],
+					},
+				],
+			},
+		];
 
 		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
 
@@ -726,7 +1190,13 @@ describe('mapMeleeMatchesToDbRows', () => {
 	});
 
 	it('never selects another source\'s deck as a Melee fallback', () => {
-		const player = { id: 11, name: 'Alice', externalId: '1', externalSource: 'melee', gameData: null } as any;
+		const player = {
+			id: 11,
+			name: 'Alice',
+			externalId: '1',
+			externalSource: 'melee',
+			gameData: null,
+		} as any;
 		const manualDeck = {
 			id: 701,
 			playerId: 11,
@@ -741,25 +1211,41 @@ describe('mapMeleeMatchesToDbRows', () => {
 			reviewedAt: null,
 		} as any;
 		const context = createMatchContext({
-			playerMap: new Map([[externalIdentityKey('melee', '1'), player]]),
-			playerDecksByPlayerId: new Map([[11, [manualDeck]]]),
+			playerMap: new Map([
+				[
+					externalIdentityKey('melee', '1'),
+					player,
+				],
+			]),
+			playerDecksByPlayerId: new Map([
+				[
+					11,
+					[manualDeck],
+				],
+			]),
 			roundFormatExternalId: 'standard',
 		});
 
-		const [result] = mapMeleeMatchesToDbRows([{
-			Guid: 'source-safe-deck',
-			TableNumber: null,
-			HasResult: false,
-			ResultString: null,
-			GameDraws: null,
-			ByeReason: 1,
-			Competitors: [{
-				TeamId: 1,
-				SortOrder: 0,
-				GameWins: null,
-				Decklists: [{ DecklistId: 'manual-deck', PlayerId: 1, FormatId: 'standard' }],
-			}],
-		}], 10, 1, context);
+		const [result] = mapMeleeMatchesToDbRows([
+			{
+				Guid: 'source-safe-deck',
+				TableNumber: null,
+				HasResult: false,
+				ResultString: null,
+				GameDraws: null,
+				ByeReason: 1,
+				Competitors: [
+					{
+						TeamId: 1,
+						SortOrder: 0,
+						GameWins: null,
+						Decklists: [
+							{ DecklistId: 'manual-deck', PlayerId: 1, FormatId: 'standard' },
+						],
+					},
+				],
+			},
+		], 10, 1, context);
 
 		expect(result!.player1Data).toMatchObject({
 			deckId: null,

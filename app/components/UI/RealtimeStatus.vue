@@ -34,7 +34,9 @@ const status = computed(() => {
 	if (connectionState.value === 'initialized')
 		return 'standby' as const;
 	// Settling is not a fault either: a page load is not a lost connection.
-	return connectionState.value === 'connecting' ? 'settling' as const : 'disconnected' as const;
+	return connectionState.value === 'connecting'
+		? 'settling' as const
+		: 'disconnected' as const;
 });
 
 const statusIcon = computed(() => {

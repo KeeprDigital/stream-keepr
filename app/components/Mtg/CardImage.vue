@@ -34,7 +34,9 @@ const scaleFactor = computed(() => {
 	const isRotated = props.display.rotated && mode.value.rotatable;
 	const isCounterRotated = props.display.counterRotated && mode.value.counterRotatable;
 
-	return (isRotated || isCounterRotated) ? 61 / 85 : 1;
+	return (isRotated || isCounterRotated)
+		? 61 / 85
+		: 1;
 });
 
 function selected() {

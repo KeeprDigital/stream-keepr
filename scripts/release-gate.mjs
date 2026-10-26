@@ -86,13 +86,30 @@ async function main() {
 	const repository = process.env.GITHUB_REPOSITORY ?? '';
 	const branch = process.env.GITHUB_REF_NAME ?? 'main';
 	/** @type {{ number: number, mergeCommit: { oid: string } | null }[]} */
-	const merged = gh(['pr', 'list', '--repo', repository, '--base', branch, '--state', 'merged', '--label', 'autorelease: pending', '--limit', '100', '--json', 'number,mergeCommit']);
+	const merged = gh([
+		'pr',
+		'list',
+		'--repo',
+		repository,
+		'--base',
+		branch,
+		'--state',
+		'merged',
+		'--label',
+		'autorelease: pending',
+		'--limit',
+		'100',
+		'--json',
+		'number,mergeCommit',
+	]);
 	const pending = merged.map(pr => ({ number: pr.number, mergeCommit: pr.mergeCommit?.oid ?? null }));
 	const problems = await checkPendingReleases(pending, async sha => gh(['api', `repos/${repository}/actions/runs?head_sha=${sha}&event=merge_group&per_page=100`]).workflow_runs);
 	if (problems.length === 0) {
 		console.log(pending.length === 0
 			? 'No merged Release PR is waiting for its tag.'
-			: `Pending release${pending.length > 1 ? 's' : ''} ${pending.map(pr => `#${pr.number}`).join(', ')} passed CI in the merge queue.`);
+			: `Pending release${pending.length > 1
+				? 's'
+				: ''} ${pending.map(pr => `#${pr.number}`).join(', ')} passed CI in the merge queue.`);
 		return;
 	}
 	for (const problem of problems)

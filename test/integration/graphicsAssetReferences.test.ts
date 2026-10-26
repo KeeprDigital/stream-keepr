@@ -67,7 +67,11 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		});
 		const response = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-			{ method: 'PUT', headers: { cookie: graphicsAuthorCookie }, body: referencePixelPng },
+			{
+				method: 'PUT',
+				headers: { cookie: graphicsAuthorCookie },
+				body: referencePixelPng,
+			},
 		);
 		operation = await expectOperationResult(response);
 	});
@@ -110,13 +114,18 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 
 		const updated = await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: config.layout } },
+			{
+				method: 'PATCH',
+				body: { layout: config.layout },
+			},
 		);
 		expect(updated!.modeConfigs!['feature-match-overlay']!.layout!.frame.backgroundImage).toEqual({ kind: 'asset', ...reference });
 
 		const usage = await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${reference.assetId}/usage`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 		// Usage is reported in owner-slot order, so the composed tree precedes the
 		// Frame it is drawn over.
@@ -166,7 +175,10 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 
 		await expect($fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: config!.layout } },
+			{
+				method: 'PATCH',
+				body: { layout: config!.layout },
+			},
 		)).rejects.toMatchObject({ statusCode: 409 });
 		const unchanged = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
 		expect(unchanged!.modeConfigs!['feature-match-overlay']!.layout!.frame.backgroundImage).toEqual({
@@ -176,7 +188,9 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		});
 		await expect($fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${operation.result!.assetId}/usage`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		)).resolves.toHaveLength(3);
 	});
 
@@ -192,16 +206,23 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: config!.layout } },
+			{
+				method: 'PATCH',
+				body: { layout: config!.layout },
+			},
 		);
 
 		await expect($fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${operation.result!.assetId}/usage`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		)).resolves.toHaveLength(3);
 		const resolution = await fetch(
 			`/api/graphics-assets/${operation.result!.assetId}/revisions/${operation.result!.revisionId}/content`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 		expect(resolution.status).toBe(200);
 	});
@@ -218,7 +239,10 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 
 		const updated = await $fetch(
 			`/api/events/${eventId}/screens/${fresh.id}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { featureMatchId: slot.id } },
+			{
+				method: 'PATCH',
+				body: { featureMatchId: slot.id },
+			},
 		);
 
 		expect(updated.modeConfigs!['feature-match-overlay']!.featureMatchId).toBe(slot.id);
@@ -230,7 +254,9 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		await $fetch(`/api/events/${eventId}/screens/${screenId}`, { method: 'DELETE' });
 		await expect($fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${operation.result!.assetId}/usage`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		)).resolves.toEqual([]);
 	});
 });
@@ -287,7 +313,11 @@ describe('background Screen exact Graphic Asset References', () => {
 		});
 		const response = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-			{ method: 'PUT', headers: { cookie: graphicsAuthorCookie }, body: referencePixelPng },
+			{
+				method: 'PUT',
+				headers: { cookie: graphicsAuthorCookie },
+				body: referencePixelPng,
+			},
 		);
 		operation = await expectOperationResult(response);
 	});
@@ -305,19 +335,37 @@ describe('background Screen exact Graphic Asset References', () => {
 			revisionId: operation.result!.revisionId,
 		};
 		const layers = [
-			{ id: 'wash', type: 'color', enabled: true, opacity: 0.4, color: '#0b1020' },
-			{ id: 'plate', type: 'image', enabled: true, opacity: 1, source: { kind: 'asset', ...reference }, fit: 'cover' },
+			{
+				id: 'wash',
+				type: 'color',
+				enabled: true,
+				opacity: 0.4,
+				color: '#0b1020',
+			},
+			{
+				id: 'plate',
+				type: 'image',
+				enabled: true,
+				opacity: 1,
+				source: { kind: 'asset', ...reference },
+				fit: 'cover',
+			},
 		];
 
 		const updated = await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/background`,
-			{ method: 'PATCH', body: { layers } },
+			{
+				method: 'PATCH',
+				body: { layers },
+			},
 		);
 		expect(updated!.modeConfigs!.background!.layers).toHaveLength(2);
 
 		const usage = await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${reference.assetId}/usage`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 		expect(usage).toEqual([
 			expect.objectContaining({
@@ -351,13 +399,18 @@ describe('background Screen exact Graphic Asset References', () => {
 
 		await expect($fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/background`,
-			{ method: 'PATCH', body: { layers } },
+			{
+				method: 'PATCH',
+				body: { layers },
+			},
 		)).rejects.toMatchObject({ statusCode: 409 });
 		const unchanged = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
 		expect(unchanged!.modeConfigs!.background!.layers).toHaveLength(2);
 		await expect($fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${operation.result!.assetId}/usage`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		)).resolves.toHaveLength(1);
 	});
 
@@ -365,13 +418,28 @@ describe('background Screen exact Graphic Asset References', () => {
 		const current = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
 		const layers = structuredClone(current!.modeConfigs!.background!.layers) as Array<Record<string, unknown>>;
 		layers.push(
-			{ id: 'anim-1', type: 'animation', enabled: true, opacity: 1, animation: { effect: 'fog' } },
-			{ id: 'anim-2', type: 'animation', enabled: false, opacity: 1, animation: { effect: 'caustics' } },
+			{
+				id: 'anim-1',
+				type: 'animation',
+				enabled: true,
+				opacity: 1,
+				animation: { effect: 'fog' },
+			},
+			{
+				id: 'anim-2',
+				type: 'animation',
+				enabled: false,
+				opacity: 1,
+				animation: { effect: 'caustics' },
+			},
 		);
 
 		await expect($fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/background`,
-			{ method: 'PATCH', body: { layers } },
+			{
+				method: 'PATCH',
+				body: { layers },
+			},
 		)).rejects.toMatchObject({ statusCode: 400 });
 	});
 
@@ -379,7 +447,9 @@ describe('background Screen exact Graphic Asset References', () => {
 		await $fetch(`/api/events/${eventId}/screens/${screenId}`, { method: 'DELETE' });
 		await expect($fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${operation.result!.assetId}/usage`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		)).resolves.toEqual([]);
 	});
 });
@@ -401,13 +471,22 @@ describe('a plain overlay mode’s own Background Layer references (#580)', () =
 	let graphicsAuthorCookie: string;
 
 	function plate() {
-		return { id: 'plate', type: 'image', enabled: true, opacity: 1, source: { kind: 'asset', ...reference }, fit: 'cover' };
+		return {
+			id: 'plate',
+			type: 'image',
+			enabled: true,
+			opacity: 1,
+			source: { kind: 'asset', ...reference },
+			fit: 'cover',
+		};
 	}
 
 	async function usageSlots() {
 		const usage = await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${reference.assetId}/usage`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 		return usage.map(item => item.owner.slot).sort();
 	}
@@ -442,7 +521,11 @@ describe('a plain overlay mode’s own Background Layer references (#580)', () =
 		});
 		const response = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-			{ method: 'PUT', headers: { cookie: graphicsAuthorCookie }, body: plainModeLayerPng },
+			{
+				method: 'PUT',
+				headers: { cookie: graphicsAuthorCookie },
+				body: plainModeLayerPng,
+			},
 		);
 		const operation = await expectOperationResult(response);
 		reference = { assetId: operation.result.assetId, revisionId: operation.result.revisionId };
@@ -458,7 +541,14 @@ describe('a plain overlay mode’s own Background Layer references (#580)', () =
 	it('indexes a Deck Screen’s asset-sourced layer under the Deck’s own namespace', async () => {
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/deck`,
-			{ method: 'PATCH', body: { backgroundLayers: [plate()] } },
+			{
+				method: 'PATCH',
+				body: {
+					backgroundLayers: [
+						plate(),
+					],
+				},
+			},
 		);
 
 		expect(await usageSlots()).toEqual(['deck.backgroundLayers.plate.source']);
@@ -467,7 +557,14 @@ describe('a plain overlay mode’s own Background Layer references (#580)', () =
 	it('keeps the Deck’s row when the same Screen’s Card stack is written', async () => {
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/card`,
-			{ method: 'PATCH', body: { backgroundLayers: [plate()] } },
+			{
+				method: 'PATCH',
+				body: {
+					backgroundLayers: [
+						plate(),
+					],
+				},
+			},
 		);
 
 		expect(await usageSlots()).toEqual([
@@ -479,12 +576,16 @@ describe('a plain overlay mode’s own Background Layer references (#580)', () =
 	it('delivers the layer’s revision to the Screen’s Output while the Deck is showing', async () => {
 		const { assetCapability } = await $fetch<{ assetCapability: string }>(
 			`/api/events/${eventId}/screens/${screenId}/asset-capability`,
-			{ headers: { cookie: graphicsAuthorCookie } },
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
 		);
 
 		const response = await fetch(
 			`/api/screen-output/screens/${screenId}/assets/${reference.assetId}/revisions/${reference.revisionId}/content`,
-			{ headers: { authorization: `Bearer ${assetCapability}` } },
+			{
+				headers: { authorization: `Bearer ${assetCapability}` },
+			},
 		);
 
 		expect(response.status).toBe(200);
@@ -493,7 +594,10 @@ describe('a plain overlay mode’s own Background Layer references (#580)', () =
 	it('stops indexing a layer once the stack drops it', async () => {
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/deck`,
-			{ method: 'PATCH', body: { backgroundLayers: [] } },
+			{
+				method: 'PATCH',
+				body: { backgroundLayers: [] },
+			},
 		);
 
 		expect(await usageSlots()).toEqual(['card.backgroundLayers.plate.source']);

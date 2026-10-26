@@ -31,12 +31,24 @@ export function readMatchFromPlayerSide(match: MatchResultFacts, playerId: numbe
 	const opponentGameWins = isPlayer1 ? match.player2GameWins : match.player1GameWins;
 
 	let outcome: MatchSideOutcome = 'pending';
-	if (match.isBye)
+	if (match.isBye) {
 		outcome = 'bye';
-	else if (match.hasResult && playerGameWins != null && opponentGameWins != null)
-		outcome = playerGameWins > opponentGameWins ? 'win' : playerGameWins < opponentGameWins ? 'loss' : 'draw';
+	}
+	else if (match.hasResult && playerGameWins != null && opponentGameWins != null) {
+		outcome = playerGameWins > opponentGameWins
+			? 'win'
+			: playerGameWins < opponentGameWins
+				? 'loss'
+				: 'draw';
+	}
 
-	return { outcome, playerGameWins, opponentGameWins, gameDraws: match.gameDraws, hasResult: match.hasResult };
+	return {
+		outcome,
+		playerGameWins,
+		opponentGameWins,
+		gameDraws: match.gameDraws,
+		hasResult: match.hasResult,
+	};
 }
 
 /**
@@ -47,5 +59,7 @@ export function readMatchFromPlayerSide(match: MatchResultFacts, playerId: numbe
 export function formatGameScore(side: MatchSide): string | null {
 	if (side.outcome === 'bye' || !side.hasResult || side.playerGameWins == null || side.opponentGameWins == null)
 		return null;
-	return `${side.playerGameWins}-${side.opponentGameWins}${side.gameDraws ? `-${side.gameDraws}` : ''}`;
+	return `${side.playerGameWins}-${side.opponentGameWins}${side.gameDraws
+		? `-${side.gameDraws}`
+		: ''}`;
 }

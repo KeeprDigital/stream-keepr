@@ -223,10 +223,14 @@ export function inspectTemplateDocument(document: unknown): TemplateDocumentInsp
 				references.push({ path, reference });
 			for (const key of Object.keys(value)) {
 				if (UNSAFE_PROPERTY_NAMES.has(key)) {
-					reject('invalid-template-document', path ? `${path}.${key}` : key, 'Template document declares an unsafe property name');
+					reject('invalid-template-document', path
+						? `${path}.${key}`
+						: key, 'Template document declares an unsafe property name');
 					continue;
 				}
-				walk(value[key], path ? `${path}.${key}` : key, depth + 1, isResourceProperty(key));
+				walk(value[key], path
+					? `${path}.${key}`
+					: key, depth + 1, isResourceProperty(key));
 			}
 			return;
 		}
@@ -306,7 +310,9 @@ function supportedCapabilityVersion(
 ): number | undefined {
 	switch (requirement.capability) {
 		case 'application-font':
-			return (GRAPHIC_FONT_IDS as readonly string[]).includes(requirement.identity) ? 1 : undefined;
+			return (GRAPHIC_FONT_IDS as readonly string[]).includes(requirement.identity)
+				? 1
+				: undefined;
 		case 'host-vocabulary':
 			return CAPABILITY_VOCABULARY[packageKind] === 'feature-match'
 				? supportedFeatureMatchLayoutVocabularyVersion(requirement.identity)
@@ -371,7 +377,9 @@ export function inspectTemplatePackageCapabilities(
 	}
 	return {
 		issues,
-		declarations: [...declarations.values()]
+		declarations: [
+			...declarations.values(),
+		]
 			.map(declaration => ({
 				...declaration,
 				requiredBy: [...declaration.requiredBy].sort(),
@@ -446,8 +454,13 @@ export function groupTemplatePackageRequirements(
 	}
 	return {
 		issues,
-		grouped: [...grouped.values()]
-			.map(entry => ({ ...entry, slots: [...entry.slots].sort() }))
+		grouped: [
+			...grouped.values(),
+		]
+			.map(entry => ({
+				...entry,
+				slots: [...entry.slots].sort(),
+			}))
 			.sort((left, right) => packagedRevisionKey(left.reference).localeCompare(packagedRevisionKey(right.reference))),
 	};
 }
@@ -523,7 +536,9 @@ export function planTemplatePackage(input: {
 			entry: templatePackageContentEntry(revision.digest),
 		});
 	}
-	const contentList = [...contents.values()]
+	const contentList = [
+		...contents.values(),
+	]
 		.sort((left, right) => left.digest.localeCompare(right.digest));
 
 	const packagedAssets: TemplatePackageAsset[] = input.revisions.map((revision, index) => ({
@@ -544,7 +559,9 @@ export function planTemplatePackage(input: {
 		},
 		facts: revision.facts,
 		compatibilityProfile: revision.compatibilityProfile,
-		content: { entry: templatePackageContentEntry(revision.digest) },
+		content: {
+			entry: templatePackageContentEntry(revision.digest),
+		},
 		requiredBy: revision.requiredBy,
 	}));
 
@@ -569,7 +586,9 @@ export function planTemplatePackage(input: {
 			name: input.template.name,
 			// Written only when the exporting workflow has one, so a manifest never
 			// claims a revision that means nothing.
-			...(input.template.revision === undefined ? {} : { revision: input.template.revision }),
+			...(input.template.revision === undefined
+				? {}
+				: { revision: input.template.revision }),
 			entry: TEMPLATE_PACKAGE_TEMPLATE_ENTRY,
 		},
 		packagedAssets,
@@ -632,7 +651,10 @@ export function planTemplatePackage(input: {
 	}
 
 	return {
-		manifest: { ...manifest, totals: { ...totals } },
+		manifest: {
+			...manifest,
+			totals: { ...totals },
+		},
 		manifestBytes,
 		templateBytes,
 		contents: contentList,

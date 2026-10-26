@@ -22,7 +22,11 @@ const BOB = talent(12, 'Bob');
 const BOB_AGAIN = talent(13, 'Bob');
 
 mockNuxtImport('useOverlay', () => () => ({
-	create: () => ({ open: () => ({ result: Promise.resolve(true) }) }),
+	create: () => ({
+		open: () => ({
+			result: Promise.resolve(true),
+		}),
+	}),
 }));
 mockNuxtImport('onBeforeRouteLeave', () => () => {});
 
@@ -60,7 +64,12 @@ const UButtonStub = defineComponent({
 
 const UDropdownMenuStub = defineComponent({
 	name: 'UDropdownMenu',
-	props: { items: { type: Array, default: () => [] } },
+	props: {
+		items: {
+			type: Array,
+			default: () => [],
+		},
+	},
 	template: '<div data-menu><slot /></div>',
 });
 
@@ -71,7 +80,9 @@ const UTooltipStub = defineComponent({
 
 const UModalStub = defineComponent({
 	name: 'UModal',
-	props: { open: { type: Boolean, default: false } },
+	props: {
+		open: { type: Boolean, default: false },
+	},
 	template: '<section v-if="open" data-editor><slot name="body" /><slot name="footer" /></section>',
 });
 
@@ -93,7 +104,9 @@ const UFormFieldStub = defineComponent({
 
 const UIconStub = defineComponent({
 	name: 'UIcon',
-	props: { name: { type: String, required: true } },
+	props: {
+		name: { type: String, required: true },
+	},
 	template: '<span :data-icon="name" />',
 });
 
@@ -113,18 +126,27 @@ const stubs = {
 enableAutoUnmount(afterEach);
 
 const componentPath = '../../../../app/components/Event/ConfigTalents.vue';
-const mountOptions = { attachTo: document.body, global: { stubs } };
+const mountOptions = {
+	attachTo: document.body,
+	global: { stubs },
+};
 
 async function mountComponent(talents: Talent[]) {
 	const { default: ConfigTalents } = await import(componentPath);
-	return mount(ConfigTalents, { ...mountOptions, props: { talents } });
+	return mount(ConfigTalents, {
+		...mountOptions,
+		props: { talents },
+	});
 }
 
 type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
 
 async function mountUnderGuard(talents: Talent[]) {
 	const { default: ConfigTalents } = await import(componentPath);
-	return mountUnderPageGuard<Wrapper>(ConfigTalents, { ...mountOptions, props: { talents } });
+	return mountUnderPageGuard<Wrapper>(ConfigTalents, {
+		...mountOptions,
+		props: { talents },
+	});
 }
 
 function chooseRowAction(wrapper: Wrapper, index: number, label: string) {
@@ -188,11 +210,13 @@ describe('event config Talents', () => {
 		await finishEditor(wrapper);
 		await button(wrapper, 'Save').trigger('click');
 
-		expect(submitted(wrapper)).toEqual([{
-			id: ALICE.id,
-			name: 'Alicia',
-			socialProfiles: { twitch: 'AliceLive', youtube: 'AliceVideo' },
-		}]);
+		expect(submitted(wrapper)).toEqual([
+			{
+				id: ALICE.id,
+				name: 'Alicia',
+				socialProfiles: { twitch: 'AliceLive', youtube: 'AliceVideo' },
+			},
+		]);
 	});
 
 	it('keeps a malformed profile error on its network field and does not stage it', async () => {
@@ -209,7 +233,9 @@ describe('event config Talents', () => {
 	});
 
 	it('replaces the complete profile set and treats a blank field as removal', async () => {
-		const wrapper = await mountComponent([talent(11, 'Alice', { twitch: 'Old', instagram: 'Kept' })]);
+		const wrapper = await mountComponent([
+			talent(11, 'Alice', { twitch: 'Old', instagram: 'Kept' }),
+		]);
 		chooseRowAction(wrapper, 0, 'Edit');
 		await flushPromises();
 
@@ -242,7 +268,9 @@ describe('event config Talents', () => {
 		await flushPromises();
 		await button(wrapper, 'Save').trigger('click');
 
-		expect(submitted(wrapper)).toEqual([{ id: BOB_AGAIN.id, name: 'Bob', socialProfiles: {} }]);
+		expect(submitted(wrapper)).toEqual([
+			{ id: BOB_AGAIN.id, name: 'Bob', socialProfiles: {} },
+		]);
 	});
 
 	// #612: the staged list used to stay as the operator first saw it, so saving
@@ -251,7 +279,9 @@ describe('event config Talents', () => {
 		const CARA = talent(14, 'Cara');
 		const wrapper = await mountComponent([ALICE, BOB]);
 		chooseRowAction(wrapper, 1, 'Remove');
-		await wrapper.setProps({ talents: [ALICE, BOB, CARA] });
+		await wrapper.setProps({
+			talents: [ALICE, BOB, CARA],
+		});
 		await flushPromises();
 		await button(wrapper, 'Save').trigger('click');
 
@@ -262,31 +292,47 @@ describe('event config Talents', () => {
 	});
 
 	it('stages only the fields edited in the open editor, keeping a colleague\'s change to the rest', async () => {
-		const wrapper = await mountComponent([talent(11, 'Alice', { twitch: 'Old' })]);
+		const wrapper = await mountComponent([
+			talent(11, 'Alice', { twitch: 'Old' }),
+		]);
 		chooseRowAction(wrapper, 0, 'Edit');
 		await flushPromises();
-		await wrapper.setProps({ talents: [talent(11, 'Alice', { twitch: 'New', x: 'Added' })] });
+		await wrapper.setProps({
+			talents: [
+				talent(11, 'Alice', { twitch: 'New', x: 'Added' }),
+			],
+		});
 		await flushPromises();
 
 		await wrapper.get('[data-field="name"] input').setValue('Alicia');
 		await finishEditor(wrapper);
 		await button(wrapper, 'Save').trigger('click');
 
-		expect(submitted(wrapper)).toEqual([{ id: 11, name: 'Alicia', socialProfiles: { twitch: 'New', x: 'Added' } }]);
+		expect(submitted(wrapper)).toEqual([
+			{
+				id: 11,
+				name: 'Alicia',
+				socialProfiles: { twitch: 'New', x: 'Added' },
+			},
+		]);
 	});
 
 	it('finishes an edit on its own row after a colleague removes an earlier one', async () => {
 		const wrapper = await mountComponent([ALICE, BOB]);
 		chooseRowAction(wrapper, 1, 'Edit');
 		await flushPromises();
-		await wrapper.setProps({ talents: [BOB] });
+		await wrapper.setProps({
+			talents: [BOB],
+		});
 		await flushPromises();
 
 		await wrapper.get('[data-field="name"] input').setValue('Robert');
 		await finishEditor(wrapper);
 		await button(wrapper, 'Save').trigger('click');
 
-		expect(submitted(wrapper)).toEqual([{ id: BOB.id, name: 'Robert', socialProfiles: {} }]);
+		expect(submitted(wrapper)).toEqual([
+			{ id: BOB.id, name: 'Robert', socialProfiles: {} },
+		]);
 	});
 
 	it('stages an edit to a Talent a colleague removed while it was open, so the save re-creates them', async () => {
@@ -300,7 +346,9 @@ describe('event config Talents', () => {
 		await finishEditor(wrapper);
 		await button(wrapper, 'Save').trigger('click');
 
-		expect(submitted(wrapper)).toEqual([{ id: ALICE.id, name: 'Alicia', socialProfiles: {} }]);
+		expect(submitted(wrapper)).toEqual([
+			{ id: ALICE.id, name: 'Alicia', socialProfiles: {} },
+		]);
 	});
 
 	it('adds a normalized Talent row with no id', async () => {
@@ -315,7 +363,10 @@ describe('event config Talents', () => {
 
 		expect(submitted(wrapper)).toEqual([
 			{ id: ALICE.id, name: 'Alice', socialProfiles: {} },
-			{ name: 'Dana', socialProfiles: { bluesky: 'dana.bsky.social' } },
+			{
+				name: 'Dana',
+				socialProfiles: { bluesky: 'dana.bsky.social' },
+			},
 		]);
 	});
 

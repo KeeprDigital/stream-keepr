@@ -92,9 +92,15 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		mappedOperationalError = true;
 	}
 	else if (cause && typeof cause === 'object' && 'code' in cause && (cause as { code: unknown }).code === 'MELEE_UPSTREAM_FAILURE') {
-		const category = 'category' in cause ? (cause as { category: unknown }).category : null;
-		error.statusCode = category === 'timeout' ? 504 : 502;
-		error.statusMessage = category === 'timeout' ? 'Gateway Timeout' : 'Bad Gateway';
+		const category = 'category' in cause
+			? (cause as { category: unknown }).category
+			: null;
+		error.statusCode = category === 'timeout'
+			? 504
+			: 502;
+		error.statusMessage = category === 'timeout'
+			? 'Gateway Timeout'
+			: 'Bad Gateway';
 		error.message = 'Melee.gg is temporarily unavailable. Try again later.';
 		hasMappedPublicServerMessage = true;
 		mappedOperationalError = true;

@@ -595,9 +595,13 @@ export function broadcastGraphicsLiveSessionModule() {
 
 		if (command.type === 'Take') {
 			await requireResolvableGraphicAssets([
-				...broadcastGraphicsGraphicAssetReferences({ graphics: [graphic] }),
+				...broadcastGraphicsGraphicAssetReferences({
+					graphics: [graphic],
+				}),
 				...broadcastGraphicsLiveSessionGraphicAssetReferences(
-					{ graphics: [graphic] },
+					{
+						graphics: [graphic],
+					},
 					session.currentState,
 				),
 			], graphicsAssets);
@@ -732,7 +736,10 @@ export function broadcastGraphicsLiveSessionModule() {
 					const due = broadcastGraphicsResolveBindingsDue(
 						recoveredBroadcastGraphicsLiveState(session.currentState),
 						graphic.id,
-						{ ...context, acceptedAt: Date.now() },
+						{
+							...context,
+							acceptedAt: Date.now(),
+						},
 					);
 					if (!due)
 						continue;

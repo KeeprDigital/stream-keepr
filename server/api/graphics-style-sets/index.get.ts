@@ -17,5 +17,7 @@ export default defineEventHandler(async (event) => {
 	await requireUserId(event);
 	const styleSets = await graphicStyleSetService().findAll();
 
-	return { styleSets: styleSets.map(mapGraphicStyleSetToSummary) };
+	return {
+		styleSets: styleSets.map(mapGraphicStyleSetToSummary),
+	};
 });

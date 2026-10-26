@@ -439,10 +439,13 @@ export function carriedForwardBroadcastGraphicsLiveState(raw: unknown): Broadcas
 	// is new, because an object literal built inside `Object.fromEntries(…map(…))`
 	// has no contextual type and nothing was checking its keys at all.
 	const inputs = Object.fromEntries(
-		Object.entries(recovered.inputs).map(([graphicId, stored]) => [graphicId, Object.assign(
-			createInitialBroadcastGraphicInputsState(),
+		Object.entries(recovered.inputs).map(([graphicId, stored]) => [
+			graphicId,
+			Object.assign(
+				createInitialBroadcastGraphicInputsState(),
 			{ working: stored.working ?? {} } satisfies Partial<NormalizedBroadcastGraphicInputsState>,
-		)]),
+			),
+		]),
 	);
 
 	return Object.assign(createInitialBroadcastGraphicsLiveState(), {

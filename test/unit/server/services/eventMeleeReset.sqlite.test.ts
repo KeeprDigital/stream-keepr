@@ -135,13 +135,19 @@ describe('eventService Melee config reset SQLite integration', () => {
 				format_name, player1_id, player2_id, player1_data, player2_data, best_of,
 				sort_order, player_display_mode, active_session_id
 			) values (10, 1, 11, 'melee-match', 'melee', 7, 'Round 3', 'modern', 21, 22, ?, ?, 5, 4, 'score', 100)`,
-			args: [JSON.stringify({ name: 'Player One' }), JSON.stringify({ name: 'Player Two' })],
+			args: [
+				JSON.stringify({ name: 'Player One' }),
+				JSON.stringify({ name: 'Player Two' }),
+			],
 		});
 		await client.execute({
 			sql: `insert into feature_match_sessions (
 				id, event_id, slot_id, status, source_snapshot, current_state, sequence
 			) values (100, 1, 10, 'active', ?, ?, 7)`,
-			args: [JSON.stringify({ old: 'snapshot' }), JSON.stringify({ old: 'state' })],
+			args: [
+				JSON.stringify({ old: 'snapshot' }),
+				JSON.stringify({ old: 'state' }),
+			],
 		});
 		await client.execute(`insert into live_state_command_receipts (
 			event_id, aggregate_kind, aggregate_id, command_id, command_type, content_key, sequence
@@ -208,7 +214,9 @@ describe('eventService Melee config reset SQLite integration', () => {
 
 		await client.execute(`drop trigger reject_replacement_session_event`);
 		await expect(eventService().updateMeleeConfig(1, input)).resolves.toEqual({
-			clearedScreens: [expect.objectContaining({ id: 30, stateVersion: 3 })],
+			clearedScreens: [
+				expect.objectContaining({ id: 30, stateVersion: 3 }),
+			],
 			keptStructure: { keptPhases: [], keptRounds: [] },
 		});
 		expect(await firstRow(`select mode_configs from screens where id = 30`))
@@ -259,10 +267,19 @@ describe('eventService Melee config reset SQLite integration', () => {
 		});
 		expect(slotAfterSuccess.active_session_id).not.toBe(100);
 		expect(await firstRow(`select status, sequence, closed_at from feature_match_sessions where id = 100`))
-			.toMatchObject({ status: 'closed', sequence: 7, closed_at: expect.any(Number) });
+			.toMatchObject({
+				status: 'closed',
+				sequence: 7,
+				closed_at: expect.any(Number),
+			});
 
 		const newSession = await firstRow(`select * from feature_match_sessions where id = ${Number(slotAfterSuccess.active_session_id)}`);
-		expect(newSession).toMatchObject({ status: 'active', sequence: 1, slot_id: 10, event_id: 1 });
+		expect(newSession).toMatchObject({
+			status: 'active',
+			sequence: 1,
+			slot_id: 10,
+			event_id: 1,
+		});
 		expect(JSON.parse(String(newSession.source_snapshot))).toMatchObject({
 			eventId: 1,
 			slotId: 10,

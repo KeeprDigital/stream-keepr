@@ -82,8 +82,16 @@ export function useScreenRepository() {
 		stateVersion: number = 0,
 	): Promise<Screen> => {
 		return await eventData.command<Screen>(
-			{ eventId, resourcePath: 'screens', resourceId: screenId, suffix: `config/${mode}` },
-			{ method: 'PATCH', body: { ...config, stateVersion } },
+			{
+				eventId,
+				resourcePath: 'screens',
+				resourceId: screenId,
+				suffix: `config/${mode}`,
+			},
+			{
+				method: 'PATCH',
+				body: { ...config, stateVersion },
+			},
 		);
 	};
 
@@ -94,8 +102,16 @@ export function useScreenRepository() {
 		stateVersion: number = 0,
 	): Promise<Screen> => {
 		return await eventData.command<Screen>(
-			{ eventId, resourcePath: 'screens', resourceId: screenId, suffix: 'screen-config' },
-			{ method: 'PATCH', body: { ...config, stateVersion } },
+			{
+				eventId,
+				resourcePath: 'screens',
+				resourceId: screenId,
+				suffix: 'screen-config',
+			},
+			{
+				method: 'PATCH',
+				body: { ...config, stateVersion },
+			},
 		);
 	};
 

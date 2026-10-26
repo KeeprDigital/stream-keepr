@@ -103,10 +103,12 @@ describe('static font ingestion through the Graphics Asset Library public module
 				},
 			},
 		});
-		await expect(assets.listGraphicAssets({})).resolves.toMatchObject([{
-			kind: 'font',
-			revisionId: completed.result!.revisionId,
-		}]);
+		await expect(assets.listGraphicAssets({})).resolves.toMatchObject([
+			{
+				kind: 'font',
+				revisionId: completed.result!.revisionId,
+			},
+		]);
 		const resolved = await assets.resolveGraphicAssetRevision({
 			assetId: completed.result!.assetId,
 			revisionId: completed.result!.revisionId,
@@ -161,7 +163,9 @@ describe('static font ingestion through the Graphics Asset Library public module
 			report: {
 				outcome: 'rejected',
 				compatibilityProfile: 'static-font-v1',
-				issues: [{ code: 'browser-font-render-failed' }],
+				issues: [
+					{ code: 'browser-font-render-failed' },
+				],
 			},
 		});
 		await expect(assets.listGraphicAssets({})).resolves.toEqual([]);
@@ -197,7 +201,9 @@ describe('static font ingestion through the Graphics Asset Library public module
 			stage: 'failed',
 			report: {
 				outcome: 'rejected',
-				issues: [{ code: 'browser-font-render-failed' }],
+				issues: [
+					{ code: 'browser-font-render-failed' },
+				],
 			},
 		});
 	});
@@ -224,7 +230,9 @@ describe('static font ingestion through the Graphics Asset Library public module
 			report: {
 				outcome: 'rejected',
 				compatibilityProfile: 'static-font-v1',
-				issues: [{ code: 'font-table-invalid' }],
+				issues: [
+					{ code: 'font-table-invalid' },
+				],
 			},
 		});
 	});
@@ -283,12 +291,14 @@ describe('static font ingestion through the Graphics Asset Library public module
 			outcome: 'revision-created',
 			assetId: original.result?.assetId,
 		});
-		await expect(assets.listGraphicAssets({})).resolves.toMatchObject([{
-			id: original.result?.assetId,
-			kind: 'font',
-			revisionId: completed.result?.revisionId,
-			revisionNumber: 2,
-		}]);
+		await expect(assets.listGraphicAssets({})).resolves.toMatchObject([
+			{
+				id: original.result?.assetId,
+				kind: 'font',
+				revisionId: completed.result?.revisionId,
+				revisionNumber: 2,
+			},
+		]);
 		await expect(assets.resolveGraphicAssetRevision({
 			assetId: original.result!.assetId,
 			revisionId: original.result!.revisionId,

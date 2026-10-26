@@ -71,7 +71,9 @@ describe('usePlayerStore', () => {
 		});
 
 		it('increments dataVersion', async () => {
-			mockRepo.list.mockResolvedValue([createMockPlayer()]);
+			mockRepo.list.mockResolvedValue([
+				createMockPlayer(),
+			]);
 			const before = store.dataVersion;
 
 			await store.loadPlayersByEventId(1);
@@ -213,7 +215,9 @@ describe('usePlayerStore', () => {
 				store.players = [];
 				const before = store.dataVersion;
 
-				ablyCallbacks.player!['player:created']!({ player: createMockPlayer({ id: 10 }) });
+				ablyCallbacks.player!['player:created']!({
+					player: createMockPlayer({ id: 10 }),
+				});
 
 				expect(store.dataVersion).toBe(before + 1);
 			});
@@ -231,7 +235,9 @@ describe('usePlayerStore', () => {
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 				store.players = [];
 
-				ablyCallbacks.player!['player:created']!({ player: createMockPlayer({ id: 10 }) });
+				ablyCallbacks.player!['player:created']!({
+					player: createMockPlayer({ id: 10 }),
+				});
 
 				expect(store.players).toHaveLength(0);
 			});
@@ -239,27 +245,39 @@ describe('usePlayerStore', () => {
 
 		describe('player:updated', () => {
 			it('updates existing player from remote message', () => {
-				store.players = [createMockPlayer({ id: 10, name: 'Old' })];
+				store.players = [
+					createMockPlayer({ id: 10, name: 'Old' }),
+				];
 
-				ablyCallbacks.player!['player:updated']!({ player: createMockPlayer({ id: 10, name: 'New' }) });
+				ablyCallbacks.player!['player:updated']!({
+					player: createMockPlayer({ id: 10, name: 'New' }),
+				});
 
 				expect(store.players[0]!.name).toBe('New');
 			});
 
 			it('increments dataVersion on update', () => {
-				store.players = [createMockPlayer({ id: 10, name: 'Old' })];
+				store.players = [
+					createMockPlayer({ id: 10, name: 'Old' }),
+				];
 				const before = store.dataVersion;
 
-				ablyCallbacks.player!['player:updated']!({ player: createMockPlayer({ id: 10, name: 'New' }) });
+				ablyCallbacks.player!['player:updated']!({
+					player: createMockPlayer({ id: 10, name: 'New' }),
+				});
 
 				expect(store.dataVersion).toBe(before + 1);
 			});
 
 			it('skips when isSelfOrigin returns true', () => {
-				store.players = [createMockPlayer({ id: 10, name: 'Old' })];
+				store.players = [
+					createMockPlayer({ id: 10, name: 'Old' }),
+				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
-				ablyCallbacks.player!['player:updated']!({ player: createMockPlayer({ id: 10, name: 'New' }) });
+				ablyCallbacks.player!['player:updated']!({
+					player: createMockPlayer({ id: 10, name: 'New' }),
+				});
 
 				expect(store.players[0]!.name).toBe('Old');
 			});
@@ -267,7 +285,9 @@ describe('usePlayerStore', () => {
 
 		describe('player:deleted', () => {
 			it('removes player from remote message', () => {
-				store.players = [createMockPlayer({ id: 10 })];
+				store.players = [
+					createMockPlayer({ id: 10 }),
+				];
 
 				ablyCallbacks.player!['player:deleted']!({ playerId: 10 });
 
@@ -275,7 +295,9 @@ describe('usePlayerStore', () => {
 			});
 
 			it('increments dataVersion on delete', () => {
-				store.players = [createMockPlayer({ id: 10 })];
+				store.players = [
+					createMockPlayer({ id: 10 }),
+				];
 				const before = store.dataVersion;
 
 				ablyCallbacks.player!['player:deleted']!({ playerId: 10 });
@@ -284,7 +306,9 @@ describe('usePlayerStore', () => {
 			});
 
 			it('skips when isSelfOrigin returns true', () => {
-				store.players = [createMockPlayer({ id: 10 })];
+				store.players = [
+					createMockPlayer({ id: 10 }),
+				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
 				ablyCallbacks.player!['player:deleted']!({ playerId: 10 });
@@ -298,7 +322,9 @@ describe('usePlayerStore', () => {
 
 	describe('$reset', () => {
 		it('clears all state including dataVersion', () => {
-			store.players = [createMockPlayer()];
+			store.players = [
+				createMockPlayer(),
+			];
 			store.error = 'some error';
 
 			store.$reset();

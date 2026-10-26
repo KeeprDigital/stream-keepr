@@ -15,7 +15,11 @@ const NOW = 1_000_000.25; // fractional, like a synchronized clock estimate
 
 const paginated = SCREEN_MODE_VALUES.flatMap((mode) => {
 	const pageRotation = SCREEN_MODES[mode].pageRotation;
-	return pageRotation ? [{ mode, pageRotation, declared: `${mode}.${pageRotation.pageSize}` }] : [];
+	return pageRotation
+		? [
+				{ mode, pageRotation, declared: `${mode}.${pageRotation.pageSize}` },
+			]
+		: [];
 });
 
 describe('screen Mode Page Rotation', () => {

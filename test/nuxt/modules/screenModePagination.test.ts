@@ -47,7 +47,12 @@ function harness(overrides: HarnessOverrides = {}) {
 		persistPage,
 		persistRotationAnchor,
 	});
-	return { pagination, persistPage, persistRotationAnchor, state };
+	return {
+		pagination,
+		persistPage,
+		persistRotationAnchor,
+		state,
+	};
 }
 
 async function advance(ms: number) {

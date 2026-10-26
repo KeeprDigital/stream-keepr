@@ -28,7 +28,12 @@ describe('failureSentence', () => {
 		it('quotes the setting a 503 says was never configured', () => {
 			const failure = transportFailure({
 				status: 503,
-				body: { error: true, statusCode: 503, statusMessage: 'Service Unavailable', message: MISSING_SETTING },
+				body: {
+					error: true,
+					statusCode: 503,
+					statusMessage: 'Service Unavailable',
+					message: MISSING_SETTING,
+				},
 				request: `[GET] "/api/events/1/screens/1/asset-capability"`,
 			});
 
@@ -104,7 +109,10 @@ describe('failureSentence', () => {
 		it('reads a failure carrying statusCode and no status at all', () => {
 			const rebuilt = Object.assign(
 				new Error(`[GET] "/api/events/1/screens/1/asset-capability": 503 Service Unavailable`),
-				{ statusCode: 503, data: { message: MISSING_SETTING } },
+				{
+					statusCode: 503,
+					data: { message: MISSING_SETTING },
+				},
 			);
 
 			expect((rebuilt as { status?: number }).status).toBeUndefined();

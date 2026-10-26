@@ -31,7 +31,9 @@ const activeListId = ref<number | null>(null);
 const selectedRoundId = ref<number | undefined>(undefined);
 const standingsLoading = ref(false);
 const standingsError = ref<string | null>(null);
-const selectedRound = computed(() => selectedRoundId.value ? roundStore.getRoundById(selectedRoundId.value) : null);
+const selectedRound = computed(() => selectedRoundId.value
+	? roundStore.getRoundById(selectedRoundId.value)
+	: null);
 const selectedRoundCanSync = computed(() => !!(eventStore.event?.meleeEnabled && selectedRound.value?.externalSource === 'melee'));
 
 const roundOptions = computed(() => {
@@ -117,7 +119,14 @@ const displayedPlayers = computed(() => {
 		const snapshot = override.get(player.id);
 		if (!snapshot) {
 			// Player has no snapshot for this round — null out standings
-			return { ...player, wins: null, losses: null, draws: null, position: null, points: null };
+			return {
+				...player,
+				wins: null,
+				losses: null,
+				draws: null,
+				position: null,
+				points: null,
+			};
 		}
 		return {
 			...player,
@@ -131,10 +140,26 @@ const displayedPlayers = computed(() => {
 });
 
 const { eventId, initialLoading, initialError, retry } = useEventPageLoading([
-	{ consumes: 'players', isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
-	{ consumes: 'playerLists', isLoaded: () => playerListStore.isLoaded, load: id => playerListStore.loadByEventId(id) },
-	{ consumes: 'phases', isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
-	{ consumes: 'rounds', isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },
+	{
+		consumes: 'players',
+		isLoaded: () => playerStore.isLoaded,
+		load: id => playerStore.loadPlayersByEventId(id),
+	},
+	{
+		consumes: 'playerLists',
+		isLoaded: () => playerListStore.isLoaded,
+		load: id => playerListStore.loadByEventId(id),
+	},
+	{
+		consumes: 'phases',
+		isLoaded: () => phaseStore.isLoaded,
+		load: id => phaseStore.loadPhasesByEventId(id),
+	},
+	{
+		consumes: 'rounds',
+		isLoaded: () => roundStore.isLoaded,
+		load: id => roundStore.loadRoundsByEventId(id),
+	},
 ], async (id) => {
 	if (!screenStore.isLoaded || screenStore.currentEventId !== id) {
 		await screenStore.loadScreensByEventId(id);
@@ -145,7 +170,11 @@ const { eventId, initialLoading, initialError, retry } = useEventPageLoading([
 useConsumedEventData(['screens']);
 
 const hasPlayers = computed(() => playerStore.players.length > 0);
-const pageState = computed(() => initialError.value ? 'ready' : initialLoading.value ? 'loading' : (hasPlayers.value ? 'ready' : 'empty'));
+const pageState = computed(() => initialError.value
+	? 'ready'
+	: initialLoading.value
+		? 'loading'
+		: (hasPlayers.value ? 'ready' : 'empty'));
 
 // ── List Tab Handlers ──
 
@@ -287,7 +316,11 @@ const bulkAddToListItems = computed<DropdownMenuItem[][]>(() => {
 	}));
 
 	if (items.length === 0) {
-		return [[{ label: 'No lists created', disabled: true }]];
+		return [
+			[
+				{ label: 'No lists created', disabled: true },
+			],
+		];
 	}
 
 	return [items];

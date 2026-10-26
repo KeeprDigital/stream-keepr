@@ -113,7 +113,9 @@ export function distinctPixelWebp(marker) {
 	const chunkHeader = Buffer.alloc(8);
 	chunkHeader.write('SKAC', 0, 'ascii');
 	chunkHeader.writeUInt32LE(payload.byteLength, 4);
-	const padding = payload.byteLength % 2 === 1 ? Buffer.alloc(1) : Buffer.alloc(0);
+	const padding = payload.byteLength % 2 === 1
+		? Buffer.alloc(1)
+		: Buffer.alloc(0);
 	const combined = Buffer.concat([
 		Buffer.from(BASE_PIXEL_WEBP),
 		chunkHeader,
@@ -156,7 +158,9 @@ async function observe(response) {
 export async function openInstallation(origin, { deployed = false } = {}) {
 	const sessionCookies = await openOperatorSession(origin, {
 		deployed,
-		supplied: deployed ? {} : suppliedNames(readLocalConfigurationFiles()),
+		supplied: deployed
+			? {}
+			: suppliedNames(readLocalConfigurationFiles()),
 	});
 
 	// The operator's session is the whole identity since ADR-0010's cutover
@@ -178,8 +182,12 @@ export async function openInstallation(origin, { deployed = false } = {}) {
 		// Unconditionally unless asked otherwise, because the boundary is
 		// unconditional: a request without this is a 401 from every path here but
 		// the Screen Output ones, where an extra cookie is ignored.
-		if (!init.anonymous)
-			headers.set('cookie', [headers.get('cookie'), ...sessionCookies].filter(Boolean).join('; '));
+		if (!init.anonymous) {
+			headers.set('cookie', [
+				headers.get('cookie'),
+				...sessionCookies,
+			].filter(Boolean).join('; '));
+		}
 		let body = init.body;
 		if (body !== undefined && !(body instanceof Uint8Array)) {
 			headers.set('content-type', 'application/json');
@@ -204,10 +212,17 @@ export async function openInstallation(origin, { deployed = false } = {}) {
 				actual: observation.status,
 			});
 		}
-		return observation.bytes.byteLength === 0 ? undefined : JSON.parse(observation.text());
+		return observation.bytes.byteLength === 0
+			? undefined
+			: JSON.parse(observation.text());
 	}
 
-	return { origin, sessionCookies, request, json };
+	return {
+		origin,
+		sessionCookies,
+		request,
+		json,
+	};
 }
 
 /**
@@ -316,7 +331,10 @@ export function registerSessionSecrets(evidence, session) {
  * assembling an identity from arguments that can be separated by an edit.
  */
 export function authoredPageRequest(session, url) {
-	return { url, cookies: [...session.sessionCookies] };
+	return {
+		url,
+		cookies: [...session.sessionCookies],
+	};
 }
 
 /**
@@ -368,7 +386,9 @@ export async function provisionScreenOutputScenario(session, { label }) {
 		acceptanceRoutes.screenModeConfig(event.id, screen.id, 'feature-match-overlay'),
 		{
 			method: 'PATCH',
-			body: { layout: featureMatchLayoutReferencing({ assetId, revisionId }) },
+			body: {
+				layout: featureMatchLayoutReferencing({ assetId, revisionId }),
+			},
 		},
 	);
 

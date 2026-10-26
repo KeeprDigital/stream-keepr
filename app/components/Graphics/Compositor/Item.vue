@@ -53,13 +53,17 @@ watchEffect(() => {
 });
 
 function pixelValue(value: unknown): number {
-	return typeof value === 'string' ? Number.parseFloat(value) || 0 : 0;
+	return typeof value === 'string'
+		? Number.parseFloat(value) || 0
+		: 0;
 }
 
 const surface = computed(() => props.render.surface);
 /** A Text Graphic Item always has runs; a template with no placeholder has one. */
 const textSegments = computed<GraphicTextRenderSegment[]>(() =>
-	props.render.textSegments ?? [{ text: props.render.text ?? '' }],
+	props.render.textSegments ?? [
+		{ text: props.render.text ?? '' },
+	],
 );
 
 /**
@@ -100,7 +104,9 @@ watch(() => props.render.text, (next, previous) => {
 
 const lifeClass = computed(() => {
 	const animation = lifeChange.value?.animation;
-	return animation && animation !== 'none' ? `graphics-compositor-item--life-${animation}` : undefined;
+	return animation && animation !== 'none'
+		? `graphics-compositor-item--life-${animation}`
+		: undefined;
 });
 
 const lifeStyle = computed(() => lifeChange.value

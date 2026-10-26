@@ -82,11 +82,15 @@ function handleSet(value: number) {
 }
 
 const activeGradientDir = computed(() => {
-	return props.playerSide === 'player1' ? 'to left' : 'to right';
+	return props.playerSide === 'player1'
+		? 'to left'
+		: 'to right';
 });
 
 const panelStyle = computed(() => ({
-	...(isActive.value ? { '--active-dir': activeGradientDir.value } : {}),
+	...(isActive.value
+		? { '--active-dir': activeGradientDir.value }
+		: {}),
 }));
 </script>
 

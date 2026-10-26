@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 
-const { mockFindById } = vi.hoisted(() => ({ mockFindById: vi.fn() }));
+const { mockFindById } = vi.hoisted(() => ({
+	mockFindById: vi.fn(),
+}));
 
 vi.mock('~~/server/services/event', () => ({
 	eventService: () => ({ findById: mockFindById }),
 }));
 vi.mock('~~/server/schemas/api/event', () => ({
-	eventParamsSchema: { parse: (input: unknown) => input },
+	eventParamsSchema: {
+		parse: (input: unknown) => input,
+	},
 }));
 
 vi.stubGlobal('defineEventHandler', vi.fn(handler => handler));

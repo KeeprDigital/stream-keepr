@@ -149,7 +149,9 @@ function decodedPathSegments(url: URL, network: SupportedSocialNetwork) {
 }
 
 function normalizeHandle(network: SupportedSocialNetwork, handle: string | undefined) {
-	const normalized = handle?.startsWith('@') ? handle.slice(1) : handle;
+	const normalized = handle?.startsWith('@')
+		? handle.slice(1)
+		: handle;
 	if (!normalized || normalized.length > MAX_SOCIAL_PROFILE_HANDLE_LENGTH || /\s/.test(normalized))
 		throw inputError(network);
 
@@ -159,7 +161,9 @@ function normalizeHandle(network: SupportedSocialNetwork, handle: string | undef
 function handleFromProfileUrl(network: SupportedSocialNetwork, value: string) {
 	let url: URL;
 	try {
-		url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `https://${value}`);
+		url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(value)
+			? value
+			: `https://${value}`);
 	}
 	catch {
 		throw inputError(network);
@@ -188,7 +192,9 @@ function handleFromProfileUrl(network: SupportedSocialNetwork, value: string) {
 				: undefined;
 			break;
 		default:
-			handle = segments.length === 1 ? segments[0] : undefined;
+			handle = segments.length === 1
+				? segments[0]
+				: undefined;
 	}
 
 	return normalizeHandle(network, handle);

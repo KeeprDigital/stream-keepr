@@ -20,11 +20,16 @@ const global = {
 		UFormField: SlotOnlyStub,
 		UFieldGroup: SlotOnlyStub,
 		USwitch: defineComponent({
-			props: { modelValue: { type: Boolean, required: false } },
+			props: {
+				modelValue: { type: Boolean, required: false },
+			},
 			emits: ['update:modelValue'],
 			template: '<button type="button" @click="$emit(\'update:modelValue\', !modelValue)" />',
 		}),
-		UButton: defineComponent({ emits: ['click'], template: '<button type="button" @click="$emit(\'click\')"><slot /></button>' }),
+		UButton: defineComponent({
+			emits: ['click'],
+			template: '<button type="button" @click="$emit(\'click\')"><slot /></button>',
+		}),
 	},
 };
 
@@ -50,7 +55,9 @@ describe('graphicsPreviewPanel', () => {
 
 		await wrapper.get('[aria-label="Key preview output"]').trigger('click');
 
-		expect(wrapper.emitted('update:output')).toEqual([['key']]);
+		expect(wrapper.emitted('update:output')).toEqual([
+			['key'],
+		]);
 	});
 
 	it('turns item guides off and safe-area guides on', async () => {
@@ -59,8 +66,12 @@ describe('graphicsPreviewPanel', () => {
 		await wrapper.get('[data-testid="preview-item-guides"]').trigger('click');
 		await wrapper.get('[data-testid="preview-safe-area-guides"]').trigger('click');
 
-		expect(wrapper.emitted('update:itemGuides')).toEqual([[false]]);
-		expect(wrapper.emitted('update:safeAreaGuides')).toEqual([[true]]);
+		expect(wrapper.emitted('update:itemGuides')).toEqual([
+			[false],
+		]);
+		expect(wrapper.emitted('update:safeAreaGuides')).toEqual([
+			[true],
+		]);
 	});
 
 	it('fits the viewport to the canvas aspect ratio over a transparency backdrop', () => {

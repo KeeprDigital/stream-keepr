@@ -6,7 +6,9 @@ const mockSet = vi.fn(() => ({ where: mockWhere }));
 const mockUpdate = vi.fn(() => ({ set: mockSet }));
 const mockProtectMeleeClientSecret = vi.fn();
 
-vi.mock('~~/server/db', () => ({ db: { update: mockUpdate } }));
+vi.mock('~~/server/db', () => ({
+	db: { update: mockUpdate },
+}));
 vi.mock('drizzle-orm', () => ({
 	and: (...conditions: unknown[]) => ({ and: conditions }),
 	eq: (field: unknown, value: unknown) => ({ field, value }),
@@ -27,7 +29,9 @@ describe('rewrapMeleeClientSecret', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockProtectMeleeClientSecret.mockResolvedValue('new-envelope');
-		mockReturning.mockResolvedValue([{ id: 42 }]);
+		mockReturning.mockResolvedValue([
+			{ id: 42 },
+		]);
 	});
 
 	it('updates only the Event that still has the credential that was read', async () => {

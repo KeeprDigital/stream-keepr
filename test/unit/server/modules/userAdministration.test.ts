@@ -73,13 +73,22 @@ function fakePort(seed: AdministeredUser[] = []): FakePort {
 		minPasswordLength: 8,
 		maxPasswordLength: 128,
 		listUsers: async limit => ({
-			users: [...accounts.values()].slice(0, limit),
+			users: [
+				...accounts.values(),
+			].slice(0, limit),
 			total: accounts.size,
 		}),
-		findByEmail: async email => [...accounts.values()].find(account => account.email === email) ?? null,
+		findByEmail: async email => [
+			...accounts.values(),
+		].find(account => account.email === email) ?? null,
 		findById: async userId => accounts.get(userId) ?? null,
 		createUser: async ({ email, name }) => {
-			const created = accountFor({ id: `user-${accounts.size + 1}`, email, name, role: 'user' });
+			const created = accountFor({
+				id: `user-${accounts.size + 1}`,
+				email,
+				name,
+				role: 'user',
+			});
 			accounts.set(created.id, created);
 			return created;
 		},
@@ -91,7 +100,10 @@ function fakePort(seed: AdministeredUser[] = []): FakePort {
 			return `token-for-${userId}-${issuedTokens.length}`;
 		},
 		setBan: async (userId, ban) => {
-			const updated = accountFor({ ...accounts.get(userId), ...ban });
+			const updated = accountFor({
+				...accounts.get(userId),
+				...ban,
+			});
 			accounts.set(userId, updated);
 			return updated;
 		},
@@ -105,10 +117,17 @@ function fakePort(seed: AdministeredUser[] = []): FakePort {
 
 describe('listing the accounts an installation holds', () => {
 	it('reports the true total alongside the capped rows', async () => {
-		const port = fakePort([accountFor()]);
+		const port = fakePort([
+			accountFor(),
+		]);
 		// A listing that reported `users.length` as the total would say an
 		// installation holds exactly as many accounts as it managed to show.
-		port.listUsers = async () => ({ users: [accountFor()], total: 412 });
+		port.listUsers = async () => ({
+			users: [
+				accountFor(),
+			],
+			total: 412,
+		});
 
 		const listing = await listUserAccounts(port);
 
@@ -146,7 +165,12 @@ describe('creating an account', () => {
 		// invite shape is that the first password is chosen by the person who
 		// will use it, so no administrator is left holding one that works.
 		expect(port.setPasswords).toEqual([]);
-		expect(port.issuedTokens).toEqual([{ userId: created.user.id, expiresAt: expect.any(Date) }]);
+		expect(port.issuedTokens).toEqual([
+			{
+				userId: created.user.id,
+				expiresAt: expect.any(Date),
+			},
+		]);
 	});
 
 	it('hands over an absolute link on the origin the request arrived at', async () => {
@@ -220,7 +244,9 @@ describe('creating an account', () => {
 
 describe('issuing a reset link for an existing account', () => {
 	it('mints a fresh one without disturbing the account', async () => {
-		const port = fakePort([accountFor()]);
+		const port = fakePort([
+			accountFor(),
+		]);
 		port.sessionCounts.set('user-1', 2);
 
 		const issued = await issuePasswordResetLinkForUser(port, 'user-1', CONTEXT);
@@ -248,14 +274,18 @@ describe('setting a password outright', () => {
 	let port: FakePort;
 
 	beforeEach(() => {
-		port = fakePort([accountFor()]);
+		port = fakePort([
+			accountFor(),
+		]);
 	});
 
 	it('sets it on the named account', async () => {
 		const outcome = await setUserAccountPassword(port, 'user-1', 'a-long-enough-password');
 
 		expect(outcome.user.id).toBe('user-1');
-		expect(port.setPasswords).toEqual([{ userId: 'user-1', password: 'a-long-enough-password' }]);
+		expect(port.setPasswords).toEqual([
+			{ userId: 'user-1', password: 'a-long-enough-password' },
+		]);
 	});
 
 	it('refuses a password shorter than Better Auth is configured to accept', async () => {
@@ -287,7 +317,9 @@ describe('banning an account', () => {
 	let port: FakePort;
 
 	beforeEach(() => {
-		port = fakePort([accountFor()]);
+		port = fakePort([
+			accountFor(),
+		]);
 		port.sessionCounts.set('user-1', 3);
 	});
 
@@ -325,7 +357,9 @@ describe('banning an account', () => {
 
 describe('revoking sessions on their own', () => {
 	it('reports how many were ended, which is what makes the action legible', async () => {
-		const port = fakePort([accountFor()]);
+		const port = fakePort([
+			accountFor(),
+		]);
 		port.sessionCounts.set('user-1', 2);
 
 		const outcome = await revokeUserSessions(port, 'user-1');
@@ -337,7 +371,9 @@ describe('revoking sessions on their own', () => {
 	});
 
 	it('leaves the account able to sign straight back in', async () => {
-		const port = fakePort([accountFor()]);
+		const port = fakePort([
+			accountFor(),
+		]);
 
 		const outcome = await revokeUserSessions(port, 'user-1');
 

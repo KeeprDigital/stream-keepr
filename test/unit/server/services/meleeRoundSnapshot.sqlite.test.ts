@@ -49,12 +49,40 @@ describe('meleeRoundSnapshotService JSON bulk SQLite integration', () => {
 			eventId: 1,
 			roundId: 1,
 			matches: [
-				{ eventId: 1, roundId: 1, externalId: 'match-1', externalSource: 'melee', player1Data: { name: 'One' }, sortOrder: 0 },
-				{ eventId: 1, roundId: 1, externalId: 'match-2', externalSource: 'melee', player1Data: { name: 'Two' }, sortOrder: 1 },
+				{
+					eventId: 1,
+					roundId: 1,
+					externalId: 'match-1',
+					externalSource: 'melee',
+					player1Data: { name: 'One' },
+					sortOrder: 0,
+				},
+				{
+					eventId: 1,
+					roundId: 1,
+					externalId: 'match-2',
+					externalSource: 'melee',
+					player1Data: { name: 'Two' },
+					sortOrder: 1,
+				},
 			],
 			standings: [
-				{ playerId: 10, wins: 1, losses: 0, draws: 0, position: 1, points: 3 },
-				{ playerId: 20, wins: 0, losses: 1, draws: 0, position: 2, points: 0 },
+				{
+					playerId: 10,
+					wins: 1,
+					losses: 0,
+					draws: 0,
+					position: 1,
+					points: 3,
+				},
+				{
+					playerId: 20,
+					wins: 0,
+					losses: 1,
+					draws: 0,
+					position: 2,
+					points: 0,
+				},
 			],
 		});
 		expect(first).toMatchObject({ created: 2, updated: 0, staleDeleted: 0 });
@@ -62,15 +90,26 @@ describe('meleeRoundSnapshotService JSON bulk SQLite integration', () => {
 		const second = await service.replace({
 			eventId: 1,
 			roundId: 1,
-			matches: [{
-				eventId: 1,
-				roundId: 1,
-				externalId: 'match-2',
-				externalSource: 'melee',
-				player1Data: { name: 'Two Updated' },
-				sortOrder: 0,
-			}],
-			standings: [{ playerId: 20, wins: 1, losses: 0, draws: 0, position: 1, points: 3 }],
+			matches: [
+				{
+					eventId: 1,
+					roundId: 1,
+					externalId: 'match-2',
+					externalSource: 'melee',
+					player1Data: { name: 'Two Updated' },
+					sortOrder: 0,
+				},
+			],
+			standings: [
+				{
+					playerId: 20,
+					wins: 1,
+					losses: 0,
+					draws: 0,
+					position: 1,
+					points: 3,
+				},
+			],
 		});
 		expect(second).toMatchObject({ created: 0, updated: 1, staleDeleted: 1 });
 		expect(second.matches[0]!.player1Data).toEqual({ name: 'Two Updated' });
@@ -87,8 +126,26 @@ describe('meleeRoundSnapshotService JSON bulk SQLite integration', () => {
 		const first = await service.replace({
 			eventId: 2,
 			roundId: 2,
-			matches: [{ eventId: 2, roundId: 2, externalId: 'match-2', externalSource: 'melee', player1Data: { name: 'Other Show' }, sortOrder: 0 }],
-			standings: [{ playerId: 30, wins: 1, losses: 0, draws: 0, position: 1, points: 3 }],
+			matches: [
+				{
+					eventId: 2,
+					roundId: 2,
+					externalId: 'match-2',
+					externalSource: 'melee',
+					player1Data: { name: 'Other Show' },
+					sortOrder: 0,
+				},
+			],
+			standings: [
+				{
+					playerId: 30,
+					wins: 1,
+					losses: 0,
+					draws: 0,
+					position: 1,
+					points: 3,
+				},
+			],
 		});
 		// Created, not updated: the colliding external id belongs to Event 1.
 		expect(first).toMatchObject({ created: 1, updated: 0, staleDeleted: 0 });
@@ -96,14 +153,34 @@ describe('meleeRoundSnapshotService JSON bulk SQLite integration', () => {
 		const second = await service.replace({
 			eventId: 2,
 			roundId: 2,
-			matches: [{ eventId: 2, roundId: 2, externalId: 'match-3', externalSource: 'melee', player1Data: { name: 'Replacement' }, sortOrder: 0 }],
-			standings: [{ playerId: 30, wins: 1, losses: 0, draws: 0, position: 1, points: 3 }],
+			matches: [
+				{
+					eventId: 2,
+					roundId: 2,
+					externalId: 'match-3',
+					externalSource: 'melee',
+					player1Data: { name: 'Replacement' },
+					sortOrder: 0,
+				},
+			],
+			standings: [
+				{
+					playerId: 30,
+					wins: 1,
+					losses: 0,
+					draws: 0,
+					position: 1,
+					points: 3,
+				},
+			],
 		});
 		// The stale sweep removes Event 2's own `match-2` and nothing else.
 		expect(second).toMatchObject({ created: 1, updated: 0, staleDeleted: 1 });
 
 		const eventOneMatches = await client.execute('select external_id, player1_data from matches where event_id = 1');
-		expect(eventOneMatches.rows).toMatchObject([{ external_id: 'match-2' }]);
+		expect(eventOneMatches.rows).toMatchObject([
+			{ external_id: 'match-2' },
+		]);
 		expect(JSON.parse(eventOneMatches.rows[0]!.player1_data as string)).toEqual({ name: 'Two Updated' });
 		expect((await client.execute('select count(*) as count from player_round_standings where event_id = 1')).rows[0]!.count).toBe(1);
 	});

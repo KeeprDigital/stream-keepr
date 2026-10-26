@@ -24,7 +24,13 @@ const PUBLISHED_CODES = new Set(ACCEPTANCE_FAILURE_CODES);
  * Reduce an unexpected error to something safe to print. Only the shape of the
  * failure survives; anything the error chose to say about it does not.
  */
-const UNREACHABLE = new Set(['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EHOSTUNREACH', 'ETIMEDOUT']);
+const UNREACHABLE = new Set([
+	'ECONNREFUSED',
+	'ECONNRESET',
+	'ENOTFOUND',
+	'EHOSTUNREACH',
+	'ETIMEDOUT',
+]);
 
 function unexpectedFailure(error) {
 	// `fetch` reports a transport failure as a bare TypeError and puts the
@@ -52,7 +58,9 @@ function unexpectedFailure(error) {
  * talking, and is reduced to the fact that a line could not be built.
  */
 function refusalLine(harness, error) {
-	const message = error instanceof Error ? error.message : '';
+	const message = error instanceof Error
+		? error.message
+		: '';
 	return message.startsWith(`${harness} evidence-`) && !/[/\\]/.test(message)
 		? message
 		: `${harness} evidence-report-refused`;
@@ -79,7 +87,9 @@ export function reportFailures(evidence, harness, failures) {
 	catch (error) {
 		return [
 			...failures.map(({ code }) =>
-				`${harness} ${PUBLISHED_CODES.has(code) ? code : 'evidence-unknown-code'} detail=withheld`),
+				`${harness} ${PUBLISHED_CODES.has(code)
+					? code
+					: 'evidence-unknown-code'} detail=withheld`),
 			refusalLine(harness, error),
 		].join('\n');
 	}
@@ -131,7 +141,9 @@ export async function runAcceptanceHarness({ harness, secrets = [], run }) {
 		summary = await run(context) ?? {};
 	}
 	catch (error) {
-		const failure = error instanceof AcceptanceFailure ? error : unexpectedFailure(error);
+		const failure = error instanceof AcceptanceFailure
+			? error
+			: unexpectedFailure(error);
 		failures.push({ code: failure.code, detail: failure.detail });
 	}
 

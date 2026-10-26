@@ -35,7 +35,10 @@ describe('the integration suite\'s retry of a transient 503', () => {
 	it('returns the last 503 once the attempts are spent, so its body can be reported', async () => {
 		const request = vi.fn(async () => unavailable());
 
-		const response = await throughTransientUnavailability(request, { attempts: 3, sleep: async () => {} });
+		const response = await throughTransientUnavailability(request, {
+			attempts: 3,
+			sleep: async () => {},
+		});
 
 		expect(request).toHaveBeenCalledTimes(3);
 		expect(response.status).toBe(503);
@@ -47,11 +50,17 @@ describe('the integration suite\'s retry of a transient 503', () => {
 		// the library refusing what was sent: re-sending changes neither.
 		for (const answer of [
 			new Response('', { status: 503 }),
-			new Response('', { status: 409, headers: { 'retry-after': '5' } }),
+			new Response('', {
+				status: 409,
+				headers: { 'retry-after': '5' },
+			}),
 			new Response('', { status: 500 }),
 		]) {
 			const request = vi.fn(async () => answer);
-			const response = await throughTransientUnavailability(request, { attempts: 3, sleep: async () => {} });
+			const response = await throughTransientUnavailability(request, {
+				attempts: 3,
+				sleep: async () => {},
+			});
 			expect(response).toBe(answer);
 			expect(request).toHaveBeenCalledTimes(1);
 		}

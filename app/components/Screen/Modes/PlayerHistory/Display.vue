@@ -26,8 +26,12 @@ const gridStyle = computed(() => ({
 }));
 
 const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
-const primaryTextStyle = computed(() => screenConfig.value.primaryTextColor ? { color: screenConfig.value.primaryTextColor } : {});
-const secondaryTextStyle = computed(() => screenConfig.value.secondaryTextColor ? { color: screenConfig.value.secondaryTextColor } : { opacity: '0.75' });
+const primaryTextStyle = computed(() => screenConfig.value.primaryTextColor
+	? { color: screenConfig.value.primaryTextColor }
+	: {});
+const secondaryTextStyle = computed(() => screenConfig.value.secondaryTextColor
+	? { color: screenConfig.value.secondaryTextColor }
+	: { opacity: '0.75' });
 const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef'), {
 	density: 'roomy',
 	prefix: 'history',

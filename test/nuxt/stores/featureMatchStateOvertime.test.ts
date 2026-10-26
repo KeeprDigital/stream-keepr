@@ -61,7 +61,9 @@ vi.mock('@vueuse/core', async () => {
 });
 
 // useEventStore mock for bulkClockAction
-const mockEventStore = { event: { featureMatchDefaultClockDuration: 50 } };
+const mockEventStore = {
+	event: { featureMatchDefaultClockDuration: 50 },
+};
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 
 describe('useFeatureMatchStateStore overtime actions', () => {
@@ -104,7 +106,10 @@ describe('useFeatureMatchStateStore overtime actions', () => {
 	}
 
 	function commandResult(state: FeatureMatchState = createMockFeatureMatchState(), session?: Partial<FeatureMatchSessionResponse>) {
-		const responseSession = { ...createSession(state), ...session };
+		const responseSession = {
+			...createSession(state),
+			...session,
+		};
 		return {
 			featureMatchState: state,
 			session: responseSession,

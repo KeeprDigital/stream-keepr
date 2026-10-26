@@ -92,7 +92,9 @@ export class BroadcastGraphicTemplateReferenceConflict extends Error {
  * from it can never disagree about which assets they depend on.
  */
 function templateAssetReferences(document: BroadcastGraphicConfig) {
-	return broadcastGraphicsGraphicAssetReferences({ graphics: [document] });
+	return broadcastGraphicsGraphicAssetReferences({
+		graphics: [document],
+	});
 }
 
 /** Which committed stamp a template's reference-index statements are conditional on. */
@@ -275,7 +277,9 @@ export function broadcastGraphicTemplateService() {
 					${REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE}
 			`).bind(
 				patch.name ?? existing.name,
-				patch.description === undefined ? existing.description : patch.description,
+				patch.description === undefined
+					? existing.description
+					: patch.description,
 				JSON.stringify(document),
 				referenceVersion,
 				document.styleSet?.styleSetId ?? null,
@@ -324,5 +328,11 @@ export function broadcastGraphicTemplateService() {
 		return results[1]?.meta.changes === 1;
 	};
 
-	return { findAll, findById, create, update, remove };
+	return {
+		findAll,
+		findById,
+		create,
+		update,
+		remove,
+	};
 }

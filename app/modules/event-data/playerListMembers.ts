@@ -56,7 +56,9 @@ export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 
 	async function addMembers(eventId: number, listId: number, playerIds: number[]) {
 		const index = state.lists.value.findIndex(l => l.id === listId);
-		const originalCount = index !== -1 ? state.lists.value[index]!.memberCount : 0;
+		const originalCount = index !== -1
+			? state.lists.value[index]!.memberCount
+			: 0;
 		const cachedIds = membersByListId.value.get(listId);
 
 		// When cache is available, deduplicate and skip if nothing to add.
@@ -74,7 +76,10 @@ export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 
 		// Optimistic: update cached member IDs.
 		if (cachedIds) {
-			membersByListId.value.set(listId, [...cachedIds, ...idsToAdd]);
+			membersByListId.value.set(listId, [
+				...cachedIds,
+				...idsToAdd,
+			]);
 		}
 
 		const flight = state.currentLifetime();
@@ -103,9 +108,14 @@ export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 	async function removeMember(eventId: number, listId: number, playerId: number) {
 		// Optimistic: decrement member count.
 		const index = state.lists.value.findIndex(l => l.id === listId);
-		const originalCount = index !== -1 ? state.lists.value[index]!.memberCount : 0;
+		const originalCount = index !== -1
+			? state.lists.value[index]!.memberCount
+			: 0;
 		if (index !== -1) {
-			state.lists.value[index] = { ...state.lists.value[index]!, memberCount: Math.max(0, originalCount - 1) };
+			state.lists.value[index] = {
+				...state.lists.value[index]!,
+				memberCount: Math.max(0, originalCount - 1),
+			};
 		}
 
 		// Optimistic: update cached member IDs.
@@ -143,9 +153,14 @@ export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 	async function batchRemoveMembers(eventId: number, listId: number, playerIds: number[]) {
 		// Optimistic: decrement member count.
 		const index = state.lists.value.findIndex(l => l.id === listId);
-		const originalCount = index !== -1 ? state.lists.value[index]!.memberCount : 0;
+		const originalCount = index !== -1
+			? state.lists.value[index]!.memberCount
+			: 0;
 		if (index !== -1) {
-			state.lists.value[index] = { ...state.lists.value[index]!, memberCount: Math.max(0, originalCount - playerIds.length) };
+			state.lists.value[index] = {
+				...state.lists.value[index]!,
+				memberCount: Math.max(0, originalCount - playerIds.length),
+			};
 		}
 
 		// Optimistic: update cached member IDs.

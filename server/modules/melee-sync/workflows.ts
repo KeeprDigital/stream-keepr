@@ -180,10 +180,18 @@ export function createMeleeSyncWorkflows() {
 		const existingPhases = await phaseSvc.findByEventId(eventId);
 		const existingRounds = await roundSvc.findByEventId(eventId);
 		const existingPhaseByExternalId = new Map(existingPhases.flatMap(phase =>
-			phase.externalSource === 'melee' && phase.externalId ? [[phase.externalId, phase] as const] : [],
+			phase.externalSource === 'melee' && phase.externalId
+				? [
+						[phase.externalId, phase] as const,
+					]
+				: [],
 		));
 		const existingRoundByExternalId = new Map(existingRounds.flatMap(round =>
-			round.externalSource === 'melee' && round.externalId ? [[round.externalId, round] as const] : [],
+			round.externalSource === 'melee' && round.externalId
+				? [
+						[round.externalId, round] as const,
+					]
+				: [],
 		));
 		const incomingPhaseExternalIds = new Set<string>();
 		const incomingRoundExternalIds = new Set<string>();
@@ -283,7 +291,9 @@ export function createMeleeSyncWorkflows() {
 			},
 			phases: totalPhases,
 			rounds: totalRounds,
-			...(warnings.length > 0 ? { warnings } : {}),
+			...(warnings.length > 0
+				? { warnings }
+				: {}),
 		};
 	}
 
@@ -342,9 +352,21 @@ export function createMeleeSyncWorkflows() {
 
 		return {
 			success: true,
-			message: `Synced ${mergedPlayers.length} active players from melee.gg${deactivated > 0 ? `; deactivated ${deactivated} missing player${deactivated === 1 ? '' : 's'}` : ''}`,
-			results: { created, updated, deactivated, matchesUpdated: updatedMatchIds.length, errors: [] },
-			...(warnings.length > 0 ? { warnings } : {}),
+			message: `Synced ${mergedPlayers.length} active players from melee.gg${deactivated > 0
+				? `; deactivated ${deactivated} missing player${deactivated === 1
+					? ''
+					: 's'}`
+				: ''}`,
+			results: {
+				created,
+				updated,
+				deactivated,
+				matchesUpdated: updatedMatchIds.length,
+				errors: [],
+			},
+			...(warnings.length > 0
+				? { warnings }
+				: {}),
 		};
 	}
 
@@ -369,7 +391,10 @@ export function createMeleeSyncWorkflows() {
 		}));
 		return {
 			...result,
-			warnings: [...(result.warnings ?? []), ...publicationWarnings],
+			warnings: [
+				...(result.warnings ?? []),
+				...publicationWarnings,
+			],
 		};
 	}
 
@@ -383,10 +408,14 @@ export function createMeleeSyncWorkflows() {
 		const snapshot = await fetchCoreSnapshot(eventData);
 		await checkpoint?.();
 		const structureResult = await syncEventStructure(requestEvent, eventId, eventData, snapshot.event);
-		recordProgress?.({ lastEventSyncedAt: new Date() });
+		recordProgress?.({
+			lastEventSyncedAt: new Date(),
+		});
 		await checkpoint?.();
 		const playersResult = await syncPlayers(requestEvent, eventId, eventData, snapshot.mappedPlayers);
-		recordProgress?.({ lastPlayersSyncedAt: new Date() });
+		recordProgress?.({
+			lastPlayersSyncedAt: new Date(),
+		});
 		await checkpoint?.();
 		const deckListsResult = await syncDeckLists(
 			requestEvent,
@@ -396,8 +425,11 @@ export function createMeleeSyncWorkflows() {
 			snapshot.event,
 			{ unsupportedGame: 'skip' },
 		);
-		if (deckListsResult.success !== false && !deckListsResult.skipped)
-			recordProgress?.({ lastDecklistsSyncedAt: new Date() });
+		if (deckListsResult.success !== false && !deckListsResult.skipped) {
+			recordProgress?.({
+				lastDecklistsSyncedAt: new Date(),
+			});
+		}
 		const success = structureResult.success !== false
 			&& playersResult.success !== false
 			&& deckListsResult.success !== false;
@@ -438,12 +470,16 @@ export function createMeleeSyncWorkflows() {
 
 		const structureResult = await syncEventStructure(requestEvent, eventId, eventData, snapshot.event);
 		steps.push('structure');
-		recordProgress?.({ lastEventSyncedAt: new Date() });
+		recordProgress?.({
+			lastEventSyncedAt: new Date(),
+		});
 		await checkpoint?.();
 
 		const playersResult = await syncPlayers(requestEvent, eventId, eventData, snapshot.mappedPlayers);
 		steps.push('players');
-		recordProgress?.({ lastPlayersSyncedAt: new Date() });
+		recordProgress?.({
+			lastPlayersSyncedAt: new Date(),
+		});
 		await checkpoint?.();
 
 		let deckListsResult: Awaited<ReturnType<typeof syncDeckLists>> | null = null;
@@ -457,8 +493,11 @@ export function createMeleeSyncWorkflows() {
 				{ unsupportedGame: 'skip' },
 			);
 			steps.push('decklists');
-			if (deckListsResult.success !== false && !deckListsResult.skipped)
-				recordProgress?.({ lastDecklistsSyncedAt: new Date() });
+			if (deckListsResult.success !== false && !deckListsResult.skipped) {
+				recordProgress?.({
+					lastDecklistsSyncedAt: new Date(),
+				});
+			}
 			await checkpoint?.();
 		}
 
@@ -470,19 +509,30 @@ export function createMeleeSyncWorkflows() {
 
 		if (advanceRound && nextRound) {
 			const nextRoundIndex = eligibleRounds.findIndex(round => round.id === nextRound.id);
-			const previousRound = nextRoundIndex > 0 ? eligibleRounds[nextRoundIndex - 1] : null;
+			const previousRound = nextRoundIndex > 0
+				? eligibleRounds[nextRoundIndex - 1]
+				: null;
 			if (previousRound?.lastSyncedAt) {
-				roundResults.push({ ...await syncRoundMatches(requestEvent, eventId, eventData, previousRound.id), role: 'previous' });
+				roundResults.push({
+					...await syncRoundMatches(requestEvent, eventId, eventData, previousRound.id),
+					role: 'previous',
+				});
 				steps.push('previous-round');
 				await checkpoint?.();
 			}
-			roundResults.push({ ...await syncRoundMatches(requestEvent, eventId, eventData, nextRound.id), role: 'next' });
+			roundResults.push({
+				...await syncRoundMatches(requestEvent, eventId, eventData, nextRound.id),
+				role: 'next',
+			});
 			steps.push('next-round');
 		}
 		else {
 			const latestSyncedRound = eligibleRounds.filter(round => round.lastSyncedAt !== null).at(-1) ?? null;
 			if (latestSyncedRound) {
-				roundResults.push({ ...await syncRoundMatches(requestEvent, eventId, eventData, latestSyncedRound.id), role: 'latest' });
+				roundResults.push({
+					...await syncRoundMatches(requestEvent, eventId, eventData, latestSyncedRound.id),
+					role: 'latest',
+				});
 				steps.push('latest-round');
 			}
 		}
@@ -559,7 +609,9 @@ export function createMeleeSyncWorkflows() {
 		const warnings: string[] = [];
 		const resolveImportedCard = createImportedCardResolver(resolutionMap);
 		const cardUpsertMap = buildResolvedCardUpserts(mergedPlayers, resolutionMap);
-		const nameToCard = await mtgCardService().batchUpsert([...cardUpsertMap.values()]);
+		const nameToCard = await mtgCardService().batchUpsert([
+			...cardUpsertMap.values(),
+		]);
 		const playersWithDeckLists = buildPlayersWithDeckLists(eventId, mergedPlayers);
 
 		const playerSvc = playerService();
@@ -578,7 +630,9 @@ export function createMeleeSyncWorkflows() {
 		});
 
 		if (unresolvedCards > 0) {
-			warnings.push(`${unresolvedCards} deck entr${unresolvedCards === 1 ? 'y remains' : 'ies remain'} unresolved and can be fixed from the Sync page`);
+			warnings.push(`${unresolvedCards} deck entr${unresolvedCards === 1
+				? 'y remains'
+				: 'ies remain'} unresolved and can be fixed from the Sync page`);
 		}
 
 		const playerIds = upsertedPlayers.map(p => p.id);
@@ -603,7 +657,9 @@ export function createMeleeSyncWorkflows() {
 		const success = skippedPlayers === 0;
 
 		if (!success) {
-			const partialFailure = new Error(`Deck list sync skipped ${skippedPlayers} player${skippedPlayers === 1 ? '' : 's'}`);
+			const partialFailure = new Error(`Deck list sync skipped ${skippedPlayers} player${skippedPlayers === 1
+				? ''
+				: 's'}`);
 			warnings.push(partialFailure.message);
 		}
 

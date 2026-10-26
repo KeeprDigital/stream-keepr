@@ -111,7 +111,10 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 			display.clear();
 			return;
 		}
-		reading = { since: Date.now(), load };
+		reading = {
+			since: Date.now(),
+			load,
+		};
 		void display.refresh(async () => {
 			try {
 				const answer = await options.read();

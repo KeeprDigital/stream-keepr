@@ -25,8 +25,12 @@ export function resolvePlayerDeckDetails(
 	const hasReviewedDetails = hasReviewedPlayerDeckDetails(deck, archetype);
 
 	return {
-		name: hasReviewedDetails && archetype ? archetype.name : deck.name,
-		colors: hasReviewedDetails && archetype ? archetype.colors ?? '' : deck.colors,
+		name: hasReviewedDetails && archetype
+			? archetype.name
+			: deck.name,
+		colors: hasReviewedDetails && archetype
+			? archetype.colors ?? ''
+			: deck.colors,
 		submittedName: deck.name,
 		submittedColors: deck.colors,
 	};

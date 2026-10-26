@@ -39,7 +39,9 @@ function close() {
 	selectedMatchId.value = undefined;
 }
 
-useEnterToSubmit(confirm, { disabled: () => !props.open || !selectedMatch.value });
+useEnterToSubmit(confirm, {
+	disabled: () => !props.open || !selectedMatch.value,
+});
 </script>
 
 <template>

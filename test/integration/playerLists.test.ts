@@ -65,7 +65,9 @@ describe('player lists API', () => {
 	it('adds members to the list', async () => {
 		const res = await $fetchRaw(`/api/events/${eventId}/player-lists/${listId}/members`, {
 			method: 'POST',
-			body: { playerIds: [player1Id, player2Id] },
+			body: {
+				playerIds: [player1Id, player2Id],
+			},
 		});
 
 		expect(res.status).toBe(201);

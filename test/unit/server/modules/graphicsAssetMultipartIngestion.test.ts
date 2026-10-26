@@ -30,8 +30,11 @@ const crcTable = (() => {
 	const table = new Uint32Array(256);
 	for (let index = 0; index < table.length; index++) {
 		let value = index;
-		for (let bit = 0; bit < 8; bit++)
-			value = value & 1 ? 0xEDB88320 ^ (value >>> 1) : value >>> 1;
+		for (let bit = 0; bit < 8; bit++) {
+			value = value & 1
+				? 0xEDB88320 ^ (value >>> 1)
+				: value >>> 1;
+		}
 		table[index] = value >>> 0;
 	}
 	return table;
@@ -157,11 +160,13 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 		expect(reconnected).toMatchObject({
 			transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
 			transfer: {
-				completedParts: [{
-					partNumber: 1,
-					partIdentity: `${operation.id}:1`,
-					byteLength: GRAPHICS_MULTIPART_PART_BYTES,
-				}],
+				completedParts: [
+					{
+						partNumber: 1,
+						partIdentity: `${operation.id}:1`,
+						byteLength: GRAPHICS_MULTIPART_PART_BYTES,
+					},
+				],
 			},
 		});
 
@@ -252,7 +257,9 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 		expect(retried).toMatchObject({
 			transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
 			transfer: {
-				completedParts: [{ partNumber: 1 }],
+				completedParts: [
+					{ partNumber: 1 },
+				],
 			},
 		});
 	});
@@ -293,13 +300,15 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 			code: 'graphics-asset-library-unavailable',
 			message: 'Graphics multipart checkpoint is temporarily unavailable',
 		});
-		expect(warn.mock.calls.map(([line]) => JSON.parse(line as string))).toEqual([{
-			message: 'graphics_catalogue_unavailable',
-			refusal: 'Graphics multipart checkpoint is temporarily unavailable',
-			errorName: 'Error',
-			errorCode: null,
-			reason: 'D1_ERROR: database is locked: SQLITE_BUSY',
-		}]);
+		expect(warn.mock.calls.map(([line]) => JSON.parse(line as string))).toEqual([
+			{
+				message: 'graphics_catalogue_unavailable',
+				refusal: 'Graphics multipart checkpoint is temporarily unavailable',
+				errorName: 'Error',
+				errorCode: null,
+				reason: 'D1_ERROR: database is locked: SQLITE_BUSY',
+			},
+		]);
 	});
 
 	it('bounds retries per part and aborts multipart state idempotently on cancellation', async () => {

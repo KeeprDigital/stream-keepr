@@ -40,7 +40,10 @@ function createMeleeSyncProgress() {
 
 	return {
 		record(update: MeleeSyncMetadataUpdate) {
-			metadata = { ...metadata, ...update };
+			metadata = {
+				...metadata,
+				...update,
+			};
 		},
 		snapshot() {
 			return { ...metadata };
@@ -203,7 +206,9 @@ export function meleeSyncModule() {
 							? {}
 							: {
 									initialSetupCompletedAt: completedAt,
-									...(result.deckListsSkipped === true ? {} : { lastDecklistsSyncedAt: completedAt }),
+									...(result.deckListsSkipped === true
+										? {}
+										: { lastDecklistsSyncedAt: completedAt }),
 								}),
 					};
 				},
@@ -219,7 +224,9 @@ export function meleeSyncModule() {
 					eventId,
 					await loadMeleeSyncEventData(eventId),
 				),
-				metadata: () => ({ lastEventSyncedAt: new Date() }),
+				metadata: () => ({
+					lastEventSyncedAt: new Date(),
+				}),
 			});
 		},
 		async syncPlayers(requestEvent: H3Event, eventId: number) {
@@ -232,7 +239,9 @@ export function meleeSyncModule() {
 					eventId,
 					await loadMeleeSyncEventData(eventId),
 				),
-				metadata: () => ({ lastPlayersSyncedAt: new Date() }),
+				metadata: () => ({
+					lastPlayersSyncedAt: new Date(),
+				}),
 			});
 		},
 		async syncDeckLists(requestEvent: H3Event, eventId: number) {
@@ -245,7 +254,11 @@ export function meleeSyncModule() {
 					eventId,
 					await loadMeleeSyncEventData(eventId),
 				),
-				metadata: result => result.success === false || result.skipped === true ? {} : { lastDecklistsSyncedAt: new Date() },
+				metadata: result => result.success === false || result.skipped === true
+					? {}
+					: {
+							lastDecklistsSyncedAt: new Date(),
+						},
 			});
 		},
 		async syncRoundMatches(requestEvent: H3Event, eventId: number, roundId: number) {
@@ -258,17 +271,25 @@ export function meleeSyncModule() {
 					const syncEventData = await loadMeleeSyncEventData(eventId);
 					await checkpoint();
 					const players = await workflows.syncPlayers(requestEvent, eventId, syncEventData);
-					if (players.success !== false)
-						progress.record({ lastPlayersSyncedAt: new Date() });
+					if (players.success !== false) {
+						progress.record({
+							lastPlayersSyncedAt: new Date(),
+						});
+					}
 					await checkpoint();
 					const round = await workflows.syncRoundMatches(requestEvent, eventId, syncEventData, roundId);
 					return {
 						...round,
-						warnings: [...(players.warnings ?? []), ...(round.warnings ?? [])],
+						warnings: [
+							...(players.warnings ?? []),
+							...(round.warnings ?? []),
+						],
 					};
 				},
 				failureMetadata: progress.snapshot,
-				metadata: () => ({ lastPlayersSyncedAt: new Date() }),
+				metadata: () => ({
+					lastPlayersSyncedAt: new Date(),
+				}),
 			});
 		},
 		async updateFromMelee(
@@ -299,7 +320,9 @@ export function meleeSyncModule() {
 					return {
 						lastEventSyncedAt: completedAt,
 						lastPlayersSyncedAt: completedAt,
-						...(completedDeckLists ? { lastDecklistsSyncedAt: completedAt } : {}),
+						...(completedDeckLists
+							? { lastDecklistsSyncedAt: completedAt }
+							: {}),
 					};
 				},
 			});

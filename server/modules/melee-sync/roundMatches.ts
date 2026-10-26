@@ -107,7 +107,10 @@ export async function syncMatchesFromMelee(
 	const playerMap = new Map(
 		allPlayers
 			?.filter(p => p.externalId !== null && p.externalSource !== null)
-			.map(p => [externalIdentityKey(p.externalSource!, p.externalId!), p]) ?? [],
+			.map(p => [
+				externalIdentityKey(p.externalSource!, p.externalId!),
+				p,
+			]) ?? [],
 	);
 	const standingTeamIds = new Set<number>();
 	for (const standing of standings) {
@@ -132,9 +135,13 @@ export async function syncMatchesFromMelee(
 		playerDecks.push(deck);
 		playerDecksByPlayerId.set(deck.playerId, playerDecks);
 	}
-	const reviewedArchetypeIds = [...new Set(meleeDecks.flatMap(deck =>
-		deck.reviewedAt != null && deck.archetypeId != null ? [deck.archetypeId] : [],
-	))];
+	const reviewedArchetypeIds = [
+		...new Set(meleeDecks.flatMap(deck =>
+			deck.reviewedAt != null && deck.archetypeId != null
+				? [deck.archetypeId]
+				: [],
+		)),
+	];
 	const reviewedArchetypes = reviewedArchetypeIds.length > 0
 		? await archetypeService().findManyByIds(eventId, reviewedArchetypeIds)
 		: [];
@@ -176,7 +183,9 @@ export async function syncMatchesFromMelee(
 		standings: standingRows,
 	});
 
-	const roundName = phase ? `${phase.name} - ${round.name}` : round.name;
+	const roundName = phase
+		? `${phase.name} - ${round.name}`
+		: round.name;
 
 	return {
 		success: true,

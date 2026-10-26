@@ -81,7 +81,10 @@ describe('screenAnimationEffectFields', () => {
 	});
 
 	it('switching effect starts over from that effect’s schema defaults — no params carry over', async () => {
-		const { wrapper, onUpdate } = await mountComponent({ effect: 'fog', params: { speed: 2 } as never });
+		const { wrapper, onUpdate } = await mountComponent({
+			effect: 'fog',
+			params: { speed: 2 } as never,
+		});
 
 		await wrapper.find('[data-testid="u-select"]').setValue('caustics');
 

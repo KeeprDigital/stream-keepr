@@ -27,7 +27,10 @@ describe('broadcast Deck List API schemas', () => {
 	it('rejects unknown, empty, unbounded, and malformed fields', () => {
 		expect(() => createBroadcastDeckListSchema.parse({ name: 'Deck', sourceText: '1 Island', surprise: true })).toThrow();
 		expect(() => createBroadcastDeckListSchema.parse({ name: ' ', sourceText: '1 Island' })).toThrow();
-		expect(() => createBroadcastDeckListSchema.parse({ name: 'Deck', sourceText: 'x'.repeat(64 * 1024 + 1) })).toThrow();
+		expect(() => createBroadcastDeckListSchema.parse({
+			name: 'Deck',
+			sourceText: 'x'.repeat(64 * 1024 + 1),
+		})).toThrow();
 		expect(() => createBroadcastDeckListSchema.parse({ name: 'Deck', sourceText: '1 Island', colors: 'WW' })).toThrow();
 		expect(() => updateBroadcastDeckListSchema.parse({ expectedRevision: 1 })).toThrow();
 		expect(() => updateBroadcastDeckListSchema.parse({ expectedRevision: 0, name: 'Nope' })).toThrow();

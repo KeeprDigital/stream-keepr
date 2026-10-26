@@ -23,9 +23,14 @@ export function appearanceSummary(style?: FeatureMatchSourceFramingStyle) {
 		parts.push('gradient');
 	if (style?.borderVisible)
 		parts.push(`border ${style.borderWidth ?? 1}px`);
-	if (style?.glowSize)
-		parts.push(`glow ${style.glowSize}px${style.glowPosition && style.glowPosition !== 'both' ? ` ${style.glowPosition}` : ''}`);
+	if (style?.glowSize) {
+		parts.push(`glow ${style.glowSize}px${style.glowPosition && style.glowPosition !== 'both'
+			? ` ${style.glowPosition}`
+			: ''}`);
+	}
 	if (style?.borderRadius)
 		parts.push(`radius ${style.borderRadius}`);
-	return parts.length ? parts.join(' • ') : 'Defaults';
+	return parts.length
+		? parts.join(' • ')
+		: 'Defaults';
 }

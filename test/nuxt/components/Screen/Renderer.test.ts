@@ -72,7 +72,9 @@ describe('screenRenderer', () => {
 		resolveScreenModeHost.mockReset();
 		getScreenModeDefinition.mockImplementation(mode => ({
 			mode,
-			displayType: mode === 'feature-match' ? 'control' : 'overlay',
+			displayType: mode === 'feature-match'
+				? 'control'
+				: 'overlay',
 			displayComponent: DisplayStub,
 		}));
 		resolveScreenModeHost.mockImplementation(({ mode, screenConfig }) => {
@@ -92,17 +94,33 @@ describe('screenRenderer', () => {
 				};
 			}
 
-			const paddingX = mode === 'feature-match-overlay' ? 0 : (screenConfig.paddingX ?? 0);
-			const paddingY = mode === 'feature-match-overlay' ? 0 : (screenConfig.paddingY ?? 0);
-			const width = screenConfig.width ?? (mode === 'feature-match-overlay' ? 1920 : undefined);
-			const height = screenConfig.height ?? (mode === 'feature-match-overlay' ? 1080 : undefined);
+			const paddingX = mode === 'feature-match-overlay'
+				? 0
+				: (screenConfig.paddingX ?? 0);
+			const paddingY = mode === 'feature-match-overlay'
+				? 0
+				: (screenConfig.paddingY ?? 0);
+			const width = screenConfig.width ?? (mode === 'feature-match-overlay'
+				? 1920
+				: undefined);
+			const height = screenConfig.height ?? (mode === 'feature-match-overlay'
+				? 1080
+				: undefined);
 			const containerStyle: Record<string, string> = {
-				width: width ? `${width}px` : '100%',
-				height: height ? `${height}px` : '100%',
+				width: width
+					? `${width}px`
+					: '100%',
+				height: height
+					? `${height}px`
+					: '100%',
 				flexShrink: '0',
 				padding: `${paddingY}px ${paddingX}px`,
-				justifyItems: screenConfig.horizontalAlign === 'right' ? 'end' : 'center',
-				alignItems: screenConfig.verticalAlign === 'bottom' ? 'end' : 'center',
+				justifyItems: screenConfig.horizontalAlign === 'right'
+					? 'end'
+					: 'center',
+				alignItems: screenConfig.verticalAlign === 'bottom'
+					? 'end'
+					: 'center',
 			};
 
 			if (screenConfig.background && mode !== 'feature-match-overlay')
@@ -211,7 +229,13 @@ describe('screenRenderer', () => {
 			modeConfigs: {
 				card: {
 					backgroundLayers: [
-						{ id: 'wash', type: 'color', color: '#101010', enabled: true, opacity: 1 },
+						{
+							id: 'wash',
+							type: 'color',
+							color: '#101010',
+							enabled: true,
+							opacity: 1,
+						},
 					],
 				},
 			},
@@ -242,7 +266,13 @@ describe('screenRenderer', () => {
 			modeConfigs: {
 				background: {
 					layers: [
-						{ id: 'wash', type: 'color', color: '#101010', enabled: true, opacity: 1 },
+						{
+							id: 'wash',
+							type: 'color',
+							color: '#101010',
+							enabled: true,
+							opacity: 1,
+						},
 					],
 				},
 			},

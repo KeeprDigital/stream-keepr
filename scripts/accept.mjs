@@ -93,7 +93,11 @@ export const DEPLOY_DAY = [
 
 function run(name, flags) {
 	const [script, ...leading] = HARNESSES[name].script;
-	const child = spawn(process.execPath, [fileURLToPath(new URL(script, import.meta.url)), ...leading, ...flags], {
+	const child = spawn(process.execPath, [
+		fileURLToPath(new URL(script, import.meta.url)),
+		...leading,
+		...flags,
+	], {
 		stdio: 'inherit',
 	});
 	return new Promise((resolve) => {
@@ -104,8 +108,15 @@ function run(name, flags) {
 function list() {
 	const width = Math.max(...Object.keys(HARNESSES).map(name => name.length));
 	const lines = Object.entries(HARNESSES).map(([name, harness]) => {
-		const flags = [harness.deployed === false ? undefined : '--deployed', harness.flags].filter(Boolean).join(', ');
-		return `  ${name.padEnd(width)}  ${harness.proves}\n  ${''.padEnd(width)}  needs: ${harness.needs}${flags ? `; flags: ${flags}` : ''}`;
+		const flags = [
+			harness.deployed === false
+				? undefined
+				: '--deployed',
+			harness.flags,
+		].filter(Boolean).join(', ');
+		return `  ${name.padEnd(width)}  ${harness.proves}\n  ${''.padEnd(width)}  needs: ${harness.needs}${flags
+			? `; flags: ${flags}`
+			: ''}`;
 	});
 	process.stdout.write(`Usage: pnpm accept <name> [flags…] | pnpm accept deployed\n\n${lines.join('\n')}\n\n`
 		+ `deployed  runs ${DEPLOY_DAY.join(', ')} with --deployed, stopping at the first failure\n`);

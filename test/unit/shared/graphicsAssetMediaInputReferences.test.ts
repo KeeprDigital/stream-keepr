@@ -45,40 +45,52 @@ function mediaInput(
 
 function graphic(inputs: MediaGraphicInputDeclaration[]): BroadcastGraphicsModeConfig {
 	return {
-		graphics: [{
-			id: 'lower-third',
-			name: 'Lower Third',
-			items: [],
-			inputs,
-		} as unknown as BroadcastGraphicConfig],
+		graphics: [
+			{
+				id: 'lower-third',
+				name: 'Lower Third',
+				items: [],
+				inputs,
+			} as unknown as BroadcastGraphicConfig,
+		],
 	} as BroadcastGraphicsModeConfig;
 }
 
 describe('media Graphic Input default references', () => {
 	it('publishes an authored default, named by the Graphic Input that pins it', () => {
-		expect(broadcastGraphicsGraphicAssetReferences(graphic([mediaInput('logo', { default: sponsor })])))
-			.toEqual([{
-				reference: sponsor,
-				ownerSlot: 'graphics.lower-third.inputs.logo.default',
-				kind: 'image',
-			}]);
+		expect(broadcastGraphicsGraphicAssetReferences(graphic([
+			mediaInput('logo', { default: sponsor }),
+		])))
+			.toEqual([
+				{
+					reference: sponsor,
+					ownerSlot: 'graphics.lower-third.inputs.logo.default',
+					kind: 'image',
+				},
+			]);
 	});
 
 	it('publishes a silent-video default as its exact revision, as an item’s content is', () => {
-		const references = broadcastGraphicsGraphicAssetReferences(graphic([mediaInput('sting', {
-			mediaKind: 'silent-video',
-			default: sting,
-		})]));
+		const references = broadcastGraphicsGraphicAssetReferences(graphic([
+			mediaInput('sting', {
+				mediaKind: 'silent-video',
+				default: sting,
+			}),
+		]));
 
-		expect(references).toEqual([{
-			reference: sting,
-			ownerSlot: 'graphics.lower-third.inputs.sting.default',
-			kind: 'silent-video',
-		}]);
+		expect(references).toEqual([
+			{
+				reference: sting,
+				ownerSlot: 'graphics.lower-third.inputs.sting.default',
+				kind: 'silent-video',
+			},
+		]);
 	});
 
 	it('publishes nothing for a media Graphic Input with no default', () => {
-		expect(broadcastGraphicsGraphicAssetReferences(graphic([mediaInput('logo')]))).toEqual([]);
+		expect(broadcastGraphicsGraphicAssetReferences(graphic([
+			mediaInput('logo'),
+		]))).toEqual([]);
 	});
 
 	it('resolves a Broadcast Graphics Screen Output through both of its owner-slot namespaces', () => {

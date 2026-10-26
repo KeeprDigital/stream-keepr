@@ -2,7 +2,9 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockEvent } from '~~/test/helpers/fixtures';
 
-const mockToast = { add: vi.fn() };
+const mockToast = {
+	add: vi.fn(),
+};
 const mockStore = {
 	event: createMockEvent(),
 	updateEvent: vi.fn(),

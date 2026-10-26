@@ -61,7 +61,9 @@ vi.mock('@vueuse/core', async () => {
 });
 
 // useEventStore mock for bulkClockAction
-const mockEventStore = { event: { featureMatchDefaultClockDuration: 50 } };
+const mockEventStore = {
+	event: { featureMatchDefaultClockDuration: 50 },
+};
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 
 describe('useFeatureMatchStateStore player and turn actions', () => {
@@ -104,7 +106,10 @@ describe('useFeatureMatchStateStore player and turn actions', () => {
 	}
 
 	function commandResult(state: FeatureMatchState = createMockFeatureMatchState(), session?: Partial<FeatureMatchSessionResponse>) {
-		const responseSession = { ...createSession(state), ...session };
+		const responseSession = {
+			...createSession(state),
+			...session,
+		};
 		return {
 			featureMatchState: state,
 			session: responseSession,
@@ -151,10 +156,14 @@ describe('useFeatureMatchStateStore player and turn actions', () => {
 			seedState();
 
 			store.updatePlayerFeatureMatchState(EVENT_ID, MATCH_ID, 'player1', {
-				counters: [{ type: 'poison', value: 3 }],
+				counters: [
+					{ type: 'poison', value: 3 },
+				],
 			});
 
-			expect(store.featureMatchStates.get(MATCH_ID)!.player1.counters).toEqual([{ type: 'poison', value: 3 }]);
+			expect(store.featureMatchStates.get(MATCH_ID)!.player1.counters).toEqual([
+				{ type: 'poison', value: 3 },
+			]);
 		});
 
 		it('no-ops when match not found', () => {
@@ -188,7 +197,13 @@ describe('useFeatureMatchStateStore player and turn actions', () => {
 		it('optimistically sets cardsKept on player', async () => {
 			seedState();
 			const serverState = createMockFeatureMatchState({
-				player1: { lifeTotal: 20, gameWins: 0, counters: [], cardsKept: 6, sideboardRevealed: false },
+				player1: {
+					lifeTotal: 20,
+					gameWins: 0,
+					counters: [],
+					cardsKept: 6,
+					sideboardRevealed: false,
+				},
 			});
 			mockRepo.updatePlayerFeatureMatchState.mockResolvedValue(commandResult(serverState));
 
@@ -202,8 +217,18 @@ describe('useFeatureMatchStateStore player and turn actions', () => {
 		it('optimistically reveals both sideboards and sends one match-level update', async () => {
 			seedState();
 			const serverState = createMockFeatureMatchState({
-				player1: { lifeTotal: 20, gameWins: 0, counters: [], sideboardRevealed: true },
-				player2: { lifeTotal: 20, gameWins: 0, counters: [], sideboardRevealed: true },
+				player1: {
+					lifeTotal: 20,
+					gameWins: 0,
+					counters: [],
+					sideboardRevealed: true,
+				},
+				player2: {
+					lifeTotal: 20,
+					gameWins: 0,
+					counters: [],
+					sideboardRevealed: true,
+				},
 			});
 			mockRepo.updateState.mockResolvedValue(commandResult(serverState));
 
@@ -337,7 +362,12 @@ describe('useFeatureMatchStateStore player and turn actions', () => {
 		it('calls repo and updates state from server response', async () => {
 			seedState();
 			const afterWin = createMockFeatureMatchState({
-				player1: { lifeTotal: 20, gameWins: 1, counters: [], sideboardRevealed: false },
+				player1: {
+					lifeTotal: 20,
+					gameWins: 1,
+					counters: [],
+					sideboardRevealed: false,
+				},
 				currentGame: 2,
 			});
 			mockRepo.recordGameWin.mockResolvedValue(commandResult(afterWin));
@@ -361,7 +391,12 @@ describe('useFeatureMatchStateStore player and turn actions', () => {
 	describe('undoGameWin', () => {
 		it('calls repo and updates state from server response', async () => {
 			seedState({
-				player1: { lifeTotal: 20, gameWins: 1, counters: [], sideboardRevealed: false },
+				player1: {
+					lifeTotal: 20,
+					gameWins: 1,
+					counters: [],
+					sideboardRevealed: false,
+				},
 				currentGame: 2,
 			});
 			const afterUndo = createMockFeatureMatchState({ currentGame: 1 });
@@ -389,14 +424,34 @@ describe('useFeatureMatchStateStore player and turn actions', () => {
 	describe('swapPlayers', () => {
 		it('swaps player1 and player2 state optimistically', async () => {
 			seedState({
-				player1: { lifeTotal: 20, gameWins: 1, counters: [], sideboardRevealed: false },
-				player2: { lifeTotal: 15, gameWins: 0, counters: [], sideboardRevealed: false },
+				player1: {
+					lifeTotal: 20,
+					gameWins: 1,
+					counters: [],
+					sideboardRevealed: false,
+				},
+				player2: {
+					lifeTotal: 15,
+					gameWins: 0,
+					counters: [],
+					sideboardRevealed: false,
+				},
 				activePlayer: 'player1',
 				firstPlayer: 'player1',
 			});
 			const swapped = createMockFeatureMatchState({
-				player1: { lifeTotal: 15, gameWins: 0, counters: [], sideboardRevealed: false },
-				player2: { lifeTotal: 20, gameWins: 1, counters: [], sideboardRevealed: false },
+				player1: {
+					lifeTotal: 15,
+					gameWins: 0,
+					counters: [],
+					sideboardRevealed: false,
+				},
+				player2: {
+					lifeTotal: 20,
+					gameWins: 1,
+					counters: [],
+					sideboardRevealed: false,
+				},
 				activePlayer: 'player2',
 				firstPlayer: 'player2',
 			});
@@ -413,17 +468,43 @@ describe('useFeatureMatchStateStore player and turn actions', () => {
 
 		it('caches returned session snapshots after local swap', async () => {
 			seedState({
-				player1: { lifeTotal: 20, gameWins: 1, counters: [], sideboardRevealed: false },
-				player2: { lifeTotal: 15, gameWins: 0, counters: [], sideboardRevealed: false },
+				player1: {
+					lifeTotal: 20,
+					gameWins: 1,
+					counters: [],
+					sideboardRevealed: false,
+				},
+				player2: {
+					lifeTotal: 15,
+					gameWins: 0,
+					counters: [],
+					sideboardRevealed: false,
+				},
 			});
 			const swapped = createMockFeatureMatchState({
-				player1: { lifeTotal: 15, gameWins: 0, counters: [], sideboardRevealed: false },
-				player2: { lifeTotal: 20, gameWins: 1, counters: [], sideboardRevealed: false },
+				player1: {
+					lifeTotal: 15,
+					gameWins: 0,
+					counters: [],
+					sideboardRevealed: false,
+				},
+				player2: {
+					lifeTotal: 20,
+					gameWins: 1,
+					counters: [],
+					sideboardRevealed: false,
+				},
 			});
 			const swappedSnapshot = {
 				...createSourceSnapshot(),
-				player1: { playerId: null, data: { name: 'Bob' } },
-				player2: { playerId: null, data: { name: 'Alice' } },
+				player1: {
+					playerId: null,
+					data: { name: 'Bob' },
+				},
+				player2: {
+					playerId: null,
+					data: { name: 'Alice' },
+				},
 			};
 			mockRepo.swapPlayers.mockResolvedValue(commandResult(swapped, { sourceSnapshot: swappedSnapshot }));
 

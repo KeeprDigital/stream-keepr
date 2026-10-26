@@ -15,30 +15,34 @@ describe('media Graphic Item exact references', () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		config.layout.composition = {
 			...createFeatureMatchLayoutComposition(),
-			items: [{
-				...getGraphicItemDefinition('media').createDefault({
-					id: 'alpha-ident',
-					label: 'Alpha ident',
-					canvasWidth: 1920,
-					canvasHeight: 1080,
-				}),
-				mediaKind: 'silent-video',
-				asset: {
-					assetId: 'video-asset' as never,
-					revisionId: 'video-revision-2' as never,
-				},
-				videoCompatibility: 'chromium-transparency',
-			} as unknown as GraphicItemConfig],
+			items: [
+				{
+					...getGraphicItemDefinition('media').createDefault({
+						id: 'alpha-ident',
+						label: 'Alpha ident',
+						canvasWidth: 1920,
+						canvasHeight: 1080,
+					}),
+					mediaKind: 'silent-video',
+					asset: {
+						assetId: 'video-asset' as never,
+						revisionId: 'video-revision-2' as never,
+					},
+					videoCompatibility: 'chromium-transparency',
+				} as unknown as GraphicItemConfig,
+			],
 		};
 
-		expect(featureMatchOverlayGraphicAssetReferences(config)).toEqual([{
-			reference: {
-				assetId: 'video-asset',
-				revisionId: 'video-revision-2',
+		expect(featureMatchOverlayGraphicAssetReferences(config)).toEqual([
+			{
+				reference: {
+					assetId: 'video-asset',
+					revisionId: 'video-revision-2',
+				},
+				ownerSlot: 'layout.composition.items.alpha-ident.asset',
+				kind: 'silent-video',
 			},
-			ownerSlot: 'layout.composition.items.alpha-ident.asset',
-			kind: 'silent-video',
-		}]);
+		]);
 	});
 
 	it('publishes the shared item tree under the Feature Match Overlay"s own slot prefix', () => {
@@ -56,13 +60,18 @@ describe('media Graphic Item exact references', () => {
 			}),
 			asset: { assetId: 'image-asset' as never, revisionId: 'image-revision-1' as never },
 		} as GraphicItemConfig;
-		config.layout.composition = { ...createFeatureMatchLayoutComposition(), items: [media] };
+		config.layout.composition = {
+			...createFeatureMatchLayoutComposition(),
+			items: [media],
+		};
 
-		expect(featureMatchOverlayGraphicAssetReferences(config)).toEqual([{
-			reference: { assetId: 'image-asset', revisionId: 'image-revision-1' },
-			ownerSlot: 'layout.composition.items.sponsor.asset',
-			kind: 'image',
-		}]);
+		expect(featureMatchOverlayGraphicAssetReferences(config)).toEqual([
+			{
+				reference: { assetId: 'image-asset', revisionId: 'image-revision-1' },
+				ownerSlot: 'layout.composition.items.sponsor.asset',
+				kind: 'image',
+			},
+		]);
 	});
 
 	it('indexes an exact silent-video revision from a Graphic Group child', () => {
@@ -72,31 +81,37 @@ describe('media Graphic Item exact references', () => {
 			throw new Error('Expected a Graphic Group fixture');
 		config.layout.composition = {
 			...config.layout.composition,
-			items: [{
-				...group,
-				children: [{
-					...getGraphicItemDefinition('media').createDefault({
-						id: 'group-ident',
-						label: 'Group ident',
-						canvasWidth: 1920,
-						canvasHeight: 1080,
-					}),
-					mediaKind: 'silent-video',
-					asset: {
-						assetId: 'group-video-asset' as never,
-						revisionId: 'group-video-revision-7' as never,
-					},
-				} as GraphicItemConfig],
-			} as GraphicItemConfig],
+			items: [
+				{
+					...group,
+					children: [
+						{
+							...getGraphicItemDefinition('media').createDefault({
+								id: 'group-ident',
+								label: 'Group ident',
+								canvasWidth: 1920,
+								canvasHeight: 1080,
+							}),
+							mediaKind: 'silent-video',
+							asset: {
+								assetId: 'group-video-asset' as never,
+								revisionId: 'group-video-revision-7' as never,
+							},
+						} as GraphicItemConfig,
+					],
+				} as GraphicItemConfig,
+			],
 		};
 
-		expect(featureMatchOverlayGraphicAssetReferences(config)).toEqual([{
-			reference: {
-				assetId: 'group-video-asset',
-				revisionId: 'group-video-revision-7',
+		expect(featureMatchOverlayGraphicAssetReferences(config)).toEqual([
+			{
+				reference: {
+					assetId: 'group-video-asset',
+					revisionId: 'group-video-revision-7',
+				},
+				ownerSlot: `layout.composition.items.${group.id}.children.group-ident.asset`,
+				kind: 'silent-video',
 			},
-			ownerSlot: `layout.composition.items.${group.id}.children.group-ident.asset`,
-			kind: 'silent-video',
-		}]);
+		]);
 	});
 });

@@ -197,7 +197,9 @@ describe('useRoundStore', () => {
 				await store.loadRoundsByEventId(1);
 				store.rounds = [];
 
-				ablyCallbacks.round!['round:created']!({ round: createMockRound({ id: 10, eventId: 1 }) });
+				ablyCallbacks.round!['round:created']!({
+					round: createMockRound({ id: 10, eventId: 1 }),
+				});
 
 				expect(store.rounds).toHaveLength(0);
 			});
@@ -205,18 +207,26 @@ describe('useRoundStore', () => {
 
 		describe('round:updated', () => {
 			it('updates existing round from remote message', () => {
-				store.rounds = [createMockRound({ id: 10, name: 'Old' })];
+				store.rounds = [
+					createMockRound({ id: 10, name: 'Old' }),
+				];
 
-				ablyCallbacks.round!['round:updated']!({ round: createMockRound({ id: 10, name: 'New' }) });
+				ablyCallbacks.round!['round:updated']!({
+					round: createMockRound({ id: 10, name: 'New' }),
+				});
 
 				expect(store.rounds[0]!.name).toBe('New');
 			});
 
 			it('skips when isSelfOrigin returns true', () => {
-				store.rounds = [createMockRound({ id: 10, name: 'Old' })];
+				store.rounds = [
+					createMockRound({ id: 10, name: 'Old' }),
+				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
-				ablyCallbacks.round!['round:updated']!({ round: createMockRound({ id: 10, name: 'New' }) });
+				ablyCallbacks.round!['round:updated']!({
+					round: createMockRound({ id: 10, name: 'New' }),
+				});
 
 				expect(store.rounds[0]!.name).toBe('Old');
 			});
@@ -224,7 +234,9 @@ describe('useRoundStore', () => {
 
 		describe('round:deleted', () => {
 			it('removes round from remote message', () => {
-				store.rounds = [createMockRound({ id: 10 })];
+				store.rounds = [
+					createMockRound({ id: 10 }),
+				];
 
 				ablyCallbacks.round!['round:deleted']!({ roundId: 10 });
 
@@ -232,7 +244,9 @@ describe('useRoundStore', () => {
 			});
 
 			it('skips when isSelfOrigin returns true', () => {
-				store.rounds = [createMockRound({ id: 10 })];
+				store.rounds = [
+					createMockRound({ id: 10 }),
+				];
 				mockIsSelfOrigin.mockReturnValueOnce(true);
 
 				ablyCallbacks.round!['round:deleted']!({ roundId: 10 });
@@ -246,7 +260,9 @@ describe('useRoundStore', () => {
 
 	describe('$reset', () => {
 		it('clears all state', () => {
-			store.rounds = [createMockRound()];
+			store.rounds = [
+				createMockRound(),
+			];
 			store.error = 'some error';
 
 			store.$reset();

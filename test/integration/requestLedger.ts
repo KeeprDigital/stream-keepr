@@ -31,7 +31,9 @@ interface RecordedRequest {
 
 /** How a request reads in a report: its method, defaulting as `fetch` does, and its path. */
 export function requestLabel(path: string, method: unknown): string {
-	return `${typeof method === 'string' ? method.toUpperCase() : 'GET'} ${path}`;
+	return `${typeof method === 'string'
+		? method.toUpperCase()
+		: 'GET'} ${path}`;
 }
 
 export function createRequestLedger(now: () => number = Date.now) {
@@ -39,7 +41,10 @@ export function createRequestLedger(now: () => number = Date.now) {
 
 	return {
 		async record<T>(label: string, run: () => Promise<T>): Promise<T> {
-			const request: RecordedRequest = { label, startedAt: now() };
+			const request: RecordedRequest = {
+				label,
+				startedAt: now(),
+			};
 			requests.push(request);
 			try {
 				return await run();
@@ -65,7 +70,9 @@ export function createRequestLedger(now: () => number = Date.now) {
 
 			return [
 				...stillPending.map(line),
-				...(elided > 0 ? [`… ${elided} earlier requests returned`] : []),
+				...(elided > 0
+					? [`… ${elided} earlier requests returned`]
+					: []),
 				...requests.slice(-REPORTED_REQUESTS).map(line),
 			];
 		},

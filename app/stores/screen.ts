@@ -101,7 +101,9 @@ export const useScreenStore = defineStore('screen', () => {
 		if (!screenRuntime.isSupersededByCache(fetched))
 			return screenRuntime.withOwnedFields(fetched);
 		const cached = screenRuntime.cachedRevision(fetched.id);
-		return cached ? toRaw(cached) : fetched;
+		return cached
+			? toRaw(cached)
+			: fetched;
 	}
 
 	async function loadScreensByEventId(eventId: number) {

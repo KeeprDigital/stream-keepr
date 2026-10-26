@@ -25,7 +25,19 @@ import { readFileSync } from 'node:fs';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 
-const TYPES = ['feat', 'fix', 'perf', 'refactor', 'docs', 'test', 'build', 'ci', 'chore', 'revert', 'style'];
+const TYPES = [
+	'feat',
+	'fix',
+	'perf',
+	'refactor',
+	'docs',
+	'test',
+	'build',
+	'ci',
+	'chore',
+	'revert',
+	'style',
+];
 const CONVENTIONAL = new RegExp(`^(?:${TYPES.join('|')})(?:\\([^)]+\\))?!?: \\S`);
 const COMMIT_ID = /^[0-9a-f]{40}$/;
 
@@ -47,7 +59,9 @@ export async function checkTitles(eventName, event, commitMessages) {
 		const title = event?.pull_request?.title;
 		if (typeof title !== 'string')
 			return ['The pull_request event carries no title.'];
-		return isConventionalTitle(title) ? [] : [`PR title ${JSON.stringify(title)} is not a Conventional Commit.`];
+		return isConventionalTitle(title)
+			? []
+			: [`PR title ${JSON.stringify(title)} is not a Conventional Commit.`];
 	}
 	if (eventName === 'merge_group') {
 		const base = event?.merge_group?.base_sha;
@@ -80,7 +94,9 @@ async function compareViaGitHub(base, head) {
 
 async function main() {
 	const eventName = process.env.GITHUB_EVENT_NAME ?? '';
-	const event = process.env.GITHUB_EVENT_PATH ? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')) : {};
+	const event = process.env.GITHUB_EVENT_PATH
+		? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'))
+		: {};
 	const problems = await checkTitles(eventName, event, compareViaGitHub);
 	if (problems.length === 0) {
 		console.log(`Conventional: everything this ${eventName} lands.`);

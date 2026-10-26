@@ -135,7 +135,9 @@ export function normalizeMeleePlayerName(name: string): string {
  * 0 = mainboard, 99 = sideboard, 4 = companion
  */
 function mapCompartment(compartmentCode: number): DeckListCompartment {
-	return compartmentCode === 99 ? 'sideboard' : 'mainboard';
+	return compartmentCode === 99
+		? 'sideboard'
+		: 'mainboard';
 }
 
 function isCompanionRecord(compartmentCode: number): boolean {
@@ -443,7 +445,9 @@ function mapCompetitorToPlayerData(
 	const playerData = applyMatchDeckSnapshot(
 		basePlayerData,
 		resolvedDeck.deck,
-		resolvedDeck.deck?.archetypeId == null ? null : context.archetypesById.get(resolvedDeck.deck.archetypeId),
+		resolvedDeck.deck?.archetypeId == null
+			? null
+			: context.archetypesById.get(resolvedDeck.deck.archetypeId),
 		{ expectsMtgDeck: referencedDeckIds.length > 0 || playerDecks.length > 0 },
 	);
 

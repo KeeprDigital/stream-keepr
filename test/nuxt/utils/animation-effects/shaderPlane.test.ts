@@ -109,7 +109,12 @@ describe('createShaderPlaneEffect with a feedback buffer', () => {
 		}, { tint: '#ff0000', strength: 2, speed: 0.5 });
 		const renderer = renderers[0] as StubRenderer;
 		const material = StubMaterial.lastCreated!;
-		return { instance, renderer, material, renderTargets };
+		return {
+			instance,
+			renderer,
+			material,
+			renderTargets,
+		};
 	}
 
 	it('draws each frame into a buffer and then onto the screen', () => {

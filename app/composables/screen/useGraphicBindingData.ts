@@ -29,7 +29,15 @@ import { useConsumedEventData } from '~/modules/event-data/resync';
  * bound values recompute from it, deletes included (#610).
  */
 export function useGraphicBindingData() {
-	useConsumedEventData(['event', 'players', 'phases', 'rounds', 'matches', 'featureMatchSlots', 'archetypes']);
+	useConsumedEventData([
+		'event',
+		'players',
+		'phases',
+		'rounds',
+		'matches',
+		'featureMatchSlots',
+		'archetypes',
+	]);
 	const eventStore = useEventStore();
 	const playerStore = usePlayerStore();
 	const matchStore = useMatchStore();
@@ -111,11 +119,20 @@ export function useGraphicBindingData() {
 					value: Number(id),
 				}));
 			case 'talent':
-				return Object.entries(data.talents).map(([id, talent]) => ({ label: talent.name, value: Number(id) }));
+				return Object.entries(data.talents).map(([id, talent]) => ({
+					label: talent.name,
+					value: Number(id),
+				}));
 			case 'phase':
-				return Object.entries(data.phases).map(([id, phase]) => ({ label: phase.name, value: Number(id) }));
+				return Object.entries(data.phases).map(([id, phase]) => ({
+					label: phase.name,
+					value: Number(id),
+				}));
 			case 'round':
-				return Object.entries(data.rounds).map(([id, round]) => ({ label: round.name, value: Number(id) }));
+				return Object.entries(data.rounds).map(([id, round]) => ({
+					label: round.name,
+					value: Number(id),
+				}));
 			case 'match':
 				return Object.entries(data.matches).map(([id, match]) => ({
 					label: [match.player1Data?.name, match.player2Data?.name].filter(Boolean).join(' vs ')
@@ -124,7 +141,9 @@ export function useGraphicBindingData() {
 				}));
 			case 'feature-match-slot':
 				return Object.entries(data.featureMatchSlots).map(([id, slot]) => ({
-					label: slot.roundName ? `Slot ${id} — ${slot.roundName}` : `Slot ${id}`,
+					label: slot.roundName
+						? `Slot ${id} — ${slot.roundName}`
+						: `Slot ${id}`,
 					value: Number(id),
 				}));
 			case 'archetype':

@@ -29,7 +29,9 @@ const counterTypeConfigs = computed(() => {
 		return props.availableCounterTypes;
 	}
 	const game = eventStore.event?.game;
-	return game ? getCounterTypeConfigs(game) : [];
+	return game
+		? getCounterTypeConfigs(game)
+		: [];
 });
 
 const showAddMenu = ref(false);
@@ -77,7 +79,10 @@ function handleRemove(index: number) {
 }
 
 function addCounter(key: string) {
-	const updated = [...props.counters, { type: key, value: 0 }];
+	const updated = [
+		...props.counters,
+		{ type: key, value: 0 },
+	];
 	playerControls.updateCounters(updated);
 	showAddMenu.value = false;
 }
@@ -100,7 +105,9 @@ const touchGridClass = computed(() => {
 
 const addButtonClass = computed(() => {
 	if (props.touch) {
-		return props.touchColumns > 1 ? 'col-span-full justify-self-center' : 'justify-self-center';
+		return props.touchColumns > 1
+			? 'col-span-full justify-self-center'
+			: 'justify-self-center';
 	}
 
 	return 'md:col-span-2 md:justify-self-center';

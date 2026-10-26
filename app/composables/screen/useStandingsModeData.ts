@@ -51,7 +51,9 @@ export function useStandingsModeData() {
 	const outputReads = useScreenOutputReads();
 	const eventStore = useEventStore();
 
-	const selectedWatchlistId = () => config.value.viewMode === 'watchlist' ? config.value.playerListId ?? null : null;
+	const selectedWatchlistId = () => config.value.viewMode === 'watchlist'
+		? config.value.playerListId ?? null
+		: null;
 	const showsPositionChange = () => isColumnVisible(config.value.columns, 'positionChange');
 
 	// ── Data Loading ──
@@ -66,7 +68,13 @@ export function useStandingsModeData() {
 			? `${outputReads.scopeKey.value}:${config.value.viewMode}:${config.value.playerListId}:${config.value.roundId}:${showsPositionChange()}`
 			: null,
 		read: () => outputReads.standings(),
-		initialData: { players: [], round: null, roundStandings: null, watchlist: null, previousRoundPositions: null },
+		initialData: {
+			players: [],
+			round: null,
+			roundStandings: null,
+			watchlist: null,
+			previousRoundPositions: null,
+		},
 		errorMessage: 'Failed to load standings data',
 		dependsOn: standingsDependencies(selectedWatchlistId, showsPositionChange),
 	});
@@ -77,11 +85,15 @@ export function useStandingsModeData() {
 	const watchlistPlayerIds = computed(() => new Set(watchlist.value?.playerIds ?? []));
 	const roundSnapshotMap = computed(() => {
 		const standings = freshness.data.value.roundStandings;
-		return standings ? new Map(standings.map(({ playerId, ...snapshot }) => [playerId, snapshot])) : null;
+		return standings
+			? new Map(standings.map(({ playerId, ...snapshot }) => [playerId, snapshot]))
+			: null;
 	});
 	const previousRoundPositionMap = computed(() => {
 		const previous = freshness.data.value.previousRoundPositions;
-		return previous ? new Map(previous.positions.map(({ playerId, position }) => [playerId, position])) : null;
+		return previous
+			? new Map(previous.positions.map(({ playerId, position }) => [playerId, position]))
+			: null;
 	});
 
 	// ── Header ──
@@ -203,13 +215,17 @@ export function useStandingsModeData() {
 
 		switch (key) {
 			case 'position':
-				return player.position != null ? String(player.position) : '-';
+				return player.position != null
+					? String(player.position)
+					: '-';
 			case 'name':
 				return player.name;
 			case 'record':
 				return formatPlayerRecord(player, event);
 			case 'points':
-				return player.points != null ? String(player.points) : '-';
+				return player.points != null
+					? String(player.points)
+					: '-';
 			case 'deck': {
 				return getMtgGameData(player.gameData).deckName ?? '-';
 			}

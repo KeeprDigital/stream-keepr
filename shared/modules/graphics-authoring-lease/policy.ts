@@ -156,13 +156,36 @@ export function resolveGraphicsAuthoringLease(
 	const live = isGraphicsAuthoringLeaseLive(record, now);
 	const ownedByAsker = live && request.sessionId !== undefined && record.holderSessionId === request.sessionId;
 
-	if (!live)
-		return { outcome: 'grant', role: 'holder', writable: true, heldByAnotherSession: false };
-	if (ownedByAsker)
-		return { outcome: 'renew', role: 'holder', writable: true, heldByAnotherSession: false };
-	if (request.takeover)
-		return { outcome: 'takeover', role: 'holder', writable: true, heldByAnotherSession: false };
-	return { outcome: 'observe', role: 'observer', writable: false, heldByAnotherSession: true };
+	if (!live) {
+		return {
+			outcome: 'grant',
+			role: 'holder',
+			writable: true,
+			heldByAnotherSession: false,
+		};
+	}
+	if (ownedByAsker) {
+		return {
+			outcome: 'renew',
+			role: 'holder',
+			writable: true,
+			heldByAnotherSession: false,
+		};
+	}
+	if (request.takeover) {
+		return {
+			outcome: 'takeover',
+			role: 'holder',
+			writable: true,
+			heldByAnotherSession: false,
+		};
+	}
+	return {
+		outcome: 'observe',
+		role: 'observer',
+		writable: false,
+		heldByAnotherSession: true,
+	};
 }
 
 /** The state one session sees for an artifact, without asking to hold it. */

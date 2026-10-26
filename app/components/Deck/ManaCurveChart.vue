@@ -29,7 +29,9 @@ const chartHeight = computed(() => props.height ?? 140);
 
 const chartData = computed(() =>
 	visibleBuckets.value.map(cmc => ({
-		label: cmc === CURVE_MAX_BUCKET ? `${CURVE_MAX_BUCKET}+` : String(cmc),
+		label: cmc === CURVE_MAX_BUCKET
+			? `${CURVE_MAX_BUCKET}+`
+			: String(cmc),
 		count: props.curve[cmc] ?? 0,
 	})),
 );
@@ -41,7 +43,13 @@ const countAxis = computed(() => {
 	if (max === 0)
 		return { interval: 1, max: 1 };
 
-	const idealStep = max <= 4 ? 1 : max <= 10 ? 2 : max <= 20 ? 5 : 10;
+	const idealStep = max <= 4
+		? 1
+		: max <= 10
+			? 2
+			: max <= 20
+				? 5
+				: 10;
 	let interval = idealStep;
 	while (interval > 1 && Math.ceil(max / interval) < 4)
 		interval = Math.max(1, Math.floor(interval / 2));

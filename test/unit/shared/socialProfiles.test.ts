@@ -81,20 +81,29 @@ describe('normalizeSocialProfileInput', () => {
 describe('social Profile Projection acceptance', () => {
 	function acceptance(handle: string) {
 		return resolveSocialProfileProjectionAcceptances({
-			sources: [{ key: 'talent', label: 'Talent', kind: 'talent' }],
-			socialProfileProjections: [{
-				key: 'profile',
-				label: 'Social Profile',
-				sourceKey: 'talent',
-				presentationGroupId: 'group',
-				dwellMs: 8_000,
-				transition: 'crossfade',
-				transitionDurationMs: 250,
-			}],
+			sources: [
+				{ key: 'talent', label: 'Talent', kind: 'talent' },
+			],
+			socialProfileProjections: [
+				{
+					key: 'profile',
+					label: 'Social Profile',
+					sourceKey: 'talent',
+					presentationGroupId: 'group',
+					dwellMs: 8_000,
+					transition: 'crossfade',
+					transitionDurationMs: 250,
+				},
+			],
 		}, { talent: 7 }, {
 			event: null,
 			players: {},
-			talents: { 7: { name: 'Legacy Talent', socialProfiles: { twitch: handle } } },
+			talents: {
+				7: {
+					name: 'Legacy Talent',
+					socialProfiles: { twitch: handle },
+				},
+			},
 			phases: {},
 			rounds: {},
 			matches: {},
@@ -129,14 +138,22 @@ describe('social Profile Projection acceptance', () => {
 	});
 
 	it('never accepts a profile set recovery refuses, whatever handle Event Data holds', () => {
-		const handles = ['', 'a', 'Caster', 'a'.repeat(MAX_SOCIAL_PROFILE_HANDLE_LENGTH), 'a'.repeat(MAX_SOCIAL_PROFILE_HANDLE_LENGTH + 1)];
+		const handles = [
+			'',
+			'a',
+			'Caster',
+			'a'.repeat(MAX_SOCIAL_PROFILE_HANDLE_LENGTH),
+			'a'.repeat(MAX_SOCIAL_PROFILE_HANDLE_LENGTH + 1),
+		];
 
 		for (const handle of handles) {
 			const stored = {
 				playout: {},
 				inputs: {},
 				sources: {},
-				socialProfileProjections: { lower: acceptance(handle) },
+				socialProfileProjections: {
+					lower: acceptance(handle),
+				},
 			};
 
 			expect(broadcastGraphicsRecoveryFault(JSON.parse(JSON.stringify(stored)))).toBeNull();

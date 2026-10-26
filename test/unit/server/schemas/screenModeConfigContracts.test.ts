@@ -24,7 +24,10 @@ it('declares the Background Layer stack and the Broadcast Graphics stack authore
 		.map(mode => [mode, screenModeConfigContract(mode).authoredStacks] as const)
 		.filter(([, stacks]) => stacks.length > 0));
 
-	expect(declared).toEqual({ 'background': ['layers'], 'broadcast-graphics': ['graphics'] });
+	expect(declared).toEqual({
+		'background': ['layers'],
+		'broadcast-graphics': ['graphics'],
+	});
 });
 
 describe.each(SCREEN_MODE_VALUES)('the %s config contract', (mode) => {
@@ -78,7 +81,10 @@ describe.each(SCREEN_MODE_VALUES)('the %s config contract', (mode) => {
 	it('saves what storage holds back through a full write unchanged, as the Edit Screen dialog sends it', () => {
 		// PATCHes leave a fragment, and a display reset writes every default but the
 		// preserved keys. Neither may be refused, nor completed into storage.
-		for (const stored of [{}, getDisplayDefaultsForMode(mode)])
+		for (const stored of [
+			{},
+			getDisplayDefaultsForMode(mode),
+		])
 			expect(modeConfigsMapSchema.parse({ [mode]: stored })).toEqual({ [mode]: stored });
 	});
 });

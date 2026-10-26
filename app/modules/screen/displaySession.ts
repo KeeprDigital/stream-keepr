@@ -86,7 +86,9 @@ class EventContextUnavailable extends Error {
 }
 
 function firstRouteParam(value: string | string[]): string {
-	return Array.isArray(value) ? value[0] ?? '' : value;
+	return Array.isArray(value)
+		? value[0] ?? ''
+		: value;
 }
 
 function routeEventId(route: RouteLocationNormalizedLoaded): number {
@@ -99,7 +101,10 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	const screenStore = options.screenStore ?? useScreenStore();
 	const realtime = options.realtime ?? useRealtime();
 	const outputReads = options.outputReads ?? useScreenOutputReadRepository();
-	const exportAdapter = { ...defaultExportAdapter, ...options.exportAdapter };
+	const exportAdapter = {
+		...defaultExportAdapter,
+		...options.exportAdapter,
+	};
 
 	const eventId = computed(() => eventStore.eventId);
 	const screenSlug = computed(() => firstRouteParam(route.params.screenSlug as string | string[]));
@@ -175,7 +180,9 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 
 	const isControlScreen = computed(() => {
 		const mode = screenStore.activeScreen?.currentMode;
-		return mode ? isControlScreenMode(mode) : false;
+		return mode
+			? isControlScreenMode(mode)
+			: false;
 	});
 	const layoutName = computed(() => isControlScreen.value ? 'screen-control' : 'screen');
 
@@ -210,7 +217,9 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	const loading = ref(true);
 	const loadFailure = ref<LoadFailure | null>(null);
 	const error = computed(() => loadFailure.value ? loadFailureMessages[loadFailure.value].title : null);
-	const errorDetail = computed(() => loadFailure.value ? loadFailureMessages[loadFailure.value].detail(screenSlug.value) : null);
+	const errorDetail = computed(() => loadFailure.value
+		? loadFailureMessages[loadFailure.value].detail(screenSlug.value)
+		: null);
 	const exportError = ref<string | null>(null);
 	const showIdentify = ref(false);
 	const showDebug = ref(false);
@@ -222,7 +231,9 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		uptimeSeconds.value = Math.floor((Date.now() - connectedAt) / 1000);
 	}, 1000);
 
-	const identifyClass = computed(() => outputMode.value === 'key' ? 'border-white' : 'border-primary');
+	const identifyClass = computed(() => outputMode.value === 'key'
+		? 'border-white'
+		: 'border-primary');
 	const debugPanelClass = computed(() => outputMode.value === 'key'
 		? 'bg-white text-white border border-white'
 		: 'bg-black/80 text-white');
@@ -318,7 +329,9 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		}
 		catch (err) {
 			console.error('Failed to export screen PNG:', err);
-			exportError.value = err instanceof Error ? err.message : 'Failed to export PNG';
+			exportError.value = err instanceof Error
+				? err.message
+				: 'Failed to export PNG';
 		}
 	}
 
@@ -442,7 +455,9 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			await finishLoad(readScope(evtId, loadedScreen.id), flight);
 		}
 		catch (err) {
-			failLoad(err instanceof EventContextUnavailable ? 'event-context-unavailable' : 'screen-missing', err, flight);
+			failLoad(err instanceof EventContextUnavailable
+				? 'event-context-unavailable'
+				: 'screen-missing', err, flight);
 		}
 	}
 

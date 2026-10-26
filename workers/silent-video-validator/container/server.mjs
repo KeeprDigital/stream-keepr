@@ -41,7 +41,11 @@ let activeValidation;
 function reserveValidation() {
 	if (activeValidation)
 		return undefined;
-	const validation = { token: randomBytes(16).toString('hex'), expected: undefined, sourcePath: undefined };
+	const validation = {
+		token: randomBytes(16).toString('hex'),
+		expected: undefined,
+		sourcePath: undefined,
+	};
 	activeValidation = validation;
 	return validation;
 }
@@ -58,7 +62,9 @@ function rejection(stage, detail) {
 
 function run(command, args, { collectStdout = true } = {}) {
 	return new Promise((resolve, reject) => {
-		const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+		const child = spawn(command, args, {
+			stdio: ['ignore', 'pipe', 'pipe'],
+		});
 		let stdout = '';
 		let stderr = '';
 		if (collectStdout)
@@ -90,13 +96,18 @@ async function receiveSource(request, sourcePath, expected) {
 		request.once('error', reject);
 		file.once('error', reject);
 	});
-	return { byteLength, sha256: hash.digest('hex') };
+	return {
+		byteLength,
+		sha256: hash.digest('hex'),
+	};
 }
 
 function decoderArguments(expected) {
 	// Chromium's native VP9 pipeline and ffmpeg's libvpx-vp9 both decode the
 	// alpha plane; ffmpeg's built-in vp9 decoder silently drops it.
-	return expected.codec === 'vp9' ? ['-c:v', 'libvpx-vp9'] : [];
+	return expected.codec === 'vp9'
+		? ['-c:v', 'libvpx-vp9']
+		: [];
 }
 
 async function verifyContainerIdentity(sourcePath, expected) {
@@ -129,7 +140,9 @@ async function verifyContainerIdentity(sourcePath, expected) {
 	if (videoStreams.length !== 1 || streams.length !== 1)
 		return rejection('metadata', 'Source must contain exactly one video stream');
 	const video = videoStreams[0];
-	const expectedCodec = expected.codec === 'h264' ? 'h264' : 'vp9';
+	const expectedCodec = expected.codec === 'h264'
+		? 'h264'
+		: 'vp9';
 	if (video.codec_name !== expectedCodec)
 		return rejection('metadata', `Codec ${video.codec_name} does not match ${expectedCodec}`);
 	if (video.width !== expected.width || video.height !== expected.height)
@@ -164,8 +177,12 @@ async function verifyCompleteDecode(sourcePath, expected) {
 		return rejection('metadata', `Complete decode failed: ${decode.stderr.trim()}`);
 	if (decode.stderr.trim().length > 0)
 		return rejection('metadata', `Decode reported errors: ${decode.stderr.trim()}`);
-	const frames = [...decode.stdout.matchAll(/^frame=(\d+)$/gm)].at(-1);
-	const decodedFrameCount = frames ? Number(frames[1]) : Number.NaN;
+	const frames = [
+		...decode.stdout.matchAll(/^frame=(\d+)$/gm),
+	].at(-1);
+	const decodedFrameCount = frames
+		? Number(frames[1])
+		: Number.NaN;
 	if (decodedFrameCount !== expected.frameCount)
 		return rejection('metadata', `Decoded ${decodedFrameCount} frames but inspection recorded ${expected.frameCount}`);
 	return { decodedFrameCount };
@@ -303,7 +320,9 @@ async function chromiumProof(expected, proofToken) {
 		'--remote-allow-origins=*',
 		'--no-first-run',
 		`--user-data-dir=${profile}`,
-	], { stdio: ['ignore', 'ignore', 'pipe'] });
+	], {
+		stdio: ['ignore', 'ignore', 'pipe'],
+	});
 	let socket;
 	try {
 		const browserWebSocket = await new Promise((resolve, reject) => {
@@ -398,7 +417,9 @@ async function chromiumProof(expected, proofToken) {
 		return rejection(
 			'playback',
 			`Chromium playback proof timed out: ${diagnostics?.result?.value ?? 'no page state'}${
-				pageEvents.length ? ` events: ${pageEvents.slice(0, 5).join(' | ')}` : ''}`,
+				pageEvents.length
+					? ` events: ${pageEvents.slice(0, 5).join(' | ')}`
+					: ''}`,
 		);
 	}
 	finally {
@@ -458,7 +479,9 @@ async function validate(request, validation) {
 	let workspace;
 	try {
 		workspace = await mkdtemp(join(tmpdir(), 'silent-video-validation-'));
-		const sourcePath = join(workspace, expected.format === 'mp4' ? 'source.mp4' : 'source.webm');
+		const sourcePath = join(workspace, expected.format === 'mp4'
+			? 'source.mp4'
+			: 'source.webm');
 		validation.sourcePath = sourcePath;
 		let received;
 		try {
@@ -516,7 +539,9 @@ async function serveSource(request, response, validation) {
 	const { size } = await stat(sourcePath);
 	const range = request.headers.range?.match(/^bytes=(\d*)-(\d*)$/);
 	if (range && (range[1] !== '' || range[2] !== '')) {
-		const start = range[1] === '' ? Math.max(0, size - Number(range[2])) : Number(range[1]);
+		const start = range[1] === ''
+			? Math.max(0, size - Number(range[2]))
+			: Number(range[1]);
 		const end = range[1] !== '' && range[2] !== ''
 			? Math.min(Number(range[2]), size - 1)
 			: size - 1;
@@ -589,7 +614,9 @@ const server = createServer(async (request, response) => {
 	}
 	catch (error) {
 		response.writeHead(500, { 'content-type': 'application/json' })
-			.end(JSON.stringify({ error: String(error?.message ?? error) }));
+			.end(JSON.stringify({
+				error: String(error?.message ?? error),
+			}));
 	}
 });
 

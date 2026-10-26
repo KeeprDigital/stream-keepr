@@ -16,7 +16,9 @@ import FillFields from '~/components/Graphics/FillFields.vue';
 enableAutoUnmount(afterEach);
 
 const UFormFieldStub = defineComponent({
-	props: { label: { type: String, required: false } },
+	props: {
+		label: { type: String, required: false },
+	},
 	template: '<div><span>{{ label }}</span><slot /></div>',
 });
 
@@ -40,19 +42,27 @@ const global = {
 		UInputNumber: numberStub('UInputNumber'),
 		UIOpacityInput: numberStub('UIOpacityInput'),
 		UButton: defineComponent({
-			props: { disabled: { type: Boolean, required: false } },
+			props: {
+				disabled: { type: Boolean, required: false },
+			},
 			emits: ['click'],
 			template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 		}),
 		USelect: defineComponent({
 			name: 'USelect',
-			props: { modelValue: { type: String, required: false }, disabled: { type: Boolean, required: false } },
+			props: {
+				modelValue: { type: String, required: false },
+				disabled: { type: Boolean, required: false },
+			},
 			emits: ['update:modelValue'],
 			template: '<select :disabled="disabled" />',
 		}),
 		UIColorPicker: defineComponent({
 			name: 'UIColorPicker',
-			props: { modelValue: { type: String, required: false }, disabled: { type: Boolean, required: false } },
+			props: {
+				modelValue: { type: String, required: false },
+				disabled: { type: Boolean, required: false },
+			},
 			emits: ['update:modelValue'],
 			template: '<button type="button" :disabled="disabled" />',
 		}),
@@ -94,7 +104,10 @@ const uses: Use[] = [
 	{
 		name: 'a Graphic Item\'s fill, with the hex picker',
 		colors: ['#123456', '#abcdef'],
-		mount: (fill, props = {}) => mount(FillFields, { global, props: { fill, ...props } }) as Wrapper,
+		mount: (fill, props = {}) => mount(FillFields, {
+			global,
+			props: { fill, ...props },
+		}) as Wrapper,
 		colorOf: (wrapper, label) => picker(wrapper, label)?.props('modelValue'),
 		pickColor: async (wrapper, label, color) => {
 			picker(wrapper, label)!.vm.$emit('update:modelValue', color);
@@ -139,7 +152,9 @@ function gradientOf([first, second]: [string, string], count = 2): GraphicFill {
 		type: 'linear-gradient',
 		angle: 90,
 		stops: Array.from({ length: count }, (_, index) => ({
-			color: index === 0 ? first : second,
+			color: index === 0
+				? first
+				: second,
 			position: index / (count - 1),
 			opacity: 1,
 		})),
@@ -175,22 +190,37 @@ describe.each(uses)('graphic fill fields for $name', (use) => {
 		expect(use.colorOf(wrapper, 'Stop 3 colour')).toBe(use.colors[1]);
 
 		await use.pickColor(wrapper, 'Stop 2 colour', use.colors[0]);
-		expect(lastEdit(wrapper)).toEqual({ kind: 'gradient-stop', index: 1, patch: { color: use.colors[0] } });
+		expect(lastEdit(wrapper)).toEqual({
+			kind: 'gradient-stop',
+			index: 1,
+			patch: { color: use.colors[0] },
+		});
 
 		numberField(wrapper, 'UInputNumber', 'Stop 3 position')!.vm.$emit('update:modelValue', 0.8);
 		await flushPromises();
-		expect(lastEdit(wrapper)).toEqual({ kind: 'gradient-stop', index: 2, patch: { position: 0.8 } });
+		expect(lastEdit(wrapper)).toEqual({
+			kind: 'gradient-stop',
+			index: 2,
+			patch: { position: 0.8 },
+		});
 
 		numberField(wrapper, 'UIOpacityInput', 'Stop 1 opacity')!.vm.$emit('update:modelValue', null);
 		await flushPromises();
-		expect(lastEdit(wrapper)).toEqual({ kind: 'gradient-stop', index: 0, patch: { opacity: 1 } });
+		expect(lastEdit(wrapper)).toEqual({
+			kind: 'gradient-stop',
+			index: 0,
+			patch: { opacity: 1 },
+		});
 	});
 
 	it('bounds and edits the gradient angle', async () => {
 		const wrapper = use.mount(gradientOf(use.colors));
 		const angle = numberField(wrapper, 'UInputNumber', 'Gradient angle')!;
 
-		expect([angle.props('min'), angle.props('max')]).toEqual([-360, 360]);
+		expect([
+			angle.props('min'),
+			angle.props('max'),
+		]).toEqual([-360, 360]);
 
 		angle.vm.$emit('update:modelValue', 135);
 		await flushPromises();

@@ -5,7 +5,12 @@ import { defineComponent, reactive, ref, watch } from 'vue';
 
 const mockEventStore = reactive({
 	eventId: 1,
-	event: { id: 1, game: 'mtg' as const, pronounsEnabled: true, lgsEnabled: false },
+	event: {
+		id: 1,
+		game: 'mtg' as const,
+		pronounsEnabled: true,
+		lgsEnabled: false,
+	},
 });
 
 const mockPlayerStore = reactive({
@@ -51,7 +56,9 @@ const mockToast = {
 
 const mockOverlay = {
 	create: vi.fn(() => ({
-		open: vi.fn(() => ({ result: Promise.resolve(false) })),
+		open: vi.fn(() => ({
+			result: Promise.resolve(false),
+		})),
 	})),
 };
 
@@ -78,7 +85,12 @@ mockNuxtImport('useToast', () => () => mockToast);
 mockNuxtImport('useOverlay', () => () => mockOverlay);
 mockNuxtImport('usePlayerDeckCache', () => () => mockPlayerDeckCache);
 mockNuxtImport('useSendDeckToScreen', () => () => mockSendDeckToScreen);
-mockNuxtImport('useEventPageLoading', () => () => ({ eventId, initialLoading, initialError: ref(null), retry: vi.fn() }));
+mockNuxtImport('useEventPageLoading', () => () => ({
+	eventId,
+	initialLoading,
+	initialError: ref(null),
+	retry: vi.fn(),
+}));
 mockNuxtImport('watchDebounced', () => (source: any, callback: any) => watch(source, callback));
 
 const NuxtLayoutStub = defineComponent({
@@ -170,7 +182,14 @@ describe('players page', () => {
 	});
 
 	it('shows the navbar action and player list once players exist', async () => {
-		mockPlayerStore.players = [{ id: 7, name: 'Ari', gameData: null, updatedAt: '2026-01-01T00:00:00.000Z' }];
+		mockPlayerStore.players = [
+			{
+				id: 7,
+				name: 'Ari',
+				gameData: null,
+				updatedAt: '2026-01-01T00:00:00.000Z',
+			},
+		];
 
 		const wrapper = await mountPage();
 

@@ -19,23 +19,27 @@ const GEOMETRY = {
 
 function withShape(geometry: Record<string, unknown>) {
 	return broadcastGraphicsModeConfigSchema.safeParse({
-		graphics: [{
-			id: 'a',
-			name: 'A',
-			inputs: [],
-			items: [{
-				type: 'shape',
-				id: 'shape',
-				label: 'Shape 1',
-				visible: true,
-				anchor: 'top-left',
-				x: 0,
-				y: 0,
-				width: 10,
-				height: 10,
-				geometry,
-			}],
-		}],
+		graphics: [
+			{
+				id: 'a',
+				name: 'A',
+				inputs: [],
+				items: [
+					{
+						type: 'shape',
+						id: 'shape',
+						label: 'Shape 1',
+						visible: true,
+						anchor: 'top-left',
+						x: 0,
+						y: 0,
+						width: 10,
+						height: 10,
+						geometry,
+					},
+				],
+			},
+		],
 	}).success;
 }
 
@@ -55,12 +59,23 @@ describe.each([
 ])('shape geometry bounds for %s', (_owner, accepts) => {
 	it('accepts a geometry at the bounds', () => {
 		expect(accepts(GEOMETRY)).toBe(true);
-		expect(accepts({ ...GEOMETRY, topLeft: { treatment: 'rounded', size: 10_000 }, leftSlant: -10_000, rightSlant: 10_000 })).toBe(true);
+		expect(accepts({
+			...GEOMETRY,
+			topLeft: { treatment: 'rounded', size: 10_000 },
+			leftSlant: -10_000,
+			rightSlant: 10_000,
+		})).toBe(true);
 	});
 
 	it('refuses a corner size or slant past the bounds', () => {
-		expect(accepts({ ...GEOMETRY, topLeft: { treatment: 'rounded', size: 10_001 } })).toBe(false);
-		expect(accepts({ ...GEOMETRY, topLeft: { treatment: 'rounded', size: -1 } })).toBe(false);
+		expect(accepts({
+			...GEOMETRY,
+			topLeft: { treatment: 'rounded', size: 10_001 },
+		})).toBe(false);
+		expect(accepts({
+			...GEOMETRY,
+			topLeft: { treatment: 'rounded', size: -1 },
+		})).toBe(false);
 		expect(accepts({ ...GEOMETRY, leftSlant: -10_001 })).toBe(false);
 		expect(accepts({ ...GEOMETRY, rightSlant: 10_001 })).toBe(false);
 	});
@@ -69,6 +84,9 @@ describe.each([
 		const { bottomLeft: _missing, ...withoutCorner } = GEOMETRY;
 		expect(accepts(withoutCorner)).toBe(false);
 		expect(accepts({ ...GEOMETRY, skew: 4 })).toBe(false);
-		expect(accepts({ ...GEOMETRY, topLeft: { treatment: 'bevel', size: 4 } })).toBe(false);
+		expect(accepts({
+			...GEOMETRY,
+			topLeft: { treatment: 'bevel', size: 4 },
+		})).toBe(false);
 	});
 });

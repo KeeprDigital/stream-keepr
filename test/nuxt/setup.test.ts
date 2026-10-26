@@ -25,7 +25,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { callsTo } from '~~/test/helpers/lastCallTo';
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 mockNuxtImport('$fetch', () => mockFetch);
 
 /**

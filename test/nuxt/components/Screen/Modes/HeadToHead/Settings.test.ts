@@ -7,16 +7,27 @@ import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
 const mockConfig = ref<Record<string, any>>({});
 const mockUpdateConfig = vi.fn((patch: Record<string, unknown>) => {
-	mockConfig.value = { ...mockConfig.value, ...patch };
+	mockConfig.value = {
+		...mockConfig.value,
+		...patch,
+	};
 });
 
 mockNuxtImport('usePlayerStore', () => () => ({
-	players: [{ id: 7, name: 'Nadia Rivers' }, { id: 8, name: 'Oskar Lind' }],
+	players: [
+		{ id: 7, name: 'Nadia Rivers' },
+		{ id: 8, name: 'Oskar Lind' },
+	],
 	isLoaded: true,
 	loadPlayersByEventId: vi.fn(),
 }));
-mockNuxtImport('useFeatureMatchStore', () => () => ({ loadFeatureMatchesByEventId: vi.fn() }));
-mockNuxtImport('useFeatureMatchMenuItems', () => () => ref([{ label: 'Table 1', value: 4 }, { label: 'Table 2', value: 5 }]));
+mockNuxtImport('useFeatureMatchStore', () => () => ({
+	loadFeatureMatchesByEventId: vi.fn(),
+}));
+mockNuxtImport('useFeatureMatchMenuItems', () => () => ref([
+	{ label: 'Table 1', value: 4 },
+	{ label: 'Table 2', value: 5 },
+]));
 mockNuxtImport('useModeConfigUpdate', () => () => ({
 	config: mockConfig,
 	saving: ref(false),
@@ -26,7 +37,10 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 
 /** A select that names its field and offers its items' values, and picks the given value when told to. */
 const USelectStub = defineComponent({
-	props: { modelValue: { type: null, required: false }, items: { type: Array, required: false } },
+	props: {
+		modelValue: { type: null, required: false },
+		items: { type: Array, required: false },
+	},
 	emits: ['update:modelValue'],
 	setup(props, { attrs, emit }) {
 		return () => h('select', {
@@ -43,8 +57,13 @@ async function mountComponent() {
 	const { default: Settings } = await import(componentPath);
 
 	const wrapper = mount(Settings, {
-		props: { screen: { id: 1 } as Screen, eventId: 1 },
-		global: { stubs: { USelect: USelectStub, UInput: true, ScreenSettingsToggle: true } },
+		props: {
+			screen: { id: 1 } as Screen,
+			eventId: 1,
+		},
+		global: {
+			stubs: { USelect: USelectStub, UInput: true, ScreenSettingsToggle: true },
+		},
 	});
 	await flushPromises();
 	return wrapper;
@@ -59,7 +78,9 @@ async function pick(wrapper: Awaited<ReturnType<typeof mountComponent>>, testId:
 describe('screenHeadToHeadSettings', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockConfig.value = { ...getDefaultConfigForMode('head-to-head') };
+		mockConfig.value = {
+			...getDefaultConfigForMode('head-to-head'),
+		};
 	});
 
 	it('binds the Screen to a Feature Match Slot of the Event', async () => {
@@ -90,7 +111,9 @@ describe('screenHeadToHeadSettings', () => {
 
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ player1Id: 8 });
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ player2Id: 7 });
-		expect(mockUpdateConfig).not.toHaveBeenCalledWith(expect.objectContaining({ featureMatchId: expect.anything() }));
+		expect(mockUpdateConfig).not.toHaveBeenCalledWith(expect.objectContaining({
+			featureMatchId: expect.anything(),
+		}));
 	});
 
 	it('clears a picked Player as the deletion that reads as none', async () => {

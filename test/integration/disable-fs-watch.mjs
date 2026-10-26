@@ -22,8 +22,11 @@ function chunkText(chunk, encoding) {
 	if (typeof chunk === 'string')
 		return chunk;
 
-	if (chunk instanceof Uint8Array)
-		return Buffer.from(chunk).toString(typeof encoding === 'string' ? encoding : 'utf8');
+	if (chunk instanceof Uint8Array) {
+		return Buffer.from(chunk).toString(typeof encoding === 'string'
+			? encoding
+			: 'utf8');
+	}
 
 	return '';
 }

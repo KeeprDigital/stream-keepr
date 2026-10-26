@@ -32,7 +32,12 @@ export function createThumbnailProjection(
 			targetY,
 		);
 	}
-	return { width, height, sourceXByTargetX, targetYBySource };
+	return {
+		width,
+		height,
+		sourceXByTargetX,
+		targetYBySource,
+	};
 }
 
 export function resizeRgbaThumbnail(image: ImageData) {

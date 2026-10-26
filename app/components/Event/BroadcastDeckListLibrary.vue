@@ -92,7 +92,9 @@ onBeforeUnmount(() => {
 });
 
 function failureRecord(value: unknown): Record<string, unknown> | null {
-	return typeof value === 'object' && value !== null ? value as Record<string, unknown> : null;
+	return typeof value === 'object' && value !== null
+		? value as Record<string, unknown>
+		: null;
 }
 
 function presentFailure(cause: unknown, fallback: string): PresentedFailure {
@@ -118,16 +120,24 @@ function presentFailure(cause: unknown, fallback: string): PresentedFailure {
 	return {
 		message: reportedMessage(cause, fallback),
 		code: details?.code,
-		errors: Array.isArray(details?.errors) ? details.errors : [],
+		errors: Array.isArray(details?.errors)
+			? details.errors
+			: [],
 		current: details?.current,
 		retryable: details?.retryable === true,
-		screens: Array.isArray(details?.screens) ? details.screens : [],
+		screens: Array.isArray(details?.screens)
+			? details.screens
+			: [],
 	};
 }
 
 function formattedImportError(error: BroadcastDeckListImportFailureDetail) {
-	const location = error.lineNumber === undefined ? '' : `Line ${error.lineNumber}: `;
-	const source = error.sourceText ? ` — ${error.sourceText}` : '';
+	const location = error.lineNumber === undefined
+		? ''
+		: `Line ${error.lineNumber}: `;
+	const source = error.sourceText
+		? ` — ${error.sourceText}`
+		: '';
 	return `${location}${error.message}${source}`;
 }
 
@@ -260,7 +270,9 @@ async function saveEditor(expectedRevision: number | null) {
 	const input = {
 		name: draft.name.trim(),
 		archetypeLabel: draft.archetypeLabel.trim() || null,
-		colors: draft.colors.length ? draft.colors.join('') : null,
+		colors: draft.colors.length
+			? draft.colors.join('')
+			: null,
 		sourceText: draft.sourceText,
 	};
 

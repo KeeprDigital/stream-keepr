@@ -26,7 +26,10 @@ vi.stubGlobal('defineEventHandler', vi.fn(handler => handler));
 vi.stubGlobal('getRequestURL', mockGetRequestURL);
 
 const handler = (await import('~~/server/api/auth/[...all]')).default;
-const event = stubH3Event({ headers: new Headers(), context: {} });
+const event = stubH3Event({
+	headers: new Headers(),
+	context: {},
+});
 
 describe('the mounted authentication interface', () => {
 	beforeEach(() => {
@@ -35,7 +38,10 @@ describe('the mounted authentication interface', () => {
 	});
 
 	it('answers a Local Developer Session through the ordinary session-reading route', async () => {
-		const localSession = { user: { id: 'local-developer-user' }, session: { id: 'local-session' } };
+		const localSession = {
+			user: { id: 'local-developer-user' },
+			session: { id: 'local-session' },
+		};
 		mockLocalAuthBypassIsActive.mockReturnValue(true);
 		mockRequestUserSession.mockResolvedValue(localSession);
 

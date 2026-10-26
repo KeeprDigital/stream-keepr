@@ -252,19 +252,28 @@ describe('cardParser', () => {
 
 	describe('split layout (aftermath)', () => {
 		it('sets rotated=false', () => {
-			const card = createScryfallCard({ layout: 'split', keywords: ['Aftermath'] });
+			const card = createScryfallCard({
+				layout: 'split',
+				keywords: ['Aftermath'],
+			});
 			const result = cardParser(card);
 			expect(result.displayData.rotated).toBe(false);
 		});
 
 		it('sets counterRotateable=true', () => {
-			const card = createScryfallCard({ layout: 'split', keywords: ['Aftermath'] });
+			const card = createScryfallCard({
+				layout: 'split',
+				keywords: ['Aftermath'],
+			});
 			const result = cardParser(card);
 			expect(result.orientationData.counterRotateable).toBe(true);
 		});
 
 		it('sets front from image_uris', () => {
-			const card = createScryfallCard({ layout: 'split', keywords: ['Aftermath'] });
+			const card = createScryfallCard({
+				layout: 'split',
+				keywords: ['Aftermath'],
+			});
 			const result = cardParser(card);
 			expect(result.imageData.front).toEqual(mockImageUris);
 		});

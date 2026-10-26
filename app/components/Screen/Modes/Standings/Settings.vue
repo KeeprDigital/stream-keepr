@@ -89,14 +89,23 @@ const isDeckColumnVisible = computed(() => isColumnVisible(config.value.columns,
 // The rows the Screen pages, its view mode and reveal applied, read and followed as its Screen Output reads and follows them, so
 // the page count is the one it renders (#780).
 const { rowCount, loading: loadingRows } = useEditedScreenModeData(
-	{ screen: () => props.screen, eventId: () => props.eventId, saving: () => saving.value },
+	{
+		screen: () => props.screen,
+		eventId: () => props.eventId,
+		saving: () => saving.value,
+	},
 	useStandingsModeData,
 );
 
 // The live Page Rotation projection and the anchor writes an operator makes.
 // Every edit below goes through its `updateConfig`, which restarts the
 // rotation from page 1 when the edit changes the rotation's shape.
-const rotation = useRotationConfigWrites({ mode: 'standings', config, rowCount, saveConfig });
+const rotation = useRotationConfigWrites({
+	mode: 'standings',
+	config,
+	rowCount,
+	saveConfig,
+});
 const { updateConfig } = rotation;
 
 function updateMaxTableWidth(value: number | null | undefined) {

@@ -73,8 +73,15 @@ const UInputNumberStub = defineComponent({
 
 const USelectStub = defineComponent({
 	props: {
-		modelValue: { type: [String, Number, Object], required: false },
-		items: { type: Array, required: false, default: () => [] },
+		modelValue: {
+			type: [String, Number, Object],
+			required: false,
+		},
+		items: {
+			type: Array,
+			required: false,
+			default: () => [],
+		},
 	},
 	emits: ['update:modelValue'],
 	template: '<select data-testid="select-input" :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items" :key="item.value" :value="item.value">{{ item.label }}</option></select>',

@@ -6,7 +6,12 @@ import { defineComponent, reactive, ref } from 'vue';
 
 const mockPlayerStore = {
 	players: [
-		{ id: 1, name: 'Alice', updatedAt: '2026-08-01T00:00:00.000Z', gameData: { type: 'mtg', deckName: 'Mono Blue', deckColors: 'U' } },
+		{
+			id: 1,
+			name: 'Alice',
+			updatedAt: '2026-08-01T00:00:00.000Z',
+			gameData: { type: 'mtg', deckName: 'Mono Blue', deckColors: 'U' },
+		},
 	],
 	loadPlayersByEventId: vi.fn().mockResolvedValue(undefined),
 };
@@ -26,7 +31,12 @@ const mockEventStore = reactive({
 });
 const mockBroadcastDeckListStore = reactive({
 	summaries: [
-		{ id: 23, name: 'Feature Table', mainboardQuantity: 60, sideboardQuantity: 15 },
+		{
+			id: 23,
+			name: 'Feature Table',
+			mainboardQuantity: 60,
+			sideboardQuantity: 15,
+		},
 	],
 	loadCollection: mockLoadBroadcastDeckLists,
 });
@@ -71,7 +81,10 @@ const UFormFieldStub = defineComponent({
 const UISegmentedTabsStub = defineComponent({
 	props: {
 		items: { type: Array, required: false },
-		modelValue: { type: [String, Number], required: false },
+		modelValue: {
+			type: [String, Number],
+			required: false,
+		},
 	},
 	emits: ['update:modelValue'],
 	template: `
@@ -93,7 +106,10 @@ const UISegmentedTabsStub = defineComponent({
 
 const USelectStub = defineComponent({
 	props: {
-		modelValue: { type: [String, Number, Boolean, Object], required: false },
+		modelValue: {
+			type: [String, Number, Boolean, Object],
+			required: false,
+		},
 		items: { type: Array, required: false },
 	},
 	emits: ['update:modelValue'],
@@ -122,8 +138,24 @@ function defaultDeckConfig(): Record<string, any> {
 		deckSource: { type: 'player', playerId: 1 },
 		board: 'full',
 		sideboardPlacement: 'beside',
-		mainboard: { view: 'grid', columns: 4, listColumns: 2, cardSize: 'medium', dynamicCardSize: false, cardGap: 8, stackOverlap: 15 },
-		sideboard: { view: 'stack', columns: 4, listColumns: 2, cardSize: 'medium', dynamicCardSize: false, cardGap: 8, stackOverlap: 15 },
+		mainboard: {
+			view: 'grid',
+			columns: 4,
+			listColumns: 2,
+			cardSize: 'medium',
+			dynamicCardSize: false,
+			cardGap: 8,
+			stackOverlap: 15,
+		},
+		sideboard: {
+			view: 'stack',
+			columns: 4,
+			listColumns: 2,
+			cardSize: 'medium',
+			dynamicCardSize: false,
+			cardGap: 8,
+			stackOverlap: 15,
+		},
 		showQuantities: true,
 		showDeckName: true,
 		showDeckColors: true,
@@ -169,7 +201,12 @@ describe('screenDeckSettings', () => {
 		vi.clearAllMocks();
 		mockEventStore.event = { id: 1, game: 'mtg', broadcastDeckListsEnabled: true };
 		mockBroadcastDeckListStore.summaries = [
-			{ id: 23, name: 'Feature Table', mainboardQuantity: 60, sideboardQuantity: 15 },
+			{
+				id: 23,
+				name: 'Feature Table',
+				mainboardQuantity: 60,
+				sideboardQuantity: 15,
+			},
 		];
 		mockConfig.value = defaultDeckConfig();
 		mockFetchDeck.mockResolvedValue({
@@ -254,7 +291,10 @@ describe('screenDeckSettings', () => {
 		expect(mockConfig.value.showHighlanderPointedCards).toBe(true);
 		expect(mockConfig.value.showHighlanderPoints).toBe(true);
 
-		mockConfig.value = { ...mockConfig.value, deckSource: { type: 'player', playerId: 1 } };
+		mockConfig.value = {
+			...mockConfig.value,
+			deckSource: { type: 'player', playerId: 1 },
+		};
 		wrapper = await mountComponent();
 		await flushPromises();
 		expect(wrapper.text()).toContain('Show Total Points');
@@ -266,7 +306,10 @@ describe('screenDeckSettings', () => {
 		{ label: 'Quantity badge position', field: 'quantityPosition', current: 'top-right' },
 		{ label: 'Highlander point badge position', field: 'highlanderPointsPosition', current: 'top-left' },
 	])('picks the $label on a nine-point grid with no centre (#543)', async ({ label, field, current }) => {
-		mockConfig.value = { ...defaultDeckConfig(), showHighlanderPoints: true };
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			showHighlanderPoints: true,
+		};
 		const wrapper = await mountComponent();
 		await flushPromises();
 
@@ -285,13 +328,19 @@ describe('screenDeckSettings', () => {
 		expect(sectionTitles(wrapper)).toContain('Mainboard Layout');
 		expect(sectionTitles(wrapper)).toContain('Sideboard Layout');
 
-		mockConfig.value = { ...defaultDeckConfig(), board: 'mainboard' };
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			board: 'mainboard',
+		};
 		wrapper = await mountComponent();
 		await flushPromises();
 		expect(sectionTitles(wrapper)).toContain('Mainboard Layout');
 		expect(sectionTitles(wrapper)).not.toContain('Sideboard Layout');
 
-		mockConfig.value = { ...defaultDeckConfig(), board: 'sideboard' };
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			board: 'sideboard',
+		};
 		wrapper = await mountComponent();
 		await flushPromises();
 		expect(sectionTitles(wrapper)).not.toContain('Mainboard Layout');
@@ -303,7 +352,10 @@ describe('screenDeckSettings', () => {
 		await flushPromises();
 		expect(wrapper.find('[data-testid="form-field"][data-label="Sideboard Placement"]').exists()).toBe(true);
 
-		mockConfig.value = { ...defaultDeckConfig(), board: 'sideboard' };
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			board: 'sideboard',
+		};
 		wrapper = await mountComponent();
 		await flushPromises();
 		expect(wrapper.find('[data-testid="form-field"][data-label="Sideboard Placement"]').exists()).toBe(false);
@@ -332,20 +384,33 @@ describe('screenDeckSettings', () => {
 		await viewTabs.find(tab => tab.attributes('data-value') === 'grid')!.trigger('click');
 
 		expect(mockUpdateConfig).toHaveBeenCalledWith({
-			sideboard: { view: 'grid', columns: 4, listColumns: 2, cardSize: 'medium', dynamicCardSize: false, cardGap: 8, stackOverlap: 15 },
+			sideboard: {
+				view: 'grid',
+				columns: 4,
+				listColumns: 2,
+				cardSize: 'medium',
+				dynamicCardSize: false,
+				cardGap: 8,
+				stackOverlap: 15,
+			},
 		});
 	});
 
 	it('hints when the selected deck has no sideboard cards', async () => {
 		mockFetchDeck.mockResolvedValue({
-			cards: [{ name: 'Mana Drain', quantity: 4, compartment: 'mainboard' }],
+			cards: [
+				{ name: 'Mana Drain', quantity: 4, compartment: 'mainboard' },
+			],
 		});
 
 		let wrapper = await mountComponent();
 		await flushPromises();
 		expect(wrapper.find('[data-testid="empty-sideboard-hint"]').exists()).toBe(true);
 
-		mockConfig.value = { ...defaultDeckConfig(), board: 'mainboard' };
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			board: 'mainboard',
+		};
 		wrapper = await mountComponent();
 		await flushPromises();
 		expect(wrapper.find('[data-testid="empty-sideboard-hint"]').exists()).toBe(false);
@@ -364,7 +429,12 @@ describe('screenDeckSettings', () => {
 			deckSource: { type: 'broadcast', broadcastDeckListId: 23 },
 		};
 		mockBroadcastDeckListStore.summaries = [
-			{ id: 23, name: 'Feature Table', mainboardQuantity: 0, sideboardQuantity: 15 },
+			{
+				id: 23,
+				name: 'Feature Table',
+				mainboardQuantity: 0,
+				sideboardQuantity: 15,
+			},
 		];
 
 		const wrapper = await mountComponent();

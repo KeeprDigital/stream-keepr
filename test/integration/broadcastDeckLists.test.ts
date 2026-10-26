@@ -26,7 +26,12 @@ interface JsonResponse {
 
 async function readJson(response: Response): Promise<JsonResponse> {
 	const text = await response.text();
-	return { status: response.status, data: text ? JSON.parse(text) as unknown : null };
+	return {
+		status: response.status,
+		data: text
+			? JSON.parse(text) as unknown
+			: null,
+	};
 }
 
 async function signedJson(path: string, method: string, body: unknown): Promise<JsonResponse> {
@@ -108,9 +113,24 @@ describe('the Broadcast Deck List merged-result acceptance', () => {
 				printing: `${entry.setCode}/${entry.collectorNumber}`,
 				scryfallId: entry.scryfallId,
 			}))).toEqual([
-				{ compartment: 'mainboard', name: 'Integration Bolt', printing: 'it1/1', scryfallId: 'integration-bolt-printing' },
-				{ compartment: 'sideboard', name: 'Integration Blast', printing: 'it1/2', scryfallId: 'integration-blast-printing' },
-				{ compartment: 'companion', name: 'Integration Companion', printing: 'it1/3', scryfallId: 'integration-companion-printing' },
+				{
+					compartment: 'mainboard',
+					name: 'Integration Bolt',
+					printing: 'it1/1',
+					scryfallId: 'integration-bolt-printing',
+				},
+				{
+					compartment: 'sideboard',
+					name: 'Integration Blast',
+					printing: 'it1/2',
+					scryfallId: 'integration-blast-printing',
+				},
+				{
+					compartment: 'companion',
+					name: 'Integration Companion',
+					printing: 'it1/3',
+					scryfallId: 'integration-companion-printing',
+				},
 			]);
 			expect(authored.entries[0]).not.toHaveProperty('imageData');
 			expect(authored.entries[0]).not.toHaveProperty('image_uris');
@@ -122,7 +142,9 @@ describe('the Broadcast Deck List merged-result acceptance', () => {
 			);
 			expect(invalid).toMatchObject({
 				status: 422,
-				data: { data: { code: 'BROADCAST_DECK_LIST_INVALID' } },
+				data: {
+					data: { code: 'BROADCAST_DECK_LIST_INVALID' },
+				},
 			});
 
 			const providerFailure = await signedJson(
@@ -191,7 +213,9 @@ describe('the Broadcast Deck List merged-result acceptance', () => {
 					`/api/events/${eventId}/screens/${screen.id}/config/deck`,
 					{
 						method: 'PATCH',
-						body: { deckSource: { type: 'broadcast', broadcastDeckListId: created.id } },
+						body: {
+							deckSource: { type: 'broadcast', broadcastDeckListId: created.id },
+						},
 					},
 				);
 				expect(selected.modeConfigs?.deck).toMatchObject({
@@ -242,7 +266,9 @@ describe('the Broadcast Deck List merged-result acceptance', () => {
 			const crossEventSelect = await signedJson(
 				`/api/events/${otherEventId}/screens/${otherScreen.id}/config/deck`,
 				'PATCH',
-				{ deckSource: { type: 'broadcast', broadcastDeckListId: created.id } },
+				{
+					deckSource: { type: 'broadcast', broadcastDeckListId: created.id },
+				},
 			);
 			expect(crossEventRead.status).toBe(404);
 			expect(crossEventSelect.status).toBe(409);
@@ -255,7 +281,9 @@ describe('the Broadcast Deck List merged-result acceptance', () => {
 				{
 					method: 'PATCH',
 					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ deckSource: { type: 'broadcast', broadcastDeckListId: created.id } }),
+					body: JSON.stringify({
+						deckSource: { type: 'broadcast', broadcastDeckListId: created.id },
+					}),
 				},
 			);
 			const wrongCapabilityRead = await anonymousJson(outputPath, {
@@ -269,7 +297,9 @@ describe('the Broadcast Deck List merged-result acceptance', () => {
 						...bearer(otherCapability.assetCapability),
 						'content-type': 'application/json',
 					},
-					body: JSON.stringify({ deckSource: { type: 'broadcast', broadcastDeckListId: created.id } }),
+					body: JSON.stringify({
+						deckSource: { type: 'broadcast', broadcastDeckListId: created.id },
+					}),
 				},
 			);
 			expect(anonymousRead.status).toBe(401);
@@ -335,7 +365,12 @@ describe('the Broadcast Deck List merged-result acceptance', () => {
 			);
 			expect(stale).toMatchObject({
 				status: 409,
-				data: { data: { code: 'BROADCAST_DECK_LIST_REVISION_CONFLICT', current: { revision: 3 } } },
+				data: {
+					data: {
+						code: 'BROADCAST_DECK_LIST_REVISION_CONFLICT',
+						current: { revision: 3 },
+					},
+				},
 			});
 			expect(await $fetch<BroadcastDeckListResponse>(outputPath)).toMatchObject({
 				revision: 3,
@@ -371,7 +406,9 @@ describe('the Broadcast Deck List merged-result acceptance', () => {
 					`/api/events/${eventId}/screens/${screen.id}/config/deck`,
 					{
 						method: 'PATCH',
-						body: { deckSource: { type: 'player', playerId: null } },
+						body: {
+							deckSource: { type: 'player', playerId: null },
+						},
 					},
 				);
 				expect(switched.modeConfigs?.deck).toMatchObject({
@@ -385,7 +422,10 @@ describe('the Broadcast Deck List merged-result acceptance', () => {
 
 			await expect($fetch(
 				`/api/events/${eventId}/broadcast-deck-lists/${created.id}`,
-				{ method: 'DELETE', body: { expectedRevision: 3 } },
+				{
+					method: 'DELETE',
+					body: { expectedRevision: 3 },
+				},
 			)).resolves.toEqual({ success: true });
 			await expect($fetch(`/api/events/${eventId}`, {
 				method: 'PATCH',
@@ -408,7 +448,9 @@ describe('the Broadcast Deck List merged-result acceptance', () => {
 					(SELECT count(*) FROM broadcast_deck_lists WHERE event_id = ?) AS lists,
 					(SELECT count(*) FROM broadcast_deck_list_entries WHERE list_id IN (?, ?)) AS entries
 			`, [eventId, created.id, reserve.id]);
-			expect(cascaded).toEqual([{ lists: 0, entries: 0 }]);
+			expect(cascaded).toEqual([
+				{ lists: 0, entries: 0 },
+			]);
 			eventId = undefined;
 		}
 		finally {

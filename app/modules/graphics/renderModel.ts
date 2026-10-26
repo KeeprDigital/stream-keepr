@@ -684,7 +684,9 @@ function rectStyle(rect: GraphicRect): CSSProperties {
  * convention: zero degrees points up, ninety degrees points right.
  */
 function gradientAxis(angle: number) {
-	const radians = ((Number.isFinite(angle) ? angle : 0) * Math.PI) / 180;
+	const radians = ((Number.isFinite(angle)
+		? angle
+		: 0) * Math.PI) / 180;
 	const dx = Math.sin(radians);
 	const dy = -Math.cos(radians);
 	const round = (value: number) => `${Math.round(value * 10000) / 10000}`;
@@ -709,8 +711,12 @@ function fillDescriptor(
 ): GraphicFillDescriptor {
 	const opacity = clampOpacity(style.fillOpacity);
 
-	if (style.fill.type === 'solid')
-		return { color: paintColour(output, style.fill.color), opacity };
+	if (style.fill.type === 'solid') {
+		return {
+			color: paintColour(output, style.fill.color),
+			opacity,
+		};
+	}
 
 	const gradientId = `graphic-fill-${scope}`;
 	return {
@@ -774,7 +780,9 @@ function surfaceDescriptor(
 	geometry: ShapeGeometry,
 	style: GraphicSurfaceStyle | undefined,
 ): GraphicSurfaceRenderDescriptor | undefined {
-	return style ? paintedSurface(output, scope, size, geometry, style) : undefined;
+	return style
+		? paintedSurface(output, scope, size, geometry, style)
+		: undefined;
 }
 
 /** A glow is a drop-shadow of the element's own painted alpha. */
@@ -918,9 +926,20 @@ function motionStyle(
 	const mask = revealMasks(motion)[0];
 
 	return {
-		...(parts.length === 0 ? {} : { transform: parts.join(' '), transformOrigin: transformOrigin(anchor) }),
-		...(opacity === undefined ? {} : { opacity: motionValue(opacity) }),
-		...(mask === undefined ? {} : { maskImage: mask }),
+		...(parts.length === 0
+			? {}
+			: {
+					transform: parts.join(' '),
+					transformOrigin: transformOrigin(anchor),
+				}),
+		...(opacity === undefined
+			? {}
+			: {
+					opacity: motionValue(opacity),
+				}),
+		...(mask === undefined
+			? {}
+			: { maskImage: mask }),
 	};
 }
 
@@ -956,7 +975,9 @@ function enclosingMotionStyle(
 	if (overflowing !== undefined)
 		style.maskImage = overflowing;
 
-	return Object.keys(style).length === 0 ? undefined : style;
+	return Object.keys(style).length === 0
+		? undefined
+		: style;
 }
 
 const RESTING: readonly GraphicAnimationOwnerValues[] = [];
@@ -1106,7 +1127,9 @@ function groupBoxStyle(group: GraphicGroupItemConfig): CSSProperties {
 
 	return {
 		display: 'flex',
-		flexDirection: group.arrangement === 'row' ? 'row' : 'column',
+		flexDirection: group.arrangement === 'row'
+			? 'row'
+			: 'column',
 		gap: `${Math.max(0, group.gap)}px`,
 		padding: `${Math.max(0, group.padding)}px`,
 		alignItems: GROUP_ALIGNMENT[group.align],
@@ -1175,7 +1198,9 @@ function placeholderStyle(
 	if (style.color !== undefined)
 		resolved.color = paintColour(output, style.color);
 
-	return Object.keys(resolved).length > 0 ? resolved : undefined;
+	return Object.keys(resolved).length > 0
+		? resolved
+		: undefined;
 }
 
 /**
@@ -1197,7 +1222,10 @@ function resolvedInputValues(
 	const values: Record<string, GraphicInputValue> = {};
 	for (const declaration of declarations)
 		values[declaration.key] = declaration.default;
-	return { ...values, ...accepted };
+	return {
+		...values,
+		...accepted,
+	};
 }
 
 function textDescriptor(
@@ -1219,7 +1247,9 @@ function textDescriptor(
 				? undefined
 				: inputs.textTokenPresentations?.[segment.inputKey];
 			const symbolCount = presentation === 'mtg-mana-colors'
-				? [...segment.text.toUpperCase()].filter(color => 'WUBRGC'.includes(color)).length
+				? [
+						...segment.text.toUpperCase(),
+					].filter(color => 'WUBRGC'.includes(color)).length
 				: 0;
 			const manaColors = presentation === 'mtg-mana-colors' && symbolCount > 0
 				? {
@@ -1234,7 +1264,9 @@ function textDescriptor(
 				style: segment.inputKey === undefined
 					? undefined
 					: placeholderStyle(output, item.placeholderStyles?.[segment.inputKey]),
-				...(manaColors ? { manaColors } : {}),
+				...(manaColors
+					? { manaColors }
+					: {}),
 			};
 		});
 
@@ -1242,7 +1274,11 @@ function textDescriptor(
 		id: item.id,
 		label: item.label,
 		kind: 'text',
-		style: { ...placement, ...textBoxStyle(), filter: glowFilter(output, surfaceStyle) },
+		style: {
+			...placement,
+			...textBoxStyle(),
+			filter: glowFilter(output, surfaceStyle),
+		},
 		surface: surfaceDescriptor(output, scope, item, squareShapeGeometry(), surfaceStyle),
 		textStyle: graphicTextStyle(output, item),
 		text: segments.map(segment => segment.text).join(''),
@@ -1274,11 +1310,17 @@ function resolvedTextDescriptor(
 		id: item.id,
 		label: item.label,
 		kind: item.type,
-		style: { ...placement, ...textBoxStyle(), filter: glowFilter(output, surfaceStyle) },
+		style: {
+			...placement,
+			...textBoxStyle(),
+			filter: glowFilter(output, surfaceStyle),
+		},
 		surface: surfaceDescriptor(output, scope, item, squareShapeGeometry(), surfaceStyle),
 		textStyle: graphicTextStyle(output, item),
 		text,
-		textSegments: [{ text }],
+		textSegments: [
+			{ text },
+		],
 		shrink: item.overflowPolicy === 'shrink'
 			? { minFontSize: item.minFontSize, maxFontSize: item.typography.fontSize }
 			: undefined,
@@ -1295,7 +1337,9 @@ function resolvedTextDescriptor(
 /** A life total as it reads on air: an absent one renders nothing rather than a zero. */
 function lifeTotalText(state: GraphicsFeatureMatchPlayerState | undefined): string {
 	const total = state?.lifeTotal;
-	return total === null || total === undefined ? '' : String(total);
+	return total === null || total === undefined
+		? ''
+		: String(total);
 }
 
 /**
@@ -1310,7 +1354,9 @@ function winBoxStates(
 ): boolean[] {
 	const wins = Math.max(0, Math.floor(featureMatch?.[item.playerSide].gameWins ?? 0));
 	const bestOf = Math.max(1, Math.floor(featureMatch?.bestOf ?? 3));
-	return Array.from({ length: Math.ceil(bestOf / 2) }, (_, index) => index < wins);
+	return Array.from({
+		length: Math.ceil(bestOf / 2),
+	}, (_, index) => index < wins);
 }
 
 /**
@@ -1335,19 +1381,27 @@ function gameWinsDescriptor(
 		label: item.label,
 		kind: 'game-wins',
 		surface: surfaceDescriptor(output, scope, item, squareShapeGeometry(), surfaceStyle),
-		style: { ...placement, filter: glowFilter(output, surfaceStyle) },
+		style: {
+			...placement,
+			filter: glowFilter(output, surfaceStyle),
+		},
 	};
 
 	if (item.displayMode === 'number') {
 		const text = String(states.filter(Boolean).length);
 		return {
 			...base,
-			style: { ...base.style, ...textBoxStyle() },
+			style: {
+				...base.style,
+				...textBoxStyle(),
+			},
 			// A win count is one short number in a box sized for it, so it clips
 			// rather than reflowing: there is no Text Overflow Policy to author.
 			textStyle: graphicTextStyle(output, { ...item, overflowPolicy: 'clip' }),
 			text,
-			textSegments: [{ text }],
+			textSegments: [
+				{ text },
+			],
 		};
 	}
 
@@ -1357,7 +1411,9 @@ function gameWinsDescriptor(
 		style: {
 			...base.style,
 			display: 'flex',
-			flexDirection: item.boxOrientation === 'vertical' ? 'column' : 'row',
+			flexDirection: item.boxOrientation === 'vertical'
+				? 'column'
+				: 'row',
 			alignItems: 'center',
 			justifyContent: 'center',
 			gap: `${item.boxGap}px`,
@@ -1467,7 +1523,9 @@ function deckListCardDescriptor(
 						width: '100%',
 						height: '100%',
 						objectFit: 'contain',
-						filter: output === 'key' ? KEY_MEDIA_ALPHA_TO_WHITE : undefined,
+						filter: output === 'key'
+							? KEY_MEDIA_ALPHA_TO_WHITE
+							: undefined,
 					},
 				},
 		placeholder: card.imageUrl !== null
@@ -1511,8 +1569,12 @@ function deckListCardDescriptor(
 						fontWeight: 700,
 						lineHeight: 1.4,
 						color: paintColour(output, '#ffffff'),
-						backgroundColor: output === 'key' ? undefined : 'rgba(15, 23, 42, 0.85)',
-						borderRadius: output === 'key' ? undefined : '4px',
+						backgroundColor: output === 'key'
+							? undefined
+							: 'rgba(15, 23, 42, 0.85)',
+						borderRadius: output === 'key'
+							? undefined
+							: '4px',
 					},
 				}
 			: undefined,
@@ -1547,18 +1609,30 @@ function deckListDescriptor(
 	const revealed = featureMatch?.[item.playerSide].sideboardRevealed ?? true;
 	const exiting = inputs.itemExitInPlay?.has(item.id) ?? false;
 	const sideboard = featureMatch?.[item.playerSide].sideboard;
-	if ((!revealed && !exiting) || !sideboard || sideboard.length === 0)
-		return { ...base, style: { ...placement, overflow: 'hidden' } };
+	if ((!revealed && !exiting) || !sideboard || sideboard.length === 0) {
+		return {
+			...base,
+			style: { ...placement, overflow: 'hidden' },
+		};
+	}
 
 	if (item.view === 'list') {
 		const text = sideboard
-			.map(card => item.showQuantities ? `${card.quantity}x ${card.name}` : card.name)
+			.map(card => item.showQuantities
+				? `${card.quantity}x ${card.name}`
+				: card.name)
 			.join('\n');
 		return {
 			...base,
 			// Top-aligned rather than the text box's vertical centring: rows read
 			// from the top of a list, and shrink keeps them inside the bounds.
-			style: { ...placement, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', overflow: 'hidden' },
+			style: {
+				...placement,
+				display: 'flex',
+				flexDirection: 'column',
+				justifyContent: 'flex-start',
+				overflow: 'hidden',
+			},
 			// `pre-wrap` in the shared text style is what turns the separators into rows.
 			textStyle: graphicTextStyle(output, {
 				typography: item.typography,
@@ -1566,7 +1640,9 @@ function deckListDescriptor(
 				height: item.height,
 			}),
 			text,
-			textSegments: [{ text }],
+			textSegments: [
+				{ text },
+			],
 			shrink: { minFontSize: DECK_LIST_MIN_FONT_SIZE, maxFontSize: item.typography.fontSize },
 		};
 	}
@@ -1636,8 +1712,14 @@ function stackedChildClipSize(
 	if (sizing.mode !== 'fixed')
 		return undefined;
 	return group.arrangement === 'row'
-		? { width: Math.max(0, sizing.size), height: child.height }
-		: { width: child.width, height: Math.max(0, sizing.size) };
+		? {
+				width: Math.max(0, sizing.size),
+				height: child.height,
+			}
+		: {
+				width: child.width,
+				height: Math.max(0, sizing.size),
+			};
 }
 
 /**
@@ -1655,7 +1737,9 @@ function mediaDescriptor(
 ): GraphicMediaRenderDescriptor {
 	return {
 		mediaKind: item.mediaKind,
-		src: item.asset && assetContent ? assetContent.url(item.asset) : '',
+		src: item.asset && assetContent
+			? assetContent.url(item.asset)
+			: '',
 		style: {
 			display: 'block',
 			width: '100%',
@@ -1663,7 +1747,9 @@ function mediaDescriptor(
 			objectFit: item.fit,
 			objectPosition: `${clampOpacity(item.focalPosition.horizontal) * 100}% ${clampOpacity(item.focalPosition.vertical) * 100}%`,
 			opacity: clampOpacity(item.opacity),
-			filter: output === 'key' ? KEY_MEDIA_ALPHA_TO_WHITE : undefined,
+			filter: output === 'key'
+				? KEY_MEDIA_ALPHA_TO_WHITE
+				: undefined,
 		},
 		loop: item.loop,
 		playbackRate: item.playbackRate,
@@ -1681,7 +1767,10 @@ function mediaItemDescriptor(
 		id: item.id,
 		label: item.label,
 		kind: 'media',
-		style: { ...placement, ...mediaClip(item, clipSize) },
+		style: {
+			...placement,
+			...mediaClip(item, clipSize),
+		},
 		media: mediaDescriptor(output, item, assetContent),
 	};
 }
@@ -1797,7 +1886,10 @@ function childDescriptor(
 		id: child.id,
 		label: child.label,
 		kind: 'shape',
-		style: { ...placement, filter: glowFilter(output, surfaceStyle) },
+		style: {
+			...placement,
+			filter: glowFilter(output, surfaceStyle),
+		},
 		surface: surfaceDescriptor(output, scope, child, child.geometry, surfaceStyle),
 	};
 }
@@ -1869,7 +1961,10 @@ function enclosedItemDescriptor(
 		id: owner.id,
 		label: owner.label,
 		kind: owner.type,
-		style: { ...crossTransitionBox(placementOf(RESTING)), ...enclosingStyle },
+		style: {
+			...crossTransitionBox(placementOf(RESTING)),
+			...enclosingStyle,
+		},
 		enclosed: paint(crossTransitionHalf(motion, owner, rotation, owner.anchor)),
 	};
 }
@@ -2084,7 +2179,10 @@ function paintedItemDescriptor(
 			id: item.id,
 			label: item.label,
 			kind: 'shape',
-			style: { ...placement, filter: glowFilter(output, item.surfaceStyle) },
+			style: {
+				...placement,
+				filter: glowFilter(output, item.surfaceStyle),
+			},
 			surface: surfaceDescriptor(output, scope, item, item.geometry, item.surfaceStyle),
 		};
 	}
@@ -2151,9 +2249,14 @@ function groupChildDescriptor(
 		context.staggerOffsets,
 	);
 	const motion = context.motionOf(child, staggerOffsets, group);
-	const rotation = group.arrangement === 'canvas' ? child.rotation ?? 0 : 0;
+	const rotation = group.arrangement === 'canvas'
+		? child.rotation ?? 0
+		: 0;
 	const placementOf = (values: readonly GraphicAnimationOwnerValues[]) => group.arrangement === 'canvas'
-		? canvasPlacement(child, { x: Math.max(0, group.padding), y: Math.max(0, group.padding) }, values)
+		? canvasPlacement(child, {
+				x: Math.max(0, group.padding),
+				y: Math.max(0, group.padding),
+			}, values)
 		: stackedPlacement(group, child, values);
 
 	if (!context.crossing?.(child.id)) {
@@ -2345,7 +2448,12 @@ function graphicAnimationContext(
 				parent,
 			}));
 			const own = base(owner, staggerOffsets, parent);
-			return own.length === 0 ? extra : [...own, ...extra];
+			return own.length === 0
+				? extra
+				: [
+						...own,
+						...extra,
+					];
 		};
 	};
 
@@ -2357,7 +2465,11 @@ function graphicAnimationContext(
 			parent: canvas,
 			motionOf,
 		};
-		return { graphicMotion: RESTING, motionOf, itemContext: () => resting };
+		return {
+			graphicMotion: RESTING,
+			motionOf,
+			itemContext: () => resting,
+		};
 	}
 
 	const phases = projections.map(projection => projection.phase);
@@ -2372,7 +2484,9 @@ function graphicAnimationContext(
 	// a phase running over an update moves both renderings together, so it belongs on
 	// the element enclosing the pair and would be applied twice if it were also here.
 	const halfOf = (values: GraphicAnimationValues): GraphicAnimationOwnerValues =>
-		half === 'outgoing' ? values.outgoing ?? {} : values;
+		half === 'outgoing'
+			? values.outgoing ?? {}
+			: values;
 
 	/**
 	 * An update recipe runs only where that owner's own rendered content changed. Outside
@@ -2389,7 +2503,9 @@ function graphicAnimationContext(
 		// owner with no recipe projects nothing anyway. It is stated because the invariant
 		// is worth reading at the point that relies on it, not because removing it would
 		// change a frame.
-		return ownerId === null ? crossTransition.wholeGraphic : crossTransition.crossing.has(ownerId);
+		return ownerId === null
+			? crossTransition.wholeGraphic
+			: crossTransition.crossing.has(ownerId);
 	};
 
 	const motionOf: GraphicsItemAnimationContext['motionOf'] = withItemMotion((owner, staggerOffsets, parent) =>
@@ -2558,7 +2674,9 @@ function updateCrossTransition(
 	if (graphic.animation?.update)
 		return { wholeGraphic: true, crossing };
 
-	return crossing.size === 0 ? null : { wholeGraphic: false, crossing };
+	return crossing.size === 0
+		? null
+		: { wholeGraphic: false, crossing };
 }
 
 function safeAreaGuide(
@@ -2615,8 +2733,12 @@ export function resolveGraphicsCompositionRenderModel(
 	const composed = visible
 		? input.graphics.filter(graphic => visible.includes(graphic.id))
 		: [...input.graphics];
-	const selectedKey = input.selectedTarget ? graphicsSelectionKey(input.selectedTarget) : null;
-	const selectedGraphicId = input.selectedTarget ? graphicsSelectionGraphicId(input.selectedTarget) : null;
+	const selectedKey = input.selectedTarget
+		? graphicsSelectionKey(input.selectedTarget)
+		: null;
+	const selectedGraphicId = input.selectedTarget
+		? graphicsSelectionGraphicId(input.selectedTarget)
+		: null;
 
 	const isLayer = input.canvasRole === 'layer';
 
@@ -2634,7 +2756,9 @@ export function resolveGraphicsCompositionRenderModel(
 			// override the host's own placement and cover everything beneath it.
 			position: isLayer ? undefined : 'relative',
 			overflow: 'hidden',
-			background: isLayer ? 'transparent' : screenOutputCanvasBackground(input.output),
+			background: isLayer
+				? 'transparent'
+				: screenOutputCanvasBackground(input.output),
 		},
 		graphics: composed.map((graphic) => {
 			// A host that supplies its own declarations supplies all of them: a
@@ -2717,10 +2841,14 @@ export function resolveGraphicsCompositionRenderModel(
 			// they sit inside. With one frame there is nothing to split and the graphic's
 			// element carries all of it, exactly as it did before concurrency existed.
 			const wholeGraphicPair = crossTransition?.wholeGraphic === true && outgoingHalf !== null;
-			const ownMotion = wholeGraphicPair ? crossingMotion(phases, graphicMotion) : graphicMotion;
+			const ownMotion = wholeGraphicPair
+				? crossingMotion(phases, graphicMotion)
+				: graphicMotion;
 			const style = motionStyle(ownMotion, canvas, 0, 'top-left');
 			const enclosingStyle = enclosingMotionStyle(
-				wholeGraphicPair ? enclosingMotion(phases, graphicMotion) : RESTING,
+				wholeGraphicPair
+					? enclosingMotion(phases, graphicMotion)
+					: RESTING,
 				ownMotion,
 				canvas,
 				'top-left',
@@ -2784,7 +2912,10 @@ export function resolveGraphicsCompositionRenderModel(
 							...context(item),
 							...(pairing === undefined
 								? {}
-								: { crossing: (ownerId: string) => crossTransition!.crossing.has(ownerId), outgoing: pairing }),
+								: {
+										crossing: (ownerId: string) => crossTransition!.crossing.has(ownerId),
+										outgoing: pairing,
+									}),
 						},
 						presentation,
 						updateAvailability,
@@ -2803,7 +2934,9 @@ export function resolveGraphicsCompositionRenderModel(
 					'top-left',
 				);
 				outgoing = {
-					...(Object.keys(outgoingStyle).length === 0 ? {} : { style: outgoingStyle }),
+					...(Object.keys(outgoingStyle).length === 0
+						? {}
+						: { style: outgoingStyle }),
 					items: buildItems(outgoingInputs, outgoingHalf.itemContext, undefined),
 				};
 			}
@@ -2813,8 +2946,12 @@ export function resolveGraphicsCompositionRenderModel(
 				name: graphic.name,
 				// Omitted entirely at rest, so an unanimated Broadcast Graphic keeps the
 				// descriptor it had before animation existed.
-				...(Object.keys(style).length === 0 ? {} : { style }),
-				...(enclosingStyle === undefined ? {} : { enclosingStyle }),
+				...(Object.keys(style).length === 0
+					? {}
+					: { style }),
+				...(enclosingStyle === undefined
+					? {}
+					: { enclosingStyle }),
 				items: buildItems(
 					inputs,
 					itemContext,
@@ -2822,7 +2959,9 @@ export function resolveGraphicsCompositionRenderModel(
 						? { inputs: outgoingInputs, motionOf: outgoingHalf.motionOf }
 						: undefined,
 				),
-				...(outgoing === undefined ? {} : { outgoing }),
+				...(outgoing === undefined
+					? {}
+					: { outgoing }),
 			};
 		}),
 		safeAreaGuides: input.safeAreaGuides

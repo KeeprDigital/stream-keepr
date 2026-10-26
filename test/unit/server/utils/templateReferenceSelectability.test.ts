@@ -113,7 +113,13 @@ describe('assertBroadcastGraphicTemplateReferencesSelectable', () => {
 	// #614: every template write, new reference or not, needs each reference to be
 	// one an author could select now, in a slot its kind fits.
 	it('refuses retired, trashed, unavailable, and wrong-kind references, naming why', async () => {
-		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([retired, trashed, unavailable, font, available]);
+		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([
+			retired,
+			trashed,
+			unavailable,
+			font,
+			available,
+		]);
 		const document = broadcastGraphic([
 			media('retired', reference('asset-1', 'revision-1')),
 			media('trashed', reference('asset-2', 'revision-2')),
@@ -136,7 +142,9 @@ describe('assertBroadcastGraphicTemplateReferencesSelectable', () => {
 
 	it('accepts active, available references of the kind their slot needs', async () => {
 		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([available]);
-		const document = broadcastGraphic([media('logo', reference('asset-1', 'revision-1'))]);
+		const document = broadcastGraphic([
+			media('logo', reference('asset-1', 'revision-1')),
+		]);
 
 		await expect(assertBroadcastGraphicTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, document))
 			.resolves
@@ -178,7 +186,12 @@ describe('assertStyleSetRewritesReferencesSelectable', () => {
 	it('asks the library once for every template and names each refused template', async () => {
 		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([available, retired, font]);
 		const rewrites = [
-			{ id: 'template-1', document: broadcastGraphic([media('logo', reference('asset-1', 'revision-1'))]) },
+			{
+				id: 'template-1',
+				document: broadcastGraphic([
+					media('logo', reference('asset-1', 'revision-1')),
+				]),
+			},
 			{
 				id: 'template-2',
 				document: {
@@ -191,7 +204,10 @@ describe('assertStyleSetRewritesReferencesSelectable', () => {
 			},
 		];
 
-		const linked = [{ id: 'template-1', name: 'Lower third' }, { id: 'template-2', name: 'Score bug' }];
+		const linked = [
+			{ id: 'template-1', name: 'Lower third' },
+			{ id: 'template-2', name: 'Score bug' },
+		];
 
 		await expect(assertStyleSetRewritesReferencesSelectable({ inspectGraphicAssetRevisions }, rewrites, linked))
 			.rejects
@@ -209,8 +225,15 @@ describe('assertStyleSetRewritesReferencesSelectable', () => {
 
 		await assertStyleSetRewritesReferencesSelectable(
 			{ inspectGraphicAssetRevisions },
-			[{ id: 'template-1', document: broadcastGraphic([]) }],
-			[{ id: 'template-1', name: 'Empty' }],
+			[
+				{
+					id: 'template-1',
+					document: broadcastGraphic([]),
+				},
+			],
+			[
+				{ id: 'template-1', name: 'Empty' },
+			],
 		);
 
 		expect(inspectGraphicAssetRevisions).not.toHaveBeenCalled();
@@ -222,7 +245,9 @@ describe('assertFeatureMatchLayoutTemplateReferencesSelectable', () => {
 		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([available, available]);
 		const document = featureMatchLayout({
 			backgroundImage: reference('asset-1', 'revision-1'),
-			items: [media('logo', reference('asset-2', 'revision-2'))],
+			items: [
+				media('logo', reference('asset-2', 'revision-2')),
+			],
 		});
 
 		await assertFeatureMatchLayoutTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, document);
@@ -240,7 +265,9 @@ describe('assertFeatureMatchLayoutTemplateReferencesSelectable', () => {
 		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([missing, missing]);
 		const document = featureMatchLayout({
 			backgroundImage: reference('asset-1', 'revision-1'),
-			items: [media('logo', reference('asset-2', 'revision-2'))],
+			items: [
+				media('logo', reference('asset-2', 'revision-2')),
+			],
 		});
 
 		await expect(assertFeatureMatchLayoutTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, document))
@@ -257,7 +284,9 @@ describe('assertFeatureMatchLayoutTemplateReferencesSelectable', () => {
 		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([retired, font]);
 		const document = featureMatchLayout({
 			backgroundImage: reference('asset-1', 'revision-1'),
-			items: [media('logo', reference('asset-2', 'revision-2'))],
+			items: [
+				media('logo', reference('asset-2', 'revision-2')),
+			],
 		});
 
 		await expect(assertFeatureMatchLayoutTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, document))
@@ -272,7 +301,9 @@ describe('assertFeatureMatchLayoutTemplateReferencesSelectable', () => {
 
 	it('accepts active, available references of the kind their slot needs', async () => {
 		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([available]);
-		const document = featureMatchLayout({ backgroundImage: reference('asset-1', 'revision-1') });
+		const document = featureMatchLayout({
+			backgroundImage: reference('asset-1', 'revision-1'),
+		});
 
 		await expect(assertFeatureMatchLayoutTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, document))
 			.resolves
@@ -291,7 +322,9 @@ describe('assertFeatureMatchLayoutTemplateReferencesSelectable', () => {
 		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([available]);
 		const document = featureMatchLayout({
 			backgroundImage: reference('asset-1', 'revision-1'),
-			items: [media('logo', reference('asset-2', 'revision-2'))],
+			items: [
+				media('logo', reference('asset-2', 'revision-2')),
+			],
 		});
 
 		await expect(assertFeatureMatchLayoutTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, document))

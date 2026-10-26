@@ -34,7 +34,12 @@ const DENSITY_RULES: Record<TableRowDensity, DensityRule> = {
 		fontGrowth: 0.16,
 		minSecondaryFontSize: 12,
 		secondaryFontScale: 0.84,
-		padding: { minY: 4, yScale: 0.12, minX: 10, xScale: 0.75 },
+		padding: {
+			minY: 4,
+			yScale: 0.12,
+			minX: 10,
+			xScale: 0.75,
+		},
 	},
 	roomy: {
 		naturalRowHeight: 72,
@@ -69,7 +74,9 @@ export interface TableRowLayout {
 export function tableRowLayout({ density, measuredHeight, rowCount, insetY = 0 }: TableRowLayoutInput): TableRowLayout {
 	const rule = DENSITY_RULES[density];
 	const rows = Math.max(rowCount, 1);
-	const availableHeight = measuredHeight > 0 ? measuredHeight : rows * rule.naturalRowHeight;
+	const availableHeight = measuredHeight > 0
+		? measuredHeight
+		: rows * rule.naturalRowHeight;
 	const usableHeight = Math.max(availableHeight - insetY, rows * rule.minRowHeight);
 	const rowHeight = usableHeight / rows;
 	const fontSize = Math.max(rule.baseFontSize, rule.baseFontSize + ((rowHeight - rule.fontBaseRowHeight) * rule.fontGrowth));
@@ -81,7 +88,12 @@ export function tableRowLayout({ density, measuredHeight, rowCount, insetY = 0 }
 			}
 		: null;
 
-	return { rowHeight, fontSize, secondaryFontSize, padding };
+	return {
+		rowHeight,
+		fontSize,
+		secondaryFontSize,
+		padding,
+	};
 }
 
 /**

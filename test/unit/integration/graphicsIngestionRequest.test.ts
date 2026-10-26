@@ -80,7 +80,9 @@ function propertyNamed(literal: ts.ObjectLiteralExpression, name: string) {
  * only `ts.isStringLiteral` would miss the path, the method and the source.
  */
 function stringValue(expression: ts.Expression | undefined) {
-	return expression && ts.isStringLiteralLike(expression) ? expression.text : undefined;
+	return expression && ts.isStringLiteralLike(expression)
+		? expression.text
+		: undefined;
 }
 
 /**

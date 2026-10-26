@@ -29,7 +29,9 @@ function isAggregate(entry: ArchetypeBreakdownEntry): boolean {
 
 function shareOf(count: number, classifiedPlayers: number): number {
 	// The breakdown's own rounding, so a folded Other reads like the server's.
-	return classifiedPlayers > 0 ? Math.round((count / classifiedPlayers) * 10000) / 100 : 0;
+	return classifiedPlayers > 0
+		? Math.round((count / classifiedPlayers) * 10000) / 100
+		: 0;
 }
 
 /**
@@ -92,5 +94,10 @@ export function projectMetagameChart(breakdown: ArchetypeBreakdownResponse): Met
 	}
 
 	const largestShare = Math.max(0, ...rows.map(row => row.metaShare));
-	return rows.map(row => ({ ...row, length: largestShare > 0 ? row.metaShare / largestShare : 0 }));
+	return rows.map(row => ({
+		...row,
+		length: largestShare > 0
+			? row.metaShare / largestShare
+			: 0,
+	}));
 }

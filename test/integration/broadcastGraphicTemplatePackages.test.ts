@@ -43,7 +43,10 @@ const basePixelPng = Uint8Array.from(Buffer.from(
 
 /** Appends a valid ancillary text chunk so this suite owns a distinct digest. */
 function pngWithTextChunk(source: Uint8Array, keyword: string): Uint8Array<ArrayBuffer> {
-	const payload = Buffer.concat([Buffer.from('tEXt'), Buffer.from(`${keyword}\0`)]);
+	const payload = Buffer.concat([
+		Buffer.from('tEXt'),
+		Buffer.from(`${keyword}\0`),
+	]);
 	const length = Buffer.alloc(4);
 	length.writeUInt32BE(payload.byteLength - 4, 0);
 	const checksum = Buffer.alloc(4);
@@ -76,10 +79,17 @@ async function request(
 	const response = await fetch(path, {
 		method: options.method ?? 'GET',
 		headers,
-		body: options.body === undefined ? undefined : JSON.stringify(options.body),
+		body: options.body === undefined
+			? undefined
+			: JSON.stringify(options.body),
 	});
 	const text = await response.text();
-	return { status: response.status, data: text ? JSON.parse(text) : null };
+	return {
+		status: response.status,
+		data: text
+			? JSON.parse(text)
+			: null,
+	};
 }
 
 async function receivePackage(archive: Uint8Array<ArrayBuffer>) {
@@ -111,7 +121,10 @@ async function receivePackage(archive: Uint8Array<ArrayBuffer>) {
 async function installPackage(operationId: string) {
 	return await $fetch<GraphicsIngestionOperation>(
 		`/api/graphics-assets/ingestion-operations/${operationId}/template-package-installation`,
-		{ method: 'POST', headers: { cookie: await operatorSessionCookie() } },
+		{
+			method: 'POST',
+			headers: { cookie: await operatorSessionCookie() },
+		},
 	);
 }
 
@@ -183,7 +196,11 @@ describe('broadcast Graphic Template Packages', () => {
 			`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`,
 			{
 				method: 'PATCH',
-				body: { graphics: [maximalBroadcastGraphicDocument({ id: 'packaged-lower-third', asset })] },
+				body: {
+					graphics: [
+						maximalBroadcastGraphicDocument({ id: 'packaged-lower-third', asset }),
+					],
+				},
 			},
 		);
 		expect(authored.status).toBe(200);

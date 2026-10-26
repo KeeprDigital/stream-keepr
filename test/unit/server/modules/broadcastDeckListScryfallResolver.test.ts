@@ -37,7 +37,9 @@ describe('broadcast Deck List Scryfall resolver', () => {
 		));
 		const lookupBySetAndCollector = vi.fn(async () => scryfallCard());
 		const resolver = createBroadcastDeckListScryfallResolver({
-			overrides: [{ inputName: 'Bolt', inputSetCode: null, canonicalName: 'Lightning Bolt' }],
+			overrides: [
+				{ inputName: 'Bolt', inputSetCode: null, canonicalName: 'Lightning Bolt' },
+			],
 			scryfall: { lookupByName, lookupBySetAndCollector },
 		});
 
@@ -189,7 +191,9 @@ describe('broadcast Deck List Scryfall resolver', () => {
 	});
 
 	it('maps collector not-found to unresolved but keeps collector outages retryable', async () => {
-		const request = [{ name: 'Lightning Bolt', setCode: 'sld', collectorNumber: '101' }];
+		const request = [
+			{ name: 'Lightning Bolt', setCode: 'sld', collectorNumber: '101' },
+		];
 		const notFoundResolver = createBroadcastDeckListScryfallResolver({
 			scryfall: {
 				lookupByName: vi.fn(async () => []),
@@ -207,7 +211,9 @@ describe('broadcast Deck List Scryfall resolver', () => {
 			},
 		});
 
-		await expect(notFoundResolver.resolve(request)).resolves.toEqual([{ status: 'unresolved' }]);
+		await expect(notFoundResolver.resolve(request)).resolves.toEqual([
+			{ status: 'unresolved' },
+		]);
 		await expect(outageResolver.resolve(request)).rejects.toMatchObject({
 			code: 'BROADCAST_DECK_LIST_CARD_PROVIDER_UNAVAILABLE',
 			retryable: true,

@@ -19,8 +19,12 @@ const defaultConfig = {
 const mutableConfig = reactive({ ...defaultConfig });
 const mockEventId = ref<number | null>(1);
 const mockInteractive = ref(false);
-const mockScreenStore = { updateModeConfig: vi.fn() };
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+const mockScreenStore = {
+	updateModeConfig: vi.fn(),
+};
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
 type Handler = (message: Record<string, unknown>) => void;
 const channelHandlers = new Map<string, Set<Handler>>();
 const continuity = createContinuitySignal();
@@ -70,10 +74,22 @@ function pairing(overrides: Partial<ScreenOutputRoundMatch> = {}): ScreenOutputR
 	};
 }
 
-const round = { id: 31, eventId: 1, phaseId: 3, name: 'Round 4', roundNumber: 4 };
+const round = {
+	id: 31,
+	eventId: 1,
+	phaseId: 3,
+	name: 'Round 4',
+	roundNumber: 4,
+};
 
 function answer(matches: ScreenOutputRoundMatch[], overrides: Partial<ScreenOutputPairingsResponse['round']> = {}) {
-	return { round: { ...round, ...overrides }, matches };
+	return {
+		round: {
+			...round,
+			...overrides,
+		},
+		matches,
+	};
 }
 
 const scopes: EffectScope[] = [];
@@ -103,7 +119,9 @@ describe('usePairingsModeData', () => {
 
 	it('reads the configured Round\'s pairings through the Screen', async () => {
 		mutableConfig.roundId = 31;
-		mockFetch.mockResolvedValue(answer([pairing()]));
+		mockFetch.mockResolvedValue(answer([
+			pairing(),
+		]));
 
 		const { round: held, pageData, isEmpty, error } = makePairingsModeData();
 		await flushPromises();
@@ -135,7 +153,9 @@ describe('usePairingsModeData', () => {
 
 	it('re-reads when the selected Round changes', async () => {
 		mutableConfig.roundId = 31;
-		mockFetch.mockResolvedValue(answer([pairing()]));
+		mockFetch.mockResolvedValue(answer([
+			pairing(),
+		]));
 		makePairingsModeData();
 		await flushPromises();
 
@@ -149,7 +169,9 @@ describe('usePairingsModeData', () => {
 		it('prefers the configured header', async () => {
 			mutableConfig.roundId = 31;
 			mutableConfig.headerText = 'Top Tables';
-			mockFetch.mockResolvedValue(answer([pairing()]));
+			mockFetch.mockResolvedValue(answer([
+				pairing(),
+			]));
 
 			const { headerText } = makePairingsModeData();
 			await flushPromises();
@@ -159,7 +181,9 @@ describe('usePairingsModeData', () => {
 
 		it('names the loaded Round when no header is configured', async () => {
 			mutableConfig.roundId = 31;
-			mockFetch.mockResolvedValue(answer([pairing()]));
+			mockFetch.mockResolvedValue(answer([
+				pairing(),
+			]));
 
 			const { headerText } = makePairingsModeData();
 			await flushPromises();
@@ -174,12 +198,52 @@ describe('usePairingsModeData', () => {
 
 	describe('formatResult', () => {
 		it.each([
-			['bye', pairing({ isBye: true, player2: null, hasResult: true, player1GameWins: 2, player2GameWins: 0 }), 'BYE'],
-			['pending Match', pairing(), 'Pending'],
-			['reported Match', pairing({ hasResult: true, player1GameWins: 2, player2GameWins: 1, gameDraws: 0 }), '2-1'],
-			['reported Match with game draws', pairing({ hasResult: true, player1GameWins: 1, player2GameWins: 1, gameDraws: 1 }), '1-1-1'],
-			['result without game counts', pairing({ hasResult: true, resultString: 'Intentional draw' }), 'Intentional draw'],
-			['result with nothing to show', pairing({ hasResult: true }), 'Result'],
+			[
+				'bye',
+				pairing({
+					isBye: true,
+					player2: null,
+					hasResult: true,
+					player1GameWins: 2,
+					player2GameWins: 0,
+				}),
+				'BYE',
+			],
+			[
+				'pending Match',
+				pairing(),
+				'Pending',
+			],
+			[
+				'reported Match',
+				pairing({
+					hasResult: true,
+					player1GameWins: 2,
+					player2GameWins: 1,
+					gameDraws: 0,
+				}),
+				'2-1',
+			],
+			[
+				'reported Match with game draws',
+				pairing({
+					hasResult: true,
+					player1GameWins: 1,
+					player2GameWins: 1,
+					gameDraws: 1,
+				}),
+				'1-1-1',
+			],
+			[
+				'result without game counts',
+				pairing({ hasResult: true, resultString: 'Intentional draw' }),
+				'Intentional draw',
+			],
+			[
+				'result with nothing to show',
+				pairing({ hasResult: true }),
+				'Result',
+			],
 		])('formats a %s', (_name, row, expected) => {
 			expect(makePairingsModeData().formatResult(row)).toBe(expected);
 		});
@@ -187,12 +251,36 @@ describe('usePairingsModeData', () => {
 
 	describe('winner', () => {
 		it.each([
-			['the first Player', pairing({ hasResult: true, player1GameWins: 2, player2GameWins: 1 }), 1],
-			['the second Player', pairing({ hasResult: true, player1GameWins: 0, player2GameWins: 2 }), 2],
-			['nobody on a draw', pairing({ hasResult: true, player1GameWins: 1, player2GameWins: 1 }), null],
-			['nobody while pending', pairing(), null],
-			['the Player with the bye', pairing({ isBye: true, player2: null }), 1],
-			['the Player with the bye, seated second', pairing({ isBye: true, player1: null }), 2],
+			[
+				'the first Player',
+				pairing({ hasResult: true, player1GameWins: 2, player2GameWins: 1 }),
+				1,
+			],
+			[
+				'the second Player',
+				pairing({ hasResult: true, player1GameWins: 0, player2GameWins: 2 }),
+				2,
+			],
+			[
+				'nobody on a draw',
+				pairing({ hasResult: true, player1GameWins: 1, player2GameWins: 1 }),
+				null,
+			],
+			[
+				'nobody while pending',
+				pairing(),
+				null,
+			],
+			[
+				'the Player with the bye',
+				pairing({ isBye: true, player2: null }),
+				1,
+			],
+			[
+				'the Player with the bye, seated second',
+				pairing({ isBye: true, player1: null }),
+				2,
+			],
 		])('is %s', (_name, row, expected) => {
 			expect(makePairingsModeData().winner(row)).toBe(expected);
 		});
@@ -218,7 +306,10 @@ describe('usePairingsModeData', () => {
 		mutableConfig.roundId = 31;
 		mutableConfig.autoPageEnabled = true;
 		mockInteractive.value = true;
-		mockFetch.mockResolvedValue(answer([pairing({ matchId: 1 }), pairing({ matchId: 2 })]));
+		mockFetch.mockResolvedValue(answer([
+			pairing({ matchId: 1 }),
+			pairing({ matchId: 2 }),
+		]));
 
 		makePairingsModeData();
 		await flushPromises();
@@ -233,7 +324,9 @@ describe('usePairingsModeData', () => {
 
 		async function showingPendingPairings() {
 			mutableConfig.roundId = 31;
-			mockFetch.mockResolvedValue(answer([pairing()]));
+			mockFetch.mockResolvedValue(answer([
+				pairing(),
+			]));
 			const data = makePairingsModeData();
 			await flushPromises();
 			expect(data.formatResult(data.pageData.value[0]!)).toBe('Pending');
@@ -242,14 +335,22 @@ describe('usePairingsModeData', () => {
 		}
 
 		function match(overrides: Record<string, unknown> = {}) {
-			return { id: 1, roundId: 31, player1Id: 7, player2Id: 8, ...overrides };
+			return {
+				id: 1,
+				roundId: 31,
+				player1Id: 7,
+				player2Id: 8,
+				...overrides,
+			};
 		}
 
 		it('shows a Match result as it is reported, without reload', async () => {
 			const { pageData, formatResult } = await showingPendingPairings();
 			mockFetch.mockResolvedValue(answer([reported]));
 
-			deliver('match:updated', { match: match({ hasResult: true }) });
+			deliver('match:updated', {
+				match: match({ hasResult: true }),
+			});
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -259,9 +360,13 @@ describe('usePairingsModeData', () => {
 		it('picks up a Match paired into the Round, or moved out of it', async () => {
 			await showingPendingPairings();
 
-			deliver('match:created', { match: match({ id: 5 }) });
+			deliver('match:created', {
+				match: match({ id: 5 }),
+			});
 			await flushPromises();
-			deliver('match:updated', { match: match({ roundId: 32 }) });
+			deliver('match:updated', {
+				match: match({ roundId: 32 }),
+			});
 			await flushPromises();
 			deliver('match:deleted', { matchId: 1 });
 			await flushPromises();
@@ -272,8 +377,12 @@ describe('usePairingsModeData', () => {
 		it('ignores Matches of other Rounds', async () => {
 			await showingPendingPairings();
 
-			deliver('match:created', { match: match({ id: 9, roundId: 32 }) });
-			deliver('match:updated', { match: match({ id: 9, roundId: 32 }) });
+			deliver('match:created', {
+				match: match({ id: 9, roundId: 32 }),
+			});
+			deliver('match:updated', {
+				match: match({ id: 9, roundId: 32 }),
+			});
 			deliver('match:deleted', { matchId: 9 });
 			await flushPromises();
 
@@ -283,18 +392,46 @@ describe('usePairingsModeData', () => {
 		it('follows its own Round being renamed, re-paired or synced, and no other', async () => {
 			await showingPendingPairings();
 
-			deliver('round:updated', { round: { id: 40 } });
+			deliver('round:updated', {
+				round: { id: 40 },
+			});
 			deliver('round:deleted', { roundId: 40 });
-			deliver('round:matchesRefreshed', { roundId: 40, matchCount: 8, created: 1, updated: 0, staleDeleted: 0 });
-			deliver('melee:roundSynced', { roundId: 40, matchCount: 8, created: 1, updated: 0, staleDeleted: 0 });
+			deliver('round:matchesRefreshed', {
+				roundId: 40,
+				matchCount: 8,
+				created: 1,
+				updated: 0,
+				staleDeleted: 0,
+			});
+			deliver('melee:roundSynced', {
+				roundId: 40,
+				matchCount: 8,
+				created: 1,
+				updated: 0,
+				staleDeleted: 0,
+			});
 			await flushPromises();
 			expect(mockFetch).not.toHaveBeenCalled();
 
-			deliver('round:updated', { round: { id: 31 } });
+			deliver('round:updated', {
+				round: { id: 31 },
+			});
 			await flushPromises();
-			deliver('round:matchesRefreshed', { roundId: 31, matchCount: 8, created: 1, updated: 0, staleDeleted: 0 });
+			deliver('round:matchesRefreshed', {
+				roundId: 31,
+				matchCount: 8,
+				created: 1,
+				updated: 0,
+				staleDeleted: 0,
+			});
 			await flushPromises();
-			deliver('melee:roundSynced', { roundId: 31, matchCount: 8, created: 1, updated: 0, staleDeleted: 0 });
+			deliver('melee:roundSynced', {
+				roundId: 31,
+				matchCount: 8,
+				created: 1,
+				updated: 0,
+				staleDeleted: 0,
+			});
 			await flushPromises();
 			expect(mockFetch).toHaveBeenCalledTimes(3);
 		});
@@ -302,11 +439,15 @@ describe('usePairingsModeData', () => {
 		it('follows a rename of a Player it shows, and of no one else', async () => {
 			await showingPendingPairings();
 
-			deliver('player:updated', { player: { id: 5 } });
+			deliver('player:updated', {
+				player: { id: 5 },
+			});
 			await flushPromises();
 			expect(mockFetch).not.toHaveBeenCalled();
 
-			deliver('player:updated', { player: { id: 8 } });
+			deliver('player:updated', {
+				player: { id: 8 },
+			});
 			await flushPromises();
 			deliver('player:deleted', { playerId: 7 });
 			await flushPromises();

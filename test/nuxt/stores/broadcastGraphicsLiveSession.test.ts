@@ -72,15 +72,17 @@ function graphic(id: string, animation?: BroadcastGraphicConfig['animation']): B
 function socialGraphic(id: string): BroadcastGraphicConfig {
 	return {
 		...graphic(id),
-		socialProfileProjections: [{
-			key: 'profile',
-			label: 'Social Profile',
-			sourceKey: 'talent',
-			presentationGroupId: 'profile-group',
-			dwellMs: 8_000,
-			transition: 'crossfade',
-			transitionDurationMs: 250,
-		}],
+		socialProfileProjections: [
+			{
+				key: 'profile',
+				label: 'Social Profile',
+				sourceKey: 'talent',
+				presentationGroupId: 'profile-group',
+				dwellMs: 8_000,
+				transition: 'crossfade',
+				transitionDurationMs: 250,
+			},
+		],
 	};
 }
 
@@ -94,7 +96,11 @@ function notification(
 		sessionId: 55,
 		sequence: 2,
 		commandType: 'Take',
-		change: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } } },
+		change: {
+			playout: {
+				slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+			},
+		},
 		...overrides,
 	} as MessageData<'broadcastGraphicsLiveSession:commandApplied'>;
 }
@@ -170,19 +176,30 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 	it('derives Graphic Playout State and the on-air stack from the loaded snapshot', async () => {
 		mockRepository.getSession.mockResolvedValue(session({
-			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false }, bug: { onAir: false, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+			currentState: {
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+					bug: { onAir: false, effectiveStartedAt: 0, cut: false },
+				},
+				inputs: {},
+			},
 		}));
 
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 
 		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
 		expect(store.playoutState(SCREEN_ID, 'bug')).toBe('off');
-		expect(store.onAirGraphicIds(SCREEN_ID, [graphic('bug'), graphic('slate')])).toEqual(['slate']);
+		expect(store.onAirGraphicIds(SCREEN_ID, [
+			graphic('bug'),
+			graphic('slate'),
+		])).toEqual(['slate']);
 	});
 
 	it('reports every Broadcast Graphic off before any snapshot has loaded', () => {
 		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('off');
-		expect(store.onAirGraphicIds(SCREEN_ID, [graphic('slate')])).toEqual([]);
+		expect(store.onAirGraphicIds(SCREEN_ID, [
+			graphic('slate'),
+		])).toEqual([]);
 	});
 
 	it('reads current Social Profile tuples and sends direct, Previous, and Next commands', async () => {
@@ -190,13 +207,25 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			playout: {},
 			inputs: {},
 			socialProfileProjections: {
-				slate: { profile: {
-					acceptedProfiles: [
-						{ network: 'twitch' as const, networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
-						{ network: 'x' as const, networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
-					],
-					currentNetwork: 'twitch' as const,
-				} },
+				slate: {
+					profile: {
+						acceptedProfiles: [
+							{
+								network: 'twitch' as const,
+								networkLabel: 'Twitch',
+								handle: 'AvaLive',
+								profileUrl: 'https://www.twitch.tv/AvaLive',
+							},
+							{
+								network: 'x' as const,
+								networkLabel: 'X',
+								handle: 'AvaCasts',
+								profileUrl: 'https://x.com/AvaCasts',
+							},
+						],
+						currentNetwork: 'twitch' as const,
+					},
+				},
 			},
 		};
 		mockRepository.getSession.mockResolvedValue(session({ currentState }));
@@ -216,7 +245,9 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 
 		expect(store.socialProfileProjectionState(SCREEN_ID, 'slate', 'profile')?.currentNetwork).toBe('twitch');
-		expect(store.socialProfileValues(SCREEN_ID, [socialGraphic('slate')])).toEqual({
+		expect(store.socialProfileValues(SCREEN_ID, [
+			socialGraphic('slate'),
+		])).toEqual({
 			slate: { profile: currentState.socialProfileProjections.slate.profile.acceptedProfiles[0] },
 		});
 
@@ -226,27 +257,50 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 		expect(mockRepository.sendCommand.mock.calls.map(call => ({ type: call[3].type, payload: call[3].payload })))
 			.toEqual([
-				{ type: 'Select Social Profile', payload: { graphicId: 'slate', projectionKey: 'profile', network: 'x' } },
-				{ type: 'Previous Social Profile', payload: { graphicId: 'slate', projectionKey: 'profile' } },
-				{ type: 'Next Social Profile', payload: { graphicId: 'slate', projectionKey: 'profile' } },
+				{
+					type: 'Select Social Profile',
+					payload: { graphicId: 'slate', projectionKey: 'profile', network: 'x' },
+				},
+				{
+					type: 'Previous Social Profile',
+					payload: { graphicId: 'slate', projectionKey: 'profile' },
+				},
+				{
+					type: 'Next Social Profile',
+					payload: { graphicId: 'slate', projectionKey: 'profile' },
+				},
 			]);
 	});
 
 	it('projects automatic Social Profile values from the shared server clock and sends the Automatic command', async () => {
 		const acceptedProfiles = [
-			{ network: 'twitch' as const, networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
-			{ network: 'x' as const, networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
+			{
+				network: 'twitch' as const,
+				networkLabel: 'Twitch',
+				handle: 'AvaLive',
+				profileUrl: 'https://www.twitch.tv/AvaLive',
+			},
+			{
+				network: 'x' as const,
+				networkLabel: 'X',
+				handle: 'AvaCasts',
+				profileUrl: 'https://x.com/AvaCasts',
+			},
 		];
 		const currentState = {
-			playout: { slate: { onAir: true, effectiveStartedAt: 999_000, cut: false } },
+			playout: {
+				slate: { onAir: true, effectiveStartedAt: 999_000, cut: false },
+			},
 			inputs: {},
 			socialProfileProjections: {
-				slate: { profile: {
-					acceptedProfiles,
-					currentNetwork: 'twitch' as const,
-					automatic: true,
-					rotationAnchor: { network: 'twitch' as const, anchoredAt: 1_000_000 },
-				} },
+				slate: {
+					profile: {
+						acceptedProfiles,
+						currentNetwork: 'twitch' as const,
+						automatic: true,
+						rotationAnchor: { network: 'twitch' as const, anchoredAt: 1_000_000 },
+					},
+				},
 			},
 		};
 		mockRepository.getSession.mockResolvedValue(session({ currentState }));
@@ -260,7 +314,9 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		});
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 
-		expect(store.socialProfileValues(SCREEN_ID, [socialGraphic('slate')], 1_008_100)).toEqual({
+		expect(store.socialProfileValues(SCREEN_ID, [
+			socialGraphic('slate'),
+		], 1_008_100)).toEqual({
 			slate: { profile: acceptedProfiles[1] },
 		});
 		expect(store.projectedSocialProfileProjectionState(
@@ -270,7 +326,9 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			socialGraphic('slate').socialProfileProjections![0]!,
 			1_008_100,
 		)?.currentNetwork).toBe('x');
-		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [socialGraphic('slate')])).toBe(true);
+		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [
+			socialGraphic('slate'),
+		])).toBe(true);
 
 		await store.setSocialProfileAutomatic(EVENT_ID, SCREEN_ID, 'slate', 'profile', false);
 		expect(mockRepository.sendCommand).toHaveBeenLastCalledWith(EVENT_ID, SCREEN_ID, 55, expect.objectContaining({
@@ -279,7 +337,9 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		}));
 
 		mockClockSynced.value = false;
-		expect(store.socialProfileValues(SCREEN_ID, [socialGraphic('slate')], 1_008_100)).toEqual({
+		expect(store.socialProfileValues(SCREEN_ID, [
+			socialGraphic('slate'),
+		], 1_008_100)).toEqual({
 			slate: { profile: acceptedProfiles[0] },
 		});
 		expect(store.projectedSocialProfileProjectionState(
@@ -289,35 +349,47 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			socialGraphic('slate').socialProfileProjections![0]!,
 			1_008_100,
 		)?.currentNetwork).toBe('twitch');
-		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [socialGraphic('slate')])).toBe(false);
+		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [
+			socialGraphic('slate'),
+		])).toBe(false);
 	});
 
 	it('advances a one-profile transition only until its transparent boundary settles', async () => {
 		const startedAt = Date.now();
 		mockRepository.getSession.mockResolvedValue(session({
 			currentState: {
-				playout: { slate: { onAir: true, effectiveStartedAt: startedAt, cut: false } },
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: startedAt, cut: false },
+				},
 				inputs: {},
 				socialProfileProjections: {
-					slate: { profile: {
-						acceptedProfiles: [{
-							network: 'twitch' as const,
-							networkLabel: 'Twitch',
-							handle: 'AvaLive',
-							profileUrl: 'https://www.twitch.tv/AvaLive',
-						}],
-						currentNetwork: 'twitch' as const,
-						rotationAnchor: { network: 'twitch' as const, anchoredAt: startedAt + 250 },
-						transitionAnchor: { startedAt, from: [] },
-					} },
+					slate: {
+						profile: {
+							acceptedProfiles: [
+								{
+									network: 'twitch' as const,
+									networkLabel: 'Twitch',
+									handle: 'AvaLive',
+									profileUrl: 'https://www.twitch.tv/AvaLive',
+								},
+							],
+							currentNetwork: 'twitch' as const,
+							rotationAnchor: { network: 'twitch' as const, anchoredAt: startedAt + 250 },
+							transitionAnchor: { startedAt, from: [] },
+						},
+					},
 				},
 			},
 		}));
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 
-		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [socialGraphic('slate')])).toBe(true);
+		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [
+			socialGraphic('slate'),
+		])).toBe(true);
 		mockServerTimeOffset.value = 250;
-		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [socialGraphic('slate')])).toBe(false);
+		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [
+			socialGraphic('slate'),
+		])).toBe(false);
 	});
 
 	it('sends a Take naming the loaded epoch, and keeps the returned snapshot', async () => {
@@ -327,8 +399,21 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			sessionId: 55,
 			sequence: 2,
 			commandType: 'Take',
-			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
-			session: session({ sequence: 2, currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} } }),
+			currentState: {
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+				},
+				inputs: {},
+			},
+			session: session({
+				sequence: 2,
+				currentState: {
+					playout: {
+						slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+					},
+					inputs: {},
+				},
+			}),
 		});
 
 		await store.take(EVENT_ID, SCREEN_ID, 'slate');
@@ -366,7 +451,12 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			sessionId: 55,
 			sequence: 2,
 			commandType: 'Take',
-			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+			currentState: {
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+				},
+				inputs: {},
+			},
 			session: session({ sequence: 2 }),
 		});
 
@@ -392,7 +482,12 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				sessionId: 56,
 				sequence: 2,
 				commandType: 'Take',
-				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+				currentState: {
+					playout: {
+						slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+					},
+					inputs: {},
+				},
 				session: session({ id: 56, sequence: 2 }),
 			});
 		mockRepository.getSession.mockResolvedValue(session({ id: 56, sequence: 1 }));
@@ -422,8 +517,22 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				sessionId: 56,
 				sequence: 2,
 				commandType: 'Take',
-				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
-				session: session({ id: 56, sequence: 2, currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} } }),
+				currentState: {
+					playout: {
+						slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+					},
+					inputs: {},
+				},
+				session: session({
+					id: 56,
+					sequence: 2,
+					currentState: {
+						playout: {
+							slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+						},
+						inputs: {},
+					},
+				}),
 			});
 		mockRepository.getSession.mockResolvedValue(session({ id: 56, sequence: 1 }));
 
@@ -492,8 +601,21 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			sessionId: 55,
 			sequence: 2,
 			commandType: 'Take',
-			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
-			session: session({ sequence: 2, currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} } }),
+			currentState: {
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+				},
+				inputs: {},
+			},
+			session: session({
+				sequence: 2,
+				currentState: {
+					playout: {
+						slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+					},
+					inputs: {},
+				},
+			}),
 		});
 		await inFlight;
 
@@ -509,15 +631,29 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		const profileState = (network: 'x' | 'bluesky') => ({
 			playout: {},
 			inputs: {},
-			socialProfileProjections: { slate: { profile: {
-				talent: { id: 7, name: 'Ava Reed' },
-				acceptedProfiles: [
-					{ network: 'x' as const, networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
-					{ network: 'bluesky' as const, networkLabel: 'Bluesky', handle: 'ava.example', profileUrl: 'https://bsky.app/profile/ava.example' },
-				],
-				currentNetwork: network,
-				manualNetwork: network,
-			} } },
+			socialProfileProjections: {
+				slate: {
+					profile: {
+						talent: { id: 7, name: 'Ava Reed' },
+						acceptedProfiles: [
+							{
+								network: 'x' as const,
+								networkLabel: 'X',
+								handle: 'AvaCasts',
+								profileUrl: 'https://x.com/AvaCasts',
+							},
+							{
+								network: 'bluesky' as const,
+								networkLabel: 'Bluesky',
+								handle: 'ava.example',
+								profileUrl: 'https://bsky.app/profile/ava.example',
+							},
+						],
+						currentNetwork: network,
+						manualNetwork: network,
+					},
+				},
+			},
 		});
 		const result = (sequence: number, network: 'x' | 'bluesky') => ({
 			screenId: SCREEN_ID,
@@ -525,7 +661,10 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			sequence,
 			commandType: 'Select Social Profile',
 			currentState: profileState(network),
-			session: session({ sequence, currentState: profileState(network) }),
+			session: session({
+				sequence,
+				currentState: profileState(network),
+			}),
 		});
 
 		const first = store.selectSocialProfile(EVENT_ID, SCREEN_ID, 'slate', 'profile', 'x');
@@ -552,16 +691,30 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			release = resolve;
 		}));
 		const old = session({ sequence: 2 });
-		const newest = session({ sequence: 3, currentState: {
-			playout: {},
-			inputs: {},
-			socialProfileProjections: { slate: { profile: {
-				talent: { id: 7, name: 'Ava Reed' },
-				acceptedProfiles: [{ network: 'x', networkLabel: 'X', handle: 'Ava', profileUrl: 'https://x.com/Ava' }],
-				currentNetwork: 'x',
-				manualNetwork: 'x',
-			} } },
-		} });
+		const newest = session({
+			sequence: 3,
+			currentState: {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: {
+					slate: {
+						profile: {
+							talent: { id: 7, name: 'Ava Reed' },
+							acceptedProfiles: [
+								{
+									network: 'x',
+									networkLabel: 'X',
+									handle: 'Ava',
+									profileUrl: 'https://x.com/Ava',
+								},
+							],
+							currentNetwork: 'x',
+							manualNetwork: 'x',
+						},
+					},
+				},
+			},
+		});
 		const inFlight = store.nextSocialProfile(EVENT_ID, SCREEN_ID, 'slate', 'profile');
 		await Promise.resolve();
 		mockRepository.getSession.mockResolvedValue(newest);
@@ -630,7 +783,11 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 		await store.applyRemoteCommand(notification({
 			sequence: 2,
-			change: { playout: { slate: { onAir: false, effectiveStartedAt: 0, cut: false } } },
+			change: {
+				playout: {
+					slate: { onAir: false, effectiveStartedAt: 0, cut: false },
+				},
+			},
 		}));
 
 		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
@@ -641,7 +798,12 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		vi.clearAllMocks();
 		mockRepository.getSession.mockResolvedValue(session({
 			sequence: 9,
-			currentState: { playout: { bug: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+			currentState: {
+				playout: {
+					bug: { onAir: true, effectiveStartedAt: 0, cut: false },
+				},
+				inputs: {},
+			},
 		}));
 
 		// A disconnect swallowed sequences 2 through 8: the notification is not
@@ -673,7 +835,12 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		vi.clearAllMocks();
 		mockRepository.getSession.mockResolvedValue(session({
 			sequence: 2,
-			currentState: { playout: { bug: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+			currentState: {
+				playout: {
+					bug: { onAir: true, effectiveStartedAt: 0, cut: false },
+				},
+				inputs: {},
+			},
 		}));
 
 		await store.applyRemoteCommand(notification({ change: undefined }));
@@ -684,12 +851,21 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 	it('removes a Broadcast Graphic a change says the committed state no longer holds', async () => {
 		mockRepository.getSession.mockResolvedValue(session({
-			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+			currentState: {
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+				},
+				inputs: {},
+			},
 		}));
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 		vi.clearAllMocks();
 
-		await store.applyRemoteCommand(notification({ change: { playout: { slate: null } } }));
+		await store.applyRemoteCommand(notification({
+			change: {
+				playout: { slate: null },
+			},
+		}));
 
 		expect(mockRepository.getSession).not.toHaveBeenCalled();
 		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('off');
@@ -745,14 +921,30 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 	it('names the acceptance it supersedes when it accepts a staged Graphic Input set', async () => {
 		mockRepository.getSession.mockResolvedValue(session({
 			currentState: {
-				playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } },
-				inputs: { slate: { working: { name: 'Ava Reed' }, accepted: { name: 'Unnamed' }, acceptedRevision: 4 } },
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+				},
+				inputs: {
+					slate: {
+						working: { name: 'Ava Reed' },
+						accepted: { name: 'Unnamed' },
+						acceptedRevision: 4,
+					},
+				},
 			},
 		}));
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 		const accepted = {
-			playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } },
-			inputs: { slate: { working: { name: 'Ava Reed' }, accepted: { name: 'Ava Reed' }, acceptedRevision: 5 } },
+			playout: {
+				slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+			},
+			inputs: {
+				slate: {
+					working: { name: 'Ava Reed' },
+					accepted: { name: 'Ava Reed' },
+					acceptedRevision: 5,
+				},
+			},
 		};
 		mockRepository.sendCommand.mockResolvedValue({
 			screenId: SCREEN_ID,
@@ -777,8 +969,16 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 	it('restates one Update Graphic unchanged — same command id, same acceptance revision', async () => {
 		mockRepository.getSession.mockResolvedValue(session({
 			currentState: {
-				playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } },
-				inputs: { slate: { working: { name: 'Ava Reed' }, accepted: {}, acceptedRevision: 4 } },
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+				},
+				inputs: {
+					slate: {
+						working: { name: 'Ava Reed' },
+						accepted: {},
+						acceptedRevision: 4,
+					},
+				},
 			},
 		}));
 		await store.loadSession(EVENT_ID, SCREEN_ID);
@@ -790,15 +990,24 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				sessionId: 56,
 				sequence: 2,
 				commandType: 'Update Graphic',
-				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+				currentState: {
+					playout: {
+						slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+					},
+					inputs: {},
+				},
 				session: session({ id: 56, sequence: 2 }),
 			});
 		// The reload the retry goes through reports a *different* acceptance revision.
 		mockRepository.getSession.mockResolvedValue(session({
 			id: 56,
 			currentState: {
-				playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } },
-				inputs: { slate: { working: {}, accepted: {}, acceptedRevision: 9 } },
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+				},
+				inputs: {
+					slate: { working: {}, accepted: {}, acceptedRevision: 9 },
+				},
 			},
 		}));
 
@@ -822,15 +1031,17 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			id: 'slate',
 			name: 'Slate',
 			items: [],
-			inputs: [{
-				type: 'text' as const,
-				key: 'name',
-				label: 'Name',
-				required: false,
-				updatePolicy: 'staged' as const,
-				default: 'Unnamed',
-				maxLength: 20,
-			}],
+			inputs: [
+				{
+					type: 'text' as const,
+					key: 'name',
+					label: 'Name',
+					required: false,
+					updatePolicy: 'staged' as const,
+					default: 'Unnamed',
+					maxLength: 20,
+				},
+			],
 		};
 
 		function refusal() {
@@ -849,7 +1060,13 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				sequence: 3,
 				currentState: {
 					playout: {},
-					inputs: { slate: { working: { name: 'Ben Cole' }, accepted: {}, acceptedRevision: 0 } },
+					inputs: {
+						slate: {
+							working: { name: 'Ben Cole' },
+							accepted: {},
+							acceptedRevision: 0,
+						},
+					},
 				},
 			}));
 
@@ -877,7 +1094,13 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				sequence: 3,
 				currentState: {
 					playout: {},
-					inputs: { slate: { working: { name: 'Ben Cole' }, accepted: {}, acceptedRevision: 0 } },
+					inputs: {
+						slate: {
+							working: { name: 'Ben Cole' },
+							accepted: {},
+							acceptedRevision: 0,
+						},
+					},
 				},
 			}));
 
@@ -1218,7 +1441,9 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			// did not arrive.
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			mockRepository.sendCommand.mockRejectedValue(
-				Object.assign(new Error('Failed to fetch'), { data: { message: 'a body from nowhere' } }),
+				Object.assign(new Error('Failed to fetch'), {
+					data: { message: 'a body from nowhere' },
+				}),
 			);
 
 			await store.take(EVENT_ID, SCREEN_ID, 'slate');
@@ -1419,7 +1644,9 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 
 			expect(store.recoveryFault(SCREEN_ID)?.reason).toBe('corrupt');
 			// The recovered state is what every output composes, so nothing is on air.
-			expect(store.onAirGraphicIds(SCREEN_ID, [graphic('slate')])).toEqual([]);
+			expect(store.onAirGraphicIds(SCREEN_ID, [
+				graphic('slate'),
+			])).toEqual([]);
 		});
 
 		it('reports no fault for a Screen it has never loaded', () => {
@@ -1440,7 +1667,12 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			vi.clearAllMocks();
 			mockRepository.getSession.mockResolvedValue(session({
 				sequence: 2,
-				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+				currentState: {
+					playout: {
+						slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+					},
+					inputs: {},
+				},
 				recoveryFault: null,
 			}));
 
@@ -1467,14 +1699,24 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 	describe('an epoch that has been replaced', () => {
 		it('discards what it holds and reloads the authoritative snapshot', async () => {
 			mockRepository.getSession.mockResolvedValue(session({
-				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+				currentState: {
+					playout: {
+						slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+					},
+					inputs: {},
+				},
 			}));
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			expect(store.playoutState(SCREEN_ID, 'slate')).toBe('on-air');
 			vi.clearAllMocks();
 			mockRepository.getSession.mockResolvedValue(session({ id: 56, sequence: 1 }));
 
-			await store.applyEpochEnded({ eventId: EVENT_ID, timestamp: 1_000, screenId: SCREEN_ID, sessionId: 55 } as never);
+			await store.applyEpochEnded({
+				eventId: EVENT_ID,
+				timestamp: 1_000,
+				screenId: SCREEN_ID,
+				sessionId: 55,
+			} as never);
 
 			expect(mockRepository.getSession).toHaveBeenCalledWith(EVENT_ID, SCREEN_ID);
 			expect(store.playoutState(SCREEN_ID, 'slate')).toBe('off');
@@ -1485,7 +1727,12 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			// after which the snapshot route refuses this client. Keeping the ended
 			// epoch's state would leave every output rendering a show that is over.
 			mockRepository.getSession.mockResolvedValue(session({
-				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+				currentState: {
+					playout: {
+						slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+					},
+					inputs: {},
+				},
 			}));
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			mockRepository.getSession.mockRejectedValue(transportFailure({
@@ -1494,13 +1741,25 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				request: SNAPSHOT_REQUEST,
 			}));
 
-			await store.applyEpochEnded({ eventId: EVENT_ID, timestamp: 1_000, screenId: SCREEN_ID, sessionId: 55 } as never);
+			await store.applyEpochEnded({
+				eventId: EVENT_ID,
+				timestamp: 1_000,
+				screenId: SCREEN_ID,
+				sessionId: 55,
+			} as never);
 
-			expect(store.onAirGraphicIds(SCREEN_ID, [graphic('slate')])).toEqual([]);
+			expect(store.onAirGraphicIds(SCREEN_ID, [
+				graphic('slate'),
+			])).toEqual([]);
 		});
 
 		it('does not open an epoch for a Screen it was not following', async () => {
-			await store.applyEpochEnded({ eventId: EVENT_ID, timestamp: 1_000, screenId: SCREEN_ID, sessionId: 55 } as never);
+			await store.applyEpochEnded({
+				eventId: EVENT_ID,
+				timestamp: 1_000,
+				screenId: SCREEN_ID,
+				sessionId: 55,
+			} as never);
 
 			expect(mockRepository.getSession).not.toHaveBeenCalled();
 		});
@@ -1532,10 +1791,20 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			sessionId: 55,
 			sequence: 2,
 			commandType: 'Take',
-			currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+			currentState: {
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+				},
+				inputs: {},
+			},
 			session: session({
 				sequence: 2,
-				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+				currentState: {
+					playout: {
+						slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+					},
+					inputs: {},
+				},
 			}),
 		};
 
@@ -1609,15 +1878,17 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			id: 'slate',
 			name: 'Slate',
 			items: [],
-			inputs: [{
-				type: 'text' as const,
-				key: 'name',
-				label: 'Name',
-				required: false,
-				updatePolicy: 'staged' as const,
-				default: 'Unnamed',
-				maxLength: 20,
-			}],
+			inputs: [
+				{
+					type: 'text' as const,
+					key: 'name',
+					label: 'Name',
+					required: false,
+					updatePolicy: 'staged' as const,
+					default: 'Unnamed',
+					maxLength: 20,
+				},
+			],
 		};
 		const OTHER_SCREEN_ID = 4;
 
@@ -1625,7 +1896,12 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			// An operator working two Screens must not have one Screen's epoch change wipe
 			// what the other is still telling them about a refused edit.
 			mockRepository.getSession.mockImplementation(async (_eventId: number, screenId: number) =>
-				session({ id: screenId === SCREEN_ID ? 55 : 66, screenId }));
+				session({
+					id: screenId === SCREEN_ID
+						? 55
+						: 66,
+					screenId,
+				}));
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			await store.loadSession(EVENT_ID, OTHER_SCREEN_ID);
 			mockRepository.sendCommand.mockRejectedValue(refusedCommandFailure(
@@ -1653,7 +1929,12 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 	describe('resetting live state', () => {
 		it('caches the fresh epoch the reset opened', async () => {
 			mockRepository.getSession.mockResolvedValue(session({
-				currentState: { playout: { slate: { onAir: true, effectiveStartedAt: 0, cut: false } }, inputs: {} },
+				currentState: {
+					playout: {
+						slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+					},
+					inputs: {},
+				},
 			}));
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			mockRepository.resetSession.mockResolvedValue(session({ id: 57, sequence: 1 }));
@@ -1672,10 +1953,20 @@ describe('the authoritative clock a Screen Output projects on', () => {
 
 	/** A one-second enter, so a phase boundary is something a test can stand either side of. */
 	const FADE_IN = {
-		enter: { duration: 1000, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } },
+		enter: {
+			duration: 1000,
+			easing: 'linear' as const,
+			delay: 0,
+			fade: { opacity: 0 },
+		},
 	};
 	const FADE_OUT = {
-		exit: { duration: 1000, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } },
+		exit: {
+			duration: 1000,
+			easing: 'linear' as const,
+			delay: 0,
+			fade: { opacity: 0 },
+		},
 	};
 
 	beforeEach(() => {
@@ -1697,13 +1988,17 @@ describe('the authoritative clock a Screen Output projects on', () => {
 		const serverNow = Date.now() + 120_000;
 		mockRepository.getSession.mockResolvedValue(session({
 			currentState: {
-				playout: { slate: { onAir: true, effectiveStartedAt: serverNow - 400, cut: false } },
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: serverNow - 400, cut: false },
+				},
 				inputs: {},
 			},
 		}));
 
 		await store.loadSession(EVENT_ID, SCREEN_ID);
-		const projection = store.animationProjection(SCREEN_ID, [graphic('slate', FADE_IN)]);
+		const projection = store.animationProjection(SCREEN_ID, [
+			graphic('slate', FADE_IN),
+		]);
 
 		expect(projection.slate?.[0]?.phase).toBe('enter');
 		expect(projection.slate?.[0]?.elapsed).toBeGreaterThanOrEqual(400);
@@ -1715,11 +2010,15 @@ describe('the authoritative clock a Screen Output projects on', () => {
 		const serverNow = Date.now() - 90_000;
 		mockRepository.getSession.mockResolvedValue(session({
 			currentState: {
-				playout: { slate: { onAir: false, effectiveStartedAt: serverNow - 200, cut: false } },
+				playout: {
+					slate: { onAir: false, effectiveStartedAt: serverNow - 200, cut: false },
+				},
 				inputs: {},
 			},
 		}));
-		const graphics = [graphic('slate', FADE_OUT)];
+		const graphics = [
+			graphic('slate', FADE_OUT),
+		];
 
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 
@@ -1739,14 +2038,18 @@ describe('the authoritative clock a Screen Output projects on', () => {
 		const serverNow = Date.now();
 		mockRepository.getSession.mockResolvedValue(session({
 			currentState: {
-				playout: { slate: { onAir: true, effectiveStartedAt: serverNow - 400, cut: false } },
+				playout: {
+					slate: { onAir: true, effectiveStartedAt: serverNow - 400, cut: false },
+				},
 				inputs: {},
 			},
 		}));
 
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 
-		expect(store.animationProjection(SCREEN_ID, [graphic('slate', FADE_IN)])).toEqual({});
+		expect(store.animationProjection(SCREEN_ID, [
+			graphic('slate', FADE_IN),
+		])).toEqual({});
 		expect(store.playoutState(SCREEN_ID, 'slate', graphic('slate', FADE_IN))).toBe('on-air');
 	});
 
@@ -1760,7 +2063,12 @@ describe('the authoritative clock a Screen Output projects on', () => {
 		mockRepository.getSession.mockResolvedValue(session({
 			currentState: {
 				playout: {
-					slate: { onAir: true, effectiveStartedAt: serverNow - 200, cut: false, updateStartedAt: serverNow + 800 },
+					slate: {
+						onAir: true,
+						effectiveStartedAt: serverNow - 200,
+						cut: false,
+						updateStartedAt: serverNow + 800,
+					},
 				},
 				inputs: {
 					slate: {
@@ -1772,18 +2080,30 @@ describe('the authoritative clock a Screen Output projects on', () => {
 				},
 			},
 		}));
-		const graphics = [{
-			...graphic('slate', { ...FADE_IN, update: { duration: 400, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } } }),
-			inputs: [{
-				type: 'text' as const,
-				key: 'headline',
-				label: 'Headline',
-				required: false,
-				updatePolicy: 'staged' as const,
-				default: '',
-				maxLength: 80,
-			}],
-		}];
+		const graphics = [
+			{
+				...graphic('slate', {
+					...FADE_IN,
+					update: {
+						duration: 400,
+						easing: 'linear' as const,
+						delay: 0,
+						fade: { opacity: 0 },
+					},
+				}),
+				inputs: [
+					{
+						type: 'text' as const,
+						key: 'headline',
+						label: 'Headline',
+						required: false,
+						updatePolicy: 'staged' as const,
+						default: '',
+						maxLength: 80,
+					},
+				],
+			},
+		];
 
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 		const rendered = store.renderedInputValues(SCREEN_ID, graphics);
@@ -1801,11 +2121,15 @@ describe('the authoritative clock a Screen Output projects on', () => {
 		mockClockSynced.value = false;
 		mockRepository.getSession.mockResolvedValue(session({
 			currentState: {
-				playout: { slate: { onAir: false, effectiveStartedAt: Date.now() - 200, cut: false } },
+				playout: {
+					slate: { onAir: false, effectiveStartedAt: Date.now() - 200, cut: false },
+				},
 				inputs: {},
 			},
 		}));
-		const graphics = [graphic('slate', FADE_OUT)];
+		const graphics = [
+			graphic('slate', FADE_OUT),
+		];
 
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 
@@ -1816,14 +2140,22 @@ describe('the authoritative clock a Screen Output projects on', () => {
 	it('has no phase to project for a Broadcast Graphic that authored no animation', async () => {
 		mockRepository.getSession.mockResolvedValue(session({
 			currentState: {
-				playout: { slate: { onAir: true, effectiveStartedAt: Date.now(), cut: false } },
+				playout: {
+					slate: {
+						onAir: true,
+						effectiveStartedAt: Date.now(),
+						cut: false,
+					},
+				},
 				inputs: {},
 			},
 		}));
 
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 
-		expect(store.animationProjection(SCREEN_ID, [graphic('slate')])).toEqual({});
+		expect(store.animationProjection(SCREEN_ID, [
+			graphic('slate'),
+		])).toEqual({});
 		expect(store.playoutState(SCREEN_ID, 'slate', graphic('slate'))).toBe('on-air');
 	});
 });
@@ -1832,11 +2164,22 @@ describe('a Graphic Channel holding one member off program', () => {
 	let store: ReturnType<typeof useBroadcastGraphicsLiveSessionStore>;
 
 	const FADE_OUT = {
-		exit: { duration: 1000, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } },
+		exit: {
+			duration: 1000,
+			easing: 'linear' as const,
+			delay: 0,
+			fade: { opacity: 0 },
+		},
 	};
 
 	function member(id: string): BroadcastGraphicConfig {
-		return { id, name: id, items: [], channelId: 'thirds', animation: FADE_OUT };
+		return {
+			id,
+			name: id,
+			items: [],
+			channelId: 'thirds',
+			animation: FADE_OUT,
+		};
 	}
 
 	beforeEach(() => {
@@ -1858,8 +2201,13 @@ describe('a Graphic Channel holding one member off program', () => {
 				inputs: {},
 			},
 		}));
-		const graphics = [member('alpha'), member('bravo')];
-		const channels = [{ id: 'thirds', name: 'Lower thirds', handoff: 'out-then-in' as const }];
+		const graphics = [
+			member('alpha'),
+			member('bravo'),
+		];
+		const channels = [
+			{ id: 'thirds', name: 'Lower thirds', handoff: 'out-then-in' as const },
+		];
 
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 		const contexts = store.channelContexts(graphics, channels);
@@ -1886,7 +2234,10 @@ describe('a Graphic Channel holding one member off program', () => {
 				inputs: {},
 			},
 		}));
-		const graphics = [member('alpha'), member('bravo')];
+		const graphics = [
+			member('alpha'),
+			member('bravo'),
+		];
 
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 
