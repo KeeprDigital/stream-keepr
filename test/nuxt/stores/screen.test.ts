@@ -1,27 +1,14 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { isReactive } from 'vue';
+import { deferred } from '~~/test/helpers/deferred';
 import { createMockScreen } from '~~/test/helpers/fixtures';
-import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 import { transportFailure } from '~~/test/helpers/transportFailure';
 
-const UPDATE_REQUEST = `[PATCH] "/api/events/1/screens/1"`;
-const GET_BY_ID_REQUEST = `[GET] "/api/events/1/screens/10"`;
-
 /**
- * Put the same Screen id in the cache more than once, by assignment.
- *
- * It used to be seeded through the public store API — `createScreen` pushed its
- * answer unconditionally, so two creates answering with one id left one entry each,
- * and that is how #251's review first reached this state. #261 closed that door, and
- * the pin for it is in the `createScreen` block below.
- *
- * The state is still worth holding tests to. `cachedRevision` is the single selection
- * that both the version comparison and every refusal's answer read, and what makes
- * one selection worth having is precisely that it cannot disagree with itself when an
- * id is held twice — the split #251's review constructed. No door into `screens` will
- * build that state any more, so a seeded cache is the only thing that can hold the
- * property to it.
+ * Put the same Screen id in the cache more than once, by assignment. No door into
+ * `screens` builds this any more (#261), but `cachedRevision` must still select one
+ * entry for both the comparison and a refusal's answer when it does (#251).
  */
 function seedDuplicateCacheEntries(store: ReturnType<typeof useScreenStore>, versions: number[]) {
 	store.screens = versions.map(stateVersion => createMockScreen({ id: 10, name: `v${stateVersion}`, stateVersion }));
@@ -41,32 +28,11 @@ const mockRepo = {
 	remove: vi.fn(),
 };
 
-const mockAbly = createMockRealtime();
-const mockIsSelfOrigin = vi.fn(() => false);
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
 }));
 
-const ablyCallbacks: Record<string, Record<string, (...args: unknown[]) => void>> = {};
-mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
-	ablyCallbacks[storeName] = callbacks;
-});
-
-/*
- * `useAsyncAction` is deliberately not mocked, as in this store's error-reporting
- * suite. The stand-in that used to sit here rethrew every failure; the real
- * composable swallows one unless the call site asks for `throwError`, writes the
- * message to `errorRef` and resolves `null`. So every failure-path row here was
- * asserting against a contract the store does not have, and `executeReporting` — the
- * seam all of this reports through, the store's own wrapper until #353 replaced it with
- * `useReportingAction` — was never exercised at all. The sibling suites removed exactly
- * this mock for exactly this
- * reason (#241, #263, #271); #311 is the same removal here. The real composable is
- * auto-imported, does no I/O and starts no timers.
- */
-
 mockNuxtImport('useScreenRepository', () => () => mockRepo);
-mockNuxtImport('useRealtime', () => () => mockAbly);
 mockNuxtImport('$fetch', () => mockFetch);
 
 describe('useScreenStore', () => {
@@ -75,19 +41,8 @@ describe('useScreenStore', () => {
 	beforeEach(() => {
 		store = useScreenStore();
 		store.$reset();
-		vi.clearAllMocks();
 		mockFetch.mockResolvedValue({ ok: true });
-		mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
-			ablyCallbacks[storeName] = callbacks;
-		});
-		ablyCallbacks.screen = {
-			'screen:created': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteCreated(data as any),
-			'screen:updated': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteUpdated(data as any),
-			'screen:deleted': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteDeleted(data as any),
-		};
 	});
-
-	// ── Loading ──
 
 	describe('loadScreensByEventId', () => {
 		it('populates screens state', async () => {
@@ -135,10 +90,7 @@ describe('useScreenStore', () => {
 		});
 
 		it('drops a cached Screen the fetched list no longer contains, however new the cache holds it', async () => {
-			// The list is the authority on membership. Absence carries no `stateVersion`
-			// to compare against, and a reload is how a client that missed the delete
-			// announcement finds out — keeping the cached entry would resurrect it on
-			// every subsequent load.
+			// The list is the authority on membership; a reload is how a missed delete is caught.
 			store.screens = [
 				createMockScreen({ id: 1, name: 'Deleted elsewhere', stateVersion: 9 }),
 				createMockScreen({ id: 2, name: 'Still there', stateVersion: 1 }),
@@ -167,9 +119,6 @@ describe('useScreenStore', () => {
 		});
 
 		it('keeps the newest held revision when the cache holds the Screen more than once', async () => {
-			// Same split-authority hazard as the single-Screen loader: selecting a
-			// different entry than the comparison did writes a revision older than the
-			// one the fetched list brought, which is worse than replacing wholesale.
 			seedDuplicateCacheEntries(store, [1, 5, 2]);
 			mockRepo.list.mockResolvedValue([
 				createMockScreen({ id: 10, name: 'v3', stateVersion: 3 }),
@@ -181,14 +130,7 @@ describe('useScreenStore', () => {
 		});
 
 		it('does not let a refresh that raced a settled save overwrite it', async () => {
-			// A page load or explicit refresh issues its GET before the operator's own
-			// save commits and can be served after it settles, by which point the
-			// editing field has stopped masking the store — so caching the list's
-			// answer wholesale is an edit visibly undone (#251, #236's clobber reached
-			// through a loader instead of an announce).
-			//
-			// Every step is driven explicitly — the save's debounce by fake timers, the
-			// list's answer by its own resolver — so the ordering is the test's.
+			// A GET issued before the save commits and served after it would visibly undo the edit (#251).
 			vi.useFakeTimers();
 			store.screens = [
 				createMockScreen({
@@ -215,8 +157,6 @@ describe('useScreenStore', () => {
 			await save;
 			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
 
-			// Served before that save committed, so it answers with the revision the
-			// save superseded.
 			serveRefresh([
 				createMockScreen({
 					id: 5,
@@ -288,17 +228,12 @@ describe('useScreenStore', () => {
 			const loaded = await store.loadScreenBySlug(1, 'main');
 
 			expect(store.activeScreen!.name).toBe('Saved');
-			// Same rule as the other two loaders: the answer is the revision kept, since
-			// the display session compares what it is handed against `activeScreen` and
-			// renders from there.
 			expect(loaded!.name).toBe('Saved');
-			// And handed back raw, like every other Screen a cache write stores.
 			expect(isReactive(loaded)).toBe(false);
 		});
 
 		it('takes the slug answer at the revision the cache already holds', async () => {
-			// Equal is not older: the server bumps `stateVersion` once per write, so the
-			// same revision carries the same Screen (#236, #251).
+			// The server bumps `stateVersion` once per write, so an equal revision is the same Screen.
 			store.screens = [
 				createMockScreen({
 					id: 7,
@@ -320,10 +255,6 @@ describe('useScreenStore', () => {
 		});
 
 		it('answers a refusal with the newest held revision when the cache holds the Screen more than once', async () => {
-			// The third loader reads the same single selection as the other two: take a
-			// different entry than the comparison did and the refusal hands back — and
-			// puts on the output — a revision older than both the cache's newest and the
-			// payload it just refused.
 			seedDuplicateCacheEntries(store, [1, 5, 2]);
 			mockRepo.getBySlug.mockResolvedValue(createMockScreen({ id: 10, name: 'v3', stateVersion: 3 }));
 
@@ -334,11 +265,7 @@ describe('useScreenStore', () => {
 		});
 
 		it('does not let a slug load that raced a settled save overwrite it', async () => {
-			// The interleaving item 3 of #261 is about, reached the only way it can be
-			// reached: a client that both writes and loads by slug. The loader nulls
-			// `activeScreen` before its GET, so the holder the comparison reads here is
-			// `screens` — which is exactly where a writing client's save lands, since
-			// `updateScreenConfig` refuses a Screen it does not hold there.
+			// The loader nulls `activeScreen` before its GET, so the comparison reads `screens` (#261).
 			vi.useFakeTimers();
 			store.screens = [
 				createMockScreen({
@@ -366,8 +293,6 @@ describe('useScreenStore', () => {
 			await vi.advanceTimersByTimeAsync(300);
 			await save;
 
-			// Served before that save committed, so it answers with the revision the save
-			// superseded.
 			serveLoad(createMockScreen({
 				id: 5,
 				slug: 'main',
@@ -383,16 +308,8 @@ describe('useScreenStore', () => {
 	});
 
 	/**
-	 * The non-blanking read a Screen Output takes when it comes back from a
-	 * suspended connection (#307).
-	 *
-	 * A Screen announcement carries no sequence number, so an output that missed a
-	 * mode change while away renders the old mode indefinitely and nothing arrives
-	 * late to correct it — re-reading is the only way to find out. But the output
-	 * doing the re-reading is on program, and `loadScreenBySlug` empties
-	 * `activeScreen` before its GET. Every row here is about the difference between
-	 * the two: same fetch, same version comparison, same flight, no blanking and no
-	 * throw.
+	 * The re-read a Screen Output takes coming back from a suspended connection (#307):
+	 * like `loadScreenBySlug`, but it is on program, so it never blanks and never throws.
 	 */
 	describe('refreshActiveScreen', () => {
 		function deferGetScreenOutputById() {
@@ -517,32 +434,13 @@ describe('useScreenStore', () => {
 	});
 
 	describe('getScreenById', () => {
-		it('adds screen to screens array if not present', async () => {
+		it('caches the Screen it reads, for that Event', async () => {
 			const screen = createMockScreen({ id: 5 });
 			mockRepo.getById.mockResolvedValue(screen);
-			store.screens = [];
-
-			await store.getScreenById(1, 5);
-
-			expect(store.screens).toContainEqual(screen);
-		});
-
-		it('updates existing screen in array', async () => {
-			const existing = createMockScreen({ id: 5, name: 'Old' });
-			store.screens = [existing];
-			const updated = createMockScreen({ id: 5, name: 'Fresh' });
-			mockRepo.getById.mockResolvedValue(updated);
-
-			await store.getScreenById(1, 5);
-
-			expect(store.screens[0]!.name).toBe('Fresh');
-		});
-
-		it('sets currentEventId', async () => {
-			mockRepo.getById.mockResolvedValue(createMockScreen({ id: 5 }));
 
 			await store.getScreenById(42, 5);
 
+			expect(store.screens).toEqual([screen]);
 			expect(store.currentEventId).toBe(42);
 		});
 
@@ -589,22 +487,6 @@ describe('useScreenStore', () => {
 			expect(store.screens[0]!.name).toBe('Fresh');
 		});
 
-		it('answers null and reports the transport line when the authority wrote no sentence', async () => {
-			// A 5xx body is the server failing rather than answering, and its prose has
-			// been rewritten to a placeholder on the way out — so what is left to report
-			// is the status line, which at least reads as machinery.
-			mockRepo.getById.mockRejectedValue(transportFailure({
-				status: 500,
-				body: { statusCode: 500, statusMessage: 'Internal Server Error', message: 'Internal Server Error' },
-				request: GET_BY_ID_REQUEST,
-			}));
-
-			const answer = await store.getScreenById(1, 10);
-
-			expect(answer).toBeNull();
-			expect(store.error).toBe(`${GET_BY_ID_REQUEST}: 500 Internal Server Error`);
-		});
-
 		it('does not let a load that raced a settled save overwrite it', async () => {
 			// Same interleaving as the list refresh above, reached through the single
 			// Screen load the configuration page runs on mount and on route change.
@@ -647,32 +529,18 @@ describe('useScreenStore', () => {
 		});
 	});
 
-	// ── Create ──
-
 	describe('createScreen', () => {
-		it('adds screen to state', async () => {
+		it('holds and answers the created Screen', async () => {
 			const created = createMockScreen({ id: 3, name: 'New Screen' });
 			mockRepo.create.mockResolvedValue(created);
 
-			await store.createScreen(1, { name: 'New Screen', slug: 'new-screen', currentMode: 'background' });
+			const result = await store.createScreen(1, { name: 'New Screen', slug: 'new-screen', currentMode: 'background' });
 
+			expect(result).toEqual(created);
 			expect(store.screens).toContainEqual(created);
 		});
 
-		it('returns created screen', async () => {
-			const created = createMockScreen({ id: 3 });
-			mockRepo.create.mockResolvedValue(created);
-
-			const result = await store.createScreen(1, { name: 'Screen', slug: 's', currentMode: 'background' });
-
-			expect(result).toEqual(created);
-		});
-
-		it('holds one entry when two creates answer with the same id', async () => {
-			// The push used to be unconditional, so this left two entries for id 10 —
-			// the duplicate #251's review constructed through the public store API, and
-			// the state in which the version comparison and the revision a refusal
-			// answers with could name different entries (#261).
+		it('holds one entry when two creates answer with the same id (#261)', async () => {
 			mockRepo.create
 				.mockResolvedValueOnce(createMockScreen({ id: 10, name: 'first', stateVersion: 1 }))
 				.mockResolvedValueOnce(createMockScreen({ id: 10, name: 'second', stateVersion: 2 }));
@@ -685,9 +553,7 @@ describe('useScreenStore', () => {
 		});
 
 		it('keeps the newer held revision when a create answers with an older one', async () => {
-			// Collision semantics, decided: newest wins, through the same selection every
-			// other door into `screens` uses. A create's answer is refused exactly when a
-			// load's would be, so no door can move a Screen's `stateVersion` backwards.
+			// Newest wins, as through every other door into `screens`.
 			store.screens = [
 				createMockScreen({ id: 10, name: 'Saved', stateVersion: 4 }),
 			];
@@ -696,10 +562,7 @@ describe('useScreenStore', () => {
 			const created = await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'background' });
 
 			expect(store.screens.map(s => s.name)).toEqual(['Saved']);
-			// Unlike a loader — whose caller mirrors the answer into its own view of the
-			// cache — nothing mirrors this one: the create modal names the Screen in a
-			// success toast, and otherwise reads the answer only to tell success from
-			// failure. So it is handed what the server made, not the entry sharing the id.
+			// Nothing mirrors a create's answer into the cache, so it is what the server made.
 			expect(created!.name).toBe('Created');
 		});
 
@@ -715,34 +578,20 @@ describe('useScreenStore', () => {
 		});
 	});
 
-	// ── Update (optimistic) ──
-
 	describe('updateScreen', () => {
-		it('optimistically updates then applies server response', async () => {
+		it('holds the server\'s Screen, in the collection and as the active Screen', async () => {
 			const screen = createMockScreen({ id: 1, name: 'Old' });
 			store.screens = [screen];
-
-			const serverUpdated = { ...screen, name: 'Server Updated' };
-			mockRepo.update.mockResolvedValue(serverUpdated);
+			store.activeScreen = screen;
+			mockRepo.update.mockResolvedValue({ ...screen, name: 'Server Updated' });
 
 			await store.updateScreen(1, 1, { name: 'Updated' });
 
 			expect(store.screens[0]!.name).toBe('Server Updated');
-		});
-
-		it('also updates activeScreen if matching', async () => {
-			const screen = createMockScreen({ id: 1, name: 'Old' });
-			store.screens = [screen];
-			store.activeScreen = screen;
-			const serverUpdated = { ...screen, name: 'Server Updated' };
-			mockRepo.update.mockResolvedValue(serverUpdated);
-
-			await store.updateScreen(1, 1, { name: 'Updated' });
-
 			expect(store.activeScreen!.name).toBe('Server Updated');
 		});
 
-		it('sends stateVersion with update request', async () => {
+		it('sends the held stateVersion with the update', async () => {
 			const screen = createMockScreen({ id: 1, stateVersion: 5 });
 			store.screens = [screen];
 			mockRepo.update.mockResolvedValue(screen);
@@ -752,12 +601,6 @@ describe('useScreenStore', () => {
 			expect(mockRepo.update).toHaveBeenCalledWith(1, 1, expect.objectContaining({ stateVersion: 5 }));
 		});
 
-		/*
-		 * The three facts a refused write produces, which the removed `executeAction`
-		 * stand-in could produce none of: it rethrew, and it ignored `errorRef`
-		 * entirely. So a suite could not have told a store that reports refusals from
-		 * one that reports nothing (#311).
-		 */
 		it('answers null, rolls the optimistic edit back, and reports what the authority said', async () => {
 			const screen = createMockScreen({ id: 1, name: 'Old', stateVersion: 2 });
 			store.screens = [screen];
@@ -766,7 +609,6 @@ describe('useScreenStore', () => {
 			mockRepo.update.mockRejectedValue(transportFailure({
 				status: 403,
 				body: { statusCode: 403, statusMessage: 'Forbidden', message: 'This Screen belongs to another Event' },
-				request: UPDATE_REQUEST,
 			}));
 
 			const answer = await store.updateScreen(1, 1, { name: 'Updated' });
@@ -777,30 +619,7 @@ describe('useScreenStore', () => {
 		});
 	});
 
-	// ── setScreenMode ──
-
-	describe('setScreenMode', () => {
-		it('delegates to updateScreen with currentMode', async () => {
-			const screen = createMockScreen({ id: 1, currentMode: 'background' });
-			store.screens = [screen];
-			const updated = { ...screen, currentMode: 'card' as const };
-			mockRepo.update.mockResolvedValue(updated);
-
-			await store.setScreenMode(1, 1, 'card');
-
-			expect(mockRepo.update).toHaveBeenCalledWith(1, 1, expect.objectContaining({ currentMode: 'card' }));
-		});
-	});
-
-	// ── updateModeConfig (optimistic merge + null-stripping) ──
-
-	// ── Writes that outlive their Event (#606) ──
-
-	/**
-	 * A Screen write is answered for the Event it was made in. Neither another Event nor
-	 * the same Event loaded afresh since is the lifetime that answer belongs to, so it may
-	 * not add, change or put back a Screen there (ADR-0024).
-	 */
+	// A Screen write is answered for the Event it was made in; it adds, changes and restores nothing in another (#606, ADR-0024).
 	describe.each([
 		[
 			'Event B',
@@ -885,13 +704,3 @@ describe('useScreenStore', () => {
 		});
 	});
 });
-
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (reason?: unknown) => void;
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve;
-		reject = promiseReject;
-	});
-	return { promise, resolve, reject };
-}

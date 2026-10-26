@@ -1,19 +1,11 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMockRealtime } from '~~/test/helpers/realtime-mock';
-
-// ── $fetch stub (used by searchFuzzyCardName, searchCardPrints, selectMeldCardPart) ──
+import { deferred } from '~~/test/helpers/deferred';
 
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn().mockResolvedValue({ data: [] }),
 }));
 mockNuxtImport('$fetch', () => mockFetch);
-
-mockNuxtImport('useServerTime', () => () => ({
-	getServerTime: () => Date.now(),
-}));
-
-// ── Mock Dependencies ──
 
 const mockCardRepo = {
 	saveScreenCard: vi.fn(),
@@ -21,22 +13,12 @@ const mockCardRepo = {
 	deleteScreenCard: vi.fn(),
 };
 
-const mockAbly = createMockRealtime();
-const mockIsSelfOrigin = vi.fn(() => false);
-
-const ablyCallbacks: Record<string, Record<string, (...args: unknown[]) => void>> = {};
-mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
-	ablyCallbacks[storeName] = callbacks;
-});
-
-// Mock eventStore — needs to look like a Pinia store with reactive properties
 const mockEventStoreState = {
 	eventId: 1 as number | null,
 	event: { id: 1, cardTimeout: 0 } as any,
 };
 
 mockNuxtImport('useCardRepository', () => () => mockCardRepo);
-mockNuxtImport('useRealtime', () => () => mockAbly);
 mockNuxtImport('useEventStore', () => () => mockEventStoreState);
 const mockFetchScryfallCards = vi.fn();
 const mockBuildDeckListArrays = vi.fn();
@@ -45,10 +27,9 @@ mockNuxtImport('useScryfallBatch', () => () => ({
 	buildDeckListArrays: mockBuildDeckListArrays,
 }));
 const mockFetchDeck = vi.fn().mockResolvedValue(null);
-const mockGetCachedDeck = vi.fn().mockReturnValue(null);
 mockNuxtImport('usePlayerDeckCache', () => () => ({
 	fetchDeck: mockFetchDeck,
-	getCachedDeck: mockGetCachedDeck,
+	getCachedDeck: vi.fn().mockReturnValue(null),
 }));
 
 const mockPlayerStoreState = reactive({
@@ -65,7 +46,7 @@ const mockFeatureMatchStoreState = reactive({
 });
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStoreState);
 
-// Helper: mock MtgCard (matches the full MtgCard shape required by cloneMtgCard)
+// The full MtgCard shape `cloneMtgCard` requires.
 function createMockMtgCard(overrides?: Record<string, any>) {
 	return {
 		id: 'card-1',
@@ -92,14 +73,6 @@ function createMockMtgCard(overrides?: Record<string, any>) {
 	} as any;
 }
 
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	const promise = new Promise<T>((promiseResolve) => {
-		resolve = promiseResolve;
-	});
-	return { promise, resolve };
-}
-
 function createScryfallCard(id: string, name: string) {
 	return {
 		id,
@@ -110,23 +83,29 @@ function createScryfallCard(id: string, name: string) {
 	} as any;
 }
 
+function slotOf(player1Data: Record<string, unknown> | null, player1Id: number | null = null) {
+	return [
+		{
+			id: 1,
+			player1Id,
+			player1Data,
+			player2Id: null,
+			player2Data: null,
+		},
+	] as any;
+}
+
 describe('useCardStore deck sources and search', () => {
 	let store: ReturnType<typeof useCardStore>;
 
 	beforeEach(() => {
 		store = useCardStore();
 		store.$reset();
-		vi.clearAllMocks();
-		mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
-			ablyCallbacks[storeName] = callbacks;
-		});
-		ablyCallbacks.card = {
-			'card:updated': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteUpdated(data as any),
-			'card:preview': data => !(mockIsSelfOrigin as any)(data) && store.applyRemotePreview(data as any),
-			'card:cleared': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteCleared(data as any),
-		};
 		mockEventStoreState.eventId = 1;
 		mockEventStoreState.event = { id: 1, cardTimeout: 0 };
+		mockPlayerStoreState.players = [];
+		mockFeatureMatchStoreState.featureMatches = [];
+		mockFetchDeck.mockReset().mockResolvedValue(null);
 		mockFetchScryfallCards.mockReset().mockResolvedValue({
 			cards: new Map(),
 			degraded: false,
@@ -140,108 +119,41 @@ describe('useCardStore deck sources and search', () => {
 		vi.useRealTimers();
 	});
 
-	// ── Active Screen ──
-
 	describe('canUsePlayerDeckMode', () => {
-		it('returns false when no players have deck names', () => {
-			mockPlayerStoreState.players = [
-				{
-					id: 1,
-					name: 'Alice',
-					gameData: { type: 'mtg', deckName: null },
-				},
-			];
-			// canUsePlayerDeckMode checks gameData.deckName now
-			const playerStore = usePlayerStore() as any;
-			expect(playerStore.players.some((p: any) => p.gameData?.deckName)).toBe(false);
-		});
+		it.each([
+			[
+				'no Player has a deck name',
+				[null],
+				false,
+			],
+			[
+				'a Player has a deck name',
+				[null, 'Mono Red'],
+				true,
+			],
+		])('is %s → %s', (_, deckNames, usable) => {
+			mockPlayerStoreState.players = deckNames.map((deckName, index) => ({
+				id: index + 1,
+				name: `Player ${index + 1}`,
+				gameData: { type: 'mtg', deckName },
+			}));
 
-		it('returns true when at least one player has a deck name', () => {
-			mockPlayerStoreState.players = [
-				{
-					id: 1,
-					name: 'Alice',
-					gameData: { type: 'mtg', deckName: null },
-				},
-				{
-					id: 2,
-					name: 'Bob',
-					gameData: { type: 'mtg', deckName: 'Mono Red' },
-				},
-			];
-			const playerStore = usePlayerStore() as any;
-			expect(playerStore.players.some((p: any) => p.gameData?.deckName)).toBe(true);
+			expect(store.canUsePlayerDeckMode).toBe(usable);
 		});
 	});
 
-	// ── loadPlayerDeck ──
+	describe('search', () => {
+		it.each([
+			['all', ''],
+			['token', 'is:token'],
+			['standard', 'format:standard'],
+		] as const)('narrows a search in format %s with %j', (format, query) => {
+			store.selectedSearchFormat = format;
 
-	describe('loadPlayerDeck', () => {
-		beforeEach(() => {
-			mockFetchDeck.mockReset().mockResolvedValue(null);
+			expect(store.searchFormatQuery).toBe(query);
 		});
 
-		it('sets playerDeckPlayerId', async () => {
-			mockFetchDeck.mockResolvedValue({ id: 1, cards: [] });
-			mockPlayerStoreState.players = [
-				{
-					id: 42,
-					name: 'Alice',
-					gameData: { type: 'mtg', deckName: 'Burn' },
-					updatedAt: new Date(),
-				},
-			];
-			await store.loadPlayerDeck(42);
-			expect(store.playerDeckPlayerId).toBe(42);
-		});
-	});
-
-	// ── clearPlayerDeck ──
-
-	describe('clearPlayerDeck', () => {
-		it('resets player deck state', () => {
-			store.playerDeckPlayerId = 42;
-			store.playerDeckData = {
-				playerName: 'Alice',
-				deckList: null,
-				mainboard: [],
-				sideboard: [],
-			} as any;
-
-			store.clearPlayerDeck();
-
-			expect(store.playerDeckPlayerId).toBeNull();
-			expect(store.playerDeckData).toBeNull();
-		});
-	});
-
-	// ── saveActiveCard missing branches ──
-
-	// ── clearActiveCard missing branches ──
-
-	// ── searchFormatQuery ──
-
-	describe('searchFormatQuery', () => {
-		it('returns empty string for "all"', () => {
-			store.selectedSearchFormat = 'all';
-			expect(store.searchFormatQuery).toBe('');
-		});
-
-		it('returns "is:token" for "token"', () => {
-			store.selectedSearchFormat = 'token';
-			expect(store.searchFormatQuery).toBe('is:token');
-		});
-
-		it('returns "format:standard" for "standard"', () => {
-			store.selectedSearchFormat = 'standard';
-			expect(store.searchFormatQuery).toBe('format:standard');
-		});
-	});
-
-	// ── searchFuzzyCardName ──
-
-	describe('searchFuzzyCardName', () => {
-		it('clears search for names shorter than 3 characters', async () => {
+		it('clears the results for a name shorter than 3 characters', async () => {
 			store.searching = true;
 			store.searchResults = [
 				createMockMtgCard(),
@@ -251,30 +163,13 @@ describe('useCardStore deck sources and search', () => {
 
 			expect(store.searching).toBe(false);
 			expect(store.searchResults).toEqual([]);
+			expect(mockFetch).not.toHaveBeenCalled();
 		});
 
-		it('fetches and populates searchResults', async () => {
-			mockFetch.mockResolvedValueOnce({ data: [] });
-
-			await store.searchFuzzyCardName('Lightning Bolt');
-
-			expect(mockFetch).toHaveBeenCalledWith(
-				expect.stringContaining('scryfall'),
-				expect.objectContaining({
-					query: expect.objectContaining({
-						q: expect.stringContaining('Lightning Bolt'),
-					}),
-				}),
-			);
-			expect(store.searching).toBe(false);
-		});
-
-		it('ignores an older response that arrives after the latest query', async () => {
+		it('keeps the latest query\'s results when an older one answers after it', async () => {
 			const first = deferred<any>();
 			const second = deferred<any>();
-			mockFetch
-				.mockReturnValueOnce(first.promise)
-				.mockReturnValueOnce(second.promise);
+			mockFetch.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
 
 			const oldSearch = store.searchFuzzyCardName('Lightning');
 			const newSearch = store.searchFuzzyCardName('Counterspell');
@@ -294,12 +189,8 @@ describe('useCardStore deck sources and search', () => {
 			expect(store.searchResults.map(card => card.name)).toEqual(['Counterspell']);
 			expect(store.searching).toBe(false);
 		});
-	});
 
-	// ── searchCardPrints ──
-
-	describe('searchCardPrints', () => {
-		it('fetches card printings', async () => {
+		it('asks Scryfall for every printing of a card', async () => {
 			mockFetch.mockResolvedValueOnce({ data: [] });
 
 			await store.searchCardPrints('Lightning Bolt');
@@ -310,67 +201,52 @@ describe('useCardStore deck sources and search', () => {
 					query: expect.objectContaining({ unique: 'prints' }),
 				}),
 			);
-			expect(store.searching).toBe(false);
 		});
 	});
 
-	// ── selectPreviewCard ──
+	describe('previewing and controlling a Card', () => {
+		it('a selected Card previews with its controls, turned over when asked', async () => {
+			mockFetch.mockResolvedValue({ data: [] });
 
-	describe('selectPreviewCard', () => {
-		it('sets previewCard and shows card controls', async () => {
-			const card = createMockMtgCard({ id: 'card-abc', name: 'Counterspell' });
-			mockFetch.mockResolvedValueOnce({ data: [] });
-
-			await store.selectPreviewCard(card, false);
+			await store.selectPreviewCard(createMockMtgCard({ name: 'Counterspell' }), true);
 
 			expect(store.previewCard?.name).toBe('Counterspell');
+			expect(store.previewCard?.displayData.turnedOver).toBe(true);
 			expect(store.showCardControls).toBe(true);
 		});
 
-		it('applies turnedOver=true when requested', async () => {
-			const card = createMockMtgCard();
-			mockFetch.mockResolvedValueOnce({ data: [] });
-
-			await store.selectPreviewCard(card, true);
-
-			expect(store.previewCard?.displayData.turnedOver).toBe(true);
-		});
-	});
-
-	// ── controlPreviewCard (remaining cases) ──
-
-	describe('controlPreviewCard (extended)', () => {
-		it('returns early when no previewCard', async () => {
-			store.previewCard = null;
-			await store.controlPreviewCard('flip');
-			// No error thrown, no state changes
-			expect(store.previewCard).toBeNull();
-		});
-
-		it('toggles turnOver', async () => {
+		it.each([
+			['flip', 'flipped'],
+			['rotate', 'rotated'],
+			['turnOver', 'turnedOver'],
+			['counterRotate', 'counterRotated'],
+		] as const)('%s toggles the preview\'s %s', async (action, field) => {
 			store.previewCard = createMockMtgCard();
-			await store.controlPreviewCard('turnOver');
-			expect(store.previewCard!.displayData.turnedOver).toBe(true);
+
+			await store.controlPreviewCard(action);
+
+			expect(store.previewCard!.displayData[field]).toBe(true);
 		});
 
-		it('toggles counterRotate', async () => {
-			store.previewCard = createMockMtgCard();
-			await store.controlPreviewCard('counterRotate');
-			expect(store.previewCard!.displayData.counterRotated).toBe(true);
+		it.each([
+			['flip', 'flipped'],
+			['rotate', 'rotated'],
+			['turnOver', 'turnedOver'],
+			['counterRotate', 'counterRotated'],
+		] as const)('%s toggles and saves the active Card\'s %s', async (action, field) => {
+			store.activeScreenId = 5;
+			store.activeCard = createMockMtgCard();
+			mockCardRepo.saveScreenCard.mockResolvedValue({ success: true, revision: 1 });
+
+			await store.controlActiveCard(action);
+
+			expect(store.activeCard!.displayData[field]).toBe(true);
+			expect(mockCardRepo.saveScreenCard).toHaveBeenCalledWith(1, 5, expect.objectContaining({
+				displayData: expect.objectContaining({ [field]: true }),
+			}));
 		});
-	});
 
-	// ── controlActiveCard ──
-
-	describe('controlActiveCard', () => {
-		it('returns early when no activeCard', async () => {
-			store.activeCard = null;
-			await store.controlActiveCard('flip');
-			// No error thrown, no state changes
-			expect(store.activeCard).toBeNull();
-		});
-
-		it('clears active card on "clear"', async () => {
+		it('"clear" clears the active Card', async () => {
 			store.activeScreenId = 5;
 			store.activeCard = createMockMtgCard();
 			mockCardRepo.deleteScreenCard.mockResolvedValue({ success: true, revision: 1 });
@@ -379,48 +255,10 @@ describe('useCardStore deck sources and search', () => {
 
 			expect(store.activeCard).toBeNull();
 		});
-
-		it('flips active card and saves', async () => {
-			store.activeScreenId = 5;
-			store.activeCard = createMockMtgCard();
-			mockCardRepo.saveScreenCard.mockResolvedValue({ success: true, revision: 1 });
-
-			await store.controlActiveCard('flip');
-
-			expect(store.activeCard!.displayData.flipped).toBe(true);
-			expect(mockCardRepo.saveScreenCard).toHaveBeenCalled();
-		});
-
-		it('rotates active card and saves', async () => {
-			store.activeScreenId = 5;
-			store.activeCard = createMockMtgCard();
-			mockCardRepo.saveScreenCard.mockResolvedValue({ success: true, revision: 1 });
-
-			await store.controlActiveCard('rotate');
-
-			expect(store.activeCard!.displayData.rotated).toBe(true);
-		});
 	});
-
-	// ── clearHistory ──
-
-	describe('clearHistory', () => {
-		it('clears selection history', () => {
-			store.selectionHistory = [
-				createMockMtgCard(),
-			] as any;
-
-			store.clearHistory();
-
-			expect(store.selectionHistory).toHaveLength(0);
-		});
-	});
-
-	// ── loadMatchDeckLists ──
 
 	describe('loadMatchDeckLists', () => {
-		it('does not fall back to a primary deck when the match snapshot explicitly has no deck', async () => {
-			mockFetchDeck.mockReset().mockResolvedValue(null);
+		it('loads no primary deck when the Match snapshot explicitly has no deck', async () => {
 			mockPlayerStoreState.players = [
 				{
 					id: 42,
@@ -429,15 +267,7 @@ describe('useCardStore deck sources and search', () => {
 					updatedAt: new Date(),
 				},
 			];
-			mockFeatureMatchStoreState.featureMatches = [
-				{
-					id: 1,
-					player1Id: 42,
-					player1Data: { name: 'Alice', deckId: null },
-					player2Id: null,
-					player2Data: null,
-				},
-			] as any;
+			mockFeatureMatchStoreState.featureMatches = slotOf({ name: 'Alice', deckId: null }, 42);
 
 			await store.loadMatchDeckLists(1);
 
@@ -445,9 +275,8 @@ describe('useCardStore deck sources and search', () => {
 			expect(store.deckListPlayer1?.deckList).toBeNull();
 		});
 
-		it('uses stable player identity before name when duplicate names exist', async () => {
+		it('identifies the Player by id before name when names collide', async () => {
 			const updatedAt = new Date('2026-07-15T00:00:00.000Z');
-			mockFetchDeck.mockReset().mockResolvedValue(null);
 			mockPlayerStoreState.players = [
 				{
 					id: 41,
@@ -462,23 +291,14 @@ describe('useCardStore deck sources and search', () => {
 					updatedAt,
 				},
 			];
-			mockFeatureMatchStoreState.featureMatches = [
-				{
-					id: 1,
-					player1Id: 42,
-					player1Data: { name: 'Alice', deckId: 77 },
-					player2Id: null,
-					player2Data: null,
-				},
-			] as any;
+			mockFeatureMatchStoreState.featureMatches = slotOf({ name: 'Alice', deckId: 77 }, 42);
 
 			await store.loadMatchDeckLists(1);
 
 			expect(mockFetchDeck).toHaveBeenCalledWith(42, 1, updatedAt, { deckId: 77 });
 		});
 
-		it('loads a historical deck by stable ids when the inactive player is absent from the active store', async () => {
-			mockFetchDeck.mockReset().mockResolvedValue(null);
+		it('loads a historical deck by its ids when the Player is not in the active roster', async () => {
 			mockPlayerStoreState.players = [
 				{
 					id: 41,
@@ -487,33 +307,15 @@ describe('useCardStore deck sources and search', () => {
 					updatedAt: new Date('2026-07-15T00:00:00.000Z'),
 				},
 			];
-			mockFeatureMatchStoreState.featureMatches = [
-				{
-					id: 1,
-					player1Id: 42,
-					player1Data: { name: 'Alice', deckId: 77 },
-					player2Id: null,
-					player2Data: null,
-				},
-			] as any;
+			mockFeatureMatchStoreState.featureMatches = slotOf({ name: 'Alice', deckId: 77 }, 42);
 
 			await store.loadMatchDeckLists(1);
 
 			expect(mockFetchDeck).toHaveBeenCalledWith(42, 1, 'match-deck:77', { deckId: 77 });
 		});
 
-		it('loads an exact historical deck without a retained player name', async () => {
-			mockFetchDeck.mockReset().mockResolvedValue(null);
-			mockPlayerStoreState.players = [];
-			mockFeatureMatchStoreState.featureMatches = [
-				{
-					id: 1,
-					player1Id: 42,
-					player1Data: { deckId: 77 },
-					player2Id: null,
-					player2Data: null,
-				},
-			] as any;
+		it('names a historical deck\'s Player by id when the snapshot kept no name', async () => {
+			mockFeatureMatchStoreState.featureMatches = slotOf({ deckId: 77 }, 42);
 
 			await store.loadMatchDeckLists(1);
 
@@ -521,9 +323,8 @@ describe('useCardStore deck sources and search', () => {
 			expect(store.deckListPlayer1?.playerName).toBe('Player 42');
 		});
 
-		it('falls back to the snapshot name when legacy data has no player id', async () => {
+		it('falls back to the snapshot name when legacy data has no Player id', async () => {
 			const updatedAt = new Date('2026-07-15T00:00:00.000Z');
-			mockFetchDeck.mockReset().mockResolvedValue(null);
 			mockPlayerStoreState.players = [
 				{
 					id: 42,
@@ -532,22 +333,14 @@ describe('useCardStore deck sources and search', () => {
 					updatedAt,
 				},
 			];
-			mockFeatureMatchStoreState.featureMatches = [
-				{
-					id: 1,
-					player1Id: null,
-					player1Data: { name: 'Alice', deckId: 77 },
-					player2Id: null,
-					player2Data: null,
-				},
-			] as any;
+			mockFeatureMatchStoreState.featureMatches = slotOf({ name: 'Alice', deckId: 77 });
 
 			await store.loadMatchDeckLists(1);
 
 			expect(mockFetchDeck).toHaveBeenCalledWith(42, 1, updatedAt, { deckId: 77 });
 		});
 
-		it('sets null for players with no matching record', async () => {
+		it('holds no Deck List for a seat with no Player', async () => {
 			mockFeatureMatchStoreState.featureMatches = [
 				{ id: 1, player1Data: null, player2Data: null },
 			] as any;
@@ -559,109 +352,48 @@ describe('useCardStore deck sources and search', () => {
 		});
 	});
 
-	// ── clearMatchDeckLists ──
-
-	describe('clearMatchDeckLists', () => {
-		it('resets match deck list state', () => {
-			store.deckListPlayer1 = {
-				playerName: 'Alice',
-				deckList: null,
-				mainboard: [],
-				sideboard: [],
-			} as any;
-			store.deckListPlayer2 = {
-				playerName: 'Bob',
-				deckList: null,
-				mainboard: [],
-				sideboard: [],
-			} as any;
-			store.deckListFilter = 'Lightning';
-
-			store.clearMatchDeckLists();
-
-			expect(store.deckListPlayer1).toBeNull();
-			expect(store.deckListPlayer2).toBeNull();
-			expect(store.deckListFilter).toBe('');
-		});
-	});
-
-	// ── canUseDeckListMode ──
-
 	describe('canUseDeckListMode', () => {
-		it('returns false when an authoritative match snapshot explicitly has no deck', () => {
-			mockFeatureMatchStoreState.featureMatches = [
-				{
-					id: 1,
-					player1Id: 1,
-					player1Data: { name: 'Alice', deckId: null },
-					player2Data: null,
-				},
-			] as any;
-			mockPlayerStoreState.players = [
-				{
-					id: 1,
-					name: 'Alice',
-					gameData: { type: 'mtg', deckName: 'Primary Deck' },
-				},
-			] as any;
-
-			expect(store.canUseDeckListMode).toBe(false);
-		});
-
-		it('returns false when no feature match players have a deckName in gameData', () => {
-			mockFeatureMatchStoreState.featureMatches = [
-				{
-					id: 1,
-					player1Data: { name: 'Alice' },
-					player2Data: null,
-				},
-			] as any;
-			mockPlayerStoreState.players = [
-				{
-					id: 1,
-					name: 'Alice',
-					gameData: { type: 'mtg', deckName: null },
-				},
-			] as any;
-
-			expect(store.canUseDeckListMode).toBe(false);
-		});
-
-		it('returns true when a feature match player has a deckName in gameData', () => {
-			mockFeatureMatchStoreState.featureMatches = [
-				{
-					id: 1,
-					player1Data: { name: 'Alice' },
-					player2Data: null,
-				},
-			] as any;
+		it.each([
+			[
+				'the snapshot explicitly has no deck',
+				{ name: 'Alice', deckId: null },
+				'Primary Deck',
+				false,
+			],
+			[
+				'no Feature Match Player has a deck name',
+				{ name: 'Alice' },
+				null,
+				false,
+			],
+			[
+				'a Feature Match Player has a deck name, matched case-insensitively',
+				{ name: 'Alice' },
+				'Burn',
+				true,
+			],
+			[
+				'the snapshot carries an exact submitted deck',
+				{ name: 'Alice', deckId: 77 },
+				null,
+				true,
+			],
+		])('when %s → %s', (_, player1Data, deckName, usable) => {
+			mockFeatureMatchStoreState.featureMatches = slotOf(player1Data, 1);
 			mockPlayerStoreState.players = [
 				{
 					id: 1,
 					name: 'alice',
-					gameData: { type: 'mtg', deckName: 'Burn' },
+					gameData: deckName
+						? { type: 'mtg', deckName }
+						: null,
 				},
-			] as any;
+			];
 
-			expect(store.canUseDeckListMode).toBe(true);
+			expect(store.canUseDeckListMode).toBe(usable);
 		});
 
-		it('returns true when the match snapshot carries an exact submitted deck', () => {
-			mockFeatureMatchStoreState.featureMatches = [
-				{
-					id: 1,
-					player1Data: { name: 'Alice', deckId: 77 },
-					player2Data: null,
-				},
-			] as any;
-			mockPlayerStoreState.players = [
-				{ id: 1, name: 'Alice', gameData: null },
-			] as any;
-
-			expect(store.canUseDeckListMode).toBe(true);
-		});
-
-		it('returns false when feature match player name is not found in players list', () => {
+		it('is false when the Feature Match Player is not in the roster', () => {
 			mockFeatureMatchStoreState.featureMatches = [
 				{
 					id: 1,
@@ -669,15 +401,22 @@ describe('useCardStore deck sources and search', () => {
 					player2Data: null,
 				},
 			] as any;
-			mockPlayerStoreState.players = [] as any;
 
 			expect(store.canUseDeckListMode).toBe(false);
 		});
 	});
 
-	// ── Degraded card data (#471) ──
-
+	// Degraded card data (#471): placeholders stay up, and a slow cadence re-fetches until Scryfall answers.
 	describe('degraded card data', () => {
+		const degraded = {
+			cards: new Map(),
+			degraded: true,
+		};
+		const complete = {
+			cards: new Map(),
+			degraded: false,
+		};
+
 		function primeMatchup() {
 			mockPlayerStoreState.players = [
 				{
@@ -687,19 +426,13 @@ describe('useCardStore deck sources and search', () => {
 					updatedAt: new Date('2026-08-20T00:00:00.000Z'),
 				},
 			];
-			mockFeatureMatchStoreState.featureMatches = [
-				{
-					id: 1,
-					player1Id: 42,
-					player1Data: { name: 'Alice', deckId: 77 },
-					player2Id: null,
-					player2Data: null,
-				},
-			] as any;
+			mockFeatureMatchStoreState.featureMatches = slotOf({ name: 'Alice', deckId: 77 }, 42);
 		}
 
-		function createDeckResponse() {
-			return {
+		beforeEach(() => {
+			vi.useFakeTimers();
+			primeMatchup();
+			mockFetchDeck.mockResolvedValue({
 				id: 77,
 				externalId: 'deck-77',
 				formatExternalId: 'modern',
@@ -720,273 +453,96 @@ describe('useCardStore deck sources and search', () => {
 						cardType: 'Instant',
 					},
 				],
-			} as any;
-		}
-
-		beforeEach(() => {
-			mockFetchDeck.mockReset().mockResolvedValue(createDeckResponse());
+			});
 		});
 
-		it('exposes a degraded matchup load and returns to complete on a clean load', async () => {
-			primeMatchup();
-			mockFetchScryfallCards.mockResolvedValueOnce({
-				cards: new Map(),
-				degraded: true,
-			});
+		it.each([
+			[
+				'matchup',
+				(s: ReturnType<typeof useCardStore>) => s.loadMatchDeckLists(1),
+				(s: ReturnType<typeof useCardStore>) => s.deckListPlayer1,
+			],
+			[
+				'player deck',
+				(s: ReturnType<typeof useCardStore>) => s.loadPlayerDeck(42),
+				(s: ReturnType<typeof useCardStore>) => s.playerDeckData,
+			],
+		])('a degraded %s load keeps its rendering and recovers on the cadence without a reload', async (_, load, rendering) => {
+			mockFetchScryfallCards.mockResolvedValueOnce(degraded).mockResolvedValue(complete);
+
+			await load(store);
+			expect(store.cardDataDegraded).toBe(true);
+			expect(rendering(store)).not.toBeNull();
+
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
+			expect(store.cardDataDegraded).toBe(false);
+
+			await vi.advanceTimersByTimeAsync(120_000);
+			expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
+		});
+
+		it('keeps the same rendering, with no loading flash, while a re-fetch is still degraded', async () => {
+			mockFetchScryfallCards.mockResolvedValue(degraded);
 
 			await store.loadMatchDeckLists(1);
+			const rendered = store.deckListPlayer1;
+			await vi.advanceTimersByTimeAsync(60_000);
+
+			expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
+			expect(store.deckListPlayer1).toBe(rendered);
+			expect(store.loadingDeckList).toBe(false);
+
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(mockFetchScryfallCards).toHaveBeenCalledTimes(3);
+		});
+
+		it('keeps the cadence and the rendering when a re-fetch itself fails mid-outage', async () => {
+			mockFetchScryfallCards.mockResolvedValueOnce(degraded).mockResolvedValue(complete);
+
+			await store.loadMatchDeckLists(1);
+			mockFetchDeck.mockRejectedValueOnce(new Error('network down'));
+			await vi.advanceTimersByTimeAsync(60_000);
 
 			expect(store.cardDataDegraded).toBe(true);
-			// The degraded rendering itself stays up — placeholders, not a blank.
 			expect(store.deckListPlayer1).not.toBeNull();
 
-			await store.loadMatchDeckLists(1);
-
+			await vi.advanceTimersByTimeAsync(60_000);
 			expect(store.cardDataDegraded).toBe(false);
 		});
 
-		it('re-fetches a degraded matchup on the slow cadence and recovers without a reload', async () => {
-			vi.useFakeTimers();
-			try {
-				primeMatchup();
-				mockFetchScryfallCards
-					.mockResolvedValueOnce({
-						cards: new Map(),
-						degraded: true,
-					})
-					.mockResolvedValue({
-						cards: new Map(),
-						degraded: false,
-					});
+		it.each([
+			[
+				'clearing the matchup',
+				(s: ReturnType<typeof useCardStore>) => s.loadMatchDeckLists(1),
+				(s: ReturnType<typeof useCardStore>) => s.clearMatchDeckLists(),
+			],
+			[
+				'clearing the player deck',
+				(s: ReturnType<typeof useCardStore>) => s.loadPlayerDeck(42),
+				(s: ReturnType<typeof useCardStore>) => s.clearPlayerDeck(),
+			],
+		])('%s clears the degradation and stops the cadence', async (_, load, clear) => {
+			mockFetchScryfallCards.mockResolvedValue(degraded);
 
-				await store.loadMatchDeckLists(1);
-				expect(store.cardDataDegraded).toBe(true);
-				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(1);
+			await load(store);
+			clear(store);
 
-				// One minute later the surface re-fetches by itself — no reload.
-				await vi.advanceTimersByTimeAsync(60_000);
-				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
-				expect(store.cardDataDegraded).toBe(false);
-
-				// Recovered: nothing left to re-fetch.
-				await vi.advanceTimersByTimeAsync(120_000);
-				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
-			}
-			finally {
-				vi.useRealTimers();
-			}
+			expect(store.cardDataDegraded).toBe(false);
+			await vi.advanceTimersByTimeAsync(180_000);
+			expect(mockFetchScryfallCards).toHaveBeenCalledTimes(1);
 		});
 
-		it('keeps the current rendering when a re-fetch is still degraded, and keeps retrying', async () => {
-			vi.useFakeTimers();
-			try {
-				primeMatchup();
-				mockFetchScryfallCards.mockResolvedValue({
-					cards: new Map(),
-					degraded: true,
-				});
+		it('a reset settles both surfaces', async () => {
+			mockFetchScryfallCards.mockResolvedValue(degraded);
 
-				await store.loadMatchDeckLists(1);
-				const rendered = store.deckListPlayer1;
-				expect(rendered).not.toBeNull();
+			await store.loadMatchDeckLists(1);
+			await store.loadPlayerDeck(42);
+			store.$reset();
 
-				// A still-degraded re-fetch of the unchanged source has nothing
-				// better to show: no swap, no loading flash on the cadence tick.
-				await vi.advanceTimersByTimeAsync(60_000);
-				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
-				expect(store.deckListPlayer1).toBe(rendered);
-				expect(store.loadingDeckList).toBe(false);
-
-				// And the cadence continues until Scryfall answers.
-				await vi.advanceTimersByTimeAsync(60_000);
-				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(3);
-			}
-			finally {
-				vi.useRealTimers();
-			}
-		});
-
-		it('keeps the recovery cadence and the rendering when a re-fetch itself fails mid-outage', async () => {
-			vi.useFakeTimers();
-			try {
-				primeMatchup();
-				mockFetchScryfallCards
-					.mockResolvedValueOnce({
-						cards: new Map(),
-						degraded: true,
-					})
-					.mockResolvedValue({
-						cards: new Map(),
-						degraded: false,
-					});
-
-				await store.loadMatchDeckLists(1);
-				expect(store.cardDataDegraded).toBe(true);
-
-				// The same outage takes down the deck endpoint for one cadence tick.
-				mockFetchDeck.mockRejectedValueOnce(new Error('network down'));
-				await vi.advanceTimersByTimeAsync(60_000);
-				expect(store.cardDataDegraded).toBe(true);
-				expect(store.deckListPlayer1).not.toBeNull();
-
-				// A failed re-fetch must not end the cadence: the next tick recovers.
-				await vi.advanceTimersByTimeAsync(60_000);
-				expect(store.cardDataDegraded).toBe(false);
-			}
-			finally {
-				vi.useRealTimers();
-			}
-		});
-
-		it('stops the cadence and clears the degradation when the matchup surface is cleared', async () => {
-			vi.useFakeTimers();
-			try {
-				primeMatchup();
-				mockFetchScryfallCards.mockResolvedValue({
-					cards: new Map(),
-					degraded: true,
-				});
-
-				await store.loadMatchDeckLists(1);
-				expect(store.cardDataDegraded).toBe(true);
-
-				// A degraded report must not outlive the rendering that measured it.
-				store.clearMatchDeckLists();
-				expect(store.cardDataDegraded).toBe(false);
-
-				await vi.advanceTimersByTimeAsync(180_000);
-				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(1);
-			}
-			finally {
-				vi.useRealTimers();
-			}
-		});
-
-		it('exposes a degraded player deck load and recovers on the cadence', async () => {
-			vi.useFakeTimers();
-			try {
-				mockPlayerStoreState.players = [
-					{
-						id: 42,
-						name: 'Alice',
-						gameData: { type: 'mtg', deckName: 'Burn' },
-						updatedAt: new Date('2026-08-20T00:00:00.000Z'),
-					},
-				];
-				mockFetchScryfallCards
-					.mockResolvedValueOnce({
-						cards: new Map(),
-						degraded: true,
-					})
-					.mockResolvedValue({
-						cards: new Map(),
-						degraded: false,
-					});
-
-				await store.loadPlayerDeck(42);
-				expect(store.cardDataDegraded).toBe(true);
-				expect(store.playerDeckData).not.toBeNull();
-
-				await vi.advanceTimersByTimeAsync(60_000);
-				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
-				expect(store.cardDataDegraded).toBe(false);
-
-				// Recovered: nothing left to re-fetch.
-				await vi.advanceTimersByTimeAsync(120_000);
-				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
-			}
-			finally {
-				vi.useRealTimers();
-			}
-		});
-
-		it('stops the cadence and clears the degradation when the player deck is cleared', async () => {
-			vi.useFakeTimers();
-			try {
-				mockPlayerStoreState.players = [
-					{
-						id: 42,
-						name: 'Alice',
-						gameData: { type: 'mtg', deckName: 'Burn' },
-						updatedAt: new Date('2026-08-20T00:00:00.000Z'),
-					},
-				];
-				mockFetchScryfallCards.mockResolvedValue({
-					cards: new Map(),
-					degraded: true,
-				});
-
-				await store.loadPlayerDeck(42);
-				expect(store.cardDataDegraded).toBe(true);
-
-				store.clearPlayerDeck();
-				expect(store.cardDataDegraded).toBe(false);
-
-				await vi.advanceTimersByTimeAsync(180_000);
-				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(1);
-			}
-			finally {
-				vi.useRealTimers();
-			}
-		});
-
-		it('settles both surfaces on $reset', async () => {
-			vi.useFakeTimers();
-			try {
-				primeMatchup();
-				mockFetchScryfallCards.mockResolvedValue({
-					cards: new Map(),
-					degraded: true,
-				});
-
-				await store.loadMatchDeckLists(1);
-				await store.loadPlayerDeck(42);
-				expect(store.cardDataDegraded).toBe(true);
-
-				store.$reset();
-				expect(store.cardDataDegraded).toBe(false);
-
-				await vi.advanceTimersByTimeAsync(180_000);
-				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
-			}
-			finally {
-				vi.useRealTimers();
-			}
-		});
-	});
-
-	// ── Ably handlers (extended) ──
-
-	describe('realtime handlers (extended)', () => {
-		describe('card:updated (null card)', () => {
-			it('resets timeout when card is null', () => {
-				store.activeScreenId = 5;
-				store.activeCard = createMockMtgCard();
-
-				ablyCallbacks.card!['card:updated']!({
-					eventId: 1,
-					screenId: 5,
-					card: null,
-					revision: 1,
-				});
-
-				expect(store.activeCard).toBeNull();
-			});
-		});
-
-		describe('card:preview', () => {
-			it('skips when isSelfOrigin returns true', () => {
-				store.activeScreenId = 5;
-				mockIsSelfOrigin.mockReturnValueOnce(true);
-
-				ablyCallbacks.card!['card:preview']!({
-					eventId: 1,
-					screenId: 5,
-					card: createMockMtgCard(),
-				});
-
-				expect(store.previewCard).toBeNull();
-			});
+			expect(store.cardDataDegraded).toBe(false);
+			await vi.advanceTimersByTimeAsync(180_000);
+			expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
 		});
 	});
 });

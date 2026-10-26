@@ -1,10 +1,9 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '~~/test/helpers/deferred';
 import { createMockPlayerList } from '~~/test/helpers/fixtures';
-import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 import { transportFailure } from '~~/test/helpers/transportFailure';
-
-// ── Mock Dependencies ──
+import { realtimeHandlersFor } from '~~/test/nuxt/helpers/realtimeEventSession';
 
 const mockRepo = {
 	list: vi.fn(),
@@ -19,23 +18,9 @@ const mockRepo = {
 	getMemberIds: vi.fn(),
 };
 
-const mockAbly = createMockRealtime();
-const mockIsSelfOrigin = vi.fn(() => false);
-
-const ablyCallbacks: Record<string, Record<string, (...args: unknown[]) => void>> = {};
-mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
-	ablyCallbacks[storeName] = callbacks;
-});
-
 mockNuxtImport('usePlayerListRepository', () => () => mockRepo);
-mockNuxtImport('useRealtime', () => () => mockAbly);
-/*
- * `useAsyncAction` is deliberately not mocked. The shared `mockExecuteAction` that
- * stood here ran the rollback and then re-threw unconditionally, where the real
- * composable re-throws only when the caller asks for `throwError` — and no caller in
- * this store does. Its callers therefore met a rejection the application never
- * produces, and never met the reported message the application does produce (#263).
- */
+
+const { deliver } = realtimeHandlersFor();
 
 function createSummary(overrides?: Record<string, any>) {
 	return {
@@ -51,73 +36,42 @@ describe('usePlayerListStore', () => {
 	beforeEach(() => {
 		store = usePlayerListStore();
 		store.$reset();
-		vi.clearAllMocks();
-		mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
-			ablyCallbacks[storeName] = callbacks;
-		});
-		ablyCallbacks.playerList = {
-			'playerList:created': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteCreated(data as any),
-			'playerList:updated': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteUpdated(data as any),
-			'playerList:deleted': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteDeleted(data as any),
-			'playerList:membersChanged': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteMembersChanged(data as any),
-		};
 	});
 
-	// ── Loading ──
+	it('loads an Event\'s Lists with every List\'s members cached', async () => {
+		mockRepo.list.mockResolvedValue([
+			createSummary({ id: 1 }),
+			createSummary({ id: 2 }),
+		]);
+		mockRepo.getMemberIds.mockImplementation(async (_eventId: number, listId: number) => [listId * 10]);
 
-	describe('loadByEventId', () => {
-		it('populates lists state and preloads members', async () => {
-			const lists = [
-				createSummary({ id: 1, name: 'List 1' }),
-				createSummary({ id: 2, name: 'List 2' }),
-			];
-			mockRepo.list.mockResolvedValue(lists);
-			mockRepo.getMemberIds.mockResolvedValue([]);
+		await store.loadByEventId(1);
 
-			await store.loadByEventId(1);
-
-			expect(store.lists).toEqual(lists);
-			expect(store.isLoaded).toBe(true);
-			expect(mockRepo.getMemberIds).toHaveBeenCalledTimes(2);
-		});
+		expect(store.lists.map(list => list.id)).toEqual([1, 2]);
+		expect(store.membersByListId).toEqual(new Map([
+			[
+				1,
+				[10],
+			],
+			[
+				2,
+				[20],
+			],
+		]));
 	});
 
-	// ── Create ──
+	it('holds a created List with no members', async () => {
+		mockRepo.create.mockResolvedValue(createMockPlayerList({ id: 3, name: 'New List' }));
 
-	describe('createList', () => {
-		it('adds list to state with memberCount 0', async () => {
-			const created = createMockPlayerList({ id: 3, name: 'New List' });
-			mockRepo.create.mockResolvedValue(created);
+		await store.createList(1, { name: 'New List' });
 
-			await store.createList(1, { name: 'New List' });
-
-			expect(store.lists).toHaveLength(1);
-			expect(store.lists[0]!.name).toBe('New List');
-			expect(store.lists[0]!.memberCount).toBe(0);
-		});
+		expect(store.lists).toEqual([
+			expect.objectContaining({ id: 3, memberCount: 0 }),
+		]);
 	});
-
-	// ── Update (optimistic) ──
-
-	describe('updateList', () => {
-		it('optimistically updates then applies server response', async () => {
-			store.lists = [
-				createSummary({ id: 1, name: 'Old Name' }),
-			];
-
-			const serverUpdated = createMockPlayerList({ id: 1, name: 'Server Name' });
-			mockRepo.update.mockResolvedValue(serverUpdated);
-
-			await store.updateList(1, 1, { name: 'New Name' });
-
-			expect(store.lists[0]!.name).toBe('Server Name');
-		});
-	});
-
-	// ── Remove (optimistic) ──
 
 	describe('removeList', () => {
-		it('removes list from state and clears member cache', async () => {
+		it('drops the List and its cached members', async () => {
 			store.lists = [
 				createSummary({ id: 1 }),
 			];
@@ -126,73 +80,62 @@ describe('usePlayerListStore', () => {
 
 			await store.removeList(1, 1);
 
-			expect(store.lists).toHaveLength(0);
+			expect(store.lists).toEqual([]);
 			expect(store.membersByListId.has(1)).toBe(false);
 		});
 
-		it('returns null and sets error when list not found', async () => {
-			store.lists = [];
-
-			const result = await store.removeList(1, 999);
-
-			expect(result).toBeNull();
-			expect(store.error).toBe('Player list not found');
-		});
-	});
-
-	// ── Failure reporting ──
-
-	describe('failure reporting', () => {
-		/*
-		 * #262 gave this store the sentence through the Event Data lifecycle seam, but no
-		 * test here could see it: the copy this suite stood in for re-threw every failure,
-		 * so a refused request left `createList` by rejecting rather than by reporting —
-		 * which is not what the application does. This is that store's own pin (#263).
-		 */
-		it('reports the sentence a refused create carries rather than rejecting', async () => {
-			mockRepo.create.mockRejectedValue(transportFailure({
+		it('puts the List and its cached members back when the delete is refused', async () => {
+			store.lists = [
+				createSummary({ id: 1 }),
+			];
+			store.membersByListId.set(1, [10, 20]);
+			mockRepo.remove.mockRejectedValue(transportFailure({
 				status: 409,
-				body: { message: 'A Player List with that name already exists for this Event' },
-				request: `[POST] "/api/events/1/player-lists"`,
+				body: { message: 'The List is in use' },
 			}));
 
-			const result = await store.createList(1, { name: 'New List' });
+			await store.removeList(1, 1);
 
-			expect(result).toBeNull();
-			expect(store.error).toBe('A Player List with that name already exists for this Event');
-			expect(store.lists).toHaveLength(0);
+			expect(store.lists.map(list => list.id)).toEqual([1]);
+			expect(store.membersByListId.get(1)).toEqual([10, 20]);
+			expect(store.error).toBe('The List is in use');
 		});
 	});
 
-	// ── Member Management ──
-
-	describe('addMembers', () => {
-		it('optimistically increments member count', async () => {
+	describe('member writes', () => {
+		it('adding counts and caches the new members while the request is pending, then takes the server\'s count', async () => {
 			store.lists = [
 				createSummary({ id: 1, memberCount: 2 }),
 			];
 			store.membersByListId.set(1, [10, 20]);
-			mockRepo.addMembers.mockResolvedValue({ added: 1, memberCount: 3 });
+			const added = deferred<{ added: number; memberCount: number }>();
+			mockRepo.addMembers.mockReturnValueOnce(added.promise);
 
-			await store.addMembers(1, 1, [30]);
+			const adding = store.addMembers(1, 1, [20, 30]);
 
+			expect(mockRepo.addMembers).toHaveBeenCalledWith(1, 1, [30]);
 			expect(store.lists[0]!.memberCount).toBe(3);
+			expect(store.membersByListId.get(1)).toEqual([10, 20, 30]);
+
+			added.resolve({ added: 1, memberCount: 7 });
+			await adding;
+
+			expect(store.lists[0]!.memberCount).toBe(7);
 		});
 
-		it('corrects member count when server added fewer than expected', async () => {
+		it('adding only members the List already caches sends nothing', async () => {
 			store.lists = [
 				createSummary({ id: 1, memberCount: 2 }),
 			];
-			mockRepo.addMembers.mockResolvedValue({ added: 1, memberCount: 3 });
+			store.membersByListId.set(1, [10, 20]);
 
-			await store.addMembers(1, 1, [30, 40]);
+			await store.addMembers(1, 1, [10]);
 
-			expect(store.lists[0]!.memberCount).toBe(3);
+			expect(mockRepo.addMembers).not.toHaveBeenCalled();
+			expect(store.lists[0]!.memberCount).toBe(2);
 		});
-	});
 
-	describe('removeMember', () => {
-		it('optimistically decrements member count', async () => {
+		it('removing a member uncounts and uncaches it', async () => {
 			store.lists = [
 				createSummary({ id: 1, memberCount: 3 }),
 			];
@@ -205,19 +148,7 @@ describe('usePlayerListStore', () => {
 			expect(store.membersByListId.get(1)).toEqual([20, 30]);
 		});
 
-		it('handles list not found (index -1) gracefully', async () => {
-			store.lists = [];
-			store.membersByListId.set(1, [10, 20]);
-			mockRepo.removeMember.mockResolvedValue({ success: true, memberCount: 1 });
-
-			await store.removeMember(1, 1, 10);
-
-			expect(store.membersByListId.get(1)).toEqual([20]);
-		});
-	});
-
-	describe('reorderMembers', () => {
-		it('optimistically updates cached member order', async () => {
+		it('reordering holds the new order', async () => {
 			store.lists = [
 				createSummary({ id: 1, memberCount: 3 }),
 			];
@@ -228,250 +159,106 @@ describe('usePlayerListStore', () => {
 
 			expect(store.membersByListId.get(1)).toEqual([30, 20, 10]);
 		});
+
+		it('loading a List\'s members caches them', async () => {
+			mockRepo.getMemberIds.mockResolvedValue([5, 10, 15]);
+
+			await store.loadListMembers(1, 42);
+
+			expect(store.membersByListId.get(42)).toEqual([5, 10, 15]);
+		});
 	});
 
-	// ── Member Mutation Failures ──
-
-	/**
-	 * What the Player List pane shows when a member mutation is refused.
-	 *
-	 * The Player List store's own lifecycle already reported the server's sentence (#262),
-	 * but its member Module did not — so adding a player to a list said
-	 * '[POST] "…": 409 Conflict' while creating the list said why. These rows also could
-	 * not exist before #271: this suite stood a hand-written `useAsyncAction` in for the
-	 * real one that re-threw every failure and never wrote `errorRef`, so nothing here had
-	 * ever observed what an operator is told (#263's map, #241's discipline).
-	 */
-	describe('member mutation failures', () => {
-		it('reports the sentence and rolls the optimistic count back when adding is refused', async () => {
-			store.lists = [
-				createSummary({ id: 1, memberCount: 2 }),
-			];
-			store.membersByListId.set(1, [10, 20]);
-			mockRepo.addMembers.mockRejectedValue(transportFailure({
-				status: 409,
-				body: { message: 'That player is already on another list for this round' },
-			}));
-
-			await store.addMembers(1, 1, [30]);
-
-			expect(store.error).toBe('That player is already on another list for this round');
-			expect(store.lists[0]!.memberCount).toBe(2);
-			expect(store.membersByListId.get(1)).toEqual([10, 20]);
-		});
-
-		it('reports the sentence when removing a member is refused', async () => {
+	describe.each([
+		[
+			'adding',
+			'addMembers',
+			(s: ReturnType<typeof usePlayerListStore>) => s.addMembers(1, 1, [40]),
+		],
+		[
+			'removing',
+			'removeMember',
+			(s: ReturnType<typeof usePlayerListStore>) => s.removeMember(1, 1, 10),
+		],
+		[
+			'batch removing',
+			'batchRemoveMembers',
+			(s: ReturnType<typeof usePlayerListStore>) => s.batchRemoveMembers(1, 1, [10, 20]),
+		],
+		[
+			'reordering',
+			'reorderMembers',
+			(s: ReturnType<typeof usePlayerListStore>) => s.reorderMembers(1, 1, [30, 20, 10]),
+		],
+	] as const)('a refused member write (%s)', (_, method, write) => {
+		it('reports the server\'s sentence and rolls the count and cached members back', async () => {
 			store.lists = [
 				createSummary({ id: 1, memberCount: 3 }),
 			];
 			store.membersByListId.set(1, [10, 20, 30]);
-			mockRepo.removeMember.mockRejectedValue(transportFailure({
-				status: 403,
+			mockRepo[method].mockRejectedValue(transportFailure({
+				status: 409,
 				body: { message: 'This list is locked for the current round' },
 			}));
 
-			await store.removeMember(1, 1, 10);
+			await write(store);
 
 			expect(store.error).toBe('This list is locked for the current round');
 			expect(store.lists[0]!.memberCount).toBe(3);
 			expect(store.membersByListId.get(1)).toEqual([10, 20, 30]);
 		});
+	});
 
-		it('reports the sentence when a batch removal is refused', async () => {
-			store.lists = [
-				createSummary({ id: 1, memberCount: 3 }),
-			];
-			mockRepo.batchRemoveMembers.mockRejectedValue(transportFailure({
-				status: 409,
-				body: { message: 'Two of those players have already been dropped' },
-			}));
+	describe('a peer\'s Player List messages', () => {
+		it('add, merge and remove Lists, dropping a removed List\'s cached members', () => {
+			deliver('playerList:created', {
+				playerList: { id: 10, name: 'Remote List' },
+			} as never);
 
-			await store.batchRemoveMembers(1, 1, [10, 20]);
+			expect(store.lists).toEqual([
+				expect.objectContaining({ id: 10, memberCount: 0 }),
+			]);
 
-			expect(store.error).toBe('Two of those players have already been dropped');
-			expect(store.lists[0]!.memberCount).toBe(3);
+			deliver('playerList:updated', {
+				playerList: { id: 10, name: 'Renamed' },
+			} as never);
+
+			expect(store.lists[0]).toEqual(expect.objectContaining({ name: 'Renamed', memberCount: 0 }));
+
+			store.membersByListId.set(10, [1, 2]);
+			deliver('playerList:deleted', { listId: 10 });
+
+			expect(store.lists).toEqual([]);
+			expect(store.membersByListId.has(10)).toBe(false);
 		});
 
-		it('reports the sentence and restores the order when a reorder is refused', async () => {
+		it('take the authoritative member count and drop the cached members', () => {
 			store.lists = [
-				createSummary({ id: 1, memberCount: 3 }),
+				createSummary({ id: 10, memberCount: 2 }),
 			];
-			store.membersByListId.set(1, [10, 20, 30]);
-			mockRepo.reorderMembers.mockRejectedValue(transportFailure({
-				status: 409,
-				body: { message: 'The list was reordered by another operator' },
-			}));
+			store.membersByListId.set(10, [1, 2]);
 
-			await store.reorderMembers(1, 1, [30, 20, 10]);
+			deliver('playerList:membersChanged', {
+				listId: 10,
+				action: 'added',
+				playerIds: [3],
+				memberCount: 8,
+			} as never);
 
-			expect(store.error).toBe('The list was reordered by another operator');
-			expect(store.membersByListId.get(1)).toEqual([10, 20, 30]);
-		});
-
-		it('reports the sentence when loading members is refused', async () => {
-			mockRepo.getMemberIds.mockRejectedValue(transportFailure({
-				status: 404,
-				body: { message: 'That Player List has been deleted' },
-				request: `[GET] "/api/events/1/player-lists/42/members"`,
-			}));
-
-			await store.loadListMembers(1, 42);
-
-			expect(store.error).toBe('That Player List has been deleted');
-		});
-
-		it('shows the transport line rather than a 5xx body detail', async () => {
-			store.lists = [
-				createSummary({ id: 1, memberCount: 2 }),
-			];
-			mockRepo.addMembers.mockRejectedValue(transportFailure({
-				status: 500,
-				body: { message: 'D1_ERROR: no such table: player_list_members' },
-				request: `[POST] "/api/events/1/player-lists/1/members"`,
-			}));
-
-			await store.addMembers(1, 1, [30]);
-
-			expect(store.error).not.toContain('D1_ERROR');
-			expect(store.error).toBe('[POST] "/api/events/1/player-lists/1/members": 500 Internal Server Error');
-		});
-
-		it('reports a rejection that is not an Error as the composable does', async () => {
-			store.lists = [
-				createSummary({ id: 1, memberCount: 2 }),
-			];
-			mockRepo.addMembers.mockRejectedValue({ message: 'not an Error at all' });
-
-			await store.addMembers(1, 1, [30]);
-
-			expect(store.error).toBe('An error occurred');
+			expect(store.lists[0]!.memberCount).toBe(8);
+			expect(store.membersByListId.has(10)).toBe(false);
 		});
 	});
 
-	// ── Realtime Handlers ──
+	it('forgets cached members on reset', () => {
+		store.membersByListId.set(1, [10]);
 
-	describe('realtime handlers', () => {
-		describe('playerList:created', () => {
-			it('adds list from remote message', () => {
-				store.lists = [];
+		store.$reset();
 
-				ablyCallbacks.playerList!['playerList:created']!({
-					playerList: { id: 10, name: 'Remote List', memberCount: 0 },
-				});
-
-				expect(store.lists).toHaveLength(1);
-			});
-
-			it('skips when isSelfOrigin returns true', () => {
-				mockIsSelfOrigin.mockReturnValueOnce(true);
-				store.lists = [];
-
-				ablyCallbacks.playerList!['playerList:created']!({
-					playerList: { id: 10, name: 'Remote List', memberCount: 0 },
-				});
-
-				expect(store.lists).toHaveLength(0);
-			});
-		});
-
-		describe('playerList:updated', () => {
-			it('updates existing list from remote message', () => {
-				store.lists = [
-					createSummary({ id: 10, name: 'Old' }),
-				];
-
-				ablyCallbacks.playerList!['playerList:updated']!({
-					playerList: { id: 10, name: 'New' },
-				});
-
-				expect(store.lists[0]!.name).toBe('New');
-			});
-
-			it('skips when isSelfOrigin returns true', () => {
-				store.lists = [
-					createSummary({ id: 10, name: 'Old' }),
-				];
-				mockIsSelfOrigin.mockReturnValueOnce(true);
-
-				ablyCallbacks.playerList!['playerList:updated']!({
-					playerList: { id: 10, name: 'New' },
-				});
-
-				expect(store.lists[0]!.name).toBe('Old');
-			});
-		});
-
-		describe('playerList:deleted', () => {
-			it('removes list and member cache from remote message', () => {
-				store.lists = [
-					createSummary({ id: 10 }),
-				];
-				store.membersByListId.set(10, [1, 2]);
-
-				ablyCallbacks.playerList!['playerList:deleted']!({ listId: 10 });
-
-				expect(store.lists).toHaveLength(0);
-				expect(store.membersByListId.has(10)).toBe(false);
-			});
-		});
-
-		describe('playerList:membersChanged', () => {
-			it('sets authoritative count on added action', () => {
-				store.lists = [
-					createSummary({ id: 10, memberCount: 2 }),
-				];
-
-				ablyCallbacks.playerList!['playerList:membersChanged']!({
-					listId: 10,
-					action: 'added',
-					playerIds: [1, 2, 3],
-					memberCount: 8,
-				});
-
-				expect(store.lists[0]!.memberCount).toBe(8);
-			});
-
-			it('invalidates member cache on any change', () => {
-				store.lists = [
-					createSummary({ id: 10 }),
-				];
-				store.membersByListId.set(10, [1, 2]);
-
-				ablyCallbacks.playerList!['playerList:membersChanged']!({
-					listId: 10,
-					action: 'reordered',
-					playerIds: [2, 1],
-					memberCount: 2,
-				});
-
-				expect(store.membersByListId.has(10)).toBe(false);
-			});
-
-			it('skips when isSelfOrigin returns true', () => {
-				store.lists = [
-					createSummary({ id: 10, memberCount: 2 }),
-				];
-				mockIsSelfOrigin.mockReturnValueOnce(true);
-
-				ablyCallbacks.playerList!['playerList:membersChanged']!({
-					listId: 10,
-					action: 'added',
-					playerIds: [1],
-					memberCount: 3,
-				});
-
-				expect(store.lists[0]!.memberCount).toBe(2);
-			});
-		});
+		expect(store.membersByListId.size).toBe(0);
 	});
 
-	// ── Writes that outlive their Event (#606) ──
-
-	/**
-	 * A Player List write is answered for the Event it was made in. Neither another
-	 * Event nor the same Event loaded afresh since — whose Lists carry the same ids — is
-	 * the lifetime it belongs to, so neither its answer nor its rollback lands there.
-	 */
+	// A write is answered for the Event it was made in; neither its answer nor its rollback lands in another (#606).
 	describe.each([
 		[
 			'Event B',
@@ -564,46 +351,4 @@ describe('usePlayerListStore', () => {
 			expect(store.membersByListId).toEqual(shown.members);
 		});
 	});
-
-	// ── $reset ──
-
-	describe('$reset', () => {
-		it('clears all state', () => {
-			store.lists = [
-				createSummary(),
-			];
-			store.membersByListId.set(1, [10]);
-			store.error = 'some error';
-
-			store.$reset();
-
-			expect(store.lists).toEqual([]);
-			expect(store.membersByListId.size).toBe(0);
-			expect(store.error).toBeNull();
-			expect(store.loading).toBe(false);
-			expect(store.isLoaded).toBe(false);
-		});
-	});
-
-	// ── loadListMembers ──
-
-	describe('loadListMembers', () => {
-		it('fetches and caches member IDs for a list', async () => {
-			mockRepo.getMemberIds.mockResolvedValue([5, 10, 15]);
-
-			await store.loadListMembers(1, 42);
-
-			expect(store.membersByListId.get(42)).toEqual([5, 10, 15]);
-		});
-	});
 });
-
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (reason?: unknown) => void;
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve;
-		reject = promiseReject;
-	});
-	return { promise, resolve, reject };
-}

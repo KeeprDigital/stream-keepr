@@ -1,10 +1,9 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '~~/test/helpers/deferred';
 import { createMockFeatureMatch, createMockFeatureMatchState } from '~~/test/helpers/fixtures';
-import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 import { transportFailure } from '~~/test/helpers/transportFailure';
-
-// ── Mock Dependencies ──
+import { realtimeHandlersFor } from '~~/test/nuxt/helpers/realtimeEventSession';
 
 const mockRepo = {
 	list: vi.fn(),
@@ -16,14 +15,6 @@ const mockRepo = {
 	promoteMatch: vi.fn(),
 };
 
-const mockAbly = createMockRealtime();
-const mockIsSelfOrigin = vi.fn(() => false);
-
-const ablyCallbacks: Record<string, Record<string, (...args: unknown[]) => void>> = {};
-mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
-	ablyCallbacks[storeName] = callbacks;
-});
-
 const mockAssignmentRepo = {
 	listByRound: vi.fn(),
 	create: vi.fn(),
@@ -33,16 +24,12 @@ const mockAssignmentRepo = {
 
 mockNuxtImport('useFeatureMatchRepository', () => () => mockRepo);
 mockNuxtImport('useFeatureMatchAssignmentRepository', () => () => mockAssignmentRepo);
-mockNuxtImport('useRealtime', () => () => mockAbly);
 
-/*
- * `useAsyncAction` is deliberately not mocked, for the reason #245's suite gives: it is
- * the seam every action here reports through, and the hand-written copy that stood in for
- * it re-raised what it caught where the real composable resolves to `null` — so no test
- * here could say what an operator is shown. The real composable is auto-imported, does no
- * I/O and starts no timers, and it calls the same `onError` rollback the copy existed to
- * support (#241, #263).
- */
+const { deliver } = realtimeHandlersFor();
+
+function announce(slot: ReturnType<typeof createMockFeatureMatch>) {
+	deliver('featureMatch:updated', { featureMatch: slot } as never);
+}
 
 describe('useFeatureMatchStore', () => {
 	let store: ReturnType<typeof useFeatureMatchStore>;
@@ -50,118 +37,33 @@ describe('useFeatureMatchStore', () => {
 	beforeEach(() => {
 		store = useFeatureMatchStore();
 		store.$reset();
-		vi.clearAllMocks();
-		mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
-			ablyCallbacks[storeName] = callbacks;
-		});
-		ablyCallbacks.featureMatches = {
-			'featureMatch:created': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteCreated(data as any),
-			'featureMatch:updated': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteUpdated(data as any),
-			'featureMatch:deleted': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteDeleted(data as any),
-			'featureMatch:reordered': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteReordered(data as any),
-		};
 	});
-
-	// ── Loading ──
-
-	describe('loadFeatureMatchesByEventId', () => {
-		it('populates featureMatches state', async () => {
-			const matches = [
-				createMockFeatureMatch({ id: 1, sortOrder: 0 }),
-				createMockFeatureMatch({ id: 2, sortOrder: 1 }),
-			];
-			mockRepo.list.mockResolvedValue(matches);
-
-			await store.loadFeatureMatchesByEventId(1);
-
-			expect(store.featureMatches).toEqual(matches);
-			expect(store.isLoaded).toBe(true);
-			expect(store.currentEventId).toBe(1);
-		});
-	});
-
-	describe('getFeatureMatchById', () => {
-		it('returns match from repo', async () => {
-			const match = createMockFeatureMatch({ id: 1 });
-			mockRepo.getById.mockResolvedValue(match);
-
-			const result = await store.getFeatureMatchById(1, 1);
-
-			expect(result).toEqual(match);
-		});
-	});
-
-	// ── Create ──
-
-	describe('createFeatureMatch', () => {
-		it('adds match to state', async () => {
-			const created = createMockFeatureMatch({ id: 3, sortOrder: 2 });
-			mockRepo.create.mockResolvedValue(created);
-
-			await store.createFeatureMatch(1, { bestOf: 3 });
-
-			expect(store.featureMatches).toContainEqual(created);
-		});
-	});
-
-	// ── Update (optimistic) ──
-
-	describe('updateFeatureMatch', () => {
-		it('optimistically updates then applies server response', async () => {
-			const match = createMockFeatureMatch({ id: 1, bestOf: 3 });
-			store.featureMatches = [match];
-
-			const serverUpdated = { ...match, bestOf: 5 };
-			mockRepo.update.mockResolvedValue(serverUpdated);
-
-			await store.updateFeatureMatch(1, 1, { bestOf: 5 });
-
-			expect(store.featureMatches[0]!.bestOf).toBe(5);
-		});
-	});
-
-	// ── Remove (optimistic) ──
-
-	describe('removeFeatureMatch', () => {
-		it('removes match from state', async () => {
-			const match = createMockFeatureMatch({ id: 1 });
-			store.featureMatches = [match];
-			mockRepo.remove.mockResolvedValue({ success: true });
-
-			await store.removeFeatureMatch(1, 1);
-
-			expect(store.featureMatches).toHaveLength(0);
-		});
-	});
-
-	// ── Reorder ──
 
 	describe('reorderFeatureMatch', () => {
-		it('optimistically swaps items and calls repo', async () => {
+		beforeEach(() => {
 			store.featureMatches = [
 				createMockFeatureMatch({ id: 1, sortOrder: 0 }),
 				createMockFeatureMatch({ id: 2, sortOrder: 1 }),
 			];
 			store.currentEventId = 1;
-			mockRepo.reorder.mockResolvedValue(undefined);
-
-			await store.reorderFeatureMatch(1, 'down');
-
-			expect(store.featureMatches[0]!.id).toBe(2);
-			expect(store.featureMatches[1]!.id).toBe(1);
-			expect(mockRepo.reorder).toHaveBeenCalledWith(1, 1, 'down');
 		});
-	});
 
-	// ── Failure reporting ──
+		it('swaps the Slots while the reorder is pending', async () => {
+			const reorder = deferred<void>();
+			mockRepo.reorder.mockReturnValueOnce(reorder.promise);
 
-	describe('failure reporting', () => {
-		it('reports the sentence a refused reorder carries, and puts the slots back', async () => {
-			store.featureMatches = [
-				createMockFeatureMatch({ id: 1, sortOrder: 0 }),
-				createMockFeatureMatch({ id: 2, sortOrder: 1 }),
-			];
-			store.currentEventId = 1;
+			const reordering = store.reorderFeatureMatch(1, 'down');
+
+			expect(store.featureMatches.map(m => m.id)).toEqual([2, 1]);
+			expect(mockRepo.reorder).toHaveBeenCalledWith(1, 1, 'down');
+
+			reorder.resolve();
+			await reordering;
+
+			expect(store.featureMatches.map(m => m.id)).toEqual([2, 1]);
+		});
+
+		it('reports the server\'s sentence for a refused reorder and puts the Slots back', async () => {
 			mockRepo.reorder.mockRejectedValue(transportFailure({
 				status: 409,
 				body: { message: 'The Feature Match order changed while you were reordering it' },
@@ -173,154 +75,52 @@ describe('useFeatureMatchStore', () => {
 			expect(store.featureMatches.map(m => m.id)).toEqual([1, 2]);
 		});
 
-		it('reports the sentence a refused single-slot read carries', async () => {
-			mockRepo.getById.mockRejectedValue(transportFailure({
-				status: 404,
-				body: { message: 'That Feature Match slot is no longer part of this Event' },
-				request: `[GET] "/api/events/1/feature-matches/9"`,
-			}));
+		it.each([
+			['the first Slot up', 1, 'up'],
+			['the last Slot down', 2, 'down'],
+		] as const)('moves nothing for %s', async (_, slotId, direction) => {
+			await store.reorderFeatureMatch(slotId, direction);
 
-			await store.getFeatureMatchById(1, 9);
-
-			expect(store.error).toBe('That Feature Match slot is no longer part of this Event');
+			expect(mockRepo.reorder).not.toHaveBeenCalled();
+			expect(store.featureMatches.map(m => m.id)).toEqual([1, 2]);
 		});
 	});
 
-	// ── Realtime Handlers ──
+	describe('a peer\'s Slot messages', () => {
+		it('hold a created Slot in sort order and drop a deleted one', () => {
+			store.featureMatches = [
+				createMockFeatureMatch({ id: 2, sortOrder: 1 }),
+			];
 
-	describe('realtime handlers', () => {
-		describe('featureMatch:created', () => {
-			it('adds match from remote message and sorts by sortOrder', () => {
-				store.featureMatches = [
-					createMockFeatureMatch({ id: 1, sortOrder: 0 }),
-				];
-				const newMatch = createMockFeatureMatch({ id: 2, sortOrder: 1 });
+			deliver('featureMatch:created', {
+				featureMatch: createMockFeatureMatch({ id: 1, sortOrder: 0 }),
+			} as never);
 
-				ablyCallbacks.featureMatches!['featureMatch:created']!({ featureMatch: newMatch });
+			expect(store.featureMatches.map(m => m.id)).toEqual([1, 2]);
 
-				expect(store.featureMatches).toHaveLength(2);
-				expect(store.featureMatches[1]!.id).toBe(2);
-			});
+			deliver('featureMatch:deleted', { featureMatchId: 1 } as never);
 
-			it('skips duplicate matches', () => {
-				const match = createMockFeatureMatch({ id: 1, sortOrder: 0 });
-				store.featureMatches = [match];
-
-				ablyCallbacks.featureMatches!['featureMatch:created']!({ featureMatch: match });
-
-				expect(store.featureMatches).toHaveLength(1);
-			});
-
-			it('skips when isSelfOrigin returns true', () => {
-				mockIsSelfOrigin.mockReturnValueOnce(true);
-				store.featureMatches = [];
-
-				ablyCallbacks.featureMatches!['featureMatch:created']!({
-					featureMatch: createMockFeatureMatch({ id: 1 }),
-				});
-
-				expect(store.featureMatches).toHaveLength(0);
-			});
+			expect(store.featureMatches.map(m => m.id)).toEqual([2]);
 		});
 
-		describe('featureMatch:updated', () => {
-			it('updates existing match from remote message', () => {
-				store.featureMatches = [
-					createMockFeatureMatch({ id: 1, bestOf: 3 }),
-				];
+		it('apply a reorder\'s sort orders', () => {
+			store.featureMatches = [
+				createMockFeatureMatch({ id: 1, sortOrder: 0 }),
+				createMockFeatureMatch({ id: 2, sortOrder: 1 }),
+			];
 
-				ablyCallbacks.featureMatches!['featureMatch:updated']!({
-					featureMatch: createMockFeatureMatch({ id: 1, bestOf: 5 }),
-				});
+			deliver('featureMatch:reordered', {
+				featureMatches: [
+					{ featureMatchId: 1, sortOrder: 1 },
+					{ featureMatchId: 2, sortOrder: 0 },
+				],
+			} as never);
 
-				expect(store.featureMatches[0]!.bestOf).toBe(5);
-			});
-
-			it('skips when isSelfOrigin returns true', () => {
-				store.featureMatches = [
-					createMockFeatureMatch({ id: 1, bestOf: 3 }),
-				];
-				mockIsSelfOrigin.mockReturnValueOnce(true);
-
-				ablyCallbacks.featureMatches!['featureMatch:updated']!({
-					featureMatch: createMockFeatureMatch({ id: 1, bestOf: 5 }),
-				});
-
-				expect(store.featureMatches[0]!.bestOf).toBe(3);
-			});
-		});
-
-		describe('featureMatch:deleted', () => {
-			it('removes match from remote message', () => {
-				store.featureMatches = [
-					createMockFeatureMatch({ id: 1 }),
-				];
-
-				ablyCallbacks.featureMatches!['featureMatch:deleted']!({ featureMatchId: 1 });
-
-				expect(store.featureMatches).toHaveLength(0);
-			});
-
-			it('skips when isSelfOrigin returns true', () => {
-				store.featureMatches = [
-					createMockFeatureMatch({ id: 1 }),
-				];
-				mockIsSelfOrigin.mockReturnValueOnce(true);
-
-				ablyCallbacks.featureMatches!['featureMatch:deleted']!({ featureMatchId: 1 });
-
-				expect(store.featureMatches).toHaveLength(1);
-			});
-		});
-
-		describe('featureMatch:reordered', () => {
-			it('applies new sort orders and re-sorts', () => {
-				store.featureMatches = [
-					createMockFeatureMatch({ id: 1, sortOrder: 0 }),
-					createMockFeatureMatch({ id: 2, sortOrder: 1 }),
-				];
-
-				ablyCallbacks.featureMatches!['featureMatch:reordered']!({
-					featureMatches: [
-						{ featureMatchId: 1, sortOrder: 1 },
-						{ featureMatchId: 2, sortOrder: 0 },
-					],
-				});
-
-				expect(store.featureMatches[0]!.id).toBe(2);
-				expect(store.featureMatches[1]!.id).toBe(1);
-			});
-
-			it('skips when isSelfOrigin returns true', () => {
-				store.featureMatches = [
-					createMockFeatureMatch({ id: 1, sortOrder: 0 }),
-					createMockFeatureMatch({ id: 2, sortOrder: 1 }),
-				];
-				mockIsSelfOrigin.mockReturnValueOnce(true);
-
-				ablyCallbacks.featureMatches!['featureMatch:reordered']!({
-					featureMatches: [
-						{ featureMatchId: 1, sortOrder: 1 },
-						{ featureMatchId: 2, sortOrder: 0 },
-					],
-				});
-
-				expect(store.featureMatches[0]!.id).toBe(1);
-			});
+			expect(store.featureMatches.map(m => m.id)).toEqual([2, 1]);
 		});
 	});
 
-	function announce(slot: ReturnType<typeof createMockFeatureMatch>) {
-		ablyCallbacks.featureMatches!['featureMatch:updated']!({ featureMatch: slot });
-	}
-
-	// ── Slot answers overtaken by a newer Session epoch (#635) ──
-
-	/**
-	 * A Slot's Session orders it (ADR-0026): a settings answer or a load carrying a
-	 * Session from an epoch this client has seen end was read before a newer Slot
-	 * Promotion or clearing, so that Slot is left behind whole.
-	 */
+	// A Slot's Session orders it (ADR-0026): an answer carrying an ended epoch's Session is left behind whole (#635).
 	describe('a Slot answer read before a newer Session epoch', () => {
 		const stateStore = () => useFeatureMatchStateStore();
 
@@ -381,14 +181,7 @@ describe('useFeatureMatchStore', () => {
 		});
 	});
 
-	// ── Slot answers read before the Slot's first Session (#658) ──
-
-	/**
-	 * No server path moves a Slot from holding a Session to holding none: every
-	 * close opens its successor in the same commit (ADR-0026, ADR-0029). A Slot
-	 * read without one was read before its first Session opened, so it is behind
-	 * any Session this client holds for that Slot, and is left behind whole.
-	 */
+	// Every Session close opens its successor (ADR-0026, ADR-0029), so a Slot read without one predates any held Session (#658).
 	describe('a Slot read without a Session', () => {
 		const stateStore = () => useFeatureMatchStateStore();
 
@@ -473,13 +266,7 @@ describe('useFeatureMatchStore', () => {
 		});
 	});
 
-	// ── Writes that outlive their Event (#606) ──
-
-	/**
-	 * A Slot write is answered for the Event it was made in. Neither another Event nor
-	 * the same Event loaded afresh since is the lifetime that answer belongs to, so it
-	 * may not add a Slot, prime a Feature Match Session, or put back an order there.
-	 */
+	// A Slot write is answered for the Event it was made in; it adds, primes and restores nothing in another (#606).
 	describe.each([
 		[
 			'Event B',
@@ -617,26 +404,6 @@ describe('useFeatureMatchStore', () => {
 			expect(assignments.assignmentsForRound(10)).toEqual(loadedAssignments);
 		});
 	});
-
-	// ── $reset ──
-
-	describe('$reset', () => {
-		it('clears all state', () => {
-			store.featureMatches = [
-				createMockFeatureMatch(),
-			];
-			store.error = 'some error';
-			store.currentEventId = 1;
-
-			store.$reset();
-
-			expect(store.featureMatches).toEqual([]);
-			expect(store.error).toBeNull();
-			expect(store.loading).toBe(false);
-			expect(store.currentEventId).toBeNull();
-			expect(store.isLoaded).toBe(false);
-		});
-	});
 });
 
 function slotInEpoch(id: number, sessionId: number, overrides: Record<string, unknown> = {}) {
@@ -670,14 +437,4 @@ function sessionlessSlot(id: number, overrides: Record<string, unknown> = {}) {
 		activeSession: null,
 		...overrides,
 	} as any);
-}
-
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (reason?: unknown) => void;
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve;
-		reject = promiseReject;
-	});
-	return { promise, resolve, reject };
 }

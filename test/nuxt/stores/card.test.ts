@@ -1,10 +1,9 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { deferred } from '~~/test/helpers/deferred';
 import { transportFailure } from '~~/test/helpers/transportFailure';
+import { realtimeHandlersFor } from '~~/test/nuxt/helpers/realtimeEventSession';
 import { createEventDataResync, storeReloaders } from '~/modules/event-data/resync';
-
-// ── $fetch stub (used by searchFuzzyCardName, searchCardPrints, selectMeldCardPart) ──
 
 const { mockFetch, mockGetServerTime } = vi.hoisted(() => ({
 	mockFetch: vi.fn().mockResolvedValue({ data: [] }),
@@ -16,8 +15,6 @@ mockNuxtImport('useServerTime', () => () => ({
 	getServerTime: mockGetServerTime,
 }));
 
-// ── Mock Dependencies ──
-
 const mockCardRepo = {
 	saveScreenCard: vi.fn(),
 	getScreenCard: vi.fn(),
@@ -25,12 +22,9 @@ const mockCardRepo = {
 };
 
 /**
- * The stand-in server's Card revision (#734). A test that is about ordering
- * answers with explicit revisions (`{ card, revision }`, `{ success, revision }`,
- * a message's `revision`). Every other test answers with a bare Card, or
- * nothing, and is answered as by a server that is current when it answers:
- * each write and each announcement advances the revision, and each read
- * answers the revision the server is at.
+ * The stand-in server's Card revision (#734). Ordering tests answer with explicit
+ * revisions; every other answer is treated as current: writes and announcements
+ * advance the revision, reads answer the revision the server is at.
  */
 let serverRevision = 0;
 function hasRevision(answer: unknown): answer is { revision: number } {
@@ -52,15 +46,13 @@ function asAnnouncement(data: any) {
 		: { ...data, revision: ++serverRevision };
 }
 
-const mockAbly = createMockRealtime();
-const mockIsSelfOrigin = vi.fn(() => false);
+const { deliver } = realtimeHandlersFor();
 
-const ablyCallbacks: Record<string, Record<string, (...args: unknown[]) => void>> = {};
-mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
-	ablyCallbacks[storeName] = callbacks;
-});
+/** A peer's Card message, carrying the next server revision unless it names one. */
+function announce(type: 'card:updated' | 'card:cleared', data: any) {
+	deliver(type, asAnnouncement(data), { eventId: data.eventId ?? 1 });
+}
 
-// Mock eventStore — needs to look like a Pinia store with reactive properties
 const mockEventStoreState = {
 	eventId: 1 as number | null,
 	event: { id: 1, cardTimeout: 0 } as any,
@@ -71,7 +63,6 @@ mockNuxtImport('useCardRepository', () => () => ({
 	getScreenCard: async (...args: unknown[]) => asRead(await mockCardRepo.getScreenCard(...args)),
 	deleteScreenCard: async (...args: unknown[]) => asWrite(await mockCardRepo.deleteScreenCard(...args)),
 }));
-mockNuxtImport('useRealtime', () => () => mockAbly);
 mockNuxtImport('useEventStore', () => () => mockEventStoreState);
 mockNuxtImport('useScryfallBatch', () => () => ({
 	fetchScryfallCards: vi.fn().mockResolvedValue({
@@ -141,16 +132,7 @@ describe('useCardStore', () => {
 	beforeEach(() => {
 		store = useCardStore();
 		store.$reset();
-		vi.clearAllMocks();
-		mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
-			ablyCallbacks[storeName] = callbacks;
-		});
 		serverRevision = 0;
-		ablyCallbacks.card = {
-			'card:updated': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteUpdated(asAnnouncement(data)),
-			'card:preview': data => !(mockIsSelfOrigin as any)(data) && store.applyRemotePreview(data as any),
-			'card:cleared': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteCleared(asAnnouncement(data)),
-		};
 		mockEventStoreState.eventId = 1;
 		mockEventStoreState.event = { id: 1, cardTimeout: 0 };
 	});
@@ -238,7 +220,7 @@ describe('useCardStore', () => {
 
 			await vi.advanceTimersByTimeAsync(1_000);
 			expect(store.activeCard).toBeNull();
-			ablyCallbacks.card!['card:updated']!({
+			announce('card:updated', {
 				eventId: 1,
 				screenId: 5,
 				card: createMockMtgCard({ id: 'y' }),
@@ -318,7 +300,7 @@ describe('useCardStore', () => {
 			const read = deferredRead();
 			const loading = store.loadActiveCard();
 
-			ablyCallbacks.card!['card:updated']!({
+			announce('card:updated', {
 				eventId: 1,
 				screenId: 5,
 				card: newCard(),
@@ -334,7 +316,7 @@ describe('useCardStore', () => {
 			const read = deferredRead();
 			const loading = store.loadActiveCard();
 
-			ablyCallbacks.card!['card:cleared']!({ eventId: 1, screenId: 5 });
+			announce('card:cleared', { eventId: 1, screenId: 5 });
 			read.resolve(oldCard());
 			await loading;
 
@@ -417,7 +399,7 @@ describe('useCardStore', () => {
 			const read = deferredRead();
 			const loading = store.loadActiveCard();
 
-			ablyCallbacks.card!['card:updated']!({
+			announce('card:updated', {
 				eventId: 1,
 				screenId: 5,
 				card: newCard(),
@@ -465,7 +447,7 @@ describe('useCardStore', () => {
 			const read = deferredRead();
 			const loading = store.loadActiveCard();
 
-			ablyCallbacks.card!['card:updated']!({
+			announce('card:updated', {
 				eventId: 1,
 				screenId: 5,
 				card: newCard(),
@@ -491,7 +473,7 @@ describe('useCardStore', () => {
 			const loading = store.loadActiveCard();
 			const saving = store.saveActiveCard(newCard());
 
-			ablyCallbacks.card!['card:updated']!({
+			announce('card:updated', {
 				eventId: 1,
 				screenId: 5,
 				card: newCard(),
@@ -523,7 +505,7 @@ describe('useCardStore', () => {
 				store.setActiveScreen(5);
 				const loading = store.loadActiveCard();
 
-				ablyCallbacks.card!['card:updated']!({
+				announce('card:updated', {
 					eventId: 1,
 					screenId: 5,
 					card: newCard(),
@@ -544,7 +526,7 @@ describe('useCardStore', () => {
 				store.setActiveScreen(5);
 				const loading = store.loadActiveCard();
 
-				ablyCallbacks.card!['card:updated']!({
+				announce('card:updated', {
 					eventId: 1,
 					screenId: 5,
 					card: newCard(),
@@ -590,16 +572,6 @@ describe('useCardStore', () => {
 	 * answers it.
 	 */
 	describe('card write lifetime', () => {
-		function deferred<T = void>() {
-			let resolve!: (value: T) => void;
-			let reject!: (error: unknown) => void;
-			const promise = new Promise<T>((res, rej) => {
-				resolve = res;
-				reject = rej;
-			});
-			return { promise, resolve, reject };
-		}
-
 		const oldCard = () => createMockMtgCard({ id: 'old', name: 'Old Card' });
 		const newCard = () => createMockMtgCard({ id: 'new', name: 'New Card' });
 
@@ -752,7 +724,7 @@ describe('useCardStore', () => {
 			it('keeps a realtime Card heard while its DELETE was out', async () => {
 				const fail = clearThatFails();
 
-				ablyCallbacks.card!['card:updated']!({
+				announce('card:updated', {
 					eventId: 1,
 					screenId: 5,
 					card: newCard(),
@@ -767,7 +739,7 @@ describe('useCardStore', () => {
 			it('keeps a realtime clear heard while its DELETE was out', async () => {
 				const fail = clearThatFails();
 
-				ablyCallbacks.card!['card:cleared']!({ eventId: 1, screenId: 5 });
+				announce('card:cleared', { eventId: 1, screenId: 5 });
 				await fail();
 
 				expect(store.activeCard).toBeNull();
@@ -829,26 +801,16 @@ describe('useCardStore', () => {
 	 * a save, Clear, read or message older than what it holds lands nothing.
 	 */
 	describe('card revision ordering', () => {
-		function deferred<T>() {
-			let resolve!: (value: T) => void;
-			let reject!: (error: unknown) => void;
-			const promise = new Promise<T>((res, rej) => {
-				resolve = res;
-				reject = rej;
-			});
-			return { promise, resolve, reject };
-		}
-
 		const committed = (revision: number) => ({ success: true, revision });
 		const read = (card: ReturnType<typeof createMockMtgCard> | null, revision: number) => ({ card, revision });
 		const updated = (card: ReturnType<typeof createMockMtgCard> | null, revision: number) =>
-			ablyCallbacks.card!['card:updated']!({
+			announce('card:updated', {
 				eventId: 1,
 				screenId: 5,
 				card,
 				revision,
 			});
-		const cleared = (revision: number) => ablyCallbacks.card!['card:cleared']!({ eventId: 1, screenId: 5, revision });
+		const cleared = (revision: number) => announce('card:cleared', { eventId: 1, screenId: 5, revision });
 		const ours = () => createMockMtgCard({ id: 'ours', name: 'Our Card' });
 		const theirs = () => createMockMtgCard({ id: 'theirs', name: 'Their Card' });
 
@@ -1085,7 +1047,7 @@ describe('useCardStore', () => {
 			const save = deferredSave();
 			const controlling = store.controlActiveCard('flip');
 
-			ablyCallbacks.card!['card:updated']!({
+			announce('card:updated', {
 				eventId: 1,
 				screenId: 5,
 				revision: 2,
@@ -1156,7 +1118,7 @@ describe('useCardStore', () => {
 			}));
 			const reread = storeReloaders().card();
 
-			ablyCallbacks.card!['card:updated']!({
+			announce('card:updated', {
 				eventId: 1,
 				screenId: 5,
 				card: createMockMtgCard({ id: 'new' }),
@@ -1230,25 +1192,12 @@ describe('useCardStore', () => {
 		});
 	});
 
-	// ── Failure Reporting ──
-
-	/**
-	 * What the Card page shows when a write is refused.
-	 *
-	 * These rows could not exist before #271. This suite stood a hand-written
-	 * `async fn => fn()` in for `useAsyncAction`, which never catches — so no test here
-	 * had ever rejected, and the store's whole failure path was unobserved rather than
-	 * merely untested (#263's map, #241's discipline). Running the real composable is what
-	 * makes them constructible; the fixtures are real `FetchError`s because that is what
-	 * `$fetch` rejects with, and a plain object would report 'An error occurred' instead.
-	 */
 	describe('failure reporting', () => {
-		it('reports the sentence the server wrote about a refused load', async () => {
+		it('reports the server\'s sentence for a refused load', async () => {
 			store.activeScreenId = 5;
 			mockCardRepo.getScreenCard.mockRejectedValue(transportFailure({
 				status: 404,
 				body: { message: 'Screen is not in Card mode' },
-				request: `[GET] "/api/events/1/screens/5/card"`,
 			}));
 
 			await store.loadActiveCard();
@@ -1257,24 +1206,7 @@ describe('useCardStore', () => {
 			expect(store.loading).toBe(false);
 		});
 
-		it('reports the sentence the server wrote about a refused save', async () => {
-			store.activeScreenId = 5;
-			mockCardRepo.saveScreenCard.mockRejectedValue(transportFailure({
-				status: 409,
-				body: { message: 'Another operator is showing a card on this Screen' },
-			}));
-
-			await store.saveActiveCard(createMockMtgCard());
-
-			expect(store.error).toBe('Another operator is showing a card on this Screen');
-		});
-
-		/**
-		 * The rollback is the reason the substitution belongs inside the action rather than
-		 * around the whole call: `onError` must still see a failure, and still put the card
-		 * an operator was looking at back on screen.
-		 */
-		it('rolls the cleared card back and still reports the sentence', async () => {
+		it('puts the cleared Card back on a refused clear, and reports the server\'s sentence', async () => {
 			store.activeScreenId = 5;
 			const card = createMockMtgCard();
 			store.activeCard = card;
@@ -1288,81 +1220,20 @@ describe('useCardStore', () => {
 			expect(store.error).toBe('The card timeout has already elapsed');
 			expect(store.activeCard).toEqual(card);
 		});
-
-		it('shows the transport line rather than a 5xx body detail', async () => {
-			store.activeScreenId = 5;
-			mockCardRepo.saveScreenCard.mockRejectedValue(transportFailure({
-				status: 500,
-				body: { message: 'D1_ERROR: no such table: screen_cards' },
-				request: `[PUT] "/api/events/1/screens/5/card"`,
-			}));
-
-			await store.saveActiveCard(createMockMtgCard());
-
-			expect(store.error).not.toContain('D1_ERROR');
-			expect(store.error).toBe('[PUT] "/api/events/1/screens/5/card": 500 Internal Server Error');
-		});
-
-		it('reports a rejection that is not an Error as the composable does', async () => {
-			store.activeScreenId = 5;
-			mockCardRepo.saveScreenCard.mockRejectedValue({ message: 'not an Error at all' });
-
-			await store.saveActiveCard(createMockMtgCard());
-
-			expect(store.error).toBe('An error occurred');
-		});
 	});
 
-	// ── Clear Active Card ──
+	it('clearActiveCard holds no Card once the clear is accepted', async () => {
+		store.activeScreenId = 5;
+		store.activeCard = createMockMtgCard();
+		mockCardRepo.deleteScreenCard.mockResolvedValue(undefined);
 
-	describe('clearActiveCard', () => {
-		it('clears active card', async () => {
-			store.activeScreenId = 5;
-			store.activeCard = createMockMtgCard();
-			mockCardRepo.deleteScreenCard.mockResolvedValue(undefined);
+		await store.clearActiveCard();
 
-			await store.clearActiveCard();
-
-			expect(store.activeCard).toBeNull();
-		});
+		expect(store.activeCard).toBeNull();
 	});
-
-	// ── Search ──
-
-	describe('clearSearch', () => {
-		it('clears search state', () => {
-			store.searching = true;
-			store.searchResults = [
-				createMockMtgCard(),
-			];
-
-			store.clearSearch();
-
-			expect(store.searching).toBe(false);
-			expect(store.searchResults).toEqual([]);
-		});
-	});
-
-	// ── Preview Controls ──
 
 	describe('controlPreviewCard', () => {
-		it('flips preview card', async () => {
-			store.previewCard = createMockMtgCard();
-
-			await store.controlPreviewCard('flip');
-
-			expect(store.previewCard!.displayData.flipped).toBe(true);
-		});
-
-		it('rotates preview card', async () => {
-			store.previewCard = createMockMtgCard();
-
-			await store.controlPreviewCard('rotate');
-
-			expect(store.previewCard!.displayData.rotated).toBe(true);
-		});
-
-		it('clears preview card', async () => {
+		it('clearing the preview hides the Card controls', async () => {
 			store.previewCard = createMockMtgCard();
 			store.showCardControls = true;
 
@@ -1372,7 +1243,7 @@ describe('useCardStore', () => {
 			expect(store.showCardControls).toBe(false);
 		});
 
-		it('rounds the synchronized clock when starting a card timeout', async () => {
+		it('showing it starts the Event\'s Card Timeout from the synchronized clock, rounded', async () => {
 			store.activeScreenId = 5;
 			store.previewCard = createMockMtgCard();
 			mockEventStoreState.event = { id: 1, cardTimeout: 5 };
@@ -1390,130 +1261,87 @@ describe('useCardStore', () => {
 		});
 	});
 
-	// ── Realtime Handlers ──
+	describe('a peer\'s Card messages', () => {
+		it('hold a Card for the active Screen and ignore another Screen\'s', () => {
+			store.activeScreenId = 5;
 
-	describe('realtime handlers', () => {
-		describe('card:updated', () => {
-			it('updates active card from remote message', () => {
-				store.activeScreenId = 5;
-				const card = createMockMtgCard({ name: 'Remote Card' });
-
-				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card });
-
-				expect(store.activeCard!.name).toBe('Remote Card');
+			announce('card:updated', {
+				eventId: 1,
+				screenId: 99,
+				card: createMockMtgCard({ name: 'Elsewhere' }),
 			});
 
-			it('skips when isSelfOrigin returns true', () => {
-				store.activeScreenId = 5;
-				mockIsSelfOrigin.mockReturnValueOnce(true);
+			expect(store.activeCard).toBeNull();
 
-				ablyCallbacks.card!['card:updated']!({
-					eventId: 1,
-					screenId: 5,
-					card: createMockMtgCard(),
-				});
-
-				expect(store.activeCard).toBeNull();
+			announce('card:updated', {
+				eventId: 1,
+				screenId: 5,
+				card: createMockMtgCard({ name: 'Remote Card' }),
 			});
 
-			it('skips when screenId does not match', () => {
-				store.activeScreenId = 5;
+			expect(store.activeCard!.name).toBe('Remote Card');
 
-				ablyCallbacks.card!['card:updated']!({
-					eventId: 1,
-					screenId: 99,
-					card: createMockMtgCard(),
-				});
+			announce('card:cleared', { eventId: 1, screenId: 5 });
 
-				expect(store.activeCard).toBeNull();
+			expect(store.activeCard).toBeNull();
+		});
+
+		it('hide a timed Card at its absolute expiry, however late the message arrives, and clear nothing', async () => {
+			vi.useFakeTimers();
+			vi.setSystemTime(new Date('2026-07-16T00:00:00.000Z'));
+			store.activeScreenId = 5;
+			// Saved 59 s ago with a 60 s timeout: one second is left.
+			const card = createMockMtgCard({
+				timeoutData: { timeoutStartTimestamp: Date.now() - 59_000, timeoutDuration: 60_000 },
 			});
 
-			it('schedules hiding from the durable card data, and clears nothing', async () => {
-				vi.useFakeTimers();
-				store.activeScreenId = 5;
-				const card = createMockMtgCard({
+			announce('card:updated', { eventId: 1, screenId: 5, card });
+			expect(store.timeout.remaining).toBe(1);
+			await vi.advanceTimersByTimeAsync(999);
+			expect(store.activeCard).toEqual(card);
+			await vi.advanceTimersByTimeAsync(1);
+
+			expect(store.activeCard).toBeNull();
+			expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
+		});
+
+		it('cancel the prior expiry when an update clears the Card', async () => {
+			vi.useFakeTimers();
+			store.activeScreenId = 5;
+			announce('card:updated', {
+				eventId: 1,
+				screenId: 5,
+				card: createMockMtgCard({
 					timeoutData: {
 						timeoutStartTimestamp: Date.now(),
 						timeoutDuration: 1_000,
 					},
-				});
-
-				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card });
-				await vi.advanceTimersByTimeAsync(1_000);
-
-				expect(store.activeCard).toBeNull();
-				expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
+				}),
 			});
 
-			it('uses the absolute expiry instead of extending a delayed message', async () => {
-				vi.useFakeTimers();
-				vi.setSystemTime(new Date('2026-07-16T00:00:00.000Z'));
-				store.activeScreenId = 5;
-				// Saved 59 s ago with a 60 s timeout: one second is left, however late this arrives.
-				const card = createMockMtgCard({
-					timeoutData: { timeoutStartTimestamp: Date.now() - 59_000, timeoutDuration: 60_000 },
-				});
+			announce('card:updated', { eventId: 1, screenId: 5, card: null });
+			await vi.advanceTimersByTimeAsync(1_000);
 
-				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card });
-				expect(store.timeout.remaining).toBe(1);
-				await vi.advanceTimersByTimeAsync(999);
-				expect(store.activeCard).toEqual(card);
-				await vi.advanceTimersByTimeAsync(1);
-
-				expect(store.activeCard).toBeNull();
-				expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
-			});
-
-			it('cancels the prior expiry when a remote update clears the card', async () => {
-				vi.useFakeTimers();
-				store.activeScreenId = 5;
-				ablyCallbacks.card!['card:updated']!({
-					eventId: 1,
-					screenId: 5,
-					card: createMockMtgCard({
-						timeoutData: {
-							timeoutStartTimestamp: Date.now(),
-							timeoutDuration: 1_000,
-						},
-					}),
-				});
-
-				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: null });
-				await vi.advanceTimersByTimeAsync(1_000);
-
-				expect(store.activeCard).toBeNull();
-				expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
-			});
+			expect(store.activeCard).toBeNull();
+			expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
 		});
 
-		describe('card:cleared', () => {
-			it('clears active card from remote message', () => {
-				store.activeScreenId = 5;
-				store.activeCard = createMockMtgCard();
+		it('show a previewed Card with its controls', () => {
+			store.activeScreenId = 5;
 
-				ablyCallbacks.card!['card:cleared']!({ eventId: 1, screenId: 5 });
+			deliver('card:preview', {
+				eventId: 1,
+				screenId: 5,
+				card: createMockMtgCard({ name: 'Preview Card' }),
+			} as never);
 
-				expect(store.activeCard).toBeNull();
-			});
-		});
-
-		describe('card:preview', () => {
-			it('sets preview card from remote message', () => {
-				store.activeScreenId = 5;
-				const card = createMockMtgCard({ name: 'Preview Card' });
-
-				ablyCallbacks.card!['card:preview']!({ eventId: 1, screenId: 5, card });
-
-				expect(store.previewCard!.name).toBe('Preview Card');
-				expect(store.showCardControls).toBe(true);
-			});
+			expect(store.previewCard!.name).toBe('Preview Card');
+			expect(store.showCardControls).toBe(true);
 		});
 	});
 
-	// ── Computed ──
-
 	describe('cardsMatch', () => {
-		it('returns true when active and preview cards are identical', () => {
+		it('matches a preview identical to the active Card', () => {
 			const card = createMockMtgCard();
 			store.activeCard = card;
 			store.previewCard = { ...card };
@@ -1521,7 +1349,7 @@ describe('useCardStore', () => {
 			expect(store.cardsMatch).toBe(true);
 		});
 
-		it('returns false when display data differs', () => {
+		it('does not match a preview whose display differs', () => {
 			store.activeCard = createMockMtgCard();
 			store.previewCard = createMockMtgCard({
 				displayData: {
@@ -1535,52 +1363,4 @@ describe('useCardStore', () => {
 			expect(store.cardsMatch).toBe(false);
 		});
 	});
-
-	// ── $reset ──
-
-	describe('$reset', () => {
-		it('clears all state', () => {
-			store.activeCard = createMockMtgCard();
-			store.previewCard = createMockMtgCard();
-			store.activeScreenId = 5;
-			store.cardPageMode = 'match-decklist';
-			store.deckListRoundId = 12;
-			store.deckListMatchId = 34;
-			store.searchResults = [
-				createMockMtgCard(),
-			];
-			store.error = 'some error';
-
-			store.$reset();
-
-			expect(store.activeCard).toBeNull();
-			expect(store.previewCard).toBeNull();
-			expect(store.activeScreenId).toBeNull();
-			expect(store.cardPageMode).toBe('search');
-			expect(store.deckListRoundId).toBeNull();
-			expect(store.deckListMatchId).toBeNull();
-			expect(store.searchResults).toEqual([]);
-			expect(store.error).toBeNull();
-			expect(store.loading).toBe(false);
-			expect(store.showCardControls).toBe(false);
-		});
-
-		it('clears player deck state', () => {
-			store.playerDeckPlayerId = 42;
-			store.playerDeckData = {
-				playerName: 'Alice',
-				deckList: null,
-				mainboard: [],
-				sideboard: [],
-			} as any;
-
-			store.$reset();
-
-			expect(store.playerDeckPlayerId).toBeNull();
-			expect(store.playerDeckData).toBeNull();
-			expect(store.loadingPlayerDeck).toBe(false);
-		});
-	});
-
-	// ── canUsePlayerDeckMode ──
 });

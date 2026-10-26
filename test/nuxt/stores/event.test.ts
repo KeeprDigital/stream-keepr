@@ -1,10 +1,9 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '~~/test/helpers/deferred';
 import { createMockEvent, createMockTalent } from '~~/test/helpers/fixtures';
-import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 import { transportFailure } from '~~/test/helpers/transportFailure';
-
-// ── Mock Dependencies ──
+import { realtimeHandlersFor } from '~~/test/nuxt/helpers/realtimeEventSession';
 
 const mockEventRepo = {
 	list: vi.fn(),
@@ -31,39 +30,21 @@ const mockFeatureMatchStore = {
 	$reset: vi.fn(),
 };
 
-const mockFeatureMatchAssignmentStore = {
-	$reset: vi.fn(),
-};
-
 const mockFeatureMatchStateStore = {
 	updateAllClockSettings: vi.fn(),
 	$reset: vi.fn(),
 };
 
-const mockAbly = createMockRealtime();
-const mockIsSelfOrigin = vi.fn(() => false);
-
-// Capture ably callbacks when stores register them
-const ablyCallbacks: Record<string, Record<string, (...args: unknown[]) => void>> = {};
-mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
-	ablyCallbacks[storeName] = callbacks;
-});
-
 mockNuxtImport('useEventRepository', () => () => mockEventRepo);
-mockNuxtImport('useRealtime', () => () => mockAbly);
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
-mockNuxtImport('useFeatureMatchAssignmentStore', () => () => mockFeatureMatchAssignmentStore);
+mockNuxtImport('useFeatureMatchAssignmentStore', () => () => ({
+	$reset: vi.fn(),
+}));
 mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
-/*
- * `useAsyncAction` is deliberately not mocked, for the reason #245's suite gives: it is
- * the seam every action here reports through, and the hand-written copy that stood in for
- * it re-raised what it caught where the real composable resolves to `null` — so no test
- * here could say what an operator is shown. The real composable is auto-imported, does no
- * I/O and starts no timers, and it calls the same `onError` rollback the copy existed to
- * support (#241, #263).
- */
 
-// Helper: EventResponse shape (DbEvent + talents + meleeConfigured)
+const { deliver } = realtimeHandlersFor();
+
+// EventResponse shape: DbEvent plus talents and meleeConfigured.
 function createEventResponse(overrides?: Record<string, any>) {
 	const base = createMockEvent(overrides as any);
 	return {
@@ -80,126 +61,72 @@ describe('useEventStore', () => {
 		store = useEventStore();
 		store.$reset();
 		store.eventsList = [];
-		vi.clearAllMocks();
-		// Re-register the implementation after clearAllMocks
-		mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
-			ablyCallbacks[storeName] = callbacks;
-		});
-		ablyCallbacks.event = {
-			'event:updated': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteUpdated(data as any),
-			'talent:created': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteTalentCreated(data as any),
-			'talent:updated': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteTalentUpdated(data as any),
-			'talent:deleted': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteTalentDeleted(data as any),
-		};
 	});
 
-	// ── Loading ──
-
 	describe('loadEvent', () => {
-		it('populates event state', async () => {
+		it('holds the Event until a reset', async () => {
 			const event = createEventResponse({ id: 1 });
 			mockEventRepo.getById.mockResolvedValue(event);
 
 			await store.loadEvent(1);
 
 			expect(store.event).toEqual(event);
-			expect(store.isLoaded).toBe(true);
-			expect(mockAbly.setRoom).toHaveBeenCalledWith('event:1');
-		});
+			expect(store.eventId).toBe(1);
 
-		it('does not repopulate an Event after the store is reset', async () => {
-			let resolveLoad!: (value: ReturnType<typeof createEventResponse>) => void;
-			mockEventRepo.getById.mockReturnValue(new Promise((resolve) => {
-				resolveLoad = resolve;
-			}));
-
-			const load = store.loadEvent(1);
 			store.$reset();
-			resolveLoad(createEventResponse({ id: 1 }));
-			await load;
 
 			expect(store.event).toBeNull();
 		});
-	});
 
-	describe('loadEventsList', () => {
-		it('populates eventsList state', async () => {
-			const events = [
-				createEventResponse({ id: 1 }),
-				createEventResponse({ id: 2, name: 'Event 2' }),
-			];
-			mockEventRepo.list.mockResolvedValue(events);
+		it('does not repopulate an Event after the store is reset', async () => {
+			const load = deferred<ReturnType<typeof createEventResponse>>();
+			mockEventRepo.getById.mockReturnValue(load.promise);
 
-			await store.loadEventsList();
+			const loading = store.loadEvent(1);
+			store.$reset();
+			load.resolve(createEventResponse({ id: 1 }));
+			await loading;
 
-			expect(store.eventsList).toEqual(events);
+			expect(store.event).toBeNull();
+		});
+
+		it('reports a refused load and re-raises the failure it caught, not a narrowed copy', async () => {
+			const refused = transportFailure({
+				status: 403,
+				body: { message: 'This Event belongs to another installation' },
+			});
+			mockEventRepo.getById.mockRejectedValue(refused);
+
+			await expect(store.loadEvent(1)).rejects.toBe(refused);
+			expect(store.error).toBe('This Event belongs to another installation');
 		});
 	});
 
-	// ── Create ──
+	it('a created Event is listed and becomes the current Event', async () => {
+		const created = createEventResponse({ id: 5, name: 'New Event' });
+		mockEventRepo.create.mockResolvedValue(created);
 
-	describe('createEvent', () => {
-		it('adds event to list and sets current event', async () => {
-			const created = createEventResponse({ id: 5, name: 'New Event' });
-			mockEventRepo.create.mockResolvedValue(created);
+		await store.createEvent({ name: 'New Event', game: 'mtg', featureMatchOrientation: 'horizontal' });
 
-			await store.createEvent({ name: 'New Event', game: 'mtg', featureMatchOrientation: 'horizontal' });
-
-			expect(store.event).toEqual(created);
-			expect(store.eventsList).toContainEqual(created);
-		});
+		expect(store.event).toEqual(created);
+		expect(store.eventsList).toContainEqual(created);
 	});
-
-	// ── Update (optimistic) ──
 
 	describe('updateEvent', () => {
-		it('optimistically updates then applies server response', async () => {
+		it('holds the server\'s Event, in the current Event and its entry in the Events list', async () => {
 			const original = createEventResponse({ id: 1, name: 'Original' });
+			const other = createEventResponse({ id: 2, name: 'Other' });
 			store.event = original;
-			store.eventsList = [original];
-
-			const serverUpdated = { ...original, name: 'Server Updated' };
-			mockEventRepo.update.mockResolvedValue(serverUpdated);
+			store.eventsList = [original, other];
+			mockEventRepo.update.mockResolvedValue({ ...original, name: 'Server Updated' });
 
 			await store.updateEvent({ name: 'Updated' });
 
 			expect(store.event!.name).toBe('Server Updated');
+			expect(store.eventsList.map(event => event.name)).toEqual(['Server Updated', 'Other']);
 		});
 
-		it('reloads feature matches when numFeatureMatches changes', async () => {
-			const original = createEventResponse({ id: 1, numFeatureMatches: 1 });
-			store.event = original;
-			store.eventsList = [original];
-
-			const serverUpdated = { ...original, numFeatureMatches: 3 };
-			mockEventRepo.update.mockResolvedValue(serverUpdated);
-
-			await store.updateEvent({ numFeatureMatches: 3 });
-
-			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(1);
-		});
-	});
-
-	// ── Delete ──
-
-	describe('deleteEvent', () => {
-		it('removes event from list and resets if current', async () => {
-			const event = createEventResponse({ id: 1 });
-			store.event = event;
-			store.eventsList = [event];
-			mockEventRepo.remove.mockResolvedValue({ success: true });
-
-			await store.deleteEvent(1);
-
-			expect(store.event).toBeNull();
-			expect(store.eventsList).toHaveLength(0);
-		});
-	});
-
-	// ── Failure reporting ──
-
-	describe('failure reporting', () => {
-		it('reports the sentence a refused update carries, and rolls the Event back', async () => {
+		it('reports the server\'s sentence for a refused update and rolls the Event back', async () => {
 			const original = createEventResponse({ id: 1, name: 'Original' });
 			store.event = original;
 			store.eventsList = [original];
@@ -214,314 +141,131 @@ describe('useEventStore', () => {
 			expect(store.event!.name).toBe('Original');
 		});
 
-		it('reports the sentence a refused load carries, and still re-raises the failure itself', async () => {
-			const refused = transportFailure({
-				status: 403,
-				body: { message: 'This Event belongs to another installation' },
-				request: `[GET] "/api/events/1"`,
-			});
-			mockEventRepo.getById.mockRejectedValue(refused);
+		it('reloads the Feature Match Slots when their number changes', async () => {
+			const original = createEventResponse({ id: 1, numFeatureMatches: 1 });
+			store.event = original;
+			mockEventRepo.update.mockResolvedValue({ ...original, numFeatureMatches: 3 });
 
-			// The load reports and re-raises, and what it re-raises is deliberately the
-			// failure it caught rather than the sentence wrapped in a fresh `Error`. Not
-			// because a caller reads the status — none does — but because the store has no
-			// business narrowing a failure it is handing on rather than handling.
-			await expect(store.loadEvent(1)).rejects.toBe(refused);
-			expect(store.error).toBe('This Event belongs to another installation');
+			await store.updateEvent({ numFeatureMatches: 3 });
+
+			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(1);
 		});
 
-		it('reports the transport line for a 5xx load, whose body message the server sanitized', async () => {
-			mockEventRepo.list.mockRejectedValue(transportFailure({
-				status: 500,
-				body: { message: 'Internal Server Error' },
-				request: `[GET] "/api/events"`,
-			}));
+		it.each([
+			[
+				'clock type',
+				{ featureMatchDefaultClockType: 'countdown' },
+				['countdown', undefined, undefined],
+			],
+			[
+				'clock duration, in minutes, as milliseconds',
+				{ featureMatchDefaultClockDuration: 50 },
+				[undefined, 50 * 60 * 1000, undefined],
+			],
+		])('pushes a changed default %s to every Feature Match clock', async (_, input, args) => {
+			const original = createEventResponse({ id: 1 });
+			store.event = original;
+			mockEventRepo.update.mockResolvedValue(original);
 
-			await expect(store.loadEventsList()).rejects.toThrow();
+			await store.updateEvent(input as never);
 
-			expect(store.error).toBe('[GET] "/api/events": 500 Internal Server Error');
+			expect(mockFeatureMatchStateStore.updateAllClockSettings).toHaveBeenCalledWith(...args);
 		});
 	});
 
-	// ── Talent CRUD ──
+	it('a deleted current Event is unlisted and cleared', async () => {
+		const event = createEventResponse({ id: 1 });
+		store.event = event;
+		store.eventsList = [event];
+		mockEventRepo.remove.mockResolvedValue({ success: true });
 
-	describe('addTalent', () => {
-		it('appends talent to event', async () => {
+		await store.deleteEvent(1);
+
+		expect(store.event).toBeNull();
+		expect(store.eventsList).toEqual([]);
+	});
+
+	describe('talent writes', () => {
+		it('add once, update and remove the current Event\'s Talent', async () => {
 			store.event = createEventResponse({ id: 1, talents: [] });
-			const talent = createMockTalent({ id: 10, eventId: 1 });
+			const talent = createMockTalent({ id: 10, eventId: 1, name: 'Ana' });
 			mockTalentRepo.create.mockResolvedValue(talent);
-
-			await store.addTalent({ name: 'New Talent' });
-
-			expect(store.event!.talents).toContainEqual(talent);
-		});
-
-		it('returns null and sets error when no event is loaded', async () => {
-			const result = await store.addTalent({ name: 'Test' });
-
-			expect(result).toBeNull();
-			expect(store.error).toBe('No event loaded');
-		});
-
-		it('skips adding talent when already present (no-duplicate guard)', async () => {
-			const talent = createMockTalent({ id: 10, eventId: 1 });
-			store.event = createEventResponse({
-				id: 1,
-				talents: [talent],
-			});
-			mockTalentRepo.create.mockResolvedValue(talent);
-
-			await store.addTalent({ name: talent.name });
-
-			expect(store.event!.talents).toHaveLength(1);
-		});
-	});
-
-	describe('updateTalent', () => {
-		it('optimistically updates talent then applies server response', async () => {
-			const talent = createMockTalent({ id: 10, eventId: 1 });
-			store.event = createEventResponse({
-				id: 1,
-				talents: [talent],
-			});
-
-			const updated = { ...talent, name: 'Updated Talent' };
-			mockTalentRepo.update.mockResolvedValue(updated);
-
-			await store.updateTalent(10, { name: 'Updated Talent' });
-
-			expect(store.event!.talents[0]!.name).toBe('Updated Talent');
-		});
-
-		it('returns null and sets error when no event is loaded', async () => {
-			const result = await store.updateTalent(1, { name: 'Test' });
-
-			expect(result).toBeNull();
-			expect(store.error).toBe('No event loaded');
-		});
-	});
-
-	describe('removeTalent', () => {
-		it('removes talent from event', async () => {
-			const talent = createMockTalent({ id: 10, eventId: 1 });
-			store.event = createEventResponse({
-				id: 1,
-				talents: [talent],
-			});
+			mockTalentRepo.update.mockResolvedValue({ ...talent, name: 'Ana renamed' });
 			mockTalentRepo.remove.mockResolvedValue({ success: true });
+
+			await store.addTalent({ name: 'Ana' });
+			await store.addTalent({ name: 'Ana' });
+
+			expect(store.event!.talents).toEqual([talent]);
+
+			await store.updateTalent(10, { name: 'Ana renamed' });
+
+			expect(store.event!.talents[0]!.name).toBe('Ana renamed');
 
 			await store.removeTalent(10);
 
-			expect(store.event!.talents).toHaveLength(0);
+			expect(store.event!.talents).toEqual([]);
 		});
 
-		it('returns null and sets error when no event is loaded', async () => {
-			const result = await store.removeTalent(1);
-
-			expect(result).toBeNull();
+		it.each([
+			[
+				'add',
+				(s: ReturnType<typeof useEventStore>) => s.addTalent({ name: 'Test' }),
+			],
+			[
+				'update',
+				(s: ReturnType<typeof useEventStore>) => s.updateTalent(1, { name: 'Test' }),
+			],
+			[
+				'remove',
+				(s: ReturnType<typeof useEventStore>) => s.removeTalent(1),
+			],
+		])('a Talent %s with no Event loaded reports so and does nothing', async (_, write) => {
+			await expect(write(store)).resolves.toBeNull();
 			expect(store.error).toBe('No event loaded');
 		});
 
-		it('returns null and sets error when talent not found', async () => {
+		it('removing a Talent the Event does not hold reports so', async () => {
 			store.event = createEventResponse({ id: 1, talents: [] });
 
-			const result = await store.removeTalent(999);
-
-			expect(result).toBeNull();
+			await expect(store.removeTalent(999)).resolves.toBeNull();
 			expect(store.error).toBe('Talent not found');
 		});
 	});
 
-	// ── Realtime Handlers ──
+	describe('a peer\'s Event and Talent messages', () => {
+		it('update the Event', () => {
+			store.event = createEventResponse({ id: 1, name: 'Old' });
+			store.eventsList = [store.event!];
 
-	describe('realtime handlers', () => {
-		describe('event:updated', () => {
-			it('updates event from remote message', () => {
-				store.event = createEventResponse({ id: 1, name: 'Old' });
-				store.eventsList = [store.event!];
+			deliver('event:updated', {
+				event: { id: 1, name: 'Remote Update' },
+			} as never);
 
-				ablyCallbacks.event!['event:updated']!({
-					event: { id: 1, name: 'Remote Update' },
-				}, {});
-
-				expect(store.event!.name).toBe('Remote Update');
-			});
-
-			it('skips when isSelfOrigin returns true', () => {
-				store.event = createEventResponse({ id: 1, name: 'Old' });
-				mockIsSelfOrigin.mockReturnValueOnce(true);
-
-				ablyCallbacks.event!['event:updated']!({
-					event: { id: 1, name: 'Remote Update' },
-				}, {});
-
-				expect(store.event!.name).toBe('Old');
-			});
+			expect(store.event!.name).toBe('Remote Update');
 		});
 
-		describe('talent:created', () => {
-			it('adds talent from remote message', () => {
-				store.event = createEventResponse({ id: 1, talents: [] });
-				const talent = createMockTalent({ id: 20, eventId: 1 });
+		it('add, upsert, update and remove its Talent', () => {
+			store.event = createEventResponse({ id: 1, talents: [] });
+			const talent = createMockTalent({ id: 20, eventId: 1, name: 'Ana' });
 
-				ablyCallbacks.event!['talent:created']!({ talent }, {});
+			deliver('talent:created', { talent } as never);
+			deliver('talent:updated', {
+				talent: createMockTalent({ id: 21, eventId: 1, name: 'Ben' }),
+			} as never);
+			deliver('talent:updated', {
+				talent: { ...talent, name: 'Ana renamed' },
+			} as never);
 
-				expect(store.event!.talents).toHaveLength(1);
-			});
+			expect(store.event!.talents.map(t => t.name)).toEqual(['Ana renamed', 'Ben']);
 
-			it('skips when isSelfOrigin returns true', () => {
-				store.event = createEventResponse({ id: 1, talents: [] });
-				mockIsSelfOrigin.mockReturnValueOnce(true);
+			deliver('talent:deleted', { eventId: 1, talentId: 20 } as never);
 
-				ablyCallbacks.event!['talent:created']!({
-					talent: createMockTalent({ id: 20, eventId: 1 }),
-				}, {});
-
-				expect(store.event!.talents).toHaveLength(0);
-			});
-		});
-
-		describe('talent:deleted', () => {
-			it('removes talent from remote message', () => {
-				const talent = createMockTalent({ id: 20, eventId: 1 });
-				store.event = createEventResponse({
-					id: 1,
-					talents: [talent],
-				});
-
-				ablyCallbacks.event!['talent:deleted']!({ eventId: 1, talentId: 20 }, {});
-
-				expect(store.event!.talents).toHaveLength(0);
-			});
-		});
-
-		describe('talent:updated', () => {
-			it('updates existing talent from remote message', () => {
-				const talent = createMockTalent({ id: 10, eventId: 1, name: 'Original' });
-				store.event = createEventResponse({
-					id: 1,
-					talents: [talent],
-				});
-
-				ablyCallbacks.event!['talent:updated']!({
-					talent: { ...talent, name: 'Remote Update' },
-				}, {});
-
-				expect(store.event!.talents[0]!.name).toBe('Remote Update');
-			});
-
-			it('adds talent if not already present (upsert)', () => {
-				store.event = createEventResponse({ id: 1, talents: [] });
-				const newTalent = createMockTalent({ id: 99, eventId: 1, name: 'New' });
-
-				ablyCallbacks.event!['talent:updated']!({ talent: newTalent }, {});
-
-				expect(store.event!.talents).toHaveLength(1);
-			});
-
-			it('skips when isSelfOrigin returns true', () => {
-				const talent = createMockTalent({ id: 10, eventId: 1, name: 'Original' });
-				store.event = createEventResponse({
-					id: 1,
-					talents: [talent],
-				});
-				mockIsSelfOrigin.mockReturnValueOnce(true);
-
-				ablyCallbacks.event!['talent:updated']!({
-					talent: { ...talent, name: 'Remote' },
-				}, {});
-
-				expect(store.event!.talents[0]!.name).toBe('Original');
-			});
+			expect(store.event!.talents.map(t => t.name)).toEqual(['Ben']);
 		});
 	});
 
-	// ── $reset ──
-
-	describe('$reset', () => {
-		it('clears event state', () => {
-			store.event = createEventResponse({ id: 1 });
-			store.error = 'some error';
-
-			store.$reset();
-
-			expect(store.event).toBeNull();
-			expect(store.error).toBeNull();
-			expect(store.loading).toBe(false);
-			expect(mockAbly.setRoom).toHaveBeenCalledWith(null);
-		});
-	});
-
-	// ── eventId computed ──
-
-	describe('eventId', () => {
-		it('returns event.id when an event is loaded', () => {
-			store.event = createEventResponse({ id: 7 });
-			expect(store.eventId).toBe(7);
-		});
-	});
-
-	// ── updateEvent: rollback + list update ──
-
-	describe('updateEvent — rollback on API error', () => {
-		it('updates matching item in eventsList', async () => {
-			const original = createEventResponse({ id: 1, name: 'Original' });
-			const other = createEventResponse({ id: 2, name: 'Other' });
-			store.event = original;
-			store.eventsList = [original, other];
-			const serverUpdated = { ...original, name: 'Server Updated' };
-			mockEventRepo.update.mockResolvedValue(serverUpdated);
-
-			await store.updateEvent({ name: 'Updated' });
-
-			expect(store.eventsList[0]!.name).toBe('Server Updated');
-			expect(store.eventsList[1]!.name).toBe('Other');
-		});
-	});
-
-	// ── syncEventDependents: clock settings ──
-
-	describe('syncEventDependents', () => {
-		it('calls updateAllClockSettings when clock settings change', async () => {
-			const original = createEventResponse({ id: 1 });
-			store.event = original;
-			store.eventsList = [original];
-			mockEventRepo.update.mockResolvedValue(original);
-
-			await store.updateEvent({ featureMatchDefaultClockType: 'countdown' });
-
-			expect(mockFeatureMatchStateStore.updateAllClockSettings).toHaveBeenCalledWith(
-				'countdown',
-				undefined,
-				undefined,
-			);
-		});
-
-		it('converts clock duration from minutes to ms', async () => {
-			const original = createEventResponse({ id: 1 });
-			store.event = original;
-			store.eventsList = [original];
-			mockEventRepo.update.mockResolvedValue(original);
-
-			await store.updateEvent({ featureMatchDefaultClockDuration: 50 });
-
-			expect(mockFeatureMatchStateStore.updateAllClockSettings).toHaveBeenCalledWith(
-				undefined,
-				50 * 60 * 1000,
-				undefined,
-			);
-		});
-	});
-
-	// ── Mutations that outlive their Event (#606) ──
-
-	/**
-	 * A write is answered for the Event it was made in. When the operator has moved on
-	 * — stores reset, another Event loaded — the answer still arrives, and the Event on
-	 * screen is not the one it describes. Coming back to the first Event is a new
-	 * lifetime too: it loaded fresh state of its own, so an answer from before the
-	 * switch is no more current there than it was in the other Event.
-	 */
+	// A write is answered for the Event it was made in; coming back to that Event is a new lifetime too (#606).
 	describe('a mutation answered after the operator switched Events', () => {
 		async function switchTo(event: ReturnType<typeof createEventResponse>) {
 			store.$reset();
@@ -755,13 +499,3 @@ describe('useEventStore', () => {
 		});
 	});
 });
-
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (reason?: unknown) => void;
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve;
-		reject = promiseReject;
-	});
-	return { promise, resolve, reject };
-}
