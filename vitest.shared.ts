@@ -32,7 +32,6 @@ const nodeOnlyAppCoverageInclude = [
 	'app/modules/feature-match-session/client.ts',
 	'app/modules/metagame/client.ts',
 	'app/plugins/realtime.client.ts',
-	'app/utils/clock.ts',
 	'app/utils/metagame.ts',
 	'app/utils/uuid.ts',
 ];

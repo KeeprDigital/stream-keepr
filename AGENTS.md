@@ -51,6 +51,40 @@ runs only on PRs and in the merge queue. Open the PR from your branch and leave
   next number. Change an existing decision by editing its section. Skills that
   default to `docs/adr/NNNN-*.md` files write here instead.
 
+## Writing tests
+
+A test earns its place by going red when behaviour a user, operator or caller
+relies on breaks, and staying green through a refactor.
+
+- Test each rule at its **home**, the one module that owns it. A consumer gets
+  one **wiring** test (passes the right input, shows the result).
+- Drive real code through a public seam and fake only the boundary: network,
+  Ably, clock, object storage. Persistence runs on `createSqliteD1Harness` with
+  the real migrations.
+- Assert outcomes: stored rows, returned values, emitted events, visible text,
+  ARIA state. Call arguments are the assertion only at a port whose call is the
+  contract.
+- Glue, pass-through repositories, re-exports and field-copy mappers are
+  covered by the test of what they wire.
+- A schema test names a rule the schema adds (refinement, transform,
+  back-compat, cross-path parity) and covers both sides of each bound it tests.
+  Literals, defaults, option lists and return shapes belong to the type system.
+- Expose component state through ARIA or `data-*` and assert that, plus message
+  codes and key tokens.
+- Assert an optimistic update while its request is pending
+  (`test/helpers/deferred.ts`).
+- Write cases as `it.each` tables. Build setup from the kits in `test/helpers/`
+  and `test/nuxt/helpers/` (Nuxt UI stubs, graphics fixtures, realtime fakes),
+  extending a kit when it lacks something.
+- Test comments state the invariant in at most three lines; issue history
+  belongs in the commit and PR.
+- An invariant that resists a behavioural test goes, in order, to a type, an
+  ESLint rule, a parsed config, or an off-the-shelf linter.
+
+Models: `test/unit/server/api/cardExpiry.sqlite.test.ts`,
+`test/nuxt/stores/broadcastGraphicsLiveSessionProtocol.test.ts`,
+`test/nuxt/components/Screen/Modes/settingsEditorFields.test.ts`.
+
 ## Issue tracker
 
 Issues and PRDs live in GitHub Issues; use `gh`, which infers the repo.
