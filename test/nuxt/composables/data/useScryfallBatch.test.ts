@@ -32,12 +32,6 @@ describe('useScryfallBatch', () => {
 		vi.clearAllMocks();
 	});
 
-	it('returns fetchScryfallCards and buildDeckListArrays', () => {
-		const batch = useScryfallBatch();
-		expect(batch).toHaveProperty('fetchScryfallCards');
-		expect(batch).toHaveProperty('buildDeckListArrays');
-	});
-
 	it('fetches cards with scryfallId via collection endpoint', async () => {
 		mockFetch.mockResolvedValueOnce({
 			data: [

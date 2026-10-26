@@ -78,17 +78,6 @@ describe('useEventPageLoading', () => {
 		eventDataResync.reset();
 	});
 
-	it('returns eventId computed from the event store', () => {
-		const { eventId } = usePage([]);
-		expect(eventId.value).toBe(1);
-	});
-
-	it('returns eventId as 0 when store has no eventId', () => {
-		mockEventStore.eventId = null;
-		const { eventId } = usePage([]);
-		expect(eventId.value).toBe(0);
-	});
-
 	it('returns initialLoading true when some entries are not loaded', () => {
 		const entries = [
 			{

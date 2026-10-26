@@ -80,7 +80,6 @@ describe('useFeatureMatchModeData', () => {
 	let activeScope: ReturnType<typeof effectScope> | null = null;
 
 	beforeEach(() => {
-		vi.clearAllMocks();
 		mockEventId.value = 1;
 		mockConfig.value = { featureMatchId: 1 };
 		mockConnectionState.value = 'connected';
@@ -124,15 +123,6 @@ describe('useFeatureMatchModeData', () => {
 		activeScope = effectScope();
 		return activeScope.run(() => useFeatureMatchModeData())!;
 	}
-
-	it('returns expected properties', () => {
-		const result = createComposable();
-		expect(result).toHaveProperty('config');
-		expect(result).toHaveProperty('match');
-		expect(result).toHaveProperty('matchState');
-		expect(result).toHaveProperty('loading');
-		expect(result).toHaveProperty('error');
-	});
 
 	it('resolves match when matchId is configured', async () => {
 		const { match } = createComposable();

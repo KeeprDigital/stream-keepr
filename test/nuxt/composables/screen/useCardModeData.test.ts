@@ -55,7 +55,6 @@ function mountCardModeData() {
 
 describe('useCardModeData', () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
 		mockScreen.value = { id: 1 };
 		serverCard = null;
 		mockCardStore.activeCard = null;
@@ -70,22 +69,6 @@ describe('useCardModeData', () => {
 		mockCardDataHealth = ref('complete');
 		mockApiFetch.mockResolvedValue({ id: 'card-1', name: 'Lightning Bolt' });
 	});
-
-	it('returns config, displayConfig, screenId, loading, and error', () => {
-		const result = useCardModeData();
-		expect(result).toHaveProperty('config');
-		expect(result).toHaveProperty('displayConfig');
-		expect(result).toHaveProperty('screenId');
-		expect(result).toHaveProperty('loading');
-		expect(result).toHaveProperty('error');
-	});
-
-	it('sets screenId from screen context', () => {
-		const { screenId } = useCardModeData();
-		expect(screenId.value).toBe(1);
-	});
-
-	// ── loadCard (via onMounted) ──
 
 	it('calls setActiveScreen and loadActiveCard on mount', async () => {
 		mountCardModeData();
@@ -156,7 +139,6 @@ describe('useCardModeData', () => {
 		mountCardModeData();
 		await flushPromises();
 
-		vi.clearAllMocks();
 		mockCardStore.loadActiveCard.mockResolvedValue(null);
 
 		mockScreen.value = { id: 99 };

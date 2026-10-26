@@ -6,13 +6,8 @@ import { resolveGraphicInputBindings } from '~~/shared/modules/graphics';
 import { eventDataResync } from '~/modules/event-data/resync';
 
 /**
- * The Event Data Live Control resolves bound values and picker options from.
- *
- * The rule under test is the one that makes sharing a resolution function worth
- * anything: Live Control has to resolve against the *same facts* the server accepts
- * against. A Feature Match Slot's live scalars change constantly, and the slot row a
- * page loaded with goes stale immediately — so they have to come from the store the
- * Realtime Event Session keeps current.
+ * The Event Data Live Control resolves bound values from: the same facts the server accepts
+ * against, so a Slot's live scalars come from the realtime-kept store, not the loaded row.
  */
 
 function state(lifeTotal: number): FeatureMatchState {

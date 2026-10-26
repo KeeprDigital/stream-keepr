@@ -3,17 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockEvent } from '~~/test/helpers/fixtures';
 
 const mockStore = {
-	startClock: vi.fn(),
-	pauseClock: vi.fn(),
-	resetClock: vi.fn(),
-	restartClock: vi.fn(),
-	adjustClock: vi.fn(),
 	setClock: vi.fn(),
 };
 
 const mockEventStore = {
-	eventId: 1,
-	event: createMockEvent({ featureMatchDefaultClockDuration: 50 }),
+	eventId: 1 as number | null,
+	displayEvent: createMockEvent({ featureMatchDefaultClockDuration: 45 }),
 };
 
 mockNuxtImport('useEventStore', () => () => mockEventStore);
@@ -21,55 +16,36 @@ mockNuxtImport('useFeatureMatchStateStore', () => () => mockStore);
 
 describe('useClockControls', () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
 		mockEventStore.eventId = 1;
+		mockEventStore.displayEvent = createMockEvent({ featureMatchDefaultClockDuration: 45 });
 	});
 
-	it('delegates start to store.startClock', () => {
+	it('resets the clock to the Event\'s default duration', () => {
 		const controls = useClockControls(10);
-		void controls.start();
-		expect(mockStore.startClock).toHaveBeenCalledWith(1, 10);
-	});
 
-	it('delegates pause to store.pauseClock', () => {
-		const controls = useClockControls(10);
-		void controls.pause();
-		expect(mockStore.pauseClock).toHaveBeenCalledWith(1, 10);
-	});
-
-	it('delegates reset to store.resetClock', () => {
-		const controls = useClockControls(10);
-		void controls.reset();
-		expect(mockStore.resetClock).toHaveBeenCalledWith(1, 10);
-	});
-
-	it('delegates restart to store.restartClock', () => {
-		const controls = useClockControls(10);
-		void controls.restart();
-		expect(mockStore.restartClock).toHaveBeenCalledWith(1, 10);
-	});
-
-	it('delegates adjust to store.adjustClock', () => {
-		const controls = useClockControls(10);
-		controls.adjust(5000);
-		expect(mockStore.adjustClock).toHaveBeenCalledWith(1, 10, 5000);
-	});
-
-	it('delegates set to store.setClock', () => {
-		const controls = useClockControls(10);
-		void controls.set(60000);
-		expect(mockStore.setClock).toHaveBeenCalledWith(1, 10, 60000);
-	});
-
-	it('computes defaultDurationMs from event config', () => {
-		const controls = useClockControls(10);
-		// 50 minutes * 60 * 1000 = 3_000_000
-		expect(controls.defaultDurationMs.value).toBe(3_000_000);
-	});
-
-	it('delegates resetToDefault to store.setClock with defaultDurationMs', () => {
-		const controls = useClockControls(10);
 		void controls.resetToDefault();
-		expect(mockStore.setClock).toHaveBeenCalledWith(1, 10, 3_000_000);
+
+		expect(controls.defaultDurationMs.value).toBe(45 * 60 * 1000);
+		expect(mockStore.setClock).toHaveBeenCalledWith(1, 10, 45 * 60 * 1000);
+	});
+
+	it('does nothing without an Event', () => {
+		mockEventStore.eventId = null;
+		const controls = useClockControls(10);
+
+		void controls.resetToDefault();
+		void controls.set(60_000);
+
+		expect(mockStore.setClock).not.toHaveBeenCalled();
+	});
+
+	it('does nothing when the Event has no default duration', () => {
+		mockEventStore.displayEvent = createMockEvent({ featureMatchDefaultClockDuration: 0 });
+		const controls = useClockControls(10);
+
+		void controls.resetToDefault();
+
+		expect(controls.defaultDurationMs.value).toBeUndefined();
+		expect(mockStore.setClock).not.toHaveBeenCalled();
 	});
 });

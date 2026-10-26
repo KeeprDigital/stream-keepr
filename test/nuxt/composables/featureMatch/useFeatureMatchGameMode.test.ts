@@ -3,23 +3,15 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockEvent, createMockFeatureMatchState } from '~~/test/helpers/fixtures';
 
-// Capture the real useIntervalFn before any mocks intercept it
+// The real useIntervalFn, captured before the Nuxt auto-import proxy is mocked.
 const { useIntervalFn: realUseIntervalFn } = await vi.importActual<typeof import('@vueuse/core')>('@vueuse/core');
-
-// ── Mock Dependencies ──
 
 const mockFeatureMatchStateStore = {
 	updateState: vi.fn(),
 	startOvertime: vi.fn(),
-	setCardsKept: vi.fn(),
 	stepTurn: vi.fn(),
 	setTurnNumber: vi.fn(),
-	selectFirstPlayer: vi.fn(),
-	changeFirstPlayer: vi.fn(),
-	nextOvertimeTurn: vi.fn(),
-	prevOvertimeTurn: vi.fn(),
 	resetMatch: vi.fn(),
-	swapPlayers: vi.fn(),
 };
 
 const mockOverlay = {
@@ -34,14 +26,16 @@ const mockToast = {
 	add: vi.fn(),
 };
 
-const mockEventData = ref(createMockEvent({
+const trackingEverything = {
 	featureMatchDefaultTurnTrackingEnabled: true,
 	featureMatchDefaultActivePlayerTrackingEnabled: true,
 	featureMatchDefaultExtraTurnsEnabled: true,
 	featureMatchDefaultMulliganTrackingEnabled: true,
 	featureMatchDefaultExtraTurns: 5,
 	featureMatchDefaultExtraTurnsLabel: 'Extra Turns',
-}));
+};
+
+const mockEventData = ref(createMockEvent(trackingEverything));
 
 mockNuxtImport('useEventStore', () => () => ({
 	eventId: 1,
@@ -51,396 +45,278 @@ mockNuxtImport('useEventStore', () => () => ({
 mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
 mockNuxtImport('useOverlay', () => () => mockOverlay);
 mockNuxtImport('useToast', () => () => mockToast);
-
-// Mock useIntervalFn to pass through to the real @vueuse/core implementation,
-// bypassing the Nuxt auto-import proxy to avoid infinite recursion.
 mockNuxtImport('useIntervalFn', () => (fn: any, interval: any, options?: any) => realUseIntervalFn(fn, interval, options));
+
+function countdown(elapsedMs: number, type: 'countdown' | 'countup' = 'countdown') {
+	return {
+		type,
+		durationMs: 60000,
+		elapsedMs,
+		isRunning: false,
+		lastStartedAt: null,
+		countUpAfterCountdown: false,
+	};
+}
 
 describe('useFeatureMatchGameMode', () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
-		mockEventData.value = createMockEvent({
-			featureMatchDefaultTurnTrackingEnabled: true,
-			featureMatchDefaultActivePlayerTrackingEnabled: true,
-			featureMatchDefaultExtraTurnsEnabled: true,
-			featureMatchDefaultMulliganTrackingEnabled: true,
-			featureMatchDefaultExtraTurns: 5,
-			featureMatchDefaultExtraTurnsLabel: 'Extra Turns',
-		});
+		mockEventData.value = createMockEvent(trackingEverything);
 	});
 
-	function createSetup(stateOverrides: Partial<FeatureMatchState> = {}) {
-		const state = createMockFeatureMatchState({
+	function track(overrides: Record<string, boolean>) {
+		mockEventData.value = createMockEvent({
+			...trackingEverything,
+			...overrides,
+		});
+	}
+
+	function createSetup(stateOverrides: Partial<FeatureMatchState> | null = {}) {
+		const state = stateOverrides && createMockFeatureMatchState({
 			turnNumber: 1,
 			firstPlayer: 'player1',
 			activePlayer: 'player1',
 			...stateOverrides,
 		});
-		const matchState = computed(() => state);
-		return useFeatureMatchGameMode(10, matchState);
+		return useFeatureMatchGameMode(10, computed(() => state));
 	}
 
-	function createSetupWithNullState() {
-		const matchState = computed(() => null);
-		return useFeatureMatchGameMode(10, matchState);
-	}
+	describe('the mulligan phase', () => {
+		it.each([
+			[
+				'before turn 1',
+				{},
+				{ turnNumber: 0, firstPlayer: null, activePlayer: null },
+				true,
+			],
+			[
+				'from turn 1',
+				{},
+				{ turnNumber: 1 },
+				false,
+			],
+			[
+				'without a Session state',
+				{},
+				null,
+				false,
+			],
+			[
+				'with mulligan tracking off',
+				{ featureMatchDefaultMulliganTrackingEnabled: false },
+				{ turnNumber: 0 },
+				false,
+			],
+			[
+				'with turn and active-player tracking off',
+				{ featureMatchDefaultTurnTrackingEnabled: false, featureMatchDefaultActivePlayerTrackingEnabled: false },
+				{ turnNumber: 0 },
+				false,
+			],
+		] as const)('is %s: %#', (_, tracking, state, expected) => {
+			track(tracking);
 
-	// ── inMulliganPhase ──
-
-	describe('inMulliganPhase', () => {
-		it('is true when turnNumber < 1 and tracking enabled', () => {
-			const mode = createSetup({ turnNumber: 0, firstPlayer: null, activePlayer: null });
-			expect(mode.inMulliganPhase.value).toBe(true);
-		});
-
-		it('is false when turnNumber >= 1', () => {
-			const mode = createSetup({ turnNumber: 1 });
-			expect(mode.inMulliganPhase.value).toBe(false);
-		});
-
-		it('is false when matchState is null', () => {
-			const mode = createSetupWithNullState();
-			expect(mode.inMulliganPhase.value).toBe(false);
-		});
-
-		it('is false when mulligan tracking disabled', () => {
-			mockEventData.value = createMockEvent({
-				featureMatchDefaultTurnTrackingEnabled: true,
-				featureMatchDefaultActivePlayerTrackingEnabled: true,
-				featureMatchDefaultMulliganTrackingEnabled: false,
-			});
-			const mode = createSetup({ turnNumber: 0 });
-			expect(mode.inMulliganPhase.value).toBe(false);
-		});
-
-		it('is false when both turn and active player tracking disabled', () => {
-			mockEventData.value = createMockEvent({
-				featureMatchDefaultTurnTrackingEnabled: false,
-				featureMatchDefaultActivePlayerTrackingEnabled: false,
-				featureMatchDefaultMulliganTrackingEnabled: true,
-			});
-			const mode = createSetup({ turnNumber: 0 });
-			expect(mode.inMulliganPhase.value).toBe(false);
+			expect(createSetup(state as Partial<FeatureMatchState> | null).inMulliganPhase.value).toBe(expected);
 		});
 	});
 
-	// ── needsFirstPlayerSelection ──
+	describe('the turn counter', () => {
+		it.each([
+			[
+				'asks for a first player while none is chosen',
+				{},
+				{ firstPlayer: null },
+				'selection',
+			],
+			[
+				'counts once a first player is chosen',
+				{},
+				{ firstPlayer: 'player1' },
+				'counter',
+			],
+			[
+				'counts without active-player tracking',
+				{ featureMatchDefaultActivePlayerTrackingEnabled: false },
+				{ firstPlayer: null },
+				'counter',
+			],
+		] as const)('%s', (_, tracking, state, expected) => {
+			track(tracking);
 
-	describe('needsFirstPlayerSelection', () => {
-		it('is true when active tracking enabled but no firstPlayer', () => {
-			const mode = createSetup({ firstPlayer: null });
-			expect(mode.turnCounterMode.value).toBe('selection');
+			expect(createSetup(state).turnCounterMode.value).toBe(expected);
 		});
 
-		it('is false when firstPlayer is set', () => {
-			const mode = createSetup({ firstPlayer: 'player1' });
-			expect(mode.turnCounterMode.value).toBe('counter');
+		it.each([
+			[
+				'with a Session and tracking',
+				{},
+				{},
+				true,
+			],
+			[
+				'without a Session state',
+				{},
+				null,
+				false,
+			],
+			[
+				'with turn and active-player tracking off',
+				{ featureMatchDefaultTurnTrackingEnabled: false, featureMatchDefaultActivePlayerTrackingEnabled: false },
+				{},
+				false,
+			],
+		] as const)('shows %s: %#', (_, tracking, state, expected) => {
+			track(tracking);
+
+			expect(!!createSetup(state as Partial<FeatureMatchState> | null).showTurnCounter.value).toBe(expected);
 		});
 
-		it('is false when active player tracking disabled', () => {
-			mockEventData.value = createMockEvent({
-				featureMatchDefaultTurnTrackingEnabled: true,
-				featureMatchDefaultActivePlayerTrackingEnabled: false,
-			});
-			const mode = createSetup({ firstPlayer: null });
-			expect(mode.turnCounterMode.value).toBe('counter');
-		});
-	});
+		it.each([
+			['the turn number with turn tracking', {}, 'Turn 3'],
+			[
+				'"Active" with active-player tracking only',
+				{ featureMatchDefaultTurnTrackingEnabled: false },
+				'Active',
+			],
+		])('labels itself with %s', (_, tracking, expected) => {
+			track(tracking);
 
-	// ── turnCounterMode ──
-
-	describe('turnCounterMode', () => {
-		it('returns "selection" when no firstPlayer selected', () => {
-			const mode = createSetup({ firstPlayer: null });
-			expect(mode.turnCounterMode.value).toBe('selection');
+			expect(createSetup({ turnNumber: 3 }).turnCounterLabel.value).toBe(expected);
 		});
 
-		it('returns "counter" when firstPlayer is set', () => {
-			const mode = createSetup({ firstPlayer: 'player1' });
-			expect(mode.turnCounterMode.value).toBe('counter');
-		});
-	});
+		it.each([
+			[
+				'the first half of turn 1',
+				{ activePlayer: 'player1', turnNumber: 1 },
+				true,
+				1,
+			],
+			[
+				'the second half of turn 1',
+				{ activePlayer: 'player2', turnNumber: 1 },
+				false,
+				2,
+			],
+			[
+				'a later turn',
+				{ activePlayer: 'player1', turnNumber: 2 },
+				false,
+				1,
+			],
+		] as const)('steps back from %s only when there is somewhere to go', (_, state, disabled, half) => {
+			const mode = createSetup({ firstPlayer: 'player1', ...state });
 
-	// ── showTurnCounter ──
-
-	describe('showTurnCounter', () => {
-		it('is truthy when turn tracking enabled and state exists', () => {
-			const mode = createSetup();
-			expect(!!mode.showTurnCounter.value).toBe(true);
-		});
-
-		it('is falsy when state is null', () => {
-			const mode = createSetupWithNullState();
-			expect(!!mode.showTurnCounter.value).toBe(false);
-		});
-
-		it('is falsy when both turn and active tracking disabled', () => {
-			mockEventData.value = createMockEvent({
-				featureMatchDefaultTurnTrackingEnabled: false,
-				featureMatchDefaultActivePlayerTrackingEnabled: false,
-			});
-			const mode = createSetup();
-			expect(!!mode.showTurnCounter.value).toBe(false);
-		});
-	});
-
-	// ── turnCounterLabel ──
-
-	describe('turnCounterLabel', () => {
-		it('returns "Turn N" when turn tracking enabled', () => {
-			const mode = createSetup({ turnNumber: 3, firstPlayer: 'player1' });
-			expect(mode.turnCounterLabel.value).toBe('Turn 3');
+			expect(mode.stepBackDisabled.value).toBe(disabled);
+			expect(mode.turnHalf.value).toBe(half);
 		});
 
-		it('returns "Active" when only active tracking enabled', () => {
-			mockEventData.value = createMockEvent({
-				featureMatchDefaultTurnTrackingEnabled: false,
-				featureMatchDefaultActivePlayerTrackingEnabled: true,
-			});
-			const mode = createSetup({ firstPlayer: 'player1' });
-			expect(mode.turnCounterLabel.value).toBe('Active');
-		});
-	});
-
-	// ── stepBackDisabled ──
-
-	describe('stepBackDisabled', () => {
-		it('is true when at turn 1 and active equals first player', () => {
-			const mode = createSetup({ firstPlayer: 'player1', activePlayer: 'player1', turnNumber: 1 });
-			expect(mode.stepBackDisabled.value).toBe(true);
-		});
-
-		it('is false when activePlayer differs from firstPlayer (second half of turn)', () => {
-			const mode = createSetup({ firstPlayer: 'player1', activePlayer: 'player2', turnNumber: 1 });
-			expect(mode.stepBackDisabled.value).toBe(false);
-		});
-
-		it('is false on turn > 1', () => {
-			const mode = createSetup({ firstPlayer: 'player1', activePlayer: 'player1', turnNumber: 2 });
-			expect(mode.stepBackDisabled.value).toBe(false);
-		});
-
-		it('is true when no firstPlayer', () => {
-			const mode = createSetup({ firstPlayer: null, activePlayer: null });
-			expect(mode.stepBackDisabled.value).toBe(true);
-		});
-
-		it('is true when no activePlayer', () => {
-			const mode = createSetup({ firstPlayer: 'player1', activePlayer: null });
-			expect(mode.stepBackDisabled.value).toBe(true);
+		it.each([
+			[
+				'no first player',
+				{ firstPlayer: null, activePlayer: null },
+			],
+			[
+				'no active player',
+				{ firstPlayer: 'player1', activePlayer: null },
+			],
+		] as const)('cannot step back with %s', (_, state) => {
+			expect(createSetup(state).stepBackDisabled.value).toBe(true);
 		});
 	});
 
-	// ── turnHalf ──
+	describe('turn changes', () => {
+		it('steps the turn when active-player tracking is on', async () => {
+			await createSetup().handleTurnChange(1);
 
-	describe('turnHalf', () => {
-		it('returns 1 when activePlayer equals firstPlayer', () => {
-			const mode = createSetup({ firstPlayer: 'player1', activePlayer: 'player1' });
-			expect(mode.turnHalf.value).toBe(1);
-		});
-
-		it('returns 2 when activePlayer differs from firstPlayer', () => {
-			const mode = createSetup({ firstPlayer: 'player1', activePlayer: 'player2' });
-			expect(mode.turnHalf.value).toBe(2);
-		});
-	});
-
-	// ── isClockExpired ──
-
-	describe('isClockExpired', () => {
-		it('returns false for non-countdown clocks', () => {
-			const mode = createSetup({
-				clock: {
-					type: 'countup',
-					durationMs: 0,
-					elapsedMs: 5000,
-					isRunning: false,
-					lastStartedAt: null,
-					countUpAfterCountdown: false,
-				},
-			});
-			expect(mode.isClockExpired.value).toBe(false);
-		});
-
-		it('returns false when countdown has not expired', () => {
-			const mode = createSetup({
-				clock: {
-					type: 'countdown',
-					durationMs: 60000,
-					elapsedMs: 30000,
-					isRunning: false,
-					lastStartedAt: null,
-					countUpAfterCountdown: false,
-				},
-			});
-			expect(mode.isClockExpired.value).toBe(false);
-		});
-
-		it('returns true when countdown elapsed >= duration', () => {
-			const mode = createSetup({
-				clock: {
-					type: 'countdown',
-					durationMs: 60000,
-					elapsedMs: 60000,
-					isRunning: false,
-					lastStartedAt: null,
-					countUpAfterCountdown: false,
-				},
-			});
-			expect(mode.isClockExpired.value).toBe(true);
-		});
-
-		it('returns false when matchState is null', () => {
-			const mode = createSetupWithNullState();
-			expect(mode.isClockExpired.value).toBe(false);
-		});
-	});
-
-	// ── Feature flags ──
-
-	describe('feature flags', () => {
-		it('reports feature flags from event config', () => {
-			const mode = createSetup();
-			expect(mode.activePlayerTrackingEnabled.value).toBe(true);
-			expect(mode.extraTurnsEnabled.value).toBe(true);
-		});
-
-		it('reports display flags from event', () => {
-			mockEventData.value = createMockEvent({
-				pronounsEnabled: false,
-				standingsEnabled: false,
-				lgsEnabled: true,
-				tableNumberEnabled: true,
-			});
-			const mode = createSetup();
-			expect(mode.pronounsEnabled.value).toBe(false);
-			expect(mode.standingsEnabled.value).toBe(false);
-			expect(mode.lgsEnabled.value).toBe(true);
-			expect(mode.tableNumberEnabled.value).toBe(true);
-		});
-
-		it('returns extraTurnsLabel from defaults', () => {
-			const mode = createSetup();
-			expect(mode.extraTurnsLabel.value).toBe('Extra Turns');
-		});
-	});
-
-	// ── Action handlers (delegation) ──
-
-	describe('handleTurnChange', () => {
-		it('delegates to stepTurn when active player tracking is on', async () => {
-			const mode = createSetup();
-			await mode.handleTurnChange(1);
 			expect(mockFeatureMatchStateStore.stepTurn).toHaveBeenCalledWith(1, 10, 1);
+			expect(mockFeatureMatchStateStore.setTurnNumber).not.toHaveBeenCalled();
 		});
 
-		it('delegates to setTurnNumber when no firstPlayer', async () => {
-			mockEventData.value = createMockEvent({
-				featureMatchDefaultTurnTrackingEnabled: true,
-				featureMatchDefaultActivePlayerTrackingEnabled: false,
-			});
-			const mode = createSetup({ turnNumber: 3, firstPlayer: null, activePlayer: null });
-			await mode.handleTurnChange(1);
-			expect(mockFeatureMatchStateStore.setTurnNumber).toHaveBeenCalledWith(1, 10, 4);
-		});
+		it.each([
+			['counts the turn number on', 3, 1, 4],
+			['never counts below turn 0', 0, -1, 0],
+		])('%s without active-player tracking', async (_, turnNumber, delta, expected) => {
+			track({ featureMatchDefaultActivePlayerTrackingEnabled: false });
 
-		it('clamps turn number to 0 minimum', async () => {
-			mockEventData.value = createMockEvent({
-				featureMatchDefaultTurnTrackingEnabled: true,
-				featureMatchDefaultActivePlayerTrackingEnabled: false,
-			});
-			const mode = createSetup({ turnNumber: 0, firstPlayer: null, activePlayer: null });
-			await mode.handleTurnChange(-1);
-			expect(mockFeatureMatchStateStore.setTurnNumber).toHaveBeenCalledWith(1, 10, 0);
+			await createSetup({ turnNumber, firstPlayer: null, activePlayer: null }).handleTurnChange(delta);
+
+			expect(mockFeatureMatchStateStore.setTurnNumber).toHaveBeenCalledWith(1, 10, expected);
 		});
 	});
 
-	describe('handleSelectFirstPlayer', () => {
-		it('delegates to selectFirstPlayer', async () => {
-			const mode = createSetup({ turnNumber: 1 });
-			await mode.handleSelectFirstPlayer('player2');
-			expect(mockFeatureMatchStateStore.selectFirstPlayer).toHaveBeenCalledWith(1, 10, 'player2');
-		});
-	});
-
-	describe('handleNextOvertimeTurn', () => {
-		it('delegates to nextOvertimeTurn', async () => {
-			const mode = createSetup();
-			await mode.handleNextOvertimeTurn();
-			expect(mockFeatureMatchStateStore.nextOvertimeTurn).toHaveBeenCalledWith(1, 10);
-		});
-	});
-
-	describe('handlePrevOvertimeTurn', () => {
-		it('delegates to prevOvertimeTurn', async () => {
-			const mode = createSetup();
-			await mode.handlePrevOvertimeTurn();
-			expect(mockFeatureMatchStateStore.prevOvertimeTurn).toHaveBeenCalledWith(1, 10);
-		});
-	});
-
-	// ── handleCardsKeptUpdate ──
-
-	describe('handleCardsKeptUpdate', () => {
-		it('calls setCardsKept with player side and value', async () => {
-			const mode = createSetup();
-			await mode.handleCardsKeptUpdate('player1', 5);
-			expect(mockFeatureMatchStateStore.setCardsKept).toHaveBeenCalledWith(1, 10, 'player1', 5);
+	describe('the clock', () => {
+		it.each([
+			[
+				'a count-up clock',
+				countdown(5000, 'countup'),
+				false,
+			],
+			[
+				'a countdown with time left',
+				countdown(30000),
+				false,
+			],
+			[
+				'a countdown that ran out',
+				countdown(60000),
+				true,
+			],
+		])('expires for %s only when a countdown runs out', (_, clock, expected) => {
+			expect(createSetup({ clock }).isClockExpired.value).toBe(expected);
 		});
 
-		it('calls setCardsKept for player2', async () => {
-			const mode = createSetup();
-			await mode.handleCardsKeptUpdate('player2', 4);
-			expect(mockFeatureMatchStateStore.setCardsKept).toHaveBeenCalledWith(1, 10, 'player2', 4);
-		});
-	});
-
-	// ── handleResetGame ──
-
-	describe('handleResetGame', () => {
-		it('calls resetMatch with type: game when confirmed', async () => {
-			const mockOpen = vi.fn(() => ({
-				result: Promise.resolve(true),
+		it('starts overtime with the Event\'s extra turns when the countdown runs out', async () => {
+			const state = shallowRef(createMockFeatureMatchState({
+				clock: countdown(0),
 			}));
-			mockOverlay.create.mockReturnValueOnce({ open: mockOpen });
-			const mode = createSetup();
+			useFeatureMatchGameMode(10, computed(() => state.value as FeatureMatchState));
 
-			await mode.handleResetGame();
+			state.value = createMockFeatureMatchState({
+				clock: countdown(60001),
+			});
+			await nextTick();
+
+			expect(mockFeatureMatchStateStore.startOvertime).toHaveBeenCalledWith(1, 10, 5);
+		});
+	});
+
+	describe('resetting a game', () => {
+		it('resets the game once the operator confirms', async () => {
+			mockOverlay.create.mockReturnValueOnce({
+				open: vi.fn(() => ({
+					result: Promise.resolve(true),
+				})),
+			});
+
+			await createSetup().handleResetGame();
 
 			expect(mockFeatureMatchStateStore.resetMatch).toHaveBeenCalledWith(1, 10, { type: 'game' });
 		});
+
+		it('leaves the game alone when the operator cancels', async () => {
+			await createSetup().handleResetGame();
+
+			expect(mockFeatureMatchStateStore.resetMatch).not.toHaveBeenCalled();
+		});
 	});
 
-	// ── matchActionItems ──
+	describe('match actions', () => {
+		it('always offers Edit Match State, and Change First Player once one is chosen', () => {
+			const labels = (state: Partial<FeatureMatchState>) => createSetup(state).matchActionItems.value[0]!.map(a => a.label);
 
-	describe('matchActionItems', () => {
-		it('always offers Edit Match State, even with no other operational actions', () => {
-			const mode = createSetup({ firstPlayer: null });
-			const labels = mode.matchActionItems.value[0]!.map(a => a.label);
-			expect(labels).toEqual(['Edit Match State…']);
-		});
-
-		it('includes Change First Player when active tracking enabled and firstPlayer set', () => {
-			const mode = createSetup({ firstPlayer: 'player1' });
-			const labels = mode.matchActionItems.value[0]!.map(a => a.label);
-			expect(labels).toContain('Change First Player');
+			expect(labels({ firstPlayer: null })).toEqual(['Edit Match State…']);
+			expect(labels({ firstPlayer: 'player1' })).toContain('Change First Player');
 		});
 
 		it('opens the edit-state modal from its action item', () => {
 			const mode = createSetup();
-			expect(mode.editStateOpen.value).toBe(false);
 
 			const editItem = mode.matchActionItems.value[0]!.find(a => a.label === 'Edit Match State…')!;
 			(editItem.onSelect as () => void)();
 
 			expect(mode.editStateOpen.value).toBe(true);
 		});
-	});
 
-	// ── handleEditStateSave ──
-
-	describe('handleEditStateSave', () => {
-		it('routes the whole diff through one updateState call and closes on success', async () => {
+		it('routes the whole edit through one updateState call and closes on success', async () => {
 			mockFeatureMatchStateStore.updateState.mockResolvedValue(createMockFeatureMatchState());
 			const mode = createSetup();
 			mode.editStateOpen.value = true;
@@ -450,14 +326,10 @@ describe('useFeatureMatchGameMode', () => {
 				player1: { lifeTotal: 12 },
 			});
 
-			expect(mockFeatureMatchStateStore.updateState).toHaveBeenCalledExactlyOnceWith(
-				1,
-				10,
-				{
-					turnNumber: 7,
-					player1: { lifeTotal: 12 },
-				},
-			);
+			expect(mockFeatureMatchStateStore.updateState).toHaveBeenCalledExactlyOnceWith(1, 10, {
+				turnNumber: 7,
+				player1: { lifeTotal: 12 },
+			});
 			expect(mode.editStateOpen.value).toBe(false);
 		});
 
@@ -473,64 +345,6 @@ describe('useFeatureMatchGameMode', () => {
 				title: 'Failed to update match state',
 				color: 'error',
 			}));
-		});
-	});
-
-	describe('resetActionItems', () => {
-		it('groups Reset Game and Reset Match together', () => {
-			const mode = createSetup();
-			const labels = mode.resetActionItems.value[0]!.map(a => a.label);
-			expect(labels).toEqual(['Reset Game', 'Reset Match']);
-		});
-	});
-
-	// ── startingHandSize ──
-
-	describe('startingHandSize', () => {
-		it('returns 7 for MTG', () => {
-			const mode = createSetup();
-			expect(mode.startingHandSize.value).toBe(7);
-		});
-	});
-
-	// ── auto-start overtime watch ──
-
-	describe('watch(isClockExpired)', () => {
-		function createExpiredClock() {
-			return {
-				type: 'countdown' as const,
-				durationMs: 60000,
-				elapsedMs: 60001,
-				isRunning: false,
-				lastStartedAt: null,
-				countUpAfterCountdown: false,
-			};
-		}
-
-		function createActiveClock() {
-			return {
-				type: 'countdown' as const,
-				durationMs: 60000,
-				elapsedMs: 0,
-				isRunning: false,
-				lastStartedAt: null,
-				countUpAfterCountdown: false,
-			};
-		}
-
-		it('calls startOvertime when clock transitions to expired', async () => {
-			const stateRef = shallowRef(createMockFeatureMatchState({
-				clock: createActiveClock(),
-			}));
-			const matchState = computed(() => stateRef.value as FeatureMatchState);
-			useFeatureMatchGameMode(10, matchState);
-
-			stateRef.value = createMockFeatureMatchState({
-				clock: createExpiredClock(),
-			});
-			await nextTick();
-
-			expect(mockFeatureMatchStateStore.startOvertime).toHaveBeenCalledWith(1, 10, 5);
 		});
 	});
 });

@@ -73,7 +73,6 @@ function makeTopCardsModeData() {
 
 describe('useTopCardsModeData', () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
 		Object.assign(mutableConfig, defaultConfig, {
 			excludedCardTypes: ['Land'],
 		});
@@ -87,51 +86,36 @@ describe('useTopCardsModeData', () => {
 		scopes.splice(0).forEach(scope => scope.stop());
 	});
 
-	it('returns expected properties', () => {
-		const result = makeTopCardsModeData();
+	it.each([
+		['the full field', {}, 'Most Played Cards'],
+		[
+			'the Top N scope',
+			{ scope: 'topN', topN: 8 },
+			'Top 8 Most Played Cards',
+		],
+		[
+			'the archetype filter',
+			{ archetypeFilter: 'Mono Red' },
+			'Most Played Cards: Mono Red',
+		],
+		[
+			'a custom header',
+			{ headerText: 'The Chase Cards' },
+			'The Chase Cards',
+		],
+	] as const)('heads the grid with %s', (_, config, expected) => {
+		Object.assign(mutableConfig, config);
 
-		expect(result).toHaveProperty('config');
-		expect(result).toHaveProperty('loading');
-		expect(result).toHaveProperty('error');
-		expect(result).toHaveProperty('isEmpty');
-		expect(result).toHaveProperty('emptyMessage');
-		expect(result).toHaveProperty('headerText');
-		expect(result).toHaveProperty('entries');
-	});
-
-	it('generates the default header text for the full field', () => {
-		const { headerText } = makeTopCardsModeData();
-
-		expect(headerText.value).toBe('Most Played Cards');
-	});
-
-	it('prefixes the header with the Top N scope', () => {
-		mutableConfig.scope = 'topN';
-		mutableConfig.topN = 8;
-
-		const { headerText } = makeTopCardsModeData();
-
-		expect(headerText.value).toBe('Top 8 Most Played Cards');
-	});
-
-	it('names the archetype filter in the header', () => {
-		mutableConfig.archetypeFilter = 'Mono Red';
-
-		const { headerText } = makeTopCardsModeData();
-
-		expect(headerText.value).toBe('Most Played Cards: Mono Red');
-	});
-
-	it('prefers custom header text', () => {
-		mutableConfig.headerText = 'The Chase Cards';
-
-		const { headerText } = makeTopCardsModeData();
-
-		expect(headerText.value).toBe('The Chase Cards');
+		expect(makeTopCardsModeData().headerText.value).toBe(expected);
 	});
 
 	it('reads the card breakdown through the Screen', async () => {
-		makeTopCardsModeData();
+		mockFetch.mockResolvedValue({
+			entries: rankedCards(1),
+			totalDecks: 5,
+			scope: 'all',
+		});
+		const { entries } = makeTopCardsModeData();
 		await flushPromises();
 
 		// The server derives board, sort, limit and excluded types from the saved
@@ -140,6 +124,7 @@ describe('useTopCardsModeData', () => {
 			'/api/screen-output/events/1/screens/1/top-cards',
 			expect.objectContaining({ headers: undefined }),
 		);
+		expect(entries.value.map(entry => entry.name)).toEqual(['Card 1']);
 	});
 
 	it('re-reads when a configuration field the breakdown depends on changes', async () => {
@@ -153,61 +138,18 @@ describe('useTopCardsModeData', () => {
 		expect(mockFetch).toHaveBeenCalledWith('/api/screen-output/events/1/screens/1/top-cards', expect.anything());
 	});
 
-	it('isEmpty is true when entries are empty and not loading', async () => {
-		const { isEmpty } = makeTopCardsModeData();
+	it.each([
+		['no decks', 0, 'No players in this event'],
+		['decks but no card data', 4, 'No card data available'],
+	])('is empty with a message for a field with %s', async (_, totalDecks, expected) => {
+		mockFetch.mockResolvedValue({ entries: [], totalDecks, scope: 'all' });
+
+		const { isEmpty, emptyMessage } = makeTopCardsModeData();
 		await flushPromises();
 
 		expect(isEmpty.value).toBe(true);
+		expect(emptyMessage.value).toBe(expected);
 	});
-
-	it('exposes fetched entries', async () => {
-		mockFetch.mockResolvedValue({
-			entries: [
-				{
-					id: 1,
-					name: 'Lightning Bolt',
-					inclusionRate: 80,
-					avgCopies: 3.6,
-					totalCopies: 18,
-					deckCount: 4,
-					mainboardCount: 18,
-					sideboardCount: 0,
-					mainboardDeckCount: 4,
-					sideboardDeckCount: 0,
-					cardType: 'Instant',
-					scryfallId: null,
-					colors: 'R',
-					cmc: 1,
-					manaCost: '{R}',
-				},
-			],
-			totalDecks: 5,
-			scope: 'all',
-		});
-
-		const { entries } = makeTopCardsModeData();
-		await flushPromises();
-
-		expect(entries.value).toHaveLength(1);
-		expect(entries.value[0]!.name).toBe('Lightning Bolt');
-	});
-
-	it('emptyMessage references no players when the breakdown counts no decks', async () => {
-		const { emptyMessage } = makeTopCardsModeData();
-		await flushPromises();
-
-		expect(emptyMessage.value).toBe('No players in this event');
-	});
-
-	it('emptyMessage reports missing card data when the field has decks', async () => {
-		mockFetch.mockResolvedValue({ entries: [], totalDecks: 4, scope: 'all' });
-
-		const { emptyMessage } = makeTopCardsModeData();
-		await flushPromises();
-
-		expect(emptyMessage.value).toBe('No card data available');
-	});
-
 	describe('page rotation', () => {
 		/** The cards a page shows, as `rank:name`. */
 		function shown(page: { entry: { name: string }; rank: number }[]) {
