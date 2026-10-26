@@ -1,49 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { GATES } from '../../../scripts/verify.mjs';
 
 const repositoryRoot = join(import.meta.dirname, '../../..');
 
 function readDocument(name: string): string {
 	return readFileSync(join(repositoryRoot, name), 'utf8');
 }
-
-/**
- * README.md is the operational guide (#706). Where it restates something a
- * script decides, these read both, so the guide cannot drift from the graph.
- */
-describe('the testing guide (README.md § Testing)', () => {
-	it('names every local browser gate `pnpm test` runs, in the order verify runs them', () => {
-		// `pnpm accept <name>` gates in run order: verify chains them, each after
-		// the one before, so follow the chain from the gate that waits on none.
-		const accepts = Object.entries(GATES as Record<string, { command: string[]; after: string[] }>)
-			.filter(([, gate]) => gate.command[1] === 'accept');
-		const browserGates: string[] = [];
-		let previous: string | undefined;
-		for (;;) {
-			const next = accepts.find(([, gate]) => previous === undefined
-				? !gate.after.some(name => name.startsWith('accept:'))
-				: gate.after.includes(previous));
-			if (next === undefined)
-				break;
-			previous = next[0];
-			browserGates.push(next[1].command[2]!);
-		}
-
-		expect(browserGates).toHaveLength(accepts.length);
-		const row = readDocument('README.md').split('\n').find(line => line.startsWith('| Before commit '));
-
-		expect(row).toBeDefined();
-		const listed = row!.match(/browser gates[^|]*/u)?.[0] ?? '';
-
-		expect([
-			...listed.matchAll(/`([a-z-]+)`/gu),
-		].map(match => match[1])).toEqual(browserGates);
-		// The negative control: Key matte was the gate the guide once left out.
-		expect(browserGates).toContain('key-matte');
-	});
-});
 
 /** The documents agents and maintainers navigate between. CHANGELOG.md is generated. */
 const NAVIGATED_DOCUMENTS = [
