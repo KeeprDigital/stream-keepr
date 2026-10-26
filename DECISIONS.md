@@ -88,7 +88,7 @@ Accepted · 2026-08-02 · [#168](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Measured cost
 
-Pinned in `test/unit/server/mappers/broadcastGraphicsCommandApplied.test.ts` against worst cases driven through the real reducer:
+Pinned in `test/unit/server/mappers/broadcastGraphicsCommandAppliedMeasurements.test.ts` against worst cases driven through the real reducer:
 
 | case                                                             | whole live state | change      |
 | ---------------------------------------------------------------- | ---------------- | ----------- |
@@ -197,7 +197,7 @@ What is given up is "the named cap binds first", only for configurations nobody 
 
 ### Consequences
 
-- The measurement is pinned with `toBe` in `broadcastGraphicsModeConfig.test.ts` in two arrangements — grouped (3,715,514, `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES`) and flat (3,712,876) — so "which worst case" stays a checked choice.
+- The measurement is pinned with `toBe` in `broadcastGraphicsModeConfigWorstCase.test.ts` in two arrangements — grouped (3,715,514, `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES`) and flat (3,712,876) — so "which worst case" stays a checked choice.
 - A ticket that adds vocabulary extends that builder and moves a visible constant. Moving the cap means re-deriving it here, not in a docblock.
 - `MAX_GRAPHIC_ITEM_ID_LENGTH` is also an import constraint: a Template Package document is proved against the Screen write-path schema, so ids over 64 characters are refused on install. Accepted — one bound on both paths keeps "a document that installs is one the write path accepts", and copy paths mint fresh uuids anyway.
 - `MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN` (60) binds first for any package whose graphics declare Live Control (two inputs each covers 30 of 50 graphics). Move that before this cap, and re-measure when you do.
