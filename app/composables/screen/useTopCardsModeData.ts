@@ -76,7 +76,7 @@ export function useTopCardsModeData() {
 	});
 
 	// ── Empty State ──
-	const isEmpty = computed(() => !loading.value && entries.value.length === 0);
+	const isEmpty = computed(() => freshness.answered.value && entries.value.length === 0);
 	// Read off the breakdown: an output holds no roster to count (#604).
 	const emptyMessage = computed(() => {
 		if (!cardData.value?.totalDecks) {

@@ -424,11 +424,11 @@ describe('useStandingsModeData pagination and formatting', () => {
 			expect(isEmpty.value).toBe(true);
 		});
 
-		it('isEmpty is false when loading', async () => {
+		it('isEmpty stays true while an empty answer is re-read', async () => {
 			serverPlayers = [];
 			const { isEmpty, loading: l } = await makeStandings();
 			l.value = true;
-			expect(isEmpty.value).toBe(false);
+			expect(isEmpty.value).toBe(true);
 		});
 
 		it('emptyMessage for watchlist without playerListId', async () => {

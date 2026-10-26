@@ -235,7 +235,7 @@ export function useStandingsModeData() {
 	}
 
 	// ── Empty State ──
-	const isEmpty = computed(() => !loading.value && displayRows.value.length === 0);
+	const isEmpty = computed(() => freshness.answered.value && displayRows.value.length === 0);
 	const emptyMessage = computed(() => {
 		if (config.value.roundId) {
 			return 'No standings snapshot available for this round';

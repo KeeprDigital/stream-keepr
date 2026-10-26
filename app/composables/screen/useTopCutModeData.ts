@@ -88,7 +88,7 @@ export function useTopCutModeData() {
 	const bracket = computed(() => freshness.data.value.bracket);
 
 	const headerText = computed(() => config.value.headerText || phase.value?.name || 'Top Cut');
-	const isEmpty = computed(() => !loading.value && (!config.value.phaseId || bracket.value.columns.length === 0));
+	const isEmpty = computed(() => freshness.answered.value && (!config.value.phaseId || bracket.value.columns.length === 0));
 
 	return {
 		config,

@@ -55,7 +55,7 @@ export function usePairingsModeData() {
 	const headerText = computed(() => config.value.headerText || (round.value
 		? `${round.value.name} Pairings`
 		: 'Pairings'));
-	const isEmpty = computed(() => !loading.value && (!config.value.roundId || rows.value.length === 0));
+	const isEmpty = computed(() => freshness.answered.value && (!config.value.roundId || rows.value.length === 0));
 
 	const { pageData, rowCount } = usePaginatedScreenMode({ mode: 'pairings', config, rows });
 
