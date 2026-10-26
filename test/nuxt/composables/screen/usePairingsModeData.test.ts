@@ -151,6 +151,26 @@ describe('usePairingsModeData', () => {
 		expect(isEmpty.value).toBe(true);
 	});
 
+	it('stays empty while a re-read of an empty Round is in flight', async () => {
+		mutableConfig.roundId = 31;
+		mockFetch.mockResolvedValue(answer([]));
+		const { isEmpty } = makePairingsModeData();
+		await flushPromises();
+
+		let release!: () => void;
+		mockFetch.mockImplementationOnce(() => new Promise((resolve) => {
+			release = () => resolve(answer([]));
+		}));
+		deliver('melee:roundSynced', { roundId: 31 });
+		await flushPromises();
+		expect(mockFetch).toHaveBeenCalledTimes(2);
+		expect(isEmpty.value).toBe(true);
+
+		release();
+		await flushPromises();
+		expect(isEmpty.value).toBe(true);
+	});
+
 	it('re-reads when the selected Round changes', async () => {
 		mutableConfig.roundId = 31;
 		mockFetch.mockResolvedValue(answer([

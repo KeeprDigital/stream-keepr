@@ -132,7 +132,7 @@ export function useMetagameModeData() {
 	} = usePaginatedScreenMode({ mode: 'metagame', config, rows: pagedRows });
 
 	// ── Empty State ──
-	const isEmpty = computed(() => !loading.value && displayRows.value.length === 0);
+	const isEmpty = computed(() => freshness.answered.value && displayRows.value.length === 0);
 	// Read off the breakdown: an output holds no roster to count (#604).
 	const emptyMessage = computed(() => {
 		const fieldSize = config.value.viewMode === 'cards'

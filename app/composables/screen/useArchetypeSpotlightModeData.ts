@@ -75,7 +75,7 @@ export function useArchetypeSpotlightModeData() {
 	}
 
 	// Nothing to show until an Archetype is picked and has pilots in the scope.
-	const isEmpty = computed(() => !loading.value && (config.value.archetypeId == null || (spotlight.value != null && pilots.value.length === 0)));
+	const isEmpty = computed(() => freshness.answered.value && (config.value.archetypeId == null || (spotlight.value != null && pilots.value.length === 0)));
 
 	return {
 		config,

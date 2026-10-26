@@ -286,7 +286,11 @@ describe('playerService', () => {
 				deactivated: 0,
 			});
 			expect(getChain('insert').onConflictDoUpdate).toHaveBeenCalledWith(expect.objectContaining({
-				set: expect.objectContaining({ updatedAt: seenAt }),
+				set: expect.objectContaining({
+					isActive: expect.anything(),
+					lastSeenAt: expect.anything(),
+					updatedAt: expect.anything(),
+				}),
 			}));
 		});
 

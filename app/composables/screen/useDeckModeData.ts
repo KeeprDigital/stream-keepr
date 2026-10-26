@@ -375,10 +375,13 @@ export function useDeckModeData() {
 		pendingDeck.value = null;
 	}
 
+	/**
+	 * What program shows, and nothing else: no Player or Broadcast Deck List
+	 * revision. A Player's revision moves with their record on every Round sync,
+	 * and an identical deck must not cross-fade to itself.
+	 */
 	interface DeckDisplayInput {
 		source: LoadedDeckSource;
-		/** A Player's update timestamp or a Broadcast Deck List revision. */
-		sourceRevision: number | null;
 		primaryHeader: string;
 		secondaryHeader: string;
 		deckColors: string;
@@ -441,7 +444,6 @@ export function useDeckModeData() {
 		}));
 		return {
 			source: { type: 'player', playerId: player.id },
-			sourceRevision: deckSourceStamp(player.updatedAt),
 			primaryHeader: player.name,
 			secondaryHeader: deckResponse.name,
 			deckColors: deckResponse.colors,
@@ -479,7 +481,6 @@ export function useDeckModeData() {
 
 		return {
 			source: { type: 'broadcast', broadcastDeckListId: list.id },
-			sourceRevision: list.revision,
 			primaryHeader: list.name,
 			secondaryHeader: list.archetypeLabel ?? '',
 			deckColors: list.colors ?? '',

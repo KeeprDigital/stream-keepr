@@ -88,7 +88,7 @@ export function usePlayerHistoryModeData() {
 	const headerText = computed(() => config.value.headerText || (player.value
 		? `${player.value.name} Match History`
 		: 'Player Match History'));
-	const isEmpty = computed(() => !loading.value && (!config.value.playerId || rows.value.length === 0));
+	const isEmpty = computed(() => freshness.answered.value && (!config.value.playerId || rows.value.length === 0));
 	const emptyMessage = computed(() => !config.value.playerId
 		? 'Select a player to show match history.'
 		: 'No matches found for this player.');

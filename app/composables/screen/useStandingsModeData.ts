@@ -11,6 +11,17 @@ import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 
 /**
+ * Placed Players by position, unplaced ones last, ties by id: a total order, so
+ * a re-read cannot reorder (and with `animateEntries`, visibly move) rows that
+ * did not change, whatever order the read answers them in.
+ */
+function byStandingsPosition(a: Player, b: Player): number {
+	return Number(a.position == null) - Number(b.position == null)
+		|| (a.position ?? 0) - (b.position ?? 0)
+		|| a.id - b.id;
+}
+
+/**
  * The Event Data Standings are read from: the roster, the Round they are fixed
  * at and its snapshot, the watchlist they filter to, and, while the Position
  * Change column shows, the previous Round in the Event's Round order. Every
@@ -106,7 +117,7 @@ export function useStandingsModeData() {
 		const rows: Player[] = [...freshness.data.value.players];
 
 		if (!selectedRoundId) {
-			return rows;
+			return rows.sort(byStandingsPosition);
 		}
 
 		const snapshotMap = roundSnapshotMap.value;
@@ -131,7 +142,7 @@ export function useStandingsModeData() {
 				};
 			})
 			.filter((player): player is Player => player !== null)
-			.sort((a, b) => (a.position ?? Number.POSITIVE_INFINITY) - (b.position ?? Number.POSITIVE_INFINITY));
+			.sort(byStandingsPosition);
 	});
 
 	// ── Display Rows (view mode filtering + reveal logic) ──
@@ -235,7 +246,7 @@ export function useStandingsModeData() {
 	}
 
 	// ── Empty State ──
-	const isEmpty = computed(() => !loading.value && displayRows.value.length === 0);
+	const isEmpty = computed(() => freshness.answered.value && displayRows.value.length === 0);
 	const emptyMessage = computed(() => {
 		if (config.value.roundId) {
 			return 'No standings snapshot available for this round';

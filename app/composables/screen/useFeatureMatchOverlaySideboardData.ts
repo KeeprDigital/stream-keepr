@@ -19,12 +19,11 @@ interface SideRequest {
 interface SideboardSourceState {
 	sideboards: FeatureMatchOverlaySideboards;
 	/**
-	 * Per-side source identity: player, source-record freshness, the deck the
-	 * fetch actually resolved, and its sideboard — a resolved deck card rewrites
-	 * that without moving the Player's revision (#648). It is how a
-	 * still-degraded rebuild can tell "identical placeholder rendering, keep it"
-	 * from "the source changed mid-outage, swap it in" — the Deck Screen Mode's
-	 * rule (#465), held per side.
+	 * Per-side source identity: player, the deck the fetch actually resolved,
+	 * and its sideboard — a resolved deck card rewrites that without moving the
+	 * Player's revision (#648), and a Player's revision moves without it. It is
+	 * how a rebuild tells "identical rendering, keep it" from "the source
+	 * changed, swap it in" — the Deck Screen Mode's rule (#465), held per side.
 	 */
 	stamps: Record<PlayerSide, string | null>;
 }
@@ -72,7 +71,7 @@ function snapshotDeckId(match: FeatureMatch | null, playerId: number): number | 
  *
  * Fetch scoping: a side is fetched only while the composition holds at least
  * one `deck-list` item for it. No item, no fetch. Live-follow rides
- * `player:updated`: a revision other than the one on screen re-runs the load,
+ * `player:updated`: a revision other than the one last read re-runs the load,
  * as does a `playerDeck:cardsResolved` naming either side's Player.
  *
  * Deck selection ladder: the session snapshot's `deckId` first, because the
@@ -100,6 +99,8 @@ export function useFeatureMatchOverlaySideboardData(
 		sideboards: { player1: null, player2: null },
 		stamps: { player1: null, player2: null },
 	};
+	/** The Player revision each side last read, which `player:updated` is judged against. */
+	let readRevisions: Record<PlayerSide, number | null> = { player1: null, player2: null };
 
 	const requests = computed<Record<PlayerSide, SideRequest | null>>(() => {
 		const result: Record<PlayerSide, SideRequest | null> = { player1: null, player2: null };
@@ -117,6 +118,11 @@ export function useFeatureMatchOverlaySideboardData(
 		return result;
 	});
 
+	function showsSameSources(next: SideboardSourceState) {
+		return next.stamps.player1 === displayed.stamps.player1
+			&& next.stamps.player2 === displayed.stamps.player2;
+	}
+
 	/**
 	 * The reload-free recovery path (#465), shared cadence with the Deck Screen
 	 * Mode: a degraded rendering re-fetches itself every `DECK_CARD_DATA_REFETCH_MS`
@@ -128,9 +134,7 @@ export function useFeatureMatchOverlaySideboardData(
 		refetch: () => {
 			void load();
 		},
-		isUnchanged: next =>
-			next.stamps.player1 === displayed.stamps.player1
-			&& next.stamps.player2 === displayed.stamps.player2,
+		isUnchanged: next => showsSameSources(next),
 		report: (degraded) => {
 			if (cardDataHealth) {
 				cardDataHealth.value = degraded ? 'degraded' : 'complete';
@@ -140,20 +144,31 @@ export function useFeatureMatchOverlaySideboardData(
 
 	async function resolveSide(
 		request: SideRequest | null,
-	): Promise<{ cards: ReadonlyArray<GraphicsDeckListCard> | null; degraded: boolean; stamp: string | null }> {
-		if (!request)
-			return { cards: null, degraded: false, stamp: null };
+	): Promise<{ cards: ReadonlyArray<GraphicsDeckListCard> | null; degraded: boolean; stamp: string | null; revision: number | null }> {
+		if (!request) {
+			return {
+				cards: null,
+				degraded: false,
+				stamp: null,
+				revision: null,
+			};
+		}
 
 		// The Player and their decks come through the Screen (#604).
 		const read = await outputReads.playerDecks(request.playerId, request.deckId != null
 			? { deckId: request.deckId }
 			: {})
 			.catch(() => null);
-		if (!read)
-			return { cards: null, degraded: false, stamp: `${request.playerId}::none` };
-		const player = read.player;
+		if (!read) {
+			return {
+				cards: null,
+				degraded: false,
+				stamp: `${request.playerId}::none`,
+				revision: null,
+			};
+		}
 
-		const updatedAtMs = new Date(player.updatedAt).getTime();
+		const revision = new Date(read.player.updatedAt).getTime();
 		// A pinned deck the collection no longer holds falls back to the
 		// collection's own selection ladder rather than rendering nothing.
 		const deck = selectPlayerDeck(read.decks, request.deckId != null
@@ -162,8 +177,14 @@ export function useFeatureMatchOverlaySideboardData(
 		?? (request.deckId != null
 			? selectPlayerDeck(read.decks)
 			: null);
-		if (!deck)
-			return { cards: null, degraded: false, stamp: `${request.playerId}:${updatedAtMs}:none` };
+		if (!deck) {
+			return {
+				cards: null,
+				degraded: false,
+				stamp: `${request.playerId}:none`,
+				revision,
+			};
+		}
 
 		const sideboardCards = deck.cards
 			.filter(card => card.compartment === 'sideboard')
@@ -175,9 +196,15 @@ export function useFeatureMatchOverlaySideboardData(
 				cardType: card.cardType ?? '',
 				scryfallId: card.scryfallId,
 			}));
-		const stamp = `${request.playerId}:${updatedAtMs}:${deck.id}:${JSON.stringify(sideboardCards)}`;
-		if (sideboardCards.length === 0)
-			return { cards: [], degraded: false, stamp };
+		const stamp = `${request.playerId}:${deck.id}:${JSON.stringify(sideboardCards)}`;
+		if (sideboardCards.length === 0) {
+			return {
+				cards: [],
+				degraded: false,
+				stamp,
+				revision,
+			};
+		}
 
 		const { cards: cardDataMap, degraded } = await fetchScryfallCards(
 			sideboardCards.map(card => ({ name: card.name, scryfallId: card.scryfallId })),
@@ -193,6 +220,7 @@ export function useFeatureMatchOverlaySideboardData(
 			})),
 			degraded,
 			stamp,
+			revision,
 		};
 	}
 
@@ -209,6 +237,7 @@ export function useFeatureMatchOverlaySideboardData(
 				sideboards: { player1: null, player2: null },
 				stamps: { player1: null, player2: null },
 			};
+			readRevisions = { player1: null, player2: null };
 			sideboards.value = displayed.sideboards;
 			return;
 		}
@@ -221,17 +250,22 @@ export function useFeatureMatchOverlaySideboardData(
 			if (flight.stale)
 				return;
 
+			readRevisions = { player1: player1.revision, player2: player2.revision };
 			const next: SideboardSourceState = {
 				sideboards: { player1: player1.cards, player2: player2.cards },
 				stamps: { player1: player1.stamp, player2: player2.stamp },
 			};
 
 			// A still-degraded re-fetch of unchanged sources has nothing better to
-			// show than the identical placeholder rendering already up (#465).
-			if (degradedRefetch.completeLoad(player1.degraded || player2.degraded, next) !== 'keep') {
-				displayed = next;
-				sideboards.value = next.sideboards;
-			}
+			// show than the identical placeholder rendering already up (#465), and
+			// a complete one of unchanged sources has nothing new to show unless
+			// it recovers a degraded rendering.
+			const wasDegraded = degradedRefetch.degraded.value;
+			const outcome = degradedRefetch.completeLoad(player1.degraded || player2.degraded, next);
+			if (outcome === 'keep' || (!wasDegraded && showsSameSources(next)))
+				return;
+			displayed = next;
+			sideboards.value = next.sideboards;
 		}
 		catch (err) {
 			console.error('Failed to load Feature Match Overlay sideboard data:', err);
@@ -266,7 +300,7 @@ export function useFeatureMatchOverlaySideboardData(
 
 	/**
 	 * Live-follow of both sides: a `player:updated` whose revision differs from
-	 * the one on screen re-reads, including one announced while a read is still in
+	 * the one last read re-reads, including one announced while a read is still in
 	 * flight, and so does a resolved deck card of either side's Player (#648).
 	 * Heard on the Event channel itself, because an output holds no roster for the
 	 * message to replace a record in (#604).
@@ -282,7 +316,7 @@ export function useFeatureMatchOverlaySideboardData(
 			for (const side of PLAYER_SIDES) {
 				if (requests.value[side]?.playerId !== player.id)
 					continue;
-				if (String(new Date(player.updatedAt).getTime()) !== displayed.stamps[side]?.split(':')[1]) {
+				if (new Date(player.updatedAt).getTime() !== readRevisions[side]) {
 					void load();
 					return;
 				}

@@ -92,7 +92,7 @@ export function useHeadToHeadModeData() {
 
 	const headerText = computed(() => config.value.headerText || 'Head to Head');
 	/** Neither side holds a Player: nothing is selected, or the Slot seats no one. */
-	const isEmpty = computed(() => !loading.value && !player1.value && !player2.value);
+	const isEmpty = computed(() => freshness.answered.value && !player1.value && !player2.value);
 	/** Both Players are known and have not met at this Event before. */
 	const firstMeeting = computed(() => !!player1.value && !!player2.value && earlierMatches.value.length === 0);
 

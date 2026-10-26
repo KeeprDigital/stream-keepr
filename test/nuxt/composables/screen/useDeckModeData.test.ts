@@ -1026,6 +1026,9 @@ describe('useDeckModeData', () => {
 			// The operator edits the deck mid-outage: the rebuild carries new cards
 			// and must reach program even though its card data is still degraded.
 			updatedAt = '2026-08-21T01:00:00.000Z';
+			mockReadDeck.mockResolvedValue(createDeckResponse([
+				createDeckCard({ name: 'Brainstorm' }),
+			]));
 			playerUpdatedHandler()!({
 				eventId: 1,
 				player: { id: 5, name: 'Alice', updatedAt },
@@ -1259,6 +1262,26 @@ describe('useDeckModeData', () => {
 			});
 			await flushPromises();
 			expect(mockPlayerDecks).toHaveBeenCalledTimes(3);
+		});
+
+		it('keeps an unchanged deck on program when only the Player revision moved', async () => {
+			// A Round sync refreshes Players, so their record moves their revision
+			// while their Deck List stays as it was.
+			mockReadDeck.mockImplementation(async () =>
+				createDeckResponse([
+					createDeckCard({ name: 'Counterspell' }),
+				]));
+			mockPlayerId.value = 5;
+			const result = mountDeckModeData();
+			await flushPromises();
+
+			serverPlayer = { ...serverPlayer, updatedAt: AFTER_EDIT };
+			deliver('melee:playersSynced', { playerCount: 1 });
+			await flushPromises();
+
+			expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
+			expect(result.pendingSwapVersion.value).toBe(0);
+			expect(result.displayedDeckVersion.value).toBe(1);
 		});
 
 		describe('a resolved deck card, which moves no Player revision (#648)', () => {

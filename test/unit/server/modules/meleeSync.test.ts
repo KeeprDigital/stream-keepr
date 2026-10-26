@@ -339,6 +339,28 @@ describe('melee Sync server module', () => {
 		}, 'origin-1');
 	});
 
+	it('announces no Players change when the sync changed no Player', async () => {
+		mockRequireMeleeService.mockReturnValue({
+			fetchEvent: vi.fn().mockResolvedValue({ Name: 'Melee Event', Game: 'Magic: The Gathering', Phases: [] }),
+			fetchMergedPlayers: vi.fn().mockResolvedValue([
+				createMeleePlayer(),
+			]),
+		});
+		mockPlayerService.reconcileMeleeSnapshot.mockResolvedValue({
+			players: [
+				{ id: 10, externalId: 'player-1' },
+			],
+			created: 0,
+			updated: 0,
+			deactivated: 0,
+		});
+
+		const result = await meleeSyncModule().syncPlayers(requestEvent, 1);
+
+		expect(result.success).toBe(true);
+		expect(mockPublishMessage).not.toHaveBeenCalledWith(1, 'melee:playersSynced', expect.anything(), expect.anything());
+	});
+
 	it('reports Melee players deactivated by authoritative snapshot reconciliation', async () => {
 		mockRequireMeleeService.mockReturnValue({
 			fetchEvent: vi.fn().mockResolvedValue({ Name: 'Melee Event', Game: 'Magic: The Gathering', Phases: [] }),
@@ -602,6 +624,15 @@ describe('melee Sync server module', () => {
 			updated: 1,
 			staleDeleted: 0,
 			warnings: ['A player deck could not be selected'],
+		});
+		// The Round command's Players refresh changed a record, so it announces first.
+		mockPlayerService.reconcileMeleeSnapshot.mockResolvedValue({
+			players: [
+				{ id: 10, externalId: 'player-1' },
+			],
+			created: 0,
+			updated: 1,
+			deactivated: 0,
 		});
 		mockPublishMessage
 			.mockResolvedValueOnce(undefined)
