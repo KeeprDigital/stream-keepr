@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
+import Display from '~/components/Screen/Modes/Card/Display.vue';
 
 const displayConfig = ref<any>({ scale: 1, animationEnabled: true, animationSpeed: 'normal' });
 const screenId = ref<number | null>(5);
@@ -22,9 +23,6 @@ const CardDisplayStub = defineComponent({
 });
 
 async function mountComponent() {
-	const componentPath = '../../../../../../app/components/Screen/Modes/Card/Display.vue';
-	const { default: Display } = await import(componentPath);
-
 	// ScreenModeBase is deliberately left real so the empty/error cases assert the
 	// broadcast contract itself: those states render nothing at all.
 	return mount(Display, {

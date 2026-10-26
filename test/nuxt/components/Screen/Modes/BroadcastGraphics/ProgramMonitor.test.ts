@@ -10,6 +10,7 @@ import {
 	broadcastGraphicRenderedInputs,
 	createInitialBroadcastGraphicsLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
+import ProgramMonitor from '~/components/Screen/Modes/BroadcastGraphics/ProgramMonitor.vue';
 
 enableAutoUnmount(afterEach);
 
@@ -129,9 +130,6 @@ async function mountComponent(
 	graphics: BroadcastGraphicConfig[] = [lowerThird, slate],
 	compact = false,
 ) {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/ProgramMonitor.vue';
-	const { default: ProgramMonitor } = await import(componentPath);
-
 	const wrapper = mount(ProgramMonitor, {
 		props: {
 			eventId: 7,

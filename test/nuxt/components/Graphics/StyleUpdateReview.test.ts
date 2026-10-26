@@ -5,6 +5,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { transportFailure } from '~~/test/helpers/transportFailure';
+import StyleUpdateReview from '~/components/Graphics/StyleUpdateReview.vue';
 
 /**
  * The reviewed Graphic Style Set update, as the author of one template meets it.
@@ -109,9 +110,6 @@ function review(overrides: Partial<GraphicStyleUpdateReview> = {}): GraphicStyle
 }
 
 async function mountReview(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../app/components/Graphics/StyleUpdateReview.vue';
-	const { default: StyleUpdateReview } = await import(componentPath);
-
 	const wrapper = mount(StyleUpdateReview, {
 		props: {
 			template: template(),

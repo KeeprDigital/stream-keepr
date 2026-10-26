@@ -1,8 +1,10 @@
+import type { Game } from '~~/shared/types/enums';
 import type { BroadcastGraphicConfig, GraphicInputDeclaration } from '~~/shared/types/graphics';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
+import Bindings from '~/components/Graphics/Compositor/Bindings.vue';
 
 enableAutoUnmount(afterEach);
 
@@ -94,12 +96,9 @@ const GRAPHIC_SELECTED: GraphicsSelectionTarget = { type: 'graphic', graphicId: 
 async function mountComponent(options: {
 	graphics: BroadcastGraphicConfig[];
 	selectedTarget?: GraphicsSelectionTarget;
-	game?: string;
+	game?: Game;
 	writable?: boolean;
 }) {
-	const componentPath = '../../../../../app/components/Graphics/Compositor/Bindings.vue';
-	const { default: Bindings } = await import(componentPath);
-
 	return mount(Bindings, {
 		props: {
 			graphics: options.graphics,

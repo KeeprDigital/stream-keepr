@@ -5,6 +5,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import PreviewOutputAside from '~/components/Screen/Modes/FeatureMatchOverlay/PreviewOutputAside.vue';
 import { GRAPHICS_PREVIEW_READY_MESSAGE } from '~/modules/graphics/previewMessages';
 
 const mockCopyToClipboard = vi.fn();
@@ -57,8 +58,6 @@ async function mountComponent(props: {
 	canvasWidth?: number;
 	canvasHeight?: number;
 } = {}) {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/PreviewOutputAside.vue';
-	const { default: PreviewOutputAside } = await import(componentPath);
 	return mount(PreviewOutputAside, {
 		props: {
 			eventId: 1,

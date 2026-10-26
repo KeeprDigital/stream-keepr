@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { nextTick } from 'vue';
 import { SUPPORTED_SOCIAL_NETWORKS } from '~~/shared/socialProfiles';
 import { init as initClientIconBundle } from '#build/nuxt-icon-client-bundle';
+import Item from '~/components/Graphics/Compositor/Item.vue';
 
 enableAutoUnmount(afterEach);
 initClientIconBundle(addIcon);
@@ -28,9 +29,6 @@ function lifeDescriptor(text: string, animation: PlayerLifeAnimation = 'glow'): 
 }
 
 async function mountItem(render: GraphicItemRenderDescriptor) {
-	const componentPath = '../../../../../app/components/Graphics/Compositor/Item.vue';
-	const { default: Item } = await import(componentPath);
-
 	return mount(Item, {
 		props: { render },
 	});

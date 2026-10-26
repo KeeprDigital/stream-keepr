@@ -5,6 +5,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
 import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
+import ConfigTalents from '~/components/Event/ConfigTalents.vue';
 
 function talent(id: number, name: string, socialProfiles: Talent['socialProfiles'] = {}): Talent {
 	return {
@@ -125,14 +126,12 @@ const stubs = {
 
 enableAutoUnmount(afterEach);
 
-const componentPath = '../../../../app/components/Event/ConfigTalents.vue';
 const mountOptions = {
 	attachTo: document.body,
 	global: { stubs },
 };
 
 async function mountComponent(talents: Talent[]) {
-	const { default: ConfigTalents } = await import(componentPath);
 	return mount(ConfigTalents, {
 		...mountOptions,
 		props: { talents },
@@ -142,7 +141,6 @@ async function mountComponent(talents: Talent[]) {
 type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
 
 async function mountUnderGuard(talents: Talent[]) {
-	const { default: ConfigTalents } = await import(componentPath);
 	return mountUnderPageGuard<Wrapper>(ConfigTalents, {
 		...mountOptions,
 		props: { talents },

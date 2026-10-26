@@ -4,6 +4,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import Settings from '~/components/Screen/Modes/FeatureMatchOverlay/Settings.vue';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 
 enableAutoUnmount(afterEach);
@@ -165,9 +166,6 @@ const UButtonStub = defineComponent({
 });
 
 async function mountComponent(screen: Partial<Screen> = {}) {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/Settings.vue';
-	const { default: Settings } = await import(componentPath);
-
 	return mount(Settings, {
 		props: {
 			screen: {

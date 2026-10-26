@@ -1,23 +1,19 @@
 import type { ArchetypeBreakdownEntry } from '~~/shared/types/metagame';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import { defineComponent } from 'vue';
-
-const THEME_KEY = Symbol('theme');
-
-const VChartStub = defineComponent({
-	name: 'VChart',
-	props: {
-		option: { type: Object, required: true },
-		autoresize: { type: Boolean, required: false },
-	},
-	emits: ['click'],
-	template: '<div class="v-chart-stub" @click="$emit(\'click\', { componentType: \'series\', name: \'Mono Red\' })" />',
-});
+import MetagameArchetypeBarChart from '~/components/Metagame/ArchetypeBarChart.vue';
 
 vi.mock('vue-echarts', () => ({
-	THEME_KEY,
-	default: VChartStub,
+	THEME_KEY: Symbol('theme'),
+	default: {
+		name: 'VChart',
+		props: {
+			option: { type: Object, required: true },
+			autoresize: { type: Boolean, required: false },
+		},
+		emits: ['click'],
+		template: '<div @click="$emit(\'click\', { componentType: \'series\', name: \'Mono Red\' })" />',
+	},
 }));
 
 function makeEntry(overrides: Partial<ArchetypeBreakdownEntry> = {}): ArchetypeBreakdownEntry {
@@ -36,9 +32,6 @@ function makeEntry(overrides: Partial<ArchetypeBreakdownEntry> = {}): ArchetypeB
 }
 
 async function mountComponent(entries: ArchetypeBreakdownEntry[], loading = false) {
-	const componentPath = '../../../../app/components/Metagame/ArchetypeBarChart.vue';
-	const { default: MetagameArchetypeBarChart } = await import(componentPath);
-
 	return mount(MetagameArchetypeBarChart, {
 		props: {
 			entries,
@@ -66,10 +59,9 @@ describe('metagameArchetypeBarChart', () => {
 			}),
 		], true);
 
-		expect(wrapper.findComponent(VChartStub).exists()).toBe(true);
 		expect(wrapper.find('[data-testid="archetype-bar-chart-loading-overlay"]').exists()).toBe(true);
 
-		await wrapper.getComponent(VChartStub).trigger('click');
+		await wrapper.getComponent({ name: 'VChart' }).trigger('click');
 
 		expect(wrapper.emitted('select')).toEqual([
 			['Mono Red'],

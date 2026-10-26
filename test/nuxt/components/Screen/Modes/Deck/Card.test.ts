@@ -1,6 +1,7 @@
 import type { DeckListCardWithData } from '~/types/card/deckList';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
+import Card from '~/components/Screen/Modes/Deck/Card.vue';
 
 function createCard(overrides: Partial<DeckListCardWithData> = {}): DeckListCardWithData {
 	return {
@@ -16,9 +17,6 @@ function createCard(overrides: Partial<DeckListCardWithData> = {}): DeckListCard
 }
 
 async function mountComponent(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../../../app/components/Screen/Modes/Deck/Card.vue';
-	const { default: Card } = await import(componentPath);
-
 	return mount(Card, {
 		props: {
 			card: createCard(),

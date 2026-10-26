@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, ref } from 'vue';
+import Display from '~/components/Screen/Modes/Pairings/Display.vue';
 
 vi.mock('@vueuse/core', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('@vueuse/core')>();
@@ -58,9 +59,6 @@ function pairingRow(overrides: Record<string, unknown> = {}) {
 }
 
 async function mountComponent() {
-	const componentPath = '../../../../../../app/components/Screen/Modes/Pairings/Display.vue';
-	const { default: Display } = await import(componentPath);
-
 	// ScreenModeBase is left real so the empty case asserts the broadcast
 	// contract itself: that state renders nothing at all.
 	return mount(Display);

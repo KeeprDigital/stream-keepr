@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
+import Settings from '~/components/Screen/ModeBackgroundLayersSettings.vue';
 import { createMockScreen } from '../../../helpers/fixtures';
 
 const config = ref<Partial<ModeConfigTypeMap['metagame']>>({});
@@ -26,9 +27,6 @@ const EditorStub = defineComponent({
 });
 
 async function mountComponent() {
-	const componentPath = '../../../../app/components/Screen/ModeBackgroundLayersSettings.vue';
-	const { default: Settings } = await import(componentPath);
-
 	return mount(Settings, {
 		props: {
 			screen: createMockScreen({ currentMode: 'metagame' }),

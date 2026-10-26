@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive, ref } from 'vue';
 import { createMockFeatureMatch } from '~~/test/helpers/fixtures';
 import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
+import FeatureMatchPanel from '~/components/FeatureMatch/Panel.vue';
 
 const mockFeatureMatchStore = reactive({
 	error: null as string | null,
@@ -144,8 +145,6 @@ const PlayerFormStub = defineComponent({
 	template: '<form :id="formId" data-testid="player-form" @submit.prevent="$emit(\'submit\')"></form>',
 });
 
-const componentPath = '../../../../app/components/FeatureMatch/' + 'Panel.vue';
-
 /** A fresh match per mount, so nothing one test edits reaches the next. */
 function mountProps(overrides: Record<string, unknown> = {}) {
 	return {
@@ -170,8 +169,6 @@ const mountOptions = {
 };
 
 async function mountComponent(overrides: Record<string, unknown> = {}) {
-	const { default: FeatureMatchPanel } = await import(componentPath);
-
 	return mount(FeatureMatchPanel, {
 		...mountOptions,
 		props: mountProps(overrides),
@@ -187,8 +184,6 @@ type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
  * invisible from a bare mount.
  */
 async function mountUnderGuard(props = mountProps()) {
-	const { default: FeatureMatchPanel } = await import(componentPath);
-
 	return mountUnderPageGuard<Wrapper>(FeatureMatchPanel, { ...mountOptions, props });
 }
 

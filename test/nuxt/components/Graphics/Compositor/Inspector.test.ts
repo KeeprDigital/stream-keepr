@@ -27,6 +27,7 @@ import {
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
 import { MAX_GRAPHIC_TEXT_LENGTH } from '~~/shared/types/graphics';
+import Inspector from '~/components/Graphics/Compositor/Inspector.vue';
 
 enableAutoUnmount(afterEach);
 // The Geometry Unit is remembered per browser; no test inherits another's choice.
@@ -249,9 +250,6 @@ async function mountComponent(options: {
 	/** The published Graphic Style Set this composition authors against, if any. */
 	styleSet?: GraphicStyleAuthoringContext;
 }) {
-	const componentPath = '../../../../../app/components/Graphics/Compositor/Inspector.vue';
-	const { default: Inspector } = await import(componentPath);
-
 	return mount(Inspector, {
 		props: {
 			graphics: options.graphics,

@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import Settings from '~/components/Screen/Modes/TopCards/Settings.vue';
 import { eventDataResync } from '~/modules/event-data/resync';
 
 const mockPlayerStore = {
@@ -153,9 +154,6 @@ function numberInput(wrapper: Awaited<ReturnType<typeof mountComponent>>, label:
 }
 
 async function mountComponent() {
-	const componentPath = '../../../../../../app/components/Screen/Modes/TopCards/Settings.vue';
-	const { default: Settings } = await import(componentPath);
-
 	const wrapper = mount(Settings, {
 		props: {
 			// Saved as edited: the Screen reads through its saved configuration.

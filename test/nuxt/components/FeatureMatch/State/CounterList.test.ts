@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
+import CounterList from '~/components/FeatureMatch/State/CounterList.vue';
 
 const mockPlayerControls = {
 	updateCounters: vi.fn(),
@@ -29,9 +30,6 @@ const UButtonStub = defineComponent({
 });
 
 async function mountComponent(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../../app/components/FeatureMatch/State/' + 'CounterList.vue';
-	const { default: CounterList } = await import(componentPath);
-
 	return mount(CounterList, {
 		props: {
 			matchId: 1,

@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import RealtimeStatus from '~/components/UI/RealtimeStatus.vue';
 
 const UPopoverStub = defineComponent({
 	template: '<div><slot /><slot name="content" /></div>',
@@ -25,9 +26,6 @@ mockNuxtImport('tryUseRealtime', () => () => ({
 }));
 
 async function mountStatus() {
-	const componentPath = '../../../../app/components/UI/RealtimeStatus.vue';
-	const { default: RealtimeStatus } = await import(componentPath);
-
 	return mount(RealtimeStatus, {
 		global: {
 			stubs: { UPopover: UPopoverStub, UIcon: UIconStub },

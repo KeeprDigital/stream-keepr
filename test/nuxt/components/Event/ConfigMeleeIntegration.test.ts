@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive } from 'vue';
 import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
 import { transportFailure } from '~~/test/helpers/transportFailure';
+import ConfigMeleeIntegration from '~/components/Event/ConfigMeleeIntegration.vue';
 
 const mockEventStore = reactive({
 	event: {
@@ -110,8 +111,6 @@ const USwitchStub = defineComponent({
 	template: '<input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)">',
 });
 
-const componentPath = '../../../../app/components/Event/ConfigMeleeIntegration.vue';
-
 // A detached button has no activation behaviour, so pressing a submit button
 // only submits its form once the tree is in the document.
 const mountOptions = {
@@ -137,8 +136,6 @@ const mountOptions = {
 enableAutoUnmount(afterEach);
 
 async function mountComponent() {
-	const { default: ConfigMeleeIntegration } = await import(componentPath);
-
 	return mount(ConfigMeleeIntegration, mountOptions);
 }
 
@@ -150,8 +147,6 @@ type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
  * harness for why the registration is invisible from a bare mount.
  */
 async function mountUnderGuard() {
-	const { default: ConfigMeleeIntegration } = await import(componentPath);
-
 	return mountUnderPageGuard<Wrapper>(ConfigMeleeIntegration, mountOptions);
 }
 

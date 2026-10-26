@@ -21,6 +21,7 @@ import {
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { addGraphicGroupChild, addGraphicItem, DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
 import { GRAPHIC_ANIMATION_REPEAT_INDEFINITE } from '~~/shared/types/graphics';
+import Display from '~/components/Screen/Modes/BroadcastGraphics/Display.vue';
 import { GRAPHICS_PREVIEW_READY_MESSAGE, GRAPHICS_PREVIEW_STATE_MESSAGE } from '~/modules/graphics/previewMessages';
 
 enableAutoUnmount(afterEach);
@@ -438,9 +439,6 @@ const AnimationSurfaceStub = defineComponent({
 });
 
 async function mountComponent() {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/Display.vue';
-	const { default: Display } = await import(componentPath);
-
 	return mount(Display, {
 		global: {
 			stubs: { ScreenAnimationEffectSurface: AnimationSurfaceStub },

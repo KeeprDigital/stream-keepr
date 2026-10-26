@@ -23,6 +23,7 @@ import {
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { createEmptyGraphicBindingDataSet } from '~~/shared/modules/graphics';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import LiveWorkspace from '~/components/Screen/Modes/BroadcastGraphics/LiveWorkspace.vue';
 
 enableAutoUnmount(afterEach);
 
@@ -260,9 +261,6 @@ async function mountComponent(
 	selectedGraphicId: string | null = null,
 	channels: GraphicChannelConfig[] = [],
 ) {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/LiveWorkspace.vue';
-	const { default: LiveWorkspace } = await import(componentPath);
-
 	const wrapper = mount(LiveWorkspace, {
 		props: {
 			eventId: 7,

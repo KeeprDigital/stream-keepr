@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive } from 'vue';
 import { createMockEvent, createMockTalent } from '~~/test/helpers/fixtures';
 import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
+import Controls from '~/components/Event/Controls.vue';
 
 const ALICE = createMockTalent({ id: 11, name: 'Alice' });
 const BRIONY = createMockTalent({ id: 12, name: 'Briony' });
@@ -112,8 +113,6 @@ const UButtonStub = defineComponent({
 	template: '<button :type="type" :data-label="label" :disabled="disabled" :data-loading="loading" @click="$emit(\'click\')"><slot>{{ label }}</slot></button>',
 });
 
-const componentPath = '../../../../app/components/Event/Controls.vue';
-
 const stubs = {
 	UForm: UFormStub,
 	UCard: UCardStub,
@@ -133,8 +132,6 @@ const mountOptions = {
 enableAutoUnmount(afterEach);
 
 async function mountComponent() {
-	const { default: Controls } = await import(componentPath);
-
 	return mount(Controls, mountOptions);
 }
 
@@ -146,8 +143,6 @@ type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
  * why the registration is invisible from a bare mount.
  */
 async function mountUnderGuard() {
-	const { default: Controls } = await import(componentPath);
-
 	return mountUnderPageGuard<Wrapper>(Controls, mountOptions);
 }
 

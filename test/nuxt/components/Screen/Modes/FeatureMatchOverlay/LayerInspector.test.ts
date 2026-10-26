@@ -1,8 +1,11 @@
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
+import type { FeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import LayerInspector from '~/components/Screen/Modes/FeatureMatchOverlay/LayerInspector.vue';
 
 /**
  * The host-owned half of the Feature Match Overlay property panel: the Frame and
@@ -63,12 +66,10 @@ const GeometryFieldsStub = defineComponent({
 
 async function mountComponent(overrides: Partial<{
 	config: FeatureMatchOverlayModeConfig;
-	selectedTarget: { type: 'canvas' | 'source'; itemId?: string };
-	updateConfig: ReturnType<typeof vi.fn>;
+	selectedTarget: FeatureMatchOverlaySelectionTarget;
+	updateConfig: FeatureMatchOverlayConfigUpdater;
 }> = {}) {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/LayerInspector.vue';
-	const { default: LayerInspector } = await import(componentPath);
-	const updateConfig = overrides.updateConfig ?? vi.fn();
+	const updateConfig = overrides.updateConfig ?? vi.fn<FeatureMatchOverlayConfigUpdater>();
 
 	return mount(LayerInspector, {
 		props: {

@@ -10,6 +10,7 @@ import {
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
 import ReorderControls from '~/components/Graphics/Compositor/ReorderControls.vue';
+import StackTree from '~/components/Graphics/Compositor/StackTree.vue';
 
 enableAutoUnmount(afterEach);
 
@@ -50,9 +51,6 @@ async function mountComponent(options: {
 	contract?: GraphicsHostContract;
 	slots?: Record<string, unknown>;
 }) {
-	const componentPath = '../../../../../app/components/Graphics/Compositor/StackTree.vue';
-	const { default: StackTree } = await import(componentPath);
-
 	return mount(StackTree, {
 		props: {
 			graphics: options.graphics,

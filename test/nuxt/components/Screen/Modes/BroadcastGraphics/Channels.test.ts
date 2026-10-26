@@ -2,6 +2,7 @@ import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/typ
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
+import Channels from '~/components/Screen/Modes/BroadcastGraphics/Channels.vue';
 
 enableAutoUnmount(afterEach);
 
@@ -60,9 +61,6 @@ async function mountPanel(props: {
 	channels?: GraphicChannelConfig[];
 	writable?: boolean;
 } = {}) {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/Channels.vue';
-	const { default: Channels } = await import(componentPath);
-
 	const wrapper = mount(Channels, {
 		props: {
 			graphics: [lowerThirdA, lowerThirdB],

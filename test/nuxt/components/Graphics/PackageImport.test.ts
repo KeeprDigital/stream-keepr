@@ -1,6 +1,7 @@
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
+import PackageImport from '~/components/Graphics/PackageImport.vue';
 
 /**
  * The package-import surface the three graphics libraries share.
@@ -25,9 +26,6 @@ const UButtonStub = defineComponent({
 });
 
 async function mountImport(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../app/components/Graphics/PackageImport.vue';
-	const { default: PackageImport } = await import(componentPath);
-
 	return mount(PackageImport, {
 		props: {
 			kind: 'skgraphic',

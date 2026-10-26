@@ -5,6 +5,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { transportFailure } from '~~/test/helpers/transportFailure';
+import TemplateLibrary from '~/components/Graphics/BroadcastGraphicTemplateLibrary.vue';
 
 enableAutoUnmount(afterEach);
 
@@ -139,9 +140,6 @@ async function chooseImportFile(wrapper: { get: (selector: string) => any }) {
 }
 
 async function mountLibrary(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../app/components/Graphics/BroadcastGraphicTemplateLibrary.vue';
-	const { default: TemplateLibrary } = await import(componentPath);
-
 	const wrapper = mount(TemplateLibrary, {
 		props: {
 			eventId: 7,

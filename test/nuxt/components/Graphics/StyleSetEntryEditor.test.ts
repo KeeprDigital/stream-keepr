@@ -4,6 +4,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
+import StyleSetEntryEditor from '~/components/Graphics/StyleSetEntryEditor.vue';
 
 /**
  * The value controls for one Graphic Style Set entry.
@@ -136,9 +137,6 @@ const TYPOGRAPHY: GraphicStyleSetEntry = {
 };
 
 async function mountEditor(entry: GraphicStyleSetEntry, props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../app/components/Graphics/StyleSetEntryEditor.vue';
-	const { default: StyleSetEntryEditor } = await import(componentPath);
-
 	return mount(StyleSetEntryEditor, {
 		props: {
 			entry,

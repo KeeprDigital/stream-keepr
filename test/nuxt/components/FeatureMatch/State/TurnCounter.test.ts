@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
+import TurnCounter from '~/components/FeatureMatch/State/TurnCounter.vue';
 
 const UButtonStub = defineComponent({
 	props: {
@@ -13,9 +14,6 @@ const UButtonStub = defineComponent({
 });
 
 async function mountComponent(props: Record<string, unknown>) {
-	const componentPath = '../../../../../app/components/FeatureMatch/State/' + 'TurnCounter.vue';
-	const { default: TurnCounter } = await import(componentPath);
-
 	return mount(TurnCounter, {
 		props,
 		global: {

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { createMockEvent } from '~~/test/helpers/fixtures';
 import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
+import ConfigFormatSettings from '~/components/Event/ConfigFormatSettings.vue';
 
 // The page guard reaches for the overlay and the router when it installs itself.
 // What it does with them is its own composable's test; here they only have to
@@ -111,8 +112,6 @@ const UButtonStub = defineComponent({
 	template: '<button :type="type" :data-label="label" :disabled="disabled" :data-loading="loading" @click="$emit(\'click\')"><slot>{{ label }}</slot></button>',
 });
 
-const componentPath = '../../../../app/components/Event/ConfigFormatSettings.vue';
-
 const stubs = {
 	UForm: UFormStub,
 	UCard: UCardStub,
@@ -134,8 +133,6 @@ const mountOptions = {
 enableAutoUnmount(afterEach);
 
 async function mountComponent(event: Event = configEvent()) {
-	const { default: ConfigFormatSettings } = await import(componentPath);
-
 	return mount(ConfigFormatSettings, {
 		...mountOptions,
 		props: { event },
@@ -150,8 +147,6 @@ type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
  * why the registration is invisible from a bare mount.
  */
 async function mountUnderGuard(event: Event = configEvent()) {
-	const { default: ConfigFormatSettings } = await import(componentPath);
-
 	return mountUnderPageGuard<Wrapper>(ConfigFormatSettings, {
 		...mountOptions,
 		props: { event },

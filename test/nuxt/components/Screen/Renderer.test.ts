@@ -1,301 +1,147 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { createMockScreen } from '~~/test/helpers/fixtures';
+import Renderer from '~/components/Screen/Renderer.vue';
 
-const getScreenModeDefinition = vi.fn();
-const resolveScreenModeHost = vi.fn();
+// The host policy itself is `resolveScreenModeHost`'s own test
+// (test/nuxt/app/modules/screenModeHost.test.ts); here it only has to answer.
+const { resolveScreenModeHost } = vi.hoisted(() => ({
+	resolveScreenModeHost: vi.fn(),
+}));
 
 vi.mock('~/modules/screen-mode', () => ({
-	getScreenModeDefinition,
+	getScreenModeDefinition: (mode: string) => ({
+		mode,
+		displayComponent: { template: '<div data-testid="display" />' },
+	}),
 	resolveScreenModeHost,
 }));
 
 const overlayContainer = ref<HTMLElement | null>(null);
-const preferredDark = ref(false);
-const isPreview = ref(false);
-const outputMode = ref<'overlay' | 'fill' | 'key'>('overlay');
-const screen = ref(createMockScreen({
-	currentMode: 'card',
-	screenConfig: null,
-}) as any);
-
-vi.mock('@vueuse/core', async (importOriginal) => {
-	const mod = await importOriginal<typeof import('@vueuse/core')>();
-	return {
-		...mod,
-		usePreferredDark: () => preferredDark,
-	};
-});
+const screen = ref();
 
 mockNuxtImport('useScreenContext', () => () => ({
 	screen,
 	eventId: computed(() => 1),
 	interactive: ref(false),
 	overlayContainer,
-	isPreview,
-	outputMode,
+	isPreview: ref(false),
+	outputMode: ref('overlay'),
 }));
 
-const DisplayStub = defineComponent({
-	template: '<div data-testid="display-stub" />',
-});
+const colorLayer = {
+	id: 'wash',
+	type: 'color',
+	color: '#101010',
+	enabled: true,
+	opacity: 1,
+};
 
-const BackgroundLayerStackStub = defineComponent({
-	props: {
-		layers: { type: Array, required: true },
-	},
-	template: '<div data-testid="mode-background-stack" :data-layer-count="layers.length" />',
-});
-
-async function mountComponent() {
-	const componentPath = '../../../../app/components/Screen/Renderer.vue';
-	const { default: Renderer } = await import(componentPath);
-
+function mountRenderer() {
 	return mount(Renderer, {
 		global: {
 			stubs: {
-				ScreenBackgroundLayerStack: BackgroundLayerStackStub,
+				ScreenBackgroundLayerStack: {
+					props: ['layers'],
+					template: '<div data-testid="mode-background-stack" :data-layer-count="layers.length" />',
+				},
 			},
 		},
+	});
+}
+
+function hostReturning(provideOverlayContainer: boolean) {
+	resolveScreenModeHost.mockReturnValue({
+		containerClass: 'host-container',
+		containerStyle: { padding: '24px 48px' },
+		wrapperClass: ['host-wrapper'],
+		wrapperStyle: {},
+		provideOverlayContainer,
 	});
 }
 
 describe('screenRenderer', () => {
 	beforeEach(() => {
 		overlayContainer.value = null;
-		preferredDark.value = false;
-		isPreview.value = false;
-		outputMode.value = 'overlay';
-		getScreenModeDefinition.mockReset();
-		resolveScreenModeHost.mockReset();
-		getScreenModeDefinition.mockImplementation(mode => ({
-			mode,
-			displayType: mode === 'feature-match'
-				? 'control'
-				: 'overlay',
-			displayComponent: DisplayStub,
-		}));
-		resolveScreenModeHost.mockImplementation(({ mode, screenConfig }) => {
-			if (mode === 'feature-match') {
-				const paddingX = screenConfig.paddingX ?? 0;
-				const paddingY = screenConfig.paddingY ?? 0;
-
-				return {
-					kind: 'control',
-					containerClass: 'screen-control-renderer w-full h-full overflow-hidden',
-					containerStyle: {
-						padding: `${paddingY}px ${paddingX}px`,
-					},
-					wrapperClass: [],
-					wrapperStyle: {},
-					provideOverlayContainer: false,
-				};
-			}
-
-			const paddingX = mode === 'feature-match-overlay'
-				? 0
-				: (screenConfig.paddingX ?? 0);
-			const paddingY = mode === 'feature-match-overlay'
-				? 0
-				: (screenConfig.paddingY ?? 0);
-			const width = screenConfig.width ?? (mode === 'feature-match-overlay'
-				? 1920
-				: undefined);
-			const height = screenConfig.height ?? (mode === 'feature-match-overlay'
-				? 1080
-				: undefined);
-			const containerStyle: Record<string, string> = {
-				width: width
-					? `${width}px`
-					: '100%',
-				height: height
-					? `${height}px`
-					: '100%',
-				flexShrink: '0',
-				padding: `${paddingY}px ${paddingX}px`,
-				justifyItems: screenConfig.horizontalAlign === 'right'
-					? 'end'
-					: 'center',
-				alignItems: screenConfig.verticalAlign === 'bottom'
-					? 'end'
-					: 'center',
-			};
-
-			if (screenConfig.background && mode !== 'feature-match-overlay')
-				containerStyle.background = screenConfig.background;
-
-			return {
-				kind: 'overlay',
-				containerClass: 'screen-renderer',
-				containerStyle,
-				wrapperClass: [],
-				wrapperStyle: {},
-				provideOverlayContainer: true,
-			};
-		});
-		screen.value = createMockScreen({
-			currentMode: 'card',
-			screenConfig: null,
-		}) as any;
+		screen.value = createMockScreen({ currentMode: 'card', screenConfig: null });
+		hostReturning(true);
 	});
 
-	it('renders overlay screens at exact configured dimensions', async () => {
+	it('renders the mode\'s display inside the container its host policy resolves', () => {
 		screen.value = createMockScreen({
 			currentMode: 'card',
-			screenConfig: {
-				width: 1920,
-				height: 1080,
-				paddingX: 48,
-				paddingY: 24,
-				horizontalAlign: 'right',
-				verticalAlign: 'bottom',
-				background: '#111111',
-			},
-		}) as any;
+			screenConfig: { width: 1920, height: 1080 },
+		});
 
-		const wrapper = await mountComponent();
-		const renderer = wrapper.get('.screen-renderer');
+		const wrapper = mountRenderer();
 
-		expect(getScreenModeDefinition).toHaveBeenCalledWith('card');
 		expect(resolveScreenModeHost).toHaveBeenCalledWith(expect.objectContaining({
 			mode: 'card',
-			screenConfig: screen.value.screenConfig,
+			screenConfig: { width: 1920, height: 1080 },
 		}));
-		expect(renderer.attributes('style')).toContain('width: 1920px;');
-		expect(renderer.attributes('style')).toContain('height: 1080px;');
-		expect(renderer.attributes('style')).toContain('flex-shrink: 0;');
-		expect(renderer.attributes('style')).toContain('padding: 24px 48px;');
-		expect(renderer.attributes('style')).toContain('justify-items: end;');
-		expect(renderer.attributes('style')).toContain('align-items: end;');
-		expect(renderer.attributes('style')).toContain('background: #111111;');
-		expect(overlayContainer.value).toBe(renderer.element);
+		const container = wrapper.get('.host-container');
+		expect(container.attributes('style')).toContain('padding: 24px 48px;');
+		expect(container.find('[data-testid="display"]').exists()).toBe(true);
 	});
 
-	it('fills available space when width and height are unset', async () => {
-		const wrapper = await mountComponent();
-		const renderer = wrapper.get('.screen-renderer');
+	it.each([
+		['provides', true],
+		['withholds', false],
+	])('%s the overlay container as the host policy says', (_, provides) => {
+		hostReturning(provides);
 
-		expect(renderer.attributes('style')).toContain('width: 100%;');
-		expect(renderer.attributes('style')).toContain('height: 100%;');
-		expect(renderer.attributes('style')).toContain('padding: 0px;');
-		expect(renderer.attributes('style')).toContain('justify-items: center;');
-		expect(renderer.attributes('style')).toContain('align-items: center;');
+		const wrapper = mountRenderer();
+
+		expect(overlayContainer.value).toBe(provides
+			? wrapper.get('.host-container').element
+			: null);
 	});
 
-	it('applies screen-level padding to control screens', async () => {
-		screen.value = createMockScreen({
-			currentMode: 'feature-match',
-			screenConfig: {
-				paddingX: 32,
-				paddingY: 16,
-			},
-		}) as any;
-
-		const wrapper = await mountComponent();
-		const renderer = wrapper.get('.screen-control-renderer');
-
-		expect(renderer.attributes('style')).toContain('padding: 16px 32px;');
-		expect(overlayContainer.value).toBeNull();
-	});
-
-	it('uses broadcast layout host defaults without renderer-owned broadcast policy', async () => {
-		screen.value = createMockScreen({
-			currentMode: 'feature-match-overlay',
-			screenConfig: {
-				paddingX: 48,
-				paddingY: 24,
-				background: '#111111',
-			},
-		}) as any;
-
-		const wrapper = await mountComponent();
-		const renderer = wrapper.get('.screen-renderer');
-
-		expect(resolveScreenModeHost).toHaveBeenCalledWith(expect.objectContaining({
-			mode: 'feature-match-overlay',
-			screenConfig: screen.value.screenConfig,
-		}));
-		expect(renderer.attributes('style')).toContain('width: 1920px;');
-		expect(renderer.attributes('style')).toContain('height: 1080px;');
-		expect(renderer.attributes('style')).toContain('padding: 0px;');
-		expect(renderer.attributes('style')).not.toContain('background: #111111;');
-	});
-
-	it('paints a capable mode\'s own background layers behind its display', async () => {
+	it('paints a capable mode\'s own background layers behind its display', () => {
 		screen.value = createMockScreen({
 			currentMode: 'card',
 			modeConfigs: {
 				card: {
-					backgroundLayers: [
-						{
-							id: 'wash',
-							type: 'color',
-							color: '#101010',
-							enabled: true,
-							opacity: 1,
-						},
-					],
+					backgroundLayers: [colorLayer],
 				},
-			},
-		}) as any;
+			} as never,
+		});
 
-		const wrapper = await mountComponent();
-		const renderer = wrapper.get('.screen-renderer');
+		const wrapper = mountRenderer();
+		const container = wrapper.get('.host-container');
 		const stack = wrapper.get('[data-testid="mode-background-stack"]');
 
 		expect(stack.attributes('data-layer-count')).toBe('1');
-		// The stack precedes the display in the container, and the container
-		// isolates so the negative-z stack cannot escape beneath its background.
-		expect(renderer.element.firstElementChild).toBe(stack.element);
-		expect(renderer.attributes('style')).toContain('position: relative;');
-		expect(renderer.attributes('style')).toContain('isolation: isolate;');
+		// The stack precedes the display, and the container isolates so the
+		// negative-z stack cannot escape beneath the Screen background.
+		expect(container.element.firstElementChild).toBe(stack.element);
+		expect(container.attributes('style')).toContain('isolation: isolate;');
 	});
 
-	it('renders no host stack when the mode has no background layers', async () => {
-		const wrapper = await mountComponent();
+	it.each([
+		[
+			'a mode without background layers',
+			createMockScreen({ currentMode: 'card' }),
+		],
+		[
+			'the Background Screen, whose display owns its layers',
+			createMockScreen({
+				currentMode: 'background',
+				modeConfigs: {
+					background: {
+						layers: [colorLayer],
+					},
+				} as never,
+			}),
+		],
+	])('paints no host stack for %s', (_, mockScreen) => {
+		screen.value = mockScreen;
+
+		const wrapper = mountRenderer();
 
 		expect(wrapper.find('[data-testid="mode-background-stack"]').exists()).toBe(false);
-		expect(wrapper.get('.screen-renderer').attributes('style')).not.toContain('isolation');
-	});
-
-	it('renders no host stack for the Background Screen — its display owns its layers', async () => {
-		screen.value = createMockScreen({
-			currentMode: 'background',
-			modeConfigs: {
-				background: {
-					layers: [
-						{
-							id: 'wash',
-							type: 'color',
-							color: '#101010',
-							enabled: true,
-							opacity: 1,
-						},
-					],
-				},
-			},
-		}) as any;
-
-		const wrapper = await mountComponent();
-
-		expect(wrapper.find('[data-testid="mode-background-stack"]').exists()).toBe(false);
-	});
-
-	it('leaves an embedded preview transparent so its host controls the backdrop', async () => {
-		isPreview.value = true;
-		outputMode.value = 'overlay';
-		screen.value = createMockScreen({
-			currentMode: 'feature-match-overlay',
-			screenConfig: {
-				width: 1920,
-				height: 1080,
-			},
-		}) as any;
-
-		const wrapper = await mountComponent();
-
-		expect(wrapper.get('.screen-renderer-wrapper').classes()).not.toContain('transparent-checkerboard-backdrop');
+		expect(wrapper.get('.host-container').attributes('style')).not.toContain('isolation');
 	});
 });

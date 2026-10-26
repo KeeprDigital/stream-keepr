@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, reactive, ref } from 'vue';
+import Settings from '~/components/Screen/Modes/BroadcastGraphics/Settings.vue';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 
 enableAutoUnmount(afterEach);
@@ -179,9 +180,6 @@ const UInputNumberStub = defineComponent({
 });
 
 async function mountComponent() {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/Settings.vue';
-	const { default: Settings } = await import(componentPath);
-
 	return mount(Settings, {
 		props: {
 			screen: {

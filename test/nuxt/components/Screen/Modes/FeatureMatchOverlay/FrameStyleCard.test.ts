@@ -1,8 +1,9 @@
-import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchLayoutFrameConfig, FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import FrameStyleCard from '~/components/Screen/Modes/FeatureMatchOverlay/FrameStyleCard.vue';
 
 const UFormFieldStub = defineComponent({
 	props: {
@@ -80,15 +81,12 @@ const USwitchStub = defineComponent({
 
 async function mountComponent(options: Partial<{
 	config: FeatureMatchOverlayModeConfig;
-	patchFrame: ReturnType<typeof vi.fn>;
+	patchFrame: (updates: Partial<FeatureMatchLayoutFrameConfig>) => void;
 }> = {}) {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/FrameStyleCard.vue';
-	const { default: FrameStyleCard } = await import(componentPath);
-
 	return mount(FrameStyleCard, {
 		props: {
 			config: options.config ?? structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG),
-			patchFrame: options.patchFrame ?? vi.fn(),
+			patchFrame: options.patchFrame ?? vi.fn<(updates: Partial<FeatureMatchLayoutFrameConfig>) => void>(),
 			eventId: 7,
 		},
 		global: {

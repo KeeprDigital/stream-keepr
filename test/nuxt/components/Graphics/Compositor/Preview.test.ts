@@ -2,6 +2,8 @@ import type { Screen } from '~/types';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
+import { squareShapeGeometry } from '~~/shared/modules/graphics';
+import Preview from '~/components/Graphics/Compositor/Preview.vue';
 import {
 	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
@@ -25,8 +27,11 @@ const graphics = [
 				y: 0,
 				width: 100,
 				height: 40,
-				geometry: { cornerRadius: 0 },
-				surfaceStyle: { fill: '#0077a3', fillOpacity: 1 },
+				geometry: squareShapeGeometry(),
+				surfaceStyle: {
+					fill: { type: 'solid' as const, color: '#0077a3' },
+					fillOpacity: 1,
+				},
 			},
 		],
 	},
@@ -92,9 +97,6 @@ const UButtonStub = defineComponent({
 });
 
 async function mountComponent(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../../app/components/Graphics/Compositor/Preview.vue';
-	const { default: Preview } = await import(componentPath);
-
 	return mount(Preview, {
 		props: {
 			eventId: 1,

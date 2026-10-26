@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
+import Display from '~/components/Screen/Modes/PlayerHistory/Display.vue';
 
 vi.mock('@vueuse/core', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('@vueuse/core')>();
@@ -77,9 +78,6 @@ function historyRow(overrides: Record<string, unknown> = {}) {
 }
 
 async function mountComponent() {
-	const componentPath = '../../../../../../app/components/Screen/Modes/PlayerHistory/Display.vue';
-	const { default: Display } = await import(componentPath);
-
 	// ScreenModeBase is deliberately left real so the empty/error cases assert the
 	// broadcast contract itself: those states render nothing at all.
 	return mount(Display, {

@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
+import EditWorkspace from '~/components/Screen/Modes/BroadcastGraphics/EditWorkspace.vue';
 
 enableAutoUnmount(afterEach);
 
@@ -122,9 +123,6 @@ const ChannelsStub = defineComponent({
 });
 
 async function mountWorkspace(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/EditWorkspace.vue';
-	const { default: EditWorkspace } = await import(componentPath);
-
 	const wrapper = mount(EditWorkspace, {
 		props: {
 			eventId: 7,

@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
+import PlayerSide from '~/components/Screen/Modes/FeatureMatch/PlayerSide.vue';
 
 const mockPlayer: {
 	lifeTotal: number;
@@ -104,9 +105,6 @@ const UINumericCounterStub = defineComponent({
 });
 
 async function mountComponent(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../../../app/components/Screen/Modes/FeatureMatch/' + 'PlayerSide.vue';
-	const { default: PlayerSide } = await import(componentPath);
-
 	return mount(PlayerSide, {
 		props: {
 			matchId: 1,

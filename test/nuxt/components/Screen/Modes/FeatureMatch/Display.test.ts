@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
+import Display from '~/components/Screen/Modes/FeatureMatch/Display.vue';
 
 const loading = ref(false);
 const error = ref<string | null>(null);
@@ -77,9 +78,6 @@ const ScreenModeBaseStub = defineComponent({
 });
 
 async function mountComponent() {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatch/Display.vue';
-	const { default: Display } = await import(componentPath);
-
 	return mount(Display, {
 		global: {
 			stubs: {

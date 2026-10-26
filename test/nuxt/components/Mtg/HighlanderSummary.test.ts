@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
+import HighlanderSummary from '~/components/Mtg/HighlanderSummary.vue';
 
 const mockEventStore = {
 	eventId: 1,
@@ -70,9 +71,6 @@ function createHighlander(overrides: Partial<HighlanderDeckSummary> = {}): Highl
 }
 
 async function mountComponent(props: { highlander?: HighlanderDeckSummary | null; compact?: boolean } = {}) {
-	const componentPath = '../../../../app/components/Mtg/HighlanderSummary.vue';
-	const { default: HighlanderSummary } = await import(componentPath);
-
 	return mount(HighlanderSummary, {
 		props: {
 			highlander: createHighlander(),

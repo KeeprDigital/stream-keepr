@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
+import CounterItem from '~/components/FeatureMatch/State/CounterItem.vue';
 
 const UButtonStub = defineComponent({
 	props: {
@@ -29,9 +30,6 @@ const UINumericCounterStub = defineComponent({
 });
 
 async function mountComponent(props: Record<string, unknown>) {
-	const componentPath = '../../../../../app/components/FeatureMatch/State/' + 'CounterItem.vue';
-	const { default: CounterItem } = await import(componentPath);
-
 	return mount(CounterItem, {
 		props: {
 			counter: { type: 'poison', value: 3 },

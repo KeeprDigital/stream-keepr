@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { computed, ref } from 'vue';
+import Display from '~/components/Screen/Modes/ArchetypeSpotlight/Display.vue';
 
 const screen = ref<any>(null);
 const config = ref<any>(null);
@@ -70,9 +71,6 @@ function card(id: number, name: string, inclusionRate: number) {
 }
 
 async function mountComponent() {
-	const componentPath = '../../../../../../app/components/Screen/Modes/ArchetypeSpotlight/Display.vue';
-	const { default: Display } = await import(componentPath);
-
 	// ScreenModeBase is left real so the empty case asserts the broadcast
 	// contract itself: that state renders nothing at all.
 	return mount(Display);

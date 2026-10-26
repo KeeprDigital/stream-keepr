@@ -4,6 +4,7 @@ import { mount } from '@vue/test-utils';
 import { createPinia, defineStore, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import CardControlsButtons from '~/components/Mtg/CardControlsButtons.vue';
 
 function createMockMtgCard(overrides: Partial<MtgCard> = {}): MtgCard {
 	return {
@@ -111,9 +112,6 @@ const UFieldGroupStub = defineComponent({
 });
 
 async function mountComponent() {
-	const componentPath = '../../../../app/components/Mtg/CardControlsButtons.vue';
-	const { default: CardControlsButtons } = await import(componentPath);
-
 	return mount(CardControlsButtons, {
 		global: {
 			stubs: {

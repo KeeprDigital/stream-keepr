@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';
+import NumericCounter from '~/components/UI/NumericCounter.vue';
 
 const UButtonStub = defineComponent({
 	props: {
@@ -43,9 +44,6 @@ const UInputNumberStub = defineComponent({
 });
 
 async function mountComponent(props: Record<string, unknown>) {
-	const componentPath = '../../../../app/components/UI/' + 'NumericCounter.vue';
-	const { default: NumericCounter } = await import(componentPath);
-
 	return mount(NumericCounter, {
 		props: {
 			value: 20,

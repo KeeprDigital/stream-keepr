@@ -1,6 +1,7 @@
 import type { GraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
+import Canvas from '~/components/Graphics/Compositor/Canvas.vue';
 import { resolveGraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 
 enableAutoUnmount(afterEach);
@@ -43,9 +44,6 @@ function renderModel(overrides: Partial<Parameters<typeof resolveGraphicsComposi
 }
 
 async function mountCanvas(slots: Record<string, string> = {}) {
-	const componentPath = '../../../../../app/components/Graphics/Compositor/Canvas.vue';
-	const { default: Canvas } = await import(componentPath);
-
 	return mount(Canvas, {
 		props: {
 			render: renderModel(),

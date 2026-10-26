@@ -7,6 +7,7 @@ import { createFeatureMatchLayoutComposition, FEATURE_MATCH_LAYOUT_COMPOSITION_I
 import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES } from '~~/shared/featureMatchSampleDataset';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import Display from '~/components/Screen/Modes/FeatureMatchOverlay/Display.vue';
 import { GRAPHICS_PREVIEW_READY_MESSAGE } from '~/modules/graphics/previewMessages';
 
 /**
@@ -86,9 +87,6 @@ mockNuxtImport('useScreenGraphicAssetContentUrls', () => () => ({
 }));
 
 async function mountComponent() {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/Display.vue';
-	const { default: Display } = await import(componentPath);
-
 	return mount(Display, {
 		global: {
 			stubs: {

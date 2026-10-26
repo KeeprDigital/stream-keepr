@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { GRAPHIC_STYLE_SET_PACKAGE_LIMITS } from '~~/shared/types/graphicStyleSetPackage';
 import { transportFailure } from '~~/test/helpers/transportFailure';
+import StyleSetLibrary from '~/components/Graphics/StyleSetLibrary.vue';
 
 /**
  * The Graphic Style Set library as an author operates it.
@@ -224,9 +225,6 @@ async function choosePackage(wrapper: Awaited<ReturnType<typeof mountLibrary>>) 
 }
 
 async function mountLibrary(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../app/components/Graphics/StyleSetLibrary.vue';
-	const { default: StyleSetLibrary } = await import(componentPath);
-
 	const wrapper = mount(StyleSetLibrary, {
 		props: { selectedGraphic: lowerThird, writable: true, ...props },
 		global: {

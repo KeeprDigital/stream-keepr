@@ -3,6 +3,8 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
+import CardDeckListColumn from '~/components/Mtg/CardDeckListColumn.vue';
+import CardDeckListSection from '~/components/Mtg/CardDeckListSection.vue';
 
 const selectPreviewCard = vi.fn();
 
@@ -89,9 +91,6 @@ function createPlayerData(): MatchPlayerDeckData {
 }
 
 async function mountColumn(playerData = createPlayerData(), filter = '') {
-	const componentPath = '../../../../app/components/Mtg/CardDeckListColumn.vue';
-	const { default: CardDeckListColumn } = await import(componentPath);
-
 	return mount(CardDeckListColumn, {
 		props: { playerData, filter },
 		global: {
@@ -107,8 +106,6 @@ async function mountColumn(playerData = createPlayerData(), filter = '') {
 }
 
 async function mountSection(filter = '') {
-	const componentPath = '../../../../app/components/Mtg/CardDeckListSection.vue';
-	const { default: CardDeckListSection } = await import(componentPath);
 	const resolvedCard = createCard('Consider', 'mainboard', 2);
 	resolvedCard.highlanderPoints = 1;
 	resolvedCard.mtgCard = {

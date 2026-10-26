@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
+import GameWins from '~/components/FeatureMatch/State/GameWins.vue';
 
 const mockPlayerControls = {
 	recordWin: vi.fn(),
@@ -31,9 +32,6 @@ const GameWinModalStub = defineComponent({
 });
 
 async function mountComponent(props: Record<string, unknown>) {
-	const componentPath = '../../../../../app/components/FeatureMatch/State/' + 'GameWins.vue';
-	const { default: GameWins } = await import(componentPath);
-
 	return mount(GameWins, {
 		props: {
 			matchId: 1,

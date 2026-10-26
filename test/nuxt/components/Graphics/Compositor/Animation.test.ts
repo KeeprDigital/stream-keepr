@@ -9,6 +9,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { createDefaultGraphicAnimationRecipe, DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
+import Animation from '~/components/Graphics/Compositor/Animation.vue';
 
 enableAutoUnmount(afterEach);
 
@@ -130,9 +131,6 @@ async function mountComponent(options: {
 	selectedTarget: GraphicsSelectionTarget;
 	writable?: boolean;
 }) {
-	const componentPath = '../../../../../app/components/Graphics/Compositor/Animation.vue';
-	const { default: Animation } = await import(componentPath);
-
 	return mount(Animation, {
 		props: {
 			graphics: options.graphics,
@@ -462,8 +460,6 @@ describe('graphicAnimationEditor', () => {
 	});
 
 	it('fails closed when no caller states that this session may author', async () => {
-		const componentPath = '../../../../../app/components/Graphics/Compositor/Animation.vue';
-		const { default: Animation } = await import(componentPath);
 		const wrapper = mount(Animation, {
 			props: {
 				graphics: stack(),

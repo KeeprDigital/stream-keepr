@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent } from 'vue';
+import ScreenListItem from '~/components/Screen/ListItem.vue';
 
 // The mode registry pulls in every mode's Display/Settings component through
 // defineAsyncComponent, and none of it bears on the hand-out controls under test.
@@ -106,9 +107,6 @@ const screen = {
 } as unknown as Screen;
 
 async function mountComponent() {
-	const componentPath = '../../../../app/components/Screen/ListItem.vue';
-	const { default: ScreenListItem } = await import(componentPath);
-
 	const wrapper = mount(ScreenListItem, {
 		props: {
 			screen,

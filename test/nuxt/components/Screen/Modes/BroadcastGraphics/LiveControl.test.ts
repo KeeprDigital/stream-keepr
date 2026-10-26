@@ -16,6 +16,7 @@ import {
 	graphicInputTraces,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { createEmptyGraphicBindingDataSet } from '~~/shared/modules/graphics';
+import LiveControl from '~/components/Screen/Modes/BroadcastGraphics/LiveControl.vue';
 
 enableAutoUnmount(afterEach);
 
@@ -234,9 +235,6 @@ async function mountComponent(
 	disconnected = false,
 	pending = false,
 ) {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/LiveControl.vue';
-	const { default: LiveControl } = await import(componentPath);
-
 	const wrapper = mount(LiveControl, {
 		props: {
 			eventId: 7,

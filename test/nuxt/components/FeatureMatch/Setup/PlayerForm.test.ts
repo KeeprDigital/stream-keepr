@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive } from 'vue';
+import PlayerForm from '~/components/FeatureMatch/Setup/PlayerForm.vue';
 import { DEFAULT_PLAYER_DATA } from '~/types';
 
 const UInputNumberStub = defineComponent({
@@ -18,8 +19,6 @@ const UInputNumberStub = defineComponent({
 });
 
 async function mountComponent() {
-	const componentPath = '../../../../../app/components/FeatureMatch/Setup/' + 'PlayerForm.vue';
-	const { default: PlayerForm } = await import(componentPath);
 	const player = reactive({ ...DEFAULT_PLAYER_DATA });
 
 	const wrapper = mount(PlayerForm, {

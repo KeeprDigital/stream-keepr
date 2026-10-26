@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { addGraphicGroupChild, addGraphicItem } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import LayerList from '~/components/Screen/Modes/FeatureMatchOverlay/LayerList.vue';
 import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
 
 /**
@@ -70,8 +71,6 @@ async function mountList() {
 		canvasWidth: 1920,
 		canvasHeight: 1080,
 	});
-	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/LayerList.vue';
-	const { default: LayerList } = await import(componentPath);
 	const wrapper = mount(LayerList, {
 		props: {
 			layout: config.value.layout,
