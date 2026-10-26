@@ -4,9 +4,16 @@ import { createMockFeatureMatch } from '~~/test/helpers/fixtures';
 const mockValidateFeatureMatchReferences = vi.fn();
 const mockFeatureMatchService = {
 	create: vi.fn(),
+	findById: vi.fn(),
 	remove: vi.fn(),
 	update: vi.fn(),
 	swapMatchOrder: vi.fn(),
+};
+const mockPlayerService = {
+	findById: vi.fn(),
+};
+const mockPlayerUpdate = {
+	updatePlayer: vi.fn(),
 };
 const mockPublication = {
 	featureMatchSlotCreated: vi.fn(),
@@ -25,6 +32,14 @@ vi.mock('~~/server/services/featureMatch', () => ({
 
 vi.mock('~~/server/modules/event-data-publication', () => ({
 	eventDataPublicationModule: () => mockPublication,
+}));
+
+vi.mock('~~/server/services/player', () => ({
+	playerService: () => mockPlayerService,
+}));
+
+vi.mock('~~/server/modules/player-update', () => ({
+	playerUpdateModule: () => mockPlayerUpdate,
 }));
 
 vi.stubGlobal('createError', (input: { statusCode: number; message?: string; statusMessage?: string }) => {
@@ -153,6 +168,65 @@ describe('featureMatchSlotWriteModule', () => {
 			});
 
 			expect(mockPublication.featureMatchSlotUpdated).not.toHaveBeenCalled();
+		});
+
+		it('writes the seated Player\'s edited identity first, published to the saving client too', async () => {
+			mockFeatureMatchService.findById.mockResolvedValue(createMockFeatureMatch({ id: 7, player1Id: 11, player2Id: 12 }));
+			mockPlayerService.findById.mockImplementation(async (id: number) => ({
+				id,
+				name: id === 11
+					? 'Mia'
+					: 'Rei',
+				pronouns: null,
+				lgs: null,
+			}));
+			const input = {
+				player1Data: { name: 'Mia', lgs: 'Northgate Games', wins: 5 },
+				player2Data: { name: 'Rei', lgs: null },
+			};
+
+			await featureMatchSlotWriteModule().updateSetup({
+				eventId: 1,
+				slotId: 7,
+				input,
+				originConnectionId: 'origin-1',
+			});
+
+			expect(mockPlayerUpdate.updatePlayer).toHaveBeenCalledTimes(1);
+			expect(mockPlayerUpdate.updatePlayer).toHaveBeenCalledWith({
+				eventId: 1,
+				playerId: 11,
+				input: { lgs: 'Northgate Games' },
+			});
+			expect(mockPlayerUpdate.updatePlayer.mock.invocationCallOrder[0])
+				.toBeLessThan(mockFeatureMatchService.update.mock.invocationCallOrder[0]!);
+			expect(mockFeatureMatchService.update).toHaveBeenCalledWith(7, 1, input);
+		});
+
+		it('writes the Player a setup edit seats, not the one it replaces', async () => {
+			mockFeatureMatchService.findById.mockResolvedValue(createMockFeatureMatch({ id: 7, player1Id: 11 }));
+			mockPlayerService.findById.mockResolvedValue({
+				id: 21,
+				name: 'Kai',
+				pronouns: null,
+				lgs: null,
+			});
+
+			await featureMatchSlotWriteModule().updateSetup({
+				eventId: 1,
+				slotId: 7,
+				input: {
+					player1Id: 21,
+					player1Data: { name: 'Kai', pronouns: 'they/them' },
+				},
+			});
+
+			expect(mockPlayerService.findById).toHaveBeenCalledWith(21, 1);
+			expect(mockPlayerUpdate.updatePlayer).toHaveBeenCalledWith({
+				eventId: 1,
+				playerId: 21,
+				input: { pronouns: 'they/them' },
+			});
 		});
 	});
 

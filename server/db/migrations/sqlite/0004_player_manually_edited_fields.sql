@@ -1,0 +1,1 @@
+ALTER TABLE `players` ADD `manually_edited_fields` text;

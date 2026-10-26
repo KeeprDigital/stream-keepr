@@ -3,6 +3,7 @@ import type { AnimationEffectSelection } from '~~/shared/animationEffects';
 import type { PlayerSlotData } from '~~/shared/api';
 import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { BroadcastGraphicsLiveSessionStatus } from '~~/shared/types/broadcastGraphicsLiveSession';
+import type { PlayerManuallyEditedField } from '~~/shared/types/enums';
 import type { FeatureMatchSessionStatus, FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { PlayerGameData } from '~~/shared/types/game';
@@ -173,6 +174,8 @@ export const players = sqliteTable('players', {
 
 	lgs: text('lgs'),
 	gameData: text('game_data', { mode: 'json' }).$type<PlayerGameData>(),
+	// The Melee-imported fields an operator has edited by hand, which Melee Sync no longer writes (ADR-0046).
+	manuallyEditedFields: text('manually_edited_fields', { mode: 'json' }).$type<PlayerManuallyEditedField[]>(),
 
 	...timestamps,
 }, table => [
