@@ -16,35 +16,11 @@ import {
 } from '~~/server/schemas/api/screen';
 import { createMiniflareD1Harness } from '~~/test/helpers/miniflare-d1';
 
-/**
- * The authored Screen Mode configuration write, against a database that enforces
- * the parameter limit its precondition has to live inside.
- *
- * The write is one compare-and-swap `UPDATE` carrying a precondition for every
- * Graphic Asset Reference the configuration publishes, so its parameter count is
- * decided by the show rather than by the query. Bound one placeholder per fact it
- * cost six parameters plus eight per reference, which clears a hundred at twelve
- * references — and a dozen media and font references is an ordinary Broadcast
- * Graphics stack, not a pathological one. #303 records the save failing there with
- * an opaque 500, permanently, until an author removed references.
- *
- * So this runs against a real D1 binding rather than the libSQL harness the
- * module's other tests use: libSQL accepts several hundred bound parameters
- * without complaint, and a fix proved there would prove nothing at all. The
- * companion `broadcastGraphicsLiveReferencesD1.test.ts` is the same argument for
- * the Live Session's half of the index.
- *
- * What is asserted is the write's contract at those sizes, not its encoding: a
- * configuration commits with its whole reference set indexed, and a reference that
- * no longer resolves still rejects the save outright rather than letting a Screen
- * publish a revision its outputs could not fetch.
- *
- * The same two assertions are made twice: at the reference counts the old encoding
- * failed on, and at the top of the regime removing it opened — every Graphic Item a
- * Broadcast Graphics Screen admits, which is six hundred references and six hundred
- * and two statements in one `db.batch`. The second is #315, filed because nothing
- * established whether D1 has a batch-level limit that bites somewhere above the
- * sixty references reached here. It commits.
+/*
+ * The authored Screen Mode configuration write carries one precondition per
+ * Graphic Asset Reference, so it runs on real D1, whose 100-parameter limit libSQL
+ * does not enforce (#303). Asserted at the old failing count, well past it, and at
+ * the Screen's whole Graphic Item cap in one batch (#315).
  */
 
 const harness: MiniflareD1Harness = await createMiniflareD1Harness();
@@ -59,41 +35,16 @@ const { updateScreenModeConfigWithGraphicAssetReferences } = await import(
 );
 const { StateConflictError } = await import('~~/server/utils/errors');
 
-/**
- * The reference count at which the one-placeholder-per-fact encoding stopped
- * fitting: six base parameters plus eight per reference, against D1's hundred.
- */
+/** Six base parameters plus eight per reference first passed D1's hundred here. */
 const FIRST_UNBINDABLE_REFERENCE_COUNT = 12;
 
 /** Comfortably past it, so a fix that merely widened the ceiling is not enough. */
 const LARGE_REFERENCE_COUNT = 60;
 
-/**
- * Every reference the item cap admits, which is the top of the regime #303 made
- * reachable.
- *
- * Removing the parameter ceiling moved the binding constraint off the statement and
- * onto the batch: the write still issues one prepared `INSERT` per reference, so at
- * the cap it is six hundred statements and their whole payload in a single
- * `db.batch`. Per-statement parameter counts are constant there and the tests above
- * reach sixty references, so what is unexercised is the batch itself — and D1's
- * batch-level limits, whatever they are, are not the ones this module's other tests
- * would ever meet. #315.
- *
- * Two per Graphic Item is what the stack below averages and what the cap's own
- * arithmetic admits: a Media Graphic Item pins its content, and a Text Graphic Item
- * pins a font for its base typography and one for each Graphic Placeholder Style.
- */
+/** Every reference the Graphic Item cap admits: media pins content, text pins fonts. */
 const MAXIMUM_REFERENCE_COUNT = MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN * 2;
 
-/**
- * How many distinct font Graphic Assets the maximal stack draws on.
- *
- * Small on purpose, and not a weakening of the boundary: what the write costs is
- * decided by how many references a configuration publishes, not by how many assets
- * they name, and a show that painted three hundred Graphic Items in six hundred
- * different fonts is not the case worth constructing.
- */
+/** Cost follows the number of references, not of distinct assets, so few fonts suffice. */
 const FONT_ASSET_COUNT = 4;
 
 const CONTENT_DIGEST = 'c'.repeat(64);
@@ -107,12 +58,7 @@ function revisionId(index: number, generation = 1) {
 	return `revision-${`${index}`.padStart(4, '0')}-${generation}`;
 }
 
-/**
- * A Broadcast Graphics stack of `count` Media Graphic Items, each pinning one
- * Graphic Asset Revision. The shape the discovery walk reads, and nothing else:
- * this file is about the write, and the configuration only has to be something
- * `screenModeGraphicAssetReferences` finds references in.
- */
+/** A stack of Media Graphic Items, each pinning one revision: only what discovery reads. */
 function stackPinning(revisions: readonly string[]) {
 	return {
 		graphics: [
@@ -156,23 +102,8 @@ function fontSelection(index: number) {
 }
 
 /**
- * A Broadcast Graphics Screen authored to its documented cap: every Graphic Item it
- * admits, each pinning what its kind can pin.
- *
- * Media and text alternate so both reference kinds ride in the same batch — the
- * resolution rule the precondition carries is asked per reference and reads the
- * asset's kind, so a boundary run made entirely of one kind would leave the other's
- * six hundredth copy unproven. Assets are drawn from a small pool because a show
- * reuses its content and its fonts; what is at the cap here is the number of
- * references, which is what the write's statement count and payload are made of.
- *
- * Split across three Broadcast Graphics because one may hold at most
- * `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC` items, so the Screen-wide cap is only
- * reachable across several — which also means the six hundred references arrive
- * under three different owner-slot roots, as they would on a real Screen.
- *
- * `repickedMediaIndex` re-picks one Media Graphic Item's content onto the second
- * generation of the same asset, which is what an author changing one item does.
+ * A Screen at its documented Graphic Item cap, media and text alternating across
+ * three Broadcast Graphics; `repickedMediaIndex` moves one item to a second generation.
  */
 function maximalStack(repickedMediaIndex?: number) {
 	const graphicCount = MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN
@@ -184,9 +115,7 @@ function maximalStack(repickedMediaIndex?: number) {
 			items: Array.from({ length: MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC }, (_, position) => {
 				const id = `item-${graphic}-${`${position}`.padStart(4, '0')}`;
 				if (position % 2 === 1) {
-					// Three font references: the item's base typography and two Graphic
-					// Placeholder Styles, each of which may override the font for one
-					// `{inputKey}` run.
+					// Base typography plus two Graphic Placeholder Styles.
 					return {
 						id,
 						type: 'text',
@@ -244,8 +173,6 @@ async function storedScreen() {
 }
 
 beforeEach(async () => {
-	// A fresh Event and Screen per test, so a rejected write's assertions are about
-	// this test's own rows. The Event cascade takes the Screen with it.
 	await db.delete(graphicAssetReferences);
 	await db.delete(schema.events);
 	await db.delete(graphicAssetRevisions);
@@ -280,12 +207,9 @@ beforeEach(async () => {
 		canonicalMime: 'font/woff2',
 	} as never);
 
-	// One D1 batch rather than ~190 awaited inserts: each insert is a round trip to
-	// Miniflare, and seeding them one by one was most of this file's run time.
+	// One batch: each awaited insert is a Miniflare round trip.
 	const seeds: BatchItem<'sqlite'>[] = [];
 
-	// The fonts the maximal stack's typography names. One revision each: a font is
-	// pinned exactly as media is, and nothing here re-picks one.
 	for (let index = 0; index < FONT_ASSET_COUNT; index++) {
 		seeds.push(db.insert(graphicAssets).values({
 			id: fontAssetId(index),
@@ -302,8 +226,7 @@ beforeEach(async () => {
 		} as never));
 	}
 
-	// Two revisions per asset, so a test can move a reference from one to another
-	// exactly as an author re-picking content does.
+	// Two revisions per asset, so a test can re-pick content.
 	for (let index = 0; index < LARGE_REFERENCE_COUNT; index++) {
 		seeds.push(db.insert(graphicAssets).values({
 			id: assetId(index),
@@ -326,9 +249,7 @@ beforeEach(async () => {
 
 describe('an authored Screen Mode configuration carrying many Graphic Asset References', () => {
 	it('proves the limit the precondition has to fit inside is enforced here', async () => {
-		// The control. Without it every assertion below would be satisfied by a
-		// database that binds whatever it is handed, which is exactly the libSQL
-		// harness this file exists to avoid.
+		// Control: this harness does refuse an over-limit statement.
 		const over = Array.from({ length: D1_MAXIMUM_BOUND_PARAMETERS + 1 }, (_, index) => `${index}`);
 		await expect(harness.database.prepare(`
 			SELECT id FROM graphic_asset_references
@@ -374,11 +295,7 @@ describe('an authored Screen Mode configuration carrying many Graphic Asset Refe
 		});
 
 		it('rejects the save when one referenced Graphic Asset is retired under it', async () => {
-			// The concurrent change: an author re-picks one item's content, and the
-			// asset it names is retired between their read and their write. A newly
-			// chosen revision on a retired asset must not resolve — and one failed
-			// precondition out of twelve has to reject the whole save, not index the
-			// other eleven.
+			// A re-pick onto a retired asset: one failed precondition rejects the whole save.
 			await harness.database.prepare(`
 				UPDATE graphic_assets SET lifecycle_state = 'retired' WHERE id = ?
 			`).bind(assetId(3)).run();
@@ -414,8 +331,7 @@ describe('an authored Screen Mode configuration carrying many Graphic Asset Refe
 		});
 
 		it('refuses through a classified conflict rather than an unhandled failure', async () => {
-			// #303's symptom was a bare 500 the operator could do nothing with. Every
-			// refusal on this path carries the status its transport answers with.
+			// #303 surfaced as a bare 500.
 			const refusal = await updateScreenModeConfigWithGraphicAssetReferences({
 				id: screenId,
 				eventId,
@@ -429,10 +345,7 @@ describe('an authored Screen Mode configuration carrying many Graphic Asset Refe
 		});
 
 		it('keeps a pinned revision resolvable once its own asset is retired', async () => {
-			// The retirement rule the precondition carries, re-asserted at a size the
-			// old encoding never reached: an unchanged reference keeps resolving, so an
-			// author editing an unrelated property of a stack holding retired content
-			// is not locked out of their own Screen.
+			// An unchanged reference keeps resolving after its asset is retired.
 			await harness.database.prepare(`
 				UPDATE graphic_assets SET lifecycle_state = 'retired' WHERE id = ?
 			`).bind(assetId(3)).run();
@@ -450,33 +363,11 @@ describe('an authored Screen Mode configuration carrying many Graphic Asset Refe
 	});
 });
 
-/**
- * The top of the reachable regime, which is a claim about the batch rather than
- * about any statement in it.
- *
- * Nothing above this point exercises a batch of more than sixty-two statements, and
- * the write's shape is one `UPDATE`, one `DELETE`, and one `INSERT` per reference —
- * so a Screen authored to its documented cap sends six hundred and two statements
- * and every reference's payload in one `db.batch`. Whether D1 admits that was the
- * open question #315 was filed on, and it is not one the module can be reasoned
- * into answering: the limit, if there is one, belongs to the platform.
- *
- * What is asserted is the write's contract, unchanged from the sizes above — the
- * configuration commits with its whole reference set indexed, and one reference that
- * stops resolving still refuses the whole save. The refusal is here rather than
- * assumed because it is what any batching a failure would have forced must keep: a
- * write split into chunks that committed the resolvable ones would satisfy the first
- * assertion completely and have given away the compare-and-swap the module exists
- * for. It is asked at both ends of the set for the same reason — a per-chunk
- * precondition is wrong one chunk at a time.
- */
+// At the cap the write is 602 statements in one batch (#315). The refusal is asked
+// at both ends of the reference set, since a per-chunk precondition fails one chunk
+// at a time.
 describe('a Broadcast Graphics Screen authored to its documented Graphic Item cap', () => {
-	/**
-	 * Every test here is given longer than the suite's default because a maximal
-	 * write is genuinely six hundred statements against a Workers runtime, and each
-	 * refusal below issues two of them. Several seconds is what that costs; the
-	 * default five would make these report as timeouts rather than as verdicts.
-	 */
+	// A maximal write is six hundred statements against workerd; the default timeout is too short.
 	const MAXIMAL_WRITE_TIMEOUT_MS = 60_000;
 
 	it('commits every reference the cap admits in one write', async () => {
@@ -491,17 +382,6 @@ describe('a Broadcast Graphics Screen authored to its documented Graphic Item ca
 		expect(await indexedReferences()).toHaveLength(MAXIMUM_REFERENCE_COUNT);
 	}, MAXIMAL_WRITE_TIMEOUT_MS);
 
-	/**
-	 * Both ends of the reference set, because a precondition that covered only part
-	 * of it would be indistinguishable from one that covered all of it if the test
-	 * only ever broke a reference the covered part contains.
-	 *
-	 * That is not hypothetical: the chunked write this ticket proposed would carry a
-	 * precondition per chunk, and getting one of them wrong is precisely how the
-	 * compare-and-swap would be lost. Asked at the first Media Graphic Item and at
-	 * the last, a precondition built from any prefix or any suffix of the set fails
-	 * one of these two.
-	 */
 	it.each([
 		['the first', 0],
 		['the last', MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN / 2 - 1],
@@ -513,10 +393,6 @@ describe('a Broadcast Graphics Screen authored to its documented Graphic Item ca
 			partialConfig: maximalStack(),
 		});
 
-		// One Media Graphic Item re-picked onto a second revision of an asset that has
-		// been retired under the author. Newly chosen content on a retired asset does
-		// not resolve, and one unresolvable reference in six hundred has to refuse the
-		// save outright rather than index the other five hundred and ninety-nine.
 		const repickedAsset = assetId(repicked % LARGE_REFERENCE_COUNT);
 		const repickedRevision = revisionId(repicked % LARGE_REFERENCE_COUNT, 2);
 		await harness.database.prepare(`
@@ -530,9 +406,7 @@ describe('a Broadcast Graphics Screen authored to its documented Graphic Item ca
 			partialConfig: maximalStack(repicked),
 		})).rejects.toThrow(StateConflictError);
 
-		// Nothing moved: not the configuration, not the version, not the index — and
-		// the five hundred and ninety-nine references that did still resolve are not
-		// indexed at a version the Screen never reached.
+		// Nothing moved: not the configuration, the version, or the index.
 		const screen = await storedScreen();
 		expect(screen?.stateVersion).toBe(1);
 		expect(screen?.modeConfigs).not.toContain(repickedRevision);
