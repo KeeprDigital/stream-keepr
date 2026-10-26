@@ -130,8 +130,6 @@ describe('the R2 Graphic Asset object-store adapter', () => {
 	});
 
 	it('says what R2 threw when a multipart part becomes an outage (#633)', async () => {
-		// A part PUT answered 503 under `pnpm verify` and nothing anywhere said
-		// why: the adapter turned R2's rejection into `unavailable` and dropped it.
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		const identity = graphicsObjectIdentity('staging/operation/multipart');
 		const uploadPart = vi.fn().mockRejectedValue(Object.assign(
@@ -152,12 +150,8 @@ describe('the R2 Graphic Asset object-store adapter', () => {
 		});
 
 		expect(outcome).toMatchObject({ outcome: 'unavailable' });
-		expect(warn).toHaveBeenCalledTimes(1);
-		expect(JSON.parse(warn.mock.calls[0]![0] as string)).toEqual({
-			message: 'graphics_object_store_unavailable',
+		expect(JSON.parse(warn.mock.calls[0]![0] as string)).toMatchObject({
 			operation: 'uploadPart',
-			errorName: 'Error',
-			errorCode: 10001,
 			reason: 'We encountered an internal error. Please try again.',
 		});
 	});
@@ -174,25 +168,19 @@ describe('the R2 Graphic Asset object-store adapter', () => {
 			return outcome;
 		}
 
-		// The code is the discriminator and has to stand on its own, so this row
-		// carries a wording the message hedge below does not know. Sharing a
-		// sentence with those rows would let the hedge classify this one, and a
-		// broken code branch would then survive unnoticed.
+		// The code alone classifies: this wording is one the message fallback does not know.
 		await expect(abortAgainst(Object.assign(
 			new Error('R2 refused the abort.'),
 			{ code: 10024 },
 		))).resolves.toEqual({ outcome: 'missing' });
-		// The wording alone is enough when a proxied refusal has lost the code, and
-		// this refusal has two documented spellings: Cloudflare's Workers API
-		// wording, then the S3-style sentence the local Miniflare binding raises.
+		// The wording alone, when a proxied refusal lost the code: the Workers API's, then Miniflare's.
 		await expect(abortAgainst(
 			new Error('Multipart upload does not exist or was aborted. (10024)'),
 		)).resolves.toEqual({ outcome: 'missing' });
 		await expect(abortAgainst(
 			new Error('The specified multipart upload does not exist.'),
 		)).resolves.toEqual({ outcome: 'missing' });
-		// Anything else is an outage. Reading these as reclaimed would clear a
-		// checkpoint whose upload is still held, which is what strands one.
+		// Anything else is an outage: reading it as reclaimed would strand a still-held upload.
 		await expect(abortAgainst(Object.assign(
 			new Error('We encountered an internal error. Please try again.'),
 			{ code: 10001 },

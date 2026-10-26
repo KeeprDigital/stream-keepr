@@ -12,34 +12,8 @@ import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentiti
 import { createMiniflareD1Harness } from '~~/test/helpers/miniflare-d1';
 
 /**
- * The one thing the Live Session reference guard needs from D1 that a libSQL
- * double could get wrong while looking right.
- *
- * `broadcastGraphicsLiveReferences.sqlite.test.ts` proves the guard's behaviour —
- * a superseded reconciliation applies nothing — against libSQL, because the
- * interleaving it needs is cheap there and a Workers runtime per test is not. That
- * rests on a premise about the platform: **a conditional statement inside a `batch`
- * that matches zero rows is not an error, and does not roll its batch back.** The
- * whole contract of the guard is "match zero rows and apply nothing", so if D1
- * treated that as a failure the module would take the `catch` on every superseded
- * reconciliation — logging `..._index_failed` where it currently returns
- * `indexed: 0` and logs `..._index_incomplete`, and turning the retry's exhaustion
- * report into a failure report.
- *
- * That premise is not obviously safe. #75 found the *converse* being assumed and
- * being wrong — `server/services/graphicStyleSet.ts` checked `allApplied` after a
- * batch had already committed, on the belief that a conditional `UPDATE` matching
- * nothing would roll the batch back — and the reviewer's statement of the real rule
- * is the one being relied on here: *"A D1 `batch` rolls back on statement error, not
- * on a conditional `UPDATE` matching zero rows."* That review named this module's
- * stamp-and-`EXISTS` cross-guard as the pattern to copy, so the pattern is now load
- * bearing in two places and its premise is worth pinning rather than citing.
- *
- * So this file establishes both halves on a real D1 binding, through the real
- * function: a guarded write whose sequence has moved applies nothing and does not
- * throw, and a genuine statement error in the same table does roll its batch back.
- * Both matter — the first is the guard's contract, and the second is what makes the
- * first a distinction rather than a description of a database that never fails.
+ * The platform premise the libSQL guard tests rest on, on a real D1 binding (#75): a guarded
+ * statement matching zero rows commits as a no-op, while a real statement error rolls the batch back.
  */
 
 // Built before the module under test is imported, because `~~/server/db` is
@@ -153,11 +127,7 @@ describe('the Live Session reference guard against a real D1 binding', () => {
 	});
 
 	it('applies nothing, and reports rather than throws, when the sequence has moved', async () => {
-		// The premise the libSQL guard tests rest on, on the real platform: every
-		// statement's `EXISTS` matches zero rows, and D1 answers with a committed batch
-		// reporting no changes rather than an error. A database that failed the batch
-		// here would send the module down its `catch` on the ordinary superseded
-		// reconciliation, which is the one outcome its logging exists to tell apart.
+		// Every `EXISTS` matches nothing: D1 commits the batch with no changes, not an error.
 		const outcome = await updateBroadcastGraphicsLiveSessionGraphicAssetReferences({
 			screenId,
 			eventId,
@@ -173,10 +143,7 @@ describe('the Live Session reference guard against a real D1 binding', () => {
 	});
 
 	it('rolls the batch back when a statement genuinely fails, which is the distinction', async () => {
-		// The other half of #75's rule, and what makes the test above say something. A
-		// zero-match condition commits; a real error does not. Asserted on the same
-		// table and the same unique index the Live Session's owner slots are kept apart
-		// by, because that index is what an unguarded insert would collide with.
+		// A real error on the owner-slot unique index does roll back, so the test above is a distinction.
 		const client = harness.database;
 		const insert = (id: string, ownerSlot: string) => client.prepare(`
 			INSERT INTO graphic_asset_references (

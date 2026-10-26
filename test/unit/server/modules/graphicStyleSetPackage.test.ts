@@ -18,16 +18,7 @@ import {
 } from '~~/shared/types/graphicStyleSetPackage';
 import { collectStream, readStoredZipArchive } from '../../../helpers/storedZipArchive';
 
-/**
- * A Graphic Style Set travelling out of one installation and into another, through the
- * package module's own contract rather than through storage.
- *
- * The two installations here are two in-memory libraries behind the same ports the
- * routes wire to a database, so a round trip proves the thing that actually matters:
- * whatever an export declares is exactly what a receiver holds it to, and the identity
- * and revision that left one library are the identity and revision that arrive in the
- * other.
- */
+/** A Style Set round trip between two in-memory libraries: what an export declares is what a receiver holds it to. */
 
 const NOW = () => new Date('2026-07-31T00:00:00.000Z');
 
@@ -758,12 +749,8 @@ describe('receiving a `.skstyle` package on another installation', () => {
 	});
 
 	it('writes nothing when a draft edit lands between the confirmed report and the install', async () => {
-		// The installed Style Set already has unpublished draft changes, so the warning
-		// naming them is in *both* reports and the only thing the second author's edit
-		// moves is the draft revision. A baseline whose draft matched its published
-		// entries would pass this for the wrong reason: the edit would introduce a warning
-		// that was absent before, and the confirmation would be refused over the issue
-		// list rather than over the revision the write is actually bound to.
+		// The draft-changes warning is in both reports, so only the draft revision moves:
+		// the refusal must come from the revision binding, not the issue list.
 		const receiver = library([
 			storedStyleSet({
 				draft: [
@@ -856,11 +843,8 @@ describe('receiving a `.skstyle` package on another installation', () => {
 		});
 		expect(proposal.outcome).toBe('requires-confirmation');
 
-		// The narrowest window there is: the edit lands after the install's own preflight
-		// read the draft revision and before it writes. The report is identical to the one
-		// confirmed, so the fingerprint still matches and only the compare-and-swap can
-		// refuse this — which is exactly what a write taking its precondition from a fresh
-		// read instead of from the report would fail to do.
+		// The edit lands between the install's preflight read and its write, with an identical
+		// report, so only the compare-and-swap can refuse it.
 		const racing: GraphicStyleSetPackageInstallPorts = {
 			...receiver.ports,
 			findLinkedTemplates: async (styleSetId, entries) => {

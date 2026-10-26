@@ -1,23 +1,14 @@
 import type {
 	GraphicAssetId,
-	GraphicAssetRevisionId,
-	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
 import type { GraphicsOperationalQueueId } from '~~/shared/utils/graphicsOperationalQueues';
+import type { TestGraphicsLibrary, TestGraphicsLibraryOptions } from '~~/test/helpers/graphicsLibrary';
 import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import { createD1GraphicsAssetReconciliationCatalogue } from '~~/server/modules/graphics-asset-library/catalogue-reconciliation';
 import { createD1GraphicsAssetRetentionCatalogue } from '~~/server/modules/graphics-asset-library/catalogue-retention';
-import {
-	createInMemoryCanonicalGraphicsObjectStore,
-	createInMemoryStagingGraphicsObjectStore,
-} from '~~/server/modules/graphics-asset-library/in-memory-object-store';
-import {
-	createBoundedByteStream,
-	graphicsObjectIdentity,
-} from '~~/server/modules/graphics-asset-library/object-store';
+
 import { evidenceOf } from '~~/test/helpers/graphicsEvidence';
 import {
 	digestOf,
@@ -25,147 +16,50 @@ import {
 	pixelPng,
 	replacementPng,
 } from '~~/test/helpers/graphicsFixtures';
+import {
+	addScreenReference,
+	boundedBytes,
+	canonicalIdentity,
+	canonicalMetadata,
+	createTestGraphicsLibrary,
+	DAY,
+	ingestImage,
+	initiateImage,
+	removeScreenReference,
+	replaceImage,
+	uploadImage,
+} from '~~/test/helpers/graphicsLibrary';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
-
-const HOUR = 60 * 60 * 1000;
-const DAY = 24 * HOUR;
-
-function canonicalIdentity(digest: string) {
-	return graphicsObjectIdentity(`sha256/${digest}`);
-}
-
-function canonicalMetadata(digest: string) {
-	return {
-		contentType: 'image/png',
-		custom: { sha256: digest },
-	};
-}
-
-function boundedBytes(bytes: Uint8Array) {
-	return createBoundedByteStream(bytes, {
-		byteLength: bytes.byteLength,
-		maximumByteLength: bytes.byteLength,
-	});
-}
-
-function decodeEvidence(bytes: Uint8Array) {
-	return {
-		outcome: 'decoded' as const,
-		sourceDigest: digestOf(bytes),
-		width: 1,
-		height: 1,
-	};
-}
 
 let harness: SqliteD1Harness;
 
-function createQueuesLibrary(
-	dependencies: Partial<Parameters<typeof createGraphicsAssetLibrary>[0]> = {},
-) {
-	let currentTime = new Date('2026-07-28T00:00:00.000Z');
-	let nextIdentity = 0;
-	const staging = createInMemoryStagingGraphicsObjectStore();
-	const canonical = createInMemoryCanonicalGraphicsObjectStore();
-	const library = createGraphicsAssetLibrary({
+function createQueuesLibrary(dependencies: Partial<TestGraphicsLibraryOptions> = {}) {
+	return createTestGraphicsLibrary({
 		catalogue: createD1GraphicsAssetCatalogue(harness.database),
-		staging,
-		canonical,
-		now: () => currentTime,
-		generateIdentity: () => `queues-${++nextIdentity}`,
+		identityPrefix: 'queues',
 		...dependencies,
 	});
-	return {
-		library,
-		staging,
-		canonical,
-		now: () => currentTime,
-		advance(milliseconds: number) {
-			currentTime = new Date(currentTime.getTime() + milliseconds);
-		},
-	};
 }
 
-type QueuesLibrary = ReturnType<typeof createQueuesLibrary>;
-
-async function ingestAsset(
-	context: QueuesLibrary,
-	options: { idempotencyKey: string; name: string; bytes?: Uint8Array },
-): Promise<GraphicsIngestionOperation> {
-	const bytes = options.bytes ?? pixelPng;
-	const operation = await context.library.initiateGraphicsIngestion({
-		idempotencyKey: options.idempotencyKey,
-		initiatedBy: 'queues-author',
-		name: options.name,
-		sourceFileName: 'logo.png',
-		declaredMime: 'image/png',
-		browserDecodeEvidence: decodeEvidence(bytes),
-		declaredByteLength: bytes.byteLength,
-		duplicateContentPolicy: 'create-separate',
-	});
-	context.advance(1000);
-	return await context.library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: 'image/png',
-		bytes: createBoundedByteStream(bytes, {
-			byteLength: bytes.byteLength,
-			maximumByteLength: bytes.byteLength,
-		}),
+const author = { initiatedBy: 'queues-author' };
+function ingestAsset(context: TestGraphicsLibrary, options: { idempotencyKey: string; name: string; bytes?: Uint8Array }) {
+	return ingestImage(context, {
+		...author,
+		...options,
 	});
 }
-
-async function replaceAsset(
-	context: QueuesLibrary,
-	input: { assetId: GraphicAssetId; idempotencyKey: string; bytes: Uint8Array },
-): Promise<GraphicsIngestionOperation> {
-	const operation = await context.library.initiateGraphicAssetReplacement({
-		assetId: input.assetId,
-		idempotencyKey: input.idempotencyKey,
-		initiatedBy: 'queues-author',
-		sourceFileName: 'logo.png',
-		declaredMime: 'image/png',
-		browserDecodeEvidence: decodeEvidence(input.bytes),
-		declaredByteLength: input.bytes.byteLength,
-	});
-	context.advance(1000);
-	return await context.library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: 'image/png',
-		bytes: createBoundedByteStream(input.bytes, {
-			byteLength: input.bytes.byteLength,
-			maximumByteLength: input.bytes.byteLength,
-		}),
+function replaceAsset(context: TestGraphicsLibrary, options: { assetId: GraphicAssetId; idempotencyKey: string; bytes: Uint8Array }) {
+	return replaceImage(context, {
+		...author,
+		...options,
 	});
 }
-
-/** Arranged exactly as the Screen reference writer does, then observed publicly. */
-async function addReference(input: {
-	referenceId: string;
-	assetId: GraphicAssetId;
-	revisionId: GraphicAssetRevisionId;
-	ownerSlot?: string;
-}) {
-	await harness.client.execute({
-		sql: `
-			INSERT INTO graphic_asset_references (
-				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
-				event_id, created_at, updated_at
-			) VALUES (?, ?, ?, 'screen', '1', ?, NULL, 0, 0)
-		`,
-		args: [
-			input.referenceId,
-			input.assetId,
-			input.revisionId,
-			input.ownerSlot ?? 'layout.frame.backgroundImage',
-		],
-	});
-}
-
-async function removeReference(referenceId: string) {
-	await harness.client.execute({
-		sql: 'DELETE FROM graphic_asset_references WHERE id = ?',
-		args: [referenceId],
+const addReference = (input: Parameters<typeof addScreenReference>[1]) => addScreenReference(harness, input);
+const removeReference = (referenceId: string) => removeScreenReference(harness, referenceId);
+function initiateQueuedImage(context: TestGraphicsLibrary, options: Parameters<typeof initiateImage>[1]) {
+	return initiateImage(context, {
+		...author,
+		...options,
 	});
 }
 
@@ -301,33 +195,10 @@ describe('the Graphics Asset Library operational queues', () => {
 	it('separates a retryable ingestion from one whose staged input expired', async () => {
 		const context = createQueuesLibrary();
 		context.canonical.injectTransientFailure('create', 2);
-		const interrupted = await context.library.initiateGraphicsIngestion({
-			idempotencyKey: 'retryable-operation',
-			initiatedBy: 'queues-author',
-			name: 'Interrupted publication',
-			sourceFileName: 'logo.png',
-			declaredMime: 'image/png',
-			browserDecodeEvidence: decodeEvidence(pixelPng),
-			declaredByteLength: pixelPng.byteLength,
-		});
-		await context.library.uploadGraphicAsset({
-			operationId: interrupted.id,
-			initiatedBy: interrupted.initiatedBy,
-			declaredMime: 'image/png',
-			bytes: createBoundedByteStream(pixelPng, {
-				byteLength: pixelPng.byteLength,
-				maximumByteLength: pixelPng.byteLength,
-			}),
-		});
+		const interrupted = await initiateQueuedImage(context, { idempotencyKey: 'retryable-operation', name: 'Interrupted publication' });
+		await uploadImage(context, interrupted);
 
-		const abandoned = await context.library.initiateGraphicsIngestion({
-			idempotencyKey: 'expiring-operation',
-			initiatedBy: 'queues-author',
-			name: 'Abandoned transfer',
-			sourceFileName: 'logo.png',
-			declaredMime: 'image/png',
-			declaredByteLength: pixelPng.byteLength,
-		});
+		const abandoned = await initiateQueuedImage(context, { idempotencyKey: 'expiring-operation', name: 'Abandoned transfer', decoded: false });
 
 		const retryable = queueOf(
 			await context.library.getOperationalQueues(),
@@ -422,21 +293,8 @@ describe('one queue never crowding out another', () => {
 
 		// One operation the library is still holding verified input for.
 		context.canonical.injectTransientFailure('create', 2);
-		const interrupted = await context.library.initiateGraphicsIngestion({
-			idempotencyKey: 'starved-retryable',
-			initiatedBy: 'queues-author',
-			name: 'Interrupted publication',
-			sourceFileName: 'logo.png',
-			declaredMime: 'image/png',
-			browserDecodeEvidence: decodeEvidence(pixelPng),
-			declaredByteLength: pixelPng.byteLength,
-		});
-		await context.library.uploadGraphicAsset({
-			operationId: interrupted.id,
-			initiatedBy: interrupted.initiatedBy,
-			declaredMime: 'image/png',
-			bytes: boundedBytes(pixelPng),
-		});
+		const interrupted = await initiateQueuedImage(context, { idempotencyKey: 'starved-retryable', name: 'Interrupted publication' });
+		await uploadImage(context, interrupted);
 
 		// A backlog of abandoned transfers larger than any one queue's sample,
 		// each a minute apart so their expiry deadlines are genuinely distinct.

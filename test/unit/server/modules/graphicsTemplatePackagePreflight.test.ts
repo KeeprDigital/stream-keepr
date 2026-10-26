@@ -1,13 +1,5 @@
-import type { SilentVideoPlaybackValidator } from '~~/server/modules/graphics-asset-library/silent-video-playback-validator';
-import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
-import type {
-	TemplatePackagePreflightIssueCode,
-	TemplatePackagePreflightReport,
-} from '~~/shared/types/templatePackage';
-import { Buffer } from 'node:buffer';
-import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { beforeEach, describe, expect, it } from 'vitest';
+import type { PackageLibrary } from '~~/test/helpers/templatePackageLibrary';
+import { describe, expect, it } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
 	createInMemoryGraphicsAssetCatalogue,
@@ -17,13 +9,24 @@ import {
 	createInMemoryStagingGraphicsObjectStore,
 } from '~~/server/modules/graphics-asset-library/in-memory-object-store';
 import {
-	createBoundedByteStream,
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { TEMPLATE_PACKAGE_LIMITS } from '~~/shared/types/templatePackage';
-import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { broadcastGraphicTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
 import { testGraphicAssetRevisionId } from '~~/test/helpers/graphicsAssetIdentities';
+import { digestOf, pixelPng as transparentPixelPng } from '~~/test/helpers/graphicsFixtures';
+import { webpPixel } from '~~/test/helpers/graphicsImageFixtures';
+import { boundedBytes } from '~~/test/helpers/graphicsLibrary';
+import {
+	issueCodes as codes,
+	createPackageLibrary,
+	exportPackage,
+	ingestPackageImage as ingestImage,
+	ingestPackageSilentVideo as ingestSilentVideo,
+	ingestPackageStaticFont as ingestStaticFont,
+	preflightPackage as preflight,
+	preflightReportOf as reportOf,
+} from '~~/test/helpers/templatePackageLibrary';
 import { collectStream } from '../../../helpers/storedZipArchive';
 import {
 	readTemplatePackageParts,
@@ -32,243 +35,7 @@ import {
 } from '../../../helpers/templatePackageArchive';
 import { acceptEveryTemplateDocument } from '../../../helpers/templatePackagePayload';
 
-const transparentPixelPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-	'base64',
-));
-const webpPixel = Uint8Array.from(Buffer.from(
-	'UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAEAdQlFKUp4CBiOh/AAA=',
-	'base64',
-));
-const sixteenPixelPosterPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAABAAAAAQBPJcTWAAAAHUlEQVR4nGP8x8Dwn4ECwEKJ5lEDRg0YNWAwGQAAkU4CO63xbeIAAAAASUVORK5CYII=',
-	'base64',
-));
-const vp9Webm = Uint8Array.from(Buffer.from(
-	'GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAIMEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggElTbuMU6uEHFO7a1OsggH27AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjIuMTIuMTAyV0GNTGF2ZjYyLjEyLjEwMkSJiECPQAAAAAAAFlSua8iuAQAAAAAAAD/XgQFzxYhkRqj8GKbqBJyBACK1nIN1bmSIgQCGhVZfVlA5g4EBI+ODhB3NZQDgkLCBELqBEJqBAlWwhFW5gQESVMNnQIBzc6BjwIBnyJpFo4dFTkNPREVSRIeNTGF2ZjYyLjEyLjEwMnNz2mPAi2PFiGRGqPwYpuoEZ8ilRaOHRU5DT0RFUkSHmExhdmM2Mi4yOC4xMDIgbGlidnB4LXZwOWfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDEuMDAwMDAwMDAwAB9DtnXG54EAo6yBAACAgkmDQgAA8AD2ADgkHBhCAAAwcAAASqf/+5CBv///CAg////7iYcAAKOTgQH0AIYAQJKcAElAAAMgAABCQBxTu2uRu4+zgQC3iveBAfGCAavwgQM=',
-	'base64',
-));
-
-function digestOf(bytes: Uint8Array) {
-	return createHash('sha256').update(bytes).digest('hex');
-}
-
-/**
- * Playback validation is a controlled adapter, exactly as the shared ingestion
- * suites drive it. Preflight uses it to prove a packaged silent video the same
- * way an uploaded one is proven.
- */
-function acceptEverySilentVideo(): SilentVideoPlaybackValidator {
-	return {
-		validate: async input => ({
-			outcome: 'accepted' as const,
-			operationId: input.operationId,
-			idempotencyKey: input.idempotencyKey,
-			sourceDigest: input.sourceDigest,
-			factsDigest: input.factsDigest,
-			width: input.inspectedFacts.width,
-			height: input.inspectedFacts.height,
-			durationSeconds: input.inspectedFacts.durationSeconds,
-			posterTimeSeconds: input.inspectedFacts.posterTimeSeconds,
-			mutedInlinePlayback: true as const,
-			seeked: true as const,
-			transparencyRendered: false,
-			posterDigest: digestOf(sixteenPixelPosterPng),
-			poster: createBoundedByteStream(sixteenPixelPosterPng, {
-				byteLength: sixteenPixelPosterPng.byteLength,
-				maximumByteLength: MAX_SILENT_VIDEO_POSTER_BYTES,
-			}),
-		}),
-	};
-}
-
-function createLibrary(label: string) {
-	let nextIdentity = 0;
-	const canonical = createInMemoryCanonicalGraphicsObjectStore();
-	const staging = createInMemoryStagingGraphicsObjectStore();
-	const library = createGraphicsAssetLibrary({
-		catalogue: createInMemoryGraphicsAssetCatalogue(),
-		staging,
-		canonical,
-		silentVideoPlaybackValidator: acceptEverySilentVideo(),
-		templatePayloads: acceptEveryTemplateDocument(),
-		now: () => new Date('2026-07-30T09:00:00.000Z'),
-		generateIdentity: () => `${label}-identity-${++nextIdentity}`,
-	});
-	return { library, canonical, staging };
-}
-
-type Library = ReturnType<typeof createLibrary>['library'];
-
-async function ingestImage(
-	library: Library,
-	name: string,
-	bytes: Uint8Array = transparentPixelPng,
-	mime: 'image/png' | 'image/webp' = 'image/png',
-): Promise<GraphicAssetReference> {
-	const operation = await library.initiateGraphicsIngestion({
-		idempotencyKey: `ingest-${name}`,
-		initiatedBy: 'package-author',
-		name,
-		sourceFileName: mime === 'image/png'
-			? `${name}.png`
-			: `${name}.webp`,
-		declaredMime: mime,
-		duplicateContentPolicy: 'create-separate',
-		browserDecodeEvidence: {
-			outcome: 'decoded',
-			sourceDigest: digestOf(bytes),
-			width: 1,
-			height: 1,
-		},
-		declaredByteLength: bytes.byteLength,
-	});
-	const completed = await library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: mime,
-		bytes: createBoundedByteStream(bytes, {
-			byteLength: bytes.byteLength,
-			maximumByteLength: bytes.byteLength,
-		}),
-	});
-	return {
-		assetId: completed.result!.assetId,
-		revisionId: completed.result!.revisionId,
-	};
-}
-
-async function ingestSilentVideo(library: Library, name: string): Promise<GraphicAssetReference> {
-	const operation = await library.initiateGraphicsIngestion({
-		idempotencyKey: `ingest-${name}`,
-		initiatedBy: 'package-author',
-		name,
-		sourceFileName: `${name}.webm`,
-		declaredMime: 'video/webm',
-		declaredByteLength: vp9Webm.byteLength,
-	});
-	const completed = await library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: 'video/webm',
-		bytes: createBoundedByteStream(vp9Webm, {
-			byteLength: vp9Webm.byteLength,
-			maximumByteLength: 250 * 1024 * 1024,
-		}),
-	});
-	return {
-		assetId: completed.result!.assetId,
-		revisionId: completed.result!.revisionId,
-	};
-}
-
-async function ingestStaticFont(library: Library, name: string): Promise<GraphicAssetReference> {
-	const source = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
-	const operation = await library.initiateGraphicsIngestion({
-		idempotencyKey: `ingest-${name}`,
-		initiatedBy: 'package-author',
-		name,
-		sourceFileName: 'mplantin.woff',
-		declaredMime: 'font/woff',
-		declaredByteLength: source.byteLength,
-	});
-	const awaitingEvidence = await library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: 'font/woff',
-		bytes: createBoundedByteStream(source, {
-			byteLength: source.byteLength,
-			maximumByteLength: 10 * 1024 * 1024,
-		}),
-	});
-	if (awaitingEvidence.report?.outcome !== 'accepted' || awaitingEvidence.report.facts.kind !== 'font')
-		throw new Error('Expected a validated font challenge');
-	const { facts } = awaitingEvidence.report;
-	const completed = await library.confirmFontBrowserEvidence({
-		operationId: awaitingEvidence.id,
-		initiatedBy: awaitingEvidence.initiatedBy,
-		evidence: {
-			outcome: 'font-loaded',
-			sourceDigest: facts.sha256,
-			challengeDigest: facts.browserChallenge.digest,
-			glyphProofs: facts.browserChallenge.codePoints.map(codePoint => ({
-				codePoint,
-				exactWithSansDigest: '1'.repeat(64),
-				exactWithMonoDigest: '1'.repeat(64),
-				sansFallbackDigest: '2'.repeat(64),
-				monoFallbackDigest: '3'.repeat(64),
-			})),
-		},
-	});
-	return {
-		assetId: completed.result!.assetId,
-		revisionId: completed.result!.revisionId,
-	};
-}
-
-/** Exports one package from `library` and returns its exact archive bytes. */
-async function exportPackage(
-	library: Library,
-	input: {
-		document?: unknown;
-		assets: { slot: string; reference: GraphicAssetReference }[];
-		templateName?: string;
-	},
-): Promise<Uint8Array> {
-	const result = await library.exportTemplatePackage({
-		packageKind: 'skgraphic',
-		template: {
-			identity: 'template-1',
-			name: input.templateName ?? 'Lower third',
-			document: input.document ?? Object.fromEntries(
-				input.assets.map(asset => [asset.slot, asset.reference]),
-			),
-		},
-		assets: input.assets,
-	});
-	if (result.outcome !== 'exported')
-		throw new Error(`Expected an exported package, got ${JSON.stringify(result.report.issues)}`);
-	return await collectStream(result.package.open());
-}
-
-let preflightSequence = 0;
-
-async function preflight(
-	library: Library,
-	archive: Uint8Array,
-	options: { sourceFileName?: string | null } = {},
-) {
-	const operation = await library.initiateTemplatePackagePreflight({
-		idempotencyKey: `preflight-${++preflightSequence}`,
-		initiatedBy: 'package-author',
-		sourceFileName: options.sourceFileName === null
-			? undefined
-			: options.sourceFileName ?? 'lower-third.skgraphic',
-		declaredByteLength: archive.byteLength,
-	});
-	return await library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		bytes: createBoundedByteStream(archive, {
-			byteLength: archive.byteLength,
-			maximumByteLength: archive.byteLength,
-		}),
-	});
-}
-
-function reportOf(operation: { templatePackagePreflight?: TemplatePackagePreflightReport }) {
-	if (!operation.templatePackagePreflight)
-		throw new Error('Expected the operation to carry a Template Package preflight report');
-	return operation.templatePackagePreflight;
-}
-
-function codes(report: TemplatePackagePreflightReport): TemplatePackagePreflightIssueCode[] {
-	return report.issues.map(issue => issue.code);
-}
-
-beforeEach(() => {
-	preflightSequence = 0;
-});
+const createLibrary = createPackageLibrary;
 
 describe('the Template Package preflight contract', () => {
 	it('maps a package exported from this installation back to its exact origins', async () => {
@@ -426,109 +193,68 @@ describe('the Template Package preflight contract', () => {
 			return codes(report);
 		}
 
-		it('rejects an entry that traverses outside the archive', async () => {
-			const parts = await validParts();
-			expect(await rejectionCodes(writeTemplatePackage(parts, {
-				extraEntries: [
-					{
-						name: '../escaped.json',
-						bytes: new Uint8Array([1]),
-					},
-				],
-			}))).toContain('package-entry-path-traversal');
-		});
-
 		it.each([
-			['an absolute path', '/etc/passwd'],
-			['a Windows path', 'C:\\windows\\system32'],
-			['a directory entry', 'nested/'],
-		])('rejects %s', async (_label, name) => {
+			[
+				'an entry that traverses outside the archive',
+				{ name: '../escaped.json' },
+				'package-entry-path-traversal',
+			],
+			[
+				'an absolute path',
+				{ name: '/etc/passwd' },
+				'unsafe-package-entry-path',
+			],
+			[
+				'a Windows path',
+				{ name: 'C:\\windows\\system32' },
+				'unsafe-package-entry-path',
+			],
+			[
+				'a directory entry',
+				{ name: 'nested/' },
+				'unsafe-package-entry-path',
+			],
+			// A Unix symlink mode in the high half of the external attributes.
+			[
+				'a link entry',
+				{ name: 'link.bin', externalAttributes: 0xA1FF0000 },
+				'package-entry-link',
+			],
+			[
+				'entry paths that collide only by case',
+				{ name: 'Manifest.JSON' },
+				'duplicate-package-entry-path',
+			],
+			[
+				'an encrypted entry',
+				{ name: 'secret.bin', generalPurposeFlags: 0x0809 },
+				'encrypted-package-entry',
+			],
+			[
+				'a compressed entry',
+				{ name: 'squeezed.bin', compressionMethod: 8 },
+				'compressed-package-entry',
+			],
+			[
+				'an entry that disagrees with itself about its size',
+				{ name: 'lying.bin', declaredUncompressedSize: 64 },
+				'inconsistent-package-entry-size',
+			],
+			[
+				'an entry the manifest never declares',
+				{ name: 'extra.bin' },
+				'undeclared-package-entry',
+			],
+		] as const)('rejects %s', async (_label, entry, code) => {
 			const parts = await validParts();
 			expect(await rejectionCodes(writeTemplatePackage(parts, {
 				extraEntries: [
 					{
-						name,
-						bytes: new Uint8Array([1]),
-					},
-				],
-			}))).toContain('unsafe-package-entry-path');
-		});
-
-		it('rejects a link entry', async () => {
-			const parts = await validParts();
-			expect(await rejectionCodes(writeTemplatePackage(parts, {
-				extraEntries: [
-					{
-						name: 'link.bin',
-						bytes: new TextEncoder().encode('/etc/passwd'),
-						// A Unix symlink mode in the high half of the external attributes.
-						externalAttributes: 0xA1FF0000,
-					},
-				],
-			}))).toContain('package-entry-link');
-		});
-
-		it('rejects entry paths that collide only by case', async () => {
-			const parts = await validParts();
-			expect(await rejectionCodes(writeTemplatePackage(parts, {
-				extraEntries: [
-					{
-						name: 'Manifest.JSON',
-						bytes: new Uint8Array([1]),
-					},
-				],
-			}))).toContain('duplicate-package-entry-path');
-		});
-
-		it('rejects an encrypted entry', async () => {
-			const parts = await validParts();
-			expect(await rejectionCodes(writeTemplatePackage(parts, {
-				extraEntries: [
-					{
-						name: 'secret.bin',
-						bytes: new Uint8Array([1]),
-						generalPurposeFlags: 0x0809,
-					},
-				],
-			}))).toContain('encrypted-package-entry');
-		});
-
-		it('rejects a compressed entry', async () => {
-			const parts = await validParts();
-			expect(await rejectionCodes(writeTemplatePackage(parts, {
-				extraEntries: [
-					{
-						name: 'squeezed.bin',
-						bytes: new Uint8Array([1]),
-						compressionMethod: 8,
-					},
-				],
-			}))).toContain('compressed-package-entry');
-		});
-
-		it('rejects an entry that disagrees with itself about its size', async () => {
-			const parts = await validParts();
-			expect(await rejectionCodes(writeTemplatePackage(parts, {
-				extraEntries: [
-					{
-						name: 'lying.bin',
 						bytes: new Uint8Array([1, 2, 3, 4]),
-						declaredUncompressedSize: 64,
+						...entry,
 					},
 				],
-			}))).toContain('inconsistent-package-entry-size');
-		});
-
-		it('rejects an entry the manifest never declares', async () => {
-			const parts = await validParts();
-			expect(await rejectionCodes(writeTemplatePackage(parts, {
-				extraEntries: [
-					{
-						name: 'extra.bin',
-						bytes: new Uint8Array([1]),
-					},
-				],
-			}))).toContain('undeclared-package-entry');
+			}))).toContain(code);
 		});
 
 		it('rejects content the manifest declares but the archive omits', async () => {
@@ -836,7 +562,7 @@ describe('the Template Package preflight contract', () => {
 	});
 
 	describe('schema versions', () => {
-		function retry(library: Library, operationId: string) {
+		function retry(library: PackageLibrary, operationId: string) {
 			return library.retryGraphicsIngestion({
 				operationId: operationId as never,
 				initiatedBy: 'package-author',
@@ -1165,10 +891,7 @@ describe('the Template Package preflight contract', () => {
 			const paused = await receiver.uploadGraphicAsset({
 				operationId: started.id,
 				initiatedBy: started.initiatedBy,
-				bytes: createBoundedByteStream(archive, {
-					byteLength: archive.byteLength,
-					maximumByteLength: archive.byteLength,
-				}),
+				bytes: boundedBytes(archive),
 			});
 			expect(paused.stage).toBe('awaiting-confirmation');
 			const superseded = reportOf(paused).fingerprint;

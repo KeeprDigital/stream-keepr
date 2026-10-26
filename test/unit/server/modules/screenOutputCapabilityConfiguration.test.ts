@@ -17,53 +17,33 @@ function withSigningKey(value: unknown) {
 	return { context: {} } as never;
 }
 
-/**
- * A misconfigured signing key is the first thing a fresh checkout hits, and the
- * only place it surfaces is the response to screen creation. If that response
- * does not say which name is wrong, the author is left with a bare 503 for a
- * one-line environment fix — which is exactly what #233 recorded.
- */
+// The only place a bad signing key surfaces is the screen-creation response, so it names the variable (#233).
 describe('a Screen Output capability signing key that cannot be used', () => {
 	beforeEach(() => {
 		vi.resetModules();
 	});
 
-	it('names the environment variable when nothing set it', () => {
-		expect(() => screenOutputAssetCapabilityManagerForEvent(withSigningKey('')))
-			.toThrowError(/NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY is not set/);
-	});
-
-	it('names the environment variable when the runtime config carries no string at all', () => {
-		expect(() => screenOutputAssetCapabilityManagerForEvent(withSigningKey(undefined)))
-			.toThrowError(/NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY is not set/);
-	});
-
-	it('distinguishes a key of the wrong shape from an absent one', () => {
-		// Both answer 503, and the two fixes are not the same fix.
-		expect(() => screenOutputAssetCapabilityManagerForEvent(withSigningKey('not-base64-32-bytes')))
-			.toThrowError(/NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY is not 32-byte base64/);
-	});
-
-	it('still answers 503, so no caller\'s handling of the outcome changes', () => {
-		expect(() => screenOutputAssetCapabilityManagerForEvent(withSigningKey('')))
-			.toThrowError(expect.objectContaining({ statusCode: 503 }));
-	});
-
-	it('carries a cause the 5xx sanitizer will let the message through', () => {
-		// The message is only public because `mapPublicNitroError` recognises this
-		// cause; thrown without one it would reach the author as 'Internal Server
-		// Error' however carefully it were worded here.
-		let thrown: unknown;
+	function refusalFor(value: unknown) {
 		try {
-			screenOutputAssetCapabilityManagerForEvent(withSigningKey(''));
+			screenOutputAssetCapabilityManagerForEvent(withSigningKey(value));
 		}
 		catch (error) {
-			thrown = error;
+			return error as Error & { statusCode: number; cause: unknown };
 		}
+		throw new Error('Expected the signing key to be refused');
+	}
 
-		const { cause } = thrown as { cause: unknown };
+	it.each([
+		['set to nothing', '', 'is not set'],
+		['absent from the runtime config', undefined, 'is not set'],
+		['the wrong shape', 'not-base64-32-bytes', 'is not 32-byte base64'],
+	])('names the variable and the fix when the key is %s', (_label, value, fix) => {
+		const refusal = refusalFor(value);
 
-		expect(cause).toBeInstanceOf(ServiceConfigurationError);
+		expect(refusal.statusCode).toBe(503);
+		expect(refusal.message).toContain(`NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY ${fix}`);
+		// The cause is what lets the public error mapper keep the message.
+		expect(refusal.cause).toBeInstanceOf(ServiceConfigurationError);
 	});
 
 	it('is not raised for a well-formed key', () => {

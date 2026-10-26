@@ -1,78 +1,34 @@
 import type { GraphicAssetId, GraphicAssetRevisionId } from '~~/shared/types/graphicsAsset';
-import { Buffer } from 'node:buffer';
-import { createHash } from 'node:crypto';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import { graphicAssetReferences } from '~~/server/db/schema/graphicsAsset';
-import { createGraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
-import {
-	createInMemoryCanonicalGraphicsObjectStore,
-	createInMemoryStagingGraphicsObjectStore,
-} from '~~/server/modules/graphics-asset-library/in-memory-object-store';
-import { createBoundedByteStream } from '~~/server/modules/graphics-asset-library/object-store';
+
+import { createTestGraphicsLibrary, ingestImage, publishedRevision } from '~~/test/helpers/graphicsLibrary';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
+
 /**
- * Retire is refused while a saved template references the asset (#614).
- *
- * A template keeps every reference it holds selectable on every write
- * (ADR-0034), so an asset retired under one would leave it unrevisable. Retire
- * therefore refuses while any Broadcast Graphic Template or Feature Match Layout
- * Template references any revision of the asset,
- * and the refusal names them. The condition sits in the statement that retires,
- * so a template saved after anyone looked still holds it back. A Screen's
- * reference does not: a Screen keeps an unchanged retired reference resolving.
- *
- * Driven against libSQL because the guarantee is a condition on a statement.
+ * Retire is refused while a saved template references any revision of the asset, in the
+ * retiring statement itself; a Screen's reference does not hold it back (#614, ADR-0034).
  */
 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
 
-const pixelPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-	'base64',
-));
-
-let nextIdentity = 0;
-const library = createGraphicsAssetLibrary({
+const context = createTestGraphicsLibrary({
 	catalogue: createD1GraphicsAssetCatalogue(harness.database),
-	staging: createInMemoryStagingGraphicsObjectStore(),
-	canonical: createInMemoryCanonicalGraphicsObjectStore(),
-	now: () => new Date('2026-10-21T00:00:00.000Z'),
-	generateIdentity: () => `retire-${++nextIdentity}`,
+	start: '2026-10-21T00:00:00.000Z',
+	identityPrefix: 'retire',
 });
+const { library } = context;
 
+let plates = 0;
 let assetId: GraphicAssetId;
 let revisionId: GraphicAssetRevisionId;
 
 async function ingestAsset(name: string) {
-	const operation = await library.initiateGraphicsIngestion({
-		idempotencyKey: name,
-		initiatedBy: 'retire-author',
-		name,
-		sourceFileName: 'plate.png',
-		declaredMime: 'image/png',
-		browserDecodeEvidence: {
-			outcome: 'decoded',
-			sourceDigest: createHash('sha256').update(pixelPng).digest('hex'),
-			width: 1,
-			height: 1,
-		},
-		declaredByteLength: pixelPng.byteLength,
-		duplicateContentPolicy: 'create-separate',
-	});
-	const uploaded = await library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: 'image/png',
-		bytes: createBoundedByteStream(pixelPng, {
-			byteLength: pixelPng.byteLength,
-			maximumByteLength: pixelPng.byteLength,
-		}),
-	});
-	return uploaded.result!;
+	return publishedRevision(await ingestImage(context, { idempotencyKey: name, initiatedBy: 'retire-author' }));
 }
 
 async function lifecycleState(): Promise<string | undefined> {
@@ -101,7 +57,7 @@ async function retire() {
 beforeEach(async () => {
 	await db.delete(graphicAssetReferences);
 	await db.delete(schema.broadcastGraphicTemplates);
-	({ assetId, revisionId } = await ingestAsset(`plate-${nextIdentity}`));
+	({ assetId, revisionId } = await ingestAsset(`plate-${++plates}`));
 });
 
 afterAll(async () => await harness.close());
