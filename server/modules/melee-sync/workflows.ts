@@ -344,11 +344,15 @@ export function createMeleeSyncWorkflows() {
 				slotIds: updatedMatchIds,
 			}));
 		}
-		await publishAfterCommit(warnings, async () => await publication.meleePlayersSynced({
-			eventId,
-			originConnectionId,
-			playerCount: upsertedPlayers.length,
-		}));
+		// A sync that changed no Player has nothing to announce: every follower
+		// would re-read or reload only to find what it holds (#798).
+		if (created + updated + deactivated > 0) {
+			await publishAfterCommit(warnings, async () => await publication.meleePlayersSynced({
+				eventId,
+				originConnectionId,
+				playerCount: upsertedPlayers.length,
+			}));
+		}
 
 		return {
 			success: true,

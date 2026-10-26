@@ -72,15 +72,17 @@ describe('playerService JSON bulk SQLite integration', () => {
 		})).rows[0]!;
 
 		await service.reconcileMeleeSnapshot(2, [player], firstSeen);
-		await service.reconcileMeleeSnapshot(2, [player], new Date(firstSeen.getTime() + 1000));
+		const unchanged = await service.reconcileMeleeSnapshot(2, [player], new Date(firstSeen.getTime() + 1000));
+		expect(unchanged).toMatchObject({ created: 0, updated: 0, deactivated: 0 });
 		expect(await readRow()).toMatchObject({
 			updated_at: firstSeen.getTime(),
 			last_seen_at: firstSeen.getTime() + 1000,
 		});
 
-		await service.reconcileMeleeSnapshot(2, [
+		const changed = await service.reconcileMeleeSnapshot(2, [
 			{ ...player, wins: 2 },
 		], new Date(firstSeen.getTime() + 2000));
+		expect(changed).toMatchObject({ created: 0, updated: 1, deactivated: 0 });
 		expect(await readRow()).toMatchObject({ updated_at: firstSeen.getTime() + 2000 });
 
 		// Missing from one sync, then back unchanged: the reactivation is a change.

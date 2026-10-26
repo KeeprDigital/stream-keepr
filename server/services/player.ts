@@ -362,15 +362,21 @@ export function playerService() {
 			existingQueries.length + upsertQueries.length,
 		).flat() as DbPlayer[];
 		const deactivatedRows = (batchResults.at(-1) ?? []) as Array<{ id: number }>;
-		const created = upsertedPlayers.filter((player) => {
+		let created = 0;
+		let updated = 0;
+		for (const player of upsertedPlayers) {
 			const key = playerIdentityKey(player);
-			return key == null || !existingKeys.has(key);
-		}).length;
+			if (key == null || !existingKeys.has(key))
+				created++;
+			// The upsert moves a revision only when it changed the Player.
+			else if (new Date(player.updatedAt).getTime() === seenAt.getTime())
+				updated++;
+		}
 
 		return {
 			players: upsertedPlayers,
 			created,
-			updated: upsertedPlayers.length - created,
+			updated,
 			deactivated: deactivatedRows.length,
 		};
 	};
