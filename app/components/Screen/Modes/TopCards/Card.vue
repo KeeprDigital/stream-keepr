@@ -40,7 +40,7 @@ watch(() => props.entry.scryfallId, () => {
 		data-testid="top-cards-item"
 	>
 		<div class="relative">
-			<div class="aspect-63/88 rounded-lg overflow-hidden bg-elevated">
+			<div class="mtg-card bg-elevated">
 				<img
 					v-if="imageUrl && !imageError"
 					:src="imageUrl"

@@ -889,7 +889,7 @@ async function handleUpdateFromMelee() {
 									v-if="getResolveSearchImageUrl(card)"
 									:src="getResolveSearchImageUrl(card)!"
 									:alt="card.name"
-									class="h-12 w-9 rounded object-cover border border-default"
+									class="mtg-card w-9 shrink-0 object-cover border border-default"
 								>
 								<div class="min-w-0 flex-1">
 									<p class="font-medium text-sm truncate">

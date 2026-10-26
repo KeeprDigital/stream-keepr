@@ -30,7 +30,7 @@ withDefaults(defineProps<{
 	width: 244,
 	height: 340,
 	side: 'right',
-	borderRadius: '4.75% / 4%',
+	borderRadius: 'var(--mtg-card-radius)',
 });
 
 const emit = defineEmits<{

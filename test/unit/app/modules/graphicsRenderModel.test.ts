@@ -26,6 +26,7 @@ import { describe, expect, it } from 'vitest';
 import { featureMatchTokenDeclarations } from '~~/shared/featureMatchTokenCatalogue';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition, squareShapeGeometry } from '~~/shared/modules/graphics';
 import { SUPPORTED_SOCIAL_NETWORKS } from '~~/shared/socialProfiles';
+import { MTG_CARD_BORDER_RADIUS } from '~~/shared/utils/card/size';
 import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
 import { resolveGraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 
@@ -396,6 +397,9 @@ function stylePaints(style: CSSProperties, path: string): KeyPaint[] {
  * property that paints is in neither and still fails by key alone.
  */
 const MEDIA_NON_PAINTING_KEYS = new Set([
+	// A Deck List card's art rounds its corners like the printed card. Like
+	// `clipPath`, it removes alpha at the corners and adds none.
+	'borderRadius',
 	'objectFit',
 	'objectPosition',
 ]);
@@ -1549,6 +1553,8 @@ describe('graphicsCompositionRenderModel', () => {
 			// A card with art renders it contained, never cropped.
 			expect(cards[2]!.image?.src).toBe('https://cards.example/pithing-needle.jpg');
 			expect(cards[2]!.image?.style.objectFit).toBe('contain');
+			// Rounded like every other Magic card face, not square-cornered JPEG.
+			expect(cards[2]!.image?.style.borderRadius).toBe(MTG_CARD_BORDER_RADIUS);
 			expect(cards[2]!.placeholder).toBeUndefined();
 		});
 
