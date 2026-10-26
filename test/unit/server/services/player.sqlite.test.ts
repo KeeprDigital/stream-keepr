@@ -55,4 +55,39 @@ describe('playerService JSON bulk SQLite integration', () => {
 			expect.objectContaining({ external_id: 'player-2', is_active: 0 }),
 		]);
 	});
+
+	it('moves a Player\'s revision only when the sync changed what they hold', async () => {
+		const service = playerService();
+		const player = {
+			externalId: 'revision-1',
+			externalStatus: 1,
+			name: 'Rev',
+			wins: 1,
+			losses: 0,
+		};
+		const firstSeen = new Date('2026-08-01T00:00:00.000Z');
+		const readRow = async () => (await client.execute({
+			sql: 'select updated_at, last_seen_at from players where external_id = ?',
+			args: ['revision-1'],
+		})).rows[0]!;
+
+		await service.reconcileMeleeSnapshot(2, [player], firstSeen);
+		await service.reconcileMeleeSnapshot(2, [player], new Date(firstSeen.getTime() + 1000));
+		expect(await readRow()).toMatchObject({
+			updated_at: firstSeen.getTime(),
+			last_seen_at: firstSeen.getTime() + 1000,
+		});
+
+		await service.reconcileMeleeSnapshot(2, [
+			{ ...player, wins: 2 },
+		], new Date(firstSeen.getTime() + 2000));
+		expect(await readRow()).toMatchObject({ updated_at: firstSeen.getTime() + 2000 });
+
+		// Missing from one sync, then back unchanged: the reactivation is a change.
+		await service.reconcileMeleeSnapshot(2, [], new Date(firstSeen.getTime() + 3000));
+		await service.reconcileMeleeSnapshot(2, [
+			{ ...player, wins: 2 },
+		], new Date(firstSeen.getTime() + 4000));
+		expect(await readRow()).toMatchObject({ updated_at: firstSeen.getTime() + 4000 });
+	});
 });

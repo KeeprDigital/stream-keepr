@@ -57,7 +57,7 @@ function buildBulkPlayerUpsertQueries(
 		...grouped.values(),
 	].flatMap((group) => {
 		const example = group[0]!;
-		const set = {
+		const written = {
 			name: sql.raw('excluded.name'),
 			...(example.pronouns !== undefined
 				? {
@@ -109,7 +109,20 @@ function buildBulkPlayerUpsertQueries(
 						lastSeenAt: sql.raw('excluded.last_seen_at'),
 					}
 				: {}),
-			updatedAt: writeAt,
+		};
+		// A Player's revision moves only when the write changes what they hold.
+		// `lastSeenAt` moves on every sync by design, so it alone moves nothing:
+		// otherwise every Player re-announces a change on every Round sync.
+		const columns = getTableColumns(players);
+		const changed = sql.join(
+			(Object.keys(written) as Array<keyof typeof written>)
+				.filter(field => field !== 'lastSeenAt')
+				.map(field => sql.raw(`"players"."${columns[field].name}" is not excluded."${columns[field].name}"`)),
+			sql` or `,
+		);
+		const set = {
+			...written,
+			updatedAt: sql`case when ${changed} then ${writeAt.getTime()} else "players"."updated_at" end`,
 		};
 		return chunkJsonRows(group.map(data => ({
 			...data,
