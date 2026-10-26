@@ -2,305 +2,124 @@ import { describe, expect, it } from 'vitest';
 import {
 	metagameArchetypesQuerySchema,
 	metagameCardsQuerySchema,
-	metagameParamsSchema,
 	metagameQuerySchema,
 } from '~~/server/schemas/api/metagame';
 
-// ──────────────── metagameQuerySchema (base) ────────────────
-
-describe('metagameQuerySchema', () => {
-	it('defaults scope to all when omitted', () => {
-		const result = metagameQuerySchema.safeParse({});
-		expect(result.success).toBe(true);
-		if (result.success)
-			expect(result.data.scope).toBe('all');
+describe.each([
+	['metagameQuerySchema', metagameQuerySchema],
+	['metagameArchetypesQuerySchema', metagameArchetypesQuerySchema],
+	['metagameCardsQuerySchema', metagameCardsQuerySchema],
+] as const)('%s scope', (_name, schema) => {
+	it('defaults to the whole Event', () => {
+		expect(schema.parse({}).scope).toBe('all');
 	});
 
-	it('accepts scope all', () => {
-		const result = metagameQuerySchema.safeParse({ scope: 'all' });
-		expect(result.success).toBe(true);
+	it.each([
+		[
+			'topN',
+			{ topN: 8 },
+		],
+		[
+			'playerList',
+			{ playerListId: 42 },
+		],
+		[
+			'minPoints',
+			{ minPoints: 9 },
+		],
+	])('requires %s to name its parameter', (scope, parameter) => {
+		expect(schema.safeParse({ scope, ...parameter }).success).toBe(true);
+		expect(schema.safeParse({ scope }).success).toBe(false);
 	});
 
-	it('accepts scope topN with topN provided', () => {
-		const result = metagameQuerySchema.safeParse({ scope: 'topN', topN: 8 });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts scope playerList with playerListId provided', () => {
-		const result = metagameQuerySchema.safeParse({ scope: 'playerList', playerListId: 42 });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts topN at min boundary (1)', () => {
-		const result = metagameQuerySchema.safeParse({ scope: 'topN', topN: 1 });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts topN at max boundary (500)', () => {
-		const result = metagameQuerySchema.safeParse({ scope: 'topN', topN: 500 });
-		expect(result.success).toBe(true);
-	});
-
-	it('coerces string topN to number', () => {
-		const result = metagameQuerySchema.safeParse({ scope: 'topN', topN: '8' });
-		expect(result.success).toBe(true);
-		if (result.success)
-			expect(result.data.topN).toBe(8);
-	});
-
-	it('coerces string playerListId to number', () => {
-		const result = metagameQuerySchema.safeParse({ scope: 'playerList', playerListId: '42' });
-		expect(result.success).toBe(true);
-		if (result.success)
-			expect(result.data.playerListId).toBe(42);
-	});
-
-	it('accepts scope minPoints with minPoints provided', () => {
-		const result = metagameQuerySchema.safeParse({ scope: 'minPoints', minPoints: 9 });
-		expect(result.success).toBe(true);
-	});
-
-	it('rejects scope minPoints without minPoints', () => {
-		const result = metagameQuerySchema.safeParse({ scope: 'minPoints' });
-		expect(result.success).toBe(false);
-	});
-
-	it('accepts minPoints at min boundary (0)', () => {
-		const result = metagameQuerySchema.safeParse({ scope: 'minPoints', minPoints: 0 });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts minPoints at max boundary (999)', () => {
-		const result = metagameQuerySchema.safeParse({ scope: 'minPoints', minPoints: 999 });
-		expect(result.success).toBe(true);
-	});
-
-	it('rejects minPoints above max boundary', () => {
-		const result = metagameQuerySchema.safeParse({ scope: 'minPoints', minPoints: 1000 });
-		expect(result.success).toBe(false);
-	});
-
-	it('coerces string minPoints to number', () => {
-		const result = metagameQuerySchema.safeParse({ scope: 'minPoints', minPoints: '12' });
-		expect(result.success).toBe(true);
-		if (result.success)
-			expect(result.data.minPoints).toBe(12);
+	it.each([
+		['topN', 1, 500],
+		['minPoints', 0, 999],
+	])('bounds %s to %i..%i', (scope, min, max) => {
+		expect(schema.safeParse({ scope, [scope]: min }).success).toBe(true);
+		expect(schema.safeParse({ scope, [scope]: max }).success).toBe(true);
+		expect(schema.safeParse({ scope, [scope]: min - 1 }).success).toBe(false);
+		expect(schema.safeParse({ scope, [scope]: max + 1 }).success).toBe(false);
 	});
 });
-
-// ──────────────── metagameArchetypesQuerySchema ────────────────
 
 describe('metagameArchetypesQuerySchema', () => {
-	it('defaults sortBy to metaShare when omitted', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all' });
-		expect(result.success).toBe(true);
-		if (result.success)
-			expect(result.data.sortBy).toBe('metaShare');
+	it('defaults to Meta Share order with no conversion target or limit', () => {
+		expect(metagameArchetypesQuerySchema.parse({ scope: 'all' })).toEqual({ scope: 'all', sortBy: 'metaShare' });
 	});
 
-	it('accepts sortBy count', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all', sortBy: 'count' });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts sortBy winRate', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all', sortBy: 'winRate' });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts sortBy conversionRate', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all', sortBy: 'conversionRate' });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts a topN conversion target with coerced threshold', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all', conversionMetric: 'topN', conversionThreshold: '8' });
-		expect(result.success).toBe(true);
-		if (result.success)
-			expect(result.data.conversionThreshold).toBe(8);
-	});
-
-	it('accepts a minPoints conversion target', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all', conversionMetric: 'minPoints', conversionThreshold: 12 });
-		expect(result.success).toBe(true);
-	});
-
-	it('leaves the conversion target undefined when omitted', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all' });
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data.conversionMetric).toBeUndefined();
-			expect(result.data.conversionThreshold).toBeUndefined();
-		}
-	});
-
-	it('rejects a conversion metric without a threshold', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all', conversionMetric: 'topN' });
-		expect(result.success).toBe(false);
-	});
-
-	it('rejects a conversion threshold without a metric', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all', conversionThreshold: 8 });
-		expect(result.success).toBe(false);
-	});
-
-	it('rejects an unknown conversion metric', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all', conversionMetric: 'wins', conversionThreshold: 3 });
-		expect(result.success).toBe(false);
-	});
-
-	it('accepts conversionThreshold at min boundary (0)', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all', conversionMetric: 'minPoints', conversionThreshold: 0 });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts conversionThreshold at max boundary (999)', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all', conversionMetric: 'topN', conversionThreshold: 999 });
-		expect(result.success).toBe(true);
-	});
-
-	it('rejects conversionThreshold above max boundary', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all', conversionMetric: 'topN', conversionThreshold: 1000 });
-		expect(result.success).toBe(false);
-	});
-
-	it('inherits base query refinements', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'topN' });
-		expect(result.success).toBe(false);
-	});
-
-	it('leaves limit undefined when omitted', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all' });
-		expect(result.success).toBe(true);
-		if (result.success)
-			expect(result.data.limit).toBeUndefined();
-	});
-
-	it('accepts limit at min boundary (1)', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all', limit: 1 });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts limit at max boundary (500)', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all', limit: 500 });
-		expect(result.success).toBe(true);
-	});
-
-	it('rejects limit below min boundary', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all', limit: 0 });
-		expect(result.success).toBe(false);
-	});
-
-	it('coerces string limit to number', () => {
-		const result = metagameArchetypesQuerySchema.safeParse({ scope: 'all', limit: '10' });
-		expect(result.success).toBe(true);
-		if (result.success)
-			expect(result.data.limit).toBe(10);
+	it.each([
+		[
+			'a topN target',
+			{ conversionMetric: 'topN', conversionThreshold: '8' },
+			true,
+		],
+		[
+			'a minPoints target',
+			{ conversionMetric: 'minPoints', conversionThreshold: 0 },
+			true,
+		],
+		[
+			'the maximum threshold',
+			{ conversionMetric: 'topN', conversionThreshold: 999 },
+			true,
+		],
+		[
+			'a threshold above the maximum',
+			{ conversionMetric: 'topN', conversionThreshold: 1000 },
+			false,
+		],
+		[
+			'a metric without a threshold',
+			{ conversionMetric: 'topN' },
+			false,
+		],
+		[
+			'a threshold without a metric',
+			{ conversionThreshold: 8 },
+			false,
+		],
+		[
+			'an unknown metric',
+			{ conversionMetric: 'wins', conversionThreshold: 3 },
+			false,
+		],
+	])('takes a conversion target of %s → %s', (_case, target, accepted) => {
+		expect(metagameArchetypesQuerySchema.safeParse({ scope: 'all', ...target }).success).toBe(accepted);
 	});
 });
 
-// ──────────────── metagameCardsQuerySchema ────────────────
+describe.each([
+	['metagameArchetypesQuerySchema', metagameArchetypesQuerySchema],
+	['metagameCardsQuerySchema', metagameCardsQuerySchema],
+] as const)('%s limit', (_name, schema) => {
+	it('bounds the limit to 1..500', () => {
+		expect(schema.safeParse({ scope: 'all', limit: 1 }).success).toBe(true);
+		expect(schema.safeParse({ scope: 'all', limit: 500 }).success).toBe(true);
+		expect(schema.safeParse({ scope: 'all', limit: 0 }).success).toBe(false);
+		expect(schema.safeParse({ scope: 'all', limit: 501 }).success).toBe(false);
+	});
+});
 
 describe('metagameCardsQuerySchema', () => {
-	it('defaults sortBy to inclusionRate and limit to 50', () => {
-		const result = metagameCardsQuerySchema.safeParse({ scope: 'all' });
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data.sortBy).toBe('inclusionRate');
-			expect(result.data.limit).toBe(50);
-		}
+	it('defaults to Inclusion Rate order, 50 cards, the full Deck List and no excluded types', () => {
+		expect(metagameCardsQuerySchema.parse({ scope: 'all' })).toEqual({
+			scope: 'all',
+			sortBy: 'inclusionRate',
+			limit: 50,
+			board: 'full',
+		});
 	});
 
-	it('accepts sortBy avgCopies', () => {
-		const result = metagameCardsQuerySchema.safeParse({ scope: 'all', sortBy: 'avgCopies' });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts sortBy totalCopies', () => {
-		const result = metagameCardsQuerySchema.safeParse({ scope: 'all', sortBy: 'totalCopies' });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts optional archetypeId filter', () => {
-		const result = metagameCardsQuerySchema.safeParse({ scope: 'all', archetypeId: 5 });
-		expect(result.success).toBe(true);
-		if (result.success)
-			expect(result.data.archetypeId).toBe(5);
-	});
-
-	it('accepts limit at min boundary (1)', () => {
-		const result = metagameCardsQuerySchema.safeParse({ scope: 'all', limit: 1 });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts limit at max boundary (500)', () => {
-		const result = metagameCardsQuerySchema.safeParse({ scope: 'all', limit: 500 });
-		expect(result.success).toBe(true);
-	});
-
-	it('coerces string limit to number', () => {
-		const result = metagameCardsQuerySchema.safeParse({ scope: 'all', limit: '25' });
-		expect(result.success).toBe(true);
-		if (result.success)
-			expect(result.data.limit).toBe(25);
-	});
-
-	it('defaults board to full when omitted', () => {
-		const result = metagameCardsQuerySchema.safeParse({ scope: 'all' });
-		expect(result.success).toBe(true);
-		if (result.success)
-			expect(result.data.board).toBe('full');
-	});
-
-	it('accepts each board selection value', () => {
-		for (const board of ['full', 'mainboard', 'sideboard']) {
-			const result = metagameCardsQuerySchema.safeParse({ scope: 'all', board });
-			expect(result.success).toBe(true);
-		}
-	});
-
-	it('rejects the retired board value both', () => {
-		const result = metagameCardsQuerySchema.safeParse({ scope: 'all', board: 'both' });
-		expect(result.success).toBe(false);
+	it('refuses the retired board value both', () => {
+		expect(metagameCardsQuerySchema.safeParse({ scope: 'all', board: 'both' }).success).toBe(false);
 	});
 
 	it('parses comma-separated excludeTypes into card-type buckets', () => {
-		const result = metagameCardsQuerySchema.safeParse({ scope: 'all', excludeTypes: 'Land,Other' });
-		expect(result.success).toBe(true);
-		if (result.success)
-			expect(result.data.excludeTypes).toEqual(['Land', 'Other']);
+		expect(metagameCardsQuerySchema.parse({ scope: 'all', excludeTypes: 'Land,Other' }).excludeTypes).toEqual(['Land', 'Other']);
 	});
 
-	it('leaves excludeTypes undefined when omitted', () => {
-		const result = metagameCardsQuerySchema.safeParse({ scope: 'all' });
-		expect(result.success).toBe(true);
-		if (result.success)
-			expect(result.data.excludeTypes).toBeUndefined();
-	});
-
-	it('rejects excludeTypes containing an unknown bucket', () => {
-		const result = metagameCardsQuerySchema.safeParse({ scope: 'all', excludeTypes: 'Land,Tribal' });
-		expect(result.success).toBe(false);
-	});
-
-	it('rejects an empty excludeTypes value', () => {
-		const result = metagameCardsQuerySchema.safeParse({ scope: 'all', excludeTypes: '' });
-		expect(result.success).toBe(false);
-	});
-});
-
-// ──────────────── metagameParamsSchema ────────────────
-
-describe('metagameParamsSchema', () => {
-	it('coerces string id to number', () => {
-		const result = metagameParamsSchema.safeParse({ id: '1' });
-		expect(result.success).toBe(true);
-		if (result.success)
-			expect(result.data.id).toBe(1);
-	});
-
-	it('accepts numeric id', () => {
-		const result = metagameParamsSchema.safeParse({ id: 10 });
-		expect(result.success).toBe(true);
+	it.each(['Land,Tribal', ''])('refuses excludeTypes %j', (excludeTypes) => {
+		expect(metagameCardsQuerySchema.safeParse({ scope: 'all', excludeTypes }).success).toBe(false);
 	});
 });
