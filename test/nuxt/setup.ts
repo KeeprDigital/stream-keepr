@@ -1,48 +1,21 @@
 /**
- * Shared setup for every Nuxt-environment suite: the two background singletons
- * that write through `$fetch` are stubbed here so they never reach a suite's
- * `$fetch` mock (#367).
+ * Shared setup for every Nuxt-environment suite (#367). The app's two background
+ * writers through `$fetch` — `useServerTime`'s clock sync and the realtime plugin's
+ * token mint — are stubbed here, so a suite's `$fetch` mock records only the suite's
+ * own requests. `test/nuxt/setup.test.ts` holds this file to that contract.
  *
- * The class this retires: 40-odd suites mock `$fetch` module-wide, and the app
- * that boots underneath them runs two writers of its own — `useServerTime`'s
- * clock sync (three `/api/time` samples at 50ms spacing on first consumption,
- * then every 60s) and the realtime plugin's token mint (`/api/realtime/token`
- * on the first Event-scoped subscription). Any unselected count, negative, or
- * positional assertion on such a mock can be shifted by one of those calls
- * landing in its window, and a `mockResolvedValueOnce` queue drained one early
- * turns into failures that name the test's own subject — #367 catalogues five
- * costumes, including the graphics-assets page suite's 1-in-3 `idempotencyKey`
- * TypeError, where no assertion is at fault at all.
+ * A suite that tests a stubbed surface takes the stub off in its own file, which
+ * registers later and wins (`vi.unmock('~/composables/core/useServerTime')`, or its
+ * own `vi.mock('ably')`).
  *
- * The fix is at the declaration the writers share, not in each suite: stub the
- * writers once, here, and a suite's mock records only the suite's requests.
- * `test/nuxt/setup.test.ts` holds this file to that contract.
- *
- * Opting back in: a suite that genuinely tests one of the stubbed surfaces
- * takes the stub off in its own file — a test file's registration lands after
- * this setup's and wins. `useServerTime.test.ts` restores the real composable
- * with `vi.unmock('~/composables/core/useServerTime')`, and any suite needing
- * its own Ably shape mocks `'ably'` itself (as
- * `broadcastGraphicsLiveSessionProtocol.test.ts` already does).
- *
- * Both stubs are plain `vi.mock` with a factory that imports nothing, and that
- * is load-bearing rather than style: `mockNuxtImport` appends an eager import
- * of the mocked module to this file, which would instantiate the real module
- * graph during setup — before the suite's own `$fetch` mock registers — and
- * bind the real `$fetch` into it for the rest of the file. A factory that
- * builds its stub from nothing leaves every app module uninstantiated until
- * the suite's mocks are all in place.
+ * The factories import nothing on purpose: `mockNuxtImport` would eagerly import the
+ * mocked module, instantiating the app graph before the suite's own `$fetch` mock exists.
  */
 
 import { vi } from 'vitest';
 import { readonly, ref } from 'vue';
 
-/**
- * The steady state suites observed before this stub existed: against a mocked
- * `$fetch` every sample failed, so `isSynced` stayed false and the offset
- * stayed zero. Keeping that state means no suite's rendering changes — only
- * the requests stop.
- */
+/** Never synced, offset zero: the state every suite saw against a mocked `$fetch`. */
 vi.mock('~/composables/core/useServerTime', () => {
 	const serverTimeOffset = readonly(ref(0));
 	const isSynced = readonly(ref(false));
@@ -61,13 +34,7 @@ vi.mock('~/composables/core/useServerTime', () => {
 	};
 });
 
-/**
- * An Ably that holds still: the realtime plugin runs unchanged, but its client
- * never connects and `authorize()` resolves without invoking the plugin's
- * `authCallback`, so no token is ever fetched. Channels accept subscriptions
- * and presence inertly, which keeps `$realtime`'s API answerable for the
- * suites that reach it.
- */
+/** An Ably that never connects and never fetches a token; channels and presence accept calls inertly. */
 vi.mock('ably', () => {
 	class InertChannel {
 		presence = {

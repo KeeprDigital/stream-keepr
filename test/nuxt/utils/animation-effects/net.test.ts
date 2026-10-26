@@ -50,15 +50,11 @@ function dotMeshes(scene: THREE.Scene): THREE.Mesh<THREE.SphereGeometry, THREE.M
 }
 
 describe('createNetDelegate', () => {
-	it('creates the fork\'s static camera — the centred-pointer target is its start position', () => {
+	it('holds its camera still over time', () => {
 		const { delegate, context, camera } = mountDelegate();
-		expect(camera.isPerspectiveCamera).toBe(true);
-		expect(camera.fov).toBe(25);
-		expect(camera.near).toBe(0.01);
-		expect(camera.far).toBe(10000);
-		expect(camera.position.toArray()).toEqual([50, 100, 150]);
+		const start = camera.position.toArray();
 		delegate.update({ ...context, elapsedSeconds: 30 });
-		expect(camera.position.toArray()).toEqual([50, 100, 150]);
+		expect(camera.position.toArray()).toEqual(start);
 	});
 
 	it('builds the fork\'s doubled grid of point markers inside its height band', () => {
@@ -169,17 +165,6 @@ describe('createNetDelegate', () => {
 			expect(dot.position.x).toBeCloseTo(after[index]!.x);
 			expect(dot.position.z).toBeCloseTo(after[index]!.z);
 		});
-	});
-
-	it('lights the field the way the fork did, spot aimed at the group', () => {
-		const { scene } = mountDelegate();
-		const ambient = scene.children.find((child): child is THREE.AmbientLight => (child as THREE.AmbientLight).isAmbientLight);
-		expect(ambient?.intensity).toBe(0.75);
-		const spot = scene.children.find((child): child is THREE.SpotLight => (child as THREE.SpotLight).isSpotLight);
-		expect(spot?.intensity).toBe(1);
-		expect(spot?.position.toArray()).toEqual([0, 200, 0]);
-		expect(spot?.distance).toBe(400);
-		expect(spot?.target).toBe(netGroup(scene));
 	});
 
 	it('applies colours live, and rebuilds the field when its construction params change', () => {

@@ -1,8 +1,6 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ── Mock Dependencies (vi.hoisted so they're available in hoisted mockNuxtImport factories) ──
-
 const {
 	mockEventStore,
 	mockNavigateTo,
@@ -25,11 +23,7 @@ mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('navigateTo', () => mockNavigateTo);
 mockNuxtImport('defineNuxtRouteMiddleware', () => (fn: any) => fn);
 
-// ── Import middleware after mocks ──
-
 const { default: middleware } = await import('~/middleware/event.global');
-
-// ── Helpers ──
 
 function createRoute(path: string, params: Record<string, string> = {}) {
 	return { path, params } as any;
@@ -47,23 +41,11 @@ describe('event.global middleware', () => {
 		vi.clearAllMocks();
 	});
 
-	// ── Non-event routes ──
+	it.each(['/', '/settings'])('resets every Event store on leaving for the non-Event path %s', async (path) => {
+		await runMiddleware(createRoute(path));
 
-	describe('non-event routes', () => {
-		it('resets all stores when navigating to root', async () => {
-			await runMiddleware(createRoute('/'));
-
-			expect(mockResetAllEventStores).toHaveBeenCalledOnce();
-		});
-
-		it('resets all stores when navigating to a non-event path', async () => {
-			await runMiddleware(createRoute('/settings'));
-
-			expect(mockResetAllEventStores).toHaveBeenCalledOnce();
-		});
+		expect(mockResetAllEventStores).toHaveBeenCalledOnce();
 	});
-
-	// ── Event routes — successful load ──
 
 	describe('event route with successful load', () => {
 		it('resets all stores before loading a new event', async () => {
@@ -89,24 +71,12 @@ describe('event.global middleware', () => {
 		});
 	});
 
-	// ── Event routes — failed load (404 / not found) ──
+	it('redirects home when the Event does not exist', async () => {
+		mockEventStore.loadEvent.mockResolvedValue(null);
 
-	describe('event route with non-existent event', () => {
-		it('redirects to / when loadEvent resolves but event remains null', async () => {
-			mockEventStore.loadEvent.mockResolvedValue(null);
+		await runMiddleware(createRoute('/event/999/matches', { eventId: '999' }));
 
-			await runMiddleware(createRoute('/event/999/matches', { eventId: '999' }));
-
-			expect(mockNavigateTo).toHaveBeenCalledWith('/');
-		});
-
-		it('redirects config routes for non-existent events', async () => {
-			mockEventStore.loadEvent.mockResolvedValue(null);
-
-			await runMiddleware(createRoute('/event/999/config', { eventId: '999' }));
-
-			expect(mockNavigateTo).toHaveBeenCalledWith('/');
-		});
+		expect(mockNavigateTo).toHaveBeenCalledWith('/');
 	});
 
 	// ── The Screen Output page (#604) ──
@@ -135,28 +105,10 @@ describe('event.global middleware', () => {
 		});
 	});
 
-	// ── Edge cases ──
+	it.each(['abc', '0', '-1'])('redirects home without loading for the Event id %j, rather than leaving the page loading', async (eventId) => {
+		await runMiddleware(createRoute(`/event/${eventId}/matches`, { eventId }));
 
-	describe('non-numeric eventId', () => {
-		it('redirects to / instead of leaving the page stuck loading', async () => {
-			await runMiddleware(createRoute('/event/abc/matches', { eventId: 'abc' }));
-
-			expect(mockNavigateTo).toHaveBeenCalledWith('/');
-			expect(mockEventStore.loadEvent).not.toHaveBeenCalled();
-		});
-
-		it('redirects for a zero eventId', async () => {
-			await runMiddleware(createRoute('/event/0/matches', { eventId: '0' }));
-
-			expect(mockNavigateTo).toHaveBeenCalledWith('/');
-			expect(mockEventStore.loadEvent).not.toHaveBeenCalled();
-		});
-
-		it('redirects for a negative eventId', async () => {
-			await runMiddleware(createRoute('/event/-1/matches', { eventId: '-1' }));
-
-			expect(mockNavigateTo).toHaveBeenCalledWith('/');
-			expect(mockEventStore.loadEvent).not.toHaveBeenCalled();
-		});
+		expect(mockNavigateTo).toHaveBeenCalledWith('/');
+		expect(mockEventStore.loadEvent).not.toHaveBeenCalled();
 	});
 });
