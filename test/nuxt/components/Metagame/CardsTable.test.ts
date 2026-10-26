@@ -137,4 +137,11 @@ describe('metagameCardsTable', () => {
 		expect(wrapper.find('[data-testid="cards-table-loading-overlay"]').exists()).toBe(true);
 		expect(wrapper.text()).toContain('Lightning Bolt');
 	});
+
+	it('shows the Decks column unless the host opts out', async () => {
+		const wrapper = await mountComponent();
+		const columns = wrapper.findComponent(UTableStub).props('columns') as { accessorKey?: string }[];
+
+		expect(columns.map(column => column.accessorKey)).toContain('deckCount');
+	});
 });

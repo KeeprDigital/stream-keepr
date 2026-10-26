@@ -3,7 +3,7 @@ import type { TableColumn } from '@nuxt/ui';
 import type { BoardSelection, MetagameCardSortBy } from '~~/shared/types/enums';
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
 	entries: CardBreakdownEntry[];
 	totalDecks?: number;
 	loading?: boolean;
@@ -12,7 +12,9 @@ const props = defineProps<{
 	showDeckCount?: boolean;
 	/** When provided, row clicks navigate to this path */
 	getRowLink?: (entry: CardBreakdownEntry) => string;
-}>();
+}>(), {
+	showDeckCount: true,
+});
 
 const emit = defineEmits<{
 	(e: 'update:sortBy', value: MetagameCardSortBy): void;
@@ -95,7 +97,7 @@ const columns = computed<TableColumn<CardBreakdownEntry>[]>(() => [
 		header: createSortableHeader('Total Copies'),
 		enableSorting: true,
 	},
-	...(props.showDeckCount !== false
+	...(props.showDeckCount
 		? [
 				createDeckCountColumn<CardBreakdownEntry>(),
 			]
