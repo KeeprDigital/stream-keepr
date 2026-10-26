@@ -18,11 +18,7 @@ function layoutWithFrame(frame: Partial<FeatureMatchLayoutConfig['frame']>): Fea
 	return layout;
 }
 
-/**
- * The Frame's image and video each take a Screen Media Source (ADR-0021). Only
- * the library arm pins a revision; a Remote Media URL is a remote dependency and
- * fabricates no reference.
- */
+// Only the Frame media's library arm pins a revision; a Remote Media URL fabricates none (ADR-0021).
 describe('the Feature Match Overlay Frame’s own media references', () => {
 	it('publishes a library-sourced Frame image and Frame video, each named by its slot', () => {
 		const references = featureMatchLayoutGraphicAssetReferences(layoutWithFrame({

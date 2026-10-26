@@ -9,16 +9,8 @@ import {
 	recoveredBroadcastGraphicsLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 
-/**
- * What a `commandApplied` notification carries, and what a peer does with it.
- *
- * The rule this exists to keep is the one the whole realtime path already
- * follows: a peer that applies a notification in place must land on exactly the
- * state the authoritative snapshot would have given it. So every assertion here
- * is the same shape — reduce a real command, describe the difference, apply the
- * description to the state a peer was holding, and require the result to equal
- * what the server committed.
- */
+// A peer applying a `commandApplied` change in place must land exactly on the state the
+// server committed: reduce, describe, apply, compare.
 
 const NAME: GraphicInputDeclaration = {
 	key: 'name',
@@ -237,17 +229,8 @@ describe('broadcastGraphicsLiveStateChange', () => {
 	});
 });
 
-/**
- * The one thing a change is not allowed to do: leave a peer holding a live state
- * the server does not have, with nothing to notice it by.
- *
- * `null` means removal, which is sound only while no entry of any described map can
- * itself be null — and that is a claim about what recovery admits, not about what
- * this module does. Recovery judged `playout` and `inputs` and read `sources`
- * without judging it, so a null Graphic Source Selection record reached both sides
- * of the comparison and became invisible: absent and null serialize alike, so the
- * difference was reported as no difference at all, and no later command healed it.
- */
+// A null entry serializes like an absent one, so a change must never leave a peer holding
+// one the server does not have.
 describe('a live state carrying an entry that is null', () => {
 	function converged(before: unknown, after: unknown): boolean {
 		const from = recoveredBroadcastGraphicsLiveState(before);

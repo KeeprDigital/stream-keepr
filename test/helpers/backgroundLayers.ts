@@ -39,10 +39,44 @@ export function assetVideoLayer(id: string): BackgroundLayer {
 /** One of every layer kind that pins no library revision, URL sources included. */
 export function layersPinningNoAsset(): BackgroundLayer[] {
 	return [
-		{ id: 'wash', type: 'color', enabled: true, opacity: 1, color: '#0b1020' },
-		{ id: 'grad', type: 'gradient', enabled: true, opacity: 1, gradient: 'linear-gradient(#000, #123)' },
-		{ id: 'remote-plate', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url: 'https://example.com/plate.png' }, fit: 'cover' },
-		{ id: 'remote-loop', type: 'video', enabled: true, opacity: 1, source: { kind: 'url', url: 'https://example.com/loop.webm' }, fit: 'cover', playbackRate: 1, loop: true },
-		{ id: 'anim', type: 'animation', enabled: true, opacity: 1, animation: { effect: 'fog' } },
+		{
+			id: 'wash',
+			type: 'color',
+			enabled: true,
+			opacity: 1,
+			color: '#0b1020',
+		},
+		{
+			id: 'grad',
+			type: 'gradient',
+			enabled: true,
+			opacity: 1,
+			gradient: 'linear-gradient(#000, #123)',
+		},
+		{
+			id: 'remote-plate',
+			type: 'image',
+			enabled: true,
+			opacity: 1,
+			source: { kind: 'url', url: 'https://example.com/plate.png' },
+			fit: 'cover',
+		},
+		{
+			id: 'remote-loop',
+			type: 'video',
+			enabled: true,
+			opacity: 1,
+			source: { kind: 'url', url: 'https://example.com/loop.webm' },
+			fit: 'cover',
+			playbackRate: 1,
+			loop: true,
+		},
+		{
+			id: 'anim',
+			type: 'animation',
+			enabled: true,
+			opacity: 1,
+			animation: { effect: 'fog' },
+		},
 	];
 }

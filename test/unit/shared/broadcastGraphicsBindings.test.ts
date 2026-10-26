@@ -16,18 +16,8 @@ import {
 	graphicInputTraces,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 
-/**
- * Event Data binding through the Broadcast Graphics reducer.
- *
- * Every rule is stated as an operator meets it: they pick a Player once and the
- * bound fields fill; an override corrects one value without losing the feed; a
- * required field that cannot resolve refuses to go on air; and one that stops
- * resolving on air keeps showing what program committed to, marked as such.
- *
- * Event Data itself reaches the reducer as a resolver over Graphic Source
- * Selections, so these tests supply that resolver directly rather than a database
- * — the same seam the server fills with real Event Data.
- */
+// Event Data binding through the reducer, with Event Data supplied as a resolver over
+// Graphic Source Selections: the seam the server fills.
 
 const GRAPHIC = 'lower-third';
 
@@ -234,11 +224,7 @@ describe('bound Graphic Inputs on air', () => {
 	it('never falls back to the template default when its binding resolves nothing', () => {
 		const state = take(createInitialBroadcastGraphicsLiveState());
 
-		// Nothing is selected, so the binding resolves nothing. The default 'Unnamed'
-		// is authored placeholder text and must not reach program dressed as live data,
-		// so the key is absent — both in what acceptance stored and in what the values
-		// the compositor reads report. An optional input has no `blocksTake` shielding
-		// it, so this is the only thing standing between a placeholder and program.
+		// Authored placeholder text must not reach program dressed as live data.
 		expect(broadcastGraphicInputsState(state, GRAPHIC).accepted).toEqual({});
 		expect(acceptedGraphicInputValues(state, GRAPHIC, [NAME])).toEqual({});
 		expect('name' in acceptedGraphicInputValues(state, GRAPHIC, [NAME])).toBe(false);
@@ -454,14 +440,7 @@ describe('re-resolving after an Event Data change', () => {
 		expect(broadcastGraphicInputsState(state, GRAPHIC).accepted).toEqual({ name: 'Ava "Riptide" Reed' });
 	});
 
-	/**
-	 * Whether the authoritative side has anything to re-resolve.
-	 *
-	 * Event Data changes constantly and almost none of it reaches a Broadcast Graphic,
-	 * so this is what stands between a Player being renamed and every Screen in the
-	 * Event advancing its authoritative sequence for a command that changes nothing.
-	 * Each case below is one an Event Data change actually lands in.
-	 */
+	// Most Event Data changes reach no Broadcast Graphic; each case is one that does.
 	describe('whether a re-resolve is due at all', () => {
 		function due(state: BroadcastGraphicsLiveState, ctx: BroadcastGraphicsReductionContext) {
 			return broadcastGraphicsResolveBindingsDue(state, GRAPHIC, ctx);

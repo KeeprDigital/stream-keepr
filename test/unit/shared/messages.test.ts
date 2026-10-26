@@ -15,7 +15,11 @@ describe('createMessage', () => {
 	it('stamps the Event, the send time and the payload, plus the sender\'s connection when given', () => {
 		const msg = createMessage(1, 'event:deleted', { eventId: 1 }, 'conn-123');
 
-		expect(msg).toMatchObject({ eventId: 1, timestamp: Date.now(), originConnectionId: 'conn-123' });
+		expect(msg).toMatchObject({
+			eventId: 1,
+			timestamp: Date.now(),
+			originConnectionId: 'conn-123',
+		});
 		expect(createMessage(1, 'event:deleted').originConnectionId).toBeUndefined();
 	});
 });

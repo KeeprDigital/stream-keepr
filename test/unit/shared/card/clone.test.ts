@@ -11,8 +11,18 @@ const card: MtgCard = {
 		front: { small: 'https://example.com/small.jpg', normal: 'https://example.com/normal.jpg' } as any,
 		back: null,
 	},
-	orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
-	displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
+	orientationData: {
+		flipable: false,
+		turnable: false,
+		rotateable: false,
+		counterRotateable: false,
+	},
+	displayData: {
+		flipped: false,
+		rotated: false,
+		counterRotated: false,
+		turnedOver: false,
+	},
 	meldData: { name: 'Meld result' } as any,
 };
 

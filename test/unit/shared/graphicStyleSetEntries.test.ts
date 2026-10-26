@@ -7,15 +7,8 @@ import {
 } from '~~/shared/modules/graphic-style-sets';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
 
-/**
- * Resolving a Graphic Style Set's entries.
- *
- * The operator-visible rule under test is the one that makes a Style Set worth
- * having: a palette entry stores one opaque colour, and every entry that uses a
- * colour *references* it. So changing one palette entry changes every entry that
- * reaches it — transitively — and a broken reference is found before anything can
- * publish, not when a template fails to render.
- */
+// A palette entry stores one colour and every other entry references it, so a change
+// reaches every entry transitively and a broken reference is found before publishing.
 
 function entry<T extends GraphicStyleSetEntry['kind']>(
 	kind: T,
@@ -221,13 +214,8 @@ describe('resolveGraphicStyleSet', () => {
 	});
 
 	it('refuses a reference that would close a cycle before the cycle can form', () => {
-		// A cycle is unreachable in the current vocabulary, and this is why: every
-		// reference demands a *different* kind, and those kinds form a strict layering.
-		// Two Graphic Fill entries pointed at each other are the closest an author can
-		// get, and each one is refused for naming the wrong kind rather than for
-		// looping. Resolution still carries the cycle guard, because that layering is a
-		// property of today's kinds and a `.skstyle` package (#76) will one day carry
-		// entries this build did not author.
+		// Unreachable with today's strictly layered kinds; the cycle guard stays for packaged
+		// entries this build did not author (#76).
 		function circularFill(id: string, colorEntryId: string): GraphicStyleSetEntry {
 			return {
 				id,

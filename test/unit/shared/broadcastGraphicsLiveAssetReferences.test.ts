@@ -22,21 +22,53 @@ const replacement = value('image-asset', 'image-revision-2');
 const sting = value('video-asset', 'video-revision-1');
 
 function mediaInput(key: string, mediaKind: 'image' | 'silent-video' = 'image'): GraphicInputDeclaration {
-	return { type: 'media', key, label: key, required: false, updatePolicy: 'staged', mediaKind, default: null };
+	return {
+		type: 'media',
+		key,
+		label: key,
+		required: false,
+		updatePolicy: 'staged',
+		mediaKind,
+		default: null,
+	};
 }
 
 function references(inputs: GraphicInputDeclaration[], liveInputs: Record<string, unknown>) {
 	const config = {
-		graphics: [{ id: 'lower-third', name: 'Lower Third', items: [], inputs } as unknown as BroadcastGraphicConfig],
+		graphics: [
+			{
+				id: 'lower-third',
+				name: 'Lower Third',
+				items: [],
+				inputs,
+			} as unknown as BroadcastGraphicConfig,
+		],
 	} as BroadcastGraphicsModeConfig;
-	const state = { graphics: {}, inputs: { 'lower-third': liveInputs } } as unknown as BroadcastGraphicsLiveState;
+	const state = {
+		graphics: {},
+		inputs: { 'lower-third': liveInputs },
+	} as unknown as BroadcastGraphicsLiveState;
 	return broadcastGraphicsLiveSessionGraphicAssetReferences(config, state);
 }
 
 describe('broadcast Graphics Live Session Graphic Asset References', () => {
 	it.each([
-		['image', mediaInput('backdrop'), { backdrop: sponsor }, 'image-asset', 'image-revision-1', 'backdrop'],
-		['silent-video', mediaInput('sting', 'silent-video'), { sting }, 'video-asset', 'video-revision-1', 'sting'],
+		[
+			'image',
+			mediaInput('backdrop'),
+			{ backdrop: sponsor },
+			'image-asset',
+			'image-revision-1',
+			'backdrop',
+		],
+		[
+			'silent-video',
+			mediaInput('sting', 'silent-video'),
+			{ sting },
+			'video-asset',
+			'video-revision-1',
+			'sting',
+		],
 	] as const)('publishes an accepted %s value as its exact revision, named by its Graphic Input', (kind, input, accepted, assetId, revisionId, key) => {
 		expect(references([input], { working: {}, accepted, acceptedRevision: 1 })).toEqual([
 			{
@@ -48,11 +80,23 @@ describe('broadcast Graphics Live Session Graphic Asset References', () => {
 	});
 
 	it('does not publish a staged value nothing has accepted', () => {
-		expect(references([mediaInput('backdrop')], { working: { backdrop: sponsor }, accepted: {}, acceptedRevision: 0 })).toEqual([]);
+		expect(references([
+			mediaInput('backdrop'),
+		], {
+			working: { backdrop: sponsor },
+			accepted: {},
+			acceptedRevision: 0,
+		})).toEqual([]);
 	});
 
 	it('stops publishing a revision a later acceptance replaced', () => {
-		expect(references([mediaInput('backdrop')], { working: {}, accepted: { backdrop: replacement }, acceptedRevision: 2 }))
+		expect(references([
+			mediaInput('backdrop'),
+		], {
+			working: {},
+			accepted: { backdrop: replacement },
+			acceptedRevision: 2,
+		}))
 			.toEqual([
 				{
 					reference: { assetId: 'image-asset', revisionId: 'image-revision-2' },

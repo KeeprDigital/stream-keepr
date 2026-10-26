@@ -73,7 +73,10 @@ describe('feature match overlay presets', () => {
 		for (const preset of FEATURE_MATCH_OVERLAY_PRESETS) {
 			const ids = preset.config.layout.composition.items.flatMap(item =>
 				item.type === 'group'
-					? [item.id, ...item.children.map(child => child.id)]
+					? [
+							item.id,
+							...item.children.map(child => child.id),
+						]
 					: [item.id]);
 
 			expect(new Set(ids).size, preset.id).toBe(ids.length);

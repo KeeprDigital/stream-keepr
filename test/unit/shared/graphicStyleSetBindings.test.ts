@@ -28,18 +28,8 @@ import {
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
 import { GRAPHIC_STYLE_SLOT_VALUES } from '~~/shared/types/graphicStyleSet';
 
-/**
- * Referencing Graphic Style Set entries from a graphics composition.
- *
- * The rules under test are the ones a template author would state:
- *
- * - A composition always holds its own resolved values, so it renders and travels
- *   without the Style Set — and a placed copy cannot change under it.
- * - Republishing an entry offers an update to what references it, and to nothing
- *   else. Renaming offers nothing.
- * - Applying an update changes inherited properties and preserves local overrides.
- * - Detaching keeps the values and drops the provenance; replacing keeps both.
- */
+// A composition holds its own resolved values; republishing offers an update only to
+// what references the entry; applying preserves local overrides; detaching drops provenance.
 
 function entry<T extends GraphicStyleSetEntry['kind']>(
 	kind: T,
@@ -99,14 +89,7 @@ function styleSet(brandColor = '#ff0044', headingSize = 64): GraphicStyleSetEntr
 	];
 }
 
-/**
- * A typography that already matches what the `heading` entry resolves to.
- *
- * `TYPOGRAPHY` above deliberately disagrees with the entry in most keys, which is
- * what most of these tests want. A test about *which* keys an author deviates in
- * needs the opposite starting point: an item in step with its entry, so a single
- * edited value is the only deviation there is.
- */
+/** A typography in step with the `heading` entry, so one edited value is the only deviation. */
 function inheritedTypography(brandColor = '#ff0044', headingSize = 64) {
 	return {
 		...TYPOGRAPHY,
@@ -156,20 +139,8 @@ function headlineOf(config: BroadcastGraphicConfig): TextGraphicItemConfig {
 }
 
 describe('gRAPHIC_STYLE_SLOT_OWNED_KEYS', () => {
-	/**
-	 * The owned-key lists are strings, and the property groups they name are types.
-	 * Nothing makes them agree, and the failure if they stop agreeing is silent: a
-	 * field added to `GraphicTypography` or `ShapeGeometry` would keep being written
-	 * by the property control and stop being capturable as an override, so an author's
-	 * deviation in it would be reverted by the next applied update with nothing
-	 * rejected. So each list is pinned against a maximal value of its property group,
-	 * built from the vocabulary rather than restated.
-	 *
-	 * "Maximal" is what `Required<…>` buys: a field added to any of these groups —
-	 * optional or not — fails to typecheck here until it is written down, and writing
-	 * it down is what makes this assertion notice it. A hand-restated list of key
-	 * literals would simply stay green, which is the drift this test exists to catch.
-	 */
+	// Each owned-key list is pinned against a `Required<…>` maximal value of its property group,
+	// so a field added to the group fails to typecheck until it is capturable as an override.
 	it('names exactly the keys of the property group each slot inherits', () => {
 		const surface: Required<GraphicSurfaceStyle> = {
 			fill: { type: 'solid', color: '#101014' },
@@ -575,15 +546,7 @@ describe('applyGraphicStyleSet', () => {
 		expect(headlineOf(applied).styleRefs?.typography?.entryId).toBe('heading');
 	});
 
-	/**
-	 * What "Keep mine" pins (#162).
-	 *
-	 * The answer is about one property group, but the author's work inside it is
-	 * usually one key. Recording the whole group would freeze every key the Style Set
-	 * and the author already agree on against every future republish — which is a
-	 * bigger commitment than the author made, and one this surface never asked them
-	 * about.
-	 */
+	// "Keep mine" pins the keys the author deviates in, not the whole group (#162).
 	it('pins only the keys the author deviates in, not the whole property group', () => {
 		// Behind the published revision, an author's own edit records no override — so
 		// what they wrote lives inline and nothing but this decision preserves it.
@@ -670,17 +633,7 @@ describe('applyGraphicStyleSet', () => {
 		expect(graphicStyleUpdateChanges(applied, resolveGraphicStyleSet(republished))).toEqual([]);
 	});
 
-	/**
-	 * An override the author had already pinned survives even when the republished
-	 * entry happens to land on the same value.
-	 *
-	 * "Where this owner deviates from the entry" is not the whole answer to "what is
-	 * mine". A pin whose value the new entry coincidentally agrees with is no longer a
-	 * deviation, but it is still the author's explicit statement that this property is
-	 * theirs — and dropping it means the next republish that moves the entry away takes
-	 * the property with it. Story 20's "with my local property overrides preserved"
-	 * is exactly what that would break.
-	 */
+	// A pin is the author's claim on a property even when the republished entry agrees with it.
 	it('keeps a pin the republished entry happens to agree with', () => {
 		const composition = graphic([
 			textItem({
@@ -710,16 +663,7 @@ describe('applyGraphicStyleSet', () => {
 			.toEqual({ fontSize: 30, color: '#ff0044' });
 	});
 
-	/**
-	 * A stored value that agrees with the entry while its own recorded override does
-	 * not pins nothing at all.
-	 *
-	 * The override is stale — it describes a value this owner is not holding — so there
-	 * is nothing of the author's in this slot to keep. Recording the whole property
-	 * group would freeze eight keys on the strength of provenance the document itself
-	 * contradicts. An empty override settles the row just as well, because what the
-	 * entry resolves to is already what is stored.
-	 */
+	// A stale override describing a value the owner no longer holds pins nothing.
 	it('pins nothing when a slot holds the entry and only a stale override disagrees', () => {
 		const composition = graphic([
 			textItem({
@@ -1044,15 +988,9 @@ describe('recaptureGraphicStyleOverrides', () => {
 		...styleSet(),
 		entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' }),
 	];
-	/**
-	 * The revision every composition here is linked at, and the one the editor is
-	 * holding while the two agree.
-	 */
+	/** The revision every composition here is linked at. */
 	const LINKED = 1;
-	/**
-	 * The same Style Set after a publish this composition has *not* been reconciled to.
-	 * `brand` moved, so both the typography entry's colour and the Graphic Fill do.
-	 */
+	/** A publish this composition has not reconciled to: `brand` moved, so the colour and fill do. */
 	const republished = [
 		...styleSet('#00ff88'),
 		entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' }),
@@ -1109,13 +1047,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 		};
 	}
 
-	/**
-	 * An edit to the one typography key the slot does not own.
-	 *
-	 * It still runs a recapture — every property edit does — while changing nothing the
-	 * entry has an opinion about, which is what makes it the cleanest form of "the author
-	 * touched this document" there is.
-	 */
+	/** An edit to the one typography key the slot does not own: it recaptures without touching the entry's keys. */
 	function editTextAlign(composition: BroadcastGraphicConfig, textAlign: 'left' | 'center'): BroadcastGraphicConfig {
 		return {
 			...composition,
@@ -1227,24 +1159,8 @@ describe('recaptureGraphicStyleOverrides', () => {
 		expect(changes[0]!.next).toEqual({ type: 'solid', color: '#00ff88' });
 	});
 
-	/**
-	 * What became of an over-broad pin written before "Keep mine" was narrowed (#167).
-	 *
-	 * A composition written by the pre-#162 behaviour carries the whole property group as
-	 * its override, and `applyGraphicStyleSet` preserves it forever: every one of those
-	 * keys genuinely is a recorded override the stored value honours, so a later "Keep
-	 * mine" narrows nothing. An ordinary edit used to be what did narrow it — recapture
-	 * re-derived each slot's overrides from what the composition deviates in and discarded
-	 * the recorded set — and that is the discard #229 removed, because it could not tell
-	 * this pin from a deliberate one the Style Set had caught up with. They are the same
-	 * keys in storage, which is the reading ADR-0006 already rejects for a migration.
-	 *
-	 * So an over-broad pin survives an edit at full width. The key the author moves is not
-	 * an exception: the recorded claim on it goes stale and the deviation the edit created
-	 * replaces it, which is a re-pin at the new value rather than a release. The population
-	 * that could be carrying one is empty by construction (#60), and losing a real override
-	 * is the worse failure of the two.
-	 */
+	// An over-broad pin from before #162 survives an edit at full width; the key the author
+	// moves is re-pinned at its new value rather than released (#167, #229, ADR-0006).
 	it('keeps all eight keys of an over-broad pin, re-pinning the one the author moves', () => {
 		const resolution = resolveGraphicStyleSet(styleSet());
 		const inStep = inheritedTypography();
@@ -1275,15 +1191,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 		expect(graphicStyleUpdateChanges(recaptured, resolveGraphicStyleSet(styleSet('#00ff88')))).toEqual([]);
 	});
 
-	/**
-	 * The one thing that takes a key off a pin, and the reason it is not much of an escape.
-	 *
-	 * A recorded override survives while the stored value honours it, so the author releases
-	 * one by landing the property exactly on what the entry resolves to — not by moving it,
-	 * which re-pins it at wherever they moved it to. And a fully pinned slot produces no
-	 * review row, so the value they would have to land on is never shown to them. What
-	 * clears a pin in practice is unbinding the slot and binding it again, below.
-	 */
+	// Landing a key exactly on the entry's value is the only edit that releases it.
 	it('releases one key of an over-broad pin when the author lands it back on the entry\'s value', () => {
 		const resolution = resolveGraphicStyleSet(styleSet());
 		const inStep = inheritedTypography();
@@ -1310,13 +1218,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 		expect(graphicStyleUpdateChanges(overPinned, resolveGraphicStyleSet(styleSet('#ff0044', 99)))).toEqual([]);
 	});
 
-	/**
-	 * The reset ADR-0006 names, and the only one that clears a whole pin.
-	 *
-	 * Unbinding keeps the values and drops the provenance; binding again starts with no
-	 * overrides at all, because the author has just said "this comes from there". Both are
-	 * offered next to the slot's picker, so this is a thing an author can actually do.
-	 */
+	// Unbinding and rebinding the slot is the reset ADR-0006 names for a whole pin.
 	it('clears an over-broad pin when the slot is unbound and bound again', () => {
 		const inStep = inheritedTypography();
 		const overPinned = graphic([
@@ -1346,14 +1248,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 		expect(headlineOf(rebound).typography.fontSize).toBe(99);
 	});
 
-	/**
-	 * Deriving nothing is not the same as deriving that nothing is the author's.
-	 *
-	 * A Style Set that failed to load resolves no entry, so there is no entry in front of
-	 * this slot to disagree with and no deviation to read off it. What is recorded is then
-	 * the only evidence there is, and it survives — the same reason a reference the
-	 * resolution cannot honour is left in place rather than dropped.
-	 */
+	// With no entry resolved there is nothing to diff against, so recorded overrides survive.
 	it('keeps the overrides recorded on a reference the Style Set can no longer honour', () => {
 		const composition = graphic([
 			textItem({
@@ -1395,14 +1290,8 @@ describe('recaptureGraphicStyleOverrides', () => {
 		expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toEqual({ entryId: 'accent-fill' });
 	});
 
-	/**
-	 * The editor holds the *published* Style Set, so after a republish it is holding
-	 * entries this composition has not been reconciled to. Every deviation it could
-	 * derive from them is then the Style Set's own change wearing the author's name,
-	 * and recording one — as an override, or by letting go of a reference — resolves a
-	 * pending update without anybody reviewing it. That is the one thing story 20
-	 * forbids, so nothing is derived at all until the two agree again.
-	 */
+	// Behind the published Style Set, every derivable deviation is the Style Set's own change,
+	// so nothing is derived until the two agree again.
 	describe('while the composition is behind the published Style Set', () => {
 		it('leaves a Graphic Fill reference the author never touched, so its update stays reviewable', () => {
 			const stored = boundBoth();
@@ -1465,18 +1354,8 @@ describe('recaptureGraphicStyleOverrides', () => {
 		});
 	});
 
-	/**
-	 * A composition whose recorded revision lags a Style Set its values already agree
-	 * with — what a publish that changed only entries this composition never references
-	 * leaves behind, since such a publish offers nothing to review and so never moves
-	 * the number (#198).
-	 *
-	 * The revision comparison above is a proxy for the question that actually matters:
-	 * is there a pending Style Set change here that recording a deviation would absorb?
-	 * Here there is none — slot by slot, what the composition holds is what the
-	 * published entries resolve to — so every deviation derivable from them is the
-	 * author's, and the guard has nothing to protect.
-	 */
+	// Stranded on an old revision whose entries it already matches, slot by slot, so every
+	// derivable deviation is the author's (#198).
 	describe('while the composition is stranded on an old revision it is already in step with', () => {
 		const PUBLISHED = 3;
 
@@ -1509,10 +1388,6 @@ describe('recaptureGraphicStyleOverrides', () => {
 				});
 		});
 
-		/**
-		 * The whole defect, end to end: the edit is made while stranded, and the review
-		 * that finally reaches this slot is taken with the answer the panel defaults to.
-		 */
 		it('keeps that edit through the next republish, applied with every row\'s default answer', () => {
 			const composition = stranded();
 			const edited = recaptureGraphicStyleOverrides(
@@ -1538,11 +1413,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 			expect(headlineOf(applied).typography.color).toBe('#00ff88');
 		});
 
-		/**
-		 * Being in step is decided per slot, not per composition. A stranded composition
-		 * can hold both a slot with nothing pending and a slot the Style Set is waiting to
-		 * change, and each gets the answer its own evidence supports.
-		 */
+		// In step is decided per slot, not per composition.
 		it('still leaves a slot the Style Set has a pending change in', () => {
 			// `accent-fill` moved off `brand` and onto `ink`, which reaches the fill and
 			// nothing else: `heading` still resolves to exactly what the item holds.
@@ -1584,17 +1455,8 @@ describe('recaptureGraphicStyleOverrides', () => {
 		});
 	});
 
-	/**
-	 * A pin the Style Set has caught up with is still the author's (#229).
-	 *
-	 * An override is a claim about a property — "this one is mine" — and a republished
-	 * entry landing on the value it names does not retract the claim. Recapture used to
-	 * derive the whole record from where the composition deviates, so a pin the entry
-	 * agreed with was not a deviation and stopped being recorded; the author's next edit
-	 * anywhere in the document dropped it, and the republish after that took the property
-	 * back. `applyGraphicStyleSet` had always read the signal the other way, and these
-	 * pin the two paths reading it the same way.
-	 */
+	// A pin the Style Set has caught up with is still the author's: recapture and
+	// `applyGraphicStyleSet` read it the same way (#229).
 	describe('when a republished entry lands on the value the author pinned', () => {
 		const PINNED_SIZE = 30;
 		/** The revision the coincident publish is at, which this composition lags. */
@@ -1660,10 +1522,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 				});
 		});
 
-		/**
-		 * Recapture walks every owner in the composition, so the edit that runs it need not
-		 * be to this slot, this item, or any item holding a reference at all.
-		 */
+		// Recapture walks every owner, so the edit that runs it can be anywhere.
 		it('keeps the pin through an edit to another Graphic Item that references nothing', () => {
 			const stored = pinned();
 			const withSubtitle = {
@@ -1692,11 +1551,6 @@ describe('recaptureGraphicStyleOverrides', () => {
 				});
 		});
 
-		/**
-		 * The whole defect, end to end: the pin survives the edit, so the republish that
-		 * moves the entry off it again does not take the property — and does not even ask,
-		 * because a pinned property is not one the author is deciding about.
-		 */
 		it('keeps the property when the Style Set moves it away again, applied with every row\'s default answer', () => {
 			const stored = pinned();
 			const edited = recaptureGraphicStyleOverrides(
@@ -1715,14 +1569,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 			expect(headlineOf(applied).typography.fontSize).toBe(PINNED_SIZE);
 		});
 
-		/**
-		 * The two paths, asked about the same slot in the same state.
-		 *
-		 * This is the disagreement the ticket named as the thing to resolve: review's "Keep
-		 * mine" preserved a recorded pin the stored value still honours, and an ordinary
-		 * edit discarded it. Both now answer through one function, so a change to either
-		 * reading has to be made deliberately for both.
-		 */
+		// Review's "Keep mine" and an ordinary edit answer through one function.
 		it('records what review\'s "Keep mine" records for the same slot', () => {
 			const stored = pinned();
 
@@ -1743,11 +1590,6 @@ describe('recaptureGraphicStyleOverrides', () => {
 				.toEqual({ fontSize: PINNED_SIZE });
 		});
 
-		/**
-		 * And the pin is not permanent, which is what keeps this from being the over-broad
-		 * pin problem in a new place: the author releases it by moving the property, the
-		 * only thing that ever released one.
-		 */
 		it('releases the pin when the author moves the property and puts it back', () => {
 			const stored = pinned();
 
@@ -1771,23 +1613,8 @@ describe('recaptureGraphicStyleOverrides', () => {
 		});
 	});
 
-	/**
-	 * A value the author types *onto* the entry's own value records nothing, and the
-	 * next republish takes the property. Accepted, not fixed (#240).
-	 *
-	 * #229 made a *recorded* pin survive the Style Set arriving at its value. This is the
-	 * other half, and it is not the same case: there was never a pin to preserve. Capture
-	 * is a diff against the entry, and a value that agrees with the entry is not a diff,
-	 * so an author who types the size the entry already resolves to leaves the document
-	 * byte-identical and the record empty.
-	 *
-	 * The intent signal a fix needs exists — the inspector's controls write
-	 * `updateTypography({ fontSize })`, which names the key — but recording a pin from it
-	 * costs more than it buys, and the direction it fails in is the wrong one. The
-	 * reasoning is in ADR-0006 under "Record a pin whenever the author edits an owned
-	 * key". These pin the two halves of it that are executable: the behaviour itself, and
-	 * the review row that is the whole of what makes it survivable.
-	 */
+	// Typing the entry's own value records no pin, so the next republish takes the property.
+	// Accepted, not fixed (#240, ADR-0006).
 	describe('when the author types the value the entry already resolves to', () => {
 		/** The size the entry itself holds, and the one the author types onto it. */
 		const TYPED_SIZE = 30;
@@ -1824,18 +1651,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 			expect(headlineOf(applied).typography.fontSize).toBe(99);
 		});
 
-		/**
-		 * Why the paragraph above is a cost worth accepting rather than a silent loss.
-		 *
-		 * An unpinned property is one review states, value by value, before it moves it
-		 * (#162) — so the author who meant that 30 is shown `30 → 99` and can answer "Keep
-		 * mine". A *pinned* property is the silent one: it resolves to what the owner
-		 * already holds, so it produces no row and no screen ever names it again.
-		 *
-		 * That asymmetry is the reason recording a pin from a keystroke would fail in the
-		 * worse direction, and it is the thing a fix must not quietly reverse. If this
-		 * stops holding, the acceptance recorded in ADR-0006 no longer stands up.
-		 */
+		// The mitigation for #240: an unpinned property gets a review row; a pinned one gets none.
 		it('offers the review row that is the whole mitigation, and offers none once pinned', () => {
 			const stored = inStepAtTypedSize();
 			const unpinned = recaptureGraphicStyleOverrides(editFontSize(stored, TYPED_SIZE), atTypedSize, LINKED, stored);

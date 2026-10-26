@@ -62,11 +62,7 @@ describe('broadcastGraphicsRecovery', () => {
 		});
 
 		it('trusts a real persisted record produced by the reducer itself', () => {
-			// Built by the reducer and round-tripped as JSON, which is exactly what a
-			// reload, a restart, or a second process reads. Asserting against a
-			// hand-written fixture would keep passing after the persisted shape moved on
-			// — the fixture would still describe a record nothing produces — so the
-			// record under test is the real one.
+			// The real persisted record, built by the reducer and round-tripped as JSON.
 			const persisted = JSON.parse(JSON.stringify(applyBroadcastGraphicsCommand(
 				createInitialBroadcastGraphicsLiveState(),
 				{
@@ -318,11 +314,7 @@ describe('broadcastGraphicsRecovery', () => {
 					inputs: {},
 				},
 			],
-			// A Graphic Source Selection stores an entity id and nothing else — clearing
-			// one deletes its key rather than storing an empty value — so anything that is
-			// not a number came from a vocabulary this build cannot read. Left unjudged it
-			// would not fail loudly: the selection would resolve no entity, and every
-			// Graphic Input Binding reading it would go quietly unavailable on air.
+			// A selection stores an entity id; anything else is a vocabulary this build cannot read.
 			[
 				'a Graphic Source Selection that does not name an entity',
 				{
@@ -540,11 +532,7 @@ describe('broadcastGraphicsRecovery', () => {
 		});
 
 		it('trusts a long-stale animation start time rather than calling it a fault', () => {
-			// The complement of the rule above, and the one that matters more: animation
-			// requires an old start time to be read literally, because the projection is
-			// monotone and saturating and therefore settles it at the Graphic Resting
-			// State by itself. Faulting it here would blank a show that is running
-			// correctly — which is the opposite of what recovery is for.
+			// An old start time is read literally and settles itself, so it is not a fault.
 			const ancient = {
 				playout: {
 					slate: { onAir: true, effectiveStartedAt: 1, cut: false },
@@ -707,12 +695,7 @@ describe('broadcastGraphicsRecovery', () => {
 		});
 
 		it('leaves a Graphic Input Override behind, because nothing can re-judge it', () => {
-			// The one piece of carried state that can neither be re-resolved nor become
-			// unavailable: a frozen literal whose whole purpose is to outrank the binding.
-			// Carried into a later show it would suppress a binding resolving a *different*
-			// entity perfectly correctly and put the previous show's value on program, with
-			// nothing unavailable to catch it and only a badge on an untouched field to say
-			// so.
+			// A carried override would outrank a correct binding in the next show.
 			const next = carriedForwardBroadcastGraphicsLiveState(endedWithBinding);
 
 			expect(next.inputs.slate?.overrides).toEqual({});
@@ -753,13 +736,8 @@ describe('broadcastGraphicsRecovery', () => {
 		});
 
 		it('carries no accepted value or acceptance revision into the new epoch', () => {
-			// An accepted value is what an on-air graphic *is rendering*, and nothing is on
-			// air here — so there is no rendering for it to be the last accepted state of.
-			// It is also unsound to keep: acceptance falls back to the previously accepted
-			// value when a working value is unavailable, and the Take gate measures
-			// requiredness against what acceptance would produce, so a carried acceptance
-			// would let a required unavailable input reach air on the strength of a show
-			// that is over.
+			// Nothing is on air after the show, and a carried acceptance would let a required
+			// unavailable input reach air.
 			const next = carriedForwardBroadcastGraphicsLiveState(ended);
 
 			expect(next.inputs.slate?.accepted).toEqual({});
@@ -814,20 +792,8 @@ describe('broadcastGraphicsRecovery', () => {
 				.toEqual(createInitialBroadcastGraphicsLiveState());
 		});
 
-		/**
-		 * This function builds both of its results by assigning onto a factory call
-		 * rather than by spreading one into an object literal, so the bundler cannot
-		 * flatten the call into duplicate keys (#324, #338, #348). `Object.assign`
-		 * mutates its target, which the spread did not, and every target here is a
-		 * factory that returns a fresh literal today. A later edit that made either
-		 * factory hand back a shared constant instead would put one Broadcast
-		 * Graphic's carried working values into another's state, and every call to
-		 * this function into the state the next call starts from — the fix's own
-		 * failure mode, so it gets its own pin.
-		 *
-		 * Nothing else caught it: measured at f8a7710, both aliasing edits survived
-		 * every test in the eight unit files that touch these factories.
-		 */
+		// Each call must assign into fresh factory state, or one graphic's or epoch's values leak
+		// into another's (#348).
 		it('gives every graphic and every epoch its own state to be assigned into', () => {
 			const first = carriedForwardBroadcastGraphicsLiveState({
 				inputs: {
@@ -844,11 +810,7 @@ describe('broadcastGraphicsRecovery', () => {
 			});
 			const second = carriedForwardBroadcastGraphicsLiveState({ inputs: {} });
 
-			// Both aliasing edits land on the first assertion below: a shared inputs
-			// factory leaves both entries holding whichever graphic was assigned last,
-			// and a shared live-state factory has `second` empty the very `inputs` map
-			// this reads from. The assertions after it are defence in depth rather than
-			// proven discriminators — neither exercised mutant reaches them.
+			// A shared factory fails the first assertion.
 			expect(first.inputs.slate?.working).toEqual({ name: 'Ava' });
 			expect(first.inputs.bug?.working).toEqual({ name: 'Sam' });
 			expect(first.inputs.slate).not.toBe(first.inputs.bug);

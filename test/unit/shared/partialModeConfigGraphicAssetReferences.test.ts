@@ -7,8 +7,18 @@ import { screenModeGraphicAssetReferences } from '~~/shared/utils/graphicsAssetR
 // Background and Background Layer modes cover their own fragments.
 describe('screenModeGraphicAssetReferences on a partial stored configuration', () => {
 	it.each<[GraphicAssetReferencingScreenMode, GraphicAssetReferencingScreenModeConfigs]>([
-		['feature-match-overlay', { 'feature-match-overlay': { featureMatchId: 7 } }],
-		['broadcast-graphics', { 'broadcast-graphics': { channels: [] } }],
+		[
+			'feature-match-overlay',
+			{
+				'feature-match-overlay': { featureMatchId: 7 },
+			},
+		],
+		[
+			'broadcast-graphics',
+			{
+				'broadcast-graphics': { channels: [] },
+			},
+		],
 	])('publishes nothing for a %s fragment with no assets in it', (mode, modeConfigs) => {
 		expect(screenModeGraphicAssetReferences(mode, modeConfigs)).toEqual([]);
 	});

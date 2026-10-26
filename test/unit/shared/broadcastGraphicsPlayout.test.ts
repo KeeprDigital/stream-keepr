@@ -22,13 +22,7 @@ function graphic(id: string): BroadcastGraphicConfig {
 /** A one-second enter, a half-second exit, and a 400ms update: a plausible authored set. */
 const TIMING = { enter: 1000, exit: 500, update: 400 };
 
-/**
- * A Broadcast Graphic declaring no Graphic Inputs: playout alone.
- *
- * The durations travel with acceptance as well as with every read, because deciding
- * whether the phase an intent interrupts is still running is an authoritative
- * question rather than one each output answers for itself.
- */
+/** No Graphic Inputs: playout alone. Durations travel with acceptance, which decides whether an interrupted phase still runs. */
 const NO_INPUTS = { inputs: [], durations: TIMING };
 
 function take(
@@ -159,32 +153,9 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 	it('persists the accepted intent and one authoritative effective start time', () => {
 		const persisted = take(createInitialBroadcastGraphicsLiveState(), 'slate');
 
-		// #64 asserted this key set so that widening the durable shape could not happen
-		// without answering the question it encodes: would recovery replay animation?
-		//
-		// The answer this ticket lands is that it cannot, and the reason is the shape
-		// itself. What is stored is the *accepted intent* plus the one authoritative
-		// instant its phase began, and nothing else. No lifecycle phase is stored, so
-		// there is no phase for recovery to resume; and the start time is not a
-		// checkpoint that recovery has to validate or clear, because reading it
-		// literally is what produces the settled answer — the projection below is
-		// monotone in elapsed time and saturates at completion, so a start time from
-		// before a restart can only ever resolve *forwards* to the Graphic Resting
-		// State.
-		//
-		// The two rejected alternatives are the reason this test still exists rather
-		// than simply being updated: persisting a phase would make recovery resume it,
-		// and persisting a start time that recovery *reset* would make recovery replay
-		// from it. If a later ticket needs a third field here, it should have to argue
-		// the same case again.
-		// Accepted Graphic Input values are stored beside playout, and are the
-		// deliberate exception: they are the values a recovered graphic renders at its
-		// resting state, not a record of how it got there, so nothing about them is
-		// replayable either.
-		// Graphic Source Selections and Graphic Input Overrides join the accepted values
-		// on the same terms: both are standing operator intent that outlives a hide/show
-		// cycle, and neither says anything about a lifecycle phase, so neither gives
-		// recovery anything to replay.
+		// The durable record is accepted intent plus the instant its phase began: no phase is
+		// stored, so recovery has nothing to resume or replay (#64). Inputs and sources are
+		// standing operator intent and replay nothing either.
 		expect(Object.keys(persisted).toSorted()).toEqual(['inputs', 'playout', 'sources']);
 		expect(Object.keys(persisted.playout.slate!).toSorted()).toEqual(['cut', 'effectiveStartedAt', 'onAir']);
 		expect(persisted.playout.slate).toEqual({ onAir: true, effectiveStartedAt: T0, cut: false });
@@ -198,35 +169,9 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 	});
 
 	it('adds a scheduled reversal completion only to an intent that actually interrupted a phase', () => {
-		// Live animation is where the third field stopped being enough, and this is the
-		// fourth field arguing its case rather than quietly appearing.
-		//
-		// What it stores is *where a reversal began*. Out during enter has to reverse the
-		// entrance from the frame currently on program, and the persisted intent cannot
-		// express that: `{ onAir: false, effectiveStartedAt, cut }` says a graphic is
-		// leaving, not that it is halfway through arriving. It is one number rather than
-		// a per-owner snapshot because the rendered state of every owner in the graphic —
-		// whole-graphic recipe, every item, every stagger — is a pure function of one
-		// position in phase time, so one position is the whole of what has to be stored.
-		//
-		// It is stored as a scheduled *completion* instant, and that is the part that
-		// answers #69's test rather than merely satisfying it. The self-healing property
-		// #69 relied on was not "the field is correct when fresh", it was "reading the
-		// field literally, with no validation and no clearing, is what produces the
-		// settled answer". A completion instant has that property in its strongest form:
-		// `now >= reversalCompletesAt` settles it, needing nothing from Screen
-		// configuration at all, and the projected elapsed time is
-		// `reversalCompletesAt - now`, which falls monotonically to zero and clamps.
-		// Zero is the far end of the phase being unwound — fully off for a reversed
-		// enter, the Graphic Resting State for a reversed exit — which is exactly the
-		// settled state of the intent that wrote the field. A stale read is therefore not
-		// merely harmless here, it is correct, and the two shapes #69 rejected are still
-		// rejected: no phase is written down, so nothing can be resumed as a phase, and
-		// nothing resets the instant, so nothing can replay from it.
-		//
-		// The last thing that keeps the shape honest is its absence. A Broadcast Graphic
-		// that was never interrupted stores exactly the three fields above, so the
-		// durable record grows only for the graphics that actually reversed.
+		// A reversal stores one scheduled completion instant, read literally with no clearing:
+		// a stale read settles to the intent that wrote it, so nothing can replay (#69). A graphic
+		// that was never interrupted stores no such field.
 		const entering = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
 		const reversed = out(entering, 'slate', false, T0 + 300);
 
@@ -251,22 +196,8 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 	});
 
 	it('adds an update phase start only while an update animation is still owed', () => {
-		// The fifth field, and the same argument in the same form. An update phase needs
-		// its own authoritative effective start time because it is not the phase the
-		// on-air intent began, and it needs one rather than an acknowledgement because
-		// coalescing — during enter into one update afterwards, during an update into one
-		// pending rendering — is a fact about the authoritative order that every output
-		// has to agree on without asking anyone.
-		//
-		// It is a start rather than a completion instant, unlike the reversal above, and
-		// the difference is real rather than an inconsistency: an update's length *is*
-		// derivable from Screen configuration, which every reader already holds because
-		// it is rendering that composition, whereas a reversal's length depends on when
-		// an operator pressed and cannot be recovered from anything. Where the two agree
-		// is the property that matters: `rollUpdateChain` walks the stored chain forward
-		// against `now` and returns nothing once it is spent, so it is monotone and
-		// saturating, and a chain read after a restart reports no update rather than an
-		// old one.
+		// An update stores its effective start; its length comes from Screen configuration and
+		// the chain saturates once spent, so a read after a restart reports no update.
 		const declaration: GraphicInputDeclaration = {
 			key: 'headline',
 			label: 'Headline',
@@ -312,14 +243,8 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 				'onAir',
 				'updateStartedAt',
 			]);
-		// The rendering it transitions away from is stored beside the accepted values it
-		// is made of, because an output that joins mid-update has to have both.
-		//
-		// `overrides` is here because every reduction writes it — an override is durable
-		// state a later reduction has to find, so it is normalised in rather than left
-		// absent. `pendingUpdateFrom` is *not*, and that is the load-bearing half of this
-		// assertion: only one update is in flight, so a second outgoing rendering would
-		// mean the chain had been lengthened rather than replaced.
+		// The outgoing rendering is stored beside the accepted values; there is never a second
+		// pending one, because only one update is in flight.
 		expect(Object.keys(state.inputs.slate!).toSorted())
 			.toEqual([
 				'accepted',
@@ -372,10 +297,7 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 	});
 
 	it('settles a graphic taken before a restart rather than replaying its entrance', () => {
-		// The failure this guards is an operator-visible one: a mid-show crash that
-		// makes a lower third fly back on over program. The graphic was taken hours
-		// ago, so by the time anything reads its start time the enter phase is long
-		// over — and that is true without recovery doing anything about it.
+		// A graphic taken long ago must not fly back on after a crash.
 		const persisted = take(createInitialBroadcastGraphicsLiveState(), 'slate');
 		const hoursLater = T0 + (4 * 60 * 60 * 1000);
 
@@ -423,10 +345,7 @@ describe('the persisted playout shape, and the no-replay invariant it has to kee
 	});
 
 	it('never replays an entrance when a plain Take follows a Cut Take', () => {
-		// Cut Take settles the graphic on air immediately. A plain Take after it reaches
-		// the same target, so it must change nothing — writing a fresh effective start
-		// time would send a settled graphic back to `entering` and replay its entrance
-		// on program, which is the failure an operator would see as a mid-show glitch.
+		// A plain Take after a Cut Take reaches the same target, so it must not replay the entrance.
 		const cut = take(createInitialBroadcastGraphicsLiveState(), 'slate', true, T0);
 		const plain = take(cut, 'slate', false, T0 + 5000);
 
@@ -558,17 +477,11 @@ describe('deriving a lifecycle phase from the authoritative effective start time
 });
 
 describe('the clock an output does not own', () => {
-	// An effective start time is stamped with the authoritative clock, so it is never
-	// genuinely in the future. A start time that looks like it is means the *reader's*
-	// clock is behind, and the sign of that being handled is not the same as its
-	// magnitude being handled.
+	// A start time in the future means the reader's clock is behind; both its sign and its
+	// magnitude must be bounded.
 
 	it('leaves an Out Broadcast Graphic on program for no longer than its exit lasts', () => {
-		// The failure this exists for, stated as an operator would see it: a browser
-		// whose clock is a minute behind the server's would hold an exiting graphic on
-		// program for that whole minute, because a graphic leaves the frame when its
-		// exit completes. A capture output stuck showing a graphic the operator has
-		// already taken off is the worst outcome available here.
+		// A minute-slow browser must not hold an exiting graphic on program for that minute.
 		const outed = out(take(createInitialBroadcastGraphicsLiveState(), 'slate'), 'slate', false, T0 + 5000);
 		const minuteBehind = T0 + 5000 - 60_000;
 
@@ -579,10 +492,7 @@ describe('the clock an output does not own', () => {
 	});
 
 	it('settles rather than pinning an entrance when the reader is further behind than the phase lasts', () => {
-		// The same bound on the way on air, where the consequence is a replay: pinned at
-		// full excursion for the length of the skew and then playing the entrance from
-		// zero, which is the replay the no-replay invariant forbids arriving through the
-		// clock instead of through the stored field.
+		// On the way on air, an unbounded skew would replay the entrance through the clock.
 		const taken = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
 
 		expect(broadcastGraphicPlayoutState(taken, 'slate', at(T0 - 30_000))).toBe('on-air');
@@ -590,12 +500,8 @@ describe('the clock an output does not own', () => {
 	});
 
 	it('projects nothing at all for a reader with no instant it trusts', () => {
-		// A reader that has not established the authoritative clock cannot say which phase
-		// anything is in, and guessing on its own clock is the one thing it must not do — so
-		// asking without an instant answers "nothing to animate" rather than falling back.
-		// Every graphic then resolves to the settled state its intent targets, which is the
-		// same answer recovery gives, and an exiting graphic is reported off rather than
-		// being held on program by a clock nobody has checked.
+		// With no authoritative instant a reader settles every graphic to its intended state
+		// rather than guessing on its own clock.
 		let state = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
 		state = out(state, 'slate', false, T0 + 300);
 
@@ -884,12 +790,8 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 	});
 
 	it('lets the transition still crossing finish beneath the exit, keeping its accepted values', () => {
-		// CONTEXT.md:556 discards the *pending* visual update, which leaves the transition
-		// already travelling free to finish underneath the exit recipe — and finishing it
-		// means an update phase and an exit phase are in play for one Broadcast Graphic at
-		// the same instant. That is what `broadcastGraphicPhaseProjections` answering with a
-		// set is for: the update keeps its own schedule and the exit runs over it, so the
-		// content the transition is halfway through crossing is not cut on its way out.
+		// Exit discards the pending update but lets the running one finish beneath it, so both
+		// phases are in play at once (CONTEXT.md, Broadcast Graphic exit).
 		let state = settledOnAir('first');
 		state = edit(state, 'second', T0 + 2000);
 		state = accept(state, T0 + 2000);
@@ -920,10 +822,7 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 	});
 
 	it('discards the rendering pending behind the transition it lets finish', () => {
-		// The half of CONTEXT.md:557 that survives the change. One transition is travelling
-		// and one rendering is queued behind it; exit keeps the first and drops the second,
-		// so program sees the crossing it was already showing complete and nothing new
-		// arrive on a graphic that is leaving.
+		// Exit keeps the running transition and drops the queued rendering.
 		let state = settledOnAir('first');
 		state = edit(state, 'second', T0 + 2000);
 		state = accept(state, T0 + 2000);
@@ -950,11 +849,7 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 	});
 
 	it('keeps the transition still crossing when a Take reverses the exit it was running under', () => {
-		// Take during exit reverses smoothly from the currently rendered state, and the
-		// rendered state is a pair of renderings half way through crossing. Dropping the
-		// transition here would cut that crossing and put the rendering the exit had just
-		// discarded on program with no animation at all — the same snap this ticket exists
-		// to remove, arriving through the one path that can reach it.
+		// Take during exit reverses from the half-crossed pair on program, not a snap.
 		let state = settledOnAir('first');
 		state = edit(state, 'second', T0 + 2000);
 		state = accept(state, T0 + 2000);
@@ -978,12 +873,8 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 	});
 
 	it('resumes the update the exit discarded, once a Take makes the graphic on air again', () => {
-		// Emergent rather than designed, and correct: exit discarded the pending rendering
-		// because the graphic was leaving, and a Take says it never left. Its accepted
-		// values are the ones that rendering was queued in front of, so program has to
-		// reach them — and reaching them through the authored update recipe is what the
-		// recipe is for. Pinned because nothing else states it, and because the alternative
-		// it must not become is the accepted set snapping in with no animation.
+		// After Take-during-exit, program reaches the accepted values through the update recipe
+		// rather than snapping to them.
 		let state = settledOnAir('first');
 		state = edit(state, 'second', T0 + 2000);
 		state = accept(state, T0 + 2000);
@@ -1011,10 +902,8 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 	});
 
 	it('holds the discarded rendering only until the graphic leaves', () => {
-		// While it is leaving, program keeps what the interrupted update was travelling
-		// towards rather than snapping to the accepted set — that snap would be the
-		// discarded update happening after all. Once it has left there is nothing on
-		// program to hold, and the accepted set is what its next Take enters with.
+		// While leaving, program keeps the interrupted update's target; once off, the accepted
+		// set is what the next Take enters with.
 		let state = settledOnAir('first');
 		state = edit(state, 'second', T0 + 2000);
 		state = accept(state, T0 + 2000);
@@ -1079,10 +968,7 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 	});
 
 	it('never carries a stale pending rendering into a later update', () => {
-		// The chain's fields outlive the chain — nothing clears them when a transition
-		// simply completes — so a later acceptance that schedules no pending rendering has
-		// to say so rather than leave the previous one standing. Without that, the next
-		// update would cross towards a rendering from the update before it.
+		// An acceptance with no pending rendering must clear the previous one.
 		let state = settledOnAir('first');
 		state = edit(state, 'second', T0 + 2000);
 		state = accept(state, T0 + 2000);
@@ -1133,10 +1019,7 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 	});
 
 	it('starts no update phase when the acceptance changes no accepted value', () => {
-		// Only about the *accepted values* being unchanged. Whether an accepted change is
-		// one any Graphic Item actually renders is a question about the composition, which
-		// this module deliberately cannot see — so the phase starts and the compositor is
-		// what declines to animate an owner whose rendered content did not change.
+		// Only accepted values decide; whether a change is rendered is the compositor's question.
 		let state = settledOnAir('first');
 		state = accept(state, T0 + 2000);
 
@@ -1145,12 +1028,7 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 	});
 
 	it('bounds a deferred update by the entrance it waits for, not by the reader\'s clock', () => {
-		// The same magnitude bound the enter/exit axis carries, in the one direction this
-		// field can be misread. An update is deferred by at most an entrance, so a start
-		// time further ahead than that means the reader's clock is behind — and without the
-		// bound such a reader sits before the update forever and renders the *old* values
-		// indefinitely, which is the failure this ticket exists to remove reappearing in
-		// the field the ticket added.
+		// An update start further ahead than one entrance is a slow reader clock, and is bounded.
 		let state = taken();
 		state = edit(state, 'second', T0 + 100);
 		state = accept(state, T0 + 100);
@@ -1166,11 +1044,7 @@ describe('the update phase, and the renderings it cross-transitions', () => {
 	});
 
 	it('abandons a running update when a live Graphic Input is applied immediately', () => {
-		// A live On-air Update Policy means applied immediately, and immediately is
-		// incompatible with a cross-transition still travelling towards the old target:
-		// writing the field into the accepted set would retarget the running transition and
-		// the content it is halfway through revealing would cut. So the animation gives way
-		// and the new rendering is simply what is on screen.
+		// A live update supersedes a running cross-transition rather than retargeting it mid-way.
 		const live: GraphicInputDeclaration = { ...HEADLINE, key: 'ticker', updatePolicy: 'live' };
 		const context = {
 			inputs: [HEADLINE, live],
@@ -1305,11 +1179,7 @@ describe('on-screen cycling on air', () => {
 	}
 
 	it('continues from the excursion that was rendered when exit interrupts cycling', () => {
-		// The snap this removes: a graphic caught mid-cycle used to have its exit start
-		// from the Graphic Resting State, so whatever excursion was on screen vanished in
-		// one frame. Cycling and the exit are now both in play, in the order they compose —
-		// the cycle moves the rendering and the exit moves the result — so the first frame
-		// of the exit is exactly the frame that was already there.
+		// Exit composes over the cycle, so its first frame is the frame already on screen.
 		const taken = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
 		const state = outCycling(taken, T0 + 2500);
 
@@ -1341,10 +1211,7 @@ describe('on-screen cycling on air', () => {
 	});
 
 	it('keeps cycling running when a Take reverses the exit it was running under', () => {
-		// Take during exit reverses smoothly from the currently rendered state, and the
-		// rendered state includes the excursion. Dropping the cycle's origin here would put
-		// that channel back at the Graphic Resting State in the same frame the enter/exit
-		// channel was made smooth.
+		// Take during exit keeps the cycle's excursion rather than snapping it to rest.
 		const taken = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
 		const exiting = outCycling(taken, T0 + 2500);
 		const state = take(exiting, 'slate', false, T0 + 2600);
@@ -1362,10 +1229,7 @@ describe('on-screen cycling on air', () => {
 	});
 
 	it('grows the durable record only for a graphic that was actually cycling', () => {
-		// The same discipline the reversal and update fields keep: an Out that interrupted
-		// nothing stores exactly what an Out has always stored. A graphic still entering
-		// has not begun cycling, and a graphic whose author enabled no on-screen recipe has
-		// nothing to cycle.
+		// An Out that interrupted no cycle stores only what an Out always stored.
 		const taken = take(createInitialBroadcastGraphicsLiveState(), 'slate', false, T0);
 
 		expect(Object.keys(outCycling(taken, T0 + 300).playout.slate!).toSorted())
@@ -1389,12 +1253,8 @@ describe('on-screen cycling on air', () => {
 
 describe('the bound on how many lifecycle phases are in play at once', () => {
 	it('projects at most one content phase and one enter/exit phase', () => {
-		// Two, never three, and the pairing is structural rather than incidental: an
-		// acceptance during an entrance is deferred past it and cycling begins only once
-		// the entrance settles, so no content phase overlaps an enter; an update interrupts
-		// cycling and cycling restarts after it, so the two content phases exclude each
-		// other. Exit is the only phase that overlaps anything, which is what lets the
-		// compositor commit to one enclosing element rather than an unbounded nest.
+		// At most two phases overlap: exit over one content phase. Enter and on-screen, and update
+		// and on-screen, exclude each other.
 		const declaration: GraphicInputDeclaration = {
 			key: 'headline',
 			label: 'Headline',

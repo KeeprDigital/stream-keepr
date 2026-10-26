@@ -9,8 +9,11 @@ describe('screen mode definitions', () => {
 	});
 
 	it('treats only Feature Match Controls as a control mode; every other mode is an overlay', () => {
-		for (const mode of SCREEN_MODE_VALUES)
-			expect(getDisplayType(mode), mode).toBe(mode === 'feature-match' ? 'control' : 'overlay');
+		for (const mode of SCREEN_MODE_VALUES) {
+			expect(getDisplayType(mode), mode).toBe(mode === 'feature-match'
+				? 'control'
+				: 'overlay');
+		}
 	});
 });
 

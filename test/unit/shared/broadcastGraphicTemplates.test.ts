@@ -369,11 +369,8 @@ describe('placeBroadcastGraphicTemplate', () => {
 
 	it('rewrites a Broadcast Graphic\'s staggered subset onto the placed copy\'s own Graphic Item ids', () => {
 		const document = composed();
-		// The stagger names both top-level items, listed in reverse of their list order.
-		// `itemIds` is a *selection*: the stagger sequence comes from the container's
-		// list order restricted to that selection, then reversed for `reverse-list`, so
-		// this array's own order carries no meaning. It is written this way so the
-		// assertion below pins each entry's mapping rather than a coincidence of order.
+		// `itemIds` is a selection, so its own order carries no meaning: the stagger follows
+		// list order, reversed.
 		document.animation = {
 			enter: {
 				duration: 400,
@@ -606,21 +603,8 @@ describe('placeBroadcastGraphicTemplate', () => {
 	});
 
 	/**
-	 * The structural guard on the copy itself.
-	 *
-	 * Placement clones the document and replaces only what it is defined to change, so
-	 * a field added to the vocabulary is carried by default. This asserts that
-	 * directly: a document with every field populated must come back deeply equal
-	 * except for the identities placement rewrites, so it fails when a new field stops
-	 * being carried — which no test enumerating the fields the author remembered can do.
-	 *
-	 * It does *not* catch the opposite mistake. `expected()` below builds its
-	 * expectation by cloning the source and rewriting the same identities placement
-	 * rewrites, so a field that needed per-placement rewriting and was carried verbatim
-	 * would be carried on both sides and pass. That half is not tested here and cannot
-	 * be: which fields need rewriting is a fact about the vocabulary rather than about
-	 * this document. `placeBroadcastGraphicTemplate` says so at its own doc comment,
-	 * which is the only thing standing behind it.
+	 * A maximally populated document comes back equal except for the identities placement
+	 * rewrites, so a new field that stops being carried fails here.
 	 */
 	it('carries every field of a maximally populated document except what it rewrites', () => {
 		const document = composed();
