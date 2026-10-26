@@ -78,6 +78,9 @@ export const unitCoverageConfig: CoverageOptions = {
 		'server/utils/**/*.ts',
 		'server/schemas/**/*.ts',
 		...nodeOnlyAppCoverageInclude,
+		// Unit-tested here and still exercised by the Nuxt suite, so measured in both.
+		'app/composables/core/useRealtimeMessageGate.ts',
+		'app/modules/screen-mode/index.ts',
 	],
 	exclude: coverageExclude,
 };
