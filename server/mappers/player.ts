@@ -7,6 +7,7 @@ export function mapPlayerToResponse(player: DbPlayer): PlayerResponse {
 		externalStatus: _externalStatus,
 		isActive: _isActive,
 		lastSeenAt: _lastSeenAt,
+		manuallyEditedFields: _manuallyEditedFields,
 		...publicPlayer
 	} = player;
 	return mapTimestamps(publicPlayer);

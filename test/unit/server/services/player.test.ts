@@ -97,9 +97,14 @@ describe('playerService', () => {
 				externalStatus: 2,
 				isActive: false,
 				lastSeenAt: new Date(0),
+				manuallyEditedFields: ['pronouns'],
 			} as any);
 
-			expect(getChain('update').set).toHaveBeenCalledWith({ name: 'Forger' });
+			// The server computes the edited fields itself (ADR-0046); a client's are dropped.
+			const written = getChain('update').set.mock.calls[0]![0];
+			expect(Object.keys(written).sort()).toEqual(['manuallyEditedFields', 'name']);
+			expect(written.name).toBe('Forger');
+			expect(written.manuallyEditedFields).not.toEqual(['pronouns']);
 		});
 	});
 

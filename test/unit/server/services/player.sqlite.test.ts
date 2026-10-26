@@ -16,7 +16,7 @@ describe('playerService JSON bulk SQLite integration', () => {
 			pronouns text, external_id text, external_source text, external_status integer,
 			is_active integer not null default 1, last_seen_at integer, wins integer, losses integer,
 			draws integer, position integer, points integer, archetype_id integer, lgs text,
-			game_data text, created_at integer not null default (unixepoch() * 1000),
+			game_data text, manually_edited_fields text, created_at integer not null default (unixepoch() * 1000),
 			updated_at integer not null default (unixepoch() * 1000),
 			unique (event_id, external_id, external_source)
 		)`);
