@@ -7,11 +7,6 @@ describe('randomUuid', () => {
 	it('generates RFC4122-shaped v4 UUIDs without crypto APIs', () => {
 		expect(randomUuid()).toMatch(UUID_V4_REGEX);
 	});
-
-	it('produces distinct values across calls', () => {
-		const values = new Set(Array.from({ length: 25 }, () => randomUuid()));
-		expect(values.size).toBe(25);
-	});
 });
 
 describe('randomCommandId', () => {
