@@ -9,15 +9,26 @@ import {
 	recoveredBroadcastGraphicsLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 
-/**
- * Recovery from durable live state that cannot be trusted.
- *
- * The operator-visible rule is one sentence: missing, corrupt, or incompatible
- * durable live state renders every graphic transparent on every output, and the
- * only way back on air is an explicit Take. Both halves are asserted here — the
- * fault is reported so Live Control can say so, and the state a reader gets has
- * nothing on air.
- */
+const avaTwitch = {
+	network: 'twitch',
+	networkLabel: 'Twitch',
+	handle: 'Ava',
+	profileUrl: 'https://www.twitch.tv/Ava',
+};
+
+/** Durable live state holding one stored Social Profile Projection, `lower.profile`. */
+function withProfile(profile: Record<string, unknown>) {
+	return {
+		playout: {},
+		inputs: {},
+		socialProfileProjections: {
+			lower: { profile },
+		},
+	};
+}
+
+// Missing, corrupt or incompatible durable live state is reported as a fault and
+// recovers with nothing on air; only an explicit Take puts a graphic back.
 describe('broadcastGraphicsRecovery', () => {
 	describe('state a reader can trust', () => {
 		it('reports no fault for the state a fresh epoch opens with', () => {
@@ -334,316 +345,182 @@ describe('broadcastGraphicsRecovery', () => {
 			],
 			[
 				'more accepted Social Profiles than the six-network catalog',
-				{
-					playout: {},
-					inputs: {},
-					socialProfileProjections: {
-						lower: {
-							profile: {
-								acceptedProfiles: Array.from({ length: 7 }, () => ({
-									network: 'twitch',
-									networkLabel: 'Twitch',
-									handle: 'Ava',
-									profileUrl: 'https://www.twitch.tv/Ava',
-								})),
-							},
-						},
-					},
-				},
+				withProfile({
+					acceptedProfiles: Array.from({ length: 7 }).fill(avaTwitch),
+				}),
 			],
 			[
 				'a current Social Profile outside the accepted set',
-				{
-					playout: {},
-					inputs: {},
-					socialProfileProjections: {
-						lower: {
-							profile: {
-								acceptedProfiles: [
-									{
-										network: 'twitch',
-										networkLabel: 'Twitch',
-										handle: 'Ava',
-										profileUrl: 'https://www.twitch.tv/Ava',
-									},
-								],
-								currentNetwork: 'x',
-							},
-						},
-					},
-				},
+				withProfile({
+					acceptedProfiles: [
+						avaTwitch,
+					],
+					currentNetwork: 'x',
+				}),
 			],
 			[
 				'a Social Profile tuple with a mismatched label',
-				{
-					playout: {},
-					inputs: {},
-					socialProfileProjections: {
-						lower: {
-							profile: {
-								acceptedProfiles: [
-									{
-										network: 'twitch',
-										networkLabel: 'YouTube',
-										handle: 'Ava',
-										profileUrl: 'https://www.twitch.tv/Ava',
-									},
-								],
-							},
+				withProfile({
+					acceptedProfiles: [
+						{
+							network: 'twitch',
+							networkLabel: 'YouTube',
+							handle: 'Ava',
+							profileUrl: 'https://www.twitch.tv/Ava',
 						},
-					},
-				},
+					],
+				}),
 			],
 			[
 				'a Graphic Update Social Profile snapshot that is not canonical',
-				{
-					playout: {},
-					inputs: {},
-					socialProfileProjections: {
-						lower: {
-							profile: {
-								acceptedProfiles: [],
-								updateFrom: [
-									{
-										values: {
-											network: 'twitch',
-											networkLabel: 'Not Twitch',
-											handle: 'Ava',
-											profileUrl: 'https://www.twitch.tv/Ava',
-										},
-										opacity: 1,
-										offsetX: 0,
-										offsetY: 0,
-									},
-								],
+				withProfile({
+					acceptedProfiles: [],
+					updateFrom: [
+						{
+							values: {
+								network: 'twitch',
+								networkLabel: 'Not Twitch',
+								handle: 'Ava',
+								profileUrl: 'https://www.twitch.tv/Ava',
 							},
+							opacity: 1,
+							offsetX: 0,
+							offsetY: 0,
 						},
-					},
-				},
+					],
+				}),
 			],
 			[
 				'accepted Social Profiles outside catalog order',
-				{
-					playout: {},
-					inputs: {},
-					socialProfileProjections: {
-						lower: {
-							profile: {
-								acceptedProfiles: [
-									{
-										network: 'x',
-										networkLabel: 'X',
-										handle: 'AvaX',
-										profileUrl: 'https://x.com/AvaX',
-									},
-									{
-										network: 'twitch',
-										networkLabel: 'Twitch',
-										handle: 'AvaLive',
-										profileUrl: 'https://www.twitch.tv/AvaLive',
-									},
-								],
-							},
+				withProfile({
+					acceptedProfiles: [
+						{
+							network: 'x',
+							networkLabel: 'X',
+							handle: 'AvaX',
+							profileUrl: 'https://x.com/AvaX',
 						},
-					},
-				},
+						{
+							network: 'twitch',
+							networkLabel: 'Twitch',
+							handle: 'AvaLive',
+							profileUrl: 'https://www.twitch.tv/AvaLive',
+						},
+					],
+				}),
 			],
 			[
 				'accepted Social Profiles without their Talent identity',
-				{
-					playout: {},
-					inputs: {},
-					socialProfileProjections: {
-						lower: {
-							profile: {
-								acceptedProfiles: [
-									{
-										network: 'twitch',
-										networkLabel: 'Twitch',
-										handle: 'AvaLive',
-										profileUrl: 'https://www.twitch.tv/AvaLive',
-									},
-								],
-								currentNetwork: 'twitch',
-							},
+				withProfile({
+					acceptedProfiles: [
+						{
+							network: 'twitch',
+							networkLabel: 'Twitch',
+							handle: 'AvaLive',
+							profileUrl: 'https://www.twitch.tv/AvaLive',
 						},
-					},
-				},
+					],
+					currentNetwork: 'twitch',
+				}),
 			],
 			[
 				'a manual Social Profile without its Talent identity',
-				{
-					playout: {},
-					inputs: {},
-					socialProfileProjections: {
-						lower: {
-							profile: {
-								acceptedProfiles: [],
-								manualNetwork: 'twitch',
-							},
-						},
-					},
-				},
+				withProfile({
+					acceptedProfiles: [],
+					manualNetwork: 'twitch',
+				}),
 			],
 			[
 				'an Automatic value that is not boolean',
-				{
-					playout: {},
-					inputs: {},
-					socialProfileProjections: {
-						lower: {
-							profile: {
-								talent: { id: 7, name: 'Ava' },
-								acceptedProfiles: [
-									{
-										network: 'twitch',
-										networkLabel: 'Twitch',
-										handle: 'Ava',
-										profileUrl: 'https://www.twitch.tv/Ava',
-									},
-								],
-								currentNetwork: 'twitch',
-								automatic: 'yes',
-							},
-						},
-					},
-				},
+				withProfile({
+					talent: { id: 7, name: 'Ava' },
+					acceptedProfiles: [
+						avaTwitch,
+					],
+					currentNetwork: 'twitch',
+					automatic: 'yes',
+				}),
 			],
 			[
 				'a rotation anchor outside the accepted set',
-				{
-					playout: {},
-					inputs: {},
-					socialProfileProjections: {
-						lower: {
-							profile: {
-								talent: { id: 7, name: 'Ava' },
-								acceptedProfiles: [
-									{
-										network: 'twitch',
-										networkLabel: 'Twitch',
-										handle: 'Ava',
-										profileUrl: 'https://www.twitch.tv/Ava',
-									},
-								],
-								currentNetwork: 'twitch',
-								automatic: true,
-								rotationAnchor: { network: 'x', anchoredAt: 123_456 },
-							},
-						},
-					},
-				},
+				withProfile({
+					talent: { id: 7, name: 'Ava' },
+					acceptedProfiles: [
+						avaTwitch,
+					],
+					currentNetwork: 'twitch',
+					automatic: true,
+					rotationAnchor: { network: 'x', anchoredAt: 123_456 },
+				}),
 			],
 			[
 				'a rotation anchor instant that is not numeric',
-				{
-					playout: {},
-					inputs: {},
-					socialProfileProjections: {
-						lower: {
-							profile: {
-								talent: { id: 7, name: 'Ava' },
-								acceptedProfiles: [
-									{
-										network: 'twitch',
-										networkLabel: 'Twitch',
-										handle: 'Ava',
-										profileUrl: 'https://www.twitch.tv/Ava',
-									},
-								],
-								currentNetwork: 'twitch',
-								automatic: true,
-								rotationAnchor: { network: 'twitch', anchoredAt: 'later' },
-							},
-						},
-					},
-				},
+				withProfile({
+					talent: { id: 7, name: 'Ava' },
+					acceptedProfiles: [
+						avaTwitch,
+					],
+					currentNetwork: 'twitch',
+					automatic: true,
+					rotationAnchor: { network: 'twitch', anchoredAt: 'later' },
+				}),
 			],
 			[
 				'an unbounded interrupted Social Profile visual',
-				{
-					playout: {},
-					inputs: {},
-					socialProfileProjections: {
-						lower: {
-							profile: {
-								acceptedProfiles: [],
-								transitionAnchor: {
-									startedAt: 123_456,
-									from: Array.from({ length: 13 }, (_, index) => ({
-										values: {
-											network: 'twitch',
-											networkLabel: 'Twitch',
-											handle: `Ava${index}`,
-											profileUrl: `https://www.twitch.tv/Ava${index}`,
-										},
-										opacity: 1,
-										offsetX: 0,
-										offsetY: 0,
-									})),
-								},
+				withProfile({
+					acceptedProfiles: [],
+					transitionAnchor: {
+						startedAt: 123_456,
+						from: Array.from({ length: 13 }, (_, index) => ({
+							values: {
+								network: 'twitch',
+								networkLabel: 'Twitch',
+								handle: `Ava${index}`,
+								profileUrl: `https://www.twitch.tv/Ava${index}`,
 							},
-						},
+							opacity: 1,
+							offsetX: 0,
+							offsetY: 0,
+						})),
 					},
-				},
+				}),
 			],
 			[
 				'an interrupted Social Profile tuple that is not canonical',
-				{
-					playout: {},
-					inputs: {},
-					socialProfileProjections: {
-						lower: {
-							profile: {
-								acceptedProfiles: [],
-								transitionAnchor: {
-									startedAt: 123_456,
-									from: [
-										{
-											values: {
-												network: 'twitch',
-												networkLabel: 'Not Twitch',
-												handle: 'Ava',
-												profileUrl: 'https://www.twitch.tv/Ava',
-											},
-											opacity: 1,
-											offsetX: 0,
-											offsetY: 0,
-										},
-									],
+				withProfile({
+					acceptedProfiles: [],
+					transitionAnchor: {
+						startedAt: 123_456,
+						from: [
+							{
+								values: {
+									network: 'twitch',
+									networkLabel: 'Not Twitch',
+									handle: 'Ava',
+									profileUrl: 'https://www.twitch.tv/Ava',
 								},
+								opacity: 1,
+								offsetX: 0,
+								offsetY: 0,
 							},
-						},
+						],
 					},
-				},
+				}),
 			],
 			[
 				'a duplicate correlated tuple in an interrupted Social Profile visual',
-				{
-					playout: {},
-					inputs: {},
-					socialProfileProjections: {
-						lower: {
-							profile: {
-								acceptedProfiles: [],
-								transitionAnchor: {
-									startedAt: 123_456,
-									from: Array.from({ length: 2 }, () => ({
-										values: {
-											network: 'twitch',
-											networkLabel: 'Twitch',
-											handle: 'Ava',
-											profileUrl: 'https://www.twitch.tv/Ava',
-										},
-										opacity: 1,
-										offsetX: 0,
-										offsetY: 0,
-									})),
-								},
-							},
-						},
+				withProfile({
+					acceptedProfiles: [],
+					transitionAnchor: {
+						startedAt: 123_456,
+						from: Array.from({ length: 2 }, () => ({
+							values: avaTwitch,
+							opacity: 1,
+							offsetX: 0,
+							offsetY: 0,
+						})),
 					},
-				},
+				}),
 			],
 		])('reports %s as incompatible', (_label, raw) => {
 			expect(broadcastGraphicsRecoveryFault(raw)?.reason).toBe('incompatible');
@@ -702,12 +579,7 @@ describe('broadcastGraphicsRecovery', () => {
 								startedAt: 123_456,
 								from: [
 									{
-										values: {
-											network: 'twitch',
-											networkLabel: 'Twitch',
-											handle: 'Ava',
-											profileUrl: 'https://www.twitch.tv/Ava',
-										},
+										values: avaTwitch,
 										opacity: 0.5,
 										offsetX: -50,
 										offsetY: 0,
@@ -791,12 +663,7 @@ describe('broadcastGraphicsRecovery', () => {
 					lower: {
 						profile: {
 							acceptedProfiles: [
-								{
-									network: 'twitch',
-									networkLabel: 'Twitch',
-									handle: 'Ava',
-									profileUrl: 'https://www.twitch.tv/Ava',
-								},
+								avaTwitch,
 							],
 							currentNetwork: 'twitch',
 							manualNetwork: 'twitch',
