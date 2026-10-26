@@ -305,7 +305,7 @@ describe('broadcastGraphicsSettings', () => {
 		const inputs = wrapper.findAllComponents({ name: 'UInputNumber' });
 		expect(inputs.map(input => input.props('modelValue'))).toEqual([1920, 1080]);
 
-		await inputs[1]?.vm.$emit('update:modelValue', 720);
+		await inputs[1]!.vm.$emit('update:modelValue', 720);
 		await nextTick();
 
 		expect(mockUpdateScreenConfig).toHaveBeenCalledWith({ height: 720 });
@@ -414,7 +414,7 @@ describe('broadcastGraphicsSettings', () => {
 		const inputs = wrapper.findAllComponents({ name: 'UInputNumber' });
 		expect(inputs.map(input => input.props('disabled'))).toEqual([false, false]);
 
-		await inputs[1]?.vm.$emit('update:modelValue', 720);
+		await inputs[1]!.vm.$emit('update:modelValue', 720);
 		await nextTick();
 
 		expect(mockUpdateScreenConfig).toHaveBeenCalledWith({ height: 720 });
@@ -488,7 +488,7 @@ describe('broadcastGraphicsSettings', () => {
 		const inputs = wrapper.findAllComponents({ name: 'UInputNumber' });
 		expect(inputs.map(input => input.props('disabled'))).toEqual([true, true]);
 
-		await inputs[1]?.vm.$emit('update:modelValue', 720);
+		await inputs[1]!.vm.$emit('update:modelValue', 720);
 		await nextTick();
 
 		expect(mockUpdateScreenConfig).not.toHaveBeenCalled();

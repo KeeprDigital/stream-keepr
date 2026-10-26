@@ -275,7 +275,7 @@ describe('featureMatchOverlaySettings', () => {
 		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-canvas-width')).toBe('1920');
 		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-canvas-height')).toBe('1080');
 
-		await inputs[0]?.vm.$emit('update:modelValue', 1280);
+		await inputs[0]!.vm.$emit('update:modelValue', 1280);
 		await nextTick();
 
 		expect(mockUpdateScreenConfig).toHaveBeenCalledWith({ width: 1280 });

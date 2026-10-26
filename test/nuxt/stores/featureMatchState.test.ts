@@ -181,7 +181,7 @@ describe('useFeatureMatchStateStore', () => {
 		seedState({}, 100);
 		seedState({}, 200);
 
-		store.updateAllClockSettings(...(args as Parameters<typeof store.updateAllClockSettings>));
+		store.updateAllClockSettings(...(args as unknown as Parameters<typeof store.updateAllClockSettings>));
 
 		expect(held(100).clock).toMatchObject(expected);
 		expect(held(200).clock).toMatchObject(expected);

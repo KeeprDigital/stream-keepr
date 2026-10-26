@@ -969,7 +969,7 @@ describe('graphicsCompositorInspector', () => {
 				{ label: 'Bluesky', value: 'bluesky' },
 			]);
 
-			network?.vm.$emit('update:modelValue', 'youtube');
+			network!.vm.$emit('update:modelValue', 'youtube');
 			await nextTick();
 
 			expect(itemOf(emittedGraphics(wrapper))).toMatchObject({
@@ -1132,8 +1132,8 @@ describe('graphicsCompositorInspector', () => {
 			});
 
 			tokenButtons(wrapper)
-				.find(button => button.attributes('data-host-token') === 'player1Name')
-				?.vm
+				.find(button => button.attributes('data-host-token') === 'player1Name')!
+				.vm
 				.$emit('click');
 			await nextTick();
 
@@ -1149,8 +1149,8 @@ describe('graphicsCompositorInspector', () => {
 			});
 
 			tokenButtons(wrapper)
-				.find(button => button.attributes('data-host-token') === 'player1Name')
-				?.vm
+				.find(button => button.attributes('data-host-token') === 'player1Name')!
+				.vm
 				.$emit('click');
 			await nextTick();
 
@@ -1193,7 +1193,7 @@ describe('graphicsCompositorInspector', () => {
 
 			expect(nameStyle?.attributes('value')).toBe('base');
 			expect(recordStyle?.attributes('value')).toBe('base');
-			nameStyle?.vm.$emit('update:modelValue', 'italic');
+			nameStyle!.vm.$emit('update:modelValue', 'italic');
 			await nextTick();
 
 			const styled = itemOf(emittedGraphics(wrapper));
@@ -1351,8 +1351,8 @@ describe('graphicsCompositorInspector', () => {
 		selectField(wrapper, 'graphic-input-type').vm.$emit('update:modelValue', 'number');
 		await nextTick();
 		wrapper.findAllComponents(UButtonStub)
-			.find(button => button.attributes('data-testid') === 'graphic-input-add')
-			?.vm
+			.find(button => button.attributes('data-testid') === 'graphic-input-add')!
+			.vm
 			.$emit('click');
 		await nextTick();
 
@@ -1466,8 +1466,8 @@ describe('graphicsCompositorInspector', () => {
 		});
 
 		wrapper.findAllComponents(UInputStub)
-			.find(input => input.attributes('data-testid') === 'graphic-input-options')
-			?.vm
+			.find(input => input.attributes('data-testid') === 'graphic-input-options')!
+			.vm
 			.$emit('update:modelValue', 'l=Left');
 		await nextTick();
 
@@ -1619,8 +1619,8 @@ describe('graphicsCompositorInspector', () => {
 		});
 
 		wrapper.findAllComponents(UInputStub)
-			.find(input => input.attributes('data-testid') === 'graphic-input-label')
-			?.vm
+			.find(input => input.attributes('data-testid') === 'graphic-input-label')!
+			.vm
 			.$emit('update:modelValue', '');
 		await nextTick();
 
@@ -1692,8 +1692,8 @@ describe('graphicsCompositorInspector', () => {
 		numberFieldByTestId(wrapper, 'graphic-placeholder-style-size').vm.$emit('update:modelValue', 24);
 		await nextTick();
 		wrapper.findAllComponents(UButtonStub)
-			.find(button => button.attributes('data-testid') === 'graphic-placeholder-style-clear')
-			?.vm
+			.find(button => button.attributes('data-testid') === 'graphic-placeholder-style-clear')!
+			.vm
 			.$emit('click');
 		await nextTick();
 
@@ -1846,7 +1846,7 @@ describe('graphicsCompositorInspector', () => {
 
 			selectField(wrapper, 'typography-font-source').vm.$emit('update:modelValue', 'asset');
 			await nextTick();
-			typographyFontPicker(wrapper)?.vm.$emit(
+			typographyFontPicker(wrapper)!.vm.$emit(
 				'select',
 				{ id: 'font-1', kind: 'font' },
 				{ assetId: 'font-1', revisionId: 'font-revision-2' },
@@ -1906,7 +1906,7 @@ describe('graphicsCompositorInspector', () => {
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
-			typographyFontPicker(wrapper)?.vm.$emit('update:modelValue', undefined);
+			typographyFontPicker(wrapper)!.vm.$emit('update:modelValue', undefined);
 			await nextTick();
 
 			expect(typographyOf(emittedGraphics(wrapper, 0))?.font)
@@ -2031,7 +2031,7 @@ describe('graphicsCompositorInspector', () => {
 				.vm
 				.$emit('update:modelValue', 'asset');
 			await nextTick();
-			placeholderFontPicker(wrapper)?.vm.$emit(
+			placeholderFontPicker(wrapper)!.vm.$emit(
 				'select',
 				{ id: 'font-1', kind: 'font' },
 				{ assetId: 'font-1', revisionId: 'font-revision-2' },
@@ -2108,7 +2108,7 @@ describe('graphicsCompositorInspector', () => {
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
-			placeholderFontPicker(wrapper)?.vm.$emit('update:modelValue', undefined);
+			placeholderFontPicker(wrapper)!.vm.$emit('update:modelValue', undefined);
 			await nextTick();
 
 			expect(placeholderStylesOf(emittedGraphics(wrapper, 0))).toEqual({
@@ -2233,8 +2233,8 @@ describe('graphicsCompositorInspector', () => {
 		});
 
 		wrapper.findAllComponents(UButtonStub)
-			.find(button => button.attributes('data-testid') === 'graphic-input-add')
-			?.vm
+			.find(button => button.attributes('data-testid') === 'graphic-input-add')!
+			.vm
 			.$emit('click');
 		await nextTick();
 
@@ -2281,8 +2281,8 @@ describe('graphicsCompositorInspector', () => {
 			await nextTick();
 			// The colour a glow or slide change tints; the other animations ignore it.
 			wrapper.findAllComponents(UInputStub)
-				.find(input => input.attributes('data-testid') === 'player-life-animation-accent')
-				?.vm
+				.find(input => input.attributes('data-testid') === 'player-life-animation-accent')!
+				.vm
 				.$emit('update:modelValue', '#ff0055');
 			await nextTick();
 
@@ -2329,8 +2329,8 @@ describe('graphicsCompositorInspector', () => {
 			const wrapper = await mountKind('game-wins');
 
 			wrapper.findAllComponents(UInputStub)
-				.find(input => input.attributes('data-testid') === 'game-wins-box-graphic-fill-color')
-				?.vm
+				.find(input => input.attributes('data-testid') === 'game-wins-box-graphic-fill-color')!
+				.vm
 				.$emit('update:modelValue', '#123456');
 			await nextTick();
 			await switchField(wrapper, 'game-wins-won-box-graphic-glow-enabled').trigger('click');

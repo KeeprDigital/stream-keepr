@@ -493,8 +493,14 @@ describe('useStandingsModeData', () => {
 			prevPage();
 
 			expect(mockScreenStore.updateModeConfig.mock.calls.map(([, , mode, patch]) => [mode, patch])).toEqual([
-				['standings', { currentPage: 2 }],
-				['standings', { currentPage: 4 }],
+				[
+					'standings',
+					{ currentPage: 2 },
+				],
+				[
+					'standings',
+					{ currentPage: 4 },
+				],
 			]);
 		});
 

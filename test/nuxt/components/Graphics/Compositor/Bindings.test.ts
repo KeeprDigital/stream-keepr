@@ -163,9 +163,9 @@ describe('graphicsCompositorBindings', () => {
 				graphics: graphic(),
 			});
 
-			selects(wrapper, 'graphic-source-kind')[0]?.vm.$emit('update:modelValue', 'feature-match-slot');
+			selects(wrapper, 'graphic-source-kind')[0]!.vm.$emit('update:modelValue', 'feature-match-slot');
 			await nextTick();
-			buttons(wrapper, 'graphic-source-add')[0]?.vm.$emit('click');
+			buttons(wrapper, 'graphic-source-add')[0]!.vm.$emit('click');
 			await nextTick();
 
 			expect(emittedGraphics(wrapper)[0]!.sources).toEqual([
@@ -180,7 +180,7 @@ describe('graphicsCompositorBindings', () => {
 				}),
 			});
 
-			wrapper.findAllComponents(UInputStub)[0]?.vm.$emit('update:modelValue', 'Champion');
+			wrapper.findAllComponents(UInputStub)[0]!.vm.$emit('update:modelValue', 'Champion');
 			await nextTick();
 
 			expect(emittedGraphics(wrapper)[0]!.sources).toEqual([
@@ -202,7 +202,7 @@ describe('graphicsCompositorBindings', () => {
 				}),
 			});
 
-			buttons(wrapper, 'graphic-source-delete')[0]?.vm.$emit('click');
+			buttons(wrapper, 'graphic-source-delete')[0]!.vm.$emit('click');
 			await nextTick();
 
 			expect(emittedGraphics(wrapper)[0]!.sources).toEqual([]);
@@ -238,7 +238,7 @@ describe('graphicsCompositorBindings', () => {
 				}),
 			});
 
-			wrapper.findAllComponents(UInputStub)[0]?.vm.$emit('update:modelValue', '');
+			wrapper.findAllComponents(UInputStub)[0]!.vm.$emit('update:modelValue', '');
 			await nextTick();
 
 			// A nameless Graphic Source Selection is one the write path refuses.
@@ -344,7 +344,7 @@ describe('graphicsCompositorBindings', () => {
 				}),
 			});
 
-			selects(wrapper, 'graphic-source-derivation')[1]?.vm.$emit('update:modelValue', 'slot:player1');
+			selects(wrapper, 'graphic-source-derivation')[1]!.vm.$emit('update:modelValue', 'slot:player1');
 			await nextTick();
 
 			expect(emittedGraphics(wrapper)[0]!.sources![1]).toEqual({
@@ -363,7 +363,7 @@ describe('graphicsCompositorBindings', () => {
 					],
 				}),
 			});
-			selects(derived, 'graphic-source-derivation')[1]?.vm.$emit('update:modelValue', '');
+			selects(derived, 'graphic-source-derivation')[1]!.vm.$emit('update:modelValue', '');
 			await nextTick();
 
 			expect(emittedGraphics(derived)[0]!.sources![1]).toEqual(PLAYER);
@@ -449,7 +449,7 @@ describe('graphicsCompositorBindings', () => {
 				}),
 			});
 
-			selects(wrapper, 'graphic-binding-source')[0]?.vm.$emit('update:modelValue', 'talent');
+			selects(wrapper, 'graphic-binding-source')[0]!.vm.$emit('update:modelValue', 'talent');
 			await nextTick();
 
 			expect(wrapper.get('[data-testid="graphic-binding-unavailable"]').text())
@@ -479,9 +479,9 @@ describe('graphicsCompositorBindings', () => {
 		it('binds one Graphic Input to one field of one Graphic Source Selection', async () => {
 			const wrapper = await mountComponent({ graphics: bindable });
 
-			selects(wrapper, 'graphic-binding-source')[0]?.vm.$emit('update:modelValue', 'player');
+			selects(wrapper, 'graphic-binding-source')[0]!.vm.$emit('update:modelValue', 'player');
 			await nextTick();
-			selects(wrapper, 'graphic-binding-field')[0]?.vm.$emit('update:modelValue', 'player.record');
+			selects(wrapper, 'graphic-binding-field')[0]!.vm.$emit('update:modelValue', 'player.record');
 			await nextTick();
 
 			expect(emittedGraphics(wrapper)[0]!.bindings).toEqual([
@@ -502,7 +502,7 @@ describe('graphicsCompositorBindings', () => {
 				}),
 			});
 
-			selects(wrapper, 'graphic-binding-field')[0]?.vm.$emit('update:modelValue', 'player.pronouns');
+			selects(wrapper, 'graphic-binding-field')[0]!.vm.$emit('update:modelValue', 'player.pronouns');
 			await nextTick();
 
 			expect(emittedGraphics(wrapper)[0]!.bindings).toEqual([
@@ -523,7 +523,7 @@ describe('graphicsCompositorBindings', () => {
 				}),
 			});
 
-			selects(wrapper, 'graphic-binding-source')[0]?.vm.$emit('update:modelValue', 'slot');
+			selects(wrapper, 'graphic-binding-source')[0]!.vm.$emit('update:modelValue', 'slot');
 			await nextTick();
 
 			// `player.name` is a catalog name the wire would accept on a Feature Match Slot
@@ -547,7 +547,7 @@ describe('graphicsCompositorBindings', () => {
 				}),
 			});
 
-			selects(wrapper, 'graphic-binding-source')[0]?.vm.$emit('update:modelValue', 'opponent');
+			selects(wrapper, 'graphic-binding-source')[0]!.vm.$emit('update:modelValue', 'opponent');
 			await nextTick();
 
 			expect(emittedGraphics(wrapper)[0]!.bindings).toEqual([
@@ -568,7 +568,7 @@ describe('graphicsCompositorBindings', () => {
 				}),
 			});
 
-			buttons(wrapper, 'graphic-binding-clear')[0]?.vm.$emit('click');
+			buttons(wrapper, 'graphic-binding-clear')[0]!.vm.$emit('click');
 			await nextTick();
 
 			expect(emittedGraphics(wrapper)[0]!.bindings).toEqual([]);
@@ -599,7 +599,7 @@ describe('graphicsCompositorBindings', () => {
 		it('still authors Graphic Source Selections, which no game decides', async () => {
 			const wrapper = await mountComponent(unresolved);
 
-			buttons(wrapper, 'graphic-source-add')[0]?.vm.$emit('click');
+			buttons(wrapper, 'graphic-source-add')[0]!.vm.$emit('click');
 			await nextTick();
 
 			expect(emittedGraphics(wrapper)[0]!.sources).toHaveLength(2);
@@ -630,10 +630,10 @@ describe('graphicsCompositorBindings', () => {
 			});
 
 			expect(wrapper.find('[data-graphic-source-selection="player"]').exists()).toBe(true);
-			buttons(wrapper, 'graphic-source-add')[0]?.vm.$emit('click');
-			buttons(wrapper, 'graphic-source-delete')[0]?.vm.$emit('click');
-			buttons(wrapper, 'graphic-binding-clear')[0]?.vm.$emit('click');
-			selects(wrapper, 'graphic-binding-field')[0]?.vm.$emit('update:modelValue', 'player.pronouns');
+			buttons(wrapper, 'graphic-source-add')[0]!.vm.$emit('click');
+			buttons(wrapper, 'graphic-source-delete')[0]!.vm.$emit('click');
+			buttons(wrapper, 'graphic-binding-clear')[0]!.vm.$emit('click');
+			selects(wrapper, 'graphic-binding-field')[0]!.vm.$emit('update:modelValue', 'player.pronouns');
 			await nextTick();
 
 			expect(wrapper.emitted('update:graphics')).toBeUndefined();

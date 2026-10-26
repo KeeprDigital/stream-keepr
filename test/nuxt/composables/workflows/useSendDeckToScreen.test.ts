@@ -90,7 +90,9 @@ describe('useSendDeckToScreen', () => {
 			mockScreenStore.screens = [allScreens[0]!];
 			const [item] = useSendDeckToScreen().createSendDeckItems(playerWithDeck);
 
-			item!.onSelect!();
+			if (!item || !('onSelect' in item))
+				throw new Error('expected a direct send item');
+			void item.onSelect();
 			await flushPromises();
 
 			expect(mockUpdateModeConfig).toHaveBeenCalledWith(1, 1, 'deck', deckSourceOf(42));
