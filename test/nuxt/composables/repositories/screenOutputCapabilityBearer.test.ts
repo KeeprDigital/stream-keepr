@@ -43,4 +43,10 @@ describe('screen Output capability reads', () => {
 
 		expect(mockFetch).toHaveBeenCalledWith(path, { headers: undefined });
 	});
+
+	it('answers a refused Screen read with nothing to tell apart from a missing Screen', async () => {
+		mockFetch.mockRejectedValue(Object.assign(new Error('Not Found'), { statusCode: 404 }));
+
+		await expect(useScreenRepository().getBySlug(1, 'main', 'a-capability-for-another-screen')).resolves.toBeNull();
+	});
 });
