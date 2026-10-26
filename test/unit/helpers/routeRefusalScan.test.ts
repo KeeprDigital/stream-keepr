@@ -18,16 +18,58 @@ describe('what the scan reads out of a source file', () => {
 	}
 
 	it.each([
-		['literals', 'createError({ statusCode: 403, message: \'Screen is locked\' });', 403, 'Screen is locked'],
-		['a status held in a const', 'const FORBIDDEN = 403;\ncreateError({ statusCode: FORBIDDEN, message: \'Screen is locked\' });', 403, 'Screen is locked'],
-		['a message held in a const', 'const LOCKED = \'Screen is locked\';\ncreateError({ statusCode: 403, message: LOCKED });', 403, 'Screen is locked'],
-		['an empty template', 'createError({ statusCode: 403, message: `Screen is locked` });', 403, 'Screen is locked'],
-		['h3\'s `status` key', 'createError({ status: 403, message: \'Screen is locked\' });', 403, 'Screen is locked'],
-		['h3\'s `statusMessage` key', 'createError({ statusCode: 404, statusMessage: \'Screen not found\' });', 404, 'Screen not found'],
-		['a quoted computed key', 'createError({ [\'statusCode\']: 403, message: \'Screen is locked\' });', 403, 'Screen is locked'],
-		['h3\'s defaults for unnamed halves', 'createError({ message: \'Screen is locked\' });', 500, 'Screen is locked'],
+		[
+			'literals',
+			'createError({ statusCode: 403, message: \'Screen is locked\' });',
+			403,
+			'Screen is locked',
+		],
+		[
+			'a status held in a const',
+			'const FORBIDDEN = 403;\ncreateError({ statusCode: FORBIDDEN, message: \'Screen is locked\' });',
+			403,
+			'Screen is locked',
+		],
+		[
+			'a message held in a const',
+			'const LOCKED = \'Screen is locked\';\ncreateError({ statusCode: 403, message: LOCKED });',
+			403,
+			'Screen is locked',
+		],
+		[
+			'an empty template',
+			'createError({ statusCode: 403, message: `Screen is locked` });',
+			403,
+			'Screen is locked',
+		],
+		[
+			'h3\'s `status` key',
+			'createError({ status: 403, message: \'Screen is locked\' });',
+			403,
+			'Screen is locked',
+		],
+		[
+			'h3\'s `statusMessage` key',
+			'createError({ statusCode: 404, statusMessage: \'Screen not found\' });',
+			404,
+			'Screen not found',
+		],
+		[
+			'a quoted computed key',
+			'createError({ [\'statusCode\']: 403, message: \'Screen is locked\' });',
+			403,
+			'Screen is locked',
+		],
+		[
+			'h3\'s defaults for unnamed halves',
+			'createError({ message: \'Screen is locked\' });',
+			500,
+			'Screen is locked',
+		],
 	])('reads %s', (_, source, statusCode, message) => {
-		expect(scan(source)).toEqual([expect.objectContaining({ statusCode, message })]);
+		expect(scan(source)).toEqual([
+			expect.objectContaining({ statusCode, message }),
+		]);
 	});
 
 	it.each([
@@ -99,7 +141,12 @@ describe('the scan\'s reach through a route\'s imports', () => {
 	it('follows direct imports, re-exports and dynamic imports, but not type-only imports', () => {
 		const messages = scanRouteRefusals(join(root, 'entry.ts')).refusals.map(refusal => refusal.message);
 
-		expect(messages).toEqual(expect.arrayContaining(['the entry point', 'a direct import', 'a re-export', 'a dynamic import']));
+		expect(messages).toEqual(expect.arrayContaining([
+			'the entry point',
+			'a direct import',
+			'a re-export',
+			'a dynamic import',
+		]));
 		expect(messages).not.toContain('a type-only import');
 	});
 
@@ -107,7 +154,9 @@ describe('the scan\'s reach through a route\'s imports', () => {
 		const entry = join(root, 'broken.ts');
 		writeFileSync(entry, 'import { gone } from \'./not-a-module\';\n');
 
-		expect(scanRouteRefusals(entry).unfollowedImports).toEqual([expect.stringContaining('./not-a-module')]);
+		expect(scanRouteRefusals(entry).unfollowedImports).toEqual([
+			expect.stringContaining('./not-a-module'),
+		]);
 	});
 
 	it('follows a first-party alias other than `~~/`', () => {
@@ -136,8 +185,26 @@ describe('the path aliases the scan follows', () => {
 	it('are this repository\'s own roots from the generated tsconfig, in both spellings', () => {
 		const prefixes = firstPartyPathAliases().map(alias => alias.prefix);
 
-		expect(prefixes).toEqual(expect.arrayContaining(['~~/', '@@/', '#shared/', '#server/', '~/', '@/', '~~', '#shared']));
-		for (const outside of ['h3', 'ofetch', 'nitropack', '#ui', '#app', '#imports', '#build', '#components'])
+		expect(prefixes).toEqual(expect.arrayContaining([
+			'~~/',
+			'@@/',
+			'#shared/',
+			'#server/',
+			'~/',
+			'@/',
+			'~~',
+			'#shared',
+		]));
+		for (const outside of [
+			'h3',
+			'ofetch',
+			'nitropack',
+			'#ui',
+			'#app',
+			'#imports',
+			'#build',
+			'#components',
+		])
 			expect(prefixes).not.toContain(outside);
 		for (const alias of firstPartyPathAliases())
 			expect(existsSync(alias.target), alias.prefix).toBe(true);
@@ -151,7 +218,13 @@ describe('the path aliases the scan follows', () => {
 	it('refuses a tsconfig whose paths name none of this repository\'s roots', () => {
 		const directory = mkdtempSync(join(tmpdir(), 'route-refusal-scan-aliases-'));
 		const tsconfig = join(directory, 'tsconfig.json');
-		writeFileSync(tsconfig, JSON.stringify({ compilerOptions: { paths: { h3: ['../node_modules/h3'] } } }));
+		writeFileSync(tsconfig, JSON.stringify({
+			compilerOptions: {
+				paths: {
+					h3: ['../node_modules/h3'],
+				},
+			},
+		}));
 
 		try {
 			expect(() => firstPartyPathAliases(tsconfig)).toThrow(/first-party/);
@@ -170,7 +243,9 @@ describe('the middleware entry points', () => {
 		writeFileSync(join(directory, 'shallow.d.ts'), 'export declare const nothing: number;\n');
 
 		try {
-			expect(serverMiddlewareFiles(directory)).toEqual([join(directory, 'nested', 'deep.ts')]);
+			expect(serverMiddlewareFiles(directory)).toEqual([
+				join(directory, 'nested', 'deep.ts'),
+			]);
 		}
 		finally {
 			rmSync(directory, { recursive: true, force: true });

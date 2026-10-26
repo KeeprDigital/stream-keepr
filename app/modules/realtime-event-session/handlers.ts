@@ -1,4 +1,6 @@
+import type { MessageType, screenCommandMessageTypes } from '~~/shared/types/messages';
 import type { AcceptRealtimeMessage } from './types';
+import type { RealtimeHandler } from '~/types/realtime';
 import { createBroadcastDeckListRealtimeHandlers } from './broadcastDeckListHandlers';
 import { createBroadcastGraphicsRealtimeHandlers } from './broadcastGraphicsHandlers';
 import { createEventTalentRealtimeHandlers } from './eventTalentHandlers';
@@ -16,6 +18,11 @@ interface EventRealtimeSessionHandlerOptions {
 	realtime: ReturnType<typeof useRealtime>;
 }
 
+type DirectChannelMessageType = (typeof screenCommandMessageTypes)[keyof typeof screenCommandMessageTypes];
+
+/** Every message on the Event room has a handler; Screen commands travel on their own channel. */
+type EventRoomHandlers = { [K in Exclude<MessageType, DirectChannelMessageType>]: RealtimeHandler<K> };
+
 /**
  * Realtime Event Session module seam.
  *
@@ -32,5 +39,5 @@ export function createEventRealtimeHandlers(options: EventRealtimeSessionHandler
 		...createBroadcastGraphicsRealtimeHandlers(options),
 		...createBroadcastDeckListRealtimeHandlers(options),
 		...createMeleeRealtimeHandlers(options),
-	};
+	} satisfies EventRoomHandlers;
 }

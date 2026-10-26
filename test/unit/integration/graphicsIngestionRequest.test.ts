@@ -11,7 +11,17 @@ describe('the body of a Graphics Ingestion Operation initiation', () => {
 	});
 
 	it('lets the suite that means reuse ask for it, and keeps everything else', () => {
-		expect(graphicsIngestionRequest({ idempotencyKey: 'k', name: 'n', declaredByteLength: 92, duplicateContentPolicy: 'reuse' as const }))
-			.toEqual({ idempotencyKey: 'k', name: 'n', declaredByteLength: 92, duplicateContentPolicy: 'reuse' });
+		expect(graphicsIngestionRequest({
+			idempotencyKey: 'k',
+			name: 'n',
+			declaredByteLength: 92,
+			duplicateContentPolicy: 'reuse' as const,
+		}))
+			.toEqual({
+				idempotencyKey: 'k',
+				name: 'n',
+				declaredByteLength: 92,
+				duplicateContentPolicy: 'reuse',
+			});
 	});
 });
