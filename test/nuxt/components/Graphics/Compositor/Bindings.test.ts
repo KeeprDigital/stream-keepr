@@ -8,15 +8,7 @@ import Bindings from '~/components/Graphics/Compositor/Bindings.vue';
 
 enableAutoUnmount(afterEach);
 
-/**
- * Authoring the Event Data one Broadcast Graphic reads.
- *
- * Every assertion is the same rule from the author's side: the surface offers only
- * what the write path accepts and what resolution can actually resolve. A derivation
- * the relation table does not yield is not in the list; a field of another kind, of
- * another game, or of a type this Graphic Input cannot hold is not in the list; and a
- * second Graphic Input Binding for one Graphic Input has nowhere to be written.
- */
+// Authoring the Event Data one Broadcast Graphic reads.
 
 const SlotOnlyStub = defineComponent({
 	props: {
@@ -583,14 +575,7 @@ describe('graphicsCompositorBindings', () => {
 		});
 	});
 
-	/**
-	 * The window before this Event's game arrives.
-	 *
-	 * The catalog offers every game's fields when it is passed no game, which is the
-	 * right answer for a surface with no Event context and the wrong one here: the
-	 * Event has a game, it has simply not loaded, and a One Piece field bound on a
-	 * Magic Event is not something the later load takes back.
-	 */
+	// The window before this Event's game arrives.
 	describe('before this Event\'s game is known', () => {
 		const unresolved = {
 			graphics: graphic({

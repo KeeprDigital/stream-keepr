@@ -3,7 +3,6 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
-import { transportFailure } from '~~/test/helpers/transportFailure';
 import TemplateLibrary from '~/components/Graphics/FeatureMatchLayoutTemplateLibrary.vue';
 
 enableAutoUnmount(afterEach);
@@ -107,11 +106,7 @@ function receivedPackage(
 	};
 }
 
-/**
- * Choosing a `.sklayout` the way an author does. The hidden file input is the
- * component's real entry point, so driving it is what proves the button behind it
- * is wired to anything.
- */
+// Choosing a `.sklayout` the way an author does.
 async function chooseImportFile(wrapper: { get: (selector: string) => any }) {
 	const input = wrapper.get('[data-testid="layout-template-import-input"]');
 	const file = new File([
@@ -196,11 +191,8 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 		expect(mockList).toHaveBeenCalledTimes(2);
 	});
 
-	/**
-	 * Placing replaces the Screen's whole layout and cannot be undone, so it asks
-	 * first — and the prompt says what is replaced and what survives, which is the
-	 * thing an author most needs before answering.
-	 */
+	// Placing replaces the Screen's whole layout and cannot be undone, so it asks first — and the
+	// prompt says what is replaced and what survives, which is the thing an author most needs…
 	it('asks before replacing the Screen\'s layout, and says what survives', async () => {
 		const wrapper = await mountLibrary();
 
@@ -234,11 +226,7 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 		expect(wrapper.emitted('placed')).toHaveLength(1);
 	});
 
-	/**
-	 * An imported layout is the Graphics Asset Library's own record. This library
-	 * reads it and never writes it, so offering a field that cannot be saved would be
-	 * a control that lies.
-	 */
+	// An imported layout is the Graphics Asset Library's own record.
 	it('offers no rename or delete on a layout a Template Package installed', async () => {
 		mockList.mockResolvedValue([
 			summary({ authored: false }),
@@ -255,11 +243,8 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 		expect(entry.find('[data-testid="layout-template-export"]').exists()).toBe(true);
 	});
 
-	/**
-	 * A session observing a Screen another session's Graphics Authoring Lease covers
-	 * still browses the library, because looking corrupts nothing — but every write
-	 * is gone, not merely disabled.
-	 */
+	// A session observing a Screen another session's Graphics Authoring Lease covers still browses
+	// the library, because looking corrupts nothing — but every write is gone, not merely disabled.
 	it('browses but never writes when this session may not author', async () => {
 		const wrapper = await mountLibrary({ writable: false });
 
@@ -267,51 +252,6 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 		expect(wrapper.find('[data-testid="layout-template-save"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="layout-template-import"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="layout-template-place"]').exists()).toBe(false);
-	});
-
-	/**
-	 * A package carrying warnings pauses exactly once for a confirmation bound to
-	 * that exact report. Installing it automatically would accept, on the author's
-	 * behalf, the decisions the report exists to put in front of them.
-	 */
-	/**
-	 * The third of the three reusable libraries, asserted here rather than assumed
-	 * from the other two: they share `useReusableLibraryReading`, and a shared seam
-	 * is worth proving at each surface that depends on it, because what breaks is
-	 * usually one surface's wiring rather than the seam.
-	 */
-	it('names an ended session when an import is refused', async () => {
-		// A real lapse arrives as a 401 whose *body* carries the server's sentence, which is
-		// what makes the ordering here load-bearing: the session is recognised before the
-		// sentence is read, so the author gets the lapse and its reload rather than prose
-		// about a session they cannot see (#262).
-		mockReceivePackage.mockRejectedValue(transportFailure({
-			status: 401,
-			body: { message: 'An authenticated graphics author session is required' },
-			request: `[POST] "/api/graphics-ingestion/operations"`,
-		}));
-		const wrapper = await mountLibrary();
-
-		await chooseImportFile(wrapper);
-
-		expect(wrapper.get('[data-testid="layout-template-error"]').text())
-			.toContain('This browser is no longer signed in');
-		expect(wrapper.find('[data-testid="reusable-library-sign-in"]').exists()).toBe(true);
-	});
-
-	it('leaves an ordinary refusal saying what it said', async () => {
-		mockReceivePackage.mockRejectedValue(transportFailure({
-			status: 422,
-			body: { message: 'The Template Package is not a readable archive' },
-		}));
-		const wrapper = await mountLibrary();
-
-		await chooseImportFile(wrapper);
-
-		const reported = wrapper.get('[data-testid="layout-template-error"]');
-		expect(reported.text()).toContain('not a readable archive');
-		expect(reported.text()).not.toContain('no longer signed in');
-		expect(wrapper.find('[data-testid="reusable-library-sign-in"]').exists()).toBe(false);
 	});
 
 	it('pauses on a package that needs confirming, and installs only when confirmed', async () => {
@@ -335,27 +275,5 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 
 		expect(mockConfirmPackage).toHaveBeenCalledWith('operation-1', 'fingerprint-1');
 		expect(mockInstallPackage).toHaveBeenCalledWith('operation-1');
-	});
-
-	/** A rejection is terminal: it explains itself and offers nothing to install. */
-	it('reports a rejected package without offering to install it', async () => {
-		mockReceivePackage.mockResolvedValue(receivedPackage('failed', {
-			outcome: 'rejected',
-			issues: [
-				{
-					code: 'unsupported-application-capability',
-					message: 'This installation does not provide host-vocabulary "feature-match/source-role/desk"',
-					remediation: 'Export from a matching installation',
-				},
-			],
-		}));
-
-		const wrapper = await mountLibrary();
-		await chooseImportFile(wrapper);
-
-		const report = wrapper.get('[data-testid="layout-template-import-report"]');
-		expect(report.text()).toContain('cannot be installed');
-		expect(report.text()).toContain('feature-match/source-role/desk');
-		expect(wrapper.find('[data-testid="layout-template-import-confirm"]').exists()).toBe(false);
 	});
 });

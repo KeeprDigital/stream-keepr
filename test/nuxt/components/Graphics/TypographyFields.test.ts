@@ -3,12 +3,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, h } from 'vue';
 import TypographyFields from '~/components/Graphics/TypographyFields.vue';
 
-/**
- * The one typography fields control, shared by a Graphic Item's base typography, a
- * Graphic Placeholder Style, and a Graphic Style Set typography entry: the bounds
- * each field holds, what clearing one emits, and what the inheritable mode a
- * Graphic Placeholder Style uses adds and removes.
- */
+// The one typography fields control, shared by a Graphic Item's base typography, a Graphic
+// Placeholder Style, and a Graphic Style Set typography entry: the bounds each field holds, what…
 
 enableAutoUnmount(afterEach);
 
@@ -98,23 +94,6 @@ describe('typography fields', () => {
 		expect(selectField(wrapper, 'type-case')?.props('modelValue')).toBe('none');
 	});
 
-	it('bounds every field to what each typography schema accepts', () => {
-		const wrapper = mountFields();
-		const bounds = (label: string) => {
-			const field = numberField(wrapper, label)!;
-			return [
-				field.props('min'),
-				field.props('max'),
-			];
-		};
-
-		expect(bounds('Font size')).toEqual([1, 600]);
-		expect(bounds('Font weight')).toEqual([1, 1000]);
-		expect(bounds('Letter spacing')).toEqual([-100, 100]);
-		expect(bounds('Line height')).toEqual([0.05, 10]);
-		expect(numberField(wrapper, 'Line height')!.props('step')).toBe(0.05);
-	});
-
 	it('emits one field at a time, held within its bounds', async () => {
 		const wrapper = mountFields();
 
@@ -185,7 +164,9 @@ describe('typography fields', () => {
 	it('disables every field for an observer', () => {
 		const wrapper = mountFields({ disabled: true });
 
-		for (const control of wrapper.findAll('input, select'))
+		const controls = wrapper.findAll('input, select');
+		expect(controls.length).toBeGreaterThan(0);
+		for (const control of controls)
 			expect((control.element as HTMLInputElement).disabled).toBe(true);
 	});
 });

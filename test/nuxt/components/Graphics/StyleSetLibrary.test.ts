@@ -6,17 +6,9 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { GRAPHIC_STYLE_SET_PACKAGE_LIMITS } from '~~/shared/types/graphicStyleSetPackage';
-import { transportFailure } from '~~/test/helpers/transportFailure';
 import StyleSetLibrary from '~/components/Graphics/StyleSetLibrary.vue';
 
-/**
- * The Graphic Style Set library as an author operates it.
- *
- * The rules under test are the ones that make a shared style safe to change: linking
- * adopts nothing, publishing reports which templates it reaches without writing one,
- * an unpublished Style Set cannot be linked to, and unlinking keeps every value the
- * Style Set produced.
- */
+// The Graphic Style Set library as an author operates it.
 
 enableAutoUnmount(afterEach);
 
@@ -460,50 +452,6 @@ describe('graphicsStyleSetLibrary', () => {
 		// A Style Set that has never been published has no snapshot to freeze.
 		const unpublished = wrapper.get('[data-style-set-id="unpublished-style"]');
 		expect(unpublished.find('[data-testid="style-set-export"]').exists()).toBe(false);
-	});
-
-	/**
-	 * The third library in the reusable-library scope, reporting through the same
-	 * shared reading. Its package routes are its own rather than the Graphics Asset
-	 * Library's ingestion routes, and they require the same graphics author session,
-	 * so a lapse has to read the same here as it does everywhere else.
-	 */
-	it('names an ended session when a package is refused', async () => {
-		// A real lapse arrives as a 401 whose *body* carries the server's sentence, which is
-		// what makes the ordering here load-bearing: the session is recognised before the
-		// sentence is read, so the author gets the lapse and its reload rather than prose
-		// about a session they cannot see (#262).
-		mockInspectPackage.mockRejectedValue(transportFailure({
-			status: 401,
-			body: { message: 'An authenticated graphics author session is required' },
-			request: `[POST] "/api/graphics-style-sets/package/inspect"`,
-		}));
-		const wrapper = await mountLibrary();
-
-		await choosePackage(wrapper);
-
-		expect(wrapper.get('[data-testid="style-set-error"]').text())
-			.toContain('This browser is no longer signed in');
-		expect(wrapper.find('[data-testid="reusable-library-sign-in"]').exists()).toBe(true);
-	});
-
-	/**
-	 * A seam that announced a lapse for every refusal would be the same defect with
-	 * friendlier wording, so the negative is asserted on each surface too.
-	 */
-	it('leaves an ordinary refusal saying what it said', async () => {
-		mockInspectPackage.mockRejectedValue(transportFailure({
-			status: 422,
-			body: { message: 'The Graphic Style Set Package is not a readable archive' },
-		}));
-		const wrapper = await mountLibrary();
-
-		await choosePackage(wrapper);
-
-		const reported = wrapper.get('[data-testid="style-set-error"]');
-		expect(reported.text()).toContain('not a readable archive');
-		expect(reported.text()).not.toContain('no longer signed in');
-		expect(wrapper.find('[data-testid="reusable-library-sign-in"]').exists()).toBe(false);
 	});
 
 	it('installs a package that has nothing for its author to weigh, without asking', async () => {

@@ -278,11 +278,8 @@ describe('graphicsCompositorItem social network icon', () => {
 	);
 });
 
-/**
- * Chromium is the only supported engine for transparent video (ADR-0020), so a
- * silent video renders as one whatever the browser. These mount under the test
- * runtime's own user agent, which is not Chromium.
- */
+// Chromium is the only supported engine for transparent video (ADR-0020), so a silent video renders
+// as one whatever the browser.
 describe('graphicsCompositorItem silent video', () => {
 	it('renders the video element whatever the browser', async () => {
 		const wrapper = await mountItem({

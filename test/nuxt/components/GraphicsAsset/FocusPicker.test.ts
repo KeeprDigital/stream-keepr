@@ -125,12 +125,8 @@ const assets = ref<GraphicAsset[]>([
 		},
 		operation: {} as never,
 	},
-	/**
-	 * The library's only font, and it belongs to another Event — the one shape in
-	 * this fixture where exactly one asset is hidden by the Event scope, which is
-	 * what the hint's singular sentence needs. No other test asks for fonts, so it
-	 * changes no existing count.
-	 */
+	// The library's only font, and it belongs to another Event — the one shape in this fixture
+	// where exactly one asset is hidden by the Event scope, which is what the hint's singular…
 	{
 		id: 'asset-shared-font' as never,
 		name: 'Sponsor display face',
@@ -173,13 +169,7 @@ const { mockApiFetch } = vi.hoisted(() => ({
 	mockApiFetch: vi.fn(),
 }));
 
-/**
- * The failure the library listing can meet, settable per test.
- *
- * `useFetch` hands its `error` on as the failure the request produced, and the picker
- * renders it — so a mock that could only ever be `null` left the picker's only failure
- * state uncovered (#286).
- */
+// The failure the library listing can meet, settable per test.
 const listingError = ref<unknown>(null);
 
 mockNuxtImport('useFetch', () => () => ({
@@ -188,12 +178,6 @@ mockNuxtImport('useFetch', () => () => ({
 	error: listingError,
 }));
 mockNuxtImport('$fetch', () => mockApiFetch);
-// The real composable auto-starts a singleton that synchronises against
-// `/api/time` on its own timers, so the shared `$fetch` mock would count
-// requests this file never made.
-mockNuxtImport('useServerTime', () => () => ({
-	getServerTime: () => Date.now(),
-}));
 
 const passthroughStub = defineComponent({
 	template: '<div><slot name="content" /><slot /></div>',
@@ -286,11 +270,7 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 		});
 	}
 
-	/**
-	 * The hint's own sentence, without the widen button that shares its element.
-	 * Whitespace is collapsed because the template wraps the line; an exact match
-	 * on the result is what pins the wording rather than a fragment of it.
-	 */
+	// The hint's own sentence, without the widen button that shares its element.
 	function hintSentence(text: string) {
 		return text.replace('Show all assets', '').replaceAll(/\s+/g, ' ').trim();
 	}
@@ -368,13 +348,8 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 		expect(wrapper.text()).toContain('Shared logo');
 	});
 
-	/**
-	 * The whole sentence at both counts, because the count is the only part of it
-	 * that varies and a plural arm is the obvious thing to reach for. This read
-	 * 'N more match(es)', whose arms agreed with a subject the sentence does not
-	 * contain — '1 more matches', '5 more match'. A bare count needs no
-	 * agreement, and leaves nothing to keep in the right order.
-	 */
+	// The whole sentence at both counts, because the count is the only part of it that varies and a
+	// plural arm is the obvious thing to reach for.
 	it('says the same sentence when the Event scope is holding back exactly one', async () => {
 		const wrapper = await mountPicker({
 			eventId: 99,
@@ -437,11 +412,8 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 		expect(wrapper.text()).toContain('Publication-requiring actions are unavailable');
 	});
 
-	/**
-	 * Chromium is the only supported engine for transparent video (ADR-0020), so a
-	 * transparent clip is offered and pinned like any other revision, with no target
-	 * to refuse it for and no open output to warn about.
-	 */
+	// Chromium is the only supported engine for transparent video (ADR-0020), so a transparent clip
+	// is offered and pinned like any other revision, with no target to refuse it for and no open…
 	it('offers a transparent video like any other revision', async () => {
 		const wrapper = mount(FocusPicker, {
 			props: {
@@ -474,11 +446,8 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 		});
 	});
 
-	/**
-	 * A host that shows and clears the pinned reference itself still wants the
-	 * picker's report on it. Withholding the Clear is what lets it have both without
-	 * offering the operator two of them.
-	 */
+	// A host that shows and clears the pinned reference itself still wants the picker's report on
+	// it.
 	it('withholds its own Clear for a host that owns one, while still reporting the pinned revision', async () => {
 		mockApiFetch.mockResolvedValue({ outcome: 'missing' });
 		const wrapper = mount(FocusPicker, {
@@ -590,15 +559,7 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 		expect(wrapper.text()).not.toContain('Pinned revision first-revision');
 	});
 
-	/**
-	 * What an author is told when the library will not answer.
-	 *
-	 * The picker used to render the failure's own `message`, which on a `$fetch` failure
-	 * is the transport's line — so an author whose session had ended, or whose
-	 * installation had a setting missing, read the route's name and a status code. Since
-	 * #286 the read goes through `failureSentence`, which quotes a refusal and also the
-	 * 5xx families whose prose the server preserves through sanitizing.
-	 */
+	// What an author is told when the library will not answer.
 	async function mountWithListingFailure() {
 		const wrapper = mount(FocusPicker, {
 			props: { modelValue: undefined, eventId: 7, fieldLabel: 'Frame image' },

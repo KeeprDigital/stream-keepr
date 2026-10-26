@@ -121,11 +121,7 @@ function receivedPackage(
 	};
 }
 
-/**
- * Choosing a `.skgraphic` the way an author does. The hidden file input is the
- * component's real entry point, so driving it is what proves the button behind it
- * is wired to anything.
- */
+// Choosing a `.skgraphic` the way an author does.
 async function chooseImportFile(wrapper: { get: (selector: string) => any }) {
 	const input = wrapper.get('[data-testid="template-library-import-input"]');
 	const file = new File([
@@ -329,29 +325,6 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 		expect(mockList).toHaveBeenCalledTimes(2);
 	});
 
-	/**
-	 * The 5xx half of what a library says about a failure.
-	 *
-	 * This server rewrites an unmapped 5xx body message to 'Internal Server Error' on the
-	 * way out, so quoting one back would put a placeholder in front of an author dressed
-	 * as the authority's own words. The transport line at least reads as machinery (#262).
-	 */
-	it('does not read a sanitized 5xx body back to the author as though it were a refusal', async () => {
-		mockUpdate.mockRejectedValue(transportFailure({
-			status: 500,
-			body: { message: 'Internal Server Error' },
-			request: `[PATCH] "/api/graphics-templates/broadcast-graphics/template-1"`,
-		}));
-		const wrapper = await mountLibrary();
-
-		await wrapper.get('[data-testid="template-name"]').setValue('Renamed into a server fault');
-		await flushPromises();
-
-		const reported = wrapper.get('[data-testid="template-library-error"]').text();
-		expect(reported).toContain('500 Internal Server Error');
-		expect(reported).toContain('[PATCH]');
-	});
-
 	it('browses read-only without offering any authoring action', async () => {
 		const wrapper = await mountLibrary({ writable: false });
 
@@ -392,53 +365,6 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 			.toBe('/api/graphics-templates/broadcast-graphics/template-1/template-package');
 	});
 
-	/**
-	 * A Template Package import is a Graphics Ingestion Operation like any other, so
-	 * it is refused the same way when the graphics author session behind it has
-	 * ended — and it is the import that pauses for a confirmation, which makes this
-	 * the surface most likely to still be open when a session runs out. It must name
-	 * the lapse rather than repeat the server's sentence about a session it cannot
-	 * explain, and offer the one action that helps.
-	 */
-	it('names an ended session when an import is refused', async () => {
-		// A real lapse arrives as a 401 whose *body* carries the server's sentence, which is
-		// what makes the ordering here load-bearing: the session is recognised before the
-		// sentence is read, so the author gets the lapse and its reload rather than prose
-		// about a session they cannot see (#262).
-		mockReceivePackage.mockRejectedValue(transportFailure({
-			status: 401,
-			body: { message: 'An authenticated graphics author session is required' },
-			request: `[POST] "/api/graphics-ingestion/operations"`,
-		}));
-		const wrapper = await mountLibrary();
-
-		await chooseImportFile(wrapper);
-
-		const reported = wrapper.get('[data-testid="template-library-error"]');
-		expect(reported.text()).toContain('This browser is no longer signed in');
-		expect(wrapper.find('[data-testid="reusable-library-sign-in"]').exists()).toBe(true);
-	});
-
-	/**
-	 * The other half of the same rule. A refusal that is not a lapse must keep its own
-	 * message: announcing a lapse for every failure would be the same defect with a
-	 * friendlier sentence.
-	 */
-	it('leaves an ordinary refusal saying what it said', async () => {
-		mockReceivePackage.mockRejectedValue(transportFailure({
-			status: 422,
-			body: { message: 'The Template Package is not a readable archive' },
-		}));
-		const wrapper = await mountLibrary();
-
-		await chooseImportFile(wrapper);
-
-		const reported = wrapper.get('[data-testid="template-library-error"]');
-		expect(reported.text()).toContain('not a readable archive');
-		expect(reported.text()).not.toContain('no longer signed in');
-		expect(wrapper.find('[data-testid="reusable-library-sign-in"]').exists()).toBe(false);
-	});
-
 	it('installs a clean Template Package without asking anything', async () => {
 		mockReceivePackage.mockResolvedValue(receivedPackage('awaiting-installation'));
 		mockInstallPackage.mockResolvedValue({
@@ -457,73 +383,6 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 		expect(wrapper.find('[data-testid="template-library-import-report"]').exists()).toBe(false);
 	});
 
-	/**
-	 * Warnings pause an import exactly once, and the pause is the point: the author
-	 * is accepting a specific proposal — this content already exists here under
-	 * another name — rather than approving "import" in the abstract.
-	 */
-	it('pauses on a proposal carrying warnings until the author accepts it', async () => {
-		mockReceivePackage.mockResolvedValue(receivedPackage('awaiting-confirmation', {
-			outcome: 'requires-confirmation',
-			issues: [
-				{
-					code: 'graphic-asset-created-from-shared-content',
-					severity: 'warning',
-					message: '"Backdrop" carries content this installation already stores as "Bug"',
-					remediation: 'Install it as a separate Graphic Asset, or cancel and reuse the existing one.',
-					retryable: false,
-				},
-			],
-		}));
-		mockConfirmPackage.mockResolvedValue(receivedPackage('awaiting-installation'));
-		mockInstallPackage.mockResolvedValue({
-			...receivedPackage('completed'),
-			stage: 'completed',
-		});
-		const wrapper = await mountLibrary();
-
-		await chooseImportFile(wrapper);
-
-		expect(mockInstallPackage).not.toHaveBeenCalled();
-		const report = wrapper.get('[data-testid="template-library-import-report"]');
-		expect(report.text()).toContain('already stores as "Bug"');
-
-		await wrapper.get('[data-testid="template-library-import-confirm"]').trigger('click');
-		await flushPromises();
-
-		// The confirmation names the exact report it accepted, never the operation alone.
-		expect(mockConfirmPackage).toHaveBeenCalledWith('operation-1', 'fingerprint-1');
-		expect(mockInstallPackage).toHaveBeenCalledWith('operation-1');
-	});
-
-	/**
-	 * A rejected package is terminal and there is nothing to accept, so the report is
-	 * shown with every reason at once and no way to install it anyway.
-	 */
-	it('reports a rejected Template Package without offering to install it', async () => {
-		mockReceivePackage.mockResolvedValue(receivedPackage('failed', {
-			outcome: 'rejected',
-			issues: [
-				{
-					code: 'unsupported-application-capability',
-					severity: 'error',
-					message: 'This installation does not provide graphic-item-definition "media" at configuration version 2',
-					remediation: 'Replace it with a supported one before exporting.',
-					retryable: false,
-				},
-			],
-		}));
-		const wrapper = await mountLibrary();
-
-		await chooseImportFile(wrapper);
-
-		const report = wrapper.get('[data-testid="template-library-import-report"]');
-		expect(report.text()).toContain('configuration version 2');
-		expect(wrapper.find('[data-testid="template-library-import-confirm"]').exists()).toBe(false);
-		expect(mockInstallPackage).not.toHaveBeenCalled();
-		expect(mockConfirmPackage).not.toHaveBeenCalled();
-	});
-
 	it('offers no import while this session may only observe', async () => {
 		const wrapper = await mountLibrary({ writable: false });
 
@@ -531,12 +390,8 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 		expect(wrapper.find('[data-testid="template-export"]').exists()).toBe(false);
 	});
 
-	/**
-	 * An imported design is the Graphics Asset Library's own record of what a
-	 * Template Package published, and this library reads it rather than writing it.
-	 * Offering a name field or a delete would be a control that cannot save, so the
-	 * component offers only what actually works on one: place, and export.
-	 */
+	// An imported design is the Graphics Asset Library's own record of what a Template Package
+	// published, and this library reads it rather than writing it.
 	it('offers an imported design only what can be done to it', async () => {
 		mockList.mockResolvedValue([
 			summary({

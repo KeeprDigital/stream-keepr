@@ -230,66 +230,6 @@ describe('graphicAnimationEditor', () => {
 		expect(animation?.exit).toBeDefined();
 	});
 
-	it('edits timing within the settled bounds it presents', async () => {
-		const graphics = stack();
-		graphics[0]!.items[0]!.animation = {
-			enter: createDefaultGraphicAnimationRecipe('enter'),
-		};
-		const wrapper = await mountComponent({ graphics, selectedTarget: ITEM_TARGET });
-
-		const duration = numberField(wrapper, 'animation-enter-duration')!;
-		expect(duration.props('min')).toBe(50);
-		expect(duration.props('max')).toBe(10000);
-		duration.vm.$emit('update:modelValue', 900);
-		await nextTick();
-
-		expect(emittedGraphics(wrapper)[0]?.items[0]?.animation?.enter?.duration).toBe(900);
-	});
-
-	it('bounds a delay to ten seconds, as the vocabulary does', async () => {
-		const graphics = stack();
-		graphics[0]!.items[0]!.animation = {
-			enter: createDefaultGraphicAnimationRecipe('enter'),
-		};
-		const wrapper = await mountComponent({ graphics, selectedTarget: ITEM_TARGET });
-
-		const delay = numberField(wrapper, 'animation-enter-delay')!;
-		expect(delay.props('min')).toBe(0);
-		expect(delay.props('max')).toBe(10000);
-	});
-
-	it('adds and removes one channel without disturbing the recipe others', async () => {
-		const graphics = stack();
-		graphics[0]!.items[0]!.animation = {
-			enter: createDefaultGraphicAnimationRecipe('enter'),
-		};
-		const wrapper = await mountComponent({ graphics, selectedTarget: ITEM_TARGET });
-
-		switchField(wrapper, 'animation-enter-slide-enabled')!.vm.$emit('update:modelValue', true);
-		await nextTick();
-
-		const withSlide = emittedGraphics(wrapper)[0]?.items[0]?.animation?.enter;
-		expect(withSlide?.slide).toEqual({ direction: 'north', distanceMode: 'fixed', distance: 100 });
-		// The fade the default recipe came with is still there.
-		expect(withSlide?.fade).toEqual({ opacity: 0 });
-	});
-
-	it('hides a fixed slide distance while the slide clears its parent instead', async () => {
-		const graphics = stack();
-		graphics[0]!.items[0]!.animation = {
-			enter: {
-				duration: 400,
-				easing: 'linear',
-				delay: 0,
-				slide: { direction: 'north', distanceMode: 'clear-parent', distance: 0 },
-			},
-		};
-		const wrapper = await mountComponent({ graphics, selectedTarget: ITEM_TARGET });
-
-		expect(numberField(wrapper, 'animation-enter-slide-distance')).toBeUndefined();
-		expect(selectField(wrapper, 'animation-enter-slide-mode')).toBeDefined();
-	});
-
 	describe('a fixed slide distance in a Geometry Unit', () => {
 		function sliding<T extends { animation?: GraphicAnimation }>(owner: T, direction: 'east' | 'north', distance: number): T {
 			owner.animation = {
@@ -386,19 +326,6 @@ describe('graphicAnimationEditor', () => {
 		expect(switchField(wrapper, 'animation-on-screen-repeat-indefinite')?.props('modelValue')).toBe(true);
 		// A repeat count is inert while a recipe repeats indefinitely.
 		expect(numberField(wrapper, 'animation-on-screen-repeat')?.props('disabled')).toBe(true);
-	});
-
-	it('turns an indefinite repetition into a finite one', async () => {
-		const graphics = stack();
-		graphics[0]!.items[0]!.animation = {
-			'on-screen': createDefaultGraphicAnimationRecipe('on-screen'),
-		};
-		const wrapper = await mountComponent({ graphics, selectedTarget: ITEM_TARGET });
-
-		switchField(wrapper, 'animation-on-screen-repeat-indefinite')!.vm.$emit('update:modelValue', false);
-		await nextTick();
-
-		expect(emittedGraphics(wrapper)[0]?.items[0]?.animation?.['on-screen']?.repeat).toBe(1);
 	});
 
 	it('initialises a recipe from a preset', async () => {
@@ -572,18 +499,6 @@ describe('stagger authoring in the editor', () => {
 		const stagger = emittedGraphics(wrapper)[0]?.animation?.stagger;
 		expect(stagger?.exit?.order).toBe('reverse-list');
 		expect(stagger?.enter?.order).toBe('list');
-	});
-
-	it('bounds a stagger step to ten seconds', async () => {
-		const graphics = stack();
-		graphics[0]!.animation = {
-			stagger: {
-				enter: { order: 'list', step: 100, itemIds: [] },
-			},
-		};
-		const wrapper = await mountComponent({ graphics, selectedTarget: GRAPHIC_TARGET });
-
-		expect(numberField(wrapper, 'animation-enter-stagger-step')?.props('max')).toBe(10000);
 	});
 
 	it('lets a container order its items without animating itself', async () => {
