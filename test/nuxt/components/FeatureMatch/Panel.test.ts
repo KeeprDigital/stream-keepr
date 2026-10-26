@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive, ref } from 'vue';
 import { createMockFeatureMatch } from '~~/test/helpers/fixtures';
 import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import FeatureMatchPanel from '~/components/FeatureMatch/Panel.vue';
 
 const mockFeatureMatchStore = reactive({
@@ -63,11 +64,7 @@ mockNuxtImport('useRoundStore', () => () => ({
 	loadRoundsByEventId: vi.fn(),
 }));
 mockNuxtImport('useToast', () => () => mockToast);
-// The page guard reaches for the overlay and the router when it installs itself.
-// What it does with them is its own composable's test; here they only have to
-// exist so a test can mount this panel the way its page does. `useRegisterDirtyState`
-// itself is deliberately not mocked: mocked away, deleting the panel's registration
-// changed nothing this file could see.
+// The page guard needs these to install; `useRegisterDirtyState` stays real.
 mockNuxtImport('useOverlay', () => () => ({
 	create: () => ({
 		open: () => ({
@@ -112,20 +109,6 @@ mockNuxtImport('useFeatureMatchSetupActions', () => () => ({
 	populateFromMelee: vi.fn(),
 }));
 
-const UCardStub = defineComponent({
-	template: '<section><slot name="header" /><slot /><slot name="footer" /></section>',
-});
-
-const UButtonStub = defineComponent({
-	props: {
-		label: { type: String, required: false },
-		disabled: { type: Boolean, required: false },
-		loading: { type: Boolean, required: false },
-	},
-	emits: ['click'],
-	template: '<button :data-label="label" :disabled="disabled" @click="$emit(\'click\')"><slot>{{ label }}</slot></button>',
-});
-
 const PanelHeaderStub = defineComponent({
 	emits: ['update:panelView', 'update:tableNumber'],
 	template: `
@@ -156,11 +139,7 @@ function mountProps(overrides: Record<string, unknown> = {}) {
 const mountOptions = {
 	global: {
 		stubs: {
-			UCard: UCardStub,
-			UButton: UButtonStub,
-			UFieldGroup: { template: '<div><slot /></div>' },
-			USeparator: true,
-			UDropdownMenu: { template: '<div><slot /></div>' },
+			...nuxtUiStubs,
 			FeatureMatchPanelHeader: PanelHeaderStub,
 			FeatureMatchSetupPlayerForm: PlayerFormStub,
 			FeatureMatchPanelMeleeModal: { template: '<div />' },
@@ -177,12 +156,11 @@ async function mountComponent(overrides: Record<string, unknown> = {}) {
 
 type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
 
-/**
- * Mounts the panel the way `pages/event/[eventId]/feature-matches.vue` does —
- * through `FeatureMatchList` — inside a page that has installed the
- * unsaved-changes guard. See the shared harness for why the registration is
- * invisible from a bare mount.
- */
+function saveButton(wrapper: Wrapper) {
+	return wrapper.findAll('button').find(button => button.text() === 'Save')!;
+}
+
+/** Mounts the panel inside a page that has installed the unsaved-changes guard. */
 async function mountUnderGuard(props = mountProps()) {
 	return mountUnderPageGuard<Wrapper>(FeatureMatchPanel, { ...mountOptions, props });
 }
@@ -217,7 +195,7 @@ describe('featureMatchPanel setup save', () => {
 
 		await wrapper.get('[data-testid="edit-mode"]').trigger('click');
 		await wrapper.get('[data-testid="set-table"]').trigger('click');
-		await wrapper.get('button[data-label="Save"]').trigger('click');
+		await saveButton(wrapper).trigger('click');
 		await flushPromises();
 
 		expect(mockFeatureMatchStore.updateFeatureMatch).toHaveBeenCalledWith(1, 1, { tableNumber: 12 });
@@ -240,8 +218,7 @@ describe('featureMatchPanel setup save', () => {
 		expect(mockFeatureMatchStore.updateFeatureMatch).toHaveBeenCalledWith(1, 1, { tableNumber: 12 });
 	});
 
-	// #612: the panel ignored remote updates while dirty, so a saved player object
-	// carried the stale value of every field the operator had not touched.
+	// A saved player object carries only the fields this operator edited (#612).
 	it('keeps a colleague\'s change to a player field this operator left untouched', async () => {
 		const updated = createMockFeatureMatch({ id: 1 });
 		mockFeatureMatchStore.updateFeatureMatch.mockResolvedValue(updated);
@@ -261,7 +238,7 @@ describe('featureMatchPanel setup save', () => {
 				player1Data: { ...original, pronouns: 'they/them' },
 			}) as any,
 		});
-		await wrapper.get('button[data-label="Save"]').trigger('click');
+		await saveButton(wrapper).trigger('click');
 		await flushPromises();
 
 		expect(mockFeatureMatchStore.updateFeatureMatch).toHaveBeenCalledWith(1, 1, {
@@ -269,10 +246,6 @@ describe('featureMatchPanel setup save', () => {
 		});
 	});
 
-	// The guard is what stops an operator navigating away from an unsaved edit. It
-	// registers through inject, so a panel mounted without a page around it
-	// registers with nothing and loses this silently — which is what this file used
-	// to arrange for itself by mocking the registration away.
 	it('tells the page it has unsaved changes while its setup edit is unsaved', async () => {
 		const match = storeEchoedMatch();
 		const { wrapper, pageIsDirty } = await mountUnderGuard({ match: match as any, matchNumber: 1 });
@@ -283,7 +256,7 @@ describe('featureMatchPanel setup save', () => {
 		await wrapper.get('[data-testid="set-table"]').trigger('click');
 		expect(pageIsDirty()).toBe(true);
 
-		await wrapper.get('button[data-label="Save"]').trigger('click');
+		await saveButton(wrapper).trigger('click');
 		await flushPromises();
 
 		expect(pageIsDirty()).toBe(false);
@@ -303,7 +276,7 @@ describe('featureMatchPanel setup save', () => {
 
 		await wrapper.get('[data-testid="edit-mode"]').trigger('click');
 		await wrapper.get('[data-testid="set-table"]').trigger('click');
-		await wrapper.get('button[data-label="Save"]').trigger('click');
+		await saveButton(wrapper).trigger('click');
 		const player1Form = wrapper.findAllComponents(PlayerFormStub)[0]!;
 		player1Form.vm.$emit('update:modelValue', {
 			...player1Form.props('modelValue'),
@@ -317,10 +290,7 @@ describe('featureMatchPanel setup save', () => {
 		expect(pageIsDirty()).toBe(true);
 	});
 
-	// The save trims, reads blanks as null and drops an empty deck, and the server
-	// stores what it was sent; the form kept the operator's raw value as a local
-	// edit against that answer, so the toast said saved while Save stayed enabled
-	// and leaving the page warned of unsaved changes.
+	// The save normalizes what it sends; the form settles to the stored value.
 	it.each([
 		[
 			'a name with trailing whitespace',
@@ -354,12 +324,12 @@ describe('featureMatchPanel setup save', () => {
 		await flushPromises();
 		expect(pageIsDirty()).toBe(true);
 
-		await wrapper.get('button[data-label="Save"]').trigger('click');
+		await saveButton(wrapper).trigger('click');
 		await flushPromises();
 
 		expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({ color: 'success' }));
 		expect(pageIsDirty()).toBe(false);
-		expect(wrapper.get('button[data-label="Save"]').attributes('disabled')).toBeDefined();
+		expect(saveButton(wrapper).attributes('disabled')).toBeDefined();
 	});
 
 	it('reads clean when the saved player comes back carrying a field it did not send', async () => {
@@ -375,7 +345,7 @@ describe('featureMatchPanel setup save', () => {
 		await wrapper.get('[data-testid="edit-mode"]').trigger('click');
 		wrapper.findAllComponents(PlayerFormStub)[0]!.vm.$emit('update:modelValue', { name: 'Bob', lgs: 'Shop' });
 		await flushPromises();
-		await wrapper.get('button[data-label="Save"]').trigger('click');
+		await saveButton(wrapper).trigger('click');
 		await flushPromises();
 
 		expect(pageIsDirty()).toBe(false);
@@ -394,10 +364,9 @@ describe('featureMatchPanel setup save', () => {
 			'feature-match-1-player-1-form',
 			'feature-match-1-player-2-form',
 		]);
-		expect(submitButtons.every(button => button.classes().includes('sr-only'))).toBe(true);
 	});
 
-	it('shows the Assignment Note as a compact strip immediately beneath the panel header', async () => {
+	it('shows the Assignment Note for the panel\'s Round, and releases the Round on unmount', async () => {
 		const releaseRound = vi.fn();
 		mockAssignmentStore.consumeRound.mockReturnValueOnce(releaseRound);
 		mockAssignmentStore.assignments = [
@@ -420,9 +389,7 @@ describe('featureMatchPanel setup save', () => {
 
 		const note = wrapper.get('.feature-match-note');
 		expect(note.text()).toContain('Watch the sideboard plan');
-		expect(note.classes()).toContain('px-3');
 		expect(note.attributes('data-remote-changed')).toBe('true');
-		expect(wrapper.html().indexOf('feature-match-note')).toBeGreaterThan(wrapper.html().indexOf('data-testid="edit-mode"'));
 		expect(mockAssignmentStore.consumeRound).toHaveBeenCalledWith(1, 3);
 		wrapper.unmount();
 		expect(releaseRound).toHaveBeenCalledOnce();

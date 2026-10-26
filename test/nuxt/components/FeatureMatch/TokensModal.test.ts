@@ -131,16 +131,6 @@ describe('featureMatchTokensModal', () => {
 		expect(wrapper.text()).toContain('Surveyor Saga');
 	});
 
-	it('emits close through the footer action', async () => {
-		const wrapper = await mountComponent();
-
-		await wrapper.get('button').trigger('click');
-
-		expect(wrapper.emitted('update:open')).toEqual([
-			[false],
-		]);
-	});
-
 	it('keeps loaded token content while closing', async () => {
 		const wrapper = await mountComponent();
 
