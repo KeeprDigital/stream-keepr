@@ -1557,9 +1557,9 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 
 **Stream Keepr owns every token.** Users set values, never names.
 
-- **Foundation Tokens** are app-wide roles and hold a literal.
+- **Foundation Tokens** are app-wide roles and hold a literal. A colour inside a composite Foundation Token (a fill or a surface) may name a colour Foundation Token instead, and a colour holds a literal only (#829).
 - **Mode Tokens** are declared by a Screen Mode Definition. Each holds a literal or names a same-type Foundation Token, and defaults to one.
-- **Graphic Item properties** name a whole Foundation Token or hold a literal. Nothing is bound partially, and nothing names a Mode Token, so resolution takes at most one step and cannot cycle.
+- **Graphic Item properties** name a whole Foundation Token or hold a literal. Nothing is bound partially, and nothing names a Mode Token. Resolution therefore takes at most two steps (a Mode Token or binding, its Foundation Token, then a colour that token names) and cannot cycle. It was one step until #829: the PRD has a composite's colour name a colour token, so a change to the accent reaches every surface using it.
 
 **A Theme stores only the tokens it sets.** A token added later reaches every existing Theme through its default. Renames and removals follow ADR-0043 and ADR-0037.
 

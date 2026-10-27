@@ -15,7 +15,7 @@ import {
 	bindGraphicThemeToken,
 	DEFAULT_GRAPHIC_THEME_TOKENS,
 	detachGraphicThemeToken,
-	paintBroadcastGraphicThemeBindings,
+	paintGraphicsThemeBindings,
 	releaseEditedGraphicThemeBindings,
 	replaceBroadcastGraphic,
 } from '~~/shared/modules/graphics';
@@ -145,7 +145,7 @@ export function editCompositorStack(
 	if (!canAuthorCompositor(state))
 		return null;
 	const tokens = themeTokensOf(state);
-	const painted = state.graphics.map(graphic => paintBroadcastGraphicThemeBindings(graphic, tokens));
+	const painted = paintGraphicsThemeBindings(state.graphics, tokens);
 	const edited = applyEdit({ ...state, graphics: painted }, edit);
 	if (!edited)
 		return null;

@@ -32,10 +32,9 @@ import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from './selection';
 import {
-	DEFAULT_GRAPHIC_THEME_TOKENS,
 	graphicAnimationStaggerOffset,
 	isRectangularShapeGeometry,
-	paintBroadcastGraphicThemeBindings,
+	paintGraphicsThemeBindings,
 	renderGraphicTextTemplate,
 	resolveGraphicAnchorPoint,
 	resolveGraphicAnimationOrigin,
@@ -2759,11 +2758,9 @@ export function resolveGraphicsCompositionRenderModel(
 	input: GraphicsCompositionRenderModelInput,
 ): GraphicsCompositionRenderModel {
 	const visible = input.visibleGraphicIds;
-	const themeTokens = input.themeTokens ?? DEFAULT_GRAPHIC_THEME_TOKENS;
-	const composed = (visible
+	const composed = paintGraphicsThemeBindings(visible
 		? input.graphics.filter(graphic => visible.includes(graphic.id))
-		: [...input.graphics])
-		.map(graphic => paintBroadcastGraphicThemeBindings(graphic, themeTokens));
+		: input.graphics, input.themeTokens);
 	const selectedKey = input.selectedTarget
 		? graphicsSelectionKey(input.selectedTarget)
 		: null;

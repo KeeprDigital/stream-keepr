@@ -771,7 +771,7 @@ _Avoid_: Dummy data, test data
 - An **Event** uses exactly one **Theme**; an Event that chose none uses the **Default Theme**, which ships with Stream Keepr and cannot be edited or deleted
 - A **Theme** in use by any **Event** cannot be deleted, and the refusal names those Events
 - A **Theme** stores only the **Theme Tokens** it sets; every other token reads its shipped default
-- A **Foundation Token** holds a value; a **Mode Token** holds a value or names a **Foundation Token** of its type; nothing names a **Mode Token**, so every token resolves in at most one step
+- A **Foundation Token** holds a value, in which a fill's or surface's colour may name a colour **Foundation Token**; a **Mode Token** holds a value or names a **Foundation Token** of its type; nothing names a **Mode Token**, and a colour names nothing, so every token resolves in at most two steps
 - A **Screen** resolves each **Theme Token** from its own **Screen Theme Override**, else its **Event**'s **Theme**, else the token's default; overriding a **Foundation Token** reaches every **Mode Token** and **Graphic Item** on that Screen that names it
 - A **Screen Theme Override** of another mode's **Mode Token** is kept while the **Screen** shows a different **Screen Mode**, and applies again on its return
 - A **Graphic Item** property either names a whole **Foundation Token** of its type or holds its own value; detaching copies the token's resolved value in

@@ -107,7 +107,7 @@ const game = computed(() => eventStore.event?.game);
 
 /**
  * The Theme the workspace previews under (#829): this Screen's Event's, unless
- * the author picks another to see the design in a different brand.
+ * the author picks another to see the design under a different Theme.
  */
 const previewTheme = useGraphicsPreviewTheme(() => eventStore.event?.themeId);
 
@@ -358,7 +358,7 @@ const leaseNotice = computed(() => {
 					:selected-target="selectedTarget"
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
-					:theme-tokens="previewTheme.storedTokens.value"
+					:preview-theme-values="previewTheme.previewThemeValues.value"
 					@select-target="emit('update:selectedTarget', $event)"
 				/>
 			</section>

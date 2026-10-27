@@ -18,7 +18,7 @@ export function useScreenGraphicThemeTokens(): ComputedRef<GraphicThemeTokens> {
 
 	function handlePreviewTheme(message: MessageEvent) {
 		if (isGraphicsPreviewThemeMessage(message, { origin: window.location.origin, source: window.parent }))
-			previewTokens.value = message.data.tokens;
+			previewTokens.value = message.data.tokens ?? undefined;
 	}
 
 	onMounted(() => {

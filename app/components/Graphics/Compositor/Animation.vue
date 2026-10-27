@@ -13,12 +13,11 @@ import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import {
 	applyBroadcastGraphicAnimationPreset,
 	applyGraphicItemAnimationPreset,
-	DEFAULT_GRAPHIC_THEME_TOKENS,
 	enableBroadcastGraphicAnimationPhase,
 	enableGraphicItemAnimationPhase,
 	GRAPHIC_ANIMATION_PHASE_LABELS,
 	graphicAnimationPresetsForPhase,
-	paintBroadcastGraphicThemeBindings,
+	paintGraphicsThemeBindings,
 	patchBroadcastGraphicAnimationChannel,
 	patchBroadcastGraphicAnimationRecipe,
 	patchBroadcastGraphicAnimationStagger,
@@ -92,7 +91,7 @@ const { canAuthor, edit, bindThemeToken, detachThemeToken } = useCompositorEditi
 
 /** The stack as it previews: a bound phase shows its token's recipe. */
 const selection = computed(() => resolveGraphicsSelection(
-	props.graphics.map(graphic => paintBroadcastGraphicThemeBindings(graphic, props.themeTokens ?? DEFAULT_GRAPHIC_THEME_TOKENS)),
+	paintGraphicsThemeBindings(props.graphics, props.themeTokens),
 	props.selectedTarget,
 ));
 

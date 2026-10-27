@@ -26,7 +26,7 @@ const props = defineProps<{ screen: Screen; eventId: number }>();
 
 /**
  * The Theme the editor previews under (#829): this Screen's Event's, unless the
- * author picks another to see the layout in a different brand.
+ * author picks another to see the layout under a different Theme.
  */
 const previewEventStore = useEventStore();
 const previewTheme = useGraphicsPreviewTheme(() => previewEventStore.event?.themeId);
@@ -528,7 +528,7 @@ useEventListener(import.meta.client
 					:items="previewTheme.items.value"
 				/>
 				<FeatureMatchOverlayPreviewOutputAside
-					:theme-tokens="previewTheme.storedTokens.value"
+					:preview-theme-values="previewTheme.previewThemeValues.value"
 					:event-id="eventId"
 					:screen="screen"
 					:config="config"

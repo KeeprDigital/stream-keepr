@@ -12,11 +12,11 @@ export const PREVIEW_DEFAULT_THEME = 'default';
 /**
  * The Theme a graphics editor previews its composition under (#829). A graphic
  * edited on a Screen previews under its Event's Theme; its author may pick any
- * other, or the Default Theme, to see how a template looks in each brand. The
+ * other, or the Default Theme, to see how a template looks under each Theme. The
  * pick is the editor's alone and changes nothing stored.
  *
- * `storedTokens` is what the preview frame renders; `themeTokens` is what the
- * editor's own controls show and what detaching copies in.
+ * `previewThemeValues` is what the preview frame is told to render under;
+ * `themeTokens` is what the editor's own controls show and what detaching copies in.
  */
 export function useGraphicsPreviewTheme(eventThemeId: MaybeRefOrGetter<string | null | undefined>) {
 	const repository = useThemeRepository();
@@ -57,11 +57,25 @@ export function useGraphicsPreviewTheme(eventThemeId: MaybeRefOrGetter<string | 
 		}
 	}, { immediate: true });
 
-	const storedTokens = computed<StoredThemeTokens>(() => themeId.value && loaded.value?.id === themeId.value
-		? loaded.value.tokens
-		: DEFAULT_THEME_TOKENS);
+	const loadedTokens = computed<StoredThemeTokens | undefined>(() => {
+		if (!themeId.value)
+			return DEFAULT_THEME_TOKENS;
+		return loaded.value?.id === themeId.value
+			? loaded.value.tokens
+			: undefined;
+	});
 
-	const themeTokens = computed<GraphicThemeTokens>(() => resolveGraphicThemeTokens(storedTokens.value));
+	/**
+	 * What the preview frame is told to render under, or null for the Event's
+	 * Theme, which the frame already follows live from its own Event context. A
+	 * picked Theme is sent only once loaded, so the frame never flashes another.
+	 */
+	const previewThemeValues = computed<StoredThemeTokens | null | undefined>(() => choice.value === PREVIEW_EVENT_THEME
+		? null
+		: loadedTokens.value);
+
+	/** The Foundation Tokens the inspector shows bound properties in, and detaching copies in. */
+	const themeTokens = computed<GraphicThemeTokens>(() => resolveGraphicThemeTokens(loadedTokens.value));
 
 	const items = computed(() => [
 		{ label: 'Event\'s Theme', value: PREVIEW_EVENT_THEME },
@@ -72,7 +86,7 @@ export function useGraphicsPreviewTheme(eventThemeId: MaybeRefOrGetter<string | 
 	return {
 		choice,
 		items,
-		storedTokens,
+		previewThemeValues,
 		themeTokens,
 	};
 }

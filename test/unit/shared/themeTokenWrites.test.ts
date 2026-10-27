@@ -41,6 +41,22 @@ describe('a Theme Token write', () => {
 			},
 		],
 		[
+			'a gradient at its fewest stops',
+			'accent-fill',
+			{
+				type: 'linear-gradient',
+				angle: 0,
+				stops: [
+					{ color: '#fff', position: 0, opacity: 1 },
+					{
+						color: { token: 'accent' },
+						position: 1,
+						opacity: 0.5,
+					},
+				],
+			},
+		],
+		[
 			'a surface with a literal fill and an outline following a colour token',
 			'panel',
 			{

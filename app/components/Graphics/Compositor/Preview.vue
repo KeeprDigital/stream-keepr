@@ -45,8 +45,11 @@ const props = defineProps<{
 	selectedTarget: GraphicsSelectionTarget;
 	canvasWidth: number;
 	canvasHeight: number;
-	/** The stored values of the Theme this preview renders bound Graphic Items under. */
-	themeTokens?: StoredThemeTokens;
+	/**
+	 * The stored values of a Theme to preview bound Graphic Items under, null to
+	 * follow the Screen's Event's Theme, or absent to tell the frame nothing yet.
+	 */
+	previewThemeValues?: StoredThemeTokens | null;
 }>();
 
 const emit = defineEmits<{ selectTarget: [target: GraphicsSelectionTarget] }>();
@@ -220,10 +223,10 @@ function pushPreviewState() {
 			animation: animationPlan.value,
 		},
 	}, window.location.origin);
-	if (props.themeTokens) {
+	if (props.previewThemeValues !== undefined) {
 		previewFrame.value.contentWindow.postMessage({
 			type: GRAPHICS_PREVIEW_THEME_MESSAGE,
-			tokens: JSON.parse(JSON.stringify(props.themeTokens)),
+			tokens: props.previewThemeValues && JSON.parse(JSON.stringify(props.previewThemeValues)),
 		}, window.location.origin);
 	}
 }
@@ -261,7 +264,7 @@ watch(
 		props.selectedTarget,
 		previewSocialProfileValues.value,
 		animationPlan.value,
-		props.themeTokens,
+		props.previewThemeValues,
 	] as const,
 	() => pushPreviewState(),
 	{ deep: true },

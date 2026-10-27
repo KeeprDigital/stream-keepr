@@ -240,6 +240,14 @@ export function paintBroadcastGraphicThemeBindings(graphic: BroadcastGraphicConf
 		: painted;
 }
 
+/** A stack of Broadcast Graphics as it previews or goes on air: each painted from `tokens`, the Default Theme when absent. */
+export function paintGraphicsThemeBindings(
+	graphics: readonly BroadcastGraphicConfig[],
+	tokens: GraphicThemeTokens = DEFAULT_GRAPHIC_THEME_TOKENS,
+): BroadcastGraphicConfig[] {
+	return graphics.map(graphic => paintBroadcastGraphicThemeBindings(graphic, tokens));
+}
+
 function withBindings<T extends GraphicThemeOwner>(owner: T, bindings: GraphicThemeBindings): T {
 	const next = { ...owner };
 	if (Object.keys(bindings).length === 0)
@@ -379,7 +387,7 @@ export function releaseEditedGraphicThemeBindings(painted: BroadcastGraphicConfi
  * already matches the Theme. A surface the kind leaves absent until authored,
  * and motion, which a new item has none of, stay unbound.
  */
-const NEW_GRAPHIC_ITEM_THEME_BINDINGS: Partial<Record<GraphicItemConfig['type'], GraphicThemeBindings>> = {
+const NEW_GRAPHIC_ITEM_THEME_BINDINGS: Partial<Record<GraphicItemConfig['type'], Partial<Record<GraphicThemeSlot, FoundationTokenName>>>> = {
 	'text': { 'typography': 'body', 'typography.color': 'text-primary' },
 	'shape': { surfaceStyle: 'panel', geometry: 'panel-shape' },
 	'social-network-icon': { color: 'text-primary' },

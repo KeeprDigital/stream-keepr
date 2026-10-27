@@ -100,7 +100,8 @@ export function resolveFoundationTokens(input: Omit<ResolveThemeTokensInput, 'mo
  * - A Mode Token naming a Foundation Token reads that Foundation Token by the
  *   same precedence, so a Foundation override reaches every Mode Token naming
  *   it. Foundation Tokens hold literals only and nothing names a Mode Token,
- *   so this is one step and cannot cycle.
+ *   so this is one step and cannot cycle; a colour a composite names adds
+ *   one more (`foundationResolver`).
  * - A stored value is read, never trusted: a token no longer in the vocabulary
  *   (a former token) is dropped, a number outside a tightened bound reads as
  *   the nearest bound, and a value of the wrong type, or naming no same-type

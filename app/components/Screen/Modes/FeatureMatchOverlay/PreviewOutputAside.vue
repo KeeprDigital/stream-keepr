@@ -50,8 +50,11 @@ const props = defineProps<{
 	selectionLabel?: string;
 	/** The tallest the fitted preview is drawn, as a CSS length. */
 	fitHeight?: string;
-	/** The stored values of the Theme this preview renders bound Graphic Items under. */
-	themeTokens?: StoredThemeTokens;
+	/**
+	 * The stored values of a Theme to preview bound Graphic Items under, null to
+	 * follow the Screen's Event's Theme, or absent to tell the frame nothing yet.
+	 */
+	previewThemeValues?: StoredThemeTokens | null;
 }>();
 
 const emit = defineEmits<{
@@ -141,16 +144,16 @@ function syncCompositorTargetToPreview() {
 }
 
 function syncThemeToPreview() {
-	if (!import.meta.client || !previewFrame.value?.contentWindow || !props.themeTokens)
+	if (!import.meta.client || !previewFrame.value?.contentWindow || props.previewThemeValues === undefined)
 		return;
 
 	previewFrame.value.contentWindow.postMessage({
 		type: GRAPHICS_PREVIEW_THEME_MESSAGE,
-		tokens: JSON.parse(JSON.stringify(props.themeTokens)),
+		tokens: props.previewThemeValues && JSON.parse(JSON.stringify(props.previewThemeValues)),
 	}, window.location.origin);
 }
 
-watch(() => props.themeTokens, syncThemeToPreview);
+watch(() => props.previewThemeValues, syncThemeToPreview);
 
 function syncPreviewState() {
 	syncConfigToPreview();

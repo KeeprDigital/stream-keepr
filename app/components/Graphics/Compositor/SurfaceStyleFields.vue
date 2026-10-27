@@ -80,7 +80,7 @@ function editBorderGlow(edit: BorderGlowEdit) {
 			which one. The caller already says that, so it fills this in too — and a
 			caller with no Style Set fills in nothing.
 		-->
-		<slot name="style-ref" />
+		<slot name="binding" />
 
 		<UFormField v-if="presenceLabel" :label="presenceLabel" size="sm">
 			<USwitch

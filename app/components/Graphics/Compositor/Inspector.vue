@@ -45,7 +45,6 @@ import {
 	authorsGraphicInputs,
 	clearMediaGraphicItemAsset,
 	DEFAULT_GRAPHIC_FONT_ID,
-	DEFAULT_GRAPHIC_THEME_TOKENS,
 	deleteGraphicInput,
 	graphicItemIcon,
 	graphicItemKindLabel,
@@ -55,10 +54,10 @@ import {
 	graphicTextTemplateInputKeys,
 	ownsPlayerSide,
 	ownsTextOverflowPolicy,
-	paintBroadcastGraphicThemeBindings,
 	paintedGraphicSurfaceStyles,
 	paintedGraphicTypography,
 	paintedShapeGeometry,
+	paintGraphicsThemeBindings,
 	patchBroadcastGraphic,
 	patchDeckListGraphicItem,
 	patchGameWinsGraphicItem,
@@ -243,8 +242,7 @@ const SIZING_MODE_OPTIONS = [
  * so every control shows what goes on air. Edits still start from the stored
  * stack, which the editing chain paints the same way.
  */
-const previewedGraphics = computed(() => props.graphics.map(graphic =>
-	paintBroadcastGraphicThemeBindings(graphic, props.themeTokens ?? DEFAULT_GRAPHIC_THEME_TOKENS)));
+const previewedGraphics = computed(() => paintGraphicsThemeBindings(props.graphics, props.themeTokens));
 const selection = computed(() => resolveGraphicsSelection(previewedGraphics.value, props.selectedTarget));
 
 const header = computed(() => {
@@ -2028,7 +2026,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				:presence-label="parentGroup ? 'Override group style default' : 'Paint a surface'"
 				@edit="editItem(applyGraphicSurfaceStyleEdit, 'surfaceStyle', $event)"
 			>
-				<template #style-ref>
+				<template #binding>
 					<!--
 						Two references, because a surface entry may itself carry a Graphic Fill
 						entry and an author may want the brand surface with this one gradient.
@@ -2062,7 +2060,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					test-id-prefix="game-wins-box"
 					@edit="editItem(applyGraphicSurfaceStyleEdit, 'boxSurfaceStyle', $event)"
 				>
-					<template #style-ref>
+					<template #binding>
 						<GraphicsCompositorThemeBinding
 							theme-slot="boxSurfaceStyle"
 							label="Win box style"
@@ -2083,7 +2081,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					test-id-prefix="game-wins-won-box"
 					@edit="editItem(applyGraphicSurfaceStyleEdit, 'wonBoxSurfaceStyle', $event)"
 				>
-					<template #style-ref>
+					<template #binding>
 						<GraphicsCompositorThemeBinding
 							theme-slot="wonBoxSurfaceStyle"
 							label="Won win box style"
