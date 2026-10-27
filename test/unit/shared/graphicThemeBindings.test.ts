@@ -13,7 +13,7 @@ import {
 	resolveGraphicThemeTokens,
 } from '~~/shared/modules/graphics';
 import { FOUNDATION_TOKENS as VOCABULARY } from '~~/shared/modules/theme';
-import { gameWins, graphic, group, shape, socialIcon, text } from '~~/test/helpers/graphicsComposition';
+import { gameWins, graphic, group, media, shape, socialIcon, text } from '~~/test/helpers/graphicsComposition';
 
 // The home of Graphic Item Theme bindings (ADR-0049): a bound property paints its
 // Foundation Token's resolved value; detach keeps it as a literal; bind replaces one.
@@ -138,6 +138,47 @@ describe('a bound Graphic Item property', () => {
 			letterSpacing: 10,
 			textTransform: 'lowercase',
 		});
+	});
+
+	// A Media Graphic Item's picture follows an asset token such as the logo (#831).
+	it.each([
+		{
+			logo: { kind: 'silent-video', assetId: 'logo', revisionId: 'logo-2' },
+			asset: { assetId: 'logo', revisionId: 'logo-2' },
+			mediaKind: 'silent-video',
+		},
+		{ logo: null, asset: undefined, mediaKind: 'image' },
+	] as const)('paints a Media Graphic Item\'s picture from the logo: $mediaKind $asset.revisionId', ({ logo, asset, mediaKind }) => {
+		const item = media('m', {
+			asset: { assetId: 'own', revisionId: 'own-1' } as never,
+			mediaKind: 'image',
+			themeBindings: { media: 'logo' },
+		});
+
+		const painted = paintOne(item, resolveGraphicThemeTokens({ logo }));
+
+		expect(painted.asset).toEqual(asset);
+		expect(painted.mediaKind).toBe(mediaKind);
+	});
+
+	it('detaches a bound picture as its own, and releases the binding when the author picks another', () => {
+		const tokens = resolveGraphicThemeTokens({
+			logo: { kind: 'image', assetId: 'logo', revisionId: 'logo-1' },
+		});
+		const bound = bindGraphicThemeOwner(media('m'), 'media', 'logo', tokens);
+
+		expect(bound.asset).toEqual({ assetId: 'logo', revisionId: 'logo-1' });
+		const detached = detachGraphicThemeOwner(bound, 'media', tokens);
+		expect(detached.asset).toEqual({ assetId: 'logo', revisionId: 'logo-1' });
+		expect(detached.themeBindings).toBeUndefined();
+
+		const edited = releaseEditedGraphicThemeBindings(graphic('g', [bound]), graphic('g', [
+			{
+				...bound,
+				asset: { assetId: 'own', revisionId: 'own-1' } as never,
+			},
+		]));
+		expect(only(edited).themeBindings).toBeUndefined();
 	});
 
 	it('paints a Broadcast Graphic\'s own motion and a Graphic Group child', () => {

@@ -22,6 +22,7 @@ import { topCutModeConfigContract } from './screenModeConfigs/topCut';
 import { archetypeSpotlightModeTokens } from './screenModeTokens/archetypeSpotlight';
 import { cardModeTokens } from './screenModeTokens/card';
 import { deckModeTokens } from './screenModeTokens/deck';
+import { featureMatchOverlayModeTokens } from './screenModeTokens/featureMatchOverlay';
 import { headToHeadModeTokens } from './screenModeTokens/headToHead';
 import { metagameModeTokens } from './screenModeTokens/metagame';
 import { pairingsModeTokens } from './screenModeTokens/pairings';
@@ -231,6 +232,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		graphicsHost: {},
 		config: featureMatchOverlayModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot' },
+		modeTokens: featureMatchOverlayModeTokens,
 	},
 	'broadcast-graphics': {
 		label: 'Broadcast Graphics',

@@ -305,49 +305,62 @@ const featureMatchOverlayBorderSidesSchema = z.object({
 }).strict();
 
 /**
- * The surface treatment of a host-owned Source Item.
+ * A look field the Frame or a Source Item stored before its fill, border and
+ * glow became the Feature Match Overlay's Mode Tokens (#831): read in the shape
+ * it could hold and dropped, not migrated, so a layout stored or exported
+ * before still loads and its next write stores it without the field.
+ */
+function retiredLookField<T extends z.ZodType>(schema: T) {
+	return schema.optional().transform(() => undefined);
+}
+
+const retiredBorderGlowShape = {
+	borderVisible: retiredLookField(z.boolean()),
+	borderColor: retiredLookField(optionalCssColorSchema),
+	borderWidth: retiredLookField(nonNegativePixelSchema),
+	glowColor: retiredLookField(optionalCssColorSchema),
+	glowSize: retiredLookField(nonNegativePixelSchema),
+	glowOpacity: retiredLookField(opacitySchema),
+};
+
+/**
+ * A Source Item's framing: which sides of its border show, its per-corner
+ * radii, and which side the glow falls on. How it paints is the
+ * `source-surface` Mode Token (#831).
  *
  * Per-side border visibility and per-corner radii stay here because the Frame and
  * its Source Items are host capability the Host Contract leaves with the host.
- * The shared Graphic Surface Style dropped per-side borders in favour of composed
- * rule-preset Shape Graphic Items, and carries its own corner treatment in Shape
- * Geometry.
  */
 const featureMatchSourceFramingStyleSchema = featureMatchOverlayBorderSidesSchema.extend({
-	backgroundColor: optionalCssColorSchema,
-	backgroundOpacity: opacitySchema.optional(),
-	backgroundGradient: z.string().max(1000).optional(),
-	borderVisible: z.boolean().optional(),
-	borderColor: optionalCssColorSchema,
-	borderWidth: nonNegativePixelSchema.optional(),
 	borderRadius: nonNegativePixelSchema.optional(),
 	borderRadiusTopLeft: nonNegativePixelSchema.optional(),
 	borderRadiusTopRight: nonNegativePixelSchema.optional(),
 	borderRadiusBottomRight: nonNegativePixelSchema.optional(),
 	borderRadiusBottomLeft: nonNegativePixelSchema.optional(),
-	glowColor: optionalCssColorSchema,
-	glowSize: nonNegativePixelSchema.optional(),
-	glowOpacity: opacitySchema.optional(),
 	glowPosition: z.enum(['both', 'inside', 'outside']).optional(),
+	backgroundColor: retiredLookField(optionalCssColorSchema),
+	backgroundOpacity: retiredLookField(opacitySchema),
+	backgroundGradient: retiredLookField(z.string().max(1000)),
+	...retiredBorderGlowShape,
 }).strict();
 
+/**
+ * The Frame: its own opacity, image, video, Animation Effect switch and which
+ * canvas edges its border runs along. Its fill, border and glow are the
+ * `frame-surface` Mode Token, its effect `frame-animation-effect` (#831).
+ */
 const featureMatchOverlayFrameConfigSchema = featureMatchOverlayBorderSidesSchema.extend({
-	backgroundColor: cssColorSchema,
 	opacity: opacitySchema,
 	backgroundImage: screenMediaSourceSchema.optional(),
 	backgroundImageFit: z.enum(MEDIA_FIT_VALUES).optional(),
 	mediaBackground: screenMediaBackgroundConfigSchema.optional(),
-	gradient: z.string().max(1000).optional(),
 	// The stored-payload wrapper rather than the plain config schema: every
 	// layout write re-sends the whole stored layout, so a pre-rebuild animation
 	// bag resets to absent here instead of vetoing the edit it rides along on.
 	animation: storedFrameAnimationConfigSchema.optional(),
-	borderVisible: z.boolean().optional(),
-	borderColor: optionalCssColorSchema,
-	borderWidth: nonNegativePixelSchema.optional(),
-	glowColor: optionalCssColorSchema,
-	glowSize: nonNegativePixelSchema.optional(),
-	glowOpacity: opacitySchema.optional(),
+	backgroundColor: retiredLookField(cssColorSchema),
+	gradient: retiredLookField(z.string().max(1000)),
+	...retiredBorderGlowShape,
 }).strict();
 
 /**
@@ -1245,7 +1258,7 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * quote different baselines for the same pre-existing Graphic Item.
  */
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 300;
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 3_851_414;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 3_855_914;
 
 function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
 	return items.reduce(

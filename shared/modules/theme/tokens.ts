@@ -8,7 +8,7 @@ import { animationEffectSelectionSchema } from '../../animationEffects';
 import { clampToShapeBounds } from '../../screenModeConfigs/fields';
 import { GRAPHIC_TEXT_TRANSFORM_VALUES } from '../../types/graphics';
 import { GRAPHIC_FONT_IDS } from '../graphics/typography';
-import { backgroundLayerStackSchema, graphicAssetReferenceSchema } from './background';
+import { graphicAssetReferenceSchema, themeBackgroundLayerStackSchema } from './background';
 import { THEME_COMPOSITE_VALUE_SCHEMAS } from './composites';
 
 /**
@@ -148,7 +148,7 @@ export function themeTokenValueSchema(definition: FoundationTokenDefinition | Mo
 		case 'typography':
 			return typographySchema;
 		case 'backgroundLayers':
-			return backgroundLayerStackSchema;
+			return themeBackgroundLayerStackSchema;
 		case 'animationEffect':
 			return animationEffectSelectionSchema;
 		case 'asset':

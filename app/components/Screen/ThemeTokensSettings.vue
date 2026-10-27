@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { StoredThemeTokens, ThemeTokenValue } from '~~/shared/modules/theme';
 import type { Screen } from '~/types';
-import { DEFAULT_THEME_TOKENS, FOUNDATION_TOKENS, readTokenLiteral, resolveThemeTokens } from '~~/shared/modules/theme';
+import { DEFAULT_THEME_TOKENS, FOUNDATION_TOKENS, readTokenLiteral, resolveFoundationToken, resolveThemeTokens } from '~~/shared/modules/theme';
 import { screenModeTokens } from '~~/shared/screenModes';
+import { screenModeBindableFoundationTokens } from '~~/shared/screenThemeOverrides';
 import { parseThemeTokenWrite, themeTokenDefinition } from '~~/shared/themeTokens';
 
-// A Screen's token section: exactly the Theme Tokens its mode consumes, each
+// A Screen's token section: exactly the Theme Tokens its mode consumes (and,
+// on a graphics host, every Foundation Token its Graphic Items may bind), each
 // with what it inherits from the Event's Theme and a Screen Theme Override
 // control. An override is written per token, and clearing one returns the
 // Screen to the Theme's value. What it inherits follows `theme:updated`, as a
@@ -65,11 +67,22 @@ function inheritedValue(name: string): unknown {
 	return readTokenLiteral(definition, stored) ?? definition.default;
 }
 
-const tokens = computed(() => resolved.value.consumed.map(name => ({
+/** The mode's consumed tokens, then any further Foundation Token its Graphic Items may bind. */
+const listed = computed(() => {
+	const consumed = resolved.value.consumed;
+	const bindable = screenModeBindableFoundationTokens(props.screen.currentMode).filter(name => !consumed.includes(name));
+	return [
+		...consumed,
+		...bindable,
+	];
+});
+
+const tokens = computed(() => listed.value.map(name => ({
 	name,
 	token: themeTokenDefinition(name)!,
 	inherited: inheritedValue(name),
-	resolved: resolved.value.values[name] as ThemeTokenValue,
+	resolved: (resolved.value.values[name]
+		?? resolveFoundationToken({ vocabulary: FOUNDATION_TOKENS, theme: theme.value, overrides: overrides.value }, name)) as ThemeTokenValue,
 })));
 const groups = computed(() => [
 	{

@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'vue';
+import type { ThemeSurfaceStyle } from '~~/shared/modules/theme';
 import type {
 	FeatureMatchOverlayFrameConfig,
 	FeatureMatchOverlayModeConfig,
@@ -7,9 +8,11 @@ import type {
 	FeatureMatchSourceFramingStyle,
 	FeatureMatchSourceItemConfig,
 } from '~~/shared/types/screenConfig';
+import type { GraphicFillDescriptor } from '~/modules/graphics/renderModel';
 import type { FeatureMatchOverlayBorderSide } from '~/utils/featureMatchOverlayGeometry';
 import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
-import { borderGlow, colourAtOpacity, glowDropShadow, glowFlood, paintColour } from '~/modules/screen/outputPaint';
+import { fillDescriptor } from '~/modules/graphics/renderModel';
+import { clampOpacity, colourAtOpacity, glowDropShadow, glowFlood, paintColour } from '~/modules/screen/outputPaint';
 import {
 	FEATURE_MATCH_OVERLAY_BORDER_SIDES,
 	featureMatchOverlayBorderRadiusCss,
@@ -32,9 +35,26 @@ import {
 
 export type { FeatureMatchOverlayBorderSide };
 
+/** A resolved surface Mode Token: every colour a literal. */
+export type FeatureMatchOverlaySurface = ThemeSurfaceStyle<string>;
+
+/** What the Frame and Source Items paint from the Screen's resolved Mode Tokens (#831). */
+export interface FeatureMatchOverlayThemeSurfaces {
+	frameSurface: FeatureMatchOverlaySurface;
+	sourceSurface: FeatureMatchOverlaySurface;
+}
+
 export interface FeatureMatchOverlayRenderModelInput {
 	config: FeatureMatchOverlayModeConfig;
 	output: FeatureMatchOverlayOutput;
+	/** The Frame's and Source Items' resolved surfaces. */
+	surfaces: FeatureMatchOverlayThemeSurfaces;
+	/**
+	 * Whether the Frame paints media or an Animation Effect over its fill: its own
+	 * image or video, its Theme's media, or its effect. The Key Output keys those
+	 * through an opaque white fill, since it paints no colour of theirs.
+	 */
+	paintsMedia?: boolean;
 	maskId?: string;
 	/** The document-unique id of the SVG filter that glows the Frame's border. */
 	frameGlowFilterId?: string;
@@ -62,9 +82,8 @@ export interface FeatureMatchOverlayFrameRenderModel {
 	paintsImage: boolean;
 	imageStyle: CSSProperties;
 	imagePreserveAspectRatio: string;
-	/** The deliberate host-owned raw CSS gradient, painted in colour only. */
-	gradientStyle: CSSProperties | undefined;
-	fill: string;
+	/** The `frame-surface` fill: a colour, or `url(#id)` with the gradient to define. */
+	fill: GraphicFillDescriptor;
 	opacity: number;
 	border: FeatureMatchOverlayFrameBorderRenderModel | undefined;
 }
@@ -125,9 +144,6 @@ export function featureMatchOverlayFrameContentMaskStyle(
 	};
 }
 
-/** A Source Item paints a border with no colour of its own white; the Frame paints none. */
-export const SOURCE_ITEM_UNSET_BORDER_COLOUR = '#ffffff';
-
 function rectStyle(rect: FeatureMatchOverlayRect): CSSProperties {
 	return {
 		left: `${rect.x}px`,
@@ -137,24 +153,28 @@ function rectStyle(rect: FeatureMatchOverlayRect): CSSProperties {
 	};
 }
 
-function cssBackgroundStyle(output: FeatureMatchOverlayOutput, style: FeatureMatchSourceFramingStyle | undefined) {
-	const gradient = style?.backgroundGradient?.trim();
-	const opacity = style?.backgroundOpacity ?? (gradient ? 1 : 0);
-	const color = style?.backgroundColor?.trim();
-	const hasBaseColor = Boolean(color && !/^transparent$/i.test(color));
-
-	if (opacity <= 0 || !(gradient || hasBaseColor))
+/**
+ * A surface's fill as one CSS background. A gradient's stops keep their own
+ * opacities, multiplied by the fill's; the Key Output paints each white at its
+ * colour's alpha, so it keys as the Fill Output shows it.
+ */
+function cssFill(output: FeatureMatchOverlayOutput, surface: FeatureMatchOverlaySurface): string {
+	const opacity = clampOpacity(surface.fillOpacity);
+	if (opacity <= 0)
 		return 'transparent';
-	// A Key Output is a matte: the raw CSS gradient becomes coverage, not colour.
-	if (output === 'key')
-		return colourAtOpacity(output, '#ffffff', opacity);
-	if (gradient) {
-		return hasBaseColor
-			? `${gradient}, ${colourAtOpacity(output, color!, opacity)}`
-			: gradient;
-	}
+	const { fill } = surface;
+	if (fill.type === 'solid')
+		return colourAtOpacity(output, fill.color, opacity);
+	const stops = fill.stops.map(stop =>
+		`${colourAtOpacity(output, stop.color, clampOpacity(stop.opacity) * opacity)} ${Math.round(clampOpacity(stop.position) * 10000) / 100}%`);
+	return `linear-gradient(${fill.angle}deg, ${stops.join(', ')})`;
+}
 
-	return colourAtOpacity(output, color!, opacity);
+/** A surface's outline, which a Frame or Source Item draws as its border; none at zero width. */
+function surfaceOutline(surface: FeatureMatchOverlaySurface) {
+	return surface.outline && surface.outline.width > 0
+		? surface.outline
+		: undefined;
 }
 
 function sourceGlowMaskStyle(
@@ -197,28 +217,19 @@ function sourceGlowMaskStyle(
 function sourceGlowStyles(
 	output: FeatureMatchOverlayOutput,
 	item: FeatureMatchSourceItemConfig,
+	surface: FeatureMatchOverlaySurface,
 ): Pick<FeatureMatchOverlaySourceItemRenderModel, 'glowContainerStyle' | 'glowStyle'> | undefined {
-	const style = item.framingStyle;
-	if (!style?.borderVisible)
+	// A Source Item glows its border, so it has no glow without one.
+	const filter = glowDropShadow(output, surface.glow);
+	if (!surfaceOutline(surface) || !surface.glow || !filter)
 		return undefined;
-	const glow = borderGlow(style);
-	const filter = glowDropShadow(output, glow);
-	if (!glow || !filter)
-		return undefined;
+	const style = item.framingStyle ?? {};
 
 	const visibleSides = FEATURE_MATCH_OVERLAY_BORDER_SIDES.filter(side => featureMatchOverlayBorderSideEnabled(style, side));
 	if (visibleSides.length === 0)
 		return undefined;
 
-	const size = glow.size;
-	const glowBorder = {
-		...style,
-		// CSS drop-shadow includes its source in the filtered result. The real
-		// Source Item covers this duplicate border, but rounded-edge antialiasing
-		// can leave subpixels visible. Matching the authored border colour keeps
-		// those edge pixels identical while the filter still paints the glow colour.
-		borderColor: style.borderColor ?? SOURCE_ITEM_UNSET_BORDER_COLOUR,
-	};
+	const size = surface.glow.size;
 	// A CSS drop-shadow extends beyond the element it filters. Give that result a
 	// larger local canvas so the mask can retain either half without clipping its
 	// soft tail. Three blur radii cover Chromium's rendered filter region.
@@ -245,7 +256,10 @@ function sourceGlowStyles(
 			height: `${Math.max(0, item.height)}px`,
 			boxSizing: 'border-box',
 			background: 'transparent',
-			...cssBorderStyle(output, glowBorder),
+			// CSS drop-shadow includes its source in the filtered result. The real
+			// Source Item covers this duplicate border, which matches it exactly so
+			// rounded-edge antialiasing leaves no visible subpixels.
+			...cssBorderStyle(output, style, surface),
 			borderRadius: featureMatchOverlayBorderRadiusCss(style),
 			filter,
 			pointerEvents: 'none',
@@ -253,19 +267,14 @@ function sourceGlowStyles(
 	};
 }
 
-function cssBorderStyle(output: FeatureMatchOverlayOutput, style: FeatureMatchSourceFramingStyle | undefined) {
-	if (!style) {
-		return {
-			border: 'none',
-			borderTop: 'none',
-			borderRight: 'none',
-			borderBottom: 'none',
-			borderLeft: 'none',
-		};
-	}
-
-	const border = style.borderVisible
-		? `${style.borderWidth ?? 1}px solid ${paintColour(output, style.borderColor ?? SOURCE_ITEM_UNSET_BORDER_COLOUR)}`
+function cssBorderStyle(
+	output: FeatureMatchOverlayOutput,
+	style: FeatureMatchSourceFramingStyle,
+	surface: FeatureMatchOverlaySurface,
+) {
+	const outline = surfaceOutline(surface);
+	const border = outline
+		? `${outline.width}px solid ${paintColour(output, outline.color)}`
 		: 'none';
 	return {
 		border: 'none',
@@ -320,63 +329,77 @@ function frameImagePreserveAspectRatio(fit: FeatureMatchOverlayModeConfig['layou
 	}
 }
 
-function svgFillColor(color: string | undefined) {
-	return color?.trim() || 'transparent';
-}
-
 /**
- * The Frame's border, or none. A Frame border without a colour paints nothing in
- * the Fill Output, so the Key Output keys nothing for it either; its glow is a
- * shadow of that stroke, so it has no glow without one.
+ * The Frame's border, or none: its surface's outline along each enabled
+ * canvas edge. Its glow is a shadow of that stroke, so it has no glow without
+ * one, in any output.
  */
 function frameBorder(
 	output: FeatureMatchOverlayOutput,
 	frame: FeatureMatchOverlayFrameConfig,
+	surface: FeatureMatchOverlaySurface,
 	glowFilterId: string,
 ): FeatureMatchOverlayFrameBorderRenderModel | undefined {
-	const color = frame.borderColor?.trim();
-	if (!frame.borderVisible || !color)
+	const outline = surfaceOutline(surface);
+	if (!outline)
 		return undefined;
 
-	const flood = glowFlood(output, borderGlow(frame));
+	const flood = glowFlood(output, surface.glow);
 	return {
-		stroke: paintColour(output, color),
-		strokeWidth: frame.borderWidth ?? 1,
+		stroke: paintColour(output, outline.color),
+		strokeWidth: outline.width,
 		sides: FEATURE_MATCH_OVERLAY_BORDER_SIDES.filter(side => featureMatchOverlayBorderSideEnabled(frame, side)),
 		glow: flood && { filterId: glowFilterId, ...flood },
 	};
 }
 
+/** The Frame's fill, keyed opaque where it carries media the Key Output paints no colour of. */
+function frameFill(
+	output: FeatureMatchOverlayOutput,
+	surface: FeatureMatchOverlaySurface,
+	paintsMedia: boolean,
+	scope: string,
+): GraphicFillDescriptor {
+	if (output === 'key' && paintsMedia) {
+		return {
+			color: paintColour(output, '#ffffff'),
+			opacity: 1,
+		};
+	}
+	return fillDescriptor(output, surface, scope);
+}
+
 function frameRenderModel(
 	output: FeatureMatchOverlayOutput,
 	frame: FeatureMatchOverlayFrameConfig,
+	surface: FeatureMatchOverlaySurface,
+	paintsMedia: boolean,
 	ids: { maskId: string; glowFilterId: string },
 ): FeatureMatchOverlayFrameRenderModel {
-	const gradient = frame.gradient?.trim();
 	return {
 		maskId: ids.maskId,
 		paintsImage: output !== 'key',
 		imageStyle: { opacity: frame.opacity },
 		imagePreserveAspectRatio: frameImagePreserveAspectRatio(frame.backgroundImageFit),
-		gradientStyle: output !== 'key' && gradient
-			? { background: frame.gradient, opacity: frame.opacity }
-			: undefined,
-		fill: output === 'key'
-			? paintColour(output, '#ffffff')
-			: svgFillColor(frame.backgroundColor),
+		fill: frameFill(output, surface, paintsMedia, ids.maskId),
 		opacity: frame.opacity,
-		border: frameBorder(output, frame, ids.glowFilterId),
+		border: frameBorder(output, frame, surface, ids.glowFilterId),
 	};
 }
 
-function sourceItemStyle(output: FeatureMatchOverlayOutput, item: FeatureMatchSourceItemConfig): CSSProperties {
+function sourceItemStyle(
+	output: FeatureMatchOverlayOutput,
+	item: FeatureMatchSourceItemConfig,
+	surface: FeatureMatchOverlaySurface,
+): CSSProperties {
+	const style = item.framingStyle ?? {};
 	return {
 		...rectStyle(item),
 		position: 'absolute',
 		boxSizing: 'border-box',
-		background: cssBackgroundStyle(output, item.framingStyle),
-		...cssBorderStyle(output, item.framingStyle),
-		borderRadius: featureMatchOverlayBorderRadiusCss(item.framingStyle ?? {}),
+		background: cssFill(output, surface),
+		...cssBorderStyle(output, style, surface),
+		borderRadius: featureMatchOverlayBorderRadiusCss(style),
 		overflow: 'hidden',
 		pointerEvents: 'none',
 	};
@@ -385,17 +408,17 @@ function sourceItemStyle(output: FeatureMatchOverlayOutput, item: FeatureMatchSo
 export function resolveFeatureMatchOverlayRenderModel(
 	input: FeatureMatchOverlayRenderModelInput,
 ): FeatureMatchOverlayRenderModel {
-	const { output, config } = input;
+	const { output, config, surfaces } = input;
 	const sourceItems = config.layout.sources
 		.filter(item => item.visible)
 		.map((item) => {
-			const glow = sourceGlowStyles(output, item);
+			const glow = sourceGlowStyles(output, item, surfaces.sourceSurface);
 			return {
 				item,
-				style: sourceItemStyle(output, item),
+				style: sourceItemStyle(output, item, surfaces.sourceSurface),
 				...glow,
 				cutoutPath: item.frameCutout
-					? roundedRectPath(featureMatchOverlaySourceCutoutRect(item)) || null
+					? roundedRectPath(featureMatchOverlaySourceCutoutRect(item, surfaceOutline(surfaces.sourceSurface)?.width)) || null
 					: null,
 			};
 		});
@@ -413,7 +436,7 @@ export function resolveFeatureMatchOverlayRenderModel(
 		sourceCutouts: sourceItems
 			.filter(source => source.cutoutPath)
 			.map(source => ({ id: source.item.id, path: source.cutoutPath! })),
-		frame: frameRenderModel(output, config.layout.frame, {
+		frame: frameRenderModel(output, config.layout.frame, surfaces.frameSurface, input.paintsMedia ?? false, {
 			maskId: input.maskId ?? 'feature-match-overlay-frame-mask',
 			glowFilterId: input.frameGlowFilterId ?? 'feature-match-overlay-frame-glow',
 		}),

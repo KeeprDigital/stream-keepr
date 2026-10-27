@@ -10,13 +10,7 @@ vi.mock('~/utils/animation-effects', () => ({
 	loadAnimationEffect: animationMocks.loadAnimationEffect,
 }));
 
-function animation(effect: 'fog' | 'caustics') {
-	return {
-		enabled: true,
-		effect,
-		opacity: 0.5,
-	};
-}
+const ON = { enabled: true, opacity: 0.5 };
 
 function effectInstance() {
 	return {
@@ -47,10 +41,12 @@ describe('featureMatchOverlayFrameAnimation', () => {
 		animationMocks.loadAnimationEffect.mockResolvedValue(() => effectInstance());
 
 		const wrapper = await mountFrameAnimation({
-			animation: animation('fog'),
+			animation: ON,
+			effect: { effect: 'fog' },
 		});
 		await flushPromises();
 
+		expect(animationMocks.loadAnimationEffect).toHaveBeenCalledWith('fog');
 		expect(wrapper.get('foreignObject').attributes('mask')).toBeUndefined();
 		const style = (wrapper.get('.frame-animation').element as HTMLElement).style;
 		expect(style.maskImage).toContain('data:image/svg+xml');
@@ -72,6 +68,7 @@ describe('featureMatchOverlayFrameAnimation', () => {
 				mouseDriftSeconds: 18,
 				mouseDriftRadius: 0.28,
 			},
+			effect: { effect: 'fog' },
 		});
 		await flushPromises();
 
@@ -83,12 +80,25 @@ describe('featureMatchOverlayFrameAnimation', () => {
 
 	it('renders nothing on the key output', async () => {
 		const wrapper = await mountFrameAnimation({
-			animation: animation('fog'),
+			animation: ON,
+			effect: { effect: 'fog' },
 			output: 'key',
 		});
 		await flushPromises();
 
 		expect(animationMocks.loadAnimationEffect).not.toHaveBeenCalled();
+		expect(wrapper.find('foreignObject').exists()).toBe(false);
+
+		wrapper.unmount();
+	});
+
+	it('renders nothing for an effect this build does not ship', async () => {
+		const wrapper = await mountFrameAnimation({
+			animation: ON,
+			effect: { effect: 'not-an-effect' },
+		});
+		await flushPromises();
+
 		expect(wrapper.find('foreignObject').exists()).toBe(false);
 
 		wrapper.unmount();

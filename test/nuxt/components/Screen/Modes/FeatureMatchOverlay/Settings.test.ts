@@ -473,7 +473,7 @@ describe('featureMatchOverlaySettings', () => {
 					...mockConfig.value,
 					layout: {
 						...mockConfig.value.layout,
-						frame: { ...mockConfig.value.layout.frame, backgroundColor: '#ff0000' },
+						frame: { ...mockConfig.value.layout.frame, opacity: 0.5 },
 					},
 				};
 			});

@@ -108,49 +108,40 @@ async function mountComponent(options: Partial<{
 }
 
 describe('featureMatchOverlayFrameStyleCard', () => {
-	it('writes an effect param edit into the Frame animation\'s params', async () => {
-		const patchFrame = vi.fn();
-		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.frame.animation = { enabled: true, effect: 'dots', opacity: 0.5 };
-		const wrapper = await mountComponent({ config, patchFrame });
+	// The Frame's fill, border, glow and effect are the Theme's Mode Tokens (#831).
+	it('offers no colour, gradient, border or glow of the Frame\'s own', async () => {
+		const wrapper = await mountComponent();
 
-		const toggle = wrapper.findAll('[data-testid="settings-toggle"]').find(candidate => candidate.text() === 'Connecting lines');
-		await toggle!.trigger('click');
-
-		const patch = patchFrame.mock.calls.at(-1)?.[0] as { animation?: { params?: Record<string, unknown> } };
-		expect(patch.animation?.params?.showLines).toBe(false);
+		expect(wrapper.find('[data-testid="color-picker"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="u-input"]').exists()).toBe(false);
+		expect(wrapper.find('[role="switch"]').exists()).toBe(false);
+		expect(wrapper.get('[data-testid="frame-theme-note"]').text()).toContain('Theme');
 	});
 
-	it('preserves transparent frame background selections', async () => {
+	it.each([
+		{ side: 'Left', stored: undefined, written: false },
+		{ side: 'Top', stored: false, written: true },
+	] as const)('switches the Frame border\'s $side edge, which shows unless switched off', async ({ side, stored, written }) => {
+		const patchFrame = vi.fn();
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		config.layout.frame = { ...config.layout.frame, [`border${side}Visible`]: stored };
+		const wrapper = await mountComponent({ config, patchFrame });
+		const toggle = wrapper.get(`button[title="${side} border"]`);
+
+		expect(toggle.attributes('aria-pressed')).toBe(String(!written));
+		await toggle.trigger('click');
+		expect(patchFrame).toHaveBeenLastCalledWith({ [`border${side}Visible`]: written });
+	});
+
+	it('switches the Frame\'s Animation Effect on, keeping its opacity and naming no effect', async () => {
 		const patchFrame = vi.fn();
 		const wrapper = await mountComponent({ patchFrame });
-		const frameBackgroundPicker = wrapper.findAll('[data-testid="color-picker"]')[0]!;
 
-		expect(frameBackgroundPicker.attributes('data-allow-raw-value')).toBe('true');
+		const toggle = wrapper.findAll('[data-testid="settings-toggle"]').find(candidate => candidate.text() === 'Animation');
+		await toggle!.trigger('click');
 
-		await frameBackgroundPicker.trigger('click');
-
-		const patch = patchFrame.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig['layout']['frame']>;
-		expect(patch.backgroundColor).toBe('transparent');
-	});
-
-	it('edits the frame border and its glow through the shared border and glow fields', async () => {
-		const patchFrame = vi.fn();
-		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.frame = { ...config.layout.frame, borderVisible: undefined, glowSize: 0 };
-		const off = await mountComponent({ config, patchFrame });
-		const borderSwitch = off.find('[role="switch"][aria-label="Frame border"]');
-
-		// An unset border is not painted, so it reads as off and its glow is not offered.
-		expect(borderSwitch.attributes('aria-checked')).toBe('false');
-		expect(off.find('[role="switch"][aria-label="Glow"]').exists()).toBe(false);
-
-		await borderSwitch.trigger('click');
-		expect(patchFrame).toHaveBeenLastCalledWith({ borderVisible: true });
-
-		config.layout.frame = { ...config.layout.frame, borderVisible: true };
-		const on = await mountComponent({ config, patchFrame });
-		await on.get('[role="switch"][aria-label="Glow"]').trigger('click');
-		expect(patchFrame).toHaveBeenLastCalledWith({ glowSize: 8 });
+		expect(patchFrame).toHaveBeenLastCalledWith({
+			animation: { enabled: true, opacity: 0.45 },
+		});
 	});
 });

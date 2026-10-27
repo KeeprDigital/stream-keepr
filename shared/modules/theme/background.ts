@@ -1,10 +1,12 @@
 import type { GraphicAssetId, GraphicAssetRevisionId } from '../../types/graphicsAsset';
-import type { BackgroundLayer } from '../../types/screenConfig';
+import type { BackgroundLayer, ColorBackgroundLayer } from '../../types/screenConfig';
+import type { ThemeColor } from './composites';
 import { z } from 'zod';
 import { animationEffectSelectionSchema } from '../../animationEffects';
 import { MEDIA_FIT_VALUES } from '../../types/graphicItem';
 import { MAX_GRAPHIC_MEDIA_PLAYBACK_RATE, MIN_GRAPHIC_MEDIA_PLAYBACK_RATE } from '../../types/graphics';
 import { remoteMediaUrlRefusal } from '../../utils/remoteMediaUrl';
+import { literalColorSchema, themeColorSchema } from './composites';
 
 /**
  * The one Background Layer stack schema: a Screen's own stack (ADR-0016) and
@@ -12,8 +14,14 @@ import { remoteMediaUrlRefusal } from '../../utils/remoteMediaUrl';
  * stack component, so both validate here. A library image or video layer is a
  * Graphic Asset Reference its owner indexes, whether that is a Screen or a
  * Theme (ADR-0050).
+ *
+ * The token's colour layer may name a colour Foundation Token, as a fill's
+ * colour may (#831), so a Theme's backdrop follows its palette. Once resolved
+ * every colour is a literal, and the stack is a Screen's.
  */
-export type ThemeBackgroundLayer = BackgroundLayer;
+export type ThemeBackgroundLayer<C = ThemeColor>
+	= | Exclude<BackgroundLayer, ColorBackgroundLayer>
+		| (Omit<ColorBackgroundLayer, 'color'> & { color: C });
 
 const opacitySchema = z.number().finite().min(0).max(1);
 
@@ -97,37 +105,39 @@ const layerShape = {
 	opacity: opacitySchema,
 };
 
-const layerSchema = z.discriminatedUnion('type', [
-	z.object({
-		...layerShape,
-		type: z.literal('color'),
-		color: z.string().min(1).max(500),
-	}).strict(),
-	z.object({
-		...layerShape,
-		type: z.literal('gradient'),
-		gradient: z.string().min(1).max(1000),
-	}).strict(),
-	z.object({
-		...layerShape,
-		type: z.literal('image'),
-		source: screenMediaSourceSchema,
-		fit: z.enum(MEDIA_FIT_VALUES),
-	}).strict(),
-	z.object({
-		...layerShape,
-		type: z.literal('video'),
-		source: screenMediaSourceSchema,
-		fit: z.enum(MEDIA_FIT_VALUES),
-		playbackRate: screenMediaPlaybackRateSchema,
-		loop: z.boolean(),
-	}).strict(),
-	z.object({
-		...layerShape,
-		type: z.literal('animation'),
-		animation: animationEffectSelectionSchema,
-	}).strict(),
-]);
+function layerSchema<C extends z.ZodType>(colorSchema: C) {
+	return z.discriminatedUnion('type', [
+		z.object({
+			...layerShape,
+			type: z.literal('color'),
+			color: colorSchema,
+		}).strict(),
+		z.object({
+			...layerShape,
+			type: z.literal('gradient'),
+			gradient: z.string().min(1).max(1000),
+		}).strict(),
+		z.object({
+			...layerShape,
+			type: z.literal('image'),
+			source: screenMediaSourceSchema,
+			fit: z.enum(MEDIA_FIT_VALUES),
+		}).strict(),
+		z.object({
+			...layerShape,
+			type: z.literal('video'),
+			source: screenMediaSourceSchema,
+			fit: z.enum(MEDIA_FIT_VALUES),
+			playbackRate: screenMediaPlaybackRateSchema,
+			loop: z.boolean(),
+		}).strict(),
+		z.object({
+			...layerShape,
+			type: z.literal('animation'),
+			animation: animationEffectSelectionSchema,
+		}).strict(),
+	]);
+}
 
 /**
  * A guardrail, not a derived cap: a real show stacks a handful of layers, and
@@ -150,9 +160,16 @@ const MAX_BACKGROUND_LAYERS = 20;
  * browser source is memory-tight, and only one mode renders at a time, so the
  * per-stack rule keeps the per-Screen invariant. Liftable if a show needs two.
  */
-export const backgroundLayerStackSchema = z.array(layerSchema)
-	.max(MAX_BACKGROUND_LAYERS)
-	.refine(
-		layers => layers.filter(layer => layer.type === 'animation').length <= 1,
-		'A Background Layer stack carries at most one animation layer',
-	);
+function layerStackSchema<C extends z.ZodType>(colorSchema: C) {
+	return z.array(layerSchema(colorSchema))
+		.max(MAX_BACKGROUND_LAYERS)
+		.refine(
+			layers => layers.filter(layer => layer.type === 'animation').length <= 1,
+			'A Background Layer stack carries at most one animation layer',
+		);
+}
+
+export const backgroundLayerStackSchema = layerStackSchema(literalColorSchema);
+
+/** The `background` token's stack: a colour layer may name a colour Foundation Token. */
+export const themeBackgroundLayerStackSchema = layerStackSchema(themeColorSchema);

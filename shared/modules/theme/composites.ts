@@ -1,4 +1,5 @@
 import type { GraphicAnimationRecipe, ShapeGeometry } from '../../types/graphics';
+import type { ThemeBackgroundLayer } from './background';
 import type { ThemeTokenReference } from './tokens';
 import { z } from 'zod';
 import {
@@ -57,8 +58,8 @@ export type ThemeCompositeTokenType = keyof ThemeCompositeValueTypes;
 
 const finite = z.number().finite();
 const unit = finite.min(0).max(1);
-const literalColorSchema = z.string().min(1).max(500);
-const themeColorSchema = z.union([
+export const literalColorSchema = z.string().min(1).max(500);
+export const themeColorSchema = z.union([
 	literalColorSchema,
 	z.object({
 		token: z.string().min(1).max(100),
@@ -180,6 +181,22 @@ function mapSurface<C, D>(surface: ThemeSurfaceStyle<C>, map: (color: C) => D | 
 	return next;
 }
 
+/** Maps a Background Layer stack's colour layers, or answers undefined when one does (#831). */
+function mapBackground<C, D>(layers: ThemeBackgroundLayer<C>[], map: (color: C) => D | undefined): ThemeBackgroundLayer<D>[] | undefined {
+	const mapped: ThemeBackgroundLayer<D>[] = [];
+	for (const layer of layers) {
+		if (layer.type !== 'color') {
+			mapped.push(layer);
+			continue;
+		}
+		const color = map(layer.color);
+		if (color === undefined)
+			return undefined;
+		mapped.push({ ...layer, color });
+	}
+	return mapped;
+}
+
 /** Every colour Foundation Token a composite value names. */
 export function themeCompositeColorReferences(type: string, value: unknown): string[] {
 	const names: string[] = [];
@@ -192,6 +209,8 @@ export function themeCompositeColorReferences(type: string, value: unknown): str
 		mapFill(value as ThemeFill, collect);
 	else if (type === 'surface-style')
 		mapSurface(value as ThemeSurfaceStyle, collect);
+	else if (type === 'backgroundLayers')
+		mapBackground(value as ThemeBackgroundLayer[], collect);
 	return names;
 }
 
@@ -209,5 +228,7 @@ export function resolveThemeCompositeColors<V>(type: string, value: V, resolveCo
 		return mapFill(value as ThemeFill, read) as V | undefined;
 	if (type === 'surface-style')
 		return mapSurface(value as ThemeSurfaceStyle, read) as V | undefined;
+	if (type === 'backgroundLayers')
+		return mapBackground(value as ThemeBackgroundLayer[], read) as V | undefined;
 	return value;
 }

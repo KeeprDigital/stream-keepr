@@ -2,10 +2,12 @@
 // store (ADR-0049). It sits beside `themeTokens.ts`, whose Theme write rules a
 // Screen Theme Override shares.
 
-import type { ThemeTokenReference, ThemeTokenValue } from './modules/theme/tokens';
+import type { ThemeTokenReference, ThemeTokenType, ThemeTokenValue } from './modules/theme/tokens';
+import type { FoundationTokenName } from './modules/theme/vocabulary';
 import type { ScreenMode } from './types/enums';
+import { GRAPHIC_THEME_SLOT_TOKEN_TYPES } from './modules/graphics/themeBindings';
 import { FOUNDATION_TOKENS } from './modules/theme/vocabulary';
-import { screenModeSupportsBackgroundLayers, screenModeTokens } from './screenModes';
+import { SCREEN_MODES, screenModeSupportsBackgroundLayers, screenModeTokens } from './screenModes';
 import { parseThemeTokenWrite, themeTokenDefinition } from './themeTokens';
 import { THEME_TOKEN_WRITE_REFUSALS } from './types/theme';
 
@@ -17,13 +19,29 @@ export const SCREEN_THEME_OVERRIDE_REFUSALS = {
 
 export type ScreenThemeOverrideRefusal = keyof typeof SCREEN_THEME_OVERRIDE_REFUSALS;
 
+const GRAPHIC_BINDABLE_TYPES: ReadonlySet<ThemeTokenType> = new Set(Object.values(GRAPHIC_THEME_SLOT_TOKEN_TYPES));
+
+/**
+ * The Foundation Tokens a graphics host's Graphic Items may bind, in
+ * vocabulary order: every one of a type some binding slot takes. None for a
+ * mode that is not a graphics host.
+ */
+export function screenModeBindableFoundationTokens(mode: ScreenMode): FoundationTokenName[] {
+	if (!SCREEN_MODES[mode].graphicsHost)
+		return [];
+	return (Object.keys(FOUNDATION_TOKENS) as FoundationTokenName[])
+		.filter(name => GRAPHIC_BINDABLE_TYPES.has(FOUNDATION_TOKENS[name].type));
+}
+
 /**
  * Whether a Screen in `mode` can consume `name`: one of the mode's own Mode
  * Tokens, or a Foundation Token one of them could follow. A Mode Token may be
  * pointed at any Foundation Token of its type, so that is every Foundation
- * Token of a type the mode declares, not only those its defaults name. The
- * `background` stack is consumed by the Screen host rather than a Mode Token,
- * on the Background Screen and every mode declaring a Background Layer stack.
+ * Token of a type the mode declares, not only those its defaults name. A
+ * graphics host's Graphic Items may bind any Foundation Token a binding slot
+ * takes, so it consumes those too (#831). The `background` stack is consumed
+ * by the Screen host rather than a Mode Token, on the Background Screen and
+ * every mode declaring a Background Layer stack.
  */
 export function screenModeCanConsume(mode: ScreenMode, name: string): boolean {
 	const modeTokens = screenModeTokens(mode);
@@ -33,6 +51,8 @@ export function screenModeCanConsume(mode: ScreenMode, name: string): boolean {
 		return true;
 	if (!Object.hasOwn(FOUNDATION_TOKENS, name))
 		return false;
+	if ((screenModeBindableFoundationTokens(mode) as string[]).includes(name))
+		return true;
 	const { type } = FOUNDATION_TOKENS[name as keyof typeof FOUNDATION_TOKENS];
 	return Object.values(modeTokens).some(definition => definition.type === type);
 }

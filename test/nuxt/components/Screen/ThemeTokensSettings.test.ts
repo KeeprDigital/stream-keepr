@@ -10,6 +10,7 @@ import { defineComponent, h } from 'vue';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { screenModeTokenName } from '~~/shared/screenModes';
 import { standingsModeTokens } from '~~/shared/screenModeTokens/standings';
+import { screenModeBindableFoundationTokens } from '~~/shared/screenThemeOverrides';
 import { deferred } from '~~/test/helpers/deferred';
 import { createWireMockScreen } from '~~/test/helpers/fixtures';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
@@ -105,9 +106,18 @@ describe('a Screen\'s token section', () => {
 	});
 
 	it('shows nothing for a mode that consumes no Theme Token', async () => {
-		const wrapper = await mountSection('broadcast-graphics');
+		const wrapper = await mountSection('feature-match');
 
 		expect(wrapper.find('[data-testid="screen-theme-tokens"]').exists()).toBe(false);
+	});
+
+	// A graphics host's Graphic Items may bind any of them, so its Screen may override any (#831).
+	it('lists every Foundation Token a Graphic Item may bind on a graphics host', async () => {
+		const wrapper = await mountSection('broadcast-graphics');
+
+		expect(wrapper.findAll('[data-token]').map(row => row.attributes('data-token')).sort())
+			.toEqual(screenModeBindableFoundationTokens('broadcast-graphics').sort());
+		expect(screenModeBindableFoundationTokens('broadcast-graphics')).toEqual(expect.arrayContaining(['accent', 'logo', 'heading', 'panel']));
 	});
 
 	it.each([

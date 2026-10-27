@@ -147,6 +147,41 @@ describe('a Theme Token write', () => {
 			},
 		],
 		[
+			'a background whose colour layer names a colour Foundation Token',
+			'background',
+			[
+				{
+					...colorLayer,
+					color: { token: 'accent' },
+				},
+			],
+		],
+		[
+			'a Feature Match Overlay surface whose colours name Foundation Tokens',
+			'feature-match-overlay.frame-surface',
+			{
+				fill: {
+					type: 'solid',
+					color: { token: 'surface-raised' },
+				},
+				fillOpacity: 1,
+				outline: {
+					color: { token: 'accent' },
+					width: 3,
+				},
+				glow: {
+					color: { token: 'accent' },
+					size: 8,
+					opacity: 0.5,
+				},
+			},
+		],
+		[
+			'a Feature Match Overlay Frame media naming the logo',
+			'feature-match-overlay.frame-media',
+			{ token: 'logo' },
+		],
+		[
 			'a Shape Geometry',
 			'panel-shape',
 			{ ...FOUNDATION_TOKENS['panel-shape'].default, leftSlant: -40 },
@@ -251,6 +286,17 @@ describe('a Theme Token write', () => {
 				type: 'solid',
 				color: { token: 'heading' },
 			},
+			'invalid-value',
+		],
+		[
+			'a background whose colour layer names a token of another type',
+			'background',
+			[
+				{
+					...colorLayer,
+					color: { token: 'heading' },
+				},
+			],
 			'invalid-value',
 		],
 		[

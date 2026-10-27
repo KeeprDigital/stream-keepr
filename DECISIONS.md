@@ -808,7 +808,7 @@ Accepted · 2026-10-17 · [#599](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**A glow is composed opacity, so the Key Output paints it like any other paint: white at the glow's own opacity.** That holds for every glow host — a Graphic Item's Graphic Surface Style, a Source Item's framing, and the Feature Match Overlay Frame's border. One module, `app/modules/screen/outputPaint.ts`, owns the Fill-versus-Key paint rules both render models use: a colour at an opacity, a glow on each output, and the flat hosts' glow defaults (the border colour, at three-quarter opacity). The Frame's paint is decided in the pure Feature Match Overlay render model, not its display. `pnpm accept key-matte` rasterises each host in Chromium and requires the Key matte to equal the Overlay alpha.
+**A glow is composed opacity, so the Key Output paints it like any other paint: white at the glow's own opacity.** That holds for every glow host — a Graphic Item's Graphic Surface Style, a Source Item's framing, and the Feature Match Overlay Frame's border. One module, `app/modules/screen/outputPaint.ts`, owns the Fill-versus-Key paint rules both render models use: a colour at an opacity and a glow on each output. Since #831 the Frame and Source Items take their glow from a surface Mode Token, so the flat hosts' glow defaults are gone. The Frame's paint is decided in the pure Feature Match Overlay render model, not its display. `pnpm accept key-matte` rasterises each host in Chromium and requires the Key matte to equal the Overlay alpha.
 
 ### Why
 
@@ -819,7 +819,7 @@ Graphic Item glow already reached the Key Output, but Source Item and Frame glow
 - A half-opaque glow is grey in the matte.
 - A Frame border with no colour paints nothing in the Key Output either, as in the Fill Output.
 - A colour that carries its own alpha (`rgba()`, eight-digit hex, `transparent`) still keys at the authored opacity alone; the pickers write opaque hex, so the matte matches what they author.
-- The raw CSS Frame gradient stays host-owned and paints in colour only; the Key Output keys the Frame through its white fill.
+- The Frame has no raw CSS gradient since #831. Its fill is its `frame-surface` Mode Token's Graphic Fill, which the Key Output keys at each colour's own alpha. It keys the Frame through opaque white only while the Frame paints media or an Animation Effect, whose colours it has none of.
 
 ### Rejected alternatives
 
@@ -1557,7 +1557,7 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 
 **Stream Keepr owns every token.** Users set values, never names.
 
-- **Foundation Tokens** are app-wide roles and hold a literal. A colour inside a composite Foundation Token (a fill or a surface) may name a colour Foundation Token instead, and a colour holds a literal only (#829).
+- **Foundation Tokens** are app-wide roles and hold a literal. A colour inside a composite Foundation Token (a fill, a surface, or a colour layer of the `background` stack) may name a colour Foundation Token instead, and a colour holds a literal only (#829, #831).
 - **Mode Tokens** are declared by a Screen Mode Definition. Each holds a literal or names a same-type Foundation Token, and defaults to one.
 - **Graphic Item properties** name a whole Foundation Token or hold a literal. Nothing is bound partially, and nothing names a Mode Token. Resolution therefore takes at most two steps (a Mode Token or binding, its Foundation Token, then a colour that token names) and cannot cycle. It was one step until #829: the PRD has a composite's colour name a colour token, so a change to the accent reaches every surface using it.
 
@@ -1581,9 +1581,9 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 - A Theme in use cannot be deleted.
 - Typography tokens carry no size. Colour tokens may carry alpha, and a consumer's opacity multiplies it. The Key Output keys a translucent colour at its own alpha, so Fill and Key agree.
 - A Graphic Theme Binding (#829) is a slot name and a token name beside the property, never in place of it. The property keeps the value it last resolved to, so a document stays complete and renders without a Theme. The compositor paints every bound slot from the Screen's resolved Foundation Tokens. An author's edit to a bound slot's value detaches that slot, keeping what the author made of the resolved value. That is the only implicit change; there is no override record. A binding naming no Foundation Token of its slot's type is refused on a write and inert on a read.
-- Media treatment and on-screen cycling bind nothing, because no token type fills either.
+- Media treatment and on-screen cycling bind nothing, because no token type fills either. A Media Graphic Item's picture binds an asset token, such as the logo (#831).
 - A rendering holds its Event's Theme in its Event context (ADR-0022), not in a read of its own (#820). A token write advances the Theme's revision in the same statement, then announces `theme:updated` with the whole stored map on every Event using the Theme. A holder applies it only for the Theme its Event names, and only if it is newer than the revision held. A Theme switch is an Event Presentation Settings write, so it announces `event:updated`. That names the new Theme without its tokens, so a rendering whose context names a Theme it does not hold re-reads the context.
-- A Screen Theme Override write is one Screen write (`PATCH …/screens/:screenId/theme-overrides`, #827): it names tokens, each with a value or the `null` that clears it (ADR-0041), and announces `screen:updated`, so outputs re-read the Screen with its overrides. It may name any token the Screen's mode can consume: its Mode Tokens, and every Foundation Token of a type they declare, since a Mode Token may be pointed at any of them. Anything else is refused whole, and an override already stored for another mode's Mode Token stays dormant. The Screen's token section lists only what the mode's declaration consumes (`resolveThemeTokens`'s `consumed`).
+- A Screen Theme Override write is one Screen write (`PATCH …/screens/:screenId/theme-overrides`, #827): it names tokens, each with a value or the `null` that clears it (ADR-0041), and announces `screen:updated`, so outputs re-read the Screen with its overrides. It may name any token the Screen's mode can consume: its Mode Tokens, and every Foundation Token of a type they declare, since a Mode Token may be pointed at any of them. A graphics host's Graphic Items may bind any Foundation Token of a type a binding slot takes, so it consumes those too (#831). Anything else is refused whole, and an override already stored for another mode's Mode Token stays dormant. The Screen's token section lists only what the mode's declaration consumes (`resolveThemeTokens`'s `consumed`).
 
 ### Rejected alternatives
 
@@ -1624,7 +1624,7 @@ A Theme is meant to carry the production's logo, backdrop and typefaces. ADR-000
 - Theme export/import, when built, must carry asset bytes through the Template Package asset pipeline: staging, quota, revalidation and Graphic Asset Origin. It cannot be data-only.
 - ADR-0001 holds only until Graphic Style Sets are removed (#830).
 - A Theme or override cannot hold a retired asset, because Retire is refused while one references it. A token write therefore never needs ADR-0034's retained-reference allowance; an override still grants it to a revision it already held at the same slot.
-- A Screen overrides only a token its mode can consume (ADR-0049), and no mode yet declares an asset Mode Token, so no Screen can override `logo` until one does. Its fonts and its `background` stack can be overridden.
+- A Screen overrides only a token its mode can consume (ADR-0049). Since #831 both graphics hosts consume every Foundation Token a Graphic Item binds, the logo included, and the Feature Match Overlay declares the asset Mode Token `frame-media`, so a graphics Screen can override `logo`. A plain mode declares no asset Mode Token, so it cannot. Its fonts and its `background` stack can be overridden.
 - The capability admits the Theme's logo on every Screen of the Event, whether or not that Screen's mode paints it. The Event context already carries the whole Theme, so this reveals nothing new, and a graphics host binding the logo needs no change to the capability.
 
 ## ADR-0051: A Screen holds no look of its own, and the Event Canvas is a coordinate space

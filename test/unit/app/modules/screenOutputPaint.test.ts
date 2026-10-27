@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { borderGlow, colourAtOpacity, glowDropShadow, glowFlood, paintColour } from '~~/app/modules/screen/outputPaint';
+import { colourAtOpacity, glowDropShadow, glowFlood, paintColour } from '~~/app/modules/screen/outputPaint';
 
 /**
  * The Fill-versus-Key paint rules both graphics render models share. A Fill or
@@ -58,29 +58,6 @@ describe('screen output paint', () => {
 		it('clamps an opacity outside zero to one', () => {
 			expect(colourAtOpacity('key', '#ff0000', 2)).toBe('#ffffffff');
 			expect(colourAtOpacity('fill', '#ff0000', -1)).toBe('#ff000000');
-		});
-	});
-
-	describe('a border glow', () => {
-		it('is off without a size', () => {
-			expect(borderGlow({ borderColor: '#0077a3' })).toBeUndefined();
-			expect(borderGlow({ borderColor: '#0077a3', glowSize: 0 })).toBeUndefined();
-		});
-
-		it('defaults to the border colour at three-quarter opacity', () => {
-			expect(borderGlow({ borderColor: '#0077a3', glowSize: 7 }))
-				.toEqual({ color: '#0077a3', size: 7, opacity: 0.75 });
-			expect(borderGlow({ glowSize: 7 })).toEqual({ color: '#ffffff', size: 7, opacity: 0.75 });
-		});
-
-		it('keeps its own colour and opacity when it has them', () => {
-			expect(borderGlow({
-				borderColor: '#0077a3',
-				glowColor: '#ff0000',
-				glowSize: 7,
-				glowOpacity: 0.5,
-			}))
-				.toEqual({ color: '#ff0000', size: 7, opacity: 0.5 });
 		});
 	});
 

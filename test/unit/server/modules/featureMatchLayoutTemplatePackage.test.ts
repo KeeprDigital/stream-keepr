@@ -208,7 +208,6 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 			featureMatchLayoutVocabularyIdentity('source-role', 'main'),
 			featureMatchLayoutVocabularyIdentity('source-role', 'player1'),
 			featureMatchLayoutVocabularyIdentity('source-role', 'player2'),
-			featureMatchLayoutVocabularyIdentity('frame-animation-effect', 'caustics'),
 			featureMatchLayoutVocabularyIdentity('token', 'player1Name'),
 			featureMatchLayoutVocabularyIdentity('token', 'player1Record'),
 			featureMatchLayoutVocabularyIdentity('token', 'player1Deck'),

@@ -225,6 +225,60 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(false);
 	});
 
+	// The Frame's and Source Items' look became Mode Tokens (#831): a layout stored or exported
+	// with its own reads with those fields dropped, not migrated, and a value no field could hold is still refused.
+	it.each([
+		{
+			field: 'frame',
+			look: {
+				backgroundColor: '#111111',
+				gradient: 'linear-gradient(#000, #111)',
+				borderVisible: true,
+				borderColor: '#0077a3',
+				borderWidth: 4,
+				glowColor: '#ffffff',
+				glowSize: 8,
+				glowOpacity: 0.5,
+			},
+		},
+		{
+			field: 'source',
+			look: {
+				backgroundColor: '#000000',
+				backgroundOpacity: 0,
+				backgroundGradient: 'linear-gradient(#000, #111)',
+				borderVisible: true,
+				borderColor: '#0077a3',
+				borderWidth: 4,
+				glowColor: '#ffffff',
+				glowSize: 8,
+				glowOpacity: 0.5,
+			},
+		},
+	])('reads a $field stored with its own look as its shape alone', ({ field, look }) => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		if (field === 'frame')
+			Object.assign(config.layout.frame, look, { borderLeftVisible: false });
+		else
+			config.layout.sources[0].framingStyle = { ...look, borderRadius: 8 };
+
+		const parsed = featureMatchOverlayModeConfigSchema.parse(config) as unknown as Record<string, any>;
+		const host = field === 'frame'
+			? parsed.layout.frame
+			: parsed.layout.sources[0].framingStyle;
+
+		expect(JSON.parse(JSON.stringify(host))).toEqual(field === 'frame'
+			? { ...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.frame, borderLeftVisible: false }
+			: { borderRadius: 8 });
+	});
+
+	it('still refuses a retired look field holding a value it never could', () => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		config.layout.frame.glowSize = -1;
+
+		expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(false);
+	});
+
 	function withFrameVideo(mediaBackground: Record<string, unknown>) {
 		return {
 			...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,

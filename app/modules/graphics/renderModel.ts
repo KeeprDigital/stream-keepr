@@ -713,9 +713,10 @@ function gradientAxis(angle: number) {
 /**
  * A Graphic Fill as one paint. A gradient keeps its stop opacities and resolves
  * every stop colour to white in the Key Output, which is exactly the case the
- * matte identity allows: white at a varying alpha.
+ * matte identity allows: white at a varying alpha. The Feature Match Overlay
+ * Frame paints its `frame-surface` fill through it too.
  */
-function fillDescriptor(
+export function fillDescriptor(
 	output: ScreenOutput,
 	style: GraphicSurfaceStyle,
 	scope: string,

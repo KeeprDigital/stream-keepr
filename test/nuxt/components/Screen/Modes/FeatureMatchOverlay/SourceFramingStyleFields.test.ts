@@ -4,14 +4,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
 import SourceFramingStyleFields from '~/components/Screen/Modes/FeatureMatchOverlay/SourceFramingStyleFields.vue';
 
-// A Source Item's border and glow go through the shared border and glow fields with every Feature
-// Match Overlay option: per side, a glow position, a glow only around a visible border, and hex…
+// A Source Item edits its shape: radii, which border sides show and where its glow
+// falls. Its fill, border and glow are the Theme's `source-surface` (#831).
 
 enableAutoUnmount(afterEach);
 
 const global = {
 	stubs: {
-		FeatureMatchOverlayBackgroundFields: true,
 		FeatureMatchOverlayBorderRadiusControl: true,
 		UFormField: defineComponent({ template: '<div><slot /></div>' }),
 		USwitch: defineComponent({
@@ -49,19 +48,20 @@ function mountFields(framingStyle: FeatureMatchSourceFramingStyle) {
 }
 
 describe('source framing style fields', () => {
-	it('offers the glow only around a visible border', async () => {
-		const off = mountFields({ borderVisible: false, glowSize: 8 });
-		expect(off.find('[role="switch"][aria-label="Glow"]').exists()).toBe(false);
+	it('offers no colour, border or glow of the Source Item\'s own', () => {
+		const wrapper = mountFields({});
 
-		await off.get('[role="switch"][aria-label="Border"]').trigger('click');
-		expect(off.emitted('update')?.at(-1)?.[0]).toEqual({ borderVisible: true });
+		expect(wrapper.findComponent({ name: 'UIColorPicker' }).exists()).toBe(false);
+		expect(wrapper.find('[role="switch"]').exists()).toBe(false);
 	});
 
-	it('edits per-side borders, a glow position, and hex colours', async () => {
-		const wrapper = mountFields({ borderVisible: true, borderColor: '#0077a3', glowSize: 8 });
+	it('switches a border side and chooses where the glow falls', async () => {
+		const wrapper = mountFields({ borderTopVisible: false });
 
-		expect(wrapper.findAll('button').some(button => button.text() === 'Top')).toBe(true);
-		expect(wrapper.findAllComponents({ name: 'UIColorPicker' }).every(picker => picker.props('hexOnly'))).toBe(true);
+		const top = wrapper.get('button[title="Top border"]');
+		expect(top.attributes('aria-pressed')).toBe('false');
+		await top.trigger('click');
+		expect(wrapper.emitted('update')?.at(-1)?.[0]).toEqual({ borderTopVisible: true });
 
 		const position = wrapper.findAllComponents({ name: 'USelect' }).find(select => select.attributes('aria-label') === 'Glow position')!;
 		position.vm.$emit('update:modelValue', 'outside');

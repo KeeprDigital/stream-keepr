@@ -15,19 +15,11 @@ export function sourceSummary(item: FeatureMatchSourceItemConfig) {
 	return `${rectSummary(item)} • ${featureMatchSourceItemSummary(item)}`;
 }
 
+/** A Source Item's own framing: its shape, since its surface is the Theme's (#831). */
 export function appearanceSummary(style?: FeatureMatchSourceFramingStyle) {
 	const parts = [];
-	if (style?.backgroundOpacity)
-		parts.push('background');
-	if (style?.backgroundGradient)
-		parts.push('gradient');
-	if (style?.borderVisible)
-		parts.push(`border ${style.borderWidth ?? 1}px`);
-	if (style?.glowSize) {
-		parts.push(`glow ${style.glowSize}px${style.glowPosition && style.glowPosition !== 'both'
-			? ` ${style.glowPosition}`
-			: ''}`);
-	}
+	if (style?.glowPosition && style.glowPosition !== 'both')
+		parts.push(`glow ${style.glowPosition}`);
 	if (style?.borderRadius)
 		parts.push(`radius ${style.borderRadius}`);
 	return parts.length

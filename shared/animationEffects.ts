@@ -830,13 +830,17 @@ const enabledAndOpacityShape = {
 };
 
 /**
- * The Feature Match Overlay Frame's animation configuration: the shared effect
- * selection plus the Frame's own `enabled` and `opacity`.
+ * The Feature Match Overlay Frame's animation configuration: the Frame's own
+ * `enabled` and `opacity`. Which effect it draws, with which params, is the
+ * `frame-animation-effect` Mode Token (#831), so a layout stored or exported
+ * with its own `effect` and `params` reads with them dropped, not migrated:
+ * the Frame then draws its Theme's effect.
  */
-export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnion(
-	'effect',
-	animationEffectHostBranches(enabledAndOpacityShape),
-);
+export const featureMatchOverlayFrameAnimationConfigSchema = z.strictObject({
+	...enabledAndOpacityShape,
+	effect: z.enum(ANIMATION_EFFECT_VALUES).optional(),
+	params: z.record(z.string(), z.unknown()).optional(),
+}).transform(({ enabled, opacity }) => ({ enabled, opacity }));
 
 /**
  * A Broadcast Graphics Screen's background: the shared effect selection plus the
@@ -869,11 +873,8 @@ export function parseBroadcastGraphicsBackgroundConfig(
 	return outcome.success ? outcome.data : null;
 }
 
-/**
- * The stored/authored shape: params sparse, defaults implied. Renderers parse it
- * through the schema to get the fully-defaulted `AnimationEffectParams` form.
- */
-export type FeatureMatchOverlayFrameAnimationConfig = z.input<typeof featureMatchOverlayFrameAnimationConfigSchema>;
+/** The Frame's stored animation switch and opacity. */
+export type FeatureMatchOverlayFrameAnimationConfig = z.output<typeof featureMatchOverlayFrameAnimationConfigSchema>;
 
 /**
  * A stored `frame.animation` value re-proven rather than trusted, for the

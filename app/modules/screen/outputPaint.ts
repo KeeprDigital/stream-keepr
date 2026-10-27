@@ -105,37 +105,6 @@ export interface GlowPaint {
 	opacity: number;
 }
 
-/**
- * The glow fields the Feature Match Overlay Frame and a Source Item's framing
- * store flat beside their border. A Graphic Surface Style always stores its
- * glow's colour and opacity, so these defaults are the flat hosts' alone.
- */
-export interface BorderGlowFields {
-	borderColor?: string;
-	glowColor?: string;
-	glowSize?: number;
-	glowOpacity?: number;
-}
-
-const BORDER_GLOW_DEFAULT_COLOUR = '#ffffff';
-const BORDER_GLOW_DEFAULT_OPACITY = 0.75;
-
-/**
- * A flat border glow, or none: a stored size of zero is how there is no glow. A
- * glow without its own colour takes the border's, and without its own opacity
- * paints at three quarters.
- */
-export function borderGlow(style: BorderGlowFields): GlowPaint | undefined {
-	const size = style.glowSize ?? 0;
-	if (size <= 0)
-		return undefined;
-	return {
-		color: style.glowColor ?? style.borderColor ?? BORDER_GLOW_DEFAULT_COLOUR,
-		size,
-		opacity: style.glowOpacity ?? BORDER_GLOW_DEFAULT_OPACITY,
-	};
-}
-
 function paintsGlow(glow: GlowPaint | undefined): glow is GlowPaint {
 	return Boolean(glow && glow.size > 0 && clampOpacity(glow.opacity) > 0);
 }

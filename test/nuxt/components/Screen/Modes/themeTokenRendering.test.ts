@@ -24,9 +24,7 @@ import Renderer from '~/components/Screen/Renderer.vue';
 
 /** Modes whose displays read no Mode Token, and the ticket moving each (or why none will). */
 const MODES_NOT_YET_ON_THEME_TOKENS: Partial<Record<ScreenMode, string>> = {
-	'background': 'none: it declares no Mode Token, and paints the `background` Foundation Token (screenBackgroundLayers)',
-	'feature-match-overlay': '#831',
-	'broadcast-graphics': '#829',
+	background: 'none: it declares no Mode Token, and paints the `background` Foundation Token (screenBackgroundLayers)',
 };
 
 type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor' | 'borderColor' | 'boxShadow' | 'width' | 'height' | 'gap';
@@ -35,6 +33,8 @@ type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'border
 interface Probe {
 	selector: string;
 	property?: ColorProperty;
+	/** For a value no style property carries: the attribute the element states it in. */
+	attribute?: string;
 	/** Mode config the element needs to render, over the mode's sample config. */
 	config?: Record<string, unknown>;
 }
@@ -177,6 +177,13 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 	'card': {
 		'card-width': { selector: '[data-testid="spotlight-card"]', property: 'width' },
 	},
+	// A surface probes its outline: the Frame's border stroke, a Source Item's border.
+	'feature-match-overlay': {
+		'frame-surface': { selector: '.feature-match-overlay__frame-border', attribute: 'stroke' },
+		'frame-media': { selector: '.frame-layer', attribute: 'data-frame-media' },
+		'frame-animation-effect': { selector: '.frame-layer', attribute: 'data-frame-animation-effect' },
+		'source-surface': { selector: '[data-graphic-item-id="main-source"]', property: 'borderTopColor' },
+	},
 	'deck': {
 		'title-typography': { selector: '.deck-header h2' },
 		'body-typography': { selector: '.deck-header p' },
@@ -232,6 +239,7 @@ const SAMPLES: { [T in ThemeTokenType]: ThemeTokenValueTypes[T] } = {
 	'surface-style': {
 		fill: { type: 'solid', color: 'rgb(12, 34, 56)' },
 		fillOpacity: 0.5,
+		outline: { color: 'rgb(12, 34, 56)', width: 3 },
 	},
 	'shape-geometry': {
 		topLeft: { treatment: 'cut', size: 7 },
@@ -773,6 +781,8 @@ async function mountMode(
 function painted(probe: Probe, type: ThemeTokenType) {
 	const element = wrapper!.find(probe.selector);
 	expect(element.exists(), `${probe.selector} is rendered`).toBe(true);
+	if (probe.attribute)
+		return element.attributes(probe.attribute);
 	const style = getComputedStyle(element.element);
 	if (type !== 'typography') {
 		return probe.property === 'boxShadow'
@@ -802,6 +812,21 @@ function expectedPaint(type: ThemeTokenType, value: unknown) {
 		return value;
 	if (type === 'dimension')
 		return `${value}px`;
+	if (type === 'surface-style') {
+		// Its outline's colour, read as the colour Foundation Token it names, if it names one.
+		const color = (value as ThemeTokenValueTypes['surface-style']).outline!.color;
+		return typeof color === 'string'
+			? color
+			: FOUNDATION_TOKENS[color.token as 'accent'].default;
+	}
+	if (type === 'asset') {
+		const asset = value as ThemeTokenValueTypes['asset'];
+		return asset
+			? `${asset.assetId}/${asset.revisionId}`
+			: 'none';
+	}
+	if (type === 'animationEffect')
+		return (value as ThemeTokenValueTypes['animationEffect']).effect;
 	const typography = value as ThemeTokenValueTypes['typography'];
 	const font = typography.font as GraphicApplicationFontSelection;
 	return {
@@ -813,7 +838,7 @@ function expectedPaint(type: ThemeTokenType, value: unknown) {
 	};
 }
 
-/** The graphics hosts, which declare no Mode Tokens: their Graphic Items bind Foundation Tokens. */
+/** The graphics hosts: their Graphic Items bind Foundation Tokens, and the Feature Match Overlay's Frame and Source Items paint Mode Tokens. */
 const GRAPHICS_HOSTS = ['broadcast-graphics', 'feature-match-overlay'] as const satisfies readonly ScreenMode[];
 
 describe.each(GRAPHICS_HOSTS)('the %s display', (mode) => {
@@ -835,6 +860,14 @@ describe.each(GRAPHICS_HOSTS)('the %s display', (mode) => {
 
 		expect(boundColor()).toBe(FOUNDATION_TOKENS['text-primary'].default);
 	});
+
+	it('paints it from the Screen\'s own override of its Foundation Token, over the Theme', async () => {
+		await mountMode(mode, { 'text-primary': 'rgb(12, 34, 56)' }, {
+			themeOverrides: { 'text-primary': 'rgb(65, 43, 21)' },
+		});
+
+		expect(boundColor()).toBe('rgb(65, 43, 21)');
+	});
 });
 
 describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
@@ -842,7 +875,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 	const notYet = MODES_NOT_YET_ON_THEME_TOKENS[mode];
 	const declared = screenModeTokens(mode);
 
-	if ((GRAPHICS_HOSTS as readonly ScreenMode[]).includes(mode) && !notYet) {
+	if (mode === 'broadcast-graphics') {
 		it('declares no Mode Tokens: its Graphic Items bind Foundation Tokens', () => {
 			expect(declared).toEqual({});
 		});

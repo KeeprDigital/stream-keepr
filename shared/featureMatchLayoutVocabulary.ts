@@ -15,7 +15,9 @@ import {
  * - a **Source Role**, which says what a Source Item frames rather than which
  *   camera fills it;
  * - a **Frame animation effect**, which names a renderer that ships with Stream
- *   Keepr rather than describing one;
+ *   Keepr rather than describing one. Since #831 a layout carries none: the
+ *   Frame's effect is its Theme's `frame-animation-effect` Mode Token. The
+ *   identity is still recognised, so a package that declares one installs;
  * - a **Feature Match token**, which names an entry of the Feature Match token
  *   binding catalogue that a Graphic Text Template's `{placeholder}` binds to.
  *
