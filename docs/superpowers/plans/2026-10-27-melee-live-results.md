@@ -40,6 +40,7 @@
 Pure refactor: replace `H3Event` with a context object so a scheduled tick can call workflows and status recording.
 
 **Files:**
+
 - Modify: `server/modules/melee-sync/workflows.ts` (every `requestEvent: H3Event` parameter)
 - Modify: `server/modules/melee-sync/index.ts` (commands build the context)
 - Modify: `server/utils/meleeSyncState.ts:33-85`
@@ -47,6 +48,7 @@ Pure refactor: replace `H3Event` with a context object so a scheduled tick can c
 - Test: `test/unit/server/modules/meleeSyncCommand.test.ts`, `meleeSyncWorkflows.test.ts`, `meleeSync.sqlite.test.ts`, `test/unit/server/utils/meleeSyncState.test.ts`
 
 **Interfaces:**
+
 - Produces: `export interface MeleeSyncContext { originConnectionId?: string }` in `server/modules/melee-sync/context.ts`; `meleeSyncContextFrom(requestEvent: H3Event): MeleeSyncContext`.
 - Produces: `createMeleeSyncWorkflows()` functions take `ctx: MeleeSyncContext` where they took `requestEvent`.
 - Produces: `recordMeleeSyncSuccess(ctx, eventId, data, leaseToken?)`, `recordMeleeSyncFailure(ctx, eventId, error, data?, leaseToken?)`.
@@ -63,11 +65,13 @@ Pure refactor: replace `H3Event` with a context object so a scheduled tick can c
 ### Task 2: Round snapshot writes only what changed
 
 **Files:**
+
 - Create: `server/services/meleeRoundDiff.ts`
 - Modify: `server/services/meleeRoundSnapshot.ts`
 - Test: `test/unit/server/services/meleeRoundDiff.test.ts` (new), `test/unit/server/services/meleeRoundSnapshotD1.test.ts`
 
 **Interfaces:**
+
 - Produces in `meleeRoundDiff.ts`:
   - `MATCH_RESULT_FIELDS = ['hasResult','player1GameWins','player2GameWins','gameDraws','isBye'] as const`
   - `MATCH_PAIRING_FIELDS = ['roundId','tableNumber','player1Id','player2Id','player1Data','player2Data','sortOrder'] as const` (`*Data` compared structurally)
@@ -89,17 +93,20 @@ Pure refactor: replace `H3Event` with a context object so a scheduled tick can c
 ### Task 3: Round Standings only for complete Rounds
 
 **Files:**
+
 - Create: `shared/utils/roundCompletion.ts`
 - Modify: `server/modules/melee-sync/roundMatches.ts`
 - Modify: `server/modules/melee-sync/workflows.ts` (`syncRoundMatches`)
 - Test: `test/unit/shared/utils/roundCompletion.test.ts` (new), `test/unit/server/services/roundMatches.sqlite.test.ts`
 
 **Interfaces:**
+
 - Produces: `isRoundComplete(matches: Array<Pick<DbMatch,'hasResult'|'isBye'>>, nextRoundHasPairings: boolean): boolean` (an empty Round is complete only when the next is paired).
 - Produces: `syncMatchesFromMelee(...)` result adds `complete: boolean`, `resultChangedMatchIds`, `pairingsChanged`, `standingsChanged`.
 - Produces in `roundMatches.ts`: `syncRoundStandingsFromMelee(eventId, eventData, round): Promise<{ standingsChanged: boolean }>` — fetches and stores one Round's standings (also re-maps its Matches' player records via the snapshot write).
 
 Behaviour in `syncMatchesFromMelee`:
+
 1. Fetch Matches. Decide `complete` from fetched Matches + whether the next Melee-managed Round in Round order has stored Melee Matches.
 2. Fetch standings only when `complete`; otherwise mapper gets an empty `standingsMap` and `replace` gets `standings: null`.
 3. `MeleeRoundNotReadyError` for a never-synced Round keys off Matches only (404 or zero Matches).
@@ -118,12 +125,14 @@ In `workflows.syncRoundMatches`, after a sync that stored pairings for a Round w
 ### Task 4: Granular, change-only sync messages (server)
 
 **Files:**
+
 - Modify: `shared/types/messages.ts:338`
 - Modify: `server/modules/event-data-publication/index.ts:94, 491, 559`
 - Modify: `server/modules/melee-sync/workflows.ts:377-403`
 - Test: `test/unit/server/modules/eventDataPublication.test.ts`, `test/unit/server/modules/meleeSync.sqlite.test.ts`
 
 **Interfaces:**
+
 - Produces message types:
   - `'melee:matchResultsSynced': { roundId: number; matchIds: number[] }`
   - `'melee:pairingsSynced': { roundId: number }`
@@ -146,23 +155,25 @@ Publishing rule: each message only when its flag is set (`resultChangedMatchIds.
 ### Task 5: Screens and operator follow the new messages
 
 **Files:**
+
 - Modify: `app/composables/screen/usePairingsModeData.ts:28`, `useTopCutModeData.ts:54`, `usePlayerHistoryModeData.ts:58`, `useHeadToHeadModeData.ts:55`, `useStandingsModeData.ts:53`, `app/modules/metagame/screenDependencies.ts:42`
 - Modify: `app/modules/realtime-event-session/meleeHandlers.ts:54-60`
 - Test: matching files under `test/nuxt/composables/screen/`, `test/unit/app/composables/workflows/useEventRealtimeSession.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 4 message types.
 
 Dependency table (remove every `'melee:roundSynced'` key):
 
-| Consumer | matchResultsSynced | pairingsSynced | roundStandingsSynced |
-| --- | --- | --- | --- |
-| Pairings | own Round | own Round | — |
-| Top Cut Bracket | holds Round | holds Round | `shows.seeds()` |
-| Player History | ✓ | ✓ | — |
-| Head-to-Head | ✓ | ✓ | ✓ |
-| Standings | — | — | ✓ |
-| Metagame (+ Archetype Spotlight, Most Played Cards via shared deps) | — | — | ✓ |
+| Consumer                                                            | matchResultsSynced | pairingsSynced | roundStandingsSynced |
+| ------------------------------------------------------------------- | ------------------ | -------------- | -------------------- |
+| Pairings                                                            | own Round          | own Round      | —                    |
+| Top Cut Bracket                                                     | holds Round        | holds Round    | `shows.seeds()`      |
+| Player History                                                      | ✓                  | ✓              | —                    |
+| Head-to-Head                                                        | ✓                  | ✓              | ✓                    |
+| Standings                                                           | —                  | —              | ✓                    |
+| Metagame (+ Archetype Spotlight, Most Played Cards via shared deps) | —                  | —              | ✓                    |
 
 Operator handlers: `matchResultsSynced` → `useMatchStore().applyRemoteMatchesRefreshed({ eventId, roundId })`; `pairingsSynced` → rounds + matches + feature matches (today's `roundSynced` body); `roundStandingsSynced` → `useRoundStore().loadRoundsByEventId`; no `roundSynced` handler.
 
@@ -177,6 +188,7 @@ Operator handlers: `matchResultsSynced` → `useMatchStore().applyRemoteMatchesR
 ### Task 6: Live Results setting and status
 
 **Files:**
+
 - Modify: `server/db/schema.ts:91-104`; generate `server/db/migrations/sqlite/0007_melee_live_results.sql` via `pnpm db:generate`
 - Modify: `server/mappers/event.ts` (strip internal columns)
 - Modify: `server/modules/melee-sync/configuration.ts` (disabling sync clears Live Results)
@@ -186,6 +198,7 @@ Operator handlers: `matchResultsSynced` → `useMatchStore().applyRemoteMatchesR
 - Test: `test/unit/server/api/events/[id]/melee/live-results.sqlite.test.ts` (new), `test/unit/server/utils/meleeSyncState.test.ts`, `test/unit/server/api/events/[id]/melee-config.put.test.ts`
 
 **Interfaces:**
+
 - Columns (Drizzle name / SQL): `meleeLiveResultsEnabled` bool not null default false; `meleeLiveResultsNextCheckAt` ts; `meleeLiveResultsBackoffStep` int not null default 0; `meleeLiveResultsLastCheckedAt` ts; `meleeLiveResultsLastChangeAt` ts; `meleeLiveResultsError` text; `meleeLiveResultsStopReason` text enum `'idle' | 'auth'`.
 - Event response exposes Enabled, LastCheckedAt, LastChangeAt, Error, StopReason; strips NextCheckAt, BackoffStep.
 - `PUT /api/events/:id/melee/live-results` body `{ enabled: boolean }`: 400 `MELEE_SYNC_DISABLED` when Melee Sync is off; on enable sets error/stopReason null, backoff 0, nextCheckAt null, lastChangeAt now; publishes `event:updated`.
@@ -202,10 +215,12 @@ Operator handlers: `matchResultsSynced` → `useMatchStore().applyRemoteMatchesR
 ### Task 7: Current Round and cadence rules
 
 **Files:**
+
 - Create: `server/modules/melee-sync/liveResults/currentRound.ts`, `liveResults/schedule.ts`
 - Test: `test/unit/server/modules/meleeLiveResultsRules.test.ts` (new)
 
 **Interfaces:**
+
 - `type LiveResultsTarget = { kind: 'results'; round: DbRound } | { kind: 'probe'; round: DbRound } | { kind: 'idle' }`
 - `resolveCurrentRound(orderedRounds: DbRound[], stats: Map<number, { matchCount: number; complete: boolean }>): { current: DbRound | null; target: LiveResultsTarget }` — rounds pre-filtered to Melee-managed and in Round order. Current = last Round with `matchCount > 0`. Target: current incomplete → results; current complete (or none) → probe next (or first); no next → idle. `idle` schedules on the probe curve.
 - `loadCurrentRound(eventId): Promise<ReturnType<typeof resolveCurrentRound>>` — reads Rounds + Match stats (uses `isRoundComplete`).
@@ -223,6 +238,7 @@ Operator handlers: `matchResultsSynced` → `useMatchStore().applyRemoteMatchesR
 ### Task 8: The Live Results tick, runner and cron
 
 **Files:**
+
 - Create: `server/modules/melee-sync/liveResults/tick.ts`, `liveResults/runner.ts`
 - Create: `server/utils/cronSchedules.ts`
 - Create: `server/api/events/[id]/melee/live-results.get.ts`
@@ -233,12 +249,14 @@ Operator handlers: `matchResultsSynced` → `useMatchStore().applyRemoteMatchesR
 - Test: `test/unit/server/modules/meleeLiveResults.sqlite.test.ts` (new), `test/unit/server/utils/cronSchedules.test.ts` (new)
 
 **Interfaces:**
+
 - `cronSchedules.ts`: `GRAPHICS_CRON = '17 * * * *'`, `LIVE_RESULTS_CRON = '* * * * *'`.
 - `runLiveResultsTick(eventId: number, now: Date): Promise<{ outcome: 'skipped' | 'changed' | 'unchanged' | 'failed' | 'stopped' }>`
 - `GET /api/events/:id/melee/live-results` → `{ enabled, currentRound: { id, name, phaseName } | null, lastCheckedAt, lastChangeAt, error, stopReason }`, `currentRound` from `loadCurrentRound`.
 - `runDueLiveResultsTicks(now: Date): Promise<void>` — Events with Melee Sync and Live Results on and `nextCheckAt` null or ≤ now, ordered by `nextCheckAt`, at most `LIVE_RESULTS_MAX_EVENTS_PER_RUN = 25`, sequential, each in its own try/catch.
 
 Tick steps:
+
 1. `acquireMeleeSyncLease(eventId, 'live-results', { durationMs: 120_000 })`; 409 → `skipped`. Always release in `finally`.
 2. Re-read the Event under the lease; Melee Sync or Live Results off → `skipped`.
 3. `loadCurrentRound`. `results` → `workflows.syncRoundMatches(ctx = {}, …)`. `probe` → `fetchMatchesByRound`; 404/empty → `unchanged`; paired → `workflows.syncPlayers` then `syncRoundMatches`. `idle` → `unchanged`.
@@ -262,12 +280,14 @@ The plugin hooks `cloudflare:scheduled`, returns unless `controller.cron === LIV
 ### Task 9: Sync page Live Results panel
 
 **Files:**
+
 - Modify: `app/pages/event/[eventId]/sync.vue` (new `UCard` after "Update from Melee", ~line 482)
 - Modify: `app/stores/melee.ts` (`setLiveResults(enabled)`, `loadLiveResultsStatus()`)
 - Create: `app/components/Sync/LiveResultsCard.vue`
 - Test: `test/nuxt/components/Sync/LiveResultsCard.test.ts` (new)
 
 **Interfaces:**
+
 - Consumes: Task 6 routes and Event response fields.
 - Card shown only when Melee Sync is enabled and setup is complete. `USwitch` labelled "Live Results". While on: Current Round name, "Checked <relative time>", Live Results error as `UAlert`. When `stopReason` set: "Live Results stopped: no changes for 12 hours" (`idle`) / "Live Results stopped: Melee.gg rejected the credentials" (`auth`). Status re-read every 30 s while mounted and on.
 - Expose state as `data-live-results="on|off|stopped"`.

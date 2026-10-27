@@ -150,7 +150,7 @@ Refresh, Re-sync Matches), not just polling:
   manual syncs as today.
 - `MeleeRoundNotReadyError` for a never-synced Round keys off Matches only,
   since standings are no longer expected for a newly paired Round. Turning it on clears the stop reason
-and resets cadence and backoff.
+  and resets cadence and backoff.
 - After the Event's last Round is complete with no next Round in structure,
   polling idles until a structure sync adds one.
 
@@ -159,11 +159,11 @@ and resets cadence and backoff.
 Replace `melee:roundSynced` with three messages on `event:{eventId}`, each
 published only when its content changed. Applies to manual syncs too.
 
-| Message | When | Payload (at least) |
-| --- | --- | --- |
-| Match Results changed | A stored Match Result in the Round changed (reported, corrected, or un-reported) | `roundId`, changed `matchIds` |
-| Pairings changed | Matches in the Round were added, removed, or re-seated (players or table changed) | `roundId` |
-| Round Standings changed | The Round's stored Round Standings differ from before | `roundId` |
+| Message                 | When                                                                              | Payload (at least)            |
+| ----------------------- | --------------------------------------------------------------------------------- | ----------------------------- |
+| Match Results changed   | A stored Match Result in the Round changed (reported, corrected, or un-reported)  | `roundId`, changed `matchIds` |
+| Pairings changed        | Matches in the Round were added, removed, or re-seated (players or table changed) | `roundId`                     |
+| Round Standings changed | The Round's stored Round Standings differ from before                             | `roundId`                     |
 
 Listeners:
 
