@@ -1,14 +1,17 @@
 import type { VueWrapper } from '@vue/test-utils';
 import type { StoredThemeTokens, ThemeTokenType, ThemeTokenValueTypes } from '~~/shared/modules/theme';
+import type { GraphicApplicationFontSelection } from '~~/shared/types/graphics';
 import type { ScreenMode } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, ref } from 'vue';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { SCREEN_MODES, screenModeTokenName, screenModeTokens } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
+import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { createMockScreen } from '~~/test/helpers/fixtures';
+import { stubCapabilitySession, stubFontFaces } from '~~/test/nuxt/helpers/fontFaces';
 import Renderer from '~/components/Screen/Renderer.vue';
 
 // Each themed Screen Mode's display, mounted by its Screen host under a
@@ -76,6 +79,7 @@ const SAMPLES: { [T in ThemeTokenType]: ThemeTokenValueTypes[T] } = {
 		},
 	],
 	animationEffect: { effect: 'caustics' },
+	asset: { kind: 'image', ...testGraphicAssetReference('asset-logo', 'revision-logo') },
 };
 
 /** The application fonts' faces, as `main.css` declares them, under names a test can read back. */
@@ -85,6 +89,7 @@ const FONT_FACES = { '--font-mplantin': 'SampleSerif', '--font-saira-condensed':
 
 const screen = ref();
 const themeTokens = ref<StoredThemeTokens>();
+const assetCapability = ref<string>();
 
 mockNuxtImport('useScreenContext', () => () => ({
 	screen,
@@ -94,6 +99,7 @@ mockNuxtImport('useScreenContext', () => () => ({
 	isPreview: ref(false),
 	outputMode: ref('overlay'),
 	themeTokens,
+	assetCapability,
 }));
 
 mockNuxtImport('useStandingsModeData', () => () => {
@@ -190,8 +196,9 @@ function expectedPaint(type: ThemeTokenType, value: unknown) {
 	if (type === 'dimension')
 		return `${value}px`;
 	const typography = value as ThemeTokenValueTypes['typography'];
+	const font = typography.font as GraphicApplicationFontSelection;
 	return {
-		fontFamily: FONT_FACES[`--font-${typography.font.fontId}` as keyof typeof FONT_FACES],
+		fontFamily: FONT_FACES[`--font-${font.fontId}` as keyof typeof FONT_FACES],
 		fontWeight: String(typography.weight),
 		lineHeight: String(typography.lineHeight),
 		letterSpacing: `${typography.tracking}em`,
@@ -234,7 +241,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 	});
 
 	it.each(tokens)('paints $name as the Default Theme ships it when its Event has no Theme', async ({ definition, probe }) => {
-		const shipped = typeof definition.default === 'object' && 'token' in definition.default
+		const shipped = typeof definition.default === 'object' && definition.default !== null && 'token' in definition.default
 			? FOUNDATION_TOKENS[definition.default.token].default
 			: definition.default;
 		await mountMode(mode);
@@ -254,5 +261,45 @@ describe('a Screen Theme Override', () => {
 		await flushPromises();
 
 		expect(dividers.map(probe => painted(probe, 'color'))).toEqual(['rgb(1, 2, 3)', 'rgb(1, 2, 3)']);
+	});
+});
+
+// A library font in the Theme is loaded on the output as a `FontFace` through the
+// Screen Output Asset Capability, and a Theme edit restyles live text (ADR-0050).
+describe('a library font in the Theme', () => {
+	const title = THEMED_DISPLAYS.standings!['title-typography']!;
+	const heading = (revisionId: string) => ({
+		...FOUNDATION_TOKENS.heading.default,
+		font: { kind: 'asset', reference: testGraphicAssetReference('asset-brand-face', revisionId) },
+	});
+	let fonts: ReturnType<typeof stubFontFaces>;
+
+	beforeEach(() => {
+		fonts = stubFontFaces();
+		stubCapabilitySession();
+		assetCapability.value = 'capability-token';
+	});
+
+	afterEach(() => {
+		assetCapability.value = undefined;
+		vi.unstubAllGlobals();
+	});
+
+	it('paints in the revision\'s face, loaded through the capability, and follows a Theme edit', async () => {
+		await mountMode('standings', { heading: heading('revision-1') });
+		await vi.waitFor(() => expect(wrapper!.get('.screen-renderer').attributes('data-font-ready')).toBe('true'));
+
+		expect(painted(title, 'typography')).toMatchObject({ fontFamily: 'stream-keepr-graphic-asset-asset-brand-face-revision-1' });
+		expect(fonts.constructed).toEqual([{
+			family: 'stream-keepr-graphic-asset-asset-brand-face-revision-1',
+			source: expect.stringContaining('/api/screen-output/screens/'),
+		}]);
+		expect(fonts.constructed[0]!.source).toContain('/assets/asset-brand-face/revisions/revision-1/content');
+
+		themeTokens.value = { heading: heading('revision-2') };
+		await vi.waitFor(() => expect(fonts.constructed.map(face => face.family)).toContain('stream-keepr-graphic-asset-asset-brand-face-revision-2'));
+		await flushPromises();
+
+		expect(painted(title, 'typography')).toMatchObject({ fontFamily: 'stream-keepr-graphic-asset-asset-brand-face-revision-2' });
 	});
 });

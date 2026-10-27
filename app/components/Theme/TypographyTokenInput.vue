@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import type { ThemeTypography } from '~~/shared/modules/theme';
-import { GRAPHIC_FONT_OPTIONS } from '~~/shared/modules/graphics/typography';
+import type { GraphicFontSource } from '~~/shared/types/graphics';
+import { DEFAULT_GRAPHIC_FONT_ID } from '~~/shared/modules/graphics/typography';
 import { GRAPHIC_TEXT_TRANSFORM_VALUES } from '~~/shared/types/graphics';
 
-// A typography token: an application font and how it is set. It has no size;
-// each consumer owns its own. Each field commits the whole token.
+// A typography token: an application font or one exact library font revision
+// (ADR-0050), and how it is set. It has no size; each consumer owns its own.
+// Each field commits the whole token.
 
 const props = defineProps<{
 	modelValue: ThemeTypography;
 	label: string;
+	/** The Event whose adopted assets the font picker offers first, if any. */
+	eventId?: number;
 }>();
 
 const emit = defineEmits<{
@@ -44,6 +48,21 @@ function commit(patch: Partial<ThemeTypography>) {
 	});
 }
 
+/**
+ * The font arm shown, held here: choosing "Library font" pins nothing until a
+ * revision is picked, and a typography token must always name a font.
+ */
+const fontSource = ref<GraphicFontSource>(props.modelValue.font.kind);
+watch(() => props.modelValue.font.kind, (kind) => {
+	fontSource.value = kind;
+});
+
+function chooseFontSource(source: GraphicFontSource) {
+	fontSource.value = source;
+	if (source === 'application' && props.modelValue.font.kind !== 'application')
+		commit({ font: { kind: 'application', fontId: DEFAULT_GRAPHIC_FONT_ID } });
+}
+
 function commitNumber(field: 'lineHeight' | 'tracking', value: number | null | undefined) {
 	if (typeof value === 'number' && Number.isFinite(value) && value !== props.modelValue[field])
 		commit({ [field]: value });
@@ -52,17 +71,20 @@ function commitNumber(field: 'lineHeight' | 'tracking', value: number | null | u
 
 <template>
 	<div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
-		<UFormField label="Font" class="sm:col-span-2">
-			<USelect
-				:model-value="modelValue.font.fontId"
-				:items="GRAPHIC_FONT_OPTIONS"
+		<div class="flex flex-col gap-2 sm:col-span-2" data-token-part="font" :data-font-kind="modelValue.font.kind">
+			<GraphicsCompositorFontSelectionField
+				:source="fontSource"
+				:font="modelValue.font"
+				:event-id="eventId"
+				:field-label="`${label} font`"
 				size="sm"
-				class="w-full"
-				:aria-label="`${label} font`"
-				data-token-part="font"
-				@update:model-value="fontId => commit({ font: { kind: 'application', fontId } })"
+				:test-id-prefix="`theme-${label}`"
+				@update:source="chooseFontSource"
+				@application="fontId => commit({ font: { kind: 'application', fontId } })"
+				@select="(_asset, reference) => commit({ font: { kind: 'asset', reference } })"
+				@clear="chooseFontSource('application')"
 			/>
-		</UFormField>
+		</div>
 		<UFormField label="Weight">
 			<USelect
 				:model-value="modelValue.weight"

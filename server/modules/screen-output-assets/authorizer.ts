@@ -1,6 +1,10 @@
 import type { ScreenOutputAssetAuthorizationInput } from '.';
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
+import type { ScreenMode } from '~~/shared/types/enums';
+import { screenThemeGraphicAssetReferences } from '~~/shared/themeAssetReferences';
 import {
 	GRAPHIC_ASSET_REFERENCING_SCREEN_MODES,
+	SCREEN_THEME_OVERRIDE_SLOT_PREFIX,
 	screenOutputResolvableSlotPrefixes,
 } from '~~/shared/utils/graphicsAssetReferences';
 
@@ -32,7 +36,74 @@ const MODE_SLOT_SCOPE = MODE_SLOT_SCOPES
 
 const MODE_SLOT_SCOPE_BINDINGS = MODE_SLOT_SCOPES.flatMap(scope => [...scope]);
 
+function parseStoredTokens(stored: string | null): StoredThemeTokens {
+	if (!stored)
+		return {};
+	try {
+		const parsed: unknown = JSON.parse(stored);
+		return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+			? parsed as StoredThemeTokens
+			: {};
+	}
+	catch {
+		return {};
+	}
+}
+
 export function createD1ScreenOutputAssetAuthorizer(database: D1Database) {
+	/**
+	 * Whether the revision is one the Screen's resolved Theme Tokens supply
+	 * (ADR-0050): its Event's Theme and its own Screen Theme Overrides,
+	 * resolved for the mode it shows. The answer must also be indexed, by that
+	 * Theme or by the Screen's override namespace, so it is a revision the
+	 * library counts as in use.
+	 */
+	async function authorizeThemeSupplied(input: ScreenOutputAssetAuthorizationInput) {
+		const screen = await database.prepare(`
+			SELECT screen.current_mode AS mode, screen.theme_overrides AS overrides,
+				theme.id AS themeId, theme.tokens AS tokens
+			FROM screens screen
+			JOIN events event ON event.id = screen.event_id
+			LEFT JOIN themes theme ON theme.id = event.theme_id
+			WHERE screen.id = ? AND screen.asset_capability_digest = ?
+			LIMIT 1
+		`).bind(input.screenId, input.capabilityDigest).first<{
+			mode: ScreenMode;
+			overrides: string | null;
+			themeId: string | null;
+			tokens: string | null;
+		}>();
+		if (!screen)
+			return undefined;
+		const supplied = screenThemeGraphicAssetReferences(
+			screen.mode,
+			parseStoredTokens(screen.tokens),
+			parseStoredTokens(screen.overrides),
+		).some(({ reference }) => reference.assetId === input.assetId && reference.revisionId === input.revisionId);
+		if (!supplied)
+			return undefined;
+		return await database.prepare(`
+			SELECT revision.content_digest AS contentIdentity
+			FROM graphic_asset_references reference
+			JOIN graphic_asset_revisions revision
+				ON revision.id = reference.revision_id
+				AND revision.asset_id = reference.asset_id
+			WHERE reference.asset_id = ? AND reference.revision_id = ?
+				AND (
+					(reference.owner_kind = 'theme' AND reference.owner_id = ?)
+					OR (reference.owner_kind = 'screen' AND reference.owner_id = ?
+						AND reference.owner_slot LIKE ?)
+				)
+			LIMIT 1
+		`).bind(
+			input.assetId,
+			input.revisionId,
+			screen.themeId ?? '',
+			String(input.screenId),
+			`${SCREEN_THEME_OVERRIDE_SLOT_PREFIX}%`,
+		).first<{ contentIdentity: string }>() ?? undefined;
+	}
+
 	return {
 		/** Whether this capability may open a session at all. */
 		async authorizeCapability(input: {
@@ -88,7 +159,8 @@ export function createD1ScreenOutputAssetAuthorizer(database: D1Database) {
 		},
 
 		/**
-		 * Whether this Screen Output may resolve one exact Graphic Asset Revision now.
+		 * Whether this Screen Output may resolve one exact Graphic Asset Revision now:
+		 * one its current mode publishes, or one its resolved Theme Tokens supply.
 		 *
 		 * Every engine is answered alike: Chromium is the only supported engine for
 		 * transparent video (ADR-0020), so there is no per-engine refusal to make.
@@ -116,7 +188,7 @@ export function createD1ScreenOutputAssetAuthorizer(database: D1Database) {
 				input.capabilityDigest,
 				input.assetId,
 				input.revisionId,
-			).first<{ contentIdentity: string }>();
+			).first<{ contentIdentity: string }>() ?? await authorizeThemeSupplied(input);
 			if (!row)
 				return { outcome: 'missing' as const };
 			return {

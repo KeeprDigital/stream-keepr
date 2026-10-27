@@ -1,6 +1,7 @@
 import type { SQL } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbScreen } from '~~/server/db/schema';
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { GraphicsAuthoringLeaseFence } from '~~/server/modules/graphics-authoring-lease';
 import type {
 	GraphicAssetReferencingScreenMode,
@@ -23,6 +24,7 @@ import {
 	graphicsAuthoringLeaseModule,
 } from '~~/server/modules/graphics-authoring-lease';
 import { mapDeckSourceConflict, StateConflictError } from '~~/server/utils/errors';
+import { SCREEN_THEME_OVERRIDE_SLOT_PREFIX, storedThemeTokenGraphicAssetReferences } from '~~/shared/themeAssetReferences';
 import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
 	BROADCAST_GRAPHICS_LIVE_SESSION_SLOT_PREFIX,
@@ -227,6 +229,107 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 			throw graphicsAuthoringLeaseConflict();
 		}
 		throw current.stateVersion === expectedVersion
+			? new StateConflictError('Graphic Asset Reference', input.id)
+			: new StateConflictError('Screen', input.id);
+	}
+	return await findScreen(input.id, input.eventId);
+}
+
+/**
+ * Write a Screen's Screen Theme Overrides and their Graphic Asset Reference
+ * index in one atomic operation (ADR-0050), as a new Screen version.
+ *
+ * The overrides index under their own owner-slot namespace, disjoint from every
+ * mode's, and the write replaces only that namespace. Each reference must
+ * resolve in the statement that commits; one already held at the same slot
+ * keeps resolving, as a mode's does.
+ */
+export async function updateScreenThemeOverridesWithGraphicAssetReferences(input: {
+	id: number;
+	eventId: number;
+	themeOverrides: StoredThemeTokens;
+	previousOverrides: StoredThemeTokens;
+	stateVersion: number;
+}): Promise<DbScreen | undefined> {
+	const referenceVersion = crypto.randomUUID();
+	const now = Date.now();
+	const previous = new Map(
+		storedThemeTokenGraphicAssetReferences(input.previousOverrides, SCREEN_THEME_OVERRIDE_SLOT_PREFIX)
+			.map(item => [item.ownerSlot, item.reference] as const),
+	);
+	const references = storedThemeTokenGraphicAssetReferences(input.themeOverrides, SCREEN_THEME_OVERRIDE_SLOT_PREFIX)
+		.map(item => ({
+			...item,
+			id: crypto.randomUUID(),
+			allowRetired: sameGraphicAssetReference(previous.get(item.ownerSlot), item.reference),
+		}));
+	const boundFacts = boundGraphicAssetReferenceFacts(references);
+	const client = db.$client;
+	const versionGuard = `
+		AND EXISTS (
+			SELECT 1 FROM screens
+			WHERE id = ? AND event_id = ?
+				AND graphic_asset_reference_version = ?
+		)
+	`;
+	const [updateResult] = await client.batch([
+		client.prepare(`
+			UPDATE screens
+			SET theme_overrides = ?, state_version = state_version + 1,
+				graphic_asset_reference_version = ?, updated_at = ?
+			WHERE id = ? AND event_id = ? AND state_version = ?
+				${REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE}
+		`).bind(
+			JSON.stringify(input.themeOverrides),
+			referenceVersion,
+			now,
+			input.id,
+			input.eventId,
+			input.stateVersion,
+			boundFacts,
+		),
+		client.prepare(`
+			DELETE FROM graphic_asset_references
+			WHERE owner_kind = 'screen' AND owner_id = ?
+				AND owner_slot LIKE ?
+				${versionGuard}
+		`).bind(String(input.id), `${SCREEN_THEME_OVERRIDE_SLOT_PREFIX}%`, input.id, input.eventId, referenceVersion),
+		...(references.length === 0
+			? []
+			: [
+					client.prepare(`
+						INSERT INTO graphic_asset_references (
+							id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
+							event_id, created_at, updated_at
+						)
+						SELECT
+							json_extract(item.value, '$.id'),
+							json_extract(item.value, '$.assetId'),
+							json_extract(item.value, '$.revisionId'),
+							'screen', ?, json_extract(item.value, '$.ownerSlot'), ?, ?, ?
+						FROM json_each(?) AS item
+						WHERE EXISTS (
+							SELECT 1
+							${jsonElementGraphicAssetRevisionResolution('item')}
+						)
+							${versionGuard}
+					`).bind(
+						String(input.id),
+						input.eventId,
+						now,
+						now,
+						boundFacts,
+						input.id,
+						input.eventId,
+						referenceVersion,
+					),
+				]),
+	]);
+	if (updateResult?.meta.changes !== 1) {
+		const current = await findScreen(input.id, input.eventId);
+		if (!current)
+			return undefined;
+		throw current.stateVersion === input.stateVersion
 			? new StateConflictError('Graphic Asset Reference', input.id)
 			: new StateConflictError('Screen', input.id);
 	}

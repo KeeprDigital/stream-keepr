@@ -16,6 +16,7 @@ import {
 import {
 	deleteScreenWithGraphicAssetReferences,
 	updateScreenModeConfigWithGraphicAssetReferences,
+	updateScreenThemeOverridesWithGraphicAssetReferences,
 } from '~~/server/modules/screen-graphic-asset-references';
 import { mapDeckSourceConflict, StateConflictError } from '~~/server/utils/errors';
 import { mergeScreenConfig, mergeScreenModeConfig } from '~~/shared/types/screenConfig';
@@ -258,14 +259,24 @@ export function screenService() {
 		return versionedWrite(id, eventId, { screenConfig: mergedConfig }, stateVersion ?? screen.stateVersion, [], leaseFence);
 	};
 
-	/** Replace a Screen's Screen Theme Overrides, as a new Screen version. */
+	/**
+	 * Replace a Screen's Screen Theme Overrides, as a new Screen version, with
+	 * the Graphic Asset References they hold indexed in the same commit.
+	 */
 	const updateThemeOverrides = async (
 		id: number,
 		eventId: number,
 		themeOverrides: StoredThemeTokens,
+		previousOverrides: StoredThemeTokens,
 		stateVersion: number,
 	): Promise<DbScreen | undefined> => {
-		return versionedWrite(id, eventId, { themeOverrides }, stateVersion);
+		return await updateScreenThemeOverridesWithGraphicAssetReferences({
+			id,
+			eventId,
+			themeOverrides,
+			previousOverrides,
+			stateVersion,
+		});
 	};
 
 	const slugExists = async (eventId: number, slug: string, excludeId?: number): Promise<boolean> => {

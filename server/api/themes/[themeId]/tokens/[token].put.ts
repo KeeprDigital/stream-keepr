@@ -1,3 +1,4 @@
+import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { themeLibraryModule } from '~~/server/modules/theme-library';
 import { setThemeTokenSchema, themeTokenParamsSchema } from '~~/server/schemas/api/theme';
 import { getOriginConnectionId } from '~~/server/utils/ably';
@@ -11,5 +12,6 @@ export default defineEventHandler(async (event) => {
 		token,
 		value,
 		originConnectionId: getOriginConnectionId(event),
+		graphicsAssets: () => graphicsAssetLibraryForEvent(event),
 	});
 });

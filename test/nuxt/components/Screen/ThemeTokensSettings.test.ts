@@ -62,6 +62,7 @@ beforeEach(() => {
 async function mountSection(mode: ScreenMode, themeOverrides: StoredThemeTokens = {}) {
 	const eventStore = useEventStore();
 	eventStore.event = { id: 1, themeId: 'brand' } as never;
+	eventStore.eventTheme = null;
 	const screenStore = useScreenStore();
 	screenStore.$reset();
 	screenStore.currentEventId = 1;
@@ -142,6 +143,18 @@ describe('a Screen\'s token section', () => {
 
 		expect(field(wrapper, token).attributes('data-token-state')).toBe('inherited');
 		expect(field(wrapper, token).get('[data-token-inherited]').text()).toBe(inherited);
+	});
+
+	it('follows a Theme edit announced while it is open', async () => {
+		const wrapper = await mountSection('standings');
+
+		useEventStore().applyRemoteThemeUpdated({
+			eventId: 1,
+			theme: { id: 'brand', revision: 2, tokens: { divider: '#654321' } },
+		} as never);
+		await flushPromises();
+
+		expect(field(wrapper, 'divider').get('[data-token-inherited]').text()).toBe('Theme: #654321');
 	});
 
 	it('writes one override per edit, and shows it overridden while the write is out', async () => {

@@ -3,8 +3,15 @@ import type { GraphicAssetReferenceStatus } from '~~/shared/types/graphicsAsset'
 import type { ScreenGraphicAssetReference } from '~~/shared/utils/graphicsAssetReferences';
 import { graphicAssetId, graphicAssetRevisionId } from '~~/server/modules/graphics-asset-library';
 
-/** Which graphics Template library a write belongs to, as an author reads it. */
-export type GraphicsTemplateArtifact = 'Broadcast Graphic Template' | 'Feature Match Layout Template';
+/**
+ * What a write belongs to, as an author reads it: a graphics Template library,
+ * or a Theme or Screen Theme Override, held to the same rule (ADR-0050).
+ */
+export type GraphicsTemplateArtifact
+	= | 'Broadcast Graphic Template'
+		| 'Feature Match Layout Template'
+		| 'Theme'
+		| 'Screen Theme Override';
 
 const KIND_NOUNS: Record<ScreenGraphicAssetReference['kind'], string> = {
 	'image': 'an image',

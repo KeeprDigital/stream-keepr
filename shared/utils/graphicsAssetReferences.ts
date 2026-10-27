@@ -383,6 +383,14 @@ export function graphicAssetReferenceSlotPrefix(mode: GraphicAssetReferencingScr
 export const BROADCAST_GRAPHICS_LIVE_SESSION_SLOT_PREFIX = 'liveSession.';
 
 /**
+ * The owner-slot namespace a Screen's Screen Theme Overrides index into, beside
+ * its modes' own (ADR-0050). No mode's namespace covers it: a Screen Output
+ * resolves it only through the Screen's resolved tokens, and a Graphic Asset
+ * referenced from it cannot be retired.
+ */
+export const SCREEN_THEME_OVERRIDE_SLOT_PREFIX = 'themeOverrides.';
+
+/**
  * Every owner-slot namespace a Screen Output in one mode may resolve.
  *
  * A Screen Output resolves exactly what its Screen currently publishes, and for

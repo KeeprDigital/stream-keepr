@@ -8,7 +8,8 @@ import { parseThemeTokenWrite, themeTokenDefinition } from '~~/shared/themeToken
 // A Screen's token section: exactly the Theme Tokens its mode consumes, each
 // with what it inherits from the Event's Theme and a Screen Theme Override
 // control. An override is written per token, and clearing one returns the
-// Screen to the Theme's value.
+// Screen to the Theme's value. What it inherits follows `theme:updated`, as a
+// Screen Output does, through the Event store's held Theme.
 
 const props = defineProps<{
 	screen: Screen;
@@ -21,12 +22,13 @@ const themes = useThemeRepository();
 const { runRequest } = useRequestFeedback();
 
 const themeId = computed(() => eventStore.event?.themeId ?? null);
-const theme = ref<StoredThemeTokens>(DEFAULT_THEME_TOKENS);
+const theme = computed<StoredThemeTokens>(() => themeId.value && eventStore.eventTheme?.id === themeId.value
+	? eventStore.eventTheme.tokens
+	: DEFAULT_THEME_TOKENS);
 const themeName = ref<string | null>(null);
 const themeError = ref<string | null>(null);
 
 async function loadTheme(id: string | null) {
-	theme.value = DEFAULT_THEME_TOKENS;
 	themeName.value = null;
 	themeError.value = null;
 	if (!id)
@@ -37,7 +39,7 @@ async function loadTheme(id: string | null) {
 		success: false,
 		error: false,
 		onSuccess: (loaded) => {
-			theme.value = loaded.tokens;
+			eventStore.holdEventTheme({ id: loaded.id, revision: loaded.revision, tokens: loaded.tokens });
 			themeName.value = loaded.name;
 		},
 	});
@@ -131,6 +133,7 @@ async function write(token: string, value: unknown) {
 				:stored="overrides[entry.name]"
 				:inherited="entry.inherited"
 				:resolved="entry.resolved"
+				:event-id="eventId"
 				:disabled="writing.has(entry.name)"
 				@set="value => write(entry.name, value)"
 				@clear="write(entry.name, null)"

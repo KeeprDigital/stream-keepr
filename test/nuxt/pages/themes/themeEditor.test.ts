@@ -48,6 +48,28 @@ beforeEach(() => {
 
 const passthroughStub = defineComponent({ template: '<div><slot /></div>' });
 
+/** The library picker, pinning one revision of the first kind it was asked for on a click. */
+const FocusPickerStub = defineComponent({
+	name: 'GraphicsAssetFocusPicker',
+	props: {
+		assetKind: { type: [String, Array], default: 'image' },
+		eventId: { type: Number, required: false },
+	},
+	emits: ['select', 'update:modelValue'],
+	computed: {
+		kinds(): string[] {
+			return ([] as string[]).concat(this.assetKind as string | string[]);
+		},
+	},
+	template: `<button
+		type="button"
+		data-testid="pick-asset"
+		:data-asset-kinds="kinds.join()"
+		:data-event-id="eventId ?? 'none'"
+		@click="$emit('select', { kind: kinds[0] }, { assetId: 'asset-1', revisionId: 'revision-1' })"
+	/>`,
+});
+
 async function mountEditor() {
 	const { default: ThemeEditor } = await import('../../../../app/pages/themes/[themeId].vue');
 	const wrapper = mount(ThemeEditor, {
@@ -57,6 +79,7 @@ async function mountEditor() {
 				NuxtLayout: passthroughStub,
 				NuxtLink: passthroughStub,
 				ScreenAnimationEffectPresetLibrary: true,
+				GraphicsAssetFocusPicker: FocusPickerStub,
 			},
 		},
 	});
@@ -91,6 +114,7 @@ describe('the Theme editor', () => {
 		['a Mode Token following a Foundation Token', 'standings.row-divider', 'Default: follows Divider'],
 		['the background', 'background', 'Default: no layers'],
 		['the Animation Effect', 'animation-effect', 'Default: Fog'],
+		['the logo', 'logo', 'Default: none'],
 	])('shows %s inheriting its default', async (_case, token, inherited) => {
 		const wrapper = await mountEditor();
 
@@ -216,16 +240,58 @@ describe('the Theme editor', () => {
 		expect(field(wrapper, 'background').attributes('data-token-state')).toBe('set');
 	});
 
-	it('offers a Theme\'s media layers a Remote Media URL only', async () => {
+	it('offers a Theme\'s media layers the whole library', async () => {
 		const wrapper = await mountEditor();
 		const editor = part(wrapper, 'background', 'background-layers');
 
 		await editor.get('[data-testid="add-layer-type"] select').setValue('image');
 		await editor.get('[data-testid="add-layer"]').trigger('click');
 
-		const sourceKinds = editor.get('[data-testid="background-layer-row"]').findAll('option').map(option => option.text());
-		expect(sourceKinds).toContain('Remote URL');
-		expect(sourceKinds).not.toContain('Asset library');
+		const source = editor.get('[data-testid="background-layer-row"]').findAll('select')
+			.find(select => select.findAll('option').some(option => option.text() === 'Asset library'))!;
+		await source.setValue('asset');
+
+		expect(editor.get('[data-testid="pick-asset"]').attributes('data-event-id')).toBe('none');
+	});
+
+	it.each([
+		[
+			'the logo, as an exact image revision',
+			'logo',
+			async (wrapper: VueWrapper) => {
+				expect(part(wrapper, 'logo', 'asset').get('[data-testid="pick-asset"]').attributes('data-asset-kinds')).toBe('image,silent-video');
+				await part(wrapper, 'logo', 'asset').get('[data-testid="pick-asset"]').trigger('click');
+			},
+			{ kind: 'image', assetId: 'asset-1', revisionId: 'revision-1' },
+		],
+		[
+			'a library font for a typography token',
+			'heading',
+			async (wrapper: VueWrapper) => {
+				await part(wrapper, 'heading', 'font').get('select').setValue('asset');
+				await part(wrapper, 'heading', 'font').get('[data-testid="pick-asset"]').trigger('click');
+			},
+			{
+				font: { kind: 'asset', reference: { assetId: 'asset-1', revisionId: 'revision-1' } },
+				weight: 800,
+				lineHeight: 1,
+				tracking: 0.06,
+				case: 'uppercase',
+			},
+		],
+	])('writes %s the picker pins', async (_case, token, pick, value) => {
+		const wrapper = await mountEditor();
+
+		await pick(wrapper);
+		await flushPromises();
+
+		expect(writes()).toEqual([
+			[
+				'PUT',
+				token,
+				{ value },
+			],
+		]);
 	});
 
 	it('writes the Animation Effect an operator picks', async () => {

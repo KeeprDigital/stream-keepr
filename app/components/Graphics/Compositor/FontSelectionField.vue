@@ -49,8 +49,8 @@ const props = defineProps<{
 	 * the font.
 	 */
 	optional?: boolean;
-	/** The Event whose Graphic Asset associations organise the picker's discovery. */
-	eventId: number;
+	/** The Event whose Graphic Asset associations organise the picker's discovery; none offers the whole library. */
+	eventId?: number;
 	/** What the picker calls the field it is pinning a revision for. */
 	fieldLabel: string;
 	size: 'sm' | 'xs';

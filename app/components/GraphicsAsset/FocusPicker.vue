@@ -10,7 +10,11 @@ import { createGuardedSequence } from '~/utils/guardedSequence';
 
 const props = withDefaults(defineProps<{
 	modelValue?: GraphicAssetReference;
-	eventId: number;
+	/**
+	 * The Event whose adopted assets the picker offers first. Without one, as
+	 * in the installation-scoped Theme editor, it offers the whole library.
+	 */
+	eventId?: number;
 	fieldLabel: string;
 	assetKind?: GraphicAsset['kind'] | GraphicAsset['kind'][];
 	/** Withhold every affordance, without hiding what is already pinned. */
@@ -86,15 +90,15 @@ const { chosen: chosenScope, choose: chooseScope } = useGraphicAssetPickerScope(
  * on the next opening, when the Event may well have adopted something.
  */
 const widenedForThisOpening = ref(false);
-const scope = computed<GraphicAssetPickerScope>(() =>
-	chosenScope.value ?? (widenedForThisOpening.value ? 'library' : 'event'),
-);
+const scope = computed<GraphicAssetPickerScope>(() => props.eventId === undefined
+	? 'library'
+	: chosenScope.value ?? (widenedForThisOpening.value ? 'library' : 'event'));
 
 const libraryAssets = computed(() => (assets.value ?? []).filter(asset =>
 	acceptedKinds.value.includes(asset.kind),
 ));
 const eventAssets = computed(() => libraryAssets.value.filter(asset =>
-	asset.eventIds.includes(props.eventId),
+	props.eventId !== undefined && asset.eventIds.includes(props.eventId),
 ));
 const visibleAssets = computed(() => scope.value === 'event'
 	? eventAssets.value
@@ -230,7 +234,9 @@ function selectAsset(asset: GraphicAsset) {
 								{{ fieldLabel }}
 							</h2>
 							<p class="text-sm text-muted">
-								Choose one exact Graphic Asset Revision for Event {{ eventId }}.
+								{{ eventId === undefined
+									? 'Choose one exact Graphic Asset Revision.'
+									: `Choose one exact Graphic Asset Revision for Event ${eventId}.` }}
 							</p>
 						</div>
 						<UButton
@@ -256,7 +262,7 @@ function selectAsset(asset: GraphicAsset) {
 							count is what separates 'this Event has adopted nothing yet' from
 							'my asset is gone' (#234).
 						-->
-						<div class="flex gap-1" role="group" aria-label="Graphic Asset scope">
+						<div v-if="eventId !== undefined" class="flex gap-1" role="group" aria-label="Graphic Asset scope">
 							<UButton
 								data-testid="graphic-asset-scope-event"
 								color="neutral"
@@ -342,7 +348,7 @@ function selectAsset(asset: GraphicAsset) {
 										Alpha
 									</UBadge>
 									<UBadge
-										v-if="asset.eventIds.includes(eventId)"
+										v-if="eventId !== undefined && asset.eventIds.includes(eventId)"
 										size="xs"
 										color="info"
 										variant="soft"

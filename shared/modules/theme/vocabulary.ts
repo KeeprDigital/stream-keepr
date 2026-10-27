@@ -63,6 +63,13 @@ export const FOUNDATION_TOKENS = {
 		label: 'Divider',
 		default: 'rgba(255, 255, 255, 0.12)',
 	},
+	'logo': {
+		type: 'asset',
+		label: 'Primary logo',
+		assetKinds: ['image', 'silent-video'],
+		// None: the Default Theme carries no production's branding.
+		default: null,
+	},
 	'heading': {
 		type: 'typography',
 		label: 'Heading',

@@ -22,7 +22,7 @@ import type { TemplatePackagePreflightState } from './template-package-preflight
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
-import { GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS } from '~~/shared/utils/graphicsAssetReferences';
+import { GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS, SCREEN_THEME_OVERRIDE_SLOT_PREFIX } from '~~/shared/utils/graphicsAssetReferences';
 import { GRAPHICS_RETENTION_GUARANTEES } from '~~/shared/utils/graphicsAssetRetention';
 import { createD1GraphicsOperationsCockpitCatalogue } from './catalogue-cockpit';
 import { createD1GraphicsAssetReconciliationCatalogue } from './catalogue-reconciliation';
@@ -249,7 +249,17 @@ const TEMPLATE_OWNER_KIND_LIST = GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS
 	.map(kind => `'${kind}'`)
 	.join(', ');
 
-function usageSelect(options: { templatesOnly?: boolean } = {}) {
+/**
+ * The references that hold Retire back, about the row aliased
+ * `asset_reference`: a saved template's (ADR-0034), a Theme's, and a Screen
+ * Theme Override's (ADR-0050). A Screen's own mode references do not.
+ */
+const RETIRE_BLOCKING_REFERENCE = `(
+	asset_reference.owner_kind IN (${TEMPLATE_OWNER_KIND_LIST}, 'theme')
+	OR (asset_reference.owner_kind = 'screen' AND asset_reference.owner_slot LIKE '${SCREEN_THEME_OVERRIDE_SLOT_PREFIX}%')
+)`;
+
+function usageSelect(options: { retireBlockingOnly?: boolean } = {}) {
 	return `
 		SELECT asset_reference.id, asset_reference.asset_id, asset_reference.revision_id,
 			asset_reference.owner_kind, asset_reference.owner_id,
@@ -265,6 +275,7 @@ function usageSelect(options: { templatesOnly?: boolean } = {}) {
 					THEN broadcast_graphic_template.name
 				WHEN asset_reference.owner_kind = 'feature-match-layout-template'
 					THEN feature_match_layout_template.name
+				WHEN asset_reference.owner_kind = 'theme' THEN theme.name
 				ELSE NULL
 			END AS owner_name
 		FROM graphic_asset_references asset_reference
@@ -281,9 +292,12 @@ function usageSelect(options: { templatesOnly?: boolean } = {}) {
 		LEFT JOIN feature_match_layout_templates feature_match_layout_template
 			ON asset_reference.owner_kind = 'feature-match-layout-template'
 			AND feature_match_layout_template.id = asset_reference.owner_id
+		LEFT JOIN themes theme
+			ON asset_reference.owner_kind = 'theme'
+			AND theme.id = asset_reference.owner_id
 		WHERE asset_reference.asset_id = ?
-			${options.templatesOnly
-				? `AND asset_reference.owner_kind IN (${TEMPLATE_OWNER_KIND_LIST})`
+			${options.retireBlockingOnly
+				? `AND ${RETIRE_BLOCKING_REFERENCE}`
 				: ''}
 		ORDER BY asset_reference.owner_kind, asset_reference.owner_id,
 			asset_reference.owner_slot, asset_reference.id
@@ -2483,9 +2497,11 @@ export function createD1GraphicsAssetCatalogue(
 		async retireGraphicAsset(input) {
 			// Refused while a saved template references any revision of the asset
 			// (ADR-0034): a template keeps its references selectable on every write,
-			// so retiring under one would leave it unrevisable. The condition rides
-			// in the statement that retires, so a template saved after anyone
-			// looked still holds the asset back. A Screen's reference does not: a
+			// so retiring under one would leave it unrevisable. A Theme or a Screen
+			// Theme Override holds it back too, so a show never loses its logo or
+			// typeface mid-broadcast (ADR-0050). The condition rides in the
+			// statement that retires, so a reference written after anyone looked
+			// still holds the asset back. A Screen's own mode reference does not: a
 			// Screen keeps an unchanged retired reference resolving.
 			const [result, usage] = await database.batch([
 				database.prepare(`
@@ -2497,10 +2513,10 @@ export function createD1GraphicsAssetCatalogue(
 							SELECT 1
 							FROM graphic_asset_references asset_reference
 							WHERE asset_reference.asset_id = graphic_assets.id
-								AND asset_reference.owner_kind IN (${TEMPLATE_OWNER_KIND_LIST})
+								AND ${RETIRE_BLOCKING_REFERENCE}
 						)
 				`).bind(new Date(input.updatedAt).getTime(), input.assetId),
-				database.prepare(usageSelect({ templatesOnly: true })).bind(input.assetId),
+				database.prepare(usageSelect({ retireBlockingOnly: true })).bind(input.assetId),
 			]);
 			if (!result?.success || !usage?.success)
 				throw new Error('Graphic Asset retirement failed');
