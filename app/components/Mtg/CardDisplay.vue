@@ -28,8 +28,8 @@ function clearShowCardTimer() {
 	showCardTimer = null;
 }
 
-/** The card's width in Event Canvas pixels, and the square it turns within: its diagonal. */
 const CARD_ASPECT_RATIO = 85 / 61;
+/** The card's width in Event Canvas pixels, and the square it turns within: its diagonal. */
 const cardWidth = modeTokenVar('card', 'card-width');
 const turningSquare = `calc(${cardWidth} * ${Math.sqrt(1 + CARD_ASPECT_RATIO ** 2)})`;
 
@@ -37,9 +37,9 @@ const turningSquare = `calc(${cardWidth} * ${Math.sqrt(1 + CARD_ASPECT_RATIO ** 
 const EVENT_CANVAS_HEIGHT = 1080;
 
 /**
- * The Event Canvas scaled to the overlay container's height, as the Screen
- * host will once it scales every plain mode's canvas (#821). Unmeasured, the
- * card renders at canvas size.
+ * The Event Canvas scaled to the overlay container's height. Interim: #821
+ * moves this scaling to the Screen host for every plain mode, and must remove
+ * it here or the card scales twice. Unmeasured, the card renders at canvas size.
  */
 const canvasZoom = computed(() => containerHeight.value > 0
 	? containerHeight.value / EVENT_CANVAS_HEIGHT

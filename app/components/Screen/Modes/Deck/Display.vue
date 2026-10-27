@@ -331,23 +331,13 @@ const cardBadgeProps = computed(() => ({
  * Token's slice of itself, down a strip or across a row, and the next card
  * covers the rest. The last card shows whole.
  */
-const STACK_REVEAL = modeTokenVar('deck', 'stack-reveal');
-
-function stackColumnCardStyle(index: number, cardCount: number) {
+function stackCardStyle(extent: 'height' | 'width', index: number, cardCount: number) {
 	return index < cardCount - 1
-		? { height: STACK_REVEAL }
+		? {
+				[extent]: modeTokenVar('deck', 'stack-reveal'),
+			}
 		: {};
 }
-
-function stackRowCardStyle(index: number, cardCount: number) {
-	return index < cardCount - 1
-		? { width: STACK_REVEAL }
-		: {};
-}
-
-const cardWidthStyle = {
-	width: modeTokenVar('deck', 'card-width'),
-};
 </script>
 
 <template>
@@ -472,13 +462,12 @@ const cardWidthStyle = {
 								v-else-if="section.layout.view === 'stack' && section.stackVertical"
 								:data-testid="`${section.key}-stack-column`"
 								class="stack-container flex flex-col"
-								:style="cardWidthStyle"
 							>
 								<div
 									v-for="(card, index) in section.cards"
 									:key="`${section.key}-${index}`"
 									class="stack-card relative shrink-0"
-									:style="stackColumnCardStyle(index, section.cards.length)"
+									:style="stackCardStyle('height', index, section.cards.length)"
 								>
 									<ScreenModesDeckCard
 										:card="card"
@@ -497,7 +486,7 @@ const cardWidthStyle = {
 										v-for="(card, index) in section.cards"
 										:key="`${section.key}-${index}`"
 										class="stack-card relative shrink-0"
-										:style="stackRowCardStyle(index, section.cards.length)"
+										:style="stackCardStyle('width', index, section.cards.length)"
 									>
 										<ScreenModesDeckCard
 											:card="card"
@@ -528,7 +517,7 @@ const cardWidthStyle = {
 									<span
 										v-if="showHighlanderPoints && card.highlanderPoints != null"
 										data-testid="highlander-list-badge"
-										class="rounded-md font-mono font-bold leading-none shadow-sm"
+										class="rounded-md font-bold tabular-nums leading-none shadow-sm"
 										:class="highlanderPointBadgeClass"
 										:style="highlanderPointBadgeStyle"
 									>

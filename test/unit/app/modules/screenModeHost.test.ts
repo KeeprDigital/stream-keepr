@@ -194,7 +194,8 @@ describe('screen mode host', () => {
 				containerControls: {
 					dimensions: true,
 					padding: true,
-					textColors: true,
+					// Card Spotlight is on Mode Tokens, which hold its text colours.
+					textColors: false,
 					background: true,
 				},
 				dimensions: {

@@ -53,7 +53,7 @@ function getCardImageUrl(card: DeckListCardWithData): string | null {
 		<div
 			v-if="showHighlanderPoints && card.highlanderPoints != null"
 			data-testid="highlander-card-badge"
-			class="absolute rounded-md font-mono font-bold leading-none shadow-md"
+			class="absolute rounded-md font-bold tabular-nums leading-none shadow-md"
 			:class="[highlanderPointsPositionClass, highlanderPointsSizeClass]"
 			:style="highlanderPointsBadgeStyle"
 		>
