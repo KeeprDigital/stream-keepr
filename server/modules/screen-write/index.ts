@@ -86,14 +86,6 @@ interface DeleteScreenParams {
 	originConnectionId?: string;
 }
 
-interface UpdateScreenConfigParams {
-	eventId: number;
-	screenId: number;
-	config: Record<string, unknown>;
-	stateVersion?: number;
-	originConnectionId?: string;
-}
-
 interface UpdateModeConfigParams extends AuthoredWrite {
 	eventId: number;
 	screenId: number;
@@ -336,23 +328,6 @@ export function screenWriteModule() {
 		return { success: true };
 	}
 
-	async function updateScreenConfig({ eventId, screenId, config, stateVersion, originConnectionId }: UpdateScreenConfigParams): Promise<ScreenResponse> {
-		const updatedScreen = await screens.updateScreenConfig(screenId, eventId, config, stateVersion);
-
-		if (!updatedScreen) {
-			throw createError({
-				statusCode: 404,
-				message: 'Screen not found',
-			});
-		}
-
-		return await publication.screenUpdated({
-			eventId,
-			entity: updatedScreen,
-			originConnectionId,
-		});
-	}
-
 	async function updateModeConfig({ eventId, screenId, mode, config, stateVersion, originConnectionId, graphicsAssets, authoringSessionId }: UpdateModeConfigParams): Promise<ScreenResponse> {
 		// The Broadcast Graphics stack is the Screen's graphics Edit workspace. Live
 		// Control reaches the Screen through its own live command surface and is
@@ -498,7 +473,6 @@ export function screenWriteModule() {
 		createScreen,
 		updateScreen,
 		deleteScreen,
-		updateScreenConfig,
 		updateModeConfig,
 		updateThemeOverrides,
 	};

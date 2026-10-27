@@ -153,7 +153,6 @@ async function mountComponent(screen: Partial<Screen> = {}) {
 			screen: {
 				id: 1,
 				slug: 'main',
-				screenConfig: {},
 				...screen,
 			} as Screen,
 			eventId: 1,

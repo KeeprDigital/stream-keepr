@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import type { ScreenOutputMatchSide, ScreenOutputRoundMatch } from '~~/shared/types/screenOutputReads';
-import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { DEFAULT_THEME_TOKENS } from '~~/shared/modules/theme';
+import { modeTokenVar, modeTypographyStyle, screenLayoutTokens } from '~/modules/screen-mode';
 
-const { screen } = useScreenContext();
+const { screen, themeTokens } = useScreenContext();
 const { config, error, isEmpty, headerText, pageData, formatResult, winner } = usePairingsModeData();
 
-const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
+/** The Screen inset the host pads the canvas by, which the rows leave room for. */
+const inset = computed(() => screenLayoutTokens(themeTokens?.value ?? DEFAULT_THEME_TOKENS, screen.value?.themeOverrides ?? {}).inset);
 
 const primaryTextStyle = {
 	color: modeTokenVar('pairings', 'primary-text'),
@@ -55,7 +56,7 @@ const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef')
 	density: 'roomy',
 	prefix: 'pairings',
 	rowCount: () => config.value.rowsPerPage ?? pageData.value.length,
-	insetY: () => screenConfig.value.paddingY ?? 0,
+	insetY: inset,
 });
 
 /** Set on the root, over the shared broadcast table chrome's own colour and face. */

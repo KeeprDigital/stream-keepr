@@ -156,7 +156,6 @@ function screenWithAuthoredMedia() {
 		slug: 'main',
 		name: 'Program',
 		currentMode: 'broadcast-graphics',
-		screenConfig: {},
 		modeConfigs: {
 			'broadcast-graphics': {
 				graphics: [strip],

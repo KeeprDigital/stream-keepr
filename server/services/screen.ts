@@ -5,7 +5,6 @@ import type { GraphicsAuthoringLeaseFence } from '~~/server/modules/graphics-aut
 import type { PersistedScreenOutputAssetCapability } from '~~/server/modules/screen-output-assets/manager';
 import type { CreateScreenInput, UpdateScreenInput } from '~~/shared/api';
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
-import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { screens } from '~~/server/db/schema';
@@ -18,7 +17,7 @@ import {
 	updateScreenModeConfigWithGraphicAssetReferences,
 } from '~~/server/modules/screen-graphic-asset-references';
 import { mapDeckSourceConflict, StateConflictError } from '~~/server/utils/errors';
-import { mergeScreenConfig, mergeScreenModeConfig } from '~~/shared/types/screenConfig';
+import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import { isGraphicAssetReferencingScreenMode } from '~~/shared/utils/graphicsAssetReferences';
 
 /**
@@ -241,22 +240,6 @@ export function screenService() {
 		return versionedWrite(id, eventId, { modeConfigs: mergedConfigs }, stateVersion ?? screen.stateVersion, [], leaseFence);
 	};
 
-	const updateScreenConfig = async (
-		id: number,
-		eventId: number,
-		partialConfig: Record<string, unknown>,
-		stateVersion?: number,
-	): Promise<DbScreen | undefined> => {
-		const screen = await findById(id, eventId);
-		if (!screen)
-			return undefined;
-
-		const currentConfig = (screen.screenConfig ?? {}) as ScreenConfig;
-		const mergedConfig = mergeScreenConfig(currentConfig, partialConfig);
-
-		return versionedWrite(id, eventId, { screenConfig: mergedConfig }, stateVersion ?? screen.stateVersion);
-	};
-
 	/** Replace a Screen's Screen Theme Overrides, as a new Screen version. */
 	const updateThemeOverrides = async (
 		id: number,
@@ -294,7 +277,6 @@ export function screenService() {
 		replaceAssetCapability,
 		update,
 		updateModeConfig,
-		updateScreenConfig,
 		updateThemeOverrides,
 		remove,
 		slugExists,

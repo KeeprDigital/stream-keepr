@@ -94,6 +94,7 @@ describe('the Theme editor', () => {
 	it.each([
 		['a Foundation colour', 'accent', 'Default: #0077a3'],
 		['a Foundation dimension', 'inset', 'Default: 0px'],
+		['the Screen alignment', 'alignment', 'Default: center center'],
 		['a Mode Token following a Foundation Token', 'standings.row-divider', 'Default: follows Divider'],
 		['the background', 'background', 'Default: no layers'],
 		['the Animation Effect', 'animation-effect', 'Default: Fog'],
@@ -150,6 +151,23 @@ describe('the Theme editor', () => {
 		await commit(wrapper, 'standings.surface', 'colour', '#00ff00');
 
 		expect(getComputedStyle(wrapper.get('.standings-table').element).backgroundColor).toBe('rgb(0, 255, 0)');
+	});
+
+	it('writes the whole Screen alignment when one axis changes', async () => {
+		const wrapper = await mountEditor();
+
+		await part(wrapper, 'alignment', 'horizontal').setValue('left');
+		await flushPromises();
+
+		expect(writes()).toEqual([
+			[
+				'PUT',
+				'alignment',
+				{
+					value: { horizontal: 'left', vertical: 'center' },
+				},
+			],
+		]);
 	});
 
 	it('points a Mode Token at another Foundation Token of its type', async () => {

@@ -502,30 +502,26 @@ describe('screens extended API', () => {
 		})).rejects.toThrow();
 	});
 
-	// ── Screen config endpoint ────────────────────────────────────────
+	// ── A Screen's look ───────────────────────────────────────────────
 
-	it('updates screen config', async () => {
-		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/screen-config`, {
+	// ADR-0051: a Screen holds no look of its own, nor a canvas; it takes its Event's Theme and Event Canvas.
+	it.each([
+		[
+			'a background, text colours, padding, alignment or colour mode',
+			{ background: '#000000', paddingX: 12, colorMode: 'dark' },
+		],
+		[
+			'a width or height',
+			{ width: 1920, height: 1080 },
+		],
+	])('refuses a Screen %s', async (_case, look) => {
+		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
+
+		await expect($fetch(`/api/events/${eventId}/screens/${screenId}`, {
 			method: 'PATCH',
-			body: {
-				background: '#000000',
-				colorMode: 'dark',
-			},
-		});
-
-		expect(updated.id).toBe(screenId);
-		expect(updated.screenConfig).toMatchObject({
-			background: '#000000',
-			colorMode: 'dark',
-		});
-	});
-
-	// ADR-0051: a Screen has no canvas of its own; it renders in its Event Canvas.
-	it('refuses a Screen width or height', async () => {
-		await expect($fetch(`/api/events/${eventId}/screens/${screenId}/screen-config`, {
-			method: 'PATCH',
-			body: { width: 1920, height: 1080 },
+			body: { stateVersion: screen.stateVersion, screenConfig: look },
 		})).rejects.toMatchObject({ statusCode: 400 });
+		expect(screen).not.toHaveProperty('screenConfig');
 	});
 
 	// ── Screen Theme Overrides ────────────────────────────────────────

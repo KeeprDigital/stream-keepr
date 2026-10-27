@@ -1,12 +1,7 @@
 <script setup lang="ts">
 import type { Screen } from '~/types';
 import { screenModeConfigContract } from '~~/shared/screenModes';
-import {
-	CARD_ANIMATION_SPEED_SELECT_OPTIONS,
-	HORIZONTAL_ALIGN_SELECT_OPTIONS,
-	VERTICAL_ALIGN_SELECT_OPTIONS,
-} from '~~/shared/utils/selectOptions';
-import { useScreenConfigUpdate } from '~/composables/screen/useScreenConfigUpdate';
+import { CARD_ANIMATION_SPEED_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
@@ -23,11 +18,6 @@ const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
 	'card',
-);
-
-const { screenConfig, updateScreenConfig } = useScreenConfigUpdate(
-	() => props.eventId,
-	() => props.screen.id,
 );
 
 defineExpose({ resetConfig, saving });
@@ -110,35 +100,6 @@ const hasMatchBinding = computed(() => !!config.value.featureMatchId);
 					:items="CARD_ANIMATION_SPEED_SELECT_OPTIONS"
 					class="w-32"
 					@update:model-value="updateConfig({ animationSpeed: $event })"
-				/>
-			</UFormField>
-		</ScreenSettingsCard>
-
-		<!-- Position Settings -->
-		<ScreenSettingsCard title="Position">
-			<UFormField
-				label="Horizontal Alignment"
-				description="Horizontal position of the card on screen."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					:model-value="screenConfig.horizontalAlign"
-					:items="HORIZONTAL_ALIGN_SELECT_OPTIONS"
-					class="w-32"
-					@update:model-value="updateScreenConfig({ horizontalAlign: $event })"
-				/>
-			</UFormField>
-
-			<UFormField
-				label="Vertical Alignment"
-				description="Vertical position of the card on screen."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					:model-value="screenConfig.verticalAlign"
-					:items="VERTICAL_ALIGN_SELECT_OPTIONS"
-					class="w-32"
-					@update:model-value="updateScreenConfig({ verticalAlign: $event })"
 				/>
 			</UFormField>
 		</ScreenSettingsCard>

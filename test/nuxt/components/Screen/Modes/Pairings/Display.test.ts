@@ -65,9 +65,7 @@ async function mountComponent() {
 
 describe('screenModesPairingsDisplay', () => {
 	beforeEach(() => {
-		screen.value = {
-			screenConfig: { paddingY: 0 },
-		};
+		screen.value = {};
 		config.value = {
 			roundId: 31,
 			showHeader: true,

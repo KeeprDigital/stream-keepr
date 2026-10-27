@@ -1,11 +1,8 @@
 <script setup lang="ts">
 import type { BackgroundLayersCapableMode } from '~~/shared/screenModes';
-import type { ScreenColorMode } from '~~/shared/types/enums';
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { Screen, ScreenCommand, ScreenMode } from '~/types';
 import { screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
-import { SCREEN_COLOR_MODE_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
-import { useScreenConfigUpdate } from '~/composables/screen/useScreenConfigUpdate';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 import { getScreenModeConfigurationPolicy, getScreenModeLabel, getScreenModeSelectOptions, getScreenModeSettingsComponent } from '~/modules/screen-mode';
 
@@ -34,7 +31,7 @@ const isUpdating = ref(false);
  * Editor Focus Mode (#744): while a graphics editor's Edit workspace offers it
  * and it is on, the editor gets the page. The layout drops the app sidebar and
  * this page drops the Screen-level cards above the editor — the header and the
- * Container — keeping the save failure, the way back to Screens, and the
+ * Theme — keeping the save failure, the way back to Screens, and the
  * Screen's name in the navbar.
  */
 const { active: editorFocus } = useEditorFocusMode();
@@ -47,19 +44,6 @@ const screenModeConfigurationPolicy = computed(() => {
 });
 const usesFullWidthConfiguration = computed(() => screenModeConfigurationPolicy.value?.fullWidthConfiguration === true);
 const isControlScreen = computed(() => screenModeConfigurationPolicy.value?.displayType === 'control');
-const containerControls = computed(() => screenModeConfigurationPolicy.value?.containerControls ?? null);
-const containerControlPlacement = computed(() => screenModeConfigurationPolicy.value?.containerControlPlacement ?? null);
-const hasContainerSettings = computed(() => {
-	if (isControlScreen.value)
-		return true;
-	if (!containerControls.value || !containerControlPlacement.value)
-		return false;
-
-	return Object.entries(containerControls.value).some(([key, enabled]) =>
-		enabled && containerControlPlacement.value?.[key as keyof typeof containerControls.value] === 'container',
-	);
-});
-
 // Connected count from presence
 const connectedCount = computed(() => screen.value
 	? screenStore.getConnectedCount(screen.value.id)
@@ -85,20 +69,7 @@ const backgroundLayersMode = computed<BackgroundLayersCapableMode | null>(() => 
 		: null;
 });
 
-// Screen-level config (container settings: background, width, height)
-const {
-	screenConfig,
-	saving: screenConfigSaving,
-	saveError: screenConfigSaveError,
-	updateScreenConfig,
-	resetScreenConfig,
-	retry: retryScreenConfig,
-} = useScreenConfigUpdate(
-	() => eventId.value,
-	() => screenId.value,
-);
-
-// Global reset: resets container config + current mode display settings (preserves bindings)
+// Reset: restores the current mode's display settings (preserves bindings and Theme overrides)
 const modeControlsRef = ref<{ resetConfig?: () => void; saving?: boolean } | null>(null);
 const showResetConfirm = ref(false);
 const showCapabilityRotationConfirm = ref(false);
@@ -106,15 +77,13 @@ const rotatingCapability = ref(false);
 
 const backgroundLayersControlsRef = ref<{ saving?: boolean } | null>(null);
 
-// Centralized saving indicator — true when container, mode, or background-layer config is saving
+// Centralized saving indicator — true when mode or background-layer config is saving
 const isSaving = computed(() =>
-	screenConfigSaving.value
-	|| modeControlsRef.value?.saving === true
+	modeControlsRef.value?.saving === true
 	|| backgroundLayersControlsRef.value?.saving === true,
 );
 
 function confirmResetAll() {
-	resetScreenConfig();
 	modeControlsRef.value?.resetConfig?.();
 	showResetConfirm.value = false;
 }
@@ -388,26 +357,6 @@ async function sendCommand(command: ScreenCommand) {
 			/>
 
 			<div v-else class="flex flex-col gap-6">
-				<UAlert
-					v-if="screenConfigSaveError"
-					color="error"
-					variant="subtle"
-					icon="i-lucide-circle-alert"
-					title="Screen settings have not been saved"
-					:description="screenConfigSaveError"
-				>
-					<template #actions>
-						<UButton
-							color="error"
-							variant="soft"
-							size="sm"
-							@click="retryScreenConfig"
-						>
-							Try Again
-						</UButton>
-					</template>
-				</UAlert>
-
 				<!-- Screen Header -->
 				<UCard v-if="!editorFocus">
 					<div class="flex flex-col gap-3">
@@ -554,7 +503,7 @@ async function sendCommand(command: ScreenCommand) {
 									<template #content>
 										<div class="p-3 flex flex-col gap-3 w-64">
 											<p class="text-sm">
-												Reset layout and mode-specific display settings to defaults? Theme colors and bindings will be preserved.
+												Reset this mode's display settings to defaults? Theme overrides and bindings will be preserved.
 											</p>
 											<div class="flex justify-end gap-2">
 												<UButton
@@ -601,95 +550,6 @@ async function sendCommand(command: ScreenCommand) {
 						</div>
 					</div>
 				</UCard>
-
-				<!-- Screen-level Container Settings -->
-				<ScreenSettingsCard v-if="hasContainerSettings && !editorFocus" title="Container" :default-open="!usesFullWidthConfiguration">
-					<!-- Color Mode (control screens only) -->
-					<UFormField
-						v-if="isControlScreen"
-						label="Color Mode"
-						description="Appearance for this control screen only."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<USelect
-							:model-value="screenConfig.colorMode ?? 'system'"
-							:items="SCREEN_COLOR_MODE_SELECT_OPTIONS"
-							class="w-32"
-							@update:model-value="updateScreenConfig({ colorMode: ($event as ScreenColorMode) })"
-						/>
-					</UFormField>
-
-					<UFormField
-						v-if="!isControlScreen && containerControls?.padding && containerControlPlacement?.padding === 'container'"
-						label="Horizontal Padding"
-						description="Inset content from the left and right edges in pixels."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<UInputNumber
-							:model-value="screenConfig.paddingX"
-							placeholder="0"
-							:min="0"
-							class="w-32"
-							@update:model-value="updateScreenConfig({ paddingX: $event ?? null })"
-						/>
-					</UFormField>
-
-					<UFormField
-						v-if="!isControlScreen && containerControls?.padding && containerControlPlacement?.padding === 'container'"
-						label="Vertical Padding"
-						description="Inset content from the top and bottom edges in pixels."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<UInputNumber
-							:model-value="screenConfig.paddingY"
-							placeholder="0"
-							:min="0"
-							class="w-32"
-							@update:model-value="updateScreenConfig({ paddingY: $event ?? null })"
-						/>
-					</UFormField>
-
-					<UFormField
-						v-if="!isControlScreen && containerControls?.textColors && containerControlPlacement?.textColors === 'container'"
-						label="Primary Text Color"
-						description="Main text color that display modes can use for headings and primary labels."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<UIColorPicker
-							:model-value="screenConfig.primaryTextColor"
-							placeholder="#ffffff"
-							@update:model-value="updateScreenConfig({ primaryTextColor: $event?.toString() || null })"
-						/>
-					</UFormField>
-
-					<UFormField
-						v-if="!isControlScreen && containerControls?.textColors && containerControlPlacement?.textColors === 'container'"
-						label="Secondary Text Color"
-						description="Secondary text color that display modes can use for muted or supporting text."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<UIColorPicker
-							:model-value="screenConfig.secondaryTextColor"
-							placeholder="#9ca3af"
-							@update:model-value="updateScreenConfig({ secondaryTextColor: $event?.toString() || null })"
-						/>
-					</UFormField>
-
-					<!-- Background (overlay screens only) -->
-					<UFormField
-						v-if="!isControlScreen && containerControls?.background && containerControlPlacement?.background === 'container'"
-						label="Background"
-						description="Pick a color or enter any CSS background value, including gradients or transparent."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<UIColorPicker
-							:model-value="screenConfig.background"
-							allow-raw-value
-							placeholder="transparent, #ffffff, linear-gradient(...)"
-							@update:model-value="updateScreenConfig({ background: $event?.toString() || null })"
-						/>
-					</UFormField>
-				</ScreenSettingsCard>
 
 				<!-- Screen Theme Overrides (modes that declare Mode Tokens) -->
 				<ScreenThemeTokensSettings

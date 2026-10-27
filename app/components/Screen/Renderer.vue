@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import type { Component, ComponentPublicInstance } from 'vue';
-import type { BackgroundLayer, ModeConfigsMap, ScreenConfig } from '~~/shared/types/screenConfig';
-import { usePreferredDark } from '@vueuse/core';
+import type { BackgroundLayer, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { DEFAULT_THEME_TOKENS } from '~~/shared/modules/theme';
 import { screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
 import { getScreenModeDefinition, resolveScreenModeHost, screenBackgroundLayers, screenModeThemeTokenStyle } from '~/modules/screen-mode';
 
 const { screen, overlayContainer, themeTokens, eventCanvas, viewport } = useScreenContext();
-const preferredDark = usePreferredDark();
 const windowWidth = ref(0);
 const windowHeight = ref(0);
 /** The space the Screen fits into: its context's when it names one, else the window. */
@@ -33,16 +31,15 @@ onBeforeUnmount(() => {
 
 const currentMode = computed(() => screen.value?.currentMode ?? 'background');
 const currentModeDefinition = computed(() => getScreenModeDefinition(currentMode.value));
-const screenConfig = computed<ScreenConfig>(() => (screen.value?.screenConfig ?? {}) as ScreenConfig);
 
 const displayComponent = computed<Component>(() => currentModeDefinition.value.displayComponent);
 const host = computed(() => resolveScreenModeHost({
 	mode: currentMode.value,
 	canvas: eventCanvas?.value ?? DEFAULT_EVENT_CANVAS,
-	screenConfig: screenConfig.value,
+	theme: themeTokens?.value ?? DEFAULT_THEME_TOKENS,
+	overrides: screen.value?.themeOverrides ?? {},
 	viewportWidth: viewportWidth.value,
 	viewportHeight: viewportHeight.value,
-	preferredDark: preferredDark.value,
 }));
 
 /**
@@ -62,7 +59,7 @@ const modeBackgroundLayers = computed<BackgroundLayer[]>(() => {
 /**
  * The stack sits at z-index -1 so the unpositioned mode content paints over
  * it; that needs the container to be its own stacking context, or the stack
- * would slip behind the container's own Screen background.
+ * would slip behind whatever the container sits on.
  */
 const containerBackgroundStyle = computed(() =>
 	modeBackgroundLayers.value.length > 0
@@ -88,11 +85,7 @@ function setHostContainer(el: Element | ComponentPublicInstance | null) {
 </script>
 
 <template>
-	<div
-		class="screen-renderer-wrapper w-full h-full"
-		:class="host.wrapperClass"
-		:style="host.wrapperStyle"
-	>
+	<div class="screen-renderer-wrapper w-full h-full">
 		<div
 			:ref="setHostContainer"
 			:class="host.containerClass"
@@ -119,8 +112,8 @@ function setHostContainer(el: Element | ComponentPublicInstance | null) {
 	padding: 0;
 }
 
-/* Behind the in-flow mode content; the container isolates, so this stays above
-   the container's own Screen background rather than escaping beneath it. */
+/* Behind the in-flow mode content; the container isolates, so this stays
+   within the container rather than escaping beneath it. */
 .screen-renderer__background {
 	z-index: -1;
 }

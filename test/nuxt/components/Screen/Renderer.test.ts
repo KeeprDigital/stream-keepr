@@ -6,7 +6,7 @@ import { createMockScreen } from '~~/test/helpers/fixtures';
 import Renderer from '~/components/Screen/Renderer.vue';
 
 // The host policy itself is `resolveScreenModeHost`'s own test
-// (test/nuxt/app/modules/screenModeHost.test.ts); here it only has to answer.
+// (test/unit/app/modules/screenModeHost.test.ts); here it only has to answer.
 const { resolveScreenModeHost } = vi.hoisted(() => ({
 	resolveScreenModeHost: vi.fn(),
 }));
@@ -73,9 +73,7 @@ function mountRenderer() {
 function hostReturning(provideOverlayContainer: boolean) {
 	resolveScreenModeHost.mockReturnValue({
 		containerClass: 'host-container',
-		containerStyle: { padding: '24px 48px' },
-		wrapperClass: ['host-wrapper'],
-		wrapperStyle: {},
+		containerStyle: { padding: '24px' },
 		provideOverlayContainer,
 	});
 }
@@ -83,26 +81,32 @@ function hostReturning(provideOverlayContainer: boolean) {
 describe('screenRenderer', () => {
 	beforeEach(() => {
 		overlayContainer.value = null;
-		screen.value = createMockScreen({ currentMode: 'card', screenConfig: null });
+		screen.value = createMockScreen({ currentMode: 'card' });
 		themeTokens.value = undefined;
 		hostReturning(true);
 	});
 
-	it('renders the mode\'s display inside the container its host resolves for the Event Canvas', () => {
+	it('renders the mode\'s display inside the container its host resolves for the Event Canvas and Theme', () => {
 		screen.value = createMockScreen({
 			currentMode: 'card',
-			screenConfig: { paddingX: 48, paddingY: 24 },
+			themeOverrides: {
+				alignment: { horizontal: 'left', vertical: 'top' },
+			},
 		});
+		themeTokens.value = { inset: 24 };
 
 		const wrapper = mountRenderer();
 
 		expect(resolveScreenModeHost).toHaveBeenCalledWith(expect.objectContaining({
 			mode: 'card',
 			canvas: { width: 1280, height: 720 },
-			screenConfig: { paddingX: 48, paddingY: 24 },
+			theme: { inset: 24 },
+			overrides: {
+				alignment: { horizontal: 'left', vertical: 'top' },
+			},
 		}));
 		const container = wrapper.get('.host-container');
-		expect(container.attributes('style')).toContain('padding: 24px 48px;');
+		expect(container.attributes('style')).toContain('padding: 24px;');
 		expect(container.find('[data-testid="display"]').exists()).toBe(true);
 	});
 

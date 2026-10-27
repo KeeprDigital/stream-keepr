@@ -26,11 +26,8 @@ import { screenModeConfigContract, screenModeSupportsBackgroundLayers } from '~~
 import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
 import {
 	FORMER_SCREEN_MODE_KEYS,
-	HORIZONTAL_ALIGN_VALUES,
 	PLAYER_SIDE_VALUES,
-	SCREEN_COLOR_MODE_VALUES,
 	SCREEN_COMMAND_VALUES,
-	VERTICAL_ALIGN_VALUES,
 } from '~~/shared/types/enums';
 import {
 	MEDIA_FIT_VALUES,
@@ -97,43 +94,13 @@ import {
 } from '~~/shared/types/screenConfig';
 import { remoteMediaUrlRefusal } from '~~/shared/utils/remoteMediaUrl';
 
-const MAX_SCREEN_CONFIG_BYTES = 64 * 1024;
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
 
 function jsonByteLength(value: unknown): number {
 	return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }
 
-/* ────────────────────────────────────────────────
- * Screen-level config schema (applies to all modes)
- * ──────────────────────────────────────────────── */
-
-export const screenColorModeSchema = z.enum(SCREEN_COLOR_MODE_VALUES);
-const horizontalAlignSchema = z.enum(HORIZONTAL_ALIGN_VALUES);
-const verticalAlignSchema = z.enum(VERTICAL_ALIGN_VALUES);
-
-export const screenConfigSchema = z.object({
-	background: z.string().max(500).optional(),
-	paddingX: z.number().nonnegative().optional(),
-	paddingY: z.number().nonnegative().optional(),
-	primaryTextColor: z.string().max(200).optional(),
-	secondaryTextColor: z.string().max(200).optional(),
-	colorMode: screenColorModeSchema.optional(),
-	horizontalAlign: horizontalAlignSchema.optional(),
-	verticalAlign: verticalAlignSchema.optional(),
-}).strict();
-
-const screenConfigPatchShape = Object.fromEntries(
-	Object.entries(screenConfigSchema.shape).map(([key, schema]) => [
-		key,
-		schema.unwrap().nullable().optional(),
-	]),
-) as z.ZodRawShape;
-
 export const screenSlugSchema = z.string().min(1).max(50).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens');
-
-// Patch variant: accepts `null` as a sentinel meaning "delete this key from stored config".
-export const screenConfigPatchSchema = z.object(screenConfigPatchShape).strict();
 
 /* ────────────────────────────────────────────────
  * Mode config Zod schemas (strict — no unknown keys)
@@ -1849,11 +1816,6 @@ export function parseModeConfigPatchResult(
 	) as ModeConfigsMap;
 }
 
-const boundedScreenConfigSchema = screenConfigSchema.refine(
-	value => jsonByteLength(value) <= MAX_SCREEN_CONFIG_BYTES,
-	`Screen configuration must not exceed ${MAX_SCREEN_CONFIG_BYTES} bytes`,
-);
-
 /* ────────────────────────────────────────────────
  * Screen CRUD schemas
  * ──────────────────────────────────────────────── */
@@ -1878,7 +1840,6 @@ export const createScreenSchema = createInsertSchema(screens)
 		slug: screenSlugSchema,
 		currentMode: screenModeSchema.optional(),
 		modeConfigs: modeConfigsMapSchema.nullable().optional(),
-		screenConfig: boundedScreenConfigSchema.nullable().optional(),
 	})
 	.strict();
 
@@ -1902,7 +1863,6 @@ export const updateScreenSchema = createUpdateSchema(screens)
 		slug: screenSlugSchema.optional(),
 		currentMode: screenModeSchema.optional(),
 		modeConfigs: modeConfigsMapSchema.nullable().optional(),
-		screenConfig: boundedScreenConfigSchema.nullable().optional(),
 		stateVersion: z.number().int().nonnegative(),
 	})
 	.strict();

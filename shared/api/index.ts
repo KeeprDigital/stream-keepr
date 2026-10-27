@@ -96,7 +96,7 @@ import type {
 } from '~~/shared/types/enums';
 import type { FeatureMatchSessionCommand, FeatureMatchSessionResponse } from '~~/shared/types/featureMatchSession';
 import type { PlayerGameData } from '~~/shared/types/game';
-import type { ModeConfigsMap, ScreenConfig } from '~~/shared/types/screenConfig';
+import type { ModeConfigsMap } from '~~/shared/types/screenConfig';
 
 export interface TalentResponse {
 	id: number;
@@ -543,7 +543,6 @@ export interface ScreenResponse {
 	slug: string;
 	currentMode: ScreenMode;
 	modeConfigs: ModeConfigsMap | null;
-	screenConfig: ScreenConfig | null;
 	/**
 	 * The Screen Theme Overrides, keyed by token name, including dormant ones
 	 * for other modes' Mode Tokens. Absent reads as none.
@@ -559,7 +558,6 @@ export interface CreateScreenInput {
 	slug: string;
 	currentMode?: ScreenMode;
 	modeConfigs?: ModeConfigsMap | null;
-	screenConfig?: ScreenConfig | null;
 	stateVersion?: number;
 }
 

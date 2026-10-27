@@ -7,21 +7,16 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { computed, reactive, ref } from 'vue';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
+import { screenModeHostTokens } from '~~/shared/screenModeDefinitions';
 import { SCREEN_MODES, screenModeTokenName, screenModeTokens } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { METAGAME_CHART_MAX_ARCHETYPES } from '~~/shared/utils/metagameChart';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import Renderer from '~/components/Screen/Renderer.vue';
 
-// Each themed Screen Mode's display, mounted by its Screen host under a
-// resolved token set, paints every Mode Token it declares (ADR-0049).
-
-/** Modes whose displays read no Mode Token, and the ticket moving each (or why none will). */
-const MODES_NOT_YET_ON_THEME_TOKENS: Partial<Record<ScreenMode, string>> = {
-	'background': 'none: it declares no Mode Token, and paints the `background` Foundation Token (screenBackgroundLayers)',
-	'feature-match-overlay': '#831',
-	'broadcast-graphics': '#829',
-};
+// Each Screen Mode's display, mounted by its Screen host under a resolved
+// token set, paints every Mode Token it declares, and a plain mode's host
+// insets and aligns it by the Theme (ADR-0049, ADR-0051).
 
 type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor' | 'borderColor' | 'boxShadow' | 'width' | 'height' | 'gap';
 
@@ -217,6 +212,7 @@ const SAMPLES: { [T in ThemeTokenType]: ThemeTokenValueTypes[T] } = {
 		},
 	],
 	animationEffect: { effect: 'caustics' },
+	alignment: { horizontal: 'right', vertical: 'bottom' },
 };
 
 /** The application fonts' faces, as `main.css` declares them, under names a test can read back. */
@@ -729,20 +725,18 @@ function expectedPaint(type: ThemeTokenType, value: unknown) {
 
 describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 	const probes = THEMED_DISPLAYS[mode];
-	const notYet = MODES_NOT_YET_ON_THEME_TOKENS[mode];
 	const declared = screenModeTokens(mode);
 
 	if (SCREEN_MODES[mode].displayType === 'control') {
 		it('consumes no Theme Token, as an operator surface', () => {
 			expect(declared).toEqual({});
+			expect(screenModeHostTokens(mode)).toEqual([]);
 		});
 		return;
 	}
 
-	it('is themed with a probe per Mode Token, or listed as not yet on Theme Tokens', () => {
-		expect(Boolean(probes) !== Boolean(notYet), `list ${mode} in THEMED_DISPLAYS or MODES_NOT_YET_ON_THEME_TOKENS`).toBe(true);
-		if (probes)
-			expect(Object.keys(probes).map(token => screenModeTokenName(mode, token)).sort()).toEqual(Object.keys(declared).sort());
+	it('has a probe for every Mode Token it declares', () => {
+		expect(Object.keys(probes ?? {}).map(token => screenModeTokenName(mode, token)).sort()).toEqual(Object.keys(declared).sort());
 	});
 
 	if (!probes)
@@ -787,5 +781,39 @@ describe('a Screen Theme Override', () => {
 		await flushPromises();
 
 		expect(dividers.map(probe => painted(probe, 'color'))).toEqual(['rgb(1, 2, 3)', 'rgb(1, 2, 3)']);
+	});
+});
+
+describe('the Screen inset and alignment', () => {
+	const PLAIN_MODES = SCREEN_MODE_VALUES.filter(mode => screenModeHostTokens(mode).length > 0);
+	const LAYOUT = { inset: 40, alignment: SAMPLES.alignment };
+
+	/** Where the host places the mode's content in its Event Canvas. */
+	function placement() {
+		const style = getComputedStyle(wrapper!.get('.screen-renderer').element);
+		return { padding: style.padding, justifyItems: style.justifyItems, alignItems: style.alignItems };
+	}
+
+	it.each(PLAIN_MODES)('places %s inside the inset, where its Theme aligns it', async (mode) => {
+		await mountMode(mode, LAYOUT);
+
+		expect(placement()).toEqual({ padding: '40px', justifyItems: 'end', alignItems: 'end' });
+	});
+
+	it('places a plain mode as the Default Theme ships it when its Event has no Theme', async () => {
+		await mountMode('card');
+
+		expect(placement()).toEqual({ padding: '0px', justifyItems: 'center', alignItems: 'center' });
+	});
+
+	it('places a plain mode by its Screen\'s overrides over its Theme', async () => {
+		await mountMode('card', LAYOUT, {
+			themeOverrides: {
+				inset: 12,
+				alignment: { horizontal: 'left', vertical: 'top' },
+			},
+		});
+
+		expect(placement()).toEqual({ padding: '12px', justifyItems: 'start', alignItems: 'start' });
 	});
 });

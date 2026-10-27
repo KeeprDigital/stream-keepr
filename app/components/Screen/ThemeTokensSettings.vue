@@ -2,6 +2,7 @@
 import type { StoredThemeTokens, ThemeTokenValue } from '~~/shared/modules/theme';
 import type { Screen } from '~/types';
 import { DEFAULT_THEME_TOKENS, FOUNDATION_TOKENS, readTokenLiteral, resolveThemeTokens } from '~~/shared/modules/theme';
+import { screenModeHostTokens } from '~~/shared/screenModeDefinitions';
 import { screenModeTokens } from '~~/shared/screenModes';
 import { parseThemeTokenWrite, themeTokenDefinition } from '~~/shared/themeTokens';
 
@@ -52,6 +53,7 @@ const resolved = computed(() => resolveThemeTokens({
 	modeTokens: modeTokens.value,
 	theme: theme.value,
 	overrides: overrides.value,
+	hostTokens: screenModeHostTokens(props.screen.currentMode),
 }));
 
 /** What a token reads with no override: the Theme's stored value where it holds one it may, else the default. */

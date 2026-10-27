@@ -1,4 +1,4 @@
-import type { StoredThemeTokens, ThemeBackgroundLayer } from '~~/shared/modules/theme';
+import type { StoredThemeTokens, ThemeAlignment, ThemeBackgroundLayer } from '~~/shared/modules/theme';
 import type { ScreenModeTokenOfType, ThemedScreenMode } from '~~/shared/screenModes';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { BackgroundLayer } from '~~/shared/types/screenConfig';
@@ -49,4 +49,18 @@ export function screenBackgroundLayers(own: BackgroundLayer[] | undefined, theme
 	if (own?.length)
 		return own;
 	return resolveFoundationToken({ vocabulary: FOUNDATION_TOKENS, theme, overrides }, 'background') as ThemeBackgroundLayer[];
+}
+
+/**
+ * Where a plain mode's Screen host places its content in the Event Canvas: the
+ * `inset` and `alignment` Foundation Tokens, from the Screen's overrides, its
+ * Event's Theme and the defaults. A display sizing itself to the space left
+ * inside the inset reads it here too.
+ */
+export function screenLayoutTokens(theme: StoredThemeTokens, overrides: StoredThemeTokens): { inset: number; alignment: ThemeAlignment } {
+	const input = { vocabulary: FOUNDATION_TOKENS, theme, overrides };
+	return {
+		inset: resolveFoundationToken(input, 'inset') as number,
+		alignment: resolveFoundationToken(input, 'alignment') as ThemeAlignment,
+	};
 }

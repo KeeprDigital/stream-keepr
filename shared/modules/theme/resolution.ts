@@ -17,6 +17,11 @@ export interface ResolveThemeTokensInput {
 	theme: StoredThemeTokens;
 	/** The Screen's Screen Theme Overrides. */
 	overrides: StoredThemeTokens;
+	/**
+	 * Foundation Tokens the Screen's host consumes itself rather than through a
+	 * Mode Token, such as a plain mode's `inset` and `alignment`. None when left out.
+	 */
+	hostTokens?: readonly string[];
 }
 
 export interface ResolvedThemeTokens {
@@ -24,8 +29,9 @@ export interface ResolvedThemeTokens {
 	values: Readonly<Record<string, ThemeTokenValue>>;
 	/**
 	 * The tokens the Screen consumes, from its mode's declaration alone: every
-	 * Mode Token it declares, then each Foundation Token their defaults name,
-	 * in vocabulary order. What a Theme or override stores never changes it.
+	 * Mode Token it declares, then each Foundation Token their defaults name or
+	 * its host consumes, in vocabulary order. What a Theme or override stores
+	 * never changes it.
 	 */
 	consumed: readonly string[];
 }
@@ -65,7 +71,7 @@ function firstReadable(stored: readonly unknown[], read: (value: unknown) => The
  *   this mode's Mode Tokens are read.
  */
 export function resolveThemeTokens(input: ResolveThemeTokensInput): ResolvedThemeTokens {
-	const { vocabulary, modeTokens, theme, overrides } = input;
+	const { vocabulary, modeTokens, theme, overrides, hostTokens = [] } = input;
 
 	function resolveFoundation(name: string): ThemeTokenValue {
 		const definition = vocabulary[name]!;
@@ -86,9 +92,12 @@ export function resolveThemeTokens(input: ResolveThemeTokensInput): ResolvedThem
 	for (const [name, definition] of Object.entries(modeTokens))
 		values[name] = firstReadable([overrides[name], theme[name], definition.default], stored => readModeToken(definition, stored))!;
 
-	const namedByDefaults = new Set(Object.values(modeTokens).flatMap(({ default: fallback }) => isReference(fallback)
-		? [fallback.token]
-		: []));
+	const namedByDefaults = new Set([
+		...Object.values(modeTokens).flatMap(({ default: fallback }) => isReference(fallback)
+			? [fallback.token]
+			: []),
+		...hostTokens,
+	]);
 	const consumedFoundation = Object.keys(vocabulary).filter(name => namedByDefaults.has(name));
 	for (const name of consumedFoundation)
 		values[name] = resolveFoundation(name);

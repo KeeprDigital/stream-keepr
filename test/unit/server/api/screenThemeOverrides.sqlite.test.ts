@@ -130,6 +130,12 @@ describe('screen Theme Overrides', () => {
 		],
 		['a Foundation Token a Mode Token\'s default names', 'divider', 'rgba(0, 0, 0, 0.5)'],
 		['a Foundation Token no default names, which a Mode Token could follow', 'accent', '#00ff00'],
+		['the Screen inset, which its host consumes', 'inset', 24],
+		[
+			'the Screen alignment, which its host consumes',
+			'alignment',
+			{ horizontal: 'left', vertical: 'top' },
+		],
 		[
 			'a typography Foundation Token',
 			'heading',
@@ -169,6 +175,13 @@ describe('screen Theme Overrides', () => {
 		[
 			'a token of a type its mode declares none of',
 			'standings',
+			'animation-effect',
+			{ effect: 'fog' },
+			'unconsumable-token',
+		],
+		[
+			'the Screen inset, on a Screen rendered edge to edge',
+			'background',
 			'inset',
 			12,
 			'unconsumable-token',
@@ -226,7 +239,10 @@ describe('screen Theme Overrides', () => {
 	it('refuses a write naming one refused token whole, so the others are not stored either', async () => {
 		const screenId = await createScreen('standings', 'main');
 
-		expect(await refusal(override(screenId, { accent: '#00ff00', inset: 12 }))).toEqual({ statusCode: 400, code: 'unconsumable-token' });
+		expect(await refusal(override(screenId, {
+			'accent': '#00ff00',
+			'animation-effect': { effect: 'fog' },
+		}))).toEqual({ statusCode: 400, code: 'unconsumable-token' });
 		expect(await storedOverrides(screenId)).toEqual({});
 	});
 

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { StandingsColumnKey } from '~~/shared/types/enums';
-import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import type { Player } from '~/types';
+import { DEFAULT_THEME_TOKENS } from '~~/shared/modules/theme';
 import { getMtgGameData } from '~~/shared/utils/gameData';
-import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { modeTokenVar, modeTypographyStyle, screenLayoutTokens } from '~/modules/screen-mode';
 
-const { screen } = useScreenContext();
+const { screen, themeTokens } = useScreenContext();
 
 const {
 	config,
@@ -18,7 +18,8 @@ const {
 	positionChangeOf,
 } = useStandingsModeData();
 
-const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
+/** The Screen inset the host pads the canvas by, which the rows leave room for. */
+const inset = computed(() => screenLayoutTokens(themeTokens?.value ?? DEFAULT_THEME_TOKENS, screen.value?.themeOverrides ?? {}).inset);
 
 const primaryTextStyle = {
 	color: modeTokenVar('standings', 'primary-text'),
@@ -98,7 +99,7 @@ const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef')
 	density: 'compact',
 	prefix: 'standings',
 	rowCount: layoutRowCount,
-	insetY: () => screenConfig.value.paddingY ?? 0,
+	insetY: inset,
 });
 
 const contentStyle = computed(() => ({

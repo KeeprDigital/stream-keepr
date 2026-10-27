@@ -33,7 +33,6 @@ function mountAside(props: {
 			screen: {
 				id: 1,
 				slug: 'main',
-				screenConfig: {},
 			} as Screen,
 			config: structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG),
 			selectedTarget: { type: 'canvas' },

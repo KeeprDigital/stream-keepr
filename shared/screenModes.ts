@@ -31,25 +31,6 @@ import { topCardsModeTokens } from './screenModeTokens/topCards';
 import { topCutModeTokens } from './screenModeTokens/topCut';
 import { SCREEN_MODE_VALUES } from './types/enums';
 
-export interface ScreenModeContainerControls {
-	padding?: boolean;
-	textColors?: boolean;
-	background?: boolean;
-}
-
-/**
- * The graphics host profile of a Screen Mode that composes in its Event Canvas
- * and exposes Overlay, Fill, and Key Screen Outputs.
- *
- * Declaring it here keeps generic-control exclusions and output options
- * together on the Screen Mode Definition instead of scattering them across
- * parallel per-mode lookup tables.
- */
-export interface ScreenModeGraphicsHost {
-	/** Feature Match Overlay still honours generic Screen alignment; a transparent host does not. */
-	useScreenAlignment?: boolean;
-}
-
 /**
  * What a field declared as each kind of Event Reference holds. A kind is what
  * the field names: a Phase, a Round, a Player, a Player List, a Feature Match
@@ -79,8 +60,12 @@ export interface ScreenModeDefinition {
 	icon: string;
 	displayType: DisplayType;
 	description: string;
-	containerControls?: ScreenModeContainerControls;
-	graphicsHost?: ScreenModeGraphicsHost;
+	/**
+	 * The mode is a graphics host: it composes in its Event Canvas and exposes
+	 * Overlay, Fill, and Key Screen Outputs. Its host takes no Theme Token of
+	 * its own, so its outputs stay transparent and keyable.
+	 */
+	graphicsHost?: true;
 	/**
 	 * The mode carries its own optional `backgroundLayers` stack, painted behind
 	 * its content by the Screen renderer host.
@@ -142,19 +127,6 @@ export interface ScreenModeDefinition {
 	 */
 	modeTokens?: Readonly<Record<string, DeclaredModeTokenDefinition>>;
 }
-
-/** Generic Screen container controls a graphics host replaces with its own canvas and styling. */
-const GRAPHICS_HOST_CONTAINER_CONTROLS: ScreenModeContainerControls = {
-	padding: false,
-	textColors: false,
-	background: false,
-};
-
-export const DEFAULT_OVERLAY_CONTAINER_CONTROLS: Required<ScreenModeContainerControls> = {
-	padding: true,
-	textColors: true,
-	background: true,
-};
 
 /**
  * Single source of truth for all screen modes and their display characteristics.
@@ -227,8 +199,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-panels-top-left',
 		displayType: 'overlay',
 		description: 'Pixel-exact feature match overlay with fill/key outputs',
-		containerControls: GRAPHICS_HOST_CONTAINER_CONTROLS,
-		graphicsHost: {},
+		graphicsHost: true,
 		config: featureMatchOverlayModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot' },
 	},
@@ -237,10 +208,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-layout-template',
 		displayType: 'overlay',
 		description: 'Composed broadcast graphics stack with overlay/fill/key outputs',
-		containerControls: GRAPHICS_HOST_CONTAINER_CONTROLS,
-		graphicsHost: {
-			useScreenAlignment: false,
-		},
+		graphicsHost: true,
 		config: broadcastGraphicsModeConfigContract,
 		eventReferences: {},
 	},
@@ -414,16 +382,4 @@ export function screenModeTokens(mode: ScreenMode): Readonly<Record<ScreenModeTo
 		screenModeTokenName(mode, token),
 		definition,
 	]));
-}
-
-/** Derive which generic Container controls apply to a Screen Mode. */
-export function getContainerControls(mode: ScreenMode): Required<ScreenModeContainerControls> {
-	return {
-		...DEFAULT_OVERLAY_CONTAINER_CONTROLS,
-		// A mode on Mode Tokens takes its text colours from them.
-		...(SCREEN_MODES[mode].modeTokens
-			? { textColors: false }
-			: {}),
-		...(SCREEN_MODES[mode].containerControls ?? {}),
-	};
 }

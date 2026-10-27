@@ -30,8 +30,6 @@ export function createScreenModeSampleContext(options: ScreenModeSampleContextOp
 		slug: 'sample',
 		currentMode: options.mode,
 		modeConfigs: screenModeSampleConfigs(options.mode),
-		// No canvas of its own: with `eventCanvas` omitted the preview renders the default Event Canvas (ADR-0051).
-		screenConfig: {},
 		stateVersion: 0,
 		createdAt: new Date(0),
 		updatedAt: new Date(0),

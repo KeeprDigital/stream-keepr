@@ -20,17 +20,35 @@ describe('screen Mode Definition module', () => {
 		}
 	});
 
-	it('gives Broadcast Graphics a transparent host that fits its canvas to the viewport uniformly', () => {
-		const definition = getScreenModeDefinition('broadcast-graphics');
+	// A plain mode's host insets and aligns it; the rest render edge to edge, or fill their window.
+	const PLAIN_MODES = [
+		'card',
+		'deck',
+		'standings',
+		'top-cut',
+		'metagame',
+		'top-cards',
+		'player-history',
+		'pairings',
+		'archetype-spotlight',
+		'head-to-head',
+	];
+	it.each(SCREEN_MODE_VALUES.map(mode => [
+		mode,
+		PLAIN_MODES.includes(mode)
+			? ['inset', 'alignment']
+			: [],
+	] as const))('hosts %s consuming the Foundation Tokens %j itself', (mode, tokens) => {
+		expect(getScreenModeDefinition(mode).host.foundationTokens).toEqual(tokens);
+	});
 
-		expect(definition.host).toEqual({
-			kind: 'overlay',
-			useScreenPadding: false,
-			useScreenBackground: false,
-			useScreenAlignment: false,
-			fitToViewport: true,
-			themePolicy: 'none',
-		});
+	it.each([
+		['broadcast-graphics', 'overlay', true],
+		['feature-match-overlay', 'overlay', true],
+		['standings', 'overlay', true],
+		['feature-match', 'control', false],
+	] as const)('hosts %s as %s, fitting its canvas to the viewport: %s', (mode, kind, fitToViewport) => {
+		expect(getScreenModeDefinition(mode).host).toMatchObject({ kind, fitToViewport });
 	});
 
 	it('exposes overlay, fill, and key Screen Outputs for Broadcast Graphics', () => {

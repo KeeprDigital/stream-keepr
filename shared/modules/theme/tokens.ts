@@ -1,9 +1,11 @@
 import type { AnimationEffectSelection } from '../../animationEffects';
+import type { HorizontalAlign, VerticalAlign } from '../../types/enums';
 import type { GraphicApplicationFontSelection, GraphicTextTransform } from '../../types/graphics';
 import type { ThemeBackgroundLayer } from './background';
 import { z } from 'zod';
 import { animationEffectSelectionSchema } from '../../animationEffects';
 import { clampToShapeBounds } from '../../screenModeConfigs/fields';
+import { HORIZONTAL_ALIGN_VALUES, VERTICAL_ALIGN_VALUES } from '../../types/enums';
 import { GRAPHIC_TEXT_TRANSFORM_VALUES } from '../../types/graphics';
 import { GRAPHIC_FONT_IDS } from '../graphics/typography';
 import { themeBackgroundLayerStackSchema } from './background';
@@ -21,6 +23,12 @@ export interface ThemeTypography {
 	case: GraphicTextTransform;
 }
 
+/** Where a Screen host places its mode's content within its Event Canvas, inside the inset. */
+export interface ThemeAlignment {
+	horizontal: HorizontalAlign;
+	vertical: VerticalAlign;
+}
+
 /** What a Theme Token of each type holds. */
 export interface ThemeTokenValueTypes {
 	/** A CSS colour, which may be translucent. */
@@ -32,6 +40,7 @@ export interface ThemeTokenValueTypes {
 	backgroundLayers: ThemeBackgroundLayer[];
 	/** An Animation Effect and its params, from the closed vocabulary (ADR-0014). */
 	animationEffect: AnimationEffectSelection;
+	alignment: ThemeAlignment;
 }
 
 export type ThemeTokenType = keyof ThemeTokenValueTypes;
@@ -103,6 +112,11 @@ const typographySchema = z.object({
 	case: z.enum(GRAPHIC_TEXT_TRANSFORM_VALUES),
 }).strict();
 
+const alignmentSchema = z.object({
+	horizontal: z.enum(HORIZONTAL_ALIGN_VALUES),
+	vertical: z.enum(VERTICAL_ALIGN_VALUES),
+}).strict();
+
 /** The literals a token of `definition`'s type holds, within its bounds. */
 export function themeTokenValueSchema(definition: FoundationTokenDefinition | ModeTokenDefinition): z.ZodType {
 	switch (definition.type) {
@@ -118,6 +132,8 @@ export function themeTokenValueSchema(definition: FoundationTokenDefinition | Mo
 			return themeBackgroundLayerStackSchema;
 		case 'animationEffect':
 			return animationEffectSelectionSchema;
+		case 'alignment':
+			return alignmentSchema;
 	}
 }
 

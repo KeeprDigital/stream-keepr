@@ -169,7 +169,6 @@ async function mountComponent() {
 			screen: {
 				id: 1,
 				slug: 'main',
-				screenConfig: {},
 			} as Screen,
 			eventId: 1,
 		},

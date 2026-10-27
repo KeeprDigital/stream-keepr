@@ -71,6 +71,11 @@ describe('a Theme Token write', () => {
 			'animation-effect',
 			{ effect: 'caustics' },
 		],
+		[
+			'an alignment',
+			'alignment',
+			{ horizontal: 'left', vertical: 'bottom' },
+		],
 	])('stores %s', (_case, name, value) => {
 		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: true, value });
 	});
@@ -104,6 +109,18 @@ describe('a Theme Token write', () => {
 			'a dimension above its bound',
 			'inset',
 			insetMax + 1,
+			'invalid-value',
+		],
+		[
+			'an alignment off either axis',
+			'alignment',
+			{ horizontal: 'middle', vertical: 'top' },
+			'invalid-value',
+		],
+		[
+			'an alignment missing an axis',
+			'alignment',
+			{ horizontal: 'left' },
 			'invalid-value',
 		],
 		[

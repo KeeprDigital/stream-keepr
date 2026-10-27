@@ -329,18 +329,6 @@ describe('graphics Authoring Leases', () => {
 		expect(live.currentState.player1.lifeTotal).toBe(17);
 	});
 
-	it('leaves the Screen configuration open while the Edit workspace is leased', async () => {
-		// The canvas is the Event's (ADR-0051), so no Screen configuration field is
-		// part of a graphics Edit workspace; each stays open to every operator.
-		await askForLease(browserA);
-
-		expect((await request(`/api/events/${eventId}/screens/${screenId}/screen-config`, {
-			method: 'PATCH',
-			body: { paddingX: 12 },
-			cookie: browserB,
-		})).status).toBe(200);
-	});
-
 	/**
 	 * The generic Screen write reaches the same artifact by another door (#607).
 	 *

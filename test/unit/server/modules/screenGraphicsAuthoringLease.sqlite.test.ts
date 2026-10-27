@@ -197,14 +197,14 @@ describe('a generic Screen write while the Edit workspace is leased', () => {
 		expect(await authoredStack()).toEqual(['authored']);
 	});
 
-	it('admits another Session\'s change to the Screen\'s own configuration', async () => {
+	it('admits another Session\'s change to the Screen\'s own fields', async () => {
 		await lease(HOLDER);
 
 		await genericWrite(OTHER, {
-			screenConfig: { paddingX: 48 },
+			name: 'Renamed',
 		});
 
-		expect((await screenRow())?.screenConfig).toEqual({ paddingX: 48 });
+		expect((await screenRow())?.name).toBe('Renamed');
 		expect(await authoredStack()).toEqual(['authored']);
 	});
 
@@ -215,7 +215,6 @@ describe('a generic Screen write while the Edit workspace is leased', () => {
 		await genericWrite(OTHER, {
 			name: 'Renamed',
 			modeConfigs: current!.modeConfigs,
-			screenConfig: current!.screenConfig,
 		});
 
 		expect((await screenRow())?.name).toBe('Renamed');
