@@ -30,7 +30,7 @@ import {
  * Screen state.
  */
 export function useBroadcastGraphicsModeData() {
-	const { eventId, isPreview, screen } = useScreenContext();
+	const { eventId, isPreview, screen, sampleDataset } = useScreenContext();
 	const storedConfig = useScreenModeConfig('broadcast-graphics');
 	const sessionStore = useBroadcastGraphicsLiveSessionStore();
 	const previewState = ref<GraphicsPreviewState | null>(null);
@@ -373,6 +373,10 @@ export function useBroadcastGraphicsModeData() {
 			: eventId.value ?? undefined),
 		() => (isPreview?.value ? undefined : screen.value?.id),
 	);
+	// A Theme preview's sample has a Live Session but no Event to follow: it is
+	// read once, through the same Screen read, and never changes.
+	if (sampleDataset && outputReads.scope.value)
+		void sessionStore.loadSession(outputReads.scope.value.eventId, outputReads.scope.value.screenId);
 
 	onMounted(() => {
 		window.addEventListener('message', handlePreviewStateMessage);

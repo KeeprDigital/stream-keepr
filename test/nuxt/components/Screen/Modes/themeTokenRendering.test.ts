@@ -6,7 +6,7 @@ import type { BroadcastGraphicConfig, GraphicApplicationFontSelection } from '~~
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, reactive, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { SCREEN_MODES, screenModeTokenName, screenModeTokens } from '~~/shared/screenModes';
@@ -657,20 +657,9 @@ const spotlightCard = {
 mockNuxtImport('useCardModeData', () => () => ({
 	displayConfig: computed(() => ({ animationEnabled: false, animationSpeed: 'normal' })),
 	screenId: computed(() => 1),
+	card: ref(spotlightCard),
 	error: ref(null),
 }));
-
-// A store's state is refs, as `storeToRefs` reads it.
-mockNuxtImport('useCardStore', () => () => {
-	const activeCard = ref<typeof spotlightCard | null>(null);
-	return reactive({
-		activeCard,
-		setActiveScreen() {},
-		async loadActiveCard() {
-			activeCard.value = spotlightCard;
-		},
-	});
-});
 
 // The graphics hosts: one on-air composition holding a Theme-bound Graphic Item.
 

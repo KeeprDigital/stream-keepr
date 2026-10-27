@@ -6,7 +6,7 @@ import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { settleUntil } from '~~/test/helpers/settle';
 import PreviewGallery from '~/components/Theme/PreviewGallery.vue';
 
-// The Theme editor's gallery shows every Screen Mode that declares Mode Tokens,
+// The Theme editor's gallery shows every Screen Mode a Theme preview shows,
 // read off its definition, under the Theme as it stands.
 
 let wrapper: VueWrapper | undefined;
@@ -27,23 +27,63 @@ function mountGallery() {
 	return wrapper;
 }
 
+function tile(gallery: VueWrapper, mode: string) {
+	return gallery.get(`[data-preview-mode="${mode}"]`);
+}
+
+/** The sample lower third's name, as the compositor paints it. */
+function lowerThirdName(gallery: VueWrapper) {
+	return tile(gallery, 'broadcast-graphics').findAll('p').find(text => text.text() === 'Alexandra Whitfield-Moreau');
+}
+
+/** Card Spotlight shows its Card once the Card's image has loaded. */
+function spotlightCard(gallery: VueWrapper) {
+	const card = tile(gallery, 'card');
+	// happy-dom loads a drawn card's data URI before Vue listens for it.
+	for (const image of card.findAll('img'))
+		image.element.dispatchEvent(new Event('load'));
+	return card.find('[data-testid="spotlight-card"] img');
+}
+
 describe('the Theme preview gallery', () => {
-	it('shows every Screen Mode that declares Mode Tokens, and only those', () => {
-		const themed = SCREEN_MODE_VALUES.filter(mode => SCREEN_MODES[mode].modeTokens);
+	it('shows every Screen Mode that declares Mode Tokens or a Theme preview, and only those', () => {
+		const previewed = SCREEN_MODE_VALUES.filter(mode => SCREEN_MODES[mode].modeTokens || SCREEN_MODES[mode].graphicsHost?.themePreview);
 
 		const shown = mountGallery().findAll('[data-preview-mode]').map(tile => tile.attributes('data-preview-mode'));
 
-		expect(shown).toEqual(themed);
+		expect(shown).toEqual(previewed);
+		expect(shown).toContain('broadcast-graphics');
 	});
 
-	it('repaints as the Theme\'s tokens change', async () => {
-		const gallery = mountGallery();
-		await settleUntil(() => gallery.find('.standings-table').exists());
-
-		await gallery.setProps({
+	it.each([
+		{
+			mode: 'standings',
 			tokens: { surface: 'rgb(9, 8, 7)' },
-		});
+			shown: (gallery: VueWrapper) => gallery.find('.standings-table').exists(),
+			painted: (gallery: VueWrapper) => getComputedStyle(gallery.get('.standings-table').element).backgroundColor,
+			value: 'rgb(9, 8, 7)',
+		},
+		{
+			mode: 'card',
+			tokens: { 'card.card-width': 300 },
+			shown: (gallery: VueWrapper) => spotlightCard(gallery).exists(),
+			painted: (gallery: VueWrapper) => (tile(gallery, 'card').get('.screen-renderer').element as HTMLElement).style.getPropertyValue('--theme-card-card-width'),
+			value: '300px',
+		},
+		{
+			mode: 'broadcast-graphics',
+			tokens: { 'text-primary': 'rgb(1, 2, 3)' },
+			shown: (gallery: VueWrapper) => lowerThirdName(gallery) !== undefined,
+			painted: (gallery: VueWrapper) => (lowerThirdName(gallery)!.element as HTMLElement).style.color,
+			value: 'rgb(1, 2, 3)',
+		},
+	])('shows $mode from the sample and repaints it as the Theme\'s tokens change', async ({ tokens, shown, painted, value }) => {
+		const gallery = mountGallery();
+		await settleUntil(() => shown(gallery));
 
-		expect(getComputedStyle(gallery.get('.standings-table').element).backgroundColor).toBe('rgb(9, 8, 7)');
+		await gallery.setProps({ tokens });
+
+		expect(shown(gallery)).toBe(true);
+		expect(painted(gallery)).toBe(value);
 	});
 });

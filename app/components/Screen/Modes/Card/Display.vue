@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { displayConfig, screenId, error } = useCardModeData();
+const { displayConfig, screenId, card, error } = useCardModeData();
 </script>
 
 <template>
@@ -10,7 +10,7 @@ const { displayConfig, screenId, error } = useCardModeData();
 		<MtgCardDisplay
 			v-if="screenId"
 			:config="displayConfig"
-			:screen-id="screenId"
+			:card="card"
 		/>
 	</ScreenModeBase>
 </template>

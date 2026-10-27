@@ -5,7 +5,7 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
 import { createMockFeatureMatchState, createWireMockFeatureMatch } from '~~/test/helpers/fixtures';
 import { useRouter } from '#app';
 import { tryUseRealtime } from '~/composables/core/useRealtime';
-import { useSampleScreenOutputReadRepository } from '~/modules/screen-mode/sampleDataset';
+import { screenModeSampleConfigs, useSampleScreenOutputReadRepository } from '~/modules/screen-mode/sampleDataset';
 import { useCardStore } from '~/stores/card';
 import { useEventStore } from '~/stores/event';
 import { useFeatureMatchStore } from '~/stores/featureMatch';
@@ -557,6 +557,75 @@ describe('a capability-only Screen Output', () => {
 		const { players } = await useSampleScreenOutputReadRepository().standings({ eventId: 42, screenId: 7 });
 		expect(standingsRead()).toBe(true);
 		expect(players.map(({ name }) => name).filter(name => wrapper.text().includes(name))).toEqual([]);
+	});
+
+	/** What a rendering of the sample Screen Card or sample Broadcast Graphic would put on air. */
+	async function sampleOnAirMarks() {
+		const { card } = await useSampleScreenOutputReadRepository().card({ eventId: 42, screenId: 7 });
+		const [lowerThird] = screenModeSampleConfigs('broadcast-graphics')['broadcast-graphics']!.graphics!;
+		return [
+			card!.imageData.front!.normal,
+			...lowerThird!.items.flatMap(item => item.type === 'text'
+				? [item.text]
+				: []),
+		];
+	}
+
+	const nothingOnAir = {
+		id: 3,
+		eventId: 42,
+		screenId: 7,
+		status: 'active',
+		currentState: { playout: {}, inputs: {}, sources: {} },
+		recoveryFault: null,
+		sequence: 1,
+		endedAt: null,
+		createdAt: '2026-10-17T00:00:00.000Z',
+		updatedAt: '2026-10-17T00:00:00.000Z',
+	};
+
+	it.each([
+		[
+			'card',
+			'card',
+			'answers no Card',
+			() => ({ card: null, revision: 1 }),
+		],
+		[
+			'card',
+			'card',
+			'fails',
+			() => Promise.reject(new Error('unavailable')),
+		],
+		[
+			'broadcast-graphics',
+			'broadcast-graphics/live-session',
+			'has nothing on air',
+			() => nothingOnAir,
+		],
+		[
+			'broadcast-graphics',
+			'broadcast-graphics/live-session',
+			'fails',
+			() => Promise.reject(new Error('unavailable')),
+		],
+	])('shows no sample Card or Broadcast Graphic when a %s output\'s %s read %s', async (mode, resource, _case, answer) => {
+		api.screen = screen({
+			currentMode: mode,
+			modeConfigs: {
+				[mode]: mode === 'broadcast-graphics'
+					? { graphics: [] }
+					: {},
+			},
+		});
+		api.answers.set(`/api/screen-output/events/42/screens/7/${resource}`, answer);
+		const read = () => api.requests.some(request => request.path.endsWith(`/screens/7/${resource}`));
+
+		const wrapper = await mountOutput(`/event/42/screen/main#asset-capability=${capability}`, read);
+		await settleUntil(() => false);
+
+		expect(read()).toBe(true);
+		expect((await sampleOnAirMarks()).filter(mark => wrapper.html().includes(mark))).toEqual([]);
 	});
 });
 

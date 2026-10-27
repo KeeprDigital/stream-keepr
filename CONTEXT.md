@@ -332,7 +332,7 @@ What an Event sets once for every Screen it has: its Theme, its Event Canvas, an
 _Avoid_: on-air formatting (when naming the whole group)
 
 **Screen Mode Sample Dataset**:
-One fixed canonical set of Event Data a Theme preview renders every Screen Mode against. Like the Feature Match Sample Dataset, it never appears on a live Screen Output.
+One fixed canonical set of Event Data a Theme preview renders every Screen Mode against, with the card data its cards are drawn with, a Screen Card, and one built-in Theme-bound Broadcast Graphic on air. That graphic is no Broadcast Graphic Template. Like the Feature Match Sample Dataset, it never appears on a live Screen Output.
 _Avoid_: dummy data, test data
 
 **Graphic Theme Binding**:

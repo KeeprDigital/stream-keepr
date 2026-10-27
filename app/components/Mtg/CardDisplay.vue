@@ -7,14 +7,13 @@ import { modeTokenVar } from '~/modules/screen-mode';
 
 const props = withDefaults(defineProps<{
 	config?: CardDisplayConfig;
-	screenId: number;
+	/** The Screen Card to show; null shows none, leaving with its exit animation. */
+	card: MtgCard | null;
 }>(), {
 	config: () => getDefaultConfigForMode('card'),
 });
 
 const { overlayContainer } = useScreenContext();
-const cardStore = useCardStore();
-const { activeCard } = storeToRefs(cardStore);
 const { height: containerHeight } = useElementSize(overlayContainer);
 
 const imageLoaded = ref(false);
@@ -69,25 +68,8 @@ const containerStyle = computed(() => ({
 	'--animation-duration': `${animationDuration.value}s`,
 }));
 
-async function loadCardForScreen() {
-	cardStore.setActiveScreen(props.screenId);
-	await cardStore.loadActiveCard();
-}
-
-// Load active card on mount and when screenId changes
-onMounted(async () => {
-	await loadCardForScreen();
-});
-
-watch(() => props.screenId, async () => {
-	if (!import.meta.client) {
-		return;
-	}
-	await loadCardForScreen();
-});
-
 // Watch for card changes and reset loading state
-watch(activeCard, (newCard) => {
+watch(() => props.card, (newCard) => {
 	if (newCard) {
 		// Same card ID - just update in place (smooth CSS transition for flip/rotate)
 		if (displayCard.value?.id === newCard.id) {
@@ -105,7 +87,7 @@ watch(activeCard, (newCard) => {
 		clearShowCardTimer();
 		showCard.value = false;
 	}
-});
+}, { immediate: true });
 
 // When image loads, wait a moment then show with animation
 function onImageLoad(cardId: string) {

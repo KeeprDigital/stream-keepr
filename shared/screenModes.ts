@@ -48,6 +48,12 @@ export interface ScreenModeContainerControls {
 export interface ScreenModeGraphicsHost {
 	/** Feature Match Overlay still honours generic Screen alignment; a transparent host does not. */
 	useScreenAlignment?: boolean;
+	/**
+	 * A Theme preview shows the host composing its sample graphic. A graphics
+	 * host declares no Mode Tokens, its Graphic Items bind Foundation Tokens
+	 * instead, so this is what puts it in the Theme preview gallery.
+	 */
+	themePreview?: true;
 }
 
 /**
@@ -240,6 +246,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		containerControls: GRAPHICS_HOST_CONTAINER_CONTROLS,
 		graphicsHost: {
 			useScreenAlignment: false,
+			themePreview: true,
 		},
 		config: broadcastGraphicsModeConfigContract,
 		eventReferences: {},
@@ -391,6 +398,13 @@ export function screenModeConfigContract<M extends ScreenMode>(mode: M): typeof 
 export type ThemedScreenMode = {
 	[M in ScreenMode]: typeof SCREEN_MODE_DEFINITIONS[M] extends { modeTokens: object } ? M : never;
 }[ScreenMode];
+
+/**
+ * The Screen Modes a Theme preview shows, in Screen Mode order: each mode
+ * declaring Mode Tokens, and each graphics host declaring a Theme preview.
+ */
+export const THEME_PREVIEW_SCREEN_MODES: readonly ScreenMode[] = SCREEN_MODE_VALUES.filter(mode =>
+	SCREEN_MODES[mode].modeTokens || SCREEN_MODES[mode].graphicsHost?.themePreview);
 
 /** A themed mode's Mode Tokens of one type, by name within the mode. */
 export type ScreenModeTokenOfType<M extends ThemedScreenMode, T extends ThemeTokenType> = {
