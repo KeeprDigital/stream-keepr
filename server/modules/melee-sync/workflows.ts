@@ -375,7 +375,7 @@ export function createMeleeSyncWorkflows() {
 
 	async function syncRoundMatches(ctx: MeleeSyncContext, eventId: number, eventData: MeleeSyncEventData, roundId: number) {
 		const { originConnectionId } = ctx;
-		const publicationWarnings: string[] = [];
+		const afterCommitWarnings: string[] = [];
 		// Re-check at the write boundary even though route-facing Round commands
 		// preflight before refreshing Players.
 		const round = await requireMeleeManagedRound(eventId, roundId);
@@ -383,25 +383,86 @@ export function createMeleeSyncWorkflows() {
 		const phase = await phaseService().findById(round.phaseId, eventId);
 
 		const result = await syncMatchesFromMelee(eventId, eventData, round, phase ?? null);
-		await publishAfterCommit(publicationWarnings, async () => await publication.meleeRoundSynced({
-			eventId,
-			originConnectionId,
-			roundId,
-			matchCount: result.matchCount,
-			created: result.created,
-			updated: result.updated,
-			staleDeleted: result.staleDeleted,
-		}));
-		// Pairings for this Round complete the one before it.
-		const previousRoundStandings = result.matchCount > 0
-			? await syncPreviousRoundStandingsFromMelee(eventId, eventData, round)
-			: null;
+		// Pairings for this Round complete the one before it. The Round's own write
+		// has committed, so a failure here must not lose its announcement.
+		let previousRoundStandings: Awaited<ReturnType<typeof syncPreviousRoundStandingsFromMelee>> = null;
+		if (result.matchCount > 0) {
+			try {
+				previousRoundStandings = await syncPreviousRoundStandingsFromMelee(eventId, eventData, round);
+			}
+			catch (error) {
+				console.warn(JSON.stringify({
+					message: 'melee_sync_previous_round_standings_failed',
+					eventId,
+					roundId,
+					errorName: error instanceof Error
+						? error.name
+						: typeof error,
+					errorMessage: error instanceof Error
+						? error.message
+						: String(error),
+				}));
+				afterCommitWarnings.push('Matches were saved, but the previous Round\'s Round Standings could not be stored');
+			}
+		}
+
+		// Each kind of change is announced only when it happened, so a quiet sync
+		// publishes nothing. `published` names the kinds even if delivery failed.
+		const published: Array<'matchResults' | 'pairings' | 'roundStandings'> = [];
+		if (result.resultChangedMatchIds.length > 0) {
+			published.push('matchResults');
+			await publishAfterCommit(afterCommitWarnings, async () => await publication.meleeMatchResultsSynced({
+				eventId,
+				originConnectionId,
+				roundId,
+				matchIds: result.resultChangedMatchIds,
+			}));
+		}
+		if (result.pairingsChanged) {
+			published.push('pairings');
+			await publishAfterCommit(afterCommitWarnings, async () => await publication.meleePairingsSynced({
+				eventId,
+				originConnectionId,
+				roundId,
+			}));
+		}
+		const standingsRoundIds = [
+			...(result.standingsChanged
+				? [roundId]
+				: []),
+			...(previousRoundStandings?.standingsChanged
+				? [previousRoundStandings.roundId]
+				: []),
+		];
+		if (standingsRoundIds.length > 0)
+			published.push('roundStandings');
+		for (const standingsRoundId of standingsRoundIds) {
+			await publishAfterCommit(afterCommitWarnings, async () => await publication.meleeRoundStandingsSynced({
+				eventId,
+				originConnectionId,
+				roundId: standingsRoundId,
+			}));
+		}
+		if (published.length > 0) {
+			// Kept for one release, for Screen Outputs still on the previous bundle.
+			await publishAfterCommit(afterCommitWarnings, async () => await publication.meleeRoundSynced({
+				eventId,
+				originConnectionId,
+				roundId,
+				matchCount: result.matchCount,
+				created: result.created,
+				updated: result.updated,
+				staleDeleted: result.staleDeleted,
+			}));
+		}
+
 		return {
 			...result,
 			previousRoundStandings,
+			published,
 			warnings: [
 				...(result.warnings ?? []),
-				...publicationWarnings,
+				...afterCommitWarnings,
 			],
 		};
 	}

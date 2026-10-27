@@ -51,6 +51,11 @@ export function createMeleeRealtimeHandlers({ accept }: Options) {
 				useFeatureMatchStore().loadFeatureMatchesByEventId(data.eventId),
 			]);
 		})),
+		// Every granular Round message arrives beside `melee:roundSynced`, which the
+		// operator still follows until it moves onto these.
+		'melee:matchResultsSynced': accept('melee:matchResultsSynced', () => {}),
+		'melee:pairingsSynced': accept('melee:pairingsSynced', () => {}),
+		'melee:roundStandingsSynced': accept('melee:roundStandingsSynced', () => {}),
 		'melee:roundSynced': accept('melee:roundSynced', operatorOnly(async (data) => {
 			await Promise.all([
 				useRoundStore().loadRoundsByEventId(data.eventId),

@@ -179,6 +179,10 @@ function matchResult(round: typeof round1, matchCount = 4) {
 		updated: 0,
 		staleDeleted: 0,
 		warnings: [],
+		complete: false,
+		resultChangedMatchIds: [],
+		pairingsChanged: true,
+		standingsChanged: false,
 	};
 }
 

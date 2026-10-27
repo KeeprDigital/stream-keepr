@@ -335,6 +335,24 @@ export interface MessageDefinitions {
 		deckCount: number;
 	};
 
+	// A Round sync publishes each of these only when its content changed.
+	'melee:matchResultsSynced': {
+		roundId: number;
+		/** Stored Matches whose Match Result changed: reported, corrected, or un-reported. */
+		matchIds: number[];
+	};
+
+	/** Matches in the Round were added, removed, or re-seated. */
+	'melee:pairingsSynced': {
+		roundId: number;
+	};
+
+	/** The Round's stored Round Standings differ from before. */
+	'melee:roundStandingsSynced': {
+		roundId: number;
+	};
+
+	/** @deprecated Published for one release for Screen Outputs on the previous bundle. */
 	'melee:roundSynced': {
 		roundId: number;
 		matchCount: number;

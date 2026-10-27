@@ -475,9 +475,13 @@ describe('syncing a Round\'s Matches', () => {
 			updated: 1,
 			staleDeleted: 0,
 			warnings: ['A player deck could not be selected'],
+			complete: false,
+			resultChangedMatchIds: [],
+			pairingsChanged: true,
+			standingsChanged: false,
 		});
 		publishMessage.mockImplementation(async (_eventId: number, type: string) => {
-			if (type === 'melee:roundSynced')
+			if (type === 'melee:pairingsSynced')
 				throw new Error('Ably unavailable');
 		});
 		vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -488,7 +492,7 @@ describe('syncing a Round\'s Matches', () => {
 			success: true,
 			warnings: [
 				'A player deck could not be selected',
-				expect.stringContaining('realtime notification "melee:roundSynced" could not be delivered'),
+				expect.stringContaining('realtime notification "melee:pairingsSynced" could not be delivered'),
 			],
 		});
 		expect((await readEvent(eventId)).lastSyncError).toBeNull();

@@ -91,6 +91,12 @@ interface StructureSyncedInput extends PublicationInput, MessagePayload<'melee:s
 
 interface FeatureMatchesSyncedInput extends PublicationInput, MessagePayload<'melee:featureMatchesSynced'> {}
 
+interface MeleeMatchResultsSyncedInput extends PublicationInput, MessagePayload<'melee:matchResultsSynced'> {}
+
+interface MeleePairingsSyncedInput extends PublicationInput, MessagePayload<'melee:pairingsSynced'> {}
+
+interface MeleeRoundStandingsSyncedInput extends PublicationInput, MessagePayload<'melee:roundStandingsSynced'> {}
+
 interface MeleeRoundSyncedInput extends PublicationInput, MessagePayload<'melee:roundSynced'> {}
 
 interface MeleeDataResetInput extends PublicationInput, MessagePayload<'melee:dataReset'> {}
@@ -488,6 +494,19 @@ export function eventDataPublicationModule() {
 		await publishSyncMessage(eventId, 'melee:featureMatchesSynced', payload, originConnectionId);
 	}
 
+	async function meleeMatchResultsSynced({ eventId, originConnectionId, ...payload }: MeleeMatchResultsSyncedInput) {
+		await publishSyncMessage(eventId, 'melee:matchResultsSynced', payload, originConnectionId);
+	}
+
+	async function meleePairingsSynced({ eventId, originConnectionId, ...payload }: MeleePairingsSyncedInput) {
+		await publishSyncMessage(eventId, 'melee:pairingsSynced', payload, originConnectionId);
+	}
+
+	async function meleeRoundStandingsSynced({ eventId, originConnectionId, ...payload }: MeleeRoundStandingsSyncedInput) {
+		await publishSyncMessage(eventId, 'melee:roundStandingsSynced', payload, originConnectionId);
+	}
+
+	/** @deprecated Published for one release beside the granular Round messages. */
 	async function meleeRoundSynced({ eventId, originConnectionId, ...payload }: MeleeRoundSyncedInput) {
 		await publishSyncMessage(eventId, 'melee:roundSynced', payload, originConnectionId);
 	}
@@ -556,6 +575,9 @@ export function eventDataPublicationModule() {
 		meleePlayersSynced,
 		meleeStructureSynced,
 		meleeFeatureMatchesSynced,
+		meleeMatchResultsSynced,
+		meleePairingsSynced,
+		meleeRoundStandingsSynced,
 		meleeRoundSynced,
 		meleeDataReset,
 		playerDeckReviewed,

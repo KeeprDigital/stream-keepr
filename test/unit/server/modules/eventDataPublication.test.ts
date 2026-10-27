@@ -457,6 +457,24 @@ describe('the realtime message each Event Data change sends', () => {
 			'melee:featureMatchesSynced',
 		],
 		[
+			'meleeMatchResultsSynced',
+			{
+				roundId: 3,
+				matchIds: [11, 12],
+			},
+			'melee:matchResultsSynced',
+		],
+		[
+			'meleePairingsSynced',
+			{ roundId: 3 },
+			'melee:pairingsSynced',
+		],
+		[
+			'meleeRoundStandingsSynced',
+			{ roundId: 3 },
+			'melee:roundStandingsSynced',
+		],
+		[
 			'meleeRoundSynced',
 			{
 				roundId: 3,

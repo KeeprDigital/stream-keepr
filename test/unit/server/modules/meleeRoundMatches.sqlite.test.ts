@@ -8,7 +8,8 @@ import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /*
  * Round Match import against real SQL: only Melee and Ably are stood in for.
- * Round Standings are stored only for a complete Round, on every sync path.
+ * Round Standings are stored only for a complete Round, on every sync path, and a
+ * Round sync announces only what it changed.
  */
 
 const harness = await createSqliteD1Harness();
@@ -16,6 +17,7 @@ const db = drizzle(harness.database, { schema });
 
 const meleeMatchesByRound = new Map<number, MeleeMatchParsed[]>();
 const meleeStandingsByRound = new Map<number, MeleeStandingParsed[]>();
+const publishMessageStrict = vi.fn();
 const melee = {
 	fetchMatchesByRound: vi.fn(async (roundId: number) => meleeMatchesByRound.get(roundId) ?? []),
 	fetchStandingsByRound: vi.fn(async (roundId: number) => meleeStandingsByRound.get(roundId) ?? []),
@@ -28,7 +30,7 @@ vi.doMock('~~/server/services/meleeIntegration', () => ({
 vi.doMock('~~/server/utils/ably', () => ({
 	getOriginConnectionId: () => 'origin-1',
 	publishMessage: vi.fn(),
-	publishMessageStrict: vi.fn(),
+	publishMessageStrict,
 }));
 vi.doMock('~~/server/modules/broadcast-graphics-live-session', () => ({
 	refreshBroadcastGraphicsBindings: vi.fn(),
@@ -176,10 +178,16 @@ async function matchesOf(eventId: number, roundId: number) {
 	)).orderBy(schema.matches.sortOrder);
 }
 
+/** Each realtime message published so far, as `[type, payload]`. */
+function announced() {
+	return publishMessageStrict.mock.calls.map(([, type, payload]) => [type, payload]);
+}
+
 beforeEach(() => {
 	vi.clearAllMocks();
 	meleeMatchesByRound.clear();
 	meleeStandingsByRound.clear();
+	melee.fetchStandingsByRound.mockImplementation(async (roundId: number) => meleeStandingsByRound.get(roundId) ?? []);
 });
 
 describe('syncing a Round from Melee', () => {
@@ -316,6 +324,204 @@ describe('pairing the next Round completes the one before it', () => {
 		expect(result.previousRoundStandings).toBeNull();
 		expect(melee.fetchMatchesByRound.mock.calls).toEqual([
 			[ROUND_4],
+		]);
+	});
+});
+
+describe('a Round sync announces only what it changed', () => {
+	type Seeded = Awaited<ReturnType<typeof seedEvent>>;
+	const matchId = async ({ eventId, roundId }: Seeded, meleeRoundId: number, guid: string) =>
+		(await matchesOf(eventId, roundId(meleeRoundId))).find(match => match.externalId === guid)!.id;
+
+	// `before` is Melee's Round 3 at the last sync; `after` is what Melee lists now.
+	it.each([
+		{
+			case: 'nothing changed',
+			before: [
+				pairing('a', [1, 2], [2, 0]),
+				pairing('b', [3, 4]),
+			],
+			after: [
+				pairing('a', [1, 2], [2, 0]),
+				pairing('b', [3, 4]),
+			],
+			published: [],
+			expected: async () => [],
+		},
+		{
+			case: 'one Match Result reported',
+			before: [
+				pairing('a', [1, 2]),
+				pairing('b', [3, 4]),
+			],
+			after: [
+				pairing('a', [1, 2], [2, 0]),
+				pairing('b', [3, 4]),
+			],
+			published: ['matchResults'],
+			expected: async (seeded: Seeded) => [
+				[
+					'melee:matchResultsSynced',
+					{
+						roundId: seeded.roundId(ROUND_3),
+						matchIds: [await matchId(seeded, ROUND_3, 'a')],
+					},
+				],
+			],
+		},
+		{
+			case: 'a Match paired',
+			before: [
+				pairing('a', [1, 2]),
+			],
+			after: [
+				pairing('a', [1, 2]),
+				pairing('b', [3, 4]),
+			],
+			published: ['pairings'],
+			expected: async (seeded: Seeded) => [
+				[
+					'melee:pairingsSynced',
+					{
+						roundId: seeded.roundId(ROUND_3),
+					},
+				],
+			],
+		},
+		{
+			// Completion re-maps each side's Player record, so pairings change with it.
+			case: 'the final Match Result completes the Round',
+			before: [
+				pairing('a', [1, 2], [2, 0]),
+				pairing('b', [3, 4]),
+			],
+			after: [
+				pairing('a', [1, 2], [2, 0]),
+				pairing('b', [3, 4], [2, 1]),
+			],
+			published: ['matchResults', 'pairings', 'roundStandings'],
+			expected: async (seeded: Seeded) => [
+				[
+					'melee:matchResultsSynced',
+					{
+						roundId: seeded.roundId(ROUND_3),
+						matchIds: [await matchId(seeded, ROUND_3, 'b')],
+					},
+				],
+				[
+					'melee:pairingsSynced',
+					{
+						roundId: seeded.roundId(ROUND_3),
+					},
+				],
+				[
+					'melee:roundStandingsSynced',
+					{
+						roundId: seeded.roundId(ROUND_3),
+					},
+				],
+			],
+		},
+	])('$case: publishes $published', async ({ before, after, published, expected }) => {
+		const seeded = await seedEvent();
+		meleeMatchesByRound.set(ROUND_3, before);
+		meleeStandingsByRound.set(ROUND_3, standingsAfter);
+		await syncRound(seeded.eventId, seeded.roundId(ROUND_3));
+		meleeMatchesByRound.set(ROUND_3, after);
+
+		const result = await createMeleeSyncWorkflows().syncRoundMatches({}, seeded.eventId, eventData, seeded.roundId(ROUND_3));
+
+		const messages = await expected(seeded);
+		expect(result.published).toEqual(published);
+		// The legacy summary follows any granular message, and only then.
+		expect(announced()).toEqual(messages.length > 0
+			? [
+					...messages,
+					[
+						'melee:roundSynced',
+						expect.objectContaining({
+							roundId: seeded.roundId(ROUND_3),
+						}),
+					],
+				]
+			: []);
+	});
+
+	it('announces the previous Round\'s Round Standings when the next Round\'s pairings store them', async () => {
+		const seeded = await seedEvent();
+		meleeMatchesByRound.set(ROUND_3, [
+			pairing('a', [1, 2], [2, 0]),
+			pairing('b', [3, 4]),
+		]);
+		meleeStandingsByRound.set(ROUND_3, standingsAfter);
+		await syncRound(seeded.eventId, seeded.roundId(ROUND_3));
+		meleeMatchesByRound.set(ROUND_4, [
+			pairing('c', [1, 3]),
+			pairing('d', [2, 4]),
+		]);
+
+		const result = await createMeleeSyncWorkflows().syncRoundMatches({}, seeded.eventId, eventData, seeded.roundId(ROUND_4));
+
+		expect(result.published).toEqual(['pairings', 'roundStandings']);
+		expect(announced()).toEqual([
+			[
+				'melee:pairingsSynced',
+				{
+					roundId: seeded.roundId(ROUND_4),
+				},
+			],
+			[
+				'melee:roundStandingsSynced',
+				{
+					roundId: seeded.roundId(ROUND_3),
+				},
+			],
+			[
+				'melee:roundSynced',
+				expect.objectContaining({
+					roundId: seeded.roundId(ROUND_4),
+				}),
+			],
+		]);
+	});
+
+	it('still announces the Round\'s own changes, with a warning, when storing the previous Round\'s Round Standings fails', async () => {
+		const seeded = await seedEvent();
+		meleeMatchesByRound.set(ROUND_3, [
+			pairing('a', [1, 2], [2, 0]),
+			pairing('b', [3, 4]),
+		]);
+		await syncRound(seeded.eventId, seeded.roundId(ROUND_3));
+		meleeMatchesByRound.set(ROUND_4, [
+			pairing('c', [1, 3]),
+			pairing('d', [2, 4]),
+		]);
+		melee.fetchStandingsByRound.mockRejectedValue(new Error('Melee unavailable'));
+		vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+		const result = await createMeleeSyncWorkflows().syncRoundMatches({}, seeded.eventId, eventData, seeded.roundId(ROUND_4));
+
+		expect(result).toMatchObject({
+			published: ['pairings'],
+			previousRoundStandings: null,
+			warnings: [
+				expect.stringContaining('previous Round\'s Round Standings could not be stored'),
+			],
+		});
+		expect(await matchesOf(seeded.eventId, seeded.roundId(ROUND_4))).toHaveLength(2);
+		expect(announced()).toEqual([
+			[
+				'melee:pairingsSynced',
+				{
+					roundId: seeded.roundId(ROUND_4),
+				},
+			],
+			[
+				'melee:roundSynced',
+				expect.objectContaining({
+					roundId: seeded.roundId(ROUND_4),
+				}),
+			],
 		]);
 	});
 });
