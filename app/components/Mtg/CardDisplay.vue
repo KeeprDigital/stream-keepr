@@ -3,7 +3,7 @@ import type { CardDisplayConfig } from '~~/shared/types/screenConfig';
 import type { MtgCard } from '~/types/card/mtg';
 import { useElementSize } from '@vueuse/core';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
-import { mtgCardSizeFromHeight } from '~~/shared/utils/card/size';
+import { modeTokenVar } from '~/modules/screen-mode';
 
 const props = withDefaults(defineProps<{
 	config?: CardDisplayConfig;
@@ -28,16 +28,22 @@ function clearShowCardTimer() {
 	showCardTimer = null;
 }
 
-// Size cards from the rendered overlay container so fixed screen dimensions stay exact.
-const cardDimensions = computed(() => {
-	const baseDimensions = mtgCardSizeFromHeight(Math.max(containerHeight.value, 80));
-	const scale = props.config?.scale ?? 1;
-	return {
-		cardWidth: baseDimensions.cardWidth * scale,
-		cardHeight: baseDimensions.cardHeight * scale,
-		diagonal: baseDimensions.diagonal * scale,
-	};
-});
+/** The card's width in Event Canvas pixels, and the square it turns within: its diagonal. */
+const CARD_ASPECT_RATIO = 85 / 61;
+const cardWidth = modeTokenVar('card', 'card-width');
+const turningSquare = `calc(${cardWidth} * ${Math.sqrt(1 + CARD_ASPECT_RATIO ** 2)})`;
+
+/** The default Event Canvas's height (ADR-0051). */
+const EVENT_CANVAS_HEIGHT = 1080;
+
+/**
+ * The Event Canvas scaled to the overlay container's height, as the Screen
+ * host will once it scales every plain mode's canvas (#821). Unmeasured, the
+ * card renders at canvas size.
+ */
+const canvasZoom = computed(() => containerHeight.value > 0
+	? containerHeight.value / EVENT_CANVAS_HEIGHT
+	: 1);
 
 // Animation speed mapping (in seconds)
 const animationSpeedMap = {
@@ -55,8 +61,9 @@ const animationDuration = computed(() => {
 // Container style — always centers the card within the diagonal rotation container.
 // Viewport-level positioning is handled by the Renderer, not this component.
 const containerStyle = computed(() => ({
-	'width': `${cardDimensions.value.diagonal}px`,
-	'height': `${cardDimensions.value.diagonal}px`,
+	'width': turningSquare,
+	'height': turningSquare,
+	'zoom': String(canvasZoom.value),
 	'justifyItems': 'center',
 	'alignItems': 'center',
 	'--animation-duration': `${animationDuration.value}s`,
@@ -133,7 +140,7 @@ function onAfterLeave() {
 		class="card-container"
 		:style="containerStyle"
 	>
-		<div :style="{ width: `${cardDimensions.cardWidth}px` }">
+		<div data-testid="spotlight-card" :style="{ width: cardWidth }">
 			<!-- Card -->
 			<transition mode="out-in" name="zoom-fade" @after-leave="onAfterLeave">
 				<div v-if="showCard" class="card-image-wrapper">

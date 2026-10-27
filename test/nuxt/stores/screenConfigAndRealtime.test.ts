@@ -66,7 +66,7 @@ describe('useScreenStore config and realtime', () => {
 				createMockScreen({
 					id: 1,
 					modeConfigs: {
-						card: { featureMatchId: 1, scale: 1 },
+						card: { featureMatchId: 1, animationSpeed: 'slow' },
 					},
 					stateVersion: 2,
 				}),
@@ -74,16 +74,16 @@ describe('useScreenStore config and realtime', () => {
 			mockRepo.updateModeConfig.mockResolvedValue(createMockScreen({
 				id: 1,
 				modeConfigs: {
-					card: { scale: 2 },
+					card: { animationSpeed: 'fast' },
 				},
 				stateVersion: 3,
 			}));
 
-			const first = store.updateModeConfig(1, 1, 'card', { scale: 2 });
+			const first = store.updateModeConfig(1, 1, 'card', { animationSpeed: 'fast' });
 			const second = store.updateModeConfig(1, 1, 'card', { featureMatchId: null as any });
 
 			expect(store.screens[0]!.modeConfigs).toEqual({
-				card: { scale: 2 },
+				card: { animationSpeed: 'fast' },
 			});
 			expect(mockRepo.updateModeConfig).not.toHaveBeenCalled();
 
@@ -91,7 +91,7 @@ describe('useScreenStore config and realtime', () => {
 			await Promise.all([first, second]);
 
 			expect(mockRepo.updateModeConfig).toHaveBeenCalledOnce();
-			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'card', { scale: 2, featureMatchId: null }, 2);
+			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'card', { animationSpeed: 'fast', featureMatchId: null }, 2);
 		});
 
 		it('holds the server\'s Screen, in the collection and as the active Screen', async () => {

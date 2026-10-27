@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { DeckListCardWithData } from '~/types/card/deckList';
+import { modeTokenVar } from '~/modules/screen-mode';
 
-defineProps<{
+const props = defineProps<{
 	card: DeckListCardWithData;
-	sizeClass: string;
 	showQuantity: boolean;
 	showHighlanderPoints: boolean;
 	quantityPositionClass: string;
@@ -12,8 +12,19 @@ defineProps<{
 	highlanderPointsPositionClass: string;
 	highlanderPointsSizeClass: string;
 	highlanderPointsBadgeStyle: Record<string, string>;
+	/** Fills its grid column rather than taking the `card-width` Mode Token. */
 	dynamicSize?: boolean;
 }>();
+
+const cardStyle = computed(() => props.dynamicSize
+	? {}
+	: {
+			width: modeTokenVar('deck', 'card-width'),
+		});
+
+const placeholderStyle = {
+	backgroundColor: modeTokenVar('deck', 'card-placeholder'),
+};
 
 function getCardImageUrl(card: DeckListCardWithData): string | null {
 	return card.mtgCard?.imageData?.front?.normal ?? null;
@@ -23,9 +34,9 @@ function getCardImageUrl(card: DeckListCardWithData): string | null {
 <template>
 	<div
 		class="card-item relative"
-		:class="{ [sizeClass]: !dynamicSize }"
+		:style="cardStyle"
 	>
-		<div class="mtg-card bg-elevated">
+		<div class="mtg-card" :style="placeholderStyle">
 			<NuxtImg
 				v-if="getCardImageUrl(card)"
 				:src="getCardImageUrl(card)!"

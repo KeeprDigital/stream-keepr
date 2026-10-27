@@ -42,6 +42,11 @@ export const FOUNDATION_TOKENS = {
 		label: 'Secondary text',
 		default: 'rgba(255, 255, 255, 0.72)',
 	},
+	'text-inverse': {
+		type: 'color',
+		label: 'Text on light',
+		default: '#111827',
+	},
 	'accent': {
 		type: 'color',
 		label: 'Accent',

@@ -90,24 +90,6 @@ const hasMatchBinding = computed(() => !!config.value.featureMatchId);
 			</p>
 		</ScreenSettingsCard>
 
-		<!-- Display Settings -->
-		<ScreenSettingsCard title="Screen Settings">
-			<UFormField
-				:label="fields.scale.label"
-				:description="`Scale multiplier for the card size (${fields.scale.min?.toFixed(1)} - ${fields.scale.max?.toFixed(1)}).`"
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="config.scale"
-					:min="fields.scale.min"
-					:max="fields.scale.max"
-					:step="fields.scale.step"
-					class="w-32"
-					@update:model-value="updateConfig({ scale: Number($event) })"
-				/>
-			</UFormField>
-		</ScreenSettingsCard>
-
 		<!-- Animation Settings -->
 		<ScreenSettingsCard title="Animation">
 			<ScreenSettingsToggle

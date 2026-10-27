@@ -51,3 +51,56 @@ describe('a Top Cut Bracket Screen storing the dropped bracketSize', () => {
 		expect(modeConfigPatchSchemaMap.standings.safeParse({ bracketSize: 8 }).success).toBe(false);
 	});
 });
+
+/**
+ * A look field that became a Mode Token (#824), top-level or inside a nested
+ * block, reads, saves and leaves storage like any former field.
+ */
+describe.each([
+	{
+		mode: 'card',
+		stored: { scale: 1.5, animationSpeed: 'fast' },
+		reads: { animationSpeed: 'fast' },
+		patch: { animationEnabled: false },
+		patched: { animationSpeed: 'fast', animationEnabled: false },
+	},
+	{
+		mode: 'deck',
+		stored: {
+			quantityBgColor: '#7c3aed',
+			mainboard: {
+				view: 'grid',
+				columns: 6,
+				cardSize: 'large',
+				cardGap: 12,
+			},
+			sideboard: { stackOverlap: 20 },
+		},
+		reads: {
+			mainboard: { view: 'grid', columns: 6 },
+			sideboard: {},
+		},
+		patch: { showDeckName: false },
+		patched: {
+			mainboard: { view: 'grid', columns: 6 },
+			sideboard: {},
+			showDeckName: false,
+		},
+	},
+] as const)('a $mode Screen storing a look field that is now a Mode Token', ({ mode, stored, reads, patch, patched }) => {
+	it('reads without it, everywhere it is read', () => {
+		expect(screenModeConfigContract(mode).readStored(stored)).toEqual(reads);
+		expect(mapScreenToResponse(createMockScreen({
+			modeConfigs: { [mode]: stored },
+		})).modeConfigs).toEqual({ [mode]: reads });
+	});
+
+	it('saves through a full write and a PATCH that still name it, and loses it on that PATCH', () => {
+		expect(JSON.parse(JSON.stringify(modeConfigsMapSchema.parse({ [mode]: stored })))).toEqual({ [mode]: reads });
+		const echoed = modeConfigPatchSchemaMap[mode].parse({
+			...stored,
+			...patch,
+		}) as Record<string, unknown>;
+		expect(parseModeConfigPatchResult({ [mode]: stored }, mode, echoed)).toEqual({ [mode]: patched });
+	});
+});

@@ -4,7 +4,7 @@ import type { ScreenMode } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { computed, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { SCREEN_MODES, screenModeTokenName, screenModeTokens } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
@@ -17,8 +17,6 @@ import Renderer from '~/components/Screen/Renderer.vue';
 /** Modes whose displays still read their look from elsewhere, and the ticket moving each. */
 const MODES_NOT_YET_ON_THEME_TOKENS: Partial<Record<ScreenMode, string>> = {
 	'background': '#825',
-	'card': '#824',
-	'deck': '#824',
 	'top-cut': '#823',
 	'feature-match-overlay': '#831',
 	'broadcast-graphics': '#829',
@@ -30,7 +28,7 @@ const MODES_NOT_YET_ON_THEME_TOKENS: Partial<Record<ScreenMode, string>> = {
 	'head-to-head': '#822',
 };
 
-type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor';
+type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderColor' | 'width' | 'height' | 'gap';
 
 /** Where a display paints one Mode Token: an element, and for a colour the property it sets. */
 interface Probe {
@@ -51,6 +49,31 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'secondary-text': { selector: '.cell-record', property: 'color' },
 		'rise': { selector: '[data-position-change="up"]', property: 'color' },
 		'fall': { selector: '[data-position-change="down"]', property: 'color' },
+	},
+	card: {
+		'card-width': { selector: '[data-testid="spotlight-card"]', property: 'width' },
+	},
+	deck: {
+		'title-typography': { selector: '.deck-header h2' },
+		'body-typography': { selector: '.deck-header p' },
+		'primary-text': { selector: '.deck-header h2', property: 'color' },
+		'secondary-text': { selector: '.deck-header p', property: 'color' },
+		'card-placeholder': { selector: '.mtg-card', property: 'backgroundColor' },
+		'quantity-badge-text': { selector: '.quantity-badge', property: 'color' },
+		'quantity-badge-surface': { selector: '.quantity-badge', property: 'backgroundColor' },
+		'points-badge-text': { selector: '[data-testid="highlander-card-badge"]', property: 'color' },
+		'points-badge-surface': { selector: '[data-testid="highlander-card-badge"]', property: 'backgroundColor' },
+		'meta-pill-text': { selector: '[data-testid="deck-meta-pill"] span', property: 'color' },
+		'meta-pill-surface': { selector: '[data-testid="deck-meta-pill"]', property: 'backgroundColor' },
+		'meta-pill-accent': { selector: '[data-testid="deck-meta-pill"] .font-medium', property: 'color' },
+		'meta-pill-border': { selector: '[data-testid="deck-meta-pill"]', property: 'borderColor' },
+		'pointed-card-text': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'color' },
+		'pointed-card-surface': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'backgroundColor' },
+		'pointed-card-accent': { selector: '[data-testid="highlander-pointed-card-chip"] span', property: 'color' },
+		'pointed-card-border': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'borderColor' },
+		'card-width': { selector: '[data-testid="mainboard-grid"] .card-item', property: 'width' },
+		'card-gap': { selector: '[data-testid="mainboard-grid"]', property: 'gap' },
+		'stack-reveal': { selector: '[data-testid="sideboard-stack-column"] .stack-card', property: 'height' },
 	},
 };
 
@@ -121,6 +144,96 @@ mockNuxtImport('useStandingsModeData', () => () => {
 	};
 });
 
+function deckCard(name: string, compartment: 'mainboard' | 'sideboard') {
+	return {
+		name,
+		quantity: 2,
+		compartment,
+		cardType: 'Instant',
+		scryfallId: null,
+		highlanderPoints: 1,
+		mtgCard: null,
+	};
+}
+
+mockNuxtImport('useDeckModeData', () => () => ({
+	config: computed(() => ({
+		board: 'full',
+		sideboardPlacement: 'beside',
+		mainboard: { view: 'grid', columns: 4, dynamicCardSize: false },
+		sideboard: { view: 'stack' },
+		showQuantities: true,
+		showDeckName: true,
+		showDeckColors: false,
+		showDeckStats: false,
+		showDeckMetaPill: true,
+		showHighlanderTotal: false,
+		showHighlanderPointedCards: true,
+		showHighlanderPoints: true,
+	})),
+	primaryHeader: ref('Alice'),
+	secondaryHeader: ref('Mono Blue'),
+	deckColors: '',
+	companion: ref({ name: 'Lurrus of the Dream-Den' }),
+	highlander: ref({
+		system: '7ph',
+		status: 'legal',
+		points: 1,
+		maxPoints: 7,
+		hasReserveListCards: false,
+		pointedCards: [
+			{
+				name: 'Mana Drain',
+				points: 1,
+				compartments: [],
+				totalQuantity: 1,
+			},
+		],
+		duplicateCards: [],
+		unknownCards: [],
+	}),
+	deckCounters: ref([]),
+	deckStats: ref([]),
+	mainboard: ref([
+		deckCard('Mana Drain', 'mainboard'),
+	]),
+	sideboard: ref([
+		deckCard('Pyroblast', 'sideboard'),
+		deckCard('Hydroblast', 'sideboard'),
+	]),
+	error: ref(null),
+	hasDisplayedDeck: computed(() => true),
+	displayedDeckVersion: ref(1),
+	pendingSwapVersion: ref(0),
+	commitPendingDeck: () => {},
+}));
+
+const spotlightCard = {
+	id: 'spotlight',
+	imageData: {
+		front: { normal: 'https://cards.example/spotlight.jpg' },
+	},
+	displayData: {},
+};
+
+mockNuxtImport('useCardModeData', () => () => ({
+	displayConfig: computed(() => ({ animationEnabled: false, animationSpeed: 'normal' })),
+	screenId: computed(() => 1),
+	error: ref(null),
+}));
+
+// A store's state is refs, as `storeToRefs` reads it.
+mockNuxtImport('useCardStore', () => () => {
+	const activeCard = ref<typeof spotlightCard | null>(null);
+	return reactive({
+		activeCard,
+		setActiveScreen() {},
+		async loadActiveCard() {
+			activeCard.value = spotlightCard;
+		},
+	});
+});
+
 // ── Mounting and reading what is painted ──
 
 let wrapper: VueWrapper | undefined;
@@ -141,11 +254,15 @@ async function mountMode(mode: ScreenMode, theme?: StoredThemeTokens) {
 	wrapper = mount(Renderer, {
 		attachTo: document.body,
 		global: {
-			stubs: { MtgManaColorDisplay: true },
+			stubs: { MtgManaColorDisplay: true, MtgCardImage: true },
 		},
 	});
 	// The display is an async component.
 	await vi.waitFor(() => expect(wrapper!.get('.screen-renderer').element.childElementCount).toBeGreaterThan(0));
+	await flushPromises();
+	// A display holding an image back until it loads shows it.
+	for (const image of wrapper.findAll('img'))
+		await image.trigger('load');
 	await flushPromises();
 	return wrapper;
 }
@@ -217,7 +334,10 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 	}));
 
 	it.each(tokens)('paints $name from the Theme', async ({ name, definition, probe }) => {
-		const sample = SAMPLES[definition.type];
+		// A dimension sample sits within the token's bounds, which a stored value outside reads clamped to.
+		const sample = definition.type === 'dimension' && definition.bounds
+			? Math.min(definition.bounds.max, Math.max(definition.bounds.min + 1, SAMPLES.dimension))
+			: SAMPLES[definition.type];
 		await mountMode(mode, { [name]: sample });
 
 		expect(painted(probe, definition.type)).toEqual(expectedPaint(definition.type, sample));

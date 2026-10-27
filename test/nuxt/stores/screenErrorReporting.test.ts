@@ -89,7 +89,7 @@ describe('useScreenStore error reporting', () => {
 		],
 		[
 			'mode-config',
-			(s: ReturnType<typeof useScreenStore>) => s.updateModeConfig(1, 5, 'card', { scale: 2 }),
+			(s: ReturnType<typeof useScreenStore>) => s.updateModeConfig(1, 5, 'card', { animationSpeed: 'fast' }),
 			'updateModeConfig',
 		],
 	] as const)('carries a refused %s write\'s sentence to its caller and to the banner', async (_, write, method) => {

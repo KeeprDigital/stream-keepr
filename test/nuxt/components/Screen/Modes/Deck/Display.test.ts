@@ -8,7 +8,6 @@ import { computed, defineComponent, ref } from 'vue';
 import Display from '~/components/Screen/Modes/Deck/Display.vue';
 
 let mutableConfig: Record<string, unknown>;
-const screenLevelConfig = ref<Record<string, unknown>>({});
 
 const mainboard = ref<DeckListCardWithData[]>([]);
 const sideboard = ref<DeckListCardWithData[]>([]);
@@ -42,13 +41,6 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	displayedDeckVersion,
 	pendingSwapVersion,
 	commitPendingDeck,
-}));
-
-mockNuxtImport('useScreenContext', () => () => ({
-	screen: computed(() => ({ screenConfig: screenLevelConfig.value })),
-	eventId: ref(1),
-	interactive: ref(false),
-	overlayContainer: ref(null),
 }));
 
 const ScreenModeBaseStub = defineComponent({
@@ -136,30 +128,18 @@ describe('screenDeckDisplay', () => {
 			board: 'full',
 			sideboardPlacement: 'beside',
 			mainboard: { view: 'grid', columns: 4, listColumns: 2 },
-			sideboard: { view: 'stack', stackOverlap: 15 },
+			sideboard: { view: 'stack' },
 			showDeckName: true,
 			showDeckColors: true,
 			showDeckStats: true,
 			showDeckMetaPill: true,
 			deckMetaPillSize: 'large',
-			deckMetaPillTextColor: '#123456',
-			deckMetaPillBgColor: 'linear-gradient(red, blue)',
-			deckMetaPillAccentColor: '#ff00aa',
-			deckMetaPillBorderColor: '#fedcba',
 			showHighlanderTotal: true,
 			showHighlanderPointedCards: true,
 			highlanderPointedCardsSize: 'large',
-			highlanderPointedCardsTextColor: '#123456',
-			highlanderPointedCardsBgColor: '#abcdef',
-			highlanderPointedCardsAccentColor: '#ff00aa',
-			highlanderPointedCardsBorderColor: '#fedcba',
 			showHighlanderPoints: true,
 			highlanderPointsPosition: 'bottom-right',
 			highlanderPointsSize: 'small',
-		};
-		screenLevelConfig.value = {
-			primaryTextColor: '#ffeeaa',
-			secondaryTextColor: '#aabbcc',
 		};
 		displayedDeckVersion.value = 1;
 		pendingSwapVersion.value = 0;
@@ -180,7 +160,7 @@ describe('screenDeckDisplay', () => {
 		deckColors.value = 'U';
 	});
 
-	it('styles the deck meta pill and chips in the configured colours', async () => {
+	it('fills the deck meta pill and the pointed card chips', async () => {
 		const wrapper = await mountComponent();
 
 		const metaPill = wrapper.get('[data-testid="deck-meta-pill"]');
@@ -189,38 +169,11 @@ describe('screenDeckDisplay', () => {
 		expect(metaPill.text()).toContain('Lurrus of the Dream-Den');
 		expect(wrapper.get('[data-testid="highlander-total-inline"]').text()).toContain('4/3 Points');
 		expect(metaPill.text()).toContain('Instants');
-		expect(metaPill.attributes('style')).toContain('color: #123456;');
-		expect(metaPill.attributes('style')).toContain('background: linear-gradient(red, blue);');
-		expect(metaPill.attributes('style')).toContain('border-color: #fedcba;');
 		expect(wrapper.text()).toContain('Mono Blue');
 		expect(wrapper.get('[data-testid="highlander-pointed-cards"]').text()).toContain('Mana Drain');
 		expect(wrapper.get('[data-testid="highlander-pointed-cards"]').text()).toContain('Sideboard');
 		expect(wrapper.get('[data-testid="highlander-pointed-cards"]').text()).toContain('Lutri, the Spellchaser');
 		expect(wrapper.get('[data-testid="highlander-pointed-cards"]').text()).toContain('Companion');
-		const chip = wrapper.get('[data-testid="highlander-pointed-card-chip"]');
-		expect(chip.attributes('style')).toContain('color: #123456;');
-		expect(chip.attributes('style')).toContain('background: #abcdef;');
-		expect(chip.attributes('style')).toContain('border-color: #fedcba;');
-	});
-
-	it('uses shared screen-level text colors for general deck text', async () => {
-		mutableConfig = {
-			...mutableConfig,
-			mainboard: { view: 'list', listColumns: 2 },
-			sideboard: { view: 'list', listColumns: 2 },
-		};
-		sideboard.value = [
-			createCard({ name: 'Force of Will', compartment: 'sideboard' }),
-		];
-
-		const wrapper = await mountComponent();
-
-		expect(wrapper.get('h2').attributes('style')).toContain('color: #ffeeaa;');
-		expect(wrapper.get('.deck-header p').attributes('style')).toContain('color: #aabbcc;');
-		expect(wrapper.findAll('h3')[0]!.attributes('style')).toContain('color: #ffeeaa;');
-		expect(wrapper.findAll('.quantity')[0]!.attributes('style')).toContain('color: #aabbcc;');
-		expect(wrapper.findAll('.name')[0]!.attributes('style')).toContain('color: #ffeeaa;');
-		expect(wrapper.findAll('.type')[0]!.attributes('style')).toContain('color: #aabbcc;');
 	});
 
 	it('gives each board its own list columns and hides the sideboard at board: mainboard', async () => {
@@ -290,6 +243,23 @@ describe('screenDeckDisplay', () => {
 
 		expect(wrapper.get('[data-testid="mainboard-section"]').attributes('style')).toContain('flex-grow:');
 		expect(wrapper.get('[data-testid="sideboard-section"]').attributes('style') ?? '').not.toContain('flex-grow:');
+	});
+
+	// The next card covers all of a stacked card but its stack-reveal slice; the last shows whole.
+	it.each([
+		{ placement: 'beside', stack: 'sideboard-stack-column', extent: 'height' },
+		{ placement: 'below', stack: 'sideboard-stack-row', extent: 'width' },
+	] as const)('shows each card but the last of a stack placed $placement by its reveal', async ({ placement, stack, extent }) => {
+		mutableConfig = { ...mutableConfig, sideboardPlacement: placement };
+		sideboard.value = ['Force of Will', 'Flusterstorm', 'Pyroblast'].map(name => createCard({ name, compartment: 'sideboard' }));
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.get(`[data-testid="${stack}"]`).findAll('.stack-card').map(card => (card.element as HTMLElement).style[extent])).toEqual([
+			'var(--theme-deck-stack-reveal)',
+			'var(--theme-deck-stack-reveal)',
+			'',
+		]);
 	});
 
 	it('renders a stacked sideboard as a vertical strip beside the mainboard and a row below it', async () => {

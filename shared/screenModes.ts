@@ -19,6 +19,8 @@ import { playerHistoryModeConfigContract } from './screenModeConfigs/playerHisto
 import { standingsModeConfigContract } from './screenModeConfigs/standings';
 import { topCardsModeConfigContract } from './screenModeConfigs/topCards';
 import { topCutModeConfigContract } from './screenModeConfigs/topCut';
+import { cardModeTokens } from './screenModeTokens/card';
+import { deckModeTokens } from './screenModeTokens/deck';
 import { standingsModeTokens } from './screenModeTokens/standings';
 import { SCREEN_MODE_VALUES } from './types/enums';
 import {
@@ -182,6 +184,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: cardModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot' },
+		modeTokens: cardModeTokens,
 	},
 	'deck': {
 		label: 'Deck List',
@@ -191,6 +194,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: deckModeConfigContract,
 		eventReferences: { deckSource: 'deckSource' },
+		modeTokens: deckModeTokens,
 	},
 	'standings': {
 		label: 'Standings',

@@ -139,14 +139,14 @@ describe('screens extended API', () => {
 		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/card`, {
 			method: 'PATCH',
 			body: {
-				scale: 1.5,
+				animationSpeed: 'slow',
 				animationEnabled: true,
 			},
 		});
 
 		expect(updated.modeConfigs).toBeDefined();
 		expect(updated!.modeConfigs!.card).toMatchObject({
-			scale: 1.5,
+			animationSpeed: 'slow',
 			animationEnabled: true,
 		});
 	});
@@ -155,7 +155,7 @@ describe('screens extended API', () => {
 		// First set some values
 		await $fetch(`/api/events/${eventId}/screens/${screenId}/config/card`, {
 			method: 'PATCH',
-			body: { scale: 2.0, animationEnabled: true },
+			body: { animationSpeed: 'slow', animationEnabled: false },
 		});
 
 		// Update only one field — the other should be preserved
@@ -165,8 +165,7 @@ describe('screens extended API', () => {
 		});
 
 		expect(updated!.modeConfigs!.card).toMatchObject({
-			scale: 2.0,
-			animationEnabled: true,
+			animationEnabled: false,
 			animationSpeed: 'fast',
 		});
 	});

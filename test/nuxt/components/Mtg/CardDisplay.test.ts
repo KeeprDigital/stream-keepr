@@ -2,7 +2,6 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, ref } from 'vue';
-import { mtgCardSizeFromHeight } from '~~/shared/utils/card/size';
 import CardDisplay from '~/components/Mtg/CardDisplay.vue';
 
 const mockCardStore = {
@@ -46,7 +45,7 @@ async function mountComponent() {
 	return mount(CardDisplay, {
 		props: {
 			screenId: 1,
-			config: { scale: 1, animationEnabled: true, animationSpeed: 'normal' },
+			config: { animationEnabled: true, animationSpeed: 'normal' },
 		},
 		global: {
 			stubs: {
@@ -69,7 +68,16 @@ describe('mtgCardDisplay', () => {
 		vi.useRealTimers();
 	});
 
-	it('sizes the card container from the overlay height', async () => {
+	// Until the host scales the Event Canvas (#821), the card scales it to its container's height.
+	it.each([
+		{ height: 1080, zoom: '1' },
+		{
+			height: 720,
+			zoom: String(720 / 1080),
+		},
+		{ height: 0, zoom: '1' },
+	])('sizes the card-width Mode Token to a $height px overlay at zoom $zoom', async ({ height, zoom }) => {
+		containerHeight.value = height;
 		const wrapper = await mountComponent();
 
 		activeCard.value = {
@@ -86,37 +94,11 @@ describe('mtgCardDisplay', () => {
 		await vi.advanceTimersByTimeAsync(50);
 		await nextTick();
 
-		const expected = mtgCardSizeFromHeight(1080);
-		const container = wrapper.get('.card-container');
-
-		expect(container.attributes('style')).toContain(`width: ${expected.diagonal}px;`);
-		expect(container.attributes('style')).toContain(`height: ${expected.diagonal}px;`);
+		const container = wrapper.get('.card-container').element as HTMLElement;
+		expect(container.style.zoom).toBe(zoom);
+		expect((wrapper.get('[data-testid="spotlight-card"]').element as HTMLElement).style.width).toBe('var(--theme-card-card-width)');
 		expect(mockCardStore.setActiveScreen).toHaveBeenCalledWith(1);
 		expect(mockCardStore.loadActiveCard).toHaveBeenCalled();
-	});
-
-	it('reacts to overlay container size changes', async () => {
-		const wrapper = await mountComponent();
-
-		activeCard.value = {
-			id: 'card-2',
-			name: 'Ponder',
-			displayData: null,
-			imageData: {
-				front: { normal: 'https://example.com/card.jpg' },
-			},
-		};
-
-		await nextTick();
-		await wrapper.get('img').trigger('load');
-		await vi.advanceTimersByTimeAsync(50);
-		await nextTick();
-
-		containerHeight.value = 720;
-		await nextTick();
-
-		const expected = mtgCardSizeFromHeight(720);
-		expect(wrapper.get('.card-container').attributes('style')).toContain(`height: ${expected.diagonal}px;`);
 	});
 
 	it('does not let an old image timer reveal a replacement card early', async () => {
