@@ -447,7 +447,36 @@ describe('a Round sync announces only what it changed', () => {
 			: []);
 	});
 
-	it('announces the previous Round\'s Round Standings when the next Round\'s pairings store them', async () => {
+	// Pairing Round 4 stores Round 3's standings, which re-syncs Round 3's Matches:
+	// each side's Player record gains them, and a late-reported result lands too.
+	it.each([
+		{
+			case: 'Round 3 otherwise unchanged',
+			round3After: [
+				pairing('a', [1, 2], [2, 0]),
+				pairing('b', [3, 4]),
+			],
+			published: ['pairings', 'roundStandings'],
+			round3Messages: async () => [],
+		},
+		{
+			case: 'Round 3\'s last result reported meanwhile',
+			round3After: [
+				pairing('a', [1, 2], [2, 0]),
+				pairing('b', [3, 4], [2, 1]),
+			],
+			published: ['matchResults', 'pairings', 'roundStandings'],
+			round3Messages: async (seeded: Seeded) => [
+				[
+					'melee:matchResultsSynced',
+					{
+						roundId: seeded.roundId(ROUND_3),
+						matchIds: [await matchId(seeded, ROUND_3, 'b')],
+					},
+				],
+			],
+		},
+	])('announces the previous Round\'s changes under its own id when the next Round\'s pairings store its standings: $case', async ({ round3After, published, round3Messages }) => {
 		const seeded = await seedEvent();
 		meleeMatchesByRound.set(ROUND_3, [
 			pairing('a', [1, 2], [2, 0]),
@@ -455,6 +484,7 @@ describe('a Round sync announces only what it changed', () => {
 		]);
 		meleeStandingsByRound.set(ROUND_3, standingsAfter);
 		await syncRound(seeded.eventId, seeded.roundId(ROUND_3));
+		meleeMatchesByRound.set(ROUND_3, round3After);
 		meleeMatchesByRound.set(ROUND_4, [
 			pairing('c', [1, 3]),
 			pairing('d', [2, 4]),
@@ -462,12 +492,19 @@ describe('a Round sync announces only what it changed', () => {
 
 		const result = await createMeleeSyncWorkflows().syncRoundMatches({}, seeded.eventId, eventData, seeded.roundId(ROUND_4));
 
-		expect(result.published).toEqual(['pairings', 'roundStandings']);
+		expect(result.published).toEqual(published);
 		expect(announced()).toEqual([
 			[
 				'melee:pairingsSynced',
 				{
 					roundId: seeded.roundId(ROUND_4),
+				},
+			],
+			...await round3Messages(seeded),
+			[
+				'melee:pairingsSynced',
+				{
+					roundId: seeded.roundId(ROUND_3),
 				},
 			],
 			[

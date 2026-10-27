@@ -42,6 +42,12 @@ export interface SyncMatchesResult {
 	standingsChanged: boolean;
 }
 
+/** What storing the previous Round's Round Standings changed in that Round. */
+export interface PreviousRoundStandingsResult
+	extends Pick<SyncMatchesResult, 'resultChangedMatchIds' | 'pairingsChanged' | 'standingsChanged'> {
+	roundId: number;
+}
+
 /** Minimal Event shape needed by Melee Sync. */
 export interface SyncableEvent {
 	meleeEnabled: boolean | null;
@@ -124,21 +130,27 @@ export async function syncRoundStandingsFromMelee(
 /**
  * Pairing a Round completes the Melee-managed Round before it, so store that
  * Round's Round Standings when it holds none yet. `null` when there is no such
- * Round or it already holds Round Standings.
+ * Round or it already holds Round Standings. Storing them re-syncs that Round's
+ * Matches too, so what changed there is reported alongside.
  */
 export async function syncPreviousRoundStandingsFromMelee(
 	eventId: number,
 	eventData: SyncableEvent,
 	round: Pick<DbRound, 'id'>,
-): Promise<{ roundId: number; standingsChanged: boolean } | null> {
+): Promise<PreviousRoundStandingsResult | null> {
 	const { previous } = await adjacentMeleeRounds(eventId, round.id);
 	if (!previous)
 		return null;
 	const stored = await playerRoundStandingsService().findByRoundId(eventId, previous.id);
 	if (stored.length > 0)
 		return null;
-	const { standingsChanged } = await syncRoundStandingsFromMelee(eventId, eventData, previous);
-	return { roundId: previous.id, standingsChanged };
+	const { resultChangedMatchIds, pairingsChanged, standingsChanged } = await syncRoundStandingsFromMelee(eventId, eventData, previous);
+	return {
+		roundId: previous.id,
+		resultChangedMatchIds,
+		pairingsChanged,
+		standingsChanged,
+	};
 }
 
 async function syncRoundSnapshot(

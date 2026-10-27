@@ -408,41 +408,43 @@ export function createMeleeSyncWorkflows() {
 
 		// Each kind of change is announced only when it happened, so a quiet sync
 		// publishes nothing. `published` names the kinds even if delivery failed.
-		const published: Array<'matchResults' | 'pairings' | 'roundStandings'> = [];
-		if (result.resultChangedMatchIds.length > 0) {
-			published.push('matchResults');
-			await publishAfterCommit(afterCommitWarnings, async () => await publication.meleeMatchResultsSynced({
-				eventId,
-				originConnectionId,
-				roundId,
-				matchIds: result.resultChangedMatchIds,
-			}));
-		}
-		if (result.pairingsChanged) {
-			published.push('pairings');
-			await publishAfterCommit(afterCommitWarnings, async () => await publication.meleePairingsSynced({
-				eventId,
-				originConnectionId,
-				roundId,
-			}));
-		}
-		const standingsRoundIds = [
-			...(result.standingsChanged
-				? [roundId]
-				: []),
-			...(previousRoundStandings?.standingsChanged
-				? [previousRoundStandings.roundId]
+		// Storing the previous Round's standings rewrites its Matches too, so its
+		// changes are announced under its own Round id.
+		const changedRounds = [
+			{ roundId, ...result },
+			...(previousRoundStandings
+				? [previousRoundStandings]
 				: []),
 		];
-		if (standingsRoundIds.length > 0)
-			published.push('roundStandings');
-		for (const standingsRoundId of standingsRoundIds) {
-			await publishAfterCommit(afterCommitWarnings, async () => await publication.meleeRoundStandingsSynced({
-				eventId,
-				originConnectionId,
-				roundId: standingsRoundId,
-			}));
+		const publishedKinds = new Set<'matchResults' | 'pairings' | 'roundStandings'>();
+		for (const changed of changedRounds) {
+			if (changed.resultChangedMatchIds.length > 0) {
+				publishedKinds.add('matchResults');
+				await publishAfterCommit(afterCommitWarnings, async () => await publication.meleeMatchResultsSynced({
+					eventId,
+					originConnectionId,
+					roundId: changed.roundId,
+					matchIds: changed.resultChangedMatchIds,
+				}));
+			}
+			if (changed.pairingsChanged) {
+				publishedKinds.add('pairings');
+				await publishAfterCommit(afterCommitWarnings, async () => await publication.meleePairingsSynced({
+					eventId,
+					originConnectionId,
+					roundId: changed.roundId,
+				}));
+			}
+			if (changed.standingsChanged) {
+				publishedKinds.add('roundStandings');
+				await publishAfterCommit(afterCommitWarnings, async () => await publication.meleeRoundStandingsSynced({
+					eventId,
+					originConnectionId,
+					roundId: changed.roundId,
+				}));
+			}
 		}
+		const published = (['matchResults', 'pairings', 'roundStandings'] as const).filter(kind => publishedKinds.has(kind));
 		if (published.length > 0) {
 			// Kept for one release, for Screen Outputs still on the previous bundle.
 			await publishAfterCommit(afterCommitWarnings, async () => await publication.meleeRoundSynced({
