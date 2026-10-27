@@ -74,7 +74,8 @@ function stripNullValues<T extends Record<string, unknown>>(value: T): Record<st
 type OwnedFields
 	= | { owner: symbol; kind: 'screen'; patch: Record<string, unknown> }
 		| { owner: symbol; kind: 'mode'; mode: ScreenMode; patch: Record<string, unknown> }
-		| { owner: symbol; kind: 'screen-config'; patch: Record<string, unknown> };
+		| { owner: symbol; kind: 'screen-config'; patch: Record<string, unknown> }
+		| { owner: symbol; kind: 'theme-overrides'; patch: Record<string, unknown> };
 
 /** A Screen with one write's fields laid over it; a `null` field reads as deleted. */
 function applyOwnedFields(screen: Screen, fields: OwnedFields): Screen {
@@ -105,6 +106,14 @@ function applyOwnedFields(screen: Screen, fields: OwnedFields): Screen {
 					...(screen.screenConfig ?? {}),
 					...fields.patch,
 				}) as ScreenConfig,
+			};
+		case 'theme-overrides':
+			return {
+				...screen,
+				themeOverrides: stripNullValues({
+					...(screen.themeOverrides ?? {}),
+					...fields.patch,
+				}),
 			};
 	}
 }
@@ -529,6 +538,25 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		});
 	}
 
+	/**
+	 * Set Screen Theme Overrides, or clear each one named with `null`: shown at
+	 * once, and written in its turn among the Screen's other writes. Each edit is
+	 * a finished one, so it is sent without a debounce. A failure rejects.
+	 */
+	async function updateThemeOverrides(eventId: number, screenId: number, tokens: Record<string, unknown>) {
+		if (!state.screens.value.some(s => s.id === screenId)) {
+			state.error.value = 'Screen not found';
+			return null;
+		}
+
+		const owner = Symbol('theme-overrides');
+		const writeLifetime = lifetime;
+		own(screenId, { owner, kind: 'theme-overrides', patch: tokens });
+
+		return await runWrite(writeLifetime, eventId, screenId, owner, stateVersion =>
+			screenRepo.updateThemeOverrides(eventId, screenId, tokens, stateVersion));
+	}
+
 	async function removeScreen(eventId: number, screenId: number) {
 		const index = state.screens.value.findIndex(s => s.id === screenId);
 		if (index === -1) {
@@ -836,6 +864,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		setScreenMode,
 		updateModeConfig,
 		updateScreenConfig,
+		updateThemeOverrides,
 		removeScreen,
 		applyRemoteCreated,
 		applyRemoteUpdated,

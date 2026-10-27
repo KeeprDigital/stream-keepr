@@ -78,6 +78,7 @@
  * If that trade is ever re-taken, the pins named above will fail and say so.
  */
 
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { SocialProfiles } from '~~/shared/socialProfiles';
 import type {
 	ClockType,
@@ -538,6 +539,11 @@ export interface ScreenResponse {
 	currentMode: ScreenMode;
 	modeConfigs: ModeConfigsMap | null;
 	screenConfig: ScreenConfig | null;
+	/**
+	 * The Screen Theme Overrides, keyed by token name, including dormant ones
+	 * for other modes' Mode Tokens. Absent reads as none.
+	 */
+	themeOverrides?: StoredThemeTokens;
 	stateVersion: number;
 	createdAt: Date;
 	updatedAt: Date;

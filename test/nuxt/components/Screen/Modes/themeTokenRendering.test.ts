@@ -135,8 +135,8 @@ afterEach(() => {
 	wrapper = undefined;
 });
 
-async function mountMode(mode: ScreenMode, theme?: StoredThemeTokens) {
-	screen.value = createMockScreen({ currentMode: mode });
+async function mountMode(mode: ScreenMode, theme?: StoredThemeTokens, themeOverrides: StoredThemeTokens = {}) {
+	screen.value = createMockScreen({ currentMode: mode, themeOverrides });
 	themeTokens.value = theme;
 	wrapper = mount(Renderer, {
 		attachTo: document.body,
@@ -230,5 +230,19 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 		await mountMode(mode);
 
 		expect(painted(probe, definition.type)).toEqual(expectedPaint(definition.type, shipped));
+	});
+});
+
+describe('a Screen Theme Override', () => {
+	const dividers = [THEMED_DISPLAYS.standings!['title-divider']!, THEMED_DISPLAYS.standings!['row-divider']!];
+
+	it('paints over the Theme wherever its Foundation Token is named, and the Theme again once cleared', async () => {
+		await mountMode('standings', { divider: 'rgb(1, 2, 3)' }, { divider: 'rgb(4, 5, 6)' });
+		expect(dividers.map(probe => painted(probe, 'color'))).toEqual(['rgb(4, 5, 6)', 'rgb(4, 5, 6)']);
+
+		screen.value = { ...screen.value, themeOverrides: {} };
+		await flushPromises();
+
+		expect(dividers.map(probe => painted(probe, 'color'))).toEqual(['rgb(1, 2, 3)', 'rgb(1, 2, 3)']);
 	});
 });

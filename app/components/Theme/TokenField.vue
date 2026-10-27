@@ -6,9 +6,10 @@ import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { themeTokenDefinition } from '~~/shared/themeTokens';
 import { THEME_TOKEN_INPUTS, themeTokenValueText } from '~/modules/theme-editor/tokenInputs';
 
-// One Theme Token in the Theme editor: its control, the default it inherits
-// when the Theme leaves it unset, and a reset that clears it. A Mode Token may
-// also follow any Foundation Token of its type instead of holding its own value.
+// One Theme Token in the Theme editor, or in a Screen's token section: its
+// control, what it inherits when left unset, and a reset that clears it. A Mode
+// Token may also follow any Foundation Token of its type instead of holding its
+// own value.
 
 const props = defineProps<{
 	name: string;
@@ -18,6 +19,13 @@ const props = defineProps<{
 	/** The token's value as it resolves under this Theme now. */
 	resolved: ThemeTokenValue;
 	disabled?: boolean;
+	/**
+	 * Where it is set: in a Theme, inheriting its default (the default), or as
+	 * a Screen Theme Override, inheriting `inherited` from the Event's Theme.
+	 */
+	scope?: 'theme' | 'screen';
+	/** What it reads when unset, as stored: a literal, or a Foundation Token it follows. */
+	inherited?: unknown;
 }>();
 
 const emit = defineEmits<{
@@ -48,7 +56,23 @@ function valueText(value: unknown): string {
 		: themeTokenValueText(definition.value.type as ThemeTokenType, value as never);
 }
 
-const inherited = computed(() => `Default: ${valueText(definition.value.default)}`);
+const SCOPE_TEXT = {
+	theme: {
+		inherited: 'Default',
+		set: 'Set in this Theme',
+		reset: 'Reset',
+		resetLabel: 'Reset {label} to its default',
+	},
+	screen: {
+		inherited: 'Theme',
+		set: 'Overridden on this Screen',
+		reset: 'Clear',
+		resetLabel: 'Clear the {label} override',
+	},
+} as const;
+const text = computed(() => SCOPE_TEXT[props.scope ?? 'theme']);
+const inheritedValue = computed(() => props.inherited ?? definition.value.default);
+const inherited = computed(() => `${text.value.inherited}: ${valueText(inheritedValue.value)}`);
 
 /** The Foundation Tokens of this token's type, which a Mode Token may follow. */
 const sourceItems = computed(() => [
@@ -61,7 +85,7 @@ const sourceItems = computed(() => [
 const source = computed(() => {
 	if (isSet.value)
 		return referenceOf(props.stored) ?? OWN_VALUE;
-	return referenceOf(definition.value.default) ?? OWN_VALUE;
+	return referenceOf(inheritedValue.value) ?? OWN_VALUE;
 });
 
 function chooseSource(value: string) {
@@ -93,7 +117,7 @@ function chooseSource(value: string) {
 					:color="isSet ? 'primary' : 'neutral'"
 					variant="subtle"
 					size="sm"
-					:label="isSet ? 'Set in this Theme' : 'Inherited'"
+					:label="isSet ? text.set : 'Inherited'"
 				/>
 				<UButton
 					v-if="isSet"
@@ -102,10 +126,10 @@ function chooseSource(value: string) {
 					variant="ghost"
 					icon="i-lucide-rotate-ccw"
 					:disabled="disabled"
-					:aria-label="`Reset ${definition.label} to its default`"
+					:aria-label="text.resetLabel.replace('{label}', definition.label)"
 					@click="emit('clear')"
 				>
-					Reset
+					{{ text.reset }}
 				</UButton>
 			</div>
 		</div>

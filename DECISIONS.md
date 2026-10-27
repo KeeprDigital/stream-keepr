@@ -1581,6 +1581,7 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 - A Theme in use cannot be deleted.
 - Typography tokens carry no size. Colour tokens may carry alpha, and a consumer's opacity multiplies it.
 - A rendering holds its Event's Theme in its Event context (ADR-0022), not in a read of its own (#820). A token write advances the Theme's revision in the same statement, then announces `theme:updated` with the whole stored map on every Event using the Theme. A holder applies it only for the Theme its Event names, and only if it is newer than the revision held. A Theme switch is an Event Presentation Settings write, so it announces `event:updated`. That names the new Theme without its tokens, so a rendering whose context names a Theme it does not hold re-reads the context.
+- A Screen Theme Override write is one Screen write (`PATCH …/screens/:screenId/theme-overrides`, #827): it names tokens, each with a value or the `null` that clears it (ADR-0041), and announces `screen:updated`, so outputs re-read the Screen with its overrides. It may name any token the Screen's mode can consume: its Mode Tokens, and every Foundation Token of a type they declare, since a Mode Token may be pointed at any of them. Anything else is refused whole, and an override already stored for another mode's Mode Token stays dormant. The Screen's token section lists only what the mode's declaration consumes (`resolveThemeTokens`'s `consumed`).
 
 ### Rejected alternatives
 

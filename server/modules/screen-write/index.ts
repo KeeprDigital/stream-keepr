@@ -20,6 +20,7 @@ import {
 	validateScreenModeConfigReferences,
 	validateScreenModeConfigsReferences,
 } from '~~/server/utils/routeGuards';
+import { parseScreenThemeOverrideWrite, SCREEN_THEME_OVERRIDE_REFUSALS } from '~~/shared/screenThemeOverrides';
 import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
 	GRAPHIC_ASSET_REFERENCING_SCREEN_MODES,
@@ -103,6 +104,15 @@ interface UpdateModeConfigParams extends AuthoredWrite {
 	stateVersion?: number;
 	originConnectionId?: string;
 	graphicsAssets: Provides<Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevisions'>>;
+}
+
+interface UpdateThemeOverridesParams {
+	eventId: number;
+	screenId: number;
+	/** Each token's new override, or `null` to clear it. */
+	tokens: Record<string, unknown>;
+	stateVersion?: number;
+	originConnectionId?: string;
 }
 
 const MODE_CONFIG_ENDPOINT_REQUIRED
@@ -484,11 +494,51 @@ export function screenWriteModule() {
 		});
 	}
 
+	/**
+	 * Set or clear Screen Theme Overrides (ADR-0049), all or none. Each token is
+	 * checked against the mode the Screen shows, read here; the write is
+	 * versioned on that read (or the client's `stateVersion`), so a mode change
+	 * landing first refuses it as a conflict rather than letting the check go
+	 * stale. An override of another mode's Mode Token is left as stored.
+	 */
+	async function updateThemeOverrides({ eventId, screenId, tokens, stateVersion, originConnectionId }: UpdateThemeOverridesParams): Promise<ScreenResponse> {
+		const existing = await screens.findById(screenId, eventId);
+		if (!existing)
+			throw createError({ statusCode: 404, message: 'Screen not found' });
+
+		const next: Record<string, unknown> = { ...existing.themeOverrides };
+		for (const [token, value] of Object.entries(tokens)) {
+			const write = parseScreenThemeOverrideWrite(existing.currentMode, token, value);
+			if (!write.ok) {
+				throw createError({
+					statusCode: 400,
+					message: `${token}: ${SCREEN_THEME_OVERRIDE_REFUSALS[write.refusal]}`,
+					data: { code: write.refusal, token },
+				});
+			}
+			if (write.value === null)
+				delete next[token];
+			else
+				next[token] = write.value;
+		}
+
+		const updatedScreen = await screens.updateThemeOverrides(screenId, eventId, next, stateVersion ?? existing.stateVersion);
+		if (!updatedScreen)
+			throw createError({ statusCode: 404, message: 'Screen not found' });
+
+		return await publication.screenUpdated({
+			eventId,
+			entity: updatedScreen,
+			originConnectionId,
+		});
+	}
+
 	return {
 		createScreen,
 		updateScreen,
 		deleteScreen,
 		updateScreenConfig,
 		updateModeConfig,
+		updateThemeOverrides,
 	};
 }

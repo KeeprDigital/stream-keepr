@@ -277,6 +277,7 @@ export function createMockScreen(overrides?: Partial<DbScreen>): DbScreen {
 		currentMode: 'background',
 		modeConfigs: null,
 		screenConfig: null,
+		themeOverrides: {},
 		stateVersion: 0,
 		assetCapabilitySeed: 'test-capability-seed',
 		assetCapabilityVersion: 1,

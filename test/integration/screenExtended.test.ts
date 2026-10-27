@@ -1,3 +1,4 @@
+import type { ScreenResponse } from '~~/shared/api';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { $fetch } from './client';
 
@@ -533,5 +534,48 @@ describe('screens extended API', () => {
 			width: 1920,
 			height: 1080,
 		});
+	});
+
+	// ── Screen Theme Overrides ────────────────────────────────────────
+
+	it('sets and clears Screen Theme Overrides, refusing a token the mode cannot consume', async () => {
+		const standings = await $fetch(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Overridden Screen', slug: 'integration-overridden-screen', currentMode: 'standings' },
+		});
+		const overrides = `/api/events/${eventId}/screens/${standings.id}/theme-overrides`;
+
+		const set = await $fetch<ScreenResponse>(overrides, {
+			method: 'PATCH',
+			body: {
+				tokens: {
+					'accent': '#ff0000',
+					'standings.row-divider': { token: 'accent' },
+				},
+			},
+		});
+		expect(set.themeOverrides).toEqual({
+			'accent': '#ff0000',
+			'standings.row-divider': { token: 'accent' },
+		});
+
+		const cleared = await $fetch<ScreenResponse>(overrides, {
+			method: 'PATCH',
+			body: {
+				tokens: { accent: null },
+			},
+		});
+		expect(cleared.themeOverrides).toEqual({
+			'standings.row-divider': { token: 'accent' },
+		});
+
+		const failure = await $fetch(overrides, {
+			method: 'PATCH',
+			body: {
+				tokens: { inset: 12 },
+			},
+		}).then(() => null).catch((error: { data?: { statusCode?: number; data?: { code?: string } } }) => error);
+		expect(failure?.data?.statusCode).toBe(400);
+		expect(failure?.data?.data?.code).toBe('unconsumable-token');
 	});
 });
