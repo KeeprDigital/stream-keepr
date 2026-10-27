@@ -20,6 +20,7 @@ const initialData = computed(() => {
 		countUpAfterCountdown: defaults.countUpAfterCountdown,
 		extraTurnsEnabled: defaults.extraTurnsEnabled,
 		extraTurns: defaults.extraTurns,
+		extraTurnsLabel: defaults.extraTurnsLabel,
 		pointsSystem: props.event.pointsSystem,
 	};
 });
@@ -188,6 +189,16 @@ function toUpdate(changes: Partial<typeof initialData.value>): UpdateEventInput 
 						:min="1"
 						class="w-64"
 					/>
+				</UFormField>
+
+				<UFormField
+					v-if="formData.extraTurnsEnabled"
+					name="extraTurnsLabel"
+					label="Extra Turns Label"
+					description="Label shown for the extra turns indicator (e.g. 'Extra Turns', 'Overtime')."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UInput v-model="formData.extraTurnsLabel" class="w-64" />
 				</UFormField>
 			</div>
 			<template #footer>

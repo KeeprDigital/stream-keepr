@@ -1,3 +1,4 @@
+import type { DropdownMenuItem } from '@nuxt/ui';
 import type { BroadcastDeckListResponse, BroadcastDeckListSummaryResponse } from '~~/shared/types/broadcastDeckList';
 import type { Event } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
@@ -110,6 +111,18 @@ function button(wrapper: Awaited<ReturnType<typeof mountComponent>>, label: stri
 	if (!match)
 		throw new Error(`No "${label}" button`);
 	return match;
+}
+
+async function chooseRowAction(wrapper: Awaited<ReturnType<typeof mountComponent>>, name: string, label: string) {
+	const row = wrapper.findAll('li').find(candidate => candidate.text().includes(name));
+	if (!row)
+		throw new Error(`No "${name}" row`);
+	const items = row.findComponent({ name: 'UDropdownMenu' }).props('items') as DropdownMenuItem[];
+	const action = items.find(item => item.label === label);
+	if (!action)
+		throw new Error(`"${name}" offers no "${label}" action`);
+	action.onSelect?.(new Event('select') as never);
+	await flushPromises();
 }
 
 async function submitEditor(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
@@ -260,7 +273,7 @@ describe('event Broadcast Deck List library', () => {
 		}));
 		const wrapper = await mountComponent();
 		await flushPromises();
-		await button(wrapper, 'Edit Azorius').trigger('click');
+		await chooseRowAction(wrapper, 'Azorius', 'Edit');
 		await flushPromises();
 		await wrapper.get('[name="name"]').setValue('My draft');
 		await submitEditor(wrapper);
@@ -282,7 +295,7 @@ describe('event Broadcast Deck List library', () => {
 		store.loadDetail.mockReturnValueOnce(new Promise(resolve => resolveDetail = resolve));
 		const wrapper = await mountComponent();
 		await flushPromises();
-		await button(wrapper, 'Edit Azorius').trigger('click');
+		await chooseRowAction(wrapper, 'Azorius', 'Edit');
 		await button(wrapper, 'Add Deck List').trigger('click');
 		await wrapper.get('[name="name"]').setValue('New draft');
 
@@ -322,7 +335,7 @@ describe('event Broadcast Deck List library', () => {
 		}));
 		const wrapper = await mountComponent();
 		await flushPromises();
-		await button(wrapper, 'Edit Azorius').trigger('click');
+		await chooseRowAction(wrapper, 'Azorius', 'Edit');
 		await flushPromises();
 		await submitEditor(wrapper);
 		await flushPromises();
@@ -407,7 +420,7 @@ describe('event Broadcast Deck List library', () => {
 		}));
 		const wrapper = await mountComponent();
 		await flushPromises();
-		await button(wrapper, 'Delete Azorius').trigger('click');
+		await chooseRowAction(wrapper, 'Azorius', 'Delete');
 		expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
 		await button(wrapper, 'Delete Deck List').trigger('click');
 		await flushPromises();
@@ -430,7 +443,7 @@ describe('event Broadcast Deck List library', () => {
 		}));
 		const wrapper = await mountComponent();
 		await flushPromises();
-		await button(wrapper, 'Delete Azorius').trigger('click');
+		await chooseRowAction(wrapper, 'Azorius', 'Delete');
 		await button(wrapper, 'Delete Deck List').trigger('click');
 		await flushPromises();
 

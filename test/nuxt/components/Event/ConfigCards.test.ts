@@ -8,11 +8,12 @@ import { reactive } from 'vue';
 import { createMockEvent } from '~~/test/helpers/fixtures';
 import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
-import ConfigApiSettings from '~/components/Event/ConfigApiSettings.vue';
-import ConfigBroadcastSettings from '~/components/Event/ConfigBroadcastSettings.vue';
+import ConfigCardSpotlight from '~/components/Event/ConfigCardSpotlight.vue';
 import ConfigEventSettings from '~/components/Event/ConfigEventSettings.vue';
-import ConfigFeatureMatchSettings from '~/components/Event/ConfigFeatureMatchSettings.vue';
+import ConfigFeatureMatchSlots from '~/components/Event/ConfigFeatureMatchSlots.vue';
+import ConfigFieldsAndTracking from '~/components/Event/ConfigFieldsAndTracking.vue';
 import ConfigFormatSettings from '~/components/Event/ConfigFormatSettings.vue';
+import ConfigOnAirFormatting from '~/components/Event/ConfigOnAirFormatting.vue';
 
 // The Event config cards. How a form tracks, diffs, settles and guards its edits
 // is `useEventConfigForm`'s own test; here each card is wired to it once, and
@@ -98,8 +99,8 @@ const CARDS: CardCase[] = [
 		saved: { name: 'Regional Championship 2026' },
 	},
 	{
-		card: 'display',
-		component: ConfigApiSettings,
+		card: 'on-air formatting',
+		component: ConfigOnAirFormatting,
 		edit: wrapper => toggle(wrapper, 'displayHideZeroDraws').trigger('click'),
 		saved: { displayHideZeroDraws: false },
 		colleague: {
@@ -109,10 +110,16 @@ const CARDS: CardCase[] = [
 		},
 	},
 	{
-		card: 'broadcast',
-		component: ConfigBroadcastSettings,
+		card: 'card spotlight',
+		component: ConfigCardSpotlight,
 		edit: wrapper => input(wrapper, 'cardTimeout').setValue('30'),
 		saved: { cardTimeout: 30 },
+	},
+	{
+		card: 'feature match slots',
+		component: ConfigFeatureMatchSlots,
+		edit: wrapper => select(wrapper, 'featureMatchOrientation').setValue('vertical'),
+		saved: { featureMatchOrientation: 'vertical' },
 		colleague: {
 			change: { numFeatureMatches: 4 },
 			shows: wrapper => shown(wrapper, 'numFeatureMatches'),
@@ -120,14 +127,14 @@ const CARDS: CardCase[] = [
 		},
 	},
 	{
-		card: 'feature match',
-		component: ConfigFeatureMatchSettings,
+		card: 'fields and tracking',
+		component: ConfigFieldsAndTracking,
 		edit: wrapper => toggle(wrapper, 'turnTrackingEnabled').trigger('click'),
 		saved: { featureMatchDefaultTurnTrackingEnabled: true },
 		colleague: {
-			change: { standingsEnabled: false },
-			shows: wrapper => isOn(wrapper, 'standingsEnabled'),
-			expected: false,
+			change: { featureMatchNotesEnabled: true },
+			shows: wrapper => isOn(wrapper, 'featureMatchNotesEnabled'),
+			expected: true,
 		},
 	},
 	{
@@ -236,9 +243,9 @@ describe('event settings card', () => {
 	});
 });
 
-describe('display settings card', () => {
-	it('shows the display settings the event already carries', () => {
-		const wrapper = mountCard(ConfigApiSettings, configEvent({ displayRecordSeparator: '/', displayPositionFormat: 'number' }));
+describe('on-air formatting card', () => {
+	it('shows the formatting the event already carries', () => {
+		const wrapper = mountCard(ConfigOnAirFormatting, configEvent({ displayRecordSeparator: '/', displayPositionFormat: 'number' }));
 
 		expect(shown(wrapper, 'displayRecordSeparator')).toBe('/');
 		expect(shown(wrapper, 'displayPositionFormat')).toBe('number');
@@ -246,7 +253,7 @@ describe('display settings card', () => {
 	});
 
 	it('offers a save only once the form has changed, and takes it back on reset', async () => {
-		const wrapper = mountCard(ConfigApiSettings);
+		const wrapper = mountCard(ConfigOnAirFormatting);
 		expect(button(wrapper, 'Save').attributes('disabled')).toBeDefined();
 
 		await toggle(wrapper, 'displayHideZeroDraws').trigger('click');
@@ -258,67 +265,51 @@ describe('display settings card', () => {
 	});
 });
 
-describe('broadcast settings card', () => {
-	const broadcastEvent = () => configEvent({ numFeatureMatches: 2, cardTimeout: 10, featureMatchOrientation: 'horizontal' });
-
-	it('shows the broadcast settings the event already carries', () => {
-		const wrapper = mountCard(ConfigBroadcastSettings, broadcastEvent());
+describe('feature match slots card', () => {
+	it('shows the slots the event already carries', () => {
+		const wrapper = mountCard(ConfigFeatureMatchSlots, configEvent({ numFeatureMatches: 2, featureMatchOrientation: 'horizontal' }));
 
 		expect(shown(wrapper, 'numFeatureMatches')).toBe('2');
-		expect(shown(wrapper, 'cardTimeout')).toBe('10');
 		expect(shown(wrapper, 'featureMatchOrientation')).toBe('horizontal');
 	});
 
 	it.each([
-		[
-			'a negative card timeout',
-			'cardTimeout',
-			'-1',
-			'Card timeout must be 0 or greater',
-		],
-		[
-			'more feature matches than the event can hold',
-			'numFeatureMatches',
-			'11',
-			'Cannot exceed 10 feature matches',
-		],
-	])('refuses to save %s, and says so at the field', async (_, name, value, complaint) => {
-		const wrapper = mountCard(ConfigBroadcastSettings, broadcastEvent());
+		['0', 'Must have at least 1 feature match'],
+		['11', 'Cannot exceed 10 feature matches'],
+	])('refuses to save %s feature matches, and says so at the field', async (value, complaint) => {
+		const wrapper = mountCard(ConfigFeatureMatchSlots);
 
-		await input(wrapper, name).setValue(value);
+		await input(wrapper, 'numFeatureMatches').setValue(value);
 		await submitOutOfRange(wrapper);
 
 		expect(handleSubmit).not.toHaveBeenCalled();
-		expect(error(wrapper, name).text()).toBe(complaint);
+		expect(error(wrapper, 'numFeatureMatches').text()).toBe(complaint);
 	});
+});
 
-	it('clears a validation complaint when the operator resets the form', async () => {
-		const wrapper = mountCard(ConfigBroadcastSettings, broadcastEvent());
+describe('card spotlight card', () => {
+	it('refuses a negative card timeout, and clears the complaint on reset', async () => {
+		const wrapper = mountCard(ConfigCardSpotlight, configEvent({ cardTimeout: 10 }));
 
 		await input(wrapper, 'cardTimeout').setValue('-1');
 		await submitOutOfRange(wrapper);
-		await button(wrapper, 'Reset').trigger('click');
+		expect(handleSubmit).not.toHaveBeenCalled();
+		expect(error(wrapper, 'cardTimeout').text()).toBe('Card timeout must be 0 or greater');
 
+		await button(wrapper, 'Reset').trigger('click');
 		expect(error(wrapper, 'cardTimeout').exists()).toBe(false);
 		expect(shown(wrapper, 'cardTimeout')).toBe('10');
 	});
 });
 
-describe('feature match settings card', () => {
-	it('shows the toggles the event already carries', () => {
-		const wrapper = mountCard(ConfigFeatureMatchSettings, configEvent({ featureMatchDefaultTurnTrackingEnabled: true, lgsEnabled: true }));
+describe('fields and tracking card', () => {
+	it('shows the fields and tracking the event already carries', () => {
+		const wrapper = mountCard(ConfigFieldsAndTracking, configEvent({ featureMatchDefaultTurnTrackingEnabled: true, lgsEnabled: true }));
 
 		expect(isOn(wrapper, 'turnTrackingEnabled')).toBe(true);
 		expect(isOn(wrapper, 'lgsEnabled')).toBe(true);
 		expect(isOn(wrapper, 'pronounsEnabled')).toBe(true);
 		expect(isOn(wrapper, 'tableNumberEnabled')).toBe(false);
-	});
-
-	it('offers the extra turns label only when the event tracks extra turns', () => {
-		expect(mountCard(ConfigFeatureMatchSettings).find('[data-field="extraTurnsLabel"]').exists()).toBe(false);
-
-		const tracking = mountCard(ConfigFeatureMatchSettings, configEvent({ featureMatchDefaultExtraTurnsEnabled: true }));
-		expect(shown(tracking, 'extraTurnsLabel')).toBe('Extra Turns');
 	});
 
 	it.each([
@@ -333,7 +324,7 @@ describe('feature match settings card', () => {
 			{ pronounsEnabled: false },
 		],
 	])('saves %s under the event\'s own column', async (_, name, saved) => {
-		const wrapper = mountCard(ConfigFeatureMatchSettings);
+		const wrapper = mountCard(ConfigFieldsAndTracking);
 
 		await toggle(wrapper, name).trigger('click');
 		await save(wrapper);
@@ -352,13 +343,25 @@ describe('format settings card', () => {
 		expect(shown(wrapper, 'clockType')).toBe('countdown');
 	});
 
-	it('offers the extra turns count only once extra turns are enabled', async () => {
+	it.each([
+		['count', 'extraTurns', '5'],
+		['label', 'extraTurnsLabel', 'Extra Turns'],
+	])('offers the extra turns %s only once extra turns are enabled', async (_, name, value) => {
 		const wrapper = mountCard(ConfigFormatSettings);
-		expect(wrapper.find('[data-field="extraTurns"]').exists()).toBe(false);
+		expect(wrapper.find(`[data-field="${name}"]`).exists()).toBe(false);
 
 		await toggle(wrapper, 'extraTurnsEnabled').trigger('click');
 
-		expect(shown(wrapper, 'extraTurns')).toBe('5');
+		expect(shown(wrapper, name)).toBe(value);
+	});
+
+	it('saves the extra turns label under its default column', async () => {
+		const wrapper = mountCard(ConfigFormatSettings, configEvent({ featureMatchDefaultExtraTurnsEnabled: true }));
+
+		await input(wrapper, 'extraTurnsLabel').setValue('Overtime');
+		await save(wrapper);
+
+		expect(submitted()).toEqual({ featureMatchDefaultExtraTurnsLabel: 'Overtime' });
 	});
 
 	it('offers the points system only to an MTG event, saving it beside the mapped defaults', async () => {

@@ -2,8 +2,9 @@ import type { DropdownMenuItem } from '@nuxt/ui';
 import type { Talent } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it } from 'vitest';
-import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { reactive } from 'vue';
+import { deferred } from '~~/test/helpers/deferred';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import ConfigTalents from '~/components/Event/ConfigTalents.vue';
 
@@ -22,14 +23,34 @@ const ALICE = talent(11, 'Alice');
 const BOB = talent(12, 'Bob');
 const BOB_AGAIN = talent(13, 'Bob');
 
+const eventStore = reactive({
+	error: null as string | null,
+	addTalent: vi.fn(),
+	updateTalent: vi.fn(),
+	removeTalent: vi.fn(),
+});
+mockNuxtImport('useEventStore', () => () => eventStore);
+
+// Runs the request as the real one does, minus the toasts: an empty result or a throw fails.
+mockNuxtImport('useRequestFeedback', () => () => ({
+	runRequest: async (request: () => Promise<unknown>) => {
+		try {
+			return (await request()) ?? null;
+		}
+		catch {
+			return null;
+		}
+	},
+}));
+
+const confirmation = { answer: true };
 mockNuxtImport('useOverlay', () => () => ({
 	create: () => ({
 		open: () => ({
-			result: Promise.resolve(true),
+			result: Promise.resolve(confirmation.answer),
 		}),
 	}),
 }));
-mockNuxtImport('onBeforeRouteLeave', () => () => {});
 
 const stubs = {
 	...nuxtUiStubs,
@@ -38,34 +59,32 @@ const stubs = {
 
 enableAutoUnmount(afterEach);
 
-const mountOptions = {
-	attachTo: document.body,
-	global: { stubs },
-};
+beforeEach(() => {
+	vi.clearAllMocks();
+	confirmation.answer = true;
+	eventStore.addTalent.mockImplementation(async input => ({ id: 99, ...input }));
+	eventStore.updateTalent.mockImplementation(async (id, input) => ({ id, ...input }));
+	eventStore.removeTalent.mockResolvedValue({ success: true });
+});
 
-async function mountComponent(talents: Talent[]) {
+function mountComponent(talents: Talent[]) {
 	return mount(ConfigTalents, {
-		...mountOptions,
+		attachTo: document.body,
 		props: { talents },
+		global: { stubs },
 	});
 }
 
-type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
+type Wrapper = ReturnType<typeof mountComponent>;
 
-async function mountUnderGuard(talents: Talent[]) {
-	return mountUnderPageGuard<Wrapper>(ConfigTalents, {
-		...mountOptions,
-		props: { talents },
-	});
-}
-
-function chooseRowAction(wrapper: Wrapper, index: number, label: string) {
+async function chooseRowAction(wrapper: Wrapper, index: number, label: string) {
 	const menus = wrapper.findAllComponents({ name: 'UDropdownMenu' });
 	const items = menus[index]!.props('items') as DropdownMenuItem[];
 	const action = items.find(item => item.label === label);
 	if (!action)
 		throw new Error(`Row ${index} offers no "${label}" action`);
 	action.onSelect?.(new Event('select') as never);
+	await flushPromises();
 }
 
 function button(wrapper: Wrapper, label: string) {
@@ -76,23 +95,18 @@ function profileInput(wrapper: Wrapper, network: string) {
 	return wrapper.get(`[data-social-network="${network}"]`);
 }
 
-async function finishEditor(wrapper: Wrapper) {
-	await button(wrapper, 'Done').trigger('click');
-	await flushPromises();
-}
+const nameInput = (wrapper: Wrapper) => wrapper.get('[data-field="name"] input');
+const editorIsOpen = (wrapper: Wrapper) => wrapper.find('[role="dialog"]').exists();
 
-function submitted(wrapper: Wrapper) {
-	const events = wrapper.emitted('submit');
-	if (!events?.length)
-		throw new Error('The card emitted no submit');
-	return events.at(-1)![0] as Array<{ id?: number; name: string; socialProfiles: Talent['socialProfiles'] }>;
+async function saveEditor(wrapper: Wrapper) {
+	await button(wrapper, 'Save').trigger('click');
+	await flushPromises();
 }
 
 describe('event config Talents', () => {
 	it('offers a focused editor with a field for each Social Profile network', async () => {
-		const wrapper = await mountComponent([ALICE]);
-		chooseRowAction(wrapper, 0, 'Edit');
-		await flushPromises();
+		const wrapper = mountComponent([ALICE]);
+		await chooseRowAction(wrapper, 0, 'Edit');
 
 		expect(wrapper.findAll('[data-social-network]').map(input => input.attributes('data-social-network')))
 			.toEqual([
@@ -105,187 +119,131 @@ describe('event config Talents', () => {
 			]);
 	});
 
-	it('normalizes profiles and keeps the Talent id through the staged save', async () => {
-		const wrapper = await mountComponent([ALICE]);
-		chooseRowAction(wrapper, 0, 'Edit');
-		await flushPromises();
+	it('saves a normalized edit under the Talent\'s id, then closes the editor', async () => {
+		const wrapper = mountComponent([ALICE]);
+		await chooseRowAction(wrapper, 0, 'Edit');
 
-		await wrapper.get('[data-field="name"] input').setValue(' Alicia ');
+		await nameInput(wrapper).setValue(' Alicia ');
 		await profileInput(wrapper, 'twitch').setValue('  @AliceLive ');
 		await profileInput(wrapper, 'youtube').setValue('https://youtube.com/@AliceVideo');
-		await finishEditor(wrapper);
-		await button(wrapper, 'Save').trigger('click');
+		await saveEditor(wrapper);
 
-		expect(submitted(wrapper)).toEqual([
-			{
-				id: ALICE.id,
-				name: 'Alicia',
-				socialProfiles: { twitch: 'AliceLive', youtube: 'AliceVideo' },
-			},
-		]);
+		expect(eventStore.updateTalent).toHaveBeenCalledWith(ALICE.id, {
+			name: 'Alicia',
+			socialProfiles: { twitch: 'AliceLive', youtube: 'AliceVideo' },
+		});
+		expect(editorIsOpen(wrapper)).toBe(false);
 	});
 
-	it('keeps a malformed profile error on its network field and does not stage it', async () => {
-		const wrapper = await mountComponent([ALICE]);
-		chooseRowAction(wrapper, 0, 'Edit');
-		await flushPromises();
+	it('creates a normalized Talent from the add editor', async () => {
+		const wrapper = mountComponent([ALICE]);
+		await button(wrapper, 'Add Talent').trigger('click');
+
+		await nameInput(wrapper).setValue('Dana');
+		await profileInput(wrapper, 'bluesky').setValue('https://bsky.app/profile/dana.bsky.social');
+		await saveEditor(wrapper);
+
+		expect(eventStore.addTalent).toHaveBeenCalledWith({
+			name: 'Dana',
+			socialProfiles: { bluesky: 'dana.bsky.social' },
+		});
+		expect(editorIsOpen(wrapper)).toBe(false);
+	});
+
+	it('keeps a malformed profile error on its network field and saves nothing', async () => {
+		const wrapper = mountComponent([ALICE]);
+		await chooseRowAction(wrapper, 0, 'Edit');
 
 		await profileInput(wrapper, 'x').setValue('two words');
-		await finishEditor(wrapper);
+		await saveEditor(wrapper);
 
 		expect(wrapper.get('[data-field="socialProfiles.x"] [data-error]').text()).toContain('valid X handle');
-		expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
-		expect(wrapper.emitted('submit')).toBeUndefined();
+		expect(editorIsOpen(wrapper)).toBe(true);
+		expect(eventStore.updateTalent).not.toHaveBeenCalled();
 	});
 
 	it('replaces the complete profile set and treats a blank field as removal', async () => {
-		const wrapper = await mountComponent([
+		const wrapper = mountComponent([
 			talent(11, 'Alice', { twitch: 'Old', instagram: 'Kept' }),
 		]);
-		chooseRowAction(wrapper, 0, 'Edit');
-		await flushPromises();
+		await chooseRowAction(wrapper, 0, 'Edit');
 
 		await profileInput(wrapper, 'twitch').setValue(' ');
 		await profileInput(wrapper, 'x').setValue('@New');
-		await finishEditor(wrapper);
-		await button(wrapper, 'Save').trigger('click');
+		await saveEditor(wrapper);
 
-		expect(submitted(wrapper)[0]!.socialProfiles).toEqual({ instagram: 'Kept', x: 'New' });
-	});
-
-	it('allows two Talents to share one handle', async () => {
-		const wrapper = await mountComponent([
-			talent(11, 'Alice', { twitch: 'Shared' }),
-			talent(12, 'Bob'),
-		]);
-		chooseRowAction(wrapper, 1, 'Edit');
-		await flushPromises();
-
-		await profileInput(wrapper, 'twitch').setValue('Shared');
-		await finishEditor(wrapper);
-		await button(wrapper, 'Save').trigger('click');
-
-		expect(submitted(wrapper).map(row => row.socialProfiles.twitch)).toEqual(['Shared', 'Shared']);
-	});
-
-	it('distinguishes namesakes by id when one is removed', async () => {
-		const wrapper = await mountComponent([BOB, BOB_AGAIN]);
-		chooseRowAction(wrapper, 0, 'Remove');
-		await flushPromises();
-		await button(wrapper, 'Save').trigger('click');
-
-		expect(submitted(wrapper)).toEqual([
-			{ id: BOB_AGAIN.id, name: 'Bob', socialProfiles: {} },
-		]);
-	});
-
-	// The staged list follows the response, so a save keeps a colleague's additions (#612).
-	it('keeps a Talent a colleague added while this operator removes another', async () => {
-		const CARA = talent(14, 'Cara');
-		const wrapper = await mountComponent([ALICE, BOB]);
-		chooseRowAction(wrapper, 1, 'Remove');
-		await wrapper.setProps({
-			talents: [ALICE, BOB, CARA],
+		expect(eventStore.updateTalent).toHaveBeenCalledWith(11, {
+			socialProfiles: { instagram: 'Kept', x: 'New' },
 		});
-		await flushPromises();
-		await button(wrapper, 'Save').trigger('click');
-
-		expect(submitted(wrapper)).toEqual([
-			{ id: ALICE.id, name: 'Alice', socialProfiles: {} },
-			{ id: CARA.id, name: 'Cara', socialProfiles: {} },
-		]);
 	});
 
-	it('stages only the fields edited in the open editor, keeping a colleague\'s change to the rest', async () => {
-		const wrapper = await mountComponent([
+	it('sends only the fields edited in the open editor, keeping a colleague\'s change to the rest (#612)', async () => {
+		const wrapper = mountComponent([
 			talent(11, 'Alice', { twitch: 'Old' }),
 		]);
-		chooseRowAction(wrapper, 0, 'Edit');
-		await flushPromises();
+		await chooseRowAction(wrapper, 0, 'Edit');
 		await wrapper.setProps({
 			talents: [
 				talent(11, 'Alice', { twitch: 'New', x: 'Added' }),
 			],
 		});
-		await flushPromises();
 
-		await wrapper.get('[data-field="name"] input').setValue('Alicia');
-		await finishEditor(wrapper);
-		await button(wrapper, 'Save').trigger('click');
+		await nameInput(wrapper).setValue('Alicia');
+		await saveEditor(wrapper);
 
-		expect(submitted(wrapper)).toEqual([
-			{
-				id: 11,
-				name: 'Alicia',
-				socialProfiles: { twitch: 'New', x: 'Added' },
-			},
-		]);
+		expect(eventStore.updateTalent).toHaveBeenCalledWith(11, { name: 'Alicia' });
 	});
 
-	it('finishes an edit on its own row after a colleague removes an earlier one', async () => {
-		const wrapper = await mountComponent([ALICE, BOB]);
-		chooseRowAction(wrapper, 1, 'Edit');
-		await flushPromises();
-		await wrapper.setProps({
-			talents: [BOB],
-		});
-		await flushPromises();
-
-		await wrapper.get('[data-field="name"] input').setValue('Robert');
-		await finishEditor(wrapper);
-		await button(wrapper, 'Save').trigger('click');
-
-		expect(submitted(wrapper)).toEqual([
-			{ id: BOB.id, name: 'Robert', socialProfiles: {} },
-		]);
-	});
-
-	it('stages an edit to a Talent a colleague removed while it was open, so the save re-creates them', async () => {
-		const wrapper = await mountComponent([ALICE]);
-		chooseRowAction(wrapper, 0, 'Edit');
-		await flushPromises();
+	it('creates again a Talent a colleague removed while its editor was open', async () => {
+		const wrapper = mountComponent([ALICE]);
+		await chooseRowAction(wrapper, 0, 'Edit');
 		await wrapper.setProps({ talents: [] });
-		await flushPromises();
 
-		await wrapper.get('[data-field="name"] input').setValue('Alicia');
-		await finishEditor(wrapper);
-		await button(wrapper, 'Save').trigger('click');
+		await nameInput(wrapper).setValue('Alicia');
+		await saveEditor(wrapper);
 
-		expect(submitted(wrapper)).toEqual([
-			{ id: ALICE.id, name: 'Alicia', socialProfiles: {} },
-		]);
+		expect(eventStore.addTalent).toHaveBeenCalledWith({ name: 'Alicia', socialProfiles: {} });
 	});
 
-	it('adds a normalized Talent row with no id', async () => {
-		const wrapper = await mountComponent([ALICE]);
-		await button(wrapper, 'Add talent').trigger('click');
-		await flushPromises();
+	it('closes an unchanged editor without a request', async () => {
+		const wrapper = mountComponent([ALICE]);
+		await chooseRowAction(wrapper, 0, 'Edit');
 
-		await wrapper.get('[data-field="name"] input').setValue('Dana');
-		await profileInput(wrapper, 'bluesky').setValue('https://bsky.app/profile/dana.bsky.social');
-		await finishEditor(wrapper);
-		await button(wrapper, 'Save').trigger('click');
+		await saveEditor(wrapper);
 
-		expect(submitted(wrapper)).toEqual([
-			{ id: ALICE.id, name: 'Alice', socialProfiles: {} },
-			{
-				name: 'Dana',
-				socialProfiles: { bluesky: 'dana.bsky.social' },
-			},
-		]);
+		expect(eventStore.updateTalent).not.toHaveBeenCalled();
+		expect(editorIsOpen(wrapper)).toBe(false);
 	});
 
-	it('registers staged changes with the page guard and Reset restores the response', async () => {
-		const { wrapper, pageIsDirty } = await mountUnderGuard([ALICE, BOB]);
-		await flushPromises();
+	it('holds Save while the save is pending, and keeps the draft open when it fails', async () => {
+		const pending = deferred<null>();
+		eventStore.updateTalent.mockReturnValueOnce(pending.promise);
+		const wrapper = mountComponent([ALICE]);
+		await chooseRowAction(wrapper, 0, 'Edit');
 
-		expect(pageIsDirty()).toBe(false);
-		chooseRowAction(wrapper, 1, 'Remove');
-		await flushPromises();
-		expect(pageIsDirty()).toBe(true);
+		await nameInput(wrapper).setValue('Alicia');
+		await button(wrapper, 'Save').trigger('click');
+		expect(button(wrapper, 'Save').attributes('aria-busy')).toBe('true');
 
-		await button(wrapper, 'Reset').trigger('click');
-		expect(pageIsDirty()).toBe(false);
-		expect(wrapper.findAllComponents({ name: 'UDropdownMenu' })).toHaveLength(2);
+		pending.resolve(null);
+		await flushPromises();
+		expect(button(wrapper, 'Save').attributes('aria-busy')).toBeUndefined();
+		expect(editorIsOpen(wrapper)).toBe(true);
+		expect((nameInput(wrapper).element as HTMLInputElement).value).toBe('Alicia');
+	});
+
+	it.each([
+		[
+			true,
+			[BOB_AGAIN.id],
+		],
+		[false, []],
+	])('deletes the chosen namesake by id only once confirmed (confirmed: %s)', async (answer, deleted) => {
+		confirmation.answer = answer;
+		const wrapper = mountComponent([BOB, BOB_AGAIN]);
+
+		await chooseRowAction(wrapper, 1, 'Delete');
+
+		expect(eventStore.removeTalent.mock.calls.map(([id]) => id)).toEqual(deleted);
 	});
 });

@@ -202,7 +202,7 @@ const navGroups = computed<NavGroup[]>(() => {
 					children: [
 						{ label: 'Event', to: `/event/${id}/config`, exact: true },
 						{ label: 'Event Structure', to: `/event/${id}/rounds` },
-						{ label: 'Features', to: `/event/${id}/config/features` },
+						{ label: 'Feature Matches', to: `/event/${id}/config/features` },
 						{ label: 'Broadcast', to: `/event/${id}/config/broadcast` },
 						{ label: 'Integrations', to: `/event/${id}/config/integrations` },
 					],

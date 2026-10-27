@@ -1,18 +1,14 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui';
 import type { SocialProfiles, SupportedSocialNetwork } from '~~/shared/socialProfiles';
-import type { Talent } from '~/types';
+import type { Talent, UpdateTalentInput } from '~/types';
 import {
 	normalizeSocialProfileInput,
 	SocialProfileInputError,
+	SUPPORTED_SOCIAL_NETWORK_KEYS,
 	SUPPORTED_SOCIAL_NETWORKS,
 } from '~~/shared/socialProfiles';
-
-interface TalentRow {
-	id?: number;
-	name: string;
-	socialProfiles: SocialProfiles;
-}
+import { LazyUIConfirmDeleteModal } from '#components';
 
 interface TalentEditorValue {
 	name: string;
@@ -21,97 +17,54 @@ interface TalentEditorValue {
 
 const props = defineProps<{
 	talents: Talent[];
-	loading?: boolean;
 }>();
 
-const emit = defineEmits<{
-	(e: 'submit', talents: TalentRow[]): void;
-}>();
+const eventStore = useEventStore();
+const overlay = useOverlay();
+const { runRequest } = useRequestFeedback();
+const deleteModal = overlay.create(LazyUIConfirmDeleteModal);
 
-/**
- * The row the editor is open on. Remote updates merge into the staged list row
- * by row (#612), so a row can move while the editor is open; the editor finds it
- * again by id, or by identity for a row that has none yet.
- */
-const editingRow = shallowRef<TalentRow | null>(null);
-/** The editor as it opened, so a save stages only the fields edited in it. */
+const editorOpen = ref(false);
+/** The Talent the editor is open on; null while adding one. */
+const editingTalentId = ref<number | null>(null);
+/** The editor as it opened, so a save sends only the fields edited in it. */
 const openedValue = shallowRef<TalentEditorValue | null>(null);
 const editingValue = ref<TalentEditorValue | null>(null);
 const editingErrors = ref<Partial<Record<'name' | SupportedSocialNetwork, string>>>({});
-const hasActiveEdit = computed(() => editingRow.value !== null);
+const saving = ref(false);
 
-function isEditingRow(row: TalentRow | undefined) {
-	const target = editingRow.value;
-	if (!row || !target)
-		return false;
-	return target.id !== undefined
-		? row.id === target.id
-		: toRaw(row) === target;
-}
-
-function rowFromTalent(talent: Talent): TalentRow {
+function editorValue(talent?: Pick<Talent, 'name' | 'socialProfiles'>): TalentEditorValue {
 	return {
-		id: talent.id,
-		name: talent.name,
-		socialProfiles: { ...talent.socialProfiles },
-	};
-}
-
-const { formData: talentsData, isDirty, reset: resetForm } = useForm({
-	initialData: computed<TalentRow[]>(() => props.talents.map(rowFromTalent)),
-	onReset: closeEditor,
-});
-
-useRegisterDirtyState(isDirty);
-
-const canSave = computed(() => isDirty.value && !hasActiveEdit.value);
-
-function editorValue(row: TalentRow): TalentEditorValue {
-	return {
-		name: row.name,
+		name: talent?.name ?? '',
 		socialProfiles: Object.fromEntries(
-			SUPPORTED_SOCIAL_NETWORKS.map(network => [network.key, row.socialProfiles[network.key] ?? '']),
+			SUPPORTED_SOCIAL_NETWORKS.map(network => [network.key, talent?.socialProfiles[network.key] ?? '']),
 		) as Record<SupportedSocialNetwork, string>,
 	};
 }
 
-function addTalent() {
-	talentsData.value.push({ name: '', socialProfiles: {} });
-	startEditing(talentsData.value.length - 1);
-}
-
-function startEditing(index: number) {
-	const row = talentsData.value[index];
-	if (!row)
-		return;
-
-	editingRow.value = toRaw(row);
-	openedValue.value = editorValue(row);
-	editingValue.value = editorValue(row);
+function openEditor(talent?: Talent) {
+	editingTalentId.value = talent?.id ?? null;
+	openedValue.value = editorValue(talent);
+	editingValue.value = editorValue(talent);
 	editingErrors.value = {};
+	editorOpen.value = true;
 }
 
 function closeEditor() {
-	editingRow.value = null;
+	editorOpen.value = false;
+	editingTalentId.value = null;
 	openedValue.value = null;
 	editingValue.value = null;
 	editingErrors.value = {};
 }
 
 function cancelTalentEdit() {
-	const index = talentsData.value.findIndex(isEditingRow);
-	if (index !== -1 && !talentsData.value[index]?.name)
-		talentsData.value.splice(index, 1);
-	closeEditor();
+	if (!saving.value)
+		closeEditor();
 }
 
-function saveTalentEdit() {
-	const row = editingRow.value;
-	const opened = openedValue.value;
-	const value = editingValue.value;
-	if (!row || !opened || !value)
-		return;
-
+/** The editor's value, normalized, or null with each complaint shown at its field. */
+function parseEditor(value: TalentEditorValue): { name: string; socialProfiles: SocialProfiles } | null {
 	const name = value.name.trim();
 	const errors: typeof editingErrors.value = {};
 	if (!name)
@@ -132,72 +85,115 @@ function saveTalentEdit() {
 	}
 
 	editingErrors.value = errors;
-	if (Object.keys(errors).length > 0)
-		return;
+	return Object.keys(errors).length > 0
+		? null
+		: { name, socialProfiles };
+}
 
-	// A field left as the editor opened takes the row's current value, which a
-	// colleague's change may have moved meanwhile (#612). A row they removed
-	// is staged again, so the save re-creates the Talent as `applyTalentUpdates`
-	// does for any such row.
-	const index = talentsData.value.findIndex(isEditingRow);
-	const current = talentsData.value[index] ?? row;
-	const staged: TalentRow = {
-		...current,
-		name: value.name === opened.name
-			? current.name
-			: name,
-		socialProfiles: {},
-	};
+/**
+ * What the editor changed on `current`. A field left as the editor opened keeps
+ * the Talent's current value, which a colleague's change may have moved meanwhile
+ * (#612).
+ */
+function editedFields(current: Talent, opened: TalentEditorValue, value: TalentEditorValue, parsed: { name: string; socialProfiles: SocialProfiles }): UpdateTalentInput {
+	const update: UpdateTalentInput = {};
+	if (value.name !== opened.name && parsed.name !== current.name)
+		update.name = parsed.name;
+
+	const socialProfiles: SocialProfiles = {};
 	for (const network of SUPPORTED_SOCIAL_NETWORKS) {
 		const handle = value.socialProfiles[network.key] === opened.socialProfiles[network.key]
 			? current.socialProfiles[network.key]
-			: socialProfiles[network.key];
+			: parsed.socialProfiles[network.key];
 		if (handle !== undefined)
-			staged.socialProfiles[network.key] = handle;
+			socialProfiles[network.key] = handle;
+	}
+	if (SUPPORTED_SOCIAL_NETWORK_KEYS.some(network => socialProfiles[network] !== current.socialProfiles[network]))
+		update.socialProfiles = socialProfiles;
+
+	return update;
+}
+
+async function saveTalentEdit() {
+	const opened = openedValue.value;
+	const value = editingValue.value;
+	if (saving.value || !opened || !value)
+		return;
+
+	const parsed = parseEditor(value);
+	if (!parsed)
+		return;
+
+	// A Talent a colleague removed while the editor was open is created again.
+	const current = props.talents.find(talent => talent.id === editingTalentId.value);
+	const update = current && editedFields(current, opened, value, parsed);
+	if (update && Object.keys(update).length === 0) {
+		closeEditor();
+		return;
 	}
 
-	if (index === -1)
-		talentsData.value.push(staged);
-	else
-		talentsData.value[index] = staged;
-	closeEditor();
+	saving.value = true;
+	try {
+		const saved = await runRequest(
+			() => current && update
+				? eventStore.updateTalent(current.id, update)
+				: eventStore.addTalent(parsed),
+			{
+				error: failure => ({
+					title: 'Talent not saved',
+					description: eventStore.error ?? failure.message,
+					color: 'error',
+				}),
+			},
+		);
+		if (saved)
+			closeEditor();
+	}
+	finally {
+		saving.value = false;
+	}
 }
 
-function removeTalent(index: number) {
-	const wasEditing = isEditingRow(talentsData.value[index]);
-	talentsData.value.splice(index, 1);
-	if (wasEditing)
-		closeEditor();
+async function confirmRemove(talent: Talent) {
+	const confirmed = await deleteModal.open({
+		title: 'Delete Talent',
+		itemName: talent.name,
+	}).result;
+	if (!confirmed)
+		return;
+
+	await runRequest(() => eventStore.removeTalent(talent.id), {
+		error: failure => ({
+			title: 'Talent not deleted',
+			description: eventStore.error ?? failure.message,
+			color: 'error',
+		}),
+	});
 }
 
-function getDropdownItems(index: number): DropdownMenuItem[] {
+function getDropdownItems(talent: Talent): DropdownMenuItem[] {
 	return [
 		{
 			label: 'Edit',
 			icon: 'i-lucide-edit',
-			onSelect: () => startEditing(index),
+			onSelect: () => openEditor(talent),
 		},
 		{
-			label: 'Remove',
+			label: 'Delete',
 			icon: 'i-lucide-trash-2',
 			color: 'error',
-			onSelect: () => removeTalent(index),
+			onSelect: () => {
+				void confirmRemove(talent);
+			},
 		},
 	];
 }
-
-function handleSubmit() {
-	if (canSave.value)
-		emit('submit', talentsData.value);
-}
-
-defineExpose({ resetForm });
 </script>
 
 <template>
 	<UCard variant="subtle">
 		<UIEmptyState
-			v-if="!talentsData.length"
+			v-if="!talents.length"
 			variant="inline"
 			icon="i-lucide-mic"
 			title="No talents added yet"
@@ -205,13 +201,13 @@ defineExpose({ resetForm });
 
 		<ul v-else role="list" class="divide-y divide-default">
 			<li
-				v-for="(talent, index) in talentsData"
-				:key="talent.id ?? `new-${index}`"
+				v-for="talent in talents"
+				:key="talent.id"
 				class="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
 			>
 				<div class="text-sm min-w-0 flex-1">
 					<p class="text-highlighted truncate font-medium">
-						{{ talent.name || 'New Talent' }}
+						{{ talent.name }}
 					</p>
 					<div v-if="Object.keys(talent.socialProfiles).length" class="mt-1 flex items-center gap-1 text-muted">
 						<UIcon
@@ -223,60 +219,35 @@ defineExpose({ resetForm });
 					</div>
 				</div>
 
-				<UDropdownMenu :items="getDropdownItems(index)" :content="{ align: 'end' }">
-					<UButton icon="i-lucide-ellipsis-vertical" color="neutral" variant="ghost" />
+				<UDropdownMenu :items="getDropdownItems(talent)" :content="{ align: 'end' }">
+					<UButton
+						icon="i-lucide-ellipsis-vertical"
+						color="neutral"
+						variant="ghost"
+						:aria-label="`${talent.name} actions`"
+					/>
 				</UDropdownMenu>
 			</li>
 		</ul>
 
 		<template #footer>
-			<div class="flex justify-between items-center gap-4">
+			<div class="flex justify-end">
 				<UButton
-					label="Reset"
-					color="error"
-					variant="ghost"
-					type="button"
-					:disabled="!isDirty"
-					@click="resetForm"
-				/>
-				<UButton
-					label="Add talent"
+					label="Add Talent"
 					icon="i-lucide-plus"
 					color="neutral"
 					variant="outline"
 					type="button"
-					:disabled="hasActiveEdit"
-					@click="addTalent"
-				/>
-				<UTooltip v-if="hasActiveEdit && isDirty" text="Complete or cancel the Talent editor before saving">
-					<UButton
-						label="Save"
-						color="primary"
-						variant="outline"
-						type="button"
-						:loading="props.loading"
-						:disabled="!canSave"
-						@click="handleSubmit"
-					/>
-				</UTooltip>
-				<UButton
-					v-else
-					label="Save"
-					color="primary"
-					variant="outline"
-					type="button"
-					:loading="props.loading"
-					:disabled="!canSave"
-					@click="handleSubmit"
+					@click="openEditor()"
 				/>
 			</div>
 		</template>
 	</UCard>
 
 	<UModal
-		:open="hasActiveEdit"
+		:open="editorOpen"
 		:dismissible="false"
-		title="Edit Talent"
+		:title="editingTalentId === null ? 'Add Talent' : 'Edit Talent'"
 		description="Manage the Talent name and optional Social Profiles."
 		:close="{ onClick: cancelTalentEdit }"
 	>
@@ -316,12 +287,14 @@ defineExpose({ resetForm });
 					color="neutral"
 					variant="ghost"
 					type="button"
+					:disabled="saving"
 					@click="cancelTalentEdit"
 				/>
 				<UButton
-					label="Done"
+					label="Save"
 					color="primary"
 					type="button"
+					:loading="saving"
 					@click="saveTalentEdit"
 				/>
 			</div>

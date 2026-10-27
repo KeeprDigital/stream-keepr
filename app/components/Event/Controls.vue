@@ -93,10 +93,8 @@ function findTalentNamed(name: string) {
  *   that name here leaves nothing to match and the offer appears for a talent the
  *   event already has. `findTalentNamed` is what sees through that.
  *
- * A duplicate created either way is not recoverable from the Talents card: the save
- * there matches on names, so dropping one of two namesakes reads as no change at all
- * (`modules/event-data/talentUpdates.ts`). Refusing to make one is the half of that
- * pair that keeps the operator out of the state to begin with.
+ * Namesakes are indistinguishable in these pickers, so refusing to make a duplicate
+ * keeps the operator out of that state to begin with.
  */
 async function handleCreateCommentator(name: string, commentatorNumber: 1 | 2) {
 	const trimmedName = name?.trim();

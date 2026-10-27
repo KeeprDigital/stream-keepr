@@ -169,8 +169,8 @@ onMounted(fetchConfig);
 			<div class="w-full flex flex-col gap-4">
 				<UFormField
 					name="meleeEnabled"
-					label="Melee.gg Integration"
-					description="Enable Melee.gg integration to sync players and standings."
+					label="Sync with Melee.gg"
+					description="Sync players and standings from a Melee.gg tournament."
 					class="flex max-sm:flex-col justify-between gap-4 items-center"
 				>
 					<USwitch v-model="formData.meleeEnabled" />
@@ -181,11 +181,11 @@ onMounted(fetchConfig);
 
 					<UFormField
 						name="meleeEventId"
-						label="Melee.gg Event ID"
+						label="Event ID"
 						description="Your tournament ID from Melee.gg"
 						class="flex max-sm:flex-col justify-between items-start gap-4"
 					>
-						<UInput v-model="formData.meleeEventId" class="w-64" placeholder="e.g., 12345" />
+						<UInput v-model="formData.meleeEventId" class="w-64" />
 					</UFormField>
 
 					<USeparator />
