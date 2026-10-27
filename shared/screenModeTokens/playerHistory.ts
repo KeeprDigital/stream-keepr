@@ -47,22 +47,22 @@ export const playerHistoryModeTokens = {
 		label: 'Outcome badge type',
 		default: { token: 'heading' },
 	},
-	'win': {
+	'outcome-win': {
 		type: 'color',
 		label: 'Win or bye outcome',
 		default: { token: 'positive' },
 	},
-	'loss': {
+	'outcome-loss': {
 		type: 'color',
 		label: 'Loss outcome',
 		default: { token: 'negative' },
 	},
-	'draw': {
+	'outcome-draw': {
 		type: 'color',
 		label: 'Draw outcome',
 		default: { token: 'caution' },
 	},
-	'pending': {
+	'outcome-pending': {
 		type: 'color',
 		label: 'Pending outcome',
 		default: { token: 'text-secondary' },

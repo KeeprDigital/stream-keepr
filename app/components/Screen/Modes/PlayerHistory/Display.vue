@@ -22,6 +22,9 @@ const visibleColumns = computed(() => config.value.columns.filter(column => colu
 // under their name, and the game score on the outcome badge.
 const showsArchetypeColumn = computed(() => visibleColumns.value.some(column => column.key === 'opponentArchetype'));
 const showsGameScoreColumn = computed(() => visibleColumns.value.some(column => column.key === 'gameScore'));
+const gridStyle = computed(() => ({
+	gridTemplateColumns: visibleColumns.value.map(column => columnWidths[column.key]).join(' '),
+}));
 
 const primaryTextStyle = {
 	color: modeTokenVar('player-history', 'primary-text'),
@@ -42,21 +45,20 @@ const subtitleStyle = {
 	...secondaryTextStyle,
 };
 /** On each row too, over the shared row chrome's own line height. */
-const rowStyle = computed(() => ({
+const rowStyle = {
 	...modeTypographyStyle('player-history', 'row-typography'),
 	borderBottomColor: modeTokenVar('player-history', 'row-divider'),
-	gridTemplateColumns: visibleColumns.value.map(column => columnWidths[column.key]).join(' '),
-}));
+};
 const surfaceStyle = {
 	backgroundColor: modeTokenVar('player-history', 'surface'),
 };
 
 const outcomeColors: Record<PlayerMatchHistoryEntry['outcome'], string> = {
-	win: modeTokenVar('player-history', 'win'),
-	bye: modeTokenVar('player-history', 'win'),
-	loss: modeTokenVar('player-history', 'loss'),
-	draw: modeTokenVar('player-history', 'draw'),
-	pending: modeTokenVar('player-history', 'pending'),
+	win: modeTokenVar('player-history', 'outcome-win'),
+	bye: modeTokenVar('player-history', 'outcome-win'),
+	loss: modeTokenVar('player-history', 'outcome-loss'),
+	draw: modeTokenVar('player-history', 'outcome-draw'),
+	pending: modeTokenVar('player-history', 'outcome-pending'),
 };
 
 function outcomeStyle(outcome: PlayerMatchHistoryEntry['outcome']) {
@@ -113,7 +115,7 @@ function outcomeParts(row: PlayerMatchHistoryEntry) {
 					v-for="row in pageData"
 					:key="row.id"
 					class="history-row broadcast-table-row"
-					:style="rowStyle"
+					:style="[rowStyle, gridStyle]"
 				>
 					<template v-for="column in visibleColumns" :key="column.key">
 						<div v-if="column.key === 'round'" class="round" :style="secondaryTextStyle">
