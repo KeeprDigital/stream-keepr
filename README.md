@@ -44,7 +44,7 @@ operating Stream Keepr. The other docs:
   [Other accounts](#other-accounts), [Access model](#access-model).
 - **Operate the library**:
   [Graphics Asset Library operations](#graphics-asset-library-operations).
-- **Operate Melee polling**: [Melee Live Results](#melee-live-results).
+- **Operate Live Results**: [Melee Live Results](#melee-live-results).
 - **Find a subsystem**: [Subsystem map](#subsystem-map).
 
 ## Stack and layout
