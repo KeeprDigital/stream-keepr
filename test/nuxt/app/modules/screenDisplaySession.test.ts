@@ -36,6 +36,8 @@ function createHarness(options: {
 	screens?: Record<string, ReturnType<typeof createMockScreen>>;
 	exportElementPng?: ReturnType<typeof vi.fn>;
 	setupSession?: (session: ScreenDisplaySession) => void;
+	/** What the Event context read carries beyond its id and name. */
+	outputEvent?: Record<string, unknown>;
 } = {}) {
 	const route = options.route ?? createRoute(options.query);
 	const screens = options.screens ?? {
@@ -80,6 +82,7 @@ function createHarness(options: {
 		event: vi.fn(async (scope: { eventId: number; screenId: number }) => ({
 			id: scope.eventId,
 			name: 'Output Event',
+			...options.outputEvent,
 		})),
 	};
 	const { onContinuityLost, reattach } = createContinuitySignal();
@@ -546,15 +549,12 @@ describe('useScreenDisplaySession', () => {
 		expect(harness.session.showDebug.value).toBe(false);
 	});
 
-	it('download=1 exports with configured dimensions, output filename, and output background', async () => {
-		const screen = createMockScreen({
-			id: 12,
-			slug: 'main',
-			screenConfig: { width: 1920, height: 1080 } as any,
-		});
+	it('download=1 exports at the Event Canvas, with the output filename and background', async () => {
+		const screen = createMockScreen({ id: 12, slug: 'main' });
 		const harness = createHarness({
 			query: { download: '1', output: 'fill' },
 			screens: { main: screen },
+			outputEvent: { canvasWidth: 1280, canvasHeight: 720 },
 			setupSession: (session) => {
 				session.screenContext.overlayContainer.value = sizedElement(100, 50);
 			},
@@ -564,9 +564,9 @@ describe('useScreenDisplaySession', () => {
 		expect(harness.exportElementPng).toHaveBeenCalledWith(
 			harness.session.screenContext.overlayContainer.value,
 			{
-				width: 1920,
-				height: 1080,
-				filename: 'file-main-fill-1920x1080.png',
+				width: 1280,
+				height: 720,
+				filename: 'file-main-fill-1280x720.png',
 				backgroundColor: '#000000',
 			},
 		);

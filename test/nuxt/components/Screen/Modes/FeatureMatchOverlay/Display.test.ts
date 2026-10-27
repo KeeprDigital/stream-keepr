@@ -17,9 +17,7 @@ const mockConfig = ref<FeatureMatchOverlayModeConfig>(structuredClone(DEFAULT_FE
 const mockOutputMode = ref<FeatureMatchOverlayOutput>('overlay');
 const mockPreviewGuides = ref(false);
 const mockPreviewSafeAreas = ref(false);
-const mockScreen = ref({
-	screenConfig: { width: 1920, height: 1080 },
-});
+const mockEventCanvas = ref({ width: 1920, height: 1080 });
 const mockIsPreview = ref(false);
 const mockLoading = ref(false);
 const mockError = ref<string | null>(null);
@@ -31,7 +29,7 @@ mockNuxtImport('useScreenContext', () => () => ({
 	outputMode: mockOutputMode,
 	previewGuides: mockPreviewGuides,
 	previewSafeAreas: mockPreviewSafeAreas,
-	screen: mockScreen,
+	eventCanvas: mockEventCanvas,
 	isPreview: mockIsPreview,
 }));
 
@@ -355,6 +353,15 @@ describe('featureMatchOverlayDisplay', () => {
 		});
 	});
 
+	// ADR-0051: the overlay composes in the Event Canvas.
+	it('draws the Frame across the Event Canvas', async () => {
+		mockEventCanvas.value = { width: 1280, height: 720 };
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.get('svg.frame-layer').attributes('viewBox')).toBe('0 0 1280 720');
+	});
+
 	describe('the editor preview guide layer', () => {
 		function guidedConfig(): FeatureMatchOverlayModeConfig {
 			// A layout with both authoring surfaces populated: the Source Items the
@@ -568,9 +575,7 @@ describe('featureMatchOverlayDisplay', () => {
 		mockOutputMode.value = 'overlay';
 		mockPreviewGuides.value = false;
 		mockPreviewSafeAreas.value = false;
-		mockScreen.value = {
-			screenConfig: { width: 1920, height: 1080 },
-		};
+		mockEventCanvas.value = { width: 1920, height: 1080 };
 		mockLoading.value = false;
 		mockError.value = null;
 		mockContentUrlsSettled.value = true;

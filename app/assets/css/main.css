@@ -93,7 +93,7 @@ body.transparent-body-override {
 }
 
 .broadcast-table-title h2 {
-	font-size: clamp(1.5rem, 3vw, 2.5rem);
+	font-size: clamp(1.5rem, 3cqw, 2.5rem);
 	font-weight: 800;
 	letter-spacing: 0.06em;
 	line-height: 1;
@@ -102,7 +102,7 @@ body.transparent-body-override {
 
 .broadcast-table-subtitle {
 	font-family: var(--font-body);
-	font-size: clamp(0.875rem, 1.3vw, 1.25rem);
+	font-size: clamp(0.875rem, 1.3cqw, 1.25rem);
 	line-height: 1.2;
 	margin-top: 0.25rem;
 }

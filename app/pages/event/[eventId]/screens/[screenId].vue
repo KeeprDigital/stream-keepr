@@ -114,7 +114,7 @@ const isSaving = computed(() =>
 );
 
 function confirmResetAll() {
-	resetScreenConfig(screenModeConfigurationPolicy.value?.resetScreenConfigDefaults);
+	resetScreenConfig();
 	modeControlsRef.value?.resetConfig?.();
 	showResetConfirm.value = false;
 }
@@ -263,14 +263,6 @@ async function rotateAssetCapability() {
 			},
 		},
 	);
-}
-
-function screenDimensionFallback(field: 'width' | 'height') {
-	return screenModeConfigurationPolicy.value?.dimensions[field].defaultValue ?? null;
-}
-
-function updateScreenDimension(field: 'width' | 'height', value: number | null | undefined) {
-	updateScreenConfig({ [field]: value ?? screenDimensionFallback(field) });
 }
 
 /**
@@ -624,34 +616,6 @@ async function sendCommand(command: ScreenCommand) {
 							:items="SCREEN_COLOR_MODE_SELECT_OPTIONS"
 							class="w-32"
 							@update:model-value="updateScreenConfig({ colorMode: ($event as ScreenColorMode) })"
-						/>
-					</UFormField>
-
-					<UFormField
-						v-if="!isControlScreen && containerControls?.dimensions && containerControlPlacement?.dimensions === 'container'"
-						label="Width"
-						:description="screenModeConfigurationPolicy?.dimensions.width.description"
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<UInputNumber
-							:model-value="screenConfig.width"
-							:placeholder="screenModeConfigurationPolicy?.dimensions.width.placeholder"
-							class="w-32"
-							@update:model-value="updateScreenDimension('width', $event)"
-						/>
-					</UFormField>
-
-					<UFormField
-						v-if="!isControlScreen && containerControls?.dimensions && containerControlPlacement?.dimensions === 'container'"
-						label="Height"
-						:description="screenModeConfigurationPolicy?.dimensions.height.description"
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<UInputNumber
-							:model-value="screenConfig.height"
-							:placeholder="screenModeConfigurationPolicy?.dimensions.height.placeholder"
-							class="w-32"
-							@update:model-value="updateScreenDimension('height', $event)"
 						/>
 					</UFormField>
 

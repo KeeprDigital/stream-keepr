@@ -4,7 +4,7 @@ import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/typ
 import type { BroadcastGraphicsWorkspace, BroadcastGraphicsWorkspaceLocation } from '~/modules/broadcast-graphics/workspace';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { Screen } from '~/types';
-import { getScreenModeGraphicsCanvas } from '~~/shared/screenModes';
+import { eventCanvasOf } from '~~/shared/eventCanvas';
 import {
 	BROADCAST_GRAPHICS_GRAPHIC_QUERY_KEY,
 	BROADCAST_GRAPHICS_WORKSPACE_QUERY_KEY,
@@ -24,16 +24,7 @@ const props = defineProps<{
 
 const route = useRoute();
 const router = useRouter();
-const screenStore = useScreenStore();
-
-const {
-	screenConfig,
-	saving: screenConfigSaving,
-	updateScreenConfig,
-} = useScreenConfigUpdate(
-	() => props.eventId,
-	() => props.screen.id,
-);
+const eventStore = useEventStore();
 
 const { config, saving, saveState, saveError, updateConfig, resetConfig, retry } = useModeConfigUpdate(
 	() => props.eventId,
@@ -41,23 +32,12 @@ const { config, saving, saveState, saveError, updateConfig, resetConfig, retry }
 	'broadcast-graphics',
 );
 
-const settingsSaving = computed(() => saving.value || screenConfigSaving.value);
+defineExpose({ resetConfig, saving });
 
-defineExpose({ resetConfig, saving: settingsSaving });
-
-const canvasDefaults = getScreenModeGraphicsCanvas('broadcast-graphics');
-
-onMounted(async () => {
-	if (!props.screen.screenConfig?.width || !props.screen.screenConfig?.height) {
-		await screenStore.updateScreenConfig(props.eventId, props.screen.id, {
-			width: props.screen.screenConfig?.width ?? canvasDefaults.width,
-			height: props.screen.screenConfig?.height ?? canvasDefaults.height,
-		});
-	}
-});
-
-const canvasWidth = computed(() => screenConfig.value.width ?? props.screen.screenConfig?.width ?? canvasDefaults.width);
-const canvasHeight = computed(() => screenConfig.value.height ?? props.screen.screenConfig?.height ?? canvasDefaults.height);
+/** Every Broadcast Graphic is authored in its Event's canvas, set in Event Presentation Settings (ADR-0051). */
+const eventCanvas = computed(() => eventCanvasOf(eventStore.event));
+const canvasWidth = computed(() => eventCanvas.value.width);
+const canvasHeight = computed(() => eventCanvas.value.height);
 
 /** The Screen's authored back-to-front stack of Broadcast Graphics. */
 const graphics = computed<readonly BroadcastGraphicConfig[]>(() => config.value.graphics ?? []);
@@ -137,25 +117,6 @@ watch(selectedGraphicId, (graphicId) => {
 }, { immediate: true });
 
 /**
- * The canvas belongs to the leased Edit workspace, but its controls sit outside
- * both workspaces. Gating them on the lease alone would disable them for a Live
- * operator who has no editor open at all — and an artifact nobody holds is
- * writable by anyone. So they close only while this session is looking at an Edit
- * workspace it does not hold; the server refuses the resize either way.
- */
-const canvasWritable = computed(() => workspace.value !== 'edit' || editLease.writable.value);
-
-function updateCanvasDimension(field: 'width' | 'height', value: number | null | undefined) {
-	if (!canvasWritable.value)
-		return;
-	updateScreenConfig({
-		[field]: value ?? (field === 'width'
-			? canvasDefaults.width
-			: canvasDefaults.height),
-	});
-}
-
-/**
  * The single write funnel for the authored stack, so one check covers every
  * authoring control the Edit workspace offers. The server refuses an observer's
  * write regardless; this keeps a read-only editor from ever asking.
@@ -190,7 +151,7 @@ function updateBackground(next: BroadcastGraphicsBackgroundConfig) {
 <template>
 	<div class="space-y-6">
 		<section class="rounded-lg border border-default/70 bg-default p-3">
-			<div class="grid gap-3 xl:grid-cols-[auto_minmax(16rem,0.85fr)] xl:items-end">
+			<div class="grid gap-3">
 				<UFormField label="Workspace" size="sm">
 					<div class="flex flex-wrap items-center gap-2">
 						<UFieldGroup size="sm">
@@ -210,31 +171,6 @@ function updateBackground(next: BroadcastGraphicsBackgroundConfig) {
 						<!-- Editor Focus Mode is the Edit workspace's alone (#744): Live keeps the page as it is. -->
 						<GraphicsEditorFocusModeToggle v-if="workspace === 'edit'" />
 					</div>
-				</UFormField>
-
-				<UFormField label="Canvas Size" size="sm" description="Every Broadcast Graphic is authored in this pixel canvas.">
-					<UFieldGroup class="w-full">
-						<UInputNumber
-							:model-value="canvasWidth"
-							:placeholder="String(canvasDefaults.width)"
-							:min="1"
-							:disabled="!canvasWritable"
-							size="sm"
-							class="min-w-0 flex-1"
-							aria-label="Canvas width"
-							@update:model-value="updateCanvasDimension('width', $event)"
-						/>
-						<UInputNumber
-							:model-value="canvasHeight"
-							:placeholder="String(canvasDefaults.height)"
-							:min="1"
-							:disabled="!canvasWritable"
-							size="sm"
-							class="min-w-0 flex-1"
-							aria-label="Canvas height"
-							@update:model-value="updateCanvasDimension('height', $event)"
-						/>
-					</UFieldGroup>
 				</UFormField>
 			</div>
 		</section>

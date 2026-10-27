@@ -2,7 +2,7 @@ import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, nextTick, ref } from 'vue';
+import { computed, defineComponent, nextTick, reactive, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import Settings from '~/components/Screen/Modes/FeatureMatchOverlay/Settings.vue';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
@@ -10,16 +10,13 @@ import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 enableAutoUnmount(afterEach);
 
 const mockConfig = ref(structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG));
-const mockScreenConfig = ref({ width: 1920, height: 1080 });
+/** The Event's canvas, other than the default so a host reading anything else shows. */
+const mockEventStore = reactive({
+	event: { canvasWidth: 1280, canvasHeight: 720 },
+});
 const mockUpdateConfig = vi.fn((patch: Record<string, unknown>) => {
 	mockConfig.value = {
 		...mockConfig.value,
-		...patch,
-	};
-});
-const mockUpdateScreenConfig = vi.fn((patch: Record<string, unknown>) => {
-	mockScreenConfig.value = {
-		...mockScreenConfig.value,
 		...patch,
 	};
 });
@@ -35,7 +32,6 @@ type ActionListener = (context: { name: string; args: unknown[]; after: (callbac
 const actionListeners: ActionListener[] = [];
 
 const mockScreenStore = {
-	updateScreenConfig: vi.fn().mockResolvedValue(undefined),
 	$onAction: vi.fn((listener: ActionListener) => {
 		actionListeners.push(listener);
 		return () => actionListeners.splice(actionListeners.indexOf(listener), 1);
@@ -65,6 +61,7 @@ const mockToastAdd = vi.fn();
 
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
+mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useFeatureMatchMenuItems', () => () => computed(() => [
 	{ label: 'Feature Match 1', value: 1 },
 ]));
@@ -78,12 +75,6 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	retry: mockRetry,
 }));
 mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
-mockNuxtImport('useScreenConfigUpdate', () => () => ({
-	screenConfig: mockScreenConfig,
-	saving: ref(false),
-	updateScreenConfig: mockUpdateScreenConfig,
-	resetScreenConfig: vi.fn(),
-}));
 mockNuxtImport('$fetch', () => mockApiFetch);
 
 const ScreenSettingsCardStub = defineComponent({
@@ -144,15 +135,6 @@ const UFormFieldStub = defineComponent({
 	template: '<div data-testid="form-field"><span>{{ label }}</span><slot /></div>',
 });
 
-const UInputNumberStub = defineComponent({
-	name: 'UInputNumber',
-	props: {
-		modelValue: { type: Number, required: false },
-	},
-	emits: ['update:modelValue'],
-	template: '<input data-testid="canvas-dimension-input" :value="modelValue" @input="$emit(\'update:modelValue\', Number($event.target.value))">',
-});
-
 const UFieldGroupStub = defineComponent({
 	template: '<div data-testid="field-group"><slot /></div>',
 });
@@ -171,7 +153,7 @@ async function mountComponent(screen: Partial<Screen> = {}) {
 			screen: {
 				id: 1,
 				slug: 'main',
-				screenConfig: { width: 1920, height: 1080 },
+				screenConfig: {},
 				...screen,
 			} as Screen,
 			eventId: 1,
@@ -191,7 +173,6 @@ async function mountComponent(screen: Partial<Screen> = {}) {
 				UPopover: true,
 				UFormField: UFormFieldStub,
 				USelect: true,
-				UInputNumber: UInputNumberStub,
 				UFieldGroup: UFieldGroupStub,
 				UButton: UButtonStub,
 				UAlert: true,
@@ -239,7 +220,6 @@ describe('featureMatchOverlaySettings', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockConfig.value = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		mockScreenConfig.value = { width: 1920, height: 1080 };
 		mockSaveState.value = 'idle';
 		actionListeners.length = 0;
 		mockApiFetch.mockReset();
@@ -264,22 +244,13 @@ describe('featureMatchOverlaySettings', () => {
 		expect(previewConfig(wrapper).presetId).toBe(mockConfig.value.presetId);
 	});
 
-	it('keeps canvas dimensions in the builder setup toolbar', async () => {
+	// ADR-0051: the canvas is the Event's, set in Event Presentation Settings, not here.
+	it('authors the layout in the Event Canvas', async () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		const inputs = wrapper.findAllComponents({ name: 'UInputNumber' });
-		expect(inputs).toHaveLength(2);
-		expect(inputs[0]?.props('modelValue')).toBe(1920);
-		expect(inputs[1]?.props('modelValue')).toBe(1080);
-		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-canvas-width')).toBe('1920');
-		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-canvas-height')).toBe('1080');
-
-		await inputs[0]!.vm.$emit('update:modelValue', 1280);
-		await nextTick();
-
-		expect(mockUpdateScreenConfig).toHaveBeenCalledWith({ width: 1280 });
 		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-canvas-width')).toBe('1280');
+		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-canvas-height')).toBe('720');
 	});
 
 	it('visibly blocks output actions while an exact Graphic Asset Reference is missing', async () => {
@@ -556,7 +527,6 @@ describe('featureMatchOverlaySettings — Editor Focus Mode', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockConfig.value = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		mockScreenConfig.value = { width: 1920, height: 1080 };
 		mockSaveState.value = 'idle';
 		mockApiFetch.mockReset();
 		mockApiFetch.mockResolvedValue({ outcome: 'available', lifecycleState: 'active' });

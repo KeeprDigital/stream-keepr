@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { screenWriteModule } from '~~/server/modules/screen-write';
 import { screenConfigPatchSchema, screenParamsSchema } from '~~/server/schemas/api/screen';
 import { getOriginConnectionId } from '~~/server/utils/ably';
-import { optionalBrowserSessionId } from '~~/server/utils/auth';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
 const versionedPatchSchema = z.object({
@@ -22,8 +21,5 @@ export default defineEventHandler(async (event) => {
 		config: body,
 		stateVersion,
 		originConnectionId: getOriginConnectionId(event),
-		// A Broadcast Graphics Screen's canvas belongs to its leased graphics Edit
-		// workspace; every other field here stays open to live operation.
-		authoringSessionId: await optionalBrowserSessionId(event),
 	});
 });

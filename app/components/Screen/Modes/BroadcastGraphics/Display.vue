@@ -2,13 +2,13 @@
 import type { AnimationEffectRenderPlan } from '~~/shared/animationEffects';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import { animationEffectRenderPlan } from '~~/shared/animationEffects';
-import { getScreenModeGraphicsCanvas } from '~~/shared/screenModes';
+import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 import GraphicsCompositorCanvas from '~/components/Graphics/Compositor/Canvas.vue';
 import { useBroadcastGraphicsModeData } from '~/composables/screen/useBroadcastGraphicsModeData';
 import { resolveBroadcastGraphicsRenderModel } from '~/modules/broadcast-graphics/renderModel';
 
-const { outputMode, previewGuides, previewSafeAreas, screen } = useScreenContext();
+const { outputMode, previewGuides, previewSafeAreas, eventCanvas } = useScreenContext();
 const {
 	animationProjection,
 	background,
@@ -46,9 +46,9 @@ const backgroundPlan = computed<AnimationEffectRenderPlan & { opacity: number } 
 		opacity: config.opacity,
 	};
 });
-const canvasDefaults = getScreenModeGraphicsCanvas('broadcast-graphics');
-const canvasWidth = computed(() => screen?.value?.screenConfig?.width ?? canvasDefaults.width);
-const canvasHeight = computed(() => screen?.value?.screenConfig?.height ?? canvasDefaults.height);
+/** Every Broadcast Graphic composes in its Event's canvas (ADR-0051). */
+const canvasWidth = computed(() => (eventCanvas?.value ?? DEFAULT_EVENT_CANVAS).width);
+const canvasHeight = computed(() => (eventCanvas?.value ?? DEFAULT_EVENT_CANVAS).height);
 
 /**
  * Every exact Graphic Asset Revision this output may resolve.

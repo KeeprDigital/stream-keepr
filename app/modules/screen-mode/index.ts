@@ -1,4 +1,5 @@
 import type { Component, CSSProperties } from 'vue';
+import type { EventCanvas } from '~~/shared/eventCanvas';
 import type {
 	ScreenModeConfigurationPolicy,
 	ScreenModeHostDefinition,
@@ -51,6 +52,8 @@ interface ScreenModeRuntimeDefinition {
 
 interface ResolveScreenModeHostOptions {
 	mode: ScreenMode;
+	/** The Event Canvas: the coordinate space every overlay mode renders in (ADR-0051). */
+	canvas: EventCanvas;
 	screenConfig: ScreenConfig;
 	viewportWidth?: number;
 	viewportHeight?: number;
@@ -154,8 +157,7 @@ export function resolveScreenModeHost(options: ResolveScreenModeHostOptions): Re
 		};
 	}
 
-	const width = config.width ?? host.defaultWidth;
-	const height = config.height ?? host.defaultHeight;
+	const { width, height } = options.canvas;
 	const paddingX = host.useScreenPadding
 		? (config.paddingX ?? 0)
 		: 0;
@@ -163,12 +165,8 @@ export function resolveScreenModeHost(options: ResolveScreenModeHostOptions): Re
 		? (config.paddingY ?? 0)
 		: 0;
 	const style: CSSProperties = {
-		width: width
-			? `${width}px`
-			: '100%',
-		height: height
-			? `${height}px`
-			: '100%',
+		width: `${width}px`,
+		height: `${height}px`,
 		flexShrink: '0',
 		padding: `${paddingY}px ${paddingX}px`,
 	};
@@ -176,18 +174,17 @@ export function resolveScreenModeHost(options: ResolveScreenModeHostOptions): Re
 	/*
 	 * Uniform viewport-fit scaling, decided by the Screen Mode Definition alone.
 	 *
-	 * The mode registers whether its host scales (`fitToViewport`), and nothing else
-	 * gets a vote. It used to also require the caller to ask, and only the surfaces
-	 * that *embed* an output ever did — so the one output nobody embeds, the one on
-	 * air, rendered its canvas 1:1 and clipped everything outside the browser window.
-	 * At exactly 1920×1080 that is invisible, which is why it survived to #232.
+	 * Every overlay mode registers it (`fitToViewport`), so each renders its
+	 * Event's canvas and no mode fills its window fluidly (ADR-0051). The caller
+	 * gets no vote: when it had to ask, the output on air rendered its canvas 1:1
+	 * and clipped everything outside the browser window (#232).
 	 *
 	 * Letterboxed rather than anchored: the canvas is centred in whatever space is
 	 * left over on the axis that did not decide the scale. Every embedder sizes its
 	 * frame to the canvas aspect ratio, so both offsets are zero there and this only
 	 * shows on a window the canvas does not fit exactly.
 	 */
-	if (host.fitToViewport && width && height && options.viewportWidth && options.viewportHeight) {
+	if (host.fitToViewport && options.viewportWidth && options.viewportHeight) {
 		const scale = Math.min(options.viewportWidth / width, options.viewportHeight / height);
 		const offsetX = (options.viewportWidth - width * scale) / 2;
 		const offsetY = (options.viewportHeight - height * scale) / 2;

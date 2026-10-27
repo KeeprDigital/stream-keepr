@@ -381,7 +381,6 @@ describe('screenWriteModule', () => {
 			mockScreenService.updateScreenConfig.mockResolvedValue(undefined);
 
 			await expect(screenWriteModule().updateScreenConfig({
-				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 404,
 				config: {},
@@ -392,7 +391,6 @@ describe('screenWriteModule', () => {
 
 		it('writes the config versioned on stateVersion and publishes the update', async () => {
 			const response = await screenWriteModule().updateScreenConfig({
-				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				config: { showLogo: false },

@@ -892,9 +892,9 @@ Accepted · 2026-10-20 · [#607](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**The Screen write module decides which writes edit a Screen's graphics Edit workspace.** Every Screen write passes through `screenWriteModule()`, and each of its update operations takes the asking browser Session as a required `authoringSessionId`. A route only says who is asking. The protected fields are the Broadcast Graphics stack, and the canvas (`width`, `height`) while the Screen is in Broadcast Graphics mode. The mode configuration write protects the Broadcast Graphics stack. The Screen configuration write protects the canvas when it names it. The generic Screen write protects either one when it would change it.
+**The Screen write module decides which writes edit a Screen's graphics Edit workspace.** Every Screen write that can reach it passes through `screenWriteModule()`, and each such update operation takes the asking browser Session as a required `authoringSessionId`. A route only says who is asking. The protected field is the Broadcast Graphics stack. The mode configuration write protects it, and the generic Screen write protects it when it would change it. The canvas is the Event's Event Canvas (ADR-0051), an Event Presentation Settings write that takes no lease, so no Screen field is a canvas the lease guards and the Screen configuration write is not lease-gated.
 
-**The generic Screen write is gated by change, not by presence.** It replaces `modeConfigs` and `screenConfig` whole, and the Edit Screen dialog sends both back as it read them. A rename that carries the protected fields back unchanged stays open to every Session. The comparison ignores object key order.
+**The generic Screen write is gated by change, not by presence.** It replaces `modeConfigs` whole, and the Edit Screen dialog sends it back as it read it. A rename that carries the protected fields back unchanged stays open to every Session. The comparison ignores object key order.
 
 **The lease is checked again inside the statement that commits.** A write is admitted up front, then commits only while no other Session holds a live lease on the artifact. That condition sits in the same `WHERE` clause as the `stateVersion` guard. It is one Drizzle expression, `graphicsAuthoringLeaseFenceCondition`, and the raw D1 mode configuration write renders the same expression. A write the fence refuses answers the lease's own 409, which the client does not retry as a race.
 
@@ -902,7 +902,7 @@ Accepted · 2026-10-20 · [#607](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Why
 
-The lease was only checked at two routes. The generic Screen write reached the same stack and canvas with no lease check at all, so a second Session's write succeeded with a current `stateVersion`. A check at the door also left a window. A takeover between admission and commit let the displaced author's save land over the new holder.
+The lease was only checked at two routes. The generic Screen write reached the same stack, and then the Screen's own canvas, with no lease check at all, so a second Session's write succeeded with a current `stateVersion`. A check at the door also left a window. A takeover between admission and commit let the displaced author's save land over the new holder.
 
 ### Consequences
 
@@ -1628,5 +1628,6 @@ Canvas size and wording are set once per production, not per brand or per Screen
 
 - Today's two canvases (`ScreenConfig` width/height and the graphics hosts' canvas fields) become one.
 - A portrait display on a landscape Event is not supported; an override is the reopening path if a real case appears.
+- Resizing the Event Canvas moves the frame every graphics composition of the Event was authored in, yet takes no Graphics Authoring Lease, like any other Event Presentation Settings write (ADR-0030).
 - On-air wording stays on the Event, so one Theme serves Events that word things differently.
 - The existing look fields are dropped, not migrated, and existing Screens render the Default Theme.

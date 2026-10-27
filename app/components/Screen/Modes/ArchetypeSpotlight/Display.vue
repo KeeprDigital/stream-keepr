@@ -170,13 +170,13 @@ const statBadgeStyle = {
 
 <style scoped>
 .spotlight-name {
-	font-size: clamp(1.5rem, 3vw, 2.75rem);
+	font-size: clamp(1.5rem, 3cqw, 2.75rem);
 }
 .stat-label {
 	font-size: 0.8rem;
 }
 .stat-value {
-	font-size: clamp(1.25rem, 2.4vw, 2.25rem);
+	font-size: clamp(1.25rem, 2.4cqw, 2.25rem);
 	font-variant-numeric: tabular-nums;
 }
 .spotlight-pilots {
@@ -188,7 +188,7 @@ const statBadgeStyle = {
 	gap: 1rem;
 	align-items: center;
 	padding: 0.6rem 0.5rem;
-	font-size: clamp(1rem, 1.8vw, 1.6rem);
+	font-size: clamp(1rem, 1.8cqw, 1.6rem);
 }
 .pilot-row {
 	border-bottom-style: solid;

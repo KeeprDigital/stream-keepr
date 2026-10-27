@@ -1,7 +1,7 @@
 import type { PageRotationConfig } from './screenModeConfigs/subShapes';
 import type { ScreenModeContainerControls } from './screenModes';
 import type { DisplayType, ScreenMode } from './types/enums';
-import type { ModeConfigTypeMap, ScreenConfig, ScreenOutput } from './types/screenConfig';
+import type { ModeConfigTypeMap, ScreenOutput } from './types/screenConfig';
 import { pageRotationEdit } from './modules/page-rotation';
 import { getContainerControls, SCREEN_MODES } from './screenModes';
 import {
@@ -11,16 +11,14 @@ import {
 
 export type ScreenModeHostKind = 'overlay' | 'control';
 export type ScreenModeThemePolicy = 'none' | 'screen-color-mode';
-export type ScreenModeDimensionField = 'width' | 'height';
 export type ScreenModeContainerControlPlacement = 'container' | 'mode';
 
 export interface ScreenModeHostDefinition {
 	kind: ScreenModeHostKind;
-	defaultWidth?: number;
-	defaultHeight?: number;
 	useScreenPadding: boolean;
 	useScreenBackground: boolean;
 	useScreenAlignment: boolean;
+	/** The host renders its Event Canvas scaled uniformly to fit its window (ADR-0051). */
 	fitToViewport: boolean;
 	themePolicy: ScreenModeThemePolicy;
 }
@@ -31,18 +29,10 @@ export interface ScreenModeOutputOption {
 	icon: string;
 }
 
-export interface ScreenModeDimensionControl {
-	defaultValue: number | null;
-	placeholder: string;
-	description: string;
-}
-
 export interface ScreenModeConfigurationPolicy {
 	displayType: DisplayType;
 	containerControls: Required<ScreenModeContainerControls>;
 	containerControlPlacement: Record<keyof Required<ScreenModeContainerControls>, ScreenModeContainerControlPlacement>;
-	dimensions: Record<ScreenModeDimensionField, ScreenModeDimensionControl>;
-	resetScreenConfigDefaults?: Partial<ScreenConfig>;
 	outputOptions: ScreenModeOutputOption[];
 	/**
 	 * Whether the Screen configuration page gives this mode the full page width
@@ -109,27 +99,10 @@ const OPEN_SCREEN_OUTPUT_OPTIONS: ScreenModeOutputOption[] = SCREEN_OUTPUT_OPTIO
 }));
 
 const DEFAULT_CONTAINER_CONTROL_PLACEMENT: ScreenModeConfigurationPolicy['containerControlPlacement'] = {
-	dimensions: 'container',
 	padding: 'container',
 	textColors: 'container',
 	background: 'container',
 };
-
-function getScreenModeDimensionControl(field: ScreenModeDimensionField, defaultValue?: number): ScreenModeDimensionControl {
-	if (defaultValue) {
-		return {
-			defaultValue,
-			placeholder: String(defaultValue),
-			description: `Pixel-exact output ${field} in pixels.`,
-		};
-	}
-
-	return {
-		defaultValue: null,
-		placeholder: 'Auto',
-		description: `Overlay ${field} in pixels. Leave empty to fill the viewport.`,
-	};
-}
 
 export function getScreenModeHostDefinition(mode: ScreenMode): ScreenModeHostDefinition {
 	const sharedDefinition = SCREEN_MODES[mode];
@@ -143,8 +116,6 @@ export function getScreenModeHostDefinition(mode: ScreenMode): ScreenModeHostDef
 
 	return {
 		...base,
-		defaultWidth: graphicsHost.canvasWidth,
-		defaultHeight: graphicsHost.canvasHeight,
 		useScreenPadding: false,
 		useScreenBackground: false,
 		useScreenAlignment: graphicsHost.useScreenAlignment ?? base.useScreenAlignment,
@@ -153,27 +124,12 @@ export function getScreenModeHostDefinition(mode: ScreenMode): ScreenModeHostDef
 
 export function getScreenModeConfigurationPolicy(mode: ScreenMode): ScreenModeConfigurationPolicy {
 	const sharedDefinition = SCREEN_MODES[mode];
-	const host = getScreenModeHostDefinition(mode);
 	const graphicsHost = sharedDefinition.graphicsHost;
-	const fixedDimensions = host.defaultWidth && host.defaultHeight;
 
 	return {
 		displayType: sharedDefinition.displayType,
 		containerControls: getContainerControls(mode),
-		containerControlPlacement: {
-			...DEFAULT_CONTAINER_CONTROL_PLACEMENT,
-			// A graphics host owns its canvas, so its dimension controls sit with the mode.
-			...(graphicsHost
-				? { dimensions: 'mode' as const }
-				: {}),
-		},
-		dimensions: {
-			width: getScreenModeDimensionControl('width', host.defaultWidth),
-			height: getScreenModeDimensionControl('height', host.defaultHeight),
-		},
-		resetScreenConfigDefaults: fixedDimensions
-			? { width: host.defaultWidth, height: host.defaultHeight }
-			: undefined,
+		containerControlPlacement: DEFAULT_CONTAINER_CONTROL_PLACEMENT,
 		outputOptions: graphicsHost
 			? OPEN_SCREEN_OUTPUT_OPTIONS
 			: [],

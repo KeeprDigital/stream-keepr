@@ -26,6 +26,7 @@ vi.mock('~/modules/screen-mode', async () => ({
 const overlayContainer = ref<HTMLElement | null>(null);
 const screen = ref();
 const themeTokens = ref<Record<string, unknown>>();
+const eventCanvas = ref({ width: 1280, height: 720 });
 
 mockNuxtImport('useScreenContext', () => () => ({
 	screen,
@@ -35,6 +36,7 @@ mockNuxtImport('useScreenContext', () => () => ({
 	isPreview: ref(false),
 	outputMode: ref('overlay'),
 	themeTokens,
+	eventCanvas,
 }));
 
 const colorLayer = {
@@ -86,17 +88,18 @@ describe('screenRenderer', () => {
 		hostReturning(true);
 	});
 
-	it('renders the mode\'s display inside the container its host policy resolves', () => {
+	it('renders the mode\'s display inside the container its host resolves for the Event Canvas', () => {
 		screen.value = createMockScreen({
 			currentMode: 'card',
-			screenConfig: { width: 1920, height: 1080 },
+			screenConfig: { paddingX: 48, paddingY: 24 },
 		});
 
 		const wrapper = mountRenderer();
 
 		expect(resolveScreenModeHost).toHaveBeenCalledWith(expect.objectContaining({
 			mode: 'card',
-			screenConfig: { width: 1920, height: 1080 },
+			canvas: { width: 1280, height: 720 },
+			screenConfig: { paddingX: 48, paddingY: 24 },
 		}));
 		const container = wrapper.get('.host-container');
 		expect(container.attributes('style')).toContain('padding: 24px 48px;');

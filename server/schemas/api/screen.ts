@@ -114,8 +114,6 @@ const verticalAlignSchema = z.enum(VERTICAL_ALIGN_VALUES);
 
 export const screenConfigSchema = z.object({
 	background: z.string().max(500).optional(),
-	width: z.number().positive().optional(),
-	height: z.number().positive().optional(),
 	paddingX: z.number().nonnegative().optional(),
 	paddingY: z.number().nonnegative().optional(),
 	primaryTextColor: z.string().max(200).optional(),
@@ -135,7 +133,6 @@ const screenConfigPatchShape = Object.fromEntries(
 export const screenSlugSchema = z.string().min(1).max(50).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens');
 
 // Patch variant: accepts `null` as a sentinel meaning "delete this key from stored config".
-// Used by the PATCH endpoint to support clearing width/height back to auto.
 export const screenConfigPatchSchema = z.object(screenConfigPatchShape).strict();
 
 /* ────────────────────────────────────────────────

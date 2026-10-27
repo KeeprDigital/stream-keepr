@@ -144,26 +144,26 @@ function outcomeLabel({ outcome }: ScreenOutputHeadToHeadEarlierMatch): string {
 	text-align: right;
 }
 .name {
-	font-size: clamp(1.75rem, 3.5vw, 3rem);
+	font-size: clamp(1.75rem, 3.5cqw, 3rem);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	max-width: 100%;
 }
 .pronouns {
-	font-size: clamp(0.875rem, 1.3vw, 1.25rem);
+	font-size: clamp(0.875rem, 1.3cqw, 1.25rem);
 }
 .stats {
 	display: flex;
 	gap: 1.25rem;
-	font-size: clamp(1.125rem, 2vw, 1.75rem);
+	font-size: clamp(1.125rem, 2cqw, 1.75rem);
 	font-variant-numeric: tabular-nums;
 }
 .deck {
-	font-size: clamp(1rem, 1.8vw, 1.5rem);
+	font-size: clamp(1rem, 1.8cqw, 1.5rem);
 }
 .versus {
-	font-size: clamp(1.25rem, 2.5vw, 2rem);
+	font-size: clamp(1.25rem, 2.5cqw, 2rem);
 }
 .head-to-head-earlier-matches {
 	padding: 0 1.5rem 1rem;
@@ -179,7 +179,7 @@ function outcomeLabel({ outcome }: ScreenOutputHeadToHeadEarlierMatch): string {
 	padding: 0.75rem 0;
 	border-bottom-style: solid;
 	border-bottom-width: 1px;
-	font-size: clamp(1rem, 1.8vw, 1.5rem);
+	font-size: clamp(1rem, 1.8cqw, 1.5rem);
 }
 .winner {
 	overflow: hidden;
@@ -193,6 +193,6 @@ function outcomeLabel({ outcome }: ScreenOutputHeadToHeadEarlierMatch): string {
 .first-meeting {
 	padding: 1rem 0;
 	text-align: center;
-	font-size: clamp(1.25rem, 2.5vw, 2rem);
+	font-size: clamp(1.25rem, 2.5cqw, 2rem);
 }
 </style>
