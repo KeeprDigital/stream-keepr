@@ -5,6 +5,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
+import { settleUntil } from '~~/test/helpers/settle';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 
 // The Theme editor writes one token per edit and shows each token's state and
@@ -59,6 +60,8 @@ async function mountEditor() {
 				ScreenAnimationEffectPresetLibrary: true,
 			},
 		},
+		// Attached, so the preview's painted style can be read back.
+		attachTo: document.body,
 	});
 	await flushPromises();
 	return wrapper;
@@ -134,6 +137,16 @@ describe('the Theme editor', () => {
 			],
 		]);
 		expect(field(wrapper, token).attributes('data-token-state')).toBe('set');
+	});
+
+	it('repaints its preview once a write lands', async () => {
+		answerWrite = () => theme(2, { 'standings.surface': 'rgb(0, 255, 0)' });
+		const wrapper = await mountEditor();
+		await settleUntil(() => wrapper.find('.standings-table').exists());
+
+		await commit(wrapper, 'standings.surface', 'colour', '#00ff00');
+
+		expect(getComputedStyle(wrapper.get('.standings-table').element).backgroundColor).toBe('rgb(0, 255, 0)');
 	});
 
 	it('points a Mode Token at another Foundation Token of its type', async () => {

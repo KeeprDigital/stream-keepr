@@ -7,16 +7,19 @@ import { DEFAULT_THEME_TOKENS } from '~~/shared/modules/theme';
 import { screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
 import { getScreenModeDefinition, resolveScreenModeHost, screenBackgroundLayers, screenModeThemeTokenStyle } from '~/modules/screen-mode';
 
-const { screen, overlayContainer, themeTokens, eventCanvas } = useScreenContext();
+const { screen, overlayContainer, themeTokens, eventCanvas, viewport } = useScreenContext();
 const preferredDark = usePreferredDark();
-const viewportWidth = ref(0);
-const viewportHeight = ref(0);
+const windowWidth = ref(0);
+const windowHeight = ref(0);
+/** The space the Screen fits into: its context's when it names one, else the window. */
+const viewportWidth = computed(() => viewport?.value.width ?? windowWidth.value);
+const viewportHeight = computed(() => viewport?.value.height ?? windowHeight.value);
 
 function updateViewportSize() {
 	if (!import.meta.client)
 		return;
-	viewportWidth.value = window.innerWidth;
-	viewportHeight.value = window.innerHeight;
+	windowWidth.value = window.innerWidth;
+	windowHeight.value = window.innerHeight;
 }
 
 onMounted(() => {

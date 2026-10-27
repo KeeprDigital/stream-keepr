@@ -44,6 +44,14 @@ export interface ScreenContext {
 	 * default canvas.
 	 */
 	eventCanvas?: Ref<EventCanvas>;
+	/**
+	 * Every read answers from the Screen Mode Sample Dataset rather than the
+	 * Screen. Set only by a Theme preview (`createScreenModeSampleContext`); a
+	 * Screen Output never sets it, so sample data never reaches air.
+	 */
+	sampleDataset?: true;
+	/** The space the Screen renders into; absent means the browser window. */
+	viewport?: Readonly<Ref<{ width: number; height: number }>>;
 }
 
 const SCREEN_CONTEXT_KEY: InjectionKey<ScreenContext> = Symbol('screen-context');
