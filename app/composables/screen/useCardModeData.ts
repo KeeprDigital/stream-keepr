@@ -28,7 +28,7 @@ export function useCardModeData() {
 	const screenId = computed<number | null>(() => screen.value?.id ?? null);
 
 	// Display config strips mode-level properties (matchId)
-	// CardDisplay only needs scale + animation settings
+	// CardDisplay only needs the animation settings
 	const displayConfig = computed<CardDisplayConfig>(() => {
 		const { featureMatchId: _featureMatchId, ...rest } = config.value;
 		return rest;

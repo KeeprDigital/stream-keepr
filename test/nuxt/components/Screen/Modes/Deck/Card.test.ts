@@ -20,7 +20,6 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 	return mount(Card, {
 		props: {
 			card: createCard(),
-			sizeClass: 'w-36',
 			showQuantity: false,
 			showHighlanderPoints: true,
 			quantityPositionClass: '-top-1 -right-1',
@@ -47,6 +46,15 @@ describe('screenDeckCard', () => {
 		expect(badge.text()).toBe('1');
 		expect(badge.attributes('style')).toContain('color: red;');
 		expect(badge.attributes('style')).toContain('background-color: blue;');
+	});
+
+	it.each([
+		{ dynamicSize: false, width: 'var(--theme-deck-card-width)' },
+		{ dynamicSize: true, width: '' },
+	])('takes the card-width Mode Token unless it fills its column (dynamic: $dynamicSize)', async ({ dynamicSize, width }) => {
+		const wrapper = await mountComponent({ dynamicSize });
+
+		expect((wrapper.get('.card-item').element as HTMLElement).style.width).toBe(width);
 	});
 
 	it('hides the Highlander point badge when disabled', async () => {

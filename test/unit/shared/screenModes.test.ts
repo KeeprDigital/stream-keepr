@@ -22,11 +22,11 @@ describe('getContainerControls', () => {
 		['deck', true],
 		['broadcast-graphics', false],
 		['feature-match-overlay', false],
-	] as const)('gives %s generic padding, text colour and background controls: %s', (mode, generic) => {
+	] as const)('gives %s generic padding and background controls: %s', (mode, generic) => {
 		expect(getContainerControls(mode)).toEqual({
 			dimensions: true,
 			padding: generic,
-			textColors: generic,
+			textColors: false,
 			background: generic,
 		});
 	});

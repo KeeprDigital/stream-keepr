@@ -59,14 +59,10 @@ describe('deckModeConfigSchema', () => {
 			view: 'grid' as const,
 			columns: 4,
 			listColumns: 2,
-			cardSize: 'medium' as const,
 			dynamicCardSize: false,
-			cardGap: 8,
-			stackOverlap: 15,
 		},
 		sideboard: {
 			view: 'stack' as const,
-			stackOverlap: 35,
 		},
 	};
 

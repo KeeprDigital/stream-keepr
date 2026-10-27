@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import type { DeckCardSize, QuantityPosition } from '~~/shared/types/enums';
-import type { ResolvedDeckBoardLayout, ScreenConfig } from '~~/shared/types/screenConfig';
+import type { QuantityPosition } from '~~/shared/types/enums';
+import type { ResolvedDeckBoardLayout } from '~~/shared/types/screenConfig';
 import type { DeckListCardWithData } from '~/types/card/deckList';
 import { DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { formatHighlanderPointedCardNote, formatHighlanderPointsLabel } from '~~/shared/utils/highlander';
 import { getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
-
-const { screen } = useScreenContext();
+import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
 const {
 	config,
@@ -26,17 +25,21 @@ const {
 	commitPendingDeck,
 } = useDeckModeData();
 
-const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
-const primaryTextStyle = computed(() => {
-	return screenConfig.value.primaryTextColor
-		? { color: screenConfig.value.primaryTextColor }
-		: {};
-});
-const secondaryTextStyle = computed(() => {
-	return screenConfig.value.secondaryTextColor
-		? { color: screenConfig.value.secondaryTextColor }
-		: {};
-});
+const primaryTextStyle = {
+	color: modeTokenVar('deck', 'primary-text'),
+};
+const secondaryTextStyle = {
+	color: modeTokenVar('deck', 'secondary-text'),
+};
+const titleStyle = {
+	...modeTypographyStyle('deck', 'title-typography'),
+	...primaryTextStyle,
+};
+/** Set on the root, so everything else reads as body text. */
+const displayStyle = {
+	...modeTypographyStyle('deck', 'body-typography'),
+	...primaryTextStyle,
+};
 
 const showDeckBody = ref(hasDisplayedDeck.value);
 const awaitingSwapCommit = ref(false);
@@ -181,11 +184,10 @@ const showHeader = computed(() =>
 	|| showHighlanderPointedCards.value,
 );
 
-// Grid style with dynamic gap
 function gridStyle(layout: ResolvedDeckBoardLayout) {
 	return {
 		gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
-		gap: `${layout.cardGap}px`,
+		gap: modeTokenVar('deck', 'card-gap'),
 	};
 }
 
@@ -195,17 +197,6 @@ function listGridStyle(layout: ResolvedDeckBoardLayout) {
 		columnGap: '1rem',
 		rowGap: '0.25rem',
 	};
-}
-
-const CARD_SIZE_CLASSES: Record<DeckCardSize, string> = {
-	small: 'w-24',
-	medium: 'w-36',
-	large: 'w-48',
-};
-
-// Card size - either dynamic or fixed class
-function gridCardSizeClass(layout: ResolvedDeckBoardLayout) {
-	return layout.dynamicCardSize ? '' : CARD_SIZE_CLASSES[layout.cardSize];
 }
 
 // Quantity badge position styles
@@ -230,19 +221,15 @@ const highlanderPointsPositionClass = computed(() => {
 	return BADGE_POSITION_CLASSES[pos];
 });
 
-const quantityBadgeStyle = computed(() => {
-	return {
-		color: config.value.quantityTextColor ?? '#ffffff',
-		backgroundColor: config.value.quantityBgColor ?? '#7c3aed',
-	};
-});
+const quantityBadgeStyle = {
+	color: modeTokenVar('deck', 'quantity-badge-text'),
+	backgroundColor: modeTokenVar('deck', 'quantity-badge-surface'),
+};
 
-const highlanderPointBadgeStyle = computed(() => {
-	return {
-		color: config.value.highlanderPointsTextColor ?? '#ffffff',
-		backgroundColor: config.value.highlanderPointsBgColor ?? '#7c3aed',
-	};
-});
+const highlanderPointBadgeStyle = {
+	color: modeTokenVar('deck', 'points-badge-text'),
+	backgroundColor: modeTokenVar('deck', 'points-badge-surface'),
+};
 
 // Quantity badge size classes
 const QUANTITY_SIZE_CLASSES: Record<string, string> = {
@@ -289,22 +276,26 @@ const deckMetaPillStyle = computed(() => {
 	}
 
 	return {
-		color: config.value.deckMetaPillTextColor ?? '#111827',
-		background: config.value.deckMetaPillBgColor ?? '#ffffff',
-		borderColor: config.value.deckMetaPillBorderColor,
+		color: modeTokenVar('deck', 'meta-pill-text'),
+		backgroundColor: modeTokenVar('deck', 'meta-pill-surface'),
+		borderColor: modeTokenVar('deck', 'meta-pill-border'),
 	};
 });
 
 const deckMetaAccentStyle = computed(() => {
 	return showDeckMetaPill.value
-		? { color: config.value.deckMetaPillAccentColor ?? '#7c3aed' }
-		: primaryTextStyle.value;
+		? {
+				color: modeTokenVar('deck', 'meta-pill-accent'),
+			}
+		: primaryTextStyle;
 });
 
 const deckMetaTextStyle = computed(() => {
 	return showDeckMetaPill.value
-		? { color: config.value.deckMetaPillTextColor ?? '#111827' }
-		: secondaryTextStyle.value;
+		? {
+				color: modeTokenVar('deck', 'meta-pill-text'),
+			}
+		: secondaryTextStyle;
 });
 
 const highlanderPointedCardClass = computed((): string => {
@@ -312,26 +303,15 @@ const highlanderPointedCardClass = computed((): string => {
 	return HIGHLANDER_POINTED_CARD_SIZE_CLASSES[size] || 'px-3 py-1 text-sm';
 });
 
-const highlanderPointedCardStyle = computed(() => {
-	return {
-		color: config.value.highlanderPointedCardsTextColor ?? '#111827',
-		background: config.value.highlanderPointedCardsBgColor ?? '#ffffff',
-		borderColor: config.value.highlanderPointedCardsBorderColor,
-	};
-});
+const highlanderPointedCardStyle = {
+	color: modeTokenVar('deck', 'pointed-card-text'),
+	backgroundColor: modeTokenVar('deck', 'pointed-card-surface'),
+	borderColor: modeTokenVar('deck', 'pointed-card-border'),
+};
 
-const highlanderPointedCardAccentStyle = computed(() => {
-	return {
-		color: config.value.highlanderPointedCardsAccentColor ?? '#7c3aed',
-	};
-});
-
-const highlanderPointedCardNoteStyle = computed(() => {
-	return {
-		color: config.value.highlanderPointedCardsTextColor ?? '#111827',
-		opacity: '0.7',
-	};
-});
+const highlanderPointedCardAccentStyle = {
+	color: modeTokenVar('deck', 'pointed-card-accent'),
+};
 
 const showQuantities = computed(() => config.value.showQuantities ?? false);
 
@@ -340,67 +320,23 @@ const cardBadgeProps = computed(() => ({
 	showHighlanderPoints: showHighlanderPoints.value,
 	quantityPositionClass: quantityPositionClass.value,
 	quantitySizeClass: quantitySizeClass.value,
-	quantityBadgeStyle: quantityBadgeStyle.value,
+	quantityBadgeStyle,
 	highlanderPointsPositionClass: highlanderPointsPositionClass.value,
 	highlanderPointsSizeClass: highlanderPointBadgeClass.value,
-	highlanderPointsBadgeStyle: highlanderPointBadgeStyle.value,
+	highlanderPointsBadgeStyle: highlanderPointBadgeStyle,
 }));
 
-// Fixed card dimensions per size (MTG card ratio is ~63:88)
-const CARD_WIDTH_PX: Record<DeckCardSize, number> = {
-	small: 96, // w-24
-	medium: 144, // w-36
-	large: 192, // w-48
-};
-const CARD_HEIGHT_PX: Record<DeckCardSize, number> = {
-	small: 134, // 96 * 88/63 ≈ 134px
-	medium: 201, // 144 * 88/63 ≈ 201px
-	large: 268, // 192 * 88/63 ≈ 268px
-};
-
-// Vertical strip: each stacked card reveals stackOverlap % of its height.
-function stackColumnOffsetPx(layout: ResolvedDeckBoardLayout) {
-	return Math.round(CARD_HEIGHT_PX[layout.cardSize] * (layout.stackOverlap / 100));
-}
-
-function stackColumnStyle(layout: ResolvedDeckBoardLayout, cardCount: number) {
-	const height = cardCount === 0
-		? 0
-		: ((cardCount - 1) * stackColumnOffsetPx(layout)) + CARD_HEIGHT_PX[layout.cardSize];
-	return { height: `${height}px` };
-}
-
-function stackColumnCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
-	return {
-		position: 'absolute' as const,
-		top: `${index * stackColumnOffsetPx(layout)}px`,
-		left: '0',
-		right: '0',
-	};
-}
-
-// Horizontal row: each stacked card reveals stackOverlap % of its width.
-function stackRowOffsetPx(layout: ResolvedDeckBoardLayout) {
-	return Math.round(CARD_WIDTH_PX[layout.cardSize] * (layout.stackOverlap / 100));
-}
-
-function stackRowStyle(layout: ResolvedDeckBoardLayout, cardCount: number) {
-	const width = cardCount === 0
-		? 0
-		: ((cardCount - 1) * stackRowOffsetPx(layout)) + CARD_WIDTH_PX[layout.cardSize];
-	return {
-		width: `${width}px`,
-		height: `${CARD_HEIGHT_PX[layout.cardSize]}px`,
-	};
-}
-
-function stackRowCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
-	return {
-		position: 'absolute' as const,
-		left: `${index * stackRowOffsetPx(layout)}px`,
-		top: '0',
-		width: `${CARD_WIDTH_PX[layout.cardSize]}px`,
-	};
+/**
+ * A stacked board: each card but the last shows only the `stack-reveal` Mode
+ * Token's slice of itself, down a strip or across a row, and the next card
+ * covers the rest. The last card shows whole.
+ */
+function stackCardStyle(extent: 'height' | 'width', index: number, cardCount: number) {
+	return index < cardCount - 1
+		? {
+				[extent]: modeTokenVar('deck', 'stack-reveal'),
+			}
+		: {};
 }
 </script>
 
@@ -409,7 +345,7 @@ function stackRowCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
 		:error="error"
 	>
 		<!-- Deck Content -->
-		<div class="deck-content overflow-hidden w-full h-full">
+		<div class="deck-content overflow-hidden w-full h-full" :style="displayStyle">
 			<transition mode="out-in" name="deck-swap" @after-leave="handleDeckAfterLeave">
 				<div v-if="showDeckBody && hasDisplayedDeck" :key="displayedDeckVersion" class="deck-body w-full h-full">
 					<!-- Header -->
@@ -419,10 +355,10 @@ function stackRowCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
 							class="flex flex-wrap items-center justify-center gap-3"
 						>
 							<template v-if="config.showDeckName">
-								<h2 class="text-xl font-bold" :style="primaryTextStyle">
+								<h2 class="text-xl" :style="titleStyle">
 									{{ primaryHeader }}
 								</h2>
-								<p v-if="secondaryHeader" class="text-muted" :style="secondaryTextStyle">
+								<p v-if="secondaryHeader" :style="secondaryTextStyle">
 									{{ secondaryHeader }}
 								</p>
 							</template>
@@ -438,12 +374,12 @@ function stackRowCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
 							:style="deckMetaPillStyle"
 						>
 							<div v-if="companion" class="flex items-center gap-2">
-								<span :class="showDeckMetaPill ? '' : 'text-muted'" :style="deckMetaTextStyle">Companion:</span>
+								<span :style="deckMetaTextStyle">Companion:</span>
 								<span class="font-medium" :style="deckMetaAccentStyle">{{ companion.name }}</span>
 							</div>
 
 							<div v-if="deckCounters.length > 0" class="flex items-center gap-2">
-								<span :class="showDeckMetaPill ? '' : 'text-muted'" :style="deckMetaTextStyle">Counters:</span>
+								<span :style="deckMetaTextStyle">Counters:</span>
 								<span
 									v-for="counter in deckCounters"
 									:key="counter.key"
@@ -458,8 +394,8 @@ function stackRowCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
 							<p
 								v-if="showHighlanderTotal"
 								data-testid="highlander-total-inline"
-								:class="showDeckMetaPill ? 'font-medium' : 'text-muted'"
-								:style="showDeckMetaPill ? deckMetaAccentStyle : undefined"
+								:class="{ 'font-medium': showDeckMetaPill }"
+								:style="showDeckMetaPill ? deckMetaAccentStyle : secondaryTextStyle"
 							>
 								{{ highlanderTotalLabel }}
 							</p>
@@ -468,8 +404,8 @@ function stackRowCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
 								v-for="stat in (config.showDeckStats ? deckStats : [])"
 								:key="stat.type"
 							>
-								<span class="font-medium me-1" :class="showDeckMetaPill ? '' : 'text-default'" :style="showDeckMetaPill ? deckMetaAccentStyle : undefined">{{ stat.count }}</span>
-								<span :class="showDeckMetaPill ? '' : 'text-muted'" :style="deckMetaTextStyle">{{ stat.type }}</span>
+								<span class="font-medium me-1" :style="deckMetaAccentStyle">{{ stat.count }}</span>
+								<span :style="deckMetaTextStyle">{{ stat.type }}</span>
 							</span>
 						</div>
 
@@ -478,13 +414,13 @@ function stackRowCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
 								v-for="card in highlanderPointedCardsList"
 								:key="card.name"
 								data-testid="highlander-pointed-card-chip"
-								class="inline-flex items-center gap-1 rounded-full border border-default leading-none"
+								class="inline-flex items-center gap-1 rounded-full border leading-none"
 								:class="highlanderPointedCardClass"
 								:style="highlanderPointedCardStyle"
 							>
 								<span class="font-semibold" :style="highlanderPointedCardAccentStyle">{{ card.points }}</span>
 								<span>{{ card.name }}</span>
-								<span v-if="formatHighlanderPointedCardNote(card)" :style="highlanderPointedCardNoteStyle">
+								<span v-if="formatHighlanderPointedCardNote(card)" class="opacity-70">
 									{{ formatHighlanderPointedCardNote(card) }}
 								</span>
 							</span>
@@ -500,7 +436,7 @@ function stackRowCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
 							:class="section.stackVertical ? 'flex flex-col' : ''"
 							:style="boardFlexStyle(section)"
 						>
-							<h3 v-if="section.showLabel" class="text-lg font-semibold mb-2" :style="primaryTextStyle">
+							<h3 v-if="section.showLabel" class="text-lg mb-2" :style="titleStyle">
 								{{ section.label }}
 							</h3>
 
@@ -516,7 +452,6 @@ function stackRowCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
 									v-for="(card, index) in section.cards"
 									:key="`${section.key}-${index}`"
 									:card="card"
-									:size-class="gridCardSizeClass(section.layout)"
 									:dynamic-size="section.layout.dynamicCardSize"
 									v-bind="cardBadgeProps"
 								/>
@@ -526,19 +461,16 @@ function stackRowCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
 							<div
 								v-else-if="section.layout.view === 'stack' && section.stackVertical"
 								:data-testid="`${section.key}-stack-column`"
-								class="stack-container relative"
-								:class="CARD_SIZE_CLASSES[section.layout.cardSize]"
-								:style="stackColumnStyle(section.layout, section.cards.length)"
+								class="stack-container flex flex-col"
 							>
 								<div
 									v-for="(card, index) in section.cards"
 									:key="`${section.key}-${index}`"
-									class="stack-card"
-									:style="stackColumnCardStyle(section.layout, index)"
+									class="stack-card relative shrink-0"
+									:style="stackCardStyle('height', index, section.cards.length)"
 								>
 									<ScreenModesDeckCard
 										:card="card"
-										:size-class="CARD_SIZE_CLASSES[section.layout.cardSize]"
 										v-bind="cardBadgeProps"
 									/>
 								</div>
@@ -548,18 +480,16 @@ function stackRowCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
 							<div v-else-if="section.layout.view === 'stack'" class="flex justify-center">
 								<div
 									:data-testid="`${section.key}-stack-row`"
-									class="relative"
-									:style="stackRowStyle(section.layout, section.cards.length)"
+									class="flex"
 								>
 									<div
 										v-for="(card, index) in section.cards"
 										:key="`${section.key}-${index}`"
-										class="stack-card"
-										:style="stackRowCardStyle(section.layout, index)"
+										class="stack-card relative shrink-0"
+										:style="stackCardStyle('width', index, section.cards.length)"
 									>
 										<ScreenModesDeckCard
 											:card="card"
-											:size-class="CARD_SIZE_CLASSES[section.layout.cardSize]"
 											v-bind="cardBadgeProps"
 										/>
 									</div>
@@ -578,7 +508,7 @@ function stackRowCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
 									:key="`${section.key}-${index}`"
 									class="card-list-item flex items-center gap-2 py-1 px-2 rounded-lg"
 								>
-									<span class="quantity text-muted w-6 text-right" :style="secondaryTextStyle">
+									<span class="quantity w-6 text-right" :style="secondaryTextStyle">
 										{{ card.quantity }}x
 									</span>
 									<span class="name flex-1" :style="primaryTextStyle">
@@ -587,13 +517,13 @@ function stackRowCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
 									<span
 										v-if="showHighlanderPoints && card.highlanderPoints != null"
 										data-testid="highlander-list-badge"
-										class="rounded-md font-mono font-bold leading-none shadow-sm"
+										class="rounded-md font-bold tabular-nums leading-none shadow-sm"
 										:class="highlanderPointBadgeClass"
 										:style="highlanderPointBadgeStyle"
 									>
 										{{ card.highlanderPoints }}
 									</span>
-									<span class="type text-muted text-sm" :style="secondaryTextStyle">
+									<span class="type text-sm" :style="secondaryTextStyle">
 										{{ getCardTypeDisplayLabel(card.cardType, { nonbasicLandLabel: true }) }}
 									</span>
 								</div>

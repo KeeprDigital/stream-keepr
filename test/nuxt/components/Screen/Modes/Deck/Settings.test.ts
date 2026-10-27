@@ -143,19 +143,13 @@ function defaultDeckConfig(): Record<string, any> {
 			view: 'grid',
 			columns: 4,
 			listColumns: 2,
-			cardSize: 'medium',
 			dynamicCardSize: false,
-			cardGap: 8,
-			stackOverlap: 15,
 		},
 		sideboard: {
 			view: 'stack',
 			columns: 4,
 			listColumns: 2,
-			cardSize: 'medium',
 			dynamicCardSize: false,
-			cardGap: 8,
-			stackOverlap: 15,
 		},
 		showQuantities: true,
 		showDeckName: true,
@@ -365,12 +359,14 @@ describe('screenDeckSettings', () => {
 
 		const mainboardSection = wrapper.get('[data-testid="settings-card"][data-title="Mainboard Layout"]');
 		expect(mainboardSection.find('[data-label="Grid Columns"]').exists()).toBe(true);
-		expect(mainboardSection.find('[data-label="Stack Visible %"]').exists()).toBe(false);
+		expect(mainboardSection.find('[data-label="Dynamic Card Size"]').exists()).toBe(true);
 		expect(mainboardSection.find('[data-label="List Columns"]').exists()).toBe(false);
 
+		// A stack's look is all Mode Tokens, so it offers only its view.
 		const sideboardSection = wrapper.get('[data-testid="settings-card"][data-title="Sideboard Layout"]');
-		expect(sideboardSection.find('[data-label="Stack Visible %"]').exists()).toBe(true);
 		expect(sideboardSection.find('[data-label="Grid Columns"]').exists()).toBe(false);
+		expect(sideboardSection.find('[data-label="Dynamic Card Size"]').exists()).toBe(false);
+		expect(sideboardSection.find('[data-label="List Columns"]').exists()).toBe(false);
 	});
 
 	it('writes a complete board block when one knob changes', async () => {
@@ -386,10 +382,7 @@ describe('screenDeckSettings', () => {
 				view: 'grid',
 				columns: 4,
 				listColumns: 2,
-				cardSize: 'medium',
 				dynamicCardSize: false,
-				cardGap: 8,
-				stackOverlap: 15,
 			},
 		});
 	});

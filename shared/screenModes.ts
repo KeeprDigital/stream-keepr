@@ -20,6 +20,8 @@ import { standingsModeConfigContract } from './screenModeConfigs/standings';
 import { topCardsModeConfigContract } from './screenModeConfigs/topCards';
 import { topCutModeConfigContract } from './screenModeConfigs/topCut';
 import { archetypeSpotlightModeTokens } from './screenModeTokens/archetypeSpotlight';
+import { cardModeTokens } from './screenModeTokens/card';
+import { deckModeTokens } from './screenModeTokens/deck';
 import { headToHeadModeTokens } from './screenModeTokens/headToHead';
 import { metagameModeTokens } from './screenModeTokens/metagame';
 import { pairingsModeTokens } from './screenModeTokens/pairings';
@@ -189,6 +191,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: cardModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot' },
+		modeTokens: cardModeTokens,
 	},
 	'deck': {
 		label: 'Deck List',
@@ -198,6 +201,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: deckModeConfigContract,
 		eventReferences: { deckSource: 'deckSource' },
+		modeTokens: deckModeTokens,
 	},
 	'standings': {
 		label: 'Standings',

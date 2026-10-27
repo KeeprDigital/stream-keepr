@@ -27,7 +27,6 @@ describe('getDisplayDefaultsForMode', () => {
 
 	it('returns display defaults that preserve visual settings only', () => {
 		expect(getDisplayDefaultsForMode('card')).toMatchObject({
-			scale: getDefaultConfigForMode('card').scale,
 			animationEnabled: getDefaultConfigForMode('card').animationEnabled,
 		});
 

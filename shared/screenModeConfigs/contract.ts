@@ -1,6 +1,6 @@
 import type { ScreenModeConfigFields } from './fields';
 import { z } from 'zod';
-import { clampToShapeBounds, screenModeConfigFields } from './fields';
+import { clampToShapeBounds, screenModeConfigFields, unwrapOptionalField } from './fields';
 
 /** Refuses a field carrying a zod default: a default lives only in `defaults` (ADR-0037). */
 type FieldsWithoutDefaults<Shape extends z.ZodRawShape> = {
@@ -71,7 +71,8 @@ type ListKeys<Shape extends z.ZodRawShape> = {
  *   editor offers exactly the range the contract accepts (#498).
  * - `formerFields` names the fields an earlier version of the contract held,
  *   which storage may still carry, such as Top Cut Bracket's placeholder `bracketSize`
- *   (#752). No reader sees one, a write naming one is accepted without storing
+ *   (#752). A field of a nested block is named by its path, such as
+ *   `mainboard.cardGap`. No reader sees one, a write naming one is accepted without storing
  *   it, and the next PATCH of the mode's config removes it from storage.
  *
  * The write forms are derived from `shape` on the server without special cases
@@ -113,18 +114,17 @@ export function defineScreenModeConfigContract<
 	options: { authoredStacks?: readonly AuthoredStack[]; formerFields?: readonly string[] } = {},
 ): ScreenModeConfigContract<Shape, AuthoredStack> {
 	const formerFields = options.formerFields ?? [];
-	for (const field of formerFields) {
-		if (Object.hasOwn(shape, field))
-			throw new Error(`Config field "${field}" cannot be both a field and a former field of one contract.`);
+	const formerPaths = formerFields.map(field => field.split('.'));
+	for (const path of formerPaths) {
+		if (shapeHoldsPath(shape, path))
+			throw new Error(`Config field "${path.join('.')}" cannot be both a field and a former field of one contract.`);
 	}
 
 	function withoutFormerFields<T>(fragment: T): T {
-		if (!fragment || typeof fragment !== 'object' || Array.isArray(fragment) || !formerFields.some(field => Object.hasOwn(fragment, field)))
-			return fragment;
-		const kept = { ...fragment } as Record<string, unknown>;
-		for (const field of formerFields)
-			delete kept[field];
-		return kept as T;
+		let kept: Record<string, unknown> | undefined;
+		for (const path of formerPaths)
+			kept = withoutPath(kept ?? fragment, path) ?? kept;
+		return (kept ?? fragment) as T;
 	}
 
 	return {
@@ -137,4 +137,35 @@ export function defineScreenModeConfigContract<
 		readStored: fragment => clampToShapeBounds(shape, withoutFormerFields(fragment)),
 		withoutFormerFields,
 	};
+}
+
+/** Whether `shape` declares the field at `path`, through its nested blocks. */
+function shapeHoldsPath(shape: z.ZodRawShape, [key, ...rest]: readonly string[]): boolean {
+	const field = key === undefined
+		? undefined
+		: shape[key] as z.ZodType | undefined;
+	if (!field)
+		return false;
+	if (rest.length === 0)
+		return true;
+	const inner = unwrapOptionalField(field);
+	return inner instanceof z.ZodObject && shapeHoldsPath(inner.shape, rest);
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+	return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** A copy of `fragment` without the field at `path`, or undefined when it holds none. */
+function withoutPath(fragment: unknown, [key, ...rest]: readonly string[]): Record<string, unknown> | undefined {
+	if (!isPlainRecord(fragment) || key === undefined || !Object.hasOwn(fragment, key))
+		return undefined;
+	if (rest.length === 0) {
+		const { [key]: _former, ...kept } = fragment;
+		return kept;
+	}
+	const block = withoutPath(fragment[key], rest);
+	return block
+		? { ...fragment, [key]: block }
+		: undefined;
 }
