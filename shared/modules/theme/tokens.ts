@@ -1,4 +1,5 @@
 import type { AnimationEffectSelection } from '../../animationEffects';
+import type { HorizontalAlign, VerticalAlign } from '../../types/enums';
 import type { GraphicFontSelection, GraphicTextTransform } from '../../types/graphics';
 import type { GraphicAssetId, GraphicAssetRevisionId } from '../../types/graphicsAsset';
 import type { ThemeBackgroundLayer } from './background';
@@ -6,6 +7,7 @@ import type { ThemeCompositeValueTypes } from './composites';
 import { z } from 'zod';
 import { animationEffectSelectionSchema } from '../../animationEffects';
 import { clampToShapeBounds } from '../../screenModeConfigs/fields';
+import { HORIZONTAL_ALIGN_VALUES, VERTICAL_ALIGN_VALUES } from '../../types/enums';
 import { GRAPHIC_TEXT_TRANSFORM_VALUES } from '../../types/graphics';
 import { GRAPHIC_FONT_IDS } from '../graphics/typography';
 import { backgroundLayerStackSchema, graphicAssetReferenceSchema } from './background';
@@ -42,6 +44,12 @@ export interface ThemeAsset {
 	revisionId: GraphicAssetRevisionId;
 }
 
+/** Where a Screen host places its mode's content within its Event Canvas, inside the inset. */
+export interface ThemeAlignment {
+	horizontal: HorizontalAlign;
+	vertical: VerticalAlign;
+}
+
 /**
  * What a Theme Token of each type holds. The composite types Graphic Items bind
  * to are in `composites.ts`.
@@ -58,6 +66,7 @@ export interface ThemeTokenValueTypes extends ThemeCompositeValueTypes {
 	animationEffect: AnimationEffectSelection;
 	/** One exact Graphic Asset Revision, or none. */
 	asset: ThemeAsset | null;
+	alignment: ThemeAlignment;
 }
 
 export type ThemeTokenType = keyof ThemeTokenValueTypes;
@@ -136,6 +145,11 @@ const typographySchema = z.object({
 	case: z.enum(GRAPHIC_TEXT_TRANSFORM_VALUES),
 }).strict();
 
+const alignmentSchema = z.object({
+	horizontal: z.enum(HORIZONTAL_ALIGN_VALUES),
+	vertical: z.enum(VERTICAL_ALIGN_VALUES),
+}).strict();
+
 /** The literals a token of `definition`'s type holds, within its bounds. */
 export function themeTokenValueSchema(definition: FoundationTokenDefinition | ModeTokenDefinition): z.ZodType {
 	switch (definition.type) {
@@ -161,6 +175,8 @@ export function themeTokenValueSchema(definition: FoundationTokenDefinition | Mo
 		case 'shape-geometry':
 		case 'animation-recipe':
 			return THEME_COMPOSITE_VALUE_SCHEMAS[definition.type];
+		case 'alignment':
+			return alignmentSchema;
 	}
 }
 

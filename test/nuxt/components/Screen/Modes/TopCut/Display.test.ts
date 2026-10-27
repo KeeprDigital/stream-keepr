@@ -6,7 +6,7 @@ import { computed, ref } from 'vue';
 import { deriveTopCutBracket, EMPTY_TOP_CUT_BRACKET } from '~~/shared/modules/top-cut-bracket';
 import Display from '~/components/Screen/Modes/TopCut/Display.vue';
 
-const screen = ref<any>({ id: 1, screenConfig: {} });
+const screen = ref<any>({ id: 1 });
 const config = ref({
 	phaseId: 3,
 	showSeeds: false,

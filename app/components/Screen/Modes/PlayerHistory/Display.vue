@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import type { PlayerHistoryColumnKey } from '~~/shared/types/enums';
-import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import type { PlayerMatchHistoryEntry } from '~/composables/screen/usePlayerHistoryModeData';
 import { formatGameScore } from '~~/shared/utils/matchFromPlayerSide';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { screen } = useScreenContext();
 const { config, error, isEmpty, headerText, pageData, player, formatOutcome } = usePlayerHistoryModeData();
 
 const columnWidths: Record<PlayerHistoryColumnKey, string> = {
@@ -68,12 +66,12 @@ function outcomeStyle(outcome: PlayerMatchHistoryEntry['outcome']) {
 	};
 }
 
-const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
+const inset = useScreenInset();
 const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef'), {
 	density: 'roomy',
 	prefix: 'history',
 	rowCount: () => config.value.rowsPerPage ?? pageData.value.length,
-	insetY: () => screenConfig.value.paddingY ?? 0,
+	insetY: inset,
 });
 
 /** Set on the root, over the shared broadcast table chrome's own colour and face. */

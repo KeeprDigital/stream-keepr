@@ -171,6 +171,11 @@ export const FOUNDATION_TOKENS = {
 		default: 0,
 		bounds: { min: 0, max: 480 },
 	},
+	'alignment': {
+		type: 'alignment',
+		label: 'Screen alignment',
+		default: { horizontal: 'center', vertical: 'center' },
+	},
 	'background': {
 		type: 'backgroundLayers',
 		label: 'Background',

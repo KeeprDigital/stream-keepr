@@ -1,4 +1,4 @@
-import type { ModeConfigsMap, ScreenConfig, ScreenConfigPatch, ScreenModeConfigPatch } from '~~/shared/types/screenConfig';
+import type { ModeConfigsMap, ScreenModeConfigPatch } from '~~/shared/types/screenConfig';
 import type { useAsyncAction } from '~/composables/core/useAsyncAction';
 import type {
 	CreateScreenInput,
@@ -11,7 +11,7 @@ import type { MessageData, RealtimePresenceMessage } from '~/types/realtime';
 import type { ScreenPresenceData } from '~/types/screen';
 import type { Flight } from '~/utils/guardedSequence';
 import { toRaw } from 'vue';
-import { getDefaultConfigForMode, toModeConfigPatch, toScreenConfigPatch } from '~~/shared/types/screenConfig';
+import { getDefaultConfigForMode, toModeConfigPatch } from '~~/shared/types/screenConfig';
 import { screenRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { isStateConflictFetchFailure } from '~~/shared/utils/stateConflict';
 import { createCancelableDebounce } from '~/utils/cancelableDebounce';
@@ -74,7 +74,6 @@ function stripNullValues<T extends Record<string, unknown>>(value: T): Record<st
 type OwnedFields
 	= | { owner: symbol; kind: 'screen'; patch: Record<string, unknown> }
 		| { owner: symbol; kind: 'mode'; mode: ScreenMode; patch: Record<string, unknown> }
-		| { owner: symbol; kind: 'screen-config'; patch: Record<string, unknown> }
 		| { owner: symbol; kind: 'theme-overrides'; patch: Record<string, unknown> };
 
 /** A Screen with one write's fields laid over it; a `null` field reads as deleted. */
@@ -99,14 +98,6 @@ function applyOwnedFields(screen: Screen, fields: OwnedFields): Screen {
 				},
 			};
 		}
-		case 'screen-config':
-			return {
-				...screen,
-				screenConfig: stripNullValues({
-					...(screen.screenConfig ?? {}),
-					...fields.patch,
-				}) as ScreenConfig,
-			};
 		case 'theme-overrides':
 			return {
 				...screen,
@@ -132,18 +123,15 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		resolve: (value: T) => void;
 		reject: (reason?: unknown) => void;
 	}
-	interface PendingScreenConfigWrite {
+	interface PendingModeConfigWrite {
 		eventId: number;
 		screenId: number;
+		mode: ScreenMode;
 		partialConfig: Record<string, unknown>;
 		owner: symbol;
 		lifetime: WriteLifetime;
 		deferred: Deferred<Screen>[];
 	}
-	interface PendingModeConfigWrite extends PendingScreenConfigWrite {
-		mode: ScreenMode;
-	}
-	const pendingScreenConfigWrites = new Map<string, PendingScreenConfigWrite>();
 	const pendingModeConfigWrites = new Map<string, PendingModeConfigWrite>();
 	/**
 	 * Every write of one Screen, in order, whichever part of it the write names. Each
@@ -446,22 +434,6 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	}
 	const modeConfigWriteDebounce = createCancelableDebounce(flushModeConfigWrites, 300, 1000);
 
-	function flushScreenConfigWrites() {
-		const entries = [
-			...pendingScreenConfigWrites.values(),
-		];
-		pendingScreenConfigWrites.clear();
-		for (const entry of entries) {
-			void runWrite(entry.lifetime, entry.eventId, entry.screenId, entry.owner, stateVersion =>
-				screenRepo.updateScreenConfig(entry.eventId, entry.screenId, entry.partialConfig, stateVersion))
-				.then(
-					written => resolveAll(entry.deferred, written),
-					error => rejectAll(entry.deferred, error),
-				);
-		}
-	}
-	const screenConfigWriteDebounce = createCancelableDebounce(flushScreenConfigWrites, 300, 1000);
-
 	/**
 	 * Edit one mode's config: shown at once, batched with the edits that follow it
 	 * within the debounce, and written as one PATCH. A field the edit clears is sent
@@ -505,36 +477,6 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		return new Promise<Screen>((resolve, reject) => {
 			entry.deferred.push({ resolve, reject });
 			modeConfigWriteDebounce.schedule();
-		});
-	}
-
-	async function updateScreenConfig(eventId: number, screenId: number, partialConfig: ScreenConfigPatch) {
-		if (!state.screens.value.some(s => s.id === screenId)) {
-			state.error.value = 'Screen not found';
-			return null;
-		}
-
-		const patch: Record<string, unknown> = toScreenConfigPatch(partialConfig);
-		const key = `screen-config:${screenId}`;
-		const entry: PendingScreenConfigWrite = pendingScreenConfigWrites.get(key)
-			?? {
-				eventId,
-				screenId,
-				partialConfig: {},
-				owner: Symbol(key),
-				lifetime,
-				deferred: [],
-			};
-		pendingScreenConfigWrites.set(key, entry);
-		entry.partialConfig = {
-			...entry.partialConfig,
-			...patch,
-		};
-		own(screenId, { owner: entry.owner, kind: 'screen-config', patch });
-
-		return new Promise<Screen>((resolve, reject) => {
-			entry.deferred.push({ resolve, reject });
-			screenConfigWriteDebounce.schedule();
 		});
 	}
 
@@ -828,7 +770,6 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 */
 	function resetRuntime() {
 		modeConfigWriteDebounce.flushIfPending();
-		screenConfigWriteDebounce.flushIfPending();
 		for (const screen of state.screens.value)
 			heard(lifetime, screen);
 		if (state.activeScreen.value)
@@ -840,10 +781,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		const cancellation = new Error('Screen write cancelled because its Event scope changed');
 		for (const entry of pendingModeConfigWrites.values())
 			rejectAll(entry.deferred, cancellation);
-		for (const entry of pendingScreenConfigWrites.values())
-			rejectAll(entry.deferred, cancellation);
 		pendingModeConfigWrites.clear();
-		pendingScreenConfigWrites.clear();
 		lifetime = beginLifetime();
 		remoteScreenLoads.supersedeAll();
 		unsubscribeFromAllPresence();
@@ -863,7 +801,6 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		updateScreen,
 		setScreenMode,
 		updateModeConfig,
-		updateScreenConfig,
 		updateThemeOverrides,
 		removeScreen,
 		applyRemoteCreated,

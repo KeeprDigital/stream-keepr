@@ -252,7 +252,6 @@ export const useScreenStore = defineStore('screen', () => {
 	const updateScreen = screenRuntime.updateScreen;
 	const setScreenMode = screenRuntime.setScreenMode;
 	const updateModeConfig = screenRuntime.updateModeConfig;
-	const updateScreenConfig = screenRuntime.updateScreenConfig;
 	const updateThemeOverrides = screenRuntime.updateThemeOverrides;
 	const removeScreen = screenRuntime.removeScreen;
 	const applyRemoteCreated = screenRuntime.applyRemoteCreated;
@@ -293,7 +292,6 @@ export const useScreenStore = defineStore('screen', () => {
 		updateScreen,
 		setScreenMode,
 		updateModeConfig,
-		updateScreenConfig,
 		updateThemeOverrides,
 		removeScreen,
 		applyRemoteCreated,

@@ -68,15 +68,8 @@ describe('mtgCardDisplay', () => {
 		vi.useRealTimers();
 	});
 
-	// Until the host scales the Event Canvas (#821), the card scales it to its container's height.
-	it.each([
-		{ height: 1080, zoom: '1' },
-		{
-			height: 720,
-			zoom: String(720 / 1080),
-		},
-		{ height: 0, zoom: '1' },
-	])('sizes the card-width Mode Token to a $height px overlay at zoom $zoom', async ({ height, zoom }) => {
+	// The host scales the Event Canvas to its window (#821); a card scaling it again would scale twice.
+	it.each([1080, 720, 0])('sizes the card by its card-width Mode Token alone in a %i px overlay', async (height) => {
 		containerHeight.value = height;
 		const wrapper = await mountComponent();
 
@@ -95,7 +88,7 @@ describe('mtgCardDisplay', () => {
 		await nextTick();
 
 		const container = wrapper.get('.card-container').element as HTMLElement;
-		expect(container.style.zoom).toBe(zoom);
+		expect(container.style.zoom).toBe('');
 		expect((wrapper.get('[data-testid="spotlight-card"]').element as HTMLElement).style.width).toBe('var(--theme-card-card-width)');
 		expect(mockCardStore.setActiveScreen).toHaveBeenCalledWith(1);
 		expect(mockCardStore.loadActiveCard).toHaveBeenCalled();

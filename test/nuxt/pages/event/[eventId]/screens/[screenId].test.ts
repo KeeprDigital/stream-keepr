@@ -34,12 +34,11 @@ interface PendingLoad {
 let pendingLoads: PendingLoad[] = [];
 
 const mockScreenStore = reactive({
-	screens: [] as Array<{ id: number; screenConfig?: Record<string, unknown> }>,
+	screens: [] as Array<{ id: number }>,
 	screenPresence: new Map<number, { count: number; members: Array<{ clientId: string; data?: Record<string, unknown> }> }>(),
 	subscribeToScreenPresence: vi.fn(),
 	unsubscribeFromScreenPresence: vi.fn(),
 	getConnectedCount: vi.fn(() => 0),
-	updateScreenConfig: vi.fn(),
 	getScreenById: vi.fn((_eventId: number, screenId: number) => new Promise((resolve) => {
 		pendingLoads.push({ screenId, resolve });
 	})),
@@ -83,6 +82,11 @@ const ScreenSettingsCardStub = defineComponent({
 
 const UContainerStub = defineComponent({
 	template: '<div><slot /></div>',
+});
+
+/** The Screen's Theme card, which loads its Event's Theme; here it only has to be on the page or not. */
+const ThemeTokensSettingsStub = defineComponent({
+	template: '<div data-settings-card="Theme" />',
 });
 
 const CardStub = defineComponent({
@@ -150,7 +154,6 @@ function makeScreen(id: number) {
 		name: `Screen ${id}`,
 		slug: `screen-${id}`,
 		currentMode: 'background',
-		screenConfig: {},
 	};
 }
 
@@ -194,6 +197,7 @@ async function mountPage() {
 				UPopover: true,
 				UAlert: true,
 				ScreenSettingsCard: ScreenSettingsCardStub,
+				ScreenThemeTokensSettings: ThemeTokensSettingsStub,
 			},
 		},
 	});
@@ -478,8 +482,7 @@ describe('screen config page — Editor Focus Mode', () => {
 		mockScreenStore.screens = [];
 		mockScreenStore.screenPresence = new Map();
 		focusMode.enabled.value = false;
-		// A control Screen, so the Container card is on the page to be hidden.
-		stubModePolicy({ displayType: 'control', outputOptions: [] });
+		stubModePolicy({ displayType: 'overlay', outputOptions: [] });
 	});
 
 	afterEach(() => {
@@ -504,13 +507,13 @@ describe('screen config page — Editor Focus Mode', () => {
 
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('false');
 		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(true);
-		expect(page.find('[data-settings-card="Container"]').exists()).toBe(true);
+		expect(page.find('[data-settings-card="Theme"]').exists()).toBe(true);
 
 		await page.get('[data-testid="editor-focus-mode-toggle"]').trigger('click');
 
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('true');
 		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(false);
-		expect(page.find('[data-settings-card="Container"]').exists()).toBe(false);
+		expect(page.find('[data-settings-card="Theme"]').exists()).toBe(false);
 		expect(page.find('[data-testid="mode-editor"]').exists()).toBe(true);
 		expect(page.get('[data-testid="focused-screen-name"]').text()).toBe('Screen 1');
 		expect(page.text()).toContain('Back to Screens');

@@ -1,11 +1,8 @@
 <script setup lang="ts">
 import type { StandingsColumnKey } from '~~/shared/types/enums';
-import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import type { Player } from '~/types';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
-
-const { screen } = useScreenContext();
 
 const {
 	config,
@@ -18,7 +15,7 @@ const {
 	positionChangeOf,
 } = useStandingsModeData();
 
-const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
+const inset = useScreenInset();
 
 const primaryTextStyle = {
 	color: modeTokenVar('standings', 'primary-text'),
@@ -98,7 +95,7 @@ const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef')
 	density: 'compact',
 	prefix: 'standings',
 	rowCount: layoutRowCount,
-	insetY: () => screenConfig.value.paddingY ?? 0,
+	insetY: inset,
 });
 
 const contentStyle = computed(() => ({

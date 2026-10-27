@@ -10,7 +10,7 @@ import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { PlayerGameData } from '~~/shared/types/game';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
-import type { FeatureMatchLayoutConfig, ModeConfigsMap, ScreenConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchLayoutConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
 import { relations, sql } from 'drizzle-orm';
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
@@ -925,7 +925,6 @@ export const screens = sqliteTable('screens', {
 
 	currentMode: text('current_mode', { enum: SCREEN_MODE_VALUES }).notNull().default('background'),
 	modeConfigs: text('mode_configs', { mode: 'json' }).$type<ModeConfigsMap>(),
-	screenConfig: text('screen_config', { mode: 'json' }).$type<ScreenConfig>(),
 	/**
 	 * The Screen Theme Overrides: a sparse token-value map keyed by token name.
 	 * An override of another mode's Mode Token is kept while the Screen shows

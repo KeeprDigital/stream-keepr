@@ -2,6 +2,8 @@ import type { Component } from 'vue';
 import type { ThemeTokenType, ThemeTokenValueTypes } from '~~/shared/modules/theme';
 import { ANIMATION_EFFECT_CATALOGUE } from '~~/shared/animationEffects';
 import { getGraphicFontDefinition } from '~~/shared/modules/graphics/typography';
+import { HORIZONTAL_ALIGN_SELECT_OPTIONS, VERTICAL_ALIGN_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
+import AlignmentTokenInput from '~/components/Theme/AlignmentTokenInput.vue';
 import AnimationEffectTokenInput from '~/components/Theme/AnimationEffectTokenInput.vue';
 import AnimationRecipeTokenInput from '~/components/Theme/AnimationRecipeTokenInput.vue';
 import AssetTokenInput from '~/components/Theme/AssetTokenInput.vue';
@@ -36,6 +38,8 @@ export const THEME_TOKEN_INPUTS = {
 	'surface-style': SurfaceStyleTokenInput,
 	'shape-geometry': ShapeGeometryTokenInput,
 	'animation-recipe': AnimationRecipeTokenInput,
+	// Where a plain overlay host places its mode's content.
+	'alignment': AlignmentTokenInput,
 } as const satisfies Record<ThemeTokenType, Component>;
 
 const ASSET_KIND_TEXT = {
@@ -100,6 +104,10 @@ const THEME_TOKEN_VALUE_TEXT: { [T in ThemeTokenType]: (value: ThemeTokenValueTy
 		value.easing,
 		...(['fade', 'slide', 'scale', 'reveal'] as const).filter(channel => value[channel]),
 	].join(' · '),
+	'alignment': value => [
+		VERTICAL_ALIGN_SELECT_OPTIONS.find(option => option.value === value.vertical)!.label,
+		HORIZONTAL_ALIGN_SELECT_OPTIONS.find(option => option.value === value.horizontal)!.label,
+	].join(' ').toLowerCase(),
 };
 
 function fillText(fill: ThemeTokenValueTypes['fill']): string {

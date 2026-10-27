@@ -892,7 +892,7 @@ Accepted · 2026-10-20 · [#607](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**The Screen write module decides which writes edit a Screen's graphics Edit workspace.** Every Screen write that can reach it passes through `screenWriteModule()`, and each such update operation takes the asking browser Session as a required `authoringSessionId`. A route only says who is asking. The protected field is the Broadcast Graphics stack. The mode configuration write protects it, and the generic Screen write protects it when it would change it. The canvas is the Event's Event Canvas (ADR-0051), an Event Presentation Settings write that takes no lease, so no Screen field is a canvas the lease guards and the Screen configuration write is not lease-gated.
+**The Screen write module decides which writes edit a Screen's graphics Edit workspace.** Every Screen write that can reach it passes through `screenWriteModule()`, and each such update operation takes the asking browser Session as a required `authoringSessionId`. A route only says who is asking. The protected field is the Broadcast Graphics stack. The mode configuration write protects it, and the generic Screen write protects it when it would change it. The canvas is the Event's Event Canvas (ADR-0051), an Event Presentation Settings write that takes no lease, so no Screen field is a canvas the lease guards. A Screen holds no look of its own (ADR-0051), and the Screen Theme Override write is not lease-gated.
 
 **The generic Screen write is gated by change, not by presence.** It replaces `modeConfigs` whole, and the Edit Screen dialog sends it back as it read it. A rename that carries the protected fields back unchanged stays open to every Session. The comparison ignores object key order.
 
@@ -1300,7 +1300,7 @@ Accepted · 2026-10-21 · [#703](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**The client shows a Screen as its newest server revision with every unsettled write's fields laid over it** (Field Ownership, in `app/modules/screen/runtime.ts`). Each write owns the fields it names: an ordinary Screen update its top-level fields, a mode-configuration or Screen-configuration write the config fields it patches. A revision from any door — a write's answer, a conflict refresh, an announced reload, a load — replaces only the revision underneath, and only when it is not older than the one held, so nothing moves a Screen's `stateVersion` backwards. A write that settles drops only its own fields. A failed write therefore rolls back to what the server holds now, keeping a remote change that landed meanwhile, and never over a newer local edit. A write answers its caller with the newer of its answer and the server revision held, never with another write's unsettled fields. A Screen deleted while a write to it was out stays deleted, whichever way the write ends.
+**The client shows a Screen as its newest server revision with every unsettled write's fields laid over it** (Field Ownership, in `app/modules/screen/runtime.ts`). Each write owns the fields it names: an ordinary Screen update its top-level fields, a mode-configuration write the config fields it patches, and a Screen Theme Override write the tokens it names. A revision from any door — a write's answer, a conflict refresh, an announced reload, a load — replaces only the revision underneath, and only when it is not older than the one held, so nothing moves a Screen's `stateVersion` backwards. A write that settles drops only its own fields. A failed write therefore rolls back to what the server holds now, keeping a remote change that landed meanwhile, and never over a newer local edit. A write answers its caller with the newer of its answer and the server revision held, never with another write's unsettled fields. A Screen deleted while a write to it was out stays deleted, whichever way the write ends.
 
 **Every write of one Screen runs in one queue**, whichever part of the Screen it names, and is sent at the revision the write before it was answered with. Independent settings edited at once no longer race each other into a conflict.
 
@@ -1308,7 +1308,7 @@ Accepted · 2026-10-21 · [#703](https://github.com/KeeprDigital/stream-keepr/is
 
 **A settings surface hands off every queued edit when it ends**, whether or not its debounce has fired and whether or not a save is in flight (`useConfigUpdate`). An edit made during a save used to wait for that save's continuation, which ran after the reset had emptied the store, so it was lost.
 
-**A field an edit names with `undefined` is sent as the `null` that deletes it** (`toModeConfigPatch`, `toScreenConfigPatch`). JSON omits `undefined`, and the server reads an omitted field as unchanged (ADR-0037), so clearing an Archetype filter, custom header or Player List kept the old value. An authored stack named with `undefined` is left out instead, so a clear never empties one. Omission still means unchanged. The edit types (`ScreenModeConfigPatch`, `ScreenConfigPatch`) take `null` for every field without changing the complete config type, and the settings editors write `null` when an optional field is cleared. A cleared field reads as its contract default at once, so it does not snap back.
+**A field an edit names with `undefined` is sent as the `null` that deletes it** (`toModeConfigPatch`). JSON omits `undefined`, and the server reads an omitted field as unchanged (ADR-0037), so clearing an Archetype filter, custom header or Player List kept the old value. An authored stack named with `undefined` is left out instead, so a clear never empties one. Omission still means unchanged. The edit type (`ScreenModeConfigPatch`) takes `null` for every field without changing the complete config type, and the settings editors write `null` when an optional field is cleared. A cleared field reads as its contract default at once, so it does not snap back.
 
 ### Why
 
@@ -1316,7 +1316,7 @@ A write's v2 answer replaced a v3 the client already held. A failed write restor
 
 ### Consequences
 
-- Every write of a Screen waits its turn, so a mode-configuration and a Screen-configuration write to one Screen no longer run concurrently. Writes to different Screens still do.
+- Every write of a Screen waits its turn, so a mode-configuration and a Screen Theme Override write to one Screen no longer run concurrently. Writes to different Screens still do.
 - A loader's revision is laid under unsettled edits too, so a page load cannot take back an edit still out.
 - A display reset now clears a default that is `undefined`, such as a custom header, where it used to leave the stored one.
 - An edit queued behind a save is sent once, by the hand-off, rather than by that save's continuation.
@@ -1648,6 +1648,7 @@ Canvas size and wording are set once per production, not per brand or per Screen
 ### Consequences
 
 - Today's two canvases (`ScreenConfig` width/height and the graphics hosts' canvas fields) become one.
+- Padding and alignment are the `inset` and `alignment` Foundation Tokens. The inset is one value on every side; the separate horizontal and vertical padding a Screen had is not kept. A plain overlay mode's Screen host consumes them itself, so they are among what its Screen consumes and may override (#826). The Background Screen and the graphics hosts render edge to edge and consume neither, and Feature Match Controls consumes no Theme Token at all.
 - A portrait display on a landscape Event is not supported; an override is the reopening path if a real case appears.
 - Resizing the Event Canvas moves the frame every graphics composition of the Event was authored in, yet takes no Graphics Authoring Lease, like any other Event Presentation Settings write (ADR-0030).
 - On-air wording stays on the Event, so one Theme serves Events that word things differently.

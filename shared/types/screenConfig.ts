@@ -1,7 +1,7 @@
 import type { AnimationEffectSelection, FeatureMatchOverlayFrameAnimationConfig } from '../animationEffects';
 import type { ScreenModeConfigOf } from '../screenModeConfigs/contract';
 import type { BackgroundLayersCapableMode } from '../screenModes';
-import type { HorizontalAlign, ScreenColorMode, ScreenMode, VerticalAlign } from './enums';
+import type { ScreenMode } from './enums';
 import type { MediaFit } from './graphicItem';
 import type { BroadcastGraphicConfig } from './graphics';
 import type { GraphicAssetId, GraphicAssetRevisionId } from './graphicsAsset';
@@ -31,23 +31,6 @@ import { topCutModeConfigContract } from '../screenModeConfigs/topCut';
  */
 export { DEFAULT_BROADCAST_GRAPHICS_BACKGROUND, DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG };
 export { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG };
-
-// ─── Screen-level config (applies to all modes) ───────────────────────
-export interface ScreenConfig {
-	background?: string;
-	paddingX?: number;
-	paddingY?: number;
-	primaryTextColor?: string;
-	secondaryTextColor?: string;
-	colorMode?: ScreenColorMode;
-	horizontalAlign?: HorizontalAlign;
-	verticalAlign?: VerticalAlign;
-}
-
-export const DEFAULT_SCREEN_CONFIG: ScreenConfig = {
-	horizontalAlign: 'center',
-	verticalAlign: 'center',
-};
 
 // ─── Mode-specific configs ─────────────────────────────────────────────
 
@@ -410,13 +393,6 @@ export type ModeConfigTypeMap = {
  */
 export type ModeConfigsMap = { [M in ScreenMode]?: Partial<ModeConfigTypeMap[M]> };
 
-// ─── Nullable config types (for reset / clear-to-default operations) ───
-// Sending `null` for a field means "delete this key from stored config".
-export type NullableScreenConfig = { [K in keyof ScreenConfig]: ScreenConfig[K] | null };
-
-/** An edit of a Screen's own config: a field left out is unchanged, and `null` deletes it. */
-export type ScreenConfigPatch = Partial<NullableScreenConfig>;
-
 /**
  * An edit of one mode's stored config, the form its PATCH takes (ADR-0037). A
  * field left out is unchanged; a field given `null` is deleted from storage and
@@ -456,11 +432,6 @@ function namedUndefinedAsDeletion(edit: Record<string, unknown>, keep: readonly 
 /** A mode-configuration edit as its PATCH carries it: every cleared field deleted, as `null`. */
 export function toModeConfigPatch<M extends ScreenMode>(mode: M, edit: ScreenModeConfigPatch<M>): ScreenModeConfigPatch<M> {
 	return namedUndefinedAsDeletion(edit, MODE_CONFIG_CONTRACTS[mode].authoredStacks) as ScreenModeConfigPatch<M>;
-}
-
-/** A Screen-configuration edit as its PATCH carries it: every cleared field deleted, as `null`. */
-export function toScreenConfigPatch(edit: ScreenConfigPatch): ScreenConfigPatch {
-	return namedUndefinedAsDeletion(edit) as ScreenConfigPatch;
 }
 
 /**
@@ -613,13 +584,6 @@ export function stripNullConfigKeys<T extends Record<string, unknown>>(config: T
 	return Object.fromEntries(
 		Object.entries(config).filter(([, value]) => value !== null),
 	) as T;
-}
-
-export function mergeScreenConfig(currentConfig: ScreenConfig, partialConfig: Record<string, unknown>): ScreenConfig {
-	return stripNullConfigKeys({
-		...currentConfig,
-		...partialConfig,
-	}) as ScreenConfig;
 }
 
 export function mergeScreenModeConfig<M extends ScreenMode>(

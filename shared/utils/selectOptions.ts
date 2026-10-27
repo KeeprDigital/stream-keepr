@@ -23,12 +23,6 @@ export const POSITION_FORMAT_SELECT_OPTIONS: { label: string; value: PositionFor
 	{ label: 'Number (1, 2, 3)', value: 'number' },
 ];
 
-export const SCREEN_COLOR_MODE_SELECT_OPTIONS: { label: string; value: ScreenColorMode }[] = [
-	{ label: 'System', value: 'system' },
-	{ label: 'Light', value: 'light' },
-	{ label: 'Dark', value: 'dark' },
-];
-
 const screenModeOptionMap = new Map(getScreenModeSelectOptions().map(option => [option.value, option.label]));
 
 export const SCREEN_MODE_SELECT_OPTIONS: { label: string; value: ScreenMode }[] = SCREEN_MODE_VALUES.map(value => ({

@@ -6,7 +6,6 @@ import {
 	mergeScreenModeConfig,
 	resolveDeckBoards,
 	toModeConfigPatch,
-	toScreenConfigPatch,
 } from '~~/shared/types/screenConfig';
 
 describe('getDisplayDefaultsForMode', () => {
@@ -137,11 +136,5 @@ describe('toModeConfigPatch', () => {
 
 	it('sends a mode\'s Background Layer stack cleared as a deletion, as before', () => {
 		expect(toModeConfigPatch('metagame', { backgroundLayers: undefined })).toEqual({ backgroundLayers: null });
-	});
-});
-
-describe('toScreenConfigPatch', () => {
-	it('sends a cleared field as a deletion', () => {
-		expect(toScreenConfigPatch({ paddingX: undefined, background: '#fff' })).toEqual({ paddingX: null, background: '#fff' });
 	});
 });

@@ -253,6 +253,26 @@ describe('resolveThemeTokens', () => {
 		expect(resolved.consumed).toEqual(DECLARED_CONSUMPTION);
 		expect(Object.keys(resolved.values)).toEqual(DECLARED_CONSUMPTION);
 	});
+
+	it('also consumes, in vocabulary order and once, each Foundation Token its host consumes itself', () => {
+		const resolved = resolveThemeTokens({
+			vocabulary,
+			modeTokens,
+			theme: { 'text-primary': 'rgb(3, 3, 3)' },
+			overrides: { inset: 20 },
+			hostTokens: ['text-primary', 'inset'],
+		});
+
+		expect(resolved.consumed).toEqual([
+			'demo.title',
+			'demo.badge',
+			'demo.gap',
+			'accent',
+			'text-primary',
+			'inset',
+		]);
+		expect(resolved.values).toMatchObject({ 'text-primary': 'rgb(3, 3, 3)', 'inset': 20 });
+	});
 });
 
 /** A shipped default with each colour a composite names read as that colour's default. */

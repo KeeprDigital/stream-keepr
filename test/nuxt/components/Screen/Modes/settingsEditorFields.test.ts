@@ -147,14 +147,6 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	retry: vi.fn(),
 }));
 
-vi.mock('~/composables/screen/useScreenConfigUpdate', () => ({
-	useScreenConfigUpdate: () => ({
-		screenConfig: ref({}),
-		saving: ref(false),
-		updateScreenConfig: vi.fn(),
-	}),
-}));
-
 const loaded = {
 	isLoaded: true,
 	$reset: vi.fn(),

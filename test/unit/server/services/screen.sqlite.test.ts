@@ -90,21 +90,18 @@ describe('screenService', () => {
 		}))?.name).toBe('Touched By Companion');
 	});
 
-	it('merges a mode\'s configuration and the Screen configuration into what is stored', async () => {
+	it('merges a mode\'s configuration into what is stored', async () => {
 		const screen = await createScreen({
 			modeConfigs: {
 				standings: { pageSize: 8, showRecord: true },
 			},
-			screenConfig: { padding: 10 },
 		});
 
 		await screenService().updateModeConfig(screen.id, eventId, 'standings', { pageSize: 12 });
-		await screenService().updateScreenConfig(screen.id, eventId, { background: '#000000' });
 
 		const after = await stored(screen.id);
 		expect(after.modeConfigs?.standings).toMatchObject({ pageSize: 12, showRecord: true });
-		expect(after.screenConfig).toMatchObject({ padding: 10, background: '#000000' });
-		expect(after.stateVersion).toBe(2);
+		expect(after.stateVersion).toBe(1);
 	});
 
 	it('answers whether a slug is taken, excluding the Screen being renamed', async () => {

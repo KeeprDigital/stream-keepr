@@ -10,6 +10,11 @@ import {
 /** An Event Canvas other than the default, so a host that ignores it shows. */
 const CANVAS = { width: 1280, height: 720 };
 const OVERLAY_MODES = SCREEN_MODE_VALUES.filter(mode => !isControlScreenMode(mode));
+/** A Theme setting the Screen inset and alignment away from their defaults. */
+const LAYOUT_THEME = {
+	inset: 32,
+	alignment: { horizontal: 'right', vertical: 'bottom' },
+};
 
 describe('screen mode host', () => {
 	it('classifies each mode as an overlay or a control host', () => {
@@ -18,26 +23,60 @@ describe('screen mode host', () => {
 		expect(isControlScreenMode('deck')).toBe(false);
 	});
 
-	it('pads and aligns an overlay inside its canvas', () => {
+	// The Screen inset and alignment Foundation Tokens: override, else Theme, else default.
+	it.each([
+		[
+			'the Default Theme',
+			{},
+			{},
+			'0px',
+			'center',
+			'center',
+		],
+		[
+			'its Theme',
+			LAYOUT_THEME,
+			{},
+			'32px',
+			'end',
+			'end',
+		],
+		[
+			'its Screen\'s overrides over its Theme',
+			LAYOUT_THEME,
+			{
+				inset: 8,
+				alignment: { horizontal: 'left', vertical: 'top' },
+			},
+			'8px',
+			'start',
+			'start',
+		],
+	])('insets and aligns a plain mode in its canvas by %s', (_case, theme, overrides, padding, justifyItems, alignItems) => {
 		const host = resolveScreenModeHost({
 			mode: 'card',
 			canvas: CANVAS,
-			screenConfig: {
-				paddingX: 32,
-				paddingY: 16,
-				background: '#101010',
-				horizontalAlign: 'right',
-				verticalAlign: 'bottom',
-			},
+			theme,
+			overrides,
 		});
 
 		expect(host).toMatchObject({ kind: 'overlay', provideOverlayContainer: true });
-		expect(host.containerStyle).toMatchObject({
-			padding: '16px 32px',
-			background: '#101010',
-			justifyItems: 'end',
-			alignItems: 'end',
+		expect(host.containerStyle).toMatchObject({ padding, justifyItems, alignItems });
+	});
+
+	// Graphics hosts compose pixel-exact and keyable; the Background Screen is its stack, edge to edge.
+	it.each(['feature-match-overlay', 'broadcast-graphics', 'background'] as const)('hosts %s in its canvas, ignoring the Screen inset and alignment', (mode) => {
+		const host = resolveScreenModeHost({
+			mode,
+			canvas: CANVAS,
+			theme: LAYOUT_THEME,
+			overrides: {},
 		});
+
+		expect(host.containerStyle).toMatchObject({ width: '1280px', height: '720px' });
+		expect(host.containerStyle).not.toHaveProperty('padding');
+		expect(host.containerStyle).not.toHaveProperty('justifyItems');
+		expect(host.containerStyle).not.toHaveProperty('alignItems');
 	});
 
 	// ADR-0051: the Event Canvas is a coordinate space; output resolution is the window's.
@@ -45,7 +84,8 @@ describe('screen mode host', () => {
 		const host = resolveScreenModeHost({
 			mode,
 			canvas: CANVAS,
-			screenConfig: {},
+			theme: {},
+			overrides: {},
 			viewportWidth: 640,
 			viewportHeight: 360,
 		});
@@ -77,59 +117,20 @@ describe('screen mode host', () => {
 		const host = resolveScreenModeHost({
 			mode: 'standings',
 			canvas: CANVAS,
-			screenConfig: {},
+			theme: {},
+			overrides: {},
 			...viewport,
 		});
 
 		expect(host.containerStyle.transform).toBe(`translate(${offsetX}px, ${offsetY}px) scale(${scale})`);
 	});
 
-	it('hosts the Feature Match Overlay in the Event Canvas without the Screen\'s padding or background', () => {
-		const host = resolveScreenModeHost({
-			mode: 'feature-match-overlay',
-			canvas: CANVAS,
-			screenConfig: {
-				paddingX: 64,
-				paddingY: 32,
-				background: '#ff00ff',
-				horizontalAlign: 'left',
-				verticalAlign: 'top',
-			},
-		});
-
-		expect(host.containerStyle).toMatchObject({
-			width: '1280px',
-			height: '720px',
-			padding: '0px 0px',
-			justifyItems: 'start',
-			alignItems: 'start',
-		});
-		expect(host.containerStyle).not.toHaveProperty('background');
-	});
-
-	it('hosts Broadcast Graphics transparently in the Event Canvas', () => {
-		const host = resolveScreenModeHost({
-			mode: 'broadcast-graphics',
-			canvas: CANVAS,
-			screenConfig: {
-				paddingX: 64,
-				paddingY: 32,
-				background: '#ff00ff',
-				horizontalAlign: 'left',
-				verticalAlign: 'top',
-			},
-		});
-
-		expect(host.containerStyle).toMatchObject({ width: '1280px', height: '720px', padding: '0px 0px' });
-		expect(host.containerStyle).not.toHaveProperty('background');
-		expect(host.containerStyle).not.toHaveProperty('justifyItems');
-	});
-
 	it('never scales a mode whose host does not register viewport-fit scaling', () => {
 		const host = resolveScreenModeHost({
 			mode: 'feature-match',
 			canvas: CANVAS,
-			screenConfig: {},
+			theme: {},
+			overrides: {},
 			viewportWidth: 800,
 			viewportHeight: 600,
 		});
@@ -138,53 +139,39 @@ describe('screen mode host', () => {
 		expect(host.containerStyle).not.toHaveProperty('transform');
 	});
 
-	it('pads a control host and follows its color mode', () => {
-		const systemDark = resolveScreenModeHost({
+	// An operator surface keeps the app's own look and fills its window (ADR-0051).
+	it('hosts Feature Match Controls the same under any Theme', () => {
+		const underDefault = resolveScreenModeHost({
 			mode: 'feature-match',
 			canvas: CANVAS,
-			screenConfig: { paddingX: 20, paddingY: 12, colorMode: 'system' },
-			preferredDark: true,
+			theme: {},
+			overrides: {},
 		});
-		const explicitLight = resolveScreenModeHost({
+		const underTheme = resolveScreenModeHost({
 			mode: 'feature-match',
 			canvas: CANVAS,
-			screenConfig: { colorMode: 'light' },
-			preferredDark: true,
+			theme: LAYOUT_THEME,
+			overrides: LAYOUT_THEME,
 		});
 
-		expect(systemDark).toMatchObject({
+		expect(underTheme).toEqual(underDefault);
+		expect(underTheme).toMatchObject({
 			kind: 'control',
-			containerStyle: { padding: '12px 20px' },
-			wrapperClass: ['dark'],
-			wrapperStyle: { colorScheme: 'dark' },
+			containerClass: expect.stringContaining('w-full h-full'),
+			containerStyle: {},
 			provideOverlayContainer: false,
 		});
-		expect(explicitLight.wrapperClass).toEqual(['light']);
-		expect(explicitLight.wrapperStyle).toEqual({ colorScheme: 'light' });
 	});
 
 	describe('configuration policy', () => {
-		it('offers the Feature Match Overlay fill and key outputs, without the generic container controls', () => {
-			expect(getScreenModeConfigurationPolicy('feature-match-overlay')).toMatchObject({
-				displayType: 'overlay',
-				containerControls: {
-					padding: false,
-					textColors: false,
-					background: false,
-				},
-			});
+		it('offers the Feature Match Overlay fill and key outputs', () => {
+			expect(getScreenModeConfigurationPolicy('feature-match-overlay')).toMatchObject({ displayType: 'overlay' });
 			expect(getScreenModeConfigurationPolicy('feature-match-overlay').outputOptions.map(option => option.value)).toEqual(['overlay', 'fill', 'key']);
 		});
 
 		it('keeps a generic overlay output-free', () => {
 			expect(getScreenModeConfigurationPolicy('card')).toMatchObject({
 				displayType: 'overlay',
-				containerControls: {
-					padding: true,
-					// Card Spotlight is on Mode Tokens, which hold its text colours.
-					textColors: false,
-					background: true,
-				},
 				outputOptions: [],
 			});
 		});

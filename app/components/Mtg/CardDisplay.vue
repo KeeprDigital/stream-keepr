@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { CardDisplayConfig } from '~~/shared/types/screenConfig';
 import type { MtgCard } from '~/types/card/mtg';
-import { useElementSize } from '@vueuse/core';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { modeTokenVar } from '~/modules/screen-mode';
 
@@ -12,10 +11,8 @@ const props = withDefaults(defineProps<{
 	config: () => getDefaultConfigForMode('card'),
 });
 
-const { overlayContainer } = useScreenContext();
 const cardStore = useCardStore();
 const { activeCard } = storeToRefs(cardStore);
-const { height: containerHeight } = useElementSize(overlayContainer);
 
 const imageLoaded = ref(false);
 const showCard = ref(false);
@@ -32,18 +29,6 @@ const CARD_ASPECT_RATIO = 85 / 61;
 /** The card's width in Event Canvas pixels, and the square it turns within: its diagonal. */
 const cardWidth = modeTokenVar('card', 'card-width');
 const turningSquare = `calc(${cardWidth} * ${Math.sqrt(1 + CARD_ASPECT_RATIO ** 2)})`;
-
-/** The default Event Canvas's height (ADR-0051). */
-const EVENT_CANVAS_HEIGHT = 1080;
-
-/**
- * The Event Canvas scaled to the overlay container's height. Interim: #821
- * moves this scaling to the Screen host for every plain mode, and must remove
- * it here or the card scales twice. Unmeasured, the card renders at canvas size.
- */
-const canvasZoom = computed(() => containerHeight.value > 0
-	? containerHeight.value / EVENT_CANVAS_HEIGHT
-	: 1);
 
 // Animation speed mapping (in seconds)
 const animationSpeedMap = {
@@ -63,7 +48,6 @@ const animationDuration = computed(() => {
 const containerStyle = computed(() => ({
 	'width': turningSquare,
 	'height': turningSquare,
-	'zoom': String(canvasZoom.value),
 	'justifyItems': 'center',
 	'alignItems': 'center',
 	'--animation-duration': `${animationDuration.value}s`,

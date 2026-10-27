@@ -92,7 +92,7 @@ function writes() {
 }
 
 describe('a Screen\'s token section', () => {
-	it('lists exactly the Mode Tokens of its mode and the Foundation Tokens their defaults name', async () => {
+	it('lists exactly the Mode Tokens of its mode, the Foundation Tokens their defaults name, and those its host consumes', async () => {
 		const declared = Object.entries(standingsModeTokens);
 		const named = new Set(declared.map(([, definition]) => definition.default.token));
 
@@ -101,6 +101,9 @@ describe('a Screen\'s token section', () => {
 		expect(wrapper.findAll('[data-token]').map(row => row.attributes('data-token')).sort()).toEqual([
 			...declared.map(([token]) => screenModeTokenName('standings', token)),
 			...Object.keys(FOUNDATION_TOKENS).filter(name => named.has(name as typeof declared[number][1]['default']['token'])),
+			// The Screen inset and alignment, by which a plain mode's host places it.
+			'inset',
+			'alignment',
 		].sort());
 	});
 

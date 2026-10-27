@@ -228,7 +228,6 @@ function screenWithStack(graphics: BroadcastGraphicConfig[] = [], channels?: Gra
 	return {
 		id: 1,
 		slug: 'main',
-		screenConfig: {},
 		modeConfigs: graphics.length
 			? {
 					'broadcast-graphics': {
@@ -247,7 +246,6 @@ function screenWithBackground(background: unknown, graphics: BroadcastGraphicCon
 	return {
 		id: 1,
 		slug: 'main',
-		screenConfig: {},
 		modeConfigs: {
 			'broadcast-graphics': { graphics, background },
 		},

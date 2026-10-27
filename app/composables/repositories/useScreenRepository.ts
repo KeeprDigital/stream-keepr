@@ -95,26 +95,6 @@ export function useScreenRepository() {
 		);
 	};
 
-	const updateScreenConfig = async (
-		eventId: number,
-		screenId: number,
-		config: Record<string, unknown>,
-		stateVersion: number = 0,
-	): Promise<Screen> => {
-		return await eventData.command<Screen>(
-			{
-				eventId,
-				resourcePath: 'screens',
-				resourceId: screenId,
-				suffix: 'screen-config',
-			},
-			{
-				method: 'PATCH',
-				body: { ...config, stateVersion },
-			},
-		);
-	};
-
 	/** Set Screen Theme Overrides, or clear each one named with `null`. */
 	const updateThemeOverrides = async (
 		eventId: number,
@@ -144,7 +124,6 @@ export function useScreenRepository() {
 		create: base.create,
 		update: base.update,
 		updateModeConfig,
-		updateScreenConfig,
 		updateThemeOverrides,
 		remove: base.remove,
 	};

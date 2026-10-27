@@ -92,11 +92,7 @@ async function mountComponent() {
 
 describe('screenModesPlayerHistoryDisplay', () => {
 	beforeEach(() => {
-		screen.value = {
-			screenConfig: {
-				paddingY: 0,
-			},
-		};
+		screen.value = {};
 		config.value = {
 			playerId: 1,
 			showHeader: true,

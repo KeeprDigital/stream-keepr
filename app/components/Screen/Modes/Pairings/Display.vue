@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import type { ScreenOutputMatchSide, ScreenOutputRoundMatch } from '~~/shared/types/screenOutputReads';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { screen } = useScreenContext();
 const { config, error, isEmpty, headerText, pageData, formatResult, winner } = usePairingsModeData();
 
-const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
+const inset = useScreenInset();
 
 const primaryTextStyle = {
 	color: modeTokenVar('pairings', 'primary-text'),
@@ -55,7 +53,7 @@ const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef')
 	density: 'roomy',
 	prefix: 'pairings',
 	rowCount: () => config.value.rowsPerPage ?? pageData.value.length,
-	insetY: () => screenConfig.value.paddingY ?? 0,
+	insetY: inset,
 });
 
 /** Set on the root, over the shared broadcast table chrome's own colour and face. */

@@ -1,26 +1,26 @@
+import type { FoundationTokenName } from './modules/theme/vocabulary';
 import type { PageRotationConfig } from './screenModeConfigs/subShapes';
-import type { ScreenModeContainerControls } from './screenModes';
 import type { DisplayType, ScreenMode } from './types/enums';
 import type { ModeConfigTypeMap, ScreenOutput } from './types/screenConfig';
 import { pageRotationEdit } from './modules/page-rotation';
-import { getContainerControls, SCREEN_MODES } from './screenModes';
+import { SCREEN_MODES, screenModeSupportsBackgroundLayers } from './screenModes';
 import {
 	getDefaultConfigForMode,
 	getDisplayDefaultsForMode,
 } from './types/screenConfig';
 
 export type ScreenModeHostKind = 'overlay' | 'control';
-export type ScreenModeThemePolicy = 'none' | 'screen-color-mode';
-export type ScreenModeContainerControlPlacement = 'container' | 'mode';
 
 export interface ScreenModeHostDefinition {
 	kind: ScreenModeHostKind;
-	useScreenPadding: boolean;
-	useScreenBackground: boolean;
-	useScreenAlignment: boolean;
 	/** The host renders its Event Canvas scaled uniformly to fit its window (ADR-0051). */
 	fitToViewport: boolean;
-	themePolicy: ScreenModeThemePolicy;
+	/**
+	 * The Foundation Tokens the host consumes itself, rather than through a Mode
+	 * Token: a plain mode's host insets and aligns its content in the Event
+	 * Canvas. They join what the Screen consumes, so a Screen may override them.
+	 */
+	foundationTokens: readonly FoundationTokenName[];
 }
 
 export interface ScreenModeOutputOption {
@@ -31,13 +31,11 @@ export interface ScreenModeOutputOption {
 
 export interface ScreenModeConfigurationPolicy {
 	displayType: DisplayType;
-	containerControls: Required<ScreenModeContainerControls>;
-	containerControlPlacement: Record<keyof Required<ScreenModeContainerControls>, ScreenModeContainerControlPlacement>;
 	outputOptions: ScreenModeOutputOption[];
 	/**
-	 * Whether the Screen configuration page gives this mode the full page width
-	 * and collapses generic container settings. A graphics host embeds the
-	 * compositor's tree, preview, and inspector side by side and needs it.
+	 * Whether the Screen configuration page gives this mode the full page width.
+	 * A graphics host embeds the compositor's tree, preview, and inspector side
+	 * by side and needs it.
 	 */
 	fullWidthConfiguration: boolean;
 }
@@ -61,23 +59,8 @@ export interface ScreenModeSelectOption {
 	icon: string;
 }
 
-const OVERLAY_HOST_DEFAULTS: ScreenModeHostDefinition = {
-	kind: 'overlay',
-	useScreenPadding: true,
-	useScreenBackground: true,
-	useScreenAlignment: true,
-	fitToViewport: true,
-	themePolicy: 'none',
-};
-
-const CONTROL_HOST_DEFAULTS: ScreenModeHostDefinition = {
-	kind: 'control',
-	useScreenPadding: true,
-	useScreenBackground: false,
-	useScreenAlignment: false,
-	fitToViewport: false,
-	themePolicy: 'screen-color-mode',
-};
+/** What a plain overlay mode's host consumes: it insets and aligns the mode's content. */
+const PLAIN_HOST_TOKENS = ['inset', 'alignment'] as const satisfies readonly FoundationTokenName[];
 
 /**
  * The graphics Screen Outputs, in the order an editor names, previews and hands them
@@ -98,28 +81,32 @@ const OPEN_SCREEN_OUTPUT_OPTIONS: ScreenModeOutputOption[] = SCREEN_OUTPUT_OPTIO
 	icon: option.icon,
 }));
 
-const DEFAULT_CONTAINER_CONTROL_PLACEMENT: ScreenModeConfigurationPolicy['containerControlPlacement'] = {
-	padding: 'container',
-	textColors: 'container',
-	background: 'container',
-};
-
+/**
+ * How a Screen Mode is hosted.
+ *
+ * - A plain overlay mode, one carrying a Background Layer stack, renders in its
+ *   Event Canvas, inset and aligned by the `inset` and `alignment` Foundation
+ *   Tokens.
+ * - The Background Screen and the graphics hosts render in their Event Canvas
+ *   edge to edge, and take no Theme Token of their own.
+ * - Feature Match Controls, an operator surface, fills its window in the app's
+ *   own look and consumes no Theme Token.
+ */
 export function getScreenModeHostDefinition(mode: ScreenMode): ScreenModeHostDefinition {
-	const sharedDefinition = SCREEN_MODES[mode];
-	const base = sharedDefinition.displayType === 'control'
-		? CONTROL_HOST_DEFAULTS
-		: OVERLAY_HOST_DEFAULTS;
-	const graphicsHost = sharedDefinition.graphicsHost;
-
-	if (!graphicsHost)
-		return { ...base };
-
+	if (SCREEN_MODES[mode].displayType === 'control')
+		return { kind: 'control', fitToViewport: false, foundationTokens: [] };
 	return {
-		...base,
-		useScreenPadding: false,
-		useScreenBackground: false,
-		useScreenAlignment: graphicsHost.useScreenAlignment ?? base.useScreenAlignment,
+		kind: 'overlay',
+		fitToViewport: true,
+		foundationTokens: screenModeSupportsBackgroundLayers(mode)
+			? PLAIN_HOST_TOKENS
+			: [],
 	};
+}
+
+/** The names of the Foundation Tokens a Screen Mode's host consumes itself. */
+export function screenModeHostTokens(mode: ScreenMode): readonly string[] {
+	return getScreenModeHostDefinition(mode).foundationTokens;
 }
 
 export function getScreenModeConfigurationPolicy(mode: ScreenMode): ScreenModeConfigurationPolicy {
@@ -128,8 +115,6 @@ export function getScreenModeConfigurationPolicy(mode: ScreenMode): ScreenModeCo
 
 	return {
 		displayType: sharedDefinition.displayType,
-		containerControls: getContainerControls(mode),
-		containerControlPlacement: DEFAULT_CONTAINER_CONTROL_PLACEMENT,
 		outputOptions: graphicsHost
 			? OPEN_SCREEN_OUTPUT_OPTIONS
 			: [],

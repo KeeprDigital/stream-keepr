@@ -5,6 +5,7 @@
 import type { ThemeTokenReference, ThemeTokenValue } from './modules/theme/tokens';
 import type { ScreenMode } from './types/enums';
 import { FOUNDATION_TOKENS } from './modules/theme/vocabulary';
+import { screenModeHostTokens } from './screenModeDefinitions';
 import { screenModeSupportsBackgroundLayers, screenModeTokens } from './screenModes';
 import { parseThemeTokenWrite, themeTokenDefinition } from './themeTokens';
 import { THEME_TOKEN_WRITE_REFUSALS } from './types/theme';
@@ -19,15 +20,18 @@ export type ScreenThemeOverrideRefusal = keyof typeof SCREEN_THEME_OVERRIDE_REFU
 
 /**
  * Whether a Screen in `mode` can consume `name`: one of the mode's own Mode
- * Tokens, or a Foundation Token one of them could follow. A Mode Token may be
- * pointed at any Foundation Token of its type, so that is every Foundation
- * Token of a type the mode declares, not only those its defaults name. The
- * `background` stack is consumed by the Screen host rather than a Mode Token,
- * on the Background Screen and every mode declaring a Background Layer stack.
+ * Tokens, a Foundation Token its host consumes itself, or a Foundation Token
+ * one of its Mode Tokens could follow. A Mode Token may be pointed at any
+ * Foundation Token of its type, so that is every Foundation Token of a type
+ * the mode declares, not only those its defaults name. The `background` stack
+ * is consumed by the Screen host rather than a Mode Token, on the Background
+ * Screen and every mode declaring a Background Layer stack.
  */
 export function screenModeCanConsume(mode: ScreenMode, name: string): boolean {
 	const modeTokens = screenModeTokens(mode);
 	if (Object.hasOwn(modeTokens, name))
+		return true;
+	if (screenModeHostTokens(mode).includes(name))
 		return true;
 	if (name === 'background' && (mode === 'background' || screenModeSupportsBackgroundLayers(mode)))
 		return true;

@@ -27,7 +27,6 @@ const mockRepo = {
 	create: vi.fn(),
 	update: vi.fn(),
 	updateModeConfig: vi.fn(),
-	updateScreenConfig: vi.fn(),
 	remove: vi.fn(),
 };
 
@@ -111,63 +110,19 @@ describe('useScreenStore config and realtime', () => {
 			expect(store.screens[0]).toEqual(updated);
 			expect(store.activeScreen).toEqual(updated);
 		});
-	});
-
-	describe('updateScreenConfig', () => {
-		it('shows rapid patches merged, nulls stripped, at once, and writes them as one', async () => {
-			vi.useFakeTimers();
-			store.screens = [
-				createMockScreen({
-					id: 1,
-					screenConfig: { background: '#000', paddingY: 1080 },
-					stateVersion: 2,
-				}),
-			];
-			mockRepo.updateScreenConfig.mockResolvedValue(createMockScreen({
-				id: 1,
-				screenConfig: { paddingX: 1920 },
-				stateVersion: 3,
-			}));
-
-			const first = store.updateScreenConfig(1, 1, { paddingX: 1920 });
-			const second = store.updateScreenConfig(1, 1, { background: null, paddingY: null });
-
-			expect(store.screens[0]!.screenConfig).toEqual({ paddingX: 1920 });
-			expect(mockRepo.updateScreenConfig).not.toHaveBeenCalled();
-
-			await vi.advanceTimersByTimeAsync(300);
-			await Promise.all([first, second]);
-
-			expect(mockRepo.updateScreenConfig).toHaveBeenCalledOnce();
-			expect(mockRepo.updateScreenConfig).toHaveBeenCalledWith(1, 1, { paddingX: 1920, background: null, paddingY: null }, 2);
-		});
-
-		it('holds the server\'s Screen, in the collection and as the active Screen', async () => {
-			const screen = createMockScreen({ id: 1, screenConfig: {} });
-			store.screens = [screen];
-			store.activeScreen = screen;
-			const updated = createMockScreen({
-				id: 1,
-				screenConfig: { paddingX: 1920 },
-			});
-			mockRepo.updateScreenConfig.mockResolvedValue(updated);
-
-			await store.updateScreenConfig(1, 1, { paddingX: 1920 });
-
-			expect(store.screens[0]).toEqual(updated);
-			expect(store.activeScreen).toEqual(updated);
-		});
 
 		it('rejects its caller, reports to the banner and rolls back when the save fails', async () => {
 			const screen = createMockScreen({
 				id: 1,
-				screenConfig: { background: '#000' },
+				modeConfigs: {
+					card: { animationSpeed: 'slow' },
+				},
 				stateVersion: 2,
 			});
 			store.screens = [screen];
-			mockRepo.updateScreenConfig.mockRejectedValue(new Error('Save failed'));
+			mockRepo.updateModeConfig.mockRejectedValue(new Error('Save failed'));
 
-			await expect(store.updateScreenConfig(1, 1, { paddingX: 1920 })).rejects.toThrow('Save failed');
+			await expect(store.updateModeConfig(1, 1, 'card', { animationSpeed: 'fast' })).rejects.toThrow('Save failed');
 
 			expect(store.screens[0]).toEqual(screen);
 			expect(store.error).toBe('Save failed');
@@ -177,65 +132,71 @@ describe('useScreenStore config and realtime', () => {
 		it('spends a pending write when the store resets for another Event', async () => {
 			vi.useFakeTimers();
 			store.screens = [
-				createMockScreen({ id: 1, screenConfig: {}, stateVersion: 2 }),
+				createMockScreen({ id: 1, modeConfigs: {}, stateVersion: 2 }),
 			];
-			mockRepo.updateScreenConfig.mockResolvedValue(createMockScreen({
+			mockRepo.updateModeConfig.mockResolvedValue(createMockScreen({
 				id: 1,
-				screenConfig: { paddingX: 1920 },
+				modeConfigs: {
+					card: { animationSpeed: 'fast' },
+				},
 				stateVersion: 3,
 			}));
 
-			const write = store.updateScreenConfig(1, 1, { paddingX: 1920 });
+			const write = store.updateModeConfig(1, 1, 'card', { animationSpeed: 'fast' });
 			store.$reset();
 			await vi.advanceTimersByTimeAsync(1000);
 			await write;
 
-			expect(mockRepo.updateScreenConfig).toHaveBeenCalledWith(1, 1, { paddingX: 1920 }, 2);
+			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'card', { animationSpeed: 'fast' }, 2);
 			expect(store.screens).toEqual([]);
 		});
 
 		it('refreshes and retries once when a batched write loses a state conflict', async () => {
 			store.screens = [
-				createMockScreen({ id: 1, screenConfig: {}, stateVersion: 2 }),
+				createMockScreen({ id: 1, modeConfigs: {}, stateVersion: 2 }),
 			];
 			const updated = createMockScreen({
 				id: 1,
-				screenConfig: { paddingY: 1080, paddingX: 1920 },
+				modeConfigs: {
+					card: { animationEnabled: false, animationSpeed: 'fast' },
+				},
 				stateVersion: 4,
 			});
-			mockRepo.updateScreenConfig
+			mockRepo.updateModeConfig
 				.mockRejectedValueOnce(stateConflictFailure())
 				.mockResolvedValueOnce(updated);
 			mockRepo.getById.mockResolvedValue(createMockScreen({
 				id: 1,
-				screenConfig: { paddingY: 1080 },
+				modeConfigs: {
+					card: { animationEnabled: false },
+				},
 				stateVersion: 3,
 			}));
 
-			await store.updateScreenConfig(1, 1, { paddingX: 1920 });
+			await store.updateModeConfig(1, 1, 'card', { animationSpeed: 'fast' });
 
 			expect(mockRepo.getById).toHaveBeenCalledWith(1, 1);
-			expect(mockRepo.updateScreenConfig).toHaveBeenNthCalledWith(1, 1, 1, { paddingX: 1920 }, 2);
-			expect(mockRepo.updateScreenConfig).toHaveBeenNthCalledWith(2, 1, 1, { paddingX: 1920 }, 3);
+			expect(mockRepo.updateModeConfig).toHaveBeenNthCalledWith(1, 1, 1, 'card', { animationSpeed: 'fast' }, 2);
+			expect(mockRepo.updateModeConfig).toHaveBeenNthCalledWith(2, 1, 1, 'card', { animationSpeed: 'fast' }, 3);
 			expect(store.screens[0]).toEqual(updated);
 		});
 
 		// A refusal is the authority's judgement about the request; no refresh changes it (#381).
 		it('surfaces an unmarked 409 refusal in the authority\'s words without refreshing or replaying the write', async () => {
 			store.screens = [
-				createMockScreen({ id: 1, screenConfig: {}, stateVersion: 2 }),
+				createMockScreen({ id: 1, modeConfigs: {}, stateVersion: 2 }),
 			];
-			mockRepo.updateScreenConfig.mockRejectedValue({
+			mockRepo.updateModeConfig.mockRejectedValue({
 				statusCode: 409,
 				data: { message: 'Graphic Asset Reference at graphics.lower-third.items.logo.asset is not selectable' },
 			});
 
-			await expect(store.updateScreenConfig(1, 1, { paddingX: 1920 })).rejects.toThrow(
+			await expect(store.updateModeConfig(1, 1, 'card', { animationSpeed: 'fast' })).rejects.toThrow(
 				'Graphic Asset Reference at graphics.lower-third.items.logo.asset is not selectable',
 			);
 
 			expect(mockRepo.getById).not.toHaveBeenCalled();
-			expect(mockRepo.updateScreenConfig).toHaveBeenCalledTimes(1);
+			expect(mockRepo.updateModeConfig).toHaveBeenCalledTimes(1);
 		});
 	});
 
@@ -344,7 +305,9 @@ describe('useScreenStore config and realtime', () => {
 				vi.useFakeTimers();
 				const cached = createMockScreen({
 					id: 10,
-					screenConfig: { paddingX: 100 },
+					modeConfigs: {
+						card: { animationSpeed: 'slow' },
+					},
 					stateVersion: 3,
 				});
 				store.screens = [cached];
@@ -356,24 +319,32 @@ describe('useScreenStore config and realtime', () => {
 				}));
 				const reload = announce.updated({ eventId: 1, screenId: 10 });
 
-				mockRepo.updateScreenConfig.mockResolvedValue(createMockScreen({
+				mockRepo.updateModeConfig.mockResolvedValue(createMockScreen({
 					id: 10,
-					screenConfig: { paddingX: 1920 },
+					modeConfigs: {
+						card: { animationSpeed: 'fast' },
+					},
 					stateVersion: 4,
 				}));
-				const save = store.updateScreenConfig(1, 10, { paddingX: 1920 });
+				const save = store.updateModeConfig(1, 10, 'card', { animationSpeed: 'fast' });
 				await vi.advanceTimersByTimeAsync(300);
 				await save;
 
 				serveAnnouncedReload(createMockScreen({
 					id: 10,
-					screenConfig: { paddingX: 100 },
+					modeConfigs: {
+						card: { animationSpeed: 'slow' },
+					},
 					stateVersion: 3,
 				}));
 				await reload;
 
-				expect(store.screens[0]!.screenConfig).toEqual({ paddingX: 1920 });
-				expect(store.activeScreen!.screenConfig).toEqual({ paddingX: 1920 });
+				expect(store.screens[0]!.modeConfigs).toEqual({
+					card: { animationSpeed: 'fast' },
+				});
+				expect(store.activeScreen!.modeConfigs).toEqual({
+					card: { animationSpeed: 'fast' },
+				});
 			});
 
 			// Another operator's write took the Screen to 4; this client's save collided, retried onto it and settled at 5.
@@ -382,13 +353,17 @@ describe('useScreenStore config and realtime', () => {
 				store.screens = [
 					createMockScreen({
 						id: 10,
-						screenConfig: { paddingX: 100 },
+						modeConfigs: {
+							card: { animationSpeed: 'slow' },
+						},
 						stateVersion: 3,
 					}),
 				];
 				const remote = createMockScreen({
 					id: 10,
-					screenConfig: { paddingX: 100, background: '#fff' },
+					modeConfigs: {
+						card: { animationSpeed: 'slow', animationEnabled: false },
+					},
 					stateVersion: 4,
 				});
 
@@ -402,14 +377,16 @@ describe('useScreenStore config and realtime', () => {
 
 				const merged = createMockScreen({
 					id: 10,
-					screenConfig: { paddingX: 1920, background: '#fff' },
+					modeConfigs: {
+						card: { animationSpeed: 'fast', animationEnabled: false },
+					},
 					stateVersion: 5,
 				});
-				mockRepo.updateScreenConfig
+				mockRepo.updateModeConfig
 					.mockRejectedValueOnce(stateConflictFailure())
 					.mockResolvedValueOnce(merged);
 
-				const save = store.updateScreenConfig(1, 10, { paddingX: 1920 });
+				const save = store.updateModeConfig(1, 10, 'card', { animationSpeed: 'fast' });
 				await vi.advanceTimersByTimeAsync(300);
 				await save;
 				expect(store.screens[0]!.stateVersion).toBe(5);
@@ -477,15 +454,15 @@ describe('useScreenStore config and realtime', () => {
 	});
 
 	/**
-	 * "Saved" means both debounces fired: `useConfigUpdate`'s and `updateScreenConfig`'s.
+	 * "Saved" means both debounces fired: `useConfigUpdate`'s and `updateModeConfig`'s.
 	 * Ending the surface between them must not drop what the first handed the second (#308).
 	 */
 	describe('a config edit whose surface goes away inside the debounce window', () => {
-		function editScreenConfig(scope: ReturnType<typeof effectScope>) {
-			const { updateScreenConfig } = scope.run(() =>
-				useScreenConfigUpdate(1, 1, { debounceMs: 100 }),
+		function editModeConfig(scope: ReturnType<typeof effectScope>) {
+			const { updateConfig } = scope.run(() =>
+				useModeConfigUpdate(1, 1, 'card', { debounceMs: 100 }),
 			)!;
-			updateScreenConfig({ background: '#fff' });
+			updateConfig({ animationSpeed: 'fast' });
 		}
 
 		beforeEach(() => {
@@ -494,47 +471,51 @@ describe('useScreenStore config and realtime', () => {
 				createMockScreen({
 					id: 1,
 					stateVersion: 2,
-					screenConfig: { background: '#000' },
+					modeConfigs: {
+						card: { animationSpeed: 'slow' },
+					},
 				}),
 			];
-			mockRepo.updateScreenConfig.mockResolvedValue(
+			mockRepo.updateModeConfig.mockResolvedValue(
 				createMockScreen({
 					id: 1,
 					stateVersion: 3,
-					screenConfig: { background: '#fff' },
+					modeConfigs: {
+						card: { animationSpeed: 'fast' },
+					},
 				}),
 			);
 		});
 
 		it('reaches the server when the surface unmounts', async () => {
 			const scope = effectScope();
-			editScreenConfig(scope);
+			editModeConfig(scope);
 			scope.stop();
 			await vi.advanceTimersByTimeAsync(1_000);
 
-			expect(mockRepo.updateScreenConfig).toHaveBeenCalledWith(1, 1, { background: '#fff' }, 2);
+			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'card', { animationSpeed: 'fast' }, 2);
 		});
 
 		// Leaving the Event runs the route middleware before the page unmounts.
 		it('reaches the server when the Event scope is torn down before the surface unmounts', async () => {
 			const scope = effectScope();
-			editScreenConfig(scope);
+			editModeConfig(scope);
 			resetAllEventStores();
 			scope.stop();
 			await vi.advanceTimersByTimeAsync(1_000);
 
-			expect(mockRepo.updateScreenConfig).toHaveBeenCalledWith(1, 1, { background: '#fff' }, 2);
+			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'card', { animationSpeed: 'fast' }, 2);
 		});
 
 		it('reaches the server when the Event scope is torn down after the first debounce fired', async () => {
 			const scope = effectScope();
-			editScreenConfig(scope);
+			editModeConfig(scope);
 			await vi.advanceTimersByTimeAsync(100);
 			store.$reset();
 			scope.stop();
 			await vi.advanceTimersByTimeAsync(1_000);
 
-			expect(mockRepo.updateScreenConfig).toHaveBeenCalledWith(1, 1, { background: '#fff' }, 2);
+			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'card', { animationSpeed: 'fast' }, 2);
 		});
 	});
 });
