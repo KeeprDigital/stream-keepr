@@ -7,6 +7,7 @@ import {
 	FOUNDATION_TOKENS,
 	resolveFoundationToken,
 	resolveThemeTokens,
+	themeMotionVars,
 	themeTokenCssProperties,
 	themeTokenVar,
 	themeTypographyStyle,
@@ -57,6 +58,14 @@ export function modeTokenVar<M extends ThemedScreenMode>(mode: M, token: ScreenM
 /** One of a display's own typography Mode Tokens, as the style declarations that set it. */
 export function modeTypographyStyle<M extends ThemedScreenMode>(mode: M, token: ScreenModeTokenOfType<M, 'typography'>) {
 	return themeTypographyStyle(screenModeTokenName(mode, token));
+}
+
+/**
+ * One of a display's own motion Mode Tokens, as the reads of its timing and of
+ * the excursion state a CSS transition travels from and back to.
+ */
+export function modeMotionVars<M extends ThemedScreenMode>(mode: M, token: ScreenModeTokenOfType<M, 'animation-recipe'>) {
+	return themeMotionVars(screenModeTokenName(mode, token));
 }
 
 /**

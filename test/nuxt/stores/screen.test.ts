@@ -135,7 +135,7 @@ describe('useScreenStore', () => {
 				createMockScreen({
 					id: 5,
 					modeConfigs: {
-						card: { animationSpeed: 'slow' },
+						deck: { showDeckName: true },
 					},
 					stateVersion: 3,
 				}),
@@ -150,23 +150,23 @@ describe('useScreenStore', () => {
 			const saved = createMockScreen({
 				id: 5,
 				modeConfigs: {
-					card: { animationSpeed: 'fast' },
+					deck: { showDeckName: false },
 				},
 				stateVersion: 4,
 			});
 			mockRepo.updateModeConfig.mockResolvedValue(saved);
-			const save = store.updateModeConfig(1, 5, 'card', { animationSpeed: 'fast' });
+			const save = store.updateModeConfig(1, 5, 'deck', { showDeckName: false });
 			await vi.advanceTimersByTimeAsync(300);
 			await save;
 			expect(store.screens[0]!.modeConfigs).toEqual({
-				card: { animationSpeed: 'fast' },
+				deck: { showDeckName: false },
 			});
 
 			serveRefresh([
 				createMockScreen({
 					id: 5,
 					modeConfigs: {
-						card: { animationSpeed: 'slow' },
+						deck: { showDeckName: true },
 					},
 					stateVersion: 3,
 				}),
@@ -174,10 +174,10 @@ describe('useScreenStore', () => {
 			const loaded = await refresh;
 
 			expect(store.screens[0]!.modeConfigs).toEqual({
-				card: { animationSpeed: 'fast' },
+				deck: { showDeckName: false },
 			});
 			expect(loaded![0]!.modeConfigs).toEqual({
-				card: { animationSpeed: 'fast' },
+				deck: { showDeckName: false },
 			});
 			vi.useRealTimers();
 		});
@@ -283,7 +283,7 @@ describe('useScreenStore', () => {
 					id: 5,
 					slug: 'main',
 					modeConfigs: {
-						card: { animationSpeed: 'slow' },
+						deck: { showDeckName: true },
 					},
 					stateVersion: 3,
 				}),
@@ -299,12 +299,12 @@ describe('useScreenStore', () => {
 				id: 5,
 				slug: 'main',
 				modeConfigs: {
-					card: { animationSpeed: 'fast' },
+					deck: { showDeckName: false },
 				},
 				stateVersion: 4,
 			});
 			mockRepo.updateModeConfig.mockResolvedValue(saved);
-			const save = store.updateModeConfig(1, 5, 'card', { animationSpeed: 'fast' });
+			const save = store.updateModeConfig(1, 5, 'deck', { showDeckName: false });
 			await vi.advanceTimersByTimeAsync(300);
 			await save;
 
@@ -312,17 +312,17 @@ describe('useScreenStore', () => {
 				id: 5,
 				slug: 'main',
 				modeConfigs: {
-					card: { animationSpeed: 'slow' },
+					deck: { showDeckName: true },
 				},
 				stateVersion: 3,
 			}));
 			const loaded = await load;
 
 			expect(store.activeScreen!.modeConfigs).toEqual({
-				card: { animationSpeed: 'fast' },
+				deck: { showDeckName: false },
 			});
 			expect(loaded!.modeConfigs).toEqual({
-				card: { animationSpeed: 'fast' },
+				deck: { showDeckName: false },
 			});
 			vi.useRealTimers();
 		});
@@ -516,7 +516,7 @@ describe('useScreenStore', () => {
 				createMockScreen({
 					id: 5,
 					modeConfigs: {
-						card: { animationSpeed: 'slow' },
+						deck: { showDeckName: true },
 					},
 					stateVersion: 3,
 				}),
@@ -531,32 +531,32 @@ describe('useScreenStore', () => {
 			const saved = createMockScreen({
 				id: 5,
 				modeConfigs: {
-					card: { animationSpeed: 'fast' },
+					deck: { showDeckName: false },
 				},
 				stateVersion: 4,
 			});
 			mockRepo.updateModeConfig.mockResolvedValue(saved);
-			const save = store.updateModeConfig(1, 5, 'card', { animationSpeed: 'fast' });
+			const save = store.updateModeConfig(1, 5, 'deck', { showDeckName: false });
 			await vi.advanceTimersByTimeAsync(300);
 			await save;
 			expect(store.screens[0]!.modeConfigs).toEqual({
-				card: { animationSpeed: 'fast' },
+				deck: { showDeckName: false },
 			});
 
 			serveLoad(createMockScreen({
 				id: 5,
 				modeConfigs: {
-					card: { animationSpeed: 'slow' },
+					deck: { showDeckName: true },
 				},
 				stateVersion: 3,
 			}));
 			const loaded = await load;
 
 			expect(store.screens[0]!.modeConfigs).toEqual({
-				card: { animationSpeed: 'fast' },
+				deck: { showDeckName: false },
 			});
 			expect(loaded!.modeConfigs).toEqual({
-				card: { animationSpeed: 'fast' },
+				deck: { showDeckName: false },
 			});
 			vi.useRealTimers();
 		});

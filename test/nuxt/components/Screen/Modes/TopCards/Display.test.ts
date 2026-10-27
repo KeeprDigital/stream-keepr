@@ -12,15 +12,12 @@ const defaultConfig = {
 	limit: 10,
 	excludedCardTypes: ['Land'],
 	columns: 5,
-	cardSize: 'medium',
 	dynamicCardSize: true,
-	cardGap: 12,
 	showHeader: true,
 	headerText: undefined,
 	showCardNames: true,
 	showRankBadges: true,
 	statBadge: 'inclusionRate',
-	statBadgeSize: 'medium',
 };
 
 const config = ref<any>({ ...defaultConfig });
@@ -169,12 +166,11 @@ describe('screenTopCardsDisplay', () => {
 		expect(wrapper.find('.top-cards-title').exists()).toBe(false);
 	});
 
-	it('lays the grid out from columns and gap config', async () => {
+	it('lays the grid out in its configured columns', async () => {
 		const wrapper = await mountComponent();
 
 		const grid = wrapper.get('[data-testid="top-cards-grid"]');
 		expect(grid.attributes('style')).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))');
-		expect(grid.attributes('style')).toContain('gap: 12px');
 	});
 
 	it('sizes fixed cards from the card size when dynamic sizing is off', async () => {

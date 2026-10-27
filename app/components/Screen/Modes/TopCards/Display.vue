@@ -23,35 +23,13 @@ const gridStyle = computed(() => ({
 	gridTemplateColumns: config.value.dynamicCardSize
 		? `repeat(${config.value.columns}, minmax(0, 1fr))`
 		: `repeat(${config.value.columns}, max-content)`,
-	gap: `${config.value.cardGap}px`,
+	gap: modeTokenVar('top-cards', 'card-gap'),
 	justifyContent: config.value.dynamicCardSize ? undefined : 'center',
 }));
 
-const cardSizeClass = computed(() => {
-	switch (config.value.cardSize) {
-		case 'small': return 'w-28';
-		case 'large': return 'w-52';
-		default: return 'w-40';
-	}
-});
-
-const rankBadgeClass = computed(() => {
-	const base = 'top-1 left-1';
-	switch (config.value.statBadgeSize ?? 'medium') {
-		case 'small': return `${base} w-5 h-5 text-xs`;
-		case 'large': return `${base} w-8 h-8 text-base`;
-		default: return `${base} w-6 h-6 text-sm`;
-	}
-});
-
-const statBadgeClass = computed(() => {
-	const base = 'bottom-1 right-1';
-	switch (config.value.statBadgeSize ?? 'medium') {
-		case 'small': return `${base} text-xs px-1.5 py-0.5`;
-		case 'large': return `${base} text-base px-2.5 py-1.5`;
-		default: return `${base} text-sm px-2 py-1`;
-	}
-});
+const cardWidth = modeTokenVar('top-cards', 'card-width');
+/** The badges' text size, which each badge sizes itself around. */
+const badgeSize = modeTokenVar('top-cards', 'badge-size');
 
 /** A badge lifts off the card's art on a soft shadow. */
 const badgeStyle = {
@@ -61,12 +39,15 @@ const badgeStyle = {
 
 const rankBadgeStyle = {
 	...badgeStyle,
+	width: '1.75em',
+	height: '1.75em',
 	color: modeTokenVar('top-cards', 'rank-badge-text'),
 	backgroundColor: modeTokenVar('top-cards', 'rank-badge-surface'),
 };
 
 const statBadgeStyle = {
 	...badgeStyle,
+	padding: '0.3em 0.6em',
 	color: modeTokenVar('top-cards', 'stat-badge-text'),
 	backgroundColor: modeTokenVar('top-cards', 'stat-badge-surface'),
 };
@@ -108,15 +89,16 @@ function statText(entry: CardBreakdownEntry): string | null {
 					:key="entry.id"
 					:entry="entry"
 					:rank="rank"
-					:size-class="cardSizeClass"
+					:width="cardWidth"
 					:dynamic-size="config.dynamicCardSize"
 					:show-name="config.showCardNames"
 					:show-rank="config.showRankBadges"
-					:rank-badge-class="rankBadgeClass"
+					rank-badge-class="top-1 left-1"
 					:rank-badge-style="rankBadgeStyle"
 					:stat-text="statText(entry)"
-					:stat-badge-class="statBadgeClass"
+					stat-badge-class="bottom-1 right-1"
 					:stat-badge-style="statBadgeStyle"
+					:badge-size="badgeSize"
 					:card-style="cardStyle"
 				/>
 			</div>

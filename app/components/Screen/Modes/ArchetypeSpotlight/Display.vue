@@ -82,11 +82,15 @@ const stats = computed(() => {
 });
 
 // Cards carry no rank badge here: their order is the ranking. The face is
-// set over the card's own.
+// set over the card's own, and the badge lifts off its art as Most Played Cards' does.
 const statBadgeStyle = {
 	...modeTypographyStyle('archetype-spotlight', 'row-typography'),
 	color: modeTokenVar('archetype-spotlight', 'stat-badge-text'),
 	backgroundColor: modeTokenVar('archetype-spotlight', 'stat-badge-surface'),
+	boxShadow: `0 4px 6px -1px ${modeTokenVar('archetype-spotlight', 'badge-shadow')}`,
+};
+const cardStyle = {
+	backgroundColor: modeTokenVar('archetype-spotlight', 'card-placeholder-surface'),
 };
 </script>
 
@@ -152,7 +156,6 @@ const statBadgeStyle = {
 						:key="entry.id"
 						:entry="entry"
 						:rank="index + 1"
-						size-class=""
 						:dynamic-size="true"
 						:show-name="true"
 						:show-rank="false"
@@ -161,6 +164,7 @@ const statBadgeStyle = {
 						:stat-text="`${entry.inclusionRate}%`"
 						stat-badge-class="bottom-1 right-1 text-sm px-2 py-1"
 						:stat-badge-style="statBadgeStyle"
+						:card-style="cardStyle"
 					/>
 				</div>
 			</div>

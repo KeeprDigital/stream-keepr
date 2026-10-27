@@ -1,4 +1,3 @@
-import type { CardDisplayConfig } from '~~/shared/types/screenConfig';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
 export function useCardModeData() {
@@ -27,13 +26,6 @@ export function useCardModeData() {
 	// Screen ID from context
 	const screenId = computed<number | null>(() => screen.value?.id ?? null);
 
-	// Display config strips mode-level properties (matchId)
-	// CardDisplay only needs the animation settings
-	const displayConfig = computed<CardDisplayConfig>(() => {
-		const { featureMatchId: _featureMatchId, ...rest } = config.value;
-		return rest;
-	});
-
 	// Selecting a Screen clears the Card held for the last one, so it happens only
 	// when the Screen changes: every other re-read holds program until it answers.
 	watch(screenId, id => cardStore.setActiveScreen(id), { immediate: true });
@@ -61,7 +53,6 @@ export function useCardModeData() {
 
 	return {
 		config,
-		displayConfig,
 		screenId,
 		loading,
 		error,

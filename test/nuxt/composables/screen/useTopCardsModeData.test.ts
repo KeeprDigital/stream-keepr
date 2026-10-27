@@ -23,9 +23,7 @@ const defaultConfig = {
 	limit: 10,
 	excludedCardTypes: ['Land'] as string[],
 	columns: 5,
-	cardSize: 'medium' as const,
 	dynamicCardSize: true,
-	cardGap: 12,
 	rowsPerPage: 60,
 	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
@@ -36,7 +34,6 @@ const defaultConfig = {
 	showCardNames: true,
 	showRankBadges: true,
 	statBadge: 'inclusionRate' as const,
-	statBadgeSize: 'medium' as const,
 };
 
 const mutableConfig = reactive({ ...defaultConfig });

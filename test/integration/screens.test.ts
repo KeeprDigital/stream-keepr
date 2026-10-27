@@ -92,7 +92,7 @@ describe('screens API', () => {
 		// fragment empty, which is also what a display reset leaves.
 		const fragments = {
 			'background': {},
-			'card': { animationSpeed: 'fast' },
+			'card': {},
 			'deck': { showDeckName: false },
 			'standings': { viewMode: 'all' },
 			'top-cut': { showHeader: false },

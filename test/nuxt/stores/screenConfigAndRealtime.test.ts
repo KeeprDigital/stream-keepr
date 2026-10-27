@@ -65,7 +65,7 @@ describe('useScreenStore config and realtime', () => {
 				createMockScreen({
 					id: 1,
 					modeConfigs: {
-						card: { featureMatchId: 1, animationSpeed: 'slow' },
+						deck: { showDeckStats: true, showDeckName: true },
 					},
 					stateVersion: 2,
 				}),
@@ -73,16 +73,16 @@ describe('useScreenStore config and realtime', () => {
 			mockRepo.updateModeConfig.mockResolvedValue(createMockScreen({
 				id: 1,
 				modeConfigs: {
-					card: { animationSpeed: 'fast' },
+					deck: { showDeckName: false },
 				},
 				stateVersion: 3,
 			}));
 
-			const first = store.updateModeConfig(1, 1, 'card', { animationSpeed: 'fast' });
-			const second = store.updateModeConfig(1, 1, 'card', { featureMatchId: null as any });
+			const first = store.updateModeConfig(1, 1, 'deck', { showDeckName: false });
+			const second = store.updateModeConfig(1, 1, 'deck', { showDeckStats: null as any });
 
 			expect(store.screens[0]!.modeConfigs).toEqual({
-				card: { animationSpeed: 'fast' },
+				deck: { showDeckName: false },
 			});
 			expect(mockRepo.updateModeConfig).not.toHaveBeenCalled();
 
@@ -90,7 +90,7 @@ describe('useScreenStore config and realtime', () => {
 			await Promise.all([first, second]);
 
 			expect(mockRepo.updateModeConfig).toHaveBeenCalledOnce();
-			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'card', { animationSpeed: 'fast', featureMatchId: null }, 2);
+			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'deck', { showDeckName: false, showDeckStats: null }, 2);
 		});
 
 		it('holds the server\'s Screen, in the collection and as the active Screen', async () => {
@@ -115,14 +115,14 @@ describe('useScreenStore config and realtime', () => {
 			const screen = createMockScreen({
 				id: 1,
 				modeConfigs: {
-					card: { animationSpeed: 'slow' },
+					deck: { showDeckName: true },
 				},
 				stateVersion: 2,
 			});
 			store.screens = [screen];
 			mockRepo.updateModeConfig.mockRejectedValue(new Error('Save failed'));
 
-			await expect(store.updateModeConfig(1, 1, 'card', { animationSpeed: 'fast' })).rejects.toThrow('Save failed');
+			await expect(store.updateModeConfig(1, 1, 'deck', { showDeckName: false })).rejects.toThrow('Save failed');
 
 			expect(store.screens[0]).toEqual(screen);
 			expect(store.error).toBe('Save failed');
@@ -137,17 +137,17 @@ describe('useScreenStore config and realtime', () => {
 			mockRepo.updateModeConfig.mockResolvedValue(createMockScreen({
 				id: 1,
 				modeConfigs: {
-					card: { animationSpeed: 'fast' },
+					deck: { showDeckName: false },
 				},
 				stateVersion: 3,
 			}));
 
-			const write = store.updateModeConfig(1, 1, 'card', { animationSpeed: 'fast' });
+			const write = store.updateModeConfig(1, 1, 'deck', { showDeckName: false });
 			store.$reset();
 			await vi.advanceTimersByTimeAsync(1000);
 			await write;
 
-			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'card', { animationSpeed: 'fast' }, 2);
+			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'deck', { showDeckName: false }, 2);
 			expect(store.screens).toEqual([]);
 		});
 
@@ -158,7 +158,7 @@ describe('useScreenStore config and realtime', () => {
 			const updated = createMockScreen({
 				id: 1,
 				modeConfigs: {
-					card: { animationEnabled: false, animationSpeed: 'fast' },
+					deck: { showQuantities: false, showDeckName: false },
 				},
 				stateVersion: 4,
 			});
@@ -168,16 +168,16 @@ describe('useScreenStore config and realtime', () => {
 			mockRepo.getById.mockResolvedValue(createMockScreen({
 				id: 1,
 				modeConfigs: {
-					card: { animationEnabled: false },
+					deck: { showQuantities: false },
 				},
 				stateVersion: 3,
 			}));
 
-			await store.updateModeConfig(1, 1, 'card', { animationSpeed: 'fast' });
+			await store.updateModeConfig(1, 1, 'deck', { showDeckName: false });
 
 			expect(mockRepo.getById).toHaveBeenCalledWith(1, 1);
-			expect(mockRepo.updateModeConfig).toHaveBeenNthCalledWith(1, 1, 1, 'card', { animationSpeed: 'fast' }, 2);
-			expect(mockRepo.updateModeConfig).toHaveBeenNthCalledWith(2, 1, 1, 'card', { animationSpeed: 'fast' }, 3);
+			expect(mockRepo.updateModeConfig).toHaveBeenNthCalledWith(1, 1, 1, 'deck', { showDeckName: false }, 2);
+			expect(mockRepo.updateModeConfig).toHaveBeenNthCalledWith(2, 1, 1, 'deck', { showDeckName: false }, 3);
 			expect(store.screens[0]).toEqual(updated);
 		});
 
@@ -191,7 +191,7 @@ describe('useScreenStore config and realtime', () => {
 				data: { message: 'Graphic Asset Reference at graphics.lower-third.items.logo.asset is not selectable' },
 			});
 
-			await expect(store.updateModeConfig(1, 1, 'card', { animationSpeed: 'fast' })).rejects.toThrow(
+			await expect(store.updateModeConfig(1, 1, 'deck', { showDeckName: false })).rejects.toThrow(
 				'Graphic Asset Reference at graphics.lower-third.items.logo.asset is not selectable',
 			);
 
@@ -306,7 +306,7 @@ describe('useScreenStore config and realtime', () => {
 				const cached = createMockScreen({
 					id: 10,
 					modeConfigs: {
-						card: { animationSpeed: 'slow' },
+						deck: { showDeckName: true },
 					},
 					stateVersion: 3,
 				});
@@ -322,28 +322,28 @@ describe('useScreenStore config and realtime', () => {
 				mockRepo.updateModeConfig.mockResolvedValue(createMockScreen({
 					id: 10,
 					modeConfigs: {
-						card: { animationSpeed: 'fast' },
+						deck: { showDeckName: false },
 					},
 					stateVersion: 4,
 				}));
-				const save = store.updateModeConfig(1, 10, 'card', { animationSpeed: 'fast' });
+				const save = store.updateModeConfig(1, 10, 'deck', { showDeckName: false });
 				await vi.advanceTimersByTimeAsync(300);
 				await save;
 
 				serveAnnouncedReload(createMockScreen({
 					id: 10,
 					modeConfigs: {
-						card: { animationSpeed: 'slow' },
+						deck: { showDeckName: true },
 					},
 					stateVersion: 3,
 				}));
 				await reload;
 
 				expect(store.screens[0]!.modeConfigs).toEqual({
-					card: { animationSpeed: 'fast' },
+					deck: { showDeckName: false },
 				});
 				expect(store.activeScreen!.modeConfigs).toEqual({
-					card: { animationSpeed: 'fast' },
+					deck: { showDeckName: false },
 				});
 			});
 
@@ -354,7 +354,7 @@ describe('useScreenStore config and realtime', () => {
 					createMockScreen({
 						id: 10,
 						modeConfigs: {
-							card: { animationSpeed: 'slow' },
+							deck: { showDeckName: true },
 						},
 						stateVersion: 3,
 					}),
@@ -362,7 +362,7 @@ describe('useScreenStore config and realtime', () => {
 				const remote = createMockScreen({
 					id: 10,
 					modeConfigs: {
-						card: { animationSpeed: 'slow', animationEnabled: false },
+						deck: { showDeckName: true, showQuantities: false },
 					},
 					stateVersion: 4,
 				});
@@ -378,7 +378,7 @@ describe('useScreenStore config and realtime', () => {
 				const merged = createMockScreen({
 					id: 10,
 					modeConfigs: {
-						card: { animationSpeed: 'fast', animationEnabled: false },
+						deck: { showDeckName: false, showQuantities: false },
 					},
 					stateVersion: 5,
 				});
@@ -386,7 +386,7 @@ describe('useScreenStore config and realtime', () => {
 					.mockRejectedValueOnce(stateConflictFailure())
 					.mockResolvedValueOnce(merged);
 
-				const save = store.updateModeConfig(1, 10, 'card', { animationSpeed: 'fast' });
+				const save = store.updateModeConfig(1, 10, 'deck', { showDeckName: false });
 				await vi.advanceTimersByTimeAsync(300);
 				await save;
 				expect(store.screens[0]!.stateVersion).toBe(5);
@@ -460,9 +460,9 @@ describe('useScreenStore config and realtime', () => {
 	describe('a config edit whose surface goes away inside the debounce window', () => {
 		function editModeConfig(scope: ReturnType<typeof effectScope>) {
 			const { updateConfig } = scope.run(() =>
-				useModeConfigUpdate(1, 1, 'card', { debounceMs: 100 }),
+				useModeConfigUpdate(1, 1, 'deck', { debounceMs: 100 }),
 			)!;
-			updateConfig({ animationSpeed: 'fast' });
+			updateConfig({ showDeckName: false });
 		}
 
 		beforeEach(() => {
@@ -472,7 +472,7 @@ describe('useScreenStore config and realtime', () => {
 					id: 1,
 					stateVersion: 2,
 					modeConfigs: {
-						card: { animationSpeed: 'slow' },
+						deck: { showDeckName: true },
 					},
 				}),
 			];
@@ -481,7 +481,7 @@ describe('useScreenStore config and realtime', () => {
 					id: 1,
 					stateVersion: 3,
 					modeConfigs: {
-						card: { animationSpeed: 'fast' },
+						deck: { showDeckName: false },
 					},
 				}),
 			);
@@ -493,7 +493,7 @@ describe('useScreenStore config and realtime', () => {
 			scope.stop();
 			await vi.advanceTimersByTimeAsync(1_000);
 
-			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'card', { animationSpeed: 'fast' }, 2);
+			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'deck', { showDeckName: false }, 2);
 		});
 
 		// Leaving the Event runs the route middleware before the page unmounts.
@@ -504,7 +504,7 @@ describe('useScreenStore config and realtime', () => {
 			scope.stop();
 			await vi.advanceTimersByTimeAsync(1_000);
 
-			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'card', { animationSpeed: 'fast' }, 2);
+			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'deck', { showDeckName: false }, 2);
 		});
 
 		it('reaches the server when the Event scope is torn down after the first debounce fired', async () => {
@@ -515,7 +515,7 @@ describe('useScreenStore config and realtime', () => {
 			scope.stop();
 			await vi.advanceTimersByTimeAsync(1_000);
 
-			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'card', { animationSpeed: 'fast' }, 2);
+			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'deck', { showDeckName: false }, 2);
 		});
 	});
 });

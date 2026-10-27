@@ -24,7 +24,7 @@ import Renderer from '~/components/Screen/Renderer.vue';
 // token set, paints every Mode Token it declares, and a plain mode's host
 // insets and aligns it by the Theme (ADR-0049, ADR-0051).
 
-type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor' | 'borderColor' | 'boxShadow' | 'width' | 'height' | 'gap';
+type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor' | 'borderColor' | 'boxShadow' | 'width' | 'height' | 'gap' | 'fontSize';
 
 /** Where a display paints one Mode Token: an element, and for a colour the property it sets. */
 interface Probe {
@@ -105,6 +105,8 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'secondary-text': { selector: '.stat-label', property: 'color' },
 		'stat-badge-surface': { selector: '[data-testid="top-cards-stat-badge"]', property: 'backgroundColor' },
 		'stat-badge-text': { selector: '[data-testid="top-cards-stat-badge"]', property: 'color' },
+		'card-placeholder-surface': { selector: '.mtg-card', property: 'backgroundColor' },
+		'badge-shadow': { selector: '[data-testid="top-cards-stat-badge"]', property: 'boxShadow' },
 	},
 	'top-cut': {
 		'title-typography': { selector: '.broadcast-table-title h2' },
@@ -168,9 +170,17 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'stat-badge-surface': { selector: '[data-testid="top-cards-stat-badge"]', property: 'backgroundColor' },
 		'stat-badge-text': { selector: '[data-testid="top-cards-stat-badge"]', property: 'color' },
 		'page-indicator-text': { selector: '[data-testid="top-cards-page-indicator"]', property: 'color' },
+		'card-width': {
+			selector: '[data-testid="top-cards-item"]',
+			property: 'width',
+			config: { dynamicCardSize: false },
+		},
+		'card-gap': { selector: '[data-testid="top-cards-grid"]', property: 'gap' },
+		'badge-size': { selector: '[data-testid="top-cards-stat-badge"]', property: 'fontSize' },
 	},
 	'card': {
 		'card-width': { selector: '[data-testid="spotlight-card"]', property: 'width' },
+		'motion': { selector: '.card-image-wrapper' },
 	},
 	'deck': {
 		'title-typography': { selector: '.deck-header h2' },
@@ -190,9 +200,35 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'pointed-card-surface': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'backgroundColor' },
 		'pointed-card-accent': { selector: '[data-testid="highlander-pointed-card-chip"] span', property: 'color' },
 		'pointed-card-border': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'borderColor' },
-		'card-width': { selector: '[data-testid="mainboard-grid"] .card-item', property: 'width' },
-		'card-gap': { selector: '[data-testid="mainboard-grid"]', property: 'gap' },
-		'stack-reveal': { selector: '[data-testid="sideboard-stack-column"] .stack-card', property: 'height' },
+		'quantity-badge-size': { selector: '.quantity-badge', property: 'fontSize' },
+		'points-badge-size': { selector: '[data-testid="highlander-card-badge"]', property: 'fontSize' },
+		'meta-pill-size': { selector: '[data-testid="deck-meta-pill"]', property: 'fontSize' },
+		'pointed-card-size': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'fontSize' },
+		'badge-shadow': { selector: '[data-testid="highlander-card-badge"]', property: 'boxShadow' },
+		'mainboard-card-width': { selector: '[data-testid="mainboard-grid"] .card-item', property: 'width' },
+		'mainboard-card-gap': { selector: '[data-testid="mainboard-grid"]', property: 'gap' },
+		'mainboard-stack-reveal': {
+			selector: '[data-testid="mainboard-stack-row"] .stack-card',
+			property: 'width',
+			config: {
+				mainboard: { view: 'stack' },
+			},
+		},
+		'sideboard-card-width': {
+			selector: '[data-testid="sideboard-grid"] .card-item',
+			property: 'width',
+			config: {
+				sideboard: { view: 'grid', columns: 2, dynamicCardSize: false },
+			},
+		},
+		'sideboard-card-gap': {
+			selector: '[data-testid="sideboard-grid"]',
+			property: 'gap',
+			config: {
+				sideboard: { view: 'grid', columns: 2, dynamicCardSize: false },
+			},
+		},
+		'sideboard-stack-reveal': { selector: '[data-testid="sideboard-stack-column"] .stack-card', property: 'height' },
 	},
 };
 
@@ -222,7 +258,7 @@ const SAMPLES: { [T in ThemeTokenType]: ThemeTokenValueTypes[T] } = {
 		kind: 'image',
 		...testGraphicAssetReference('asset-logo', 'revision-logo'),
 	},
-	// The composites Graphic Items bind to (#829); no plain-mode Mode Token is one yet.
+	// The composites Graphic Items bind to (#829), and Card Spotlight's motion.
 	'fill': { type: 'solid', color: 'rgb(12, 34, 56)' },
 	'surface-style': {
 		fill: { type: 'solid', color: 'rgb(12, 34, 56)' },
@@ -236,7 +272,12 @@ const SAMPLES: { [T in ThemeTokenType]: ThemeTokenValueTypes[T] } = {
 		leftSlant: 0,
 		rightSlant: 0,
 	},
-	'animation-recipe': { duration: 700, easing: 'linear', delay: 0 },
+	'animation-recipe': {
+		duration: 700,
+		easing: 'linear',
+		delay: 40,
+		fade: { opacity: 0.25 },
+	},
 	'alignment': { horizontal: 'right', vertical: 'bottom' },
 };
 
@@ -557,14 +598,11 @@ mockNuxtImport('useTopCardsModeData', () => () => {
 	return {
 		config: computed(() => ({
 			columns: 5,
-			cardSize: 'medium',
 			dynamicCardSize: true,
-			cardGap: 12,
 			showHeader: true,
 			showCardNames: true,
 			showRankBadges: true,
 			statBadge: 'inclusionRate',
-			statBadgeSize: 'medium',
 			...probeConfig.value,
 		})),
 		error: ref(null),
@@ -604,6 +642,7 @@ mockNuxtImport('useDeckModeData', () => () => ({
 		showHighlanderTotal: false,
 		showHighlanderPointedCards: true,
 		showHighlanderPoints: true,
+		...probeConfig.value,
 	})),
 	primaryHeader: ref('Alice'),
 	secondaryHeader: ref('Mono Blue'),
@@ -630,6 +669,7 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	deckStats: ref([]),
 	mainboard: ref([
 		deckCard('Mana Drain', 'mainboard'),
+		deckCard('Force of Will', 'mainboard'),
 	]),
 	sideboard: ref([
 		deckCard('Pyroblast', 'sideboard'),
@@ -651,7 +691,6 @@ const spotlightCard = {
 };
 
 mockNuxtImport('useCardModeData', () => () => ({
-	displayConfig: computed(() => ({ animationEnabled: false, animationSpeed: 'normal' })),
 	screenId: computed(() => 1),
 	error: ref(null),
 }));
@@ -765,11 +804,23 @@ async function mountMode(
 	return wrapper;
 }
 
+/** Waits for a probe's element, which a display may show only once it settles. */
+async function shown(probe: Probe) {
+	await vi.waitFor(() => expect(wrapper!.find(probe.selector).exists(), `${probe.selector} is rendered`).toBe(true));
+}
+
 /** What a probe's element visibly paints. */
 function painted(probe: Probe, type: ThemeTokenType) {
 	const element = wrapper!.find(probe.selector);
 	expect(element.exists(), `${probe.selector} is rendered`).toBe(true);
 	const style = getComputedStyle(element.element);
+	if (type === 'animation-recipe') {
+		return {
+			transitionDuration: style.transitionDuration,
+			transitionTimingFunction: style.transitionTimingFunction,
+			transitionDelay: style.transitionDelay,
+		};
+	}
 	if (type !== 'typography') {
 		return probe.property === 'boxShadow'
 			// A shadow's colour, after its offsets, blur and spread.
@@ -785,10 +836,10 @@ function painted(probe: Probe, type: ThemeTokenType) {
 	};
 }
 
-/** Tracking as em, whether the element computes it in px or keeps the em it inherited. */
+/** Tracking as em, whether the element computes it in px or keeps the em it inherited, past float noise. */
 function inEm(letterSpacing: string, fontSize: string) {
 	return letterSpacing.endsWith('px')
-		? `${Number.parseFloat(letterSpacing) / Number.parseFloat(fontSize)}em`
+		? `${Number((Number.parseFloat(letterSpacing) / Number.parseFloat(fontSize)).toFixed(6))}em`
 		: letterSpacing;
 }
 
@@ -798,6 +849,14 @@ function expectedPaint(type: ThemeTokenType, value: unknown) {
 		return value;
 	if (type === 'dimension')
 		return `${value}px`;
+	if (type === 'animation-recipe') {
+		const recipe = value as ThemeTokenValueTypes['animation-recipe'];
+		return {
+			transitionDuration: `${recipe.duration}ms`,
+			transitionTimingFunction: { 'linear': 'linear', 'ease-in-out': 'cubic-bezier(0.45, 0, 0.55, 1)' }[recipe.easing as string],
+			transitionDelay: `${recipe.delay}ms`,
+		};
+	}
 	const typography = value as ThemeTokenValueTypes['typography'];
 	const font = typography.font as GraphicApplicationFontSelection;
 	return {
@@ -871,6 +930,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 			? Math.min(definition.bounds.max, Math.max(definition.bounds.min + 1, SAMPLES.dimension))
 			: SAMPLES[definition.type];
 		await mountMode(mode, { [name]: sample }, { config: probe.config });
+		await shown(probe);
 
 		expect(painted(probe, definition.type)).toEqual(expectedPaint(definition.type, sample));
 	});
@@ -880,8 +940,61 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 			? FOUNDATION_TOKENS[definition.default.token].default
 			: definition.default;
 		await mountMode(mode, undefined, { config: probe.config });
+		await shown(probe);
 
 		expect(painted(probe, definition.type)).toEqual(expectedPaint(definition.type, shipped));
+	});
+});
+
+// A light Theme sets `text-primary` dark and `text-inverse` light as a pair, so
+// whatever a display paints on the primary text colour reads in `text-inverse`.
+describe('a light Theme', () => {
+	const LIGHT = { 'text-primary': 'rgb(17, 24, 39)', 'text-inverse': 'rgb(250, 250, 250)' };
+
+	/** The text colour of each element painted on the primary text colour. */
+	function textOnPrimaryText() {
+		return new Set(wrapper!.findAll('*')
+			.map(element => getComputedStyle(element.element))
+			.filter(style => style.backgroundColor === LIGHT['text-primary'])
+			.map(style => style.color));
+	}
+
+	const BADGED_MODES: readonly ScreenMode[] = ['archetype-spotlight', 'top-cards', 'deck'];
+
+	it.each(Object.keys(THEMED_DISPLAYS) as ScreenMode[])('keeps every %s badge, pill and chip on the primary text colour legible', async (mode) => {
+		await mountMode(mode, LIGHT);
+
+		expect(textOnPrimaryText()).toEqual(new Set(BADGED_MODES.includes(mode)
+			? [LIGHT['text-inverse']]
+			: []));
+	});
+});
+
+// A Deck Screen's Mainboard and Sideboard each take their own size Mode Tokens.
+describe('a Deck Screen\'s two boards', () => {
+	it('are sized independently', async () => {
+		await mountMode('deck', {
+			'deck.mainboard-card-width': 200,
+			'deck.mainboard-card-gap': 20,
+			'deck.sideboard-card-width': 100,
+			'deck.sideboard-card-gap': 4,
+		}, {
+			config: {
+				sideboard: { view: 'grid', columns: 2, dynamicCardSize: false },
+			},
+		});
+
+		const board = (key: string) => ({
+			width: getComputedStyle(wrapper!.get(`[data-testid="${key}-grid"] .card-item`).element).width,
+			gap: getComputedStyle(wrapper!.get(`[data-testid="${key}-grid"]`).element).gap,
+		});
+		expect([
+			board('mainboard'),
+			board('sideboard'),
+		]).toEqual([
+			{ width: '200px', gap: '20px' },
+			{ width: '100px', gap: '4px' },
+		]);
 	});
 });
 

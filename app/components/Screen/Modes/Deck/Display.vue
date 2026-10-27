@@ -184,10 +184,10 @@ const showHeader = computed(() =>
 	|| showHighlanderPointedCards.value,
 );
 
-function gridStyle(layout: ResolvedDeckBoardLayout) {
+function gridStyle(section: VisibleBoard) {
 	return {
-		gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
-		gap: modeTokenVar('deck', 'card-gap'),
+		gridTemplateColumns: `repeat(${section.layout.columns}, minmax(0, 1fr))`,
+		gap: modeTokenVar('deck', `${section.key}-card-gap`),
 	};
 }
 
@@ -221,54 +221,34 @@ const highlanderPointsPositionClass = computed(() => {
 	return BADGE_POSITION_CLASSES[pos];
 });
 
+// Each badge, pill and chip sizes itself around its text, which its size Mode
+// Token sets, keeping the proportions its former medium size had.
+
 const quantityBadgeStyle = {
+	fontSize: modeTokenVar('deck', 'quantity-badge-size'),
+	width: '1.75em',
+	height: '1.75em',
 	color: modeTokenVar('deck', 'quantity-badge-text'),
 	backgroundColor: modeTokenVar('deck', 'quantity-badge-surface'),
 };
 
 const highlanderPointBadgeStyle = {
+	fontSize: modeTokenVar('deck', 'points-badge-size'),
+	minWidth: '2em',
+	padding: '0.3em 0.7em',
 	color: modeTokenVar('deck', 'points-badge-text'),
 	backgroundColor: modeTokenVar('deck', 'points-badge-surface'),
 };
 
-// Quantity badge size classes
-const QUANTITY_SIZE_CLASSES: Record<string, string> = {
-	small: 'w-6 h-6 text-sm',
-	medium: 'w-7 h-7 text-base',
-	large: 'w-8 h-8 text-lg',
+/** A point badge lifts off a card's art on a soft shadow, and off a list row on a slighter one. */
+const highlanderCardBadgeStyle = {
+	...highlanderPointBadgeStyle,
+	boxShadow: `0 4px 6px -1px ${modeTokenVar('deck', 'badge-shadow')}`,
 };
-const quantitySizeClass = computed((): string => {
-	const size = config.value.quantitySize ?? 'medium';
-	return QUANTITY_SIZE_CLASSES[size] || 'w-7 h-7 text-base';
-});
-
-const HIGHLANDER_POINT_SIZE_CLASSES: Record<string, string> = {
-	small: 'min-w-6 px-2 py-0.5 text-xs',
-	medium: 'min-w-7 px-2.5 py-1 text-sm',
-	large: 'min-w-8 px-3 py-1.5 text-base',
+const highlanderListBadgeStyle = {
+	...highlanderPointBadgeStyle,
+	boxShadow: `0 1px 3px 0 ${modeTokenVar('deck', 'badge-shadow')}`,
 };
-
-const highlanderPointBadgeClass = computed((): string => {
-	const size = config.value.highlanderPointsSize ?? 'medium';
-	return HIGHLANDER_POINT_SIZE_CLASSES[size] || 'min-w-7 px-2.5 py-1 text-sm';
-});
-
-const DECK_META_PILL_SIZE_CLASSES: Record<string, string> = {
-	small: 'px-4 py-1.5 text-sm gap-x-3 gap-y-1',
-	medium: 'px-5 py-2 text-base gap-x-4 gap-y-1.5',
-	large: 'px-6 py-2.5 text-lg gap-x-5 gap-y-2',
-};
-
-const HIGHLANDER_POINTED_CARD_SIZE_CLASSES: Record<string, string> = {
-	small: 'px-2.5 py-1 text-xs',
-	medium: 'px-3 py-1 text-sm',
-	large: 'px-3.5 py-1.5 text-base',
-};
-
-const deckMetaPillClass = computed((): string => {
-	const size = config.value.deckMetaPillSize ?? 'medium';
-	return DECK_META_PILL_SIZE_CLASSES[size] || 'px-5 py-2 text-base gap-x-4 gap-y-1.5';
-});
 
 const deckMetaPillStyle = computed(() => {
 	if (!showDeckMetaPill.value) {
@@ -276,6 +256,9 @@ const deckMetaPillStyle = computed(() => {
 	}
 
 	return {
+		fontSize: modeTokenVar('deck', 'meta-pill-size'),
+		padding: '0.5em 1.25em',
+		gap: '0.375em 1em',
 		color: modeTokenVar('deck', 'meta-pill-text'),
 		backgroundColor: modeTokenVar('deck', 'meta-pill-surface'),
 		borderColor: modeTokenVar('deck', 'meta-pill-border'),
@@ -298,12 +281,9 @@ const deckMetaTextStyle = computed(() => {
 		: secondaryTextStyle;
 });
 
-const highlanderPointedCardClass = computed((): string => {
-	const size = config.value.highlanderPointedCardsSize ?? 'medium';
-	return HIGHLANDER_POINTED_CARD_SIZE_CLASSES[size] || 'px-3 py-1 text-sm';
-});
-
 const highlanderPointedCardStyle = {
+	fontSize: modeTokenVar('deck', 'pointed-card-size'),
+	padding: '0.3em 0.85em',
 	color: modeTokenVar('deck', 'pointed-card-text'),
 	backgroundColor: modeTokenVar('deck', 'pointed-card-surface'),
 	borderColor: modeTokenVar('deck', 'pointed-card-border'),
@@ -319,22 +299,20 @@ const cardBadgeProps = computed(() => ({
 	showQuantity: showQuantities.value,
 	showHighlanderPoints: showHighlanderPoints.value,
 	quantityPositionClass: quantityPositionClass.value,
-	quantitySizeClass: quantitySizeClass.value,
 	quantityBadgeStyle,
 	highlanderPointsPositionClass: highlanderPointsPositionClass.value,
-	highlanderPointsSizeClass: highlanderPointBadgeClass.value,
-	highlanderPointsBadgeStyle: highlanderPointBadgeStyle,
+	highlanderPointsBadgeStyle: highlanderCardBadgeStyle,
 }));
 
 /**
- * A stacked board: each card but the last shows only the `stack-reveal` Mode
- * Token's slice of itself, down a strip or across a row, and the next card
- * covers the rest. The last card shows whole.
+ * A stacked board: each card but the last shows only its board's
+ * `stack-reveal` Mode Token's slice of itself, down a strip or across a row,
+ * and the next card covers the rest. The last card shows whole.
  */
-function stackCardStyle(extent: 'height' | 'width', index: number, cardCount: number) {
-	return index < cardCount - 1
+function stackCardStyle(section: VisibleBoard, extent: 'height' | 'width', index: number) {
+	return index < section.cards.length - 1
 		? {
-				[extent]: modeTokenVar('deck', 'stack-reveal'),
+				[extent]: modeTokenVar('deck', `${section.key}-stack-reveal`),
 			}
 		: {};
 }
@@ -370,7 +348,7 @@ function stackCardStyle(extent: 'height' | 'width', index: number, cardCount: nu
 							v-if="showDeckMeta"
 							data-testid="deck-meta-pill"
 							class="mt-3 flex flex-wrap items-center justify-center border"
-							:class="showDeckMetaPill ? ['inline-flex rounded-full', deckMetaPillClass] : ['gap-x-4 gap-y-1 text-sm border-transparent px-0 py-0']"
+							:class="showDeckMetaPill ? 'inline-flex rounded-full' : ['gap-x-4 gap-y-1 text-sm border-transparent px-0 py-0']"
 							:style="deckMetaPillStyle"
 						>
 							<div v-if="companion" class="flex items-center gap-2">
@@ -415,7 +393,6 @@ function stackCardStyle(extent: 'height' | 'width', index: number, cardCount: nu
 								:key="card.name"
 								data-testid="highlander-pointed-card-chip"
 								class="inline-flex items-center gap-1 rounded-full border leading-none"
-								:class="highlanderPointedCardClass"
 								:style="highlanderPointedCardStyle"
 							>
 								<span class="font-semibold" :style="highlanderPointedCardAccentStyle">{{ card.points }}</span>
@@ -446,12 +423,13 @@ function stackCardStyle(extent: 'height' | 'width', index: number, cardCount: nu
 								:data-testid="`${section.key}-grid`"
 								class="card-grid"
 								:class="{ 'dynamic-grid': section.layout.dynamicCardSize }"
-								:style="gridStyle(section.layout)"
+								:style="gridStyle(section)"
 							>
 								<ScreenModesDeckCard
 									v-for="(card, index) in section.cards"
 									:key="`${section.key}-${index}`"
 									:card="card"
+									:board="section.key"
 									:dynamic-size="section.layout.dynamicCardSize"
 									v-bind="cardBadgeProps"
 								/>
@@ -467,10 +445,11 @@ function stackCardStyle(extent: 'height' | 'width', index: number, cardCount: nu
 									v-for="(card, index) in section.cards"
 									:key="`${section.key}-${index}`"
 									class="stack-card relative shrink-0"
-									:style="stackCardStyle('height', index, section.cards.length)"
+									:style="stackCardStyle(section, 'height', index)"
 								>
 									<ScreenModesDeckCard
 										:card="card"
+										:board="section.key"
 										v-bind="cardBadgeProps"
 									/>
 								</div>
@@ -486,10 +465,11 @@ function stackCardStyle(extent: 'height' | 'width', index: number, cardCount: nu
 										v-for="(card, index) in section.cards"
 										:key="`${section.key}-${index}`"
 										class="stack-card relative shrink-0"
-										:style="stackCardStyle('width', index, section.cards.length)"
+										:style="stackCardStyle(section, 'width', index)"
 									>
 										<ScreenModesDeckCard
 											:card="card"
+											:board="section.key"
 											v-bind="cardBadgeProps"
 										/>
 									</div>
@@ -517,9 +497,8 @@ function stackCardStyle(extent: 'height' | 'width', index: number, cardCount: nu
 									<span
 										v-if="showHighlanderPoints && card.highlanderPoints != null"
 										data-testid="highlander-list-badge"
-										class="rounded-md font-bold tabular-nums leading-none shadow-sm"
-										:class="highlanderPointBadgeClass"
-										:style="highlanderPointBadgeStyle"
+										class="rounded-md font-bold tabular-nums leading-none"
+										:style="highlanderListBadgeStyle"
 									>
 										{{ card.highlanderPoints }}
 									</span>

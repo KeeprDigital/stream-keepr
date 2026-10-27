@@ -63,9 +63,8 @@ const DeckCardStub = defineComponent({
 	props: {
 		showHighlanderPoints: { type: Boolean, required: false },
 		highlanderPointsPositionClass: { type: String, required: false },
-		highlanderPointsSizeClass: { type: String, required: false },
 	},
-	template: '<div data-testid="deck-card" :data-show-highlander-points="String(showHighlanderPoints)" :data-point-position="highlanderPointsPositionClass" :data-point-size="highlanderPointsSizeClass" />',
+	template: '<div data-testid="deck-card" :data-show-highlander-points="String(showHighlanderPoints)" :data-point-position="highlanderPointsPositionClass" />',
 });
 
 function createCard(overrides: Partial<DeckListCardWithData> = {}): DeckListCardWithData {
@@ -245,7 +244,7 @@ describe('screenDeckDisplay', () => {
 		expect(wrapper.get('[data-testid="sideboard-section"]').attributes('style') ?? '').not.toContain('flex-grow:');
 	});
 
-	// The next card covers all of a stacked card but its stack-reveal slice; the last shows whole.
+	// The next card covers all of a stacked card but its board's stack-reveal slice; the last shows whole.
 	it.each([
 		{ placement: 'beside', stack: 'sideboard-stack-column', extent: 'height' },
 		{ placement: 'below', stack: 'sideboard-stack-row', extent: 'width' },
@@ -256,8 +255,8 @@ describe('screenDeckDisplay', () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.get(`[data-testid="${stack}"]`).findAll('.stack-card').map(card => (card.element as HTMLElement).style[extent])).toEqual([
-			'var(--theme-deck-stack-reveal)',
-			'var(--theme-deck-stack-reveal)',
+			'var(--theme-deck-sideboard-stack-reveal)',
+			'var(--theme-deck-sideboard-stack-reveal)',
 			'',
 		]);
 	});

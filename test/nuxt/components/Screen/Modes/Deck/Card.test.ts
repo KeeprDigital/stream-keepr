@@ -20,13 +20,12 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 	return mount(Card, {
 		props: {
 			card: createCard(),
+			board: 'mainboard',
 			showQuantity: false,
 			showHighlanderPoints: true,
 			quantityPositionClass: '-top-1 -right-1',
-			quantitySizeClass: 'w-7 h-7 text-base',
 			quantityBadgeStyle: { color: 'white', backgroundColor: 'purple' },
 			highlanderPointsPositionClass: '-bottom-1 -left-1',
-			highlanderPointsSizeClass: 'min-w-8 px-3 py-1.5 text-base',
 			highlanderPointsBadgeStyle: { color: 'red', backgroundColor: 'blue' },
 			...props,
 		},
@@ -49,10 +48,11 @@ describe('screenDeckCard', () => {
 	});
 
 	it.each([
-		{ dynamicSize: false, width: 'var(--theme-deck-card-width)' },
-		{ dynamicSize: true, width: '' },
-	])('takes the card-width Mode Token unless it fills its column (dynamic: $dynamicSize)', async ({ dynamicSize, width }) => {
-		const wrapper = await mountComponent({ dynamicSize });
+		{ board: 'mainboard', dynamicSize: false, width: 'var(--theme-deck-mainboard-card-width)' },
+		{ board: 'sideboard', dynamicSize: false, width: 'var(--theme-deck-sideboard-card-width)' },
+		{ board: 'sideboard', dynamicSize: true, width: '' },
+	])('takes its board\'s card-width Mode Token unless it fills its column ($board, dynamic: $dynamicSize)', async ({ board, dynamicSize, width }) => {
+		const wrapper = await mountComponent({ board, dynamicSize });
 
 		expect((wrapper.get('.card-item').element as HTMLElement).style.width).toBe(width);
 	});
