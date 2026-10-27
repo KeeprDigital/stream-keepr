@@ -12,12 +12,11 @@ const initialData = computed(() => {
 	return {
 		pronounsEnabled: props.event.pronounsEnabled,
 		standingsEnabled: props.event.standingsEnabled,
-		turnTrackingEnabled: defaults.turnTrackingEnabled,
-		activePlayerTrackingEnabled: defaults.activePlayerTrackingEnabled,
-		mulliganTrackingEnabled: defaults.mulliganTrackingEnabled,
-		extraTurnsLabel: defaults.extraTurnsLabel,
 		lgsEnabled: props.event.lgsEnabled,
 		tableNumberEnabled: props.event.tableNumberEnabled,
+		turnTrackingEnabled: defaults.turnTrackingEnabled,
+		mulliganTrackingEnabled: defaults.mulliganTrackingEnabled,
+		activePlayerTrackingEnabled: defaults.activePlayerTrackingEnabled,
 		featureMatchNotesEnabled: props.event.featureMatchNotesEnabled,
 	};
 });
@@ -49,6 +48,10 @@ function toUpdate(changes: Partial<typeof initialData.value>): UpdateEventInput 
 	<UForm :state="formData" @submit="save">
 		<UCard variant="subtle">
 			<div class="w-full flex flex-col gap-4">
+				<h3 class="font-semibold">
+					Player Fields
+				</h3>
+
 				<UFormField
 					name="pronounsEnabled"
 					label="Player Pronouns"
@@ -60,12 +63,36 @@ function toUpdate(changes: Partial<typeof initialData.value>): UpdateEventInput 
 
 				<UFormField
 					name="standingsEnabled"
-					label="Player Standings"
+					label="Standings Inputs"
 					description="Show player record (W-L-D) and position inputs on match setup forms."
 					class="flex max-sm:flex-col justify-between gap-4 items-center"
 				>
 					<USwitch v-model="formData.standingsEnabled" />
 				</UFormField>
+
+				<UFormField
+					name="lgsEnabled"
+					label="Local Game Store"
+					description="Show a Local Game Store field on player forms."
+					class="flex max-sm:flex-col justify-between gap-4 items-center"
+				>
+					<USwitch v-model="formData.lgsEnabled" />
+				</UFormField>
+
+				<UFormField
+					name="tableNumberEnabled"
+					label="Table Numbers"
+					description="Show a table number field on match setup forms."
+					class="flex max-sm:flex-col justify-between gap-4 items-center"
+				>
+					<USwitch v-model="formData.tableNumberEnabled" />
+				</UFormField>
+
+				<USeparator />
+
+				<h3 class="font-semibold">
+					Match Tracking
+				</h3>
 
 				<UFormField
 					name="turnTrackingEnabled"
@@ -95,40 +122,12 @@ function toUpdate(changes: Partial<typeof initialData.value>): UpdateEventInput 
 				</UFormField>
 
 				<UFormField
-					name="lgsEnabled"
-					label="LGS Tracking"
-					description="Show a Local Game Store field on player forms."
-					class="flex max-sm:flex-col justify-between gap-4 items-center"
-				>
-					<USwitch v-model="formData.lgsEnabled" />
-				</UFormField>
-
-				<UFormField
-					name="tableNumberEnabled"
-					label="Table Numbers"
-					description="Show a table number field on match setup forms."
-					class="flex max-sm:flex-col justify-between gap-4 items-center"
-				>
-					<USwitch v-model="formData.tableNumberEnabled" />
-				</UFormField>
-
-				<UFormField
 					name="featureMatchNotesEnabled"
 					label="Feature Match Notes"
 					description="Show a production note on each Feature Match for the crew to share."
 					class="flex max-sm:flex-col justify-between gap-4 items-center"
 				>
 					<USwitch v-model="formData.featureMatchNotesEnabled" />
-				</UFormField>
-
-				<UFormField
-					v-if="event.featureMatchDefaultExtraTurnsEnabled"
-					name="extraTurnsLabel"
-					label="Extra Turns Label"
-					description="Label shown for the extra turns indicator (e.g. 'Extra Turns', 'Overtime')."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UInput v-model="formData.extraTurnsLabel" class="w-64" />
 				</UFormField>
 			</div>
 			<template #footer>

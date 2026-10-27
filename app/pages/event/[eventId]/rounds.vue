@@ -185,6 +185,7 @@ async function handleEnableManualOverride(round: Round) {
 		:state="pageState"
 		flush
 		content-width="full"
+		toolbar-mode="always"
 		empty-icon="i-lucide-list-ordered"
 		empty-title="No event structure yet"
 		empty-description="Add a phase to start building the event's phase and round structure."
@@ -196,7 +197,8 @@ async function handleEnableManualOverride(round: Round) {
 		</template>
 
 		<template #toolbar>
-			<UDashboardToolbar>
+			<EventConfigTabs v-if="eventId" :event-id="eventId" />
+			<UDashboardToolbar v-if="pageState === 'ready'">
 				<template #left>
 					<div class="flex flex-wrap items-center gap-3">
 						<span class="text-sm text-muted">{{ totalPhases }} phase{{ totalPhases !== 1 ? 's' : '' }} · {{ totalRounds }} round{{ totalRounds !== 1 ? 's' : '' }}</span>

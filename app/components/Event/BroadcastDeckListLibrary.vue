@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { FormError } from '@nuxt/ui';
+import type { DropdownMenuItem, FormError } from '@nuxt/ui';
 import type {
 	BroadcastDeckListImportFailureDetail,
 	BroadcastDeckListResponse,
@@ -328,6 +328,22 @@ async function reloadLatest() {
 	}
 }
 
+function getDropdownItems(summary: BroadcastDeckListSummaryResponse): DropdownMenuItem[] {
+	return [
+		{
+			label: 'Edit',
+			icon: 'i-lucide-edit',
+			onSelect: () => startEdit(summary),
+		},
+		{
+			label: 'Delete',
+			icon: 'i-lucide-trash-2',
+			color: 'error',
+			onSelect: () => openDelete(summary),
+		},
+	];
+}
+
 function openDelete(summary: BroadcastDeckListSummaryResponse) {
 	deleteFailure.value = null;
 	deleteTarget.value = summary;
@@ -358,16 +374,11 @@ async function confirmDelete() {
 </script>
 
 <template>
-	<section v-if="props.event.game === 'mtg'" class="flex flex-col gap-4">
-		<div class="flex flex-wrap items-start justify-between gap-4">
-			<div>
-				<h2 class="text-xl font-semibold">
-					Broadcast Deck Lists
-				</h2>
-				<p class="text-sm text-muted">
-					Manage the MTG Deck List library available to Deck Screens.
-				</p>
-			</div>
+	<section v-if="props.event.game === 'mtg'" class="flex flex-col gap-6">
+		<div class="flex flex-wrap items-center justify-between gap-4">
+			<h2 class="text-xl font-semibold">
+				Broadcast Deck Lists
+			</h2>
 			<div class="flex items-center gap-3">
 				<span class="text-sm font-medium">Enable for Broadcast</span>
 				<USwitch
@@ -398,71 +409,73 @@ async function confirmDelete() {
 			aria-live="polite"
 		/>
 
-		<UCard>
-			<template #header>
-				<div class="flex items-center justify-between gap-4">
-					<div>
-						<h3 class="font-semibold">
-							Library
-						</h3>
-						<p v-if="!featureEnabled" class="text-sm text-muted">
-							The library remains editable while Broadcast Deck Lists are disabled.
-						</p>
-					</div>
-					<UButton
-						label="Add Deck List"
-						icon="i-lucide-plus"
-						@click="startAdd"
-					/>
-				</div>
-			</template>
-
-			<div v-if="deckListStore.loading" class="py-8 text-center text-muted">
+		<UCard variant="subtle">
+			<div v-if="deckListStore.loading" class="py-8 text-center text-sm text-muted">
 				Loading Deck Lists…
 			</div>
-			<div v-else-if="deckListStore.summaries.length === 0" class="py-8 text-center text-muted">
-				No Broadcast Deck Lists yet.
-			</div>
-			<ul v-else class="divide-y divide-muted">
+			<UIEmptyState
+				v-else-if="deckListStore.summaries.length === 0"
+				variant="inline"
+				icon="i-lucide-list"
+				title="No Broadcast Deck Lists yet"
+			/>
+			<ul v-else role="list" class="divide-y divide-default">
 				<li
 					v-for="item in deckListStore.summaries"
 					:key="item.id"
-					class="flex flex-wrap items-center justify-between gap-4 py-4 first:pt-0 last:pb-0"
+					class="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
 				>
-					<div class="min-w-0">
-						<div class="flex flex-wrap items-center gap-2">
-							<span class="font-medium">{{ item.name }}</span>
-							<UBadge v-if="item.archetypeLabel" color="neutral" variant="soft">
+					<div class="text-sm min-w-0 flex-1">
+						<div class="flex items-center gap-2 min-w-0">
+							<p class="text-highlighted truncate font-medium">
+								{{ item.name }}
+							</p>
+							<UBadge
+								v-if="item.archetypeLabel"
+								color="neutral"
+								variant="soft"
+								size="sm"
+							>
 								{{ item.archetypeLabel }}
 							</UBadge>
-							<UBadge v-if="item.colors" color="neutral" variant="outline">
+							<UBadge
+								v-if="item.colors"
+								color="neutral"
+								variant="outline"
+								size="sm"
+							>
 								{{ item.colors }}
 							</UBadge>
 						</div>
-						<p class="mt-1 text-sm text-muted">
+						<p class="mt-1 text-muted">
 							{{ item.mainboardQuantity }} mainboard · {{ item.sideboardQuantity }} sideboard
 							<span v-if="item.hasCompanion"> · Companion</span>
 							· Revision {{ item.revision }}
 						</p>
 					</div>
-					<div class="flex items-center gap-2">
+
+					<UDropdownMenu :items="getDropdownItems(item)" :content="{ align: 'end' }">
 						<UButton
-							:label="`Edit ${item.name}`"
+							icon="i-lucide-ellipsis-vertical"
 							color="neutral"
-							variant="outline"
-							icon="i-lucide-pencil"
-							@click="startEdit(item)"
-						/>
-						<UButton
-							:label="`Delete ${item.name}`"
-							color="error"
 							variant="ghost"
-							icon="i-lucide-trash-2"
-							@click="openDelete(item)"
+							:aria-label="`${item.name} actions`"
 						/>
-					</div>
+					</UDropdownMenu>
 				</li>
 			</ul>
+
+			<template #footer>
+				<div class="flex justify-end">
+					<UButton
+						label="Add Deck List"
+						icon="i-lucide-plus"
+						color="neutral"
+						variant="outline"
+						@click="startAdd"
+					/>
+				</div>
+			</template>
 		</UCard>
 
 		<UModal

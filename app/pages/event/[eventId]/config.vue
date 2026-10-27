@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui';
-import type { NavigationMenuItem } from '#ui/types';
 import { LazyUIConfirmDeleteModal, LazyUIUnsavedChangesModal } from '#components';
 
 definePageMeta({
@@ -22,19 +21,6 @@ const routeEventId = computed(() => Number.parseInt(route.params.eventId as stri
 const eventId = computed(() => event.value?.id ?? (Number.isNaN(routeEventId.value)
 	? 0
 	: routeEventId.value));
-
-// Tab bar
-const tabs = computed<NavigationMenuItem[]>(() => [
-	{
-		label: 'Event',
-		icon: 'i-lucide-settings',
-		to: `/event/${eventId.value}/config`,
-		exact: true,
-	},
-	{ label: 'Features', icon: 'i-lucide-toggle-left', to: `/event/${eventId.value}/config/features` },
-	{ label: 'Broadcast', icon: 'i-lucide-radio', to: `/event/${eventId.value}/config/broadcast` },
-	{ label: 'Integrations', icon: 'i-lucide-plug', to: `/event/${eventId.value}/config/integrations` },
-]);
 
 // Inter-tab dirty state check
 const unsavedModal = overlay.create(LazyUIUnsavedChangesModal);
@@ -127,11 +113,7 @@ async function handleLoadEvent() {
 		</template>
 
 		<template v-if="event" #toolbar>
-			<UNavigationMenu
-				highlight
-				:items="tabs"
-				class="border-b border-default px-4 sm:px-6"
-			/>
+			<EventConfigTabs :event-id="eventId" />
 		</template>
 
 		<UContainer>
