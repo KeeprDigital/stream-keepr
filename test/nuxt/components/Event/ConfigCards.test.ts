@@ -355,6 +355,31 @@ describe('format settings card', () => {
 		expect(shown(wrapper, name)).toBe(value);
 	});
 
+	it('trades the timing settings for an Untimed Label once the clock is untimed', async () => {
+		const wrapper = mountCard(ConfigFormatSettings, configEvent({ featureMatchDefaultExtraTurnsEnabled: true }));
+		const offered = () => [
+			'clockDuration',
+			'countUpAfterCountdown',
+			'extraTurnsEnabled',
+			'extraTurns',
+			'untimedLabel',
+		]
+			.filter(name => wrapper.find(`[data-field="${name}"]`).exists());
+		expect(offered()).toEqual([
+			'clockDuration',
+			'countUpAfterCountdown',
+			'extraTurnsEnabled',
+			'extraTurns',
+		]);
+
+		await select(wrapper, 'clockType').setValue('untimed');
+		expect(offered()).toEqual(['untimedLabel']);
+
+		await input(wrapper, 'untimedLabel').setValue('Top 8');
+		await save(wrapper);
+		expect(submitted()).toEqual({ featureMatchDefaultClockType: 'untimed', featureMatchDefaultUntimedLabel: 'Top 8' });
+	});
+
 	it('saves the extra turns label under its default column', async () => {
 		const wrapper = mountCard(ConfigFormatSettings, configEvent({ featureMatchDefaultExtraTurnsEnabled: true }));
 

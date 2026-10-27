@@ -51,6 +51,9 @@ const emit = defineEmits<{
 		<div v-if="stateLoading" class="loading-indicator">
 			<UIcon name="i-lucide-loader-2" class="size-4 text-muted animate-spin" />
 		</div>
+		<span v-else-if="clock?.type === 'untimed'" class="text-sm text-muted" data-testid="untimed-clock">
+			Untimed
+		</span>
 		<div v-else-if="clock" class="clock-wrapper">
 			<FeatureMatchStateClock
 				:match-id="matchId"

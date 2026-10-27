@@ -327,7 +327,7 @@ export function useFeatureMatchSessionClient() {
 
 		for (const slot of slots) {
 			const session = slot.activeSession;
-			if (!session)
+			if (!session || session.currentState.clock.type === 'untimed')
 				continue;
 
 			const command = createBulkClockCommand(action, session, `bulk:${bulkId}:${session.id}:${action}`, deltaMs);

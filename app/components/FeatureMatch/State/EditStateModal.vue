@@ -237,7 +237,7 @@ function handleCancel() {
 							class="w-full"
 						/>
 					</UFormField>
-					<UFormField label="Clock">
+					<UFormField v-if="state.clock.type !== 'untimed'" label="Clock">
 						<UInput
 							v-model="clockInput"
 							data-testid="state-clock"

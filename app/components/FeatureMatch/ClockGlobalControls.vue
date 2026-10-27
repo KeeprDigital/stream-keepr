@@ -4,13 +4,19 @@ const featureMatchStore = useFeatureMatchStore();
 const featureMatchStateStore = useFeatureMatchStateStore();
 const toast = useToast();
 
-const isDisabled = computed(() => !eventStore.eventId || featureMatchStore.featureMatches.length === 0);
-const matchCount = computed(() => featureMatchStore.featureMatches.length);
+// An untimed match has no clock, so it is neither counted here nor acted on.
+const untimedCount = computed(() => [
+	...featureMatchStateStore.featureMatchStates.values(),
+]
+	.filter(state => state.clock.type === 'untimed')
+	.length);
+const matchCount = computed(() => featureMatchStore.featureMatches.length - untimedCount.value);
+const isDisabled = computed(() => !eventStore.eventId || matchCount.value <= 0);
 
 const runningCount = computed(() => {
 	let count = 0;
 	for (const state of featureMatchStateStore.featureMatchStates.values()) {
-		if (state.clock.isRunning)
+		if (state.clock.type !== 'untimed' && state.clock.isRunning)
 			count++;
 	}
 	return count;
@@ -19,13 +25,15 @@ const runningCount = computed(() => {
 const pausedCount = computed(() => {
 	let count = 0;
 	for (const state of featureMatchStateStore.featureMatchStates.values()) {
-		if (!state.clock.isRunning && state.clock.elapsedMs > 0)
+		if (state.clock.type !== 'untimed' && !state.clock.isRunning && state.clock.elapsedMs > 0)
 			count++;
 	}
 	return count;
 });
 
 const statusText = computed(() => {
+	if (matchCount.value <= 0)
+		return 'Untimed';
 	if (runningCount.value > 0)
 		return `${runningCount.value} of ${matchCount.value} running`;
 	if (pausedCount.value > 0)

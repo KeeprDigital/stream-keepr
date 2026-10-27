@@ -21,6 +21,21 @@ describe.each([
 		expect(schema.safeParse({ ...base, [field]: max + 1 }).success).toBe(false);
 	});
 
+	// Unlike the extra turns label, a blank Untimed Label is meaningful: it shows nothing.
+	it.each([
+		['', true],
+		[
+			'x'.repeat(100),
+			true,
+		],
+		[
+			'x'.repeat(101),
+			false,
+		],
+	])('bounds the Untimed Label %#, allowing it blank', (label, accepted) => {
+		expect(schema.safeParse({ ...base, featureMatchDefaultUntimedLabel: label }).success).toBe(accepted);
+	});
+
 	it.each([
 		['id', 123],
 		['meleeClientSecret', 'secret'],

@@ -185,6 +185,21 @@ describe('feature match edit state modal', () => {
 		expect(wrapper.get('[data-testid="state-save"]').attributes('disabled')).toBeUndefined();
 	});
 
+	it('offers no clock field for an untimed match', async () => {
+		const wrapper = await mountModal({}, {
+			clock: {
+				type: 'untimed',
+				durationMs: 0,
+				elapsedMs: 0,
+				isRunning: false,
+				lastStartedAt: null,
+				countUpAfterCountdown: false,
+			},
+		});
+
+		expect(wrapper.find('[data-testid="state-clock"]').exists()).toBe(false);
+	});
+
 	it('hides the flag-gated fields when their tracking is off', async () => {
 		const wrapper = await mountModal({
 			showTurnNumber: false,

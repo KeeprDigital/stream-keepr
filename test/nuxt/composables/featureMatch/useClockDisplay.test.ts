@@ -1,10 +1,16 @@
 import type { ClockState } from '~~/shared/types/featureMatchState';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { describe, expect, it } from 'vitest';
+import { reactive } from 'vue';
 
 mockNuxtImport('useServerTime', () => () => ({
 	getServerTime: () => Date.now(),
 }));
+
+const eventStore = reactive({
+	displayEvent: { featureMatchDefaultUntimedLabel: '' },
+});
+mockNuxtImport('useEventStore', () => () => eventStore);
 
 function clock(overrides: Partial<ClockState> = {}): ClockState {
 	return {
@@ -38,6 +44,24 @@ describe('useClockDisplay', () => {
 		],
 	])('shows %s as %s', (_, state, expected) => {
 		expect(useClockDisplay(state).displayTime.value).toBe(expected);
+	});
+
+	it.each([
+		[
+			'blank',
+			'',
+			{ displayTime: '', showsClock: false },
+		],
+		[
+			'set',
+			' Untimed ',
+			{ displayTime: 'Untimed', showsClock: true },
+		],
+	])('shows an untimed match by its Untimed Label, with no clock while it is %s', (_, label, expected) => {
+		eventStore.displayEvent.featureMatchDefaultUntimedLabel = label;
+		const display = useClockDisplay(clock({ type: 'untimed' }));
+
+		expect({ displayTime: display.displayTime.value, showsClock: display.showsClock.value }).toEqual(expected);
 	});
 
 	it.each([

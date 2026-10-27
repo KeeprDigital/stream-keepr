@@ -1,4 +1,4 @@
-import type { BulkClockAction, ClockType, PlayerSide } from '~~/shared/types/enums';
+import type { BulkClockAction, PlayerSide } from '~~/shared/types/enums';
 import type { FeatureMatchSessionResponse } from '~~/shared/types/featureMatchSession';
 import type { FeatureMatchState, GameWinOptions, PlayerFeatureMatchStateUpdate } from '~~/shared/types/featureMatchState';
 import type {
@@ -498,6 +498,8 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		deltaMs?: number,
 		defaultDurationMs?: number,
 	): FeatureMatchState | null {
+		if (state.clock.type === 'untimed')
+			return null;
 		switch (action) {
 			case 'start':
 				return state.clock.isRunning
@@ -866,21 +868,6 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		);
 	}
 
-	// ──────────────── Clock Settings ────────────────
-
-	function updateAllClockSettings(clockType?: ClockType, durationMs?: number, countUpAfterCountdown?: boolean) {
-		for (const [matchId, state] of featureMatchStates.value) {
-			const updatedClock = { ...state.clock };
-			if (clockType)
-				updatedClock.type = clockType;
-			if (durationMs !== undefined)
-				updatedClock.durationMs = durationMs;
-			if (countUpAfterCountdown !== undefined)
-				updatedClock.countUpAfterCountdown = countUpAfterCountdown;
-			featureMatchStates.value.set(matchId, { ...state, clock: updatedClock });
-		}
-	}
-
 	// ──────────────── Realtime Handlers ────────────────
 
 	async function applyRemoteSessionEvent(data: MessageData<'featureMatchSession:eventApplied'>) {
@@ -957,7 +944,6 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		startOvertime,
 		nextOvertimeTurn,
 		prevOvertimeTurn,
-		updateAllClockSettings,
 		cacheSession,
 		offerSlotSession,
 		settleSlotCommandResult,

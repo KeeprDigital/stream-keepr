@@ -26,6 +26,7 @@ describe('toFeatureMatchDefaults', () => {
 			featureMatchDefaultExtraTurnsEnabled: true,
 			featureMatchDefaultExtraTurns: 3,
 			featureMatchDefaultExtraTurnsLabel: 'Overtime',
+			featureMatchDefaultUntimedLabel: 'Top 8',
 			featureMatchDefaultMulliganTrackingEnabled: true,
 		})).toEqual({
 			bestOf: 1,
@@ -38,6 +39,7 @@ describe('toFeatureMatchDefaults', () => {
 			extraTurnsEnabled: true,
 			extraTurns: 3,
 			extraTurnsLabel: 'Overtime',
+			untimedLabel: 'Top 8',
 			mulliganTrackingEnabled: true,
 		});
 	});

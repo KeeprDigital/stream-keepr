@@ -21,6 +21,7 @@ const initialData = computed(() => {
 		extraTurnsEnabled: defaults.extraTurnsEnabled,
 		extraTurns: defaults.extraTurns,
 		extraTurnsLabel: defaults.extraTurnsLabel,
+		untimedLabel: defaults.untimedLabel,
 		pointsSystem: props.event.pointsSystem,
 	};
 });
@@ -35,6 +36,7 @@ const { formData, isDirty, reset, save, saving } = useEventConfigForm({
 const clockTypeOptions = [
 	{ label: 'Countdown', value: 'countdown' },
 	{ label: 'Count Up', value: 'countup' },
+	{ label: 'Untimed', value: 'untimed' },
 ];
 
 const bestOfOptions = [
@@ -65,7 +67,7 @@ function validate(): boolean {
 	if (formData.value.clockDuration !== undefined && formData.value.clockDuration < 0) {
 		errors.value.clockDuration = 'Duration must be 0 or greater';
 	}
-	if (formData.value.extraTurnsEnabled && formData.value.extraTurns !== undefined && formData.value.extraTurns < 1) {
+	if (formData.value.clockType !== 'untimed' && formData.value.extraTurnsEnabled && formData.value.extraTurns !== undefined && formData.value.extraTurns < 1) {
 		errors.value.extraTurns = 'Must have at least 1 extra turn';
 	}
 	return Object.keys(errors.value).length === 0;
@@ -136,70 +138,82 @@ function toUpdate(changes: Partial<typeof initialData.value>): UpdateEventInput 
 				<UFormField
 					name="clockType"
 					label="Clock Type"
-					description="Whether the match clock counts down or up."
+					description="Whether the match clock counts down, counts up, or is not used. Applies to matches as they are assigned to a feature match."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<USelect v-model="formData.clockType" class="w-64" :items="clockTypeOptions" />
 				</UFormField>
 
 				<UFormField
-					name="clockDuration"
-					label="Clock Duration (minutes)"
-					description="Default duration for countdown timer in minutes. Common values: 45, 50."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-					:error="errors.clockDuration"
-				>
-					<UInputNumber
-						v-model="formData.clockDuration"
-						:min="0"
-						class="w-64"
-					/>
-				</UFormField>
-
-				<UFormField
-					name="countUpAfterCountdown"
-					label="Count Up After Countdown"
-					description="When the countdown expires, continue counting up to show overtime elapsed."
-					class="flex max-sm:flex-col justify-between gap-4 items-center"
-				>
-					<USwitch v-model="formData.countUpAfterCountdown" />
-				</UFormField>
-
-				<USeparator />
-
-				<UFormField
-					name="extraTurnsEnabled"
-					label="Extra Turns"
-					description="Enable extra turns tracking when the clock expires."
-					class="flex max-sm:flex-col justify-between gap-4 items-center"
-				>
-					<USwitch v-model="formData.extraTurnsEnabled" />
-				</UFormField>
-
-				<UFormField
-					v-if="formData.extraTurnsEnabled"
-					name="extraTurns"
-					label="Number of Extra Turns"
-					description="How many extra turns are allowed after the clock expires."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-					:error="errors.extraTurns"
-				>
-					<UInputNumber
-						v-model="formData.extraTurns"
-						:min="1"
-						class="w-64"
-					/>
-				</UFormField>
-
-				<UFormField
-					v-if="formData.extraTurnsEnabled"
-					name="extraTurnsLabel"
-					label="Extra Turns Label"
-					description="Label shown for the extra turns indicator (e.g. 'Extra Turns', 'Overtime')."
+					v-if="formData.clockType === 'untimed'"
+					name="untimedLabel"
+					label="Untimed Label"
+					description="Shown where the clock would be on overlays. Leave blank to show nothing."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
-					<UInput v-model="formData.extraTurnsLabel" class="w-64" />
+					<UInput v-model="formData.untimedLabel" class="w-64" />
 				</UFormField>
+
+				<template v-else>
+					<UFormField
+						name="clockDuration"
+						label="Clock Duration (minutes)"
+						description="Default duration for countdown timer in minutes. Common values: 45, 50."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+						:error="errors.clockDuration"
+					>
+						<UInputNumber
+							v-model="formData.clockDuration"
+							:min="0"
+							class="w-64"
+						/>
+					</UFormField>
+
+					<UFormField
+						name="countUpAfterCountdown"
+						label="Count Up After Countdown"
+						description="When the countdown expires, continue counting up to show overtime elapsed."
+						class="flex max-sm:flex-col justify-between gap-4 items-center"
+					>
+						<USwitch v-model="formData.countUpAfterCountdown" />
+					</UFormField>
+
+					<USeparator />
+
+					<UFormField
+						name="extraTurnsEnabled"
+						label="Extra Turns"
+						description="Enable extra turns tracking when the clock expires."
+						class="flex max-sm:flex-col justify-between gap-4 items-center"
+					>
+						<USwitch v-model="formData.extraTurnsEnabled" />
+					</UFormField>
+
+					<UFormField
+						v-if="formData.extraTurnsEnabled"
+						name="extraTurns"
+						label="Number of Extra Turns"
+						description="How many extra turns are allowed after the clock expires."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+						:error="errors.extraTurns"
+					>
+						<UInputNumber
+							v-model="formData.extraTurns"
+							:min="1"
+							class="w-64"
+						/>
+					</UFormField>
+
+					<UFormField
+						v-if="formData.extraTurnsEnabled"
+						name="extraTurnsLabel"
+						label="Extra Turns Label"
+						description="Label shown for the extra turns indicator (e.g. 'Extra Turns', 'Overtime')."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<UInput v-model="formData.extraTurnsLabel" class="w-64" />
+					</UFormField>
+				</template>
 			</div>
 			<template #footer>
 				<EventConfigFormFooter :is-dirty="isDirty" :loading="loading || saving" @reset="reset" />

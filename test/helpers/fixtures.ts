@@ -80,6 +80,7 @@ export function createMockEvent(overrides?: Partial<DbEvent>): DbEvent {
 		featureMatchDefaultExtraTurnsEnabled: false,
 		featureMatchDefaultExtraTurns: 5,
 		featureMatchDefaultExtraTurnsLabel: 'Extra Turns',
+		featureMatchDefaultUntimedLabel: '',
 		featureMatchDefaultMulliganTrackingEnabled: false,
 		standingsEnabled: true,
 		broadcastDeckListsEnabled: false,

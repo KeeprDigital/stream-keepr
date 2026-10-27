@@ -113,6 +113,10 @@ A single mutable plain-text production note belonging to a Feature Match Assignm
 **Feature Match Session**:
 The live state timeline for a Feature Match Slot.
 
+**Untimed Match**:
+A Feature Match whose Session clock type is untimed: it has no clock to run and so no extra turns. The type comes from the Event's Match Format when the Session opens. Where its clock would render, it shows the Event's Untimed Label, or nothing while that label is blank.
+_Avoid_: unclocked match, timeless match
+
 **Feature Match Slot Promotion**:
 The workflow that promotes a Match into a Feature Match Slot for production controls and saves the Round-scoped Feature Match Assignment.
 
@@ -589,7 +593,7 @@ A Graphic Item that renders a bounded Shape Geometry.
 A feature-match-context Graphic Item rendering one player side's Sideboard as cards or a text list within its bounds, with no framing, labels, or board choice of its own. An empty Sideboard renders nothing.
 
 **Clock Graphic Item**:
-A context-gated Graphic Item that renders the active Feature Match Session clock.
+A context-gated Graphic Item that renders the active Feature Match Session clock, the Untimed Label for an Untimed Match, or nothing at all while that label is blank.
 
 **Player Life Graphic Item**:
 A context-gated Graphic Item that renders one Player's life total.

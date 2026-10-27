@@ -1,0 +1,1 @@
+ALTER TABLE `events` ADD `feature_match_default_untimed_label` text DEFAULT '' NOT NULL;

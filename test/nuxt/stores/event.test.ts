@@ -31,7 +31,6 @@ const mockFeatureMatchStore = {
 };
 
 const mockFeatureMatchStateStore = {
-	updateAllClockSettings: vi.fn(),
 	$reset: vi.fn(),
 };
 
@@ -149,27 +148,6 @@ describe('useEventStore', () => {
 			await store.updateEvent({ numFeatureMatches: 3 });
 
 			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(1);
-		});
-
-		it.each([
-			[
-				'clock type',
-				{ featureMatchDefaultClockType: 'countdown' },
-				['countdown', undefined, undefined],
-			],
-			[
-				'clock duration, in minutes, as milliseconds',
-				{ featureMatchDefaultClockDuration: 50 },
-				[undefined, 50 * 60 * 1000, undefined],
-			],
-		])('pushes a changed default %s to every Feature Match clock', async (_, input, args) => {
-			const original = createEventResponse({ id: 1 });
-			store.event = original;
-			mockEventRepo.update.mockResolvedValue(original);
-
-			await store.updateEvent(input as never);
-
-			expect(mockFeatureMatchStateStore.updateAllClockSettings).toHaveBeenCalledWith(...args);
 		});
 	});
 
@@ -320,21 +298,6 @@ describe('useEventStore', () => {
 			await saving;
 
 			expect(store.eventsList.map(event => event.name)).toEqual(['Event A renamed', 'Event B']);
-		});
-
-		it('a save whose dependents settle after the switch does not push its clock settings into Event B', async () => {
-			store.event = createEventResponse({ id: 1 });
-			const slotsReload = deferred<void>();
-			mockFeatureMatchStore.loadFeatureMatchesByEventId.mockReturnValueOnce(slotsReload.promise);
-			mockEventRepo.update.mockResolvedValueOnce(createEventResponse({ id: 1, numFeatureMatches: 2 }));
-
-			const saving = store.updateEvent({ numFeatureMatches: 2, featureMatchDefaultClockType: 'countdown' });
-			await vi.waitFor(() => expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalled());
-			await switchTo(createEventResponse({ id: 2 }));
-			slotsReload.resolve();
-			await saving;
-
-			expect(mockFeatureMatchStateStore.updateAllClockSettings).not.toHaveBeenCalled();
 		});
 
 		it.each([

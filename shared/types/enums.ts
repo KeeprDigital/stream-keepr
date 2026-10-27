@@ -37,7 +37,7 @@ export const FORMER_SCREEN_MODE_KEYS: Readonly<Record<string, ScreenMode>> = { t
 /** Where a Head-to-Head Screen takes its two Players from (#760). */
 export const HEAD_TO_HEAD_PLAYER_SOURCE_VALUES = ['featureMatchSlot', 'players'] as const;
 export const SCREEN_COMMAND_VALUES = ['refresh', 'identify', 'debug'] as const;
-export const CLOCK_TYPE_VALUES = ['countdown', 'countup'] as const;
+export const CLOCK_TYPE_VALUES = ['countdown', 'countup', 'untimed'] as const;
 export const RECORD_SEPARATOR_VALUES = ['-', '/', ' | ', ' '] as const;
 export const DECK_BOARD_VIEW_VALUES = ['grid', 'stack', 'list'] as const;
 export const DECK_CARD_SIZE_VALUES = ['small', 'medium', 'large'] as const;

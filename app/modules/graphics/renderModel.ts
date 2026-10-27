@@ -454,8 +454,12 @@ export interface GraphicsFeatureMatchPlayerState {
  * render their empty state rather than throwing.
  */
 export interface GraphicsFeatureMatchContext {
-	/** The active Feature Match Session clock, already formatted by its owner. */
-	clockDisplayTime: string;
+	/**
+	 * The active Feature Match Session clock, already formatted by its owner. Null
+	 * when there is no clock to show (untimed, blank Untimed Label): a Clock Graphic
+	 * Item then renders nothing, surface included.
+	 */
+	clockDisplayTime: string | null;
 	player1: GraphicsFeatureMatchPlayerState;
 	player2: GraphicsFeatureMatchPlayerState;
 	/** The Match length, which decides how many win boxes an indicator draws. */
@@ -1834,6 +1838,16 @@ interface GraphicItemContentContext {
 	itemExitInPlay?: ReadonlySet<string>;
 }
 
+/** A Clock Graphic Item with no clock to show: its placement, and nothing painted in it. */
+function absentClockDescriptor(item: ClockGraphicItemConfig, placement: CSSProperties): GraphicItemRenderDescriptor {
+	return {
+		id: item.id,
+		label: item.label,
+		kind: item.type,
+		style: { ...placement },
+	};
+}
+
 /** What a Clock or Player Life Graphic Item renders, given the host's session state. */
 function contextText(
 	item: ClockGraphicItemConfig | PlayerLifeGraphicItemConfig,
@@ -1869,6 +1883,9 @@ function childDescriptor(
 
 	if (child.type === 'text')
 		return textDescriptor(output, scope, child, placement, surfaceStyle, inputs);
+
+	if (child.type === 'clock' && inputs.featureMatch?.clockDisplayTime === null)
+		return absentClockDescriptor(child, placement);
 
 	if (child.type === 'clock' || child.type === 'player-life') {
 		return resolvedTextDescriptor(
@@ -2188,6 +2205,9 @@ function paintedItemDescriptor(
 			surface: surfaceDescriptor(output, scope, item, item.geometry, item.surfaceStyle),
 		};
 	}
+
+	if (item.type === 'clock' && inputs.featureMatch?.clockDisplayTime === null)
+		return absentClockDescriptor(item, placement);
 
 	if (item.type === 'clock' || item.type === 'player-life') {
 		return resolvedTextDescriptor(

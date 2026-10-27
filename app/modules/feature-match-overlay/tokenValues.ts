@@ -39,8 +39,8 @@ export interface FeatureMatchOverlayHostStateInput {
 	sourceMatch: Pick<Match, 'tableNumber'> | null | undefined;
 	round: Pick<Round, 'name'> | null | undefined;
 	phase: Pick<Phase, 'name'> | null | undefined;
-	/** The Feature Match Session clock, already formatted by its own composable. */
-	displayTime: string;
+	/** The Feature Match Session clock, already formatted by its own composable; null while there is none to show. */
+	displayTime: string | null;
 }
 
 /** The per-player token suffixes, in the order the catalogue generates them. */
