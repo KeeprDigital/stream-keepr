@@ -1558,7 +1558,7 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 **Stream Keepr owns every token.** Users set values, never names.
 
 - **Foundation Tokens** are app-wide roles and hold a literal. A colour inside a composite Foundation Token (a fill or a surface) may name a colour Foundation Token instead, and a colour holds a literal only (#829).
-- **Mode Tokens** are declared by a Screen Mode Definition. Each holds a literal or names a same-type Foundation Token, and defaults to one.
+- **Mode Tokens** are declared by a Screen Mode Definition. Each holds a literal or names a same-type Foundation Token, and defaults to a Foundation Token, except where none fills its role: a badge shadow's colour (no shadow role exists) or Card Spotlight's zoom (no motion Foundation Token holds it) defaults to its shipped literal (#823, #844).
 - **Graphic Item properties** name a whole Foundation Token or hold a literal. Nothing is bound partially, and nothing names a Mode Token. Resolution therefore takes at most two steps (a Mode Token or binding, its Foundation Token, then a colour that token names) and cannot cycle. It was one step until #829: the PRD has a composite's colour name a colour token, so a change to the accent reaches every surface using it.
 
 **A Theme stores only the tokens it sets.** A token added later reaches every existing Theme through its default. Renames and removals follow ADR-0043 and ADR-0037.
@@ -1653,3 +1653,6 @@ Canvas size and wording are set once per production, not per brand or per Screen
 - Resizing the Event Canvas moves the frame every graphics composition of the Event was authored in, yet takes no Graphics Authoring Lease, like any other Event Presentation Settings write (ADR-0030).
 - On-air wording stays on the Event, so one Theme serves Events that word things differently.
 - The existing look fields are dropped, not migrated, and existing Screens render the Default Theme.
+- The plain modes' remaining look fields became Mode Tokens and former fields (#844): Most Played Cards' card width, gap and badge size; Deck's card width, gap and stack reveal, one set per board, and its badge, pill and chip sizes; Card Spotlight's enter and exit. A size choice became a dimension; a choice of layout behaviour, such as whether cards fill their columns, stays config. Card Spotlight's on/off switch went with its speed, since a motion recipe with no channel cuts. A badge's size token is its text size, and the badge is laid out around it in em, so one value sizes it whole. Where no Foundation Token fills a role, such as a shadow colour, the Mode Token defaults to a literal.
+- A motion Mode Token reaches its display as custom properties a CSS transition reads: its timing, and the excursion state the element enters from and leaves to. A slide clearing its parent travels the whole Screen, which is the size container its Screen host sets.
+- `text-inverse` is text on the primary text colour. Every badge, pill and chip whose surface is `text-primary` pairs it with `text-inverse`, so a light Theme sets the two as a pair.

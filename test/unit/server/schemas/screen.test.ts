@@ -845,9 +845,7 @@ describe('topCardsModeConfigSchema', () => {
 		limit: 10,
 		excludedCardTypes: ['Land'],
 		columns: 5,
-		cardSize: 'medium' as const,
 		dynamicCardSize: true,
-		cardGap: 12,
 		rowsPerPage: 60,
 		autoPageEnabled: false,
 		autoPageIntervalMs: 10000,
@@ -855,7 +853,6 @@ describe('topCardsModeConfigSchema', () => {
 		showCardNames: true,
 		showRankBadges: true,
 		statBadge: 'inclusionRate' as const,
-		statBadgeSize: 'medium' as const,
 	};
 
 	it('accepts a valid top cards config', () => {

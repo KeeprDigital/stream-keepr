@@ -25,9 +25,8 @@ describe('getDisplayDefaultsForMode', () => {
 	});
 
 	it('returns display defaults that preserve visual settings only', () => {
-		expect(getDisplayDefaultsForMode('card')).toMatchObject({
-			animationEnabled: getDefaultConfigForMode('card').animationEnabled,
-		});
+		// Card Spotlight's config is its match binding alone, which a reset keeps.
+		expect(getDisplayDefaultsForMode('card')).toEqual({});
 
 		expect(getDisplayDefaultsForMode('deck')).toMatchObject({
 			board: getDefaultConfigForMode('deck').board,

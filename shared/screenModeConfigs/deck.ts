@@ -5,22 +5,20 @@ import {
 	BOARD_SELECTION_VALUES,
 	DECK_BOARD_VIEW_VALUES,
 	QUANTITY_POSITION_VALUES,
-	QUANTITY_SIZE_VALUES,
 	SIDEBOARD_PLACEMENT_VALUES,
 } from '../types/enums';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField, screenModeConfigFields } from './fields';
 
 const quantityPositionSchema = z.enum(QUANTITY_POSITION_VALUES);
-const quantitySizeSchema = z.enum(QUANTITY_SIZE_VALUES);
 
 /**
  * One board's complete layout block. The Mainboard and Sideboard each carry
  * their own (#478): which view renders the board, and the knobs each view
  * reads — grid reads columns and whether cards fill them, list reads
  * listColumns. Visibility is the `board` selection's concern, so a block
- * carries no show/hide of its own. How big the cards are, the grid's gap and
- * how much of a stacked card shows are Mode Tokens (#824).
+ * carries no show/hide of its own. How big its cards are, its grid's gap and
+ * how much of a stacked card shows are its board's Mode Tokens (#824, #844).
  */
 const deckBoardLayoutShape = {
 	view: editorField(z.enum(DECK_BOARD_VIEW_VALUES).optional(), { label: 'View' }),
@@ -28,7 +26,7 @@ const deckBoardLayoutShape = {
 	// stored value outside one reads clamped.
 	columns: editorField(z.number().int().min(1).max(12).optional(), { label: 'Grid Columns' }),
 	listColumns: editorField(z.number().int().min(1).max(4).optional(), { label: 'List Columns' }),
-	/** Grid cards fill their columns rather than taking the `card-width` Mode Token. */
+	/** Grid cards fill their columns rather than taking their board's `card-width` Mode Token. */
 	dynamicCardSize: editorField(z.boolean().optional(), { label: 'Dynamic Card Size' }),
 };
 
@@ -87,17 +85,13 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	showDeckColors: editorField(z.boolean().optional(), { label: 'Show Deck Colors' }),
 	showDeckStats: editorField(z.boolean().optional(), { label: 'Show Deck Stats' }),
 	showDeckMetaPill: editorField(z.boolean().optional(), { label: 'Show Deck Meta Pill' }),
-	deckMetaPillSize: editorField(quantitySizeSchema.optional(), { label: 'Pill Size' }),
 	showHighlanderTotal: editorField(z.boolean().optional(), { label: 'Show Total Points' }),
 	showHighlanderPointedCards: editorField(z.boolean().optional(), { label: 'Show Pointed Cards' }),
-	highlanderPointedCardsSize: editorField(quantitySizeSchema.optional(), { label: 'Chip Size' }),
 	showHighlanderPoints: editorField(z.boolean().optional(), { label: 'Show Point Badges' }),
 	highlanderPointsPosition: editorField(quantityPositionSchema.optional(), { label: 'Badge Position' }),
-	highlanderPointsSize: editorField(quantitySizeSchema.optional(), { label: 'Badge Size' }),
 
-	// Quantity badge placement and size
+	// Quantity badge placement
 	quantityPosition: editorField(quantityPositionSchema.optional(), { label: 'Badge Position' }),
-	quantitySize: editorField(quantitySizeSchema.optional(), { label: 'Badge Size' }),
 }, {
 	deckSource: { type: 'player', playerId: null },
 	board: DEFAULT_BOARD,
@@ -109,15 +103,11 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	showDeckColors: true,
 	showDeckStats: false,
 	showDeckMetaPill: true,
-	deckMetaPillSize: 'medium',
 	showHighlanderTotal: true,
 	showHighlanderPointedCards: true,
-	highlanderPointedCardsSize: 'medium',
 	showHighlanderPoints: true,
 	highlanderPointsPosition: DEFAULT_HIGHLANDER_POINTS_POSITION,
-	highlanderPointsSize: 'medium',
 	quantityPosition: DEFAULT_QUANTITY_POSITION,
-	quantitySize: 'medium',
 }, {
 	formerFields: [
 		// Their colours are the mode's Mode Tokens (#824).
@@ -133,6 +123,11 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 		'highlanderPointsBgColor',
 		'quantityTextColor',
 		'quantityBgColor',
+		// Their sizes are the mode's Mode Tokens (#844).
+		'deckMetaPillSize',
+		'highlanderPointedCardsSize',
+		'highlanderPointsSize',
+		'quantitySize',
 		...FORMER_BOARD_LAYOUT_FIELDS.flatMap(field => [`mainboard.${field}`, `sideboard.${field}`]),
 	],
 });

@@ -266,7 +266,7 @@ export type { BroadcastGraphicsBackgroundConfig } from '../animationEffects';
 export type { ArchetypeSpotlightModeConfig } from '../screenModeConfigs/archetypeSpotlight';
 export type { BackgroundModeConfig } from '../screenModeConfigs/background';
 export type { BroadcastGraphicsModeConfig } from '../screenModeConfigs/broadcastGraphics';
-export type { CardDisplayConfig, CardModeConfig } from '../screenModeConfigs/card';
+export type { CardModeConfig } from '../screenModeConfigs/card';
 export type { DeckBoardLayoutConfig, DeckModeConfig, DeckSource, ResolvedDeckBoardLayout, ResolvedDeckBoards } from '../screenModeConfigs/deck';
 export { DEFAULT_DECK_BOARD_LAYOUT, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '../screenModeConfigs/deck';
 export type { FeatureMatchModeConfig } from '../screenModeConfigs/featureMatch';

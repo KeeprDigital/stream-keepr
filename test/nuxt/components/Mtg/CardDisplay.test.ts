@@ -45,7 +45,6 @@ async function mountComponent() {
 	return mount(CardDisplay, {
 		props: {
 			screenId: 1,
-			config: { animationEnabled: true, animationSpeed: 'normal' },
 		},
 		global: {
 			stubs: {

@@ -10,7 +10,8 @@ import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 const props = defineProps<{
 	entry: CardBreakdownEntry;
 	rank: number;
-	sizeClass: string;
+	/** The card's width, unless it fills its grid column. */
+	width?: string;
 	dynamicSize?: boolean;
 	showName: boolean;
 	showRank: boolean;
@@ -19,6 +20,8 @@ const props = defineProps<{
 	statText: string | null;
 	statBadgeClass: string;
 	statBadgeStyle: Record<string, string>;
+	/** The badges' text size, which each badge sizes itself around. */
+	badgeSize?: string;
 	/** The card's face, which shows when it has no image. */
 	cardStyle?: Record<string, string>;
 }>();
@@ -44,10 +47,10 @@ watch(() => props.entry.scryfallId, () => {
 <template>
 	<div
 		class="top-cards-item flex flex-col gap-1 min-w-0"
-		:class="{ [sizeClass]: !dynamicSize }"
+		:style="dynamicSize ? undefined : { width }"
 		data-testid="top-cards-item"
 	>
-		<div class="relative">
+		<div class="relative" :style="badgeSize ? { fontSize: badgeSize } : undefined">
 			<div class="mtg-card" :style="cardStyle">
 				<img
 					v-if="imageUrl && !imageError"

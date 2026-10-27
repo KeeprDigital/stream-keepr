@@ -35,9 +35,7 @@ const defaultConfig = {
 	limit: 10,
 	excludedCardTypes: ['Land'],
 	columns: 5,
-	cardSize: 'medium' as const,
 	dynamicCardSize: true,
-	cardGap: 12,
 	rowsPerPage: 60,
 	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
@@ -46,7 +44,6 @@ const defaultConfig = {
 	showCardNames: true,
 	showRankBadges: true,
 	statBadge: 'inclusionRate' as const,
-	statBadgeSize: 'medium' as const,
 };
 
 const mockConfig = ref<Record<string, any>>({ ...defaultConfig });
@@ -218,17 +215,6 @@ describe('screenTopCardsSettings', () => {
 			excludedCardTypes: ['Land', 'Creature'],
 			currentPage: 1,
 		});
-	});
-
-	it('hides the fixed card size select while dynamic sizing is on', async () => {
-		const wrapper = await mountComponent();
-
-		expect(wrapper.text()).not.toContain('Card size');
-
-		mockConfig.value = { ...mockConfig.value, dynamicCardSize: false };
-		await nextTick();
-
-		expect(wrapper.text()).toContain('Card size');
 	});
 
 	it('offers the player list scope only when lists exist', async () => {

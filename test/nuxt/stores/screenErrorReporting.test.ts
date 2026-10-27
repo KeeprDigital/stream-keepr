@@ -83,7 +83,7 @@ describe('useScreenStore error reporting', () => {
 	it.each([
 		[
 			'mode-config',
-			(s: ReturnType<typeof useScreenStore>) => s.updateModeConfig(1, 5, 'card', { animationSpeed: 'fast' }),
+			(s: ReturnType<typeof useScreenStore>) => s.updateModeConfig(1, 5, 'deck', { showDeckName: false }),
 			'updateModeConfig',
 		],
 	] as const)('carries a refused %s write\'s sentence to its caller and to the banner', async (_, write, method) => {

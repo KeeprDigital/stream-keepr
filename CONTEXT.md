@@ -316,7 +316,7 @@ _Avoid_: variable, style entry
 A Theme Token naming an application-wide role any Screen Mode may consume, such as the accent colour, the heading font, or the screen inset. Every one has a default value shipped with Stream Keepr.
 
 **Mode Token**:
-A Theme Token a Screen Mode Definition declares for its own rendering, such as a Standings row's surface. Its default is a Foundation Token, so a new Screen Mode follows every existing Theme unchanged.
+A Theme Token a Screen Mode Definition declares for its own rendering, such as a Standings row's surface. Its default is a Foundation Token, so a new Screen Mode follows every existing Theme unchanged. Where no Foundation Token fills its role, such as a badge shadow's colour or Card Spotlight's zoom, it defaults to a literal.
 _Avoid_: component token
 
 **Screen Theme Override**:

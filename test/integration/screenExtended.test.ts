@@ -136,38 +136,38 @@ describe('screens extended API', () => {
 		});
 	});
 
-	it('updates card mode config', async () => {
-		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/card`, {
+	it('updates deck mode config', async () => {
+		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/deck`, {
 			method: 'PATCH',
 			body: {
-				animationSpeed: 'slow',
-				animationEnabled: true,
+				showDeckName: false,
+				showQuantities: true,
 			},
 		});
 
 		expect(updated.modeConfigs).toBeDefined();
-		expect(updated!.modeConfigs!.card).toMatchObject({
-			animationSpeed: 'slow',
-			animationEnabled: true,
+		expect(updated!.modeConfigs!.deck).toMatchObject({
+			showDeckName: false,
+			showQuantities: true,
 		});
 	});
 
 	it('merges mode config with existing values', async () => {
 		// First set some values
-		await $fetch(`/api/events/${eventId}/screens/${screenId}/config/card`, {
+		await $fetch(`/api/events/${eventId}/screens/${screenId}/config/deck`, {
 			method: 'PATCH',
-			body: { animationSpeed: 'slow', animationEnabled: false },
+			body: { showDeckName: false, showQuantities: false },
 		});
 
 		// Update only one field — the other should be preserved
-		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/card`, {
+		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/deck`, {
 			method: 'PATCH',
-			body: { animationSpeed: 'fast' },
+			body: { showDeckName: true },
 		});
 
-		expect(updated!.modeConfigs!.card).toMatchObject({
-			animationEnabled: false,
-			animationSpeed: 'fast',
+		expect(updated!.modeConfigs!.deck).toMatchObject({
+			showQuantities: false,
+			showDeckName: true,
 		});
 	});
 

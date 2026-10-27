@@ -25,12 +25,18 @@ describe.each([
 			'rankBadgeBgColor',
 			'statBadgeTextColor',
 			'statBadgeBgColor',
+			'cardSize',
+			'cardGap',
+			'statBadgeSize',
 		],
 		former: {
 			rankBadgeTextColor: '#ffffff',
 			rankBadgeBgColor: '#7c3aed',
 			statBadgeTextColor: '#111827',
 			statBadgeBgColor: '#ffffff',
+			cardSize: 'large',
+			cardGap: 20,
+			statBadgeSize: 'small',
 		},
 		kept: { limit: 12 },
 		patch: { limit: 15 },
@@ -82,21 +88,30 @@ describe.each([
 });
 
 /**
- * A look field that became a Mode Token (#824), top-level or inside a nested
- * block, reads, saves and leaves storage like any former field.
+ * A look field that became a Mode Token (#824, #844), top-level or inside a
+ * nested block, reads, saves and leaves storage like any former field.
  */
 describe.each([
 	{
 		mode: 'card',
-		stored: { scale: 1.5, animationSpeed: 'fast' },
-		reads: { animationSpeed: 'fast' },
-		patch: { animationEnabled: false },
-		patched: { animationSpeed: 'fast', animationEnabled: false },
+		stored: {
+			scale: 1.5,
+			animationEnabled: true,
+			animationSpeed: 'fast',
+			featureMatchId: 3,
+		},
+		reads: { featureMatchId: 3 },
+		patch: { featureMatchId: 4 },
+		patched: { featureMatchId: 4 },
 	},
 	{
 		mode: 'deck',
 		stored: {
 			quantityBgColor: '#7c3aed',
+			quantitySize: 'large',
+			highlanderPointsSize: 'small',
+			deckMetaPillSize: 'large',
+			highlanderPointedCardsSize: 'small',
 			mainboard: {
 				view: 'grid',
 				columns: 6,

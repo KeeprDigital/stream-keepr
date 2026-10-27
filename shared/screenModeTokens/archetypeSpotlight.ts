@@ -63,4 +63,16 @@ export const archetypeSpotlightModeTokens = {
 		label: 'Card stat badge text',
 		default: { token: 'text-inverse' },
 	},
+	// As Most Played Cards' card face and badge shadow, which its cards share.
+	'card-placeholder-surface': {
+		type: 'color',
+		label: 'Card without an image',
+		default: { token: 'surface-raised' },
+	},
+	// No Foundation Token is a shadow, so it holds the one it shipped with.
+	'badge-shadow': {
+		type: 'color',
+		label: 'Card stat badge shadow',
+		default: 'rgba(0, 0, 0, 0.1)',
+	},
 } as const satisfies Readonly<Record<string, DeclaredModeTokenDefinition>>;

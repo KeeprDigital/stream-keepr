@@ -2,7 +2,9 @@ import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 
 /**
  * How the Deck List Screen Mode looks: its Mode Tokens, by name within the mode.
- * The Mainboard and Sideboard share one card width, gap and stack reveal.
+ * The Mainboard and Sideboard each have their own card width, grid gap and
+ * stack reveal, with the same defaults, so a small sideboard stack can sit
+ * beside a medium grid.
  */
 export const deckModeTokens = {
 	'title-typography': {
@@ -90,22 +92,73 @@ export const deckModeTokens = {
 		label: 'Pointed card border',
 		default: { token: 'text-primary' },
 	},
-	'card-width': {
+	'quantity-badge-size': {
 		type: 'dimension',
-		label: 'Card width',
+		label: 'Quantity badge text size',
+		// Each size token is the former medium size's text; its badge sizes itself around it.
+		default: 16,
+		bounds: { min: 8, max: 48 },
+	},
+	'points-badge-size': {
+		type: 'dimension',
+		label: 'Point badge text size',
+		default: 14,
+		bounds: { min: 8, max: 48 },
+	},
+	'meta-pill-size': {
+		type: 'dimension',
+		label: 'Deck meta pill text size',
+		default: 16,
+		bounds: { min: 8, max: 48 },
+	},
+	'pointed-card-size': {
+		type: 'dimension',
+		label: 'Pointed card text size',
+		default: 14,
+		bounds: { min: 8, max: 48 },
+	},
+	// No Foundation Token is a shadow, so it holds the one it shipped with.
+	'badge-shadow': {
+		type: 'color',
+		label: 'Point badge shadow',
+		default: 'rgba(0, 0, 0, 0.1)',
+	},
+	'mainboard-card-width': {
+		type: 'dimension',
+		label: 'Mainboard card width',
 		// The former medium card size.
 		default: 144,
 		bounds: { min: 48, max: 480 },
 	},
-	'card-gap': {
+	'mainboard-card-gap': {
 		type: 'dimension',
-		label: 'Grid card gap',
+		label: 'Mainboard grid card gap',
 		default: 8,
 		bounds: { min: 0, max: 48 },
 	},
-	'stack-reveal': {
+	'mainboard-stack-reveal': {
 		type: 'dimension',
-		label: 'Stacked card reveal',
+		label: 'Mainboard stacked card reveal',
+		// About the former 15% of a medium card's height.
+		default: 30,
+		bounds: { min: 4, max: 240 },
+	},
+	'sideboard-card-width': {
+		type: 'dimension',
+		label: 'Sideboard card width',
+		// The former medium card size.
+		default: 144,
+		bounds: { min: 48, max: 480 },
+	},
+	'sideboard-card-gap': {
+		type: 'dimension',
+		label: 'Sideboard grid card gap',
+		default: 8,
+		bounds: { min: 0, max: 48 },
+	},
+	'sideboard-stack-reveal': {
+		type: 'dimension',
+		label: 'Sideboard stacked card reveal',
 		// About the former 15% of a medium card's height.
 		default: 30,
 		bounds: { min: 4, max: 240 },

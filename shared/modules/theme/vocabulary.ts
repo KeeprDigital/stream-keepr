@@ -43,9 +43,11 @@ export const FOUNDATION_TOKENS = {
 		label: 'Secondary text',
 		default: 'rgba(255, 255, 255, 0.72)',
 	},
+	// Text on a badge, pill or chip whose surface is `text-primary`, so a Theme
+	// sets the two as a pair.
 	'text-inverse': {
 		type: 'color',
-		label: 'Text on light',
+		label: 'Text on primary text',
 		default: '#111827',
 	},
 	'accent': {

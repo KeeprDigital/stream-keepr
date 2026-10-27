@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import type {
 	BoardSelection,
-	DeckCardSize,
 	MetagameCardSortBy,
-	QuantitySize,
 	TopCardsStat,
 } from '~~/shared/types/enums';
 import type { CardTypeBucket } from '~~/shared/utils/metagame';
@@ -87,24 +85,12 @@ const sortByOptions = [
 	{ label: 'Total Copies', value: 'totalCopies' },
 ];
 
-const cardSizeOptions = [
-	{ label: 'Small', value: 'small' },
-	{ label: 'Medium', value: 'medium' },
-	{ label: 'Large', value: 'large' },
-];
-
 const statBadgeOptions = [
 	{ label: 'None', value: 'none' },
 	{ label: 'Inclusion Rate', value: 'inclusionRate' },
 	{ label: 'Avg Copies', value: 'avgCopies' },
 	{ label: 'Total Copies', value: 'totalCopies' },
 	{ label: 'Deck Count', value: 'deckCount' },
-];
-
-const badgeSizeOptions = [
-	{ label: 'Small', value: 'small' },
-	{ label: 'Medium', value: 'medium' },
-	{ label: 'Large', value: 'large' },
 ];
 
 function isTypeExcluded(bucket: CardTypeBucket): boolean {
@@ -215,38 +201,10 @@ function typeLabel(bucket: CardTypeBucket): string {
 
 			<ScreenSettingsToggle
 				:label="fields.dynamicCardSize.label"
-				description="Stretch cards to fill the available width."
+				description="Stretch cards to fill the available width, rather than take the Theme's card width."
 				:model-value="config.dynamicCardSize"
 				@update:model-value="updateConfig({ dynamicCardSize: $event })"
 			/>
-
-			<UFormField
-				v-if="!config.dynamicCardSize"
-				:label="fields.cardSize.label"
-				description="Fixed size for each card."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					:model-value="config.cardSize"
-					:items="cardSizeOptions"
-					class="w-48"
-					@update:model-value="updateConfig({ cardSize: $event as DeckCardSize })"
-				/>
-			</UFormField>
-
-			<UFormField
-				:label="fields.cardGap.label"
-				description="Space between cards in pixels."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="config.cardGap"
-					:min="fields.cardGap.min"
-					:max="fields.cardGap.max"
-					class="w-32"
-					@update:model-value="updateConfig({ cardGap: Number($event) })"
-				/>
-			</UFormField>
 		</ScreenSettingsCard>
 
 		<ScreenPaginationSettingsCard
@@ -308,20 +266,6 @@ function typeLabel(bucket: CardTypeBucket): string {
 					@update:model-value="updateConfig({ statBadge: $event as TopCardsStat })"
 				/>
 			</UFormField>
-
-			<template v-if="config.statBadge !== 'none'">
-				<UFormField
-					:label="fields.statBadgeSize.label"
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<USelect
-						:model-value="config.statBadgeSize ?? 'medium'"
-						:items="badgeSizeOptions"
-						class="w-48"
-						@update:model-value="updateConfig({ statBadgeSize: $event as QuantitySize })"
-					/>
-				</UFormField>
-			</template>
 		</ScreenSettingsCard>
 	</div>
 </template>

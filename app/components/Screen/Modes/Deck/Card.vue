@@ -4,22 +4,22 @@ import { modeTokenVar } from '~/modules/screen-mode';
 
 const props = defineProps<{
 	card: DeckListCardWithData;
+	/** The board it is on, whose `card-width` Mode Token it takes. */
+	board: 'mainboard' | 'sideboard';
 	showQuantity: boolean;
 	showHighlanderPoints: boolean;
 	quantityPositionClass: string;
-	quantitySizeClass: string;
 	quantityBadgeStyle: Record<string, string>;
 	highlanderPointsPositionClass: string;
-	highlanderPointsSizeClass: string;
 	highlanderPointsBadgeStyle: Record<string, string>;
-	/** Fills its grid column rather than taking the `card-width` Mode Token. */
+	/** Fills its grid column rather than taking its board's `card-width` Mode Token. */
 	dynamicSize?: boolean;
 }>();
 
 const cardStyle = computed(() => props.dynamicSize
 	? {}
 	: {
-			width: modeTokenVar('deck', 'card-width'),
+			width: modeTokenVar('deck', `${props.board}-card-width`),
 		});
 
 const placeholderStyle = {
@@ -53,8 +53,8 @@ function getCardImageUrl(card: DeckListCardWithData): string | null {
 		<div
 			v-if="showHighlanderPoints && card.highlanderPoints != null"
 			data-testid="highlander-card-badge"
-			class="absolute rounded-md font-bold tabular-nums leading-none shadow-md"
-			:class="[highlanderPointsPositionClass, highlanderPointsSizeClass]"
+			class="absolute rounded-md font-bold tabular-nums leading-none"
+			:class="highlanderPointsPositionClass"
 			:style="highlanderPointsBadgeStyle"
 		>
 			{{ card.highlanderPoints }}
@@ -62,7 +62,7 @@ function getCardImageUrl(card: DeckListCardWithData): string | null {
 		<div
 			v-if="showQuantity && card.quantity > 1"
 			class="quantity-badge absolute font-bold rounded-full flex items-center justify-center"
-			:class="[quantityPositionClass, quantitySizeClass]"
+			:class="quantityPositionClass"
 			:style="quantityBadgeStyle"
 		>
 			{{ card.quantity }}

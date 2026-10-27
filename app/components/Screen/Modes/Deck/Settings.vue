@@ -8,10 +8,7 @@ import { DECK_BOARD_LAYOUT_FIELDS } from '~~/shared/screenModeConfigs/deck';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
-import {
-	QUANTITY_SIZE_SELECT_OPTIONS,
-	SIDEBOARD_PLACEMENT_SELECT_OPTIONS,
-} from '~~/shared/utils/selectOptions';
+import { SIDEBOARD_PLACEMENT_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
@@ -313,23 +310,6 @@ const emptyBoardHint = computed(() => {
 				:model-value="config.showDeckMetaPill"
 				@update:model-value="updateConfig({ showDeckMetaPill: $event })"
 			/>
-
-			<template v-if="config.showDeckMetaPill !== false">
-				<USeparator />
-
-				<UFormField
-					:label="fields.deckMetaPillSize.label"
-					description="Size of the deck meta pill."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<USelect
-						:model-value="config.deckMetaPillSize"
-						:items="QUANTITY_SIZE_SELECT_OPTIONS"
-						class="w-32"
-						@update:model-value="updateConfig({ deckMetaPillSize: $event })"
-					/>
-				</UFormField>
-			</template>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard v-if="!isBroadcastSource" title="Pointed Cards">
@@ -339,23 +319,6 @@ const emptyBoardHint = computed(() => {
 				:model-value="config.showHighlanderPointedCards"
 				@update:model-value="updateConfig({ showHighlanderPointedCards: $event })"
 			/>
-
-			<template v-if="config.showHighlanderPointedCards">
-				<USeparator />
-
-				<UFormField
-					:label="fields.highlanderPointedCardsSize.label"
-					description="Size of the pointed card chips."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<USelect
-						:model-value="config.highlanderPointedCardsSize"
-						:items="QUANTITY_SIZE_SELECT_OPTIONS"
-						class="w-32"
-						@update:model-value="updateConfig({ highlanderPointedCardsSize: $event })"
-					/>
-				</UFormField>
-			</template>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Layout">
@@ -484,19 +447,6 @@ const emptyBoardHint = computed(() => {
 						@update:model-value="updateConfig({ quantityPosition: $event as QuantityPosition })"
 					/>
 				</UFormField>
-
-				<UFormField
-					:label="fields.quantitySize.label"
-					description="Size of the quantity badge."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<USelect
-						:model-value="config.quantitySize"
-						:items="QUANTITY_SIZE_SELECT_OPTIONS"
-						class="w-32"
-						@update:model-value="updateConfig({ quantitySize: $event })"
-					/>
-				</UFormField>
 			</template>
 
 			<template v-if="!isBroadcastSource">
@@ -526,19 +476,6 @@ const emptyBoardHint = computed(() => {
 							:disabled-points="BADGE_DISABLED_POINTS"
 							aria-label="Highlander point badge position"
 							@update:model-value="updateConfig({ highlanderPointsPosition: $event as QuantityPosition })"
-						/>
-					</UFormField>
-
-					<UFormField
-						:label="fields.highlanderPointsSize.label"
-						description="Size of the Highlander point badge."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<USelect
-							:model-value="config.highlanderPointsSize"
-							:items="QUANTITY_SIZE_SELECT_OPTIONS"
-							class="w-32"
-							@update:model-value="updateConfig({ highlanderPointsSize: $event })"
 						/>
 					</UFormField>
 				</template>
