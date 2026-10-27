@@ -38,9 +38,18 @@ function element(tag, style = {}, attributes = {}) {
 	return node;
 }
 
-function featureMatchOverlayModel(output, layout) {
+/** A surface Mode Token, resolved: an unfilled box with a border and a half-opaque glow (#831). */
+const GLOWING_OUTLINE = {
+	fill: { type: 'solid', color: '#101820' },
+	fillOpacity: 0,
+	outline: { color: '#0077a3', width: 4 },
+	glow: GLOW,
+};
+
+function featureMatchOverlayModel(output, layout, surfaces) {
 	const base = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 	return resolveFeatureMatchOverlayRenderModel({
+		surfaces: { frameSurface: GLOWING_OUTLINE, sourceSurface: GLOWING_OUTLINE, ...surfaces },
 		config: {
 			...base,
 			layout: {
@@ -115,7 +124,7 @@ function drawGraphicItem(stage, output) {
 /** A Source Item with a border and a half-opaque glow, as the Feature Match Overlay Display draws it. */
 function drawSourceItem(stage, output, { unkeyed = false } = {}) {
 	const model = featureMatchOverlayModel(output, {
-		frame: { backgroundColor: '#101820', opacity: 0 },
+		frame: { opacity: 0 },
 		sources: [
 			{
 				id: 'source',
@@ -127,14 +136,6 @@ function drawSourceItem(stage, output, { unkeyed = false } = {}) {
 				height: 60,
 				sourceRole: 'main',
 				frameCutout: false,
-				framingStyle: {
-					borderVisible: true,
-					borderColor: '#0077a3',
-					borderWidth: 4,
-					glowColor: GLOW.color,
-					glowSize: GLOW.size,
-					glowOpacity: GLOW.opacity,
-				},
 			},
 		],
 	});
@@ -154,17 +155,13 @@ function drawSourceItem(stage, output, { unkeyed = false } = {}) {
 /** The Frame's border with a half-opaque glow, its own fill at zero opacity so only the border paints. */
 function drawFrame(stage, output) {
 	const model = featureMatchOverlayModel(output, {
-		frame: {
-			backgroundColor: '#101820',
-			opacity: 0,
-			borderVisible: true,
-			borderColor: '#0077a3',
-			borderWidth: 8,
-			glowColor: GLOW.color,
-			glowSize: GLOW.size,
-			glowOpacity: GLOW.opacity,
-		},
+		frame: { opacity: 0 },
 		sources: [],
+	}, {
+		frameSurface: {
+			...GLOWING_OUTLINE,
+			outline: { color: '#0077a3', width: 8 },
+		},
 	});
 	stage.style.background = model.canvasStyle.background;
 	const { frame } = model;
@@ -195,12 +192,13 @@ function drawFrame(stage, output) {
 	}
 	svg.append(defs);
 	svg.append(element('rect', {}, {
-		x: 0,
-		y: 0,
-		width: SCENE_WIDTH,
-		height: SCENE_HEIGHT,
-		fill: frame.fill,
-		opacity: frame.opacity,
+		'x': 0,
+		'y': 0,
+		'width': SCENE_WIDTH,
+		'height': SCENE_HEIGHT,
+		'fill': frame.fill.color,
+		'fill-opacity': frame.fill.opacity,
+		'opacity': frame.opacity,
 	}));
 	if (frame.border) {
 		const group = element('g', {}, {
