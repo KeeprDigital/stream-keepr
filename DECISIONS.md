@@ -6,6 +6,8 @@ One section per settled architectural decision, numbered in the order taken; rea
 
 Accepted · 2026-08-01 · [#143](https://github.com/KeeprDigital/stream-keepr/issues/143)
 
+**Reversed by ADR-0050**: Graphic Style Sets give way to Themes, whose asset tokens may reference library fonts. This section holds for the code until #815 removes Style Sets.
+
 ### Decision
 
 A Graphic Style Set's typography entries reference **application fonts only**. The entry's font is typed `GraphicApplicationFontSelection` and its wire schema accepts only the `application` arm. A Graphic Item's own typography is unrestricted and takes either arm of `GraphicFontSelection`. The `.skstyle` exporter's `undeclared-graphic-asset-dependency` refusal stays, as enforcement against a document that reached the exporter by some route other than the write path.
@@ -132,6 +134,8 @@ Server rules still earn a place because they fail earlier and more legibly: with
 ## ADR-0006: Over-broad Graphic Style Set override pins are not migrated
 
 Accepted · 2026-08-05, amended under #229 and #240 · [#199](https://github.com/KeeprDigital/stream-keepr/issues/199) (decided under #167)
+
+**Made moot by ADR-0049**: Graphic Item properties bind whole tokens with no review or pins. This section holds for the code until #815 removes Style Sets.
 
 ### Decision
 
@@ -1542,3 +1546,86 @@ The Players page opened Edit on a row click and kept history in the menu, while 
 
 - **Make the whole Players page row open history.** It would hide one target behind another again, and the deck cell and row menu sit in the same row.
 - **Link a name the surface knows only as text by matching it against the roster.** Two Players can share a name, and the wrong history is worse than none.
+
+## ADR-0049: Themes replace Graphic Style Sets, resolve live, and use a closed vocabulary of two tiers
+
+Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812)
+
+### Decision
+
+**Every Screen's look comes from a Theme, resolved when it renders.** A Theme is an installation-scoped set of Theme Token values. An Event uses one, or the built-in, read-only Default Theme. A Screen resolves each token from its own Screen Theme Override, else its Event's Theme, else the token's shipped default. An edit reaches every Screen Output using the Theme at once. There is no draft, publish, review or per-template update.
+
+**Stream Keepr owns every token.** Users set values, never names.
+
+- **Foundation Tokens** are app-wide roles and hold a literal.
+- **Mode Tokens** are declared by a Screen Mode Definition. Each holds a literal or names a same-type Foundation Token, and defaults to one.
+- **Graphic Item properties** name a whole Foundation Token or hold a literal. Nothing is bound partially, and nothing names a Mode Token, so resolution takes at most one step and cannot cycle.
+
+**A Theme stores only the tokens it sets.** A token added later reaches every existing Theme through its default. Renames and removals follow ADR-0043 and ADR-0037.
+
+**Graphic Style Sets are deleted, with `.skstyle` and the override-pin rules of ADR-0006, and so are Animation Effect Presets with `.skeffect`.** Their data is dropped, not migrated. Templates keep their values as literals.
+
+### Why
+
+- Look and feel lived in four places: `ScreenConfig`, per-mode inline fallbacks, the Feature Match Overlay Frame's own fields, and Style Sets that reached Broadcast Graphic Templates only.
+- A new Screen Mode started unstyled.
+- The Style Set's copy-and-review model protects placed graphics from change. The product wants the opposite: one edit restyles the whole production.
+- Defaulting each Mode Token to a Foundation Token is what makes a new Screen Mode fit every Theme with nothing changed.
+- A closed vocabulary keeps tokens consumable everywhere, and lets a template travel between installations carrying only token names.
+
+### Consequences
+
+- A template renders in whichever Theme it is placed under, and its package carries no Theme.
+- A Theme edit is a live on-air change: editing a Theme an Event is using restyles its outputs mid-show. This is accepted; Themes have no draft state.
+- Theme writes are per token, last write wins, and take no Graphics Authoring Lease.
+- A Theme in use cannot be deleted.
+- Typography tokens carry no size. Colour tokens may carry alpha, and a consumer's opacity multiplies it.
+
+### Rejected alternatives
+
+- **Keep Style Sets beside Themes.** Two token systems split the vocabulary.
+- **Draft and atomic publish.** Rejected for simplicity.
+- **User-named primitive tokens, as Palette Entries were.** An open vocabulary cannot be consumed by code written before a name existed.
+- **An Event-level override layer.** It makes "why is this colour here" a four-layer answer. An Event picks a Theme instead.
+
+## ADR-0050: Theme Tokens may reference Graphics Asset Library content
+
+Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812) · Reverses ADR-0001
+
+### Decision
+
+**An asset-typed Theme Token, or a Screen Theme Override of one, holds an ordinary Graphic Asset Reference** to an exact revision of an image, silent video or font. Library fonts are included. The reference protects the asset from retire and trash as a template's does (ADR-0034), and the refusal names the Theme or Screen. A Screen Output's asset capability covers the revisions its resolved Theme supplies.
+
+### Why
+
+A Theme is meant to carry the production's logo, backdrop and typefaces. ADR-0001 kept Style Sets data-only so that `.skstyle` needed no asset pipeline. Themes have no export yet, so that cost is deferred rather than avoided.
+
+### Consequences
+
+- Theme export/import, when built, must carry asset bytes through the Template Package asset pipeline: staging, quota, revalidation and Graphic Asset Origin. It cannot be data-only.
+- ADR-0001 holds only until Graphic Style Sets are removed (#815).
+
+## ADR-0051: A Screen holds no look of its own, and the Event Canvas is a coordinate space
+
+Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812)
+
+### Decision
+
+**`ScreenConfig` is deleted.** A Screen holds its Screen Mode, that mode's content config and its Screen Theme Overrides.
+
+- Background, text colours, padding and alignment become Theme Tokens.
+- colorMode goes: a light look and a dark look are two Themes.
+- Mode config holds what a mode shows (headers, columns, page size, Event References). Mode Tokens hold how it looks (colour, type, spacing, size, media, motion).
+
+**Each Event sets one Event Canvas** (default 1920×1080) in its Event Presentation Settings, with its Theme and on-air wording. Every Screen of the Event uses it, graphics hosts included, and every Screen Mode scales it uniformly to fit its window. There is no per-Screen canvas.
+
+### Why
+
+Canvas size and wording are set once per production, not per brand or per Screen. Dimension tokens are in canvas pixels. If canvas meant output resolution, a Theme reused on a 4K show would render at half size. As a coordinate space the canvas changes only for a different aspect ratio, and output resolution is the browser source's to set.
+
+### Consequences
+
+- Today's two canvases (`ScreenConfig` width/height and the graphics hosts' canvas fields) become one.
+- A portrait display on a landscape Event is not supported; an override is the reopening path if a real case appears.
+- On-air wording stays on the Event, so one Theme serves Events that word things differently.
+- The existing look fields are dropped, not migrated, and existing Screens render the Default Theme.

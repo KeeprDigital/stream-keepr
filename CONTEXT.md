@@ -134,7 +134,7 @@ A rendering mode for a Screen, such as Background, Card Spotlight, Deck List, St
 _Avoid_: Top Cards for the Most Played Cards mode (one word from Top Cut); Feature Match for the control mode (the on-air one is the Feature Match Overlay).
 
 **Screen Mode Definition**:
-The definition of a Screen Mode: its defaults and configuration shape (held as one config contract, ADR-0037, which also names its Authored Stacks), data preparation, rendering contract, Screen host contract (overlay or control surface; how width, height, padding, background, alignment, viewport-fit scaling, and theme apply), and what it declares it carries, such as its own Background Layer stack, its Event References, or its Page Rotation. A mode that declares it carries something gets all of that thing's behaviour from the declaration alone. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.
+The definition of a Screen Mode: its defaults and configuration shape (held as one config contract, ADR-0037, which also names its Authored Stacks), data preparation, rendering contract, Screen host contract (overlay or control surface), and what it declares it carries, such as its Mode Tokens, its own Background Layer stack, its Event References, or its Page Rotation. A mode that declares it carries something gets all of that thing's behaviour from the declaration alone. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.
 
 **Event Reference**:
 A field in a Screen Mode's configuration naming something that must belong to the Screen's Event: a Phase, a Round, a Player, a Player List, a Feature Match Slot, an Archetype, or a Deck Source. Every Screen Mode Definition declares its Event References, declaring none if it has none, and a Screen write refuses one naming something outside the Event (ADR-0038).
@@ -297,6 +297,39 @@ Whoever presents the installation's shared administrator credential, authorised 
 
 **Graphics Authoring Lease**:
 The exclusive, Session-scoped right to edit one graphics authoring artifact: a Screen's complete graphics Edit workspace or one reusable graphics Template. Other Sessions may observe accepted changes but cannot modify the leased artifact.
+
+### Theming
+
+**Theme**:
+A named, installation-scoped set of Theme Token values giving every Screen of an Event one look and feel, whatever its Screen Mode. It holds values, never compositions: it may supply a logo a Broadcast Graphic shows, but the Broadcast Graphic itself is a template's. An Event uses one Theme; a Theme may serve many Events. An edit reaches every Screen using it at once, with no draft or publish step. It themes what Screens render, never the operator app.
+_Avoid_: Style Set, brand, skin, palette (when naming the whole)
+
+**Theme Token**:
+One named value a Screen may consume from its Theme, such as a colour, font, or Graphic Asset. Stream Keepr owns every token's name, type, and where it may be consumed; users set values, never names.
+_Avoid_: variable, style entry
+
+**Foundation Token**:
+A Theme Token naming an application-wide role any Screen Mode may consume, such as the accent colour, the heading font, or the screen inset. Every one has a default value shipped with Stream Keepr.
+
+**Mode Token**:
+A Theme Token a Screen Mode Definition declares for its own rendering, such as a Standings row's surface. Its default is a Foundation Token, so a new Screen Mode follows every existing Theme unchanged.
+_Avoid_: component token
+
+**Screen Theme Override**:
+A Screen's own value for one Theme Token, used by that Screen in place of its Theme's. Clearing it returns the Screen to the Theme's value.
+_Avoid_: local style, pin
+
+**Event Canvas**:
+The pixel coordinate space every Screen of an Event is authored and rendered in, default 1920 × 1080. A Screen Output scales it uniformly to fit its window, so output resolution is not the canvas's to set.
+_Avoid_: screen size, resolution
+
+**Event Presentation Settings**:
+What an Event sets once for every Screen it has: its Theme, its Event Canvas, and its on-air wording and formatting, such as the record separator, position format, holding text, and Untimed Label. Wording stays here rather than in the Theme, so a Theme can serve Events that word things differently.
+_Avoid_: on-air formatting (when naming the whole group)
+
+**Screen Mode Sample Dataset**:
+One fixed canonical set of Event Data a Theme preview renders every Screen Mode against. Like the Feature Match Sample Dataset, it never appears on a live Screen Output.
+_Avoid_: dummy data, test data
 
 ### Broadcast Graphics
 
@@ -724,6 +757,22 @@ _Avoid_: Dummy data, test data
 - A **Program monitor** or preview without a capability renders everything but media, is admitted by its operator's **Session**, and reports its missing asset access so a control surface states the loss
 - **Screen Outputs** and authoring run on Chromium, the only engine transparent video is supported on; another browser may flatten its alpha, and nothing detects or refuses it (ADR-0020)
 - **Broadcast Graphics Screen** and **Feature Match Overlay** previews share output selection, zoom, item selection, guides, and advisory action-safe (5%) and title-safe (10%) guides; guides never appear in live **Screen Outputs** and never clip items
+
+### Theming
+
+- An **Event** uses exactly one **Theme**; an Event that chose none uses the **Default Theme**, which ships with Stream Keepr and cannot be edited or deleted
+- A **Theme** in use by any **Event** cannot be deleted, and the refusal names those Events
+- A **Theme** stores only the **Theme Tokens** it sets; every other token reads its shipped default
+- A **Foundation Token** holds a value; a **Mode Token** holds a value or names a **Foundation Token** of its type; nothing names a **Mode Token**, so every token resolves in at most one step
+- A **Screen** resolves each **Theme Token** from its own **Screen Theme Override**, else its **Event**'s **Theme**, else the token's default; overriding a **Foundation Token** reaches every **Mode Token** and **Graphic Item** on that Screen that names it
+- A **Screen Theme Override** of another mode's **Mode Token** is kept while the **Screen** shows a different **Screen Mode**, and applies again on its return
+- A **Graphic Item** property either names a whole **Foundation Token** of its type or holds its own value; detaching copies the token's resolved value in
+- A typography **Theme Token** carries no size; the consuming **Graphic Item** or **Mode Token** owns it
+- A colour **Theme Token** may be translucent; a consumer's own opacity multiplies it
+- A **Graphic Asset** a **Theme** or **Screen Theme Override** references cannot be retired or trashed, and the refusal names its referrers
+- A **Broadcast Graphic Template** or **Feature Match Layout Template** carries **Graphic Item** token names, never a **Theme**, and renders under whichever Theme it is placed in; its editor previews under a Theme its author picks
+- A **Theme** edit reaches every **Screen Output** of every **Event** using it at once
+- Feature Match Controls consumes no **Theme Token**: it is an operator surface
 
 ### Access
 
