@@ -22,6 +22,7 @@ const emit = defineEmits<{
 }>();
 
 const eventStore = useEventStore();
+const eventRepo = useEventRepository();
 const playerStore = usePlayerStore();
 const player = computed(() => props.playerId == null
 	? null
@@ -59,15 +60,31 @@ async function handleSendToScreen(screenId?: number) {
 	}
 }
 
-// Default to the first tab
-const defaultDeckIndex = computed(() => 0);
+// Opens on the deck for the Current Round's Phase, else the primary deck (listed
+// first). A deck the operator picks stays picked.
+const currentRoundPhaseId = ref<number | null>(null);
+const pickedDeckIndex = ref<number | null>(null);
 
-const selectedDeckIndex = ref(defaultDeckIndex.value);
-
-// Re-sync when the modal opens with a different phase
-watch(defaultDeckIndex, (idx) => {
-	selectedDeckIndex.value = idx;
+onMounted(async () => {
+	if (!eventStore.eventId)
+		return;
+	try {
+		const status = await eventRepo.getMeleeLiveResultsStatus(eventStore.eventId);
+		currentRoundPhaseId.value = status.currentRound?.phaseId ?? null;
+	}
+	catch {
+		// No Current Round to follow: the primary deck stays the default.
+	}
 });
+
+const defaultDeckIndex = computed(() => {
+	const phaseId = currentRoundPhaseId.value;
+	return phaseId == null
+		? 0
+		: Math.max(localDeckLists.value.findIndex(deck => deck.phaseIds.includes(phaseId)), 0);
+});
+
+const selectedDeckIndex = computed(() => pickedDeckIndex.value ?? defaultDeckIndex.value);
 
 // Get the currently selected deck list
 const selectedDeck = computed(() => localDeckLists.value[selectedDeckIndex.value] ?? null);
@@ -245,6 +262,14 @@ const companionCard = computed<DeckListCard | null>(() => {
 });
 const companionPreviewKey = computed(() => `companion-${companionCard.value?.name ?? ''}`);
 
+// A Companion outside the sideboard still takes one of its slots.
+const sideboardHeadingCount = computed(() => {
+	const companion = selectedDeck.value?.companion;
+	return companion && !companion.usesExistingSideboardSlot
+		? `${sideboardTotal.value} + Companion`
+		: String(sideboardTotal.value);
+});
+
 const highlanderImageUrlsByCardName = computed<Record<string, string | null>>(() => {
 	const imageUrls: Record<string, string | null> = {};
 	for (const card of cards.value) {
@@ -310,6 +335,16 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 					class="ml-1"
 				/>
 				<UBadge
+					v-if="selectedDeck.reviewed !== undefined"
+					:data-deck-review="selectedDeck.reviewed ? 'reviewed' : 'unreviewed'"
+					:color="selectedDeck.reviewed ? 'success' : 'neutral'"
+					variant="soft"
+					size="sm"
+					class="ml-2"
+				>
+					{{ selectedDeck.reviewed ? 'Reviewed' : 'Unreviewed' }}
+				</UBadge>
+				<UBadge
 					v-if="selectedDeck.highlander"
 					color="neutral"
 					variant="soft"
@@ -365,7 +400,7 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 					v-if="localDeckLists.length > 1"
 					:items="tabItems"
 					:model-value="selectedDeckIndex.toString()"
-					@update:model-value="(val) => selectedDeckIndex = Number(val)"
+					@update:model-value="(val) => pickedDeckIndex = Number(val)"
 				/>
 
 				<!-- Deck list content -->
@@ -418,7 +453,7 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 							</section>
 							<div v-if="sideboardCards.length > 0">
 								<h4 class="font-semibold mb-3 text-sm uppercase tracking-wide">
-									Sideboard ({{ sideboardTotal }})
+									Sideboard ({{ sideboardHeadingCount }})
 								</h4>
 								<div ref="sideboardGroupContainer" class="deck-type-grid" :style="sideboardGridStyle">
 									<div v-for="(column, columnIndex) in sideboardColumns" :key="`sideboard-column-${columnIndex}`" class="deck-type-column">
