@@ -3,6 +3,7 @@ import type {
 	GraphicPlayerSideItem,
 	GraphicsHostContract,
 	GraphicSurfaceStyleSlot,
+	GraphicThemeTokens,
 	OwnedShapeGeometry,
 } from '~~/shared/modules/graphics';
 import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
@@ -33,7 +34,7 @@ import type {
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
 import type { GraphicAsset, GraphicAssetReference } from '~~/shared/types/graphicsAsset';
-import type { GraphicStyleRef, GraphicStyleSlot } from '~~/shared/types/graphicStyleSet';
+import type { GraphicThemeSlot } from '~~/shared/types/graphicThemeBindings';
 import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { MediaFieldsPatch } from '~/utils/mediaFields';
@@ -44,6 +45,7 @@ import {
 	authorsGraphicInputs,
 	clearMediaGraphicItemAsset,
 	DEFAULT_GRAPHIC_FONT_ID,
+	DEFAULT_GRAPHIC_THEME_TOKENS,
 	deleteGraphicInput,
 	graphicItemIcon,
 	graphicItemKindLabel,
@@ -53,6 +55,7 @@ import {
 	graphicTextTemplateInputKeys,
 	ownsPlayerSide,
 	ownsTextOverflowPolicy,
+	paintBroadcastGraphicThemeBindings,
 	paintedGraphicSurfaceStyles,
 	paintedGraphicTypography,
 	paintedShapeGeometry,
@@ -154,6 +157,11 @@ const props = defineProps<{
 	 */
 	styleSet?: GraphicStyleAuthoringContext;
 	/**
+	 * The Foundation Tokens the editor previews under, which bound properties show
+	 * and detaching copies in. Absent is the Default Theme.
+	 */
+	themeTokens?: GraphicThemeTokens;
+	/**
 	 * Whether this session may author the selection. A session observing an artifact
 	 * another session's Graphics Authoring Lease covers reads every property and
 	 * changes none.
@@ -170,7 +178,7 @@ const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[
  * re-captures Graphic Style Set overrides, and replaces the stack. The controls below
  * write values and hand it the authoring operation that writes them.
  */
-const { canAuthor, editItem, editGraphic, bindStyleRef, unbindStyleRef } = useCompositorEditing(
+const { canAuthor, editItem, editGraphic, bindThemeToken, detachThemeToken } = useCompositorEditing(
 	() => props,
 	graphics => emit('update:graphics', graphics),
 );
@@ -230,7 +238,14 @@ const SIZING_MODE_OPTIONS = [
 	{ label: 'Weighted fill', value: 'fill' },
 ] satisfies Array<{ label: string; value: GraphicGroupChildSizing['mode'] }>;
 
-const selection = computed(() => resolveGraphicsSelection(props.graphics, props.selectedTarget));
+/**
+ * The stack as it previews, each bound property painted from the preview's Theme,
+ * so every control shows what goes on air. Edits still start from the stored
+ * stack, which the editing chain paints the same way.
+ */
+const previewedGraphics = computed(() => props.graphics.map(graphic =>
+	paintBroadcastGraphicThemeBindings(graphic, props.themeTokens ?? DEFAULT_GRAPHIC_THEME_TOKENS)));
+const selection = computed(() => resolveGraphicsSelection(previewedGraphics.value, props.selectedTarget));
 
 const header = computed(() => {
 	const current = selection.value;
@@ -522,9 +537,9 @@ const geometryContainer = computed(() => parentGroup.value
 	? { width: parentGroup.value.width, height: parentGroup.value.height }
 	: { width: props.canvasWidth, height: props.canvasHeight });
 
-/** The Graphic Style Set entry one slot of the selected Graphic Item follows. */
-function styleRefFor(slot: GraphicStyleSlot): GraphicStyleRef | undefined {
-	return selectedItem.value?.styleRefs?.[slot];
+/** The Foundation Token one slot of the selected Graphic Item follows, if any. */
+function themeBindingFor(slot: GraphicThemeSlot): string | undefined {
+	return selectedItem.value?.themeBindings?.[slot];
 }
 
 /**
@@ -1185,6 +1200,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				:game="game"
 				:writable="writable"
 				:style-set="styleSet"
+				:theme-tokens="themeTokens"
 				@update:graphics="emit('update:graphics', $event)"
 			/>
 		</template>
@@ -1202,6 +1218,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			:canvas-height="canvasHeight"
 			:writable="writable"
 			:style-set="styleSet"
+			:theme-tokens="themeTokens"
 			@update:graphics="emit('update:graphics', $event)"
 		/>
 
@@ -1374,15 +1391,14 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							@update:model-value="editItem(patchGraphicGroupDefaultChildSurfaceStyle, $event ? {} : null)"
 						/>
 					</UFormField>
-					<GraphicsCompositorStyleRef
+					<GraphicsCompositorThemeBinding
 						v-if="selectedGroup.defaultChildSurfaceStyle"
-						style-slot="defaultChildSurfaceStyle"
+						theme-slot="defaultChildSurfaceStyle"
 						label="Child style default"
-						:entries="styleSet?.entries"
-						:current="styleRefFor('defaultChildSurfaceStyle')"
+						:current="themeBindingFor('defaultChildSurfaceStyle')"
 						:writable="canAuthor"
-						@bind="entryId => bindStyleRef('defaultChildSurfaceStyle', entryId)"
-						@unbind="unbindStyleRef('defaultChildSurfaceStyle')"
+						@bind="token => bindThemeToken('defaultChildSurfaceStyle', token)"
+						@detach="detachThemeToken('defaultChildSurfaceStyle')"
 					/>
 					<UFormField
 						v-if="selectedGroup.defaultChildSurfaceStyle"
@@ -1694,6 +1710,14 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					</p>
 					<div class="grid grid-cols-2 gap-2">
 						<UFormField label="Colour" size="sm">
+							<GraphicsCompositorThemeBinding
+								theme-slot="color"
+								label="Icon colour"
+								:current="themeBindingFor('color')"
+								:writable="canAuthor"
+								@bind="token => bindThemeToken('color', token)"
+								@detach="detachThemeToken('color')"
+							/>
 							<UIColorPicker
 								:model-value="selectedSocialNetworkIcon.color"
 								data-testid="social-network-icon-color"
@@ -1719,16 +1743,6 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					<p class="text-xs font-semibold text-muted">
 						Media
 					</p>
-
-					<GraphicsCompositorStyleRef
-						style-slot="media"
-						label="Media treatment"
-						:entries="styleSet?.entries"
-						:current="styleRefFor('media')"
-						:writable="canAuthor"
-						@bind="entryId => bindStyleRef('media', entryId)"
-						@unbind="unbindStyleRef('media')"
-					/>
 
 					<!--
 						The picker pins one exact Graphic Asset identity and revision, and
@@ -1789,14 +1803,13 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				how it is set.
 			-->
 			<template v-if="selectedTypography">
-				<GraphicsCompositorStyleRef
-					style-slot="typography"
+				<GraphicsCompositorThemeBinding
+					theme-slot="typography"
 					label="Typography"
-					:entries="styleSet?.entries"
-					:current="styleRefFor('typography')"
+					:current="themeBindingFor('typography')"
 					:writable="canAuthor"
-					@bind="entryId => bindStyleRef('typography', entryId)"
-					@unbind="unbindStyleRef('typography')"
+					@bind="token => bindThemeToken('typography', token)"
+					@detach="detachThemeToken('typography')"
 				/>
 
 				<GraphicsTypographyFields
@@ -1834,7 +1847,15 @@ function clearPlaceholderFontAsset(inputKey: string) {
 								@update:model-value="editItem(patchGraphicTypography, { textAlign: $event as never })"
 							/>
 						</UFormField>
-						<UFormField label="Colour" size="sm">
+						<UFormField label="Colour" size="sm" class="col-span-2">
+							<GraphicsCompositorThemeBinding
+								theme-slot="typography.color"
+								label="Text colour"
+								:current="themeBindingFor('typography.color')"
+								:writable="canAuthor"
+								@bind="token => bindThemeToken('typography.color', token)"
+								@detach="detachThemeToken('typography.color')"
+							/>
 							<UIColorPicker
 								:model-value="selectedTypography.color"
 								@update:model-value="editItem(patchGraphicTypography, { color: $event?.toString() || '#ffffff' })"
@@ -1970,14 +1991,13 @@ function clearPlaceholderFontAsset(inputKey: string) {
 		>
 			<template v-if="selectedShapeGeometry">
 				<div class="space-y-2">
-					<GraphicsCompositorStyleRef
-						:style-slot="selectedShapeGeometry.slot"
+					<GraphicsCompositorThemeBinding
+						:theme-slot="selectedShapeGeometry.slot"
 						label="Shape Geometry"
-						:entries="styleSet?.entries"
-						:current="styleRefFor(selectedShapeGeometry.slot)"
+						:current="themeBindingFor(selectedShapeGeometry!.slot)"
 						:writable="canAuthor"
-						@bind="entryId => bindStyleRef(selectedShapeGeometry!.slot, entryId)"
-						@unbind="unbindStyleRef(selectedShapeGeometry!.slot)"
+						@bind="token => bindThemeToken(selectedShapeGeometry!.slot, token)"
+						@detach="detachThemeToken(selectedShapeGeometry!.slot)"
 					/>
 					<GraphicsShapeGeometryFields
 						:geometry="selectedShapeGeometry.geometry"
@@ -2014,23 +2034,21 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						entry and an author may want the brand surface with this one gradient.
 						The finer of the two is applied last and wins.
 					-->
-					<GraphicsCompositorStyleRef
-						style-slot="surfaceStyle"
+					<GraphicsCompositorThemeBinding
+						theme-slot="surfaceStyle"
 						label="Surface style"
-						:entries="styleSet?.entries"
-						:current="styleRefFor('surfaceStyle')"
+						:current="themeBindingFor('surfaceStyle')"
 						:writable="canAuthor"
-						@bind="entryId => bindStyleRef('surfaceStyle', entryId)"
-						@unbind="unbindStyleRef('surfaceStyle')"
+						@bind="token => bindThemeToken('surfaceStyle', token)"
+						@detach="detachThemeToken('surfaceStyle')"
 					/>
-					<GraphicsCompositorStyleRef
-						style-slot="surfaceStyle.fill"
+					<GraphicsCompositorThemeBinding
+						theme-slot="surfaceStyle.fill"
 						label="Graphic Fill"
-						:entries="styleSet?.entries"
-						:current="styleRefFor('surfaceStyle.fill')"
+						:current="themeBindingFor('surfaceStyle.fill')"
 						:writable="canAuthor"
-						@bind="entryId => bindStyleRef('surfaceStyle.fill', entryId)"
-						@unbind="unbindStyleRef('surfaceStyle.fill')"
+						@bind="token => bindThemeToken('surfaceStyle.fill', token)"
+						@detach="detachThemeToken('surfaceStyle.fill')"
 					/>
 				</template>
 			</GraphicsCompositorSurfaceStyleFields>
@@ -2045,14 +2063,13 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					@edit="editItem(applyGraphicSurfaceStyleEdit, 'boxSurfaceStyle', $event)"
 				>
 					<template #style-ref>
-						<GraphicsCompositorStyleRef
-							style-slot="boxSurfaceStyle"
+						<GraphicsCompositorThemeBinding
+							theme-slot="boxSurfaceStyle"
 							label="Win box style"
-							:entries="styleSet?.entries"
-							:current="styleRefFor('boxSurfaceStyle')"
+							:current="themeBindingFor('boxSurfaceStyle')"
 							:writable="canAuthor"
-							@bind="entryId => bindStyleRef('boxSurfaceStyle', entryId)"
-							@unbind="unbindStyleRef('boxSurfaceStyle')"
+							@bind="token => bindThemeToken('boxSurfaceStyle', token)"
+							@detach="detachThemeToken('boxSurfaceStyle')"
 						/>
 					</template>
 				</GraphicsCompositorSurfaceStyleFields>
@@ -2067,14 +2084,13 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					@edit="editItem(applyGraphicSurfaceStyleEdit, 'wonBoxSurfaceStyle', $event)"
 				>
 					<template #style-ref>
-						<GraphicsCompositorStyleRef
-							style-slot="wonBoxSurfaceStyle"
+						<GraphicsCompositorThemeBinding
+							theme-slot="wonBoxSurfaceStyle"
 							label="Won win box style"
-							:entries="styleSet?.entries"
-							:current="styleRefFor('wonBoxSurfaceStyle')"
+							:current="themeBindingFor('wonBoxSurfaceStyle')"
 							:writable="canAuthor"
-							@bind="entryId => bindStyleRef('wonBoxSurfaceStyle', entryId)"
-							@unbind="unbindStyleRef('wonBoxSurfaceStyle')"
+							@bind="token => bindThemeToken('wonBoxSurfaceStyle', token)"
+							@detach="detachThemeToken('wonBoxSurfaceStyle')"
 						/>
 					</template>
 				</GraphicsCompositorSurfaceStyleFields>
@@ -2094,6 +2110,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				:selected-target="selectedTarget"
 				:writable="writable"
 				:style-set="styleSet"
+				:theme-tokens="themeTokens"
 				:canvas-width="canvasWidth"
 				:canvas-height="canvasHeight"
 				@update:graphics="emit('update:graphics', $event)"

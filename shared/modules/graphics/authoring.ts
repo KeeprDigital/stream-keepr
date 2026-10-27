@@ -81,6 +81,7 @@ import {
 } from './itemDefinitions';
 import { getShapeGeometryPreset, squareShapeGeometry } from './shapeGeometry';
 import { graphicTextTemplateProjectedValueReferences, readSocialProfileProjectedValueReference } from './textTemplate';
+import { bindNewGraphicItem } from './themeBindings';
 
 /**
  * Authoring operations for a Screen's back-to-front stack of Broadcast
@@ -996,12 +997,12 @@ export function addGraphicItem(
 	graphic: BroadcastGraphicConfig,
 	options: AddGraphicItemOptions,
 ): AddGraphicItemResult {
-	const item = getGraphicItemDefinition(options.kind).createDefault({
+	const item = bindNewGraphicItem(getGraphicItemDefinition(options.kind).createDefault({
 		id: options.id,
 		label: nextSequentialName(graphicItemKindLabel(options.kind), usedLabels(graphic)),
 		canvasWidth: options.canvasWidth,
 		canvasHeight: options.canvasHeight,
-	});
+	}));
 
 	return {
 		graphic: {
@@ -1033,12 +1034,12 @@ export function addGraphicGroupChild(
 	if (!group || group.type !== 'group')
 		return { graphic, itemId: '' };
 
-	const child = getGraphicItemDefinition(options.kind).createDefault({
+	const child = bindNewGraphicItem(getGraphicItemDefinition(options.kind).createDefault({
 		id: options.id,
 		label: nextSequentialName(graphicItemKindLabel(options.kind), usedLabels(graphic)),
 		canvasWidth: group.width,
 		canvasHeight: group.height,
-	}) as GraphicGroupChildConfig;
+	}) as GraphicGroupChildConfig);
 
 	return {
 		graphic: replaceGraphicItem(graphic, {

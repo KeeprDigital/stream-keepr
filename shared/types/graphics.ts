@@ -4,6 +4,7 @@ import type { PlayerSide } from './enums';
 import type { GraphicFocalPosition, MediaFit } from './graphicItem';
 import type { GraphicAssetReference } from './graphicsAsset';
 import type { GraphicContainerStyleRefs, GraphicStyleRefs, GraphicStyleSetLink } from './graphicStyleSet';
+import type { GraphicContainerThemeBindings, GraphicThemeBindings } from './graphicThemeBindings';
 
 /**
  * Shared Graphics Foundation vocabulary.
@@ -881,6 +882,11 @@ interface GraphicItemConfigBase extends GraphicRect {
 	 * republished entry into a reviewable offer rather than a silent mutation.
 	 */
 	styleRefs?: GraphicStyleRefs;
+	/**
+	 * Which of this item's property groups follow a Foundation Token. The
+	 * compositor paints each bound group from the Screen's resolved Theme.
+	 */
+	themeBindings?: GraphicThemeBindings;
 }
 
 export interface TextGraphicItemConfig extends GraphicItemConfigBase {
@@ -1218,4 +1224,6 @@ export interface BroadcastGraphicConfig {
 	styleSet?: GraphicStyleSetLink;
 	/** Whole-graphic Graphic Animation Recipes inherited from that Style Set. */
 	styleRefs?: GraphicContainerStyleRefs;
+	/** Whole-graphic Graphic Animation Recipes that follow a Foundation Token. */
+	themeBindings?: GraphicContainerThemeBindings;
 }

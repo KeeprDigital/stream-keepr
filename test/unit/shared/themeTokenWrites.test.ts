@@ -32,6 +32,41 @@ describe('a Theme Token write', () => {
 			'standings.title-typography',
 			{ token: 'body' },
 		],
+		[
+			'a fill whose colour follows a colour token',
+			'accent-fill',
+			{
+				type: 'solid',
+				color: { token: 'positive' },
+			},
+		],
+		[
+			'a surface with a literal fill and an outline following a colour token',
+			'panel',
+			{
+				fill: { type: 'solid', color: '#123456' },
+				fillOpacity: 0.5,
+				outline: {
+					color: { token: 'divider' },
+					width: 2,
+				},
+			},
+		],
+		[
+			'a Shape Geometry',
+			'panel-shape',
+			{ ...FOUNDATION_TOKENS['panel-shape'].default, leftSlant: -40 },
+		],
+		[
+			'an animation recipe',
+			'motion-exit',
+			{
+				duration: 50,
+				easing: 'back-in',
+				delay: 0,
+				scale: { factor: 0, origin: 'center' },
+			},
+		],
 	])('stores %s', (_case, name, value) => {
 		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: true, value });
 	});
@@ -95,6 +130,42 @@ describe('a Theme Token write', () => {
 			'a Mode Token naming no token',
 			'standings.row-divider',
 			{ token: 'nonsense' },
+			'invalid-value',
+		],
+		[
+			'a fill whose colour names a token of another type',
+			'accent-fill',
+			{
+				type: 'solid',
+				color: { token: 'heading' },
+			},
+			'invalid-value',
+		],
+		[
+			'a fill whose colour names no token',
+			'accent-fill',
+			{
+				type: 'solid',
+				color: { token: 'nonsense' },
+			},
+			'invalid-value',
+		],
+		[
+			'a gradient with one stop',
+			'accent-fill',
+			{
+				type: 'linear-gradient',
+				angle: 0,
+				stops: [
+					{ color: '#fff', position: 0, opacity: 1 },
+				],
+			},
+			'invalid-value',
+		],
+		[
+			'an animation recipe shorter than its bound',
+			'motion-enter',
+			{ duration: 49, easing: 'linear', delay: 0 },
 			'invalid-value',
 		],
 	])('refuses %s', (_case, name, value, refusal) => {

@@ -1,8 +1,10 @@
 import type { GraphicApplicationFontSelection, GraphicTextTransform } from '../../types/graphics';
+import type { ThemeCompositeValueTypes } from './composites';
 import { z } from 'zod';
 import { clampToShapeBounds } from '../../screenModeConfigs/fields';
 import { GRAPHIC_TEXT_TRANSFORM_VALUES } from '../../types/graphics';
 import { GRAPHIC_FONT_IDS } from '../graphics/typography';
+import { THEME_COMPOSITE_VALUE_SCHEMAS } from './composites';
 
 /**
  * A typography Theme Token: a face and how it is set, never a size. Each
@@ -17,8 +19,11 @@ export interface ThemeTypography {
 	case: GraphicTextTransform;
 }
 
-/** What a Theme Token of each type holds. */
-export interface ThemeTokenValueTypes {
+/**
+ * What a Theme Token of each type holds. The composite types Graphic Items bind
+ * to are in `composites.ts`.
+ */
+export interface ThemeTokenValueTypes extends ThemeCompositeValueTypes {
 	/** A CSS colour, which may be translucent. */
 	color: string;
 	/** Event Canvas pixels. */
@@ -106,6 +111,11 @@ export function themeTokenValueSchema(definition: FoundationTokenDefinition | Mo
 		}
 		case 'typography':
 			return typographySchema;
+		case 'fill':
+		case 'surface-style':
+		case 'shape-geometry':
+		case 'animation-recipe':
+			return THEME_COMPOSITE_VALUE_SCHEMAS[definition.type];
 	}
 }
 

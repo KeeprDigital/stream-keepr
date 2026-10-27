@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SocialProfileProjectionPatch } from '~~/shared/modules/graphics';
+import type { GraphicThemeTokens, SocialProfileProjectionPatch } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
 	OnAirUpdatePolicy,
@@ -44,6 +44,8 @@ const props = defineProps<{
 	writable?: boolean;
 	/** The published Graphic Style Set the selected Broadcast Graphic is linked to. */
 	styleSet?: GraphicStyleAuthoringContext;
+	/** The Foundation Tokens the editor previews under (#829). */
+	themeTokens?: GraphicThemeTokens;
 }>();
 
 const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[]] }>();

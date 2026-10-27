@@ -172,3 +172,76 @@ describe('a `.sklayout` whose Frame names a root-relative Remote Media URL', () 
 		]);
 	});
 });
+
+/** A Template Package carries Theme bindings, never a Theme (ADR-0049, #829). */
+describe('theme bindings in a Template Package', () => {
+	function boundGraphic(): BroadcastGraphicConfig {
+		const document = maximalBroadcastGraphicDocument({ asset });
+		return {
+			...document,
+			animation: {
+				enter: {
+					duration: 400,
+					easing: 'ease-out',
+					delay: 0,
+					fade: { opacity: 0 },
+				},
+			},
+			themeBindings: { 'animation.enter': 'motion-enter' },
+		};
+	}
+
+	function boundLayout() {
+		const layout = maximalFeatureMatchLayoutDocument({
+			frameAsset: testGraphicAssetReference('frame-asset', 'frame-revision'),
+			itemAsset: asset,
+		});
+		return {
+			...layout,
+			composition: {
+				...layout.composition,
+				themeBindings: { 'animation.exit': 'motion-exit' },
+			},
+		};
+	}
+
+	function bindingsOf(graphic: BroadcastGraphicConfig) {
+		return [
+			graphic.themeBindings,
+			...graphic.items.flatMap(item => [
+				item.themeBindings,
+				...(item.type === 'group'
+					? item.children.map(child => child.themeBindings)
+					: []),
+			]),
+		];
+	}
+
+	it('reads and installs a `.skgraphic`, keeping every binding', () => {
+		const document = boundGraphic();
+		expect(bindingsOf(document).filter(Boolean).length).toBeGreaterThan(3);
+
+		expect(read(document).outcome).toBe('read');
+		expect(bindingsOf(readInstalledBroadcastGraphicDocument(document)!)).toEqual(bindingsOf(document));
+	});
+
+	it('reads and installs a `.sklayout`, keeping every binding', () => {
+		const layout = boundLayout();
+
+		expect(templatePackagePayloads('sklayout').readInstallableDocument(layout).outcome).toBe('read');
+		expect(bindingsOf(readInstalledFeatureMatchLayoutDocument(layout)!.composition)).toEqual(bindingsOf(layout.composition));
+	});
+
+	it.each([
+		['names a token of another type', 'heading'],
+		['names no token', 'retired-accent'],
+	])('refuses a binding that %s', (_case, token) => {
+		const document = boundGraphic();
+		document.items[0] = {
+			...document.items[0]!,
+			themeBindings: { geometry: token },
+		};
+
+		expect(rejectionCodes(document)).toEqual(['invalid-template-document']);
+	});
+});

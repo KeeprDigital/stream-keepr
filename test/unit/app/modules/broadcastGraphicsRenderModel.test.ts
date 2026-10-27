@@ -1,7 +1,10 @@
 import type { BroadcastGraphicsRenderModelInput } from '~~/app/modules/broadcast-graphics/renderModel';
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { BroadcastGraphicConfig, GraphicInputDeclaration, GraphicPlaceholderStyle } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import { resolveBroadcastGraphicsRenderModel } from '~~/app/modules/broadcast-graphics/renderModel';
+import { placeBroadcastGraphicTemplate, resolveGraphicThemeTokens } from '~~/shared/modules/graphics';
+import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { graphic as graphicOf, shape, text } from '~~/test/helpers/graphicsComposition';
 
 function graphic(id: string): BroadcastGraphicConfig {
@@ -250,5 +253,48 @@ describe('broadcast Graphics render model', () => {
 		}));
 
 		expect(model.graphics[0]!.items[0]!.textSegments![2]!.style).toEqual({ color: '#ffffff' });
+	});
+});
+
+// A template carries token names, never a Theme, so each placement paints its own Event's Theme (#829).
+describe('one template placed under two Events with different Themes', () => {
+	const template = {
+		id: 'template-1',
+		name: 'Lower third',
+		document: graphicOf('lower-third', [
+			shape('bar', {
+				themeBindings: { surfaceStyle: 'panel' },
+			}),
+		]),
+	};
+
+	function placedUnder(theme: StoredThemeTokens) {
+		let next = 0;
+		const placed = placeBroadcastGraphicTemplate(template, {
+			generateId: () => `placed-${++next}`,
+			existing: [],
+		});
+		const model = resolveBroadcastGraphicsRenderModel(input({
+			graphics: [placed],
+			onAirGraphicIds: [placed.id],
+			themeTokens: resolveGraphicThemeTokens(theme),
+		}));
+		return model.graphics[0]!.items[0]!.surface?.fill.color;
+	}
+
+	it.each([
+		[
+			'an Event whose Theme sets the accent',
+			{ accent: '#112233' },
+			'#112233',
+		],
+		[
+			'an Event whose Theme sets another accent',
+			{ accent: '#445566' },
+			'#445566',
+		],
+		['an Event on the Default Theme', {}, FOUNDATION_TOKENS.accent.default],
+	])('renders in the Theme of %s', (_case, theme, painted) => {
+		expect(placedUnder(theme)).toBe(painted);
 	});
 });

@@ -84,6 +84,69 @@ export const FOUNDATION_TOKENS = {
 			case: 'none',
 		},
 	},
+	// What Graphic Items bind to (#829). A fill's or surface's colour names a
+	// colour token, so it follows the palette.
+	'accent-fill': {
+		type: 'fill',
+		label: 'Accent fill',
+		default: {
+			type: 'solid',
+			color: { token: 'accent' },
+		},
+	},
+	'panel': {
+		type: 'surface-style',
+		label: 'Panel',
+		default: {
+			fill: {
+				type: 'solid',
+				color: { token: 'accent' },
+			},
+			fillOpacity: 1,
+		},
+	},
+	'panel-shape': {
+		type: 'shape-geometry',
+		label: 'Panel shape',
+		default: {
+			topLeft: { treatment: 'square', size: 0 },
+			topRight: { treatment: 'square', size: 0 },
+			bottomRight: { treatment: 'square', size: 0 },
+			bottomLeft: { treatment: 'square', size: 0 },
+			leftSlant: 0,
+			rightSlant: 0,
+		},
+	},
+	'motion-enter': {
+		type: 'animation-recipe',
+		label: 'Enter motion',
+		default: {
+			duration: 400,
+			easing: 'ease-out',
+			delay: 0,
+			fade: { opacity: 0 },
+		},
+	},
+	'motion-update': {
+		type: 'animation-recipe',
+		label: 'Update motion',
+		default: {
+			duration: 400,
+			easing: 'ease-out',
+			delay: 0,
+			fade: { opacity: 0 },
+		},
+	},
+	'motion-exit': {
+		type: 'animation-recipe',
+		label: 'Exit motion',
+		default: {
+			duration: 300,
+			easing: 'ease-in',
+			delay: 0,
+			fade: { opacity: 0 },
+		},
+	},
 	'inset': {
 		type: 'dimension',
 		label: 'Screen inset',

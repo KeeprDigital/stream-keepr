@@ -1,4 +1,5 @@
 import type {
+	FoundationTokenDefinition,
 	FoundationTokenVocabulary,
 	ModeTokenDeclarations,
 	ModeTokenDefinition,
@@ -6,6 +7,7 @@ import type {
 	ThemeTokenReference,
 	ThemeTokenValue,
 } from './tokens';
+import { resolveThemeCompositeColors } from './composites';
 import { readTokenLiteral } from './tokens';
 
 export interface ResolveThemeTokensInput {
@@ -48,6 +50,48 @@ function firstReadable(stored: readonly unknown[], read: (value: unknown) => The
 }
 
 /**
+ * How one Screen reads Foundation Tokens: override, else Theme, else default.
+ * A colour inside a composite literal (a fill or a surface) is read the same
+ * way, so a colour override reaches every composite naming it. A colour holds
+ * a literal only, so this adds at most one step and cannot cycle.
+ */
+function foundationResolver({ vocabulary, theme, overrides }: Omit<ResolveThemeTokensInput, 'modeTokens'>) {
+	function resolveColor(name: string): string | undefined {
+		return vocabulary[name]?.type === 'color'
+			? resolveFoundation(name) as string
+			: undefined;
+	}
+
+	/** A literal as `definition`'s type, its colours resolved, or undefined when it is not one. */
+	function readLiteral(definition: FoundationTokenDefinition | ModeTokenDefinition, stored: unknown): ThemeTokenValue | undefined {
+		const literal = readTokenLiteral(definition, stored);
+		return literal === undefined
+			? undefined
+			: resolveThemeCompositeColors(definition.type, literal, resolveColor);
+	}
+
+	function resolveFoundation(name: string): ThemeTokenValue {
+		const definition = vocabulary[name]!;
+		return firstReadable([overrides[name], theme[name], definition.default], stored => readLiteral(definition, stored))!;
+	}
+
+	return { resolveFoundation, readLiteral };
+}
+
+/**
+ * Every Foundation Token a Screen resolves, by name. A graphics host's Graphic
+ * Items bind to these, since any of them may name any Foundation Token of its
+ * type. Resolved by the same rules as `resolveThemeTokens`.
+ */
+export function resolveFoundationTokens(input: Omit<ResolveThemeTokensInput, 'modeTokens'>): Readonly<Record<string, ThemeTokenValue>> {
+	const { resolveFoundation } = foundationResolver(input);
+	return Object.fromEntries(Object.keys(input.vocabulary).map(name => [
+		name,
+		resolveFoundation(name),
+	]));
+}
+
+/**
  * Resolves a Screen's Theme Tokens: the single home of every resolution rule
  * (ADR-0049).
  *
@@ -66,16 +110,12 @@ function firstReadable(stored: readonly unknown[], read: (value: unknown) => The
  */
 export function resolveThemeTokens(input: ResolveThemeTokensInput): ResolvedThemeTokens {
 	const { vocabulary, modeTokens, theme, overrides } = input;
-
-	function resolveFoundation(name: string): ThemeTokenValue {
-		const definition = vocabulary[name]!;
-		return firstReadable([overrides[name], theme[name], definition.default], stored => readTokenLiteral(definition, stored))!;
-	}
+	const { resolveFoundation, readLiteral } = foundationResolver(input);
 
 	/** A Mode Token's value as one source holds it, or undefined when it holds none it can read. */
 	function readModeToken(definition: ModeTokenDefinition, stored: unknown): ThemeTokenValue | undefined {
 		if (!isReference(stored))
-			return readTokenLiteral(definition, stored);
+			return readLiteral(definition, stored);
 		if (vocabulary[stored.token]?.type !== definition.type)
 			return undefined;
 		// Read within the Mode Token's own bounds too, where it declares tighter ones.

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'vue';
 import type { SocialProfilePresentationProjection } from '~~/shared/modules/broadcast-graphics-live-session';
-import type { GraphicAnimationOwnerValues, GraphicAnimationValues, ShapeGeometrySize } from '~~/shared/modules/graphics';
+import type { GraphicAnimationOwnerValues, GraphicAnimationValues, GraphicThemeTokens, ShapeGeometrySize } from '~~/shared/modules/graphics';
 import type { GraphicsHostTokenPresentation } from '~~/shared/modules/graphics/hostContract';
 import type {
 	BroadcastGraphicConfig,
@@ -32,8 +32,10 @@ import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from './selection';
 import {
+	DEFAULT_GRAPHIC_THEME_TOKENS,
 	graphicAnimationStaggerOffset,
 	isRectangularShapeGeometry,
+	paintBroadcastGraphicThemeBindings,
 	renderGraphicTextTemplate,
 	resolveGraphicAnchorPoint,
 	resolveGraphicAnimationOrigin,
@@ -325,6 +327,11 @@ export interface GraphicsCompositionRenderModelInput {
 	 * nothing else, which is what an unresolvable reference should look like.
 	 */
 	graphicAssetContentUrl?: (reference: GraphicAssetReference) => string;
+	/**
+	 * The Screen's resolved Foundation Tokens, which every bound Graphic Item
+	 * property paints from (#829). Omitted paints the Default Theme.
+	 */
+	themeTokens?: GraphicThemeTokens;
 }
 
 /** How one output reaches the content it composes. */
@@ -2752,9 +2759,11 @@ export function resolveGraphicsCompositionRenderModel(
 	input: GraphicsCompositionRenderModelInput,
 ): GraphicsCompositionRenderModel {
 	const visible = input.visibleGraphicIds;
-	const composed = visible
+	const themeTokens = input.themeTokens ?? DEFAULT_GRAPHIC_THEME_TOKENS;
+	const composed = (visible
 		? input.graphics.filter(graphic => visible.includes(graphic.id))
-		: [...input.graphics];
+		: [...input.graphics])
+		.map(graphic => paintBroadcastGraphicThemeBindings(graphic, themeTokens));
 	const selectedKey = input.selectedTarget
 		? graphicsSelectionKey(input.selectedTarget)
 		: null;

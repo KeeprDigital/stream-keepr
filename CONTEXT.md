@@ -335,6 +335,10 @@ _Avoid_: on-air formatting (when naming the whole group)
 One fixed canonical set of Event Data a Theme preview renders every Screen Mode against. Like the Feature Match Sample Dataset, it never appears on a live Screen Output.
 _Avoid_: dummy data, test data
 
+**Graphic Theme Binding**:
+A Graphic Item property group, or a Broadcast Graphic's enter, update or exit recipe, that names one whole Foundation Token of its type rather than holding its own value: a typography, a text or icon colour, a Graphic Surface Style, a Graphic Fill, a Shape Geometry, or a Graphic Animation Recipe. The compositor paints it from the Screen's resolved Theme. Detaching copies the resolved value in as the property's own; binding replaces it; editing it detaches it.
+_Avoid_: style reference, pin, override, Graphic Input Binding (which maps a Graphic Input to Event Data)
+
 ### Broadcast Graphics
 
 **Broadcast Graphics Screen**:

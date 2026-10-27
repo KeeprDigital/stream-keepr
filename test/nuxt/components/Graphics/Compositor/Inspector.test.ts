@@ -1,4 +1,4 @@
-import type { GraphicsHostContract } from '~~/shared/modules/graphics';
+import type { GraphicsHostContract, GraphicThemeTokens } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
 	GraphicGroupItemConfig,
@@ -24,6 +24,7 @@ import {
 	getGraphicItemDefinition,
 	GRAPHIC_ITEM_KINDS,
 	isGraphicItemDefinitionAvailable,
+	resolveGraphicThemeTokens,
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
 import { MAX_GRAPHIC_TEXT_LENGTH } from '~~/shared/types/graphics';
@@ -224,6 +225,8 @@ async function mountComponent(options: {
 	contract?: GraphicsHostContract;
 	/** The published Graphic Style Set this composition authors against, if any. */
 	styleSet?: GraphicStyleAuthoringContext;
+	/** The Foundation Tokens the editor previews under. */
+	themeTokens?: GraphicThemeTokens;
 }) {
 	return mount(Inspector, {
 		props: {
@@ -235,6 +238,7 @@ async function mountComponent(options: {
 			eventId: 7,
 			writable: options.writable ?? true,
 			styleSet: options.styleSet,
+			themeTokens: options.themeTokens,
 		},
 		global: {
 			stubs: {
@@ -2838,5 +2842,67 @@ describe('recording a Graphic Style Set override from a property edit', () => {
 		// Deferring the provenance is not refusing the edit: the value is stored inline
 		// and review is where the author is shown that theirs and the Style Set's differ.
 		expect(item?.type === 'text' && item.typography.fontSize).toBe(30);
+	});
+});
+
+// The Inspector's wiring to Theme bindings (#829): a bound property shows the preview Theme's value,
+// and its picker binds or detaches through the editing chain.
+describe('a Graphic Item property\'s Theme binding', () => {
+	const SELECTED: GraphicsSelectionTarget = { type: 'item', graphicId: 'lower-third', itemId: 'name' };
+	const themeTokens = resolveGraphicThemeTokens({ 'text-primary': '#123456' });
+
+	function withText(themeBindings?: Record<string, string>): BroadcastGraphicConfig[] {
+		return [
+			{
+				id: 'lower-third',
+				name: 'Lower Third',
+				items: [
+					{ ...textItem, themeBindings },
+				],
+			},
+		];
+	}
+
+	async function mountBound(themeBindings?: Record<string, string>) {
+		return await mountComponent({
+			graphics: withText(themeBindings),
+			selectedTarget: SELECTED,
+			themeTokens,
+		});
+	}
+
+	it.each([
+		[
+			'shows the token it follows',
+			{ 'typography.color': 'text-primary' },
+			'text-primary',
+		],
+		['shows none while the property holds its own value', undefined, undefined],
+	])('%s', async (_case, bindings, token) => {
+		const wrapper = await mountBound(bindings);
+
+		expect(wrapper.get('[data-testid="theme-binding-typography.color"]').attributes('data-theme-token')).toBe(token);
+	});
+
+	it('binds the property, painting the preview Theme\'s value', async () => {
+		const wrapper = await mountBound();
+
+		selectField(wrapper, 'theme-binding-typography.color-token').vm.$emit('update:modelValue', 'text-primary');
+		await nextTick();
+
+		const item = itemOf(emittedGraphics(wrapper));
+		expect(item?.themeBindings).toEqual({ 'typography.color': 'text-primary' });
+		expect(item?.type === 'text' && item.typography.color).toBe('#123456');
+	});
+
+	it('detaches the property, keeping the value it showed', async () => {
+		const wrapper = await mountBound({ 'typography.color': 'text-primary' });
+
+		selectField(wrapper, 'theme-binding-typography.color-token').vm.$emit('update:modelValue', '__own__');
+		await nextTick();
+
+		const item = itemOf(emittedGraphics(wrapper));
+		expect(item?.themeBindings).toBeUndefined();
+		expect(item?.type === 'text' && item.typography.color).toBe('#123456');
 	});
 });

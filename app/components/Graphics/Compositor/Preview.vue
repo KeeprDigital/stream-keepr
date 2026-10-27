@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
 import type { BroadcastGraphicConfig, GraphicAnimationPhase } from '~~/shared/types/graphics';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
@@ -11,6 +12,7 @@ import { GRAPHIC_ANIMATION_PHASE_VALUES } from '~~/shared/types/graphics';
 import { screenOutputPath } from '~~/shared/utils/screenOutput';
 import {
 	GRAPHICS_PREVIEW_STATE_MESSAGE,
+	GRAPHICS_PREVIEW_THEME_MESSAGE,
 	isGraphicsPreviewReadyMessage,
 	isGraphicsPreviewSelectMessage,
 } from '~/modules/graphics/previewMessages';
@@ -43,6 +45,8 @@ const props = defineProps<{
 	selectedTarget: GraphicsSelectionTarget;
 	canvasWidth: number;
 	canvasHeight: number;
+	/** The stored values of the Theme this preview renders bound Graphic Items under. */
+	themeTokens?: StoredThemeTokens;
 }>();
 
 const emit = defineEmits<{ selectTarget: [target: GraphicsSelectionTarget] }>();
@@ -216,6 +220,12 @@ function pushPreviewState() {
 			animation: animationPlan.value,
 		},
 	}, window.location.origin);
+	if (props.themeTokens) {
+		previewFrame.value.contentWindow.postMessage({
+			type: GRAPHICS_PREVIEW_THEME_MESSAGE,
+			tokens: JSON.parse(JSON.stringify(props.themeTokens)),
+		}, window.location.origin);
+	}
 }
 
 function handlePreviewMessage(message: MessageEvent) {
@@ -251,6 +261,7 @@ watch(
 		props.selectedTarget,
 		previewSocialProfileValues.value,
 		animationPlan.value,
+		props.themeTokens,
 	] as const,
 	() => pushPreviewState(),
 	{ deep: true },

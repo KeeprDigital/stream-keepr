@@ -36,6 +36,10 @@ function typographyCss(value: ThemeTypography): Record<TypographyProperty, strin
 	};
 }
 
+function isTypography(value: unknown): value is ThemeTypography {
+	return typeof value === 'object' && value !== null && 'font' in value && 'weight' in value;
+}
+
 /** Resolved token values as the custom properties a Screen host sets for its display. */
 export function themeTokenCssProperties(values: Readonly<Record<string, unknown>>): Record<string, string> {
 	const properties: Record<string, string> = {};
@@ -46,8 +50,9 @@ export function themeTokenCssProperties(values: Readonly<Record<string, unknown>
 		else if (typeof value === 'number') {
 			properties[themeTokenCssProperty(name)] = `${value}px`;
 		}
-		else {
-			for (const [property, css] of Object.entries(typographyCss(value as ThemeTypography)))
+		else if (isTypography(value)) {
+			// A composite only Graphic Items consume, such as a fill, sets no property.
+			for (const [property, css] of Object.entries(typographyCss(value)))
 				properties[themeTokenCssProperty(name, TYPOGRAPHY_PROPERTIES[property as TypographyProperty])] = css;
 		}
 	}

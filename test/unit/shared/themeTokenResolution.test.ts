@@ -1,6 +1,6 @@
 import type { FoundationTokenName, FoundationTokenVocabulary, ModeTokenDeclarations, StoredThemeTokens } from '~~/shared/modules/theme';
 import { describe, expect, it } from 'vitest';
-import { FOUNDATION_TOKENS, resolveThemeTokens } from '~~/shared/modules/theme';
+import { FOUNDATION_TOKENS, resolveFoundationTokens, resolveThemeTokens } from '~~/shared/modules/theme';
 import { SCREEN_MODES, screenModeTokens } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 
@@ -255,6 +255,97 @@ describe('resolveThemeTokens', () => {
 	});
 });
 
+/** A shipped default with each colour a composite names read as that colour's default. */
+function withColorDefaults(value: unknown): unknown {
+	if (Array.isArray(value))
+		return value.map(withColorDefaults);
+	if (typeof value !== 'object' || value === null)
+		return value;
+	if ('token' in value && Object.keys(value).length === 1)
+		return FOUNDATION_TOKENS[value.token as FoundationTokenName].default;
+	return Object.fromEntries(Object.entries(value).map(([key, entry]) => [
+		key,
+		withColorDefaults(entry),
+	]));
+}
+
+describe('a composite Foundation Token naming a colour', () => {
+	const composites = {
+		...vocabulary,
+		panel: {
+			type: 'surface-style',
+			label: 'Panel',
+			default: {
+				fill: {
+					type: 'linear-gradient',
+					angle: 90,
+					stops: [
+						{
+							color: { token: 'accent' },
+							position: 0,
+							opacity: 1,
+						},
+						{ color: '#000000', position: 1, opacity: 1 },
+					],
+				},
+				fillOpacity: 1,
+				outline: {
+					color: { token: 'text-primary' },
+					width: 2,
+				},
+			},
+		},
+	} satisfies FoundationTokenVocabulary;
+
+	function panel(theme: StoredThemeTokens = {}, overrides: StoredThemeTokens = {}) {
+		return resolveFoundationTokens({ vocabulary: composites, theme, overrides }).panel as Record<string, any>;
+	}
+
+	it.each([
+		[
+			'the colour\'s default',
+			{},
+			{},
+			'rgb(0, 0, 1)',
+		],
+		[
+			'the colour\'s Theme value',
+			{ accent: 'rgb(3, 0, 0)' },
+			{},
+			'rgb(3, 0, 0)',
+		],
+		[
+			'the colour\'s override, over the Theme',
+			{ accent: 'rgb(3, 0, 0)' },
+			{ accent: 'rgb(4, 0, 0)' },
+			'rgb(4, 0, 0)',
+		],
+	])('reads it as %s', (_, theme, overrides, expected) => {
+		expect(panel(theme, overrides).fill.stops[0].color).toBe(expected);
+		expect(panel(theme, overrides).fill.stops[1].color).toBe('#000000');
+	});
+
+	it.each([
+		[
+			'a colour that is not a colour token',
+			{ token: 'inset' },
+		],
+		[
+			'a former colour token',
+			{ token: 'retired-glow' },
+		],
+	])('falls through to the next source when the Theme\'s names %s', (_, color) => {
+		const theme = {
+			panel: {
+				fill: { type: 'solid', color },
+				fillOpacity: 1,
+			},
+		};
+
+		expect(panel(theme)).toEqual(panel());
+	});
+});
+
 describe('the shipped vocabulary and Mode Token declarations', () => {
 	const themedModes = SCREEN_MODE_VALUES.filter(mode => SCREEN_MODES[mode].modeTokens);
 
@@ -292,6 +383,6 @@ describe('the shipped vocabulary and Mode Token declarations', () => {
 		});
 
 		for (const [name, definition] of Object.entries(FOUNDATION_TOKENS))
-			expect(values[name], name).toEqual(definition.default);
+			expect(values[name], name).toEqual(withColorDefaults(definition.default));
 	});
 });
