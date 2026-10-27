@@ -152,7 +152,7 @@ A Screen Mode rendering an ordered stack of Background Layers (ADR-0016).
 _Avoid_: Idle screen, empty state
 
 **Background Layer**:
-One entry in an ordered Background Layer stack — a colour, gradient, image, video, or Animation Effect — owning its own enabled state and opacity. The Background Screen's configuration is such a stack, and every mode whose Screen Mode Definition declares one carries its own optional stack behind its content. Every plain overlay mode declares one; the graphics hosts do not, as they own their backgrounds and keep their outputs transparent.
+One entry in an ordered Background Layer stack — a colour, gradient, image, video, or Animation Effect — owning its own enabled state and opacity. The Background Screen's configuration is such a stack, and every mode whose Screen Mode Definition declares one carries its own optional stack behind its content. Every plain overlay mode declares one; the graphics hosts do not, as they own their backgrounds and keep their outputs transparent. A Screen whose stack is empty paints its Theme's `background` Foundation Token, a stack of the same layers.
 _Avoid_: background type, media background (when meaning a layer)
 
 **Screen Media Source**:

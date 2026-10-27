@@ -1,6 +1,9 @@
 import type { Component } from 'vue';
 import type { ThemeTokenType, ThemeTokenValueTypes } from '~~/shared/modules/theme';
+import { ANIMATION_EFFECT_CATALOGUE } from '~~/shared/animationEffects';
 import { getGraphicFontDefinition } from '~~/shared/modules/graphics/typography';
+import AnimationEffectTokenInput from '~/components/Theme/AnimationEffectTokenInput.vue';
+import BackgroundLayersTokenInput from '~/components/Theme/BackgroundLayersTokenInput.vue';
 import ColorTokenInput from '~/components/Theme/ColorTokenInput.vue';
 import DimensionTokenInput from '~/components/Theme/DimensionTokenInput.vue';
 import TypographyTokenInput from '~/components/Theme/TypographyTokenInput.vue';
@@ -17,6 +20,8 @@ export const THEME_TOKEN_INPUTS = {
 	color: ColorTokenInput,
 	dimension: DimensionTokenInput,
 	typography: TypographyTokenInput,
+	backgroundLayers: BackgroundLayersTokenInput,
+	animationEffect: AnimationEffectTokenInput,
 } as const satisfies Record<ThemeTokenType, Component>;
 
 /** A token value as the editor states an inherited default. */
@@ -32,6 +37,12 @@ const THEME_TOKEN_VALUE_TEXT: { [T in ThemeTokenType]: (value: ThemeTokenValueTy
 			? null
 			: value.case,
 	].filter(Boolean).join(' · '),
+	backgroundLayers: value => value.length === 0
+		? 'no layers'
+		: `${value.length} ${value.length === 1
+			? 'layer'
+			: 'layers'}`,
+	animationEffect: value => ANIMATION_EFFECT_CATALOGUE[value.effect].label,
 };
 
 export function themeTokenValueText<T extends ThemeTokenType>(type: T, value: ThemeTokenValueTypes[T]): string {

@@ -101,3 +101,15 @@ export function resolveThemeTokens(input: ResolveThemeTokensInput): ResolvedThem
 		],
 	};
 }
+
+/**
+ * One Foundation Token a Screen host consumes itself rather than through a
+ * Mode Token, such as the `background` stack: its Screen Theme Override, else
+ * its Theme's value, else its shipped default, read as `resolveThemeTokens`
+ * reads every Foundation Token.
+ */
+export function resolveFoundationToken(input: Omit<ResolveThemeTokensInput, 'modeTokens'>, name: string): ThemeTokenValue {
+	const { vocabulary, theme, overrides } = input;
+	const definition = vocabulary[name]!;
+	return firstReadable([overrides[name], theme[name], definition.default], stored => readTokenLiteral(definition, stored))!;
+}

@@ -37,7 +37,7 @@ function writeLayers(nextLayers: BackgroundLayer[]) {
 <template>
 	<ScreenSettingsCard
 		title="Background Layers"
-		subtitle="Painted behind this mode's content."
+		subtitle="Painted behind this mode's content. With no layers, the Theme's background shows."
 		:default-open="layers.length > 0"
 	>
 		<ScreenBackgroundLayersEditor

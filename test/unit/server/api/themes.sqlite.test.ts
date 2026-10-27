@@ -142,10 +142,17 @@ describe('the Theme library', () => {
 	});
 
 	// Which values a write refuses is `parseThemeTokenWrite`'s own test; here, that the route asks it.
-	it('refuses a token write the vocabulary does not allow, storing and announcing nothing', async () => {
+	it.each([
+		['a colour given a number', 'accent', 12],
+		[
+			'an unimplemented Animation Effect',
+			'animation-effect',
+			{ effect: 'vanta-birds' },
+		],
+	])('refuses a token write the vocabulary does not allow (%s), storing and announcing nothing', async (_case, token, value) => {
 		const theme = await create('Refused');
 
-		expect(await refusal(set(theme.id, 'accent', 12))).toMatchObject({
+		expect(await refusal(set(theme.id, token, value))).toMatchObject({
 			statusCode: 400,
 			data: { code: 'invalid-value' },
 		});

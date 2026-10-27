@@ -52,7 +52,12 @@ async function mountEditor() {
 	const { default: ThemeEditor } = await import('../../../../app/pages/themes/[themeId].vue');
 	const wrapper = mount(ThemeEditor, {
 		global: {
-			stubs: { ...nuxtUiStubs, NuxtLayout: passthroughStub, NuxtLink: passthroughStub },
+			stubs: {
+				...nuxtUiStubs,
+				NuxtLayout: passthroughStub,
+				NuxtLink: passthroughStub,
+				ScreenAnimationEffectPresetLibrary: true,
+			},
 		},
 	});
 	await flushPromises();
@@ -84,6 +89,8 @@ describe('the Theme editor', () => {
 		['a Foundation colour', 'accent', 'Default: #0077a3'],
 		['a Foundation dimension', 'inset', 'Default: 0px'],
 		['a Mode Token following a Foundation Token', 'standings.row-divider', 'Default: follows Divider'],
+		['the background', 'background', 'Default: no layers'],
+		['the Animation Effect', 'animation-effect', 'Default: Fog'],
 	])('shows %s inheriting its default', async (_case, token, inherited) => {
 		const wrapper = await mountEditor();
 
@@ -177,5 +184,63 @@ describe('the Theme editor', () => {
 		await flushPromises();
 
 		expect(field(wrapper, 'standings.surface').attributes('data-token-state')).toBe('set');
+	});
+
+	it('writes the background once its edits pause, as the whole stack', async () => {
+		answerWrite = body => theme(2, { background: body?.value });
+		const wrapper = await mountEditor();
+		const addLayer = () => part(wrapper, 'background', 'background-layers').get('[data-testid="add-layer"]').trigger('click');
+
+		await addLayer();
+		await addLayer();
+		expect(part(wrapper, 'background', 'background-layers').findAll('[data-testid="background-layer-row"]')).toHaveLength(2);
+		expect(writes()).toEqual([]);
+
+		const colorLayer = {
+			id: expect.any(String),
+			type: 'color',
+			color: '#000000',
+			enabled: true,
+			opacity: 1,
+		};
+		await vi.waitFor(() => expect(writes()).toEqual([
+			[
+				'PUT',
+				'background',
+				{
+					value: [colorLayer, colorLayer],
+				},
+			],
+		]));
+		await flushPromises();
+		expect(field(wrapper, 'background').attributes('data-token-state')).toBe('set');
+	});
+
+	it('offers a Theme\'s media layers a Remote Media URL only', async () => {
+		const wrapper = await mountEditor();
+		const editor = part(wrapper, 'background', 'background-layers');
+
+		await editor.get('[data-testid="add-layer-type"] select').setValue('image');
+		await editor.get('[data-testid="add-layer"]').trigger('click');
+
+		const sourceKinds = editor.get('[data-testid="background-layer-row"]').findAll('option').map(option => option.text());
+		expect(sourceKinds).toContain('Remote URL');
+		expect(sourceKinds).not.toContain('Asset library');
+	});
+
+	it('writes the Animation Effect an operator picks', async () => {
+		const wrapper = await mountEditor();
+
+		await part(wrapper, 'animation-effect', 'animation-effect').get('select').setValue('caustics');
+
+		await vi.waitFor(() => expect(writes()).toEqual([
+			[
+				'PUT',
+				'animation-effect',
+				{
+					value: { effect: 'caustics' },
+				},
+			],
+		]));
 	});
 });

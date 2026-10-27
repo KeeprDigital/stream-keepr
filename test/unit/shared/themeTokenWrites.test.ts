@@ -15,6 +15,20 @@ const typography = {
 
 const { max: insetMax } = FOUNDATION_TOKENS.inset.bounds;
 
+const layer = { id: 'layer', enabled: true, opacity: 1 } as const;
+const colorLayer = { ...layer, type: 'color', color: '#101010' } as const;
+const animationLayer = {
+	...layer,
+	type: 'animation',
+	animation: { effect: 'fog' },
+} as const;
+const remoteImageLayer = {
+	...layer,
+	type: 'image',
+	fit: 'cover',
+	source: { kind: 'url', url: 'https://example.com/plate.png' },
+} as const;
+
 describe('a Theme Token write', () => {
 	it.each([
 		['a Foundation colour', 'accent', 'rgba(255, 0, 0, 0.5)'],
@@ -31,6 +45,29 @@ describe('a Theme Token write', () => {
 			'a typography Mode Token naming a typography Foundation Token',
 			'standings.title-typography',
 			{ token: 'body' },
+		],
+		[
+			'a background of colour, gradient, Remote Media URL and animation layers',
+			'background',
+			[
+				colorLayer,
+				{ ...layer, type: 'gradient', gradient: 'linear-gradient(#000, #123)' },
+				remoteImageLayer,
+				{
+					...layer,
+					type: 'video',
+					fit: 'contain',
+					playbackRate: 1,
+					loop: true,
+					source: { kind: 'url', url: 'https://example.com/loop.webm' },
+				},
+				animationLayer,
+			],
+		],
+		[
+			'an Animation Effect',
+			'animation-effect',
+			{ effect: 'caustics' },
 		],
 	])('stores %s', (_case, name, value) => {
 		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: true, value });
@@ -95,6 +132,52 @@ describe('a Theme Token write', () => {
 			'a Mode Token naming no token',
 			'standings.row-divider',
 			{ token: 'nonsense' },
+			'invalid-value',
+		],
+		[
+			'a background layer referencing a library asset, until #828',
+			'background',
+			[
+				{
+					...remoteImageLayer,
+					source: { kind: 'asset', assetId: 'asset', revisionId: 'revision' },
+				},
+			],
+			'invalid-value',
+		],
+		[
+			'a background with two animation layers',
+			'background',
+			[
+				animationLayer,
+				{ ...animationLayer, id: 'second' },
+			],
+			'invalid-value',
+		],
+		[
+			'a background animation layer naming an unimplemented effect',
+			'background',
+			[
+				{
+					...animationLayer,
+					animation: { effect: 'vanta-birds' },
+				},
+			],
+			'invalid-value',
+		],
+		[
+			'an unimplemented Animation Effect',
+			'animation-effect',
+			{ effect: 'vanta-birds' },
+			'invalid-value',
+		],
+		[
+			'an Animation Effect with another effect\'s params',
+			'animation-effect',
+			{
+				effect: 'fog',
+				params: { notAFogParam: 1 },
+			},
 			'invalid-value',
 		],
 	])('refuses %s', (_case, name, value, refusal) => {

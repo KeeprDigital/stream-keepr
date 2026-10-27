@@ -16,6 +16,7 @@ import Renderer from '~/components/Screen/Renderer.vue';
 
 /** Modes whose displays still read their look from elsewhere, and the ticket moving each. */
 const MODES_NOT_YET_ON_THEME_TOKENS: Partial<Record<ScreenMode, string>> = {
+	// Declares no Mode Token: its stack is the `background` Foundation Token (Background/Display.test.ts).
 	'background': '#825',
 	'card': '#824',
 	'deck': '#824',
@@ -66,6 +67,16 @@ const SAMPLES: { [T in ThemeTokenType]: ThemeTokenValueTypes[T] } = {
 		tracking: 0.2,
 		case: 'lowercase',
 	},
+	backgroundLayers: [
+		{
+			id: 'wash',
+			type: 'color',
+			color: '#123456',
+			enabled: true,
+			opacity: 0.5,
+		},
+	],
+	animationEffect: { effect: 'caustics' },
 };
 
 /** The application fonts' faces, as `main.css` declares them, under names a test can read back. */
