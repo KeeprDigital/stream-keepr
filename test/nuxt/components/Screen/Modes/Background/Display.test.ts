@@ -11,8 +11,9 @@ const config = ref<BackgroundModeConfig>({ layers: [] });
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => config.value));
 
 const themeTokens = ref<Record<string, unknown>>();
+const screen = ref<{ themeOverrides: Record<string, unknown> }>();
 
-mockNuxtImport('useScreenContext', () => () => ({ themeTokens }));
+mockNuxtImport('useScreenContext', () => () => ({ screen, themeTokens }));
 
 const contentUrl = vi.fn((reference: GraphicAssetReference) => `/resolved/${reference.assetId}/${reference.revisionId}`);
 
@@ -58,6 +59,7 @@ async function mountComponent() {
 describe('screenModesBackgroundDisplay', () => {
 	beforeEach(() => {
 		config.value = { layers: [] };
+		screen.value = undefined;
 		themeTokens.value = undefined;
 		contentUrl.mockClear();
 	});
@@ -238,5 +240,24 @@ describe('screenModesBackgroundDisplay', () => {
 		await nextTick();
 
 		expect(wrapper.findAll('.background-layer-stack__layer').map(rendered => rendered.attributes('data-layer-id'))).toEqual(['theme-wash']);
+	});
+
+	it('paints the Screen\'s override of its Theme\'s background', async () => {
+		themeTokens.value = {
+			background: [
+				layer({ id: 'theme-wash', type: 'color', color: '#203040' }),
+			],
+		};
+		screen.value = {
+			themeOverrides: {
+				background: [
+					layer({ id: 'override-wash', type: 'color', color: '#405060' }),
+				],
+			},
+		};
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.findAll('.background-layer-stack__layer').map(rendered => rendered.attributes('data-layer-id'))).toEqual(['override-wash']);
 	});
 });

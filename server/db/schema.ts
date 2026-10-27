@@ -87,6 +87,8 @@ export const themes = sqliteTable('themes', {
 	tokens: text('tokens', { mode: 'json' }).$type<StoredThemeTokens>().notNull().default(sql`'{}'`),
 	/** Advanced by every token write, so a holder orders a write's announcement against a read. */
 	revision: integer('revision').notNull().default(1),
+	/** Transaction marker keeping the token map and its Graphic Asset Reference index in lockstep. */
+	graphicAssetReferenceVersion: text('graphic_asset_reference_version'),
 
 	...timestamps,
 }, table => [

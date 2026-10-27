@@ -1027,7 +1027,7 @@ Accepted · 2026-10-21 · [#614](https://github.com/KeeprDigital/stream-keepr/is
 
 **A Graphic Style Set operation is refused whole.** Deleting an entry or a whole Style Set already stamps one operation only if every participant is at the revision it read. That first statement now also requires every reference of every template it rewrites to resolve, and each rewrite restates its template's reference index under the same stamp. One template referencing an asset that is no longer selectable refuses the whole operation: the Style Set and every template stay as they were. That refusal is `GraphicStyleSetTemplateReferenceConflict`, told apart from a concurrent edit by every revision still standing. The route asks first and names each refused template; the commit-time refusal only happens when the catalogue moved after that, and its `409` names none.
 
-**Retire is refused while a saved template references the asset.** Retiring a Graphic Asset is refused while any Broadcast Graphic Template or Feature Match Layout Template references any of its revisions. It answers `in-use` with those templates' usage, as Trash answers a referenced asset, and the Library Workspace names them. The condition sits in the catalogue's retiring `UPDATE`, so a template saved concurrently either commits first and holds the asset back, or finds the asset retired and is refused. A Screen's reference does not hold Retire back: a Screen keeps an unchanged retired reference resolving, as before. This matches a selected Broadcast Deck List, which cannot be deleted.
+**Retire is refused while a saved template references the asset.** Retiring a Graphic Asset is refused while any Broadcast Graphic Template or Feature Match Layout Template references any of its revisions. It answers `in-use` with those templates' usage, as Trash answers a referenced asset, and the Library Workspace names them. The condition sits in the catalogue's retiring `UPDATE`, so a template saved concurrently either commits first and holds the asset back, or finds the asset retired and is refused. A Screen's reference does not hold Retire back: a Screen keeps an unchanged retired reference resolving, as before. This matches a selected Broadcast Deck List, which cannot be deleted. A Theme's reference and a Screen Theme Override's do hold it back (ADR-0050).
 
 **Content availability is checked at the route only.** It is the byte store's state, which no D1 statement can see.
 
@@ -1592,11 +1592,26 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 
 ## ADR-0050: Theme Tokens may reference Graphics Asset Library content
 
-Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812) · Reverses ADR-0001
+Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812) · Reverses ADR-0001 · Amended 2026-10-27 ([#828](https://github.com/KeeprDigital/stream-keepr/issues/828)): what is indexed, what holds Retire back, and what the capability admits
 
 ### Decision
 
 **An asset-typed Theme Token, or a Screen Theme Override of one, holds an ordinary Graphic Asset Reference** to an exact revision of an image, silent video or font. Library fonts are included. The reference protects the asset from retire and trash as a template's does (ADR-0034), and the refusal names the Theme or Screen. A Screen Output's asset capability covers the revisions its resolved Theme supplies.
+
+Three token shapes reach library content (#828):
+
+- **An `asset` token** holds `{ kind, assetId, revisionId }` or `null` for none. Its definition names the kinds it admits; the `logo` Foundation Token admits an image or silent video, and ships `null`.
+- **A typography token's font** is an application font or one exact font revision, as a Graphic Item's is.
+- **A Background Layer stack's image and video layers** take library media as a Screen's own do. A Screen's stack and the `background` token validate through one schema (`shared/modules/theme/background.ts`).
+
+**How each is indexed.**
+
+- **A Theme's references** have owner kind `theme`, the Theme's id, and slots rooted at the token: `logo`, `heading/font`, `background/<layer id>/source`. No token name holds the `/`, so the `background` token's slots never read as a `background.` Mode Token's. A token write replaces only that token's slots, in the statement that commits the value. Each reference must resolve there, and the route first asks the library, so a refusal names the slot. Clearing the token, or setting it to none, releases them. Deleting the Theme drops them.
+- **A Screen's overrides** index under its own `themeOverrides.` namespace, beside its modes'. Each override write replaces that whole namespace.
+
+**Retire is refused** while a Theme or an override references the asset, as for a template. A Screen's own mode references still do not hold it back (ADR-0034). Trash was already refused for any reference. The usage names the Theme by its name.
+
+**The capability admits exactly what the Screen's resolved tokens supply.** That is every Foundation Token, which any Screen may consume and a Graphic Item may bind, plus the Mode Tokens of the mode the Screen shows. Each resolves from the override, else the Theme, else the default. A Theme value an override shadows, a dormant override of another mode's Mode Token, and a Theme the Event does not use supply nothing. The revision must also be indexed by that Theme or by the Screen's override namespace. Screen Outputs load the library fonts their typography Mode Tokens resolve to as `FontFace`s, and hide the mode's display, not its background, while the fonts load.
 
 ### Why
 
@@ -1606,6 +1621,9 @@ A Theme is meant to carry the production's logo, backdrop and typefaces. ADR-000
 
 - Theme export/import, when built, must carry asset bytes through the Template Package asset pipeline: staging, quota, revalidation and Graphic Asset Origin. It cannot be data-only.
 - ADR-0001 holds only until Graphic Style Sets are removed (#830).
+- A Theme or override cannot hold a retired asset, because Retire is refused while one references it. A token write therefore never needs ADR-0034's retained-reference allowance; an override still grants it to a revision it already held at the same slot.
+- A Screen overrides only a token its mode can consume (ADR-0049), and no mode yet declares an asset Mode Token, so no Screen can override `logo` until one does. Its fonts and its `background` stack can be overridden.
+- The capability admits the Theme's logo on every Screen of the Event, whether or not that Screen's mode paints it. The Event context already carries the whole Theme, so this reveals nothing new, and a graphics host binding the logo needs no change to the capability.
 
 ## ADR-0051: A Screen holds no look of its own, and the Event Canvas is a coordinate space
 

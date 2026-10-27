@@ -21,6 +21,7 @@ vi.mock('~/modules/screen-mode', async () => ({
 	// Theme Tokens reaching a display are the rendering test's
 	// (test/nuxt/components/Screen/Modes/themeTokenRendering.test.ts).
 	screenModeThemeTokenStyle: () => ({}),
+	screenModeThemeFontReferences: () => [],
 }));
 
 const overlayContainer = ref<HTMLElement | null>(null);
@@ -184,5 +185,21 @@ describe('screenRenderer', () => {
 		await nextTick();
 
 		expect(paintedLayerIds(wrapper)).toBe('theme-wash');
+	});
+
+	it('paints the Screen\'s override of the Theme background', () => {
+		themeTokens.value = {
+			background: [themeLayer],
+		};
+		screen.value = createMockScreen({
+			currentMode: 'standings',
+			themeOverrides: {
+				background: [
+					{ ...colorLayer, id: 'override-wash' },
+				],
+			},
+		});
+
+		expect(paintedLayerIds(mountRenderer())).toBe('override-wash');
 	});
 });

@@ -13,8 +13,8 @@ import { remoteMediaUrlRefusal } from '~~/shared/utils/remoteMediaUrl';
  * `null` means the author cleared the library choice; each host decides what
  * "no source" stores, since a Frame image may be absent and a layer may not.
  *
- * Without an `eventId` the field offers a Remote Media URL only: a Theme's
- * layers cannot reference library media until #828.
+ * Without an `eventId`, as for a Theme's layers, the library picker offers the
+ * whole library rather than the Event's adopted assets first (ADR-0050).
  */
 const props = defineProps<{
 	modelValue: ScreenMediaSource | undefined;
@@ -28,17 +28,10 @@ const emit = defineEmits<{
 	'update:modelValue': [source: ScreenMediaSource | null];
 }>();
 
-/** The library is an Event's; without one, only a Remote Media URL can be given. */
-const libraryOffered = computed(() => props.eventId !== undefined);
-
-const sourceKindOptions = computed(() => [
-	...(libraryOffered.value
-		? [
-				{ label: 'Asset library', value: 'asset' },
-			]
-		: []),
+const sourceKindOptions = [
+	{ label: 'Asset library', value: 'asset' },
 	{ label: 'Remote URL', value: 'url' },
-]);
+];
 
 /**
  * The kind the field is showing, held as UI state rather than written through:
@@ -48,9 +41,7 @@ const sourceKindOptions = computed(() => [
  * different choices, not two spellings of one.
  */
 const draftKind = ref<'asset' | 'url'>();
-const kind = computed(() => libraryOffered.value
-	? draftKind.value ?? props.modelValue?.kind ?? 'asset'
-	: 'url');
+const kind = computed(() => draftKind.value ?? props.modelValue?.kind ?? 'asset');
 const url = computed(() => props.modelValue?.kind === 'url'
 	? props.modelValue.url
 	: '');
@@ -103,7 +94,7 @@ function clearAsset(next: GraphicAssetReference | undefined) {
 			@update:model-value="emit('update:modelValue', { kind: 'url', url: String($event) })"
 		/>
 	</UFormField>
-	<UFormField v-else-if="eventId !== undefined" :label="label">
+	<UFormField v-else :label="label">
 		<GraphicsAssetFocusPicker
 			:model-value="reference"
 			:event-id="eventId"

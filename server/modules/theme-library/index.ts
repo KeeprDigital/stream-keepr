@@ -1,9 +1,12 @@
 import type { DbTheme } from '~~/server/db/schema';
+import type { GraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import type { ThemeInUseData, ThemeListResponse, ThemeResponse } from '~~/shared/types/theme';
 import { mapThemeToResponse, mapThemeToScreenOutput, mapThemeToSummary } from '~~/server/mappers/theme';
-import { ThemeInUseError, themeService } from '~~/server/services/theme';
+import { ThemeAssetReferenceConflict, ThemeInUseError, themeService } from '~~/server/services/theme';
 import { publishMessage } from '~~/server/utils/ably';
-import { parseThemeTokenWrite } from '~~/shared/themeTokens';
+import { assertGraphicsTemplateReferencesSelectable } from '~~/server/utils/graphicsTemplateReferences';
+import { themeTokenValueGraphicAssetReferences } from '~~/shared/themeAssetReferences';
+import { parseThemeTokenWrite, themeTokenDefinition } from '~~/shared/themeTokens';
 import { THEME_IN_USE, THEME_TOKEN_WRITE_REFUSALS } from '~~/shared/types/theme';
 import { randomUuid } from '~~/shared/utils/uuid';
 
@@ -11,6 +14,10 @@ interface TokenWriteParams {
 	themeId: string;
 	token: string;
 	originConnectionId?: string;
+}
+
+function isReference(value: unknown): value is { token: string } {
+	return typeof value === 'object' && value !== null && 'token' in value;
 }
 
 function themeNotFound(): never {
@@ -81,7 +88,16 @@ export function themeLibraryModule() {
 		await Promise.all(users.map(event => publishMessage(event.id, 'theme:updated', payload, originConnectionId)));
 	}
 
-	async function setToken({ themeId, token, value, originConnectionId }: TokenWriteParams & { value: unknown }): Promise<ThemeResponse> {
+	/**
+	 * Set a token. A value naming library content holds it as the Theme's own
+	 * Graphic Asset References (ADR-0050): each must be one an author could
+	 * select now, asked of the library first so a refusal names the slot, and
+	 * again in the statement that commits.
+	 */
+	async function setToken({ themeId, token, value, originConnectionId, graphicsAssets }: TokenWriteParams & {
+		value: unknown;
+		graphicsAssets: () => Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevisions'>;
+	}): Promise<ThemeResponse> {
 		const write = parseThemeTokenWrite(token, value);
 		if (!write.ok) {
 			throw createError({
@@ -90,7 +106,25 @@ export function themeLibraryModule() {
 				data: { code: write.refusal },
 			});
 		}
-		const theme = await themes.setToken(themeId, token, write.value) ?? themeNotFound();
+		const references = isReference(write.value)
+			? []
+			: themeTokenValueGraphicAssetReferences(themeTokenDefinition(token)!.definition.type, write.value, token);
+		if (references.length > 0)
+			await assertGraphicsTemplateReferencesSelectable(graphicsAssets(), references, 'Theme');
+		let written: DbTheme | undefined;
+		try {
+			written = await themes.setToken(themeId, token, write.value, references);
+		}
+		catch (error) {
+			if (!(error instanceof ThemeAssetReferenceConflict))
+				throw error;
+			throw createError({
+				statusCode: 409,
+				statusMessage: 'Conflict',
+				message: 'A Graphic Asset Revision this value names stopped being selectable while it was being saved. Choose another, or restore the asset.',
+			});
+		}
+		const theme = written ?? themeNotFound();
 		await announce(theme, originConnectionId);
 		return mapThemeToResponse(theme);
 	}

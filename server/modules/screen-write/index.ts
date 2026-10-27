@@ -14,17 +14,20 @@ import { parseModeConfigPatchResult } from '~~/server/schemas/api/screen';
 import { cardService } from '~~/server/services/card';
 import { screenService } from '~~/server/services/screen';
 import { canonicalJson } from '~~/server/utils/canonicalJson';
+import { assertGraphicsTemplateReferencesSelectable } from '~~/server/utils/graphicsTemplateReferences';
 import {
 	validateScreenModeConfigReferences,
 	validateScreenModeConfigsReferences,
 } from '~~/server/utils/routeGuards';
 import { parseScreenThemeOverrideWrite, SCREEN_THEME_OVERRIDE_REFUSALS } from '~~/shared/screenThemeOverrides';
+import { storedThemeTokenGraphicAssetReferences } from '~~/shared/themeAssetReferences';
 import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
 	GRAPHIC_ASSET_REFERENCING_SCREEN_MODES,
 	isGraphicAssetReferencingScreenMode,
 	sameGraphicAssetReference,
 	sameScreenGraphicAssetReferences,
+	SCREEN_THEME_OVERRIDE_SLOT_PREFIX,
 	screenModeGraphicAssetReferences,
 } from '~~/shared/utils/graphicsAssetReferences';
 
@@ -107,6 +110,7 @@ interface UpdateModeConfigParams extends AuthoredWrite {
 interface UpdateThemeOverridesParams {
 	eventId: number;
 	screenId: number;
+	graphicsAssets: Provides<Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevisions'>>;
 	/** Each token's new override, or `null` to clear it. */
 	tokens: Record<string, unknown>;
 	stateVersion?: number;
@@ -462,7 +466,7 @@ export function screenWriteModule() {
 	 * landing first refuses it as a conflict rather than letting the check go
 	 * stale. An override of another mode's Mode Token is left as stored.
 	 */
-	async function updateThemeOverrides({ eventId, screenId, tokens, stateVersion, originConnectionId }: UpdateThemeOverridesParams): Promise<ScreenResponse> {
+	async function updateThemeOverrides({ eventId, screenId, tokens, stateVersion, originConnectionId, graphicsAssets }: UpdateThemeOverridesParams): Promise<ScreenResponse> {
 		const existing = await screens.findById(screenId, eventId);
 		if (!existing)
 			throw createError({ statusCode: 404, message: 'Screen not found' });
@@ -483,7 +487,18 @@ export function screenWriteModule() {
 				next[token] = write.value;
 		}
 
-		const updatedScreen = await screens.updateThemeOverrides(screenId, eventId, next, stateVersion ?? existing.stateVersion);
+		// A newly named Graphic Asset Revision must be one an author could select
+		// now (ADR-0050); one the override already held is not asked again.
+		const held = new Map(
+			storedThemeTokenGraphicAssetReferences(existing.themeOverrides, SCREEN_THEME_OVERRIDE_SLOT_PREFIX)
+				.map(item => [item.ownerSlot, item.reference] as const),
+		);
+		const changed = storedThemeTokenGraphicAssetReferences(next, SCREEN_THEME_OVERRIDE_SLOT_PREFIX)
+			.filter(item => !sameGraphicAssetReference(held.get(item.ownerSlot), item.reference));
+		if (changed.length > 0)
+			await assertGraphicsTemplateReferencesSelectable(graphicsAssets(), changed, 'Screen Theme Override');
+
+		const updatedScreen = await screens.updateThemeOverrides(screenId, eventId, next, existing.themeOverrides, stateVersion ?? existing.stateVersion);
 		if (!updatedScreen)
 			throw createError({ statusCode: 404, message: 'Screen not found' });
 

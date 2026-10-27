@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { backgroundModeConfigSchema } from '~~/server/schemas/api/screen';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { parseThemeTokenWrite } from '~~/shared/themeTokens';
 
@@ -15,6 +14,8 @@ const typography = {
 } as const;
 
 const { max: insetMax } = FOUNDATION_TOKENS.inset.bounds;
+
+const libraryRevision = { assetId: 'asset-brand', revisionId: 'revision-brand' } as const;
 
 const layer = { id: 'layer', enabled: true, opacity: 1 } as const;
 const colorLayer = { ...layer, type: 'color', color: '#101010' } as const;
@@ -70,6 +71,44 @@ describe('a Theme Token write', () => {
 			'an Animation Effect',
 			'animation-effect',
 			{ effect: 'caustics' },
+		],
+		[
+			'a typography in a library font',
+			'heading',
+			{
+				...typography,
+				font: { kind: 'asset', reference: libraryRevision },
+			},
+		],
+		[
+			'a library image as the logo',
+			'logo',
+			{ kind: 'image', ...libraryRevision },
+		],
+		[
+			'a library silent video as the logo',
+			'logo',
+			{ kind: 'silent-video', ...libraryRevision },
+		],
+		[
+			'no logo',
+			'logo',
+			null,
+		],
+		[
+			'a background of library image and video layers',
+			'background',
+			[
+				{
+					...remoteImageLayer,
+					source: { kind: 'asset', ...libraryRevision },
+				},
+				{
+					...remoteVideoLayer,
+					id: 'loop',
+					source: { kind: 'asset', ...libraryRevision },
+				},
+			],
 		],
 	])('stores %s', (_case, name, value) => {
 		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: true, value });
@@ -137,14 +176,15 @@ describe('a Theme Token write', () => {
 			'invalid-value',
 		],
 		[
-			'a background layer referencing a library asset, until #828',
-			'background',
-			[
-				{
-					...remoteImageLayer,
-					source: { kind: 'asset', assetId: 'asset', revisionId: 'revision' },
-				},
-			],
+			'a logo naming a font, a kind it does not admit',
+			'logo',
+			{ kind: 'font', ...libraryRevision },
+			'invalid-value',
+		],
+		[
+			'a logo naming no revision',
+			'logo',
+			{ kind: 'image', assetId: 'asset-brand' },
 			'invalid-value',
 		],
 		[
@@ -155,105 +195,5 @@ describe('a Theme Token write', () => {
 		],
 	])('refuses %s', (_case, name, value, refusal) => {
 		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: false, refusal });
-	});
-});
-
-// A Theme's background paints through the Screen's own stack, so each side of
-// every bound the two share gives one answer; only library media differs (#828).
-describe('a Theme background beside a Screen\'s own stack', () => {
-	const screenAccepts = (layers: unknown) => backgroundModeConfigSchema.safeParse({ layers }).success;
-	const themeAccepts = (layers: unknown) => parseThemeTokenWrite('background', layers).ok;
-	const colorLayers = (count: number) => Array.from({ length: count }, (_, index) => ({ ...colorLayer, id: `layer-${index}` }));
-
-	it.each([
-		['an empty stack', [], true],
-		[
-			'twenty layers',
-			colorLayers(20),
-			true,
-		],
-		[
-			'twenty-one layers',
-			colorLayers(21),
-			false,
-		],
-		[
-			'one animation layer',
-			[animationLayer],
-			true,
-		],
-		[
-			'two animation layers',
-			[
-				animationLayer,
-				{ ...animationLayer, id: 'second' },
-			],
-			false,
-		],
-		[
-			'opacity at both bounds',
-			[
-				{ ...colorLayer, opacity: 0 },
-				{ ...colorLayer, id: 'top', opacity: 1 },
-			],
-			true,
-		],
-		[
-			'opacity above its bound',
-			[
-				{ ...colorLayer, opacity: 1.01 },
-			],
-			false,
-		],
-		[
-			'a video at both playback-rate bounds',
-			[
-				{ ...remoteVideoLayer, playbackRate: 0.25 },
-				{ ...remoteVideoLayer, id: 'fast', playbackRate: 4 },
-			],
-			true,
-		],
-		[
-			'an empty Remote Media URL, meaning unset',
-			[
-				{
-					...remoteImageLayer,
-					source: { kind: 'url', url: '' },
-				},
-			],
-			true,
-		],
-		[
-			'a plain-HTTP Remote Media URL',
-			[
-				{
-					...remoteImageLayer,
-					source: { kind: 'url', url: 'http://example.com/plate.png' },
-				},
-			],
-			false,
-		],
-		[
-			'an empty colour',
-			[
-				{ ...colorLayer, color: '' },
-			],
-			false,
-		],
-		[
-			'an unimplemented effect',
-			[
-				{
-					...animationLayer,
-					animation: { effect: 'vanta-birds' },
-				},
-			],
-			false,
-		],
-	])('answers the same for %s', (_case, stack, accepted) => {
-		expect([
-			themeAccepts(stack),
-			screenAccepts(stack),
-		]).toEqual([accepted, accepted]);
 	});
 });

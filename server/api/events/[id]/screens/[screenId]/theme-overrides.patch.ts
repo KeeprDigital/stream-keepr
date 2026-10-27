@@ -1,3 +1,4 @@
+import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { screenWriteModule } from '~~/server/modules/screen-write';
 import { screenParamsSchema, screenThemeOverridesPatchSchema } from '~~/server/schemas/api/screen';
 import { getOriginConnectionId } from '~~/server/utils/ably';
@@ -12,5 +13,6 @@ export default defineEventHandler(async (event) => {
 		tokens,
 		stateVersion,
 		originConnectionId: getOriginConnectionId(event),
+		graphicsAssets: () => graphicsAssetLibraryForEvent(event),
 	});
 });

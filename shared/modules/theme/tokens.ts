@@ -1,24 +1,43 @@
 import type { AnimationEffectSelection } from '../../animationEffects';
-import type { GraphicApplicationFontSelection, GraphicTextTransform } from '../../types/graphics';
+import type { GraphicFontSelection, GraphicTextTransform } from '../../types/graphics';
+import type { GraphicAssetId, GraphicAssetRevisionId } from '../../types/graphicsAsset';
 import type { ThemeBackgroundLayer } from './background';
 import { z } from 'zod';
 import { animationEffectSelectionSchema } from '../../animationEffects';
 import { clampToShapeBounds } from '../../screenModeConfigs/fields';
 import { GRAPHIC_TEXT_TRANSFORM_VALUES } from '../../types/graphics';
 import { GRAPHIC_FONT_IDS } from '../graphics/typography';
-import { themeBackgroundLayerStackSchema } from './background';
+import { backgroundLayerStackSchema, graphicAssetReferenceSchema } from './background';
 
 /**
  * A typography Theme Token: a face and how it is set, never a size. Each
  * consumer owns its size, so one heading style serves large and small text.
+ * The face is an application font or one exact font Graphic Asset Revision
+ * (ADR-0050).
  */
 export interface ThemeTypography {
-	font: GraphicApplicationFontSelection;
+	font: GraphicFontSelection;
 	weight: number;
 	lineHeight: number;
 	/** Letter spacing in em. */
 	tracking: number;
 	case: GraphicTextTransform;
+}
+
+/** The kinds of Graphic Asset an asset Theme Token may name. */
+export const THEME_ASSET_KINDS = ['image', 'silent-video', 'font'] as const;
+
+export type ThemeAssetKind = typeof THEME_ASSET_KINDS[number];
+
+/**
+ * An asset Theme Token's value: one exact Graphic Asset Revision and its kind,
+ * held as an ordinary Graphic Asset Reference by the Theme or Screen that
+ * stores it (ADR-0050).
+ */
+export interface ThemeAsset {
+	kind: ThemeAssetKind;
+	assetId: GraphicAssetId;
+	revisionId: GraphicAssetRevisionId;
 }
 
 /** What a Theme Token of each type holds. */
@@ -28,10 +47,12 @@ export interface ThemeTokenValueTypes {
 	/** Event Canvas pixels. */
 	dimension: number;
 	typography: ThemeTypography;
-	/** A Background Layer stack, painter's order (ADR-0016); library media waits for #828. */
+	/** A Background Layer stack, painter's order (ADR-0016). */
 	backgroundLayers: ThemeBackgroundLayer[];
 	/** An Animation Effect and its params, from the closed vocabulary (ADR-0014). */
 	animationEffect: AnimationEffectSelection;
+	/** One exact Graphic Asset Revision, or none. */
+	asset: ThemeAsset | null;
 }
 
 export type ThemeTokenType = keyof ThemeTokenValueTypes;
@@ -50,7 +71,8 @@ export type TokenDefinitionOf<T extends ThemeTokenType, Default> = {
 	type: T;
 	label: string;
 	default: Default;
-} & (T extends 'dimension' ? { bounds?: ThemeDimensionBounds } : unknown);
+} & (T extends 'dimension' ? { bounds?: ThemeDimensionBounds } : unknown)
+& (T extends 'asset' ? { assetKinds: readonly ThemeAssetKind[] } : unknown);
 
 /**
  * A Foundation Token: an application-wide role any Screen Mode may consume. It
@@ -93,10 +115,16 @@ export type ModeTokenDeclarations = Readonly<Record<string, ModeTokenDefinition>
 export type StoredThemeTokens = Readonly<Record<string, unknown>>;
 
 const typographySchema = z.object({
-	font: z.object({
-		kind: z.literal('application'),
-		fontId: z.enum(GRAPHIC_FONT_IDS),
-	}).strict(),
+	font: z.discriminatedUnion('kind', [
+		z.object({
+			kind: z.literal('application'),
+			fontId: z.enum(GRAPHIC_FONT_IDS),
+		}).strict(),
+		z.object({
+			kind: z.literal('asset'),
+			reference: graphicAssetReferenceSchema,
+		}).strict(),
+	]),
 	weight: z.number().int().min(100).max(900),
 	lineHeight: z.number().min(0.5).max(3),
 	tracking: z.number().min(-0.5).max(1),
@@ -115,9 +143,14 @@ export function themeTokenValueSchema(definition: FoundationTokenDefinition | Mo
 		case 'typography':
 			return typographySchema;
 		case 'backgroundLayers':
-			return themeBackgroundLayerStackSchema;
+			return backgroundLayerStackSchema;
 		case 'animationEffect':
 			return animationEffectSelectionSchema;
+		case 'asset':
+			return z.object({
+				kind: z.enum(definition.assetKinds as [ThemeAssetKind, ...ThemeAssetKind[]]),
+				...graphicAssetReferenceSchema.shape,
+			}).strict().nullable();
 	}
 }
 

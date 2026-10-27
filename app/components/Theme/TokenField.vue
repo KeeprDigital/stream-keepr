@@ -26,6 +26,8 @@ const props = defineProps<{
 	scope?: 'theme' | 'screen';
 	/** What it reads when unset, as stored: a literal, or a Foundation Token it follows. */
 	inherited?: unknown;
+	/** The Event whose adopted library assets a picker offers first; a Theme has none. */
+	eventId?: number;
 }>();
 
 const emit = defineEmits<{
@@ -149,6 +151,8 @@ function chooseSource(value: string) {
 			:model-value="resolved"
 			:label="definition.label"
 			:bounds="definition.type === 'dimension' ? definition.bounds : undefined"
+			:asset-kinds="definition.type === 'asset' ? definition.assetKinds : undefined"
+			:event-id="eventId"
 			:class="{ 'pointer-events-none opacity-50': disabled }"
 			@commit="(value: unknown) => emit('set', value)"
 		/>

@@ -153,6 +153,39 @@ describe('screen Theme Overrides', () => {
 		expect(announcedScreens()).toEqual([screenId]);
 	});
 
+	// `background` is consumed by the Screen host, not a Mode Token.
+	const background = [
+		{
+			id: 'wash',
+			type: 'color',
+			color: '#101010',
+			enabled: true,
+			opacity: 1,
+		},
+	];
+	it.each([
+		[
+			'the Background Screen',
+			'background',
+			{ background },
+		],
+		[
+			'a mode declaring a Background Layer stack',
+			'standings',
+			{ background },
+		],
+		['a graphics host, which paints no Background Layer stack', 'broadcast-graphics', 'unconsumable-token'],
+	])('answers %s overriding the background', async (_case, mode, answer) => {
+		const screenId = await createScreen(mode as ScreenMode, 'main');
+
+		const outcome = await override(screenId, { background }).then(
+			screen => screen.themeOverrides,
+			(error: { data?: { code?: string } }) => error.data?.code,
+		);
+
+		expect(outcome).toEqual(answer);
+	});
+
 	it('clears one override, keeping the rest, so the cleared token reads the Theme again', async () => {
 		const screenId = await createScreen('standings', 'main');
 		await override(screenId, { 'accent': '#00ff00', 'standings.surface': '#000000' });

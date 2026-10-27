@@ -36,7 +36,15 @@ function typographyCss(value: ThemeTypography): Record<TypographyProperty, strin
 	};
 }
 
-/** Resolved token values as the custom properties a Screen host sets for its display. */
+function isTypography(value: unknown): value is ThemeTypography {
+	return typeof value === 'object' && value !== null && 'font' in value && 'weight' in value;
+}
+
+/**
+ * Resolved token values as the custom properties a Screen host sets for its
+ * display. A token a property cannot carry, such as an asset or a Background
+ * Layer stack, sets none: its consumer reads the resolved value itself.
+ */
 export function themeTokenCssProperties(values: Readonly<Record<string, unknown>>): Record<string, string> {
 	const properties: Record<string, string> = {};
 	for (const [name, value] of Object.entries(values)) {
@@ -46,8 +54,8 @@ export function themeTokenCssProperties(values: Readonly<Record<string, unknown>
 		else if (typeof value === 'number') {
 			properties[themeTokenCssProperty(name)] = `${value}px`;
 		}
-		else {
-			for (const [property, css] of Object.entries(typographyCss(value as ThemeTypography)))
+		else if (isTypography(value)) {
+			for (const [property, css] of Object.entries(typographyCss(value)))
 				properties[themeTokenCssProperty(name, TYPOGRAPHY_PROPERTIES[property as TypographyProperty])] = css;
 		}
 	}

@@ -5,7 +5,7 @@ import { usePreferredDark } from '@vueuse/core';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { DEFAULT_THEME_TOKENS } from '~~/shared/modules/theme';
 import { screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
-import { getScreenModeDefinition, resolveScreenModeHost, screenBackgroundLayers, screenModeThemeTokenStyle } from '~/modules/screen-mode';
+import { getScreenModeDefinition, resolveScreenModeHost, screenBackgroundLayers, screenModeThemeFontReferences, screenModeThemeTokenStyle } from '~/modules/screen-mode';
 
 const { screen, overlayContainer, themeTokens, eventCanvas, viewport } = useScreenContext();
 const preferredDark = usePreferredDark();
@@ -56,7 +56,7 @@ const modeBackgroundLayers = computed<BackgroundLayer[]>(() => {
 	if (!screenModeSupportsBackgroundLayers(mode))
 		return [];
 	const modeConfigs = (screen.value?.modeConfigs ?? {}) as ModeConfigsMap;
-	return screenBackgroundLayers(modeConfigs[mode]?.backgroundLayers, themeTokens?.value ?? DEFAULT_THEME_TOKENS, {});
+	return screenBackgroundLayers(modeConfigs[mode]?.backgroundLayers, themeTokens?.value ?? DEFAULT_THEME_TOKENS, screen.value?.themeOverrides ?? {});
 });
 
 /**
@@ -80,6 +80,30 @@ const themeTokenStyle = computed(() => screenModeThemeTokenStyle(
 	screen.value?.themeOverrides ?? {},
 ));
 
+/**
+ * The library fonts the mode's typography Mode Tokens resolve to, loaded as
+ * `FontFace`s through the Screen Output Asset Capability, which admits what
+ * the Screen's resolved tokens supply (ADR-0050). The mode's display hides
+ * while they load, so text never flashes in a fallback face, and the
+ * background behind it stays on air; a font that fails shows its fallback
+ * rather than a blank display.
+ */
+const themeFontReferences = computed(() => screenModeThemeFontReferences(
+	currentMode.value,
+	themeTokens?.value ?? DEFAULT_THEME_TOKENS,
+	screen.value?.themeOverrides ?? {},
+));
+const themeFontAssets = computed(() => themeFontReferences.value.map(({ reference }) => reference));
+const { contentUrl: themeFontUrl, contentUrlsSettled: themeFontUrlsSettled } = useScreenGraphicAssetContentUrls(themeFontAssets);
+const { fontsReady: themeFontsReady, fontsFailed: themeFontsFailed } = useGraphicAssetFontFaces(
+	themeFontReferences,
+	themeFontUrl,
+	themeFontUrlsSettled,
+);
+const themeFontStyle = computed(() => themeFontsReady.value || themeFontsFailed.value
+	? undefined
+	: { visibility: 'hidden' as const });
+
 function setHostContainer(el: Element | ComponentPublicInstance | null) {
 	overlayContainer.value = host.value.provideOverlayContainer && el instanceof HTMLElement
 		? el
@@ -97,13 +121,15 @@ function setHostContainer(el: Element | ComponentPublicInstance | null) {
 			:ref="setHostContainer"
 			:class="host.containerClass"
 			:style="[host.containerStyle, containerBackgroundStyle, themeTokenStyle]"
+			:data-font-ready="themeFontsReady.toString()"
+			:data-font-error="themeFontsFailed.toString()"
 		>
 			<ScreenBackgroundLayerStack
 				v-if="modeBackgroundLayers.length"
 				class="screen-renderer__background"
 				:layers="modeBackgroundLayers"
 			/>
-			<component :is="displayComponent" />
+			<component :is="displayComponent" :style="themeFontStyle" />
 		</div>
 	</div>
 </template>

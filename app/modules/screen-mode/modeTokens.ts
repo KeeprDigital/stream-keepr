@@ -2,6 +2,7 @@ import type { StoredThemeTokens, ThemeBackgroundLayer } from '~~/shared/modules/
 import type { ScreenModeTokenOfType, ThemedScreenMode } from '~~/shared/screenModes';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { BackgroundLayer } from '~~/shared/types/screenConfig';
+import type { ScreenGraphicAssetReference } from '~~/shared/utils/graphicsAssetReferences';
 import {
 	FOUNDATION_TOKENS,
 	resolveFoundationToken,
@@ -11,6 +12,7 @@ import {
 	themeTypographyStyle,
 } from '~~/shared/modules/theme';
 import { screenModeTokenName, screenModeTokens } from '~~/shared/screenModes';
+import { themeTokenValueGraphicAssetReferences } from '~~/shared/themeAssetReferences';
 
 /**
  * The custom properties a Screen host sets for its mode's display: each of the
@@ -27,6 +29,24 @@ export function screenModeThemeTokenStyle(mode: ScreenMode, theme: StoredThemeTo
 		overrides,
 	});
 	return themeTokenCssProperties(Object.fromEntries(Object.keys(modeTokens).map(name => [name, values[name]])));
+}
+
+/**
+ * The library fonts a mode's display paints: each typography Mode Token that
+ * resolves to a font Graphic Asset Revision. Its Screen host loads them as
+ * `FontFace`s under the family the token's custom property names.
+ */
+export function screenModeThemeFontReferences(mode: ScreenMode, theme: StoredThemeTokens, overrides: StoredThemeTokens): ScreenGraphicAssetReference[] {
+	const modeTokens = screenModeTokens(mode);
+	const { values } = resolveThemeTokens({
+		vocabulary: FOUNDATION_TOKENS,
+		modeTokens,
+		theme,
+		overrides,
+	});
+	return Object.entries(modeTokens).flatMap(([name, definition]) => definition.type === 'typography'
+		? themeTokenValueGraphicAssetReferences('typography', values[name]!, name)
+		: []);
 }
 
 /** One of a display's own colour or dimension Mode Tokens, as a CSS value. */
