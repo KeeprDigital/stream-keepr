@@ -23,8 +23,9 @@ export interface ResolvedThemeTokens {
 	/** Each consumed token's resolved value, by name. */
 	values: Readonly<Record<string, ThemeTokenValue>>;
 	/**
-	 * The tokens the Screen consumes: every Mode Token its mode declares, then
-	 * each Foundation Token one of them resolves through, in vocabulary order.
+	 * The tokens the Screen consumes, from its mode's declaration alone: every
+	 * Mode Token it declares, then each Foundation Token their defaults name,
+	 * in vocabulary order. What a Theme or override stores never changes it.
 	 */
 	consumed: readonly string[];
 }
@@ -34,6 +35,16 @@ function isReference(value: unknown): value is ThemeTokenReference {
 		&& value !== null
 		&& Object.keys(value).length === 1
 		&& typeof (value as { token?: unknown }).token === 'string';
+}
+
+/** The first of `stored`, most preferred first, that `read` can read. */
+function firstReadable(stored: readonly unknown[], read: (value: unknown) => ThemeTokenValue | undefined): ThemeTokenValue | undefined {
+	for (const value of stored) {
+		const readable = read(value);
+		if (readable !== undefined)
+			return readable;
+	}
+	return undefined;
 }
 
 /**
@@ -55,24 +66,10 @@ function isReference(value: unknown): value is ThemeTokenReference {
  */
 export function resolveThemeTokens(input: ResolveThemeTokensInput): ResolvedThemeTokens {
 	const { vocabulary, modeTokens, theme, overrides } = input;
-	const sources = [overrides, theme];
-	const foundationValues = new Map<string, ThemeTokenValue>();
 
 	function resolveFoundation(name: string): ThemeTokenValue {
-		const cached = foundationValues.get(name);
-		if (cached !== undefined)
-			return cached;
 		const definition = vocabulary[name]!;
-		let value: ThemeTokenValue = definition.default;
-		for (const source of sources) {
-			const stored = readTokenLiteral(definition, source[name]);
-			if (stored !== undefined) {
-				value = stored;
-				break;
-			}
-		}
-		foundationValues.set(name, value);
-		return value;
+		return firstReadable([overrides[name], theme[name], definition.default], stored => readTokenLiteral(definition, stored))!;
 	}
 
 	/** A Mode Token's value as one source holds it, or undefined when it holds none it can read. */
@@ -86,19 +83,15 @@ export function resolveThemeTokens(input: ResolveThemeTokensInput): ResolvedThem
 	}
 
 	const values: Record<string, ThemeTokenValue> = {};
-	for (const [name, definition] of Object.entries(modeTokens)) {
-		for (const stored of [overrides[name], theme[name], definition.default]) {
-			const value = readModeToken(definition, stored);
-			if (value !== undefined) {
-				values[name] = value;
-				break;
-			}
-		}
-	}
+	for (const [name, definition] of Object.entries(modeTokens))
+		values[name] = firstReadable([overrides[name], theme[name], definition.default], stored => readModeToken(definition, stored))!;
 
-	const consumedFoundation = Object.keys(vocabulary).filter(name => foundationValues.has(name));
+	const namedByDefaults = new Set(Object.values(modeTokens).flatMap(({ default: fallback }) => isReference(fallback)
+		? [fallback.token]
+		: []));
+	const consumedFoundation = Object.keys(vocabulary).filter(name => namedByDefaults.has(name));
 	for (const name of consumedFoundation)
-		values[name] = foundationValues.get(name)!;
+		values[name] = resolveFoundation(name);
 
 	return {
 		values,

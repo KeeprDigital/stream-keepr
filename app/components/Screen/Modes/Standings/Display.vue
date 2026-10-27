@@ -33,7 +33,9 @@ const titleStyle = {
 const titleDividerStyle = {
 	borderBottomColor: modeTokenVar('standings', 'title-divider'),
 };
+/** On each row too, over the shared row chrome's own line height. */
 const rowStyle = {
+	...modeTypographyStyle('standings', 'row-typography'),
 	borderBottomColor: modeTokenVar('standings', 'row-divider'),
 };
 const surfaceStyle = {
@@ -105,9 +107,13 @@ const contentStyle = computed(() => ({
 		? `${config.value.maxTableWidth}px`
 		: undefined,
 	marginInline: config.value.maxTableWidth ? 'auto' : undefined,
+}));
+
+/** Set on the root, over the shared broadcast table chrome's own colour and face. */
+const displayStyle = {
 	...modeTypographyStyle('standings', 'row-typography'),
 	color: modeTokenVar('standings', 'primary-text'),
-}));
+};
 </script>
 
 <template>
@@ -115,7 +121,7 @@ const contentStyle = computed(() => ({
 		:error="error"
 		:empty="isEmpty"
 	>
-		<div class="standings-display broadcast-table-display flex flex-col h-full w-full" :class="{ 'reveal-mode': isRevealMode }">
+		<div class="standings-display broadcast-table-display flex flex-col h-full w-full" :class="{ 'reveal-mode': isRevealMode }" :style="displayStyle">
 			<div data-testid="standings-content" class="standings-content broadcast-table-content flex flex-col h-full w-full" :style="contentStyle">
 				<!-- Header -->
 				<div v-if="config.showHeader" class="standings-header broadcast-table-title" :style="titleDividerStyle">
@@ -237,8 +243,7 @@ const contentStyle = computed(() => ({
 .cell-position {
 	width: 2.5em;
 	text-align: center;
-	font-family: var(--font-mono);
-	font-weight: 700;
+	font-variant-numeric: tabular-nums;
 	font-size: var(--standings-row-secondary-font-size, 0.875rem);
 }
 
@@ -253,7 +258,7 @@ const contentStyle = computed(() => ({
 .cell-record {
 	width: 4.25em;
 	text-align: center;
-	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
 	font-size: var(--standings-row-secondary-font-size, 0.875rem);
 	white-space: nowrap;
 }
@@ -261,22 +266,20 @@ const contentStyle = computed(() => ({
 .cell-points {
 	width: 3.25em;
 	text-align: center;
-	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
 }
 
 .cell-positionChange {
 	width: 3.25em;
 	text-align: center;
-	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
 	font-size: var(--standings-row-secondary-font-size, 0.875rem);
 	white-space: nowrap;
 }
 
 .cell-positionChange[data-position-change='new'] {
 	font-size: calc(var(--standings-row-secondary-font-size, 0.875rem) * 0.8);
-	text-transform: uppercase;
-	letter-spacing: 0.05em;
 }
 
 .cell-deck {

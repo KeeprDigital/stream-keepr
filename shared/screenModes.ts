@@ -1,5 +1,5 @@
 import type { PageRotationDeclaration } from './modules/page-rotation';
-import type { ModeTokenDeclarations, ThemeTokenType } from './modules/theme/tokens';
+import type { ThemeTokenType } from './modules/theme/tokens';
 import type { DeclaredModeTokenDefinition } from './modules/theme/vocabulary';
 import type { ScreenModeConfigContract, ScreenModeConfigOf } from './screenModeConfigs/contract';
 import type { DeckSource } from './screenModeConfigs/deck';
@@ -394,13 +394,18 @@ export type ScreenModeTokenOfType<M extends ThemedScreenMode, T extends ThemeTok
 	[K in keyof typeof SCREEN_MODE_DEFINITIONS[M]['modeTokens']]: typeof SCREEN_MODE_DEFINITIONS[M]['modeTokens'][K] extends { type: T } ? K : never;
 }[keyof typeof SCREEN_MODE_DEFINITIONS[M]['modeTokens']] & string;
 
-/** A Mode Token's full name: its mode's key, then its name within the mode. */
-export function screenModeTokenName(mode: ScreenMode, token: string): string {
+/**
+ * A Mode Token's full name, as a Theme or a Screen Theme Override stores it:
+ * its mode's key, then its name within the mode.
+ */
+export type ScreenModeTokenName = `${ScreenMode}.${string}`;
+
+export function screenModeTokenName(mode: ScreenMode, token: string): ScreenModeTokenName {
 	return `${mode}.${token}`;
 }
 
 /** A mode's declared Mode Tokens by full name, as `resolveThemeTokens` reads them; none for a mode declaring none. */
-export function screenModeTokens(mode: ScreenMode): ModeTokenDeclarations {
+export function screenModeTokens(mode: ScreenMode): Readonly<Record<ScreenModeTokenName, DeclaredModeTokenDefinition>> {
 	const declared = SCREEN_MODES[mode].modeTokens ?? {};
 	return Object.fromEntries(Object.entries(declared).map(([token, definition]) => [
 		screenModeTokenName(mode, token),

@@ -16,8 +16,9 @@ import type {
  * value outside a tightened bound reads as the nearest bound
  * (`resolveThemeTokens`).
  *
- * The defaults are the Default Theme's look, so an Event with no Theme renders
- * as Screens rendered before Themes.
+ * The defaults are the Default Theme's look, an Event with no Theme. They keep
+ * the broadcast look Screens had before Themes, as one palette: a mode's rules
+ * share one divider, and its secondary text is a colour, not an opacity.
  */
 export const FOUNDATION_TOKENS = {
 	'surface': {

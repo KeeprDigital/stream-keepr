@@ -18,8 +18,6 @@ vi.mock('@vueuse/core', async (importOriginal) => {
 
 const screen = ref<any>({
 	screenConfig: {
-		primaryTextColor: '#123456',
-		secondaryTextColor: '#654321',
 		paddingY: 0,
 	},
 });
@@ -117,8 +115,6 @@ describe('screenStandingsDisplay', () => {
 	beforeEach(() => {
 		screen.value = {
 			screenConfig: {
-				primaryTextColor: '#123456',
-				secondaryTextColor: '#654321',
 				paddingY: 0,
 			},
 		};

@@ -41,6 +41,15 @@ const modeTokens = {
 	},
 } satisfies ModeTokenDeclarations;
 
+/** What the fixture mode consumes: its Mode Tokens, then the Foundation Tokens their defaults name. */
+const DECLARED_CONSUMPTION = [
+	'demo.title',
+	'demo.badge',
+	'demo.gap',
+	'accent',
+	'inset',
+];
+
 function resolve(theme: StoredThemeTokens = {}, overrides: StoredThemeTokens = {}) {
 	return resolveThemeTokens({
 		vocabulary,
@@ -164,13 +173,7 @@ describe('resolveThemeTokens', () => {
 		const resolved = resolve(theme, overrides);
 
 		expect(resolved.values).toEqual(resolve().values);
-		expect(resolved.consumed).toEqual([
-			'demo.title',
-			'demo.badge',
-			'demo.gap',
-			'accent',
-			'inset',
-		]);
+		expect(resolved.consumed).toEqual(DECLARED_CONSUMPTION);
 	});
 
 	it.each([
@@ -233,40 +236,22 @@ describe('resolveThemeTokens', () => {
 	});
 
 	it.each([
+		['nothing is stored', {}],
 		[
-			'the Foundation Tokens its Mode Tokens default to',
-			{},
-			[
-				'demo.title',
-				'demo.badge',
-				'demo.gap',
-				'accent',
-				'inset',
-			],
-		],
-		[
-			'the one a Mode Token is pointed at instead',
+			'a Mode Token is pointed at another Foundation Token',
 			{
 				'demo.title': { token: 'text-primary' },
 			},
-			[
-				'demo.title',
-				'demo.badge',
-				'demo.gap',
-				'text-primary',
-				'inset',
-			],
 		],
 		[
-			'none for a Mode Token holding a literal',
-			{ 'demo.title': 'rgb(1, 1, 1)', 'demo.gap': 4 },
-			['demo.title', 'demo.badge', 'demo.gap'],
+			'every Mode Token holds a literal',
+			{ 'demo.title': 'rgb(1, 1, 1)', 'demo.badge': 'rgb(2, 2, 2)', 'demo.gap': 4 },
 		],
-	])('consumes its Mode Tokens and %s', (_, theme, consumed) => {
+	])('consumes its Mode Tokens and the Foundation Tokens their defaults name when %s', (_, theme) => {
 		const resolved = resolve(theme);
 
-		expect(resolved.consumed).toEqual(consumed);
-		expect(Object.keys(resolved.values)).toEqual(consumed);
+		expect(resolved.consumed).toEqual(DECLARED_CONSUMPTION);
+		expect(Object.keys(resolved.values)).toEqual(DECLARED_CONSUMPTION);
 	});
 });
 
