@@ -610,14 +610,8 @@ describe('a capability-only Screen Output', () => {
 			() => Promise.reject(new Error('unavailable')),
 		],
 	])('shows no sample Card or Broadcast Graphic when a %s output\'s %s read %s', async (mode, resource, _case, answer) => {
-		api.screen = screen({
-			currentMode: mode,
-			modeConfigs: {
-				[mode]: mode === 'broadcast-graphics'
-					? { graphics: [] }
-					: {},
-			},
-		});
+		// No config of its own: the mode's defaults, never the sample's, fill it.
+		api.screen = screen({ currentMode: mode, modeConfigs: {} });
 		api.answers.set(`/api/screen-output/events/42/screens/7/${resource}`, answer);
 		const read = () => api.requests.some(request => request.path.endsWith(`/screens/7/${resource}`));
 

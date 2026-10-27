@@ -3,6 +3,8 @@ import type { CardDisplayConfig } from '~~/shared/types/screenConfig';
 import type { MtgCard } from '~/types/card/mtg';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
+const CARD_LOAD_FAILED = 'Failed to load card data';
+
 export function useCardModeData() {
 	const config = useScreenModeConfig('card');
 	const { screen, sampleDataset } = useScreenContext();
@@ -39,17 +41,20 @@ function holdSampleCard() {
 	const outputReads = useScreenOutputReads();
 	const card = ref<MtgCard | null>(null);
 	const error = ref<string | null>(null);
+	const loading = ref(true);
 	outputReads.card().then(
 		(state) => {
 			card.value = state.card;
 		},
 		() => {
-			error.value = 'Failed to load card data';
+			error.value = CARD_LOAD_FAILED;
 		},
-	);
+	).finally(() => {
+		loading.value = false;
+	});
 	return {
 		card: computed(() => card.value),
-		loading: ref(false),
+		loading: computed(() => loading.value),
 		error: computed(() => error.value),
 	};
 }
@@ -92,11 +97,11 @@ function followScreenCard(screenId: Readonly<Ref<number | null>>) {
 		// superseded one does not: something newer already reached the Card.
 		read: async () => {
 			if (await cardStore.loadActiveCard() === 'failed')
-				throw new Error(cardStore.error ?? 'Failed to load card data');
+				throw new Error(cardStore.error ?? CARD_LOAD_FAILED);
 			return null;
 		},
 		initialData: null,
-		errorMessage: 'Failed to load card data',
+		errorMessage: CARD_LOAD_FAILED,
 		dependsOn: {},
 	});
 

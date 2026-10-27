@@ -10,8 +10,10 @@ import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 import type { ModeConfigsMap } from '~~/shared/types/screenConfig';
 import type { ScryfallCardFetchResult } from '~/composables/data/useScryfallBatch';
 import type { ScreenOutputReadScope, useScreenOutputReadRepository } from '~/composables/repositories/useScreenOutputReadRepository';
+import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { bindGraphicThemeOwner, DEFAULT_GRAPHIC_THEME_TOKENS, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { deriveTopCutBracket } from '~~/shared/modules/top-cut-bracket';
+import { scryfallNameKey } from '~/composables/data/useScryfallBatch';
 
 /**
  * The Screen Mode Sample Dataset: one fixed canonical set of Event Data a Theme
@@ -349,12 +351,14 @@ const FRAME_COLORS: Readonly<Record<string, string>> = {
 	G: '#2f7a4b',
 };
 
+const COLORLESS_FRAME = '#9ca3af';
+
 function frameColor(colors: string | null): string {
 	if (!colors)
-		return '#9ca3af';
+		return COLORLESS_FRAME;
 	return colors.length > 1
 		? '#c9a54a'
-		: FRAME_COLORS[colors] ?? '#9ca3af';
+		: FRAME_COLORS[colors] ?? COLORLESS_FRAME;
 }
 
 /**
@@ -417,7 +421,7 @@ const SAMPLE_SCREEN_CARD = sampleCard('Lightning Helix', 'Instant', 'RW');
 /** Each sample deck card's data, keyed by name as a Scryfall name lookup keys it. */
 const SAMPLE_DECK_CARD_DATA = new Map<string, MtgCard>(SAMPLE_DECK_CARDS.map(([name, cardType, colors]) =>
 	[
-		`name:${name.toLowerCase()}`,
+		scryfallNameKey(name),
 		sampleCard(name, cardType, colors),
 	] as const));
 
@@ -428,7 +432,7 @@ const SAMPLE_DECK_CARD_DATA = new Map<string, MtgCard>(SAMPLE_DECK_CARDS.map(([n
 export async function sampleDeckCardData(cards: ReadonlyArray<{ name: string }>): Promise<ScryfallCardFetchResult> {
 	const found = new Map<string, MtgCard>();
 	for (const { name } of cards) {
-		const key = `name:${name.toLowerCase()}`;
+		const key = scryfallNameKey(name);
 		const card = SAMPLE_DECK_CARD_DATA.get(key);
 		if (card)
 			found.set(key, structuredClone(card));
@@ -437,7 +441,7 @@ export async function sampleDeckCardData(cards: ReadonlyArray<{ name: string }>)
 }
 
 /** The sample graphic is authored in the default Event Canvas (ADR-0051). */
-const SAMPLE_CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
+const SAMPLE_CANVAS = { canvasWidth: DEFAULT_EVENT_CANVAS.width, canvasHeight: DEFAULT_EVENT_CANVAS.height };
 
 interface SampleRect {
 	x: number;
@@ -447,7 +451,7 @@ interface SampleRect {
 }
 
 /** `owner` with each slot bound to its Foundation Token, painted from the Default Theme. */
-function bound<T extends GraphicItemConfig | BroadcastGraphicConfig>(owner: T, bindings: Partial<Record<GraphicThemeSlot, FoundationTokenName>>): T {
+function withThemeBindings<T extends GraphicItemConfig | BroadcastGraphicConfig>(owner: T, bindings: Partial<Record<GraphicThemeSlot, FoundationTokenName>>): T {
 	return (Object.entries(bindings) as [GraphicThemeSlot, FoundationTokenName][]).reduce(
 		(next, [slot, token]) => bindGraphicThemeOwner(next, slot, token, DEFAULT_GRAPHIC_THEME_TOKENS),
 		owner,
@@ -479,29 +483,29 @@ const LEADER = PLAYERS[0]!;
  * graphic would. It is no Broadcast Graphic Template and sits in no library:
  * only a Theme preview's Screen holds it.
  */
-const SAMPLE_LOWER_THIRD: BroadcastGraphicConfig = bound({
+const SAMPLE_LOWER_THIRD: BroadcastGraphicConfig = withThemeBindings({
 	id: 'sample-lower-third',
 	name: 'Sample lower third',
 	items: [
-		bound(sampleShape('sample-panel', {
+		withThemeBindings(sampleShape('sample-panel', {
 			x: 96,
 			y: 828,
 			width: 960,
 			height: 156,
 		}), { surfaceStyle: 'panel', geometry: 'panel-shape' }),
-		bound(sampleShape('sample-accent', {
+		withThemeBindings(sampleShape('sample-accent', {
 			x: 96,
 			y: 828,
 			width: 14,
 			height: 156,
 		}), { 'surfaceStyle.fill': 'accent-fill' }),
-		bound(sampleText('sample-name', LEADER.name, 56, {
+		withThemeBindings(sampleText('sample-name', LEADER.name, 56, {
 			x: 140,
 			y: 846,
 			width: 880,
 			height: 72,
 		}), { 'typography': 'heading', 'typography.color': 'text-primary' }),
-		bound(
+		withThemeBindings(
 			sampleText('sample-deck', `${deckOf(0).name} · ${LEADER.wins}-${LEADER.losses}-${LEADER.draws}`, 34, {
 				x: 140,
 				y: 920,

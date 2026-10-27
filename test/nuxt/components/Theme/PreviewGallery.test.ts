@@ -1,9 +1,9 @@
 import type { VueWrapper } from '@vue/test-utils';
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SCREEN_MODES } from '~~/shared/screenModes';
-import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
+import { THEME_PREVIEW_SCREEN_MODES } from '~~/shared/screenModes';
 import { settleUntil } from '~~/test/helpers/settle';
+import { loadDrawnImages } from '~~/test/nuxt/helpers/drawnImages';
 import PreviewGallery from '~/components/Theme/PreviewGallery.vue';
 
 // The Theme editor's gallery shows every Screen Mode a Theme preview shows,
@@ -36,23 +36,16 @@ function lowerThirdName(gallery: VueWrapper) {
 	return tile(gallery, 'broadcast-graphics').findAll('p').find(text => text.text() === 'Alexandra Whitfield-Moreau');
 }
 
-/** Card Spotlight shows its Card once the Card's image has loaded. */
+/** Card Spotlight's Card, shown once its image has loaded. */
 function spotlightCard(gallery: VueWrapper) {
-	const card = tile(gallery, 'card');
-	// happy-dom loads a drawn card's data URI before Vue listens for it.
-	for (const image of card.findAll('img'))
-		image.element.dispatchEvent(new Event('load'));
-	return card.find('[data-testid="spotlight-card"] img');
+	return tile(gallery, 'card').find('[data-testid="spotlight-card"] img');
 }
 
 describe('the Theme preview gallery', () => {
-	it('shows every Screen Mode that declares Mode Tokens or a Theme preview, and only those', () => {
-		const previewed = SCREEN_MODE_VALUES.filter(mode => SCREEN_MODES[mode].modeTokens || SCREEN_MODES[mode].graphicsHost?.themePreview);
-
+	it('shows every Screen Mode a Theme preview shows, in Screen Mode order', () => {
 		const shown = mountGallery().findAll('[data-preview-mode]').map(tile => tile.attributes('data-preview-mode'));
 
-		expect(shown).toEqual(previewed);
-		expect(shown).toContain('broadcast-graphics');
+		expect(shown).toEqual(THEME_PREVIEW_SCREEN_MODES);
 	});
 
 	it.each([
@@ -79,7 +72,10 @@ describe('the Theme preview gallery', () => {
 		},
 	])('shows $mode from the sample and repaints it as the Theme\'s tokens change', async ({ tokens, shown, painted, value }) => {
 		const gallery = mountGallery();
-		await settleUntil(() => shown(gallery));
+		await settleUntil(() => {
+			loadDrawnImages(gallery);
+			return shown(gallery);
+		});
 
 		await gallery.setProps({ tokens });
 
