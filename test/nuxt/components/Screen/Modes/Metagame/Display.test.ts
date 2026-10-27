@@ -5,11 +5,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import Display from '~/components/Screen/Modes/Metagame/Display.vue';
 
-const screen = ref<any>({
-	screenConfig: {
-	},
-});
-
 const config = ref<any>({
 	viewMode: 'archetype',
 	showHeader: true,
@@ -48,10 +43,6 @@ const pageData = ref<any[]>([
 ]);
 
 const chartBars = ref<MetagameChartBar[]>([]);
-
-mockNuxtImport('useScreenContext', () => () => ({
-	screen: computed(() => screen.value),
-}));
 
 mockNuxtImport('useMetagameModeData', () => () => ({
 	config: computed(() => config.value),
@@ -98,10 +89,6 @@ async function mountComponent() {
 
 describe('screenMetagameDisplay', () => {
 	beforeEach(() => {
-		screen.value = {
-			screenConfig: {
-			},
-		};
 		config.value = {
 			viewMode: 'archetype',
 			showHeader: true,

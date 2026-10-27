@@ -55,9 +55,9 @@ export const topCardsModeTokens = {
 		label: 'Stat badge text',
 		default: { token: 'text-inverse' },
 	},
-	'secondary-text': {
+	'page-indicator-text': {
 		type: 'color',
-		label: 'Page text',
+		label: 'Page indicator text',
 		default: { token: 'text-secondary' },
 	},
 } as const satisfies Readonly<Record<string, DeclaredModeTokenDefinition>>;

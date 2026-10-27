@@ -1,5 +1,6 @@
 import type { VueWrapper } from '@vue/test-utils';
 import type { StoredThemeTokens, ThemeTokenType, ThemeTokenValueTypes } from '~~/shared/modules/theme';
+import type { BracketEntrant, BracketPosition, TopCutBracket } from '~~/shared/modules/top-cut-bracket';
 import type { ScreenMode } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
@@ -8,6 +9,7 @@ import { computed, ref } from 'vue';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { SCREEN_MODES, screenModeTokenName, screenModeTokens } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
+import { METAGAME_CHART_MAX_ARCHETYPES } from '~~/shared/utils/metagameChart';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import Renderer from '~/components/Screen/Renderer.vue';
 
@@ -37,6 +39,9 @@ interface Probe {
 	config?: Record<string, unknown>;
 }
 
+/** The Metagame chart's categorical colour slots, slot 1 first. */
+const CHART_SLOTS = Array.from({ length: METAGAME_CHART_MAX_ARCHETYPES }, (_, index) => index + 1);
+
 /** Each themed mode's probes, one per Mode Token it declares, by the token's name within the mode. */
 const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 	'standings': {
@@ -55,8 +60,8 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'title-typography': { selector: '.broadcast-table-title h2' },
 		'title-text': { selector: '.broadcast-table-title h2', property: 'color' },
 		'title-divider': { selector: '.broadcast-table-title', property: 'borderBottomColor' },
-		'column-name-typography': { selector: '.bracket-column-name' },
-		'column-name-text': { selector: '.bracket-column-name', property: 'color' },
+		'round-name-typography': { selector: '.bracket-column-name' },
+		'round-name-text': { selector: '.bracket-column-name', property: 'color' },
 		'entrant-typography': { selector: '.bracket-entrant-name' },
 		'primary-text': { selector: '.is-winner .bracket-entrant-name', property: 'color' },
 		'secondary-text': { selector: '.is-eliminated .bracket-entrant-name', property: 'color' },
@@ -86,7 +91,7 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 			property: 'borderLeftColor',
 			config: { viewMode: 'chart' },
 		},
-		...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8].map(slot => [
+		...Object.fromEntries(CHART_SLOTS.map(slot => [
 			`chart-series-${slot}`,
 			{
 				selector: `[data-color-slot="${slot}"]`,
@@ -111,7 +116,7 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'rank-badge-text': { selector: '[data-testid="top-cards-rank-badge"]', property: 'color' },
 		'stat-badge-surface': { selector: '[data-testid="top-cards-stat-badge"]', property: 'backgroundColor' },
 		'stat-badge-text': { selector: '[data-testid="top-cards-stat-badge"]', property: 'color' },
-		'secondary-text': { selector: '[data-testid="top-cards-page-indicator"]', property: 'color' },
+		'page-indicator-text': { selector: '[data-testid="top-cards-page-indicator"]', property: 'color' },
 	},
 };
 
@@ -183,7 +188,7 @@ mockNuxtImport('useStandingsModeData', () => () => {
 	};
 });
 
-function entrant(id: number) {
+function entrant(id: number): BracketEntrant {
 	return {
 		playerId: id,
 		name: `Seed ${id}`,
@@ -192,12 +197,15 @@ function entrant(id: number) {
 	};
 }
 
-function position(status: 'reported' | 'awaiting', entrants: [number, number] | null) {
+function position(status: 'reported' | 'awaiting', entrants: [number, number] | null): BracketPosition {
 	return {
 		matchId: entrants ? entrants[0] : null,
 		tableNumber: null,
 		entrants: entrants
-			? entrants.map(entrant)
+			? [
+					entrant(entrants[0]),
+					entrant(entrants[1]),
+				]
 			: [null, null],
 		gameWins: entrants
 			? [2, 1]
@@ -219,7 +227,7 @@ mockNuxtImport('useTopCutModeData', () => () => ({
 	isEmpty: computed(() => false),
 	headerText: computed(() => 'Top 4'),
 	// Every kind of Bracket Position at once, which no one real bracket holds.
-	bracket: computed(() => ({
+	bracket: computed((): TopCutBracket => ({
 		size: 4,
 		columns: [
 			{
@@ -278,7 +286,7 @@ mockNuxtImport('useMetagameModeData', () => () => ({
 		},
 	]),
 	chartBars: computed(() => [
-		...[1, 2, 3, 4, 5, 6, 7, 8].map(slot => ({
+		...CHART_SLOTS.map(slot => ({
 			id: slot,
 			name: `Archetype ${slot}`,
 			colors: null,

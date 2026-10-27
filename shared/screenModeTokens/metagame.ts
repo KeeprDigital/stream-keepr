@@ -12,8 +12,10 @@ function chartSeries(slot: number, color: string) {
 /**
  * How the Metagame Screen Mode looks: its Mode Tokens, by name within the mode.
  *
- * The chart's categorical slots hold literals, since no Foundation Token is a
- * categorical palette. They are stepped for a dark surface and validated as a
+ * The chart's categorical slots default to literals, since no Foundation Token
+ * is a categorical palette; #812 allows a literal default, though ADR-0049 and
+ * CONTEXT.md word a Mode Token's default as a Foundation Token. They are
+ * stepped for a dark surface and validated as a
  * set for adjacent-pair CVD separation and >= 3:1 against #1a1a19. Every bar
  * is named, so identity never rests on its colour alone. Other is the
  * neutral, never a slot.

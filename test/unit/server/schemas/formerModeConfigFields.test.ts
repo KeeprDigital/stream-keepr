@@ -12,7 +12,6 @@ import { createMockScreen } from '~~/test/helpers/fixtures';
  */
 describe.each([
 	{
-		// The placeholder bracket size went when the bracket came from a Phase (#752).
 		mode: 'top-cut' as const,
 		formerFields: ['bracketSize'],
 		former: { bracketSize: 16 },
@@ -20,7 +19,6 @@ describe.each([
 		patch: { phaseId: 5 },
 	},
 	{
-		// The badge colours became Mode Tokens (#823).
 		mode: 'top-cards' as const,
 		formerFields: [
 			'rankBadgeTextColor',

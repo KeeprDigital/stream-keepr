@@ -4,10 +4,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import Display from '~/components/Screen/Modes/TopCards/Display.vue';
 
-const screen = ref<any>({
-	screenConfig: {},
-});
-
 const defaultConfig = {
 	scope: 'all',
 	topN: 8,
@@ -57,10 +53,6 @@ const pageEntries = ref<any[] | null>(null);
 const currentPage = ref(1);
 const totalPages = ref(1);
 
-mockNuxtImport('useScreenContext', () => () => ({
-	screen: computed(() => screen.value),
-}));
-
 mockNuxtImport('useTopCardsModeData', () => () => ({
 	config: computed(() => config.value),
 	loading: ref(false),
@@ -106,9 +98,6 @@ async function mountComponent() {
 
 describe('screenTopCardsDisplay', () => {
 	beforeEach(() => {
-		screen.value = {
-			screenConfig: {},
-		};
 		config.value = { ...defaultConfig };
 		entries.value = [
 			{

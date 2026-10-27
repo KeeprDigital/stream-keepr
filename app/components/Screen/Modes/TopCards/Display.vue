@@ -16,7 +16,7 @@ const titleStyle = {
 /** Over the shared page indicator's own face. */
 const pageIndicatorStyle = {
 	...modeTypographyStyle('top-cards', 'name-typography'),
-	color: modeTokenVar('top-cards', 'secondary-text'),
+	color: modeTokenVar('top-cards', 'page-indicator-text'),
 };
 
 const gridStyle = computed(() => ({

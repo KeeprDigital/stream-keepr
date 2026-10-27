@@ -16,9 +16,9 @@ const titleStyle = {
 	...modeTypographyStyle('top-cut', 'title-typography'),
 	color: modeTokenVar('top-cut', 'title-text'),
 };
-const columnNameStyle = {
-	...modeTypographyStyle('top-cut', 'column-name-typography'),
-	color: modeTokenVar('top-cut', 'column-name-text'),
+const roundNameStyle = {
+	...modeTypographyStyle('top-cut', 'round-name-typography'),
+	color: modeTokenVar('top-cut', 'round-name-text'),
 };
 const secondaryTextStyle = {
 	color: modeTokenVar('top-cut', 'secondary-text'),
@@ -107,7 +107,7 @@ function entrantStyle(position: BracketPosition, side: 0 | 1) {
 					:key="column.roundId ?? `pending-${columnIndex}`"
 					class="bracket-column"
 				>
-					<div class="bracket-column-name" :style="columnNameStyle">
+					<div class="bracket-column-name" :style="roundNameStyle">
 						{{ column.name }}
 					</div>
 					<div class="bracket-pairs">
@@ -150,7 +150,7 @@ function entrantStyle(position: BracketPosition, side: 0 | 1) {
 				</div>
 
 				<div v-if="bracket.champion" class="bracket-champion">
-					<div class="bracket-column-name" :style="columnNameStyle">
+					<div class="bracket-column-name" :style="roundNameStyle">
 						Champion
 					</div>
 					<div class="bracket-champion-name" :style="championStyle">

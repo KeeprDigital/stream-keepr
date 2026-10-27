@@ -17,12 +17,12 @@ export const topCutModeTokens = {
 		label: 'Title divider',
 		default: { token: 'divider' },
 	},
-	'column-name-typography': {
+	'round-name-typography': {
 		type: 'typography',
 		label: 'Round name type',
 		default: { token: 'heading' },
 	},
-	'column-name-text': {
+	'round-name-text': {
 		type: 'color',
 		label: 'Round name text',
 		default: { token: 'text-secondary' },

@@ -6,9 +6,9 @@ import { modeTokenVar } from '~/modules/screen-mode';
 /**
  * The Metagame Screen's chart display: meta share by Archetype as horizontal
  * bars, each labelled with its name, mana colours and share. HTML rather than
- * a canvas chart, so its text takes the Metagame Mode Tokens' type and colours
- * and stays crisp at any output size. Its type is the row type the Display
- * hosting it sets.
+ * a canvas chart, so its text takes the Metagame Mode Tokens and stays crisp
+ * at any output size. Its labels' type and colour are the row type and
+ * primary text the Display hosting it sets.
  */
 const props = defineProps<{
 	bars: MetagameChartBar[];
@@ -29,9 +29,6 @@ const SERIES_FILLS = [
 
 const chartStyle = {
 	backgroundColor: modeTokenVar('metagame', 'surface'),
-};
-const labelStyle = {
-	color: modeTokenVar('metagame', 'primary-text'),
 };
 const trackStyle = {
 	borderLeftColor: modeTokenVar('metagame', 'chart-baseline'),
@@ -78,7 +75,7 @@ function fillOf(bar: MetagameChartBar): string {
 			data-testid="metagame-chart-bar"
 		>
 			<div class="metagame-chart-label">
-				<span class="metagame-chart-name" data-testid="metagame-chart-name" :style="labelStyle">{{ bar.name }}</span>
+				<span class="metagame-chart-name" data-testid="metagame-chart-name">{{ bar.name }}</span>
 				<MtgManaColorDisplay
 					v-if="bar.colors"
 					:colors="bar.colors"
@@ -95,7 +92,7 @@ function fillOf(bar: MetagameChartBar): string {
 					:data-color-slot="bar.colorSlot ?? 'other'"
 					:style="{ '--bar-length': bar.length, 'backgroundColor': fillOf(bar) }"
 				/>
-				<span class="metagame-chart-share" data-testid="metagame-chart-share" :style="labelStyle">{{ bar.metaShare }}%</span>
+				<span class="metagame-chart-share" data-testid="metagame-chart-share">{{ bar.metaShare }}%</span>
 			</div>
 		</div>
 	</div>
