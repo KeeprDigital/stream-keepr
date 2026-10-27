@@ -19,6 +19,10 @@ import { playerHistoryModeConfigContract } from './screenModeConfigs/playerHisto
 import { standingsModeConfigContract } from './screenModeConfigs/standings';
 import { topCardsModeConfigContract } from './screenModeConfigs/topCards';
 import { topCutModeConfigContract } from './screenModeConfigs/topCut';
+import { archetypeSpotlightModeTokens } from './screenModeTokens/archetypeSpotlight';
+import { headToHeadModeTokens } from './screenModeTokens/headToHead';
+import { pairingsModeTokens } from './screenModeTokens/pairings';
+import { playerHistoryModeTokens } from './screenModeTokens/playerHistory';
 import { standingsModeTokens } from './screenModeTokens/standings';
 import { SCREEN_MODE_VALUES } from './types/enums';
 import {
@@ -276,6 +280,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		config: playerHistoryModeConfigContract,
 		eventReferences: { playerId: 'player' },
 		pageRotation: { pageSize: 'rowsPerPage' },
+		modeTokens: playerHistoryModeTokens,
 	},
 	'pairings': {
 		label: 'Pairings',
@@ -286,6 +291,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		config: pairingsModeConfigContract,
 		eventReferences: { roundId: 'round' },
 		pageRotation: { pageSize: 'rowsPerPage' },
+		modeTokens: pairingsModeTokens,
 	},
 	'archetype-spotlight': {
 		label: 'Archetype Spotlight',
@@ -296,6 +302,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		config: archetypeSpotlightModeConfigContract,
 		eventReferences: { archetypeId: 'archetype', playerListId: 'playerList' },
 		pageRotation: { pageSize: 'rowsPerPage' },
+		modeTokens: archetypeSpotlightModeTokens,
 	},
 	'head-to-head': {
 		label: 'Head-to-Head',
@@ -305,6 +312,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: headToHeadModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot', player1Id: 'player', player2Id: 'player' },
+		modeTokens: headToHeadModeTokens,
 	},
 } as const satisfies Record<ScreenMode, ScreenModeDefinition>;
 
