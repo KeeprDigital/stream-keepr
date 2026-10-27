@@ -1,4 +1,5 @@
 import { eventService } from '~~/server/services/event';
+import { errorNameOf } from '~~/server/utils/errorLogFields';
 import { runLiveResultsTick } from './tick';
 
 /**
@@ -22,9 +23,7 @@ export async function runDueLiveResultsTicks(now: Date): Promise<void> {
 			console.error(JSON.stringify({
 				message: 'melee_live_results_tick_failed',
 				eventId,
-				errorName: error instanceof Error
-					? error.name
-					: typeof error,
+				errorName: errorNameOf(error),
 			}));
 		}
 	}

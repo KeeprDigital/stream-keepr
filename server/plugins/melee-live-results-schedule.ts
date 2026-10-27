@@ -3,6 +3,7 @@
 import type {} from 'nitropack/presets/cloudflare/types';
 import { runDueLiveResultsTicks } from '~~/server/modules/melee-sync/liveResults/runner';
 import { LIVE_RESULTS_CRON } from '~~/server/utils/cronSchedules';
+import { errorNameOf } from '~~/server/utils/errorLogFields';
 
 /**
  * Runs the due Melee Live Results ticks on the Worker's minute trigger. Nitro's
@@ -23,9 +24,7 @@ export default defineNitroPlugin((nitroApp) => {
 			console.error(JSON.stringify({
 				message: 'melee_live_results_run_failed',
 				cron: controller.cron,
-				errorName: error instanceof Error
-					? error.name
-					: null,
+				errorName: errorNameOf(error),
 			}));
 		}
 	});

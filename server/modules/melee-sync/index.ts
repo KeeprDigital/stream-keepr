@@ -23,7 +23,7 @@ interface MeleeSyncCommandResult {
 }
 
 interface RunMeleeSyncCommandOptions<T extends MeleeSyncCommandResult> {
-	ctx: MeleeSyncContext;
+	syncContext: MeleeSyncContext;
 	eventId: number;
 	command: MeleeSyncCommandName;
 	execute: (checkpoint: () => Promise<void>) => Promise<T>;
@@ -116,7 +116,7 @@ async function runMeleeSyncCommand<T extends MeleeSyncCommandResult>(
 			// This write is itself token-conditioned and therefore becomes a no-op if
 			// another command already owns the Event.
 			await recordMeleeSyncFailure(
-				options.ctx,
+				options.syncContext,
 				options.eventId,
 				ownershipError,
 				options.failureMetadata?.() ?? {},
@@ -127,7 +127,7 @@ async function runMeleeSyncCommand<T extends MeleeSyncCommandResult>(
 
 		if (!execution.success) {
 			const recorded = await recordMeleeSyncFailure(
-				options.ctx,
+				options.syncContext,
 				options.eventId,
 				execution.error,
 				options.failureMetadata?.() ?? {},
@@ -144,7 +144,7 @@ async function runMeleeSyncCommand<T extends MeleeSyncCommandResult>(
 		let recorded: boolean;
 		if (result.success === false) {
 			recorded = await recordMeleeSyncFailure(
-				options.ctx,
+				options.syncContext,
 				options.eventId,
 				commandFailureFromResult(result),
 				metadata,
@@ -153,7 +153,7 @@ async function runMeleeSyncCommand<T extends MeleeSyncCommandResult>(
 		}
 		else {
 			recorded = await recordMeleeSyncSuccess(
-				options.ctx,
+				options.syncContext,
 				options.eventId,
 				metadata,
 				lease.token,
@@ -190,14 +190,14 @@ export function meleeSyncModule() {
 		liveResultsStatus: loadLiveResultsStatus,
 
 		async runInitialSetup(requestEvent: H3Event, eventId: number) {
-			const ctx = meleeSyncContextFrom(requestEvent);
+			const syncContext = meleeSyncContextFrom(requestEvent);
 			const progress = createMeleeSyncProgress();
 			return await runMeleeSyncCommand({
-				ctx,
+				syncContext,
 				eventId,
 				command: 'initial-setup',
 				execute: async checkpoint => await workflows.runInitialSetup(
-					ctx,
+					syncContext,
 					eventId,
 					await loadMeleeSyncEventData(eventId),
 					checkpoint,
@@ -222,13 +222,13 @@ export function meleeSyncModule() {
 			});
 		},
 		async syncEventStructure(requestEvent: H3Event, eventId: number) {
-			const ctx = meleeSyncContextFrom(requestEvent);
+			const syncContext = meleeSyncContextFrom(requestEvent);
 			return await runMeleeSyncCommand({
-				ctx,
+				syncContext,
 				eventId,
 				command: 'event-structure',
 				execute: async () => await workflows.syncEventStructure(
-					ctx,
+					syncContext,
 					eventId,
 					await loadMeleeSyncEventData(eventId),
 				),
@@ -238,13 +238,13 @@ export function meleeSyncModule() {
 			});
 		},
 		async syncPlayers(requestEvent: H3Event, eventId: number) {
-			const ctx = meleeSyncContextFrom(requestEvent);
+			const syncContext = meleeSyncContextFrom(requestEvent);
 			return await runMeleeSyncCommand({
-				ctx,
+				syncContext,
 				eventId,
 				command: 'players',
 				execute: async () => await workflows.syncPlayers(
-					ctx,
+					syncContext,
 					eventId,
 					await loadMeleeSyncEventData(eventId),
 				),
@@ -254,13 +254,13 @@ export function meleeSyncModule() {
 			});
 		},
 		async syncDeckLists(requestEvent: H3Event, eventId: number) {
-			const ctx = meleeSyncContextFrom(requestEvent);
+			const syncContext = meleeSyncContextFrom(requestEvent);
 			return await runMeleeSyncCommand({
-				ctx,
+				syncContext,
 				eventId,
 				command: 'decklists',
 				execute: async () => await workflows.syncDeckLists(
-					ctx,
+					syncContext,
 					eventId,
 					await loadMeleeSyncEventData(eventId),
 				),
@@ -272,23 +272,23 @@ export function meleeSyncModule() {
 			});
 		},
 		async syncRoundMatches(requestEvent: H3Event, eventId: number, roundId: number) {
-			const ctx = meleeSyncContextFrom(requestEvent);
+			const syncContext = meleeSyncContextFrom(requestEvent);
 			const progress = createMeleeSyncProgress();
 			return await runMeleeSyncCommand({
-				ctx,
+				syncContext,
 				eventId,
 				command: 'round',
 				execute: async (checkpoint) => {
 					const syncEventData = await loadMeleeSyncEventData(eventId);
 					await checkpoint();
-					const players = await workflows.syncPlayers(ctx, eventId, syncEventData);
+					const players = await workflows.syncPlayers(syncContext, eventId, syncEventData);
 					if (players.success !== false) {
 						progress.record({
 							lastPlayersSyncedAt: new Date(),
 						});
 					}
 					await checkpoint();
-					const round = await workflows.syncRoundMatches(ctx, eventId, syncEventData, roundId);
+					const round = await workflows.syncRoundMatches(syncContext, eventId, syncEventData, roundId);
 					return {
 						...round,
 						warnings: [
@@ -308,14 +308,14 @@ export function meleeSyncModule() {
 			eventId: number,
 			options: { includeDeckLists?: boolean; advanceRound?: boolean } = {},
 		) {
-			const ctx = meleeSyncContextFrom(requestEvent);
+			const syncContext = meleeSyncContextFrom(requestEvent);
 			const progress = createMeleeSyncProgress();
 			return await runMeleeSyncCommand({
-				ctx,
+				syncContext,
 				eventId,
 				command: 'update',
 				execute: async checkpoint => await workflows.updateFromMelee(
-					ctx,
+					syncContext,
 					eventId,
 					await loadMeleeSyncEventData(eventId),
 					options,

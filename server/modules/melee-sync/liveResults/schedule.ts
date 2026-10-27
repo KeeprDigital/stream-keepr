@@ -1,3 +1,4 @@
+import type { MeleeLiveResultsStopReason } from '~~/shared/types/enums';
 import type { LiveResultsTarget } from './currentRound';
 
 /** Results polling interval while the Current Round is incomplete. */
@@ -12,7 +13,6 @@ export const LIVE_RESULTS_BACKOFF_CAP_MS = 900_000;
 export const LIVE_RESULTS_IDLE_STOP_MS = 43_200_000;
 
 export type LiveResultsOutcome = 'changed' | 'unchanged' | 'failed' | 'auth-failed';
-export type LiveResultsStopReason = 'idle' | 'auth';
 
 export interface LiveResultsScheduleInput {
 	now: Date;
@@ -26,7 +26,7 @@ export interface LiveResultsSchedule {
 	nextCheckAt: Date;
 	backoffStep: number;
 	lastChangeAt: Date;
-	stop: LiveResultsStopReason | null;
+	stop: MeleeLiveResultsStopReason | null;
 }
 
 /**
@@ -49,7 +49,7 @@ export function nextLiveResultsSchedule(input: LiveResultsScheduleInput): LiveRe
 	}
 
 	const quietFor = now.getTime() - lastChangeAt.getTime();
-	const stop: LiveResultsStopReason | null = outcome === 'auth-failed'
+	const stop: MeleeLiveResultsStopReason | null = outcome === 'auth-failed'
 		? 'auth'
 		: quietFor > LIVE_RESULTS_IDLE_STOP_MS
 			? 'idle'

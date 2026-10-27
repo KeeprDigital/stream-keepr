@@ -36,7 +36,7 @@ const {
 	renewMeleeSyncLease,
 } = await import('~~/server/utils/meleeSyncState');
 
-const ctx = { originConnectionId: 'origin-1' };
+const syncContext = { originConnectionId: 'origin-1' };
 
 describe('melee sync lease state', () => {
 	beforeEach(() => {
@@ -49,7 +49,7 @@ describe('melee sync lease state', () => {
 	it('conditions successful metadata on the owning lease token before publication', async () => {
 		const syncedAt = new Date('2026-01-01T00:05:00.000Z');
 
-		await expect(recordMeleeSyncSuccess(ctx, 9, {
+		await expect(recordMeleeSyncSuccess(syncContext, 9, {
 			lastPlayersSyncedAt: syncedAt,
 		}, 'lease-token')).resolves.toBe(true);
 
@@ -65,7 +65,7 @@ describe('melee sync lease state', () => {
 		mockEventService.updateSyncMetadata.mockResolvedValue(false);
 
 		await expect(recordMeleeSyncFailure(
-			ctx,
+			syncContext,
 			9,
 			new Error('upstream failed'),
 			{},
@@ -83,7 +83,7 @@ describe('melee sync lease state', () => {
 			code: 'IMPORTED_CARD_LOOKUP_UNAVAILABLE',
 		});
 
-		await recordMeleeSyncFailure(ctx, 9, error, {}, 'lease-token');
+		await recordMeleeSyncFailure(syncContext, 9, error, {}, 'lease-token');
 
 		expect(mockEventService.updateSyncMetadata).toHaveBeenCalledWith(9, {
 			lastSyncError: 'Card data provider is temporarily unavailable. Existing deck data was preserved; retry the sync.',
@@ -94,7 +94,7 @@ describe('melee sync lease state', () => {
 	it('does not persist messages from arbitrary errors carrying client-like status metadata', async () => {
 		const error = Object.assign(new Error('library detail must remain private'), { statusCode: 400 });
 
-		await recordMeleeSyncFailure(ctx, 9, error, {}, 'lease-token');
+		await recordMeleeSyncFailure(syncContext, 9, error, {}, 'lease-token');
 
 		expect(mockEventService.updateSyncMetadata).toHaveBeenCalledWith(9, {
 			lastSyncError: 'Melee sync failed. Retry the operation.',

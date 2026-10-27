@@ -153,12 +153,9 @@ export async function syncPreviousRoundStandingsFromMelee(
 	const stored = await playerRoundStandingsService().findByRoundId(eventId, previous.id);
 	if (stored.length > 0)
 		return null;
-	const { resultChangedMatchIds, pairingsChanged, standingsChanged } = await syncRoundStandingsFromMelee(eventId, eventData, previous, options);
 	return {
 		roundId: previous.id,
-		resultChangedMatchIds,
-		pairingsChanged,
-		standingsChanged,
+		...await syncRoundStandingsFromMelee(eventId, eventData, previous, options),
 	};
 }
 

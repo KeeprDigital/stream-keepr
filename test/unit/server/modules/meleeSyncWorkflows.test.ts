@@ -128,7 +128,7 @@ vi.mock('~~/server/modules/melee-sync/deckLists', () => ({
 
 const { createMeleeSyncWorkflows } = await import('~~/server/modules/melee-sync/workflows');
 
-const ctx = { originConnectionId: 'origin-1' };
+const syncContext = { originConnectionId: 'origin-1' };
 
 const eventData = {
 	game: 'mtg' as const,
@@ -245,7 +245,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 		mockRoundService.findByEventId.mockResolvedValue([]);
 		const checkpoint = vi.fn().mockResolvedValue(undefined);
 
-		const result = await createMeleeSyncWorkflows().runInitialSetup(ctx, 1, eventData, checkpoint);
+		const result = await createMeleeSyncWorkflows().runInitialSetup(syncContext, 1, eventData, checkpoint);
 
 		expect(mockMelee.fetchEvent).toHaveBeenCalledOnce();
 		expect(mockMelee.fetchPlayers).toHaveBeenCalledOnce();
@@ -270,7 +270,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 		vi.mocked(ably.publishMessageStrict).mockRejectedValueOnce(providerRefusal());
 		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-		const result = await createMeleeSyncWorkflows().runInitialSetup(ctx, 1, eventData, vi.fn().mockResolvedValue(undefined));
+		const result = await createMeleeSyncWorkflows().runInitialSetup(syncContext, 1, eventData, vi.fn().mockResolvedValue(undefined));
 
 		const [line] = lastCallTo(warnSpy, isPublishFailureLine);
 		expect(JSON.parse(line as string)).toEqual({
@@ -293,7 +293,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 			.mockRejectedValueOnce(ownershipLost);
 
 		await expect(
-			createMeleeSyncWorkflows().updateFromMelee(ctx, 1, eventData, {}, checkpoint),
+			createMeleeSyncWorkflows().updateFromMelee(syncContext, 1, eventData, {}, checkpoint),
 		).rejects.toBe(ownershipLost);
 
 		expect(checkpoint).toHaveBeenCalledTimes(2);
@@ -326,7 +326,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 		});
 
 		await expect(
-			createMeleeSyncWorkflows().syncEventStructure(ctx, 1, eventData),
+			createMeleeSyncWorkflows().syncEventStructure(syncContext, 1, eventData),
 		)
 			.rejects
 			.toThrow('Duplicate Melee phase external identity: 10');
@@ -364,7 +364,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 		});
 
 		await expect(
-			createMeleeSyncWorkflows().syncEventStructure(ctx, 1, eventData),
+			createMeleeSyncWorkflows().syncEventStructure(syncContext, 1, eventData),
 		)
 			.rejects
 			.toThrow('Duplicate Melee round external identity: 101');
@@ -378,7 +378,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 		mockRoundService.findById.mockResolvedValue(null);
 
 		await expect(
-			createMeleeSyncWorkflows().syncRoundMatches(ctx, 1, eventData, 999),
+			createMeleeSyncWorkflows().syncRoundMatches(syncContext, 1, eventData, 999),
 		).rejects.toMatchObject({ statusCode: 404 });
 
 		expect(mockPhaseService.findById).not.toHaveBeenCalled();
@@ -393,7 +393,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 		});
 
 		await expect(
-			createMeleeSyncWorkflows().syncRoundMatches(ctx, 1, eventData, round1.id),
+			createMeleeSyncWorkflows().syncRoundMatches(syncContext, 1, eventData, round1.id),
 		).rejects.toMatchObject({ statusCode: 400 });
 
 		expect(mockPhaseService.findById).not.toHaveBeenCalled();
@@ -407,7 +407,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 
 		await expect(
 			createMeleeSyncWorkflows().runInitialSetup(
-				ctx,
+				syncContext,
 				1,
 				eventData,
 				undefined,
@@ -436,7 +436,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 		const progress: Array<Record<string, Date>> = [];
 
 		const result = await createMeleeSyncWorkflows().runInitialSetup(
-			ctx,
+			syncContext,
 			1,
 			{ ...eventData, game: 'op' },
 			undefined,
@@ -471,7 +471,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 		});
 
 		await expect(
-			createMeleeSyncWorkflows().runInitialSetup(ctx, 1, eventData),
+			createMeleeSyncWorkflows().runInitialSetup(syncContext, 1, eventData),
 		).rejects.toMatchObject({
 			statusCode: 422,
 			data: { code: 'MELEE_GAME_MISMATCH' },
@@ -485,7 +485,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 	it('refreshes players, skips deck lists by default when already synced, and advances the next round after refreshing the previous round', async () => {
 		mockRoundService.findByEventId.mockResolvedValue([round1, round2]);
 
-		const result = await createMeleeSyncWorkflows().updateFromMelee(ctx, 1, eventData);
+		const result = await createMeleeSyncWorkflows().updateFromMelee(syncContext, 1, eventData);
 
 		expect(mockPlayerService.reconcileMeleeSnapshot).toHaveBeenCalledOnce();
 		expect(mockMelee.fetchEvent).toHaveBeenCalledOnce();
@@ -504,7 +504,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 	it('includes deck lists when requested', async () => {
 		mockRoundService.findByEventId.mockResolvedValue([round2]);
 
-		const result = await createMeleeSyncWorkflows().updateFromMelee(ctx, 1, eventData, { includeDeckLists: true });
+		const result = await createMeleeSyncWorkflows().updateFromMelee(syncContext, 1, eventData, { includeDeckLists: true });
 
 		expect(mockMelee.fetchEvent).toHaveBeenCalledOnce();
 		expect(result.deckLists).toEqual(expect.objectContaining({ deckLists: 0, players: 0 }));
@@ -514,7 +514,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 	it('includes deck lists automatically when they have never been synced', async () => {
 		mockRoundService.findByEventId.mockResolvedValue([round2]);
 
-		await createMeleeSyncWorkflows().updateFromMelee(ctx, 1, { ...eventData, lastDecklistsSyncedAt: null });
+		await createMeleeSyncWorkflows().updateFromMelee(syncContext, 1, { ...eventData, lastDecklistsSyncedAt: null });
 
 		expect(mockMelee.fetchEvent).toHaveBeenCalledOnce();
 	});
@@ -522,7 +522,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 	it('refreshes the latest synced round when there is no next unsynced round', async () => {
 		mockRoundService.findByEventId.mockResolvedValue([round1, syncedRound2]);
 
-		const result = await createMeleeSyncWorkflows().updateFromMelee(ctx, 1, eventData);
+		const result = await createMeleeSyncWorkflows().updateFromMelee(syncContext, 1, eventData);
 
 		expect(mockSyncMatchesFromMelee).toHaveBeenCalledTimes(1);
 		expect(mockSyncMatchesFromMelee!.mock!.calls![0]![2].id).toBe(2);
@@ -538,7 +538,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 
 		await expect(
 			createMeleeSyncWorkflows().updateFromMelee(
-				ctx,
+				syncContext,
 				1,
 				eventData,
 				{ includeDeckLists: true },
@@ -574,7 +574,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 					updated: 1,
 					deactivated: 0,
 				});
-				await createMeleeSyncWorkflows().syncPlayers(ctx, 1, eventData);
+				await createMeleeSyncWorkflows().syncPlayers(syncContext, 1, eventData);
 				return 10;
 			},
 		],
@@ -588,7 +588,7 @@ describe('melee Sync updateFromMelee workflow', () => {
 					created: 0,
 					updated: 1,
 				});
-				await createMeleeSyncWorkflows().syncDeckLists(ctx, 1, eventData);
+				await createMeleeSyncWorkflows().syncDeckLists(syncContext, 1, eventData);
 				return 11;
 			},
 		],

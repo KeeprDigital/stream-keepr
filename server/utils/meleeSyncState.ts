@@ -34,7 +34,7 @@ export interface MeleeSyncLease {
 	expiresAt: Date;
 }
 
-async function publishEventUpdate(ctx: MeleeSyncContext, eventId: number) {
+async function publishEventUpdate(syncContext: MeleeSyncContext, eventId: number) {
 	const updatedEvent = await eventService().findById(eventId);
 	if (!updatedEvent) {
 		return;
@@ -46,12 +46,12 @@ async function publishEventUpdate(ctx: MeleeSyncContext, eventId: number) {
 		{
 			event: mapEventToResponse(updatedEvent as DbEvent & { talents: DbEventTalent[] }),
 		},
-		ctx.originConnectionId,
+		syncContext.originConnectionId,
 	);
 }
 
 export async function recordMeleeSyncSuccess(
-	ctx: MeleeSyncContext,
+	syncContext: MeleeSyncContext,
 	eventId: number,
 	data: MeleeSyncMetadataUpdate,
 	leaseToken?: string,
@@ -62,14 +62,14 @@ export async function recordMeleeSyncSuccess(
 	}, leaseToken);
 
 	if (updated) {
-		await publishEventUpdate(ctx, eventId);
+		await publishEventUpdate(syncContext, eventId);
 	}
 
 	return updated;
 }
 
 export async function recordMeleeSyncFailure(
-	ctx: MeleeSyncContext,
+	syncContext: MeleeSyncContext,
 	eventId: number,
 	error: unknown,
 	data: MeleeSyncMetadataUpdate = {},
@@ -82,14 +82,14 @@ export async function recordMeleeSyncFailure(
 	}, leaseToken);
 
 	if (updated) {
-		await publishEventUpdate(ctx, eventId);
+		await publishEventUpdate(syncContext, eventId);
 	}
 
 	return updated;
 }
 
 /**
- * Takes the Event's Melee Sync lease or answers 409. Polling never blocks an
+ * Takes the Event's Melee Sync lease or answers 409. Live Results never blocks an
  * operator: an operator command takes a Live Results tick's lease over at once,
  * and the tick finds it gone at its next checkpoint. It never takes another
  * operator command's lease, and a tick never takes any.

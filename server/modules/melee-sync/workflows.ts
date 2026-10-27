@@ -3,6 +3,7 @@ import type { MeleeEventParsed, MeleePlayerParsed } from '~~/server/schemas/exte
 import type { MeleeSyncMetadataUpdate } from '~~/server/utils/meleeSyncState';
 import type { Game } from '~~/shared/types/enums';
 import type { MeleeSyncContext } from './context';
+import type { PreviousRoundStandingsResult } from './roundMatches';
 import { createError } from 'h3';
 import { mapMeleePlayersToDb } from '~~/server/mappers/melee';
 import { eventDataPublicationModule, RealtimePublicationError } from '~~/server/modules/event-data-publication';
@@ -15,6 +16,7 @@ import { phaseService } from '~~/server/services/phase';
 import { playerService } from '~~/server/services/player';
 import { playerFeatureMatchSyncService } from '~~/server/services/playerFeatureMatchSync';
 import { roundService } from '~~/server/services/round';
+import { errorNameOf } from '~~/server/utils/errorLogFields';
 import { publishFailureFields } from '~~/server/utils/realtimePublishFailure';
 import { isMeleeManagedRound } from '~~/shared/utils/roundControl';
 import {
@@ -170,13 +172,13 @@ export function createMeleeSyncWorkflows() {
 	}
 
 	async function syncEventStructure(
-		ctx: MeleeSyncContext,
+		syncContext: MeleeSyncContext,
 		eventId: number,
 		eventData: MeleeSyncEventData,
 		meleeEventSnapshot?: MeleeEventParsed,
 	) {
 		const melee = requireMeleeService(eventData);
-		const { originConnectionId } = ctx;
+		const { originConnectionId } = syncContext;
 
 		const rawMeleeEvent = meleeEventSnapshot ?? await melee.fetchEvent();
 		const gameCompatibility = inspectSourceGame(eventData, rawMeleeEvent);
@@ -308,14 +310,14 @@ export function createMeleeSyncWorkflows() {
 	}
 
 	async function syncPlayers(
-		ctx: MeleeSyncContext,
+		syncContext: MeleeSyncContext,
 		eventId: number,
 		eventData: MeleeSyncEventData,
 		playersSnapshot?: MappedMeleePlayer[],
 		options: { beforeWrite?: () => Promise<void> } = {},
 	) {
 		const melee = requireMeleeService(eventData);
-		const { originConnectionId } = ctx;
+		const { originConnectionId } = syncContext;
 		const warnings: string[] = [];
 
 		let mergedPlayers = playersSnapshot;
@@ -387,13 +389,13 @@ export function createMeleeSyncWorkflows() {
 	}
 
 	async function syncRoundMatches(
-		ctx: MeleeSyncContext,
+		syncContext: MeleeSyncContext,
 		eventId: number,
 		eventData: MeleeSyncEventData,
 		roundId: number,
 		options: SyncRoundMatchesOptions = {},
 	) {
-		const { originConnectionId } = ctx;
+		const { originConnectionId } = syncContext;
 		const afterCommitWarnings: string[] = [];
 		// Re-check at the write boundary even though route-facing Round commands
 		// preflight before refreshing Players.
@@ -416,9 +418,7 @@ export function createMeleeSyncWorkflows() {
 					message: 'melee_sync_previous_round_standings_failed',
 					eventId,
 					roundId,
-					errorName: error instanceof Error
-						? error.name
-						: typeof error,
+					errorName: errorNameOf(error),
 					errorMessage: error instanceof Error
 						? error.message
 						: String(error),
@@ -431,41 +431,55 @@ export function createMeleeSyncWorkflows() {
 		// publishes nothing. `published` names the kinds even if delivery failed.
 		// Storing the previous Round's standings rewrites its Matches too, so its
 		// changes are announced under its own Round id.
-		const changedRounds = [
+		const changedRounds: PreviousRoundStandingsResult[] = [
 			{ roundId, ...result },
 			...(previousRoundStandings
 				? [previousRoundStandings]
 				: []),
 		];
-		const publishedKinds = new Set<'matchResults' | 'pairings' | 'roundStandings'>();
-		for (const changed of changedRounds) {
-			if (changed.resultChangedMatchIds.length > 0) {
-				publishedKinds.add('matchResults');
-				await publishAfterCommit(afterCommitWarnings, async () => await publication.meleeMatchResultsSynced({
+		const announcements: Array<{
+			kind: 'matchResults' | 'pairings' | 'roundStandings';
+			changed: (changed: PreviousRoundStandingsResult) => boolean;
+			publish: (changed: PreviousRoundStandingsResult) => Promise<void>;
+		}> = [
+			{
+				kind: 'matchResults',
+				changed: changed => changed.resultChangedMatchIds.length > 0,
+				publish: async changed => await publication.meleeMatchResultsSynced({
 					eventId,
 					originConnectionId,
 					roundId: changed.roundId,
 					matchIds: changed.resultChangedMatchIds,
-				}));
-			}
-			if (changed.pairingsChanged) {
-				publishedKinds.add('pairings');
-				await publishAfterCommit(afterCommitWarnings, async () => await publication.meleePairingsSynced({
+				}),
+			},
+			{
+				kind: 'pairings',
+				changed: changed => changed.pairingsChanged,
+				publish: async changed => await publication.meleePairingsSynced({
 					eventId,
 					originConnectionId,
 					roundId: changed.roundId,
-				}));
-			}
-			if (changed.standingsChanged) {
-				publishedKinds.add('roundStandings');
-				await publishAfterCommit(afterCommitWarnings, async () => await publication.meleeRoundStandingsSynced({
+				}),
+			},
+			{
+				kind: 'roundStandings',
+				changed: changed => changed.standingsChanged,
+				publish: async changed => await publication.meleeRoundStandingsSynced({
 					eventId,
 					originConnectionId,
 					roundId: changed.roundId,
-				}));
+				}),
+			},
+		];
+		for (const changed of changedRounds) {
+			for (const announcement of announcements) {
+				if (announcement.changed(changed))
+					await publishAfterCommit(afterCommitWarnings, async () => await announcement.publish(changed));
 			}
 		}
-		const published = (['matchResults', 'pairings', 'roundStandings'] as const).filter(kind => publishedKinds.has(kind));
+		const published = announcements
+			.filter(announcement => changedRounds.some(announcement.changed))
+			.map(announcement => announcement.kind);
 		if (published.length > 0) {
 			// Kept for one release, for Screen Outputs still on the previous bundle.
 			await publishAfterCommit(afterCommitWarnings, async () => await publication.meleeRoundSynced({
@@ -491,7 +505,7 @@ export function createMeleeSyncWorkflows() {
 	}
 
 	async function runInitialSetup(
-		ctx: MeleeSyncContext,
+		syncContext: MeleeSyncContext,
 		eventId: number,
 		eventData: MeleeSyncEventData,
 		checkpoint?: () => Promise<void>,
@@ -499,18 +513,18 @@ export function createMeleeSyncWorkflows() {
 	) {
 		const snapshot = await fetchCoreSnapshot(eventData);
 		await checkpoint?.();
-		const structureResult = await syncEventStructure(ctx, eventId, eventData, snapshot.event);
+		const structureResult = await syncEventStructure(syncContext, eventId, eventData, snapshot.event);
 		recordProgress?.({
 			lastEventSyncedAt: new Date(),
 		});
 		await checkpoint?.();
-		const playersResult = await syncPlayers(ctx, eventId, eventData, snapshot.mappedPlayers);
+		const playersResult = await syncPlayers(syncContext, eventId, eventData, snapshot.mappedPlayers);
 		recordProgress?.({
 			lastPlayersSyncedAt: new Date(),
 		});
 		await checkpoint?.();
 		const deckListsResult = await syncDeckLists(
-			ctx,
+			syncContext,
 			eventId,
 			eventData,
 			snapshot.players,
@@ -547,7 +561,7 @@ export function createMeleeSyncWorkflows() {
 	}
 
 	async function updateFromMelee(
-		ctx: MeleeSyncContext,
+		syncContext: MeleeSyncContext,
 		eventId: number,
 		eventData: MeleeSyncEventData & { lastDecklistsSyncedAt?: Date | null },
 		options: { includeDeckLists?: boolean; advanceRound?: boolean } = {},
@@ -560,14 +574,14 @@ export function createMeleeSyncWorkflows() {
 		const snapshot = await fetchCoreSnapshot(eventData);
 		await checkpoint?.();
 
-		const structureResult = await syncEventStructure(ctx, eventId, eventData, snapshot.event);
+		const structureResult = await syncEventStructure(syncContext, eventId, eventData, snapshot.event);
 		steps.push('structure');
 		recordProgress?.({
 			lastEventSyncedAt: new Date(),
 		});
 		await checkpoint?.();
 
-		const playersResult = await syncPlayers(ctx, eventId, eventData, snapshot.mappedPlayers);
+		const playersResult = await syncPlayers(syncContext, eventId, eventData, snapshot.mappedPlayers);
 		steps.push('players');
 		recordProgress?.({
 			lastPlayersSyncedAt: new Date(),
@@ -577,7 +591,7 @@ export function createMeleeSyncWorkflows() {
 		let deckListsResult: Awaited<ReturnType<typeof syncDeckLists>> | null = null;
 		if (includeDeckLists) {
 			deckListsResult = await syncDeckLists(
-				ctx,
+				syncContext,
 				eventId,
 				eventData,
 				snapshot.players,
@@ -606,14 +620,14 @@ export function createMeleeSyncWorkflows() {
 				: null;
 			if (previousRound?.lastSyncedAt) {
 				roundResults.push({
-					...await syncRoundMatches(ctx, eventId, eventData, previousRound.id),
+					...await syncRoundMatches(syncContext, eventId, eventData, previousRound.id),
 					role: 'previous',
 				});
 				steps.push('previous-round');
 				await checkpoint?.();
 			}
 			roundResults.push({
-				...await syncRoundMatches(ctx, eventId, eventData, nextRound.id),
+				...await syncRoundMatches(syncContext, eventId, eventData, nextRound.id),
 				role: 'next',
 			});
 			steps.push('next-round');
@@ -622,7 +636,7 @@ export function createMeleeSyncWorkflows() {
 			const latestSyncedRound = eligibleRounds.filter(round => round.lastSyncedAt !== null).at(-1) ?? null;
 			if (latestSyncedRound) {
 				roundResults.push({
-					...await syncRoundMatches(ctx, eventId, eventData, latestSyncedRound.id),
+					...await syncRoundMatches(syncContext, eventId, eventData, latestSyncedRound.id),
 					role: 'latest',
 				});
 				steps.push('latest-round');
@@ -651,14 +665,14 @@ export function createMeleeSyncWorkflows() {
 	}
 
 	async function syncDeckLists(
-		ctx: MeleeSyncContext,
+		syncContext: MeleeSyncContext,
 		eventId: number,
 		eventData: MeleeSyncEventData,
 		playersSnapshot?: MeleePlayerParsed[],
 		meleeEventSnapshot?: MeleeEventParsed,
 		options: DeckListSyncOptions = { unsupportedGame: 'reject' },
 	) {
-		const { originConnectionId } = ctx;
+		const { originConnectionId } = syncContext;
 		const melee = requireMeleeService(eventData);
 		const rawMeleeEvent = meleeEventSnapshot ?? await melee.fetchEvent();
 		const gameCompatibility = inspectSourceGame(eventData, rawMeleeEvent);
