@@ -61,10 +61,6 @@ const highlanderImageUrlsByCardName = computed<Record<string, string | null>>(()
 						{{ playerData.deckList.name }}
 					</button>
 					<MtgManaColorDisplay :colors="playerData.deckList.colors" size="sm" />
-					<div v-if="playerData.deckList.companion" class="flex items-center gap-2 min-w-0">
-						<span class="text-xs uppercase tracking-wide text-muted shrink-0">Companion</span>
-						<span class="font-medium truncate">{{ playerData.deckList.companion.name }}</span>
-					</div>
 					<UBadge
 						v-if="playerData.deckList.highlander"
 						color="neutral"
@@ -119,6 +115,13 @@ const highlanderImageUrlsByCardName = computed<Record<string, string | null>>(()
 					v-if="playerData.sideboard.length"
 					title="Sideboard"
 					:cards="playerData.sideboard"
+					:filter="filter"
+					:default-open="true"
+				/>
+				<MtgCardDeckListSection
+					v-if="playerData.companion"
+					title="Companion"
+					:cards="[playerData.companion]"
 					:filter="filter"
 					:default-open="true"
 				/>

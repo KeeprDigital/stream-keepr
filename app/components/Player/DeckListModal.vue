@@ -230,6 +230,21 @@ function getCompanionImageUrl() {
 	return getDeckCardImageUrl(cardDataMap.value, companion);
 }
 
+const companionCard = computed<DeckListCard | null>(() => {
+	const companion = selectedDeck.value?.companion;
+	return companion
+		? {
+				name: companion.name,
+				setCode: null,
+				quantity: 1,
+				compartment: 'sideboard',
+				cardType: '',
+				scryfallId: companion.scryfallId,
+			}
+		: null;
+});
+const companionPreviewKey = computed(() => `companion-${companionCard.value?.name ?? ''}`);
+
 const highlanderImageUrlsByCardName = computed<Record<string, string | null>>(() => {
 	const imageUrls: Record<string, string | null> = {};
 	for (const card of cards.value) {
@@ -385,7 +400,22 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 						</div>
 
 						<!-- Sideboard -->
-						<div v-if="sideboardCards.length > 0 || tokenCards.length > 0" class="shrink-0 border-l border-default pl-6">
+						<div v-if="companionCard || sideboardCards.length > 0 || tokenCards.length > 0" class="shrink-0 border-l border-default pl-6">
+							<section v-if="companionCard" data-deck-companion :class="{ 'mb-5': sideboardCards.length > 0 }">
+								<h4 class="font-semibold mb-3 text-sm uppercase tracking-wide">
+									Companion
+								</h4>
+								<ul class="flex flex-col gap-0.5">
+									<PlayerDeckListCardItem
+										:card="companionCard"
+										:image-url="getCompanionImageUrl()"
+										:is-active="activePreviewCard === companionPreviewKey"
+										:preview-key="companionPreviewKey"
+										@preview="handlePreviewUpdate"
+										@pin="togglePreviewPin"
+									/>
+								</ul>
+							</section>
 							<div v-if="sideboardCards.length > 0">
 								<h4 class="font-semibold mb-3 text-sm uppercase tracking-wide">
 									Sideboard ({{ sideboardTotal }})
