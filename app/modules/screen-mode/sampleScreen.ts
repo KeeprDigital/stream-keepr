@@ -9,7 +9,7 @@ import { SAMPLE_ID, screenModeSampleConfigs } from './sampleDataset';
 interface ScreenModeSampleContextOptions {
 	mode: ScreenMode;
 	/** The Theme previewed, as stored; undefined previews the Default Theme. */
-	themeTokens: Readonly<Ref<StoredThemeTokens | undefined>>;
+	themeTokens: Ref<StoredThemeTokens | undefined>;
 	viewport: Readonly<Ref<{ width: number; height: number }>>;
 }
 
@@ -42,7 +42,7 @@ export function createScreenModeSampleContext(options: ScreenModeSampleContextOp
 		overlayContainer: ref(null),
 		isPreview: ref(true),
 		outputMode: ref('overlay'),
-		themeTokens: options.themeTokens as Ref<StoredThemeTokens | undefined>,
+		themeTokens: options.themeTokens,
 		sampleDataset: true,
 		viewport: options.viewport,
 	};

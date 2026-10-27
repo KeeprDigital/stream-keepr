@@ -33,9 +33,8 @@ interface SamplePlayer {
 	wins: number;
 	losses: number;
 	draws: number;
-	deckName: string;
-	deckColors: string;
-	archetypeId: number;
+	/** Their deck is their Archetype's. */
+	archetypeId: typeof ARCHETYPES[number]['id'];
 	/** Their position a Round earlier, which Standings' Position Change measures against. */
 	previousPosition: number;
 }
@@ -55,8 +54,6 @@ const PLAYERS: readonly SamplePlayer[] = [
 		wins: 6,
 		losses: 0,
 		draws: 1,
-		deckName: 'Boros Convoke',
-		deckColors: 'RW',
 		archetypeId: 1,
 		previousPosition: 3,
 	},
@@ -66,8 +63,6 @@ const PLAYERS: readonly SamplePlayer[] = [
 		wins: 6,
 		losses: 1,
 		draws: 0,
-		deckName: 'Dimir Midrange',
-		deckColors: 'UB',
 		archetypeId: 2,
 		previousPosition: 1,
 	},
@@ -77,8 +72,6 @@ const PLAYERS: readonly SamplePlayer[] = [
 		wins: 5,
 		losses: 1,
 		draws: 1,
-		deckName: 'Esper Control',
-		deckColors: 'WUB',
 		archetypeId: 4,
 		previousPosition: 2,
 	},
@@ -88,8 +81,6 @@ const PLAYERS: readonly SamplePlayer[] = [
 		wins: 5,
 		losses: 2,
 		draws: 0,
-		deckName: 'Mono-Green Landfall',
-		deckColors: 'G',
 		archetypeId: 3,
 		previousPosition: 4,
 	},
@@ -99,8 +90,6 @@ const PLAYERS: readonly SamplePlayer[] = [
 		wins: 5,
 		losses: 2,
 		draws: 0,
-		deckName: 'Boros Convoke',
-		deckColors: 'RW',
 		archetypeId: 1,
 		previousPosition: 7,
 	},
@@ -110,8 +99,6 @@ const PLAYERS: readonly SamplePlayer[] = [
 		wins: 4,
 		losses: 2,
 		draws: 1,
-		deckName: 'Dimir Midrange',
-		deckColors: 'UB',
 		archetypeId: 2,
 		previousPosition: 5,
 	},
@@ -121,8 +108,6 @@ const PLAYERS: readonly SamplePlayer[] = [
 		wins: 4,
 		losses: 3,
 		draws: 0,
-		deckName: 'Esper Control',
-		deckColors: 'WUB',
 		archetypeId: 4,
 		previousPosition: 6,
 	},
@@ -132,12 +117,16 @@ const PLAYERS: readonly SamplePlayer[] = [
 		wins: 4,
 		losses: 3,
 		draws: 0,
-		deckName: 'Mono-Green Landfall',
-		deckColors: 'G',
 		archetypeId: 3,
 		previousPosition: 8,
 	},
 ];
+
+/** A sample Player's deck, as a broadcast names it: their Archetype's name and colours. */
+function deckOf(index: number) {
+	const { name, colors } = ARCHETYPES.find(archetype => archetype.id === PLAYERS[index]!.archetypeId)!;
+	return { name, colors };
+}
 
 /** Player ids are 1-based positions. */
 const playerId = (index: number) => index + 1;
@@ -156,7 +145,7 @@ const SAMPLE_PLAYERS: PlayerResponse[] = PLAYERS.map((player, index) => ({
 	points: player.wins * 3 + player.draws,
 	archetypeId: player.archetypeId,
 	lgs: null,
-	gameData: { type: 'mtg', deckName: player.deckName, deckColors: player.deckColors },
+	gameData: { type: 'mtg', deckName: deckOf(index).name, deckColors: deckOf(index).colors },
 	createdAt: SAMPLE_TIMESTAMP,
 	updatedAt: SAMPLE_TIMESTAMP,
 }));
@@ -209,7 +198,7 @@ function entrant(index: number): BracketEntrant {
 		playerId: id,
 		name,
 		seed: index + 1,
-		deck: { name: PLAYERS[index]!.deckName, colors: PLAYERS[index]!.deckColors },
+		deck: deckOf(index),
 	};
 }
 
@@ -389,8 +378,8 @@ const ANSWERS = {
 			tableNumber: index + 3,
 			opponentId: player(opponent).id,
 			opponentName: player(opponent).name,
-			opponentDeckName: PLAYERS[opponent]!.deckName,
-			opponentDeckColors: PLAYERS[opponent]!.deckColors,
+			opponentDeckName: deckOf(opponent).name,
+			opponentDeckColors: deckOf(opponent).colors,
 			outcome: index === 2
 				? 'draw'
 				: 'win',
@@ -407,13 +396,13 @@ const ANSWERS = {
 	headToHead: {
 		player1: {
 			...player(0),
-			deckName: PLAYERS[0]!.deckName,
-			deckColors: PLAYERS[0]!.deckColors,
+			deckName: deckOf(0).name,
+			deckColors: deckOf(0).colors,
 		},
 		player2: {
 			...player(1),
-			deckName: PLAYERS[1]!.deckName,
-			deckColors: PLAYERS[1]!.deckColors,
+			deckName: deckOf(1).name,
+			deckColors: deckOf(1).colors,
 		},
 		earlierMatches: [
 			{
@@ -478,10 +467,10 @@ const ANSWERS = {
 					formatExternalId: 'sample-format',
 					phaseIds: [SWISS.id],
 					phaseName: SWISS.name,
-					name: PLAYERS[0]!.deckName,
-					colors: PLAYERS[0]!.deckColors,
-					submittedName: PLAYERS[0]!.deckName,
-					submittedColors: PLAYERS[0]!.deckColors,
+					name: deckOf(0).name,
+					colors: deckOf(0).colors,
+					submittedName: deckOf(0).name,
+					submittedColors: deckOf(0).colors,
 					sortOrder: 0,
 					isPrimary: true,
 					archetypeId: SPOTLIT.id,
@@ -510,7 +499,7 @@ const ANSWERS = {
  * Each plain mode's configuration under the sample: what it selects from the
  * dataset, where its defaults select nothing.
  */
-export const SCREEN_MODE_SAMPLE_CONFIGS: ModeConfigsMap = {
+const SCREEN_MODE_SAMPLE_CONFIGS: ModeConfigsMap = {
 	'deck': {
 		deckSource: { type: 'player', playerId: player(0).id },
 	},
@@ -567,6 +556,3 @@ export function useSampleScreenOutputReadRepository(): SampleReadRepository {
 		playerDecks: answer(ANSWERS.playerDecks),
 	};
 }
-
-/** Every sample Player's name, as a test proving where the sample may not appear reads them. */
-export const SAMPLE_PLAYER_NAMES: readonly string[] = PLAYERS.map(entry => entry.name);

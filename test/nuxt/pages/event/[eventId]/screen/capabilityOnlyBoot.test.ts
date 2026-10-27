@@ -5,7 +5,7 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
 import { createMockFeatureMatchState, createWireMockFeatureMatch } from '~~/test/helpers/fixtures';
 import { useRouter } from '#app';
 import { tryUseRealtime } from '~/composables/core/useRealtime';
-import { SAMPLE_PLAYER_NAMES } from '~/modules/screen-mode/sampleDataset';
+import { useSampleScreenOutputReadRepository } from '~/modules/screen-mode/sampleDataset';
 import { useCardStore } from '~/stores/card';
 import { useEventStore } from '~/stores/event';
 import { useFeatureMatchStore } from '~/stores/featureMatch';
@@ -551,10 +551,12 @@ describe('a capability-only Screen Output', () => {
 		const standingsRead = () => api.requests.some(request => request.path.endsWith('/screens/7/standings'));
 
 		const wrapper = await mountOutput(`/event/42/screen/main#asset-capability=${capability}`, standingsRead);
+		// Nothing appears to wait on, so give the read's answer its full settle to render.
 		await settleUntil(() => false);
 
+		const { players } = await useSampleScreenOutputReadRepository().standings({ eventId: 42, screenId: 7 });
 		expect(standingsRead()).toBe(true);
-		expect(SAMPLE_PLAYER_NAMES.filter(name => wrapper.text().includes(name))).toEqual([]);
+		expect(players.map(({ name }) => name).filter(name => wrapper.text().includes(name))).toEqual([]);
 	});
 });
 
