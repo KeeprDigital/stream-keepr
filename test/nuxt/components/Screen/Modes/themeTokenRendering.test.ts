@@ -16,9 +16,9 @@ import Renderer from '~/components/Screen/Renderer.vue';
 // Each themed Screen Mode's display, mounted by its Screen host under a
 // resolved token set, paints every Mode Token it declares (ADR-0049).
 
-/** Modes whose displays still read their look from elsewhere, and the ticket moving each. */
+/** Modes whose displays read no Mode Token, and the ticket moving each (or why none will). */
 const MODES_NOT_YET_ON_THEME_TOKENS: Partial<Record<ScreenMode, string>> = {
-	'background': '#825',
+	'background': 'none: it declares no Mode Token, and paints the `background` Foundation Token (screenBackgroundLayers)',
 	'feature-match-overlay': '#831',
 	'broadcast-graphics': '#829',
 };
@@ -207,6 +207,16 @@ const SAMPLES: { [T in ThemeTokenType]: ThemeTokenValueTypes[T] } = {
 		tracking: 0.2,
 		case: 'lowercase',
 	},
+	backgroundLayers: [
+		{
+			id: 'wash',
+			type: 'color',
+			color: '#123456',
+			enabled: true,
+			opacity: 0.5,
+		},
+	],
+	animationEffect: { effect: 'caustics' },
 };
 
 /** The application fonts' faces, as `main.css` declares them, under names a test can read back. */

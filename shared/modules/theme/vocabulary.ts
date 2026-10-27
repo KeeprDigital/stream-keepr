@@ -1,3 +1,4 @@
+import type { ThemeBackgroundLayer } from './background';
 import type {
 	FoundationTokenVocabulary,
 	ModeTokenValue,
@@ -99,6 +100,17 @@ export const FOUNDATION_TOKENS = {
 		label: 'Screen inset',
 		default: 0,
 		bounds: { min: 0, max: 480 },
+	},
+	'background': {
+		type: 'backgroundLayers',
+		label: 'Background',
+		// Empty: a Background Screen stays black and a plain mode clear.
+		default: [] as ThemeBackgroundLayer[],
+	},
+	'animation-effect': {
+		type: 'animationEffect',
+		label: 'Animation Effect',
+		default: { effect: 'fog' },
 	},
 } as const satisfies FoundationTokenVocabulary;
 
