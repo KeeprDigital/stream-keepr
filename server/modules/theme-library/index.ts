@@ -95,10 +95,11 @@ export function themeLibraryModule() {
 		return mapThemeToResponse(theme);
 	}
 
-	/** Clear a token, so the Theme reads its default again. A name no token has is cleared already. */
+	/** Clear a token, so the Theme reads its default again. One it does not set is cleared already, and announces nothing. */
 	async function clearToken({ themeId, token, originConnectionId }: TokenWriteParams): Promise<ThemeResponse> {
-		const theme = await themes.clearToken(themeId, token) ?? themeNotFound();
-		await announce(theme, originConnectionId);
+		const { theme, cleared } = await themes.clearToken(themeId, token) ?? themeNotFound();
+		if (cleared)
+			await announce(theme, originConnectionId);
 		return mapThemeToResponse(theme);
 	}
 

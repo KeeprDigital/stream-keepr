@@ -656,16 +656,36 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	/*
 	 * A Theme switch arrives as `event:updated`, which names the new Theme and
 	 * carries none of its tokens; an Event context naming a Theme it does not
-	 * hold re-reads, and renders the held one until the answer lands.
+	 * hold re-reads, and renders the held one until the answer lands. A re-read
+	 * that fails is retried on the slow cadence, since nothing else retries it
+	 * while the connection stays up.
 	 */
-	watch(
-		() => !!loadedOn.value && !!eventStore.outputEvent && !holdsSelectedTheme(eventStore.outputEvent),
-		(due) => {
-			const loaded = loadedOn.value;
-			if (due && loaded)
-				void rereadOutputEvent(loaded, recoveries.begin());
-		},
-	);
+	const selectedThemeDue = computed(() => !!loadedOn.value && !!eventStore.outputEvent && !holdsSelectedTheme(eventStore.outputEvent));
+	/** The slow retry of a switch's re-read that failed, while the connection stays up. */
+	let selectedThemeRetry: ReturnType<typeof setTimeout> | null = null;
+
+	function cancelSelectedThemeRetry() {
+		if (selectedThemeRetry)
+			clearTimeout(selectedThemeRetry);
+		selectedThemeRetry = null;
+	}
+
+	async function rereadSelectedTheme() {
+		cancelSelectedThemeRetry();
+		const loaded = loadedOn.value;
+		if (!selectedThemeDue.value || !loaded)
+			return;
+		await rereadOutputEvent(loaded, recoveries.begin());
+		if (selectedThemeDue.value && loadedOn.value === loaded && !selectedThemeRetry)
+			selectedThemeRetry = setTimeout(() => void rereadSelectedTheme(), SCREEN_OUTPUT_LOAD_RETRY_MS);
+	}
+
+	watch(selectedThemeDue, (due) => {
+		if (due)
+			void rereadSelectedTheme();
+		else
+			cancelSelectedThemeRetry();
+	});
 
 	// A loaded rendering hears its Screen's announcements on the Event channel.
 	// One not loaded listens on none — its Event context, which names the channel,
@@ -699,6 +719,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	onBeforeUnmount(async () => {
 		loads.supersede();
 		forgetLoad();
+		cancelSelectedThemeRetry();
 		stopListeningDuringLoad();
 		await screenRealtimeSession.stop();
 	});

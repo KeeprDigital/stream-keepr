@@ -63,6 +63,9 @@ export function eventWriteModule() {
 			updatedEvent = await events.update(eventId, input);
 		}
 		catch (error) {
+			// The Theme checked above was deleted before the write: its foreign key refused it.
+			if (input.themeId)
+				await requireTheme(input.themeId);
 			if (error instanceof BroadcastDeckListsInUseError) {
 				const names = error.screens.map(screen => screen.name).join(', ');
 				throw createError({

@@ -20,7 +20,7 @@ export const THEME_TOKEN_INPUTS = {
 } as const satisfies Record<ThemeTokenType, Component>;
 
 /** A token value as the editor states an inherited default. */
-export const THEME_TOKEN_VALUE_TEXT: { [T in ThemeTokenType]: (value: ThemeTokenValueTypes[T]) => string } = {
+const THEME_TOKEN_VALUE_TEXT: { [T in ThemeTokenType]: (value: ThemeTokenValueTypes[T]) => string } = {
 	color: value => value,
 	dimension: value => `${value}px`,
 	typography: value => [

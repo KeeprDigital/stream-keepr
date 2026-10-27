@@ -286,6 +286,48 @@ describe('useScreenDisplaySession', () => {
 		expect(harness.session.error.value).toBeNull();
 	});
 
+	it('retries the re-read a Theme switch asks for until it holds the new Theme', async () => {
+		vi.useFakeTimers();
+		const harness = createHarness();
+		const brand = { id: 'brand', revision: 1, tokens: {} };
+		const next = {
+			id: 'next',
+			revision: 1,
+			tokens: { accent: '#000000' },
+		};
+		harness.outputReads.event.mockResolvedValueOnce({
+			id: 42,
+			name: 'Output Event',
+			themeId: 'brand',
+			theme: brand,
+		} as never);
+		await vi.advanceTimersByTimeAsync(0);
+		harness.outputReads.event.mockRejectedValueOnce(new Error('503 Service Unavailable'));
+		harness.outputReads.event.mockResolvedValueOnce({
+			id: 42,
+			name: 'Output Event',
+			themeId: 'next',
+			theme: next,
+		} as never);
+
+		// What an `event:updated` naming the new Theme leaves held: its id, and the old Theme's tokens.
+		harness.eventStore.outputEvent = {
+			id: 42,
+			name: 'Output Event',
+			themeId: 'next',
+			theme: brand,
+		};
+		await vi.advanceTimersByTimeAsync(0);
+		expect(harness.outputReads.event).toHaveBeenCalledTimes(2);
+
+		await vi.advanceTimersByTimeAsync(SCREEN_OUTPUT_LOAD_RETRY_MS);
+		expect(harness.outputReads.event).toHaveBeenCalledTimes(3);
+		expect(harness.session.screenContext.themeTokens?.value).toEqual(next.tokens);
+
+		await vi.advanceTimersByTimeAsync(SCREEN_OUTPUT_LOAD_RETRY_MS * 2);
+		expect(harness.outputReads.event).toHaveBeenCalledTimes(3);
+	});
+
 	it('stops retrying once disposed', async () => {
 		vi.useFakeTimers();
 		const harness = createHarness();

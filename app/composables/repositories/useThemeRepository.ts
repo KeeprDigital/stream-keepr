@@ -7,13 +7,14 @@ import type { ThemeListResponse, ThemeResponse, ThemeSummary } from '~~/shared/t
 export function useThemeRepository() {
 	const apiHeaders = useApiHeaders();
 	const library = '/api/themes';
-	const token = (themeId: string, name: string) => `${library}/${encodeURIComponent(themeId)}/tokens/${encodeURIComponent(name)}`;
+	const theme = (themeId: string) => `${library}/${encodeURIComponent(themeId)}`;
+	const token = (themeId: string, name: string) => `${theme(themeId)}/tokens/${encodeURIComponent(name)}`;
 
 	const list = async (): Promise<ThemeSummary[]> =>
 		(await $fetch<ThemeListResponse>(library)).themes;
 
 	const get = async (themeId: string): Promise<ThemeResponse> =>
-		await $fetch<ThemeResponse>(`${library}/${encodeURIComponent(themeId)}`);
+		await $fetch<ThemeResponse>(theme(themeId));
 
 	const create = async (name: string): Promise<ThemeResponse> =>
 		await $fetch<ThemeResponse>(library, {
@@ -23,14 +24,14 @@ export function useThemeRepository() {
 		});
 
 	const rename = async (themeId: string, name: string): Promise<ThemeResponse> =>
-		await $fetch<ThemeResponse>(`${library}/${encodeURIComponent(themeId)}`, {
+		await $fetch<ThemeResponse>(theme(themeId), {
 			method: 'PATCH',
 			headers: apiHeaders.getHeaders(),
 			body: { name },
 		});
 
 	const remove = async (themeId: string): Promise<void> => {
-		await $fetch(`${library}/${encodeURIComponent(themeId)}`, {
+		await $fetch(theme(themeId), {
 			method: 'DELETE',
 			headers: apiHeaders.getHeaders(),
 		});

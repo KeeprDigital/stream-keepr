@@ -1,4 +1,10 @@
-import type { FoundationTokenDefinition, ThemeTokenValue } from './modules/theme/tokens';
+// The whole Theme Token vocabulary a Theme may set: every Foundation Token,
+// and every Mode Token a Screen Mode Definition declares. Stream Keepr owns
+// each name (ADR-0049). It sits beside `screenModes.ts` rather than in
+// `modules/theme`, because Mode Tokens are read off the Screen Mode
+// Definitions, which already import that module.
+
+import type { FoundationTokenDefinition, ThemeTokenReference, ThemeTokenValue } from './modules/theme/tokens';
 import type { DeclaredModeTokenDefinition, FoundationTokenName } from './modules/theme/vocabulary';
 import type { ScreenModeTokenName } from './screenModes';
 import type { ScreenMode } from './types/enums';
@@ -8,12 +14,6 @@ import { themeTokenValueSchema } from './modules/theme/tokens';
 import { FOUNDATION_TOKENS } from './modules/theme/vocabulary';
 import { SCREEN_MODES, screenModeTokens } from './screenModes';
 import { SCREEN_MODE_VALUES } from './types/enums';
-
-/**
- * The whole Theme Token vocabulary a Theme may set: every Foundation Token,
- * and every Mode Token a Screen Mode Definition declares. Stream Keepr owns
- * each name (ADR-0049).
- */
 
 /** The Mode Tokens of one themed Screen Mode, by full name, as a Theme editor groups them. */
 export interface ThemedScreenModeTokens {
@@ -54,7 +54,7 @@ const referenceSchema = z.object({
 }).strict();
 
 export type ThemeTokenWrite
-	= | { ok: true; value: ThemeTokenValue | { token: string } }
+	= | { ok: true; value: ThemeTokenValue | ThemeTokenReference }
 		| { ok: false; refusal: ThemeTokenWriteRefusal };
 
 /**

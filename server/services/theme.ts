@@ -1,17 +1,12 @@
 import type { DbTheme } from '~~/server/db/schema';
-import { asc, eq, sql } from 'drizzle-orm';
+import type { EventUsingTheme } from '~~/shared/types/theme';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events, themes } from '~~/server/db/schema';
 
-/** The Events a Theme serves, by name. */
-export interface ThemeUser {
-	id: number;
-	name: string;
-}
-
 /** A Theme delete refused because Events use it. */
 export class ThemeInUseError extends Error {
-	constructor(readonly events: ThemeUser[]) {
+	constructor(readonly events: EventUsingTheme[]) {
 		super('Theme is in use');
 		this.name = 'ThemeInUseError';
 	}
@@ -68,19 +63,24 @@ export function themeService() {
 		return theme;
 	}
 
-	async function clearToken(id: string, name: string): Promise<DbTheme | undefined> {
-		const [theme] = await db.update(themes)
+	/** Clear a token the Theme sets; a token it does not set is answered `cleared: false`, unwritten. */
+	async function clearToken(id: string, name: string): Promise<{ theme: DbTheme; cleared: boolean } | undefined> {
+		const path = tokenPath(name);
+		const [cleared] = await db.update(themes)
 			.set({
-				tokens: sql`json_remove(${themes.tokens}, ${tokenPath(name)})`,
+				tokens: sql`json_remove(${themes.tokens}, ${path})`,
 				revision: sql`${themes.revision} + 1`,
 				updatedAt: new Date(),
 			})
-			.where(eq(themes.id, id))
+			.where(and(eq(themes.id, id), sql`json_type(${themes.tokens}, ${path}) is not null`))
 			.returning();
-		return theme;
+		if (cleared)
+			return { theme: cleared, cleared: true };
+		const unchanged = await findById(id);
+		return unchanged && { theme: unchanged, cleared: false };
 	}
 
-	async function eventsUsing(id: string): Promise<ThemeUser[]> {
+	async function eventsUsing(id: string): Promise<EventUsingTheme[]> {
 		return await db.select({ id: events.id, name: events.name })
 			.from(events)
 			.where(eq(events.themeId, id))

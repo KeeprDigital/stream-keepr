@@ -141,31 +141,13 @@ describe('the Theme library', () => {
 		expect(await storedTokens(theme.id)).toEqual(cleared.tokens);
 	});
 
-	it.each([
-		[
-			'a name no token has',
-			'nonsense',
-			'#fff',
-			'unknown-token',
-		],
-		[
-			'a value of the wrong type',
-			'accent',
-			12,
-			'invalid-value',
-		],
-		[
-			'a dimension outside its bounds',
-			'inset',
-			100_000,
-			'invalid-value',
-		],
-	])('refuses a token write of %s, storing nothing', async (_case, token, value, code) => {
-		const theme = await create(`Refused ${token}`);
+	// Which values a write refuses is `parseThemeTokenWrite`'s own test; here, that the route asks it.
+	it('refuses a token write the vocabulary does not allow, storing and announcing nothing', async () => {
+		const theme = await create('Refused');
 
-		expect(await refusal(set(theme.id, token, value))).toMatchObject({
+		expect(await refusal(set(theme.id, 'accent', 12))).toMatchObject({
 			statusCode: 400,
-			data: { code },
+			data: { code: 'invalid-value' },
 		});
 		expect(await storedTokens(theme.id)).toEqual({});
 		expect(published).toEqual([]);
@@ -258,6 +240,18 @@ describe('a Theme\'s announcements', () => {
 			{ eventId: second, revision: written.revision + 1, tokens: {} },
 		]);
 		expect(published.map(message => message.eventId)).not.toContain(unthemed);
+	});
+
+	it('announces nothing for clearing a token the Theme does not set', async () => {
+		const theme = await create('Unset');
+		const event = await createEvent('Unset Event');
+		await select(event, theme.id);
+		published.length = 0;
+
+		const answered = await clear(theme.id, 'accent');
+
+		expect(answered.revision).toBe(theme.revision);
+		expect(published).toEqual([]);
 	});
 
 	it('announces a Theme switch to its Event as an Event update', async () => {

@@ -32,10 +32,16 @@ export interface ScreenOutputTheme {
 /** Why a Theme delete was refused: Events use it. */
 export const THEME_IN_USE = 'THEME_IN_USE';
 
+/** An Event a Theme serves, as a refused delete names it. */
+export interface EventUsingTheme {
+	id: number;
+	name: string;
+}
+
 /** The Events a refused Theme delete names. */
 export interface ThemeInUseData {
 	code: typeof THEME_IN_USE;
-	events: { id: number; name: string }[];
+	events: EventUsingTheme[];
 }
 
 /** Why a Theme Token write was refused. */

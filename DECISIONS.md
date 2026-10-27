@@ -583,7 +583,7 @@ A root-relative path was first accepted wherever it pointed, so an author could 
 
 ## ADR-0022: A Screen Output reads what its Screen publishes, through its Screen
 
-Accepted · 2026-10-17 · [#604](https://github.com/KeeprDigital/stream-keepr/issues/604) · Amended 2026-10-21 ([#707](https://github.com/KeeprDigital/stream-keepr/issues/707)): a Card's expiry is a clock projection that no read, client or timer writes
+Accepted · 2026-10-17 · [#604](https://github.com/KeeprDigital/stream-keepr/issues/604) · Amended 2026-10-21 ([#707](https://github.com/KeeprDigital/stream-keepr/issues/707)): a Card's expiry is a clock projection that no read, client or timer writes · Amended 2026-10-27 ([#820](https://github.com/KeeprDigital/stream-keepr/issues/820)): the Event context carries the Event's Theme
 
 ### Decision
 
