@@ -5,15 +5,6 @@ const toast = useToast();
 
 const event = computed(() => eventStore.event);
 
-const holdingTextInitialData = computed(() => {
-	if (!event.value)
-		return null;
-
-	return {
-		holdingText: event.value.holdingText ?? '',
-	};
-});
-
 /**
  * The form holds talent ids and the dropdowns display names (#298).
  *
@@ -35,19 +26,14 @@ const commentatorInitialData = computed(() => {
 	};
 });
 
-const { formData: holdingTextFormData, isDirty: isHoldingTextDirty, reset: resetHoldingText, getChanges: getHoldingTextChanges, runSave: runHoldingTextSave } = useForm({
-	initialData: holdingTextInitialData,
-});
-
 const { formData: commentatorFormData, isDirty: isCommentatorsDirty, reset: resetCommentators, getChanges: getCommentatorChanges, runSave: runCommentatorSave } = useForm({
 	initialData: commentatorInitialData,
 });
 
-const holdingTextSaving = ref(false);
 const commentatorsSaving = ref(false);
 const commentatorCreating = ref(false);
 
-useRegisterDirtyState(computed(() => isHoldingTextDirty.value || isCommentatorsDirty.value));
+useRegisterDirtyState(isCommentatorsDirty);
 
 const talentOptions = computed(() => {
 	return (event.value?.talents || [])
@@ -138,28 +124,6 @@ async function handleCreateCommentator(name: string, commentatorNumber: 1 | 2) {
 	);
 }
 
-async function saveHoldingTextSettings() {
-	if (!event.value)
-		return;
-
-	const changes = getHoldingTextChanges();
-	const updates = 'holdingText' in changes
-		? { holdingText: changes.holdingText?.trim() || null }
-		: {};
-
-	await runHoldingTextSave(() => runRequest(
-		() => eventStore.updateEvent(updates),
-		{
-			loadingRef: holdingTextSaving,
-			success: { title: 'Saved', description: 'Holding text updated', color: 'success' },
-			error: { title: 'Error', description: 'Failed to save holding text', color: 'error' },
-			onFailure: ({ error }) => {
-				console.error(error);
-			},
-		},
-	));
-}
-
 async function saveCommentatorSettings() {
 	if (!event.value)
 		return;
@@ -193,25 +157,7 @@ function swapCommentators() {
 </script>
 
 <template>
-	<div v-if="holdingTextFormData && commentatorFormData" class="flex flex-col gap-6">
-		<UForm :state="holdingTextFormData" @submit="saveHoldingTextSettings">
-			<UCard variant="subtle" title="Holding Text">
-				<UFormField name="holdingText" label="Message">
-					<UTextarea
-						v-model="holdingTextFormData.holdingText"
-						class="w-full"
-						autoresize
-						:rows="4"
-						placeholder="Coverage resumes shortly."
-					/>
-				</UFormField>
-
-				<template #footer>
-					<EventConfigFormFooter :is-dirty="isHoldingTextDirty" :loading="holdingTextSaving" @reset="resetHoldingText" />
-				</template>
-			</UCard>
-		</UForm>
-
+	<div v-if="commentatorFormData" class="flex flex-col gap-6">
 		<UForm :state="commentatorFormData" @submit="saveCommentatorSettings">
 			<UCard variant="subtle" title="Commentators">
 				<div class="flex gap-4 items-end max-md:flex-col max-md:items-stretch">

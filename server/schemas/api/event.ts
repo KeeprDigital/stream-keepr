@@ -1,7 +1,10 @@
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { events } from '~~/server/db/schema';
+import { EVENT_CANVAS_SIDE_BOUNDS } from '~~/shared/eventCanvas';
 import { FEATURE_MATCH_ORIENTATION_VALUES, GAME_VALUES } from '~~/shared/types/enums';
+
+const eventCanvasSideSchema = z.number().int().min(EVENT_CANVAS_SIDE_BOUNDS.min).max(EVENT_CANVAS_SIDE_BOUNDS.max);
 
 // Shared field constraints applied to both create and update schemas.
 // Centralised here so bounds stay in sync between the two schemas.
@@ -17,6 +20,8 @@ const eventFieldConstraints = {
 	featureMatchDefaultStartingLife: z.number().int().nonnegative().max(99999).optional(),
 	featureMatchDefaultClockDuration: z.number().int().nonnegative().max(999).optional(),
 	featureMatchDefaultExtraTurns: z.number().int().nonnegative().max(20).optional(),
+	canvasWidth: eventCanvasSideSchema.optional(),
+	canvasHeight: eventCanvasSideSchema.optional(),
 };
 
 const SERVER_MANAGED_OMIT = {
@@ -52,6 +57,8 @@ export const createEventSchema = createInsertSchema(events)
 		// foreign keys would allow a caller to attach another Event's Talent.
 		commentator1TalentId: true,
 		commentator2TalentId: true,
+		// An Event starts on the Default Theme; its Event Presentation Settings pick another.
+		themeId: true,
 	})
 	.extend({
 		...eventFieldConstraints,
@@ -79,6 +86,8 @@ export const updateEventSchema = createUpdateSchema(events)
 	.extend({
 		...eventFieldConstraints,
 		name: eventFieldConstraints.name.optional(),
+		// Event Presentation Settings: no Theme is the Default Theme.
+		themeId: z.string().min(1).max(100).nullable().optional(),
 	})
 	.strict();
 

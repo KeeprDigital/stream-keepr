@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { GraphicAnimationChannelKey, GraphicAnimationChannels } from '~~/shared/modules/graphics';
+import type { GraphicAnimationChannelKey, GraphicAnimationChannels, GraphicThemeTokens } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
 	GraphicAnimationPhase,
@@ -7,8 +7,7 @@ import type {
 	GraphicContainerAnimation,
 	GraphicOnScreenAnimationRecipe,
 } from '~~/shared/types/graphics';
-import type { GraphicStyleSlot } from '~~/shared/types/graphicStyleSet';
-import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
+import type { GraphicThemeAnimationSlot } from '~~/shared/types/graphicThemeBindings';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import {
 	applyBroadcastGraphicAnimationPreset,
@@ -17,6 +16,7 @@ import {
 	enableGraphicItemAnimationPhase,
 	GRAPHIC_ANIMATION_PHASE_LABELS,
 	graphicAnimationPresetsForPhase,
+	paintGraphicsThemeBindings,
 	patchBroadcastGraphicAnimationChannel,
 	patchBroadcastGraphicAnimationRecipe,
 	patchBroadcastGraphicAnimationStagger,
@@ -59,13 +59,8 @@ const props = defineProps<{
 	selectedTarget: GraphicsSelectionTarget;
 	/** Whether this session holds the artifact's Graphics Authoring Lease. */
 	writable?: boolean;
-	/**
-	 * The published Graphic Style Set this composition is linked to, when it is
-	 * linked to one. A Graphic Animation Recipe entry is referenced per lifecycle
-	 * phase, from the phase's own controls, exactly as every other entry is
-	 * referenced from the property control that already edits it.
-	 */
-	styleSet?: GraphicStyleAuthoringContext;
+	/** The Foundation Tokens the editor previews under, which a bound phase shows. */
+	themeTokens?: GraphicThemeTokens;
 	/** The Broadcast Graphics canvas, which a top-level owner's slide is measured against. */
 	canvasWidth: number;
 	canvasHeight: number;
@@ -77,34 +72,36 @@ const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[
 
 /**
  * Every edit here goes through the compositor editing module, which checks the
- * Graphics Authoring Lease, re-captures Graphic Style Set overrides, and replaces the
- * stack. These controls write recipe values, and an edit to a phase whose recipe is
- * inherited is a deviation by definition, so it is recorded as an override.
+ * Graphics Authoring Lease and replaces the stack. These controls write recipe
+ * values, and an edit to a phase bound to a Theme token detaches it (ADR-0049).
  */
-const { canAuthor, edit, bindStyleRef, unbindStyleRef } = useCompositorEditing(
+const { canAuthor, edit, bindThemeToken, detachThemeToken } = useCompositorEditing(
 	() => props,
 	graphics => emit('update:graphics', graphics),
 );
 
-const selection = computed(() => resolveGraphicsSelection(props.graphics, props.selectedTarget));
+/** The stack as it previews: a bound phase shows its token's recipe. */
+const selection = computed(() => resolveGraphicsSelection(
+	paintGraphicsThemeBindings(props.graphics, props.themeTokens),
+	props.selectedTarget,
+));
 
 /**
- * The Graphic Style Set slot one lifecycle phase's recipe is inherited through.
- *
- * The slot vocabulary names the phase, so an entry assigned to enter and the same
- * entry assigned to exit are two independent references to it, while item selection,
- * staggering, and choreography stay local.
+ * The Theme binding slot of one lifecycle phase's recipe, or null for on-screen
+ * cycling, which no motion token fills.
  */
-function styleSlotFor(phase: GraphicAnimationPhase): GraphicStyleSlot {
-	return `animation.${phase}` as GraphicStyleSlot;
+function themeSlotFor(phase: GraphicAnimationPhase): GraphicThemeAnimationSlot | null {
+	return phase === 'on-screen'
+		? null
+		: `animation.${phase}`;
 }
 
-function styleRefFor(phase: GraphicAnimationPhase) {
+function themeBindingFor(slot: GraphicThemeAnimationSlot): string | undefined {
 	const current = selection.value;
 	if (current.kind === 'graphic')
-		return current.graphic.styleRefs?.[styleSlotFor(phase) as 'animation.enter'];
+		return current.graphic.themeBindings?.[slot];
 	if (current.kind === 'item')
-		return current.item.styleRefs?.[styleSlotFor(phase)];
+		return current.item.themeBindings?.[slot];
 	return undefined;
 }
 
@@ -279,14 +276,14 @@ function staggerOf(phase: GraphicAnimationPhase) {
 			</div>
 
 			<div v-if="recipeOf(phase)" class="mt-2 space-y-2">
-				<GraphicsCompositorStyleRef
-					:style-slot="`animation.${phase}`"
+				<GraphicsCompositorThemeBinding
+					v-if="themeSlotFor(phase)"
+					:theme-slot="themeSlotFor(phase)!"
 					:label="`${GRAPHIC_ANIMATION_PHASE_LABELS[phase]} recipe`"
-					:entries="styleSet?.entries"
-					:current="styleRefFor(phase)"
+					:current="themeBindingFor(themeSlotFor(phase)!)"
 					:writable="canAuthor"
-					@bind="entryId => bindStyleRef(styleSlotFor(phase), entryId)"
-					@unbind="unbindStyleRef(styleSlotFor(phase))"
+					@bind="token => bindThemeToken(themeSlotFor(phase)!, token)"
+					@detach="detachThemeToken(themeSlotFor(phase)!)"
 				/>
 
 				<UFormField label="Preset" size="xs">

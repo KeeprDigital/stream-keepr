@@ -1,4 +1,6 @@
 import type { Component, CSSProperties } from 'vue';
+import type { EventCanvas } from '~~/shared/eventCanvas';
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type {
 	ScreenModeConfigurationPolicy,
 	ScreenModeHostDefinition,
@@ -6,7 +8,6 @@ import type {
 	SharedScreenModeDefinition,
 } from '~~/shared/screenModeDefinitions';
 import type { DisplayType, ScreenMode } from '~~/shared/types/enums';
-import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import { defineAsyncComponent } from 'vue';
 import {
 	getScreenModeSelectOptions,
@@ -14,6 +15,7 @@ import {
 	getScreenModeDefinition as getSharedScreenModeDefinition,
 	getScreenModeHostDefinition as getSharedScreenModeHostDefinition,
 } from '~~/shared/screenModeDefinitions';
+import { screenLayoutTokens } from './modeTokens';
 
 const ScreenModesBackgroundDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/Background/Display.vue'));
 const ScreenModesBackgroundSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/Background/Settings.vue'));
@@ -51,18 +53,20 @@ interface ScreenModeRuntimeDefinition {
 
 interface ResolveScreenModeHostOptions {
 	mode: ScreenMode;
-	screenConfig: ScreenConfig;
+	/** The Event Canvas: the coordinate space every overlay mode renders in (ADR-0051). */
+	canvas: EventCanvas;
+	/** The Event's Theme's stored values; the Default Theme stores none. */
+	theme: StoredThemeTokens;
+	/** The Screen's Screen Theme Overrides. */
+	overrides: StoredThemeTokens;
 	viewportWidth?: number;
 	viewportHeight?: number;
-	preferredDark?: boolean;
 }
 
 export interface ResolvedScreenModeHost {
 	kind: ScreenModeHostKind;
 	containerClass: string;
 	containerStyle: CSSProperties;
-	wrapperClass: string[];
-	wrapperStyle: CSSProperties;
 	provideOverlayContainer: boolean;
 }
 
@@ -127,67 +131,38 @@ export function getScreenModeConfigurationPolicy(mode: ScreenMode): ScreenModeCo
 
 export function resolveScreenModeHost(options: ResolveScreenModeHostOptions): ResolvedScreenModeHost {
 	const host = getScreenModeHostDefinition(options.mode);
-	const config = options.screenConfig;
 
+	// An operator surface: it fills its window in the app's own look (ADR-0051).
 	if (host.kind === 'control') {
-		const paddingX = host.useScreenPadding
-			? (config.paddingX ?? 0)
-			: 0;
-		const paddingY = host.useScreenPadding
-			? (config.paddingY ?? 0)
-			: 0;
-		const theme = resolveScreenModeHostTheme(host, config, options.preferredDark);
-
 		return {
 			kind: 'control',
 			containerClass: 'screen-control-renderer w-full h-full overflow-hidden',
-			containerStyle: {
-				padding: `${paddingY}px ${paddingX}px`,
-			},
-			wrapperClass: theme
-				? [theme]
-				: [],
-			wrapperStyle: theme
-				? { colorScheme: theme }
-				: {},
+			containerStyle: {},
 			provideOverlayContainer: false,
 		};
 	}
 
-	const width = config.width ?? host.defaultWidth;
-	const height = config.height ?? host.defaultHeight;
-	const paddingX = host.useScreenPadding
-		? (config.paddingX ?? 0)
-		: 0;
-	const paddingY = host.useScreenPadding
-		? (config.paddingY ?? 0)
-		: 0;
+	const { width, height } = options.canvas;
 	const style: CSSProperties = {
-		width: width
-			? `${width}px`
-			: '100%',
-		height: height
-			? `${height}px`
-			: '100%',
+		width: `${width}px`,
+		height: `${height}px`,
 		flexShrink: '0',
-		padding: `${paddingY}px ${paddingX}px`,
 	};
 
 	/*
 	 * Uniform viewport-fit scaling, decided by the Screen Mode Definition alone.
 	 *
-	 * The mode registers whether its host scales (`fitToViewport`), and nothing else
-	 * gets a vote. It used to also require the caller to ask, and only the surfaces
-	 * that *embed* an output ever did — so the one output nobody embeds, the one on
-	 * air, rendered its canvas 1:1 and clipped everything outside the browser window.
-	 * At exactly 1920×1080 that is invisible, which is why it survived to #232.
+	 * Every overlay mode registers it (`fitToViewport`), so each renders its
+	 * Event's canvas and no mode fills its window fluidly (ADR-0051). The caller
+	 * gets no vote: when it had to ask, the output on air rendered its canvas 1:1
+	 * and clipped everything outside the browser window (#232).
 	 *
 	 * Letterboxed rather than anchored: the canvas is centred in whatever space is
 	 * left over on the axis that did not decide the scale. Every embedder sizes its
 	 * frame to the canvas aspect ratio, so both offsets are zero there and this only
 	 * shows on a window the canvas does not fit exactly.
 	 */
-	if (host.fitToViewport && width && height && options.viewportWidth && options.viewportHeight) {
+	if (host.fitToViewport && options.viewportWidth && options.viewportHeight) {
 		const scale = Math.min(options.viewportWidth / width, options.viewportHeight / height);
 		const offsetX = (options.viewportWidth - width * scale) / 2;
 		const offsetY = (options.viewportHeight - height * scale) / 2;
@@ -196,36 +171,21 @@ export function resolveScreenModeHost(options: ResolveScreenModeHostOptions): Re
 		style.margin = '0';
 	}
 
-	if (host.useScreenBackground && config.background) {
-		style.background = config.background;
-	}
-
-	if (host.useScreenAlignment) {
-		const hAlign = config.horizontalAlign ?? 'center';
-		const vAlign = config.verticalAlign ?? 'center';
-		style.justifyItems = HALIGN_MAP[hAlign];
-		style.alignItems = VALIGN_MAP[vAlign];
+	// A plain mode's content sits inside the Screen inset, where the Theme aligns it.
+	const { inset, alignment } = screenLayoutTokens(options.theme, options.overrides);
+	if (host.foundationTokens.includes('inset'))
+		style.padding = `${inset}px`;
+	if (host.foundationTokens.includes('alignment')) {
+		style.justifyItems = HALIGN_MAP[alignment.horizontal];
+		style.alignItems = VALIGN_MAP[alignment.vertical];
 	}
 
 	return {
 		kind: 'overlay',
 		containerClass: 'screen-renderer',
 		containerStyle: style,
-		wrapperClass: [],
-		wrapperStyle: {},
 		provideOverlayContainer: true,
 	};
-}
-
-function resolveScreenModeHostTheme(host: ScreenModeHostDefinition, config: ScreenConfig, preferredDark = false): 'light' | 'dark' | null {
-	if (host.themePolicy !== 'screen-color-mode')
-		return null;
-
-	const mode = config.colorMode ?? 'system';
-	if (mode === 'system')
-		return preferredDark ? 'dark' : 'light';
-
-	return mode;
 }
 
 export function getScreenModeSettingsComponent(mode: ScreenMode): Component | null {
@@ -236,6 +196,7 @@ export function isControlScreenMode(mode: ScreenMode): boolean {
 	return getScreenModeDisplayType(mode) === 'control';
 }
 
+export { modeMotionVars, modeTokenVar, modeTypographyStyle, screenBackgroundLayers, screenLayoutTokens, screenModeThemeFontReferences, screenModeThemeTokenStyle } from './modeTokens';
 export { usePaginatedScreenMode, useProjectedRotationPage, useScreenModePagination } from './pagination';
 export type { ProjectedRotationPageOptions, ScreenModePaginationOptions } from './pagination';
 export { getScreenModeSelectOptions };

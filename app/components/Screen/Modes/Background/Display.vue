@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import type { BackgroundLayer } from '~~/shared/types/screenConfig';
+import { DEFAULT_THEME_TOKENS } from '~~/shared/modules/theme';
+import { screenBackgroundLayers } from '~/modules/screen-mode';
 
 const config = useScreenModeConfig('background');
+const { screen, themeTokens } = useScreenContext();
 
-const layers = computed<BackgroundLayer[]>(() => config.value.layers ?? []);
+/** The Screen's own stack, else its Theme's background, overridden on this Screen or not. */
+const layers = computed<BackgroundLayer[]>(() => screenBackgroundLayers(
+	config.value.layers,
+	themeTokens?.value ?? DEFAULT_THEME_TOKENS,
+	screen.value?.themeOverrides ?? {},
+));
 </script>
 
 <template>

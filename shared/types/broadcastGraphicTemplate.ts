@@ -13,7 +13,7 @@ import type { BroadcastGraphicConfig } from './graphics';
  * `id` is the stable identity and `revision` the automatically managed revision
  * the glossary requires: identity survives every edit, and each accepted edit
  * advances the revision by one. Together they are what a Template Package's
- * provenance and a Graphic Style Set update will later name.
+ * provenance names.
  */
 
 export const MAX_BROADCAST_GRAPHIC_TEMPLATE_NAME_LENGTH = 100;

@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { computed, ref } from 'vue';
 import Display from '~/components/Screen/Modes/ArchetypeSpotlight/Display.vue';
 
-const screen = ref<any>(null);
 const config = ref<any>(null);
 const error = ref<string | null>(null);
 const isEmpty = ref(false);
@@ -19,10 +18,6 @@ const currentPage = ref(1);
 // Canned records keyed by pilot, not a copy of the real formatting, which the
 // composable's own test covers: the component only places what it is handed.
 const cannedRecords = new Map<number, string>();
-
-mockNuxtImport('useScreenContext', () => () => ({
-	screen: computed(() => screen.value),
-}));
 
 mockNuxtImport('useArchetypeSpotlightModeData', () => () => ({
 	config: computed(() => config.value),
@@ -78,9 +73,6 @@ async function mountComponent() {
 
 describe('screenModesArchetypeSpotlightDisplay', () => {
 	beforeEach(() => {
-		screen.value = {
-			screenConfig: { primaryTextColor: '#123456', secondaryTextColor: '#654321' },
-		};
 		config.value = { archetypeId: 7, showHeader: true, rowsPerPage: 8 };
 		error.value = null;
 		isEmpty.value = false;

@@ -103,7 +103,6 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 			screen: {
 				id: 1,
 				slug: 'main',
-				screenConfig: { width: 1920, height: 1080 },
 			} as Screen,
 			graphics,
 			selectedTarget: { type: 'canvas' },

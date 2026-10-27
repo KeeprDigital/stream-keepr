@@ -7,8 +7,8 @@ import type {
 	ArchetypeBreakdownEntry,
 	CardBreakdownEntry,
 } from '~~/shared/types/metagame';
-import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import { getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
+import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
 interface TableColumnDefinition<Key extends string> {
 	key: Key;
@@ -17,8 +17,6 @@ interface TableColumnDefinition<Key extends string> {
 	headerClass?: string;
 	cellClass?: string;
 }
-
-const { screen } = useScreenContext();
 
 const {
 	config,
@@ -31,19 +29,38 @@ const {
 	totalPages,
 } = useMetagameModeData();
 
-const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
-const primaryTextStyle = computed(() => {
-	return screenConfig.value.primaryTextColor
-		? { color: screenConfig.value.primaryTextColor }
-		: {};
-});
-const secondaryTextStyle = computed(() => {
-	if (screenConfig.value.secondaryTextColor) {
-		return { color: screenConfig.value.secondaryTextColor };
-	}
-
-	return { opacity: '0.75' };
-});
+const primaryTextStyle = {
+	color: modeTokenVar('metagame', 'primary-text'),
+};
+const secondaryTextStyle = {
+	color: modeTokenVar('metagame', 'secondary-text'),
+};
+const titleStyle = {
+	...modeTypographyStyle('metagame', 'title-typography'),
+	color: modeTokenVar('metagame', 'title-text'),
+};
+const titleDividerStyle = {
+	borderBottomColor: modeTokenVar('metagame', 'title-divider'),
+};
+const surfaceStyle = {
+	backgroundColor: modeTokenVar('metagame', 'surface'),
+};
+/** Over the shared header row chrome's own face, colour and rule. */
+const headerRowStyle = {
+	...modeTypographyStyle('metagame', 'header-typography'),
+	color: modeTokenVar('metagame', 'header-text'),
+	borderBottomColor: modeTokenVar('metagame', 'header-divider'),
+};
+/** On each row too, over the shared row chrome's own line height. */
+const rowStyle = {
+	...modeTypographyStyle('metagame', 'row-typography'),
+	borderBottomColor: modeTokenVar('metagame', 'row-divider'),
+};
+/** Over the shared page indicator's own face. */
+const pageIndicatorStyle = {
+	...modeTypographyStyle('metagame', 'row-typography'),
+	...secondaryTextStyle,
+};
 
 const archetypeColumnDefinitions: Record<MetagameArchetypeColumnKey, TableColumnDefinition<MetagameArchetypeColumnKey>> = {
 	archetype: {
@@ -195,12 +212,19 @@ const contentStyle = computed(() => ({
 	marginInline: config.value.maxTableWidth ? 'auto' : undefined,
 }));
 
-const displayStyle = computed(() => ({
-	'--metagame-primary-text': screenConfig.value.primaryTextColor ?? '#ffffff',
-	'--metagame-secondary-text': screenConfig.value.secondaryTextColor ?? 'rgba(255, 255, 255, 0.72)',
-	'--broadcast-table-primary-text': screenConfig.value.primaryTextColor ?? '#ffffff',
-	'--broadcast-table-secondary-text': screenConfig.value.secondaryTextColor ?? 'rgba(255, 255, 255, 0.72)',
-}));
+/** Set on the root, over the shared broadcast table chrome's own colour and face. */
+const displayStyle = {
+	...modeTypographyStyle('metagame', 'row-typography'),
+	...primaryTextStyle,
+};
+
+/** A name or headline figure reads as primary text, every other figure as secondary. */
+function cellStyle(column: TableColumnDefinition<string>) {
+	const classes = column.cellClass?.split(' ') ?? [];
+	return classes.includes('is-name') || classes.includes('is-primary-metric')
+		? primaryTextStyle
+		: secondaryTextStyle;
+}
 
 function isArchetypeEntry(entry: unknown): entry is ArchetypeBreakdownEntry {
 	return !!entry && typeof entry === 'object' && 'name' in entry && 'metaShare' in entry && 'count' in entry;
@@ -279,8 +303,8 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 	>
 		<div class="metagame-display broadcast-table-display flex flex-col h-full w-full" :style="displayStyle">
 			<div data-testid="metagame-content" class="metagame-content broadcast-table-content flex flex-col h-full w-full" :style="contentStyle">
-				<div v-if="config.showHeader" class="metagame-title broadcast-table-title">
-					<h2 :style="primaryTextStyle">
+				<div v-if="config.showHeader" class="metagame-title broadcast-table-title" :style="titleDividerStyle">
+					<h2 :style="titleStyle">
 						{{ headerText }}
 					</h2>
 				</div>
@@ -291,8 +315,8 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 					:animate="config.animateEntries"
 				/>
 
-				<div v-else class="metagame-table broadcast-table-surface">
-					<div class="metagame-header-row broadcast-table-header-row metagame-grid" :style="gridStyle" data-testid="metagame-header-row">
+				<div v-else class="metagame-table broadcast-table-surface" :style="surfaceStyle">
+					<div class="metagame-header-row broadcast-table-header-row metagame-grid" :style="[gridStyle, headerRowStyle]" data-testid="metagame-header-row">
 						<div
 							v-for="column in activeColumns"
 							:key="column.key"
@@ -315,7 +339,7 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 							v-for="(entry, index) in pageData"
 							:key="config.viewMode === 'cards' && isCardEntry(entry) ? entry.id : isArchetypeEntry(entry) ? entry.id : index"
 							class="metagame-row broadcast-table-row metagame-grid"
-							:style="{ ...gridStyle, '--row-index': index }"
+							:style="[gridStyle, rowStyle, { '--row-index': index }]"
 							:data-testid="`metagame-row-${index}`"
 						>
 							<template v-if="config.viewMode === 'archetype' && isArchetypeEntry(entry)">
@@ -324,10 +348,11 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 									:key="column.key"
 									class="metagame-cell"
 									:class="column.cellClass"
+									:style="cellStyle(column)"
 								>
 									<template v-if="column.key === 'colors'">
 										<MtgManaColorDisplay v-if="entry.colors" :colors="entry.colors" size="sm" />
-										<span v-else class="text-secondary-tone">-</span>
+										<span v-else>-</span>
 									</template>
 									<template v-else>
 										{{ formatArchetypeCell(entry, column.key) }}
@@ -341,10 +366,11 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 									:key="column.key"
 									class="metagame-cell"
 									:class="column.cellClass"
+									:style="cellStyle(column)"
 								>
 									<template v-if="column.key === 'manaCost'">
 										<MtgManaColorDisplay v-if="entry.manaCost" :mana-cost="entry.manaCost" size="xs" />
-										<span v-else class="text-secondary-tone">-</span>
+										<span v-else>-</span>
 									</template>
 									<template v-else>
 										{{ formatCardCell(entry, column.key) }}
@@ -364,7 +390,7 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 							v-for="(entry, index) in pageData"
 							:key="config.viewMode === 'cards' && isCardEntry(entry) ? entry.id : isArchetypeEntry(entry) ? entry.id : index"
 							class="metagame-row broadcast-table-row metagame-grid"
-							:style="gridStyle"
+							:style="[gridStyle, rowStyle]"
 						>
 							<template v-if="config.viewMode === 'archetype' && isArchetypeEntry(entry)">
 								<div
@@ -372,10 +398,11 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 									:key="column.key"
 									class="metagame-cell"
 									:class="column.cellClass"
+									:style="cellStyle(column)"
 								>
 									<template v-if="column.key === 'colors'">
 										<MtgManaColorDisplay v-if="entry.colors" :colors="entry.colors" size="sm" />
-										<span v-else class="text-secondary-tone">-</span>
+										<span v-else>-</span>
 									</template>
 									<template v-else>
 										{{ formatArchetypeCell(entry, column.key) }}
@@ -389,10 +416,11 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 									:key="column.key"
 									class="metagame-cell"
 									:class="column.cellClass"
+									:style="cellStyle(column)"
 								>
 									<template v-if="column.key === 'manaCost'">
 										<MtgManaColorDisplay v-if="entry.manaCost" :mana-cost="entry.manaCost" size="xs" />
-										<span v-else class="text-secondary-tone">-</span>
+										<span v-else>-</span>
 									</template>
 									<template v-else>
 										{{ formatCardCell(entry, column.key) }}
@@ -403,7 +431,7 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 					</div>
 				</div>
 
-				<div v-if="totalPages > 1" class="metagame-page-indicator broadcast-table-page-indicator" :style="secondaryTextStyle">
+				<div v-if="totalPages > 1" class="metagame-page-indicator broadcast-table-page-indicator" :style="pageIndicatorStyle">
 					{{ currentPage }} / {{ totalPages }}
 				</div>
 			</div>
@@ -412,10 +440,6 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 </template>
 
 <style scoped>
-.metagame-display {
-	color: var(--metagame-primary-text);
-}
-
 .metagame-content {
 	min-height: 0;
 	overflow: hidden;
@@ -435,12 +459,9 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 
 .metagame-header-row {
 	padding: 0.75rem var(--metagame-row-padding-x, 1rem);
-	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
+	border-bottom-style: solid;
+	border-bottom-width: 1px;
 	font-size: var(--metagame-row-secondary-font-size, 0.72rem);
-	font-weight: 700;
-	color: var(--metagame-secondary-text);
 	flex-shrink: 0;
 }
 
@@ -455,7 +476,8 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 .metagame-row {
 	height: var(--metagame-row-height, auto);
 	padding: var(--metagame-row-padding-y, 0.625rem) var(--metagame-row-padding-x, 1rem);
-	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+	border-bottom-style: solid;
+	border-bottom-width: 1px;
 }
 
 .metagame-row:last-child {
@@ -463,23 +485,7 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 }
 
 .metagame-cell {
-	color: var(--metagame-secondary-text);
 	font-size: var(--metagame-row-font-size, 1rem);
-	line-height: 1.1;
-}
-
-.metagame-cell.is-name,
-.metagame-cell.is-primary-metric,
-.text-primary-tone {
-	color: var(--metagame-primary-text);
-}
-
-.text-secondary-tone {
-	color: var(--metagame-secondary-text);
-}
-
-.is-name {
-	font-weight: 600;
 }
 
 .is-center {
@@ -490,7 +496,6 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 
 .is-numeric {
 	text-align: right;
-	font-family: var(--font-mono);
 	font-variant-numeric: tabular-nums;
 }
 

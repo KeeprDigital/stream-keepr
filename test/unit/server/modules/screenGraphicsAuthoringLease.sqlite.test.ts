@@ -117,11 +117,6 @@ beforeEach(async () => {
 	});
 	eventId = seeded.eventId;
 	screenId = seeded.screenId;
-	await db.update(schema.screens)
-		.set({
-			screenConfig: { width: 1920, height: 1080 },
-		})
-		.where(eq(schema.screens.id, screenId));
 });
 
 afterAll(async () => await harness.close());
@@ -166,28 +161,14 @@ describe('the commit-time lease fence', () => {
 
 		expect(await authoredStack()).toEqual(['holder']);
 	});
-
-	it('refuses a canvas resize by a Session that does not hold the lease', async () => {
-		await lease(HOLDER);
-
-		await expect(screenService().updateScreenConfig(
-			screenId,
-			eventId,
-			{ width: 1600 },
-			0,
-			fenceFor(OTHER),
-		)).rejects.toMatchObject({ statusCode: 409 });
-
-		expect((await screenRow())?.screenConfig?.width).toBe(1920);
-	});
 });
 
 /**
  * The generic Screen write serves every field a Screen has, and an Edit Screen
  * dialog sends the configuration back as it read it. So it is refused only when it
- * would actually change what the lease protects — the Broadcast Graphics stack, or
- * the canvas of a Screen in Broadcast Graphics mode — and a rename that round-trips
- * them unchanged stays open to everyone.
+ * would actually change what the lease protects — the Broadcast Graphics stack —
+ * and a rename that round-trips it unchanged stays open to everyone. The canvas is
+ * the Event's (ADR-0051), so no Screen field is a canvas the lease guards.
  */
 describe('a generic Screen write while the Edit workspace is leased', () => {
 	async function genericWrite(sessionId: string | undefined, input: Record<string, unknown>) {
@@ -216,14 +197,15 @@ describe('a generic Screen write while the Edit workspace is leased', () => {
 		expect(await authoredStack()).toEqual(['authored']);
 	});
 
-	it('refuses another Session\'s change to the canvas', async () => {
+	it('admits another Session\'s change to the Screen\'s own fields', async () => {
 		await lease(HOLDER);
 
-		await expect(genericWrite(OTHER, {
-			screenConfig: { width: 1600, height: 1080 },
-		})).rejects.toMatchObject({ statusCode: 409 });
+		await genericWrite(OTHER, {
+			name: 'Renamed',
+		});
 
-		expect((await screenRow())?.screenConfig?.width).toBe(1920);
+		expect((await screenRow())?.name).toBe('Renamed');
+		expect(await authoredStack()).toEqual(['authored']);
 	});
 
 	it('admits another Session\'s rename that carries the protected fields back unchanged', async () => {
@@ -233,7 +215,6 @@ describe('a generic Screen write while the Edit workspace is leased', () => {
 		await genericWrite(OTHER, {
 			name: 'Renamed',
 			modeConfigs: current!.modeConfigs,
-			screenConfig: current!.screenConfig,
 		});
 
 		expect((await screenRow())?.name).toBe('Renamed');

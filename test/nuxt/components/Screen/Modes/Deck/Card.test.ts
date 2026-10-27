@@ -20,14 +20,12 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 	return mount(Card, {
 		props: {
 			card: createCard(),
-			sizeClass: 'w-36',
+			board: 'mainboard',
 			showQuantity: false,
 			showHighlanderPoints: true,
 			quantityPositionClass: '-top-1 -right-1',
-			quantitySizeClass: 'w-7 h-7 text-base',
 			quantityBadgeStyle: { color: 'white', backgroundColor: 'purple' },
 			highlanderPointsPositionClass: '-bottom-1 -left-1',
-			highlanderPointsSizeClass: 'min-w-8 px-3 py-1.5 text-base',
 			highlanderPointsBadgeStyle: { color: 'red', backgroundColor: 'blue' },
 			...props,
 		},
@@ -47,6 +45,16 @@ describe('screenDeckCard', () => {
 		expect(badge.text()).toBe('1');
 		expect(badge.attributes('style')).toContain('color: red;');
 		expect(badge.attributes('style')).toContain('background-color: blue;');
+	});
+
+	it.each([
+		{ board: 'mainboard', dynamicSize: false, width: 'var(--theme-deck-mainboard-card-width)' },
+		{ board: 'sideboard', dynamicSize: false, width: 'var(--theme-deck-sideboard-card-width)' },
+		{ board: 'sideboard', dynamicSize: true, width: '' },
+	])('takes its board\'s card-width Mode Token unless it fills its column ($board, dynamic: $dynamicSize)', async ({ board, dynamicSize, width }) => {
+		const wrapper = await mountComponent({ board, dynamicSize });
+
+		expect((wrapper.get('.card-item').element as HTMLElement).style.width).toBe(width);
 	});
 
 	it('hides the Highlander point badge when disabled', async () => {

@@ -1,11 +1,7 @@
 import type { BroadcastGraphicConfig, GraphicItemConfig } from '~~/shared/types/graphics';
-import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
-import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { CompositorEdit, CompositorEditingState } from '~/modules/graphics/compositorEditing';
-import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { describe, expect, it } from 'vitest';
 import { ref } from 'vue';
-import { applyGraphicStyleSet, resolveGraphicStyleSet } from '~~/shared/modules/graphic-style-sets';
 import {
 	createBroadcastGraphic,
 	DEFAULT_GRAPHIC_TYPOGRAPHY,
@@ -13,6 +9,7 @@ import {
 	patchBroadcastGraphic,
 	patchGraphicItem,
 	patchGraphicTypography,
+	resolveGraphicThemeTokens,
 } from '~~/shared/modules/graphics';
 import { editCompositorStack, useCompositorEditing } from '~/modules/graphics/compositorEditing';
 
@@ -73,87 +70,14 @@ function fontSizeOf(graphics: readonly BroadcastGraphicConfig[] | null) {
 		: undefined;
 }
 
-function typographyRefOf(graphics: readonly BroadcastGraphicConfig[] | null) {
-	return graphics?.[0]?.items[0]?.styleRefs?.typography;
-}
-
-function entries(letterSpacing = 2): GraphicStyleSetEntry[] {
-	return [
-		{
-			id: 'brand',
-			kind: 'palette',
-			name: 'Brand',
-			schemaVersion: 1,
-			value: { color: '#ff0044' },
-		},
-		{
-			id: 'heading',
-			kind: 'typography',
-			name: 'Show heading',
-			schemaVersion: 1,
-			value: {
-				font: { kind: 'application', fontId: 'inter' },
-				fontSize: 64,
-				fontWeight: 800,
-				fontStyle: 'normal',
-				textTransform: 'uppercase',
-				letterSpacing,
-				lineHeight: 1,
-				colorEntryId: 'brand',
-			},
-		},
-	];
-}
-
-const PUBLISHED = 3;
-
-function styleSet(published: GraphicStyleSetEntry[] = entries()): GraphicStyleAuthoringContext {
-	return {
-		id: 'show-style',
-		name: 'Show style',
-		entries: published,
-		resolution: resolveGraphicStyleSet(published),
-		publishedRevision: PUBLISHED,
-	};
-}
-
-/**
- * A composition holding exactly what `entries()` resolves to, recorded two revisions
- * behind the published one: what a publish that changed only entries it never
- * references leaves behind (#198).
- */
-function stranded(): BroadcastGraphicConfig[] {
-	return [
-		applyGraphicStyleSet(
-			{
-				id: 'lower-third',
-				name: 'Lower Third',
-				styleSet: { styleSetId: 'show-style', revision: 1 },
-				items: [
-					{
-						...textItem,
-						styleRefs: {
-							typography: { entryId: 'heading' },
-						},
-					},
-				],
-			},
-			resolveGraphicStyleSet(entries()),
-		),
-	];
-}
-
 describe('the Graphics Authoring Lease', () => {
 	it('refuses every edit while this Session does not hold it', () => {
-		const refused = state({
-			writable: false,
-			styleSet: styleSet(),
-		});
+		const refused = state({ writable: false });
 
 		expect(editCompositorStack(refused, setFontSize)).toBeNull();
 		expect(editCompositorStack({ ...refused, selectedTarget: GRAPHIC }, rename)).toBeNull();
-		expect(editCompositorStack(refused, { kind: 'bind-style-ref', slot: 'typography', entryId: 'heading' })).toBeNull();
-		expect(editCompositorStack(refused, { kind: 'unbind-style-ref', slot: 'typography' })).toBeNull();
+		expect(editCompositorStack(refused, { kind: 'bind-theme-token', slot: 'typography.color', token: 'text-primary' })).toBeNull();
+		expect(editCompositorStack(refused, { kind: 'detach-theme-token', slot: 'typography.color' })).toBeNull();
 	});
 
 	it('fails closed when nothing states that this Session holds it', () => {
@@ -238,9 +162,7 @@ describe('editing one named Broadcast Graphic whatever is selected', () => {
 
 describe('replacing the stack', () => {
 	it('replaces only the edited Broadcast Graphic, in place', () => {
-		const before = state({
-			styleSet: styleSet(),
-		});
+		const before = state();
 		const next = editCompositorStack(before, setFontSize);
 
 		expect(next?.map(graphic => graphic.id)).toEqual(['lower-third', 'bug']);
@@ -263,185 +185,10 @@ describe('replacing the stack', () => {
 	});
 
 	it('never changes the stack it was given', () => {
-		const before = state({
-			styleSet: styleSet(),
-		});
+		const before = state();
 		editCompositorStack(before, setFontSize);
 
 		expect(before.graphics).toEqual(stack());
-	});
-});
-
-describe('re-capturing Graphic Style Set overrides', () => {
-	it('records a value edit as an override, judged against the stored graphic', () => {
-		const next = editCompositorStack(state({
-			graphics: stranded(),
-			styleSet: styleSet(),
-		}), setFontSize);
-
-		expect(typographyRefOf(next)).toEqual({
-			entryId: 'heading',
-			overrides: { fontSize: 30 },
-		});
-	});
-
-	/**
-	 * Every kind of edit that can change a value, each from a selection it applies to.
-	 * The style-reference edits are not here: they write provenance themselves, and
-	 * are pinned below under referencing an entry.
-	 */
-	const resize = (graphic: BroadcastGraphicConfig) => patchGraphicTypography(graphic, 'name', { fontSize: 30 });
-	const everyValueEdit: Array<[string, GraphicsSelectionTarget, CompositorEdit]> = [
-		['an item edit', ITEM, setFontSize],
-		[
-			'a graphic edit',
-			GRAPHIC,
-			{
-				kind: 'author',
-				graphic: (graphics, graphicId) => graphics.map(graphic => graphic.id === graphicId
-					? resize(graphic)
-					: graphic),
-			},
-		],
-		[
-			'a stack edit',
-			CANVAS,
-			{
-				kind: 'stack',
-				apply: graphics => graphics.map(resize),
-			},
-		],
-		[
-			'an edit to a named Broadcast Graphic',
-			CANVAS,
-			{ kind: 'named-graphic', graphicId: 'lower-third', apply: resize },
-		],
-	];
-
-	it.each(everyValueEdit)('re-captures %s, judged against the stored graphic', (_, selectedTarget, edit) => {
-		const next = editCompositorStack(state({
-			graphics: stranded(),
-			selectedTarget,
-			styleSet: styleSet(),
-		}), edit);
-
-		expect(typographyRefOf(next)).toEqual({
-			entryId: 'heading',
-			overrides: { fontSize: 30 },
-		});
-	});
-
-	it('judges a graphic against the loaded Style Set only when it is linked to that one', () => {
-		const [linked] = stranded();
-		const elsewhere = {
-			...linked!,
-			id: 'elsewhere',
-			styleSet: { styleSetId: 'another-style', revision: 1 },
-		};
-
-		const next = editCompositorStack(
-			state({
-				graphics: [linked!, elsewhere],
-				selectedTarget: CANVAS,
-				styleSet: styleSet(),
-			}),
-			{
-				kind: 'stack',
-				apply: graphics => graphics.map(resize),
-			},
-		);
-
-		expect(next?.[0]?.items[0]?.styleRefs?.typography).toEqual({
-			entryId: 'heading',
-			overrides: { fontSize: 30 },
-		});
-		expect(next?.[1]?.items[0]?.styleRefs?.typography).toEqual({ entryId: 'heading' });
-	});
-
-	it('records nothing on a slot the Style Set has a pending change in, and keeps the value', () => {
-		const next = editCompositorStack(state({
-			graphics: stranded(),
-			styleSet: styleSet(entries(8)),
-		}), setFontSize);
-
-		expect(typographyRefOf(next)).toEqual({ entryId: 'heading' });
-		expect(fontSizeOf(next)).toBe(30);
-	});
-
-	it('records nothing without a loaded Style Set, leaving the reference as it was', () => {
-		const next = editCompositorStack(state({
-			graphics: stranded(),
-		}), setFontSize);
-
-		expect(typographyRefOf(next)).toEqual({ entryId: 'heading' });
-		expect(fontSizeOf(next)).toBe(30);
-	});
-});
-
-describe('referencing a Graphic Style Set entry', () => {
-	it('binds the selected owner\'s slot and takes the entry\'s values, recording no override', () => {
-		const next = editCompositorStack(
-			state({
-				styleSet: styleSet(),
-			}),
-			{ kind: 'bind-style-ref', slot: 'typography', entryId: 'heading' },
-		);
-
-		expect(typographyRefOf(next)).toEqual({ entryId: 'heading' });
-		expect(fontSizeOf(next)).toBe(64);
-	});
-
-	it('keeps another owner\'s recorded override when it binds', () => {
-		const pinned = {
-			entryId: 'heading',
-			overrides: { fontSize: 30 },
-		};
-		const graphics = [
-			applyGraphicStyleSet(
-				{
-					id: 'lower-third',
-					name: 'Lower Third',
-					styleSet: { styleSetId: 'show-style', revision: PUBLISHED },
-					items: [
-						textItem,
-						{
-							...textItem,
-							id: 'role',
-							styleRefs: { typography: pinned },
-						},
-					],
-				},
-				resolveGraphicStyleSet(entries()),
-			),
-		];
-
-		const next = editCompositorStack(
-			state({
-				graphics,
-				styleSet: styleSet(),
-			}),
-			{ kind: 'bind-style-ref', slot: 'typography', entryId: 'heading' },
-		);
-
-		expect(typographyRefOf(next)).toEqual({ entryId: 'heading' });
-		expect(next?.[0]?.items[1]?.styleRefs?.typography).toEqual(pinned);
-	});
-
-	it('refuses to bind without a loaded Style Set to bind to', () => {
-		expect(editCompositorStack(state(), { kind: 'bind-style-ref', slot: 'typography', entryId: 'heading' })).toBeNull();
-	});
-
-	it('unbinds a slot and keeps the value it holds', () => {
-		const next = editCompositorStack(
-			state({
-				graphics: stranded(),
-				styleSet: styleSet(),
-			}),
-			{ kind: 'unbind-style-ref', slot: 'typography' },
-		);
-
-		expect(typographyRefOf(next)).toBeUndefined();
-		expect(fontSizeOf(next)).toBe(64);
 	});
 });
 
@@ -481,9 +228,83 @@ describe('a panel editing through the module', () => {
 
 		editing.editItem(patchGraphicTypography, { fontSize: 30 });
 		editing.editGraphic(patchBroadcastGraphic, { name: 'Talent' });
-		editing.unbindStyleRef('typography');
+		editing.detachThemeToken('typography.color');
 
 		expect(editing.canAuthor.value).toBe(false);
 		expect(committed).toEqual([]);
+	});
+});
+
+describe('binding a Foundation Token', () => {
+	const tokens = resolveGraphicThemeTokens({ 'text-primary': 'rgb(1, 2, 3)' });
+	const bound = (): BroadcastGraphicConfig[] => [
+		{
+			...stack()[0]!,
+			items: [
+				{
+					...textItem,
+					themeBindings: { 'typography.color': 'text-primary' },
+				},
+			],
+		},
+		stack()[1]!,
+	];
+
+	function itemOf(graphics: readonly BroadcastGraphicConfig[] | null) {
+		const item = graphics?.[0]?.items[0];
+		return item?.type === 'text'
+			? item
+			: undefined;
+	}
+
+	it('binds the selected owner\'s slot, replacing its value with the token\'s', () => {
+		const next = editCompositorStack(state({ themeTokens: tokens }), { kind: 'bind-theme-token', slot: 'typography.color', token: 'text-primary' });
+
+		expect(itemOf(next)?.themeBindings).toEqual({ 'typography.color': 'text-primary' });
+		expect(itemOf(next)?.typography.color).toBe('rgb(1, 2, 3)');
+	});
+
+	it('detaches a slot, keeping the value the preview resolves it to', () => {
+		const next = editCompositorStack(state({
+			graphics: bound(),
+			themeTokens: tokens,
+		}), { kind: 'detach-theme-token', slot: 'typography.color' });
+
+		expect(itemOf(next)?.themeBindings).toBeUndefined();
+		expect(itemOf(next)?.typography.color).toBe('rgb(1, 2, 3)');
+	});
+
+	it.each([
+		[
+			'an edit to the bound value releases it',
+			{ color: '#00ff00' },
+			undefined,
+		],
+		[
+			'an edit to a value the token does not own keeps it',
+			{ fontSize: 30 },
+			{ 'typography.color': 'text-primary' },
+		],
+	])('%s', (_, patch, kept) => {
+		const next = editCompositorStack(state({
+			graphics: bound(),
+			themeTokens: tokens,
+		}), {
+			kind: 'author',
+			item: (graphic, itemId) => patchGraphicTypography(graphic, itemId, patch),
+		});
+
+		expect(itemOf(next)?.themeBindings).toEqual(kept);
+	});
+
+	it('returns a graphic the edit left alone as it was stored', () => {
+		const before = state({
+			graphics: bound(),
+			themeTokens: tokens,
+			selectedTarget: { type: 'graphic', graphicId: 'bug' },
+		});
+		const next = editCompositorStack(before, rename);
+
+		expect(next?.[0]).toBe(before.graphics[0]);
 	});
 });

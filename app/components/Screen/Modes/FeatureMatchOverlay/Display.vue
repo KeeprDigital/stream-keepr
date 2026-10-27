@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayOutput, ScreenVideoPlayback } from '~~/shared/types/screenConfig';
+import type { ScreenGraphicAssetReference } from '~~/shared/utils/graphicsAssetReferences';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
+import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import {
 	FEATURE_MATCH_SAMPLE_CONTEXT,
 	FEATURE_MATCH_SAMPLE_TOKEN_VALUES,
 } from '~~/shared/featureMatchSampleDataset';
+import { paintBroadcastGraphicThemeBindings } from '~~/shared/modules/graphics';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { featureMatchOverlayGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
@@ -18,6 +21,7 @@ import {
 } from '~/modules/feature-match-overlay/previewMessages';
 import { frameBorderLine, resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-overlay/renderModel';
 import { featureMatchOverlaySelectionKey } from '~/modules/feature-match-overlay/selection';
+import { resolveFeatureMatchOverlayThemeValues } from '~/modules/feature-match-overlay/themeTokens';
 import { featureMatchGraphicsContext, featureMatchTokenValues } from '~/modules/feature-match-overlay/tokenValues';
 import {
 	GRAPHICS_PREVIEW_READY_MESSAGE,
@@ -28,12 +32,13 @@ import { screenMediaSourceUrl } from '~/utils/screenMediaSource';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
 import FeatureMatchOverlayFrameMedia from './FrameMedia.vue';
 
-const { isPreview, outputMode, previewGuides, previewSafeAreas, screen } = useScreenContext();
+const { isPreview, outputMode, previewGuides, previewSafeAreas, eventCanvas } = useScreenContext();
 const resolvedOutput = computed<FeatureMatchOverlayOutput>(() => outputMode?.value ?? 'overlay');
 const showPreviewGuides = computed(() => previewGuides?.value ?? false);
 const showSafeAreaGuides = computed(() => previewSafeAreas?.value ?? false);
-const canvasWidth = computed(() => screen.value?.screenConfig?.width ?? 1920);
-const canvasHeight = computed(() => screen.value?.screenConfig?.height ?? 1080);
+/** The overlay composes in its Event's canvas (ADR-0051). */
+const canvasWidth = computed(() => (eventCanvas?.value ?? DEFAULT_EVENT_CANVAS).width);
+const canvasHeight = computed(() => (eventCanvas?.value ?? DEFAULT_EVENT_CANVAS).height);
 const frameMaskId = `feature-match-overlay-frame-mask-${useId().replace(/[^\w-]/g, '')}`;
 const frameGlowFilterId = `feature-match-overlay-frame-glow-${useId().replace(/[^\w-]/g, '')}`;
 const { config, match, matchState, sourceMatch, round, phase, event, usesSampleDataset, loading, error } = useFeatureMatchOverlayModeData();
@@ -41,9 +46,43 @@ const { config, match, matchState, sourceMatch, round, phase, event, usesSampleD
 // client-side while the composition authors one. A sample-dataset preview has
 // no Slot and so no player ids, which is what keeps it from fetching.
 const { sideboards } = useFeatureMatchOverlaySideboardData(config, match);
-const indexedGraphicAssetReferences = computed(() =>
-	featureMatchOverlayGraphicAssetReferences(config.value),
-);
+
+/**
+ * The Theme this overlay renders under, with its Screen's own overrides: its
+ * Graphic Items' bindings paint from its Foundation Tokens, and its Frame and
+ * Source Items from its Mode Tokens (#831).
+ */
+const themeSources = useScreenThemeSources();
+const themeTokens = useScreenGraphicThemeTokens(themeSources);
+const themeValues = computed(() => resolveFeatureMatchOverlayThemeValues(themeSources.value.theme, themeSources.value.overrides));
+
+/**
+ * Every Graphic Asset Revision this output paints: its layout's, read with its
+ * bindings painted so a bound font or logo is the Theme's, and its Theme's
+ * Frame media. The Screen Output Asset Capability admits what the Screen's
+ * resolved tokens supply (ADR-0050).
+ */
+const indexedGraphicAssetReferences = computed<ScreenGraphicAssetReference[]>(() => {
+	const layout = config.value.layout;
+	const painted = featureMatchOverlayGraphicAssetReferences({
+		...config.value,
+		layout: {
+			...layout,
+			composition: paintBroadcastGraphicThemeBindings(layout.composition, themeTokens.value),
+		},
+	});
+	const media = themeValues.value.frameMedia;
+	return media
+		? [
+				...painted,
+				{
+					reference: { assetId: media.assetId, revisionId: media.revisionId },
+					ownerSlot: 'feature-match-overlay.frame-media',
+					kind: media.kind,
+				},
+			]
+		: painted;
+});
 const graphicAssetReferences = computed(() => indexedGraphicAssetReferences.value.map(item => item.reference));
 const {
 	contentUrl: graphicAssetContentUrl,
@@ -80,6 +119,26 @@ const frameVideo = computed<ScreenVideoPlayback | undefined>(() => {
 		loop: media.loop,
 	};
 });
+// The Theme's Frame media, painted beneath the Frame's own image and video.
+const themeFrameImageUrl = computed(() => {
+	const media = themeValues.value.frameMedia;
+	return media?.kind === 'image'
+		? graphicAssetContentUrl(media)
+		: undefined;
+});
+const themeFrameVideo = computed<ScreenVideoPlayback | undefined>(() => {
+	const media = themeValues.value.frameMedia;
+	if (media?.kind !== 'silent-video')
+		return undefined;
+	return {
+		url: graphicAssetContentUrl(media),
+		fit: 'cover',
+		opacity: config.value.layout.frame.opacity,
+		playbackRate: 1,
+		loop: true,
+	};
+});
+const frameAnimationEnabled = computed(() => config.value.layout.frame.animation?.enabled === true);
 const { displayTime, showsClock } = useClockDisplay(() => matchState.value?.clock ?? null);
 const selectedPreviewTarget = ref<FeatureMatchOverlaySelectionTarget>({ type: 'canvas' });
 /**
@@ -92,6 +151,8 @@ const selectedCompositorTarget = ref<GraphicsSelectionTarget>({ type: 'canvas' }
 const renderModel = computed(() => resolveFeatureMatchOverlayRenderModel({
 	config: config.value,
 	output: resolvedOutput.value,
+	surfaces: themeValues.value,
+	paintsMedia: Boolean(frameImageUrl.value || frameVideo.value?.url || themeValues.value.frameMedia || frameAnimationEnabled.value),
 	maskId: frameMaskId,
 	frameGlowFilterId,
 }));
@@ -165,6 +226,7 @@ const compositorRenderModel = computed(() => resolveFeatureMatchOverlayComposito
 	safeAreaGuides: showSafeAreaGuides.value,
 	selectedTarget: selectedCompositorTarget.value,
 	graphicAssetContentUrl,
+	themeTokens: themeTokens.value,
 }));
 
 const canvasStyle = computed(() => renderModel.value.canvasStyle);
@@ -174,6 +236,7 @@ const sourceCutouts = computed(() => renderModel.value.sourceCutouts);
 const frame = computed(() => renderModel.value.frame);
 const frameBorder = computed(() => frame.value.border);
 const frameGlow = computed(() => frameBorder.value?.glow);
+const frameFillGradient = computed(() => frame.value.fill.gradient);
 
 function guideStyle(item: { x: number; y: number; width: number; height: number }) {
 	return renderModel.value.rectStyle(item);
@@ -322,6 +385,8 @@ onBeforeUnmount(() => {
 	>
 		<svg
 			class="frame-layer"
+			:data-frame-media="themeValues.frameMedia ? `${themeValues.frameMedia.assetId}/${themeValues.frameMedia.revisionId}` : 'none'"
+			:data-frame-animation-effect="themeValues.frameAnimationEffect.effect"
 			width="100%"
 			height="100%"
 			:viewBox="`0 0 ${canvasWidth} ${canvasHeight}`"
@@ -351,6 +416,22 @@ onBeforeUnmount(() => {
 						fill="black"
 					/>
 				</mask>
+				<linearGradient
+					v-if="frameFillGradient"
+					:id="frameFillGradient.id"
+					:x1="frameFillGradient.x1"
+					:y1="frameFillGradient.y1"
+					:x2="frameFillGradient.x2"
+					:y2="frameFillGradient.y2"
+				>
+					<stop
+						v-for="(stop, index) in frameFillGradient.stops"
+						:key="index"
+						:offset="stop.offset"
+						:stop-color="stop.color"
+						:stop-opacity="stop.opacity"
+					/>
+				</linearGradient>
 				<filter
 					v-if="frameGlow"
 					:id="frameGlow.filterId"
@@ -373,9 +454,31 @@ onBeforeUnmount(() => {
 				y="0"
 				:width="canvasWidth"
 				:height="canvasHeight"
-				:fill="frame.fill"
+				class="feature-match-overlay__frame-fill"
+				:fill="frame.fill.color"
+				:fill-opacity="frame.fill.opacity"
 				:opacity="frame.opacity"
 				:mask="`url(#${frameMaskId})`"
+			/>
+			<image
+				v-if="frame.paintsImage && themeFrameImageUrl"
+				class="feature-match-overlay__theme-frame-image"
+				:xlink:href="themeFrameImageUrl"
+				x="0"
+				y="0"
+				:width="canvasWidth"
+				:height="canvasHeight"
+				preserveAspectRatio="xMidYMid slice"
+				:mask="`url(#${frameMaskId})`"
+				:style="frame.imageStyle"
+			/>
+			<FeatureMatchOverlayFrameMedia
+				v-if="themeFrameVideo"
+				:video="themeFrameVideo"
+				:canvas-width="canvasWidth"
+				:canvas-height="canvasHeight"
+				:cutout-paths="sourceCutouts.map(cutout => cutout.path)"
+				:output="resolvedOutput"
 			/>
 			<FeatureMatchOverlayFrameMedia
 				:video="frameVideo"
@@ -395,22 +498,9 @@ onBeforeUnmount(() => {
 				:mask="`url(#${frameMaskId})`"
 				:style="frame.imageStyle"
 			/>
-			<foreignObject
-				v-if="frame.gradientStyle"
-				x="0"
-				y="0"
-				:width="canvasWidth"
-				:height="canvasHeight"
-				:mask="`url(#${frameMaskId})`"
-			>
-				<div
-					xmlns="http://www.w3.org/1999/xhtml"
-					class="frame-gradient"
-					:style="frame.gradientStyle"
-				/>
-			</foreignObject>
 			<FeatureMatchOverlayFrameAnimation
 				:animation="config.layout.frame.animation"
+				:effect="themeValues.frameAnimationEffect"
 				:canvas-width="canvasWidth"
 				:canvas-height="canvasHeight"
 				:cutout-paths="sourceCutouts.map(cutout => cutout.path)"
@@ -418,6 +508,7 @@ onBeforeUnmount(() => {
 			/>
 			<g
 				v-if="frameBorder"
+				class="feature-match-overlay__frame-border"
 				:stroke="frameBorder.stroke"
 				:stroke-width="frameBorder.strokeWidth"
 				:filter="frameGlow ? `url(#${frameGlow.filterId})` : undefined"
@@ -516,11 +607,6 @@ onBeforeUnmount(() => {
 .feature-match-overlay__composition {
 	position: absolute;
 	inset: 0;
-}
-
-.frame-gradient {
-	width: 100%;
-	height: 100%;
 }
 
 /*

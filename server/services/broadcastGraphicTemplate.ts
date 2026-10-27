@@ -35,13 +35,6 @@ import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphic
  * can change before the commit, so the row write carries the rule itself and the
  * index insert reads the same rule from the same bound array. A template is stored
  * with every one of its references indexed, or not at all.
- *
- * Every write also restates the document's Graphic Style Set link into its own
- * columns. They are a denormalisation of `document.styleSet` and are derived here
- * rather than accepted from a caller, so a template's stored link can never disagree
- * with the composition it is a link for. What they buy is the one question the Style
- * Set library asks constantly — which templates does this Style Set reach — answered
- * by an index instead of by parsing every document in the library.
  */
 
 const OWNER_KIND = 'broadcast-graphic-template';
@@ -97,20 +90,14 @@ function templateAssetReferences(document: BroadcastGraphicConfig) {
 	});
 }
 
-/** Which committed stamp a template's reference-index statements are conditional on. */
-export type BroadcastGraphicTemplateIndexGuard
-	= | { kind: 'template-write'; referenceVersion: string }
-		| { kind: 'style-set-operation'; styleSetId: string; operationVersion: string };
-
 /**
  * The reference facts one template write is refused on and indexes.
  *
  * No reference is allowed to be retired, unlike a Screen's unchanged one: a
  * template has no retained-reference path (ADR-0034), so every write states every
- * reference as if it were new. Exported for the Graphic Style Set library-wide
- * operations, which rewrite templates in their own batch.
+ * reference as if it were new.
  */
-export function broadcastGraphicTemplateReferenceFacts(
+function broadcastGraphicTemplateReferenceFacts(
 	document: BroadcastGraphicConfig,
 ): IndexedGraphicAssetReferenceFacts[] {
 	return templateAssetReferences(document).map(item => ({
@@ -125,33 +112,24 @@ export function broadcastGraphicTemplateReferenceFacts(
  *
  * The insert reads the same bound array the row write's precondition reads, under
  * the same resolution rule, so the row commits only when every reference resolves
- * and then every reference is indexed. `guard` names the stamp saying the row
- * write committed — this store's own, or a Graphic Style Set operation's — so both
- * statements are no-ops whenever it did not.
+ * and then every reference is indexed. Both statements are conditional on the
+ * stamp the row write makes, so they are no-ops whenever it did not commit.
  */
-export function broadcastGraphicTemplateIndexStatements(
+function broadcastGraphicTemplateIndexStatements(
 	client: typeof db.$client,
 	id: string,
 	/** `broadcastGraphicTemplateReferenceFacts`, as `boundGraphicAssetReferenceFacts` encodes them. */
 	referenceFacts: string,
 	now: number,
-	guard: BroadcastGraphicTemplateIndexGuard,
+	referenceVersion: string,
 ): D1PreparedStatement[] {
-	const condition = guard.kind === 'template-write'
-		? {
-				sql: 'EXISTS (SELECT 1 FROM broadcast_graphic_templates WHERE id = ? AND graphic_asset_reference_version = ?)',
-				params: [id, guard.referenceVersion],
-			}
-		: {
-				sql: 'EXISTS (SELECT 1 FROM graphic_style_sets WHERE id = ? AND operation_version = ?)',
-				params: [guard.styleSetId, guard.operationVersion],
-			};
+	const committed = 'EXISTS (SELECT 1 FROM broadcast_graphic_templates WHERE id = ? AND graphic_asset_reference_version = ?)';
 	return [
 		client.prepare(`
 			DELETE FROM graphic_asset_references
 			WHERE owner_kind = '${OWNER_KIND}' AND owner_id = ?
-				AND ${condition.sql}
-		`).bind(id, ...condition.params),
+				AND ${committed}
+		`).bind(id, id, referenceVersion),
 		client.prepare(`
 			INSERT INTO graphic_asset_references (
 				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
@@ -167,8 +145,8 @@ export function broadcastGraphicTemplateIndexStatements(
 				SELECT 1
 				${jsonElementGraphicAssetRevisionResolution('item')}
 			)
-				AND ${condition.sql}
-		`).bind(id, now, now, referenceFacts, ...condition.params),
+				AND ${committed}
+		`).bind(id, now, now, referenceFacts, id, referenceVersion),
 	];
 }
 
@@ -197,7 +175,7 @@ export function broadcastGraphicTemplateService() {
 		id,
 		referenceFacts,
 		now,
-		{ kind: 'template-write', referenceVersion },
+		referenceVersion,
 	);
 
 	const create = async (input: SaveBroadcastGraphicTemplate): Promise<DbBroadcastGraphicTemplate> => {
@@ -210,10 +188,9 @@ export function broadcastGraphicTemplateService() {
 			client.prepare(`
 				INSERT INTO broadcast_graphic_templates (
 					id, name, description, revision, document,
-					graphic_asset_reference_version, style_set_id, style_set_revision,
-					created_at, updated_at
+					graphic_asset_reference_version, created_at, updated_at
 				)
-				SELECT ?, ?, ?, 1, ?, ?, ?, ?, ?, ?
+				SELECT ?, ?, ?, 1, ?, ?, ?, ?
 				WHERE 1 = 1
 					${REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE}
 			`).bind(
@@ -222,8 +199,6 @@ export function broadcastGraphicTemplateService() {
 				input.description,
 				JSON.stringify(input.document),
 				referenceVersion,
-				input.document.styleSet?.styleSetId ?? null,
-				input.document.styleSet?.revision ?? null,
 				now,
 				now,
 				referenceFacts,
@@ -271,8 +246,7 @@ export function broadcastGraphicTemplateService() {
 			client.prepare(`
 				UPDATE broadcast_graphic_templates
 				SET name = ?, description = ?, document = ?, revision = revision + 1,
-					graphic_asset_reference_version = ?, style_set_id = ?, style_set_revision = ?,
-					updated_at = ?
+					graphic_asset_reference_version = ?, updated_at = ?
 				WHERE id = ? AND revision = ?
 					${REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE}
 			`).bind(
@@ -282,8 +256,6 @@ export function broadcastGraphicTemplateService() {
 					: patch.description,
 				JSON.stringify(document),
 				referenceVersion,
-				document.styleSet?.styleSetId ?? null,
-				document.styleSet?.revision ?? null,
 				now,
 				id,
 				patch.revision,

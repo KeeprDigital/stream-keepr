@@ -1,5 +1,4 @@
-import type { BroadcastGraphicConfig, GraphicGroupItemConfig, GraphicItemConfig } from '~~/shared/types/graphics';
-import type { AnimationRecipeGraphicStyleEntryValue } from '~~/shared/types/graphicStyleSet';
+import type { BroadcastGraphicConfig, GraphicGroupItemConfig, GraphicItemConfig, GraphicOnScreenAnimationRecipe } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import {
 	applyBroadcastGraphicAnimationPreset,
@@ -323,9 +322,9 @@ describe('whole-graphic animation authoring', () => {
 
 describe('one channel merge for every recipe', () => {
 	it('switches a channel on with its editable default, keeping the recipe\'s other fields', () => {
-		// A Graphic Animation Recipe entry carries no delay and the on-screen defaults;
-		// the merge keeps whatever the recipe holds beside the channel.
-		const recipe: AnimationRecipeGraphicStyleEntryValue = {
+		// A recipe may carry no delay and the on-screen defaults; the merge keeps
+		// whatever the recipe holds beside the channel.
+		const recipe: Partial<GraphicOnScreenAnimationRecipe> = {
 			duration: 400,
 			easing: 'linear',
 			pause: 500,

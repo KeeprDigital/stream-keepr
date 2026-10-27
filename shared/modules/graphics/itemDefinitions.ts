@@ -9,7 +9,7 @@ import type {
 	ShapeGeometry,
 	TextOverflowPolicy,
 } from '../../types/graphics';
-import type { GraphicStyleSlot } from '../../types/graphicStyleSet';
+import type { GraphicThemeSlot } from '../../types/graphicThemeBindings';
 import type { GraphicsContextKind, GraphicsHostContract, GraphicsHostId } from './hostContract';
 import { SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '../../socialProfiles';
 import { applicationGraphicFont } from '../../types/graphics';
@@ -29,7 +29,7 @@ import { DEFAULT_GRAPHIC_FONT_ID } from './typography';
  * the descriptor arms in `app/modules/graphics/renderModel.ts`, and the compositor's
  * `Item.vue` and the Inspector's kind-specific controls. What follows this table for
  * free: the definition palette, Template Package requirements, and the property
- * groups — the Inspector, the Graphic Style Set slots, and authoring all read the
+ * groups — the Inspector, the Theme binding slots, and authoring all read the
  * declarations below rather than a kind list of their own, and the mapped type on
  * the `satisfies` closure requires each declaration exactly where the kind's stored
  * config carries the group. Templates never provide executable Definitions.
@@ -75,13 +75,13 @@ export interface GraphicItemDefinition {
 	/**
 	 * The base typography this kind paints its text with, absent for a kind that paints
 	 * none. Stated once here: the Inspector's typography and Text Overflow Policy
-	 * controls, the Graphic Style Set typography slot, and the authoring operations
+	 * controls, the typography Theme binding slot, and the authoring operations
 	 * all read it, so none of them can offer typography a kind does not have.
 	 */
 	typography?: GraphicTypographyDeclaration;
 	/**
-	 * The Graphic Surface Styles this kind keeps, each under its Graphic Style Set
-	 * slot, absent for a kind that paints none. The Graphic Style Set slots, the
+	 * The Graphic Surface Styles this kind keeps, each under its Theme binding
+	 * slot, absent for a kind that paints none. The Theme binding slots, the
 	 * surface authoring operations, and the Inspector's surface controls all read it.
 	 */
 	surfaceStyles?: Partial<Record<GraphicSurfaceStyleSlot, GraphicDisplayDeclaration>>;
@@ -105,8 +105,8 @@ export interface GraphicTypographyDeclaration {
 	textOverflowPolicy: boolean;
 	/**
 	 * Whether the item paints text with its typography in its current display mode;
-	 * absent means always. The item owns its typography either way, so a Graphic Style
-	 * Set slot still binds to it — only the Inspector, which offers controls for what
+	 * absent means always. The item owns its typography either way, so a Theme
+	 * binding slot still binds to it — only the Inspector, which offers controls for what
 	 * is on screen, reads this.
 	 *
 	 * Each Definition narrows the parameter to its own kind, and is only ever called
@@ -127,15 +127,15 @@ type GraphicItemWithKey<P extends PropertyKey, I = GraphicItemConfig> = I extend
 
 /**
  * Every place a Graphic Item can keep a Graphic Surface Style, each named as the
- * Graphic Style Set slot that inherits into it.
+ * Theme binding slot that binds it.
  */
 export type GraphicSurfaceStyleSlot = Extract<
-	GraphicStyleSlot,
+	GraphicThemeSlot,
 	'surfaceStyle' | 'defaultChildSurfaceStyle' | 'boxSurfaceStyle' | 'wonBoxSurfaceStyle'
 >;
 
-/** Every place a Graphic Item can keep its Shape Geometry, named as its Graphic Style Set slot. */
-export type GraphicShapeGeometrySlot = Extract<GraphicStyleSlot, 'geometry' | 'clipGeometry' | 'boxGeometry'>;
+/** Every place a Graphic Item can keep its Shape Geometry, named as its Theme binding slot. */
+export type GraphicShapeGeometrySlot = Extract<GraphicThemeSlot, 'geometry' | 'clipGeometry' | 'boxGeometry'>;
 
 /** A Graphic Item that can keep a Graphic Surface Style in this slot. */
 export type GraphicSurfaceStyleItem<S extends GraphicSurfaceStyleSlot = GraphicSurfaceStyleSlot> = GraphicItemWithKey<S>;
@@ -149,7 +149,7 @@ export type GraphicPlayerSideItem = Extract<GraphicItemConfig, { playerSide: Pla
 /**
  * When a property group the item owns is on screen. `paints` absent means always;
  * otherwise it is the item's current display mode that decides, as `paintsText` does
- * for typography. The item owns the group either way, so a Graphic Style Set slot
+ * for typography. The item owns the group either way, so a Theme binding slot
  * still binds to it — only the Inspector, which offers controls for what is on
  * screen, reads this.
  *
@@ -617,7 +617,7 @@ export function graphicGroupChildDefinitionsForHost(
 }
 
 /**
- * Whether this item owns base typography: what the Graphic Style Set typography slot
+ * Whether this item owns base typography: what the typography Theme binding slot
  * and `patchGraphicTypography` accept. Read from the item's kind, not its fields.
  */
 export function ownsGraphicTypography(item: GraphicItemConfig): item is GraphicTypographyItem {
@@ -647,8 +647,8 @@ function isPainted(declaration: GraphicDisplayDeclaration, item: GraphicItemConf
 }
 
 /**
- * Whether this item keeps a Graphic Surface Style in this slot: what the Graphic
- * Style Set surface slots and the surface authoring operations accept. Read from the
+ * Whether this item keeps a Graphic Surface Style in this slot: what the surface
+ * Theme binding slots and the surface authoring operations accept. Read from the
  * item's kind, not its fields, since an owned surface may be absent until authored.
  */
 export function ownsGraphicSurfaceStyle<S extends GraphicSurfaceStyleSlot>(

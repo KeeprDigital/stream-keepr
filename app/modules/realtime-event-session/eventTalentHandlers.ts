@@ -10,6 +10,7 @@ interface Options {
 export function createEventTalentRealtimeHandlers({ accept, eventStore, realtime }: Options) {
 	return {
 		'event:updated': accept('event:updated', data => eventStore.applyRemoteUpdated(data)),
+		'theme:updated': accept('theme:updated', data => eventStore.applyRemoteThemeUpdated(data)),
 		'event:deleted': accept('event:deleted', async (data) => {
 			if (data.eventId !== eventStore.eventId)
 				return;

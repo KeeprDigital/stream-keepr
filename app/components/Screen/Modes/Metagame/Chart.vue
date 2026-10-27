@@ -1,18 +1,38 @@
 <script setup lang="ts">
 import type { MetagameChartBar } from '~~/shared/utils/metagameChart';
 import { useElementSize } from '@vueuse/core';
+import { modeTokenVar } from '~/modules/screen-mode';
 
 /**
  * The Metagame Screen's chart display: meta share by Archetype as horizontal
  * bars, each labelled with its name, mana colours and share. HTML rather than
- * a canvas chart, so its text takes the Screen's fonts and text colours and
- * stays crisp at any output size. Its text colour is the Metagame Display's
- * `--metagame-primary-text`, set by the Display that hosts it.
+ * a canvas chart, so its text takes the Metagame Mode Tokens and stays crisp
+ * at any output size. Its labels' type and colour are the row type and
+ * primary text the Display hosting it sets.
  */
 const props = defineProps<{
 	bars: MetagameChartBar[];
 	animate: boolean;
 }>();
+
+/** Each categorical colour slot's fill, slot 1 first. */
+const SERIES_FILLS = [
+	modeTokenVar('metagame', 'chart-series-1'),
+	modeTokenVar('metagame', 'chart-series-2'),
+	modeTokenVar('metagame', 'chart-series-3'),
+	modeTokenVar('metagame', 'chart-series-4'),
+	modeTokenVar('metagame', 'chart-series-5'),
+	modeTokenVar('metagame', 'chart-series-6'),
+	modeTokenVar('metagame', 'chart-series-7'),
+	modeTokenVar('metagame', 'chart-series-8'),
+];
+
+const chartStyle = {
+	backgroundColor: modeTokenVar('metagame', 'surface'),
+};
+const trackStyle = {
+	borderLeftColor: modeTokenVar('metagame', 'chart-baseline'),
+};
 
 const plotRef = useTemplateRef<HTMLElement>('plotRef');
 const { height: plotHeight } = useElementSize(plotRef);
@@ -33,8 +53,8 @@ const layoutStyle = computed(() => {
 
 function fillOf(bar: MetagameChartBar): string {
 	return bar.colorSlot == null
-		? 'var(--metagame-chart-other)'
-		: `var(--metagame-chart-series-${bar.colorSlot})`;
+		? modeTokenVar('metagame', 'chart-other')
+		: SERIES_FILLS[bar.colorSlot - 1]!;
 }
 </script>
 
@@ -45,7 +65,7 @@ function fillOf(bar: MetagameChartBar): string {
 		role="list"
 		aria-label="Meta share by archetype"
 		data-testid="metagame-chart"
-		:style="layoutStyle"
+		:style="[chartStyle, layoutStyle]"
 	>
 		<div
 			v-for="bar in bars"
@@ -63,13 +83,14 @@ function fillOf(bar: MetagameChartBar): string {
 					class="metagame-chart-mana"
 				/>
 			</div>
-			<div class="metagame-chart-track">
+			<div class="metagame-chart-track" :style="trackStyle">
 				<!-- A live update grows or shrinks each bar in place when entries animate. -->
 				<div
 					class="metagame-chart-fill"
 					:class="{ 'is-animated': animate }"
 					data-testid="metagame-chart-fill"
-					:style="{ '--bar-length': bar.length, 'background': fillOf(bar) }"
+					:data-color-slot="bar.colorSlot ?? 'other'"
+					:style="{ '--bar-length': bar.length, 'backgroundColor': fillOf(bar) }"
 				/>
 				<span class="metagame-chart-share" data-testid="metagame-chart-share">{{ bar.metaShare }}%</span>
 			</div>
@@ -78,22 +99,7 @@ function fillOf(bar: MetagameChartBar): string {
 </template>
 
 <style scoped>
-/*
- * Categorical slots stepped for a dark surface, the background a broadcast
- * overlay usually sits on; validated as a set for adjacent-pair CVD
- * separation and >= 3:1 against #1a1a19. Every bar is named, so identity
- * never rests on its colour alone. Other is the neutral, never a slot.
- */
 .metagame-chart {
-	--metagame-chart-series-1: #3987e5;
-	--metagame-chart-series-2: #d95926;
-	--metagame-chart-series-3: #199e70;
-	--metagame-chart-series-4: #c98500;
-	--metagame-chart-series-5: #d55181;
-	--metagame-chart-series-6: #008300;
-	--metagame-chart-series-7: #9085e9;
-	--metagame-chart-series-8: #e66767;
-	--metagame-chart-other: #898781;
 	--metagame-chart-value-width: 5.5em;
 
 	flex: 1 1 0;
@@ -122,17 +128,12 @@ function fillOf(bar: MetagameChartBar): string {
 	min-width: 0;
 }
 
-/* Text keeps the Screen's text colours, with a soft shadow to read over any video. */
 .metagame-chart-name,
 .metagame-chart-share {
-	color: var(--metagame-primary-text);
-	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
-	line-height: 1.1;
 	white-space: nowrap;
 }
 
 .metagame-chart-name {
-	font-weight: 600;
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -148,7 +149,8 @@ function fillOf(bar: MetagameChartBar): string {
 	align-items: center;
 	height: 100%;
 	min-width: 0;
-	border-left: 1px solid rgba(255, 255, 255, 0.24);
+	border-left-style: solid;
+	border-left-width: 1px;
 }
 
 /* The leader spans the plot less the room its share label needs at its tip. */
@@ -166,6 +168,5 @@ function fillOf(bar: MetagameChartBar): string {
 
 .metagame-chart-share {
 	padding-left: 0.5em;
-	font-weight: 700;
 }
 </style>

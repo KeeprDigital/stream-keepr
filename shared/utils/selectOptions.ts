@@ -23,30 +23,12 @@ export const POSITION_FORMAT_SELECT_OPTIONS: { label: string; value: PositionFor
 	{ label: 'Number (1, 2, 3)', value: 'number' },
 ];
 
-export const SCREEN_COLOR_MODE_SELECT_OPTIONS: { label: string; value: ScreenColorMode }[] = [
-	{ label: 'System', value: 'system' },
-	{ label: 'Light', value: 'light' },
-	{ label: 'Dark', value: 'dark' },
-];
-
 const screenModeOptionMap = new Map(getScreenModeSelectOptions().map(option => [option.value, option.label]));
 
 export const SCREEN_MODE_SELECT_OPTIONS: { label: string; value: ScreenMode }[] = SCREEN_MODE_VALUES.map(value => ({
 	label: screenModeOptionMap.get(value) ?? value,
 	value,
 }));
-
-export const DECK_CARD_SIZE_SELECT_OPTIONS: { label: string; value: DeckCardSize }[] = [
-	{ label: 'Small', value: 'small' },
-	{ label: 'Medium', value: 'medium' },
-	{ label: 'Large', value: 'large' },
-];
-
-export const QUANTITY_SIZE_SELECT_OPTIONS: { label: string; value: QuantitySize }[] = [
-	{ label: 'Small', value: 'small' },
-	{ label: 'Medium', value: 'medium' },
-	{ label: 'Large', value: 'large' },
-];
 
 export const DECK_BOARD_VIEW_SELECT_OPTIONS: { label: string; value: DeckBoardView }[] = [
 	{ label: 'Grid', value: 'grid' },
@@ -57,12 +39,6 @@ export const DECK_BOARD_VIEW_SELECT_OPTIONS: { label: string; value: DeckBoardVi
 export const SIDEBOARD_PLACEMENT_SELECT_OPTIONS: { label: string; value: SideboardPlacement }[] = [
 	{ label: 'Beside the mainboard', value: 'beside' },
 	{ label: 'Below the mainboard', value: 'below' },
-];
-
-export const CARD_ANIMATION_SPEED_SELECT_OPTIONS: { label: string; value: CardAnimationSpeed }[] = [
-	{ label: 'Slow', value: 'slow' },
-	{ label: 'Normal', value: 'normal' },
-	{ label: 'Fast', value: 'fast' },
 ];
 
 export const HORIZONTAL_ALIGN_SELECT_OPTIONS: { label: string; value: HorizontalAlign }[] = [

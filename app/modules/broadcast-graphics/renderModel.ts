@@ -1,4 +1,5 @@
 import type { SocialProfilePresentationProjection } from '~~/shared/modules/broadcast-graphics-live-session';
+import type { GraphicThemeTokens } from '~~/shared/modules/graphics';
 import type { BroadcastGraphicConfig, GraphicInputValue, SocialProfileProjectionValues } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
@@ -68,6 +69,8 @@ export interface BroadcastGraphicsRenderModelInput {
 	 * capability and never by browsing the Graphics Asset Library.
 	 */
 	graphicAssetContentUrl?: (reference: GraphicAssetReference) => string;
+	/** The Screen's resolved Foundation Tokens, which bound Graphic Items paint from. */
+	themeTokens?: GraphicThemeTokens;
 }
 
 export type BroadcastGraphicsRenderModel = GraphicsCompositionRenderModel;
@@ -104,5 +107,6 @@ export function resolveBroadcastGraphicsRenderModel(
 		safeAreaGuides: input.safeAreaGuides,
 		selectedTarget: input.selectedTarget,
 		graphicAssetContentUrl: input.graphicAssetContentUrl,
+		themeTokens: input.themeTokens,
 	});
 }

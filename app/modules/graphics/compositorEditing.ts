@@ -1,15 +1,17 @@
 import type { MaybeRefOrGetter } from 'vue';
+import type { GraphicThemeTokens } from '~~/shared/modules/graphics';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
-import type { GraphicStyleSlot } from '~~/shared/types/graphicStyleSet';
-import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
+import type { GraphicThemeSlot } from '~~/shared/types/graphicThemeBindings';
 import type { GraphicsSelection, GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { computed, toValue } from 'vue';
 import {
-	bindGraphicStyleRef,
-	recaptureGraphicStyleOverrides,
-	unbindGraphicStyleRef,
-} from '~~/shared/modules/graphic-style-sets';
-import { replaceBroadcastGraphic } from '~~/shared/modules/graphics';
+	bindGraphicThemeToken,
+	DEFAULT_GRAPHIC_THEME_TOKENS,
+	detachGraphicThemeToken,
+	paintGraphicsThemeBindings,
+	releaseEditedGraphicThemeBindings,
+	replaceBroadcastGraphic,
+} from '~~/shared/modules/graphics';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 
 /**
@@ -21,12 +23,13 @@ import { resolveGraphicsSelection } from '~/modules/graphics/selection';
  * 1. The fail-closed Graphics Authoring Lease check.
  * 2. Resolving what the edit is aimed at: the selection, a named Broadcast Graphic, or
  *    the stack as a whole.
- * 3. Applying the authoring operation.
- * 4. Re-capturing Graphic Style Set overrides against the stored graphic (#198).
- * 5. Replacing the stack.
+ * 3. Applying the authoring operation to the stack with its Theme bindings painted,
+ *    so an edit to a bound property starts from the token's value, then releasing
+ *    each binding whose property the edit changed (#829).
+ * 4. Replacing the stack.
  *
  * A panel hands it an edit and commits whatever stack comes back. It never checks the
- * lease, re-captures, or replaces the stack itself. A panel whose edit moves the
+ * lease or replaces the stack itself. A panel whose edit moves the
  * selection, such as an add or a delete, moves it only once the edit is committed.
  *
  * The lease here is the client half only: it keeps an observer's controls from
@@ -36,7 +39,7 @@ import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 
 /** What a compositor panel edits against. */
 export interface CompositorEditingState {
-	/** The stack as stored: what the edit starts from, and what re-capture judges it against. */
+	/** The stack as stored: what the edit starts from. */
 	graphics: readonly BroadcastGraphicConfig[];
 	selectedTarget: GraphicsSelectionTarget;
 	/**
@@ -45,11 +48,10 @@ export interface CompositorEditingState {
 	 */
 	writable?: boolean;
 	/**
-	 * The published Graphic Style Set the selection is linked to. Absent means nothing is
-	 * re-captured and nothing can be bound: an unlinked composition, or a Style Set that
-	 * could not be loaded.
+	 * The Foundation Tokens the editor previews under: what a bound property shows,
+	 * what detaching copies in, and what binding paints. Absent is the Default Theme.
 	 */
-	styleSet?: GraphicStyleAuthoringContext;
+	themeTokens?: GraphicThemeTokens;
 }
 
 /** An authoring operation on one Graphic Item of a Broadcast Graphic. */
@@ -70,7 +72,7 @@ export type BroadcastGraphicOperation<A extends unknown[] = []> = (
  * One edit a panel hands the module.
  *
  * `author` says what to do for each kind of selection it applies to; a selection it
- * has nothing for refuses the edit. The style-reference edits aim at whichever owner is
+ * has nothing for refuses the edit. The Theme binding edits aim at whichever owner is
  * selected: the Broadcast Graphic itself, or one Graphic Item. `stack` and
  * `named-graphic` follow no selection: the stack tree's edits are aimed at the stack,
  * or at the graphic it shows whether that graphic or one of its items is selected.
@@ -83,8 +85,8 @@ export type CompositorEdit
 		/** Applied while a Graphic Item is selected. */
 		item?: GraphicItemOperation;
 	}
-	| { kind: 'bind-style-ref'; slot: GraphicStyleSlot; entryId: string }
-	| { kind: 'unbind-style-ref'; slot: GraphicStyleSlot }
+	| { kind: 'bind-theme-token'; slot: GraphicThemeSlot; token: string }
+	| { kind: 'detach-theme-token'; slot: GraphicThemeSlot }
 	| {
 		/**
 		 * An edit to the stack as a whole: adding, moving, or deleting a Broadcast
@@ -116,9 +118,9 @@ function canAuthorCompositor(state: Pick<CompositorEditingState, 'writable'>): b
  *
  * Answers the next stack, or `null` when there is nothing to commit. That is when the
  * edit is refused (this Session does not hold the lease; the selection or named graphic
- * is gone, or is something the edit has nothing for; a bind has no Style Set to bind
- * to) and when the edit changes nothing. The stack it is given is never changed, and
- * every Broadcast Graphic the edit did not touch comes back as the same object.
+ * is gone, or is something the edit has nothing for) and when the edit changes
+ * nothing. The stack it is given is never changed, and every Broadcast Graphic the
+ * edit did not touch comes back as the same object.
  */
 export function editCompositorStack(
 	state: CompositorEditingState,
@@ -126,10 +128,28 @@ export function editCompositorStack(
 ): BroadcastGraphicConfig[] | null {
 	if (!canAuthorCompositor(state))
 		return null;
-	const next = applyEdit(state, edit);
-	return next && !isSameStack(state.graphics, next)
-		? recaptureEditedGraphics(state, next)
+	const tokens = themeTokensOf(state);
+	const painted = paintGraphicsThemeBindings(state.graphics, tokens);
+	const edited = applyEdit({ ...state, graphics: painted }, edit);
+	if (!edited)
+		return null;
+	// A graphic the edit left alone goes back as it was stored, not as painted.
+	const next = edited.map((graphic) => {
+		const index = painted.indexOf(graphic);
+		if (index !== -1)
+			return state.graphics[index]!;
+		const before = painted.find(candidate => candidate.id === graphic.id);
+		return before
+			? releaseEditedGraphicThemeBindings(before, graphic)
+			: graphic;
+	});
+	return !isSameStack(state.graphics, next)
+		? next
 		: null;
+}
+
+function themeTokensOf(state: Pick<CompositorEditingState, 'themeTokens'>): GraphicThemeTokens {
+	return state.themeTokens ?? DEFAULT_GRAPHIC_THEME_TOKENS;
 }
 
 /**
@@ -177,47 +197,17 @@ function applySelectionEdit(
 			return edit.item
 				? replaceBroadcastGraphic(state.graphics, edit.item(selection.graphic, selection.item.id))
 				: null;
-		case 'bind-style-ref':
-			return state.styleSet
-				? replaceBroadcastGraphic(
-						state.graphics,
-						bindGraphicStyleRef(selection.graphic, ownerId, edit.slot, edit.entryId, state.styleSet.resolution),
-					)
-				: null;
-		case 'unbind-style-ref':
-			return replaceBroadcastGraphic(state.graphics, unbindGraphicStyleRef(selection.graphic, ownerId, edit.slot));
+		case 'bind-theme-token':
+			return replaceBroadcastGraphic(
+				state.graphics,
+				bindGraphicThemeToken(selection.graphic, ownerId, edit.slot, edit.token, themeTokensOf(state)),
+			);
+		case 'detach-theme-token':
+			return replaceBroadcastGraphic(
+				state.graphics,
+				detachGraphicThemeToken(selection.graphic, ownerId, edit.slot, themeTokensOf(state)),
+			);
 	}
-}
-
-/**
- * Every edited Broadcast Graphic, with its Graphic Style Set overrides brought back
- * into line with what it now holds.
- *
- * This is where a value edit becomes an explicit property-level override. Controls
- * write values and know nothing about provenance; re-deriving the deviations here is
- * what lets every control take part without being taught to, and an author who edits
- * a value and puts it back is left with no override pinning it. With no Style Set
- * loaded it is the identity.
- *
- * Each is judged against the graphic as stored before this edit, which is what says
- * which slots had a pending Style Set change in them: the edited copy cannot, since the
- * edit is itself a difference from the entry (#198). A graphic the edit added has no
- * stored version and nothing to re-capture.
- *
- * Only a graphic linked to the loaded Style Set is judged against it. The Style Set is
- * the selected graphic's, and a stack edit or an edit to a named graphic can reach one
- * linked elsewhere, whose entries these are not.
- */
-function recaptureEditedGraphics(state: CompositorEditingState, next: BroadcastGraphicConfig[]): BroadcastGraphicConfig[] {
-	const context = state.styleSet;
-	if (!context)
-		return next;
-	return next.map((graphic) => {
-		const stored = state.graphics.find(candidate => candidate.id === graphic.id);
-		return stored && stored !== graphic && graphic.styleSet?.styleSetId === context.id
-			? recaptureGraphicStyleOverrides(graphic, context.resolution, context.publishedRevision, stored)
-			: graphic;
-	});
 }
 
 /**
@@ -260,13 +250,13 @@ export function useCompositorEditing(
 				graphic: (graphics, graphicId) => operation(graphics, graphicId, ...args),
 			});
 		},
-		/** Reference one Graphic Style Set entry from a slot of the selected owner. */
-		bindStyleRef(slot: GraphicStyleSlot, entryId: string): boolean {
-			return edit({ kind: 'bind-style-ref', slot, entryId });
+		/** Bind one slot of the selected owner to a Foundation Token, replacing its literal. */
+		bindThemeToken(slot: GraphicThemeSlot, token: string): boolean {
+			return edit({ kind: 'bind-theme-token', slot, token });
 		},
-		/** Stop inheriting one slot of the selected owner, keeping the value it holds. */
-		unbindStyleRef(slot: GraphicStyleSlot): boolean {
-			return edit({ kind: 'unbind-style-ref', slot });
+		/** Detach one slot of the selected owner, keeping the token's resolved value as its literal. */
+		detachThemeToken(slot: GraphicThemeSlot): boolean {
+			return edit({ kind: 'detach-theme-token', slot });
 		},
 	};
 }

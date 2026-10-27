@@ -2,13 +2,14 @@
 import type { AnimationEffectRenderPlan } from '~~/shared/animationEffects';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import { animationEffectRenderPlan } from '~~/shared/animationEffects';
-import { getScreenModeGraphicsCanvas } from '~~/shared/screenModes';
+import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
+import { paintGraphicsThemeBindings } from '~~/shared/modules/graphics';
 import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 import GraphicsCompositorCanvas from '~/components/Graphics/Compositor/Canvas.vue';
 import { useBroadcastGraphicsModeData } from '~/composables/screen/useBroadcastGraphicsModeData';
 import { resolveBroadcastGraphicsRenderModel } from '~/modules/broadcast-graphics/renderModel';
 
-const { outputMode, previewGuides, previewSafeAreas, screen } = useScreenContext();
+const { outputMode, previewGuides, previewSafeAreas, eventCanvas } = useScreenContext();
 const {
 	animationProjection,
 	background,
@@ -46,9 +47,9 @@ const backgroundPlan = computed<AnimationEffectRenderPlan & { opacity: number } 
 		opacity: config.opacity,
 	};
 });
-const canvasDefaults = getScreenModeGraphicsCanvas('broadcast-graphics');
-const canvasWidth = computed(() => screen?.value?.screenConfig?.width ?? canvasDefaults.width);
-const canvasHeight = computed(() => screen?.value?.screenConfig?.height ?? canvasDefaults.height);
+/** Every Broadcast Graphic composes in its Event's canvas (ADR-0051). */
+const canvasWidth = computed(() => (eventCanvas?.value ?? DEFAULT_EVENT_CANVAS).width);
+const canvasHeight = computed(() => (eventCanvas?.value ?? DEFAULT_EVENT_CANVAS).height);
 
 /**
  * Every exact Graphic Asset Revision this output may resolve.
@@ -62,9 +63,13 @@ const canvasHeight = computed(() => screen?.value?.screenConfig?.height ?? canva
  * edit that pins nothing new does not re-resolve — which is what keeps an on-air
  * video from being torn down and restarted mid-air.
  */
+const themeTokens = useScreenGraphicThemeTokens();
+
+// Read with its bindings painted, so a font or logo a bound item takes from the
+// Theme resolves too (#831): the capability admits what the Theme supplies.
 const indexedGraphicAssetReferences = computed(() =>
 	broadcastGraphicsGraphicAssetReferences({
-		graphics: [...graphics.value],
+		graphics: paintGraphicsThemeBindings(graphics.value, themeTokens.value),
 	}),
 );
 const graphicAssetReferences = computed(() =>
@@ -104,6 +109,7 @@ const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 	safeAreaGuides: previewSafeAreas?.value ?? false,
 	selectedTarget: selectedTarget.value,
 	graphicAssetContentUrl: contentUrl,
+	themeTokens: themeTokens.value,
 }));
 </script>
 

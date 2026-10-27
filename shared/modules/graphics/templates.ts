@@ -222,15 +222,15 @@ export function broadcastGraphicTemplateDocument(
  * Cloning inverts that failure rather than removing it. **A field added to the
  * vocabulary is carried verbatim unless this function is told otherwise**, so
  * anyone adding one that must not be copied as-is has to override it here: anything
- * naming a Graphic Item by id (as a stagger does), anything naming a Screen, an
- * Event, or a Graphic Style Set entry, and anything that should be per-placement
+ * naming a Graphic Item by id (as a stagger does), anything naming a Screen or an
+ * Event, and anything that should be per-placement
  * rather than per-design.
  *
  * Be clear about what enforces which half. The round-trip test over a maximally
  * populated document enforces the *drop* half only: it fails when a field stops
  * being carried. It cannot catch a field that needed rewriting and was carried
  * anyway, because it builds its expectation by cloning the source and rewriting the
- * same identities this function does — so a new `styleSetId` that must be
+ * same identities this function does — so a new field that must be
  * re-resolved per placement would be carried verbatim on both sides and the test
  * would pass. Nothing here catches that, and no test can: which fields need
  * rewriting is a fact about the vocabulary, not about this document. The carry half

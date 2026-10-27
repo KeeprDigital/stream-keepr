@@ -1,7 +1,6 @@
 import type { BroadcastGraphicConfig, GraphicItemConfig, GraphicItemKind } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import { FEATURE_MATCH_TOKEN_CATALOGUE } from '~~/shared/featureMatchTokenCatalogue';
-import { graphicStyleOwnerSupportsSlot } from '~~/shared/modules/graphic-style-sets';
 import {
 	authorsGraphicInputs,
 	authorsGraphicStack,
@@ -15,6 +14,7 @@ import {
 	graphicItemSummary,
 	graphicShapeGeometry,
 	graphicsHostTokenCatalogue,
+	graphicThemeOwnerSupportsSlot,
 	isGraphicItemDefinitionAvailable,
 	ownsGraphicSurfaceStyle,
 	ownsGraphicTypography,
@@ -440,9 +440,9 @@ describe('graphicItemDefinitions', () => {
 
 			expect(ownsGraphicTypography(item)).toBe(offers.typography);
 			expect(ownsTextOverflowPolicy(item)).toBe(offers.textOverflowPolicy);
-			// The Graphic Style Set typography slot exists exactly where the item owns
-			// typography, so a style reference can never be bound to text nothing paints.
-			expect(graphicStyleOwnerSupportsSlot(item, 'typography')).toBe(offers.typography);
+			// The typography Theme binding slot exists exactly where the item owns
+			// typography, so a binding can never be bound to text nothing paints.
+			expect(graphicThemeOwnerSupportsSlot(item, 'typography')).toBe(offers.typography);
 			// A new item carries what its Definition declares, and nothing it does not.
 			expect('typography' in item).toBe(offers.typography);
 			expect('overflowPolicy' in item).toBe(offers.textOverflowPolicy);
@@ -457,7 +457,7 @@ describe('graphicItemDefinitions', () => {
 		it('offers typography in the Inspector only while the item paints text with it', () => {
 			// A Game Wins Item paints text only in its `number` display mode, and a Deck
 			// List Item only in its list view. Either still owns the typography, so a
-			// Style Set slot binds to it whatever is on screen.
+			// Theme binding slot binds to it whatever is on screen.
 			const wins = placed('game-wins');
 			const deck = placed('deck-list');
 			if (wins.type !== 'game-wins' || deck.type !== 'deck-list')
@@ -467,7 +467,7 @@ describe('graphicItemDefinitions', () => {
 			expect(paintedGraphicTypography({ ...wins, displayMode: 'number' })).toBe(wins.typography);
 			expect(paintedGraphicTypography(deck)).toBe(deck.typography);
 			expect(paintedGraphicTypography({ ...deck, view: 'grid' })).toBeNull();
-			expect(graphicStyleOwnerSupportsSlot(wins, 'typography')).toBe(true);
+			expect(graphicThemeOwnerSupportsSlot(wins, 'typography')).toBe(true);
 
 			for (const kind of ['text', 'clock', 'player-life'] as const)
 				expect(paintedGraphicTypography(placed(kind))).not.toBeNull();
@@ -565,10 +565,10 @@ describe('graphicItemDefinitions', () => {
 
 			for (const slot of SURFACE_SLOTS) {
 				expect(ownsGraphicSurfaceStyle(item, slot), slot).toBe(owns.surfaces.includes(slot));
-				// The Graphic Style Set slot exists exactly where the item owns the surface.
-				expect(graphicStyleOwnerSupportsSlot(item, slot), slot).toBe(owns.surfaces.includes(slot));
+				// The Theme binding slot exists exactly where the item owns the surface.
+				expect(graphicThemeOwnerSupportsSlot(item, slot), slot).toBe(owns.surfaces.includes(slot));
 			}
-			expect(graphicStyleOwnerSupportsSlot(item, 'surfaceStyle.fill')).toBe(owns.surfaces.includes('surfaceStyle'));
+			expect(graphicThemeOwnerSupportsSlot(item, 'surfaceStyle.fill')).toBe(owns.surfaces.includes('surfaceStyle'));
 			for (const slot of ['surfaceStyle', 'boxSurfaceStyle', 'wonBoxSurfaceStyle'] as const) {
 				const painted = patchGraphicSurfaceStyle(graphic, kind, { fillOpacity: 0.3 }, slot);
 				expect(painted !== graphic, slot).toBe(owns.surfaces.includes(slot));
@@ -577,7 +577,7 @@ describe('graphicItemDefinitions', () => {
 			expect(ownsShapeGeometry(item)).toBe(owns.geometry !== null);
 			expect(graphicShapeGeometry(item)?.slot ?? null).toBe(owns.geometry);
 			for (const slot of GEOMETRY_SLOTS)
-				expect(graphicStyleOwnerSupportsSlot(item, slot), slot).toBe(owns.geometry === slot);
+				expect(graphicThemeOwnerSupportsSlot(item, slot), slot).toBe(owns.geometry === slot);
 			const shaped = patchShapeGeometry(graphic, kind, { leftSlant: 12 });
 			expect(shaped !== graphic).toBe(owns.geometry !== null);
 			if (owns.geometry !== null) {
@@ -594,7 +594,7 @@ describe('graphicItemDefinitions', () => {
 
 		it('offers a Game Wins Item its win boxes in the Inspector only while it renders them', () => {
 			// The `number` display mode paints a win count, with no box to shape or paint.
-			// The item owns the boxes either way, so a Style Set slot binds to them
+			// The item owns the boxes either way, so a Theme binding slot binds to them
 			// whatever is on screen.
 			const boxes = placed('game-wins');
 			if (boxes.type !== 'game-wins')
@@ -608,7 +608,7 @@ describe('graphicItemDefinitions', () => {
 			expect(Object.keys(paintedGraphicSurfaceStyles(number))).toEqual(['surfaceStyle']);
 			expect(paintedShapeGeometry(number)).toBeNull();
 			for (const slot of ['boxSurfaceStyle', 'wonBoxSurfaceStyle', 'boxGeometry'] as const)
-				expect(graphicStyleOwnerSupportsSlot(number, slot), slot).toBe(true);
+				expect(graphicThemeOwnerSupportsSlot(number, slot), slot).toBe(true);
 		});
 
 		it('offers an item without a surface of its own the control that gives it one', () => {

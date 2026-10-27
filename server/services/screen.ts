@@ -4,7 +4,7 @@ import type { DbScreen, ScreenMode } from '~~/server/db/schema';
 import type { GraphicsAuthoringLeaseFence } from '~~/server/modules/graphics-authoring-lease';
 import type { PersistedScreenOutputAssetCapability } from '~~/server/modules/screen-output-assets/manager';
 import type { CreateScreenInput, UpdateScreenInput } from '~~/shared/api';
-import type { ScreenConfig } from '~~/shared/types/screenConfig';
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { screens } from '~~/server/db/schema';
@@ -15,9 +15,10 @@ import {
 import {
 	deleteScreenWithGraphicAssetReferences,
 	updateScreenModeConfigWithGraphicAssetReferences,
+	updateScreenThemeOverridesWithGraphicAssetReferences,
 } from '~~/server/modules/screen-graphic-asset-references';
 import { mapDeckSourceConflict, StateConflictError } from '~~/server/utils/errors';
-import { mergeScreenConfig, mergeScreenModeConfig } from '~~/shared/types/screenConfig';
+import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import { isGraphicAssetReferencingScreenMode } from '~~/shared/utils/graphicsAssetReferences';
 
 /**
@@ -240,21 +241,24 @@ export function screenService() {
 		return versionedWrite(id, eventId, { modeConfigs: mergedConfigs }, stateVersion ?? screen.stateVersion, [], leaseFence);
 	};
 
-	const updateScreenConfig = async (
+	/**
+	 * Replace a Screen's Screen Theme Overrides, as a new Screen version, with
+	 * the Graphic Asset References they hold indexed in the same commit.
+	 */
+	const updateThemeOverrides = async (
 		id: number,
 		eventId: number,
-		partialConfig: Record<string, unknown>,
-		stateVersion?: number,
-		leaseFence?: GraphicsAuthoringLeaseFence,
+		themeOverrides: StoredThemeTokens,
+		previousOverrides: StoredThemeTokens,
+		stateVersion: number,
 	): Promise<DbScreen | undefined> => {
-		const screen = await findById(id, eventId);
-		if (!screen)
-			return undefined;
-
-		const currentConfig = (screen.screenConfig ?? {}) as ScreenConfig;
-		const mergedConfig = mergeScreenConfig(currentConfig, partialConfig);
-
-		return versionedWrite(id, eventId, { screenConfig: mergedConfig }, stateVersion ?? screen.stateVersion, [], leaseFence);
+		return await updateScreenThemeOverridesWithGraphicAssetReferences({
+			id,
+			eventId,
+			themeOverrides,
+			previousOverrides,
+			stateVersion,
+		});
 	};
 
 	const slugExists = async (eventId: number, slug: string, excludeId?: number): Promise<boolean> => {
@@ -284,7 +288,7 @@ export function screenService() {
 		replaceAssetCapability,
 		update,
 		updateModeConfig,
-		updateScreenConfig,
+		updateThemeOverrides,
 		remove,
 		slugExists,
 	};

@@ -128,7 +128,7 @@ describe('feature Match Layout Template library', () => {
 		// A layout distinguishable from the target Screen's default in every part an
 		// author would recognise: the Frame, the Source Items, and the composition.
 		const authored = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout);
-		authored.frame.backgroundColor = '#123456';
+		authored.frame.opacity = 0.33;
 		authored.sources = [
 			{
 				id: 'main-source',
@@ -278,7 +278,7 @@ describe('feature Match Layout Template library', () => {
 		const current = await request(`${LIBRARY_PATH}/${templateId}`, { cookie: authorCookie });
 		const revision = (current.data as FeatureMatchLayoutTemplateResponse).revision;
 		const revised = structuredClone(savedLayout);
-		revised.frame.backgroundColor = '#abcdef';
+		revised.frame.opacity = 0.66;
 
 		const patched = await request(`${LIBRARY_PATH}/${templateId}`, {
 			method: 'PATCH',
@@ -289,7 +289,7 @@ describe('feature Match Layout Template library', () => {
 		expect(patched.status).toBe(200);
 		expect((patched.data as FeatureMatchLayoutTemplateResponse).revision).toBe(revision + 1);
 		const placed = await storedLayout(otherEventId, otherScreenId);
-		expect(placed.frame.backgroundColor).toBe(savedLayout.frame.backgroundColor);
+		expect(placed.frame.opacity).toBe(savedLayout.frame.opacity);
 	});
 
 	/**

@@ -26,6 +26,12 @@ definePageMeta({
 	title: 'Graphics Asset Library',
 });
 
+/** How a usage row names the kind of artifact holding the reference, where the kind's own spelling reads poorly. */
+const USAGE_OWNER_KIND_LABELS: Record<string, string> = {
+	screen: 'Screen',
+	theme: 'Theme',
+};
+
 const eventStore = useEventStore();
 const authorship = useGraphicsAuthorship();
 /**
@@ -1586,7 +1592,7 @@ onMounted(async () => {
 									/>
 								</div>
 								<p class="mt-1 text-muted">
-									{{ usage.owner.kind === 'screen' ? 'Screen' : usage.owner.kind }} {{ usage.owner.id }}
+									{{ USAGE_OWNER_KIND_LABELS[usage.owner.kind] ?? usage.owner.kind }} {{ usage.owner.id }}
 									<span v-if="usage.owner.eventId"> · Event {{ usage.owner.eventId }}</span>
 									· {{ usage.owner.slot }}
 								</p>

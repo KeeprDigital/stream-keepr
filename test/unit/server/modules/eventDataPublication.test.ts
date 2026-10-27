@@ -124,7 +124,6 @@ const screen = row({
 	slug: 'main-screen',
 	currentMode: 'feature-match',
 	modeConfigs: {},
-	screenConfig: {},
 	stateVersion: 3,
 });
 

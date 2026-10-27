@@ -54,8 +54,50 @@
     {
       "idx": 7,
       "version": "6",
-      "when": 1793082203392,
-      "tag": "0007_melee_live_results",
+      "when": 1793095818992,
+      "tag": "0007_themes",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1793098485501,
+      "tag": "0008_event_canvas",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1793101648683,
+      "tag": "0009_screen_theme_overrides",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1793103619192,
+      "tag": "0010_theme_graphic_asset_references",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1793105265657,
+      "tag": "0011_drop_screen_config",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1793108858181,
+      "tag": "0012_remove_graphic_style_sets",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1793137549663,
+      "tag": "0013_melee_live_results",
       "breakpoints": true
     }
   ]

@@ -13,12 +13,8 @@ import {
 } from '~~/shared/types/graphics';
 
 /**
- * Graphic values a Screen's graphics document and a Graphic Style Set both store.
- *
- * A Graphic Style Set Entry exists to be written into a graphics document, so its
- * value must be bounded exactly as the property it produces. One schema here, rather
- * than one per write surface, makes that true by construction instead of by
- * matching numbers — and keeps the Style Set schema from importing the Screen's.
+ * Bounded graphic values a Screen's graphics document stores, kept apart from
+ * the Screen schema so each typography owner composes its own object from them.
  */
 
 const finiteNumberSchema = z.number().finite();
@@ -41,10 +37,9 @@ export const shapeGeometrySchema = z.object({
 /**
  * The bounded typography fields every typography owner shares.
  *
- * Fields rather than a schema: base typography, a Graphic Placeholder Style, and a
- * typography Graphic Style Set Entry differ by design in which font they may name,
- * whether colour is a value or a palette reference, which fields lay out the whole
- * block, and what is optional. Each composes its own object from these.
+ * Fields rather than a schema: base typography and a Graphic Placeholder Style
+ * differ by design in which fields lay out the whole block, and what is
+ * optional. Each composes its own object from these.
  */
 export const graphicTypographyFields = {
 	fontSize: finiteNumberSchema.positive().max(MAX_GRAPHIC_FONT_SIZE),

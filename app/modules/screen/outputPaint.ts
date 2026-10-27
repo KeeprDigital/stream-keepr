@@ -22,10 +22,60 @@ export function clampOpacity(value: number): number {
 
 const HEX_COLOUR = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i;
 
-/** A Key Output paints opacity, never colour. */
+const HEX_WITH_ALPHA = /^#(?:[\da-f]{4}|[\da-f]{8})$/i;
+const FUNCTIONAL_COLOUR = /^(?:rgba?|hsla?)\((.*)\)$/i;
+
+/** The alpha argument of an `rgb()` or `hsl()` colour, when it has one. */
+function functionalAlpha(args: string): string | undefined {
+	const slash = args.split('/');
+	if (slash.length === 2)
+		return slash[1]!.trim();
+	const commas = args.split(',');
+	return commas.length === 4
+		? commas[3]!.trim()
+		: undefined;
+}
+
+/**
+ * A colour's own alpha, 0 to 1: a translucent Theme colour carries one. A
+ * colour whose alpha cannot be read here is opaque.
+ */
+export function colourAlpha(colour: string): number {
+	const value = colour.trim();
+	if (value.toLowerCase() === 'transparent')
+		return 0;
+	if (HEX_WITH_ALPHA.test(value)) {
+		const digits = value.length === 5
+			? value[4]!.repeat(2)
+			: value.slice(7);
+		return Number.parseInt(digits, 16) / 255;
+	}
+	const args = FUNCTIONAL_COLOUR.exec(value)?.[1];
+	const alpha = args === undefined
+		? undefined
+		: functionalAlpha(args);
+	if (alpha === undefined)
+		return 1;
+	return clampOpacity(alpha.endsWith('%')
+		? Number.parseFloat(alpha) / 100
+		: Number.parseFloat(alpha));
+}
+
+function keyWhite(alpha: number): string {
+	const opacity = clampOpacity(alpha);
+	return opacity >= 1
+		? '#ffffff'
+		: `#ffffff${Math.round(opacity * 255).toString(16).padStart(2, '0')}`;
+}
+
+/**
+ * A Key Output paints opacity, never colour: white at the colour's own alpha,
+ * so a translucent colour keys as the Fill Output shows it, and a consumer's
+ * opacity multiplies it there as it does in the Fill.
+ */
 export function paintColour(output: ScreenOutput, colour: string): string {
 	return output === 'key'
-		? '#ffffff'
+		? keyWhite(colourAlpha(colour))
 		: colour;
 }
 
@@ -38,7 +88,7 @@ export function colourAtOpacity(output: ScreenOutput, colour: string, opacity: n
 	const channel = Math.round(alpha * 255).toString(16).padStart(2, '0');
 
 	if (output === 'key')
-		return `#ffffff${channel}`;
+		return `#ffffff${Math.round(alpha * colourAlpha(colour) * 255).toString(16).padStart(2, '0')}`;
 	if (alpha >= 1)
 		return colour;
 
@@ -53,37 +103,6 @@ export interface GlowPaint {
 	color: string;
 	size: number;
 	opacity: number;
-}
-
-/**
- * The glow fields the Feature Match Overlay Frame and a Source Item's framing
- * store flat beside their border. A Graphic Surface Style always stores its
- * glow's colour and opacity, so these defaults are the flat hosts' alone.
- */
-export interface BorderGlowFields {
-	borderColor?: string;
-	glowColor?: string;
-	glowSize?: number;
-	glowOpacity?: number;
-}
-
-const BORDER_GLOW_DEFAULT_COLOUR = '#ffffff';
-const BORDER_GLOW_DEFAULT_OPACITY = 0.75;
-
-/**
- * A flat border glow, or none: a stored size of zero is how there is no glow. A
- * glow without its own colour takes the border's, and without its own opacity
- * paints at three quarters.
- */
-export function borderGlow(style: BorderGlowFields): GlowPaint | undefined {
-	const size = style.glowSize ?? 0;
-	if (size <= 0)
-		return undefined;
-	return {
-		color: style.glowColor ?? style.borderColor ?? BORDER_GLOW_DEFAULT_COLOUR,
-		size,
-		opacity: style.glowOpacity ?? BORDER_GLOW_DEFAULT_OPACITY,
-	};
 }
 
 function paintsGlow(glow: GlowPaint | undefined): glow is GlowPaint {

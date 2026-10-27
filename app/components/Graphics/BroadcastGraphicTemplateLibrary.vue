@@ -178,19 +178,6 @@ async function place(templateId: string) {
 						{{ template.itemCount }} items · {{ template.inputCount }} inputs
 					</template>
 
-					<template #detail>
-						<!--
-							A Graphic Style Set change reaches this template as an offer, never as a
-							write. The badge says whether one is waiting; applying it is an explicit
-							reviewed act that creates one new template revision.
-						-->
-						<GraphicsStyleUpdateReview
-							:template="template"
-							:writable="canAuthor"
-							@applied="refresh()"
-						/>
-					</template>
-
 					<template #actions>
 						<!--
 							A plain download, because a Template Package is a file an author

@@ -1,10 +1,8 @@
 import type { GraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
-import type { GraphicsAuthoringLeaseFence } from '~~/server/modules/graphics-authoring-lease';
 import type { ScreenOutputAssetCapabilityManager } from '~~/server/modules/screen-output-assets/manager';
 import type { CreateScreenInput, UpdateScreenInput } from '~~/server/schemas/api/screen';
 import type { ScreenResponse } from '~~/shared/api';
 import type { ScreenMode } from '~~/shared/types/enums';
-import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import { broadcastGraphicsLiveSessionModule } from '~~/server/modules/broadcast-graphics-live-session';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import {
@@ -16,16 +14,20 @@ import { parseModeConfigPatchResult } from '~~/server/schemas/api/screen';
 import { cardService } from '~~/server/services/card';
 import { screenService } from '~~/server/services/screen';
 import { canonicalJson } from '~~/server/utils/canonicalJson';
+import { assertGraphicsTemplateReferencesSelectable } from '~~/server/utils/graphicsTemplateReferences';
 import {
 	validateScreenModeConfigReferences,
 	validateScreenModeConfigsReferences,
 } from '~~/server/utils/routeGuards';
+import { parseScreenThemeOverrideWrite, SCREEN_THEME_OVERRIDE_REFUSALS } from '~~/shared/screenThemeOverrides';
+import { storedThemeTokenGraphicAssetReferences } from '~~/shared/themeAssetReferences';
 import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
 	GRAPHIC_ASSET_REFERENCING_SCREEN_MODES,
 	isGraphicAssetReferencingScreenMode,
 	sameGraphicAssetReference,
 	sameScreenGraphicAssetReferences,
+	SCREEN_THEME_OVERRIDE_SLOT_PREFIX,
 	screenModeGraphicAssetReferences,
 } from '~~/shared/utils/graphicsAssetReferences';
 
@@ -87,14 +89,6 @@ interface DeleteScreenParams {
 	originConnectionId?: string;
 }
 
-interface UpdateScreenConfigParams extends AuthoredWrite {
-	eventId: number;
-	screenId: number;
-	config: Record<string, unknown>;
-	stateVersion?: number;
-	originConnectionId?: string;
-}
-
 interface UpdateModeConfigParams extends AuthoredWrite {
 	eventId: number;
 	screenId: number;
@@ -103,6 +97,16 @@ interface UpdateModeConfigParams extends AuthoredWrite {
 	stateVersion?: number;
 	originConnectionId?: string;
 	graphicsAssets: Provides<Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevisions'>>;
+}
+
+interface UpdateThemeOverridesParams {
+	eventId: number;
+	screenId: number;
+	graphicsAssets: Provides<Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevisions'>>;
+	/** Each token's new override, or `null` to clear it. */
+	tokens: Record<string, unknown>;
+	stateVersion?: number;
+	originConnectionId?: string;
 }
 
 const MODE_CONFIG_ENDPOINT_REQUIRED
@@ -149,22 +153,6 @@ function rejectChangedGraphicAssetReferencesOnGenericUpdate(
 	}
 }
 
-/**
- * The canvas fields of a Screen's graphics Edit workspace.
- *
- * What a Graphics Authoring Lease protects on a Screen is its graphics Edit
- * workspace, which is the Broadcast Graphics stack and — while the Screen is in
- * Broadcast Graphics mode — the canvas every Broadcast Graphic is composed in.
- * Resizing the canvas moves the frame a holder's composition was authored into,
- * which is the harm the lease exists to prevent. Every other Screen field and
- * every other Screen Mode stays open: live operation must not wait on an author.
- */
-const CANVAS_FIELDS = ['width', 'height'] as const;
-
-function namesCanvas(config: Record<string, unknown>): boolean {
-	return CANVAS_FIELDS.some(field => config[field] !== undefined);
-}
-
 /** Compared as JSON, so a stack sent back exactly as it was read is no change. */
 function sameJson(left: unknown, right: unknown): boolean {
 	return canonicalJson(JSON.parse(JSON.stringify(left ?? null)))
@@ -172,28 +160,21 @@ function sameJson(left: unknown, right: unknown): boolean {
 }
 
 /**
- * Whether a generic Screen write edits the graphics Edit workspace.
+ * Whether a generic Screen write edits the graphics Edit workspace: its
+ * Broadcast Graphics stack. The canvas is the Event's (ADR-0051), so no Screen
+ * write resizes it.
  *
  * Decided by what would change rather than by which fields are present: the
- * generic write replaces `modeConfigs` and `screenConfig` whole, and the Edit
- * Screen dialog sends both back as it read them, so presence alone would refuse
- * every rename while a Screen is leased.
+ * generic write replaces `modeConfigs` whole, and the Edit Screen dialog sends
+ * it back as it read it, so presence alone would refuse every rename while a
+ * Screen is leased.
  */
 function genericWriteEditsWorkspace(
-	existing: { currentMode: ScreenMode; modeConfigs: ScreenResponse['modeConfigs']; screenConfig: ScreenConfig | null },
+	existing: { modeConfigs: ScreenResponse['modeConfigs'] },
 	data: Omit<UpdateScreenInput, 'stateVersion'>,
 ): boolean {
-	if (data.modeConfigs !== undefined
-		&& !sameJson(existing.modeConfigs?.['broadcast-graphics'], data.modeConfigs?.['broadcast-graphics'])) {
-		return true;
-	}
-	const inBroadcastGraphics = existing.currentMode === 'broadcast-graphics'
-		|| data.currentMode === 'broadcast-graphics';
-	if (!inBroadcastGraphics || data.screenConfig === undefined)
-		return false;
-	const current = (existing.screenConfig ?? {}) as Record<string, unknown>;
-	const next = (data.screenConfig ?? {}) as Record<string, unknown>;
-	return CANVAS_FIELDS.some(field => current[field] !== next[field]);
+	return data.modeConfigs !== undefined
+		&& !sameJson(existing.modeConfigs?.['broadcast-graphics'], data.modeConfigs?.['broadcast-graphics']);
 }
 
 export function screenWriteModule() {
@@ -351,37 +332,6 @@ export function screenWriteModule() {
 		return { success: true };
 	}
 
-	async function updateScreenConfig({ eventId, screenId, config, stateVersion, originConnectionId, authoringSessionId }: UpdateScreenConfigParams): Promise<ScreenResponse> {
-		// Only a write naming the canvas reads the Screen first. Its version then
-		// guards the commit when the client sent none, so the mode the decision
-		// was made on is the mode the write commits against.
-		let leaseFence: GraphicsAuthoringLeaseFence | undefined;
-		let expectedVersion = stateVersion;
-		if (namesCanvas(config)) {
-			const existing = await screens.findById(screenId, eventId);
-			if (!existing)
-				throw createError({ statusCode: 404, message: 'Screen not found' });
-			expectedVersion ??= existing.stateVersion;
-			if (existing.currentMode === 'broadcast-graphics')
-				leaseFence = await admitScreenGraphicsEditWrite(eventId, screenId, authoringSessionId);
-		}
-
-		const updatedScreen = await screens.updateScreenConfig(screenId, eventId, config, expectedVersion, leaseFence);
-
-		if (!updatedScreen) {
-			throw createError({
-				statusCode: 404,
-				message: 'Screen not found',
-			});
-		}
-
-		return await publication.screenUpdated({
-			eventId,
-			entity: updatedScreen,
-			originConnectionId,
-		});
-	}
-
 	async function updateModeConfig({ eventId, screenId, mode, config, stateVersion, originConnectionId, graphicsAssets, authoringSessionId }: UpdateModeConfigParams): Promise<ScreenResponse> {
 		// The Broadcast Graphics stack is the Screen's graphics Edit workspace. Live
 		// Control reaches the Screen through its own live command surface and is
@@ -484,11 +434,61 @@ export function screenWriteModule() {
 		});
 	}
 
+	/**
+	 * Set or clear Screen Theme Overrides (ADR-0049), all or none. Each token is
+	 * checked against the mode the Screen shows, read here; the write is
+	 * versioned on that read (or the client's `stateVersion`), so a mode change
+	 * landing first refuses it as a conflict rather than letting the check go
+	 * stale. An override of another mode's Mode Token is left as stored.
+	 */
+	async function updateThemeOverrides({ eventId, screenId, tokens, stateVersion, originConnectionId, graphicsAssets }: UpdateThemeOverridesParams): Promise<ScreenResponse> {
+		const existing = await screens.findById(screenId, eventId);
+		if (!existing)
+			throw createError({ statusCode: 404, message: 'Screen not found' });
+
+		const next: Record<string, unknown> = { ...existing.themeOverrides };
+		for (const [token, value] of Object.entries(tokens)) {
+			const write = parseScreenThemeOverrideWrite(existing.currentMode, token, value);
+			if (!write.ok) {
+				throw createError({
+					statusCode: 400,
+					message: `${token}: ${SCREEN_THEME_OVERRIDE_REFUSALS[write.refusal]}`,
+					data: { code: write.refusal, token },
+				});
+			}
+			if (write.value === null)
+				delete next[token];
+			else
+				next[token] = write.value;
+		}
+
+		// A newly named Graphic Asset Revision must be one an author could select
+		// now (ADR-0050); one the override already held is not asked again.
+		const held = new Map(
+			storedThemeTokenGraphicAssetReferences(existing.themeOverrides, SCREEN_THEME_OVERRIDE_SLOT_PREFIX)
+				.map(item => [item.ownerSlot, item.reference] as const),
+		);
+		const changed = storedThemeTokenGraphicAssetReferences(next, SCREEN_THEME_OVERRIDE_SLOT_PREFIX)
+			.filter(item => !sameGraphicAssetReference(held.get(item.ownerSlot), item.reference));
+		if (changed.length > 0)
+			await assertGraphicsTemplateReferencesSelectable(graphicsAssets(), changed, 'Screen Theme Override');
+
+		const updatedScreen = await screens.updateThemeOverrides(screenId, eventId, next, existing.themeOverrides, stateVersion ?? existing.stateVersion);
+		if (!updatedScreen)
+			throw createError({ statusCode: 404, message: 'Screen not found' });
+
+		return await publication.screenUpdated({
+			eventId,
+			entity: updatedScreen,
+			originConnectionId,
+		});
+	}
+
 	return {
 		createScreen,
 		updateScreen,
 		deleteScreen,
-		updateScreenConfig,
 		updateModeConfig,
+		updateThemeOverrides,
 	};
 }

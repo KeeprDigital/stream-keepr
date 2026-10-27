@@ -19,10 +19,10 @@ import { addGraphicGroupChild, addGraphicItem } from '../../shared/modules/graph
  * - **A Feature Match Slot.** There is nowhere to put one, which is the point: the
  *   assignment lives on the mode configuration beside the layout. A fixture with a
  *   `featureMatchId` would not be a layout.
- * - **Graphic Inputs, Graphic Source Selections, Graphic Input Bindings, or a
- *   Graphic Style Set link** on the composition. A Feature Match Overlay binds a
- *   fixed host token catalogue instead of declaring inputs, and the layout
- *   composition schema refuses all four.
+ * - **Graphic Inputs, Graphic Source Selections, or Graphic Input Bindings** on
+ *   the composition. A Feature Match Overlay binds a fixed host token catalogue
+ *   instead of declaring inputs, and the layout composition schema refuses all
+ *   three.
  * - **A Remote Media URL on the Frame.** A URL Screen Media Source is a remote
  *   resource, and the Template Package envelope refuses any document that depends
  *   on one (ADR-0021). A layout using it cannot be exported at all, so the fixture
@@ -267,33 +267,18 @@ export function maximalFeatureMatchLayoutDocument(
 	};
 
 	return {
+		// Its fill, border, glow and effect are the Theme's Mode Tokens (#831).
 		frame: {
-			backgroundColor: '#0b1220',
 			opacity: 0.95,
 			backgroundImage: { kind: 'asset', ...options.frameAsset },
 			backgroundImageFit: 'cover',
-			gradient: 'linear-gradient(180deg, #0b1220 0%, #000000 100%)',
 			borderTopVisible: true,
 			borderRightVisible: false,
 			borderBottomVisible: true,
 			borderLeftVisible: false,
-			borderVisible: true,
-			borderColor: '#0077a3',
-			borderWidth: 6,
-			glowColor: '#00d9ff',
-			glowSize: 14,
-			glowOpacity: 0.7,
 			animation: {
 				enabled: true,
-				effect: 'caustics',
 				opacity: 0.6,
-				params: {
-					lightColor: '#00d9ff',
-					waterColor: '#0b1220',
-					intensity: 1.2,
-					speed: 1.5,
-					scale: 0.8,
-				},
 			},
 		},
 		// Every Source Role, so the whole vocabulary is exercised by one package.
@@ -311,24 +296,16 @@ export function maximalFeatureMatchLayoutDocument(
 				width: 1500,
 				height: 900,
 				framingStyle: {
-					backgroundColor: '#000000',
-					backgroundOpacity: 0.2,
-					backgroundGradient: 'linear-gradient(90deg, #000000 0%, #0077a3 100%)',
 					borderTopVisible: true,
 					borderRightVisible: true,
 					borderBottomVisible: false,
 					borderLeftVisible: true,
-					borderVisible: true,
-					borderColor: '#0077a3',
-					borderWidth: 4,
 					borderRadius: 8,
 					borderRadiusTopLeft: 12,
 					borderRadiusTopRight: 4,
 					borderRadiusBottomRight: 0,
 					borderRadiusBottomLeft: 6,
-					glowColor: '#00d9ff',
-					glowSize: 10,
-					glowOpacity: 0.5,
+					glowPosition: 'outside',
 				},
 			},
 			{

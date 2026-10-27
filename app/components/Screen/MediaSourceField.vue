@@ -12,10 +12,13 @@ import { remoteMediaUrlRefusal } from '~~/shared/utils/remoteMediaUrl';
  *
  * `null` means the author cleared the library choice; each host decides what
  * "no source" stores, since a Frame image may be absent and a layer may not.
+ *
+ * Without an `eventId`, as for a Theme's layers, the library picker offers the
+ * whole library rather than the Event's adopted assets first (ADR-0050).
  */
 const props = defineProps<{
 	modelValue: ScreenMediaSource | undefined;
-	eventId: number;
+	eventId?: number;
 	assetKind: 'image' | 'silent-video';
 	/** Names the library picker, e.g. "Video asset". */
 	label: string;
@@ -25,7 +28,7 @@ const emit = defineEmits<{
 	'update:modelValue': [source: ScreenMediaSource | null];
 }>();
 
-const SOURCE_KIND_OPTIONS = [
+const sourceKindOptions = [
 	{ label: 'Asset library', value: 'asset' },
 	{ label: 'Remote URL', value: 'url' },
 ];
@@ -74,7 +77,7 @@ function clearAsset(next: GraphicAssetReference | undefined) {
 	<UFormField label="Source">
 		<USelect
 			:model-value="kind"
-			:items="SOURCE_KIND_OPTIONS"
+			:items="sourceKindOptions"
 			value-key="value"
 			size="sm"
 			class="w-full"

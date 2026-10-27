@@ -1,4 +1,6 @@
 import type { InjectionKey, Ref } from 'vue';
+import type { EventCanvas } from '~~/shared/eventCanvas';
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { ModeConfigTypeMap, ScreenOutput } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
@@ -32,6 +34,24 @@ export interface ScreenContext {
 	 * presence, like `assetAccess`) instead of showing it on program (#465).
 	 */
 	cardDataHealth?: Ref<ScreenCardDataHealth>;
+	/**
+	 * The stored token values of the Theme the Screen's Event uses. Absent, or
+	 * undefined, renders the Default Theme.
+	 */
+	themeTokens?: Ref<StoredThemeTokens | undefined>;
+	/**
+	 * The Event Canvas the Screen renders in (ADR-0051). Absent renders the
+	 * default canvas.
+	 */
+	eventCanvas?: Ref<EventCanvas>;
+	/**
+	 * Every read answers from the Screen Mode Sample Dataset rather than the
+	 * Screen. Set only by a Theme preview (`createScreenModeSampleContext`); a
+	 * Screen Output never sets it, so sample data never reaches air.
+	 */
+	sampleDataset?: true;
+	/** The space the Screen renders into; absent means the browser window. */
+	viewport?: Readonly<Ref<{ width: number; height: number }>>;
 }
 
 const SCREEN_CONTEXT_KEY: InjectionKey<ScreenContext> = Symbol('screen-context');

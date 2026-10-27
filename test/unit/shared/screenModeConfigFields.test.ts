@@ -133,3 +133,29 @@ describe('a config contract\'s stored-fragment clamp', () => {
 		expect(contract.schema.safeParse({ ...contract.defaults, scale: 4 }).success).toBe(false);
 	});
 });
+
+// A former field is gone from the shape, at the top level or in a nested block.
+describe('a config contract\'s former fields', () => {
+	const shape = {
+		gap: z.number().optional(),
+		board: z.object({
+			columns: z.number().optional(),
+		}).strict().optional(),
+	};
+
+	it.each([
+		{ former: 'gap', refused: true },
+		{ former: 'board.columns', refused: true },
+		{ former: 'board.cardGap', refused: false },
+		{ former: 'gap.size', refused: false },
+	])('$former: refused while the shape still declares it, $refused', ({ former, refused }) => {
+		const define = () => defineScreenModeConfigContract(shape, {}, {
+			formerFields: [former],
+		});
+
+		if (refused)
+			expect(define).toThrow(`Config field "${former}" cannot be both a field and a former field of one contract.`);
+		else
+			expect(define).not.toThrow();
+	});
+});

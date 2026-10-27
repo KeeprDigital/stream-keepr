@@ -245,7 +245,7 @@ Operator handlers: `matchResultsSynced` → `useMatchStore().applyRemoteMatchesR
 - Create: `server/plugins/melee-live-results-schedule.ts`
 - Modify: `server/plugins/graphics-retention-schedule.ts`, `graphics-reconciliation-schedule.ts` (gate on `GRAPHICS_CRON`)
 - Modify: `wrangler.jsonc:43-45` (`"crons": ["17 * * * *", "* * * * *"]`)
-- Modify: `DECISIONS.md` (append ADR-0049), `CONTEXT.md` (Current Round, Live Results; Melee Sync mentions polling; Round complete rule), `README.md` operations
+- Modify: `DECISIONS.md` (append ADR-0052), `CONTEXT.md` (Current Round, Live Results; Melee Sync mentions polling; Round complete rule), `README.md` operations
 - Test: `test/unit/server/modules/meleeLiveResults.sqlite.test.ts` (new), `test/unit/server/utils/cronSchedules.test.ts` (new)
 
 **Interfaces:**
@@ -270,7 +270,7 @@ The plugin hooks `cloudflare:scheduled`, returns unless `controller.cron === LIV
 - [ ] **Step 1: Failing tests** in `meleeLiveResults.sqlite.test.ts` (Melee, Ably, clock faked): in-progress Round, new result → Match updated, `matchResultsSynced` published, no `event:updated`; quiet tick → no publish, `lastCheckedAt` written, `nextCheckAt` +60 s; complete Round, next paired → Players refreshed, pairings stored, previous Round standings stored; probe 404 → backoff step +1; Melee 500 → error stored + `event:updated` once, next failure no second `event:updated`, success clears it; 401 → enabled false, stopReason 'auth'; lease held by operator → `skipped`, nothing written; runner: three due Events where the second throws → first and third ticked; Event not due → untouched; GET status returns the Current Round's name and the stored error.
 - [ ] **Step 2: Failing test** `cronSchedules.test.ts`: parse `wrangler.jsonc` (strip comments) and assert `triggers.crons` equals `[GRAPHICS_CRON, LIVE_RESULTS_CRON]`; invoke each graphics plugin hook with `LIVE_RESULTS_CRON` → its library is not called.
 - [ ] **Step 3:** Run. Expected: FAIL.
-- [ ] **Step 4:** Implement code, then the docs: ADR-0049 records polling, the lease as what keeps a tick from writing after sync is turned off (configuration takes the same lease), Current Round, completion rule, standings-only-when-complete, message split + one-release `roundSynced`, cron as scheduler, operator lease wait.
+- [ ] **Step 4:** Implement code, then the docs: ADR-0052 records polling, the lease as what keeps a tick from writing after sync is turned off (configuration takes the same lease), Current Round, completion rule, standings-only-when-complete, message split + one-release `roundSynced`, cron as scheduler, operator lease wait.
 - [ ] **Step 5:** Run `pnpm verify` (includes Worker build and workerd smoke). Expected: PASS.
 - [ ] **Step 6:** Run `pnpm test:integration --run`. Expected: PASS.
 - [ ] **Step 7:** Commit `feat(melee-sync): Live Results polls the Current Round every minute`.
@@ -302,8 +302,8 @@ The plugin hooks `cloudflare:scheduled`, returns unless `controller.cron === LIV
 
 ### Task 10: Remove the legacy message (follow-up release)
 
-Not in this PR. Open an issue after the release ships: "Stop publishing `melee:roundSynced`", body pointing at ADR-0049. Command:
+Not in this PR. Open an issue after the release ships: "Stop publishing `melee:roundSynced`", body pointing at ADR-0052. Command:
 
 ```bash
-gh issue create --title "chore(melee-sync): stop publishing melee:roundSynced" --body "One release after Live Results (ADR-0049). Remove the type, publication function and the publish in workflows.syncRoundMatches." --label ready-for-agent
+gh issue create --title "chore(melee-sync): stop publishing melee:roundSynced" --body "One release after Live Results (ADR-0052). Remove the type, publication function and the publish in workflows.syncRoundMatches." --label ready-for-agent
 ```

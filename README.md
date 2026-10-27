@@ -135,7 +135,7 @@ points at them.
   - Decisions:
     [ADR-0031](DECISIONS.md#adr-0031-a-resolved-unresolved-deck-card-announces-the-deck-lists-it-rewrote-and-re-projects-nothing),
     [ADR-0032](DECISIONS.md#adr-0032-deleting-a-player-releases-every-deck-source-that-selects-them),
-    [ADR-0049](DECISIONS.md#adr-0049-live-results-polls-the-current-round-and-melee-sync-announces-only-what-changed).
+    [ADR-0052](DECISIONS.md#adr-0052-live-results-polls-the-current-round-and-melee-sync-announces-only-what-changed).
   - Code: `server/modules/melee-sync/`, `server/services/melee*.ts`.
 - **Feature Match production**: Feature Match Slots, Feature Match
   Assignments, Feature Match Sessions and Feature Match Slot Promotion, shown by
@@ -974,7 +974,7 @@ default), a minute cron (`* * * * *`,
 `server/plugins/melee-live-results-schedule.ts`) polls Melee.gg for the
 Current Round's Match Results, and for the next Round's pairings once it is
 complete. Pairings and Top Cut Bracket Screens fill in within about a minute of
-Melee reporting a result. ADR-0049 has the rules.
+Melee reporting a result. ADR-0052 has the rules.
 
 - **Cost.** One paginated Melee request per Event per tick; a newly paired
   Round adds a Players refresh, a newly complete Round a standings fetch. At

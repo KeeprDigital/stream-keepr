@@ -6,7 +6,6 @@ import {
 	mergeScreenModeConfig,
 	resolveDeckBoards,
 	toModeConfigPatch,
-	toScreenConfigPatch,
 } from '~~/shared/types/screenConfig';
 
 describe('getDisplayDefaultsForMode', () => {
@@ -26,10 +25,8 @@ describe('getDisplayDefaultsForMode', () => {
 	});
 
 	it('returns display defaults that preserve visual settings only', () => {
-		expect(getDisplayDefaultsForMode('card')).toMatchObject({
-			scale: getDefaultConfigForMode('card').scale,
-			animationEnabled: getDefaultConfigForMode('card').animationEnabled,
-		});
+		// Card Spotlight's config is its match binding alone, which a reset keeps.
+		expect(getDisplayDefaultsForMode('card')).toEqual({});
 
 		expect(getDisplayDefaultsForMode('deck')).toMatchObject({
 			board: getDefaultConfigForMode('deck').board,
@@ -138,11 +135,5 @@ describe('toModeConfigPatch', () => {
 
 	it('sends a mode\'s Background Layer stack cleared as a deletion, as before', () => {
 		expect(toModeConfigPatch('metagame', { backgroundLayers: undefined })).toEqual({ backgroundLayers: null });
-	});
-});
-
-describe('toScreenConfigPatch', () => {
-	it('sends a cleared field as a deletion', () => {
-		expect(toScreenConfigPatch({ width: undefined, background: '#fff' })).toEqual({ width: null, background: '#fff' });
 	});
 });

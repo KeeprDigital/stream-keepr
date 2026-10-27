@@ -208,7 +208,6 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 			featureMatchLayoutVocabularyIdentity('source-role', 'main'),
 			featureMatchLayoutVocabularyIdentity('source-role', 'player1'),
 			featureMatchLayoutVocabularyIdentity('source-role', 'player2'),
-			featureMatchLayoutVocabularyIdentity('frame-animation-effect', 'caustics'),
 			featureMatchLayoutVocabularyIdentity('token', 'player1Name'),
 			featureMatchLayoutVocabularyIdentity('token', 'player1Record'),
 			featureMatchLayoutVocabularyIdentity('token', 'player1Deck'),
@@ -407,5 +406,18 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 				&& issue.message.includes('a-font-no-installation-ships'),
 			)).toBe(true);
 		}
+	});
+});
+
+describe('a `.sklayout` Template Package and the Theme', () => {
+	// Bindings travel as token names, so the receiver's own Theme restyles the layout.
+	it('round-trips every Theme binding, and a receiver accepts them', async () => {
+		const { document, archive } = await exportedPackage();
+		const travelled = readTemplatePackageParts(archive).template as FeatureMatchLayoutConfig;
+
+		expect(travelled.composition.items.map(item => item.themeBindings)).toEqual(document.composition.items.map(item => item.themeBindings));
+		expect(travelled.composition.items.some(item => item.themeBindings)).toBe(true);
+		const report = reportOf(await preflight(createLibrary('theme-receiver'), archive));
+		expect(report.issues.filter(issue => issue.severity === 'error')).toEqual([]);
 	});
 });

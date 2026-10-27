@@ -17,9 +17,10 @@ const FocusPickerStub = defineComponent({
 	props: {
 		modelValue: { type: Object, required: false },
 		assetKind: { type: String, required: false },
+		eventId: { type: Number, required: false },
 	},
 	emits: ['select', 'update:modelValue'],
-	template: '<div data-testid="source-asset" :data-asset-kind="assetKind" />',
+	template: '<div data-testid="source-asset" :data-asset-kind="assetKind" :data-event-id="eventId ?? \'none\'" />',
 });
 
 const global = {
@@ -31,12 +32,13 @@ const global = {
 
 const librarySource: ScreenMediaSource = { kind: 'asset', assetId: 'plate' as never, revisionId: 'plate-1' as never };
 
-function mountField(modelValue: ScreenMediaSource | undefined) {
+/** `withEvent: false` mounts it as the Theme editor does, with no Event's library to offer. */
+function mountField(modelValue: ScreenMediaSource | undefined, { withEvent = true } = {}) {
 	return mount(MediaSourceField, {
 		global,
 		props: {
 			modelValue,
-			eventId: 7,
+			eventId: withEvent ? 7 : undefined,
 			assetKind: 'silent-video',
 			label: 'Video asset',
 		},
@@ -107,5 +109,12 @@ describe('the Screen Media Source field', () => {
 
 		expect(wrapper.find('[data-testid="source-asset"]').exists()).toBe(true);
 		expect(wrapper.find('input').exists()).toBe(false);
+	});
+
+	it('offers the whole library without an Event, as a Theme\'s layers pick media', () => {
+		const wrapper = mountField(undefined, { withEvent: false });
+
+		expect(wrapper.findAll('option').map(option => option.text())).toEqual(['Asset library', 'Remote URL']);
+		expect(wrapper.get('[data-testid="source-asset"]').attributes('data-event-id')).toBe('none');
 	});
 });

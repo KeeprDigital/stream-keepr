@@ -40,7 +40,6 @@ export const SCREEN_COMMAND_VALUES = ['refresh', 'identify', 'debug'] as const;
 export const CLOCK_TYPE_VALUES = ['countdown', 'countup', 'untimed'] as const;
 export const RECORD_SEPARATOR_VALUES = ['-', '/', ' | ', ' '] as const;
 export const DECK_BOARD_VIEW_VALUES = ['grid', 'stack', 'list'] as const;
-export const DECK_CARD_SIZE_VALUES = ['small', 'medium', 'large'] as const;
 // Where a badge sits on a Deck Screen card: the nine points less the centre, spelled as `NINE_POINTS`
 // (`shared/utils/ninePoints.ts`) so the nine-point picker edits it directly (#543).
 export const QUANTITY_POSITION_VALUES = [
@@ -53,12 +52,9 @@ export const QUANTITY_POSITION_VALUES = [
 	'bottom',
 	'bottom-right',
 ] as const;
-export const QUANTITY_SIZE_VALUES = ['small', 'medium', 'large'] as const;
 export const SIDEBOARD_PLACEMENT_VALUES = ['beside', 'below'] as const;
 export const BOARD_SELECTION_VALUES = ['full', 'mainboard', 'sideboard'] as const;
 export const PLAYER_SIDE_VALUES = ['player1', 'player2'] as const;
-export const SCREEN_COLOR_MODE_VALUES = ['light', 'dark', 'system'] as const;
-export const CARD_ANIMATION_SPEED_VALUES = ['slow', 'normal', 'fast'] as const;
 export const HORIZONTAL_ALIGN_VALUES = ['left', 'center', 'right'] as const;
 export const VERTICAL_ALIGN_VALUES = ['top', 'center', 'bottom'] as const;
 export const RESET_TYPE_VALUES = ['game', 'match'] as const;
@@ -157,14 +153,10 @@ export type HeadToHeadPlayerSource = typeof HEAD_TO_HEAD_PLAYER_SOURCE_VALUES[nu
 export type ScreenCommand = typeof SCREEN_COMMAND_VALUES[number];
 export type RecordSeparator = typeof RECORD_SEPARATOR_VALUES[number];
 export type DeckBoardView = typeof DECK_BOARD_VIEW_VALUES[number];
-export type DeckCardSize = typeof DECK_CARD_SIZE_VALUES[number];
 export type QuantityPosition = typeof QUANTITY_POSITION_VALUES[number];
-export type QuantitySize = typeof QUANTITY_SIZE_VALUES[number];
 export type SideboardPlacement = typeof SIDEBOARD_PLACEMENT_VALUES[number];
 export type BoardSelection = typeof BOARD_SELECTION_VALUES[number];
 export type PlayerSide = typeof PLAYER_SIDE_VALUES[number];
-export type ScreenColorMode = typeof SCREEN_COLOR_MODE_VALUES[number];
-export type CardAnimationSpeed = typeof CARD_ANIMATION_SPEED_VALUES[number];
 export type HorizontalAlign = typeof HORIZONTAL_ALIGN_VALUES[number];
 export type VerticalAlign = typeof VERTICAL_ALIGN_VALUES[number];
 export type ResetType = typeof RESET_TYPE_VALUES[number];

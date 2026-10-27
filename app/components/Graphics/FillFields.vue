@@ -5,16 +5,14 @@ import { MAX_GRAPHIC_FILL_STOPS, MIN_GRAPHIC_FILL_STOPS } from '~~/shared/types/
 
 /**
  * The one Graphic Fill fields control, for a Graphic Item's own fill (through a
- * Graphic Surface Style) and a Graphic Style Set fill entry.
+ * Graphic Surface Style) and a Theme's fill token.
  *
  * It is presentational: it shows a Graphic Fill and reports each change as a
- * `GraphicFillEdit`, leaving the host to apply it (`applyGraphicSurfaceStyleEdit`
- * for an item, `applyGraphicStyleFillEntryEdit` for an entry), so both get the
- * same two to four gradient stops by the same rules.
+ * `GraphicFillEdit`, leaving the host to apply it, so every host gets the same
+ * two to four gradient stops by the same rules.
  *
  * The colour field is the `color` slot, as in the border and glow fields: an item
- * takes the default hex picker, and a Style Set entry passes a palette entry
- * picker, so its fill's colours are palette entry ids.
+ * takes the default hex picker, and a host may pass its own picker.
  */
 const props = withDefaults(defineProps<{
 	fill: GraphicFill;

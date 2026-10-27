@@ -1,3 +1,4 @@
+import type { ScreenOutputTheme } from '~~/shared/types/theme';
 import type { ScreenOutputEvent } from '~~/shared/utils/screenOutputEvent';
 import type {
 	CreateEventInput,
@@ -30,6 +31,12 @@ export const useEventStore = defineStore('event', () => {
 	 * Event its realtime room and reads are scoped to.
 	 */
 	const outputEvent = ref<ScreenOutputEvent | null>(null);
+	/**
+	 * The operator Event's Theme as an operator surface last read it, kept
+	 * current by `theme:updated` as a rendering's is, so a Screen's token
+	 * section shows what it inherits now. Null until one is read.
+	 */
+	const eventTheme = ref<ScreenOutputTheme | null>(null);
 	const eventsList = ref<Event[]>([]);
 	const loading = ref(false);
 	const error = ref<string | null>(null);
@@ -142,6 +149,31 @@ export const useEventStore = defineStore('event', () => {
 		if (index !== -1) {
 			Object.assign(eventsList.value[index]!, data.event);
 		}
+	}
+
+	/**
+	 * Hold a token write to the Theme the held Event context's Event uses. An
+	 * announcement for another Theme is not this Event's, and one older than the
+	 * held revision of the same Theme arrived late, so neither lands.
+	 */
+	function applyRemoteThemeUpdated(data: MessageData<'theme:updated'>) {
+		const { theme } = data;
+		if (event.value?.id === data.eventId && event.value.themeId === theme.id)
+			holdEventTheme(theme);
+		const held = outputEvent.value;
+		if (!held || held.id !== data.eventId || theme.id !== held.themeId)
+			return;
+		if (held.theme?.id === theme.id && held.theme.revision >= theme.revision)
+			return;
+		outputEvent.value = { ...held, theme };
+	}
+
+	/** Hold the operator Event's Theme as read or announced, unless the same Theme is held at a newer revision. */
+	function holdEventTheme(theme: ScreenOutputTheme) {
+		const held = eventTheme.value;
+		if (held?.id === theme.id && held.revision >= theme.revision)
+			return;
+		eventTheme.value = theme;
 	}
 
 	function applyRemoteTalentCreated(data: MessageData<'talent:created'>) {
@@ -452,6 +484,7 @@ export const useEventStore = defineStore('event', () => {
 		activeLoads.clear();
 		event.value = null;
 		outputEvent.value = null;
+		eventTheme.value = null;
 		error.value = null;
 		loading.value = false;
 	}
@@ -460,6 +493,7 @@ export const useEventStore = defineStore('event', () => {
 		// State
 		event,
 		outputEvent,
+		eventTheme,
 		eventsList,
 		loading,
 		error,
@@ -481,6 +515,8 @@ export const useEventStore = defineStore('event', () => {
 		removeTalent,
 		deleteEvent,
 		applyRemoteUpdated,
+		applyRemoteThemeUpdated,
+		holdEventTheme,
 		applyRemoteTalentCreated,
 		applyRemoteTalentUpdated,
 		applyRemoteTalentDeleted,

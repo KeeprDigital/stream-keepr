@@ -1,21 +1,49 @@
 <script setup lang="ts">
-import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import type { ScreenOutputHeadToHeadEarlierMatch } from '~~/shared/types/screenOutputReads';
+import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { screen } = useScreenContext();
 const { config, error, isEmpty, firstMeeting, headerText, player1, player2, earlierMatches, formatRecord } = useHeadToHeadModeData();
 
-const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
-const primaryTextStyle = computed(() => screenConfig.value.primaryTextColor
-	? { color: screenConfig.value.primaryTextColor }
-	: {});
-const secondaryTextStyle = computed(() => screenConfig.value.secondaryTextColor
-	? { color: screenConfig.value.secondaryTextColor }
-	: { opacity: '0.75' });
-const displayStyle = computed(() => ({
-	'--broadcast-table-primary-text': screenConfig.value.primaryTextColor ?? '#ffffff',
-	'--broadcast-table-secondary-text': screenConfig.value.secondaryTextColor ?? 'rgba(255, 255, 255, 0.72)',
-}));
+const primaryTextStyle = {
+	color: modeTokenVar('head-to-head', 'primary-text'),
+};
+const secondaryTextStyle = {
+	color: modeTokenVar('head-to-head', 'secondary-text'),
+};
+const titleStyle = {
+	...modeTypographyStyle('head-to-head', 'title-typography'),
+	color: modeTokenVar('head-to-head', 'title-text'),
+};
+const titleDividerStyle = {
+	borderBottomColor: modeTokenVar('head-to-head', 'title-divider'),
+};
+const nameStyle = {
+	...modeTypographyStyle('head-to-head', 'name-typography'),
+	...primaryTextStyle,
+};
+const labelStyle = {
+	...modeTypographyStyle('head-to-head', 'label-typography'),
+	...secondaryTextStyle,
+};
+/** Over the shared header row's own face, colour and rule. */
+const listTitleStyle = {
+	...labelStyle,
+	borderBottomColor: modeTokenVar('head-to-head', 'row-divider'),
+};
+/** On each row too, over the shared row chrome's own line height. */
+const rowStyle = {
+	...modeTypographyStyle('head-to-head', 'row-typography'),
+	borderBottomColor: modeTokenVar('head-to-head', 'row-divider'),
+};
+const surfaceStyle = {
+	backgroundColor: modeTokenVar('head-to-head', 'surface'),
+};
+
+/** Set on the root, over the shared broadcast table chrome's own colour and face. */
+const displayStyle = {
+	...modeTypographyStyle('head-to-head', 'row-typography'),
+	color: modeTokenVar('head-to-head', 'primary-text'),
+};
 
 const players = computed(() => [player1.value, player2.value]);
 
@@ -38,25 +66,25 @@ function outcomeLabel({ outcome }: ScreenOutputHeadToHeadEarlierMatch): string {
 		:empty="isEmpty"
 	>
 		<div class="head-to-head-display broadcast-table-display flex flex-col h-full w-full" :style="displayStyle">
-			<div v-if="config.showHeader" class="head-to-head-header broadcast-table-title">
-				<h2 :style="primaryTextStyle">
+			<div v-if="config.showHeader" class="head-to-head-header broadcast-table-title" :style="titleDividerStyle">
+				<h2 :style="titleStyle">
 					{{ headerText }}
 				</h2>
 			</div>
 
 			<div class="head-to-head-players">
 				<template v-for="(side, index) in players" :key="index">
-					<div v-if="index === 1" class="versus" :style="secondaryTextStyle">
+					<div v-if="index === 1" class="versus" :style="labelStyle">
 						vs
 					</div>
 					<div class="head-to-head-player" :class="`player-${index + 1}`">
-						<div class="name" :style="primaryTextStyle">
+						<div class="name" :style="nameStyle">
 							{{ side?.name ?? 'TBD' }}
 						</div>
 						<div v-if="side?.pronouns" class="pronouns" :style="secondaryTextStyle">
 							{{ side.pronouns }}
 						</div>
-						<div v-if="side" class="stats broadcast-table-numeric" :style="secondaryTextStyle">
+						<div v-if="side" class="stats" :style="secondaryTextStyle">
 							<span v-if="formatRecord(side)" class="record">{{ formatRecord(side) }}</span>
 							<span v-if="side.points != null" class="points">{{ side.points }} pts</span>
 						</div>
@@ -73,22 +101,23 @@ function outcomeLabel({ outcome }: ScreenOutputHeadToHeadEarlierMatch): string {
 				</template>
 			</div>
 
-			<div class="head-to-head-earlier-matches broadcast-table-surface">
-				<p v-if="firstMeeting" class="first-meeting" :style="secondaryTextStyle">
+			<div class="head-to-head-earlier-matches broadcast-table-surface" :style="surfaceStyle">
+				<p v-if="firstMeeting" class="first-meeting" :style="labelStyle">
 					First meeting
 				</p>
 				<template v-else-if="earlierMatches.length > 0">
-					<p class="earlier-matches-title broadcast-table-header-row">
+					<p class="earlier-matches-title broadcast-table-header-row" :style="listTitleStyle">
 						Earlier Matches
 					</p>
 					<div
 						v-for="earlierMatch in earlierMatches"
 						:key="earlierMatch.matchId"
 						class="earlier-match broadcast-table-row"
+						:style="rowStyle"
 					>
 						<span class="round" :style="secondaryTextStyle">{{ earlierMatch.roundName }}</span>
 						<span class="winner" :style="primaryTextStyle">{{ outcomeLabel(earlierMatch) }}</span>
-						<span class="score broadcast-table-numeric">{{ earlierMatch.gameScore }}</span>
+						<span class="score">{{ earlierMatch.gameScore }}</span>
 					</div>
 				</template>
 			</div>
@@ -115,33 +144,26 @@ function outcomeLabel({ outcome }: ScreenOutputHeadToHeadEarlierMatch): string {
 	text-align: right;
 }
 .name {
-	font-size: clamp(1.75rem, 3.5vw, 3rem);
-	font-weight: 800;
-	line-height: 1.05;
+	font-size: clamp(1.75rem, 3.5cqw, 3rem);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	max-width: 100%;
 }
 .pronouns {
-	font-family: var(--font-body);
-	font-size: clamp(0.875rem, 1.3vw, 1.25rem);
+	font-size: clamp(0.875rem, 1.3cqw, 1.25rem);
 }
 .stats {
 	display: flex;
 	gap: 1.25rem;
-	font-size: clamp(1.125rem, 2vw, 1.75rem);
-	font-weight: 700;
+	font-size: clamp(1.125rem, 2cqw, 1.75rem);
+	font-variant-numeric: tabular-nums;
 }
 .deck {
-	font-size: clamp(1rem, 1.8vw, 1.5rem);
-	font-weight: 600;
+	font-size: clamp(1rem, 1.8cqw, 1.5rem);
 }
 .versus {
-	font-family: var(--font-mono);
-	font-size: clamp(1.25rem, 2.5vw, 2rem);
-	font-weight: 900;
-	text-transform: uppercase;
+	font-size: clamp(1.25rem, 2.5cqw, 2rem);
 }
 .head-to-head-earlier-matches {
 	padding: 0 1.5rem 1rem;
@@ -155,24 +177,22 @@ function outcomeLabel({ outcome }: ScreenOutputHeadToHeadEarlierMatch): string {
 	gap: 1rem;
 	align-items: center;
 	padding: 0.75rem 0;
-	font-size: clamp(1rem, 1.8vw, 1.5rem);
+	border-bottom-style: solid;
+	border-bottom-width: 1px;
+	font-size: clamp(1rem, 1.8cqw, 1.5rem);
 }
 .winner {
-	font-weight: 700;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 .score {
-	font-weight: 900;
+	font-variant-numeric: tabular-nums;
 	justify-self: end;
 }
 .first-meeting {
 	padding: 1rem 0;
 	text-align: center;
-	font-size: clamp(1.25rem, 2.5vw, 2rem);
-	font-weight: 800;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
+	font-size: clamp(1.25rem, 2.5cqw, 2rem);
 }
 </style>

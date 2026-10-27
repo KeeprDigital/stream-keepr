@@ -7,6 +7,7 @@ import type { ScreenCardDataHealth, ScreenPresenceData } from '~/types/screen';
 import type { Flight } from '~/utils/guardedSequence';
 import { useIntervalFn } from '@vueuse/core';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue';
+import { eventCanvasOf } from '~~/shared/eventCanvas';
 import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import {
 	parseScreenEmbed,
@@ -14,6 +15,7 @@ import {
 	screenOutputAssetCapabilityFromHash,
 	screenOutputBackground,
 } from '~~/shared/utils/screenOutput';
+import { holdsSelectedTheme } from '~~/shared/utils/screenOutputEvent';
 import { useRoute } from '#app';
 import { useRealtime } from '~/composables/core/useRealtime';
 import { useReconnectResync } from '~/composables/core/useReconnectResync';
@@ -196,6 +198,10 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	 * operator learns about the degradation beside the controls instead.
 	 */
 	const cardDataHealth = ref<ScreenCardDataHealth>('complete');
+	/** The Event's Theme, as its Event context carries it and `theme:updated` keeps it. */
+	const themeTokens = computed(() => eventStore.outputEvent?.theme?.tokens);
+	/** The Event Canvas, as the Event context carries it and `event:updated` keeps it. */
+	const eventCanvas = computed(() => eventCanvasOf(eventStore.outputEvent));
 	const screenContext: ScreenContext = {
 		screen: activeScreen,
 		eventId,
@@ -208,6 +214,8 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		previewSafeAreas,
 		assetCapability,
 		cardDataHealth,
+		themeTokens,
+		eventCanvas,
 	};
 
 	watch(isControlScreen, (isControl) => {
@@ -309,8 +317,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		if (!container)
 			return;
 
-		const width = screenStore.activeScreen.screenConfig?.width ?? container.offsetWidth;
-		const height = screenStore.activeScreen.screenConfig?.height ?? container.offsetHeight;
+		const { width, height } = eventCanvas.value;
 		const output = outputMode.value;
 
 		try {
@@ -649,6 +656,40 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			void resumeLoad(readScope(evtId, held.id));
 	}
 
+	/*
+	 * A Theme switch arrives as `event:updated`, which names the new Theme and
+	 * carries none of its tokens; an Event context naming a Theme it does not
+	 * hold re-reads, and renders the held one until the answer lands. A re-read
+	 * that fails is retried on the slow cadence, since nothing else retries it
+	 * while the connection stays up.
+	 */
+	const selectedThemeDue = computed(() => !!loadedOn.value && !!eventStore.outputEvent && !holdsSelectedTheme(eventStore.outputEvent));
+	/** The slow retry of a switch's re-read that failed, while the connection stays up. */
+	let selectedThemeRetry: ReturnType<typeof setTimeout> | null = null;
+
+	function cancelSelectedThemeRetry() {
+		if (selectedThemeRetry)
+			clearTimeout(selectedThemeRetry);
+		selectedThemeRetry = null;
+	}
+
+	async function rereadSelectedTheme() {
+		cancelSelectedThemeRetry();
+		const loaded = loadedOn.value;
+		if (!selectedThemeDue.value || !loaded)
+			return;
+		await rereadOutputEvent(loaded, recoveries.begin());
+		if (selectedThemeDue.value && loadedOn.value === loaded && !selectedThemeRetry)
+			selectedThemeRetry = setTimeout(() => void rereadSelectedTheme(), SCREEN_OUTPUT_LOAD_RETRY_MS);
+	}
+
+	watch(selectedThemeDue, (due) => {
+		if (due)
+			void rereadSelectedTheme();
+		else
+			cancelSelectedThemeRetry();
+	});
+
 	// A loaded rendering hears its Screen's announcements on the Event channel.
 	// One not loaded listens on none — its Event context, which names the channel,
 	// may be what failed — so the connection coming back retries it.
@@ -681,6 +722,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	onBeforeUnmount(async () => {
 		loads.supersede();
 		forgetLoad();
+		cancelSelectedThemeRetry();
 		stopListeningDuringLoad();
 		await screenRealtimeSession.stop();
 	});

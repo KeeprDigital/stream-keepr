@@ -13,14 +13,14 @@ A competitive gaming tournament managed by Stream Keepr.
 A segment of an Event structure, such as Swiss or Top Cut.
 
 **Round**:
-A unit of tournament play within a Phase, containing Matches and optional tournament-state metadata synced from Melee. A Melee-managed Round is complete when every Match stored from Melee in it has a Match Result (reported or a bye), or when the next Melee-managed Round in the Event's Round order has pairings: Rounds run strictly in sequence, so pairing the next one means this one is done. Completion is derived from synced data; no operator completes a Round (ADR-0049).
+A unit of tournament play within a Phase, containing Matches and optional tournament-state metadata synced from Melee. A Melee-managed Round is complete when every Match stored from Melee in it has a Match Result (reported or a bye), or when the next Melee-managed Round in the Event's Round order has pairings: Rounds run strictly in sequence, so pairing the next one means this one is done. Completion is derived from synced data; no operator completes a Round (ADR-0052).
 
 **Current Round**:
-The latest Melee-managed Round, in the Event's Round order (Phase sort order, round number, id), that has pairings: at least one Match stored from Melee. None before any Round is paired. Derived from stored Matches, never set by an operator (ADR-0049).
+The latest Melee-managed Round, in the Event's Round order (Phase sort order, round number, id), that has pairings: at least one Match stored from Melee. None before any Round is paired. Derived from stored Matches, never set by an operator (ADR-0052).
 _Avoid_: active Round, live Round.
 
 **Match**:
-A pairing between Players in a Round, with its Match Result and the records used for standings and broadcast workflows. Each side's record is its Player's Round Standings after the Round once it is complete, and going into it (the previous Round's) while it is played (ADR-0049).
+A pairing between Players in a Round, with its Match Result and the records used for standings and broadcast workflows. Each side's record is its Player's Round Standings after the Round once it is complete, and going into it (the previous Round's) while it is played (ADR-0052).
 _Avoid_: Feature Match when referring to the pairing.
 
 **Match Result**:
@@ -31,7 +31,7 @@ _Avoid_: score, for the whole result.
 A Match's game wins and game draws read from one of its Players' side, theirs first: 2-1, or 1-1-1 with a game draw. Every reported Match that is not a bye has one; a bye or an unreported Match has none.
 
 **Round Standings**:
-The standings for Players as of a specific Round, including that Round's results. Melee Sync stores them only once the Round is complete, so while a Round is played the latest Round Standings are the previous Round's (ADR-0049).
+The standings for Players as of a specific Round, including that Round's results. Melee Sync stores them only once the Round is complete, so while a Round is played the latest Round Standings are the previous Round's (ADR-0052).
 
 **Position Change**:
 How many positions a Player moved since the previous Round's Round Standings: the nearest earlier Round, in the Event's Round order (Phase sort order, then round number), that holds Round Standings. Current standings stand as the latest Round holding them, so they compare with the one before it. A Player absent from that Round is new; with no such Round, or no position to compare, there is no Position Change. Derived from stored Round Standings, never imported.
@@ -75,7 +75,7 @@ _Avoid_: top-cut rate, cash rate, qualification rate
 The workflow that imports and refreshes Event structure, Players, Deck Lists, standings, Matches, and Rounds from Melee.gg. An operator runs it from the Sync page; Live Results runs its Round sync on a schedule. One Melee Sync command runs per Event at a time; an operator's command takes over from a Live Results tick instead of waiting for it.
 
 **Live Results**:
-A per-Event setting, off by default and on only while Melee Sync is on, under which Melee Sync polls Melee.gg each minute for the Current Round's Match Results, and for the next Round's pairings once the Current Round is complete. It announces only what changed and switches itself off after 12 hours with no change or when Melee refuses its credentials. Its failures are its own Live Results error, apart from the manual sync's (ADR-0049).
+A per-Event setting, off by default and on only while Melee Sync is on, under which Melee Sync polls Melee.gg each minute for the Current Round's Match Results, and for the next Round's pairings once the Current Round is complete. It announces only what changed and switches itself off after 12 hours with no change or when Melee refuses its credentials. Its failures are its own Live Results error, apart from the manual sync's (ADR-0052).
 _Avoid_: auto-sync, polling, when naming the setting.
 
 **Provenance**:
@@ -142,7 +142,7 @@ A rendering mode for a Screen, such as Background, Card Spotlight, Deck List, St
 _Avoid_: Top Cards for the Most Played Cards mode (one word from Top Cut); Feature Match for the control mode (the on-air one is the Feature Match Overlay).
 
 **Screen Mode Definition**:
-The definition of a Screen Mode: its defaults and configuration shape (held as one config contract, ADR-0037, which also names its Authored Stacks), data preparation, rendering contract, Screen host contract (overlay or control surface; how width, height, padding, background, alignment, viewport-fit scaling, and theme apply), and what it declares it carries, such as its own Background Layer stack, its Event References, or its Page Rotation. A mode that declares it carries something gets all of that thing's behaviour from the declaration alone. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.
+The definition of a Screen Mode: its defaults and configuration shape (held as one config contract, ADR-0037, which also names its Authored Stacks), data preparation, rendering contract, Screen host contract (overlay or control surface), and what it declares it carries, such as its Mode Tokens, its own Background Layer stack, its Event References, or its Page Rotation. A mode that declares it carries something gets all of that thing's behaviour from the declaration alone. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.
 
 **Event Reference**:
 A field in a Screen Mode's configuration naming something that must belong to the Screen's Event: a Phase, a Round, a Player, a Player List, a Feature Match Slot, an Archetype, or a Deck Source. Every Screen Mode Definition declares its Event References, declaring none if it has none, and a Screen write refuses one naming something outside the Event (ADR-0038).
@@ -160,11 +160,11 @@ A Screen Mode rendering an ordered stack of Background Layers (ADR-0016).
 _Avoid_: Idle screen, empty state
 
 **Background Layer**:
-One entry in an ordered Background Layer stack — a colour, gradient, image, video, or Animation Effect — owning its own enabled state and opacity. The Background Screen's configuration is such a stack, and every mode whose Screen Mode Definition declares one carries its own optional stack behind its content. Every plain overlay mode declares one; the graphics hosts do not, as they own their backgrounds and keep their outputs transparent.
+One entry in an ordered Background Layer stack — a colour, gradient, image, video, or Animation Effect — owning its own enabled state and opacity. The Background Screen's configuration is such a stack, and every mode whose Screen Mode Definition declares one carries its own optional stack behind its content. Every plain overlay mode declares one; the graphics hosts do not, as they own their backgrounds and keep their outputs transparent. A Screen whose stack is empty paints its Theme's `background` Foundation Token, a stack of the same layers.
 _Avoid_: background type, media background (when meaning a layer)
 
 **Screen Media Source**:
-Where a Screen's own image or video comes from: one exact Graphic Asset Revision, referenced like any other Graphic Asset, or a Remote Media URL. Image and video Background Layers and the Feature Match Overlay Frame's image and video take one; Graphic Items and Graphic Inputs never do, as their media is Graphics Asset Library content only (ADR-0021).
+Where a Screen's own image or video comes from: one exact Graphic Asset Revision, referenced like any other Graphic Asset, or a Remote Media URL. Image and video Background Layers, a Theme's `background` stack's included, and the Feature Match Overlay Frame's image and video take one; Graphic Items and Graphic Inputs never do, as their media is Graphics Asset Library content only (ADR-0021).
 _Avoid_: media URL, asset source
 
 **Remote Media URL**:
@@ -174,10 +174,6 @@ _Avoid_: hotlink, external asset
 **Animation Effect**:
 A named, autonomously animating background renderer that ships with Stream Keepr, with its own per-effect configuration. Its hosts are the Feature Match Overlay Frame, a Background Layer (on the Background Screen and every plain overlay mode), and the Broadcast Graphics Background; the vocabulary is closed, so a config or package naming an unimplemented effect is refused rather than approximated (ADR-0014).
 _Avoid_: Vanta effect, frame animation, shader background, background effect
-
-**Animation Effect Preset**:
-A user-created, installation-scoped, named Animation Effect selection: one effect and its parameters, with no host enabled state, opacity, or identity. Applying one copies it into the host as an independent value with no update link.
-_Avoid_: Animation Effect Template, linked effect style
 
 **Page Rotation**:
 The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time, computed identically by every rendering (ADR-0009). A paginated Screen Mode Definition declares it, naming its page size field; an edit of the page size or page duration changes the rotation's shape, restarting it from page 1 (ADR-0039).
@@ -224,7 +220,7 @@ A control surface's own live rendering of the Screen it drives. It composes what
 _Avoid_: Preview — which composes the authored state its embedder pushes in and resolves media as the author. Confidence monitor.
 
 **Screen Output Asset Capability**:
-An opaque, long-lived, revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions its Screen currently publishes, never Graphics Asset Library discovery. It is also the output's whole identity to the installation: it admits the lookup of its Screen, the reads of what that Screen publishes — its Event context and its mode's data, derived from the Screen's saved configuration — and a realtime grant narrowed to that Screen and its Event, in place of a Session (ADR-0010, ADR-0022).
+An opaque, long-lived, revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions its Screen currently publishes, its resolved Theme Tokens' included (ADR-0050), never Graphics Asset Library discovery. It is also the output's whole identity to the installation: it admits the lookup of its Screen, the reads of what that Screen publishes — its Event context and its mode's data, derived from the Screen's saved configuration — and a realtime grant narrowed to that Screen and its Event, in place of a Session (ADR-0010, ADR-0022).
 
 ### Client and live-state infrastructure
 
@@ -306,6 +302,47 @@ Whoever presents the installation's shared administrator credential, authorised 
 **Graphics Authoring Lease**:
 The exclusive, Session-scoped right to edit one graphics authoring artifact: a Screen's complete graphics Edit workspace or one reusable graphics Template. Other Sessions may observe accepted changes but cannot modify the leased artifact.
 
+### Theming
+
+**Theme**:
+A named, installation-scoped set of Theme Token values giving every Screen of an Event one look and feel, whatever its Screen Mode. It holds values, never compositions: it may supply a logo a Broadcast Graphic shows, but the Broadcast Graphic itself is a template's. An Event uses one Theme; a Theme may serve many Events. An edit reaches every Screen using it at once, with no draft or publish step. It themes what Screens render, never the operator app.
+_Avoid_: Style Set, brand, skin, palette (when naming the whole)
+
+**Default Theme**:
+The built-in Theme that ships with Stream Keepr, used by every Event that picks no Theme. It is read-only: it cannot be edited or deleted.
+_Avoid_: base theme, fallback theme
+
+**Theme Token**:
+One named value a Screen may consume from its Theme, such as a colour, font, or Graphic Asset. Stream Keepr owns every token's name, type, and where it may be consumed; users set values, never names.
+_Avoid_: variable, style entry
+
+**Foundation Token**:
+A Theme Token naming an application-wide role any Screen Mode may consume, such as the accent colour, the heading font, or the screen inset. Every one has a default value shipped with Stream Keepr.
+
+**Mode Token**:
+A Theme Token a Screen Mode Definition declares for its own rendering, such as a Standings row's surface. Its default is a Foundation Token, so a new Screen Mode follows every existing Theme unchanged. Where no Foundation Token fills its role, such as a badge shadow's colour or Card Spotlight's zoom, it defaults to a literal.
+_Avoid_: component token
+
+**Screen Theme Override**:
+A Screen's own value for one Theme Token, used by that Screen in place of its Theme's. Clearing it returns the Screen to the Theme's value.
+_Avoid_: local style, pin
+
+**Event Canvas**:
+The pixel coordinate space every Screen of an Event is authored and rendered in, default 1920 × 1080. A Screen Output scales it uniformly to fit its window, so output resolution is not the canvas's to set.
+_Avoid_: screen size, resolution
+
+**Event Presentation Settings**:
+What an Event sets once for every Screen it has: its Theme, its Event Canvas, and its on-air wording and formatting, such as the record separator, position format, holding text, and Untimed Label. Wording stays here rather than in the Theme, so a Theme can serve Events that word things differently.
+_Avoid_: on-air formatting (when naming the whole group)
+
+**Screen Mode Sample Dataset**:
+One fixed canonical set of Event Data a Theme preview renders every Screen Mode against, with the card data its cards are drawn with, a Screen Card, and one built-in Theme-bound Broadcast Graphic on air. That graphic is no Broadcast Graphic Template. Like the Feature Match Sample Dataset, it never appears on a live Screen Output.
+_Avoid_: dummy data, test data
+
+**Graphic Theme Binding**:
+A Graphic Item property group, or a Broadcast Graphic's enter, update or exit recipe, that names one whole Foundation Token of its type rather than holding its own value: a typography, a text or icon colour, a Graphic Surface Style, a Graphic Fill, a Shape Geometry, a Graphic Animation Recipe, or a Media Graphic Item's picture, from an asset token such as the logo. The compositor paints it from the Screen's resolved Theme. Detaching copies the resolved value in as the property's own; binding replaces it; editing it detaches it.
+_Avoid_: style reference, pin, override, Graphic Input Binding (which maps a Graphic Input to Event Data)
+
 ### Broadcast Graphics
 
 **Broadcast Graphics Screen**:
@@ -383,23 +420,7 @@ The default-on, on-air-only progression of a Social Profile Projection through i
 **Social Profile Transition**:
 The synchronized visual change between profiles in a Social Profile Rotation: Cut, Crossfade, Slide Left, Slide Right, Slide Up, or Slide Down, lasting 100–2,000 ms (default 250). A newer target replaces rather than queues; an explicit Update Graphic uses its own update animation instead.
 
-### Graphic Style Sets and Template Packages
-
-**Graphic Style Set**:
-A named reusable authoring resource, shared across the graphics template libraries, holding Graphic Style Set Entries that keep a cohesive visual and motion language across Broadcast Graphic Templates and Feature Match Layout Templates. Events consume but never own one.
-Its entry kinds are palette (each one a Palette Entry), typography, Graphic Fill, Graphic Surface Style, media treatment, Shape Geometry, and Graphic Animation Recipe. It never holds Graphic Item trees, layout structure, or Graphics Asset Library content; typography references application fonts only (ADR-0001).
-Edits accumulate in a working draft and become a Style Set revision only through an explicit atomic publish (deleting a published entry is the one exception). Linked templates receive an update to review and apply as a new template revision, preserving their property-level overrides; placed graphics never change automatically.
-
-**Graphic Style Set Entry**:
-One named, bounded value in a Graphic Style Set that templates link to rather than copy, so a published change reaches them as a reviewable update.
-_Avoid_: Preset — which initialises a value by copying it, with no link.
-
-**Palette Entry**:
-A Graphic Style Set Entry holding one freely named colour, with no opacity and no fixed role: the consuming property owns opacity, and what the colour does is decided by whatever references it. Every other colour-bearing entry, such as a typography, Graphic Fill or Graphic Surface Style entry, stores a Palette Entry's id rather than a colour, so a brand colour changed once reaches every entry linking to it.
-_Avoid_: palette colour (the colour a Palette Entry holds, not the entry), colour role (the palette is open-ended and assigns none).
-
-**Graphic Style Set Package**:
-A single-Style-Set portable `.skstyle` archive, carrying one published revision and no templates or asset files; it declares the application fonts it needs and a receiver missing one refuses it. It follows the Template Package principles; an import never field-merges and may always install as an independent copy.
+### Template Packages
 
 **Template Package**:
 A single-template portable artifact transferring one Broadcast Graphic Template or one Feature Match Layout Template. Both kinds share the envelope, asset handling, validation, migration, conflict, and atomic installation contract while keeping separate payloads, libraries, and workflows.
@@ -450,7 +471,7 @@ The normal, warning, critical, or full state derived from use of the Canonical G
 A stable-identity library resource for a validated image, silent video, or font, owned by the installation-wide Graphics Asset Library and reusable across Events. Events may associate with or reference one but never own it.
 
 **Retired Graphic Asset**:
-A Graphic Asset hidden from discovery and unavailable for new references while existing references keep resolving. An asset a saved template references cannot be retired (ADR-0034). It may be restored.
+A Graphic Asset hidden from discovery and unavailable for new references while existing references keep resolving. An asset a saved template, a Theme or a Screen Theme Override references cannot be retired (ADR-0034, ADR-0050). It may be restored.
 
 **Trashed Graphic Asset**:
 An unreferenced Graphic Asset removed from discovery and new references, restorable for 30 days; afterwards it is purged only after a fresh proof that no reference points to any revision.
@@ -591,7 +612,7 @@ The behaviour when the text of a Text Graphic Item, Clock Graphic Item, or Playe
 A Graphic Item rendering an image or silent video with a Media Fit, focal position, opacity, and optional Shape Geometry clipping. Video has playback-rate and looping controls and starts from the beginning when its Broadcast Graphic enters.
 
 **Media Fit**:
-How an image or video fills the box it is drawn in: cover, contain, or fill. One vocabulary shared by Media Graphic Items, media treatment Graphic Style Set Entries, image and video Background Layers, and the Feature Match Overlay Frame's image and video.
+How an image or video fills the box it is drawn in: cover, contain, or fill. One vocabulary shared by Media Graphic Items, image and video Background Layers, and the Feature Match Overlay Frame's image and video.
 _Avoid_: object fit, scaling mode
 
 **Shape Graphic Item**:
@@ -667,7 +688,7 @@ The authored arrangement a Feature Match Overlay renders: the Frame, its Source 
 _Avoid_: Overlay config
 
 **Feature Match Overlay Frame**:
-The continuous graphic area of a Feature Match Layout behind and around its Layout Items.
+The continuous graphic area of a Feature Match Layout behind and around its Layout Items. Its fill, border, glow, Animation Effect and the media its Theme adds beneath its own are the Feature Match Overlay's Mode Tokens; the layout holds its opacity, its own image and video, and which edges its border runs along.
 _Avoid_: Panel area, background panel
 
 **Feature Match Layout Item**:
@@ -675,7 +696,7 @@ A Graphic Item placed in a Feature Match Layout; layouts use the shared Graphic 
 _Avoid_: Region
 
 **Source Item**:
-A host-owned Feature Match Overlay element placing an external video source, with optional Frame cutout and source framing style. It is not a Graphic Item and lives in the layout's own Source Item list.
+A host-owned Feature Match Overlay element placing an external video source, with optional Frame cutout and source framing: its corner radii, border sides and glow position. Its fill, border and glow are the Feature Match Overlay's Source Item surface Mode Token. It is not a Graphic Item and lives in the layout's own Source Item list.
 _Avoid_: Source Region, camera box, Source Graphic Item
 
 **Feature Match Overlay Preset**:
@@ -687,7 +708,7 @@ A user-created reusable Feature Match Layout that can be copied into a Screen's 
 _Avoid_: Preset when referring to user-owned reusable layouts.
 
 **Feature Match Layout Host Vocabulary**:
-The terms a Feature Match Layout uses whose meaning the installation supplies: Source Roles, the Frame's Animation Effect, and Feature Match tokens a Graphic Text Template binds. Each is closed and pinned by the layout format version, so a package naming an unimplemented term is refused.
+The terms a Feature Match Layout uses whose meaning the installation supplies: Source Roles and Feature Match tokens a Graphic Text Template binds. Each is closed and pinned by the layout format version, so a package naming an unimplemented term is refused. The Frame's Animation Effect was one until it became a Mode Token; its identity is still recognised.
 _Avoid_: Free-form role, camera name
 
 **Feature Match Sample Dataset**:
@@ -702,7 +723,7 @@ _Avoid_: Dummy data, test data
 - **Players**, **Phases**, **Rounds**, **Matches**, **Feature Match Slots**, and **Deck Lists** carry **Provenance** when they originate from **Melee Sync**
 - A **Phase** contains ordered **Rounds**; a **Round** contains zero or more **Matches** and **Feature Match Assignments**, and may have **Round Standings**
 - **Melee Sync** never removes a manual **Round** or **Match**: an imported **Phase** or **Round** that leaves Melee.gg, or that a Melee data reset would remove, while holding one is kept as a manual one, its **Provenance** cleared, and the operator is told which (ADR-0040)
-- **Live Results** polls only the **Current Round**, or probes the next **Round** once it is complete; a **Round**'s **Round Standings** are stored only once it is complete, on every **Melee Sync** path (ADR-0049)
+- **Live Results** polls only the **Current Round**, or probes the next **Round** once it is complete; a **Round**'s **Round Standings** are stored only once it is complete, on every **Melee Sync** path (ADR-0052)
 - A **Match Result** comes only from **Melee Sync**; a manual **Match**, including one kept under ADR-0040, has none, and no Player's record, history, Head-to-Head or **Top Cut Bracket** reads one an operator entered (ADR-0047)
 - A **Feature Match Slot** belongs to exactly one **Event** and may reference at most one current **Match**
 - A **Feature Match Assignment** connects exactly one **Match** to exactly one **Feature Match Slot** for exactly one **Round**, and may have one **Feature Match Note**
@@ -721,7 +742,7 @@ _Avoid_: Dummy data, test data
 - At the same authoritative time, every graphics **Screen Output** resolves the same composition and animation phase; a late-loading or reconnected one catches up rather than replaying
 - The **Feature Match Overlay**'s Sideboard reveal is the host-local exception: each output plays the **Deck List Graphic Item**'s authored enter or exit on its own clock from when it observes the reveal flag change, so outputs agree within realtime skew rather than at one authoritative time. First load and reload render the settled frame; an output that was disconnected across the change plays the motion late on **Reconnect Resync** rather than catching up (ADR-0015)
 - Application-level output alignment does not promise hardware genlock between browser windows or capture devices
-- A **Screen Output** renders its canvas scaled uniformly to fit its window, letterboxed, whenever its **Screen Mode Definition** registers viewport-fit scaling
+- A **Screen Output** renders its **Event Canvas** scaled uniformly to fit its window, letterboxed, whenever its **Screen Mode Definition** registers viewport-fit scaling
 - Every realtime-fed surface re-reads authoritative state on **Reconnect Resync**; a reconnected **Screen Output** renders the current **Screen Mode** without waiting for the next change
 - A **Screen Output** whose realtime link is disconnected holds its last accepted rendering rather than blanking
 - A client that cannot mint a realtime token for its **Event** re-attempts, and reports a persistent failure where an operator can see it
@@ -734,6 +755,22 @@ _Avoid_: Dummy data, test data
 - **Screen Outputs** and authoring run on Chromium, the only engine transparent video is supported on; another browser may flatten its alpha, and nothing detects or refuses it (ADR-0020)
 - **Broadcast Graphics Screen** and **Feature Match Overlay** previews share output selection, zoom, item selection, guides, and advisory action-safe (5%) and title-safe (10%) guides; guides never appear in live **Screen Outputs** and never clip items
 
+### Theming
+
+- An **Event** uses exactly one **Theme**; an Event that chose none uses the **Default Theme**, which ships with Stream Keepr and cannot be edited or deleted
+- A **Theme** in use by any **Event** cannot be deleted, and the refusal names those Events
+- A **Theme** stores only the **Theme Tokens** it sets; every other token reads its shipped default
+- A **Foundation Token** holds a value, in which a fill's, surface's or background colour layer's colour may name a colour **Foundation Token**; a **Mode Token** holds a value or names a **Foundation Token** of its type; nothing names a **Mode Token**, and a colour names nothing, so every token resolves in at most two steps
+- A **Screen** resolves each **Theme Token** from its own **Screen Theme Override**, else its **Event**'s **Theme**, else the token's default; overriding a **Foundation Token** reaches every **Mode Token** and **Graphic Item** on that Screen that names it
+- A **Screen Theme Override** of another mode's **Mode Token** is kept while the **Screen** shows a different **Screen Mode**, and applies again on its return
+- A **Graphic Item** property either names a whole **Foundation Token** of its type or holds its own value; detaching copies the token's resolved value in
+- A typography **Theme Token** carries no size; the consuming **Graphic Item** or **Mode Token** owns it
+- A colour **Theme Token** may be translucent; a consumer's own opacity multiplies it
+- A **Graphic Asset** a **Theme** or **Screen Theme Override** references cannot be retired or trashed, and the refusal names its referrers
+- A **Broadcast Graphic Template** or **Feature Match Layout Template** carries **Graphic Item** token names, never a **Theme**, and renders under whichever Theme it is placed in; its editor previews under a Theme its author picks
+- A **Theme** edit reaches every **Screen Output** of every **Event** using it at once
+- Feature Match Controls consumes no **Theme Token**: it is an operator surface
+
 ### Access
 
 - A **Graphics Ingestion Operation** is owned by the **User** who initiated it; its UUID is a name, not a right, and another user is told it does not exist
@@ -743,8 +780,8 @@ _Avoid_: Dummy data, test data
 ### Broadcast Graphics composition
 
 - A **Broadcast Graphics Screen** has at most one active **Broadcast Graphics Live Session** and renders an ordered stack of zero or more **Broadcast Graphics**
-- A **Broadcast Graphics Screen** owns one configurable pixel canvas (default 1920 × 1080); every **Broadcast Graphic** on it is authored in that coordinate space, and fitting to another viewport scales uniformly without reflow
-- A **Broadcast Graphics Screen** has a transparent host and ignores generic Screen padding, background, and alignment
+- A **Broadcast Graphics Screen** composes in its **Event**'s **Event Canvas**; every **Broadcast Graphic** on it is authored in that coordinate space, and fitting to another viewport scales uniformly without reflow
+- A **Broadcast Graphics Screen** has a transparent host and ignores the Screen inset and alignment Foundation Tokens
 - Concurrent **Broadcast Graphics** composite once into one transparent frame in authored Screen stack order; Take timing and **Graphic Channel** membership never change that order
 - An empty **Broadcast Graphics Screen** is transparent in its **Overlay Output** and black in its **Fill Output** and **Key Output**
 - A **Broadcast Graphic Template** initializes a copy of a **Broadcast Graphic** on a **Broadcast Graphics Screen**
@@ -770,7 +807,7 @@ _Avoid_: Dummy data, test data
 - Graphic Animation presets are authoring shortcuts that initialise editable recipes, not runtime concepts
 - Every recipe operates relative to its owner's **Graphic Resting State**
 - A scale channel uses one **Graphic Animation Origin** and a uniform factor from zero to twice the resting size
-- A slide channel uses one of eight compass directions and a fixed distance (any **Geometry Unit**, measured against its owner's parent: width for east/west, height for north/south, the shorter side for a diagonal; stored in pixels) or the distance needed to clear its owner's parent. A Graphic Animation Recipe **Graphic Style Set Entry** has no owner, so its fixed distance is entered in pixels
+- A slide channel uses one of eight compass directions and a fixed distance (any **Geometry Unit**, measured against its owner's parent: width for east/west, height for north/south, the shorter side for a diagonal; stored in pixels) or the distance needed to clear its owner's parent. A Graphic Animation Recipe held by a **Foundation Token** has no owner, so its fixed distance is entered in pixels
 - A reveal channel wipes from one edge across its owner's rectangular bounds, preserving existing **Shape Geometry** clipping
 - A fade channel reduces opacity from the resting value; fades on a **Broadcast Graphic** and its items compose multiplicatively
 - Easing is linear, ease-in, ease-out, ease-in-out, back-in, back-out, or back-in-out; rotation, skew, perspective, filters, morphing, motion paths, and arbitrary transforms are outside **Graphic Animation**
@@ -831,7 +868,7 @@ _Avoid_: Dummy data, test data
 - Creating, changing, publishing, or transferring a reference requires its exact revision to resolve
 - A **Missing Graphic Asset Reference** stays persisted and diagnosable until repaired, invalidating its owning artifact
 - **Unavailable Graphic Asset Content** fails only operations that currently need its bytes
-- A **Graphic Asset** may be associated with or referenced from several **Events** and by templates, Style Sets, Screens, and placed graphics without per-Event copies; associations organise discovery only
+- A **Graphic Asset** may be associated with or referenced from several **Events** and by templates, Themes, Screens, and placed graphics without per-Event copies; associations organise discovery only
 - Deleting an **Event** removes its associations and references but never deletes or hides shared **Graphic Assets**
 - Graphics authors may discover and reference every **Graphic Asset**; a **Screen Output** may resolve only those its **Screen** publishes
 - A **Broadcast Graphics Screen** publishes the revisions its configuration pins plus the media values its **Broadcast Graphics Live Session** has accepted; a value no longer accepted stops being published as it leaves air
@@ -861,7 +898,7 @@ _Avoid_: Dummy data, test data
 - A recheck that leaves a **Graphics Discrepancy** open reports retryable-unavailable, not already-in-state
 - An **Early Purge** from a **Queue Inspector** requires typed confirmation as well as the fresh all-revision reference proof
 
-### Template Packages and Style Sets
+### Template Packages and template writes
 
 - A Template Package contains only the **Graphic Assets** its single template transitively requires, and its import revalidates their bytes under the receiver's current **Graphic Asset Compatibility Profile**
 - **Template Package Preflight** rejects unsafe or traversing paths, links, colliding or duplicate paths, encrypted or compressed entries, nested archives, undeclared or missing entries, inconsistent sizes, envelope-limit violations, and schemas newer than the installation reads
@@ -871,16 +908,10 @@ _Avoid_: Dummy data, test data
 - A proposal reusing a **Retired Graphic Asset** or **Trashed Graphic Asset** is reported before confirmation and stays retryable, since neither takes new references until restored
 - A later locally created revision never inherits **Graphic Asset Origin** from an imported one
 - An **Installed Graphics Template** owns one ordinary **Graphic Asset Reference** per asset field, so a pinned asset cannot enter Trash
-- Every write of a **Broadcast Graphic Template** or **Feature Match Layout Template**, including a **Graphic Style Set** operation that rewrites it, requires each **Graphic Asset Reference** it holds to name an available revision of an active **Graphic Asset** whose kind fits its slot, including references it already held; a Style Set operation refused for one template writes nothing (ADR-0034)
-- A **Graphic Asset** cannot be retired while any **Broadcast Graphic Template** or **Feature Match Layout Template** references any of its revisions, and the refusal names them; a **Screen**'s or **Installed Graphics Template**'s reference does not hold it back (ADR-0034)
+- Every write of a **Broadcast Graphic Template** or **Feature Match Layout Template** requires each **Graphic Asset Reference** it holds to name an available revision of an active **Graphic Asset** whose kind fits its slot, including references it already held (ADR-0034)
+- A **Graphic Asset** cannot be retired while any **Broadcast Graphic Template**, **Feature Match Layout Template**, **Theme** or **Screen Theme Override** references any of its revisions, and the refusal names them; a **Screen**'s own mode reference or an **Installed Graphics Template**'s does not hold it back (ADR-0034, ADR-0050)
 - A **Template Package Installation** run inside an **Event** associates every asset it created or reused with that Event without changing reused assets' metadata
 - A failed or cancelled installation leaves nothing discoverable
-- A **Broadcast Graphic Template** or **Feature Match Layout Template** links to at most one **Graphic Style Set**, adopted by selecting entries in existing property controls; unselected properties stay local
-- Style Set entries may reference entries in the same set only; Style Sets never inherit or compose
-- A template update is available only when a referenced entry or its dependencies change in resolved style, schema, or asset dependency; applying one is atomic per template and cannot leave references on mixed Style Set revisions
-- Deleting a referenced entry offers atomic replacement with a same-kind entry or detachment by freezing resolved values; deleting a whole Style Set offers detachment only; either succeeds only if every affected template update does
-- Export resolves every used entry into a self-contained snapshot, keeping Style Set identities and revisions as provenance; importing a template never requires or modifies a **Graphic Style Set**, but may explicitly relink to a compatible installed one
-- A **Graphic Style Set Package** import of a newer related revision updates through the ordinary publish and review flow; an older one never downgrades; same identity and revision with different content is a conflict; an installed set never published cannot be updated by import
 
 ### Feature Match Overlay
 

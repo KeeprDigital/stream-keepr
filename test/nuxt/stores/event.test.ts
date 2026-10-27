@@ -243,6 +243,91 @@ describe('useEventStore', () => {
 		});
 	});
 
+	// A rendering holds only a newer write to the Theme its Event uses (ADR-0049).
+	describe('a Theme token write announced to a rendering', () => {
+		const held = {
+			id: 'brand',
+			revision: 3,
+			tokens: { accent: '#111111' },
+		};
+
+		it.each([
+			[
+				'a newer write to its Theme',
+				{
+					...held,
+					revision: 4,
+					tokens: { accent: '#222222' },
+				},
+				1,
+				'#222222',
+			],
+			[
+				'an older write to its Theme',
+				{
+					...held,
+					revision: 2,
+					tokens: { accent: '#222222' },
+				},
+				1,
+				'#111111',
+			],
+			[
+				'a write to another Theme',
+				{
+					id: 'other',
+					revision: 9,
+					tokens: { accent: '#222222' },
+				},
+				1,
+				'#111111',
+			],
+			[
+				'a write announced on another Event',
+				{
+					...held,
+					revision: 4,
+					tokens: { accent: '#222222' },
+				},
+				2,
+				'#111111',
+			],
+		])('applies only %s', (_case, theme, eventId, accent) => {
+			store.setOutputEvent({
+				...createMockEvent({ id: 1, themeId: 'brand' }),
+				theme: held,
+			});
+
+			deliver('theme:updated', { theme }, { eventId });
+
+			expect(store.outputEvent?.theme?.tokens).toEqual({ accent });
+		});
+
+		it('takes the Theme its Event switched to while the switch\'s re-read is out', () => {
+			store.setOutputEvent({
+				...createMockEvent({ id: 1, themeId: 'brand' }),
+				theme: held,
+			});
+			deliver('event:updated', {
+				event: { id: 1, themeId: 'next' },
+			} as never);
+
+			deliver('theme:updated', {
+				theme: {
+					id: 'next',
+					revision: 1,
+					tokens: { accent: '#333333' },
+				},
+			});
+
+			expect(store.outputEvent?.theme).toEqual({
+				id: 'next',
+				revision: 1,
+				tokens: { accent: '#333333' },
+			});
+		});
+	});
+
 	// A write is answered for the Event it was made in; coming back to that Event is a new lifetime too (#606).
 	describe('a mutation answered after the operator switched Events', () => {
 		async function switchTo(event: ReturnType<typeof createEventResponse>) {

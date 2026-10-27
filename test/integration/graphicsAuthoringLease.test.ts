@@ -99,14 +99,6 @@ describe('graphics Authoring Leases', () => {
 		return await request(leasePath(), { method: 'POST', body, cookie }) as { status: number; data: LeaseResponse };
 	}
 
-	async function patchCanvas(cookie: string | undefined, height: number) {
-		return await request(`/api/events/${eventId}/screens/${screenId}/screen-config`, {
-			method: 'PATCH',
-			body: { height },
-			cookie,
-		});
-	}
-
 	async function patchStack(cookie: string | undefined, graphics: BroadcastGraphicConfig[]) {
 		return await request(`/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`, {
 			method: 'PATCH',
@@ -337,44 +329,6 @@ describe('graphics Authoring Leases', () => {
 		expect(live.currentState.player1.lifeTotal).toBe(17);
 	});
 
-	it('refuses an observer\'s resize of the leased Screen canvas', async () => {
-		expect((await askForLease(browserA)).data.lease.writable).toBe(true);
-
-		expect((await patchCanvas(browserA, 1080)).status).toBe(200);
-		expect((await patchCanvas(browserB, 720)).status).toBe(409);
-
-		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
-		expect(screen.screenConfig?.height).toBe(1080);
-	});
-
-	it('leaves every other Screen configuration field open while the canvas is leased', async () => {
-		// The lease covers the canvas, not the route. A generic Screen field is not
-		// part of any graphics Edit workspace and stays open to every operator.
-		await askForLease(browserA);
-
-		expect((await request(`/api/events/${eventId}/screens/${screenId}/screen-config`, {
-			method: 'PATCH',
-			body: { paddingX: 12 },
-			cookie: browserB,
-		})).status).toBe(200);
-	});
-
-	it('never leases the canvas of a Screen that is not in Broadcast Graphics mode', async () => {
-		await askForLease(browserA);
-		const other = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
-			method: 'POST',
-			body: { name: 'Background Screen', slug: 'lease-background-screen', currentMode: 'background' },
-		});
-
-		const resized = await request(`/api/events/${eventId}/screens/${other.id}/screen-config`, {
-			method: 'PATCH',
-			body: { height: 480 },
-			cookie: browserB,
-		});
-
-		expect(resized.status).toBe(200);
-	});
-
 	/**
 	 * The generic Screen write reaches the same artifact by another door (#607).
 	 *
@@ -393,21 +347,6 @@ describe('graphics Authoring Leases', () => {
 			cookie,
 		});
 	}
-
-	it('refuses an observer\'s canvas resize through the generic Screen write', async () => {
-		await askForLease(browserA);
-		expect((await patchCanvas(browserA, 1080)).status).toBe(200);
-		const before = await currentScreen();
-
-		const refused = await patchScreen(browserB, {
-			screenConfig: { ...before.screenConfig, width: 1600 },
-		});
-
-		expect(refused.status).toBe(409);
-		const after = await currentScreen();
-		expect(after.screenConfig).toEqual(before.screenConfig);
-		expect(after.stateVersion).toBe(before.stateVersion);
-	});
 
 	it('refuses an observer\'s stack edit through the generic Screen write', async () => {
 		await askForLease(browserA);
@@ -532,6 +471,5 @@ describe('graphics Authoring Leases', () => {
 			graphic('unleased'),
 		])).status).toBe(200);
 		expect((await authoredStack()).map(entry => entry.id)).toEqual(['unleased']);
-		expect((await patchCanvas(undefined, 900)).status).toBe(200);
 	});
 });

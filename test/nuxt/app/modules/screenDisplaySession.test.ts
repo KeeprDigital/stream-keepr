@@ -36,6 +36,8 @@ function createHarness(options: {
 	screens?: Record<string, ReturnType<typeof createMockScreen>>;
 	exportElementPng?: ReturnType<typeof vi.fn>;
 	setupSession?: (session: ScreenDisplaySession) => void;
+	/** What the Event context read carries beyond its id and name. */
+	outputEvent?: Record<string, unknown>;
 } = {}) {
 	const route = options.route ?? createRoute(options.query);
 	const screens = options.screens ?? {
@@ -80,6 +82,7 @@ function createHarness(options: {
 		event: vi.fn(async (scope: { eventId: number; screenId: number }) => ({
 			id: scope.eventId,
 			name: 'Output Event',
+			...options.outputEvent,
 		})),
 	};
 	const { onContinuityLost, reattach } = createContinuitySignal();
@@ -284,6 +287,48 @@ describe('useScreenDisplaySession', () => {
 		expect(harness.screenStore.activeScreen?.id).toBe(8);
 		expect(harness.realtimeSession.start).toHaveBeenLastCalledWith(42, 8);
 		expect(harness.session.error.value).toBeNull();
+	});
+
+	it('retries the re-read a Theme switch asks for until it holds the new Theme', async () => {
+		vi.useFakeTimers();
+		const harness = createHarness();
+		const brand = { id: 'brand', revision: 1, tokens: {} };
+		const next = {
+			id: 'next',
+			revision: 1,
+			tokens: { accent: '#000000' },
+		};
+		harness.outputReads.event.mockResolvedValueOnce({
+			id: 42,
+			name: 'Output Event',
+			themeId: 'brand',
+			theme: brand,
+		} as never);
+		await vi.advanceTimersByTimeAsync(0);
+		harness.outputReads.event.mockRejectedValueOnce(new Error('503 Service Unavailable'));
+		harness.outputReads.event.mockResolvedValueOnce({
+			id: 42,
+			name: 'Output Event',
+			themeId: 'next',
+			theme: next,
+		} as never);
+
+		// What an `event:updated` naming the new Theme leaves held: its id, and the old Theme's tokens.
+		harness.eventStore.outputEvent = {
+			id: 42,
+			name: 'Output Event',
+			themeId: 'next',
+			theme: brand,
+		};
+		await vi.advanceTimersByTimeAsync(0);
+		expect(harness.outputReads.event).toHaveBeenCalledTimes(2);
+
+		await vi.advanceTimersByTimeAsync(SCREEN_OUTPUT_LOAD_RETRY_MS);
+		expect(harness.outputReads.event).toHaveBeenCalledTimes(3);
+		expect(harness.session.screenContext.themeTokens?.value).toEqual(next.tokens);
+
+		await vi.advanceTimersByTimeAsync(SCREEN_OUTPUT_LOAD_RETRY_MS * 2);
+		expect(harness.outputReads.event).toHaveBeenCalledTimes(3);
 	});
 
 	it('stops retrying once disposed', async () => {
@@ -504,15 +549,12 @@ describe('useScreenDisplaySession', () => {
 		expect(harness.session.showDebug.value).toBe(false);
 	});
 
-	it('download=1 exports with configured dimensions, output filename, and output background', async () => {
-		const screen = createMockScreen({
-			id: 12,
-			slug: 'main',
-			screenConfig: { width: 1920, height: 1080 } as any,
-		});
+	it('download=1 exports at the Event Canvas, with the output filename and background', async () => {
+		const screen = createMockScreen({ id: 12, slug: 'main' });
 		const harness = createHarness({
 			query: { download: '1', output: 'fill' },
 			screens: { main: screen },
+			outputEvent: { canvasWidth: 1280, canvasHeight: 720 },
 			setupSession: (session) => {
 				session.screenContext.overlayContainer.value = sizedElement(100, 50);
 			},
@@ -522,9 +564,9 @@ describe('useScreenDisplaySession', () => {
 		expect(harness.exportElementPng).toHaveBeenCalledWith(
 			harness.session.screenContext.overlayContainer.value,
 			{
-				width: 1920,
-				height: 1080,
-				filename: 'file-main-fill-1920x1080.png',
+				width: 1280,
+				height: 720,
+				filename: 'file-main-fill-1280x720.png',
 				backgroundColor: '#000000',
 			},
 		);

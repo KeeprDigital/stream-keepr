@@ -1,16 +1,10 @@
+import type { MtgCard } from '~/types/card/mtg';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, ref } from 'vue';
-import { mtgCardSizeFromHeight } from '~~/shared/utils/card/size';
 import CardDisplay from '~/components/Mtg/CardDisplay.vue';
 
-const mockCardStore = {
-	setActiveScreen: vi.fn(),
-	loadActiveCard: vi.fn(),
-};
-
-const activeCard = ref<any>(null);
 const overlayContainer = ref<HTMLElement | null>(null);
 const containerHeight = ref(1080);
 
@@ -32,9 +26,6 @@ mockNuxtImport('useScreenContext', () => () => ({
 	overlayContainer,
 }));
 
-mockNuxtImport('useCardStore', () => () => mockCardStore);
-mockNuxtImport('storeToRefs', () => () => ({ activeCard }));
-
 const CardImageStub = defineComponent({
 	props: {
 		card: { type: Object, required: false },
@@ -42,11 +33,21 @@ const CardImageStub = defineComponent({
 	template: '<div data-testid="card-image">{{ card?.name }}</div>',
 });
 
-async function mountComponent() {
+function card(id: string, name: string): MtgCard {
+	return {
+		id,
+		name,
+		displayData: null,
+		imageData: {
+			front: { normal: `https://example.com/${id}.jpg` },
+		},
+	} as unknown as MtgCard;
+}
+
+function mountComponent(shown: MtgCard | null = null) {
 	return mount(CardDisplay, {
 		props: {
-			screenId: 1,
-			config: { scale: 1, animationEnabled: true, animationSpeed: 'normal' },
+			card: shown,
 		},
 		global: {
 			stubs: {
@@ -58,90 +59,53 @@ async function mountComponent() {
 
 describe('mtgCardDisplay', () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
 		vi.useFakeTimers();
 		containerHeight.value = 1080;
-		activeCard.value = null;
-		mockCardStore.loadActiveCard.mockResolvedValue(null);
 	});
 
 	afterEach(() => {
 		vi.useRealTimers();
 	});
 
-	it('sizes the card container from the overlay height', async () => {
-		const wrapper = await mountComponent();
+	// The host scales the Event Canvas to its window (#821); a card scaling it again would scale twice.
+	it.each([1080, 720, 0])('sizes the card by its card-width Mode Token alone in a %i px overlay', async (height) => {
+		containerHeight.value = height;
+		const wrapper = mountComponent();
 
-		activeCard.value = {
-			id: 'card-1',
-			name: 'Brainstorm',
-			displayData: null,
-			imageData: {
-				front: { normal: 'https://example.com/card.jpg' },
-			},
-		};
-
-		await nextTick();
+		await wrapper.setProps({
+			card: card('card-1', 'Brainstorm'),
+		});
 		await wrapper.get('img').trigger('load');
 		await vi.advanceTimersByTimeAsync(50);
 		await nextTick();
 
-		const expected = mtgCardSizeFromHeight(1080);
-		const container = wrapper.get('.card-container');
-
-		expect(container.attributes('style')).toContain(`width: ${expected.diagonal}px;`);
-		expect(container.attributes('style')).toContain(`height: ${expected.diagonal}px;`);
-		expect(mockCardStore.setActiveScreen).toHaveBeenCalledWith(1);
-		expect(mockCardStore.loadActiveCard).toHaveBeenCalled();
+		const container = wrapper.get('.card-container').element as HTMLElement;
+		expect(container.style.zoom).toBe('');
+		expect((wrapper.get('[data-testid="spotlight-card"]').element as HTMLElement).style.width).toBe('var(--theme-card-card-width)');
 	});
 
-	it('reacts to overlay container size changes', async () => {
-		const wrapper = await mountComponent();
-
-		activeCard.value = {
-			id: 'card-2',
-			name: 'Ponder',
-			displayData: null,
-			imageData: {
-				front: { normal: 'https://example.com/card.jpg' },
-			},
-		};
-
+	it('shows a Card it is given at mount once its image loads', async () => {
+		const wrapper = mountComponent(card('held', 'Held Card'));
 		await nextTick();
+
 		await wrapper.get('img').trigger('load');
 		await vi.advanceTimersByTimeAsync(50);
 		await nextTick();
 
-		containerHeight.value = 720;
-		await nextTick();
-
-		const expected = mtgCardSizeFromHeight(720);
-		expect(wrapper.get('.card-container').attributes('style')).toContain(`height: ${expected.diagonal}px;`);
+		expect(wrapper.get('[data-testid="card-image"]').text()).toBe('Held Card');
 	});
 
 	it('does not let an old image timer reveal a replacement card early', async () => {
-		const wrapper = await mountComponent();
-		activeCard.value = {
-			id: 'old-card',
-			name: 'Old Card',
-			displayData: null,
-			imageData: {
-				front: { normal: 'https://example.com/old.jpg' },
-			},
-		};
-		await nextTick();
+		const wrapper = mountComponent();
+		await wrapper.setProps({
+			card: card('old-card', 'Old Card'),
+		});
 		await wrapper.get('img').trigger('load');
 		await vi.advanceTimersByTimeAsync(40);
 
-		activeCard.value = {
-			id: 'new-card',
-			name: 'New Card',
-			displayData: null,
-			imageData: {
-				front: { normal: 'https://example.com/new.jpg' },
-			},
-		};
-		await nextTick();
+		await wrapper.setProps({
+			card: card('new-card', 'New Card'),
+		});
 		await wrapper.get('img').trigger('load');
 		await vi.advanceTimersByTimeAsync(10);
 		await nextTick();

@@ -2,6 +2,7 @@ import type { ServerValidatedKeys } from '~~/shared/screenModeConfigs/contract';
 import type { BackgroundLayersCapableMode } from '~~/shared/screenModes';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { BroadcastGraphicConfig, GraphicGroupChildConfig, GraphicItemConfig } from '~~/shared/types/graphics';
+import type { GraphicThemeSlot } from '~~/shared/types/graphicThemeBindings';
 import type { FeatureMatchSourceItemConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
@@ -11,7 +12,7 @@ import {
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
 import { graphicTypographyFields, shapeGeometrySchema } from '~~/server/schemas/api/graphicValues';
-import { animationEffectSelectionSchema, storedFrameAnimationConfigSchema } from '~~/shared/animationEffects';
+import { storedFrameAnimationConfigSchema } from '~~/shared/animationEffects';
 import { FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION } from '~~/shared/featureMatchSourceItems';
 import {
 	GRAPHIC_FONT_IDS,
@@ -21,16 +22,20 @@ import {
 	isKnownGraphicBindingFieldId,
 	readSocialProfileProjectedValueReference,
 } from '~~/shared/modules/graphics';
+import { graphicThemeSlotTokens } from '~~/shared/modules/graphics/themeBindings';
+import {
+	backgroundLayerStackSchema,
+	retiredVideoCompatibilitySchema,
+	screenMediaPlaybackRateSchema,
+	screenMediaSourceSchema,
+} from '~~/shared/modules/theme/background';
 import { isServerValidatedField } from '~~/shared/screenModeConfigs/contract';
 import { screenModeConfigContract, screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
 import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
 import {
 	FORMER_SCREEN_MODE_KEYS,
-	HORIZONTAL_ALIGN_VALUES,
 	PLAYER_SIDE_VALUES,
-	SCREEN_COLOR_MODE_VALUES,
 	SCREEN_COMMAND_VALUES,
-	VERTICAL_ALIGN_VALUES,
 } from '~~/shared/types/enums';
 import {
 	MEDIA_FIT_VALUES,
@@ -90,53 +95,20 @@ import {
 	SOCIAL_PROFILE_TRANSITION_VALUES,
 	TEXT_OVERFLOW_POLICY_VALUES,
 } from '~~/shared/types/graphics';
+import { GRAPHIC_THEME_SLOT_VALUES } from '~~/shared/types/graphicThemeBindings';
 import {
 	FEATURE_MATCH_OVERLAY_ANCHOR_VALUES,
 	FEATURE_MATCH_SOURCE_ROLE_VALUES,
 	mergeScreenModeConfig,
 } from '~~/shared/types/screenConfig';
-import { remoteMediaUrlRefusal } from '~~/shared/utils/remoteMediaUrl';
 
-const MAX_SCREEN_CONFIG_BYTES = 64 * 1024;
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
 
 function jsonByteLength(value: unknown): number {
 	return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }
 
-/* ────────────────────────────────────────────────
- * Screen-level config schema (applies to all modes)
- * ──────────────────────────────────────────────── */
-
-export const screenColorModeSchema = z.enum(SCREEN_COLOR_MODE_VALUES);
-const horizontalAlignSchema = z.enum(HORIZONTAL_ALIGN_VALUES);
-const verticalAlignSchema = z.enum(VERTICAL_ALIGN_VALUES);
-
-export const screenConfigSchema = z.object({
-	background: z.string().max(500).optional(),
-	width: z.number().positive().optional(),
-	height: z.number().positive().optional(),
-	paddingX: z.number().nonnegative().optional(),
-	paddingY: z.number().nonnegative().optional(),
-	primaryTextColor: z.string().max(200).optional(),
-	secondaryTextColor: z.string().max(200).optional(),
-	colorMode: screenColorModeSchema.optional(),
-	horizontalAlign: horizontalAlignSchema.optional(),
-	verticalAlign: verticalAlignSchema.optional(),
-}).strict();
-
-const screenConfigPatchShape = Object.fromEntries(
-	Object.entries(screenConfigSchema.shape).map(([key, schema]) => [
-		key,
-		schema.unwrap().nullable().optional(),
-	]),
-) as z.ZodRawShape;
-
 export const screenSlugSchema = z.string().min(1).max(50).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens');
-
-// Patch variant: accepts `null` as a sentinel meaning "delete this key from stored config".
-// Used by the PATCH endpoint to support clearing width/height back to auto.
-export const screenConfigPatchSchema = z.object(screenConfigPatchShape).strict();
 
 /* ────────────────────────────────────────────────
  * Mode config Zod schemas (strict — no unknown keys)
@@ -149,32 +121,10 @@ const pixelPositionSchema = finiteNumberSchema.min(-MAX_PIXEL_VALUE).max(MAX_PIX
 const nonNegativePixelSchema = finiteNumberSchema.nonnegative().max(MAX_PIXEL_VALUE);
 const cssColorSchema = z.string().min(1).max(500);
 const optionalCssColorSchema = cssColorSchema.optional();
-/**
- * A Remote Media URL: HTTPS, or root-relative under an app-served media prefix;
- * empty means unset (ADR-0021). The rule and its wording live in
- * `remoteMediaUrlRefusal`, which the editor shows before a save is attempted.
- */
-const remoteMediaUrlSchema = z.string().max(2000).superRefine((value, context) => {
-	const refusal = remoteMediaUrlRefusal(value);
-	if (refusal !== undefined)
-		context.addIssue({ code: 'custom', message: refusal });
-});
 const graphicAssetReferenceSchema = z.object({
 	assetId: z.string().min(1).max(100).transform(graphicAssetId),
 	revisionId: z.string().min(1).max(100).transform(graphicAssetRevisionId),
 }).strict();
-
-/**
- * `videoCompatibility` as documents recorded it before ADR-0020: accepted so a
- * stored stack, layout or exported Template Package that still carries it reads,
- * and dropped, because Chromium is now the only supported engine for transparent
- * video and the fact means nothing. Only the values it could hold are accepted, so
- * a document that never was valid still is not.
- */
-const retiredVideoCompatibilitySchema = z
-	.enum(['all-supported', 'chromium-transparency'])
-	.optional()
-	.transform(() => undefined);
 
 /**
  * One media Graphic Input value on the wire: an exact revision, the same shape
@@ -187,51 +137,6 @@ const mediaGraphicInputValueSchema = z.object({
 	videoCompatibility: retiredVideoCompatibilitySchema,
 }).strict();
 
-/**
- * The bounds Screen-owned video (the Feature Match Overlay Frame's video and a
- * video Background Layer) was stored under before #539 narrowed it to a Media
- * Graphic Item's 0.25–4.
- */
-const LEGACY_SCREEN_MEDIA_PLAYBACK_RATE = { min: 0.1, max: 16 } as const;
-
-/**
- * A Screen-owned video's playback rate: a Media Graphic Item's 0.25–4, so every
- * media host shares one bound (#539).
- *
- * Stored mode configurations are read without a schema, but the editors re-send
- * a whole Background Layer stack or Frame layout on any edit. A rate the old
- * 0.1–16 bounds accepted is therefore clamped into range rather than refused:
- * refusing it would refuse every later edit to that stack or layout, however
- * unrelated. Anything outside the old bounds was never storable and is refused.
- */
-const screenMediaPlaybackRateSchema = z.preprocess(
-	value => typeof value === 'number'
-		&& value >= LEGACY_SCREEN_MEDIA_PLAYBACK_RATE.min
-		&& value <= LEGACY_SCREEN_MEDIA_PLAYBACK_RATE.max
-		? Math.min(MAX_GRAPHIC_MEDIA_PLAYBACK_RATE, Math.max(MIN_GRAPHIC_MEDIA_PLAYBACK_RATE, value))
-		: value,
-	finiteNumberSchema.min(MIN_GRAPHIC_MEDIA_PLAYBACK_RATE).max(MAX_GRAPHIC_MEDIA_PLAYBACK_RATE),
-);
-
-/**
- * A Screen Media Source: an exact Graphics Asset Library revision or a Remote
- * Media URL, offered wherever a Screen supplies its own media — Background
- * Layers and the Feature Match Overlay Frame (ADR-0021). The asset branch is
- * shaped as a media Graphic Input value is.
- */
-const screenMediaSourceSchema = z.discriminatedUnion('kind', [
-	z.object({
-		kind: z.literal('asset'),
-		assetId: z.string().min(1).max(100).transform(graphicAssetId),
-		revisionId: z.string().min(1).max(100).transform(graphicAssetRevisionId),
-		videoCompatibility: retiredVideoCompatibilitySchema,
-	}).strict(),
-	z.object({
-		kind: z.literal('url'),
-		url: remoteMediaUrlSchema,
-	}).strict(),
-]);
-
 const screenMediaBackgroundConfigSchema = z.object({
 	enabled: z.boolean(),
 	source: screenMediaSourceSchema,
@@ -240,72 +145,6 @@ const screenMediaBackgroundConfigSchema = z.object({
 	playbackRate: screenMediaPlaybackRateSchema,
 	loop: z.boolean(),
 }).strict();
-
-/** What every Background Layer owns regardless of type — see `BackgroundLayerBase`. */
-const backgroundLayerShape = {
-	id: z.string().min(1).max(100),
-	enabled: z.boolean(),
-	opacity: opacitySchema,
-};
-
-const backgroundLayerSchema = z.discriminatedUnion('type', [
-	z.object({
-		...backgroundLayerShape,
-		type: z.literal('color'),
-		color: cssColorSchema,
-	}).strict(),
-	z.object({
-		...backgroundLayerShape,
-		type: z.literal('gradient'),
-		gradient: z.string().min(1).max(1000),
-	}).strict(),
-	z.object({
-		...backgroundLayerShape,
-		type: z.literal('image'),
-		source: screenMediaSourceSchema,
-		fit: z.enum(MEDIA_FIT_VALUES),
-	}).strict(),
-	z.object({
-		...backgroundLayerShape,
-		type: z.literal('video'),
-		source: screenMediaSourceSchema,
-		fit: z.enum(MEDIA_FIT_VALUES),
-		playbackRate: screenMediaPlaybackRateSchema,
-		loop: z.boolean(),
-	}).strict(),
-	z.object({
-		...backgroundLayerShape,
-		type: z.literal('animation'),
-		animation: animationEffectSelectionSchema,
-	}).strict(),
-]);
-
-/**
- * A guardrail, not a derived cap: a real show stacks a handful of layers, and
- * the 512 KiB mode-configuration budget is the binding constraint long before
- * twenty video elements are.
- */
-const MAX_BACKGROUND_LAYERS = 20;
-
-/**
- * One ordered Background Layer stack — the Background Screen's `layers` and
- * every declaring mode's own `backgroundLayers` validate identically.
- *
- * Painter's order: first layer is the bottom of the stack. Both rules live on
- * this array field rather than on the mode object, because a field-level rule
- * survives the PATCH-schema derivation and an object-level one cannot reach
- * that path (see `assertNoUnenforceableModeConfigRules`, #85).
- *
- * At most one animation layer per stack: each is its own WebGL context, an OBS
- * browser source is memory-tight, and only one mode renders at a time, so the
- * per-stack rule keeps the per-Screen invariant. Liftable if a show needs two.
- */
-const backgroundLayerStackSchema = z.array(backgroundLayerSchema)
-	.max(MAX_BACKGROUND_LAYERS)
-	.refine(
-		layers => layers.filter(layer => layer.type === 'animation').length <= 1,
-		'A Background Layer stack carries at most one animation layer',
-	);
 
 /** The field a mode's configuration gains by declaring a Background Layer stack. */
 const BACKGROUND_LAYERS_CONFIG_SHAPE = {
@@ -433,49 +272,62 @@ const featureMatchOverlayBorderSidesSchema = z.object({
 }).strict();
 
 /**
- * The surface treatment of a host-owned Source Item.
+ * A look field the Frame or a Source Item stored before its fill, border and
+ * glow became the Feature Match Overlay's Mode Tokens (#831): read in the shape
+ * it could hold and dropped, not migrated, so a layout stored or exported
+ * before still loads and its next write stores it without the field.
+ */
+function retiredLookField<T extends z.ZodType>(schema: T) {
+	return schema.optional().transform(() => undefined);
+}
+
+const retiredBorderGlowShape = {
+	borderVisible: retiredLookField(z.boolean()),
+	borderColor: retiredLookField(optionalCssColorSchema),
+	borderWidth: retiredLookField(nonNegativePixelSchema),
+	glowColor: retiredLookField(optionalCssColorSchema),
+	glowSize: retiredLookField(nonNegativePixelSchema),
+	glowOpacity: retiredLookField(opacitySchema),
+};
+
+/**
+ * A Source Item's framing: which sides of its border show, its per-corner
+ * radii, and which side the glow falls on. How it paints is the
+ * `source-surface` Mode Token (#831).
  *
  * Per-side border visibility and per-corner radii stay here because the Frame and
  * its Source Items are host capability the Host Contract leaves with the host.
- * The shared Graphic Surface Style dropped per-side borders in favour of composed
- * rule-preset Shape Graphic Items, and carries its own corner treatment in Shape
- * Geometry.
  */
 const featureMatchSourceFramingStyleSchema = featureMatchOverlayBorderSidesSchema.extend({
-	backgroundColor: optionalCssColorSchema,
-	backgroundOpacity: opacitySchema.optional(),
-	backgroundGradient: z.string().max(1000).optional(),
-	borderVisible: z.boolean().optional(),
-	borderColor: optionalCssColorSchema,
-	borderWidth: nonNegativePixelSchema.optional(),
 	borderRadius: nonNegativePixelSchema.optional(),
 	borderRadiusTopLeft: nonNegativePixelSchema.optional(),
 	borderRadiusTopRight: nonNegativePixelSchema.optional(),
 	borderRadiusBottomRight: nonNegativePixelSchema.optional(),
 	borderRadiusBottomLeft: nonNegativePixelSchema.optional(),
-	glowColor: optionalCssColorSchema,
-	glowSize: nonNegativePixelSchema.optional(),
-	glowOpacity: opacitySchema.optional(),
 	glowPosition: z.enum(['both', 'inside', 'outside']).optional(),
+	backgroundColor: retiredLookField(optionalCssColorSchema),
+	backgroundOpacity: retiredLookField(opacitySchema),
+	backgroundGradient: retiredLookField(z.string().max(1000)),
+	...retiredBorderGlowShape,
 }).strict();
 
+/**
+ * The Frame: its own opacity, image, video, Animation Effect switch and which
+ * canvas edges its border runs along. Its fill, border and glow are the
+ * `frame-surface` Mode Token, its effect `frame-animation-effect` (#831).
+ */
 const featureMatchOverlayFrameConfigSchema = featureMatchOverlayBorderSidesSchema.extend({
-	backgroundColor: cssColorSchema,
 	opacity: opacitySchema,
 	backgroundImage: screenMediaSourceSchema.optional(),
 	backgroundImageFit: z.enum(MEDIA_FIT_VALUES).optional(),
 	mediaBackground: screenMediaBackgroundConfigSchema.optional(),
-	gradient: z.string().max(1000).optional(),
 	// The stored-payload wrapper rather than the plain config schema: every
 	// layout write re-sends the whole stored layout, so a pre-rebuild animation
 	// bag resets to absent here instead of vetoing the edit it rides along on.
 	animation: storedFrameAnimationConfigSchema.optional(),
-	borderVisible: z.boolean().optional(),
-	borderColor: optionalCssColorSchema,
-	borderWidth: nonNegativePixelSchema.optional(),
-	glowColor: optionalCssColorSchema,
-	glowSize: nonNegativePixelSchema.optional(),
-	glowOpacity: opacitySchema.optional(),
+	backgroundColor: retiredLookField(cssColorSchema),
+	gradient: retiredLookField(z.string().max(1000)),
+	...retiredBorderGlowShape,
 }).strict();
 
 /**
@@ -912,98 +764,42 @@ function graphicSourceDerivationsAcyclic(
 }
 
 /* ────────────────────────────────────────────────
- * Graphic Style Set references
+ * Former graphics document fields
  * ──────────────────────────────────────────────── */
 
 /**
- * The bound on a Graphic Style Set identity, and on one entry's identity within it.
- *
- * One schema because they are the same kind of opaque stable id, generated the same
- * way and stored the same way. They are named separately so a reader of the two
- * fields below does not have to work out that a `styleSetId` is not an entry id.
+ * A Graphic Style Set link, a former field of graphics documents recorded before
+ * #830 (ADR-0049): an item's `styleRefs`, and a Broadcast Graphic's `styleSet` and
+ * `styleRefs`. Accepted so a stored, packaged or stale-client document that still
+ * carries one reads, and dropped, because Style Sets are gone and their values are
+ * the document's own literals already. Every other unknown key is still refused.
  */
-const graphicStyleIdSchema = z.string().min(1).max(100);
-const graphicStyleEntryIdSchema = graphicStyleIdSchema;
-const graphicStyleSetIdSchema = graphicStyleIdSchema;
+const formerGraphicStyleSetLinkSchema = z.unknown().optional().transform(() => undefined);
+
+/* ────────────────────────────────────────────────
+ * Graphic Item Theme bindings
+ * ──────────────────────────────────────────────── */
 
 /**
- * A media treatment's owned properties, as one object so its override shape is a
- * partial of exactly the same thing the Media Graphic Item stores.
+ * One slot's binding: the name of a Foundation Token of the slot's type. A
+ * write naming any other token is refused; a read of one is inert.
  */
-const graphicMediaTreatmentPropertiesSchema = z.object({
-	fit: z.enum(MEDIA_FIT_VALUES),
-	focalPosition: z.object({ horizontal: opacitySchema, vertical: opacitySchema }).strict(),
-	opacity: opacitySchema,
-	clipGeometry: shapeGeometrySchema.optional(),
-	playbackRate: finiteNumberSchema
-		.min(MIN_GRAPHIC_MEDIA_PLAYBACK_RATE)
-		.max(MAX_GRAPHIC_MEDIA_PLAYBACK_RATE),
-	loop: z.boolean(),
-}).strict();
-
-/**
- * One slot's reference to a Graphic Style Set entry.
- *
- * Every override shape is derived from the property schema it deviates from, rather
- * than restated: an override is a *partial of the same property group*, so a bound
- * that tightens on typography tightens on a typography override in the same commit.
- * A slot whose value has no meaningful partial — a Graphic Fill, which is a
- * discriminated union — takes no overrides at all.
- *
- * The reference carries no value. A graphics document always stores its own resolved
- * properties inline, so nothing here is needed to render it; this is the provenance
- * that makes a republished Style Set a reviewable offer instead of a silent change.
- */
-function graphicStyleRefSchema<T extends z.ZodType>(overrides: T) {
-	return z.object({
-		entryId: graphicStyleEntryIdSchema,
-		overrides: overrides.optional(),
-	}).strict();
+function graphicThemeSlotBindingSchema(slot: GraphicThemeSlot) {
+	return z.enum(graphicThemeSlotTokens(slot) as [string, ...string[]]).optional();
 }
 
-/** The one slot with no meaningful partial to override. */
-const graphicFillStyleRefSchema = z.object({ entryId: graphicStyleEntryIdSchema }).strict();
+const graphicItemThemeBindingsSchema = z.object(Object.fromEntries(
+	GRAPHIC_THEME_SLOT_VALUES.map(slot => [
+		slot,
+		graphicThemeSlotBindingSchema(slot),
+	]),
+)).strict();
 
-const graphicAnimationRecipeOverridesSchema = z.object(graphicAnimationRecipeShape).strict().partial();
-
-const graphicAnimationStyleRefShape = {
-	'animation.enter': graphicStyleRefSchema(graphicAnimationRecipeOverridesSchema).optional(),
-	'animation.on-screen': graphicStyleRefSchema(graphicOnScreenAnimationRecipeSchema.partial()).optional(),
-	'animation.update': graphicStyleRefSchema(graphicAnimationRecipeOverridesSchema).optional(),
-	'animation.exit': graphicStyleRefSchema(graphicAnimationRecipeOverridesSchema).optional(),
-};
-
-const graphicItemStyleRefsSchema = z.object({
-	'typography': graphicStyleRefSchema(graphicTypographySchema.omit({ textAlign: true }).partial()).optional(),
-	'surfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
-	'surfaceStyle.fill': graphicFillStyleRefSchema.optional(),
-	'defaultChildSurfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
-	'boxSurfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
-	'wonBoxSurfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
-	'geometry': graphicStyleRefSchema(shapeGeometrySchema.partial()).optional(),
-	'clipGeometry': graphicStyleRefSchema(shapeGeometrySchema.partial()).optional(),
-	'boxGeometry': graphicStyleRefSchema(shapeGeometrySchema.partial()).optional(),
-	'media': graphicStyleRefSchema(graphicMediaTreatmentPropertiesSchema.partial()).optional(),
-	...graphicAnimationStyleRefShape,
-}).strict();
-
-/**
- * A Broadcast Graphic's own references: whole-composition motion and nothing else.
- * It has no typography, surface, geometry, or media to inherit into, so the wire
- * refuses those slots rather than storing references nothing can apply.
- */
-const graphicContainerStyleRefsSchema = z.object(graphicAnimationStyleRefShape).strict();
-
-/** At most one Graphic Style Set per composition, stated by this being one object. */
-const graphicStyleSetLinkSchema = z.object({
-	styleSetId: graphicStyleSetIdSchema,
-	// The only field the worst-case measurement cannot populate at a maximum,
-	// because it has none: a revision counts publications and nothing bounds how
-	// many a Style Set may have. Its contribution to the byte budget is therefore
-	// the width of a number rather than a cap, which is why it is left unbounded
-	// rather than given an arbitrary ceiling — but it is worth knowing it is the
-	// one hole in `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES`.
-	revision: z.number().int().nonnegative(),
+/** A Broadcast Graphic's own bindings: whole-composition motion and nothing else. */
+const graphicContainerThemeBindingsSchema = z.object({
+	'animation.enter': graphicThemeSlotBindingSchema('animation.enter'),
+	'animation.update': graphicThemeSlotBindingSchema('animation.update'),
+	'animation.exit': graphicThemeSlotBindingSchema('animation.exit'),
 }).strict();
 
 const graphicItemBaseShape = {
@@ -1017,7 +813,8 @@ const graphicItemBaseShape = {
 	width: pixelSizeSchema,
 	height: pixelSizeSchema,
 	animation: graphicAnimationSchema.optional(),
-	styleRefs: graphicItemStyleRefsSchema.optional(),
+	styleRefs: formerGraphicStyleSetLinkSchema,
+	themeBindings: graphicItemThemeBindingsSchema.optional(),
 };
 
 /**
@@ -1313,13 +1110,9 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  *
  * `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES` is what the
  * caps together admit: every construct the schema accepts, each populated at its
- * own maximum, with the one exception named beside the fixture — a Graphic Style
- * Set link's `revision` has no upper bound to populate. The claim is qualified
- * rather than absolute on purpose; four rounds of correction here came of an
- * absolute one. It is
- * about seven times the budget and **that is a settled decision, not an oversight**:
- * the worst case is allowed not to fit, because the byte total is enforced on the
- * editors' write path (#85) and realtime no longer publishes mode configurations
+ * own maximum. It is over three and a half times the budget and **that is a
+ * settled decision, not an oversight**: the worst case is allowed not to fit,
+ * because the byte total is enforced on the editors' write path (#85) and realtime no longer publishes mode configurations
  * (#95). The measurement is pinned in two arrangements in
  * `broadcastGraphicsModeConfig.test.ts`, so "which worst case" stays a checked
  * choice rather than an assumption.
@@ -1346,7 +1139,7 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * quote different baselines for the same pre-existing Graphic Item.
  */
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 300;
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 3_715_514;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 1_930_214;
 
 function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
 	return items.reduce(
@@ -1511,8 +1304,9 @@ export const broadcastGraphicConfigSchema = z.object({
 		)
 		.optional(),
 	animation: graphicContainerAnimationSchema.optional(),
-	styleSet: graphicStyleSetLinkSchema.optional(),
-	styleRefs: graphicContainerStyleRefsSchema.optional(),
+	styleSet: formerGraphicStyleSetLinkSchema,
+	styleRefs: formerGraphicStyleSetLinkSchema,
+	themeBindings: graphicContainerThemeBindingsSchema.optional(),
 }).strict().refine(
 	// Top-level items only: a Graphic Group's children are staggered by the group.
 	graphic => graphicStaggerNamesASubset(graphic, graphic.items.length),
@@ -1577,6 +1371,7 @@ const featureMatchLayoutCompositionSchema = z.object({
 			'Social Profile Projection placeholder styles are available only in Broadcast Graphics',
 		),
 	animation: graphicContainerAnimationSchema.optional(),
+	themeBindings: graphicContainerThemeBindingsSchema.optional(),
 }).strict().refine(
 	composition => graphicStaggerNamesASubset(composition, composition.items.length),
 	GRAPHIC_STAGGER_SUBSET_MESSAGE,
@@ -1852,11 +1647,6 @@ export function parseModeConfigPatchResult(
 	) as ModeConfigsMap;
 }
 
-const boundedScreenConfigSchema = screenConfigSchema.refine(
-	value => jsonByteLength(value) <= MAX_SCREEN_CONFIG_BYTES,
-	`Screen configuration must not exceed ${MAX_SCREEN_CONFIG_BYTES} bytes`,
-);
-
 /* ────────────────────────────────────────────────
  * Screen CRUD schemas
  * ──────────────────────────────────────────────── */
@@ -1874,12 +1664,13 @@ export const createScreenSchema = createInsertSchema(screens)
 		assetCapabilitySeed: true,
 		assetCapabilityVersion: true,
 		assetCapabilityDigest: true,
+		// Only the Screen Theme Override write sets them, one token at a time.
+		themeOverrides: true,
 	})
 	.extend({
 		slug: screenSlugSchema,
 		currentMode: screenModeSchema.optional(),
 		modeConfigs: modeConfigsMapSchema.nullable().optional(),
-		screenConfig: boundedScreenConfigSchema.nullable().optional(),
 	})
 	.strict();
 
@@ -1896,18 +1687,32 @@ export const updateScreenSchema = createUpdateSchema(screens)
 		assetCapabilitySeed: true,
 		assetCapabilityVersion: true,
 		assetCapabilityDigest: true,
+		// Only the Screen Theme Override write sets them, one token at a time.
+		themeOverrides: true,
 	})
 	.extend({
 		slug: screenSlugSchema.optional(),
 		currentMode: screenModeSchema.optional(),
 		modeConfigs: modeConfigsMapSchema.nullable().optional(),
-		screenConfig: boundedScreenConfigSchema.nullable().optional(),
 		stateVersion: z.number().int().nonnegative(),
 	})
 	.strict();
 
 export const screenCommandSchema = z.object({
 	command: z.enum(SCREEN_COMMAND_VALUES),
+}).strict();
+
+/**
+ * A Screen Theme Override write: each named token's new value, or `null` to
+ * clear it (ADR-0041). Each value is checked against the token's type and the
+ * Screen's mode by the write, which knows the vocabulary.
+ */
+export const screenThemeOverridesPatchSchema = z.object({
+	stateVersion: z.number().int().nonnegative().optional(),
+	tokens: z.record(
+		z.string(),
+		z.unknown().refine(value => value !== undefined, 'A value, or null to clear, is required'),
+	).refine(tokens => Object.keys(tokens).length > 0, 'Name at least one token'),
 }).strict();
 
 // ROUTE PARAMS

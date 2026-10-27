@@ -11,10 +11,12 @@ import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
  * edit its `layers` through this; every plain overlay mode's settings edit
  * that mode's own `backgroundLayers` through the same editor. The owner wires
  * `update:layers` to its own configuration write — the editor never saves.
+ * Without an `eventId`, as in the Theme editor, media layers take a Remote
+ * Media URL only.
  */
 const props = defineProps<{
 	layers: BackgroundLayer[];
-	eventId: number;
+	eventId?: number;
 }>();
 
 const emit = defineEmits<{

@@ -11,7 +11,6 @@ const mockRepo = {
 	create: vi.fn(),
 	update: vi.fn(),
 	updateModeConfig: vi.fn(),
-	updateScreenConfig: vi.fn(),
 	remove: vi.fn(),
 };
 
@@ -83,13 +82,8 @@ describe('useScreenStore error reporting', () => {
 	// A debounced write answers its own caller, which shows the message beside the field, as well as the banner.
 	it.each([
 		[
-			'Screen-config',
-			(s: ReturnType<typeof useScreenStore>) => s.updateScreenConfig(1, 5, { width: 1920 }),
-			'updateScreenConfig',
-		],
-		[
 			'mode-config',
-			(s: ReturnType<typeof useScreenStore>) => s.updateModeConfig(1, 5, 'card', { scale: 2 }),
+			(s: ReturnType<typeof useScreenStore>) => s.updateModeConfig(1, 5, 'deck', { showDeckName: false }),
 			'updateModeConfig',
 		],
 	] as const)('carries a refused %s write\'s sentence to its caller and to the banner', async (_, write, method) => {

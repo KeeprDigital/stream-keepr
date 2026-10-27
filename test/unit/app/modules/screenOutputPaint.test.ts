@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { borderGlow, colourAtOpacity, glowDropShadow, glowFlood } from '~~/app/modules/screen/outputPaint';
+import { colourAtOpacity, glowDropShadow, glowFlood, paintColour } from '~~/app/modules/screen/outputPaint';
 
 /**
  * The Fill-versus-Key paint rules both graphics render models share. A Fill or
@@ -32,32 +32,32 @@ describe('screen output paint', () => {
 			expect(colourAtOpacity('key', '#ff0000', 1)).toBe('#ffffffff');
 		});
 
+		// A translucent Theme colour keys as the Fill shows it: its alpha times the consumer's opacity.
+		it.each([
+			['rgba(1, 2, 3, 0.5)', 1, '#ffffff80'],
+			['rgba(1, 2, 3, 0.5)', 0.5, '#ffffff40'],
+			['rgb(1 2 3 / 50%)', 1, '#ffffff80'],
+			['#00000080', 1, '#ffffff80'],
+			['rgb(10, 20, 30)', 0.5, '#ffffff80'],
+			['transparent', 1, '#ffffff00'],
+		])('keys %s at opacity %s as %s', (colour, opacity, keyed) => {
+			expect(colourAtOpacity('key', colour, opacity)).toBe(keyed);
+		});
+
+		it.each([
+			['#0077a3', '#ffffff'],
+			['rgb(10, 20, 30)', '#ffffff'],
+			['rgba(10, 20, 30, 0.25)', '#ffffff40'],
+			['hsl(10 20% 30% / 0.5)', '#ffffff80'],
+			['#0008', '#ffffff88'],
+		])('paints %s in the Key Output as white at its own alpha, %s', (colour, keyed) => {
+			expect(paintColour('key', colour)).toBe(keyed);
+			expect(paintColour('fill', colour)).toBe(colour);
+		});
+
 		it('clamps an opacity outside zero to one', () => {
 			expect(colourAtOpacity('key', '#ff0000', 2)).toBe('#ffffffff');
 			expect(colourAtOpacity('fill', '#ff0000', -1)).toBe('#ff000000');
-		});
-	});
-
-	describe('a border glow', () => {
-		it('is off without a size', () => {
-			expect(borderGlow({ borderColor: '#0077a3' })).toBeUndefined();
-			expect(borderGlow({ borderColor: '#0077a3', glowSize: 0 })).toBeUndefined();
-		});
-
-		it('defaults to the border colour at three-quarter opacity', () => {
-			expect(borderGlow({ borderColor: '#0077a3', glowSize: 7 }))
-				.toEqual({ color: '#0077a3', size: 7, opacity: 0.75 });
-			expect(borderGlow({ glowSize: 7 })).toEqual({ color: '#ffffff', size: 7, opacity: 0.75 });
-		});
-
-		it('keeps its own colour and opacity when it has them', () => {
-			expect(borderGlow({
-				borderColor: '#0077a3',
-				glowColor: '#ff0000',
-				glowSize: 7,
-				glowOpacity: 0.5,
-			}))
-				.toEqual({ color: '#ff0000', size: 7, opacity: 0.5 });
 		});
 	});
 

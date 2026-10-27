@@ -1,19 +1,19 @@
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
-import type { AnimationEffectSelection } from '~~/shared/animationEffects';
 import type { PlayerSlotData } from '~~/shared/api';
 import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { BroadcastGraphicsLiveSessionStatus } from '~~/shared/types/broadcastGraphicsLiveSession';
 import type { PlayerManuallyEditedField } from '~~/shared/types/enums';
 import type { FeatureMatchSessionStatus, FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { PlayerGameData } from '~~/shared/types/game';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
-import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
-import type { FeatureMatchLayoutConfig, ModeConfigsMap, ScreenConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchLayoutConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
 import { relations, sql } from 'drizzle-orm';
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
+import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { BROADCAST_GRAPHICS_LIVE_SESSION_STATUS_VALUES } from '~~/shared/types/broadcastGraphicsLiveSession';
 /* ENUMS — imported from shared, re-exported for backward compatibility */
 import {
@@ -73,6 +73,27 @@ const timestamps = {
 };
 
 /* TABLES */
+
+/**
+ * The installation's Theme library (ADR-0049). A Theme stores only the Theme
+ * Tokens it sets, so a token added later reaches it through its default. The
+ * Default Theme is code, never a row.
+ */
+export const themes = sqliteTable('themes', {
+	id: text('id').primaryKey(),
+	name: text('name').notNull(),
+	/** The sparse token-value map, keyed by token name. */
+	tokens: text('tokens', { mode: 'json' }).$type<StoredThemeTokens>().notNull().default(sql`'{}'`),
+	/** Advanced by every token write, so a holder orders a write's announcement against a read. */
+	revision: integer('revision').notNull().default(1),
+	/** Transaction marker keeping the token map and its Graphic Asset Reference index in lockstep. */
+	graphicAssetReferenceVersion: text('graphic_asset_reference_version'),
+
+	...timestamps,
+}, table => [
+	index('themes_name_idx').on(table.name),
+]);
+
 export const events = sqliteTable('events', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	name: text('name').notNull(),
@@ -117,6 +138,12 @@ export const events = sqliteTable('events', {
 	displayRecordSeparator: text('display_record_separator', { enum: RECORD_SEPARATOR_VALUES }).notNull().default('-'),
 	displayHideZeroDraws: integer('display_hide_zero_draws', { mode: 'boolean' }).notNull().default(true),
 	displayPositionFormat: text('display_position_format', { enum: POSITION_FORMAT_VALUES }).notNull().default('ordinal'),
+
+	// Event Presentation Settings. No Theme is the Default Theme; a Theme in use cannot be deleted.
+	themeId: text('theme_id').references(() => themes.id, { onDelete: 'restrict' }),
+	// The Event Canvas: the coordinate space every Screen of the Event is authored and rendered in (ADR-0051).
+	canvasWidth: integer('canvas_width').notNull().default(DEFAULT_EVENT_CANVAS.width),
+	canvasHeight: integer('canvas_height').notNull().default(DEFAULT_EVENT_CANVAS.height),
 
 	// Feature match defaults
 	featureMatchDefaultBestOf: integer('feature_match_default_best_of').notNull().default(3),
@@ -578,9 +605,8 @@ export const graphicsAuthoringLeases = sqliteTable('graphics_authoring_leases', 
  *
  * `revision` is the automatically managed revision the glossary requires: identity
  * is `id` and never changes, and every accepted edit to the stored document,
- * name, or description advances the revision by one. It exists so a future
- * Template Package and a Graphic Style Set update can name exactly which version
- * of a template they came from.
+ * name, or description advances the revision by one. It exists so a Template
+ * Package can name exactly which version of a template it came from.
  *
  * `graphic_asset_reference_version` is the same one-shot token the Screen write
  * path uses: a write stamps it and every reference-index statement in the same
@@ -596,25 +622,9 @@ export const broadcastGraphicTemplates = sqliteTable('broadcast_graphic_template
 	/** The saved Broadcast Graphic composition, exactly as a Screen would carry it. */
 	document: text('document', { mode: 'json' }).$type<BroadcastGraphicConfig>().notNull(),
 	graphicAssetReferenceVersion: text('graphic_asset_reference_version'),
-	/**
-	 * The one Graphic Style Set this template's inherited properties come from, and
-	 * the published revision they were last reconciled to.
-	 *
-	 * Both are already inside `document`, and both are here anyway. The reason is the
-	 * one question the Style Set library has to answer cheaply and completely: when an
-	 * author publishes, which templates does this reach? That is a lookup by Style Set
-	 * across the whole library, and answering it by parsing every stored document
-	 * would make one publish cost the size of the library. There is no foreign key,
-	 * because deleting a Style Set is an operation that rewrites every template it
-	 * touches rather than a cascade that silently unlinks them.
-	 */
-	styleSetId: text('style_set_id'),
-	styleSetRevision: integer('style_set_revision'),
-
 	...timestamps,
 }, table => [
 	index('broadcast_graphic_templates_name_idx').on(table.name),
-	index('broadcast_graphic_templates_style_set_idx').on(table.styleSetId),
 ]);
 
 /**
@@ -631,11 +641,6 @@ export const broadcastGraphicTemplates = sqliteTable('broadcast_graphic_template
  * is: a layout is a design an author reuses across every show, and a Feature Match
  * Slot assignment is Screen state that never travels with it. `revision` and
  * `graphic_asset_reference_version` carry exactly the meanings they carry there.
- *
- * There is no Graphic Style Set link. A Feature Match Overlay's Frame and Source
- * Items are host-owned and its composition declares no Graphic Inputs, so nothing
- * in a layout is a linked Style Set property today; adding the columns before there
- * is anything to put in them would be an index over an empty question.
  */
 export const featureMatchLayoutTemplates = sqliteTable('feature_match_layout_templates', {
 	id: text('id').primaryKey(),
@@ -650,88 +655,6 @@ export const featureMatchLayoutTemplates = sqliteTable('feature_match_layout_tem
 	...timestamps,
 }, table => [
 	index('feature_match_layout_templates_name_idx').on(table.name),
-]);
-
-/**
- * The installation's library of named, host-neutral Animation Effect selections.
- *
- * Applying one copies `selection` into a host. No Screen or Event references this
- * row, so deleting or revising a preset cannot change anything already on air.
- */
-export const animationEffectPresets = sqliteTable('animation_effect_presets', {
-	id: text('id').primaryKey(),
-	name: text('name').notNull(),
-	revision: integer('revision').notNull().default(1),
-	selection: text('selection', { mode: 'json' }).$type<AnimationEffectSelection>().notNull(),
-
-	...timestamps,
-}, table => [
-	index('animation_effect_presets_name_idx').on(table.name),
-]);
-
-/**
- * The installation's library of reusable Graphic Style Sets.
- *
- * Installation-scoped for the same reason the Broadcast Graphic Template library is:
- * a Style Set exists so a family of independently portable templates keeps one
- * visual language, and a per-Event one could not do that. Events consume Style Sets
- * through templates and never own them.
- *
- * ## Two entry lists, on purpose
- *
- * `draft` is where an author's edits accumulate and `published` is what every linked
- * template resolves against. They are separate columns rather than one list with a
- * dirty flag because the separation *is* the guarantee: an author can restructure a
- * palette all afternoon, leaving the draft referentially broken for most of it,
- * without one linked template seeing an available update. One atomic publish
- * validates the draft, copies it into `published`, and advances `revision`.
- *
- * `revision` starts at zero, which is a real state rather than a placeholder: it
- * means never published, and a template cannot link to a Style Set that has never
- * resolved to anything.
- */
-export const graphicStyleSets = sqliteTable('graphic_style_sets', {
-	id: text('id').primaryKey(),
-	name: text('name').notNull(),
-	description: text('description'),
-	/** The published revision. Zero until the first publish. */
-	revision: integer('revision').notNull().default(0),
-	/**
-	 * Advanced by one on every accepted write to the draft, its name, or its
-	 * description, and the token every such write compare-and-swaps on.
-	 *
-	 * Separate from `revision` because they answer different questions. `revision` is
-	 * what a linked template names as its provenance and only publish moves it;
-	 * this one exists so two authors with the library open cannot silently overwrite
-	 * each other's draft edits, which happens far more often than a publish does.
-	 */
-	draftRevision: integer('draft_revision').notNull().default(1),
-	/** The working draft's entries. Always present, even before the first publish. */
-	draft: text('draft', { mode: 'json' }).$type<GraphicStyleSetEntry[]>().notNull(),
-	/** The entries at `revision`. Null until the first publish. */
-	published: text('published', { mode: 'json' }).$type<GraphicStyleSetEntry[] | null>(),
-	publishedAt: integer('published_at', { mode: 'timestamp_ms' }),
-	/**
-	 * The token one library-wide operation stamps here so every other statement in the
-	 * same batch can depend on it.
-	 *
-	 * Deleting an entry and deleting a Style Set both rewrite this row *and* every
-	 * template the change reaches, and have to do all of it or none of it. A batch of
-	 * statements each carrying its own precondition cannot promise that: a conditional
-	 * `UPDATE` that matches no row is not an error, so a batch whose first statement
-	 * found its row and whose second did not still commits the first. So the operation
-	 * puts every precondition — this row's draft revision and each template's revision
-	 * — on one statement, which stamps a fresh value here, and gives every later
-	 * statement an `EXISTS` guard on that stamp. A failed precondition writes no stamp,
-	 * and every statement behind it becomes a no-op.
-	 *
-	 * The same technique, for the same reason, as `screens.graphic_asset_reference_version`.
-	 */
-	operationVersion: text('operation_version'),
-
-	...timestamps,
-}, table => [
-	index('graphic_style_sets_name_idx').on(table.name),
 ]);
 
 export const featureMatches = featureMatchSlots;
@@ -906,7 +829,12 @@ export const screens = sqliteTable('screens', {
 
 	currentMode: text('current_mode', { enum: SCREEN_MODE_VALUES }).notNull().default('background'),
 	modeConfigs: text('mode_configs', { mode: 'json' }).$type<ModeConfigsMap>(),
-	screenConfig: text('screen_config', { mode: 'json' }).$type<ScreenConfig>(),
+	/**
+	 * The Screen Theme Overrides: a sparse token-value map keyed by token name.
+	 * An override of another mode's Mode Token is kept while the Screen shows
+	 * a different mode (ADR-0049).
+	 */
+	themeOverrides: text('theme_overrides', { mode: 'json' }).$type<StoredThemeTokens>().notNull().default(sql`'{}'`),
 	stateVersion: integer('state_version').notNull().default(0),
 	/** Transaction marker keeping Screen configuration and its Graphic Asset usage index in lockstep. */
 	graphicAssetReferenceVersion: text('graphic_asset_reference_version'),
@@ -1239,6 +1167,8 @@ export const screensRelations = relations(screens, ({ one, many }) => ({
 }));
 
 /* DB TYPES */
+export type DbTheme = typeof themes.$inferSelect;
+export type DbThemeInsert = typeof themes.$inferInsert;
 export type DbEvent = typeof events.$inferSelect;
 export type DbEventInsert = typeof events.$inferInsert;
 export type DbEventTalent = typeof eventTalents.$inferSelect;
@@ -1265,10 +1195,6 @@ export type DbBroadcastGraphicTemplate = typeof broadcastGraphicTemplates.$infer
 export type DbBroadcastGraphicTemplateInsert = typeof broadcastGraphicTemplates.$inferInsert;
 export type DbFeatureMatchLayoutTemplate = typeof featureMatchLayoutTemplates.$inferSelect;
 export type DbFeatureMatchLayoutTemplateInsert = typeof featureMatchLayoutTemplates.$inferInsert;
-export type DbAnimationEffectPreset = typeof animationEffectPresets.$inferSelect;
-export type DbAnimationEffectPresetInsert = typeof animationEffectPresets.$inferInsert;
-export type DbGraphicStyleSet = typeof graphicStyleSets.$inferSelect;
-export type DbGraphicStyleSetInsert = typeof graphicStyleSets.$inferInsert;
 export type DbLiveStateCommandReceipt = typeof liveStateCommandReceipts.$inferSelect;
 export type DbLiveStateCommandReceiptInsert = typeof liveStateCommandReceipts.$inferInsert;
 export type DbScreen = typeof screens.$inferSelect;

@@ -1,6 +1,7 @@
 import type { FeatureMatchLayoutEdge } from './featureMatchLayoutItems';
 import type { PlayerSide } from './types/enums';
-import type { GraphicItemConfig, GraphicSurfaceStyle, GraphicTypography } from './types/graphics';
+import type { GraphicGroupChildConfig, GraphicItemConfig, GraphicSurfaceStyle, GraphicTypography } from './types/graphics';
+import type { GraphicThemeSlot } from './types/graphicThemeBindings';
 import type {
 	FeatureMatchOverlayModeConfig,
 	FeatureMatchOverlayPresetId,
@@ -24,6 +25,7 @@ import {
 	typography,
 } from './featureMatchLayoutItems';
 import { roundedShapeGeometry } from './modules/graphics/shapeGeometry';
+import { bindGraphicThemeOwner, DEFAULT_GRAPHIC_THEME_TOKENS, graphicThemeOwnerSupportsSlot } from './modules/graphics/themeBindings';
 import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from './screenGraphicsDefaults';
 
 /**
@@ -42,6 +44,12 @@ import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from 
  * Graphic Fills with outline and glow, Text Overflow Policies, and — for the
  * per-side borders the shared Graphic Surface Style deliberately dropped —
  * composed rule-preset Shape Graphic Items.
+ *
+ * Every preset is token-bound (#831): its text follows the Theme's type and
+ * primary text colour, its panels and rules the Theme's `panel` surface, and
+ * its branding images the Theme's `logo`. Its Frame and Source Items carry
+ * only shape, and paint from the Feature Match Overlay's Mode Tokens. So a
+ * placed preset looks right under any Theme, and restyles live with it.
  */
 
 export interface FeatureMatchOverlayPreset {
@@ -53,17 +61,76 @@ export interface FeatureMatchOverlayPreset {
 }
 
 /* ────────────────────────────────────────────────
+ * Theme binding
+ * ──────────────────────────────────────────────── */
+
+/** Heavy preset text sets in the Theme's heading; the rest in its body. */
+const HEADING_WEIGHT = 700;
+
+/** Branding slots that keep their own picture, so a pair of slots shows the logo once. */
+const OWN_PICTURE_ITEMS: ReadonlySet<string> = new Set(['branding-image-2']);
+
+/** The Foundation Token each slot of a preset item follows. */
+function presetBindings(item: GraphicItemConfig | GraphicGroupChildConfig): Partial<Record<GraphicThemeSlot, string>> {
+	const typographyWeight = 'typography' in item && item.typography
+		? item.typography.fontWeight
+		: 0;
+	return {
+		'typography': typographyWeight >= HEADING_WEIGHT
+			? 'heading'
+			: 'body',
+		'typography.color': 'text-primary',
+		'surfaceStyle': 'panel',
+		...(OWN_PICTURE_ITEMS.has(item.id)
+			? {}
+			: { media: 'logo' }),
+	};
+}
+
+function bindPresetItem<T extends GraphicItemConfig | GraphicGroupChildConfig>(item: T): T {
+	let bound = item;
+	for (const [slot, token] of Object.entries(presetBindings(item)) as [GraphicThemeSlot, string][]) {
+		if (graphicThemeOwnerSupportsSlot(bound, slot))
+			bound = bindGraphicThemeOwner(bound, slot, token, DEFAULT_GRAPHIC_THEME_TOKENS);
+	}
+	return bound;
+}
+
+/** A preset's Graphic Items, each bound to the Theme and painted as the Default Theme ships it. */
+function themeBound(items: GraphicItemConfig[]): GraphicItemConfig[] {
+	return items.map((item) => {
+		const bound = bindPresetItem(item);
+		return bound.type === 'group'
+			? {
+					...bound,
+					children: bound.children.map(child => bindPresetItem(child)),
+				}
+			: bound;
+	});
+}
+
+/** A preset's config with its composition bound to the Theme. */
+function themeBoundConfig(config: Omit<FeatureMatchOverlayModeConfig, 'featureMatchId'>): Omit<FeatureMatchOverlayModeConfig, 'featureMatchId'> {
+	const { composition } = config.layout;
+	return {
+		...config,
+		layout: {
+			...config.layout,
+			composition: {
+				...composition,
+				items: themeBound(composition.items),
+			},
+		},
+	};
+}
+
+/* ────────────────────────────────────────────────
  * Table with Left Stacked Player Cams
  * ──────────────────────────────────────────────── */
 
-/** The teal framing every Source Item of the default preset is cut into. */
-function tealSourceFraming(): FeatureMatchSourceFramingStyle {
+/** The rounded framing every Source Item of the default preset is cut into; it paints the Theme's `source-surface`. */
+function roundedSourceFraming(): FeatureMatchSourceFramingStyle {
 	return {
-		backgroundColor: '#000000',
-		backgroundOpacity: 0,
-		borderVisible: true,
-		borderColor: '#0077a3',
-		borderWidth: 4,
 		borderRadius: 8,
 	};
 }
@@ -107,14 +174,10 @@ function leftStackedPlayerCamsConfig(): Omit<FeatureMatchOverlayModeConfig, 'fea
 		presetId: 'left-stacked-player-cams',
 		layout: {
 			frame: {
-				backgroundColor: '#111111',
-				opacity: 0.92,
+				opacity: 1,
 				backgroundImageFit: 'cover',
 				mediaBackground: { ...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG },
 				animation: { ...DEFAULT_FRAME_ANIMATION },
-				borderVisible: true,
-				borderColor: '#0077a3',
-				borderWidth: 4,
 			},
 			sources: [
 				{
@@ -127,7 +190,7 @@ function leftStackedPlayerCamsConfig(): Omit<FeatureMatchOverlayModeConfig, 'fea
 					y: 90,
 					width: 1500,
 					height: 900,
-					framingStyle: tealSourceFraming(),
+					framingStyle: roundedSourceFraming(),
 				},
 				{
 					id: 'player1-source',
@@ -139,7 +202,7 @@ function leftStackedPlayerCamsConfig(): Omit<FeatureMatchOverlayModeConfig, 'fea
 					y: 16,
 					width: 340,
 					height: 250,
-					framingStyle: tealSourceFraming(),
+					framingStyle: roundedSourceFraming(),
 				},
 				{
 					id: 'player2-source',
@@ -151,7 +214,7 @@ function leftStackedPlayerCamsConfig(): Omit<FeatureMatchOverlayModeConfig, 'fea
 					y: 800,
 					width: 340,
 					height: 250,
-					framingStyle: tealSourceFraming(),
+					framingStyle: roundedSourceFraming(),
 				},
 			],
 			composition: {
@@ -319,7 +382,7 @@ function leftStackedPlayerCamsConfig(): Omit<FeatureMatchOverlayModeConfig, 'fea
  */
 export const DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG: FeatureMatchOverlayModeConfig = {
 	featureMatchId: null,
-	...leftStackedPlayerCamsConfig(),
+	...themeBoundConfig(leftStackedPlayerCamsConfig()),
 };
 
 /* ────────────────────────────────────────────────
@@ -382,16 +445,10 @@ function neonRuleStyle(glow = neonGlow(8, 0.8)): GraphicSurfaceStyle {
 	return surfaceStyle(solidFill(NEON_LINE), { glow });
 }
 
+/** Square framing; it paints the Theme's `source-surface`, glow included. */
 function neonSourceFraming(overrides: Partial<FeatureMatchSourceFramingStyle> = {}): FeatureMatchSourceFramingStyle {
 	return {
-		backgroundOpacity: 0,
-		borderVisible: true,
-		borderColor: NEON_LINE,
-		borderWidth: NEON_LINE_WIDTH,
 		borderRadius: 0,
-		glowColor: NEON_LINE,
-		glowSize: 7,
-		glowOpacity: 0.75,
 		...overrides,
 	};
 }
@@ -589,32 +646,14 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 		presetId: 'neon-feature-match',
 		layout: {
 			frame: {
-				backgroundColor: '#050008',
 				opacity: 1,
 				backgroundImageFit: 'cover',
-				gradient: 'linear-gradient(180deg, rgba(10,0,16,0.2) 0%, rgba(122,0,122,0.28) 48%, rgba(4,0,10,0.5) 100%)',
 				mediaBackground: { ...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG, enabled: true },
-				// The net port landing (#473) ends the caustics stand-in: this is the
-				// pre-rebuild preset's own net configuration, in per-effect params form.
+				// The Frame's effect is the Theme's `frame-animation-effect`.
 				animation: {
 					enabled: true,
-					effect: 'net',
 					opacity: 0.34,
-					params: {
-						lineColor: '#d600ff',
-						backgroundColor: '#050008',
-						points: 12,
-						connectionDistance: 34,
-						spacing: 18,
-						showPoints: false,
-					},
 				},
-				borderVisible: true,
-				borderColor: NEON_LINE,
-				borderWidth: NEON_LINE_WIDTH,
-				glowColor: NEON_LINE,
-				glowSize: 10,
-				glowOpacity: 0.85,
 			},
 			sources: [
 				{
@@ -627,7 +666,7 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 					y: 164,
 					width: 1328,
 					height: 908,
-					framingStyle: neonSourceFraming({ borderWidth: 4, glowSize: 8, glowOpacity: 0.8 }),
+					framingStyle: neonSourceFraming(),
 				},
 				{
 					id: 'player1-source',
@@ -872,21 +911,21 @@ export const FEATURE_MATCH_OVERLAY_PRESETS: FeatureMatchOverlayPreset[] = [
 		label: 'Full Table',
 		description: 'A full-width main match source with separated details and branding Graphic Items.',
 		aspectRatio: 16 / 9,
-		config: fullTableConfig(),
+		config: themeBoundConfig(fullTableConfig()),
 	},
 	{
 		id: 'left-stacked-player-cams',
 		label: 'Table with Left Stacked Player Cams',
 		description: 'Main table source with two stacked player source items in a left rail.',
 		aspectRatio: 16 / 9,
-		config: leftStackedPlayerCamsConfig(),
+		config: themeBoundConfig(leftStackedPlayerCamsConfig()),
 	},
 	{
 		id: 'neon-feature-match',
 		label: 'Neon Feature Match',
-		description: 'A neon broadcast frame with player cameras, a full-width scoreboard, glowing rules, gradient name bars, and looping video background support.',
+		description: 'A broadcast frame with player cameras, a full-width scoreboard, edge-ruled name bars, branding panels either side, and looping video background support.',
 		aspectRatio: 16 / 9,
-		config: neonFeatureMatchConfig(),
+		config: themeBoundConfig(neonFeatureMatchConfig()),
 	},
 ];
 

@@ -24,7 +24,6 @@ const mockRepo = {
 	create: vi.fn(),
 	update: vi.fn(),
 	updateModeConfig: vi.fn(),
-	updateScreenConfig: vi.fn(),
 	remove: vi.fn(),
 };
 
@@ -135,7 +134,9 @@ describe('useScreenStore', () => {
 			store.screens = [
 				createMockScreen({
 					id: 5,
-					screenConfig: { width: 100 },
+					modeConfigs: {
+						deck: { showDeckName: true },
+					},
 					stateVersion: 3,
 				}),
 			];
@@ -148,26 +149,36 @@ describe('useScreenStore', () => {
 
 			const saved = createMockScreen({
 				id: 5,
-				screenConfig: { width: 1920 },
+				modeConfigs: {
+					deck: { showDeckName: false },
+				},
 				stateVersion: 4,
 			});
-			mockRepo.updateScreenConfig.mockResolvedValue(saved);
-			const save = store.updateScreenConfig(1, 5, { width: 1920 });
+			mockRepo.updateModeConfig.mockResolvedValue(saved);
+			const save = store.updateModeConfig(1, 5, 'deck', { showDeckName: false });
 			await vi.advanceTimersByTimeAsync(300);
 			await save;
-			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
+			expect(store.screens[0]!.modeConfigs).toEqual({
+				deck: { showDeckName: false },
+			});
 
 			serveRefresh([
 				createMockScreen({
 					id: 5,
-					screenConfig: { width: 100 },
+					modeConfigs: {
+						deck: { showDeckName: true },
+					},
 					stateVersion: 3,
 				}),
 			]);
 			const loaded = await refresh;
 
-			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
-			expect(loaded![0]!.screenConfig).toEqual({ width: 1920 });
+			expect(store.screens[0]!.modeConfigs).toEqual({
+				deck: { showDeckName: false },
+			});
+			expect(loaded![0]!.modeConfigs).toEqual({
+				deck: { showDeckName: false },
+			});
 			vi.useRealTimers();
 		});
 	});
@@ -271,7 +282,9 @@ describe('useScreenStore', () => {
 				createMockScreen({
 					id: 5,
 					slug: 'main',
-					screenConfig: { width: 100 },
+					modeConfigs: {
+						deck: { showDeckName: true },
+					},
 					stateVersion: 3,
 				}),
 			];
@@ -285,24 +298,32 @@ describe('useScreenStore', () => {
 			const saved = createMockScreen({
 				id: 5,
 				slug: 'main',
-				screenConfig: { width: 1920 },
+				modeConfigs: {
+					deck: { showDeckName: false },
+				},
 				stateVersion: 4,
 			});
-			mockRepo.updateScreenConfig.mockResolvedValue(saved);
-			const save = store.updateScreenConfig(1, 5, { width: 1920 });
+			mockRepo.updateModeConfig.mockResolvedValue(saved);
+			const save = store.updateModeConfig(1, 5, 'deck', { showDeckName: false });
 			await vi.advanceTimersByTimeAsync(300);
 			await save;
 
 			serveLoad(createMockScreen({
 				id: 5,
 				slug: 'main',
-				screenConfig: { width: 100 },
+				modeConfigs: {
+					deck: { showDeckName: true },
+				},
 				stateVersion: 3,
 			}));
 			const loaded = await load;
 
-			expect(store.activeScreen!.screenConfig).toEqual({ width: 1920 });
-			expect(loaded!.screenConfig).toEqual({ width: 1920 });
+			expect(store.activeScreen!.modeConfigs).toEqual({
+				deck: { showDeckName: false },
+			});
+			expect(loaded!.modeConfigs).toEqual({
+				deck: { showDeckName: false },
+			});
 			vi.useRealTimers();
 		});
 	});
@@ -494,7 +515,9 @@ describe('useScreenStore', () => {
 			store.screens = [
 				createMockScreen({
 					id: 5,
-					screenConfig: { width: 100 },
+					modeConfigs: {
+						deck: { showDeckName: true },
+					},
 					stateVersion: 3,
 				}),
 			];
@@ -507,24 +530,34 @@ describe('useScreenStore', () => {
 
 			const saved = createMockScreen({
 				id: 5,
-				screenConfig: { width: 1920 },
+				modeConfigs: {
+					deck: { showDeckName: false },
+				},
 				stateVersion: 4,
 			});
-			mockRepo.updateScreenConfig.mockResolvedValue(saved);
-			const save = store.updateScreenConfig(1, 5, { width: 1920 });
+			mockRepo.updateModeConfig.mockResolvedValue(saved);
+			const save = store.updateModeConfig(1, 5, 'deck', { showDeckName: false });
 			await vi.advanceTimersByTimeAsync(300);
 			await save;
-			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
+			expect(store.screens[0]!.modeConfigs).toEqual({
+				deck: { showDeckName: false },
+			});
 
 			serveLoad(createMockScreen({
 				id: 5,
-				screenConfig: { width: 100 },
+				modeConfigs: {
+					deck: { showDeckName: true },
+				},
 				stateVersion: 3,
 			}));
 			const loaded = await load;
 
-			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
-			expect(loaded!.screenConfig).toEqual({ width: 1920 });
+			expect(store.screens[0]!.modeConfigs).toEqual({
+				deck: { showDeckName: false },
+			});
+			expect(loaded!.modeConfigs).toEqual({
+				deck: { showDeckName: false },
+			});
 			vi.useRealTimers();
 		});
 	});

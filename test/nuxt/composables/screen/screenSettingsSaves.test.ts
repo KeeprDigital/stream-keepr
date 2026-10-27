@@ -28,7 +28,6 @@ const mockRepo = {
 	create: vi.fn(),
 	update: vi.fn(),
 	updateModeConfig: vi.fn(),
-	updateScreenConfig: vi.fn(),
 	remove: vi.fn(),
 };
 mockNuxtImport('useScreenRepository', () => () => mockRepo);

@@ -242,7 +242,7 @@ The manual "Update from Melee" Round choice (`lastSyncedAt`-based,
 
 ## Docs to update
 
-- `DECISIONS.md`: new ADR-0049 covering Live Results, Current Round, the
+- `DECISIONS.md`: new ADR-0052 covering Live Results, Current Round, the
   message split, and the scheduler choice.
 - `CONTEXT.md`: **Current Round**, **Live Results**; update **Melee Sync** to
   mention polling.
