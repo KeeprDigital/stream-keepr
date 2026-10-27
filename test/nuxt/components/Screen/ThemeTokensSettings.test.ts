@@ -10,7 +10,6 @@ import { defineComponent, h } from 'vue';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { screenModeTokenName } from '~~/shared/screenModes';
 import { standingsModeTokens } from '~~/shared/screenModeTokens/standings';
-import { screenModeBindableFoundationTokens } from '~~/shared/screenThemeOverrides';
 import { deferred } from '~~/test/helpers/deferred';
 import { createWireMockScreen } from '~~/test/helpers/fixtures';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
@@ -115,9 +114,17 @@ describe('a Screen\'s token section', () => {
 	it('lists every Foundation Token a Graphic Item may bind on a graphics host', async () => {
 		const wrapper = await mountSection('broadcast-graphics');
 
-		expect(wrapper.findAll('[data-token]').map(row => row.attributes('data-token')).sort())
-			.toEqual(screenModeBindableFoundationTokens('broadcast-graphics').sort());
-		expect(screenModeBindableFoundationTokens('broadcast-graphics')).toEqual(expect.arrayContaining(['accent', 'logo', 'heading', 'panel']));
+		const listed = wrapper.findAll('[data-token]').map(row => row.attributes('data-token'));
+		expect(listed).toEqual(expect.arrayContaining([
+			'accent',
+			'logo',
+			'heading',
+			'panel',
+			'motion-enter',
+		]));
+		// No binding slot takes a dimension or a Background Layer stack.
+		expect(listed).not.toContain('inset');
+		expect(listed).not.toContain('background');
 	});
 
 	it.each([

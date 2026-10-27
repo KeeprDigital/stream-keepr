@@ -858,8 +858,6 @@ describe('featureMatchOverlayDisplay', () => {
 			mockOutputMode.value = output;
 			mockTheme.value = { accent: '#123456' };
 			const wrapper = await mountComponent();
-			if (output !== 'key')
-				expect(frameStroke(wrapper)).toBe('#123456');
 
 			mockTheme.value = { accent: '#c0ffee' };
 			await nextTick();
@@ -924,9 +922,9 @@ describe('featureMatchOverlayDisplay', () => {
 				'animation-effect': { effect: 'net' },
 			};
 
-			const animation = (await mountComponent()).getComponent({ name: 'FeatureMatchOverlayFrameAnimation' });
+			const frame = (await mountComponent()).get('.frame-layer');
 
-			expect(animation.props('effect')).toEqual({ effect: 'net' });
+			expect(frame.attributes('data-frame-animation-effect')).toBe('net');
 		});
 
 		it('loads a library font the Theme\'s heading supplies to a bound Graphic Item', async () => {

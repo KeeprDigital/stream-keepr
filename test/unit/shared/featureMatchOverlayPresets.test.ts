@@ -92,7 +92,7 @@ describe('feature match overlay presets', () => {
 		{ kind: 'shape', slot: 'surfaceStyle', token: 'panel' },
 		{ kind: 'media', slot: 'media', token: 'logo' },
 	] as const)('binds every $kind item\'s $slot to $token', ({ kind, slot, token }) => {
-		const items = everyPresetItem().filter(item => item.type === kind);
+		const items = everyPresetItem().filter(item => item.type === kind && item.id !== 'branding-image-2');
 
 		expect(items.length).toBeGreaterThan(0);
 		for (const item of items)

@@ -171,7 +171,7 @@ describe('screen Theme Overrides', () => {
 				fillOpacity: 1,
 			},
 		],
-	])('sets a Foundation Token a Graphic Item binds on %s', async (_case, mode, token, value) => {
+	])('sets a token a graphics host consumes on %s', async (_case, mode, token, value) => {
 		await expectOverrideStored(mode as ScreenMode, token, value);
 	});
 

@@ -3,6 +3,7 @@ import type { AnimationEffectRenderPlan } from '~~/shared/animationEffects';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import { animationEffectRenderPlan } from '~~/shared/animationEffects';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
+import { paintGraphicsThemeBindings } from '~~/shared/modules/graphics';
 import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 import GraphicsCompositorCanvas from '~/components/Graphics/Compositor/Canvas.vue';
 import { useBroadcastGraphicsModeData } from '~/composables/screen/useBroadcastGraphicsModeData';
@@ -62,9 +63,13 @@ const canvasHeight = computed(() => (eventCanvas?.value ?? DEFAULT_EVENT_CANVAS)
  * edit that pins nothing new does not re-resolve — which is what keeps an on-air
  * video from being torn down and restarted mid-air.
  */
+const themeTokens = useScreenGraphicThemeTokens();
+
+// Read with its bindings painted, so a font or logo a bound item takes from the
+// Theme resolves too (#831): the capability admits what the Theme supplies.
 const indexedGraphicAssetReferences = computed(() =>
 	broadcastGraphicsGraphicAssetReferences({
-		graphics: [...graphics.value],
+		graphics: paintGraphicsThemeBindings(graphics.value, themeTokens.value),
 	}),
 );
 const graphicAssetReferences = computed(() =>
@@ -83,8 +88,6 @@ const { fontsReady, fontsFailed, fontSources } = useGraphicAssetFontFaces(
 	contentUrl,
 	contentUrlsSettled,
 );
-
-const themeTokens = useScreenGraphicThemeTokens();
 
 const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 	output: resolvedOutput.value,

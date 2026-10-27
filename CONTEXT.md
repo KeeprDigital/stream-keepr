@@ -700,7 +700,7 @@ The authored arrangement a Feature Match Overlay renders: the Frame, its Source 
 _Avoid_: Overlay config
 
 **Feature Match Overlay Frame**:
-The continuous graphic area of a Feature Match Layout behind and around its Layout Items. Its fill, border, glow, Theme media and Animation Effect are the Feature Match Overlay's Mode Tokens; the layout holds its opacity, its own image and video, and which edges its border runs along.
+The continuous graphic area of a Feature Match Layout behind and around its Layout Items. Its fill, border, glow, Animation Effect and the media its Theme adds beneath its own are the Feature Match Overlay's Mode Tokens; the layout holds its opacity, its own image and video, and which edges its border runs along.
 _Avoid_: Panel area, background panel
 
 **Feature Match Layout Item**:

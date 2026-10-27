@@ -67,6 +67,9 @@ export interface FeatureMatchOverlayPreset {
 /** Heavy preset text sets in the Theme's heading; the rest in its body. */
 const HEADING_WEIGHT = 700;
 
+/** Branding slots that keep their own picture, so a pair of slots shows the logo once. */
+const OWN_PICTURE_ITEMS: ReadonlySet<string> = new Set(['branding-image-2']);
+
 /** The Foundation Token each slot of a preset item follows. */
 function presetBindings(item: GraphicItemConfig | GraphicGroupChildConfig): Partial<Record<GraphicThemeSlot, string>> {
 	const typographyWeight = 'typography' in item && item.typography
@@ -78,7 +81,9 @@ function presetBindings(item: GraphicItemConfig | GraphicGroupChildConfig): Part
 			: 'body',
 		'typography.color': 'text-primary',
 		'surfaceStyle': 'panel',
-		'media': 'logo',
+		...(OWN_PICTURE_ITEMS.has(item.id)
+			? {}
+			: { media: 'logo' }),
 	};
 }
 
@@ -918,7 +923,7 @@ export const FEATURE_MATCH_OVERLAY_PRESETS: FeatureMatchOverlayPreset[] = [
 	{
 		id: 'neon-feature-match',
 		label: 'Neon Feature Match',
-		description: 'A neon broadcast frame with player cameras, a full-width scoreboard, glowing rules, gradient name bars, and looping video background support.',
+		description: 'A broadcast frame with player cameras, a full-width scoreboard, edge-ruled name bars, branding panels either side, and looping video background support.',
 		aspectRatio: 16 / 9,
 		config: themeBoundConfig(neonFeatureMatchConfig()),
 	},
