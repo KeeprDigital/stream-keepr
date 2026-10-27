@@ -39,6 +39,8 @@ interface MeleeSyncLeaseInput {
 	command: string;
 	now: Date;
 	expiresAt: Date;
+	/** A live lease held by this command is taken over too. */
+	preempts?: string;
 }
 
 export interface ActiveMeleeSyncLease {
@@ -391,8 +393,9 @@ export function eventService() {
 	 * Atomically acquires the per-event Melee sync lease.
 	 *
 	 * The conditional UPDATE is the compare-and-set operation: only an empty or
-	 * expired lease can be replaced. A conditional release uses the opaque token,
-	 * so an expired command can never clear a newer command's lease.
+	 * expired lease, or one held by `input.preempts`, can be replaced. A
+	 * conditional release uses the opaque token, so an expired command can never
+	 * clear a newer command's lease.
 	 */
 	const tryAcquireMeleeSyncLease = async (input: MeleeSyncLeaseInput): Promise<MeleeSyncLeaseAcquisition> => {
 		const attemptAcquire = async () => {
@@ -409,6 +412,11 @@ export function eventService() {
 						isNull(events.meleeSyncLeaseToken),
 						isNull(events.meleeSyncLeaseExpiresAt),
 						lte(events.meleeSyncLeaseExpiresAt, input.now),
+						...(input.preempts
+							? [
+									eq(events.meleeSyncLeaseCommand, input.preempts),
+								]
+							: []),
 					),
 				))
 				.returning({ id: events.id });
@@ -436,7 +444,8 @@ export function eventService() {
 		const currentLeaseIsAvailable = current
 			&& (!current.meleeSyncLeaseToken
 				|| !current.meleeSyncLeaseExpiresAt
-				|| current.meleeSyncLeaseExpiresAt.getTime() <= input.now.getTime());
+				|| current.meleeSyncLeaseExpiresAt.getTime() <= input.now.getTime()
+				|| (input.preempts != null && current.meleeSyncLeaseCommand === input.preempts));
 		if (currentLeaseIsAvailable) {
 			[acquiredEvent] = await attemptAcquire();
 			if (acquiredEvent) {

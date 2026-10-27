@@ -445,6 +445,76 @@ describe('a Live Results tick', () => {
 		expect(announced()).toEqual([]);
 	});
 
+	// Whatever lands while Melee answers, the tick writes neither the Round nor
+	// its poll state: an operator's command, or a setting switched off, wins.
+	it.each([
+		{
+			case: 'an operator command takes the Event',
+			meanwhile: async (eventId: number) => {
+				await acquireMeleeSyncLease(eventId, 'update');
+			},
+		},
+		{
+			case: 'Live Results is switched off',
+			meanwhile: async (eventId: number) => {
+				await db.update(schema.events).set({ meleeLiveResultsEnabled: false }).where(eq(schema.events.id, eventId));
+			},
+		},
+		{
+			case: 'Melee Sync is switched off',
+			meanwhile: async (eventId: number) => {
+				await db.update(schema.events).set({ meleeEnabled: false }).where(eq(schema.events.id, eventId));
+			},
+		},
+	])('abandons its write when $case mid-tick', async ({ meanwhile }) => {
+		const { eventId, roundId, stage, tournament } = await seedEvent();
+		await stage(ROUND_3, [
+			pairing('a', [1, 2]),
+			pairing('b', [3, 4]),
+		]);
+		const before = await matchesOf(eventId, roundId(ROUND_3));
+		const pollBefore = await pollState(eventId);
+		tournament.matches.set(ROUND_3, [
+			pairing('a', [1, 2]),
+			pairing('b', [3, 4], [2, 1]),
+		]);
+		tournament.onFetchMatches = async () => await meanwhile(eventId);
+
+		const { outcome } = await runLiveResultsTick(eventId, now);
+
+		expect(outcome).toBe('skipped');
+		expect(await matchesOf(eventId, roundId(ROUND_3))).toEqual(before);
+		expect(await pollState(eventId)).toMatchObject({
+			nextCheckAt: pollBefore.nextCheckAt,
+			lastCheckedAt: pollBefore.lastCheckedAt,
+			error: null,
+		});
+		expect(announced()).toEqual([]);
+	});
+
+	it('abandons a probe\'s Player refresh when an operator command takes the Event mid-tick', async () => {
+		const { eventId, roundId, stage, tournament } = await seedEvent();
+		await stage(ROUND_3, [
+			pairing('a', [1, 2], [2, 0]),
+		], round3Standings);
+		tournament.teamIds = [1, 2, 3, 4, 5];
+		tournament.matches.set(ROUND_4, [
+			pairing('c', [1, 5]),
+		]);
+		tournament.onFetchMatches = async () => {
+			await acquireMeleeSyncLease(eventId, 'update');
+		};
+
+		const { outcome } = await runLiveResultsTick(eventId, now);
+
+		const newcomer = await db.query.players.findFirst({
+			where: and(eq(schema.players.eventId, eventId), eq(schema.players.externalId, '5')),
+		});
+		expect(outcome).toBe('skipped');
+		expect(newcomer).toBeUndefined();
+		expect(await matchesOf(eventId, roundId(ROUND_4))).toEqual([]);
+	});
+
 	it.each([
 		{
 			case: 'Live Results',

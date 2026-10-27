@@ -990,9 +990,9 @@ Melee reporting a result. ADR-0049 has the rules.
   `melee_live_results_check_failed` / `melee_live_results_tick_failed`.
 - **Status**: `GET /api/events/:id/melee/live-results` answers the Current
   Round, last checked and last change times, the error and the stop reason.
-- **Polling never blocks an operator**: a tick holds the Event's Melee Sync
-  lease for at most two minutes, and an operator command waits up to 10 s for
-  it before answering `409`.
+- **Live Results never blocks an operator**: an operator command takes a
+  tick's Melee Sync lease over at once, and the tick abandons its remaining
+  writes. Only another operator command answers `409`.
 - **A deploy without the minute cron stops Live Results silently.** Events keep
   the setting and resume once the cron is back.
 

@@ -5,8 +5,14 @@ import { eventDataPublicationModule } from '~~/server/modules/event-data-publica
 import { eventService } from '~~/server/services/event';
 import { requireMeleeService } from '~~/server/services/meleeIntegration';
 import { MeleeTransportError } from '~~/server/services/meleeTransport';
-import { toPublicOperationalError } from '~~/server/utils/errors';
-import { acquireMeleeSyncLease, releaseMeleeSyncLease, renewMeleeSyncLease } from '~~/server/utils/meleeSyncState';
+import { errorNameOf } from '~~/server/utils/errorLogFields';
+import { isStateConflictFailure, toPublicOperationalError } from '~~/server/utils/errors';
+import {
+	acquireMeleeSyncLease,
+	LIVE_RESULTS_COMMAND,
+	releaseMeleeSyncLease,
+	renewMeleeSyncLease,
+} from '~~/server/utils/meleeSyncState';
 import { createMeleeSyncWorkflows } from '../workflows';
 import { loadCurrentRound } from './currentRound';
 import { nextLiveResultsSchedule } from './schedule';
@@ -14,14 +20,14 @@ import { nextLiveResultsSchedule } from './schedule';
 /** Long enough for one Round sync; renewed only at the checkpoint before a write. */
 export const LIVE_RESULTS_LEASE_MS = 120_000;
 
-export type LiveResultsTickOutcome = 'skipped' | 'changed' | 'unchanged' | 'failed' | 'stopped';
+/** A Melee 401/403 always stops Live Results, so a tick reports it as `stopped`. */
+export type LiveResultsTickOutcome = Exclude<LiveResultsOutcome, 'auth-failed'> | 'skipped' | 'stopped';
 
-/** The lease is no longer this tick's: an operator command has taken the Event. */
-class LiveResultsLeaseLostError extends Error {}
-
-function isLeaseUnavailable(error: unknown) {
-	return (error as { statusCode?: unknown } | null)?.statusCode === 409;
-}
+/**
+ * The tick may no longer write: an operator command has taken the Event over,
+ * or Melee Sync or Live Results was switched off.
+ */
+class LiveResultsAbandonedError extends Error {}
 
 function isMeleeAuthFailure(error: unknown) {
 	return error instanceof MeleeTransportError
@@ -36,18 +42,20 @@ function isMeleeNotFound(error: unknown) {
 
 /**
  * One Live Results check for an Event. Takes the Event's Melee Sync lease or
- * skips (polling never waits for an operator), polls the Current Round's Match
- * Results or probes the next Round for pairings, and stores when to check next.
- * Writes the Event row's poll state only, and announces the Event only when its
- * Live Results error appears or clears or Live Results stops itself.
+ * skips, polls the Current Round's Match Results or probes the next Round for
+ * pairings, and stores when to check next. An operator command may take the
+ * lease over mid-tick: the tick then abandons every write still to come,
+ * its poll state included. Writes the Event row's poll state only, and
+ * announces the Event only when its Live Results error appears or clears or
+ * Live Results stops itself.
  */
 export async function runLiveResultsTick(eventId: number, now: Date): Promise<{ outcome: LiveResultsTickOutcome }> {
 	let lease;
 	try {
-		lease = await acquireMeleeSyncLease(eventId, 'live-results', { now, durationMs: LIVE_RESULTS_LEASE_MS });
+		lease = await acquireMeleeSyncLease(eventId, LIVE_RESULTS_COMMAND, { now, durationMs: LIVE_RESULTS_LEASE_MS });
 	}
 	catch (error) {
-		if (isLeaseUnavailable(error))
+		if (isStateConflictFailure(error))
 			return { outcome: 'skipped' };
 		throw error;
 	}
@@ -58,12 +66,16 @@ export async function runLiveResultsTick(eventId: number, now: Date): Promise<{ 
 		if (!event?.meleeEnabled || !event.meleeLiveResultsEnabled)
 			return { outcome: 'skipped' };
 
-		// The Round snapshot write itself is not lease-conditioned, so confirm the
-		// lease is still ours just before it: configuration takes the same lease.
+		// Player and Round writes are not lease-conditioned, so just before each
+		// one confirm the lease is still ours (an operator command, configuration
+		// included, takes it over) and both settings are still on.
 		const checkpoint = async () => {
 			const held = await renewMeleeSyncLease(eventId, lease.token, { durationMs: LIVE_RESULTS_LEASE_MS });
 			if (!held)
-				throw new LiveResultsLeaseLostError();
+				throw new LiveResultsAbandonedError();
+			const current = await eventSvc.findById(eventId);
+			if (!current?.meleeEnabled || !current.meleeLiveResultsEnabled)
+				throw new LiveResultsAbandonedError();
 		};
 
 		let target: LiveResultsTarget['kind'] = 'idle';
@@ -77,7 +89,7 @@ export async function runLiveResultsTick(eventId: number, now: Date): Promise<{ 
 				: 'unchanged';
 		}
 		catch (cause) {
-			if (cause instanceof LiveResultsLeaseLostError)
+			if (cause instanceof LiveResultsAbandonedError)
 				return { outcome: 'skipped' };
 			outcome = isMeleeAuthFailure(cause)
 				? 'auth-failed'
@@ -86,9 +98,7 @@ export async function runLiveResultsTick(eventId: number, now: Date): Promise<{ 
 			console.warn(JSON.stringify({
 				message: 'melee_live_results_check_failed',
 				eventId,
-				errorName: cause instanceof Error
-					? cause.name
-					: typeof cause,
+				errorName: errorNameOf(cause),
 				upstreamStatus: cause instanceof MeleeTransportError
 					? cause.upstreamStatus
 					: null,
@@ -120,13 +130,9 @@ export async function runLiveResultsTick(eventId: number, now: Date): Promise<{ 
 
 		if (!recorded)
 			return { outcome: 'skipped' };
-		if (schedule.stop)
+		if (schedule.stop || outcome === 'auth-failed')
 			return { outcome: 'stopped' };
-		return {
-			outcome: outcome === 'changed' || outcome === 'unchanged'
-				? outcome
-				: 'failed',
-		};
+		return { outcome };
 	}
 	finally {
 		await releaseMeleeSyncLease(eventId, lease.token);
@@ -136,7 +142,8 @@ export async function runLiveResultsTick(eventId: number, now: Date): Promise<{ 
 /**
  * Polls what the Current Round calls for. A Round Melee has paired since the
  * last tick becomes current: Players are refreshed once so its new Players
- * resolve, then its Matches are stored. Throws Melee and storage failures.
+ * resolve, then its Matches are stored. `checkpoint` runs just before each
+ * write and throws to abandon it. Throws Melee and storage failures.
  */
 async function checkCurrentRound(
 	event: DbEvent,
@@ -151,12 +158,12 @@ async function checkCurrentRound(
 		const paired = await probeForPairings(event, Number(target.round.externalId));
 		if (!paired)
 			return { target: target.kind, changed: false };
-		await checkpoint();
-		await workflows.syncPlayers({}, event.id, event);
+		await workflows.syncPlayers({}, event.id, event, undefined, { beforeWrite: checkpoint });
 	}
 
-	await checkpoint();
-	const { published } = await workflows.syncRoundMatches({}, event.id, event, target.round.id);
+	const { published } = await workflows.syncRoundMatches({}, event.id, event, target.round.id, {
+		beforeWrite: checkpoint,
+	});
 	// A probe that found pairings has moved the Current Round on: a change.
 	return {
 		target: target.kind,
@@ -188,9 +195,7 @@ async function announceEvent(eventId: number) {
 		console.warn(JSON.stringify({
 			message: 'melee_live_results_event_update_undelivered',
 			eventId,
-			errorName: error instanceof Error
-				? error.name
-				: typeof error,
+			errorName: errorNameOf(error),
 		}));
 	}
 }

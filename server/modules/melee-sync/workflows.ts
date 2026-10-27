@@ -38,6 +38,11 @@ interface MeleeSyncEventData {
 	meleeClientSecret: string | null;
 }
 
+interface SyncRoundMatchesOptions {
+	/** Runs just before each write; throwing abandons it. */
+	beforeWrite?: () => Promise<void>;
+}
+
 interface DeckListSyncOptions {
 	unsupportedGame: 'reject' | 'skip';
 }
@@ -301,6 +306,7 @@ export function createMeleeSyncWorkflows() {
 		eventId: number,
 		eventData: MeleeSyncEventData,
 		playersSnapshot?: MappedMeleePlayer[],
+		options: { beforeWrite?: () => Promise<void> } = {},
 	) {
 		const melee = requireMeleeService(eventData);
 		const { originConnectionId } = ctx;
@@ -325,6 +331,7 @@ export function createMeleeSyncWorkflows() {
 			return playerData;
 		});
 
+		await options.beforeWrite?.();
 		const {
 			players: upsertedPlayers,
 			created,
@@ -373,7 +380,13 @@ export function createMeleeSyncWorkflows() {
 		};
 	}
 
-	async function syncRoundMatches(ctx: MeleeSyncContext, eventId: number, eventData: MeleeSyncEventData, roundId: number) {
+	async function syncRoundMatches(
+		ctx: MeleeSyncContext,
+		eventId: number,
+		eventData: MeleeSyncEventData,
+		roundId: number,
+		options: SyncRoundMatchesOptions = {},
+	) {
 		const { originConnectionId } = ctx;
 		const afterCommitWarnings: string[] = [];
 		// Re-check at the write boundary even though route-facing Round commands
@@ -382,13 +395,13 @@ export function createMeleeSyncWorkflows() {
 
 		const phase = await phaseService().findById(round.phaseId, eventId);
 
-		const result = await syncMatchesFromMelee(eventId, eventData, round, phase ?? null);
+		const result = await syncMatchesFromMelee(eventId, eventData, round, phase ?? null, options);
 		// Pairings for this Round complete the one before it. The Round's own write
 		// has committed, so a failure here must not lose its announcement.
 		let previousRoundStandings: Awaited<ReturnType<typeof syncPreviousRoundStandingsFromMelee>> = null;
 		if (result.matchCount > 0) {
 			try {
-				previousRoundStandings = await syncPreviousRoundStandingsFromMelee(eventId, eventData, round);
+				previousRoundStandings = await syncPreviousRoundStandingsFromMelee(eventId, eventData, round, options);
 			}
 			catch (error) {
 				console.warn(JSON.stringify({

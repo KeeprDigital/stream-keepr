@@ -7,9 +7,9 @@ import { toPublicOperationalError } from '~~/server/utils/errors';
 
 export const MELEE_SYNC_LEASE_DURATION_MS = 15 * 60 * 1000;
 export const MELEE_SYNC_LEASE_RENEW_INTERVAL_MS = 60 * 1000;
-/** How long an operator command waits out a Live Results tick before its 409. */
-export const OPERATOR_LEASE_WAIT_MS = 10_000;
-const OPERATOR_LEASE_RETRY_MS = 500;
+
+/** The lease command a Live Results tick holds; any operator command takes it over. */
+export const LIVE_RESULTS_COMMAND = 'live-results';
 
 export type MeleeSyncCommandName
 	= | 'configuration'
@@ -19,7 +19,7 @@ export type MeleeSyncCommandName
 		| 'decklists'
 		| 'round'
 		| 'update'
-		| 'live-results';
+		| typeof LIVE_RESULTS_COMMAND;
 
 export interface MeleeSyncMetadataUpdate {
 	initialSetupCompletedAt?: Date | null;
@@ -90,10 +90,9 @@ export async function recordMeleeSyncFailure(
 
 /**
  * Takes the Event's Melee Sync lease or answers 409. Polling never blocks an
- * operator: a command finding a Live Results tick holding the lease retries
- * every `OPERATOR_LEASE_RETRY_MS` for up to `OPERATOR_LEASE_WAIT_MS` first. It
- * never waits for another operator command, and a tick never waits at all.
- * `options.now` dates the first attempt; a retry reads the clock.
+ * operator: an operator command takes a Live Results tick's lease over at once,
+ * and the tick finds it gone at its next checkpoint. It never takes another
+ * operator command's lease, and a tick never takes any.
  */
 export async function acquireMeleeSyncLease(
 	eventId: number,
@@ -101,33 +100,22 @@ export async function acquireMeleeSyncLease(
 	options: { now?: Date; durationMs?: number; token?: string } = {},
 ): Promise<MeleeSyncLease> {
 	const token = options.token ?? crypto.randomUUID();
-	const waitUntil = Date.now() + OPERATOR_LEASE_WAIT_MS;
-	let now = options.now ?? new Date();
-	for (;;) {
-		const expiresAt = new Date(now.getTime() + (options.durationMs ?? MELEE_SYNC_LEASE_DURATION_MS));
-		const result = await eventService().tryAcquireMeleeSyncLease({
-			eventId,
-			token,
-			command,
-			now,
-			expiresAt,
-		});
-		if (result.acquired) {
-			return {
-				token: result.lease.token,
-				command,
-				expiresAt: result.lease.expiresAt,
-			};
-		}
-
-		const waitForTick = command !== 'live-results'
-			&& result.activeLease?.command === 'live-results'
-			&& Date.now() + OPERATOR_LEASE_RETRY_MS <= waitUntil;
-		if (!waitForTick)
-			return await throwLeaseUnavailable(eventId, result.activeLease);
-		await new Promise(resolve => setTimeout(resolve, OPERATOR_LEASE_RETRY_MS));
-		now = new Date();
-	}
+	const now = options.now ?? new Date();
+	const result = await eventService().tryAcquireMeleeSyncLease({
+		eventId,
+		token,
+		command,
+		now,
+		expiresAt: new Date(now.getTime() + (options.durationMs ?? MELEE_SYNC_LEASE_DURATION_MS)),
+		...(command !== LIVE_RESULTS_COMMAND && { preempts: LIVE_RESULTS_COMMAND }),
+	});
+	if (!result.acquired)
+		return await throwLeaseUnavailable(eventId, result.activeLease);
+	return {
+		token: result.lease.token,
+		command,
+		expiresAt: result.lease.expiresAt,
+	};
 }
 
 async function throwLeaseUnavailable(

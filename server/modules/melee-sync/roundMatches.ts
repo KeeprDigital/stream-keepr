@@ -48,6 +48,11 @@ export interface PreviousRoundStandingsResult
 	roundId: number;
 }
 
+export interface RoundSnapshotWriteOptions {
+	/** Runs just before the snapshot write; throwing abandons it. */
+	beforeWrite?: () => Promise<void>;
+}
+
 /** Minimal Event shape needed by Melee Sync. */
 export interface SyncableEvent {
 	meleeEnabled: boolean | null;
@@ -109,8 +114,9 @@ export async function syncMatchesFromMelee(
 	eventData: SyncableEvent,
 	round: DbRound,
 	phase: DbPhase | null,
+	options: RoundSnapshotWriteOptions = {},
 ): Promise<SyncMatchesResult> {
-	return await syncRoundSnapshot(eventId, eventData, round, phase, { knownComplete: false });
+	return await syncRoundSnapshot(eventId, eventData, round, phase, { ...options, knownComplete: false });
 }
 
 /**
@@ -122,9 +128,10 @@ export async function syncRoundStandingsFromMelee(
 	eventId: number,
 	eventData: SyncableEvent,
 	round: DbRound,
+	options: RoundSnapshotWriteOptions = {},
 ): Promise<SyncMatchesResult> {
 	const phase = await phaseService().findById(round.phaseId, eventId);
-	return await syncRoundSnapshot(eventId, eventData, round, phase ?? null, { knownComplete: true });
+	return await syncRoundSnapshot(eventId, eventData, round, phase ?? null, { ...options, knownComplete: true });
 }
 
 /**
@@ -137,6 +144,7 @@ export async function syncPreviousRoundStandingsFromMelee(
 	eventId: number,
 	eventData: SyncableEvent,
 	round: Pick<DbRound, 'id'>,
+	options: RoundSnapshotWriteOptions = {},
 ): Promise<PreviousRoundStandingsResult | null> {
 	const { previous } = await adjacentMeleeRounds(eventId, round.id);
 	if (!previous)
@@ -144,7 +152,7 @@ export async function syncPreviousRoundStandingsFromMelee(
 	const stored = await playerRoundStandingsService().findByRoundId(eventId, previous.id);
 	if (stored.length > 0)
 		return null;
-	const { resultChangedMatchIds, pairingsChanged, standingsChanged } = await syncRoundStandingsFromMelee(eventId, eventData, previous);
+	const { resultChangedMatchIds, pairingsChanged, standingsChanged } = await syncRoundStandingsFromMelee(eventId, eventData, previous, options);
 	return {
 		roundId: previous.id,
 		resultChangedMatchIds,
@@ -158,7 +166,7 @@ async function syncRoundSnapshot(
 	eventData: SyncableEvent,
 	round: DbRound,
 	phase: DbPhase | null,
-	options: { knownComplete: boolean },
+	options: RoundSnapshotWriteOptions & { knownComplete: boolean },
 ): Promise<SyncMatchesResult> {
 	const melee = requireMeleeService(eventData);
 	const playerSvc = playerService();
@@ -273,6 +281,7 @@ async function syncRoundSnapshot(
 			points: standing.Points,
 		};
 	}) ?? null;
+	await options.beforeWrite?.();
 	const {
 		created: matchesCreated,
 		updated: matchesUpdated,

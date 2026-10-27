@@ -72,7 +72,7 @@ The percentage of an Archetype's Players in the current Metagame scope that reac
 _Avoid_: top-cut rate, cash rate, qualification rate
 
 **Melee Sync**:
-The workflow that imports and refreshes Event structure, Players, Deck Lists, standings, Matches, and Rounds from Melee.gg. An operator runs it from the Sync page; Live Results runs its Round sync on a schedule. One Melee Sync command runs per Event at a time.
+The workflow that imports and refreshes Event structure, Players, Deck Lists, standings, Matches, and Rounds from Melee.gg. An operator runs it from the Sync page; Live Results runs its Round sync on a schedule. One Melee Sync command runs per Event at a time; an operator's command takes over from a Live Results tick instead of waiting for it.
 
 **Live Results**:
 A per-Event setting, off by default and on only while Melee Sync is on, under which Melee Sync polls Melee.gg each minute for the Current Round's Match Results, and for the next Round's pairings once the Current Round is complete. It announces only what changed and switches itself off after 12 hours with no change or when Melee refuses its credentials. Its failures are its own Live Results error, apart from the manual sync's (ADR-0049).
