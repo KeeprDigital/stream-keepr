@@ -304,6 +304,10 @@ The exclusive, Session-scoped right to edit one graphics authoring artifact: a S
 A named, installation-scoped set of Theme Token values giving every Screen of an Event one look and feel, whatever its Screen Mode. It holds values, never compositions: it may supply a logo a Broadcast Graphic shows, but the Broadcast Graphic itself is a template's. An Event uses one Theme; a Theme may serve many Events. An edit reaches every Screen using it at once, with no draft or publish step. It themes what Screens render, never the operator app.
 _Avoid_: Style Set, brand, skin, palette (when naming the whole)
 
+**Default Theme**:
+The built-in Theme that ships with Stream Keepr, used by every Event that picks no Theme. It is read-only: it cannot be edited or deleted.
+_Avoid_: base theme, fallback theme
+
 **Theme Token**:
 One named value a Screen may consume from its Theme, such as a colour, font, or Graphic Asset. Stream Keepr owns every token's name, type, and where it may be consumed; users set values, never names.
 _Avoid_: variable, style entry

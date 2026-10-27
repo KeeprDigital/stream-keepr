@@ -2,10 +2,11 @@
 import type { Component, ComponentPublicInstance } from 'vue';
 import type { BackgroundLayer, ModeConfigsMap, ScreenConfig } from '~~/shared/types/screenConfig';
 import { usePreferredDark } from '@vueuse/core';
+import { DEFAULT_THEME_TOKENS } from '~~/shared/modules/theme';
 import { screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
-import { getScreenModeDefinition, resolveScreenModeHost } from '~/modules/screen-mode';
+import { getScreenModeDefinition, resolveScreenModeHost, screenModeThemeTokenStyle } from '~/modules/screen-mode';
 
-const { screen, overlayContainer } = useScreenContext();
+const { screen, overlayContainer, themeTokens } = useScreenContext();
 const preferredDark = usePreferredDark();
 const viewportWidth = ref(0);
 const viewportHeight = ref(0);
@@ -63,6 +64,16 @@ const containerBackgroundStyle = computed(() =>
 		: undefined,
 );
 
+/**
+ * The mode's resolved Mode Tokens, as the custom properties its display reads.
+ * The Screen carries no Screen Theme Overrides yet.
+ */
+const themeTokenStyle = computed(() => screenModeThemeTokenStyle(
+	currentMode.value,
+	themeTokens?.value ?? DEFAULT_THEME_TOKENS,
+	{},
+));
+
 function setHostContainer(el: Element | ComponentPublicInstance | null) {
 	overlayContainer.value = host.value.provideOverlayContainer && el instanceof HTMLElement
 		? el
@@ -79,7 +90,7 @@ function setHostContainer(el: Element | ComponentPublicInstance | null) {
 		<div
 			:ref="setHostContainer"
 			:class="host.containerClass"
-			:style="[host.containerStyle, containerBackgroundStyle]"
+			:style="[host.containerStyle, containerBackgroundStyle, themeTokenStyle]"
 		>
 			<ScreenBackgroundLayerStack
 				v-if="modeBackgroundLayers.length"
