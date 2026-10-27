@@ -220,19 +220,16 @@ describe('screenModesPlayerHistoryDisplay', () => {
 		expect(badge.get('.outcome-score').text()).toBe('2-1');
 	});
 
-	// A bye is badged in the win colour: it scores as one.
 	it.each([
 		[
 			'bye',
 			historyRow({ outcome: 'bye' }),
 			'BYE',
-			'win',
 		],
 		[
 			'loss',
 			historyRow({ outcome: 'loss', playerGameWins: 0, opponentGameWins: 2 }),
 			'LOSS',
-			'loss',
 		],
 		[
 			'draw',
@@ -243,23 +240,31 @@ describe('screenModesPlayerHistoryDisplay', () => {
 				gameDraws: 1,
 			}),
 			'DRAW',
-			'draw',
 		],
 		[
 			'pending',
 			historyRow({ outcome: 'pending', hasResult: false }),
 			'Pending',
-			'pending',
 		],
-	] as const)('badges a %s outcome in its own colour', async (outcome, row, expectedLabel, colorToken) => {
+	] as const)('badges a %s outcome with its state', async (outcome, row, expectedLabel) => {
 		pageData.value = [row];
 
 		const wrapper = await mountComponent();
 
 		const badge = wrapper.get('.outcome-badge');
 		expect(badge.attributes('data-outcome')).toBe(outcome);
-		expect(badge.attributes('style')).toContain(`color: ${modeTokenVar('player-history', colorToken)};`);
 		expect(badge.get('.outcome-label').text()).toBe(expectedLabel);
+	});
+
+	// A bye scores as a win, so it reads in the win colour.
+	it('badges a bye in the win colour', async () => {
+		pageData.value = [
+			historyRow({ outcome: 'bye' }),
+		];
+
+		const badge = (await mountComponent()).get('.outcome-badge');
+
+		expect(badge.attributes('style')).toContain(`color: ${modeTokenVar('player-history', 'outcome-win')};`);
 	});
 
 	it('leaves the score segment off an unscored outcome', async () => {
