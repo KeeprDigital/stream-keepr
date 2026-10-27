@@ -54,13 +54,13 @@ const matchOptions = useFeatureMatchMenuItems();
 const presetOptions = FEATURE_MATCH_OVERLAY_PRESETS.map(preset => ({ label: preset.label, value: preset.id, description: preset.description }));
 /** The overlay is authored in its Event's canvas, set in Event Presentation Settings (ADR-0051). */
 const eventCanvas = computed(() => eventCanvasOf(eventStore.event));
-const screenWidth = computed(() => eventCanvas.value.width);
-const screenHeight = computed(() => eventCanvas.value.height);
+const canvasWidth = computed(() => eventCanvas.value.width);
+const canvasHeight = computed(() => eventCanvas.value.height);
 const selectedPreset = computed(() => FEATURE_MATCH_OVERLAY_PRESETS.find(preset => preset.id === config.value.presetId));
 const aspectMismatch = computed(() => {
 	if (!selectedPreset.value)
 		return false;
-	const actual = screenWidth.value / screenHeight.value;
+	const actual = canvasWidth.value / canvasHeight.value;
 	return Math.abs(actual - selectedPreset.value.aspectRatio) > 0.05;
 });
 
@@ -71,8 +71,8 @@ const aspectMismatch = computed(() => {
 const editor = useFeatureMatchLayoutEditor({
 	config,
 	updateConfig,
-	canvasWidth: screenWidth,
-	canvasHeight: screenHeight,
+	canvasWidth,
+	canvasHeight,
 });
 const { selection } = editor;
 
@@ -466,8 +466,8 @@ useEventListener(import.meta.client
 				<FeatureMatchOverlayLayerList
 					:layout="config.layout"
 					:editor="editor"
-					:canvas-width="screenWidth"
-					:canvas-height="screenHeight"
+					:canvas-width="canvasWidth"
+					:canvas-height="canvasHeight"
 				/>
 			</section>
 
@@ -478,8 +478,8 @@ useEventListener(import.meta.client
 					:config="config"
 					:selected-target="selectedTarget"
 					:compositor-target="compositorTarget"
-					:canvas-width="screenWidth"
-					:canvas-height="screenHeight"
+					:canvas-width="canvasWidth"
+					:canvas-height="canvasHeight"
 					:publication-blocked="assetPublicationBlocked"
 					:publication-block-reason="assetPublicationBlockReason"
 					:selection-frame="selectionFrame"
@@ -496,8 +496,8 @@ useEventListener(import.meta.client
 					v-if="selection.type === 'item'"
 					:layout="config.layout"
 					:selected-target="compositorTarget"
-					:canvas-width="screenWidth"
-					:canvas-height="screenHeight"
+					:canvas-width="canvasWidth"
+					:canvas-height="canvasHeight"
 					:event-id="eventId"
 					writable
 					@update:composition="composition => updateFields({ layout: { ...config.layout, composition } })"
@@ -507,8 +507,8 @@ useEventListener(import.meta.client
 					:selected-target="selectedTarget"
 					:config="config"
 					:update-config="updateFields"
-					:screen-width="screenWidth"
-					:screen-height="screenHeight"
+					:screen-width="canvasWidth"
+					:screen-height="canvasHeight"
 					:event-id="eventId"
 					@remove="itemId => editor.remove({ type: 'source', itemId })"
 					@duplicate="itemId => editor.duplicate({ type: 'source', itemId })"

@@ -1628,7 +1628,6 @@ Canvas size and wording are set once per production, not per brand or per Screen
 
 - Today's two canvases (`ScreenConfig` width/height and the graphics hosts' canvas fields) become one.
 - A portrait display on a landscape Event is not supported; an override is the reopening path if a real case appears.
-- Feature Match Controls is a control surface, not an authored rendering, so it keeps filling its window rather than scaling the Event Canvas.
 - Resizing the Event Canvas moves the frame every graphics composition of the Event was authored in, yet takes no Graphics Authoring Lease, like any other Event Presentation Settings write (ADR-0030).
 - On-air wording stays on the Event, so one Theme serves Events that word things differently.
 - The existing look fields are dropped, not migrated, and existing Screens render the Default Theme.

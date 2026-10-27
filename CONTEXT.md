@@ -749,7 +749,7 @@ _Avoid_: Dummy data, test data
 - At the same authoritative time, every graphics **Screen Output** resolves the same composition and animation phase; a late-loading or reconnected one catches up rather than replaying
 - The **Feature Match Overlay**'s Sideboard reveal is the host-local exception: each output plays the **Deck List Graphic Item**'s authored enter or exit on its own clock from when it observes the reveal flag change, so outputs agree within realtime skew rather than at one authoritative time. First load and reload render the settled frame; an output that was disconnected across the change plays the motion late on **Reconnect Resync** rather than catching up (ADR-0015)
 - Application-level output alignment does not promise hardware genlock between browser windows or capture devices
-- Every overlay **Screen Mode Definition** registers viewport-fit scaling, so its **Screen Output** renders the **Event Canvas** scaled uniformly to fit its window, letterboxed; Feature Match Controls, a control surface, fills its window
+- A **Screen Output** renders its **Event Canvas** scaled uniformly to fit its window, letterboxed, whenever its **Screen Mode Definition** registers viewport-fit scaling
 - Every realtime-fed surface re-reads authoritative state on **Reconnect Resync**; a reconnected **Screen Output** renders the current **Screen Mode** without waiting for the next change
 - A **Screen Output** whose realtime link is disconnected holds its last accepted rendering rather than blanking
 - A client that cannot mint a realtime token for its **Event** re-attempts, and reports a persistent failure where an operator can see it
