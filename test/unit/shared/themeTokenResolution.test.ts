@@ -268,7 +268,7 @@ describe('the shipped vocabulary and Mode Token declarations', () => {
 		});
 
 		for (const [name, { default: declared }] of Object.entries(modeTokens)) {
-			const expected = typeof declared === 'object' && 'token' in declared
+			const expected = typeof declared === 'object' && declared !== null && 'token' in declared
 				? FOUNDATION_TOKENS[declared.token as FoundationTokenName].default
 				: declared;
 			expect(values[name], name).toEqual(expected);
@@ -279,7 +279,7 @@ describe('the shipped vocabulary and Mode Token declarations', () => {
 		const modeTokens = Object.fromEntries(Object.entries(FOUNDATION_TOKENS).map(([name, definition]) => [
 			`probe.${name}`,
 			{
-				type: definition.type,
+				...definition,
 				label: name,
 				default: { token: name },
 			},
