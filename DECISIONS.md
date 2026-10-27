@@ -1542,3 +1542,53 @@ The Players page opened Edit on a row click and kept history in the menu, while 
 
 - **Make the whole Players page row open history.** It would hide one target behind another again, and the deck cell and row menu sit in the same row.
 - **Link a name the surface knows only as text by matching it against the roster.** Two Players can share a name, and the wrong history is worse than none.
+
+## ADR-0049: Live Results polls the Current Round, and Melee Sync announces only what changed
+
+Accepted · 2026-10-27
+
+### Decision
+
+**Live Results is a per-Event setting under which Melee Sync polls Melee.gg.** It is off by default, existing Events included, and can be on only while Melee Sync is on; turning Melee Sync off turns it off, so re-enabling sync starts without it. Turning it on starts a fresh poll (due now, no backoff, no error or stop reason, the idle clock restarted); turning it off stops polling and touches no data. `PUT /api/events/:id/melee/live-results` sets it; `GET` on the same path answers the Current Round and the last poll's state for the Sync page.
+
+**The Current Round is derived, never set.** It is the latest Melee-managed Round (`isMeleeManagedRound`), in the Event's Round order, with at least one Match stored from Melee. A Round is complete when every such Match has a result or is a bye, or when the next Melee-managed Round has pairings. While the Current Round is incomplete, a tick fetches its Matches only (one paginated request) and syncs them. Once it is complete, a tick probes the next Round; when Melee pairs it, the tick refreshes Players once, so new Players resolve, and syncs it, which makes it current. With no Round paired, the first is probed; with no next Round, polling idles until a structure sync adds one (`liveResults/currentRound.ts`).
+
+**Round Standings are stored only for a complete Round, on every Melee Sync path**: polling, Update from Melee, per-Round Refresh and Re-sync Matches. A sync of an incomplete Round stores its Matches and leaves its standings alone, without asking Melee for them. Pairing Round N+1 completes Round N, so that sync fills Round N's standings if none are stored. The Standings Screen therefore always shows standings after the last complete Round.
+
+**The Round snapshot write diffs, and each kind of change is announced on its own.** `meleeRoundSnapshotService().replace` writes only rows that changed and reports what did. `syncRoundMatches` publishes `melee:matchResultsSynced` (changed `matchIds`), `melee:pairingsSynced` and `melee:roundStandingsSynced`, each only when its content changed, for manual syncs too; a quiet sync publishes nothing. For one release `melee:roundSynced`, payload unchanged, is published beside any of them for Screen Outputs still on the previous bundle; new client code never listens to it.
+
+**A one-minute Cloudflare cron is the scheduler.** `wrangler.jsonc` declares `* * * * *` beside the hourly `17 * * * *`, and every `cloudflare:scheduled` handler checks `controller.cron` against `server/utils/cronSchedules.ts`, so the graphics jobs stay hourly. `runDueLiveResultsTicks` ticks Events with Melee Sync and Live Results on whose `meleeLiveResultsNextCheckAt` is unset or passed, longest-waiting first, at most 25 per run, one at a time, each in its own `try`/`catch`.
+
+**Poll state is columns on `events`**: next check, backoff step, last checked, last change, Live Results error, stop reason. Cadence is `nextLiveResultsSchedule`: results every minute, every five minutes after thirty quiet minutes, back to every minute on a change; probing, idling and failures back off from a minute, doubling to a fifteen-minute cap. Live Results stops itself, storing a stop reason, after twelve hours with no change of any kind (failed ticks count) or on a Melee 401/403.
+
+**The Melee Sync lease keeps a tick from writing after Melee Sync is turned off.** A tick takes the Event's lease as `live-results` for two minutes or skips; it never waits. Configuration, which resets imported data when sync goes off, takes the same lease, so the reset and a tick never interleave; the tick re-confirms the lease just before its Round write, and its poll-state write is conditioned on the lease token and both settings still being on. Polling never blocks an operator: an operator command finding a `live-results` lease retries for up to ten seconds before its `409`.
+
+**A tick churns no Event row.** It writes only its poll columns, and publishes `event:updated` only when its Live Results error appears or clears or it stops itself. The Live Results error is its own column, apart from the manual sync's `lastSyncError`, so neither clears the other. Melee Sync takes a `MeleeSyncContext` (an optional origin connection id) instead of an `H3Event`, so a tick runs with no request.
+
+### Why
+
+Match Results reported on Melee.gg reached Stream Keepr only when an operator pressed a button. Polling closes that gap without operator action, and deriving the Current Round from synced data means no pointer can go stale.
+
+Polling with the old messages would have made every results-reading Screen re-read every minute: every Round sync published `melee:roundSynced` whether or not anything changed, and every command rewrote and announced the Event row. Diffing and per-kind messages make a quiet tick invisible.
+
+Melee's Round Standings for Round N include Round N's results, so storing them mid-Round would move the Standings Screen while the Round is played. Storing them on completion keeps "standings after Round X" honest.
+
+A minute cron meets the cadence: the shortest interval is a minute, and backoff only needs a stored next-check time. It keeps all state in D1 beside the Event, with no new binding to deploy.
+
+### Consequences
+
+- A deploy without the minute cron silently stops Live Results; Events keep their setting and resume on the next deploy with it.
+- Every new `cloudflare:scheduled` handler must check its own cron, or it runs every minute. `test/unit/server/utils/cronSchedules.test.ts` pins the triggers against `wrangler.jsonc` and each handler's gate.
+- A result corrected on Melee after its Round is complete is not polled for; a manual sync picks it up.
+- Polling refreshes Players only when a new Round is first paired, never Deck Lists or Event structure.
+- A tick slower than its two-minute lease could overlap an operator command that takes the lease after it lapses; the tick's poll-state write is then refused by the token condition. One Round sync is far inside that bound.
+- `melee:roundSynced` is removed in the following release (plan Task 10).
+- `test/unit/server/modules/meleeLiveResults.sqlite.test.ts` pins the tick, the runner and the status route; `meleeLiveResultsRules.test.ts` the cadence; `meleeLiveResultsCurrentRound.sqlite.test.ts` the Current Round.
+
+### Rejected alternatives
+
+- **A Durable Object alarm per Event.** Exact per-Event timing, but a new binding and state outside D1, for a cadence a minute cron already meets.
+- **An operator pointer to the Current Round.** It goes stale the moment Melee pairs the next Round, which is what polling exists to notice.
+- **Store Round Standings whenever Melee returns them.** The Standings Screen would change mid-Round, and Seeds would read standings that still move.
+- **Keep `melee:roundSynced` as the only message, published only on change.** Standings would still re-read on every reported result, and the Pairings Screen could not tell a result from a re-pairing.
+- **Let a tick wait for the lease like an operator command.** A tick that waits holds a cron invocation for nothing; the next minute's tick tries again.

@@ -21,6 +21,14 @@ type SyncMetadataUpdate = Partial<Pick<DbEvent,	| 'initialSetupCompletedAt'
 	| 'lastDecklistsSyncedAt'
 	| 'lastSyncError'>>;
 
+/** What one Live Results tick writes: its poll state, and on a stop, the switch-off. */
+export type MeleeLiveResultsCheck = Pick<DbEvent, 'meleeLiveResultsNextCheckAt'
+	| 'meleeLiveResultsBackoffStep'
+	| 'meleeLiveResultsLastCheckedAt'
+	| 'meleeLiveResultsLastChangeAt'
+	| 'meleeLiveResultsError'>
+	& Partial<Pick<DbEvent, 'meleeLiveResultsEnabled' | 'meleeLiveResultsStopReason'>>;
+
 interface FindAllParams {
 	game?: 'mtg' | 'op';
 }
@@ -337,6 +345,49 @@ export function eventService() {
 	};
 
 	/**
+	 * Events whose Live Results check is due at `now`: Melee Sync and Live Results
+	 * on, next check unset or passed. Longest-waiting first, at most `limit`.
+	 */
+	const findDueMeleeLiveResults = async (now: Date, limit: number): Promise<number[]> => {
+		const rows = await db
+			.select({ id: events.id })
+			.from(events)
+			.where(and(
+				eq(events.meleeEnabled, true),
+				eq(events.meleeLiveResultsEnabled, true),
+				or(isNull(events.meleeLiveResultsNextCheckAt), lte(events.meleeLiveResultsNextCheckAt, now)),
+			))
+			// SQLite sorts NULL first ascending: an Event due "now" goes ahead.
+			.orderBy(asc(events.meleeLiveResultsNextCheckAt), asc(events.id))
+			.limit(limit);
+		return rows.map(row => row.id);
+	};
+
+	/**
+	 * Stores a Live Results tick's poll state. Only the tick holding `leaseToken`
+	 * writes, and only while Melee Sync and Live Results are still on, so a tick
+	 * never revives a poll an operator switched off. `false` when nothing matched.
+	 */
+	const recordMeleeLiveResultsCheck = async (
+		id: number,
+		leaseToken: string,
+		data: MeleeLiveResultsCheck,
+	): Promise<boolean> => {
+		const [updatedEvent] = await db
+			.update(events)
+			.set(data)
+			.where(and(
+				eq(events.id, id),
+				eq(events.meleeSyncLeaseToken, leaseToken),
+				eq(events.meleeEnabled, true),
+				eq(events.meleeLiveResultsEnabled, true),
+			))
+			.returning({ id: events.id });
+
+		return !!updatedEvent;
+	};
+
+	/**
 	 * Atomically acquires the per-event Melee sync lease.
 	 *
 	 * The conditional UPDATE is the compare-and-set operation: only an empty or
@@ -473,6 +524,8 @@ export function eventService() {
 		updateSyncMetadata,
 		enableMeleeLiveResults,
 		disableMeleeLiveResults,
+		findDueMeleeLiveResults,
+		recordMeleeLiveResultsCheck,
 		tryAcquireMeleeSyncLease,
 		renewMeleeSyncLease,
 		releaseMeleeSyncLease,
