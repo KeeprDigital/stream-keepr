@@ -35,7 +35,10 @@ export function useGraphicsPreviewTheme(eventThemeId: MaybeRefOrGetter<string | 
 
 	onMounted(async () => {
 		try {
-			themes.value = await repository.list();
+			const listed = await repository.list();
+			themes.value = Array.isArray(listed)
+				? listed
+				: [];
 		}
 		catch {
 			// The picker still offers the Event's Theme and the Default Theme.
