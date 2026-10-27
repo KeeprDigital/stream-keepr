@@ -353,20 +353,6 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 				>
 					{{ formatHighlanderPointsLabel(selectedDeck.highlander) }}
 				</UBadge>
-				<div v-if="selectedDeckCounters.length > 0" class="flex items-center gap-1.5 ml-2">
-					<span class="text-xs uppercase tracking-wide text-muted">Counters</span>
-					<UBadge
-						v-for="counter in selectedDeckCounters"
-						:key="counter.key"
-						color="neutral"
-						variant="soft"
-						size="sm"
-						class="gap-1"
-					>
-						<UIcon :name="counter.icon" class="size-3.5" />
-						{{ counter.label }}
-					</UBadge>
-				</div>
 			</div>
 		</template>
 		<template #description>
@@ -435,7 +421,7 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 						</div>
 
 						<!-- Sideboard -->
-						<div v-if="companionCard || sideboardCards.length > 0 || tokenCards.length > 0" class="shrink-0 border-l border-default pl-6">
+						<div v-if="companionCard || sideboardCards.length > 0 || tokenCards.length > 0 || selectedDeckCounters.length > 0" class="shrink-0 border-l border-default pl-6">
 							<section v-if="companionCard" data-deck-companion :class="{ 'mb-5': sideboardCards.length > 0 }">
 								<h4 class="font-semibold mb-3 text-sm uppercase tracking-wide">
 									Companion
@@ -477,7 +463,7 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 								</div>
 							</div>
 
-							<section v-if="tokenCards.length > 0" class="token-section" :class="{ 'mt-5': sideboardCards.length > 0 }">
+							<section v-if="tokenCards.length > 0" class="supplementary-section" :class="{ 'mt-5': sideboardCards.length > 0 }">
 								<h4 class="font-semibold mb-3 text-sm uppercase tracking-wide">
 									Tokens ({{ tokenCards.length }})
 								</h4>
@@ -493,6 +479,23 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 										@preview="handlePreviewUpdate"
 										@pin="togglePreviewPin"
 									/>
+								</ul>
+							</section>
+
+							<section
+								v-if="selectedDeckCounters.length > 0"
+								data-deck-counters
+								class="supplementary-section"
+								:class="{ 'mt-5': sideboardCards.length > 0 || tokenCards.length > 0 }"
+							>
+								<h4 class="font-semibold mb-3 text-sm uppercase tracking-wide">
+									Counters
+								</h4>
+								<ul class="flex flex-col gap-1">
+									<li v-for="counter in selectedDeckCounters" :key="counter.key" class="flex items-center gap-2 text-sm">
+										<UIcon :name="counter.icon" class="size-4 shrink-0 text-muted" />
+										{{ counter.label }}
+									</li>
 								</ul>
 							</section>
 						</div>
@@ -575,7 +578,7 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 	min-width: 0;
 }
 
-.token-section {
+.supplementary-section {
 	border-top: 1px solid var(--ui-border-muted);
 	padding-top: 1rem;
 }

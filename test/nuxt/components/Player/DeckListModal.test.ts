@@ -40,7 +40,7 @@ mockNuxtImport('useScryfallBatch', () => () => ({
 }));
 
 const UModalStub = defineComponent({
-	template: '<div><slot name="title" /><slot name="description" /><slot name="body" /><slot name="footer" /></div>',
+	template: '<div><header><slot name="title" /><slot name="description" /></header><main><slot name="body" /></main><slot name="footer" /></div>',
 });
 
 function currentRoundIn(phaseId: number) {
@@ -323,5 +323,22 @@ describe('player deck list modal', () => {
 		await flushPromises();
 
 		expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('Swiss');
+	});
+
+	it('lists the deck\'s counter types with the cards, not in the header', async () => {
+		const deck = makeDeckList();
+		deck.cards[0]!.deckCounterTypes = ['energy'];
+		deck.cards[1]!.deckCounterTypes = ['poison', 'energy'];
+		const wrapper = mount(DeckListModal, {
+			props: {
+				playerName: 'Marcus',
+				deckLists: [deck],
+			},
+			global: { stubs },
+		});
+
+		expect(wrapper.get('header').text()).not.toContain('Counters');
+		const counters = wrapper.get('main [data-deck-counters]');
+		expect(counters.findAll('li').map(item => item.text())).toEqual(['Poison', 'Energy']);
 	});
 });
