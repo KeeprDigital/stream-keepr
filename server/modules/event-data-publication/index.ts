@@ -97,8 +97,6 @@ interface MeleePairingsSyncedInput extends PublicationInput, MessagePayload<'mel
 
 interface MeleeRoundStandingsSyncedInput extends PublicationInput, MessagePayload<'melee:roundStandingsSynced'> {}
 
-interface MeleeRoundSyncedInput extends PublicationInput, MessagePayload<'melee:roundSynced'> {}
-
 interface MeleeDataResetInput extends PublicationInput, MessagePayload<'melee:dataReset'> {}
 
 export class RealtimePublicationError extends Error {
@@ -506,11 +504,6 @@ export function eventDataPublicationModule() {
 		await publishSyncMessage(eventId, 'melee:roundStandingsSynced', payload, originConnectionId);
 	}
 
-	/** @deprecated Published for one release beside the granular Round messages. */
-	async function meleeRoundSynced({ eventId, originConnectionId, ...payload }: MeleeRoundSyncedInput) {
-		await publishSyncMessage(eventId, 'melee:roundSynced', payload, originConnectionId);
-	}
-
 	async function meleeDataReset({ eventId, originConnectionId, ...payload }: MeleeDataResetInput) {
 		// Configuration persistence has already committed. Keep notification
 		// best-effort so a delivery failure cannot turn a successful PUT into an
@@ -578,7 +571,6 @@ export function eventDataPublicationModule() {
 		meleeMatchResultsSynced,
 		meleePairingsSynced,
 		meleeRoundStandingsSynced,
-		meleeRoundSynced,
 		meleeDataReset,
 		playerDeckReviewed,
 		playerDeckCardsResolved,

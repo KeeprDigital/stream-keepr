@@ -620,7 +620,7 @@ describe('useStandingsModeData', () => {
 		});
 
 		// Standings show only Round Standings, never a Match Result as it is
-		// reported; the deprecated Round sync always arrives beside one of these.
+		// reported.
 		it.each([
 			{
 				type: 'melee:matchResultsSynced',
@@ -639,17 +639,6 @@ describe('useStandingsModeData', () => {
 				type: 'melee:roundStandingsSynced',
 				payload: { roundId: 7 },
 				rereads: true,
-			},
-			{
-				type: 'melee:roundSynced',
-				payload: {
-					roundId: 7,
-					matchCount: 8,
-					created: 0,
-					updated: 8,
-					staleDeleted: 0,
-				},
-				rereads: false,
 			},
 		])('$type for the Round it shows re-reads: $rereads', async ({ type, payload, rereads }) => {
 			mutableConfig.roundId = 7;

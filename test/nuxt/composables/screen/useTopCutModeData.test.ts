@@ -296,17 +296,6 @@ describe('useTopCutModeData', () => {
 				'melee:pairingsSynced',
 				{ roundId: 40 },
 			],
-			[
-				'the deprecated Round sync of a Round it shows',
-				'melee:roundSynced',
-				{
-					roundId: 31,
-					matchCount: 2,
-					created: 0,
-					updated: 1,
-					staleDeleted: 0,
-				},
-			],
 		])('does not re-read on %s', async (_, type, payload) => {
 			await following();
 			deliver(type, payload);
@@ -396,17 +385,6 @@ describe('useTopCutModeData', () => {
 				'an earlier Round re-paired',
 				'melee:pairingsSynced',
 				{ roundId: 20 },
-			],
-			[
-				'the deprecated Round sync of an earlier Round',
-				'melee:roundSynced',
-				{
-					roundId: 20,
-					matchCount: 8,
-					created: 0,
-					updated: 8,
-					staleDeleted: 0,
-				},
 			],
 		] as const)('does not re-read on %s while seeds show', async (_, type, payload) => {
 			await following({ showSeeds: true });

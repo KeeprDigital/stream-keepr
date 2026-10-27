@@ -165,8 +165,7 @@ describe('useEventRealtimeSession', () => {
 		});
 	});
 
-	// The deprecated `melee:roundSynced` arrives beside a granular message, so
-	// following it too would reload everything twice.
+	// Each Round sync message reloads only what that kind of change touches.
 	it.each([
 		{
 			type: 'melee:matchResultsSynced',
@@ -185,17 +184,6 @@ describe('useEventRealtimeSession', () => {
 			type: 'melee:roundStandingsSynced',
 			data: { roundId: 3 },
 			reloads: ['rounds'],
-		},
-		{
-			type: 'melee:roundSynced',
-			data: {
-				roundId: 3,
-				matchCount: 4,
-				created: 2,
-				updated: 1,
-				staleDeleted: 1,
-			},
-			reloads: [],
 		},
 	] as const)('after $type reloads $reloads', async ({ type, data, reloads }) => {
 		const handlers = await startSession();

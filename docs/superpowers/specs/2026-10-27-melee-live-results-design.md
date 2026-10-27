@@ -178,9 +178,9 @@ Listeners:
 - General rule (builder applies it to any Screen missed above): each Screen
   listens to the messages for the data it actually reads.
 
-For one release, also publish `melee:roundSynced` whenever any of the three is
-published, so Screen Outputs still on the previous bundle during a deploy keep
-updating. Remove it in the following release.
+`melee:roundSynced` is removed outright, with no compatibility release (operator
+decision): a Screen Output still on the previous bundle misses Round sync
+messages until it reloads.
 
 ### No Event-row churn
 

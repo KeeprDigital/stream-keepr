@@ -607,18 +607,7 @@ describe('a Round sync announces only what it changed', () => {
 
 		const messages = await expected(seeded);
 		expect(result.published).toEqual(published);
-		// The legacy summary follows any granular message, and only then.
-		expect(announced()).toEqual(messages.length > 0
-			? [
-					...messages,
-					[
-						'melee:roundSynced',
-						expect.objectContaining({
-							roundId: seeded.roundId(ROUND_3),
-						}),
-					],
-				]
-			: []);
+		expect(announced()).toEqual(messages);
 	});
 
 	// Pairing Round 4 stores Round 3's standings, which re-syncs Round 3's Matches:
@@ -687,12 +676,6 @@ describe('a Round sync announces only what it changed', () => {
 					roundId: seeded.roundId(ROUND_3),
 				},
 			],
-			[
-				'melee:roundSynced',
-				expect.objectContaining({
-					roundId: seeded.roundId(ROUND_4),
-				}),
-			],
 		]);
 	});
 
@@ -726,12 +709,6 @@ describe('a Round sync announces only what it changed', () => {
 				{
 					roundId: seeded.roundId(ROUND_4),
 				},
-			],
-			[
-				'melee:roundSynced',
-				expect.objectContaining({
-					roundId: seeded.roundId(ROUND_4),
-				}),
 			],
 		]);
 	});

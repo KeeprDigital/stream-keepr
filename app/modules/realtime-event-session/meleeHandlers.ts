@@ -64,9 +64,5 @@ export function createMeleeRealtimeHandlers({ accept }: Options) {
 		'melee:roundStandingsSynced': accept('melee:roundStandingsSynced', operatorOnly(async (data) => {
 			await useRoundStore().loadRoundsByEventId(data.eventId);
 		})),
-		// Deprecated: every one is published beside a granular message above, so
-		// following it too would reload twice. Kept only while the Event room's
-		// handler map must name every message type.
-		'melee:roundSynced': accept('melee:roundSynced', () => {}),
 	};
 }

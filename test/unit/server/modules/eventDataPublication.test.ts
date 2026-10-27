@@ -474,17 +474,6 @@ describe('the realtime message each Event Data change sends', () => {
 			{ roundId: 3 },
 			'melee:roundStandingsSynced',
 		],
-		[
-			'meleeRoundSynced',
-			{
-				roundId: 3,
-				matchCount: 4,
-				created: 2,
-				updated: 1,
-				staleDeleted: 1,
-			},
-			'melee:roundSynced',
-		],
 	] as const)('%s sends %s strictly, carrying the summary as given', async (method, summary, type) => {
 		await (publication() as any)[method]({ eventId: 1, originConnectionId: origin, ...summary });
 

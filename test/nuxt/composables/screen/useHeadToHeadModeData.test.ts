@@ -342,8 +342,7 @@ describe('useHeadToHeadModeData', () => {
 		});
 
 		// Earlier Matches and the Players' records come from any Round, and Melee
-		// names no Players in a Round sync; the deprecated Round sync always
-		// arrives beside one of these.
+		// names no Players in a Round sync.
 		it.each([
 			{
 				type: 'melee:matchResultsSynced',
@@ -362,17 +361,6 @@ describe('useHeadToHeadModeData', () => {
 				type: 'melee:roundStandingsSynced',
 				payload: { roundId: 40 },
 				rereads: true,
-			},
-			{
-				type: 'melee:roundSynced',
-				payload: {
-					roundId: 40,
-					matchCount: 8,
-					created: 0,
-					updated: 8,
-					staleDeleted: 0,
-				},
-				rereads: false,
 			},
 		])('$type re-reads: $rereads', async ({ type, payload, rereads }) => {
 			await showingSlot();

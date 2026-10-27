@@ -494,17 +494,6 @@ describe('usePlayerHistoryModeData', () => {
 				payload: { roundId: 31 },
 				rereads: false,
 			},
-			{
-				type: 'melee:roundSynced',
-				payload: {
-					roundId: 31,
-					matchCount: 8,
-					created: 0,
-					updated: 1,
-					staleDeleted: 0,
-				},
-				rereads: false,
-			},
 		])('$type re-reads: $rereads', async ({ type, payload, rereads }) => {
 			const { pageData, formatOutcome } = await showingPendingHistory();
 			mockFetch.mockResolvedValue({

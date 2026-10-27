@@ -480,18 +480,6 @@ export function createMeleeSyncWorkflows() {
 		const published = announcements
 			.filter(announcement => changedRounds.some(announcement.changed))
 			.map(announcement => announcement.kind);
-		if (published.length > 0) {
-			// Kept for one release, for Screen Outputs still on the previous bundle.
-			await publishAfterCommit(afterCommitWarnings, async () => await publication.meleeRoundSynced({
-				eventId,
-				originConnectionId,
-				roundId,
-				matchCount: result.matchCount,
-				created: result.created,
-				updated: result.updated,
-				staleDeleted: result.staleDeleted,
-			}));
-		}
 
 		return {
 			...result,

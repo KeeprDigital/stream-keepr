@@ -410,8 +410,7 @@ describe('usePairingsModeData', () => {
 		});
 
 		// Melee Sync fills in Match Results as they are reported; Round Standings
-		// are not on the Screen, and the deprecated Round sync always arrives
-		// beside one of these.
+		// are not on the Screen.
 		it.each([
 			{
 				type: 'melee:matchResultsSynced',
@@ -442,17 +441,6 @@ describe('usePairingsModeData', () => {
 			{
 				type: 'melee:roundStandingsSynced',
 				payload: { roundId: 31 },
-				rereads: false,
-			},
-			{
-				type: 'melee:roundSynced',
-				payload: {
-					roundId: 31,
-					matchCount: 8,
-					created: 0,
-					updated: 1,
-					staleDeleted: 0,
-				},
 				rereads: false,
 			},
 		])('$type for Round $payload.roundId re-reads: $rereads', async ({ type, payload, rereads }) => {

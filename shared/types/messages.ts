@@ -352,15 +352,6 @@ export interface MessageDefinitions {
 		roundId: number;
 	};
 
-	/** @deprecated Published for one release for Screen Outputs on the previous bundle. */
-	'melee:roundSynced': {
-		roundId: number;
-		matchCount: number;
-		created: number;
-		updated: number;
-		staleDeleted: number;
-	};
-
 	// Card management (screen-scoped). `card:updated` and `card:cleared` carry
 	// the Card revision the write committed. A holder applies only a Card state
 	// at least as new as the one it holds, whether it arrives as an announcement,

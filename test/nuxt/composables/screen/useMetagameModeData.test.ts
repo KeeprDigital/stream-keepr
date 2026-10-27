@@ -466,7 +466,7 @@ describe('useMetagameModeData', () => {
 		});
 
 		// Standing comes from Round Standings, not a Match Result as it is
-		// reported; the deprecated Round sync always arrives beside one of these.
+		// reported.
 		it.each([
 			[
 				'melee:matchResultsSynced',
@@ -478,16 +478,6 @@ describe('useMetagameModeData', () => {
 			[
 				'melee:pairingsSynced',
 				{ roundId: 31 },
-			],
-			[
-				'melee:roundSynced',
-				{
-					roundId: 31,
-					matchCount: 8,
-					created: 0,
-					updated: 8,
-					staleDeleted: 0,
-				},
 			],
 		] as const)('does not re-read on %s', async (type, payload) => {
 			await showingMetagame();

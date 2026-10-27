@@ -1582,7 +1582,7 @@ A minute cron meets the cadence: the shortest interval is a minute, and backoff 
 - A result corrected on Melee after its Round is complete is not polled for; a manual sync picks it up.
 - Polling refreshes Players only when a new Round is first paired, never Deck Lists or Event structure.
 - An operator command taken over a tick can overlap only the write the tick had already begun when it lost the lease: one Round snapshot or Player reconcile, which is itself a Melee Sync write of the same data. The tick's poll-state write is then refused by the token condition.
-- A follow-up release removes `melee:roundSynced`.
+- `melee:roundSynced` is gone in the same release, with no compatibility window: a Screen Output still on the previous bundle during a deploy misses Round sync messages until it reloads.
 - `test/unit/server/modules/meleeLiveResults.sqlite.test.ts` pins the tick, the runner and the status route; `meleeLiveResultsRules.test.ts` the cadence; `meleeLiveResultsCurrentRound.sqlite.test.ts` the Current Round.
 
 ### Rejected alternatives
