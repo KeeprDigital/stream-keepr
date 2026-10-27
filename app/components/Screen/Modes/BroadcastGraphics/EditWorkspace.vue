@@ -86,16 +86,6 @@ const selectedGraphic = computed(() =>
 );
 
 /**
- * The published Graphic Style Set the selected Broadcast Graphic inherits from.
- *
- * Loaded here rather than in the inspector because the same context serves the
- * property pickers and the library card beside them, and because it follows the
- * *selection*: two Broadcast Graphics on one Screen may be linked to different Style
- * Sets, or to none.
- */
-const styleSetAuthoring = useGraphicStyleSetAuthoring(selectedGraphic);
-
-/**
  * The game of the Event this Screen belongs to.
  *
  * The inspector needs it to author Graphic Input Bindings: the field catalog
@@ -134,13 +124,6 @@ const onAirGraphicIds = computed(() => new Set(sessionStore.onAirGraphicIds(
 	playoutNow.value,
 	props.channels,
 )));
-
-/** One edited Broadcast Graphic back into the Screen's stack. */
-function replaceSelectedGraphic(graphic: BroadcastGraphicConfig) {
-	emit('update:graphics', props.graphics.map(entry => entry.id === graphic.id
-		? graphic
-		: entry));
-}
 
 /** A placement is a new Broadcast Graphic, and the author is put straight on it. */
 function selectPlacedGraphic(graphicId: string) {
@@ -253,7 +236,6 @@ const leaseNotice = computed(() => {
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
 					:writable="canAuthor"
-					:style-set="styleSetAuthoring.context.value ?? undefined"
 					:theme-tokens="previewTheme.themeTokens.value"
 					@update:graphics="emit('update:graphics', $event)"
 					@update:selected-target="emit('update:selectedTarget', $event)"
@@ -329,20 +311,6 @@ const leaseNotice = computed(() => {
 					:writable="canAuthor"
 					@update:background="emit('update:background', $event)"
 				/>
-
-				<!--
-					The Graphic Style Set library sits beside the template library because
-					they answer one question together: what a design is, and what visual
-					language it speaks. Both are authoring, and neither has a route from the
-					Live workspace.
-				-->
-				<GraphicsStyleSetLibrary
-					class="mt-4 block"
-					:selected-graphic="selectedGraphic"
-					:writable="canAuthor"
-					@update:graphic="replaceSelectedGraphic"
-					@published="styleSetAuthoring.refreshLinked()"
-				/>
 			</section>
 
 			<section class="min-w-0 xl:sticky xl:top-4">
@@ -373,7 +341,6 @@ const leaseNotice = computed(() => {
 					:event-id="eventId"
 					:game="game"
 					:writable="canAuthor"
-					:style-set="styleSetAuthoring.context.value ?? undefined"
 					:theme-tokens="previewTheme.themeTokens.value"
 					@update:graphics="emit('update:graphics', $event)"
 				/>

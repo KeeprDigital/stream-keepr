@@ -85,6 +85,13 @@
       "when": 1793105265657,
       "tag": "0011_drop_screen_config",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1793108858181,
+      "tag": "0012_remove_graphic_style_sets",
+      "breakpoints": true
     }
   ]
 }

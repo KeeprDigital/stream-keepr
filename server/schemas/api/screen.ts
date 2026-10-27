@@ -751,99 +751,17 @@ function graphicSourceDerivationsAcyclic(
 }
 
 /* ────────────────────────────────────────────────
- * Graphic Style Set references
+ * Former graphics document fields
  * ──────────────────────────────────────────────── */
 
 /**
- * The bound on a Graphic Style Set identity, and on one entry's identity within it.
- *
- * One schema because they are the same kind of opaque stable id, generated the same
- * way and stored the same way. They are named separately so a reader of the two
- * fields below does not have to work out that a `styleSetId` is not an entry id.
+ * A Graphic Style Set link, a former field of graphics documents recorded before
+ * #830 (ADR-0049): an item's `styleRefs`, and a Broadcast Graphic's `styleSet` and
+ * `styleRefs`. Accepted so a stored, packaged or stale-client document that still
+ * carries one reads, and dropped, because Style Sets are gone and their values are
+ * the document's own literals already. Every other unknown key is still refused.
  */
-const graphicStyleIdSchema = z.string().min(1).max(100);
-const graphicStyleEntryIdSchema = graphicStyleIdSchema;
-const graphicStyleSetIdSchema = graphicStyleIdSchema;
-
-/**
- * A media treatment's owned properties, as one object so its override shape is a
- * partial of exactly the same thing the Media Graphic Item stores.
- */
-const graphicMediaTreatmentPropertiesSchema = z.object({
-	fit: z.enum(MEDIA_FIT_VALUES),
-	focalPosition: z.object({ horizontal: opacitySchema, vertical: opacitySchema }).strict(),
-	opacity: opacitySchema,
-	clipGeometry: shapeGeometrySchema.optional(),
-	playbackRate: finiteNumberSchema
-		.min(MIN_GRAPHIC_MEDIA_PLAYBACK_RATE)
-		.max(MAX_GRAPHIC_MEDIA_PLAYBACK_RATE),
-	loop: z.boolean(),
-}).strict();
-
-/**
- * One slot's reference to a Graphic Style Set entry.
- *
- * Every override shape is derived from the property schema it deviates from, rather
- * than restated: an override is a *partial of the same property group*, so a bound
- * that tightens on typography tightens on a typography override in the same commit.
- * A slot whose value has no meaningful partial — a Graphic Fill, which is a
- * discriminated union — takes no overrides at all.
- *
- * The reference carries no value. A graphics document always stores its own resolved
- * properties inline, so nothing here is needed to render it; this is the provenance
- * that makes a republished Style Set a reviewable offer instead of a silent change.
- */
-function graphicStyleRefSchema<T extends z.ZodType>(overrides: T) {
-	return z.object({
-		entryId: graphicStyleEntryIdSchema,
-		overrides: overrides.optional(),
-	}).strict();
-}
-
-/** The one slot with no meaningful partial to override. */
-const graphicFillStyleRefSchema = z.object({ entryId: graphicStyleEntryIdSchema }).strict();
-
-const graphicAnimationRecipeOverridesSchema = z.object(graphicAnimationRecipeShape).strict().partial();
-
-const graphicAnimationStyleRefShape = {
-	'animation.enter': graphicStyleRefSchema(graphicAnimationRecipeOverridesSchema).optional(),
-	'animation.on-screen': graphicStyleRefSchema(graphicOnScreenAnimationRecipeSchema.partial()).optional(),
-	'animation.update': graphicStyleRefSchema(graphicAnimationRecipeOverridesSchema).optional(),
-	'animation.exit': graphicStyleRefSchema(graphicAnimationRecipeOverridesSchema).optional(),
-};
-
-const graphicItemStyleRefsSchema = z.object({
-	'typography': graphicStyleRefSchema(graphicTypographySchema.omit({ textAlign: true }).partial()).optional(),
-	'surfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
-	'surfaceStyle.fill': graphicFillStyleRefSchema.optional(),
-	'defaultChildSurfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
-	'boxSurfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
-	'wonBoxSurfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
-	'geometry': graphicStyleRefSchema(shapeGeometrySchema.partial()).optional(),
-	'clipGeometry': graphicStyleRefSchema(shapeGeometrySchema.partial()).optional(),
-	'boxGeometry': graphicStyleRefSchema(shapeGeometrySchema.partial()).optional(),
-	'media': graphicStyleRefSchema(graphicMediaTreatmentPropertiesSchema.partial()).optional(),
-	...graphicAnimationStyleRefShape,
-}).strict();
-
-/**
- * A Broadcast Graphic's own references: whole-composition motion and nothing else.
- * It has no typography, surface, geometry, or media to inherit into, so the wire
- * refuses those slots rather than storing references nothing can apply.
- */
-const graphicContainerStyleRefsSchema = z.object(graphicAnimationStyleRefShape).strict();
-
-/** At most one Graphic Style Set per composition, stated by this being one object. */
-const graphicStyleSetLinkSchema = z.object({
-	styleSetId: graphicStyleSetIdSchema,
-	// The only field the worst-case measurement cannot populate at a maximum,
-	// because it has none: a revision counts publications and nothing bounds how
-	// many a Style Set may have. Its contribution to the byte budget is therefore
-	// the width of a number rather than a cap, which is why it is left unbounded
-	// rather than given an arbitrary ceiling — but it is worth knowing it is the
-	// one hole in `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES`.
-	revision: z.number().int().nonnegative(),
-}).strict();
+const formerGraphicStyleSetLinkSchema = z.unknown().optional().transform(() => undefined);
 
 /* ────────────────────────────────────────────────
  * Graphic Item Theme bindings
@@ -882,7 +800,7 @@ const graphicItemBaseShape = {
 	width: pixelSizeSchema,
 	height: pixelSizeSchema,
 	animation: graphicAnimationSchema.optional(),
-	styleRefs: graphicItemStyleRefsSchema.optional(),
+	styleRefs: formerGraphicStyleSetLinkSchema,
 	themeBindings: graphicItemThemeBindingsSchema.optional(),
 };
 
@@ -1179,13 +1097,9 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  *
  * `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES` is what the
  * caps together admit: every construct the schema accepts, each populated at its
- * own maximum, with the one exception named beside the fixture — a Graphic Style
- * Set link's `revision` has no upper bound to populate. The claim is qualified
- * rather than absolute on purpose; four rounds of correction here came of an
- * absolute one. It is
- * about seven times the budget and **that is a settled decision, not an oversight**:
- * the worst case is allowed not to fit, because the byte total is enforced on the
- * editors' write path (#85) and realtime no longer publishes mode configurations
+ * own maximum. It is over three and a half times the budget and **that is a
+ * settled decision, not an oversight**: the worst case is allowed not to fit,
+ * because the byte total is enforced on the editors' write path (#85) and realtime no longer publishes mode configurations
  * (#95). The measurement is pinned in two arrangements in
  * `broadcastGraphicsModeConfig.test.ts`, so "which worst case" stays a checked
  * choice rather than an assumption.
@@ -1212,7 +1126,7 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * quote different baselines for the same pre-existing Graphic Item.
  */
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 300;
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 3_851_414;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 1_925_714;
 
 function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
 	return items.reduce(
@@ -1377,8 +1291,8 @@ export const broadcastGraphicConfigSchema = z.object({
 		)
 		.optional(),
 	animation: graphicContainerAnimationSchema.optional(),
-	styleSet: graphicStyleSetLinkSchema.optional(),
-	styleRefs: graphicContainerStyleRefsSchema.optional(),
+	styleSet: formerGraphicStyleSetLinkSchema,
+	styleRefs: formerGraphicStyleSetLinkSchema,
 	themeBindings: graphicContainerThemeBindingsSchema.optional(),
 }).strict().refine(
 	// Top-level items only: a Graphic Group's children are staggered by the group.

@@ -167,10 +167,6 @@ _Avoid_: hotlink, external asset
 A named, autonomously animating background renderer that ships with Stream Keepr, with its own per-effect configuration. Its hosts are the Feature Match Overlay Frame, a Background Layer (on the Background Screen and every plain overlay mode), and the Broadcast Graphics Background; the vocabulary is closed, so a config or package naming an unimplemented effect is refused rather than approximated (ADR-0014).
 _Avoid_: Vanta effect, frame animation, shader background, background effect
 
-**Animation Effect Preset**:
-A user-created, installation-scoped, named Animation Effect selection: one effect and its parameters, with no host enabled state, opacity, or identity. Applying one copies it into the host as an independent value with no update link.
-_Avoid_: Animation Effect Template, linked effect style
-
 **Page Rotation**:
 The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time, computed identically by every rendering (ADR-0009). A paginated Screen Mode Definition declares it, naming its page size field; an edit of the page size or page duration changes the rotation's shape, restarting it from page 1 (ADR-0039).
 _Avoid_: Auto-paging when naming the projection itself — auto-page is the operator toggle that turns rotation on.
@@ -416,23 +412,7 @@ The default-on, on-air-only progression of a Social Profile Projection through i
 **Social Profile Transition**:
 The synchronized visual change between profiles in a Social Profile Rotation: Cut, Crossfade, Slide Left, Slide Right, Slide Up, or Slide Down, lasting 100–2,000 ms (default 250). A newer target replaces rather than queues; an explicit Update Graphic uses its own update animation instead.
 
-### Graphic Style Sets and Template Packages
-
-**Graphic Style Set**:
-A named reusable authoring resource, shared across the graphics template libraries, holding Graphic Style Set Entries that keep a cohesive visual and motion language across Broadcast Graphic Templates and Feature Match Layout Templates. Events consume but never own one.
-Its entry kinds are palette (each one a Palette Entry), typography, Graphic Fill, Graphic Surface Style, media treatment, Shape Geometry, and Graphic Animation Recipe. It never holds Graphic Item trees, layout structure, or Graphics Asset Library content; typography references application fonts only (ADR-0001).
-Edits accumulate in a working draft and become a Style Set revision only through an explicit atomic publish (deleting a published entry is the one exception). Linked templates receive an update to review and apply as a new template revision, preserving their property-level overrides; placed graphics never change automatically.
-
-**Graphic Style Set Entry**:
-One named, bounded value in a Graphic Style Set that templates link to rather than copy, so a published change reaches them as a reviewable update.
-_Avoid_: Preset — which initialises a value by copying it, with no link.
-
-**Palette Entry**:
-A Graphic Style Set Entry holding one freely named colour, with no opacity and no fixed role: the consuming property owns opacity, and what the colour does is decided by whatever references it. Every other colour-bearing entry, such as a typography, Graphic Fill or Graphic Surface Style entry, stores a Palette Entry's id rather than a colour, so a brand colour changed once reaches every entry linking to it.
-_Avoid_: palette colour (the colour a Palette Entry holds, not the entry), colour role (the palette is open-ended and assigns none).
-
-**Graphic Style Set Package**:
-A single-Style-Set portable `.skstyle` archive, carrying one published revision and no templates or asset files; it declares the application fonts it needs and a receiver missing one refuses it. It follows the Template Package principles; an import never field-merges and may always install as an independent copy.
+### Template Packages
 
 **Template Package**:
 A single-template portable artifact transferring one Broadcast Graphic Template or one Feature Match Layout Template. Both kinds share the envelope, asset handling, validation, migration, conflict, and atomic installation contract while keeping separate payloads, libraries, and workflows.
@@ -624,7 +604,7 @@ The behaviour when the text of a Text Graphic Item, Clock Graphic Item, or Playe
 A Graphic Item rendering an image or silent video with a Media Fit, focal position, opacity, and optional Shape Geometry clipping. Video has playback-rate and looping controls and starts from the beginning when its Broadcast Graphic enters.
 
 **Media Fit**:
-How an image or video fills the box it is drawn in: cover, contain, or fill. One vocabulary shared by Media Graphic Items, media treatment Graphic Style Set Entries, image and video Background Layers, and the Feature Match Overlay Frame's image and video.
+How an image or video fills the box it is drawn in: cover, contain, or fill. One vocabulary shared by Media Graphic Items, image and video Background Layers, and the Feature Match Overlay Frame's image and video.
 _Avoid_: object fit, scaling mode
 
 **Shape Graphic Item**:
@@ -818,7 +798,7 @@ _Avoid_: Dummy data, test data
 - Graphic Animation presets are authoring shortcuts that initialise editable recipes, not runtime concepts
 - Every recipe operates relative to its owner's **Graphic Resting State**
 - A scale channel uses one **Graphic Animation Origin** and a uniform factor from zero to twice the resting size
-- A slide channel uses one of eight compass directions and a fixed distance (any **Geometry Unit**, measured against its owner's parent: width for east/west, height for north/south, the shorter side for a diagonal; stored in pixels) or the distance needed to clear its owner's parent. A Graphic Animation Recipe **Graphic Style Set Entry** has no owner, so its fixed distance is entered in pixels
+- A slide channel uses one of eight compass directions and a fixed distance (any **Geometry Unit**, measured against its owner's parent: width for east/west, height for north/south, the shorter side for a diagonal; stored in pixels) or the distance needed to clear its owner's parent. A Graphic Animation Recipe held by a **Foundation Token** has no owner, so its fixed distance is entered in pixels
 - A reveal channel wipes from one edge across its owner's rectangular bounds, preserving existing **Shape Geometry** clipping
 - A fade channel reduces opacity from the resting value; fades on a **Broadcast Graphic** and its items compose multiplicatively
 - Easing is linear, ease-in, ease-out, ease-in-out, back-in, back-out, or back-in-out; rotation, skew, perspective, filters, morphing, motion paths, and arbitrary transforms are outside **Graphic Animation**
@@ -879,7 +859,7 @@ _Avoid_: Dummy data, test data
 - Creating, changing, publishing, or transferring a reference requires its exact revision to resolve
 - A **Missing Graphic Asset Reference** stays persisted and diagnosable until repaired, invalidating its owning artifact
 - **Unavailable Graphic Asset Content** fails only operations that currently need its bytes
-- A **Graphic Asset** may be associated with or referenced from several **Events** and by templates, Style Sets, Screens, and placed graphics without per-Event copies; associations organise discovery only
+- A **Graphic Asset** may be associated with or referenced from several **Events** and by templates, Themes, Screens, and placed graphics without per-Event copies; associations organise discovery only
 - Deleting an **Event** removes its associations and references but never deletes or hides shared **Graphic Assets**
 - Graphics authors may discover and reference every **Graphic Asset**; a **Screen Output** may resolve only those its **Screen** publishes
 - A **Broadcast Graphics Screen** publishes the revisions its configuration pins plus the media values its **Broadcast Graphics Live Session** has accepted; a value no longer accepted stops being published as it leaves air
@@ -909,7 +889,7 @@ _Avoid_: Dummy data, test data
 - A recheck that leaves a **Graphics Discrepancy** open reports retryable-unavailable, not already-in-state
 - An **Early Purge** from a **Queue Inspector** requires typed confirmation as well as the fresh all-revision reference proof
 
-### Template Packages and Style Sets
+### Template Packages and template writes
 
 - A Template Package contains only the **Graphic Assets** its single template transitively requires, and its import revalidates their bytes under the receiver's current **Graphic Asset Compatibility Profile**
 - **Template Package Preflight** rejects unsafe or traversing paths, links, colliding or duplicate paths, encrypted or compressed entries, nested archives, undeclared or missing entries, inconsistent sizes, envelope-limit violations, and schemas newer than the installation reads
@@ -919,16 +899,10 @@ _Avoid_: Dummy data, test data
 - A proposal reusing a **Retired Graphic Asset** or **Trashed Graphic Asset** is reported before confirmation and stays retryable, since neither takes new references until restored
 - A later locally created revision never inherits **Graphic Asset Origin** from an imported one
 - An **Installed Graphics Template** owns one ordinary **Graphic Asset Reference** per asset field, so a pinned asset cannot enter Trash
-- Every write of a **Broadcast Graphic Template** or **Feature Match Layout Template**, including a **Graphic Style Set** operation that rewrites it, requires each **Graphic Asset Reference** it holds to name an available revision of an active **Graphic Asset** whose kind fits its slot, including references it already held; a Style Set operation refused for one template writes nothing (ADR-0034)
+- Every write of a **Broadcast Graphic Template** or **Feature Match Layout Template** requires each **Graphic Asset Reference** it holds to name an available revision of an active **Graphic Asset** whose kind fits its slot, including references it already held (ADR-0034)
 - A **Graphic Asset** cannot be retired while any **Broadcast Graphic Template**, **Feature Match Layout Template**, **Theme** or **Screen Theme Override** references any of its revisions, and the refusal names them; a **Screen**'s own mode reference or an **Installed Graphics Template**'s does not hold it back (ADR-0034, ADR-0050)
 - A **Template Package Installation** run inside an **Event** associates every asset it created or reused with that Event without changing reused assets' metadata
 - A failed or cancelled installation leaves nothing discoverable
-- A **Broadcast Graphic Template** or **Feature Match Layout Template** links to at most one **Graphic Style Set**, adopted by selecting entries in existing property controls; unselected properties stay local
-- Style Set entries may reference entries in the same set only; Style Sets never inherit or compose
-- A template update is available only when a referenced entry or its dependencies change in resolved style, schema, or asset dependency; applying one is atomic per template and cannot leave references on mixed Style Set revisions
-- Deleting a referenced entry offers atomic replacement with a same-kind entry or detachment by freezing resolved values; deleting a whole Style Set offers detachment only; either succeeds only if every affected template update does
-- Export resolves every used entry into a self-contained snapshot, keeping Style Set identities and revisions as provenance; importing a template never requires or modifies a **Graphic Style Set**, but may explicitly relink to a compatible installed one
-- A **Graphic Style Set Package** import of a newer related revision updates through the ordinary publish and review flow; an older one never downgrades; same identity and revision with different content is a conflict; an installed set never published cannot be updated by import
 
 ### Feature Match Overlay
 

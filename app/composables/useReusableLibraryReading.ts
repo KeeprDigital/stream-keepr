@@ -3,23 +3,23 @@ import type { Ref } from 'vue';
 /**
  * One reading of a library in the reusable-library scope.
  *
- * Three surfaces browse a library in that scope — the Broadcast Graphic Template
- * library, the Feature Match Layout Template library, and the Graphic Style Set library
- * — and each does the same three things around whatever else it offers: it re-reads the
- * library, it turns a refused write into something an author can read, and it holds that
- * message until the author has seen it.
+ * Two surfaces browse a library in that scope — the Broadcast Graphic Template
+ * library and the Feature Match Layout Template library — and each does the same
+ * three things around whatever else it offers: it re-reads the library, it turns a
+ * refused write into something an author can read, and it holds that message until
+ * the author has seen it.
  *
  * Deliberately not named for the Graphics Asset Library, which is a different thing: that
  * one owns the image, silent video, and font bytes these libraries' artifacts reference,
  * and is what `useGraphicsAdminReading` and `useGraphicsIngestionTransfer` next door
  * speak to. This one reads a list of authoring artifacts and knows nothing about assets.
  *
- * What it deliberately does not own is importing. The three libraries receive different
- * portable artifacts and an import means a different thing in each, so the import path
- * stays with the library that has the semantics.
+ * What it deliberately does not own is importing. The two libraries receive different
+ * portable artifacts, so the import path stays with the library that has the
+ * semantics.
  *
- * The first read is owned here too. All three surfaces are browsers of a library and
- * every one of them opened with the same `onMounted(() => void refresh())`; a library
+ * The first read is owned here too. Both surfaces are browsers of a library and
+ * each of them opened with the same `onMounted(() => void refresh())`; a library
  * that read nothing until something asked would be a surface showing an empty list it
  * has no evidence for.
  */
@@ -53,13 +53,6 @@ export function useReusableLibraryReading<Entry>(options: {
 	read: () => Promise<Entry[]>;
 	/** What to say when the failure carries no message of its own. */
 	unavailable: string;
-	/**
-	 * Called with a caught value before its message is derived, for a library whose
-	 * refusals carry structured detail beside the message. The Graphic Style Set library
-	 * is the one that does: a draft it cannot publish is refused with every reason at
-	 * once, and losing them would leave the author only "cannot be published".
-	 */
-	inspectFailure?: (caught: unknown) => void;
 }): ReusableLibraryReading<Entry> {
 	const entries = ref<Entry[]>([]) as Ref<Entry[]>;
 	const loading = ref(false);
@@ -67,10 +60,10 @@ export function useReusableLibraryReading<Entry>(options: {
 	const authorship = useGraphicsAuthorship();
 
 	/**
-	 * Every refusal these three libraries report passes through here, which is why
+	 * Every refusal these two libraries report passes through here, which is why
 	 * an ended session is recognised here rather than at each call site.
 	 *
-	 * All three write through routes behind the API boundary, and importing a
+	 * Both write through routes behind the API boundary, and importing a
 	 * portable artifact runs as a Graphics Ingestion Operation on the Graphics Asset
 	 * Library's own routes — so the refusal can arrive from either, and it reaches an
 	 * author as the boundary's flat 'Authentication is required' unless it is named
@@ -86,7 +79,6 @@ export function useReusableLibraryReading<Entry>(options: {
 	 * these routes is an exhausted byte store or a named dependency that is down (#286).
 	 */
 	function failureMessage(caught: unknown): string {
-		options.inspectFailure?.(caught);
 		if (graphicsAuthorSignedOut(caught))
 			return authorship.describeFailure(caught, options.unavailable);
 		return reportedMessage(caught, options.unavailable);

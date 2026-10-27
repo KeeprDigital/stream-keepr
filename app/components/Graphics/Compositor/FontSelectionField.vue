@@ -20,9 +20,6 @@ import { GRAPHIC_FONT_OPTIONS } from '~~/shared/modules/graphics';
  * the caller to say *what to do with it*: a `GraphicTypography` must name a font, so
  * its caller falls back to the application default, while a Graphic Placeholder Style
  * need not, so its caller removes the key instead. Neither policy belongs here.
- *
- * A typography Graphic Style Set Entry references application fonts only
- * (ADR-0001), so it has no source to choose and uses `ApplicationFontField` instead.
  */
 const props = defineProps<{
 	/**

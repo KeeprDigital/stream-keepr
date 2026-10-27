@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { GraphicsHostContract, GraphicThemeTokens } from '~~/shared/modules/graphics';
 import type { BroadcastGraphicConfig, GraphicItemConfig, GraphicItemKind } from '~~/shared/types/graphics';
-import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import {
 	addGraphicGroupChild,
@@ -57,8 +56,6 @@ const props = defineProps<{
 	 * but is offered no authoring control and emits no change.
 	 */
 	writable?: boolean;
-	/** The published Graphic Style Set the selected Broadcast Graphic is linked to. */
-	styleSet?: GraphicStyleAuthoringContext;
 	/** The Foundation Tokens the editor previews under (#829). */
 	themeTokens?: GraphicThemeTokens;
 }>();

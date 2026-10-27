@@ -4,30 +4,9 @@ One section per settled architectural decision, numbered in the order taken; rea
 
 ## ADR-0001: Graphic Style Sets reference application fonts only
 
-Accepted · 2026-08-01 · [#143](https://github.com/KeeprDigital/stream-keepr/issues/143)
+Accepted · 2026-08-01 · [#143](https://github.com/KeeprDigital/stream-keepr/issues/143) · Superseded 2026-10-28 by ADR-0049 and ADR-0050 · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830)
 
-**Reversed by ADR-0050**: Graphic Style Sets give way to Themes, whose asset tokens may reference library fonts. This section holds for the code until #830 removes Style Sets.
-
-### Decision
-
-A Graphic Style Set's typography entries reference **application fonts only**. The entry's font is typed `GraphicApplicationFontSelection` and its wire schema accepts only the `application` arm. A Graphic Item's own typography is unrestricted and takes either arm of `GraphicFontSelection`. The `.skstyle` exporter's `undeclared-graphic-asset-dependency` refusal stays, as enforcement against a document that reached the exporter by some route other than the write path.
-
-### Why
-
-A `.skstyle` package is deliberately data-only: no staging, no quota reservation, no asset revalidation, and preflight is a pure read of the received bytes (`server/modules/graphic-style-set-package/preflight.ts`). Embedding font bytes would take all of that back — a packaged Graphic Asset Revision must be staged durably, charged against the Graphics Staging Allowance, revalidated under the receiver's Graphic Asset Compatibility Profile and given an origin, and a font additionally needs browser-load evidence. That is the Template Package asset pipeline in full, and a second copy inside the Style Set module would break the library's one export contract.
-
-What it would buy is small: the font asset a template needs already travels with that template in its Template Package. And a Style Set naming a library font would be publishable on the installation that authored it and unpublishable wherever it travelled, breaking the rule that it references only assets in the same reusable-library scope.
-
-### Consequences
-
-- A `.skstyle` package carries zero packaged assets and one `application-font` capability declaration per distinct font; a receiver missing one refuses with `unsupported-application-capability` rather than installing a Style Set it could never publish.
-- An author who wants a library font selects it on the item. Binding that item's typography slot to a Style Set entry replaces the item's font with the entry's application font, as binding replaces every other property the entry owns.
-- `undeclared-graphic-asset-dependency` is belt and braces: the wire schema already refuses an asset-arm font on the way in.
-- Reversing this means building `.skstyle` asset embedding (a slice comparable to #76); the type then widens to `GraphicFontSelection`. Nothing here forecloses it.
-
-### Rejected alternatives
-
-- **Let a Style Set font reference a font Graphic Asset Revision and embed its bytes in `.skstyle`** — see _Why_.
+**Fully superseded.** Graphic Style Sets and the `.skstyle` package are gone (#830), so nothing remains for this decision to govern. It kept a Style Set's typography entries to application fonts so `.skstyle` could stay data-only, with no asset pipeline. Themes replace Style Sets (ADR-0049), and a Theme's typography may name a library font (ADR-0050). A Graphic Item's own typography takes either arm of `GraphicFontSelection`, as before. What changed: the Style Set typography entry, its `GraphicApplicationFontSelection`-only wire schema and the `.skstyle` font refusals were deleted with Style Sets.
 
 ## ADR-0002: Concurrent Graphic Animation phases compose by nesting
 
@@ -133,40 +112,13 @@ Server rules still earn a place because they fail earlier and more legibly: with
 
 ## ADR-0006: Over-broad Graphic Style Set override pins are not migrated
 
-Accepted · 2026-08-05, amended under #229 and #240 · [#199](https://github.com/KeeprDigital/stream-keepr/issues/199) (decided under #167)
+Accepted · 2026-08-05, amended under #229 and #240 · [#199](https://github.com/KeeprDigital/stream-keepr/issues/199) (decided under #167) · Superseded 2026-10-28 by ADR-0049 · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830)
 
-**Made moot by ADR-0049**: Graphic Item properties bind whole tokens with no review or pins. This section holds for the code until #830 removes Style Sets.
-
-### Decision
-
-Before #162, answering **Keep mine** in review recorded the whole property group — all eight typography keys — as the override; #162 narrowed it to the author's prior pins plus the keys the update was about to move. Documents written earlier carry eight-key pins, and **nothing reconciles them**: no migration, heuristic narrowing or one-off pass. An over-broad pin is preserved like any recorded override.
-
-The rule for every recorded key: it leaves the record only when the author sets that property to exactly what the entry resolves to; any other edit re-pins it at the new value. **Unbind and rebind** the slot (`unbindGraphicStyleRef` then `bindGraphicStyleRef`, next to the slot's picker) is the reset that drops a whole pin. Apply (`heldGraphicStyleOverrides` in `shared/modules/graphic-style-sets/apply.ts`) and recapture (`recaptureGraphicStyleOverrides`, via `authoredGraphicStyleOverrides`) read the recorded set the same way: a recorded key the stored value still honours survives, whether or not the entry has caught up with it.
-
-### Why
-
-- **Storage cannot tell an over-broad pin from a deliberate one.** Both are the same eight keys. The only candidate signal — "this override agrees with what the entry resolves to" — is wrong: a pin the republished entry happens to land on is still the author's, and dropping it lets the next republish take the property. Losing a real override is worse than keeping one the author did not mean to make.
-- The same wrong reading used to run on the live path: recapture re-derived overrides from where the composition deviates and discarded the recorded set, so a deliberate pin vanished once the Style Set's value coincided with it — triggered by an edit to _any_ owner in the composition. #229 removed that discard; this is why recapture and apply now share one rule.
-- A fully pinned slot resolves to what the owner already holds, so it never produces a review row and no later Keep mine can narrow it.
-- No such document reaches production: spec #60 wipes the database before ship and puts data migration out of scope.
-
-### Consequences
-
-- A pre-#162 document keeps its over-broad pin, and editing a pinned property re-pins it rather than releasing it. The author cannot read the target value off the screen, since a pinned slot shows no review row. The answer to "this property inherits nothing" is **rebind the slot**.
-- **A value typed onto the entry's own value records nothing (#240).** Capture is a diff against the entry, so the document stays byte-identical and a later publish moving that entry takes the property under the review row's default answer. Accepted: nothing recorded is lost, and the failure is visible — an unpinned property gets a review row (`30 → 99`) where Keep mine records the pin the typing did not. Both halves are pinned in `test/unit/shared/graphicStyleSetBindings.test.ts` under _when the author types the value the entry already resolves to_.
-- `heldGraphicStyleOverrides` and `recaptureGraphicStyleOverrides` stay pure functions of what is recorded and what is stored. Nothing may give them provenance (when an override was written) — that is the rejected heuristic under another name.
-- Recapture's guard is per slot and turns on whether the stored value is in step with the published entries, not on revision number (#198), so a template stranded on an older revision it is in step with records deviations too.
-
-### Rejected alternatives
-
-- **Migrate on the "agrees with the entry" signal** — cannot tell deliberate from accidental, and fails destructively.
-- **Ask the author** — a prompt about eight keys on a template they have not opened has no context. The slot, with its bind and unbind, is where that question belongs.
-- **Record a pin whenever the author edits an owned key (#240).** Four counts. It deletes the release rule: typing the entry's value cannot mean both "mine" and "give it back", leaving only the whole-slot rebind. It fails quietly (a pinned slot shows no review row) where the current failure is shown and answerable. The signal is "a value arrived", which fires on net-zero gestures like a stepper nudged and nudged back, and may not fire at all when the typed value equals the displayed one. And it makes provenance a per-control obligation whose failures are silent in both directions. The workable fix is an explicit "pin this property" gesture at the slot, filed as [#244](https://github.com/KeeprDigital/stream-keepr/issues/244); a design that uses the touched key to scope such a gesture is not decided here.
-- **Version the override record** — a permanent stored-schema field for a population that is empty by construction.
+**Fully superseded.** Graphic Style Sets are gone (#830), and with them the review flow, the recorded overrides and the pins this decision governed. A Graphic Item property now binds a whole Foundation Token or holds a literal, with no override record (ADR-0049). What changed: `heldGraphicStyleOverrides`, `recaptureGraphicStyleOverrides` and the bind and unbind edits were deleted. A stored or packaged document still carrying a `styleRefs` override record reads, and the record is dropped (ADR-0049).
 
 ## ADR-0007: The Broadcast Graphics Graphic Item cap is set from what a show needs, and the worst case is allowed not to fit
 
-Accepted · 2026-08-01 · [#99](https://github.com/KeeprDigital/stream-keepr/issues/99)
+Accepted · 2026-08-01 · [#99](https://github.com/KeeprDigital/stream-keepr/issues/99) · Amended 2026-10-28: the worst case is re-measured without Style Set references · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830)
 
 ### Decision
 
@@ -191,21 +143,21 @@ Three axes that were unbounded relative to their own meaning were narrowed, at n
 
 ### Why
 
-The worst case populates every construct `broadcastGraphicsModeConfigSchema` admits at its own maximum — all seven Graphic Item types including groups, maximal-length ids, Style Set references in every slot, animation and staggers on items, groups and shells, every Graphic Input, binding, Graphic Source Selection and Graphic Channel slot. One named exception: a Style Set link's `revision` is `int().nonnegative()` with no upper bound, so the fixture uses six digits. The claim is qualified deliberately; four earlier corrections each came from an unqualified one. It costs **11,876 bytes per Graphic Item on 288,564 bytes of fixed shell cost**, reaching 3,851,414 bytes at 300. (#829 added a Theme binding in every slot: 433 bytes per maximal Graphic Item and 120 per Broadcast Graphic. The lowering-the-cap figures below were not re-measured for it.) (#539 widened a Graphic Placeholder Style's font weight to 1–1000 and populated every font weight at 1000, which base typography and its override already admitted: 6 bytes more per maximal Text Graphic Item. The lowering-the-cap figures below predate that and were not re-measured; at 6 bytes an item they move by at most 132, which leaves 21 as the cap that fits.)
+The worst case populates every construct `broadcastGraphicsModeConfigSchema` admits at its own maximum — all seven Graphic Item types including groups, maximal-length ids, a Theme binding in every slot, animation and staggers on items, groups and shells, every Graphic Input, binding, Graphic Source Selection and Graphic Channel slot. It cost **11,876 bytes per Graphic Item on 288,564 bytes of fixed shell cost**, reaching 3,851,414 bytes at 300, while Graphic Style Sets existed. #830 removed them, and with them a Style Set reference in every slot and a link on every Broadcast Graphic: 6,130 bytes per maximal Graphic Item and 1,734 per Broadcast Graphic. The worst case is now 1,925,714 bytes at 300, with no construct left unpopulated: the Style Set link's unbounded `revision` was the one exception the measurement had to name. (#829 added a Theme binding in every slot: 433 bytes per maximal Graphic Item and 120 per Broadcast Graphic. The lowering-the-cap figures below were not re-measured for it, nor for #830, so they understate the cap that now fits.) (#539 widened a Graphic Placeholder Style's font weight to 1–1000 and populated every font weight at 1000, which base typography and its override already admitted: 6 bytes more per maximal Text Graphic Item. The lowering-the-cap figures below predate that and were not re-measured; at 6 bytes an item they move by at most 132, which leaves 21 as the cap that fits.)
 
 - **Lowering the cap until it fits** gives 21 (521,272 bytes; 22 is 532,755). That clears the 19-item acceptance set, but the objection is volume: it would leave most of a Screen's 50 Broadcast Graphics unable to carry a single item, while the spec asks for commentator and player lower thirds, slates and brand bugs concurrently.
-- **Narrowing further cannot close it.** At 300 the budget left after fixed cost is 241,724 bytes, 806 per item, and `MAX_GRAPHIC_TEXT_LENGTH` is 1,000 — a maximal text template alone overshoots before anything else is counted. Removing the largest remaining axis (a Style Set reference in every slot, ~6,100 bytes per item) is not enough. Only cutting vocabulary the spec settles would be.
+- **Narrowing further cannot close it.** At 300 the budget left after fixed cost is 241,724 bytes, 806 per item, and `MAX_GRAPHIC_TEXT_LENGTH` is 1,000 — a maximal text template alone overshoots before anything else is counted. Removing the largest axis, a Style Set reference in every slot, took 6,130 bytes an item (#830) and was not enough. Only cutting vocabulary the spec settles would be.
 - **The overshoot is safe** because the byte total is enforced on the editors' write path (#85), refusing an oversized configuration legibly at authoring time, and because realtime no longer publishes mode configurations (#95), so anything storable is notifiable. The live-session message is keyed by graphic and input, never by item, so this cap does not touch it (ADR-0004).
 
 What is given up is "the named cap binds first", only for configurations nobody authors: they read a byte count instead of a limit name. One non-pathological shape crosses the line — a Screen at the cap where every item carries a 1,000-character template (300,000 characters) is refused by byte count.
 
 ### Consequences
 
-- The measurement is pinned with `toBe` in `broadcastGraphicsModeConfigWorstCase.test.ts` in two arrangements — grouped (3,851,414, `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES`) and flat (3,848,776) — so "which worst case" stays a checked choice.
+- The measurement is pinned with `toBe` in `broadcastGraphicsModeConfigWorstCase.test.ts` in two arrangements — grouped (1,925,714, `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES`) and flat (1,923,076) — so "which worst case" stays a checked choice.
 - A ticket that adds vocabulary extends that builder and moves a visible constant. Moving the cap means re-deriving it here, not in a docblock.
 - `MAX_GRAPHIC_ITEM_ID_LENGTH` is also an import constraint: a Template Package document is proved against the Screen write-path schema, so ids over 64 characters are refused on install. Accepted — one bound on both paths keeps "a document that installs is one the write path accepts", and copy paths mint fresh uuids anyway.
 - `MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN` (60) binds first for any package whose graphics declare Live Control (two inputs each covers 30 of 50 graphics). Move that before this cap, and re-measure when you do.
-- Making the worst case fit means cutting `MAX_GRAPHIC_TEXT_LENGTH` or the Style Set override vocabulary — questions about what an author may express, not budget questions. Open for whoever owns Style Sets: should a reference be able to override every property of its group, or only the ones the author changed?
+- Making the worst case fit means cutting `MAX_GRAPHIC_TEXT_LENGTH` — a question about what an author may express, not a budget question.
 
 ## ADR-0009: The current page of a Page Rotation is a clock projection, not persisted state
 
@@ -290,7 +242,7 @@ Accepted · 2026-08-18 · [#416](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-A rotating Talent identity is a named **Social Profile Projection**, not an opaque all-in-one Graphic Item or a collection-valued Graphic Input. The projection references a Talent Graphic Source Selection, atomically supplies read-only network and profile values, and transitions one explicitly associated Social Profile Presentation Group, whose ordinary Text, Social Network Icon and decorative Graphic Items keep the compositor's layout, styling, animation and Style Set capabilities.
+A rotating Talent identity is a named **Social Profile Projection**, not an opaque all-in-one Graphic Item or a collection-valued Graphic Input. The projection references a Talent Graphic Source Selection, atomically supplies read-only network and profile values, and transitions one explicitly associated Social Profile Presentation Group, whose ordinary Text, Social Network Icon and decorative Graphic Items keep the compositor's layout, styling, animation and Theme binding capabilities.
 
 Rotation is a pure projection of authoritative Broadcast Graphics Live Session state, the accepted populated profile set, and synchronised server time (as ADR-0009). Operator actions write the projection's selection, automatic mode and rotation anchor; Screen Outputs never write as it advances. A rendering without trustworthy synchronised time holds its last accepted or anchored profile rather than blanking or writing. An accepted profile-set change preserves and re-anchors the current network when it still exists, so adding a profile cannot make program jump because catalogue indexes moved. The Feature Match Overlay is out of scope.
 
@@ -757,7 +709,7 @@ The catalogue had three names for one concept (`size`, `scale`, `zoom`) and two 
 
 ### Consequences
 
-- **Stored params, Animation Effect Presets, and Template Packages naming the old keys stop parsing**: the strict schemas refuse them and the renderer falls back to defaults. That is acceptable before ship only. No format-version bump, for the reason ADR-0014 gives.
+- **Stored params and Template Packages naming the old keys stop parsing**: the strict schemas refuse them and the renderer falls back to defaults. That is acceptable before ship only. No format-version bump, for the reason ADR-0014 gives.
 - Ripple's `ringFactor` ("Ripple scale") was a motion knob, not a spatial one, so #503 left it alone; #583 made it `swingSpeed`: it sets how fast each ring's lights swing back and forth round it.
 - Halo's and ripple's `amplitudeFactor` were both labelled "Intensity" but neither changes brightness: halo's deepens the petals of its flower edge, ripple's sets each ring's radius. So ripple's becomes `size` under the spatial standard (its twenty rings are fixed), and halo's becomes `petalDepth`.
 - Shader uniforms carry the catalogue's names, so a reader follows one name from the editor to the GLSL.
@@ -1015,17 +967,15 @@ One function ran about ten steps in a fixed order. It published 3+N messages, an
 
 ## ADR-0034: Every graphics Template write requires each of its references to be selectable, fenced at the commit
 
-Accepted · 2026-10-21 · [#614](https://github.com/KeeprDigital/stream-keepr/issues/614)
+Accepted · 2026-10-21 · [#614](https://github.com/KeeprDigital/stream-keepr/issues/614) · Amended 2026-10-28: the Graphic Style Set operations it also covered are gone · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830)
 
 ### Decision
 
-**A template has no retained-reference path.** Every write of a Broadcast Graphic Template or a Feature Match Layout Template requires each Graphic Asset Reference its stored document holds to name an existing revision, with available content, of an active Graphic Asset whose kind fits its item, input, or typography slot. That covers save, revision, rename, a single-template Style Set update, and the library-wide Graphic Style Set operations that rewrite templates. A write that keeps a reference it already held is held to the same rule as one that introduces it. Anything else is refused with `409`.
+**A template has no retained-reference path.** Every write of a Broadcast Graphic Template or a Feature Match Layout Template requires each Graphic Asset Reference its stored document holds to name an existing revision, with available content, of an active Graphic Asset whose kind fits its item, input, or typography slot. That covers save, revision and rename. A write that keeps a reference it already held is held to the same rule as one that introduces it. Anything else is refused with `409`.
 
-**The route asks first and names every refused slot.** `assertGraphicsTemplateReferencesSelectable` (`server/utils/graphicsTemplateReferences.ts`) asks the library once for the whole document and lists each slot with its reason: does not exist, content unavailable, retired, trashed, or the wrong kind. Its several-template form answers for a Graphic Style Set operation, naming each template a refusal belongs to.
+**The route asks first and names every refused slot.** `assertGraphicsTemplateReferencesSelectable` (`server/utils/graphicsTemplateReferences.ts`) asks the library once for the whole document and lists each slot with its reason: does not exist, content unavailable, retired, trashed, or the wrong kind.
 
 **The store asks again in the statement that commits.** The template row's `INSERT` or `UPDATE` carries `REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE`, the rule the Screen write already uses, with no reference allowed to be retired. The reference-index insert reads the same bound array under the same rule. So a template commits only with every reference resolving, and then every reference is indexed. The rule now lives in `server/modules/graphic-asset-reference-resolution.ts`, shared by the Screen and both template stores. A commit the rule refuses answers its own `409`, told apart from a stale `revision` by the revision still standing.
-
-**A Graphic Style Set operation is refused whole.** Deleting an entry or a whole Style Set already stamps one operation only if every participant is at the revision it read. That first statement now also requires every reference of every template it rewrites to resolve, and each rewrite restates its template's reference index under the same stamp. One template referencing an asset that is no longer selectable refuses the whole operation: the Style Set and every template stay as they were. That refusal is `GraphicStyleSetTemplateReferenceConflict`, told apart from a concurrent edit by every revision still standing. The route asks first and names each refused template; the commit-time refusal only happens when the catalogue moved after that, and its `409` names none.
 
 **Retire is refused while a saved template references the asset.** Retiring a Graphic Asset is refused while any Broadcast Graphic Template or Feature Match Layout Template references any of its revisions. It answers `in-use` with those templates' usage, as Trash answers a referenced asset, and the Library Workspace names them. The condition sits in the catalogue's retiring `UPDATE`, so a template saved concurrently either commits first and holds the asset back, or finds the asset retired and is refused. A Screen's reference does not hold Retire back: a Screen keeps an unchanged retired reference resolving, as before. This matches a selected Broadcast Deck List, which cannot be deleted. A Theme's reference and a Screen Theme Override's do hold it back (ADR-0050).
 
@@ -1040,7 +990,7 @@ Without the Retire guard, the rule would turn retiring an asset into making ever
 ### Consequences
 
 - A template's references cannot become retired, trashed, pruned, or purged under it. Trash, Revision Pruning, and purge each prove no reference points at a revision, and Retire now proves no template does.
-- Unavailable content can still appear under a saved template. It refuses that template's writes, and any Style Set operation that rewrites it, until Exact-Byte Repair restores the bytes.
+- Unavailable content can still appear under a saved template. It refuses that template's writes until Exact-Byte Repair restores the bytes.
 - An Installed Graphics Template does not hold Retire back. It is never revised and cannot be deleted, so counting it would make its assets unretirable for good. Retiring one of its assets leaves it unplaceable until restored, as before.
 - A template already holding a retired reference (written before this rule, or by a direct database change) is refused on every write until the reference is replaced in that write or the asset restored.
 - A rename on a stale `revision` skips the route's check and gets the revision conflict, so an author is not told about a document they have not read. A revision carrying a new document is checked first, as before.
@@ -1549,7 +1499,7 @@ The Players page opened Edit on a row click and kept history in the menu, while 
 
 ## ADR-0049: Themes replace Graphic Style Sets, resolve live, and use a closed vocabulary of two tiers
 
-Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812)
+Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812) · Amended 2026-10-28: Graphic Style Sets and Animation Effect Presets are removed, and a document's Style Set link is a former field · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830)
 
 ### Decision
 
@@ -1563,13 +1513,13 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 
 **A Theme stores only the tokens it sets.** A token added later reaches every existing Theme through its default. Renames and removals follow ADR-0043 and ADR-0037.
 
-**Graphic Style Sets are deleted, with `.skstyle` and the override-pin rules of ADR-0006, and so are Animation Effect Presets with `.skeffect`.** Their data is dropped, not migrated. Templates keep their values as literals.
+**Graphic Style Sets are deleted, with `.skstyle` and the override-pin rules of ADR-0006, and so are Animation Effect Presets with `.skeffect`** (#830). Their data is dropped, not migrated. Templates keep their values as literals.
 
 ### Why
 
 - Look and feel lived in four places: `ScreenConfig`, per-mode inline fallbacks, the Feature Match Overlay Frame's own fields, and Style Sets that reached Broadcast Graphic Templates only.
 - A new Screen Mode started unstyled.
-- The Style Set's copy-and-review model protects placed graphics from change. The product wants the opposite: one edit restyles the whole production.
+- The Style Set's copy-and-review model protected placed graphics from change. The product wants the opposite: one edit restyles the whole production.
 - Defaulting each Mode Token to a Foundation Token is what makes a new Screen Mode fit every Theme with nothing changed.
 - A closed vocabulary keeps tokens consumable everywhere, and lets a template travel between installations carrying only token names.
 
@@ -1582,6 +1532,8 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 - Typography tokens carry no size. Colour tokens may carry alpha, and a consumer's opacity multiplies it. The Key Output keys a translucent colour at its own alpha, so Fill and Key agree.
 - A Graphic Theme Binding (#829) is a slot name and a token name beside the property, never in place of it. The property keeps the value it last resolved to, so a document stays complete and renders without a Theme. The compositor paints every bound slot from the Screen's resolved Foundation Tokens. An author's edit to a bound slot's value detaches that slot, keeping what the author made of the resolved value. That is the only implicit change; there is no override record. A binding naming no Foundation Token of its slot's type is refused on a write and inert on a read.
 - Media treatment and on-screen cycling bind nothing, because no token type fills either.
+- Migration `0012_remove_graphic_style_sets` drops the Graphic Style Set and Animation Effect Preset libraries and a Broadcast Graphic Template's link columns (#830). A template's document is untouched, so its values stay as the literals it already held.
+- A graphics document recorded with a Style Set link, stored or in a `.skgraphic` or `.sklayout` exported before #830, still reads. An item's `styleRefs`, and a Broadcast Graphic's `styleSet` and `styleRefs`, are former fields: accepted by the graphics schemas and dropped, as ADR-0037's are, so a write that sends the document (a Screen write, a template revision carrying its document, a package install) stores it without them. A client holding one sends it back unrefused. A copy the server makes of a stored document without parsing it, such as saving a placed graphic as a template or renaming a template, carries a stale link along, inert, until such a write. Every other unknown key is still refused.
 - A rendering holds its Event's Theme in its Event context (ADR-0022), not in a read of its own (#820). A token write advances the Theme's revision in the same statement, then announces `theme:updated` with the whole stored map on every Event using the Theme. A holder applies it only for the Theme its Event names, and only if it is newer than the revision held. A Theme switch is an Event Presentation Settings write, so it announces `event:updated`. That names the new Theme without its tokens, so a rendering whose context names a Theme it does not hold re-reads the context.
 - A Screen Theme Override write is one Screen write (`PATCH …/screens/:screenId/theme-overrides`, #827): it names tokens, each with a value or the `null` that clears it (ADR-0041), and announces `screen:updated`, so outputs re-read the Screen with its overrides. It may name any token the Screen's mode can consume: its Mode Tokens, and every Foundation Token of a type they declare, since a Mode Token may be pointed at any of them. Anything else is refused whole, and an override already stored for another mode's Mode Token stays dormant. The Screen's token section lists only what the mode's declaration consumes (`resolveThemeTokens`'s `consumed`).
 
@@ -1622,7 +1574,7 @@ A Theme is meant to carry the production's logo, backdrop and typefaces. ADR-000
 ### Consequences
 
 - Theme export/import, when built, must carry asset bytes through the Template Package asset pipeline: staging, quota, revalidation and Graphic Asset Origin. It cannot be data-only.
-- ADR-0001 holds only until Graphic Style Sets are removed (#830).
+- ADR-0001 is fully superseded: #830 removed Graphic Style Sets.
 - A Theme or override cannot hold a retired asset, because Retire is refused while one references it. A token write therefore never needs ADR-0034's retained-reference allowance; an override still grants it to a revision it already held at the same slot.
 - A Screen overrides only a token its mode can consume (ADR-0049), and no mode yet declares an asset Mode Token, so no Screen can override `logo` until one does. Its fonts and its `background` stack can be overridden.
 - The capability admits the Theme's logo on every Screen of the Event, whether or not that Screen's mode paints it. The Event context already carries the whole Theme, so this reveals nothing new, and a graphics host binding the logo needs no change to the capability.

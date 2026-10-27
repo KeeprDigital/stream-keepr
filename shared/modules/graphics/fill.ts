@@ -5,11 +5,11 @@ import { MAX_GRAPHIC_FILL_STOPS, MIN_GRAPHIC_FILL_STOPS } from '../../types/grap
  * Graphic Fill edits: one vocabulary and one set of rules for every place a fill
  * is authored.
  *
- * A Graphic Item's own fill and a Graphic Style Set fill entry are the same Graphic
- * Fill with a different colour vocabulary: the item's holds a CSS colour, the
- * entry's names a palette entry. The rules here never read the colour, so both
- * take these edits, and the one fill fields control emits them for both. Only a
- * host's mapping to and from what it stores knows which vocabulary it is.
+ * A Graphic Item's own fill and a Theme's fill token are the same Graphic Fill,
+ * possibly with a different colour vocabulary. The rules here never read the
+ * colour, so both take these edits, and the one fill fields control emits them
+ * for both. Only a host's mapping to and from what it stores knows which
+ * vocabulary it is.
  */
 
 /** One author change to a Graphic Fill. `color` is in the host's own vocabulary. */
@@ -23,8 +23,7 @@ export type GraphicFillEdit
 export interface ApplyGraphicFillEditOptions {
 	/**
 	 * What a new gradient's end stop starts as. Absent, it is the fill's own colour,
-	 * because a host may have no neutral colour to offer: a Style Set's palette has
-	 * no entry every set holds.
+	 * because a host may have no neutral colour to offer.
 	 */
 	gradientEndColor?: string;
 }

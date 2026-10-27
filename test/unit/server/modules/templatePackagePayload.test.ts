@@ -8,6 +8,7 @@ import { TEMPLATE_PACKAGE_KINDS } from '~~/shared/types/templatePackage';
 import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { maximalBroadcastGraphicDocument } from '../../../helpers/broadcastGraphicDocument';
 import { maximalFeatureMatchLayoutDocument } from '../../../helpers/featureMatchLayoutDocument';
+import { GRAPHIC_STYLE_SET_LINK_KEYS, withFormerItemStyleRefs, withFormerStyleSetLink } from '../../../helpers/formerGraphicStyleSetLinks';
 
 const asset = testGraphicAssetReference('asset-1', 'revision-1');
 
@@ -131,6 +132,35 @@ describe('a v1 package exported before ADR-0020', () => {
 		const installed = readInstalledFeatureMatchLayoutDocument(layout);
 		expect(installed).toBeDefined();
 		expect(JSON.stringify(installed)).not.toContain('videoCompatibility');
+	});
+});
+
+/** A package exported while Graphic Style Sets existed installs, its values kept as literals. */
+describe('a package exported before Graphic Style Sets were removed', () => {
+	const graphic = withFormerStyleSetLink(maximalBroadcastGraphicDocument({ asset }));
+	const layout = withFormerItemStyleRefs(maximalFeatureMatchLayoutDocument({
+		frameAsset: testGraphicAssetReference('frame-asset', 'frame-revision'),
+		itemAsset: asset,
+	}));
+
+	it.each([
+		[
+			'`.skgraphic`',
+			'skgraphic' as const,
+			graphic,
+			readInstalledBroadcastGraphicDocument,
+		],
+		[
+			'`.sklayout`',
+			'sklayout' as const,
+			layout,
+			readInstalledFeatureMatchLayoutDocument,
+		],
+	])('installs a %s carrying Style Set links, and reads it back without them', (_, kind, document, readInstalled) => {
+		expect(templatePackagePayloads(kind).readInstallableDocument(document).outcome).toBe('read');
+		const installed = readInstalled(document);
+		expect(installed).toBeDefined();
+		expect(JSON.stringify(installed)).not.toMatch(GRAPHIC_STYLE_SET_LINK_KEYS);
 	});
 });
 

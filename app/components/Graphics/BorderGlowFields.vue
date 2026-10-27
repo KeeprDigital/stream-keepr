@@ -4,8 +4,7 @@ import type { BorderFieldsValue, BorderGlowEdit, BorderSide, GlowFieldsValue } f
 
 /**
  * The one border and glow fields control, for the Feature Match Overlay Frame,
- * a Source Item's framing, a Graphic Surface Style, and a Graphic Surface Style
- * entry in a Graphic Style Set.
+ * a Source Item's framing, and a Graphic Surface Style.
  *
  * It is presentational: it shows a neutral border and glow and reports each
  * change as a `BorderGlowEdit`, leaving the host to say what it stores. A
@@ -14,8 +13,8 @@ import type { BorderFieldsValue, BorderGlowEdit, BorderSide, GlowFieldsValue } f
  *
  * Hosts differ only where their renderer does, and say so by prop: per-side
  * borders, a glow position, and a glow that only exists around a visible
- * border. The colour field is the `color` slot, so a Style Set entry can pick a
- * palette entry where the others take a colour.
+ * border. The colour field is the `color` slot, so a host can offer its own
+ * colour picker.
  */
 const props = withDefaults(defineProps<{
 	/** What the host calls its border: "Frame border", "Border", "Outline". */

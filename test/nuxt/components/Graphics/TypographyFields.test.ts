@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, h } from 'vue';
 import TypographyFields from '~/components/Graphics/TypographyFields.vue';
 
-// The one typography fields control, shared by a Graphic Item's base typography, a Graphic
-// Placeholder Style, and a Graphic Style Set typography entry: the bounds each field holds, what…
+// The one typography fields control, shared by a Graphic Item's base typography and a Graphic
+// Placeholder Style: the bounds each field holds, what…
 
 enableAutoUnmount(afterEach);
 

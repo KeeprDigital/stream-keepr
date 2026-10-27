@@ -1,7 +1,5 @@
 import type { GraphicFill } from '~~/shared/types/graphics';
-import type { FillGraphicStyleEntryValue } from '~~/shared/types/graphicStyleSet';
 import { describe, expect, it } from 'vitest';
-import { applyGraphicStyleFillEntryEdit, graphicFillOfStyleEntry } from '~~/shared/modules/graphic-style-sets';
 import { applyGraphicFillEdit } from '~~/shared/modules/graphics';
 
 // One Graphic Fill edit for every host: the colour is opaque to it, and only a new
@@ -82,41 +80,6 @@ describe('applyGraphicFillEdit', () => {
 			{ color: 'ink', position: 1, opacity: 1 },
 		]);
 		expect(shrunk).toEqual(gradient);
-	});
-
-	it('applies the same edits to a Graphic Style Set fill entry, on its palette entry ids', () => {
-		const entry: FillGraphicStyleEntryValue = { type: 'solid', colorEntryId: 'brand' };
-
-		const gradientEntry = applyGraphicStyleFillEntryEdit(entry, { kind: 'fill-kind', fillKind: 'linear-gradient' });
-		const grown = applyGraphicStyleFillEntryEdit(
-			applyGraphicStyleFillEntryEdit(gradientEntry, {
-				kind: 'gradient-stop',
-				index: 1,
-				patch: { color: 'ink' },
-			}),
-			{ kind: 'stop-count', delta: 1 },
-		);
-
-		expect(grown).toEqual({
-			type: 'linear-gradient',
-			angle: 90,
-			stops: [
-				{ colorEntryId: 'brand', position: 0, opacity: 1 },
-				{ colorEntryId: 'ink', position: 1, opacity: 1 },
-				{ colorEntryId: 'ink', position: 1, opacity: 1 },
-			],
-		});
-		expect(graphicFillOfStyleEntry(grown)).toEqual({
-			type: 'linear-gradient',
-			angle: 90,
-			stops: [
-				{ color: 'brand', position: 0, opacity: 1 },
-				{ color: 'ink', position: 1, opacity: 1 },
-				{ color: 'ink', position: 1, opacity: 1 },
-			],
-		});
-		expect(applyGraphicStyleFillEntryEdit(grown, { kind: 'fill-kind', fillKind: 'solid' }))
-			.toEqual({ type: 'solid', colorEntryId: 'brand' });
 	});
 
 	it('ignores a gradient edit aimed at a solid fill, and a solid colour aimed at a gradient', () => {

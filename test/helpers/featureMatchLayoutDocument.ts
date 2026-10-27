@@ -19,10 +19,10 @@ import { addGraphicGroupChild, addGraphicItem } from '../../shared/modules/graph
  * - **A Feature Match Slot.** There is nowhere to put one, which is the point: the
  *   assignment lives on the mode configuration beside the layout. A fixture with a
  *   `featureMatchId` would not be a layout.
- * - **Graphic Inputs, Graphic Source Selections, Graphic Input Bindings, or a
- *   Graphic Style Set link** on the composition. A Feature Match Overlay binds a
- *   fixed host token catalogue instead of declaring inputs, and the layout
- *   composition schema refuses all four.
+ * - **Graphic Inputs, Graphic Source Selections, or Graphic Input Bindings** on
+ *   the composition. A Feature Match Overlay binds a fixed host token catalogue
+ *   instead of declaring inputs, and the layout composition schema refuses all
+ *   three.
  * - **A Remote Media URL on the Frame.** A URL Screen Media Source is a remote
  *   resource, and the Template Package envelope refuses any document that depends
  *   on one (ADR-0021). A layout using it cannot be exported at all, so the fixture
