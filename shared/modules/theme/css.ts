@@ -89,12 +89,18 @@ function slideOffset(slide: NonNullable<GraphicAnimationRecipe['slide']>): strin
 		: `translate(${x * slide.distance}px, ${y * slide.distance}px)`;
 }
 
+/** A recipe with no channel cuts: it takes no time, as an absent recipe does. */
 function motionCss(value: GraphicAnimationRecipe): Record<MotionProperty, string> {
 	const origin = resolveGraphicAnimationOrigin(value.scale?.origin);
+	const cuts = !value.fade && !value.slide && !value.scale && !value.reveal;
 	return {
-		duration: `${value.duration}ms`,
+		duration: cuts
+			? '0ms'
+			: `${value.duration}ms`,
 		easing: EASING_CSS[value.easing],
-		delay: `${value.delay}ms`,
+		delay: cuts
+			? '0ms'
+			: `${value.delay}ms`,
 		opacity: String(value.fade?.opacity ?? 1),
 		transform: [
 			value.slide

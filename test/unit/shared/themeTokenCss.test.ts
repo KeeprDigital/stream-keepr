@@ -64,9 +64,11 @@ describe('a motion token as custom properties', () => {
 			},
 		],
 		[
-			'no channel, which cuts',
+			'no channel, which cuts, taking no time',
 			{ ...timing },
 			{
+				duration: '0ms',
+				delay: '0ms',
 				opacity: '1',
 				transform: 'translate(0px, 0px) scale(1)',
 				origin: '50% 50%',

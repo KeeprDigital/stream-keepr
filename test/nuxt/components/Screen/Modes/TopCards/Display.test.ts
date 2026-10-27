@@ -173,7 +173,7 @@ describe('screenTopCardsDisplay', () => {
 		expect(grid.attributes('style')).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))');
 	});
 
-	it('sizes fixed cards from the card size when dynamic sizing is off', async () => {
+	it('lays fixed cards out at their own width when dynamic sizing is off', async () => {
 		config.value = { ...config.value, dynamicCardSize: false };
 
 		const wrapper = await mountComponent();
