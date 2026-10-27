@@ -230,6 +230,8 @@ function getCompanionImageUrl() {
 	return getDeckCardImageUrl(cardDataMap.value, companion);
 }
 
+const companionPreviewKey = computed(() => `companion-${selectedDeck.value?.companion?.name ?? ''}`);
+
 const highlanderImageUrlsByCardName = computed<Record<string, string | null>>(() => {
 	const imageUrls: Record<string, string | null> = {};
 	for (const card of cards.value) {
@@ -294,6 +296,18 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 					size="sm"
 					class="ml-1"
 				/>
+				<div v-if="selectedDeck.companion" data-deck-companion class="flex items-center gap-2 min-w-0 ml-2">
+					<span class="text-xs uppercase tracking-wide text-muted shrink-0">Companion</span>
+					<CardHoverPreview
+						:image-url="getCompanionImageUrl()"
+						:alt="selectedDeck.companion.name"
+						:is-active="activePreviewCard === companionPreviewKey"
+						@preview="(open: boolean) => handlePreviewUpdate(companionPreviewKey, open)"
+						@pin="togglePreviewPin(companionPreviewKey)"
+					>
+						<span class="font-medium truncate">{{ selectedDeck.companion.name }}</span>
+					</CardHoverPreview>
+				</div>
 				<UBadge
 					v-if="selectedDeck.highlander"
 					color="neutral"

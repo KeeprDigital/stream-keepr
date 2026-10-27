@@ -105,6 +105,40 @@ describe('player deck list modal', () => {
 	});
 
 	it.each([
+		[
+			'names the Companion',
+			{
+				cardId: 9,
+				name: 'Kaheera, the Orphanguard',
+				scryfallId: null,
+				oracleId: null,
+				source: 'melee' as const,
+				usesExistingSideboardSlot: false,
+			},
+			true,
+		],
+		['shows no Companion', null, false],
+	])('%s when the deck list has one or not', async (_, companion, shown) => {
+		const wrapper = mount(DeckListModal, {
+			props: {
+				playerName: 'Marcus',
+				deckLists: [
+					{
+						...makeDeckList(),
+						companion,
+					},
+				],
+			},
+			global: { stubs },
+		});
+
+		const label = wrapper.find('[data-deck-companion]');
+		expect(label.exists()).toBe(shown);
+		if (shown)
+			expect(label.text()).toContain('Kaheera, the Orphanguard');
+	});
+
+	it.each([
 		['a known Player\'s', 7, true],
 		['a Player-less', undefined, false],
 	])('titles %s deck list with a name that opens their match history only when one is known', async (_, playerId, clickable) => {

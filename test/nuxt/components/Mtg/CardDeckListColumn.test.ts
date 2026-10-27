@@ -77,6 +77,7 @@ function createPlayerData(): MatchPlayerDeckData {
 		sideboard: [
 			createCard('Negate', 'sideboard', 2),
 		],
+		companion: null,
 		tokens: [
 			{
 				id: 'treasure',
@@ -149,6 +150,21 @@ describe('mtgCardDeckListColumn', () => {
 		]);
 		expect(sections.map(section => section.attributes('data-card-count'))).toEqual(['1', '1', '1']);
 		expect(sections.map(section => section.attributes('data-default-open'))).toEqual(['true', 'true', 'false']);
+	});
+
+	it('renders the companion as its own section after the sideboard', async () => {
+		const playerData = createPlayerData();
+		playerData.companion = createCard('Kaheera, the Orphanguard', 'sideboard');
+		const wrapper = await mountColumn(playerData);
+		const sections = wrapper.findAll('[data-testid="deck-section"]');
+
+		expect(sections.map(section => section.attributes('data-title'))).toEqual([
+			'Mainboard',
+			'Sideboard',
+			'Companion',
+			'Tokens',
+		]);
+		expect(sections[2]!.attributes('data-card-count')).toBe('1');
 	});
 
 	it('omits empty optional sections but always shows the mainboard', async () => {

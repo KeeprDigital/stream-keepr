@@ -22,4 +22,5 @@ export interface MatchPlayerDeckData {
 	tokens: DeckListTokenWithData[];
 	mainboard: DeckListCardWithData[];
 	sideboard: DeckListCardWithData[];
+	companion: DeckListCardWithData | null;
 }

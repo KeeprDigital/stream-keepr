@@ -123,6 +123,13 @@ const highlanderImageUrlsByCardName = computed<Record<string, string | null>>(()
 					:default-open="true"
 				/>
 				<MtgCardDeckListSection
+					v-if="playerData.companion"
+					title="Companion"
+					:cards="[playerData.companion]"
+					:filter="filter"
+					:default-open="true"
+				/>
+				<MtgCardDeckListSection
 					v-if="playerData.tokens.length"
 					title="Tokens"
 					:cards="playerData.tokens"
