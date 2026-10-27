@@ -63,8 +63,11 @@ So:
   Round order (Phase sortOrder, roundNumber, id: `server/services/round.ts`).
 - **Current Round** = the latest such Round that has pairings (at least one
   Match stored from Melee).
-- The Current Round is **complete** when every Match in it has a result
-  (`hasResult` or `isBye`).
+- A Round is **complete** when every Match in it has a result (`hasResult` or
+  `isBye`), **or** when the next Round in Round order has pairings (Rounds run
+  strictly in sequence, so pairing Round N+1 means Round N is done; this also
+  covers a Round stuck on a Match that never gets a result). Completion is
+  derived from synced data only; no operator ever completes a Round.
 - When the Current Round is complete, polling also probes the **next** Round
   in Round order. When Melee returns pairings for it, it becomes the Current
   Round.
@@ -127,7 +130,26 @@ stored, the Sync page shows "Live Results stopped: <reason>") when:
 - 12 hours pass with no change of any kind (no new result, no new pairings);
 - Melee answers an authentication failure (401/403), which waiting won't fix.
 
-The operator turns it back on by hand. Turning it on clears the stop reason
+The operator turns it back on by hand.
+
+### Round Standings only for complete Rounds
+
+Applies to every Melee Sync path (polling, "Update from Melee", per-Round
+Refresh, Re-sync Matches), not just polling:
+
+- A Round's Round Standings are stored only once the Round is complete. A
+  sync of an incomplete Round stores its Matches and leaves its standings
+  alone, whatever Melee returns for them.
+- So the Standings Screen, reading the latest Round holding Round Standings,
+  always shows "standings after Round X" for the last complete Round, even
+  while Round X+1 is paired and in progress.
+- When a Round becomes complete, by either rule, its standings are fetched
+  and stored. When Round N+1's pairings arrive, Round N's standings are
+  fetched in the same sync if not yet stored.
+- Round Standings already stored for a complete Round are refreshed by later
+  manual syncs as today.
+- `MeleeRoundNotReadyError` for a never-synced Round keys off Matches only,
+  since standings are no longer expected for a newly paired Round. Turning it on clears the stop reason
 and resets cadence and backoff.
 - After the Event's last Round is complete with no next Round in structure,
   polling idles until a structure sync adds one.
