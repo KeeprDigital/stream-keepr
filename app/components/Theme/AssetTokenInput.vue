@@ -19,7 +19,9 @@ const emit = defineEmits<{
 	commit: [value: ThemeAsset | null];
 }>();
 
-const kinds = computed(() => [...(props.assetKinds ?? ['image'])]);
+const kinds = computed(() => [
+	...(props.assetKinds ?? ['image']),
+]);
 const reference = computed<GraphicAssetReference | undefined>(() => props.modelValue
 	? { assetId: props.modelValue.assetId, revisionId: props.modelValue.revisionId }
 	: undefined);

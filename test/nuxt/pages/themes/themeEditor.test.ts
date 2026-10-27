@@ -52,7 +52,10 @@ const passthroughStub = defineComponent({ template: '<div><slot /></div>' });
 const FocusPickerStub = defineComponent({
 	name: 'GraphicsAssetFocusPicker',
 	props: {
-		assetKind: { type: [String, Array], default: 'image' },
+		assetKind: {
+			type: [String, Array],
+			default: 'image',
+		},
 		eventId: { type: Number, required: false },
 	},
 	emits: ['select', 'update:modelValue'],
@@ -247,8 +250,7 @@ describe('the Theme editor', () => {
 		await editor.get('[data-testid="add-layer-type"] select').setValue('image');
 		await editor.get('[data-testid="add-layer"]').trigger('click');
 
-		const source = editor.get('[data-testid="background-layer-row"]').findAll('select')
-			.find(select => select.findAll('option').some(option => option.text() === 'Asset library'))!;
+		const source = editor.get('[data-testid="background-layer-row"]').findAll('select').find(select => select.findAll('option').some(option => option.text() === 'Asset library'))!;
 		await source.setValue('asset');
 
 		expect(editor.get('[data-testid="pick-asset"]').attributes('data-event-id')).toBe('none');
@@ -272,7 +274,10 @@ describe('the Theme editor', () => {
 				await part(wrapper, 'heading', 'font').get('[data-testid="pick-asset"]').trigger('click');
 			},
 			{
-				font: { kind: 'asset', reference: { assetId: 'asset-1', revisionId: 'revision-1' } },
+				font: {
+					kind: 'asset',
+					reference: { assetId: 'asset-1', revisionId: 'revision-1' },
+				},
 				weight: 800,
 				lineHeight: 1,
 				tracking: 0.06,

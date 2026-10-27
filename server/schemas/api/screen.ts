@@ -11,14 +11,8 @@ import {
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
 import { graphicTypographyFields, shapeGeometrySchema } from '~~/server/schemas/api/graphicValues';
-import { animationEffectSelectionSchema, storedFrameAnimationConfigSchema } from '~~/shared/animationEffects';
+import { storedFrameAnimationConfigSchema } from '~~/shared/animationEffects';
 import { FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION } from '~~/shared/featureMatchSourceItems';
-import {
-	backgroundLayerStackSchema,
-	retiredVideoCompatibilitySchema,
-	screenMediaPlaybackRateSchema,
-	screenMediaSourceSchema,
-} from '~~/shared/modules/theme/background';
 import {
 	GRAPHIC_FONT_IDS,
 	graphicSourceRelationKind,
@@ -27,6 +21,12 @@ import {
 	isKnownGraphicBindingFieldId,
 	readSocialProfileProjectedValueReference,
 } from '~~/shared/modules/graphics';
+import {
+	backgroundLayerStackSchema,
+	retiredVideoCompatibilitySchema,
+	screenMediaPlaybackRateSchema,
+	screenMediaSourceSchema,
+} from '~~/shared/modules/theme/background';
 import { isServerValidatedField } from '~~/shared/screenModeConfigs/contract';
 import { screenModeConfigContract, screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
 import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';

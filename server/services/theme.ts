@@ -1,7 +1,7 @@
 import type { DbTheme } from '~~/server/db/schema';
 import type { EventUsingTheme } from '~~/shared/types/theme';
 import type { ScreenGraphicAssetReference } from '~~/shared/utils/graphicsAssetReferences';
-import { and, asc, eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events, themes } from '~~/server/db/schema';
 import {
@@ -9,6 +9,8 @@ import {
 	jsonElementGraphicAssetRevisionResolution,
 	REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE,
 } from '~~/server/modules/graphic-asset-reference-resolution';
+import { THEME_TOKEN_SLOT_SEPARATOR } from '~~/shared/themeAssetReferences';
+import { THEME_REFERENCE_OWNER_KIND } from '~~/shared/utils/graphicsAssetReferences';
 
 /** A Theme delete refused because Events use it. */
 export class ThemeInUseError extends Error {
@@ -28,9 +30,6 @@ export class ThemeAssetReferenceConflict extends Error {
 		this.name = 'ThemeAssetReferenceConflict';
 	}
 }
-
-/** The owner kind a Theme's Graphic Asset References are indexed under. */
-export const THEME_REFERENCE_OWNER_KIND = 'theme';
 
 /** The JSON path of one token in the stored map. A token name is a vocabulary name, so it needs no escaping. */
 function tokenPath(name: string): string {
@@ -84,6 +83,7 @@ export function themeService() {
 		references: readonly ScreenGraphicAssetReference[],
 	): Promise<{ theme: DbTheme; written: boolean } | undefined> {
 		const path = tokenPath(name);
+		const slotPrefix = `${name}${THEME_TOKEN_SLOT_SEPARATOR}`;
 		const referenceVersion = crypto.randomUUID();
 		const now = Date.now();
 		const boundFacts = boundGraphicAssetReferenceFacts(references.map(item => ({
@@ -117,9 +117,9 @@ export function themeService() {
 			client.prepare(`
 				DELETE FROM graphic_asset_references
 				WHERE owner_kind = '${THEME_REFERENCE_OWNER_KIND}' AND owner_id = ?
-					AND (owner_slot = ? OR owner_slot LIKE ?)
+					AND (owner_slot = ? OR substr(owner_slot, 1, ?) = ?)
 					${versionGuard}
-			`).bind(id, name, `${name}.%`, id, referenceVersion),
+			`).bind(id, name, slotPrefix.length, slotPrefix, id, referenceVersion),
 			...(references.length === 0
 				? []
 				: [

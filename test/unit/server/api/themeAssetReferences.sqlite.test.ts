@@ -34,6 +34,9 @@ vi.doMock('~~/server/utils/auth', () => ({
 	optionalBrowserSessionId: async () => undefined,
 }));
 
+/** Assets the library answered for before they were retired, as a route's question can be overtaken by the commit. */
+const answeredBeforeRetirement = new Set<string>();
+
 /** The library a write asks about selectability: what the catalogue holds, with every content byte available. */
 async function inspectGraphicAssetRevisions(input: { references: GraphicAssetReference[] }): Promise<GraphicAssetReferenceStatus[]> {
 	return await Promise.all(input.references.map(async (reference) => {
@@ -41,8 +44,11 @@ async function inspectGraphicAssetRevisions(input: { references: GraphicAssetRef
 			.from(graphicAssetRevisions)
 			.innerJoin(graphicAssets, eq(graphicAssets.id, graphicAssetRevisions.assetId))
 			.where(eq(graphicAssetRevisions.id, reference.revisionId));
+		const lifecycleState = answeredBeforeRetirement.has(reference.assetId)
+			? 'active'
+			: row?.lifecycleState;
 		return row
-			? { outcome: 'available' as const, kind: row.kind, lifecycleState: row.lifecycleState } as GraphicAssetReferenceStatus
+			? { outcome: 'available' as const, kind: row.kind, lifecycleState } as GraphicAssetReferenceStatus
 			: { outcome: 'missing' as const };
 	}));
 }
@@ -68,7 +74,10 @@ const patchOverrides = handler(await import('~~/server/api/events/[id]/screens/[
 
 function call(handler: Handler, params: Record<string, string | number>, body?: unknown) {
 	return handler(stubH3Event({
-		params: Object.fromEntries(Object.entries(params).map(([key, value]) => [key, String(value)])),
+		params: Object.fromEntries(Object.entries(params).map(([key, value]) => [
+			key,
+			String(value),
+		])),
 		body,
 	}));
 }
@@ -89,7 +98,7 @@ const context = createTestGraphicsLibrary({
 });
 const authorizer = createD1ScreenOutputAssetAuthorizer(harness.database);
 
-type Revision = { assetId: GraphicAssetId; revisionId: GraphicAssetRevisionId };
+interface Revision { assetId: GraphicAssetId; revisionId: GraphicAssetRevisionId }
 let images = 0;
 async function ingest(): Promise<Revision> {
 	return publishedRevision(await ingestImage(context, { idempotencyKey: `image-${++images}`, initiatedBy: 'author' }));
@@ -118,18 +127,24 @@ beforeAll(async () => {
 
 afterAll(async () => await harness.close());
 
-const libraryFont = (revision: Revision) => ({
-	...FOUNDATION_TOKENS.heading.default,
-	font: { kind: 'asset', reference: revision },
-});
-const libraryImageLayer = (revision: Revision) => [{
-	id: 'plate',
-	type: 'image',
-	enabled: true,
-	opacity: 1,
-	fit: 'cover',
-	source: { kind: 'asset', ...revision },
-}];
+function libraryFont(revision: Revision) {
+	return {
+		...FOUNDATION_TOKENS.heading.default,
+		font: { kind: 'asset', reference: revision },
+	};
+}
+function libraryImageLayer(revision: Revision) {
+	return [
+		{
+			id: 'plate',
+			type: 'image',
+			enabled: true,
+			opacity: 1,
+			fit: 'cover',
+			source: { kind: 'asset', ...revision },
+		},
+	];
+}
 
 let themeId: string;
 let eventId: number;
@@ -149,6 +164,7 @@ async function createScreen(name: string, mode = 'standings') {
 }
 
 beforeEach(async () => {
+	answeredBeforeRetirement.clear();
 	await db.delete(graphicAssetReferences);
 	logo = await ingest();
 	plate = await ingest();
@@ -156,7 +172,12 @@ beforeEach(async () => {
 	digest = (digest ?? 0) + 1;
 	themeId = (await call(createTheme, {}, { name: 'Brand' })).id;
 	const [event] = await db.insert(schema.events)
-		.values({ name: 'Finals', game: 'mtg', featureMatchOrientation: 'horizontal', themeId })
+		.values({
+			name: 'Finals',
+			game: 'mtg',
+			featureMatchOrientation: 'horizontal',
+			themeId,
+		})
 		.returning({ id: schema.events.id });
 	eventId = event!.id;
 	screenId = (await createScreen('main')).id;
@@ -167,24 +188,70 @@ const trash = (revision: Revision) => context.library.trashGraphicAsset({ assetI
 
 describe('a Graphic Asset a Theme or Screen Theme Override references', () => {
 	it.each([
-		['the Theme\'s logo', 'theme', 'logo', () => ({ kind: 'image', ...logo }), () => logo],
-		['a Theme background layer', 'theme', 'background', () => libraryImageLayer(plate), () => plate],
-		['a Theme library font', 'theme', 'heading', () => libraryFont(FACE), () => FACE],
-		['an override\'s library font', 'screen', 'heading', () => libraryFont(FACE), () => FACE],
-		['an override\'s background layer', 'screen', 'background', () => libraryImageLayer(plate), () => plate],
+		[
+			'the Theme\'s logo',
+			'theme',
+			'logo',
+			() => ({ kind: 'image', ...logo }),
+			() => logo,
+		],
+		[
+			'a Theme background layer',
+			'theme',
+			'background',
+			() => libraryImageLayer(plate),
+			() => plate,
+		],
+		[
+			'a Theme library font',
+			'theme',
+			'heading',
+			() => libraryFont(FACE),
+			() => FACE,
+		],
+		[
+			'an override\'s library font',
+			'screen',
+			'heading',
+			() => libraryFont(FACE),
+			() => FACE,
+		],
+		[
+			'an override\'s background layer',
+			'screen',
+			'background',
+			() => libraryImageLayer(plate),
+			() => plate,
+		],
 	])('refuses Retire and Trash while %s references it, naming the referrer', async (_case, owner, token, value, revision) => {
-		if (owner === 'theme')
-			await call(setToken, { themeId, token }, { value: value() });
-		else
-			await call(patchOverrides, { id: eventId, screenId }, { tokens: { [token]: value() } });
+		if (owner === 'theme') {
+			await call(setToken, { themeId, token }, {
+				value: value(),
+			});
+		}
+		else {
+			await call(patchOverrides, { id: eventId, screenId }, {
+				tokens: {
+					[token]: value(),
+				},
+			});
+		}
 		const named = owner === 'theme'
 			? { kind: 'theme', id: themeId, name: 'Brand' }
-			: { kind: 'screen', id: String(screenId), name: 'main' };
+			: {
+					kind: 'screen',
+					id: String(screenId),
+					name: 'main',
+				};
 
 		for (const action of [retire, trash]) {
 			expect(await action(revision())).toMatchObject({
 				outcome: 'in-use',
-				usage: [expect.objectContaining({ owner: expect.objectContaining(named) })],
+				usage: [
+					expect.objectContaining({
+						owner: expect.objectContaining(named),
+					}),
+				],
 			});
 		}
 	});
@@ -193,28 +260,40 @@ describe('a Graphic Asset a Theme or Screen Theme Override references', () => {
 		[
 			'clearing the Theme\'s token',
 			async () => {
-				await call(setToken, { themeId, token: 'logo' }, { value: { kind: 'image', ...logo } });
+				await call(setToken, { themeId, token: 'logo' }, {
+					value: { kind: 'image', ...logo },
+				});
 				await call(clearToken, { themeId, token: 'logo' });
 			},
 		],
 		[
 			'setting the Theme\'s token to none',
 			async () => {
-				await call(setToken, { themeId, token: 'logo' }, { value: { kind: 'image', ...logo } });
+				await call(setToken, { themeId, token: 'logo' }, {
+					value: { kind: 'image', ...logo },
+				});
 				await call(setToken, { themeId, token: 'logo' }, { value: null });
 			},
 		],
 		[
 			'clearing the override',
 			async () => {
-				await call(patchOverrides, { id: eventId, screenId }, { tokens: { background: libraryImageLayer(logo) } });
-				await call(patchOverrides, { id: eventId, screenId }, { tokens: { background: null } });
+				await call(patchOverrides, { id: eventId, screenId }, {
+					tokens: {
+						background: libraryImageLayer(logo),
+					},
+				});
+				await call(patchOverrides, { id: eventId, screenId }, {
+					tokens: { background: null },
+				});
 			},
 		],
 		[
 			'deleting the Theme no Event uses',
 			async () => {
-				await call(setToken, { themeId, token: 'logo' }, { value: { kind: 'image', ...logo } });
+				await call(setToken, { themeId, token: 'logo' }, {
+					value: { kind: 'image', ...logo },
+				});
 				await db.update(schema.events).set({ themeId: null }).where(eq(schema.events.id, eventId));
 				await call(deleteTheme, { themeId });
 			},
@@ -226,8 +305,12 @@ describe('a Graphic Asset a Theme or Screen Theme Override references', () => {
 	});
 
 	it('releases only the token written, keeping another token\'s reference', async () => {
-		await call(setToken, { themeId, token: 'logo' }, { value: { kind: 'image', ...logo } });
-		await call(setToken, { themeId, token: 'background' }, { value: libraryImageLayer(plate) });
+		await call(setToken, { themeId, token: 'logo' }, {
+			value: { kind: 'image', ...logo },
+		});
+		await call(setToken, { themeId, token: 'background' }, {
+			value: libraryImageLayer(plate),
+		});
 
 		await call(clearToken, { themeId, token: 'background' });
 
@@ -236,25 +319,77 @@ describe('a Graphic Asset a Theme or Screen Theme Override references', () => {
 	});
 
 	it.each([
-		['a retired asset', async () => {
-			await retire(unrelated);
-			return { kind: 'image', ...unrelated };
-		}],
-		['a revision that does not exist', async () => ({ kind: 'image', assetId: logo.assetId, revisionId: 'revision-invented' })],
-		['an image named as a silent video', async () => ({ kind: 'silent-video', ...logo })],
+		[
+			'a retired asset',
+			async () => {
+				await retire(unrelated);
+				return { kind: 'image', ...unrelated };
+			},
+		],
+		[
+			'a revision that does not exist',
+			async () => ({ kind: 'image', assetId: logo.assetId, revisionId: 'revision-invented' }),
+		],
+		[
+			'an image named as a silent video',
+			async () => ({ kind: 'silent-video', ...logo }),
+		],
 	])('refuses a Theme write naming %s, storing nothing', async (_case, value) => {
 		const refused = await refusal(call(setToken, { themeId, token: 'logo' }, { value: await value() }));
 
-		expect(refused).toMatchObject({ statusCode: 409, message: expect.stringContaining('logo') });
+		expect(refused).toMatchObject({
+			statusCode: 409,
+			message: expect.stringContaining('logo'),
+		});
 		const [theme] = await db.select().from(schema.themes).where(eq(schema.themes.id, themeId));
 		expect(theme!.tokens).toEqual({});
 		expect(await db.select().from(graphicAssetReferences).where(eq(graphicAssetReferences.ownerKind, 'theme'))).toEqual([]);
 	});
 
+	it('refuses at the commit a Theme write whose asset was retired after the library answered', async () => {
+		await retire(unrelated);
+		answeredBeforeRetirement.add(unrelated.assetId);
+
+		const refused = await refusal(call(setToken, { themeId, token: 'logo' }, {
+			value: { kind: 'image', ...unrelated },
+		}));
+
+		expect(refused).toMatchObject({
+			statusCode: 409,
+			message: expect.stringContaining('stopped being selectable'),
+		});
+		const [theme] = await db.select().from(schema.themes).where(eq(schema.themes.id, themeId));
+		expect(theme!.tokens).toEqual({});
+		expect(await db.select().from(graphicAssetReferences).where(eq(graphicAssetReferences.ownerKind, 'theme'))).toEqual([]);
+	});
+
+	it('releases a Foundation Token\'s slots alone, never a same-named mode\'s Mode Token slots', async () => {
+		await db.insert(graphicAssetReferences).values({
+			id: 'background-mode-token',
+			assetId: logo.assetId,
+			revisionId: logo.revisionId,
+			ownerKind: 'theme',
+			ownerId: themeId,
+			ownerSlot: 'background.plate',
+			eventId: null,
+		} as never);
+		await call(setToken, { themeId, token: 'background' }, {
+			value: libraryImageLayer(plate),
+		});
+
+		await call(clearToken, { themeId, token: 'background' });
+
+		expect((await db.select().from(graphicAssetReferences)).map(row => row.ownerSlot)).toEqual(['background.plate']);
+	});
+
 	it('refuses an override naming a retired asset, storing nothing', async () => {
 		await retire(unrelated);
 
-		const refused = await refusal(call(patchOverrides, { id: eventId, screenId }, { tokens: { background: libraryImageLayer(unrelated) } }));
+		const refused = await refusal(call(patchOverrides, { id: eventId, screenId }, {
+			tokens: {
+				background: libraryImageLayer(unrelated),
+			},
+		}));
 
 		expect(refused.statusCode).toBe(409);
 		const [screen] = await db.select().from(schema.screens).where(eq(schema.screens.id, screenId));
@@ -279,8 +414,12 @@ describe('a Screen Output\'s capability over its Theme\'s content', () => {
 	}
 
 	it('resolves the Theme\'s logo and font, and no unrelated asset', async () => {
-		await call(setToken, { themeId, token: 'logo' }, { value: { kind: 'image', ...logo } });
-		await call(setToken, { themeId, token: 'heading' }, { value: libraryFont(FACE) });
+		await call(setToken, { themeId, token: 'logo' }, {
+			value: { kind: 'image', ...logo },
+		});
+		await call(setToken, { themeId, token: 'heading' }, {
+			value: libraryFont(FACE),
+		});
 		const screen = await screenRow(screenId);
 
 		expect([
@@ -291,15 +430,25 @@ describe('a Screen Output\'s capability over its Theme\'s content', () => {
 	});
 
 	it('resolves an override\'s content in place of the Theme value it shadows', async () => {
-		await call(setToken, { themeId, token: 'background' }, { value: libraryImageLayer(plate) });
-		await call(patchOverrides, { id: eventId, screenId }, { tokens: { background: libraryImageLayer(logo) } });
+		await call(setToken, { themeId, token: 'background' }, {
+			value: libraryImageLayer(plate),
+		});
+		await call(patchOverrides, { id: eventId, screenId }, {
+			tokens: {
+				background: libraryImageLayer(logo),
+			},
+		});
 		const screen = await screenRow(screenId);
 
 		expect([await resolves(screen, logo), await resolves(screen, plate)]).toEqual([true, false]);
 	});
 
 	it('resolves a dormant override of another mode\'s Mode Token only once the Screen shows that mode again', async () => {
-		await call(patchOverrides, { id: eventId, screenId }, { tokens: { 'standings.title-typography': libraryFont(FACE) } });
+		await call(patchOverrides, { id: eventId, screenId }, {
+			tokens: {
+				'standings.title-typography': libraryFont(FACE),
+			},
+		});
 		await db.update(schema.screens).set({ currentMode: 'card' }).where(eq(schema.screens.id, screenId));
 		expect(await resolves(await screenRow(screenId), FACE)).toBe(false);
 
@@ -308,7 +457,9 @@ describe('a Screen Output\'s capability over its Theme\'s content', () => {
 	});
 
 	it('resolves nothing of a Theme its Event does not use', async () => {
-		await call(setToken, { themeId, token: 'logo' }, { value: { kind: 'image', ...logo } });
+		await call(setToken, { themeId, token: 'logo' }, {
+			value: { kind: 'image', ...logo },
+		});
 		await db.update(schema.events).set({ themeId: null }).where(eq(schema.events.id, eventId));
 
 		expect(await resolves(await screenRow(screenId), logo)).toBe(false);

@@ -150,7 +150,11 @@ describe('a Screen\'s token section', () => {
 
 		useEventStore().applyRemoteThemeUpdated({
 			eventId: 1,
-			theme: { id: 'brand', revision: 2, tokens: { divider: '#654321' } },
+			theme: {
+				id: 'brand',
+				revision: 2,
+				tokens: { divider: '#654321' },
+			},
 		} as never);
 		await flushPromises();
 

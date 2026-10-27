@@ -22,7 +22,7 @@ import type { TemplatePackagePreflightState } from './template-package-preflight
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
-import { GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS, SCREEN_THEME_OVERRIDE_SLOT_PREFIX } from '~~/shared/utils/graphicsAssetReferences';
+import { GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS, SCREEN_THEME_OVERRIDE_SLOT_PREFIX, THEME_REFERENCE_OWNER_KIND } from '~~/shared/utils/graphicsAssetReferences';
 import { GRAPHICS_RETENTION_GUARANTEES } from '~~/shared/utils/graphicsAssetRetention';
 import { createD1GraphicsOperationsCockpitCatalogue } from './catalogue-cockpit';
 import { createD1GraphicsAssetReconciliationCatalogue } from './catalogue-reconciliation';
@@ -255,7 +255,7 @@ const TEMPLATE_OWNER_KIND_LIST = GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS
  * Theme Override's (ADR-0050). A Screen's own mode references do not.
  */
 const RETIRE_BLOCKING_REFERENCE = `(
-	asset_reference.owner_kind IN (${TEMPLATE_OWNER_KIND_LIST}, 'theme')
+	asset_reference.owner_kind IN (${TEMPLATE_OWNER_KIND_LIST}, '${THEME_REFERENCE_OWNER_KIND}')
 	OR (asset_reference.owner_kind = 'screen' AND asset_reference.owner_slot LIKE '${SCREEN_THEME_OVERRIDE_SLOT_PREFIX}%')
 )`;
 
@@ -275,7 +275,7 @@ function usageSelect(options: { retireBlockingOnly?: boolean } = {}) {
 					THEN broadcast_graphic_template.name
 				WHEN asset_reference.owner_kind = 'feature-match-layout-template'
 					THEN feature_match_layout_template.name
-				WHEN asset_reference.owner_kind = 'theme' THEN theme.name
+				WHEN asset_reference.owner_kind = '${THEME_REFERENCE_OWNER_KIND}' THEN theme.name
 				ELSE NULL
 			END AS owner_name
 		FROM graphic_asset_references asset_reference
@@ -293,7 +293,7 @@ function usageSelect(options: { retireBlockingOnly?: boolean } = {}) {
 			ON asset_reference.owner_kind = 'feature-match-layout-template'
 			AND feature_match_layout_template.id = asset_reference.owner_id
 		LEFT JOIN themes theme
-			ON asset_reference.owner_kind = 'theme'
+			ON asset_reference.owner_kind = '${THEME_REFERENCE_OWNER_KIND}'
 			AND theme.id = asset_reference.owner_id
 		WHERE asset_reference.asset_id = ?
 			${options.retireBlockingOnly

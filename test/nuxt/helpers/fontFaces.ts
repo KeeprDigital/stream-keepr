@@ -3,7 +3,8 @@ import { vi } from 'vitest';
 /**
  * The browser's font loading, faked at its boundary: a `FontFace` that records
  * every face constructed and loads at once, and a `document.fonts` that accepts
- * every face. Undo with `vi.unstubAllGlobals()`.
+ * every face. `vi.unstubAllGlobals()` undoes the `FontFace`; `document.fonts`
+ * stays defined, accepting every face, until the next call replaces it.
  */
 export function stubFontFaces() {
 	const constructed: Array<{ family: string; source: string }> = [];

@@ -75,7 +75,10 @@ describe('a Theme Token write', () => {
 		[
 			'a typography in a library font',
 			'heading',
-			{ ...typography, font: { kind: 'asset', reference: libraryRevision } },
+			{
+				...typography,
+				font: { kind: 'asset', reference: libraryRevision },
+			},
 		],
 		[
 			'a library image as the logo',
@@ -96,8 +99,15 @@ describe('a Theme Token write', () => {
 			'a background of library image and video layers',
 			'background',
 			[
-				{ ...remoteImageLayer, source: { kind: 'asset', ...libraryRevision } },
-				{ ...remoteVideoLayer, id: 'loop', source: { kind: 'asset', ...libraryRevision } },
+				{
+					...remoteImageLayer,
+					source: { kind: 'asset', ...libraryRevision },
+				},
+				{
+					...remoteVideoLayer,
+					id: 'loop',
+					source: { kind: 'asset', ...libraryRevision },
+				},
 			],
 		],
 	])('stores %s', (_case, name, value) => {

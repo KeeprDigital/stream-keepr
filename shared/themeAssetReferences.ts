@@ -12,13 +12,16 @@ import { screenModeTokens } from './screenModes';
 import { themeTokenDefinition } from './themeTokens';
 import { screenMediaSourceReference } from './utils/graphicsAssetReferences';
 
-export { SCREEN_THEME_OVERRIDE_SLOT_PREFIX } from './utils/graphicsAssetReferences';
+/** What divides a token's name from the path of a revision within its value, in an owner slot. */
+export const THEME_TOKEN_SLOT_SEPARATOR = '/';
 
 /**
  * Every Graphic Asset Revision one token value pins, each at a slot rooted at
  * `slot`: an asset token at the slot itself, a typography token's library font
- * at `<slot>.font`, and a Background Layer stack's library media at
- * `<slot>.<layer id>.source`. A disabled layer still pins, as a Screen's does.
+ * at `<slot>/font`, and a Background Layer stack's library media at
+ * `<slot>/<layer id>/source`. The separator is one no token name holds, so
+ * the `background` token's slots never read as a `background.` Mode Token's.
+ * A disabled layer still pins, as a Screen's does.
  */
 export function themeTokenValueGraphicAssetReferences(
 	type: ThemeTokenType,
@@ -29,13 +32,21 @@ export function themeTokenValueGraphicAssetReferences(
 		case 'asset': {
 			const asset = value as ThemeTokenValueTypes['asset'];
 			return asset
-				? [{ reference: { assetId: asset.assetId, revisionId: asset.revisionId }, ownerSlot: slot, kind: asset.kind }]
+				? [
+						{
+							reference: { assetId: asset.assetId, revisionId: asset.revisionId },
+							ownerSlot: slot,
+							kind: asset.kind,
+						},
+					]
 				: [];
 		}
 		case 'typography': {
 			const { font } = value as ThemeTokenValueTypes['typography'];
 			return font.kind === 'asset'
-				? [{ reference: font.reference, ownerSlot: `${slot}.font`, kind: 'font' }]
+				? [
+						{ reference: font.reference, ownerSlot: `${slot}${THEME_TOKEN_SLOT_SEPARATOR}font`, kind: 'font' },
+					]
 				: [];
 		}
 		case 'backgroundLayers':
@@ -44,13 +55,15 @@ export function themeTokenValueGraphicAssetReferences(
 					return [];
 				const reference = screenMediaSourceReference(layer.source);
 				return reference
-					? [{
-							reference,
-							ownerSlot: `${slot}.${layer.id}.source`,
-							kind: layer.type === 'video'
-								? 'silent-video' as const
-								: 'image' as const,
-						}]
+					? [
+							{
+								reference,
+								ownerSlot: `${slot}${THEME_TOKEN_SLOT_SEPARATOR}${layer.id}${THEME_TOKEN_SLOT_SEPARATOR}source`,
+								kind: layer.type === 'video'
+									? 'silent-video' as const
+									: 'image' as const,
+							},
+						]
 					: [];
 			});
 		default:
@@ -91,7 +104,12 @@ export function screenThemeGraphicAssetReferences(
 	overrides: StoredThemeTokens,
 ): ScreenGraphicAssetReference[] {
 	const modeTokens = screenModeTokens(mode);
-	const { values } = resolveThemeTokens({ vocabulary: FOUNDATION_TOKENS, modeTokens, theme, overrides });
+	const { values } = resolveThemeTokens({
+		vocabulary: FOUNDATION_TOKENS,
+		modeTokens,
+		theme,
+		overrides,
+	});
 	const foundation = Object.entries(FOUNDATION_TOKENS).flatMap(([name, definition]) =>
 		themeTokenValueGraphicAssetReferences(
 			definition.type,
@@ -100,5 +118,8 @@ export function screenThemeGraphicAssetReferences(
 		));
 	const own = Object.entries(modeTokens).flatMap(([name, definition]) =>
 		themeTokenValueGraphicAssetReferences(definition.type, values[name]!, name));
-	return [...foundation, ...own];
+	return [
+		...foundation,
+		...own,
+	];
 }

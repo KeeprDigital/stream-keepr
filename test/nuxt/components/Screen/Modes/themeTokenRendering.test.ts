@@ -1,7 +1,7 @@
 import type { VueWrapper } from '@vue/test-utils';
 import type { StoredThemeTokens, ThemeTokenType, ThemeTokenValueTypes } from '~~/shared/modules/theme';
-import type { GraphicApplicationFontSelection } from '~~/shared/types/graphics';
 import type { ScreenMode } from '~~/shared/types/enums';
+import type { GraphicApplicationFontSelection } from '~~/shared/types/graphics';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,8 +9,8 @@ import { computed, ref } from 'vue';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { SCREEN_MODES, screenModeTokenName, screenModeTokens } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
-import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { createMockScreen } from '~~/test/helpers/fixtures';
+import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { stubCapabilitySession, stubFontFaces } from '~~/test/nuxt/helpers/fontFaces';
 import Renderer from '~/components/Screen/Renderer.vue';
 
@@ -79,7 +79,10 @@ const SAMPLES: { [T in ThemeTokenType]: ThemeTokenValueTypes[T] } = {
 		},
 	],
 	animationEffect: { effect: 'caustics' },
-	asset: { kind: 'image', ...testGraphicAssetReference('asset-logo', 'revision-logo') },
+	asset: {
+		kind: 'image',
+		...testGraphicAssetReference('asset-logo', 'revision-logo'),
+	},
 };
 
 /** The application fonts' faces, as `main.css` declares them, under names a test can read back. */
@@ -270,7 +273,10 @@ describe('a library font in the Theme', () => {
 	const title = THEMED_DISPLAYS.standings!['title-typography']!;
 	const heading = (revisionId: string) => ({
 		...FOUNDATION_TOKENS.heading.default,
-		font: { kind: 'asset', reference: testGraphicAssetReference('asset-brand-face', revisionId) },
+		font: {
+			kind: 'asset',
+			reference: testGraphicAssetReference('asset-brand-face', revisionId),
+		},
 	});
 	let fonts: ReturnType<typeof stubFontFaces>;
 
@@ -286,17 +292,23 @@ describe('a library font in the Theme', () => {
 	});
 
 	it('paints in the revision\'s face, loaded through the capability, and follows a Theme edit', async () => {
-		await mountMode('standings', { heading: heading('revision-1') });
+		await mountMode('standings', {
+			heading: heading('revision-1'),
+		});
 		await vi.waitFor(() => expect(wrapper!.get('.screen-renderer').attributes('data-font-ready')).toBe('true'));
 
 		expect(painted(title, 'typography')).toMatchObject({ fontFamily: 'stream-keepr-graphic-asset-asset-brand-face-revision-1' });
-		expect(fonts.constructed).toEqual([{
-			family: 'stream-keepr-graphic-asset-asset-brand-face-revision-1',
-			source: expect.stringContaining('/api/screen-output/screens/'),
-		}]);
+		expect(fonts.constructed).toEqual([
+			{
+				family: 'stream-keepr-graphic-asset-asset-brand-face-revision-1',
+				source: expect.stringContaining('/api/screen-output/screens/'),
+			},
+		]);
 		expect(fonts.constructed[0]!.source).toContain('/assets/asset-brand-face/revisions/revision-1/content');
 
-		themeTokens.value = { heading: heading('revision-2') };
+		themeTokens.value = {
+			heading: heading('revision-2'),
+		};
 		await vi.waitFor(() => expect(fonts.constructed.map(face => face.family)).toContain('stream-keepr-graphic-asset-asset-brand-face-revision-2'));
 		await flushPromises();
 

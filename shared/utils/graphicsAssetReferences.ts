@@ -30,6 +30,9 @@ export const GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS = [
 	'feature-match-layout-template',
 ] as const;
 
+/** The owner kind a Theme's Graphic Asset References are indexed under (ADR-0050). */
+export const THEME_REFERENCE_OWNER_KIND = 'theme';
+
 export function isGraphicsTemplateReferenceOwnerKind(
 	kind: string,
 ): kind is typeof GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS[number] {

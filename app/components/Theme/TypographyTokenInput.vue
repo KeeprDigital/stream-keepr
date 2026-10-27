@@ -59,8 +59,11 @@ watch(() => props.modelValue.font.kind, (kind) => {
 
 function chooseFontSource(source: GraphicFontSource) {
 	fontSource.value = source;
-	if (source === 'application' && props.modelValue.font.kind !== 'application')
-		commit({ font: { kind: 'application', fontId: DEFAULT_GRAPHIC_FONT_ID } });
+	if (source === 'application' && props.modelValue.font.kind !== 'application') {
+		commit({
+			font: { kind: 'application', fontId: DEFAULT_GRAPHIC_FONT_ID },
+		});
+	}
 }
 
 function commitNumber(field: 'lineHeight' | 'tracking', value: number | null | undefined) {

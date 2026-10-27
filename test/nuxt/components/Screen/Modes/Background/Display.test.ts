@@ -59,6 +59,7 @@ async function mountComponent() {
 describe('screenModesBackgroundDisplay', () => {
 	beforeEach(() => {
 		config.value = { layers: [] };
+		screen.value = undefined;
 		themeTokens.value = undefined;
 		contentUrl.mockClear();
 	});
@@ -242,12 +243,21 @@ describe('screenModesBackgroundDisplay', () => {
 	});
 
 	it('paints the Screen\'s override of its Theme\'s background', async () => {
-		themeTokens.value = { background: [layer({ id: 'theme-wash', type: 'color', color: '#203040' })] };
-		screen.value = { themeOverrides: { background: [layer({ id: 'override-wash', type: 'color', color: '#405060' })] } };
+		themeTokens.value = {
+			background: [
+				layer({ id: 'theme-wash', type: 'color', color: '#203040' }),
+			],
+		};
+		screen.value = {
+			themeOverrides: {
+				background: [
+					layer({ id: 'override-wash', type: 'color', color: '#405060' }),
+				],
+			},
+		};
 
 		const wrapper = await mountComponent();
 
 		expect(wrapper.findAll('.background-layer-stack__layer').map(rendered => rendered.attributes('data-layer-id'))).toEqual(['override-wash']);
-		screen.value = undefined;
 	});
 });

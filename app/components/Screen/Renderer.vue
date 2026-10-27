@@ -78,9 +78,10 @@ const themeTokenStyle = computed(() => screenModeThemeTokenStyle(
 /**
  * The library fonts the mode's typography Mode Tokens resolve to, loaded as
  * `FontFace`s through the Screen Output Asset Capability, which admits what
- * the Screen's resolved tokens supply (ADR-0050). The content hides while
- * they load, so text never flashes in a fallback face; a font that fails
- * shows its fallback rather than a blank Screen.
+ * the Screen's resolved tokens supply (ADR-0050). The mode's display hides
+ * while they load, so text never flashes in a fallback face, and the
+ * background behind it stays on air; a font that fails shows its fallback
+ * rather than a blank display.
  */
 const themeFontReferences = computed(() => screenModeThemeFontReferences(
 	currentMode.value,
@@ -114,7 +115,7 @@ function setHostContainer(el: Element | ComponentPublicInstance | null) {
 		<div
 			:ref="setHostContainer"
 			:class="host.containerClass"
-			:style="[host.containerStyle, containerBackgroundStyle, themeTokenStyle, themeFontStyle]"
+			:style="[host.containerStyle, containerBackgroundStyle, themeTokenStyle]"
 			:data-font-ready="themeFontsReady.toString()"
 			:data-font-error="themeFontsFailed.toString()"
 		>
@@ -123,7 +124,7 @@ function setHostContainer(el: Element | ComponentPublicInstance | null) {
 				class="screen-renderer__background"
 				:layers="modeBackgroundLayers"
 			/>
-			<component :is="displayComponent" />
+			<component :is="displayComponent" :style="themeFontStyle" />
 		</div>
 	</div>
 </template>

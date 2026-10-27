@@ -262,7 +262,12 @@ function selectAsset(asset: GraphicAsset) {
 							count is what separates 'this Event has adopted nothing yet' from
 							'my asset is gone' (#234).
 						-->
-						<div v-if="eventId !== undefined" class="flex gap-1" role="group" aria-label="Graphic Asset scope">
+						<div
+							v-if="eventId !== undefined"
+							class="flex gap-1"
+							role="group"
+							aria-label="Graphic Asset scope"
+						>
 							<UButton
 								data-testid="graphic-asset-scope-event"
 								color="neutral"

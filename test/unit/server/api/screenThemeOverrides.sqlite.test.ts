@@ -154,10 +154,26 @@ describe('screen Theme Overrides', () => {
 	});
 
 	// `background` is consumed by the Screen host, not a Mode Token.
-	const background = [{ id: 'wash', type: 'color', color: '#101010', enabled: true, opacity: 1 }];
+	const background = [
+		{
+			id: 'wash',
+			type: 'color',
+			color: '#101010',
+			enabled: true,
+			opacity: 1,
+		},
+	];
 	it.each([
-		['the Background Screen', 'background', { background }],
-		['a mode declaring a Background Layer stack', 'standings', { background }],
+		[
+			'the Background Screen',
+			'background',
+			{ background },
+		],
+		[
+			'a mode declaring a Background Layer stack',
+			'standings',
+			{ background },
+		],
 		['a graphics host, which paints no Background Layer stack', 'broadcast-graphics', 'unconsumable-token'],
 	])('answers %s overriding the background', async (_case, mode, answer) => {
 		const screenId = await createScreen(mode as ScreenMode, 'main');

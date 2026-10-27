@@ -1606,12 +1606,12 @@ Three token shapes reach library content (#828):
 
 **How each is indexed.**
 
-- **A Theme's references** have owner kind `theme`, the Theme's id, and slots rooted at the token: `logo`, `heading.font`, `background.<layer id>.source`. A token write replaces only that token's slots, in the statement that commits the value. Each reference must resolve there, and the route first asks the library, so a refusal names the slot. Clearing the token, or setting it to none, releases them. Deleting the Theme drops them.
+- **A Theme's references** have owner kind `theme`, the Theme's id, and slots rooted at the token: `logo`, `heading/font`, `background/<layer id>/source`. No token name holds the `/`, so the `background` token's slots never read as a `background.` Mode Token's. A token write replaces only that token's slots, in the statement that commits the value. Each reference must resolve there, and the route first asks the library, so a refusal names the slot. Clearing the token, or setting it to none, releases them. Deleting the Theme drops them.
 - **A Screen's overrides** index under its own `themeOverrides.` namespace, beside its modes'. Each override write replaces that whole namespace.
 
 **Retire is refused** while a Theme or an override references the asset, as for a template. A Screen's own mode references still do not hold it back (ADR-0034). Trash was already refused for any reference. The usage names the Theme by its name.
 
-**The capability admits exactly what the Screen's resolved tokens supply.** That is every Foundation Token, which any Screen may consume and a Graphic Item may bind, plus the Mode Tokens of the mode the Screen shows. Each resolves from the override, else the Theme, else the default. A Theme value an override shadows, a dormant override of another mode's Mode Token, and a Theme the Event does not use supply nothing. The revision must also be indexed by that Theme or by the Screen's override namespace. Screen Outputs load the library fonts their typography Mode Tokens resolve to as `FontFace`s, and hide their content while the fonts load.
+**The capability admits exactly what the Screen's resolved tokens supply.** That is every Foundation Token, which any Screen may consume and a Graphic Item may bind, plus the Mode Tokens of the mode the Screen shows. Each resolves from the override, else the Theme, else the default. A Theme value an override shadows, a dormant override of another mode's Mode Token, and a Theme the Event does not use supply nothing. The revision must also be indexed by that Theme or by the Screen's override namespace. Screen Outputs load the library fonts their typography Mode Tokens resolve to as `FontFace`s, and hide the mode's display, not its background, while the fonts load.
 
 ### Why
 
@@ -1622,6 +1622,7 @@ A Theme is meant to carry the production's logo, backdrop and typefaces. ADR-000
 - Theme export/import, when built, must carry asset bytes through the Template Package asset pipeline: staging, quota, revalidation and Graphic Asset Origin. It cannot be data-only.
 - ADR-0001 holds only until Graphic Style Sets are removed (#830).
 - A Theme or override cannot hold a retired asset, because Retire is refused while one references it. A token write therefore never needs ADR-0034's retained-reference allowance; an override still grants it to a revision it already held at the same slot.
+- A Screen overrides only a token its mode can consume (ADR-0049), and no mode yet declares an asset Mode Token, so no Screen can override `logo` until one does. Its fonts and its `background` stack can be overridden.
 - The capability admits the Theme's logo on every Screen of the Event, whether or not that Screen's mode paints it. The Event context already carries the whole Theme, so this reveals nothing new, and a graphics host binding the logo needs no change to the capability.
 
 ## ADR-0051: A Screen holds no look of its own, and the Event Canvas is a coordinate space

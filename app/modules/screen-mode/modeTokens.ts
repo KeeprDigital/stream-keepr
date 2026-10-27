@@ -38,7 +38,12 @@ export function screenModeThemeTokenStyle(mode: ScreenMode, theme: StoredThemeTo
  */
 export function screenModeThemeFontReferences(mode: ScreenMode, theme: StoredThemeTokens, overrides: StoredThemeTokens): ScreenGraphicAssetReference[] {
 	const modeTokens = screenModeTokens(mode);
-	const { values } = resolveThemeTokens({ vocabulary: FOUNDATION_TOKENS, modeTokens, theme, overrides });
+	const { values } = resolveThemeTokens({
+		vocabulary: FOUNDATION_TOKENS,
+		modeTokens,
+		theme,
+		overrides,
+	});
 	return Object.entries(modeTokens).flatMap(([name, definition]) => definition.type === 'typography'
 		? themeTokenValueGraphicAssetReferences('typography', values[name]!, name)
 		: []);

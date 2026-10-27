@@ -190,7 +190,11 @@ describe('screenRenderer', () => {
 		};
 		screen.value = createMockScreen({
 			currentMode: 'standings',
-			themeOverrides: { background: [{ ...colorLayer, id: 'override-wash' }] },
+			themeOverrides: {
+				background: [
+					{ ...colorLayer, id: 'override-wash' },
+				],
+			},
 		});
 
 		expect(paintedLayerIds(mountRenderer())).toBe('override-wash');

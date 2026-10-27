@@ -1,11 +1,12 @@
-import type { ScreenOutputAssetAuthorizationInput } from '.';
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { ScreenMode } from '~~/shared/types/enums';
+import type { ScreenOutputAssetAuthorizationInput } from '.';
 import { screenThemeGraphicAssetReferences } from '~~/shared/themeAssetReferences';
 import {
 	GRAPHIC_ASSET_REFERENCING_SCREEN_MODES,
 	SCREEN_THEME_OVERRIDE_SLOT_PREFIX,
 	screenOutputResolvableSlotPrefixes,
+	THEME_REFERENCE_OWNER_KIND,
 } from '~~/shared/utils/graphicsAssetReferences';
 
 /**
@@ -90,7 +91,7 @@ export function createD1ScreenOutputAssetAuthorizer(database: D1Database) {
 				AND revision.asset_id = reference.asset_id
 			WHERE reference.asset_id = ? AND reference.revision_id = ?
 				AND (
-					(reference.owner_kind = 'theme' AND reference.owner_id = ?)
+					(reference.owner_kind = '${THEME_REFERENCE_OWNER_KIND}' AND reference.owner_id = ?)
 					OR (reference.owner_kind = 'screen' AND reference.owner_id = ?
 						AND reference.owner_slot LIKE ?)
 				)
