@@ -4,6 +4,7 @@ import type { RowSelectionState } from '@tanstack/vue-table';
 import type { Player, PlayerListSummary } from '~/types';
 import { getFilteredRowModel } from '@tanstack/vue-table';
 import { getMtgGameData } from '~~/shared/utils/gameData';
+import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
 
 interface Props {
 	players: Player[];
@@ -187,12 +188,10 @@ function getRowId(row: Player) {
 	return String(row.id);
 }
 
-// Format record as W-L-D
+const eventStore = useEventStore();
+
 function formatRecord(player: Player): string {
-	const w = player.wins ?? 0;
-	const l = player.losses ?? 0;
-	const d = player.draws ?? 0;
-	return `${w}-${l}-${d}`;
+	return formatPlayerRecord(player, eventStore.displayEvent);
 }
 
 // Table columns with sorting functionality

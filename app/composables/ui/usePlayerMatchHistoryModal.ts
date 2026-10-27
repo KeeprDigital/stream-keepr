@@ -9,15 +9,34 @@ function _usePlayerMatchHistoryModal() {
 	const toast = useToast();
 	const modal = overlay.create(LazyPlayerMatchHistoryModal);
 	let currentRequestId = 0;
+	// The Player the open modal shows, and those it showed before, most recent last.
+	let current: Player | null = null;
+	const trail: Player[] = [];
 
-	async function openPlayerMatchHistory(player: Player) {
+	function goBack() {
+		const previous = trail.pop();
+		if (previous)
+			void show(previous);
+	}
+
+	async function show(player: Player) {
 		const requestId = ++currentRequestId;
+		const opening = !current;
+		current = player;
 
-		void modal.open({
+		const closed = modal.open({
 			player,
 			history: [],
 			loading: true,
+			previousPlayer: trail.at(-1) ?? null,
+			onBack: goBack,
 		});
+		if (opening) {
+			void Promise.resolve(closed).then(() => {
+				current = null;
+				trail.length = 0;
+			});
+		}
 
 		if (!eventStore.eventId) {
 			modal.patch({ loading: false });
@@ -41,6 +60,13 @@ function _usePlayerMatchHistoryModal() {
 			modal.patch({ loading: false });
 			toast.add({ title: 'Error', description: 'Failed to load match history', color: 'error' });
 		}
+	}
+
+	/** Opens a Player's history; from inside an open modal, such as an opponent's name, it remembers the way back. */
+	async function openPlayerMatchHistory(player: Player) {
+		if (current && current.id !== player.id)
+			trail.push(current);
+		await show(player);
 	}
 
 	return { openPlayerMatchHistory };

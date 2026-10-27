@@ -93,6 +93,26 @@ describe('playerList rows', () => {
 		expect(openPlayerMatchHistory).toHaveBeenCalledWith(alice);
 	});
 
+	it('shows the record as the Event displays records', () => {
+		const wrapper = mount(PlayerList, {
+			props: {
+				players: [
+					{
+						...alice,
+						wins: 3,
+						losses: 1,
+						draws: 0,
+					} as never,
+				],
+			},
+			global: {
+				stubs: { ...nuxtUiStubs, UTable: UTableStub, MtgManaColorDisplay: true },
+			},
+		});
+
+		expect(wrapper.get('[data-column="record"]').text()).toBe('3-1');
+	});
+
 	it('edits the Player from the first action in the row menu', async () => {
 		const wrapper = mountRows();
 

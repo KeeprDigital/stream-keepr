@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui';
 import type { Player } from '~/types';
-import { LazyPlayerCreateModal, LazyPlayerListCreateModal, LazyPlayerListEditModal, LazyPlayerManageModal, LazyUIConfirmDeleteModal } from '#components';
+import { LazyPlayerCreateModal, LazyPlayerListCreateModal, LazyPlayerListEditModal, LazyUIConfirmDeleteModal } from '#components';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
@@ -18,6 +18,7 @@ const meleeStore = useMeleeStore();
 const screenStore = useScreenStore();
 const overlay = useOverlay();
 const { openPlayerDeckList } = usePlayerDeckListModal();
+const { openPlayerEdit } = usePlayerEditModal();
 const { sendToFirstDeckScreen, sendToScreen: sendDeckToScreen } = useSendDeckToScreen();
 const { sendToFirstPlayerHistoryScreen, sendToScreen: sendPlayerHistoryToScreen } = useSendPlayerHistoryToScreen();
 const { runRequest } = useRequestFeedback();
@@ -190,16 +191,6 @@ async function handleSelectList(listId: number | null) {
 function handleCreatePlayer() {
 	const modal = overlay.create(LazyPlayerCreateModal);
 	void modal.open({
-		game: eventStore.event?.game ?? 'mtg',
-		pronounsEnabled: eventStore.event?.pronounsEnabled ?? true,
-		lgsEnabled: eventStore.event?.lgsEnabled ?? false,
-	});
-}
-
-function handleEditPlayer(player: Player) {
-	const modal = overlay.create(LazyPlayerManageModal);
-	void modal.open({
-		player,
 		game: eventStore.event?.game ?? 'mtg',
 		pronounsEnabled: eventStore.event?.pronounsEnabled ?? true,
 		lgsEnabled: eventStore.event?.lgsEnabled ?? false,
@@ -482,7 +473,7 @@ async function handleBulkRemoveFromList() {
 				:active-list-id="activeListId"
 				@add-to-list="handleAddToList"
 				@remove-from-list="handleRemoveFromList"
-				@edit-player="handleEditPlayer"
+				@edit-player="openPlayerEdit"
 				@delete-player="handleDeletePlayer"
 				@view-deck-list="openPlayerDeckList"
 				@send-deck-to-screen="handleSendDeckToScreen"
