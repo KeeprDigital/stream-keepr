@@ -1,4 +1,5 @@
-import type { DbPhase, DbRound } from '~~/server/db/schema';
+import type { DbPhase, DbPlayer, DbRound } from '~~/server/db/schema';
+import type { MatchSideRecord } from '~~/server/mappers/melee';
 import {
 	externalIdentityKey,
 	InvalidMeleeRoundSnapshotError,
@@ -161,6 +162,48 @@ export async function syncPreviousRoundStandingsFromMelee(
 	};
 }
 
+/**
+ * Each Player's record going into a Round, keyed by Melee TeamId: the previous
+ * Melee-managed Round's stored Round Standings. Empty when there is no such
+ * Round or it holds none.
+ */
+async function recordsGoingIntoRound(
+	eventId: number,
+	roundId: number,
+	players: DbPlayer[],
+): Promise<Map<number, MatchSideRecord>> {
+	const { previous } = await adjacentMeleeRounds(eventId, roundId);
+	if (!previous)
+		return new Map();
+	const stored = await playerRoundStandingsService().findByRoundId(eventId, previous.id);
+	const teamIdByPlayerId = new Map(players.flatMap(player =>
+		player.externalSource === 'melee' && player.externalId != null
+			? [
+					[
+						player.id,
+						Number(player.externalId),
+					] as const,
+				]
+			: []));
+	return new Map(stored.flatMap((standing) => {
+		const teamId = teamIdByPlayerId.get(standing.playerId);
+		return teamId == null
+			? []
+			: [
+					[
+						teamId,
+						{
+							wins: standing.wins,
+							losses: standing.losses,
+							draws: standing.draws,
+							position: standing.position,
+							points: standing.points,
+						},
+					] as const,
+				];
+	}));
+}
+
 async function syncRoundSnapshot(
 	eventId: number,
 	eventData: SyncableEvent,
@@ -236,7 +279,18 @@ async function syncRoundSnapshot(
 			);
 		}
 	}
-	const standingsMap = new Map((standings ?? []).map(standing => [standing.TeamId, standing]));
+	const recordsByTeamId = standings
+		? new Map(standings.map(standing => [
+				standing.TeamId,
+				{
+					wins: standing.MatchWins,
+					losses: standing.MatchLosses,
+					draws: standing.MatchDraws,
+					position: standing.Rank,
+					points: standing.Points,
+				},
+			]))
+		: await recordsGoingIntoRound(eventId, round.id, allPlayers);
 	const meleeDecks = allDecks.filter(deck => deck.externalSource === 'melee');
 	const playerDecksByPlayerId = new Map<number, typeof meleeDecks>();
 	for (const deck of meleeDecks) {
@@ -262,7 +316,7 @@ async function syncRoundSnapshot(
 
 	const matchRows = mapMeleeMatchesToDbRows(meleeMatches, round.id, eventId, {
 		playerMap,
-		standingsMap,
+		recordsByTeamId,
 		playerDecksByPlayerId,
 		archetypesById,
 		roundFormatExternalId,

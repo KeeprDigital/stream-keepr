@@ -20,7 +20,7 @@ The latest Melee-managed Round, in the Event's Round order (Phase sort order, ro
 _Avoid_: active Round, live Round.
 
 **Match**:
-A pairing between Players in a Round, with its Match Result and the records used for standings and broadcast workflows.
+A pairing between Players in a Round, with its Match Result and the records used for standings and broadcast workflows. Each side's record is its Player's Round Standings after the Round once it is complete, and going into it (the previous Round's) while it is played (ADR-0049).
 _Avoid_: Feature Match when referring to the pairing.
 
 **Match Result**:

@@ -272,6 +272,130 @@ describe('syncing a Round from Melee', () => {
 	});
 });
 
+describe('the Player records a Round\'s Matches carry', () => {
+	// Mid-Round, a Match side carries its Player's record going into the Round:
+	// the previous Round's stored Round Standings. Once complete, the Round's own.
+	const round4After = [
+		meleeStanding(1, { Rank: 1, MatchWins: 4, Points: 12 }),
+		meleeStanding(3, {
+			Rank: 2,
+			MatchWins: 3,
+			MatchLosses: 1,
+			Points: 9,
+		}),
+		meleeStanding(2, {
+			Rank: 3,
+			MatchWins: 1,
+			MatchLosses: 3,
+			Points: 3,
+		}),
+		meleeStanding(4, { Rank: 4, MatchLosses: 4 }),
+	];
+
+	it.each([
+		{
+			case: 'an incomplete Round carries the previous Round\'s stored records',
+			round3Standings: standingsAfter,
+			round4: [
+				pairing('c', [1, 3]),
+				pairing('d', [2, 4], [2, 0]),
+			],
+			player1: {
+				wins: 3,
+				losses: 0,
+				draws: 0,
+				position: 1,
+				points: 9,
+			},
+			player3: {
+				wins: 2,
+				losses: 1,
+				draws: 0,
+				position: 2,
+				points: 6,
+			},
+		},
+		{
+			case: 'an incomplete Round after one with no stored standings carries none',
+			round3Standings: [],
+			round4: [
+				pairing('c', [1, 3]),
+				pairing('d', [2, 4], [2, 0]),
+			],
+			player1: {
+				wins: null,
+				losses: null,
+				draws: null,
+				position: null,
+				points: null,
+			},
+			player3: {
+				wins: null,
+				losses: null,
+				draws: null,
+				position: null,
+				points: null,
+			},
+		},
+		{
+			case: 'a complete Round carries its own fetched records',
+			round3Standings: standingsAfter,
+			round4: [
+				pairing('c', [1, 3], [2, 1]),
+				pairing('d', [2, 4], [2, 0]),
+			],
+			player1: {
+				wins: 4,
+				losses: 0,
+				draws: 0,
+				position: 1,
+				points: 12,
+			},
+			player3: {
+				wins: 3,
+				losses: 1,
+				draws: 0,
+				position: 2,
+				points: 9,
+			},
+		},
+	])('$case', async ({ round3Standings, round4, player1, player3 }) => {
+		const { eventId, roundId } = await seedEvent();
+		meleeMatchesByRound.set(ROUND_3, [
+			pairing('a', [1, 2], [2, 0]),
+			pairing('b', [3, 4], [2, 1]),
+		]);
+		meleeStandingsByRound.set(ROUND_3, round3Standings);
+		await syncRound(eventId, roundId(ROUND_3));
+		meleeMatchesByRound.set(ROUND_4, round4);
+		meleeStandingsByRound.set(ROUND_4, round4After);
+
+		await syncRound(eventId, roundId(ROUND_4));
+
+		const tableC = (await matchesOf(eventId, roundId(ROUND_4))).find(match => match.externalId === 'c')!;
+		expect(tableC.player1Data).toMatchObject(player1);
+		expect(tableC.player2Data).toMatchObject(player3);
+	});
+
+	it('stores no Round Standings for an incomplete Round whose Matches carry the previous Round\'s', async () => {
+		const { eventId, roundId } = await seedEvent();
+		meleeMatchesByRound.set(ROUND_3, [
+			pairing('a', [1, 2], [2, 0]),
+			pairing('b', [3, 4], [2, 1]),
+		]);
+		meleeStandingsByRound.set(ROUND_3, standingsAfter);
+		await syncRound(eventId, roundId(ROUND_3));
+		meleeMatchesByRound.set(ROUND_4, [
+			pairing('c', [1, 3]),
+			pairing('d', [2, 4]),
+		]);
+
+		await syncRound(eventId, roundId(ROUND_4));
+
+		expect(await standingsOf(eventId, roundId(ROUND_4))).toEqual([]);
+	});
+});
+
 describe('pairing the next Round completes the one before it', () => {
 	// The last Swiss Round's standings seed the Top Cut, so the Phase boundary counts as Round order too.
 	it.each([

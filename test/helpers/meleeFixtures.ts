@@ -119,7 +119,7 @@ export function matchContext(
 			externalIdentityKey(player.externalSource!, player.externalId!),
 			player,
 		])),
-		standingsMap: new Map(),
+		recordsByTeamId: new Map(),
 		playerDecksByPlayerId: decksByPlayer,
 		archetypesById: new Map(),
 		roundFormatExternalId: null,
