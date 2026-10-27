@@ -1,4 +1,5 @@
 import type { InjectionKey, Ref } from 'vue';
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { ModeConfigTypeMap, ScreenOutput } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
@@ -32,6 +33,11 @@ export interface ScreenContext {
 	 * presence, like `assetAccess`) instead of showing it on program (#465).
 	 */
 	cardDataHealth?: Ref<ScreenCardDataHealth>;
+	/**
+	 * The stored token values of the Theme the Screen's Event uses. Absent, or
+	 * undefined, renders the Default Theme.
+	 */
+	themeTokens?: Ref<StoredThemeTokens | undefined>;
 }
 
 const SCREEN_CONTEXT_KEY: InjectionKey<ScreenContext> = Symbol('screen-context');

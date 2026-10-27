@@ -17,6 +17,9 @@ vi.mock('~/modules/screen-mode', () => ({
 		displayComponent: { template: '<div data-testid="display" />' },
 	}),
 	resolveScreenModeHost,
+	// Theme Tokens reaching a display are the rendering test's
+	// (test/nuxt/components/Screen/Modes/themeTokenRendering.test.ts).
+	screenModeThemeTokenStyle: () => ({}),
 }));
 
 const overlayContainer = ref<HTMLElement | null>(null);

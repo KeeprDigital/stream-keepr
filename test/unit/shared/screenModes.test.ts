@@ -30,4 +30,13 @@ describe('getContainerControls', () => {
 			background: generic,
 		});
 	});
+
+	it('offers a mode on Mode Tokens no Screen text colours, which it no longer reads', () => {
+		expect(getContainerControls('standings')).toEqual({
+			dimensions: true,
+			padding: true,
+			textColors: false,
+			background: true,
+		});
+	});
 });

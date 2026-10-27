@@ -1,4 +1,6 @@
 import type { PageRotationDeclaration } from './modules/page-rotation';
+import type { ModeTokenDeclarations, ThemeTokenType } from './modules/theme/tokens';
+import type { DeclaredModeTokenDefinition } from './modules/theme/vocabulary';
 import type { ScreenModeConfigContract, ScreenModeConfigOf } from './screenModeConfigs/contract';
 import type { DeckSource } from './screenModeConfigs/deck';
 import type { PageRotationConfig } from './screenModeConfigs/subShapes';
@@ -17,6 +19,7 @@ import { playerHistoryModeConfigContract } from './screenModeConfigs/playerHisto
 import { standingsModeConfigContract } from './screenModeConfigs/standings';
 import { topCardsModeConfigContract } from './screenModeConfigs/topCards';
 import { topCutModeConfigContract } from './screenModeConfigs/topCut';
+import { standingsModeTokens } from './screenModeTokens/standings';
 import { SCREEN_MODE_VALUES } from './types/enums';
 import {
 	DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
@@ -125,6 +128,19 @@ export interface ScreenModeDefinition {
 	 * declare it, or the definitions fail to compile (ADR-0039).
 	 */
 	pageRotation?: PageRotationDeclaration;
+	/**
+	 * How the mode looks: its Mode Tokens, by name within the mode, each with a
+	 * type, optional bounds, and a default naming a same-type Foundation Token
+	 * or holding a literal. Its config holds what it shows; these hold how it
+	 * looks (ADR-0049, ADR-0051).
+	 *
+	 * Declared here and nowhere else. The Screen host resolves them and sets
+	 * them as CSS custom properties for the display (`screenModeTokens`,
+	 * `resolveThemeTokens`), and the display reads only them. A mode not yet on
+	 * Theme Tokens leaves it out; Feature Match Controls, an operator surface,
+	 * always will.
+	 */
+	modeTokens?: Readonly<Record<string, DeclaredModeTokenDefinition>>;
 }
 
 /** Generic Screen container controls a graphics host replaces with its own canvas and styling. */
@@ -185,6 +201,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		config: standingsModeConfigContract,
 		eventReferences: { roundId: 'round', playerListId: 'playerList' },
 		pageRotation: { pageSize: 'rowsPerPage' },
+		modeTokens: standingsModeTokens,
 	},
 	'top-cut': {
 		label: 'Top Cut Bracket',
@@ -367,10 +384,38 @@ export function screenModeConfigContract<M extends ScreenMode>(mode: M): typeof 
 	return SCREEN_MODE_DEFINITIONS[mode].config;
 }
 
+/** The Screen Modes whose definition declares Mode Tokens. */
+export type ThemedScreenMode = {
+	[M in ScreenMode]: typeof SCREEN_MODE_DEFINITIONS[M] extends { modeTokens: object } ? M : never;
+}[ScreenMode];
+
+/** A themed mode's Mode Tokens of one type, by name within the mode. */
+export type ScreenModeTokenOfType<M extends ThemedScreenMode, T extends ThemeTokenType> = {
+	[K in keyof typeof SCREEN_MODE_DEFINITIONS[M]['modeTokens']]: typeof SCREEN_MODE_DEFINITIONS[M]['modeTokens'][K] extends { type: T } ? K : never;
+}[keyof typeof SCREEN_MODE_DEFINITIONS[M]['modeTokens']] & string;
+
+/** A Mode Token's full name: its mode's key, then its name within the mode. */
+export function screenModeTokenName(mode: ScreenMode, token: string): string {
+	return `${mode}.${token}`;
+}
+
+/** A mode's declared Mode Tokens by full name, as `resolveThemeTokens` reads them; none for a mode declaring none. */
+export function screenModeTokens(mode: ScreenMode): ModeTokenDeclarations {
+	const declared = SCREEN_MODES[mode].modeTokens ?? {};
+	return Object.fromEntries(Object.entries(declared).map(([token, definition]) => [
+		screenModeTokenName(mode, token),
+		definition,
+	]));
+}
+
 /** Derive which generic Container controls apply to a Screen Mode. */
 export function getContainerControls(mode: ScreenMode): Required<ScreenModeContainerControls> {
 	return {
 		...DEFAULT_OVERLAY_CONTAINER_CONTROLS,
+		// A mode on Mode Tokens takes its text colours from them.
+		...(SCREEN_MODES[mode].modeTokens
+			? { textColors: false }
+			: {}),
 		...(SCREEN_MODES[mode].containerControls ?? {}),
 	};
 }
