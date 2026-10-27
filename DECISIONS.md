@@ -1522,6 +1522,8 @@ It renders names on the Players page, Matches rows (both seats and the bye), the
 
 **Every name opens one modal.** `usePlayerMatchHistoryModal` is a shared composable, so opening another Player, an opponent from inside the modal included, replaces what the open modal shows instead of stacking a second one.
 
+**The match history modal is a Player's detail view.** Its footer holds Edit Player, Deck List, the Player List memberships (checked, toggled in place) and Send to Screen, and each row with a roster opponent sends a Head-to-Head of the shown Player and that opponent to a Head-to-Head Screen, picking both directly (`playerSource: 'players'`). Its header gives the record as the Event displays records, the Players page's Record column does too, and the pronouns and LGS the Event shows. Opening an opponent from it remembers the way back, one Player at a time, until the modal closes.
+
 ### Why
 
 The Players page opened Edit on a row click and kept history in the menu, while every other page showed names that did nothing. Viewing a Player's history is the expected default, and editing is the deliberate act. One meaning for a name everywhere means an operator learns it once.
