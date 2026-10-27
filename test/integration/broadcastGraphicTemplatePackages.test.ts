@@ -254,11 +254,16 @@ describe('broadcast Graphic Template Packages', () => {
 		});
 		expect(parts.contents).toHaveLength(1);
 		// Application-owned capabilities are declared, never duplicated into bytes:
-		// every Graphic Item Definition the design uses, plus the application font it
-		// names. Compared against the shared vocabulary so this also pins that the
-		// design still exercises every kind.
+		// every Graphic Item Definition the design uses, plus the application fonts it
+		// names (a new text item's, from the Default Theme's body). Compared against
+		// the shared vocabulary so this also pins that the design still exercises every kind.
 		expect(parts.manifest.applicationCapabilities.map(entry => entry.identity).sort())
-			.toEqual([...GRAPHIC_ITEM_KINDS, 'inter', 'social-profile-projection'].sort());
+			.toEqual([
+				...GRAPHIC_ITEM_KINDS,
+				'inter',
+				'saira-condensed',
+				'social-profile-projection',
+			].sort());
 	});
 
 	/**
