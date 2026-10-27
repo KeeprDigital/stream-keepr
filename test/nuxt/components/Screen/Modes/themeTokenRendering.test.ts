@@ -14,10 +14,9 @@ import Renderer from '~/components/Screen/Renderer.vue';
 // Each themed Screen Mode's display, mounted by its Screen host under a
 // resolved token set, paints every Mode Token it declares (ADR-0049).
 
-/** Modes whose displays still read their look from elsewhere, and the ticket moving each. */
+/** Modes whose displays read no Mode Token, and the ticket moving each (or why none will). */
 const MODES_NOT_YET_ON_THEME_TOKENS: Partial<Record<ScreenMode, string>> = {
-	// Declares no Mode Token: its stack is the `background` Foundation Token (Background/Display.test.ts).
-	'background': '#825',
+	'background': 'none: it declares no Mode Token, and paints the `background` Foundation Token (screenBackgroundLayers)',
 	'card': '#824',
 	'deck': '#824',
 	'top-cut': '#823',

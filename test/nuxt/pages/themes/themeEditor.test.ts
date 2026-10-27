@@ -231,6 +231,7 @@ describe('the Theme editor', () => {
 	it('writes the Animation Effect an operator picks', async () => {
 		const wrapper = await mountEditor();
 
+		expect(field(wrapper, 'animation-effect').findComponent({ name: 'ScreenAnimationEffectPresetLibrary' }).exists()).toBe(false);
 		await part(wrapper, 'animation-effect', 'animation-effect').get('select').setValue('caustics');
 
 		await vi.waitFor(() => expect(writes()).toEqual([

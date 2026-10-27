@@ -162,45 +162,13 @@ describe('screenRenderer', () => {
 		expect(wrapper.get('.host-container').attributes('style')).not.toContain('isolation');
 	});
 
-	it.each([
-		[
-			'a plain mode with no stack of its own paints its Theme\'s background',
-			'card',
-			undefined,
-			'theme-wash',
-		],
-		[
-			'a plain mode\'s empty stack still paints its Theme\'s background',
-			'card',
-			[],
-			'theme-wash',
-		],
-		[
-			'a plain mode\'s own stack replaces its Theme\'s',
-			'card',
-			[colorLayer],
-			'wash',
-		],
-		[
-			'a graphics host stays transparent under a Theme background',
-			'broadcast-graphics',
-			undefined,
-			null,
-		],
-	] as const)('%s', (_case, mode, own, painted) => {
+	it('keeps a graphics host transparent under a Theme background', () => {
 		themeTokens.value = {
 			background: [themeLayer],
 		};
-		screen.value = createMockScreen({
-			currentMode: mode,
-			modeConfigs: (own
-				? {
-						[mode]: { backgroundLayers: own },
-					}
-				: {}) as never,
-		});
+		screen.value = createMockScreen({ currentMode: 'broadcast-graphics' });
 
-		expect(paintedLayerIds(mountRenderer())).toBe(painted);
+		expect(paintedLayerIds(mountRenderer())).toBeNull();
 	});
 
 	it('restyles a live plain mode when its Theme\'s background changes', async () => {

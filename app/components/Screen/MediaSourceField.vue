@@ -28,12 +28,15 @@ const emit = defineEmits<{
 	'update:modelValue': [source: ScreenMediaSource | null];
 }>();
 
+/** The library is an Event's; without one, only a Remote Media URL can be given. */
+const libraryOffered = computed(() => props.eventId !== undefined);
+
 const sourceKindOptions = computed(() => [
-	...(props.eventId === undefined
-		? []
-		: [
+	...(libraryOffered.value
+		? [
 				{ label: 'Asset library', value: 'asset' },
-			]),
+			]
+		: []),
 	{ label: 'Remote URL', value: 'url' },
 ]);
 
@@ -45,9 +48,9 @@ const sourceKindOptions = computed(() => [
  * different choices, not two spellings of one.
  */
 const draftKind = ref<'asset' | 'url'>();
-const kind = computed(() => props.eventId === undefined
-	? 'url'
-	: draftKind.value ?? props.modelValue?.kind ?? 'asset');
+const kind = computed(() => libraryOffered.value
+	? draftKind.value ?? props.modelValue?.kind ?? 'asset'
+	: 'url');
 const url = computed(() => props.modelValue?.kind === 'url'
 	? props.modelValue.url
 	: '');

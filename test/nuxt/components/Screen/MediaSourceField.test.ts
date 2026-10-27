@@ -31,12 +31,13 @@ const global = {
 
 const librarySource: ScreenMediaSource = { kind: 'asset', assetId: 'plate' as never, revisionId: 'plate-1' as never };
 
-function mountField(modelValue: ScreenMediaSource | undefined) {
+/** `withEvent: false` mounts it as the Theme editor does, with no Event's library to offer. */
+function mountField(modelValue: ScreenMediaSource | undefined, { withEvent = true } = {}) {
 	return mount(MediaSourceField, {
 		global,
 		props: {
 			modelValue,
-			eventId: 7,
+			eventId: withEvent ? 7 : undefined,
 			assetKind: 'silent-video',
 			label: 'Video asset',
 		},
@@ -107,5 +108,13 @@ describe('the Screen Media Source field', () => {
 
 		expect(wrapper.find('[data-testid="source-asset"]').exists()).toBe(true);
 		expect(wrapper.find('input').exists()).toBe(false);
+	});
+
+	it('offers a Remote Media URL only without an Event to pick library media from', () => {
+		const wrapper = mountField(undefined, { withEvent: false });
+
+		expect(wrapper.findAll('option').map(option => option.text())).toEqual(['Remote URL']);
+		expect(wrapper.find('[data-testid="source-asset"]').exists()).toBe(false);
+		expect(wrapper.find('input').exists()).toBe(true);
 	});
 });

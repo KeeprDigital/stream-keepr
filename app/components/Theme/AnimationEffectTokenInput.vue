@@ -21,6 +21,7 @@ const { draft, edit } = useThemeTokenDraft(() => props.modelValue, value => emit
 	<div data-token-part="animation-effect" :aria-label="`${label} effect`" role="group">
 		<ScreenAnimationEffectFields
 			:selection="draft"
+			:presets="false"
 			@update:selection="edit"
 		/>
 	</div>

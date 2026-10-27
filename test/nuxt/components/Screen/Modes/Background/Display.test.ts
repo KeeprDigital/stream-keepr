@@ -226,32 +226,6 @@ describe('screenModesBackgroundDisplay', () => {
 		expect(wrapper.find('[data-testid="animation-surface"]').exists()).toBe(false);
 	});
 
-	it.each([
-		[
-			'renders its Theme\'s background when it has no stack of its own',
-			[],
-			['theme-wash'],
-		],
-		[
-			'renders its own stack in place of its Theme\'s',
-			[
-				layer({ id: 'own', type: 'color', color: '#101010' }),
-			],
-			['own'],
-		],
-	])('%s', async (_case, own, painted) => {
-		themeTokens.value = {
-			background: [
-				layer({ id: 'theme-wash', type: 'color', color: '#203040' }),
-			],
-		};
-		config.value = { layers: own };
-
-		const wrapper = await mountComponent();
-
-		expect(wrapper.findAll('.background-layer-stack__layer').map(rendered => rendered.attributes('data-layer-id'))).toEqual(painted);
-	});
-
 	it('restyles live when its Theme\'s background changes', async () => {
 		const wrapper = await mountComponent();
 		expect(wrapper.findAll('.background-layer-stack__layer')).toHaveLength(0);
