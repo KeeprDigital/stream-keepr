@@ -2,6 +2,7 @@
 import type { FeatureMatchOverlayOutput, ScreenVideoPlayback } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
+import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import {
 	FEATURE_MATCH_SAMPLE_CONTEXT,
 	FEATURE_MATCH_SAMPLE_TOKEN_VALUES,
@@ -28,12 +29,13 @@ import { screenMediaSourceUrl } from '~/utils/screenMediaSource';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
 import FeatureMatchOverlayFrameMedia from './FrameMedia.vue';
 
-const { isPreview, outputMode, previewGuides, previewSafeAreas, screen } = useScreenContext();
+const { isPreview, outputMode, previewGuides, previewSafeAreas, eventCanvas } = useScreenContext();
 const resolvedOutput = computed<FeatureMatchOverlayOutput>(() => outputMode?.value ?? 'overlay');
 const showPreviewGuides = computed(() => previewGuides?.value ?? false);
 const showSafeAreaGuides = computed(() => previewSafeAreas?.value ?? false);
-const canvasWidth = computed(() => screen.value?.screenConfig?.width ?? 1920);
-const canvasHeight = computed(() => screen.value?.screenConfig?.height ?? 1080);
+/** The overlay composes in its Event's canvas (ADR-0051). */
+const canvasWidth = computed(() => (eventCanvas?.value ?? DEFAULT_EVENT_CANVAS).width);
+const canvasHeight = computed(() => (eventCanvas?.value ?? DEFAULT_EVENT_CANVAS).height);
 const frameMaskId = `feature-match-overlay-frame-mask-${useId().replace(/[^\w-]/g, '')}`;
 const frameGlowFilterId = `feature-match-overlay-frame-glow-${useId().replace(/[^\w-]/g, '')}`;
 const { config, match, matchState, sourceMatch, round, phase, event, usesSampleDataset, loading, error } = useFeatureMatchOverlayModeData();

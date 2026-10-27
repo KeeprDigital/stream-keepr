@@ -35,8 +35,6 @@ export { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG };
 // ─── Screen-level config (applies to all modes) ───────────────────────
 export interface ScreenConfig {
 	background?: string;
-	width?: number;
-	height?: number;
 	paddingX?: number;
 	paddingY?: number;
 	primaryTextColor?: string;
@@ -56,8 +54,6 @@ export const DEFAULT_SCREEN_CONFIG: ScreenConfig = {
 /** The live rendering variants a graphics Screen Mode Definition exposes. */
 export type ScreenOutput = 'overlay' | 'fill' | 'key';
 export type FeatureMatchOverlayOutput = ScreenOutput;
-export const DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH = 1920;
-export const DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT = 1080;
 export const FEATURE_MATCH_OVERLAY_ANCHOR_VALUES = [
 	'top-left',
 	'top',
@@ -370,9 +366,6 @@ export interface FeatureMatchLayoutConfig {
 	/** The shared Graphic Item tree, composed above the Frame and the Source Items. */
 	composition: BroadcastGraphicConfig;
 }
-
-export const DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH = 1920;
-export const DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT = 1080;
 
 /**
  * Every Screen Mode's config contract, which holds its defaults and authored

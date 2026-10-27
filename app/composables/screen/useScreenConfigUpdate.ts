@@ -40,15 +40,12 @@ export function useScreenConfigUpdate(
 	});
 
 	/** Reset layout-related screen config while preserving theme colors and color mode. */
-	function resetScreenConfig(overrides?: ScreenConfigPatch) {
+	function resetScreenConfig() {
 		updateConfig({
-			width: null,
-			height: null,
 			paddingX: null,
 			paddingY: null,
 			horizontalAlign: null,
 			verticalAlign: null,
-			...(overrides ?? {}),
 		});
 	}
 

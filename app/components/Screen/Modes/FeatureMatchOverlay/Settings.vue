@@ -4,8 +4,8 @@ import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayPresetId } from 
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
 import { useEventListener } from '@vueuse/core';
+import { eventCanvasOf } from '~~/shared/eventCanvas';
 import { applyFeatureMatchOverlayPreset, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
-import { DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT, DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH } from '~~/shared/types/screenConfig';
 import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import {
@@ -26,15 +26,7 @@ const props = defineProps<{ screen: Screen; eventId: number }>();
 
 const featureMatchStore = useFeatureMatchStore();
 const screenStore = useScreenStore();
-
-const {
-	screenConfig,
-	saving: screenConfigSaving,
-	updateScreenConfig,
-} = useScreenConfigUpdate(
-	() => props.eventId,
-	() => props.screen.id,
-);
+const eventStore = useEventStore();
 
 const { config, saving, saveState, saveError, updateConfig, resetConfig, retry: retrySave } = useModeConfigUpdate(
 	() => props.eventId,
@@ -42,7 +34,6 @@ const { config, saving, saveState, saveError, updateConfig, resetConfig, retry: 
 	'feature-match-overlay',
 );
 
-const settingsSaving = computed(() => saving.value || screenConfigSaving.value);
 const {
 	eligibility: assetPublicationEligibility,
 	blocked: assetPublicationBlocked,
@@ -50,25 +41,21 @@ const {
 	retry: retryAssetPublicationEligibility,
 } = useGraphicAssetPublicationEligibility(config);
 
-defineExpose({ resetConfig, saving: settingsSaving });
+defineExpose({ resetConfig, saving });
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
 useConsumedEventData(['featureMatchSlots']);
 
 onMounted(async () => {
 	await featureMatchStore.loadFeatureMatchesByEventId(props.eventId);
-	if (!props.screen.screenConfig?.width || !props.screen.screenConfig?.height) {
-		await screenStore.updateScreenConfig(props.eventId, props.screen.id, {
-			width: props.screen.screenConfig?.width ?? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH,
-			height: props.screen.screenConfig?.height ?? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT,
-		});
-	}
 });
 
 const matchOptions = useFeatureMatchMenuItems();
 const presetOptions = FEATURE_MATCH_OVERLAY_PRESETS.map(preset => ({ label: preset.label, value: preset.id, description: preset.description }));
-const screenWidth = computed(() => screenConfig.value.width ?? props.screen.screenConfig?.width ?? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH);
-const screenHeight = computed(() => screenConfig.value.height ?? props.screen.screenConfig?.height ?? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT);
+/** The overlay is authored in its Event's canvas, set in Event Presentation Settings (ADR-0051). */
+const eventCanvas = computed(() => eventCanvasOf(eventStore.event));
+const screenWidth = computed(() => eventCanvas.value.width);
+const screenHeight = computed(() => eventCanvas.value.height);
 const selectedPreset = computed(() => FEATURE_MATCH_OVERLAY_PRESETS.find(preset => preset.id === config.value.presetId));
 const aspectMismatch = computed(() => {
 	if (!selectedPreset.value)
@@ -76,14 +63,6 @@ const aspectMismatch = computed(() => {
 	const actual = screenWidth.value / screenHeight.value;
 	return Math.abs(actual - selectedPreset.value.aspectRatio) > 0.05;
 });
-
-function updateCanvasDimension(field: 'width' | 'height', value: number | null | undefined) {
-	updateScreenConfig({
-		[field]: value ?? (field === 'width'
-			? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH
-			: DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT),
-	});
-}
 
 /* ────────────────────────────────────────────────
  * The editor: one selection, one history
@@ -346,28 +325,6 @@ useEventListener(import.meta.client
 						>
 							Reset
 						</UButton>
-					</UFieldGroup>
-				</UFormField>
-				<UFormField label="Canvas size" size="sm" class="w-64">
-					<UFieldGroup class="w-full">
-						<UInputNumber
-							:model-value="screenWidth"
-							:placeholder="String(DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH)"
-							:min="1"
-							size="sm"
-							class="min-w-0 flex-1"
-							aria-label="Canvas width"
-							@update:model-value="updateCanvasDimension('width', $event)"
-						/>
-						<UInputNumber
-							:model-value="screenHeight"
-							:placeholder="String(DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT)"
-							:min="1"
-							size="sm"
-							class="min-w-0 flex-1"
-							aria-label="Canvas height"
-							@update:model-value="updateCanvasDimension('height', $event)"
-						/>
 					</UFieldGroup>
 				</UFormField>
 

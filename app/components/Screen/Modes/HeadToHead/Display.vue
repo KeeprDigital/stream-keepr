@@ -115,7 +115,7 @@ function outcomeLabel({ outcome }: ScreenOutputHeadToHeadEarlierMatch): string {
 	text-align: right;
 }
 .name {
-	font-size: clamp(1.75rem, 3.5vw, 3rem);
+	font-size: clamp(1.75rem, 3.5cqw, 3rem);
 	font-weight: 800;
 	line-height: 1.05;
 	overflow: hidden;
@@ -125,21 +125,21 @@ function outcomeLabel({ outcome }: ScreenOutputHeadToHeadEarlierMatch): string {
 }
 .pronouns {
 	font-family: var(--font-body);
-	font-size: clamp(0.875rem, 1.3vw, 1.25rem);
+	font-size: clamp(0.875rem, 1.3cqw, 1.25rem);
 }
 .stats {
 	display: flex;
 	gap: 1.25rem;
-	font-size: clamp(1.125rem, 2vw, 1.75rem);
+	font-size: clamp(1.125rem, 2cqw, 1.75rem);
 	font-weight: 700;
 }
 .deck {
-	font-size: clamp(1rem, 1.8vw, 1.5rem);
+	font-size: clamp(1rem, 1.8cqw, 1.5rem);
 	font-weight: 600;
 }
 .versus {
 	font-family: var(--font-mono);
-	font-size: clamp(1.25rem, 2.5vw, 2rem);
+	font-size: clamp(1.25rem, 2.5cqw, 2rem);
 	font-weight: 900;
 	text-transform: uppercase;
 }
@@ -155,7 +155,7 @@ function outcomeLabel({ outcome }: ScreenOutputHeadToHeadEarlierMatch): string {
 	gap: 1rem;
 	align-items: center;
 	padding: 0.75rem 0;
-	font-size: clamp(1rem, 1.8vw, 1.5rem);
+	font-size: clamp(1rem, 1.8cqw, 1.5rem);
 }
 .winner {
 	font-weight: 700;
@@ -170,7 +170,7 @@ function outcomeLabel({ outcome }: ScreenOutputHeadToHeadEarlierMatch): string {
 .first-meeting {
 	padding: 1rem 0;
 	text-align: center;
-	font-size: clamp(1.25rem, 2.5vw, 2rem);
+	font-size: clamp(1.25rem, 2.5cqw, 2rem);
 	font-weight: 800;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;

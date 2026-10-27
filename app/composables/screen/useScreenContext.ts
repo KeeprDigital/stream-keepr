@@ -1,4 +1,5 @@
 import type { InjectionKey, Ref } from 'vue';
+import type { EventCanvas } from '~~/shared/eventCanvas';
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { ModeConfigTypeMap, ScreenOutput } from '~~/shared/types/screenConfig';
@@ -38,6 +39,11 @@ export interface ScreenContext {
 	 * undefined, renders the Default Theme.
 	 */
 	themeTokens?: Ref<StoredThemeTokens | undefined>;
+	/**
+	 * The Event Canvas the Screen renders in (ADR-0051). Absent renders the
+	 * default canvas.
+	 */
+	eventCanvas?: Ref<EventCanvas>;
 }
 
 const SCREEN_CONTEXT_KEY: InjectionKey<ScreenContext> = Symbol('screen-context');

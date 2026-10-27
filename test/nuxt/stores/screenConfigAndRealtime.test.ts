@@ -119,27 +119,27 @@ describe('useScreenStore config and realtime', () => {
 			store.screens = [
 				createMockScreen({
 					id: 1,
-					screenConfig: { background: '#000', height: 1080 },
+					screenConfig: { background: '#000', paddingY: 1080 },
 					stateVersion: 2,
 				}),
 			];
 			mockRepo.updateScreenConfig.mockResolvedValue(createMockScreen({
 				id: 1,
-				screenConfig: { width: 1920 },
+				screenConfig: { paddingX: 1920 },
 				stateVersion: 3,
 			}));
 
-			const first = store.updateScreenConfig(1, 1, { width: 1920 });
-			const second = store.updateScreenConfig(1, 1, { background: null, height: null });
+			const first = store.updateScreenConfig(1, 1, { paddingX: 1920 });
+			const second = store.updateScreenConfig(1, 1, { background: null, paddingY: null });
 
-			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
+			expect(store.screens[0]!.screenConfig).toEqual({ paddingX: 1920 });
 			expect(mockRepo.updateScreenConfig).not.toHaveBeenCalled();
 
 			await vi.advanceTimersByTimeAsync(300);
 			await Promise.all([first, second]);
 
 			expect(mockRepo.updateScreenConfig).toHaveBeenCalledOnce();
-			expect(mockRepo.updateScreenConfig).toHaveBeenCalledWith(1, 1, { width: 1920, background: null, height: null }, 2);
+			expect(mockRepo.updateScreenConfig).toHaveBeenCalledWith(1, 1, { paddingX: 1920, background: null, paddingY: null }, 2);
 		});
 
 		it('holds the server\'s Screen, in the collection and as the active Screen', async () => {
@@ -148,11 +148,11 @@ describe('useScreenStore config and realtime', () => {
 			store.activeScreen = screen;
 			const updated = createMockScreen({
 				id: 1,
-				screenConfig: { width: 1920 },
+				screenConfig: { paddingX: 1920 },
 			});
 			mockRepo.updateScreenConfig.mockResolvedValue(updated);
 
-			await store.updateScreenConfig(1, 1, { width: 1920 });
+			await store.updateScreenConfig(1, 1, { paddingX: 1920 });
 
 			expect(store.screens[0]).toEqual(updated);
 			expect(store.activeScreen).toEqual(updated);
@@ -167,7 +167,7 @@ describe('useScreenStore config and realtime', () => {
 			store.screens = [screen];
 			mockRepo.updateScreenConfig.mockRejectedValue(new Error('Save failed'));
 
-			await expect(store.updateScreenConfig(1, 1, { width: 1920 })).rejects.toThrow('Save failed');
+			await expect(store.updateScreenConfig(1, 1, { paddingX: 1920 })).rejects.toThrow('Save failed');
 
 			expect(store.screens[0]).toEqual(screen);
 			expect(store.error).toBe('Save failed');
@@ -181,16 +181,16 @@ describe('useScreenStore config and realtime', () => {
 			];
 			mockRepo.updateScreenConfig.mockResolvedValue(createMockScreen({
 				id: 1,
-				screenConfig: { width: 1920 },
+				screenConfig: { paddingX: 1920 },
 				stateVersion: 3,
 			}));
 
-			const write = store.updateScreenConfig(1, 1, { width: 1920 });
+			const write = store.updateScreenConfig(1, 1, { paddingX: 1920 });
 			store.$reset();
 			await vi.advanceTimersByTimeAsync(1000);
 			await write;
 
-			expect(mockRepo.updateScreenConfig).toHaveBeenCalledWith(1, 1, { width: 1920 }, 2);
+			expect(mockRepo.updateScreenConfig).toHaveBeenCalledWith(1, 1, { paddingX: 1920 }, 2);
 			expect(store.screens).toEqual([]);
 		});
 
@@ -200,7 +200,7 @@ describe('useScreenStore config and realtime', () => {
 			];
 			const updated = createMockScreen({
 				id: 1,
-				screenConfig: { height: 1080, width: 1920 },
+				screenConfig: { paddingY: 1080, paddingX: 1920 },
 				stateVersion: 4,
 			});
 			mockRepo.updateScreenConfig
@@ -208,15 +208,15 @@ describe('useScreenStore config and realtime', () => {
 				.mockResolvedValueOnce(updated);
 			mockRepo.getById.mockResolvedValue(createMockScreen({
 				id: 1,
-				screenConfig: { height: 1080 },
+				screenConfig: { paddingY: 1080 },
 				stateVersion: 3,
 			}));
 
-			await store.updateScreenConfig(1, 1, { width: 1920 });
+			await store.updateScreenConfig(1, 1, { paddingX: 1920 });
 
 			expect(mockRepo.getById).toHaveBeenCalledWith(1, 1);
-			expect(mockRepo.updateScreenConfig).toHaveBeenNthCalledWith(1, 1, 1, { width: 1920 }, 2);
-			expect(mockRepo.updateScreenConfig).toHaveBeenNthCalledWith(2, 1, 1, { width: 1920 }, 3);
+			expect(mockRepo.updateScreenConfig).toHaveBeenNthCalledWith(1, 1, 1, { paddingX: 1920 }, 2);
+			expect(mockRepo.updateScreenConfig).toHaveBeenNthCalledWith(2, 1, 1, { paddingX: 1920 }, 3);
 			expect(store.screens[0]).toEqual(updated);
 		});
 
@@ -230,7 +230,7 @@ describe('useScreenStore config and realtime', () => {
 				data: { message: 'Graphic Asset Reference at graphics.lower-third.items.logo.asset is not selectable' },
 			});
 
-			await expect(store.updateScreenConfig(1, 1, { width: 1920 })).rejects.toThrow(
+			await expect(store.updateScreenConfig(1, 1, { paddingX: 1920 })).rejects.toThrow(
 				'Graphic Asset Reference at graphics.lower-third.items.logo.asset is not selectable',
 			);
 
@@ -344,7 +344,7 @@ describe('useScreenStore config and realtime', () => {
 				vi.useFakeTimers();
 				const cached = createMockScreen({
 					id: 10,
-					screenConfig: { width: 100 },
+					screenConfig: { paddingX: 100 },
 					stateVersion: 3,
 				});
 				store.screens = [cached];
@@ -358,22 +358,22 @@ describe('useScreenStore config and realtime', () => {
 
 				mockRepo.updateScreenConfig.mockResolvedValue(createMockScreen({
 					id: 10,
-					screenConfig: { width: 1920 },
+					screenConfig: { paddingX: 1920 },
 					stateVersion: 4,
 				}));
-				const save = store.updateScreenConfig(1, 10, { width: 1920 });
+				const save = store.updateScreenConfig(1, 10, { paddingX: 1920 });
 				await vi.advanceTimersByTimeAsync(300);
 				await save;
 
 				serveAnnouncedReload(createMockScreen({
 					id: 10,
-					screenConfig: { width: 100 },
+					screenConfig: { paddingX: 100 },
 					stateVersion: 3,
 				}));
 				await reload;
 
-				expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
-				expect(store.activeScreen!.screenConfig).toEqual({ width: 1920 });
+				expect(store.screens[0]!.screenConfig).toEqual({ paddingX: 1920 });
+				expect(store.activeScreen!.screenConfig).toEqual({ paddingX: 1920 });
 			});
 
 			// Another operator's write took the Screen to 4; this client's save collided, retried onto it and settled at 5.
@@ -382,13 +382,13 @@ describe('useScreenStore config and realtime', () => {
 				store.screens = [
 					createMockScreen({
 						id: 10,
-						screenConfig: { width: 100 },
+						screenConfig: { paddingX: 100 },
 						stateVersion: 3,
 					}),
 				];
 				const remote = createMockScreen({
 					id: 10,
-					screenConfig: { width: 100, background: '#fff' },
+					screenConfig: { paddingX: 100, background: '#fff' },
 					stateVersion: 4,
 				});
 
@@ -402,14 +402,14 @@ describe('useScreenStore config and realtime', () => {
 
 				const merged = createMockScreen({
 					id: 10,
-					screenConfig: { width: 1920, background: '#fff' },
+					screenConfig: { paddingX: 1920, background: '#fff' },
 					stateVersion: 5,
 				});
 				mockRepo.updateScreenConfig
 					.mockRejectedValueOnce(stateConflictFailure())
 					.mockResolvedValueOnce(merged);
 
-				const save = store.updateScreenConfig(1, 10, { width: 1920 });
+				const save = store.updateScreenConfig(1, 10, { paddingX: 1920 });
 				await vi.advanceTimersByTimeAsync(300);
 				await save;
 				expect(store.screens[0]!.stateVersion).toBe(5);

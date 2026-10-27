@@ -63,10 +63,11 @@ type Wrapper = VueWrapper<any>;
 
 const field = (wrapper: Wrapper, name: string) => wrapper.get(`[data-field="${name}"]`);
 const input = (wrapper: Wrapper, name: string) => field(wrapper, name).get('input');
+const textarea = (wrapper: Wrapper, name: string) => field(wrapper, name).get('textarea');
 const toggle = (wrapper: Wrapper, name: string) => field(wrapper, name).get('[role="switch"]');
 const isOn = (wrapper: Wrapper, name: string) => toggle(wrapper, name).attributes('aria-checked') === 'true';
 const select = (wrapper: Wrapper, name: string) => field(wrapper, name).get('select');
-const shown = (wrapper: Wrapper, name: string) => (field(wrapper, name).get('input, select').element as HTMLInputElement).value;
+const shown = (wrapper: Wrapper, name: string) => (field(wrapper, name).get('input, select, textarea').element as HTMLInputElement).value;
 const error = (wrapper: Wrapper, name: string) => field(wrapper, name).find('[data-error]');
 const button = (wrapper: Wrapper, label: string) => wrapper.findAll('button').find(candidate => candidate.text() === label)!;
 
@@ -141,6 +142,42 @@ const CARDS: CardCase[] = [
 			shows: wrapper => shown(wrapper, 'displayPositionFormat'),
 			expected: 'number',
 		},
+	},
+	{
+		card: 'presentation canvas',
+		component: PresentationSettings,
+		edit: wrapper => input(wrapper, 'canvasWidth').setValue('1280'),
+		saved: { canvasWidth: 1280 },
+		colleague: {
+			change: { canvasHeight: 1200 },
+			shows: wrapper => shown(wrapper, 'canvasHeight'),
+			expected: '1200',
+		},
+	},
+	{
+		card: 'presentation holding text',
+		component: PresentationSettings,
+		edit: wrapper => textarea(wrapper, 'holdingText').setValue('  Back after this break.  '),
+		saved: { holdingText: 'Back after this break.' },
+	},
+	{
+		card: 'presentation holding text cleared',
+		component: PresentationSettings,
+		event: { holdingText: 'Coverage resumes shortly.' },
+		edit: wrapper => textarea(wrapper, 'holdingText').setValue('   '),
+		saved: { holdingText: null },
+	},
+	{
+		card: 'presentation extra turns label',
+		component: PresentationSettings,
+		edit: wrapper => input(wrapper, 'extraTurnsLabel').setValue('Overtime'),
+		saved: { featureMatchDefaultExtraTurnsLabel: 'Overtime' },
+	},
+	{
+		card: 'presentation untimed label',
+		component: PresentationSettings,
+		edit: wrapper => input(wrapper, 'untimedLabel').setValue('Top 8'),
+		saved: { featureMatchDefaultUntimedLabel: 'Top 8' },
 	},
 	{
 		card: 'card spotlight',
@@ -287,12 +324,38 @@ describe('event presentation settings card', () => {
 		expect(shown(wrapper, 'themeId')).toBe(expected);
 	});
 
-	it('shows the formatting the event already carries', () => {
-		const wrapper = mountCard(PresentationSettings, configEvent({ displayRecordSeparator: '/', displayPositionFormat: 'number' }));
+	it('shows the canvas, formatting and wording the event already carries', () => {
+		const wrapper = mountCard(PresentationSettings, configEvent({
+			canvasWidth: 1080,
+			canvasHeight: 1920,
+			displayRecordSeparator: '/',
+			displayPositionFormat: 'number',
+			holdingText: 'Coverage resumes shortly.',
+			featureMatchDefaultExtraTurnsLabel: 'Overtime',
+			featureMatchDefaultUntimedLabel: 'Top 8',
+		}));
 
+		expect(shown(wrapper, 'canvasWidth')).toBe('1080');
+		expect(shown(wrapper, 'canvasHeight')).toBe('1920');
 		expect(shown(wrapper, 'displayRecordSeparator')).toBe('/');
 		expect(shown(wrapper, 'displayPositionFormat')).toBe('number');
 		expect(isOn(wrapper, 'displayHideZeroDraws')).toBe(true);
+		expect(shown(wrapper, 'holdingText')).toBe('Coverage resumes shortly.');
+		expect(shown(wrapper, 'extraTurnsLabel')).toBe('Overtime');
+		expect(shown(wrapper, 'untimedLabel')).toBe('Top 8');
+	});
+
+	it.each([
+		['canvasWidth', '99', 'Canvas width must be between 100 and 7680 pixels'],
+		['canvasHeight', '7681', 'Canvas height must be between 100 and 7680 pixels'],
+	])('refuses to save a %s of %s, and says so at the field', async (name, value, complaint) => {
+		const wrapper = mountCard(PresentationSettings);
+
+		await input(wrapper, name).setValue(value);
+		await submitOutOfRange(wrapper);
+
+		expect(handleSubmit).not.toHaveBeenCalled();
+		expect(error(wrapper, name).text()).toBe(complaint);
 	});
 
 	it('offers a save only once the form has changed, and takes it back on reset', async () => {
@@ -386,50 +449,31 @@ describe('format settings card', () => {
 		expect(shown(wrapper, 'clockType')).toBe('countdown');
 	});
 
-	it.each([
-		['count', 'extraTurns', '5'],
-		['label', 'extraTurnsLabel', 'Extra Turns'],
-	])('offers the extra turns %s only once extra turns are enabled', async (_, name, value) => {
+	it('offers the extra turns count only once extra turns are enabled', async () => {
 		const wrapper = mountCard(ConfigFormatSettings);
-		expect(wrapper.find(`[data-field="${name}"]`).exists()).toBe(false);
+		expect(wrapper.find('[data-field="extraTurns"]').exists()).toBe(false);
 
 		await toggle(wrapper, 'extraTurnsEnabled').trigger('click');
 
-		expect(shown(wrapper, name)).toBe(value);
+		expect(shown(wrapper, 'extraTurns')).toBe('5');
 	});
 
-	it('trades the timing settings for an Untimed Label once the clock is untimed', async () => {
+	it('drops the timing settings once the clock is untimed', async () => {
 		const wrapper = mountCard(ConfigFormatSettings, configEvent({ featureMatchDefaultExtraTurnsEnabled: true }));
 		const offered = () => [
 			'clockDuration',
 			'countUpAfterCountdown',
 			'extraTurnsEnabled',
 			'extraTurns',
-			'untimedLabel',
 		]
 			.filter(name => wrapper.find(`[data-field="${name}"]`).exists());
-		expect(offered()).toEqual([
-			'clockDuration',
-			'countUpAfterCountdown',
-			'extraTurnsEnabled',
-			'extraTurns',
-		]);
+		expect(offered()).toHaveLength(4);
 
 		await select(wrapper, 'clockType').setValue('untimed');
-		expect(offered()).toEqual(['untimedLabel']);
+		expect(offered()).toEqual([]);
 
-		await input(wrapper, 'untimedLabel').setValue('Top 8');
 		await save(wrapper);
-		expect(submitted()).toEqual({ featureMatchDefaultClockType: 'untimed', featureMatchDefaultUntimedLabel: 'Top 8' });
-	});
-
-	it('saves the extra turns label under its default column', async () => {
-		const wrapper = mountCard(ConfigFormatSettings, configEvent({ featureMatchDefaultExtraTurnsEnabled: true }));
-
-		await input(wrapper, 'extraTurnsLabel').setValue('Overtime');
-		await save(wrapper);
-
-		expect(submitted()).toEqual({ featureMatchDefaultExtraTurnsLabel: 'Overtime' });
+		expect(submitted()).toEqual({ featureMatchDefaultClockType: 'untimed' });
 	});
 
 	it('offers the points system only to an MTG event, saving it beside the mapped defaults', async () => {

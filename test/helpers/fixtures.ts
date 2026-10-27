@@ -71,6 +71,8 @@ export function createMockEvent(overrides?: Partial<DbEvent>): DbEvent {
 		displayHideZeroDraws: true,
 		displayPositionFormat: 'ordinal',
 		themeId: null,
+		canvasWidth: 1920,
+		canvasHeight: 1080,
 		featureMatchDefaultBestOf: 3,
 		featureMatchDefaultStartingLife: 20,
 		featureMatchDefaultClockType: 'countdown',

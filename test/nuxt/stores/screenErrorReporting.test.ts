@@ -84,7 +84,7 @@ describe('useScreenStore error reporting', () => {
 	it.each([
 		[
 			'Screen-config',
-			(s: ReturnType<typeof useScreenStore>) => s.updateScreenConfig(1, 5, { width: 1920 }),
+			(s: ReturnType<typeof useScreenStore>) => s.updateScreenConfig(1, 5, { paddingX: 1920 }),
 			'updateScreenConfig',
 		],
 		[

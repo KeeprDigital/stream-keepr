@@ -15,6 +15,8 @@ export const SCREEN_OUTPUT_EVENT_FIELDS = [
 	'displayHideZeroDraws',
 	'displayPositionFormat',
 	'themeId',
+	'canvasWidth',
+	'canvasHeight',
 	'featureMatchDefaultBestOf',
 	'featureMatchDefaultStartingLife',
 	'featureMatchDefaultClockType',

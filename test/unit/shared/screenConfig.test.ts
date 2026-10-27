@@ -143,6 +143,6 @@ describe('toModeConfigPatch', () => {
 
 describe('toScreenConfigPatch', () => {
 	it('sends a cleared field as a deletion', () => {
-		expect(toScreenConfigPatch({ width: undefined, background: '#fff' })).toEqual({ width: null, background: '#fff' });
+		expect(toScreenConfigPatch({ paddingX: undefined, background: '#fff' })).toEqual({ paddingX: null, background: '#fff' });
 	});
 });

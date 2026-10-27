@@ -24,6 +24,7 @@ const mockPreviewGuides = ref(false);
 const mockPreviewSafeAreas = ref(false);
 const mockScreen = ref<Screen | null>(null);
 const mockAssetCapability = ref<string | undefined>(undefined);
+const mockEventCanvas = ref({ width: 1920, height: 1080 });
 
 mockNuxtImport('useScreenContext', () => () => ({
 	screen: mockScreen,
@@ -35,6 +36,7 @@ mockNuxtImport('useScreenContext', () => () => ({
 	previewGuides: mockPreviewGuides,
 	previewSafeAreas: mockPreviewSafeAreas,
 	assetCapability: mockAssetCapability,
+	eventCanvas: mockEventCanvas,
 }));
 
 // Every capability-session exchange a live Screen Output makes, so a test can prove media content
@@ -226,7 +228,7 @@ function screenWithStack(graphics: BroadcastGraphicConfig[] = [], channels?: Gra
 	return {
 		id: 1,
 		slug: 'main',
-		screenConfig: { width: 1920, height: 1080 },
+		screenConfig: {},
 		modeConfigs: graphics.length
 			? {
 					'broadcast-graphics': {
@@ -245,7 +247,7 @@ function screenWithBackground(background: unknown, graphics: BroadcastGraphicCon
 	return {
 		id: 1,
 		slug: 'main',
-		screenConfig: { width: 1920, height: 1080 },
+		screenConfig: {},
 		modeConfigs: {
 			'broadcast-graphics': { graphics, background },
 		},
@@ -256,6 +258,8 @@ const AnimationSurfaceStub = defineComponent({
 	props: {
 		effect: { type: String, required: true },
 		params: { type: Object, required: false, default: undefined },
+		width: { type: Number, required: true },
+		height: { type: Number, required: true },
 	},
 	template: '<div data-testid="animation-surface" />',
 });
@@ -322,6 +326,7 @@ function itemStyle(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
 describe('broadcastGraphicsDisplay', () => {
 	beforeEach(() => {
 		mockOutputMode.value = 'overlay';
+		mockEventCanvas.value = { width: 1920, height: 1080 };
 		mockOutputModeProvided.value = true;
 		mockIsPreview.value = false;
 		mockPreviewGuides.value = false;
@@ -1376,6 +1381,7 @@ describe('broadcastGraphicsDisplay', () => {
 describe('graphicAnimationPreview in a Screen Output frame', () => {
 	beforeEach(() => {
 		mockOutputMode.value = 'overlay';
+		mockEventCanvas.value = { width: 1920, height: 1080 };
 		mockOutputModeProvided.value = true;
 		mockIsPreview.value = true;
 		mockPreviewGuides.value = false;
@@ -1525,6 +1531,7 @@ describe('live playout animation in a Screen Output', () => {
 
 	beforeEach(() => {
 		mockOutputMode.value = 'overlay';
+		mockEventCanvas.value = { width: 1920, height: 1080 };
 		mockOutputModeProvided.value = true;
 		mockIsPreview.value = false;
 		mockPreviewGuides.value = false;
@@ -1765,6 +1772,19 @@ describe('live playout animation in a Screen Output', () => {
 
 			expect(surface.props('effect')).toBe('fog');
 			expect(surface.props('params')).toMatchObject({ speed: 2, softness: 0.55 });
+		});
+
+		// ADR-0051: Broadcast Graphics compose in the Event Canvas.
+		it('paints the background across the Event Canvas', async () => {
+			mockEventCanvas.value = { width: 1280, height: 720 };
+			mockScreen.value = screenWithBackground(fogBackground);
+
+			const surface = (await mountComponent()).getComponent(AnimationSurfaceStub);
+
+			expect([
+				surface.props('width'),
+				surface.props('height'),
+			]).toEqual([1280, 720]);
 		});
 
 		it('composes the background behind every Broadcast Graphic, at the authored opacity', async () => {

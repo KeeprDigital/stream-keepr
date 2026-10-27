@@ -15,6 +15,7 @@ import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
 import { relations, sql } from 'drizzle-orm';
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
+import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { BROADCAST_GRAPHICS_LIVE_SESSION_STATUS_VALUES } from '~~/shared/types/broadcastGraphicsLiveSession';
 /* ENUMS — imported from shared, re-exported for backward compatibility */
 import {
@@ -130,6 +131,9 @@ export const events = sqliteTable('events', {
 
 	// Event Presentation Settings. No Theme is the Default Theme; a Theme in use cannot be deleted.
 	themeId: text('theme_id').references(() => themes.id, { onDelete: 'restrict' }),
+	// The Event Canvas: the coordinate space every Screen of the Event is authored and rendered in (ADR-0051).
+	canvasWidth: integer('canvas_width').notNull().default(DEFAULT_EVENT_CANVAS.width),
+	canvasHeight: integer('canvas_height').notNull().default(DEFAULT_EVENT_CANVAS.height),
 
 	// Feature match defaults
 	featureMatchDefaultBestOf: integer('feature_match_default_best_of').notNull().default(3),

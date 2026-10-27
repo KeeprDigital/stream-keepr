@@ -127,7 +127,7 @@ function screen(overrides: Record<string, unknown> = {}) {
 		slug: 'main',
 		name: 'Program',
 		currentMode: 'player-history',
-		screenConfig: { width: 1920, height: 1080 },
+		screenConfig: {},
 		modeConfigs: {
 			'player-history': { playerId: 11 },
 		},

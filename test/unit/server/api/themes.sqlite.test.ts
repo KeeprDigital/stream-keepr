@@ -304,3 +304,60 @@ describe('the Screen Output Event context', () => {
 		expect(await outputEvent(event)).toMatchObject({ themeId: null, theme: null });
 	});
 });
+
+// ADR-0051: the Event Canvas is set once in Event Presentation Settings, and every Screen Output reads it.
+describe('the Event Canvas', () => {
+	const setCanvas = (eventId: number, canvas: Record<string, unknown>) => call(updateEvent, { id: eventId }, canvas);
+	const outputCanvas = async (eventId: number) => {
+		const { canvasWidth, canvasHeight } = await call(readOutputEvent, { id: eventId, screenId: 1 }) as ScreenOutputEvent;
+		return { canvasWidth, canvasHeight };
+	};
+
+	it('starts an Event at 1920×1080', async () => {
+		expect(await outputCanvas(await createEvent('New'))).toEqual({ canvasWidth: 1920, canvasHeight: 1080 });
+	});
+
+	it.each([
+		[
+			'the smallest',
+			{ canvasWidth: 100, canvasHeight: 100 },
+		],
+		[
+			'the largest',
+			{ canvasWidth: 7680, canvasHeight: 7680 },
+		],
+		[
+			'a portrait',
+			{ canvasWidth: 1080, canvasHeight: 1920 },
+		],
+	])('stores %s canvas, announces it with the Event, and hands it to its Screen Outputs', async (_case, canvas) => {
+		const event = await createEvent('Resized');
+
+		await setCanvas(event, canvas);
+
+		expect(published.map(message => [message.type, message.data.event?.canvasWidth, message.data.event?.canvasHeight]))
+			.toEqual([
+				['event:updated', canvas.canvasWidth, canvas.canvasHeight],
+			]);
+		expect(await outputCanvas(event)).toEqual(canvas);
+	});
+
+	// The route's body validation answers these 400; the stubbed reader hands back the schema's refusal.
+	it.each([
+		['too narrow', 'canvasWidth', 99],
+		['too tall', 'canvasHeight', 7681],
+		['fractional', 'canvasWidth', 1280.5],
+	])('refuses a canvas %s, storing and announcing nothing', async (_case, side, value) => {
+		const event = await createEvent('Refused');
+
+		await expect(setCanvas(event, { [side]: value })).rejects.toMatchObject({
+			issues: [
+				expect.objectContaining({
+					path: [side],
+				}),
+			],
+		});
+		expect(published).toEqual([]);
+		expect(await outputCanvas(event)).toEqual({ canvasWidth: 1920, canvasHeight: 1080 });
+	});
+});

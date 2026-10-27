@@ -2,11 +2,12 @@
 import type { Component, ComponentPublicInstance } from 'vue';
 import type { BackgroundLayer, ModeConfigsMap, ScreenConfig } from '~~/shared/types/screenConfig';
 import { usePreferredDark } from '@vueuse/core';
+import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { DEFAULT_THEME_TOKENS } from '~~/shared/modules/theme';
 import { screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
 import { getScreenModeDefinition, resolveScreenModeHost, screenModeThemeTokenStyle } from '~/modules/screen-mode';
 
-const { screen, overlayContainer, themeTokens } = useScreenContext();
+const { screen, overlayContainer, themeTokens, eventCanvas } = useScreenContext();
 const preferredDark = usePreferredDark();
 const viewportWidth = ref(0);
 const viewportHeight = ref(0);
@@ -34,6 +35,7 @@ const screenConfig = computed<ScreenConfig>(() => (screen.value?.screenConfig ??
 const displayComponent = computed<Component>(() => currentModeDefinition.value.displayComponent);
 const host = computed(() => resolveScreenModeHost({
 	mode: currentMode.value,
+	canvas: eventCanvas?.value ?? DEFAULT_EVENT_CANVAS,
 	screenConfig: screenConfig.value,
 	viewportWidth: viewportWidth.value,
 	viewportHeight: viewportHeight.value,
@@ -107,6 +109,8 @@ function setHostContainer(el: Element | ComponentPublicInstance | null) {
 	display: grid;
 	overflow: hidden;
 	box-sizing: border-box;
+	/* A display sizes against its Event Canvas (`cqw`, `cqh`), never the window. */
+	container-type: size;
 	margin: 0;
 	padding: 0;
 }

@@ -7,6 +7,7 @@ import type { ScreenCardDataHealth, ScreenPresenceData } from '~/types/screen';
 import type { Flight } from '~/utils/guardedSequence';
 import { useIntervalFn } from '@vueuse/core';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue';
+import { eventCanvasOf } from '~~/shared/eventCanvas';
 import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import {
 	parseScreenEmbed,
@@ -199,6 +200,8 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	const cardDataHealth = ref<ScreenCardDataHealth>('complete');
 	/** The Event's Theme, as its Event context carries it and `theme:updated` keeps it. */
 	const themeTokens = computed(() => eventStore.outputEvent?.theme?.tokens);
+	/** The Event Canvas, as the Event context carries it and `event:updated` keeps it. */
+	const eventCanvas = computed(() => eventCanvasOf(eventStore.outputEvent));
 	const screenContext: ScreenContext = {
 		screen: activeScreen,
 		eventId,
@@ -212,6 +215,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		assetCapability,
 		cardDataHealth,
 		themeTokens,
+		eventCanvas,
 	};
 
 	watch(isControlScreen, (isControl) => {
@@ -313,8 +317,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		if (!container)
 			return;
 
-		const width = screenStore.activeScreen.screenConfig?.width ?? container.offsetWidth;
-		const height = screenStore.activeScreen.screenConfig?.height ?? container.offsetHeight;
+		const { width, height } = eventCanvas.value;
 		const output = outputMode.value;
 
 		try {

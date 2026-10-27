@@ -135,7 +135,7 @@ describe('useScreenStore', () => {
 			store.screens = [
 				createMockScreen({
 					id: 5,
-					screenConfig: { width: 100 },
+					screenConfig: { paddingX: 100 },
 					stateVersion: 3,
 				}),
 			];
@@ -148,26 +148,26 @@ describe('useScreenStore', () => {
 
 			const saved = createMockScreen({
 				id: 5,
-				screenConfig: { width: 1920 },
+				screenConfig: { paddingX: 1920 },
 				stateVersion: 4,
 			});
 			mockRepo.updateScreenConfig.mockResolvedValue(saved);
-			const save = store.updateScreenConfig(1, 5, { width: 1920 });
+			const save = store.updateScreenConfig(1, 5, { paddingX: 1920 });
 			await vi.advanceTimersByTimeAsync(300);
 			await save;
-			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
+			expect(store.screens[0]!.screenConfig).toEqual({ paddingX: 1920 });
 
 			serveRefresh([
 				createMockScreen({
 					id: 5,
-					screenConfig: { width: 100 },
+					screenConfig: { paddingX: 100 },
 					stateVersion: 3,
 				}),
 			]);
 			const loaded = await refresh;
 
-			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
-			expect(loaded![0]!.screenConfig).toEqual({ width: 1920 });
+			expect(store.screens[0]!.screenConfig).toEqual({ paddingX: 1920 });
+			expect(loaded![0]!.screenConfig).toEqual({ paddingX: 1920 });
 			vi.useRealTimers();
 		});
 	});
@@ -271,7 +271,7 @@ describe('useScreenStore', () => {
 				createMockScreen({
 					id: 5,
 					slug: 'main',
-					screenConfig: { width: 100 },
+					screenConfig: { paddingX: 100 },
 					stateVersion: 3,
 				}),
 			];
@@ -285,24 +285,24 @@ describe('useScreenStore', () => {
 			const saved = createMockScreen({
 				id: 5,
 				slug: 'main',
-				screenConfig: { width: 1920 },
+				screenConfig: { paddingX: 1920 },
 				stateVersion: 4,
 			});
 			mockRepo.updateScreenConfig.mockResolvedValue(saved);
-			const save = store.updateScreenConfig(1, 5, { width: 1920 });
+			const save = store.updateScreenConfig(1, 5, { paddingX: 1920 });
 			await vi.advanceTimersByTimeAsync(300);
 			await save;
 
 			serveLoad(createMockScreen({
 				id: 5,
 				slug: 'main',
-				screenConfig: { width: 100 },
+				screenConfig: { paddingX: 100 },
 				stateVersion: 3,
 			}));
 			const loaded = await load;
 
-			expect(store.activeScreen!.screenConfig).toEqual({ width: 1920 });
-			expect(loaded!.screenConfig).toEqual({ width: 1920 });
+			expect(store.activeScreen!.screenConfig).toEqual({ paddingX: 1920 });
+			expect(loaded!.screenConfig).toEqual({ paddingX: 1920 });
 			vi.useRealTimers();
 		});
 	});
@@ -494,7 +494,7 @@ describe('useScreenStore', () => {
 			store.screens = [
 				createMockScreen({
 					id: 5,
-					screenConfig: { width: 100 },
+					screenConfig: { paddingX: 100 },
 					stateVersion: 3,
 				}),
 			];
@@ -507,24 +507,24 @@ describe('useScreenStore', () => {
 
 			const saved = createMockScreen({
 				id: 5,
-				screenConfig: { width: 1920 },
+				screenConfig: { paddingX: 1920 },
 				stateVersion: 4,
 			});
 			mockRepo.updateScreenConfig.mockResolvedValue(saved);
-			const save = store.updateScreenConfig(1, 5, { width: 1920 });
+			const save = store.updateScreenConfig(1, 5, { paddingX: 1920 });
 			await vi.advanceTimersByTimeAsync(300);
 			await save;
-			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
+			expect(store.screens[0]!.screenConfig).toEqual({ paddingX: 1920 });
 
 			serveLoad(createMockScreen({
 				id: 5,
-				screenConfig: { width: 100 },
+				screenConfig: { paddingX: 100 },
 				stateVersion: 3,
 			}));
 			const loaded = await load;
 
-			expect(store.screens[0]!.screenConfig).toEqual({ width: 1920 });
-			expect(loaded!.screenConfig).toEqual({ width: 1920 });
+			expect(store.screens[0]!.screenConfig).toEqual({ paddingX: 1920 });
+			expect(loaded!.screenConfig).toEqual({ paddingX: 1920 });
 			vi.useRealTimers();
 		});
 	});

@@ -46,8 +46,6 @@ describe('useScreenConfigUpdate', () => {
 
 		await vi.advanceTimersByTimeAsync(200);
 		expect(mockUpdateScreenConfig).toHaveBeenCalledWith(1, 1, {
-			width: null,
-			height: null,
 			paddingX: null,
 			paddingY: null,
 			horizontalAlign: null,

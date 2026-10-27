@@ -520,18 +520,11 @@ describe('screens extended API', () => {
 		});
 	});
 
-	it('updates screen dimensions in screen config', async () => {
-		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/screen-config`, {
+	// ADR-0051: a Screen has no canvas of its own; it renders in its Event Canvas.
+	it('refuses a Screen width or height', async () => {
+		await expect($fetch(`/api/events/${eventId}/screens/${screenId}/screen-config`, {
 			method: 'PATCH',
-			body: {
-				width: 1920,
-				height: 1080,
-			},
-		});
-
-		expect(updated.screenConfig).toMatchObject({
-			width: 1920,
-			height: 1080,
-		});
+			body: { width: 1920, height: 1080 },
+		})).rejects.toMatchObject({ statusCode: 400 });
 	});
 });

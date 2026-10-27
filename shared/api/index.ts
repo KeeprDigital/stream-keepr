@@ -139,6 +139,9 @@ export interface EventListResponse {
 	displayPositionFormat: PositionFormat;
 	/** The Event's Theme; null renders the Default Theme. */
 	themeId: string | null;
+	/** The Event Canvas every Screen of the Event is authored and rendered in (ADR-0051). */
+	canvasWidth: number;
+	canvasHeight: number;
 	featureMatchDefaultBestOf: number;
 	featureMatchDefaultStartingLife: number;
 	featureMatchDefaultClockType: ClockType;
@@ -197,6 +200,8 @@ export interface CreateEventInput {
 	tableNumberEnabled?: boolean;
 	featureMatchNotesEnabled?: boolean;
 	pointsSystem?: PointsSystem | null;
+	canvasWidth?: number;
+	canvasHeight?: number;
 }
 
 export type UpdateEventInput = Partial<Omit<CreateEventInput, 'game'>> & {

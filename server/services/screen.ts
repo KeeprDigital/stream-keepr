@@ -245,7 +245,6 @@ export function screenService() {
 		eventId: number,
 		partialConfig: Record<string, unknown>,
 		stateVersion?: number,
-		leaseFence?: GraphicsAuthoringLeaseFence,
 	): Promise<DbScreen | undefined> => {
 		const screen = await findById(id, eventId);
 		if (!screen)
@@ -254,7 +253,7 @@ export function screenService() {
 		const currentConfig = (screen.screenConfig ?? {}) as ScreenConfig;
 		const mergedConfig = mergeScreenConfig(currentConfig, partialConfig);
 
-		return versionedWrite(id, eventId, { screenConfig: mergedConfig }, stateVersion ?? screen.stateVersion, [], leaseFence);
+		return versionedWrite(id, eventId, { screenConfig: mergedConfig }, stateVersion ?? screen.stateVersion);
 	};
 
 	const slugExists = async (eventId: number, slug: string, excludeId?: number): Promise<boolean> => {
