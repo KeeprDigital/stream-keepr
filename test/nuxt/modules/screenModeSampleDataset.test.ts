@@ -43,6 +43,7 @@ const SHOWS: Partial<Record<ScreenMode, Shown>> = {
 	'deck': deckCard('Gleeful Demolition'),
 	'top-cut': text('Tomás Ó Briain'),
 	'broadcast-graphics': text('Boros Convoke · 6-0-1'),
+	'feature-match-overlay': text('Dimir Midrange'),
 	'metagame': text('Mono-Green Landfall'),
 	'top-cards': text('Lightning Helix'),
 	'player-history': text('Maximilian Hohenberger'),
