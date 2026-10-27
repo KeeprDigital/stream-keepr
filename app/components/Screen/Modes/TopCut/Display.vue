@@ -1,11 +1,35 @@
 <script setup lang="ts">
 import type { BracketPosition } from '~~/shared/modules/top-cut-bracket';
-import type { ScreenConfig } from '~~/shared/types/screenConfig';
+import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { screen } = useScreenContext();
 const { config, error, isEmpty, headerText, bracket } = useTopCutModeData();
 
-const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
+/** Set on the root, over the shared broadcast table chrome's own colour and face. */
+const displayStyle = {
+	...modeTypographyStyle('top-cut', 'entrant-typography'),
+	color: modeTokenVar('top-cut', 'primary-text'),
+};
+const titleDividerStyle = {
+	borderBottomColor: modeTokenVar('top-cut', 'title-divider'),
+};
+const titleStyle = {
+	...modeTypographyStyle('top-cut', 'title-typography'),
+	color: modeTokenVar('top-cut', 'title-text'),
+};
+const roundNameStyle = {
+	...modeTypographyStyle('top-cut', 'round-name-typography'),
+	color: modeTokenVar('top-cut', 'round-name-text'),
+};
+const secondaryTextStyle = {
+	color: modeTokenVar('top-cut', 'secondary-text'),
+};
+const connectorStyle = {
+	borderColor: modeTokenVar('top-cut', 'connector'),
+};
+const championStyle = {
+	...modeTypographyStyle('top-cut', 'champion-typography'),
+	borderColor: modeTokenVar('top-cut', 'champion-border'),
+};
 
 /** Each column's positions in the pairs whose winners meet in the next column. */
 const columns = computed(() => bracket.value.columns.map(column => ({
@@ -22,8 +46,6 @@ const columns = computed(() => bracket.value.columns.map(column => ({
 const layoutStyle = computed(() => ({
 	'--bracket-rows': String(Math.max(bracket.value.columns[0]?.positions.length ?? 1, 1)),
 	'--bracket-position-height': config.value.showArchetypes ? '6.4' : '4.6',
-	'--broadcast-table-primary-text': screenConfig.value.primaryTextColor ?? '#ffffff',
-	'--broadcast-table-secondary-text': screenConfig.value.secondaryTextColor ?? 'rgba(255, 255, 255, 0.72)',
 }));
 
 function entrantLabel(position: BracketPosition, side: 0 | 1): string {
@@ -39,6 +61,32 @@ function entrantClass(position: BracketPosition, side: 0 | 1) {
 		'is-unknown': !position.entrants[side],
 	};
 }
+
+/** A pending Bracket Position, which no Match fills yet, has its own border. */
+function positionStyle(position: BracketPosition) {
+	return {
+		backgroundColor: modeTokenVar('top-cut', 'position-surface'),
+		borderColor: position.status === 'awaiting'
+			? modeTokenVar('top-cut', 'pending-position-border')
+			: modeTokenVar('top-cut', 'position-border'),
+	};
+}
+
+/** A winner sits on its own surface; an eliminated or unknown entrant reads as secondary text. */
+function entrantStyle(position: BracketPosition, side: 0 | 1) {
+	const { 'is-winner': isWinner, 'is-eliminated': isEliminated, 'is-unknown': isUnknown } = entrantClass(position, side);
+	return {
+		borderTopColor: side === 1
+			? modeTokenVar('top-cut', 'entrant-divider')
+			: undefined,
+		backgroundColor: isWinner
+			? modeTokenVar('top-cut', 'winner-surface')
+			: undefined,
+		color: isEliminated || isUnknown
+			? secondaryTextStyle.color
+			: undefined,
+	};
+}
 </script>
 
 <template>
@@ -46,9 +94,11 @@ function entrantClass(position: BracketPosition, side: 0 | 1) {
 		:error="error"
 		:empty="isEmpty"
 	>
-		<div class="topcut-display broadcast-table-display flex flex-col h-full w-full" :style="layoutStyle">
-			<div v-if="config.showHeader" class="broadcast-table-title">
-				<h2>{{ headerText }}</h2>
+		<div class="topcut-display broadcast-table-display flex flex-col h-full w-full" :style="[layoutStyle, displayStyle]">
+			<div v-if="config.showHeader" class="broadcast-table-title" :style="titleDividerStyle">
+				<h2 :style="titleStyle">
+					{{ headerText }}
+				</h2>
 			</div>
 
 			<div class="bracket">
@@ -57,7 +107,7 @@ function entrantClass(position: BracketPosition, side: 0 | 1) {
 					:key="column.roundId ?? `pending-${columnIndex}`"
 					class="bracket-column"
 				>
-					<div class="bracket-column-name broadcast-table-secondary">
+					<div class="bracket-column-name" :style="roundNameStyle">
 						{{ column.name }}
 					</div>
 					<div class="bracket-pairs">
@@ -65,26 +115,34 @@ function entrantClass(position: BracketPosition, side: 0 | 1) {
 							v-for="(pair, pairIndex) in column.pairs"
 							:key="pairIndex"
 							class="bracket-pair"
-							:class="{ 'is-joined': pair.length === 2 }"
 						>
+							<!-- The bracket line joining a pair's two positions to the position their winners meet in. -->
+							<div
+								v-if="pair.length === 2"
+								class="bracket-connector"
+								aria-hidden="true"
+								:style="connectorStyle"
+							/>
 							<div
 								v-for="(position, positionIndex) in pair"
 								:key="position.matchId ?? `position-${pairIndex}-${positionIndex}`"
 								class="bracket-position"
 								:data-status="position.status"
+								:style="positionStyle(position)"
 							>
 								<div
 									v-for="side in ([0, 1] as const)"
 									:key="side"
 									class="bracket-entrant"
 									:class="entrantClass(position, side)"
+									:style="entrantStyle(position, side)"
 								>
-									<span v-if="config.showSeeds" class="bracket-entrant-seed broadcast-table-numeric">{{ position.entrants[side]?.seed ?? '' }}</span>
+									<span v-if="config.showSeeds" class="bracket-entrant-seed" :style="secondaryTextStyle">{{ position.entrants[side]?.seed ?? '' }}</span>
 									<div class="bracket-entrant-identity">
 										<span class="bracket-entrant-name">{{ entrantLabel(position, side) }}</span>
-										<span v-if="config.showArchetypes" class="bracket-entrant-archetype">{{ position.entrants[side]?.deck?.name ?? '' }}</span>
+										<span v-if="config.showArchetypes" class="bracket-entrant-archetype" :style="secondaryTextStyle">{{ position.entrants[side]?.deck?.name ?? '' }}</span>
 									</div>
-									<span v-if="position.gameWins[side] != null" class="bracket-entrant-score broadcast-table-numeric">{{ position.gameWins[side] }}</span>
+									<span v-if="position.gameWins[side] != null" class="bracket-entrant-score">{{ position.gameWins[side] }}</span>
 								</div>
 							</div>
 						</div>
@@ -92,10 +150,10 @@ function entrantClass(position: BracketPosition, side: 0 | 1) {
 				</div>
 
 				<div v-if="bracket.champion" class="bracket-champion">
-					<div class="bracket-column-name broadcast-table-secondary">
+					<div class="bracket-column-name" :style="roundNameStyle">
 						Champion
 					</div>
-					<div class="bracket-champion-name">
+					<div class="bracket-champion-name" :style="championStyle">
 						{{ bracket.champion.name }}
 					</div>
 				</div>
@@ -127,13 +185,9 @@ function entrantClass(position: BracketPosition, side: 0 | 1) {
 
 .bracket-column-name {
 	flex-shrink: 0;
-	font-family: var(--font-body);
 	font-size: max(0.75rem, 0.6em);
-	font-weight: 800;
-	letter-spacing: 0.1em;
 	padding-bottom: 0.4em;
 	text-align: center;
-	text-transform: uppercase;
 }
 
 .bracket-pairs {
@@ -152,12 +206,10 @@ function entrantClass(position: BracketPosition, side: 0 | 1) {
 	position: relative;
 }
 
-/* The bracket line joining a pair's two positions to the position their winners meet in. */
-.bracket-pair.is-joined::after {
-	border: 2px solid rgba(255, 255, 255, 0.25);
-	border-left: none;
+.bracket-connector {
+	border-style: solid solid solid none;
+	border-width: 2px;
 	bottom: 25%;
-	content: '';
 	pointer-events: none;
 	position: absolute;
 	right: calc(var(--bracket-gap) / -2);
@@ -166,8 +218,8 @@ function entrantClass(position: BracketPosition, side: 0 | 1) {
 }
 
 .bracket-position {
-	background: rgba(255, 255, 255, 0.06);
-	border: 1px solid rgba(255, 255, 255, 0.14);
+	border-style: solid;
+	border-width: 1px;
 	border-radius: 0.3em;
 	overflow: hidden;
 }
@@ -181,19 +233,18 @@ function entrantClass(position: BracketPosition, side: 0 | 1) {
 	display: flex;
 	gap: 0.5em;
 	justify-content: space-between;
-	line-height: 1.15;
 	padding: 0.3em 0.6em;
 }
 
 .bracket-entrant + .bracket-entrant {
-	border-top: 1px solid rgba(255, 255, 255, 0.08);
+	border-top-style: solid;
+	border-top-width: 1px;
 }
 
 .bracket-entrant-seed {
-	color: var(--broadcast-table-secondary-text, rgba(255, 255, 255, 0.72));
 	flex-shrink: 0;
 	font-size: 0.8em;
-	font-weight: 700;
+	font-variant-numeric: tabular-nums;
 	min-width: 1.6em;
 	text-align: right;
 }
@@ -215,25 +266,13 @@ function entrantClass(position: BracketPosition, side: 0 | 1) {
 
 /* Blank for a Player with no Archetype, holding its line so every entrant stays one height. */
 .bracket-entrant-archetype {
-	color: var(--broadcast-table-secondary-text, rgba(255, 255, 255, 0.72));
 	font-size: 0.75em;
-	font-weight: 600;
 	min-height: 1.15em;
 }
 
 .bracket-entrant-score {
 	flex-shrink: 0;
-	font-weight: 700;
-}
-
-.bracket-entrant.is-winner {
-	background: rgba(255, 255, 255, 0.14);
-	font-weight: 800;
-}
-
-.bracket-entrant.is-eliminated,
-.bracket-entrant.is-unknown {
-	color: var(--broadcast-table-secondary-text, rgba(255, 255, 255, 0.72));
+	font-variant-numeric: tabular-nums;
 }
 
 .bracket-entrant.is-eliminated .bracket-entrant-name {
@@ -245,10 +284,10 @@ function entrantClass(position: BracketPosition, side: 0 | 1) {
 }
 
 .bracket-champion-name {
-	border: 2px solid rgba(255, 255, 255, 0.4);
+	border-style: solid;
+	border-width: 2px;
 	border-radius: 0.3em;
 	font-size: 1.25em;
-	font-weight: 800;
 	padding: 0.5em 0.75em;
 	text-align: center;
 }

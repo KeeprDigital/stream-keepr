@@ -21,9 +21,12 @@ import { topCardsModeConfigContract } from './screenModeConfigs/topCards';
 import { topCutModeConfigContract } from './screenModeConfigs/topCut';
 import { archetypeSpotlightModeTokens } from './screenModeTokens/archetypeSpotlight';
 import { headToHeadModeTokens } from './screenModeTokens/headToHead';
+import { metagameModeTokens } from './screenModeTokens/metagame';
 import { pairingsModeTokens } from './screenModeTokens/pairings';
 import { playerHistoryModeTokens } from './screenModeTokens/playerHistory';
 import { standingsModeTokens } from './screenModeTokens/standings';
+import { topCardsModeTokens } from './screenModeTokens/topCards';
+import { topCutModeTokens } from './screenModeTokens/topCut';
 import { SCREEN_MODE_VALUES } from './types/enums';
 import {
 	DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
@@ -215,6 +218,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: topCutModeConfigContract,
 		eventReferences: { phaseId: 'phase' },
+		modeTokens: topCutModeTokens,
 	},
 	'feature-match': {
 		label: 'Feature Match Controls',
@@ -260,6 +264,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		config: metagameModeConfigContract,
 		eventReferences: { playerListId: 'playerList' },
 		pageRotation: { pageSize: 'pageSize' },
+		modeTokens: metagameModeTokens,
 	},
 	'top-cards': {
 		label: 'Most Played Cards',
@@ -270,6 +275,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		config: topCardsModeConfigContract,
 		eventReferences: { playerListId: 'playerList' },
 		pageRotation: { pageSize: 'rowsPerPage' },
+		modeTokens: topCardsModeTokens,
 	},
 	'player-history': {
 		label: 'Player History',

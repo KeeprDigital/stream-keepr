@@ -21,9 +21,6 @@ import {
 	pageRotationShape,
 } from './subShapes';
 
-/** A badge colour: any CSS colour, as the server's other colour fields take. */
-const optionalCssColorSchema = z.string().min(1).max(500).optional();
-
 /** The most cards a Most Played Cards Screen ranks. */
 const TOP_CARDS_MAX_LIMIT = 60;
 
@@ -43,6 +40,9 @@ const TOP_CARDS_MAX_GRID_ROWS = TOP_CARDS_MAX_LIMIT;
  * Its Page Rotation pages the grid by whole grid rows: `rowsPerPage` rows of
  * `columns` cards each. The default holds the most cards a Screen can rank in
  * one column, so a Screen that never set it shows every card on one page.
+ *
+ * Its rank and stat badge colours are Mode Tokens (#823); the four colour
+ * fields it once held are former fields, which a stored config may still carry.
  */
 export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	// Scoping
@@ -71,13 +71,9 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	// Card labels & badges
 	showCardNames: editorField(z.boolean(), { label: 'Show card names' }),
 	showRankBadges: editorField(z.boolean(), { label: 'Show rank badges' }),
-	rankBadgeTextColor: editorField(optionalCssColorSchema, { label: 'Rank badge text color', control: 'color' }),
-	rankBadgeBgColor: editorField(optionalCssColorSchema, { label: 'Rank badge background color', control: 'color' }),
 	/** Which metric the stat badge shows; 'none' hides the badge. */
 	statBadge: editorField(z.enum(TOP_CARDS_STAT_VALUES), { label: 'Stat badge' }),
 	statBadgeSize: editorField(z.enum(QUANTITY_SIZE_VALUES).optional(), { label: 'Badge size' }),
-	statBadgeTextColor: editorField(optionalCssColorSchema, { label: 'Stat badge text color', control: 'color' }),
-	statBadgeBgColor: editorField(optionalCssColorSchema, { label: 'Stat badge background color', control: 'color' }),
 }, {
 	...DEFAULT_METAGAME_SCOPE_WITHOUT_MIN_POINTS,
 	archetypeFilter: undefined,
@@ -96,12 +92,15 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	...DEFAULT_HEADER_CONFIG,
 	showCardNames: true,
 	showRankBadges: true,
-	rankBadgeTextColor: '#ffffff',
-	rankBadgeBgColor: '#7c3aed',
 	statBadge: 'inclusionRate',
 	statBadgeSize: 'medium',
-	statBadgeTextColor: '#111827',
-	statBadgeBgColor: '#ffffff',
+}, {
+	formerFields: [
+		'rankBadgeTextColor',
+		'rankBadgeBgColor',
+		'statBadgeTextColor',
+		'statBadgeBgColor',
+	],
 });
 
 export type TopCardsModeConfig = ScreenModeConfigOf<typeof topCardsModeConfigContract>;

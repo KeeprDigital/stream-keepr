@@ -5,13 +5,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import Display from '~/components/Screen/Modes/Metagame/Display.vue';
 
-const screen = ref<any>({
-	screenConfig: {
-		primaryTextColor: '#123456',
-		secondaryTextColor: '#654321',
-	},
-});
-
 const config = ref<any>({
 	viewMode: 'archetype',
 	showHeader: true,
@@ -50,10 +43,6 @@ const pageData = ref<any[]>([
 ]);
 
 const chartBars = ref<MetagameChartBar[]>([]);
-
-mockNuxtImport('useScreenContext', () => () => ({
-	screen: computed(() => screen.value),
-}));
 
 mockNuxtImport('useMetagameModeData', () => () => ({
 	config: computed(() => config.value),
@@ -100,12 +89,6 @@ async function mountComponent() {
 
 describe('screenMetagameDisplay', () => {
 	beforeEach(() => {
-		screen.value = {
-			screenConfig: {
-				primaryTextColor: '#123456',
-				secondaryTextColor: '#654321',
-			},
-		};
 		config.value = {
 			viewMode: 'archetype',
 			showHeader: true,
@@ -267,15 +250,6 @@ describe('screenMetagameDisplay', () => {
 			const bars = wrapper.findAll('[data-testid="metagame-chart-bar"]');
 			expect(bars[0]!.get('[data-testid="mana-display"]').text()).toBe('RW');
 			expect(bars[1]!.find('[data-testid="mana-display"]').exists()).toBe(false);
-		});
-
-		it('fills each archetype with its colour slot, and Other with the neutral', async () => {
-			const wrapper = await mountComponent();
-
-			const fills = wrapper.findAll('[data-testid="metagame-chart-fill"]').map(fill => fill.attributes('style'));
-			expect(fills[0]).toContain('var(--metagame-chart-series-4)');
-			expect(fills[1]).toContain('var(--metagame-chart-series-1)');
-			expect(fills[2]).toContain('var(--metagame-chart-other)');
 		});
 
 		it('keeps the header above the chart', async () => {
