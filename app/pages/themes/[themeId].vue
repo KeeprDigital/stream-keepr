@@ -162,6 +162,18 @@ watch(themeId, load);
 				<UCard>
 					<template #header>
 						<h2 class="font-semibold text-highlighted">
+							Preview
+						</h2>
+						<p class="text-xs text-muted">
+							Every themed Screen Mode, shown with sample data. It is never shown on air.
+						</p>
+					</template>
+					<ThemePreviewGallery :tokens="stored" />
+				</UCard>
+
+				<UCard>
+					<template #header>
+						<h2 class="font-semibold text-highlighted">
 							Foundation Tokens
 						</h2>
 						<p class="text-xs text-muted">

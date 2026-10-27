@@ -5,6 +5,7 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
 import { createMockFeatureMatchState, createWireMockFeatureMatch } from '~~/test/helpers/fixtures';
 import { useRouter } from '#app';
 import { tryUseRealtime } from '~/composables/core/useRealtime';
+import { SAMPLE_PLAYER_NAMES } from '~/modules/screen-mode/sampleDataset';
 import { useCardStore } from '~/stores/card';
 import { useEventStore } from '~/stores/event';
 import { useFeatureMatchStore } from '~/stores/featureMatch';
@@ -525,6 +526,35 @@ describe('a capability-only Screen Output', () => {
 
 		expect(useCardStore().activeCard).toBeNull();
 		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
+	});
+
+	// The Screen Mode Sample Dataset is a Theme preview's alone: an output with
+	// nothing to show renders nothing, never the sample.
+	it.each([
+		[
+			'answers no Players',
+			() => ({
+				players: [],
+				round: null,
+				roundStandings: null,
+				watchlist: null,
+				previousRoundPositions: null,
+			}),
+		],
+		[
+			'fails',
+			() => Promise.reject(new Error('unavailable')),
+		],
+	])('shows no sample Player when its Standings read %s', async (_case, answer) => {
+		api.screen = screen({ currentMode: 'standings', modeConfigs: {} });
+		api.answers.set('/api/screen-output/events/42/screens/7/standings', answer);
+		const standingsRead = () => api.requests.some(request => request.path.endsWith('/screens/7/standings'));
+
+		const wrapper = await mountOutput(`/event/42/screen/main#asset-capability=${capability}`, standingsRead);
+		await settleUntil(() => false);
+
+		expect(standingsRead()).toBe(true);
+		expect(SAMPLE_PLAYER_NAMES.filter(name => wrapper.text().includes(name))).toEqual([]);
 	});
 });
 

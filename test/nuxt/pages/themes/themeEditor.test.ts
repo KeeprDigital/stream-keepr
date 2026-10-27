@@ -129,6 +129,16 @@ describe('the Theme editor', () => {
 		expect(field(wrapper, token).attributes('data-token-state')).toBe('set');
 	});
 
+	it('repaints its preview once a write lands', async () => {
+		answerWrite = () => theme(2, { 'standings.surface': '#00ff00' });
+		const wrapper = await mountEditor();
+		const host = () => wrapper.get('[data-preview-mode="standings"] .screen-renderer').element as HTMLElement;
+
+		await commit(wrapper, 'standings.surface', 'colour', '#00ff00');
+
+		expect(host().style.getPropertyValue('--theme-standings-surface')).toBe('#00ff00');
+	});
+
 	it('points a Mode Token at another Foundation Token of its type', async () => {
 		const wrapper = await mountEditor();
 
