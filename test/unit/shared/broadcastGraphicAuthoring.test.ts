@@ -447,7 +447,8 @@ describe('broadcastGraphicAuthoring', () => {
 		const built = addGraphicItem(graphic('a'), { kind: 'text', id: 'name', ...CANVAS }).graphic;
 
 		const patched = patchGraphicTypography(built, 'name', { fontSize: 96 });
-		const before = built.items[0]!.type === 'text' && built.items[0].typography;
+		const first = built.items[0]!;
+		const before = first.type === 'text' && first.typography;
 
 		expect(patched.items[0]).toMatchObject({
 			typography: {

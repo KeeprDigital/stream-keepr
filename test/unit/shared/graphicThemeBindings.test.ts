@@ -155,7 +155,8 @@ describe('a bound Graphic Item property', () => {
 		const painted = paintBroadcastGraphicThemeBindings(composition, TOKENS);
 
 		expect(painted.animation?.enter?.duration).toBe(900);
-		expect(painted.items[0]!.type === 'group' && painted.items[0].children[0]).toMatchObject({ color: 'rgb(1, 2, 3)' });
+		const row = painted.items[0]!;
+		expect(row.type === 'group' && row.children[0]).toMatchObject({ color: 'rgb(1, 2, 3)' });
 	});
 
 	it.each([
