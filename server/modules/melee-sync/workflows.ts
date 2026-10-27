@@ -6,7 +6,7 @@ import type { MeleeSyncContext } from './context';
 import { createError } from 'h3';
 import { mapMeleePlayersToDb } from '~~/server/mappers/melee';
 import { eventDataPublicationModule, RealtimePublicationError } from '~~/server/modules/event-data-publication';
-import { syncMatchesFromMelee } from '~~/server/modules/melee-sync/roundMatches';
+import { syncMatchesFromMelee, syncPreviousRoundStandingsFromMelee } from '~~/server/modules/melee-sync/roundMatches';
 import { importedMtgCardResolverService } from '~~/server/services/importedMtgCardResolver';
 import { describeKeptStructure, removeImportedStructure } from '~~/server/services/importedStructure';
 import { requireMeleeService } from '~~/server/services/meleeIntegration';
@@ -392,8 +392,13 @@ export function createMeleeSyncWorkflows() {
 			updated: result.updated,
 			staleDeleted: result.staleDeleted,
 		}));
+		// Pairings for this Round complete the one before it.
+		const previousRoundStandings = result.matchCount > 0
+			? await syncPreviousRoundStandingsFromMelee(eventId, eventData, round)
+			: null;
 		return {
 			...result,
+			previousRoundStandings,
 			warnings: [
 				...(result.warnings ?? []),
 				...publicationWarnings,

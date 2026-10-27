@@ -62,6 +62,7 @@ vi.mock('~~/server/services/meleeIntegration', () => ({
 
 vi.mock('~~/server/modules/melee-sync/roundMatches', () => ({
 	syncMatchesFromMelee: mockSyncMatchesFromMelee,
+	syncPreviousRoundStandingsFromMelee: async () => null,
 }));
 
 vi.mock('~~/server/services/round', () => ({

@@ -515,6 +515,14 @@ function validateMeleeMatchSnapshot(
 	}
 }
 
+/** Whether a Melee Match holds a result, and whether it is a bye, as its stored Match records them. */
+export function meleeMatchResultState(meleeMatch: MeleeMatchParsed): { hasResult: boolean; isBye: boolean } {
+	return {
+		hasResult: meleeMatch.HasResult ?? false,
+		isBye: meleeMatch.Competitors.length < 2 || meleeMatch.ByeReason != null,
+	};
+}
+
 /**
  * Maps a single MeleeMatch into data for DB upsert (without eventId — caller adds it).
  */
@@ -529,8 +537,7 @@ function mapMeleeMatchToDbRow(
 	const p1 = mapCompetitorToPlayerData(competitors[0], context, meleeMatch.Guid, matchFormatExternalId);
 	const p2 = mapCompetitorToPlayerData(competitors[1], context, meleeMatch.Guid, matchFormatExternalId);
 
-	const isBye = competitors.length < 2 || meleeMatch.ByeReason != null;
-	const hasResult = meleeMatch.HasResult ?? false;
+	const { hasResult, isBye } = meleeMatchResultState(meleeMatch);
 	// Melee leaves a side's GameWins, and the Match's GameDraws, null rather
 	// than 0 when there were none. A reported Match always holds its Game
 	// Score; an unreported Match or a bye holds none (ADR-0047).

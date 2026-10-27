@@ -9,7 +9,7 @@ import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 /*
  * Melee Sync commands against real SQL: only the upstream boundaries are stood in
  * for — Melee itself, the card provider, Ably — and Round Match import, which
- * roundMatches.sqlite owns. Lease and sync metadata are the real Event columns.
+ * meleeRoundMatches.sqlite owns. Lease and sync metadata are the real Event columns.
  */
 
 const harness = await createSqliteD1Harness();
@@ -39,7 +39,10 @@ vi.doMock('~~/server/utils/ably', () => ({
 vi.doMock('~~/server/modules/broadcast-graphics-live-session', () => ({
 	refreshBroadcastGraphicsBindings: vi.fn(),
 }));
-vi.doMock('~~/server/modules/melee-sync/roundMatches', () => ({ syncMatchesFromMelee }));
+vi.doMock('~~/server/modules/melee-sync/roundMatches', () => ({
+	syncMatchesFromMelee,
+	syncPreviousRoundStandingsFromMelee: async () => null,
+}));
 vi.stubGlobal('createError', (input: { statusCode: number; message?: string; statusMessage?: string; data?: unknown }) =>
 	Object.assign(new Error(input.message ?? input.statusMessage), input));
 
