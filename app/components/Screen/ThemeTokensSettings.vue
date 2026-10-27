@@ -69,8 +69,16 @@ const tokens = computed(() => resolved.value.consumed.map(name => ({
 	inherited: inheritedValue(name),
 	resolved: resolved.value.values[name] as ThemeTokenValue,
 })));
-const modeTokenEntries = computed(() => tokens.value.filter(entry => entry.token.tier === 'mode'));
-const foundationEntries = computed(() => tokens.value.filter(entry => entry.token.tier === 'foundation'));
+const groups = computed(() => [
+	{
+		label: 'This mode',
+		entries: tokens.value.filter(entry => entry.token.tier === 'mode'),
+	},
+	{
+		label: 'Foundation',
+		entries: tokens.value.filter(entry => entry.token.tier === 'foundation'),
+	},
+]);
 
 const subtitle = computed(() => themeName.value
 	? `Inherits from ${themeName.value}. An override applies to this Screen only.`
@@ -110,37 +118,23 @@ async function write(token: string, value: unknown) {
 			title="The Event's Theme could not be loaded"
 			description="Inherited values are shown as the Default Theme ships them."
 		/>
-		<p class="text-xs font-medium uppercase text-muted">
-			This mode
-		</p>
-		<ThemeTokenField
-			v-for="entry in modeTokenEntries"
-			:key="entry.name"
-			scope="screen"
-			:name="entry.name"
-			:token="entry.token"
-			:stored="overrides[entry.name]"
-			:inherited="entry.inherited"
-			:resolved="entry.resolved"
-			:disabled="writing.has(entry.name)"
-			@set="value => write(entry.name, value)"
-			@clear="write(entry.name, null)"
-		/>
-		<p class="mt-4 text-xs font-medium uppercase text-muted">
-			Foundation
-		</p>
-		<ThemeTokenField
-			v-for="entry in foundationEntries"
-			:key="entry.name"
-			scope="screen"
-			:name="entry.name"
-			:token="entry.token"
-			:stored="overrides[entry.name]"
-			:inherited="entry.inherited"
-			:resolved="entry.resolved"
-			:disabled="writing.has(entry.name)"
-			@set="value => write(entry.name, value)"
-			@clear="write(entry.name, null)"
-		/>
+		<template v-for="group in groups" :key="group.label">
+			<p class="mt-4 text-xs font-medium uppercase text-muted first:mt-0">
+				{{ group.label }}
+			</p>
+			<ThemeTokenField
+				v-for="entry in group.entries"
+				:key="entry.name"
+				scope="screen"
+				:name="entry.name"
+				:token="entry.token"
+				:stored="overrides[entry.name]"
+				:inherited="entry.inherited"
+				:resolved="entry.resolved"
+				:disabled="writing.has(entry.name)"
+				@set="value => write(entry.name, value)"
+				@clear="write(entry.name, null)"
+			/>
+		</template>
 	</ScreenSettingsCard>
 </template>

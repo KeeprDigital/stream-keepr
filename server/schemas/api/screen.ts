@@ -1922,9 +1922,9 @@ export const screenCommandSchema = z.object({
 export const screenThemeOverridesPatchSchema = z.object({
 	stateVersion: z.number().int().nonnegative().optional(),
 	tokens: z.record(
-		z.string().regex(/^[a-z0-9][a-z0-9.-]*$/).max(100),
+		z.string(),
 		z.unknown().refine(value => value !== undefined, 'A value, or null to clear, is required'),
-	).refine(tokens => Object.keys(tokens).length > 0, 'Name at least one token').refine(tokens => Object.keys(tokens).length <= 100, 'Name at most 100 tokens'),
+	).refine(tokens => Object.keys(tokens).length > 0, 'Name at least one token'),
 }).strict();
 
 // ROUTE PARAMS

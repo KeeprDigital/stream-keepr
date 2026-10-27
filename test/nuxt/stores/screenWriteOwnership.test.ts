@@ -21,6 +21,7 @@ const mockRepo = {
 	update: vi.fn(),
 	updateModeConfig: vi.fn(),
 	updateScreenConfig: vi.fn(),
+	updateThemeOverrides: vi.fn(),
 	remove: vi.fn(),
 };
 
@@ -356,6 +357,32 @@ describe('screen store writes and what overtakes them', () => {
 			await sendPending();
 			await secondSave;
 			expect(store.screens[0]!.modeConfigs?.metagame).toEqual({ topN: 32, limit: 20 });
+		});
+
+		it('rolls back a Screen Theme Override, set or cleared, to what the server holds now', async () => {
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 1,
+					themeOverrides: { accent: '#ff0000' },
+				}),
+			];
+			const write = served();
+			mockRepo.updateThemeOverrides.mockReturnValueOnce(write.promise);
+
+			const save = store.updateThemeOverrides(1, 1, { 'accent': null, 'standings.surface': '#000000' });
+			expect(store.screens[0]!.themeOverrides).toEqual({ 'standings.surface': '#000000' });
+			mockRepo.getById.mockResolvedValueOnce(createMockScreen({
+				id: 1,
+				stateVersion: 2,
+				themeOverrides: { accent: '#ff0000', divider: '#00ff00' },
+			}));
+			await store.applyRemoteUpdated({ eventId: 1, screenId: 1 } as never);
+
+			write.reject(new Error('Refused'));
+			await expect(save).rejects.toThrow('Refused');
+
+			expect(store.screens[0]!.themeOverrides).toEqual({ accent: '#ff0000', divider: '#00ff00' });
 		});
 
 		it('rolls back an ordinary Screen update without taking back a configuration edit still out', async () => {

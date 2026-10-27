@@ -61,13 +61,13 @@ const SCOPE_TEXT = {
 		inherited: 'Default',
 		set: 'Set in this Theme',
 		reset: 'Reset',
-		resetLabel: 'Reset {label} to its default',
+		resetLabel: (label: string) => `Reset ${label} to its default`,
 	},
 	screen: {
 		inherited: 'Theme',
 		set: 'Overridden on this Screen',
 		reset: 'Clear',
-		resetLabel: 'Clear the {label} override',
+		resetLabel: (label: string) => `Clear the ${label} override`,
 	},
 } as const;
 const text = computed(() => SCOPE_TEXT[props.scope ?? 'theme']);
@@ -126,7 +126,7 @@ function chooseSource(value: string) {
 					variant="ghost"
 					icon="i-lucide-rotate-ccw"
 					:disabled="disabled"
-					:aria-label="text.resetLabel.replace('{label}', definition.label)"
+					:aria-label="text.resetLabel(definition.label)"
 					@click="emit('clear')"
 				>
 					{{ text.reset }}

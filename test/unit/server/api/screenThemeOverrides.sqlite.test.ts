@@ -230,6 +230,13 @@ describe('screen Theme Overrides', () => {
 		expect(await storedOverrides(screenId)).toEqual({});
 	});
 
+	it('refuses a write naming no token, so nothing is versioned or announced', async () => {
+		const screenId = await createScreen('standings', 'main');
+
+		await expect(override(screenId, {})).rejects.toThrow();
+		expect(published).toEqual([]);
+	});
+
 	it('keeps an override of a mode\'s Mode Token while the Screen shows another mode, and carries it again on return', async () => {
 		const screenId = await createScreen('standings', 'main');
 		await override(screenId, { 'standings.row-divider': '#ff0000' });
