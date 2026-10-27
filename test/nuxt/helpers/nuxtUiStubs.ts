@@ -535,3 +535,38 @@ export const nuxtUiStubs = {
 	UTextarea: UTextareaStub,
 	UTooltip: UTooltipStub,
 };
+
+interface TableColumnLike {
+	id?: string;
+	accessorKey?: string;
+}
+
+/**
+ * A `<table>` of `data`, one `<td>` per column: its `<id>-cell` slot (given `{ row: { original } }`),
+ * else the accessor's value. Clicking a row emits `select`, as `UTable` does. Kept out of
+ * `nuxtUiStubs`, which suites rendering the real table spread: pass `{ ...nuxtUiStubs, UTable: UTableStub }`.
+ */
+export const UTableStub = defineComponent({
+	name: 'UTable',
+	props: {
+		data: {
+			type: Array as PropType<Record<string, unknown>[]>,
+			default: () => [],
+		},
+		columns: {
+			type: Array as PropType<TableColumnLike[]>,
+			default: () => [],
+		},
+	},
+	emits: ['select'],
+	setup: props => ({
+		columnIds: computed(() => props.columns.map(column => column.id ?? column.accessorKey ?? '')),
+	}),
+	template: `<table><tbody>
+		<tr v-for="(row, ri) in data" :key="ri" @click="$emit('select', $event, { original: row })">
+			<td v-for="id in columnIds" :key="id" :data-column="id">
+				<slot :name="id + '-cell'" :row="{ original: row }">{{ row[id] }}</slot>
+			</td>
+		</tr>
+	</tbody></table>`,
+});

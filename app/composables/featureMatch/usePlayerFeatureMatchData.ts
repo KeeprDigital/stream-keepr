@@ -64,6 +64,20 @@ export function usePlayerFeatureMatchData(
 		return playerData.value?.name || fallback;
 	});
 
+	// The roster Player whose name this side shows, from the same source as playerData; a seat filled by hand links none.
+	const linkedPlayer = computed(() => {
+		const s = side();
+		const snapshotPlayer = activeSession.value?.sourceSnapshot[s];
+		const playerId = snapshotPlayer
+			? snapshotPlayer.playerId
+			: s === 'player1'
+				? match.value?.player1Id
+				: match.value?.player2Id;
+		return playerId
+			? playerStore.players.find(p => p.id === playerId) ?? null
+			: null;
+	});
+
 	const playerPronouns = computed(() => {
 		return playerData.value?.pronouns ?? undefined;
 	});
@@ -135,6 +149,7 @@ export function usePlayerFeatureMatchData(
 		matchState,
 		player,
 		playerName,
+		linkedPlayer,
 		playerPronouns,
 		deckName,
 		bestOf,

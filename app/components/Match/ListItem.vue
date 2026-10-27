@@ -179,7 +179,7 @@ function getScoreColor(side: 'player1' | 'player2') {
 			</UBadge>
 			<div class="match-bye-player-wrap">
 				<div class="match-player-stack match-bye-player items-center">
-					<span class="font-medium truncate">{{ match.player1Data?.name || 'TBD' }}</span>
+					<PlayerMatchHistoryButton class="font-medium truncate" :player="player1" :name="match.player1Data?.name || 'TBD'" />
 					<span v-if="formatRecord(player1Record)" class="text-xs font-mono text-muted">{{ formatRecord(player1Record) }}</span>
 					<div v-if="player1Deck.name" class="flex items-center gap-1.5">
 						<MtgManaColorDisplay
@@ -223,12 +223,14 @@ function getScoreColor(side: 'player1' | 'player2') {
 				</UBadge>
 				<div class="match-player-stack items-end">
 					<div class="flex items-center justify-end gap-2 min-w-0">
-						<span
+						<PlayerMatchHistoryButton
 							data-testid="player1-name"
 							class="truncate"
 							:class="getPlayerResultClasses('player1')"
 							:data-outcome="getPlayerOutcome('player1')"
-						>{{ match.player1Data?.name || 'TBD' }}</span>
+							:player="player1"
+							:name="match.player1Data?.name || 'TBD'"
+						/>
 						<UBadge
 							v-if="match.hasResult"
 							data-testid="player1-score"
@@ -279,12 +281,14 @@ function getScoreColor(side: 'player1' | 'player2') {
 						>
 							{{ player2GameWins }}
 						</UBadge>
-						<span
+						<PlayerMatchHistoryButton
 							data-testid="player2-name"
 							class="truncate"
 							:class="getPlayerResultClasses('player2')"
 							:data-outcome="getPlayerOutcome('player2')"
-						>{{ match.player2Data?.name || 'TBD' }}</span>
+							:player="player2"
+							:name="match.player2Data?.name || 'TBD'"
+						/>
 					</div>
 					<span v-if="formatRecord(player2Record)" class="text-xs font-mono text-muted">{{ formatRecord(player2Record) }}</span>
 					<div v-if="player2Deck.name" class="flex items-center gap-1.5 justify-start min-w-0">

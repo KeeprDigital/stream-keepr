@@ -163,7 +163,7 @@ async function handleSendToScreen(screenId?: number) {
 					</div>
 				</template>
 				<template #opponentName-cell="{ row }">
-					<span class="font-medium">{{ row.original.opponentName }}</span>
+					<PlayerMatchHistoryButton class="font-medium" :player="resolveOpponent(row.original)" :name="row.original.opponentName" />
 				</template>
 				<template #opponentDeckName-cell="{ row }">
 					<button

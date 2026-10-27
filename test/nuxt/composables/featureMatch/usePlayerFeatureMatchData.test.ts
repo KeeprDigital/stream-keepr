@@ -146,6 +146,44 @@ describe('usePlayerFeatureMatchData', () => {
 	});
 
 	it.each([
+		[
+			'the roster Player the Slot seats',
+			{ player1Id: 21 },
+			21,
+		],
+		[
+			'no Player for a seat filled by hand, even under a roster name',
+			{ player1Id: null },
+			null,
+		],
+		[
+			'the Player the active Session\'s snapshot shows, not the Slot\'s current one',
+			{
+				player1Id: 21,
+				activeSession: {
+					sourceSnapshot: {
+						bestOf: 3,
+						playerDisplayMode: 'score',
+						player1: { playerId: 22, data: p1Data },
+						player2: null,
+					},
+				},
+			},
+			22,
+		],
+	])('links %s', (_, slotOverrides, linkedId) => {
+		mockMatches.value = [
+			slot(slotOverrides),
+		];
+		mockRoster.value = [
+			createMockPlayer({ id: 21, name: 'Alice' }),
+			createMockPlayer({ id: 22, name: 'Alicia' }),
+		];
+
+		expect(usePlayerFeatureMatchData(1, 'player1').linkedPlayer.value?.id ?? null).toBe(linkedId);
+	});
+
+	it.each([
 		['horizontal', 'player1', undefined],
 		['vertical', 'player1', 'Top'],
 		['vertical', 'player2', 'Bottom'],

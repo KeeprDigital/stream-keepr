@@ -1,8 +1,9 @@
 import type { PlayerMatchHistoryEntry } from '~/composables/screen/usePlayerHistoryModeData';
 import type { Player } from '~/types';
+import { createSharedComposable } from '@vueuse/core';
 import { LazyPlayerMatchHistoryModal } from '#components';
 
-export function usePlayerMatchHistoryModal() {
+function _usePlayerMatchHistoryModal() {
 	const overlay = useOverlay();
 	const eventStore = useEventStore();
 	const toast = useToast();
@@ -44,3 +45,6 @@ export function usePlayerMatchHistoryModal() {
 
 	return { openPlayerMatchHistory };
 }
+
+// One modal for every Player name on screen: opening another Player, an opponent included, replaces what it shows.
+export const usePlayerMatchHistoryModal = createSharedComposable(_usePlayerMatchHistoryModal);
