@@ -53,16 +53,26 @@ const statBadgeClass = computed(() => {
 	}
 });
 
-const rankBadgeStyle = {
+/** A badge lifts off the card's art on a soft shadow. */
+const badgeStyle = {
 	...modeTypographyStyle('top-cards', 'badge-typography'),
+	boxShadow: `0 4px 6px -1px ${modeTokenVar('top-cards', 'badge-shadow')}`,
+};
+
+const rankBadgeStyle = {
+	...badgeStyle,
 	color: modeTokenVar('top-cards', 'rank-badge-text'),
 	backgroundColor: modeTokenVar('top-cards', 'rank-badge-surface'),
 };
 
 const statBadgeStyle = {
-	...modeTypographyStyle('top-cards', 'badge-typography'),
+	...badgeStyle,
 	color: modeTokenVar('top-cards', 'stat-badge-text'),
 	backgroundColor: modeTokenVar('top-cards', 'stat-badge-surface'),
+};
+
+const cardStyle = {
+	backgroundColor: modeTokenVar('top-cards', 'card-placeholder-surface'),
 };
 
 function statText(entry: CardBreakdownEntry): string | null {
@@ -107,6 +117,7 @@ function statText(entry: CardBreakdownEntry): string | null {
 					:stat-text="statText(entry)"
 					:stat-badge-class="statBadgeClass"
 					:stat-badge-style="statBadgeStyle"
+					:card-style="cardStyle"
 				/>
 			</div>
 

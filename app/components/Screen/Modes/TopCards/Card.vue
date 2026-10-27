@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
-import { modeTokenVar } from '~/modules/screen-mode';
 
+/**
+ * One ranked card, for any Screen Mode that shows one. Its look comes from the
+ * host mode's Mode Tokens through the style props, since a mode's tokens are
+ * set only while it is the Screen's mode; a host passing none leaves its own
+ * look showing through.
+ */
 const props = defineProps<{
 	entry: CardBreakdownEntry;
 	rank: number;
@@ -14,13 +19,11 @@ const props = defineProps<{
 	statText: string | null;
 	statBadgeClass: string;
 	statBadgeStyle: Record<string, string>;
+	/** The card's face, which shows when it has no image. */
+	cardStyle?: Record<string, string>;
 }>();
 
 const imageError = ref(false);
-
-const cardStyle = {
-	backgroundColor: modeTokenVar('top-cards', 'card-placeholder-surface'),
-};
 
 /**
  * Scryfall CDN URL for the card's normal front face image.
@@ -61,7 +64,7 @@ watch(() => props.entry.scryfallId, () => {
 			<div
 				v-if="showRank"
 				data-testid="top-cards-rank-badge"
-				class="absolute rounded-full flex items-center justify-center shadow-md"
+				class="absolute rounded-full flex items-center justify-center"
 				:class="rankBadgeClass"
 				:style="rankBadgeStyle"
 			>
@@ -70,7 +73,7 @@ watch(() => props.entry.scryfallId, () => {
 			<div
 				v-if="statText"
 				data-testid="top-cards-stat-badge"
-				class="absolute rounded-md tabular-nums shadow-md"
+				class="absolute rounded-md tabular-nums"
 				:class="statBadgeClass"
 				:style="statBadgeStyle"
 			>

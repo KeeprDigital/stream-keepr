@@ -29,7 +29,7 @@ const MODES_NOT_YET_ON_THEME_TOKENS: Partial<Record<ScreenMode, string>> = {
 	'head-to-head': '#822',
 };
 
-type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor';
+type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor' | 'boxShadow';
 
 /** Where a display paints one Mode Token: an element, and for a colour the property it sets. */
 interface Probe {
@@ -112,6 +112,7 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'name-text': { selector: '[data-testid="top-cards-name"]', property: 'color' },
 		'card-placeholder-surface': { selector: '.mtg-card', property: 'backgroundColor' },
 		'badge-typography': { selector: '[data-testid="top-cards-stat-badge"]' },
+		'badge-shadow': { selector: '[data-testid="top-cards-rank-badge"]', property: 'boxShadow' },
 		'rank-badge-surface': { selector: '[data-testid="top-cards-rank-badge"]', property: 'backgroundColor' },
 		'rank-badge-text': { selector: '[data-testid="top-cards-rank-badge"]', property: 'color' },
 		'stat-badge-surface': { selector: '[data-testid="top-cards-stat-badge"]', property: 'backgroundColor' },
@@ -377,8 +378,12 @@ function painted(probe: Probe, type: ThemeTokenType) {
 	const element = wrapper!.find(probe.selector);
 	expect(element.exists(), `${probe.selector} is rendered`).toBe(true);
 	const style = getComputedStyle(element.element);
-	if (type !== 'typography')
-		return style[probe.property!];
+	if (type !== 'typography') {
+		return probe.property === 'boxShadow'
+			// A shadow's colour, after its offsets, blur and spread.
+			? style.boxShadow.replace(/^(?:-?[\d.]+(?:px)?\s+)+/, '')
+			: style[probe.property!];
+	}
 	return {
 		fontFamily: style.fontFamily,
 		fontWeight: style.fontWeight,
