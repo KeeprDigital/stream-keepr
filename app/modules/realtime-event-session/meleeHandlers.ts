@@ -51,17 +51,22 @@ export function createMeleeRealtimeHandlers({ accept }: Options) {
 				useFeatureMatchStore().loadFeatureMatchesByEventId(data.eventId),
 			]);
 		})),
-		// Every granular Round message arrives beside `melee:roundSynced`, which the
-		// operator still follows until it moves onto these.
-		'melee:matchResultsSynced': accept('melee:matchResultsSynced', () => {}),
-		'melee:pairingsSynced': accept('melee:pairingsSynced', () => {}),
-		'melee:roundStandingsSynced': accept('melee:roundStandingsSynced', () => {}),
-		'melee:roundSynced': accept('melee:roundSynced', operatorOnly(async (data) => {
+		'melee:matchResultsSynced': accept('melee:matchResultsSynced', operatorOnly(async (data) => {
+			await useMatchStore().applyRemoteMatchesRefreshed(data);
+		})),
+		'melee:pairingsSynced': accept('melee:pairingsSynced', operatorOnly(async (data) => {
 			await Promise.all([
 				useRoundStore().loadRoundsByEventId(data.eventId),
 				useMatchStore().applyRemoteMatchesRefreshed(data),
 				useFeatureMatchStore().loadFeatureMatchesByEventId(data.eventId),
 			]);
 		})),
+		'melee:roundStandingsSynced': accept('melee:roundStandingsSynced', operatorOnly(async (data) => {
+			await useRoundStore().loadRoundsByEventId(data.eventId);
+		})),
+		// Deprecated: every one is published beside a granular message above, so
+		// following it too would reload twice. Kept only while the Event room's
+		// handler map must name every message type.
+		'melee:roundSynced': accept('melee:roundSynced', () => {}),
 	};
 }

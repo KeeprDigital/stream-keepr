@@ -26,9 +26,11 @@ function byStandingsPosition(a: Player, b: Player): number {
  * at and its snapshot, the watchlist they filter to, and, while the Position
  * Change column shows, the previous Round in the Event's Round order. Every
  * Player is a row, and Melee syncs rewrite records and snapshots wholesale, so
- * any of them re-reads. Any Round or Phase edit may reorder the Event's Rounds,
- * so while that column shows, each one re-reads. A new Round holds no Round
- * Standings until a Melee sync writes them, which re-reads already.
+ * any sync of Players or Round Standings re-reads; a synced Match Result or
+ * pairing does not, since Standings show only stored Round Standings. Any
+ * Round or Phase edit may reorder the Event's Rounds, so while that column
+ * shows, each one re-reads. A new Round holds no Round Standings until a Melee
+ * sync stores them, which re-reads already.
  */
 function standingsDependencies(
 	watchlistId: () => number | null,
@@ -50,7 +52,7 @@ function standingsDependencies(
 		'playerList:membersChanged': ({ listId }) => isWatchlist(listId),
 		'melee:dataReset': true,
 		'melee:structureSynced': true,
-		'melee:roundSynced': true,
+		'melee:roundStandingsSynced': true,
 		'melee:playersSynced': true,
 	};
 }

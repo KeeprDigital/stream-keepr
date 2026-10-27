@@ -63,7 +63,8 @@ export const useMatchStore = defineStore('match', () => {
 		lifecycle.applyRemoteDeleted(data.matchId);
 	}
 
-	async function applyRemoteMatchesRefreshed(data: MessageData<'round:matchesRefreshed'>) {
+	/** Reloads the loaded Round's Matches when a message says that Round's Matches changed. */
+	async function applyRemoteMatchesRefreshed(data: Pick<MessageData<'round:matchesRefreshed'>, 'eventId' | 'roundId'>) {
 		if (data.eventId !== currentEventId.value)
 			return;
 		if (loadedRoundId.value !== data.roundId)

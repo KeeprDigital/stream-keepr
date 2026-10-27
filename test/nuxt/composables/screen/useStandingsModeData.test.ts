@@ -619,7 +619,39 @@ describe('useStandingsModeData', () => {
 			expect(headerText.value).toBe('Feature Players');
 		});
 
-		it('follows a Melee sync of the standings it shows', async () => {
+		// Standings show only Round Standings, never a Match Result as it is
+		// reported; the deprecated Round sync always arrives beside one of these.
+		it.each([
+			{
+				type: 'melee:matchResultsSynced',
+				payload: {
+					roundId: 7,
+					matchIds: [70],
+				},
+				rereads: false,
+			},
+			{
+				type: 'melee:pairingsSynced',
+				payload: { roundId: 7 },
+				rereads: false,
+			},
+			{
+				type: 'melee:roundStandingsSynced',
+				payload: { roundId: 7 },
+				rereads: true,
+			},
+			{
+				type: 'melee:roundSynced',
+				payload: {
+					roundId: 7,
+					matchCount: 8,
+					created: 0,
+					updated: 8,
+					staleDeleted: 0,
+				},
+				rereads: false,
+			},
+		])('$type for the Round it shows re-reads: $rereads', async ({ type, payload, rereads }) => {
 			mutableConfig.roundId = 7;
 			let roundStandings = [
 				standing(1, 1, 4, 1, 12),
@@ -633,16 +665,10 @@ describe('useStandingsModeData', () => {
 			roundStandings = [
 				standing(1, 1, 5, 1, 15),
 			];
-			deliver('melee:roundSynced', {
-				roundId: 7,
-				matchCount: 8,
-				created: 0,
-				updated: 8,
-				staleDeleted: 0,
-			});
+			deliver(type, payload);
 			await flushPromises();
 
-			expect(displayRows.value[0]!.wins).toBe(5);
+			expect(displayRows.value[0]!.wins).toBe(rereads ? 5 : 4);
 		});
 
 		it('shows current standings, not the cached roster, once its channel is attached again', async () => {

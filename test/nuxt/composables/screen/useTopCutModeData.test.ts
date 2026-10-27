@@ -214,8 +214,16 @@ describe('useTopCutModeData', () => {
 				{ roundId: 31 },
 			],
 			[
-				'a Round of it re-synced from Melee',
-				'melee:roundSynced',
+				'Match Results synced from Melee in a Round it shows',
+				'melee:matchResultsSynced',
+				{
+					roundId: 31,
+					matchIds: [102],
+				},
+			],
+			[
+				'a Round it shows re-paired from Melee',
+				'melee:pairingsSynced',
 				{ roundId: 31 },
 			],
 			[
@@ -275,6 +283,30 @@ describe('useTopCutModeData', () => {
 					player: { id: 50 },
 				},
 			],
+			[
+				'Match Results synced from Melee in a Round it does not show',
+				'melee:matchResultsSynced',
+				{
+					roundId: 40,
+					matchIds: [500],
+				},
+			],
+			[
+				'a Round it does not show re-paired from Melee',
+				'melee:pairingsSynced',
+				{ roundId: 40 },
+			],
+			[
+				'the deprecated Round sync of a Round it shows',
+				'melee:roundSynced',
+				{
+					roundId: 31,
+					matchCount: 2,
+					created: 0,
+					updated: 1,
+					staleDeleted: 0,
+				},
+			],
 		])('does not re-read on %s', async (_, type, payload) => {
 			await following();
 			deliver(type, payload);
@@ -284,11 +316,11 @@ describe('useTopCutModeData', () => {
 		});
 
 		// Seeds come from Round Standings before the Phase, which a sync of any
-		// Round may write, and any Round or Phase edit may reorder.
+		// Round may store, and any Round or Phase edit may reorder.
 		const seedChanges = [
 			[
-				'an earlier Round re-synced from Melee',
-				'melee:roundSynced',
+				'an earlier Round\'s Round Standings synced from Melee',
+				'melee:roundStandingsSynced',
 				{ roundId: 20 },
 			],
 			[
@@ -349,6 +381,39 @@ describe('useTopCutModeData', () => {
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
+		});
+
+		it.each([
+			[
+				'Match Results synced in an earlier Round',
+				'melee:matchResultsSynced',
+				{
+					roundId: 20,
+					matchIds: [200],
+				},
+			],
+			[
+				'an earlier Round re-paired',
+				'melee:pairingsSynced',
+				{ roundId: 20 },
+			],
+			[
+				'the deprecated Round sync of an earlier Round',
+				'melee:roundSynced',
+				{
+					roundId: 20,
+					matchCount: 8,
+					created: 0,
+					updated: 8,
+					staleDeleted: 0,
+				},
+			],
+		] as const)('does not re-read on %s while seeds show', async (_, type, payload) => {
+			await following({ showSeeds: true });
+			deliver(type, payload);
+			await flushPromises();
+
+			expect(mockFetch).not.toHaveBeenCalled();
 		});
 
 		it.each([

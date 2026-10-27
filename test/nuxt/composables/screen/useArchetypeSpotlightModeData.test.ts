@@ -275,7 +275,7 @@ describe('useArchetypeSpotlightModeData', () => {
 				],
 				['melee:decklistsSynced', {}],
 				[
-					'melee:roundSynced',
+					'melee:roundStandingsSynced',
 					{ roundId: 31 },
 				],
 			] as const) {

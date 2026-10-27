@@ -52,7 +52,9 @@ function headToHeadDependencies(boundSlotId: () => number | null): ScreenModeDep
 		'archetype:deleted': true,
 		'melee:dataReset': true,
 		'melee:structureSynced': true,
-		'melee:roundSynced': true,
+		'melee:matchResultsSynced': true,
+		'melee:pairingsSynced': true,
+		'melee:roundStandingsSynced': true,
 		'melee:playersSynced': true,
 		'melee:decklistsSynced': true,
 	};

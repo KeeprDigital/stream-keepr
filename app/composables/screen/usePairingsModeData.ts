@@ -8,7 +8,8 @@ type HeldPairings = ScreenOutputPairingsResponse | null;
 /**
  * The Event Data a Round's pairings are read from: the Round, its Matches, and
  * the Players they seat. Melee's wholesale syncs of structure and Players
- * re-read; a Round sync re-reads only for this Round.
+ * re-read; a Round's synced Match Results or pairings re-read only for this
+ * Round.
  */
 function pairingsDependencies(roundId: () => number | undefined): ScreenModeDependencies<HeldPairings> {
 	const isRound = (id: number) => id === roundId();
@@ -25,7 +26,8 @@ function pairingsDependencies(roundId: () => number | undefined): ScreenModeDepe
 		'round:updated': ({ round }) => isRound(round.id),
 		'round:deleted': ({ roundId: id }) => isRound(id),
 		'round:matchesRefreshed': ({ roundId: id }) => isRound(id),
-		'melee:roundSynced': ({ roundId: id }) => isRound(id),
+		'melee:matchResultsSynced': ({ roundId: id }) => isRound(id),
+		'melee:pairingsSynced': ({ roundId: id }) => isRound(id),
 		'melee:dataReset': true,
 		'melee:structureSynced': true,
 		'melee:playersSynced': true,

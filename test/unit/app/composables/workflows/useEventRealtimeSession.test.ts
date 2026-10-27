@@ -165,23 +165,66 @@ describe('useEventRealtimeSession', () => {
 		});
 	});
 
-	it('reloads Rounds, refreshed Matches and Feature Matches after a Melee Round sync', async () => {
+	// The deprecated `melee:roundSynced` arrives beside a granular message, so
+	// following it too would reload everything twice.
+	it.each([
+		{
+			type: 'melee:matchResultsSynced',
+			data: {
+				roundId: 3,
+				matchIds: [7],
+			},
+			reloads: ['matches'],
+		},
+		{
+			type: 'melee:pairingsSynced',
+			data: { roundId: 3 },
+			reloads: ['rounds', 'matches', 'featureMatches'],
+		},
+		{
+			type: 'melee:roundStandingsSynced',
+			data: { roundId: 3 },
+			reloads: ['rounds'],
+		},
+		{
+			type: 'melee:roundSynced',
+			data: {
+				roundId: 3,
+				matchCount: 4,
+				created: 2,
+				updated: 1,
+				staleDeleted: 1,
+			},
+			reloads: [],
+		},
+	] as const)('after $type reloads $reloads', async ({ type, data, reloads }) => {
 		const handlers = await startSession();
-		const roundMessage = {
+		const delivered = {
 			...message,
-			roundId: 3,
-			matchCount: 4,
-			created: 2,
-			updated: 1,
-			staleDeleted: 1,
+			...data,
+		};
+		const reloadArguments = {
+			rounds: [12],
+			matches: [delivered],
+			featureMatches: [12],
 		};
 
-		handlers['melee:roundSynced']!(roundMessage);
+		handlers[type]!(delivered);
 
 		await vi.waitFor(() => {
-			expect(stores.useRoundStore.loadRoundsByEventId).toHaveBeenCalledWith(12);
-			expect(stores.useMatchStore.applyRemoteMatchesRefreshed).toHaveBeenCalledWith(roundMessage);
-			expect(featureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(12);
+			expect({
+				rounds: stores.useRoundStore.loadRoundsByEventId!.mock.calls,
+				matches: stores.useMatchStore.applyRemoteMatchesRefreshed!.mock.calls,
+				featureMatches: featureMatchStore.loadFeatureMatchesByEventId!.mock.calls,
+			}).toEqual({
+				rounds: [],
+				matches: [],
+				featureMatches: [],
+				...Object.fromEntries(reloads.map(store => [
+					store,
+					[reloadArguments[store]],
+				])),
+			});
 		});
 	});
 

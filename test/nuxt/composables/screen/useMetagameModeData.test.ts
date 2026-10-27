@@ -445,17 +445,11 @@ describe('useMetagameModeData', () => {
 				],
 			],
 			[
-				'a Melee round sync rewrites standings',
+				'Melee stores new Round Standings',
 				[
 					[
-						'melee:roundSynced',
-						{
-							roundId: 31,
-							matchCount: 8,
-							created: 0,
-							updated: 8,
-							staleDeleted: 0,
-						},
+						'melee:roundStandingsSynced',
+						{ roundId: 31 },
 					],
 				],
 			],
@@ -469,6 +463,39 @@ describe('useMetagameModeData', () => {
 
 			expect(mockFetch).toHaveBeenCalledTimes(messages.length);
 			expect(usePlayerStore().dataVersion).toBe(0);
+		});
+
+		// Standing comes from Round Standings, not a Match Result as it is
+		// reported; the deprecated Round sync always arrives beside one of these.
+		it.each([
+			[
+				'melee:matchResultsSynced',
+				{
+					roundId: 31,
+					matchIds: [9],
+				},
+			],
+			[
+				'melee:pairingsSynced',
+				{ roundId: 31 },
+			],
+			[
+				'melee:roundSynced',
+				{
+					roundId: 31,
+					matchCount: 8,
+					created: 0,
+					updated: 8,
+					staleDeleted: 0,
+				},
+			],
+		] as const)('does not re-read on %s', async (type, payload) => {
+			await showingMetagame();
+
+			deliver(type, payload);
+			await flushPromises();
+
+			expect(mockFetch).not.toHaveBeenCalled();
 		});
 
 		it('shows a breakdown missed while disconnected once its channel is attached again', async () => {

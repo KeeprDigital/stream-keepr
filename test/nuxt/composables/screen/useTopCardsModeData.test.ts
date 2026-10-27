@@ -325,17 +325,11 @@ describe('useTopCardsModeData', () => {
 			expect(mockFetch).not.toHaveBeenCalled();
 		});
 
-		it('re-reads when a Melee round sync rewrites standings', async () => {
+		it('re-reads when Melee stores new Round Standings', async () => {
 			mutableConfig.scope = 'topN';
 			await showingCards();
 
-			deliver('melee:roundSynced', {
-				roundId: 31,
-				matchCount: 8,
-				created: 0,
-				updated: 8,
-				staleDeleted: 0,
-			});
+			deliver('melee:roundStandingsSynced', { roundId: 31 });
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
