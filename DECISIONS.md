@@ -6,7 +6,7 @@ One section per settled architectural decision, numbered in the order taken; rea
 
 Accepted · 2026-08-01 · [#143](https://github.com/KeeprDigital/stream-keepr/issues/143)
 
-**Reversed by ADR-0050**: Graphic Style Sets give way to Themes, whose asset tokens may reference library fonts. This section holds for the code until #815 removes Style Sets.
+**Reversed by ADR-0050**: Graphic Style Sets give way to Themes, whose asset tokens may reference library fonts. This section holds for the code until #830 removes Style Sets.
 
 ### Decision
 
@@ -135,7 +135,7 @@ Server rules still earn a place because they fail earlier and more legibly: with
 
 Accepted · 2026-08-05, amended under #229 and #240 · [#199](https://github.com/KeeprDigital/stream-keepr/issues/199) (decided under #167)
 
-**Made moot by ADR-0049**: Graphic Item properties bind whole tokens with no review or pins. This section holds for the code until #815 removes Style Sets.
+**Made moot by ADR-0049**: Graphic Item properties bind whole tokens with no review or pins. This section holds for the code until #830 removes Style Sets.
 
 ### Decision
 
@@ -1603,7 +1603,7 @@ A Theme is meant to carry the production's logo, backdrop and typefaces. ADR-000
 ### Consequences
 
 - Theme export/import, when built, must carry asset bytes through the Template Package asset pipeline: staging, quota, revalidation and Graphic Asset Origin. It cannot be data-only.
-- ADR-0001 holds only until Graphic Style Sets are removed (#815).
+- ADR-0001 holds only until Graphic Style Sets are removed (#830).
 
 ## ADR-0051: A Screen holds no look of its own, and the Event Canvas is a coordinate space
 
