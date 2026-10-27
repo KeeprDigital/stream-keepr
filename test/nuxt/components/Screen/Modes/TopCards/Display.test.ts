@@ -5,9 +5,7 @@ import { computed, defineComponent, ref } from 'vue';
 import Display from '~/components/Screen/Modes/TopCards/Display.vue';
 
 const screen = ref<any>({
-	screenConfig: {
-		primaryTextColor: '#123456',
-	},
+	screenConfig: {},
 });
 
 const defaultConfig = {
@@ -109,9 +107,7 @@ async function mountComponent() {
 describe('screenTopCardsDisplay', () => {
 	beforeEach(() => {
 		screen.value = {
-			screenConfig: {
-				primaryTextColor: '#123456',
-			},
+			screenConfig: {},
 		};
 		config.value = { ...defaultConfig };
 		entries.value = [
@@ -170,12 +166,10 @@ describe('screenTopCardsDisplay', () => {
 		expect(items[1]!.text()).toBe('2:Counterspell:60%:true:true');
 	});
 
-	it('shows the header with the primary text color', async () => {
+	it('shows the header', async () => {
 		const wrapper = await mountComponent();
 
-		const header = wrapper.get('.top-cards-title h2');
-		expect(header.text()).toBe('Most Played Cards');
-		expect(header.attributes('style')).toContain('color: #123456');
+		expect(wrapper.get('.top-cards-title h2').text()).toBe('Most Played Cards');
 	});
 
 	it('hides the header when disabled', async () => {

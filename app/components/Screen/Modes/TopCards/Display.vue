@@ -1,22 +1,23 @@
 <script setup lang="ts">
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
-import type { ScreenConfig } from '~~/shared/types/screenConfig';
-
-const { screen } = useScreenContext();
+import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
 const { config, error, isEmpty, headerText, pageEntries, currentPage, totalPages } = useTopCardsModeData();
 
-const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
-const primaryTextStyle = computed(() => {
-	return screenConfig.value.primaryTextColor
-		? { color: screenConfig.value.primaryTextColor }
-		: {};
-});
-const secondaryTextStyle = computed(() => {
-	return screenConfig.value.secondaryTextColor
-		? { color: screenConfig.value.secondaryTextColor }
-		: {};
-});
+/** Set on the root, so card names and a card without an image take it. */
+const displayStyle = {
+	...modeTypographyStyle('top-cards', 'name-typography'),
+	color: modeTokenVar('top-cards', 'name-text'),
+};
+const titleStyle = {
+	...modeTypographyStyle('top-cards', 'title-typography'),
+	color: modeTokenVar('top-cards', 'title-text'),
+};
+/** Over the shared page indicator's own face. */
+const pageIndicatorStyle = {
+	...modeTypographyStyle('top-cards', 'name-typography'),
+	color: modeTokenVar('top-cards', 'secondary-text'),
+};
 
 const gridStyle = computed(() => ({
 	gridTemplateColumns: config.value.dynamicCardSize
@@ -52,15 +53,17 @@ const statBadgeClass = computed(() => {
 	}
 });
 
-const rankBadgeStyle = computed(() => ({
-	color: config.value.rankBadgeTextColor ?? '#ffffff',
-	backgroundColor: config.value.rankBadgeBgColor ?? '#7c3aed',
-}));
+const rankBadgeStyle = {
+	...modeTypographyStyle('top-cards', 'badge-typography'),
+	color: modeTokenVar('top-cards', 'rank-badge-text'),
+	backgroundColor: modeTokenVar('top-cards', 'rank-badge-surface'),
+};
 
-const statBadgeStyle = computed(() => ({
-	color: config.value.statBadgeTextColor ?? '#111827',
-	backgroundColor: config.value.statBadgeBgColor ?? '#ffffff',
-}));
+const statBadgeStyle = {
+	...modeTypographyStyle('top-cards', 'badge-typography'),
+	color: modeTokenVar('top-cards', 'stat-badge-text'),
+	backgroundColor: modeTokenVar('top-cards', 'stat-badge-surface'),
+};
 
 function statText(entry: CardBreakdownEntry): string | null {
 	switch (config.value.statBadge) {
@@ -78,9 +81,9 @@ function statText(entry: CardBreakdownEntry): string | null {
 		:error="error"
 		:empty="isEmpty"
 	>
-		<div class="top-cards-display flex flex-col gap-4 h-full w-full">
+		<div class="top-cards-display flex flex-col gap-4 h-full w-full" :style="displayStyle">
 			<div v-if="config.showHeader" class="top-cards-title">
-				<h2 class="text-3xl font-bold" :style="primaryTextStyle">
+				<h2 class="text-3xl" :style="titleStyle">
 					{{ headerText }}
 				</h2>
 			</div>
@@ -110,7 +113,7 @@ function statText(entry: CardBreakdownEntry): string | null {
 			<div
 				v-if="totalPages > 1"
 				class="broadcast-table-page-indicator"
-				:style="secondaryTextStyle"
+				:style="pageIndicatorStyle"
 				data-testid="top-cards-page-indicator"
 			>
 				{{ currentPage }} / {{ totalPages }}

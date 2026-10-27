@@ -45,12 +45,8 @@ const defaultConfig = {
 	headerText: undefined,
 	showCardNames: true,
 	showRankBadges: true,
-	rankBadgeTextColor: '#ffffff',
-	rankBadgeBgColor: '#7c3aed',
 	statBadge: 'inclusionRate' as const,
 	statBadgeSize: 'medium' as const,
-	statBadgeTextColor: '#111827',
-	statBadgeBgColor: '#ffffff',
 };
 
 const mockConfig = ref<Record<string, any>>({ ...defaultConfig });
@@ -173,7 +169,6 @@ async function mountComponent() {
 				UInput: true,
 				UInputNumber: UInputNumberStub,
 				USeparator: true,
-				UIColorPicker: true,
 			},
 		},
 	});

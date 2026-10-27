@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
+import { modeTokenVar } from '~/modules/screen-mode';
 
 const props = defineProps<{
 	entry: CardBreakdownEntry;
@@ -16,6 +17,10 @@ const props = defineProps<{
 }>();
 
 const imageError = ref(false);
+
+const cardStyle = {
+	backgroundColor: modeTokenVar('top-cards', 'card-placeholder-surface'),
+};
 
 /**
  * Scryfall CDN URL for the card's normal front face image.
@@ -40,7 +45,7 @@ watch(() => props.entry.scryfallId, () => {
 		data-testid="top-cards-item"
 	>
 		<div class="relative">
-			<div class="mtg-card bg-elevated">
+			<div class="mtg-card" :style="cardStyle">
 				<img
 					v-if="imageUrl && !imageError"
 					:src="imageUrl"
@@ -56,7 +61,7 @@ watch(() => props.entry.scryfallId, () => {
 			<div
 				v-if="showRank"
 				data-testid="top-cards-rank-badge"
-				class="absolute rounded-full font-bold flex items-center justify-center shadow-md"
+				class="absolute rounded-full flex items-center justify-center shadow-md"
 				:class="rankBadgeClass"
 				:style="rankBadgeStyle"
 			>
@@ -65,7 +70,7 @@ watch(() => props.entry.scryfallId, () => {
 			<div
 				v-if="statText"
 				data-testid="top-cards-stat-badge"
-				class="absolute rounded-md font-mono font-bold leading-none shadow-md"
+				class="absolute rounded-md tabular-nums shadow-md"
 				:class="statBadgeClass"
 				:style="statBadgeStyle"
 			>
@@ -75,7 +80,7 @@ watch(() => props.entry.scryfallId, () => {
 		<div
 			v-if="showName"
 			data-testid="top-cards-name"
-			class="top-cards-name text-center font-semibold truncate"
+			class="top-cards-name text-center truncate"
 		>
 			{{ entry.name }}
 		</div>

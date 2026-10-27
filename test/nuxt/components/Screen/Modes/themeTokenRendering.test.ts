@@ -19,28 +19,27 @@ const MODES_NOT_YET_ON_THEME_TOKENS: Partial<Record<ScreenMode, string>> = {
 	'background': '#825',
 	'card': '#824',
 	'deck': '#824',
-	'top-cut': '#823',
 	'feature-match-overlay': '#831',
 	'broadcast-graphics': '#829',
-	'metagame': '#823',
-	'top-cards': '#823',
 	'player-history': '#822',
 	'pairings': '#822',
 	'archetype-spotlight': '#822',
 	'head-to-head': '#822',
 };
 
-type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor';
+type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor';
 
 /** Where a display paints one Mode Token: an element, and for a colour the property it sets. */
 interface Probe {
 	selector: string;
 	property?: ColorProperty;
+	/** Mode config the element needs to render, over the mode's sample config. */
+	config?: Record<string, unknown>;
 }
 
 /** Each themed mode's probes, one per Mode Token it declares, by the token's name within the mode. */
 const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
-	standings: {
+	'standings': {
 		'surface': { selector: '.standings-table', property: 'backgroundColor' },
 		'title-typography': { selector: '.standings-header h2' },
 		'title-text': { selector: '.standings-header h2', property: 'color' },
@@ -51,6 +50,68 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'secondary-text': { selector: '.cell-record', property: 'color' },
 		'rise': { selector: '[data-position-change="up"]', property: 'color' },
 		'fall': { selector: '[data-position-change="down"]', property: 'color' },
+	},
+	'top-cut': {
+		'title-typography': { selector: '.broadcast-table-title h2' },
+		'title-text': { selector: '.broadcast-table-title h2', property: 'color' },
+		'title-divider': { selector: '.broadcast-table-title', property: 'borderBottomColor' },
+		'column-name-typography': { selector: '.bracket-column-name' },
+		'column-name-text': { selector: '.bracket-column-name', property: 'color' },
+		'entrant-typography': { selector: '.bracket-entrant-name' },
+		'primary-text': { selector: '.is-winner .bracket-entrant-name', property: 'color' },
+		'secondary-text': { selector: '.is-eliminated .bracket-entrant-name', property: 'color' },
+		'position-surface': { selector: '[data-status="reported"]', property: 'backgroundColor' },
+		'position-border': { selector: '[data-status="reported"]', property: 'borderTopColor' },
+		'pending-position-border': { selector: '[data-status="awaiting"]', property: 'borderTopColor' },
+		'entrant-divider': { selector: '.bracket-entrant + .bracket-entrant', property: 'borderTopColor' },
+		'winner-surface': { selector: '.bracket-entrant.is-winner', property: 'backgroundColor' },
+		'connector': { selector: '.bracket-connector', property: 'borderTopColor' },
+		'champion-typography': { selector: '.bracket-champion-name' },
+		'champion-border': { selector: '.bracket-champion-name', property: 'borderTopColor' },
+	},
+	'metagame': {
+		'surface': { selector: '.metagame-table', property: 'backgroundColor' },
+		'title-typography': { selector: '.metagame-title h2' },
+		'title-text': { selector: '.metagame-title h2', property: 'color' },
+		'title-divider': { selector: '.metagame-title', property: 'borderBottomColor' },
+		'header-typography': { selector: '.metagame-header-cell' },
+		'header-text': { selector: '.metagame-header-row', property: 'color' },
+		'header-divider': { selector: '.metagame-header-row', property: 'borderBottomColor' },
+		'row-typography': { selector: '.metagame-cell' },
+		'row-divider': { selector: '.metagame-row', property: 'borderBottomColor' },
+		'primary-text': { selector: '.metagame-cell.is-name', property: 'color' },
+		'secondary-text': { selector: '.metagame-cell:not(.is-name):not(.is-primary-metric)', property: 'color' },
+		'chart-baseline': {
+			selector: '.metagame-chart-track',
+			property: 'borderLeftColor',
+			config: { viewMode: 'chart' },
+		},
+		...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8].map(slot => [
+			`chart-series-${slot}`,
+			{
+				selector: `[data-color-slot="${slot}"]`,
+				property: 'backgroundColor',
+				config: { viewMode: 'chart' },
+			},
+		])),
+		'chart-other': {
+			selector: '[data-color-slot="other"]',
+			property: 'backgroundColor',
+			config: { viewMode: 'chart' },
+		},
+	},
+	'top-cards': {
+		'title-typography': { selector: '.top-cards-title h2' },
+		'title-text': { selector: '.top-cards-title h2', property: 'color' },
+		'name-typography': { selector: '[data-testid="top-cards-name"]' },
+		'name-text': { selector: '[data-testid="top-cards-name"]', property: 'color' },
+		'card-placeholder-surface': { selector: '.mtg-card', property: 'backgroundColor' },
+		'badge-typography': { selector: '[data-testid="top-cards-stat-badge"]' },
+		'rank-badge-surface': { selector: '[data-testid="top-cards-rank-badge"]', property: 'backgroundColor' },
+		'rank-badge-text': { selector: '[data-testid="top-cards-rank-badge"]', property: 'color' },
+		'stat-badge-surface': { selector: '[data-testid="top-cards-stat-badge"]', property: 'backgroundColor' },
+		'stat-badge-text': { selector: '[data-testid="top-cards-stat-badge"]', property: 'color' },
+		'secondary-text': { selector: '[data-testid="top-cards-page-indicator"]', property: 'color' },
 	},
 };
 
@@ -75,6 +136,7 @@ const FONT_FACES = { '--font-mplantin': 'SampleSerif', '--font-saira-condensed':
 
 const screen = ref();
 const themeTokens = ref<StoredThemeTokens>();
+const probeConfig = ref<Record<string, unknown>>({});
 
 mockNuxtImport('useScreenContext', () => () => ({
 	screen,
@@ -121,6 +183,157 @@ mockNuxtImport('useStandingsModeData', () => () => {
 	};
 });
 
+function entrant(id: number) {
+	return {
+		playerId: id,
+		name: `Seed ${id}`,
+		seed: id,
+		deck: { name: `Deck ${id}`, colors: null },
+	};
+}
+
+function position(status: 'reported' | 'awaiting', entrants: [number, number] | null) {
+	return {
+		matchId: entrants ? entrants[0] : null,
+		tableNumber: null,
+		entrants: entrants
+			? entrants.map(entrant)
+			: [null, null],
+		gameWins: entrants
+			? [2, 1]
+			: [null, null],
+		gameDraws: entrants ? 0 : null,
+		winner: entrants ? 0 : null,
+		status,
+	};
+}
+
+mockNuxtImport('useTopCutModeData', () => () => ({
+	config: computed(() => ({
+		showSeeds: true,
+		showArchetypes: true,
+		showHeader: true,
+		...probeConfig.value,
+	})),
+	error: ref(null),
+	isEmpty: computed(() => false),
+	headerText: computed(() => 'Top 4'),
+	// Every kind of Bracket Position at once, which no one real bracket holds.
+	bracket: computed(() => ({
+		size: 4,
+		columns: [
+			{
+				roundId: 1,
+				name: 'Semifinals',
+				positions: [
+					position('reported', [1, 4]),
+					position('reported', [2, 3]),
+				],
+			},
+			{
+				roundId: null,
+				name: 'Final',
+				positions: [
+					position('awaiting', null),
+				],
+			},
+		],
+		champion: entrant(1),
+	})),
+}));
+
+mockNuxtImport('useMetagameModeData', () => () => ({
+	config: computed(() => ({
+		viewMode: 'archetype',
+		showHeader: true,
+		animateEntries: false,
+		pageSize: 8,
+		archetypeColumns: ['archetype', 'count', 'winRate'].map(key => ({ key, visible: true })),
+		cardColumns: [],
+		...probeConfig.value,
+	})),
+	error: ref(null),
+	isEmpty: computed(() => false),
+	headerText: computed(() => 'Metagame'),
+	pageData: computed(() => [
+		{
+			id: 1,
+			name: 'Boros Energy',
+			count: 4,
+			metaShare: 40,
+			winRate: 55,
+			avgPosition: 3,
+			colors: null,
+			conversionRate: null,
+		},
+		{
+			id: 2,
+			name: 'Eldrazi Ramp',
+			count: 2,
+			metaShare: 20,
+			winRate: 45,
+			avgPosition: 5,
+			colors: null,
+			conversionRate: null,
+		},
+	]),
+	chartBars: computed(() => [
+		...[1, 2, 3, 4, 5, 6, 7, 8].map(slot => ({
+			id: slot,
+			name: `Archetype ${slot}`,
+			colors: null,
+			metaShare: 10,
+			length: 1,
+			colorSlot: slot,
+		})),
+		{
+			id: -1,
+			name: 'Other',
+			colors: null,
+			metaShare: 20,
+			length: 1,
+			colorSlot: null,
+		},
+	]),
+	currentPage: computed(() => 1),
+	totalPages: computed(() => 2),
+}));
+
+mockNuxtImport('useTopCardsModeData', () => () => {
+	const entry = {
+		id: 1,
+		name: 'Lightning Bolt',
+		inclusionRate: 80,
+		avgCopies: 3.6,
+		totalCopies: 18,
+		deckCount: 4,
+		cardType: 'Instant',
+		scryfallId: null,
+	};
+	return {
+		config: computed(() => ({
+			columns: 5,
+			cardSize: 'medium',
+			dynamicCardSize: true,
+			cardGap: 12,
+			showHeader: true,
+			showCardNames: true,
+			showRankBadges: true,
+			statBadge: 'inclusionRate',
+			statBadgeSize: 'medium',
+			...probeConfig.value,
+		})),
+		error: ref(null),
+		isEmpty: computed(() => false),
+		headerText: computed(() => 'Most Played Cards'),
+		pageEntries: computed(() => [
+			{ entry, rank: 1 },
+		]),
+		currentPage: computed(() => 1),
+		totalPages: computed(() => 2),
+	};
+});
+
 // ── Mounting and reading what is painted ──
 
 let wrapper: VueWrapper | undefined;
@@ -135,9 +348,10 @@ afterEach(() => {
 	wrapper = undefined;
 });
 
-async function mountMode(mode: ScreenMode, theme?: StoredThemeTokens) {
+async function mountMode(mode: ScreenMode, theme?: StoredThemeTokens, config: Record<string, unknown> = {}) {
 	screen.value = createMockScreen({ currentMode: mode });
 	themeTokens.value = theme;
+	probeConfig.value = config;
 	wrapper = mount(Renderer, {
 		attachTo: document.body,
 		global: {
@@ -218,7 +432,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 
 	it.each(tokens)('paints $name from the Theme', async ({ name, definition, probe }) => {
 		const sample = SAMPLES[definition.type];
-		await mountMode(mode, { [name]: sample });
+		await mountMode(mode, { [name]: sample }, probe.config);
 
 		expect(painted(probe, definition.type)).toEqual(expectedPaint(definition.type, sample));
 	});
@@ -227,7 +441,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 		const shipped = typeof definition.default === 'object' && 'token' in definition.default
 			? FOUNDATION_TOKENS[definition.default.token].default
 			: definition.default;
-		await mountMode(mode);
+		await mountMode(mode, undefined, probe.config);
 
 		expect(painted(probe, definition.type)).toEqual(expectedPaint(definition.type, shipped));
 	});

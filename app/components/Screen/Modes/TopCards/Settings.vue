@@ -294,28 +294,6 @@ function typeLabel(bucket: CardTypeBucket): string {
 				@update:model-value="updateConfig({ showRankBadges: $event })"
 			/>
 
-			<template v-if="config.showRankBadges">
-				<UFormField
-					label="Rank badge colors"
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<div class="flex items-center gap-2">
-						<UIColorPicker
-							:model-value="config.rankBadgeTextColor"
-							placeholder="Text"
-							:aria-label="fields.rankBadgeTextColor.label"
-							@update:model-value="updateConfig({ rankBadgeTextColor: $event })"
-						/>
-						<UIColorPicker
-							:model-value="config.rankBadgeBgColor"
-							placeholder="Background"
-							:aria-label="fields.rankBadgeBgColor.label"
-							@update:model-value="updateConfig({ rankBadgeBgColor: $event })"
-						/>
-					</div>
-				</UFormField>
-			</template>
-
 			<USeparator />
 
 			<UFormField
@@ -342,26 +320,6 @@ function typeLabel(bucket: CardTypeBucket): string {
 						class="w-48"
 						@update:model-value="updateConfig({ statBadgeSize: $event as QuantitySize })"
 					/>
-				</UFormField>
-
-				<UFormField
-					label="Stat badge colors"
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<div class="flex items-center gap-2">
-						<UIColorPicker
-							:model-value="config.statBadgeTextColor"
-							placeholder="Text"
-							:aria-label="fields.statBadgeTextColor.label"
-							@update:model-value="updateConfig({ statBadgeTextColor: $event })"
-						/>
-						<UIColorPicker
-							:model-value="config.statBadgeBgColor"
-							placeholder="Background"
-							:aria-label="fields.statBadgeBgColor.label"
-							@update:model-value="updateConfig({ statBadgeBgColor: $event })"
-						/>
-					</div>
 				</UFormField>
 			</template>
 		</ScreenSettingsCard>
