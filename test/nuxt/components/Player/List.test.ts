@@ -1,7 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, ref } from 'vue';
+import { computed, defineComponent, ref } from 'vue';
 import { createMockPlayer } from '~~/test/helpers/fixtures';
 import { nuxtUiStubs, UTableStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import PlayerList from '~/components/Player/List.vue';
@@ -21,9 +21,10 @@ mockNuxtImport('useSendDeckToScreen', () => () => ({
 	deckScreens: ref([]),
 }));
 
+const playerHistoryScreens = ref<{ id: number; name: string }[]>([]);
 mockNuxtImport('useSendPlayerHistoryToScreen', () => () => ({
-	hasPlayerHistoryScreens: ref(false),
-	playerHistoryScreens: ref([]),
+	hasPlayerHistoryScreens: computed(() => playerHistoryScreens.value.length > 0),
+	playerHistoryScreens,
 }));
 
 const UIEmptyStateStub = defineComponent({
@@ -69,12 +70,24 @@ describe('playerList rows', () => {
 
 	beforeEach(() => {
 		openPlayerMatchHistory.mockReset();
+		playerHistoryScreens.value = [];
 	});
 
-	function mountRows() {
+	async function openMenu(wrapper: ReturnType<typeof mountRows>) {
+		await wrapper.get('[aria-label="Player actions"]').trigger('click');
+		return wrapper.get('[role="menu"]');
+	}
+
+	async function choose(wrapper: ReturnType<typeof mountRows>, ...path: string[]) {
+		for (const label of path)
+			await wrapper.findAll('[role="menuitem"]').find(item => item.text() === label)!.trigger('click');
+	}
+
+	function mountRows(props: Record<string, unknown> = {}) {
 		return mount(PlayerList, {
 			props: {
 				players: [alice as never],
+				...props,
 			},
 			global: {
 				stubs: { ...nuxtUiStubs, UTable: UTableStub, MtgManaColorDisplay: true },
@@ -116,13 +129,65 @@ describe('playerList rows', () => {
 	it('edits the Player from the first action in the row menu', async () => {
 		const wrapper = mountRows();
 
-		await wrapper.get('[aria-label="Player actions"]').trigger('click');
-		const [first] = wrapper.get('[data-column="actions"]').findAll('button').filter(button => button.attributes('aria-label') !== 'Player actions');
-		expect(first!.text()).toBe('Edit Player');
-		await first!.trigger('click');
+		const menu = await openMenu(wrapper);
+		expect(menu.findAll('[role="menuitem"]')[0]!.text()).toBe('Edit Player');
+		await choose(wrapper, 'Edit Player');
 
 		expect(wrapper.emitted('editPlayer')).toEqual([
 			[alice],
 		]);
+	});
+
+	it.each([
+		[
+			'adds the Player to a list from the Add to List submenu',
+			{
+				lists: [
+					{ id: 3, name: 'Top 8' },
+				],
+			},
+			[],
+			['Add to List', 'Top 8'],
+			[
+				'addToList',
+				[
+					3,
+					[7],
+				],
+			],
+		],
+		[
+			'sends their history to the one Player History Screen directly',
+			{},
+			[
+				{ id: 4, name: 'Desk' },
+			],
+			['Send Match History to Screen'],
+			[
+				'sendMatchHistoryToScreen',
+				[7],
+			],
+		],
+		[
+			'sends their history to a chosen Screen once several could take it',
+			{},
+			[
+				{ id: 4, name: 'Desk' },
+				{ id: 5, name: 'Stage' },
+			],
+			['Send Match History to…', 'Stage'],
+			[
+				'sendMatchHistoryToScreen',
+				[7, 5],
+			],
+		],
+	])('%s', async (_, props, screens, path, [event, args]) => {
+		playerHistoryScreens.value = screens;
+		const wrapper = mountRows(props);
+
+		await openMenu(wrapper);
+		await choose(wrapper, ...path as string[]);
+
+		expect(wrapper.emitted(event as string)).toEqual([args]);
 	});
 });

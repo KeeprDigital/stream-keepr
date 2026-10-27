@@ -90,87 +90,85 @@ const globalFilterOptions = {
 	},
 };
 
-// Row-level actions
+// Row-level actions: a screen choice is a submenu once more than one Screen could take it.
 function getRowMenuItems(player: Player): DropdownMenuItem[][] {
-	const groups: DropdownMenuItem[][] = [
-		[
-			{
-				label: 'Edit Player',
-				icon: 'i-lucide-pencil' as const,
-				onSelect: () => emit('editPlayer', player),
-			},
-		],
-	];
+	const sendItems: DropdownMenuItem[] = [];
 
-	// List membership: add to list
-	const addItems = props.lists.map(list => ({
-		label: list.name,
-		icon: 'i-lucide-list-plus' as const,
-		onSelect: () => emit('addToList', list.id, [player.id]),
-	}));
-	if (addItems.length > 0) {
-		groups.push(addItems);
+	if (props.lists.length > 0) {
+		sendItems.push({
+			label: 'Add to List',
+			icon: 'i-lucide-list-plus',
+			children: props.lists.map(list => ({
+				label: list.name,
+				icon: 'i-lucide-list',
+				onSelect: () => emit('addToList', list.id, [player.id]),
+			})),
+		});
 	}
 
-	// Send deck to screen
 	if (getMtgGameData(player.gameData).deckName && hasDeckScreens.value) {
-		if (deckScreens.value.length === 1) {
-			groups.push([
-				{
+		sendItems.push(deckScreens.value.length === 1
+			? {
 					label: 'Send Deck to Screen',
-					icon: 'i-lucide-send' as const,
+					icon: 'i-lucide-send',
 					onSelect: () => emit('sendDeckToScreen', player.id),
-				},
-			]);
-		}
-		else {
-			groups.push(deckScreens.value.map(screen => ({
-				label: `Send to ${screen.name}`,
-				icon: 'i-lucide-monitor' as const,
-				onSelect: () => emit('sendDeckToScreen', player.id, screen.id),
-			})));
-		}
+				}
+			: {
+					label: 'Send Deck to…',
+					icon: 'i-lucide-send',
+					children: deckScreens.value.map(screen => ({
+						label: screen.name,
+						icon: 'i-lucide-monitor',
+						onSelect: () => emit('sendDeckToScreen', player.id, screen.id),
+					})),
+				});
 	}
 
-	// Send match history to screen
 	if (hasPlayerHistoryScreens.value) {
-		if (playerHistoryScreens.value.length === 1) {
-			groups.push([
-				{
+		sendItems.push(playerHistoryScreens.value.length === 1
+			? {
 					label: 'Send Match History to Screen',
-					icon: 'i-lucide-history' as const,
+					icon: 'i-lucide-history',
 					onSelect: () => emit('sendMatchHistoryToScreen', player.id),
-				},
-			]);
-		}
-		else {
-			groups.push(playerHistoryScreens.value.map(screen => ({
-				label: `Send history to ${screen.name}`,
-				icon: 'i-lucide-history' as const,
-				onSelect: () => emit('sendMatchHistoryToScreen', player.id, screen.id),
-			})));
-		}
+				}
+			: {
+					label: 'Send Match History to…',
+					icon: 'i-lucide-history',
+					children: playerHistoryScreens.value.map(screen => ({
+						label: screen.name,
+						icon: 'i-lucide-monitor',
+						onSelect: () => emit('sendMatchHistoryToScreen', player.id, screen.id),
+					})),
+				});
 	}
 
-	// Destructive actions
 	const destructiveItems: DropdownMenuItem[] = [];
 	if (props.activeListId !== null) {
 		destructiveItems.push({
 			label: 'Remove from List',
-			icon: 'i-lucide-list-minus' as const,
-			color: 'error' as const,
+			icon: 'i-lucide-list-minus',
+			color: 'error',
 			onSelect: () => emit('removeFromList', props.activeListId!, [player.id]),
 		});
 	}
 	destructiveItems.push({
 		label: 'Delete Player',
-		icon: 'i-lucide-trash-2' as const,
-		color: 'error' as const,
+		icon: 'i-lucide-trash-2',
+		color: 'error',
 		onSelect: () => emit('deletePlayer', player),
 	});
-	groups.push(destructiveItems);
 
-	return groups;
+	return [
+		[
+			{
+				label: 'Edit Player',
+				icon: 'i-lucide-pencil',
+				onSelect: () => emit('editPlayer', player),
+			},
+		],
+		sendItems,
+		destructiveItems,
+	].filter(group => group.length > 0);
 }
 
 // Lazy dropdown: only mount UDropdownMenu when the trigger is clicked
@@ -339,7 +337,13 @@ const columns = computed<TableColumn<Player>[]>(() => {
 			</template>
 
 			<template #actions-cell="{ row }">
-				<UPopover v-if="activeDropdownPlayerId === row.original.id" :open="true" @update:open="activeDropdownPlayerId = null">
+				<!-- Mounted once opened: a menu per row costs the virtualized table too much. -->
+				<UDropdownMenu
+					v-if="activeDropdownPlayerId === row.original.id"
+					:open="true"
+					:items="getRowMenuItems(row.original)"
+					@update:open="activeDropdownPlayerId = null"
+				>
 					<UButton
 						variant="ghost"
 						color="neutral"
@@ -347,25 +351,7 @@ const columns = computed<TableColumn<Player>[]>(() => {
 						icon="i-lucide-more-horizontal"
 						aria-label="Player actions"
 					/>
-					<template #content>
-						<div class="p-1">
-							<template v-for="(group, gi) in getRowMenuItems(row.original)" :key="gi">
-								<USeparator v-if="gi > 0" class="my-1" />
-								<button
-									v-for="item in group"
-									:key="item.label"
-									type="button"
-									class="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded-md hover:bg-elevated transition-colors cursor-pointer"
-									:class="item.color === 'error' ? 'text-error' : 'text-default'"
-									@click="item.onSelect?.($event); activeDropdownPlayerId = null"
-								>
-									<UIcon :name="item.icon!" class="w-4 h-4 shrink-0" />
-									{{ item.label }}
-								</button>
-							</template>
-						</div>
-					</template>
-				</UPopover>
+				</UDropdownMenu>
 				<UButton
 					v-else
 					variant="ghost"
