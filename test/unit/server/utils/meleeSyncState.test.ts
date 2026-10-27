@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockEventService = {
 	tryAcquireMeleeSyncLease: vi.fn(),
@@ -143,6 +143,100 @@ describe('melee sync lease state', () => {
 				command: 'update',
 				retryAt: expiresAt.toISOString(),
 			},
+		});
+	});
+
+	// Polling never blocks an operator: a command waits out a Live Results tick
+	// for up to 10 s, but never another operator command, and a tick never waits.
+	describe('waiting out a Live Results tick', () => {
+		const startedAt = new Date('2026-01-01T00:00:00.000Z');
+		const expiresAt = new Date('2026-01-01T00:15:00.000Z');
+
+		beforeEach(() => {
+			vi.useFakeTimers();
+			vi.setSystemTime(startedAt);
+		});
+
+		afterEach(() => vi.useRealTimers());
+
+		/** The active lease is `holder`'s until `releasedAfterMs`, then free. */
+		function holdLease(holder: string, releasedAfterMs: number) {
+			mockEventService.tryAcquireMeleeSyncLease.mockImplementation(async (input: { token: string; command: string; now: Date }) =>
+				input.now.getTime() - startedAt.getTime() >= releasedAfterMs
+					? {
+							acquired: true,
+							lease: { token: input.token, command: input.command, expiresAt },
+						}
+					: {
+							acquired: false,
+							activeLease: { command: holder, expiresAt },
+						});
+		}
+
+		it.each([
+			{
+				case: 'an operator command waits for a tick that ends in 1 s',
+				holder: 'live-results',
+				command: 'update',
+				releasedAfterMs: 1_000,
+				settlesAtMs: 1_000,
+				outcome: 'acquired',
+			},
+			{
+				case: 'an operator command gives up on a tick held past 10 s',
+				holder: 'live-results',
+				command: 'update',
+				releasedAfterMs: 60_000,
+				settlesAtMs: 10_000,
+				outcome: 409,
+			},
+			{
+				case: 'configuration waits for a tick too',
+				holder: 'live-results',
+				command: 'configuration',
+				releasedAfterMs: 500,
+				settlesAtMs: 500,
+				outcome: 'acquired',
+			},
+			{
+				case: 'an operator command never waits for another operator command',
+				holder: 'round',
+				command: 'update',
+				releasedAfterMs: 1_000,
+				settlesAtMs: 0,
+				outcome: 409,
+			},
+			{
+				case: 'a tick never waits for another tick',
+				holder: 'live-results',
+				command: 'live-results',
+				releasedAfterMs: 1_000,
+				settlesAtMs: 0,
+				outcome: 409,
+			},
+		] as const)('$case', async ({ holder, command, releasedAfterMs, settlesAtMs, outcome }) => {
+			holdLease(holder, releasedAfterMs);
+
+			const settled = acquireMeleeSyncLease(9, command, { token: 'operator-token' })
+				.then(lease => ({ lease, at: Date.now() - startedAt.getTime() }))
+				.catch((error: { statusCode: number; data: unknown }) => ({ error, at: Date.now() - startedAt.getTime() }));
+			await vi.advanceTimersByTimeAsync(20_000);
+			const result = await settled;
+
+			expect(result.at).toBe(settlesAtMs);
+			if (outcome === 'acquired') {
+				expect(result).toMatchObject({
+					lease: { token: 'operator-token', command },
+				});
+			}
+			else {
+				expect(result).toMatchObject({
+					error: {
+						statusCode: 409,
+						data: { code: 'MELEE_SYNC_IN_PROGRESS', command: holder },
+					},
+				});
+			}
 		});
 	});
 

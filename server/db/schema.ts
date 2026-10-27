@@ -23,6 +23,7 @@ import {
 	EXTERNAL_SOURCE_VALUES,
 	FEATURE_MATCH_ORIENTATION_VALUES,
 	GAME_VALUES,
+	MELEE_LIVE_RESULTS_STOP_REASON_VALUES,
 	PLAYER_DISPLAY_MODE_VALUES,
 	POINTS_SYSTEM_VALUES,
 	POSITION_FORMAT_VALUES,
@@ -102,6 +103,15 @@ export const events = sqliteTable('events', {
 	meleeSyncLeaseToken: text('melee_sync_lease_token'),
 	meleeSyncLeaseCommand: text('melee_sync_lease_command'),
 	meleeSyncLeaseExpiresAt: integer('melee_sync_lease_expires_at', { mode: 'timestamp_ms' }),
+	// Live Results: the operator's setting and the poll state the Sync page shows.
+	// The schedule (next check, backoff step) is internal and stripped from responses.
+	meleeLiveResultsEnabled: integer('melee_live_results_enabled', { mode: 'boolean' }).notNull().default(false),
+	meleeLiveResultsNextCheckAt: integer('melee_live_results_next_check_at', { mode: 'timestamp_ms' }),
+	meleeLiveResultsBackoffStep: integer('melee_live_results_backoff_step').notNull().default(0),
+	meleeLiveResultsLastCheckedAt: integer('melee_live_results_last_checked_at', { mode: 'timestamp_ms' }),
+	meleeLiveResultsLastChangeAt: integer('melee_live_results_last_change_at', { mode: 'timestamp_ms' }),
+	meleeLiveResultsError: text('melee_live_results_error'),
+	meleeLiveResultsStopReason: text('melee_live_results_stop_reason', { enum: MELEE_LIVE_RESULTS_STOP_REASON_VALUES }),
 
 	// Display formatting options
 	displayRecordSeparator: text('display_record_separator', { enum: RECORD_SEPARATOR_VALUES }).notNull().default('-'),

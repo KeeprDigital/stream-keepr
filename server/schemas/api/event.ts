@@ -35,6 +35,13 @@ const SERVER_MANAGED_OMIT = {
 	meleeSyncLeaseToken: true,
 	meleeSyncLeaseCommand: true,
 	meleeSyncLeaseExpiresAt: true,
+	meleeLiveResultsEnabled: true,
+	meleeLiveResultsNextCheckAt: true,
+	meleeLiveResultsBackoffStep: true,
+	meleeLiveResultsLastCheckedAt: true,
+	meleeLiveResultsLastChangeAt: true,
+	meleeLiveResultsError: true,
+	meleeLiveResultsStopReason: true,
 } as const;
 
 // CREATE

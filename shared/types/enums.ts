@@ -139,6 +139,8 @@ export const PLAYER_HISTORY_COLUMN_KEY_VALUES = [
 export const REVEAL_ORDER_VALUES = ['bottomUp', 'topDown'] as const;
 export const REVEAL_TRIGGER_VALUES = ['manual', 'auto'] as const;
 export const ROUND_CONTROL_MODE_VALUES = ['default', 'manual_override'] as const;
+/** Why Live Results switched itself off: 12 hours without a change, or Melee refused the credentials. */
+export const MELEE_LIVE_RESULTS_STOP_REASON_VALUES = ['idle', 'auth'] as const;
 
 export type Game = typeof GAME_VALUES[number];
 export type PointsSystem = typeof POINTS_SYSTEM_VALUES[number];
@@ -183,3 +185,4 @@ export type MetagameCardColumnKey = typeof METAGAME_CARD_COLUMN_KEY_VALUES[numbe
 export type RevealOrder = typeof REVEAL_ORDER_VALUES[number];
 export type RevealTrigger = typeof REVEAL_TRIGGER_VALUES[number];
 export type RoundControlMode = typeof ROUND_CONTROL_MODE_VALUES[number];
+export type MeleeLiveResultsStopReason = typeof MELEE_LIVE_RESULTS_STOP_REASON_VALUES[number];

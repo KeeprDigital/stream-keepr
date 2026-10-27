@@ -244,6 +244,9 @@ export function eventService() {
 			meleeClientId: data.meleeClientId,
 			updatedAt: new Date(),
 			...resetSyncFields,
+			// Live Results polls through Melee Sync, so switching sync off switches it
+			// off too, and re-enabling sync starts with it off.
+			...(!data.meleeEnabled && { meleeLiveResultsEnabled: false }),
 			...(protectedClientSecret !== undefined && { meleeClientSecret: protectedClientSecret }),
 		};
 
@@ -290,6 +293,44 @@ export function eventService() {
 				updatedAt: new Date(),
 			})
 			.where(and(...conditions))
+			.returning({ id: events.id });
+
+		return !!updatedEvent;
+	};
+
+	/**
+	 * Turns Live Results on with a fresh poll: no error or stop reason, no backoff,
+	 * due now, and `now` counted as the last change so the idle clock starts over.
+	 * Conditioned on Melee Sync being on in the same statement, so a concurrent
+	 * sync switch-off cannot be overwritten. `false` when no enabled Event matched.
+	 */
+	const enableMeleeLiveResults = async (id: number, now: Date): Promise<boolean> => {
+		const [updatedEvent] = await db
+			.update(events)
+			.set({
+				meleeLiveResultsEnabled: true,
+				meleeLiveResultsNextCheckAt: null,
+				meleeLiveResultsBackoffStep: 0,
+				meleeLiveResultsLastChangeAt: now,
+				meleeLiveResultsError: null,
+				meleeLiveResultsStopReason: null,
+				updatedAt: now,
+			})
+			.where(and(eq(events.id, id), eq(events.meleeEnabled, true)))
+			.returning({ id: events.id });
+
+		return !!updatedEvent;
+	};
+
+	/** Turns Live Results off, leaving its last poll state for the Sync page. */
+	const disableMeleeLiveResults = async (id: number): Promise<boolean> => {
+		const [updatedEvent] = await db
+			.update(events)
+			.set({
+				meleeLiveResultsEnabled: false,
+				updatedAt: new Date(),
+			})
+			.where(eq(events.id, id))
 			.returning({ id: events.id });
 
 		return !!updatedEvent;
@@ -430,6 +471,8 @@ export function eventService() {
 		update,
 		updateMeleeConfig,
 		updateSyncMetadata,
+		enableMeleeLiveResults,
+		disableMeleeLiveResults,
 		tryAcquireMeleeSyncLease,
 		renewMeleeSyncLease,
 		releaseMeleeSyncLease,

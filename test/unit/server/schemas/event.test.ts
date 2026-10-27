@@ -40,6 +40,8 @@ describe.each([
 		['id', 123],
 		['meleeClientSecret', 'secret'],
 		['meleeSyncLeaseToken', 'token'],
+		['meleeLiveResultsEnabled', true],
+		['meleeLiveResultsBackoffStep', 0],
 		['unexpected', true],
 	])('refuses the server-managed or unknown %s rather than dropping it', (field, value) => {
 		expect(schema.safeParse({ ...base, [field]: value }).success).toBe(false);

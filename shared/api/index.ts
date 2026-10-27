@@ -85,6 +85,7 @@ import type {
 	ExternalSource,
 	FeatureMatchOrientation,
 	Game,
+	MeleeLiveResultsStopReason,
 	PlayerDisplayMode,
 	PointsSystem,
 	PositionFormat,
@@ -134,6 +135,11 @@ export interface EventListResponse {
 	lastPlayersSyncedAt: Date | null;
 	lastDecklistsSyncedAt: Date | null;
 	lastSyncError: string | null;
+	meleeLiveResultsEnabled: boolean;
+	meleeLiveResultsLastCheckedAt: Date | null;
+	meleeLiveResultsLastChangeAt: Date | null;
+	meleeLiveResultsError: string | null;
+	meleeLiveResultsStopReason: MeleeLiveResultsStopReason | null;
 	displayRecordSeparator: RecordSeparator;
 	displayHideZeroDraws: boolean;
 	displayPositionFormat: PositionFormat;

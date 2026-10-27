@@ -12,6 +12,7 @@ import {
 import { updateMeleeConfiguration } from './configuration';
 import { meleeSyncContextFrom } from './context';
 import { requireMeleeSyncEventData as loadMeleeSyncEventData } from './eventData';
+import { setMeleeLiveResults } from './liveResultsSetting';
 import { createMeleeSyncWorkflows } from './workflows';
 
 interface MeleeSyncCommandResult {
@@ -184,6 +185,7 @@ export function meleeSyncModule() {
 
 	return {
 		updateConfiguration: updateMeleeConfiguration,
+		setLiveResults: setMeleeLiveResults,
 
 		async runInitialSetup(requestEvent: H3Event, eventId: number) {
 			const ctx = meleeSyncContextFrom(requestEvent);
