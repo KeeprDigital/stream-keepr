@@ -68,13 +68,13 @@ const containerBackgroundStyle = computed(() =>
 );
 
 /**
- * The mode's resolved Mode Tokens, as the custom properties its display reads.
- * The Screen carries no Screen Theme Overrides yet.
+ * The mode's resolved Mode Tokens, as the custom properties its display reads:
+ * the Screen's own Screen Theme Overrides over its Event's Theme.
  */
 const themeTokenStyle = computed(() => screenModeThemeTokenStyle(
 	currentMode.value,
 	themeTokens?.value ?? DEFAULT_THEME_TOKENS,
-	{},
+	screen.value?.themeOverrides ?? {},
 ));
 
 function setHostContainer(el: Element | ComponentPublicInstance | null) {

@@ -1871,6 +1871,8 @@ export const createScreenSchema = createInsertSchema(screens)
 		assetCapabilitySeed: true,
 		assetCapabilityVersion: true,
 		assetCapabilityDigest: true,
+		// Only the Screen Theme Override write sets them, one token at a time.
+		themeOverrides: true,
 	})
 	.extend({
 		slug: screenSlugSchema,
@@ -1893,6 +1895,8 @@ export const updateScreenSchema = createUpdateSchema(screens)
 		assetCapabilitySeed: true,
 		assetCapabilityVersion: true,
 		assetCapabilityDigest: true,
+		// Only the Screen Theme Override write sets them, one token at a time.
+		themeOverrides: true,
 	})
 	.extend({
 		slug: screenSlugSchema.optional(),
@@ -1905,6 +1909,19 @@ export const updateScreenSchema = createUpdateSchema(screens)
 
 export const screenCommandSchema = z.object({
 	command: z.enum(SCREEN_COMMAND_VALUES),
+}).strict();
+
+/**
+ * A Screen Theme Override write: each named token's new value, or `null` to
+ * clear it (ADR-0041). Each value is checked against the token's type and the
+ * Screen's mode by the write, which knows the vocabulary.
+ */
+export const screenThemeOverridesPatchSchema = z.object({
+	stateVersion: z.number().int().nonnegative().optional(),
+	tokens: z.record(
+		z.string(),
+		z.unknown().refine(value => value !== undefined, 'A value, or null to clear, is required'),
+	).refine(tokens => Object.keys(tokens).length > 0, 'Name at least one token'),
 }).strict();
 
 // ROUTE PARAMS

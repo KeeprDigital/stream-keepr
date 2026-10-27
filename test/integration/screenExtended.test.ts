@@ -1,3 +1,4 @@
+import type { ScreenResponse } from '~~/shared/api';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { $fetch } from './client';
 
@@ -525,5 +526,23 @@ describe('screens extended API', () => {
 			method: 'PATCH',
 			body: { width: 1920, height: 1080 },
 		})).rejects.toMatchObject({ statusCode: 400 });
+	});
+
+	// ── Screen Theme Overrides ────────────────────────────────────────
+
+	it('stores a Screen Theme Override on the Screen it names', async () => {
+		const standings = await $fetch(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Overridden Screen', slug: 'integration-overridden-screen', currentMode: 'standings' },
+		});
+
+		const updated = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${standings.id}/theme-overrides`, {
+			method: 'PATCH',
+			body: {
+				tokens: { accent: '#ff0000' },
+			},
+		});
+
+		expect(updated.themeOverrides).toEqual({ accent: '#ff0000' });
 	});
 });

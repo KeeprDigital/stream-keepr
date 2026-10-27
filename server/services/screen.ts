@@ -4,6 +4,7 @@ import type { DbScreen, ScreenMode } from '~~/server/db/schema';
 import type { GraphicsAuthoringLeaseFence } from '~~/server/modules/graphics-authoring-lease';
 import type { PersistedScreenOutputAssetCapability } from '~~/server/modules/screen-output-assets/manager';
 import type { CreateScreenInput, UpdateScreenInput } from '~~/shared/api';
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
@@ -256,6 +257,16 @@ export function screenService() {
 		return versionedWrite(id, eventId, { screenConfig: mergedConfig }, stateVersion ?? screen.stateVersion);
 	};
 
+	/** Replace a Screen's Screen Theme Overrides, as a new Screen version. */
+	const updateThemeOverrides = async (
+		id: number,
+		eventId: number,
+		themeOverrides: StoredThemeTokens,
+		stateVersion: number,
+	): Promise<DbScreen | undefined> => {
+		return versionedWrite(id, eventId, { themeOverrides }, stateVersion);
+	};
+
 	const slugExists = async (eventId: number, slug: string, excludeId?: number): Promise<boolean> => {
 		const conditions = [
 			eq(screens.eventId, eventId),
@@ -284,6 +295,7 @@ export function screenService() {
 		update,
 		updateModeConfig,
 		updateScreenConfig,
+		updateThemeOverrides,
 		remove,
 		slugExists,
 	};

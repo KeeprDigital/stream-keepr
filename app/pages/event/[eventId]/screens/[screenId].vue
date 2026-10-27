@@ -691,6 +691,13 @@ async function sendCommand(command: ScreenCommand) {
 					</UFormField>
 				</ScreenSettingsCard>
 
+				<!-- Screen Theme Overrides (modes that declare Mode Tokens) -->
+				<ScreenThemeTokensSettings
+					v-if="!editorFocus"
+					:screen="screen"
+					:event-id="eventId"
+				/>
+
 				<!-- Background Layers (modes that carry their own stack) -->
 				<ScreenModeBackgroundLayersSettings
 					v-if="backgroundLayersMode"

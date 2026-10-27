@@ -924,6 +924,12 @@ export const screens = sqliteTable('screens', {
 	currentMode: text('current_mode', { enum: SCREEN_MODE_VALUES }).notNull().default('background'),
 	modeConfigs: text('mode_configs', { mode: 'json' }).$type<ModeConfigsMap>(),
 	screenConfig: text('screen_config', { mode: 'json' }).$type<ScreenConfig>(),
+	/**
+	 * The Screen Theme Overrides: a sparse token-value map keyed by token name.
+	 * An override of another mode's Mode Token is kept while the Screen shows
+	 * a different mode (ADR-0049).
+	 */
+	themeOverrides: text('theme_overrides', { mode: 'json' }).$type<StoredThemeTokens>().notNull().default(sql`'{}'`),
 	stateVersion: integer('state_version').notNull().default(0),
 	/** Transaction marker keeping Screen configuration and its Graphic Asset usage index in lockstep. */
 	graphicAssetReferenceVersion: text('graphic_asset_reference_version'),

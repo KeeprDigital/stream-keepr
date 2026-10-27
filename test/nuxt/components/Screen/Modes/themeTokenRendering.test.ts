@@ -659,8 +659,13 @@ afterEach(() => {
 	wrapper = undefined;
 });
 
-async function mountMode(mode: ScreenMode, theme?: StoredThemeTokens, config: Record<string, unknown> = {}) {
-	screen.value = createMockScreen({ currentMode: mode });
+/** Mounts `mode` under `theme`, with mode config over its sample and the Screen's own overrides. */
+async function mountMode(
+	mode: ScreenMode,
+	theme?: StoredThemeTokens,
+	{ config = {}, themeOverrides = {} }: { config?: Record<string, unknown>; themeOverrides?: StoredThemeTokens } = {},
+) {
+	screen.value = createMockScreen({ currentMode: mode, themeOverrides });
 	themeTokens.value = theme;
 	probeConfig.value = config;
 	wrapper = mount(Renderer, {
@@ -754,7 +759,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 		const sample = definition.type === 'dimension' && definition.bounds
 			? Math.min(definition.bounds.max, Math.max(definition.bounds.min + 1, SAMPLES.dimension))
 			: SAMPLES[definition.type];
-		await mountMode(mode, { [name]: sample }, probe.config);
+		await mountMode(mode, { [name]: sample }, { config: probe.config });
 
 		expect(painted(probe, definition.type)).toEqual(expectedPaint(definition.type, sample));
 	});
@@ -763,8 +768,24 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 		const shipped = typeof definition.default === 'object' && 'token' in definition.default
 			? FOUNDATION_TOKENS[definition.default.token].default
 			: definition.default;
-		await mountMode(mode, undefined, probe.config);
+		await mountMode(mode, undefined, { config: probe.config });
 
 		expect(painted(probe, definition.type)).toEqual(expectedPaint(definition.type, shipped));
+	});
+});
+
+describe('a Screen Theme Override', () => {
+	const dividers = [THEMED_DISPLAYS.standings!['title-divider']!, THEMED_DISPLAYS.standings!['row-divider']!];
+
+	it('paints over the Theme wherever its Foundation Token is named, and the Theme again once cleared', async () => {
+		await mountMode('standings', { divider: 'rgb(1, 2, 3)' }, {
+			themeOverrides: { divider: 'rgb(4, 5, 6)' },
+		});
+		expect(dividers.map(probe => painted(probe, 'color'))).toEqual(['rgb(4, 5, 6)', 'rgb(4, 5, 6)']);
+
+		screen.value = { ...screen.value, themeOverrides: {} };
+		await flushPromises();
+
+		expect(dividers.map(probe => painted(probe, 'color'))).toEqual(['rgb(1, 2, 3)', 'rgb(1, 2, 3)']);
 	});
 });

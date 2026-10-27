@@ -115,6 +115,27 @@ export function useScreenRepository() {
 		);
 	};
 
+	/** Set Screen Theme Overrides, or clear each one named with `null`. */
+	const updateThemeOverrides = async (
+		eventId: number,
+		screenId: number,
+		tokens: Record<string, unknown>,
+		stateVersion: number = 0,
+	): Promise<Screen> => {
+		return await eventData.command<Screen>(
+			{
+				eventId,
+				resourcePath: 'screens',
+				resourceId: screenId,
+				suffix: 'theme-overrides',
+			},
+			{
+				method: 'PATCH',
+				body: { tokens, stateVersion },
+			},
+		);
+	};
+
 	return {
 		list: base.list,
 		getById,
@@ -124,6 +145,7 @@ export function useScreenRepository() {
 		update: base.update,
 		updateModeConfig,
 		updateScreenConfig,
+		updateThemeOverrides,
 		remove: base.remove,
 	};
 }
