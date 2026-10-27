@@ -172,9 +172,10 @@ export function resolveScreenModeHost(options: ResolveScreenModeHostOptions): Re
 	}
 
 	// A plain mode's content sits inside the Screen inset, where the Theme aligns it.
-	if (host.foundationTokens.length > 0) {
-		const { inset, alignment } = screenLayoutTokens(options.theme, options.overrides);
+	const { inset, alignment } = screenLayoutTokens(options.theme, options.overrides);
+	if (host.foundationTokens.includes('inset'))
 		style.padding = `${inset}px`;
+	if (host.foundationTokens.includes('alignment')) {
 		style.justifyItems = HALIGN_MAP[alignment.horizontal];
 		style.alignItems = VALIGN_MAP[alignment.vertical];
 	}

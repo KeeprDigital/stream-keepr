@@ -1,13 +1,10 @@
 <script setup lang="ts">
 import type { ScreenOutputMatchSide, ScreenOutputRoundMatch } from '~~/shared/types/screenOutputReads';
-import { DEFAULT_THEME_TOKENS } from '~~/shared/modules/theme';
-import { modeTokenVar, modeTypographyStyle, screenLayoutTokens } from '~/modules/screen-mode';
+import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { screen, themeTokens } = useScreenContext();
 const { config, error, isEmpty, headerText, pageData, formatResult, winner } = usePairingsModeData();
 
-/** The Screen inset the host pads the canvas by, which the rows leave room for. */
-const inset = computed(() => screenLayoutTokens(themeTokens?.value ?? DEFAULT_THEME_TOKENS, screen.value?.themeOverrides ?? {}).inset);
+const inset = useScreenInset();
 
 const primaryTextStyle = {
 	color: modeTokenVar('pairings', 'primary-text'),

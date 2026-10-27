@@ -29,7 +29,7 @@ export function screenModeCanConsume(mode: ScreenMode, name: string): boolean {
 	const modeTokens = screenModeTokens(mode);
 	if (Object.hasOwn(modeTokens, name))
 		return true;
-	if ((screenModeHostTokens(mode) as readonly string[]).includes(name))
+	if (screenModeHostTokens(mode).includes(name))
 		return true;
 	if (!Object.hasOwn(FOUNDATION_TOKENS, name))
 		return false;

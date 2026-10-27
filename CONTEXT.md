@@ -788,7 +788,7 @@ _Avoid_: Dummy data, test data
 
 - A **Broadcast Graphics Screen** has at most one active **Broadcast Graphics Live Session** and renders an ordered stack of zero or more **Broadcast Graphics**
 - A **Broadcast Graphics Screen** composes in its **Event**'s **Event Canvas**; every **Broadcast Graphic** on it is authored in that coordinate space, and fitting to another viewport scales uniformly without reflow
-- A **Broadcast Graphics Screen** has a transparent host and ignores generic Screen padding, background, and alignment
+- A **Broadcast Graphics Screen** has a transparent host and ignores the Screen inset and alignment Foundation Tokens
 - Concurrent **Broadcast Graphics** composite once into one transparent frame in authored Screen stack order; Take timing and **Graphic Channel** membership never change that order
 - An empty **Broadcast Graphics Screen** is transparent in its **Overlay Output** and black in its **Fill Output** and **Key Output**
 - A **Broadcast Graphic Template** initializes a copy of a **Broadcast Graphic** on a **Broadcast Graphics Screen**

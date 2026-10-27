@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import type { PlayerHistoryColumnKey } from '~~/shared/types/enums';
 import type { PlayerMatchHistoryEntry } from '~/composables/screen/usePlayerHistoryModeData';
-import { DEFAULT_THEME_TOKENS } from '~~/shared/modules/theme';
 import { formatGameScore } from '~~/shared/utils/matchFromPlayerSide';
-import { modeTokenVar, modeTypographyStyle, screenLayoutTokens } from '~/modules/screen-mode';
+import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { screen, themeTokens } = useScreenContext();
 const { config, error, isEmpty, headerText, pageData, player, formatOutcome } = usePlayerHistoryModeData();
 
 const columnWidths: Record<PlayerHistoryColumnKey, string> = {
@@ -68,8 +66,7 @@ function outcomeStyle(outcome: PlayerMatchHistoryEntry['outcome']) {
 	};
 }
 
-/** The Screen inset the host pads the canvas by, which the rows leave room for. */
-const inset = computed(() => screenLayoutTokens(themeTokens?.value ?? DEFAULT_THEME_TOKENS, screen.value?.themeOverrides ?? {}).inset);
+const inset = useScreenInset();
 const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef'), {
 	density: 'roomy',
 	prefix: 'history',

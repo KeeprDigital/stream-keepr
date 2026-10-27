@@ -34,8 +34,8 @@ export interface ScreenModeConfigurationPolicy {
 	outputOptions: ScreenModeOutputOption[];
 	/**
 	 * Whether the Screen configuration page gives this mode the full page width.
-	 * A graphics host embeds the
-	 * compositor's tree, preview, and inspector side by side and needs it.
+	 * A graphics host embeds the compositor's tree, preview, and inspector side
+	 * by side and needs it.
 	 */
 	fullWidthConfiguration: boolean;
 }
@@ -104,8 +104,8 @@ export function getScreenModeHostDefinition(mode: ScreenMode): ScreenModeHostDef
 	};
 }
 
-/** The Foundation Tokens a Screen Mode's host consumes itself. */
-export function screenModeHostTokens(mode: ScreenMode): readonly FoundationTokenName[] {
+/** The names of the Foundation Tokens a Screen Mode's host consumes itself. */
+export function screenModeHostTokens(mode: ScreenMode): readonly string[] {
 	return getScreenModeHostDefinition(mode).foundationTokens;
 }
 

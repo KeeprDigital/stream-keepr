@@ -1,11 +1,8 @@
 <script setup lang="ts">
 import type { StandingsColumnKey } from '~~/shared/types/enums';
 import type { Player } from '~/types';
-import { DEFAULT_THEME_TOKENS } from '~~/shared/modules/theme';
 import { getMtgGameData } from '~~/shared/utils/gameData';
-import { modeTokenVar, modeTypographyStyle, screenLayoutTokens } from '~/modules/screen-mode';
-
-const { screen, themeTokens } = useScreenContext();
+import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
 const {
 	config,
@@ -18,8 +15,7 @@ const {
 	positionChangeOf,
 } = useStandingsModeData();
 
-/** The Screen inset the host pads the canvas by, which the rows leave room for. */
-const inset = computed(() => screenLayoutTokens(themeTokens?.value ?? DEFAULT_THEME_TOKENS, screen.value?.themeOverrides ?? {}).inset);
+const inset = useScreenInset();
 
 const primaryTextStyle = {
 	color: modeTokenVar('standings', 'primary-text'),

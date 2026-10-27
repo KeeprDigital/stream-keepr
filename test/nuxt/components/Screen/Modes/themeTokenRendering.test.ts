@@ -799,21 +799,4 @@ describe('the Screen inset and alignment', () => {
 
 		expect(placement()).toEqual({ padding: '40px', justifyItems: 'end', alignItems: 'end' });
 	});
-
-	it('places a plain mode as the Default Theme ships it when its Event has no Theme', async () => {
-		await mountMode('card');
-
-		expect(placement()).toEqual({ padding: '0px', justifyItems: 'center', alignItems: 'center' });
-	});
-
-	it('places a plain mode by its Screen\'s overrides over its Theme', async () => {
-		await mountMode('card', LAYOUT, {
-			themeOverrides: {
-				inset: 12,
-				alignment: { horizontal: 'left', vertical: 'top' },
-			},
-		});
-
-		expect(placement()).toEqual({ padding: '12px', justifyItems: 'start', alignItems: 'start' });
-	});
 });

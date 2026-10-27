@@ -892,7 +892,7 @@ Accepted · 2026-10-20 · [#607](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**The Screen write module decides which writes edit a Screen's graphics Edit workspace.** Every Screen write that can reach it passes through `screenWriteModule()`, and each such update operation takes the asking browser Session as a required `authoringSessionId`. A route only says who is asking. The protected field is the Broadcast Graphics stack. The mode configuration write protects it, and the generic Screen write protects it when it would change it. The canvas is the Event's Event Canvas (ADR-0051), an Event Presentation Settings write that takes no lease, so no Screen field is a canvas the lease guards and the Screen configuration write is not lease-gated.
+**The Screen write module decides which writes edit a Screen's graphics Edit workspace.** Every Screen write that can reach it passes through `screenWriteModule()`, and each such update operation takes the asking browser Session as a required `authoringSessionId`. A route only says who is asking. The protected field is the Broadcast Graphics stack. The mode configuration write protects it, and the generic Screen write protects it when it would change it. The canvas is the Event's Event Canvas (ADR-0051), an Event Presentation Settings write that takes no lease, so no Screen field is a canvas the lease guards. A Screen holds no look of its own (ADR-0051), and the Screen Theme Override write is not lease-gated.
 
 **The generic Screen write is gated by change, not by presence.** It replaces `modeConfigs` whole, and the Edit Screen dialog sends it back as it read it. A rename that carries the protected fields back unchanged stays open to every Session. The comparison ignores object key order.
 
@@ -1628,7 +1628,7 @@ Canvas size and wording are set once per production, not per brand or per Screen
 ### Consequences
 
 - Today's two canvases (`ScreenConfig` width/height and the graphics hosts' canvas fields) become one.
-- Padding and alignment are the `inset` and `alignment` Foundation Tokens. A plain overlay mode's Screen host consumes them itself, so they are among what its Screen consumes and may override (#826). The Background Screen and the graphics hosts render edge to edge and consume neither, and Feature Match Controls consumes no Theme Token at all.
+- Padding and alignment are the `inset` and `alignment` Foundation Tokens. The inset is one value on every side; the separate horizontal and vertical padding a Screen had is not kept. A plain overlay mode's Screen host consumes them itself, so they are among what its Screen consumes and may override (#826). The Background Screen and the graphics hosts render edge to edge and consume neither, and Feature Match Controls consumes no Theme Token at all.
 - A portrait display on a landscape Event is not supported; an override is the reopening path if a real case appears.
 - Resizing the Event Canvas moves the frame every graphics composition of the Event was authored in, yet takes no Graphics Authoring Lease, like any other Event Presentation Settings write (ADR-0030).
 - On-air wording stays on the Event, so one Theme serves Events that word things differently.
