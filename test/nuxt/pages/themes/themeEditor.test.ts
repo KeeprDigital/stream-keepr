@@ -43,6 +43,9 @@ beforeEach(() => {
 	mockApiFetch.mockImplementation(async (url: string, init?: { method?: string; body?: { value?: unknown } }) => {
 		if (url === '/api/themes/brand' && !init?.method)
 			return theme(1);
+		// The preview's Deck tile looks its sample cards up on Scryfall; none is found.
+		if (!url.startsWith('/api/themes/brand'))
+			throw Object.assign(new Error('Not Found'), { statusCode: 404 });
 		return answerWrite(init?.body);
 	});
 });

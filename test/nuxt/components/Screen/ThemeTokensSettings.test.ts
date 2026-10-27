@@ -104,7 +104,7 @@ describe('a Screen\'s token section', () => {
 	});
 
 	it('shows nothing for a mode that consumes no Theme Token', async () => {
-		const wrapper = await mountSection('card');
+		const wrapper = await mountSection('broadcast-graphics');
 
 		expect(wrapper.find('[data-testid="screen-theme-tokens"]').exists()).toBe(false);
 	});
