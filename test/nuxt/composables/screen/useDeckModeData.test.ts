@@ -58,6 +58,7 @@ mockNuxtImport('useScreenOutputReads', () => () => ({
 		? `${mockEventId.value}:${mockScreen.value.id}`
 		: null),
 	playerDecks: mockPlayerDecks,
+	cardData: mockFetchScryfallCards,
 }));
 mockNuxtImport('useScreenOutputBroadcastDeckListRepository', () => () => ({
 	getSelected: mockGetSelectedBroadcastDeckList,

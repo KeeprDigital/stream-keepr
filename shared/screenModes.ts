@@ -68,6 +68,12 @@ export interface ScreenModeDefinition {
 	 */
 	graphicsHost?: true;
 	/**
+	 * A Theme preview shows the mode though it declares no Mode Tokens: a
+	 * graphics host whose Graphic Items bind Foundation Tokens instead, shown
+	 * composing its sample graphic.
+	 */
+	themePreview?: true;
+	/**
 	 * The mode carries its own optional `backgroundLayers` stack, painted behind
 	 * its content by the Screen renderer host.
 	 *
@@ -211,6 +217,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		displayType: 'overlay',
 		description: 'Composed broadcast graphics stack with overlay/fill/key outputs',
 		graphicsHost: true,
+		themePreview: true,
 		config: broadcastGraphicsModeConfigContract,
 		eventReferences: {},
 	},
@@ -361,6 +368,13 @@ export function screenModeConfigContract<M extends ScreenMode>(mode: M): typeof 
 export type ThemedScreenMode = {
 	[M in ScreenMode]: typeof SCREEN_MODE_DEFINITIONS[M] extends { modeTokens: object } ? M : never;
 }[ScreenMode];
+
+/**
+ * The Screen Modes a Theme preview shows, in Screen Mode order: each mode
+ * declaring Mode Tokens, and each graphics host declaring a Theme preview.
+ */
+export const THEME_PREVIEW_SCREEN_MODES: readonly ScreenMode[] = SCREEN_MODE_VALUES.filter(mode =>
+	SCREEN_MODES[mode].modeTokens || SCREEN_MODES[mode].themePreview);
 
 /** A themed mode's Mode Tokens of one type, by name within the mode. */
 export type ScreenModeTokenOfType<M extends ThemedScreenMode, T extends ThemeTokenType> = {

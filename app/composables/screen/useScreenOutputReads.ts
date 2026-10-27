@@ -1,6 +1,6 @@
 import type { ScreenOutputReadScope } from '~/composables/repositories/useScreenOutputReadRepository';
 import { useScreenOutputReadRepository } from '~/composables/repositories/useScreenOutputReadRepository';
-import { SAMPLE_ID, useSampleScreenOutputReadRepository } from '~/modules/screen-mode/sampleDataset';
+import { SAMPLE_ID, sampleDeckCardData, useSampleScreenOutputReadRepository } from '~/modules/screen-mode/sampleDataset';
 
 /**
  * The Screen Output reads of the Screen this rendering shows, bound to it (#604).
@@ -12,13 +12,17 @@ import { SAMPLE_ID, useSampleScreenOutputReadRepository } from '~/modules/screen
  * its read depends on changes.
  *
  * A Theme preview's sample context reads the Screen Mode Sample Dataset
- * instead, at a scope of its own, and nothing is fetched.
+ * instead, at a scope of its own, and nothing is fetched: not even the card
+ * data its deck cards are drawn with, which a Screen reads from Scryfall.
  */
 export function useScreenOutputReads() {
 	const { screen, eventId, assetCapability, sampleDataset } = useScreenContext();
 	const repository = sampleDataset
 		? useSampleScreenOutputReadRepository()
 		: useScreenOutputReadRepository();
+	const cardData = sampleDataset
+		? sampleDeckCardData
+		: useScryfallBatch().fetchScryfallCards;
 
 	const scope = computed<ScreenOutputReadScope | null>(() => {
 		if (sampleDataset)
@@ -62,5 +66,7 @@ export function useScreenOutputReads() {
 			(await repository.featureMatchSlot(requireScope(), slotId)).slot.activeSession ?? null,
 		playerDecks: (playerId: number, selection?: { deckId?: number }) =>
 			repository.playerDecks(requireScope(), playerId, selection),
+		/** The card data deck cards are drawn with, by Scryfall id or else by name. */
+		cardData,
 	};
 }

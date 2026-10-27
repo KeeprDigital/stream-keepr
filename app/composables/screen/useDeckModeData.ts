@@ -258,7 +258,7 @@ export function useDeckModeData() {
 
 	const outputReads = useScreenOutputReads();
 	const broadcastDeckLists = useScreenOutputBroadcastDeckListRepository();
-	const { fetchScryfallCards, buildDeckListArrays } = useScryfallBatch();
+	const { buildDeckListArrays } = useScryfallBatch();
 
 	const displayedDeck = ref<DeckDisplayState | null>(null);
 	const pendingDeck = ref<DeckDisplayState | null>(null);
@@ -401,7 +401,7 @@ export function useDeckModeData() {
 
 	async function buildDeckDisplayState(input: DeckDisplayInput): Promise<{ deck: DeckDisplayState; degraded: boolean }> {
 		const lookupCards = createDeckLookupCards(input.cards, input.companion);
-		const { cards: cardDataMap, degraded } = await fetchScryfallCards(lookupCards);
+		const { cards: cardDataMap, degraded } = await outputReads.cardData(lookupCards);
 		const arrays = buildDeckListArrays(input.cards, cardDataMap);
 		const deckCounters = counterConfigsForDeckCounterTypes(
 			input.cards.flatMap(card => card.deckCounterTypes ?? []),

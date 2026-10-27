@@ -1,10 +1,19 @@
 import type { PhaseResponse, PlayerResponse, RoundResponse } from '~~/shared/api';
+import type { FoundationTokenName } from '~~/shared/modules/theme';
 import type { BracketEntrant, BracketMatchInput } from '~~/shared/modules/top-cut-bracket';
+import type { BroadcastGraphicsLiveSessionResponse } from '~~/shared/types/broadcastGraphicsLiveSession';
+import type { MtgCard } from '~~/shared/types/card/mtg';
 import type { ScreenMode } from '~~/shared/types/enums';
+import type { BroadcastGraphicConfig, GraphicItemConfig, TextGraphicItemConfig } from '~~/shared/types/graphics';
+import type { GraphicThemeSlot } from '~~/shared/types/graphicThemeBindings';
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 import type { ModeConfigsMap } from '~~/shared/types/screenConfig';
+import type { ScryfallCardFetchResult } from '~/composables/data/useScryfallBatch';
 import type { ScreenOutputReadScope, useScreenOutputReadRepository } from '~/composables/repositories/useScreenOutputReadRepository';
+import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
+import { bindGraphicThemeOwner, DEFAULT_GRAPHIC_THEME_TOKENS, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { deriveTopCutBracket } from '~~/shared/modules/top-cut-bracket';
+import { scryfallNameKey } from '~/composables/data/useScryfallBatch';
 
 /**
  * The Screen Mode Sample Dataset: one fixed canonical set of Event Data a Theme
@@ -333,10 +342,211 @@ const SAMPLE_DECK_CARDS = [
 	],
 ] as const;
 
+/** A frame colour per colour identity; gold for several, grey for none. */
+const FRAME_COLORS: Readonly<Record<string, string>> = {
+	W: '#e9e1c6',
+	U: '#2c6cab',
+	B: '#3d3638',
+	R: '#c4472d',
+	G: '#2f7a4b',
+};
+
+const COLORLESS_FRAME = '#9ca3af';
+
+function frameColor(colors: string | null): string {
+	if (!colors)
+		return COLORLESS_FRAME;
+	return colors.length > 1
+		? '#c9a54a'
+		: FRAME_COLORS[colors] ?? COLORLESS_FRAME;
+}
+
+/**
+ * A drawn card face, as a data URI. The sample draws its cards rather than
+ * fetching their art, so a preview makes no request. Names are plain ASCII.
+ */
+function cardFace(name: string, cardType: string, colors: string | null): string {
+	const svg = [
+		'<svg xmlns="http://www.w3.org/2000/svg" width="488" height="680" viewBox="0 0 488 680">',
+		'<rect width="488" height="680" rx="24" fill="#111111"/>',
+		`<rect x="20" y="20" width="448" height="640" rx="12" fill="${frameColor(colors)}"/>`,
+		'<rect x="36" y="36" width="416" height="44" rx="6" fill="#f5f1e6"/>',
+		`<text x="50" y="66" font-family="sans-serif" font-size="22" font-weight="700" fill="#111111">${name}</text>`,
+		'<rect x="36" y="92" width="416" height="300" fill="#111111" fill-opacity="0.3"/>',
+		'<rect x="36" y="404" width="416" height="36" rx="6" fill="#f5f1e6"/>',
+		`<text x="50" y="429" font-family="sans-serif" font-size="18" fill="#111111">${cardType}</text>`,
+		'<rect x="36" y="452" width="416" height="188" fill="#f5f1e6"/>',
+		'</svg>',
+	].join('');
+	return `data:image/svg+xml;base64,${btoa(svg)}`;
+}
+
+/** A sample card as a Scryfall read gives one, with its face drawn rather than fetched. */
+function sampleCard(name: string, cardType: string, colors: string | null): MtgCard {
+	const face = cardFace(name, cardType, colors);
+	return {
+		id: `sample-${name.toLowerCase().replace(/\W+/g, '-')}`,
+		name,
+		set: 'sample',
+		layout: 'normal',
+		imageData: {
+			front: {
+				small: face,
+				normal: face,
+				large: face,
+				png: face,
+				art_crop: face,
+				border_crop: face,
+			},
+			back: null,
+		},
+		orientationData: {
+			flipable: false,
+			turnable: false,
+			rotateable: false,
+			counterRotateable: false,
+		},
+		displayData: {
+			flipped: false,
+			rotated: false,
+			counterRotated: false,
+			turnedOver: false,
+		},
+	};
+}
+
+/** Card Spotlight's Screen Card. Untimed, so it stays up as long as the preview does. */
+const SAMPLE_SCREEN_CARD = sampleCard('Lightning Helix', 'Instant', 'RW');
+
+/** Each sample deck card's data, keyed by name as a Scryfall name lookup keys it. */
+const SAMPLE_DECK_CARD_DATA = new Map<string, MtgCard>(SAMPLE_DECK_CARDS.map(([name, cardType, colors]) =>
+	[
+		scryfallNameKey(name),
+		sampleCard(name, cardType, colors),
+	] as const));
+
+/**
+ * The card data a Theme preview draws its deck cards with, in place of
+ * Scryfall's. It is fixed, so the preview fetches nothing.
+ */
+export async function sampleDeckCardData(cards: ReadonlyArray<{ name: string }>): Promise<ScryfallCardFetchResult> {
+	const found = new Map<string, MtgCard>();
+	for (const { name } of cards) {
+		const key = scryfallNameKey(name);
+		const card = SAMPLE_DECK_CARD_DATA.get(key);
+		if (card)
+			found.set(key, structuredClone(card));
+	}
+	return { cards: found, degraded: false };
+}
+
+/** The sample graphic is authored in the default Event Canvas (ADR-0051). */
+const SAMPLE_CANVAS = { canvasWidth: DEFAULT_EVENT_CANVAS.width, canvasHeight: DEFAULT_EVENT_CANVAS.height };
+
+interface SampleRect {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+/** `owner` with each slot bound to its Foundation Token, painted from the Default Theme. */
+function withThemeBindings<T extends GraphicItemConfig | BroadcastGraphicConfig>(owner: T, bindings: Partial<Record<GraphicThemeSlot, FoundationTokenName>>): T {
+	return (Object.entries(bindings) as [GraphicThemeSlot, FoundationTokenName][]).reduce(
+		(next, [slot, token]) => bindGraphicThemeOwner(next, slot, token, DEFAULT_GRAPHIC_THEME_TOKENS),
+		owner,
+	);
+}
+
+function sampleShape(id: string, rect: SampleRect): GraphicItemConfig {
+	return {
+		...getGraphicItemDefinition('shape').createDefault({ id, label: id, ...SAMPLE_CANVAS }),
+		...rect,
+	};
+}
+
+function sampleText(id: string, text: string, fontSize: number, rect: SampleRect): TextGraphicItemConfig {
+	const item = getGraphicItemDefinition('text').createDefault({ id, label: id, ...SAMPLE_CANVAS }) as TextGraphicItemConfig;
+	return {
+		...item,
+		...rect,
+		text,
+		typography: { ...item.typography, fontSize },
+	};
+}
+
+const LEADER = PLAYERS[0]!;
+
+/**
+ * Broadcast Graphics' sample: a lower third naming the sample's leader, every
+ * part of it bound to a Foundation Token, so it shows the Theme as a placed
+ * graphic would. It is no Broadcast Graphic Template and sits in no library:
+ * only a Theme preview's Screen holds it.
+ */
+const SAMPLE_LOWER_THIRD: BroadcastGraphicConfig = withThemeBindings({
+	id: 'sample-lower-third',
+	name: 'Sample lower third',
+	items: [
+		withThemeBindings(sampleShape('sample-panel', {
+			x: 96,
+			y: 828,
+			width: 960,
+			height: 156,
+		}), { surfaceStyle: 'panel', geometry: 'panel-shape' }),
+		withThemeBindings(sampleShape('sample-accent', {
+			x: 96,
+			y: 828,
+			width: 14,
+			height: 156,
+		}), { 'surfaceStyle.fill': 'accent-fill' }),
+		withThemeBindings(sampleText('sample-name', LEADER.name, 56, {
+			x: 140,
+			y: 846,
+			width: 880,
+			height: 72,
+		}), { 'typography': 'heading', 'typography.color': 'text-primary' }),
+		withThemeBindings(
+			sampleText('sample-deck', `${deckOf(0).name} · ${LEADER.wins}-${LEADER.losses}-${LEADER.draws}`, 34, {
+				x: 140,
+				y: 920,
+				width: 880,
+				height: 48,
+			}),
+			{ 'typography': 'body', 'typography.color': 'text-secondary' },
+		),
+	],
+}, { 'animation.enter': 'motion-enter', 'animation.update': 'motion-update', 'animation.exit': 'motion-exit' });
+
+/** The sample Live Session: the lower third on air, long since settled at rest. */
+const SAMPLE_LIVE_SESSION: BroadcastGraphicsLiveSessionResponse = {
+	id: SAMPLE_ID,
+	eventId: SAMPLE_ID,
+	screenId: SAMPLE_ID,
+	status: 'active',
+	currentState: {
+		playout: {
+			[SAMPLE_LOWER_THIRD.id]: {
+				onAir: true,
+				effectiveStartedAt: SAMPLE_TIMESTAMP.getTime(),
+				cut: true,
+			},
+		},
+		inputs: {},
+		sources: {},
+	},
+	recoveryFault: null,
+	sequence: 1,
+	endedAt: null,
+	createdAt: SAMPLE_TIMESTAMP,
+	updatedAt: SAMPLE_TIMESTAMP,
+};
+
 type SampleReadRepository = ReturnType<typeof useScreenOutputReadRepository>;
 
 /** What the dataset answers for each read, whatever Screen the preview names. */
 const ANSWERS = {
+	card: { card: SAMPLE_SCREEN_CARD, revision: 1 },
+	liveSession: SAMPLE_LIVE_SESSION,
 	standings: {
 		players: SAMPLE_PLAYERS,
 		round: null,
@@ -496,10 +706,13 @@ const ANSWERS = {
 } satisfies { [K in keyof SampleReadRepository]?: Awaited<ReturnType<SampleReadRepository[K]>> };
 
 /**
- * Each plain mode's configuration under the sample: what it selects from the
- * dataset, where its defaults select nothing.
+ * Each mode's configuration under the sample: what it selects from the
+ * dataset, where its defaults select nothing, and Broadcast Graphics' stack.
  */
 const SCREEN_MODE_SAMPLE_CONFIGS: ModeConfigsMap = {
+	'broadcast-graphics': {
+		graphics: [SAMPLE_LOWER_THIRD],
+	},
 	'deck': {
 		deckSource: { type: 'player', playerId: player(0).id },
 	},
@@ -528,7 +741,7 @@ export function screenModeSampleConfigs(mode: ScreenMode): ModeConfigsMap {
 		: {};
 }
 
-/** A read the dataset does not hold: the graphics hosts preview from the Feature Match Sample Dataset. */
+/** A read the dataset does not hold: the Feature Match Overlay previews from the Feature Match Sample Dataset. */
 function notInSample(resource: string): never {
 	throw new Error(`The Screen Mode Sample Dataset holds no ${resource}`);
 }
@@ -541,9 +754,8 @@ export function useSampleScreenOutputReadRepository(): SampleReadRepository {
 	const answer = <T>(value: T) => async (_scope: ScreenOutputReadScope): Promise<T> => structuredClone(value);
 	return {
 		event: async () => notInSample('Event context'),
-		// A Screen Card is set live by an operator, so the sample holds none.
-		card: async () => ({ card: null, revision: 0 }),
-		liveSession: async () => notInSample('Broadcast Graphics session'),
+		card: answer(ANSWERS.card),
+		liveSession: answer(ANSWERS.liveSession),
 		featureMatchSlot: async () => notInSample('Feature Match Slot'),
 		playerHistory: answer(ANSWERS.playerHistory),
 		standings: answer(ANSWERS.standings),
