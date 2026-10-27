@@ -1507,3 +1507,32 @@ Manual results were never meant to exist. A result entered by hand reached Playe
 - **Treat a `null` as `0` in each reader.** Player history, Pairings, Head-to-Head, Top Cut Bracket and the Graphic binding would each need the rule, and the next reader would miss it.
 - **Keep manual result entry for manual Matches.** Melee's standings would still never count those results, so a Player's record and their history would keep disagreeing.
 - **Keep `ResultString` for display.** It cannot be read from the second Player's side, and with a whole Game Score nothing needs it.
+
+## ADR-0048: A Player's name opens their match history
+
+Accepted · 2026-10-27
+
+### Decision
+
+**Clicking a Player's name, on any operator page, opens that Player's match history, as clicking a deck name opens its deck list.** `PlayerMatchHistoryButton` (`app/components/Player/MatchHistoryButton.vue`) renders every such name. It takes the Player and, when the surface shows other text, such as a Match's snapshot name or "TBD", that text. A name with no Player behind it, like a seat filled by hand or an opponent off the roster, is plain text. The button carries no icon; it takes the hover colour the deck name uses.
+
+It renders names on the Players page, Matches rows (both seats and the bye), the match history modal's opponent column, the deck list modal's title, the Feature Match live panel's seats and the metagame Players table. Surfaces that know only a name, like the card page's deck column headers and the sync page, stay plain text, as do pickers that choose a Player.
+
+**A row on the Players page does nothing when clicked.** Edit Player is the first action in the row menu, and the menu no longer offers View Match History, because the name already opens it.
+
+**Every name opens one modal.** `usePlayerMatchHistoryModal` is a shared composable, so opening another Player, an opponent from inside the modal included, replaces what the open modal shows instead of stacking a second one.
+
+### Why
+
+The Players page opened Edit on a row click and kept history in the menu, while every other page showed names that did nothing. Viewing a Player's history is the expected default, and editing is the deliberate act. One meaning for a name everywhere means an operator learns it once.
+
+### Consequences
+
+- A new surface that shows a Player's name renders it through `PlayerMatchHistoryButton`.
+- Without the shared composable, each button would create an overlay of its own through `useOverlay().create`, which never removes one.
+- `test/nuxt/components/Player/MatchHistoryButton.test.ts` pins the rule and the single modal; each surface has one wiring test.
+
+### Rejected alternatives
+
+- **Make the whole Players page row open history.** It would hide one target behind another again, and the deck cell and row menu sit in the same row.
+- **Link a name the surface knows only as text by matching it against the roster.** Two Players can share a name, and the wrong history is worse than none.

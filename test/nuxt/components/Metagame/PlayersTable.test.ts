@@ -2,7 +2,7 @@ import type { ArchetypePlayerEntry } from '~~/shared/types/metagame';
 import type { Player } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive } from 'vue';
 import PlayersTable from '~/components/Metagame/PlayersTable.vue';
 
@@ -11,6 +11,11 @@ const mockPlayerStore = reactive({
 });
 
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
+
+const { openPlayerMatchHistory } = vi.hoisted(() => ({
+	openPlayerMatchHistory: vi.fn(),
+}));
+mockNuxtImport('usePlayerMatchHistoryModal', () => () => ({ openPlayerMatchHistory }));
 
 const UCardStub = defineComponent({
 	template: '<div><slot name="header" /><slot /></div>',
@@ -120,5 +125,17 @@ describe('metagame players table', () => {
 
 		expect(wrapper.find('button').exists()).toBe(false);
 		expect(wrapper.text()).toContain('Alice');
+	});
+
+	it('opens the resolved Player\'s match history from their name', async () => {
+		const player = makePlayer();
+		mockPlayerStore.players = [player];
+
+		const wrapper = await mountComponent([
+			makeEntry(),
+		]);
+		await wrapper.get('button[title="View Match History"]').trigger('click');
+
+		expect(openPlayerMatchHistory).toHaveBeenCalledWith(player);
 	});
 });

@@ -22,6 +22,10 @@ const emit = defineEmits<{
 }>();
 
 const eventStore = useEventStore();
+const playerStore = usePlayerStore();
+const player = computed(() => props.playerId == null
+	? null
+	: playerStore.players.find(p => p.id === props.playerId) ?? null);
 const reviewPagePath = computed(() => props.playerId != null && eventStore.eventId
 	? `/event/${eventStore.eventId}/archetype-review?playerId=${props.playerId}`
 	: null);
@@ -269,7 +273,7 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 	>
 		<template v-if="selectedDeck" #title>
 			<div class="flex items-center gap-2">
-				<span>{{ playerName }}</span>
+				<PlayerMatchHistoryButton :player="player" :name="playerName" />
 				<span class="text-muted mx-2">|</span>
 				<span class="text-muted">
 					{{ selectedDeck.name }}

@@ -18,7 +18,6 @@ const meleeStore = useMeleeStore();
 const screenStore = useScreenStore();
 const overlay = useOverlay();
 const { openPlayerDeckList } = usePlayerDeckListModal();
-const { openPlayerMatchHistory } = usePlayerMatchHistoryModal();
 const { sendToFirstDeckScreen, sendToScreen: sendDeckToScreen } = useSendDeckToScreen();
 const { sendToFirstPlayerHistoryScreen, sendToScreen: sendPlayerHistoryToScreen } = useSendPlayerHistoryToScreen();
 const { runRequest } = useRequestFeedback();
@@ -486,7 +485,6 @@ async function handleBulkRemoveFromList() {
 				@edit-player="handleEditPlayer"
 				@delete-player="handleDeletePlayer"
 				@view-deck-list="openPlayerDeckList"
-				@view-match-history="openPlayerMatchHistory"
 				@send-deck-to-screen="handleSendDeckToScreen"
 				@send-match-history-to-screen="handleSendMatchHistoryToScreen"
 			/>

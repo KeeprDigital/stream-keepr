@@ -26,7 +26,6 @@ const emit = defineEmits<{
 	editPlayer: [player: Player];
 	deletePlayer: [player: Player];
 	viewDeckList: [player: Player];
-	viewMatchHistory: [player: Player];
 	sendDeckToScreen: [playerId: number, screenId?: number];
 	sendMatchHistoryToScreen: [playerId: number, screenId?: number];
 }>();
@@ -92,7 +91,15 @@ const globalFilterOptions = {
 
 // Row-level actions
 function getRowMenuItems(player: Player): DropdownMenuItem[][] {
-	const groups: DropdownMenuItem[][] = [];
+	const groups: DropdownMenuItem[][] = [
+		[
+			{
+				label: 'Edit Player',
+				icon: 'i-lucide-pencil' as const,
+				onSelect: () => emit('editPlayer', player),
+			},
+		],
+	];
 
 	// List membership: add to list
 	const addItems = props.lists.map(list => ({
@@ -123,14 +130,6 @@ function getRowMenuItems(player: Player): DropdownMenuItem[][] {
 			})));
 		}
 	}
-
-	groups.push([
-		{
-			label: 'View Match History',
-			icon: 'i-lucide-history' as const,
-			onSelect: () => emit('viewMatchHistory', player),
-		},
-	]);
 
 	// Send match history to screen
 	if (hasPlayerHistoryScreens.value) {
@@ -183,7 +182,7 @@ function toggleDropdown(playerId: number) {
 }
 
 // Static table config (avoid re-allocation on every render)
-const tableUi = { root: 'flex-1 min-h-0', tr: 'cursor-pointer' };
+const tableUi = { root: 'flex-1 min-h-0' };
 function getRowId(row: Player) {
 	return String(row.id);
 }
@@ -281,7 +280,6 @@ const columns = computed<TableColumn<Player>[]>(() => {
 			:get-row-id="getRowId"
 			:watch-options="{ deep: false }"
 			:ui="tableUi"
-			@select="(_e, row) => emit('editPlayer', row.original)"
 		>
 			<template #empty>
 				<UIEmptyState
@@ -294,6 +292,10 @@ const columns = computed<TableColumn<Player>[]>(() => {
 
 			<template #position-cell="{ row }">
 				<span class="font-mono text-muted">{{ row.original.position ?? '-' }}</span>
+			</template>
+
+			<template #name-cell="{ row }">
+				<PlayerMatchHistoryButton :player="row.original" />
 			</template>
 
 			<template #pronouns-cell="{ row }">

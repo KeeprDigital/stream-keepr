@@ -16,6 +16,7 @@ const featureMatchStateStore = useFeatureMatchStateStore();
 const {
 	player,
 	playerName,
+	linkedPlayer,
 	playerPronouns,
 	deckName,
 	bestOf,
@@ -107,9 +108,7 @@ const panelStyle = computed(() => ({
 				<span v-if="seatLabel" class="seat-badge">{{ seatLabel }}</span>
 			</div>
 			<div class="info-center">
-				<span class="font-semibold truncate">
-					{{ playerName }}
-				</span>
+				<PlayerMatchHistoryButton class="font-semibold truncate" :player="linkedPlayer" :name="playerName" />
 				<span v-if="showPronouns" class="text-sm text-muted">
 					{{ playerPronouns ? `(${playerPronouns})` : '' }}
 				</span>

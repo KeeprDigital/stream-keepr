@@ -12,6 +12,11 @@ const mockDeckCache = {
 
 mockNuxtImport('usePlayerDeckCache', () => () => mockDeckCache);
 
+const { openPlayerMatchHistory } = vi.hoisted(() => ({
+	openPlayerMatchHistory: vi.fn(),
+}));
+mockNuxtImport('usePlayerMatchHistoryModal', () => () => ({ openPlayerMatchHistory }));
+
 const MatchNotePopoverStub = defineComponent({
 	props: [
 		'note',
@@ -57,6 +62,7 @@ async function mountComponent(
 
 describe('matchListItem', () => {
 	beforeEach(() => {
+		openPlayerMatchHistory.mockReset();
 		mockDeckCache.getActiveDeckForPlayer.mockReset();
 		mockDeckCache.getActiveDeckForPlayer.mockReturnValue(null);
 	});
@@ -205,5 +211,32 @@ describe('matchListItem', () => {
 
 		expect(wrapper.find('.match-note-preview').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="match-note-popover"]').exists()).toBe(false);
+	});
+
+	it.each([
+		['player 1', {}, 'Alice', 1],
+		['player 2', {}, 'Bob', 2],
+		[
+			'a bye',
+			{ player2Id: null, player2Data: null },
+			'Alice',
+			1,
+		],
+	])('opens %s\'s match history from their name', async (_, matchOverrides, name, playerId) => {
+		const wrapper = await mountComponent(matchOverrides as never);
+
+		await wrapper.findAll('button').find(button => button.text() === name)!.trigger('click');
+
+		expect(openPlayerMatchHistory).toHaveBeenCalledWith(expect.objectContaining({ id: playerId, name }));
+	});
+
+	it('shows a seat with no Player as plain text', async () => {
+		const wrapper = await mountComponent({
+			player2Id: null,
+			player2Data: { name: 'TBD' } as never,
+		});
+
+		expect(wrapper.get('[data-testid="player2-name"]').element.tagName).toBe('SPAN');
+		expect(wrapper.get('[data-testid="player1-name"]').element.tagName).toBe('BUTTON');
 	});
 });

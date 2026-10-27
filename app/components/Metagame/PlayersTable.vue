@@ -113,7 +113,7 @@ const columns = computed<TableColumn<AnyPlayer>[]>(() => [
 				<span class="text-xs text-muted tabular-nums">{{ row.original.position ?? '—' }}</span>
 			</template>
 			<template #name-cell="{ row }">
-				<span class="font-medium">{{ row.original.name }}</span>
+				<PlayerMatchHistoryButton class="font-medium" :player="resolvePlayer(row.original)" :name="row.original.name" />
 			</template>
 			<template #record-cell="{ row }">
 				<span class="tabular-nums text-sm">
