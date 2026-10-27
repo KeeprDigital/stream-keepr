@@ -181,7 +181,7 @@ export interface EventResponse extends EventListResponse {
 export interface MeleeLiveResultsStatusResponse {
 	enabled: boolean;
 	/** The latest Melee-managed Round with pairings; `null` before any is paired. */
-	currentRound: { id: number; name: string; phaseName: string | null } | null;
+	currentRound: { id: number; name: string; phaseId: number; phaseName: string | null } | null;
 	lastCheckedAt: Date | null;
 	lastChangeAt: Date | null;
 	error: string | null;

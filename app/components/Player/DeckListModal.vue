@@ -22,6 +22,7 @@ const emit = defineEmits<{
 }>();
 
 const eventStore = useEventStore();
+const eventRepo = useEventRepository();
 const playerStore = usePlayerStore();
 const player = computed(() => props.playerId == null
 	? null
@@ -59,15 +60,31 @@ async function handleSendToScreen(screenId?: number) {
 	}
 }
 
-// Default to the first tab
-const defaultDeckIndex = computed(() => 0);
+// Opens on the deck for the Current Round's Phase, else the primary deck (listed
+// first). A deck the operator picks stays picked.
+const currentRoundPhaseId = ref<number | null>(null);
+const pickedDeckIndex = ref<number | null>(null);
 
-const selectedDeckIndex = ref(defaultDeckIndex.value);
-
-// Re-sync when the modal opens with a different phase
-watch(defaultDeckIndex, (idx) => {
-	selectedDeckIndex.value = idx;
+onMounted(async () => {
+	if (!eventStore.eventId)
+		return;
+	try {
+		const status = await eventRepo.getMeleeLiveResultsStatus(eventStore.eventId);
+		currentRoundPhaseId.value = status.currentRound?.phaseId ?? null;
+	}
+	catch {
+		// No Current Round to follow: the primary deck stays the default.
+	}
 });
+
+const defaultDeckIndex = computed(() => {
+	const phaseId = currentRoundPhaseId.value;
+	return phaseId == null
+		? 0
+		: Math.max(localDeckLists.value.findIndex(deck => deck.phaseIds.includes(phaseId)), 0);
+});
+
+const selectedDeckIndex = computed(() => pickedDeckIndex.value ?? defaultDeckIndex.value);
 
 // Get the currently selected deck list
 const selectedDeck = computed(() => localDeckLists.value[selectedDeckIndex.value] ?? null);
@@ -245,6 +262,14 @@ const companionCard = computed<DeckListCard | null>(() => {
 });
 const companionPreviewKey = computed(() => `companion-${companionCard.value?.name ?? ''}`);
 
+// A Companion outside the sideboard still takes one of its slots.
+const sideboardHeadingCount = computed(() => {
+	const companion = selectedDeck.value?.companion;
+	return companion && !companion.usesExistingSideboardSlot
+		? `${sideboardTotal.value} + Companion`
+		: String(sideboardTotal.value);
+});
+
 const highlanderImageUrlsByCardName = computed<Record<string, string | null>>(() => {
 	const imageUrls: Record<string, string | null> = {};
 	for (const card of cards.value) {
@@ -310,6 +335,16 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 					class="ml-1"
 				/>
 				<UBadge
+					v-if="selectedDeck.reviewed !== undefined"
+					:data-deck-review="selectedDeck.reviewed ? 'reviewed' : 'unreviewed'"
+					:color="selectedDeck.reviewed ? 'success' : 'neutral'"
+					variant="soft"
+					size="sm"
+					class="ml-2"
+				>
+					{{ selectedDeck.reviewed ? 'Reviewed' : 'Unreviewed' }}
+				</UBadge>
+				<UBadge
 					v-if="selectedDeck.highlander"
 					color="neutral"
 					variant="soft"
@@ -318,20 +353,6 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 				>
 					{{ formatHighlanderPointsLabel(selectedDeck.highlander) }}
 				</UBadge>
-				<div v-if="selectedDeckCounters.length > 0" class="flex items-center gap-1.5 ml-2">
-					<span class="text-xs uppercase tracking-wide text-muted">Counters</span>
-					<UBadge
-						v-for="counter in selectedDeckCounters"
-						:key="counter.key"
-						color="neutral"
-						variant="soft"
-						size="sm"
-						class="gap-1"
-					>
-						<UIcon :name="counter.icon" class="size-3.5" />
-						{{ counter.label }}
-					</UBadge>
-				</div>
 			</div>
 		</template>
 		<template #description>
@@ -365,7 +386,7 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 					v-if="localDeckLists.length > 1"
 					:items="tabItems"
 					:model-value="selectedDeckIndex.toString()"
-					@update:model-value="(val) => selectedDeckIndex = Number(val)"
+					@update:model-value="(val) => pickedDeckIndex = Number(val)"
 				/>
 
 				<!-- Deck list content -->
@@ -400,7 +421,7 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 						</div>
 
 						<!-- Sideboard -->
-						<div v-if="companionCard || sideboardCards.length > 0 || tokenCards.length > 0" class="shrink-0 border-l border-default pl-6">
+						<div v-if="companionCard || sideboardCards.length > 0 || tokenCards.length > 0 || selectedDeckCounters.length > 0" class="shrink-0 border-l border-default pl-6">
 							<section v-if="companionCard" data-deck-companion :class="{ 'mb-5': sideboardCards.length > 0 }">
 								<h4 class="font-semibold mb-3 text-sm uppercase tracking-wide">
 									Companion
@@ -418,7 +439,7 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 							</section>
 							<div v-if="sideboardCards.length > 0">
 								<h4 class="font-semibold mb-3 text-sm uppercase tracking-wide">
-									Sideboard ({{ sideboardTotal }})
+									Sideboard ({{ sideboardHeadingCount }})
 								</h4>
 								<div ref="sideboardGroupContainer" class="deck-type-grid" :style="sideboardGridStyle">
 									<div v-for="(column, columnIndex) in sideboardColumns" :key="`sideboard-column-${columnIndex}`" class="deck-type-column">
@@ -442,7 +463,7 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 								</div>
 							</div>
 
-							<section v-if="tokenCards.length > 0" class="token-section" :class="{ 'mt-5': sideboardCards.length > 0 }">
+							<section v-if="tokenCards.length > 0" class="supplementary-section" :class="{ 'mt-5': sideboardCards.length > 0 }">
 								<h4 class="font-semibold mb-3 text-sm uppercase tracking-wide">
 									Tokens ({{ tokenCards.length }})
 								</h4>
@@ -458,6 +479,23 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 										@preview="handlePreviewUpdate"
 										@pin="togglePreviewPin"
 									/>
+								</ul>
+							</section>
+
+							<section
+								v-if="selectedDeckCounters.length > 0"
+								data-deck-counters
+								class="supplementary-section"
+								:class="{ 'mt-5': sideboardCards.length > 0 || tokenCards.length > 0 }"
+							>
+								<h4 class="font-semibold mb-3 text-sm uppercase tracking-wide">
+									Counters
+								</h4>
+								<ul class="flex flex-col gap-1">
+									<li v-for="counter in selectedDeckCounters" :key="counter.key" class="flex items-center gap-2 text-sm">
+										<UIcon :name="counter.icon" class="size-4 shrink-0 text-muted" />
+										{{ counter.label }}
+									</li>
 								</ul>
 							</section>
 						</div>
@@ -540,7 +578,7 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 	min-width: 0;
 }
 
-.token-section {
+.supplementary-section {
 	border-top: 1px solid var(--ui-border-muted);
 	padding-top: 1rem;
 }

@@ -148,6 +148,7 @@ async function seedEvent(poll: Partial<typeof schema.events.$inferInsert> = {}) 
 	const tournament = tournaments.get(meleeEventId)!;
 	return {
 		eventId,
+		swissId: swiss!.id,
 		tournament,
 		roundId: (meleeRoundId: number) => meleeRoundId === ROUND_3
 			? round3!.id
@@ -619,7 +620,7 @@ describe('the Live Results runner', () => {
 
 describe('gET /api/events/:id/melee/live-results', () => {
 	it('names the Current Round and the stored Live Results error', async () => {
-		const { eventId, roundId, stage } = await seedEvent({
+		const { eventId, swissId, roundId, stage } = await seedEvent({
 			meleeLiveResultsLastCheckedAt: minutesAgo(1),
 			meleeLiveResultsError: GENERIC_FAILURE,
 		});
@@ -639,6 +640,7 @@ describe('gET /api/events/:id/melee/live-results', () => {
 			currentRound: {
 				id: roundId(ROUND_3),
 				name: 'Round 3',
+				phaseId: swissId,
 				phaseName: 'Swiss',
 			},
 			lastCheckedAt: minutesAgo(1),

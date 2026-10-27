@@ -27,6 +27,7 @@ export function createPlayerDeckList(
 		name: deckResponse.name,
 		colors: deckResponse.colors,
 		isPrimary: deckResponse.isPrimary,
+		reviewed: isReviewedPlayerDeck(deckResponse),
 		cards: deckResponse.cards as unknown as PlayerDeckList['cards'],
 		...(options.stats
 			? { stats: options.stats }
