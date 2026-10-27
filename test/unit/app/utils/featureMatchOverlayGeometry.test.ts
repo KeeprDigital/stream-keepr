@@ -22,14 +22,9 @@ describe('broadcast layout geometry utilities', () => {
 			width: 320,
 			height: 180,
 			framingStyle: {
-				backgroundColor: '#000000',
-				backgroundOpacity: 0,
-				borderVisible: true,
-				borderColor: '#ffffff',
-				borderWidth: 6,
 				borderRadius: 18,
 			},
-		});
+		}, 6);
 
 		expect(cutout).toEqual({
 			x: 106,
@@ -56,16 +51,11 @@ describe('broadcast layout geometry utilities', () => {
 			width: 320,
 			height: 180,
 			framingStyle: {
-				backgroundColor: '#000000',
-				backgroundOpacity: 0,
-				borderVisible: true,
-				borderColor: '#ffffff',
-				borderWidth: 6,
 				borderRadius: 18,
 				borderLeftVisible: false,
 				borderBottomVisible: false,
 			},
-		});
+		}, 6);
 
 		expect(cutout).toEqual({
 			x: 100,
@@ -81,7 +71,7 @@ describe('broadcast layout geometry utilities', () => {
 		});
 	});
 
-	it('cuts the full source rect when the source border is hidden', () => {
+	it('cuts the full source rect when the source surface has no outline', () => {
 		const cutout = featureMatchOverlaySourceCutoutRect({
 			id: 'player1-source',
 			label: 'Player',
@@ -92,14 +82,9 @@ describe('broadcast layout geometry utilities', () => {
 			width: 100,
 			height: 80,
 			framingStyle: {
-				backgroundColor: '#000000',
-				backgroundOpacity: 0,
-				borderVisible: false,
-				borderColor: '#ffffff',
-				borderWidth: 10,
 				borderRadius: 14,
 			},
-		});
+		}, 0);
 
 		expect(cutout.x).toBe(10);
 		expect(cutout.y).toBe(20);

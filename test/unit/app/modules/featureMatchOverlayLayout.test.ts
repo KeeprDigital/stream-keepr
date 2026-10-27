@@ -47,9 +47,9 @@ describe('feature match layout writer', () => {
 			source(),
 		]);
 
-		const next = patchFrame(layout, { backgroundColor: '#123456' });
+		const next = patchFrame(layout, { opacity: 0.25 });
 
-		expect(next.frame.backgroundColor).toBe('#123456');
+		expect(next.frame.opacity).toBe(0.25);
 		expect(next.sources).toBe(layout.sources);
 		expect(next.composition).toBe(layout.composition);
 	});
@@ -69,13 +69,13 @@ describe('feature match layout writer', () => {
 	it('merges a Source Item surface style rather than replacing it', () => {
 		const layout = layoutOf([
 			source({
-				framingStyle: { borderVisible: true, borderColor: '#ffffff' },
+				framingStyle: { borderRadius: 8, borderTopVisible: false },
 			}),
 		]);
 
-		const next = patchSourceFramingStyle(layout, 's1', { borderWidth: 6 });
+		const next = patchSourceFramingStyle(layout, 's1', { glowPosition: 'outside' });
 
-		expect(next.sources[0]!.framingStyle).toEqual({ borderVisible: true, borderColor: '#ffffff', borderWidth: 6 });
+		expect(next.sources[0]!.framingStyle).toEqual({ borderRadius: 8, borderTopVisible: false, glowPosition: 'outside' });
 	});
 
 	it('returns the same layout when an id names nothing', () => {
@@ -84,7 +84,7 @@ describe('feature match layout writer', () => {
 		]);
 
 		expect(patchSource(layout, 'missing', { label: 'x' })).toBe(layout);
-		expect(patchSourceFramingStyle(layout, 'missing', { borderWidth: 1 })).toBe(layout);
+		expect(patchSourceFramingStyle(layout, 'missing', { borderRadius: 1 })).toBe(layout);
 		expect(removeSource(layout, 'missing')).toBe(layout);
 		expect(moveSourceOrder(layout, 'missing', 1)).toBe(layout);
 	});

@@ -5,9 +5,10 @@ import type {
 	GraphicGroupChildConfig,
 	GraphicItemConfig,
 	GraphicSurfaceStyle,
+	MediaGraphicItemConfig,
 } from '../../types/graphics';
 import type { GraphicThemeBindings, GraphicThemeSlot } from '../../types/graphicThemeBindings';
-import type { FoundationTokenName, StoredThemeTokens, ThemeSurfaceStyle, ThemeTokenType, ThemeTokenValue, ThemeTypography } from '../theme';
+import type { FoundationTokenName, StoredThemeTokens, ThemeAsset, ThemeSurfaceStyle, ThemeTokenType, ThemeTokenValue, ThemeTypography } from '../theme';
 import { GRAPHIC_THEME_SLOT_VALUES } from '../../types/graphicThemeBindings';
 import { DEFAULT_THEME_TOKENS, FOUNDATION_TOKENS, resolveFoundationTokens } from '../theme';
 import {
@@ -53,6 +54,7 @@ export const GRAPHIC_THEME_SLOT_TOKEN_TYPES = {
 	'clipGeometry': 'shape-geometry',
 	'boxGeometry': 'shape-geometry',
 	'color': 'color',
+	'media': 'asset',
 	'animation.enter': 'animation-recipe',
 	'animation.update': 'animation-recipe',
 	'animation.exit': 'animation-recipe',
@@ -110,6 +112,8 @@ export function graphicThemeOwnerSupportsSlot(owner: GraphicThemeOwner, slot: Gr
 			return getGraphicItemDefinition(owner.type).shapeGeometry?.slot === slot;
 		case 'color':
 			return owner.type === 'social-network-icon';
+		case 'media':
+			return owner.type === 'media';
 		default:
 			return false;
 	}
@@ -149,6 +153,8 @@ function ownedSlotValue(owner: GraphicThemeOwner, slot: GraphicThemeSlot): unkno
 			return (fields.typography as { color?: string } | undefined)?.color;
 		case 'surfaceStyle.fill':
 			return (fields.surfaceStyle as GraphicSurfaceStyle | undefined)?.fill;
+		case 'media':
+			return { asset: fields.asset, mediaKind: fields.mediaKind };
 		default:
 			return fields[slot];
 	}
@@ -200,9 +206,29 @@ function paintSlot<T extends GraphicThemeOwner>(owner: T, slot: GraphicThemeSlot
 		case 'wonBoxSurfaceStyle':
 			// Resolved, so every colour is a literal: a Graphic Surface Style.
 			return { ...owner, [slot]: value as ThemeSurfaceStyle<string> };
+		case 'media':
+			return paintMedia(owner, value as ThemeAsset | null);
 		default:
 			return { ...owner, [slot]: value };
 	}
+}
+
+/**
+ * A Media Graphic Item showing an asset token's picture: none paints nothing,
+ * as an unfilled item does. A token naming no picture (a font) paints nothing
+ * over the item's own.
+ */
+function paintMedia<T extends GraphicThemeOwner>(owner: T, asset: ThemeAsset | null): T {
+	const media = { ...owner } as unknown as MediaGraphicItemConfig;
+	if (asset === null) {
+		delete media.asset;
+		return media as unknown as T;
+	}
+	if (asset.kind === 'font')
+		return owner;
+	media.asset = { assetId: asset.assetId, revisionId: asset.revisionId };
+	media.mediaKind = asset.kind;
+	return media as unknown as T;
 }
 
 /** `owner` with each of its own bound slots painted; the same object when none paints. */

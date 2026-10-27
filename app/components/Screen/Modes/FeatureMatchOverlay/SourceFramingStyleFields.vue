@@ -1,24 +1,13 @@
 <script setup lang="ts">
-import type { FeatureMatchSourceFramingStyle } from '~~/shared/types/screenConfig';
-import { borderGlowFieldsValue, borderGlowStyleUpdates } from '~/modules/feature-match-overlay/borderGlow';
-import { SOURCE_ITEM_UNSET_BORDER_COLOUR } from '~/modules/feature-match-overlay/renderModel';
-import FeatureMatchOverlayBackgroundFields from './BackgroundFields.vue';
+import type { FeatureMatchOverlayGlowPosition, FeatureMatchSourceFramingStyle } from '~~/shared/types/screenConfig';
 import FeatureMatchOverlayBorderRadiusControl from './BorderRadiusControl.vue';
+import FeatureMatchOverlayBorderSidesControl from './BorderSidesControl.vue';
 
 /**
- * The Source Item framing controls.
- *
- * Only what a Source Item paints: a background wash behind the video area,
- * per-corner radii, and, through the shared border and glow fields, a per-side
- * border and a glow. Its pickers offer hex colours; the renderer keeps the
- * opacity of any stored colour (`~/modules/screen/outputPaint.ts`).
- *
- * The shared Graphic Surface Style has no per-side border by design — a composed
- * rule-preset Shape Graphic Item replaces it there — but the Frame and its Source
- * Items are host capability, and that is what this edits.
- *
- * The background block is the Frame's own, so both host-owned surfaces offer the
- * same base colour, gradient overlay, and opacity.
+ * The Source Item framing controls: its shape only. Per-corner radii, which
+ * sides of its border show, and which side of the border its glow falls on.
+ * Its fill, border and glow are the Theme's `source-surface` Mode Token,
+ * shared by every Source Item (#831).
  */
 
 const props = defineProps<{ framingStyle?: FeatureMatchSourceFramingStyle }>();
@@ -29,32 +18,22 @@ const emit = defineEmits<{
 
 const style = computed(() => props.framingStyle ?? {});
 
+const GLOW_POSITION_OPTIONS = [
+	{ label: 'Both', value: 'both' },
+	{ label: 'Inside', value: 'inside' },
+	{ label: 'Outside', value: 'outside' },
+] satisfies Array<{ label: string; value: FeatureMatchOverlayGlowPosition }>;
+
 function update(updates: Partial<FeatureMatchSourceFramingStyle>) {
 	emit('update', updates);
-}
-
-function updateBackground(updates: { color?: string; gradient?: string; opacity?: number }) {
-	const styleUpdates: Partial<FeatureMatchSourceFramingStyle> = {};
-	if ('color' in updates)
-		styleUpdates.backgroundColor = updates.color;
-	if ('gradient' in updates)
-		styleUpdates.backgroundGradient = updates.gradient;
-	if ('opacity' in updates)
-		styleUpdates.backgroundOpacity = updates.opacity ?? 0;
-	update(styleUpdates);
 }
 </script>
 
 <template>
 	<div class="space-y-3">
-		<FeatureMatchOverlayBackgroundFields
-			:color="style.backgroundColor"
-			:gradient="style.backgroundGradient"
-			:opacity="style.backgroundOpacity"
-			color-label="Background"
-			opacity-label="Background opacity"
-			@update="updateBackground"
-		/>
+		<p class="text-xs text-muted" data-testid="source-framing-theme-note">
+			Fill, border and glow follow the Theme's Source Item surface.
+		</p>
 
 		<FeatureMatchOverlayBorderRadiusControl
 			:border-radius="style.borderRadius"
@@ -65,14 +44,22 @@ function updateBackground(updates: { color?: string; gradient?: string; opacity?
 			@update="(field, value) => update({ [field]: value })"
 		/>
 
-		<GraphicsBorderGlowFields
-			border-label="Border"
-			v-bind="borderGlowFieldsValue(style, SOURCE_ITEM_UNSET_BORDER_COLOUR)"
-			per-side
-			glow-position
-			glow-gated-on-border
-			hex-only
-			@edit="update(borderGlowStyleUpdates($event))"
+		<FeatureMatchOverlayBorderSidesControl
+			label="Border sides"
+			:sides="style"
+			@update="update"
 		/>
+
+		<UFormField label="Glow position" size="sm">
+			<USelect
+				:model-value="style.glowPosition ?? 'both'"
+				:items="GLOW_POSITION_OPTIONS"
+				value-key="value"
+				size="sm"
+				class="w-full"
+				aria-label="Glow position"
+				@update:model-value="update({ glowPosition: $event as FeatureMatchOverlayGlowPosition })"
+			/>
+		</UFormField>
 	</div>
 </template>

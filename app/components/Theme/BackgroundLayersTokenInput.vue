@@ -6,9 +6,11 @@ import { useThemeTokenDraft } from '~/modules/theme-editor/draft';
 // A Background Layer stack token, edited with the Screen's own stack editor.
 // Its image and video layers take library media or a Remote Media URL; a Theme
 // holds the library revisions as its own Graphic Asset References (ADR-0050).
+// It edits the stack as it resolves now, so a colour layer naming a colour
+// Foundation Token (#831) reads, and is written back, as its literal.
 
 const props = defineProps<{
-	modelValue: ThemeBackgroundLayer[];
+	modelValue: ThemeBackgroundLayer<string>[];
 	label: string;
 	/** The Event whose adopted assets the media picker offers first, if any. */
 	eventId?: number;

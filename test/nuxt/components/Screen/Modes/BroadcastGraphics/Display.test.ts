@@ -958,6 +958,29 @@ describe('broadcastGraphicsDisplay', () => {
 			expect(capabilitySessionRequests).toEqual(['/api/screen-output/screens/1/asset-capability-session']);
 		});
 
+		// A bound item's picture is the Screen's resolved logo, its override here (#831).
+		it('resolves a media item bound to the logo from the Screen\'s own override, through its capability', async () => {
+			mockAssetCapability.value = 'capability-token';
+			mockScreen.value = {
+				...screenWithStack([
+					withMedia({
+						themeBindings: { media: 'logo' },
+					}),
+				]),
+				themeOverrides: {
+					logo: { kind: 'image', assetId: 'logo-asset', revisionId: 'logo-revision' },
+				},
+			} as never;
+			mockOnAirGraphicIds.value = ['lower-third'];
+
+			const wrapper = await mountComponent();
+			await flushPromises();
+			await nextTick();
+
+			expect(wrapper.get('[data-graphic-item-kind="media"] img').attributes('src'))
+				.toBe('/api/screen-output/screens/1/assets/logo-asset/revisions/logo-revision/content');
+		});
+
 		/**
 		 * Chromium is the only supported engine for transparent video (ADR-0020), so a
 		 * live output renders every silent video it publishes as a video.

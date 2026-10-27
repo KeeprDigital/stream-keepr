@@ -1736,6 +1736,14 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						pinned it.
 					-->
 					<UFormField label="Graphic Asset" size="sm">
+						<GraphicsCompositorThemeBinding
+							theme-slot="media"
+							label="Media"
+							:current="themeBindingFor('media')"
+							:writable="canAuthor"
+							@bind="token => bindThemeToken('media', token)"
+							@detach="detachThemeToken('media')"
+						/>
 						<GraphicsAssetFocusPicker
 							:model-value="selectedMediaItem.asset"
 							:event-id="eventId"

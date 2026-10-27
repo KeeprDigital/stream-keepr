@@ -62,7 +62,7 @@ describe('useFeatureMatchOverlayConfigEditor', () => {
 		]);
 
 		editor.updateSource('missing', { label: 'x' });
-		editor.updateSourceFramingStyle('missing', { borderWidth: 2 });
+		editor.updateSourceFramingStyle('missing', { borderRadius: 2 });
 		editor.removeSource('missing');
 
 		expect(updateConfig).not.toHaveBeenCalled();
@@ -71,10 +71,10 @@ describe('useFeatureMatchOverlayConfigEditor', () => {
 	it('patchFrame routes frame edits through the writer', () => {
 		const { config, updateConfig, editor } = createEditor([]);
 
-		editor.patchFrame({ backgroundColor: '#123456' });
+		editor.patchFrame({ opacity: 0.25 });
 
 		expect(updateConfig).toHaveBeenCalledOnce();
-		expect(config.value.layout.frame.backgroundColor).toBe('#123456');
+		expect(config.value.layout.frame.opacity).toBe(0.25);
 	});
 
 	it('createSourceItem submits and returns the new id', () => {

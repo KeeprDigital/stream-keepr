@@ -15,9 +15,9 @@
  * The property groups a Graphic Item or Broadcast Graphic may bind.
  *
  * Media treatment and `animation.on-screen` have no slot, because no token
- * type fills either. Text colour is its own
- * slot, because a typography token carries no colour; `color` is a Social
- * Network Icon's.
+ * type fills either. Text colour is its own slot, because a typography token
+ * carries no colour; `color` is a Social Network Icon's, and `media` a Media
+ * Graphic Item's picture, which an asset token such as `logo` fills (#831).
  */
 export const GRAPHIC_THEME_SLOT_VALUES = [
 	'typography',
@@ -31,6 +31,7 @@ export const GRAPHIC_THEME_SLOT_VALUES = [
 	'clipGeometry',
 	'boxGeometry',
 	'color',
+	'media',
 	'animation.enter',
 	'animation.update',
 	'animation.exit',

@@ -108,9 +108,26 @@ describe('a Screen\'s token section', () => {
 	});
 
 	it('shows nothing for a mode that consumes no Theme Token', async () => {
-		const wrapper = await mountSection('broadcast-graphics');
+		const wrapper = await mountSection('feature-match');
 
 		expect(wrapper.find('[data-testid="screen-theme-tokens"]').exists()).toBe(false);
+	});
+
+	// A graphics host's Graphic Items may bind any of them, so its Screen may override any (#831).
+	it('lists every Foundation Token a Graphic Item may bind on a graphics host', async () => {
+		const wrapper = await mountSection('broadcast-graphics');
+
+		const listed = wrapper.findAll('[data-token]').map(row => row.attributes('data-token'));
+		expect(listed).toEqual(expect.arrayContaining([
+			'accent',
+			'logo',
+			'heading',
+			'panel',
+			'motion-enter',
+		]));
+		// No binding slot takes a dimension or a Background Layer stack.
+		expect(listed).not.toContain('inset');
+		expect(listed).not.toContain('background');
 	});
 
 	it.each([

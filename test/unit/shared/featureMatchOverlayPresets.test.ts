@@ -1,10 +1,9 @@
-import type { GraphicGroupChildConfig, GraphicItemConfig, GraphicSurfaceStyle } from '~~/shared/types/graphics';
+import type { GraphicGroupChildConfig, GraphicItemConfig } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { applyFeatureMatchOverlayPreset, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { FEATURE_MATCH_TOKEN_KEYS } from '~~/shared/featureMatchTokenCatalogue';
 import { getGraphicItemDefinition, parseGraphicTextTemplate } from '~~/shared/modules/graphics';
-import { MAX_GRAPHIC_FILL_STOPS, MIN_GRAPHIC_FILL_STOPS } from '~~/shared/types/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 
 function everyPresetItem(): Array<GraphicItemConfig | GraphicGroupChildConfig> {
@@ -12,19 +11,6 @@ function everyPresetItem(): Array<GraphicItemConfig | GraphicGroupChildConfig> {
 		item.type === 'group'
 			? [item, ...item.children]
 			: [item]));
-}
-
-function presetSurfaceStyles(): GraphicSurfaceStyle[] {
-	return everyPresetItem().flatMap((item) => {
-		const styles: GraphicSurfaceStyle[] = [];
-		if ('surfaceStyle' in item && item.surfaceStyle)
-			styles.push(item.surfaceStyle);
-		if (item.type === 'group' && item.defaultChildSurfaceStyle)
-			styles.push(item.defaultChildSurfaceStyle);
-		if (item.type === 'game-wins')
-			styles.push(item.boxSurfaceStyle, item.wonBoxSurfaceStyle);
-		return styles;
-	});
 }
 
 describe('feature match overlay presets', () => {
@@ -100,15 +86,40 @@ describe('feature match overlay presets', () => {
 			expect(group.children.some(child => (child as { type: string }).type === 'group')).toBe(false);
 	});
 
-	it('keeps every gradient fill within the Graphic Fill stop bounds', () => {
-		const gradients = presetSurfaceStyles().filter(style => style.fill.type === 'linear-gradient');
+	// Placed under any Theme, a preset follows it: its text, panels and branding bind Foundation Tokens.
+	it.each([
+		{ kind: 'text', slot: 'typography.color', token: 'text-primary' },
+		{ kind: 'shape', slot: 'surfaceStyle', token: 'panel' },
+		{ kind: 'media', slot: 'media', token: 'logo' },
+	] as const)('binds every $kind item\'s $slot to $token', ({ kind, slot, token }) => {
+		const items = everyPresetItem().filter(item => item.type === kind && item.id !== 'branding-image-2');
 
-		expect(gradients.length).toBeGreaterThan(0);
-		for (const style of gradients) {
-			if (style.fill.type !== 'linear-gradient')
-				continue;
-			expect(style.fill.stops.length).toBeGreaterThanOrEqual(MIN_GRAPHIC_FILL_STOPS);
-			expect(style.fill.stops.length).toBeLessThanOrEqual(MAX_GRAPHIC_FILL_STOPS);
+		expect(items.length).toBeGreaterThan(0);
+		for (const item of items)
+			expect(item.themeBindings?.[slot], item.id).toBe(token);
+	});
+
+	it('carries no raw CSS gradient, colour, border or glow on its Frame or Source Items', () => {
+		const looks = [
+			'backgroundColor',
+			'gradient',
+			'backgroundGradient',
+			'backgroundOpacity',
+			'borderVisible',
+			'borderColor',
+			'borderWidth',
+			'glowColor',
+			'glowSize',
+			'glowOpacity',
+		];
+		for (const preset of FEATURE_MATCH_OVERLAY_PRESETS) {
+			const hosts = [
+				preset.config.layout.frame,
+				...preset.config.layout.sources.map(source => source.framingStyle ?? {}),
+			];
+			for (const host of hosts)
+				expect(Object.keys(host).filter(key => looks.includes(key)), preset.id).toEqual([]);
+			expect(Object.keys(preset.config.layout.frame.animation ?? {}).sort()).toEqual(['enabled', 'opacity']);
 		}
 	});
 });

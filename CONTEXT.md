@@ -332,7 +332,7 @@ One fixed canonical set of Event Data a Theme preview renders every Screen Mode 
 _Avoid_: dummy data, test data
 
 **Graphic Theme Binding**:
-A Graphic Item property group, or a Broadcast Graphic's enter, update or exit recipe, that names one whole Foundation Token of its type rather than holding its own value: a typography, a text or icon colour, a Graphic Surface Style, a Graphic Fill, a Shape Geometry, or a Graphic Animation Recipe. The compositor paints it from the Screen's resolved Theme. Detaching copies the resolved value in as the property's own; binding replaces it; editing it detaches it.
+A Graphic Item property group, or a Broadcast Graphic's enter, update or exit recipe, that names one whole Foundation Token of its type rather than holding its own value: a typography, a text or icon colour, a Graphic Surface Style, a Graphic Fill, a Shape Geometry, a Graphic Animation Recipe, or a Media Graphic Item's picture, from an asset token such as the logo. The compositor paints it from the Screen's resolved Theme. Detaching copies the resolved value in as the property's own; binding replaces it; editing it detaches it.
 _Avoid_: style reference, pin, override, Graphic Input Binding (which maps a Graphic Input to Event Data)
 
 ### Broadcast Graphics
@@ -680,7 +680,7 @@ The authored arrangement a Feature Match Overlay renders: the Frame, its Source 
 _Avoid_: Overlay config
 
 **Feature Match Overlay Frame**:
-The continuous graphic area of a Feature Match Layout behind and around its Layout Items.
+The continuous graphic area of a Feature Match Layout behind and around its Layout Items. Its fill, border, glow, Animation Effect and the media its Theme adds beneath its own are the Feature Match Overlay's Mode Tokens; the layout holds its opacity, its own image and video, and which edges its border runs along.
 _Avoid_: Panel area, background panel
 
 **Feature Match Layout Item**:
@@ -688,7 +688,7 @@ A Graphic Item placed in a Feature Match Layout; layouts use the shared Graphic 
 _Avoid_: Region
 
 **Source Item**:
-A host-owned Feature Match Overlay element placing an external video source, with optional Frame cutout and source framing style. It is not a Graphic Item and lives in the layout's own Source Item list.
+A host-owned Feature Match Overlay element placing an external video source, with optional Frame cutout and source framing: its corner radii, border sides and glow position. Its fill, border and glow are the Feature Match Overlay's Source Item surface Mode Token. It is not a Graphic Item and lives in the layout's own Source Item list.
 _Avoid_: Source Region, camera box, Source Graphic Item
 
 **Feature Match Overlay Preset**:
@@ -700,7 +700,7 @@ A user-created reusable Feature Match Layout that can be copied into a Screen's 
 _Avoid_: Preset when referring to user-owned reusable layouts.
 
 **Feature Match Layout Host Vocabulary**:
-The terms a Feature Match Layout uses whose meaning the installation supplies: Source Roles, the Frame's Animation Effect, and Feature Match tokens a Graphic Text Template binds. Each is closed and pinned by the layout format version, so a package naming an unimplemented term is refused.
+The terms a Feature Match Layout uses whose meaning the installation supplies: Source Roles and Feature Match tokens a Graphic Text Template binds. Each is closed and pinned by the layout format version, so a package naming an unimplemented term is refused. The Frame's Animation Effect was one until it became a Mode Token; its identity is still recognised.
 _Avoid_: Free-form role, camera name
 
 **Feature Match Sample Dataset**:
@@ -751,7 +751,7 @@ _Avoid_: Dummy data, test data
 - An **Event** uses exactly one **Theme**; an Event that chose none uses the **Default Theme**, which ships with Stream Keepr and cannot be edited or deleted
 - A **Theme** in use by any **Event** cannot be deleted, and the refusal names those Events
 - A **Theme** stores only the **Theme Tokens** it sets; every other token reads its shipped default
-- A **Foundation Token** holds a value, in which a fill's or surface's colour may name a colour **Foundation Token**; a **Mode Token** holds a value or names a **Foundation Token** of its type; nothing names a **Mode Token**, and a colour names nothing, so every token resolves in at most two steps
+- A **Foundation Token** holds a value, in which a fill's, surface's or background colour layer's colour may name a colour **Foundation Token**; a **Mode Token** holds a value or names a **Foundation Token** of its type; nothing names a **Mode Token**, and a colour names nothing, so every token resolves in at most two steps
 - A **Screen** resolves each **Theme Token** from its own **Screen Theme Override**, else its **Event**'s **Theme**, else the token's default; overriding a **Foundation Token** reaches every **Mode Token** and **Graphic Item** on that Screen that names it
 - A **Screen Theme Override** of another mode's **Mode Token** is kept while the **Screen** shows a different **Screen Mode**, and applies again on its return
 - A **Graphic Item** property either names a whole **Foundation Token** of its type or holds its own value; detaching copies the token's resolved value in

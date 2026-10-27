@@ -33,12 +33,8 @@ export function createFeatureMatchSourceItem(id: string): FeatureMatchSourceItem
 		y: 80,
 		width: 420,
 		height: 240,
+		// Shape only: it paints the Theme's `source-surface` (#831).
 		framingStyle: {
-			backgroundColor: '#000000',
-			backgroundOpacity: 0,
-			borderVisible: true,
-			borderColor: '#0077a3',
-			borderWidth: 4,
 			borderRadius: 8,
 		},
 	};

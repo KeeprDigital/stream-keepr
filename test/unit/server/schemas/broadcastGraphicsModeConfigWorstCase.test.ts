@@ -32,7 +32,7 @@ import { GRAPHIC_THEME_SLOT_VALUES } from '~~/shared/types/graphicThemeBindings'
 // the figures look measured when they are not.
 
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
-const WORST_CASE_FLAT_BYTES = 1_923_076;
+const WORST_CASE_FLAT_BYTES = 1_927_576;
 const REALISTIC_SCREEN_AT_CAP_BYTES = 248_734;
 
 const jsonBytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;

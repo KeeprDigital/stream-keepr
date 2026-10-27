@@ -245,17 +245,8 @@ export function featureMatchLayoutTemplatePackageRequirements(
 			});
 		}
 	}
-	// Declared whether or not the effect is currently switched on: the term is
-	// stored either way, and an author who imports a layout and enables its Frame
-	// animation must not be the one who discovers the renderer is missing.
-	if (layout.frame.animation) {
-		capabilities.push({
-			slot: 'frame.animation.effect',
-			capability: 'host-vocabulary',
-			identity: featureMatchLayoutVocabularyIdentity('frame-animation-effect', layout.frame.animation.effect),
-			configurationVersion: FEATURE_MATCH_LAYOUT_FORMAT_VERSION,
-		});
-	}
+	// The Frame's Animation Effect is the receiving Theme's Mode Token (#831), so
+	// a layout names no effect a receiver must implement.
 	for (const item of layout.composition.items)
 		appendBroadcastGraphicItemCapabilities(capabilities, item, `composition.items.${item.id}`);
 	appendFeatureMatchTokenCapabilities(capabilities, layout.composition.items, 'composition.items');

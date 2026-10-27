@@ -77,7 +77,8 @@ export function modeMotionVars<M extends ThemedScreenMode>(mode: M, token: Scree
 export function screenBackgroundLayers(own: BackgroundLayer[] | undefined, theme: StoredThemeTokens, overrides: StoredThemeTokens): BackgroundLayer[] {
 	if (own?.length)
 		return own;
-	return resolveFoundationToken({ vocabulary: FOUNDATION_TOKENS, theme, overrides }, 'background') as ThemeBackgroundLayer[];
+	// Resolved, so every colour layer holds a literal.
+	return resolveFoundationToken({ vocabulary: FOUNDATION_TOKENS, theme, overrides }, 'background') as ThemeBackgroundLayer<string>[];
 }
 
 /**

@@ -1,3 +1,4 @@
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
@@ -24,6 +25,9 @@ const mockError = ref<string | null>(null);
 const mockContentUrlsSettled = ref(true);
 // Whether the stubbed content-URL map is currently cleared.
 const mockContentUrlsCleared = ref(false);
+/** The Event's Theme, and the Screen's own overrides of it. */
+const mockTheme = ref<StoredThemeTokens>();
+const mockScreen = ref<{ themeOverrides: StoredThemeTokens }>({ themeOverrides: {} });
 
 mockNuxtImport('useScreenContext', () => () => ({
 	outputMode: mockOutputMode,
@@ -31,7 +35,14 @@ mockNuxtImport('useScreenContext', () => () => ({
 	previewSafeAreas: mockPreviewSafeAreas,
 	eventCanvas: mockEventCanvas,
 	isPreview: mockIsPreview,
+	themeTokens: mockTheme,
+	screen: mockScreen,
 }));
+
+afterEach(() => {
+	mockTheme.value = undefined;
+	mockScreen.value = { themeOverrides: {} };
+});
 
 const mockUsesSampleDataset = ref(false);
 const mockMatchState = ref<Record<string, unknown> | null>(null);
@@ -114,24 +125,24 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(composition).toBeGreaterThan(source);
 		});
 
-		it('draws the Frame border and glow the render model resolves, in the Key Output too', async () => {
+		it('draws the Frame border and glow its Theme\'s surface resolves, in the Key Output too', async () => {
 			// What the Frame paints is decided by the render model and tested there;
-			// this pins only that the component draws what it is given.
+			// this pins only that the component draws what the Theme gives it.
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-			config.layout.frame = {
-				...config.layout.frame,
-				borderVisible: true,
-				borderColor: '#0077a3',
-				borderWidth: 4,
-				borderLeftVisible: false,
-				glowSize: 12,
-				glowOpacity: 0.5,
-			};
+			config.layout.frame = { ...config.layout.frame, borderLeftVisible: false };
 			mockConfig.value = config;
+			mockTheme.value = {
+				'feature-match-overlay.frame-surface': {
+					fill: { type: 'solid', color: '#111111' },
+					fillOpacity: 1,
+					outline: { color: '#0077a3', width: 4 },
+					glow: { color: '#0077a3', size: 12, opacity: 0.5 },
+				},
+			};
 			mockOutputMode.value = 'key';
 
 			const wrapper = await mountComponent();
-			const border = wrapper.get('.frame-layer g[stroke]');
+			const border = wrapper.get('.feature-match-overlay__frame-border');
 			const filterId = border.attributes('filter')?.match(/^url\(#(.+)\)$/)?.[1];
 			const shadow = wrapper.get(`filter[id="${filterId}"] feDropShadow`);
 
@@ -140,7 +151,7 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(shadow.attributes()).toMatchObject({ 'stdDeviation': '6', 'flood-color': '#ffffff', 'flood-opacity': '0.5' });
 		});
 
-		it('draws a Source Item glow in the Key Output too', async () => {
+		it('draws a Source Item glow its Theme\'s surface resolves, in the Key Output too', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.sources = [
 				{
@@ -153,16 +164,17 @@ describe('featureMatchOverlayDisplay', () => {
 					height: 200,
 					sourceRole: 'main',
 					frameCutout: false,
-					framingStyle: {
-						borderVisible: true,
-						borderColor: '#0077a3',
-						borderWidth: 4,
-						glowSize: 10,
-						glowOpacity: 0.5,
-					},
 				},
 			];
 			mockConfig.value = config;
+			mockTheme.value = {
+				'feature-match-overlay.source-surface': {
+					fill: { type: 'solid', color: '#000000' },
+					fillOpacity: 0,
+					outline: { color: '#0077a3', width: 4 },
+					glow: { color: '#0077a3', size: 10, opacity: 0.5 },
+				},
+			};
 			mockOutputMode.value = 'key';
 
 			const wrapper = await mountComponent();
@@ -806,6 +818,155 @@ describe('featureMatchOverlayDisplay', () => {
 	// The Feature Match Overlay's half of the library-font claim (#141).
 	// The Frame's image and video each take a Screen Media Source (ADR-0021): a library revision
 	// resolves through the Screen's content URLs, a Remote Media URL is drawn as given.
+	// A placed preset follows its Theme on every output: the Frame and Source Items
+	// through the overlay's Mode Tokens, its Graphic Items through their bindings (#831).
+	describe('the Theme a placed preset renders under', () => {
+		function frameStroke(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+			return wrapper.get('.feature-match-overlay__frame-border').attributes('stroke');
+		}
+		function sourceBorder(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+			return (wrapper.get('[data-graphic-item-id="main-source"]').element as HTMLElement).style.borderTop;
+		}
+		function panelFill(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+			return wrapper.get('[data-graphic-item-kind="shape"] path').attributes('fill');
+		}
+
+		beforeEach(() => {
+			mockConfig.value = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		});
+
+		it.each([
+			{
+				output: 'overlay',
+				stroke: '#c0ffee',
+				border: '4px solid #c0ffee',
+				panel: '#c0ffee',
+			},
+			{
+				output: 'fill',
+				stroke: '#c0ffee',
+				border: '4px solid #c0ffee',
+				panel: '#c0ffee',
+			},
+			{
+				output: 'key',
+				stroke: '#ffffff',
+				border: '4px solid #ffffff',
+				panel: '#ffffff',
+			},
+		] as const)('restyles its Frame, Source Items and panels live when the Theme\'s accent changes, in the $output Output', async ({ output, stroke, border, panel }) => {
+			mockOutputMode.value = output;
+			mockTheme.value = { accent: '#123456' };
+			const wrapper = await mountComponent();
+
+			mockTheme.value = { accent: '#c0ffee' };
+			await nextTick();
+
+			expect(frameStroke(wrapper)).toBe(stroke);
+			expect(sourceBorder(wrapper)).toBe(border);
+			expect(panelFill(wrapper)).toBe(panel);
+		});
+
+		it('restyles them from the Screen\'s own override of the accent over its Theme\'s', async () => {
+			mockTheme.value = { accent: '#123456' };
+			mockScreen.value = {
+				themeOverrides: { accent: '#654321' },
+			};
+
+			const wrapper = await mountComponent();
+
+			expect(frameStroke(wrapper)).toBe('#654321');
+			expect(panelFill(wrapper)).toBe('#654321');
+		});
+
+		it('fills the Frame from the Theme\'s Frame surface', async () => {
+			mockTheme.value = {
+				'feature-match-overlay.frame-surface': {
+					fill: {
+						type: 'solid',
+						color: { token: 'accent' },
+					},
+					fillOpacity: 0.5,
+				},
+				'accent': '#abcdef',
+			};
+
+			const fill = (await mountComponent()).get('.feature-match-overlay__frame-fill');
+
+			expect(fill.attributes()).toMatchObject({ 'fill': '#abcdef', 'fill-opacity': '0.5' });
+		});
+
+		it('draws its Event Branding from the Theme\'s logo, resolved through its exact revision', async () => {
+			mockTheme.value = {
+				logo: { kind: 'image', assetId: 'logo-asset', revisionId: 'logo-revision' },
+			};
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.get('[data-graphic-item-kind="media"] img').attributes('src'))
+				.toBe('/private-assets/logo-asset/logo-revision');
+		});
+
+		it('draws the Theme\'s Frame media beneath the Frame\'s own', async () => {
+			mockTheme.value = {
+				'feature-match-overlay.frame-media': { kind: 'image', assetId: 'backdrop', revisionId: 'backdrop-1' },
+			};
+
+			const image = (await mountComponent()).get('.feature-match-overlay__theme-frame-image');
+
+			expect(image.attributes('href') ?? image.attributes('xlink:href')).toBe('/private-assets/backdrop/backdrop-1');
+		});
+
+		it('draws the Frame\'s Animation Effect the Theme names', async () => {
+			mockTheme.value = {
+				'animation-effect': { effect: 'net' },
+			};
+
+			const frame = (await mountComponent()).get('.frame-layer');
+
+			expect(frame.attributes('data-frame-animation-effect')).toBe('net');
+		});
+
+		it('loads a library font the Theme\'s heading supplies to a bound Graphic Item', async () => {
+			Object.defineProperty(document, 'fonts', {
+				configurable: true,
+				value: {
+					add: vi.fn(),
+					delete: vi.fn(),
+					load: vi.fn().mockResolvedValue([]),
+					check: vi.fn().mockReturnValue(true),
+					ready: Promise.resolve(),
+				},
+			});
+			const sources: string[] = [];
+			vi.stubGlobal('FontFace', class {
+				constructor(public family: string, public source: string) {
+					sources.push(source);
+				}
+
+				async load() { return this; }
+			});
+			mockTheme.value = {
+				heading: {
+					font: {
+						kind: 'asset',
+						reference: { assetId: 'heading-font', revisionId: 'heading-font-1' },
+					},
+					weight: 800,
+					lineHeight: 1,
+					tracking: 0,
+					case: 'none',
+				},
+			};
+
+			const wrapper = await mountComponent();
+
+			await vi.waitFor(() => expect(sources).toContain('url("/private-assets/heading-font/heading-font-1")'));
+			expect(wrapper.get('[data-graphic-item-kind="text"] p').attributes('style'))
+				.toContain('font-family: stream-keepr-graphic-asset-heading-font-heading-font-1;');
+		});
+	});
+
 	describe('the Frame’s own media', () => {
 		const loopVideo = {
 			enabled: true,

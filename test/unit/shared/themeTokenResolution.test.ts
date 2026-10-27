@@ -1,6 +1,6 @@
 import type { FoundationTokenName, FoundationTokenVocabulary, ModeTokenDeclarations, StoredThemeTokens } from '~~/shared/modules/theme';
 import { describe, expect, it } from 'vitest';
-import { FOUNDATION_TOKENS, resolveFoundationTokens, resolveThemeTokens } from '~~/shared/modules/theme';
+import { FOUNDATION_TOKENS, resolveFoundationTokens, resolveThemeCompositeColors, resolveThemeTokens } from '~~/shared/modules/theme';
 import { SCREEN_MODES, screenModeTokens } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 
@@ -364,6 +364,41 @@ describe('a composite Foundation Token naming a colour', () => {
 
 		expect(panel(theme)).toEqual(panel());
 	});
+
+	// The background stack's colour layers name colour tokens as a fill's colours do (#831).
+	it.each([
+		['the Theme value', {}, 'rgb(3, 0, 0)'],
+		[
+			'the override, over the Theme',
+			{ accent: 'rgb(4, 0, 0)' },
+			'rgb(4, 0, 0)',
+		],
+	])('reads a background colour layer naming the accent as %s', (_, overrides, expected) => {
+		const theme = {
+			accent: 'rgb(3, 0, 0)',
+			background: [
+				{
+					id: 'wash',
+					type: 'color',
+					enabled: true,
+					opacity: 0.5,
+					color: { token: 'accent' },
+				},
+			],
+		};
+
+		const background = resolveFoundationTokens({ vocabulary: FOUNDATION_TOKENS, theme, overrides }).background;
+
+		expect(background).toEqual([
+			{
+				id: 'wash',
+				type: 'color',
+				enabled: true,
+				opacity: 0.5,
+				color: expected,
+			},
+		]);
+	});
 });
 
 describe('the shipped vocabulary and Mode Token declarations', () => {
@@ -378,10 +413,11 @@ describe('the shipped vocabulary and Mode Token declarations', () => {
 			overrides: {},
 		});
 
-		for (const [name, { default: declared }] of Object.entries(modeTokens)) {
+		for (const [name, { type, default: declared }] of Object.entries(modeTokens)) {
+			// A literal composite's colours read as the colour Foundation Tokens they name.
 			const expected = typeof declared === 'object' && declared !== null && 'token' in declared
 				? FOUNDATION_TOKENS[declared.token as FoundationTokenName].default
-				: declared;
+				: resolveThemeCompositeColors(type, declared, color => FOUNDATION_TOKENS[color as FoundationTokenName].default as string);
 			expect(values[name], name).toEqual(expected);
 		}
 	});
