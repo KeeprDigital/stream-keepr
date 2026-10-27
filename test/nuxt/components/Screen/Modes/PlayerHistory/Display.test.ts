@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import Display from '~/components/Screen/Modes/PlayerHistory/Display.vue';
+import { modeTokenVar } from '~/modules/screen-mode';
 
 vi.mock('@vueuse/core', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('@vueuse/core')>();
@@ -93,8 +94,6 @@ describe('screenModesPlayerHistoryDisplay', () => {
 	beforeEach(() => {
 		screen.value = {
 			screenConfig: {
-				primaryTextColor: '#123456',
-				secondaryTextColor: '#654321',
 				paddingY: 0,
 			},
 		};
@@ -216,7 +215,7 @@ describe('screenModesPlayerHistoryDisplay', () => {
 		const wrapper = await mountComponent();
 
 		const badge = wrapper.get('.outcome-badge');
-		expect(badge.classes()).toContain('outcome-win');
+		expect(badge.attributes('data-outcome')).toBe('win');
 		expect(badge.get('.outcome-label').text()).toBe('WIN');
 		expect(badge.get('.outcome-score').text()).toBe('2-1');
 	});
@@ -225,13 +224,11 @@ describe('screenModesPlayerHistoryDisplay', () => {
 		[
 			'bye',
 			historyRow({ outcome: 'bye' }),
-			'outcome-win',
 			'BYE',
 		],
 		[
 			'loss',
 			historyRow({ outcome: 'loss', playerGameWins: 0, opponentGameWins: 2 }),
-			'outcome-loss',
 			'LOSS',
 		],
 		[
@@ -242,23 +239,32 @@ describe('screenModesPlayerHistoryDisplay', () => {
 				opponentGameWins: 1,
 				gameDraws: 1,
 			}),
-			'outcome-draw',
 			'DRAW',
 		],
 		[
 			'pending',
 			historyRow({ outcome: 'pending', hasResult: false }),
-			'outcome-pending',
 			'Pending',
 		],
-	])('badges a %s outcome with its state class', async (_name, row, expectedClass, expectedLabel) => {
+	] as const)('badges a %s outcome with its state', async (outcome, row, expectedLabel) => {
 		pageData.value = [row];
 
 		const wrapper = await mountComponent();
 
 		const badge = wrapper.get('.outcome-badge');
-		expect(badge.classes()).toContain(expectedClass);
+		expect(badge.attributes('data-outcome')).toBe(outcome);
 		expect(badge.get('.outcome-label').text()).toBe(expectedLabel);
+	});
+
+	// A bye scores as a win, so it reads in the win colour.
+	it('badges a bye in the win colour', async () => {
+		pageData.value = [
+			historyRow({ outcome: 'bye' }),
+		];
+
+		const badge = (await mountComponent()).get('.outcome-badge');
+
+		expect(badge.attributes('style')).toContain(`color: ${modeTokenVar('player-history', 'outcome-win')};`);
 	});
 
 	it('leaves the score segment off an unscored outcome', async () => {
@@ -412,8 +418,6 @@ describe('screenModesPlayerHistoryDisplay', () => {
 
 		const style = wrapper.get('.player-history-display').attributes('style');
 		expect(style).toContain('--history-row-height: 100px;');
-		expect(style).toContain('--broadcast-table-primary-text: #123456;');
-		expect(style).toContain('--broadcast-table-secondary-text: #654321;');
 	});
 
 	it('renders nothing while the mode is empty', async () => {

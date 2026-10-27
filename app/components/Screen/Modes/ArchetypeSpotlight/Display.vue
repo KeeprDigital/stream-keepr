@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import type { ScreenConfig } from '~~/shared/types/screenConfig';
+import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { screen } = useScreenContext();
 const {
 	config,
 	error,
@@ -16,17 +15,51 @@ const {
 	formatRecord,
 } = useArchetypeSpotlightModeData();
 
-const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
-const primaryTextStyle = computed(() => screenConfig.value.primaryTextColor
-	? { color: screenConfig.value.primaryTextColor }
-	: {});
-const secondaryTextStyle = computed(() => screenConfig.value.secondaryTextColor
-	? { color: screenConfig.value.secondaryTextColor }
-	: {});
-const themeStyle = computed(() => ({
-	'--broadcast-table-primary-text': screenConfig.value.primaryTextColor ?? '#ffffff',
-	'--broadcast-table-secondary-text': screenConfig.value.secondaryTextColor ?? 'rgba(255, 255, 255, 0.72)',
-}));
+const primaryTextStyle = {
+	color: modeTokenVar('archetype-spotlight', 'primary-text'),
+};
+const secondaryTextStyle = {
+	color: modeTokenVar('archetype-spotlight', 'secondary-text'),
+};
+const titleStyle = {
+	...modeTypographyStyle('archetype-spotlight', 'title-typography'),
+	color: modeTokenVar('archetype-spotlight', 'title-text'),
+};
+const titleDividerStyle = {
+	borderBottomColor: modeTokenVar('archetype-spotlight', 'title-divider'),
+};
+const headlineStyle = {
+	...modeTypographyStyle('archetype-spotlight', 'headline-typography'),
+	...primaryTextStyle,
+};
+const labelStyle = {
+	...modeTypographyStyle('archetype-spotlight', 'label-typography'),
+	...secondaryTextStyle,
+};
+/** Over the shared header row's own face, colour and rule. */
+const columnHeaderStyle = {
+	...labelStyle,
+	borderBottomColor: modeTokenVar('archetype-spotlight', 'row-divider'),
+};
+/** On each row too, over the shared row chrome's own line height. */
+const rowStyle = {
+	...modeTypographyStyle('archetype-spotlight', 'row-typography'),
+	borderBottomColor: modeTokenVar('archetype-spotlight', 'row-divider'),
+};
+/** Over the shared page indicator's own face. */
+const pageIndicatorStyle = {
+	...modeTypographyStyle('archetype-spotlight', 'row-typography'),
+	...secondaryTextStyle,
+};
+const surfaceStyle = {
+	backgroundColor: modeTokenVar('archetype-spotlight', 'surface'),
+};
+
+/** Set on the root, over the shared broadcast table chrome's own colour and face. */
+const displayStyle = {
+	...modeTypographyStyle('archetype-spotlight', 'row-typography'),
+	color: modeTokenVar('archetype-spotlight', 'primary-text'),
+};
 
 // The archetype page's stat strip, for the numbers a spotlight shows.
 const stats = computed(() => {
@@ -48,9 +81,13 @@ const stats = computed(() => {
 	];
 });
 
-// Most Played Cards' default stat badge, so a card's inclusion rate reads the same on
-// both Screens. Cards carry no rank badge here: their order is the ranking.
-const statBadgeStyle = { color: '#111827', backgroundColor: '#ffffff' };
+// Cards carry no rank badge here: their order is the ranking. The face is
+// set over the card's own.
+const statBadgeStyle = {
+	...modeTypographyStyle('archetype-spotlight', 'row-typography'),
+	color: modeTokenVar('archetype-spotlight', 'stat-badge-text'),
+	backgroundColor: modeTokenVar('archetype-spotlight', 'stat-badge-surface'),
+};
 </script>
 
 <template>
@@ -58,16 +95,16 @@ const statBadgeStyle = { color: '#111827', backgroundColor: '#ffffff' };
 		:error="error"
 		:empty="isEmpty"
 	>
-		<div class="archetype-spotlight-display broadcast-table-display flex flex-col gap-4 h-full w-full" :style="themeStyle">
-			<div v-if="config.showHeader" class="spotlight-header broadcast-table-title">
-				<h2 :style="primaryTextStyle">
+		<div class="archetype-spotlight-display broadcast-table-display flex flex-col gap-4 h-full w-full" :style="displayStyle">
+			<div v-if="config.showHeader" class="spotlight-header broadcast-table-title" :style="titleDividerStyle">
+				<h2 :style="titleStyle">
 					{{ headerText }}
 				</h2>
 			</div>
 
 			<div v-if="spotlight" class="spotlight-summary flex items-center justify-between gap-6 px-4">
 				<div class="flex items-center gap-3 min-w-0">
-					<span class="spotlight-name truncate" :style="primaryTextStyle">{{ spotlight.archetype.name }}</span>
+					<span class="spotlight-name truncate" :style="headlineStyle">{{ spotlight.archetype.name }}</span>
 					<MtgManaColorDisplay
 						v-if="spotlight.archetype.colors"
 						:colors="spotlight.archetype.colors"
@@ -77,15 +114,15 @@ const statBadgeStyle = { color: '#111827', backgroundColor: '#ffffff' };
 				</div>
 				<div class="flex gap-8">
 					<div v-for="stat in stats" :key="stat.label" class="spotlight-stat flex flex-col items-end">
-						<span class="stat-label broadcast-table-secondary" :style="secondaryTextStyle">{{ stat.label }}</span>
-						<span class="stat-value broadcast-table-numeric" :style="primaryTextStyle">{{ stat.value }}</span>
+						<span class="stat-label" :style="labelStyle">{{ stat.label }}</span>
+						<span class="stat-value" :style="headlineStyle">{{ stat.value }}</span>
 					</div>
 				</div>
 			</div>
 
 			<div class="spotlight-body flex gap-6 flex-1 min-h-0 px-4">
-				<div class="spotlight-pilots broadcast-table-surface">
-					<div class="pilot-grid broadcast-table-header-row">
+				<div class="spotlight-pilots broadcast-table-surface" :style="surfaceStyle">
+					<div class="pilot-grid broadcast-table-header-row" :style="columnHeaderStyle">
 						<span>#</span>
 						<span>Pilot</span>
 						<span class="text-right">Record</span>
@@ -94,15 +131,16 @@ const statBadgeStyle = { color: '#111827', backgroundColor: '#ffffff' };
 						v-for="pilot in pageData"
 						:key="pilot.id"
 						class="pilot-row pilot-grid broadcast-table-row"
+						:style="rowStyle"
 					>
-						<span class="pilot-position broadcast-table-numeric broadcast-table-secondary" :style="secondaryTextStyle">{{ pilot.position ?? '-' }}</span>
+						<span class="pilot-position" :style="secondaryTextStyle">{{ pilot.position ?? '-' }}</span>
 						<span class="pilot-name truncate" :style="primaryTextStyle">{{ pilot.name }}</span>
-						<span class="pilot-record broadcast-table-numeric text-right" :style="primaryTextStyle">{{ formatRecord(pilot) }}</span>
+						<span class="pilot-record text-right" :style="primaryTextStyle">{{ formatRecord(pilot) }}</span>
 					</div>
 					<div
 						v-if="totalPages > 1"
 						class="broadcast-table-page-indicator"
-						:style="secondaryTextStyle"
+						:style="pageIndicatorStyle"
 					>
 						{{ currentPage }} / {{ totalPages }}
 					</div>
@@ -133,19 +171,13 @@ const statBadgeStyle = { color: '#111827', backgroundColor: '#ffffff' };
 <style scoped>
 .spotlight-name {
 	font-size: clamp(1.5rem, 3vw, 2.75rem);
-	font-weight: 800;
-	line-height: 1;
 }
 .stat-label {
-	font-family: var(--font-body);
 	font-size: 0.8rem;
-	font-weight: 800;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
 }
 .stat-value {
 	font-size: clamp(1.25rem, 2.4vw, 2.25rem);
-	font-weight: 800;
+	font-variant-numeric: tabular-nums;
 }
 .spotlight-pilots {
 	flex: 1 1 45%;
@@ -158,8 +190,13 @@ const statBadgeStyle = { color: '#111827', backgroundColor: '#ffffff' };
 	padding: 0.6rem 0.5rem;
 	font-size: clamp(1rem, 1.8vw, 1.6rem);
 }
-.pilot-name {
-	font-weight: 600;
+.pilot-row {
+	border-bottom-style: solid;
+	border-bottom-width: 1px;
+}
+.pilot-position,
+.pilot-record {
+	font-variant-numeric: tabular-nums;
 }
 .spotlight-cards {
 	flex: 1 1 55%;

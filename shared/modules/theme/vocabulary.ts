@@ -42,6 +42,11 @@ export const FOUNDATION_TOKENS = {
 		label: 'Secondary text',
 		default: 'rgba(255, 255, 255, 0.72)',
 	},
+	'text-inverse': {
+		type: 'color',
+		label: 'Text on light',
+		default: '#111827',
+	},
 	'accent': {
 		type: 'color',
 		label: 'Accent',
@@ -56,6 +61,11 @@ export const FOUNDATION_TOKENS = {
 		type: 'color',
 		label: 'Negative',
 		default: '#f87171',
+	},
+	'caution': {
+		type: 'color',
+		label: 'Caution',
+		default: '#facc15',
 	},
 	'divider': {
 		type: 'color',

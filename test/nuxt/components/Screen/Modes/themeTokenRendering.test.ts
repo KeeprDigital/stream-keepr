@@ -24,10 +24,6 @@ const MODES_NOT_YET_ON_THEME_TOKENS: Partial<Record<ScreenMode, string>> = {
 	'broadcast-graphics': '#829',
 	'metagame': '#823',
 	'top-cards': '#823',
-	'player-history': '#822',
-	'pairings': '#822',
-	'archetype-spotlight': '#822',
-	'head-to-head': '#822',
 };
 
 type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor';
@@ -40,7 +36,7 @@ interface Probe {
 
 /** Each themed mode's probes, one per Mode Token it declares, by the token's name within the mode. */
 const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
-	standings: {
+	'standings': {
 		'surface': { selector: '.standings-table', property: 'backgroundColor' },
 		'title-typography': { selector: '.standings-header h2' },
 		'title-text': { selector: '.standings-header h2', property: 'color' },
@@ -51,6 +47,61 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'secondary-text': { selector: '.cell-record', property: 'color' },
 		'rise': { selector: '[data-position-change="up"]', property: 'color' },
 		'fall': { selector: '[data-position-change="down"]', property: 'color' },
+	},
+	'pairings': {
+		'surface': { selector: '.pairings-rows', property: 'backgroundColor' },
+		'title-typography': { selector: '.pairings-header h2' },
+		'title-text': { selector: '.pairings-header h2', property: 'color' },
+		'title-divider': { selector: '.pairings-header', property: 'borderBottomColor' },
+		'row-typography': { selector: '.pairing-row .table' },
+		'row-divider': { selector: '.pairing-row', property: 'borderBottomColor' },
+		'primary-text': { selector: '.player-1', property: 'color' },
+		'secondary-text': { selector: '.versus', property: 'color' },
+		'result-typography': { selector: '[data-result="reported"]' },
+		'result-reported': { selector: '[data-result="reported"]', property: 'color' },
+		'result-pending': { selector: '[data-result="pending"]', property: 'color' },
+		'result-bye': { selector: '[data-result="bye"]', property: 'color' },
+	},
+	'player-history': {
+		'surface': { selector: '.history-rows', property: 'backgroundColor' },
+		'title-typography': { selector: '.history-header h2' },
+		'title-text': { selector: '.history-header h2', property: 'color' },
+		'title-divider': { selector: '.history-header', property: 'borderBottomColor' },
+		'row-typography': { selector: '.history-row .round' },
+		'row-divider': { selector: '.history-row', property: 'borderBottomColor' },
+		'primary-text': { selector: '.opponent', property: 'color' },
+		'secondary-text': { selector: '.round', property: 'color' },
+		'outcome-typography': { selector: '[data-outcome="win"]' },
+		'outcome-win': { selector: '[data-outcome="win"]', property: 'color' },
+		'outcome-loss': { selector: '[data-outcome="loss"]', property: 'color' },
+		'outcome-draw': { selector: '[data-outcome="draw"]', property: 'color' },
+		'outcome-pending': { selector: '[data-outcome="pending"]', property: 'color' },
+	},
+	'head-to-head': {
+		'title-typography': { selector: '.head-to-head-header h2' },
+		'title-text': { selector: '.head-to-head-header h2', property: 'color' },
+		'title-divider': { selector: '.head-to-head-header', property: 'borderBottomColor' },
+		'name-typography': { selector: '.name' },
+		'label-typography': { selector: '.earlier-matches-title' },
+		'surface': { selector: '.head-to-head-earlier-matches', property: 'backgroundColor' },
+		'row-typography': { selector: '.earlier-match .round' },
+		'row-divider': { selector: '.earlier-match', property: 'borderBottomColor' },
+		'primary-text': { selector: '.name', property: 'color' },
+		'secondary-text': { selector: '.versus', property: 'color' },
+	},
+	'archetype-spotlight': {
+		'title-typography': { selector: '.spotlight-header h2' },
+		'title-text': { selector: '.spotlight-header h2', property: 'color' },
+		'title-divider': { selector: '.spotlight-header', property: 'borderBottomColor' },
+		'headline-typography': { selector: '.spotlight-name' },
+		'label-typography': { selector: '.stat-label' },
+		'surface': { selector: '.spotlight-pilots', property: 'backgroundColor' },
+		'row-typography': { selector: '.pilot-name' },
+		'row-divider': { selector: '.pilot-row', property: 'borderBottomColor' },
+		'primary-text': { selector: '.pilot-name', property: 'color' },
+		'secondary-text': { selector: '.stat-label', property: 'color' },
+		'stat-badge-surface': { selector: '[data-testid="top-cards-stat-badge"]', property: 'backgroundColor' },
+		'stat-badge-text': { selector: '[data-testid="top-cards-stat-badge"]', property: 'color' },
 	},
 };
 
@@ -120,6 +171,134 @@ mockNuxtImport('useStandingsModeData', () => () => {
 			: { kind: 'down', by: 1 },
 	};
 });
+
+mockNuxtImport('usePairingsModeData', () => () => ({
+	config: computed(() => ({ showHeader: true, rowsPerPage: 8 })),
+	error: ref(null),
+	isEmpty: computed(() => false),
+	headerText: computed(() => 'Pairings'),
+	pageData: computed(() => [
+		{
+			matchId: 1,
+			tableNumber: 1,
+			player1: { id: 1, name: 'Reported' },
+			player2: { id: 2, name: 'Result' },
+			isBye: false,
+			hasResult: true,
+		},
+		{
+			matchId: 2,
+			tableNumber: 2,
+			player1: { id: 3, name: 'Still' },
+			player2: { id: 4, name: 'Playing' },
+			isBye: false,
+			hasResult: false,
+		},
+		{
+			matchId: 3,
+			tableNumber: null,
+			player1: { id: 5, name: 'Byed' },
+			player2: null,
+			isBye: true,
+			hasResult: false,
+		},
+	]),
+	formatResult: (row: { matchId: number }) => `Result ${row.matchId}`,
+	winner: () => null,
+}));
+
+mockNuxtImport('usePlayerHistoryModeData', () => () => {
+	const columns = [
+		'round',
+		'opponent',
+		'table',
+		'outcome',
+	].map(key => ({ key, visible: true }));
+	return {
+		config: computed(() => ({ showHeader: true, rowsPerPage: 8, columns })),
+		error: ref(null),
+		isEmpty: computed(() => false),
+		headerText: computed(() => 'History'),
+		player: computed(() => ({
+			name: 'Player',
+			wins: 1,
+			losses: 1,
+			draws: 1,
+			position: 1,
+		})),
+		pageData: computed(() => ['win', 'loss', 'draw', 'pending'].map((outcome, index) => ({
+			id: index + 1,
+			roundName: `Round ${index + 1}`,
+			tableNumber: index + 1,
+			opponentName: `Opponent ${index + 1}`,
+			opponentDeckName: null,
+			opponentDeckColors: null,
+			outcome,
+		}))),
+		formatOutcome: (row: { outcome: string }) => row.outcome,
+	};
+});
+
+mockNuxtImport('useHeadToHeadModeData', () => () => {
+	const side = (id: number, name: string) => ({
+		id,
+		name,
+		pronouns: 'they/them',
+		wins: 1,
+		losses: 0,
+		draws: 0,
+		points: 3,
+		deckName: 'Deck',
+		deckColors: null,
+	});
+	return {
+		config: computed(() => ({ showHeader: true })),
+		error: ref(null),
+		isEmpty: computed(() => false),
+		firstMeeting: computed(() => false),
+		headerText: computed(() => 'Head to Head'),
+		player1: computed(() => side(1, 'One')),
+		player2: computed(() => side(2, 'Two')),
+		earlierMatches: computed(() => [
+			{
+				matchId: 1,
+				roundName: 'Round 1',
+				outcome: 'player1',
+				gameScore: '2-0',
+			},
+		]),
+		formatRecord: () => '1-0',
+	};
+});
+
+mockNuxtImport('useArchetypeSpotlightModeData', () => () => ({
+	config: computed(() => ({ showHeader: true, rowsPerPage: 8 })),
+	error: ref(null),
+	isEmpty: computed(() => false),
+	headerText: computed(() => 'Spotlight'),
+	conversionLabel: computed(() => 'Top 8'),
+	spotlight: computed(() => ({
+		archetype: { id: 1, name: 'Archetype', colors: null },
+		playerCount: 1,
+		metaShare: 10,
+		convertedCount: 1,
+		conversionRate: 100,
+	})),
+	pageData: computed(() => [
+		{ id: 1, name: 'Pilot', position: 1 },
+	]),
+	topCards: computed(() => [
+		{
+			id: 1,
+			name: 'Card',
+			scryfallId: null,
+			inclusionRate: 100,
+		},
+	]),
+	currentPage: computed(() => 1),
+	totalPages: computed(() => 1),
+	formatRecord: () => '1-0',
+}));
 
 // ── Mounting and reading what is painted ──
 

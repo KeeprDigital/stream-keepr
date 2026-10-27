@@ -3,6 +3,7 @@ import type { PlayerHistoryColumnKey } from '~~/shared/types/enums';
 import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import type { PlayerMatchHistoryEntry } from '~/composables/screen/usePlayerHistoryModeData';
 import { formatGameScore } from '~~/shared/utils/matchFromPlayerSide';
+import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
 const { screen } = useScreenContext();
 const { config, error, isEmpty, headerText, pageData, player, formatOutcome } = usePlayerHistoryModeData();
@@ -25,13 +26,49 @@ const gridStyle = computed(() => ({
 	gridTemplateColumns: visibleColumns.value.map(column => columnWidths[column.key]).join(' '),
 }));
 
+const primaryTextStyle = {
+	color: modeTokenVar('player-history', 'primary-text'),
+};
+const secondaryTextStyle = {
+	color: modeTokenVar('player-history', 'secondary-text'),
+};
+const titleStyle = {
+	...modeTypographyStyle('player-history', 'title-typography'),
+	color: modeTokenVar('player-history', 'title-text'),
+};
+const titleDividerStyle = {
+	borderBottomColor: modeTokenVar('player-history', 'title-divider'),
+};
+/** Over the shared subtitle's own face. */
+const subtitleStyle = {
+	...modeTypographyStyle('player-history', 'row-typography'),
+	...secondaryTextStyle,
+};
+/** On each row too, over the shared row chrome's own line height. */
+const rowStyle = {
+	...modeTypographyStyle('player-history', 'row-typography'),
+	borderBottomColor: modeTokenVar('player-history', 'row-divider'),
+};
+const surfaceStyle = {
+	backgroundColor: modeTokenVar('player-history', 'surface'),
+};
+
+const outcomeColors: Record<PlayerMatchHistoryEntry['outcome'], string> = {
+	win: modeTokenVar('player-history', 'outcome-win'),
+	bye: modeTokenVar('player-history', 'outcome-win'),
+	loss: modeTokenVar('player-history', 'outcome-loss'),
+	draw: modeTokenVar('player-history', 'outcome-draw'),
+	pending: modeTokenVar('player-history', 'outcome-pending'),
+};
+
+function outcomeStyle(outcome: PlayerMatchHistoryEntry['outcome']) {
+	return {
+		...modeTypographyStyle('player-history', 'outcome-typography'),
+		color: outcomeColors[outcome],
+	};
+}
+
 const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
-const primaryTextStyle = computed(() => screenConfig.value.primaryTextColor
-	? { color: screenConfig.value.primaryTextColor }
-	: {});
-const secondaryTextStyle = computed(() => screenConfig.value.secondaryTextColor
-	? { color: screenConfig.value.secondaryTextColor }
-	: { opacity: '0.75' });
 const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef'), {
 	density: 'roomy',
 	prefix: 'history',
@@ -39,20 +76,12 @@ const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef')
 	insetY: () => screenConfig.value.paddingY ?? 0,
 });
 
+/** Set on the root, over the shared broadcast table chrome's own colour and face. */
 const displayStyle = computed(() => ({
 	...rowLayoutStyle.value,
-	'--broadcast-table-primary-text': screenConfig.value.primaryTextColor ?? '#ffffff',
-	'--broadcast-table-secondary-text': screenConfig.value.secondaryTextColor ?? 'rgba(255, 255, 255, 0.72)',
+	...modeTypographyStyle('player-history', 'row-typography'),
+	color: modeTokenVar('player-history', 'primary-text'),
 }));
-
-function outcomeClass(outcome: string) {
-	return {
-		'outcome-win': outcome === 'win' || outcome === 'bye',
-		'outcome-loss': outcome === 'loss',
-		'outcome-draw': outcome === 'draw',
-		'outcome-pending': outcome === 'pending',
-	};
-}
 
 function outcomeParts(row: PlayerMatchHistoryEntry) {
 	const text = formatOutcome(row);
@@ -71,22 +100,22 @@ function outcomeParts(row: PlayerMatchHistoryEntry) {
 		:empty="isEmpty"
 	>
 		<div class="player-history-display broadcast-table-display flex flex-col h-full w-full" :style="displayStyle">
-			<div v-if="config.showHeader" class="history-header broadcast-table-title">
-				<h2 :style="primaryTextStyle">
+			<div v-if="config.showHeader" class="history-header broadcast-table-title" :style="titleDividerStyle">
+				<h2 :style="titleStyle">
 					{{ headerText }}
 				</h2>
-				<p v-if="player" class="broadcast-table-subtitle" :style="secondaryTextStyle">
+				<p v-if="player" class="broadcast-table-subtitle" :style="subtitleStyle">
 					Record {{ player.wins ?? 0 }}-{{ player.losses ?? 0 }}{{ player.draws ? `-${player.draws}` : '' }}
 					<span v-if="player.position"> · #{{ player.position }}</span>
 				</p>
 			</div>
 
-			<div ref="tableRef" class="history-rows broadcast-table-surface">
+			<div ref="tableRef" class="history-rows broadcast-table-surface" :style="surfaceStyle">
 				<div
 					v-for="row in pageData"
 					:key="row.id"
 					class="history-row broadcast-table-row"
-					:style="gridStyle"
+					:style="[rowStyle, gridStyle]"
 				>
 					<template v-for="column in visibleColumns" :key="column.key">
 						<div v-if="column.key === 'round'" class="round" :style="secondaryTextStyle">
@@ -102,7 +131,7 @@ function outcomeParts(row: PlayerMatchHistoryEntry) {
 							{{ row.tableNumber ? `Table ${row.tableNumber}` : '' }}
 						</div>
 						<div v-else-if="column.key === 'outcome'" class="outcome">
-							<span class="outcome-badge" :class="outcomeClass(row.outcome)">
+							<span class="outcome-badge" :data-outcome="row.outcome" :style="outcomeStyle(row.outcome)">
 								<span class="outcome-label">{{ outcomeParts(row).label }}</span>
 								<span v-if="outcomeParts(row).score && !showsGameScoreColumn" class="outcome-score">{{ outcomeParts(row).score }}</span>
 							</span>
@@ -132,76 +161,47 @@ function outcomeParts(row: PlayerMatchHistoryEntry) {
 	align-items: center;
 	height: var(--history-row-height, auto);
 	padding: 0 0.5rem;
+	border-bottom-style: solid;
+	border-bottom-width: 1px;
 	font-size: var(--history-row-font-size, 1.5rem);
 }
 .round,
 .table {
-	font-family: var(--font-mono);
 	font-size: var(--history-row-secondary-font-size, 1rem);
 	font-variant-numeric: tabular-nums;
 }
 .opponent {
-	font-weight: 800;
-}
-.opponent-archetype {
-	font-weight: 500;
+	font-weight: bolder;
 }
 .game-score {
-	font-family: var(--font-mono);
 	font-variant-numeric: tabular-nums;
-	font-weight: 800;
 	text-align: right;
 }
 .opponent-deck {
 	font-size: 0.72em;
-	font-weight: 500;
 	margin-top: 0.15rem;
 }
 .outcome {
 	display: flex;
 	justify-content: flex-end;
 }
+/* Tinted from its own colour, so a Theme's outcome colour reaches the whole badge. */
 .outcome-badge {
 	align-items: center;
 	border: 1px solid currentColor;
 	border-radius: 999px;
+	background: color-mix(in srgb, currentColor 16%, transparent);
+	box-shadow: inset 0 0 1.6rem color-mix(in srgb, currentColor 8%, transparent);
 	display: inline-flex;
-	font-family: var(--font-mono);
 	font-size: var(--history-row-secondary-font-size, 1rem);
 	font-variant-numeric: tabular-nums;
-	font-weight: 900;
 	gap: 0.45em;
 	justify-content: center;
-	letter-spacing: 0.06em;
-	line-height: 1;
 	min-width: 5.75em;
 	padding: 0.42em 0.75em;
-	text-transform: uppercase;
-}
-.outcome-label {
-	font-family: var(--font-display);
 }
 .outcome-score {
 	border-left: 1px solid currentColor;
 	padding-left: 0.45em;
-}
-.outcome-win {
-	background: rgba(34, 197, 94, 0.18);
-	box-shadow: inset 0 0 1.6rem rgba(34, 197, 94, 0.1);
-	color: #4ade80;
-}
-.outcome-loss {
-	background: rgba(248, 113, 113, 0.16);
-	box-shadow: inset 0 0 1.6rem rgba(248, 113, 113, 0.08);
-	color: #f87171;
-}
-.outcome-draw {
-	background: rgba(250, 204, 21, 0.16);
-	box-shadow: inset 0 0 1.6rem rgba(250, 204, 21, 0.08);
-	color: #facc15;
-}
-.outcome-pending {
-	background: rgba(255, 255, 255, 0.08);
-	color: rgba(255, 255, 255, 0.68);
 }
 </style>
