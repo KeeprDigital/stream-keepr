@@ -52,6 +52,21 @@ mockNuxtImport('usePlayerListStore', () => () => playerListStore);
 mockNuxtImport('usePlayerDeckListModal', () => () => ({ openPlayerDeckList }));
 mockNuxtImport('usePlayerEditModal', () => () => ({ openPlayerEdit }));
 mockNuxtImport('usePlayerMatchHistoryModal', () => () => ({ openPlayerMatchHistory }));
+const read = {
+	playerId: null as number | null,
+	history: ref<PlayerMatchHistoryEntry[]>([]),
+	loading: ref(false),
+	error: ref<string | null>(null),
+};
+mockNuxtImport('usePlayerMatchHistory', () => (playerId: () => number | null) => {
+	read.playerId = playerId();
+	return {
+		player: ref(null),
+		history: read.history,
+		loading: read.loading,
+		error: read.error,
+	};
+});
 const headToHeadScreens = ref([
 	{ id: 5, name: 'H2H' },
 ]);
@@ -80,13 +95,13 @@ function entry(opponentId: number | null, opponentName: string) {
 	} as PlayerMatchHistoryEntry;
 }
 
-function mountModal(props: Record<string, unknown> = {}) {
+function mountModal({ history = [
+	entry(8, 'Bob'),
+], ...props }: { history?: PlayerMatchHistoryEntry[] } & Record<string, unknown> = {}) {
+	read.history.value = history;
 	return mount(MatchHistoryModal, {
 		props: {
 			player: alice as never,
-			history: [
-				entry(8, 'Bob'),
-			],
 			...props,
 		},
 		global: {
@@ -113,6 +128,40 @@ describe('player match history modal', () => {
 		headToHeadScreens.value = [
 			{ id: 5, name: 'H2H' },
 		];
+		read.loading.value = false;
+		read.error.value = null;
+	});
+
+	it.each([
+		[
+			'the history it read for the Player',
+			false,
+			null,
+			'Bob',
+		],
+		['that it is reading', true, null, null],
+		[
+			'a failed read with nothing to show',
+			false,
+			'Failed to load match history',
+			'Failed to load match history',
+		],
+	])('shows %s', (_, loading, error, text) => {
+		read.loading.value = loading;
+		read.error.value = error;
+
+		const wrapper = mountModal({
+			history: error
+				? []
+				: [
+						entry(8, 'Bob'),
+					],
+		});
+
+		expect(read.playerId).toBe(7);
+		expect(wrapper.find('[data-column="opponentName"]').exists()).toBe(!loading && !error);
+		if (text)
+			expect(wrapper.text()).toContain(text);
 	});
 
 	it.each([
