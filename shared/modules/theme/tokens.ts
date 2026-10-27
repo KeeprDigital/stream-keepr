@@ -95,7 +95,8 @@ const typographySchema = z.object({
 	case: z.enum(GRAPHIC_TEXT_TRANSFORM_VALUES),
 }).strict();
 
-function valueSchema(definition: FoundationTokenDefinition | ModeTokenDefinition): z.ZodType {
+/** The literals a token of `definition`'s type holds, within its bounds. */
+export function themeTokenValueSchema(definition: FoundationTokenDefinition | ModeTokenDefinition): z.ZodType {
 	switch (definition.type) {
 		case 'color':
 			return z.string().min(1).max(500);
@@ -117,7 +118,7 @@ function valueSchema(definition: FoundationTokenDefinition | ModeTokenDefinition
 export function readTokenLiteral(definition: FoundationTokenDefinition | ModeTokenDefinition, stored: unknown): ThemeTokenValue | undefined {
 	if (stored === undefined)
 		return undefined;
-	const schema = valueSchema(definition);
+	const schema = themeTokenValueSchema(definition);
 	const { value } = clampToShapeBounds({ value: schema }, { value: stored });
 	const parsed = schema.safeParse(value);
 	return parsed.success

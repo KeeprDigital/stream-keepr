@@ -137,6 +137,8 @@ export interface EventListResponse {
 	displayRecordSeparator: RecordSeparator;
 	displayHideZeroDraws: boolean;
 	displayPositionFormat: PositionFormat;
+	/** The Event's Theme; null renders the Default Theme. */
+	themeId: string | null;
 	featureMatchDefaultBestOf: number;
 	featureMatchDefaultStartingLife: number;
 	featureMatchDefaultClockType: ClockType;
@@ -200,6 +202,8 @@ export interface CreateEventInput {
 export type UpdateEventInput = Partial<Omit<CreateEventInput, 'game'>> & {
 	commentator1TalentId?: number | null;
 	commentator2TalentId?: number | null;
+	/** Event Presentation Settings: no Theme is the Default Theme. */
+	themeId?: string | null;
 };
 
 export interface MeleeConfigInput {

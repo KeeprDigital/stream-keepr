@@ -596,7 +596,7 @@ Accepted · 2026-10-17 · [#604](https://github.com/KeeprDigital/stream-keepr/is
 - `feature-match-slots/:slotId` — a capability reaches only the Slot the current mode shows; a Session reaches any, because the Feature Match Overlay's editor preview renders a Slot not yet saved.
 - `players/:playerId/decks` — a capability reaches only the Deck List mode's selected Player or the shown Slot's two Players, so it cannot read the Event's decklists ahead of their broadcast.
 
-**The Event context is an allowlist** (`SCREEN_OUTPUT_EVENT_FIELDS`): name, game, orientation, display formatting, Feature Match defaults and feature flags. A rendering holds it as `eventStore.outputEvent`; components shared with control pages read `eventStore.displayEvent`.
+**The Event context is an allowlist** (`SCREEN_OUTPUT_EVENT_FIELDS`): name, game, orientation, display formatting, Theme selection, Feature Match defaults and feature flags. Beside those fields it carries the selected Theme's stored tokens and revision (`theme`, null for the Default Theme; #820), so Reconnect Resync re-reads the Theme with the rest of the context. A rendering holds it as `eventStore.outputEvent`; components shared with control pages read `eventStore.displayEvent`.
 
 **A rendering never changes live state by reading it.** A Slot with no Feature Match Session answers `activeSession: null` instead of the output starting one, and an expired Card is hidden locally instead of `DELETE`d.
 
@@ -1580,6 +1580,7 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 - Theme writes are per token, last write wins, and take no Graphics Authoring Lease.
 - A Theme in use cannot be deleted.
 - Typography tokens carry no size. Colour tokens may carry alpha, and a consumer's opacity multiplies it.
+- A rendering holds its Event's Theme in its Event context (ADR-0022), not in a read of its own (#820). A token write advances the Theme's revision in the same statement, then announces `theme:updated` with the whole stored map on every Event using the Theme. A holder applies it only for the Theme its Event names, and only if it is newer than the revision held. A Theme switch is an Event Presentation Settings write, so it announces `event:updated`. That names the new Theme without its tokens, so a rendering whose context names a Theme it does not hold re-reads the context.
 
 ### Rejected alternatives
 

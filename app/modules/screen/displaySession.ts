@@ -14,6 +14,7 @@ import {
 	screenOutputAssetCapabilityFromHash,
 	screenOutputBackground,
 } from '~~/shared/utils/screenOutput';
+import { holdsSelectedTheme } from '~~/shared/utils/screenOutputEvent';
 import { useRoute } from '#app';
 import { useRealtime } from '~/composables/core/useRealtime';
 import { useReconnectResync } from '~/composables/core/useReconnectResync';
@@ -196,6 +197,8 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	 * operator learns about the degradation beside the controls instead.
 	 */
 	const cardDataHealth = ref<ScreenCardDataHealth>('complete');
+	/** The Event's Theme, as its Event context carries it and `theme:updated` keeps it. */
+	const themeTokens = computed(() => eventStore.outputEvent?.theme?.tokens);
 	const screenContext: ScreenContext = {
 		screen: activeScreen,
 		eventId,
@@ -208,6 +211,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		previewSafeAreas,
 		assetCapability,
 		cardDataHealth,
+		themeTokens,
 	};
 
 	watch(isControlScreen, (isControl) => {
@@ -648,6 +652,20 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		else
 			void resumeLoad(readScope(evtId, held.id));
 	}
+
+	/*
+	 * A Theme switch arrives as `event:updated`, which names the new Theme and
+	 * carries none of its tokens; an Event context naming a Theme it does not
+	 * hold re-reads, and renders the held one until the answer lands.
+	 */
+	watch(
+		() => !!loadedOn.value && !!eventStore.outputEvent && !holdsSelectedTheme(eventStore.outputEvent),
+		(due) => {
+			const loaded = loadedOn.value;
+			if (due && loaded)
+				void rereadOutputEvent(loaded, recoveries.begin());
+		},
+	);
 
 	// A loaded rendering hears its Screen's announcements on the Event channel.
 	// One not loaded listens on none — its Event context, which names the channel,

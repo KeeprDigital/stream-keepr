@@ -2,6 +2,7 @@ import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import type { AnimationEffectSelection } from '~~/shared/animationEffects';
 import type { PlayerSlotData } from '~~/shared/api';
 import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { BroadcastGraphicsLiveSessionStatus } from '~~/shared/types/broadcastGraphicsLiveSession';
 import type { PlayerManuallyEditedField } from '~~/shared/types/enums';
 import type { FeatureMatchSessionStatus, FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
@@ -72,6 +73,25 @@ const timestamps = {
 };
 
 /* TABLES */
+
+/**
+ * The installation's Theme library (ADR-0049). A Theme stores only the Theme
+ * Tokens it sets, so a token added later reaches it through its default. The
+ * Default Theme is code, never a row.
+ */
+export const themes = sqliteTable('themes', {
+	id: text('id').primaryKey(),
+	name: text('name').notNull(),
+	/** The sparse token-value map, keyed by token name. */
+	tokens: text('tokens', { mode: 'json' }).$type<StoredThemeTokens>().notNull().default(sql`'{}'`),
+	/** Advanced by every token write, so a holder orders a write's announcement against a read. */
+	revision: integer('revision').notNull().default(1),
+
+	...timestamps,
+}, table => [
+	index('themes_name_idx').on(table.name),
+]);
+
 export const events = sqliteTable('events', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	name: text('name').notNull(),
@@ -107,6 +127,9 @@ export const events = sqliteTable('events', {
 	displayRecordSeparator: text('display_record_separator', { enum: RECORD_SEPARATOR_VALUES }).notNull().default('-'),
 	displayHideZeroDraws: integer('display_hide_zero_draws', { mode: 'boolean' }).notNull().default(true),
 	displayPositionFormat: text('display_position_format', { enum: POSITION_FORMAT_VALUES }).notNull().default('ordinal'),
+
+	// Event Presentation Settings. No Theme is the Default Theme; a Theme in use cannot be deleted.
+	themeId: text('theme_id').references(() => themes.id, { onDelete: 'restrict' }),
 
 	// Feature match defaults
 	featureMatchDefaultBestOf: integer('feature_match_default_best_of').notNull().default(3),
@@ -1229,6 +1252,8 @@ export const screensRelations = relations(screens, ({ one, many }) => ({
 }));
 
 /* DB TYPES */
+export type DbTheme = typeof themes.$inferSelect;
+export type DbThemeInsert = typeof themes.$inferInsert;
 export type DbEvent = typeof events.$inferSelect;
 export type DbEventInsert = typeof events.$inferInsert;
 export type DbEventTalent = typeof eventTalents.$inferSelect;

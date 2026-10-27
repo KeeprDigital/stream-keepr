@@ -1,0 +1,103 @@
+import { describe, expect, it } from 'vitest';
+import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
+import { parseThemeTokenWrite } from '~~/shared/themeTokens';
+
+// A Theme write is strict where a read forgives: a wrong type or an out-of-bounds value is
+// refused, never clamped, and a Mode Token may name only a same-type Foundation Token.
+
+const typography = {
+	font: { kind: 'application', fontId: 'inter' },
+	weight: 700,
+	lineHeight: 1.2,
+	tracking: 0.02,
+	case: 'uppercase',
+} as const;
+
+const { max: insetMax } = FOUNDATION_TOKENS.inset.bounds;
+
+describe('a Theme Token write', () => {
+	it.each([
+		['a Foundation colour', 'accent', 'rgba(255, 0, 0, 0.5)'],
+		['a Foundation dimension at its lower bound', 'inset', 0],
+		['a Foundation dimension at its upper bound', 'inset', insetMax],
+		['a Foundation typography', 'heading', typography],
+		['a Mode Token literal', 'standings.row-divider', '#ff0000'],
+		[
+			'a Mode Token naming a same-type Foundation Token',
+			'standings.row-divider',
+			{ token: 'accent' },
+		],
+		[
+			'a typography Mode Token naming a typography Foundation Token',
+			'standings.title-typography',
+			{ token: 'body' },
+		],
+	])('stores %s', (_case, name, value) => {
+		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: true, value });
+	});
+
+	it.each([
+		[
+			'a name no token has',
+			'nonsense',
+			'#fff',
+			'unknown-token',
+		],
+		[
+			'a former or misspelt Mode Token',
+			'standings.nonsense',
+			'#fff',
+			'unknown-token',
+		],
+		[
+			'a colour token given a number',
+			'accent',
+			12,
+			'invalid-value',
+		],
+		[
+			'a dimension below its bound',
+			'inset',
+			-1,
+			'invalid-value',
+		],
+		[
+			'a dimension above its bound',
+			'inset',
+			insetMax + 1,
+			'invalid-value',
+		],
+		[
+			'a typography with a size',
+			'heading',
+			{ ...typography, size: 40 },
+			'invalid-value',
+		],
+		[
+			'a Foundation Token naming another',
+			'accent',
+			{ token: 'divider' },
+			'invalid-value',
+		],
+		[
+			'a Mode Token naming a Foundation Token of another type',
+			'standings.row-divider',
+			{ token: 'heading' },
+			'invalid-value',
+		],
+		[
+			'a Mode Token naming a Mode Token',
+			'standings.row-divider',
+			{ token: 'standings.title-divider' },
+			'invalid-value',
+		],
+		[
+			'a Mode Token naming no token',
+			'standings.row-divider',
+			{ token: 'nonsense' },
+			'invalid-value',
+		],
+	])('refuses %s', (_case, name, value, refusal) => {
+		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: false, refusal });
+	});
+});

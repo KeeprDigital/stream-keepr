@@ -70,6 +70,7 @@ export function createMockEvent(overrides?: Partial<DbEvent>): DbEvent {
 		displayRecordSeparator: '-',
 		displayHideZeroDraws: true,
 		displayPositionFormat: 'ordinal',
+		themeId: null,
 		featureMatchDefaultBestOf: 3,
 		featureMatchDefaultStartingLife: 20,
 		featureMatchDefaultClockType: 'countdown',

@@ -13,7 +13,7 @@ import ConfigEventSettings from '~/components/Event/ConfigEventSettings.vue';
 import ConfigFeatureMatchSlots from '~/components/Event/ConfigFeatureMatchSlots.vue';
 import ConfigFieldsAndTracking from '~/components/Event/ConfigFieldsAndTracking.vue';
 import ConfigFormatSettings from '~/components/Event/ConfigFormatSettings.vue';
-import ConfigOnAirFormatting from '~/components/Event/ConfigOnAirFormatting.vue';
+import PresentationSettings from '~/components/Event/PresentationSettings.vue';
 
 // The Event config cards. How a form tracks, diffs, settles and guards its edits
 // is `useEventConfigForm`'s own test; here each card is wired to it once, and
@@ -28,6 +28,13 @@ mockNuxtImport('useOverlay', () => () => ({
 	}),
 }));
 mockNuxtImport('onBeforeRouteLeave', () => () => {});
+
+// The Theme library the Theme picker offers.
+mockNuxtImport('useThemeRepository', () => () => ({
+	list: async () => [
+		{ id: 'theme-1', name: 'Summer Series' },
+	],
+}));
 
 const handleSubmit = vi.fn(async (_update: object): Promise<unknown> => true);
 mockNuxtImport('useEventConfigSubmit', () => () => ({ handleSubmit }));
@@ -85,6 +92,8 @@ function submitted() {
 interface CardCase {
 	card: string;
 	component: Component;
+	/** What the Event already carries, where the edit starts from more than the defaults. */
+	event?: Parameters<typeof createMockEvent>[0];
 	edit: (wrapper: Wrapper) => Promise<unknown>;
 	saved: object;
 	/** A colleague's concurrent change to a field this operator leaves alone, and what the card then shows. */
@@ -99,8 +108,32 @@ const CARDS: CardCase[] = [
 		saved: { name: 'Regional Championship 2026' },
 	},
 	{
-		card: 'on-air formatting',
-		component: ConfigOnAirFormatting,
+		card: 'presentation theme',
+		component: PresentationSettings,
+		edit: async (wrapper) => {
+			await flushPromises();
+			await select(wrapper, 'themeId').setValue('theme-1');
+		},
+		saved: { themeId: 'theme-1' },
+		colleague: {
+			change: { displayRecordSeparator: '/' },
+			shows: wrapper => shown(wrapper, 'displayRecordSeparator'),
+			expected: '/',
+		},
+	},
+	{
+		card: 'presentation theme cleared',
+		component: PresentationSettings,
+		event: { themeId: 'theme-1' },
+		edit: async (wrapper) => {
+			await flushPromises();
+			await select(wrapper, 'themeId').setValue('default');
+		},
+		saved: { themeId: null },
+	},
+	{
+		card: 'presentation formatting',
+		component: PresentationSettings,
 		edit: wrapper => toggle(wrapper, 'displayHideZeroDraws').trigger('click'),
 		saved: { displayHideZeroDraws: false },
 		colleague: {
@@ -156,11 +189,11 @@ beforeEach(() => {
 });
 
 describe('event config cards', () => {
-	it.each(CARDS)('the $card card tells its page it has unsaved changes until reset', async ({ component, edit }) => {
+	it.each(CARDS)('the $card card tells its page it has unsaved changes until reset', async ({ component, event, edit }) => {
 		const { wrapper, pageIsDirty } = mountUnderPageGuard<Wrapper>(component, {
 			...mountOptions,
 			props: {
-				event: configEvent(),
+				event: configEvent(event),
 			},
 		});
 		await flushPromises();
@@ -173,8 +206,8 @@ describe('event config cards', () => {
 		expect(pageIsDirty()).toBe(false);
 	});
 
-	it.each(CARDS)('the $card card saves its edit under the Event\'s own names', async ({ component, edit, saved }) => {
-		const wrapper = mountCard(component);
+	it.each(CARDS)('the $card card saves its edit under the Event\'s own names', async ({ component, event, edit, saved }) => {
+		const wrapper = mountCard(component, configEvent(event));
 
 		await edit(wrapper);
 		await save(wrapper);
@@ -243,9 +276,19 @@ describe('event settings card', () => {
 	});
 });
 
-describe('on-air formatting card', () => {
+describe('event presentation settings card', () => {
+	it.each([
+		['no Theme as the Default Theme', null, 'default'],
+		['its Theme by id', 'theme-1', 'theme-1'],
+	])('shows %s', async (_case, themeId, expected) => {
+		const wrapper = mountCard(PresentationSettings, configEvent({ themeId }));
+		await flushPromises();
+
+		expect(shown(wrapper, 'themeId')).toBe(expected);
+	});
+
 	it('shows the formatting the event already carries', () => {
-		const wrapper = mountCard(ConfigOnAirFormatting, configEvent({ displayRecordSeparator: '/', displayPositionFormat: 'number' }));
+		const wrapper = mountCard(PresentationSettings, configEvent({ displayRecordSeparator: '/', displayPositionFormat: 'number' }));
 
 		expect(shown(wrapper, 'displayRecordSeparator')).toBe('/');
 		expect(shown(wrapper, 'displayPositionFormat')).toBe('number');
@@ -253,7 +296,7 @@ describe('on-air formatting card', () => {
 	});
 
 	it('offers a save only once the form has changed, and takes it back on reset', async () => {
-		const wrapper = mountCard(ConfigOnAirFormatting);
+		const wrapper = mountCard(PresentationSettings);
 		expect(button(wrapper, 'Save').attributes('disabled')).toBeDefined();
 
 		await toggle(wrapper, 'displayHideZeroDraws').trigger('click');

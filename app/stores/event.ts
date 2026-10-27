@@ -144,6 +144,21 @@ export const useEventStore = defineStore('event', () => {
 		}
 	}
 
+	/**
+	 * Hold a token write to the Theme the held Event context's Event uses. An
+	 * announcement for another Theme is not this Event's, and one older than the
+	 * held revision of the same Theme arrived late, so neither lands.
+	 */
+	function applyRemoteThemeUpdated(data: MessageData<'theme:updated'>) {
+		const held = outputEvent.value;
+		const { theme } = data;
+		if (!held || held.id !== data.eventId || theme.id !== held.themeId)
+			return;
+		if (held.theme?.id === theme.id && held.theme.revision >= theme.revision)
+			return;
+		outputEvent.value = { ...held, theme };
+	}
+
 	function applyRemoteTalentCreated(data: MessageData<'talent:created'>) {
 		if (event.value && data.talent.eventId === event.value.id) {
 			upsertTalentById(data.talent);
@@ -481,6 +496,7 @@ export const useEventStore = defineStore('event', () => {
 		removeTalent,
 		deleteEvent,
 		applyRemoteUpdated,
+		applyRemoteThemeUpdated,
 		applyRemoteTalentCreated,
 		applyRemoteTalentUpdated,
 		applyRemoteTalentDeleted,

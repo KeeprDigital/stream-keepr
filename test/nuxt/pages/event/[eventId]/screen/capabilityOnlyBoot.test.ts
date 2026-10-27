@@ -6,6 +6,7 @@ import { createMockFeatureMatchState, createWireMockFeatureMatch } from '~~/test
 import { useRouter } from '#app';
 import { tryUseRealtime } from '~/composables/core/useRealtime';
 import { useCardStore } from '~/stores/card';
+import { useEventStore } from '~/stores/event';
 import { useFeatureMatchStore } from '~/stores/featureMatch';
 import { useFeatureMatchStateStore } from '~/stores/featureMatchState';
 import { usePlayerStore } from '~/stores/player';
@@ -748,5 +749,152 @@ describe('a capability-only Feature Match Overlay output', () => {
 		expect(wrapper.text()).toContain('Life 17');
 		expect(held()).toEqual({ sessionId: 91, sequence: 1, lifeTotal: 17 });
 		expect(privateRequests()).toEqual([]);
+	});
+});
+
+/**
+ * A Standings output renders its Event's Theme, and follows every change to it
+ * without a reload: a token write, a Theme switch, and one missed while away.
+ */
+describe('a capability-only output\'s Theme', () => {
+	const eventPath = '/api/screen-output/events/42/screens/7/event';
+	const TITLE = '--theme-standings-title-text';
+
+	function theme(id: string, revision: number, titleText: string) {
+		return {
+			id,
+			revision,
+			tokens: { 'standings.title-text': titleText },
+		};
+	}
+
+	function themedEvent(selected: ReturnType<typeof theme> | null) {
+		return { ...outputEvent, themeId: selected?.id ?? null, theme: selected };
+	}
+
+	/** The title colour the Screen host resolved for the Standings display. */
+	function titleColour(wrapper: { findAll: (selector: string) => Array<{ element: Element }> }) {
+		return wrapper.findAll('div')
+			.map(({ element }) => (element as HTMLElement).style.getPropertyValue(TITLE))
+			.find(Boolean);
+	}
+
+	/** One `theme:updated`, handed to the store as the Event room would. */
+	function announce(announced: ReturnType<typeof theme>) {
+		useEventStore().applyRemoteThemeUpdated({
+			eventId: 42,
+			timestamp: Date.now(),
+			theme: announced,
+		});
+	}
+
+	function eventReads() {
+		return api.requests.filter(request => request.path === eventPath).length;
+	}
+
+	beforeEach(() => {
+		api.requests = [];
+		api.screen = screen({
+			currentMode: 'standings',
+			modeConfigs: { standings: {} },
+		});
+		api.answers = new Map<string, () => unknown>([
+			[
+				'/api/screen-output/events/42/screens/slug/main',
+				() => api.screen,
+			],
+			[
+				'/api/screen-output/events/42/screens/7',
+				() => api.screen,
+			],
+			[
+				eventPath,
+				() => themedEvent(theme('brand', 3, 'rgb(1, 1, 1)')),
+			],
+			[
+				'/api/screen-output/events/42/screens/7/standings',
+				() => ({
+					players: [],
+					round: null,
+					roundStandings: null,
+					watchlist: null,
+					previousRoundPositions: null,
+				}),
+			],
+		]);
+		resetAllEventStores();
+		realtime().connectionState = 'connected';
+		realtime().detach('event:42');
+	});
+
+	afterEach(() => {
+		for (const wrapper of mounted.splice(0))
+			wrapper.unmount();
+	});
+
+	async function mountThemed() {
+		const wrapper = await mountOutput(`/event/42/screen/main#asset-capability=${capability}`, () => true);
+		await settleUntil(() => titleColour(wrapper) === 'rgb(1, 1, 1)');
+		expect(titleColour(wrapper)).toBe('rgb(1, 1, 1)');
+		return wrapper;
+	}
+
+	it('renders the Default Theme for an Event with none', async () => {
+		api.answers.set(eventPath, () => themedEvent(null));
+		const wrapper = await mountOutput(`/event/42/screen/main#asset-capability=${capability}`, () => true);
+		await settleUntil(() => !!titleColour(wrapper));
+
+		expect(titleColour(wrapper)).toBe('#ffffff');
+	});
+
+	it.each([
+		['applies a token write it hears, without a read', 4, 'rgb(2, 2, 2)'],
+		['ignores a token write older than the one it holds', 2, 'rgb(1, 1, 1)'],
+	])('%s', async (_case, revision, shown) => {
+		const wrapper = await mountThemed();
+		const reads = eventReads();
+
+		announce(theme('brand', revision, 'rgb(2, 2, 2)'));
+		await settleUntil(() => false);
+
+		expect(titleColour(wrapper)).toBe(shown);
+		expect(eventReads()).toBe(reads);
+	});
+
+	it('ignores a token write to a Theme its Event does not use', async () => {
+		const wrapper = await mountThemed();
+
+		announce(theme('elsewhere', 9, 'rgb(9, 9, 9)'));
+		await settleUntil(() => false);
+
+		expect(titleColour(wrapper)).toBe('rgb(1, 1, 1)');
+	});
+
+	it('re-reads its Event context when its Event switches Theme, and renders the new one', async () => {
+		const wrapper = await mountThemed();
+
+		api.answers.set(eventPath, () => themedEvent(theme('switched', 1, 'rgb(3, 3, 3)')));
+		useEventStore().applyRemoteUpdated({
+			eventId: 42,
+			timestamp: Date.now(),
+			event: { id: 42, themeId: 'switched' },
+		} as never);
+		await settleUntil(() => titleColour(wrapper) === 'rgb(3, 3, 3)');
+
+		expect(titleColour(wrapper)).toBe('rgb(3, 3, 3)');
+	});
+
+	it('shows a token write missed while disconnected once its Event channel is attached again', async () => {
+		const wrapper = await mountThemed();
+
+		realtime().connectionState = 'suspended';
+		await flushPromises();
+		api.answers.set(eventPath, () => themedEvent(theme('brand', 5, 'rgb(4, 4, 4)')));
+		realtime().connectionState = 'connected';
+		realtime().reattach('event:42');
+		await settleUntil(() => titleColour(wrapper) === 'rgb(4, 4, 4)');
+
+		expect(titleColour(wrapper)).toBe('rgb(4, 4, 4)');
+		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
 	});
 });

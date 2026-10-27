@@ -136,6 +136,14 @@ function userAdministrationItem(): NavigationMenuItem {
 	};
 }
 
+function themesItem(): NavigationMenuItem {
+	return {
+		label: 'Themes',
+		icon: 'i-lucide-palette',
+		to: '/themes',
+	};
+}
+
 function graphicsAssetLibraryItem(): NavigationMenuItem {
 	return {
 		label: 'Graphics Asset Library',
@@ -212,6 +220,7 @@ const navGroups = computed<NavGroup[]>(() => {
 		{
 			label: 'Administration',
 			items: [
+				themesItem(),
 				graphicsAssetLibraryItem(),
 				graphicsOperationsCockpitItem(),
 				graphicsAssetLibraryHealthItem(),
@@ -228,6 +237,7 @@ const homeLinks = computed<NavigationMenuItem[]>(() => [
 		icon: 'i-lucide-calendar',
 		to: '/',
 	},
+	themesItem(),
 	graphicsAssetLibraryItem(),
 	graphicsOperationsCockpitItem(),
 	graphicsAssetLibraryHealthItem(),

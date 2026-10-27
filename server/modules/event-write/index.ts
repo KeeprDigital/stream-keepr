@@ -5,6 +5,7 @@ import { cardService } from '~~/server/services/card';
 import { eventService } from '~~/server/services/event';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { screenService } from '~~/server/services/screen';
+import { themeService } from '~~/server/services/theme';
 import { BroadcastDeckListsInUseError, runCompensation } from '~~/server/utils/errors';
 import { requireTalentInEvent } from '~~/server/utils/routeGuards';
 import { BROADCAST_DECK_LISTS_IN_USE } from '~~/shared/types/broadcastDeckList';
@@ -18,6 +19,16 @@ interface UpdateEventParams {
 interface DeleteEventParams {
 	eventId: number;
 	originConnectionId?: string;
+}
+
+/** A Theme an Event Presentation Settings write picks must exist; none picks the Default Theme. */
+async function requireTheme(themeId: string | null | undefined): Promise<void> {
+	if (themeId && !await themeService().findById(themeId)) {
+		throw createError({
+			statusCode: 400,
+			message: 'Theme not found',
+		});
+	}
 }
 
 export function eventWriteModule() {
@@ -44,6 +55,7 @@ export function eventWriteModule() {
 		await Promise.all([
 			requireTalentInEvent(eventId, input.commentator1TalentId),
 			requireTalentInEvent(eventId, input.commentator2TalentId),
+			requireTheme(input.themeId),
 		]);
 
 		let updatedEvent;

@@ -45,6 +45,8 @@ export const createEventSchema = createInsertSchema(events)
 		// foreign keys would allow a caller to attach another Event's Talent.
 		commentator1TalentId: true,
 		commentator2TalentId: true,
+		// An Event starts on the Default Theme; its Event Presentation Settings pick another.
+		themeId: true,
 	})
 	.extend({
 		...eventFieldConstraints,
@@ -72,6 +74,8 @@ export const updateEventSchema = createUpdateSchema(events)
 	.extend({
 		...eventFieldConstraints,
 		name: eventFieldConstraints.name.optional(),
+		// Event Presentation Settings: no Theme is the Default Theme.
+		themeId: z.string().min(1).max(100).nullable().optional(),
 	})
 	.strict();
 
