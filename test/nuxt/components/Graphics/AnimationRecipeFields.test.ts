@@ -82,7 +82,7 @@ const RECIPE: GraphicAnimationRecipe = {
 	reveal: { edge: 'left' },
 };
 
-/** A phase's recipe, or a Style Set entry's, which may leave out its delay. */
+/** A phase's recipe, or a motion token's, which may leave out its delay. */
 type FieldsRecipe = Omit<GraphicAnimationRecipe, 'delay'> & Partial<Pick<GraphicOnScreenAnimationRecipe, 'delay' | 'pause' | 'repeat'>>;
 
 interface SlideParent { width: number; height: number; name: 'canvas' | 'group' }

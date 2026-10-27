@@ -166,6 +166,21 @@ export default withNuxt(
 		},
 	},
 	{
+		// The Screen Mode Sample Dataset never reaches a Screen Output: only a Theme preview builds its context.
+		files: ['app/**/*.{ts,vue}'],
+		ignores: ['app/components/Theme/**', 'app/modules/screen-mode/sample*.ts', 'app/composables/screen/useScreenOutputReads.ts'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					patterns: [
+						{ regex: 'screen-mode/sample(Screen|Dataset)$', message: 'The Screen Mode Sample Dataset is a Theme preview\'s alone (components/Theme).' },
+					],
+				},
+			],
+		},
+	},
+	{
 		files: ['app/components/Graphics/Compositor/**/*.vue'],
 		rules: {
 			'no-restricted-syntax': ['error', ...compositorPanelSyntax],

@@ -1,7 +1,7 @@
 import type { AnimationEffectSelection, FeatureMatchOverlayFrameAnimationConfig } from '../animationEffects';
 import type { ScreenModeConfigOf } from '../screenModeConfigs/contract';
 import type { BackgroundLayersCapableMode } from '../screenModes';
-import type { HorizontalAlign, ScreenColorMode, ScreenMode, VerticalAlign } from './enums';
+import type { ScreenMode } from './enums';
 import type { MediaFit } from './graphicItem';
 import type { BroadcastGraphicConfig } from './graphics';
 import type { GraphicAssetId, GraphicAssetRevisionId } from './graphicsAsset';
@@ -32,32 +32,11 @@ import { topCutModeConfigContract } from '../screenModeConfigs/topCut';
 export { DEFAULT_BROADCAST_GRAPHICS_BACKGROUND, DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG };
 export { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG };
 
-// ─── Screen-level config (applies to all modes) ───────────────────────
-export interface ScreenConfig {
-	background?: string;
-	width?: number;
-	height?: number;
-	paddingX?: number;
-	paddingY?: number;
-	primaryTextColor?: string;
-	secondaryTextColor?: string;
-	colorMode?: ScreenColorMode;
-	horizontalAlign?: HorizontalAlign;
-	verticalAlign?: VerticalAlign;
-}
-
-export const DEFAULT_SCREEN_CONFIG: ScreenConfig = {
-	horizontalAlign: 'center',
-	verticalAlign: 'center',
-};
-
 // ─── Mode-specific configs ─────────────────────────────────────────────
 
 /** The live rendering variants a graphics Screen Mode Definition exposes. */
 export type ScreenOutput = 'overlay' | 'fill' | 'key';
 export type FeatureMatchOverlayOutput = ScreenOutput;
-export const DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH = 1920;
-export const DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT = 1080;
 export const FEATURE_MATCH_OVERLAY_ANCHOR_VALUES = [
 	'top-left',
 	'top',
@@ -107,38 +86,20 @@ export interface FeatureMatchOverlayBorderSides {
 export type FeatureMatchOverlayGlowPosition = 'both' | 'inside' | 'outside';
 
 /**
- * The surface treatment of a host-owned Feature Match Overlay element.
+ * The framing of a Source Item: which sides of its border show, its per-corner
+ * radii, and which side of the border its glow falls on.
  *
- * Only the Frame and Source Items carry one. It keeps the per-side border
- * visibility and per-corner radii the Frame has always drawn, because those are
- * host capability the Host Contract leaves with the host — the drop of per-side
- * borders is a drop from the shared Graphic Surface Style, where a composed rule
- * Shape Graphic Item replaces them.
- *
- * It carries no typography, padding, or overflow. Those belonged to the legacy
- * widget model, and a Source Item paints a bordered hole rather than text.
- *
- * `backgroundGradient` is a raw CSS gradient string, as the Frame's own
- * `gradient` is. The shared Graphic Fill replaced arbitrary CSS with a bounded
- * two-to-four-stop gradient, but that is a rule for the shared vocabulary — the
- * host layer keeps the string it always painted, and keeping it here and on the
- * Frame means the two host-owned surfaces state the same capability.
+ * Only shape. How it paints, its fill, outline and glow, is the Feature Match
+ * Overlay's `source-surface` Mode Token, so a Theme styles every Source Item
+ * at once (#831). The raw CSS gradient, colour, border and glow fields it held
+ * before are dropped when read, not migrated.
  */
 export interface FeatureMatchSourceFramingStyle extends FeatureMatchOverlayBorderSides {
-	backgroundColor?: string;
-	backgroundOpacity?: number;
-	backgroundGradient?: string;
-	borderVisible?: boolean;
-	borderColor?: string;
-	borderWidth?: number;
 	borderRadius?: number;
 	borderRadiusTopLeft?: number;
 	borderRadiusTopRight?: number;
 	borderRadiusBottomRight?: number;
 	borderRadiusBottomLeft?: number;
-	glowColor?: string;
-	glowSize?: number;
-	glowOpacity?: number;
 	/** Which side of the Source Item border receives the glow. Absent means both. */
 	glowPosition?: FeatureMatchOverlayGlowPosition;
 }
@@ -287,7 +248,7 @@ export type { BroadcastGraphicsBackgroundConfig } from '../animationEffects';
 export type { ArchetypeSpotlightModeConfig } from '../screenModeConfigs/archetypeSpotlight';
 export type { BackgroundModeConfig } from '../screenModeConfigs/background';
 export type { BroadcastGraphicsModeConfig } from '../screenModeConfigs/broadcastGraphics';
-export type { CardDisplayConfig, CardModeConfig } from '../screenModeConfigs/card';
+export type { CardModeConfig } from '../screenModeConfigs/card';
 export type { DeckBoardLayoutConfig, DeckModeConfig, DeckSource, ResolvedDeckBoardLayout, ResolvedDeckBoards } from '../screenModeConfigs/deck';
 export { DEFAULT_DECK_BOARD_LAYOUT, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '../screenModeConfigs/deck';
 export type { FeatureMatchModeConfig } from '../screenModeConfigs/featureMatch';
@@ -302,20 +263,22 @@ export type { TopCutModeConfig } from '../screenModeConfigs/topCut';
 
 export type FeatureMatchOverlayPlayerLifeAnimation = 'none' | 'fade' | 'pop' | 'slide' | 'glow';
 
+/**
+ * The Feature Match Overlay Frame: its own opacity, its own image and video
+ * (each a Screen Media Source, ADR-0021), its Animation Effect's switch, and
+ * which canvas edges its border runs along.
+ *
+ * Its fill, border and glow are the `frame-surface` Mode Token, its Theme media
+ * `frame-media`, and its effect `frame-animation-effect` (#831). The raw CSS
+ * gradient, colour, border and glow fields it held before are dropped when
+ * read, not migrated.
+ */
 export interface FeatureMatchOverlayFrameConfig extends FeatureMatchOverlayBorderSides {
-	backgroundColor: string;
 	opacity: number;
 	backgroundImage?: ScreenMediaSource;
 	backgroundImageFit?: MediaFit;
 	mediaBackground?: ScreenMediaBackgroundConfig;
-	gradient?: string;
 	animation?: FeatureMatchOverlayFrameAnimationConfig;
-	borderVisible?: boolean;
-	borderColor?: string;
-	borderWidth?: number;
-	glowColor?: string;
-	glowSize?: number;
-	glowOpacity?: number;
 }
 
 export interface FeatureMatchLayoutFrameConfig extends FeatureMatchOverlayFrameConfig {}
@@ -371,9 +334,6 @@ export interface FeatureMatchLayoutConfig {
 	composition: BroadcastGraphicConfig;
 }
 
-export const DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH = 1920;
-export const DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT = 1080;
-
 /**
  * Every Screen Mode's config contract, which holds its defaults and authored
  * stacks. The same contracts as the Screen Mode Definitions' `config`, which
@@ -417,13 +377,6 @@ export type ModeConfigTypeMap = {
  */
 export type ModeConfigsMap = { [M in ScreenMode]?: Partial<ModeConfigTypeMap[M]> };
 
-// ─── Nullable config types (for reset / clear-to-default operations) ───
-// Sending `null` for a field means "delete this key from stored config".
-export type NullableScreenConfig = { [K in keyof ScreenConfig]: ScreenConfig[K] | null };
-
-/** An edit of a Screen's own config: a field left out is unchanged, and `null` deletes it. */
-export type ScreenConfigPatch = Partial<NullableScreenConfig>;
-
 /**
  * An edit of one mode's stored config, the form its PATCH takes (ADR-0037). A
  * field left out is unchanged; a field given `null` is deleted from storage and
@@ -463,11 +416,6 @@ function namedUndefinedAsDeletion(edit: Record<string, unknown>, keep: readonly 
 /** A mode-configuration edit as its PATCH carries it: every cleared field deleted, as `null`. */
 export function toModeConfigPatch<M extends ScreenMode>(mode: M, edit: ScreenModeConfigPatch<M>): ScreenModeConfigPatch<M> {
 	return namedUndefinedAsDeletion(edit, MODE_CONFIG_CONTRACTS[mode].authoredStacks) as ScreenModeConfigPatch<M>;
-}
-
-/** A Screen-configuration edit as its PATCH carries it: every cleared field deleted, as `null`. */
-export function toScreenConfigPatch(edit: ScreenConfigPatch): ScreenConfigPatch {
-	return namedUndefinedAsDeletion(edit) as ScreenConfigPatch;
 }
 
 /**
@@ -620,13 +568,6 @@ export function stripNullConfigKeys<T extends Record<string, unknown>>(config: T
 	return Object.fromEntries(
 		Object.entries(config).filter(([, value]) => value !== null),
 	) as T;
-}
-
-export function mergeScreenConfig(currentConfig: ScreenConfig, partialConfig: Record<string, unknown>): ScreenConfig {
-	return stripNullConfigKeys({
-		...currentConfig,
-		...partialConfig,
-	}) as ScreenConfig;
 }
 
 export function mergeScreenModeConfig<M extends ScreenMode>(

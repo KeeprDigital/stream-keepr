@@ -23,14 +23,9 @@ export const DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG: ScreenMediaBackgroundConfig
 	loop: true,
 };
 
-/**
- * Effect params are deliberately absent: each Animation Effect's Zod schema is
- * the single source of its defaults, so an empty bag means "as shipped" and
- * never goes stale against the catalogue.
- */
+/** Off; its effect is the Theme's `frame-animation-effect` Mode Token (#831). */
 export const DEFAULT_FRAME_ANIMATION: FeatureMatchOverlayFrameAnimationConfig = {
 	enabled: false,
-	effect: 'fog',
 	opacity: 0.45,
 };
 

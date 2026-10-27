@@ -3,7 +3,7 @@ import type { SupportedSocialNetwork } from '../socialProfiles';
 import type { PlayerSide } from './enums';
 import type { GraphicFocalPosition, MediaFit } from './graphicItem';
 import type { GraphicAssetReference } from './graphicsAsset';
-import type { GraphicContainerStyleRefs, GraphicStyleRefs, GraphicStyleSetLink } from './graphicStyleSet';
+import type { GraphicContainerThemeBindings, GraphicThemeBindings } from './graphicThemeBindings';
 
 /**
  * Shared Graphics Foundation vocabulary.
@@ -102,12 +102,8 @@ export type GraphicFontSelection
 		| { kind: 'asset'; reference: GraphicAssetReference };
 
 /**
- * A Graphic Font Selection narrowed to the application arm.
- *
- * It exists because one consumer genuinely cannot take the other arm: a Graphic
- * Style Set travels as a `.skstyle` package with no asset envelope, so a Style Set
- * that named a library font would be a Style Set that could not be transferred.
- * See `DECISIONS.md` (ADR-0001).
+ * A Graphic Font Selection narrowed to the application arm: what a newly
+ * authored item names before an author picks a library font.
  */
 export type GraphicApplicationFontSelection = Extract<GraphicFontSelection, { kind: 'application' }>;
 
@@ -170,7 +166,7 @@ export interface GraphicTypography {
 
 /**
  * The bounds the editor offers for every typography: a Graphic Item's base
- * typography, a Graphic Placeholder Style, and a Graphic Style Set typography entry.
+ * typography, and a Graphic Placeholder Style.
  *
  * Weight and letter spacing are the wire schemas' own bounds, and every maximum is.
  * Font size and line height floors are editor-only: the schemas need those only to be
@@ -288,8 +284,8 @@ export const SHAPE_CORNER_KEYS = [
 export type ShapeCornerKey = typeof SHAPE_CORNER_KEYS[number];
 
 /**
- * The largest pixel length a saved Screen or Graphic Style Set value accepts, either
- * way: sizes, positions, border widths, and Feature Match Overlay border radii.
+ * The largest pixel length a saved Screen value accepts, either way: sizes,
+ * positions, border widths, and Feature Match Overlay border radii.
  * Controls bound their inputs to it so the editor never offers what a write refuses.
  */
 export const MAX_PIXEL_VALUE = 10_000;
@@ -871,16 +867,10 @@ interface GraphicItemConfigBase extends GraphicRect {
 	 */
 	animation?: GraphicAnimation;
 	/**
-	 * Which of this item's property groups are inherited from a Graphic Style Set
-	 * entry, and how the author has deviated from each.
-	 *
-	 * It never holds a value. Every property above stays the authoritative resolved
-	 * one, so this item renders, travels, and is copied without its Style Set being
-	 * anywhere in reach — which is exactly why a placed copy cannot change under an
-	 * author who republishes a Style Set. This is provenance, and it is what turns a
-	 * republished entry into a reviewable offer rather than a silent mutation.
+	 * Which of this item's property groups follow a Foundation Token. The
+	 * compositor paints each bound group from the Screen's resolved Theme.
 	 */
-	styleRefs?: GraphicStyleRefs;
+	themeBindings?: GraphicThemeBindings;
 }
 
 export interface TextGraphicItemConfig extends GraphicItemConfigBase {
@@ -1208,14 +1198,6 @@ export interface BroadcastGraphicConfig {
 	bindings?: GraphicInputBinding[];
 	/** Read-only Social Profile values projected into ordinary Presentation Groups. */
 	socialProfileProjections?: SocialProfileProjectionDeclaration[];
-	/**
-	 * The one Graphic Style Set this composition's inherited properties come from.
-	 *
-	 * At most one, structurally. Absent means every property in this composition is
-	 * local, which is what a Broadcast Graphic authored without a Style Set has and
-	 * what detaching from one leaves behind.
-	 */
-	styleSet?: GraphicStyleSetLink;
-	/** Whole-graphic Graphic Animation Recipes inherited from that Style Set. */
-	styleRefs?: GraphicContainerStyleRefs;
+	/** Whole-graphic Graphic Animation Recipes that follow a Foundation Token. */
+	themeBindings?: GraphicContainerThemeBindings;
 }

@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { graphicStyleSetEntrySchema } from '~~/server/schemas/api/graphicStyleSet';
 import { broadcastGraphicsModeConfigSchema } from '~~/server/schemas/api/screen';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
+import { parseThemeTokenWrite } from '~~/shared/themeTokens';
 
 /**
- * One stop bound for every Graphic Fill: a Graphic Item's own and a Graphic Style
- * Set fill entry both hold two to four gradient stops. The one fill fields control
- * offers add and remove within those bounds for both, so a fill the editor builds
- * is one either write accepts.
+ * One stop bound for every Graphic Fill: a Graphic Item's own and a Theme's fill
+ * token both hold two to four gradient stops. The one fill fields control offers
+ * add and remove within those bounds for both, so a fill the editor builds is one
+ * either write accepts.
  */
 
 function stops(count: number, color: Record<string, string>) {
@@ -51,24 +51,18 @@ function itemAccepts(count: number) {
 	}).success;
 }
 
-function entryAccepts(count: number) {
-	return graphicStyleSetEntrySchema.safeParse({
-		id: 'accent-fill',
-		kind: 'fill',
-		name: 'Accent fill',
-		schemaVersion: 1,
-		value: {
-			type: 'linear-gradient',
-			angle: 90,
-			stops: stops(count, { colorEntryId: 'brand' }),
-		},
-	}).success;
+function tokenAccepts(count: number) {
+	return parseThemeTokenWrite('accent-fill', {
+		type: 'linear-gradient',
+		angle: 90,
+		stops: stops(count, { color: '#ffffff' }),
+	}).ok;
 }
 
 describe('graphic fill stop bounds', () => {
 	it.each([
 		['a Graphic Item\'s fill', itemAccepts],
-		['a Graphic Style Set fill entry', entryAccepts],
+		['a Theme fill token', tokenAccepts],
 	])('holds %s to two to four stops', (_, accepts) => {
 		expect([1, 2, 3, 4, 5].map(accepts)).toEqual([false, true, true, true, false]);
 	});

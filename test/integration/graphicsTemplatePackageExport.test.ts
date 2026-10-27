@@ -167,7 +167,8 @@ describe('template Package export through the API boundary', () => {
 		expect(manifest.applicationCapabilities).toEqual(expect.arrayContaining([
 			expect.objectContaining({
 				capability: 'application-font',
-				identity: 'inter',
+				// The preset's text is bound to the Default Theme's type, which it holds as its literal.
+				identity: 'saira-condensed',
 			}),
 			expect.objectContaining({ capability: 'graphic-item-definition', identity: 'source' }),
 			expect.objectContaining({ capability: 'graphic-item-definition', identity: 'group' }),

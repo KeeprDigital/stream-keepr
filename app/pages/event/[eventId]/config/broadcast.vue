@@ -8,9 +8,9 @@ const loading = computed(() => eventStore.loading);
 <template>
 	<div class="flex flex-col gap-6">
 		<h2 class="text-xl font-semibold">
-			On-Air Formatting
+			Presentation
 		</h2>
-		<EventConfigOnAirFormatting :event="event" :loading="loading" />
+		<EventPresentationSettings :event="event" :loading="loading" />
 
 		<h2 class="text-xl font-semibold">
 			Card Spotlight

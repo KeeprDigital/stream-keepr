@@ -1,3 +1,4 @@
+import type { GraphicThemeTokens } from '~~/shared/modules/graphics';
 import type { GraphicInputValue } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { FeatureMatchLayoutConfig, ScreenOutput } from '~~/shared/types/screenConfig';
@@ -65,6 +66,8 @@ export interface FeatureMatchOverlayCompositorRenderModelInput {
 	 * and by ordinary authoring access in the editor.
 	 */
 	graphicAssetContentUrl?: (reference: GraphicAssetReference) => string;
+	/** The Screen's resolved Foundation Tokens, which bound Graphic Items paint from. */
+	themeTokens?: GraphicThemeTokens;
 }
 
 export type FeatureMatchOverlayCompositorRenderModel = GraphicsCompositionRenderModel;
@@ -95,5 +98,6 @@ export function resolveFeatureMatchOverlayCompositorRenderModel(
 		safeAreaGuides: input.safeAreaGuides,
 		selectedTarget: input.selectedTarget,
 		graphicAssetContentUrl: input.graphicAssetContentUrl,
+		themeTokens: input.themeTokens,
 	});
 }

@@ -16,6 +16,7 @@ import type { MtgCard } from './card/mtg';
 import type { FeatureMatchOrientation, Game, ScreenCommand } from './enums';
 import type { FeatureMatchSessionEventAppliedPayload } from './featureMatchSession';
 import type { CardResponse, PlayerDeckSummaryResponse } from './metagame';
+import type { ScreenOutputTheme } from './theme';
 
 /*
  * Shared message payload types — lightweight API-facing interfaces
@@ -105,6 +106,15 @@ export interface MessageDefinitions {
 
 	'event:deleted': {
 		eventId: number;
+	};
+
+	/**
+	 * A token write to the Theme this Event uses, announced on every Event using
+	 * it. It carries the whole stored map at its revision, so a holder applies
+	 * it without a read, and an older one arriving late is ignored.
+	 */
+	'theme:updated': {
+		theme: ScreenOutputTheme;
 	};
 
 	// Talent management

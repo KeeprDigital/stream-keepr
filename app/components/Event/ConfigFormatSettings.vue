@@ -20,8 +20,6 @@ const initialData = computed(() => {
 		countUpAfterCountdown: defaults.countUpAfterCountdown,
 		extraTurnsEnabled: defaults.extraTurnsEnabled,
 		extraTurns: defaults.extraTurns,
-		extraTurnsLabel: defaults.extraTurnsLabel,
-		untimedLabel: defaults.untimedLabel,
 		pointsSystem: props.event.pointsSystem,
 	};
 });
@@ -144,17 +142,7 @@ function toUpdate(changes: Partial<typeof initialData.value>): UpdateEventInput 
 					<USelect v-model="formData.clockType" class="w-64" :items="clockTypeOptions" />
 				</UFormField>
 
-				<UFormField
-					v-if="formData.clockType === 'untimed'"
-					name="untimedLabel"
-					label="Untimed Label"
-					description="Shown where the clock would be on overlays. Leave blank to show nothing."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UInput v-model="formData.untimedLabel" class="w-64" />
-				</UFormField>
-
-				<template v-else>
+				<template v-if="formData.clockType !== 'untimed'">
 					<UFormField
 						name="clockDuration"
 						label="Clock Duration (minutes)"
@@ -202,16 +190,6 @@ function toUpdate(changes: Partial<typeof initialData.value>): UpdateEventInput 
 							:min="1"
 							class="w-64"
 						/>
-					</UFormField>
-
-					<UFormField
-						v-if="formData.extraTurnsEnabled"
-						name="extraTurnsLabel"
-						label="Extra Turns Label"
-						description="Label shown for the extra turns indicator (e.g. 'Extra Turns', 'Overtime')."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<UInput v-model="formData.extraTurnsLabel" class="w-64" />
 					</UFormField>
 				</template>
 			</div>

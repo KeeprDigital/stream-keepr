@@ -48,15 +48,14 @@ describe('graphicsPackageImport', () => {
 	// The noun and the accepted extension are two facts about one artifact kind, so the component
 	// is told the kind and derives both.
 	it('names the artifact it receives and accepts exactly what that artifact travels as', async () => {
-		const styleSet = await mountImport({ kind: 'skstyle' });
-
-		expect(styleSet.get('[data-testid="library-import"]').text())
-			.toBe('Import a Graphic Style Set Package');
-		expect(styleSet.get<HTMLInputElement>('[data-testid="library-import-input"]')
-			.attributes('accept')).toBe('.skstyle');
-
 		// Both Template Package kinds share the noun and differ in extension, which is why
 		// the pairing is a table rather than one derived string.
+		const graphic = await mountImport({ kind: 'skgraphic' });
+
+		expect(graphic.get('[data-testid="library-import"]').text()).toBe('Import a Template Package');
+		expect(graphic.get<HTMLInputElement>('[data-testid="library-import-input"]')
+			.attributes('accept')).toBe('.skgraphic');
+
 		const layout = await mountImport({ kind: 'sklayout' });
 
 		expect(layout.get('[data-testid="library-import"]').text()).toBe('Import a Template Package');

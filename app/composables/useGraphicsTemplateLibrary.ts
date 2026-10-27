@@ -12,17 +12,6 @@ import type { TemplatePackagePreflightIssue } from '~~/shared/types/templatePack
  * managed revision: an independent local copy that records the packaged Template's
  * identity as provenance only, with no live link to the installation that exported it.
  *
- * ## What this is deliberately not
- *
- * A **Graphic Style Set Package** is not a Template Package and does not import through
- * here. Its first import *preserves* the packaged Style Set identity and revision rather
- * than yielding an unlinked copy, and an independent copy is the fallback an author
- * explicitly asks for rather than the ordinary outcome (`CONTEXT.md`, "Graphic Style Set
- * Package"). `StyleSetLibrary.vue` therefore builds on `useReusableLibraryReading` and keeps its
- * own import path, where that choice is stated once and read at the call site. Folding
- * the two into a shared "install" path would quietly recreate the bug the separation
- * exists to prevent.
- *
  * ## Why importing is not one click
  *
  * Template Package Preflight can reach three conclusions and each needs a different thing

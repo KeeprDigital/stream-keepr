@@ -4,36 +4,34 @@ import { z } from 'zod';
 import {
 	BOARD_SELECTION_VALUES,
 	DECK_BOARD_VIEW_VALUES,
-	DECK_CARD_SIZE_VALUES,
 	QUANTITY_POSITION_VALUES,
-	QUANTITY_SIZE_VALUES,
 	SIDEBOARD_PLACEMENT_VALUES,
 } from '../types/enums';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField, screenModeConfigFields } from './fields';
 
 const quantityPositionSchema = z.enum(QUANTITY_POSITION_VALUES);
-const quantitySizeSchema = z.enum(QUANTITY_SIZE_VALUES);
 
 /**
  * One board's complete layout block. The Mainboard and Sideboard each carry
  * their own (#478): which view renders the board, and the knobs each view
- * reads — grid reads columns/gap/sizing, list reads listColumns, stack reads
- * cardSize and stackOverlap. Visibility is the `board` selection's concern, so a
- * block carries no show/hide of its own.
+ * reads — grid reads columns and whether cards fill them, list reads
+ * listColumns. Visibility is the `board` selection's concern, so a block
+ * carries no show/hide of its own. How big its cards are, its grid's gap and
+ * how much of a stacked card shows are its board's Mode Tokens (#824, #844).
  */
 const deckBoardLayoutShape = {
 	view: editorField(z.enum(DECK_BOARD_VIEW_VALUES).optional(), { label: 'View' }),
-	// The editor's ranges are the product ranges (#498): columns was 1–20, card
-	// gap and stack overlap had no maximum. A stored value outside one reads clamped.
+	// The editor's ranges are the product ranges (#498): columns was 1–20. A
+	// stored value outside one reads clamped.
 	columns: editorField(z.number().int().min(1).max(12).optional(), { label: 'Grid Columns' }),
 	listColumns: editorField(z.number().int().min(1).max(4).optional(), { label: 'List Columns' }),
-	cardSize: editorField(z.enum(DECK_CARD_SIZE_VALUES).optional(), { label: 'Card Size' }),
+	/** Grid cards fill their columns rather than taking their board's `card-width` Mode Token. */
 	dynamicCardSize: editorField(z.boolean().optional(), { label: 'Dynamic Card Size' }),
-	cardGap: editorField(z.number().min(0).max(48).optional(), { label: 'Card Gap' }),
-	/** Percentage of each stacked card left visible under the next one. */
-	stackOverlap: editorField(z.number().min(5).max(50).optional(), { label: 'Stack Visible %', step: 1 }),
 };
+
+/** A board layout block's former look fields, now the mode's Mode Tokens (#824). */
+const FORMER_BOARD_LAYOUT_FIELDS = ['cardSize', 'cardGap', 'stackOverlap'] as const;
 
 const deckBoardLayoutConfigSchema = z.object(deckBoardLayoutShape).strict();
 
@@ -47,10 +45,7 @@ export const DEFAULT_DECK_BOARD_LAYOUT: ResolvedDeckBoardLayout = {
 	view: 'grid',
 	columns: 4,
 	listColumns: 2,
-	cardSize: 'medium',
 	dynamicCardSize: false,
-	cardGap: 8,
-	stackOverlap: 15,
 };
 
 const DEFAULT_SIDEBOARD_LAYOUT: ResolvedDeckBoardLayout = {
@@ -90,29 +85,13 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	showDeckColors: editorField(z.boolean().optional(), { label: 'Show Deck Colors' }),
 	showDeckStats: editorField(z.boolean().optional(), { label: 'Show Deck Stats' }),
 	showDeckMetaPill: editorField(z.boolean().optional(), { label: 'Show Deck Meta Pill' }),
-	deckMetaPillSize: editorField(quantitySizeSchema.optional(), { label: 'Pill Size' }),
-	deckMetaPillTextColor: editorField(z.string().max(50).optional(), { label: 'Text Color', control: 'color' }),
-	deckMetaPillBgColor: editorField(z.string().max(200).optional(), { label: 'Background', control: 'color' }),
-	deckMetaPillAccentColor: editorField(z.string().max(50).optional(), { label: 'Accent Color', control: 'color' }),
-	deckMetaPillBorderColor: editorField(z.string().max(50).optional(), { label: 'Border Color', control: 'color' }),
 	showHighlanderTotal: editorField(z.boolean().optional(), { label: 'Show Total Points' }),
 	showHighlanderPointedCards: editorField(z.boolean().optional(), { label: 'Show Pointed Cards' }),
-	highlanderPointedCardsSize: editorField(quantitySizeSchema.optional(), { label: 'Chip Size' }),
-	highlanderPointedCardsTextColor: editorField(z.string().max(50).optional(), { label: 'Text Color', control: 'color' }),
-	highlanderPointedCardsBgColor: editorField(z.string().max(200).optional(), { label: 'Background Color', control: 'color' }),
-	highlanderPointedCardsAccentColor: editorField(z.string().max(50).optional(), { label: 'Accent Color', control: 'color' }),
-	highlanderPointedCardsBorderColor: editorField(z.string().max(50).optional(), { label: 'Border Color', control: 'color' }),
 	showHighlanderPoints: editorField(z.boolean().optional(), { label: 'Show Point Badges' }),
 	highlanderPointsPosition: editorField(quantityPositionSchema.optional(), { label: 'Badge Position' }),
-	highlanderPointsSize: editorField(quantitySizeSchema.optional(), { label: 'Badge Size' }),
-	highlanderPointsTextColor: editorField(z.string().max(50).optional(), { label: 'Text Color', control: 'color' }),
-	highlanderPointsBgColor: editorField(z.string().max(50).optional(), { label: 'Background Color', control: 'color' }),
 
-	// Quantity badge customization
+	// Quantity badge placement
 	quantityPosition: editorField(quantityPositionSchema.optional(), { label: 'Badge Position' }),
-	quantitySize: editorField(quantitySizeSchema.optional(), { label: 'Badge Size' }),
-	quantityTextColor: editorField(z.string().max(50).optional(), { label: 'Text Color', control: 'color' }),
-	quantityBgColor: editorField(z.string().max(50).optional(), { label: 'Background Color', control: 'color' }),
 }, {
 	deckSource: { type: 'player', playerId: null },
 	board: DEFAULT_BOARD,
@@ -124,26 +103,33 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	showDeckColors: true,
 	showDeckStats: false,
 	showDeckMetaPill: true,
-	deckMetaPillSize: 'medium',
-	deckMetaPillTextColor: '#111827',
-	deckMetaPillBgColor: '#ffffff',
-	deckMetaPillAccentColor: '#7c3aed',
 	showHighlanderTotal: true,
 	showHighlanderPointedCards: true,
-	highlanderPointedCardsSize: 'medium',
-	highlanderPointedCardsTextColor: '#111827',
-	highlanderPointedCardsBgColor: '#ffffff',
-	highlanderPointedCardsAccentColor: '#7c3aed',
-	highlanderPointedCardsBorderColor: undefined,
 	showHighlanderPoints: true,
 	highlanderPointsPosition: DEFAULT_HIGHLANDER_POINTS_POSITION,
-	highlanderPointsSize: 'medium',
-	highlanderPointsTextColor: '#ffffff',
-	highlanderPointsBgColor: '#7c3aed',
 	quantityPosition: DEFAULT_QUANTITY_POSITION,
-	quantitySize: 'medium',
-	quantityTextColor: '#ffffff',
-	quantityBgColor: '#7c3aed',
+}, {
+	formerFields: [
+		// Their colours are the mode's Mode Tokens (#824).
+		'deckMetaPillTextColor',
+		'deckMetaPillBgColor',
+		'deckMetaPillAccentColor',
+		'deckMetaPillBorderColor',
+		'highlanderPointedCardsTextColor',
+		'highlanderPointedCardsBgColor',
+		'highlanderPointedCardsAccentColor',
+		'highlanderPointedCardsBorderColor',
+		'highlanderPointsTextColor',
+		'highlanderPointsBgColor',
+		'quantityTextColor',
+		'quantityBgColor',
+		// Their sizes are the mode's Mode Tokens (#844).
+		'deckMetaPillSize',
+		'highlanderPointedCardsSize',
+		'highlanderPointsSize',
+		'quantitySize',
+		...FORMER_BOARD_LAYOUT_FIELDS.flatMap(field => [`mainboard.${field}`, `sideboard.${field}`]),
+	],
 });
 
 export type DeckModeConfig = ScreenModeConfigOf<typeof deckModeConfigContract>;

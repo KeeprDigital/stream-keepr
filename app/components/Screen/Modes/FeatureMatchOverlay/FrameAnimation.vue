@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import type { AnimationEffectRenderPlan, FeatureMatchOverlayFrameAnimationConfig } from '~~/shared/animationEffects';
+import type { AnimationEffectRenderPlan, AnimationEffectSelection, FeatureMatchOverlayFrameAnimationConfig } from '~~/shared/animationEffects';
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
-import { animationEffectRenderPlan, parseFrameAnimationConfig } from '~~/shared/animationEffects';
+import { animationEffectRenderPlan, parseAnimationEffectSelection, parseFrameAnimationConfig } from '~~/shared/animationEffects';
 import ScreenAnimationEffectSurface from '~/components/Screen/AnimationEffectSurface.vue';
 import { featureMatchOverlayFrameContentMaskStyle } from '~/modules/feature-match-overlay/renderModel';
 
 const props = defineProps<{
+	/** Whether the Frame shows its effect, and at what opacity. */
 	animation?: FeatureMatchOverlayFrameAnimationConfig;
+	/** Which effect: the `frame-animation-effect` Mode Token (#831). */
+	effect?: AnimationEffectSelection;
 	canvasWidth: number;
 	canvasHeight: number;
 	cutoutPaths: readonly string[];
@@ -26,10 +29,11 @@ const hostStyle = computed(() => ({
 	opacity: parsedAnimation.value?.opacity ?? 0,
 }));
 
+/** An effect this build does not ship parses to nothing and renders nothing. */
 const renderPlan = computed<AnimationEffectRenderPlan | null>(() => {
-	const config = parsedAnimation.value;
-	return config
-		? animationEffectRenderPlan(config)
+	const selection = parseAnimationEffectSelection(props.effect);
+	return selection
+		? animationEffectRenderPlan(selection)
 		: null;
 });
 </script>

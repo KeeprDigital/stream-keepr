@@ -78,6 +78,7 @@
  * If that trade is ever re-taken, the pins named above will fail and say so.
  */
 
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { SocialProfiles } from '~~/shared/socialProfiles';
 import type {
 	ClockType,
@@ -95,7 +96,7 @@ import type {
 } from '~~/shared/types/enums';
 import type { FeatureMatchSessionCommand, FeatureMatchSessionResponse } from '~~/shared/types/featureMatchSession';
 import type { PlayerGameData } from '~~/shared/types/game';
-import type { ModeConfigsMap, ScreenConfig } from '~~/shared/types/screenConfig';
+import type { ModeConfigsMap } from '~~/shared/types/screenConfig';
 
 export interface TalentResponse {
 	id: number;
@@ -137,6 +138,11 @@ export interface EventListResponse {
 	displayRecordSeparator: RecordSeparator;
 	displayHideZeroDraws: boolean;
 	displayPositionFormat: PositionFormat;
+	/** The Event's Theme; null renders the Default Theme. */
+	themeId: string | null;
+	/** The Event Canvas every Screen of the Event is authored and rendered in (ADR-0051). */
+	canvasWidth: number;
+	canvasHeight: number;
 	featureMatchDefaultBestOf: number;
 	featureMatchDefaultStartingLife: number;
 	featureMatchDefaultClockType: ClockType;
@@ -195,11 +201,15 @@ export interface CreateEventInput {
 	tableNumberEnabled?: boolean;
 	featureMatchNotesEnabled?: boolean;
 	pointsSystem?: PointsSystem | null;
+	canvasWidth?: number;
+	canvasHeight?: number;
 }
 
 export type UpdateEventInput = Partial<Omit<CreateEventInput, 'game'>> & {
 	commentator1TalentId?: number | null;
 	commentator2TalentId?: number | null;
+	/** Event Presentation Settings: no Theme is the Default Theme. */
+	themeId?: string | null;
 };
 
 export interface MeleeConfigInput {
@@ -533,7 +543,11 @@ export interface ScreenResponse {
 	slug: string;
 	currentMode: ScreenMode;
 	modeConfigs: ModeConfigsMap | null;
-	screenConfig: ScreenConfig | null;
+	/**
+	 * The Screen Theme Overrides, keyed by token name, including dormant ones
+	 * for other modes' Mode Tokens. Absent reads as none.
+	 */
+	themeOverrides?: StoredThemeTokens;
 	stateVersion: number;
 	createdAt: Date;
 	updatedAt: Date;
@@ -544,7 +558,6 @@ export interface CreateScreenInput {
 	slug: string;
 	currentMode?: ScreenMode;
 	modeConfigs?: ModeConfigsMap | null;
-	screenConfig?: ScreenConfig | null;
 	stateVersion?: number;
 }
 

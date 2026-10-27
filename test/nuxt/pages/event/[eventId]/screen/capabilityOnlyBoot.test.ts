@@ -5,7 +5,9 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
 import { createMockFeatureMatchState, createWireMockFeatureMatch } from '~~/test/helpers/fixtures';
 import { useRouter } from '#app';
 import { tryUseRealtime } from '~/composables/core/useRealtime';
+import { screenModeSampleConfigs, useSampleScreenOutputReadRepository } from '~/modules/screen-mode/sampleDataset';
 import { useCardStore } from '~/stores/card';
+import { useEventStore } from '~/stores/event';
 import { useFeatureMatchStore } from '~/stores/featureMatch';
 import { useFeatureMatchStateStore } from '~/stores/featureMatchState';
 import { usePlayerStore } from '~/stores/player';
@@ -126,7 +128,6 @@ function screen(overrides: Record<string, unknown> = {}) {
 		slug: 'main',
 		name: 'Program',
 		currentMode: 'player-history',
-		screenConfig: { width: 1920, height: 1080 },
 		modeConfigs: {
 			'player-history': { playerId: 11 },
 		},
@@ -525,6 +526,100 @@ describe('a capability-only Screen Output', () => {
 		expect(useCardStore().activeCard).toBeNull();
 		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
 	});
+
+	// The Screen Mode Sample Dataset is a Theme preview's alone: an output with
+	// nothing to show renders nothing, never the sample.
+	it.each([
+		[
+			'answers no Players',
+			() => ({
+				players: [],
+				round: null,
+				roundStandings: null,
+				watchlist: null,
+				previousRoundPositions: null,
+			}),
+		],
+		[
+			'fails',
+			() => Promise.reject(new Error('unavailable')),
+		],
+	])('shows no sample Player when its Standings read %s', async (_case, answer) => {
+		api.screen = screen({ currentMode: 'standings', modeConfigs: {} });
+		api.answers.set('/api/screen-output/events/42/screens/7/standings', answer);
+		const standingsRead = () => api.requests.some(request => request.path.endsWith('/screens/7/standings'));
+
+		const wrapper = await mountOutput(`/event/42/screen/main#asset-capability=${capability}`, standingsRead);
+		// Nothing appears to wait on, so give the read's answer its full settle to render.
+		await settleUntil(() => false);
+
+		const { players } = await useSampleScreenOutputReadRepository().standings({ eventId: 42, screenId: 7 });
+		expect(standingsRead()).toBe(true);
+		expect(players.map(({ name }) => name).filter(name => wrapper.text().includes(name))).toEqual([]);
+	});
+
+	/** What a rendering of the sample Screen Card or sample Broadcast Graphic would put on air. */
+	async function sampleOnAirMarks() {
+		const { card } = await useSampleScreenOutputReadRepository().card({ eventId: 42, screenId: 7 });
+		const [lowerThird] = screenModeSampleConfigs('broadcast-graphics')['broadcast-graphics']!.graphics!;
+		return [
+			card!.imageData.front!.normal,
+			...lowerThird!.items.flatMap(item => item.type === 'text'
+				? [item.text]
+				: []),
+		];
+	}
+
+	const nothingOnAir = {
+		id: 3,
+		eventId: 42,
+		screenId: 7,
+		status: 'active',
+		currentState: { playout: {}, inputs: {}, sources: {} },
+		recoveryFault: null,
+		sequence: 1,
+		endedAt: null,
+		createdAt: '2026-10-17T00:00:00.000Z',
+		updatedAt: '2026-10-17T00:00:00.000Z',
+	};
+
+	it.each([
+		[
+			'card',
+			'card',
+			'answers no Card',
+			() => ({ card: null, revision: 1 }),
+		],
+		[
+			'card',
+			'card',
+			'fails',
+			() => Promise.reject(new Error('unavailable')),
+		],
+		[
+			'broadcast-graphics',
+			'broadcast-graphics/live-session',
+			'has nothing on air',
+			() => nothingOnAir,
+		],
+		[
+			'broadcast-graphics',
+			'broadcast-graphics/live-session',
+			'fails',
+			() => Promise.reject(new Error('unavailable')),
+		],
+	])('shows no sample Card or Broadcast Graphic when a %s output\'s %s read %s', async (mode, resource, _case, answer) => {
+		// No config of its own: the mode's defaults, never the sample's, fill it.
+		api.screen = screen({ currentMode: mode, modeConfigs: {} });
+		api.answers.set(`/api/screen-output/events/42/screens/7/${resource}`, answer);
+		const read = () => api.requests.some(request => request.path.endsWith(`/screens/7/${resource}`));
+
+		const wrapper = await mountOutput(`/event/42/screen/main#asset-capability=${capability}`, read);
+		await settleUntil(() => false);
+
+		expect(read()).toBe(true);
+		expect((await sampleOnAirMarks()).filter(mark => wrapper.html().includes(mark))).toEqual([]);
+	});
 });
 
 /**
@@ -748,5 +843,152 @@ describe('a capability-only Feature Match Overlay output', () => {
 		expect(wrapper.text()).toContain('Life 17');
 		expect(held()).toEqual({ sessionId: 91, sequence: 1, lifeTotal: 17 });
 		expect(privateRequests()).toEqual([]);
+	});
+});
+
+/**
+ * A Standings output renders its Event's Theme, and follows every change to it
+ * without a reload: a token write, a Theme switch, and one missed while away.
+ */
+describe('a capability-only output\'s Theme', () => {
+	const eventPath = '/api/screen-output/events/42/screens/7/event';
+	const TITLE = '--theme-standings-title-text';
+
+	function theme(id: string, revision: number, titleText: string) {
+		return {
+			id,
+			revision,
+			tokens: { 'standings.title-text': titleText },
+		};
+	}
+
+	function themedEvent(selected: ReturnType<typeof theme> | null) {
+		return { ...outputEvent, themeId: selected?.id ?? null, theme: selected };
+	}
+
+	/** The title colour the Screen host resolved for the Standings display. */
+	function titleColour(wrapper: { findAll: (selector: string) => Array<{ element: Element }> }) {
+		return wrapper.findAll('div')
+			.map(({ element }) => (element as HTMLElement).style.getPropertyValue(TITLE))
+			.find(Boolean);
+	}
+
+	/** One `theme:updated`, handed to the store as the Event room would. */
+	function announce(announced: ReturnType<typeof theme>) {
+		useEventStore().applyRemoteThemeUpdated({
+			eventId: 42,
+			timestamp: Date.now(),
+			theme: announced,
+		});
+	}
+
+	function eventReads() {
+		return api.requests.filter(request => request.path === eventPath).length;
+	}
+
+	beforeEach(() => {
+		api.requests = [];
+		api.screen = screen({
+			currentMode: 'standings',
+			modeConfigs: { standings: {} },
+		});
+		api.answers = new Map<string, () => unknown>([
+			[
+				'/api/screen-output/events/42/screens/slug/main',
+				() => api.screen,
+			],
+			[
+				'/api/screen-output/events/42/screens/7',
+				() => api.screen,
+			],
+			[
+				eventPath,
+				() => themedEvent(theme('brand', 3, 'rgb(1, 1, 1)')),
+			],
+			[
+				'/api/screen-output/events/42/screens/7/standings',
+				() => ({
+					players: [],
+					round: null,
+					roundStandings: null,
+					watchlist: null,
+					previousRoundPositions: null,
+				}),
+			],
+		]);
+		resetAllEventStores();
+		realtime().connectionState = 'connected';
+		realtime().detach('event:42');
+	});
+
+	afterEach(() => {
+		for (const wrapper of mounted.splice(0))
+			wrapper.unmount();
+	});
+
+	async function mountThemed() {
+		const wrapper = await mountOutput(`/event/42/screen/main#asset-capability=${capability}`, () => true);
+		await settleUntil(() => titleColour(wrapper) === 'rgb(1, 1, 1)');
+		expect(titleColour(wrapper)).toBe('rgb(1, 1, 1)');
+		return wrapper;
+	}
+
+	it('renders the Default Theme for an Event with none', async () => {
+		api.answers.set(eventPath, () => themedEvent(null));
+		const wrapper = await mountOutput(`/event/42/screen/main#asset-capability=${capability}`, () => true);
+		await settleUntil(() => !!titleColour(wrapper));
+
+		expect(titleColour(wrapper)).toBe('#ffffff');
+	});
+
+	it.each([
+		['applies a token write it hears, without a read', 4, 'rgb(2, 2, 2)'],
+		['ignores a token write older than the one it holds', 2, 'rgb(1, 1, 1)'],
+	])('%s', async (_case, revision, shown) => {
+		const wrapper = await mountThemed();
+		const reads = eventReads();
+
+		announce(theme('brand', revision, 'rgb(2, 2, 2)'));
+		await settleUntil(() => false);
+
+		expect(titleColour(wrapper)).toBe(shown);
+		expect(eventReads()).toBe(reads);
+	});
+
+	it('ignores a token write to a Theme its Event does not use', async () => {
+		const wrapper = await mountThemed();
+
+		announce(theme('elsewhere', 9, 'rgb(9, 9, 9)'));
+		await settleUntil(() => false);
+
+		expect(titleColour(wrapper)).toBe('rgb(1, 1, 1)');
+	});
+
+	it('re-reads its Event context when its Event switches Theme, and renders the new one', async () => {
+		const wrapper = await mountThemed();
+
+		api.answers.set(eventPath, () => themedEvent(theme('switched', 1, 'rgb(3, 3, 3)')));
+		useEventStore().applyRemoteUpdated({
+			eventId: 42,
+			timestamp: Date.now(),
+			event: { id: 42, themeId: 'switched' },
+		} as never);
+		await settleUntil(() => titleColour(wrapper) === 'rgb(3, 3, 3)');
+
+		expect(titleColour(wrapper)).toBe('rgb(3, 3, 3)');
+	});
+
+	it('shows a token write missed while disconnected once its Event channel is attached again', async () => {
+		const wrapper = await mountThemed();
+
+		realtime().connectionState = 'suspended';
+		await flushPromises();
+		api.answers.set(eventPath, () => themedEvent(theme('brand', 5, 'rgb(4, 4, 4)')));
+		realtime().connectionState = 'connected';
+		realtime().reattach('event:42');
+		await settleUntil(() => titleColour(wrapper) === 'rgb(4, 4, 4)');
+
+		expect(titleColour(wrapper)).toBe('rgb(4, 4, 4)');
+		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
 	});
 });

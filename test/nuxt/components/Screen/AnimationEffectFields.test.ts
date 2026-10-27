@@ -34,7 +34,6 @@ async function mountComponent(selection: AnimationEffectSelection, onUpdate = vi
 		global: {
 			stubs: {
 				...nuxtUiStubs,
-				ScreenAnimationEffectPresetLibrary: true,
 				UIColorPicker: UIColorPickerStub,
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
 			},

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getContainerControls, getDisplayType, SCREEN_MODES } from '~~/shared/screenModes';
+import { getDisplayType, SCREEN_MODES } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 
 describe('screen mode definitions', () => {
@@ -14,20 +14,5 @@ describe('screen mode definitions', () => {
 				? 'control'
 				: 'overlay');
 		}
-	});
-});
-
-describe('getContainerControls', () => {
-	it.each([
-		['deck', true],
-		['broadcast-graphics', false],
-		['feature-match-overlay', false],
-	] as const)('gives %s generic padding, text colour and background controls: %s', (mode, generic) => {
-		expect(getContainerControls(mode)).toEqual({
-			dimensions: true,
-			padding: generic,
-			textColors: generic,
-			background: generic,
-		});
 	});
 });

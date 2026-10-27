@@ -15,7 +15,7 @@ import {
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 	modeConfigsMapSchema,
 } from '~~/server/schemas/api/screen';
-import { graphicBindingFieldIds } from '~~/shared/modules/graphics';
+import { graphicBindingFieldIds, graphicThemeSlotTokens } from '~~/shared/modules/graphics';
 import {
 	MAX_GRAPHIC_INPUT_CHOICE_LENGTH,
 	MAX_GRAPHIC_INPUT_CHOICE_OPTIONS,
@@ -23,16 +23,16 @@ import {
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
 	MAX_GRAPHIC_TEXT_LENGTH,
 } from '~~/shared/types/graphics';
+import { GRAPHIC_THEME_SLOT_VALUES } from '~~/shared/types/graphicThemeBindings';
 
 // The Broadcast Graphics byte measurements ADR-0007 records, pinned with `toBe` so
 // that a vocabulary or cap change moves a figure visibly rather than quietly. The
 // worst case populates every construct `broadcastGraphicsModeConfigSchema` admits at
-// its own maximum, with the one exception the ADR names: a Style Set link's unbounded
-// `revision`, written as six digits. A construct the schema admits and this builder
-// omits would make the figures look measured when they are not.
+// its own maximum. A construct the schema admits and this builder omits would make
+// the figures look measured when they are not.
 
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
-const WORST_CASE_FLAT_BYTES = 3_712_876;
+const WORST_CASE_FLAT_BYTES = 1_927_576;
 const REALISTIC_SCREEN_AT_CAP_BYTES = 248_734;
 
 const jsonBytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
@@ -96,43 +96,17 @@ const TYPOGRAPHY = {
 	textAlign: 'center' as const,
 	color: '#0077a3',
 };
-const ENTRY = 'e'.repeat(100);
-
-// Every style slot, each with its largest override; slots are not gated by item kind.
-const ITEM_STYLE_REFS = {
-	'typography': {
-		entryId: ENTRY,
-		overrides: { ...RUN_STYLE, lineHeight: 1.15, color: '#0077a3' },
-	},
-	'surfaceStyle': { entryId: ENTRY, overrides: SURFACE_STYLE },
-	'surfaceStyle.fill': { entryId: ENTRY },
-	'defaultChildSurfaceStyle': { entryId: ENTRY, overrides: SURFACE_STYLE },
-	'boxSurfaceStyle': { entryId: ENTRY, overrides: SURFACE_STYLE },
-	'wonBoxSurfaceStyle': { entryId: ENTRY, overrides: SURFACE_STYLE },
-	'geometry': { entryId: ENTRY, overrides: GEOMETRY },
-	'clipGeometry': { entryId: ENTRY, overrides: GEOMETRY },
-	'boxGeometry': { entryId: ENTRY, overrides: GEOMETRY },
-	'media': {
-		entryId: ENTRY,
-		overrides: {
-			fit: 'cover' as const,
-			focalPosition: { horizontal: 0.5, vertical: 0.5 },
-			opacity: 0.85,
-			clipGeometry: GEOMETRY,
-			playbackRate: 3.75,
-			loop: true,
-		},
-	},
-	'animation.enter': { entryId: ENTRY, overrides: RECIPE },
-	'animation.on-screen': { entryId: ENTRY, overrides: ON_SCREEN },
-	'animation.update': { entryId: ENTRY, overrides: RECIPE },
-	'animation.exit': { entryId: ENTRY, overrides: RECIPE },
-};
-const CONTAINER_STYLE_REFS = {
-	'animation.enter': ITEM_STYLE_REFS['animation.enter'],
-	'animation.on-screen': ITEM_STYLE_REFS['animation.on-screen'],
-	'animation.update': ITEM_STYLE_REFS['animation.update'],
-	'animation.exit': ITEM_STYLE_REFS['animation.exit'],
+/** Every Theme binding slot, each naming the longest Foundation Token of its type. */
+const ITEM_THEME_BINDINGS = Object.fromEntries(GRAPHIC_THEME_SLOT_VALUES.map(slot => [
+	slot,
+	graphicThemeSlotTokens(slot).reduce((longest, name) => name.length > longest.length
+		? name
+		: longest, ''),
+]));
+const CONTAINER_THEME_BINDINGS = {
+	'animation.enter': ITEM_THEME_BINDINGS['animation.enter'],
+	'animation.update': ITEM_THEME_BINDINGS['animation.update'],
+	'animation.exit': ITEM_THEME_BINDINGS['animation.exit'],
 };
 const LONGEST_FIELD_ID = graphicBindingFieldIds().reduce((longest, id) => (id.length > longest.length
 	? id
@@ -182,7 +156,7 @@ function item(id: string) {
 		minFontSize: 599.5,
 		surfaceStyle: SURFACE_STYLE,
 		animation: ANIMATION,
-		styleRefs: ITEM_STYLE_REFS,
+		themeBindings: ITEM_THEME_BINDINGS,
 	};
 }
 
@@ -203,7 +177,7 @@ function group(id: string, childIds: string[]) {
 		surfaceStyle: SURFACE_STYLE,
 		defaultChildSurfaceStyle: SURFACE_STYLE,
 		animation: containerAnimation(childIds),
-		styleRefs: ITEM_STYLE_REFS,
+		themeBindings: ITEM_THEME_BINDINGS,
 		children: childIds.map(childId => ({
 			...item(childId),
 			sizing: { mode: 'fixed' as const, size: 9999.5, weight: 99.5 },
@@ -242,11 +216,7 @@ function worstCaseScreen(arrangement: 'flat' | 'grouped') {
 		bindings: [] as unknown[],
 		sources: [] as unknown[],
 		animation: undefined as ReturnType<typeof containerAnimation> | undefined,
-		styleSet: {
-			styleSetId: 's'.repeat(100),
-			revision: 999999,
-		},
-		styleRefs: CONTAINER_STYLE_REFS,
+		themeBindings: CONTAINER_THEME_BINDINGS,
 		channelId: channels[index % channels.length]!.id,
 	}));
 

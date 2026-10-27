@@ -274,3 +274,16 @@ describe('a `.skgraphic` Template Package crossing an installation boundary', ()
 		expect(report.issues.filter(issue => issue.severity === 'error')).toEqual([]);
 	});
 });
+
+describe('a `.skgraphic` Template Package and the Theme', () => {
+	// Bindings travel as token names, so the receiver's own Theme restyles the design.
+	it('round-trips every Theme binding, and a receiver accepts them', async () => {
+		const { document, archive } = await exportedPackage();
+		const travelled = readTemplatePackageParts(archive).template as BroadcastGraphicConfig;
+
+		expect(travelled.items.map(item => item.themeBindings)).toEqual(document.items.map(item => item.themeBindings));
+		expect(travelled.items.some(item => item.themeBindings)).toBe(true);
+		const report = reportOf(await preflight(createLibrary('theme-receiver'), archive));
+		expect(report.issues.filter(issue => issue.severity === 'error')).toEqual([]);
+	});
+});

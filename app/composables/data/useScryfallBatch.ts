@@ -39,6 +39,11 @@ export interface ScryfallCardFetchResult {
  */
 export const DECK_CARD_DATA_REFETCH_MS = 60_000;
 
+/** The key a card with no Scryfall id is found by in fetched card data: its name. */
+export function scryfallNameKey(name: string): `name:${string}` {
+	return `name:${name.toLowerCase()}`;
+}
+
 function delay(ms: number): Promise<void> {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -142,7 +147,7 @@ export function useScryfallBatch() {
 					cardDataMap.set(response.id, parsed);
 					// Also key by the original card name (lowercased) so cards
 					// without a scryfallId can still be enriched during display
-					cardDataMap.set(`name:${name.toLowerCase()}`, parsed);
+					cardDataMap.set(scryfallNameKey(name), parsed);
 				}
 				catch (error) {
 					// A 404 is a card that genuinely does not exist: the placeholder
@@ -171,7 +176,7 @@ export function useScryfallBatch() {
 				? cardDataMap.get(card.scryfallId) ?? null
 				// Fall back to name-based lookup for cards without a scryfallId
 				// (e.g. MDFCs where the server-side Scryfall lookup had a key mismatch)
-				: cardDataMap.get(`name:${card.name.toLowerCase()}`) ?? null,
+				: cardDataMap.get(scryfallNameKey(card.name)) ?? null,
 		});
 
 		return {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { GraphicThemeTokens } from '~~/shared/modules/graphics';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
@@ -20,6 +21,8 @@ const props = defineProps<{
 	canvasHeight: number;
 	eventId: number;
 	writable?: boolean;
+	/** The Foundation Tokens the editor previews under (#829). */
+	themeTokens?: GraphicThemeTokens;
 }>();
 
 const emit = defineEmits<{ 'update:composition': [composition: BroadcastGraphicConfig] }>();
@@ -44,6 +47,7 @@ function updateStack(next: BroadcastGraphicConfig[]) {
 		:canvas-height="canvasHeight"
 		:event-id="eventId"
 		:writable="writable"
+		:theme-tokens="themeTokens"
 		@update:graphics="updateStack"
 	/>
 </template>

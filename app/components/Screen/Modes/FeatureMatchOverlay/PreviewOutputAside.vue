@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { GraphicRect } from '~~/shared/types/graphics';
 import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { EditorSelectionFrame } from '~/modules/feature-match-overlay/editorSelection';
@@ -13,6 +14,7 @@ import {
 } from '~/modules/feature-match-overlay/previewMessages';
 import {
 	GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE,
+	GRAPHICS_PREVIEW_THEME_MESSAGE,
 	isGraphicsPreviewReadyMessage,
 	isGraphicsPreviewSelectMessage,
 } from '~/modules/graphics/previewMessages';
@@ -48,6 +50,11 @@ const props = defineProps<{
 	selectionLabel?: string;
 	/** The tallest the fitted preview is drawn, as a CSS length. */
 	fitHeight?: string;
+	/**
+	 * The stored values of a Theme to preview bound Graphic Items under, null to
+	 * follow the Screen's Event's Theme, or absent to tell the frame nothing yet.
+	 */
+	previewThemeValues?: StoredThemeTokens | null;
 }>();
 
 const emit = defineEmits<{
@@ -136,10 +143,23 @@ function syncCompositorTargetToPreview() {
 	}, window.location.origin);
 }
 
+function syncThemeToPreview() {
+	if (!import.meta.client || !previewFrame.value?.contentWindow || props.previewThemeValues === undefined)
+		return;
+
+	previewFrame.value.contentWindow.postMessage({
+		type: GRAPHICS_PREVIEW_THEME_MESSAGE,
+		tokens: props.previewThemeValues && JSON.parse(JSON.stringify(props.previewThemeValues)),
+	}, window.location.origin);
+}
+
+watch(() => props.previewThemeValues, syncThemeToPreview);
+
 function syncPreviewState() {
 	syncConfigToPreview();
 	syncSelectedTargetToPreview();
 	syncCompositorTargetToPreview();
+	syncThemeToPreview();
 }
 
 /**

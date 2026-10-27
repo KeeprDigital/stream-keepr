@@ -3,12 +3,17 @@ import type { BackgroundLayer, BackgroundModeConfig } from '~~/shared/types/scre
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, ref } from 'vue';
+import { computed, defineComponent, nextTick, ref } from 'vue';
 import Display from '~/components/Screen/Modes/Background/Display.vue';
 
 const config = ref<BackgroundModeConfig>({ layers: [] });
 
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => config.value));
+
+const themeTokens = ref<Record<string, unknown>>();
+const screen = ref<{ themeOverrides: Record<string, unknown> }>();
+
+mockNuxtImport('useScreenContext', () => () => ({ screen, themeTokens }));
 
 const contentUrl = vi.fn((reference: GraphicAssetReference) => `/resolved/${reference.assetId}/${reference.revisionId}`);
 
@@ -54,6 +59,8 @@ async function mountComponent() {
 describe('screenModesBackgroundDisplay', () => {
 	beforeEach(() => {
 		config.value = { layers: [] };
+		screen.value = undefined;
+		themeTokens.value = undefined;
 		contentUrl.mockClear();
 	});
 
@@ -219,5 +226,38 @@ describe('screenModesBackgroundDisplay', () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.find('[data-testid="animation-surface"]').exists()).toBe(false);
+	});
+
+	it('restyles live when its Theme\'s background changes', async () => {
+		const wrapper = await mountComponent();
+		expect(wrapper.findAll('.background-layer-stack__layer')).toHaveLength(0);
+
+		themeTokens.value = {
+			background: [
+				layer({ id: 'theme-wash', type: 'color', color: '#203040' }),
+			],
+		};
+		await nextTick();
+
+		expect(wrapper.findAll('.background-layer-stack__layer').map(rendered => rendered.attributes('data-layer-id'))).toEqual(['theme-wash']);
+	});
+
+	it('paints the Screen\'s override of its Theme\'s background', async () => {
+		themeTokens.value = {
+			background: [
+				layer({ id: 'theme-wash', type: 'color', color: '#203040' }),
+			],
+		};
+		screen.value = {
+			themeOverrides: {
+				background: [
+					layer({ id: 'override-wash', type: 'color', color: '#405060' }),
+				],
+			},
+		};
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.findAll('.background-layer-stack__layer').map(rendered => rendered.attributes('data-layer-id'))).toEqual(['override-wash']);
 	});
 });

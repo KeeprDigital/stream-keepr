@@ -1,10 +1,17 @@
 <script setup lang="ts">
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 
+/**
+ * One ranked card, for any Screen Mode that shows one. Its look comes from the
+ * host mode's Mode Tokens through the style props, since a mode's tokens are
+ * set only while it is the Screen's mode; a host passing none leaves its own
+ * look showing through.
+ */
 const props = defineProps<{
 	entry: CardBreakdownEntry;
 	rank: number;
-	sizeClass: string;
+	/** The card's width, unless it fills its grid column. */
+	width?: string;
 	dynamicSize?: boolean;
 	showName: boolean;
 	showRank: boolean;
@@ -13,6 +20,10 @@ const props = defineProps<{
 	statText: string | null;
 	statBadgeClass: string;
 	statBadgeStyle: Record<string, string>;
+	/** The badges' text size, which each badge sizes itself around. */
+	badgeSize?: string;
+	/** The card's face, which shows when it has no image. */
+	cardStyle?: Record<string, string>;
 }>();
 
 const imageError = ref(false);
@@ -36,11 +47,11 @@ watch(() => props.entry.scryfallId, () => {
 <template>
 	<div
 		class="top-cards-item flex flex-col gap-1 min-w-0"
-		:class="{ [sizeClass]: !dynamicSize }"
+		:style="dynamicSize ? undefined : { width }"
 		data-testid="top-cards-item"
 	>
-		<div class="relative">
-			<div class="mtg-card bg-elevated">
+		<div class="relative" :style="badgeSize ? { fontSize: badgeSize } : undefined">
+			<div class="mtg-card" :style="cardStyle">
 				<img
 					v-if="imageUrl && !imageError"
 					:src="imageUrl"
@@ -56,7 +67,7 @@ watch(() => props.entry.scryfallId, () => {
 			<div
 				v-if="showRank"
 				data-testid="top-cards-rank-badge"
-				class="absolute rounded-full font-bold flex items-center justify-center shadow-md"
+				class="absolute rounded-full flex items-center justify-center"
 				:class="rankBadgeClass"
 				:style="rankBadgeStyle"
 			>
@@ -65,7 +76,7 @@ watch(() => props.entry.scryfallId, () => {
 			<div
 				v-if="statText"
 				data-testid="top-cards-stat-badge"
-				class="absolute rounded-md font-mono font-bold leading-none shadow-md"
+				class="absolute rounded-md tabular-nums"
 				:class="statBadgeClass"
 				:style="statBadgeStyle"
 			>
@@ -75,7 +86,7 @@ watch(() => props.entry.scryfallId, () => {
 		<div
 			v-if="showName"
 			data-testid="top-cards-name"
-			class="top-cards-name text-center font-semibold truncate"
+			class="top-cards-name text-center truncate"
 		>
 			{{ entry.name }}
 		</div>

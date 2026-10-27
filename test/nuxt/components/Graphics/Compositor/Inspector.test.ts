@@ -1,4 +1,4 @@
-import type { GraphicsHostContract } from '~~/shared/modules/graphics';
+import type { GraphicsHostContract, GraphicThemeTokens } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
 	GraphicGroupItemConfig,
@@ -9,14 +9,11 @@ import type {
 	MediaGraphicInputDeclaration,
 	ShapeGeometry,
 } from '~~/shared/types/graphics';
-import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
-import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { FEATURE_MATCH_TOKEN_CATALOGUE } from '~~/shared/featureMatchTokenCatalogue';
-import { applyGraphicStyleSet, resolveGraphicStyleSet } from '~~/shared/modules/graphic-style-sets';
 import {
 	BROADCAST_GRAPHICS_HOST_CONTRACT,
 	DEFAULT_GRAPHIC_TYPOGRAPHY,
@@ -24,6 +21,7 @@ import {
 	getGraphicItemDefinition,
 	GRAPHIC_ITEM_KINDS,
 	isGraphicItemDefinitionAvailable,
+	resolveGraphicThemeTokens,
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
 import { MAX_GRAPHIC_TEXT_LENGTH } from '~~/shared/types/graphics';
@@ -222,8 +220,8 @@ async function mountComponent(options: {
 	selectedTarget: GraphicsSelectionTarget;
 	writable?: boolean;
 	contract?: GraphicsHostContract;
-	/** The published Graphic Style Set this composition authors against, if any. */
-	styleSet?: GraphicStyleAuthoringContext;
+	/** The Foundation Tokens the editor previews under. */
+	themeTokens?: GraphicThemeTokens;
 }) {
 	return mount(Inspector, {
 		props: {
@@ -234,7 +232,7 @@ async function mountComponent(options: {
 			canvasHeight: 1080,
 			eventId: 7,
 			writable: options.writable ?? true,
-			styleSet: options.styleSet,
+			themeTokens: options.themeTokens,
 		},
 		global: {
 			stubs: {
@@ -2736,107 +2734,64 @@ describe('surfaces, Shape Geometry, and the Player for every Graphic Item Defini
 	});
 });
 
-// The seam a property edit becomes an explicit property-level override at.
-describe('recording a Graphic Style Set override from a property edit', () => {
-	function entries(letterSpacing = 2): GraphicStyleSetEntry[] {
-		return [
-			{
-				id: 'brand',
-				kind: 'palette',
-				name: 'Brand',
-				schemaVersion: 1,
-				value: { color: '#ff0044' },
-			},
-			{
-				id: 'heading',
-				kind: 'typography',
-				name: 'Show heading',
-				schemaVersion: 1,
-				value: {
-					font: { kind: 'application', fontId: 'inter' },
-					fontSize: 64,
-					fontWeight: 800,
-					fontStyle: 'normal',
-					textTransform: 'uppercase',
-					letterSpacing,
-					lineHeight: 1,
-					colorEntryId: 'brand',
-				},
-			},
-		];
-	}
-
-	const PUBLISHED = 3;
-
-	function context(published: GraphicStyleSetEntry[]): GraphicStyleAuthoringContext {
-		return {
-			id: 'show-style',
-			name: 'Show style',
-			entries: published,
-			resolution: resolveGraphicStyleSet(published),
-			publishedRevision: PUBLISHED,
-		};
-	}
-
-	// A composition holding exactly what `entries()` resolves to, and recorded two revisions behind
-	// the published one — what a publish that changed only entries this composition never…
-	function stranded(): BroadcastGraphicConfig[] {
-		return [
-			applyGraphicStyleSet(
-				{
-					id: 'lower-third',
-					name: 'Lower Third',
-					styleSet: { styleSetId: 'show-style', revision: 1 },
-					items: [
-						{
-							...textItem,
-							styleRefs: {
-								typography: { entryId: 'heading' },
-							},
-						},
-					],
-				},
-				resolveGraphicStyleSet(entries()),
-			),
-		];
-	}
-
+// The Inspector's wiring to Theme bindings (#829): a bound property shows the preview Theme's value,
+// and its picker binds or detaches through the editing chain.
+describe('a Graphic Item property\'s Theme binding', () => {
 	const SELECTED: GraphicsSelectionTarget = { type: 'item', graphicId: 'lower-third', itemId: 'name' };
+	const themeTokens = resolveGraphicThemeTokens({ 'text-primary': '#123456' });
 
-	it('records the edit as an override while the template is stranded on an older revision', async () => {
-		const wrapper = await mountComponent({
-			graphics: stranded(),
+	function withText(themeBindings?: Record<string, string>): BroadcastGraphicConfig[] {
+		return [
+			{
+				id: 'lower-third',
+				name: 'Lower Third',
+				items: [
+					{ ...textItem, themeBindings },
+				],
+			},
+		];
+	}
+
+	async function mountBound(themeBindings?: Record<string, string>) {
+		return await mountComponent({
+			graphics: withText(themeBindings),
 			selectedTarget: SELECTED,
-			styleSet: context(entries()),
+			themeTokens,
 		});
+	}
 
-		numberField(wrapper, 'Font size').vm.$emit('update:modelValue', 30);
-		await nextTick();
+	it.each([
+		[
+			'shows the token it follows',
+			{ 'typography.color': 'text-primary' },
+			'text-primary',
+		],
+		['shows none while the property holds its own value', undefined, undefined],
+	])('%s', async (_case, bindings, token) => {
+		const wrapper = await mountBound(bindings);
 
-		expect(itemOf(emittedGraphics(wrapper, 0))?.styleRefs?.typography)
-			.toEqual({
-				entryId: 'heading',
-				overrides: { fontSize: 30 },
-			});
+		expect(wrapper.get('[data-testid="theme-binding-typography.color"]').attributes('data-theme-token')).toBe(token);
 	});
 
-	it('records nothing on a slot the Style Set has a pending change in', async () => {
-		const wrapper = await mountComponent({
-			graphics: stranded(),
-			selectedTarget: SELECTED,
-			// `heading`'s letter spacing has moved, so this slot is carrying a republished
-			// change nobody has reviewed. Recording anything derived from it here would
-			// settle that update without the author ever seeing it.
-			styleSet: context(entries(8)),
-		});
+	it('binds the property, painting the preview Theme\'s value', async () => {
+		const wrapper = await mountBound();
 
-		numberField(wrapper, 'Font size').vm.$emit('update:modelValue', 30);
+		selectField(wrapper, 'theme-binding-typography.color-token').vm.$emit('update:modelValue', 'text-primary');
 		await nextTick();
 
-		const item = itemOf(emittedGraphics(wrapper, 0));
-		expect(item?.styleRefs?.typography).toEqual({ entryId: 'heading' });
-		// Deferring the provenance is not refusing the edit: the value is stored inline
-		// and review is where the author is shown that theirs and the Style Set's differ.
-		expect(item?.type === 'text' && item.typography.fontSize).toBe(30);
+		const item = itemOf(emittedGraphics(wrapper));
+		expect(item?.themeBindings).toEqual({ 'typography.color': 'text-primary' });
+		expect(item?.type === 'text' && item.typography.color).toBe('#123456');
+	});
+
+	it('detaches the property, keeping the value it showed', async () => {
+		const wrapper = await mountBound({ 'typography.color': 'text-primary' });
+
+		selectField(wrapper, 'theme-binding-typography.color-token').vm.$emit('update:modelValue', '__own__');
+		await nextTick();
+
+		const item = itemOf(emittedGraphics(wrapper));
+		expect(item?.themeBindings).toBeUndefined();
+		expect(item?.type === 'text' && item.typography.color).toBe('#123456');
 	});
 });

@@ -18,6 +18,7 @@ vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/ed
 const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 	'background': 'its editor is the Background Layer stack, an authored stack',
 	'feature-match-overlay': 'its editor picks a Feature Match Slot (an Event Reference), applies a preset, and edits the server-validated layout',
+	'card': 'its editor only binds a Feature Match (an Event Reference); its size and motion are Mode Tokens',
 	'broadcast-graphics': 'its editor edits the authored graphics stack, the Graphic Channels list, and the Broadcast Graphics Background: one Animation Effect selection, a union field the shared Animation Effect editor edits from its catalogue schema',
 };
 
@@ -31,10 +32,6 @@ const OPTIONS_NOT_OFFERED: Record<string, readonly string[]> = {
 
 /** Each mode's editor, and the config variants that between them render every scalar control. */
 const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Record<string, unknown>[] }>> = {
-	'card': {
-		editor: 'Card',
-		variants: [{}],
-	},
 	'feature-match': {
 		editor: 'FeatureMatch',
 		variants: [{}],
@@ -145,14 +142,6 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	updateConfig: saveConfig,
 	resetConfig: vi.fn(),
 	retry: vi.fn(),
-}));
-
-vi.mock('~/composables/screen/useScreenConfigUpdate', () => ({
-	useScreenConfigUpdate: () => ({
-		screenConfig: ref({}),
-		saving: ref(false),
-		updateScreenConfig: vi.fn(),
-	}),
 }));
 
 const loaded = {

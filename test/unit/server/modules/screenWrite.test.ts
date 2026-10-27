@@ -11,7 +11,6 @@ const mockScreenService = {
 	findById: vi.fn(),
 	update: vi.fn(),
 	remove: vi.fn(),
-	updateScreenConfig: vi.fn(),
 	updateModeConfig: vi.fn(),
 };
 const mockCardService = {
@@ -78,7 +77,6 @@ describe('screenWriteModule', () => {
 		mockScreenService.findById.mockResolvedValue(createMockScreen({ id: 7, slug: 'main' }));
 		mockScreenService.update.mockResolvedValue(createMockScreen({ id: 7, slug: 'main' }));
 		mockScreenService.remove.mockResolvedValue(true);
-		mockScreenService.updateScreenConfig.mockResolvedValue(createMockScreen({ id: 7 }));
 		mockScreenService.updateModeConfig.mockResolvedValue(createMockScreen({ id: 7 }));
 		mockPublication.screenCreated.mockResolvedValue({ id: 7, slug: 'main' });
 		mockPublication.screenUpdated.mockResolvedValue({ id: 7, slug: 'main' });
@@ -373,41 +371,6 @@ describe('screenWriteModule', () => {
 				originConnectionId: 'origin-1',
 			});
 			expect(result).toEqual({ success: true });
-		});
-	});
-
-	describe('updateScreenConfig', () => {
-		it('returns 404 when the screen does not exist', async () => {
-			mockScreenService.updateScreenConfig.mockResolvedValue(undefined);
-
-			await expect(screenWriteModule().updateScreenConfig({
-				authoringSessionId: undefined,
-				eventId: 1,
-				screenId: 404,
-				config: {},
-			})).rejects.toMatchObject({ statusCode: 404, message: 'Screen not found' });
-
-			expect(mockPublication.screenUpdated).not.toHaveBeenCalled();
-		});
-
-		it('writes the config versioned on stateVersion and publishes the update', async () => {
-			const response = await screenWriteModule().updateScreenConfig({
-				authoringSessionId: undefined,
-				eventId: 1,
-				screenId: 7,
-				config: { showLogo: false },
-				stateVersion: 2,
-				originConnectionId: 'origin-1',
-			});
-
-			expect(mockScreenService.updateScreenConfig.mock.calls[0]?.slice(0, 4)).toEqual([
-				7,
-				1,
-				{ showLogo: false },
-				2,
-			]);
-			expect(mockPublication.screenUpdated).toHaveBeenCalledWith(expect.objectContaining({ eventId: 1, originConnectionId: 'origin-1' }));
-			expect(response).toEqual({ id: 7, slug: 'main' });
 		});
 	});
 

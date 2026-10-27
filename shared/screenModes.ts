@@ -1,4 +1,6 @@
 import type { PageRotationDeclaration } from './modules/page-rotation';
+import type { ThemeTokenType } from './modules/theme/tokens';
+import type { DeclaredModeTokenDefinition } from './modules/theme/vocabulary';
 import type { ScreenModeConfigContract, ScreenModeConfigOf } from './screenModeConfigs/contract';
 import type { DeckSource } from './screenModeConfigs/deck';
 import type { PageRotationConfig } from './screenModeConfigs/subShapes';
@@ -17,35 +19,18 @@ import { playerHistoryModeConfigContract } from './screenModeConfigs/playerHisto
 import { standingsModeConfigContract } from './screenModeConfigs/standings';
 import { topCardsModeConfigContract } from './screenModeConfigs/topCards';
 import { topCutModeConfigContract } from './screenModeConfigs/topCut';
+import { archetypeSpotlightModeTokens } from './screenModeTokens/archetypeSpotlight';
+import { cardModeTokens } from './screenModeTokens/card';
+import { deckModeTokens } from './screenModeTokens/deck';
+import { featureMatchOverlayModeTokens } from './screenModeTokens/featureMatchOverlay';
+import { headToHeadModeTokens } from './screenModeTokens/headToHead';
+import { metagameModeTokens } from './screenModeTokens/metagame';
+import { pairingsModeTokens } from './screenModeTokens/pairings';
+import { playerHistoryModeTokens } from './screenModeTokens/playerHistory';
+import { standingsModeTokens } from './screenModeTokens/standings';
+import { topCardsModeTokens } from './screenModeTokens/topCards';
+import { topCutModeTokens } from './screenModeTokens/topCut';
 import { SCREEN_MODE_VALUES } from './types/enums';
-import {
-	DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
-	DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH,
-	DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT,
-	DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH,
-} from './types/screenConfig';
-
-export interface ScreenModeContainerControls {
-	dimensions?: boolean;
-	padding?: boolean;
-	textColors?: boolean;
-	background?: boolean;
-}
-
-/**
- * The graphics host profile of a Screen Mode that renders a pixel-exact canvas
- * and exposes Overlay, Fill, and Key Screen Outputs.
- *
- * Declaring it here keeps host size, generic-control exclusions, dimension
- * placement, and output options together on the Screen Mode Definition instead
- * of scattering them across parallel per-mode lookup tables.
- */
-export interface ScreenModeGraphicsHost {
-	canvasWidth: number;
-	canvasHeight: number;
-	/** Feature Match Overlay still honours generic Screen alignment; a transparent host does not. */
-	useScreenAlignment?: boolean;
-}
 
 /**
  * What a field declared as each kind of Event Reference holds. A kind is what
@@ -76,8 +61,18 @@ export interface ScreenModeDefinition {
 	icon: string;
 	displayType: DisplayType;
 	description: string;
-	containerControls?: ScreenModeContainerControls;
-	graphicsHost?: ScreenModeGraphicsHost;
+	/**
+	 * The mode is a graphics host: it composes in its Event Canvas and exposes
+	 * Overlay, Fill, and Key Screen Outputs. Its host takes no Theme Token of
+	 * its own, so its outputs stay transparent and keyable.
+	 */
+	graphicsHost?: true;
+	/**
+	 * A Theme preview shows the mode though it declares no Mode Tokens: a
+	 * graphics host whose Graphic Items bind Foundation Tokens instead, shown
+	 * composing its sample graphic.
+	 */
+	themePreview?: true;
 	/**
 	 * The mode carries its own optional `backgroundLayers` stack, painted behind
 	 * its content by the Screen renderer host.
@@ -125,21 +120,20 @@ export interface ScreenModeDefinition {
 	 * declare it, or the definitions fail to compile (ADR-0039).
 	 */
 	pageRotation?: PageRotationDeclaration;
+	/**
+	 * How the mode looks: its Mode Tokens, by name within the mode, each with a
+	 * type, optional bounds, and a default naming a same-type Foundation Token
+	 * or holding a literal. Its config holds what it shows; these hold how it
+	 * looks (ADR-0049, ADR-0051).
+	 *
+	 * Declared here and nowhere else. The Screen host resolves them and sets
+	 * them as CSS custom properties for the display (`screenModeTokens`,
+	 * `resolveThemeTokens`), and the display reads only them. A mode not yet on
+	 * Theme Tokens leaves it out; Feature Match Controls, an operator surface,
+	 * always will.
+	 */
+	modeTokens?: Readonly<Record<string, DeclaredModeTokenDefinition>>;
 }
-
-/** Generic Screen container controls a graphics host replaces with its own canvas and styling. */
-const GRAPHICS_HOST_CONTAINER_CONTROLS: ScreenModeContainerControls = {
-	padding: false,
-	textColors: false,
-	background: false,
-};
-
-export const DEFAULT_OVERLAY_CONTAINER_CONTROLS: Required<ScreenModeContainerControls> = {
-	dimensions: true,
-	padding: true,
-	textColors: true,
-	background: true,
-};
 
 /**
  * Single source of truth for all screen modes and their display characteristics.
@@ -166,6 +160,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: cardModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot' },
+		modeTokens: cardModeTokens,
 	},
 	'deck': {
 		label: 'Deck List',
@@ -175,6 +170,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: deckModeConfigContract,
 		eventReferences: { deckSource: 'deckSource' },
+		modeTokens: deckModeTokens,
 	},
 	'standings': {
 		label: 'Standings',
@@ -185,6 +181,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		config: standingsModeConfigContract,
 		eventReferences: { roundId: 'round', playerListId: 'playerList' },
 		pageRotation: { pageSize: 'rowsPerPage' },
+		modeTokens: standingsModeTokens,
 	},
 	'top-cut': {
 		label: 'Top Cut Bracket',
@@ -194,6 +191,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: topCutModeConfigContract,
 		eventReferences: { phaseId: 'phase' },
+		modeTokens: topCutModeTokens,
 	},
 	'feature-match': {
 		label: 'Feature Match Controls',
@@ -208,25 +206,18 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-panels-top-left',
 		displayType: 'overlay',
 		description: 'Pixel-exact feature match overlay with fill/key outputs',
-		containerControls: GRAPHICS_HOST_CONTAINER_CONTROLS,
-		graphicsHost: {
-			canvasWidth: DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH,
-			canvasHeight: DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT,
-		},
+		graphicsHost: true,
 		config: featureMatchOverlayModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot' },
+		modeTokens: featureMatchOverlayModeTokens,
 	},
 	'broadcast-graphics': {
 		label: 'Broadcast Graphics',
 		icon: 'i-lucide-layout-template',
 		displayType: 'overlay',
 		description: 'Composed broadcast graphics stack with overlay/fill/key outputs',
-		containerControls: GRAPHICS_HOST_CONTAINER_CONTROLS,
-		graphicsHost: {
-			canvasWidth: DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH,
-			canvasHeight: DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
-			useScreenAlignment: false,
-		},
+		graphicsHost: true,
+		themePreview: true,
 		config: broadcastGraphicsModeConfigContract,
 		eventReferences: {},
 	},
@@ -239,6 +230,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		config: metagameModeConfigContract,
 		eventReferences: { playerListId: 'playerList' },
 		pageRotation: { pageSize: 'pageSize' },
+		modeTokens: metagameModeTokens,
 	},
 	'top-cards': {
 		label: 'Most Played Cards',
@@ -249,6 +241,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		config: topCardsModeConfigContract,
 		eventReferences: { playerListId: 'playerList' },
 		pageRotation: { pageSize: 'rowsPerPage' },
+		modeTokens: topCardsModeTokens,
 	},
 	'player-history': {
 		label: 'Player History',
@@ -259,6 +252,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		config: playerHistoryModeConfigContract,
 		eventReferences: { playerId: 'player' },
 		pageRotation: { pageSize: 'rowsPerPage' },
+		modeTokens: playerHistoryModeTokens,
 	},
 	'pairings': {
 		label: 'Pairings',
@@ -269,6 +263,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		config: pairingsModeConfigContract,
 		eventReferences: { roundId: 'round' },
 		pageRotation: { pageSize: 'rowsPerPage' },
+		modeTokens: pairingsModeTokens,
 	},
 	'archetype-spotlight': {
 		label: 'Archetype Spotlight',
@@ -279,6 +274,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		config: archetypeSpotlightModeConfigContract,
 		eventReferences: { archetypeId: 'archetype', playerListId: 'playerList' },
 		pageRotation: { pageSize: 'rowsPerPage' },
+		modeTokens: archetypeSpotlightModeTokens,
 	},
 	'head-to-head': {
 		label: 'Head-to-Head',
@@ -288,6 +284,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: headToHeadModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot', player1Id: 'player', player2Id: 'player' },
+		modeTokens: headToHeadModeTokens,
 	},
 } as const satisfies Record<ScreenMode, ScreenModeDefinition>;
 
@@ -367,24 +364,38 @@ export function screenModeConfigContract<M extends ScreenMode>(mode: M): typeof 
 	return SCREEN_MODE_DEFINITIONS[mode].config;
 }
 
-/** Derive which generic Container controls apply to a Screen Mode. */
-export function getContainerControls(mode: ScreenMode): Required<ScreenModeContainerControls> {
-	return {
-		...DEFAULT_OVERLAY_CONTAINER_CONTROLS,
-		...(SCREEN_MODES[mode].containerControls ?? {}),
-	};
-}
+/** The Screen Modes whose definition declares Mode Tokens. */
+export type ThemedScreenMode = {
+	[M in ScreenMode]: typeof SCREEN_MODE_DEFINITIONS[M] extends { modeTokens: object } ? M : never;
+}[ScreenMode];
 
 /**
- * The canvas a graphics Screen Mode defaults to, when a Screen has not yet been
- * given its own width and height. This is the one home for that number: editors
- * and Screen Outputs read it here rather than reaching for a loose constant.
- * Only a graphics host has a canvas, so asking about any other mode is a bug.
+ * The Screen Modes a Theme preview shows, in Screen Mode order: each mode
+ * declaring Mode Tokens, and each graphics host declaring a Theme preview.
  */
-export function getScreenModeGraphicsCanvas(mode: ScreenMode): { width: number; height: number } {
-	const graphicsHost = SCREEN_MODES[mode].graphicsHost;
-	if (!graphicsHost)
-		throw new Error(`Screen Mode "${mode}" has no graphics host canvas.`);
+export const THEME_PREVIEW_SCREEN_MODES: readonly ScreenMode[] = SCREEN_MODE_VALUES.filter(mode =>
+	SCREEN_MODES[mode].modeTokens || SCREEN_MODES[mode].themePreview);
 
-	return { width: graphicsHost.canvasWidth, height: graphicsHost.canvasHeight };
+/** A themed mode's Mode Tokens of one type, by name within the mode. */
+export type ScreenModeTokenOfType<M extends ThemedScreenMode, T extends ThemeTokenType> = {
+	[K in keyof typeof SCREEN_MODE_DEFINITIONS[M]['modeTokens']]: typeof SCREEN_MODE_DEFINITIONS[M]['modeTokens'][K] extends { type: T } ? K : never;
+}[keyof typeof SCREEN_MODE_DEFINITIONS[M]['modeTokens']] & string;
+
+/**
+ * A Mode Token's full name, as a Theme or a Screen Theme Override stores it:
+ * its mode's key, then its name within the mode.
+ */
+export type ScreenModeTokenName = `${ScreenMode}.${string}`;
+
+export function screenModeTokenName(mode: ScreenMode, token: string): ScreenModeTokenName {
+	return `${mode}.${token}`;
+}
+
+/** A mode's declared Mode Tokens by full name, as `resolveThemeTokens` reads them; none for a mode declaring none. */
+export function screenModeTokens(mode: ScreenMode): Readonly<Record<ScreenModeTokenName, DeclaredModeTokenDefinition>> {
+	const declared = SCREEN_MODES[mode].modeTokens ?? {};
+	return Object.fromEntries(Object.entries(declared).map(([token, definition]) => [
+		screenModeTokenName(mode, token),
+		definition,
+	]));
 }

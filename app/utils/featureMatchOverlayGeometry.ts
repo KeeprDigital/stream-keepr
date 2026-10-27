@@ -50,7 +50,7 @@ export function featureMatchOverlayBorderSideEnabled(
 }
 
 function borderSideInset(style: FeatureMatchSourceFramingStyle, side: FeatureMatchOverlayBorderSide, borderWidth: number): number {
-	return style.borderVisible && featureMatchOverlayBorderSideEnabled(style, side)
+	return featureMatchOverlayBorderSideEnabled(style, side)
 		? borderWidth
 		: 0;
 }
@@ -122,11 +122,14 @@ export function normalizeFeatureMatchOverlayRadiiForRect(radii: FeatureMatchOver
 	return mapRadii(safeRadii, value => value * scale);
 }
 
-export function featureMatchOverlaySourceCutoutRect(item: FeatureMatchSourceItemConfig): FeatureMatchOverlayRoundedRect {
+/**
+ * The hole a Source Item cuts through the Frame: inside its border on each
+ * side that shows one. `outlineWidth` is its `source-surface` outline's width,
+ * zero when it has none (#831).
+ */
+export function featureMatchOverlaySourceCutoutRect(item: FeatureMatchSourceItemConfig, outlineWidth = 0): FeatureMatchOverlayRoundedRect {
 	const style: FeatureMatchSourceFramingStyle = item.framingStyle ?? {};
-	const borderWidth = style.borderVisible
-		? pixelValue(style.borderWidth)
-		: 0;
+	const borderWidth = pixelValue(outlineWidth);
 	const itemWidth = pixelValue(item.width);
 	const itemHeight = pixelValue(item.height);
 	const [leftInset, rightInset] = fitFeatureMatchOverlayInsets(

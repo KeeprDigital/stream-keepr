@@ -1,26 +1,33 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import Renderer from '~/components/Screen/Renderer.vue';
 
 // The host policy itself is `resolveScreenModeHost`'s own test
-// (test/nuxt/app/modules/screenModeHost.test.ts); here it only has to answer.
+// (test/unit/app/modules/screenModeHost.test.ts); here it only has to answer.
 const { resolveScreenModeHost } = vi.hoisted(() => ({
 	resolveScreenModeHost: vi.fn(),
 }));
 
-vi.mock('~/modules/screen-mode', () => ({
+vi.mock('~/modules/screen-mode', async () => ({
+	screenBackgroundLayers: (await vi.importActual<typeof import('~/modules/screen-mode/modeTokens')>('~/modules/screen-mode/modeTokens')).screenBackgroundLayers,
 	getScreenModeDefinition: (mode: string) => ({
 		mode,
 		displayComponent: { template: '<div data-testid="display" />' },
 	}),
 	resolveScreenModeHost,
+	// Theme Tokens reaching a display are the rendering test's
+	// (test/nuxt/components/Screen/Modes/themeTokenRendering.test.ts).
+	screenModeThemeTokenStyle: () => ({}),
+	screenModeThemeFontReferences: () => [],
 }));
 
 const overlayContainer = ref<HTMLElement | null>(null);
 const screen = ref();
+const themeTokens = ref<Record<string, unknown>>();
+const eventCanvas = ref({ width: 1280, height: 720 });
 
 mockNuxtImport('useScreenContext', () => () => ({
 	screen,
@@ -29,6 +36,8 @@ mockNuxtImport('useScreenContext', () => () => ({
 	overlayContainer,
 	isPreview: ref(false),
 	outputMode: ref('overlay'),
+	themeTokens,
+	eventCanvas,
 }));
 
 const colorLayer = {
@@ -39,13 +48,23 @@ const colorLayer = {
 	opacity: 1,
 };
 
+const themeLayer = { ...colorLayer, id: 'theme-wash', color: '#203040' };
+
+/** The ids of the layers the host stack paints, or null when it paints none. */
+function paintedLayerIds(wrapper: ReturnType<typeof mountRenderer>) {
+	const stack = wrapper.find('[data-testid="mode-background-stack"]');
+	return stack.exists()
+		? stack.attributes('data-layer-ids')
+		: null;
+}
+
 function mountRenderer() {
 	return mount(Renderer, {
 		global: {
 			stubs: {
 				ScreenBackgroundLayerStack: {
 					props: ['layers'],
-					template: '<div data-testid="mode-background-stack" :data-layer-count="layers.length" />',
+					template: '<div data-testid="mode-background-stack" :data-layer-count="layers.length" :data-layer-ids="layers.map(layer => layer.id).join()" />',
 				},
 			},
 		},
@@ -55,9 +74,7 @@ function mountRenderer() {
 function hostReturning(provideOverlayContainer: boolean) {
 	resolveScreenModeHost.mockReturnValue({
 		containerClass: 'host-container',
-		containerStyle: { padding: '24px 48px' },
-		wrapperClass: ['host-wrapper'],
-		wrapperStyle: {},
+		containerStyle: { padding: '24px' },
 		provideOverlayContainer,
 	});
 }
@@ -65,24 +82,32 @@ function hostReturning(provideOverlayContainer: boolean) {
 describe('screenRenderer', () => {
 	beforeEach(() => {
 		overlayContainer.value = null;
-		screen.value = createMockScreen({ currentMode: 'card', screenConfig: null });
+		screen.value = createMockScreen({ currentMode: 'card' });
+		themeTokens.value = undefined;
 		hostReturning(true);
 	});
 
-	it('renders the mode\'s display inside the container its host policy resolves', () => {
+	it('renders the mode\'s display inside the container its host resolves for the Event Canvas and Theme', () => {
 		screen.value = createMockScreen({
 			currentMode: 'card',
-			screenConfig: { width: 1920, height: 1080 },
+			themeOverrides: {
+				alignment: { horizontal: 'left', vertical: 'top' },
+			},
 		});
+		themeTokens.value = { inset: 24 };
 
 		const wrapper = mountRenderer();
 
 		expect(resolveScreenModeHost).toHaveBeenCalledWith(expect.objectContaining({
 			mode: 'card',
-			screenConfig: { width: 1920, height: 1080 },
+			canvas: { width: 1280, height: 720 },
+			theme: { inset: 24 },
+			overrides: {
+				alignment: { horizontal: 'left', vertical: 'top' },
+			},
 		}));
 		const container = wrapper.get('.host-container');
-		expect(container.attributes('style')).toContain('padding: 24px 48px;');
+		expect(container.attributes('style')).toContain('padding: 24px;');
 		expect(container.find('[data-testid="display"]').exists()).toBe(true);
 	});
 
@@ -143,5 +168,42 @@ describe('screenRenderer', () => {
 
 		expect(wrapper.find('[data-testid="mode-background-stack"]').exists()).toBe(false);
 		expect(wrapper.get('.host-container').attributes('style')).not.toContain('isolation');
+	});
+
+	it('keeps a graphics host transparent under a Theme background', () => {
+		themeTokens.value = {
+			background: [themeLayer],
+		};
+		screen.value = createMockScreen({ currentMode: 'broadcast-graphics' });
+
+		expect(paintedLayerIds(mountRenderer())).toBeNull();
+	});
+
+	it('restyles a live plain mode when its Theme\'s background changes', async () => {
+		const wrapper = mountRenderer();
+		expect(paintedLayerIds(wrapper)).toBeNull();
+
+		themeTokens.value = {
+			background: [themeLayer],
+		};
+		await nextTick();
+
+		expect(paintedLayerIds(wrapper)).toBe('theme-wash');
+	});
+
+	it('paints the Screen\'s override of the Theme background', () => {
+		themeTokens.value = {
+			background: [themeLayer],
+		};
+		screen.value = createMockScreen({
+			currentMode: 'standings',
+			themeOverrides: {
+				background: [
+					{ ...colorLayer, id: 'override-wash' },
+				],
+			},
+		});
+
+		expect(paintedLayerIds(mountRenderer())).toBe('override-wash');
 	});
 });

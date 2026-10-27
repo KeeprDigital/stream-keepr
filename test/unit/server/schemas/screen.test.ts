@@ -59,14 +59,10 @@ describe('deckModeConfigSchema', () => {
 			view: 'grid' as const,
 			columns: 4,
 			listColumns: 2,
-			cardSize: 'medium' as const,
 			dynamicCardSize: false,
-			cardGap: 8,
-			stackOverlap: 15,
 		},
 		sideboard: {
 			view: 'stack' as const,
-			stackOverlap: 35,
 		},
 	};
 
@@ -225,6 +221,60 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 	it('rejects widget-era typography on a Source Item surface style', () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
 		config.layout.sources[0].framingStyle = { fontSize: 24, textColor: '#ffffff' };
+
+		expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(false);
+	});
+
+	// The Frame's and Source Items' look became Mode Tokens (#831): a layout stored or exported
+	// with its own reads with those fields dropped, not migrated, and a value no field could hold is still refused.
+	it.each([
+		{
+			field: 'frame',
+			look: {
+				backgroundColor: '#111111',
+				gradient: 'linear-gradient(#000, #111)',
+				borderVisible: true,
+				borderColor: '#0077a3',
+				borderWidth: 4,
+				glowColor: '#ffffff',
+				glowSize: 8,
+				glowOpacity: 0.5,
+			},
+		},
+		{
+			field: 'source',
+			look: {
+				backgroundColor: '#000000',
+				backgroundOpacity: 0,
+				backgroundGradient: 'linear-gradient(#000, #111)',
+				borderVisible: true,
+				borderColor: '#0077a3',
+				borderWidth: 4,
+				glowColor: '#ffffff',
+				glowSize: 8,
+				glowOpacity: 0.5,
+			},
+		},
+	])('reads a $field stored with its own look as its shape alone', ({ field, look }) => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		if (field === 'frame')
+			Object.assign(config.layout.frame, look, { borderLeftVisible: false });
+		else
+			config.layout.sources[0].framingStyle = { ...look, borderRadius: 8 };
+
+		const parsed = featureMatchOverlayModeConfigSchema.parse(config) as unknown as Record<string, any>;
+		const host = field === 'frame'
+			? parsed.layout.frame
+			: parsed.layout.sources[0].framingStyle;
+
+		expect(JSON.parse(JSON.stringify(host))).toEqual(field === 'frame'
+			? { ...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.frame, borderLeftVisible: false }
+			: { borderRadius: 8 });
+	});
+
+	it('still refuses a retired look field holding a value it never could', () => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		config.layout.frame.glowSize = -1;
 
 		expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(false);
 	});
@@ -849,9 +899,7 @@ describe('topCardsModeConfigSchema', () => {
 		limit: 10,
 		excludedCardTypes: ['Land'],
 		columns: 5,
-		cardSize: 'medium' as const,
 		dynamicCardSize: true,
-		cardGap: 12,
 		rowsPerPage: 60,
 		autoPageEnabled: false,
 		autoPageIntervalMs: 10000,
@@ -859,7 +907,6 @@ describe('topCardsModeConfigSchema', () => {
 		showCardNames: true,
 		showRankBadges: true,
 		statBadge: 'inclusionRate' as const,
-		statBadgeSize: 'medium' as const,
 	};
 
 	it('accepts a valid top cards config', () => {

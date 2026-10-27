@@ -221,19 +221,15 @@ describe('animation effect host unions', () => {
 		expectTypeOf<AnimationEffectParams<'cells'>>().toEqualTypeOf<Cells>();
 
 		type Selection = z.output<typeof animationEffectSelectionSchema>;
-		type Frame = z.output<typeof featureMatchOverlayFrameAnimationConfigSchema>;
 		type Background = z.output<typeof broadcastGraphicsBackgroundConfigSchema>;
 		expectTypeOf<Extract<Selection, { effect: 'rings' }>>().toEqualTypeOf<{ effect: 'rings'; params?: Rings | undefined }>();
-		expectTypeOf<Extract<Frame, { effect: 'cells' }>>().toEqualTypeOf<{ effect: 'cells'; params?: Cells | undefined; enabled: boolean; opacity: number }>();
 		expectTypeOf<Extract<Background, { effect: 'rings' }>>().toEqualTypeOf<{ effect: 'rings'; params?: Rings | undefined; enabled: boolean; opacity: number }>();
 	});
 
 	it('covers the whole catalogue in every host union, in catalogue order', () => {
 		// Every host union is mapped from the catalogue; an effect missing from one
 		// would be an effect that silently cannot be selected on that host.
-		for (const schema of [featureMatchOverlayFrameAnimationConfigSchema, broadcastGraphicsBackgroundConfigSchema]) {
-			expect(schema.options.map(branch => branch.shape.effect.value)).toEqual([...ANIMATION_EFFECT_VALUES]);
-		}
+		expect(broadcastGraphicsBackgroundConfigSchema.options.map(branch => branch.shape.effect.value)).toEqual([...ANIMATION_EFFECT_VALUES]);
 	});
 
 	it('fills each effect\'s params from that effect\'s own schema in every union', () => {
@@ -242,41 +238,29 @@ describe('animation effect host unions', () => {
 		for (const effect of ANIMATION_EFFECT_VALUES) {
 			const expected = animationEffectDefaultParams(effect);
 			expect(animationEffectSelectionSchema.parse({ effect, params: {} }).params).toEqual(expected);
-			for (const schema of [featureMatchOverlayFrameAnimationConfigSchema, broadcastGraphicsBackgroundConfigSchema]) {
-				expect(schema.parse({
-					effect,
-					params: {},
-					enabled: true,
-					opacity: 1,
-				}).params).toEqual(expected);
-			}
+			expect(broadcastGraphicsBackgroundConfigSchema.parse({
+				effect,
+				params: {},
+				enabled: true,
+				opacity: 1,
+			}).params).toEqual(expected);
 		}
 	});
 });
 
 describe('featureMatchOverlayFrameAnimationConfigSchema', () => {
-	it('accepts a sparse config for every effect and leaves the params sparse', () => {
-		for (const effect of ANIMATION_EFFECT_VALUES) {
-			const outcome = featureMatchOverlayFrameAnimationConfigSchema.safeParse({
-				enabled: true,
-				effect,
-				opacity: 0.5,
-			});
-			expect(outcome.success).toBe(true);
-		}
-	});
-
-	it('validates params against the schema of the named effect, not any other', () => {
+	// The Frame's effect is its Theme's `frame-animation-effect` Mode Token (#831).
+	it.each(ANIMATION_EFFECT_VALUES)('reads a layout stored with its own %s effect and params as its switch and opacity alone', (effect) => {
 		const outcome = featureMatchOverlayFrameAnimationConfigSchema.safeParse({
 			enabled: true,
-			effect: 'fog',
+			effect,
 			opacity: 0.5,
-			params: { lightColor: '#7dd3fc' },
+			params: { speed: 2 },
 		});
-		expect(outcome.success).toBe(false);
+		expect(outcome.data).toEqual({ enabled: true, opacity: 0.5 });
 	});
 
-	it('refuses an effect outside the closed vocabulary rather than approximating it', () => {
+	it('refuses an effect outside the closed vocabulary, which no stored layout held', () => {
 		const outcome = featureMatchOverlayFrameAnimationConfigSchema.safeParse({
 			enabled: true,
 			effect: 'not-an-effect',
@@ -292,19 +276,9 @@ describe('featureMatchOverlayFrameAnimationConfigSchema', () => {
 });
 
 describe('storedFrameAnimationConfigSchema', () => {
-	it('passes a current-shape config through untouched', () => {
-		const config = {
-			enabled: true,
-			effect: 'fog',
-			opacity: 0.5,
-			params: { speed: 2 },
-		};
-		const outcome = storedFrameAnimationConfigSchema.safeParse(config);
-		expect(outcome.success).toBe(true);
-		expect(outcome.data).toMatchObject({
-			effect: 'fog',
-			params: expect.objectContaining({ speed: 2 }),
-		});
+	it('passes a current-shape config through', () => {
+		const outcome = storedFrameAnimationConfigSchema.safeParse({ enabled: true, opacity: 0.5 });
+		expect(outcome.data).toEqual({ enabled: true, opacity: 0.5 });
 	});
 
 	it('resets a pre-rebuild flat bag to no animation instead of refusing the write that carries it', () => {
@@ -313,15 +287,6 @@ describe('storedFrameAnimationConfigSchema', () => {
 		const outcome = storedFrameAnimationConfigSchema.safeParse(PRE_REBUILD_FLAT_BAG);
 		expect(outcome.success).toBe(true);
 		expect(outcome.data).toBeUndefined();
-	});
-
-	it('still refuses a current-shape config naming an effect outside the vocabulary', () => {
-		const outcome = storedFrameAnimationConfigSchema.safeParse({
-			enabled: true,
-			effect: 'not-an-effect',
-			opacity: 0.5,
-		});
-		expect(outcome.success).toBe(false);
 	});
 });
 

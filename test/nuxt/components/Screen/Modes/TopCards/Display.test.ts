@@ -4,12 +4,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import Display from '~/components/Screen/Modes/TopCards/Display.vue';
 
-const screen = ref<any>({
-	screenConfig: {
-		primaryTextColor: '#123456',
-	},
-});
-
 const defaultConfig = {
 	scope: 'all',
 	topN: 8,
@@ -18,15 +12,12 @@ const defaultConfig = {
 	limit: 10,
 	excludedCardTypes: ['Land'],
 	columns: 5,
-	cardSize: 'medium',
 	dynamicCardSize: true,
-	cardGap: 12,
 	showHeader: true,
 	headerText: undefined,
 	showCardNames: true,
 	showRankBadges: true,
 	statBadge: 'inclusionRate',
-	statBadgeSize: 'medium',
 };
 
 const config = ref<any>({ ...defaultConfig });
@@ -58,10 +49,6 @@ const entries = ref<any[]>([
 const pageEntries = ref<any[] | null>(null);
 const currentPage = ref(1);
 const totalPages = ref(1);
-
-mockNuxtImport('useScreenContext', () => () => ({
-	screen: computed(() => screen.value),
-}));
 
 mockNuxtImport('useTopCardsModeData', () => () => ({
 	config: computed(() => config.value),
@@ -108,11 +95,6 @@ async function mountComponent() {
 
 describe('screenTopCardsDisplay', () => {
 	beforeEach(() => {
-		screen.value = {
-			screenConfig: {
-				primaryTextColor: '#123456',
-			},
-		};
 		config.value = { ...defaultConfig };
 		entries.value = [
 			{
@@ -170,12 +152,10 @@ describe('screenTopCardsDisplay', () => {
 		expect(items[1]!.text()).toBe('2:Counterspell:60%:true:true');
 	});
 
-	it('shows the header with the primary text color', async () => {
+	it('shows the header', async () => {
 		const wrapper = await mountComponent();
 
-		const header = wrapper.get('.top-cards-title h2');
-		expect(header.text()).toBe('Most Played Cards');
-		expect(header.attributes('style')).toContain('color: #123456');
+		expect(wrapper.get('.top-cards-title h2').text()).toBe('Most Played Cards');
 	});
 
 	it('hides the header when disabled', async () => {
@@ -186,15 +166,14 @@ describe('screenTopCardsDisplay', () => {
 		expect(wrapper.find('.top-cards-title').exists()).toBe(false);
 	});
 
-	it('lays the grid out from columns and gap config', async () => {
+	it('lays the grid out in its configured columns', async () => {
 		const wrapper = await mountComponent();
 
 		const grid = wrapper.get('[data-testid="top-cards-grid"]');
 		expect(grid.attributes('style')).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))');
-		expect(grid.attributes('style')).toContain('gap: 12px');
 	});
 
-	it('sizes fixed cards from the card size when dynamic sizing is off', async () => {
+	it('lays fixed cards out at their own width when dynamic sizing is off', async () => {
 		config.value = { ...config.value, dynamicCardSize: false };
 
 		const wrapper = await mountComponent();

@@ -45,26 +45,12 @@ describe('a stored mode config outside its contract\'s bounds', () => {
  */
 const TIGHTENED_BOUNDS = [
 	{
-		mode: 'card',
-		field: 'scale',
-		stored: { scale: 4, animationSpeed: 'fast' },
-		reads: { scale: 2, animationSpeed: 'fast' },
-	},
-	{
-		mode: 'card',
-		field: 'scale',
-		stored: { scale: 0.1 },
-		reads: { scale: 0.5 },
-	},
-	{
 		mode: 'deck',
-		field: 'a board\'s columns, card gap and stack overlap',
+		field: 'a board\'s columns',
 		stored: {
 			mainboard: {
 				view: 'stack',
 				columns: 16,
-				cardGap: 60,
-				stackOverlap: 2,
 			},
 			showDeckStats: true,
 		},
@@ -72,20 +58,8 @@ const TIGHTENED_BOUNDS = [
 			mainboard: {
 				view: 'stack',
 				columns: 12,
-				cardGap: 48,
-				stackOverlap: 5,
 			},
 			showDeckStats: true,
-		},
-	},
-	{
-		mode: 'deck',
-		field: 'stackOverlap',
-		stored: {
-			sideboard: { stackOverlap: 80 },
-		},
-		reads: {
-			sideboard: { stackOverlap: 50 },
 		},
 	},
 ] as const satisfies readonly { mode: ScreenMode; field: string; stored: Record<string, unknown>; reads: Record<string, unknown> }[];

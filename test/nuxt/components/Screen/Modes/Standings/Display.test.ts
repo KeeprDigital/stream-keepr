@@ -16,13 +16,7 @@ vi.mock('@vueuse/core', async (importOriginal) => {
 	};
 });
 
-const screen = ref<any>({
-	screenConfig: {
-		primaryTextColor: '#123456',
-		secondaryTextColor: '#654321',
-		paddingY: 0,
-	},
-});
+const screen = ref<any>({});
 
 const config = ref<any>({
 	viewMode: 'all',
@@ -115,13 +109,7 @@ async function mountComponent() {
 
 describe('screenStandingsDisplay', () => {
 	beforeEach(() => {
-		screen.value = {
-			screenConfig: {
-				primaryTextColor: '#123456',
-				secondaryTextColor: '#654321',
-				paddingY: 0,
-			},
-		};
+		screen.value = {};
 		config.value = {
 			viewMode: 'all',
 			showHeader: true,

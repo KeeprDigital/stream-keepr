@@ -1,21 +1,11 @@
 <script setup lang="ts">
-import type { CardDisplayConfig } from '~~/shared/types/screenConfig';
 import type { MtgCard } from '~/types/card/mtg';
-import { useElementSize } from '@vueuse/core';
-import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
-import { mtgCardSizeFromHeight } from '~~/shared/utils/card/size';
+import { modeMotionVars, modeTokenVar } from '~/modules/screen-mode';
 
-const props = withDefaults(defineProps<{
-	config?: CardDisplayConfig;
-	screenId: number;
-}>(), {
-	config: () => getDefaultConfigForMode('card'),
-});
-
-const { overlayContainer } = useScreenContext();
-const cardStore = useCardStore();
-const { activeCard } = storeToRefs(cardStore);
-const { height: containerHeight } = useElementSize(overlayContainer);
+const props = defineProps<{
+	/** The Screen Card to show; null shows none, leaving with its exit animation. */
+	card: MtgCard | null;
+}>();
 
 const imageLoaded = ref(false);
 const showCard = ref(false);
@@ -28,59 +18,38 @@ function clearShowCardTimer() {
 	showCardTimer = null;
 }
 
-// Size cards from the rendered overlay container so fixed screen dimensions stay exact.
-const cardDimensions = computed(() => {
-	const baseDimensions = mtgCardSizeFromHeight(Math.max(containerHeight.value, 80));
-	const scale = props.config?.scale ?? 1;
-	return {
-		cardWidth: baseDimensions.cardWidth * scale,
-		cardHeight: baseDimensions.cardHeight * scale,
-		diagonal: baseDimensions.diagonal * scale,
-	};
-});
-
-// Animation speed mapping (in seconds)
-const animationSpeedMap = {
-	slow: 0.4,
-	normal: 0.2,
-	fast: 0.1,
-};
-
-const animationDuration = computed(() => {
-	if (!props.config?.animationEnabled)
-		return 0;
-	return animationSpeedMap[props.config?.animationSpeed ?? 'normal'];
-});
+const CARD_ASPECT_RATIO = 85 / 61;
+/** The card's width in Event Canvas pixels, and the square it turns within: its diagonal. */
+const cardWidth = modeTokenVar('card', 'card-width');
+const turningSquare = `calc(${cardWidth} * ${Math.sqrt(1 + CARD_ASPECT_RATIO ** 2)})`;
 
 // Container style — always centers the card within the diagonal rotation container.
 // Viewport-level positioning is handled by the Renderer, not this component.
-const containerStyle = computed(() => ({
-	'width': `${cardDimensions.value.diagonal}px`,
-	'height': `${cardDimensions.value.diagonal}px`,
-	'justifyItems': 'center',
-	'alignItems': 'center',
-	'--animation-duration': `${animationDuration.value}s`,
-}));
+const containerStyle = {
+	width: turningSquare,
+	height: turningSquare,
+	justifyItems: 'center',
+	alignItems: 'center',
+};
 
-async function loadCardForScreen() {
-	cardStore.setActiveScreen(props.screenId);
-	await cardStore.loadActiveCard();
-}
-
-// Load active card on mount and when screenId changes
-onMounted(async () => {
-	await loadCardForScreen();
-});
-
-watch(() => props.screenId, async () => {
-	if (!import.meta.client) {
-		return;
-	}
-	await loadCardForScreen();
-});
+/**
+ * The card enters from its `motion` Mode Token's excursion and leaves back to
+ * it, on the token's timing. The transition classes read the excursion.
+ */
+const motion = modeMotionVars('card', 'motion');
+const motionStyle = {
+	'transitionProperty': 'opacity, transform, clip-path',
+	'transitionDuration': motion.duration,
+	'transitionTimingFunction': motion.easing,
+	'transitionDelay': motion.delay,
+	'transformOrigin': motion.transformOrigin,
+	'--card-motion-opacity': motion.opacity,
+	'--card-motion-transform': motion.transform,
+	'--card-motion-clip': motion.clipPath,
+};
 
 // Watch for card changes and reset loading state
-watch(activeCard, (newCard) => {
+watch(() => props.card, (newCard) => {
 	if (newCard) {
 		// Same card ID - just update in place (smooth CSS transition for flip/rotate)
 		if (displayCard.value?.id === newCard.id) {
@@ -98,7 +67,7 @@ watch(activeCard, (newCard) => {
 		clearShowCardTimer();
 		showCard.value = false;
 	}
-});
+}, { immediate: true });
 
 // When image loads, wait a moment then show with animation
 function onImageLoad(cardId: string) {
@@ -133,10 +102,10 @@ function onAfterLeave() {
 		class="card-container"
 		:style="containerStyle"
 	>
-		<div :style="{ width: `${cardDimensions.cardWidth}px` }">
+		<div data-testid="spotlight-card" :style="{ width: cardWidth }">
 			<!-- Card -->
-			<transition mode="out-in" name="zoom-fade" @after-leave="onAfterLeave">
-				<div v-if="showCard" class="card-image-wrapper">
+			<transition mode="out-in" name="card-motion" @after-leave="onAfterLeave">
+				<div v-if="showCard" class="card-image-wrapper" :style="motionStyle">
 					<MtgCardImage
 						:card="displayCard"
 						:display="displayCard.displayData"
@@ -164,32 +133,15 @@ function onAfterLeave() {
 
 .card-image-wrapper {
 	position: relative;
-}
-
-.zoom-fade-enter-active,
-.zoom-fade-leave-active {
-	transition:
-		transform var(--animation-duration, 0.2s) cubic-bezier(0.5, 0, 0.5, 1),
-		opacity var(--animation-duration, 0.2s) ease-out;
-}
-
-.zoom-fade-enter-from {
-	opacity: 0;
-	transform: scale(0.7);
-}
-
-.zoom-fade-enter-to {
 	opacity: 1;
-	transform: scale(1);
+	transform: none;
+	clip-path: inset(0 0 0 0);
 }
 
-.zoom-fade-leave-from {
-	opacity: 1;
-	transform: scale(1);
-}
-
-.zoom-fade-leave-to {
-	opacity: 0;
-	transform: scale(0.7);
+.card-motion-enter-from,
+.card-motion-leave-to {
+	opacity: var(--card-motion-opacity);
+	transform: var(--card-motion-transform);
+	clip-path: var(--card-motion-clip);
 }
 </style>

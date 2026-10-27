@@ -1,3 +1,4 @@
+import type { ScreenResponse } from '~~/shared/api';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { $fetch } from './client';
 
@@ -135,39 +136,38 @@ describe('screens extended API', () => {
 		});
 	});
 
-	it('updates card mode config', async () => {
-		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/card`, {
+	it('updates deck mode config', async () => {
+		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/deck`, {
 			method: 'PATCH',
 			body: {
-				scale: 1.5,
-				animationEnabled: true,
+				showDeckName: false,
+				showQuantities: true,
 			},
 		});
 
 		expect(updated.modeConfigs).toBeDefined();
-		expect(updated!.modeConfigs!.card).toMatchObject({
-			scale: 1.5,
-			animationEnabled: true,
+		expect(updated!.modeConfigs!.deck).toMatchObject({
+			showDeckName: false,
+			showQuantities: true,
 		});
 	});
 
 	it('merges mode config with existing values', async () => {
 		// First set some values
-		await $fetch(`/api/events/${eventId}/screens/${screenId}/config/card`, {
+		await $fetch(`/api/events/${eventId}/screens/${screenId}/config/deck`, {
 			method: 'PATCH',
-			body: { scale: 2.0, animationEnabled: true },
+			body: { showDeckName: false, showQuantities: false },
 		});
 
 		// Update only one field — the other should be preserved
-		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/card`, {
+		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/deck`, {
 			method: 'PATCH',
-			body: { animationSpeed: 'fast' },
+			body: { showDeckName: true },
 		});
 
-		expect(updated!.modeConfigs!.card).toMatchObject({
-			scale: 2.0,
-			animationEnabled: true,
-			animationSpeed: 'fast',
+		expect(updated!.modeConfigs!.deck).toMatchObject({
+			showQuantities: false,
+			showDeckName: true,
 		});
 	});
 
@@ -502,36 +502,43 @@ describe('screens extended API', () => {
 		})).rejects.toThrow();
 	});
 
-	// ── Screen config endpoint ────────────────────────────────────────
+	// ── A Screen's look ───────────────────────────────────────────────
 
-	it('updates screen config', async () => {
-		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/screen-config`, {
+	// ADR-0051: a Screen holds no look of its own, nor a canvas; it takes its Event's Theme and Event Canvas.
+	it.each([
+		[
+			'a background, text colours, padding, alignment or colour mode',
+			{ background: '#000000', paddingX: 12, colorMode: 'dark' },
+		],
+		[
+			'a width or height',
+			{ width: 1920, height: 1080 },
+		],
+	])('refuses a Screen %s', async (_case, look) => {
+		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
+
+		await expect($fetch(`/api/events/${eventId}/screens/${screenId}`, {
 			method: 'PATCH',
-			body: {
-				background: '#000000',
-				colorMode: 'dark',
-			},
-		});
-
-		expect(updated.id).toBe(screenId);
-		expect(updated.screenConfig).toMatchObject({
-			background: '#000000',
-			colorMode: 'dark',
-		});
+			body: { stateVersion: screen.stateVersion, screenConfig: look },
+		})).rejects.toMatchObject({ statusCode: 400 });
+		expect(screen).not.toHaveProperty('screenConfig');
 	});
 
-	it('updates screen dimensions in screen config', async () => {
-		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/screen-config`, {
+	// ── Screen Theme Overrides ────────────────────────────────────────
+
+	it('stores a Screen Theme Override on the Screen it names', async () => {
+		const standings = await $fetch(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Overridden Screen', slug: 'integration-overridden-screen', currentMode: 'standings' },
+		});
+
+		const updated = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${standings.id}/theme-overrides`, {
 			method: 'PATCH',
 			body: {
-				width: 1920,
-				height: 1080,
+				tokens: { accent: '#ff0000' },
 			},
 		});
 
-		expect(updated.screenConfig).toMatchObject({
-			width: 1920,
-			height: 1080,
-		});
+		expect(updated.themeOverrides).toEqual({ accent: '#ff0000' });
 	});
 });

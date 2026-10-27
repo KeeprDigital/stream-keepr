@@ -8,11 +8,7 @@ import { DECK_BOARD_LAYOUT_FIELDS } from '~~/shared/screenModeConfigs/deck';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
-import {
-	DECK_CARD_SIZE_SELECT_OPTIONS,
-	QUANTITY_SIZE_SELECT_OPTIONS,
-	SIDEBOARD_PLACEMENT_SELECT_OPTIONS,
-} from '~~/shared/utils/selectOptions';
+import { SIDEBOARD_PLACEMENT_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
@@ -314,74 +310,6 @@ const emptyBoardHint = computed(() => {
 				:model-value="config.showDeckMetaPill"
 				@update:model-value="updateConfig({ showDeckMetaPill: $event })"
 			/>
-
-			<template v-if="config.showDeckMetaPill !== false">
-				<USeparator />
-
-				<UFormField
-					:label="fields.deckMetaPillSize.label"
-					description="Size of the deck meta pill."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<USelect
-						:model-value="config.deckMetaPillSize"
-						:items="QUANTITY_SIZE_SELECT_OPTIONS"
-						class="w-32"
-						@update:model-value="updateConfig({ deckMetaPillSize: $event })"
-					/>
-				</UFormField>
-
-				<USeparator />
-
-				<UFormField
-					:label="fields.deckMetaPillTextColor.label"
-					description="Color of the deck meta text."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UIColorPicker
-						:model-value="config.deckMetaPillTextColor"
-						placeholder="#111827"
-						@update:model-value="updateConfig({ deckMetaPillTextColor: $event })"
-					/>
-				</UFormField>
-
-				<UFormField
-					:label="fields.deckMetaPillBgColor.label"
-					description="Pick a color or enter any CSS background value."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UIColorPicker
-						:model-value="config.deckMetaPillBgColor"
-						allow-raw-value
-						placeholder="transparent, #ffffff, linear-gradient(...)"
-						@update:model-value="updateConfig({ deckMetaPillBgColor: $event })"
-					/>
-				</UFormField>
-
-				<UFormField
-					:label="fields.deckMetaPillAccentColor.label"
-					description="Color for counts and highlighted values in the pill."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UIColorPicker
-						:model-value="config.deckMetaPillAccentColor"
-						placeholder="#7c3aed"
-						@update:model-value="updateConfig({ deckMetaPillAccentColor: $event })"
-					/>
-				</UFormField>
-
-				<UFormField
-					:label="fields.deckMetaPillBorderColor.label"
-					description="Border color of the deck meta pill."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UIColorPicker
-						:model-value="config.deckMetaPillBorderColor"
-						placeholder="#d1d5db"
-						@update:model-value="updateConfig({ deckMetaPillBorderColor: $event })"
-					/>
-				</UFormField>
-			</template>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard v-if="!isBroadcastSource" title="Pointed Cards">
@@ -391,73 +319,6 @@ const emptyBoardHint = computed(() => {
 				:model-value="config.showHighlanderPointedCards"
 				@update:model-value="updateConfig({ showHighlanderPointedCards: $event })"
 			/>
-
-			<template v-if="config.showHighlanderPointedCards">
-				<USeparator />
-
-				<UFormField
-					:label="fields.highlanderPointedCardsSize.label"
-					description="Size of the pointed card chips."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<USelect
-						:model-value="config.highlanderPointedCardsSize"
-						:items="QUANTITY_SIZE_SELECT_OPTIONS"
-						class="w-32"
-						@update:model-value="updateConfig({ highlanderPointedCardsSize: $event })"
-					/>
-				</UFormField>
-
-				<USeparator />
-
-				<UFormField
-					:label="fields.highlanderPointedCardsTextColor.label"
-					description="Color of the pointed card text."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UIColorPicker
-						:model-value="config.highlanderPointedCardsTextColor"
-						placeholder="#111827"
-						@update:model-value="updateConfig({ highlanderPointedCardsTextColor: $event })"
-					/>
-				</UFormField>
-
-				<UFormField
-					:label="fields.highlanderPointedCardsBgColor.label"
-					description="Background color of the pointed card chips."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UIColorPicker
-						:model-value="config.highlanderPointedCardsBgColor"
-						placeholder="#ffffff"
-						@update:model-value="updateConfig({ highlanderPointedCardsBgColor: $event })"
-					/>
-				</UFormField>
-
-				<UFormField
-					:label="fields.highlanderPointedCardsBorderColor.label"
-					description="Border color of the pointed card chips."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UIColorPicker
-						:model-value="config.highlanderPointedCardsBorderColor"
-						placeholder="#d1d5db"
-						@update:model-value="updateConfig({ highlanderPointedCardsBorderColor: $event })"
-					/>
-				</UFormField>
-
-				<UFormField
-					:label="fields.highlanderPointedCardsAccentColor.label"
-					description="Color of the pointed card value."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UIColorPicker
-						:model-value="config.highlanderPointedCardsAccentColor"
-						placeholder="#7c3aed"
-						@update:model-value="updateConfig({ highlanderPointedCardsAccentColor: $event })"
-					/>
-				</UFormField>
-			</template>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Layout">
@@ -515,7 +376,7 @@ const emptyBoardHint = computed(() => {
 				/>
 			</UFormField>
 
-			<USeparator />
+			<USeparator v-if="section.layout.view !== 'stack'" />
 
 			<template v-if="section.layout.view === 'grid'">
 				<UFormField
@@ -532,20 +393,6 @@ const emptyBoardHint = computed(() => {
 					/>
 				</UFormField>
 
-				<UFormField
-					:label="boardFields.cardGap.label"
-					description="Space between cards in pixels."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UInputNumber
-						:model-value="section.layout.cardGap"
-						:min="boardFields.cardGap.min"
-						:max="boardFields.cardGap.max"
-						class="w-32"
-						@update:model-value="updateBoardLayout(section.key, { cardGap: Number($event) })"
-					/>
-				</UFormField>
-
 				<USeparator />
 
 				<ScreenSettingsToggle
@@ -554,53 +401,9 @@ const emptyBoardHint = computed(() => {
 					:model-value="section.layout.dynamicCardSize"
 					@update:model-value="updateBoardLayout(section.key, { dynamicCardSize: $event })"
 				/>
-
-				<UFormField
-					v-if="!section.layout.dynamicCardSize"
-					:label="boardFields.cardSize.label"
-					description="Fixed card size when dynamic sizing is disabled."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<USelect
-						:model-value="section.layout.cardSize"
-						:items="DECK_CARD_SIZE_SELECT_OPTIONS"
-						class="w-32"
-						@update:model-value="updateBoardLayout(section.key, { cardSize: $event })"
-					/>
-				</UFormField>
 			</template>
 
-			<template v-else-if="section.layout.view === 'stack'">
-				<UFormField
-					:label="boardFields.cardSize.label"
-					description="Size of the stacked cards."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<USelect
-						:model-value="section.layout.cardSize"
-						:items="DECK_CARD_SIZE_SELECT_OPTIONS"
-						class="w-32"
-						@update:model-value="updateBoardLayout(section.key, { cardSize: $event })"
-					/>
-				</UFormField>
-
-				<UFormField
-					:label="boardFields.stackOverlap.label"
-					:description="`Percentage of each card visible when stacked (${boardFields.stackOverlap.min}-${boardFields.stackOverlap.max}%).`"
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UInputNumber
-						:model-value="section.layout.stackOverlap"
-						:min="boardFields.stackOverlap.min"
-						:max="boardFields.stackOverlap.max"
-						:step="boardFields.stackOverlap.step"
-						class="w-32"
-						@update:model-value="updateBoardLayout(section.key, { stackOverlap: Number($event) })"
-					/>
-				</UFormField>
-			</template>
-
-			<template v-else>
+			<template v-else-if="section.layout.view === 'list'">
 				<UFormField
 					:label="boardFields.listColumns.label"
 					description="Number of columns in the list."
@@ -644,45 +447,6 @@ const emptyBoardHint = computed(() => {
 						@update:model-value="updateConfig({ quantityPosition: $event as QuantityPosition })"
 					/>
 				</UFormField>
-
-				<UFormField
-					:label="fields.quantitySize.label"
-					description="Size of the quantity badge."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<USelect
-						:model-value="config.quantitySize"
-						:items="QUANTITY_SIZE_SELECT_OPTIONS"
-						class="w-32"
-						@update:model-value="updateConfig({ quantitySize: $event })"
-					/>
-				</UFormField>
-
-				<USeparator />
-
-				<UFormField
-					:label="fields.quantityTextColor.label"
-					description="Color of the quantity number."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UIColorPicker
-						:model-value="config.quantityTextColor"
-						placeholder="#ffffff"
-						@update:model-value="updateConfig({ quantityTextColor: $event })"
-					/>
-				</UFormField>
-
-				<UFormField
-					:label="fields.quantityBgColor.label"
-					description="Background color of the badge."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UIColorPicker
-						:model-value="config.quantityBgColor"
-						placeholder="#7c3aed"
-						@update:model-value="updateConfig({ quantityBgColor: $event })"
-					/>
-				</UFormField>
 			</template>
 
 			<template v-if="!isBroadcastSource">
@@ -712,45 +476,6 @@ const emptyBoardHint = computed(() => {
 							:disabled-points="BADGE_DISABLED_POINTS"
 							aria-label="Highlander point badge position"
 							@update:model-value="updateConfig({ highlanderPointsPosition: $event as QuantityPosition })"
-						/>
-					</UFormField>
-
-					<UFormField
-						:label="fields.highlanderPointsSize.label"
-						description="Size of the Highlander point badge."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<USelect
-							:model-value="config.highlanderPointsSize"
-							:items="QUANTITY_SIZE_SELECT_OPTIONS"
-							class="w-32"
-							@update:model-value="updateConfig({ highlanderPointsSize: $event })"
-						/>
-					</UFormField>
-
-					<USeparator />
-
-					<UFormField
-						:label="fields.highlanderPointsTextColor.label"
-						description="Color of the Highlander point number."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<UIColorPicker
-							:model-value="config.highlanderPointsTextColor"
-							placeholder="#ffffff"
-							@update:model-value="updateConfig({ highlanderPointsTextColor: $event })"
-						/>
-					</UFormField>
-
-					<UFormField
-						:label="fields.highlanderPointsBgColor.label"
-						description="Background color of the Highlander point badge."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<UIColorPicker
-							:model-value="config.highlanderPointsBgColor"
-							placeholder="#7c3aed"
-							@update:model-value="updateConfig({ highlanderPointsBgColor: $event })"
 						/>
 					</UFormField>
 				</template>

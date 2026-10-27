@@ -20,7 +20,7 @@ const mockRepo = {
 	create: vi.fn(),
 	update: vi.fn(),
 	updateModeConfig: vi.fn(),
-	updateScreenConfig: vi.fn(),
+	updateThemeOverrides: vi.fn(),
 	remove: vi.fn(),
 };
 
@@ -117,31 +117,31 @@ describe('screen store writes and what overtakes them', () => {
 			expect(answered?.stateVersion).toBe(3);
 		});
 
-		it('keeps the newer revision a reload brought while a Screen-configuration write was out', async () => {
+		it('keeps the newer revision a reload brought while a Screen Theme Override write was out', async () => {
 			store.screens = [
 				createMockScreen({
 					id: 1,
 					stateVersion: 1,
-					screenConfig: { background: '#000' },
+					themeOverrides: { accent: '#000' },
 				}),
 			];
 			const write = served();
-			mockRepo.updateScreenConfig.mockReturnValueOnce(write.promise);
+			mockRepo.updateThemeOverrides.mockReturnValueOnce(write.promise);
 
-			const save = store.updateScreenConfig(1, 1, { background: '#fff' });
+			const save = store.updateThemeOverrides(1, 1, { accent: '#fff' });
 			await sendPending();
 			mockRepo.getById.mockResolvedValueOnce(createMockScreen({
 				id: 1,
 				stateVersion: 3,
 				name: 'Renamed',
-				screenConfig: { background: '#fff' },
+				themeOverrides: { accent: '#fff' },
 			}));
 			await store.applyRemoteUpdated({ eventId: 1, screenId: 1 } as never);
 
 			write.resolve(createMockScreen({
 				id: 1,
 				stateVersion: 2,
-				screenConfig: { background: '#fff' },
+				themeOverrides: { accent: '#fff' },
 			}));
 			const answered = await save;
 
@@ -358,38 +358,64 @@ describe('screen store writes and what overtakes them', () => {
 			expect(store.screens[0]!.modeConfigs?.metagame).toEqual({ topN: 32, limit: 20 });
 		});
 
-		it('rolls back an ordinary Screen update without taking back a configuration edit still out', async () => {
+		it('rolls back a Screen Theme Override, set or cleared, to what the server holds now', async () => {
+			store.screens = [
+				createMockScreen({
+					id: 1,
+					stateVersion: 1,
+					themeOverrides: { accent: '#ff0000' },
+				}),
+			];
+			const write = served();
+			mockRepo.updateThemeOverrides.mockReturnValueOnce(write.promise);
+
+			const save = store.updateThemeOverrides(1, 1, { 'accent': null, 'standings.surface': '#000000' });
+			expect(store.screens[0]!.themeOverrides).toEqual({ 'standings.surface': '#000000' });
+			mockRepo.getById.mockResolvedValueOnce(createMockScreen({
+				id: 1,
+				stateVersion: 2,
+				themeOverrides: { accent: '#ff0000', divider: '#00ff00' },
+			}));
+			await store.applyRemoteUpdated({ eventId: 1, screenId: 1 } as never);
+
+			write.reject(new Error('Refused'));
+			await expect(save).rejects.toThrow('Refused');
+
+			expect(store.screens[0]!.themeOverrides).toEqual({ accent: '#ff0000', divider: '#00ff00' });
+		});
+
+		it('rolls back an ordinary Screen update without taking back a Screen Theme Override still out', async () => {
 			store.screens = [
 				createMockScreen({
 					id: 1,
 					stateVersion: 1,
 					name: 'One',
-					screenConfig: { background: '#000' },
+					themeOverrides: { accent: '#000' },
 				}),
 			];
 			const rename = served();
 			const config = served();
 			mockRepo.update.mockReturnValueOnce(rename.promise);
-			mockRepo.updateScreenConfig.mockReturnValueOnce(config.promise);
+			mockRepo.updateThemeOverrides.mockReturnValueOnce(config.promise);
 
 			const renaming = store.updateScreen(1, 1, { name: 'Renamed' });
-			const configuring = store.updateScreenConfig(1, 1, { background: '#fff' });
+			const configuring = store.updateThemeOverrides(1, 1, { accent: '#fff' });
 			rename.resolve(null as never);
 			rename.promise.catch(() => {});
 			await vi.advanceTimersByTimeAsync(0);
-			expect(store.screens[0]!.screenConfig).toEqual({ background: '#fff' });
+			expect(store.screens[0]!.themeOverrides).toEqual({ accent: '#fff' });
 
 			await sendPending();
 			config.resolve(createMockScreen({
 				id: 1,
 				stateVersion: 2,
 				name: 'One',
-				screenConfig: { background: '#fff' },
+				themeOverrides: { accent: '#fff' },
 			}));
 			await Promise.allSettled([renaming, configuring]);
 			expect(store.screens[0]!).toMatchObject({
 				name: 'One',
-				screenConfig: { background: '#fff' },
+				themeOverrides: { accent: '#fff' },
 			});
 		});
 	});
@@ -400,19 +426,19 @@ describe('screen store writes and what overtakes them', () => {
 				createMockScreen({
 					id: 1,
 					stateVersion: 1,
-					screenConfig: { background: '#000' },
+					themeOverrides: { accent: '#000' },
 				}),
 			];
 			const write = served();
-			mockRepo.updateScreenConfig.mockReturnValueOnce(write.promise);
+			mockRepo.updateThemeOverrides.mockReturnValueOnce(write.promise);
 
-			const save = store.updateScreenConfig(1, 1, { background: '#fff' });
+			const save = store.updateThemeOverrides(1, 1, { accent: '#fff' });
 			await sendPending();
 			store.applyRemoteDeleted({ eventId: 1, screenId: 1 } as never);
 			write.resolve(createMockScreen({
 				id: 1,
 				stateVersion: 2,
-				screenConfig: { background: '#fff' },
+				themeOverrides: { accent: '#fff' },
 			}));
 			await save;
 
@@ -424,13 +450,13 @@ describe('screen store writes and what overtakes them', () => {
 				createMockScreen({
 					id: 1,
 					stateVersion: 1,
-					screenConfig: { background: '#000' },
+					themeOverrides: { accent: '#000' },
 				}),
 			];
 			const write = served();
-			mockRepo.updateScreenConfig.mockReturnValueOnce(write.promise);
+			mockRepo.updateThemeOverrides.mockReturnValueOnce(write.promise);
 
-			const save = store.updateScreenConfig(1, 1, { background: '#fff' });
+			const save = store.updateThemeOverrides(1, 1, { accent: '#fff' });
 			await sendPending();
 			store.applyRemoteDeleted({ eventId: 1, screenId: 1 } as never);
 			write.reject(Object.assign(new Error('Screen not found'), { statusCode: 404 }));
@@ -449,7 +475,7 @@ describe('screen store writes and what overtakes them', () => {
 				modeConfigs: {
 					metagame: { topN: 8 },
 				},
-				screenConfig: { background: '#000' },
+				themeOverrides: { accent: '#000' },
 			});
 			const commit = (version: number, change: Partial<Screen>) => {
 				if (version !== held.stateVersion)
@@ -472,10 +498,10 @@ describe('screen store writes and what overtakes them', () => {
 						},
 					},
 				}));
-			mockRepo.updateScreenConfig.mockImplementation(async (_e, _s, patch, version: number) =>
+			mockRepo.updateThemeOverrides.mockImplementation(async (_e, _s, patch, version: number) =>
 				commit(version, {
-					screenConfig: {
-						...held.screenConfig,
+					themeOverrides: {
+						...held.themeOverrides,
 						...patch,
 					},
 				}));
@@ -487,7 +513,7 @@ describe('screen store writes and what overtakes them', () => {
 			const saves = Promise.all([
 				store.updateModeConfig(1, 1, 'metagame', { topN: 16 }),
 				store.updateModeConfig(1, 1, 'metagame', { limit: 20 }),
-				store.updateScreenConfig(1, 1, { background: '#fff' }),
+				store.updateThemeOverrides(1, 1, { accent: '#fff' }),
 				store.updateScreen(1, 1, { name: 'Renamed' }),
 			]);
 			await sendPending();
@@ -498,7 +524,7 @@ describe('screen store writes and what overtakes them', () => {
 				modeConfigs: {
 					metagame: { topN: 16, limit: 20 },
 				},
-				screenConfig: { background: '#fff' },
+				themeOverrides: { accent: '#fff' },
 			});
 			expect(store.screens[0]!).toEqual(held);
 		});
@@ -573,31 +599,31 @@ describe('screen store writes and what overtakes them', () => {
 				createMockScreen({
 					id: 1,
 					stateVersion: 1,
-					screenConfig: { background: '#000' },
+					themeOverrides: { accent: '#000' },
 				}),
 			];
 			const conflict = served();
-			mockRepo.updateScreenConfig
+			mockRepo.updateThemeOverrides
 				.mockReturnValueOnce(conflict.promise)
 				.mockResolvedValueOnce(createMockScreen({
 					id: 1,
 					stateVersion: 6,
-					screenConfig: { background: '#fff' },
+					themeOverrides: { accent: '#fff' },
 				}));
 			mockRepo.getById.mockResolvedValueOnce(createMockScreen({
 				id: 1,
 				stateVersion: 5,
-				screenConfig: { background: '#000' },
+				themeOverrides: { accent: '#000' },
 			}));
 
-			const save = store.updateScreenConfig(1, 1, { background: '#fff' });
+			const save = store.updateThemeOverrides(1, 1, { accent: '#fff' });
 			await sendPending();
 			await moveToEventTwo();
 			conflict.reject(stateConflictFailure());
 
 			await expect(save).resolves.toMatchObject({ stateVersion: 6 });
 			expect(mockRepo.getById).toHaveBeenCalledWith(1, 1);
-			expect(mockRepo.updateScreenConfig).toHaveBeenLastCalledWith(1, 1, { background: '#fff' }, 5);
+			expect(mockRepo.updateThemeOverrides).toHaveBeenLastCalledWith(1, 1, { accent: '#fff' }, 5);
 			expect(store.screens).toEqual([eventTwoScreen]);
 		});
 
@@ -637,10 +663,10 @@ describe('screen store writes and what overtakes them', () => {
 			const succeeded = served();
 			const failed = served();
 			mockRepo.updateModeConfig.mockReturnValueOnce(succeeded.promise);
-			mockRepo.updateScreenConfig.mockReturnValueOnce(failed.promise);
+			mockRepo.updateThemeOverrides.mockReturnValueOnce(failed.promise);
 
 			const saving = store.updateModeConfig(1, 1, 'metagame', { topN: 16 });
-			const configuring = store.updateScreenConfig(1, 1, { background: '#fff' });
+			const configuring = store.updateThemeOverrides(1, 1, { accent: '#fff' });
 			await sendPending();
 			await moveToEventTwo();
 			store.$reset();
@@ -676,19 +702,19 @@ describe('screen store writes and what overtakes them', () => {
 				createMockScreen({
 					id: 1,
 					stateVersion: 1,
-					screenConfig: { background: '#000' },
+					themeOverrides: { accent: '#000' },
 				}),
 			];
 			const write = served();
-			mockRepo.updateScreenConfig.mockReturnValueOnce(write.promise);
+			mockRepo.updateThemeOverrides.mockReturnValueOnce(write.promise);
 
-			const save = store.updateScreenConfig(1, 1, { background: '#fff' });
+			const save = store.updateThemeOverrides(1, 1, { accent: '#fff' });
 			await sendPending();
 			await moveToEventTwo();
 			const answer = createMockScreen({
 				id: 1,
 				stateVersion: 2,
-				screenConfig: { background: '#fff' },
+				themeOverrides: { accent: '#fff' },
 			});
 			write.resolve(answer);
 

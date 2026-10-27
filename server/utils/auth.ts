@@ -283,7 +283,7 @@ async function readBetterAuthSession(event: H3Event, auth: ServerAuth): Promise<
  * the day a caller stops being a private `/api/**` path.
  *
  * **Some routes call this for the refusal alone and discard the id** — the
- * template and Style Set libraries, and the two library reads. That is
+ * template libraries, and the two library reads. That is
  * deliberate rather than a leftover: it keeps each route's own graph refusing
  * before it touches the library, which is a property the unit suites pin per
  * route (`rejects the read before touching the library …`), and which the

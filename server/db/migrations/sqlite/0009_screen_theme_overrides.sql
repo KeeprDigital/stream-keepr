@@ -1,0 +1,1 @@
+ALTER TABLE `screens` ADD `theme_overrides` text DEFAULT '{}' NOT NULL;

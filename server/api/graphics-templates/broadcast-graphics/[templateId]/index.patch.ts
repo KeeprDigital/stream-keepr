@@ -12,7 +12,6 @@ import {
 } from '~~/server/services/broadcastGraphicTemplate';
 import { requireUserId } from '~~/server/utils/auth';
 import { assertBroadcastGraphicTemplateReferencesSelectable } from '~~/server/utils/broadcastGraphicTemplateReferences';
-import { assertBroadcastGraphicTemplateStyleSetResolves } from '~~/server/utils/broadcastGraphicTemplateStyleSet';
 import { refuseInstalledBroadcastGraphicTemplateWrite } from '~~/server/utils/broadcastGraphicTemplateWrites';
 import { graphicsTemplateReferenceConflict } from '~~/server/utils/graphicsTemplateReferences';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
@@ -52,8 +51,6 @@ export default defineEventHandler(async (event) => {
 		: undefined);
 	if (document)
 		await assertBroadcastGraphicTemplateReferencesSelectable(graphicsAssetLibraryForEvent(event), document);
-	if (body.document)
-		await assertBroadcastGraphicTemplateStyleSetResolves(body.document);
 
 	try {
 		const template = await broadcastGraphicTemplateService().update(templateId, body);

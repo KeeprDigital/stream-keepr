@@ -73,14 +73,13 @@ function editBorderGlow(edit: BorderGlowEdit) {
 		</p>
 
 		<!--
-			Where this surface inherits from, when the composition is linked to a Graphic
-			Style Set. A slot rather than props for the same reason the surface itself is
-			reported as an edit: this component knows what a Graphic Surface Style is and
-			deliberately not *which* one it is, and a Style Set reference is a fact about
-			which one. The caller already says that, so it fills this in too — and a
-			caller with no Style Set fills in nothing.
+			Which Theme token this surface follows, if any. A slot rather than props for
+			the same reason the surface itself is reported as an edit: this component
+			knows what a Graphic Surface Style is and deliberately not *which* one it is,
+			and a Theme binding is a fact about which one. The caller already says that,
+			so it fills this in too — and a caller with no binding fills in nothing.
 		-->
-		<slot name="style-ref" />
+		<slot name="binding" />
 
 		<UFormField v-if="presenceLabel" :label="presenceLabel" size="sm">
 			<USwitch

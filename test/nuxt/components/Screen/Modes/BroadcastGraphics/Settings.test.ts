@@ -10,7 +10,10 @@ import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 enableAutoUnmount(afterEach);
 
 const mockConfig = ref<BroadcastGraphicsModeConfig>({ graphics: [] });
-const mockScreenConfig = ref({ width: 1920, height: 1080 });
+/** The Event's canvas, other than the default so a host reading anything else shows. */
+const mockEventStore = reactive({
+	event: { canvasWidth: 1280, canvasHeight: 720 },
+});
 const mockRoute = reactive({
 	query: {} as Record<string, unknown>,
 	params: {},
@@ -32,12 +35,6 @@ const mockUpdateConfig = vi.fn((patch: Record<string, unknown>) => {
 		...patch,
 	} as BroadcastGraphicsModeConfig;
 });
-const mockUpdateScreenConfig = vi.fn((patch: Record<string, unknown>) => {
-	mockScreenConfig.value = {
-		...mockScreenConfig.value,
-		...patch,
-	};
-});
 
 mockNuxtImport('useRoute', () => () => mockRoute);
 mockNuxtImport('useRouter', () => () => ({
@@ -46,9 +43,7 @@ mockNuxtImport('useRouter', () => () => ({
 	beforeEach: () => () => {},
 	beforeResolve: () => () => {},
 }));
-mockNuxtImport('useScreenStore', () => () => ({
-	updateScreenConfig: vi.fn().mockResolvedValue(undefined),
-}));
+mockNuxtImport('useEventStore', () => () => mockEventStore);
 const mockSaveState = ref<'idle' | 'saving' | 'committed' | 'failed'>('idle');
 const mockSaveError = ref<string | null>(null);
 const mockRetry = vi.fn();
@@ -81,12 +76,6 @@ mockNuxtImport('useGraphicsAuthoringLease', () => (options: { enabled?: () => bo
 		release: vi.fn(),
 	};
 });
-mockNuxtImport('useScreenConfigUpdate', () => () => ({
-	screenConfig: mockScreenConfig,
-	saving: ref(false),
-	updateScreenConfig: mockUpdateScreenConfig,
-	resetScreenConfig: vi.fn(),
-}));
 // The hoisted Live Session sync (#373): loaded here so the Program monitor and the Edit workspace's
 // on-air marks project from a loaded session whichever workspace is open.
 const mockPlayoutDisconnected = ref(false);
@@ -101,6 +90,8 @@ const EditWorkspaceStub = defineComponent({
 		selectedTarget: { type: Object, required: true },
 		selectedGraphicId: { type: String, default: null },
 		writable: { type: Boolean, default: true },
+		canvasWidth: { type: Number, required: true },
+		canvasHeight: { type: Number, required: true },
 		canTakeOver: { type: Boolean, default: false },
 		holderName: { type: String, default: null },
 		playoutDisconnected: { type: Boolean, default: false },
@@ -118,6 +109,7 @@ const EditWorkspaceStub = defineComponent({
 		:data-selected-graphic="selectedGraphicId ?? ''"
 		:data-selected-target="JSON.stringify(selectedTarget)"
 		:data-writable="String(writable)"
+		:data-canvas="canvasWidth + 'x' + canvasHeight"
 		:data-can-take-over="String(canTakeOver)"
 		:data-playout-disconnected="String(playoutDisconnected)"
 		:data-save-state="saveState"
@@ -129,10 +121,13 @@ const LiveWorkspaceStub = defineComponent({
 	props: {
 		graphics: { type: Array, required: true },
 		selectedGraphicId: { type: String, default: null },
+		canvasWidth: { type: Number, required: true },
+		canvasHeight: { type: Number, required: true },
 	},
 	emits: ['select'],
 	template: `<button
 		data-testid="live-workspace"
+		:data-canvas="canvasWidth + 'x' + canvasHeight"
 		:data-selected-graphic="selectedGraphicId ?? ''"
 		@click="$emit('select', 'slate')"
 	/>`,
@@ -142,9 +137,12 @@ const ProgramMonitorStub = defineComponent({
 	props: {
 		graphics: { type: Array, required: true },
 		compact: { type: Boolean, default: false },
+		canvasWidth: { type: Number, required: true },
+		canvasHeight: { type: Number, required: true },
 	},
 	template: `<div
 		data-testid="program-monitor-card"
+		:data-canvas="canvasWidth + 'x' + canvasHeight"
 		:data-compact="String(compact)"
 		:data-graphics="graphics.length"
 	/>`,
@@ -165,23 +163,12 @@ const UButtonStub = defineComponent({
 	template: '<button type="button" @click="$emit(\'click\')"><slot /></button>',
 });
 
-const UInputNumberStub = defineComponent({
-	name: 'UInputNumber',
-	props: {
-		modelValue: { type: Number, required: false },
-		disabled: { type: Boolean, default: false },
-	},
-	emits: ['update:modelValue'],
-	template: '<input :value="modelValue" :disabled="disabled">',
-});
-
 async function mountComponent() {
 	return mount(Settings, {
 		props: {
 			screen: {
 				id: 1,
 				slug: 'main',
-				screenConfig: { width: 1920, height: 1080 },
 			} as Screen,
 			eventId: 1,
 		},
@@ -193,7 +180,6 @@ async function mountComponent() {
 				UFormField: UFormFieldStub,
 				UFieldGroup: UFieldGroupStub,
 				UButton: UButtonStub,
-				UInputNumber: UInputNumberStub,
 			},
 		},
 	});
@@ -209,7 +195,6 @@ describe('broadcastGraphicsSettings', () => {
 				{ id: 'slate', name: 'Slate', items: [] },
 			],
 		};
-		mockScreenConfig.value = { width: 1920, height: 1080 };
 		mockRoute.query = {};
 		mockLeaseWritable.value = true;
 		mockLeaseEnabled.value = null;
@@ -298,18 +283,18 @@ describe('broadcastGraphicsSettings', () => {
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ graphics: next });
 	});
 
-	it('keeps the Broadcast Graphics canvas with the mode settings', async () => {
+	// ADR-0051: the canvas is the Event's, set in Event Presentation Settings, not here.
+	it.each(['live', 'edit'])('composes the %s workspace and the Program monitor in the Event Canvas', async (workspace) => {
+		mockRoute.query = { workspace };
+
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		const inputs = wrapper.findAllComponents({ name: 'UInputNumber' });
-		expect(inputs.map(input => input.props('modelValue'))).toEqual([1920, 1080]);
-
-		await inputs[1]!.vm.$emit('update:modelValue', 720);
-		await nextTick();
-
-		expect(mockUpdateScreenConfig).toHaveBeenCalledWith({ height: 720 });
+		expect(wrapper.get(`[data-testid="${workspace}-workspace"]`).attributes('data-canvas')).toBe('1280x720');
+		expect(wrapper.get('[data-testid="program-monitor-card"]').attributes('data-canvas')).toBe('1280x720');
+		expect(wrapper.findAllComponents({ name: 'UInputNumber' })).toHaveLength(0);
 	});
+
 	it('refuses an authoring write from a session observing the Edit workspace read-only', async () => {
 		mockRoute.query = { workspace: 'edit' };
 		mockLeaseWritable.value = false;
@@ -405,21 +390,6 @@ describe('broadcastGraphicsSettings', () => {
 		expect(mockLeaseEnabled.value).toBe(false);
 	});
 
-	it('leaves the canvas open to a Live operator who holds no lease', async () => {
-		mockLeaseWritable.value = false;
-
-		const wrapper = await mountComponent();
-		await flushPromises();
-
-		const inputs = wrapper.findAllComponents({ name: 'UInputNumber' });
-		expect(inputs.map(input => input.props('disabled'))).toEqual([false, false]);
-
-		await inputs[1]!.vm.$emit('update:modelValue', 720);
-		await nextTick();
-
-		expect(mockUpdateScreenConfig).toHaveBeenCalledWith({ height: 720 });
-	});
-
 	// Story 23 (#60, carried as #335): a persistent Program monitor in BOTH workspaces, so the
 	// operator always knows what is on air — an Edit-workspace change can reach program instantly…
 	describe('the persistent Program monitor', () => {
@@ -478,21 +448,14 @@ describe('broadcastGraphicsSettings', () => {
 		});
 	});
 
-	it('closes the canvas to a session observing the Edit workspace read-only', async () => {
+	it('names the lease holder to a session observing the Edit workspace read-only', async () => {
 		mockRoute.query = { workspace: 'edit' };
 		mockLeaseWritable.value = false;
 
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		const inputs = wrapper.findAllComponents({ name: 'UInputNumber' });
-		expect(inputs.map(input => input.props('disabled'))).toEqual([true, true]);
-
-		await inputs[1]!.vm.$emit('update:modelValue', 720);
-		await nextTick();
-
-		expect(mockUpdateScreenConfig).not.toHaveBeenCalled();
-		// And the workspace is handed who to name, rather than being left to say
+		// The workspace is handed who to name, rather than being left to say
 		// "another session" (#398). The notice itself is the workspace's own, and
 		// is pinned in `EditWorkspace.test.ts`.
 		expect(wrapper.getComponent(EditWorkspaceStub).props('holderName')).toBe('Marcus Angel');

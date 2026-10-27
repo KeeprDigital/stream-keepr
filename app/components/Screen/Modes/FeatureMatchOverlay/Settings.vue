@@ -4,8 +4,8 @@ import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayPresetId } from 
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
 import { useEventListener } from '@vueuse/core';
+import { eventCanvasOf } from '~~/shared/eventCanvas';
 import { applyFeatureMatchOverlayPreset, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
-import { DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT, DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH } from '~~/shared/types/screenConfig';
 import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import {
@@ -24,17 +24,16 @@ import FeatureMatchOverlayPreviewOutputAside from './PreviewOutputAside.vue';
 
 const props = defineProps<{ screen: Screen; eventId: number }>();
 
+/**
+ * The Theme the editor previews under (#829): this Screen's Event's, unless the
+ * author picks another to see the layout under a different Theme.
+ */
+const previewEventStore = useEventStore();
+const previewTheme = useGraphicsPreviewTheme(() => previewEventStore.event?.themeId);
+
 const featureMatchStore = useFeatureMatchStore();
 const screenStore = useScreenStore();
-
-const {
-	screenConfig,
-	saving: screenConfigSaving,
-	updateScreenConfig,
-} = useScreenConfigUpdate(
-	() => props.eventId,
-	() => props.screen.id,
-);
+const eventStore = useEventStore();
 
 const { config, saving, saveState, saveError, updateConfig, resetConfig, retry: retrySave } = useModeConfigUpdate(
 	() => props.eventId,
@@ -42,7 +41,6 @@ const { config, saving, saveState, saveError, updateConfig, resetConfig, retry: 
 	'feature-match-overlay',
 );
 
-const settingsSaving = computed(() => saving.value || screenConfigSaving.value);
 const {
 	eligibility: assetPublicationEligibility,
 	blocked: assetPublicationBlocked,
@@ -50,40 +48,28 @@ const {
 	retry: retryAssetPublicationEligibility,
 } = useGraphicAssetPublicationEligibility(config);
 
-defineExpose({ resetConfig, saving: settingsSaving });
+defineExpose({ resetConfig, saving });
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
 useConsumedEventData(['featureMatchSlots']);
 
 onMounted(async () => {
 	await featureMatchStore.loadFeatureMatchesByEventId(props.eventId);
-	if (!props.screen.screenConfig?.width || !props.screen.screenConfig?.height) {
-		await screenStore.updateScreenConfig(props.eventId, props.screen.id, {
-			width: props.screen.screenConfig?.width ?? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH,
-			height: props.screen.screenConfig?.height ?? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT,
-		});
-	}
 });
 
 const matchOptions = useFeatureMatchMenuItems();
 const presetOptions = FEATURE_MATCH_OVERLAY_PRESETS.map(preset => ({ label: preset.label, value: preset.id, description: preset.description }));
-const screenWidth = computed(() => screenConfig.value.width ?? props.screen.screenConfig?.width ?? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH);
-const screenHeight = computed(() => screenConfig.value.height ?? props.screen.screenConfig?.height ?? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT);
+/** The overlay is authored in its Event's canvas, set in Event Presentation Settings (ADR-0051). */
+const eventCanvas = computed(() => eventCanvasOf(eventStore.event));
+const canvasWidth = computed(() => eventCanvas.value.width);
+const canvasHeight = computed(() => eventCanvas.value.height);
 const selectedPreset = computed(() => FEATURE_MATCH_OVERLAY_PRESETS.find(preset => preset.id === config.value.presetId));
 const aspectMismatch = computed(() => {
 	if (!selectedPreset.value)
 		return false;
-	const actual = screenWidth.value / screenHeight.value;
+	const actual = canvasWidth.value / canvasHeight.value;
 	return Math.abs(actual - selectedPreset.value.aspectRatio) > 0.05;
 });
-
-function updateCanvasDimension(field: 'width' | 'height', value: number | null | undefined) {
-	updateScreenConfig({
-		[field]: value ?? (field === 'width'
-			? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH
-			: DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT),
-	});
-}
 
 /* ────────────────────────────────────────────────
  * The editor: one selection, one history
@@ -92,8 +78,8 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 const editor = useFeatureMatchLayoutEditor({
 	config,
 	updateConfig,
-	canvasWidth: screenWidth,
-	canvasHeight: screenHeight,
+	canvasWidth,
+	canvasHeight,
 });
 const { selection } = editor;
 
@@ -348,28 +334,6 @@ useEventListener(import.meta.client
 						</UButton>
 					</UFieldGroup>
 				</UFormField>
-				<UFormField label="Canvas size" size="sm" class="w-64">
-					<UFieldGroup class="w-full">
-						<UInputNumber
-							:model-value="screenWidth"
-							:placeholder="String(DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH)"
-							:min="1"
-							size="sm"
-							class="min-w-0 flex-1"
-							aria-label="Canvas width"
-							@update:model-value="updateCanvasDimension('width', $event)"
-						/>
-						<UInputNumber
-							:model-value="screenHeight"
-							:placeholder="String(DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT)"
-							:min="1"
-							size="sm"
-							class="min-w-0 flex-1"
-							aria-label="Canvas height"
-							@update:model-value="updateCanvasDimension('height', $event)"
-						/>
-					</UFieldGroup>
-				</UFormField>
 
 				<div class="ml-auto flex items-center gap-1">
 					<div
@@ -509,20 +473,26 @@ useEventListener(import.meta.client
 				<FeatureMatchOverlayLayerList
 					:layout="config.layout"
 					:editor="editor"
-					:canvas-width="screenWidth"
-					:canvas-height="screenHeight"
+					:canvas-width="canvasWidth"
+					:canvas-height="canvasHeight"
 				/>
 			</section>
 
 			<section class="min-w-0 xl:sticky xl:top-4">
+				<GraphicsPreviewThemePicker
+					v-model="previewTheme.choice.value"
+					class="mb-2"
+					:items="previewTheme.items.value"
+				/>
 				<FeatureMatchOverlayPreviewOutputAside
+					:preview-theme-values="previewTheme.previewThemeValues.value"
 					:event-id="eventId"
 					:screen="screen"
 					:config="config"
 					:selected-target="selectedTarget"
 					:compositor-target="compositorTarget"
-					:canvas-width="screenWidth"
-					:canvas-height="screenHeight"
+					:canvas-width="canvasWidth"
+					:canvas-height="canvasHeight"
 					:publication-blocked="assetPublicationBlocked"
 					:publication-block-reason="assetPublicationBlockReason"
 					:selection-frame="selectionFrame"
@@ -539,9 +509,10 @@ useEventListener(import.meta.client
 					v-if="selection.type === 'item'"
 					:layout="config.layout"
 					:selected-target="compositorTarget"
-					:canvas-width="screenWidth"
-					:canvas-height="screenHeight"
+					:canvas-width="canvasWidth"
+					:canvas-height="canvasHeight"
 					:event-id="eventId"
+					:theme-tokens="previewTheme.themeTokens.value"
 					writable
 					@update:composition="composition => updateFields({ layout: { ...config.layout, composition } })"
 				/>
@@ -550,8 +521,8 @@ useEventListener(import.meta.client
 					:selected-target="selectedTarget"
 					:config="config"
 					:update-config="updateFields"
-					:screen-width="screenWidth"
-					:screen-height="screenHeight"
+					:screen-width="canvasWidth"
+					:screen-height="canvasHeight"
 					:event-id="eventId"
 					@remove="itemId => editor.remove({ type: 'source', itemId })"
 					@duplicate="itemId => editor.duplicate({ type: 'source', itemId })"
