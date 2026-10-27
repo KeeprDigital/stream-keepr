@@ -1,8 +1,8 @@
-import type { H3Event } from 'h3';
 import type { MappedMeleePlayer } from '~~/server/mappers/melee';
 import type { MeleeEventParsed, MeleePlayerParsed } from '~~/server/schemas/external/melee';
 import type { MeleeSyncMetadataUpdate } from '~~/server/utils/meleeSyncState';
 import type { Game } from '~~/shared/types/enums';
+import type { MeleeSyncContext } from './context';
 import { createError } from 'h3';
 import { mapMeleePlayersToDb } from '~~/server/mappers/melee';
 import { eventDataPublicationModule, RealtimePublicationError } from '~~/server/modules/event-data-publication';
@@ -15,7 +15,6 @@ import { phaseService } from '~~/server/services/phase';
 import { playerService } from '~~/server/services/player';
 import { playerFeatureMatchSyncService } from '~~/server/services/playerFeatureMatchSync';
 import { roundService } from '~~/server/services/round';
-import { getOriginConnectionId } from '~~/server/utils/ably';
 import { publishFailureFields } from '~~/server/utils/realtimePublishFailure';
 import { isMeleeManagedRound } from '~~/shared/utils/roundControl';
 import {
@@ -160,13 +159,13 @@ export function createMeleeSyncWorkflows() {
 	}
 
 	async function syncEventStructure(
-		requestEvent: H3Event,
+		ctx: MeleeSyncContext,
 		eventId: number,
 		eventData: MeleeSyncEventData,
 		meleeEventSnapshot?: MeleeEventParsed,
 	) {
 		const melee = requireMeleeService(eventData);
-		const originConnectionId = getOriginConnectionId(requestEvent);
+		const { originConnectionId } = ctx;
 
 		const rawMeleeEvent = meleeEventSnapshot ?? await melee.fetchEvent();
 		const gameCompatibility = inspectSourceGame(eventData, rawMeleeEvent);
@@ -298,13 +297,13 @@ export function createMeleeSyncWorkflows() {
 	}
 
 	async function syncPlayers(
-		requestEvent: H3Event,
+		ctx: MeleeSyncContext,
 		eventId: number,
 		eventData: MeleeSyncEventData,
 		playersSnapshot?: MappedMeleePlayer[],
 	) {
 		const melee = requireMeleeService(eventData);
-		const originConnectionId = getOriginConnectionId(requestEvent);
+		const { originConnectionId } = ctx;
 		const warnings: string[] = [];
 
 		let mergedPlayers = playersSnapshot;
@@ -374,8 +373,8 @@ export function createMeleeSyncWorkflows() {
 		};
 	}
 
-	async function syncRoundMatches(requestEvent: H3Event, eventId: number, eventData: MeleeSyncEventData, roundId: number) {
-		const originConnectionId = getOriginConnectionId(requestEvent);
+	async function syncRoundMatches(ctx: MeleeSyncContext, eventId: number, eventData: MeleeSyncEventData, roundId: number) {
+		const { originConnectionId } = ctx;
 		const publicationWarnings: string[] = [];
 		// Re-check at the write boundary even though route-facing Round commands
 		// preflight before refreshing Players.
@@ -403,7 +402,7 @@ export function createMeleeSyncWorkflows() {
 	}
 
 	async function runInitialSetup(
-		requestEvent: H3Event,
+		ctx: MeleeSyncContext,
 		eventId: number,
 		eventData: MeleeSyncEventData,
 		checkpoint?: () => Promise<void>,
@@ -411,18 +410,18 @@ export function createMeleeSyncWorkflows() {
 	) {
 		const snapshot = await fetchCoreSnapshot(eventData);
 		await checkpoint?.();
-		const structureResult = await syncEventStructure(requestEvent, eventId, eventData, snapshot.event);
+		const structureResult = await syncEventStructure(ctx, eventId, eventData, snapshot.event);
 		recordProgress?.({
 			lastEventSyncedAt: new Date(),
 		});
 		await checkpoint?.();
-		const playersResult = await syncPlayers(requestEvent, eventId, eventData, snapshot.mappedPlayers);
+		const playersResult = await syncPlayers(ctx, eventId, eventData, snapshot.mappedPlayers);
 		recordProgress?.({
 			lastPlayersSyncedAt: new Date(),
 		});
 		await checkpoint?.();
 		const deckListsResult = await syncDeckLists(
-			requestEvent,
+			ctx,
 			eventId,
 			eventData,
 			snapshot.players,
@@ -459,7 +458,7 @@ export function createMeleeSyncWorkflows() {
 	}
 
 	async function updateFromMelee(
-		requestEvent: H3Event,
+		ctx: MeleeSyncContext,
 		eventId: number,
 		eventData: MeleeSyncEventData & { lastDecklistsSyncedAt?: Date | null },
 		options: { includeDeckLists?: boolean; advanceRound?: boolean } = {},
@@ -472,14 +471,14 @@ export function createMeleeSyncWorkflows() {
 		const snapshot = await fetchCoreSnapshot(eventData);
 		await checkpoint?.();
 
-		const structureResult = await syncEventStructure(requestEvent, eventId, eventData, snapshot.event);
+		const structureResult = await syncEventStructure(ctx, eventId, eventData, snapshot.event);
 		steps.push('structure');
 		recordProgress?.({
 			lastEventSyncedAt: new Date(),
 		});
 		await checkpoint?.();
 
-		const playersResult = await syncPlayers(requestEvent, eventId, eventData, snapshot.mappedPlayers);
+		const playersResult = await syncPlayers(ctx, eventId, eventData, snapshot.mappedPlayers);
 		steps.push('players');
 		recordProgress?.({
 			lastPlayersSyncedAt: new Date(),
@@ -489,7 +488,7 @@ export function createMeleeSyncWorkflows() {
 		let deckListsResult: Awaited<ReturnType<typeof syncDeckLists>> | null = null;
 		if (includeDeckLists) {
 			deckListsResult = await syncDeckLists(
-				requestEvent,
+				ctx,
 				eventId,
 				eventData,
 				snapshot.players,
@@ -518,14 +517,14 @@ export function createMeleeSyncWorkflows() {
 				: null;
 			if (previousRound?.lastSyncedAt) {
 				roundResults.push({
-					...await syncRoundMatches(requestEvent, eventId, eventData, previousRound.id),
+					...await syncRoundMatches(ctx, eventId, eventData, previousRound.id),
 					role: 'previous',
 				});
 				steps.push('previous-round');
 				await checkpoint?.();
 			}
 			roundResults.push({
-				...await syncRoundMatches(requestEvent, eventId, eventData, nextRound.id),
+				...await syncRoundMatches(ctx, eventId, eventData, nextRound.id),
 				role: 'next',
 			});
 			steps.push('next-round');
@@ -534,7 +533,7 @@ export function createMeleeSyncWorkflows() {
 			const latestSyncedRound = eligibleRounds.filter(round => round.lastSyncedAt !== null).at(-1) ?? null;
 			if (latestSyncedRound) {
 				roundResults.push({
-					...await syncRoundMatches(requestEvent, eventId, eventData, latestSyncedRound.id),
+					...await syncRoundMatches(ctx, eventId, eventData, latestSyncedRound.id),
 					role: 'latest',
 				});
 				steps.push('latest-round');
@@ -563,14 +562,14 @@ export function createMeleeSyncWorkflows() {
 	}
 
 	async function syncDeckLists(
-		requestEvent: H3Event,
+		ctx: MeleeSyncContext,
 		eventId: number,
 		eventData: MeleeSyncEventData,
 		playersSnapshot?: MeleePlayerParsed[],
 		meleeEventSnapshot?: MeleeEventParsed,
 		options: DeckListSyncOptions = { unsupportedGame: 'reject' },
 	) {
-		const originConnectionId = getOriginConnectionId(requestEvent);
+		const { originConnectionId } = ctx;
 		const melee = requireMeleeService(eventData);
 		const rawMeleeEvent = meleeEventSnapshot ?? await melee.fetchEvent();
 		const gameCompatibility = inspectSourceGame(eventData, rawMeleeEvent);

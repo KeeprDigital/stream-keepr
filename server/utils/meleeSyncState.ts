@@ -1,8 +1,8 @@
-import type { H3Event } from 'h3';
 import type { DbEvent, DbEventTalent } from '~~/server/db/schema';
+import type { MeleeSyncContext } from '~~/server/modules/melee-sync/context';
 import { mapEventToResponse } from '~~/server/mappers/event';
 import { eventService } from '~~/server/services/event';
-import { getOriginConnectionId, publishMessage } from '~~/server/utils/ably';
+import { publishMessage } from '~~/server/utils/ably';
 import { toPublicOperationalError } from '~~/server/utils/errors';
 
 export const MELEE_SYNC_LEASE_DURATION_MS = 15 * 60 * 1000;
@@ -30,7 +30,7 @@ export interface MeleeSyncLease {
 	expiresAt: Date;
 }
 
-async function publishEventUpdate(requestEvent: H3Event, eventId: number) {
+async function publishEventUpdate(ctx: MeleeSyncContext, eventId: number) {
 	const updatedEvent = await eventService().findById(eventId);
 	if (!updatedEvent) {
 		return;
@@ -42,12 +42,12 @@ async function publishEventUpdate(requestEvent: H3Event, eventId: number) {
 		{
 			event: mapEventToResponse(updatedEvent as DbEvent & { talents: DbEventTalent[] }),
 		},
-		getOriginConnectionId(requestEvent),
+		ctx.originConnectionId,
 	);
 }
 
 export async function recordMeleeSyncSuccess(
-	requestEvent: H3Event,
+	ctx: MeleeSyncContext,
 	eventId: number,
 	data: MeleeSyncMetadataUpdate,
 	leaseToken?: string,
@@ -58,14 +58,14 @@ export async function recordMeleeSyncSuccess(
 	}, leaseToken);
 
 	if (updated) {
-		await publishEventUpdate(requestEvent, eventId);
+		await publishEventUpdate(ctx, eventId);
 	}
 
 	return updated;
 }
 
 export async function recordMeleeSyncFailure(
-	requestEvent: H3Event,
+	ctx: MeleeSyncContext,
 	eventId: number,
 	error: unknown,
 	data: MeleeSyncMetadataUpdate = {},
@@ -78,7 +78,7 @@ export async function recordMeleeSyncFailure(
 	}, leaseToken);
 
 	if (updated) {
-		await publishEventUpdate(requestEvent, eventId);
+		await publishEventUpdate(ctx, eventId);
 	}
 
 	return updated;
