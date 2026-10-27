@@ -3,9 +3,8 @@ import type { Ref } from 'vue';
 /**
  * One reading of a library in the reusable-library scope.
  *
- * Three surfaces browse a library in that scope — the Broadcast Graphic Template
- * library, the Feature Match Layout Template library, and the Graphic Style Set library
- * — and each does the same three things around whatever else it offers: it re-reads the
+ * Two surfaces browse a library in that scope — the Broadcast Graphic Template
+ * library and the Feature Match Layout Template library — and each does the same three things around whatever else it offers: it re-reads the
  * library, it turns a refused write into something an author can read, and it holds that
  * message until the author has seen it.
  *
@@ -14,9 +13,9 @@ import type { Ref } from 'vue';
  * and is what `useGraphicsAdminReading` and `useGraphicsIngestionTransfer` next door
  * speak to. This one reads a list of authoring artifacts and knows nothing about assets.
  *
- * What it deliberately does not own is importing. The three libraries receive different
- * portable artifacts and an import means a different thing in each, so the import path
- * stays with the library that has the semantics.
+ * What it deliberately does not own is importing. The two libraries receive different
+ * portable artifacts, so the import path stays with the library that has the
+ * semantics.
  *
  * The first read is owned here too. All three surfaces are browsers of a library and
  * every one of them opened with the same `onMounted(() => void refresh())`; a library
@@ -53,13 +52,6 @@ export function useReusableLibraryReading<Entry>(options: {
 	read: () => Promise<Entry[]>;
 	/** What to say when the failure carries no message of its own. */
 	unavailable: string;
-	/**
-	 * Called with a caught value before its message is derived, for a library whose
-	 * refusals carry structured detail beside the message. The Graphic Style Set library
-	 * is the one that does: a draft it cannot publish is refused with every reason at
-	 * once, and losing them would leave the author only "cannot be published".
-	 */
-	inspectFailure?: (caught: unknown) => void;
 }): ReusableLibraryReading<Entry> {
 	const entries = ref<Entry[]>([]) as Ref<Entry[]>;
 	const loading = ref(false);
@@ -86,7 +78,6 @@ export function useReusableLibraryReading<Entry>(options: {
 	 * these routes is an exhausted byte store or a named dependency that is down (#286).
 	 */
 	function failureMessage(caught: unknown): string {
-		options.inspectFailure?.(caught);
 		if (graphicsAuthorSignedOut(caught))
 			return authorship.describeFailure(caught, options.unavailable);
 		return reportedMessage(caught, options.unavailable);

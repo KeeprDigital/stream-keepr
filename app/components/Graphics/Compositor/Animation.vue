@@ -8,7 +8,6 @@ import type {
 	GraphicOnScreenAnimationRecipe,
 } from '~~/shared/types/graphics';
 import type { GraphicThemeAnimationSlot } from '~~/shared/types/graphicThemeBindings';
-import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import {
 	applyBroadcastGraphicAnimationPreset,
@@ -60,13 +59,6 @@ const props = defineProps<{
 	selectedTarget: GraphicsSelectionTarget;
 	/** Whether this session holds the artifact's Graphics Authoring Lease. */
 	writable?: boolean;
-	/**
-	 * The published Graphic Style Set this composition is linked to, when it is
-	 * linked to one. A Graphic Animation Recipe entry is referenced per lifecycle
-	 * phase, from the phase's own controls, exactly as every other entry is
-	 * referenced from the property control that already edits it.
-	 */
-	styleSet?: GraphicStyleAuthoringContext;
 	/** The Foundation Tokens the editor previews under, which a bound phase shows. */
 	themeTokens?: GraphicThemeTokens;
 	/** The Broadcast Graphics canvas, which a top-level owner's slide is measured against. */
@@ -80,9 +72,8 @@ const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[
 
 /**
  * Every edit here goes through the compositor editing module, which checks the
- * Graphics Authoring Lease, re-captures Graphic Style Set overrides, and replaces the
- * stack. These controls write recipe values, and an edit to a phase whose recipe is
- * inherited is a deviation by definition, so it is recorded as an override.
+ * Graphics Authoring Lease and replaces the stack. These controls write recipe
+ * values, and an edit to a phase bound to a Theme token detaches it (ADR-0049).
  */
 const { canAuthor, edit, bindThemeToken, detachThemeToken } = useCompositorEditing(
 	() => props,

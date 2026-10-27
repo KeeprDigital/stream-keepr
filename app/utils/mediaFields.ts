@@ -37,9 +37,8 @@ export type ResolvedMediaFieldsPatch = Omit<MediaFieldsPatch, 'opacity' | 'playb
 };
 
 /**
- * Every host's default for a cleared field: opaque, at normal speed. A Style Set
- * media treatment, a Media Graphic Item, a Background Layer, and the Frame's
- * video all start there.
+ * Every host's default for a cleared field: opaque, at normal speed. A Media
+ * Graphic Item, a Background Layer, and the Frame's video all start there.
  */
 const MEDIA_FIELD_DEFAULTS = { opacity: 1, playbackRate: 1 } as const;
 

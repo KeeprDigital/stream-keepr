@@ -7,9 +7,8 @@ import { REUSABLE_LIBRARY_IMPORTS } from '~/utils/reusableLibraryImports';
  * and what preflight concluded about it.
  *
  * Presentation only, and that is the whole point of the seam. What importing a package
- * *means* differs by artifact — a Template Package yields an Installed Graphics Template
- * unlinked from whatever exported it, while a Graphic Style Set Package preserves the
- * packaged identity and revision — so the chosen file is handed straight back to the
+ * *means* is the library's — a Template Package yields an Installed Graphics Template
+ * unlinked from whatever exported it — so the chosen file is handed straight back to the
  * library that owns those semantics rather than acted on here. Every library states its
  * own import at its own call site; only the chrome around it is shared.
  *

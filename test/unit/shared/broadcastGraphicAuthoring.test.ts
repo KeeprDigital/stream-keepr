@@ -523,7 +523,7 @@ describe('broadcastGraphicAuthoring', () => {
 
 	describe('graphic fill', () => {
 		// The fill's own rules (kind, angle, stops, the two-to-four bound) are shared with a
-		// Graphic Style Set fill entry and tested once, in graphicFill.test.ts. What is the
+		// Theme's fill token and tested once, in graphicFill.test.ts. What is the
 		// item's own is the colour a new gradient ends on, and which slot an edit reaches.
 		it('switches a Graphic Fill between solid and gradient without losing the authored colour', () => {
 			const built = applyGraphicSurfaceStyleEdit(

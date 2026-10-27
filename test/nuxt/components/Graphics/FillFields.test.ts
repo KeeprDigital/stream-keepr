@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, h } from 'vue';
 import FillFields from '~/components/Graphics/FillFields.vue';
 
-// The one Graphic Fill fields control, for a Graphic Item's own fill and a Graphic Style Set fill
-// entry: the same fields and the same edits for both, which differ only in the colour picker.
+// The one Graphic Fill fields control, for a Graphic Item's own fill and a Theme fill token: the
+// same fields and the same edits for both, which differ only in the colour picker.
 
 enableAutoUnmount(afterEach);
 
@@ -71,7 +71,7 @@ interface ColorSlotProps {
 	update: (value: string) => void;
 }
 
-/** A palette entry picker, as the Style Set editor passes one in. */
+/** A colour picker of the host's own, as the Theme editor passes one in. */
 function paletteSlot({ value, label, disabled, update }: ColorSlotProps) {
 	return h('select', {
 		'data-palette-picker': '',
@@ -111,7 +111,7 @@ const uses: Use[] = [
 		colorDisabled: (wrapper, label) => picker(wrapper, label)!.props('disabled') === true,
 	},
 	{
-		name: 'a Graphic Style Set fill entry, with a palette entry picker',
+		name: 'a Theme fill token, with a host colour picker',
 		colors: ['brand', 'ink'],
 		mount: (fill, props = {}) => mount(FillFields, {
 			global,

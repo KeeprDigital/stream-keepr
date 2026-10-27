@@ -26,10 +26,9 @@ import { featureMatchLayoutGraphicAssetReferences } from '~~/shared/utils/graphi
  * Graphic Asset whose kind fits its slot, and a layout is stored with every one of
  * its references indexed, or not at all.
  *
- * What differs is only what a layout is. There is no Graphic Style Set link to
- * denormalise, because nothing in a Feature Match Layout is a linked Style Set
- * property today, and the reference walk is the Feature Match Overlay one — the
- * Frame's background image as well as the composition's Media Graphic Items.
+ * What differs is only what a layout is: the reference walk is the Feature Match
+ * Overlay one — the Frame's background image as well as the composition's Media
+ * Graphic Items.
  */
 
 const OWNER_KIND = 'feature-match-layout-template';

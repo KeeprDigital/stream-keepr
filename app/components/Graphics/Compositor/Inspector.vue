@@ -35,7 +35,6 @@ import type {
 } from '~~/shared/types/graphics';
 import type { GraphicAsset, GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { GraphicThemeSlot } from '~~/shared/types/graphicThemeBindings';
-import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { MediaFieldsPatch } from '~/utils/mediaFields';
 import {
@@ -146,16 +145,6 @@ const props = defineProps<{
 	 */
 	game?: Game;
 	/**
-	 * The published Graphic Style Set this composition is linked to, when it is
-	 * linked to one.
-	 *
-	 * Absent means every property here is local, and no picker appears at all. That
-	 * is the unlinked case and also the failure case — a Style Set that could not be
-	 * loaded leaves the properties exactly as they are rather than offering entries
-	 * that might not be the ones the composition was authored against.
-	 */
-	styleSet?: GraphicStyleAuthoringContext;
-	/**
 	 * The Foundation Tokens the editor previews under, which bound properties show
 	 * and detaching copies in. Absent is the Default Theme.
 	 */
@@ -174,7 +163,7 @@ const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[
  * Every edit here goes through the compositor editing module. It checks the Graphics
  * Authoring Lease (fail closed: a caller that does not grant authoring gets a
  * read-only editor), resolves the selection, applies the authoring operation,
- * re-captures Graphic Style Set overrides, and replaces the stack. The controls below
+ * and replaces the stack. The controls below
  * write values and hand it the authoring operation that writes them.
  */
 const { canAuthor, editItem, editGraphic, bindThemeToken, detachThemeToken } = useCompositorEditing(
@@ -355,7 +344,7 @@ const selectedDeckList = computed<DeckListGraphicItemConfig | null>(() =>
  * The base typography of whatever the selection paints text with, as its Graphic
  * Item Definition declares — including in which display mode it paints any, since
  * typography controls beside boxes or cards would change nothing on screen. The
- * Graphic Style Set typography slot reads the same declaration.
+ * typography Theme binding slot reads the same declaration.
  */
 const selectedTypography = computed<GraphicTypography | null>(() =>
 	selectedItem.value
@@ -392,7 +381,7 @@ const PLAYER_SIDE_OPTIONS = [
 ] satisfies Array<{ label: string; value: PlayerSide }>;
 
 /**
- * The Shape Geometry the geometry controls edit, and the Graphic Style Set slot it
+ * The Shape Geometry the geometry controls edit, and the Theme binding slot it
  * sits in, as the selection's Definition declares them.
  *
  * A Shape Graphic Item and a Graphic Group draw one and always have one. A Media
@@ -1197,7 +1186,6 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				:selected-target="selectedTarget"
 				:game="game"
 				:writable="writable"
-				:style-set="styleSet"
 				:theme-tokens="themeTokens"
 				@update:graphics="emit('update:graphics', $event)"
 			/>
@@ -1215,7 +1203,6 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			:canvas-width="canvasWidth"
 			:canvas-height="canvasHeight"
 			:writable="writable"
-			:style-set="styleSet"
 			:theme-tokens="themeTokens"
 			@update:graphics="emit('update:graphics', $event)"
 		/>
@@ -2107,7 +2094,6 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				:graphics="graphics"
 				:selected-target="selectedTarget"
 				:writable="writable"
-				:style-set="styleSet"
 				:theme-tokens="themeTokens"
 				:canvas-width="canvasWidth"
 				:canvas-height="canvasHeight"

@@ -6,7 +6,7 @@ import { MAX_SHAPE_GEOMETRY_PX } from '~~/shared/types/graphics';
 
 /**
  * The one Shape Geometry fields control, for a Graphic Item in the compositor
- * Inspector and for a Graphic Style Set's Shape Geometry entry.
+ * Inspector and for a Theme's Shape Geometry token.
  *
  * Laid out the way the shape is: a starting preset, then the four corners where
  * they sit — each a square, rounded, or cut treatment and, while not square, a
@@ -17,7 +17,7 @@ import { MAX_SHAPE_GEOMETRY_PX } from '~~/shared/types/graphics';
  *
  * A preset is emitted by id rather than applied here, because what it produces
  * depends on bounds only the host knows — the item's own, a win box's, or none
- * at all for a Style Set entry — and a preset may also propose a height.
+ * at all for a Theme token — and a preset may also propose a height.
  *
  * `BorderRadiusControl` is not this: a Feature Match Overlay border radius has
  * neither cut corners nor slants.

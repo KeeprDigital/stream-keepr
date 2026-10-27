@@ -37,10 +37,10 @@ import { useGeometryUnit } from '~/composables/ui/useGeometryUnit';
 
 /**
  * The one Graphic Animation Recipe fields control, for a lifecycle phase's recipe
- * in the compositor and for a Graphic Animation Recipe entry in a Graphic Style Set.
+ * in the compositor and for a Theme's motion token.
  *
  * It edits the recipe body only: timing, easing, and the fade, slide, scale, and
- * reveal channels. Enabling a phase, presets, Style Set references, and staggers
+ * reveal channels. Enabling a phase, presets, Theme bindings, and staggers
  * are the host's. Every edit is emitted as a patch, and the host applies it with
  * its own merge: `update` for a recipe field, `channel` for one channel's fields,
  * or null to remove that channel. A switched-on channel is emitted empty, so the
@@ -51,17 +51,17 @@ import { useGeometryUnit } from '~/composables/ui/useGeometryUnit';
  * repetition is a whole number.
  *
  * Pause and repetition belong to the phase that cycles, so a host offers them with
- * `cycling`: on-screen, and a Style Set entry, which any phase may reference.
+ * `cycling`: on-screen.
  *
  * A fixed slide distance is entered in the author's Geometry Unit when the host
  * names the owner's parent (`slideParent`): a horizontal slide against its width,
  * a vertical one against its height, a diagonal against its shorter side. It is
- * stored and emitted in pixels either way. A Graphic Animation Recipe entry has
- * no owner, so nothing to measure against, and stays in pixels.
+ * stored and emitted in pixels either way. A Theme's motion token has no owner,
+ * so nothing to measure against, and stays in pixels.
  */
 const props = defineProps<{
 	/**
-	 * A phase's recipe, or a Style Set entry's, which may leave out its delay and
+	 * A phase's recipe, or a motion token's, which may leave out its delay and
 	 * its on-screen defaults.
 	 */
 	recipe: Omit<GraphicAnimationRecipe, 'delay'> & Partial<Pick<GraphicOnScreenAnimationRecipe, 'delay' | 'pause' | 'repeat'>>;

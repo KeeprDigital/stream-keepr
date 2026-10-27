@@ -78,6 +78,13 @@
       "when": 1793103619192,
       "tag": "0010_theme_graphic_asset_references",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1793105441604,
+      "tag": "0012_remove_graphic_style_sets",
+      "breakpoints": true
     }
   ]
 }

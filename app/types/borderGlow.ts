@@ -4,8 +4,7 @@ import type { FeatureMatchOverlayGlowPosition } from '~~/shared/types/screenConf
  * The value the one border and glow fields control edits, in its own neutral
  * shape. Each host maps it from and to what it stores: a Feature Match Overlay
  * Frame's or Source Item's per-side border, or a Graphic Surface Style's uniform
- * outline. `color` is whatever the host's colour slot edits: a CSS colour, or a
- * Graphic Style Set palette entry id.
+ * outline. `color` is whatever the host's colour slot edits.
  */
 export const BORDER_SIDES = ['top', 'right', 'bottom', 'left'] as const;
 

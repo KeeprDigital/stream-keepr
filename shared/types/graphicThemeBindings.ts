@@ -14,8 +14,8 @@
 /**
  * The property groups a Graphic Item or Broadcast Graphic may bind.
  *
- * They retarget the Graphic Style Set slots, less `media` and
- * `animation.on-screen`, which no token type fills. Text colour is its own
+ * Media treatment and `animation.on-screen` have no slot, because no token
+ * type fills either. Text colour is its own
  * slot, because a typography token carries no colour; `color` is a Social
  * Network Icon's.
  */

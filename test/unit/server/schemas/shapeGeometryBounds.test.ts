@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { graphicStyleSetEntrySchema } from '~~/server/schemas/api/graphicStyleSet';
 import { broadcastGraphicsModeConfigSchema } from '~~/server/schemas/api/screen';
+import { parseThemeTokenWrite } from '~~/shared/themeTokens';
 
 /**
- * One set of Shape Geometry bounds for a Shape Graphic Item and a Shape Geometry
- * Graphic Style Set Entry: corner sizes from 0 to 10000 and slants either way up to
+ * One set of Shape Geometry bounds for a Shape Graphic Item and a Theme's Shape
+ * Geometry token: corner sizes from 0 to 10000 and slants either way up to
  * 10000, every corner and both slants present.
  */
 
@@ -43,19 +43,13 @@ function withShape(geometry: Record<string, unknown>) {
 	}).success;
 }
 
-function withEntry(geometry: Record<string, unknown>) {
-	return graphicStyleSetEntrySchema.safeParse({
-		id: 'panel',
-		kind: 'shape-geometry',
-		name: 'Panel',
-		schemaVersion: 1,
-		value: geometry,
-	}).success;
+function withToken(geometry: Record<string, unknown>) {
+	return parseThemeTokenWrite('panel-shape', geometry).ok;
 }
 
 describe.each([
 	['a Shape Graphic Item', withShape],
-	['a Shape Geometry Graphic Style Set Entry', withEntry],
+	['a Theme Shape Geometry token', withToken],
 ])('shape geometry bounds for %s', (_owner, accepts) => {
 	it('accepts a geometry at the bounds', () => {
 		expect(accepts(GEOMETRY)).toBe(true);

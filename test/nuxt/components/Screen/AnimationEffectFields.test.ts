@@ -25,17 +25,15 @@ const ScreenSettingsToggleStub = defineComponent({
 	template: '<button type="button" data-testid="settings-toggle" :data-description="description" @click="$emit(\'update:modelValue\', !modelValue)">{{ label }}</button>',
 });
 
-async function mountComponent(selection: AnimationEffectSelection, onUpdate = vi.fn(), extraProps: { presets?: boolean } = {}) {
+async function mountComponent(selection: AnimationEffectSelection, onUpdate = vi.fn()) {
 	const wrapper = mount(AnimationEffectFields, {
 		props: {
 			selection,
 			'onUpdate:selection': onUpdate,
-			...extraProps,
 		},
 		global: {
 			stubs: {
 				...nuxtUiStubs,
-				ScreenAnimationEffectPresetLibrary: true,
 				UIColorPicker: UIColorPickerStub,
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
 			},
@@ -100,18 +98,5 @@ describe('screenAnimationEffectFields', () => {
 
 		const selection = onUpdate.mock.calls.at(-1)?.[0] as { params: Record<string, unknown> };
 		expect(selection.params.showLines).toBe(false);
-	});
-
-	it.each([
-		['offers Animation Effect Presets by default', {}, true],
-		[
-			'offers none to a host that declines them, as a Theme does',
-			{ presets: false },
-			false,
-		],
-	])('%s', async (_case, extraProps, offered) => {
-		const { wrapper } = await mountComponent({ effect: 'fog' }, vi.fn(), extraProps);
-
-		expect(wrapper.findComponent({ name: 'ScreenAnimationEffectPresetLibrary' }).exists()).toBe(offered);
 	});
 });

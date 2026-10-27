@@ -196,7 +196,7 @@ export class AcceptanceFailure extends Error {
 const MAX_DETAIL_LENGTH = 120;
 const URL_PATTERN = /[a-z][a-z0-9+.-]*:\/\//i;
 const FILENAME_PATTERN
-	= /\.(?:png|jpe?g|webp|gif|mp4|webm|mov|woff2?|ttf|otf|eot|zip|sklayout|skgraphic|skstyle|json|html?|txt)\b/i;
+	= /\.(?:png|jpe?g|webp|gif|mp4|webm|mov|woff2?|ttf|otf|eot|zip|sklayout|skgraphic|json|html?|txt)\b/i;
 /**
  * Object keys, capability tokens, digests, and representation tags are all
  * long unbroken runs of token characters. Domain vocabulary is not: real

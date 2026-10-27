@@ -19,14 +19,13 @@ mockNuxtImport('useRoute', () => () => mockRoute);
 
 const mockRead = vi.fn<() => Promise<string[]>>();
 
-function mountReading(options: { unavailable?: string; inspectFailure?: (caught: unknown) => void } = {}) {
+function mountReading(options: { unavailable?: string } = {}) {
 	let reading!: ReturnType<typeof useReusableLibraryReading<string>>;
 	const wrapper = mount(defineComponent({
 		setup() {
 			reading = useReusableLibraryReading<string>({
 				read: mockRead,
 				unavailable: options.unavailable ?? 'The library could not be read.',
-				inspectFailure: options.inspectFailure,
 			});
 			return () => h('div');
 		},
@@ -68,10 +67,10 @@ describe('useReusableLibraryReading', () => {
 	it('falls back to the unavailable line when the failure carries no message', async () => {
 		mockRead.mockRejectedValue({ some: 'object' });
 
-		const { reading } = mountReading({ unavailable: 'The Style Set library could not be read.' });
+		const { reading } = mountReading({ unavailable: 'The template library could not be read.' });
 		await flushPromises();
 
-		expect(reading.error.value).toBe('The Style Set library could not be read.');
+		expect(reading.error.value).toBe('The template library could not be read.');
 	});
 
 	it('recognises an ended session and marks the reading signed out', async () => {
@@ -85,20 +84,6 @@ describe('useReusableLibraryReading', () => {
 
 		expect(reading.error.value).toBe(GRAPHICS_AUTHOR_SIGNED_OUT_MESSAGE);
 		expect(reading.signedOut.value).toBe(true);
-	});
-
-	it('lets a caller inspect the caught value before the message is derived', async () => {
-		const caught = transportFailure({
-			status: 422,
-			body: { message: 'Cannot be published.' },
-		});
-		mockRead.mockRejectedValue(caught);
-		const inspectFailure = vi.fn();
-
-		mountReading({ inspectFailure });
-		await flushPromises();
-
-		expect(inspectFailure).toHaveBeenCalledWith(caught);
 	});
 
 	it('keeps the refusal message through the re-read that follows a refused write', async () => {

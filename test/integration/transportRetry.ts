@@ -5,10 +5,9 @@
  * the unread rest of the body: the next request to reuse it died with EPIPE or
  * ECONNRESET 6 s later, before reaching a handler. That was Nitro's dev proxy
  * stopping mid-body (#633), and the integration servers now read those bytes
- * (`./earlyAnswerDrain.mjs`), so that suite no longer retries.
- * `graphicStyleSets.test.ts` still does: its failure was seen under `pnpm verify`
- * and has not been reproduced, and its own 413 route did not strand a connection
- * when probed without the drain, so the drain is not known to cover it.
+ * (`./earlyAnswerDrain.mjs`), so that suite no longer retries. Its last caller,
+ * the Graphic Style Set suite, went with Style Sets (#830); it stays for a socket
+ * failure the drain does not cover.
  *
  * Retrying is not weakening an assertion. These are failures of the socket rather
  * than answers from the server: there is no status to have been wrong about, and a

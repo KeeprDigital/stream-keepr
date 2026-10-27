@@ -15,13 +15,9 @@ import {
  * around the selection — the Frame's enabled/opacity, a layer's own — is the
  * host's editor's business, exactly as it is on the schema side.
  */
-const props = withDefaults(defineProps<{
+const props = defineProps<{
 	selection: AnimationEffectSelection;
-	/** Offer Animation Effect Presets, which a Theme does not: #812 removes them. */
-	presets?: boolean;
-}>(), {
-	presets: true,
-});
+}>();
 
 const emit = defineEmits<{
 	(event: 'update:selection', selection: AnimationEffectSelection): void;
@@ -76,12 +72,6 @@ function updateParam(field: AnimationEffectParamField, value: AnimationEffectPar
 
 <template>
 	<div class="space-y-3">
-		<ScreenAnimationEffectPresetLibrary
-			v-if="presets"
-			:selection="selection"
-			@apply="emit('update:selection', $event)"
-		/>
-
 		<UFormField label="Effect">
 			<USelect
 				:model-value="selection.effect"

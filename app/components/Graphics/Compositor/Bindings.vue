@@ -8,7 +8,6 @@ import type {
 	GraphicSourceSelectionDeclaration,
 	GraphicSourceSelectionKind,
 } from '~~/shared/types/graphics';
-import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { getGameConfig } from '~~/shared/config/games';
 import {
@@ -72,8 +71,6 @@ const props = defineProps<{
 	game?: Game;
 	/** Whether this session holds the artifact's Graphics Authoring Lease. */
 	writable?: boolean;
-	/** The published Graphic Style Set the selected Broadcast Graphic is linked to. */
-	styleSet?: GraphicStyleAuthoringContext;
 	/** The Foundation Tokens the editor previews under (#829). */
 	themeTokens?: GraphicThemeTokens;
 }>();

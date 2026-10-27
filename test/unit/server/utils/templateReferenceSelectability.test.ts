@@ -2,10 +2,7 @@ import type { BroadcastGraphicConfig, MediaGraphicItemConfig } from '~~/shared/t
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it, vi } from 'vitest';
-import {
-	assertBroadcastGraphicTemplateReferencesSelectable,
-	assertStyleSetRewritesReferencesSelectable,
-} from '~~/server/utils/broadcastGraphicTemplateReferences';
+import { assertBroadcastGraphicTemplateReferencesSelectable } from '~~/server/utils/broadcastGraphicTemplateReferences';
 import { assertFeatureMatchLayoutTemplateReferencesSelectable } from '~~/server/utils/featureMatchLayoutTemplateWrites';
 
 // A template save asks the library once about every reference it holds, refuses
@@ -150,52 +147,5 @@ describe.each(KINDS)('$kind references', ({ kind, assert, empty, twoReferences, 
 
 	it('refuses a reference the answer is silent about', async () => {
 		await expect(check(vi.fn().mockResolvedValue([available]), twoReferences)).rejects.toMatchObject(refusal(`${slots[1]} (does not exist)`));
-	});
-});
-
-describe('assertStyleSetRewritesReferencesSelectable', () => {
-	const linked = [
-		{ id: 'template-1', name: 'Lower third' },
-		{ id: 'template-2', name: 'Score bug' },
-	];
-
-	it('asks once for every rewritten template and names the template each refusal belongs to', async () => {
-		const inspect = vi.fn().mockResolvedValue([available, retired, font]);
-		const rewrites = [
-			{
-				id: 'template-1',
-				document: broadcastGraphic([
-					media('logo', reference(1)),
-				]),
-			},
-			{
-				id: 'template-2',
-				document: broadcastGraphic([
-					media('plate', reference(2)),
-					media('badge', reference(3)),
-				], 'score-bug'),
-			},
-		];
-
-		await expect(assertStyleSetRewritesReferencesSelectable({ inspectGraphicAssetRevisions: inspect }, rewrites, linked)).rejects.toMatchObject({
-			statusCode: 409,
-			message: 'Broadcast Graphic Template "Score bug" cannot reference these Graphic Asset Revisions: '
-				+ 'graphics.score-bug.items.plate.asset (retired), '
-				+ 'graphics.score-bug.items.badge.asset (is a font, not an image)',
-		});
-		expect(inspect).toHaveBeenCalledTimes(1);
-	});
-
-	it('asks nothing when no rewritten template holds a reference', async () => {
-		const inspect = vi.fn();
-
-		await assertStyleSetRewritesReferencesSelectable({ inspectGraphicAssetRevisions: inspect }, [
-			{
-				id: 'template-1',
-				document: broadcastGraphic([]),
-			},
-		], linked);
-
-		expect(inspect).not.toHaveBeenCalled();
 	});
 });

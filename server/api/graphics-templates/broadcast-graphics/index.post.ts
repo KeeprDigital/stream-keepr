@@ -8,7 +8,6 @@ import {
 import { screenService } from '~~/server/services/screen';
 import { requireUserId } from '~~/server/utils/auth';
 import { assertBroadcastGraphicTemplateReferencesSelectable } from '~~/server/utils/broadcastGraphicTemplateReferences';
-import { assertBroadcastGraphicTemplateStyleSetResolves } from '~~/server/utils/broadcastGraphicTemplateStyleSet';
 import { graphicsTemplateReferenceConflict } from '~~/server/utils/graphicsTemplateReferences';
 import { broadcastGraphicTemplateDocument } from '~~/shared/modules/graphics';
 import { randomUuid } from '~~/shared/utils/uuid';
@@ -41,10 +40,6 @@ export default defineEventHandler(async (event) => {
 
 	const document = broadcastGraphicTemplateDocument(graphic);
 	await assertBroadcastGraphicTemplateReferencesSelectable(graphicsAssetLibraryForEvent(event), document);
-	// The Screen's write path does not prove Graphic Style Set references, because a
-	// placed graphic never receives an update from one. Saving it into the library is
-	// where it becomes a linked artifact, so it is where the link has to hold.
-	await assertBroadcastGraphicTemplateStyleSetResolves(document);
 
 	const template = await broadcastGraphicTemplateService().create({
 		id: randomUuid(),
