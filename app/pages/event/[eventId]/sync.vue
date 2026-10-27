@@ -509,6 +509,8 @@ async function handleUpdateFromMelee() {
 					</div>
 				</UCard>
 
+				<SyncLiveResultsCard v-if="isSetupComplete && event?.meleeEnabled" />
+
 				<UCard v-if="isSetupComplete && roundRows.length > 0" :ui="{ body: 'p-0 sm:p-0' }">
 					<template #header>
 						<div class="flex items-center gap-2">

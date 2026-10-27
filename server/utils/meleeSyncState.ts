@@ -1,12 +1,15 @@
-import type { H3Event } from 'h3';
 import type { DbEvent, DbEventTalent } from '~~/server/db/schema';
+import type { MeleeSyncContext } from '~~/server/modules/melee-sync/context';
 import { mapEventToResponse } from '~~/server/mappers/event';
 import { eventService } from '~~/server/services/event';
-import { getOriginConnectionId, publishMessage } from '~~/server/utils/ably';
+import { publishMessage } from '~~/server/utils/ably';
 import { toPublicOperationalError } from '~~/server/utils/errors';
 
 export const MELEE_SYNC_LEASE_DURATION_MS = 15 * 60 * 1000;
 export const MELEE_SYNC_LEASE_RENEW_INTERVAL_MS = 60 * 1000;
+
+/** The lease command a Live Results tick holds; any operator command takes it over. */
+export const LIVE_RESULTS_COMMAND = 'live-results';
 
 export type MeleeSyncCommandName
 	= | 'configuration'
@@ -15,7 +18,8 @@ export type MeleeSyncCommandName
 		| 'players'
 		| 'decklists'
 		| 'round'
-		| 'update';
+		| 'update'
+		| typeof LIVE_RESULTS_COMMAND;
 
 export interface MeleeSyncMetadataUpdate {
 	initialSetupCompletedAt?: Date | null;
@@ -30,7 +34,7 @@ export interface MeleeSyncLease {
 	expiresAt: Date;
 }
 
-async function publishEventUpdate(requestEvent: H3Event, eventId: number) {
+async function publishEventUpdate(syncContext: MeleeSyncContext, eventId: number) {
 	const updatedEvent = await eventService().findById(eventId);
 	if (!updatedEvent) {
 		return;
@@ -42,12 +46,12 @@ async function publishEventUpdate(requestEvent: H3Event, eventId: number) {
 		{
 			event: mapEventToResponse(updatedEvent as DbEvent & { talents: DbEventTalent[] }),
 		},
-		getOriginConnectionId(requestEvent),
+		syncContext.originConnectionId,
 	);
 }
 
 export async function recordMeleeSyncSuccess(
-	requestEvent: H3Event,
+	syncContext: MeleeSyncContext,
 	eventId: number,
 	data: MeleeSyncMetadataUpdate,
 	leaseToken?: string,
@@ -58,14 +62,14 @@ export async function recordMeleeSyncSuccess(
 	}, leaseToken);
 
 	if (updated) {
-		await publishEventUpdate(requestEvent, eventId);
+		await publishEventUpdate(syncContext, eventId);
 	}
 
 	return updated;
 }
 
 export async function recordMeleeSyncFailure(
-	requestEvent: H3Event,
+	syncContext: MeleeSyncContext,
 	eventId: number,
 	error: unknown,
 	data: MeleeSyncMetadataUpdate = {},
@@ -78,52 +82,62 @@ export async function recordMeleeSyncFailure(
 	}, leaseToken);
 
 	if (updated) {
-		await publishEventUpdate(requestEvent, eventId);
+		await publishEventUpdate(syncContext, eventId);
 	}
 
 	return updated;
 }
 
+/**
+ * Takes the Event's Melee Sync lease or answers 409. Live Results never blocks an
+ * operator: an operator command takes a Live Results tick's lease over at once,
+ * and the tick finds it gone at its next checkpoint. It never takes another
+ * operator command's lease, and a tick never takes any.
+ */
 export async function acquireMeleeSyncLease(
 	eventId: number,
 	command: MeleeSyncCommandName,
 	options: { now?: Date; durationMs?: number; token?: string } = {},
 ): Promise<MeleeSyncLease> {
-	const now = options.now ?? new Date();
 	const token = options.token ?? crypto.randomUUID();
-	const expiresAt = new Date(now.getTime() + (options.durationMs ?? MELEE_SYNC_LEASE_DURATION_MS));
+	const now = options.now ?? new Date();
 	const result = await eventService().tryAcquireMeleeSyncLease({
 		eventId,
 		token,
 		command,
 		now,
-		expiresAt,
+		expiresAt: new Date(now.getTime() + (options.durationMs ?? MELEE_SYNC_LEASE_DURATION_MS)),
+		...(command !== LIVE_RESULTS_COMMAND && { preempts: LIVE_RESULTS_COMMAND }),
 	});
-
-	if (!result.acquired) {
-		if (!result.activeLease && !await eventService().exists(eventId)) {
-			throw createError({ statusCode: 404, message: 'Event not found' });
-		}
-		const activeCommand = result.activeLease?.command;
-		const retryAt = result.activeLease?.expiresAt;
-		throw createError({
-			statusCode: 409,
-			message: activeCommand
-				? `Melee sync command "${activeCommand}" is already running for this event`
-				: 'Another Melee sync command is already running for this event',
-			data: {
-				code: 'MELEE_SYNC_IN_PROGRESS',
-				command: activeCommand ?? null,
-				retryAt: retryAt?.toISOString() ?? null,
-			},
-		});
-	}
-
+	if (!result.acquired)
+		return await throwLeaseUnavailable(eventId, result.activeLease);
 	return {
 		token: result.lease.token,
 		command,
 		expiresAt: result.lease.expiresAt,
 	};
+}
+
+async function throwLeaseUnavailable(
+	eventId: number,
+	activeLease: { command: string; expiresAt: Date } | null,
+): Promise<never> {
+	if (!activeLease && !await eventService().exists(eventId)) {
+		throw createError({ statusCode: 404, message: 'Event not found' });
+	}
+	const activeCommand = activeLease?.command;
+	const retryAt = activeLease?.expiresAt;
+	throw createError({
+		statusCode: 409,
+		message: activeCommand
+			? `Melee sync command "${activeCommand}" is already running for this event`
+			: 'Another Melee sync command is already running for this event',
+		data: {
+			code: 'MELEE_SYNC_IN_PROGRESS',
+			command: activeCommand ?? null,
+			retryAt: retryAt?.toISOString() ?? null,
+		},
+	});
 }
 
 export async function releaseMeleeSyncLease(eventId: number, token: string): Promise<boolean> {

@@ -60,6 +60,7 @@ async function stageMeleeEvent() {
 		meleeSyncLeaseToken: 'lease-token',
 		meleeSyncLeaseCommand: 'update',
 		meleeSyncLeaseExpiresAt: leaseExpiresAt,
+		meleeLiveResultsEnabled: true,
 	}).returning();
 	const eventId = event!.id;
 	const [card] = await db.insert(schema.cards).values({ name: `Card ${eventId}`, game: 'mtg' }).returning();
@@ -234,7 +235,7 @@ describe('updateMeleeConfig', () => {
 		expect(await countBySource(schema.players, eventId, 'melee')).toBe(1);
 	});
 
-	it('clears sync progress when Melee is switched off, leaving the running lease alone', async () => {
+	it('clears sync progress and turns Live Results off when Melee is switched off, leaving the running lease alone', async () => {
 		const { eventId } = await stageMeleeEvent();
 
 		await eventService().updateMeleeConfig(eventId, {
@@ -250,8 +251,17 @@ describe('updateMeleeConfig', () => {
 			lastPlayersSyncedAt: null,
 			lastDecklistsSyncedAt: null,
 			lastSyncError: null,
+			meleeLiveResultsEnabled: false,
 			meleeSyncLeaseToken: 'lease-token',
 		});
+	});
+
+	it('keeps Live Results on when Melee stays on', async () => {
+		const { eventId } = await stageMeleeEvent();
+
+		await eventService().updateMeleeConfig(eventId, { meleeEnabled: true, meleeEventId: 'old-event', meleeClientId: 'client' } as never);
+
+		expect((await storedEvent(eventId)).meleeLiveResultsEnabled).toBe(true);
 	});
 
 	it('resets imported data, keeping manual data, when the Melee event changes', async () => {

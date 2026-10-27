@@ -216,6 +216,7 @@ async function mountPage() {
 				UCheckbox: UCheckboxStub,
 				UILoadingSpinner: true,
 				UIcon: true,
+				SyncLiveResultsCard: { template: '<div data-live-results-card />' },
 			},
 		},
 	});
@@ -287,6 +288,35 @@ describe('melee Sync page', () => {
 		expect(wrapper.text()).toContain(new Date('2026-04-09T10:05:00.000Z').toLocaleDateString());
 		expect(wrapper.text()).toContain(new Date('2026-04-09T10:10:00.000Z').toLocaleDateString());
 		expect(wrapper.text()).not.toContain('Invalid Date');
+	});
+
+	it.each([
+		{
+			name: 'once setup is complete',
+			setupCompletedAt: new Date('2026-04-09T10:00:00.000Z'),
+			meleeEnabled: true,
+			shown: true,
+		},
+		{
+			name: 'before setup is complete',
+			setupCompletedAt: null,
+			meleeEnabled: true,
+			shown: false,
+		},
+		{
+			name: 'with Melee Sync off',
+			setupCompletedAt: new Date('2026-04-09T10:00:00.000Z'),
+			meleeEnabled: false,
+			shown: false,
+		},
+	])('offers Live Results $name: $shown', async ({ setupCompletedAt, meleeEnabled, shown }) => {
+		mockEventStore.event.initialSetupCompletedAt = setupCompletedAt;
+		mockEventStore.event.meleeEnabled = meleeEnabled;
+
+		const wrapper = await mountPage();
+		await Promise.resolve();
+
+		expect(wrapper.find('[data-live-results-card]').exists()).toBe(shown);
 	});
 
 	it('runs the unified update action from the primary sync card', async () => {

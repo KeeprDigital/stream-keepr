@@ -1,12 +1,13 @@
-import type { H3Event } from 'h3';
 import type { MappedMeleePlayer } from '~~/server/mappers/melee';
 import type { MeleeEventParsed, MeleePlayerParsed } from '~~/server/schemas/external/melee';
 import type { MeleeSyncMetadataUpdate } from '~~/server/utils/meleeSyncState';
 import type { Game } from '~~/shared/types/enums';
+import type { MeleeSyncContext } from './context';
+import type { PreviousRoundStandingsResult } from './roundMatches';
 import { createError } from 'h3';
 import { mapMeleePlayersToDb } from '~~/server/mappers/melee';
 import { eventDataPublicationModule, RealtimePublicationError } from '~~/server/modules/event-data-publication';
-import { syncMatchesFromMelee } from '~~/server/modules/melee-sync/roundMatches';
+import { syncMatchesFromMelee, syncPreviousRoundStandingsFromMelee } from '~~/server/modules/melee-sync/roundMatches';
 import { importedMtgCardResolverService } from '~~/server/services/importedMtgCardResolver';
 import { describeKeptStructure, removeImportedStructure } from '~~/server/services/importedStructure';
 import { requireMeleeService } from '~~/server/services/meleeIntegration';
@@ -15,7 +16,7 @@ import { phaseService } from '~~/server/services/phase';
 import { playerService } from '~~/server/services/player';
 import { playerFeatureMatchSyncService } from '~~/server/services/playerFeatureMatchSync';
 import { roundService } from '~~/server/services/round';
-import { getOriginConnectionId } from '~~/server/utils/ably';
+import { errorNameOf } from '~~/server/utils/errorLogFields';
 import { publishFailureFields } from '~~/server/utils/realtimePublishFailure';
 import { isMeleeManagedRound } from '~~/shared/utils/roundControl';
 import {
@@ -37,6 +38,17 @@ interface MeleeSyncEventData {
 	meleeEventId: string | null;
 	meleeClientId: string | null;
 	meleeClientSecret: string | null;
+}
+
+interface SyncRoundMatchesOptions {
+	/** Runs just before each write; throwing abandons it. */
+	beforeWrite?: () => Promise<void>;
+	/**
+	 * When pairings in this Round fill the previous Round's missing Round
+	 * Standings: on every sync (`always`, so a manual sync heals them), or only
+	 * when this sync stores the Round's first pairings (`onFirstPairing`).
+	 */
+	previousRoundStandings?: 'always' | 'onFirstPairing';
 }
 
 interface DeckListSyncOptions {
@@ -160,13 +172,13 @@ export function createMeleeSyncWorkflows() {
 	}
 
 	async function syncEventStructure(
-		requestEvent: H3Event,
+		syncContext: MeleeSyncContext,
 		eventId: number,
 		eventData: MeleeSyncEventData,
 		meleeEventSnapshot?: MeleeEventParsed,
 	) {
 		const melee = requireMeleeService(eventData);
-		const originConnectionId = getOriginConnectionId(requestEvent);
+		const { originConnectionId } = syncContext;
 
 		const rawMeleeEvent = meleeEventSnapshot ?? await melee.fetchEvent();
 		const gameCompatibility = inspectSourceGame(eventData, rawMeleeEvent);
@@ -298,13 +310,14 @@ export function createMeleeSyncWorkflows() {
 	}
 
 	async function syncPlayers(
-		requestEvent: H3Event,
+		syncContext: MeleeSyncContext,
 		eventId: number,
 		eventData: MeleeSyncEventData,
 		playersSnapshot?: MappedMeleePlayer[],
+		options: { beforeWrite?: () => Promise<void> } = {},
 	) {
 		const melee = requireMeleeService(eventData);
-		const originConnectionId = getOriginConnectionId(requestEvent);
+		const { originConnectionId } = syncContext;
 		const warnings: string[] = [];
 
 		let mergedPlayers = playersSnapshot;
@@ -326,6 +339,7 @@ export function createMeleeSyncWorkflows() {
 			return playerData;
 		});
 
+		await options.beforeWrite?.();
 		const {
 			players: upsertedPlayers,
 			created,
@@ -374,36 +388,112 @@ export function createMeleeSyncWorkflows() {
 		};
 	}
 
-	async function syncRoundMatches(requestEvent: H3Event, eventId: number, eventData: MeleeSyncEventData, roundId: number) {
-		const originConnectionId = getOriginConnectionId(requestEvent);
-		const publicationWarnings: string[] = [];
+	async function syncRoundMatches(
+		syncContext: MeleeSyncContext,
+		eventId: number,
+		eventData: MeleeSyncEventData,
+		roundId: number,
+		options: SyncRoundMatchesOptions = {},
+	) {
+		const { originConnectionId } = syncContext;
+		const afterCommitWarnings: string[] = [];
 		// Re-check at the write boundary even though route-facing Round commands
 		// preflight before refreshing Players.
 		const round = await requireMeleeManagedRound(eventId, roundId);
 
 		const phase = await phaseService().findById(round.phaseId, eventId);
 
-		const result = await syncMatchesFromMelee(eventId, eventData, round, phase ?? null);
-		await publishAfterCommit(publicationWarnings, async () => await publication.meleeRoundSynced({
-			eventId,
-			originConnectionId,
-			roundId,
-			matchCount: result.matchCount,
-			created: result.created,
-			updated: result.updated,
-			staleDeleted: result.staleDeleted,
-		}));
+		const result = await syncMatchesFromMelee(eventId, eventData, round, phase ?? null, options);
+		// Pairings for this Round complete the one before it. The Round's own write
+		// has committed, so a failure here must not lose its announcement.
+		let previousRoundStandings: Awaited<ReturnType<typeof syncPreviousRoundStandingsFromMelee>> = null;
+		const firstPairing = round.lastSyncedAt == null;
+		const fillPreviousRound = (options.previousRoundStandings ?? 'always') === 'always' || firstPairing;
+		if (result.matchCount > 0 && fillPreviousRound) {
+			try {
+				previousRoundStandings = await syncPreviousRoundStandingsFromMelee(eventId, eventData, round, options);
+			}
+			catch (error) {
+				console.warn(JSON.stringify({
+					message: 'melee_sync_previous_round_standings_failed',
+					eventId,
+					roundId,
+					errorName: errorNameOf(error),
+					errorMessage: error instanceof Error
+						? error.message
+						: String(error),
+				}));
+				afterCommitWarnings.push('Matches were saved, but the previous Round\'s Round Standings could not be stored');
+			}
+		}
+
+		// Each kind of change is announced only when it happened, so a quiet sync
+		// publishes nothing. `published` names the kinds even if delivery failed.
+		// Storing the previous Round's standings rewrites its Matches too, so its
+		// changes are announced under its own Round id.
+		const changedRounds: PreviousRoundStandingsResult[] = [
+			{ roundId, ...result },
+			...(previousRoundStandings
+				? [previousRoundStandings]
+				: []),
+		];
+		const announcements: Array<{
+			kind: 'matchResults' | 'pairings' | 'roundStandings';
+			changed: (changed: PreviousRoundStandingsResult) => boolean;
+			publish: (changed: PreviousRoundStandingsResult) => Promise<void>;
+		}> = [
+			{
+				kind: 'matchResults',
+				changed: changed => changed.resultChangedMatchIds.length > 0,
+				publish: async changed => await publication.meleeMatchResultsSynced({
+					eventId,
+					originConnectionId,
+					roundId: changed.roundId,
+					matchIds: changed.resultChangedMatchIds,
+				}),
+			},
+			{
+				kind: 'pairings',
+				changed: changed => changed.pairingsChanged,
+				publish: async changed => await publication.meleePairingsSynced({
+					eventId,
+					originConnectionId,
+					roundId: changed.roundId,
+				}),
+			},
+			{
+				kind: 'roundStandings',
+				changed: changed => changed.standingsChanged,
+				publish: async changed => await publication.meleeRoundStandingsSynced({
+					eventId,
+					originConnectionId,
+					roundId: changed.roundId,
+				}),
+			},
+		];
+		for (const changed of changedRounds) {
+			for (const announcement of announcements) {
+				if (announcement.changed(changed))
+					await publishAfterCommit(afterCommitWarnings, async () => await announcement.publish(changed));
+			}
+		}
+		const published = announcements
+			.filter(announcement => changedRounds.some(announcement.changed))
+			.map(announcement => announcement.kind);
+
 		return {
 			...result,
+			previousRoundStandings,
+			published,
 			warnings: [
 				...(result.warnings ?? []),
-				...publicationWarnings,
+				...afterCommitWarnings,
 			],
 		};
 	}
 
 	async function runInitialSetup(
-		requestEvent: H3Event,
+		syncContext: MeleeSyncContext,
 		eventId: number,
 		eventData: MeleeSyncEventData,
 		checkpoint?: () => Promise<void>,
@@ -411,18 +501,18 @@ export function createMeleeSyncWorkflows() {
 	) {
 		const snapshot = await fetchCoreSnapshot(eventData);
 		await checkpoint?.();
-		const structureResult = await syncEventStructure(requestEvent, eventId, eventData, snapshot.event);
+		const structureResult = await syncEventStructure(syncContext, eventId, eventData, snapshot.event);
 		recordProgress?.({
 			lastEventSyncedAt: new Date(),
 		});
 		await checkpoint?.();
-		const playersResult = await syncPlayers(requestEvent, eventId, eventData, snapshot.mappedPlayers);
+		const playersResult = await syncPlayers(syncContext, eventId, eventData, snapshot.mappedPlayers);
 		recordProgress?.({
 			lastPlayersSyncedAt: new Date(),
 		});
 		await checkpoint?.();
 		const deckListsResult = await syncDeckLists(
-			requestEvent,
+			syncContext,
 			eventId,
 			eventData,
 			snapshot.players,
@@ -459,7 +549,7 @@ export function createMeleeSyncWorkflows() {
 	}
 
 	async function updateFromMelee(
-		requestEvent: H3Event,
+		syncContext: MeleeSyncContext,
 		eventId: number,
 		eventData: MeleeSyncEventData & { lastDecklistsSyncedAt?: Date | null },
 		options: { includeDeckLists?: boolean; advanceRound?: boolean } = {},
@@ -472,14 +562,14 @@ export function createMeleeSyncWorkflows() {
 		const snapshot = await fetchCoreSnapshot(eventData);
 		await checkpoint?.();
 
-		const structureResult = await syncEventStructure(requestEvent, eventId, eventData, snapshot.event);
+		const structureResult = await syncEventStructure(syncContext, eventId, eventData, snapshot.event);
 		steps.push('structure');
 		recordProgress?.({
 			lastEventSyncedAt: new Date(),
 		});
 		await checkpoint?.();
 
-		const playersResult = await syncPlayers(requestEvent, eventId, eventData, snapshot.mappedPlayers);
+		const playersResult = await syncPlayers(syncContext, eventId, eventData, snapshot.mappedPlayers);
 		steps.push('players');
 		recordProgress?.({
 			lastPlayersSyncedAt: new Date(),
@@ -489,7 +579,7 @@ export function createMeleeSyncWorkflows() {
 		let deckListsResult: Awaited<ReturnType<typeof syncDeckLists>> | null = null;
 		if (includeDeckLists) {
 			deckListsResult = await syncDeckLists(
-				requestEvent,
+				syncContext,
 				eventId,
 				eventData,
 				snapshot.players,
@@ -518,14 +608,14 @@ export function createMeleeSyncWorkflows() {
 				: null;
 			if (previousRound?.lastSyncedAt) {
 				roundResults.push({
-					...await syncRoundMatches(requestEvent, eventId, eventData, previousRound.id),
+					...await syncRoundMatches(syncContext, eventId, eventData, previousRound.id),
 					role: 'previous',
 				});
 				steps.push('previous-round');
 				await checkpoint?.();
 			}
 			roundResults.push({
-				...await syncRoundMatches(requestEvent, eventId, eventData, nextRound.id),
+				...await syncRoundMatches(syncContext, eventId, eventData, nextRound.id),
 				role: 'next',
 			});
 			steps.push('next-round');
@@ -534,7 +624,7 @@ export function createMeleeSyncWorkflows() {
 			const latestSyncedRound = eligibleRounds.filter(round => round.lastSyncedAt !== null).at(-1) ?? null;
 			if (latestSyncedRound) {
 				roundResults.push({
-					...await syncRoundMatches(requestEvent, eventId, eventData, latestSyncedRound.id),
+					...await syncRoundMatches(syncContext, eventId, eventData, latestSyncedRound.id),
 					role: 'latest',
 				});
 				steps.push('latest-round');
@@ -563,14 +653,14 @@ export function createMeleeSyncWorkflows() {
 	}
 
 	async function syncDeckLists(
-		requestEvent: H3Event,
+		syncContext: MeleeSyncContext,
 		eventId: number,
 		eventData: MeleeSyncEventData,
 		playersSnapshot?: MeleePlayerParsed[],
 		meleeEventSnapshot?: MeleeEventParsed,
 		options: DeckListSyncOptions = { unsupportedGame: 'reject' },
 	) {
-		const originConnectionId = getOriginConnectionId(requestEvent);
+		const { originConnectionId } = syncContext;
 		const melee = requireMeleeService(eventData);
 		const rawMeleeEvent = meleeEventSnapshot ?? await melee.fetchEvent();
 		const gameCompatibility = inspectSourceGame(eventData, rawMeleeEvent);

@@ -86,6 +86,7 @@ import type {
 	ExternalSource,
 	FeatureMatchOrientation,
 	Game,
+	MeleeLiveResultsStopReason,
 	PlayerDisplayMode,
 	PointsSystem,
 	PositionFormat,
@@ -135,6 +136,11 @@ export interface EventListResponse {
 	lastPlayersSyncedAt: Date | null;
 	lastDecklistsSyncedAt: Date | null;
 	lastSyncError: string | null;
+	meleeLiveResultsEnabled: boolean;
+	meleeLiveResultsLastCheckedAt: Date | null;
+	meleeLiveResultsLastChangeAt: Date | null;
+	meleeLiveResultsError: string | null;
+	meleeLiveResultsStopReason: MeleeLiveResultsStopReason | null;
 	displayRecordSeparator: RecordSeparator;
 	displayHideZeroDraws: boolean;
 	displayPositionFormat: PositionFormat;
@@ -169,6 +175,17 @@ export interface EventListResponse {
 
 export interface EventResponse extends EventListResponse {
 	talents: TalentResponse[];
+}
+
+/** `GET /api/events/:id/melee/live-results`: what the Sync page shows of Live Results. */
+export interface MeleeLiveResultsStatusResponse {
+	enabled: boolean;
+	/** The latest Melee-managed Round with pairings; `null` before any is paired. */
+	currentRound: { id: number; name: string; phaseName: string | null } | null;
+	lastCheckedAt: Date | null;
+	lastChangeAt: Date | null;
+	error: string | null;
+	stopReason: MeleeLiveResultsStopReason | null;
 }
 
 export interface CreateEventInput {

@@ -38,10 +38,12 @@
 			"bucket_name": "stream-graphics-asset-canonical"
 		}
 	],
-	// Graphics Asset Library retention. Deadlines are evaluated inside the
-	// library, so this only needs to run often enough to keep queues short.
+	// Hourly: Graphics Asset Library retention and reconciliation. Deadlines are
+	// evaluated inside the library, so this only needs to run often enough to
+	// keep queues short. Every minute: Melee Live Results ticks for due Events.
+	// Each handler keeps to its own cron (server/utils/cronSchedules.ts).
 	"triggers": {
-		"crons": ["17 * * * *"]
+		"crons": ["17 * * * *", "* * * * *"]
 	},
 	"services": [
 		{

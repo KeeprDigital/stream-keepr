@@ -345,12 +345,21 @@ export interface MessageDefinitions {
 		deckCount: number;
 	};
 
-	'melee:roundSynced': {
+	// A Round sync publishes each of these only when its content changed.
+	'melee:matchResultsSynced': {
 		roundId: number;
-		matchCount: number;
-		created: number;
-		updated: number;
-		staleDeleted: number;
+		/** Stored Matches whose Match Result changed: reported, corrected, or un-reported. */
+		matchIds: number[];
+	};
+
+	/** Matches in the Round were added, removed, or re-seated. */
+	'melee:pairingsSynced': {
+		roundId: number;
+	};
+
+	/** The Round's stored Round Standings differ from before. */
+	'melee:roundStandingsSynced': {
+		roundId: number;
 	};
 
 	// Card management (screen-scoped). `card:updated` and `card:cleared` carry

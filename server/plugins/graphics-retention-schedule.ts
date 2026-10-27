@@ -3,6 +3,7 @@
 // instead of silently disabling retention.
 import type {} from 'nitropack/presets/cloudflare/types';
 import { graphicsAssetLibraryForBindings } from '~~/server/modules/graphics-asset-library/runtime';
+import { GRAPHICS_CRON } from '~~/server/utils/cronSchedules';
 
 type GraphicsBindings = Parameters<typeof graphicsAssetLibraryForBindings>[0];
 
@@ -13,6 +14,9 @@ type GraphicsBindings = Parameters<typeof graphicsAssetLibraryForBindings>[0];
  */
 export default defineNitroPlugin((nitroApp) => {
 	nitroApp.hooks.hook('cloudflare:scheduled', async ({ controller, env }) => {
+		// Every handler runs on every trigger; this one keeps to the hourly cron.
+		if (controller.cron !== GRAPHICS_CRON)
+			return;
 		try {
 			// Everything a successful sweep decided is already in the durable
 			// Evidence ledger, so only failures need a log line.

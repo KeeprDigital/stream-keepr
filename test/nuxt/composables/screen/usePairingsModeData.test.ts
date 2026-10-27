@@ -139,7 +139,7 @@ describe('usePairingsModeData', () => {
 		mockFetch.mockImplementationOnce(() => new Promise((resolve) => {
 			release = () => resolve(answer([]));
 		}));
-		deliver('melee:roundSynced', { roundId: 31 });
+		deliver('melee:pairingsSynced', { roundId: 31 });
 		await flushPromises();
 		expect(mockFetch).toHaveBeenCalledTimes(2);
 		expect(isEmpty.value).toBe(true);
@@ -377,7 +377,7 @@ describe('usePairingsModeData', () => {
 			expect(mockFetch).not.toHaveBeenCalled();
 		});
 
-		it('follows its own Round being renamed, re-paired or synced, and no other', async () => {
+		it('follows its own Round being renamed or re-paired, and no other', async () => {
 			await showingPendingPairings();
 
 			deliver('round:updated', {
@@ -385,13 +385,6 @@ describe('usePairingsModeData', () => {
 			});
 			deliver('round:deleted', { roundId: 40 });
 			deliver('round:matchesRefreshed', {
-				roundId: 40,
-				matchCount: 8,
-				created: 1,
-				updated: 0,
-				staleDeleted: 0,
-			});
-			deliver('melee:roundSynced', {
 				roundId: 40,
 				matchCount: 8,
 				created: 1,
@@ -413,15 +406,52 @@ describe('usePairingsModeData', () => {
 				staleDeleted: 0,
 			});
 			await flushPromises();
-			deliver('melee:roundSynced', {
-				roundId: 31,
-				matchCount: 8,
-				created: 1,
-				updated: 0,
-				staleDeleted: 0,
-			});
+			expect(mockFetch).toHaveBeenCalledTimes(2);
+		});
+
+		// Melee Sync fills in Match Results as they are reported; Round Standings
+		// are not on the Screen.
+		it.each([
+			{
+				type: 'melee:matchResultsSynced',
+				payload: {
+					roundId: 31,
+					matchIds: [1],
+				},
+				rereads: true,
+			},
+			{
+				type: 'melee:matchResultsSynced',
+				payload: {
+					roundId: 40,
+					matchIds: [9],
+				},
+				rereads: false,
+			},
+			{
+				type: 'melee:pairingsSynced',
+				payload: { roundId: 31 },
+				rereads: true,
+			},
+			{
+				type: 'melee:pairingsSynced',
+				payload: { roundId: 40 },
+				rereads: false,
+			},
+			{
+				type: 'melee:roundStandingsSynced',
+				payload: { roundId: 31 },
+				rereads: false,
+			},
+		])('$type for Round $payload.roundId re-reads: $rereads', async ({ type, payload, rereads }) => {
+			const { pageData, formatResult } = await showingPendingPairings();
+			mockFetch.mockResolvedValue(answer([reported]));
+
+			deliver(type, payload);
 			await flushPromises();
-			expect(mockFetch).toHaveBeenCalledTimes(3);
+
+			expect(mockFetch).toHaveBeenCalledTimes(rereads ? 1 : 0);
+			expect(formatResult(pageData.value[0]!)).toBe(rereads ? '2-0' : 'Pending');
 		});
 
 		it('follows a rename of a Player it shows, and of no one else', async () => {

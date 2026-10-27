@@ -473,6 +473,41 @@ describe('usePlayerHistoryModeData', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(2);
 		});
 
+		// A history row names no Melee Round sync, so any synced Match Result or
+		// pairing re-reads; the history shows no Round Standings.
+		it.each([
+			{
+				type: 'melee:matchResultsSynced',
+				payload: {
+					roundId: 40,
+					matchIds: [9],
+				},
+				rereads: true,
+			},
+			{
+				type: 'melee:pairingsSynced',
+				payload: { roundId: 40 },
+				rereads: true,
+			},
+			{
+				type: 'melee:roundStandingsSynced',
+				payload: { roundId: 31 },
+				rereads: false,
+			},
+		])('$type re-reads: $rereads', async ({ type, payload, rereads }) => {
+			const { pageData, formatOutcome } = await showingPendingHistory();
+			mockFetch.mockResolvedValue({
+				player: mockPlayer,
+				history: [recorded],
+			});
+
+			deliver(type, payload);
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(rereads ? 1 : 0);
+			expect(formatOutcome(pageData.value[0]!)).toBe(rereads ? 'WIN 2-0' : 'Pending');
+		});
+
 		it('follows an edit to the selected Player\'s record or an opponent\'s, and no one else\'s', async () => {
 			const { player } = await showingPendingHistory();
 			mockFetch.mockResolvedValue({

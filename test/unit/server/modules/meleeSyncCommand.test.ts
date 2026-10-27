@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3';
+import type { MeleeSyncContext } from '~~/server/modules/melee-sync/context';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockLoadEventData = vi.fn();
@@ -27,6 +28,10 @@ vi.mock('~~/server/modules/melee-sync/workflows', () => ({
 	createMeleeSyncWorkflows: () => mockWorkflows,
 }));
 
+vi.mock('~~/server/utils/ably', () => ({
+	getOriginConnectionId: () => 'origin-1',
+}));
+
 vi.mock('~~/server/utils/meleeSyncState', () => ({
 	acquireMeleeSyncLease: mockAcquireLease,
 	MELEE_SYNC_LEASE_RENEW_INTERVAL_MS: 60_000,
@@ -39,6 +44,8 @@ vi.mock('~~/server/utils/meleeSyncState', () => ({
 const { meleeSyncModule } = await import('~~/server/modules/melee-sync');
 
 const requestEvent = {} as H3Event;
+// What every command hands workflows and status recording, read from the request.
+const syncContext: MeleeSyncContext = { originConnectionId: 'origin-1' };
 const eventData = {
 	id: 1,
 	game: 'mtg' as const,
@@ -153,7 +160,7 @@ describe('melee sync command boundary', () => {
 			await (meleeSyncModule() as any)[command](requestEvent, 1, ...args);
 
 			expect(mockAcquireLease).toHaveBeenCalledWith(1, lease);
-			expect(mockRecordSuccess).toHaveBeenCalledWith(requestEvent, 1, recorded, 'lease-token');
+			expect(mockRecordSuccess).toHaveBeenCalledWith(syncContext, 1, recorded, 'lease-token');
 			expect(mockRecordFailure).not.toHaveBeenCalled();
 			expect(mockReleaseLease).toHaveBeenCalledWith(1, 'lease-token');
 		});
@@ -186,7 +193,7 @@ describe('melee sync command boundary', () => {
 
 		expect(mockRecordSuccess).not.toHaveBeenCalled();
 		expect(mockRecordFailure).toHaveBeenCalledOnce();
-		expect(mockRecordFailure).toHaveBeenCalledWith(requestEvent, 1, expect.objectContaining({ message }), { lastEventSyncedAt: at, lastPlayersSyncedAt: at }, 'lease-token');
+		expect(mockRecordFailure).toHaveBeenCalledWith(syncContext, 1, expect.objectContaining({ message }), { lastEventSyncedAt: at, lastPlayersSyncedAt: at }, 'lease-token');
 	});
 
 	it('loads credentials only after acquiring the command lease', async () => {
@@ -216,7 +223,7 @@ describe('melee sync command boundary', () => {
 		expect(mockAcquireLease).toHaveBeenCalledWith(1, 'round');
 		expect(mockWorkflows.syncPlayers.mock.invocationCallOrder[0]).toBeLessThan(mockWorkflows.syncRoundMatches.mock.invocationCallOrder[0]!);
 		expect(result.warnings).toEqual(['Player notification delayed', 'One deck was unresolved']);
-		expect(mockRecordSuccess).toHaveBeenCalledWith(requestEvent, 1, { lastPlayersSyncedAt: at }, 'lease-token');
+		expect(mockRecordSuccess).toHaveBeenCalledWith(syncContext, 1, { lastPlayersSyncedAt: at }, 'lease-token');
 	});
 
 	it('records one failure and releases the lease when execution throws', async () => {
@@ -226,7 +233,7 @@ describe('melee sync command boundary', () => {
 		await expect(meleeSyncModule().syncPlayers(requestEvent, 1)).rejects.toBe(upstreamError);
 
 		expect(mockRecordFailure).toHaveBeenCalledOnce();
-		expect(mockRecordFailure).toHaveBeenCalledWith(requestEvent, 1, upstreamError, {}, 'lease-token');
+		expect(mockRecordFailure).toHaveBeenCalledWith(syncContext, 1, upstreamError, {}, 'lease-token');
 		expect(mockRecordSuccess).not.toHaveBeenCalled();
 		expect(mockReleaseLease).toHaveBeenCalledWith(1, 'lease-token');
 	});
@@ -247,7 +254,7 @@ describe('melee sync command boundary', () => {
 
 		await expect(meleeSyncModule().syncRoundMatches(requestEvent, 1, 10)).rejects.toBe(roundError);
 
-		expect(mockRecordFailure).toHaveBeenCalledWith(requestEvent, 1, roundError, {
+		expect(mockRecordFailure).toHaveBeenCalledWith(syncContext, 1, roundError, {
 			lastPlayersSyncedAt: expect.any(Date),
 		}, 'lease-token');
 		expect(mockRecordSuccess).not.toHaveBeenCalled();
@@ -258,7 +265,7 @@ describe('melee sync command boundary', () => {
 		const structureAt = new Date('2026-02-01T00:00:00.000Z');
 		const playersAt = new Date('2026-02-01T00:01:00.000Z');
 		mockWorkflows.runInitialSetup.mockImplementation(async (
-			_event: H3Event,
+			_ctx: MeleeSyncContext,
 			_eventId: number,
 			_eventData: typeof eventData,
 			_checkpoint: () => Promise<void>,
@@ -271,7 +278,7 @@ describe('melee sync command boundary', () => {
 
 		await expect(meleeSyncModule().runInitialSetup(requestEvent, 1)).rejects.toBe(deckError);
 
-		expect(mockRecordFailure).toHaveBeenCalledWith(requestEvent, 1, deckError, {
+		expect(mockRecordFailure).toHaveBeenCalledWith(syncContext, 1, deckError, {
 			lastEventSyncedAt: structureAt,
 			lastPlayersSyncedAt: playersAt,
 		}, 'lease-token');
@@ -285,7 +292,7 @@ describe('melee sync command boundary', () => {
 		const playersAt = new Date('2026-02-02T00:01:00.000Z');
 		const deckListsAt = new Date('2026-02-02T00:02:00.000Z');
 		mockWorkflows.updateFromMelee.mockImplementation(async (
-			_event: H3Event,
+			_ctx: MeleeSyncContext,
 			_eventId: number,
 			_eventData: typeof eventData,
 			_options: { includeDeckLists?: boolean },
@@ -300,7 +307,7 @@ describe('melee sync command boundary', () => {
 
 		await expect(meleeSyncModule().updateFromMelee(requestEvent, 1, { includeDeckLists: true })).rejects.toBe(roundError);
 
-		expect(mockRecordFailure).toHaveBeenCalledWith(requestEvent, 1, roundError, {
+		expect(mockRecordFailure).toHaveBeenCalledWith(syncContext, 1, roundError, {
 			lastEventSyncedAt: structureAt,
 			lastPlayersSyncedAt: playersAt,
 			lastDecklistsSyncedAt: deckListsAt,
@@ -342,7 +349,7 @@ describe('melee sync command boundary', () => {
 		await expect(command).rejects.toThrow('lease ownership was lost');
 		expect(mockRecordSuccess).not.toHaveBeenCalled();
 		expect(mockRecordFailure).toHaveBeenCalledWith(
-			requestEvent,
+			syncContext,
 			1,
 			expect.objectContaining({ message: 'Melee sync lease ownership was lost while the command was running' }),
 			{},
@@ -361,7 +368,7 @@ describe('melee sync command boundary', () => {
 		expect(mockRenewLease).toHaveBeenCalledOnce();
 		expect(mockRecordSuccess).not.toHaveBeenCalled();
 		expect(mockRecordFailure).toHaveBeenCalledWith(
-			requestEvent,
+			syncContext,
 			1,
 			expect.objectContaining({ message: 'Melee sync lease ownership was lost while the command was running' }),
 			{},
@@ -378,7 +385,7 @@ describe('melee sync command boundary', () => {
 
 		expect(mockRenewLease).toHaveBeenCalledWith(1, 'lease-token');
 		expect(mockRecordSuccess).toHaveBeenCalledWith(
-			requestEvent,
+			syncContext,
 			1,
 			{
 				lastPlayersSyncedAt: expect.any(Date),

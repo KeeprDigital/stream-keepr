@@ -44,6 +44,7 @@ operating Stream Keepr. The other docs:
   [Other accounts](#other-accounts), [Access model](#access-model).
 - **Operate the library**:
   [Graphics Asset Library operations](#graphics-asset-library-operations).
+- **Operate Live Results**: [Melee Live Results](#melee-live-results).
 - **Find a subsystem**: [Subsystem map](#subsystem-map).
 
 ## Stack and layout
@@ -124,14 +125,17 @@ points at them.
   - Code: `server/modules/screen-write/`, `server/modules/screen-output-assets/`,
     `server/api/screen-output/`, `app/composables/screen/`.
 - **Melee Sync**: imports Event structure, Players, Deck Lists, Round
-  Standings, Matches and Rounds from Melee.gg, with their Provenance.
-  - Operate: [Local configuration](#local-configuration) and
-    [Worker secrets](#worker-secrets) (Melee credential keys and rotation).
+  Standings, Matches and Rounds from Melee.gg, with their Provenance; Live
+  Results polls the Current Round's Match Results each minute.
+  - Operate: [Local configuration](#local-configuration),
+    [Worker secrets](#worker-secrets) (Melee credential keys and rotation) and
+    [Melee Live Results](#melee-live-results).
   - Terms: [Tournament](CONTEXT.md#tournament),
     [Tournament and Feature Match production](CONTEXT.md#tournament-and-feature-match-production).
   - Decisions:
     [ADR-0031](DECISIONS.md#adr-0031-a-resolved-unresolved-deck-card-announces-the-deck-lists-it-rewrote-and-re-projects-nothing),
-    [ADR-0032](DECISIONS.md#adr-0032-deleting-a-player-releases-every-deck-source-that-selects-them).
+    [ADR-0032](DECISIONS.md#adr-0032-deleting-a-player-releases-every-deck-source-that-selects-them),
+    [ADR-0052](DECISIONS.md#adr-0052-live-results-polls-the-current-round-and-melee-sync-announces-only-what-changed).
   - Code: `server/modules/melee-sync/`, `server/services/melee*.ts`.
 - **Feature Match production**: Feature Match Slots, Feature Match
   Assignments, Feature Match Sessions and Feature Match Slot Promotion, shown by
@@ -963,6 +967,35 @@ them.
 Realtime stays within the Ably **Free** plan by decision (#189). Validate
 against its limits and report anything that would exceed them.
 
+## Melee Live Results
+
+With **Live Results** on (Sync page, shown while Melee Sync is on; off by
+default), a minute cron (`* * * * *`,
+`server/plugins/melee-live-results-schedule.ts`) polls Melee.gg for the
+Current Round's Match Results, and for the next Round's pairings once it is
+complete. Pairings and Top Cut Bracket Screens fill in within about a minute of
+Melee reporting a result. ADR-0052 has the rules.
+
+- **Cost.** One paginated Melee request per Event per tick; a newly paired
+  Round adds a Players refresh, a newly complete Round a standings fetch. At
+  most 25 due Events tick per run, one at a time.
+- **Cadence.** Every minute while results are coming in; every 5 minutes after
+  30 quiet minutes; probing and failures back off to every 15 minutes.
+- **Switching it off.** Turn Live Results off on the Sync page, or turn Melee
+  Sync off (which turns Live Results off too). Neither touches stored data.
+- **It stops itself** after 12 hours with no change, or when Melee refuses the
+  credentials (401/403); the Sync page shows why. Turn it back on by hand.
+- **Failures** go to the Event's Live Results error, apart from the manual
+  sync's error, and clear on the next good tick. Per-Event failures log
+  `melee_live_results_check_failed` / `melee_live_results_tick_failed`.
+- **Status**: `GET /api/events/:id/melee/live-results` answers the Current
+  Round, last checked and last change times, the error and the stop reason.
+- **Live Results never blocks an operator**: an operator command takes a
+  tick's Melee Sync lease over at once, and the tick abandons its remaining
+  writes. Only another operator command answers `409`.
+- **A deploy without the minute cron stops Live Results silently.** Events keep
+  the setting and resume once the cron is back.
+
 ## Graphics Asset Library operations
 
 Admin surfaces live under `/admin/graphics-assets`: the operations cockpit
@@ -971,9 +1004,12 @@ Admin surfaces live under `/admin/graphics-assets`: the operations cockpit
 
 ### Scheduled work
 
-`wrangler.jsonc` declares one hourly cron (`17 * * * *`). It runs retention
-(`server/plugins/graphics-retention-schedule.ts`) and reconciliation
-(`server/plugins/graphics-reconciliation-schedule.ts`) as independent handlers.
+`wrangler.jsonc` declares an hourly cron (`17 * * * *`) for the library. It
+runs retention (`server/plugins/graphics-retention-schedule.ts`) and
+reconciliation (`server/plugins/graphics-reconciliation-schedule.ts`) as
+independent handlers. The minute cron beside it is for
+[Melee Live Results](#melee-live-results); every handler checks
+`controller.cron` against `server/utils/cronSchedules.ts` and ignores the other.
 A failed pass is logged and swallowed; the next run resumes from durable state.
 **A deploy without the cron silently stops automatic reclamation**; the backlog
 then shows in the retention view.

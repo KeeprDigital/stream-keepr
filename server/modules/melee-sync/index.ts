@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3';
 import type { MeleeSyncCommandName, MeleeSyncMetadataUpdate } from '~~/server/utils/meleeSyncState';
+import type { MeleeSyncContext } from './context';
 import {
 	acquireMeleeSyncLease,
 	MELEE_SYNC_LEASE_RENEW_INTERVAL_MS,
@@ -9,7 +10,10 @@ import {
 	renewMeleeSyncLease,
 } from '~~/server/utils/meleeSyncState';
 import { updateMeleeConfiguration } from './configuration';
+import { meleeSyncContextFrom } from './context';
 import { requireMeleeSyncEventData as loadMeleeSyncEventData } from './eventData';
+import { loadLiveResultsStatus } from './liveResults/status';
+import { setMeleeLiveResults } from './liveResultsSetting';
 import { createMeleeSyncWorkflows } from './workflows';
 
 interface MeleeSyncCommandResult {
@@ -19,7 +23,7 @@ interface MeleeSyncCommandResult {
 }
 
 interface RunMeleeSyncCommandOptions<T extends MeleeSyncCommandResult> {
-	requestEvent: H3Event;
+	syncContext: MeleeSyncContext;
 	eventId: number;
 	command: MeleeSyncCommandName;
 	execute: (checkpoint: () => Promise<void>) => Promise<T>;
@@ -112,7 +116,7 @@ async function runMeleeSyncCommand<T extends MeleeSyncCommandResult>(
 			// This write is itself token-conditioned and therefore becomes a no-op if
 			// another command already owns the Event.
 			await recordMeleeSyncFailure(
-				options.requestEvent,
+				options.syncContext,
 				options.eventId,
 				ownershipError,
 				options.failureMetadata?.() ?? {},
@@ -123,7 +127,7 @@ async function runMeleeSyncCommand<T extends MeleeSyncCommandResult>(
 
 		if (!execution.success) {
 			const recorded = await recordMeleeSyncFailure(
-				options.requestEvent,
+				options.syncContext,
 				options.eventId,
 				execution.error,
 				options.failureMetadata?.() ?? {},
@@ -140,7 +144,7 @@ async function runMeleeSyncCommand<T extends MeleeSyncCommandResult>(
 		let recorded: boolean;
 		if (result.success === false) {
 			recorded = await recordMeleeSyncFailure(
-				options.requestEvent,
+				options.syncContext,
 				options.eventId,
 				commandFailureFromResult(result),
 				metadata,
@@ -149,7 +153,7 @@ async function runMeleeSyncCommand<T extends MeleeSyncCommandResult>(
 		}
 		else {
 			recorded = await recordMeleeSyncSuccess(
-				options.requestEvent,
+				options.syncContext,
 				options.eventId,
 				metadata,
 				lease.token,
@@ -182,15 +186,18 @@ export function meleeSyncModule() {
 
 	return {
 		updateConfiguration: updateMeleeConfiguration,
+		setLiveResults: setMeleeLiveResults,
+		liveResultsStatus: loadLiveResultsStatus,
 
 		async runInitialSetup(requestEvent: H3Event, eventId: number) {
+			const syncContext = meleeSyncContextFrom(requestEvent);
 			const progress = createMeleeSyncProgress();
 			return await runMeleeSyncCommand({
-				requestEvent,
+				syncContext,
 				eventId,
 				command: 'initial-setup',
 				execute: async checkpoint => await workflows.runInitialSetup(
-					requestEvent,
+					syncContext,
 					eventId,
 					await loadMeleeSyncEventData(eventId),
 					checkpoint,
@@ -215,12 +222,13 @@ export function meleeSyncModule() {
 			});
 		},
 		async syncEventStructure(requestEvent: H3Event, eventId: number) {
+			const syncContext = meleeSyncContextFrom(requestEvent);
 			return await runMeleeSyncCommand({
-				requestEvent,
+				syncContext,
 				eventId,
 				command: 'event-structure',
 				execute: async () => await workflows.syncEventStructure(
-					requestEvent,
+					syncContext,
 					eventId,
 					await loadMeleeSyncEventData(eventId),
 				),
@@ -230,12 +238,13 @@ export function meleeSyncModule() {
 			});
 		},
 		async syncPlayers(requestEvent: H3Event, eventId: number) {
+			const syncContext = meleeSyncContextFrom(requestEvent);
 			return await runMeleeSyncCommand({
-				requestEvent,
+				syncContext,
 				eventId,
 				command: 'players',
 				execute: async () => await workflows.syncPlayers(
-					requestEvent,
+					syncContext,
 					eventId,
 					await loadMeleeSyncEventData(eventId),
 				),
@@ -245,12 +254,13 @@ export function meleeSyncModule() {
 			});
 		},
 		async syncDeckLists(requestEvent: H3Event, eventId: number) {
+			const syncContext = meleeSyncContextFrom(requestEvent);
 			return await runMeleeSyncCommand({
-				requestEvent,
+				syncContext,
 				eventId,
 				command: 'decklists',
 				execute: async () => await workflows.syncDeckLists(
-					requestEvent,
+					syncContext,
 					eventId,
 					await loadMeleeSyncEventData(eventId),
 				),
@@ -262,22 +272,23 @@ export function meleeSyncModule() {
 			});
 		},
 		async syncRoundMatches(requestEvent: H3Event, eventId: number, roundId: number) {
+			const syncContext = meleeSyncContextFrom(requestEvent);
 			const progress = createMeleeSyncProgress();
 			return await runMeleeSyncCommand({
-				requestEvent,
+				syncContext,
 				eventId,
 				command: 'round',
 				execute: async (checkpoint) => {
 					const syncEventData = await loadMeleeSyncEventData(eventId);
 					await checkpoint();
-					const players = await workflows.syncPlayers(requestEvent, eventId, syncEventData);
+					const players = await workflows.syncPlayers(syncContext, eventId, syncEventData);
 					if (players.success !== false) {
 						progress.record({
 							lastPlayersSyncedAt: new Date(),
 						});
 					}
 					await checkpoint();
-					const round = await workflows.syncRoundMatches(requestEvent, eventId, syncEventData, roundId);
+					const round = await workflows.syncRoundMatches(syncContext, eventId, syncEventData, roundId);
 					return {
 						...round,
 						warnings: [
@@ -297,13 +308,14 @@ export function meleeSyncModule() {
 			eventId: number,
 			options: { includeDeckLists?: boolean; advanceRound?: boolean } = {},
 		) {
+			const syncContext = meleeSyncContextFrom(requestEvent);
 			const progress = createMeleeSyncProgress();
 			return await runMeleeSyncCommand({
-				requestEvent,
+				syncContext,
 				eventId,
 				command: 'update',
 				execute: async checkpoint => await workflows.updateFromMelee(
-					requestEvent,
+					syncContext,
 					eventId,
 					await loadMeleeSyncEventData(eventId),
 					options,

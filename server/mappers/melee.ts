@@ -13,10 +13,20 @@ import { applyMatchDeckSnapshot, selectMatchDeck } from '~~/server/utils/matchDe
 
 export { calculateDeckPips, calculateDeckStats } from '~~/shared/utils/deckStats';
 
+/** A Player's Match record as a Match side carries it. */
+export interface MatchSideRecord {
+	wins: number | null;
+	losses: number | null;
+	draws: number | null;
+	position: number | null;
+	points: number | null;
+}
+
 export interface MatchMapperContext {
 	/** Players keyed by both external source and external ID. */
 	playerMap: Map<string, DbPlayer>;
-	standingsMap: Map<number, MeleeStandingParsed>;
+	/** Each Player's record, keyed by Melee TeamId. */
+	recordsByTeamId: Map<number, MatchSideRecord>;
 	playerDecksByPlayerId: Map<number, DbPlayerDeck[]>;
 	archetypesById: Map<number, Pick<DbArchetype, 'id' | 'name' | 'colors'>>;
 	roundFormatExternalId: string | null;
@@ -394,7 +404,7 @@ function mapCompetitorToPlayerData(
 	}
 
 	const player = context.playerMap.get(externalIdentityKey('melee', competitor.TeamId));
-	const standing = context.standingsMap.get(competitor.TeamId);
+	const record = context.recordsByTeamId.get(competitor.TeamId);
 
 	if (!player) {
 		throw new InvalidMeleeRoundSnapshotError(
@@ -420,11 +430,11 @@ function mapCompetitorToPlayerData(
 		pronouns: player.pronouns ?? null,
 		externalId: player.externalId ?? null,
 		externalSource: player.externalSource ?? null,
-		wins: standing?.MatchWins ?? null,
-		losses: standing?.MatchLosses ?? null,
-		draws: standing?.MatchDraws ?? null,
-		position: standing?.Rank ?? null,
-		points: standing?.Points ?? null,
+		wins: record?.wins ?? null,
+		losses: record?.losses ?? null,
+		draws: record?.draws ?? null,
+		position: record?.position ?? null,
+		points: record?.points ?? null,
 		archetypeId: player.archetypeId,
 		lgs: player.lgs,
 		gameData: player.gameData,
@@ -515,6 +525,14 @@ function validateMeleeMatchSnapshot(
 	}
 }
 
+/** Whether a Melee Match holds a result, and whether it is a bye, as its stored Match records them. */
+export function meleeMatchResultState(meleeMatch: MeleeMatchParsed): { hasResult: boolean; isBye: boolean } {
+	return {
+		hasResult: meleeMatch.HasResult ?? false,
+		isBye: meleeMatch.Competitors.length < 2 || meleeMatch.ByeReason != null,
+	};
+}
+
 /**
  * Maps a single MeleeMatch into data for DB upsert (without eventId — caller adds it).
  */
@@ -529,8 +547,7 @@ function mapMeleeMatchToDbRow(
 	const p1 = mapCompetitorToPlayerData(competitors[0], context, meleeMatch.Guid, matchFormatExternalId);
 	const p2 = mapCompetitorToPlayerData(competitors[1], context, meleeMatch.Guid, matchFormatExternalId);
 
-	const isBye = competitors.length < 2 || meleeMatch.ByeReason != null;
-	const hasResult = meleeMatch.HasResult ?? false;
+	const { hasResult, isBye } = meleeMatchResultState(meleeMatch);
 	// Melee leaves a side's GameWins, and the Match's GameDraws, null rather
 	// than 0 when there were none. A reported Match always holds its Game
 	// Score; an unreported Match or a bye holds none (ADR-0047).

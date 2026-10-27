@@ -51,12 +51,18 @@ export function createMeleeRealtimeHandlers({ accept }: Options) {
 				useFeatureMatchStore().loadFeatureMatchesByEventId(data.eventId),
 			]);
 		})),
-		'melee:roundSynced': accept('melee:roundSynced', operatorOnly(async (data) => {
+		'melee:matchResultsSynced': accept('melee:matchResultsSynced', operatorOnly(async (data) => {
+			await useMatchStore().applyRemoteMatchesRefreshed(data);
+		})),
+		'melee:pairingsSynced': accept('melee:pairingsSynced', operatorOnly(async (data) => {
 			await Promise.all([
 				useRoundStore().loadRoundsByEventId(data.eventId),
 				useMatchStore().applyRemoteMatchesRefreshed(data),
 				useFeatureMatchStore().loadFeatureMatchesByEventId(data.eventId),
 			]);
+		})),
+		'melee:roundStandingsSynced': accept('melee:roundStandingsSynced', operatorOnly(async (data) => {
+			await useRoundStore().loadRoundsByEventId(data.eventId);
 		})),
 	};
 }

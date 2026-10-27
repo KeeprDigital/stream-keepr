@@ -3,13 +3,16 @@ import type { EventListResponse, EventResponse } from '~~/shared/api';
 import { mapTalentToResponse } from '~~/server/mappers/talent';
 import { mapTimestamps } from '~~/server/utils/mapTimestamps';
 
-export function mapEventListToResponse(event: DbEvent): EventListResponse {
+/** Credentials, the sync lease, and the Live Results poll schedule never leave the server. */
+function publicEventFields(event: DbEvent) {
 	const {
 		meleeClientId,
 		meleeClientSecret,
 		meleeSyncLeaseToken: _,
 		meleeSyncLeaseCommand: __,
 		meleeSyncLeaseExpiresAt: ___,
+		meleeLiveResultsNextCheckAt: ____,
+		meleeLiveResultsBackoffStep: _____,
 		...rest
 	} = event;
 	return {
@@ -18,19 +21,14 @@ export function mapEventListToResponse(event: DbEvent): EventListResponse {
 	};
 }
 
+export function mapEventListToResponse(event: DbEvent): EventListResponse {
+	return publicEventFields(event);
+}
+
 export function mapEventToResponse(event: DbEvent & { talents: DbEventTalent[] }): EventResponse {
-	const {
-		meleeClientId,
-		meleeClientSecret,
-		meleeSyncLeaseToken: _,
-		meleeSyncLeaseCommand: __,
-		meleeSyncLeaseExpiresAt: ___,
-		talents,
-		...rest
-	} = event;
+	const { talents, ...rest } = event;
 	return {
-		...mapTimestamps(rest),
-		meleeConfigured: !!(meleeClientId && meleeClientSecret),
+		...publicEventFields(rest),
 		talents: talents.map(mapTalentToResponse),
 	};
 }

@@ -1,4 +1,3 @@
-import type { H3Event } from 'h3';
 import type { MeleeEventParsed } from '~~/server/schemas/external/melee';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
@@ -24,7 +23,6 @@ const publishMessageStrict = vi.fn();
 
 vi.doMock('~~/server/db', () => ({ db }));
 vi.doMock('~~/server/utils/ably', () => ({
-	getOriginConnectionId: vi.fn(() => 'origin-1'),
 	publishMessage,
 	publishMessageStrict,
 }));
@@ -41,7 +39,7 @@ vi.doMock('~~/server/services/meleeCredentials', () => ({
 const { createMeleeSyncWorkflows } = await import('~~/server/modules/melee-sync/workflows');
 const { eventService } = await import('~~/server/services/event');
 
-const requestEvent = {} as H3Event;
+const syncContext = { originConnectionId: 'origin-1' };
 const meleeEventData = {
 	game: 'mtg' as const,
 	meleeEnabled: true,
@@ -133,7 +131,7 @@ describe('melee Sync structure reconciliation keeps manual descendants', () => {
 		const importedRound = await insertRound(eventId, stalePhase.id, 'Round 1', 'round-old');
 		await insertMatch(eventId, importedRound.id, 'match-old');
 
-		const result = await createMeleeSyncWorkflows().syncEventStructure(requestEvent, eventId, meleeEventData, upstream([
+		const result = await createMeleeSyncWorkflows().syncEventStructure(syncContext, eventId, meleeEventData, upstream([
 			{
 				ID: 200,
 				Name: 'Swiss',
@@ -197,7 +195,7 @@ describe('melee Sync structure reconciliation keeps manual descendants', () => {
 			})
 			.returning();
 
-		const result = await createMeleeSyncWorkflows().syncEventStructure(requestEvent, eventId, meleeEventData, upstream([
+		const result = await createMeleeSyncWorkflows().syncEventStructure(syncContext, eventId, meleeEventData, upstream([
 			{
 				ID: 400,
 				Name: 'Swiss',
@@ -262,7 +260,7 @@ describe('melee Sync structure reconciliation keeps manual descendants', () => {
 		] as MeleeEventParsed['Phases'];
 		const workflows = createMeleeSyncWorkflows();
 
-		const first = await workflows.syncEventStructure(requestEvent, eventId, meleeEventData, upstream(livePhases));
+		const first = await workflows.syncEventStructure(syncContext, eventId, meleeEventData, upstream(livePhases));
 		const afterFirst = await readStructure(eventId);
 		expect(first.warnings).toHaveLength(1);
 		expect(afterFirst.phases.map(phase => [
@@ -281,7 +279,7 @@ describe('melee Sync structure reconciliation keeps manual descendants', () => {
 		expect(afterFirst.matches.map(match => match.id)).toEqual([manualMatch.id]);
 
 		publishMessageStrict.mockClear();
-		const second = await workflows.syncEventStructure(requestEvent, eventId, meleeEventData, upstream(livePhases));
+		const second = await workflows.syncEventStructure(syncContext, eventId, meleeEventData, upstream(livePhases));
 		expect(second.warnings).toBeUndefined();
 		expect(await readStructure(eventId)).toEqual(afterFirst);
 		expect(publishMessageStrict).not.toHaveBeenCalled();

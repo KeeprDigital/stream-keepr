@@ -1,3 +1,4 @@
+import type { MeleeLiveResultsStatusResponse } from '~~/shared/api';
 import { isMeleeManagedRound } from '~~/shared/utils/roundControl';
 
 export type SetupStep = 'syncing' | 'loading' | 'complete';
@@ -50,6 +51,9 @@ export const useMeleeStore = defineStore('melee', () => {
 	const syncStep = ref<SyncStep | null>(null);
 	const error = ref<string | null>(null);
 	const lastOperation = ref<MeleeOperationResult | null>(null);
+	const settingLiveResults = ref(false);
+	/** The last Live Results status read; the Current Round and last check live only here, since a quiet tick announces nothing. */
+	const liveResultsStatus = ref<MeleeLiveResultsStatusResponse | null>(null);
 	const activeCommandPromises = new Map<string, Promise<unknown>>();
 	/**
 	 * The Event Lifetime an operation's answer belongs to, begun afresh by each reset, so
@@ -765,6 +769,69 @@ export const useMeleeStore = defineStore('melee', () => {
 		return runCommandOnce('setup', runInitialSetupOnce);
 	}
 
+	/**
+	 * Turns Live Results on or off. The Event shows the new setting while the request
+	 * is pending — turning it on clears a stop reason and Live Results error, as the
+	 * server does — and gets its own Live Results fields back if the request fails.
+	 */
+	async function setLiveResults(enabled: boolean): Promise<{ success: boolean; error?: string }> {
+		const event = eventStore.event;
+		if (!event)
+			return { success: false, error: 'No event loaded' };
+
+		const original = {
+			meleeLiveResultsEnabled: event.meleeLiveResultsEnabled,
+			meleeLiveResultsError: event.meleeLiveResultsError,
+			meleeLiveResultsStopReason: event.meleeLiveResultsStopReason,
+		};
+		const flight = lifetime;
+		const failure = ref<string | null>(null);
+		eventStore.setEvent({
+			...event,
+			meleeLiveResultsEnabled: enabled,
+			...(enabled && { meleeLiveResultsError: null, meleeLiveResultsStopReason: null }),
+		});
+
+		const updated = await executeReporting(
+			() => eventRepo.setMeleeLiveResults(event.id, enabled),
+			{
+				loadingRef: settingLiveResults,
+				errorRef: failure,
+				flight,
+				onError: () => {
+					if (eventStore.event?.id === event.id) {
+						eventStore.setEvent({
+							...eventStore.event,
+							...original,
+						});
+					}
+				},
+			},
+		);
+
+		if (!updated)
+			return { success: false, error: failure.value ?? 'Failed to change Live Results' };
+		if (flight.current && eventStore.event?.id === event.id) {
+			eventStore.setEvent({
+				...eventStore.event,
+				...updated,
+			});
+		}
+		return { success: true };
+	}
+
+	/** Reads the Live Results status. A failed read keeps the last one: it is re-read on a timer. */
+	async function loadLiveResultsStatus(): Promise<MeleeLiveResultsStatusResponse | null> {
+		const eventId = eventStore.eventId;
+		if (!eventId)
+			return null;
+		const flight = lifetime;
+		const status = await executeReporting(() => eventRepo.getMeleeLiveResultsStatus(eventId), { flight });
+		if (status && flight.current)
+			liveResultsStatus.value = status;
+		return status;
+	}
+
 	function $reset() {
 		lifetime = lifetimes.begin();
 		activeCommandPromises.clear();
@@ -778,6 +845,8 @@ export const useMeleeStore = defineStore('melee', () => {
 		setSyncStep(null);
 		error.value = null;
 		lastOperation.value = null;
+		settingLiveResults.value = false;
+		liveResultsStatus.value = null;
 	}
 
 	return {
@@ -792,6 +861,8 @@ export const useMeleeStore = defineStore('melee', () => {
 		syncStep,
 		error,
 		lastOperation,
+		settingLiveResults,
+		liveResultsStatus,
 
 		// Computed
 		hasCredentials,
@@ -809,6 +880,8 @@ export const useMeleeStore = defineStore('melee', () => {
 		syncDecklists,
 		syncSpecificRound,
 		runInitialSetup,
+		setLiveResults,
+		loadLiveResultsStatus,
 		setLastOperation,
 		$reset,
 	};

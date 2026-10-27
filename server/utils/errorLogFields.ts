@@ -90,3 +90,10 @@ export function errorLogFields(error: LoggedNitroError, path: string | undefined
 		unhandled: error.unhandled ?? false,
 	};
 }
+
+/** A failure's class name for a structured log line, or `null` for a non-Error throw. */
+export function errorNameOf(error: unknown): string | null {
+	return error instanceof Error
+		? error.name
+		: null;
+}

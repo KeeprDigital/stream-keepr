@@ -46,6 +46,29 @@ describe.each(mappers)('event mapper %s', (_name, map) => {
 		expect(result).not.toHaveProperty('meleeSyncLeaseCommand');
 		expect(result).not.toHaveProperty('meleeSyncLeaseExpiresAt');
 	});
+
+	it('shows Live Results state but never its poll schedule', () => {
+		const checkedAt = new Date('2026-01-01T00:10:00.000Z');
+		const result = map(createMockEvent({
+			meleeLiveResultsEnabled: true,
+			meleeLiveResultsNextCheckAt: new Date('2026-01-01T00:11:00.000Z'),
+			meleeLiveResultsBackoffStep: 2,
+			meleeLiveResultsLastCheckedAt: checkedAt,
+			meleeLiveResultsLastChangeAt: checkedAt,
+			meleeLiveResultsError: 'Melee.gg is unavailable',
+			meleeLiveResultsStopReason: 'idle',
+		}));
+
+		expect(result).toMatchObject({
+			meleeLiveResultsEnabled: true,
+			meleeLiveResultsLastCheckedAt: checkedAt,
+			meleeLiveResultsLastChangeAt: checkedAt,
+			meleeLiveResultsError: 'Melee.gg is unavailable',
+			meleeLiveResultsStopReason: 'idle',
+		});
+		expect(result).not.toHaveProperty('meleeLiveResultsNextCheckAt');
+		expect(result).not.toHaveProperty('meleeLiveResultsBackoffStep');
+	});
 });
 
 describe('mapEventToResponse', () => {

@@ -66,6 +66,13 @@ export function createMockEvent(overrides?: Partial<DbEvent>): DbEvent {
 		meleeSyncLeaseToken: null,
 		meleeSyncLeaseCommand: null,
 		meleeSyncLeaseExpiresAt: null,
+		meleeLiveResultsEnabled: false,
+		meleeLiveResultsNextCheckAt: null,
+		meleeLiveResultsBackoffStep: 0,
+		meleeLiveResultsLastCheckedAt: null,
+		meleeLiveResultsLastChangeAt: null,
+		meleeLiveResultsError: null,
+		meleeLiveResultsStopReason: null,
 
 		displayRecordSeparator: '-',
 		displayHideZeroDraws: true,

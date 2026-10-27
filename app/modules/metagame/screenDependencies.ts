@@ -11,7 +11,7 @@ interface MetagameBreakdownScoping {
  * Mode Data Freshness: the Players in scope (their standing, activity and
  * Archetype), their reviewed Deck Lists and the cards in them, the Archetypes,
  * and the Player List scoping it. Melee syncs rewrite Players, Deck Lists and
- * standings in bulk.
+ * Round Standings in bulk.
  *
  * These are the breakdown's own invalidations, not the Player store's: a deck
  * review, a resolved deck card or a Player List membership change re-reads
@@ -39,6 +39,6 @@ export function metagameBreakdownDependencies(scoping: () => MetagameBreakdownSc
 		'melee:dataReset': true,
 		'melee:playersSynced': true,
 		'melee:decklistsSynced': true,
-		'melee:roundSynced': true,
+		'melee:roundStandingsSynced': true,
 	};
 }

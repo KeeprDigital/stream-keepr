@@ -13,10 +13,14 @@ A competitive gaming tournament managed by Stream Keepr.
 A segment of an Event structure, such as Swiss or Top Cut.
 
 **Round**:
-A unit of tournament play within a Phase, containing Matches and optional tournament-state metadata synced from Melee.
+A unit of tournament play within a Phase, containing Matches and optional tournament-state metadata synced from Melee. A Melee-managed Round is complete when every Match stored from Melee in it has a Match Result (reported or a bye), or when the next Melee-managed Round in the Event's Round order has pairings: Rounds run strictly in sequence, so pairing the next one means this one is done. Completion is derived from synced data; no operator completes a Round (ADR-0052).
+
+**Current Round**:
+The latest Melee-managed Round, in the Event's Round order (Phase sort order, round number, id), that has pairings: at least one Match stored from Melee. None before any Round is paired. Derived from stored Matches, never set by an operator (ADR-0052).
+_Avoid_: active Round, live Round.
 
 **Match**:
-A pairing between Players in a Round, with its Match Result and the records used for standings and broadcast workflows.
+A pairing between Players in a Round, with its Match Result and the records used for standings and broadcast workflows. Each side's record is its Player's Round Standings after the Round once it is complete, and going into it (the previous Round's) while it is played (ADR-0052).
 _Avoid_: Feature Match when referring to the pairing.
 
 **Match Result**:
@@ -27,7 +31,7 @@ _Avoid_: score, for the whole result.
 A Match's game wins and game draws read from one of its Players' side, theirs first: 2-1, or 1-1-1 with a game draw. Every reported Match that is not a bye has one; a bye or an unreported Match has none.
 
 **Round Standings**:
-The standings for Players as of a specific Round.
+The standings for Players as of a specific Round, including that Round's results. Melee Sync stores them only once the Round is complete, so while a Round is played the latest Round Standings are the previous Round's (ADR-0052).
 
 **Position Change**:
 How many positions a Player moved since the previous Round's Round Standings: the nearest earlier Round, in the Event's Round order (Phase sort order, then round number), that holds Round Standings. Current standings stand as the latest Round holding them, so they compare with the one before it. A Player absent from that Round is new; with no such Round, or no position to compare, there is no Position Change. Derived from stored Round Standings, never imported.
@@ -68,7 +72,11 @@ The percentage of an Archetype's Players in the current Metagame scope that reac
 _Avoid_: top-cut rate, cash rate, qualification rate
 
 **Melee Sync**:
-The workflow that imports and refreshes Event structure, Players, Deck Lists, standings, Matches, and Rounds from Melee.gg.
+The workflow that imports and refreshes Event structure, Players, Deck Lists, standings, Matches, and Rounds from Melee.gg. An operator runs it from the Sync page; Live Results runs its Round sync on a schedule. One Melee Sync command runs per Event at a time; an operator's command takes over from a Live Results tick instead of waiting for it.
+
+**Live Results**:
+A per-Event setting, off by default and on only while Melee Sync is on, under which Melee Sync polls Melee.gg each minute for the Current Round's Match Results, and for the next Round's pairings once the Current Round is complete. It announces only what changed and switches itself off after 12 hours with no change or when Melee refuses its credentials. Its failures are its own Live Results error, apart from the manual sync's (ADR-0052).
+_Avoid_: auto-sync, polling, when naming the setting.
 
 **Provenance**:
 The Melee-owned identity and lifecycle facts on a synced record: its external identity, sync status, activity, and last-seen time. Only Melee Sync writes Provenance; manual operator edits never carry it.
@@ -715,6 +723,7 @@ _Avoid_: Dummy data, test data
 - **Players**, **Phases**, **Rounds**, **Matches**, **Feature Match Slots**, and **Deck Lists** carry **Provenance** when they originate from **Melee Sync**
 - A **Phase** contains ordered **Rounds**; a **Round** contains zero or more **Matches** and **Feature Match Assignments**, and may have **Round Standings**
 - **Melee Sync** never removes a manual **Round** or **Match**: an imported **Phase** or **Round** that leaves Melee.gg, or that a Melee data reset would remove, while holding one is kept as a manual one, its **Provenance** cleared, and the operator is told which (ADR-0040)
+- **Live Results** polls only the **Current Round**, or probes the next **Round** once it is complete; a **Round**'s **Round Standings** are stored only once it is complete, on every **Melee Sync** path (ADR-0052)
 - A **Match Result** comes only from **Melee Sync**; a manual **Match**, including one kept under ADR-0040, has none, and no Player's record, history, Head-to-Head or **Top Cut Bracket** reads one an operator entered (ADR-0047)
 - A **Feature Match Slot** belongs to exactly one **Event** and may reference at most one current **Match**
 - A **Feature Match Assignment** connects exactly one **Match** to exactly one **Feature Match Slot** for exactly one **Round**, and may have one **Feature Match Note**

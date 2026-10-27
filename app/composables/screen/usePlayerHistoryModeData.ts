@@ -29,7 +29,8 @@ export interface PlayerHistory {
  * The Event Data a Player's match history is read from: the Player and their
  * opponents, their Matches, those Matches' Rounds and Phases, and the
  * opponents' Archetypes. Phases and Melee syncs are rare and not identified in
- * a history row, so any of them re-reads.
+ * a history row, so any of them re-reads, except a sync of Round Standings,
+ * which the history does not show.
  */
 export function playerHistoryDependencies(playerId: () => number | null): ScreenModeDependencies<PlayerHistory> {
 	const involvesPlayer = (match: MatchResponse) =>
@@ -55,7 +56,8 @@ export function playerHistoryDependencies(playerId: () => number | null): Screen
 		'archetype:deleted': showsOpponentDeck,
 		'melee:dataReset': true,
 		'melee:structureSynced': true,
-		'melee:roundSynced': true,
+		'melee:matchResultsSynced': true,
+		'melee:pairingsSynced': true,
 		'melee:playersSynced': true,
 		'melee:decklistsSynced': true,
 	};

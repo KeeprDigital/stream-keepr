@@ -91,7 +91,11 @@ interface StructureSyncedInput extends PublicationInput, MessagePayload<'melee:s
 
 interface FeatureMatchesSyncedInput extends PublicationInput, MessagePayload<'melee:featureMatchesSynced'> {}
 
-interface MeleeRoundSyncedInput extends PublicationInput, MessagePayload<'melee:roundSynced'> {}
+interface MeleeMatchResultsSyncedInput extends PublicationInput, MessagePayload<'melee:matchResultsSynced'> {}
+
+interface MeleePairingsSyncedInput extends PublicationInput, MessagePayload<'melee:pairingsSynced'> {}
+
+interface MeleeRoundStandingsSyncedInput extends PublicationInput, MessagePayload<'melee:roundStandingsSynced'> {}
 
 interface MeleeDataResetInput extends PublicationInput, MessagePayload<'melee:dataReset'> {}
 
@@ -488,8 +492,16 @@ export function eventDataPublicationModule() {
 		await publishSyncMessage(eventId, 'melee:featureMatchesSynced', payload, originConnectionId);
 	}
 
-	async function meleeRoundSynced({ eventId, originConnectionId, ...payload }: MeleeRoundSyncedInput) {
-		await publishSyncMessage(eventId, 'melee:roundSynced', payload, originConnectionId);
+	async function meleeMatchResultsSynced({ eventId, originConnectionId, ...payload }: MeleeMatchResultsSyncedInput) {
+		await publishSyncMessage(eventId, 'melee:matchResultsSynced', payload, originConnectionId);
+	}
+
+	async function meleePairingsSynced({ eventId, originConnectionId, ...payload }: MeleePairingsSyncedInput) {
+		await publishSyncMessage(eventId, 'melee:pairingsSynced', payload, originConnectionId);
+	}
+
+	async function meleeRoundStandingsSynced({ eventId, originConnectionId, ...payload }: MeleeRoundStandingsSyncedInput) {
+		await publishSyncMessage(eventId, 'melee:roundStandingsSynced', payload, originConnectionId);
 	}
 
 	async function meleeDataReset({ eventId, originConnectionId, ...payload }: MeleeDataResetInput) {
@@ -556,7 +568,9 @@ export function eventDataPublicationModule() {
 		meleePlayersSynced,
 		meleeStructureSynced,
 		meleeFeatureMatchesSynced,
-		meleeRoundSynced,
+		meleeMatchResultsSynced,
+		meleePairingsSynced,
+		meleeRoundStandingsSynced,
 		meleeDataReset,
 		playerDeckReviewed,
 		playerDeckCardsResolved,

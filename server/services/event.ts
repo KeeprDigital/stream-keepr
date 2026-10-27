@@ -21,6 +21,14 @@ type SyncMetadataUpdate = Partial<Pick<DbEvent,	| 'initialSetupCompletedAt'
 	| 'lastDecklistsSyncedAt'
 	| 'lastSyncError'>>;
 
+/** What one Live Results tick writes: its poll state, and on a stop, the switch-off. */
+export type MeleeLiveResultsCheck = Pick<DbEvent, 'meleeLiveResultsNextCheckAt'
+	| 'meleeLiveResultsBackoffStep'
+	| 'meleeLiveResultsLastCheckedAt'
+	| 'meleeLiveResultsLastChangeAt'
+	| 'meleeLiveResultsError'>
+	& Partial<Pick<DbEvent, 'meleeLiveResultsEnabled' | 'meleeLiveResultsStopReason'>>;
+
 interface FindAllParams {
 	game?: 'mtg' | 'op';
 }
@@ -31,6 +39,8 @@ interface MeleeSyncLeaseInput {
 	command: string;
 	now: Date;
 	expiresAt: Date;
+	/** A live lease held by this command is taken over too. */
+	preempts?: string;
 }
 
 export interface ActiveMeleeSyncLease {
@@ -244,6 +254,9 @@ export function eventService() {
 			meleeClientId: data.meleeClientId,
 			updatedAt: new Date(),
 			...resetSyncFields,
+			// Live Results polls through Melee Sync, so switching sync off switches it
+			// off too, and re-enabling sync starts with it off.
+			...(!data.meleeEnabled && { meleeLiveResultsEnabled: false }),
 			...(protectedClientSecret !== undefined && { meleeClientSecret: protectedClientSecret }),
 		};
 
@@ -296,11 +309,93 @@ export function eventService() {
 	};
 
 	/**
+	 * Turns Live Results on with a fresh poll: no error or stop reason, no backoff,
+	 * due now, and `now` counted as the last change so the idle clock starts over.
+	 * Conditioned on Melee Sync being on in the same statement, so a concurrent
+	 * sync switch-off cannot be overwritten. `false` when no enabled Event matched.
+	 */
+	const enableMeleeLiveResults = async (id: number, now: Date): Promise<boolean> => {
+		const [updatedEvent] = await db
+			.update(events)
+			.set({
+				meleeLiveResultsEnabled: true,
+				meleeLiveResultsNextCheckAt: null,
+				meleeLiveResultsBackoffStep: 0,
+				meleeLiveResultsLastChangeAt: now,
+				meleeLiveResultsError: null,
+				meleeLiveResultsStopReason: null,
+				updatedAt: now,
+			})
+			.where(and(eq(events.id, id), eq(events.meleeEnabled, true)))
+			.returning({ id: events.id });
+
+		return !!updatedEvent;
+	};
+
+	/** Turns Live Results off, leaving its last poll state for the Sync page. */
+	const disableMeleeLiveResults = async (id: number): Promise<boolean> => {
+		const [updatedEvent] = await db
+			.update(events)
+			.set({
+				meleeLiveResultsEnabled: false,
+				updatedAt: new Date(),
+			})
+			.where(eq(events.id, id))
+			.returning({ id: events.id });
+
+		return !!updatedEvent;
+	};
+
+	/**
+	 * Events whose Live Results check is due at `now`: Melee Sync and Live Results
+	 * on, next check unset or passed. Longest-waiting first, at most `limit`.
+	 */
+	const findDueMeleeLiveResults = async (now: Date, limit: number): Promise<number[]> => {
+		const rows = await db
+			.select({ id: events.id })
+			.from(events)
+			.where(and(
+				eq(events.meleeEnabled, true),
+				eq(events.meleeLiveResultsEnabled, true),
+				or(isNull(events.meleeLiveResultsNextCheckAt), lte(events.meleeLiveResultsNextCheckAt, now)),
+			))
+			// SQLite sorts NULL first ascending: an Event due "now" goes ahead.
+			.orderBy(asc(events.meleeLiveResultsNextCheckAt), asc(events.id))
+			.limit(limit);
+		return rows.map(row => row.id);
+	};
+
+	/**
+	 * Stores a Live Results tick's poll state. Only the tick holding `leaseToken`
+	 * writes, and only while Melee Sync and Live Results are still on, so a tick
+	 * never revives a poll an operator switched off. `false` when nothing matched.
+	 */
+	const recordMeleeLiveResultsCheck = async (
+		id: number,
+		leaseToken: string,
+		data: MeleeLiveResultsCheck,
+	): Promise<boolean> => {
+		const [updatedEvent] = await db
+			.update(events)
+			.set(data)
+			.where(and(
+				eq(events.id, id),
+				eq(events.meleeSyncLeaseToken, leaseToken),
+				eq(events.meleeEnabled, true),
+				eq(events.meleeLiveResultsEnabled, true),
+			))
+			.returning({ id: events.id });
+
+		return !!updatedEvent;
+	};
+
+	/**
 	 * Atomically acquires the per-event Melee sync lease.
 	 *
 	 * The conditional UPDATE is the compare-and-set operation: only an empty or
-	 * expired lease can be replaced. A conditional release uses the opaque token,
-	 * so an expired command can never clear a newer command's lease.
+	 * expired lease, or one held by `input.preempts`, can be replaced. A
+	 * conditional release uses the opaque token, so an expired command can never
+	 * clear a newer command's lease.
 	 */
 	const tryAcquireMeleeSyncLease = async (input: MeleeSyncLeaseInput): Promise<MeleeSyncLeaseAcquisition> => {
 		const attemptAcquire = async () => {
@@ -317,6 +412,11 @@ export function eventService() {
 						isNull(events.meleeSyncLeaseToken),
 						isNull(events.meleeSyncLeaseExpiresAt),
 						lte(events.meleeSyncLeaseExpiresAt, input.now),
+						...(input.preempts
+							? [
+									eq(events.meleeSyncLeaseCommand, input.preempts),
+								]
+							: []),
 					),
 				))
 				.returning({ id: events.id });
@@ -344,7 +444,8 @@ export function eventService() {
 		const currentLeaseIsAvailable = current
 			&& (!current.meleeSyncLeaseToken
 				|| !current.meleeSyncLeaseExpiresAt
-				|| current.meleeSyncLeaseExpiresAt.getTime() <= input.now.getTime());
+				|| current.meleeSyncLeaseExpiresAt.getTime() <= input.now.getTime()
+				|| (input.preempts != null && current.meleeSyncLeaseCommand === input.preempts));
 		if (currentLeaseIsAvailable) {
 			[acquiredEvent] = await attemptAcquire();
 			if (acquiredEvent) {
@@ -430,6 +531,10 @@ export function eventService() {
 		update,
 		updateMeleeConfig,
 		updateSyncMetadata,
+		enableMeleeLiveResults,
+		disableMeleeLiveResults,
+		findDueMeleeLiveResults,
+		recordMeleeLiveResultsCheck,
 		tryAcquireMeleeSyncLease,
 		renewMeleeSyncLease,
 		releaseMeleeSyncLease,

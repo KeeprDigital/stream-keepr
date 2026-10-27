@@ -1,13 +1,13 @@
 import type { MiniflareD1Harness } from '~~/test/helpers/miniflare-d1';
 import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import { createMiniflareD1Harness } from '~~/test/helpers/miniflare-d1';
 
 // A Melee Round snapshot replaces the Round's Matches and Round Standings as
-// one authoritative write, on a real D1 binding so a thousand-row snapshot is
-// held to D1's bound-parameter limit.
+// one authoritative write touching only changed rows, on a real D1 binding so a
+// thousand-row snapshot is held to D1's bound-parameter limit.
 
 const harness: MiniflareD1Harness = await createMiniflareD1Harness();
 const db = drizzle(harness.database, { schema });
@@ -16,6 +16,7 @@ vi.doMock('~~/server/db', () => ({ db }));
 
 const { meleeRoundSnapshotService } = await import('~~/server/services/meleeRoundSnapshot');
 
+afterEach(() => vi.useRealTimers());
 afterAll(async () => await harness.dispose());
 
 async function stageRound(playerCount = 2) {
@@ -77,6 +78,14 @@ async function stored(eventId: number) {
 	};
 }
 
+async function updatedAtByExternalId(eventId: number) {
+	const rows = await db.select().from(schema.matches).where(eq(schema.matches.eventId, eventId));
+	return Object.fromEntries(rows.map(row => [
+		row.externalId ?? `manual-${row.id}`,
+		row.updatedAt.getTime(),
+	]));
+}
+
 describe('meleeRoundSnapshotService.replace', () => {
 	it('creates, updates and sweeps stale rows, counting each, and stamps the Round synced', async () => {
 		const { eventId, roundId, playerIds: [a, b] } = await stageRound();
@@ -117,6 +126,175 @@ describe('meleeRoundSnapshotService.replace', () => {
 		}))?.lastSyncedAt).toBeInstanceOf(Date);
 	});
 
+	it.each([
+		[
+			'an identical snapshot',
+			(m: ReturnType<typeof match>) => m,
+			[] as string[],
+			false,
+		],
+		[
+			'one Match Result reported',
+			(m: ReturnType<typeof match>) => m.externalId === 'm-2'
+				? {
+						...m,
+						hasResult: true,
+						player1GameWins: 2,
+						player2GameWins: 1,
+						gameDraws: 0,
+					}
+				: m,
+			['m-2'],
+			false,
+		],
+		[
+			'one table re-seated',
+			(m: ReturnType<typeof match>) => m.externalId === 'm-1'
+				? { ...m, tableNumber: 9 }
+				: m,
+			[] as string[],
+			true,
+		],
+	] as const)('rewrites only the Matches that changed on %s', async (_case, change, changedIds, pairingsChanged) => {
+		vi.useFakeTimers({
+			toFake: ['Date'],
+		});
+		vi.setSystemTime(1_000_000);
+		const { eventId, roundId, playerIds: [a, b] } = await stageRound();
+		const service = meleeRoundSnapshotService();
+		const snapshot = [
+			match(eventId, roundId, 'm-1'),
+			match(eventId, roundId, 'm-2'),
+		];
+		const first = await service.replace({
+			eventId,
+			roundId,
+			matches: snapshot,
+			standings: [
+				standing(a!, 1),
+				standing(b!, 2),
+			],
+		});
+		const ids = Object.fromEntries(first.matches.map(row => [row.externalId, row.id]));
+		vi.setSystemTime(2_000_000);
+
+		const second = await service.replace({
+			eventId,
+			roundId,
+			matches: snapshot.map(change),
+			standings: [
+				standing(b!, 2),
+				standing(a!, 1),
+			],
+		});
+
+		expect(second).toMatchObject({
+			created: 0,
+			updated: changedIds.length + (pairingsChanged
+				? 1
+				: 0),
+			staleDeleted: 0,
+			resultChangedMatchIds: changedIds.map(externalId => ids[externalId]),
+			pairingsChanged,
+			standingsChanged: false,
+		});
+		expect(second.matches.map(row => row.externalId).toSorted()).toEqual(['m-1', 'm-2']);
+		expect(await updatedAtByExternalId(eventId)).toEqual({
+			'm-1': pairingsChanged
+				? 2_000_000
+				: 1_000_000,
+			'm-2': changedIds.includes('m-2')
+				? 2_000_000
+				: 1_000_000,
+		});
+	});
+
+	it('reports a new snapshot as changed pairings and Round Standings', async () => {
+		const { eventId, roundId, playerIds: [a] } = await stageRound();
+
+		expect(await meleeRoundSnapshotService().replace({
+			eventId,
+			roundId,
+			matches: [
+				match(eventId, roundId, 'm-1'),
+			],
+			standings: [
+				standing(a!, 1),
+			],
+		})).toMatchObject({ resultChangedMatchIds: [], pairingsChanged: true, standingsChanged: true });
+	});
+
+	it.each([
+		[
+			'null leaves them alone',
+			null,
+			false,
+			1,
+		],
+		[
+			'a changed set replaces them',
+			2,
+			true,
+			2,
+		],
+	] as const)('round Standings: %s', async (_case, nextPosition, standingsChanged, keptPosition) => {
+		const { eventId, roundId, playerIds: [a] } = await stageRound();
+		const service = meleeRoundSnapshotService();
+		await service.replace({
+			eventId,
+			roundId,
+			matches: [],
+			standings: [
+				standing(a!, 1),
+			],
+		});
+
+		const result = await service.replace({
+			eventId,
+			roundId,
+			matches: [],
+			standings: nextPosition == null
+				? null
+				: [
+						standing(a!, nextPosition),
+					],
+		});
+
+		expect(result.standingsChanged).toBe(standingsChanged);
+		const rows = await db.select().from(schema.playerRoundStandings).where(eq(schema.playerRoundStandings.roundId, roundId));
+		expect(rows.map(row => [row.playerId, row.position])).toEqual([
+			[a, keptPosition],
+		]);
+	});
+
+	it('sweeps stale Melee Matches but keeps manual Matches in the Round', async () => {
+		const { eventId, roundId } = await stageRound();
+		await db.insert(schema.matches).values({
+			eventId,
+			roundId,
+			player1Data: { name: 'Manual' },
+		});
+		await meleeRoundSnapshotService().replace({
+			eventId,
+			roundId,
+			matches: [
+				match(eventId, roundId, 'm-1'),
+			],
+			standings: [],
+		});
+
+		const result = await meleeRoundSnapshotService().replace({
+			eventId,
+			roundId,
+			matches: [],
+			standings: [],
+		});
+
+		expect(result).toMatchObject({ staleDeleted: 1, pairingsChanged: true });
+		const rows = await db.select().from(schema.matches).where(eq(schema.matches.roundId, roundId));
+		expect(rows.map(row => row.player1Data?.name)).toEqual(['Manual']);
+	});
+
 	it('clears the Round for an empty snapshot', async () => {
 		const { eventId, roundId, playerIds: [a] } = await stageRound();
 		await meleeRoundSnapshotService().replace({
@@ -141,6 +319,9 @@ describe('meleeRoundSnapshotService.replace', () => {
 				created: 0,
 				updated: 0,
 				staleDeleted: 1,
+				resultChangedMatchIds: [],
+				pairingsChanged: true,
+				standingsChanged: true,
 			});
 		expect(await stored(eventId)).toEqual({ matches: [], standings: [] });
 	});

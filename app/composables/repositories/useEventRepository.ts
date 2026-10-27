@@ -1,6 +1,7 @@
 import type {
 	MeleeConfigInput,
 	MeleeConfigResponse,
+	MeleeLiveResultsStatusResponse,
 	MeleeUnresolvedDeckCardResponse,
 	ResolveMeleeUnresolvedDeckCardInput,
 	ResolveMeleeUnresolvedDeckCardResponse,
@@ -176,6 +177,24 @@ export function useEventRepository() {
 		);
 	};
 
+	/** The saved Event. 400 `MELEE_SYNC_DISABLED` when turning Live Results on with Melee Sync off. */
+	const setMeleeLiveResults = async (id: number, enabled: boolean): Promise<Event> => {
+		return await eventData.command<Event, { enabled: boolean }>(
+			{ eventId: id, resourcePath: 'melee', suffix: 'live-results' },
+			{
+				method: 'PUT',
+				body: { enabled },
+			},
+		);
+	};
+
+	const getMeleeLiveResultsStatus = async (id: number): Promise<MeleeLiveResultsStatusResponse> => {
+		return await eventData.command<MeleeLiveResultsStatusResponse>(
+			{ eventId: id, resourcePath: 'melee', suffix: 'live-results' },
+			{ method: 'GET' },
+		);
+	};
+
 	return {
 		list,
 		getById,
@@ -192,5 +211,7 @@ export function useEventRepository() {
 		syncDecklists,
 		listUnresolvedDeckCards,
 		resolveUnresolvedDeckCard,
+		setMeleeLiveResults,
+		getMeleeLiveResultsStatus,
 	};
 }

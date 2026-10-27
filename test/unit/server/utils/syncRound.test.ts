@@ -42,6 +42,12 @@ vi.mock('~~/server/services/archetype', () => ({
 		findManyByIds: mockFindArchetypesByIds,
 	}),
 }));
+// No Round follows, so a Round is complete only once every Match has a result.
+vi.mock('~~/server/services/round', () => ({
+	roundService: () => ({
+		findByEventId: async () => [],
+	}),
+}));
 vi.mock('~~/server/services/meleeRoundSnapshot', () => ({
 	meleeRoundSnapshotService: () => ({
 		replace: mockReplaceRoundSnapshot,
@@ -49,6 +55,7 @@ vi.mock('~~/server/services/meleeRoundSnapshot', () => ({
 }));
 
 const { syncMatchesFromMelee } = await import('~~/server/modules/melee-sync/roundMatches');
+const { meleeMatch } = await import('~~/test/helpers/meleeFixtures');
 const { MeleeTransportError } = await import('~~/server/services/meleeTransport');
 
 const testRounds = [
@@ -188,12 +195,16 @@ describe('syncMatchesFromMelee', () => {
 			eventId: 1,
 			roundId: 10,
 			matches: [],
-			standings: [],
+			standings: null,
 		});
 	});
 
 	it('maps standings through the Melee source identity when another source has the same ID', async () => {
 		const round = { ...testRounds[0], externalId: '100', externalSource: 'melee' as const };
+		const reported = [
+			meleeMatch('reported'),
+		];
+		mockFetchMatchesByRound.mockResolvedValue(reported);
 		mockFindAll.mockResolvedValue([
 			{ id: 6, externalId: '42', externalSource: 'manual' },
 			{ id: 7, externalId: '42', externalSource: 'melee' },
@@ -223,7 +234,7 @@ describe('syncMatchesFromMelee', () => {
 				},
 			],
 		}));
-		expect(mockMapMeleeMatchesToDbRows).toHaveBeenCalledWith([], 10, 1, expect.objectContaining({
+		expect(mockMapMeleeMatchesToDbRows).toHaveBeenCalledWith(reported, 10, 1, expect.objectContaining({
 			playerMap: expect.objectContaining({
 				get: expect.any(Function),
 			}),
@@ -235,6 +246,9 @@ describe('syncMatchesFromMelee', () => {
 
 	it('rejects unknown or duplicate standing participants before replacement', async () => {
 		const round = { ...testRounds[0], externalId: '100', externalSource: 'melee' as const };
+		mockFetchMatchesByRound.mockResolvedValue([
+			meleeMatch('reported'),
+		]);
 		mockFindAll.mockResolvedValue([
 			{ id: 7, externalId: '42', externalSource: 'melee' },
 		]);
