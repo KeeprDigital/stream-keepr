@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { computed, ref } from 'vue';
 import Display from '~/components/Screen/Modes/HeadToHead/Display.vue';
 
-const screen = ref<any>(null);
 const config = ref<any>(null);
 const error = ref<string | null>(null);
 const isEmpty = ref(false);
@@ -13,10 +12,6 @@ const headerText = ref('Head to Head');
 const player1 = ref<any>(null);
 const player2 = ref<any>(null);
 const earlierMatches = ref<any[]>([]);
-
-mockNuxtImport('useScreenContext', () => () => ({
-	screen: computed(() => screen.value),
-}));
 
 // A canned record, not a copy of the real formatting, which the composable's
 // own test covers: the component only places what it is handed.
@@ -79,9 +74,6 @@ async function mountComponent() {
 
 describe('screenModesHeadToHeadDisplay', () => {
 	beforeEach(() => {
-		screen.value = {
-			screenConfig: { primaryTextColor: '#123456', secondaryTextColor: '#654321' },
-		};
 		config.value = { playerSource: 'featureMatchSlot', featureMatchId: 4, showHeader: true };
 		error.value = null;
 		isEmpty.value = false;

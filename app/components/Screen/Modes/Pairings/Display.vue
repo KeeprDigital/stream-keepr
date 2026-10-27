@@ -1,17 +1,56 @@
 <script setup lang="ts">
 import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import type { ScreenOutputMatchSide, ScreenOutputRoundMatch } from '~~/shared/types/screenOutputReads';
+import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
 const { screen } = useScreenContext();
 const { config, error, isEmpty, headerText, pageData, formatResult, winner } = usePairingsModeData();
 
 const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
-const primaryTextStyle = computed(() => screenConfig.value.primaryTextColor
-	? { color: screenConfig.value.primaryTextColor }
-	: {});
-const secondaryTextStyle = computed(() => screenConfig.value.secondaryTextColor
-	? { color: screenConfig.value.secondaryTextColor }
-	: { opacity: '0.75' });
+
+const primaryTextStyle = {
+	color: modeTokenVar('pairings', 'primary-text'),
+};
+const secondaryTextStyle = {
+	color: modeTokenVar('pairings', 'secondary-text'),
+};
+const titleStyle = {
+	...modeTypographyStyle('pairings', 'title-typography'),
+	color: modeTokenVar('pairings', 'title-text'),
+};
+const titleDividerStyle = {
+	borderBottomColor: modeTokenVar('pairings', 'title-divider'),
+};
+/** On each row too, over the shared row chrome's own line height. */
+const rowStyle = {
+	...modeTypographyStyle('pairings', 'row-typography'),
+	borderBottomColor: modeTokenVar('pairings', 'row-divider'),
+};
+const surfaceStyle = {
+	backgroundColor: modeTokenVar('pairings', 'surface'),
+};
+
+type ResultState = 'reported' | 'pending' | 'bye';
+
+const resultColors: Record<ResultState, string> = {
+	reported: modeTokenVar('pairings', 'result-reported'),
+	pending: modeTokenVar('pairings', 'result-pending'),
+	bye: modeTokenVar('pairings', 'result-bye'),
+};
+
+function resultState(row: ScreenOutputRoundMatch): ResultState {
+	if (row.isBye)
+		return 'bye';
+	return row.hasResult ? 'reported' : 'pending';
+}
+
+function resultStyle(row: ScreenOutputRoundMatch) {
+	return {
+		...modeTypographyStyle('pairings', 'result-typography'),
+		color: resultColors[resultState(row)],
+	};
+}
+
 const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef'), {
 	density: 'roomy',
 	prefix: 'pairings',
@@ -19,10 +58,11 @@ const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef')
 	insetY: () => screenConfig.value.paddingY ?? 0,
 });
 
+/** Set on the root, over the shared broadcast table chrome's own colour and face. */
 const displayStyle = computed(() => ({
 	...rowLayoutStyle.value,
-	'--broadcast-table-primary-text': screenConfig.value.primaryTextColor ?? '#ffffff',
-	'--broadcast-table-secondary-text': screenConfig.value.secondaryTextColor ?? 'rgba(255, 255, 255, 0.72)',
+	...modeTypographyStyle('pairings', 'row-typography'),
+	color: modeTokenVar('pairings', 'primary-text'),
 }));
 
 function sideName(row: ScreenOutputRoundMatch, side: ScreenOutputMatchSide | null) {
@@ -38,18 +78,19 @@ function sideName(row: ScreenOutputRoundMatch, side: ScreenOutputMatchSide | nul
 		:empty="isEmpty"
 	>
 		<div class="pairings-display broadcast-table-display flex flex-col h-full w-full" :style="displayStyle">
-			<div v-if="config.showHeader" class="pairings-header broadcast-table-title">
-				<h2 :style="primaryTextStyle">
+			<div v-if="config.showHeader" class="pairings-header broadcast-table-title" :style="titleDividerStyle">
+				<h2 :style="titleStyle">
 					{{ headerText }}
 				</h2>
 			</div>
 
-			<div ref="tableRef" class="pairings-rows broadcast-table-surface">
+			<div ref="tableRef" class="pairings-rows broadcast-table-surface" :style="surfaceStyle">
 				<div
 					v-for="row in pageData"
 					:key="row.matchId"
 					class="pairing-row broadcast-table-row"
 					:class="{ bye: row.isBye }"
+					:style="rowStyle"
 				>
 					<div class="table" :style="secondaryTextStyle">
 						{{ row.tableNumber ?? '' }}
@@ -63,7 +104,7 @@ function sideName(row: ScreenOutputRoundMatch, side: ScreenOutputMatchSide | nul
 					<div class="player player-2" :class="{ winner: winner(row) === 2 }" :style="row.isBye ? secondaryTextStyle : primaryTextStyle">
 						{{ sideName(row, row.player2) }}
 					</div>
-					<div class="result" :class="{ 'result-pending': !row.hasResult && !row.isBye, 'result-bye': row.isBye }">
+					<div class="result" :data-result="resultState(row)" :style="resultStyle(row)">
 						{{ formatResult(row) }}
 					</div>
 				</div>
@@ -85,11 +126,12 @@ function sideName(row: ScreenOutputRoundMatch, side: ScreenOutputMatchSide | nul
 	align-items: center;
 	height: var(--pairings-row-height, auto);
 	padding: 0 0.5rem;
+	border-bottom-style: solid;
+	border-bottom-width: 1px;
 	font-size: var(--pairings-row-font-size, 1.5rem);
 }
 .table,
 .versus {
-	font-family: var(--font-mono);
 	font-size: var(--pairings-row-secondary-font-size, 1rem);
 	font-variant-numeric: tabular-nums;
 }
@@ -97,40 +139,26 @@ function sideName(row: ScreenOutputRoundMatch, side: ScreenOutputMatchSide | nul
 	text-transform: uppercase;
 }
 .player {
-	font-weight: 600;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 .player.winner {
-	font-weight: 900;
+	font-weight: bolder;
 }
 .player-2 {
 	text-align: right;
 }
+/* Tinted from its own colour, so a Theme's result colour reaches the whole badge. */
 .result {
 	border: 1px solid currentColor;
 	border-radius: 999px;
-	font-family: var(--font-mono);
+	background: color-mix(in srgb, currentColor 16%, transparent);
 	font-size: var(--pairings-row-secondary-font-size, 1rem);
 	font-variant-numeric: tabular-nums;
-	font-weight: 900;
 	justify-self: end;
-	letter-spacing: 0.06em;
-	line-height: 1;
 	min-width: 5.75em;
 	padding: 0.42em 0.75em;
 	text-align: center;
-	text-transform: uppercase;
-	background: rgba(34, 197, 94, 0.18);
-	color: #4ade80;
-}
-.result-pending {
-	background: rgba(255, 255, 255, 0.08);
-	color: rgba(255, 255, 255, 0.68);
-}
-.result-bye {
-	background: rgba(250, 204, 21, 0.16);
-	color: #facc15;
 }
 </style>

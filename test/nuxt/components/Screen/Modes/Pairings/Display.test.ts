@@ -66,7 +66,7 @@ async function mountComponent() {
 describe('screenModesPairingsDisplay', () => {
 	beforeEach(() => {
 		screen.value = {
-			screenConfig: { primaryTextColor: '#123456', secondaryTextColor: '#654321', paddingY: 0 },
+			screenConfig: { paddingY: 0 },
 		};
 		config.value = {
 			roundId: 31,
@@ -118,9 +118,9 @@ describe('screenModesPairingsDisplay', () => {
 		expect(rows[0]!.get('.player-1').text()).toBe('Nadia Rivers');
 		expect(rows[0]!.get('.player-2').text()).toBe('Oskar Lind');
 		expect(rows[0]!.get('.result').text()).toBe('Pending');
-		expect(rows[0]!.get('.result').classes()).toContain('result-pending');
+		expect(rows[0]!.get('.result').attributes('data-result')).toBe('pending');
 		expect(rows[1]!.get('.result').text()).toBe('2-1');
-		expect(rows[1]!.get('.result').classes()).not.toContain('result-pending');
+		expect(rows[1]!.get('.result').attributes('data-result')).toBe('reported');
 	});
 
 	it('marks the winning side of a reported Match', async () => {
@@ -148,6 +148,7 @@ describe('screenModesPairingsDisplay', () => {
 		expect(row.get('.table').text()).toBe('');
 		expect(row.get('.player-2').text()).toBe('BYE');
 		expect(row.get('.result').text()).toBe('BYE');
+		expect(row.get('.result').attributes('data-result')).toBe('bye');
 	});
 
 	it('names an unfilled seat as to be decided', async () => {
@@ -162,7 +163,6 @@ describe('screenModesPairingsDisplay', () => {
 		const style = (await mountComponent()).get('.pairings-display').attributes('style');
 
 		expect(style).toContain('--pairings-row-height: 100px;');
-		expect(style).toContain('--broadcast-table-primary-text: #123456;');
 	});
 
 	it('renders nothing while the mode is empty', async () => {
