@@ -8,8 +8,6 @@ import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
 
 const props = defineProps<{
 	player: Player;
-	history: PlayerMatchHistoryEntry[];
-	loading?: boolean;
 	/** The Player this modal showed before, when it was opened from their history. */
 	previousPlayer?: Player | null;
 }>();
@@ -27,8 +25,10 @@ const playerStore = usePlayerStore();
 const playerListStore = usePlayerListStore();
 const eventStore = useEventStore();
 
-// The roster's copy follows an edit made from this modal; the answer's stands until the roster holds the Player.
-const shownPlayer = computed(() => playerStore.players.find(p => p.id === props.player.id) ?? props.player);
+const { player: answeredPlayer, history, loading, error } = usePlayerMatchHistory(() => props.player.id);
+
+// The roster's copy follows an edit made from this modal, then the read's, then the Player it opened with.
+const shownPlayer = computed(() => playerStore.players.find(p => p.id === props.player.id) ?? answeredPlayer.value ?? props.player);
 const record = computed(() => formatPlayerRecord(shownPlayer.value, eventStore.displayEvent));
 const identity = computed(() => [
 	eventStore.event?.pronounsEnabled !== false
@@ -218,6 +218,13 @@ async function handleSendToScreen(screenId?: number) {
 			<div v-if="loading" class="py-10 flex justify-center">
 				<UILoadingSpinner />
 			</div>
+
+			<UIEmptyState
+				v-else-if="error && history.length === 0"
+				icon="i-lucide-circle-alert"
+				title="Failed to load match history"
+				description="It will try again shortly."
+			/>
 
 			<UIEmptyState
 				v-else-if="history.length === 0"

@@ -1,29 +1,22 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, reactive } from 'vue';
+import { defineComponent } from 'vue';
 import { createMockPlayer } from '~~/test/helpers/fixtures';
 import PlayerMatchHistoryButton from '~/components/Player/MatchHistoryButton.vue';
 
-const { mockFetch, modals } = vi.hoisted(() => ({
-	mockFetch: vi.fn(),
-	modals: [] as { open: ReturnType<typeof vi.fn>; patch: ReturnType<typeof vi.fn> }[],
+const { modals } = vi.hoisted(() => ({
+	modals: [] as { open: ReturnType<typeof vi.fn> }[],
 }));
 
-mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('useOverlay', () => () => ({
 	create: () => {
 		const modal = {
-			open: vi.fn(),
-			patch: vi.fn(),
+			open: vi.fn(() => new Promise(() => {})),
 		};
 		modals.push(modal);
 		return modal;
 	},
-}));
-mockNuxtImport('useEventStore', () => () => reactive({ eventId: 1 }));
-mockNuxtImport('useToast', () => () => ({
-	add: vi.fn(),
 }));
 
 const alice = createMockPlayer({ id: 7, name: 'Alice' }) as never;
@@ -49,8 +42,6 @@ enableAutoUnmount(afterEach);
 describe('player match history button', () => {
 	beforeEach(() => {
 		modals.length = 0;
-		mockFetch.mockReset();
-		mockFetch.mockReturnValue(new Promise(() => {}));
 	});
 
 	it('opens the Player\'s match history from their name', async () => {
@@ -63,7 +54,6 @@ describe('player match history button', () => {
 		expect(openedPlayers()).toEqual([
 			['Alice'],
 		]);
-		expect(mockFetch).toHaveBeenCalledWith('/api/events/1/players/7/match-history');
 	});
 
 	it('opens every name into one modal, so a second Player replaces the first', async () => {

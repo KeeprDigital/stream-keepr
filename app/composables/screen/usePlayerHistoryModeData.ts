@@ -20,7 +20,7 @@ export interface PlayerMatchHistoryEntry extends MatchSide {
 	opponentDeckColors: string | null;
 }
 
-interface PlayerHistory {
+export interface PlayerHistory {
 	player: Player | null;
 	rows: PlayerMatchHistoryEntry[];
 }
@@ -31,7 +31,7 @@ interface PlayerHistory {
  * opponents' Archetypes. Phases and Melee syncs are rare and not identified in
  * a history row, so any of them re-reads.
  */
-function playerHistoryDependencies(playerId: () => number | null): ScreenModeDependencies<PlayerHistory> {
+export function playerHistoryDependencies(playerId: () => number | null): ScreenModeDependencies<PlayerHistory> {
 	const involvesPlayer = (match: MatchResponse) =>
 		match.player1Id === playerId() || match.player2Id === playerId();
 	const holdsMatch = (held: PlayerHistory, matchId: number) => held.rows.some(row => row.id === matchId);
