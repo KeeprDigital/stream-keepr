@@ -70,20 +70,6 @@ const highlanderImageUrlsByCardName = computed<Record<string, string | null>>(()
 					>
 						{{ formatHighlanderPointsLabel(playerData.deckList.highlander) }}
 					</UBadge>
-					<div v-if="playerData.deckCounters.length > 0" class="flex items-center gap-1.5 min-w-0">
-						<span class="text-xs uppercase tracking-wide text-muted shrink-0">Counters</span>
-						<UBadge
-							v-for="counter in playerData.deckCounters"
-							:key="counter.key"
-							color="neutral"
-							variant="soft"
-							size="sm"
-							class="gap-1"
-						>
-							<UIcon :name="counter.icon" class="size-3.5" />
-							{{ counter.label }}
-						</UBadge>
-					</div>
 				</template>
 			</div>
 
