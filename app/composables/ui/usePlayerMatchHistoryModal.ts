@@ -8,6 +8,7 @@ function _usePlayerMatchHistoryModal() {
 	// The Player the open modal shows, and those it showed before, most recent last.
 	let current: Player | null = null;
 	const trail: Player[] = [];
+	const shownPlayerId = ref<number | null>(null);
 
 	function goBack() {
 		const previous = trail.pop();
@@ -18,6 +19,7 @@ function _usePlayerMatchHistoryModal() {
 	function show(player: Player) {
 		const opening = !current;
 		current = player;
+		shownPlayerId.value = player.id;
 
 		// The modal reads the Player's history itself, and keeps it current while open.
 		const closed = modal.open({
@@ -29,6 +31,7 @@ function _usePlayerMatchHistoryModal() {
 			void Promise.resolve(closed).then(() => {
 				current = null;
 				trail.length = 0;
+				shownPlayerId.value = null;
 			});
 		}
 	}
@@ -40,7 +43,11 @@ function _usePlayerMatchHistoryModal() {
 		show(player);
 	}
 
-	return { openPlayerMatchHistory };
+	return {
+		openPlayerMatchHistory,
+		/** The Player the open modal shows; `null` while it is closed. */
+		shownPlayerId: readonly(shownPlayerId),
+	};
 }
 
 // One modal for every Player name on screen: opening another Player, an opponent included, replaces what it shows.

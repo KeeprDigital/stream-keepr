@@ -402,12 +402,14 @@ interface DropdownItem {
 	checked?: boolean;
 	onSelect?: (event: Event) => void;
 	onUpdateChecked?: (checked: boolean) => void;
+	children?: DropdownItem[] | DropdownItem[][];
 }
 
 /**
  * Trigger slot, then while open a `role="menu"` of `role="menuitem"` buttons
  * (`menuitemcheckbox` for checkbox items). Choosing calls `onSelect` and closes,
- * unless `onSelect` calls `event.preventDefault()`.
+ * unless `onSelect` calls `event.preventDefault()`. An item with `children` is an
+ * `aria-haspopup="menu"` item that toggles its own nested `role="menu"`.
  */
 export const UDropdownMenuStub = defineComponent({
 	name: 'UDropdownMenu',
@@ -421,9 +423,18 @@ export const UDropdownMenuStub = defineComponent({
 	emits: ['update:open'],
 	setup(props, { emit }) {
 		const open = useOpen(props, emit);
+		// By position: a menu may build its items afresh on every render.
+		const expanded = ref<number | null>(null);
 		return {
 			...open,
+			expanded,
 			entries: computed(() => (props.items as DropdownItem[]).flat()),
+			childrenOf: (item: DropdownItem) => (item.children as DropdownItem[]).flat(),
+			toggle(index: number) {
+				expanded.value = expanded.value === index
+					? null
+					: index;
+			},
 			choose(item: DropdownItem, event: Event) {
 				if (item.type === 'checkbox')
 					item.onUpdateChecked?.(!item.checked);
@@ -438,6 +449,12 @@ export const UDropdownMenuStub = defineComponent({
 		<template v-for="(item, index) in entries" :key="index">
 			<hr v-if="item.type === 'separator'">
 			<div v-else-if="item.type === 'label'">{{ item.label }}</div>
+			<div v-else-if="item.children">
+				<button type="button" role="menuitem" aria-haspopup="menu" :aria-expanded="String(expanded === index)" :disabled="item.disabled" @click="toggle(index)">{{ item.label }}</button>
+				<div v-if="expanded === index" role="menu" :aria-label="item.label">
+					<button v-for="(child, childIndex) in childrenOf(item)" :key="childIndex" type="button" role="menuitem" :disabled="child.disabled" @click="choose(child, $event)">{{ child.label }}</button>
+				</div>
+			</div>
 			<button v-else type="button" :role="item.type === 'checkbox' ? 'menuitemcheckbox' : 'menuitem'" :aria-checked="item.type === 'checkbox' ? String(!!item.checked) : undefined" :disabled="item.disabled" @click="choose(item, $event)"><slot name="item-label" :item="item" :index="index">{{ item.label }}</slot></button>
 		</template>
 	</div></div>`,

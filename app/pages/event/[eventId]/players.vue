@@ -19,6 +19,7 @@ const screenStore = useScreenStore();
 const overlay = useOverlay();
 const { openPlayerDeckList } = usePlayerDeckListModal();
 const { openPlayerEdit } = usePlayerEditModal();
+usePlayerMatchHistoryLink(() => playerStore.players);
 const { sendToFirstDeckScreen, sendToScreen: sendDeckToScreen } = useSendDeckToScreen();
 const { sendToFirstPlayerHistoryScreen, sendToScreen: sendPlayerHistoryToScreen } = useSendPlayerHistoryToScreen();
 const { runRequest } = useRequestFeedback();

@@ -1520,6 +1520,10 @@ It renders names on the Players page, Matches rows (both seats and the bye), the
 
 **A row on the Players page does nothing when clicked.** Edit Player is the first action in the row menu, and the menu no longer offers View Match History, because the name already opens it.
 
+**The row menu is a `UDropdownMenu`, mounted only once its row's trigger is clicked**, so it has menu roles and keyboard navigation without a menu per virtualized row. Player Lists sit under Add to List, and a Screen send becomes a submenu (Send Deck to…, Send Match History to…) once more than one Screen could take it.
+
+**On the Players page, `?player=<id>` names the Player whose history is open** (`usePlayerMatchHistoryLink`): arriving with it opens their history once the roster loads, and it follows the modal to another Player and away when it closes. Other pages open the modal without a link, since no shell is shared between them.
+
 **Every name opens one modal.** `usePlayerMatchHistoryModal` is a shared composable, so opening another Player, an opponent from inside the modal included, replaces what the open modal shows instead of stacking a second one.
 
 **The match history modal is a Player's detail view.** Its footer holds Edit Player, Deck List, the Player List memberships (checked, toggled in place) and Send to Screen, and each row with a roster opponent sends a Head-to-Head of the shown Player and that opponent to a Head-to-Head Screen, picking both directly (`playerSource: 'players'`). Its header gives the record as the Event displays records, the Players page's Record column does too, and the pronouns and LGS the Event shows. Opening an opponent from it remembers the way back, one Player at a time, until the modal closes. It reads the history itself through `usePlayerMatchHistory`, which follows the Event Data a Player History Screen follows (`playerHistoryDependencies`, Screen Mode Data Freshness), so a Match reported or a Melee Sync landing while it is open shows without reopening it.
