@@ -2,6 +2,7 @@ import type { ServerValidatedKeys } from '~~/shared/screenModeConfigs/contract';
 import type { BackgroundLayersCapableMode } from '~~/shared/screenModes';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { BroadcastGraphicConfig, GraphicGroupChildConfig, GraphicItemConfig } from '~~/shared/types/graphics';
+import type { GraphicThemeSlot } from '~~/shared/types/graphicThemeBindings';
 import type { FeatureMatchSourceItemConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
@@ -21,6 +22,7 @@ import {
 	isKnownGraphicBindingFieldId,
 	readSocialProfileProjectedValueReference,
 } from '~~/shared/modules/graphics';
+import { graphicThemeSlotTokens } from '~~/shared/modules/graphics/themeBindings';
 import {
 	backgroundLayerStackSchema,
 	retiredVideoCompatibilitySchema,
@@ -96,6 +98,7 @@ import {
 	SOCIAL_PROFILE_TRANSITION_VALUES,
 	TEXT_OVERFLOW_POLICY_VALUES,
 } from '~~/shared/types/graphics';
+import { GRAPHIC_THEME_SLOT_VALUES } from '~~/shared/types/graphicThemeBindings';
 import {
 	FEATURE_MATCH_OVERLAY_ANCHOR_VALUES,
 	FEATURE_MATCH_SOURCE_ROLE_VALUES,
@@ -875,6 +878,32 @@ const graphicStyleSetLinkSchema = z.object({
 	revision: z.number().int().nonnegative(),
 }).strict();
 
+/* ────────────────────────────────────────────────
+ * Graphic Item Theme bindings
+ * ──────────────────────────────────────────────── */
+
+/**
+ * One slot's binding: the name of a Foundation Token of the slot's type. A
+ * write naming any other token is refused; a read of one is inert.
+ */
+function graphicThemeSlotBindingSchema(slot: GraphicThemeSlot) {
+	return z.enum(graphicThemeSlotTokens(slot) as [string, ...string[]]).optional();
+}
+
+const graphicItemThemeBindingsSchema = z.object(Object.fromEntries(
+	GRAPHIC_THEME_SLOT_VALUES.map(slot => [
+		slot,
+		graphicThemeSlotBindingSchema(slot),
+	]),
+)).strict();
+
+/** A Broadcast Graphic's own bindings: whole-composition motion and nothing else. */
+const graphicContainerThemeBindingsSchema = z.object({
+	'animation.enter': graphicThemeSlotBindingSchema('animation.enter'),
+	'animation.update': graphicThemeSlotBindingSchema('animation.update'),
+	'animation.exit': graphicThemeSlotBindingSchema('animation.exit'),
+}).strict();
+
 const graphicItemBaseShape = {
 	id: z.string().min(1).max(MAX_GRAPHIC_ITEM_ID_LENGTH),
 	label: z.string().min(1).max(100),
@@ -887,6 +916,7 @@ const graphicItemBaseShape = {
 	height: pixelSizeSchema,
 	animation: graphicAnimationSchema.optional(),
 	styleRefs: graphicItemStyleRefsSchema.optional(),
+	themeBindings: graphicItemThemeBindingsSchema.optional(),
 };
 
 /**
@@ -1215,7 +1245,7 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * quote different baselines for the same pre-existing Graphic Item.
  */
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 300;
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 3_715_514;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 3_851_414;
 
 function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
 	return items.reduce(
@@ -1382,6 +1412,7 @@ export const broadcastGraphicConfigSchema = z.object({
 	animation: graphicContainerAnimationSchema.optional(),
 	styleSet: graphicStyleSetLinkSchema.optional(),
 	styleRefs: graphicContainerStyleRefsSchema.optional(),
+	themeBindings: graphicContainerThemeBindingsSchema.optional(),
 }).strict().refine(
 	// Top-level items only: a Graphic Group's children are staggered by the group.
 	graphic => graphicStaggerNamesASubset(graphic, graphic.items.length),
@@ -1446,6 +1477,7 @@ const featureMatchLayoutCompositionSchema = z.object({
 			'Social Profile Projection placeholder styles are available only in Broadcast Graphics',
 		),
 	animation: graphicContainerAnimationSchema.optional(),
+	themeBindings: graphicContainerThemeBindingsSchema.optional(),
 }).strict().refine(
 	composition => graphicStaggerNamesASubset(composition, composition.items.length),
 	GRAPHIC_STAGGER_SUBSET_MESSAGE,

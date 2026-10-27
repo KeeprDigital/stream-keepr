@@ -10,6 +10,7 @@ import type { ScreenModeTokenName } from './screenModes';
 import type { ScreenMode } from './types/enums';
 import type { ThemeTokenWriteRefusal } from './types/theme';
 import { z } from 'zod';
+import { themeCompositeColorReferences } from './modules/theme/composites';
 import { themeTokenValueSchema } from './modules/theme/tokens';
 import { FOUNDATION_TOKENS } from './modules/theme/vocabulary';
 import { SCREEN_MODES, screenModeTokens } from './screenModes';
@@ -82,7 +83,11 @@ export function parseThemeTokenWrite(name: string, value: unknown): ThemeTokenWr
 	}
 
 	const literal = themeTokenValueSchema(definition).safeParse(value);
-	return literal.success
+	if (!literal.success)
+		return { ok: false, refusal: 'invalid-value' };
+	// A colour inside a composite names a colour Foundation Token, or nothing resolves it.
+	const colors = themeCompositeColorReferences(definition.type, literal.data);
+	return colors.every(color => themeTokenDefinition(color)?.tier === 'foundation' && FOUNDATION_TOKENS[color as FoundationTokenName].type === 'color')
 		? { ok: true, value: literal.data as ThemeTokenValue }
 		: { ok: false, refusal: 'invalid-value' };
 }

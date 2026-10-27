@@ -15,7 +15,7 @@ import {
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 	modeConfigsMapSchema,
 } from '~~/server/schemas/api/screen';
-import { graphicBindingFieldIds } from '~~/shared/modules/graphics';
+import { graphicBindingFieldIds, graphicThemeSlotTokens } from '~~/shared/modules/graphics';
 import {
 	MAX_GRAPHIC_INPUT_CHOICE_LENGTH,
 	MAX_GRAPHIC_INPUT_CHOICE_OPTIONS,
@@ -23,6 +23,7 @@ import {
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
 	MAX_GRAPHIC_TEXT_LENGTH,
 } from '~~/shared/types/graphics';
+import { GRAPHIC_THEME_SLOT_VALUES } from '~~/shared/types/graphicThemeBindings';
 
 // The Broadcast Graphics byte measurements ADR-0007 records, pinned with `toBe` so
 // that a vocabulary or cap change moves a figure visibly rather than quietly. The
@@ -32,7 +33,7 @@ import {
 // omits would make the figures look measured when they are not.
 
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
-const WORST_CASE_FLAT_BYTES = 3_712_876;
+const WORST_CASE_FLAT_BYTES = 3_848_776;
 const REALISTIC_SCREEN_AT_CAP_BYTES = 248_734;
 
 const jsonBytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
@@ -128,6 +129,18 @@ const ITEM_STYLE_REFS = {
 	'animation.update': { entryId: ENTRY, overrides: RECIPE },
 	'animation.exit': { entryId: ENTRY, overrides: RECIPE },
 };
+/** Every Theme binding slot, each naming the longest Foundation Token of its type. */
+const ITEM_THEME_BINDINGS = Object.fromEntries(GRAPHIC_THEME_SLOT_VALUES.map(slot => [
+	slot,
+	graphicThemeSlotTokens(slot).reduce((longest, name) => name.length > longest.length
+		? name
+		: longest, ''),
+]));
+const CONTAINER_THEME_BINDINGS = {
+	'animation.enter': ITEM_THEME_BINDINGS['animation.enter'],
+	'animation.update': ITEM_THEME_BINDINGS['animation.update'],
+	'animation.exit': ITEM_THEME_BINDINGS['animation.exit'],
+};
 const CONTAINER_STYLE_REFS = {
 	'animation.enter': ITEM_STYLE_REFS['animation.enter'],
 	'animation.on-screen': ITEM_STYLE_REFS['animation.on-screen'],
@@ -183,6 +196,7 @@ function item(id: string) {
 		surfaceStyle: SURFACE_STYLE,
 		animation: ANIMATION,
 		styleRefs: ITEM_STYLE_REFS,
+		themeBindings: ITEM_THEME_BINDINGS,
 	};
 }
 
@@ -204,6 +218,7 @@ function group(id: string, childIds: string[]) {
 		defaultChildSurfaceStyle: SURFACE_STYLE,
 		animation: containerAnimation(childIds),
 		styleRefs: ITEM_STYLE_REFS,
+		themeBindings: ITEM_THEME_BINDINGS,
 		children: childIds.map(childId => ({
 			...item(childId),
 			sizing: { mode: 'fixed' as const, size: 9999.5, weight: 99.5 },
@@ -247,6 +262,7 @@ function worstCaseScreen(arrangement: 'flat' | 'grouped') {
 			revision: 999999,
 		},
 		styleRefs: CONTAINER_STYLE_REFS,
+		themeBindings: CONTAINER_THEME_BINDINGS,
 		channelId: channels[index % channels.length]!.id,
 	}));
 

@@ -24,6 +24,13 @@ import FeatureMatchOverlayPreviewOutputAside from './PreviewOutputAside.vue';
 
 const props = defineProps<{ screen: Screen; eventId: number }>();
 
+/**
+ * The Theme the editor previews under (#829): this Screen's Event's, unless the
+ * author picks another to see the layout under a different Theme.
+ */
+const previewEventStore = useEventStore();
+const previewTheme = useGraphicsPreviewTheme(() => previewEventStore.event?.themeId);
+
 const featureMatchStore = useFeatureMatchStore();
 const screenStore = useScreenStore();
 const eventStore = useEventStore();
@@ -472,7 +479,13 @@ useEventListener(import.meta.client
 			</section>
 
 			<section class="min-w-0 xl:sticky xl:top-4">
+				<GraphicsPreviewThemePicker
+					v-model="previewTheme.choice.value"
+					class="mb-2"
+					:items="previewTheme.items.value"
+				/>
 				<FeatureMatchOverlayPreviewOutputAside
+					:preview-theme-values="previewTheme.previewThemeValues.value"
 					:event-id="eventId"
 					:screen="screen"
 					:config="config"
@@ -499,6 +512,7 @@ useEventListener(import.meta.client
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
 					:event-id="eventId"
+					:theme-tokens="previewTheme.themeTokens.value"
 					writable
 					@update:composition="composition => updateFields({ layout: { ...config.layout, composition } })"
 				/>

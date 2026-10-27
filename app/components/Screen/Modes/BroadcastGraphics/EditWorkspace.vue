@@ -106,6 +106,12 @@ const eventStore = useEventStore();
 const game = computed(() => eventStore.event?.game);
 
 /**
+ * The Theme the workspace previews under (#829): this Screen's Event's, unless
+ * the author picks another to see the design under a different Theme.
+ */
+const previewTheme = useGraphicsPreviewTheme(() => eventStore.event?.themeId);
+
+/**
  * The Broadcast Graphics currently composing into a program output (#373).
  *
  * Read from the same Broadcast Graphics Live Session store the hoisted Program
@@ -248,6 +254,7 @@ const leaseNotice = computed(() => {
 					:canvas-height="canvasHeight"
 					:writable="canAuthor"
 					:style-set="styleSetAuthoring.context.value ?? undefined"
+					:theme-tokens="previewTheme.themeTokens.value"
 					@update:graphics="emit('update:graphics', $event)"
 					@update:selected-target="emit('update:selectedTarget', $event)"
 				>
@@ -339,6 +346,11 @@ const leaseNotice = computed(() => {
 			</section>
 
 			<section class="min-w-0 xl:sticky xl:top-4">
+				<GraphicsPreviewThemePicker
+					v-model="previewTheme.choice.value"
+					class="mb-2"
+					:items="previewTheme.items.value"
+				/>
 				<GraphicsCompositorPreview
 					:event-id="eventId"
 					:screen="screen"
@@ -346,6 +358,7 @@ const leaseNotice = computed(() => {
 					:selected-target="selectedTarget"
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
+					:preview-theme-values="previewTheme.previewThemeValues.value"
 					@select-target="emit('update:selectedTarget', $event)"
 				/>
 			</section>
@@ -361,6 +374,7 @@ const leaseNotice = computed(() => {
 					:game="game"
 					:writable="canAuthor"
 					:style-set="styleSetAuthoring.context.value ?? undefined"
+					:theme-tokens="previewTheme.themeTokens.value"
 					@update:graphics="emit('update:graphics', $event)"
 				/>
 			</section>

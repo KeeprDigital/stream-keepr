@@ -84,6 +84,8 @@ const { fontsReady, fontsFailed, fontSources } = useGraphicAssetFontFaces(
 	contentUrlsSettled,
 );
 
+const themeTokens = useScreenGraphicThemeTokens();
+
 const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 	output: resolvedOutput.value,
 	canvasWidth: canvasWidth.value,
@@ -104,6 +106,7 @@ const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 	safeAreaGuides: previewSafeAreas?.value ?? false,
 	selectedTarget: selectedTarget.value,
 	graphicAssetContentUrl: contentUrl,
+	themeTokens: themeTokens.value,
 }));
 </script>
 

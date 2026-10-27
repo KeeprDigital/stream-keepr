@@ -447,13 +447,13 @@ describe('broadcastGraphicAuthoring', () => {
 		const built = addGraphicItem(graphic('a'), { kind: 'text', id: 'name', ...CANVAS }).graphic;
 
 		const patched = patchGraphicTypography(built, 'name', { fontSize: 96 });
+		const first = built.items[0]!;
+		const before = first.type === 'text' && first.typography;
 
 		expect(patched.items[0]).toMatchObject({
 			typography: {
+				...before,
 				fontSize: 96,
-				fontWeight: 700,
-				textAlign: 'left',
-				color: '#ffffff',
 			},
 		});
 	});
@@ -933,17 +933,20 @@ describe('broadcastGraphicAuthoring', () => {
 		] as const)('sets the base typography of a %s Item', (kind) => {
 			// Their string comes from the live Feature Match Session rather than from an
 			// author, which decides what they say and nothing about how it is set.
+			const unpatched = itemOf(withKind(kind), kind);
 			const built = patchGraphicTypography(withKind(kind), kind, { fontSize: 96 });
 			const item = itemOf(built, kind);
+			const typographyOf = (owner: typeof item) => owner.type !== 'shape'
+				&& owner.type !== 'media'
+				&& owner.type !== 'social-network-icon'
+				&& owner.type !== 'group'
+				&& owner.typography;
 
-			expect(
-				item.type !== 'shape'
-				&& item.type !== 'media'
-				&& item.type !== 'social-network-icon'
-				&& item.type !== 'group'
-				&& item.typography,
-			)
-				.toMatchObject({ fontSize: 96, fontWeight: 700 });
+			expect(typographyOf(item))
+				.toMatchObject({
+					...typographyOf(unpatched),
+					fontSize: 96,
+				});
 		});
 
 		it.each(['clock', 'player-life', 'game-wins'] as const)('gives a %s Item a Graphic Surface Style of its own', (kind) => {

@@ -42,8 +42,9 @@ function isTypography(value: unknown): value is ThemeTypography {
 
 /**
  * Resolved token values as the custom properties a Screen host sets for its
- * display. A token a property cannot carry, such as an asset or a Background
- * Layer stack, sets none: its consumer reads the resolved value itself.
+ * display. A token a property cannot carry, such as an asset, a Background
+ * Layer stack or a composite only Graphic Items consume, sets none: its
+ * consumer reads the resolved value itself.
  */
 export function themeTokenCssProperties(values: Readonly<Record<string, unknown>>): Record<string, string> {
 	const properties: Record<string, string> = {};

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'vue';
 import type { SocialProfilePresentationProjection } from '~~/shared/modules/broadcast-graphics-live-session';
-import type { GraphicAnimationOwnerValues, GraphicAnimationValues, ShapeGeometrySize } from '~~/shared/modules/graphics';
+import type { GraphicAnimationOwnerValues, GraphicAnimationValues, GraphicThemeTokens, ShapeGeometrySize } from '~~/shared/modules/graphics';
 import type { GraphicsHostTokenPresentation } from '~~/shared/modules/graphics/hostContract';
 import type {
 	BroadcastGraphicConfig,
@@ -34,6 +34,7 @@ import type { GraphicsSelectionTarget } from './selection';
 import {
 	graphicAnimationStaggerOffset,
 	isRectangularShapeGeometry,
+	paintGraphicsThemeBindings,
 	renderGraphicTextTemplate,
 	resolveGraphicAnchorPoint,
 	resolveGraphicAnimationOrigin,
@@ -325,6 +326,11 @@ export interface GraphicsCompositionRenderModelInput {
 	 * nothing else, which is what an unresolvable reference should look like.
 	 */
 	graphicAssetContentUrl?: (reference: GraphicAssetReference) => string;
+	/**
+	 * The Screen's resolved Foundation Tokens, which every bound Graphic Item
+	 * property paints from (#829). Omitted paints the Default Theme.
+	 */
+	themeTokens?: GraphicThemeTokens;
 }
 
 /** How one output reaches the content it composes. */
@@ -2752,9 +2758,9 @@ export function resolveGraphicsCompositionRenderModel(
 	input: GraphicsCompositionRenderModelInput,
 ): GraphicsCompositionRenderModel {
 	const visible = input.visibleGraphicIds;
-	const composed = visible
+	const composed = paintGraphicsThemeBindings(visible
 		? input.graphics.filter(graphic => visible.includes(graphic.id))
-		: [...input.graphics];
+		: input.graphics, input.themeTokens);
 	const selectedKey = input.selectedTarget
 		? graphicsSelectionKey(input.selectedTarget)
 		: null;

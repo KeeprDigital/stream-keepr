@@ -1,6 +1,8 @@
 import type { MaybeRefOrGetter } from 'vue';
+import type { GraphicThemeTokens } from '~~/shared/modules/graphics';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { GraphicStyleSlot } from '~~/shared/types/graphicStyleSet';
+import type { GraphicThemeSlot } from '~~/shared/types/graphicThemeBindings';
 import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelection, GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { computed, toValue } from 'vue';
@@ -9,7 +11,14 @@ import {
 	recaptureGraphicStyleOverrides,
 	unbindGraphicStyleRef,
 } from '~~/shared/modules/graphic-style-sets';
-import { replaceBroadcastGraphic } from '~~/shared/modules/graphics';
+import {
+	bindGraphicThemeToken,
+	DEFAULT_GRAPHIC_THEME_TOKENS,
+	detachGraphicThemeToken,
+	paintGraphicsThemeBindings,
+	releaseEditedGraphicThemeBindings,
+	replaceBroadcastGraphic,
+} from '~~/shared/modules/graphics';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 
 /**
@@ -21,7 +30,9 @@ import { resolveGraphicsSelection } from '~/modules/graphics/selection';
  * 1. The fail-closed Graphics Authoring Lease check.
  * 2. Resolving what the edit is aimed at: the selection, a named Broadcast Graphic, or
  *    the stack as a whole.
- * 3. Applying the authoring operation.
+ * 3. Applying the authoring operation to the stack with its Theme bindings painted,
+ *    so an edit to a bound property starts from the token's value, then releasing
+ *    each binding whose property the edit changed (#829).
  * 4. Re-capturing Graphic Style Set overrides against the stored graphic (#198).
  * 5. Replacing the stack.
  *
@@ -50,6 +61,11 @@ export interface CompositorEditingState {
 	 * could not be loaded.
 	 */
 	styleSet?: GraphicStyleAuthoringContext;
+	/**
+	 * The Foundation Tokens the editor previews under: what a bound property shows,
+	 * what detaching copies in, and what binding paints. Absent is the Default Theme.
+	 */
+	themeTokens?: GraphicThemeTokens;
 }
 
 /** An authoring operation on one Graphic Item of a Broadcast Graphic. */
@@ -85,6 +101,8 @@ export type CompositorEdit
 	}
 	| { kind: 'bind-style-ref'; slot: GraphicStyleSlot; entryId: string }
 	| { kind: 'unbind-style-ref'; slot: GraphicStyleSlot }
+	| { kind: 'bind-theme-token'; slot: GraphicThemeSlot; token: string }
+	| { kind: 'detach-theme-token'; slot: GraphicThemeSlot }
 	| {
 		/**
 		 * An edit to the stack as a whole: adding, moving, or deleting a Broadcast
@@ -126,10 +144,28 @@ export function editCompositorStack(
 ): BroadcastGraphicConfig[] | null {
 	if (!canAuthorCompositor(state))
 		return null;
-	const next = applyEdit(state, edit);
-	return next && !isSameStack(state.graphics, next)
+	const tokens = themeTokensOf(state);
+	const painted = paintGraphicsThemeBindings(state.graphics, tokens);
+	const edited = applyEdit({ ...state, graphics: painted }, edit);
+	if (!edited)
+		return null;
+	// A graphic the edit left alone goes back as it was stored, not as painted.
+	const next = edited.map((graphic) => {
+		const index = painted.indexOf(graphic);
+		if (index !== -1)
+			return state.graphics[index]!;
+		const before = painted.find(candidate => candidate.id === graphic.id);
+		return before
+			? releaseEditedGraphicThemeBindings(before, graphic)
+			: graphic;
+	});
+	return !isSameStack(state.graphics, next)
 		? recaptureEditedGraphics(state, next)
 		: null;
+}
+
+function themeTokensOf(state: Pick<CompositorEditingState, 'themeTokens'>): GraphicThemeTokens {
+	return state.themeTokens ?? DEFAULT_GRAPHIC_THEME_TOKENS;
 }
 
 /**
@@ -186,6 +222,16 @@ function applySelectionEdit(
 				: null;
 		case 'unbind-style-ref':
 			return replaceBroadcastGraphic(state.graphics, unbindGraphicStyleRef(selection.graphic, ownerId, edit.slot));
+		case 'bind-theme-token':
+			return replaceBroadcastGraphic(
+				state.graphics,
+				bindGraphicThemeToken(selection.graphic, ownerId, edit.slot, edit.token, themeTokensOf(state)),
+			);
+		case 'detach-theme-token':
+			return replaceBroadcastGraphic(
+				state.graphics,
+				detachGraphicThemeToken(selection.graphic, ownerId, edit.slot, themeTokensOf(state)),
+			);
 	}
 }
 
@@ -267,6 +313,14 @@ export function useCompositorEditing(
 		/** Stop inheriting one slot of the selected owner, keeping the value it holds. */
 		unbindStyleRef(slot: GraphicStyleSlot): boolean {
 			return edit({ kind: 'unbind-style-ref', slot });
+		},
+		/** Bind one slot of the selected owner to a Foundation Token, replacing its literal. */
+		bindThemeToken(slot: GraphicThemeSlot, token: string): boolean {
+			return edit({ kind: 'bind-theme-token', slot, token });
+		},
+		/** Detach one slot of the selected owner, keeping the token's resolved value as its literal. */
+		detachThemeToken(slot: GraphicThemeSlot): boolean {
+			return edit({ kind: 'detach-theme-token', slot });
 		},
 	};
 }

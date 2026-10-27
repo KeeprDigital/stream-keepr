@@ -2,17 +2,20 @@ import type { VueWrapper } from '@vue/test-utils';
 import type { StoredThemeTokens, ThemeTokenType, ThemeTokenValueTypes } from '~~/shared/modules/theme';
 import type { BracketEntrant, BracketPosition, TopCutBracket } from '~~/shared/modules/top-cut-bracket';
 import type { ScreenMode } from '~~/shared/types/enums';
-import type { GraphicApplicationFontSelection } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicApplicationFontSelection } from '~~/shared/types/graphics';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, reactive, ref } from 'vue';
+import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { SCREEN_MODES, screenModeTokenName, screenModeTokens } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
+import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { METAGAME_CHART_MAX_ARCHETYPES } from '~~/shared/utils/metagameChart';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
+import { text } from '~~/test/helpers/graphicsComposition';
 import { stubCapabilitySession, stubFontFaces } from '~~/test/nuxt/helpers/fontFaces';
 import Renderer from '~/components/Screen/Renderer.vue';
 
@@ -201,16 +204,16 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 // ── Sample values, distinct from every default ──
 
 const SAMPLES: { [T in ThemeTokenType]: ThemeTokenValueTypes[T] } = {
-	color: 'rgb(12, 34, 56)',
-	dimension: 37,
-	typography: {
+	'color': 'rgb(12, 34, 56)',
+	'dimension': 37,
+	'typography': {
 		font: { kind: 'application', fontId: 'mplantin' },
 		weight: 300,
 		lineHeight: 1.7,
 		tracking: 0.2,
 		case: 'lowercase',
 	},
-	backgroundLayers: [
+	'backgroundLayers': [
 		{
 			id: 'wash',
 			type: 'color',
@@ -219,11 +222,26 @@ const SAMPLES: { [T in ThemeTokenType]: ThemeTokenValueTypes[T] } = {
 			opacity: 0.5,
 		},
 	],
-	animationEffect: { effect: 'caustics' },
-	asset: {
+	'animationEffect': { effect: 'caustics' },
+	'asset': {
 		kind: 'image',
 		...testGraphicAssetReference('asset-logo', 'revision-logo'),
 	},
+	// The composites Graphic Items bind to (#829); no plain-mode Mode Token is one yet.
+	'fill': { type: 'solid', color: 'rgb(12, 34, 56)' },
+	'surface-style': {
+		fill: { type: 'solid', color: 'rgb(12, 34, 56)' },
+		fillOpacity: 0.5,
+	},
+	'shape-geometry': {
+		topLeft: { treatment: 'cut', size: 7 },
+		topRight: { treatment: 'square', size: 0 },
+		bottomRight: { treatment: 'square', size: 0 },
+		bottomLeft: { treatment: 'square', size: 0 },
+		leftSlant: 0,
+		rightSlant: 0,
+	},
+	'animation-recipe': { duration: 700, easing: 'linear', delay: 0 },
 };
 
 /** The application fonts' faces, as `main.css` declares them, under names a test can read back. */
@@ -654,6 +672,69 @@ mockNuxtImport('useCardStore', () => () => {
 	});
 });
 
+// The graphics hosts: one on-air composition holding a Theme-bound Graphic Item.
+
+const BOUND_TEXT = {
+	...text('bound', {
+		themeBindings: { 'typography.color': 'text-primary' },
+	}),
+	typography: {
+		...text('bound').typography,
+		color: '#123123',
+	},
+	text: 'Bound',
+};
+const boundComposition: BroadcastGraphicConfig = {
+	id: 'graphic',
+	name: 'Graphic',
+	items: [BOUND_TEXT],
+};
+
+mockNuxtImport('useBroadcastGraphicsModeData', () => () => ({
+	animationProjection: computed(() => ({})),
+	background: computed(() => undefined),
+	graphics: computed(() => [boundComposition]),
+	onAirGraphicIds: computed(() => [boundComposition.id]),
+	inputValues: computed(() => ({})),
+	outgoingInputValues: computed(() => ({})),
+	socialProfileValues: computed(() => ({})),
+	outgoingSocialProfileValues: computed(() => ({})),
+	socialProfilePresentations: computed(() => ({})),
+	outgoingSocialProfilePresentations: computed(() => ({})),
+	isAuthoringPreview: computed(() => false),
+	selectedTarget: computed(() => ({ type: 'canvas' })),
+	publishSelection: () => {},
+}));
+
+mockNuxtImport('useFeatureMatchOverlayModeData', () => () => ({
+	config: computed(() => ({
+		...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
+		layout: {
+			...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout,
+			composition: { ...boundComposition, id: FEATURE_MATCH_LAYOUT_COMPOSITION_ID },
+		},
+	})),
+	match: ref(null),
+	matchState: ref(null),
+	sourceMatch: ref(null),
+	round: ref(null),
+	phase: ref(null),
+	event: ref(null),
+	usesSampleDataset: computed(() => false),
+	loading: ref(false),
+	error: ref(null),
+}));
+
+mockNuxtImport('useFeatureMatchOverlaySideboardData', () => () => ({
+	sideboards: computed(() => ({ player1: null, player2: null })),
+	cardDataDegraded: ref(false),
+}));
+
+mockNuxtImport('useScreenGraphicAssetContentUrls', () => () => ({
+	contentUrl: () => '',
+	contentUrlsSettled: ref(true),
+}));
+
 // ── Mounting and reading what is painted ──
 
 let wrapper: VueWrapper | undefined;
@@ -737,10 +818,41 @@ function expectedPaint(type: ThemeTokenType, value: unknown) {
 	};
 }
 
+/** The graphics hosts, which declare no Mode Tokens: their Graphic Items bind Foundation Tokens. */
+const GRAPHICS_HOSTS = ['broadcast-graphics', 'feature-match-overlay'] as const satisfies readonly ScreenMode[];
+
+describe.each(GRAPHICS_HOSTS)('the %s display', (mode) => {
+	function boundColor() {
+		return getComputedStyle(wrapper!.get('[data-graphic-item-kind="text"] p').element).color;
+	}
+
+	it('paints a Theme-bound Graphic Item from its Event\'s Theme, and restyles it on air when the Theme changes', async () => {
+		await mountMode(mode, { 'text-primary': 'rgb(12, 34, 56)' });
+		expect(boundColor()).toBe('rgb(12, 34, 56)');
+
+		themeTokens.value = { 'text-primary': 'rgb(65, 43, 21)' };
+		await flushPromises();
+		expect(boundColor()).toBe('rgb(65, 43, 21)');
+	});
+
+	it('paints it as the Default Theme ships it when its Event has no Theme', async () => {
+		await mountMode(mode);
+
+		expect(boundColor()).toBe(FOUNDATION_TOKENS['text-primary'].default);
+	});
+});
+
 describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 	const probes = THEMED_DISPLAYS[mode];
 	const notYet = MODES_NOT_YET_ON_THEME_TOKENS[mode];
 	const declared = screenModeTokens(mode);
+
+	if ((GRAPHICS_HOSTS as readonly ScreenMode[]).includes(mode) && !notYet) {
+		it('declares no Mode Tokens: its Graphic Items bind Foundation Tokens', () => {
+			expect(declared).toEqual({});
+		});
+		return;
+	}
 
 	if (SCREEN_MODES[mode].displayType === 'control') {
 		it('consumes no Theme Token, as an operator surface', () => {

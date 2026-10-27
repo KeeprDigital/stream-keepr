@@ -335,6 +335,10 @@ _Avoid_: on-air formatting (when naming the whole group)
 One fixed canonical set of Event Data a Theme preview renders every Screen Mode against. Like the Feature Match Sample Dataset, it never appears on a live Screen Output.
 _Avoid_: dummy data, test data
 
+**Graphic Theme Binding**:
+A Graphic Item property group, or a Broadcast Graphic's enter, update or exit recipe, that names one whole Foundation Token of its type rather than holding its own value: a typography, a text or icon colour, a Graphic Surface Style, a Graphic Fill, a Shape Geometry, or a Graphic Animation Recipe. The compositor paints it from the Screen's resolved Theme. Detaching copies the resolved value in as the property's own; binding replaces it; editing it detaches it.
+_Avoid_: style reference, pin, override, Graphic Input Binding (which maps a Graphic Input to Event Data)
+
 ### Broadcast Graphics
 
 **Broadcast Graphics Screen**:
@@ -767,7 +771,7 @@ _Avoid_: Dummy data, test data
 - An **Event** uses exactly one **Theme**; an Event that chose none uses the **Default Theme**, which ships with Stream Keepr and cannot be edited or deleted
 - A **Theme** in use by any **Event** cannot be deleted, and the refusal names those Events
 - A **Theme** stores only the **Theme Tokens** it sets; every other token reads its shipped default
-- A **Foundation Token** holds a value; a **Mode Token** holds a value or names a **Foundation Token** of its type; nothing names a **Mode Token**, so every token resolves in at most one step
+- A **Foundation Token** holds a value, in which a fill's or surface's colour may name a colour **Foundation Token**; a **Mode Token** holds a value or names a **Foundation Token** of its type; nothing names a **Mode Token**, and a colour names nothing, so every token resolves in at most two steps
 - A **Screen** resolves each **Theme Token** from its own **Screen Theme Override**, else its **Event**'s **Theme**, else the token's default; overriding a **Foundation Token** reaches every **Mode Token** and **Graphic Item** on that Screen that names it
 - A **Screen Theme Override** of another mode's **Mode Token** is kept while the **Screen** shows a different **Screen Mode**, and applies again on its return
 - A **Graphic Item** property either names a whole **Foundation Token** of its type or holds its own value; detaching copies the token's resolved value in

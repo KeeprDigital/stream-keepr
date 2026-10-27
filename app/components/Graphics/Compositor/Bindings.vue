@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { GraphicThemeTokens } from '~~/shared/modules/graphics';
 import type { Game } from '~~/shared/types/enums';
 import type {
 	BroadcastGraphicConfig,
@@ -73,6 +74,8 @@ const props = defineProps<{
 	writable?: boolean;
 	/** The published Graphic Style Set the selected Broadcast Graphic is linked to. */
 	styleSet?: GraphicStyleAuthoringContext;
+	/** The Foundation Tokens the editor previews under (#829). */
+	themeTokens?: GraphicThemeTokens;
 }>();
 
 const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[]] }>();

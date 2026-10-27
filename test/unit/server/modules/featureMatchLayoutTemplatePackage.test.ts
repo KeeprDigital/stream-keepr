@@ -409,3 +409,16 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		}
 	});
 });
+
+describe('a `.sklayout` Template Package and the Theme', () => {
+	// Bindings travel as token names, so the receiver's own Theme restyles the layout.
+	it('round-trips every Theme binding, and a receiver accepts them', async () => {
+		const { document, archive } = await exportedPackage();
+		const travelled = readTemplatePackageParts(archive).template as FeatureMatchLayoutConfig;
+
+		expect(travelled.composition.items.map(item => item.themeBindings)).toEqual(document.composition.items.map(item => item.themeBindings));
+		expect(travelled.composition.items.some(item => item.themeBindings)).toBe(true);
+		const report = reportOf(await preflight(createLibrary('theme-receiver'), archive));
+		expect(report.issues.filter(issue => issue.severity === 'error')).toEqual([]);
+	});
+});

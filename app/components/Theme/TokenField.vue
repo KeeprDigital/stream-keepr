@@ -2,7 +2,7 @@
 import type { Component } from 'vue';
 import type { FoundationTokenName, ThemeTokenType, ThemeTokenValue } from '~~/shared/modules/theme';
 import type { ThemeTokenDefinitionOf } from '~~/shared/themeTokens';
-import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
+import { FOUNDATION_TOKENS, isThemeCompositeTokenType } from '~~/shared/modules/theme';
 import { themeTokenDefinition } from '~~/shared/themeTokens';
 import { THEME_TOKEN_INPUTS, themeTokenValueText } from '~/modules/theme-editor/tokenInputs';
 
@@ -90,6 +90,21 @@ const source = computed(() => {
 	return referenceOf(inheritedValue.value) ?? OWN_VALUE;
 });
 
+/**
+ * What the input edits. A composite's colours may follow colour tokens, which
+ * its resolved value no longer shows, so it edits the literal as stored, or
+ * as its default holds it.
+ */
+const editable = computed(() => {
+	if (!isThemeCompositeTokenType(definition.value.type))
+		return props.resolved;
+	if (isSet.value && !referenceOf(props.stored))
+		return props.stored as ThemeTokenValue;
+	return referenceOf(definition.value.default)
+		? props.resolved
+		: definition.value.default as ThemeTokenValue;
+});
+
 function chooseSource(value: string) {
 	if (value === source.value)
 		return;
@@ -148,7 +163,7 @@ function chooseSource(value: string) {
 		/>
 		<component
 			:is="input"
-			:model-value="resolved"
+			:model-value="editable"
 			:label="definition.label"
 			:bounds="definition.type === 'dimension' ? definition.bounds : undefined"
 			:asset-kinds="definition.type === 'asset' ? definition.assetKinds : undefined"

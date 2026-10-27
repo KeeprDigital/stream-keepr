@@ -13,6 +13,7 @@ import {
 	patchBroadcastGraphic,
 	patchGraphicItem,
 	patchGraphicTypography,
+	resolveGraphicThemeTokens,
 } from '~~/shared/modules/graphics';
 import { editCompositorStack, useCompositorEditing } from '~/modules/graphics/compositorEditing';
 
@@ -485,5 +486,79 @@ describe('a panel editing through the module', () => {
 
 		expect(editing.canAuthor.value).toBe(false);
 		expect(committed).toEqual([]);
+	});
+});
+
+describe('binding a Foundation Token', () => {
+	const tokens = resolveGraphicThemeTokens({ 'text-primary': 'rgb(1, 2, 3)' });
+	const bound = (): BroadcastGraphicConfig[] => [
+		{
+			...stack()[0]!,
+			items: [
+				{
+					...textItem,
+					themeBindings: { 'typography.color': 'text-primary' },
+				},
+			],
+		},
+		stack()[1]!,
+	];
+
+	function itemOf(graphics: readonly BroadcastGraphicConfig[] | null) {
+		const item = graphics?.[0]?.items[0];
+		return item?.type === 'text'
+			? item
+			: undefined;
+	}
+
+	it('binds the selected owner\'s slot, replacing its value with the token\'s', () => {
+		const next = editCompositorStack(state({ themeTokens: tokens }), { kind: 'bind-theme-token', slot: 'typography.color', token: 'text-primary' });
+
+		expect(itemOf(next)?.themeBindings).toEqual({ 'typography.color': 'text-primary' });
+		expect(itemOf(next)?.typography.color).toBe('rgb(1, 2, 3)');
+	});
+
+	it('detaches a slot, keeping the value the preview resolves it to', () => {
+		const next = editCompositorStack(state({
+			graphics: bound(),
+			themeTokens: tokens,
+		}), { kind: 'detach-theme-token', slot: 'typography.color' });
+
+		expect(itemOf(next)?.themeBindings).toBeUndefined();
+		expect(itemOf(next)?.typography.color).toBe('rgb(1, 2, 3)');
+	});
+
+	it.each([
+		[
+			'an edit to the bound value releases it',
+			{ color: '#00ff00' },
+			undefined,
+		],
+		[
+			'an edit to a value the token does not own keeps it',
+			{ fontSize: 30 },
+			{ 'typography.color': 'text-primary' },
+		],
+	])('%s', (_, patch, kept) => {
+		const next = editCompositorStack(state({
+			graphics: bound(),
+			themeTokens: tokens,
+		}), {
+			kind: 'author',
+			item: (graphic, itemId) => patchGraphicTypography(graphic, itemId, patch),
+		});
+
+		expect(itemOf(next)?.themeBindings).toEqual(kept);
+	});
+
+	it('returns a graphic the edit left alone as it was stored', () => {
+		const before = state({
+			graphics: bound(),
+			themeTokens: tokens,
+			selectedTarget: { type: 'graphic', graphicId: 'bug' },
+		});
+		const next = editCompositorStack(before, rename);
+
+		expect(next?.[0]).toBe(before.graphics[0]);
 	});
 });

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
 import type { BroadcastGraphicConfig, GraphicAnimationPhase } from '~~/shared/types/graphics';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
@@ -11,6 +12,7 @@ import { GRAPHIC_ANIMATION_PHASE_VALUES } from '~~/shared/types/graphics';
 import { screenOutputPath } from '~~/shared/utils/screenOutput';
 import {
 	GRAPHICS_PREVIEW_STATE_MESSAGE,
+	GRAPHICS_PREVIEW_THEME_MESSAGE,
 	isGraphicsPreviewReadyMessage,
 	isGraphicsPreviewSelectMessage,
 } from '~/modules/graphics/previewMessages';
@@ -43,6 +45,11 @@ const props = defineProps<{
 	selectedTarget: GraphicsSelectionTarget;
 	canvasWidth: number;
 	canvasHeight: number;
+	/**
+	 * The stored values of a Theme to preview bound Graphic Items under, null to
+	 * follow the Screen's Event's Theme, or absent to tell the frame nothing yet.
+	 */
+	previewThemeValues?: StoredThemeTokens | null;
 }>();
 
 const emit = defineEmits<{ selectTarget: [target: GraphicsSelectionTarget] }>();
@@ -216,6 +223,12 @@ function pushPreviewState() {
 			animation: animationPlan.value,
 		},
 	}, window.location.origin);
+	if (props.previewThemeValues !== undefined) {
+		previewFrame.value.contentWindow.postMessage({
+			type: GRAPHICS_PREVIEW_THEME_MESSAGE,
+			tokens: props.previewThemeValues && JSON.parse(JSON.stringify(props.previewThemeValues)),
+		}, window.location.origin);
+	}
 }
 
 function handlePreviewMessage(message: MessageEvent) {
@@ -251,6 +264,7 @@ watch(
 		props.selectedTarget,
 		previewSocialProfileValues.value,
 		animationPlan.value,
+		props.previewThemeValues,
 	] as const,
 	() => pushPreviewState(),
 	{ deep: true },

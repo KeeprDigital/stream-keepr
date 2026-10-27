@@ -148,6 +148,8 @@ const { itemAnimation } = useFeatureMatchOverlaySideboardRevealAnimation(
 	computed(() => usesSampleDataset.value ? undefined : graphicsContext.value),
 );
 
+const themeTokens = useScreenGraphicThemeTokens();
+
 const compositorRenderModel = computed(() => resolveFeatureMatchOverlayCompositorRenderModel({
 	output: resolvedOutput.value,
 	canvasWidth: canvasWidth.value,
@@ -167,6 +169,7 @@ const compositorRenderModel = computed(() => resolveFeatureMatchOverlayComposito
 	safeAreaGuides: showSafeAreaGuides.value,
 	selectedTarget: selectedCompositorTarget.value,
 	graphicAssetContentUrl,
+	themeTokens: themeTokens.value,
 }));
 
 const canvasStyle = computed(() => renderModel.value.canvasStyle);

@@ -272,3 +272,23 @@ export function isGraphicsPreviewSelectMessage(
 	const data = message.data as Record<string, unknown>;
 	return data.type === GRAPHICS_PREVIEW_SELECT_MESSAGE && isGraphicsSelectionTarget(data.target);
 }
+
+/**
+ * The Theme an editor previews under (#829), pushed into its embedded preview:
+ * the stored token values the frame resolves its bound Graphic Items from in
+ * place of its Event's Theme, or null to follow its Event's Theme again. Never
+ * sent to a live Screen Output.
+ */
+export const GRAPHICS_PREVIEW_THEME_MESSAGE = 'graphics-compositor:preview-theme';
+
+export function isGraphicsPreviewThemeMessage(
+	message: MessageEnvelope,
+	expected: ExpectedSender,
+): message is MessageEnvelope & { data: { type: string; tokens: Record<string, unknown> | null } } {
+	if (!isFromExpectedSender(message, expected))
+		return false;
+	const data = message.data as Record<string, unknown>;
+	return data.type === GRAPHICS_PREVIEW_THEME_MESSAGE
+		&& typeof data.tokens === 'object'
+		&& !Array.isArray(data.tokens);
+}
