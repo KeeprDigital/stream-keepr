@@ -1,10 +1,11 @@
 import type { DbMatch } from '~~/server/db/schema';
 import type { MatchUpsertInput } from '~~/server/services/match';
 import type { RoundStandingInput } from '~~/server/services/playerRoundStandings';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { matches, playerRoundStandings } from '~~/server/db/schema';
 import { buildDeleteStaleMatchesByRoundQuery } from '~~/server/services/match';
+import { diffRoundMatches, standingsDiffer } from '~~/server/services/meleeRoundDiff';
 import { buildMarkRoundSyncedQuery } from '~~/server/services/round';
 import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
 
@@ -12,23 +13,33 @@ export interface MeleeRoundSnapshotInput {
 	eventId: number;
 	roundId: number;
 	matches: MatchUpsertInput[];
-	standings: RoundStandingInput[];
+	/** `null` leaves the Round's stored Round Standings alone. */
+	standings: RoundStandingInput[] | null;
 	syncedAt?: Date;
 }
 
 export interface MeleeRoundSnapshotResult {
+	/** The Round's Melee Matches after the write, in snapshot order. */
 	matches: DbMatch[];
 	created: number;
+	/** Stored Matches the snapshot actually changed. */
 	updated: number;
 	staleDeleted: number;
+	/** Stored Matches whose Match Result changed. */
+	resultChangedMatchIds: number[];
+	/** A Match was added, removed, or re-seated. */
+	pairingsChanged: boolean;
+	/** The stored Round Standings were replaced with a different set. */
+	standingsChanged: boolean;
 }
 
 /**
- * Persist a complete Melee Round snapshot in one D1 transaction.
+ * Persist a complete Melee Round snapshot, writing only what changed.
  *
- * D1 guarantees that `db.batch()` executes sequentially and rolls the entire
- * sequence back when any statement fails. Query builders live in their owning
- * services so standalone writes and this composed operation cannot drift.
+ * Stored rows are read and diffed first. The writes then run as one D1
+ * `db.batch()`, which executes sequentially and rolls the entire sequence back
+ * when any statement fails. Query builders live in their owning services so
+ * standalone writes and this composed operation cannot drift.
  */
 export function meleeRoundSnapshotService() {
 	const replace = async (
@@ -52,24 +63,37 @@ export function meleeRoundSnapshotService() {
 			keepExternalIds.push(match.externalId);
 		}
 		const standingPlayerIds = new Set<number>();
-		for (const standing of input.standings) {
+		for (const standing of input.standings ?? []) {
 			if (standingPlayerIds.has(standing.playerId)) {
 				throw new Error(`Duplicate Round standing player identity: ${standing.playerId}`);
 			}
 			standingPlayerIds.add(standing.playerId);
 		}
 
-		const writeAt = new Date();
-		const writeAtMs = writeAt.getTime();
-		const existingMatchQueries = chunkJsonRows(keepExternalIds).map(payload => db
-			.select({ externalId: matches.externalId })
-			.from(matches)
-			.where(and(
+		// The Round's Melee Matches, plus any the snapshot moves in from another Round.
+		const snapshotIdentities = chunkJsonRows(keepExternalIds).map(payload =>
+			sql`${matches.externalId} in (select value from json_each(${payload}))`);
+		const [storedMatches, storedStandings] = await Promise.all([
+			db.select().from(matches).where(and(
 				eq(matches.eventId, input.eventId),
 				eq(matches.externalSource, 'melee'),
-				sql`${matches.externalId} in (select value from json_each(${payload}))`,
-			)));
-		const matchQueries = chunkJsonRows(input.matches).map(payload => db
+				or(eq(matches.roundId, input.roundId), ...snapshotIdentities),
+			)),
+			input.standings === null
+				? []
+				: db.select().from(playerRoundStandings).where(and(
+						eq(playerRoundStandings.eventId, input.eventId),
+						eq(playerRoundStandings.roundId, input.roundId),
+					)),
+		]);
+		const diff = diffRoundMatches(storedMatches, input.matches);
+		const changedStandings = input.standings !== null && standingsDiffer(storedStandings, input.standings)
+			? input.standings
+			: null;
+
+		const writeAt = new Date();
+		const writeAtMs = writeAt.getTime();
+		const matchQueries = chunkJsonRows(diff.toWrite).map(payload => db
 			.insert(matches)
 			.select(selectForInsert(matches, {
 				id: sql`null`,
@@ -110,28 +134,31 @@ export function meleeRoundSnapshotService() {
 				},
 			})
 			.returning());
-		const standingsDeleteQuery = db
-			.delete(playerRoundStandings)
-			.where(and(
-				eq(playerRoundStandings.eventId, input.eventId),
-				eq(playerRoundStandings.roundId, input.roundId),
-			));
-		const standingsInsertQueries = chunkJsonRows(input.standings).map(payload => db
-			.insert(playerRoundStandings)
-			.select(selectForInsert(playerRoundStandings, {
-				id: sql`null`,
-				eventId: sql`${input.eventId}`,
-				playerId: sql`json_extract(value, '$.playerId')`,
-				roundId: sql`${input.roundId}`,
-				wins: sql`json_extract(value, '$.wins')`,
-				losses: sql`json_extract(value, '$.losses')`,
-				draws: sql`json_extract(value, '$.draws')`,
-				position: sql`json_extract(value, '$.position')`,
-				points: sql`json_extract(value, '$.points')`,
-				createdAt: sql`${writeAtMs}`,
-				updatedAt: sql`${writeAtMs}`,
-			}, sql`from json_each(${payload})`)));
-		const standingsQueries = [standingsDeleteQuery, ...standingsInsertQueries];
+		const standingsQueries = changedStandings === null
+			? []
+			: [
+					db
+						.delete(playerRoundStandings)
+						.where(and(
+							eq(playerRoundStandings.eventId, input.eventId),
+							eq(playerRoundStandings.roundId, input.roundId),
+						)),
+					...chunkJsonRows(changedStandings).map(payload => db
+						.insert(playerRoundStandings)
+						.select(selectForInsert(playerRoundStandings, {
+							id: sql`null`,
+							eventId: sql`${input.eventId}`,
+							playerId: sql`json_extract(value, '$.playerId')`,
+							roundId: sql`${input.roundId}`,
+							wins: sql`json_extract(value, '$.wins')`,
+							losses: sql`json_extract(value, '$.losses')`,
+							draws: sql`json_extract(value, '$.draws')`,
+							position: sql`json_extract(value, '$.position')`,
+							points: sql`json_extract(value, '$.points')`,
+							createdAt: sql`${writeAtMs}`,
+							updatedAt: sql`${writeAtMs}`,
+						}, sql`from json_each(${payload})`))),
+				];
 		const staleDeleteQuery = buildDeleteStaleMatchesByRoundQuery(
 			input.eventId,
 			input.roundId,
@@ -143,9 +170,8 @@ export function meleeRoundSnapshotService() {
 			input.syncedAt,
 		);
 
-		const staleDeleteResultIndex = existingMatchQueries.length + matchQueries.length + standingsQueries.length;
+		const staleDeleteResultIndex = matchQueries.length + standingsQueries.length;
 		const queries = [
-			...existingMatchQueries,
 			...matchQueries,
 			...standingsQueries,
 			staleDeleteQuery,
@@ -155,27 +181,22 @@ export function meleeRoundSnapshotService() {
 			queries as [typeof queries[number], ...Array<typeof queries[number]>],
 		);
 
-		const existingExternalIds = new Set(
-			(batchResults.slice(0, existingMatchQueries.length).flat() as Array<{ externalId: string | null }>)
-				.flatMap(row => row.externalId == null
-					? []
-					: [row.externalId]),
-		);
-		const matchBatchResults = batchResults.slice(
-			existingMatchQueries.length,
-			existingMatchQueries.length + matchQueries.length,
-		) as DbMatch[][];
-		const persistedMatches = matchBatchResults.flat();
+		const writtenMatches = (batchResults.slice(0, matchQueries.length) as DbMatch[][]).flat();
 		const staleDeletedRows = batchResults[staleDeleteResultIndex] as Array<{ id: number }> | undefined;
-		const created = persistedMatches.filter(match =>
-			match.externalId != null && !existingExternalIds.has(match.externalId),
-		).length;
+		const storedByExternalId = new Map(storedMatches.map(match => [match.externalId, match]));
+		const writtenByExternalId = new Map(writtenMatches.map(match => [match.externalId, match]));
+		const created = writtenMatches.filter(match => !storedByExternalId.has(match.externalId)).length;
 
 		return {
-			matches: persistedMatches,
+			matches: keepExternalIds.map(externalId =>
+				(writtenByExternalId.get(externalId) ?? storedByExternalId.get(externalId))!),
 			created,
-			updated: persistedMatches.length - created,
+			updated: writtenMatches.length - created,
 			staleDeleted: staleDeletedRows?.length ?? 0,
+			resultChangedMatchIds: diff.resultChangedExternalIds.map(externalId =>
+				storedByExternalId.get(externalId)!.id),
+			pairingsChanged: diff.pairingsChanged,
+			standingsChanged: changedStandings !== null,
 		};
 	};
 
