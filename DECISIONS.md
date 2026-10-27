@@ -422,7 +422,7 @@ What a show wants behind everything else is a composition — a colour wash over
 ### Consequences
 
 - The mode key renamed end to end: `SCREEN_MODE_VALUES`, registries, component directories, the D1 `screens.current_mode` default, and stored rows (a pre-ship data migration, squashed by ADR-0019). OBS URLs address Screens by slug, so nothing external broke.
-- The old `mediaBackground` configuration reset rather than mapping onto a video layer (small install base, as ADR-0014). New Background Screens start empty: black until configured.
+- The old `mediaBackground` configuration reset rather than mapping onto a video layer (small install base, as ADR-0014). New Background Screens start empty: black until configured. Since #825 an empty stack, the Background Screen's or a plain mode's, paints the Theme's `background` Foundation Token instead, itself a Background Layer stack; the Default Theme's is empty, so the black stays. A Theme's media layers take a Remote Media URL only until a Theme can own a Graphic Asset Reference (#828).
 - **At most one animation layer per Screen**, enforced on the `layers` field in the schema: each is its own WebGL context and an OBS browser source is memory-tight. Liftable.
 - Opacity belongs to the layer, never to the stack or the renderer behind it.
 - Image and video layers take a Screen Media Source — a Graphics Asset Library reference or a Remote Media URL — whose reach ADR-0021 sets. Asset-sourced layers join Graphic Asset Reference indexing under the `layers.` owner-slot namespace; a plain overlay mode's own stack indexes under `<mode>.backgroundLayers.` (#580).

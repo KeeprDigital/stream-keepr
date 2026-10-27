@@ -4,7 +4,7 @@ import type { BackgroundLayer, ModeConfigsMap, ScreenConfig } from '~~/shared/ty
 import { usePreferredDark } from '@vueuse/core';
 import { DEFAULT_THEME_TOKENS } from '~~/shared/modules/theme';
 import { screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
-import { getScreenModeDefinition, resolveScreenModeHost, screenModeThemeTokenStyle } from '~/modules/screen-mode';
+import { getScreenModeDefinition, resolveScreenModeHost, screenBackgroundLayers, screenModeThemeTokenStyle } from '~/modules/screen-mode';
 
 const { screen, overlayContainer, themeTokens } = useScreenContext();
 const preferredDark = usePreferredDark();
@@ -41,16 +41,17 @@ const host = computed(() => resolveScreenModeHost({
 }));
 
 /**
- * The active mode's own Background Layer stack, painted by this host behind
- * the mode's content. Only the plain overlay modes carry one — the Background
- * Screen renders its stack itself, and the graphics hosts stay transparent.
+ * The active mode's Background Layer stack, painted by this host behind the
+ * mode's content: its own, else its Theme's background. Only the plain overlay
+ * modes carry one — the Background Screen renders its stack itself, and the
+ * graphics hosts stay transparent.
  */
 const modeBackgroundLayers = computed<BackgroundLayer[]>(() => {
 	const mode = currentMode.value;
 	if (!screenModeSupportsBackgroundLayers(mode))
 		return [];
 	const modeConfigs = (screen.value?.modeConfigs ?? {}) as ModeConfigsMap;
-	return modeConfigs[mode]?.backgroundLayers ?? [];
+	return screenBackgroundLayers(modeConfigs[mode]?.backgroundLayers, themeTokens?.value ?? DEFAULT_THEME_TOKENS, {});
 });
 
 /**

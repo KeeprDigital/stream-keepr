@@ -1,8 +1,12 @@
+import type { AnimationEffectSelection } from '../../animationEffects';
 import type { GraphicApplicationFontSelection, GraphicTextTransform } from '../../types/graphics';
+import type { ThemeBackgroundLayer } from './background';
 import { z } from 'zod';
+import { animationEffectSelectionSchema } from '../../animationEffects';
 import { clampToShapeBounds } from '../../screenModeConfigs/fields';
 import { GRAPHIC_TEXT_TRANSFORM_VALUES } from '../../types/graphics';
 import { GRAPHIC_FONT_IDS } from '../graphics/typography';
+import { themeBackgroundLayerStackSchema } from './background';
 
 /**
  * A typography Theme Token: a face and how it is set, never a size. Each
@@ -24,6 +28,10 @@ export interface ThemeTokenValueTypes {
 	/** Event Canvas pixels. */
 	dimension: number;
 	typography: ThemeTypography;
+	/** A Background Layer stack, painter's order (ADR-0016); library media waits for #828. */
+	backgroundLayers: ThemeBackgroundLayer[];
+	/** An Animation Effect and its params, from the closed vocabulary (ADR-0014). */
+	animationEffect: AnimationEffectSelection;
 }
 
 export type ThemeTokenType = keyof ThemeTokenValueTypes;
@@ -106,6 +114,10 @@ export function themeTokenValueSchema(definition: FoundationTokenDefinition | Mo
 		}
 		case 'typography':
 			return typographySchema;
+		case 'backgroundLayers':
+			return themeBackgroundLayerStackSchema;
+		case 'animationEffect':
+			return animationEffectSelectionSchema;
 	}
 }
 

@@ -1,8 +1,10 @@
-import type { StoredThemeTokens } from '~~/shared/modules/theme';
+import type { StoredThemeTokens, ThemeBackgroundLayer } from '~~/shared/modules/theme';
 import type { ScreenModeTokenOfType, ThemedScreenMode } from '~~/shared/screenModes';
 import type { ScreenMode } from '~~/shared/types/enums';
+import type { BackgroundLayer } from '~~/shared/types/screenConfig';
 import {
 	FOUNDATION_TOKENS,
+	resolveFoundationToken,
 	resolveThemeTokens,
 	themeTokenCssProperties,
 	themeTokenVar,
@@ -35,4 +37,16 @@ export function modeTokenVar<M extends ThemedScreenMode>(mode: M, token: ScreenM
 /** One of a display's own typography Mode Tokens, as the style declarations that set it. */
 export function modeTypographyStyle<M extends ThemedScreenMode>(mode: M, token: ScreenModeTokenOfType<M, 'typography'>) {
 	return themeTypographyStyle(screenModeTokenName(mode, token));
+}
+
+/**
+ * The Background Layer stack a Screen paints: its own when it has one, else
+ * its Theme's `background` Foundation Token. The Background Screen's `layers`
+ * and a plain overlay mode's `backgroundLayers` both follow it; an empty own
+ * stack is no stack, so the Theme's shows.
+ */
+export function screenBackgroundLayers(own: BackgroundLayer[] | undefined, theme: StoredThemeTokens, overrides: StoredThemeTokens): BackgroundLayer[] {
+	if (own?.length)
+		return own;
+	return resolveFoundationToken({ vocabulary: FOUNDATION_TOKENS, theme, overrides }, 'background') as ThemeBackgroundLayer[];
 }
