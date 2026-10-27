@@ -730,11 +730,6 @@ mockNuxtImport('useFeatureMatchOverlaySideboardData', () => () => ({
 	cardDataDegraded: ref(false),
 }));
 
-mockNuxtImport('useScreenGraphicAssetContentUrls', () => () => ({
-	contentUrl: () => '',
-	contentUrlsSettled: ref(true),
-}));
-
 // ── Mounting and reading what is painted ──
 
 let wrapper: VueWrapper | undefined;
