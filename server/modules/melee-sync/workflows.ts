@@ -41,6 +41,12 @@ interface MeleeSyncEventData {
 interface SyncRoundMatchesOptions {
 	/** Runs just before each write; throwing abandons it. */
 	beforeWrite?: () => Promise<void>;
+	/**
+	 * When pairings in this Round fill the previous Round's missing Round
+	 * Standings: on every sync (`always`, so a manual sync heals them), or only
+	 * when this sync stores the Round's first pairings (`onFirstPairing`).
+	 */
+	previousRoundStandings?: 'always' | 'onFirstPairing';
 }
 
 interface DeckListSyncOptions {
@@ -399,7 +405,9 @@ export function createMeleeSyncWorkflows() {
 		// Pairings for this Round complete the one before it. The Round's own write
 		// has committed, so a failure here must not lose its announcement.
 		let previousRoundStandings: Awaited<ReturnType<typeof syncPreviousRoundStandingsFromMelee>> = null;
-		if (result.matchCount > 0) {
+		const firstPairing = round.lastSyncedAt == null;
+		const fillPreviousRound = (options.previousRoundStandings ?? 'always') === 'always' || firstPairing;
+		if (result.matchCount > 0 && fillPreviousRound) {
 			try {
 				previousRoundStandings = await syncPreviousRoundStandingsFromMelee(eventId, eventData, round, options);
 			}

@@ -271,7 +271,7 @@ describe('a Live Results tick', () => {
 		});
 	});
 
-	it('writes only when it last checked, and announces nothing, when Melee reports nothing new', async () => {
+	it('records only when it last checked when Melee reports nothing new', async () => {
 		const { eventId, stage } = await seedEvent();
 		await stage(ROUND_3, [
 			pairing('a', [1, 2], [2, 0]),
@@ -281,16 +281,31 @@ describe('a Live Results tick', () => {
 		const { outcome } = await runLiveResultsTick(eventId, now);
 
 		expect(outcome).toBe('unchanged');
-		expect(announced()).toEqual([]);
-		expect(meleeCalls.mock.calls.map(call => call.slice(1))).toEqual([
-			['matches', ROUND_3],
-		]);
 		expect(await pollState(eventId)).toMatchObject({
 			nextCheckAt: secondsLater(60),
 			lastCheckedAt: now,
 			lastChangeAt: minutesAgo(5),
 			backoffStep: 0,
 		});
+	});
+
+	it('asks Melee for the Current Round\'s Matches only, leaving the previous Round\'s missing standings to its first pairing', async () => {
+		const { eventId, stage, tournament } = await seedEvent();
+		await stage(ROUND_3, [
+			pairing('a', [1, 2], [2, 0]),
+			pairing('b', [3, 4]),
+		]);
+		await stage(ROUND_4, [
+			pairing('c', [1, 3]),
+			pairing('d', [2, 4]),
+		]);
+		tournament.standings.set(ROUND_3, round3Standings);
+
+		await runLiveResultsTick(eventId, now);
+
+		expect(meleeCalls.mock.calls.map(call => call.slice(1))).toEqual([
+			['matches', ROUND_4],
+		]);
 	});
 
 	it('takes up the next Round once Melee pairs it: Players refreshed, pairings stored, the previous Round\'s standings filled', async () => {

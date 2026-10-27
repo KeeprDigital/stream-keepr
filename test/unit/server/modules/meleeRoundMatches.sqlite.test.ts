@@ -305,6 +305,56 @@ describe('pairing the next Round completes the one before it', () => {
 		expect(await syncRound(eventId, roundId(previous))).toMatchObject({ complete: true });
 	});
 
+	// Polling re-syncs the Current Round every minute, so it fills the previous
+	// Round's standings only with the first pairings; a manual sync always heals.
+	it.each([
+		{
+			case: 'a first pairing under onFirstPairing fills them',
+			firstPairing: true,
+			option: 'onFirstPairing',
+			fills: true,
+		},
+		{
+			case: 'a re-sync under onFirstPairing leaves them',
+			firstPairing: false,
+			option: 'onFirstPairing',
+			fills: false,
+		},
+		{
+			case: 'a re-sync by default fills them',
+			firstPairing: false,
+			option: undefined,
+			fills: true,
+		},
+	] as const)('the previous Round\'s missing Round Standings: $case', async ({ firstPairing, option, fills }) => {
+		const { eventId, roundId } = await seedEvent();
+		meleeMatchesByRound.set(ROUND_3, [
+			pairing('a', [1, 2], [2, 0]),
+			pairing('b', [3, 4]),
+		]);
+		await syncRound(eventId, roundId(ROUND_3));
+		meleeMatchesByRound.set(ROUND_4, [
+			pairing('c', [1, 3]),
+			pairing('d', [2, 4]),
+		]);
+		const workflows = createMeleeSyncWorkflows();
+		// Melee had no standings for Round 3 when Round 4 was first paired.
+		if (!firstPairing)
+			await workflows.syncRoundMatches({}, eventId, eventData, roundId(ROUND_4));
+		meleeStandingsByRound.set(ROUND_3, standingsAfter);
+		melee.fetchMatchesByRound.mockClear();
+
+		const result = await workflows.syncRoundMatches({}, eventId, eventData, roundId(ROUND_4), option && {
+			previousRoundStandings: option,
+		});
+
+		expect((await standingsOf(eventId, roundId(ROUND_3))).length).toBe(fills
+			? 4
+			: 0);
+		expect(result.previousRoundStandings != null).toBe(fills);
+		expect(melee.fetchMatchesByRound.mock.calls.some(([id]) => id === ROUND_3)).toBe(fills);
+	});
+
 	it('leaves a previous Round already holding Round Standings alone', async () => {
 		const { eventId, roundId } = await seedEvent();
 		meleeMatchesByRound.set(ROUND_3, [

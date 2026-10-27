@@ -163,6 +163,7 @@ async function checkCurrentRound(
 
 	const { published } = await workflows.syncRoundMatches({}, event.id, event, target.round.id, {
 		beforeWrite: checkpoint,
+		previousRoundStandings: 'onFirstPairing',
 	});
 	// A probe that found pairings has moved the Current Round on: a change.
 	return {
