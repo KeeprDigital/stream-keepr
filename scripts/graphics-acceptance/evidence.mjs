@@ -276,7 +276,6 @@ const ROUTE_WORDS = new Set([
 	'parts',
 	'replacement-operations',
 	'admin',
-	'graphics-style-sets',
 	'packages',
 ]);
 

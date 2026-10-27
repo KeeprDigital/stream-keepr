@@ -788,13 +788,13 @@ function graphicSourceDerivationsAcyclic(
  * ──────────────────────────────────────────────── */
 
 /**
- * A Graphic Style Set link, as documents recorded it before #830: an item's
- * `styleRefs`, and a Broadcast Graphic's `styleSet` and `styleRefs`. Accepted so a
- * stored, packaged or stale-client document that still carries one reads, and
- * dropped, because Style Sets are gone and their values are the document's own
- * literals already. Every other unknown key is still refused.
+ * A Graphic Style Set link, a former field of graphics documents recorded before
+ * #830 (ADR-0049): an item's `styleRefs`, and a Broadcast Graphic's `styleSet` and
+ * `styleRefs`. Accepted so a stored, packaged or stale-client document that still
+ * carries one reads, and dropped, because Style Sets are gone and their values are
+ * the document's own literals already. Every other unknown key is still refused.
  */
-const retiredGraphicStyleSetLinkSchema = z.unknown().optional().transform(() => undefined);
+const formerGraphicStyleSetLinkSchema = z.unknown().optional().transform(() => undefined);
 
 /* ────────────────────────────────────────────────
  * Graphic Item Theme bindings
@@ -833,7 +833,7 @@ const graphicItemBaseShape = {
 	width: pixelSizeSchema,
 	height: pixelSizeSchema,
 	animation: graphicAnimationSchema.optional(),
-	styleRefs: retiredGraphicStyleSetLinkSchema,
+	styleRefs: formerGraphicStyleSetLinkSchema,
 	themeBindings: graphicItemThemeBindingsSchema.optional(),
 };
 
@@ -1324,8 +1324,8 @@ export const broadcastGraphicConfigSchema = z.object({
 		)
 		.optional(),
 	animation: graphicContainerAnimationSchema.optional(),
-	styleSet: retiredGraphicStyleSetLinkSchema,
-	styleRefs: retiredGraphicStyleSetLinkSchema,
+	styleSet: formerGraphicStyleSetLinkSchema,
+	styleRefs: formerGraphicStyleSetLinkSchema,
 	themeBindings: graphicContainerThemeBindingsSchema.optional(),
 }).strict().refine(
 	// Top-level items only: a Graphic Group's children are staggered by the group.

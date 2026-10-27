@@ -118,7 +118,7 @@ Accepted · 2026-08-05, amended under #229 and #240 · [#199](https://github.com
 
 ## ADR-0007: The Broadcast Graphics Graphic Item cap is set from what a show needs, and the worst case is allowed not to fit
 
-Accepted · 2026-08-01 · [#99](https://github.com/KeeprDigital/stream-keepr/issues/99)
+Accepted · 2026-08-01 · [#99](https://github.com/KeeprDigital/stream-keepr/issues/99) · Amended 2026-10-28: the worst case is re-measured without Style Set references · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830)
 
 ### Decision
 
@@ -1499,7 +1499,7 @@ The Players page opened Edit on a row click and kept history in the menu, while 
 
 ## ADR-0049: Themes replace Graphic Style Sets, resolve live, and use a closed vocabulary of two tiers
 
-Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812)
+Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812) · Amended 2026-10-28: Graphic Style Sets and Animation Effect Presets are removed, and a document's Style Set link is a former field · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830)
 
 ### Decision
 
@@ -1533,7 +1533,7 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 - A Graphic Theme Binding (#829) is a slot name and a token name beside the property, never in place of it. The property keeps the value it last resolved to, so a document stays complete and renders without a Theme. The compositor paints every bound slot from the Screen's resolved Foundation Tokens. An author's edit to a bound slot's value detaches that slot, keeping what the author made of the resolved value. That is the only implicit change; there is no override record. A binding naming no Foundation Token of its slot's type is refused on a write and inert on a read.
 - Media treatment and on-screen cycling bind nothing, because no token type fills either.
 - Migration `0012_remove_graphic_style_sets` drops the Graphic Style Set and Animation Effect Preset libraries and a Broadcast Graphic Template's link columns (#830). A template's document is untouched, so its values stay as the literals it already held.
-- A graphics document recorded with a Style Set link, stored or in a `.skgraphic` or `.sklayout` exported before #830, still reads. An item's `styleRefs`, and a Broadcast Graphic's `styleSet` and `styleRefs`, are retired fields: accepted on every read and write and dropped, as ADR-0037's former fields are, so the next write of the document removes them. A client holding one sends it back unrefused. Every other unknown key is still refused.
+- A graphics document recorded with a Style Set link, stored or in a `.skgraphic` or `.sklayout` exported before #830, still reads. An item's `styleRefs`, and a Broadcast Graphic's `styleSet` and `styleRefs`, are former fields: accepted by the graphics schemas and dropped, as ADR-0037's are, so a write that sends the document (a Screen write, a template revision carrying its document, a package install) stores it without them. A client holding one sends it back unrefused. A copy the server makes of a stored document without parsing it, such as saving a placed graphic as a template or renaming a template, carries a stale link along, inert, until such a write. Every other unknown key is still refused.
 - A rendering holds its Event's Theme in its Event context (ADR-0022), not in a read of its own (#820). A token write advances the Theme's revision in the same statement, then announces `theme:updated` with the whole stored map on every Event using the Theme. A holder applies it only for the Theme its Event names, and only if it is newer than the revision held. A Theme switch is an Event Presentation Settings write, so it announces `event:updated`. That names the new Theme without its tokens, so a rendering whose context names a Theme it does not hold re-reads the context.
 - A Screen Theme Override write is one Screen write (`PATCH …/screens/:screenId/theme-overrides`, #827): it names tokens, each with a value or the `null` that clears it (ADR-0041), and announces `screen:updated`, so outputs re-read the Screen with its overrides. It may name any token the Screen's mode can consume: its Mode Tokens, and every Foundation Token of a type they declare, since a Mode Token may be pointed at any of them. Anything else is refused whole, and an override already stored for another mode's Mode Token stays dormant. The Screen's token section lists only what the mode's declaration consumes (`resolveThemeTokens`'s `consumed`).
 

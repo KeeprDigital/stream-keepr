@@ -1,9 +1,12 @@
 import type { BroadcastGraphicConfig } from '../../shared/types/graphics';
 
 /**
- * Graphics documents as they were recorded before #830 removed Graphic Style
- * Sets: linked to one, with its references beside the literal values.
+ * Graphics documents as they were recorded while Graphic Style Sets existed:
+ * linked to one, with its references beside the literal values.
  */
+
+/** Matches a Style Set link anywhere in a serialised document. */
+export const GRAPHIC_STYLE_SET_LINK_KEYS = /"style(?:Set|Refs)"/;
 
 const ITEM_STYLE_REFS = {
 	'typography': {
@@ -32,14 +35,14 @@ function linkItems(value: unknown): unknown {
 }
 
 /** Every Graphic Item in `document`, Graphic Group children included, carrying `styleRefs`. */
-export function withRetiredItemStyleRefs<T>(document: T): T {
+export function withFormerItemStyleRefs<T>(document: T): T {
 	return linkItems(document) as T;
 }
 
 /** A Broadcast Graphic linked to a Style Set, as were each of its Graphic Items. */
-export function withRetiredStyleSetLink(graphic: BroadcastGraphicConfig): BroadcastGraphicConfig {
+export function withFormerStyleSetLink(graphic: BroadcastGraphicConfig): BroadcastGraphicConfig {
 	return {
-		...withRetiredItemStyleRefs(graphic),
+		...withFormerItemStyleRefs(graphic),
 		styleSet: { styleSetId: 'show-style', revision: 3 },
 		styleRefs: {
 			'animation.enter': { entryId: 'motion' },

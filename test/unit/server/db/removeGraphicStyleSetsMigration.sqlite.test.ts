@@ -4,8 +4,8 @@ import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
  * Graphic Style Sets and Animation Effect Presets are removed with no data
- * migration (#830, ADR-0049). A linked Broadcast Graphic Template keeps its
- * document, and so its values as literals; the libraries and link columns go.
+ * migration. A linked Broadcast Graphic Template keeps its document, and so its
+ * values as literals; the libraries and link columns go.
  */
 describe('the Graphic Style Set removal migration', () => {
 	let harness: SqliteD1Harness;

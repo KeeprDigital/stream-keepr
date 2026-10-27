@@ -123,16 +123,13 @@ function broadcastGraphicTemplateIndexStatements(
 	now: number,
 	referenceVersion: string,
 ): D1PreparedStatement[] {
-	const condition = {
-		sql: 'EXISTS (SELECT 1 FROM broadcast_graphic_templates WHERE id = ? AND graphic_asset_reference_version = ?)',
-		params: [id, referenceVersion],
-	};
+	const committed = 'EXISTS (SELECT 1 FROM broadcast_graphic_templates WHERE id = ? AND graphic_asset_reference_version = ?)';
 	return [
 		client.prepare(`
 			DELETE FROM graphic_asset_references
 			WHERE owner_kind = '${OWNER_KIND}' AND owner_id = ?
-				AND ${condition.sql}
-		`).bind(id, ...condition.params),
+				AND ${committed}
+		`).bind(id, id, referenceVersion),
 		client.prepare(`
 			INSERT INTO graphic_asset_references (
 				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
@@ -148,8 +145,8 @@ function broadcastGraphicTemplateIndexStatements(
 				SELECT 1
 				${jsonElementGraphicAssetRevisionResolution('item')}
 			)
-				AND ${condition.sql}
-		`).bind(id, now, now, referenceFacts, ...condition.params),
+				AND ${committed}
+		`).bind(id, now, now, referenceFacts, id, referenceVersion),
 	];
 }
 

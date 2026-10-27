@@ -4,9 +4,10 @@ import type { Ref } from 'vue';
  * One reading of a library in the reusable-library scope.
  *
  * Two surfaces browse a library in that scope — the Broadcast Graphic Template
- * library and the Feature Match Layout Template library — and each does the same three things around whatever else it offers: it re-reads the
- * library, it turns a refused write into something an author can read, and it holds that
- * message until the author has seen it.
+ * library and the Feature Match Layout Template library — and each does the same
+ * three things around whatever else it offers: it re-reads the library, it turns a
+ * refused write into something an author can read, and it holds that message until
+ * the author has seen it.
  *
  * Deliberately not named for the Graphics Asset Library, which is a different thing: that
  * one owns the image, silent video, and font bytes these libraries' artifacts reference,
@@ -17,8 +18,8 @@ import type { Ref } from 'vue';
  * portable artifacts, so the import path stays with the library that has the
  * semantics.
  *
- * The first read is owned here too. All three surfaces are browsers of a library and
- * every one of them opened with the same `onMounted(() => void refresh())`; a library
+ * The first read is owned here too. Both surfaces are browsers of a library and
+ * each of them opened with the same `onMounted(() => void refresh())`; a library
  * that read nothing until something asked would be a surface showing an empty list it
  * has no evidence for.
  */
@@ -59,10 +60,10 @@ export function useReusableLibraryReading<Entry>(options: {
 	const authorship = useGraphicsAuthorship();
 
 	/**
-	 * Every refusal these three libraries report passes through here, which is why
+	 * Every refusal these two libraries report passes through here, which is why
 	 * an ended session is recognised here rather than at each call site.
 	 *
-	 * All three write through routes behind the API boundary, and importing a
+	 * Both write through routes behind the API boundary, and importing a
 	 * portable artifact runs as a Graphics Ingestion Operation on the Graphics Asset
 	 * Library's own routes — so the refusal can arrive from either, and it reaches an
 	 * author as the boundary's flat 'Authentication is required' unless it is named

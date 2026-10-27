@@ -118,8 +118,9 @@ function canAuthorCompositor(state: Pick<CompositorEditingState, 'writable'>): b
  *
  * Answers the next stack, or `null` when there is nothing to commit. That is when the
  * edit is refused (this Session does not hold the lease; the selection or named graphic
- * is gone, or is something the edit has nothing for) and when the edit changes nothing. The stack it is given is never changed, and
- * every Broadcast Graphic the edit did not touch comes back as the same object.
+ * is gone, or is something the edit has nothing for) and when the edit changes
+ * nothing. The stack it is given is never changed, and every Broadcast Graphic the
+ * edit did not touch comes back as the same object.
  */
 export function editCompositorStack(
 	state: CompositorEditingState,
