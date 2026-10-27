@@ -10,6 +10,7 @@ const eventFieldConstraints = {
 	description: z.string().max(5000).nullable().optional(),
 	holdingText: z.string().max(1000).nullable().optional(),
 	featureMatchDefaultExtraTurnsLabel: z.string().min(1).max(100).optional(),
+	featureMatchDefaultUntimedLabel: z.string().max(100).optional(),
 	cardTimeout: z.number().int().nonnegative().max(300).optional(),
 	numFeatureMatches: z.number().int().min(1).max(50).optional(),
 	featureMatchDefaultBestOf: z.number().int().min(1).max(9).optional(),

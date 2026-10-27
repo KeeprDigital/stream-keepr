@@ -80,7 +80,7 @@ const frameVideo = computed<ScreenVideoPlayback | undefined>(() => {
 		loop: media.loop,
 	};
 });
-const { displayTime } = useClockDisplay(() => matchState.value?.clock ?? null);
+const { displayTime, showsClock } = useClockDisplay(() => matchState.value?.clock ?? null);
 const selectedPreviewTarget = ref<FeatureMatchOverlaySelectionTarget>({ type: 'canvas' });
 /**
  * The shared item tree's own selection, held separately from the host-owned one
@@ -116,7 +116,9 @@ const hostState = computed(() => ({
 	sourceMatch: sourceMatch.value,
 	round: round.value,
 	phase: phase.value,
-	displayTime: displayTime.value,
+	displayTime: showsClock.value
+		? displayTime.value
+		: null,
 }));
 
 /**

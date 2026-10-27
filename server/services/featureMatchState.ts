@@ -80,6 +80,7 @@ export function featureMatchStateService() {
 				featureMatchDefaultExtraTurnsEnabled: true,
 				featureMatchDefaultExtraTurns: true,
 				featureMatchDefaultExtraTurnsLabel: true,
+				featureMatchDefaultUntimedLabel: true,
 				featureMatchDefaultMulliganTrackingEnabled: true,
 			},
 		});

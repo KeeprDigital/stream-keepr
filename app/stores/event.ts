@@ -8,7 +8,6 @@ import type {
 	UpdateTalentInput,
 } from '~/types';
 import type { MessageData } from '~/types/realtime';
-import type { Flight } from '~/utils/guardedSequence';
 import { toScreenOutputEvent } from '~~/shared/utils/screenOutputEvent';
 import { useEventDataResource } from '~/modules/event-data/client';
 
@@ -269,7 +268,7 @@ export const useEventStore = defineStore('event', () => {
 					...updatedEvent,
 				};
 
-				await syncEventDependents(original.id, updates, flight);
+				await syncEventDependents(original.id, updates);
 
 				return event.value;
 			},
@@ -414,30 +413,12 @@ export const useEventStore = defineStore('event', () => {
 	 * that changed. Uses lazy store access (Pinia-idiomatic cross-store pattern)
 	 * so the event store does not import from the other stores at the module level.
 	 */
-	async function syncEventDependents(eventId: number, updates: UpdateEventInput, flight: Flight) {
+	async function syncEventDependents(eventId: number, updates: UpdateEventInput) {
 		// Reload feature match slots when slot count changes. The realtime
 		// self-origin guard skips the server-broadcast update for the originating
 		// client, so an explicit reload is required here.
 		if (updates.numFeatureMatches !== undefined)
 			await useFeatureMatchStore().loadFeatureMatchesByEventId(eventId);
-		if (flight.stale)
-			return;
-
-		// Push updated clock settings to any already-loaded match states.
-		if (
-			updates.featureMatchDefaultClockType !== undefined
-			|| updates.featureMatchDefaultClockDuration !== undefined
-			|| updates.featureMatchDefaultCountUpAfterCountdown !== undefined
-		) {
-			const durationMs = updates.featureMatchDefaultClockDuration !== undefined
-				? updates.featureMatchDefaultClockDuration * 60 * 1000
-				: undefined;
-			useFeatureMatchStateStore().updateAllClockSettings(
-				updates.featureMatchDefaultClockType,
-				durationMs,
-				updates.featureMatchDefaultCountUpAfterCountdown,
-			);
-		}
 	}
 
 	/**

@@ -170,6 +170,14 @@ function correctedSourceSnapshot(
 	return { ...oriented, createdAt: held.createdAt };
 }
 
+const UNTIMED_REFUSED_COMMANDS = new Set<string>([
+	'AdjustClock',
+	'SetClock',
+	'StartClock',
+	'RestartClock',
+	'StartOvertime',
+]);
+
 export function applyFeatureMatchSessionEvent(
 	currentState: FeatureMatchState,
 	sourceSnapshot: FeatureMatchSourceSnapshot,
@@ -207,6 +215,11 @@ function reduceFeatureMatchSessionEvent(
 			),
 		};
 	}
+
+	// An untimed match has no clock to run and so no time to run out: nothing
+	// starts, sets or adjusts its clock, and no extra turns begin.
+	if (currentState.clock.type === 'untimed' && UNTIMED_REFUSED_COMMANDS.has(type))
+		return null;
 
 	// One event, many field writes: an operator's multi-field save folds through
 	// the same reducer cases it would have hit as serial commands, but commits as

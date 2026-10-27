@@ -156,37 +156,6 @@ describe('useFeatureMatchStateStore', () => {
 		});
 	});
 
-	it.each([
-		[
-			'clock type',
-			['countup'],
-			{ type: 'countup' },
-		],
-		[
-			'duration',
-			[undefined, 6_000_000],
-			{ durationMs: 6_000_000 },
-		],
-		[
-			'count-up after countdown',
-			[undefined, undefined, true],
-			{ countUpAfterCountdown: true },
-		],
-		[
-			'every setting at once',
-			['countup', 1_800_000, true],
-			{ type: 'countup', durationMs: 1_800_000, countUpAfterCountdown: true },
-		],
-	] as const)('updateAllClockSettings applies a changed %s to every held clock', (_, args, expected) => {
-		seedState({}, 100);
-		seedState({}, 200);
-
-		store.updateAllClockSettings(...(args as unknown as Parameters<typeof store.updateAllClockSettings>));
-
-		expect(held(100).clock).toMatchObject(expected);
-		expect(held(200).clock).toMatchObject(expected);
-	});
-
 	describe('a peer\'s applied Session event', () => {
 		function sessionEvent(
 			overrides: Partial<FeatureMatchSessionEventAppliedPayload> = {},

@@ -1,6 +1,7 @@
 import type { MaybeRefOrGetter } from 'vue';
 import type { ClockState } from '~~/shared/types/featureMatchState';
 import { useIntervalFn } from '@vueuse/core';
+import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { formatClockTime } from '~~/shared/utils/clock';
 
 /**
@@ -10,9 +11,17 @@ import { formatClockTime } from '~~/shared/utils/clock';
  *
  * Shared between the admin Clock component and the
  * match control screen ClockBar.
+ *
+ * An untimed match shows the Event's Untimed Label in place of a time, and no
+ * clock at all (`showsClock` false) while that label is blank.
  */
 export function useClockDisplay(clock: MaybeRefOrGetter<ClockState | null>) {
 	const { getServerTime } = useServerTime();
+	const eventStore = useEventStore();
+
+	const isUntimed = computed(() => toValue(clock)?.type === 'untimed');
+	const untimedLabel = computed(() => toFeatureMatchDefaults(eventStore.displayEvent).untimedLabel.trim());
+	const showsClock = computed(() => !isUntimed.value || untimedLabel.value !== '');
 
 	// Single tick counter that forces reactivity updates while clock is running
 	const tick = ref(0);
@@ -77,6 +86,8 @@ export function useClockDisplay(clock: MaybeRefOrGetter<ClockState | null>) {
 		const c = toValue(clock);
 		if (!c)
 			return '0:00';
+		if (isUntimed.value)
+			return untimedLabel.value;
 
 		// Read tick to trigger reactivity while running
 		if (c.isRunning)
@@ -106,6 +117,8 @@ export function useClockDisplay(clock: MaybeRefOrGetter<ClockState | null>) {
 
 	return {
 		displayTime,
+		isUntimed,
+		showsClock,
 		timeColorClass,
 		isPaused,
 		isExpired,

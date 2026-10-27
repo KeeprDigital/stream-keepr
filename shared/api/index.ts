@@ -147,6 +147,7 @@ export interface EventListResponse {
 	featureMatchDefaultExtraTurnsEnabled: boolean;
 	featureMatchDefaultExtraTurns: number;
 	featureMatchDefaultExtraTurnsLabel: string;
+	featureMatchDefaultUntimedLabel: string;
 	featureMatchDefaultMulliganTrackingEnabled: boolean;
 	standingsEnabled: boolean;
 	broadcastDeckListsEnabled: boolean;
@@ -185,6 +186,7 @@ export interface CreateEventInput {
 	featureMatchDefaultExtraTurnsEnabled?: boolean;
 	featureMatchDefaultExtraTurns?: number;
 	featureMatchDefaultExtraTurnsLabel?: string;
+	featureMatchDefaultUntimedLabel?: string;
 	featureMatchDefaultMulliganTrackingEnabled?: boolean;
 	standingsEnabled?: boolean;
 	broadcastDeckListsEnabled?: boolean;

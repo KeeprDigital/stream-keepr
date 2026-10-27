@@ -119,6 +119,7 @@ export const events = sqliteTable('events', {
 	featureMatchDefaultExtraTurnsEnabled: integer('feature_match_default_extra_turns_enabled', { mode: 'boolean' }).notNull().default(false),
 	featureMatchDefaultExtraTurns: integer('feature_match_default_extra_turns').notNull().default(5),
 	featureMatchDefaultExtraTurnsLabel: text('feature_match_default_extra_turns_label').notNull().default('Extra Turns'),
+	featureMatchDefaultUntimedLabel: text('feature_match_default_untimed_label').notNull().default(''),
 	featureMatchDefaultMulliganTrackingEnabled: integer('feature_match_default_mulligan_tracking_enabled', { mode: 'boolean' }).notNull().default(false),
 
 	standingsEnabled: integer('standings_enabled', { mode: 'boolean' }).notNull().default(true),

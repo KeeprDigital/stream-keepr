@@ -18,6 +18,8 @@ export interface FeatureMatchDefaults {
 	extraTurnsEnabled: boolean;
 	extraTurns: number;
 	extraTurnsLabel: string;
+	/** Shown where an untimed match's clock would be; blank shows nothing. */
+	untimedLabel: string;
 	mulliganTrackingEnabled: boolean;
 }
 
@@ -33,6 +35,7 @@ export const DEFAULT_FEATURE_MATCH_DEFAULTS: FeatureMatchDefaults = {
 	extraTurnsEnabled: false,
 	extraTurns: 5,
 	extraTurnsLabel: 'Extra Turns',
+	untimedLabel: '',
 	mulliganTrackingEnabled: false,
 };
 
@@ -49,6 +52,7 @@ const FIELD_MAP = {
 	extraTurnsEnabled: 'featureMatchDefaultExtraTurnsEnabled',
 	extraTurns: 'featureMatchDefaultExtraTurns',
 	extraTurnsLabel: 'featureMatchDefaultExtraTurnsLabel',
+	untimedLabel: 'featureMatchDefaultUntimedLabel',
 	mulliganTrackingEnabled: 'featureMatchDefaultMulliganTrackingEnabled',
 } as const satisfies Record<keyof FeatureMatchDefaults, string>;
 

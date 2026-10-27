@@ -60,6 +60,7 @@ mockNuxtImport('useFeatureMatchGameMode', () => () => ({
 
 mockNuxtImport('useClockDisplay', () => () => ({
 	displayTime: computed(() => '00:00'),
+	showsClock: computed(() => true),
 	timeColorClass: computed(() => ''),
 	isExpired: computed(() => false),
 	isInOvertime: computed(() => false),

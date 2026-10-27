@@ -434,3 +434,40 @@ describe('feature match session reducer payload guards', () => {
 		expect(state.clock.elapsedMs).toBe(2_000);
 	});
 });
+
+describe('an untimed feature match', () => {
+	const untimed = (): FeatureMatchState => createInitialFeatureMatchState(20, 'untimed');
+
+	it.each<[FeatureMatchCommandType, Record<string, unknown>]>([
+		[
+			'StartClock',
+			{ at: 2_000 },
+		],
+		[
+			'RestartClock',
+			{ at: 2_000 },
+		],
+		[
+			'SetClock',
+			{ at: 2_000, targetMs: 60_000 },
+		],
+		[
+			'AdjustClock',
+			{ at: 2_000, deltaMs: 60_000 },
+		],
+		[
+			'StartOvertime',
+			{ totalTurns: 5 },
+		],
+	])('refuses %s, leaving the match as it was', (type, payload) => {
+		const state = untimed();
+
+		expect(applyFeatureMatchSessionEvent(state, createSnapshot(), type, payload).currentState).toEqual(state);
+	});
+
+	it('still tracks the rest of the match', () => {
+		const result = applyFeatureMatchSessionEvent(untimed(), createSnapshot(), 'AdjustLife', { player: 'player1', delta: -3 });
+
+		expect(result.currentState.player1.lifeTotal).toBe(17);
+	});
+});

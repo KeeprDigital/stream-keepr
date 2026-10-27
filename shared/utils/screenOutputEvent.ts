@@ -23,6 +23,7 @@ export const SCREEN_OUTPUT_EVENT_FIELDS = [
 	'featureMatchDefaultExtraTurnsEnabled',
 	'featureMatchDefaultExtraTurns',
 	'featureMatchDefaultExtraTurnsLabel',
+	'featureMatchDefaultUntimedLabel',
 	'featureMatchDefaultMulliganTrackingEnabled',
 	'standingsEnabled',
 	'broadcastDeckListsEnabled',

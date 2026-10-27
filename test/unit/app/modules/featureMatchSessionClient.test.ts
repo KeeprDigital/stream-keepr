@@ -18,7 +18,10 @@ function createSession(overrides: Record<string, unknown> = {}) {
 		id: 7,
 		slotId: 2,
 		sequence: 4,
-		currentState: { currentGame: 1 },
+		currentState: {
+			currentGame: 1,
+			clock: { type: 'countdown' },
+		},
 		...overrides,
 	};
 }
@@ -219,6 +222,30 @@ describe('feature Match Session client module', () => {
 
 		expect(repository.sendCommand).not.toHaveBeenCalled();
 		expect(result.session).toMatchObject({ id: session.id, sequence: session.sequence });
+	});
+
+	it('leaves an untimed match out of a bulk clock action', async () => {
+		repository.listSlots.mockResolvedValue([
+			{
+				id: 2,
+				activeSession: createSession(),
+			},
+			{
+				id: 3,
+				activeSession: createSession({
+					id: 8,
+					slotId: 3,
+					currentState: {
+						currentGame: 1,
+						clock: { type: 'untimed' },
+					},
+				}),
+			},
+		]);
+
+		const result = await useFeatureMatchSessionClient().bulkClockAction(1, 'start');
+
+		expect(result.updates.map(update => update.featureMatchId)).toEqual([2]);
 	});
 
 	it('orchestrates bulk clock actions from slot sessions', async () => {

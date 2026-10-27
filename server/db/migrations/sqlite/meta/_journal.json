@@ -43,6 +43,13 @@
       "when": 1793009018041,
       "tag": "0005_melee_owned_match_results",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793063107330,
+      "tag": "0006_event_untimed_label",
+      "breakpoints": true
     }
   ]
 }

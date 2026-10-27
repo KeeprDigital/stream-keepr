@@ -52,6 +52,7 @@ const {
 
 const {
 	displayTime,
+	showsClock,
 	timeColorClass,
 	isExpired,
 	isInOvertime,
@@ -124,7 +125,7 @@ function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
 				<span v-else class="game-label" />
 
 				<span
-					v-if="config.showClock"
+					v-if="config.showClock && showsClock"
 					class="clock"
 					:class="[
 						timeColorClass,

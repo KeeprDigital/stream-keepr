@@ -636,6 +636,16 @@ describe('graphicsCompositionRenderModel', () => {
 			expect(rendered.textStyle?.fontSize).toBe('64px');
 		});
 
+		// An untimed match with a blank Untimed Label has no clock to show: the item
+		// keeps its place but paints nothing, not even its surface.
+		it('renders nothing for a Clock Graphic Item when the host has no clock to show', () => {
+			const rendered = contextItem(clock('clock-1'), { ...FEATURE_MATCH, clockDisplayTime: null });
+
+			expect(rendered.kind).toBe('clock');
+			expect(rendered.text).toBeUndefined();
+			expect(rendered.surface).toBeUndefined();
+		});
+
 		it('renders one Player life total and leaves an absent one empty', () => {
 			// An absent total is the session not holding one yet. Rendering it as `0`
 			// would put a wrong number on program that looks exactly like a right one.

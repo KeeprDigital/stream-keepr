@@ -54,6 +54,7 @@ mockNuxtImport('useFeatureMatchOverlayModeData', () => () => ({
 
 mockNuxtImport('useClockDisplay', () => () => ({
 	displayTime: computed(() => '12:34'),
+	showsClock: computed(() => true),
 }));
 
 /** The per-side deck data the host's own fetch path resolved; a stub here so these tests stay about composition, not fetching. */
