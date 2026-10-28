@@ -1688,7 +1688,7 @@ Accepted · 2026-10-28
 
 - **Columns:** each board's columns are chosen alongside the other's. A set column count is kept.
 - **Stack:** a stacked sideboard shows less of each card, down to its name bar (`MIN_STACK_REVEAL_SHARE`), before its cards shrink.
-- **Fuller rows:** of card sizes within 5% of the largest, the fewest empty places in last rows win.
+- **Fuller, fewer rows:** of card sizes within 10% of the largest, the fewest empty places in last rows win, then the fewest rows, so a deck spreads across the space rather than leaving a side bare.
 - **Placement:** the boards are sized exactly and fill the space they share. Across the axis they share, each board sits at its own `alignment`, as far as the Screen's edge, a sideboard's heading with it. Along it they sit together at the mainboard's `alignment`, so the space they leave is shared out around them. A sideboard aligned away from the mainboard (bottom below it, right beside it) goes to that far edge instead. A board fitting itself places its cards at its own `alignment`.
 - **First frame:** until the space is measured, each board fits itself.
 

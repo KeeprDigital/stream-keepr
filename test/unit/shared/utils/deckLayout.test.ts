@@ -118,7 +118,7 @@ describe('solveDeckLayout', () => {
 		expect(reveal).toBeGreaterThanOrEqual(MIN_STACK_REVEAL_SHARE * (layout.cardWidth / CARD_ASPECT) - 0.001);
 	});
 
-	// Of card sizes within 5% of the largest, the fewest empty places in last rows win.
+	// Of card sizes within 10% of the largest, the fewest empty places in last rows win.
 	it.each([
 		{ count: 13, columns: 7 },
 		{ count: 12, columns: 6 },
@@ -167,13 +167,22 @@ describe('solveDeckLayout', () => {
 	});
 
 	// Of near-equal card sizes with as full rows, the layout in fewest rows wins, spread across the space.
-	it('spreads a deck across the space rather than leaving it empty beside it', () => {
+	it.each([
+		{ gap: 8, height: 940 },
+		{ gap: 24, height: 920 },
+	])('spreads a deck across the space rather than leaving it empty beside it, $gap px apart', ({ gap, height }) => {
 		const input = space({
 			width: 1880,
-			height: 940,
+			height,
 			placement: 'below',
-			mainboard: grid(23),
-			sideboard: grid(8, null, 36),
+			mainboard: {
+				...grid(23),
+				gap,
+			},
+			sideboard: {
+				...grid(8, null, 36),
+				gap,
+			},
 		});
 		const layout = solveDeckLayout(input)!;
 

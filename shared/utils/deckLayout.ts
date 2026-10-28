@@ -3,8 +3,8 @@ import { CARD_ASPECT, MAX_CARD_GRID_COLUMNS } from './cardGrid';
 /** The least of a stacked card that still shows, as a share of its height: its name bar. */
 export const MIN_STACK_REVEAL_SHARE = 0.09;
 
-/** Card sizes within this share of the largest count as equally large, and the fuller rows win. */
-const FULLER_ROWS_TOLERANCE = 0.05;
+/** Card sizes within this share of the largest count as equally large: then fuller, fewer rows win. */
+const LAYOUT_TOLERANCE = 0.1;
 
 export interface DeckLayoutGridBoard {
 	view: 'grid';
@@ -177,7 +177,7 @@ function solvedStack(board: DeckLayoutStackBoard, cardWidth: number, height: num
  * One Deck List's boards laid out together at one card size: the largest at
  * which both fit the space they share. Each board's columns are chosen with
  * the other's (a fixed count is kept), and a stacked sideboard shows less of
- * each card before its cards shrink. Of card sizes within 5% of the largest,
+ * each card before its cards shrink. Of card sizes within 10% of the largest,
  * the one leaving the fewest empty places in last rows wins, then the one in
  * the fewest rows, so a deck spreads across the space rather than leaving a
  * side bare. A sideboard grid under the mainboard choosing its own columns is
@@ -209,7 +209,7 @@ export function solveDeckLayout(input: DeckLayoutInput): DeckLayout | null {
 	if (largest <= 0)
 		return null;
 	return candidates
-		.filter(candidate => candidate.layout.cardWidth >= largest * (1 - FULLER_ROWS_TOLERANCE))
+		.filter(candidate => candidate.layout.cardWidth >= largest * (1 - LAYOUT_TOLERANCE))
 		.sort((a, b) => a.empty - b.empty || a.rows - b.rows || b.layout.cardWidth - a.layout.cardWidth)[0]!
 		.layout;
 }
