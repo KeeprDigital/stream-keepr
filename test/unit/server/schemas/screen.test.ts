@@ -138,7 +138,7 @@ describe('deckModeConfigSchema', () => {
 		}).success).toBe(false);
 	});
 
-	// Only a sideboard stacks, as the strip beside the mainboard (ADR-0053).
+	// Only a sideboard stacks, as the strip beside the mainboard (ADR-0054).
 	it.each([
 		{ board: 'mainboard', view: 'stack', accepted: false },
 		{ board: 'mainboard', view: 'grid', accepted: true },
@@ -836,7 +836,6 @@ describe('metagameModeConfigSchema', () => {
 		currentPage: 1,
 		showHeader: true,
 		headerText: 'Full Field Metagame',
-		animateEntries: true,
 	};
 	const conversionTarget = { conversionMetric: 'topN' as const, conversionThreshold: 8 };
 

@@ -259,7 +259,7 @@ These values were checked against the formula. The 60-card row is capped at 12 c
 
 **Files:**
 
-- Modify: `DECISIONS.md`: append `## ADR-0053: Cards fit the Event Canvas or take a fixed width`. It covers:
+- Modify: `DECISIONS.md`: append `## ADR-0054: Cards fit the Event Canvas or take a fixed width`. It covers:
   - Fixed vs Fit;
   - auto columns, chosen from the Event Canvas rather than measured so Settings and output agree on page counts;
   - stack only as the beside sideboard strip, and why (never used elsewhere);
@@ -277,4 +277,4 @@ These values were checked against the formula. The 60-card row is capped at 12 c
   - the same at 10 cards;
   - Deck: a 75-card mainboard grid in Fit with a 15-card sideboard strip beside it;
   - Deck: a sideboard grid below.
-- [ ] **Step 4:** Commit `docs(screens): ADR-0053 card sizing`, push, and open a draft PR titled `feat(screens): cards fit the screen or take a fixed width`.
+- [ ] **Step 4:** Commit `docs(screens): ADR-0054 card sizing`, push, and open a draft PR titled `feat(screens): cards fit the screen or take a fixed width`.

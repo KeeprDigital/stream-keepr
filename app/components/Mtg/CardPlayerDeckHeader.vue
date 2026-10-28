@@ -23,6 +23,10 @@ const playerOptions = computed(() => {
 	});
 });
 
+// A selection restored before mount, as by a linked reload, has no deck loaded yet.
+if (selectedPlayerId.value && !cardStore.playerDeckHasData)
+	void cardStore.loadPlayerDeck(selectedPlayerId.value);
+
 // When player selection changes
 watch(selectedPlayerId, async (playerId) => {
 	if (playerId) {

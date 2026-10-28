@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
+
 const props = defineProps<{
 	scryfallId: string | null;
 	name?: string;
@@ -7,16 +9,7 @@ const props = defineProps<{
 
 const imageError = ref(false);
 
-/**
- * Scryfall CDN URL for the card's normal face image.
- * Format: https://cards.scryfall.io/normal/front/{char1}/{char2}/{uuid}.jpg
- */
-const imageUrl = computed(() => {
-	if (!props.scryfallId)
-		return null;
-	const id = props.scryfallId;
-	return `https://cards.scryfall.io/normal/front/${id[0]}/${id[1]}/${id}.jpg`;
-});
+const imageUrl = computed(() => scryfallCardImageUrl(props.scryfallId));
 
 const widthClass = computed(() => {
 	switch (props.size) {

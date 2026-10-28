@@ -22,7 +22,7 @@ export interface CardGridColumnsOptions {
  * A card grid's column count. Auto columns are chosen from the card count, the
  * Event Canvas inside the Screen inset, and for a Fixed grid its card width and
  * gap, never from the rendered page: a settings editor reads the same inputs
- * its Screen Output does, so both count the same pages (ADR-0053).
+ * its Screen Output does, so both count the same pages (ADR-0054).
  */
 export function useCardGridColumns(options: CardGridColumnsOptions): ComputedRef<number> {
 	const { screen, themeTokens, eventCanvas } = useScreenContext();

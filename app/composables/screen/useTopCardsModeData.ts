@@ -1,7 +1,9 @@
 import type { CardBreakdownEntry, CardBreakdownResponse } from '~~/shared/types/metagame';
+import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
 import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
+import { useStagedScreenContent } from '~/modules/screen-mode/readiness';
 
 /** A card in the grid with its rank across the whole ranking, not just its page. */
 export interface RankedTopCard {
@@ -43,7 +45,7 @@ export function useTopCardsModeData() {
 	// ── Pagination ──
 	// A Page Rotation over the ranked cards, `cardsPerPage` (the declared page
 	// size) a page. Columns are the Screen's to lay out in the space it measures;
-	// they never change which cards a page holds (ADR-0053).
+	// they never change which cards a page holds (ADR-0054).
 	const rankedCards = computed(() => entries.value.map((entry, index) => ({ entry, rank: index + 1 })));
 	const {
 		rowCount,
@@ -54,9 +56,21 @@ export function useTopCardsModeData() {
 		nextPage,
 		prevPage,
 	} = usePaginatedScreenMode({ mode: 'top-cards', config, rows: rankedCards });
-	const pageEntries = computed<RankedTopCard[]>(() => pageData.value);
 	/** The cards a full page holds, which every page lays out as, so a short last page keeps its size. */
 	const pageCapacity = computed(() => Math.max(1, Math.min(config.value.cardsPerPage, entries.value.length)));
+
+	// ── Staging ──
+	// A page, a new one or new data, reaches program once its card images have
+	// loaded, together with its page indicator.
+	const { shown: shownPage, staging } = useStagedScreenContent(
+		() => ({
+			entries: pageData.value,
+			currentPage: currentPage.value,
+			totalPages: totalPages.value,
+		}),
+		page => page.entries.flatMap(({ entry }) => scryfallCardImageUrl(entry.scryfallId) ?? []),
+	);
+	const pageEntries = computed(() => shownPage.value.entries);
 
 	// ── Header ──
 	const headerText = computed(() => {
@@ -88,6 +102,8 @@ export function useTopCardsModeData() {
 		config,
 		loading,
 		error,
+		/** Rendering Readiness: its first read has answered or failed, and its page has loaded. */
+		ready: computed(() => freshness.answered.value && !staging.value),
 		isEmpty,
 		emptyMessage,
 		headerText,
@@ -96,8 +112,8 @@ export function useTopCardsModeData() {
 		pageEntries,
 		pageCapacity,
 		rowCount,
-		currentPage,
-		totalPages,
+		currentPage: computed(() => shownPage.value.currentPage),
+		totalPages: computed(() => shownPage.value.totalPages),
 		setPage,
 		nextPage,
 		prevPage,

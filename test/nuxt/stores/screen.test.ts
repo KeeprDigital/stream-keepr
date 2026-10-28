@@ -128,6 +128,58 @@ describe('useScreenStore', () => {
 			expect(store.screens.map(s => s.stateVersion)).toEqual([5]);
 		});
 
+		// A page whose layout loads Screens after it must not read its own superseded load as a failure.
+		it.each([
+			[
+				'first',
+				[0, 1],
+			],
+			[
+				'last',
+				[1, 0],
+			],
+		])('answers a load superseded for the same Event with the newer load\'s Screens, served %s', async (_, order) => {
+			const answers = [
+				deferred<unknown>(),
+				deferred<unknown>(),
+			];
+			mockRepo.list
+				.mockReturnValueOnce(answers[0]!.promise)
+				.mockReturnValueOnce(answers[1]!.promise);
+			const older = store.loadScreensByEventId(1);
+			const newer = store.loadScreensByEventId(1);
+			const fresh = [
+				createMockScreen({ id: 2, name: 'Fresh' }),
+			];
+			const served = [
+				[
+					createMockScreen({ id: 1, name: 'Stale' }),
+				],
+				fresh,
+			];
+
+			for (const index of order)
+				answers[index]!.resolve(served[index]);
+
+			expect(await older).toEqual(fresh);
+			expect(await newer).toEqual(fresh);
+			expect(store.screens).toEqual(fresh);
+		});
+
+		it('answers nothing for a load the store reset superseded', async () => {
+			const answer = deferred<unknown>();
+			mockRepo.list.mockReturnValueOnce(answer.promise);
+			const load = store.loadScreensByEventId(1);
+
+			store.$reset();
+			answer.resolve([
+				createMockScreen({ id: 1 }),
+			]);
+
+			expect(await load).toBeNull();
+			expect(store.screens).toEqual([]);
+		});
+
 		it('does not let a refresh that raced a settled save overwrite it', async () => {
 			// A GET issued before the save commits and served after it would visibly undo the edit (#251).
 			vi.useFakeTimers();

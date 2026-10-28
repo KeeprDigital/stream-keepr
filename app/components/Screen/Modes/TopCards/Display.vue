@@ -4,10 +4,10 @@ import { useElementSize } from '@vueuse/core';
 import { fitColumns } from '~~/shared/utils/cardGrid';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { config, error, isEmpty, headerText, pageEntries, currentPage, totalPages, pageCapacity } = useTopCardsModeData();
+const { config, error, ready, isEmpty, headerText, pageEntries, currentPage, totalPages, pageCapacity } = useTopCardsModeData();
 
 // ── Columns, from the space the grid really has ──
-// Pages hold cards, not rows (ADR-0053), so the Screen chooses its columns from
+// Pages hold cards, not rows (ADR-0054), so the Screen chooses its columns from
 // the space it measures: Fit auto columns are the count at which a full page's
 // cards are largest; Fixed auto columns are as many as fit across.
 
@@ -54,7 +54,7 @@ const pageIndicatorStyle = {
 	color: modeTokenVar('top-cards', 'page-indicator-text'),
 };
 
-// Its sizes are its own config, in Event Canvas px (ADR-0053).
+// Its sizes are its own config, in Event Canvas px (ADR-0054).
 const cardGap = computed(() => `${config.value.cardGap}px`);
 const cardWidth = computed(() => `${config.value.cardWidth}px`);
 /** The badges' text size, which each badge sizes itself around. */
@@ -99,6 +99,7 @@ function statText(entry: CardBreakdownEntry): string | null {
 <template>
 	<ScreenModeBase
 		:error="error"
+		:ready="ready"
 		:empty="isEmpty"
 	>
 		<div class="top-cards-display relative flex flex-col gap-4 h-full w-full" :style="displayStyle">

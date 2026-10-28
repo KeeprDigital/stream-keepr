@@ -399,7 +399,17 @@ export function useBroadcastGraphicsModeData() {
 		stopLiveClock();
 	});
 
+	/**
+	 * Rendering Readiness: an authoring preview composes what it is pushed; a
+	 * live output has read its Live Session.
+	 */
+	const ready = computed(() => {
+		const screenId = screen.value?.id;
+		return isAuthoringPreview.value || (screenId != null && sessionStore.sessions.has(screenId));
+	});
+
 	return {
+		ready,
 		animationProjection,
 		background,
 		graphics,

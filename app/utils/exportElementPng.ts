@@ -1,3 +1,5 @@
+import { waitForImage, waitForVideo } from './renderedMediaReadiness';
+
 export interface ExportElementPngOptions {
 	width: number;
 	height: number;
@@ -65,44 +67,8 @@ async function waitForFonts() {
 		await fonts.ready;
 }
 
-function imageHasSource(image: HTMLImageElement) {
-	return Boolean(image.currentSrc || image.src || image.getAttribute('src'));
-}
-
-async function waitForImage(image: HTMLImageElement) {
-	if (!imageHasSource(image) || (image.complete && image.naturalWidth > 0))
-		return;
-
-	if (typeof image.decode === 'function') {
-		try {
-			await image.decode();
-			return;
-		}
-		catch {
-			// Fall back to load/error listeners below; browsers may reject decode for cached cross-origin images.
-		}
-	}
-
-	await new Promise<void>((resolve) => {
-		image.addEventListener('load', () => resolve(), { once: true });
-		image.addEventListener('error', () => resolve(), { once: true });
-	});
-}
-
 async function waitForImages(element: HTMLElement) {
 	await Promise.all(Array.from(element.querySelectorAll('img')).map(waitForImage));
-}
-
-async function waitForVideo(video: HTMLVideoElement) {
-	if (!video.currentSrc && !video.src && !video.getAttribute('src'))
-		return;
-	if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA)
-		return;
-
-	await new Promise<void>((resolve) => {
-		video.addEventListener('loadeddata', () => resolve(), { once: true });
-		video.addEventListener('error', () => resolve(), { once: true });
-	});
 }
 
 async function waitForVideos(element: HTMLElement) {

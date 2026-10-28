@@ -69,7 +69,6 @@ function createPlayerData(): MatchPlayerDeckData {
 			isPrimary: true,
 			cards: [],
 		},
-		deckCounters: [],
 		deckTokens: [],
 		mainboard: [
 			createCard('Consider', 'mainboard', 4),

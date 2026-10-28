@@ -19,7 +19,12 @@ export async function loadLiveResultsStatus(eventId: number): Promise<MeleeLiveR
 	return {
 		enabled: event.meleeLiveResultsEnabled,
 		currentRound: current
-			? { id: current.id, name: current.name, phaseName: phase?.name ?? null }
+			? {
+					id: current.id,
+					name: current.name,
+					phaseId: current.phaseId,
+					phaseName: phase?.name ?? null,
+				}
 			: null,
 		lastCheckedAt: event.meleeLiveResultsLastCheckedAt,
 		lastChangeAt: event.meleeLiveResultsLastChangeAt,

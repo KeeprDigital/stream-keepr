@@ -20,10 +20,10 @@ const quantityPositionSchema = z.enum(QUANTITY_POSITION_VALUES);
  * their own (#478): which view renders the board, and the knobs each view
  * reads — grid reads its columns and how its cards are sized, list reads
  * listColumns. Only the sideboard stacks, as the strip beside the mainboard
- * (ADR-0053), so each board names its own views, and only it says how much of
+ * (ADR-0054), so each board names its own views, and only it says how much of
  * a stacked card shows. Visibility is the `board` selection's concern, so a
  * block carries no show/hide of its own. Its card width and gap are config,
- * read only by its board (ADR-0053).
+ * read only by its board (ADR-0054).
  */
 function deckBoardLayoutShape<const Views extends readonly [string, ...string[]]>(views: Views) {
 	return {
@@ -54,7 +54,7 @@ const sideboardLayoutShape = {
 /**
  * A layout block's former fields: its size preset and stack share, which
  * `cardWidth` and `stackReveal` replaced, and `dynamicCardSize`, which
- * `cardSizing` replaced (ADR-0053).
+ * `cardSizing` replaced (ADR-0054).
  */
 const FORMER_BOARD_LAYOUT_FIELDS = ['cardSize', 'stackOverlap', 'dynamicCardSize'] as const;
 
@@ -148,7 +148,7 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	/** Where the companion's tag sits on its card: a corner puts the tag's own edge there. */
 	companionTagPosition: editorField(quantityPositionSchema.optional(), { label: 'Badge Position' }),
 
-	// Text sizes in px; each badge, pill and chip sizes itself around its own (ADR-0053).
+	// Text sizes in px; each badge, pill and chip sizes itself around its own (ADR-0054).
 	quantityBadgeSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Badge Text Size' }),
 	pointsBadgeSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Badge Text Size' }),
 	metaPillSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Details Text Size' }),
@@ -188,7 +188,7 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 		'highlanderPointsBgColor',
 		'quantityTextColor',
 		'quantityBgColor',
-		// Their size presets, which the px text sizes replaced (ADR-0053).
+		// Their size presets, which the px text sizes replaced (ADR-0054).
 		'deckMetaPillSize',
 		'highlanderPointedCardsSize',
 		'highlanderPointsSize',
@@ -213,7 +213,7 @@ export interface ResolvedDeckBoards {
  * lone `{ columns: 6 }` — so every rendering and settings surface resolves
  * through this rather than reading the fragments directly. A mainboard stack,
  * which only a client older than migration 0014 could still write, reads as
- * a grid (ADR-0053), so neither a rendering nor the next board write carries it.
+ * a grid (ADR-0054), so neither a rendering nor the next board write carries it.
  */
 export function resolveDeckBoards(config: Partial<DeckModeConfig>): ResolvedDeckBoards {
 	const mainboard = {

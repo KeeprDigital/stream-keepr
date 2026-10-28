@@ -23,6 +23,7 @@ const {
 	sideboard,
 	boardColumns,
 	error,
+	ready,
 	hasDisplayedDeck,
 	displayedDeckVersion,
 	pendingSwapVersion,
@@ -94,7 +95,7 @@ const showMainboard = computed(() => board.value !== 'sideboard' && mainboard.va
 const showSideboard = computed(() => board.value !== 'mainboard' && sideboard.value.length > 0);
 
 // A sideboard stacks only as the strip beside a mainboard; anywhere else its
-// stack renders as a grid (ADR-0053), keeping the stored view for when it
+// stack renders as a grid (ADR-0054), keeping the stored view for when it
 // moves back beside.
 const sideboardBeside = computed(() =>
 	board.value === 'full'
@@ -394,7 +395,7 @@ const companionTagPositionClass = computed(() =>
 	BADGE_POSITION_CLASSES[config.value.companionTagPosition ?? DEFAULT_COMPANION_TAG_POSITION]);
 
 // Each badge, pill and chip sizes itself around its text, whose size is the
-// Screen's own config (ADR-0053), keeping the proportions its former medium size had.
+// Screen's own config (ADR-0054), keeping the proportions its former medium size had.
 
 /** One text size in px, the Screen's or its default. */
 function textSize(key: keyof typeof DEFAULT_DECK_TEXT_SIZES): string {
@@ -528,6 +529,7 @@ function stackCardStyle(section: VisibleBoard, index: number) {
 <template>
 	<ScreenModeBase
 		:error="error"
+		:ready="ready"
 	>
 		<!-- Deck Content -->
 		<div class="deck-content w-full h-full" :style="displayStyle">

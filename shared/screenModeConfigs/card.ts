@@ -7,7 +7,7 @@ import { editorField } from './fields';
 export const cardModeConfigContract = defineScreenModeConfigContract({
 	// Optional feature match binding (for decklist convenience, not required)
 	featureMatchId: z.number().int().positive().nullable().optional(),
-	/** The card's width in Event Canvas px; it replaced `scale` (ADR-0053). */
+	/** The card's width in Event Canvas px; it replaced `scale` (ADR-0054). */
 	cardWidth: editorField(z.number().int().min(120).max(1600).optional(), { label: 'Card Width' }),
 }, {
 	featureMatchId: null,

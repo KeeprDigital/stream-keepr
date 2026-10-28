@@ -33,7 +33,7 @@ const assetReferences = computed<GraphicAssetReference[]>(() =>
 	}),
 );
 
-const { contentUrl } = useScreenGraphicAssetContentUrls(assetReferences);
+const { contentUrl, contentUrlsSettled } = useScreenGraphicAssetContentUrls(assetReferences);
 
 /**
  * One rendered layer, everything already decided: media URLs resolved, the
@@ -93,7 +93,11 @@ const layerViews = computed(() => enabledLayers.value.map(layerView));
 </script>
 
 <template>
-	<div class="background-layer-stack" aria-hidden="true">
+	<div
+		class="background-layer-stack"
+		aria-hidden="true"
+		:data-render-pending="contentUrlsSettled ? undefined : ''"
+	>
 		<div
 			v-for="view in layerViews"
 			:key="view.id"

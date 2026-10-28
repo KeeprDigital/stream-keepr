@@ -89,5 +89,6 @@ export function useScreenFeatureMatchSlot<T>(options: ScreenFeatureMatchSlotOpti
 		data: freshness.data,
 		loading: freshness.loading,
 		error: freshness.error,
+		answered: freshness.answered,
 	};
 }

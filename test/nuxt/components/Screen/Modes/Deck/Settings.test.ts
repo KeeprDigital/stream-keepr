@@ -501,7 +501,7 @@ describe('screenDeckSettings', () => {
 		});
 	});
 
-	// Each size sits beside the control it sizes, and writes that one field (ADR-0053).
+	// Each size sits beside the control it sizes, and writes that one field (ADR-0054).
 	it.each([
 		{
 			card: 'Mainboard',
@@ -579,7 +579,7 @@ describe('screenDeckSettings', () => {
 		expect(wrapper.get('[data-testid="settings-card"][data-title="Mainboard"]').find('[data-label="Card Width"]').exists()).toBe(offered);
 	});
 
-	// Only a sideboard stacks, and only beside the mainboard (ADR-0053).
+	// Only a sideboard stacks, and only beside the mainboard (ADR-0054).
 	it.each([
 		{ name: 'beside', config: {}, stackEnabled: true },
 		{

@@ -58,7 +58,7 @@ describe('screen Mode Page Rotation', () => {
 		it('carries the shared rotation fields, validation and defaults', () => {
 			for (const [field, schema] of Object.entries(pageRotationShape))
 				expect(contract.shape[field], field).toBe(schema);
-			// Most Played Cards pages by cards, not rows (ADR-0053), so its page size is its own field.
+			// Most Played Cards pages by cards, not rows (ADR-0054), so its page size is its own field.
 			if (mode !== 'top-cards')
 				expect(contract.shape[pageRotation.pageSize]).toBe(pageRotationPageSize);
 			expect(contract.defaults).toMatchObject(DEFAULT_PAGE_ROTATION);

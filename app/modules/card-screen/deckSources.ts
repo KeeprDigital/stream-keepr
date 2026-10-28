@@ -6,8 +6,6 @@ import type { FeatureMatch, Player } from '~/types';
 import type { DeckListTokenWithData, MatchPlayerDeckData } from '~/types/card/deckList';
 import type { MtgCard } from '~/types/card/mtg';
 import { computed, toValue } from 'vue';
-import { getCounterTypeConfigs } from '~~/shared/config/games';
-import { counterConfigsForDeckCounterTypes } from '~~/shared/utils/deckCounters';
 import { uniqueDeckTokens } from '~~/shared/utils/deckTokens';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { createPlayerDeckList } from '~~/shared/utils/playerDeck';
@@ -188,18 +186,12 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		return {
 			playerName,
 			deckList: buildDeckList(playerName, deckResponse),
-			deckCounters: [],
 			deckTokens: [],
 			tokens: [],
 			mainboard: [],
 			sideboard: [],
 			companion: null,
 		};
-	}
-
-	function deriveDeckCounters(cards: DeckListCard[]) {
-		const counterTypes = cards.flatMap(card => card.deckCounterTypes ?? []);
-		return counterConfigsForDeckCounterTypes(counterTypes, getCounterTypeConfigs('mtg'));
 	}
 
 	function deriveDeckTokens(cards: DeckListCard[]) {
@@ -266,7 +258,6 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		return {
 			playerName,
 			deckList: buildDeckList(playerName, deckResponse),
-			deckCounters: deriveDeckCounters(cards),
 			deckTokens,
 			tokens: buildTokenList(deckTokens),
 			...buildDeckListArrays(cards, cardDataMap),

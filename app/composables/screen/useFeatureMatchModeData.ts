@@ -6,7 +6,7 @@ export function useFeatureMatchModeData() {
 	 * follows through the Live State Follower (#592); this mode keeps nothing
 	 * else of the read.
 	 */
-	const { slot: match, state: matchState, loading, error } = useScreenFeatureMatchSlot<null>({
+	const { slot: match, state: matchState, loading, error, answered } = useScreenFeatureMatchSlot<null>({
 		slotId: () => config.value.featureMatchId,
 		keep: () => null,
 		initialData: null,
@@ -19,5 +19,7 @@ export function useFeatureMatchModeData() {
 		matchState,
 		loading,
 		error,
+		/** Rendering Readiness: its Slot read has answered or failed. */
+		ready: answered,
 	};
 }

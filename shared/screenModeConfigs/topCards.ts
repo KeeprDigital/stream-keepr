@@ -31,12 +31,12 @@ const TOP_CARDS_MAX_LIMIT = 60;
  *
  * Its Page Rotation pages the ranking by cards: `cardsPerPage` a page, however
  * many columns the Screen lays them out in, so a page count never depends on
- * the space the Screen measures (ADR-0053). The default is the most cards a
+ * the space the Screen measures (ADR-0054). The default is the most cards a
  * Screen can rank, so a Screen that never set it shows every card on one page.
  *
  * Its badge colours (#823) are Mode Tokens; the fields it once held for them
  * are former fields, which a stored config may still carry. Its card width,
- * card gap and badge size are config, read only here (ADR-0053); the size
+ * card gap and badge size are config, read only here (ADR-0054); the size
  * presets they replaced are former fields too. `cardSizing` replaced
  * `dynamicCardSize`.
  */
@@ -105,7 +105,7 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 		'cardSize',
 		'statBadgeSize',
 		'dynamicCardSize',
-		// A page held whole grid rows; it holds cards now (ADR-0053).
+		// A page held whole grid rows; it holds cards now (ADR-0054).
 		'rowsPerPage',
 	],
 });

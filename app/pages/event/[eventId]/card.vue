@@ -43,6 +43,13 @@ function optionalId(source: Ref<number | null>) {
 
 // Event-scoped view selections live in the card store so route navigation preserves them.
 const selectedScreenId = optionalId(activeScreenId);
+// The query names the deck on view, so a reload or shared link reopens it.
+const { linked } = useCardPageLink({
+	mode: activeMode,
+	roundId: storedDeckListRoundId,
+	matchId: storedDeckListMatchId,
+	playerId: storedPlayerDeckPlayerId,
+});
 const deckListRoundId = optionalId(storedDeckListRoundId);
 const deckListMatchId = optionalId(storedDeckListMatchId);
 const playerDeckPlayerId = optionalId(storedPlayerDeckPlayerId);
@@ -121,10 +128,12 @@ watch(cardScreens, () => {
 	syncSelectedScreen();
 });
 
-watch(selectedScreenId, async (screenId) => {
+watch(selectedScreenId, async (screenId, previousScreenId) => {
 	await syncCardScope();
 
-	if (screenId) {
+	// A linked view outranks the match of the Screen first selected on arrival.
+	const keepsLinkedView = linked && previousScreenId === undefined;
+	if (screenId && !keepsLinkedView) {
 		// Check if the screen is tied to a match with decklists
 		const matchId = selectedScreenMatchId.value;
 		if (matchId) {

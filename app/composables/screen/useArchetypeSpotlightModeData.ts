@@ -1,9 +1,11 @@
 import type { ScreenOutputArchetypePilot, ScreenOutputArchetypeSpotlightResponse } from '~~/shared/types/screenOutputReads';
 import { archetypeSpotlightScreenQuery } from '~~/shared/utils/metagameQuery';
 import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
+import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
 import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
+import { useStagedScreenContent } from '~/modules/screen-mode/readiness';
 
 /** The Archetype Spotlight Screen's data (#761): one Archetype's pilots, numbers and top cards in a Metagame scope. */
 export function useArchetypeSpotlightModeData() {
@@ -36,9 +38,13 @@ export function useArchetypeSpotlightModeData() {
 	});
 	const loading = freshness.loading;
 	const error = freshness.error;
-	const spotlight = computed(() => config.value.archetypeId != null
-		? freshness.data.value
-		: null);
+	// A spotlight reaches program once its top cards' images have loaded.
+	const { shown: spotlight, staging } = useStagedScreenContent(
+		() => config.value.archetypeId != null
+			? freshness.data.value
+			: null,
+		read => (read?.topCards ?? []).flatMap(card => scryfallCardImageUrl(card.scryfallId) ?? []),
+	);
 	const pilots = computed(() => spotlight.value?.pilots ?? []);
 	const topCards = computed(() => spotlight.value?.topCards ?? []);
 
@@ -81,6 +87,8 @@ export function useArchetypeSpotlightModeData() {
 		config,
 		loading,
 		error,
+		/** Rendering Readiness: its first read has answered or failed, and its top cards have loaded. */
+		ready: computed(() => freshness.answered.value && !staging.value),
 		isEmpty,
 		headerText,
 		conversionLabel,

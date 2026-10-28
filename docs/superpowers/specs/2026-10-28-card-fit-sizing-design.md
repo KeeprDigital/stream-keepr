@@ -163,7 +163,7 @@ already sets `container-type: size`.
 
 ## Docs
 
-- New ADR-0053 at the end of `DECISIONS.md`: Fixed vs Fit, auto columns chosen
+- New ADR-0054 at the end of `DECISIONS.md`: Fixed vs Fit, auto columns chosen
   from the Event Canvas rather than measured, stack limited to the beside
   sideboard. It amends #844's note that "whether cards fill their columns stays
   config" (still config, now `cardSizing`).

@@ -12,7 +12,7 @@ import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 
 /**
  * Placed Players by position, unplaced ones last, ties by id: a total order, so
- * a re-read cannot reorder (and with `animateEntries`, visibly move) rows that
+ * a re-read cannot reorder (and, under a moving `row-motion`, visibly move) rows that
  * did not change, whatever order the read answers them in.
  */
 function byStandingsPosition(a: Player, b: Player): number {
@@ -266,6 +266,8 @@ export function useStandingsModeData() {
 	});
 
 	return {
+		/** Rendering Readiness: its first read has answered or failed. */
+		ready: freshness.answered,
 		config,
 		loading,
 		error,

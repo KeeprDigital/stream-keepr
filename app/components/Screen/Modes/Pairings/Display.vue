@@ -2,7 +2,7 @@
 import type { ScreenOutputMatchSide, ScreenOutputRoundMatch } from '~~/shared/types/screenOutputReads';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { config, error, isEmpty, headerText, pageData, formatResult, winner } = usePairingsModeData();
+const { config, error, ready, isEmpty, headerText, pageData, formatResult, winner } = usePairingsModeData();
 
 const inset = useScreenInset();
 
@@ -73,6 +73,7 @@ function sideName(row: ScreenOutputRoundMatch, side: ScreenOutputMatchSide | nul
 <template>
 	<ScreenModeBase
 		:error="error"
+		:ready="ready"
 		:empty="isEmpty"
 	>
 		<div class="pairings-display broadcast-table-display flex flex-col h-full w-full" :style="displayStyle">

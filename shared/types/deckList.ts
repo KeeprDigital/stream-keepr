@@ -62,6 +62,8 @@ export interface PlayerDeckList {
 	name: string;
 	colors: string;
 	isPrimary: boolean;
+	/** An operator has confirmed its Archetype, so `name` and `colors` are the Archetype's. */
+	reviewed?: boolean;
 	cards: DeckListCard[];
 	stats?: DeckListStats;
 	pips?: ManaPipCounts;

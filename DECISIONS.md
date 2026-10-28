@@ -1500,7 +1500,7 @@ The Players page opened Edit on a row click and kept history in the menu, while 
 
 ## ADR-0049: Themes replace Graphic Style Sets, resolve live, and use a closed vocabulary of two tiers
 
-Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812) · Amended 2026-10-28: Graphic Style Sets and Animation Effect Presets are removed, and a document's Style Set link is a former field · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830)
+Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812) · Amended 2026-10-28: Graphic Style Sets and Animation Effect Presets are removed, and a document's Style Set link is a former field · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830) · Amended 2026-10-28: a composite Mode Token default names colour Foundation Tokens, and the chart palette is Foundation Tokens · [#851](https://github.com/KeeprDigital/stream-keepr/issues/851)
 
 ### Decision
 
@@ -1509,7 +1509,7 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 **Stream Keepr owns every token.** Users set values, never names.
 
 - **Foundation Tokens** are app-wide roles and hold a literal. A colour inside a composite Foundation Token (a fill, a surface, or a colour layer of the `background` stack) may name a colour Foundation Token instead, and a colour holds a literal only (#829, #831).
-- **Mode Tokens** are declared by a Screen Mode Definition. Each holds a literal or names a same-type Foundation Token, and defaults to a Foundation Token, except where none fills its role: a badge shadow's colour (no shadow role exists) or Card Spotlight's zoom (no motion Foundation Token holds it) defaults to its shipped literal (#823, #844).
+- **Mode Tokens** are declared by a Screen Mode Definition. Each holds a literal or names a same-type Foundation Token, and defaults to a Foundation Token, except where none fills its role: a badge shadow's colour (no shadow role exists) or Card Spotlight's zoom (no motion Foundation Token holds it) defaults to its shipped literal (#823, #844). A composite Mode Token's literal default may name colour Foundation Tokens inside it, as the Feature Match Overlay's Frame and Source Item surfaces fill with `surface` and outline in `accent`, so a change to those tokens restyles every placed preset; the Frame fills at full opacity, so the Theme's colour, alpha included, is what it paints. Metagame's chart slots follow the `series-1` … `series-8` and `series-other` Foundation Tokens (#851).
 - **Graphic Item properties** name a whole Foundation Token or hold a literal. Nothing is bound partially, and nothing names a Mode Token. Resolution therefore takes at most two steps (a Mode Token or binding, its Foundation Token, then a colour that token names) and cannot cycle. It was one step until #829: the PRD has a composite's colour name a colour token, so a change to the accent reaches every surface using it.
 
 **A Theme stores only the tokens it sets.** A token added later reaches every existing Theme through its default. Renames and removals follow ADR-0043 and ADR-0037.
@@ -1532,6 +1532,7 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 - A Theme in use cannot be deleted.
 - Typography tokens carry no size. Colour tokens may carry alpha, and a consumer's opacity multiplies it. The Key Output keys a translucent colour at its own alpha, so Fill and Key agree.
 - A Graphic Theme Binding (#829) is a slot name and a token name beside the property, never in place of it. The property keeps the value it last resolved to, so a document stays complete and renders without a Theme. The compositor paints every bound slot from the Screen's resolved Foundation Tokens. An author's edit to a bound slot's value detaches that slot, keeping what the author made of the resolved value. That is the only implicit change; there is no override record. A binding naming no Foundation Token of its slot's type is refused on a write and inert on a read.
+- The Theme editor and a Screen's token section edit a composite, or the `background` stack, as it is stored, not as it resolves, so a colour inside it keeps naming its Foundation Token across a save. Each such colour's control follows a colour Foundation Token or holds its own (#851).
 - Media treatment and on-screen cycling bind nothing, because no token type fills either. A Media Graphic Item's picture binds an asset token, such as the logo (#831).
 - Migration `0012_remove_graphic_style_sets` drops the Graphic Style Set and Animation Effect Preset libraries and a Broadcast Graphic Template's link columns (#830). A template's document is untouched, so its values stay as the literals it already held.
 - A graphics document recorded with a Style Set link, stored or in a `.skgraphic` or `.sklayout` exported before #830, still reads. An item's `styleRefs`, and a Broadcast Graphic's `styleSet` and `styleRefs`, are former fields: accepted by the graphics schemas and dropped, as ADR-0037's are, so a write that sends the document (a Screen write, a template revision carrying its document, a package install) stores it without them. A client holding one sends it back unrefused. A copy the server makes of a stored document without parsing it, such as saving a placed graphic as a template or renaming a template, carries a stale link along, inert, until such a write. Every other unknown key is still refused.
@@ -1582,7 +1583,7 @@ A Theme is meant to carry the production's logo, backdrop and typefaces. ADR-000
 
 ## ADR-0051: A Screen holds no look of its own, and the Event Canvas is a coordinate space
 
-Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812)
+Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812) · Amended 2026-10-28: only overlay Screen Modes scale the Event Canvas, and Standings and Metagame's last look fields are Mode Tokens · [#851](https://github.com/KeeprDigital/stream-keepr/issues/851)
 
 ### Decision
 
@@ -1592,7 +1593,7 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 - colorMode goes: a light look and a dark look are two Themes.
 - Mode config holds what a mode shows (headers, columns, page size, Event References). Mode Tokens hold how it looks (colour, type, spacing, size, media, motion).
 
-**Each Event sets one Event Canvas** (default 1920×1080) in its Event Presentation Settings, with its Theme and on-air wording. Every Screen of the Event uses it, graphics hosts included, and every Screen Mode scales it uniformly to fit its window. There is no per-Screen canvas.
+**Each Event sets one Event Canvas** (default 1920×1080) in its Event Presentation Settings, with its Theme and on-air wording. Every Screen of the Event uses it, graphics hosts included, and every overlay Screen Mode scales it uniformly to fit its window. There is no per-Screen canvas. Feature Match Controls is the exception: it is an operator surface, so it fills its window and consumes no Theme Token (#812, Q37 and Q44).
 
 ### Why
 
@@ -1607,7 +1608,8 @@ Canvas size and wording are set once per production, not per brand or per Screen
 - On-air wording stays on the Event, so one Theme serves Events that word things differently.
 - The existing look fields are dropped, not migrated, and existing Screens render the Default Theme.
 - The plain modes' remaining look fields became Mode Tokens and former fields (#844): their colours, type and Card Spotlight's enter and exit. Card Spotlight's on/off switch went with its speed, since a motion recipe with no channel cuts.
-- **A Theme Token is shared, never a value one display alone reads** (amended by ADR-0053). A Mode Token defaults to a Foundation Token, so it carries a shared value to the place it is consumed. A size or spacing only one display reads is that mode's config, edited beside the control it sizes: Most Played Cards' card width, gap and badge size; each Deck board's card width and gap, the sideboard's stack reveal, and the Deck's badge, pill and chip text sizes; Card Spotlight's card width. A badge's size is its text size, and the badge is laid out around it in em, so one value sizes it whole. A colour, type, motion or surface a brand would set stays a Theme look even where one mode reads it, such as the Metagame chart palette. The badges' shadow is the `shadow` Foundation Token.
+- **A Theme Token is shared, never a value one display alone reads** (amended by ADR-0054). A Mode Token defaults to a Foundation Token, so it carries a shared value to the place it is consumed. A size or spacing only one display reads is that mode's config, edited beside the control it sizes: Most Played Cards' card width, gap and badge size; each Deck board's card width and gap, the sideboard's stack reveal, and the Deck's badge, pill and chip text sizes; Card Spotlight's card width. A badge's size is its text size, and the badge is laid out around it in em, so one value sizes it whole. A colour, type, motion or surface a brand would set stays a Theme look even where one mode reads it, such as the Metagame chart palette. The badges' shadow is the `shadow` Foundation Token.
+- Standings and Metagame followed (#851). Max table width became the `max-width` dimension, shipped at the widest Event Canvas, so a table fills its Screen until a Theme narrows it. Animate entries became `row-motion`, which also times Metagame's chart bars. Standings' `reveal` view mode keeps its own rise as `reveal-motion`. An entering row starts an eighth of the duration after the one above it, so a cut has no stagger either. No plain mode keeps a size or motion field in config.
 - A motion Mode Token reaches its display as custom properties a CSS transition reads: its timing, and the excursion state the element enters from and leaves to. A slide clearing its parent travels the whole Screen, which is the size container its Screen host sets.
 - `text-inverse` is text on the primary text colour. Every badge, pill and chip whose surface is `text-primary` pairs it with `text-inverse`, so a light Theme sets the two as a pair.
 
@@ -1662,7 +1664,42 @@ A minute cron meets the cadence: the shortest interval is a minute, and backoff 
 - **Let a tick wait for the lease like an operator command.** A tick that waits holds a cron invocation for nothing; the next minute's tick tries again.
 - **Let an operator command wait out a tick.** A tick slower than the wait still answers the operator `409`, and every wait delays the operator for polling, which Live Results must never do.
 
-## ADR-0053: Cards fit the Event Canvas or take a fixed width
+## ADR-0053: Program holds what it shows until what replaces it is ready
+
+Accepted · 2026-10-28
+
+### Decision
+
+**A Screen Mode rendering is ready once what it shows has settled**: its display has declared its data settled, its Theme fonts have loaded or failed, and every image, video and pending part inside it has loaded or failed. This is Rendering Readiness, owned by `app/modules/screen-mode/readiness.ts` and the Screen renderer's frame (`Screen/RendererFrame.vue`).
+
+**The renderer double-buffers modes.** On a mode change the incoming mode renders hidden behind the one on program, and the renderer cuts to it once it is ready. On a first load nothing shows until then. A mode left before it was ready is dropped; going back to the mode on program drops the one loading. Only the rendering on program hosts overlays. A rendering not ready after `SCREEN_MODE_READY_TIMEOUT_MS` (10 s) is shown anyway with a console warning, so a hung read or image never pins program to the outgoing mode.
+
+**Every display declares.** `ScreenModeBase` takes a required `ready` prop, so a mode built on it cannot forget; a display without it calls `useScreenModeReady` (Background, Feature Match Overlay, Broadcast Graphics). Its data composable answers `ready`: its first read answered or failed (Screen Mode Data Freshness's `answered`), and whatever it stages loaded. Nothing declared is not ready, because a display is an async component that declares only once its chunk has loaded. A part that loads on its own declares too (the Card Spotlight's card), or marks itself `data-render-pending` while it loads (a Background Layer stack resolving library media, an Animation Effect loading its module); the frame waits for both, then for every `<img>` and `<video>` inside it.
+
+**Inside a mode, a change that brings new images is staged.** `useStagedScreenContent` holds what a rendering shows until the images of what replaces it have preloaded and decoded (`preloadImages`), a newer change superseding one still loading, a failed image counting as loaded so its fallback shows. Most Played Cards stages each page with its page indicator, Archetype Spotlight its whole read. The Deck List keeps its own staged swap, now on the shared preload, and the Card Spotlight keeps its card on program until the replacement's images have loaded, then plays its exit and entry.
+
+### Why
+
+Some modes held program and others did not. The Deck List preloaded its card art and swapped whole; Most Played Cards mounted its grid at once and painted card by card on every page; every mode change showed the incoming mode's empty scaffold ("TBD vs TBD", an empty table) while its first read was in flight. Doing it once in the renderer covers every mode, present and future, without each re-implementing a preload.
+
+### Consequences
+
+- A mode change shows nothing new until the incoming mode is ready, up to the timeout. A read that fails settles as ready, showing what the mode shows on error.
+- Two renderings are briefly live during a mode change, each reading its own data and holding its own Realtime Subscriptions.
+- A Broadcast Graphics output whose Live Session read fails reaches program only at the timeout.
+- A video whose source changes, a video Background Layer's or the Feature Match Overlay Frame's, keeps playing until the new source has its first frame or fails (`ScreenMediaBackground`).
+- A Take cannot be held on one output, whose animation phases follow the shared clock with every other. Instead a Broadcast Graphics output loads every image its stack can put on air once its content URLs resolve, and holds the loaded images while the stack names them (`createImageRetainer`): its library content is `no-store`, so only an image still held is reused. Videos are not preloaded.
+- A Broadcast Graphics canvas whose library font fails now shows in the fallback face, as the Feature Match Overlay does, rather than staying hidden: a blank graphic is worse on air than the wrong face.
+- Not covered: a Screen Output navigated to another Screen still blanks while it loads, because the display session unmounts the renderer. Nothing in the app moves an output between Screens, and holding one would need each rendering to keep its own Screen, Event, Theme and capability.
+- `test/nuxt/components/Screen/Renderer.test.ts` pins the hold, `test/nuxt/modules/screenModeReadiness.test.ts` the declarations and staging.
+
+### Rejected alternatives
+
+- **Each mode preloading its own media, as the Deck List did.** It covers only the modes that remember to, and none of them covers the mode change itself.
+- **Hold program by scanning the DOM alone, with no declaration.** An async display's chunk has not mounted when the scan runs, so an empty rendering would look ready.
+- **Vue `<Suspense>`.** Still experimental, and suspending setup would keep the incoming rendering from mounting, which is what starts its media loading.
+
+## ADR-0054: Cards fit the Event Canvas or take a fixed width
 
 Accepted · 2026-10-28
 

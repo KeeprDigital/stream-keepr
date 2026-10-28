@@ -3,7 +3,7 @@ import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 /**
  * How the Deck List Screen Mode looks: its Mode Tokens, by name within the mode.
  * The Mainboard and Sideboard each have their own card width and grid gap,
- * with the same defaults; only the sideboard stacks (ADR-0053), so only it has a
+ * with the same defaults; only the sideboard stacks (ADR-0054), so only it has a
  * stack reveal, and a small sideboard stack can sit beside a medium grid.
  */
 export const deckModeTokens = {

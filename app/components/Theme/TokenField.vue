@@ -91,18 +91,19 @@ const source = computed(() => {
 });
 
 /**
- * What the input edits. A composite's colours may follow colour tokens, which
- * its resolved value no longer shows, so it edits the literal as stored, or
- * as its default holds it.
+ * What the input edits. A composite's colours, and a background colour
+ * layer's, may follow colour tokens, which its resolved value no longer
+ * shows, so it edits the literal as stored, or as it is inherited.
  */
 const editable = computed(() => {
-	if (!isThemeCompositeTokenType(definition.value.type))
+	const type = definition.value.type;
+	if (!isThemeCompositeTokenType(type) && type !== 'backgroundLayers')
 		return props.resolved;
 	if (isSet.value && !referenceOf(props.stored))
 		return props.stored as ThemeTokenValue;
-	return referenceOf(definition.value.default)
+	return referenceOf(inheritedValue.value)
 		? props.resolved
-		: definition.value.default as ThemeTokenValue;
+		: inheritedValue.value as ThemeTokenValue;
 });
 
 function chooseSource(value: string) {

@@ -2,11 +2,12 @@
 import type { StandingsColumnKey } from '~~/shared/types/enums';
 import type { Player } from '~/types';
 import { getMtgGameData } from '~~/shared/utils/gameData';
-import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { modeMotionVars, modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
 const {
 	config,
 	error,
+	ready,
 	isEmpty,
 	headerText,
 	visibleColumns,
@@ -98,13 +99,31 @@ const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef')
 	insetY: inset,
 });
 
-const contentStyle = computed(() => ({
+const contentStyle = {
 	width: '100%',
-	maxWidth: config.value.maxTableWidth
-		? `${config.value.maxTableWidth}px`
-		: undefined,
-	marginInline: config.value.maxTableWidth ? 'auto' : undefined,
-}));
+	maxWidth: modeTokenVar('standings', 'max-width'),
+	marginInline: 'auto',
+};
+
+/**
+ * Rows enter from their motion Mode Token's excursion, leave back to it and
+ * move on its timing; the `reveal` view mode's rows take `reveal-motion`. An
+ * entering row starts an eighth of the duration after the one above it. The
+ * row's class reads these, since a move clears an inline transition.
+ */
+const rowMotionStyle = computed(() => {
+	const motion = modeMotionVars('standings', isRevealMode.value ? 'reveal-motion' : 'row-motion');
+	return {
+		'--standings-row-duration': motion.duration,
+		'--standings-row-easing': motion.easing,
+		'--standings-row-delay': motion.delay,
+		'--standings-row-stagger': `calc(${motion.delay} + var(--row-index) * ${motion.duration} / 8)`,
+		'--standings-row-origin': motion.transformOrigin,
+		'--standings-row-opacity': motion.opacity,
+		'--standings-row-transform': motion.transform,
+		'--standings-row-clip': motion.clipPath,
+	};
+});
 
 /** Set on the root, over the shared broadcast table chrome's own colour and face. */
 const displayStyle = {
@@ -116,9 +135,10 @@ const displayStyle = {
 <template>
 	<ScreenModeBase
 		:error="error"
+		:ready="ready"
 		:empty="isEmpty"
 	>
-		<div class="standings-display broadcast-table-display flex flex-col h-full w-full" :class="{ 'reveal-mode': isRevealMode }" :style="displayStyle">
+		<div class="standings-display broadcast-table-display flex flex-col h-full w-full" :style="displayStyle">
 			<div data-testid="standings-content" class="standings-content broadcast-table-content flex flex-col h-full w-full" :style="contentStyle">
 				<!-- Header -->
 				<div v-if="config.showHeader" class="standings-header broadcast-table-title" :style="titleDividerStyle">
@@ -130,7 +150,6 @@ const displayStyle = {
 				<!-- Table -->
 				<div ref="tableRef" class="standings-table broadcast-table-surface" :style="surfaceStyle">
 					<TransitionGroup
-						v-if="config.animateEntries"
 						name="standings-row"
 						tag="div"
 						class="standings-rows"
@@ -140,7 +159,7 @@ const displayStyle = {
 							v-for="(player, index) in pageData"
 							:key="player.id"
 							class="standings-row broadcast-table-row"
-							:style="[rowStyle, { '--row-index': index }]"
+							:style="[rowStyle, rowMotionStyle, { '--row-index': index }]"
 						>
 							<template v-for="col in visibleColumns" :key="col.key">
 								<div
@@ -168,41 +187,6 @@ const displayStyle = {
 							</template>
 						</div>
 					</TransitionGroup>
-
-					<!-- Non-animated fallback -->
-					<div v-else class="standings-rows" :style="rowLayoutStyle">
-						<div
-							v-for="player in pageData"
-							:key="player.id"
-							class="standings-row broadcast-table-row"
-							:style="rowStyle"
-						>
-							<template v-for="col in visibleColumns" :key="col.key">
-								<div
-									class="standings-cell"
-									:class="`cell-${col.key}`"
-									:style="getCellStyle(col.key, player)"
-									:data-position-change="positionChangeKind(col.key, player)"
-								>
-									<template v-if="col.key === 'deck'">
-										<span class="deck-cell-content">
-											<span class="deck-cell-text">{{ formatCell(player, col.key) }}</span>
-											<span
-												v-if="config.showArchetypeColors && getDeckColors(player)"
-												data-testid="standings-deck-colors"
-												class="deck-cell-colors"
-											>
-												<MtgManaColorDisplay :colors="getDeckColors(player)" size="xs" />
-											</span>
-										</span>
-									</template>
-									<template v-else>
-										{{ formatCell(player, col.key) }}
-									</template>
-								</div>
-							</template>
-						</div>
-					</div>
 				</div>
 			</div>
 		</div>
@@ -304,41 +288,29 @@ const displayStyle = {
 	flex-shrink: 0;
 }
 
-/* ── Entry Animation (staggered) ── */
-.standings-row-enter-active {
-	transition: all 0.4s ease;
-	transition-delay: calc(var(--row-index) * 0.05s);
+/* ── Row motion: its timing, and the excursion a row enters from and leaves to ── */
+.standings-row {
+	transition-property: opacity, transform, clip-path;
+	transition-duration: var(--standings-row-duration);
+	transition-timing-function: var(--standings-row-easing);
+	transition-delay: var(--standings-row-enter-delay, var(--standings-row-delay));
+	transform-origin: var(--standings-row-origin);
 }
 
-.standings-row-enter-from {
-	opacity: 0;
-	transform: translateX(-20px);
+.standings-row-enter-active {
+	--standings-row-enter-delay: var(--standings-row-stagger);
+}
+
+.standings-row-enter-from,
+.standings-row-leave-to {
+	opacity: var(--standings-row-opacity);
+	transform: var(--standings-row-transform);
+	clip-path: var(--standings-row-clip);
 }
 
 .standings-row-leave-active {
-	transition: all 0.3s ease;
 	position: absolute;
 	left: 0;
 	right: 0;
-}
-
-.standings-row-leave-to {
-	opacity: 0;
-	transform: translateX(20px);
-}
-
-.standings-row-move {
-	transition: transform 0.4s ease;
-}
-
-/* ── Reveal Mode: More Dramatic Animation ── */
-.reveal-mode .standings-row-enter-active {
-	transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-	transition-delay: calc(var(--row-index) * 0.05s);
-}
-
-.reveal-mode .standings-row-enter-from {
-	opacity: 0;
-	transform: translateY(20px) scale(0.95);
 }
 </style>

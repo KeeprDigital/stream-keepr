@@ -18,13 +18,14 @@ import { createMockScreen } from '~~/test/helpers/fixtures';
 import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { text } from '~~/test/helpers/graphicsComposition';
 import { stubCapabilitySession, stubFontFaces } from '~~/test/nuxt/helpers/fontFaces';
+import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
 import Renderer from '~/components/Screen/Renderer.vue';
 
 // Each Screen Mode's display, mounted by its Screen host under a resolved
 // token set, paints every Mode Token it declares, and a plain mode's host
 // insets and aligns it by the Theme (ADR-0049, ADR-0051).
 
-type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor' | 'borderColor' | 'boxShadow' | 'width' | 'height' | 'gap' | 'fontSize';
+type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor' | 'borderColor' | 'boxShadow' | 'width' | 'height' | 'gap' | 'fontSize' | 'maxWidth';
 
 /** Where a display paints one Mode Token: an element, and for a colour the property it sets. */
 interface Probe {
@@ -32,6 +33,8 @@ interface Probe {
 	property?: ColorProperty;
 	/** For a value no style property carries: the attribute the element states it in. */
 	attribute?: string;
+	/** For motion its class transitions by: the custom properties' prefix, which carry its timing. */
+	motionProperties?: string;
 	/** Mode config the element needs to render, over the mode's sample config. */
 	config?: Record<string, unknown>;
 }
@@ -52,6 +55,13 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'secondary-text': { selector: '.cell-record', property: 'color' },
 		'rise': { selector: '[data-position-change="up"]', property: 'color' },
 		'fall': { selector: '[data-position-change="down"]', property: 'color' },
+		'max-width': { selector: '[data-testid="standings-content"]', property: 'maxWidth' },
+		'row-motion': { selector: '.standings-row', motionProperties: '--standings-row' },
+		'reveal-motion': {
+			selector: '.standings-row',
+			motionProperties: '--standings-row',
+			config: { viewMode: 'reveal' },
+		},
 	},
 	'pairings': {
 		'surface': { selector: '.pairings-rows', property: 'backgroundColor' },
@@ -158,6 +168,8 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 			property: 'backgroundColor',
 			config: { viewMode: 'chart' },
 		},
+		'max-width': { selector: '[data-testid="metagame-content"]', property: 'maxWidth' },
+		'row-motion': { selector: '.metagame-row', motionProperties: '--metagame-row' },
 	},
 	'top-cards': {
 		'title-typography': { selector: '.top-cards-title h2' },
@@ -282,8 +294,8 @@ mockNuxtImport('useStandingsModeData', () => () => {
 		showHeader: true,
 		showArchetypeColors: false,
 		rowsPerPage: 8,
-		animateEntries: false,
 		columns: [],
+		...probeConfig.value,
 	}));
 	const columns = [
 		'position',
@@ -295,6 +307,7 @@ mockNuxtImport('useStandingsModeData', () => () => {
 	return {
 		config,
 		error: ref(null),
+		ready: computed(() => true),
 		isEmpty: computed(() => false),
 		headerText: computed(() => 'Standings'),
 		visibleColumns: computed(() => columns),
@@ -314,6 +327,7 @@ mockNuxtImport('useStandingsModeData', () => () => {
 mockNuxtImport('usePairingsModeData', () => () => ({
 	config: computed(() => ({ showHeader: true, rowsPerPage: 8 })),
 	error: ref(null),
+	ready: computed(() => true),
 	isEmpty: computed(() => false),
 	headerText: computed(() => 'Pairings'),
 	pageData: computed(() => [
@@ -356,6 +370,7 @@ mockNuxtImport('usePlayerHistoryModeData', () => () => {
 	return {
 		config: computed(() => ({ showHeader: true, rowsPerPage: 8, columns })),
 		error: ref(null),
+		ready: computed(() => true),
 		isEmpty: computed(() => false),
 		headerText: computed(() => 'History'),
 		player: computed(() => ({
@@ -393,6 +408,7 @@ mockNuxtImport('useHeadToHeadModeData', () => () => {
 	return {
 		config: computed(() => ({ showHeader: true })),
 		error: ref(null),
+		ready: computed(() => true),
 		isEmpty: computed(() => false),
 		firstMeeting: computed(() => false),
 		headerText: computed(() => 'Head to Head'),
@@ -413,6 +429,7 @@ mockNuxtImport('useHeadToHeadModeData', () => () => {
 mockNuxtImport('useArchetypeSpotlightModeData', () => () => ({
 	config: computed(() => ({ showHeader: true, rowsPerPage: 8 })),
 	error: ref(null),
+	ready: computed(() => true),
 	isEmpty: computed(() => false),
 	headerText: computed(() => 'Spotlight'),
 	conversionLabel: computed(() => 'Top 8'),
@@ -475,6 +492,7 @@ mockNuxtImport('useTopCutModeData', () => () => ({
 		...probeConfig.value,
 	})),
 	error: ref(null),
+	ready: computed(() => true),
 	isEmpty: computed(() => false),
 	headerText: computed(() => 'Top 4'),
 	// Every kind of Bracket Position at once, which no one real bracket holds.
@@ -505,13 +523,13 @@ mockNuxtImport('useMetagameModeData', () => () => ({
 	config: computed(() => ({
 		viewMode: 'archetype',
 		showHeader: true,
-		animateEntries: false,
 		pageSize: 8,
 		archetypeColumns: ['archetype', 'count', 'winRate'].map(key => ({ key, visible: true })),
 		cardColumns: [],
 		...probeConfig.value,
 	})),
 	error: ref(null),
+	ready: computed(() => true),
 	isEmpty: computed(() => false),
 	headerText: computed(() => 'Metagame'),
 	pageData: computed(() => [
@@ -580,6 +598,7 @@ mockNuxtImport('useTopCardsModeData', () => () => {
 			...probeConfig.value,
 		})),
 		error: ref(null),
+		ready: computed(() => true),
 		isEmpty: computed(() => false),
 		headerText: computed(() => 'Most Played Cards'),
 		pageEntries: computed(() => [
@@ -653,6 +672,7 @@ mockNuxtImport('useDeckModeData', () => () => ({
 		deckCard('Hydroblast', 'sideboard'),
 	]),
 	error: ref(null),
+	ready: computed(() => true),
 	hasDisplayedDeck: computed(() => true),
 	displayedDeckVersion: ref(1),
 	pendingSwapVersion: ref(0),
@@ -676,6 +696,7 @@ mockNuxtImport('useCardModeData', () => () => ({
 	screenId: computed(() => 1),
 	card: ref(spotlightCard),
 	error: ref(null),
+	ready: computed(() => true),
 }));
 
 // The graphics hosts: one on-air composition holding a Theme-bound Graphic Item.
@@ -710,6 +731,7 @@ mockNuxtImport('useBroadcastGraphicsModeData', () => () => ({
 	isAuthoringPreview: computed(() => false),
 	selectedTarget: computed(() => ({ type: 'canvas' })),
 	publishSelection: () => {},
+	ready: computed(() => true),
 }));
 
 mockNuxtImport('useFeatureMatchOverlayModeData', () => () => ({
@@ -729,6 +751,7 @@ mockNuxtImport('useFeatureMatchOverlayModeData', () => () => ({
 	usesSampleDataset: computed(() => false),
 	loading: ref(false),
 	error: ref(null),
+	ready: computed(() => true),
 }));
 
 mockNuxtImport('useFeatureMatchOverlaySideboardData', () => () => ({
@@ -739,6 +762,9 @@ mockNuxtImport('useFeatureMatchOverlaySideboardData', () => () => ({
 // ── Mounting and reading what is painted ──
 
 let wrapper: VueWrapper | undefined;
+
+// A card preloads its image before it shows.
+stubImageLoading();
 
 beforeAll(() => {
 	for (const [property, face] of Object.entries(FONT_FACES))
@@ -787,6 +813,14 @@ function painted(probe: Probe, type: ThemeTokenType) {
 	if (probe.attribute)
 		return element.attributes(probe.attribute);
 	const style = getComputedStyle(element.element);
+	if (type === 'animation-recipe' && probe.motionProperties) {
+		const part = (name: string) => style.getPropertyValue(`${probe.motionProperties}-${name}`).trim();
+		return {
+			transitionDuration: part('duration'),
+			transitionTimingFunction: part('easing'),
+			transitionDelay: part('delay'),
+		};
+	}
 	if (type === 'animation-recipe') {
 		return {
 			transitionDuration: style.transitionDuration,
@@ -826,7 +860,7 @@ function expectedPaint(type: ThemeTokenType, value: unknown) {
 		const recipe = value as ThemeTokenValueTypes['animation-recipe'];
 		return {
 			transitionDuration: `${recipe.duration}ms`,
-			transitionTimingFunction: { 'linear': 'linear', 'ease-in-out': 'cubic-bezier(0.45, 0, 0.55, 1)' }[recipe.easing as string],
+			transitionTimingFunction: { 'linear': 'linear', 'ease-out': 'cubic-bezier(0.5, 1, 0.89, 1)', 'ease-in-out': 'cubic-bezier(0.45, 0, 0.55, 1)' }[recipe.easing as string],
 			transitionDelay: `${recipe.delay}ms`,
 		};
 	}
@@ -974,6 +1008,50 @@ describe('a Theme\'s shadow', () => {
 		await shown(probe);
 
 		expect(painted(probe, 'color')).toBe('rgb(1, 2, 3)');
+	});
+});
+
+// Metagame's chart bars grow and shrink on its rows' motion timing.
+describe('a Metagame Screen\'s chart', () => {
+	it('times its bars by row-motion', async () => {
+		const bar = {
+			selector: '[data-color-slot="1"]',
+			config: { viewMode: 'chart' },
+		};
+		await mountMode('metagame', { 'metagame.row-motion': SAMPLES['animation-recipe'] }, { config: bar.config });
+		await shown(bar);
+
+		expect(painted(bar, 'animation-recipe')).toEqual(expectedPaint('animation-recipe', SAMPLES['animation-recipe']));
+	});
+});
+
+// A Mode Token defaulting to a Foundation Token, or to a composite whose colour
+// names one, follows a Theme setting only that Foundation Token.
+describe('a Foundation Token a Mode Token\'s default names', () => {
+	const CASES = [
+		{
+			mode: 'feature-match-overlay',
+			token: 'surface',
+			part: 'a built-in preset\'s Frame',
+			probe: { selector: '.feature-match-overlay__frame-fill', attribute: 'fill' },
+		},
+		{
+			mode: 'metagame',
+			token: 'series-1',
+			part: 'the first chart series',
+			probe: {
+				selector: '[data-color-slot="1"]',
+				property: 'backgroundColor',
+				config: { viewMode: 'chart' },
+			},
+		},
+	] satisfies Array<{ mode: ScreenMode; token: string; part: string; probe: Probe }>;
+
+	it.each(CASES)('restyles $part when a Theme sets $token', async ({ mode, token, probe }) => {
+		await mountMode(mode, { [token]: 'rgb(12, 34, 56)' }, { config: probe.config });
+		await shown(probe);
+
+		expect(painted(probe, 'color')).toBe('rgb(12, 34, 56)');
 	});
 });
 

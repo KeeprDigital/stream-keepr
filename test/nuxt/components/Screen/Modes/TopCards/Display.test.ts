@@ -248,7 +248,7 @@ describe('screenTopCardsDisplay', () => {
 		expect(wrapper.findAll('[data-testid="top-cards-item"]').map(item => item.attributes('data-sizing'))).toEqual([cardSizing, cardSizing]);
 	});
 
-	// The Screen's own sizes, not the Theme's, size its cards, gap and badges (ADR-0053).
+	// The Screen's own sizes, not the Theme's, size its cards, gap and badges (ADR-0054).
 	it('sizes its cards, gap and badges from its config', async () => {
 		config.value = {
 			...config.value,

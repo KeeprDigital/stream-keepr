@@ -2,7 +2,7 @@
 import type { BracketPosition } from '~~/shared/modules/top-cut-bracket';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { config, error, isEmpty, headerText, bracket } = useTopCutModeData();
+const { config, error, ready, isEmpty, headerText, bracket } = useTopCutModeData();
 
 /** Set on the root, over the shared broadcast table chrome's own colour and face. */
 const displayStyle = {
@@ -92,6 +92,7 @@ function entrantStyle(position: BracketPosition, side: 0 | 1) {
 <template>
 	<ScreenModeBase
 		:error="error"
+		:ready="ready"
 		:empty="isEmpty"
 	>
 		<div class="topcut-display broadcast-table-display flex flex-col h-full w-full" :style="[layoutStyle, displayStyle]">

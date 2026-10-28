@@ -132,7 +132,7 @@ describe.each([
 			showDeckName: false,
 		},
 	},
-	// `cardSizing` replaced it (ADR-0053); 0014 migrated stored values, so a straggler reads as the default.
+	// `cardSizing` replaced it (ADR-0054); 0014 migrated stored values, so a straggler reads as the default.
 	{
 		mode: 'deck',
 		stored: {
@@ -149,6 +149,20 @@ describe.each([
 			sideboard: { view: 'stack' },
 			showDeckName: false,
 		},
+	},
+	{
+		mode: 'standings',
+		stored: { maxTableWidth: 1200, animateEntries: false, topNCount: 8 },
+		reads: { topNCount: 8 },
+		patch: { topNCount: 16 },
+		patched: { topNCount: 16 },
+	},
+	{
+		mode: 'metagame',
+		stored: { maxTableWidth: 1200, animateEntries: false, limit: 20 },
+		reads: { limit: 20 },
+		patch: { limit: 30 },
+		patched: { limit: 30 },
 	},
 ] as const)('a $mode Screen storing a look field that is now a Mode Token', ({ mode, stored, reads, patch, patched }) => {
 	it('reads without it, everywhere it is read', () => {

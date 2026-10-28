@@ -350,7 +350,7 @@ describe('screenTopCardsSettings', () => {
 			expect(wrapper.findAll('[data-testid="form-field"]').some(field => field.text().includes('Columns'))).toBe(offered);
 		});
 
-		// Each size sits beside the control it sizes and writes that one field (ADR-0053).
+		// Each size sits beside the control it sizes and writes that one field (ADR-0054).
 		it.each([
 			{
 				label: 'Card width',

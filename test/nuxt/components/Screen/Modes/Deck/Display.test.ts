@@ -327,7 +327,7 @@ describe('screenDeckDisplay', () => {
 	});
 
 	// The next card covers all of a stacked card but its board's stack-reveal slice; the last shows whole.
-	// The Screen's own sizes, not the Theme's, size each board and every badge, pill and chip (ADR-0053).
+	// The Screen's own sizes, not the Theme's, size each board and every badge, pill and chip (ADR-0054).
 	it('sizes its boards, badges, pill and chips from its config', async () => {
 		mutableConfig = {
 			...mutableConfig,

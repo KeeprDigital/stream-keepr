@@ -4,6 +4,7 @@ import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 const {
 	config,
 	error,
+	ready,
 	isEmpty,
 	headerText,
 	conversionLabel,
@@ -97,6 +98,7 @@ const cardStyle = {
 <template>
 	<ScreenModeBase
 		:error="error"
+		:ready="ready"
 		:empty="isEmpty"
 	>
 		<div class="archetype-spotlight-display broadcast-table-display flex flex-col gap-4 h-full w-full" :style="displayStyle">

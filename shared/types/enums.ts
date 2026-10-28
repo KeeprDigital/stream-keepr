@@ -39,7 +39,7 @@ export const HEAD_TO_HEAD_PLAYER_SOURCE_VALUES = ['featureMatchSlot', 'players']
 export const SCREEN_COMMAND_VALUES = ['refresh', 'identify', 'debug'] as const;
 export const CLOCK_TYPE_VALUES = ['countdown', 'countup', 'untimed'] as const;
 export const RECORD_SEPARATOR_VALUES = ['-', '/', ' | ', ' '] as const;
-// A sideboard stacks only as the strip beside the mainboard (ADR-0053).
+// A sideboard stacks only as the strip beside the mainboard (ADR-0054).
 export const MAINBOARD_VIEW_VALUES = ['grid', 'list'] as const;
 export const SIDEBOARD_VIEW_VALUES = ['grid', 'stack', 'list'] as const;
 // Fixed: cards take their width Mode Token and may overflow. Fit: every card fits the Event Canvas.

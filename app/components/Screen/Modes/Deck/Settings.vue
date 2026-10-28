@@ -133,7 +133,7 @@ const resolvedBoards = computed(() => resolveDeckBoards(config.value));
 const board = computed<BoardSelection>(() => resolvedBoards.value.board);
 
 // Per-board view tabs. Only the sideboard stacks, and only as the strip beside
-// the mainboard (ADR-0053); elsewhere its stack shows as a grid, so the tab
+// the mainboard (ADR-0054); elsewhere its stack shows as a grid, so the tab
 // stays, disabled, rather than lose a stack that would return beside.
 const sideboardCanStack = computed(() =>
 	board.value === 'full' && resolvedBoards.value.sideboardPlacement === 'beside');
