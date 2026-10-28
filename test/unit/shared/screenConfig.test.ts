@@ -25,8 +25,8 @@ describe('getDisplayDefaultsForMode', () => {
 	});
 
 	it('returns display defaults that preserve visual settings only', () => {
-		// Card Spotlight's config is its match binding alone, which a reset keeps.
-		expect(getDisplayDefaultsForMode('card')).toEqual({});
+		// A reset returns Card Spotlight's card width and keeps its match binding.
+		expect(getDisplayDefaultsForMode('card')).toEqual({ cardWidth: 583 });
 
 		expect(getDisplayDefaultsForMode('deck')).toMatchObject({
 			board: getDefaultConfigForMode('deck').board,
@@ -88,6 +88,17 @@ describe('getDisplayDefaultsForMode', () => {
 });
 
 describe('resolveDeckBoards', () => {
+	// A mainboard cannot stack (ADR-0054); one stored by a client older than 0014 reads as a grid.
+	it('reads a stored mainboard stack as a grid, and leaves a sideboard stack', () => {
+		const resolved = resolveDeckBoards({
+			mainboard: { view: 'stack' },
+			sideboard: { view: 'stack' },
+		} as never);
+
+		expect(resolved.mainboard.view).toBe('grid');
+		expect(resolved.sideboard.view).toBe('stack');
+	});
+
 	it('resolves an empty config to the defaults', () => {
 		expect(resolveDeckBoards({})).toEqual({
 			board: 'full',

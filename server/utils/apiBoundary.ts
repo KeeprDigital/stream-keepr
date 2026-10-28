@@ -76,7 +76,7 @@ export const SESSION_EXEMPT_API_PATHS: readonly string[] = [
  *   ADR-0010 leaves the shared token untouched until a roles-and-permissions
  *   effort redraws that seam, and it names that as the successor work.
  * - `/api/public/` — deliberately unauthenticated reads for outside tools
- *   (ADR-0054). Everything under it is public by name, so a route belongs
+ *   (ADR-0055). Everything under it is public by name, so a route belongs
  *   there only if anyone on the internet may read what it answers.
  *
  * **The admin exemption is an exemption, not a second guard.** Every route

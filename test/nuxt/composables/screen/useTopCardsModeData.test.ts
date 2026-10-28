@@ -27,8 +27,11 @@ const defaultConfig = {
 	limit: 10,
 	excludedCardTypes: ['Land'] as string[],
 	columns: 5,
-	dynamicCardSize: true,
-	rowsPerPage: 60,
+	autoColumns: false,
+	cardSizing: 'fit' as 'fit' | 'fixed',
+	cardWidth: 160,
+	cardGap: 12,
+	cardsPerPage: 60,
 	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
 	currentPage: undefined as number | undefined,
@@ -174,13 +177,13 @@ describe('useTopCardsModeData', () => {
 			expect(shown(pageEntries.value).at(-1)).toBe('12:Card 12');
 		});
 
-		it('pages the grid by whole rows of columns cards, keeping each card\'s overall rank', async () => {
+		it('pages the ranking by cards, keeping each card\'s overall rank', async () => {
 			mockFetch.mockResolvedValue({
 				entries: rankedCards(5),
 				totalDecks: 5,
 				scope: 'all',
 			});
-			Object.assign(mutableConfig, { columns: 2, rowsPerPage: 1, currentPage: 2 });
+			Object.assign(mutableConfig, { columns: 4, cardsPerPage: 2, currentPage: 2 });
 
 			const { pageEntries, currentPage, totalPages } = makeTopCardsModeData();
 			await flushPromises();
@@ -196,13 +199,38 @@ describe('useTopCardsModeData', () => {
 				totalDecks: 5,
 				scope: 'all',
 			});
-			Object.assign(mutableConfig, { columns: 2, rowsPerPage: 2, currentPage: 2 });
+			Object.assign(mutableConfig, { columns: 2, cardsPerPage: 4, currentPage: 2 });
 
 			const { pageEntries, totalPages } = makeTopCardsModeData();
 			await flushPromises();
 
 			expect(totalPages.value).toBe(2);
 			expect(shown(pageEntries.value)).toEqual(['5:Card 5']);
+		});
+
+		// Columns never move a card to another page; every page lays out as a full one would.
+		it.each([
+			{ columns: 1, autoColumns: false },
+			{ columns: 6, autoColumns: true },
+		])('pages the same cards in $columns columns, auto: $autoColumns', async ({ columns, autoColumns }) => {
+			mockFetch.mockResolvedValue({
+				entries: rankedCards(10),
+				totalDecks: 5,
+				scope: 'all',
+			});
+			Object.assign(mutableConfig, {
+				columns,
+				autoColumns,
+				cardsPerPage: 4,
+				currentPage: 3,
+			});
+
+			const { pageEntries, totalPages, pageCapacity } = makeTopCardsModeData();
+			await flushPromises();
+
+			expect(totalPages.value).toBe(3);
+			expect(shown(pageEntries.value)).toEqual(['9:Card 9', '10:Card 10']);
+			expect(pageCapacity.value).toBe(4);
 		});
 
 		it('shows the page projected from the Rotation Anchor while auto-page is on', async () => {
@@ -214,7 +242,7 @@ describe('useTopCardsModeData', () => {
 			// 25s into 10s pages: the third page, whatever page was last selected by hand.
 			Object.assign(mutableConfig, {
 				columns: 2,
-				rowsPerPage: 1,
+				cardsPerPage: 2,
 				currentPage: 1,
 				autoPageEnabled: true,
 				rotationAnchor: mockServerNow - 25_000,
@@ -232,7 +260,7 @@ describe('useTopCardsModeData', () => {
 				totalDecks: 5,
 				scope: 'all',
 			});
-			Object.assign(mutableConfig, { columns: 2, rowsPerPage: 1, currentPage: 1 });
+			Object.assign(mutableConfig, { cardsPerPage: 2, currentPage: 1 });
 			const { pageEntries, currentPage, ready } = makeTopCardsModeData();
 			await flushPromises();
 			expect(ready.value).toBe(true);

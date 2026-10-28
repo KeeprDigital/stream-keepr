@@ -7,6 +7,15 @@ import type {
 	TokenDefinitionOf,
 } from './tokens';
 
+/** One categorical chart colour slot, holding the colour it ships with. */
+function chartSeries(slot: number, color: string) {
+	return {
+		type: 'color',
+		label: `Chart series ${slot}`,
+		default: color,
+	} as const;
+}
+
 /**
  * Every Foundation Token, owned by Stream Keepr and versioned with the code:
  * its name, type, bounds and shipped default. Users set values, never names
@@ -74,6 +83,28 @@ export const FOUNDATION_TOKENS = {
 		type: 'color',
 		label: 'Divider',
 		default: 'rgba(255, 255, 255, 0.12)',
+	},
+	// What lifts a badge off the card art under it, wherever a mode has badges.
+	'shadow': {
+		type: 'color',
+		label: 'Shadow',
+		default: 'rgba(0, 0, 0, 0.1)',
+	},
+	// A categorical chart palette, slot 1 first. Stepped for a dark surface and
+	// validated as a set for adjacent-pair CVD separation and >= 3:1 against
+	// #1a1a19. Other is the neutral, never a slot.
+	'series-1': chartSeries(1, '#3987e5'),
+	'series-2': chartSeries(2, '#d95926'),
+	'series-3': chartSeries(3, '#199e70'),
+	'series-4': chartSeries(4, '#c98500'),
+	'series-5': chartSeries(5, '#d55181'),
+	'series-6': chartSeries(6, '#008300'),
+	'series-7': chartSeries(7, '#9085e9'),
+	'series-8': chartSeries(8, '#e66767'),
+	'series-other': {
+		type: 'color',
+		label: 'Chart series Other',
+		default: '#898781',
 	},
 	'logo': {
 		type: 'asset',

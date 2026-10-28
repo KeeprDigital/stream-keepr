@@ -37,7 +37,6 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 	// Display limits
 	limit: editorField(z.number().int().min(1).max(500), { label: 'Card limit' }),
 	archetypeLimit: editorField(z.number().int().min(1).max(500).nullable().optional(), { label: 'Top archetypes' }),
-	maxTableWidth: editorField(z.number().int().min(1).nullable().optional(), { label: 'Max table width' }),
 
 	// Pagination
 	pageSize: pageRotationPageSize,
@@ -45,9 +44,6 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 
 	// Visibility toggles
 	...headerConfigShape,
-
-	// Animation
-	animateEntries: editorField(z.boolean(), { label: 'Animate entries' }),
 }, {
 	viewMode: 'archetype',
 	...DEFAULT_METAGAME_SCOPE,
@@ -78,11 +74,12 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 	],
 	limit: 50,
 	archetypeLimit: null,
-	maxTableWidth: undefined,
 	pageSize: 10,
 	...DEFAULT_PAGE_ROTATION,
 	...DEFAULT_HEADER_CONFIG,
-	animateEntries: true,
+}, {
+	// The table's width and its rows' motion are the mode's Mode Tokens (#851).
+	formerFields: ['maxTableWidth', 'animateEntries'],
 });
 
 export type MetagameModeConfig = ScreenModeConfigOf<typeof metagameModeConfigContract>;

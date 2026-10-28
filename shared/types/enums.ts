@@ -39,7 +39,11 @@ export const HEAD_TO_HEAD_PLAYER_SOURCE_VALUES = ['featureMatchSlot', 'players']
 export const SCREEN_COMMAND_VALUES = ['refresh', 'identify', 'debug'] as const;
 export const CLOCK_TYPE_VALUES = ['countdown', 'countup', 'untimed'] as const;
 export const RECORD_SEPARATOR_VALUES = ['-', '/', ' | ', ' '] as const;
-export const DECK_BOARD_VIEW_VALUES = ['grid', 'stack', 'list'] as const;
+// A sideboard stacks only as the strip beside the mainboard (ADR-0054).
+export const MAINBOARD_VIEW_VALUES = ['grid', 'list'] as const;
+export const SIDEBOARD_VIEW_VALUES = ['grid', 'stack', 'list'] as const;
+// Fixed: cards take their width Mode Token and may overflow. Fit: every card fits the Event Canvas.
+export const CARD_SIZING_VALUES = ['fixed', 'fit'] as const;
 // Where a badge sits on a Deck Screen card: the nine points less the centre, spelled as `NINE_POINTS`
 // (`shared/utils/ninePoints.ts`) so the nine-point picker edits it directly (#543).
 export const QUANTITY_POSITION_VALUES = [
@@ -152,7 +156,9 @@ export type ScreenMode = typeof SCREEN_MODE_VALUES[number];
 export type HeadToHeadPlayerSource = typeof HEAD_TO_HEAD_PLAYER_SOURCE_VALUES[number];
 export type ScreenCommand = typeof SCREEN_COMMAND_VALUES[number];
 export type RecordSeparator = typeof RECORD_SEPARATOR_VALUES[number];
-export type DeckBoardView = typeof DECK_BOARD_VIEW_VALUES[number];
+export type MainboardView = typeof MAINBOARD_VIEW_VALUES[number];
+export type SideboardView = typeof SIDEBOARD_VIEW_VALUES[number];
+export type CardSizing = typeof CARD_SIZING_VALUES[number];
 export type QuantityPosition = typeof QUANTITY_POSITION_VALUES[number];
 export type SideboardPlacement = typeof SIDEBOARD_PLACEMENT_VALUES[number];
 export type BoardSelection = typeof BOARD_SELECTION_VALUES[number];

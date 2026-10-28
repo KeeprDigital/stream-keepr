@@ -25,7 +25,7 @@ import Renderer from '~/components/Screen/Renderer.vue';
 // token set, paints every Mode Token it declares, and a plain mode's host
 // insets and aligns it by the Theme (ADR-0049, ADR-0051).
 
-type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor' | 'borderColor' | 'boxShadow' | 'width' | 'height' | 'gap' | 'fontSize';
+type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor' | 'borderColor' | 'boxShadow' | 'width' | 'height' | 'gap' | 'fontSize' | 'maxWidth';
 
 /** Where a display paints one Mode Token: an element, and for a colour the property it sets. */
 interface Probe {
@@ -33,6 +33,8 @@ interface Probe {
 	property?: ColorProperty;
 	/** For a value no style property carries: the attribute the element states it in. */
 	attribute?: string;
+	/** For motion its class transitions by: the custom properties' prefix, which carry its timing. */
+	motionProperties?: string;
 	/** Mode config the element needs to render, over the mode's sample config. */
 	config?: Record<string, unknown>;
 }
@@ -53,6 +55,13 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'secondary-text': { selector: '.cell-record', property: 'color' },
 		'rise': { selector: '[data-position-change="up"]', property: 'color' },
 		'fall': { selector: '[data-position-change="down"]', property: 'color' },
+		'max-width': { selector: '[data-testid="standings-content"]', property: 'maxWidth' },
+		'row-motion': { selector: '.standings-row', motionProperties: '--standings-row' },
+		'reveal-motion': {
+			selector: '.standings-row',
+			motionProperties: '--standings-row',
+			config: { viewMode: 'reveal' },
+		},
 	},
 	'pairings': {
 		'surface': { selector: '.pairings-rows', property: 'backgroundColor' },
@@ -159,6 +168,8 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 			property: 'backgroundColor',
 			config: { viewMode: 'chart' },
 		},
+		'max-width': { selector: '[data-testid="metagame-content"]', property: 'maxWidth' },
+		'row-motion': { selector: '.metagame-row', motionProperties: '--metagame-row' },
 	},
 	'top-cards': {
 		'title-typography': { selector: '.top-cards-title h2' },
@@ -173,17 +184,9 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'stat-badge-surface': { selector: '[data-testid="top-cards-stat-badge"]', property: 'backgroundColor' },
 		'stat-badge-text': { selector: '[data-testid="top-cards-stat-badge"]', property: 'color' },
 		'page-indicator-text': { selector: '[data-testid="top-cards-page-indicator"]', property: 'color' },
-		'card-width': {
-			selector: '[data-testid="top-cards-item"]',
-			property: 'width',
-			config: { dynamicCardSize: false },
-		},
-		'card-gap': { selector: '[data-testid="top-cards-grid"]', property: 'gap' },
-		'badge-size': { selector: '[data-testid="top-cards-stat-badge"]', property: 'fontSize' },
 	},
 	'card': {
-		'card-width': { selector: '[data-testid="spotlight-card"]', property: 'width' },
-		'motion': { selector: '.card-image-wrapper' },
+		motion: { selector: '.card-image-wrapper' },
 	},
 	// A surface probes its outline: the Frame's border stroke, a Source Item's border.
 	'feature-match-overlay': {
@@ -210,35 +213,7 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'pointed-card-surface': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'backgroundColor' },
 		'pointed-card-accent': { selector: '[data-testid="highlander-pointed-card-chip"] span', property: 'color' },
 		'pointed-card-border': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'borderColor' },
-		'quantity-badge-size': { selector: '.quantity-badge', property: 'fontSize' },
-		'points-badge-size': { selector: '[data-testid="highlander-card-badge"]', property: 'fontSize' },
-		'meta-pill-size': { selector: '[data-testid="deck-meta-pill"]', property: 'fontSize' },
-		'pointed-card-size': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'fontSize' },
 		'badge-shadow': { selector: '[data-testid="highlander-card-badge"]', property: 'boxShadow' },
-		'mainboard-card-width': { selector: '[data-testid="mainboard-grid"] .card-item', property: 'width' },
-		'mainboard-card-gap': { selector: '[data-testid="mainboard-grid"]', property: 'gap' },
-		'mainboard-stack-reveal': {
-			selector: '[data-testid="mainboard-stack-row"] .stack-card',
-			property: 'width',
-			config: {
-				mainboard: { view: 'stack' },
-			},
-		},
-		'sideboard-card-width': {
-			selector: '[data-testid="sideboard-grid"] .card-item',
-			property: 'width',
-			config: {
-				sideboard: { view: 'grid', columns: 2, dynamicCardSize: false },
-			},
-		},
-		'sideboard-card-gap': {
-			selector: '[data-testid="sideboard-grid"]',
-			property: 'gap',
-			config: {
-				sideboard: { view: 'grid', columns: 2, dynamicCardSize: false },
-			},
-		},
-		'sideboard-stack-reveal': { selector: '[data-testid="sideboard-stack-column"] .stack-card', property: 'height' },
 	},
 };
 
@@ -319,8 +294,8 @@ mockNuxtImport('useStandingsModeData', () => () => {
 		showHeader: true,
 		showArchetypeColors: false,
 		rowsPerPage: 8,
-		animateEntries: false,
 		columns: [],
+		...probeConfig.value,
 	}));
 	const columns = [
 		'position',
@@ -548,7 +523,6 @@ mockNuxtImport('useMetagameModeData', () => () => ({
 	config: computed(() => ({
 		viewMode: 'archetype',
 		showHeader: true,
-		animateEntries: false,
 		pageSize: 8,
 		archetypeColumns: ['archetype', 'count', 'winRate'].map(key => ({ key, visible: true })),
 		cardColumns: [],
@@ -616,7 +590,7 @@ mockNuxtImport('useTopCardsModeData', () => () => {
 	return {
 		config: computed(() => ({
 			columns: 5,
-			dynamicCardSize: true,
+			cardSizing: 'fit',
 			showHeader: true,
 			showCardNames: true,
 			showRankBadges: true,
@@ -632,6 +606,7 @@ mockNuxtImport('useTopCardsModeData', () => () => {
 		]),
 		currentPage: computed(() => 1),
 		totalPages: computed(() => 2),
+		pageCapacity: computed(() => 1),
 	};
 });
 
@@ -651,12 +626,13 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	config: computed(() => ({
 		board: 'full',
 		sideboardPlacement: 'beside',
-		mainboard: { view: 'grid', columns: 4, dynamicCardSize: false },
+		mainboard: { view: 'grid', columns: 4, cardSizing: 'fixed' },
 		sideboard: { view: 'stack' },
 		showQuantities: true,
 		showDeckName: true,
 		showDeckColors: false,
-		showDeckStats: false,
+		// Card type counts, so the details row and its pill show.
+		showDeckStats: true,
 		showDeckMetaPill: true,
 		showHighlanderTotal: false,
 		showHighlanderPointedCards: true,
@@ -666,7 +642,7 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	primaryHeader: ref('Alice'),
 	secondaryHeader: ref('Mono Blue'),
 	deckColors: '',
-	companion: ref({ name: 'Lurrus of the Dream-Den' }),
+	companionCard: ref(null),
 	highlander: ref({
 		system: '7ph',
 		status: 'legal',
@@ -684,8 +660,9 @@ mockNuxtImport('useDeckModeData', () => () => ({
 		duplicateCards: [],
 		unknownCards: [],
 	}),
-	deckCounters: ref([]),
-	deckStats: ref([]),
+	deckStats: ref([
+		{ type: 'Instants', count: 12 },
+	]),
 	mainboard: ref([
 		deckCard('Mana Drain', 'mainboard'),
 		deckCard('Force of Will', 'mainboard'),
@@ -700,6 +677,10 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	displayedDeckVersion: ref(1),
 	pendingSwapVersion: ref(0),
 	commitPendingDeck: () => {},
+	boardColumns: {
+		mainboard: computed(() => 4),
+		sideboard: computed(() => 2),
+	},
 }));
 
 const spotlightCard = {
@@ -711,6 +692,7 @@ const spotlightCard = {
 };
 
 mockNuxtImport('useCardModeData', () => () => ({
+	config: computed(() => ({ cardWidth: 583 })),
 	screenId: computed(() => 1),
 	card: ref(spotlightCard),
 	error: ref(null),
@@ -831,6 +813,14 @@ function painted(probe: Probe, type: ThemeTokenType) {
 	if (probe.attribute)
 		return element.attributes(probe.attribute);
 	const style = getComputedStyle(element.element);
+	if (type === 'animation-recipe' && probe.motionProperties) {
+		const part = (name: string) => style.getPropertyValue(`${probe.motionProperties}-${name}`).trim();
+		return {
+			transitionDuration: part('duration'),
+			transitionTimingFunction: part('easing'),
+			transitionDelay: part('delay'),
+		};
+	}
 	if (type === 'animation-recipe') {
 		return {
 			transitionDuration: style.transitionDuration,
@@ -870,7 +860,7 @@ function expectedPaint(type: ThemeTokenType, value: unknown) {
 		const recipe = value as ThemeTokenValueTypes['animation-recipe'];
 		return {
 			transitionDuration: `${recipe.duration}ms`,
-			transitionTimingFunction: { 'linear': 'linear', 'ease-in-out': 'cubic-bezier(0.45, 0, 0.55, 1)' }[recipe.easing as string],
+			transitionTimingFunction: { 'linear': 'linear', 'ease-out': 'cubic-bezier(0.5, 1, 0.89, 1)', 'ease-in-out': 'cubic-bezier(0.45, 0, 0.55, 1)' }[recipe.easing as string],
 			transitionDelay: `${recipe.delay}ms`,
 		};
 	}
@@ -1010,31 +1000,58 @@ describe('a light Theme', () => {
 	});
 });
 
-// A Deck Screen's Mainboard and Sideboard each take their own size Mode Tokens.
-describe('a Deck Screen\'s two boards', () => {
-	it('are sized independently', async () => {
-		await mountMode('deck', {
-			'deck.mainboard-card-width': 200,
-			'deck.mainboard-card-gap': 20,
-			'deck.sideboard-card-width': 100,
-			'deck.sideboard-card-gap': 4,
-		}, {
-			config: {
-				sideboard: { view: 'grid', columns: 2, dynamicCardSize: false },
-			},
-		});
+// Every badge's shadow reads the one `shadow` Foundation Token, so a Theme sets it once.
+describe('a Theme\'s shadow', () => {
+	it.each(['top-cards', 'deck', 'archetype-spotlight'] as const)('lifts the %s badges', async (mode) => {
+		const probe = THEMED_DISPLAYS[mode]!['badge-shadow']!;
+		await mountMode(mode, { shadow: 'rgb(1, 2, 3)' }, { config: probe.config });
+		await shown(probe);
 
-		const board = (key: string) => ({
-			width: getComputedStyle(wrapper!.get(`[data-testid="${key}-grid"] .card-item`).element).width,
-			gap: getComputedStyle(wrapper!.get(`[data-testid="${key}-grid"]`).element).gap,
-		});
-		expect([
-			board('mainboard'),
-			board('sideboard'),
-		]).toEqual([
-			{ width: '200px', gap: '20px' },
-			{ width: '100px', gap: '4px' },
-		]);
+		expect(painted(probe, 'color')).toBe('rgb(1, 2, 3)');
+	});
+});
+
+// Metagame's chart bars grow and shrink on its rows' motion timing.
+describe('a Metagame Screen\'s chart', () => {
+	it('times its bars by row-motion', async () => {
+		const bar = {
+			selector: '[data-color-slot="1"]',
+			config: { viewMode: 'chart' },
+		};
+		await mountMode('metagame', { 'metagame.row-motion': SAMPLES['animation-recipe'] }, { config: bar.config });
+		await shown(bar);
+
+		expect(painted(bar, 'animation-recipe')).toEqual(expectedPaint('animation-recipe', SAMPLES['animation-recipe']));
+	});
+});
+
+// A Mode Token defaulting to a Foundation Token, or to a composite whose colour
+// names one, follows a Theme setting only that Foundation Token.
+describe('a Foundation Token a Mode Token\'s default names', () => {
+	const CASES = [
+		{
+			mode: 'feature-match-overlay',
+			token: 'surface',
+			part: 'a built-in preset\'s Frame',
+			probe: { selector: '.feature-match-overlay__frame-fill', attribute: 'fill' },
+		},
+		{
+			mode: 'metagame',
+			token: 'series-1',
+			part: 'the first chart series',
+			probe: {
+				selector: '[data-color-slot="1"]',
+				property: 'backgroundColor',
+				config: { viewMode: 'chart' },
+			},
+		},
+	] satisfies Array<{ mode: ScreenMode; token: string; part: string; probe: Probe }>;
+
+	it.each(CASES)('restyles $part when a Theme sets $token', async ({ mode, token, probe }) => {
+		await mountMode(mode, { [token]: 'rgb(12, 34, 56)' }, { config: probe.config });
+		await shown(probe);
+
+		expect(painted(probe, 'color')).toBe('rgb(12, 34, 56)');
 	});
 });
 

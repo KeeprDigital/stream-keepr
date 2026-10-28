@@ -36,11 +36,10 @@ export const topCardsModeTokens = {
 		label: 'Badge type',
 		default: { token: 'heading' },
 	},
-	// No Foundation Token is a shadow, so it holds the one it shipped with.
 	'badge-shadow': {
 		type: 'color',
 		label: 'Badge shadow',
-		default: 'rgba(0, 0, 0, 0.1)',
+		default: { token: 'shadow' },
 	},
 	'rank-badge-surface': {
 		type: 'color',
@@ -66,25 +65,5 @@ export const topCardsModeTokens = {
 		type: 'color',
 		label: 'Page indicator text',
 		default: { token: 'text-secondary' },
-	},
-	'card-width': {
-		type: 'dimension',
-		label: 'Card width',
-		// The former medium card size. A grid whose cards fill their columns ignores it.
-		default: 160,
-		bounds: { min: 48, max: 480 },
-	},
-	'card-gap': {
-		type: 'dimension',
-		label: 'Card gap',
-		default: 12,
-		bounds: { min: 0, max: 100 },
-	},
-	'badge-size': {
-		type: 'dimension',
-		label: 'Badge text size',
-		// The former medium badge; each badge sizes itself around its text.
-		default: 14,
-		bounds: { min: 8, max: 48 },
 	},
 } as const satisfies Readonly<Record<string, DeclaredModeTokenDefinition>>;

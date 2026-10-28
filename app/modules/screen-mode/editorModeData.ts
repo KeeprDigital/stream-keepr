@@ -1,6 +1,8 @@
 import type { Screen } from '~/types';
 import { computed, ref, shallowRef, toValue, watch } from 'vue';
+import { eventCanvasOf } from '~~/shared/eventCanvas';
 import { runInScreenContext } from '~/composables/screen/useScreenContext';
+import { useEventStore } from '~/stores/event';
 
 export interface EditedScreen {
 	/** The Screen as the store shows it, an unsettled edit laid over it. */
@@ -31,10 +33,15 @@ export function useEditedScreenModeData<T>(edited: EditedScreen, setup: () => T)
 			saved.value = screen;
 	});
 
+	// The Event's canvas and Theme too, which a display laying itself out from
+	// them reads, so the editor counts the pages its Screen Output counts.
+	const eventStore = useEventStore();
 	return runInScreenContext({
 		screen: saved,
 		eventId: computed(() => toValue(edited.eventId) || null),
 		interactive: ref(false),
 		overlayContainer: ref(null),
+		eventCanvas: computed(() => eventCanvasOf(eventStore.event)),
+		themeTokens: computed(() => eventStore.eventTheme?.tokens),
 	}, setup);
 }

@@ -3,7 +3,7 @@ import { eventService } from '~~/server/services/event';
 
 /**
  * An Event's commentator Talent names and holding text, unauthenticated and
- * readable from any origin. A stopgap for outside tools (ADR-0054): names and
+ * readable from any origin. A stopgap for outside tools (ADR-0055): names and
  * wording only, nothing an operator would not already put on air.
  */
 export default defineEventHandler(async (event) => {

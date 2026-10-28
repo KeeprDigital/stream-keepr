@@ -240,7 +240,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: topCardsModeConfigContract,
 		eventReferences: { playerListId: 'playerList' },
-		pageRotation: { pageSize: 'rowsPerPage' },
+		pageRotation: { pageSize: 'cardsPerPage' },
 		modeTokens: topCardsModeTokens,
 	},
 	'player-history': {

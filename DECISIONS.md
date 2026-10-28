@@ -209,7 +209,7 @@ Before this, the installation had no login: a self-issued, anonymous Graphics Au
 - **Session policy: Better Auth defaults, `expiresIn` 7 days, `updateAge` 1 day.** An idle-sliding window (measured from last use, not issue) is the right shape, and nothing now argues for a short one: a lapse no longer destroys ownership of work, D1 has no per-key write cap, and a mid-show forced re-login is the costliest failure this product can buy. The abandoned-shared-machine risk is answered by admin session revocation and banning.
 - **The Graphics Administrator shared token (`x-graphics-admin-token`) is untouched** — the admin credential until a roles effort redraws that seam.
 
-**Deny-by-default over `/api/**`.** `server/middleware/api-session.ts` requires a session on every `/api/**` route that `apiPathRequiresSession` (`server/utils/apiBoundary.ts`) does not exempt, so a new route is private until consciously allowlisted. The exempt surface, exhaustively: `/api/auth/**`; `/api/time` (output drift correction); `/api/realtime/token` (scoped below); `/api/screen-output/**` (capability-authorised); `/api/bootstrap/ensure-admin`; `/api/admin/**`; `/api/public/**` (ADR-0054); and the SPA shell and static assets, unavoidably public under `ssr: false`.
+**Deny-by-default over `/api/**`.** `server/middleware/api-session.ts` requires a session on every `/api/**` route that `apiPathRequiresSession` (`server/utils/apiBoundary.ts`) does not exempt, so a new route is private until consciously allowlisted. The exempt surface, exhaustively: `/api/auth/**`; `/api/time` (output drift correction); `/api/realtime/token` (scoped below); `/api/screen-output/**` (capability-authorised); `/api/bootstrap/ensure-admin`; `/api/admin/**`; `/api/public/**` (ADR-0055); and the SPA shell and static assets, unavoidably public under `ssr: false`.
 
 - **The Screen-by-slug bootstrap route lives at `/api/screen-output/events/:id/screens/slug/:slug`** and accepts either the Screen Output Asset Capability bearer from the output page's URL hash or a session. The session arm exists for editor previews (`embed=preview`), which deliberately resolve media as the author with no capability; it adds no reach, since any signed-in user can read the same Screen elsewhere and `mapScreenToResponse` strips the capability digest either way. Minting capabilities for previews would contradict that design, and a second session-only route for the same resource would make a repository choose a path by credential.
 - **Realtime token: dual grant, no anonymous issuance.** A user gets the event channel plus all screen channels (subscribe, history, presence) with `clientId` = userId. A capability bearer gets that screen's channels plus its event channel, with a screen-output `clientId`. Screen Outputs need no account — the capability already in hand is their credential.
@@ -1500,7 +1500,7 @@ The Players page opened Edit on a row click and kept history in the menu, while 
 
 ## ADR-0049: Themes replace Graphic Style Sets, resolve live, and use a closed vocabulary of two tiers
 
-Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812) · Amended 2026-10-28: Graphic Style Sets and Animation Effect Presets are removed, and a document's Style Set link is a former field · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830)
+Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812) · Amended 2026-10-28: Graphic Style Sets and Animation Effect Presets are removed, and a document's Style Set link is a former field · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830) · Amended 2026-10-28: a composite Mode Token default names colour Foundation Tokens, and the chart palette is Foundation Tokens · [#851](https://github.com/KeeprDigital/stream-keepr/issues/851)
 
 ### Decision
 
@@ -1509,7 +1509,7 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 **Stream Keepr owns every token.** Users set values, never names.
 
 - **Foundation Tokens** are app-wide roles and hold a literal. A colour inside a composite Foundation Token (a fill, a surface, or a colour layer of the `background` stack) may name a colour Foundation Token instead, and a colour holds a literal only (#829, #831).
-- **Mode Tokens** are declared by a Screen Mode Definition. Each holds a literal or names a same-type Foundation Token, and defaults to a Foundation Token, except where none fills its role: a badge shadow's colour (no shadow role exists) or Card Spotlight's zoom (no motion Foundation Token holds it) defaults to its shipped literal (#823, #844).
+- **Mode Tokens** are declared by a Screen Mode Definition. Each holds a literal or names a same-type Foundation Token, and defaults to a Foundation Token, except where none fills its role: a badge shadow's colour (no shadow role exists) or Card Spotlight's zoom (no motion Foundation Token holds it) defaults to its shipped literal (#823, #844). A composite Mode Token's literal default may name colour Foundation Tokens inside it, as the Feature Match Overlay's Frame and Source Item surfaces fill with `surface` and outline in `accent`, so a change to those tokens restyles every placed preset; the Frame fills at full opacity, so the Theme's colour, alpha included, is what it paints. Metagame's chart slots follow the `series-1` … `series-8` and `series-other` Foundation Tokens (#851).
 - **Graphic Item properties** name a whole Foundation Token or hold a literal. Nothing is bound partially, and nothing names a Mode Token. Resolution therefore takes at most two steps (a Mode Token or binding, its Foundation Token, then a colour that token names) and cannot cycle. It was one step until #829: the PRD has a composite's colour name a colour token, so a change to the accent reaches every surface using it.
 
 **A Theme stores only the tokens it sets.** A token added later reaches every existing Theme through its default. Renames and removals follow ADR-0043 and ADR-0037.
@@ -1532,6 +1532,7 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 - A Theme in use cannot be deleted.
 - Typography tokens carry no size. Colour tokens may carry alpha, and a consumer's opacity multiplies it. The Key Output keys a translucent colour at its own alpha, so Fill and Key agree.
 - A Graphic Theme Binding (#829) is a slot name and a token name beside the property, never in place of it. The property keeps the value it last resolved to, so a document stays complete and renders without a Theme. The compositor paints every bound slot from the Screen's resolved Foundation Tokens. An author's edit to a bound slot's value detaches that slot, keeping what the author made of the resolved value. That is the only implicit change; there is no override record. A binding naming no Foundation Token of its slot's type is refused on a write and inert on a read.
+- The Theme editor and a Screen's token section edit a composite, or the `background` stack, as it is stored, not as it resolves, so a colour inside it keeps naming its Foundation Token across a save. Each such colour's control follows a colour Foundation Token or holds its own (#851).
 - Media treatment and on-screen cycling bind nothing, because no token type fills either. A Media Graphic Item's picture binds an asset token, such as the logo (#831).
 - Migration `0012_remove_graphic_style_sets` drops the Graphic Style Set and Animation Effect Preset libraries and a Broadcast Graphic Template's link columns (#830). A template's document is untouched, so its values stay as the literals it already held.
 - A graphics document recorded with a Style Set link, stored or in a `.skgraphic` or `.sklayout` exported before #830, still reads. An item's `styleRefs`, and a Broadcast Graphic's `styleSet` and `styleRefs`, are former fields: accepted by the graphics schemas and dropped, as ADR-0037's are, so a write that sends the document (a Screen write, a template revision carrying its document, a package install) stores it without them. A client holding one sends it back unrefused. A copy the server makes of a stored document without parsing it, such as saving a placed graphic as a template or renaming a template, carries a stale link along, inert, until such a write. Every other unknown key is still refused.
@@ -1582,7 +1583,7 @@ A Theme is meant to carry the production's logo, backdrop and typefaces. ADR-000
 
 ## ADR-0051: A Screen holds no look of its own, and the Event Canvas is a coordinate space
 
-Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812)
+Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812) · Amended 2026-10-28: only overlay Screen Modes scale the Event Canvas, and Standings and Metagame's last look fields are Mode Tokens · [#851](https://github.com/KeeprDigital/stream-keepr/issues/851)
 
 ### Decision
 
@@ -1592,7 +1593,7 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 - colorMode goes: a light look and a dark look are two Themes.
 - Mode config holds what a mode shows (headers, columns, page size, Event References). Mode Tokens hold how it looks (colour, type, spacing, size, media, motion).
 
-**Each Event sets one Event Canvas** (default 1920×1080) in its Event Presentation Settings, with its Theme and on-air wording. Every Screen of the Event uses it, graphics hosts included, and every Screen Mode scales it uniformly to fit its window. There is no per-Screen canvas.
+**Each Event sets one Event Canvas** (default 1920×1080) in its Event Presentation Settings, with its Theme and on-air wording. Every Screen of the Event uses it, graphics hosts included, and every overlay Screen Mode scales it uniformly to fit its window. There is no per-Screen canvas. Feature Match Controls is the exception: it is an operator surface, so it fills its window and consumes no Theme Token (#812, Q37 and Q44).
 
 ### Why
 
@@ -1606,7 +1607,9 @@ Canvas size and wording are set once per production, not per brand or per Screen
 - Resizing the Event Canvas moves the frame every graphics composition of the Event was authored in, yet takes no Graphics Authoring Lease, like any other Event Presentation Settings write (ADR-0030).
 - On-air wording stays on the Event, so one Theme serves Events that word things differently.
 - The existing look fields are dropped, not migrated, and existing Screens render the Default Theme.
-- The plain modes' remaining look fields became Mode Tokens and former fields (#844): Most Played Cards' card width, gap and badge size; Deck's card width, gap and stack reveal, one set per board, and its badge, pill and chip sizes; Card Spotlight's enter and exit. A size choice became a dimension; a choice of layout behaviour, such as whether cards fill their columns, stays config. Card Spotlight's on/off switch went with its speed, since a motion recipe with no channel cuts. A badge's size token is its text size, and the badge is laid out around it in em, so one value sizes it whole. Where no Foundation Token fills a role, such as a shadow colour, the Mode Token defaults to a literal.
+- The plain modes' remaining look fields became Mode Tokens and former fields (#844): their colours, type and Card Spotlight's enter and exit. Card Spotlight's on/off switch went with its speed, since a motion recipe with no channel cuts.
+- **A Theme Token is shared, never a value one display alone reads** (amended by ADR-0054). A Mode Token defaults to a Foundation Token, so it carries a shared value to the place it is consumed. A size or spacing only one display reads is that mode's config, edited beside the control it sizes: Most Played Cards' card width, gap and badge size; each Deck board's card width and gap, the sideboard's stack reveal, and the Deck's badge, pill and chip text sizes; Card Spotlight's card width. A badge's size is its text size, and the badge is laid out around it in em, so one value sizes it whole. A colour, type, motion or surface a brand would set stays a Theme look even where one mode reads it, such as the Metagame chart palette. The badges' shadow is the `shadow` Foundation Token.
+- Standings and Metagame followed (#851). Max table width became the `max-width` dimension, shipped at the widest Event Canvas, so a table fills its Screen until a Theme narrows it. Animate entries became `row-motion`, which also times Metagame's chart bars. Standings' `reveal` view mode keeps its own rise as `reveal-motion`. An entering row starts an eighth of the duration after the one above it, so a cut has no stagger either. No plain mode keeps a size or motion field in config.
 - A motion Mode Token reaches its display as custom properties a CSS transition reads: its timing, and the excursion state the element enters from and leaves to. A slide clearing its parent travels the whole Screen, which is the size container its Screen host sets.
 - `text-inverse` is text on the primary text colour. Every badge, pill and chip whose surface is `text-primary` pairs it with `text-inverse`, so a light Theme sets the two as a pair.
 
@@ -1696,7 +1699,72 @@ Some modes held program and others did not. The Deck List preloaded its card art
 - **Hold program by scanning the DOM alone, with no declaration.** An async display's chunk has not mounted when the scan runs, so an empty rendering would look ready.
 - **Vue `<Suspense>`.** Still experimental, and suspending setup would keep the incoming rendering from mounting, which is what starts its media loading.
 
-## ADR-0054: A stopgap public read names an Event's commentators and holding text
+## ADR-0054: Cards fit the Event Canvas or take a fixed width
+
+Accepted · 2026-10-28
+
+### Decision
+
+**A card grid's Card Sizing is Fixed width or Fit to screen.** `cardSizing: 'fixed' | 'fit'` replaces `dynamicCardSize` on Most Played Cards and on each Deck List board. Fixed takes the grid's own `cardWidth` and may overflow. Fit gives the grid the height its display leaves it, splits it into equal rows (`ScreenCardGrid`), and sizes each card in its cell as `min(100cqw, 100cqh × 61/85)` (`MtgCardFitBox`), so no card leaves the Event Canvas. This is CSS: nothing measures the rendered page. A Most Played Cards page lays out a full page's rows, `min(rowsPerPage, rows)`, so a short last page keeps its card size. Deck boards below each other share the height by their Fit rows, and a Fixed board keeps its own height.
+
+**Auto columns are chosen from the Event Canvas, never measured.** `autoColumns` sits beside `columns`. Fit picks the column count, from 1 to 12, at which the cards are largest (`fitColumns`). Fixed fits as many card-width columns as there is room for (`fixedColumns`). Both read the canvas inside the Screen inset and the grid's own width and gap (`useCardGridColumns`), and the settings editor's mode data now carries its Event's canvas and Theme, for the inset. Most Played Cards chooses its columns over every card and then pages them, so the column count and the page size never depend on each other. A Fixed Deck grid with auto columns uses CSS `auto-fill`, because a Deck has no pages to agree on.
+
+**Only a sideboard stacks, as the strip beside the mainboard.** The mainboard's views are grid and list. A sideboard stack placed below the mainboard, or shown alone, renders as a grid and keeps `view: 'stack'` stored, so moving it back beside restores the strip. Settings shows the Stack tab disabled in those cases. A Fit strip is one mainboard column wide, and its cards fit the whole stack to its height while the sideboard's `stackReveal` stays in px. A mainboard stack stored by an older client reads as a grid (`resolveDeckBoards`).
+
+**A card grid's sizes are its mode's config, not Mode Tokens.** Each one a single display reads moved back beside the control it sizes, which amends ADR-0051's #844 bullet: a Theme Token is shared. Most Played Cards holds `cardWidth`, `cardGap` and `badgeSize`; each Deck board `cardWidth` and `cardGap`, the sideboard `stackReveal`, and the Deck its four text sizes; Card Spotlight `cardWidth`. The three badge shadows read a new `shadow` Foundation Token.
+
+**Nothing is migrated.** The Themes work is not in production, and existing Screens are deleted and set up again rather than carried over. Every replaced field is a former field, so a stored one reads as the mode's default until the Screen is next written:
+
+- `dynamicCardSize`;
+- the size presets;
+- `stackOverlap`;
+- `scale`;
+- `rowsPerPage` on Most Played Cards.
+
+**A Deck's Fit boards are laid out together from the space they measure** (`solveDeckLayout`). A Deck has no pages, so when every board shown is Fit, the Screen measures the space below its header and lays both boards out at one card size: the largest at which both fit.
+
+- **Columns:** each board's columns are chosen alongside the other's. A set column count is kept.
+- **Stack:** a stacked sideboard shows less of each card, down to its name bar (`MIN_STACK_REVEAL_SHARE`), before its cards shrink.
+- **One score, no thresholds** (`layoutScore`): each column choice is laid out at the largest card size that fits. The choices are compared on one continuous score:
+  - card size, relative to the largest possible;
+  - the share of the width the deck spans;
+  - the square root of the share of the height it spans;
+  - how full its rows are.
+
+  Every term is a ratio, so the same choice holds at any canvas, card or gap size, and no small change flips it. Width counts more than height: space under a deck reads as margin, space beside it as a gap. Most Played Cards' auto columns use the same score (`fitColumns`).
+
+- **A sideboard below wraps at the mainboard's width**: choosing its own columns, it takes as many as the mainboard has, or as many as it has cards.
+- **Measured, not guessed:** a board's heading and a Most Played Cards name label are measured from hidden copies, as their Theme types them, by layout height (`useLayoutHeight`), which the Screen's scale leaves alone. The gap between boards is set from the value the layout reads.
+- **Placement:** the boards are sized exactly and fill the space they share. Across the axis they share, each board sits at its own `alignment`, as far as the Screen's edge, a sideboard's heading with it. Along it they sit together at the mainboard's `alignment`, so the space they leave is shared out around them. A sideboard aligned away from the mainboard (bottom below it, right beside it) goes to that far edge instead. A board fitting itself places its cards at its own `alignment`.
+- **First frame:** until the space is measured, each board fits itself.
+
+**Most Played Cards pages by cards.** `cardsPerPage` replaced `rowsPerPage`. Columns no longer change which cards a page holds, so the Screen chooses its auto columns from the grid space it measures, and a page laid out at a full page's capacity keeps its card size.
+
+**The Deck's information is the deck's alone.**
+
+- **Counters:** none are shown.
+- **Companion:** it is a card, the sideboard's first, tagged "Companion" and listed once, or in a column of its own with no sideboard (`showCompanion`).
+- **Header:** the Player's name and the deck's name are each their own line (`showPlayerName`, `showDeckName`).
+- **Visibility:** each board's card shows or hides it, writing the one `board` selection, so the last board shown stays on.
+- **Hidden settings:** a setting that cannot have an effect is not shown:
+  - card points without an Event points system;
+  - the details row's look while the row is empty;
+  - the column count while auto columns choose it;
+  - the sideboard's alignment while both boards are placed together.
+
+### Why
+
+A Theme exists to share a look across Screens. A size only one display reads gained nothing from the Theme and cost an override section away from the control it sized.
+
+With "Dynamic card size", columns only filled the canvas width. Card height followed the card's aspect, so enough rows ran off the bottom of the Event Canvas with no way to stop them. Operators need one mode that never overflows and one that takes an exact width and accepts overflow. Choosing auto columns from inputs every surface holds keeps the settings editor's page count equal to the Screen Output's. The mainboard stack and the horizontal sideboard row were never used.
+
+### Consequences
+
+- Most Played Cards keeps Fit as its default, so a Screen that filled its columns now also fits its height, and a long grid shrinks instead of overflowing.
+- Fit cards in a page of 60 can be small. Paging, not a minimum size, is the operator's way to keep them large.
+- Canvas aspect only chooses the auto column count; the rendered Fit size always comes from the grid's real space, so a tall header costs size, never overflow.
+
+## ADR-0055: A stopgap public read names an Event's commentators and holding text
 
 Accepted · 2026-10-28. Amends ADR-0010's exempt surface.
 

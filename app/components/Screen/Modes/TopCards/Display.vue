@@ -1,8 +1,43 @@
 <script setup lang="ts">
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
+import { useElementSize } from '@vueuse/core';
+import { fitColumns } from '~~/shared/utils/cardGrid';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { config, error, ready, isEmpty, headerText, pageEntries, currentPage, totalPages } = useTopCardsModeData();
+const { config, error, ready, isEmpty, headerText, pageEntries, currentPage, totalPages, pageCapacity } = useTopCardsModeData();
+
+// ── Columns, from the space the grid really has ──
+// Pages hold cards, not rows (ADR-0054), so the Screen chooses its columns from
+// the space it measures: Fit auto columns are the count at which a full page's
+// cards are largest; Fixed auto columns are as many as fit across.
+
+// A name label under its card is measured, as its Theme types it, from a hidden copy.
+const nameProbe = ref<HTMLElement | null>(null);
+const nameLabelHeight = useLayoutHeight(nameProbe);
+
+const gridElement = ref(null);
+const { width: gridWidth, height: gridHeight } = useElementSize(gridElement);
+
+const columns = computed<number | 'auto-fill'>(() => {
+	if (!config.value.autoColumns)
+		return config.value.columns;
+	if (config.value.cardSizing === 'fixed')
+		return 'auto-fill';
+	if (!gridWidth.value || !gridHeight.value)
+		return config.value.columns;
+	return fitColumns({
+		count: pageCapacity.value,
+		width: gridWidth.value,
+		height: gridHeight.value,
+		gap: config.value.cardGap,
+		labelHeight: config.value.showCardNames ? nameLabelHeight.value : 0,
+	});
+});
+
+/** A full page's rows, so a short last page keeps the same card size. */
+const rows = computed(() => Math.ceil(pageCapacity.value / (typeof columns.value === 'number'
+	? columns.value
+	: 1)));
 
 /** Set on the root, so card names and a card without an image take it. */
 const displayStyle = {
@@ -19,17 +54,11 @@ const pageIndicatorStyle = {
 	color: modeTokenVar('top-cards', 'page-indicator-text'),
 };
 
-const gridStyle = computed(() => ({
-	gridTemplateColumns: config.value.dynamicCardSize
-		? `repeat(${config.value.columns}, minmax(0, 1fr))`
-		: `repeat(${config.value.columns}, max-content)`,
-	gap: modeTokenVar('top-cards', 'card-gap'),
-	justifyContent: config.value.dynamicCardSize ? undefined : 'center',
-}));
-
-const cardWidth = modeTokenVar('top-cards', 'card-width');
+// Its sizes are its own config, in Event Canvas px (ADR-0054).
+const cardGap = computed(() => `${config.value.cardGap}px`);
+const cardWidth = computed(() => `${config.value.cardWidth}px`);
 /** The badges' text size, which each badge sizes itself around. */
-const badgeSize = modeTokenVar('top-cards', 'badge-size');
+const badgeSize = computed(() => `${config.value.badgeSize}px`);
 
 /** A badge lifts off the card's art on a soft shadow. */
 const badgeStyle = {
@@ -73,16 +102,29 @@ function statText(entry: CardBreakdownEntry): string | null {
 		:ready="ready"
 		:empty="isEmpty"
 	>
-		<div class="top-cards-display flex flex-col gap-4 h-full w-full" :style="displayStyle">
+		<div class="top-cards-display relative flex flex-col gap-4 h-full w-full" :style="displayStyle">
+			<!-- A card's name label and its gap, as the Theme types it, measured for the layout. -->
+			<div ref="nameProbe" aria-hidden="true" class="invisible absolute pointer-events-none pt-1">
+				<div class="top-cards-name">
+					Mg
+				</div>
+			</div>
+
 			<div v-if="config.showHeader" class="top-cards-title">
 				<h2 class="text-3xl" :style="titleStyle">
 					{{ headerText }}
 				</h2>
 			</div>
 
-			<div
-				class="top-cards-grid grid"
-				:style="gridStyle"
+			<ScreenCardGrid
+				ref="gridElement"
+				class="top-cards-grid"
+				:sizing="config.cardSizing"
+				:columns="columns"
+				:rows="rows"
+				:card-width="cardWidth"
+				:gap="cardGap"
+				:label-height="config.showCardNames ? `${nameLabelHeight}px` : '0px'"
 				data-testid="top-cards-grid"
 			>
 				<ScreenModesTopCardsCard
@@ -91,7 +133,7 @@ function statText(entry: CardBreakdownEntry): string | null {
 					:entry="entry"
 					:rank="rank"
 					:width="cardWidth"
-					:dynamic-size="config.dynamicCardSize"
+					:sizing="config.cardSizing"
 					:show-name="config.showCardNames"
 					:show-rank="config.showRankBadges"
 					rank-badge-class="top-1 left-1"
@@ -102,7 +144,7 @@ function statText(entry: CardBreakdownEntry): string | null {
 					:badge-size="badgeSize"
 					:card-style="cardStyle"
 				/>
-			</div>
+			</ScreenCardGrid>
 
 			<div
 				v-if="totalPages > 1"

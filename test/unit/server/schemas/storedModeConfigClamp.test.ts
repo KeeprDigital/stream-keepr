@@ -49,14 +49,14 @@ const TIGHTENED_BOUNDS = [
 		field: 'a board\'s columns',
 		stored: {
 			mainboard: {
-				view: 'stack',
+				view: 'grid',
 				columns: 16,
 			},
 			showDeckStats: true,
 		},
 		reads: {
 			mainboard: {
-				view: 'stack',
+				view: 'grid',
 				columns: 12,
 			},
 			showDeckStats: true,

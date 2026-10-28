@@ -108,10 +108,6 @@ const rotation = useRotationConfigWrites({
 });
 const { updateConfig } = rotation;
 
-function updateMaxTableWidth(value: number | null | undefined) {
-	updateConfig({ maxTableWidth: value ?? null } as Partial<StandingsModeConfig>);
-}
-
 function updateRoundId(value: number | null | undefined) {
 	updateConfig({ roundId: value ?? null, currentPage: 1 } as Partial<StandingsModeConfig>);
 }
@@ -341,22 +337,6 @@ const modeSettingsLabel = computed(() => {
 					@update:model-value="updateConfig({ showArchetypeColors: $event })"
 				/>
 			</template>
-
-			<USeparator />
-
-			<UFormField
-				:label="fields.maxTableWidth.label"
-				description="Optional cap in pixels. Leave empty to fill the available width."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="config.maxTableWidth ?? null"
-					placeholder="Auto"
-					:min="fields.maxTableWidth.min"
-					class="w-32"
-					@update:model-value="updateMaxTableWidth($event)"
-				/>
-			</UFormField>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Header">
@@ -388,14 +368,5 @@ const modeSettingsLabel = computed(() => {
 			auto-page-description="Automatically cycle through pages on the display."
 			:loading="loadingRows"
 		/>
-
-		<ScreenSettingsCard title="Animation">
-			<ScreenSettingsToggle
-				:label="fields.animateEntries.label"
-				description="Animate row transitions on the display."
-				:model-value="config.animateEntries"
-				@update:model-value="updateConfig({ animateEntries: $event })"
-			/>
-		</ScreenSettingsCard>
 	</div>
 </template>

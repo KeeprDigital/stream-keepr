@@ -1,5 +1,4 @@
 import type { CardBreakdownEntry, CardBreakdownResponse } from '~~/shared/types/metagame';
-import { topCardsGridRows } from '~~/shared/screenModeConfigs/topCards';
 import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
 import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
@@ -44,12 +43,10 @@ export function useTopCardsModeData() {
 	const entries = computed(() => cardData.value?.entries ?? []);
 
 	// ── Pagination ──
-	// A Page Rotation over the grid's rows, so each page holds whole rows of
-	// `columns` cards and `rowsPerPage` (the declared page size) counts them.
-	const gridRows = computed(() => topCardsGridRows<RankedTopCard>(
-		entries.value.map((entry, index) => ({ entry, rank: index + 1 })),
-		config.value.columns,
-	));
+	// A Page Rotation over the ranked cards, `cardsPerPage` (the declared page
+	// size) a page. Columns are the Screen's to lay out in the space it measures;
+	// they never change which cards a page holds (ADR-0054).
+	const rankedCards = computed(() => entries.value.map((entry, index) => ({ entry, rank: index + 1 })));
 	const {
 		rowCount,
 		pageData,
@@ -58,14 +55,16 @@ export function useTopCardsModeData() {
 		setPage,
 		nextPage,
 		prevPage,
-	} = usePaginatedScreenMode({ mode: 'top-cards', config, rows: gridRows });
+	} = usePaginatedScreenMode({ mode: 'top-cards', config, rows: rankedCards });
+	/** The cards a full page holds, which every page lays out as, so a short last page keeps its size. */
+	const pageCapacity = computed(() => Math.max(1, Math.min(config.value.cardsPerPage, entries.value.length)));
 
 	// ── Staging ──
 	// A page, a new one or new data, reaches program once its card images have
 	// loaded, together with its page indicator.
 	const { shown: shownPage, staging } = useStagedScreenContent(
 		() => ({
-			entries: pageData.value.flat(),
+			entries: pageData.value,
 			currentPage: currentPage.value,
 			totalPages: totalPages.value,
 		}),
@@ -111,6 +110,7 @@ export function useTopCardsModeData() {
 		cardData,
 		entries,
 		pageEntries,
+		pageCapacity,
 		rowCount,
 		currentPage: computed(() => shownPage.value.currentPage),
 		totalPages: computed(() => shownPage.value.totalPages),

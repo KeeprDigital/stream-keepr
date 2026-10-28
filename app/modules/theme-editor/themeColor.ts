@@ -1,4 +1,5 @@
-import type { ThemeColor, ThemeFill } from '~~/shared/modules/theme';
+import type { ThemeBackgroundLayer, ThemeColor, ThemeFill } from '~~/shared/modules/theme';
+import type { BackgroundLayer } from '~~/shared/types/screenConfig';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 
 /**
@@ -52,6 +53,25 @@ export function decodeThemeFill(fill: ThemeFill<string>): ThemeFill {
 					color: decodeThemeColor(stop.color),
 				})),
 			};
+}
+
+/** A `background` stack as the Screen's stack editor edits it: each colour layer's colour encoded. */
+export function encodeThemeBackground(layers: ThemeBackgroundLayer[]): BackgroundLayer[] {
+	return layers.map(layer => layer.type === 'color'
+		? {
+				...layer,
+				color: encodeThemeColor(layer.color),
+			}
+		: layer);
+}
+
+export function decodeThemeBackground(layers: BackgroundLayer[]): ThemeBackgroundLayer[] {
+	return layers.map(layer => layer.type === 'color'
+		? {
+				...layer,
+				color: decodeThemeColor(layer.color),
+			}
+		: layer);
 }
 
 /** The colour Foundation Tokens a composite's colour may follow, as picker items. */

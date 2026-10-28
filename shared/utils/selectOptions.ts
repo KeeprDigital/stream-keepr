@@ -30,10 +30,9 @@ export const SCREEN_MODE_SELECT_OPTIONS: { label: string; value: ScreenMode }[] 
 	value,
 }));
 
-export const DECK_BOARD_VIEW_SELECT_OPTIONS: { label: string; value: DeckBoardView }[] = [
-	{ label: 'Grid', value: 'grid' },
-	{ label: 'Stack (overlapping)', value: 'stack' },
-	{ label: 'List', value: 'list' },
+export const CARD_SIZING_SELECT_OPTIONS: { label: string; value: CardSizing }[] = [
+	{ label: 'Fixed width', value: 'fixed' },
+	{ label: 'Fit to screen', value: 'fit' },
 ];
 
 export const SIDEBOARD_PLACEMENT_SELECT_OPTIONS: { label: string; value: SideboardPlacement }[] = [

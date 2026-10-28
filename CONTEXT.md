@@ -215,6 +215,10 @@ _Avoid_: Beauty when naming product concepts.
 A Screen Output that renders the final composed opacity as a grayscale alpha matte.
 _Avoid_: Black-and-white export, chroma key.
 
+**Card Sizing**:
+How a card grid on a Most Played Cards or Deck List Screen sizes its cards. Fixed width: each card takes the grid's own card width, and the grid may run off the Event Canvas. Fit to screen: every card on the page takes the largest size at which all of them fit the space the grid is given, so none overflow. Either may take auto columns, chosen from the card count and the Event Canvas (ADR-0054).
+_Avoid_: dynamic card size, card size presets.
+
 **Program monitor**:
 A control surface's own live rendering of the Screen it drives. It composes what playout has taken, resolving media exactly as a Screen Output does, but is not a Screen Output.
 _Avoid_: Preview — which composes the authored state its embedder pushes in and resolves media as the author. Confidence monitor.
@@ -324,7 +328,7 @@ _Avoid_: variable, style entry
 A Theme Token naming an application-wide role any Screen Mode may consume, such as the accent colour, the heading font, or the screen inset. Every one has a default value shipped with Stream Keepr.
 
 **Mode Token**:
-A Theme Token a Screen Mode Definition declares for its own rendering, such as a Standings row's surface. Its default is a Foundation Token, so a new Screen Mode follows every existing Theme unchanged. Where no Foundation Token fills its role, such as a badge shadow's colour or Card Spotlight's zoom, it defaults to a literal.
+A Theme Token a Screen Mode Definition declares for its own rendering, such as a Standings row's surface. Its default is a Foundation Token, so a new Screen Mode follows every existing Theme unchanged. Where no Foundation Token fills its role, such as a badge shadow's colour or Card Spotlight's zoom, it defaults to a literal; a composite literal's colours still name Foundation Tokens where they can, as the Feature Match Overlay Frame's fill names `surface`.
 _Avoid_: component token
 
 **Screen Theme Override**:
@@ -332,7 +336,7 @@ A Screen's own value for one Theme Token, used by that Screen in place of its Th
 _Avoid_: local style, pin
 
 **Event Canvas**:
-The pixel coordinate space every Screen of an Event is authored and rendered in, default 1920 × 1080. A Screen Output scales it uniformly to fit its window, so output resolution is not the canvas's to set.
+The pixel coordinate space every overlay Screen of an Event is authored and rendered in, default 1920 × 1080. A Screen Output scales it uniformly to fit its window, so output resolution is not the canvas's to set. Feature Match Controls, an operator surface, fills its window instead (ADR-0051).
 _Avoid_: screen size, resolution
 
 **Event Presentation Settings**:

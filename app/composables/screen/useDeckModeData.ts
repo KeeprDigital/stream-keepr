@@ -1,15 +1,13 @@
 import type { BroadcastDeckListEntryResponse, BroadcastDeckListResponse } from '~~/shared/types/broadcastDeckList';
 import type { DeckCompanion } from '~~/shared/types/deckCompanion';
 import type { DeckListStats } from '~~/shared/types/deckList';
-import type { CounterTypeConfig } from '~~/shared/types/game';
 import type { HighlanderDeckSummary } from '~~/shared/types/highlander';
 import type { PlayerDeckResponse } from '~~/shared/types/metagame';
 import type { DeckSource } from '~~/shared/types/screenConfig';
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import type { Player } from '~/types';
 import type { DeckListCardWithData } from '~/types/card/deckList';
-import { getCounterTypeConfigs } from '~~/shared/config/games';
-import { counterConfigsForDeckCounterTypes } from '~~/shared/utils/deckCounters';
+import { resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { createDeckLookupCards } from '~~/shared/utils/playerDeck';
 import { selectPlayerDeck } from '~/composables/data/usePlayerDeckCache';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
@@ -29,8 +27,9 @@ interface DeckDisplayState {
 	secondaryHeader: string;
 	deckColors: string;
 	companion: DeckCompanion | null;
+	/** The companion as a card image, shown apart from the deck information. */
+	companionCard: DeckListCardWithData | null;
 	highlander: HighlanderDeckSummary | null;
-	deckCounters: CounterTypeConfig[];
 	deckStats: Array<{ type: string; count: number }>;
 	mainboard: DeckListCardWithData[];
 	sideboard: DeckListCardWithData[];
@@ -298,12 +297,34 @@ export function useDeckModeData() {
 	const deckColors = computed(() => displayedDeck.value?.deckColors ?? '');
 	const companion = computed(() => displayedDeck.value?.companion ?? null);
 	const highlander = computed(() => displayedDeck.value?.highlander ?? null);
-	const deckCounters = computed(() => displayedDeck.value?.deckCounters ?? []);
+	const companionCard = computed(() => displayedDeck.value?.companionCard ?? null);
 	const deckStats = computed(() => displayedDeck.value?.deckStats ?? []);
 	const mainboard = computed(() => displayedDeck.value?.mainboard ?? []);
 	const sideboard = computed(() => displayedDeck.value?.sideboard ?? []);
 	const displayedDeckVersion = computed(() => displayedDeck.value?.version ?? 0);
 	const hasDisplayedDeck = computed(() => displayedDeck.value !== null);
+
+	// Each grid board's columns: its own count, or with auto columns, chosen from
+	// its own cards and the Event Canvas (ADR-0054).
+	const boards = computed(() => resolveDeckBoards(config.value));
+	const boardColumns = {
+		mainboard: useCardGridColumns({
+			sizing: () => boards.value.mainboard.cardSizing,
+			autoColumns: () => boards.value.mainboard.autoColumns,
+			columns: () => boards.value.mainboard.columns,
+			count: () => mainboard.value.length,
+			cardWidth: () => boards.value.mainboard.cardWidth,
+			gap: () => boards.value.mainboard.cardGap,
+		}),
+		sideboard: useCardGridColumns({
+			sizing: () => boards.value.sideboard.cardSizing,
+			autoColumns: () => boards.value.sideboard.autoColumns,
+			columns: () => boards.value.sideboard.columns,
+			count: () => sideboard.value.length,
+			cardWidth: () => boards.value.sideboard.cardWidth,
+			gap: () => boards.value.sideboard.cardGap,
+		}),
+	};
 	const loading = freshness.loading;
 
 	/** Program never blanks for an error: one shows only while nothing is on air. */
@@ -373,13 +394,24 @@ export function useDeckModeData() {
 		const lookupCards = createDeckLookupCards(input.cards, input.companion);
 		const { cards: cardDataMap, degraded } = await outputReads.cardData(lookupCards);
 		const arrays = buildDeckListArrays(input.cards, cardDataMap);
-		const deckCounters = counterConfigsForDeckCounterTypes(
-			input.cards.flatMap(card => card.deckCounterTypes ?? []),
-			getCounterTypeConfigs('mtg'),
-		);
+		const companionCard = input.companion
+			? buildDeckListArrays([
+				{
+					name: input.companion.name,
+					setCode: null,
+					quantity: 1,
+					compartment: 'sideboard',
+					cardType: '',
+					scryfallId: input.companion.scryfallId,
+				},
+			], cardDataMap).sideboard[0] ?? null
+			: null;
 		const artDegraded = await preloadDeckImages([
 			...arrays.mainboard,
 			...arrays.sideboard,
+			...(companionCard
+				? [companionCard]
+				: []),
 		]);
 
 		return {
@@ -391,8 +423,8 @@ export function useDeckModeData() {
 				secondaryHeader: input.secondaryHeader,
 				deckColors: input.deckColors,
 				companion: input.companion,
+				companionCard,
 				highlander: input.highlander,
-				deckCounters,
 				deckStats: computeDeckStats(input.cards),
 				mainboard: arrays.mainboard,
 				sideboard: arrays.sideboard,
@@ -542,10 +574,11 @@ export function useDeckModeData() {
 		deckColors,
 		companion,
 		highlander,
-		deckCounters,
+		companionCard,
 		deckStats,
 		mainboard,
 		sideboard,
+		boardColumns,
 		loading,
 		error,
 		ready,

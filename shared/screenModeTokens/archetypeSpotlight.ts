@@ -69,10 +69,9 @@ export const archetypeSpotlightModeTokens = {
 		label: 'Card without an image',
 		default: { token: 'surface-raised' },
 	},
-	// No Foundation Token is a shadow, so it holds the one it shipped with.
 	'badge-shadow': {
 		type: 'color',
 		label: 'Card stat badge shadow',
-		default: 'rgba(0, 0, 0, 0.1)',
+		default: { token: 'shadow' },
 	},
 } as const satisfies Readonly<Record<string, DeclaredModeTokenDefinition>>;
