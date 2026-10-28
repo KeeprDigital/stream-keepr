@@ -1684,7 +1684,10 @@ Some modes held program and others did not. The Deck List preloaded its card art
 - A mode change shows nothing new until the incoming mode is ready, up to the timeout. A read that fails settles as ready, showing what the mode shows on error.
 - Two renderings are briefly live during a mode change, each reading its own data and holding its own Realtime Subscriptions.
 - A Broadcast Graphics output whose Live Session read fails reaches program only at the timeout.
-- Not covered: a Screen Output navigated to another Screen still blanks while it loads (the display session unmounts the renderer); a Broadcast Graphic's media loads as it enters on a Take; a Background Layer whose video URL changes remounts its video.
+- A video whose source changes, a video Background Layer's or the Feature Match Overlay Frame's, keeps playing until the new source has its first frame or fails (`ScreenMediaBackground`).
+- A Take cannot be held on one output, whose animation phases follow the shared clock with every other. Instead a Broadcast Graphics output loads every image its stack can put on air once its content URLs resolve, and holds the loaded images while the stack names them (`createImageRetainer`): its library content is `no-store`, so only an image still held is reused. Videos are not preloaded.
+- A Broadcast Graphics canvas whose library font fails now shows in the fallback face, as the Feature Match Overlay does, rather than staying hidden: a blank graphic is worse on air than the wrong face.
+- Not covered: a Screen Output navigated to another Screen still blanks while it loads, because the display session unmounts the renderer. Nothing in the app moves an output between Screens, and holding one would need each rendering to keep its own Screen, Event, Theme and capability.
 - `test/nuxt/components/Screen/Renderer.test.ts` pins the hold, `test/nuxt/modules/screenModeReadiness.test.ts` the declarations and staging.
 
 ### Rejected alternatives

@@ -12,6 +12,7 @@ import {
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { addGraphicGroupChild, addGraphicItem, DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
 import { liveSessionSelectors } from '~~/test/nuxt/helpers/broadcastGraphicsLiveSessionReads';
+import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
 import Display from '~/components/Screen/Modes/BroadcastGraphics/Display.vue';
 import { GRAPHICS_PREVIEW_READY_MESSAGE, GRAPHICS_PREVIEW_STATE_MESSAGE } from '~/modules/graphics/previewMessages';
 
@@ -1198,11 +1199,9 @@ describe('broadcastGraphicsDisplay', () => {
 			expect(capabilitySessionRequests).toEqual(['/api/screen-output/screens/1/asset-capability-session']);
 		});
 
-		it('reports a font that cannot load rather than leaving the canvas silently blank', async () => {
-			// Hiding is the right response to a font that has not loaded yet, but a
-			// failure hidden the same way a load-in-progress is hidden is a permanently
-			// blank output with nothing to read off it. `data-font-error` is what tells
-			// the two apart.
+		it('shows the canvas in its fallback face, and reports it, when a font cannot load', async () => {
+			// Hiding suits a font still loading; a failure hidden the same way would
+			// leave program blank for good, which is worse on air than the wrong face.
 			mockAssetCapability.value = 'capability-token';
 			mockScreen.value = screenWithStack([
 				withLibraryFont(),
@@ -1223,7 +1222,7 @@ describe('broadcastGraphicsDisplay', () => {
 			});
 			const canvas = wrapper.get('.graphics-compositor-canvas');
 			expect(canvas.attributes('data-font-ready')).toBe('false');
-			expect((canvas.element as HTMLElement).style.visibility).toBe('hidden');
+			expect((canvas.element as HTMLElement).style.visibility).toBe('');
 		});
 
 		// The Take the issue names, and the one stack change that does not leave the Screen's asset
@@ -1267,6 +1266,23 @@ describe('broadcastGraphicsDisplay', () => {
 			expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
 			expect((wrapper.get('.graphics-compositor-canvas').element as HTMLElement).style.visibility).toBe('');
 			expect(registered).toEqual(settled);
+		});
+
+		it('loads every image the stack can put on air before a Take brings it on', async () => {
+			const images = stubImageLoading();
+			mockAssetCapability.value = 'capability-token';
+			mockScreen.value = screenWithStack([
+				withImage(),
+			]);
+			mockOnAirGraphicIds.value = [];
+
+			await mountComponent();
+
+			await vi.waitFor(() => {
+				expect(images.requested).toEqual([
+					'/api/screen-output/screens/1/assets/image-asset/revisions/image-revision-1/content',
+				]);
+			});
 		});
 	});
 

@@ -9,6 +9,7 @@ import GraphicsCompositorCanvas from '~/components/Graphics/Compositor/Canvas.vu
 import { useBroadcastGraphicsModeData } from '~/composables/screen/useBroadcastGraphicsModeData';
 import { resolveBroadcastGraphicsRenderModel } from '~/modules/broadcast-graphics/renderModel';
 import { useScreenModeReady } from '~/modules/screen-mode';
+import { createImageRetainer } from '~/utils/preloadImage';
 
 const { outputMode, previewGuides, previewSafeAreas, eventCanvas } = useScreenContext();
 const {
@@ -83,13 +84,29 @@ const graphicAssetReferences = computed(() =>
 const { contentUrl, contentUrlsSettled } = useScreenGraphicAssetContentUrls(graphicAssetReferences);
 
 // Typography naming a library font paints in the family this registers, so the
-// canvas stays hidden until every one of them is loaded rather than flashing a
-// fallback typeface on air.
+// canvas stays hidden while one is loading rather than flashing a fallback
+// typeface on air. A font that fails shows its fallback, as the Feature Match
+// Overlay does: a blank graphic is worse on air than the wrong face.
 const { fontsReady, fontsFailed, fontSources } = useGraphicAssetFontFaces(
 	indexedGraphicAssetReferences,
 	contentUrl,
 	contentUrlsSettled,
 );
+
+// A Take cannot wait on one output, whose animation phases follow the shared
+// clock, so every image the stack can put on air is loaded ahead of it and held
+// while the stack names it.
+const takeImages = createImageRetainer();
+watch(
+	() => contentUrlsSettled.value
+		? indexedGraphicAssetReferences.value
+				.filter(item => item.kind === 'image')
+				.map(item => contentUrl(item.reference))
+		: [],
+	urls => takeImages.retain(urls),
+	{ immediate: true },
+);
+onBeforeUnmount(() => takeImages.release());
 
 // Rendering Readiness: the Live Session read, its media URLs resolved, and its
 // fonts loaded or failed; the media itself is the host's to wait on.
@@ -123,7 +140,7 @@ const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 	<GraphicsCompositorCanvas
 		class="broadcast-graphics"
 		:class="`broadcast-graphics--${renderModel.output}`"
-		:style="{ visibility: fontsReady ? undefined : 'hidden' }"
+		:style="{ visibility: fontsReady || fontsFailed ? undefined : 'hidden' }"
 		:data-font-ready="fontsReady.toString()"
 		:data-font-error="fontsFailed.toString()"
 		:data-export-font-sources="JSON.stringify(fontSources)"
