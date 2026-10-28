@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import { fitColumns } from '~~/shared/utils/cardGrid';
 import Display from '~/components/Screen/Modes/TopCards/Display.vue';
+import { CARD_BADGE_POSITION_CLASSES } from '~/utils/cardBadgePosition';
 
 // The space the grid measures; 0 until it is laid out.
 const measured = vi.hoisted(() => ({ width: 0, height: 0 }));
@@ -30,12 +31,14 @@ const defaultConfig = {
 	cardSizing: 'fit',
 	cardWidth: 160,
 	cardGap: 12,
-	badgeSize: 14,
 	showHeader: true,
 	headerText: undefined,
-	showCardNames: true,
 	showRankBadges: true,
+	rankBadgePosition: 'top-left',
+	rankBadgeTextSize: 14,
 	statBadge: 'inclusionRate',
+	statBadgePosition: 'bottom-right',
+	statBadgeTextSize: 14,
 };
 
 const config = ref<any>({ ...defaultConfig });
@@ -100,9 +103,20 @@ const TopCardsCardStub = defineComponent({
 		statText: { type: String, required: false },
 		sizing: { type: String, required: true },
 		width: { type: String, required: false },
-		badgeSize: { type: String, required: false },
+		rankBadgeClass: { type: String, required: true },
+		rankBadgeStyle: { type: Object, required: true },
+		statBadgeClass: { type: String, required: true },
+		statBadgeStyle: { type: Object, required: true },
 	},
-	template: '<div data-testid="top-cards-item" :data-sizing="sizing" :data-width="width" :data-badge-size="badgeSize">{{ rank }}:{{ entry.name }}:{{ statText ?? "-" }}:{{ showRank }}:{{ showName }}</div>',
+	template: `<div
+		data-testid="top-cards-item"
+		:data-sizing="sizing"
+		:data-width="width"
+		:data-rank-badge-class="rankBadgeClass"
+		:data-rank-badge-size="rankBadgeStyle.fontSize"
+		:data-stat-badge-class="statBadgeClass"
+		:data-stat-badge-size="statBadgeStyle.fontSize"
+	>{{ rank }}:{{ entry.name }}:{{ statText ?? "-" }}:{{ showRank }}:{{ showName }}</div>`,
 });
 
 async function mountComponent() {
@@ -159,7 +173,7 @@ describe('screenTopCardsDisplay', () => {
 		const wrapper = await mountComponent();
 
 		const items = wrapper.findAll('[data-testid="top-cards-item"]');
-		expect(items.map(item => item.text())).toEqual(['7:Counterspell:60%:true:true']);
+		expect(items.map(item => item.text())).toEqual(['7:Counterspell:60%:true:false']);
 		expect(wrapper.get('[data-testid="top-cards-page-indicator"]').text()).toBe('2 / 3');
 	});
 
@@ -174,8 +188,8 @@ describe('screenTopCardsDisplay', () => {
 
 		const items = wrapper.findAll('[data-testid="top-cards-item"]');
 		expect(items).toHaveLength(2);
-		expect(items[0]!.text()).toBe('1:Lightning Bolt:80%:true:true');
-		expect(items[1]!.text()).toBe('2:Counterspell:60%:true:true');
+		expect(items[0]!.text()).toBe('1:Lightning Bolt:80%:true:false');
+		expect(items[1]!.text()).toBe('2:Counterspell:60%:true:false');
 	});
 
 	it('shows the header', async () => {
@@ -213,7 +227,6 @@ describe('screenTopCardsDisplay', () => {
 				width: 600,
 				height: 1400,
 				gap: 12,
-				labelHeight: 28,
 			})),
 			rows: undefined,
 		},
@@ -248,22 +261,48 @@ describe('screenTopCardsDisplay', () => {
 		expect(wrapper.findAll('[data-testid="top-cards-item"]').map(item => item.attributes('data-sizing'))).toEqual([cardSizing, cardSizing]);
 	});
 
-	// The Screen's own sizes, not the Theme's, size its cards, gap and badges (ADR-0054).
-	it('sizes its cards, gap and badges from its config', async () => {
+	// The Screen's own sizes, not the Theme's, size its cards and gap (ADR-0054).
+	it('sizes its cards and gap from its config', async () => {
 		config.value = {
 			...config.value,
 			cardSizing: 'fixed',
 			cardWidth: 200,
 			cardGap: 30,
-			badgeSize: 20,
 		};
 
 		const wrapper = await mountComponent();
 
 		expect((wrapper.get('[data-testid="top-cards-grid"]').element as HTMLElement).style.gap).toBe('30px');
+		expect(wrapper.get('[data-testid="top-cards-item"]').attributes('data-width')).toBe('200px');
+	});
+
+	// Each badge takes its own place and text size, as a Deck Screen's badges do.
+	it.each([
+		{
+			rankBadgePosition: 'top-left',
+			rankBadgeTextSize: 14,
+			statBadgePosition: 'bottom-right',
+			statBadgeTextSize: 14,
+		},
+		{
+			rankBadgePosition: 'bottom',
+			rankBadgeTextSize: 24,
+			statBadgePosition: 'top-right',
+			statBadgeTextSize: 10,
+		},
+	] as const)('places and sizes each badge: rank $rankBadgePosition, stat $statBadgePosition', async (badges) => {
+		config.value = {
+			...config.value,
+			...badges,
+		};
+
+		const wrapper = await mountComponent();
+
 		const card = wrapper.get('[data-testid="top-cards-item"]');
-		expect(card.attributes('data-width')).toBe('200px');
-		expect(card.attributes('data-badge-size')).toBe('20px');
+		expect(card.attributes('data-rank-badge-class')).toBe(CARD_BADGE_POSITION_CLASSES[badges.rankBadgePosition]);
+		expect(card.attributes('data-rank-badge-size')).toBe(`${badges.rankBadgeTextSize}px`);
+		expect(card.attributes('data-stat-badge-class')).toBe(CARD_BADGE_POSITION_CLASSES[badges.statBadgePosition]);
+		expect(card.attributes('data-stat-badge-size')).toBe(`${badges.statBadgeTextSize}px`);
 	});
 
 	it('passes no stat text when the stat badge is off', async () => {
@@ -271,7 +310,7 @@ describe('screenTopCardsDisplay', () => {
 
 		const wrapper = await mountComponent();
 
-		expect(wrapper.findAll('[data-testid="top-cards-item"]')[0]!.text()).toBe('1:Lightning Bolt:-:true:true');
+		expect(wrapper.findAll('[data-testid="top-cards-item"]')[0]!.text()).toBe('1:Lightning Bolt:-:true:false');
 	});
 
 	it('shows deck count when selected as the stat', async () => {
@@ -279,6 +318,6 @@ describe('screenTopCardsDisplay', () => {
 
 		const wrapper = await mountComponent();
 
-		expect(wrapper.findAll('[data-testid="top-cards-item"]')[0]!.text()).toBe('1:Lightning Bolt:4:true:true');
+		expect(wrapper.findAll('[data-testid="top-cards-item"]')[0]!.text()).toBe('1:Lightning Bolt:4:true:false');
 	});
 });

@@ -3,9 +3,11 @@ import type {
 	BoardSelection,
 	CardSizing,
 	MetagameCardSortBy,
+	QuantityPosition,
 	TopCardsStat,
 } from '~~/shared/types/enums';
 import type { CardTypeBucket } from '~~/shared/utils/metagame';
+import type { NinePoint } from '~~/shared/utils/ninePoints';
 import type { Screen } from '~/types';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { CARD_TYPE_BUCKET_ORDER } from '~~/shared/utils/metagame';
@@ -74,6 +76,30 @@ const rotation = useRotationConfigWrites({
 	saveConfig,
 });
 const { updateConfig } = rotation;
+
+// Paging is the ranking split into pages: on while a page holds fewer cards
+// than the ranking does. Off stores the most a page can hold, so the ranking
+// stays one page whatever its card count becomes.
+const paged = computed(() => config.value.cardsPerPage < config.value.limit);
+
+/** The page count is the one the Screen renders, from the cards it reads. */
+const pageSizeDescription = computed(() => {
+	const pages = rotation.totalPages.value;
+	return `Cards on each page, laid out in as many columns as the Screen fits: ${pages} ${pages === 1
+		? 'page'
+		: 'pages'}.`;
+});
+
+function setPaged(enabled: boolean) {
+	rotation.setPageSize(enabled
+		? Math.ceil(config.value.limit / 2)
+		: fields.cardsPerPage.max!);
+}
+
+// A badge in the centre of a card would cover its art, so the badge position
+// pickers offer every point but this one — which is why what they emit is
+// always a `QuantityPosition`, and why the casts below are safe.
+const BADGE_DISABLED_POINTS: readonly NinePoint[] = ['center'];
 
 const boardOptions = [
 	{ label: 'Full Deck', value: 'full' },
@@ -149,20 +175,6 @@ function typeLabel(bucket: CardTypeBucket): string {
 					@update:model-value="updateConfig({ sortBy: $event as MetagameCardSortBy, currentPage: 1 })"
 				/>
 			</UFormField>
-
-			<UFormField
-				:label="fields.limit.label"
-				description="How many top cards to show."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="config.limit"
-					:min="fields.limit.min"
-					:max="fields.limit.max"
-					class="w-32"
-					@update:model-value="updateConfig({ limit: Number($event), currentPage: 1 })"
-				/>
-			</UFormField>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Filters">
@@ -184,6 +196,55 @@ function typeLabel(bucket: CardTypeBucket): string {
 					/>
 				</div>
 			</UFormField>
+		</ScreenSettingsCard>
+
+		<ScreenSettingsCard title="Cards">
+			<UFormField
+				:label="fields.limit.label"
+				description="How many of the top cards the ranking shows."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<UInputNumber
+					:model-value="config.limit"
+					:min="fields.limit.min"
+					:max="fields.limit.max"
+					class="w-32"
+					@update:model-value="updateConfig({ limit: Number($event), currentPage: 1 })"
+				/>
+			</UFormField>
+
+			<ScreenSettingsToggle
+				label="Split into pages"
+				description="Show the cards a page at a time. Off, every card is on one page."
+				:model-value="paged"
+				:enabled="config.limit > 1"
+				disabled-description="A ranking of one card is one page."
+				@update:model-value="setPaged($event === true)"
+			/>
+
+			<template v-if="paged">
+				<UFormField
+					:label="fields.cardsPerPage.label"
+					:description="pageSizeDescription"
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UInputNumber
+						:model-value="config.cardsPerPage"
+						:min="fields.cardsPerPage.min"
+						:max="config.limit - 1"
+						class="w-32"
+						@update:model-value="rotation.setPageSize(Number($event))"
+					/>
+				</UFormField>
+
+				<USeparator />
+
+				<ScreenPaginationRotationControls
+					:rotation="rotation"
+					auto-page-description="Automatically cycle through pages of cards."
+					:loading="loadingCards"
+				/>
+			</template>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Layout">
@@ -252,13 +313,6 @@ function typeLabel(bucket: CardTypeBucket): string {
 			</UFormField>
 		</ScreenSettingsCard>
 
-		<ScreenPaginationSettingsCard
-			:rotation="rotation"
-			page-size-description="Cards shown on each page, laid out in as many columns as the Screen fits."
-			auto-page-description="Automatically cycle through pages of cards."
-			:loading="loadingCards"
-		/>
-
 		<ScreenSettingsCard title="Header">
 			<ScreenSettingsToggle
 				:label="fields.showHeader.label"
@@ -282,13 +336,10 @@ function typeLabel(bucket: CardTypeBucket): string {
 			</UFormField>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Badges & Labels">
-			<ScreenSettingsToggle
-				:label="fields.showCardNames.label"
-				description="Show each card's name under its image."
-				:model-value="config.showCardNames"
-				@update:model-value="updateConfig({ showCardNames: $event })"
-			/>
+		<ScreenSettingsCard title="Card Badges">
+			<p class="text-xs font-semibold uppercase tracking-wider text-muted">
+				Rank Badge
+			</p>
 
 			<ScreenSettingsToggle
 				:label="fields.showRankBadges.label"
@@ -297,7 +348,43 @@ function typeLabel(bucket: CardTypeBucket): string {
 				@update:model-value="updateConfig({ showRankBadges: $event })"
 			/>
 
+			<template v-if="config.showRankBadges">
+				<USeparator />
+
+				<UFormField
+					:label="fields.rankBadgePosition.label"
+					description="Where the badge appears on the card."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UINinePointPicker
+						:model-value="config.rankBadgePosition"
+						:disabled-points="BADGE_DISABLED_POINTS"
+						aria-label="Rank badge position"
+						@update:model-value="updateConfig({ rankBadgePosition: $event as QuantityPosition })"
+					/>
+				</UFormField>
+
+				<UFormField
+					:label="fields.rankBadgeTextSize.label"
+					description="The badge's text size in px; the badge sizes itself around it."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UInputNumber
+						:model-value="config.rankBadgeTextSize"
+						:min="fields.rankBadgeTextSize.min"
+						:max="fields.rankBadgeTextSize.max"
+						class="w-32"
+						aria-label="Rank badge text size"
+						@update:model-value="updateConfig({ rankBadgeTextSize: Number($event) })"
+					/>
+				</UFormField>
+			</template>
+
 			<USeparator />
+
+			<p class="text-xs font-semibold uppercase tracking-wider text-muted">
+				Stat Badge
+			</p>
 
 			<UFormField
 				:label="fields.statBadge.label"
@@ -312,19 +399,37 @@ function typeLabel(bucket: CardTypeBucket): string {
 				/>
 			</UFormField>
 
-			<UFormField
-				:label="fields.badgeSize.label"
-				description="The badges' text size in px; each badge sizes itself around it."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="config.badgeSize"
-					:min="fields.badgeSize.min"
-					:max="fields.badgeSize.max"
-					class="w-32"
-					@update:model-value="updateConfig({ badgeSize: Number($event) })"
-				/>
-			</UFormField>
+			<template v-if="config.statBadge !== 'none'">
+				<USeparator />
+
+				<UFormField
+					:label="fields.statBadgePosition.label"
+					description="Where the badge appears on the card."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UINinePointPicker
+						:model-value="config.statBadgePosition"
+						:disabled-points="BADGE_DISABLED_POINTS"
+						aria-label="Stat badge position"
+						@update:model-value="updateConfig({ statBadgePosition: $event as QuantityPosition })"
+					/>
+				</UFormField>
+
+				<UFormField
+					:label="fields.statBadgeTextSize.label"
+					description="The badge's text size in px; the badge sizes itself around it."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UInputNumber
+						:model-value="config.statBadgeTextSize"
+						:min="fields.statBadgeTextSize.min"
+						:max="fields.statBadgeTextSize.max"
+						class="w-32"
+						aria-label="Stat badge text size"
+						@update:model-value="updateConfig({ statBadgeTextSize: Number($event) })"
+					/>
+				</UFormField>
+			</template>
 		</ScreenSettingsCard>
 	</div>
 </template>

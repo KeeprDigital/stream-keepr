@@ -10,6 +10,7 @@ import { formatHighlanderPointedCardNote, formatHighlanderPointsLabel } from '~~
 import { getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
 import { ninePointPlacement } from '~~/shared/utils/ninePoints';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { CARD_BADGE_POSITION_CLASSES } from '~/utils/cardBadgePosition';
 
 const {
 	config,
@@ -368,31 +369,19 @@ function listGridStyle(layout: ResolvedDeckBoardLayout) {
 	};
 }
 
-// Quantity badge position styles
-const BADGE_POSITION_CLASSES: Record<QuantityPosition, string> = {
-	'top-left': '-top-1 -left-1',
-	'top': '-top-1 left-1/2 -translate-x-1/2',
-	'top-right': '-top-1 -right-1',
-	'left': 'top-1/2 -left-1 -translate-y-1/2',
-	'right': 'top-1/2 -right-1 -translate-y-1/2',
-	'bottom-left': '-bottom-1 -left-1',
-	'bottom': '-bottom-1 left-1/2 -translate-x-1/2',
-	'bottom-right': '-bottom-1 -right-1',
-};
-
 const quantityPositionClass = computed(() => {
 	const pos: QuantityPosition = config.value.quantityPosition ?? DEFAULT_QUANTITY_POSITION;
-	return BADGE_POSITION_CLASSES[pos];
+	return CARD_BADGE_POSITION_CLASSES[pos];
 });
 
 const highlanderPointsPositionClass = computed(() => {
 	const pos: QuantityPosition = config.value.highlanderPointsPosition ?? DEFAULT_HIGHLANDER_POINTS_POSITION;
-	return BADGE_POSITION_CLASSES[pos];
+	return CARD_BADGE_POSITION_CLASSES[pos];
 });
 
 /** The companion's tag is placed as the other badges are: in a corner, its own edge sits there. */
 const companionTagPositionClass = computed(() =>
-	BADGE_POSITION_CLASSES[config.value.companionTagPosition ?? DEFAULT_COMPANION_TAG_POSITION]);
+	CARD_BADGE_POSITION_CLASSES[config.value.companionTagPosition ?? DEFAULT_COMPANION_TAG_POSITION]);
 
 // Each badge, pill and chip sizes itself around its text, whose size is the
 // Screen's own config (ADR-0054), keeping the proportions its former medium size had.

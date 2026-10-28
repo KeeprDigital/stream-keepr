@@ -38,9 +38,12 @@ const defaultConfig = {
 	rotationAnchor: undefined as number | undefined,
 	showHeader: true,
 	headerText: undefined as string | undefined,
-	showCardNames: true,
 	showRankBadges: true,
+	rankBadgePosition: 'top-left' as const,
+	rankBadgeTextSize: 14,
 	statBadge: 'inclusionRate' as const,
+	statBadgePosition: 'bottom-right' as const,
+	statBadgeTextSize: 14,
 };
 
 const mutableConfig = reactive({ ...defaultConfig });

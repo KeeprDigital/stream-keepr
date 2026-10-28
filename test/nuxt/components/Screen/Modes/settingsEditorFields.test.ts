@@ -22,9 +22,12 @@ const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 };
 
 // Fields a scalar control writes without being that field's own control, and why.
+// A bespoke control counts as rendering its field.
 const BESPOKE_CONTROLS: Record<string, string> = {
 	// Each board's own show toggle writes the one board selection both share.
 	'deck.board': 'the Mainboard and Sideboard show toggles',
+	// Paging on is a page smaller than the ranking, so its toggle and its page size both read the card count.
+	'top-cards.cardsPerPage': 'the Split into pages toggle, and a page size kept below the card count',
 };
 
 // Values a contract's select field allows that its editor does not offer.
@@ -131,7 +134,12 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 	'top-cards': {
 		editor: 'TopCards',
 		variants: [
-			{ scope: 'topN', cardSizing: 'fixed', autoPageEnabled: true },
+			{
+				scope: 'topN',
+				cardSizing: 'fixed',
+				autoPageEnabled: true,
+				cardsPerPage: 5,
+			},
 		],
 	},
 };
@@ -400,8 +408,10 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 					continue; // an Event Reference picker stays bespoke (ADR-0038)
 
 				const key = path.join('.');
-				if (BESPOKE_CONTROLS[`${mode}.${key}`])
+				if (BESPOKE_CONTROLS[`${mode}.${key}`]) {
+					rendered.add(key);
 					continue;
+				}
 				const field = fields.get(key);
 				const where = `${mode} editor control writing ${key}`;
 				expect(field, `${where}: its contract field carries no editor metadata`).toBeDefined();

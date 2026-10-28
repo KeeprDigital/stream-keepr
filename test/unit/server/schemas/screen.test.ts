@@ -916,14 +916,16 @@ describe('topCardsModeConfigSchema', () => {
 		autoColumns: false,
 		cardWidth: 160,
 		cardGap: 12,
-		badgeSize: 14,
 		cardsPerPage: 60,
 		autoPageEnabled: false,
 		autoPageIntervalMs: 10000,
 		showHeader: true,
-		showCardNames: true,
 		showRankBadges: true,
+		rankBadgePosition: 'top-left' as const,
+		rankBadgeTextSize: 14,
 		statBadge: 'inclusionRate' as const,
+		statBadgePosition: 'bottom-right' as const,
+		statBadgeTextSize: 14,
 	};
 
 	it('accepts a valid top cards config', () => {

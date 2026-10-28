@@ -3,6 +3,7 @@ import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 import { useElementSize } from '@vueuse/core';
 import { fitColumns } from '~~/shared/utils/cardGrid';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { CARD_BADGE_POSITION_CLASSES } from '~/utils/cardBadgePosition';
 
 const { config, error, ready, isEmpty, headerText, pageEntries, currentPage, totalPages, pageCapacity } = useTopCardsModeData();
 
@@ -10,10 +11,6 @@ const { config, error, ready, isEmpty, headerText, pageEntries, currentPage, tot
 // Pages hold cards, not rows (ADR-0054), so the Screen chooses its columns from
 // the space it measures: Fit auto columns are the count at which a full page's
 // cards are largest; Fixed auto columns are as many as fit across.
-
-// A name label under its card is measured, as its Theme types it, from a hidden copy.
-const nameProbe = ref<HTMLElement | null>(null);
-const nameLabelHeight = useLayoutHeight(nameProbe);
 
 const gridElement = ref(null);
 const { width: gridWidth, height: gridHeight } = useElementSize(gridElement);
@@ -30,7 +27,6 @@ const columns = computed<number | 'auto-fill'>(() => {
 		width: gridWidth.value,
 		height: gridHeight.value,
 		gap: config.value.cardGap,
-		labelHeight: config.value.showCardNames ? nameLabelHeight.value : 0,
 	});
 });
 
@@ -39,7 +35,7 @@ const rows = computed(() => Math.ceil(pageCapacity.value / (typeof columns.value
 	? columns.value
 	: 1)));
 
-/** Set on the root, so card names and a card without an image take it. */
+/** Set on the root, so a card without an image takes it. */
 const displayStyle = {
 	...modeTypographyStyle('top-cards', 'name-typography'),
 	color: modeTokenVar('top-cards', 'name-text'),
@@ -57,8 +53,6 @@ const pageIndicatorStyle = {
 // Its sizes are its own config, in Event Canvas px (ADR-0054).
 const cardGap = computed(() => `${config.value.cardGap}px`);
 const cardWidth = computed(() => `${config.value.cardWidth}px`);
-/** The badges' text size, which each badge sizes itself around. */
-const badgeSize = computed(() => `${config.value.badgeSize}px`);
 
 /** A badge lifts off the card's art on a soft shadow. */
 const badgeStyle = {
@@ -66,20 +60,26 @@ const badgeStyle = {
 	boxShadow: `0 4px 6px -1px ${modeTokenVar('top-cards', 'badge-shadow')}`,
 };
 
-const rankBadgeStyle = {
+// Each badge sits where its config places it, and sizes itself around its own text size.
+const rankBadgeClass = computed(() => CARD_BADGE_POSITION_CLASSES[config.value.rankBadgePosition]);
+const statBadgeClass = computed(() => CARD_BADGE_POSITION_CLASSES[config.value.statBadgePosition]);
+
+const rankBadgeStyle = computed(() => ({
 	...badgeStyle,
+	fontSize: `${config.value.rankBadgeTextSize}px`,
 	width: '1.75em',
 	height: '1.75em',
 	color: modeTokenVar('top-cards', 'rank-badge-text'),
 	backgroundColor: modeTokenVar('top-cards', 'rank-badge-surface'),
-};
+}));
 
-const statBadgeStyle = {
+const statBadgeStyle = computed(() => ({
 	...badgeStyle,
+	fontSize: `${config.value.statBadgeTextSize}px`,
 	padding: '0.3em 0.6em',
 	color: modeTokenVar('top-cards', 'stat-badge-text'),
 	backgroundColor: modeTokenVar('top-cards', 'stat-badge-surface'),
-};
+}));
 
 const cardStyle = {
 	backgroundColor: modeTokenVar('top-cards', 'card-placeholder-surface'),
@@ -103,13 +103,6 @@ function statText(entry: CardBreakdownEntry): string | null {
 		:empty="isEmpty"
 	>
 		<div class="top-cards-display relative flex flex-col gap-4 h-full w-full" :style="displayStyle">
-			<!-- A card's name label and its gap, as the Theme types it, measured for the layout. -->
-			<div ref="nameProbe" aria-hidden="true" class="invisible absolute pointer-events-none pt-1">
-				<div class="top-cards-name">
-					Mg
-				</div>
-			</div>
-
 			<div v-if="config.showHeader" class="top-cards-title">
 				<h2 class="text-3xl" :style="titleStyle">
 					{{ headerText }}
@@ -124,7 +117,6 @@ function statText(entry: CardBreakdownEntry): string | null {
 				:rows="rows"
 				:card-width="cardWidth"
 				:gap="cardGap"
-				:label-height="config.showCardNames ? `${nameLabelHeight}px` : '0px'"
 				data-testid="top-cards-grid"
 			>
 				<ScreenModesTopCardsCard
@@ -134,14 +126,13 @@ function statText(entry: CardBreakdownEntry): string | null {
 					:rank="rank"
 					:width="cardWidth"
 					:sizing="config.cardSizing"
-					:show-name="config.showCardNames"
+					:show-name="false"
 					:show-rank="config.showRankBadges"
-					rank-badge-class="top-1 left-1"
+					:rank-badge-class="rankBadgeClass"
 					:rank-badge-style="rankBadgeStyle"
 					:stat-text="statText(entry)"
-					stat-badge-class="bottom-1 right-1"
+					:stat-badge-class="statBadgeClass"
 					:stat-badge-style="statBadgeStyle"
-					:badge-size="badgeSize"
 					:card-style="cardStyle"
 				/>
 			</ScreenCardGrid>
