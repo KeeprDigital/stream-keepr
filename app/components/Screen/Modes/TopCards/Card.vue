@@ -10,9 +10,10 @@ import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 const props = defineProps<{
 	entry: CardBreakdownEntry;
 	rank: number;
-	/** The card's width, unless it fills its grid column. */
+	/** The card's width while its sizing is fixed. */
 	width?: string;
-	dynamicSize?: boolean;
+	/** Fixed takes `width`; fill takes its grid column's width; fit fits its grid cell both ways. */
+	sizing: 'fixed' | 'fill' | 'fit';
 	showName: boolean;
 	showRank: boolean;
 	rankBadgeClass: string;
@@ -27,6 +28,8 @@ const props = defineProps<{
 }>();
 
 const imageError = ref(false);
+/** A fitted card sits in a box that fits it to its grid cell. */
+const cardBox = computed(() => props.sizing === 'fit' ? resolveComponent('MtgCardFitBox') : 'div');
 
 /**
  * Scryfall CDN URL for the card's normal front face image.
@@ -47,42 +50,46 @@ watch(() => props.entry.scryfallId, () => {
 <template>
 	<div
 		class="top-cards-item flex flex-col gap-1 min-w-0"
-		:style="dynamicSize ? undefined : { width }"
+		:class="{ 'min-h-0': sizing === 'fit' }"
+		:style="sizing === 'fixed' ? { width } : undefined"
+		:data-sizing="sizing"
 		data-testid="top-cards-item"
 	>
-		<div class="relative" :style="badgeSize ? { fontSize: badgeSize } : undefined">
-			<div class="mtg-card" :style="cardStyle">
-				<img
-					v-if="imageUrl && !imageError"
-					:src="imageUrl"
-					:alt="entry.name"
-					class="w-full h-full object-cover"
-					loading="eager"
-					@error="imageError = true"
+		<component :is="cardBox">
+			<div class="relative" :style="badgeSize ? { fontSize: badgeSize } : undefined">
+				<div class="mtg-card" :style="cardStyle">
+					<img
+						v-if="imageUrl && !imageError"
+						:src="imageUrl"
+						:alt="entry.name"
+						class="w-full h-full object-cover"
+						loading="eager"
+						@error="imageError = true"
+					>
+					<div v-else class="w-full h-full flex items-center justify-center text-xs text-center p-1">
+						{{ entry.name }}
+					</div>
+				</div>
+				<div
+					v-if="showRank"
+					data-testid="top-cards-rank-badge"
+					class="absolute rounded-full flex items-center justify-center"
+					:class="rankBadgeClass"
+					:style="rankBadgeStyle"
 				>
-				<div v-else class="w-full h-full flex items-center justify-center text-xs text-center p-1">
-					{{ entry.name }}
+					{{ rank }}
+				</div>
+				<div
+					v-if="statText"
+					data-testid="top-cards-stat-badge"
+					class="absolute rounded-md tabular-nums"
+					:class="statBadgeClass"
+					:style="statBadgeStyle"
+				>
+					{{ statText }}
 				</div>
 			</div>
-			<div
-				v-if="showRank"
-				data-testid="top-cards-rank-badge"
-				class="absolute rounded-full flex items-center justify-center"
-				:class="rankBadgeClass"
-				:style="rankBadgeStyle"
-			>
-				{{ rank }}
-			</div>
-			<div
-				v-if="statText"
-				data-testid="top-cards-stat-badge"
-				class="absolute rounded-md tabular-nums"
-				:class="statBadgeClass"
-				:style="statBadgeStyle"
-			>
-				{{ statText }}
-			</div>
-		</div>
+		</component>
 		<div
 			v-if="showName"
 			data-testid="top-cards-name"

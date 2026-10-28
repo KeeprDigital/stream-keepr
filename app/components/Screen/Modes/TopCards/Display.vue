@@ -2,7 +2,7 @@
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { config, error, isEmpty, headerText, pageEntries, currentPage, totalPages } = useTopCardsModeData();
+const { config, error, isEmpty, headerText, pageEntries, currentPage, totalPages, resolvedColumns, pageRowCount } = useTopCardsModeData();
 
 /** Set on the root, so card names and a card without an image take it. */
 const displayStyle = {
@@ -19,14 +19,7 @@ const pageIndicatorStyle = {
 	color: modeTokenVar('top-cards', 'page-indicator-text'),
 };
 
-const gridStyle = computed(() => ({
-	gridTemplateColumns: config.value.dynamicCardSize
-		? `repeat(${config.value.columns}, minmax(0, 1fr))`
-		: `repeat(${config.value.columns}, max-content)`,
-	gap: modeTokenVar('top-cards', 'card-gap'),
-	justifyContent: config.value.dynamicCardSize ? undefined : 'center',
-}));
-
+const cardGap = modeTokenVar('top-cards', 'card-gap');
 const cardWidth = modeTokenVar('top-cards', 'card-width');
 /** The badges' text size, which each badge sizes itself around. */
 const badgeSize = modeTokenVar('top-cards', 'badge-size');
@@ -79,9 +72,13 @@ function statText(entry: CardBreakdownEntry): string | null {
 				</h2>
 			</div>
 
-			<div
-				class="top-cards-grid grid"
-				:style="gridStyle"
+			<ScreenCardGrid
+				class="top-cards-grid"
+				:sizing="config.cardSizing"
+				:columns="resolvedColumns"
+				:rows="pageRowCount"
+				:card-width="cardWidth"
+				:gap="cardGap"
 				data-testid="top-cards-grid"
 			>
 				<ScreenModesTopCardsCard
@@ -90,7 +87,7 @@ function statText(entry: CardBreakdownEntry): string | null {
 					:entry="entry"
 					:rank="rank"
 					:width="cardWidth"
-					:dynamic-size="config.dynamicCardSize"
+					:sizing="config.cardSizing"
 					:show-name="config.showCardNames"
 					:show-rank="config.showRankBadges"
 					rank-badge-class="top-1 left-1"
@@ -101,7 +98,7 @@ function statText(entry: CardBreakdownEntry): string | null {
 					:badge-size="badgeSize"
 					:card-style="cardStyle"
 				/>
-			</div>
+			</ScreenCardGrid>
 
 			<div
 				v-if="totalPages > 1"

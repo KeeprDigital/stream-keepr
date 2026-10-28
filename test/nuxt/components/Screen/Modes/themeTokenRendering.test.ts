@@ -175,7 +175,7 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'card-width': {
 			selector: '[data-testid="top-cards-item"]',
 			property: 'width',
-			config: { dynamicCardSize: false },
+			config: { cardSizing: 'fixed' },
 		},
 		'card-gap': { selector: '[data-testid="top-cards-grid"]', property: 'gap' },
 		'badge-size': { selector: '[data-testid="top-cards-stat-badge"]', property: 'fontSize' },
@@ -608,7 +608,7 @@ mockNuxtImport('useTopCardsModeData', () => () => {
 	return {
 		config: computed(() => ({
 			columns: 5,
-			dynamicCardSize: true,
+			cardSizing: 'fit',
 			showHeader: true,
 			showCardNames: true,
 			showRankBadges: true,
@@ -623,6 +623,8 @@ mockNuxtImport('useTopCardsModeData', () => () => {
 		]),
 		currentPage: computed(() => 1),
 		totalPages: computed(() => 2),
+		resolvedColumns: computed(() => 5),
+		pageRowCount: computed(() => 1),
 	};
 });
 

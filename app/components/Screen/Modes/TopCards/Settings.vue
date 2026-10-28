@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {
 	BoardSelection,
+	CardSizing,
 	MetagameCardSortBy,
 	TopCardsStat,
 } from '~~/shared/types/enums';
@@ -8,6 +9,7 @@ import type { CardTypeBucket } from '~~/shared/utils/metagame';
 import type { Screen } from '~/types';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { CARD_TYPE_BUCKET_ORDER } from '~~/shared/utils/metagame';
+import { CARD_SIZING_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
@@ -186,6 +188,26 @@ function typeLabel(bucket: CardTypeBucket): string {
 
 		<ScreenSettingsCard title="Layout">
 			<UFormField
+				:label="fields.cardSizing.label"
+				description="Fit shrinks the cards until every one on the page fits the screen. Fixed takes the Theme's card width and may run off the screen."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<USelect
+					:model-value="config.cardSizing"
+					:items="CARD_SIZING_SELECT_OPTIONS"
+					class="w-48"
+					@update:model-value="updateConfig({ cardSizing: $event as CardSizing, ...(config.autoColumns ? { currentPage: 1 } : {}) })"
+				/>
+			</UFormField>
+
+			<ScreenSettingsToggle
+				:label="fields.autoColumns.label"
+				description="Choose the columns from the card count and the screen's size."
+				:model-value="config.autoColumns"
+				@update:model-value="updateConfig({ autoColumns: $event, currentPage: 1 })"
+			/>
+
+			<UFormField
 				:label="fields.columns.label"
 				description="Number of cards per row."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
@@ -194,17 +216,11 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:model-value="config.columns"
 					:min="fields.columns.min"
 					:max="fields.columns.max"
+					:disabled="config.autoColumns"
 					class="w-32"
 					@update:model-value="updateConfig({ columns: Number($event), currentPage: 1 })"
 				/>
 			</UFormField>
-
-			<ScreenSettingsToggle
-				:label="fields.dynamicCardSize.label"
-				description="Stretch cards to fill the available width, rather than take the Theme's card width."
-				:model-value="config.dynamicCardSize"
-				@update:model-value="updateConfig({ dynamicCardSize: $event })"
-			/>
 		</ScreenSettingsCard>
 
 		<ScreenPaginationSettingsCard

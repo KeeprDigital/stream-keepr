@@ -12,7 +12,8 @@ const defaultConfig = {
 	limit: 10,
 	excludedCardTypes: ['Land'],
 	columns: 5,
-	dynamicCardSize: true,
+	autoColumns: false,
+	cardSizing: 'fit',
 	showHeader: true,
 	headerText: undefined,
 	showCardNames: true,
@@ -49,6 +50,8 @@ const entries = ref<any[]>([
 const pageEntries = ref<any[] | null>(null);
 const currentPage = ref(1);
 const totalPages = ref(1);
+const resolvedColumns = ref(5);
+const pageRowCount = ref(1);
 
 mockNuxtImport('useTopCardsModeData', () => () => ({
 	config: computed(() => config.value),
@@ -61,6 +64,8 @@ mockNuxtImport('useTopCardsModeData', () => () => ({
 	pageEntries: computed(() => pageEntries.value ?? entries.value.map((entry, index) => ({ entry, rank: index + 1 }))),
 	currentPage: computed(() => currentPage.value),
 	totalPages: computed(() => totalPages.value),
+	resolvedColumns: computed(() => resolvedColumns.value),
+	pageRowCount: computed(() => pageRowCount.value),
 }));
 
 const ScreenModeBaseStub = defineComponent({
@@ -78,8 +83,9 @@ const TopCardsCardStub = defineComponent({
 		showName: { type: Boolean, required: true },
 		showRank: { type: Boolean, required: true },
 		statText: { type: String, required: false },
+		sizing: { type: String, required: true },
 	},
-	template: '<div data-testid="top-cards-item">{{ rank }}:{{ entry.name }}:{{ statText ?? "-" }}:{{ showRank }}:{{ showName }}</div>',
+	template: '<div data-testid="top-cards-item" :data-sizing="sizing">{{ rank }}:{{ entry.name }}:{{ statText ?? "-" }}:{{ showRank }}:{{ showName }}</div>',
 });
 
 async function mountComponent() {
@@ -121,6 +127,8 @@ describe('screenTopCardsDisplay', () => {
 		pageEntries.value = null;
 		currentPage.value = 1;
 		totalPages.value = 1;
+		resolvedColumns.value = 5;
+		pageRowCount.value = 1;
 	});
 
 	it('renders only the current page, ranking each card across the whole ranking', async () => {
@@ -166,20 +174,22 @@ describe('screenTopCardsDisplay', () => {
 		expect(wrapper.find('.top-cards-title').exists()).toBe(false);
 	});
 
-	it('lays the grid out in its configured columns', async () => {
+	// A Fit grid shares the height between a page's rows; a Fixed grid has no rows to share.
+	it.each([
+		{ cardSizing: 'fit', rows: '2' },
+		{ cardSizing: 'fixed', rows: undefined },
+	])('lays a $cardSizing grid out in the columns its data resolves', async ({ cardSizing, rows }) => {
+		config.value = { ...config.value, cardSizing };
+		resolvedColumns.value = 4;
+		pageRowCount.value = 2;
+
 		const wrapper = await mountComponent();
 
 		const grid = wrapper.get('[data-testid="top-cards-grid"]');
-		expect(grid.attributes('style')).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))');
-	});
-
-	it('lays fixed cards out at their own width when dynamic sizing is off', async () => {
-		config.value = { ...config.value, dynamicCardSize: false };
-
-		const wrapper = await mountComponent();
-
-		const grid = wrapper.get('[data-testid="top-cards-grid"]');
-		expect(grid.attributes('style')).toContain('grid-template-columns: repeat(5, max-content)');
+		expect(grid.attributes('data-card-sizing')).toBe(cardSizing);
+		expect(grid.attributes('data-columns')).toBe('4');
+		expect(grid.attributes('data-rows')).toBe(rows);
+		expect(wrapper.findAll('[data-testid="top-cards-item"]').map(item => item.attributes('data-sizing'))).toEqual([cardSizing, cardSizing]);
 	});
 
 	it('passes no stat text when the stat badge is off', async () => {

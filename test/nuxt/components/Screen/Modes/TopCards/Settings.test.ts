@@ -35,7 +35,8 @@ const defaultConfig = {
 	limit: 10,
 	excludedCardTypes: ['Land'],
 	columns: 5,
-	dynamicCardSize: true,
+	autoColumns: false,
+	cardSizing: 'fit',
 	rowsPerPage: 60,
 	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
@@ -134,10 +135,20 @@ const UButtonStub = defineComponent({
 const UInputNumberStub = defineComponent({
 	props: {
 		modelValue: { type: Number, required: false },
+		disabled: { type: Boolean, required: false },
 	},
 	emits: ['update:modelValue'],
-	template: '<div data-testid="u-input-number">{{ modelValue }}</div>',
+	template: '<div data-testid="u-input-number" :aria-disabled="disabled">{{ modelValue }}</div>',
 });
+
+/** The control under the form field or toggle labelled `label`. */
+function control<T>(wrapper: Awaited<ReturnType<typeof mountComponent>>, label: string, stub: T) {
+	const field = wrapper.findAll('[data-testid="form-field"], [data-testid="settings-toggle"]').find(item => item.text().includes(label));
+	expect(field, label).toBeDefined();
+	return field!.findComponent(stub as any).exists()
+		? field!.getComponent(stub as any)
+		: field!;
+}
 
 /** The number input under the form field labelled `label`. */
 function numberInput(wrapper: Awaited<ReturnType<typeof mountComponent>>, label: string) {
@@ -293,6 +304,37 @@ describe('screenTopCardsSettings', () => {
 			numberInput(wrapper, 'Columns').vm.$emit('update:modelValue', 4);
 
 			expect(mockUpdateConfig).toHaveBeenCalledWith({ columns: 4, currentPage: 1 });
+		});
+	});
+
+	describe('card sizing', () => {
+		it('offers Fixed width and Fit to screen, and writes the choice', async () => {
+			const wrapper = await mountComponent();
+
+			const select = control(wrapper, 'Card sizing', USelectStub);
+			expect(select.text()).toBe('Fixed width|Fit to screen');
+			(select as any).vm.$emit('update:modelValue', 'fixed');
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith({ cardSizing: 'fixed' });
+		});
+
+		// Auto columns change which cards each page holds, so the rotation returns to page 1.
+		it('turns auto columns on from page 1', async () => {
+			const wrapper = await mountComponent();
+
+			await control(wrapper, 'Auto columns', ScreenSettingsToggleStub).trigger('click');
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith({ autoColumns: true, currentPage: 1 });
+		});
+
+		it.each([
+			{ autoColumns: false, disabled: 'false' },
+			{ autoColumns: true, disabled: 'true' },
+		])('leaves the column count editable only while auto columns is $autoColumns', async ({ autoColumns, disabled }) => {
+			mockConfig.value = { ...mockConfig.value, autoColumns };
+			const wrapper = await mountComponent();
+
+			expect(numberInput(wrapper, 'Columns').attributes('aria-disabled')).toBe(disabled);
 		});
 	});
 });

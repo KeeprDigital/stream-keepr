@@ -43,10 +43,20 @@ export function useTopCardsModeData() {
 
 	// ── Pagination ──
 	// A Page Rotation over the grid's rows, so each page holds whole rows of
-	// `columns` cards and `rowsPerPage` (the declared page size) counts them.
+	// its columns' cards and `rowsPerPage` (the declared page size) counts them.
+	// Auto columns are chosen for every card at once, then paged (ADR-0053).
+	const resolvedColumns = useCardGridColumns({
+		mode: 'top-cards',
+		sizing: () => config.value.cardSizing,
+		autoColumns: () => config.value.autoColumns,
+		columns: () => config.value.columns,
+		count: () => entries.value.length,
+		cardWidthToken: 'card-width',
+		gapToken: 'card-gap',
+	});
 	const gridRows = computed(() => topCardsGridRows<RankedTopCard>(
 		entries.value.map((entry, index) => ({ entry, rank: index + 1 })),
-		config.value.columns,
+		resolvedColumns.value,
 	));
 	const {
 		rowCount,
@@ -58,6 +68,8 @@ export function useTopCardsModeData() {
 		prevPage,
 	} = usePaginatedScreenMode({ mode: 'top-cards', config, rows: gridRows });
 	const pageEntries = computed(() => pageData.value.flat());
+	/** The rows a Fit grid shares its height between: a full page's, so a short last page keeps its card size. */
+	const pageRowCount = computed(() => Math.max(1, Math.min(config.value.rowsPerPage, rowCount.value)));
 
 	// ── Header ──
 	const headerText = computed(() => {
@@ -95,6 +107,8 @@ export function useTopCardsModeData() {
 		cardData,
 		entries,
 		pageEntries,
+		pageRowCount,
+		resolvedColumns,
 		rowCount,
 		currentPage,
 		totalPages,

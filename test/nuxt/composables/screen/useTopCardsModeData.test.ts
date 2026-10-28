@@ -23,7 +23,8 @@ const defaultConfig = {
 	limit: 10,
 	excludedCardTypes: ['Land'] as string[],
 	columns: 5,
-	dynamicCardSize: true,
+	autoColumns: false,
+	cardSizing: 'fit' as 'fit' | 'fixed',
 	rowsPerPage: 60,
 	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
@@ -198,6 +199,33 @@ describe('useTopCardsModeData', () => {
 
 			expect(totalPages.value).toBe(2);
 			expect(shown(pageEntries.value)).toEqual(['5:Card 5']);
+		});
+
+		// A Fit grid shares its height between a full page's rows, so a short last page keeps its card size.
+		it.each([
+			{ cards: 5, rowsPerPage: 2, currentPage: 2, pageRowCount: 2 },
+			{ cards: 3, rowsPerPage: 60, currentPage: 1, pageRowCount: 2 },
+		])('lays $cards cards, $rowsPerPage rows a page, out in $pageRowCount rows on page $currentPage', async ({ cards, rowsPerPage, currentPage, pageRowCount }) => {
+			mockFetch.mockResolvedValue({ entries: rankedCards(cards), totalDecks: 5, scope: 'all' });
+			Object.assign(mutableConfig, { columns: 2, rowsPerPage, currentPage });
+
+			const data = makeTopCardsModeData();
+			await flushPromises();
+
+			expect(data.pageRowCount.value).toBe(pageRowCount);
+		});
+
+		it('pages by the columns auto columns chooses for the Event Canvas', async () => {
+			mockFetch.mockResolvedValue({ entries: rankedCards(10), totalDecks: 5, scope: 'all' });
+			Object.assign(mutableConfig, { columns: 2, autoColumns: true, rowsPerPage: 1 });
+
+			const { pageEntries, totalPages, resolvedColumns } = makeTopCardsModeData();
+			await flushPromises();
+
+			// Ten cards on the default 1920×1080 canvas fit largest in two rows of five.
+			expect(resolvedColumns.value).toBe(5);
+			expect(totalPages.value).toBe(2);
+			expect(pageEntries.value).toHaveLength(5);
 		});
 
 		it('shows the page projected from the Rotation Anchor while auto-page is on', async () => {
