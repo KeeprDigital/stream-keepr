@@ -106,14 +106,30 @@ export const useScreenStore = defineStore('screen', () => {
 			: fetched;
 	}
 
-	async function loadScreensByEventId(eventId: number) {
+	let latestScreensLoad: Promise<Screen[] | null> | null = null;
+
+	/**
+	 * A load superseded by a newer one for the same Event answers with that newer
+	 * load's Screens, so a caller racing another (a page and its layout) is not told
+	 * it failed. One superseded by a reset or another Event answers `null`.
+	 */
+	function loadScreensByEventId(eventId: number) {
+		const load = fetchScreens(eventId);
+		latestScreensLoad = load;
+		return load;
+	}
+
+	async function fetchScreens(eventId: number): Promise<Screen[] | null> {
 		const flight = screensLoads.begin();
 		const token = beginLoad();
 		currentEventId.value = eventId;
 		try {
 			const data = await screenRepo.list(eventId);
-			if (flight.stale || currentEventId.value !== eventId)
-				return null;
+			if (flight.stale || currentEventId.value !== eventId) {
+				return currentEventId.value === eventId
+					? latestScreensLoad
+					: null;
+			}
 			// Per Screen, not wholesale. The list is the authority on *membership* —
 			// a Screen it omits is dropped however new the cache holds it, since
 			// absence carries no revision to compare and a reload is how a client
@@ -264,6 +280,7 @@ export const useScreenStore = defineStore('screen', () => {
 
 	function $reset() {
 		screensLoads.supersede();
+		latestScreensLoad = null;
 		activeScreenLoads.supersede();
 		activeLoads.clear();
 		screenRuntime.resetRuntime();

@@ -6,11 +6,10 @@ import type { FeatureMatch, Player } from '~/types';
 import type { DeckListTokenWithData, MatchPlayerDeckData } from '~/types/card/deckList';
 import type { MtgCard } from '~/types/card/mtg';
 import { computed, toValue } from 'vue';
-import { getCounterTypeConfigs } from '~~/shared/config/games';
-import { counterConfigsForDeckCounterTypes } from '~~/shared/utils/deckCounters';
 import { uniqueDeckTokens } from '~~/shared/utils/deckTokens';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { createPlayerDeckList } from '~~/shared/utils/playerDeck';
+import { scryfallNameKey } from '~/composables/data/useScryfallBatch';
 
 interface CardDeckSourceRuntimeState {
 	eventId: MaybeRefOrGetter<number | null | undefined>;
@@ -159,21 +158,40 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		}));
 	}
 
+	/** The Companion as a sideboard-shaped card, so the Scryfall batch and card selection treat it like any other. */
+	function toCompanionCard(deck: PlayerDeckResponse | null): DeckListCard | null {
+		const companion = deck?.companion;
+		return companion
+			? {
+					name: companion.name,
+					setCode: null,
+					quantity: 1,
+					compartment: 'sideboard',
+					cardType: '',
+					scryfallId: companion.scryfallId,
+				}
+			: null;
+	}
+
+	function enrichCompanion(companion: DeckListCard | null, cardDataMap: Map<string, MtgCard>) {
+		return companion
+			? {
+					...companion,
+					mtgCard: cardDataMap.get(companion.scryfallId ?? scryfallNameKey(companion.name)) ?? null,
+				}
+			: null;
+	}
+
 	function buildEmptyDeckSource(playerName: string, deckResponse: PlayerDeckResponse | null): MatchPlayerDeckData {
 		return {
 			playerName,
 			deckList: buildDeckList(playerName, deckResponse),
-			deckCounters: [],
 			deckTokens: [],
 			tokens: [],
 			mainboard: [],
 			sideboard: [],
+			companion: null,
 		};
-	}
-
-	function deriveDeckCounters(cards: DeckListCard[]) {
-		const counterTypes = cards.flatMap(card => card.deckCounterTypes ?? []);
-		return counterConfigsForDeckCounterTypes(counterTypes, getCounterTypeConfigs('mtg'));
 	}
 
 	function deriveDeckTokens(cards: DeckListCard[]) {
@@ -240,10 +258,10 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		return {
 			playerName,
 			deckList: buildDeckList(playerName, deckResponse),
-			deckCounters: deriveDeckCounters(cards),
 			deckTokens,
 			tokens: buildTokenList(deckTokens),
 			...buildDeckListArrays(cards, cardDataMap),
+			companion: enrichCompanion(toCompanionCard(deckResponse), cardDataMap),
 		};
 	}
 
@@ -324,6 +342,10 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 			const allCards = [
 				...p1Cards,
 				...p2Cards,
+				...[
+					toCompanionCard(p1DeckResponse),
+					toCompanionCard(p2DeckResponse),
+				].filter(card => card !== null),
 			];
 			const { cards: cardDataMap, degraded } = allCards.length > 0
 				? await fetchScryfallCards(allCards)
@@ -463,8 +485,11 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		try {
 			const deckResponse = await deckCache.fetchDeck(player.id, evtId, player.updatedAt);
 			const deckCards = toDeckListCards(deckResponse);
+			const companionCard = toCompanionCard(deckResponse);
 			const { cards: cardDataMap, degraded } = deckCards.length > 0
-				? await fetchScryfallCards(deckCards)
+				? await fetchScryfallCards(companionCard
+						? [...deckCards, companionCard]
+						: deckCards)
 				: {
 						cards: new Map<string, MtgCard>(),
 						degraded: false,

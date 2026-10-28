@@ -1,5 +1,4 @@
 import type { DeckListCard, PlayerDeckList } from '~~/shared/types/deckList';
-import type { CounterTypeConfig } from '~~/shared/types/game';
 import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
 import type { MtgCard } from '~/types/card/mtg';
 
@@ -17,9 +16,9 @@ export interface DeckListTokenWithData extends DeckTokenRequirement {
 export interface MatchPlayerDeckData {
 	playerName: string;
 	deckList: PlayerDeckList | null;
-	deckCounters: CounterTypeConfig[];
 	deckTokens: DeckTokenRequirement[];
 	tokens: DeckListTokenWithData[];
 	mainboard: DeckListCardWithData[];
 	sideboard: DeckListCardWithData[];
+	companion: DeckListCardWithData | null;
 }

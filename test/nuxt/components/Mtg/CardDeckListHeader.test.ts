@@ -26,6 +26,32 @@ const FeatureMatchNoteStub = defineComponent({
 });
 
 describe('mtgCardDeckListHeader', () => {
+	it.each([
+		['loads the decks of a Match selected before mount', false, 1],
+		['keeps the decks the store already holds', true, 0],
+	])('%s', (_, deckListHasData, loads) => {
+		cardStore.deckListHasData = deckListHasData;
+		cardStore.loadMatchupDeckLists.mockClear();
+		mount(CardDeckListHeader, {
+			props: {
+				deckListMatchId: 40,
+				selectedMatch: {
+					id: 40,
+					player1Id: 1,
+					player2Id: 2,
+					player1Data: { name: 'Alice', deckId: 11 },
+					player2Data: { name: 'Bob', deckId: 12 },
+				} as never,
+			},
+			global: {
+				stubs: { USelect: true, UInput: true, UButton: true },
+			},
+		});
+		cardStore.deckListHasData = false;
+
+		expect(cardStore.loadMatchupDeckLists).toHaveBeenCalledTimes(loads);
+	});
+
 	it('presents the selected Assignment Note beside the Cards match-decklist controls', async () => {
 		const save = vi.fn().mockResolvedValue(undefined);
 		const wrapper = mount(CardDeckListHeader, {

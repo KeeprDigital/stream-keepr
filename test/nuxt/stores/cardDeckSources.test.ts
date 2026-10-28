@@ -416,6 +416,96 @@ describe('useCardStore deck sources and search', () => {
 	});
 
 	// Degraded card data (#471): placeholders stay up, and a slow cadence re-fetches until Scryfall answers.
+	describe('companion', () => {
+		const kaheera = createMockMtgCard({ id: 'sc-kaheera', name: 'Kaheera, the Orphanguard' });
+
+		function deckWithCompanion(companion: Record<string, unknown> | null) {
+			return {
+				id: 77,
+				externalId: 'deck-77',
+				formatExternalId: 'modern',
+				phaseIds: [1],
+				phaseName: 'Swiss',
+				name: 'Azorius Control',
+				colors: 'WU',
+				sortOrder: 0,
+				isPrimary: true,
+				companion,
+				highlander: null,
+				cards: [
+					{
+						name: 'Consider',
+						scryfallId: 'sc-1',
+						quantity: 4,
+						compartment: 'mainboard',
+						cardType: 'Instant',
+					},
+				],
+			};
+		}
+
+		beforeEach(() => {
+			mockPlayerStoreState.players = [
+				{
+					id: 42,
+					name: 'Alice',
+					gameData: { type: 'mtg', deckName: 'Azorius Control' },
+					updatedAt: new Date('2026-08-20T00:00:00.000Z'),
+				},
+			];
+			mockFeatureMatchStoreState.featureMatches = slotOf({ name: 'Alice', deckId: 77 }, 42);
+			mockFetchScryfallCards.mockResolvedValue({
+				cards: new Map([
+					['sc-kaheera', kaheera],
+				]),
+				degraded: false,
+			});
+		});
+
+		it.each([
+			[
+				'matchup',
+				'a companion',
+				{
+					cardId: 9,
+					name: 'Kaheera, the Orphanguard',
+					scryfallId: 'sc-kaheera',
+					oracleId: null,
+					source: 'melee',
+					usesExistingSideboardSlot: false,
+				},
+				'sc-kaheera',
+			],
+			['matchup', 'no companion', null, null],
+			[
+				'Player',
+				'a companion',
+				{
+					cardId: 9,
+					name: 'Kaheera, the Orphanguard',
+					scryfallId: 'sc-kaheera',
+					oracleId: null,
+					source: 'melee',
+					usesExistingSideboardSlot: false,
+				},
+				'sc-kaheera',
+			],
+			['Player', 'no companion', null, null],
+		])('a %s deck with %s offers its companion as a selectable card', async (surface, _, companion, selectableId) => {
+			mockFetchDeck.mockResolvedValue(deckWithCompanion(companion));
+
+			if (surface === 'matchup')
+				await store.loadMatchDeckLists(1);
+			else
+				await store.loadPlayerDeck(42);
+
+			const rendering = surface === 'matchup'
+				? store.deckListPlayer1
+				: store.playerDeckData;
+			expect(rendering?.companion?.mtgCard?.id ?? null).toBe(selectableId);
+		});
+	});
+
 	describe('degraded card data', () => {
 		const degraded = {
 			cards: new Map(),

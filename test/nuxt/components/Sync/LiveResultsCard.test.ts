@@ -38,7 +38,12 @@ function wireEvent(fields: Partial<LiveResultsFields> = {}): Event {
 function status(overrides: Partial<MeleeLiveResultsStatusResponse> = {}): MeleeLiveResultsStatusResponse {
 	return {
 		enabled: true,
-		currentRound: { id: 4, name: 'Round 4', phaseName: 'Swiss' },
+		currentRound: {
+			id: 4,
+			name: 'Round 4',
+			phaseId: 1,
+			phaseName: 'Swiss',
+		},
 		lastCheckedAt: TWO_MINUTES_AGO,
 		lastChangeAt: TWO_MINUTES_AGO,
 		error: null,
@@ -190,7 +195,12 @@ describe('live Results card', () => {
 	it('re-reads the status every 30 seconds while on', async () => {
 		const wrapper = await mountCard({ meleeLiveResultsEnabled: true });
 		mockEventRepo.getMeleeLiveResultsStatus.mockResolvedValue(status({
-			currentRound: { id: 5, name: 'Quarterfinals', phaseName: null },
+			currentRound: {
+				id: 5,
+				name: 'Quarterfinals',
+				phaseId: 2,
+				phaseName: null,
+			},
 			lastCheckedAt: NOW,
 		}));
 
