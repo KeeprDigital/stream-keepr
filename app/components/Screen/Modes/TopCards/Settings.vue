@@ -74,10 +74,6 @@ const rotation = useRotationConfigWrites({
 	saveConfig,
 });
 const { updateConfig } = rotation;
-/** With auto columns on, a sizing edit changes the columns, and so which cards each page holds. */
-const autoColumnsPageReset = computed(() => config.value.autoColumns
-	? { currentPage: 1 }
-	: {});
 
 const boardOptions = [
 	{ label: 'Full Deck', value: 'full' },
@@ -200,7 +196,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:model-value="config.cardSizing"
 					:items="CARD_SIZING_SELECT_OPTIONS"
 					class="w-48"
-					@update:model-value="updateConfig({ cardSizing: $event as CardSizing, ...autoColumnsPageReset })"
+					@update:model-value="updateConfig({ cardSizing: $event as CardSizing })"
 				/>
 			</UFormField>
 
@@ -215,7 +211,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:min="fields.cardWidth.min"
 					:max="fields.cardWidth.max"
 					class="w-32"
-					@update:model-value="updateConfig({ cardWidth: Number($event), ...autoColumnsPageReset })"
+					@update:model-value="updateConfig({ cardWidth: Number($event) })"
 				/>
 			</UFormField>
 
@@ -229,18 +225,19 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:min="fields.cardGap.min"
 					:max="fields.cardGap.max"
 					class="w-32"
-					@update:model-value="updateConfig({ cardGap: Number($event), ...autoColumnsPageReset })"
+					@update:model-value="updateConfig({ cardGap: Number($event) })"
 				/>
 			</UFormField>
 
 			<ScreenSettingsToggle
 				:label="fields.autoColumns.label"
-				description="Choose the columns from the card count and the screen's size."
+				description="Choose the columns from the space the cards have on the Screen."
 				:model-value="config.autoColumns"
-				@update:model-value="updateConfig({ autoColumns: $event, currentPage: 1 })"
+				@update:model-value="updateConfig({ autoColumns: $event })"
 			/>
 
 			<UFormField
+				v-if="!config.autoColumns"
 				:label="fields.columns.label"
 				description="Number of cards per row."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
@@ -249,16 +246,15 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:model-value="config.columns"
 					:min="fields.columns.min"
 					:max="fields.columns.max"
-					:disabled="config.autoColumns"
 					class="w-32"
-					@update:model-value="updateConfig({ columns: Number($event), currentPage: 1 })"
+					@update:model-value="updateConfig({ columns: Number($event) })"
 				/>
 			</UFormField>
 		</ScreenSettingsCard>
 
 		<ScreenPaginationSettingsCard
 			:rotation="rotation"
-			page-size-description="Grid rows shown per page, each holding one card per column."
+			page-size-description="Cards shown on each page, laid out in as many columns as the Screen fits."
 			auto-page-description="Automatically cycle through pages of cards."
 			:loading="loadingCards"
 		/>

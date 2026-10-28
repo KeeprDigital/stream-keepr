@@ -918,7 +918,7 @@ describe('topCardsModeConfigSchema', () => {
 		cardWidth: 160,
 		cardGap: 12,
 		badgeSize: 14,
-		rowsPerPage: 60,
+		cardsPerPage: 60,
 		autoPageEnabled: false,
 		autoPageIntervalMs: 10000,
 		showHeader: true,

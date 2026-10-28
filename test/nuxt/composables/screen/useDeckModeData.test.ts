@@ -392,8 +392,9 @@ describe('useDeckModeData', () => {
 				{ type: 'Creatures', count: 1 },
 				{ type: 'Instants', count: 4 },
 			]);
-			expect(result.deckCounters.value.map(counter => counter.key)).toEqual(['poison', 'storm']);
+			// The companion is a card image of its own, its art read with the deck's.
 			expect(result.companion.value).toMatchObject({ cardId: 4, name: 'Lutri, the Spellchaser' });
+			expect(result.companionCard.value).toMatchObject({ name: 'Lutri, the Spellchaser', quantity: 1 });
 			expect(mainboardNames(result)).toEqual(['Lightning Bolt', 'Birds of Paradise']);
 			expect(result.sideboard.value.map(card => card.name)).toEqual(['Surgical Extraction']);
 		});

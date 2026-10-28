@@ -9,6 +9,7 @@ import {
 	SIDEBOARD_PLACEMENT_VALUES,
 	SIDEBOARD_VIEW_VALUES,
 } from '../types/enums';
+import { NINE_POINT_VALUES } from '../utils/ninePoints';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField, screenModeConfigFields } from './fields';
 
@@ -38,6 +39,8 @@ function deckBoardLayoutShape<const Views extends readonly [string, ...string[]]
 		/** A Fixed or stacked card's width in Event Canvas px. */
 		cardWidth: editorField(z.number().int().min(48).max(480).optional(), { label: 'Card Width' }),
 		cardGap: editorField(z.number().int().min(0).max(48).optional(), { label: 'Card Gap' }),
+		/** Where the board's cards sit in its space when they leave some over. */
+		alignment: editorField(z.enum(NINE_POINT_VALUES).optional(), { label: 'Alignment' }),
 	};
 }
 
@@ -75,6 +78,7 @@ export const DEFAULT_DECK_BOARD_LAYOUT: ResolvedMainboardLayout = {
 	cardSizing: 'fixed',
 	cardWidth: 144,
 	cardGap: 8,
+	alignment: 'center',
 };
 
 const DEFAULT_SIDEBOARD_LAYOUT: ResolvedSideboardLayout = {
@@ -113,15 +117,23 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 			broadcastDeckListId: z.number().int().positive(),
 		}).strict(),
 	]),
-	/** Which boards render (#477). "Both hidden" is impossible by construction. */
-	board: editorField(z.enum(BOARD_SELECTION_VALUES).optional(), { label: 'Boards' }),
+	/**
+	 * Which boards render (#477). "Both hidden" is impossible by construction.
+	 * Its editor is each board's own show toggle, so it carries no editor meta.
+	 */
+	board: z.enum(BOARD_SELECTION_VALUES).optional(),
 	/** Where the sideboard sits relative to the mainboard. Read only at `board: 'full'`. */
 	sideboardPlacement: editorField(z.enum(SIDEBOARD_PLACEMENT_VALUES).optional(), { label: 'Sideboard Placement' }),
 	mainboard: mainboardLayoutConfigSchema.optional(),
 	sideboard: sideboardLayoutConfigSchema.optional(),
 	showQuantities: editorField(z.boolean().optional(), { label: 'Show Quantities' }),
+	/** The header's first line: the Player's name, or a Broadcast Deck List's own name. */
+	showPlayerName: editorField(z.boolean().optional(), { label: 'Show Player Name' }),
+	/** The header's second line: the deck's name, or a Broadcast Deck List's archetype. */
 	showDeckName: editorField(z.boolean().optional(), { label: 'Show Deck Name' }),
 	showDeckColors: editorField(z.boolean().optional(), { label: 'Show Deck Colors' }),
+	/** The companion as its own card image, beside the boards. */
+	showCompanion: editorField(z.boolean().optional(), { label: 'Show Companion' }),
 	showDeckStats: editorField(z.boolean().optional(), { label: 'Show Deck Stats' }),
 	showDeckMetaPill: editorField(z.boolean().optional(), { label: 'Show Deck Meta Pill' }),
 	showHighlanderTotal: editorField(z.boolean().optional(), { label: 'Show Total Points' }),
@@ -135,7 +147,7 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	// Text sizes in px; each badge, pill and chip sizes itself around its own (ADR-0053).
 	quantityBadgeSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Badge Text Size' }),
 	pointsBadgeSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Badge Text Size' }),
-	metaPillSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Meta Pill Text Size' }),
+	metaPillSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Details Text Size' }),
 	pointedCardSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Pointed Card Text Size' }),
 }, {
 	deckSource: { type: 'player', playerId: null },
@@ -144,8 +156,10 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT },
 	sideboard: { ...DEFAULT_SIDEBOARD_LAYOUT },
 	showQuantities: true,
+	showPlayerName: true,
 	showDeckName: true,
 	showDeckColors: true,
+	showCompanion: true,
 	showDeckStats: false,
 	showDeckMetaPill: true,
 	showHighlanderTotal: true,

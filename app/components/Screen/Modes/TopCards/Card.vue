@@ -28,10 +28,6 @@ const props = defineProps<{
 }>();
 
 const imageError = ref(false);
-/** A fitted card sits in a box that fits it to its grid cell. */
-const cardBox = computed(() => props.sizing === 'fit'
-	? resolveComponent('MtgCardFitBox')
-	: 'div');
 
 /**
  * Scryfall CDN URL for the card's normal front face image.
@@ -57,7 +53,7 @@ watch(() => props.entry.scryfallId, () => {
 		:data-sizing="sizing"
 		data-testid="top-cards-item"
 	>
-		<component :is="cardBox">
+		<div>
 			<div class="relative" :style="badgeSize ? { fontSize: badgeSize } : undefined">
 				<div class="mtg-card" :style="cardStyle">
 					<img
@@ -91,7 +87,7 @@ watch(() => props.entry.scryfallId, () => {
 					{{ statText }}
 				</div>
 			</div>
-		</component>
+		</div>
 		<div
 			v-if="showName"
 			data-testid="top-cards-name"

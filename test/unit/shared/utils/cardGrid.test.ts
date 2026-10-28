@@ -50,6 +50,18 @@ describe('cardGrid', () => {
 		expect(fitColumns(input)).toBe(expected);
 	});
 
+	// A label under each card takes height from every row, so taller rows win sooner.
+	it('fits fewer rows when each card carries a label', () => {
+		const input = {
+			count: 12,
+			width: 1920,
+			height: 600,
+			gap: 12,
+		};
+
+		expect(fitColumns({ ...input, labelHeight: 120 })).toBeGreaterThan(fitColumns(input));
+	});
+
 	// Paged, a page holds at most `maxRows` rows; of equally large cards, the fewest pages win.
 	it.each([
 		{ count: 60, maxRows: 2, expected: 4 },

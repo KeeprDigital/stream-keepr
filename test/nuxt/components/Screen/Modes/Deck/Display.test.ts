@@ -1,4 +1,3 @@
-import type { CounterTypeConfig } from '~~/shared/types/game';
 import type { HighlanderDeckSummary } from '~~/shared/types/highlander';
 import type { DeckListCardWithData } from '~/types/card/deckList';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
@@ -7,13 +6,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import Display from '~/components/Screen/Modes/Deck/Display.vue';
 
+// The space the boards measure; 0 until they are laid out, when each board fits itself.
+const measured = vi.hoisted(() => ({ width: 0, height: 0 }));
+vi.mock('@vueuse/core', async (importOriginal) => {
+	const { ref } = await import('vue');
+	return {
+		...await importOriginal<typeof import('@vueuse/core')>(),
+		useElementSize: () => ({
+			width: ref(measured.width),
+			height: ref(measured.height),
+		}),
+	};
+});
+
 let mutableConfig: Record<string, unknown>;
 
 const mainboard = ref<DeckListCardWithData[]>([]);
 const sideboard = ref<DeckListCardWithData[]>([]);
-const companion = ref<{ name: string } | null>(null);
+const companionCard = ref<DeckListCardWithData | null>(null);
 const deckStats = ref<Array<{ type: string; count: number }>>([]);
-const deckCounters = ref<CounterTypeConfig[]>([]);
 const highlander = ref<HighlanderDeckSummary | null>(null);
 const tokenCards = ref<DeckListCardWithData[]>([]);
 const primaryName = ref('Alice');
@@ -28,10 +39,9 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	primaryHeader: primaryName,
 	secondaryHeader: secondaryName,
 	deckColors,
-	companion,
+	companionCard,
 	highlander,
 	tokenCards,
-	deckCounters,
 	deckStats,
 	mainboard,
 	sideboard,
@@ -69,11 +79,13 @@ const DeckCardStub = defineComponent({
 		showHighlanderPoints: { type: Boolean, required: false },
 		highlanderPointsPositionClass: { type: String, required: false },
 		sizing: { type: String, required: true },
+		card: { type: Object, required: true },
+		tag: { type: String, required: false },
 		width: { type: String, required: false },
 		quantityBadgeStyle: { type: Object, required: false },
 		highlanderPointsBadgeStyle: { type: Object, required: false },
 	},
-	template: '<div data-testid="deck-card" :data-sizing="sizing" :data-width="width" :data-quantity-size="quantityBadgeStyle?.fontSize" :data-points-size="highlanderPointsBadgeStyle?.fontSize" :data-show-highlander-points="String(showHighlanderPoints)" :data-point-position="highlanderPointsPositionClass" />',
+	template: '<div data-testid="deck-card" :data-sizing="sizing" :data-tag="tag" :data-name="card.name" :data-width="width" :data-quantity-size="quantityBadgeStyle?.fontSize" :data-points-size="highlanderPointsBadgeStyle?.fontSize" :data-show-highlander-points="String(showHighlanderPoints)" :data-point-position="highlanderPointsPositionClass" />',
 });
 
 function createCard(overrides: Partial<DeckListCardWithData> = {}): DeckListCardWithData {
@@ -156,11 +168,12 @@ describe('screenDeckDisplay', () => {
 			createCard(),
 		];
 		sideboard.value = [];
-		companion.value = { name: 'Lurrus of the Dream-Den' };
+		companionCard.value = null;
+		measured.width = 0;
+		measured.height = 0;
 		deckStats.value = [
 			{ type: 'Instants', count: 12 },
 		];
-		deckCounters.value = [];
 		highlander.value = createHighlanderSummary();
 		tokenCards.value = [];
 		primaryName.value = 'Alice';
@@ -173,8 +186,8 @@ describe('screenDeckDisplay', () => {
 
 		const metaPill = wrapper.get('[data-testid="deck-meta-pill"]');
 		expect(wrapper.find('[data-testid="mana-colors"]').exists()).toBe(true);
-		expect(metaPill.text()).toContain('Companion:');
-		expect(metaPill.text()).toContain('Lurrus of the Dream-Den');
+		// The companion is a card image, never part of the deck information.
+		expect(metaPill.text()).not.toContain('Companion');
 		expect(wrapper.get('[data-testid="highlander-total-inline"]').text()).toContain('4/3 Points');
 		expect(metaPill.text()).toContain('Instants');
 		expect(wrapper.text()).toContain('Mono Blue');
@@ -452,12 +465,8 @@ describe('screenDeckDisplay', () => {
 				highlanderPoints: null,
 			}),
 		];
-		companion.value = { name: 'Kaheera, the Orphanguard' };
 		deckStats.value = [
 			{ type: 'Creatures', count: 0 },
-		];
-		deckCounters.value = [
-			{ key: 'energy', label: 'Energy', icon: 'i-lucide-activity' },
 		];
 		highlander.value = null;
 
@@ -466,13 +475,113 @@ describe('screenDeckDisplay', () => {
 		expect(wrapper.get('h2').text()).toBe('Sunday Finals Control');
 		expect(wrapper.get('.deck-header p').text()).toBe('Azorius Control');
 		expect(wrapper.get('[data-testid="mana-colors"]').attributes('data-colors')).toBe('WU');
-		expect(wrapper.text()).toContain('Kaheera, the Orphanguard');
-		expect(wrapper.text()).toContain('Energy');
 		expect(wrapper.text()).toContain('Creatures');
 		expect(wrapper.get('[data-testid="sideboard-section"]').findAll('[data-testid="deck-card"]')).toHaveLength(1);
 		expect(wrapper.find('[data-testid="mainboard-section"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="highlander-total-inline"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="highlander-pointed-cards"]').exists()).toBe(false);
+	});
+
+	// Who and what are each their own line, shown or hidden on its own.
+	it.each([
+		{ config: {}, player: true, deck: true },
+		{
+			config: { showPlayerName: false },
+			player: false,
+			deck: true,
+		},
+		{
+			config: { showDeckName: false },
+			player: true,
+			deck: false,
+		},
+	])('shows the header lines $config', async ({ config, player, deck }) => {
+		mutableConfig = {
+			...mutableConfig,
+			...config,
+		};
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-testid="deck-player-name"]').exists()).toBe(player);
+		expect(wrapper.find('[data-testid="deck-name"]').exists()).toBe(deck);
+	});
+
+	it('shows the details row in its text size with or without its pill', async () => {
+		mutableConfig = { ...mutableConfig, showDeckMetaPill: false, metaPillSize: 22 };
+
+		const wrapper = await mountComponent();
+
+		expect((wrapper.get('[data-testid="deck-meta-pill"]').element as HTMLElement).style.fontSize).toBe('22px');
+	});
+
+	// The companion is the sideboard's first card, tagged, and listed once; with no sideboard it stands alone.
+	it.each([
+		{ name: 'beside a sideboard', config: {}, inSideboard: true },
+		{
+			name: 'with no sideboard shown',
+			config: { board: 'mainboard' },
+			inSideboard: false,
+		},
+	])('shows the companion as a card $name', async ({ config, inSideboard }) => {
+		mutableConfig = {
+			...mutableConfig,
+			...config,
+		};
+		companionCard.value = createCard({ name: 'Lurrus of the Dream-Den', compartment: 'sideboard' });
+		sideboard.value = ['Lurrus of the Dream-Den', 'Force of Will'].map(name => createCard({ name, compartment: 'sideboard' }));
+
+		const wrapper = await mountComponent();
+
+		const holder = wrapper.get(inSideboard ? '[data-testid="sideboard-section"]' : '[data-testid="companion-section"]');
+		const cards = holder.findAll('[data-testid="deck-card"]');
+		expect(cards[0]!.attributes('data-tag')).toBe('Companion');
+		expect(cards.map(card => card.attributes('data-name'))).toEqual(inSideboard
+			? ['Lurrus of the Dream-Den', 'Force of Will']
+			: ['Lurrus of the Dream-Den']);
+	});
+
+	it('hides the companion when it is turned off', async () => {
+		mutableConfig = { ...mutableConfig, showCompanion: false };
+		companionCard.value = createCard({ name: 'Lurrus of the Dream-Den', compartment: 'sideboard' });
+		sideboard.value = [
+			createCard({ name: 'Force of Will', compartment: 'sideboard' }),
+		];
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.findAll('[data-tag="Companion"]')).toHaveLength(0);
+	});
+
+	// Measured, Fit boards share one card size and are sized and placed as one group.
+	it('lays every Fit board out at one card size from the space it measures', async () => {
+		measured.width = 1920;
+		measured.height = 960;
+		mutableConfig = {
+			...mutableConfig,
+			mainboard: {
+				view: 'grid',
+				cardSizing: 'fit',
+				autoColumns: true,
+				alignment: 'left',
+			},
+			sideboard: { view: 'stack', cardSizing: 'fit', alignment: 'bottom' },
+		};
+		mainboard.value = Array.from({ length: 23 }, (_, index) => createCard({ name: `Card ${index}` }));
+		sideboard.value = Array.from({ length: 15 }, (_, index) => createCard({ name: `Side ${index}`, compartment: 'sideboard' }));
+
+		const wrapper = await mountComponent();
+
+		const grid = wrapper.get('[data-testid="mainboard-grid"]');
+		const px = (value: string) => Number.parseFloat(value);
+		const cardWidth = px((wrapper.get('[data-testid="sideboard-stack-column"] .stack-card').element as HTMLElement).style.width);
+		const columns = (grid.get('.grid').element as HTMLElement).style.gridTemplateColumns.match(/^repeat\((\d+), (.+)\)$/)!;
+		expect(columns[1]).toBe(grid.attributes('data-columns'));
+		expect(px(columns[2]!)).toBeCloseTo(cardWidth, 3);
+		expect(px((wrapper.get('[data-testid="sideboard-section"]').element as HTMLElement).style.width)).toBeCloseTo(cardWidth, 3);
+		// The group sits at the mainboard's alignment; the sideboard sits along the mainboard at its own.
+		expect((wrapper.get('.deck-layout-space').element as HTMLElement).style.justifyContent).toBe('start');
+		expect((wrapper.get('[data-testid="sideboard-section"]').element as HTMLElement).style.alignSelf).toBe('end');
 	});
 
 	it('does not render token metadata on the Deck display', async () => {
@@ -498,7 +607,6 @@ describe('screenDeckDisplay', () => {
 		displayedDeckVersion.value = 0;
 		mainboard.value = [];
 		sideboard.value = [];
-		companion.value = null;
 		deckStats.value = [];
 		highlander.value = null;
 

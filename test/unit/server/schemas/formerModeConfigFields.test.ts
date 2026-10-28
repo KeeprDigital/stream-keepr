@@ -28,6 +28,7 @@ describe.each([
 			'cardSize',
 			'statBadgeSize',
 			'dynamicCardSize',
+			'rowsPerPage',
 		],
 		former: {
 			rankBadgeTextColor: '#ffffff',
@@ -37,6 +38,7 @@ describe.each([
 			cardSize: 'large',
 			statBadgeSize: 'small',
 			dynamicCardSize: true,
+			rowsPerPage: 2,
 		},
 		kept: { limit: 12 },
 		patch: { limit: 15 },

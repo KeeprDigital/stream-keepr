@@ -587,8 +587,7 @@ mockNuxtImport('useTopCardsModeData', () => () => {
 		]),
 		currentPage: computed(() => 1),
 		totalPages: computed(() => 2),
-		resolvedColumns: computed(() => 5),
-		pageRowCount: computed(() => 1),
+		pageCapacity: computed(() => 1),
 	};
 });
 
@@ -613,7 +612,8 @@ mockNuxtImport('useDeckModeData', () => () => ({
 		showQuantities: true,
 		showDeckName: true,
 		showDeckColors: false,
-		showDeckStats: false,
+		// Card type counts, so the details row and its pill show.
+		showDeckStats: true,
 		showDeckMetaPill: true,
 		showHighlanderTotal: false,
 		showHighlanderPointedCards: true,
@@ -623,7 +623,7 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	primaryHeader: ref('Alice'),
 	secondaryHeader: ref('Mono Blue'),
 	deckColors: '',
-	companion: ref({ name: 'Lurrus of the Dream-Den' }),
+	companionCard: ref(null),
 	highlander: ref({
 		system: '7ph',
 		status: 'legal',
@@ -641,8 +641,9 @@ mockNuxtImport('useDeckModeData', () => () => ({
 		duplicateCards: [],
 		unknownCards: [],
 	}),
-	deckCounters: ref([]),
-	deckStats: ref([]),
+	deckStats: ref([
+		{ type: 'Instants', count: 12 },
+	]),
 	mainboard: ref([
 		deckCard('Mana Drain', 'mainboard'),
 		deckCard('Force of Will', 'mainboard'),

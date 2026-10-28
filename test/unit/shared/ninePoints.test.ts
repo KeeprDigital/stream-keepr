@@ -6,7 +6,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import { QUANTITY_POSITION_VALUES } from '~~/shared/types/enums';
 import { GRAPHIC_ANCHOR_POINT_VALUES, GRAPHIC_ANIMATION_ORIGIN_VALUES } from '~~/shared/types/graphics';
 import { FEATURE_MATCH_OVERLAY_ANCHOR_VALUES } from '~~/shared/types/screenConfig';
-import { NINE_POINT_VALUES, NINE_POINTS } from '~~/shared/utils/ninePoints';
+import { NINE_POINT_VALUES, NINE_POINTS, ninePointPlacement } from '~~/shared/utils/ninePoints';
 
 describe('nine points', () => {
 	it('lays the table out in reading order across a 3×3 grid', () => {
@@ -40,5 +40,17 @@ describe('nine points', () => {
 		// that point rather than this vocabulary inventing its own spelling.
 		expectTypeOf<QuantityPosition>().toEqualTypeOf<Exclude<NinePoint, 'center'>>();
 		expect([...QUANTITY_POSITION_VALUES]).toEqual(NINE_POINT_VALUES.filter(point => point !== 'center'));
+	});
+});
+
+describe('ninePointPlacement', () => {
+	// A point places a box at its side of each axis, or the middle.
+	it.each([
+		{ point: 'top-left', x: 'start', y: 'start' },
+		{ point: 'center', x: 'center', y: 'center' },
+		{ point: 'bottom', x: 'center', y: 'end' },
+		{ point: 'right', x: 'end', y: 'center' },
+	] as const)('places $point at $x across and $y down', ({ point, x, y }) => {
+		expect(ninePointPlacement(point)).toEqual({ x, y });
 	});
 });

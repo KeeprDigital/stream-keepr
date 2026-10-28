@@ -1676,7 +1676,35 @@ Accepted · 2026-10-28
 
 **A card grid's sizes are its mode's config, not Mode Tokens.** Each one a single display reads moved back beside the control it sizes, which amends ADR-0051's #844 bullet: a Theme Token is shared. Most Played Cards holds `cardWidth`, `cardGap` and `badgeSize`; each Deck board `cardWidth` and `cardGap`, the sideboard `stackReveal`, and the Deck its four text sizes; Card Spotlight `cardWidth`. The three badge shadows read a new `shadow` Foundation Token.
 
-**Nothing is migrated.** The Themes work is not in production, and existing Screens are deleted and set up again rather than carried over. Every replaced field (`dynamicCardSize`, the size presets, `stackOverlap`, `scale`) is a former field, so a stored one reads as the mode's default until the Screen is next written.
+**Nothing is migrated.** The Themes work is not in production, and existing Screens are deleted and set up again rather than carried over. Every replaced field is a former field, so a stored one reads as the mode's default until the Screen is next written:
+
+- `dynamicCardSize`;
+- the size presets;
+- `stackOverlap`;
+- `scale`;
+- `rowsPerPage` on Most Played Cards.
+
+**A Deck's Fit boards are laid out together from the space they measure** (`solveDeckLayout`). A Deck has no pages, so when every board shown is Fit, the Screen measures the space below its header and lays both boards out at one card size: the largest at which both fit.
+
+- **Columns:** each board's columns are chosen alongside the other's. A set column count is kept.
+- **Stack:** a stacked sideboard shows less of each card, down to its name bar (`MIN_STACK_REVEAL_SHARE`), before its cards shrink.
+- **Fuller rows:** of card sizes within 5% of the largest, the fewest empty places in last rows win.
+- **Placement:** the boards are sized exactly and placed as one group at the mainboard's alignment, so the space they leave is shared out around them. The sideboard's `alignment` places it along the mainboard within the group: up or down beside it, across below it. The group keeps the same space to the Screen's edges. A board fitting itself places its cards at its own `alignment`.
+- **First frame:** until the space is measured, each board fits itself.
+
+**Most Played Cards pages by cards.** `cardsPerPage` replaced `rowsPerPage`. Columns no longer change which cards a page holds, so the Screen chooses its auto columns from the grid space it measures, and a page laid out at a full page's capacity keeps its card size.
+
+**The Deck's information is the deck's alone.**
+
+- **Counters:** none are shown.
+- **Companion:** it is a card, the sideboard's first, tagged "Companion" and listed once, or in a column of its own with no sideboard (`showCompanion`).
+- **Header:** the Player's name and the deck's name are each their own line (`showPlayerName`, `showDeckName`).
+- **Visibility:** each board's card shows or hides it, writing the one `board` selection, so the last board shown stays on.
+- **Hidden settings:** a setting that cannot have an effect is not shown:
+  - card points without an Event points system;
+  - the details row's look while the row is empty;
+  - the column count while auto columns choose it;
+  - the sideboard's alignment while both boards are placed together.
 
 ### Why
 

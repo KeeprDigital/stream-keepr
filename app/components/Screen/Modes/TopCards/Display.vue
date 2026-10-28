@@ -1,8 +1,42 @@
 <script setup lang="ts">
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
+import { useElementSize } from '@vueuse/core';
+import { fitColumns } from '~~/shared/utils/cardGrid';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { config, error, isEmpty, headerText, pageEntries, currentPage, totalPages, resolvedColumns, pageRowCount } = useTopCardsModeData();
+const { config, error, isEmpty, headerText, pageEntries, currentPage, totalPages, pageCapacity } = useTopCardsModeData();
+
+// ── Columns, from the space the grid really has ──
+// Pages hold cards, not rows (ADR-0053), so the Screen chooses its columns from
+// the space it measures: Fit auto columns are the count at which a full page's
+// cards are largest; Fixed auto columns are as many as fit across.
+
+/** A name label's height under its card, as Fit sizing allows for it: its line and `gap-1`. */
+const NAME_LABEL_HEIGHT = 28;
+
+const gridElement = ref(null);
+const { width: gridWidth, height: gridHeight } = useElementSize(gridElement);
+
+const columns = computed<number | 'auto-fill'>(() => {
+	if (!config.value.autoColumns)
+		return config.value.columns;
+	if (config.value.cardSizing === 'fixed')
+		return 'auto-fill';
+	if (!gridWidth.value || !gridHeight.value)
+		return config.value.columns;
+	return fitColumns({
+		count: pageCapacity.value,
+		width: gridWidth.value,
+		height: gridHeight.value,
+		gap: config.value.cardGap,
+		labelHeight: config.value.showCardNames ? NAME_LABEL_HEIGHT : 0,
+	});
+});
+
+/** A full page's rows, so a short last page keeps the same card size. */
+const rows = computed(() => Math.ceil(pageCapacity.value / (typeof columns.value === 'number'
+	? columns.value
+	: 1)));
 
 /** Set on the root, so card names and a card without an image take it. */
 const displayStyle = {
@@ -74,12 +108,14 @@ function statText(entry: CardBreakdownEntry): string | null {
 			</div>
 
 			<ScreenCardGrid
+				ref="gridElement"
 				class="top-cards-grid"
 				:sizing="config.cardSizing"
-				:columns="resolvedColumns"
-				:rows="pageRowCount"
+				:columns="columns"
+				:rows="rows"
 				:card-width="cardWidth"
 				:gap="cardGap"
+				:label-height="config.showCardNames ? 'calc(1lh + 0.25rem)' : '0px'"
 				data-testid="top-cards-grid"
 			>
 				<ScreenModesTopCardsCard

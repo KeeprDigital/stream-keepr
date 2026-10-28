@@ -1,5 +1,4 @@
 import type { CardBreakdownEntry, CardBreakdownResponse } from '~~/shared/types/metagame';
-import { topCardsGridRows } from '~~/shared/screenModeConfigs/topCards';
 import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
@@ -42,23 +41,10 @@ export function useTopCardsModeData() {
 	const entries = computed(() => cardData.value?.entries ?? []);
 
 	// ── Pagination ──
-	// A Page Rotation over the grid's rows, so each page holds whole rows of
-	// its columns' cards and `rowsPerPage` (the declared page size) counts them.
-	// Auto columns are chosen for every card and a page's rows at once, then
-	// paged (ADR-0053), so they never depend on the page they lay out.
-	const resolvedColumns = useCardGridColumns({
-		sizing: () => config.value.cardSizing,
-		autoColumns: () => config.value.autoColumns,
-		columns: () => config.value.columns,
-		count: () => entries.value.length,
-		maxRows: () => config.value.rowsPerPage,
-		cardWidth: () => config.value.cardWidth,
-		gap: () => config.value.cardGap,
-	});
-	const gridRows = computed(() => topCardsGridRows<RankedTopCard>(
-		entries.value.map((entry, index) => ({ entry, rank: index + 1 })),
-		resolvedColumns.value,
-	));
+	// A Page Rotation over the ranked cards, `cardsPerPage` (the declared page
+	// size) a page. Columns are the Screen's to lay out in the space it measures;
+	// they never change which cards a page holds (ADR-0053).
+	const rankedCards = computed(() => entries.value.map((entry, index) => ({ entry, rank: index + 1 })));
 	const {
 		rowCount,
 		pageData,
@@ -67,10 +53,10 @@ export function useTopCardsModeData() {
 		setPage,
 		nextPage,
 		prevPage,
-	} = usePaginatedScreenMode({ mode: 'top-cards', config, rows: gridRows });
-	const pageEntries = computed(() => pageData.value.flat());
-	/** The rows a Fit grid shares its height between: a full page's, so a short last page keeps its card size. */
-	const pageRowCount = computed(() => Math.max(1, Math.min(config.value.rowsPerPage, rowCount.value)));
+	} = usePaginatedScreenMode({ mode: 'top-cards', config, rows: rankedCards });
+	const pageEntries = computed<RankedTopCard[]>(() => pageData.value);
+	/** The cards a full page holds, which every page lays out as, so a short last page keeps its size. */
+	const pageCapacity = computed(() => Math.max(1, Math.min(config.value.cardsPerPage, entries.value.length)));
 
 	// ── Header ──
 	const headerText = computed(() => {
@@ -108,8 +94,7 @@ export function useTopCardsModeData() {
 		cardData,
 		entries,
 		pageEntries,
-		pageRowCount,
-		resolvedColumns,
+		pageCapacity,
 		rowCount,
 		currentPage,
 		totalPages,

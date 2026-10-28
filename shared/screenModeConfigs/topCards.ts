@@ -16,18 +16,11 @@ import {
 	headerConfigShape,
 	metagameArchetypeFilterField,
 	metagameScopeShapeWithoutMinPoints,
-	pageRotationPageSize,
 	pageRotationShape,
 } from './subShapes';
 
 /** The most cards a Most Played Cards Screen ranks. */
 const TOP_CARDS_MAX_LIMIT = 60;
-
-/**
- * The most grid rows a Most Played Cards grid can have: every card a Screen can rank,
- * in one column. As the default page size, it holds any grid on one page.
- */
-const TOP_CARDS_MAX_GRID_ROWS = TOP_CARDS_MAX_LIMIT;
 
 /**
  * The Most Played Cards Screen Mode's config contract: a ranked grid of the most played
@@ -36,9 +29,10 @@ const TOP_CARDS_MAX_GRID_ROWS = TOP_CARDS_MAX_LIMIT;
  * it never offered; `excludedCardTypes` is applied server-side before `limit`,
  * so a filtered top N still fills N slots.
  *
- * Its Page Rotation pages the grid by whole grid rows: `rowsPerPage` rows of
- * `columns` cards each. The default holds the most cards a Screen can rank in
- * one column, so a Screen that never set it shows every card on one page.
+ * Its Page Rotation pages the ranking by cards: `cardsPerPage` a page, however
+ * many columns the Screen lays them out in, so a page count never depends on
+ * the space the Screen measures (ADR-0053). The default is the most cards a
+ * Screen can rank, so a Screen that never set it shows every card on one page.
  *
  * Its badge colours (#823) are Mode Tokens; the fields it once held for them
  * are former fields, which a stored config may still carry. Its card width,
@@ -68,7 +62,7 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	cardGap: editorField(z.number().int().min(0).max(100), { label: 'Card gap' }),
 
 	// Pagination: grid rows per page
-	rowsPerPage: pageRotationPageSize,
+	cardsPerPage: editorField(z.number().int().min(1).max(TOP_CARDS_MAX_LIMIT), { label: 'Cards per page' }),
 	...pageRotationShape,
 
 	// Header
@@ -95,7 +89,7 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	cardSizing: 'fit',
 	cardWidth: 160,
 	cardGap: 12,
-	rowsPerPage: TOP_CARDS_MAX_GRID_ROWS,
+	cardsPerPage: TOP_CARDS_MAX_LIMIT,
 	...DEFAULT_PAGE_ROTATION,
 	...DEFAULT_HEADER_CONFIG,
 	showCardNames: true,
@@ -111,21 +105,9 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 		'cardSize',
 		'statBadgeSize',
 		'dynamicCardSize',
+		// A page held whole grid rows; it holds cards now (ADR-0053).
+		'rowsPerPage',
 	],
 });
 
 export type TopCardsModeConfig = ScreenModeConfigOf<typeof topCardsModeConfigContract>;
-
-/** How many grid rows `cardCount` cards fill, in rows of `columns` cards. */
-function topCardsGridRowCount(cardCount: number, columns: number): number {
-	return Math.ceil(cardCount / Math.max(1, columns));
-}
-
-/** `cards` laid out as the grid's rows of `columns` cards, the last row possibly short. */
-export function topCardsGridRows<T>(cards: readonly T[], columns: number): T[][] {
-	const width = Math.max(1, columns);
-	return Array.from({
-		length: topCardsGridRowCount(cards.length, width),
-	}, (_, row) =>
-		cards.slice(row * width, (row + 1) * width));
-}

@@ -40,7 +40,7 @@ const defaultConfig = {
 	cardWidth: 160,
 	cardGap: 12,
 	badgeSize: 14,
-	rowsPerPage: 60,
+	cardsPerPage: 60,
 	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
 	showHeader: true,
@@ -267,19 +267,19 @@ describe('screenTopCardsSettings', () => {
 
 	// The rotation writes themselves are `rotationConfigWrites`' and the Pagination card's tests.
 	describe('page rotation', () => {
-		it('counts pages of whole grid rows from the cards the Screen reads and its columns', async () => {
+		it('counts pages of cards from the cards the Screen reads, whatever its columns', async () => {
 			mockConfig.value = {
 				...mockConfig.value,
 				limit: 12,
 				columns: 5,
-				rowsPerPage: 1,
+				cardsPerPage: 4,
 			};
 			mockFetch.mockResolvedValue(ranking(12));
 
 			const wrapper = await mountComponent();
 
 			expect(mockFetch).toHaveBeenCalledWith('/api/screen-output/events/1/screens/1/top-cards', expect.anything());
-			// 12 cards in rows of 5 is 3 grid rows, one per page.
+			// 12 cards, 4 a page.
 			expect(wrapper.text()).toContain('Page 1 of 3');
 		});
 
@@ -288,7 +288,7 @@ describe('screenTopCardsSettings', () => {
 				...mockConfig.value,
 				limit: 12,
 				columns: 5,
-				rowsPerPage: 1,
+				cardsPerPage: 5,
 				excludedCardTypes: ['Land', 'Creature'],
 			};
 			// Only 7 cards are left once Lands and Creatures are excluded.
@@ -296,17 +296,27 @@ describe('screenTopCardsSettings', () => {
 
 			const wrapper = await mountComponent();
 
-			// 7 cards in rows of 5 is 2 grid rows, one per page, as the Screen renders.
+			// 7 cards, 5 a page, as the Screen renders.
 			expect(wrapper.text()).toContain('Page 1 of 2');
 		});
 
-		it('returns to page 1 when the columns change which cards each page holds, without re-anchoring', async () => {
+		// Columns never change which cards a page holds, so a layout edit keeps the page on air.
+		it.each([
+			{
+				label: 'Columns',
+				patch: { columns: 4 },
+			},
+			{
+				label: 'Card gap',
+				patch: { cardGap: 20 },
+			},
+		])('keeps the page when the $label change', async ({ label, patch }) => {
 			mockConfig.value = { ...mockConfig.value, autoPageEnabled: true, currentPage: 2 };
 			const wrapper = await mountComponent();
 
-			numberInput(wrapper, 'Columns').vm.$emit('update:modelValue', 4);
+			numberInput(wrapper, label).vm.$emit('update:modelValue', Object.values(patch)[0]);
 
-			expect(mockUpdateConfig).toHaveBeenCalledWith({ columns: 4, currentPage: 1 });
+			expect(mockUpdateConfig).toHaveBeenCalledWith(patch);
 		});
 	});
 
@@ -321,23 +331,23 @@ describe('screenTopCardsSettings', () => {
 			expect(mockUpdateConfig).toHaveBeenCalledWith({ cardSizing: 'fixed' });
 		});
 
-		// Auto columns change which cards each page holds, so the rotation returns to page 1.
-		it('turns auto columns on from page 1', async () => {
+		it('turns auto columns on', async () => {
 			const wrapper = await mountComponent();
 
 			await control(wrapper, 'Auto columns', ScreenSettingsToggleStub).trigger('click');
 
-			expect(mockUpdateConfig).toHaveBeenCalledWith({ autoColumns: true, currentPage: 1 });
+			expect(mockUpdateConfig).toHaveBeenCalledWith({ autoColumns: true });
 		});
 
+		// Auto columns choose the count, so the count is offered only while they are off.
 		it.each([
-			{ autoColumns: false, disabled: 'false' },
-			{ autoColumns: true, disabled: 'true' },
-		])('leaves the column count editable only while auto columns is $autoColumns', async ({ autoColumns, disabled }) => {
+			{ autoColumns: false, offered: true },
+			{ autoColumns: true, offered: false },
+		])('offers a column count while auto columns is $autoColumns: $offered', async ({ autoColumns, offered }) => {
 			mockConfig.value = { ...mockConfig.value, autoColumns };
 			const wrapper = await mountComponent();
 
-			expect(numberInput(wrapper, 'Columns').attributes('aria-disabled')).toBe(disabled);
+			expect(wrapper.findAll('[data-testid="form-field"]').some(field => field.text().includes('Columns'))).toBe(offered);
 		});
 
 		// Each size sits beside the control it sizes and writes that one field (ADR-0053).
@@ -361,16 +371,6 @@ describe('screenTopCardsSettings', () => {
 			numberInput(wrapper, label).vm.$emit('update:modelValue', Object.values(patch)[0]);
 
 			expect(mockUpdateConfig).toHaveBeenCalledWith(patch);
-		});
-
-		// With auto columns on, a size changes the columns, and so which cards each page holds.
-		it('returns to page 1 when a size changes the auto columns', async () => {
-			mockConfig.value = { ...mockConfig.value, cardSizing: 'fixed', autoColumns: true };
-			const wrapper = await mountComponent();
-
-			numberInput(wrapper, 'Card width').vm.$emit('update:modelValue', 200);
-
-			expect(mockUpdateConfig).toHaveBeenCalledWith({ cardWidth: 200, currentPage: 1 });
 		});
 
 		// A Fit grid sizes its cards to the screen, so it offers no width.

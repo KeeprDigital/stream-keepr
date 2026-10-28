@@ -83,12 +83,12 @@ describe('screenTopCardsCard', () => {
 		expect(wrapper.get('[data-testid="top-cards-name"]').text()).toBe('Lightning Bolt');
 	});
 
-	// Fixed takes its width; fit fits its card, badges and all, into its grid cell; fill takes its column.
+	// Fixed takes its width; fill and fit take their column, which a Fit grid sizes to the card.
 	it.each([
-		{ sizing: 'fixed', width: '160px', fitted: false },
-		{ sizing: 'fill', width: '', fitted: false },
-		{ sizing: 'fit', width: '', fitted: true },
-	] as const)('sizes a $sizing card', ({ sizing, width, fitted }) => {
+		{ sizing: 'fixed', width: '160px' },
+		{ sizing: 'fill', width: '' },
+		{ sizing: 'fit', width: '' },
+	] as const)('sizes a $sizing card', ({ sizing, width }) => {
 		const wrapper = mount(Card, {
 			props: { ...baseProps, sizing },
 		});
@@ -96,6 +96,5 @@ describe('screenTopCardsCard', () => {
 		const item = wrapper.get('[data-testid="top-cards-item"]');
 		expect(item.attributes('data-sizing')).toBe(sizing);
 		expect((item.element as HTMLElement).style.width).toBe(width);
-		expect(wrapper.find('[data-card-fit] [data-testid="top-cards-rank-badge"]').exists()).toBe(fitted);
 	});
 });

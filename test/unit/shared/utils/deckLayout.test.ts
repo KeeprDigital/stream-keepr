@@ -1,0 +1,154 @@
+import type { DeckLayoutGridBoard, DeckLayoutInput, DeckLayoutStackBoard } from '~~/shared/utils/deckLayout';
+import { describe, expect, it } from 'vitest';
+import { CARD_ASPECT } from '~~/shared/utils/cardGrid';
+import { MIN_STACK_REVEAL_SHARE, solveDeckLayout } from '~~/shared/utils/deckLayout';
+
+function grid(count: number, columns: number | null = null, labelHeight = 0): DeckLayoutGridBoard {
+	return {
+		view: 'grid',
+		count,
+		gap: 8,
+		columns,
+		labelHeight,
+	};
+}
+
+function stack(count: number, reveal = 30): DeckLayoutStackBoard {
+	return {
+		view: 'stack',
+		count,
+		reveal,
+		labelHeight: 36,
+	};
+}
+
+function space(input: Partial<DeckLayoutInput>): DeckLayoutInput {
+	return {
+		width: 1920,
+		height: 960,
+		boardGap: 24,
+		placement: 'beside',
+		mainboard: null,
+		sideboard: null,
+		...input,
+	};
+}
+
+/** How far a solved layout reaches across and down: the boards beside or below each other. */
+function extent(input: DeckLayoutInput) {
+	const layout = solveDeckLayout(input)!;
+	const boards = [layout.mainboard, layout.sideboard].filter(board => board !== null);
+	const between = boards.length > 1
+		? input.boardGap
+		: 0;
+	return input.placement === 'beside'
+		? {
+				width: boards.reduce((sum, board) => sum + board.width, 0) + between,
+				height: Math.max(...boards.map(board => board.height)),
+			}
+		: {
+				width: Math.max(...boards.map(board => board.width)),
+				height: boards.reduce((sum, board) => sum + board.height, 0) + between,
+			};
+}
+
+describe('solveDeckLayout', () => {
+	// Every board shares one card size, and together they fit the space they share.
+	it.each([
+		{
+			name: 'a grid beside a stack',
+			input: space({
+				mainboard: grid(23),
+				sideboard: stack(15),
+			}),
+		},
+		{
+			name: 'two grids beside each other',
+			input: space({
+				mainboard: grid(23),
+				sideboard: grid(15, null, 36),
+			}),
+		},
+		{
+			name: 'two grids, one below the other',
+			input: space({
+				placement: 'below',
+				mainboard: grid(23),
+				sideboard: grid(15, null, 36),
+			}),
+		},
+		{
+			name: 'a mainboard alone',
+			input: space({
+				mainboard: grid(40),
+			}),
+		},
+	])('fits $name inside its space', ({ input }) => {
+		const { width, height } = extent(input);
+
+		expect(width).toBeLessThanOrEqual(input.width + 0.001);
+		expect(height).toBeLessThanOrEqual(input.height + 0.001);
+	});
+
+	it('gives the mainboard and sideboard one card size', () => {
+		const layout = solveDeckLayout(space({
+			mainboard: grid(23),
+			sideboard: stack(15),
+		}))!;
+
+		expect(layout.sideboard!.width).toBe(layout.cardWidth);
+		expect(layout.mainboard!.width).toBeCloseTo(layout.mainboard!.columns * layout.cardWidth + (layout.mainboard!.columns - 1) * 8);
+	});
+
+	// A stack shows less of each card before its cards shrink, never less than the name bar.
+	it.each([
+		{ name: 'keeps the set reveal while it fits', height: 1400, compressed: false },
+		{ name: 'shows less of each card where the set reveal would not fit', height: 700, compressed: true },
+	])('$name', ({ height, compressed }) => {
+		const layout = solveDeckLayout(space({
+			height,
+			mainboard: grid(23, 8),
+			sideboard: stack(15, 60),
+		}))!;
+		const reveal = layout.sideboard!.view === 'stack'
+			? layout.sideboard!.reveal
+			: NaN;
+
+		expect(reveal < 60).toBe(compressed);
+		expect(reveal).toBeGreaterThanOrEqual(MIN_STACK_REVEAL_SHARE * (layout.cardWidth / CARD_ASPECT) - 0.001);
+	});
+
+	// Of card sizes within 5% of the largest, the fewest empty places in last rows win.
+	it.each([
+		{ count: 13, columns: 7 },
+		{ count: 12, columns: 6 },
+	])('lays $count cards out in $columns columns', ({ count, columns }) => {
+		expect(solveDeckLayout(space({
+			mainboard: grid(count),
+		}))!.mainboard!.columns).toBe(columns);
+	});
+
+	it('keeps a board\'s own column count', () => {
+		expect(solveDeckLayout(space({
+			mainboard: grid(23, 4),
+			sideboard: stack(15),
+		}))!.mainboard!.columns).toBe(4);
+	});
+
+	it.each([
+		{
+			name: 'no boards',
+			input: space({}),
+		},
+		{
+			name: 'an unmeasured space',
+			input: space({
+				width: 0,
+				height: 0,
+				mainboard: grid(10),
+			}),
+		},
+	])('lays out nothing for $name', ({ input }) => {
+		expect(solveDeckLayout(input)).toBeNull();
+	});
+});

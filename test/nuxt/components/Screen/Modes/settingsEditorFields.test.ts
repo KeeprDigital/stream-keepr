@@ -21,6 +21,12 @@ const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 	'broadcast-graphics': 'its editor edits the authored graphics stack, the Graphic Channels list, and the Broadcast Graphics Background: one Animation Effect selection, a union field the shared Animation Effect editor edits from its catalogue schema',
 };
 
+// Fields a scalar control writes without being that field's own control, and why.
+const BESPOKE_CONTROLS: Record<string, string> = {
+	// Each board's own show toggle writes the one board selection both share.
+	'deck.board': 'the Mainboard and Sideboard show toggles',
+};
+
 // Values a contract's select field allows that its editor does not offer.
 const OPTIONS_NOT_OFFERED: Record<string, readonly string[]> = {
 	// Shared Metagame vocabulary: the Metagame page sorts by it; this editor never offered it.
@@ -197,8 +203,9 @@ mockNuxtImport('useBroadcastDeckListStore', () => () => ({
 	summaries: [],
 	loadCollection: vi.fn(),
 }));
+// A points system, so the Deck editor offers its card point settings.
 mockNuxtImport('useEventStore', () => () => ({
-	event: { id: 1, game: 'mtg' },
+	event: { id: 1, game: 'mtg', pointsSystem: '7ph' },
 	$reset: vi.fn(),
 }));
 mockNuxtImport('usePlayerDeckCache', () => () => ({
@@ -393,6 +400,8 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 					continue; // an Event Reference picker stays bespoke (ADR-0038)
 
 				const key = path.join('.');
+				if (BESPOKE_CONTROLS[`${mode}.${key}`])
+					continue;
 				const field = fields.get(key);
 				const where = `${mode} editor control writing ${key}`;
 				expect(field, `${where}: its contract field carries no editor metadata`).toBeDefined();

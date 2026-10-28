@@ -15,7 +15,7 @@ function clampColumns(columns: number): number {
  * fewest pages win, then the fewest columns. It chooses only the count: a Fit
  * grid sizes its cards from the space it is given, so the area need only be close.
  */
-export function fitColumns({ count, width, height, gap, maxRows = Infinity }: { count: number; width: number; height: number; gap: number; maxRows?: number }): number {
+export function fitColumns({ count, width, height, gap, maxRows = Infinity, labelHeight = 0 }: { count: number; width: number; height: number; gap: number; maxRows?: number; labelHeight?: number }): number {
 	let best = 1;
 	let bestWidth = -Infinity;
 	let bestPages = Infinity;
@@ -24,7 +24,7 @@ export function fitColumns({ count, width, height, gap, maxRows = Infinity }: { 
 		const pages = Math.ceil(count / (columns * rows));
 		const cardWidth = Math.min(
 			(width - (columns - 1) * gap) / columns,
-			((height - (rows - 1) * gap) / rows) * CARD_ASPECT,
+			((height - (rows - 1) * gap) / rows - labelHeight) * CARD_ASPECT,
 		);
 		if (cardWidth > bestWidth || (cardWidth === bestWidth && pages < bestPages)) {
 			best = columns;

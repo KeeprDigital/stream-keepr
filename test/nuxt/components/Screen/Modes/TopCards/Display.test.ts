@@ -1,8 +1,22 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
+import { fitColumns } from '~~/shared/utils/cardGrid';
 import Display from '~/components/Screen/Modes/TopCards/Display.vue';
+
+// The space the grid measures; 0 until it is laid out.
+const measured = vi.hoisted(() => ({ width: 0, height: 0 }));
+vi.mock('@vueuse/core', async (importOriginal) => {
+	const { ref } = await import('vue');
+	return {
+		...await importOriginal<typeof import('@vueuse/core')>(),
+		useElementSize: () => ({
+			width: ref(measured.width),
+			height: ref(measured.height),
+		}),
+	};
+});
 
 const defaultConfig = {
 	scope: 'all',
@@ -53,8 +67,7 @@ const entries = ref<any[]>([
 const pageEntries = ref<any[] | null>(null);
 const currentPage = ref(1);
 const totalPages = ref(1);
-const resolvedColumns = ref(5);
-const pageRowCount = ref(1);
+const pageCapacity = ref(2);
 
 mockNuxtImport('useTopCardsModeData', () => () => ({
 	config: computed(() => config.value),
@@ -67,8 +80,7 @@ mockNuxtImport('useTopCardsModeData', () => () => ({
 	pageEntries: computed(() => pageEntries.value ?? entries.value.map((entry, index) => ({ entry, rank: index + 1 }))),
 	currentPage: computed(() => currentPage.value),
 	totalPages: computed(() => totalPages.value),
-	resolvedColumns: computed(() => resolvedColumns.value),
-	pageRowCount: computed(() => pageRowCount.value),
+	pageCapacity: computed(() => pageCapacity.value),
 }));
 
 const ScreenModeBaseStub = defineComponent({
@@ -132,8 +144,9 @@ describe('screenTopCardsDisplay', () => {
 		pageEntries.value = null;
 		currentPage.value = 1;
 		totalPages.value = 1;
-		resolvedColumns.value = 5;
-		pageRowCount.value = 1;
+		pageCapacity.value = 2;
+		measured.width = 0;
+		measured.height = 0;
 	});
 
 	it('renders only the current page, ranking each card across the whole ranking', async () => {
@@ -179,21 +192,59 @@ describe('screenTopCardsDisplay', () => {
 		expect(wrapper.find('.top-cards-title').exists()).toBe(false);
 	});
 
-	// A Fit grid shares the height between a page's rows; a Fixed grid has no rows to share.
+	// Columns come from the space the grid measures: Fit picks the largest cards for a
+	// full page, Fixed fits as many as there is room for, and set columns stay set.
 	it.each([
-		{ cardSizing: 'fit', rows: '2' },
-		{ cardSizing: 'fixed', rows: undefined },
-	])('lays a $cardSizing grid out in the columns its data resolves', async ({ cardSizing, rows }) => {
-		config.value = { ...config.value, cardSizing };
-		resolvedColumns.value = 4;
-		pageRowCount.value = 2;
+		{
+			name: 'set columns',
+			cardSizing: 'fit',
+			autoColumns: false,
+			size: [1920, 900],
+			columns: '5',
+			rows: '2',
+		},
+		{
+			name: 'Fit auto columns, measured',
+			cardSizing: 'fit',
+			autoColumns: true,
+			size: [600, 1400],
+			columns: String(fitColumns({
+				count: 10,
+				width: 600,
+				height: 1400,
+				gap: 12,
+				labelHeight: 28,
+			})),
+			rows: undefined,
+		},
+		{
+			name: 'Fit auto columns, before the grid is measured',
+			cardSizing: 'fit',
+			autoColumns: true,
+			size: [0, 0],
+			columns: '5',
+			rows: '2',
+		},
+		{
+			name: 'Fixed auto columns',
+			cardSizing: 'fixed',
+			autoColumns: true,
+			size: [1920, 900],
+			columns: 'auto-fill',
+			rows: undefined,
+		},
+	])('lays the grid out in its columns: $name', async ({ cardSizing, autoColumns, size, columns, rows }) => {
+		config.value = { ...config.value, cardSizing, autoColumns };
+		pageCapacity.value = 10;
+		[measured.width, measured.height] = size as [number, number];
 
 		const wrapper = await mountComponent();
 
 		const grid = wrapper.get('[data-testid="top-cards-grid"]');
 		expect(grid.attributes('data-card-sizing')).toBe(cardSizing);
-		expect(grid.attributes('data-columns')).toBe('4');
-		expect(grid.attributes('data-rows')).toBe(rows);
+		expect(grid.attributes('data-columns')).toBe(columns);
+		if (rows)
+			expect(grid.attributes('data-rows')).toBe(rows);
 		expect(wrapper.findAll('[data-testid="top-cards-item"]').map(item => item.attributes('data-sizing'))).toEqual([cardSizing, cardSizing]);
 	});
 

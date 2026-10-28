@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import type { QuantityPosition } from '~~/shared/types/enums';
 import type { ResolvedDeckBoardLayout } from '~~/shared/types/screenConfig';
+import type { DeckLayout, DeckLayoutGridBoard, DeckLayoutStackBoard } from '~~/shared/utils/deckLayout';
 import type { DeckListCardWithData } from '~/types/card/deckList';
+import { useElementSize } from '@vueuse/core';
 import { DEFAULT_DECK_TEXT_SIZES, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
+import { solveDeckLayout } from '~~/shared/utils/deckLayout';
 import { formatHighlanderPointedCardNote, formatHighlanderPointsLabel } from '~~/shared/utils/highlander';
 import { getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
+import { ninePointPlacement } from '~~/shared/utils/ninePoints';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
 const {
@@ -12,9 +16,8 @@ const {
 	primaryHeader,
 	secondaryHeader,
 	deckColors,
-	companion,
+	companionCard,
 	highlander,
-	deckCounters = computed(() => []),
 	deckStats,
 	mainboard,
 	sideboard,
@@ -110,6 +113,22 @@ interface VisibleBoard {
 	showLabel: boolean;
 }
 
+/** The companion shows as a card, never in the deck information: first among the sideboard's. */
+const shownCompanion = computed(() => config.value.showCompanion !== false
+	? companionCard.value
+	: null);
+
+/** The sideboard's cards, its companion first and not listed twice. */
+const sideboardCards = computed(() => {
+	const companion = shownCompanion.value;
+	return companion
+		? [
+				companion,
+				...sideboard.value.filter(card => card.name !== companion.name),
+			]
+		: sideboard.value;
+});
+
 const visibleBoards = computed<VisibleBoard[]>(() => {
 	const boards: VisibleBoard[] = [];
 	if (showMainboard.value) {
@@ -127,7 +146,7 @@ const visibleBoards = computed<VisibleBoard[]>(() => {
 		boards.push({
 			key: 'sideboard',
 			label: 'Sideboard',
-			cards: sideboard.value,
+			cards: sideboardCards.value,
 			layout: resolvedBoards.value.sideboard,
 			view: view === 'stack' && !sideboardBeside.value
 				? 'grid'
@@ -144,25 +163,118 @@ function isFit(section: VisibleBoard): boolean {
 	return section.layout.cardSizing === 'fit';
 }
 
+// ── Fit: the whole deck at one card size ──
+// When every board shown is Fit, the boards are laid out together from the
+// space they really have (they have no pages to agree on): one card size, the
+// largest at which both fit, with each board's columns chosen alongside the
+// other's and a stacked sideboard showing less of each card before shrinking.
+// Until that space is measured, each board fits itself.
+
+/** A board label's height: its `text-lg` line and `mb-2`. */
+const BOARD_LABEL_HEIGHT = 36;
+/** The space between boards: the layout's `gap-6`. */
+const BOARD_GAP = 24;
+
+const layoutElement = ref<HTMLElement | null>(null);
+const { width: layoutWidth, height: layoutHeight } = useElementSize(layoutElement);
+
+function layoutBoard(section: VisibleBoard): DeckLayoutGridBoard | DeckLayoutStackBoard {
+	const labelHeight = section.showLabel ? BOARD_LABEL_HEIGHT : 0;
+	return section.view === 'stack'
+		? {
+				view: 'stack',
+				count: section.cards.length,
+				reveal: resolvedBoards.value.sideboard.stackReveal,
+				labelHeight,
+			}
+		: {
+				view: 'grid',
+				count: section.cards.length,
+				gap: section.layout.cardGap,
+				columns: section.layout.autoColumns ? null : section.layout.columns,
+				labelHeight,
+			};
+}
+
+const solvedLayout = computed<DeckLayout | null>(() => {
+	const boards = visibleBoards.value;
+	if (boards.length === 0 || boards.some(section => !isFit(section) || section.view === 'list'))
+		return null;
+	const mainboard = boards.find(section => section.key === 'mainboard');
+	const sideboard = boards.find(section => section.key === 'sideboard');
+	return solveDeckLayout({
+		width: layoutWidth.value,
+		height: layoutHeight.value,
+		boardGap: BOARD_GAP,
+		placement: besideActive.value ? 'beside' : 'below',
+		mainboard: mainboard
+			? layoutBoard(mainboard) as DeckLayoutGridBoard
+			: null,
+		sideboard: sideboard
+			? layoutBoard(sideboard)
+			: null,
+	});
+});
+
+function solvedBoard(section: VisibleBoard) {
+	return solvedLayout.value?.[section.key] ?? null;
+}
+
 /** A grid's columns; a Fixed grid with auto columns fits as many as there is room for. */
 function gridColumns(section: VisibleBoard): number | 'auto-fill' {
+	const solved = solvedBoard(section);
+	if (solved?.view === 'grid')
+		return solved.columns;
 	return !isFit(section) && section.layout.autoColumns
 		? 'auto-fill'
 		: boardColumns[section.key].value;
 }
 
 function gridRows(section: VisibleBoard): number {
+	const solved = solvedBoard(section);
+	if (solved?.view === 'grid')
+		return solved.rows;
 	return Math.max(1, Math.ceil(section.cards.length / boardColumns[section.key].value));
 }
+
+/** The one card width the solved deck uses, or none until its space is measured. */
+const solvedCardWidth = computed(() => solvedLayout.value
+	? `${solvedLayout.value.cardWidth}px`
+	: undefined);
+
+/**
+ * A solved deck's boards sit together as one group at the mainboard's
+ * alignment, so the space they leave is shared out around the group: the
+ * sideboard sits as far from its edge as the mainboard from its own.
+ */
+const solvedLayoutStyle = computed(() => {
+	if (!solvedLayout.value)
+		return undefined;
+	const { x, y } = ninePointPlacement(resolvedBoards.value[showMainboard.value ? 'mainboard' : 'sideboard'].alignment);
+	return { justifyContent: x, alignItems: y };
+});
 
 /**
  * In the beside row each board's share of the width follows its column count,
  * so a column reads about the same width on either side. A Fixed beside stack
  * stays content-sized, its strip at its card width; a Fit one is one column
  * wide. Boards below each other share the height a Fit grid needs by its rows,
- * and anything else takes its own height.
+ * and anything else takes its own height. A solved deck gives every board
+ * exactly its size, and the boards are placed together (`solvedLayoutStyle`).
  */
 function boardFlexStyle(section: VisibleBoard) {
+	const solved = solvedBoard(section);
+	if (solved) {
+		// Within the group, each board sits along the other at its own alignment:
+		// up and down beside it, across below it.
+		const { x, y } = ninePointPlacement(section.layout.alignment);
+		return {
+			flex: 'none',
+			width: `${solved.width}px`,
+			height: `${solved.height}px`,
+			alignSelf: besideActive.value ? y : x,
+		};
+	}
 	if (!besideActive.value) {
 		return isFit(section) && section.view === 'grid'
 			? { flex: `${gridRows(section)} 1 0%` }
@@ -195,14 +307,14 @@ const highlanderTotalLabel = computed(() =>
 		: '',
 );
 const highlanderPointedCardsList = computed(() => highlander.value?.pointedCards ?? []);
-const showTopHeader = computed(() =>
-	config.value.showDeckName
-	|| (config.value.showDeckColors && !!deckColors),
-);
+// The header's two lines, each its own choice: who (the Player, or a list's
+// name) and what (the deck's name, or a list's archetype).
+const showPlayerName = computed(() => config.value.showPlayerName !== false && !!primaryHeader.value);
+const showDeckName = computed(() => config.value.showDeckName !== false && !!secondaryHeader.value);
+const showDeckColors = computed(() => config.value.showDeckColors !== false && !!deckColors.value);
+const showTopHeader = computed(() => showPlayerName.value || showDeckName.value || showDeckColors.value);
 const showDeckMeta = computed(() =>
 	(config.value.showDeckStats && deckStats.value.length > 0)
-	|| !!companion.value
-	|| deckCounters.value.length > 0
 	|| showHighlanderTotal.value,
 );
 const showHeader = computed(() =>
@@ -275,9 +387,12 @@ const highlanderListBadgeStyle = computed(() => ({
 	boxShadow: `0 1px 3px 0 ${modeTokenVar('deck', 'badge-shadow')}`,
 }));
 
+/** The deck details row's text size applies with or without its pill. */
 const deckMetaPillStyle = computed(() => {
 	if (!showDeckMetaPill.value) {
-		return {};
+		return {
+			fontSize: textSize('metaPillSize'),
+		};
 	}
 
 	return {
@@ -342,7 +457,22 @@ function cardWidth(section: VisibleBoard): string {
  * rest. The last card shows whole. In Fit, every card takes the width at which
  * the whole strip, reveals and last card, fits the strip's height.
  */
+/** The strip places its stack at its board's alignment, or from its start once the stack overflows. */
+function stackAlignmentStyle(section: VisibleBoard) {
+	const { x, y } = ninePointPlacement(section.layout.alignment);
+	return { alignItems: `safe ${x}`, justifyContent: `safe ${y}` };
+}
+
 function stackCardStyle(section: VisibleBoard, index: number) {
+	const solved = solvedBoard(section);
+	if (solved?.view === 'stack') {
+		return {
+			...(index < section.cards.length - 1
+				? { height: `${solved.reveal}px` }
+				: {}),
+			width: `${solved.width}px`,
+		};
+	}
 	return {
 		...(index < section.cards.length - 1
 			? { height: stackReveal.value }
@@ -359,7 +489,7 @@ function stackCardStyle(section: VisibleBoard, index: number) {
 		:error="error"
 	>
 		<!-- Deck Content -->
-		<div class="deck-content overflow-hidden w-full h-full" :style="displayStyle">
+		<div class="deck-content w-full h-full" :style="displayStyle">
 			<transition mode="out-in" name="deck-swap" @after-leave="handleDeckAfterLeave">
 				<div v-if="showDeckBody && hasDisplayedDeck" :key="displayedDeckVersion" class="deck-body flex flex-col w-full h-full">
 					<!-- Header -->
@@ -368,43 +498,28 @@ function stackCardStyle(section: VisibleBoard, index: number) {
 							v-if="showTopHeader"
 							class="flex flex-wrap items-center justify-center gap-3"
 						>
-							<template v-if="config.showDeckName">
-								<h2 class="text-xl" :style="titleStyle">
-									{{ primaryHeader }}
-								</h2>
-								<p v-if="secondaryHeader" :style="secondaryTextStyle">
-									{{ secondaryHeader }}
-								</p>
-							</template>
+							<h2
+								v-if="showPlayerName"
+								data-testid="deck-player-name"
+								class="text-xl"
+								:style="titleStyle"
+							>
+								{{ primaryHeader }}
+							</h2>
+							<p v-if="showDeckName" data-testid="deck-name" :style="secondaryTextStyle">
+								{{ secondaryHeader }}
+							</p>
 
-							<MtgManaColorDisplay v-if="config.showDeckColors && deckColors" :colors="deckColors" size="lg" />
+							<MtgManaColorDisplay v-if="showDeckColors" :colors="deckColors" size="lg" />
 						</div>
 
 						<div
 							v-if="showDeckMeta"
 							data-testid="deck-meta-pill"
 							class="mt-3 flex flex-wrap items-center justify-center border"
-							:class="showDeckMetaPill ? 'inline-flex rounded-full' : ['gap-x-4 gap-y-1 text-sm border-transparent px-0 py-0']"
+							:class="showDeckMetaPill ? 'inline-flex rounded-full' : ['gap-x-4 gap-y-1 border-transparent px-0 py-0']"
 							:style="deckMetaPillStyle"
 						>
-							<div v-if="companion" class="flex items-center gap-2">
-								<span :style="deckMetaTextStyle">Companion:</span>
-								<span class="font-medium" :style="deckMetaAccentStyle">{{ companion.name }}</span>
-							</div>
-
-							<div v-if="deckCounters.length > 0" class="flex items-center gap-2">
-								<span :style="deckMetaTextStyle">Counters:</span>
-								<span
-									v-for="counter in deckCounters"
-									:key="counter.key"
-									class="inline-flex items-center gap-1 font-medium"
-									:style="deckMetaAccentStyle"
-								>
-									<UIcon :name="counter.icon" class="size-4" />
-									{{ counter.label }}
-								</span>
-							</div>
-
 							<p
 								v-if="showHighlanderTotal"
 								data-testid="highlander-total-inline"
@@ -441,91 +556,122 @@ function stackCardStyle(section: VisibleBoard, index: number) {
 					</div>
 
 					<!-- Boards: each visible board renders its own layout block -->
-					<div class="deck-layout flex flex-1 min-h-0 gap-6" :class="besideActive ? 'flex-row' : 'flex-col'">
+					<!-- The space the boards share, and in it the boards as one group. -->
+					<div
+						ref="layoutElement"
+						class="deck-layout-space flex flex-1 min-h-0"
+						:style="solvedLayoutStyle"
+					>
 						<div
-							v-for="section in visibleBoards"
-							:key="section.key"
-							:data-testid="`${section.key}-section`"
-							class="flex flex-col min-h-0 min-w-0"
-							:style="boardFlexStyle(section)"
+							class="deck-layout flex gap-6"
+							:class="[besideActive ? 'flex-row' : 'flex-col', solvedLayout ? 'flex-none' : 'flex-1 min-h-0 min-w-0']"
 						>
-							<h3 v-if="section.showLabel" class="text-lg shrink-0 mb-2" :style="titleStyle">
-								{{ section.label }}
-							</h3>
-
-							<!-- Grid -->
-							<ScreenCardGrid
-								v-if="section.view === 'grid'"
-								:data-testid="`${section.key}-grid`"
-								:sizing="section.layout.cardSizing"
-								:columns="gridColumns(section)"
-								:rows="gridRows(section)"
-								:card-width="cardWidth(section)"
-								:gap="`${section.layout.cardGap}px`"
-							>
-								<ScreenModesDeckCard
-									v-for="(card, index) in section.cards"
-									:key="`${section.key}-${index}`"
-									:card="card"
-									:width="cardWidth(section)"
-									:sizing="section.layout.cardSizing"
-									v-bind="cardBadgeProps"
-								/>
-							</ScreenCardGrid>
-
-							<!-- Stack, beside a mainboard: vertical strip -->
 							<div
-								v-else-if="section.view === 'stack'"
-								:data-testid="`${section.key}-stack-column`"
-								class="stack-container flex flex-col"
-								:class="{ 'stack-container--fit': isFit(section) }"
-								:data-card-sizing="section.layout.cardSizing"
+								v-for="section in visibleBoards"
+								:key="section.key"
+								:data-testid="`${section.key}-section`"
+								class="flex flex-col min-h-0 min-w-0"
+								:style="boardFlexStyle(section)"
 							>
-								<div
-									v-for="(card, index) in section.cards"
-									:key="`${section.key}-${index}`"
-									class="stack-card relative shrink-0"
-									:style="stackCardStyle(section, index)"
+								<h3 v-if="section.showLabel" class="text-lg shrink-0 mb-2" :style="titleStyle">
+									{{ section.label }}
+								</h3>
+
+								<!-- Grid -->
+								<ScreenCardGrid
+									v-if="section.view === 'grid'"
+									:data-testid="`${section.key}-grid`"
+									:sizing="section.layout.cardSizing"
+									:columns="gridColumns(section)"
+									:rows="gridRows(section)"
+									:card-width="cardWidth(section)"
+									:gap="`${section.layout.cardGap}px`"
+									:alignment="section.layout.alignment"
+									:fit-card-width="solvedCardWidth"
 								>
 									<ScreenModesDeckCard
+										v-for="(card, index) in section.cards"
+										:key="`${section.key}-${index}`"
 										:card="card"
+										:tag="card === shownCompanion ? 'Companion' : undefined"
 										:width="cardWidth(section)"
-										:sizing="isFit(section) ? 'fill' : 'fixed'"
+										:sizing="section.layout.cardSizing"
 										v-bind="cardBadgeProps"
 									/>
+								</ScreenCardGrid>
+
+								<!-- Stack, beside a mainboard: vertical strip -->
+								<div
+									v-else-if="section.view === 'stack'"
+									:data-testid="`${section.key}-stack-column`"
+									class="stack-container flex flex-col flex-1 min-h-0"
+									:class="{ 'stack-container--fit': isFit(section) }"
+									:style="stackAlignmentStyle(section)"
+									:data-card-sizing="section.layout.cardSizing"
+								>
+									<div
+										v-for="(card, index) in section.cards"
+										:key="`${section.key}-${index}`"
+										class="stack-card relative shrink-0"
+										:style="stackCardStyle(section, index)"
+									>
+										<ScreenModesDeckCard
+											:card="card"
+											:tag="card === shownCompanion ? 'Companion' : undefined"
+											:width="cardWidth(section)"
+											:sizing="isFit(section) ? 'fill' : 'fixed'"
+											v-bind="cardBadgeProps"
+										/>
+									</div>
+								</div>
+
+								<!-- List -->
+								<div
+									v-else
+									:data-testid="`${section.key}-list`"
+									class="card-list"
+									:style="listGridStyle(section.layout)"
+								>
+									<div
+										v-for="(card, index) in section.cards"
+										:key="`${section.key}-${index}`"
+										class="card-list-item flex items-center gap-2 py-1 px-2 rounded-lg"
+									>
+										<span class="quantity w-6 text-right" :style="secondaryTextStyle">
+											{{ card.quantity }}x
+										</span>
+										<span class="name flex-1" :style="primaryTextStyle">
+											{{ card.name }}
+										</span>
+										<span
+											v-if="showHighlanderPoints && card.highlanderPoints != null"
+											data-testid="highlander-list-badge"
+											class="rounded-md font-bold tabular-nums leading-none"
+											:style="highlanderListBadgeStyle"
+										>
+											{{ card.highlanderPoints }}
+										</span>
+										<span class="type text-sm" :style="secondaryTextStyle">
+											{{ getCardTypeDisplayLabel(card.cardType, { nonbasicLandLabel: true }) }}
+										</span>
+									</div>
 								</div>
 							</div>
 
-							<!-- List -->
+							<!-- With no sideboard shown, the companion takes a column of its own. -->
 							<div
-								v-else
-								:data-testid="`${section.key}-list`"
-								class="card-list"
-								:style="listGridStyle(section.layout)"
+								v-if="shownCompanion && !showSideboard"
+								data-testid="companion-section"
+								class="shrink-0 flex flex-col"
 							>
-								<div
-									v-for="(card, index) in section.cards"
-									:key="`${section.key}-${index}`"
-									class="card-list-item flex items-center gap-2 py-1 px-2 rounded-lg"
-								>
-									<span class="quantity w-6 text-right" :style="secondaryTextStyle">
-										{{ card.quantity }}x
-									</span>
-									<span class="name flex-1" :style="primaryTextStyle">
-										{{ card.name }}
-									</span>
-									<span
-										v-if="showHighlanderPoints && card.highlanderPoints != null"
-										data-testid="highlander-list-badge"
-										class="rounded-md font-bold tabular-nums leading-none"
-										:style="highlanderListBadgeStyle"
-									>
-										{{ card.highlanderPoints }}
-									</span>
-									<span class="type text-sm" :style="secondaryTextStyle">
-										{{ getCardTypeDisplayLabel(card.cardType, { nonbasicLandLabel: true }) }}
-									</span>
-								</div>
+								<ScreenModesDeckCard
+									:card="shownCompanion"
+									tag="Companion"
+									:width="`${resolvedBoards.sideboard.cardWidth}px`"
+									sizing="fixed"
+									v-bind="cardBadgeProps"
+									:show-quantity="false"
+								/>
 							</div>
 						</div>
 					</div>
@@ -542,10 +688,7 @@ function stackCardStyle(section: VisibleBoard, index: number) {
 
 /* The strip's own height and width are what its cards fit (`stackCardStyle`). */
 .stack-container--fit {
-	flex: 1 1 0%;
-	min-height: 0;
 	container-type: size;
-	align-items: center;
 }
 
 .deck-swap-enter-active,

@@ -14,20 +14,22 @@ const props = defineProps<{
 	highlanderPointsBadgeStyle: Record<string, string>;
 	/** Fixed takes `width`; fill takes its column; fit fits its grid cell both ways. */
 	sizing: 'fixed' | 'fill' | 'fit';
+	/** A tag naming the card's role, such as the companion's, at its top so a stack still shows it. */
+	tag?: string;
 }>();
 
-const cardStyle = computed(() => {
-	switch (props.sizing) {
-		case 'fixed': return { width: props.width };
-		case 'fill': return { width: '100%' };
-		default: return {};
-	}
-});
+/** A pill in the quantity badge's colours, at three quarters of its text size. */
+const tagStyle = computed(() => ({
+	fontSize: `calc(${props.quantityBadgeStyle.fontSize ?? '16px'} * 0.75)`,
+	padding: '0.35em 0.8em',
+	color: modeTokenVar('deck', 'quantity-badge-text'),
+	backgroundColor: modeTokenVar('deck', 'quantity-badge-surface'),
+}));
 
-/** A fitted card sits in a box that fits it to its grid cell. */
-const cardBox = computed(() => props.sizing === 'fit'
-	? resolveComponent('MtgCardFitBox')
-	: 'div');
+// A Fit grid's columns are already card-sized, so a fitted card fills its column.
+const cardStyle = computed(() => props.sizing === 'fixed'
+	? { width: props.width }
+	: { width: '100%' });
 
 const placeholderStyle = {
 	backgroundColor: modeTokenVar('deck', 'card-placeholder'),
@@ -39,7 +41,7 @@ function getCardImageUrl(card: DeckListCardWithData): string | null {
 </script>
 
 <template>
-	<component :is="cardBox" class="min-w-0 min-h-0" :data-sizing="sizing">
+	<div class="min-w-0 min-h-0" :data-sizing="sizing">
 		<div
 			class="card-item relative"
 			:style="cardStyle"
@@ -75,6 +77,14 @@ function getCardImageUrl(card: DeckListCardWithData): string | null {
 			>
 				{{ card.quantity }}
 			</div>
+			<div
+				v-if="tag"
+				data-testid="deck-card-tag"
+				class="absolute top-1 left-1/2 -translate-x-1/2 rounded-full font-bold uppercase tracking-wide leading-none whitespace-nowrap"
+				:style="tagStyle"
+			>
+				{{ tag }}
+			</div>
 		</div>
-	</component>
+	</div>
 </template>

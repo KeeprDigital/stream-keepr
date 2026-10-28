@@ -47,16 +47,27 @@ describe('screenDeckCard', () => {
 		expect(badge.attributes('style')).toContain('background-color: blue;');
 	});
 
-	// Fixed takes the width its board gives it; fill takes its column; fit fits its grid cell, badges and all.
+	// Fixed takes the width its board gives it; fill and fit take their column, which a Fit grid sizes to the card.
 	it.each([
-		{ sizing: 'fixed', width: '200px', fitted: false },
-		{ sizing: 'fill', width: '100%', fitted: false },
-		{ sizing: 'fit', width: '', fitted: true },
-	])('sizes a $sizing card', async ({ sizing, width, fitted }) => {
+		{ sizing: 'fixed', width: '200px' },
+		{ sizing: 'fill', width: '100%' },
+		{ sizing: 'fit', width: '100%' },
+	])('sizes a $sizing card', async ({ sizing, width }) => {
 		const wrapper = await mountComponent({ sizing, width: '200px' });
 
 		expect((wrapper.get('.card-item').element as HTMLElement).style.width).toBe(width);
-		expect(wrapper.find('[data-card-fit] .card-item [data-testid="highlander-card-badge"]').exists()).toBe(fitted);
+	});
+
+	// A card in a role, such as the companion, says so on its face.
+	it.each([
+		{ tag: 'Companion', shown: 'Companion' },
+		{ tag: undefined, shown: undefined },
+	])('tags a card $tag', async ({ tag, shown }) => {
+		const wrapper = await mountComponent({ tag });
+
+		expect(wrapper.find('[data-testid="deck-card-tag"]').exists()
+			? wrapper.get('[data-testid="deck-card-tag"]').text()
+			: undefined).toBe(shown);
 	});
 
 	it('hides the Highlander point badge when disabled', async () => {
