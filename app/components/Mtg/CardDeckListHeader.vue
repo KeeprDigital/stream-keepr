@@ -18,6 +18,21 @@ const cardStore = useCardStore();
 const featureMatchOptions = useFeatureMatchMenuItems();
 const matchOptions = computed(() => props.matchOptions ?? featureMatchOptions.value);
 
+function loadSelectedMatchup(selectedMatch: Match) {
+	return cardStore.loadMatchupDeckLists(
+		selectedMatch.player1Data?.name,
+		selectedMatch.player2Data?.name,
+		selectedMatch.player1Id,
+		selectedMatch.player2Id,
+		selectedMatch.player1Data?.deckId,
+		selectedMatch.player2Data?.deckId,
+	);
+}
+
+// A selection restored before mount, as by a linked reload, has no decks loaded yet.
+if (deckListMatchId.value && props.selectedMatch && !cardStore.deckListHasData)
+	void loadSelectedMatchup(props.selectedMatch);
+
 // When picker selection changes, load either a round-specific match or the live feature-match slot.
 watch([
 	deckListMatchId,
@@ -29,14 +44,7 @@ watch([
 	}
 
 	if (selectedMatch) {
-		await cardStore.loadMatchupDeckLists(
-			selectedMatch.player1Data?.name,
-			selectedMatch.player2Data?.name,
-			selectedMatch.player1Id,
-			selectedMatch.player2Id,
-			selectedMatch.player1Data?.deckId,
-			selectedMatch.player2Data?.deckId,
-		);
+		await loadSelectedMatchup(selectedMatch);
 		return;
 	}
 
