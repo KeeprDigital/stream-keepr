@@ -4,7 +4,7 @@ import type { PlayerMatchHistoryEntry } from '~/composables/screen/usePlayerHist
 import { formatGameScore } from '~~/shared/utils/matchFromPlayerSide';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { config, error, isEmpty, headerText, pageData, player, formatOutcome } = usePlayerHistoryModeData();
+const { config, error, ready, isEmpty, headerText, pageData, player, formatOutcome } = usePlayerHistoryModeData();
 
 const columnWidths: Record<PlayerHistoryColumnKey, string> = {
 	round: 'minmax(10rem, 1fr)',
@@ -95,6 +95,7 @@ function outcomeParts(row: PlayerMatchHistoryEntry) {
 <template>
 	<ScreenModeBase
 		:error="error"
+		:ready="ready"
 		:empty="isEmpty"
 	>
 		<div class="player-history-display broadcast-table-display flex flex-col h-full w-full" :style="displayStyle">

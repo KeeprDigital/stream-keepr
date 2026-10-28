@@ -1,8 +1,10 @@
 import type { CardBreakdownEntry, CardBreakdownResponse } from '~~/shared/types/metagame';
 import { topCardsGridRows } from '~~/shared/screenModeConfigs/topCards';
+import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
 import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
+import { useStagedScreenContent } from '~/modules/screen-mode/readiness';
 
 /** A card in the grid with its rank across the whole ranking, not just its page. */
 export interface RankedTopCard {
@@ -57,7 +59,19 @@ export function useTopCardsModeData() {
 		nextPage,
 		prevPage,
 	} = usePaginatedScreenMode({ mode: 'top-cards', config, rows: gridRows });
-	const pageEntries = computed(() => pageData.value.flat());
+
+	// ── Staging ──
+	// A page, a new one or new data, reaches program once its card images have
+	// loaded, together with its page indicator.
+	const { shown: shownPage, staging } = useStagedScreenContent(
+		() => ({
+			entries: pageData.value.flat(),
+			currentPage: currentPage.value,
+			totalPages: totalPages.value,
+		}),
+		page => page.entries.flatMap(({ entry }) => scryfallCardImageUrl(entry.scryfallId) ?? []),
+	);
+	const pageEntries = computed(() => shownPage.value.entries);
 
 	// ── Header ──
 	const headerText = computed(() => {
@@ -89,6 +103,8 @@ export function useTopCardsModeData() {
 		config,
 		loading,
 		error,
+		/** Rendering Readiness: its first read has answered or failed, and its page has loaded. */
+		ready: computed(() => freshness.answered.value && !staging.value),
 		isEmpty,
 		emptyMessage,
 		headerText,
@@ -96,8 +112,8 @@ export function useTopCardsModeData() {
 		entries,
 		pageEntries,
 		rowCount,
-		currentPage,
-		totalPages,
+		currentPage: computed(() => shownPage.value.currentPage),
+		totalPages: computed(() => shownPage.value.totalPages),
 		setPage,
 		nextPage,
 		prevPage,

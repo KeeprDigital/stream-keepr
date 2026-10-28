@@ -3,7 +3,10 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, ref } from 'vue';
+import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
 import CardDisplay from '~/components/Mtg/CardDisplay.vue';
+
+const images = stubImageLoading();
 
 const overlayContainer = ref<HTMLElement | null>(null);
 const containerHeight = ref(1080);
@@ -52,6 +55,8 @@ function mountComponent(shown: MtgCard | null = null) {
 		global: {
 			stubs: {
 				MtgCardImage: CardImageStub,
+				// The real one, so a card leaves before its replacement enters.
+				transition: false,
 			},
 		},
 	});
@@ -59,6 +64,7 @@ function mountComponent(shown: MtgCard | null = null) {
 
 describe('mtgCardDisplay', () => {
 	beforeEach(() => {
+		images.reset();
 		vi.useFakeTimers();
 		containerHeight.value = 1080;
 	});
@@ -75,7 +81,6 @@ describe('mtgCardDisplay', () => {
 		await wrapper.setProps({
 			card: card('card-1', 'Brainstorm'),
 		});
-		await wrapper.get('img').trigger('load');
 		await vi.advanceTimersByTimeAsync(50);
 		await nextTick();
 
@@ -86,33 +91,44 @@ describe('mtgCardDisplay', () => {
 
 	it('shows a Card it is given at mount once its image loads', async () => {
 		const wrapper = mountComponent(card('held', 'Held Card'));
-		await nextTick();
-
-		await wrapper.get('img').trigger('load');
 		await vi.advanceTimersByTimeAsync(50);
 		await nextTick();
 
 		expect(wrapper.get('[data-testid="card-image"]').text()).toBe('Held Card');
 	});
 
-	it('does not let an old image timer reveal a replacement card early', async () => {
+	it('does not let an old reveal timer reveal a replacement card early', async () => {
 		const wrapper = mountComponent();
 		await wrapper.setProps({
 			card: card('old-card', 'Old Card'),
 		});
-		await wrapper.get('img').trigger('load');
 		await vi.advanceTimersByTimeAsync(40);
 
 		await wrapper.setProps({
 			card: card('new-card', 'New Card'),
 		});
-		await wrapper.get('img').trigger('load');
 		await vi.advanceTimersByTimeAsync(10);
 		await nextTick();
 		expect(wrapper.find('[data-testid="card-image"]').exists()).toBe(false);
 
 		await vi.advanceTimersByTimeAsync(40);
 		await nextTick();
+		expect(wrapper.get('[data-testid="card-image"]').text()).toBe('New Card');
+	});
+
+	it('keeps the card on program until its replacement\'s image has loaded', async () => {
+		const wrapper = mountComponent(card('old-card', 'Old Card'));
+		await vi.advanceTimersByTimeAsync(50);
+		images.hold('https://example.com/new-card.jpg');
+
+		await wrapper.setProps({
+			card: card('new-card', 'New Card'),
+		});
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(wrapper.get('[data-testid="card-image"]').text()).toBe('Old Card');
+
+		images.release('https://example.com/new-card.jpg');
+		await vi.advanceTimersByTimeAsync(1000);
 		expect(wrapper.get('[data-testid="card-image"]').text()).toBe('New Card');
 	});
 });

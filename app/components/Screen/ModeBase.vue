@@ -1,10 +1,20 @@
 <script setup lang="ts">
-withDefaults(defineProps<{
+import { useScreenModeReady } from '~/modules/screen-mode';
+
+const props = withDefaults(defineProps<{
 	error: string | null;
 	empty?: boolean;
+	/**
+	 * Whether what the mode shows has settled: its first read answered or
+	 * failed, and anything it stages loaded. Program keeps the outgoing mode
+	 * until it is.
+	 */
+	ready: boolean;
 }>(), {
 	empty: false,
 });
+
+useScreenModeReady(() => props.ready);
 </script>
 
 <template>

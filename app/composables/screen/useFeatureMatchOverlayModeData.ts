@@ -94,5 +94,7 @@ export function useFeatureMatchOverlayModeData() {
 		usesSampleDataset,
 		loading,
 		error,
+		/** Rendering Readiness: its Slot read has answered or failed. */
+		ready: slotData.answered,
 	};
 }

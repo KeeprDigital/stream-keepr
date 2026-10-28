@@ -1660,3 +1660,38 @@ A minute cron meets the cadence: the shortest interval is a minute, and backoff 
 - **Keep `melee:roundSynced` as the only message, published only on change.** Standings would still re-read on every reported result, and the Pairings Screen could not tell a result from a re-pairing.
 - **Let a tick wait for the lease like an operator command.** A tick that waits holds a cron invocation for nothing; the next minute's tick tries again.
 - **Let an operator command wait out a tick.** A tick slower than the wait still answers the operator `409`, and every wait delays the operator for polling, which Live Results must never do.
+
+## ADR-0053: Program holds what it shows until what replaces it is ready
+
+Accepted · 2026-10-28
+
+### Decision
+
+**A Screen Mode rendering is ready once what it shows has settled**: its display has declared its data settled, its Theme fonts have loaded or failed, and every image, video and pending part inside it has loaded or failed. This is Rendering Readiness, owned by `app/modules/screen-mode/readiness.ts` and the Screen renderer's frame (`Screen/RendererFrame.vue`).
+
+**The renderer double-buffers modes.** On a mode change the incoming mode renders hidden behind the one on program, and the renderer cuts to it once it is ready. On a first load nothing shows until then. A mode left before it was ready is dropped; going back to the mode on program drops the one loading. Only the rendering on program hosts overlays. A rendering not ready after `SCREEN_MODE_READY_TIMEOUT_MS` (10 s) is shown anyway with a console warning, so a hung read or image never pins program to the outgoing mode.
+
+**Every display declares.** `ScreenModeBase` takes a required `ready` prop, so a mode built on it cannot forget; a display without it calls `useScreenModeReady` (Background, Feature Match Overlay, Broadcast Graphics). Its data composable answers `ready`: its first read answered or failed (Screen Mode Data Freshness's `answered`), and whatever it stages loaded. Nothing declared is not ready, because a display is an async component that declares only once its chunk has loaded. A part that loads on its own declares too (the Card Spotlight's card), or marks itself `data-render-pending` while it loads (a Background Layer stack resolving library media, an Animation Effect loading its module); the frame waits for both, then for every `<img>` and `<video>` inside it.
+
+**Inside a mode, a change that brings new images is staged.** `useStagedScreenContent` holds what a rendering shows until the images of what replaces it have preloaded and decoded (`preloadImages`), a newer change superseding one still loading, a failed image counting as loaded so its fallback shows. Most Played Cards stages each page with its page indicator, Archetype Spotlight its whole read. The Deck List keeps its own staged swap, now on the shared preload, and the Card Spotlight keeps its card on program until the replacement's images have loaded, then plays its exit and entry.
+
+### Why
+
+Some modes held program and others did not. The Deck List preloaded its card art and swapped whole; Most Played Cards mounted its grid at once and painted card by card on every page; every mode change showed the incoming mode's empty scaffold ("TBD vs TBD", an empty table) while its first read was in flight. Doing it once in the renderer covers every mode, present and future, without each re-implementing a preload.
+
+### Consequences
+
+- A mode change shows nothing new until the incoming mode is ready, up to the timeout. A read that fails settles as ready, showing what the mode shows on error.
+- Two renderings are briefly live during a mode change, each reading its own data and holding its own Realtime Subscriptions.
+- A Broadcast Graphics output whose Live Session read fails reaches program only at the timeout.
+- A video whose source changes, a video Background Layer's or the Feature Match Overlay Frame's, keeps playing until the new source has its first frame or fails (`ScreenMediaBackground`).
+- A Take cannot be held on one output, whose animation phases follow the shared clock with every other. Instead a Broadcast Graphics output loads every image its stack can put on air once its content URLs resolve, and holds the loaded images while the stack names them (`createImageRetainer`): its library content is `no-store`, so only an image still held is reused. Videos are not preloaded.
+- A Broadcast Graphics canvas whose library font fails now shows in the fallback face, as the Feature Match Overlay does, rather than staying hidden: a blank graphic is worse on air than the wrong face.
+- Not covered: a Screen Output navigated to another Screen still blanks while it loads, because the display session unmounts the renderer. Nothing in the app moves an output between Screens, and holding one would need each rendering to keep its own Screen, Event, Theme and capability.
+- `test/nuxt/components/Screen/Renderer.test.ts` pins the hold, `test/nuxt/modules/screenModeReadiness.test.ts` the declarations and staging.
+
+### Rejected alternatives
+
+- **Each mode preloading its own media, as the Deck List did.** It covers only the modes that remember to, and none of them covers the mode change itself.
+- **Hold program by scanning the DOM alone, with no declaration.** An async display's chunk has not mounted when the scan runs, so an empty rendering would look ready.
+- **Vue `<Suspense>`.** Still experimental, and suspending setup would keep the incoming rendering from mounting, which is what starts its media loading.

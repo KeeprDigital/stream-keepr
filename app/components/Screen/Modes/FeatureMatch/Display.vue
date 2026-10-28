@@ -12,6 +12,7 @@ const {
 	matchState,
 	loading: stateLoading,
 	error: dataError,
+	ready,
 } = useFeatureMatchModeData();
 
 function allow(key: FeatureMatchBooleanKey): boolean {
@@ -111,6 +112,7 @@ function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
 <template>
 	<ScreenModeBase
 		:error="modeError"
+		:ready="ready"
 		:empty="isEmpty"
 	>
 		<div

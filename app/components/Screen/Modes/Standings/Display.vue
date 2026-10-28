@@ -7,6 +7,7 @@ import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 const {
 	config,
 	error,
+	ready,
 	isEmpty,
 	headerText,
 	visibleColumns,
@@ -116,6 +117,7 @@ const displayStyle = {
 <template>
 	<ScreenModeBase
 		:error="error"
+		:ready="ready"
 		:empty="isEmpty"
 	>
 		<div class="standings-display broadcast-table-display flex flex-col h-full w-full" :class="{ 'reveal-mode': isRevealMode }" :style="displayStyle">

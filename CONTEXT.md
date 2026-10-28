@@ -246,6 +246,10 @@ _Avoid_: refresh registry, reload list.
 The client-side module owning the invariant "a Screen Output shows its Screen Mode's current data." A mode states what it reads and which Event Data messages touch what it holds; the module owns the initial load, live-follow on those messages from the Event channel, a slow re-read while realtime is degraded (disconnected, or its subscriptions waiting on a token for the Event the transport covers), the same slow re-read after its latest read failed, a re-read once its Event channel first attaches, and **Reconnect Resync**. A message or that first attach heard while a read is in flight asks for one follow-up read once it settles, rather than superseding it, so a burst of messages costs one more read per read in flight. Every re-read holds the last accepted rendering until it answers.
 _Avoid_: mode refresh hook, per-mode live sync.
 
+**Rendering Readiness**:
+The client-side invariant "program holds what it shows until what replaces it is ready." A Screen Mode rendering is ready once its display has declared its data settled, its Theme fonts have loaded or failed, and every image, video and pending part inside it has loaded or failed. A mode change renders the incoming mode hidden and cuts to it once ready, and a change within a mode that brings new images swaps in once they have loaded; a rendering that never settles is shown after a timeout (ADR-0053).
+_Avoid_: preload, loading state, when naming the invariant.
+
 **Guarded Sequence**:
 The client-side module owning the invariant "discard the result of async work that newer work has superseded." Scoped or keyed; issues Flights.
 _Avoid_: generation counter, version guard, latest-wins map.

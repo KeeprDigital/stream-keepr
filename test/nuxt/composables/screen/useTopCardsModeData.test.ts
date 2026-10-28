@@ -2,12 +2,16 @@ import type { EffectScope } from 'vue';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
+import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
 
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
 }));
 mockNuxtImport('$fetch', () => mockFetch);
+
+const images = stubImageLoading();
 
 const realtime = createFakeEventChannel();
 const { deliver } = realtime;
@@ -76,6 +80,7 @@ describe('useTopCardsModeData', () => {
 		mockEventId.value = 1;
 		mockServerNow = 1_000_000;
 		realtime.reset();
+		images.reset();
 		mockFetch.mockResolvedValue({ entries: [], totalDecks: 0, scope: 'all' });
 	});
 
@@ -220,6 +225,32 @@ describe('useTopCardsModeData', () => {
 
 			expect(currentPage.value).toBe(3);
 			expect(shown(pageEntries.value)).toEqual(['5:Card 5', '6:Card 6']);
+		});
+		it('turns to a page, with its page indicator, once its card images have loaded', async () => {
+			mockFetch.mockResolvedValue({
+				entries: rankedCards(4).map(card => ({ ...card, scryfallId: `${card.id}0-card` })),
+				totalDecks: 5,
+				scope: 'all',
+			});
+			Object.assign(mutableConfig, { columns: 2, rowsPerPage: 1, currentPage: 1 });
+			const { pageEntries, currentPage, ready } = makeTopCardsModeData();
+			await flushPromises();
+			expect(ready.value).toBe(true);
+			const thirdCardImage = scryfallCardImageUrl('30-card')!;
+			images.hold(thirdCardImage);
+
+			mutableConfig.currentPage = 2;
+			await flushPromises();
+			expect(shown(pageEntries.value)).toEqual(['1:Card 1', '2:Card 2']);
+			expect(currentPage.value).toBe(1);
+			expect(ready.value).toBe(false);
+
+			images.release(thirdCardImage);
+			await flushPromises();
+
+			expect(shown(pageEntries.value)).toEqual(['3:Card 3', '4:Card 4']);
+			expect(currentPage.value).toBe(2);
+			expect(ready.value).toBe(true);
 		});
 	});
 

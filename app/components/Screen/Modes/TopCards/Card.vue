@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
+import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
 
 /**
  * One ranked card, for any Screen Mode that shows one. Its look comes from the
@@ -28,16 +29,7 @@ const props = defineProps<{
 
 const imageError = ref(false);
 
-/**
- * Scryfall CDN URL for the card's normal front face image.
- * Format: https://cards.scryfall.io/normal/front/{char1}/{char2}/{uuid}.jpg
- */
-const imageUrl = computed(() => {
-	const id = props.entry.scryfallId;
-	if (!id)
-		return null;
-	return `https://cards.scryfall.io/normal/front/${id[0]}/${id[1]}/${id}.jpg`;
-});
+const imageUrl = computed(() => scryfallCardImageUrl(props.entry.scryfallId));
 
 watch(() => props.entry.scryfallId, () => {
 	imageError.value = false;

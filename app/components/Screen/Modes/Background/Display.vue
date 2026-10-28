@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { BackgroundLayer } from '~~/shared/types/screenConfig';
 import { DEFAULT_THEME_TOKENS } from '~~/shared/modules/theme';
-import { screenBackgroundLayers } from '~/modules/screen-mode';
+import { screenBackgroundLayers, useScreenModeReady } from '~/modules/screen-mode';
 
 const config = useScreenModeConfig('background');
 const { screen, themeTokens } = useScreenContext();
@@ -12,6 +12,9 @@ const layers = computed<BackgroundLayer[]>(() => screenBackgroundLayers(
 	themeTokens?.value ?? DEFAULT_THEME_TOKENS,
 	screen.value?.themeOverrides ?? {},
 ));
+
+// Its stack reads no data; what it shows marks itself pending while it loads.
+useScreenModeReady(true);
 </script>
 
 <template>

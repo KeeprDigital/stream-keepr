@@ -109,6 +109,8 @@ export function useHeadToHeadModeData() {
 	}
 
 	return {
+		/** Rendering Readiness: its first read has answered or failed. */
+		ready: freshness.answered,
 		config,
 		loading,
 		error,
