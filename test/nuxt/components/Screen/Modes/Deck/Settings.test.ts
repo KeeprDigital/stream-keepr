@@ -378,6 +378,7 @@ describe('screenDeckSettings', () => {
 	it.each([
 		{ label: 'Quantity badge position', field: 'quantityPosition', current: 'top-right' },
 		{ label: 'Highlander point badge position', field: 'highlanderPointsPosition', current: 'top-left' },
+		{ label: 'Companion badge position', field: 'companionTagPosition', current: 'top' },
 	])('picks the $label on a nine-point grid with no centre (#543)', async ({ label, field, current }) => {
 		mockConfig.value = {
 			...defaultDeckConfig(),

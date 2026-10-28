@@ -14,8 +14,10 @@ const props = defineProps<{
 	highlanderPointsBadgeStyle: Record<string, string>;
 	/** Fixed takes `width`; fill takes its column; fit fits its grid cell both ways. */
 	sizing: 'fixed' | 'fill' | 'fit';
-	/** A tag naming the card's role, such as the companion's, at its top so a stack still shows it. */
+	/** A tag naming the card's role, such as the companion's. */
 	tag?: string;
+	/** Where the tag sits, as the other badges are placed. */
+	tagPositionClass?: string;
 }>();
 
 /** A pill in the quantity badge's colours, at three quarters of its text size. */
@@ -80,7 +82,8 @@ function getCardImageUrl(card: DeckListCardWithData): string | null {
 			<div
 				v-if="tag"
 				data-testid="deck-card-tag"
-				class="absolute top-1 left-1/2 -translate-x-1/2 rounded-full font-bold uppercase tracking-wide leading-none whitespace-nowrap"
+				class="absolute rounded-full font-bold uppercase tracking-wide leading-none whitespace-nowrap"
+				:class="tagPositionClass ?? '-top-1 left-1/2 -translate-x-1/2'"
 				:style="tagStyle"
 			>
 				{{ tag }}

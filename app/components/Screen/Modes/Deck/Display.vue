@@ -4,7 +4,7 @@ import type { ResolvedDeckBoardLayout } from '~~/shared/types/screenConfig';
 import type { DeckLayout, DeckLayoutGridBoard, DeckLayoutStackBoard } from '~~/shared/utils/deckLayout';
 import type { DeckListCardWithData } from '~/types/card/deckList';
 import { useElementSize } from '@vueuse/core';
-import { DEFAULT_DECK_TEXT_SIZES, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
+import { DEFAULT_COMPANION_TAG_POSITION, DEFAULT_DECK_TEXT_SIZES, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { solveDeckLayout } from '~~/shared/utils/deckLayout';
 import { formatHighlanderPointedCardNote, formatHighlanderPointsLabel } from '~~/shared/utils/highlander';
 import { getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
@@ -353,6 +353,10 @@ const highlanderPointsPositionClass = computed(() => {
 	return BADGE_POSITION_CLASSES[pos];
 });
 
+/** The companion's tag is placed as the other badges are: in a corner, its own edge sits there. */
+const companionTagPositionClass = computed(() =>
+	BADGE_POSITION_CLASSES[config.value.companionTagPosition ?? DEFAULT_COMPANION_TAG_POSITION]);
+
 // Each badge, pill and chip sizes itself around its text, whose size is the
 // Screen's own config (ADR-0053), keeping the proportions its former medium size had.
 
@@ -442,6 +446,7 @@ const cardBadgeProps = computed(() => ({
 	quantityBadgeStyle: quantityBadgeStyle.value,
 	highlanderPointsPositionClass: highlanderPointsPositionClass.value,
 	highlanderPointsBadgeStyle: highlanderCardBadgeStyle.value,
+	tagPositionClass: companionTagPositionClass.value,
 }));
 
 const stackReveal = computed(() => `${resolvedBoards.value.sideboard.stackReveal}px`);

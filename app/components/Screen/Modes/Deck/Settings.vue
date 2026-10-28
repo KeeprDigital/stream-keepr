@@ -6,7 +6,7 @@ import type { NinePoint } from '~~/shared/utils/ninePoints';
 import type { Screen } from '~/types';
 import { DECK_SIDEBOARD_LAYOUT_FIELDS } from '~~/shared/screenModeConfigs/deck';
 import { screenModeConfigContract } from '~~/shared/screenModes';
-import { DEFAULT_DECK_TEXT_SIZES, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
+import { DEFAULT_COMPANION_TAG_POSITION, DEFAULT_DECK_TEXT_SIZES, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { CARD_SIZING_SELECT_OPTIONS, SIDEBOARD_PLACEMENT_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
 import { useConsumedEventData } from '~/modules/event-data/resync';
@@ -697,6 +697,27 @@ const emptyBoardHint = computed(() => {
 						/>
 					</UFormField>
 				</template>
+			</template>
+
+			<template v-if="config.showCompanion !== false">
+				<USeparator />
+
+				<p class="text-xs font-semibold uppercase tracking-wider text-muted">
+					Companion Badge
+				</p>
+
+				<UFormField
+					:label="fields.companionTagPosition.label"
+					description="Where the Companion badge sits on its card. In a corner, the badge lines up with that side."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UINinePointPicker
+						:model-value="config.companionTagPosition ?? DEFAULT_COMPANION_TAG_POSITION"
+						:disabled-points="BADGE_DISABLED_POINTS"
+						aria-label="Companion badge position"
+						@update:model-value="updateConfig({ companionTagPosition: $event as QuantityPosition })"
+					/>
+				</UFormField>
 			</template>
 		</ScreenSettingsCard>
 	</div>

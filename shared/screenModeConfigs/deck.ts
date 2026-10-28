@@ -103,6 +103,8 @@ export const DEFAULT_DECK_TEXT_SIZES = {
 /** Where each badge sits on a Deck Screen card until an operator moves it. */
 export const DEFAULT_QUANTITY_POSITION: QuantityPosition = 'top-right';
 export const DEFAULT_HIGHLANDER_POINTS_POSITION: QuantityPosition = 'top-left';
+/** Top centre: clear of the corner badges, and shown by a stacked card's top slice. */
+export const DEFAULT_COMPANION_TAG_POSITION: QuantityPosition = 'top';
 
 /** The Deck Screen Mode's config contract: its shape, type, and defaults. */
 export const deckModeConfigContract = defineScreenModeConfigContract({
@@ -143,6 +145,8 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 
 	// Quantity badge placement
 	quantityPosition: editorField(quantityPositionSchema.optional(), { label: 'Badge Position' }),
+	/** Where the companion's tag sits on its card: a corner puts the tag's own edge there. */
+	companionTagPosition: editorField(quantityPositionSchema.optional(), { label: 'Badge Position' }),
 
 	// Text sizes in px; each badge, pill and chip sizes itself around its own (ADR-0053).
 	quantityBadgeSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Badge Text Size' }),
@@ -167,6 +171,7 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	showHighlanderPoints: true,
 	highlanderPointsPosition: DEFAULT_HIGHLANDER_POINTS_POSITION,
 	quantityPosition: DEFAULT_QUANTITY_POSITION,
+	companionTagPosition: DEFAULT_COMPANION_TAG_POSITION,
 	...DEFAULT_DECK_TEXT_SIZES,
 }, {
 	formerFields: [
