@@ -20,10 +20,11 @@ const props = defineProps<{
 	tagPositionClass?: string;
 }>();
 
-/** A pill in the quantity badge's colours, at three quarters of its text size. */
+/** A pill matching the quantity badge: its colours, its text size and its 1.75em height. */
 const tagStyle = computed(() => ({
-	fontSize: `calc(${props.quantityBadgeStyle.fontSize ?? '16px'} * 0.75)`,
-	padding: '0.35em 0.8em',
+	fontSize: props.quantityBadgeStyle.fontSize ?? '16px',
+	height: '1.75em',
+	padding: '0 0.75em',
 	color: modeTokenVar('deck', 'quantity-badge-text'),
 	backgroundColor: modeTokenVar('deck', 'quantity-badge-surface'),
 }));
@@ -82,7 +83,7 @@ function getCardImageUrl(card: DeckListCardWithData): string | null {
 			<div
 				v-if="tag"
 				data-testid="deck-card-tag"
-				class="absolute rounded-full font-bold uppercase tracking-wide leading-none whitespace-nowrap"
+				class="absolute rounded-full font-bold uppercase tracking-wide leading-none whitespace-nowrap flex items-center"
 				:class="tagPositionClass ?? '-top-1 left-1/2 -translate-x-1/2'"
 				:style="tagStyle"
 			>

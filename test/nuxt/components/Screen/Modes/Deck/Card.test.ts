@@ -70,6 +70,18 @@ describe('screenDeckCard', () => {
 			: undefined).toBe(shown);
 	});
 
+	// A tag reads as the quantity badge's pair: its text size and its height.
+	it('sizes a tag as the quantity badge is sized', async () => {
+		const wrapper = await mountComponent({
+			tag: 'Companion',
+			quantityBadgeStyle: { fontSize: '20px', color: 'white', backgroundColor: 'purple' },
+		});
+
+		const tag = wrapper.get('[data-testid="deck-card-tag"]').element as HTMLElement;
+		expect(tag.style.fontSize).toBe('20px');
+		expect(tag.style.height).toBe('1.75em');
+	});
+
 	it('hides the Highlander point badge when disabled', async () => {
 		const wrapper = await mountComponent({ showHighlanderPoints: false });
 
