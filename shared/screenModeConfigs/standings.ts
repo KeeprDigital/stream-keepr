@@ -18,9 +18,6 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 	// Column configuration (ordered array — order = display order)
 	columns: z.array(columnConfigSchema(STANDINGS_COLUMN_KEY_VALUES)).min(1).max(10),
 	showArchetypeColors: editorField(z.boolean(), { label: 'Show Archetype Colors' }),
-	// `.min(1)` rather than `.positive()`: the same whole numbers, as an inclusive
-	// bound the editor can offer.
-	maxTableWidth: editorField(z.number().int().min(1).optional(), { label: 'Max table width' }),
 	roundId: z.number().int().positive().optional(),
 
 	// Header
@@ -46,9 +43,6 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 	// Pagination
 	rowsPerPage: pageRotationPageSize,
 	...pageRotationShape,
-
-	// Animation
-	animateEntries: editorField(z.boolean(), { label: 'Animate entries' }),
 }, {
 	viewMode: 'all',
 	columns: [
@@ -60,7 +54,6 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 		{ key: 'positionChange', visible: false },
 	],
 	showArchetypeColors: false,
-	maxTableWidth: undefined,
 	roundId: undefined,
 	...DEFAULT_HEADER_CONFIG,
 	topNCount: 8,
@@ -74,7 +67,9 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 	revealedCount: 0,
 	rowsPerPage: 8,
 	...DEFAULT_PAGE_ROTATION,
-	animateEntries: true,
+}, {
+	// The table's width and its rows' motion are the mode's Mode Tokens (#851).
+	formerFields: ['maxTableWidth', 'animateEntries'],
 });
 
 export type StandingsModeConfig = ScreenModeConfigOf<typeof standingsModeConfigContract>;

@@ -1,24 +1,18 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
+import { EVENT_CANVAS_SIDE_BOUNDS } from '../eventCanvas';
 
-/** One of the chart's categorical colour slots, holding the colour it shipped with. */
-function chartSeries(slot: number, color: string) {
+/** One of the chart's categorical colour slots, following the Theme's chart palette. */
+function chartSlot<N extends number>(slot: N) {
 	return {
 		type: 'color',
 		label: `Chart colour ${slot}`,
-		default: color,
+		default: { token: `series-${slot}` },
 	} as const;
 }
 
 /**
  * How the Metagame Screen Mode looks: its Mode Tokens, by name within the mode.
- *
- * The chart's categorical slots default to literals, since no Foundation Token
- * is a categorical palette; #812 allows a literal default, though ADR-0049 and
- * CONTEXT.md word a Mode Token's default as a Foundation Token. They are
- * stepped for a dark surface and validated as a
- * set for adjacent-pair CVD separation and >= 3:1 against #1a1a19. Every bar
- * is named, so identity never rests on its colour alone. Other is the
- * neutral, never a slot.
+ * Every bar is named, so identity never rests on its colour alone.
  */
 export const metagameModeTokens = {
 	'surface': {
@@ -81,17 +75,39 @@ export const metagameModeTokens = {
 		label: 'Chart baseline',
 		default: { token: 'divider' },
 	},
-	'chart-series-1': chartSeries(1, '#3987e5'),
-	'chart-series-2': chartSeries(2, '#d95926'),
-	'chart-series-3': chartSeries(3, '#199e70'),
-	'chart-series-4': chartSeries(4, '#c98500'),
-	'chart-series-5': chartSeries(5, '#d55181'),
-	'chart-series-6': chartSeries(6, '#008300'),
-	'chart-series-7': chartSeries(7, '#9085e9'),
-	'chart-series-8': chartSeries(8, '#e66767'),
+	'chart-series-1': chartSlot(1),
+	'chart-series-2': chartSlot(2),
+	'chart-series-3': chartSlot(3),
+	'chart-series-4': chartSlot(4),
+	'chart-series-5': chartSlot(5),
+	'chart-series-6': chartSlot(6),
+	'chart-series-7': chartSlot(7),
+	'chart-series-8': chartSlot(8),
 	'chart-other': {
 		type: 'color',
 		label: 'Chart Other',
-		default: '#898781',
+		default: { token: 'series-other' },
+	},
+	// The widest the table or chart runs, centred. It ships at the widest Event
+	// Canvas, so either fills its Screen until a Theme narrows it.
+	'max-width': {
+		type: 'dimension',
+		label: 'Table and chart max width',
+		default: EVENT_CANVAS_SIDE_BOUNDS.max,
+		bounds: EVENT_CANVAS_SIDE_BOUNDS,
+	},
+	// How a row enters, leaves back to, and moves, each row an eighth of the
+	// duration after the one above, and how a chart bar grows on its timing.
+	// A recipe with no channel cuts.
+	'row-motion': {
+		type: 'animation-recipe',
+		label: 'Row enter and exit',
+		default: {
+			duration: 400,
+			easing: 'ease-out',
+			delay: 0,
+			fade: { opacity: 0 },
+			slide: { direction: 'west', distanceMode: 'fixed', distance: 20 },
+		},
 	},
 } as const satisfies Readonly<Record<string, DeclaredModeTokenDefinition>>;

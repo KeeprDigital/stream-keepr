@@ -822,7 +822,6 @@ describe('metagameModeConfigSchema', () => {
 		currentPage: 1,
 		showHeader: true,
 		headerText: 'Full Field Metagame',
-		animateEntries: true,
 	};
 	const conversionTarget = { conversionMetric: 'topN' as const, conversionThreshold: 8 };
 

@@ -138,10 +138,6 @@ function persistColumns(columns: ActiveMetagameColumnConfig[]) {
 	updateConfig({ archetypeColumns: columns as MetagameArchetypeColumnConfig[] });
 }
 
-function updateMaxTableWidth(value: number | null | undefined) {
-	updateConfig({ maxTableWidth: value ?? null });
-}
-
 function updateArchetypeLimit(value: number | null | undefined) {
 	updateConfig({
 		archetypeLimit: value == null
@@ -268,32 +264,15 @@ function updateArchetypeLimit(value: number | null | undefined) {
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard
-			:title="config.viewMode === 'chart' ? 'Layout' : 'Columns'"
-			:subtitle="config.viewMode === 'chart' ? undefined : 'Drag to reorder, toggle to show/hide.'"
+			v-if="config.viewMode !== 'chart'"
+			title="Columns"
+			subtitle="Drag to reorder, toggle to show/hide."
 		>
-			<template v-if="config.viewMode !== 'chart'">
-				<ScreenColumnVisibilityList
-					:columns="activeColumns"
-					:labels="columnLabels"
-					@update="persistColumns"
-				/>
-
-				<USeparator />
-			</template>
-
-			<UFormField
-				:label="fields.maxTableWidth.label"
-				description="Optional cap in pixels. Leave empty to fill the available width."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="config.maxTableWidth ?? null"
-					placeholder="Auto"
-					:min="fields.maxTableWidth.min"
-					class="w-32"
-					@update:model-value="updateMaxTableWidth($event)"
-				/>
-			</UFormField>
+			<ScreenColumnVisibilityList
+				:columns="activeColumns"
+				:labels="columnLabels"
+				@update="persistColumns"
+			/>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Header">
@@ -326,14 +305,5 @@ function updateArchetypeLimit(value: number | null | undefined) {
 			auto-page-description="Automatically cycle through table pages."
 			:loading="loadingRows"
 		/>
-
-		<ScreenSettingsCard title="Animation">
-			<ScreenSettingsToggle
-				:label="fields.animateEntries.label"
-				description="Animate row changes when the table updates."
-				:model-value="config.animateEntries"
-				@update:model-value="updateConfig({ animateEntries: $event })"
-			/>
-		</ScreenSettingsCard>
 	</div>
 </template>

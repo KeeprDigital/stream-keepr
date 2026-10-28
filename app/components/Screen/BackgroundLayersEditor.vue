@@ -12,7 +12,8 @@ import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
  * that mode's own `backgroundLayers` through the same editor. The owner wires
  * `update:layers` to its own configuration write — the editor never saves.
  * Without an `eventId`, as in the Theme editor, media layers take a Remote
- * Media URL only.
+ * Media URL only. Its `color` slot replaces a colour layer's picker, given the
+ * layer's colour and the `update` that writes a new one.
  */
 const props = defineProps<{
 	layers: BackgroundLayer[];
@@ -196,11 +197,13 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 				</div>
 
 				<UFormField v-if="layer.type === 'color'" label="Colour">
-					<UIColorPicker
-						:model-value="layer.color"
-						placeholder="#000000"
-						@update:model-value="patchLayer(layer.id, { color: $event || '#000000' })"
-					/>
+					<slot name="color" :value="layer.color" :update="(color: string) => patchLayer(layer.id, { color })">
+						<UIColorPicker
+							:model-value="layer.color"
+							placeholder="#000000"
+							@update:model-value="patchLayer(layer.id, { color: $event || '#000000' })"
+						/>
+					</slot>
 				</UFormField>
 
 				<UFormField v-if="layer.type === 'gradient'" label="CSS gradient">

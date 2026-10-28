@@ -22,10 +22,8 @@ const config = ref<any>({
 	viewMode: 'all',
 	showHeader: true,
 	showArchetypeColors: false,
-	maxTableWidth: undefined,
 	rowsPerPage: 8,
 	revealCount: 8,
-	animateEntries: false,
 	columns: [
 		{ key: 'position', visible: true },
 		{ key: 'name', visible: true },
@@ -114,10 +112,8 @@ describe('screenStandingsDisplay', () => {
 			viewMode: 'all',
 			showHeader: true,
 			showArchetypeColors: false,
-			maxTableWidth: undefined,
 			rowsPerPage: 8,
 			revealCount: 8,
-			animateEntries: false,
 			columns: [
 				{ key: 'position', visible: true },
 				{ key: 'name', visible: true },
@@ -161,17 +157,6 @@ describe('screenStandingsDisplay', () => {
 		expect(wrapper.get('[data-testid="mana-colors"]').text()).toBe('UBR');
 	});
 
-	it('applies an optional max table width to the standings content', async () => {
-		config.value = {
-			...config.value,
-			maxTableWidth: 1200,
-		};
-
-		const wrapper = await mountComponent();
-
-		expect(wrapper.get('[data-testid="standings-content"]').attributes('style')).toContain('max-width: 1200px;');
-	});
-
 	it('keeps the same row sizing on a short last page', async () => {
 		pageData.value = [pageData.value[0]];
 
@@ -194,10 +179,9 @@ describe('screenStandingsDisplay', () => {
 		expect(wrapper.get('.standings-rows').attributes('style')).toContain('--standings-row-height: 200px;');
 	});
 
-	it.each([false, true])('shows each row\'s Position Change, marked with its direction (animated: %s)', async (animateEntries) => {
+	it('shows each row\'s Position Change, marked with its direction', async () => {
 		config.value = {
 			...config.value,
-			animateEntries,
 			columns: [
 				{ key: 'name', visible: true },
 				{ key: 'positionChange', visible: true },

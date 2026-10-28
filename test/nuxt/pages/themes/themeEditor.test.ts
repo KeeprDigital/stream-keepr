@@ -36,13 +36,16 @@ function theme(revision: number, tokens: Record<string, unknown> = {}): ThemeRes
 
 type Answer = (body: { value?: unknown } | undefined) => ThemeResponse | Promise<ThemeResponse>;
 let answerWrite: Answer;
+/** What the Theme stores when the editor opens. */
+let storedTokens: Record<string, unknown>;
 
 beforeEach(() => {
 	mockApiFetch.mockReset();
 	answerWrite = () => theme(2);
+	storedTokens = {};
 	mockApiFetch.mockImplementation(async (url: string, init?: { method?: string; body?: { value?: unknown } }) => {
 		if (url === '/api/themes/brand' && !init?.method)
-			return theme(1);
+			return theme(1, storedTokens);
 		// The preview's Deck tile looks its sample cards up on Scryfall; none is found.
 		if (!url.startsWith('/api/themes/brand'))
 			throw Object.assign(new Error('Not Found'), { statusCode: 404 });
@@ -274,6 +277,47 @@ describe('the Theme editor', () => {
 		]));
 		await flushPromises();
 		expect(field(wrapper, 'background').attributes('data-token-state')).toBe('set');
+	});
+
+	// A background colour layer follows a colour Foundation Token or holds its own colour.
+	it.each([
+		{
+			case: 'keeps a colour layer following a token through an edit to the stack',
+			stored: { token: 'accent' },
+			edit: (editor: ReturnType<typeof part>) => editor.get('[data-testid="add-layer"]').trigger('click'),
+			written: [
+				{ token: 'accent' },
+				'#000000',
+			],
+		},
+		{
+			case: 'points a colour layer at a token',
+			stored: '#123456',
+			edit: (editor: ReturnType<typeof part>) => editor.get('[data-token-part="colour-source"]').setValue('token:accent'),
+			written: [
+				{ token: 'accent' },
+			],
+		},
+	])('$case', async ({ stored, edit, written }) => {
+		storedTokens = {
+			background: [
+				{
+					id: 'wash',
+					type: 'color',
+					color: stored,
+					enabled: true,
+					opacity: 1,
+				},
+			],
+		};
+		const wrapper = await mountEditor();
+
+		await edit(part(wrapper, 'background', 'background-layers'));
+
+		await vi.waitFor(() => expect(writes()).toHaveLength(1));
+		const [[, token, body]] = writes() as [[string, string, { value: Array<{ color: unknown }> }]];
+		expect(token).toBe('background');
+		expect(body.value.map(layer => layer.color)).toEqual(written);
 	});
 
 	it('offers a Theme\'s media layers the whole library', async () => {

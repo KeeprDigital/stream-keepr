@@ -6,17 +6,22 @@ import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
  * bind Foundation Tokens themselves.
  *
  * A surface carries the fill, the outline (the Frame's canvas-edge border, a
- * Source Item's framing border) and the glow around that outline. Their
- * defaults keep the look the Feature Match Overlay Presets had before Themes,
- * with the outline on the accent so a Theme's accent reaches it.
+ * Source Item's framing border) and the glow around that outline. Each fills
+ * with the Theme's `surface` and outlines in its accent, so changing either
+ * colour restyles every placed preset (#851). The Frame fills at full opacity,
+ * so it paints the Theme's colour as set; a Source Item's fill stays clear,
+ * since its video shows through it.
  */
 export const featureMatchOverlayModeTokens = {
 	'frame-surface': {
 		type: 'surface-style',
 		label: 'Frame surface',
 		default: {
-			fill: { type: 'solid', color: '#111111' },
-			fillOpacity: 0.92,
+			fill: {
+				type: 'solid',
+				color: { token: 'surface' },
+			},
+			fillOpacity: 1,
 			outline: {
 				color: { token: 'accent' },
 				width: 4,
@@ -39,7 +44,10 @@ export const featureMatchOverlayModeTokens = {
 		type: 'surface-style',
 		label: 'Source Item surface',
 		default: {
-			fill: { type: 'solid', color: '#000000' },
+			fill: {
+				type: 'solid',
+				color: { token: 'surface' },
+			},
 			fillOpacity: 0,
 			outline: {
 				color: { token: 'accent' },

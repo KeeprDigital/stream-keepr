@@ -16,7 +16,6 @@ const defaultConfig = {
 		{ key: 'deck', visible: false },
 	],
 	showArchetypeColors: false,
-	maxTableWidth: undefined,
 	roundId: undefined as number | undefined,
 	rowsPerPage: 10,
 	currentPage: 1,

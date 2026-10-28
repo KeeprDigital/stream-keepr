@@ -8,7 +8,6 @@ import Display from '~/components/Screen/Modes/Metagame/Display.vue';
 const config = ref<any>({
 	viewMode: 'archetype',
 	showHeader: true,
-	animateEntries: false,
 	archetypeColumns: [
 		{ key: 'archetype', visible: true },
 		{ key: 'count', visible: true },
@@ -92,7 +91,6 @@ describe('screenMetagameDisplay', () => {
 		config.value = {
 			viewMode: 'archetype',
 			showHeader: true,
-			animateEntries: false,
 			archetypeColumns: [
 				{ key: 'archetype', visible: true },
 				{ key: 'count', visible: true },

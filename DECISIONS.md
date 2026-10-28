@@ -1500,7 +1500,7 @@ The Players page opened Edit on a row click and kept history in the menu, while 
 
 ## ADR-0049: Themes replace Graphic Style Sets, resolve live, and use a closed vocabulary of two tiers
 
-Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812) · Amended 2026-10-28: Graphic Style Sets and Animation Effect Presets are removed, and a document's Style Set link is a former field · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830)
+Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812) · Amended 2026-10-28: Graphic Style Sets and Animation Effect Presets are removed, and a document's Style Set link is a former field · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830) · Amended 2026-10-28: a composite Mode Token default names colour Foundation Tokens, and the chart palette is Foundation Tokens · [#851](https://github.com/KeeprDigital/stream-keepr/issues/851)
 
 ### Decision
 
@@ -1509,7 +1509,7 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 **Stream Keepr owns every token.** Users set values, never names.
 
 - **Foundation Tokens** are app-wide roles and hold a literal. A colour inside a composite Foundation Token (a fill, a surface, or a colour layer of the `background` stack) may name a colour Foundation Token instead, and a colour holds a literal only (#829, #831).
-- **Mode Tokens** are declared by a Screen Mode Definition. Each holds a literal or names a same-type Foundation Token, and defaults to a Foundation Token, except where none fills its role: a badge shadow's colour (no shadow role exists) or Card Spotlight's zoom (no motion Foundation Token holds it) defaults to its shipped literal (#823, #844).
+- **Mode Tokens** are declared by a Screen Mode Definition. Each holds a literal or names a same-type Foundation Token, and defaults to a Foundation Token, except where none fills its role: a badge shadow's colour (no shadow role exists) or Card Spotlight's zoom (no motion Foundation Token holds it) defaults to its shipped literal (#823, #844). A composite Mode Token's literal default may name colour Foundation Tokens inside it, as the Feature Match Overlay's Frame and Source Item surfaces fill with `surface` and outline in `accent`, so a change to those tokens restyles every placed preset; the Frame fills at full opacity, so the Theme's colour, alpha included, is what it paints. Metagame's chart slots follow the `series-1` … `series-8` and `series-other` Foundation Tokens (#851).
 - **Graphic Item properties** name a whole Foundation Token or hold a literal. Nothing is bound partially, and nothing names a Mode Token. Resolution therefore takes at most two steps (a Mode Token or binding, its Foundation Token, then a colour that token names) and cannot cycle. It was one step until #829: the PRD has a composite's colour name a colour token, so a change to the accent reaches every surface using it.
 
 **A Theme stores only the tokens it sets.** A token added later reaches every existing Theme through its default. Renames and removals follow ADR-0043 and ADR-0037.
@@ -1532,6 +1532,7 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 - A Theme in use cannot be deleted.
 - Typography tokens carry no size. Colour tokens may carry alpha, and a consumer's opacity multiplies it. The Key Output keys a translucent colour at its own alpha, so Fill and Key agree.
 - A Graphic Theme Binding (#829) is a slot name and a token name beside the property, never in place of it. The property keeps the value it last resolved to, so a document stays complete and renders without a Theme. The compositor paints every bound slot from the Screen's resolved Foundation Tokens. An author's edit to a bound slot's value detaches that slot, keeping what the author made of the resolved value. That is the only implicit change; there is no override record. A binding naming no Foundation Token of its slot's type is refused on a write and inert on a read.
+- The Theme editor and a Screen's token section edit a composite, or the `background` stack, as it is stored, not as it resolves, so a colour inside it keeps naming its Foundation Token across a save. Each such colour's control follows a colour Foundation Token or holds its own (#851).
 - Media treatment and on-screen cycling bind nothing, because no token type fills either. A Media Graphic Item's picture binds an asset token, such as the logo (#831).
 - Migration `0012_remove_graphic_style_sets` drops the Graphic Style Set and Animation Effect Preset libraries and a Broadcast Graphic Template's link columns (#830). A template's document is untouched, so its values stay as the literals it already held.
 - A graphics document recorded with a Style Set link, stored or in a `.skgraphic` or `.sklayout` exported before #830, still reads. An item's `styleRefs`, and a Broadcast Graphic's `styleSet` and `styleRefs`, are former fields: accepted by the graphics schemas and dropped, as ADR-0037's are, so a write that sends the document (a Screen write, a template revision carrying its document, a package install) stores it without them. A client holding one sends it back unrefused. A copy the server makes of a stored document without parsing it, such as saving a placed graphic as a template or renaming a template, carries a stale link along, inert, until such a write. Every other unknown key is still refused.
@@ -1582,7 +1583,7 @@ A Theme is meant to carry the production's logo, backdrop and typefaces. ADR-000
 
 ## ADR-0051: A Screen holds no look of its own, and the Event Canvas is a coordinate space
 
-Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812)
+Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/issues/812) · Amended 2026-10-28: only overlay Screen Modes scale the Event Canvas, and Standings and Metagame's last look fields are Mode Tokens · [#851](https://github.com/KeeprDigital/stream-keepr/issues/851)
 
 ### Decision
 
@@ -1592,7 +1593,7 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 - colorMode goes: a light look and a dark look are two Themes.
 - Mode config holds what a mode shows (headers, columns, page size, Event References). Mode Tokens hold how it looks (colour, type, spacing, size, media, motion).
 
-**Each Event sets one Event Canvas** (default 1920×1080) in its Event Presentation Settings, with its Theme and on-air wording. Every Screen of the Event uses it, graphics hosts included, and every Screen Mode scales it uniformly to fit its window. There is no per-Screen canvas.
+**Each Event sets one Event Canvas** (default 1920×1080) in its Event Presentation Settings, with its Theme and on-air wording. Every Screen of the Event uses it, graphics hosts included, and every overlay Screen Mode scales it uniformly to fit its window. There is no per-Screen canvas. Feature Match Controls is the exception: it is an operator surface, so it fills its window and consumes no Theme Token (#812, Q37 and Q44).
 
 ### Why
 
@@ -1607,6 +1608,7 @@ Canvas size and wording are set once per production, not per brand or per Screen
 - On-air wording stays on the Event, so one Theme serves Events that word things differently.
 - The existing look fields are dropped, not migrated, and existing Screens render the Default Theme.
 - The plain modes' remaining look fields became Mode Tokens and former fields (#844): Most Played Cards' card width, gap and badge size; Deck's card width, gap and stack reveal, one set per board, and its badge, pill and chip sizes; Card Spotlight's enter and exit. A size choice became a dimension; a choice of layout behaviour, such as whether cards fill their columns, stays config. Card Spotlight's on/off switch went with its speed, since a motion recipe with no channel cuts. A badge's size token is its text size, and the badge is laid out around it in em, so one value sizes it whole. Where no Foundation Token fills a role, such as a shadow colour, the Mode Token defaults to a literal.
+- Standings and Metagame followed (#851). Max table width became the `max-width` dimension, shipped at the widest Event Canvas, so a table fills its Screen until a Theme narrows it. Animate entries became `row-motion`, which also times Metagame's chart bars. Standings' `reveal` view mode keeps its own rise as `reveal-motion`. An entering row starts an eighth of the duration after the one above it, so a cut has no stagger either. No plain mode keeps a size or motion field in config.
 - A motion Mode Token reaches its display as custom properties a CSS transition reads: its timing, and the excursion state the element enters from and leaves to. A slide clearing its parent travels the whole Screen, which is the size container its Screen host sets.
 - `text-inverse` is text on the primary text colour. Every badge, pill and chip whose surface is `text-primary` pairs it with `text-inverse`, so a light Theme sets the two as a pair.
 
