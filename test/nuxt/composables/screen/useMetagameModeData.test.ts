@@ -54,7 +54,6 @@ const defaultConfig = {
 	rotationAnchor: undefined as number | undefined,
 	showHeader: true,
 	headerText: undefined,
-	animateEntries: true,
 };
 
 const mutableConfig = reactive({ ...defaultConfig });

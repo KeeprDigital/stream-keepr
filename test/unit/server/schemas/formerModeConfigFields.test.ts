@@ -131,6 +131,20 @@ describe.each([
 			showDeckName: false,
 		},
 	},
+	{
+		mode: 'standings',
+		stored: { maxTableWidth: 1200, animateEntries: false, topNCount: 8 },
+		reads: { topNCount: 8 },
+		patch: { topNCount: 16 },
+		patched: { topNCount: 16 },
+	},
+	{
+		mode: 'metagame',
+		stored: { maxTableWidth: 1200, animateEntries: false, limit: 20 },
+		reads: { limit: 20 },
+		patch: { limit: 30 },
+		patched: { limit: 30 },
+	},
 ] as const)('a $mode Screen storing a look field that is now a Mode Token', ({ mode, stored, reads, patch, patched }) => {
 	it('reads without it, everywhere it is read', () => {
 		expect(screenModeConfigContract(mode).readStored(stored)).toEqual(reads);

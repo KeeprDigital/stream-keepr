@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MetagameChartBar } from '~~/shared/utils/metagameChart';
 import { useElementSize } from '@vueuse/core';
-import { modeTokenVar } from '~/modules/screen-mode';
+import { modeMotionVars, modeTokenVar } from '~/modules/screen-mode';
 
 /**
  * The Metagame Screen's chart display: meta share by Archetype as horizontal
@@ -12,7 +12,6 @@ import { modeTokenVar } from '~/modules/screen-mode';
  */
 const props = defineProps<{
 	bars: MetagameChartBar[];
-	animate: boolean;
 }>();
 
 /** Each categorical colour slot's fill, slot 1 first. */
@@ -32,6 +31,14 @@ const chartStyle = {
 };
 const trackStyle = {
 	borderLeftColor: modeTokenVar('metagame', 'chart-baseline'),
+};
+/** A live update grows or shrinks each bar in place on the rows' motion timing; a cut snaps it. */
+const rowMotion = modeMotionVars('metagame', 'row-motion');
+const fillMotionStyle = {
+	transitionProperty: 'width',
+	transitionDuration: rowMotion.duration,
+	transitionTimingFunction: rowMotion.easing,
+	transitionDelay: rowMotion.delay,
 };
 
 const plotRef = useTemplateRef<HTMLElement>('plotRef');
@@ -84,13 +91,11 @@ function fillOf(bar: MetagameChartBar): string {
 				/>
 			</div>
 			<div class="metagame-chart-track" :style="trackStyle">
-				<!-- A live update grows or shrinks each bar in place when entries animate. -->
 				<div
 					class="metagame-chart-fill"
-					:class="{ 'is-animated': animate }"
 					data-testid="metagame-chart-fill"
 					:data-color-slot="bar.colorSlot ?? 'other'"
-					:style="{ '--bar-length': bar.length, 'backgroundColor': fillOf(bar) }"
+					:style="[fillMotionStyle, { '--bar-length': bar.length, 'backgroundColor': fillOf(bar) }]"
 				/>
 				<span class="metagame-chart-share" data-testid="metagame-chart-share">{{ bar.metaShare }}%</span>
 			</div>
@@ -160,10 +165,6 @@ function fillOf(bar: MetagameChartBar): string {
 	min-width: 2px;
 	height: var(--metagame-chart-bar-thickness, 24px);
 	border-radius: 0 4px 4px 0;
-}
-
-.metagame-chart-fill.is-animated {
-	transition: width 0.5s ease;
 }
 
 .metagame-chart-share {

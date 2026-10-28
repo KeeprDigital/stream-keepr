@@ -8,7 +8,7 @@ import type {
 	CardBreakdownEntry,
 } from '~~/shared/types/metagame';
 import { getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
-import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { modeMotionVars, modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
 interface TableColumnDefinition<Key extends string> {
 	key: Key;
@@ -205,13 +205,29 @@ const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('rowsRef'),
 	rowCount: () => config.value.pageSize ?? pageData.value.length,
 });
 
-const contentStyle = computed(() => ({
+const contentStyle = {
 	width: '100%',
-	maxWidth: config.value.maxTableWidth
-		? `${config.value.maxTableWidth}px`
-		: undefined,
-	marginInline: config.value.maxTableWidth ? 'auto' : undefined,
-}));
+	maxWidth: modeTokenVar('metagame', 'max-width'),
+	marginInline: 'auto',
+};
+
+/**
+ * Rows enter from the `row-motion` Mode Token's excursion, leave back to it
+ * and move on its timing. An entering row starts an eighth of the duration
+ * after the one above it. The row's class reads these, since a move clears an
+ * inline transition.
+ */
+const rowMotion = modeMotionVars('metagame', 'row-motion');
+const rowMotionStyle = {
+	'--metagame-row-duration': rowMotion.duration,
+	'--metagame-row-easing': rowMotion.easing,
+	'--metagame-row-delay': rowMotion.delay,
+	'--metagame-row-stagger': `calc(${rowMotion.delay} + var(--row-index) * ${rowMotion.duration} / 8)`,
+	'--metagame-row-origin': rowMotion.transformOrigin,
+	'--metagame-row-opacity': rowMotion.opacity,
+	'--metagame-row-transform': rowMotion.transform,
+	'--metagame-row-clip': rowMotion.clipPath,
+};
 
 /** Set on the root, over the shared broadcast table chrome's own colour and face. */
 const displayStyle = {
@@ -314,7 +330,6 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 				<ScreenModesMetagameChart
 					v-if="config.viewMode === 'chart'"
 					:bars="chartBars"
-					:animate="config.animateEntries"
 				/>
 
 				<div v-else class="metagame-table broadcast-table-surface" :style="surfaceStyle">
@@ -330,7 +345,6 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 					</div>
 
 					<TransitionGroup
-						v-if="config.animateEntries"
 						ref="rowsRef"
 						name="metagame-row"
 						tag="div"
@@ -341,7 +355,7 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 							v-for="(entry, index) in pageData"
 							:key="config.viewMode === 'cards' && isCardEntry(entry) ? entry.id : isArchetypeEntry(entry) ? entry.id : index"
 							class="metagame-row broadcast-table-row metagame-grid"
-							:style="[gridStyle, rowStyle, { '--row-index': index }]"
+							:style="[gridStyle, rowStyle, rowMotionStyle, { '--row-index': index }]"
 							:data-testid="`metagame-row-${index}`"
 						>
 							<template v-if="config.viewMode === 'archetype' && isArchetypeEntry(entry)">
@@ -381,56 +395,6 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 							</template>
 						</div>
 					</TransitionGroup>
-
-					<div
-						v-else
-						ref="rowsRef"
-						class="metagame-rows"
-						:style="rowLayoutStyle"
-					>
-						<div
-							v-for="(entry, index) in pageData"
-							:key="config.viewMode === 'cards' && isCardEntry(entry) ? entry.id : isArchetypeEntry(entry) ? entry.id : index"
-							class="metagame-row broadcast-table-row metagame-grid"
-							:style="[gridStyle, rowStyle]"
-						>
-							<template v-if="config.viewMode === 'archetype' && isArchetypeEntry(entry)">
-								<div
-									v-for="column in visibleArchetypeColumns"
-									:key="column.key"
-									class="metagame-cell"
-									:class="column.cellClass"
-									:style="cellStyle(column)"
-								>
-									<template v-if="column.key === 'colors'">
-										<MtgManaColorDisplay v-if="entry.colors" :colors="entry.colors" size="sm" />
-										<span v-else>-</span>
-									</template>
-									<template v-else>
-										{{ formatArchetypeCell(entry, column.key) }}
-									</template>
-								</div>
-							</template>
-
-							<template v-else-if="config.viewMode === 'cards' && isCardEntry(entry)">
-								<div
-									v-for="column in visibleCardColumns"
-									:key="column.key"
-									class="metagame-cell"
-									:class="column.cellClass"
-									:style="cellStyle(column)"
-								>
-									<template v-if="column.key === 'manaCost'">
-										<MtgManaColorDisplay v-if="entry.manaCost" :mana-cost="entry.manaCost" size="xs" />
-										<span v-else>-</span>
-									</template>
-									<template v-else>
-										{{ formatCardCell(entry, column.key) }}
-									</template>
-								</div>
-							</template>
-						</div>
-					</div>
 				</div>
 
 				<div v-if="totalPages > 1" class="metagame-page-indicator broadcast-table-page-indicator" :style="pageIndicatorStyle">
@@ -515,29 +479,29 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 	flex-shrink: 0;
 }
 
-.metagame-row-enter-active {
-	transition: all 0.4s ease;
-	transition-delay: calc(var(--row-index) * 0.05s);
+/* ── Row motion: its timing, and the excursion a row enters from and leaves to ── */
+.metagame-row {
+	transition-property: opacity, transform, clip-path;
+	transition-duration: var(--metagame-row-duration);
+	transition-timing-function: var(--metagame-row-easing);
+	transition-delay: var(--metagame-row-enter-delay, var(--metagame-row-delay));
+	transform-origin: var(--metagame-row-origin);
 }
 
-.metagame-row-enter-from {
-	opacity: 0;
-	transform: translateX(-20px);
+.metagame-row-enter-active {
+	--metagame-row-enter-delay: var(--metagame-row-stagger);
+}
+
+.metagame-row-enter-from,
+.metagame-row-leave-to {
+	opacity: var(--metagame-row-opacity);
+	transform: var(--metagame-row-transform);
+	clip-path: var(--metagame-row-clip);
 }
 
 .metagame-row-leave-active {
-	transition: all 0.3s ease;
 	position: absolute;
 	left: 0;
 	right: 0;
-}
-
-.metagame-row-leave-to {
-	opacity: 0;
-	transform: translateX(20px);
-}
-
-.metagame-row-move {
-	transition: transform 0.4s ease;
 }
 </style>

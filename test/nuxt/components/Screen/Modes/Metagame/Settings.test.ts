@@ -79,7 +79,6 @@ const defaultConfig = {
 	currentPage: 1,
 	showHeader: true,
 	headerText: undefined,
-	animateEntries: true,
 };
 
 const mockConfig = ref<Record<string, any>>({ ...defaultConfig });
