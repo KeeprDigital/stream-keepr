@@ -34,10 +34,12 @@
 ### Task 1: Column maths
 
 **Files:**
+
 - Create: `shared/utils/cardGrid.ts`
 - Test: `test/unit/shared/utils/cardGrid.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `export const CARD_ASPECT = 63 / 88`
   - `export const MAX_CARD_GRID_COLUMNS = 12`
@@ -48,11 +50,41 @@
 
 ```ts
 it.each([
-	{ count: 1, width: 1920, height: 1080, gap: 12, expected: 1 },
-	{ count: 10, width: 1920, height: 1080, gap: 12, expected: 5 },
-	{ count: 60, width: 1920, height: 1080, gap: 12, expected: 12 },
-	{ count: 10, width: 1080, height: 1920, gap: 12, expected: 3 },
-	{ count: 0, width: 1920, height: 1080, gap: 12, expected: 1 },
+	{
+		count: 1,
+		width: 1920,
+		height: 1080,
+		gap: 12,
+		expected: 1
+	},
+	{
+		count: 10,
+		width: 1920,
+		height: 1080,
+		gap: 12,
+		expected: 5
+	},
+	{
+		count: 60,
+		width: 1920,
+		height: 1080,
+		gap: 12,
+		expected: 12
+	},
+	{
+		count: 10,
+		width: 1080,
+		height: 1920,
+		gap: 12,
+		expected: 3
+	},
+	{
+		count: 0,
+		width: 1920,
+		height: 1080,
+		gap: 12,
+		expected: 1
+	},
 ])('fits $count cards on $width×$height in $expected columns', ({ expected, ...input }) => {
 	expect(fitColumns(input)).toBe(expected);
 });
@@ -70,6 +102,7 @@ These values were checked against the formula. The 60-card row is capped at 12 c
 ### Task 2: Contracts, tokens, migration
 
 **Files:**
+
 - Modify: `shared/types/enums.ts:42,155`: replace `DECK_BOARD_VIEW_VALUES` / `DeckBoardView` with `MAINBOARD_VIEW_VALUES = ['grid', 'list']`, `SIDEBOARD_VIEW_VALUES = ['grid', 'stack', 'list']`, `CARD_SIZING_VALUES = ['fixed', 'fit']`, and types `MainboardView`, `SideboardView`, `CardSizing`.
 - Modify: `shared/utils/selectOptions.ts:33`: `CARD_SIZING_SELECT_OPTIONS` (`Fixed width` / `Fit to screen`); split the view options or drop them if Deck Settings is their only reader.
 - Modify: `shared/screenModeConfigs/topCards.ts`: drop `dynamicCardSize`; add `cardSizing: editorField(z.enum(CARD_SIZING_VALUES), { label: 'Card sizing' })` and `autoColumns: editorField(z.boolean(), { label: 'Auto columns' })`; defaults `'fit'` / `false`; add `'dynamicCardSize'` to `formerFields`; update the contract doc comment.
@@ -79,9 +112,11 @@ These values were checked against the formula. The 60-card row is capped at 12 c
 - Test: `test/unit/server/db/cardSizingMigration.sqlite.test.ts`; update `test/unit/server/schemas/screen.test.ts`, `formerModeConfigFields.test.ts`, `storedModeConfigClamp.test.ts`, `screenModeConfigContracts.test.ts` where they name the old fields.
 
 **Interfaces:**
+
 - Produces: `CardSizing`, `CARD_SIZING_VALUES`, `MainboardView`, `SideboardView`; `TopCardsModeConfig.cardSizing` / `.autoColumns`; `ResolvedDeckBoards['mainboard' | 'sideboard'].cardSizing` / `.autoColumns`; `DECK_MAINBOARD_LAYOUT_FIELDS`, `DECK_SIDEBOARD_LAYOUT_FIELDS`.
 
 **Migration SQL** (hand-written; follow `0008_event_canvas.sql` for the `json_valid` guard; the top-cards key must be quoted as `'$."top-cards"'`, see `0003_top_cut_screen_mode_key.sql`):
+
 - `$."top-cards".dynamicCardSize` → `$."top-cards".cardSizing`: `true → 'fit'`, `false → 'fixed'`, removing the old key.
 - The same for `$.deck.mainboard.dynamicCardSize` and `$.deck.sideboard.dynamicCardSize`.
 - `$.deck.mainboard.view = 'stack'` → `'grid'`.
@@ -89,13 +124,13 @@ These values were checked against the formula. The 60-card row is capped at 12 c
 
 - [ ] **Step 1: Failing migration test** on `createSqliteD1Harness({ throughMigration: '0013' })` (model: `removeGraphicStyleSetsMigration.sqlite.test.ts`). Insert screens, `applyRemainingMigrations()`, and read `mode_configs` back. Write it as `it.each`:
 
-| stored before | after |
-|---|---|
-| `{"top-cards":{"dynamicCardSize":true,"columns":5}}` | `{"top-cards":{"cardSizing":"fit","columns":5}}` |
-| `{"top-cards":{"dynamicCardSize":false}}` | `{"top-cards":{"cardSizing":"fixed"}}` |
+| stored before                                                                                                         | after                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `{"top-cards":{"dynamicCardSize":true,"columns":5}}`                                                                  | `{"top-cards":{"cardSizing":"fit","columns":5}}`                                                              |
+| `{"top-cards":{"dynamicCardSize":false}}`                                                                             | `{"top-cards":{"cardSizing":"fixed"}}`                                                                        |
 | `{"deck":{"mainboard":{"view":"stack","dynamicCardSize":true},"sideboard":{"view":"stack","dynamicCardSize":false}}}` | `{"deck":{"mainboard":{"view":"grid","cardSizing":"fit"},"sideboard":{"view":"stack","cardSizing":"fixed"}}}` |
-| `{"standings":{"columns":[]}}` | unchanged |
-| `null` | `null` |
+| `{"standings":{"columns":[]}}`                                                                                        | unchanged                                                                                                     |
+| `null`                                                                                                                | `null`                                                                                                        |
 
 - [ ] **Step 2:** `pnpm vitest run test/unit/server/db/cardSizingMigration.sqlite.test.ts`. Expect a FAIL.
 - [ ] **Step 3:** Write the migration. Run the test and expect a PASS.
@@ -112,12 +147,14 @@ These values were checked against the formula. The 60-card row is capped at 12 c
 ### Task 3: Resolve columns from canvas and Theme
 
 **Files:**
+
 - Modify: `app/modules/screen-mode/modeTokens.ts`: add `screenModeDimensionTokens`, and export it from `app/modules/screen-mode/index.ts:199`.
 - Create: `app/composables/screen/useCardGridColumns.ts`
 - Modify: `app/modules/screen-mode/editorModeData.ts:34-39`: the editor context gains `eventCanvas: computed(() => eventCanvasOf(eventStore.event))` and `themeTokens: computed(() => eventStore.eventTheme?.tokens)`.
 - Test: `test/nuxt/composables/screen/useCardGridColumns.test.ts`, plus a case in the existing editorModeData test if one exists (otherwise in this file).
 
 **Interfaces:**
+
 - Consumes: `fitColumns`, `fixedColumns` (Task 1); `CardSizing` (Task 2); `useScreenInset()`; `useScreenContext().eventCanvas / themeTokens / screen`.
 - Produces:
   - `screenModeDimensionTokens<M extends ThemedScreenMode>(mode: M, tokens: readonly ScreenModeTokenOfType<M, 'dimension'>[], theme: StoredThemeTokens, overrides: StoredThemeTokens): Record<string, number>`, keyed by the short token name. It resolves through `resolveThemeTokens` the same way `screenModeThemeTokenStyle` does.
@@ -134,6 +171,7 @@ These values were checked against the formula. The 60-card row is capped at 12 c
   - a portrait canvas in context changes the result.
 
   Add a case where `useEditedScreenModeData` sees an Event with `canvasWidth: 1080, canvasHeight: 1920` and the composable reads it. That covers Review Focus 5.
+
 - [ ] **Step 2:** Run it. Expect a FAIL.
 - [ ] **Step 3:** Implement the three changes.
 - [ ] **Step 4:** Run `pnpm vitest run --config vitest.nuxt.config.ts test/nuxt/composables/screen`. Expect a PASS.
@@ -144,11 +182,13 @@ These values were checked against the formula. The 60-card row is capped at 12 c
 ### Task 4: Fit rendering primitives
 
 **Files:**
+
 - Create: `app/components/Screen/CardGrid.vue`
 - Create: `app/components/Mtg/CardFitBox.vue`
 - Test: `test/nuxt/components/Screen/CardGrid.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `<ScreenCardGrid :sizing="CardSizing" :columns="number | 'auto-fill'" :rows="number | undefined" :card-width="string" :gap="string">`, which puts the cards in its default slot and sets `data-card-sizing`, `data-columns`, `data-rows`. Its layouts:
     - Fit: `grid-template-columns: repeat(c, minmax(0, 1fr))`, `grid-template-rows: repeat(rows, minmax(0, 1fr))`, `flex-1 min-h-0`.
@@ -166,6 +206,7 @@ These values were checked against the formula. The 60-card row is capped at 12 c
 ### Task 5: Most Played Cards
 
 **Files:**
+
 - Modify: `app/composables/screen/useTopCardsModeData.ts`: rows are built from `resolvedColumns` (`useCardGridColumns` with `count: entries.length`, tokens `card-width` / `card-gap`); return `resolvedColumns` and `pageRowCount = min(config.rowsPerPage, rowCount)`.
 - Modify: `app/components/Screen/Modes/TopCards/Display.vue`: the display root is `flex flex-col h-full`, and the grid is a `ScreenCardGrid` with `rows = pageRowCount` in Fit.
 - Modify: `app/components/Screen/Modes/TopCards/Card.vue`: replace `dynamicSize` with `sizing: 'fixed' | 'fill' | 'fit'`. Fit wraps the badge block in `MtgCardFitBox` with the name below it; fill means width 100%; fixed means `width`.
@@ -187,6 +228,7 @@ These values were checked against the formula. The 60-card row is capped at 12 c
 ### Task 6: Deck List
 
 **Files:**
+
 - Modify: `app/components/Screen/Modes/Deck/Display.vue`:
   - **Effective view:** in `visibleBoards`, the effective view is `'grid'` when `layout.view === 'stack' && !sideboardBeside`. Delete the horizontal stack-row template and the `'width'` branch of `stackCardStyle`.
   - **Heights:** `deck-body` is a `flex flex-col` column, `deck-layout` is `flex-1 min-h-0`, and each section is `flex flex-col min-h-0`.
@@ -216,6 +258,7 @@ These values were checked against the formula. The 60-card row is capped at 12 c
 ### Task 7: Docs, full check, eyeball, PR
 
 **Files:**
+
 - Modify: `DECISIONS.md`: append `## ADR-0053: Cards fit the Event Canvas or take a fixed width`. It covers:
   - Fixed vs Fit;
   - auto columns, chosen from the Event Canvas rather than measured so Settings and output agree on page counts;
@@ -223,6 +266,7 @@ These values were checked against the formula. The 60-card row is capped at 12 c
   - the 0014 migration.
 
   It amends ADR-0051's #844 bullet: card fill is still config, now `cardSizing`.
+
 - Modify: `CONTEXT.md`: add **Card Sizing** (Fixed width: the Mode Token width, may overflow; Fit to screen: largest size at which every card on the page fits the Event Canvas).
 - Modify: spec: replace `columns: number | 'auto'` with `autoColumns`.
 

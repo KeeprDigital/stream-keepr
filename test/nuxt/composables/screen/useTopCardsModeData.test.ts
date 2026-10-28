@@ -240,10 +240,10 @@ describe('useTopCardsModeData', () => {
 			const { pageEntries, totalPages, resolvedColumns } = makeTopCardsModeData();
 			await flushPromises();
 
-			// Ten cards on the default 1920×1080 canvas fit largest in two rows of five.
-			expect(resolvedColumns.value).toBe(5);
-			expect(totalPages.value).toBe(2);
-			expect(pageEntries.value).toHaveLength(5);
+			// One row a page on the default 1920×1080 canvas: two cards are as large as one, in half the pages.
+			expect(resolvedColumns.value).toBe(2);
+			expect(totalPages.value).toBe(5);
+			expect(pageEntries.value).toHaveLength(2);
 		});
 
 		it('shows the page projected from the Rotation Anchor while auto-page is on', async () => {

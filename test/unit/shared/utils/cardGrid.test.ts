@@ -50,6 +50,20 @@ describe('cardGrid', () => {
 		expect(fitColumns(input)).toBe(expected);
 	});
 
+	// Paged, a page holds at most `maxRows` rows; of equally large cards, the fewest pages win.
+	it.each([
+		{ count: 60, maxRows: 2, expected: 4 },
+		{ count: 10, maxRows: 1, expected: 2 },
+		{ count: 10, maxRows: 60, expected: 5 },
+	])('fits $count cards, $maxRows rows a page, in $expected columns', ({ expected, ...input }) => {
+		expect(fitColumns({
+			...input,
+			width: 1920,
+			height: 1080,
+			gap: 12,
+		})).toBe(expected);
+	});
+
 	it.each([
 		{
 			width: 1920,

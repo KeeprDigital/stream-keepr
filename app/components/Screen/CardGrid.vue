@@ -30,6 +30,8 @@ const gridStyle = computed(() => {
 			? `repeat(auto-fill, ${props.cardWidth})`
 			: `repeat(${props.columns}, max-content)`,
 		gap: props.gap,
+		// Centred while it fits; wider, it overflows its end, never clipping its first column.
+		justifyContent: 'safe center',
 	};
 });
 </script>
@@ -37,7 +39,7 @@ const gridStyle = computed(() => {
 <template>
 	<div
 		class="card-grid grid"
-		:class="sizing === 'fit' ? 'card-grid--fit' : 'justify-center'"
+		:class="{ 'card-grid--fit': sizing === 'fit' }"
 		:style="gridStyle"
 		:data-card-sizing="sizing"
 		:data-columns="columns"

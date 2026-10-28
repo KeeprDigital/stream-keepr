@@ -170,15 +170,23 @@ export interface ResolvedDeckBoards {
  * Completes a Deck configuration's board selection and board blocks from their
  * defaults. Stored blocks are partial fragments — a PATCH may have written a
  * lone `{ columns: 6 }` — so every rendering and settings surface resolves
- * through this rather than reading the fragments directly.
+ * through this rather than reading the fragments directly. A mainboard stack,
+ * which only a client older than migration 0014 could still write, reads as
+ * a grid (ADR-0053), so neither a rendering nor the next board write carries it.
  */
 export function resolveDeckBoards(config: Partial<DeckModeConfig>): ResolvedDeckBoards {
+	const mainboard = {
+		...DEFAULT_DECK_BOARD_LAYOUT,
+		...config.mainboard,
+	};
 	return {
 		board: config.board ?? DEFAULT_BOARD,
 		sideboardPlacement: config.sideboardPlacement ?? DEFAULT_SIDEBOARD_PLACEMENT,
 		mainboard: {
-			...DEFAULT_DECK_BOARD_LAYOUT,
-			...config.mainboard,
+			...mainboard,
+			view: MAINBOARD_VIEW_VALUES.includes(mainboard.view)
+				? mainboard.view
+				: 'grid',
 		},
 		sideboard: {
 			...DEFAULT_SIDEBOARD_LAYOUT,

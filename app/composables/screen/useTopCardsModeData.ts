@@ -44,13 +44,15 @@ export function useTopCardsModeData() {
 	// ── Pagination ──
 	// A Page Rotation over the grid's rows, so each page holds whole rows of
 	// its columns' cards and `rowsPerPage` (the declared page size) counts them.
-	// Auto columns are chosen for every card at once, then paged (ADR-0053).
+	// Auto columns are chosen for every card and a page's rows at once, then
+	// paged (ADR-0053), so they never depend on the page they lay out.
 	const resolvedColumns = useCardGridColumns({
 		mode: 'top-cards',
 		sizing: () => config.value.cardSizing,
 		autoColumns: () => config.value.autoColumns,
 		columns: () => config.value.columns,
 		count: () => entries.value.length,
+		maxRows: () => config.value.rowsPerPage,
 		cardWidthToken: 'card-width',
 		gapToken: 'card-gap',
 	});

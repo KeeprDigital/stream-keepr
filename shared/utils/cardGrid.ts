@@ -10,22 +10,26 @@ function clampColumns(columns: number): number {
 
 /**
  * The column count at which `count` cards, in rows of that many, are largest
- * while every row fits `height` and every column fits `width`. A tie keeps the
- * fewer columns. It chooses only the count: a Fit grid sizes its cards from the
- * space it is given, so the area need only be close.
+ * while every row of a page fits `height` and every column fits `width`. A
+ * paged grid holds at most `maxRows` rows a page. Of equally large cards, the
+ * fewest pages win, then the fewest columns. It chooses only the count: a Fit
+ * grid sizes its cards from the space it is given, so the area need only be close.
  */
-export function fitColumns({ count, width, height, gap }: { count: number; width: number; height: number; gap: number }): number {
+export function fitColumns({ count, width, height, gap, maxRows = Infinity }: { count: number; width: number; height: number; gap: number; maxRows?: number }): number {
 	let best = 1;
 	let bestWidth = -Infinity;
+	let bestPages = Infinity;
 	for (let columns = 1; columns <= clampColumns(count); columns++) {
-		const rows = Math.ceil(count / columns);
+		const rows = Math.max(1, Math.min(Math.ceil(count / columns), maxRows));
+		const pages = Math.ceil(count / (columns * rows));
 		const cardWidth = Math.min(
 			(width - (columns - 1) * gap) / columns,
 			((height - (rows - 1) * gap) / rows) * CARD_ASPECT,
 		);
-		if (cardWidth > bestWidth) {
+		if (cardWidth > bestWidth || (cardWidth === bestWidth && pages < bestPages)) {
 			best = columns;
 			bestWidth = cardWidth;
+			bestPages = pages;
 		}
 	}
 	return best;

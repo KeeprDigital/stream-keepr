@@ -88,6 +88,17 @@ describe('getDisplayDefaultsForMode', () => {
 });
 
 describe('resolveDeckBoards', () => {
+	// A mainboard cannot stack (ADR-0053); one stored by a client older than 0014 reads as a grid.
+	it('reads a stored mainboard stack as a grid, and leaves a sideboard stack', () => {
+		const resolved = resolveDeckBoards({
+			mainboard: { view: 'stack' },
+			sideboard: { view: 'stack' },
+		} as never);
+
+		expect(resolved.mainboard.view).toBe('grid');
+		expect(resolved.sideboard.view).toBe('stack');
+	});
+
 	it('resolves an empty config to the defaults', () => {
 		expect(resolveDeckBoards({})).toEqual({
 			board: 'full',

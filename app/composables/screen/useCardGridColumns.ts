@@ -15,6 +15,8 @@ export interface CardGridColumnsOptions<M extends CardGridMode> {
 	columns: () => number;
 	/** The cards the grid lays out, across every page. */
 	count: () => number;
+	/** A paged grid's rows a page, which Fit columns are chosen to fill. */
+	maxRows?: () => number;
 	cardWidthToken: ScreenModeTokenOfType<M, 'dimension'>;
 	gapToken: ScreenModeTokenOfType<M, 'dimension'>;
 }
@@ -46,6 +48,7 @@ export function useCardGridColumns<M extends CardGridMode>(options: CardGridColu
 					width,
 					height: canvas.height - 2 * inset,
 					gap,
+					maxRows: options.maxRows?.(),
 				})
 			: fixedColumns({ width, cardWidth: tokens[options.cardWidthToken], gap });
 	});

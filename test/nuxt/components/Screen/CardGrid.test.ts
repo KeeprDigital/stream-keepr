@@ -52,6 +52,20 @@ describe('screenCardGrid', () => {
 		expect(style.gap).toBe('12px');
 		expect(wrapper.find('[data-testid="card"]').exists()).toBe(true);
 	});
+
+	// A Fixed grid wider than its space overflows on the end side only, never clipping its first column.
+	it('centres a Fixed grid only while it fits', () => {
+		const wrapper = mount(CardGrid, {
+			props: {
+				sizing: 'fixed',
+				columns: 5,
+				cardWidth: '160px',
+				gap: '12px',
+			},
+		});
+
+		expect((wrapper.element as HTMLElement).style.justifyContent).toBe('safe center');
+	});
 });
 
 describe('mtgCardFitBox', () => {
