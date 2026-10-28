@@ -89,7 +89,9 @@ describe('screenTopCardsCard', () => {
 		{ sizing: 'fill', width: '', fitted: false },
 		{ sizing: 'fit', width: '', fitted: true },
 	] as const)('sizes a $sizing card', ({ sizing, width, fitted }) => {
-		const wrapper = mount(Card, { props: { ...baseProps, sizing } });
+		const wrapper = mount(Card, {
+			props: { ...baseProps, sizing },
+		});
 
 		const item = wrapper.get('[data-testid="top-cards-item"]');
 		expect(item.attributes('data-sizing')).toBe(sizing);

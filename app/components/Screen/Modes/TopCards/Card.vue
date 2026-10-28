@@ -29,7 +29,9 @@ const props = defineProps<{
 
 const imageError = ref(false);
 /** A fitted card sits in a box that fits it to its grid cell. */
-const cardBox = computed(() => props.sizing === 'fit' ? resolveComponent('MtgCardFitBox') : 'div');
+const cardBox = computed(() => props.sizing === 'fit'
+	? resolveComponent('MtgCardFitBox')
+	: 'div');
 
 /**
  * Scryfall CDN URL for the card's normal front face image.

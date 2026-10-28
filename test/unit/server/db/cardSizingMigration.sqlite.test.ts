@@ -25,9 +25,11 @@ describe('the card sizing migration', () => {
 				INSERT INTO screens (id, event_id, name, slug, current_mode, mode_configs, asset_capability_seed, asset_capability_digest)
 				VALUES (1, 1, 'Screen 1', 'screen-1', 'deck', ?, 'seed-1', 'digest-1')
 			`,
-			args: [modeConfigs === null
-				? null
-				: JSON.stringify(modeConfigs)],
+			args: [
+				modeConfigs === null
+					? null
+					: JSON.stringify(modeConfigs),
+			],
 		});
 		await harness.applyRemainingMigrations();
 		const result = await harness.client.execute('SELECT mode_configs FROM screens WHERE id = 1');
@@ -40,28 +42,58 @@ describe('the card sizing migration', () => {
 	it.each([
 		{
 			name: 'a filling Most Played Cards grid fits',
-			before: { 'top-cards': { dynamicCardSize: true, columns: 5 } },
-			after: { 'top-cards': { cardSizing: 'fit', columns: 5 } },
+			before: {
+				'top-cards': { dynamicCardSize: true, columns: 5 },
+			},
+			after: {
+				'top-cards': { cardSizing: 'fit', columns: 5 },
+			},
 		},
 		{
 			name: 'a fixed Most Played Cards grid stays fixed',
-			before: { 'top-cards': { dynamicCardSize: false } },
-			after: { 'top-cards': { cardSizing: 'fixed' } },
+			before: {
+				'top-cards': { dynamicCardSize: false },
+			},
+			after: {
+				'top-cards': { cardSizing: 'fixed' },
+			},
 		},
 		{
 			name: 'each Deck board keeps its sizing, and a mainboard stack becomes a grid',
-			before: { deck: { mainboard: { view: 'stack', dynamicCardSize: true }, sideboard: { view: 'stack', dynamicCardSize: false } } },
-			after: { deck: { mainboard: { view: 'grid', cardSizing: 'fit' }, sideboard: { view: 'stack', cardSizing: 'fixed' } } },
+			before: {
+				deck: {
+					mainboard: { view: 'stack', dynamicCardSize: true },
+					sideboard: { view: 'stack', dynamicCardSize: false },
+				},
+			},
+			after: {
+				deck: {
+					mainboard: { view: 'grid', cardSizing: 'fit' },
+					sideboard: { view: 'stack', cardSizing: 'fixed' },
+				},
+			},
 		},
 		{
 			name: 'a Deck board that never set its sizing is left alone',
-			before: { deck: { mainboard: { columns: 6 } } },
-			after: { deck: { mainboard: { columns: 6 } } },
+			before: {
+				deck: {
+					mainboard: { columns: 6 },
+				},
+			},
+			after: {
+				deck: {
+					mainboard: { columns: 6 },
+				},
+			},
 		},
 		{
 			name: 'another mode is left alone',
-			before: { standings: { columns: [] } },
-			after: { standings: { columns: [] } },
+			before: {
+				standings: { columns: [] },
+			},
+			after: {
+				standings: { columns: [] },
+			},
 		},
 		{
 			name: 'a Screen with no mode configs is left alone',

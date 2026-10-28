@@ -9,6 +9,7 @@ import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import type { Player } from '~/types';
 import type { DeckListCardWithData } from '~/types/card/deckList';
 import { getCounterTypeConfigs } from '~~/shared/config/games';
+import { resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { counterConfigsForDeckCounterTypes } from '~~/shared/utils/deckCounters';
 import { createDeckLookupCards } from '~~/shared/utils/playerDeck';
 import { selectPlayerDeck } from '~/composables/data/usePlayerDeckCache';
@@ -345,6 +346,30 @@ export function useDeckModeData() {
 	const sideboard = computed(() => displayedDeck.value?.sideboard ?? []);
 	const displayedDeckVersion = computed(() => displayedDeck.value?.version ?? 0);
 	const hasDisplayedDeck = computed(() => displayedDeck.value !== null);
+
+	// Each grid board's columns: its own count, or with auto columns, chosen from
+	// its own cards and the Event Canvas (ADR-0053).
+	const boards = computed(() => resolveDeckBoards(config.value));
+	const boardColumns = {
+		mainboard: useCardGridColumns({
+			mode: 'deck',
+			sizing: () => boards.value.mainboard.cardSizing,
+			autoColumns: () => boards.value.mainboard.autoColumns,
+			columns: () => boards.value.mainboard.columns,
+			count: () => mainboard.value.length,
+			cardWidthToken: 'mainboard-card-width',
+			gapToken: 'mainboard-card-gap',
+		}),
+		sideboard: useCardGridColumns({
+			mode: 'deck',
+			sizing: () => boards.value.sideboard.cardSizing,
+			autoColumns: () => boards.value.sideboard.autoColumns,
+			columns: () => boards.value.sideboard.columns,
+			count: () => sideboard.value.length,
+			cardWidthToken: 'sideboard-card-width',
+			gapToken: 'sideboard-card-gap',
+		}),
+	};
 	const loading = freshness.loading;
 
 	/** Program never blanks for an error: one shows only while nothing is on air. */
@@ -576,6 +601,7 @@ export function useDeckModeData() {
 		deckStats,
 		mainboard,
 		sideboard,
+		boardColumns,
 		loading,
 		error,
 		cardDataDegraded: degradedRefetch.degraded,

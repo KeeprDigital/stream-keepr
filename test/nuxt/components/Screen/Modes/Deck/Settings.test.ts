@@ -97,6 +97,7 @@ const UISegmentedTabsStub = defineComponent({
 				data-testid="segmented-tab"
 				:data-value="item.value"
 				:data-active="String(item.value === modelValue)"
+				:disabled="item.disabled"
 				@click="$emit('update:modelValue', item.value)"
 			>
 				{{ item.label }}
@@ -129,9 +130,10 @@ const UTabsStub = defineComponent({
 const UInputNumberStub = defineComponent({
 	props: {
 		modelValue: { type: Number, required: false },
+		disabled: { type: Boolean, required: false },
 	},
 	emits: ['update:modelValue'],
-	template: '<div data-testid="u-input-number">{{ modelValue }}</div>',
+	template: '<div data-testid="u-input-number" :aria-disabled="String(disabled)">{{ modelValue }}</div>',
 });
 
 function defaultDeckConfig(): Record<string, any> {
@@ -143,13 +145,15 @@ function defaultDeckConfig(): Record<string, any> {
 			view: 'grid',
 			columns: 4,
 			listColumns: 2,
-			dynamicCardSize: false,
+			cardSizing: 'fixed',
+			autoColumns: false,
 		},
 		sideboard: {
 			view: 'stack',
 			columns: 4,
 			listColumns: 2,
-			dynamicCardSize: false,
+			cardSizing: 'fixed',
+			autoColumns: false,
 		},
 		showQuantities: true,
 		showDeckName: true,
@@ -359,13 +363,15 @@ describe('screenDeckSettings', () => {
 
 		const mainboardSection = wrapper.get('[data-testid="settings-card"][data-title="Mainboard Layout"]');
 		expect(mainboardSection.find('[data-label="Grid Columns"]').exists()).toBe(true);
-		expect(mainboardSection.find('[data-label="Dynamic Card Size"]').exists()).toBe(true);
+		expect(mainboardSection.find('[data-label="Card Sizing"]').exists()).toBe(true);
+		expect(mainboardSection.find('[data-label="Auto Columns"]').exists()).toBe(true);
 		expect(mainboardSection.find('[data-label="List Columns"]').exists()).toBe(false);
 
-		// A stack's look is all Mode Tokens, so it offers only its view.
+		// A stack's look is otherwise all Mode Tokens, so it offers only its view and sizing.
 		const sideboardSection = wrapper.get('[data-testid="settings-card"][data-title="Sideboard Layout"]');
 		expect(sideboardSection.find('[data-label="Grid Columns"]').exists()).toBe(false);
-		expect(sideboardSection.find('[data-label="Dynamic Card Size"]').exists()).toBe(false);
+		expect(sideboardSection.find('[data-label="Card Sizing"]').exists()).toBe(true);
+		expect(sideboardSection.find('[data-label="Auto Columns"]').exists()).toBe(false);
 		expect(sideboardSection.find('[data-label="List Columns"]').exists()).toBe(false);
 	});
 
@@ -382,9 +388,59 @@ describe('screenDeckSettings', () => {
 				view: 'grid',
 				columns: 4,
 				listColumns: 2,
-				dynamicCardSize: false,
+				cardSizing: 'fixed',
+				autoColumns: false,
 			},
 		});
+	});
+
+	// Only a sideboard stacks, and only beside the mainboard (ADR-0053).
+	it.each([
+		{ name: 'beside', config: {}, stackEnabled: true },
+		{
+			name: 'below',
+			config: { sideboardPlacement: 'below' },
+			stackEnabled: false,
+		},
+		{
+			name: 'alone',
+			config: { board: 'sideboard' },
+			stackEnabled: false,
+		},
+	])('offers a sideboard placed $name a stack: $stackEnabled, and the mainboard none', async ({ config, stackEnabled }) => {
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			...config,
+		};
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const tabsOf = (title: string) => wrapper.find(`[data-testid="settings-card"][data-title="${title}"]`).exists()
+			? wrapper.get(`[data-testid="settings-card"][data-title="${title}"]`).findAll('[data-testid="segmented-tab"]')
+			: [];
+		expect(tabsOf('Mainboard Layout').map(tab => tab.attributes('data-value'))).toEqual(config.board
+			? []
+			: ['grid', 'list']);
+		const stackTab = tabsOf('Sideboard Layout').find(tab => tab.attributes('data-value') === 'stack')!;
+		expect(stackTab.attributes('disabled')).toBe(stackEnabled ? undefined : '');
+	});
+
+	it('picks a grid\'s card sizing, and its columns by count or automatically', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+		const mainboardSection = () => wrapper.get('[data-testid="settings-card"][data-title="Mainboard Layout"]');
+
+		await mainboardSection().get('[data-label="Card Sizing"] [data-value="fit"]').trigger('click');
+		expect(mockUpdateConfig).toHaveBeenLastCalledWith({
+			mainboard: expect.objectContaining({ cardSizing: 'fit' }),
+		});
+
+		await mainboardSection().get('[data-label="Auto Columns"]').trigger('click');
+		expect(mockUpdateConfig).toHaveBeenLastCalledWith({
+			mainboard: expect.objectContaining({ autoColumns: true }),
+		});
+		await flushPromises();
+		expect(mainboardSection().get('[data-label="Grid Columns"] [data-testid="u-input-number"]').attributes('aria-disabled')).toBe('true');
 	});
 
 	it('hints when the selected deck has no sideboard cards', async () => {

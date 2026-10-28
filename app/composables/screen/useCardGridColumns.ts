@@ -41,7 +41,12 @@ export function useCardGridColumns<M extends CardGridMode>(options: CardGridColu
 		const gap = tokens[options.gapToken];
 
 		return options.sizing() === 'fit'
-			? fitColumns({ count: options.count(), width, height: canvas.height - 2 * inset, gap })
+			? fitColumns({
+					count: options.count(),
+					width,
+					height: canvas.height - 2 * inset,
+					gap,
+				})
 			: fixedColumns({ width, cardWidth: tokens[options.cardWidthToken], gap });
 	});
 }

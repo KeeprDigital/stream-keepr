@@ -27,6 +27,7 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 			quantityBadgeStyle: { color: 'white', backgroundColor: 'purple' },
 			highlanderPointsPositionClass: '-bottom-1 -left-1',
 			highlanderPointsBadgeStyle: { color: 'red', backgroundColor: 'blue' },
+			sizing: 'fixed',
 			...props,
 		},
 		global: {
@@ -47,14 +48,37 @@ describe('screenDeckCard', () => {
 		expect(badge.attributes('style')).toContain('background-color: blue;');
 	});
 
+	// Fixed takes its board's card-width Mode Token; fill takes its column; fit fits its grid cell, badges and all.
 	it.each([
-		{ board: 'mainboard', dynamicSize: false, width: 'var(--theme-deck-mainboard-card-width)' },
-		{ board: 'sideboard', dynamicSize: false, width: 'var(--theme-deck-sideboard-card-width)' },
-		{ board: 'sideboard', dynamicSize: true, width: '' },
-	])('takes its board\'s card-width Mode Token unless it fills its column ($board, dynamic: $dynamicSize)', async ({ board, dynamicSize, width }) => {
-		const wrapper = await mountComponent({ board, dynamicSize });
+		{
+			board: 'mainboard',
+			sizing: 'fixed',
+			width: 'var(--theme-deck-mainboard-card-width)',
+			fitted: false,
+		},
+		{
+			board: 'sideboard',
+			sizing: 'fixed',
+			width: 'var(--theme-deck-sideboard-card-width)',
+			fitted: false,
+		},
+		{
+			board: 'sideboard',
+			sizing: 'fill',
+			width: '100%',
+			fitted: false,
+		},
+		{
+			board: 'mainboard',
+			sizing: 'fit',
+			width: '',
+			fitted: true,
+		},
+	])('sizes a $sizing $board card', async ({ board, sizing, width, fitted }) => {
+		const wrapper = await mountComponent({ board, sizing });
 
 		expect((wrapper.get('.card-item').element as HTMLElement).style.width).toBe(width);
+		expect(wrapper.find('[data-card-fit] .card-item [data-testid="highlander-card-badge"]').exists()).toBe(fitted);
 	});
 
 	it('hides the Highlander point badge when disabled', async () => {

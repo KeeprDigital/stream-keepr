@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
-import type { BoardSelection, DeckBoardView, QuantityPosition, SideboardPlacement } from '~~/shared/types/enums';
-import type { DeckBoardLayoutConfig, ResolvedDeckBoardLayout } from '~~/shared/types/screenConfig';
+import type { BoardSelection, CardSizing, QuantityPosition, SideboardPlacement, SideboardView } from '~~/shared/types/enums';
+import type { ResolvedDeckBoardLayout, ResolvedSideboardLayout } from '~~/shared/types/screenConfig';
 import type { NinePoint } from '~~/shared/utils/ninePoints';
 import type { Screen } from '~/types';
-import { DECK_BOARD_LAYOUT_FIELDS } from '~~/shared/screenModeConfigs/deck';
+import { DECK_SIDEBOARD_LAYOUT_FIELDS } from '~~/shared/screenModeConfigs/deck';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
-import { SIDEBOARD_PLACEMENT_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
+import { CARD_SIZING_SELECT_OPTIONS, SIDEBOARD_PLACEMENT_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
@@ -29,9 +29,10 @@ const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 defineExpose({ resetConfig, saving });
 
 // Each control's label and bounds, read from the mode's config contract (#498):
-// the mode's own fields, and the layout block each board carries.
+// the mode's own fields, and the layout block each board carries. The boards'
+// blocks label and bound their knobs alike; only their views differ.
 const fields = screenModeConfigContract('deck').fields;
-const boardFields = DECK_BOARD_LAYOUT_FIELDS;
+const boardFields = DECK_SIDEBOARD_LAYOUT_FIELDS;
 
 // A badge in the centre of a Deck Screen card would cover its art, so the badge
 // position pickers offer every point but this one — which is why what they emit
@@ -129,15 +130,27 @@ const boardTabs: TabsItem[] = [
 	{ label: 'Sideboard', value: 'sideboard' },
 ];
 
-// Per-board view tabs
-const boardViewTabs: TabsItem[] = [
-	{ label: 'Grid', value: 'grid', icon: 'i-lucide-grid-3x3' },
-	{ label: 'Stack', value: 'stack', icon: 'i-lucide-layers' },
-	{ label: 'List', value: 'list', icon: 'i-lucide-list' },
-];
-
 const resolvedBoards = computed(() => resolveDeckBoards(config.value));
 const board = computed<BoardSelection>(() => resolvedBoards.value.board);
+
+// Per-board view tabs. Only the sideboard stacks, and only as the strip beside
+// the mainboard (ADR-0053); elsewhere its stack shows as a grid, so the tab
+// stays, disabled, rather than lose a stack that would return beside.
+const sideboardCanStack = computed(() =>
+	board.value === 'full' && resolvedBoards.value.sideboardPlacement === 'beside');
+const gridViewTab = { label: 'Grid', value: 'grid', icon: 'i-lucide-grid-3x3' };
+const listViewTab = { label: 'List', value: 'list', icon: 'i-lucide-list' };
+const mainboardViewTabs = [gridViewTab, listViewTab];
+const sideboardViewTabs = computed(() => [
+	gridViewTab,
+	{
+		label: 'Stack',
+		value: 'stack',
+		icon: 'i-lucide-layers',
+		disabled: !sideboardCanStack.value,
+	},
+	listViewTab,
+]);
 
 type BoardKey = 'mainboard' | 'sideboard';
 
@@ -145,22 +158,41 @@ interface BoardSection {
 	key: BoardKey;
 	title: string;
 	layout: ResolvedDeckBoardLayout;
+	viewTabs: { label: string; value: string; icon: string; disabled?: boolean }[];
+	/** The view its Screen renders: a stack that cannot stack shows as a grid. */
+	view: SideboardView;
 }
 
 const boardSections = computed<BoardSection[]>(() => {
 	const sections: BoardSection[] = [];
 	if (board.value !== 'sideboard') {
-		sections.push({ key: 'mainboard', title: 'Mainboard', layout: resolvedBoards.value.mainboard });
+		const layout = resolvedBoards.value.mainboard;
+		sections.push({
+			key: 'mainboard',
+			title: 'Mainboard',
+			layout,
+			viewTabs: mainboardViewTabs,
+			view: layout.view,
+		});
 	}
 	if (board.value !== 'mainboard') {
-		sections.push({ key: 'sideboard', title: 'Sideboard', layout: resolvedBoards.value.sideboard });
+		const layout = resolvedBoards.value.sideboard;
+		sections.push({
+			key: 'sideboard',
+			title: 'Sideboard',
+			layout,
+			viewTabs: sideboardViewTabs.value,
+			view: layout.view === 'stack' && !sideboardCanStack.value
+				? 'grid'
+				: layout.view,
+		});
 	}
 	return sections;
 });
 
 // The mode-config PATCH replaces a board block wholesale, so every knob change
 // writes the complete resolved block back.
-function updateBoardLayout(key: BoardKey, patch: Partial<DeckBoardLayoutConfig>) {
+function updateBoardLayout(key: BoardKey, patch: Partial<ResolvedSideboardLayout>) {
 	updateConfig({
 		[key]: {
 			...resolvedBoards.value[key],
@@ -369,16 +401,37 @@ const emptyBoardHint = computed(() => {
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UISegmentedTabs
-					:items="boardViewTabs"
-					:model-value="section.layout.view"
+					:items="section.viewTabs"
+					:model-value="section.view"
 					size="sm"
-					@update:model-value="updateBoardLayout(section.key, { view: $event as DeckBoardView })"
+					@update:model-value="updateBoardLayout(section.key, { view: $event as SideboardView })"
 				/>
 			</UFormField>
 
-			<USeparator v-if="section.layout.view !== 'stack'" />
+			<USeparator />
 
-			<template v-if="section.layout.view === 'grid'">
+			<UFormField
+				v-if="section.view !== 'list'"
+				:label="boardFields.cardSizing.label"
+				description="Fit shrinks the cards until every one fits the screen. Fixed takes the Theme's card width and may run off the screen."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<USelect
+					:model-value="section.layout.cardSizing"
+					:items="CARD_SIZING_SELECT_OPTIONS"
+					class="w-48"
+					@update:model-value="updateBoardLayout(section.key, { cardSizing: $event as CardSizing })"
+				/>
+			</UFormField>
+
+			<template v-if="section.view === 'grid'">
+				<ScreenSettingsToggle
+					:label="boardFields.autoColumns.label"
+					description="Choose the columns from the card count and the screen's size."
+					:model-value="section.layout.autoColumns"
+					@update:model-value="updateBoardLayout(section.key, { autoColumns: $event })"
+				/>
+
 				<UFormField
 					:label="boardFields.columns.label"
 					description="Number of columns in the card grid."
@@ -388,22 +441,14 @@ const emptyBoardHint = computed(() => {
 						:model-value="section.layout.columns"
 						:min="boardFields.columns.min"
 						:max="boardFields.columns.max"
+						:disabled="section.layout.autoColumns"
 						class="w-32"
 						@update:model-value="updateBoardLayout(section.key, { columns: Number($event) })"
 					/>
 				</UFormField>
-
-				<USeparator />
-
-				<ScreenSettingsToggle
-					:label="boardFields.dynamicCardSize.label"
-					description="Cards automatically fill the available column width."
-					:model-value="section.layout.dynamicCardSize"
-					@update:model-value="updateBoardLayout(section.key, { dynamicCardSize: $event })"
-				/>
 			</template>
 
-			<template v-else-if="section.layout.view === 'list'">
+			<template v-else-if="section.view === 'list'">
 				<UFormField
 					:label="boardFields.listColumns.label"
 					description="Number of columns in the list."

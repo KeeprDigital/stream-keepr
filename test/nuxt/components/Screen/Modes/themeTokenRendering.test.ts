@@ -216,25 +216,18 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'badge-shadow': { selector: '[data-testid="highlander-card-badge"]', property: 'boxShadow' },
 		'mainboard-card-width': { selector: '[data-testid="mainboard-grid"] .card-item', property: 'width' },
 		'mainboard-card-gap': { selector: '[data-testid="mainboard-grid"]', property: 'gap' },
-		'mainboard-stack-reveal': {
-			selector: '[data-testid="mainboard-stack-row"] .stack-card',
-			property: 'width',
-			config: {
-				mainboard: { view: 'stack' },
-			},
-		},
 		'sideboard-card-width': {
 			selector: '[data-testid="sideboard-grid"] .card-item',
 			property: 'width',
 			config: {
-				sideboard: { view: 'grid', columns: 2, dynamicCardSize: false },
+				sideboard: { view: 'grid', columns: 2, cardSizing: 'fixed' },
 			},
 		},
 		'sideboard-card-gap': {
 			selector: '[data-testid="sideboard-grid"]',
 			property: 'gap',
 			config: {
-				sideboard: { view: 'grid', columns: 2, dynamicCardSize: false },
+				sideboard: { view: 'grid', columns: 2, cardSizing: 'fixed' },
 			},
 		},
 		'sideboard-stack-reveal': { selector: '[data-testid="sideboard-stack-column"] .stack-card', property: 'height' },
@@ -644,7 +637,7 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	config: computed(() => ({
 		board: 'full',
 		sideboardPlacement: 'beside',
-		mainboard: { view: 'grid', columns: 4, dynamicCardSize: false },
+		mainboard: { view: 'grid', columns: 4, cardSizing: 'fixed' },
 		sideboard: { view: 'stack' },
 		showQuantities: true,
 		showDeckName: true,
@@ -692,6 +685,10 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	displayedDeckVersion: ref(1),
 	pendingSwapVersion: ref(0),
 	commitPendingDeck: () => {},
+	boardColumns: {
+		mainboard: computed(() => 4),
+		sideboard: computed(() => 2),
+	},
 }));
 
 const spotlightCard = {
@@ -1006,7 +1003,7 @@ describe('a Deck Screen\'s two boards', () => {
 			'deck.sideboard-card-gap': 4,
 		}, {
 			config: {
-				sideboard: { view: 'grid', columns: 2, dynamicCardSize: false },
+				sideboard: { view: 'grid', columns: 2, cardSizing: 'fixed' },
 			},
 		});
 

@@ -18,6 +18,7 @@ const {
 	deckStats,
 	mainboard,
 	sideboard,
+	boardColumns,
 	error,
 	hasDisplayedDeck,
 	displayedDeckVersion,
@@ -89,8 +90,9 @@ const board = computed(() => resolvedBoards.value.board);
 const showMainboard = computed(() => board.value !== 'sideboard' && mainboard.value.length > 0);
 const showSideboard = computed(() => board.value !== 'mainboard' && sideboard.value.length > 0);
 
-// A vertical strip only reads beside a mainboard; every other stacked board
-// renders as a horizontal overlapping row (#478).
+// A sideboard stacks only as the strip beside a mainboard; anywhere else its
+// stack renders as a grid (ADR-0053), keeping the stored view for when it
+// moves back beside.
 const sideboardBeside = computed(() =>
 	board.value === 'full'
 	&& resolvedBoards.value.sideboardPlacement === 'beside'
@@ -103,7 +105,8 @@ interface VisibleBoard {
 	label: string;
 	cards: DeckListCardWithData[];
 	layout: ResolvedDeckBoardLayout;
-	stackVertical: boolean;
+	/** The view it renders, which is its layout's, unless a stack cannot stack here. */
+	view: 'grid' | 'stack' | 'list';
 	showLabel: boolean;
 }
 
@@ -115,17 +118,20 @@ const visibleBoards = computed<VisibleBoard[]>(() => {
 			label: 'Mainboard',
 			cards: mainboard.value,
 			layout: resolvedBoards.value.mainboard,
-			stackVertical: false,
+			view: resolvedBoards.value.mainboard.view,
 			showLabel: resolvedBoards.value.mainboard.view === 'list',
 		});
 	}
 	if (showSideboard.value) {
+		const { view } = resolvedBoards.value.sideboard;
 		boards.push({
 			key: 'sideboard',
 			label: 'Sideboard',
 			cards: sideboard.value,
 			layout: resolvedBoards.value.sideboard,
-			stackVertical: sideboardBeside.value,
+			view: view === 'stack' && !sideboardBeside.value
+				? 'grid'
+				: view,
 			showLabel: true,
 		});
 	}
@@ -134,21 +140,42 @@ const visibleBoards = computed<VisibleBoard[]>(() => {
 
 const besideActive = computed(() => sideboardBeside.value && showMainboard.value);
 
+function isFit(section: VisibleBoard): boolean {
+	return section.layout.cardSizing === 'fit';
+}
+
+/** A grid's columns; a Fixed grid with auto columns fits as many as there is room for. */
+function gridColumns(section: VisibleBoard): number | 'auto-fill' {
+	return !isFit(section) && section.layout.autoColumns
+		? 'auto-fill'
+		: boardColumns[section.key].value;
+}
+
+function gridRows(section: VisibleBoard): number {
+	return Math.max(1, Math.ceil(section.cards.length / boardColumns[section.key].value));
+}
+
 /**
  * In the beside row each board's share of the width follows its column count,
- * so a column reads about the same width on either side. A beside stacked
- * sideboard stays content-sized — its strip has a fixed card width.
+ * so a column reads about the same width on either side. A Fixed beside stack
+ * stays content-sized, its strip at its card width; a Fit one is one column
+ * wide. Boards below each other share the height a Fit grid needs by its rows,
+ * and anything else takes its own height.
  */
 function boardFlexStyle(section: VisibleBoard) {
 	if (!besideActive.value) {
-		return {};
+		return isFit(section) && section.view === 'grid'
+			? { flex: `${gridRows(section)} 1 0%` }
+			: { flex: 'none' };
 	}
-	if (section.key === 'sideboard' && section.layout.view === 'stack') {
-		return {};
+	if (section.view === 'stack') {
+		return isFit(section)
+			? { flex: '1 1 0%' }
+			: {};
 	}
-	const weight = section.layout.view === 'list'
+	const weight = section.view === 'list'
 		? section.layout.listColumns
-		: section.layout.columns;
+		: boardColumns[section.key].value;
 	return { flex: `${weight} 1 0%` };
 }
 const showHighlanderPoints = computed(() => config.value.showHighlanderPoints !== false);
@@ -183,13 +210,6 @@ const showHeader = computed(() =>
 	|| showDeckMeta.value
 	|| showHighlanderPointedCards.value,
 );
-
-function gridStyle(section: VisibleBoard) {
-	return {
-		gridTemplateColumns: `repeat(${section.layout.columns}, minmax(0, 1fr))`,
-		gap: modeTokenVar('deck', `${section.key}-card-gap`),
-	};
-}
 
 function listGridStyle(layout: ResolvedDeckBoardLayout) {
 	return {
@@ -304,17 +324,23 @@ const cardBadgeProps = computed(() => ({
 	highlanderPointsBadgeStyle: highlanderCardBadgeStyle,
 }));
 
+const stackReveal = modeTokenVar('deck', 'sideboard-stack-reveal');
+
 /**
- * A stacked board: each card but the last shows only its board's
- * `stack-reveal` Mode Token's slice of itself, down a strip or across a row,
- * and the next card covers the rest. The last card shows whole.
+ * The beside stack: each card but the last shows only the `stack-reveal`
+ * Mode Token's slice of itself down the strip, and the next card covers the
+ * rest. The last card shows whole. In Fit, every card takes the width at which
+ * the whole strip, reveals and last card, fits the strip's height.
  */
-function stackCardStyle(section: VisibleBoard, extent: 'height' | 'width', index: number) {
-	return index < section.cards.length - 1
-		? {
-				[extent]: modeTokenVar('deck', `${section.key}-stack-reveal`),
-			}
-		: {};
+function stackCardStyle(section: VisibleBoard, index: number) {
+	return {
+		...(index < section.cards.length - 1
+			? { height: stackReveal }
+			: {}),
+		...(isFit(section)
+			? { width: `min(100cqw, calc((100cqh - ${section.cards.length - 1} * ${stackReveal}) * 61 / 85))` }
+			: {}),
+	};
 }
 </script>
 
@@ -325,9 +351,9 @@ function stackCardStyle(section: VisibleBoard, extent: 'height' | 'width', index
 		<!-- Deck Content -->
 		<div class="deck-content overflow-hidden w-full h-full" :style="displayStyle">
 			<transition mode="out-in" name="deck-swap" @after-leave="handleDeckAfterLeave">
-				<div v-if="showDeckBody && hasDisplayedDeck" :key="displayedDeckVersion" class="deck-body w-full h-full">
+				<div v-if="showDeckBody && hasDisplayedDeck" :key="displayedDeckVersion" class="deck-body flex flex-col w-full h-full">
 					<!-- Header -->
-					<div v-if="showHeader" class="deck-header mb-4 text-center">
+					<div v-if="showHeader" class="deck-header shrink-0 mb-4 text-center">
 						<div
 							v-if="showTopHeader"
 							class="flex flex-wrap items-center justify-center gap-3"
@@ -405,74 +431,58 @@ function stackCardStyle(section: VisibleBoard, extent: 'height' | 'width', index
 					</div>
 
 					<!-- Boards: each visible board renders its own layout block -->
-					<div class="deck-layout flex gap-6" :class="besideActive ? 'flex-row' : 'flex-col'">
+					<div class="deck-layout flex flex-1 min-h-0 gap-6" :class="besideActive ? 'flex-row' : 'flex-col'">
 						<div
 							v-for="section in visibleBoards"
 							:key="section.key"
 							:data-testid="`${section.key}-section`"
-							:class="section.stackVertical ? 'flex flex-col' : ''"
+							class="flex flex-col min-h-0 min-w-0"
 							:style="boardFlexStyle(section)"
 						>
-							<h3 v-if="section.showLabel" class="text-lg mb-2" :style="titleStyle">
+							<h3 v-if="section.showLabel" class="text-lg shrink-0 mb-2" :style="titleStyle">
 								{{ section.label }}
 							</h3>
 
 							<!-- Grid -->
-							<div
-								v-if="section.layout.view === 'grid'"
+							<ScreenCardGrid
+								v-if="section.view === 'grid'"
 								:data-testid="`${section.key}-grid`"
-								class="card-grid"
-								:class="{ 'dynamic-grid': section.layout.dynamicCardSize }"
-								:style="gridStyle(section)"
+								:sizing="section.layout.cardSizing"
+								:columns="gridColumns(section)"
+								:rows="gridRows(section)"
+								:card-width="modeTokenVar('deck', `${section.key}-card-width`)"
+								:gap="modeTokenVar('deck', `${section.key}-card-gap`)"
 							>
 								<ScreenModesDeckCard
 									v-for="(card, index) in section.cards"
 									:key="`${section.key}-${index}`"
 									:card="card"
 									:board="section.key"
-									:dynamic-size="section.layout.dynamicCardSize"
+									:sizing="section.layout.cardSizing"
 									v-bind="cardBadgeProps"
 								/>
-							</div>
+							</ScreenCardGrid>
 
 							<!-- Stack, beside a mainboard: vertical strip -->
 							<div
-								v-else-if="section.layout.view === 'stack' && section.stackVertical"
+								v-else-if="section.view === 'stack'"
 								:data-testid="`${section.key}-stack-column`"
 								class="stack-container flex flex-col"
+								:class="{ 'stack-container--fit': isFit(section) }"
+								:data-card-sizing="section.layout.cardSizing"
 							>
 								<div
 									v-for="(card, index) in section.cards"
 									:key="`${section.key}-${index}`"
 									class="stack-card relative shrink-0"
-									:style="stackCardStyle(section, 'height', index)"
+									:style="stackCardStyle(section, index)"
 								>
 									<ScreenModesDeckCard
 										:card="card"
 										:board="section.key"
+										:sizing="isFit(section) ? 'fill' : 'fixed'"
 										v-bind="cardBadgeProps"
 									/>
-								</div>
-							</div>
-
-							<!-- Stack, full width: horizontal overlapping row -->
-							<div v-else-if="section.layout.view === 'stack'" class="flex justify-center">
-								<div
-									:data-testid="`${section.key}-stack-row`"
-									class="flex"
-								>
-									<div
-										v-for="(card, index) in section.cards"
-										:key="`${section.key}-${index}`"
-										class="stack-card relative shrink-0"
-										:style="stackCardStyle(section, 'width', index)"
-									>
-										<ScreenModesDeckCard
-											:card="card"
-											:board="section.key"
-											v-bind="cardBadgeProps"
-										/>
-									</div>
 								</div>
 							</div>
 
@@ -516,16 +526,16 @@ function stackCardStyle(section: VisibleBoard, extent: 'height' | 'width', index
 </template>
 
 <style scoped>
-.card-grid {
-	display: grid;
-}
-
 .card-list {
 	display: grid;
 }
 
-.card-grid.dynamic-grid :deep(.card-item) {
-	width: 100%;
+/* The strip's own height and width are what its cards fit (`stackCardStyle`). */
+.stack-container--fit {
+	flex: 1 1 0%;
+	min-height: 0;
+	container-type: size;
+	align-items: center;
 }
 
 .deck-swap-enter-active,

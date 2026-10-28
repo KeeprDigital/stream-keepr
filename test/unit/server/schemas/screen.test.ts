@@ -145,7 +145,10 @@ describe('deckModeConfigSchema', () => {
 		{ board: 'sideboard', view: 'stack', accepted: true },
 		{ board: 'sideboard', view: 'list', accepted: true },
 	] as const)('$board view $view accepted: $accepted', ({ board, view, accepted }) => {
-		expect(deckModeConfigSchema.safeParse({ ...validConfig, [board]: { view } }).success).toBe(accepted);
+		expect(deckModeConfigSchema.safeParse({
+			...validConfig,
+			[board]: { view },
+		}).success).toBe(accepted);
 	});
 });
 

@@ -203,10 +203,24 @@ describe('useTopCardsModeData', () => {
 
 		// A Fit grid shares its height between a full page's rows, so a short last page keeps its card size.
 		it.each([
-			{ cards: 5, rowsPerPage: 2, currentPage: 2, pageRowCount: 2 },
-			{ cards: 3, rowsPerPage: 60, currentPage: 1, pageRowCount: 2 },
+			{
+				cards: 5,
+				rowsPerPage: 2,
+				currentPage: 2,
+				pageRowCount: 2,
+			},
+			{
+				cards: 3,
+				rowsPerPage: 60,
+				currentPage: 1,
+				pageRowCount: 2,
+			},
 		])('lays $cards cards, $rowsPerPage rows a page, out in $pageRowCount rows on page $currentPage', async ({ cards, rowsPerPage, currentPage, pageRowCount }) => {
-			mockFetch.mockResolvedValue({ entries: rankedCards(cards), totalDecks: 5, scope: 'all' });
+			mockFetch.mockResolvedValue({
+				entries: rankedCards(cards),
+				totalDecks: 5,
+				scope: 'all',
+			});
 			Object.assign(mutableConfig, { columns: 2, rowsPerPage, currentPage });
 
 			const data = makeTopCardsModeData();
@@ -216,7 +230,11 @@ describe('useTopCardsModeData', () => {
 		});
 
 		it('pages by the columns auto columns chooses for the Event Canvas', async () => {
-			mockFetch.mockResolvedValue({ entries: rankedCards(10), totalDecks: 5, scope: 'all' });
+			mockFetch.mockResolvedValue({
+				entries: rankedCards(10),
+				totalDecks: 5,
+				scope: 'all',
+			});
 			Object.assign(mutableConfig, { columns: 2, autoColumns: true, rowsPerPage: 1 });
 
 			const { pageEntries, totalPages, resolvedColumns } = makeTopCardsModeData();

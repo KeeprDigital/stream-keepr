@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, reactive } from 'vue';
+import { fitColumns } from '~~/shared/utils/cardGrid';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 import { SCREEN_MODE_REREAD_MS } from '~/modules/screen-mode/freshness';
 
@@ -71,10 +72,12 @@ mockNuxtImport('useScreenContext', () => () => ({
 	assetCapability: mockAssetCapability,
 	cardDataHealth: mockCardDataHealth,
 }));
+const mockBoardLayouts = ref<Record<string, unknown>>({});
 mockNuxtImport('useScreenModeConfig', () => (_mode: string) => computed(() => ({
 	deckSource: mockBroadcastDeckListId.value === null
 		? { type: 'player' as const, playerId: mockPlayerId.value }
 		: { type: 'broadcast' as const, broadcastDeckListId: mockBroadcastDeckListId.value },
+	...mockBoardLayouts.value,
 })));
 mockNuxtImport('useScryfallBatch', () => () => ({
 	fetchScryfallCards: mockFetchScryfallCards,
@@ -310,6 +313,27 @@ describe('useDeckModeData', () => {
 		expect(sideboard.value).toEqual([]);
 		expect(loading.value).toBe(false);
 		expect(hasDisplayedDeck.value).toBe(false);
+	});
+
+	// A board's auto columns come from its own cards and the Event Canvas; without auto, its own count.
+	it('gives each grid board its columns', async () => {
+		mockPlayerId.value = 5;
+		mockBoardLayouts.value = {
+			mainboard: { cardSizing: 'fit', autoColumns: true },
+			sideboard: { columns: 3 },
+		};
+		const { boardColumns, mainboard } = mountDeckModeData();
+		await flushPromises();
+
+		expect(mainboard.value.length).toBeGreaterThan(0);
+		expect(boardColumns.mainboard.value).toBe(fitColumns({
+			count: mainboard.value.length,
+			width: 1920,
+			height: 1080,
+			gap: 8,
+		}));
+		expect(boardColumns.sideboard.value).toBe(3);
+		mockBoardLayouts.value = {};
 	});
 
 	it('loads the initial deck immediately and preloads its images', async () => {

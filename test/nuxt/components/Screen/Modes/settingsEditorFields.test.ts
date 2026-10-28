@@ -46,7 +46,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 				sideboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'grid' },
 			},
 			{
-				mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'stack' },
+				mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'grid' },
 				sideboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'list' },
 			},
 		],

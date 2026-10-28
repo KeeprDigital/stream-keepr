@@ -45,7 +45,12 @@ const sideboardLayoutShape = deckBoardLayoutShape(SIDEBOARD_VIEW_VALUES);
  * A layout block's former fields: its look fields, now the mode's Mode Tokens
  * (#824), and `dynamicCardSize`, which `cardSizing` replaced (ADR-0053).
  */
-const FORMER_BOARD_LAYOUT_FIELDS = ['cardSize', 'cardGap', 'stackOverlap', 'dynamicCardSize'] as const;
+const FORMER_BOARD_LAYOUT_FIELDS = [
+	'cardSize',
+	'cardGap',
+	'stackOverlap',
+	'dynamicCardSize',
+] as const;
 
 const mainboardLayoutConfigSchema = z.object(mainboardLayoutShape).strict();
 const sideboardLayoutConfigSchema = z.object(sideboardLayoutShape).strict();
