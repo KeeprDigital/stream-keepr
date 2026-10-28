@@ -1,5 +1,5 @@
-/** A Magic card's width over its height. */
-export const CARD_ASPECT = 63 / 88;
+/** A card image's width over its height. Keep in step with the `mtg-card` utility in main.css. */
+export const CARD_ASPECT = 61 / 85;
 
 /** The most columns a card grid lays out, auto or not. */
 export const MAX_CARD_GRID_COLUMNS = 12;
