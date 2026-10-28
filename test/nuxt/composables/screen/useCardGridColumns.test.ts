@@ -13,9 +13,10 @@ interface Case {
 	count?: number;
 	canvas?: { width: number; height: number };
 	overrides?: Record<string, unknown>;
+	cardWidth?: number;
 }
 
-function columnsIn({ sizing, autoColumns, count = 10, canvas, overrides = {} }: Case): number {
+function columnsIn({ sizing, autoColumns, count = 10, canvas, overrides = {}, cardWidth = 160 }: Case): number {
 	const context: ScreenContext = {
 		screen: ref(createMockScreen({ themeOverrides: overrides } as any) as any),
 		eventId: computed(() => 1),
@@ -28,13 +29,12 @@ function columnsIn({ sizing, autoColumns, count = 10, canvas, overrides = {} }: 
 			: {}),
 	};
 	return runInScreenContext(context, () => useCardGridColumns({
-		mode: 'top-cards',
 		sizing: () => sizing,
 		autoColumns: () => autoColumns,
 		columns: () => 5,
 		count: () => count,
-		cardWidthToken: 'card-width',
-		gapToken: 'card-gap',
+		cardWidth: () => cardWidth,
+		gap: () => 12,
 	})).value;
 }
 
@@ -71,10 +71,10 @@ describe('useCardGridColumns', () => {
 			expected: 10,
 		},
 		{
-			name: 'Fixed fits fewer of a Screen\'s wider cards',
+			name: 'Fixed fits fewer wider cards',
 			sizing: 'fixed',
 			autoColumns: true,
-			overrides: { 'top-cards.card-width': 480 },
+			cardWidth: 480,
 			expected: 3,
 		},
 		{
@@ -103,13 +103,12 @@ describe('useCardGridColumns', () => {
 			eventId: () => 1,
 			saving: () => false,
 		}, () => useCardGridColumns({
-			mode: 'top-cards',
 			sizing: () => 'fit',
 			autoColumns: () => true,
 			columns: () => 5,
 			count: () => 10,
-			cardWidthToken: 'card-width',
-			gapToken: 'card-gap',
+			cardWidth: () => 160,
+			gap: () => 12,
 		}));
 
 		expect(columns.value).toBe(fitColumns({

@@ -50,21 +50,6 @@ export function screenModeThemeFontReferences(mode: ScreenMode, theme: StoredThe
 		: []);
 }
 
-/**
- * Some of a mode's dimension Mode Tokens as numbers, by name within the mode,
- * resolved as its host resolves them. For a display that lays itself out from
- * one in script, as auto card columns do from the card width.
- */
-export function screenModeDimensionTokens<M extends ThemedScreenMode, T extends ScreenModeTokenOfType<M, 'dimension'>>(mode: M, tokens: readonly T[], theme: StoredThemeTokens, overrides: StoredThemeTokens): Record<T, number> {
-	const { values } = resolveThemeTokens({
-		vocabulary: FOUNDATION_TOKENS,
-		modeTokens: screenModeTokens(mode),
-		theme,
-		overrides,
-	});
-	return Object.fromEntries(tokens.map(token => [token, values[screenModeTokenName(mode, token)] as number])) as Record<T, number>;
-}
-
 /** One of a display's own colour or dimension Mode Tokens, as a CSS value. */
 export function modeTokenVar<M extends ThemedScreenMode>(mode: M, token: ScreenModeTokenOfType<M, 'color' | 'dimension'>): string {
 	return themeTokenVar(screenModeTokenName(mode, token));

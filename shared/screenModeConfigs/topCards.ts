@@ -40,10 +40,11 @@ const TOP_CARDS_MAX_GRID_ROWS = TOP_CARDS_MAX_LIMIT;
  * `columns` cards each. The default holds the most cards a Screen can rank in
  * one column, so a Screen that never set it shows every card on one page.
  *
- * Its badge colours (#823), card size, card gap and badge size (#844) are Mode
- * Tokens; the fields it once held for them are former fields, which a stored
- * config may still carry. Whether cards fit the screen is behaviour, so
- * `cardSizing` is config; it replaced `dynamicCardSize` (ADR-0053).
+ * Its badge colours (#823) are Mode Tokens; the fields it once held for them
+ * are former fields, which a stored config may still carry. Its card width,
+ * card gap and badge size are config, read only here (ADR-0053); the size
+ * presets they replaced are former fields too. `cardSizing` replaced
+ * `dynamicCardSize`.
  */
 export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	// Scoping
@@ -60,8 +61,11 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	columns: editorField(z.number().int().min(1).max(12), { label: 'Columns' }),
 	/** Columns chosen from the card count and the Event Canvas, in place of `columns`. */
 	autoColumns: editorField(z.boolean(), { label: 'Auto columns' }),
-	/** Fit: every card on the page fits the screen. Fixed: cards take the `card-width` Mode Token. */
+	/** Fit: every card on the page fits the screen. Fixed: cards take `cardWidth`. */
 	cardSizing: editorField(z.enum(CARD_SIZING_VALUES), { label: 'Card sizing' }),
+	/** A Fixed card's width in Event Canvas px. */
+	cardWidth: editorField(z.number().int().min(48).max(480), { label: 'Card width' }),
+	cardGap: editorField(z.number().int().min(0).max(100), { label: 'Card gap' }),
 
 	// Pagination: grid rows per page
 	rowsPerPage: pageRotationPageSize,
@@ -75,6 +79,8 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	showRankBadges: editorField(z.boolean(), { label: 'Show rank badges' }),
 	/** Which metric the stat badge shows; 'none' hides the badge. */
 	statBadge: editorField(z.enum(TOP_CARDS_STAT_VALUES), { label: 'Stat badge' }),
+	/** The badges' text size in px; each badge sizes itself around it. */
+	badgeSize: editorField(z.number().int().min(8).max(48), { label: 'Badge text size' }),
 }, {
 	...DEFAULT_METAGAME_SCOPE_WITHOUT_MIN_POINTS,
 	archetypeFilter: undefined,
@@ -87,12 +93,15 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	columns: 5,
 	autoColumns: false,
 	cardSizing: 'fit',
+	cardWidth: 160,
+	cardGap: 12,
 	rowsPerPage: TOP_CARDS_MAX_GRID_ROWS,
 	...DEFAULT_PAGE_ROTATION,
 	...DEFAULT_HEADER_CONFIG,
 	showCardNames: true,
 	showRankBadges: true,
 	statBadge: 'inclusionRate',
+	badgeSize: 14,
 }, {
 	formerFields: [
 		'rankBadgeTextColor',
@@ -100,7 +109,6 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 		'statBadgeTextColor',
 		'statBadgeBgColor',
 		'cardSize',
-		'cardGap',
 		'statBadgeSize',
 		'dynamicCardSize',
 	],

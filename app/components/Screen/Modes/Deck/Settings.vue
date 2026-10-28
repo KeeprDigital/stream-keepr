@@ -6,7 +6,7 @@ import type { NinePoint } from '~~/shared/utils/ninePoints';
 import type { Screen } from '~/types';
 import { DECK_SIDEBOARD_LAYOUT_FIELDS } from '~~/shared/screenModeConfigs/deck';
 import { screenModeConfigContract } from '~~/shared/screenModes';
-import { DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
+import { DEFAULT_DECK_TEXT_SIZES, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { CARD_SIZING_SELECT_OPTIONS, SIDEBOARD_PLACEMENT_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
 import { useConsumedEventData } from '~/modules/event-data/resync';
@@ -342,6 +342,21 @@ const emptyBoardHint = computed(() => {
 				:model-value="config.showDeckMetaPill"
 				@update:model-value="updateConfig({ showDeckMetaPill: $event })"
 			/>
+
+			<UFormField
+				v-if="config.showDeckMetaPill !== false"
+				:label="fields.metaPillSize.label"
+				description="The pill's text size in px; the pill sizes itself around it."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<UInputNumber
+					:model-value="config.metaPillSize ?? DEFAULT_DECK_TEXT_SIZES.metaPillSize"
+					:min="fields.metaPillSize.min"
+					:max="fields.metaPillSize.max"
+					class="w-32"
+					@update:model-value="updateConfig({ metaPillSize: Number($event) })"
+				/>
+			</UFormField>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard v-if="!isBroadcastSource" title="Pointed Cards">
@@ -351,6 +366,21 @@ const emptyBoardHint = computed(() => {
 				:model-value="config.showHighlanderPointedCards"
 				@update:model-value="updateConfig({ showHighlanderPointedCards: $event })"
 			/>
+
+			<UFormField
+				v-if="config.showHighlanderPointedCards !== false"
+				:label="fields.pointedCardSize.label"
+				description="Each chip's text size in px; the chip sizes itself around it."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<UInputNumber
+					:model-value="config.pointedCardSize ?? DEFAULT_DECK_TEXT_SIZES.pointedCardSize"
+					:min="fields.pointedCardSize.min"
+					:max="fields.pointedCardSize.max"
+					class="w-32"
+					@update:model-value="updateConfig({ pointedCardSize: Number($event) })"
+				/>
+			</UFormField>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Layout">
@@ -413,7 +443,7 @@ const emptyBoardHint = computed(() => {
 			<UFormField
 				v-if="section.view !== 'list'"
 				:label="boardFields.cardSizing.label"
-				description="Fit shrinks the cards until every one fits the screen. Fixed takes the Theme's card width and may run off the screen."
+				description="Fit shrinks the cards until every one fits the screen. Fixed takes the card width below and may run off the screen."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<USelect
@@ -421,6 +451,36 @@ const emptyBoardHint = computed(() => {
 					:items="CARD_SIZING_SELECT_OPTIONS"
 					class="w-48"
 					@update:model-value="updateBoardLayout(section.key, { cardSizing: $event as CardSizing })"
+				/>
+			</UFormField>
+
+			<UFormField
+				v-if="section.view === 'stack' || (section.view === 'grid' && section.layout.cardSizing === 'fixed')"
+				:label="boardFields.cardWidth.label"
+				description="Each card's width in px."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<UInputNumber
+					:model-value="section.layout.cardWidth"
+					:min="boardFields.cardWidth.min"
+					:max="boardFields.cardWidth.max"
+					class="w-32"
+					@update:model-value="updateBoardLayout(section.key, { cardWidth: Number($event) })"
+				/>
+			</UFormField>
+
+			<UFormField
+				v-if="section.view === 'stack'"
+				:label="boardFields.stackReveal.label"
+				description="How much of each stacked card but the last shows, in px."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<UInputNumber
+					:model-value="resolvedBoards.sideboard.stackReveal"
+					:min="boardFields.stackReveal.min"
+					:max="boardFields.stackReveal.max"
+					class="w-32"
+					@update:model-value="updateBoardLayout(section.key, { stackReveal: Number($event) })"
 				/>
 			</UFormField>
 
@@ -444,6 +504,20 @@ const emptyBoardHint = computed(() => {
 						:disabled="section.layout.autoColumns"
 						class="w-32"
 						@update:model-value="updateBoardLayout(section.key, { columns: Number($event) })"
+					/>
+				</UFormField>
+
+				<UFormField
+					:label="boardFields.cardGap.label"
+					description="The space between cards in px."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UInputNumber
+						:model-value="section.layout.cardGap"
+						:min="boardFields.cardGap.min"
+						:max="boardFields.cardGap.max"
+						class="w-32"
+						@update:model-value="updateBoardLayout(section.key, { cardGap: Number($event) })"
 					/>
 				</UFormField>
 			</template>
@@ -492,6 +566,20 @@ const emptyBoardHint = computed(() => {
 						@update:model-value="updateConfig({ quantityPosition: $event as QuantityPosition })"
 					/>
 				</UFormField>
+
+				<UFormField
+					:label="fields.quantityBadgeSize.label"
+					description="The badge's text size in px; the badge sizes itself around it."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UInputNumber
+						:model-value="config.quantityBadgeSize ?? DEFAULT_DECK_TEXT_SIZES.quantityBadgeSize"
+						:min="fields.quantityBadgeSize.min"
+						:max="fields.quantityBadgeSize.max"
+						class="w-32"
+						@update:model-value="updateConfig({ quantityBadgeSize: Number($event) })"
+					/>
+				</UFormField>
 			</template>
 
 			<template v-if="!isBroadcastSource">
@@ -521,6 +609,20 @@ const emptyBoardHint = computed(() => {
 							:disabled-points="BADGE_DISABLED_POINTS"
 							aria-label="Highlander point badge position"
 							@update:model-value="updateConfig({ highlanderPointsPosition: $event as QuantityPosition })"
+						/>
+					</UFormField>
+
+					<UFormField
+						:label="fields.pointsBadgeSize.label"
+						description="The badge's text size in px; the badge sizes itself around it."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<UInputNumber
+							:model-value="config.pointsBadgeSize ?? DEFAULT_DECK_TEXT_SIZES.pointsBadgeSize"
+							:min="fields.pointsBadgeSize.min"
+							:max="fields.pointsBadgeSize.max"
+							class="w-32"
+							@update:model-value="updateConfig({ pointsBadgeSize: Number($event) })"
 						/>
 					</UFormField>
 				</template>

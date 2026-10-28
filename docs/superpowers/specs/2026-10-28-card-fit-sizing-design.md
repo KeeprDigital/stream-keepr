@@ -37,12 +37,11 @@ On Most Played Cards (top level) and Deck (each board block). Editor label
 Most Played Cards `'fit'`, Deck boards `'fixed'`.
 
 `dynamicCardSize` becomes a former field (`dynamicCardSize`,
-`mainboard.dynamicCardSize`, `sideboard.dynamicCardSize`). Former fields are
-dropped, not mapped, so a D1 migration (`0014_card_sizing`) rewrites stored
-`screens.mode_configs` first: `true → 'fit'`, `false → 'fixed'`, removing the old
-key, for `'$."top-cards"'` (quoted, as in `0003_top_cut_screen_mode_key.sql`),
-`$.deck.mainboard`, `$.deck.sideboard`. Mode configs live only in
-`screens.mode_configs`. Precedent: `0008_event_canvas.sql` uses `json_remove`.
+`mainboard.dynamicCardSize`, `sideboard.dynamicCardSize`).
+
+**As built, no migration** (the user's call): the Themes work isn't in
+production, and existing Screens are deleted and set up again. A stored former
+field reads as the mode default.
 
 ### `autoColumns: boolean` beside `columns`
 
@@ -97,11 +96,24 @@ editor fields (`DECK_BOARD_LAYOUT_FIELDS`).
   to show the disabled state).
 - Defaults unchanged: sideboard stack beside. The other common setup is a
   sideboard grid below.
-- The same migration rewrites stored `mainboard.view: 'stack'` to `'grid'`.
+- A stored `mainboard.view: 'stack'` reads as `'grid'` (`resolveDeckBoards`).
 - Delete the horizontal stack row template and its code path.
-- The `*-stack-reveal` Mode Tokens: `mainboard-stack-reveal` is removed (its
-  board can no longer stack); `sideboard-stack-reveal` stays. A Theme storing a
-  removed token has it dropped on read already (`theme/resolution.ts`).
+- `mainboard-stack-reveal` is removed (its board can no longer stack).
+
+### Sizes are config, not Mode Tokens (added after review)
+
+A Theme Token is shared. A size only one display reads is that mode's config,
+edited beside the control it sizes. It replaces these Mode Tokens:
+
+- Most Played Cards: `cardWidth`, `cardGap`, `badgeSize`.
+- Each Deck board: `cardWidth`, `cardGap`. The sideboard also gets `stackReveal`.
+- Deck text sizes: `quantityBadgeSize`, `pointsBadgeSize`, `metaPillSize` and
+  `pointedCardSize`.
+- Card Spotlight: `cardWidth`.
+
+Card width is offered only for a Fixed grid or a stack. The three badge shadows
+read a new `shadow` Foundation Token. Moving inline overrides of the remaining
+Mode Tokens is a follow-up.
 
 ## Rendering Fit (CSS, no measuring)
 
@@ -140,8 +152,6 @@ already sets `container-type: size`.
 
 - Column resolution: `it.each` table at its home (Fit tie-break, tall vs
   wide canvas, Fixed width maths, clamps).
-- Migration: on `createSqliteD1Harness`, stored rows before → after for both
-  modes and `mainboard.view: 'stack'`.
 - Contract: `screenModeConfigContracts.test.ts` and
   `formerModeConfigFields.test.ts` cover the new fields and former fields;
   `'auto'` accepted, out-of-range numbers still clamp.

@@ -74,6 +74,10 @@ const rotation = useRotationConfigWrites({
 	saveConfig,
 });
 const { updateConfig } = rotation;
+/** With auto columns on, a sizing edit changes the columns, and so which cards each page holds. */
+const autoColumnsPageReset = computed(() => config.value.autoColumns
+	? { currentPage: 1 }
+	: {});
 
 const boardOptions = [
 	{ label: 'Full Deck', value: 'full' },
@@ -189,14 +193,43 @@ function typeLabel(bucket: CardTypeBucket): string {
 		<ScreenSettingsCard title="Layout">
 			<UFormField
 				:label="fields.cardSizing.label"
-				description="Fit shrinks the cards until every one on the page fits the screen. Fixed takes the Theme's card width and may run off the screen."
+				description="Fit shrinks the cards until every one on the page fits the screen. Fixed takes the card width below and may run off the screen."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<USelect
 					:model-value="config.cardSizing"
 					:items="CARD_SIZING_SELECT_OPTIONS"
 					class="w-48"
-					@update:model-value="updateConfig({ cardSizing: $event as CardSizing, ...(config.autoColumns ? { currentPage: 1 } : {}) })"
+					@update:model-value="updateConfig({ cardSizing: $event as CardSizing, ...autoColumnsPageReset })"
+				/>
+			</UFormField>
+
+			<UFormField
+				v-if="config.cardSizing === 'fixed'"
+				:label="fields.cardWidth.label"
+				description="Each card's width in px."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<UInputNumber
+					:model-value="config.cardWidth"
+					:min="fields.cardWidth.min"
+					:max="fields.cardWidth.max"
+					class="w-32"
+					@update:model-value="updateConfig({ cardWidth: Number($event), ...autoColumnsPageReset })"
+				/>
+			</UFormField>
+
+			<UFormField
+				:label="fields.cardGap.label"
+				description="The space between cards in px."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<UInputNumber
+					:model-value="config.cardGap"
+					:min="fields.cardGap.min"
+					:max="fields.cardGap.max"
+					class="w-32"
+					@update:model-value="updateConfig({ cardGap: Number($event), ...autoColumnsPageReset })"
 				/>
 			</UFormField>
 
@@ -280,6 +313,20 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:items="statBadgeOptions"
 					class="w-48"
 					@update:model-value="updateConfig({ statBadge: $event as TopCardsStat })"
+				/>
+			</UFormField>
+
+			<UFormField
+				:label="fields.badgeSize.label"
+				description="The badges' text size in px; each badge sizes itself around it."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<UInputNumber
+					:model-value="config.badgeSize"
+					:min="fields.badgeSize.min"
+					:max="fields.badgeSize.max"
+					class="w-32"
+					@update:model-value="updateConfig({ badgeSize: Number($event) })"
 				/>
 			</UFormField>
 		</ScreenSettingsCard>

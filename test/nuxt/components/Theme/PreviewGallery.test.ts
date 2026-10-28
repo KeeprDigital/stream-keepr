@@ -58,10 +58,18 @@ describe('the Theme preview gallery', () => {
 		},
 		{
 			mode: 'card',
-			tokens: { 'card.card-width': 300 },
+			tokens: {
+				'card.motion': {
+					duration: 500,
+					easing: 'ease-in-out',
+					delay: 0,
+					fade: { opacity: 0 },
+					scale: { factor: 0.7, origin: 'center' },
+				},
+			},
 			shown: (gallery: VueWrapper) => spotlightCard(gallery).exists(),
-			painted: (gallery: VueWrapper) => (tile(gallery, 'card').get('.screen-renderer').element as HTMLElement).style.getPropertyValue('--theme-card-card-width'),
-			value: '300px',
+			painted: (gallery: VueWrapper) => (tile(gallery, 'card').get('.screen-renderer').element as HTMLElement).style.getPropertyValue('--theme-card-motion-duration'),
+			value: '500ms',
 		},
 		{
 			mode: 'broadcast-graphics',

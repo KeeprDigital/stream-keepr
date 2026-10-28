@@ -18,7 +18,6 @@ vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/ed
 const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 	'background': 'its editor is the Background Layer stack, an authored stack',
 	'feature-match-overlay': 'its editor picks a Feature Match Slot (an Event Reference), applies a preset, and edits the server-validated layout',
-	'card': 'its editor only binds a Feature Match (an Event Reference); its size and motion are Mode Tokens',
 	'broadcast-graphics': 'its editor edits the authored graphics stack, the Graphic Channels list, and the Broadcast Graphics Background: one Animation Effect selection, a union field the shared Animation Effect editor edits from its catalogue schema',
 };
 
@@ -36,6 +35,10 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 		editor: 'FeatureMatch',
 		variants: [{}],
 	},
+	'card': {
+		editor: 'Card',
+		variants: [{}],
+	},
 	// Each board in each view: the defaults show a grid Mainboard and a stacked Sideboard.
 	'deck': {
 		editor: 'Deck',
@@ -43,11 +46,17 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 			{},
 			{
 				mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'list' },
-				sideboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'grid' },
+				sideboard: {
+					...getDefaultConfigForMode('deck').sideboard,
+					view: 'grid',
+				},
 			},
 			{
 				mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'grid' },
-				sideboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'list' },
+				sideboard: {
+					...getDefaultConfigForMode('deck').sideboard,
+					view: 'list',
+				},
 			},
 		],
 	},
@@ -112,11 +121,11 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 		editor: 'TopCut',
 		variants: [{}],
 	},
-	// The Top N scope, a fixed card size, and auto-page.
+	// The Top N scope, a Fixed card width, and auto-page.
 	'top-cards': {
 		editor: 'TopCards',
 		variants: [
-			{ scope: 'topN', dynamicCardSize: false, autoPageEnabled: true },
+			{ scope: 'topN', cardSizing: 'fixed', autoPageEnabled: true },
 		],
 	},
 };

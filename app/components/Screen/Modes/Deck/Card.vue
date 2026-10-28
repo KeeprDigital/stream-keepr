@@ -4,23 +4,21 @@ import { modeTokenVar } from '~/modules/screen-mode';
 
 const props = defineProps<{
 	card: DeckListCardWithData;
-	/** The board it is on, whose `card-width` Mode Token it takes. */
-	board: 'mainboard' | 'sideboard';
+	/** Its width while its sizing is fixed: its board's card width. */
+	width?: string;
 	showQuantity: boolean;
 	showHighlanderPoints: boolean;
 	quantityPositionClass: string;
 	quantityBadgeStyle: Record<string, string>;
 	highlanderPointsPositionClass: string;
 	highlanderPointsBadgeStyle: Record<string, string>;
-	/** Fixed takes its board's `card-width` Mode Token; fill takes its column; fit fits its grid cell both ways. */
+	/** Fixed takes `width`; fill takes its column; fit fits its grid cell both ways. */
 	sizing: 'fixed' | 'fill' | 'fit';
 }>();
 
 const cardStyle = computed(() => {
 	switch (props.sizing) {
-		case 'fixed': return {
-			width: modeTokenVar('deck', `${props.board}-card-width`),
-		};
+		case 'fixed': return { width: props.width };
 		case 'fill': return { width: '100%' };
 		default: return {};
 	}

@@ -37,6 +37,9 @@ const defaultConfig = {
 	columns: 5,
 	autoColumns: false,
 	cardSizing: 'fit',
+	cardWidth: 160,
+	cardGap: 12,
+	badgeSize: 14,
 	rowsPerPage: 60,
 	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
@@ -335,6 +338,50 @@ describe('screenTopCardsSettings', () => {
 			const wrapper = await mountComponent();
 
 			expect(numberInput(wrapper, 'Columns').attributes('aria-disabled')).toBe(disabled);
+		});
+
+		// Each size sits beside the control it sizes and writes that one field (ADR-0053).
+		it.each([
+			{
+				label: 'Card width',
+				patch: { cardWidth: 200 },
+			},
+			{
+				label: 'Card gap',
+				patch: { cardGap: 20 },
+			},
+			{
+				label: 'Badge text size',
+				patch: { badgeSize: 18 },
+			},
+		])('writes the $label', async ({ label, patch }) => {
+			mockConfig.value = { ...mockConfig.value, cardSizing: 'fixed' };
+			const wrapper = await mountComponent();
+
+			numberInput(wrapper, label).vm.$emit('update:modelValue', Object.values(patch)[0]);
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith(patch);
+		});
+
+		// With auto columns on, a size changes the columns, and so which cards each page holds.
+		it('returns to page 1 when a size changes the auto columns', async () => {
+			mockConfig.value = { ...mockConfig.value, cardSizing: 'fixed', autoColumns: true };
+			const wrapper = await mountComponent();
+
+			numberInput(wrapper, 'Card width').vm.$emit('update:modelValue', 200);
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith({ cardWidth: 200, currentPage: 1 });
+		});
+
+		// A Fit grid sizes its cards to the screen, so it offers no width.
+		it.each([
+			{ cardSizing: 'fixed', offered: true },
+			{ cardSizing: 'fit', offered: false },
+		])('offers a $cardSizing grid a card width: $offered', async ({ cardSizing, offered }) => {
+			mockConfig.value = { ...mockConfig.value, cardSizing };
+			const wrapper = await mountComponent();
+
+			expect(wrapper.findAll('[data-testid="form-field"]').some(field => field.text().includes('Card width'))).toBe(offered);
 		});
 	});
 });

@@ -47,14 +47,13 @@ export function useTopCardsModeData() {
 	// Auto columns are chosen for every card and a page's rows at once, then
 	// paged (ADR-0053), so they never depend on the page they lay out.
 	const resolvedColumns = useCardGridColumns({
-		mode: 'top-cards',
 		sizing: () => config.value.cardSizing,
 		autoColumns: () => config.value.autoColumns,
 		columns: () => config.value.columns,
 		count: () => entries.value.length,
 		maxRows: () => config.value.rowsPerPage,
-		cardWidthToken: 'card-width',
-		gapToken: 'card-gap',
+		cardWidth: () => config.value.cardWidth,
+		gap: () => config.value.cardGap,
 	});
 	const gridRows = computed(() => topCardsGridRows<RankedTopCard>(
 		entries.value.map((entry, index) => ({ entry, rank: index + 1 })),

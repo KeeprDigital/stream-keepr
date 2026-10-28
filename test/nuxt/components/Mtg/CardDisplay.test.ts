@@ -48,6 +48,7 @@ function mountComponent(shown: MtgCard | null = null) {
 	return mount(CardDisplay, {
 		props: {
 			card: shown,
+			width: '400px',
 		},
 		global: {
 			stubs: {
@@ -68,7 +69,7 @@ describe('mtgCardDisplay', () => {
 	});
 
 	// The host scales the Event Canvas to its window (#821); a card scaling it again would scale twice.
-	it.each([1080, 720, 0])('sizes the card by its card-width Mode Token alone in a %i px overlay', async (height) => {
+	it.each([1080, 720, 0])('sizes the card by its width alone in a %i px overlay', async (height) => {
 		containerHeight.value = height;
 		const wrapper = mountComponent();
 
@@ -81,7 +82,7 @@ describe('mtgCardDisplay', () => {
 
 		const container = wrapper.get('.card-container').element as HTMLElement;
 		expect(container.style.zoom).toBe('');
-		expect((wrapper.get('[data-testid="spotlight-card"]').element as HTMLElement).style.width).toBe('var(--theme-card-card-width)');
+		expect((wrapper.get('[data-testid="spotlight-card"]').element as HTMLElement).style.width).toBe('400px');
 	});
 
 	it('shows a Card it is given at mount once its image loads', async () => {

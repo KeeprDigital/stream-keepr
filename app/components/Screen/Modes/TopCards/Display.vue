@@ -19,10 +19,11 @@ const pageIndicatorStyle = {
 	color: modeTokenVar('top-cards', 'page-indicator-text'),
 };
 
-const cardGap = modeTokenVar('top-cards', 'card-gap');
-const cardWidth = modeTokenVar('top-cards', 'card-width');
+// Its sizes are its own config, in Event Canvas px (ADR-0053).
+const cardGap = computed(() => `${config.value.cardGap}px`);
+const cardWidth = computed(() => `${config.value.cardWidth}px`);
 /** The badges' text size, which each badge sizes itself around. */
-const badgeSize = modeTokenVar('top-cards', 'badge-size');
+const badgeSize = computed(() => `${config.value.badgeSize}px`);
 
 /** A badge lifts off the card's art on a soft shadow. */
 const badgeStyle = {

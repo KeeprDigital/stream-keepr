@@ -216,7 +216,7 @@ A Screen Output that renders the final composed opacity as a grayscale alpha mat
 _Avoid_: Black-and-white export, chroma key.
 
 **Card Sizing**:
-How a card grid on a Most Played Cards or Deck List Screen sizes its cards. Fixed width: each card takes its card-width Mode Token, and the grid may run off the Event Canvas. Fit to screen: every card on the page takes the largest size at which all of them fit the space the grid is given, so none overflow. Either may take auto columns, chosen from the card count and the Event Canvas (ADR-0053).
+How a card grid on a Most Played Cards or Deck List Screen sizes its cards. Fixed width: each card takes the grid's own card width, and the grid may run off the Event Canvas. Fit to screen: every card on the page takes the largest size at which all of them fit the space the grid is given, so none overflow. Either may take auto columns, chosen from the card count and the Event Canvas (ADR-0053).
 _Avoid_: dynamic card size, card size presets.
 
 **Program monitor**:

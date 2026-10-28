@@ -352,22 +352,20 @@ export function useDeckModeData() {
 	const boards = computed(() => resolveDeckBoards(config.value));
 	const boardColumns = {
 		mainboard: useCardGridColumns({
-			mode: 'deck',
 			sizing: () => boards.value.mainboard.cardSizing,
 			autoColumns: () => boards.value.mainboard.autoColumns,
 			columns: () => boards.value.mainboard.columns,
 			count: () => mainboard.value.length,
-			cardWidthToken: 'mainboard-card-width',
-			gapToken: 'mainboard-card-gap',
+			cardWidth: () => boards.value.mainboard.cardWidth,
+			gap: () => boards.value.mainboard.cardGap,
 		}),
 		sideboard: useCardGridColumns({
-			mode: 'deck',
 			sizing: () => boards.value.sideboard.cardSizing,
 			autoColumns: () => boards.value.sideboard.autoColumns,
 			columns: () => boards.value.sideboard.columns,
 			count: () => sideboard.value.length,
-			cardWidthToken: 'sideboard-card-width',
-			gapToken: 'sideboard-card-gap',
+			cardWidth: () => boards.value.sideboard.cardWidth,
+			gap: () => boards.value.sideboard.cardGap,
 		}),
 	};
 	const loading = freshness.loading;

@@ -69,8 +69,11 @@ const DeckCardStub = defineComponent({
 		showHighlanderPoints: { type: Boolean, required: false },
 		highlanderPointsPositionClass: { type: String, required: false },
 		sizing: { type: String, required: true },
+		width: { type: String, required: false },
+		quantityBadgeStyle: { type: Object, required: false },
+		highlanderPointsBadgeStyle: { type: Object, required: false },
 	},
-	template: '<div data-testid="deck-card" :data-sizing="sizing" :data-show-highlander-points="String(showHighlanderPoints)" :data-point-position="highlanderPointsPositionClass" />',
+	template: '<div data-testid="deck-card" :data-sizing="sizing" :data-width="width" :data-quantity-size="quantityBadgeStyle?.fontSize" :data-points-size="highlanderPointsBadgeStyle?.fontSize" :data-show-highlander-points="String(showHighlanderPoints)" :data-point-position="highlanderPointsPositionClass" />',
 });
 
 function createCard(overrides: Partial<DeckListCardWithData> = {}): DeckListCardWithData {
@@ -311,14 +314,47 @@ describe('screenDeckDisplay', () => {
 	});
 
 	// The next card covers all of a stacked card but its board's stack-reveal slice; the last shows whole.
+	// The Screen's own sizes, not the Theme's, size each board and every badge, pill and chip (ADR-0053).
+	it('sizes its boards, badges, pill and chips from its config', async () => {
+		mutableConfig = {
+			...mutableConfig,
+			mainboard: {
+				view: 'grid',
+				columns: 4,
+				cardWidth: 200,
+				cardGap: 20,
+			},
+			sideboard: { view: 'stack', cardWidth: 100, stackReveal: 40 },
+			quantityBadgeSize: 21,
+			pointsBadgeSize: 22,
+			metaPillSize: 23,
+			pointedCardSize: 24,
+		};
+		sideboard.value = ['Force of Will', 'Flusterstorm'].map(name => createCard({ name, compartment: 'sideboard' }));
+
+		const wrapper = await mountComponent();
+
+		const grid = wrapper.get('[data-testid="mainboard-grid"]');
+		expect((grid.element as HTMLElement).style.gap).toBe('20px');
+		const mainCard = grid.get('[data-testid="deck-card"]');
+		expect(mainCard.attributes('data-width')).toBe('200px');
+		expect(mainCard.attributes('data-quantity-size')).toBe('21px');
+		expect(mainCard.attributes('data-points-size')).toBe('22px');
+		const strip = wrapper.get('[data-testid="sideboard-stack-column"]');
+		expect(strip.get('[data-testid="deck-card"]').attributes('data-width')).toBe('100px');
+		expect((strip.get('.stack-card').element as HTMLElement).style.height).toBe('40px');
+		expect((wrapper.get('[data-testid="deck-meta-pill"]').element as HTMLElement).style.fontSize).toBe('23px');
+		expect((wrapper.get('[data-testid="highlander-pointed-card-chip"]').element as HTMLElement).style.fontSize).toBe('24px');
+	});
+
 	it('shows each card but the last of the beside stack by its reveal', async () => {
 		sideboard.value = ['Force of Will', 'Flusterstorm', 'Pyroblast'].map(name => createCard({ name, compartment: 'sideboard' }));
 
 		const wrapper = await mountComponent();
 
 		expect(wrapper.get('[data-testid="sideboard-stack-column"]').findAll('.stack-card').map(card => (card.element as HTMLElement).style.height)).toEqual([
-			'var(--theme-deck-sideboard-stack-reveal)',
-			'var(--theme-deck-sideboard-stack-reveal)',
+			'30px',
+			'30px',
 			'',
 		]);
 	});

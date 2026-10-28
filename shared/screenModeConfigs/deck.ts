@@ -19,10 +19,10 @@ const quantityPositionSchema = z.enum(QUANTITY_POSITION_VALUES);
  * their own (#478): which view renders the board, and the knobs each view
  * reads — grid reads its columns and how its cards are sized, list reads
  * listColumns. Only the sideboard stacks, as the strip beside the mainboard
- * (ADR-0053), so each board names its own views. Visibility is the `board`
- * selection's concern, so a block carries no show/hide of its own. How big
- * its cards are, its grid's gap and how much of a stacked card shows are its
- * board's Mode Tokens (#824, #844).
+ * (ADR-0053), so each board names its own views, and only it says how much of
+ * a stacked card shows. Visibility is the `board` selection's concern, so a
+ * block carries no show/hide of its own. Its card width and gap are config,
+ * read only by its board (ADR-0053).
  */
 function deckBoardLayoutShape<const Views extends readonly [string, ...string[]]>(views: Views) {
 	return {
@@ -33,24 +33,27 @@ function deckBoardLayoutShape<const Views extends readonly [string, ...string[]]
 		/** Columns chosen from the card count and the Event Canvas, in place of `columns`. */
 		autoColumns: editorField(z.boolean().optional(), { label: 'Auto Columns' }),
 		listColumns: editorField(z.number().int().min(1).max(4).optional(), { label: 'List Columns' }),
-		/** Fit: every card fits its board's space. Fixed: cards take their board's `card-width` Mode Token. */
+		/** Fit: every card fits its board's space. Fixed: cards take `cardWidth`. */
 		cardSizing: editorField(z.enum(CARD_SIZING_VALUES).optional(), { label: 'Card Sizing' }),
+		/** A Fixed or stacked card's width in Event Canvas px. */
+		cardWidth: editorField(z.number().int().min(48).max(480).optional(), { label: 'Card Width' }),
+		cardGap: editorField(z.number().int().min(0).max(48).optional(), { label: 'Card Gap' }),
 	};
 }
 
 const mainboardLayoutShape = deckBoardLayoutShape(MAINBOARD_VIEW_VALUES);
-const sideboardLayoutShape = deckBoardLayoutShape(SIDEBOARD_VIEW_VALUES);
+const sideboardLayoutShape = {
+	...deckBoardLayoutShape(SIDEBOARD_VIEW_VALUES),
+	/** How much of each stacked card but the last shows, in px. */
+	stackReveal: editorField(z.number().int().min(4).max(240).optional(), { label: 'Stack Reveal' }),
+};
 
 /**
- * A layout block's former fields: its look fields, now the mode's Mode Tokens
- * (#824), and `dynamicCardSize`, which `cardSizing` replaced (ADR-0053).
+ * A layout block's former fields: its size preset and stack share, which
+ * `cardWidth` and `stackReveal` replaced, and `dynamicCardSize`, which
+ * `cardSizing` replaced (ADR-0053).
  */
-const FORMER_BOARD_LAYOUT_FIELDS = [
-	'cardSize',
-	'cardGap',
-	'stackOverlap',
-	'dynamicCardSize',
-] as const;
+const FORMER_BOARD_LAYOUT_FIELDS = ['cardSize', 'stackOverlap', 'dynamicCardSize'] as const;
 
 const mainboardLayoutConfigSchema = z.object(mainboardLayoutShape).strict();
 const sideboardLayoutConfigSchema = z.object(sideboardLayoutShape).strict();
@@ -70,16 +73,28 @@ export const DEFAULT_DECK_BOARD_LAYOUT: ResolvedMainboardLayout = {
 	autoColumns: false,
 	listColumns: 2,
 	cardSizing: 'fixed',
+	cardWidth: 144,
+	cardGap: 8,
 };
 
 const DEFAULT_SIDEBOARD_LAYOUT: ResolvedSideboardLayout = {
 	...DEFAULT_DECK_BOARD_LAYOUT,
 	view: 'stack',
+	// About the former 15% of a medium card's height.
+	stackReveal: 30,
 };
 
 /** Which boards render, and where the sideboard sits, until an operator changes them. */
 const DEFAULT_BOARD: BoardSelection = 'full';
 const DEFAULT_SIDEBOARD_PLACEMENT: SideboardPlacement = 'beside';
+
+/** Each badge's, pill's and chip's text size in px until an operator sets it; each sizes itself around its own. */
+export const DEFAULT_DECK_TEXT_SIZES = {
+	quantityBadgeSize: 16,
+	pointsBadgeSize: 14,
+	metaPillSize: 16,
+	pointedCardSize: 14,
+} as const;
 
 /** Where each badge sits on a Deck Screen card until an operator moves it. */
 export const DEFAULT_QUANTITY_POSITION: QuantityPosition = 'top-right';
@@ -116,6 +131,12 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 
 	// Quantity badge placement
 	quantityPosition: editorField(quantityPositionSchema.optional(), { label: 'Badge Position' }),
+
+	// Text sizes in px; each badge, pill and chip sizes itself around its own (ADR-0053).
+	quantityBadgeSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Badge Text Size' }),
+	pointsBadgeSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Badge Text Size' }),
+	metaPillSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Meta Pill Text Size' }),
+	pointedCardSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Pointed Card Text Size' }),
 }, {
 	deckSource: { type: 'player', playerId: null },
 	board: DEFAULT_BOARD,
@@ -132,6 +153,7 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	showHighlanderPoints: true,
 	highlanderPointsPosition: DEFAULT_HIGHLANDER_POINTS_POSITION,
 	quantityPosition: DEFAULT_QUANTITY_POSITION,
+	...DEFAULT_DECK_TEXT_SIZES,
 }, {
 	formerFields: [
 		// Their colours are the mode's Mode Tokens (#824).
@@ -147,7 +169,7 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 		'highlanderPointsBgColor',
 		'quantityTextColor',
 		'quantityBgColor',
-		// Their sizes are the mode's Mode Tokens (#844).
+		// Their size presets, which the px text sizes replaced (ADR-0053).
 		'deckMetaPillSize',
 		'highlanderPointedCardsSize',
 		'highlanderPointsSize',

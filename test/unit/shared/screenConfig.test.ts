@@ -25,8 +25,8 @@ describe('getDisplayDefaultsForMode', () => {
 	});
 
 	it('returns display defaults that preserve visual settings only', () => {
-		// Card Spotlight's config is its match binding alone, which a reset keeps.
-		expect(getDisplayDefaultsForMode('card')).toEqual({});
+		// A reset returns Card Spotlight's card width and keeps its match binding.
+		expect(getDisplayDefaultsForMode('card')).toEqual({ cardWidth: 583 });
 
 		expect(getDisplayDefaultsForMode('deck')).toMatchObject({
 			board: getDefaultConfigForMode('deck').board,

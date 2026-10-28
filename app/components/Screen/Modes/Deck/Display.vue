@@ -2,7 +2,7 @@
 import type { QuantityPosition } from '~~/shared/types/enums';
 import type { ResolvedDeckBoardLayout } from '~~/shared/types/screenConfig';
 import type { DeckListCardWithData } from '~/types/card/deckList';
-import { DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
+import { DEFAULT_DECK_TEXT_SIZES, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { formatHighlanderPointedCardNote, formatHighlanderPointsLabel } from '~~/shared/utils/highlander';
 import { getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
@@ -241,34 +241,39 @@ const highlanderPointsPositionClass = computed(() => {
 	return BADGE_POSITION_CLASSES[pos];
 });
 
-// Each badge, pill and chip sizes itself around its text, which its size Mode
-// Token sets, keeping the proportions its former medium size had.
+// Each badge, pill and chip sizes itself around its text, whose size is the
+// Screen's own config (ADR-0053), keeping the proportions its former medium size had.
 
-const quantityBadgeStyle = {
-	fontSize: modeTokenVar('deck', 'quantity-badge-size'),
+/** One text size in px, the Screen's or its default. */
+function textSize(key: keyof typeof DEFAULT_DECK_TEXT_SIZES): string {
+	return `${config.value[key] ?? DEFAULT_DECK_TEXT_SIZES[key]}px`;
+}
+
+const quantityBadgeStyle = computed(() => ({
+	fontSize: textSize('quantityBadgeSize'),
 	width: '1.75em',
 	height: '1.75em',
 	color: modeTokenVar('deck', 'quantity-badge-text'),
 	backgroundColor: modeTokenVar('deck', 'quantity-badge-surface'),
-};
+}));
 
-const highlanderPointBadgeStyle = {
-	fontSize: modeTokenVar('deck', 'points-badge-size'),
+const highlanderPointBadgeStyle = computed(() => ({
+	fontSize: textSize('pointsBadgeSize'),
 	minWidth: '2em',
 	padding: '0.3em 0.7em',
 	color: modeTokenVar('deck', 'points-badge-text'),
 	backgroundColor: modeTokenVar('deck', 'points-badge-surface'),
-};
+}));
 
 /** A point badge lifts off a card's art on a soft shadow, and off a list row on a slighter one. */
-const highlanderCardBadgeStyle = {
-	...highlanderPointBadgeStyle,
+const highlanderCardBadgeStyle = computed(() => ({
+	...highlanderPointBadgeStyle.value,
 	boxShadow: `0 4px 6px -1px ${modeTokenVar('deck', 'badge-shadow')}`,
-};
-const highlanderListBadgeStyle = {
-	...highlanderPointBadgeStyle,
+}));
+const highlanderListBadgeStyle = computed(() => ({
+	...highlanderPointBadgeStyle.value,
 	boxShadow: `0 1px 3px 0 ${modeTokenVar('deck', 'badge-shadow')}`,
-};
+}));
 
 const deckMetaPillStyle = computed(() => {
 	if (!showDeckMetaPill.value) {
@@ -276,7 +281,7 @@ const deckMetaPillStyle = computed(() => {
 	}
 
 	return {
-		fontSize: modeTokenVar('deck', 'meta-pill-size'),
+		fontSize: textSize('metaPillSize'),
 		padding: '0.5em 1.25em',
 		gap: '0.375em 1em',
 		color: modeTokenVar('deck', 'meta-pill-text'),
@@ -301,13 +306,13 @@ const deckMetaTextStyle = computed(() => {
 		: secondaryTextStyle;
 });
 
-const highlanderPointedCardStyle = {
-	fontSize: modeTokenVar('deck', 'pointed-card-size'),
+const highlanderPointedCardStyle = computed(() => ({
+	fontSize: textSize('pointedCardSize'),
 	padding: '0.3em 0.85em',
 	color: modeTokenVar('deck', 'pointed-card-text'),
 	backgroundColor: modeTokenVar('deck', 'pointed-card-surface'),
 	borderColor: modeTokenVar('deck', 'pointed-card-border'),
-};
+}));
 
 const highlanderPointedCardAccentStyle = {
 	color: modeTokenVar('deck', 'pointed-card-accent'),
@@ -319,26 +324,31 @@ const cardBadgeProps = computed(() => ({
 	showQuantity: showQuantities.value,
 	showHighlanderPoints: showHighlanderPoints.value,
 	quantityPositionClass: quantityPositionClass.value,
-	quantityBadgeStyle,
+	quantityBadgeStyle: quantityBadgeStyle.value,
 	highlanderPointsPositionClass: highlanderPointsPositionClass.value,
-	highlanderPointsBadgeStyle: highlanderCardBadgeStyle,
+	highlanderPointsBadgeStyle: highlanderCardBadgeStyle.value,
 }));
 
-const stackReveal = modeTokenVar('deck', 'sideboard-stack-reveal');
+const stackReveal = computed(() => `${resolvedBoards.value.sideboard.stackReveal}px`);
+
+/** A board's card width, in px. */
+function cardWidth(section: VisibleBoard): string {
+	return `${section.layout.cardWidth}px`;
+}
 
 /**
- * The beside stack: each card but the last shows only the `stack-reveal`
- * Mode Token's slice of itself down the strip, and the next card covers the
+ * The beside stack: each card but the last shows only its `stackReveal`
+ * slice of itself down the strip, and the next card covers the
  * rest. The last card shows whole. In Fit, every card takes the width at which
  * the whole strip, reveals and last card, fits the strip's height.
  */
 function stackCardStyle(section: VisibleBoard, index: number) {
 	return {
 		...(index < section.cards.length - 1
-			? { height: stackReveal }
+			? { height: stackReveal.value }
 			: {}),
 		...(isFit(section)
-			? { width: `min(100cqw, calc((100cqh - ${section.cards.length - 1} * ${stackReveal}) * 61 / 85))` }
+			? { width: `min(100cqw, calc((100cqh - ${section.cards.length - 1} * ${stackReveal.value}) * 61 / 85))` }
 			: {}),
 	};
 }
@@ -450,14 +460,14 @@ function stackCardStyle(section: VisibleBoard, index: number) {
 								:sizing="section.layout.cardSizing"
 								:columns="gridColumns(section)"
 								:rows="gridRows(section)"
-								:card-width="modeTokenVar('deck', `${section.key}-card-width`)"
-								:gap="modeTokenVar('deck', `${section.key}-card-gap`)"
+								:card-width="cardWidth(section)"
+								:gap="`${section.layout.cardGap}px`"
 							>
 								<ScreenModesDeckCard
 									v-for="(card, index) in section.cards"
 									:key="`${section.key}-${index}`"
 									:card="card"
-									:board="section.key"
+									:width="cardWidth(section)"
 									:sizing="section.layout.cardSizing"
 									v-bind="cardBadgeProps"
 								/>
@@ -479,7 +489,7 @@ function stackCardStyle(section: VisibleBoard, index: number) {
 								>
 									<ScreenModesDeckCard
 										:card="card"
-										:board="section.key"
+										:width="cardWidth(section)"
 										:sizing="isFit(section) ? 'fill' : 'fixed'"
 										v-bind="cardBadgeProps"
 									/>

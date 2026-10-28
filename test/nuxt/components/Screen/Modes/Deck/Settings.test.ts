@@ -147,6 +147,8 @@ function defaultDeckConfig(): Record<string, any> {
 			listColumns: 2,
 			cardSizing: 'fixed',
 			autoColumns: false,
+			cardWidth: 144,
+			cardGap: 8,
 		},
 		sideboard: {
 			view: 'stack',
@@ -158,6 +160,9 @@ function defaultDeckConfig(): Record<string, any> {
 		showQuantities: true,
 		showDeckName: true,
 		showDeckColors: true,
+		showDeckMetaPill: true,
+		showHighlanderPointedCards: true,
+		showHighlanderPoints: true,
 	};
 }
 
@@ -390,8 +395,89 @@ describe('screenDeckSettings', () => {
 				listColumns: 2,
 				cardSizing: 'fixed',
 				autoColumns: false,
+				cardWidth: 144,
+				cardGap: 8,
+				stackReveal: 30,
 			},
 		});
+	});
+
+	// Each size sits beside the control it sizes, and writes that one field (ADR-0053).
+	it.each([
+		{
+			card: 'Mainboard Layout',
+			label: 'Card Width',
+			patch: {
+				mainboard: expect.objectContaining({ cardWidth: 200 }),
+			},
+		},
+		{
+			card: 'Mainboard Layout',
+			label: 'Card Gap',
+			patch: {
+				mainboard: expect.objectContaining({ cardGap: 200 }),
+			},
+		},
+		{
+			card: 'Sideboard Layout',
+			label: 'Card Width',
+			patch: {
+				sideboard: expect.objectContaining({ cardWidth: 200 }),
+			},
+		},
+		{
+			card: 'Sideboard Layout',
+			label: 'Stack Reveal',
+			patch: {
+				sideboard: expect.objectContaining({ stackReveal: 200 }),
+			},
+		},
+		{
+			card: 'Deck Meta',
+			label: 'Meta Pill Text Size',
+			patch: { metaPillSize: 200 },
+		},
+		{
+			card: 'Pointed Cards',
+			label: 'Pointed Card Text Size',
+			patch: { pointedCardSize: 200 },
+		},
+	])('writes the $card $label', async ({ card, label, patch }) => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		wrapper.get(`[data-testid="settings-card"][data-title="${card}"]`).get(`[data-label="${label}"]`).getComponent(UInputNumberStub).vm.$emit('update:modelValue', 200);
+
+		expect(mockUpdateConfig).toHaveBeenLastCalledWith(patch);
+	});
+
+	it('writes each card badge\'s text size', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const sizes = wrapper.get('[data-testid="settings-card"][data-title="Card Badges"]').findAll('[data-label="Badge Text Size"]');
+		sizes[0]!.getComponent(UInputNumberStub).vm.$emit('update:modelValue', 20);
+		expect(mockUpdateConfig).toHaveBeenLastCalledWith({ quantityBadgeSize: 20 });
+		sizes[1]!.getComponent(UInputNumberStub).vm.$emit('update:modelValue', 18);
+		expect(mockUpdateConfig).toHaveBeenLastCalledWith({ pointsBadgeSize: 18 });
+	});
+
+	// A Fit grid sizes its cards to the screen, so it offers no width.
+	it.each([
+		{ cardSizing: 'fixed', offered: true },
+		{ cardSizing: 'fit', offered: false },
+	])('offers a $cardSizing grid a card width: $offered', async ({ cardSizing, offered }) => {
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			mainboard: {
+				...defaultDeckConfig().mainboard,
+				cardSizing,
+			},
+		};
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="settings-card"][data-title="Mainboard Layout"]').find('[data-label="Card Width"]').exists()).toBe(offered);
 	});
 
 	// Only a sideboard stacks, and only beside the mainboard (ADR-0053).

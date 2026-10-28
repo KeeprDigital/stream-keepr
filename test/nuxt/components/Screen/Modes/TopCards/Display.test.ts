@@ -14,6 +14,9 @@ const defaultConfig = {
 	columns: 5,
 	autoColumns: false,
 	cardSizing: 'fit',
+	cardWidth: 160,
+	cardGap: 12,
+	badgeSize: 14,
 	showHeader: true,
 	headerText: undefined,
 	showCardNames: true,
@@ -84,8 +87,10 @@ const TopCardsCardStub = defineComponent({
 		showRank: { type: Boolean, required: true },
 		statText: { type: String, required: false },
 		sizing: { type: String, required: true },
+		width: { type: String, required: false },
+		badgeSize: { type: String, required: false },
 	},
-	template: '<div data-testid="top-cards-item" :data-sizing="sizing">{{ rank }}:{{ entry.name }}:{{ statText ?? "-" }}:{{ showRank }}:{{ showName }}</div>',
+	template: '<div data-testid="top-cards-item" :data-sizing="sizing" :data-width="width" :data-badge-size="badgeSize">{{ rank }}:{{ entry.name }}:{{ statText ?? "-" }}:{{ showRank }}:{{ showName }}</div>',
 });
 
 async function mountComponent() {
@@ -190,6 +195,24 @@ describe('screenTopCardsDisplay', () => {
 		expect(grid.attributes('data-columns')).toBe('4');
 		expect(grid.attributes('data-rows')).toBe(rows);
 		expect(wrapper.findAll('[data-testid="top-cards-item"]').map(item => item.attributes('data-sizing'))).toEqual([cardSizing, cardSizing]);
+	});
+
+	// The Screen's own sizes, not the Theme's, size its cards, gap and badges (ADR-0053).
+	it('sizes its cards, gap and badges from its config', async () => {
+		config.value = {
+			...config.value,
+			cardSizing: 'fixed',
+			cardWidth: 200,
+			cardGap: 30,
+			badgeSize: 20,
+		};
+
+		const wrapper = await mountComponent();
+
+		expect((wrapper.get('[data-testid="top-cards-grid"]').element as HTMLElement).style.gap).toBe('30px');
+		const card = wrapper.get('[data-testid="top-cards-item"]');
+		expect(card.attributes('data-width')).toBe('200px');
+		expect(card.attributes('data-badge-size')).toBe('20px');
 	});
 
 	it('passes no stat text when the stat badge is off', async () => {

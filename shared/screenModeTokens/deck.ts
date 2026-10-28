@@ -92,67 +92,9 @@ export const deckModeTokens = {
 		label: 'Pointed card border',
 		default: { token: 'text-primary' },
 	},
-	'quantity-badge-size': {
-		type: 'dimension',
-		label: 'Quantity badge text size',
-		// Each size token is the former medium size's text; its badge sizes itself around it.
-		default: 16,
-		bounds: { min: 8, max: 48 },
-	},
-	'points-badge-size': {
-		type: 'dimension',
-		label: 'Point badge text size',
-		default: 14,
-		bounds: { min: 8, max: 48 },
-	},
-	'meta-pill-size': {
-		type: 'dimension',
-		label: 'Deck meta pill text size',
-		default: 16,
-		bounds: { min: 8, max: 48 },
-	},
-	'pointed-card-size': {
-		type: 'dimension',
-		label: 'Pointed card text size',
-		default: 14,
-		bounds: { min: 8, max: 48 },
-	},
 	'badge-shadow': {
 		type: 'color',
 		label: 'Point badge shadow',
 		default: { token: 'shadow' },
-	},
-	'mainboard-card-width': {
-		type: 'dimension',
-		label: 'Mainboard card width',
-		// The former medium card size.
-		default: 144,
-		bounds: { min: 48, max: 480 },
-	},
-	'mainboard-card-gap': {
-		type: 'dimension',
-		label: 'Mainboard grid card gap',
-		default: 8,
-		bounds: { min: 0, max: 48 },
-	},
-	'sideboard-card-width': {
-		type: 'dimension',
-		label: 'Sideboard card width',
-		// The former medium card size.
-		default: 144,
-		bounds: { min: 48, max: 480 },
-	},
-	'sideboard-card-gap': {
-		type: 'dimension',
-		label: 'Sideboard grid card gap',
-		default: 8,
-		bounds: { min: 0, max: 48 },
-	},
-	'sideboard-stack-reveal': {
-		type: 'dimension',
-		label: 'Sideboard stacked card reveal',
-		// About the former 15% of a medium card's height.
-		default: 30,
-		bounds: { min: 4, max: 240 },
 	},
 } as const satisfies Readonly<Record<string, DeclaredModeTokenDefinition>>;

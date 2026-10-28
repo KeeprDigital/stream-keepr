@@ -1,14 +1,10 @@
-import type { ScreenModeTokenOfType } from '~~/shared/screenModes';
 import type { CardSizing } from '~~/shared/types/enums';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { DEFAULT_THEME_TOKENS } from '~~/shared/modules/theme';
 import { fitColumns, fixedColumns } from '~~/shared/utils/cardGrid';
-import { screenLayoutTokens, screenModeDimensionTokens } from '~/modules/screen-mode';
+import { screenLayoutTokens } from '~/modules/screen-mode';
 
-type CardGridMode = 'top-cards' | 'deck';
-
-export interface CardGridColumnsOptions<M extends CardGridMode> {
-	mode: M;
+export interface CardGridColumnsOptions {
 	sizing: () => CardSizing;
 	autoColumns: () => boolean;
 	/** The operator's column count, which auto columns replaces. */
@@ -17,8 +13,9 @@ export interface CardGridColumnsOptions<M extends CardGridMode> {
 	count: () => number;
 	/** A paged grid's rows a page, which Fit columns are chosen to fill. */
 	maxRows?: () => number;
-	cardWidthToken: ScreenModeTokenOfType<M, 'dimension'>;
-	gapToken: ScreenModeTokenOfType<M, 'dimension'>;
+	/** A Fixed card's width and the grid's gap, in Event Canvas px. */
+	cardWidth: () => number;
+	gap: () => number;
 }
 
 /**
@@ -27,20 +24,17 @@ export interface CardGridColumnsOptions<M extends CardGridMode> {
  * gap, never from the rendered page: a settings editor reads the same inputs
  * its Screen Output does, so both count the same pages (ADR-0053).
  */
-export function useCardGridColumns<M extends CardGridMode>(options: CardGridColumnsOptions<M>): ComputedRef<number> {
+export function useCardGridColumns(options: CardGridColumnsOptions): ComputedRef<number> {
 	const { screen, themeTokens, eventCanvas } = useScreenContext();
 
 	return computed(() => {
 		if (!options.autoColumns())
 			return options.columns();
 
-		const theme = themeTokens?.value ?? DEFAULT_THEME_TOKENS;
-		const overrides = screen.value?.themeOverrides ?? {};
 		const canvas = eventCanvas?.value ?? DEFAULT_EVENT_CANVAS;
-		const { inset } = screenLayoutTokens(theme, overrides);
-		const tokens = screenModeDimensionTokens(options.mode, [options.cardWidthToken, options.gapToken], theme, overrides);
+		const { inset } = screenLayoutTokens(themeTokens?.value ?? DEFAULT_THEME_TOKENS, screen.value?.themeOverrides ?? {});
 		const width = canvas.width - 2 * inset;
-		const gap = tokens[options.gapToken];
+		const gap = options.gap();
 
 		return options.sizing() === 'fit'
 			? fitColumns({
@@ -50,6 +44,10 @@ export function useCardGridColumns<M extends CardGridMode>(options: CardGridColu
 					gap,
 					maxRows: options.maxRows?.(),
 				})
-			: fixedColumns({ width, cardWidth: tokens[options.cardWidthToken], gap });
+			: fixedColumns({
+					width,
+					cardWidth: options.cardWidth(),
+					gap,
+				});
 	});
 }

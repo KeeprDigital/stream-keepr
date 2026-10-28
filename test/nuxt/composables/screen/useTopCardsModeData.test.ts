@@ -25,6 +25,8 @@ const defaultConfig = {
 	columns: 5,
 	autoColumns: false,
 	cardSizing: 'fit' as 'fit' | 'fixed',
+	cardWidth: 160,
+	cardGap: 12,
 	rowsPerPage: 60,
 	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
