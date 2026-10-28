@@ -170,16 +170,18 @@ function isFit(section: VisibleBoard): boolean {
 // other's and a stacked sideboard showing less of each card before shrinking.
 // Until that space is measured, each board fits itself.
 
-/** A board label's height: its `text-lg` line and `mb-2`. */
-const BOARD_LABEL_HEIGHT = 36;
-/** The space between boards: the layout's `gap-6`. */
+/** The space between boards, in Event Canvas px: the layout's gap, set from this. */
 const BOARD_GAP = 24;
+
+// A board's label is measured, as its Theme types it, from a hidden copy.
+const labelProbe = ref<HTMLElement | null>(null);
+const boardLabelHeight = useLayoutHeight(labelProbe);
 
 const layoutElement = ref<HTMLElement | null>(null);
 const { width: layoutWidth, height: layoutHeight } = useElementSize(layoutElement);
 
 function layoutBoard(section: VisibleBoard): DeckLayoutGridBoard | DeckLayoutStackBoard {
-	const labelHeight = section.showLabel ? BOARD_LABEL_HEIGHT : 0;
+	const labelHeight = section.showLabel ? boardLabelHeight.value : 0;
 	return section.view === 'stack'
 		? {
 				view: 'stack',
@@ -530,7 +532,7 @@ function stackCardStyle(section: VisibleBoard, index: number) {
 		<!-- Deck Content -->
 		<div class="deck-content w-full h-full" :style="displayStyle">
 			<transition mode="out-in" name="deck-swap" @after-leave="handleDeckAfterLeave">
-				<div v-if="showDeckBody && hasDisplayedDeck" :key="displayedDeckVersion" class="deck-body flex flex-col w-full h-full">
+				<div v-if="showDeckBody && hasDisplayedDeck" :key="displayedDeckVersion" class="deck-body relative flex flex-col w-full h-full">
 					<!-- Header -->
 					<div v-if="showHeader" class="deck-header shrink-0 mb-4 text-center">
 						<div
@@ -595,15 +597,22 @@ function stackCardStyle(section: VisibleBoard, index: number) {
 					</div>
 
 					<!-- Boards: each visible board renders its own layout block -->
+					<!-- A board label as the Theme types it, measured for the layout. -->
+					<div ref="labelProbe" aria-hidden="true" class="invisible absolute pointer-events-none">
+						<h3 class="text-lg pb-2" :style="titleStyle">
+							Sideboard
+						</h3>
+					</div>
+
 					<!-- The space the boards share, and in it the boards. -->
 					<div
 						ref="layoutElement"
 						class="deck-layout-space flex flex-1 min-h-0"
 					>
 						<div
-							class="deck-layout flex flex-1 min-h-0 min-w-0 gap-6"
+							class="deck-layout flex flex-1 min-h-0 min-w-0"
 							:class="besideActive ? 'flex-row' : 'flex-col'"
-							:style="solvedLayoutStyle"
+							:style="[{ gap: `${BOARD_GAP}px` }, solvedLayoutStyle]"
 						>
 							<div
 								v-for="section in visibleBoards"
@@ -612,7 +621,7 @@ function stackCardStyle(section: VisibleBoard, index: number) {
 								class="flex flex-col min-h-0 min-w-0"
 								:style="boardFlexStyle(section)"
 							>
-								<h3 v-if="section.showLabel" class="text-lg shrink-0 mb-2" :style="labelStyle(section)">
+								<h3 v-if="section.showLabel" class="text-lg shrink-0 pb-2" :style="labelStyle(section)">
 									{{ section.label }}
 								</h3>
 

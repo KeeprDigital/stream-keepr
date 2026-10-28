@@ -118,7 +118,7 @@ describe('solveDeckLayout', () => {
 		expect(reveal).toBeGreaterThanOrEqual(MIN_STACK_REVEAL_SHARE * (layout.cardWidth / CARD_ASPECT) - 0.001);
 	});
 
-	// Of card sizes within 10% of the largest, the fewest empty places in last rows win.
+	// Full last rows score higher, so near-equal card sizes go to the fuller rows.
 	it.each([
 		{ count: 13, columns: 7 },
 		{ count: 12, columns: 6 },
@@ -166,11 +166,8 @@ describe('solveDeckLayout', () => {
 		expect(layout.sideboard!.view === 'grid' && layout.sideboard!.columns).toBeLessThanOrEqual(layout.mainboard!.columns);
 	});
 
-	// Of near-equal card sizes with as full rows, the layout in fewest rows wins, spread across the space.
-	it.each([
-		{ gap: 8, height: 940 },
-		{ gap: 24, height: 920 },
-	])('spreads a deck across the space rather than leaving it empty beside it, $gap px apart', ({ gap, height }) => {
+	// At any gap the deck spans the width: wider gaps trade a column for a row, never a bare side.
+	it.each([0, 8, 16, 24, 32, 40, 48].map(gap => ({ gap, height: 920 })))('spreads a deck across the space rather than leaving it empty beside it, $gap px apart', ({ gap, height }) => {
 		const input = space({
 			width: 1880,
 			height,
@@ -186,7 +183,7 @@ describe('solveDeckLayout', () => {
 		});
 		const layout = solveDeckLayout(input)!;
 
-		expect(Math.max(layout.mainboard!.width, layout.sideboard!.width) / input.width).toBeGreaterThan(0.95);
+		expect(Math.max(layout.mainboard!.width, layout.sideboard!.width) / input.width).toBeGreaterThan(0.9);
 		expect(layout.sideboard!.view === 'grid' && layout.sideboard!.rows).toBe(1);
 	});
 

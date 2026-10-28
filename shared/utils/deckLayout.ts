@@ -1,10 +1,7 @@
-import { CARD_ASPECT, MAX_CARD_GRID_COLUMNS } from './cardGrid';
+import { CARD_ASPECT, layoutScore, MAX_CARD_GRID_COLUMNS } from './cardGrid';
 
 /** The least of a stacked card that still shows, as a share of its height: its name bar. */
 export const MIN_STACK_REVEAL_SHARE = 0.09;
-
-/** Card sizes within this share of the largest count as equally large: then fuller, fewer rows win. */
-const LAYOUT_TOLERANCE = 0.1;
 
 export interface DeckLayoutGridBoard {
 	view: 'grid';
@@ -139,13 +136,37 @@ function widestCard(input: DeckLayoutInput, mainColumns: number | null, sideColu
 	return Math.max(0, Math.min(...bounds));
 }
 
-function emptySlots(input: DeckLayoutInput, mainColumns: number | null, sideColumns: number | null): number {
-	let empty = 0;
-	if (input.mainboard && mainColumns)
-		empty += rowsOf(input.mainboard, mainColumns) * mainColumns - input.mainboard.count;
-	if (input.sideboard?.view === 'grid' && sideColumns)
-		empty += rowsOf(input.sideboard, sideColumns) * sideColumns - input.sideboard.count;
-	return empty;
+/** Cards over the places their grids' rows hold; a stack has no empty places. */
+function slotFillOf(input: DeckLayoutInput, layout: DeckLayout): number {
+	let cards = 0;
+	let places = 0;
+	if (input.mainboard && layout.mainboard) {
+		cards += input.mainboard.count;
+		places += layout.mainboard.columns * layout.mainboard.rows;
+	}
+	if (input.sideboard?.view === 'grid' && layout.sideboard?.view === 'grid') {
+		cards += input.sideboard.count;
+		places += layout.sideboard.columns * layout.sideboard.rows;
+	}
+	return places > 0
+		? cards / places
+		: 1;
+}
+
+/** The share of the space's width and of its height the boards span together. */
+function sharesOf(input: DeckLayoutInput, layout: DeckLayout): { widthShare: number; heightShare: number } {
+	const boards = [layout.mainboard, layout.sideboard].filter(board => board !== null);
+	const between = boards.length > 1
+		? input.boardGap
+		: 0;
+	const beside = input.placement === 'beside' || boards.length === 1;
+	const width = beside
+		? boards.reduce((sum, board) => sum + board.width, 0) + between
+		: Math.max(...boards.map(board => board.width));
+	const height = beside
+		? Math.max(...boards.map(board => board.height))
+		: boards.reduce((sum, board) => sum + board.height, 0) + between;
+	return { widthShare: width / input.width, heightShare: height / input.height };
 }
 
 function solvedGrid(board: DeckLayoutGridBoard, columns: number, cardWidth: number): SolvedGridBoard {
@@ -174,44 +195,52 @@ function solvedStack(board: DeckLayoutStackBoard, cardWidth: number, height: num
 }
 
 /**
- * One Deck List's boards laid out together at one card size: the largest at
- * which both fit the space they share. Each board's columns are chosen with
- * the other's (a fixed count is kept), and a stacked sideboard shows less of
- * each card before its cards shrink. Of card sizes within 10% of the largest,
- * the one leaving the fewest empty places in last rows wins, then the one in
- * the fewest rows, so a deck spreads across the space rather than leaving a
- * side bare. A sideboard grid under the mainboard choosing its own columns is
- * never wider than it, so the deck reads as one block.
+ * One Deck List's boards laid out together at one card size, at the columns
+ * that use the space best (`layoutScore`): each pair of column counts at the
+ * largest card size at which both boards fit, scored on that size, the share
+ * of the space the deck spans and how full its rows are. A fixed count is
+ * kept. A stacked sideboard shows less of each card before its cards shrink.
+ * A sideboard grid under the mainboard, choosing its own columns, wraps at
+ * the mainboard's width, so the deck reads as one block.
  */
 export function solveDeckLayout(input: DeckLayoutInput): DeckLayout | null {
 	if ((!input.mainboard && !input.sideboard) || input.width <= 0 || input.height <= 0)
 		return null;
 
-	const sideboardUnderMainboard = input.placement === 'below'
+	const sideboardWrapsUnderMainboard = input.placement === 'below'
 		&& !!input.mainboard
 		&& input.sideboard?.view === 'grid'
 		&& input.sideboard.columns === null;
 
-	const candidates: { layout: DeckLayout; empty: number; rows: number }[] = [];
+	const layouts: DeckLayout[] = [];
 	for (const main of columnChoices(input.mainboard)) {
-		for (const side of columnChoices(input.sideboard)) {
-			if (sideboardUnderMainboard && side! > main!)
-				continue;
-			const layout = laidOut(input, main, side, widestCard(input, main, side));
-			candidates.push({
-				layout,
-				empty: emptySlots(input, main, side),
-				rows: rowsOfLayout(layout),
-			});
+		const sides = sideboardWrapsUnderMainboard
+			? [
+					Math.min(main!, Math.max(1, input.sideboard!.count)),
+				]
+			: columnChoices(input.sideboard);
+		for (const side of sides)
+			layouts.push(laidOut(input, main, side, widestCard(input, main, side)));
+	}
+	const largestCardWidth = Math.max(...layouts.map(layout => layout.cardWidth));
+	if (largestCardWidth <= 0)
+		return null;
+
+	let best = layouts[0]!;
+	let bestScore = -Infinity;
+	for (const layout of layouts) {
+		const score = layoutScore({
+			cardWidth: layout.cardWidth,
+			largestCardWidth,
+			...sharesOf(input, layout),
+			slotFill: slotFillOf(input, layout),
+		});
+		if (score > bestScore) {
+			best = layout;
+			bestScore = score;
 		}
 	}
-	const largest = Math.max(...candidates.map(candidate => candidate.layout.cardWidth));
-	if (largest <= 0)
-		return null;
-	return candidates
-		.filter(candidate => candidate.layout.cardWidth >= largest * (1 - LAYOUT_TOLERANCE))
-		.sort((a, b) => a.empty - b.empty || a.rows - b.rows || b.layout.cardWidth - a.layout.cardWidth)[0]!
-		.layout;
+	return best;
 }
 
 function laidOut(input: DeckLayoutInput, main: number | null, side: number | null, cardWidth: number): DeckLayout {
@@ -226,14 +255,4 @@ function laidOut(input: DeckLayoutInput, main: number | null, side: number | nul
 				? solvedStack(input.sideboard, cardWidth, input.height)
 				: solvedGrid(input.sideboard, side!, cardWidth),
 	};
-}
-
-/** Every grid row the deck's boards lay out in; a stack is a single row. */
-function rowsOfLayout(layout: DeckLayout): number {
-	return [layout.mainboard, layout.sideboard].reduce((rows, board) =>
-		rows + (board === null
-			? 0
-			: board.view === 'grid'
-				? board.rows
-				: 1), 0);
 }

@@ -11,8 +11,9 @@ const { config, error, isEmpty, headerText, pageEntries, currentPage, totalPages
 // the space it measures: Fit auto columns are the count at which a full page's
 // cards are largest; Fixed auto columns are as many as fit across.
 
-/** A name label's height under its card, as Fit sizing allows for it: its line and `gap-1`. */
-const NAME_LABEL_HEIGHT = 28;
+// A name label under its card is measured, as its Theme types it, from a hidden copy.
+const nameProbe = ref<HTMLElement | null>(null);
+const nameLabelHeight = useLayoutHeight(nameProbe);
 
 const gridElement = ref(null);
 const { width: gridWidth, height: gridHeight } = useElementSize(gridElement);
@@ -29,7 +30,7 @@ const columns = computed<number | 'auto-fill'>(() => {
 		width: gridWidth.value,
 		height: gridHeight.value,
 		gap: config.value.cardGap,
-		labelHeight: config.value.showCardNames ? NAME_LABEL_HEIGHT : 0,
+		labelHeight: config.value.showCardNames ? nameLabelHeight.value : 0,
 	});
 });
 
@@ -100,7 +101,14 @@ function statText(entry: CardBreakdownEntry): string | null {
 		:error="error"
 		:empty="isEmpty"
 	>
-		<div class="top-cards-display flex flex-col gap-4 h-full w-full" :style="displayStyle">
+		<div class="top-cards-display relative flex flex-col gap-4 h-full w-full" :style="displayStyle">
+			<!-- A card's name label and its gap, as the Theme types it, measured for the layout. -->
+			<div ref="nameProbe" aria-hidden="true" class="invisible absolute pointer-events-none pt-1">
+				<div class="top-cards-name">
+					Mg
+				</div>
+			</div>
+
 			<div v-if="config.showHeader" class="top-cards-title">
 				<h2 class="text-3xl" :style="titleStyle">
 					{{ headerText }}
@@ -115,7 +123,7 @@ function statText(entry: CardBreakdownEntry): string | null {
 				:rows="rows"
 				:card-width="cardWidth"
 				:gap="cardGap"
-				:label-height="config.showCardNames ? 'calc(1lh + 0.25rem)' : '0px'"
+				:label-height="config.showCardNames ? `${nameLabelHeight}px` : '0px'"
 				data-testid="top-cards-grid"
 			>
 				<ScreenModesTopCardsCard
