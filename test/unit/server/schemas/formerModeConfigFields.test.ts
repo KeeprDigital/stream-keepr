@@ -28,6 +28,7 @@ describe.each([
 			'cardSize',
 			'cardGap',
 			'statBadgeSize',
+			'dynamicCardSize',
 		],
 		former: {
 			rankBadgeTextColor: '#ffffff',
@@ -37,6 +38,7 @@ describe.each([
 			cardSize: 'large',
 			cardGap: 20,
 			statBadgeSize: 'small',
+			dynamicCardSize: true,
 		},
 		kept: { limit: 12 },
 		patch: { limit: 15 },
@@ -128,6 +130,24 @@ describe.each([
 		patched: {
 			mainboard: { view: 'grid', columns: 6 },
 			sideboard: {},
+			showDeckName: false,
+		},
+	},
+	// `cardSizing` replaced it (ADR-0053); 0014 migrated stored values, so a straggler reads as the default.
+	{
+		mode: 'deck',
+		stored: {
+			mainboard: { view: 'grid', dynamicCardSize: true },
+			sideboard: { view: 'stack', dynamicCardSize: false },
+		},
+		reads: {
+			mainboard: { view: 'grid' },
+			sideboard: { view: 'stack' },
+		},
+		patch: { showDeckName: false },
+		patched: {
+			mainboard: { view: 'grid' },
+			sideboard: { view: 'stack' },
 			showDeckName: false,
 		},
 	},

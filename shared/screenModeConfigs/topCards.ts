@@ -2,6 +2,7 @@ import type { ScreenModeConfigOf } from './contract';
 import { z } from 'zod';
 import {
 	BOARD_SELECTION_VALUES,
+	CARD_SIZING_VALUES,
 	METAGAME_CARD_SORT_BY_VALUES,
 	TOP_CARDS_STAT_VALUES,
 } from '../types/enums';
@@ -41,8 +42,8 @@ const TOP_CARDS_MAX_GRID_ROWS = TOP_CARDS_MAX_LIMIT;
  *
  * Its badge colours (#823), card size, card gap and badge size (#844) are Mode
  * Tokens; the fields it once held for them are former fields, which a stored
- * config may still carry. Whether cards fill their columns is behaviour, so
- * `dynamicCardSize` stays.
+ * config may still carry. Whether cards fit the screen is behaviour, so
+ * `cardSizing` is config; it replaced `dynamicCardSize` (ADR-0053).
  */
 export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	// Scoping
@@ -57,8 +58,10 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 
 	// Grid layout
 	columns: editorField(z.number().int().min(1).max(12), { label: 'Columns' }),
-	/** Cards fill their columns rather than taking the `card-width` Mode Token. */
-	dynamicCardSize: editorField(z.boolean(), { label: 'Dynamic card size' }),
+	/** Columns chosen from the card count and the Event Canvas, in place of `columns`. */
+	autoColumns: editorField(z.boolean(), { label: 'Auto columns' }),
+	/** Fit: every card on the page fits the screen. Fixed: cards take the `card-width` Mode Token. */
+	cardSizing: editorField(z.enum(CARD_SIZING_VALUES), { label: 'Card sizing' }),
 
 	// Pagination: grid rows per page
 	rowsPerPage: pageRotationPageSize,
@@ -82,7 +85,8 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	// reach the breakdown at all.
 	excludedCardTypes: ['Land'],
 	columns: 5,
-	dynamicCardSize: true,
+	autoColumns: false,
+	cardSizing: 'fit',
 	rowsPerPage: TOP_CARDS_MAX_GRID_ROWS,
 	...DEFAULT_PAGE_ROTATION,
 	...DEFAULT_HEADER_CONFIG,
@@ -98,6 +102,7 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 		'cardSize',
 		'cardGap',
 		'statBadgeSize',
+		'dynamicCardSize',
 	],
 });
 

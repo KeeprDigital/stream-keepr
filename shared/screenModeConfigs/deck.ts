@@ -3,9 +3,11 @@ import type { ScreenModeConfigOf } from './contract';
 import { z } from 'zod';
 import {
 	BOARD_SELECTION_VALUES,
-	DECK_BOARD_VIEW_VALUES,
+	CARD_SIZING_VALUES,
+	MAINBOARD_VIEW_VALUES,
 	QUANTITY_POSITION_VALUES,
 	SIDEBOARD_PLACEMENT_VALUES,
+	SIDEBOARD_VIEW_VALUES,
 } from '../types/enums';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField, screenModeConfigFields } from './fields';
@@ -15,40 +17,57 @@ const quantityPositionSchema = z.enum(QUANTITY_POSITION_VALUES);
 /**
  * One board's complete layout block. The Mainboard and Sideboard each carry
  * their own (#478): which view renders the board, and the knobs each view
- * reads — grid reads columns and whether cards fill them, list reads
- * listColumns. Visibility is the `board` selection's concern, so a block
- * carries no show/hide of its own. How big its cards are, its grid's gap and
- * how much of a stacked card shows are its board's Mode Tokens (#824, #844).
+ * reads — grid reads its columns and how its cards are sized, list reads
+ * listColumns. Only the sideboard stacks, as the strip beside the mainboard
+ * (ADR-0053), so each board names its own views. Visibility is the `board`
+ * selection's concern, so a block carries no show/hide of its own. How big
+ * its cards are, its grid's gap and how much of a stacked card shows are its
+ * board's Mode Tokens (#824, #844).
  */
-const deckBoardLayoutShape = {
-	view: editorField(z.enum(DECK_BOARD_VIEW_VALUES).optional(), { label: 'View' }),
-	// The editor's ranges are the product ranges (#498): columns was 1–20. A
-	// stored value outside one reads clamped.
-	columns: editorField(z.number().int().min(1).max(12).optional(), { label: 'Grid Columns' }),
-	listColumns: editorField(z.number().int().min(1).max(4).optional(), { label: 'List Columns' }),
-	/** Grid cards fill their columns rather than taking their board's `card-width` Mode Token. */
-	dynamicCardSize: editorField(z.boolean().optional(), { label: 'Dynamic Card Size' }),
-};
+function deckBoardLayoutShape<const Views extends readonly [string, ...string[]]>(views: Views) {
+	return {
+		view: editorField(z.enum(views).optional(), { label: 'View' }),
+		// The editor's ranges are the product ranges (#498): columns was 1–20. A
+		// stored value outside one reads clamped.
+		columns: editorField(z.number().int().min(1).max(12).optional(), { label: 'Grid Columns' }),
+		/** Columns chosen from the card count and the Event Canvas, in place of `columns`. */
+		autoColumns: editorField(z.boolean().optional(), { label: 'Auto Columns' }),
+		listColumns: editorField(z.number().int().min(1).max(4).optional(), { label: 'List Columns' }),
+		/** Fit: every card fits its board's space. Fixed: cards take their board's `card-width` Mode Token. */
+		cardSizing: editorField(z.enum(CARD_SIZING_VALUES).optional(), { label: 'Card Sizing' }),
+	};
+}
 
-/** A board layout block's former look fields, now the mode's Mode Tokens (#824). */
-const FORMER_BOARD_LAYOUT_FIELDS = ['cardSize', 'cardGap', 'stackOverlap'] as const;
+const mainboardLayoutShape = deckBoardLayoutShape(MAINBOARD_VIEW_VALUES);
+const sideboardLayoutShape = deckBoardLayoutShape(SIDEBOARD_VIEW_VALUES);
 
-const deckBoardLayoutConfigSchema = z.object(deckBoardLayoutShape).strict();
+/**
+ * A layout block's former fields: its look fields, now the mode's Mode Tokens
+ * (#824), and `dynamicCardSize`, which `cardSizing` replaced (ADR-0053).
+ */
+const FORMER_BOARD_LAYOUT_FIELDS = ['cardSize', 'cardGap', 'stackOverlap', 'dynamicCardSize'] as const;
 
-/** The editor fields of a board's layout block, which the Mainboard and Sideboard share. */
-export const DECK_BOARD_LAYOUT_FIELDS = screenModeConfigFields(deckBoardLayoutShape);
+const mainboardLayoutConfigSchema = z.object(mainboardLayoutShape).strict();
+const sideboardLayoutConfigSchema = z.object(sideboardLayoutShape).strict();
 
-export type DeckBoardLayoutConfig = z.output<typeof deckBoardLayoutConfigSchema>;
-export type ResolvedDeckBoardLayout = Required<DeckBoardLayoutConfig>;
+/** The editor fields of each board's layout block. */
+export const DECK_MAINBOARD_LAYOUT_FIELDS = screenModeConfigFields(mainboardLayoutShape);
+export const DECK_SIDEBOARD_LAYOUT_FIELDS = screenModeConfigFields(sideboardLayoutShape);
 
-export const DEFAULT_DECK_BOARD_LAYOUT: ResolvedDeckBoardLayout = {
+export type ResolvedMainboardLayout = Required<z.output<typeof mainboardLayoutConfigSchema>>;
+export type ResolvedSideboardLayout = Required<z.output<typeof sideboardLayoutConfigSchema>>;
+/** Either board's resolved layout block, as a reader of both boards reads it. */
+export type ResolvedDeckBoardLayout = ResolvedMainboardLayout | ResolvedSideboardLayout;
+
+export const DEFAULT_DECK_BOARD_LAYOUT: ResolvedMainboardLayout = {
 	view: 'grid',
 	columns: 4,
+	autoColumns: false,
 	listColumns: 2,
-	dynamicCardSize: false,
+	cardSizing: 'fixed',
 };
 
-const DEFAULT_SIDEBOARD_LAYOUT: ResolvedDeckBoardLayout = {
+const DEFAULT_SIDEBOARD_LAYOUT: ResolvedSideboardLayout = {
 	...DEFAULT_DECK_BOARD_LAYOUT,
 	view: 'stack',
 };
@@ -78,8 +97,8 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	board: editorField(z.enum(BOARD_SELECTION_VALUES).optional(), { label: 'Boards' }),
 	/** Where the sideboard sits relative to the mainboard. Read only at `board: 'full'`. */
 	sideboardPlacement: editorField(z.enum(SIDEBOARD_PLACEMENT_VALUES).optional(), { label: 'Sideboard Placement' }),
-	mainboard: deckBoardLayoutConfigSchema.optional(),
-	sideboard: deckBoardLayoutConfigSchema.optional(),
+	mainboard: mainboardLayoutConfigSchema.optional(),
+	sideboard: sideboardLayoutConfigSchema.optional(),
 	showQuantities: editorField(z.boolean().optional(), { label: 'Show Quantities' }),
 	showDeckName: editorField(z.boolean().optional(), { label: 'Show Deck Name' }),
 	showDeckColors: editorField(z.boolean().optional(), { label: 'Show Deck Colors' }),
@@ -138,8 +157,8 @@ export type DeckSource = DeckModeConfig['deckSource'];
 export interface ResolvedDeckBoards {
 	board: BoardSelection;
 	sideboardPlacement: SideboardPlacement;
-	mainboard: ResolvedDeckBoardLayout;
-	sideboard: ResolvedDeckBoardLayout;
+	mainboard: ResolvedMainboardLayout;
+	sideboard: ResolvedSideboardLayout;
 }
 
 /**

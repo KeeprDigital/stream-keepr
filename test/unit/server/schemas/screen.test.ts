@@ -59,7 +59,8 @@ describe('deckModeConfigSchema', () => {
 			view: 'grid' as const,
 			columns: 4,
 			listColumns: 2,
-			dynamicCardSize: false,
+			cardSizing: 'fixed' as const,
+			autoColumns: false,
 		},
 		sideboard: {
 			view: 'stack' as const,
@@ -135,6 +136,16 @@ describe('deckModeConfigSchema', () => {
 			...validConfig,
 			mainboard: { ...validConfig.mainboard, columns: 0 },
 		}).success).toBe(false);
+	});
+
+	// Only a sideboard stacks, as the strip beside the mainboard (ADR-0053).
+	it.each([
+		{ board: 'mainboard', view: 'stack', accepted: false },
+		{ board: 'mainboard', view: 'grid', accepted: true },
+		{ board: 'sideboard', view: 'stack', accepted: true },
+		{ board: 'sideboard', view: 'list', accepted: true },
+	] as const)('$board view $view accepted: $accepted', ({ board, view, accepted }) => {
+		expect(deckModeConfigSchema.safeParse({ ...validConfig, [board]: { view } }).success).toBe(accepted);
 	});
 });
 
@@ -899,7 +910,8 @@ describe('topCardsModeConfigSchema', () => {
 		limit: 10,
 		excludedCardTypes: ['Land'],
 		columns: 5,
-		dynamicCardSize: true,
+		cardSizing: 'fit' as const,
+		autoColumns: false,
 		rowsPerPage: 60,
 		autoPageEnabled: false,
 		autoPageIntervalMs: 10000,

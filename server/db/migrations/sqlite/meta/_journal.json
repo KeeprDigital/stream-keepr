@@ -99,6 +99,13 @@
       "when": 1793137549663,
       "tag": "0013_melee_live_results",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1793149309172,
+      "tag": "0014_card_sizing",
+      "breakpoints": true
     }
   ]
 }

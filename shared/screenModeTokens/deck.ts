@@ -2,9 +2,9 @@ import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 
 /**
  * How the Deck List Screen Mode looks: its Mode Tokens, by name within the mode.
- * The Mainboard and Sideboard each have their own card width, grid gap and
- * stack reveal, with the same defaults, so a small sideboard stack can sit
- * beside a medium grid.
+ * The Mainboard and Sideboard each have their own card width and grid gap,
+ * with the same defaults; only the sideboard stacks (ADR-0053), so only it has a
+ * stack reveal, and a small sideboard stack can sit beside a medium grid.
  */
 export const deckModeTokens = {
 	'title-typography': {
@@ -135,13 +135,6 @@ export const deckModeTokens = {
 		label: 'Mainboard grid card gap',
 		default: 8,
 		bounds: { min: 0, max: 48 },
-	},
-	'mainboard-stack-reveal': {
-		type: 'dimension',
-		label: 'Mainboard stacked card reveal',
-		// About the former 15% of a medium card's height.
-		default: 30,
-		bounds: { min: 4, max: 240 },
 	},
 	'sideboard-card-width': {
 		type: 'dimension',
