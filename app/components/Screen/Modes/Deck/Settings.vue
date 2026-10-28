@@ -170,9 +170,9 @@ const mainboardShown = computed(() => board.value !== 'sideboard');
 const sideboardShown = computed(() => board.value !== 'mainboard');
 
 /**
- * Both boards shown and Fit are laid out together at one card size and placed
- * as one group at the mainboard's alignment; the sideboard's places it along
- * the mainboard, so the group keeps the same space to the Screen's edges.
+ * Both boards shown and Fit are laid out together at one card size. Along the
+ * axis they share, the mainboard's alignment places them as one group; across
+ * it, each board sits at its own, as far as the Screen's edge.
  */
 const boardsPlacedTogether = computed(() =>
 	mainboardShown.value
@@ -182,11 +182,15 @@ const boardsPlacedTogether = computed(() =>
 function alignmentDescription(key: BoardKey): string {
 	if (!boardsPlacedTogether.value)
 		return 'Where the cards sit when they don\'t fill the board\'s space. A Fixed grid places them across only.';
-	if (key === 'mainboard')
-		return 'Where both boards sit, together, in the space they leave over.';
-	return resolvedBoards.value.sideboardPlacement === 'beside'
-		? 'Where the sideboard sits up or down beside the mainboard.'
-		: 'Where the sideboard sits across under the mainboard.';
+	const beside = resolvedBoards.value.sideboardPlacement === 'beside';
+	if (key === 'mainboard') {
+		return beside
+			? 'Across, where both boards sit together; up and down, where the mainboard sits.'
+			: 'Up and down, where both boards sit together; across, where the mainboard sits.';
+	}
+	return beside
+		? 'Up and down, where the sideboard sits, top to bottom of the screen. Right sends it to the right edge; otherwise it sits beside the mainboard.'
+		: 'Across, where the sideboard and its heading sit, edge to edge. Bottom sends it to the bottom of the screen; otherwise it sits under the mainboard.';
 }
 
 function setBoardShown(key: BoardKey, shown: boolean) {

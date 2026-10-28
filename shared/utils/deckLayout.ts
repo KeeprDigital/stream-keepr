@@ -178,9 +178,10 @@ function solvedStack(board: DeckLayoutStackBoard, cardWidth: number, height: num
  * which both fit the space they share. Each board's columns are chosen with
  * the other's (a fixed count is kept), and a stacked sideboard shows less of
  * each card before its cards shrink. Of card sizes within 5% of the largest,
- * the one leaving the fewest empty places in last rows wins. A sideboard grid
- * under the mainboard choosing its own columns is never wider than it, so the
- * deck reads as one block.
+ * the one leaving the fewest empty places in last rows wins, then the one in
+ * the fewest rows, so a deck spreads across the space rather than leaving a
+ * side bare. A sideboard grid under the mainboard choosing its own columns is
+ * never wider than it, so the deck reads as one block.
  */
 export function solveDeckLayout(input: DeckLayoutInput): DeckLayout | null {
 	if ((!input.mainboard && !input.sideboard) || input.width <= 0 || input.height <= 0)
@@ -191,35 +192,48 @@ export function solveDeckLayout(input: DeckLayoutInput): DeckLayout | null {
 		&& input.sideboard?.view === 'grid'
 		&& input.sideboard.columns === null;
 
-	const candidates: { main: number | null; side: number | null; width: number; empty: number }[] = [];
+	const candidates: { layout: DeckLayout; empty: number; rows: number }[] = [];
 	for (const main of columnChoices(input.mainboard)) {
 		for (const side of columnChoices(input.sideboard)) {
 			if (sideboardUnderMainboard && side! > main!)
 				continue;
+			const layout = laidOut(input, main, side, widestCard(input, main, side));
 			candidates.push({
-				main,
-				side,
-				width: widestCard(input, main, side),
+				layout,
 				empty: emptySlots(input, main, side),
+				rows: rowsOfLayout(layout),
 			});
 		}
 	}
-	const largest = Math.max(...candidates.map(candidate => candidate.width));
+	const largest = Math.max(...candidates.map(candidate => candidate.layout.cardWidth));
 	if (largest <= 0)
 		return null;
-	const best = candidates
-		.filter(candidate => candidate.width >= largest * (1 - FULLER_ROWS_TOLERANCE))
-		.sort((a, b) => a.empty - b.empty || b.width - a.width)[0]!;
+	return candidates
+		.filter(candidate => candidate.layout.cardWidth >= largest * (1 - FULLER_ROWS_TOLERANCE))
+		.sort((a, b) => a.empty - b.empty || a.rows - b.rows || b.layout.cardWidth - a.layout.cardWidth)[0]!
+		.layout;
+}
 
+function laidOut(input: DeckLayoutInput, main: number | null, side: number | null, cardWidth: number): DeckLayout {
 	return {
-		cardWidth: best.width,
+		cardWidth,
 		mainboard: input.mainboard
-			? solvedGrid(input.mainboard, best.main!, best.width)
+			? solvedGrid(input.mainboard, main!, cardWidth)
 			: null,
 		sideboard: !input.sideboard
 			? null
 			: input.sideboard.view === 'stack'
-				? solvedStack(input.sideboard, best.width, input.height)
-				: solvedGrid(input.sideboard, best.side!, best.width),
+				? solvedStack(input.sideboard, cardWidth, input.height)
+				: solvedGrid(input.sideboard, side!, cardWidth),
 	};
+}
+
+/** Every grid row the deck's boards lay out in; a stack is a single row. */
+function rowsOfLayout(layout: DeckLayout): number {
+	return [layout.mainboard, layout.sideboard].reduce((rows, board) =>
+		rows + (board === null
+			? 0
+			: board.view === 'grid'
+				? board.rows
+				: 1), 0);
 }

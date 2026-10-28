@@ -580,8 +580,98 @@ describe('screenDeckDisplay', () => {
 		expect(px(columns[2]!)).toBeCloseTo(cardWidth, 3);
 		expect(px((wrapper.get('[data-testid="sideboard-section"]').element as HTMLElement).style.width)).toBeCloseTo(cardWidth, 3);
 		// The group sits at the mainboard's alignment; the sideboard sits along the mainboard at its own.
-		expect((wrapper.get('.deck-layout-space').element as HTMLElement).style.justifyContent).toBe('start');
+		expect((wrapper.get('.deck-layout').element as HTMLElement).style.justifyContent).toBe('start');
 		expect((wrapper.get('[data-testid="sideboard-section"]').element as HTMLElement).style.alignSelf).toBe('end');
+	});
+
+	// Below the mainboard, the sideboard and its heading sit at its own alignment across the whole space.
+	it('places a sideboard below the mainboard at its own edge, heading and all', async () => {
+		measured.width = 1920;
+		measured.height = 960;
+		mutableConfig = {
+			...mutableConfig,
+			sideboardPlacement: 'below',
+			mainboard: {
+				view: 'grid',
+				cardSizing: 'fit',
+				autoColumns: true,
+				alignment: 'center',
+			},
+			sideboard: {
+				view: 'grid',
+				cardSizing: 'fit',
+				autoColumns: true,
+				alignment: 'right',
+			},
+		};
+		mainboard.value = Array.from({ length: 21 }, (_, index) => createCard({ name: `Card ${index}` }));
+		sideboard.value = Array.from({ length: 9 }, (_, index) => createCard({ name: `Side ${index}`, compartment: 'sideboard' }));
+
+		const wrapper = await mountComponent();
+
+		const section = wrapper.get('[data-testid="sideboard-section"]');
+		expect((section.element as HTMLElement).style.alignSelf).toBe('end');
+		expect((section.get('h3').element as HTMLElement).style.textAlign).toBe('right');
+		expect((wrapper.get('[data-testid="mainboard-section"]').element as HTMLElement).style.alignSelf).toBe('center');
+	});
+
+	// A sideboard aligned away from the mainboard goes to that far edge; otherwise the two sit together.
+	it.each([
+		{
+			name: 'bottom-left sideboard below',
+			placement: 'below',
+			sideboardAlignment: 'bottom-left',
+			toEdge: true,
+			edge: 'marginTop',
+		},
+		{
+			name: 'top sideboard below',
+			placement: 'below',
+			sideboardAlignment: 'top',
+			toEdge: false,
+			edge: 'marginTop',
+		},
+		{
+			name: 'right sideboard beside',
+			placement: 'beside',
+			sideboardAlignment: 'right',
+			toEdge: true,
+			edge: 'marginLeft',
+		},
+		{
+			name: 'centred sideboard beside',
+			placement: 'beside',
+			sideboardAlignment: 'center',
+			toEdge: false,
+			edge: 'marginLeft',
+		},
+	] as const)('places a $name at the far edge: $toEdge', async ({ placement, sideboardAlignment, toEdge, edge }) => {
+		measured.width = 1920;
+		measured.height = 960;
+		mutableConfig = {
+			...mutableConfig,
+			sideboardPlacement: placement,
+			mainboard: {
+				view: 'grid',
+				cardSizing: 'fit',
+				autoColumns: true,
+				alignment: 'top-left',
+			},
+			sideboard: {
+				view: placement === 'beside'
+					? 'stack'
+					: 'grid',
+				cardSizing: 'fit',
+				autoColumns: true,
+				alignment: sideboardAlignment,
+			},
+		};
+		mainboard.value = Array.from({ length: 21 }, (_, index) => createCard({ name: `Card ${index}` }));
+		sideboard.value = Array.from({ length: 9 }, (_, index) => createCard({ name: `Side ${index}`, compartment: 'sideboard' }));
+
+		const wrapper = await mountComponent();
+
+		expect((wrapper.get('[data-testid="sideboard-section"]').element as HTMLElement).style[edge]).toBe(toEdge ? 'auto' : '');
 	});
 
 	it('does not render token metadata on the Deck display', async () => {

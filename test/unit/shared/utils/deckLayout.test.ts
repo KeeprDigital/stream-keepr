@@ -166,6 +166,21 @@ describe('solveDeckLayout', () => {
 		expect(layout.sideboard!.view === 'grid' && layout.sideboard!.columns).toBeLessThanOrEqual(layout.mainboard!.columns);
 	});
 
+	// Of near-equal card sizes with as full rows, the layout in fewest rows wins, spread across the space.
+	it('spreads a deck across the space rather than leaving it empty beside it', () => {
+		const input = space({
+			width: 1880,
+			height: 940,
+			placement: 'below',
+			mainboard: grid(23),
+			sideboard: grid(8, null, 36),
+		});
+		const layout = solveDeckLayout(input)!;
+
+		expect(Math.max(layout.mainboard!.width, layout.sideboard!.width) / input.width).toBeGreaterThan(0.95);
+		expect(layout.sideboard!.view === 'grid' && layout.sideboard!.rows).toBe(1);
+	});
+
 	it('keeps a board\'s own column count', () => {
 		expect(solveDeckLayout(space({
 			mainboard: grid(23, 4),

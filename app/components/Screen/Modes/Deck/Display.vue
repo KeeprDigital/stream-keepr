@@ -243,16 +243,43 @@ const solvedCardWidth = computed(() => solvedLayout.value
 	: undefined);
 
 /**
- * A solved deck's boards sit together as one group at the mainboard's
- * alignment, so the space they leave is shared out around the group: the
- * sideboard sits as far from its edge as the mainboard from its own.
+ * A solved deck's boards fill the space they share. Across the axis they
+ * share, each board sits at its own alignment, as far as the Screen's edge.
+ * Along it they sit together at the mainboard's alignment, so the space they
+ * leave is shared out around them, unless the sideboard's alignment points
+ * away from the mainboard: then it goes to that far edge, and the mainboard
+ * sits at its own alignment in the space before it (`boardFlexStyle`).
  */
-const solvedLayoutStyle = computed(() => {
-	if (!solvedLayout.value)
-		return undefined;
-	const { x, y } = ninePointPlacement(resolvedBoards.value[showMainboard.value ? 'mainboard' : 'sideboard'].alignment);
-	return { justifyContent: x, alignItems: y };
+const solvedPlacement = computed(() => {
+	const along = (key: 'mainboard' | 'sideboard') => {
+		const { x, y } = ninePointPlacement(resolvedBoards.value[key].alignment);
+		return besideActive.value ? x : y;
+	};
+	const mainboard = along(showMainboard.value ? 'mainboard' : 'sideboard');
+	const sideboardToEdge = showMainboard.value && showSideboard.value && along('sideboard') === 'end' && mainboard !== 'end';
+	return { mainboard, sideboardToEdge };
 });
+
+const solvedLayoutStyle = computed(() => {
+	if (!solvedLayout.value || solvedPlacement.value.sideboardToEdge)
+		return undefined;
+	return { justifyContent: solvedPlacement.value.mainboard };
+});
+
+/** A solved board's label lines up with the edge its board sits at. */
+function labelStyle(section: VisibleBoard) {
+	if (!solvedLayout.value)
+		return titleStyle;
+	const { x } = ninePointPlacement(section.layout.alignment);
+	return {
+		...titleStyle,
+		textAlign: x === 'start'
+			? 'left' as const
+			: x === 'end'
+				? 'right' as const
+				: 'center' as const,
+	};
+}
 
 /**
  * In the beside row each board's share of the width follows its column count,
@@ -265,14 +292,21 @@ const solvedLayoutStyle = computed(() => {
 function boardFlexStyle(section: VisibleBoard) {
 	const solved = solvedBoard(section);
 	if (solved) {
-		// Within the group, each board sits along the other at its own alignment:
-		// up and down beside it, across below it.
+		// Across the shared axis, each board sits at its own alignment: up and
+		// down beside the other, across below it. A sideboard sent to the far
+		// edge takes the space before it, which a centred mainboard shares.
 		const { x, y } = ninePointPlacement(section.layout.alignment);
+		const { mainboard, sideboardToEdge } = solvedPlacement.value;
+		const leading = besideActive.value ? 'marginLeft' : 'marginTop';
+		const pushed = sideboardToEdge && (section.key === 'sideboard' || mainboard === 'center');
 		return {
 			flex: 'none',
 			width: `${solved.width}px`,
 			height: `${solved.height}px`,
 			alignSelf: besideActive.value ? y : x,
+			...(pushed
+				? { [leading]: 'auto' }
+				: {}),
 		};
 	}
 	if (!besideActive.value) {
@@ -561,15 +595,15 @@ function stackCardStyle(section: VisibleBoard, index: number) {
 					</div>
 
 					<!-- Boards: each visible board renders its own layout block -->
-					<!-- The space the boards share, and in it the boards as one group. -->
+					<!-- The space the boards share, and in it the boards. -->
 					<div
 						ref="layoutElement"
 						class="deck-layout-space flex flex-1 min-h-0"
-						:style="solvedLayoutStyle"
 					>
 						<div
-							class="deck-layout flex gap-6"
-							:class="[besideActive ? 'flex-row' : 'flex-col', solvedLayout ? 'flex-none' : 'flex-1 min-h-0 min-w-0']"
+							class="deck-layout flex flex-1 min-h-0 min-w-0 gap-6"
+							:class="besideActive ? 'flex-row' : 'flex-col'"
+							:style="solvedLayoutStyle"
 						>
 							<div
 								v-for="section in visibleBoards"
@@ -578,7 +612,7 @@ function stackCardStyle(section: VisibleBoard, index: number) {
 								class="flex flex-col min-h-0 min-w-0"
 								:style="boardFlexStyle(section)"
 							>
-								<h3 v-if="section.showLabel" class="text-lg shrink-0 mb-2" :style="titleStyle">
+								<h3 v-if="section.showLabel" class="text-lg shrink-0 mb-2" :style="labelStyle(section)">
 									{{ section.label }}
 								</h3>
 

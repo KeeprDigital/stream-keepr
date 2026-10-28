@@ -435,7 +435,7 @@ describe('screenDeckSettings', () => {
 
 	// Both boards Fit are placed as one group at the mainboard's alignment; the sideboard's places it along the mainboard.
 	it.each([
-		{ sideboardSizing: 'fit', description: 'Where the sideboard sits up or down beside the mainboard.' },
+		{ sideboardSizing: 'fit', description: 'Up and down, where the sideboard sits, top to bottom of the screen. Right sends it to the right edge; otherwise it sits beside the mainboard.' },
 		{ sideboardSizing: 'fixed', description: 'Where the cards sit when they don\'t fill the board\'s space. A Fixed grid places them across only.' },
 	] as const)('describes the sideboard alignment while it is $sideboardSizing', async ({ sideboardSizing, description }) => {
 		mockConfig.value = {
