@@ -178,15 +178,24 @@ function solvedStack(board: DeckLayoutStackBoard, cardWidth: number, height: num
  * which both fit the space they share. Each board's columns are chosen with
  * the other's (a fixed count is kept), and a stacked sideboard shows less of
  * each card before its cards shrink. Of card sizes within 5% of the largest,
- * the one leaving the fewest empty places in last rows wins.
+ * the one leaving the fewest empty places in last rows wins. A sideboard grid
+ * under the mainboard choosing its own columns is never wider than it, so the
+ * deck reads as one block.
  */
 export function solveDeckLayout(input: DeckLayoutInput): DeckLayout | null {
 	if ((!input.mainboard && !input.sideboard) || input.width <= 0 || input.height <= 0)
 		return null;
 
+	const sideboardUnderMainboard = input.placement === 'below'
+		&& !!input.mainboard
+		&& input.sideboard?.view === 'grid'
+		&& input.sideboard.columns === null;
+
 	const candidates: { main: number | null; side: number | null; width: number; empty: number }[] = [];
 	for (const main of columnChoices(input.mainboard)) {
 		for (const side of columnChoices(input.sideboard)) {
+			if (sideboardUnderMainboard && side! > main!)
+				continue;
 			candidates.push({
 				main,
 				side,

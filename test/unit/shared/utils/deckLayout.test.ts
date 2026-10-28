@@ -128,6 +128,44 @@ describe('solveDeckLayout', () => {
 		}))!.mainboard!.columns).toBe(columns);
 	});
 
+	// A sideboard under the mainboard is never wider than it, so the deck reads as one block.
+	it.each([
+		{
+			main: 21,
+			side: 9,
+			width: 1800,
+			height: 990,
+		},
+		{
+			main: 21,
+			side: 9,
+			width: 1920,
+			height: 960,
+		},
+		{
+			main: 23,
+			side: 15,
+			width: 1920,
+			height: 960,
+		},
+		{
+			main: 12,
+			side: 15,
+			width: 1920,
+			height: 960,
+		},
+	])('lays $side sideboard cards below $main no wider than the mainboard, in $width×$height', ({ main, side, width, height }) => {
+		const layout = solveDeckLayout(space({
+			width,
+			height,
+			placement: 'below',
+			mainboard: grid(main),
+			sideboard: grid(side, null, 36),
+		}))!;
+
+		expect(layout.sideboard!.view === 'grid' && layout.sideboard!.columns).toBeLessThanOrEqual(layout.mainboard!.columns);
+	});
+
 	it('keeps a board\'s own column count', () => {
 		expect(solveDeckLayout(space({
 			mainboard: grid(23, 4),
