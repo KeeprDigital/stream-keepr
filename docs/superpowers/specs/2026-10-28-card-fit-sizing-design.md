@@ -44,11 +44,12 @@ key, for `'$."top-cards"'` (quoted, as in `0003_top_cut_screen_mode_key.sql`),
 `$.deck.mainboard`, `$.deck.sideboard`. Mode configs live only in
 `screens.mode_configs`. Precedent: `0008_event_canvas.sql` uses `json_remove`.
 
-### `columns: number | 'auto'`
+### `autoColumns: boolean` beside `columns`
 
-Same fields as today (Most Played Cards `columns`, Deck board `columns`), bounds
-unchanged for the number, plus `'auto'`. Editor: number input with an "Auto"
-toggle (builder's call on the exact control). Defaults stay numeric.
+As built: a separate `autoColumns` toggle (default `false`) beside the existing
+numeric `columns` (1–12) on Most Played Cards and each Deck board, rather than
+`columns: number | 'auto'`; editor meta, clamping and PATCH already handle both.
+The Columns input is disabled while auto is on.
 
 `'auto'` resolves to a number in one shared pure function (its **home**, e.g.
 `shared/utils/cardGridColumns.ts`), from inputs every surface has: card count,

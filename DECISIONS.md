@@ -1660,3 +1660,29 @@ A minute cron meets the cadence: the shortest interval is a minute, and backoff 
 - **Keep `melee:roundSynced` as the only message, published only on change.** Standings would still re-read on every reported result, and the Pairings Screen could not tell a result from a re-pairing.
 - **Let a tick wait for the lease like an operator command.** A tick that waits holds a cron invocation for nothing; the next minute's tick tries again.
 - **Let an operator command wait out a tick.** A tick slower than the wait still answers the operator `409`, and every wait delays the operator for polling, which Live Results must never do.
+
+## ADR-0053: Cards fit the Event Canvas or take a fixed width
+
+Accepted · 2026-10-28
+
+### Decision
+
+**A card grid's Card Sizing is Fixed width or Fit to screen.** `cardSizing: 'fixed' | 'fit'` replaces `dynamicCardSize` on Most Played Cards and on each Deck List board. Fixed takes the card-width Mode Token (#844) and may overflow. Fit gives the grid the height its display leaves it, splits it into equal rows (`ScreenCardGrid`), and sizes each card in its cell as `min(100cqw, 100cqh × 61/85)` (`MtgCardFitBox`), so no card leaves the Event Canvas. This is CSS: nothing measures the rendered page. A Most Played Cards page lays out a full page's rows, `min(rowsPerPage, rows)`, so a short last page keeps its card size. Deck boards below each other share the height by their Fit rows, and a Fixed board keeps its own height.
+
+**Auto columns are chosen from the Event Canvas, never measured.** `autoColumns` sits beside `columns`. Fit picks the column count, from 1 to 12, at which the cards are largest (`fitColumns`). Fixed fits as many card-width columns as there is room for (`fixedColumns`). Both read the canvas inside the Screen inset and the resolved Mode Tokens (`useCardGridColumns`), and the settings editor's mode data now carries its Event's canvas and Theme. Most Played Cards chooses its columns over every card and then pages them, so the column count and the page size never depend on each other. A Fixed Deck grid with auto columns uses CSS `auto-fill`, because a Deck has no pages to agree on.
+
+**Only a sideboard stacks, as the strip beside the mainboard.** The mainboard's views are grid and list. A sideboard stack placed below the mainboard, or shown alone, renders as a grid and keeps `view: 'stack'` stored, so moving it back beside restores the strip. Settings shows the Stack tab disabled in those cases. A Fit strip is one mainboard column wide, and its cards fit the whole stack to its height while the `sideboard-stack-reveal` token stays in px. `mainboard-stack-reveal` is gone.
+
+**Migration `0014_card_sizing` carries stored Screens over.** A stored `dynamicCardSize: true` becomes `'fit'`, and `false` becomes `'fixed'`. A stored mainboard `view: 'stack'` becomes `'grid'`. `dynamicCardSize` is a former field of both contracts, so a straggler reads as the mode default.
+
+This amends ADR-0051's #844 note: whether cards fill their columns is still config, now `cardSizing`.
+
+### Why
+
+With "Dynamic card size", columns only filled the canvas width. Card height followed the card's aspect, so enough rows ran off the bottom of the Event Canvas with no way to stop them. Operators need one mode that never overflows and one that takes an exact width and accepts overflow. Choosing auto columns from inputs every surface holds keeps the settings editor's page count equal to the Screen Output's. The mainboard stack and the horizontal sideboard row were never used.
+
+### Consequences
+
+- Most Played Cards keeps Fit as its default, so a Screen that filled its columns now also fits its height, and a long grid shrinks instead of overflowing.
+- Fit cards in a page of 60 can be small. Paging, not a minimum size, is the operator's way to keep them large.
+- Canvas aspect only chooses the auto column count; the rendered Fit size always comes from the grid's real space, so a tall header costs size, never overflow.
