@@ -28,6 +28,7 @@ import {
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
 	isGraphicsPreviewSelectedTargetMessage,
 } from '~/modules/graphics/previewMessages';
+import { useScreenModeReady } from '~/modules/screen-mode';
 import { screenMediaSourceUrl } from '~/utils/screenMediaSource';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
 import FeatureMatchOverlayFrameMedia from './FrameMedia.vue';
@@ -41,7 +42,7 @@ const canvasWidth = computed(() => (eventCanvas?.value ?? DEFAULT_EVENT_CANVAS).
 const canvasHeight = computed(() => (eventCanvas?.value ?? DEFAULT_EVENT_CANVAS).height);
 const frameMaskId = `feature-match-overlay-frame-mask-${useId().replace(/[^\w-]/g, '')}`;
 const frameGlowFilterId = `feature-match-overlay-frame-glow-${useId().replace(/[^\w-]/g, '')}`;
-const { config, match, matchState, sourceMatch, round, phase, event, usesSampleDataset, loading, error } = useFeatureMatchOverlayModeData();
+const { config, match, matchState, sourceMatch, round, phase, event, usesSampleDataset, loading, error, ready } = useFeatureMatchOverlayModeData();
 // Real sideboard card data for the Deck List Graphic Items (#491), fetched
 // client-side while the composition authors one. A sample-dataset preview has
 // no Slot and so no player ids, which is what keeps it from fetching.
@@ -101,6 +102,10 @@ const { fontsReady, fontsFailed, fontSources } = useGraphicAssetFontFaces(
 	graphicAssetContentUrl,
 	contentUrlsSettled,
 );
+// Rendering Readiness: the Slot read has settled, its media URLs have resolved,
+// and its fonts have loaded or failed; the media itself is the host's to wait on.
+useScreenModeReady(() => ready.value && contentUrlsSettled.value && (fontsReady.value || fontsFailed.value));
+
 // The Frame's own media, each a Screen Media Source (ADR-0021). A library
 // revision resolves through the same content URLs as everything else this
 // layout publishes; a Remote Media URL is drawn as given.

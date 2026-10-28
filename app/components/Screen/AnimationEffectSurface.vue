@@ -142,6 +142,7 @@ onBeforeUnmount(() => {
 	<div
 		ref="host"
 		class="animation-effect-surface"
+		:data-render-pending="instance ? undefined : ''"
 	/>
 </template>
 

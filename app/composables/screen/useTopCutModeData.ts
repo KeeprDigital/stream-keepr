@@ -93,6 +93,8 @@ export function useTopCutModeData() {
 	const isEmpty = computed(() => freshness.answered.value && (!config.value.phaseId || bracket.value.columns.length === 0));
 
 	return {
+		/** Rendering Readiness: its first read has answered or failed. */
+		ready: freshness.answered,
 		config,
 		loading,
 		error,

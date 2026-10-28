@@ -21,6 +21,7 @@ interface TableColumnDefinition<Key extends string> {
 const {
 	config,
 	error,
+	ready,
 	isEmpty,
 	headerText,
 	pageData,
@@ -299,6 +300,7 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 <template>
 	<ScreenModeBase
 		:error="error"
+		:ready="ready"
 		:empty="isEmpty"
 	>
 		<div class="metagame-display broadcast-table-display flex flex-col h-full w-full" :style="displayStyle">

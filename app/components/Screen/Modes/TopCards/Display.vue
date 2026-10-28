@@ -2,7 +2,7 @@
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { config, error, isEmpty, headerText, pageEntries, currentPage, totalPages } = useTopCardsModeData();
+const { config, error, ready, isEmpty, headerText, pageEntries, currentPage, totalPages } = useTopCardsModeData();
 
 /** Set on the root, so card names and a card without an image take it. */
 const displayStyle = {
@@ -70,6 +70,7 @@ function statText(entry: CardBreakdownEntry): string | null {
 <template>
 	<ScreenModeBase
 		:error="error"
+		:ready="ready"
 		:empty="isEmpty"
 	>
 		<div class="top-cards-display flex flex-col gap-4 h-full w-full" :style="displayStyle">

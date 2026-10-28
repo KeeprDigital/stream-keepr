@@ -19,6 +19,7 @@ const {
 	mainboard,
 	sideboard,
 	error,
+	ready,
 	hasDisplayedDeck,
 	displayedDeckVersion,
 	pendingSwapVersion,
@@ -321,6 +322,7 @@ function stackCardStyle(section: VisibleBoard, extent: 'height' | 'width', index
 <template>
 	<ScreenModeBase
 		:error="error"
+		:ready="ready"
 	>
 		<!-- Deck Content -->
 		<div class="deck-content overflow-hidden w-full h-full" :style="displayStyle">

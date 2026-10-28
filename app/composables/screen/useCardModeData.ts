@@ -11,7 +11,7 @@ export function useCardModeData() {
 	// Screen ID from context
 	const screenId = computed<number | null>(() => screen.value?.id ?? null);
 
-	const { card, loading, error } = sampleDataset
+	const { card, loading, error, answered } = sampleDataset
 		? holdSampleCard()
 		: followScreenCard(screenId);
 
@@ -21,6 +21,8 @@ export function useCardModeData() {
 		card,
 		loading,
 		error,
+		/** Rendering Readiness: its Card read has answered or failed; the card's image stages itself. */
+		ready: answered,
 	};
 }
 
@@ -47,6 +49,7 @@ function holdSampleCard() {
 		card: computed(() => card.value),
 		loading: computed(() => loading.value),
 		error: computed(() => error.value),
+		answered: computed(() => !loading.value),
 	};
 }
 
@@ -100,5 +103,6 @@ function followScreenCard(screenId: Readonly<Ref<number | null>>) {
 		card: computed(() => cardStore.activeCard),
 		loading: freshness.loading,
 		error: freshness.error,
+		answered: freshness.answered,
 	};
 }

@@ -13,6 +13,7 @@ import { counterConfigsForDeckCounterTypes } from '~~/shared/utils/deckCounters'
 import { createDeckLookupCards } from '~~/shared/utils/playerDeck';
 import { selectPlayerDeck } from '~/composables/data/usePlayerDeckCache';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
+import { preloadImages } from '~/utils/preloadImage';
 
 interface DeckDisplayState {
 	version: number;
@@ -188,58 +189,16 @@ function deckSourceStamp(updatedAt: Date | string | null | undefined): number | 
 		: new Date(updatedAt).getTime();
 }
 
-function preloadDeckImage(url: string): Promise<boolean> {
-	return new Promise((resolve) => {
-		const image = new Image();
-		let settled = false;
-
-		const finish = (loaded: boolean) => {
-			if (settled) {
-				return;
-			}
-			settled = true;
-			resolve(loaded);
-		};
-
-		image.onload = () => {
-			if (typeof image.decode === 'function') {
-				image.decode().then(() => finish(true), () => finish(false));
-				return;
-			}
-			finish(true);
-		};
-
-		image.onerror = () => finish(false);
-		image.src = url;
-
-		if (image.complete) {
-			if ('naturalWidth' in image && image.naturalWidth === 0) {
-				finish(false);
-				return;
-			}
-			if (typeof image.decode === 'function') {
-				image.decode().then(() => finish(true), () => finish(false));
-				return;
-			}
-			finish(true);
-		}
-	});
-}
-
 async function preloadDeckImages(cards: DeckListCardWithData[]): Promise<boolean> {
 	if (!import.meta.client) {
 		return false;
 	}
 
-	const imageUrls = [
-		...new Set(
-			cards
-				.map(card => card.mtgCard?.imageData?.front?.normal)
-				.filter((url): url is string => !!url),
-		),
-	];
-	const results = await Promise.all(imageUrls.map(async url => [url, await preloadDeckImage(url)] as const));
-	const failedUrls = new Set(results.filter(([, loaded]) => !loaded).map(([url]) => url));
+	const failedUrls = await preloadImages(
+		cards
+			.map(card => card.mtgCard?.imageData?.front?.normal)
+			.filter((url): url is string => !!url),
+	);
 	if (failedUrls.size === 0)
 		return false;
 
@@ -355,6 +314,17 @@ export function useDeckModeData() {
 		if (read && !displayInput(read))
 			return 'Player has no deck list';
 		return freshness.error.value ?? (buildFailed.value ? DECK_LOAD_FAILED : null);
+	});
+
+	/**
+	 * Rendering Readiness: a deck is on program, or there is none to build —
+	 * nothing selected, no deck list, or a failure that shows as the error.
+	 */
+	const ready = computed(() => {
+		if (displayedDeck.value || error.value)
+			return true;
+		const read = freshness.data.value;
+		return freshness.answered.value && !(read && displayInput(read));
 	});
 
 	onScopeDispose(() => {
@@ -578,6 +548,7 @@ export function useDeckModeData() {
 		sideboard,
 		loading,
 		error,
+		ready,
 		cardDataDegraded: degradedRefetch.degraded,
 		hasDisplayedDeck,
 		displayedDeckVersion,

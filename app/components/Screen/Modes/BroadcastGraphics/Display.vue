@@ -8,6 +8,7 @@ import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphic
 import GraphicsCompositorCanvas from '~/components/Graphics/Compositor/Canvas.vue';
 import { useBroadcastGraphicsModeData } from '~/composables/screen/useBroadcastGraphicsModeData';
 import { resolveBroadcastGraphicsRenderModel } from '~/modules/broadcast-graphics/renderModel';
+import { useScreenModeReady } from '~/modules/screen-mode';
 
 const { outputMode, previewGuides, previewSafeAreas, eventCanvas } = useScreenContext();
 const {
@@ -24,6 +25,7 @@ const {
 	isAuthoringPreview,
 	selectedTarget,
 	publishSelection,
+	ready,
 } = useBroadcastGraphicsModeData();
 
 const resolvedOutput = computed<ScreenOutput>(() => outputMode?.value ?? 'overlay');
@@ -88,6 +90,10 @@ const { fontsReady, fontsFailed, fontSources } = useGraphicAssetFontFaces(
 	contentUrl,
 	contentUrlsSettled,
 );
+
+// Rendering Readiness: the Live Session read, its media URLs resolved, and its
+// fonts loaded or failed; the media itself is the host's to wait on.
+useScreenModeReady(() => ready.value && contentUrlsSettled.value && (fontsReady.value || fontsFailed.value));
 
 const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 	output: resolvedOutput.value,

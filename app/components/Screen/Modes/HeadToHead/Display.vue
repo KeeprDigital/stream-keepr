@@ -2,7 +2,7 @@
 import type { ScreenOutputHeadToHeadEarlierMatch } from '~~/shared/types/screenOutputReads';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { config, error, isEmpty, firstMeeting, headerText, player1, player2, earlierMatches, formatRecord } = useHeadToHeadModeData();
+const { config, error, ready, isEmpty, firstMeeting, headerText, player1, player2, earlierMatches, formatRecord } = useHeadToHeadModeData();
 
 const primaryTextStyle = {
 	color: modeTokenVar('head-to-head', 'primary-text'),
@@ -63,6 +63,7 @@ function outcomeLabel({ outcome }: ScreenOutputHeadToHeadEarlierMatch): string {
 <template>
 	<ScreenModeBase
 		:error="error"
+		:ready="ready"
 		:empty="isEmpty"
 	>
 		<div class="head-to-head-display broadcast-table-display flex flex-col h-full w-full" :style="displayStyle">

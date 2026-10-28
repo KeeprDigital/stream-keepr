@@ -18,6 +18,7 @@ import { createMockScreen } from '~~/test/helpers/fixtures';
 import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { text } from '~~/test/helpers/graphicsComposition';
 import { stubCapabilitySession, stubFontFaces } from '~~/test/nuxt/helpers/fontFaces';
+import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
 import Renderer from '~/components/Screen/Renderer.vue';
 
 // Each Screen Mode's display, mounted by its Screen host under a resolved
@@ -331,6 +332,7 @@ mockNuxtImport('useStandingsModeData', () => () => {
 	return {
 		config,
 		error: ref(null),
+		ready: computed(() => true),
 		isEmpty: computed(() => false),
 		headerText: computed(() => 'Standings'),
 		visibleColumns: computed(() => columns),
@@ -350,6 +352,7 @@ mockNuxtImport('useStandingsModeData', () => () => {
 mockNuxtImport('usePairingsModeData', () => () => ({
 	config: computed(() => ({ showHeader: true, rowsPerPage: 8 })),
 	error: ref(null),
+	ready: computed(() => true),
 	isEmpty: computed(() => false),
 	headerText: computed(() => 'Pairings'),
 	pageData: computed(() => [
@@ -392,6 +395,7 @@ mockNuxtImport('usePlayerHistoryModeData', () => () => {
 	return {
 		config: computed(() => ({ showHeader: true, rowsPerPage: 8, columns })),
 		error: ref(null),
+		ready: computed(() => true),
 		isEmpty: computed(() => false),
 		headerText: computed(() => 'History'),
 		player: computed(() => ({
@@ -429,6 +433,7 @@ mockNuxtImport('useHeadToHeadModeData', () => () => {
 	return {
 		config: computed(() => ({ showHeader: true })),
 		error: ref(null),
+		ready: computed(() => true),
 		isEmpty: computed(() => false),
 		firstMeeting: computed(() => false),
 		headerText: computed(() => 'Head to Head'),
@@ -449,6 +454,7 @@ mockNuxtImport('useHeadToHeadModeData', () => () => {
 mockNuxtImport('useArchetypeSpotlightModeData', () => () => ({
 	config: computed(() => ({ showHeader: true, rowsPerPage: 8 })),
 	error: ref(null),
+	ready: computed(() => true),
 	isEmpty: computed(() => false),
 	headerText: computed(() => 'Spotlight'),
 	conversionLabel: computed(() => 'Top 8'),
@@ -511,6 +517,7 @@ mockNuxtImport('useTopCutModeData', () => () => ({
 		...probeConfig.value,
 	})),
 	error: ref(null),
+	ready: computed(() => true),
 	isEmpty: computed(() => false),
 	headerText: computed(() => 'Top 4'),
 	// Every kind of Bracket Position at once, which no one real bracket holds.
@@ -548,6 +555,7 @@ mockNuxtImport('useMetagameModeData', () => () => ({
 		...probeConfig.value,
 	})),
 	error: ref(null),
+	ready: computed(() => true),
 	isEmpty: computed(() => false),
 	headerText: computed(() => 'Metagame'),
 	pageData: computed(() => [
@@ -616,6 +624,7 @@ mockNuxtImport('useTopCardsModeData', () => () => {
 			...probeConfig.value,
 		})),
 		error: ref(null),
+		ready: computed(() => true),
 		isEmpty: computed(() => false),
 		headerText: computed(() => 'Most Played Cards'),
 		pageEntries: computed(() => [
@@ -686,6 +695,7 @@ mockNuxtImport('useDeckModeData', () => () => ({
 		deckCard('Hydroblast', 'sideboard'),
 	]),
 	error: ref(null),
+	ready: computed(() => true),
 	hasDisplayedDeck: computed(() => true),
 	displayedDeckVersion: ref(1),
 	pendingSwapVersion: ref(0),
@@ -704,6 +714,7 @@ mockNuxtImport('useCardModeData', () => () => ({
 	screenId: computed(() => 1),
 	card: ref(spotlightCard),
 	error: ref(null),
+	ready: computed(() => true),
 }));
 
 // The graphics hosts: one on-air composition holding a Theme-bound Graphic Item.
@@ -738,6 +749,7 @@ mockNuxtImport('useBroadcastGraphicsModeData', () => () => ({
 	isAuthoringPreview: computed(() => false),
 	selectedTarget: computed(() => ({ type: 'canvas' })),
 	publishSelection: () => {},
+	ready: computed(() => true),
 }));
 
 mockNuxtImport('useFeatureMatchOverlayModeData', () => () => ({
@@ -757,6 +769,7 @@ mockNuxtImport('useFeatureMatchOverlayModeData', () => () => ({
 	usesSampleDataset: computed(() => false),
 	loading: ref(false),
 	error: ref(null),
+	ready: computed(() => true),
 }));
 
 mockNuxtImport('useFeatureMatchOverlaySideboardData', () => () => ({
@@ -767,6 +780,9 @@ mockNuxtImport('useFeatureMatchOverlaySideboardData', () => () => ({
 // ── Mounting and reading what is painted ──
 
 let wrapper: VueWrapper | undefined;
+
+// A card preloads its image before it shows.
+stubImageLoading();
 
 beforeAll(() => {
 	for (const [property, face] of Object.entries(FONT_FACES))

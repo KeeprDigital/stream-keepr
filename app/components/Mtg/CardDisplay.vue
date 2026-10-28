@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import type { MtgCard } from '~/types/card/mtg';
-import { modeMotionVars, modeTokenVar } from '~/modules/screen-mode';
+import { modeMotionVars, modeTokenVar, useScreenModeReady } from '~/modules/screen-mode';
+import { createGuardedSequence } from '~/utils/guardedSequence';
+import { preloadImages } from '~/utils/preloadImage';
 
 const props = defineProps<{
 	/** The Screen Card to show; null shows none, leaving with its exit animation. */
 	card: MtgCard | null;
 }>();
 
-const imageLoaded = ref(false);
 const showCard = ref(false);
 const displayCard = ref<MtgCard | null>(null);
+/** A card whose images have loaded, waiting for the one shown to leave. */
+const pendingCard = ref<MtgCard | null>(null);
+const preloading = ref(false);
+let leaving = false;
 let showCardTimer: ReturnType<typeof setTimeout> | null = null;
+const loads = createGuardedSequence();
 
 function clearShowCardTimer() {
 	if (showCardTimer)
@@ -48,33 +54,14 @@ const motionStyle = {
 	'--card-motion-clip': motion.clipPath,
 };
 
-// Watch for card changes and reset loading state
-watch(() => props.card, (newCard) => {
-	if (newCard) {
-		// Same card ID - just update in place (smooth CSS transition for flip/rotate)
-		if (displayCard.value?.id === newCard.id) {
-			displayCard.value = newCard;
-			return;
-		}
-		// Different card: reset and prepare for preload
-		clearShowCardTimer();
-		displayCard.value = newCard;
-		imageLoaded.value = false;
-		showCard.value = false;
-	}
-	else {
-		// Card cleared: trigger exit animation
-		clearShowCardTimer();
-		showCard.value = false;
-	}
-}, { immediate: true });
+function cardImageUrls(card: MtgCard): string[] {
+	return [card.imageData.front?.normal, card.imageData.back?.normal]
+		.filter((url): url is string => !!url);
+}
 
-// When image loads, wait a moment then show with animation
-function onImageLoad(cardId: string) {
-	if (displayCard.value?.id !== cardId)
-		return;
+/** Enters the card shown, once it has mounted. */
+function reveal(cardId: string) {
 	clearShowCardTimer();
-	imageLoaded.value = true;
 	void nextTick(() => {
 		if (displayCard.value?.id !== cardId)
 			return;
@@ -86,18 +73,73 @@ function onImageLoad(cardId: string) {
 	});
 }
 
-onBeforeUnmount(clearShowCardTimer);
+function leave() {
+	clearShowCardTimer();
+	if (showCard.value) {
+		leaving = true;
+		showCard.value = false;
+	}
+	else if (!leaving) {
+		displayCard.value = pendingCard.value;
+		pendingCard.value = null;
+	}
+}
 
-// Clear displayCard after exit animation completes
+/**
+ * The card on program stays until its replacement's images have loaded; then
+ * it leaves and the replacement enters. The same card updates in place, so a
+ * flip or rotation animates on the card shown.
+ */
+watch(() => props.card, async (next) => {
+	const flight = loads.begin();
+	preloading.value = false;
+	if (!next) {
+		pendingCard.value = null;
+		leave();
+		return;
+	}
+	if (displayCard.value?.id === next.id && !leaving) {
+		pendingCard.value = null;
+		displayCard.value = next;
+		if (!showCard.value)
+			reveal(next.id);
+		return;
+	}
+
+	preloading.value = true;
+	await preloadImages(cardImageUrls(next));
+	if (flight.stale)
+		return;
+	preloading.value = false;
+	if (displayCard.value && (showCard.value || leaving)) {
+		pendingCard.value = next;
+		leave();
+		return;
+	}
+	displayCard.value = next;
+	reveal(next.id);
+}, { immediate: true });
+
+useScreenModeReady(() => !preloading.value);
+
+onBeforeUnmount(() => {
+	clearShowCardTimer();
+	loads.supersede();
+});
+
+// The card that left gives way to the one waiting, if any.
 function onAfterLeave() {
-	displayCard.value = null;
-	imageLoaded.value = false;
+	leaving = false;
+	displayCard.value = pendingCard.value;
+	pendingCard.value = null;
+	if (displayCard.value)
+		reveal(displayCard.value.id);
 }
 </script>
 
 <template>
 	<div
-		v-if="displayCard && imageLoaded"
+		v-if="displayCard"
 		:key="displayCard.id"
 		class="card-container"
 		:style="containerStyle"
@@ -114,13 +156,6 @@ function onAfterLeave() {
 				</div>
 			</transition>
 		</div>
-	</div>
-	<!-- Hidden image preloader -->
-	<div v-if="displayCard && !imageLoaded" class="hidden">
-		<img
-			:src="displayCard.imageData.front?.normal"
-			@load="onImageLoad(displayCard.id)"
-		>
 	</div>
 </template>
 

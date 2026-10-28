@@ -3,6 +3,7 @@ import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, reactive } from 'vue';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
 import { SCREEN_MODE_REREAD_MS } from '~/modules/screen-mode/freshness';
 
 /** The server's two halves of the Screen Output Player read (#604). */
@@ -81,39 +82,7 @@ mockNuxtImport('useScryfallBatch', () => () => ({
 	buildDeckListArrays: mockBuildDeckListArrays,
 }));
 
-class MockImage {
-	static loadedUrls: string[] = [];
-	static failedUrls = new Set<string>();
-	complete = false;
-	onload: (() => void) | null = null;
-	onerror: (() => void) | null = null;
-	#src = '';
-
-	set src(value: string) {
-		this.#src = value;
-		MockImage.loadedUrls.push(value);
-		this.complete = true;
-		queueMicrotask(() => MockImage.failedUrls.has(value)
-			? this.onerror?.()
-			: this.onload?.());
-	}
-
-	get src() {
-		return this.#src;
-	}
-
-	get naturalWidth() {
-		return MockImage.failedUrls.has(this.#src)
-			? 0
-			: 488;
-	}
-
-	decode() {
-		return Promise.resolve();
-	}
-}
-
-vi.stubGlobal('Image', MockImage);
+const images = stubImageLoading();
 
 function createDeckResponse(cards: Array<Record<string, unknown>>, metadata: { id?: number; name?: string; colors?: string } = {}) {
 	return {
@@ -272,8 +241,7 @@ describe('useDeckModeData', () => {
 	}
 
 	beforeEach(() => {
-		MockImage.loadedUrls = [];
-		MockImage.failedUrls.clear();
+		images.reset();
 		mockPlayerId.value = null;
 		mockBroadcastDeckListId.value = null;
 		mockEventId.value = 1;
@@ -322,7 +290,7 @@ describe('useDeckModeData', () => {
 		expect(deckColors.value).toBe('WU');
 		expect(hasDisplayedDeck.value).toBe(true);
 		expect(displayedDeckVersion.value).toBe(1);
-		expect(MockImage.loadedUrls).toContain('https://img.test/Counterspell.jpg');
+		expect(images.requested).toContain('https://img.test/Counterspell.jpg');
 	});
 
 	describe('a Broadcast Deck List', () => {
@@ -465,7 +433,7 @@ describe('useDeckModeData', () => {
 				mainboard: cards.map(card => createEnrichedCard(card.name, failedUrl)),
 				sideboard: [],
 			}));
-			MockImage.failedUrls.add(failedUrl);
+			images.fail(failedUrl);
 			const result = mountDeckModeData();
 			await vi.advanceTimersByTimeAsync(0);
 
@@ -477,7 +445,7 @@ describe('useDeckModeData', () => {
 			expect(result.primaryHeader.value).toBe('New revision');
 			expect(result.mainboard.value[0]?.mtgCard).toBeNull();
 
-			MockImage.failedUrls.clear();
+			images.reset();
 			await vi.advanceTimersByTimeAsync(60_000);
 			expect(result.cardDataDegraded.value).toBe(false);
 			expect(result.pendingSwapVersion.value).toBe(2);
