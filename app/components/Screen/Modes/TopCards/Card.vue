@@ -15,15 +15,15 @@ const props = defineProps<{
 	width?: string;
 	/** Fixed takes `width`; fill takes its grid column's width; fit fits its grid cell both ways. */
 	sizing: 'fixed' | 'fill' | 'fit';
+	/** A name label under the card, for a host whose cards want one. */
 	showName: boolean;
 	showRank: boolean;
+	/** Each badge's place on the card, and its look, text size included; it sizes itself around its text. */
 	rankBadgeClass: string;
 	rankBadgeStyle: Record<string, string>;
 	statText: string | null;
 	statBadgeClass: string;
 	statBadgeStyle: Record<string, string>;
-	/** The badges' text size, which each badge sizes itself around. */
-	badgeSize?: string;
 	/** The card's face, which shows when it has no image. */
 	cardStyle?: Record<string, string>;
 }>();
@@ -45,39 +45,37 @@ watch(() => props.entry.scryfallId, () => {
 		:data-sizing="sizing"
 		data-testid="top-cards-item"
 	>
-		<div>
-			<div class="relative" :style="badgeSize ? { fontSize: badgeSize } : undefined">
-				<div class="mtg-card" :style="cardStyle">
-					<img
-						v-if="imageUrl && !imageError"
-						:src="imageUrl"
-						:alt="entry.name"
-						class="w-full h-full object-cover"
-						loading="eager"
-						@error="imageError = true"
-					>
-					<div v-else class="w-full h-full flex items-center justify-center text-xs text-center p-1">
-						{{ entry.name }}
-					</div>
-				</div>
-				<div
-					v-if="showRank"
-					data-testid="top-cards-rank-badge"
-					class="absolute rounded-full flex items-center justify-center"
-					:class="rankBadgeClass"
-					:style="rankBadgeStyle"
+		<div class="relative">
+			<div class="mtg-card" :style="cardStyle">
+				<img
+					v-if="imageUrl && !imageError"
+					:src="imageUrl"
+					:alt="entry.name"
+					class="w-full h-full object-cover"
+					loading="eager"
+					@error="imageError = true"
 				>
-					{{ rank }}
+				<div v-else class="w-full h-full flex items-center justify-center text-xs text-center p-1">
+					{{ entry.name }}
 				</div>
-				<div
-					v-if="statText"
-					data-testid="top-cards-stat-badge"
-					class="absolute rounded-md tabular-nums"
-					:class="statBadgeClass"
-					:style="statBadgeStyle"
-				>
-					{{ statText }}
-				</div>
+			</div>
+			<div
+				v-if="showRank"
+				data-testid="top-cards-rank-badge"
+				class="absolute rounded-full flex items-center justify-center"
+				:class="rankBadgeClass"
+				:style="rankBadgeStyle"
+			>
+				{{ rank }}
+			</div>
+			<div
+				v-if="statText"
+				data-testid="top-cards-stat-badge"
+				class="absolute rounded-md tabular-nums"
+				:class="statBadgeClass"
+				:style="statBadgeStyle"
+			>
+				{{ statText }}
 			</div>
 		</div>
 		<div

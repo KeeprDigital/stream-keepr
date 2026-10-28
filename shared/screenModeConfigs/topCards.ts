@@ -4,6 +4,7 @@ import {
 	BOARD_SELECTION_VALUES,
 	CARD_SIZING_VALUES,
 	METAGAME_CARD_SORT_BY_VALUES,
+	QUANTITY_POSITION_VALUES,
 	TOP_CARDS_STAT_VALUES,
 } from '../types/enums';
 import { CARD_TYPE_BUCKET_ORDER } from '../utils/metagame';
@@ -36,9 +37,11 @@ const TOP_CARDS_MAX_LIMIT = 60;
  *
  * Its badge colours (#823) are Mode Tokens; the fields it once held for them
  * are former fields, which a stored config may still carry. Its card width,
- * card gap and badge size are config, read only here (ADR-0054); the size
+ * card gap and badge text sizes are config, read only here (ADR-0054); the size
  * presets they replaced are former fields too. `cardSizing` replaced
- * `dynamicCardSize`.
+ * `dynamicCardSize`. Each badge is placed and sized on its own, as a Deck
+ * Screen's are; one `badgeSize` once sized both. A card's image prints its
+ * name, so `showCardNames`, a label under it, is a former field.
  */
 export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	// Scoping
@@ -61,20 +64,21 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	cardWidth: editorField(z.number().int().min(48).max(480), { label: 'Card width' }),
 	cardGap: editorField(z.number().int().min(0).max(100), { label: 'Card gap' }),
 
-	// Pagination: grid rows per page
+	// Paging: cards per page; at least `limit` is one page
 	cardsPerPage: editorField(z.number().int().min(1).max(TOP_CARDS_MAX_LIMIT), { label: 'Cards per page' }),
 	...pageRotationShape,
 
 	// Header
 	...headerConfigShape,
 
-	// Card labels & badges
-	showCardNames: editorField(z.boolean(), { label: 'Show card names' }),
+	// Card badges: each placed on its card, and sized around its own text size in px.
 	showRankBadges: editorField(z.boolean(), { label: 'Show rank badges' }),
+	rankBadgePosition: editorField(z.enum(QUANTITY_POSITION_VALUES), { label: 'Badge position' }),
+	rankBadgeTextSize: editorField(z.number().int().min(8).max(48), { label: 'Badge text size' }),
 	/** Which metric the stat badge shows; 'none' hides the badge. */
 	statBadge: editorField(z.enum(TOP_CARDS_STAT_VALUES), { label: 'Stat badge' }),
-	/** The badges' text size in px; each badge sizes itself around it. */
-	badgeSize: editorField(z.number().int().min(8).max(48), { label: 'Badge text size' }),
+	statBadgePosition: editorField(z.enum(QUANTITY_POSITION_VALUES), { label: 'Badge position' }),
+	statBadgeTextSize: editorField(z.number().int().min(8).max(48), { label: 'Badge text size' }),
 }, {
 	...DEFAULT_METAGAME_SCOPE_WITHOUT_MIN_POINTS,
 	archetypeFilter: undefined,
@@ -92,10 +96,12 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	cardsPerPage: TOP_CARDS_MAX_LIMIT,
 	...DEFAULT_PAGE_ROTATION,
 	...DEFAULT_HEADER_CONFIG,
-	showCardNames: true,
 	showRankBadges: true,
+	rankBadgePosition: 'top-left',
+	rankBadgeTextSize: 14,
 	statBadge: 'inclusionRate',
-	badgeSize: 14,
+	statBadgePosition: 'bottom-right',
+	statBadgeTextSize: 14,
 }, {
 	formerFields: [
 		'rankBadgeTextColor',
@@ -107,6 +113,10 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 		'dynamicCardSize',
 		// A page held whole grid rows; it holds cards now (ADR-0054).
 		'rowsPerPage',
+		// One text size for both badges, which each badge now sets for itself.
+		'badgeSize',
+		// A card's image prints its name.
+		'showCardNames',
 	],
 });
 

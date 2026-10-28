@@ -39,15 +39,17 @@ const defaultConfig = {
 	cardSizing: 'fit',
 	cardWidth: 160,
 	cardGap: 12,
-	badgeSize: 14,
 	cardsPerPage: 60,
 	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
 	showHeader: true,
 	headerText: undefined,
-	showCardNames: true,
 	showRankBadges: true,
+	rankBadgePosition: 'top-left' as const,
+	rankBadgeTextSize: 14,
 	statBadge: 'inclusionRate' as const,
+	statBadgePosition: 'bottom-right' as const,
+	statBadgeTextSize: 14,
 };
 
 const mockConfig = ref<Record<string, any>>({ ...defaultConfig });
@@ -101,9 +103,18 @@ const ScreenSettingsToggleStub = defineComponent({
 	props: {
 		label: { type: String, required: true },
 		modelValue: { type: Boolean, required: false },
+		enabled: { type: Boolean, required: false, default: undefined },
 	},
 	emits: ['update:modelValue'],
-	template: '<button type="button" data-testid="settings-toggle" @click="$emit(\'update:modelValue\', !modelValue)">{{ label }}</button>',
+	template: '<button type="button" data-testid="settings-toggle" :aria-pressed="modelValue" :aria-disabled="enabled === false" @click="$emit(\'update:modelValue\', !modelValue)">{{ label }}</button>',
+});
+
+const UINinePointPickerStub = defineComponent({
+	props: {
+		modelValue: { type: String, required: false },
+	},
+	emits: ['update:modelValue'],
+	template: '<div data-testid="nine-point-picker" :data-value="modelValue" />',
 });
 
 const UFormFieldStub = defineComponent({
@@ -153,6 +164,16 @@ function control<T>(wrapper: Awaited<ReturnType<typeof mountComponent>>, label: 
 		: field!;
 }
 
+/** The component stub carrying `aria-label`. */
+function labelled<T>(wrapper: Awaited<ReturnType<typeof mountComponent>>, stub: T, label: string) {
+	return wrapper.findAllComponents(stub as any).find(item => item.attributes('aria-label') === label);
+}
+
+/** The toggle labelled `label`. */
+function toggle(wrapper: Awaited<ReturnType<typeof mountComponent>>, label: string) {
+	return wrapper.findAll('[data-testid="settings-toggle"]').find(item => item.text() === label)!;
+}
+
 /** The number input under the form field labelled `label`. */
 function numberInput(wrapper: Awaited<ReturnType<typeof mountComponent>>, label: string) {
 	const field = wrapper.findAll('[data-testid="form-field"]').find(item => item.text().includes(label));
@@ -179,6 +200,7 @@ async function mountComponent() {
 				UButton: UButtonStub,
 				UInput: true,
 				UInputNumber: UInputNumberStub,
+				UINinePointPicker: UINinePointPickerStub,
 				USeparator: true,
 			},
 		},
@@ -360,10 +382,6 @@ describe('screenTopCardsSettings', () => {
 				label: 'Card gap',
 				patch: { cardGap: 20 },
 			},
-			{
-				label: 'Badge text size',
-				patch: { badgeSize: 18 },
-			},
 		])('writes the $label', async ({ label, patch }) => {
 			mockConfig.value = { ...mockConfig.value, cardSizing: 'fixed' };
 			const wrapper = await mountComponent();
@@ -382,6 +400,119 @@ describe('screenTopCardsSettings', () => {
 			const wrapper = await mountComponent();
 
 			expect(wrapper.findAll('[data-testid="form-field"]').some(field => field.text().includes('Card width'))).toBe(offered);
+		});
+	});
+
+	// Paging is the ranking split into pages: on while a page holds fewer cards than the ranking.
+	describe('paging', () => {
+		it.each([
+			{ limit: 10, cardsPerPage: 60, paged: false },
+			{ limit: 10, cardsPerPage: 10, paged: false },
+			{ limit: 12, cardsPerPage: 4, paged: true },
+		])('splits $limit cards at $cardsPerPage a page: $paged', async ({ limit, cardsPerPage, paged }) => {
+			mockConfig.value = { ...mockConfig.value, limit, cardsPerPage };
+			mockFetch.mockResolvedValue(ranking(limit));
+
+			const wrapper = await mountComponent();
+
+			expect(toggle(wrapper, 'Split into pages').attributes('aria-pressed')).toBe(String(paged));
+			expect(wrapper.findAll('[data-testid="form-field"]').some(field => field.text().includes('Cards per page'))).toBe(paged);
+			expect(wrapper.text().includes('Automatic Paging')).toBe(paged);
+		});
+
+		// On splits the ranking in two; off stores the most a page holds, so any card count stays one page.
+		it.each([
+			{ cardsPerPage: 60, cardsPerPageWritten: 5 },
+			{ cardsPerPage: 4, cardsPerPageWritten: 60 },
+		])('toggles paging from $cardsPerPage a page to $cardsPerPageWritten', async ({ cardsPerPage, cardsPerPageWritten }) => {
+			mockConfig.value = { ...mockConfig.value, limit: 10, cardsPerPage };
+			const wrapper = await mountComponent();
+
+			await toggle(wrapper, 'Split into pages').trigger('click');
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({ cardsPerPage: cardsPerPageWritten }));
+		});
+
+		it.each([
+			{ limit: 1, enabled: false },
+			{ limit: 2, enabled: true },
+		])('offers paging to a ranking of $limit: $enabled', async ({ limit, enabled }) => {
+			mockConfig.value = { ...mockConfig.value, limit };
+			const wrapper = await mountComponent();
+
+			expect(toggle(wrapper, 'Split into pages').attributes('aria-disabled')).toBe(String(!enabled));
+		});
+
+		it('caps a page below the ranking, so paging stays on', async () => {
+			mockConfig.value = { ...mockConfig.value, limit: 12, cardsPerPage: 4 };
+			const wrapper = await mountComponent();
+
+			expect(numberInput(wrapper, 'Cards per page').attributes('max')).toBe('11');
+		});
+	});
+
+	// Each badge is placed and sized on its own, as a Deck Screen's are.
+	describe('card badges', () => {
+		it.each([
+			{
+				label: 'Rank badge position',
+				value: 'bottom-left',
+				patch: { rankBadgePosition: 'bottom-left' },
+			},
+			{
+				label: 'Stat badge position',
+				value: 'top',
+				patch: { statBadgePosition: 'top' },
+			},
+		])('writes the $label', async ({ label, value, patch }) => {
+			const wrapper = await mountComponent();
+
+			labelled(wrapper, UINinePointPickerStub, label)!.vm.$emit('update:modelValue', value);
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith(patch);
+		});
+
+		it.each([
+			{
+				label: 'Rank badge text size',
+				value: 20,
+				patch: { rankBadgeTextSize: 20 },
+			},
+			{
+				label: 'Stat badge text size',
+				value: 11,
+				patch: { statBadgeTextSize: 11 },
+			},
+		])('writes the $label', async ({ label, value, patch }) => {
+			const wrapper = await mountComponent();
+
+			labelled(wrapper, UInputNumberStub, label)!.vm.$emit('update:modelValue', value);
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith(patch);
+		});
+
+		// A hidden badge offers no place or size.
+		it.each([
+			{
+				hidden: { showRankBadges: false },
+				gone: 'Rank',
+				kept: 'Stat',
+			},
+			{
+				hidden: { statBadge: 'none' },
+				gone: 'Stat',
+				kept: 'Rank',
+			},
+		])('offers no $gone badge controls while it is hidden', async ({ hidden, gone, kept }) => {
+			mockConfig.value = {
+				...mockConfig.value,
+				...hidden,
+			};
+			const wrapper = await mountComponent();
+
+			expect(labelled(wrapper, UINinePointPickerStub, `${gone} badge position`)).toBeUndefined();
+			expect(labelled(wrapper, UInputNumberStub, `${gone} badge text size`)).toBeUndefined();
+			expect(labelled(wrapper, UINinePointPickerStub, `${kept} badge position`)).toBeDefined();
 		});
 	});
 });

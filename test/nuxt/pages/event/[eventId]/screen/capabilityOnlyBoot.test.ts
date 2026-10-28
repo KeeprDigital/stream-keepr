@@ -409,7 +409,7 @@ describe('a capability-only Screen Output', () => {
 		api.screen = screen({
 			currentMode: 'top-cards',
 			modeConfigs: {
-				'top-cards': { showCardNames: true },
+				'top-cards': { showRankBadges: true },
 			},
 		});
 		api.answers.set('/api/screen-output/events/42/screens/7/top-cards', () => topCards('Lightning Bolt'));
