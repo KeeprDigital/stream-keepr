@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {
 	BoardSelection,
+	CardSizing,
 	MetagameCardSortBy,
 	TopCardsStat,
 } from '~~/shared/types/enums';
@@ -8,6 +9,7 @@ import type { CardTypeBucket } from '~~/shared/utils/metagame';
 import type { Screen } from '~/types';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { CARD_TYPE_BUCKET_ORDER } from '~~/shared/utils/metagame';
+import { CARD_SIZING_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
@@ -186,6 +188,56 @@ function typeLabel(bucket: CardTypeBucket): string {
 
 		<ScreenSettingsCard title="Layout">
 			<UFormField
+				:label="fields.cardSizing.label"
+				description="Fit shrinks the cards until every one on the page fits the screen. Fixed takes the card width below and may run off the screen."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<USelect
+					:model-value="config.cardSizing"
+					:items="CARD_SIZING_SELECT_OPTIONS"
+					class="w-48"
+					@update:model-value="updateConfig({ cardSizing: $event as CardSizing })"
+				/>
+			</UFormField>
+
+			<UFormField
+				v-if="config.cardSizing === 'fixed'"
+				:label="fields.cardWidth.label"
+				description="Each card's width in px."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<UInputNumber
+					:model-value="config.cardWidth"
+					:min="fields.cardWidth.min"
+					:max="fields.cardWidth.max"
+					class="w-32"
+					@update:model-value="updateConfig({ cardWidth: Number($event) })"
+				/>
+			</UFormField>
+
+			<UFormField
+				:label="fields.cardGap.label"
+				description="The space between cards in px."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<UInputNumber
+					:model-value="config.cardGap"
+					:min="fields.cardGap.min"
+					:max="fields.cardGap.max"
+					class="w-32"
+					@update:model-value="updateConfig({ cardGap: Number($event) })"
+				/>
+			</UFormField>
+
+			<ScreenSettingsToggle
+				:label="fields.autoColumns.label"
+				description="Choose the columns from the space the cards have on the Screen."
+				:model-value="config.autoColumns"
+				@update:model-value="updateConfig({ autoColumns: $event })"
+			/>
+
+			<UFormField
+				v-if="!config.autoColumns"
 				:label="fields.columns.label"
 				description="Number of cards per row."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
@@ -195,21 +247,14 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:min="fields.columns.min"
 					:max="fields.columns.max"
 					class="w-32"
-					@update:model-value="updateConfig({ columns: Number($event), currentPage: 1 })"
+					@update:model-value="updateConfig({ columns: Number($event) })"
 				/>
 			</UFormField>
-
-			<ScreenSettingsToggle
-				:label="fields.dynamicCardSize.label"
-				description="Stretch cards to fill the available width, rather than take the Theme's card width."
-				:model-value="config.dynamicCardSize"
-				@update:model-value="updateConfig({ dynamicCardSize: $event })"
-			/>
 		</ScreenSettingsCard>
 
 		<ScreenPaginationSettingsCard
 			:rotation="rotation"
-			page-size-description="Grid rows shown per page, each holding one card per column."
+			page-size-description="Cards shown on each page, laid out in as many columns as the Screen fits."
 			auto-page-description="Automatically cycle through pages of cards."
 			:loading="loadingCards"
 		/>
@@ -264,6 +309,20 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:items="statBadgeOptions"
 					class="w-48"
 					@update:model-value="updateConfig({ statBadge: $event as TopCardsStat })"
+				/>
+			</UFormField>
+
+			<UFormField
+				:label="fields.badgeSize.label"
+				description="The badges' text size in px; each badge sizes itself around it."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<UInputNumber
+					:model-value="config.badgeSize"
+					:min="fields.badgeSize.min"
+					:max="fields.badgeSize.max"
+					class="w-32"
+					@update:model-value="updateConfig({ badgeSize: Number($event) })"
 				/>
 			</UFormField>
 		</ScreenSettingsCard>

@@ -1,5 +1,8 @@
 <script setup lang="ts">
-const { screenId, card, error, ready } = useCardModeData();
+const { config, screenId, card, error, ready } = useCardModeData();
+
+/** The card's width is the Screen's own config, in Event Canvas px (ADR-0054). */
+const cardWidth = computed(() => `${config.value.cardWidth}px`);
 </script>
 
 <template>
@@ -11,6 +14,7 @@ const { screenId, card, error, ready } = useCardModeData();
 		<MtgCardDisplay
 			v-if="screenId"
 			:card="card"
+			:width="cardWidth"
 		/>
 	</ScreenModeBase>
 </template>

@@ -1,0 +1,121 @@
+import type { CardSizing } from '~~/shared/types/enums';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
+import { createPinia, setActivePinia } from 'pinia';
+import { describe, expect, it } from 'vitest';
+import { fitColumns } from '~~/shared/utils/cardGrid';
+import { createMockScreen } from '~~/test/helpers/fixtures';
+import { useCardGridColumns } from '~/composables/screen/useCardGridColumns';
+import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
+
+interface Case {
+	sizing: CardSizing;
+	autoColumns: boolean;
+	count?: number;
+	canvas?: { width: number; height: number };
+	overrides?: Record<string, unknown>;
+	cardWidth?: number;
+}
+
+function columnsIn({ sizing, autoColumns, count = 10, canvas, overrides = {}, cardWidth = 160 }: Case): number {
+	const context: ScreenContext = {
+		screen: ref(createMockScreen({ themeOverrides: overrides } as any) as any),
+		eventId: computed(() => 1),
+		interactive: ref(false),
+		overlayContainer: ref(null),
+		...(canvas
+			? {
+					eventCanvas: ref(canvas),
+				}
+			: {}),
+	};
+	return runInScreenContext(context, () => useCardGridColumns({
+		sizing: () => sizing,
+		autoColumns: () => autoColumns,
+		columns: () => 5,
+		count: () => count,
+		cardWidth: () => cardWidth,
+		gap: () => 12,
+	})).value;
+}
+
+describe('useCardGridColumns', () => {
+	it.each([
+		{
+			name: 'auto off keeps the configured columns',
+			sizing: 'fit',
+			autoColumns: false,
+			expected: 5,
+		},
+		{
+			name: 'Fit fills the default canvas',
+			sizing: 'fit',
+			autoColumns: true,
+			expected: fitColumns({
+				count: 10,
+				width: 1920,
+				height: 1080,
+				gap: 12,
+			}),
+		},
+		{
+			name: 'Fixed fits default-width cards across',
+			sizing: 'fixed',
+			autoColumns: true,
+			expected: 11,
+		},
+		{
+			name: 'Fixed fits fewer inside a Screen inset',
+			sizing: 'fixed',
+			autoColumns: true,
+			overrides: { inset: 96 },
+			expected: 10,
+		},
+		{
+			name: 'Fixed fits fewer wider cards',
+			sizing: 'fixed',
+			autoColumns: true,
+			cardWidth: 480,
+			expected: 3,
+		},
+		{
+			name: 'Fit takes fewer columns on a portrait canvas',
+			sizing: 'fit',
+			autoColumns: true,
+			canvas: { width: 1080, height: 1920 },
+			expected: fitColumns({
+				count: 10,
+				width: 1080,
+				height: 1920,
+				gap: 12,
+			}),
+		},
+	] satisfies (Case & { name: string; expected: number })[])('$name', ({ expected, ...input }) => {
+		expect(columnsIn(input)).toBe(expected);
+	});
+
+	it('reads the edited Event\'s canvas in a settings editor, as its Screen Output does', () => {
+		setActivePinia(createPinia());
+		const eventStore = useEventStore();
+		eventStore.event = { id: 1, canvasWidth: 1080, canvasHeight: 1920 } as any;
+
+		const columns = useEditedScreenModeData({
+			screen: () => createMockScreen() as any,
+			eventId: () => 1,
+			saving: () => false,
+		}, () => useCardGridColumns({
+			sizing: () => 'fit',
+			autoColumns: () => true,
+			columns: () => 5,
+			count: () => 10,
+			cardWidth: () => 160,
+			gap: () => 12,
+		}));
+
+		expect(columns.value).toBe(fitColumns({
+			count: 10,
+			width: 1080,
+			height: 1920,
+			gap: 12,
+		}));
+	});
+});

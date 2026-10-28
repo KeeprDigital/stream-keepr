@@ -84,6 +84,12 @@ export const FOUNDATION_TOKENS = {
 		label: 'Divider',
 		default: 'rgba(255, 255, 255, 0.12)',
 	},
+	// What lifts a badge off the card art under it, wherever a mode has badges.
+	'shadow': {
+		type: 'color',
+		label: 'Shadow',
+		default: 'rgba(0, 0, 0, 0.1)',
+	},
 	// A categorical chart palette, slot 1 first. Stepped for a dark surface and
 	// validated as a set for adjacent-pair CVD separation and >= 3:1 against
 	// #1a1a19. Other is the neutral, never a slot.

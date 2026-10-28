@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import type { MtgCard } from '~/types/card/mtg';
-import { modeMotionVars, modeTokenVar, useScreenModeReady } from '~/modules/screen-mode';
+import { modeMotionVars, useScreenModeReady } from '~/modules/screen-mode';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 import { preloadImages } from '~/utils/preloadImage';
 
 const props = defineProps<{
 	/** The Screen Card to show; null shows none, leaving with its exit animation. */
 	card: MtgCard | null;
+	/** The card's width in Event Canvas px, as a CSS length. */
+	width: string;
 }>();
 
 const showCard = ref(false);
@@ -26,17 +28,17 @@ function clearShowCardTimer() {
 
 const CARD_ASPECT_RATIO = 85 / 61;
 /** The card's width in Event Canvas pixels, and the square it turns within: its diagonal. */
-const cardWidth = modeTokenVar('card', 'card-width');
-const turningSquare = `calc(${cardWidth} * ${Math.sqrt(1 + CARD_ASPECT_RATIO ** 2)})`;
+const cardWidth = computed(() => props.width);
+const turningSquare = computed(() => `calc(${cardWidth.value} * ${Math.sqrt(1 + CARD_ASPECT_RATIO ** 2)})`);
 
 // Container style — always centers the card within the diagonal rotation container.
 // Viewport-level positioning is handled by the Renderer, not this component.
-const containerStyle = {
-	width: turningSquare,
-	height: turningSquare,
+const containerStyle = computed(() => ({
+	width: turningSquare.value,
+	height: turningSquare.value,
 	justifyItems: 'center',
 	alignItems: 'center',
-};
+}));
 
 /**
  * The card enters from its `motion` Mode Token's excursion and leaves back to

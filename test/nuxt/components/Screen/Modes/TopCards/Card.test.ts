@@ -23,8 +23,8 @@ const entry = {
 const baseProps = {
 	entry,
 	rank: 3,
-	sizeClass: 'w-40',
-	dynamicSize: true,
+	width: '160px',
+	sizing: 'fill' as 'fixed' | 'fill' | 'fit',
 	showName: true,
 	showRank: true,
 	rankBadgeClass: 'top-1 left-1 w-6 h-6 text-sm',
@@ -81,5 +81,20 @@ describe('screenTopCardsCard', () => {
 		const wrapper = mount(Card, { props: baseProps });
 
 		expect(wrapper.get('[data-testid="top-cards-name"]').text()).toBe('Lightning Bolt');
+	});
+
+	// Fixed takes its width; fill and fit take their column, which a Fit grid sizes to the card.
+	it.each([
+		{ sizing: 'fixed', width: '160px' },
+		{ sizing: 'fill', width: '' },
+		{ sizing: 'fit', width: '' },
+	] as const)('sizes a $sizing card', ({ sizing, width }) => {
+		const wrapper = mount(Card, {
+			props: { ...baseProps, sizing },
+		});
+
+		const item = wrapper.get('[data-testid="top-cards-item"]');
+		expect(item.attributes('data-sizing')).toBe(sizing);
+		expect((item.element as HTMLElement).style.width).toBe(width);
 	});
 });

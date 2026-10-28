@@ -28,7 +28,12 @@ const mockUpdateConfig = vi.fn((patch: Record<string, unknown>) => {
 const mockFetchDeck = vi.fn();
 const mockLoadBroadcastDeckLists = vi.fn();
 const mockEventStore = reactive({
-	event: { id: 1, game: 'mtg', broadcastDeckListsEnabled: true },
+	event: {
+		id: 1,
+		game: 'mtg',
+		broadcastDeckListsEnabled: true,
+		pointsSystem: '7ph' as string | null,
+	},
 });
 const mockBroadcastDeckListStore = reactive({
 	summaries: [
@@ -76,7 +81,7 @@ const UFormFieldStub = defineComponent({
 		label: { type: String, required: false },
 		description: { type: String, required: false },
 	},
-	template: '<div data-testid="form-field" :data-label="label"><span>{{ label }}</span><slot /></div>',
+	template: '<div data-testid="form-field" :data-label="label" :data-description="description"><span>{{ label }}</span><slot /></div>',
 });
 
 const UISegmentedTabsStub = defineComponent({
@@ -97,6 +102,7 @@ const UISegmentedTabsStub = defineComponent({
 				data-testid="segmented-tab"
 				:data-value="item.value"
 				:data-active="String(item.value === modelValue)"
+				:disabled="item.disabled"
 				@click="$emit('update:modelValue', item.value)"
 			>
 				{{ item.label }}
@@ -129,9 +135,10 @@ const UTabsStub = defineComponent({
 const UInputNumberStub = defineComponent({
 	props: {
 		modelValue: { type: Number, required: false },
+		disabled: { type: Boolean, required: false },
 	},
 	emits: ['update:modelValue'],
-	template: '<div data-testid="u-input-number">{{ modelValue }}</div>',
+	template: '<div data-testid="u-input-number" :aria-disabled="String(disabled)">{{ modelValue }}</div>',
 });
 
 function defaultDeckConfig(): Record<string, any> {
@@ -143,17 +150,24 @@ function defaultDeckConfig(): Record<string, any> {
 			view: 'grid',
 			columns: 4,
 			listColumns: 2,
-			dynamicCardSize: false,
+			cardSizing: 'fixed',
+			autoColumns: false,
+			cardWidth: 144,
+			cardGap: 8,
 		},
 		sideboard: {
 			view: 'stack',
 			columns: 4,
 			listColumns: 2,
-			dynamicCardSize: false,
+			cardSizing: 'fixed',
+			autoColumns: false,
 		},
 		showQuantities: true,
 		showDeckName: true,
 		showDeckColors: true,
+		showDeckMetaPill: true,
+		showHighlanderPointedCards: true,
+		showHighlanderPoints: true,
 	};
 }
 
@@ -180,18 +194,28 @@ async function mountComponent() {
 	});
 }
 
-function boardsControl(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
-	return wrapper.get('[data-testid="form-field"][data-label="Boards"] [data-testid="segmented-tabs"]');
+/** A board's own card. */
+function boardCard(wrapper: Awaited<ReturnType<typeof mountComponent>>, title: 'Mainboard' | 'Sideboard') {
+	return wrapper.get(`[data-testid="settings-card"][data-title="${title}"]`);
 }
 
 function sectionTitles(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
 	return wrapper.findAll('[data-testid="settings-card"]').map(card => card.attributes('data-title'));
 }
 
+// The whole Deck editor mounts in each test, about half a second alone; a full
+// parallel run can take several times that, past the default five seconds.
+vi.setConfig({ testTimeout: 15_000 });
+
 describe('screenDeckSettings', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockEventStore.event = { id: 1, game: 'mtg', broadcastDeckListsEnabled: true };
+		mockEventStore.event = {
+			id: 1,
+			game: 'mtg',
+			broadcastDeckListsEnabled: true,
+			pointsSystem: '7ph',
+		};
 		mockBroadcastDeckListStore.summaries = [
 			{
 				id: 23,
@@ -209,17 +233,26 @@ describe('screenDeckSettings', () => {
 		});
 	});
 
-	it('selects the shown boards with a three-way segmented control', async () => {
+	// Each board is shown or hidden on its own card; the last board shown stays on.
+	it.each([
+		{ board: 'full', toggle: 'Mainboard', written: 'sideboard' },
+		{ board: 'full', toggle: 'Sideboard', written: 'mainboard' },
+		{ board: 'mainboard', toggle: 'Sideboard', written: 'full' },
+		{ board: 'mainboard', toggle: 'Mainboard', written: undefined },
+	] as const)('at board: $board, toggling $toggle writes board: $written', async ({ board, toggle, written }) => {
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			board,
+		};
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		const tabs = boardsControl(wrapper).findAll('[data-testid="segmented-tab"]');
-		expect(tabs.map(tab => tab.attributes('data-value'))).toEqual(['full', 'mainboard', 'sideboard']);
-		expect(tabs.map(tab => tab.text())).toEqual(['Full deck', 'Mainboard', 'Sideboard']);
+		await boardCard(wrapper, toggle).get(`[data-label="Show ${toggle}"]`).trigger('click');
 
-		await tabs[2]!.trigger('click');
-
-		expect(mockUpdateConfig).toHaveBeenCalledWith({ board: 'sideboard' });
+		if (written)
+			expect(mockUpdateConfig).toHaveBeenCalledWith({ board: written });
+		else
+			expect(mockUpdateConfig).not.toHaveBeenCalled();
 	});
 
 	it('shows source tabs only while Broadcast Deck Lists are enabled', async () => {
@@ -228,7 +261,12 @@ describe('screenDeckSettings', () => {
 		expect(wrapper.get('[data-testid="source-tabs"]').text()).toContain('Player Deck');
 		expect(wrapper.get('[data-testid="source-tabs"]').text()).toContain('Broadcast Deck List');
 
-		mockEventStore.event = { id: 1, game: 'mtg', broadcastDeckListsEnabled: false };
+		mockEventStore.event = {
+			id: 1,
+			game: 'mtg',
+			broadcastDeckListsEnabled: false,
+			pointsSystem: '7ph',
+		};
 		wrapper = await mountComponent();
 		await flushPromises();
 		expect(wrapper.find('[data-testid="source-tabs"]').exists()).toBe(false);
@@ -277,7 +315,7 @@ describe('screenDeckSettings', () => {
 		let wrapper = await mountComponent();
 		await flushPromises();
 		expect(wrapper.text()).not.toContain('Show Total Points');
-		expect(sectionTitles(wrapper)).not.toContain('Pointed Cards');
+		expect(wrapper.text()).not.toContain('Show Pointed Cards');
 		expect(wrapper.text()).not.toContain('Highlander Point Badges');
 		expect(mockConfig.value.showHighlanderTotal).toBe(true);
 		expect(mockConfig.value.showHighlanderPointedCards).toBe(true);
@@ -290,13 +328,57 @@ describe('screenDeckSettings', () => {
 		wrapper = await mountComponent();
 		await flushPromises();
 		expect(wrapper.text()).toContain('Show Total Points');
-		expect(sectionTitles(wrapper)).toContain('Pointed Cards');
+		expect(wrapper.text()).toContain('Show Pointed Cards');
 		expect(wrapper.text()).toContain('Highlander Point Badges');
+	});
+
+	// Card points are the Event's points system; with none, no card point setting shows.
+	it.each([
+		{ pointsSystem: '7ph', shown: true },
+		{ pointsSystem: null, shown: false },
+	])('offers card point settings with points system $pointsSystem: $shown', async ({ pointsSystem, shown }) => {
+		mockEventStore.event = { ...mockEventStore.event, pointsSystem };
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		for (const text of ['Show Total Points', 'Show Pointed Cards', 'Highlander Point Badges'])
+			expect(wrapper.text().includes(text), text).toBe(shown);
+	});
+
+	// The details row shows only with something in it, so its text size and pill show only then.
+	it.each([
+		{
+			name: 'card type counts',
+			config: { showDeckStats: true, showHighlanderTotal: false },
+			shown: true,
+		},
+		{
+			name: 'the points total',
+			config: { showDeckStats: false, showHighlanderTotal: true },
+			shown: true,
+		},
+		{
+			name: 'nothing',
+			config: { showDeckStats: false, showHighlanderTotal: false },
+			shown: false,
+		},
+	])('offers the details row\'s look while it shows $name: $shown', async ({ config, shown }) => {
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			...config,
+		};
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const details = wrapper.get('[data-testid="settings-card"][data-title="Deck Details"]');
+		expect(details.find('[data-label="Details Text Size"]').exists()).toBe(shown);
+		expect(details.find('[data-label="Show Deck Meta Pill"]').exists()).toBe(shown);
 	});
 
 	it.each([
 		{ label: 'Quantity badge position', field: 'quantityPosition', current: 'top-right' },
 		{ label: 'Highlander point badge position', field: 'highlanderPointsPosition', current: 'top-left' },
+		{ label: 'Companion badge position', field: 'companionTagPosition', current: 'top' },
 	])('picks the $label on a nine-point grid with no centre (#543)', async ({ label, field, current }) => {
 		mockConfig.value = {
 			...defaultDeckConfig(),
@@ -314,58 +396,85 @@ describe('screenDeckSettings', () => {
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ [field]: 'bottom' });
 	});
 
-	it('shows a layout section per visible board only', async () => {
-		let wrapper = await mountComponent();
-		await flushPromises();
-		expect(sectionTitles(wrapper)).toContain('Mainboard Layout');
-		expect(sectionTitles(wrapper)).toContain('Sideboard Layout');
-
+	// Both boards keep their card; a hidden board's layout collapses under its toggle.
+	it.each([
+		{ board: 'full', mainboardViews: true, sideboardViews: true },
+		{ board: 'mainboard', mainboardViews: true, sideboardViews: false },
+		{ board: 'sideboard', mainboardViews: false, sideboardViews: true },
+	] as const)('at board: $board, shows each board\'s layout only while it is shown', async ({ board, mainboardViews, sideboardViews }) => {
 		mockConfig.value = {
 			...defaultDeckConfig(),
-			board: 'mainboard',
+			board,
 		};
-		wrapper = await mountComponent();
+		const wrapper = await mountComponent();
 		await flushPromises();
-		expect(sectionTitles(wrapper)).toContain('Mainboard Layout');
-		expect(sectionTitles(wrapper)).not.toContain('Sideboard Layout');
 
-		mockConfig.value = {
-			...defaultDeckConfig(),
-			board: 'sideboard',
-		};
-		wrapper = await mountComponent();
-		await flushPromises();
-		expect(sectionTitles(wrapper)).not.toContain('Mainboard Layout');
-		expect(sectionTitles(wrapper)).toContain('Sideboard Layout');
+		expect(sectionTitles(wrapper)).toEqual(expect.arrayContaining(['Mainboard', 'Sideboard']));
+		expect(boardCard(wrapper, 'Mainboard').find('[data-label="View"]').exists()).toBe(mainboardViews);
+		expect(boardCard(wrapper, 'Sideboard').find('[data-label="View"]').exists()).toBe(sideboardViews);
 	});
 
-	it('offers the sideboard placement knob only at board: full', async () => {
-		let wrapper = await mountComponent();
-		await flushPromises();
-		expect(wrapper.find('[data-testid="form-field"][data-label="Sideboard Placement"]').exists()).toBe(true);
-
+	// The sideboard sits beside or below the mainboard only while both show; its companion is always its to show.
+	it.each([
+		{ board: 'full', placement: true },
+		{ board: 'sideboard', placement: false },
+		{ board: 'mainboard', placement: false },
+	] as const)('offers the sideboard placement at board: $board: $placement, and its companion', async ({ board, placement }) => {
 		mockConfig.value = {
 			...defaultDeckConfig(),
-			board: 'sideboard',
+			board,
 		};
-		wrapper = await mountComponent();
+		const wrapper = await mountComponent();
 		await flushPromises();
-		expect(wrapper.find('[data-testid="form-field"][data-label="Sideboard Placement"]').exists()).toBe(false);
+
+		const sideboard = boardCard(wrapper, 'Sideboard');
+		expect(sideboard.find('[data-label="Sideboard Placement"]').exists()).toBe(placement);
+		await sideboard.get('[data-label="Show Companion"]').trigger('click');
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ showCompanion: false });
+	});
+
+	// Both boards Fit are placed as one group at the mainboard's alignment; the sideboard's places it along the mainboard.
+	it.each([
+		{ sideboardSizing: 'fit', description: 'Up and down, where the sideboard sits, top to bottom of the screen. Right sends it to the right edge; otherwise it sits beside the mainboard.' },
+		{ sideboardSizing: 'fixed', description: 'Where the cards sit when they don\'t fill the board\'s space. A Fixed grid places them across only.' },
+	] as const)('describes the sideboard alignment while it is $sideboardSizing', async ({ sideboardSizing, description }) => {
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			mainboard: {
+				...defaultDeckConfig().mainboard,
+				cardSizing: 'fit',
+			},
+			sideboard: {
+				...defaultDeckConfig().sideboard,
+				cardSizing: sideboardSizing,
+			},
+		};
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(boardCard(wrapper, 'Sideboard').get('[data-label="Alignment"]').attributes('data-description')).toBe(description);
+		const picker = boardCard(wrapper, 'Mainboard').get('[role="radiogroup"][aria-label="Mainboard alignment"]');
+		await picker.get('[data-point="top-left"]').trigger('click');
+		expect(mockUpdateConfig).toHaveBeenLastCalledWith({
+			mainboard: expect.objectContaining({ alignment: 'top-left' }),
+		});
 	});
 
 	it('shows only the knobs the board view reads', async () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		const mainboardSection = wrapper.get('[data-testid="settings-card"][data-title="Mainboard Layout"]');
+		const mainboardSection = wrapper.get('[data-testid="settings-card"][data-title="Mainboard"]');
 		expect(mainboardSection.find('[data-label="Grid Columns"]').exists()).toBe(true);
-		expect(mainboardSection.find('[data-label="Dynamic Card Size"]').exists()).toBe(true);
+		expect(mainboardSection.find('[data-label="Card Sizing"]').exists()).toBe(true);
+		expect(mainboardSection.find('[data-label="Auto Columns"]').exists()).toBe(true);
 		expect(mainboardSection.find('[data-label="List Columns"]').exists()).toBe(false);
 
-		// A stack's look is all Mode Tokens, so it offers only its view.
-		const sideboardSection = wrapper.get('[data-testid="settings-card"][data-title="Sideboard Layout"]');
+		// A stack's look is otherwise all Mode Tokens, so it offers only its view and sizing.
+		const sideboardSection = wrapper.get('[data-testid="settings-card"][data-title="Sideboard"]');
 		expect(sideboardSection.find('[data-label="Grid Columns"]').exists()).toBe(false);
-		expect(sideboardSection.find('[data-label="Dynamic Card Size"]').exists()).toBe(false);
+		expect(sideboardSection.find('[data-label="Card Sizing"]').exists()).toBe(true);
+		expect(sideboardSection.find('[data-label="Auto Columns"]').exists()).toBe(false);
 		expect(sideboardSection.find('[data-label="List Columns"]').exists()).toBe(false);
 	});
 
@@ -373,7 +482,7 @@ describe('screenDeckSettings', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		const sideboardSection = wrapper.get('[data-testid="settings-card"][data-title="Sideboard Layout"]');
+		const sideboardSection = wrapper.get('[data-testid="settings-card"][data-title="Sideboard"]');
 		const viewTabs = sideboardSection.findAll('[data-testid="segmented-tab"]');
 		await viewTabs.find(tab => tab.attributes('data-value') === 'grid')!.trigger('click');
 
@@ -382,9 +491,142 @@ describe('screenDeckSettings', () => {
 				view: 'grid',
 				columns: 4,
 				listColumns: 2,
-				dynamicCardSize: false,
+				cardSizing: 'fixed',
+				autoColumns: false,
+				cardWidth: 144,
+				cardGap: 8,
+				alignment: 'center',
+				stackReveal: 30,
 			},
 		});
+	});
+
+	// Each size sits beside the control it sizes, and writes that one field (ADR-0054).
+	it.each([
+		{
+			card: 'Mainboard',
+			label: 'Card Width',
+			patch: {
+				mainboard: expect.objectContaining({ cardWidth: 200 }),
+			},
+		},
+		{
+			card: 'Mainboard',
+			label: 'Card Gap',
+			patch: {
+				mainboard: expect.objectContaining({ cardGap: 200 }),
+			},
+		},
+		{
+			card: 'Sideboard',
+			label: 'Card Width',
+			patch: {
+				sideboard: expect.objectContaining({ cardWidth: 200 }),
+			},
+		},
+		{
+			card: 'Sideboard',
+			label: 'Stack Reveal',
+			patch: {
+				sideboard: expect.objectContaining({ stackReveal: 200 }),
+			},
+		},
+		{
+			card: 'Deck Details',
+			label: 'Details Text Size',
+			patch: { metaPillSize: 200 },
+		},
+		{
+			card: 'Deck Details',
+			label: 'Pointed Card Text Size',
+			patch: { pointedCardSize: 200 },
+		},
+	])('writes the $card $label', async ({ card, label, patch }) => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		wrapper.get(`[data-testid="settings-card"][data-title="${card}"]`).get(`[data-label="${label}"]`).getComponent(UInputNumberStub).vm.$emit('update:modelValue', 200);
+
+		expect(mockUpdateConfig).toHaveBeenLastCalledWith(patch);
+	});
+
+	it('writes each card badge\'s text size', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const sizes = wrapper.get('[data-testid="settings-card"][data-title="Card Badges"]').findAll('[data-label="Badge Text Size"]');
+		sizes[0]!.getComponent(UInputNumberStub).vm.$emit('update:modelValue', 20);
+		expect(mockUpdateConfig).toHaveBeenLastCalledWith({ quantityBadgeSize: 20 });
+		sizes[1]!.getComponent(UInputNumberStub).vm.$emit('update:modelValue', 18);
+		expect(mockUpdateConfig).toHaveBeenLastCalledWith({ pointsBadgeSize: 18 });
+	});
+
+	// A Fit grid sizes its cards to the screen, so it offers no width.
+	it.each([
+		{ cardSizing: 'fixed', offered: true },
+		{ cardSizing: 'fit', offered: false },
+	])('offers a $cardSizing grid a card width: $offered', async ({ cardSizing, offered }) => {
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			mainboard: {
+				...defaultDeckConfig().mainboard,
+				cardSizing,
+			},
+		};
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="settings-card"][data-title="Mainboard"]').find('[data-label="Card Width"]').exists()).toBe(offered);
+	});
+
+	// Only a sideboard stacks, and only beside the mainboard (ADR-0054).
+	it.each([
+		{ name: 'beside', config: {}, stackEnabled: true },
+		{
+			name: 'below',
+			config: { sideboardPlacement: 'below' },
+			stackEnabled: false,
+		},
+		{
+			name: 'alone',
+			config: { board: 'sideboard' },
+			stackEnabled: false,
+		},
+	])('offers a sideboard placed $name a stack: $stackEnabled, and the mainboard none', async ({ config, stackEnabled }) => {
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			...config,
+		};
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const tabsOf = (title: string) => wrapper.find(`[data-testid="settings-card"][data-title="${title}"]`).exists()
+			? wrapper.get(`[data-testid="settings-card"][data-title="${title}"]`).findAll('[data-testid="segmented-tab"]')
+			: [];
+		expect(tabsOf('Mainboard').map(tab => tab.attributes('data-value'))).toEqual(config.board
+			? []
+			: ['grid', 'list']);
+		const stackTab = tabsOf('Sideboard').find(tab => tab.attributes('data-value') === 'stack')!;
+		expect(stackTab.attributes('disabled')).toBe(stackEnabled ? undefined : '');
+	});
+
+	it('picks a grid\'s card sizing, and its columns by count or automatically', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+		const mainboardSection = () => wrapper.get('[data-testid="settings-card"][data-title="Mainboard"]');
+
+		await mainboardSection().get('[data-label="Card Sizing"] [data-value="fit"]').trigger('click');
+		expect(mockUpdateConfig).toHaveBeenLastCalledWith({
+			mainboard: expect.objectContaining({ cardSizing: 'fit' }),
+		});
+
+		await mainboardSection().get('[data-label="Auto Columns"]').trigger('click');
+		expect(mockUpdateConfig).toHaveBeenLastCalledWith({
+			mainboard: expect.objectContaining({ autoColumns: true }),
+		});
+		await flushPromises();
+		// Auto columns choose the count, so the count is not offered.
+		expect(mainboardSection().find('[data-label="Grid Columns"]').exists()).toBe(false);
 	});
 
 	it('hints when the selected deck has no sideboard cards', async () => {

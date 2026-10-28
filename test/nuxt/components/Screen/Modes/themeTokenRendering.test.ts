@@ -184,17 +184,9 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'stat-badge-surface': { selector: '[data-testid="top-cards-stat-badge"]', property: 'backgroundColor' },
 		'stat-badge-text': { selector: '[data-testid="top-cards-stat-badge"]', property: 'color' },
 		'page-indicator-text': { selector: '[data-testid="top-cards-page-indicator"]', property: 'color' },
-		'card-width': {
-			selector: '[data-testid="top-cards-item"]',
-			property: 'width',
-			config: { dynamicCardSize: false },
-		},
-		'card-gap': { selector: '[data-testid="top-cards-grid"]', property: 'gap' },
-		'badge-size': { selector: '[data-testid="top-cards-stat-badge"]', property: 'fontSize' },
 	},
 	'card': {
-		'card-width': { selector: '[data-testid="spotlight-card"]', property: 'width' },
-		'motion': { selector: '.card-image-wrapper' },
+		motion: { selector: '.card-image-wrapper' },
 	},
 	// A surface probes its outline: the Frame's border stroke, a Source Item's border.
 	'feature-match-overlay': {
@@ -221,35 +213,7 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'pointed-card-surface': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'backgroundColor' },
 		'pointed-card-accent': { selector: '[data-testid="highlander-pointed-card-chip"] span', property: 'color' },
 		'pointed-card-border': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'borderColor' },
-		'quantity-badge-size': { selector: '.quantity-badge', property: 'fontSize' },
-		'points-badge-size': { selector: '[data-testid="highlander-card-badge"]', property: 'fontSize' },
-		'meta-pill-size': { selector: '[data-testid="deck-meta-pill"]', property: 'fontSize' },
-		'pointed-card-size': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'fontSize' },
 		'badge-shadow': { selector: '[data-testid="highlander-card-badge"]', property: 'boxShadow' },
-		'mainboard-card-width': { selector: '[data-testid="mainboard-grid"] .card-item', property: 'width' },
-		'mainboard-card-gap': { selector: '[data-testid="mainboard-grid"]', property: 'gap' },
-		'mainboard-stack-reveal': {
-			selector: '[data-testid="mainboard-stack-row"] .stack-card',
-			property: 'width',
-			config: {
-				mainboard: { view: 'stack' },
-			},
-		},
-		'sideboard-card-width': {
-			selector: '[data-testid="sideboard-grid"] .card-item',
-			property: 'width',
-			config: {
-				sideboard: { view: 'grid', columns: 2, dynamicCardSize: false },
-			},
-		},
-		'sideboard-card-gap': {
-			selector: '[data-testid="sideboard-grid"]',
-			property: 'gap',
-			config: {
-				sideboard: { view: 'grid', columns: 2, dynamicCardSize: false },
-			},
-		},
-		'sideboard-stack-reveal': { selector: '[data-testid="sideboard-stack-column"] .stack-card', property: 'height' },
 	},
 };
 
@@ -626,7 +590,7 @@ mockNuxtImport('useTopCardsModeData', () => () => {
 	return {
 		config: computed(() => ({
 			columns: 5,
-			dynamicCardSize: true,
+			cardSizing: 'fit',
 			showHeader: true,
 			showCardNames: true,
 			showRankBadges: true,
@@ -642,6 +606,7 @@ mockNuxtImport('useTopCardsModeData', () => () => {
 		]),
 		currentPage: computed(() => 1),
 		totalPages: computed(() => 2),
+		pageCapacity: computed(() => 1),
 	};
 });
 
@@ -661,12 +626,13 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	config: computed(() => ({
 		board: 'full',
 		sideboardPlacement: 'beside',
-		mainboard: { view: 'grid', columns: 4, dynamicCardSize: false },
+		mainboard: { view: 'grid', columns: 4, cardSizing: 'fixed' },
 		sideboard: { view: 'stack' },
 		showQuantities: true,
 		showDeckName: true,
 		showDeckColors: false,
-		showDeckStats: false,
+		// Card type counts, so the details row and its pill show.
+		showDeckStats: true,
 		showDeckMetaPill: true,
 		showHighlanderTotal: false,
 		showHighlanderPointedCards: true,
@@ -676,7 +642,7 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	primaryHeader: ref('Alice'),
 	secondaryHeader: ref('Mono Blue'),
 	deckColors: '',
-	companion: ref({ name: 'Lurrus of the Dream-Den' }),
+	companionCard: ref(null),
 	highlander: ref({
 		system: '7ph',
 		status: 'legal',
@@ -694,8 +660,9 @@ mockNuxtImport('useDeckModeData', () => () => ({
 		duplicateCards: [],
 		unknownCards: [],
 	}),
-	deckCounters: ref([]),
-	deckStats: ref([]),
+	deckStats: ref([
+		{ type: 'Instants', count: 12 },
+	]),
 	mainboard: ref([
 		deckCard('Mana Drain', 'mainboard'),
 		deckCard('Force of Will', 'mainboard'),
@@ -710,6 +677,10 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	displayedDeckVersion: ref(1),
 	pendingSwapVersion: ref(0),
 	commitPendingDeck: () => {},
+	boardColumns: {
+		mainboard: computed(() => 4),
+		sideboard: computed(() => 2),
+	},
 }));
 
 const spotlightCard = {
@@ -721,6 +692,7 @@ const spotlightCard = {
 };
 
 mockNuxtImport('useCardModeData', () => () => ({
+	config: computed(() => ({ cardWidth: 583 })),
 	screenId: computed(() => 1),
 	card: ref(spotlightCard),
 	error: ref(null),
@@ -1028,31 +1000,14 @@ describe('a light Theme', () => {
 	});
 });
 
-// A Deck Screen's Mainboard and Sideboard each take their own size Mode Tokens.
-describe('a Deck Screen\'s two boards', () => {
-	it('are sized independently', async () => {
-		await mountMode('deck', {
-			'deck.mainboard-card-width': 200,
-			'deck.mainboard-card-gap': 20,
-			'deck.sideboard-card-width': 100,
-			'deck.sideboard-card-gap': 4,
-		}, {
-			config: {
-				sideboard: { view: 'grid', columns: 2, dynamicCardSize: false },
-			},
-		});
+// Every badge's shadow reads the one `shadow` Foundation Token, so a Theme sets it once.
+describe('a Theme\'s shadow', () => {
+	it.each(['top-cards', 'deck', 'archetype-spotlight'] as const)('lifts the %s badges', async (mode) => {
+		const probe = THEMED_DISPLAYS[mode]!['badge-shadow']!;
+		await mountMode(mode, { shadow: 'rgb(1, 2, 3)' }, { config: probe.config });
+		await shown(probe);
 
-		const board = (key: string) => ({
-			width: getComputedStyle(wrapper!.get(`[data-testid="${key}-grid"] .card-item`).element).width,
-			gap: getComputedStyle(wrapper!.get(`[data-testid="${key}-grid"]`).element).gap,
-		});
-		expect([
-			board('mainboard'),
-			board('sideboard'),
-		]).toEqual([
-			{ width: '200px', gap: '20px' },
-			{ width: '100px', gap: '4px' },
-		]);
+		expect(painted(probe, 'color')).toBe('rgb(1, 2, 3)');
 	});
 });
 

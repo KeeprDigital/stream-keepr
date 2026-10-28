@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
-import type { BoardSelection, DeckBoardView, QuantityPosition, SideboardPlacement } from '~~/shared/types/enums';
-import type { DeckBoardLayoutConfig, ResolvedDeckBoardLayout } from '~~/shared/types/screenConfig';
+import type { BoardSelection, CardSizing, QuantityPosition, SideboardPlacement, SideboardView } from '~~/shared/types/enums';
+import type { ResolvedDeckBoardLayout, ResolvedSideboardLayout } from '~~/shared/types/screenConfig';
 import type { NinePoint } from '~~/shared/utils/ninePoints';
 import type { Screen } from '~/types';
-import { DECK_BOARD_LAYOUT_FIELDS } from '~~/shared/screenModeConfigs/deck';
+import { DECK_SIDEBOARD_LAYOUT_FIELDS } from '~~/shared/screenModeConfigs/deck';
 import { screenModeConfigContract } from '~~/shared/screenModes';
-import { DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
+import { DEFAULT_COMPANION_TAG_POSITION, DEFAULT_DECK_TEXT_SIZES, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
-import { SIDEBOARD_PLACEMENT_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
+import { CARD_SIZING_SELECT_OPTIONS, SIDEBOARD_PLACEMENT_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
@@ -29,9 +29,10 @@ const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 defineExpose({ resetConfig, saving });
 
 // Each control's label and bounds, read from the mode's config contract (#498):
-// the mode's own fields, and the layout block each board carries.
+// the mode's own fields, and the layout block each board carries. The boards'
+// blocks label and bound their knobs alike; only their views differ.
 const fields = screenModeConfigContract('deck').fields;
-const boardFields = DECK_BOARD_LAYOUT_FIELDS;
+const boardFields = DECK_SIDEBOARD_LAYOUT_FIELDS;
 
 // A badge in the centre of a Deck Screen card would cover its art, so the badge
 // position pickers offer every point but this one — which is why what they emit
@@ -59,6 +60,12 @@ const broadcastDeckListOptions = computed(() => [
 	...broadcastDeckListStore.summaries.map(list => ({ label: list.name, value: list.id })),
 ]);
 const isBroadcastSource = computed(() => config.value.deckSource.type === 'broadcast');
+// Card points come from the Event's points system; a Broadcast Deck List carries none.
+const showsCardPoints = computed(() => !isBroadcastSource.value && !!eventStore.event?.pointsSystem);
+/** The Deck Details row shows only with something in it, so its look settings show only then. */
+const showsDetailsRow = computed(() =>
+	!!config.value.showDeckStats
+	|| (showsCardPoints.value && config.value.showHighlanderTotal !== false));
 
 function selectBroadcastDeckList(listId: number | null) {
 	if (listId !== null) {
@@ -122,22 +129,27 @@ const playerOptions = computed(() => {
 	];
 });
 
-// Board selection tabs
-const boardTabs: TabsItem[] = [
-	{ label: 'Full deck', value: 'full' },
-	{ label: 'Mainboard', value: 'mainboard' },
-	{ label: 'Sideboard', value: 'sideboard' },
-];
-
-// Per-board view tabs
-const boardViewTabs: TabsItem[] = [
-	{ label: 'Grid', value: 'grid', icon: 'i-lucide-grid-3x3' },
-	{ label: 'Stack', value: 'stack', icon: 'i-lucide-layers' },
-	{ label: 'List', value: 'list', icon: 'i-lucide-list' },
-];
-
 const resolvedBoards = computed(() => resolveDeckBoards(config.value));
 const board = computed<BoardSelection>(() => resolvedBoards.value.board);
+
+// Per-board view tabs. Only the sideboard stacks, and only as the strip beside
+// the mainboard (ADR-0054); elsewhere its stack shows as a grid, so the tab
+// stays, disabled, rather than lose a stack that would return beside.
+const sideboardCanStack = computed(() =>
+	board.value === 'full' && resolvedBoards.value.sideboardPlacement === 'beside');
+const gridViewTab = { label: 'Grid', value: 'grid', icon: 'i-lucide-grid-3x3' };
+const listViewTab = { label: 'List', value: 'list', icon: 'i-lucide-list' };
+const mainboardViewTabs = [gridViewTab, listViewTab];
+const sideboardViewTabs = computed(() => [
+	gridViewTab,
+	{
+		label: 'Stack',
+		value: 'stack',
+		icon: 'i-lucide-layers',
+		disabled: !sideboardCanStack.value,
+	},
+	listViewTab,
+]);
 
 type BoardKey = 'mainboard' | 'sideboard';
 
@@ -145,22 +157,86 @@ interface BoardSection {
 	key: BoardKey;
 	title: string;
 	layout: ResolvedDeckBoardLayout;
+	viewTabs: { label: string; value: string; icon: string; disabled?: boolean }[];
+	/** The view its Screen renders: a stack that cannot stack shows as a grid. */
+	view: SideboardView;
+	/** Whether the Screen shows the board; the last one shown cannot be hidden. */
+	shown: boolean;
+}
+
+// Each board is shown or hidden on its own card. `board` stores the pair, so
+// both hidden cannot be written: the last board shown keeps its toggle locked on.
+const mainboardShown = computed(() => board.value !== 'sideboard');
+const sideboardShown = computed(() => board.value !== 'mainboard');
+
+/**
+ * Both boards shown and Fit are laid out together at one card size. Along the
+ * axis they share, the mainboard's alignment places them as one group; across
+ * it, each board sits at its own, as far as the Screen's edge.
+ */
+const boardsPlacedTogether = computed(() =>
+	mainboardShown.value
+	&& sideboardShown.value
+	&& [resolvedBoards.value.mainboard, resolvedBoards.value.sideboard].every(layout => layout.cardSizing === 'fit' && layout.view !== 'list'));
+
+function alignmentDescription(key: BoardKey): string {
+	if (!boardsPlacedTogether.value)
+		return 'Where the cards sit when they don\'t fill the board\'s space. A Fixed grid places them across only.';
+	const beside = resolvedBoards.value.sideboardPlacement === 'beside';
+	if (key === 'mainboard') {
+		return beside
+			? 'Across, where both boards sit together; up and down, where the mainboard sits.'
+			: 'Up and down, where both boards sit together; across, where the mainboard sits.';
+	}
+	return beside
+		? 'Up and down, where the sideboard sits, top to bottom of the screen. Right sends it to the right edge; otherwise it sits beside the mainboard.'
+		: 'Across, where the sideboard and its heading sit, edge to edge. Bottom sends it to the bottom of the screen; otherwise it sits under the mainboard.';
+}
+
+function setBoardShown(key: BoardKey, shown: boolean) {
+	const mainboard = key === 'mainboard'
+		? shown
+		: mainboardShown.value;
+	const sideboard = key === 'sideboard'
+		? shown
+		: sideboardShown.value;
+	if (!mainboard && !sideboard)
+		return;
+	updateConfig({
+		board: mainboard && sideboard
+			? 'full'
+			: mainboard ? 'mainboard' : 'sideboard',
+	});
 }
 
 const boardSections = computed<BoardSection[]>(() => {
-	const sections: BoardSection[] = [];
-	if (board.value !== 'sideboard') {
-		sections.push({ key: 'mainboard', title: 'Mainboard', layout: resolvedBoards.value.mainboard });
-	}
-	if (board.value !== 'mainboard') {
-		sections.push({ key: 'sideboard', title: 'Sideboard', layout: resolvedBoards.value.sideboard });
-	}
-	return sections;
+	const mainboard = resolvedBoards.value.mainboard;
+	const sideboard = resolvedBoards.value.sideboard;
+	return [
+		{
+			key: 'mainboard',
+			title: 'Mainboard',
+			layout: mainboard,
+			viewTabs: mainboardViewTabs,
+			view: mainboard.view,
+			shown: mainboardShown.value,
+		},
+		{
+			key: 'sideboard',
+			title: 'Sideboard',
+			layout: sideboard,
+			viewTabs: sideboardViewTabs.value,
+			view: sideboard.view === 'stack' && !sideboardCanStack.value
+				? 'grid'
+				: sideboard.view,
+			shown: sideboardShown.value,
+		},
+	];
 });
 
 // The mode-config PATCH replaces a board block wholesale, so every knob change
 // writes the complete resolved block back.
-function updateBoardLayout(key: BoardKey, patch: Partial<DeckBoardLayoutConfig>) {
+function updateBoardLayout(key: BoardKey, patch: Partial<ResolvedSideboardLayout>) {
 	updateConfig({
 		[key]: {
 			...resolvedBoards.value[key],
@@ -273,150 +349,268 @@ const emptyBoardHint = computed(() => {
 
 		<ScreenSettingsCard title="Header">
 			<ScreenSettingsToggle
-				:label="fields.showDeckName.label"
-				description="Show the source name and optional secondary label."
-				:model-value="config.showDeckName"
+				:label="isBroadcastSource ? 'Show List Name' : fields.showPlayerName.label"
+				:description="isBroadcastSource ? 'The Broadcast Deck List\'s name, on the first line.' : 'The Player\'s name, on the first line.'"
+				:model-value="config.showPlayerName !== false"
+				@update:model-value="updateConfig({ showPlayerName: $event })"
+			/>
+			<ScreenSettingsToggle
+				:label="isBroadcastSource ? 'Show Archetype' : fields.showDeckName.label"
+				:description="isBroadcastSource ? 'The list\'s archetype, beside its name.' : 'The deck\'s name, beside the Player\'s.'"
+				:model-value="config.showDeckName !== false"
 				@update:model-value="updateConfig({ showDeckName: $event })"
 			/>
 			<ScreenSettingsToggle
 				:label="fields.showDeckColors.label"
-				description="Show the deck's mana colors."
-				:model-value="config.showDeckColors"
+				description="The deck's mana colours, beside its name."
+				:model-value="config.showDeckColors !== false"
 				@update:model-value="updateConfig({ showDeckColors: $event })"
 			/>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Deck Meta">
+		<ScreenSettingsCard title="Deck Details">
+			<p class="text-xs text-muted">
+				A row under the header. Shown only when something in it is on.
+			</p>
+
 			<ScreenSettingsToggle
 				:label="fields.showDeckStats.label"
-				description="Show card counts by type (creatures, instants, etc.)."
+				description="Card counts by type: creatures, instants and so on."
 				:model-value="config.showDeckStats"
 				@update:model-value="updateConfig({ showDeckStats: $event })"
 			/>
 
 			<ScreenSettingsToggle
-				v-if="!isBroadcastSource"
+				v-if="showsCardPoints"
 				:label="fields.showHighlanderTotal.label"
-				description="Show the deck's total 7 Point Highlander points in the deck meta row."
-				:model-value="config.showHighlanderTotal"
+				description="The deck's total 7 Point Highlander points."
+				:model-value="config.showHighlanderTotal !== false"
 				@update:model-value="updateConfig({ showHighlanderTotal: $event })"
 			/>
 
-			<USeparator />
+			<template v-if="showsDetailsRow">
+				<UFormField
+					:label="fields.metaPillSize.label"
+					description="The row's text size in px; a pill sizes itself around it."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UInputNumber
+						:model-value="config.metaPillSize ?? DEFAULT_DECK_TEXT_SIZES.metaPillSize"
+						:min="fields.metaPillSize.min"
+						:max="fields.metaPillSize.max"
+						class="w-32"
+						@update:model-value="updateConfig({ metaPillSize: Number($event) })"
+					/>
+				</UFormField>
 
-			<ScreenSettingsToggle
-				:label="fields.showDeckMetaPill.label"
-				description="Wrap available deck metadata in a single pill."
-				:model-value="config.showDeckMetaPill"
-				@update:model-value="updateConfig({ showDeckMetaPill: $event })"
-			/>
-		</ScreenSettingsCard>
-
-		<ScreenSettingsCard v-if="!isBroadcastSource" title="Pointed Cards">
-			<ScreenSettingsToggle
-				:label="fields.showHighlanderPointedCards.label"
-				description="Show pointed card chips under the deck info."
-				:model-value="config.showHighlanderPointedCards"
-				@update:model-value="updateConfig({ showHighlanderPointedCards: $event })"
-			/>
-		</ScreenSettingsCard>
-
-		<ScreenSettingsCard title="Layout">
-			<UFormField
-				:label="fields.board.label"
-				description="Which boards of the deck are shown."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UISegmentedTabs
-					:items="boardTabs"
-					:model-value="board"
-					size="sm"
-					@update:model-value="updateConfig({ board: $event as BoardSelection })"
+				<ScreenSettingsToggle
+					:label="fields.showDeckMetaPill.label"
+					description="Wrap the row in a pill."
+					:model-value="config.showDeckMetaPill !== false"
+					@update:model-value="updateConfig({ showDeckMetaPill: $event })"
 				/>
-			</UFormField>
+			</template>
+
+			<template v-if="showsCardPoints">
+				<USeparator />
+
+				<ScreenSettingsToggle
+					:label="fields.showHighlanderPointedCards.label"
+					description="A chip per pointed card, under the row."
+					:model-value="config.showHighlanderPointedCards !== false"
+					@update:model-value="updateConfig({ showHighlanderPointedCards: $event })"
+				/>
+
+				<UFormField
+					v-if="config.showHighlanderPointedCards !== false"
+					:label="fields.pointedCardSize.label"
+					description="Each chip's text size in px; the chip sizes itself around it."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UInputNumber
+						:model-value="config.pointedCardSize ?? DEFAULT_DECK_TEXT_SIZES.pointedCardSize"
+						:min="fields.pointedCardSize.min"
+						:max="fields.pointedCardSize.max"
+						class="w-32"
+						@update:model-value="updateConfig({ pointedCardSize: Number($event) })"
+					/>
+				</UFormField>
+			</template>
+		</ScreenSettingsCard>
+
+		<ScreenSettingsCard
+			v-for="section in boardSections"
+			:key="section.key"
+			:title="section.title"
+		>
+			<ScreenSettingsToggle
+				:label="`Show ${section.title}`"
+				:description="section.shown && !(mainboardShown && sideboardShown)
+					? 'The only board shown, so it stays on. Show the other board to hide this one.'
+					: `Show the ${section.title.toLowerCase()} on the Screen.`"
+				:model-value="section.shown"
+				@update:model-value="setBoardShown(section.key, !!$event)"
+			/>
 
 			<p
-				v-if="emptyBoardHint"
+				v-if="section.key === 'sideboard' && emptyBoardHint"
 				data-testid="empty-sideboard-hint"
 				class="text-xs text-muted"
 			>
 				{{ emptyBoardHint }}
 			</p>
 
-			<UFormField
-				v-if="board === 'full'"
-				:label="fields.sideboardPlacement.label"
-				description="Where the sideboard sits relative to the mainboard."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					:model-value="resolvedBoards.sideboardPlacement"
-					:items="SIDEBOARD_PLACEMENT_SELECT_OPTIONS"
-					class="w-48"
-					@update:model-value="updateConfig({ sideboardPlacement: $event as SideboardPlacement })"
-				/>
-			</UFormField>
-		</ScreenSettingsCard>
-
-		<ScreenSettingsCard
-			v-for="section in boardSections"
-			:key="section.key"
-			:title="`${section.title} Layout`"
-		>
-			<UFormField
-				:label="boardFields.view.label"
-				:description="`How the ${section.title.toLowerCase()} cards are shown.`"
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UISegmentedTabs
-					:items="boardViewTabs"
-					:model-value="section.layout.view"
-					size="sm"
-					@update:model-value="updateBoardLayout(section.key, { view: $event as DeckBoardView })"
-				/>
-			</UFormField>
-
-			<USeparator v-if="section.layout.view !== 'stack'" />
-
-			<template v-if="section.layout.view === 'grid'">
+			<template v-if="section.key === 'sideboard'">
 				<UFormField
-					:label="boardFields.columns.label"
-					description="Number of columns in the card grid."
+					v-if="mainboardShown && sideboardShown"
+					:label="fields.sideboardPlacement.label"
+					description="Where the sideboard sits relative to the mainboard."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
-					<UInputNumber
-						:model-value="section.layout.columns"
-						:min="boardFields.columns.min"
-						:max="boardFields.columns.max"
-						class="w-32"
-						@update:model-value="updateBoardLayout(section.key, { columns: Number($event) })"
+					<USelect
+						:model-value="resolvedBoards.sideboardPlacement"
+						:items="SIDEBOARD_PLACEMENT_SELECT_OPTIONS"
+						class="w-48"
+						@update:model-value="updateConfig({ sideboardPlacement: $event as SideboardPlacement })"
+					/>
+				</UFormField>
+
+				<ScreenSettingsToggle
+					:label="fields.showCompanion.label"
+					description="The deck's companion as the sideboard's first card."
+					:model-value="config.showCompanion !== false"
+					@update:model-value="updateConfig({ showCompanion: $event })"
+				/>
+			</template>
+
+			<template v-if="section.shown">
+				<USeparator />
+
+				<UFormField
+					:label="boardFields.view.label"
+					:description="`How the ${section.title.toLowerCase()} cards are shown.`"
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UISegmentedTabs
+						:items="section.viewTabs"
+						:model-value="section.view"
+						size="sm"
+						@update:model-value="updateBoardLayout(section.key, { view: $event as SideboardView })"
 					/>
 				</UFormField>
 
 				<USeparator />
 
-				<ScreenSettingsToggle
-					:label="boardFields.dynamicCardSize.label"
-					description="Cards automatically fill the available column width."
-					:model-value="section.layout.dynamicCardSize"
-					@update:model-value="updateBoardLayout(section.key, { dynamicCardSize: $event })"
-				/>
-			</template>
-
-			<template v-else-if="section.layout.view === 'list'">
 				<UFormField
-					:label="boardFields.listColumns.label"
-					description="Number of columns in the list."
+					v-if="section.view !== 'list'"
+					:label="boardFields.cardSizing.label"
+					description="Fit shrinks the cards until every one fits the screen. Fixed takes the card width below and may run off the screen."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<USelect
+						:model-value="section.layout.cardSizing"
+						:items="CARD_SIZING_SELECT_OPTIONS"
+						class="w-48"
+						@update:model-value="updateBoardLayout(section.key, { cardSizing: $event as CardSizing })"
+					/>
+				</UFormField>
+
+				<UFormField
+					v-if="section.view !== 'list'"
+					:label="boardFields.alignment.label"
+					:description="alignmentDescription(section.key)"
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UINinePointPicker
+						:model-value="section.layout.alignment"
+						:aria-label="`${section.title} alignment`"
+						@update:model-value="updateBoardLayout(section.key, { alignment: $event as NinePoint })"
+					/>
+				</UFormField>
+
+				<UFormField
+					v-if="section.view === 'stack' || (section.view === 'grid' && section.layout.cardSizing === 'fixed')"
+					:label="boardFields.cardWidth.label"
+					description="Each card's width in px."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<UInputNumber
-						:model-value="section.layout.listColumns"
-						:min="boardFields.listColumns.min"
-						:max="boardFields.listColumns.max"
+						:model-value="section.layout.cardWidth"
+						:min="boardFields.cardWidth.min"
+						:max="boardFields.cardWidth.max"
 						class="w-32"
-						@update:model-value="updateBoardLayout(section.key, { listColumns: Number($event) })"
+						@update:model-value="updateBoardLayout(section.key, { cardWidth: Number($event) })"
 					/>
 				</UFormField>
+
+				<UFormField
+					v-if="section.view === 'stack'"
+					:label="boardFields.stackReveal.label"
+					description="How much of each stacked card but the last shows, in px."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UInputNumber
+						:model-value="resolvedBoards.sideboard.stackReveal"
+						:min="boardFields.stackReveal.min"
+						:max="boardFields.stackReveal.max"
+						class="w-32"
+						@update:model-value="updateBoardLayout(section.key, { stackReveal: Number($event) })"
+					/>
+				</UFormField>
+
+				<template v-if="section.view === 'grid'">
+					<ScreenSettingsToggle
+						:label="boardFields.autoColumns.label"
+						description="Choose the columns from the card count and the screen's size."
+						:model-value="section.layout.autoColumns"
+						@update:model-value="updateBoardLayout(section.key, { autoColumns: $event })"
+					/>
+
+					<UFormField
+						v-if="!section.layout.autoColumns"
+						:label="boardFields.columns.label"
+						description="Number of columns in the card grid."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<UInputNumber
+							:model-value="section.layout.columns"
+							:min="boardFields.columns.min"
+							:max="boardFields.columns.max"
+							class="w-32"
+							@update:model-value="updateBoardLayout(section.key, { columns: Number($event) })"
+						/>
+					</UFormField>
+
+					<UFormField
+						:label="boardFields.cardGap.label"
+						description="The space between cards in px."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<UInputNumber
+							:model-value="section.layout.cardGap"
+							:min="boardFields.cardGap.min"
+							:max="boardFields.cardGap.max"
+							class="w-32"
+							@update:model-value="updateBoardLayout(section.key, { cardGap: Number($event) })"
+						/>
+					</UFormField>
+				</template>
+
+				<template v-else-if="section.view === 'list'">
+					<UFormField
+						:label="boardFields.listColumns.label"
+						description="Number of columns in the list."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<UInputNumber
+							:model-value="section.layout.listColumns"
+							:min="boardFields.listColumns.min"
+							:max="boardFields.listColumns.max"
+							class="w-32"
+							@update:model-value="updateBoardLayout(section.key, { listColumns: Number($event) })"
+						/>
+					</UFormField>
+				</template>
 			</template>
 		</ScreenSettingsCard>
 
@@ -447,9 +641,23 @@ const emptyBoardHint = computed(() => {
 						@update:model-value="updateConfig({ quantityPosition: $event as QuantityPosition })"
 					/>
 				</UFormField>
+
+				<UFormField
+					:label="fields.quantityBadgeSize.label"
+					description="The badge's text size in px; the badge sizes itself around it."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UInputNumber
+						:model-value="config.quantityBadgeSize ?? DEFAULT_DECK_TEXT_SIZES.quantityBadgeSize"
+						:min="fields.quantityBadgeSize.min"
+						:max="fields.quantityBadgeSize.max"
+						class="w-32"
+						@update:model-value="updateConfig({ quantityBadgeSize: Number($event) })"
+					/>
+				</UFormField>
 			</template>
 
-			<template v-if="!isBroadcastSource">
+			<template v-if="showsCardPoints">
 				<USeparator />
 
 				<p class="text-xs font-semibold uppercase tracking-wider text-muted">
@@ -478,7 +686,42 @@ const emptyBoardHint = computed(() => {
 							@update:model-value="updateConfig({ highlanderPointsPosition: $event as QuantityPosition })"
 						/>
 					</UFormField>
+
+					<UFormField
+						:label="fields.pointsBadgeSize.label"
+						description="The badge's text size in px; the badge sizes itself around it."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<UInputNumber
+							:model-value="config.pointsBadgeSize ?? DEFAULT_DECK_TEXT_SIZES.pointsBadgeSize"
+							:min="fields.pointsBadgeSize.min"
+							:max="fields.pointsBadgeSize.max"
+							class="w-32"
+							@update:model-value="updateConfig({ pointsBadgeSize: Number($event) })"
+						/>
+					</UFormField>
 				</template>
+			</template>
+
+			<template v-if="config.showCompanion !== false">
+				<USeparator />
+
+				<p class="text-xs font-semibold uppercase tracking-wider text-muted">
+					Companion Badge
+				</p>
+
+				<UFormField
+					:label="fields.companionTagPosition.label"
+					description="Where the Companion badge sits on its card. In a corner, the badge lines up with that side."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UINinePointPicker
+						:model-value="config.companionTagPosition ?? DEFAULT_COMPANION_TAG_POSITION"
+						:disabled-points="BADGE_DISABLED_POINTS"
+						aria-label="Companion badge position"
+						@update:model-value="updateConfig({ companionTagPosition: $event as QuantityPosition })"
+					/>
+				</UFormField>
 			</template>
 		</ScreenSettingsCard>
 	</div>

@@ -27,7 +27,7 @@ describe('screen Mode Page Rotation', () => {
 		expect(paginated.map(({ declared }) => declared)).toEqual([
 			'standings.rowsPerPage',
 			'metagame.pageSize',
-			'top-cards.rowsPerPage',
+			'top-cards.cardsPerPage',
 			'player-history.rowsPerPage',
 			'pairings.rowsPerPage',
 			'archetype-spotlight.rowsPerPage',
@@ -58,7 +58,9 @@ describe('screen Mode Page Rotation', () => {
 		it('carries the shared rotation fields, validation and defaults', () => {
 			for (const [field, schema] of Object.entries(pageRotationShape))
 				expect(contract.shape[field], field).toBe(schema);
-			expect(contract.shape[pageRotation.pageSize]).toBe(pageRotationPageSize);
+			// Most Played Cards pages by cards, not rows (ADR-0054), so its page size is its own field.
+			if (mode !== 'top-cards')
+				expect(contract.shape[pageRotation.pageSize]).toBe(pageRotationPageSize);
 			expect(contract.defaults).toMatchObject(DEFAULT_PAGE_ROTATION);
 		});
 

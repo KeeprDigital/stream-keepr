@@ -5,6 +5,8 @@ interface SegmentedTabItem {
 	icon?: string;
 	/** Names an icon-only item for assistive technology. */
 	ariaLabel?: string;
+	/** Shown but not choosable, such as a view the current placement cannot render. */
+	disabled?: boolean;
 }
 
 withDefaults(defineProps<{
@@ -30,6 +32,7 @@ const model = defineModel<string | number | undefined>({ required: true });
 			:variant="model === item.value ? 'soft' : 'outline'"
 			:data-testid="item.value ? `tab-${item.value}` : undefined"
 			:data-active="model === item.value ? 'true' : 'false'"
+			:disabled="item.disabled"
 			@click="() => { model = item.value }"
 		/>
 	</UFieldGroup>

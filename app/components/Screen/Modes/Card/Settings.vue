@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Screen } from '~/types';
+import { screenModeConfigContract } from '~~/shared/screenModes';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
@@ -16,6 +17,9 @@ const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 );
 
 defineExpose({ resetConfig, saving });
+
+// Each control's label and bounds, read from the mode's config contract (#498).
+const fields = screenModeConfigContract('card').fields;
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
 useConsumedEventData(['featureMatchSlots']);
@@ -73,6 +77,22 @@ const hasMatchBinding = computed(() => !!config.value.featureMatchId);
 			<p v-if="!hasMatchBinding" class="text-sm text-muted">
 				No match linked. Cards can still be pushed to this screen from the card search page.
 			</p>
+		</ScreenSettingsCard>
+
+		<ScreenSettingsCard title="Card">
+			<UFormField
+				:label="fields.cardWidth.label"
+				description="The card's width in px."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<UInputNumber
+					:model-value="config.cardWidth"
+					:min="fields.cardWidth.min"
+					:max="fields.cardWidth.max"
+					class="w-32"
+					@update:model-value="updateConfig({ cardWidth: Number($event) })"
+				/>
+			</UFormField>
 		</ScreenSettingsCard>
 	</div>
 </template>

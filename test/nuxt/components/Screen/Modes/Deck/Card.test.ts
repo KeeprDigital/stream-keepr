@@ -20,13 +20,13 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 	return mount(Card, {
 		props: {
 			card: createCard(),
-			board: 'mainboard',
 			showQuantity: false,
 			showHighlanderPoints: true,
 			quantityPositionClass: '-top-1 -right-1',
 			quantityBadgeStyle: { color: 'white', backgroundColor: 'purple' },
 			highlanderPointsPositionClass: '-bottom-1 -left-1',
 			highlanderPointsBadgeStyle: { color: 'red', backgroundColor: 'blue' },
+			sizing: 'fixed',
 			...props,
 		},
 		global: {
@@ -47,14 +47,39 @@ describe('screenDeckCard', () => {
 		expect(badge.attributes('style')).toContain('background-color: blue;');
 	});
 
+	// Fixed takes the width its board gives it; fill and fit take their column, which a Fit grid sizes to the card.
 	it.each([
-		{ board: 'mainboard', dynamicSize: false, width: 'var(--theme-deck-mainboard-card-width)' },
-		{ board: 'sideboard', dynamicSize: false, width: 'var(--theme-deck-sideboard-card-width)' },
-		{ board: 'sideboard', dynamicSize: true, width: '' },
-	])('takes its board\'s card-width Mode Token unless it fills its column ($board, dynamic: $dynamicSize)', async ({ board, dynamicSize, width }) => {
-		const wrapper = await mountComponent({ board, dynamicSize });
+		{ sizing: 'fixed', width: '200px' },
+		{ sizing: 'fill', width: '100%' },
+		{ sizing: 'fit', width: '100%' },
+	])('sizes a $sizing card', async ({ sizing, width }) => {
+		const wrapper = await mountComponent({ sizing, width: '200px' });
 
 		expect((wrapper.get('.card-item').element as HTMLElement).style.width).toBe(width);
+	});
+
+	// A card in a role, such as the companion, says so on its face.
+	it.each([
+		{ tag: 'Companion', shown: 'Companion' },
+		{ tag: undefined, shown: undefined },
+	])('tags a card $tag', async ({ tag, shown }) => {
+		const wrapper = await mountComponent({ tag });
+
+		expect(wrapper.find('[data-testid="deck-card-tag"]').exists()
+			? wrapper.get('[data-testid="deck-card-tag"]').text()
+			: undefined).toBe(shown);
+	});
+
+	// A tag reads as the quantity badge's pair: its text size and its height.
+	it('sizes a tag as the quantity badge is sized', async () => {
+		const wrapper = await mountComponent({
+			tag: 'Companion',
+			quantityBadgeStyle: { fontSize: '20px', color: 'white', backgroundColor: 'purple' },
+		});
+
+		const tag = wrapper.get('[data-testid="deck-card-tag"]').element as HTMLElement;
+		expect(tag.style.fontSize).toBe('20px');
+		expect(tag.style.height).toBe('1.75em');
 	});
 
 	it('hides the Highlander point badge when disabled', async () => {
