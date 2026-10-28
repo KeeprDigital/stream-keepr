@@ -1021,8 +1021,19 @@ describe('a Deck Screen\'s two boards', () => {
 	});
 });
 
+// Every badge's shadow reads the one `shadow` Foundation Token, so a Theme sets it once.
+describe('a Theme\'s shadow', () => {
+	it.each(['top-cards', 'deck', 'archetype-spotlight'] as const)('lifts the %s badges', async (mode) => {
+		const probe = THEMED_DISPLAYS[mode]!['badge-shadow']!;
+		await mountMode(mode, { shadow: 'rgb(1, 2, 3)' }, { config: probe.config });
+		await shown(probe);
+
+		expect(painted(probe, 'color')).toBe('rgb(1, 2, 3)');
+	});
+});
+
 describe('a Screen Theme Override', () => {
-	const dividers = [THEMED_DISPLAYS.standings!['title-divider']!, THEMED_DISPLAYS.standings!['row-divider']!];
+	const dividers =[THEMED_DISPLAYS.standings!['title-divider']!, THEMED_DISPLAYS.standings!['row-divider']!];
 
 	it('paints over the Theme wherever its Foundation Token is named, and the Theme again once cleared', async () => {
 		await mountMode('standings', { divider: 'rgb(1, 2, 3)' }, {

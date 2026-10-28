@@ -117,11 +117,10 @@ export const deckModeTokens = {
 		default: 14,
 		bounds: { min: 8, max: 48 },
 	},
-	// No Foundation Token is a shadow, so it holds the one it shipped with.
 	'badge-shadow': {
 		type: 'color',
 		label: 'Point badge shadow',
-		default: 'rgba(0, 0, 0, 0.1)',
+		default: { token: 'shadow' },
 	},
 	'mainboard-card-width': {
 		type: 'dimension',
