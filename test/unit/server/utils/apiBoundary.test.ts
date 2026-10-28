@@ -112,6 +112,7 @@ describe('which API paths require a session', () => {
 		expect(apiPathRequiresSession('/api/auth/sign-in/email')).toBe(false);
 		expect(apiPathRequiresSession('/api/screen-output/screens/7/asset-capability-session')).toBe(false);
 		expect(apiPathRequiresSession('/api/admin/graphics-assets/health')).toBe(false);
+		expect(apiPathRequiresSession('/api/public/events/1/on-air')).toBe(false);
 	});
 
 	it('ignores the one trailing slash Nitro ignores', () => {
@@ -139,6 +140,7 @@ describe('which API paths require a session', () => {
 		expect(apiPathRequiresSession('/api/authors/12')).toBe(true);
 		expect(apiPathRequiresSession('/api/administration/users')).toBe(true);
 		expect(apiPathRequiresSession('/api/screen-outputs/7')).toBe(true);
+		expect(apiPathRequiresSession('/api/publications/7')).toBe(true);
 		// And the bare prefixes themselves are not exempt. No route answers any
 		// of them, so the only thing at stake is the direction of the guess.
 		for (const prefix of SESSION_EXEMPT_API_PREFIXES)
@@ -184,6 +186,8 @@ describe('the public surface, counted against the routes on disk', () => {
 			// The first-admin bootstrap, armed by a Worker secret and 503 without
 			// it. It exists for the installation that has no account to sign in to.
 			'server/api/bootstrap/ensure-admin.post.ts',
+			// A stopgap for outside tools: commentator names and holding text only (ADR-0055).
+			'server/api/public/events/[id]/on-air.get.ts',
 			// An Ably token request. #397 narrows what an unauthenticated caller is
 			// granted; that is a change to what this issues, not to its reachability.
 			'server/api/realtime/token.get.ts',

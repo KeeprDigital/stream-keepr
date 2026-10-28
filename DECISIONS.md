@@ -209,7 +209,7 @@ Before this, the installation had no login: a self-issued, anonymous Graphics Au
 - **Session policy: Better Auth defaults, `expiresIn` 7 days, `updateAge` 1 day.** An idle-sliding window (measured from last use, not issue) is the right shape, and nothing now argues for a short one: a lapse no longer destroys ownership of work, D1 has no per-key write cap, and a mid-show forced re-login is the costliest failure this product can buy. The abandoned-shared-machine risk is answered by admin session revocation and banning.
 - **The Graphics Administrator shared token (`x-graphics-admin-token`) is untouched** — the admin credential until a roles effort redraws that seam.
 
-**Deny-by-default over `/api/**`.** `server/middleware/api-session.ts` requires a session on every `/api/**` route that `apiPathRequiresSession` (`server/utils/apiBoundary.ts`) does not exempt, so a new route is private until consciously allowlisted. The exempt surface, exhaustively: `/api/auth/**`; `/api/time` (output drift correction); `/api/realtime/token` (scoped below); `/api/screen-output/**` (capability-authorised); `/api/bootstrap/ensure-admin`; `/api/admin/**`; and the SPA shell and static assets, unavoidably public under `ssr: false`.
+**Deny-by-default over `/api/**`.** `server/middleware/api-session.ts` requires a session on every `/api/**` route that `apiPathRequiresSession` (`server/utils/apiBoundary.ts`) does not exempt, so a new route is private until consciously allowlisted. The exempt surface, exhaustively: `/api/auth/**`; `/api/time` (output drift correction); `/api/realtime/token` (scoped below); `/api/screen-output/**` (capability-authorised); `/api/bootstrap/ensure-admin`; `/api/admin/**`; `/api/public/**` (ADR-0055); and the SPA shell and static assets, unavoidably public under `ssr: false`.
 
 - **The Screen-by-slug bootstrap route lives at `/api/screen-output/events/:id/screens/slug/:slug`** and accepts either the Screen Output Asset Capability bearer from the output page's URL hash or a session. The session arm exists for editor previews (`embed=preview`), which deliberately resolve media as the author with no capability; it adds no reach, since any signed-in user can read the same Screen elsewhere and `mapScreenToResponse` strips the capability digest either way. Minting capabilities for previews would contradict that design, and a second session-only route for the same resource would make a repository choose a path by credential.
 - **Realtime token: dual grant, no anonymous issuance.** A user gets the event channel plus all screen channels (subscribe, history, presence) with `clientId` = userId. A capability bearer gets that screen's channels plus its event channel, with a screen-output `clientId`. Screen Outputs need no account — the capability already in hand is their credential.
@@ -1763,3 +1763,25 @@ With "Dynamic card size", columns only filled the canvas width. Card height foll
 - Most Played Cards keeps Fit as its default, so a Screen that filled its columns now also fits its height, and a long grid shrinks instead of overflowing.
 - Fit cards in a page of 60 can be small. Paging, not a minimum size, is the operator's way to keep them large.
 - Canvas aspect only chooses the auto column count; the rendered Fit size always comes from the grid's real space, so a tall header costs size, never overflow.
+
+## ADR-0055: A stopgap public read names an Event's commentators and holding text
+
+Accepted · 2026-10-28. Amends ADR-0010's exempt surface.
+
+Outside tools need the commentators' names and the holding text for an Event, and have no session or Screen Output Asset Capability to present.
+
+### Decision
+
+**`GET /api/public/events/:id/on-air` is unauthenticated** and answers `{ eventId, eventName, holdingText, talent: [{ slot, name }] }`, `talent` being the Event's commentator 1 and 2 Talents that are set, in slot order. It sends `access-control-allow-origin: *` and `cache-control: no-store`. An unknown Event is a 404.
+
+**`/api/public/` joins ADR-0010's exempt prefixes.** Everything under it is public by name, so a route belongs there only if anyone on the internet may read what it answers.
+
+### Why
+
+A stopgap that works now. Names and wording an operator puts on air are not secret; nothing else is exposed.
+
+### Consequences
+
+- Anyone can enumerate Events by id and read their names, commentator names and holding text.
+- Contradicts ADR-0010's rejection of a stopgap boundary only in spirit: that rejected a shared token in front of private routes, not a public read of on-air text.
+- Replace with a capability- or token-scoped read when a real integration needs one.
