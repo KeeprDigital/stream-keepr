@@ -24,6 +24,10 @@ const props = defineProps<{
 	statText: string | null;
 	statBadgeClass: string;
 	statBadgeStyle: Record<string, string>;
+	/** The card's points, for a host that badges them; `null` or absent shows no badge. */
+	pointsText?: string | null;
+	pointsBadgeClass?: string;
+	pointsBadgeStyle?: Record<string, string>;
 	/** The card's face, which shows when it has no image. */
 	cardStyle?: Record<string, string>;
 }>();
@@ -76,6 +80,15 @@ watch(() => props.entry.scryfallId, () => {
 				:style="statBadgeStyle"
 			>
 				{{ statText }}
+			</div>
+			<div
+				v-if="pointsText"
+				data-testid="top-cards-points-badge"
+				class="absolute rounded-md tabular-nums"
+				:class="pointsBadgeClass"
+				:style="pointsBadgeStyle"
+			>
+				{{ pointsText }}
 			</div>
 		</div>
 		<div

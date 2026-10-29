@@ -27,8 +27,10 @@ const TOP_CARDS_MAX_LIMIT = 60;
  * The Most Played Cards Screen Mode's config contract: a ranked grid of the most played
  * cards in the event's metagame, rendered as card images the way the Deck Screen
  * renders a deck. It is scoped by the Metagame Scope, less Minimum Points, which
- * it never offered; `excludedCardTypes` is applied server-side before `limit`,
- * so a filtered top N still fills N slots.
+ * it never offered; `excludedCardTypes` and `pointedOnly` are applied
+ * server-side before `limit`, so a filtered top N still fills N slots. While
+ * `pointedOnly` is on, Nonbasic Land is never excluded: a pointed land such as
+ * Strip Mine is as much a pointed pick as any other card.
  *
  * Its Page Rotation pages the ranking by cards: `cardsPerPage` a page, however
  * many columns the Screen lays them out in, so a page count never depends on
@@ -53,6 +55,8 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	sortBy: editorField(z.enum(METAGAME_CARD_SORT_BY_VALUES), { label: 'Rank by' }),
 	limit: editorField(z.number().int().min(1).max(TOP_CARDS_MAX_LIMIT), { label: 'Card count' }),
 	excludedCardTypes: z.array(z.enum(CARD_TYPE_BUCKET_ORDER)).max(CARD_TYPE_BUCKET_ORDER.length),
+	/** Only cards the Event's points system points, applied server-side before `limit`. */
+	pointedOnly: editorField(z.boolean(), { label: 'Pointed only' }),
 
 	// Grid layout
 	columns: editorField(z.number().int().min(1).max(12), { label: 'Columns' }),
@@ -79,6 +83,10 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	statBadge: editorField(z.enum(TOP_CARDS_STAT_VALUES), { label: 'Stat badge' }),
 	statBadgePosition: editorField(z.enum(QUANTITY_POSITION_VALUES), { label: 'Badge position' }),
 	statBadgeTextSize: editorField(z.number().int().min(8).max(48), { label: 'Badge text size' }),
+	/** A pointed card's points from the Event's points system; an unpointed card shows none. */
+	showPointsBadges: editorField(z.boolean(), { label: 'Show point badges' }),
+	pointsBadgePosition: editorField(z.enum(QUANTITY_POSITION_VALUES), { label: 'Badge position' }),
+	pointsBadgeTextSize: editorField(z.number().int().min(8).max(48), { label: 'Badge text size' }),
 }, {
 	...DEFAULT_METAGAME_SCOPE_WITHOUT_MIN_POINTS,
 	archetypeFilter: undefined,
@@ -88,6 +96,7 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	// Nonbasic lands read as noise in a "most played" ranking; basics never
 	// reach the breakdown at all.
 	excludedCardTypes: ['Land'],
+	pointedOnly: false,
 	columns: 5,
 	autoColumns: false,
 	cardSizing: 'fit',
@@ -102,6 +111,9 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	statBadge: 'inclusionRate',
 	statBadgePosition: 'bottom-right',
 	statBadgeTextSize: 14,
+	showPointsBadges: false,
+	pointsBadgePosition: 'top-right',
+	pointsBadgeTextSize: 14,
 }, {
 	formerFields: [
 		'rankBadgeTextColor',

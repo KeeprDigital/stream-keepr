@@ -33,6 +33,7 @@ defineExpose({ resetConfig, saving });
 // Edits still go through the Page Rotation's `updateConfig` below (ADR-0039).
 const fields = screenModeConfigContract('top-cards').fields;
 
+const eventStore = useEventStore();
 const playerStore = usePlayerStore();
 const playerListStore = usePlayerListStore();
 
@@ -122,7 +123,7 @@ const statBadgeOptions = [
 ];
 
 function isTypeExcluded(bucket: CardTypeBucket): boolean {
-	return config.value.excludedCardTypes.includes(bucket);
+	return !isTypeLocked(bucket) && config.value.excludedCardTypes.includes(bucket);
 }
 
 function toggleType(bucket: CardTypeBucket) {
@@ -131,6 +132,18 @@ function toggleType(bucket: CardTypeBucket) {
 		: [...config.value.excludedCardTypes, bucket];
 
 	updateConfig({ excludedCardTypes: excluded, currentPage: 1 });
+}
+
+// Points come from the Event's points system. A Screen left filtering to
+// pointed cards, or badging their points, keeps its toggle, so it can be
+// turned back off.
+const hasPointsSystem = computed(() => !!eventStore.event?.pointsSystem);
+const showsPointedOnly = computed(() => hasPointsSystem.value || config.value.pointedOnly);
+const showsPointsBadges = computed(() => hasPointsSystem.value || config.value.showPointsBadges);
+
+/** Ranking pointed cards keeps nonbasic lands in, whatever the Land filter holds. */
+function isTypeLocked(bucket: CardTypeBucket): boolean {
+	return bucket === 'Land' && config.value.pointedOnly;
 }
 
 function typeLabel(bucket: CardTypeBucket): string {
@@ -178,6 +191,14 @@ function typeLabel(bucket: CardTypeBucket): string {
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Filters">
+			<ScreenSettingsToggle
+				v-if="showsPointedOnly"
+				:label="fields.pointedOnly.label"
+				description="Rank only cards the Event's points system gives points, pointed lands such as Strip Mine included."
+				:model-value="config.pointedOnly"
+				@update:model-value="updateConfig({ pointedOnly: $event, currentPage: 1 })"
+			/>
+
 			<UFormField
 				label="Card types"
 				description="Toggle which card types appear in the ranking. Basic lands are always excluded."
@@ -191,6 +212,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 						:variant="isTypeExcluded(bucket) ? 'outline' : 'solid'"
 						:color="isTypeExcluded(bucket) ? 'neutral' : 'primary'"
 						size="xs"
+						:disabled="isTypeLocked(bucket)"
 						:data-testid="`top-cards-type-${bucket}`"
 						@click="toggleType(bucket)"
 					/>
@@ -429,6 +451,53 @@ function typeLabel(bucket: CardTypeBucket): string {
 						@update:model-value="updateConfig({ statBadgeTextSize: Number($event) })"
 					/>
 				</UFormField>
+			</template>
+
+			<template v-if="showsPointsBadges">
+				<USeparator />
+
+				<p class="text-xs font-semibold uppercase tracking-wider text-muted">
+					Point Badge
+				</p>
+
+				<ScreenSettingsToggle
+					:label="fields.showPointsBadges.label"
+					description="Show each pointed card's points from the Event's points system."
+					:model-value="config.showPointsBadges"
+					@update:model-value="updateConfig({ showPointsBadges: $event })"
+				/>
+
+				<template v-if="config.showPointsBadges">
+					<USeparator />
+
+					<UFormField
+						:label="fields.pointsBadgePosition.label"
+						description="Where the badge appears on the card."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<UINinePointPicker
+							:model-value="config.pointsBadgePosition"
+							:disabled-points="BADGE_DISABLED_POINTS"
+							aria-label="Point badge position"
+							@update:model-value="updateConfig({ pointsBadgePosition: $event as QuantityPosition })"
+						/>
+					</UFormField>
+
+					<UFormField
+						:label="fields.pointsBadgeTextSize.label"
+						description="The badge's text size in px; the badge sizes itself around it."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<UInputNumber
+							:model-value="config.pointsBadgeTextSize"
+							:min="fields.pointsBadgeTextSize.min"
+							:max="fields.pointsBadgeTextSize.max"
+							class="w-32"
+							aria-label="Point badge text size"
+							@update:model-value="updateConfig({ pointsBadgeTextSize: Number($event) })"
+						/>
+					</UFormField>
+				</template>
 			</template>
 		</ScreenSettingsCard>
 	</div>

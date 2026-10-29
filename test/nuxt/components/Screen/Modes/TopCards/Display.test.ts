@@ -39,6 +39,9 @@ const defaultConfig = {
 	statBadge: 'inclusionRate',
 	statBadgePosition: 'bottom-right',
 	statBadgeTextSize: 14,
+	showPointsBadges: false,
+	pointsBadgePosition: 'top-right',
+	pointsBadgeTextSize: 14,
 };
 
 const config = ref<any>({ ...defaultConfig });
@@ -107,6 +110,9 @@ const TopCardsCardStub = defineComponent({
 		rankBadgeStyle: { type: Object, required: true },
 		statBadgeClass: { type: String, required: true },
 		statBadgeStyle: { type: Object, required: true },
+		pointsText: { type: String, required: false },
+		pointsBadgeClass: { type: String, required: false },
+		pointsBadgeStyle: { type: Object, required: false },
 	},
 	template: `<div
 		data-testid="top-cards-item"
@@ -116,6 +122,9 @@ const TopCardsCardStub = defineComponent({
 		:data-rank-badge-size="rankBadgeStyle.fontSize"
 		:data-stat-badge-class="statBadgeClass"
 		:data-stat-badge-size="statBadgeStyle.fontSize"
+		:data-points="pointsText ?? undefined"
+		:data-points-badge-class="pointsBadgeClass"
+		:data-points-badge-size="pointsBadgeStyle?.fontSize"
 	>{{ rank }}:{{ entry.name }}:{{ statText ?? "-" }}:{{ showRank }}:{{ showName }}</div>`,
 });
 
@@ -303,6 +312,29 @@ describe('screenTopCardsDisplay', () => {
 		expect(card.attributes('data-rank-badge-size')).toBe(`${badges.rankBadgeTextSize}px`);
 		expect(card.attributes('data-stat-badge-class')).toBe(CARD_BADGE_POSITION_CLASSES[badges.statBadgePosition]);
 		expect(card.attributes('data-stat-badge-size')).toBe(`${badges.statBadgeTextSize}px`);
+	});
+
+	// Points come from the Event's points system: a card it leaves out, or a Screen not badging them, shows none.
+	it.each([
+		{ showPointsBadges: true, highlanderPoints: 2, shown: '2' },
+		{ showPointsBadges: true, highlanderPoints: 0, shown: '0' },
+		{ showPointsBadges: true, highlanderPoints: null, shown: undefined },
+		{ showPointsBadges: false, highlanderPoints: 2, shown: undefined },
+	])('badges a card with $highlanderPoints points, badges $showPointsBadges: $shown', async ({ showPointsBadges, highlanderPoints, shown }) => {
+		config.value = {
+			...config.value,
+			showPointsBadges,
+			pointsBadgePosition: 'left',
+			pointsBadgeTextSize: 20,
+		};
+		entries.value[0] = { ...entries.value[0], highlanderPoints };
+
+		const wrapper = await mountComponent();
+
+		const card = wrapper.get('[data-testid="top-cards-item"]');
+		expect(card.attributes('data-points')).toBe(shown);
+		expect(card.attributes('data-points-badge-class')).toBe(CARD_BADGE_POSITION_CLASSES.left);
+		expect(card.attributes('data-points-badge-size')).toBe('20px');
 	});
 
 	it('passes no stat text when the stat badge is off', async () => {

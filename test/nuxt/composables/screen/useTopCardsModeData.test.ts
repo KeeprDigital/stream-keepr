@@ -26,6 +26,7 @@ const defaultConfig = {
 	sortBy: 'inclusionRate' as const,
 	limit: 10,
 	excludedCardTypes: ['Land'] as string[],
+	pointedOnly: false,
 	columns: 5,
 	autoColumns: false,
 	cardSizing: 'fit' as 'fit' | 'fixed',
@@ -107,6 +108,11 @@ describe('useTopCardsModeData', () => {
 			'Most Played Cards: Mono Red',
 		],
 		[
+			'the pointed filter',
+			{ scope: 'topN', topN: 8, pointedOnly: true },
+			'Top 8 Most Played Pointed Cards',
+		],
+		[
 			'a custom header',
 			{ headerText: 'The Chase Cards' },
 			'The Chase Cards',
@@ -147,9 +153,26 @@ describe('useTopCardsModeData', () => {
 	});
 
 	it.each([
-		['no decks', 0, 'No players in this event'],
-		['decks but no card data', 4, 'No card data available'],
-	])('is empty with a message for a field with %s', async (_, totalDecks, expected) => {
+		{
+			field: 'no decks',
+			totalDecks: 0,
+			pointedOnly: false,
+			expected: 'No players in this event',
+		},
+		{
+			field: 'decks but no card data',
+			totalDecks: 4,
+			pointedOnly: false,
+			expected: 'No card data available',
+		},
+		{
+			field: 'decks but no pointed cards',
+			totalDecks: 4,
+			pointedOnly: true,
+			expected: 'No pointed cards played',
+		},
+	])('is empty with a message for a field with $field', async ({ totalDecks, pointedOnly, expected }) => {
+		mutableConfig.pointedOnly = pointedOnly;
 		mockFetch.mockResolvedValue({ entries: [], totalDecks, scope: 'all' });
 
 		const { isEmpty, emptyMessage } = makeTopCardsModeData();

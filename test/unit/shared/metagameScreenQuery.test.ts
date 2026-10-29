@@ -1,6 +1,6 @@
 import type { ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
-import { metagameArchetypeDetailQuerySchema, metagameArchetypesQuerySchema } from '~~/server/schemas/api/metagame';
+import { metagameArchetypeDetailQuerySchema, metagameArchetypesQuerySchema, metagameCardsQuerySchema } from '~~/server/schemas/api/metagame';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import { archetypeSpotlightScreenQuery, metagameScreenQuery, topCardsScreenQuery } from '~~/shared/utils/metagameQuery';
@@ -121,6 +121,28 @@ describe('topCardsScreenQuery', () => {
 		const { scope, playerListId, archetype } = screenQuery({ ...stored, viewMode: 'cards' }).query as Record<string, unknown>;
 
 		expect(topCardsQuery(stored)).toMatchObject({ scope, playerListId, archetype });
+	});
+
+	// A pointed land such as Strip Mine is a pointed pick, so ranking pointed cards keeps nonbasic lands in.
+	it.each([
+		{
+			pointedOnly: true,
+			asked: true,
+			excludeTypes: ['Creature'],
+		},
+		{
+			pointedOnly: false,
+			asked: undefined,
+			excludeTypes: ['Land', 'Creature'],
+		},
+	])('asks for pointed cards only while the Screen filters to them: $pointedOnly', ({ pointedOnly, asked, excludeTypes }) => {
+		const query = metagameCardsQuerySchema.parse(topCardsQuery({
+			pointedOnly,
+			excludedCardTypes: ['Land', 'Creature'],
+		}));
+
+		expect(query.pointedOnly).toBe(asked);
+		expect(query.excludeTypes).toEqual(excludeTypes);
 	});
 
 	it('reads a Minimum Points scope, which it never offered, with no minimum', () => {

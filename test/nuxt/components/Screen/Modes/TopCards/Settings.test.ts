@@ -34,6 +34,7 @@ const defaultConfig = {
 	sortBy: 'inclusionRate' as const,
 	limit: 10,
 	excludedCardTypes: ['Land'],
+	pointedOnly: false,
 	columns: 5,
 	autoColumns: false,
 	cardSizing: 'fit',
@@ -50,6 +51,9 @@ const defaultConfig = {
 	statBadge: 'inclusionRate' as const,
 	statBadgePosition: 'bottom-right' as const,
 	statBadgeTextSize: 14,
+	showPointsBadges: false,
+	pointsBadgePosition: 'top-right' as const,
+	pointsBadgeTextSize: 14,
 };
 
 const mockConfig = ref<Record<string, any>>({ ...defaultConfig });
@@ -82,7 +86,12 @@ mockNuxtImport('useServerTime', () => () => ({
 	getServerTime: () => 1_000_000.25,
 }));
 
-mockNuxtImport('useEventStore', () => () => ({ eventId: 1 }));
+const mockEventStore = {
+	eventId: 1,
+	event: { pointsSystem: '7ph' as string | null },
+};
+
+mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('usePlayerListStore', () => () => mockPlayerListStore);
 mockNuxtImport('useModeConfigUpdate', () => () => ({
@@ -141,9 +150,10 @@ const UButtonStub = defineComponent({
 		label: { type: String, required: false },
 		variant: { type: String, required: false },
 		color: { type: String, required: false },
+		disabled: { type: Boolean, required: false },
 	},
 	emits: ['click'],
-	template: '<button type="button" :data-variant="variant" @click="$emit(\'click\')">{{ label }}</button>',
+	template: '<button type="button" :data-variant="variant" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
 });
 
 const UInputNumberStub = defineComponent({
@@ -215,6 +225,7 @@ describe('screenTopCardsSettings', () => {
 		mockConfig.value = structuredClone(defaultConfig);
 		mockPlayerStore.isLoaded = false;
 		mockPlayerListStore.isLoaded = false;
+		mockEventStore.event = { pointsSystem: '7ph' };
 		mockFetch.mockReset();
 		mockFetch.mockResolvedValue(ranking(10));
 	});
@@ -250,6 +261,87 @@ describe('screenTopCardsSettings', () => {
 		expect(mockUpdateConfig).toHaveBeenCalledWith({
 			excludedCardTypes: ['Land', 'Creature'],
 			currentPage: 1,
+		});
+	});
+
+	describe('pointed only', () => {
+		// Points come from the Event's points system; a Screen left filtering keeps its way back.
+		it.each([
+			{ pointsSystem: '7ph', pointedOnly: false, offered: true },
+			{ pointsSystem: null, pointedOnly: false, offered: false },
+			{ pointsSystem: null, pointedOnly: true, offered: true },
+		])('offers the filter with points system $pointsSystem, filtering $pointedOnly: $offered', async ({ pointsSystem, pointedOnly, offered }) => {
+			mockEventStore.event = { pointsSystem };
+			mockConfig.value = { ...mockConfig.value, pointedOnly };
+			const wrapper = await mountComponent();
+
+			const pointed = toggle(wrapper, 'Pointed only');
+			expect(pointed?.exists() ?? false).toBe(offered);
+			if (offered)
+				expect(pointed.attributes('aria-pressed')).toBe(String(pointedOnly));
+		});
+
+		it.each([
+			{ pointedOnly: false, written: true },
+			{ pointedOnly: true, written: false },
+		])('turns the filter from $pointedOnly', async ({ pointedOnly, written }) => {
+			mockConfig.value = { ...mockConfig.value, pointedOnly };
+			const wrapper = await mountComponent();
+
+			await toggle(wrapper, 'Pointed only').trigger('click');
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith({ pointedOnly: written, currentPage: 1 });
+		});
+
+		// The Screen ranks pointed lands whatever the Land filter holds, so the chip shows them in and can't be turned off.
+		it.each([
+			{ pointedOnly: true, variant: 'solid', locked: true },
+			{ pointedOnly: false, variant: 'outline', locked: false },
+		])('shows Nonbasic Land in while filtering $pointedOnly', async ({ pointedOnly, variant, locked }) => {
+			mockConfig.value = {
+				...mockConfig.value,
+				pointedOnly,
+				excludedCardTypes: ['Land'],
+			};
+			const wrapper = await mountComponent();
+
+			const land = wrapper.get('[data-testid="top-cards-type-Land"]');
+			expect(land.attributes('data-variant')).toBe(variant);
+			expect(land.attributes('disabled') !== undefined).toBe(locked);
+		});
+	});
+
+	describe('point badges', () => {
+		it.each([
+			{ pointsSystem: '7ph', showPointsBadges: false, offered: true },
+			{ pointsSystem: null, showPointsBadges: false, offered: false },
+			{ pointsSystem: null, showPointsBadges: true, offered: true },
+		])('offers point badges with points system $pointsSystem, badging $showPointsBadges: $offered', async ({ pointsSystem, showPointsBadges, offered }) => {
+			mockEventStore.event = { pointsSystem };
+			mockConfig.value = { ...mockConfig.value, showPointsBadges };
+			const wrapper = await mountComponent();
+
+			expect(toggle(wrapper, 'Show point badges')?.exists() ?? false).toBe(offered);
+		});
+
+		it('turns point badges on', async () => {
+			const wrapper = await mountComponent();
+
+			await toggle(wrapper, 'Show point badges').trigger('click');
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith({ showPointsBadges: true });
+		});
+
+		// A hidden badge offers no place or size.
+		it.each([
+			{ showPointsBadges: true, offered: true },
+			{ showPointsBadges: false, offered: false },
+		])('offers a place and size while badging $showPointsBadges', async ({ showPointsBadges, offered }) => {
+			mockConfig.value = { ...mockConfig.value, showPointsBadges };
+			const wrapper = await mountComponent();
+
+			expect(labelled(wrapper, UINinePointPickerStub, 'Point badge position') !== undefined).toBe(offered);
+			expect(labelled(wrapper, UInputNumberStub, 'Point badge text size') !== undefined).toBe(offered);
 		});
 	});
 

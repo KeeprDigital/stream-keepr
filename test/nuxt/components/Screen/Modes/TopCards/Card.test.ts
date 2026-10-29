@@ -77,6 +77,20 @@ describe('screenTopCardsCard', () => {
 		expect(wrapper.find('[data-testid="top-cards-name"]').exists()).toBe(false);
 	});
 
+	it.each([
+		{ pointsText: '2', shown: true },
+		{ pointsText: null, shown: false },
+	])('shows points $pointsText: $shown', ({ pointsText, shown }) => {
+		const wrapper = mount(Card, {
+			props: { ...baseProps, pointsText },
+		});
+
+		const badge = wrapper.find('[data-testid="top-cards-points-badge"]');
+		expect(badge.exists()).toBe(shown);
+		if (shown)
+			expect(badge.text()).toBe(pointsText);
+	});
+
 	it('shows the card name label when enabled', () => {
 		const wrapper = mount(Card, { props: baseProps });
 

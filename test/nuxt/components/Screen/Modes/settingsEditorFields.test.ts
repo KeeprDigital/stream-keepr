@@ -139,6 +139,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 				cardSizing: 'fixed',
 				autoPageEnabled: true,
 				cardsPerPage: 5,
+				showPointsBadges: true,
 			},
 		],
 	},
