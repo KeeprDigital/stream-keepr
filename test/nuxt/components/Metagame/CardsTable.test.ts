@@ -65,4 +65,49 @@ describe('metagameCardsTable', () => {
 	])('shows the Decks column unless the host opts out (%o)', (props, shown) => {
 		expect(mountCardsTable(props).find('[data-column="deckCount"]').exists()).toBe(shown);
 	});
+
+	it.each([
+		[{}, false],
+		[
+			{ showPoints: true },
+			true,
+		],
+	])('shows the Points column and Pointed only toggle only with a points system (%o)', (props, shown) => {
+		const wrapper = mountCardsTable(props);
+
+		expect(wrapper.find('[data-column="highlanderPoints"]').exists()).toBe(shown);
+		expect(wrapper.text().includes('Pointed only')).toBe(shown);
+	});
+
+	it.each([
+		[false, 'false', true],
+		[true, 'true', false],
+	])('with pointedOnly %s the toggle is pressed %s and asks for %s', async (pointedOnly, pressed, next) => {
+		const wrapper = mountCardsTable({ showPoints: true, pointedOnly });
+		const toggle = wrapper.findAll('button').find(button => button.text() === 'Pointed only')!;
+
+		expect(toggle.attributes('aria-pressed')).toBe(pressed);
+		await toggle.trigger('click');
+		expect(wrapper.emitted('update:pointedOnly')).toEqual([
+			[next],
+		]);
+	});
+
+	it('shows pointed lands once the pointed view is on', async () => {
+		const stripMine = {
+			...lightningBolt,
+			id: 2,
+			name: 'Strip Mine',
+			cardType: 'Land',
+			highlanderPoints: 2,
+		};
+		const wrapper = mountCardsTable({
+			entries: [stripMine],
+			showPoints: true,
+		});
+
+		expect(wrapper.text()).not.toContain('Strip Mine');
+		await wrapper.setProps({ pointedOnly: true });
+		expect(wrapper.text()).toContain('Strip Mine');
+	});
 });

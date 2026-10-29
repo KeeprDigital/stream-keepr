@@ -84,7 +84,7 @@ describe('metagame client module', () => {
 		]);
 	});
 
-	it('defaults card sorting and limit, trims the archetype filter, and drops a blank one', async () => {
+	it('defaults card sorting and limit, trims the archetype filter, and drops a blank one or an unset pointedOnly', async () => {
 		const client = useMetagameClient();
 		await client.loadCardBreakdown(1, { scope: 'playerList', playerListId: 5 }, {
 			sortBy: 'totalCopies',
@@ -92,8 +92,9 @@ describe('metagame client module', () => {
 			board: 'sideboard',
 			archetypeId: 9,
 			archetype: ' Mono Red ',
+			pointedOnly: true,
 		});
-		await client.loadCardBreakdown(1, { scope: 'all' }, { archetype: '  ' });
+		await client.loadCardBreakdown(1, { scope: 'all' }, { archetype: '  ', pointedOnly: false });
 
 		expect(mockFetch.mock.calls).toEqual([
 			[
@@ -107,6 +108,7 @@ describe('metagame client module', () => {
 						board: 'sideboard',
 						archetypeId: 9,
 						archetype: 'Mono Red',
+						pointedOnly: 'true',
 					},
 				},
 			],

@@ -65,6 +65,8 @@ export const metagameCardsQuerySchema = metagameCardTableQuerySchema.and(z.objec
 	/** Legacy Screen config filter by archetype name */
 	archetype: z.string().trim().min(1).max(200).optional(),
 	excludeTypes: metagameExcludeTypesSchema.optional(),
+	/** Only cards the Event's points system points, applied before `limit`. */
+	pointedOnly: z.enum(['true', 'false']).transform(value => value === 'true').optional(),
 }));
 
 /**

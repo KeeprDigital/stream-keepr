@@ -122,4 +122,15 @@ describe('metagameCardsQuerySchema', () => {
 	it.each(['Land,Tribal', ''])('refuses excludeTypes %j', (excludeTypes) => {
 		expect(metagameCardsQuerySchema.safeParse({ scope: 'all', excludeTypes }).success).toBe(false);
 	});
+
+	it.each([
+		['true', true],
+		['false', false],
+	])('reads pointedOnly %j as %j', (pointedOnly, expected) => {
+		expect(metagameCardsQuerySchema.parse({ scope: 'all', pointedOnly }).pointedOnly).toBe(expected);
+	});
+
+	it.each(['yes', '1', ''])('refuses pointedOnly %j', (pointedOnly) => {
+		expect(metagameCardsQuerySchema.safeParse({ scope: 'all', pointedOnly }).success).toBe(false);
+	});
 });

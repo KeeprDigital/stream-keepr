@@ -10,15 +10,21 @@ const props = withDefaults(defineProps<{
 	sortBy: MetagameCardSortBy;
 	boardFilter: BoardSelection;
 	showDeckCount?: boolean;
+	/** The Event has a points system: show each card's points and the Pointed only toggle. */
+	showPoints?: boolean;
+	pointedOnly?: boolean;
 	/** When provided, row clicks navigate to this path */
 	getRowLink?: (entry: CardBreakdownEntry) => string;
 }>(), {
 	showDeckCount: true,
+	showPoints: false,
+	pointedOnly: false,
 });
 
 const emit = defineEmits<{
 	(e: 'update:sortBy', value: MetagameCardSortBy): void;
 	(e: 'update:boardFilter', value: BoardSelection): void;
+	(e: 'update:pointedOnly', value: boolean): void;
 }>();
 
 // ── Filters ──
@@ -38,6 +44,12 @@ const {
 	filteredEntries,
 } = useMetagameCardFilters(computed(() => props.entries), {
 	defaultExcludedTypes: ['Land'],
+});
+
+// Pointed lands (Strip Mine, Wasteland, …) belong in the pointed view, so it shows lands.
+watch(() => props.pointedOnly, (pointedOnly) => {
+	if (pointedOnly && excludedTypes.value.has('Land'))
+		toggleType('Land');
 });
 
 function toggleMainboard() {
@@ -82,6 +94,15 @@ const columns = computed<TableColumn<CardBreakdownEntry>[]>(() => [
 	createNameColumn<CardBreakdownEntry>(),
 	createManaCostColumn<CardBreakdownEntry>(),
 	createCardTypeColumn<CardBreakdownEntry>(),
+	...(props.showPoints
+		? [
+				{
+					accessorKey: 'highlanderPoints',
+					header: createSortableHeader('Points'),
+					enableSorting: true,
+				} satisfies TableColumn<CardBreakdownEntry>,
+			]
+		: []),
 	{
 		accessorKey: 'inclusionRate',
 		header: createSortableHeader('Inclusion'),
@@ -171,6 +192,16 @@ const maxInclusionRate = computed(() =>
 						Side
 					</UButton>
 				</UFieldGroup>
+				<UButton
+					v-if="showPoints"
+					size="sm"
+					:color="pointedOnly ? 'primary' : 'neutral'"
+					:variant="pointedOnly ? 'soft' : 'outline'"
+					:aria-pressed="pointedOnly ? 'true' : 'false'"
+					@click="emit('update:pointedOnly', !pointedOnly)"
+				>
+					Pointed only
+				</UButton>
 				<span v-if="hasExclusions || hasFilterOverrides" class="text-xs text-muted">
 					{{ hasExclusions ? `${visibleExcludedTypes.length} type${visibleExcludedTypes.length === 1 ? '' : 's'} hidden` : 'Filters changed' }}
 					<UButton
@@ -209,6 +240,9 @@ const maxInclusionRate = computed(() =>
 				:ui="getRowLink ? { tr: 'cursor-pointer transition-colors' } : {}"
 				@select="handleRowClick"
 			>
+				<template #highlanderPoints-cell="{ row }">
+					<span v-if="row.original.highlanderPoints" class="tabular-nums font-semibold text-primary">{{ row.original.highlanderPoints }}</span>
+				</template>
 				<template #inclusionRate-cell="{ row }">
 					<MetagameMetaShareBar :value="row.original.inclusionRate" :max="maxInclusionRate" />
 				</template>

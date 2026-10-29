@@ -25,6 +25,7 @@ export interface MetagameCardBreakdownQuery extends MetagameScopeQuery {
 	board?: BoardSelection;
 	archetype?: string;
 	excludeTypes?: CardTypeBucket[];
+	pointedOnly?: boolean;
 }
 
 export interface MetagameArchetypeDetailQuery extends MetagameScopeQuery {
@@ -71,6 +72,7 @@ export function metagameReadModel() {
 				query.archetype,
 				query.excludeTypes,
 				query.minPoints,
+				query.pointedOnly,
 			);
 		},
 		getArchetypeDetail(eventId: number, query: MetagameArchetypeDetailQuery) {
