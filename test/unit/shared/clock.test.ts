@@ -2,6 +2,7 @@ import type { ClockState } from '~~/shared/types/featureMatchState';
 import { describe, expect, it } from 'vitest';
 import {
 	applyClockAdjustment,
+	formatClockDisplay,
 	formatClockTime,
 	getEffectiveElapsedMs,
 	normalizeTimeInput,
@@ -19,6 +20,72 @@ describe('formatClockTime', () => {
 		[3_661_000, '1:01:01'],
 	])('formats %i ms as %s', (ms, expected) => {
 		expect(formatClockTime(ms)).toBe(expected);
+	});
+});
+
+describe('formatClockDisplay', () => {
+	const NOW = 1_000_000;
+	const clock = (overrides: Partial<ClockState>): ClockState => ({
+		type: 'countdown',
+		durationMs: 600_000,
+		elapsedMs: 0,
+		isRunning: false,
+		lastStartedAt: null,
+		countUpAfterCountdown: false,
+		...overrides,
+	});
+
+	it.each([
+		{
+			name: 'no clock',
+			state: null,
+			label: '',
+			expected: '0:00',
+		},
+		{
+			name: 'a countdown with time left',
+			state: clock({ elapsedMs: 300_000 }),
+			label: '',
+			expected: '5:00',
+		},
+		{
+			name: 'a running countdown, by now',
+			state: clock({ isRunning: true, lastStartedAt: NOW - 90_000 }),
+			label: '',
+			expected: '8:30',
+		},
+		{
+			name: 'an expired countdown',
+			state: clock({ elapsedMs: 700_000 }),
+			label: '',
+			expected: '0:00',
+		},
+		{
+			name: 'an expired countdown that counts up after',
+			state: clock({ elapsedMs: 700_000, countUpAfterCountdown: true }),
+			label: '',
+			expected: '1:40',
+		},
+		{
+			name: 'a count-up clock',
+			state: clock({ type: 'countup', elapsedMs: 90_000 }),
+			label: '',
+			expected: '1:30',
+		},
+		{
+			name: 'an untimed clock',
+			state: clock({ type: 'untimed' }),
+			label: ' Untimed ',
+			expected: 'Untimed',
+		},
+		{
+			name: 'an untimed clock with a blank label',
+			state: clock({ type: 'untimed' }),
+			label: '',
+			expected: '',
+		},
+	])('shows $name as "$expected"', ({ state, label, expected }) => {
+		expect(formatClockDisplay(state, NOW, label)).toBe(expected);
 	});
 });
 

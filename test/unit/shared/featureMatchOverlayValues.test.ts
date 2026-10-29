@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildFeatureMatchOverlayTemplateMetadataValues } from '~/utils/featureMatchOverlayTemplateValues';
+import { buildFeatureMatchOverlayTemplateMetadataValues } from '~~/shared/featureMatchOverlayValues';
 
 describe('broadcast layout template metadata values', () => {
 	it('populates event, stage, round, format, and table placeholders', () => {

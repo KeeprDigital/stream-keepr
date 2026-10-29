@@ -2,7 +2,7 @@ import type { MaybeRefOrGetter } from 'vue';
 import type { ClockState } from '~~/shared/types/featureMatchState';
 import { useIntervalFn } from '@vueuse/core';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
-import { formatClockTime } from '~~/shared/utils/clock';
+import { formatClockDisplay } from '~~/shared/utils/clock';
 
 /**
  * Composable that encapsulates clock display logic:
@@ -83,25 +83,10 @@ export function useClockDisplay(clock: MaybeRefOrGetter<ClockState | null>) {
 	});
 
 	const displayTime = computed(() => {
-		const c = toValue(clock);
-		if (!c)
-			return '0:00';
-		if (isUntimed.value)
-			return untimedLabel.value;
-
 		// Read tick to trigger reactivity while running
-		if (c.isRunning)
+		if (toValue(clock)?.isRunning)
 			void tick.value;
-
-		if (c.type === 'countdown') {
-			const elapsed = getElapsedMs();
-			// When expired and countUpAfterCountdown is enabled, show overtime elapsed
-			if (c.countUpAfterCountdown && elapsed >= c.durationMs) {
-				return formatClockTime(elapsed - c.durationMs);
-			}
-			return formatClockTime(Math.max(0, c.durationMs - elapsed));
-		}
-		return formatClockTime(getElapsedMs());
+		return formatClockDisplay(toValue(clock), getServerTime(), untimedLabel.value);
 	});
 
 	const timeColorClass = computed(() => {

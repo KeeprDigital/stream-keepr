@@ -186,7 +186,11 @@ describe('the public surface, counted against the routes on disk', () => {
 			// The first-admin bootstrap, armed by a Worker secret and 503 without
 			// it. It exists for the installation that has no account to sign in to.
 			'server/api/bootstrap/ensure-admin.post.ts',
-			// A stopgap for outside tools: commentator names and holding text only (ADR-0055).
+			// Stopgaps for outside tools: a Feature Match Slot as its Overlay shows
+			// it (ADR-0056), and commentator names and holding text (ADR-0055).
+			'server/api/public/events/[id]/commentators.get.ts',
+			'server/api/public/events/[id]/feature-match-slots/[slotId].get.ts',
+			'server/api/public/events/[id]/holding-text.get.ts',
 			'server/api/public/events/[id]/on-air.get.ts',
 			// An Ably token request. #397 narrows what an unauthenticated caller is
 			// granted; that is a change to what this issues, not to its reachability.

@@ -1774,6 +1774,8 @@ Outside tools need the commentators' names and the holding text for an Event, an
 
 **`GET /api/public/events/:id/on-air` is unauthenticated** and answers `{ eventId, eventName, holdingText, talent: [{ slot, name }] }`, `talent` being the Event's commentator 1 and 2 Talents that are set, in slot order. It sends `access-control-allow-origin: *` and `cache-control: no-store`. An unknown Event is a 404.
 
+**Two vMix-shaped reads answer the same facts as flat rows.** `GET /api/public/events/:id/commentators` answers `[{ commentator1, commentator2 }]` and `GET /api/public/events/:id/holding-text` answers `[{ holdingText }]`, with the same headers and 404. A vMix JSON Data Source reads an array as rows and shows `null` as text, so each is a one-element array and an unset value is an empty string.
+
 **`/api/public/` joins ADR-0010's exempt prefixes.** Everything under it is public by name, so a route belongs there only if anyone on the internet may read what it answers.
 
 ### Why
@@ -1785,3 +1787,25 @@ A stopgap that works now. Names and wording an operator puts on air are not secr
 - Anyone can enumerate Events by id and read their names, commentator names and holding text.
 - Contradicts ADR-0010's rejection of a stopgap boundary only in spirit: that rejected a shared token in front of private routes, not a public read of on-air text.
 - Replace with a capability- or token-scoped read when a real integration needs one.
+
+## ADR-0056: A stopgap public read shows a Feature Match Slot as its Overlay would
+
+Accepted · 2026-10-29. Extends ADR-0055.
+
+An Event is producing its Feature Match graphics in vMix rather than with a Feature Match Overlay, and vMix needs the Slot's names, records and clock without a session or a Screen Output Asset Capability.
+
+### Decision
+
+**`GET /api/public/events/:id/feature-match-slots/:slotId` is unauthenticated** under ADR-0055's `/api/public/` prefix, with the same `access-control-allow-origin: *` and `cache-control: no-store`. It answers a one-element array holding one row of strings, because a vMix JSON Data Source reads an array as rows and shows `null` as text: every Feature Match token the Overlay resolves (`player1Name`, `player1Record`, … `eventName`), plus `clock`, `player1Life`, `player1GameWins`, `player2Life` and `player2GameWins`. An unknown Event, or a Slot not of that Event, is a 404.
+
+**It applies the Overlay's display rules by sharing their code.** The token values moved from the app into `shared/featureMatchOverlayValues.ts`, and the clock's rendering into `formatClockDisplay` in `shared/utils/clock.ts`, which `useClockDisplay` now calls. The clock is read at request time: a countdown's remaining time, its overtime when it counts up after, an Untimed Match's Untimed Label (empty while blank), and `0:00` with no Session, as the Overlay shows it. A Slot without a Session starts none.
+
+### Why
+
+A stopgap that works now. Sharing the rules rather than copying them keeps vMix and an Overlay showing the same Slot identically.
+
+### Consequences
+
+- Anyone can enumerate Slots by id and read the Players' names, pronouns, LGS, records, decks and the live state of a Feature Match: what an Overlay would put on air.
+- vMix polls, so its clock is only as fresh as its polling interval; it does not tick between reads.
+- Replace with a capability- or token-scoped read when a real integration needs one, as ADR-0055 says.
