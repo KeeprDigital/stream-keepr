@@ -17,6 +17,10 @@ import { formatClockDisplay } from '~~/shared/utils/clock';
  * rows and would show `null` as the text "null". The tokens and the clock follow
  * the Overlay's own rules, the clock read at request time; an output must not
  * change live state by reading it, so a Slot with no Session starts none.
+ *
+ * A stopgap for vMix alone: each Player's first and second game win as a colour,
+ * white once won and transparent before, so a shape can bind to it. Eight hex
+ * digits read the same as ARGB or RGBA.
  */
 export default defineEventHandler(async (event) => {
 	const { id, slotId } = await getValidatedRouterParams(event, featureMatchSlotParamsSchema.parse);
@@ -44,6 +48,9 @@ export default defineEventHandler(async (event) => {
 	const lifeOf = (lifeTotal: number | null | undefined) => lifeTotal == null
 		? ''
 		: String(lifeTotal);
+	const winColour = (gameWins: number | undefined, game: number) => (gameWins ?? 0) >= game
+		? '#FFFFFFFF'
+		: '#00000000';
 
 	setResponseHeader(event, 'access-control-allow-origin', '*');
 	setResponseHeader(event, 'cache-control', 'no-store');
@@ -62,6 +69,10 @@ export default defineEventHandler(async (event) => {
 			player1GameWins: String(state?.player1.gameWins ?? 0),
 			player2Life: lifeOf(state?.player2.lifeTotal),
 			player2GameWins: String(state?.player2.gameWins ?? 0),
+			player1Game1Win: winColour(state?.player1.gameWins, 1),
+			player1Game2Win: winColour(state?.player1.gameWins, 2),
+			player2Game1Win: winColour(state?.player2.gameWins, 1),
+			player2Game2Win: winColour(state?.player2.gameWins, 2),
 		},
 	];
 });
