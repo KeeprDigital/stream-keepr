@@ -406,7 +406,7 @@ const timeoutProgress = computed(() => {
 	<USlideover
 		v-model:open="cardStore.showCardControls"
 		side="right"
-		:ui="{ content: `max-w-[clamp(180px,calc((100dvh-24rem)*61/170+2rem),360px)]` }"
+		:ui="{ content: `max-w-[clamp(180px,calc((100dvh-24rem)*61/170+2rem),360px)] sm:max-w-[clamp(180px,calc((100dvh-24rem)*61/170+2rem),360px)]` }"
 	>
 		<template #content>
 			<MtgCardControls />
