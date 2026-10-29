@@ -105,6 +105,8 @@ export interface CardBreakdownEntry {
 	sideboardDeckCount: number;
 	/** Number of decks containing this card */
 	deckCount: number;
+	/** The card's points under the Event's points system; absent when the Event has none. */
+	highlanderPoints?: number | null;
 }
 
 export interface CardBreakdownResponse {

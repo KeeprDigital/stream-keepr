@@ -14,6 +14,9 @@ const cardData = ref<CardBreakdownResponse | null>(null);
 const cardLoading = ref(false);
 const cardSortBy = ref<MetagameCardSortBy>('inclusionRate');
 const cardBoardFilter = ref<BoardSelection>('full');
+const cardPointedOnly = ref(false);
+
+const showsPoints = computed(() => !!eventStore.event?.pointsSystem);
 
 const hasDeckData = computed(() => playerStore.players.some(p => getMtgGameData(p.gameData).deckName));
 
@@ -26,7 +29,12 @@ async function fetchCards() {
 		() => metagameClient.loadCardBreakdown(
 			eventStore.eventId!,
 			metagameStore.scopeQuery,
-			{ sortBy: cardSortBy.value, limit: 100, board: cardBoardFilter.value },
+			{
+				sortBy: cardSortBy.value,
+				limit: 100,
+				board: cardBoardFilter.value,
+				pointedOnly: showsPoints.value && cardPointedOnly.value,
+			},
 		),
 		{
 			latestKey: 'cards',
@@ -53,7 +61,7 @@ const { initialLoading, initialError, retry } = useEventPageLoading([
 	},
 ], fetchPageData);
 
-watch([cardSortBy, cardBoardFilter], () => fetchCards());
+watch([cardSortBy, cardBoardFilter, cardPointedOnly], () => fetchCards());
 </script>
 
 <template>
@@ -81,9 +89,12 @@ watch([cardSortBy, cardBoardFilter], () => fetchCards());
 			:loading="cardLoading"
 			:sort-by="cardSortBy"
 			:board-filter="cardBoardFilter"
+			:show-points="showsPoints"
+			:pointed-only="cardPointedOnly"
 			:get-row-link="cardRowLink"
 			@update:sort-by="cardSortBy = $event"
 			@update:board-filter="cardBoardFilter = $event"
+			@update:pointed-only="cardPointedOnly = $event"
 		/>
 	</div>
 </template>

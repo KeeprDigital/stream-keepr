@@ -40,6 +40,8 @@ export interface MetagameCardBreakdownOptions {
 	archetype?: string;
 	/** Card-type buckets to drop server-side, before the limit applies. */
 	excludeTypes?: CardTypeBucket[];
+	/** Only cards the Event's points system points, before the limit applies. */
+	pointedOnly?: boolean;
 }
 
 export interface MetagameArchetypeDetailOptions extends MetagameConversionInput {
@@ -105,6 +107,9 @@ export function buildCardBreakdownQuery(
 			? {
 					excludeTypes: options.excludeTypes.join(','),
 				}
+			: {}),
+		...(options.pointedOnly
+			? { pointedOnly: 'true' }
 			: {}),
 	};
 }

@@ -21,7 +21,7 @@ import type { CardTypeBucket } from '~~/shared/utils/metagame';
 import { and, asc, count, desc, eq, isNotNull, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { db } from '~~/server/db';
-import { archetypeCards, archetypes, cards, playerDeckCards, playerDecks, players } from '~~/server/db/schema';
+import { archetypeCards, archetypes, cards, events, playerDeckCards, playerDecks, players } from '~~/server/db/schema';
 import { hasReviewedPlayerDeckDetails } from '~~/server/mappers/playerDeck';
 import { buildArchetypeBreakdownEntries, compareArchetypeBreakdownEntries, groupClassifiedPlayersByArchetype, isConvertedPlayer, limitArchetypeBreakdownEntries } from '~~/server/modules/metagame/archetypes';
 import { compareCardBreakdownEntries, createCardTypeBucketFilter, isEligibleMetagameCard, toCardBreakdownEntry } from '~~/server/modules/metagame/cards';
@@ -30,6 +30,7 @@ import { archetypeService } from '~~/server/services/archetype';
 import { archetypeCardService } from '~~/server/services/archetypeCard';
 import { buildMetagameFacts } from '~~/server/services/metagameFacts';
 import { computeMetagameWinRate } from '~~/server/services/metagameMetrics';
+import { getPointsByOracleId } from '~~/shared/utils/highlander';
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -190,6 +191,7 @@ export function createMetagameReadModelImplementation() {
 		sortBy: 'inclusionRate' | 'avgCopies' | 'totalCopies' = 'inclusionRate',
 		limit: number = 50,
 		excludeTypes?: CardTypeBucket[],
+		pointedOnly: boolean = false,
 	): Promise<CardBreakdownResponse> {
 		const scope = metagameScope.scope;
 		const board = metagameScope.deckUniverse.board;
@@ -208,6 +210,7 @@ export function createMetagameReadModelImplementation() {
 				colors: cards.colors,
 				cmc: cards.cmc,
 				manaCost: cards.manaCost,
+				oracleId: cards.oracleId,
 				totalCopies: sql<number>`sum(${playerDeckCards.quantity})`,
 				mainboardCount: sql<number>`sum(case when ${playerDeckCards.compartment} = 'mainboard' then ${playerDeckCards.quantity} else 0 end)`,
 				sideboardCount: sql<number>`sum(case when ${playerDeckCards.compartment} = 'sideboard' then ${playerDeckCards.quantity} else 0 end)`,
@@ -223,12 +226,28 @@ export function createMetagameReadModelImplementation() {
 				...metagameScope.playerFilters,
 				eq(playerDecks.isPrimary, true),
 			))
-			.groupBy(playerDeckCards.cardId, cards.name, cards.cardType, cards.scryfallId, cards.colors, cards.cmc, cards.manaCost);
+			.groupBy(playerDeckCards.cardId, cards.name, cards.cardType, cards.scryfallId, cards.colors, cards.cmc, cards.manaCost, cards.oracleId);
+
+		const event = await db.query.events.findFirst({
+			where: eq(events.id, eventId),
+			columns: { pointsSystem: true },
+		});
+		const pointsByOracleId = event?.pointsSystem
+			? getPointsByOracleId(event.pointsSystem)
+			: null;
 
 		const includesCardType = createCardTypeBucketFilter(excludeTypes);
 		const entries: CardBreakdownEntry[] = aggRows
-			.map(row => toCardBreakdownEntry(row, totalDecks, board))
-			.filter(entry => entry.totalCopies > 0 && isEligibleMetagameCard(entry.cardType) && includesCardType(entry.cardType));
+			.map(row => ({
+				...toCardBreakdownEntry(row, totalDecks, board),
+				...(pointsByOracleId
+					? { highlanderPoints: pointsByOracleId.get(row.oracleId ?? '') ?? null }
+					: {}),
+			}))
+			.filter(entry => entry.totalCopies > 0
+				&& isEligibleMetagameCard(entry.cardType)
+				&& includesCardType(entry.cardType)
+				&& (!pointedOnly || entry.highlanderPoints != null));
 
 		entries.sort((a, b) => compareCardBreakdownEntries(sortBy, a, b));
 
@@ -251,6 +270,7 @@ export function createMetagameReadModelImplementation() {
 		archetypeName?: string,
 		excludeTypes?: CardTypeBucket[],
 		minPoints?: number,
+		pointedOnly?: boolean,
 	): Promise<CardBreakdownResponse> {
 		const metagameScope = await resolveMetagameScope(eventId, {
 			scope,
@@ -267,7 +287,7 @@ export function createMetagameReadModelImplementation() {
 
 		const totalDecks = await metagameScope.deckUniverse.countDecks();
 
-		return computeCardBreakdown(eventId, metagameScope, totalDecks, sortBy, limit, excludeTypes);
+		return computeCardBreakdown(eventId, metagameScope, totalDecks, sortBy, limit, excludeTypes, pointedOnly);
 	}
 
 	// ── Summary dashboard ──────────────────────────────────────────
