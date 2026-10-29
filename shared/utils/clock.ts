@@ -128,6 +128,27 @@ export function getEffectiveElapsedMs(clock: ClockState, now: number): number {
 	return Math.max(0, elapsedMs);
 }
 
+/**
+ * What a Feature Match Session clock shows at `now`: the remaining time of a
+ * countdown, its overtime once expired if it counts up after, the elapsed time
+ * otherwise, and the Event's Untimed Label for an untimed clock. No clock reads
+ * `0:00`. Whether a blank Untimed Label hides the clock is the caller's to decide.
+ */
+export function formatClockDisplay(clock: ClockState | null, now: number, untimedLabel: string): string {
+	if (!clock)
+		return '0:00';
+	if (clock.type === 'untimed')
+		return untimedLabel.trim();
+
+	const elapsedMs = getEffectiveElapsedMs(clock, now);
+	if (clock.type === 'countdown') {
+		if (clock.countUpAfterCountdown && elapsedMs >= clock.durationMs)
+			return formatClockTime(elapsedMs - clock.durationMs);
+		return formatClockTime(Math.max(0, clock.durationMs - elapsedMs));
+	}
+	return formatClockTime(elapsedMs);
+}
+
 export interface ClockAdjustmentInput {
 	deltaDisplayMs?: number;
 	targetDisplayMs?: number;
