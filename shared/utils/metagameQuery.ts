@@ -174,7 +174,11 @@ export function archetypeSpotlightScreenQuery(config: ArchetypeSpotlightModeConf
 	};
 }
 
-/** The card breakdown a Most Played Cards Screen renders, read off its configuration. */
+/**
+ * The card breakdown a Most Played Cards Screen renders, read off its
+ * configuration. Ranking pointed cards only keeps nonbasic lands in, since a
+ * pointed land is as much a pointed pick as any other card.
+ */
 export function topCardsScreenQuery(config: TopCardsModeConfig) {
 	return buildCardBreakdownQuery(
 		config,
@@ -183,7 +187,9 @@ export function topCardsScreenQuery(config: TopCardsModeConfig) {
 			limit: config.limit,
 			board: config.board,
 			archetype: config.archetypeFilter,
-			excludeTypes: config.excludedCardTypes,
+			excludeTypes: config.pointedOnly
+				? config.excludedCardTypes.filter(type => type !== 'Land')
+				: config.excludedCardTypes,
 			pointedOnly: config.pointedOnly,
 		},
 	);

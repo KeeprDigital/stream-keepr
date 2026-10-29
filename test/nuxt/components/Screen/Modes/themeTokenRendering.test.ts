@@ -183,6 +183,8 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'rank-badge-text': { selector: '[data-testid="top-cards-rank-badge"]', property: 'color' },
 		'stat-badge-surface': { selector: '[data-testid="top-cards-stat-badge"]', property: 'backgroundColor' },
 		'stat-badge-text': { selector: '[data-testid="top-cards-stat-badge"]', property: 'color' },
+		'points-badge-surface': { selector: '[data-testid="top-cards-points-badge"]', property: 'backgroundColor' },
+		'points-badge-text': { selector: '[data-testid="top-cards-points-badge"]', property: 'color' },
 		'page-indicator-text': { selector: '[data-testid="top-cards-page-indicator"]', property: 'color' },
 	},
 	'card': {
@@ -586,6 +588,7 @@ mockNuxtImport('useTopCardsModeData', () => () => {
 		deckCount: 4,
 		cardType: 'Instant',
 		scryfallId: null,
+		highlanderPoints: 1,
 	};
 	return {
 		config: computed(() => ({
@@ -596,9 +599,12 @@ mockNuxtImport('useTopCardsModeData', () => () => {
 			rankBadgePosition: 'top-left',
 			statBadge: 'inclusionRate',
 			statBadgePosition: 'bottom-right',
+			showPointsBadges: true,
+			pointsBadgePosition: 'top-right',
 			// jsdom resolves a badge's em tracking against the inherited 16px, not its own text size.
 			rankBadgeTextSize: 16,
 			statBadgeTextSize: 16,
+			pointsBadgeTextSize: 16,
 			...probeConfig.value,
 		})),
 		error: ref(null),

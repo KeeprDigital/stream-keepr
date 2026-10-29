@@ -123,11 +123,26 @@ describe('topCardsScreenQuery', () => {
 		expect(topCardsQuery(stored)).toMatchObject({ scope, playerListId, archetype });
 	});
 
+	// A pointed land such as Strip Mine is a pointed pick, so ranking pointed cards keeps nonbasic lands in.
 	it.each([
-		{ pointedOnly: true, asked: true },
-		{ pointedOnly: false, asked: undefined },
-	])('asks for pointed cards only while the Screen filters to them: $pointedOnly', ({ pointedOnly, asked }) => {
-		expect(metagameCardsQuerySchema.parse(topCardsQuery({ pointedOnly })).pointedOnly).toBe(asked);
+		{
+			pointedOnly: true,
+			asked: true,
+			excludeTypes: ['Creature'],
+		},
+		{
+			pointedOnly: false,
+			asked: undefined,
+			excludeTypes: ['Land', 'Creature'],
+		},
+	])('asks for pointed cards only while the Screen filters to them: $pointedOnly', ({ pointedOnly, asked, excludeTypes }) => {
+		const query = metagameCardsQuerySchema.parse(topCardsQuery({
+			pointedOnly,
+			excludedCardTypes: ['Land', 'Creature'],
+		}));
+
+		expect(query.pointedOnly).toBe(asked);
+		expect(query.excludeTypes).toEqual(excludeTypes);
 	});
 
 	it('reads a Minimum Points scope, which it never offered, with no minimum', () => {

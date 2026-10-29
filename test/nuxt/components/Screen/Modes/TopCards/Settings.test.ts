@@ -51,6 +51,9 @@ const defaultConfig = {
 	statBadge: 'inclusionRate' as const,
 	statBadgePosition: 'bottom-right' as const,
 	statBadgeTextSize: 14,
+	showPointsBadges: false,
+	pointsBadgePosition: 'top-right' as const,
+	pointsBadgeTextSize: 14,
 };
 
 const mockConfig = ref<Record<string, any>>({ ...defaultConfig });
@@ -147,9 +150,10 @@ const UButtonStub = defineComponent({
 		label: { type: String, required: false },
 		variant: { type: String, required: false },
 		color: { type: String, required: false },
+		disabled: { type: Boolean, required: false },
 	},
 	emits: ['click'],
-	template: '<button type="button" :data-variant="variant" @click="$emit(\'click\')">{{ label }}</button>',
+	template: '<button type="button" :data-variant="variant" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
 });
 
 const UInputNumberStub = defineComponent({
@@ -287,6 +291,57 @@ describe('screenTopCardsSettings', () => {
 			await toggle(wrapper, 'Pointed only').trigger('click');
 
 			expect(mockUpdateConfig).toHaveBeenCalledWith({ pointedOnly: written, currentPage: 1 });
+		});
+
+		// The Screen ranks pointed lands whatever the Land filter holds, so the chip shows them in and can't be turned off.
+		it.each([
+			{ pointedOnly: true, variant: 'solid', locked: true },
+			{ pointedOnly: false, variant: 'outline', locked: false },
+		])('shows Nonbasic Land in while filtering $pointedOnly', async ({ pointedOnly, variant, locked }) => {
+			mockConfig.value = {
+				...mockConfig.value,
+				pointedOnly,
+				excludedCardTypes: ['Land'],
+			};
+			const wrapper = await mountComponent();
+
+			const land = wrapper.get('[data-testid="top-cards-type-Land"]');
+			expect(land.attributes('data-variant')).toBe(variant);
+			expect(land.attributes('disabled') !== undefined).toBe(locked);
+		});
+	});
+
+	describe('point badges', () => {
+		it.each([
+			{ pointsSystem: '7ph', showPointsBadges: false, offered: true },
+			{ pointsSystem: null, showPointsBadges: false, offered: false },
+			{ pointsSystem: null, showPointsBadges: true, offered: true },
+		])('offers point badges with points system $pointsSystem, badging $showPointsBadges: $offered', async ({ pointsSystem, showPointsBadges, offered }) => {
+			mockEventStore.event = { pointsSystem };
+			mockConfig.value = { ...mockConfig.value, showPointsBadges };
+			const wrapper = await mountComponent();
+
+			expect(toggle(wrapper, 'Show point badges')?.exists() ?? false).toBe(offered);
+		});
+
+		it('turns point badges on', async () => {
+			const wrapper = await mountComponent();
+
+			await toggle(wrapper, 'Show point badges').trigger('click');
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith({ showPointsBadges: true });
+		});
+
+		// A hidden badge offers no place or size.
+		it.each([
+			{ showPointsBadges: true, offered: true },
+			{ showPointsBadges: false, offered: false },
+		])('offers a place and size while badging $showPointsBadges', async ({ showPointsBadges, offered }) => {
+			mockConfig.value = { ...mockConfig.value, showPointsBadges };
+			const wrapper = await mountComponent();
+
+			expect(labelled(wrapper, UINinePointPickerStub, 'Point badge position') !== undefined).toBe(offered);
+			expect(labelled(wrapper, UInputNumberStub, 'Point badge text size') !== undefined).toBe(offered);
 		});
 	});
 

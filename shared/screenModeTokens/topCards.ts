@@ -61,6 +61,16 @@ export const topCardsModeTokens = {
 		label: 'Stat badge text',
 		default: { token: 'text-inverse' },
 	},
+	'points-badge-surface': {
+		type: 'color',
+		label: 'Point badge background',
+		default: { token: 'accent' },
+	},
+	'points-badge-text': {
+		type: 'color',
+		label: 'Point badge text',
+		default: { token: 'text-primary' },
+	},
 	'page-indicator-text': {
 		type: 'color',
 		label: 'Page indicator text',

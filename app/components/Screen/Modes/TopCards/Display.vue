@@ -63,6 +63,7 @@ const badgeStyle = {
 // Each badge sits where its config places it, and sizes itself around its own text size.
 const rankBadgeClass = computed(() => CARD_BADGE_POSITION_CLASSES[config.value.rankBadgePosition]);
 const statBadgeClass = computed(() => CARD_BADGE_POSITION_CLASSES[config.value.statBadgePosition]);
+const pointsBadgeClass = computed(() => CARD_BADGE_POSITION_CLASSES[config.value.pointsBadgePosition]);
 
 const rankBadgeStyle = computed(() => ({
 	...badgeStyle,
@@ -81,6 +82,14 @@ const statBadgeStyle = computed(() => ({
 	backgroundColor: modeTokenVar('top-cards', 'stat-badge-surface'),
 }));
 
+const pointsBadgeStyle = computed(() => ({
+	...badgeStyle,
+	fontSize: `${config.value.pointsBadgeTextSize}px`,
+	padding: '0.3em 0.6em',
+	color: modeTokenVar('top-cards', 'points-badge-text'),
+	backgroundColor: modeTokenVar('top-cards', 'points-badge-surface'),
+}));
+
 const cardStyle = {
 	backgroundColor: modeTokenVar('top-cards', 'card-placeholder-surface'),
 };
@@ -93,6 +102,13 @@ function statText(entry: CardBreakdownEntry): string | null {
 		case 'deckCount': return `${entry.deckCount}`;
 		default: return null;
 	}
+}
+
+/** Only a pointed card has points; a card the Event's points system leaves out shows none. */
+function pointsText(entry: CardBreakdownEntry): string | null {
+	return config.value.showPointsBadges && entry.highlanderPoints != null
+		? `${entry.highlanderPoints}`
+		: null;
 }
 </script>
 
@@ -133,6 +149,9 @@ function statText(entry: CardBreakdownEntry): string | null {
 					:stat-text="statText(entry)"
 					:stat-badge-class="statBadgeClass"
 					:stat-badge-style="statBadgeStyle"
+					:points-text="pointsText(entry)"
+					:points-badge-class="pointsBadgeClass"
+					:points-badge-style="pointsBadgeStyle"
 					:card-style="cardStyle"
 				/>
 			</ScreenCardGrid>
