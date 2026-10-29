@@ -30,12 +30,12 @@ describe('highlander utils', () => {
 				oracleId: '23467047-6dba-4498-b783-1ebc4f74b8c2',
 			}),
 			makeCard({
-				name: 'Force of Will',
-				oracleId: '956381ba-6d37-4a8a-846c-bad79222dbee',
+				name: 'Snapcaster Mage',
+				oracleId: '2bb2eda7-3b38-4c56-870f-c3218a1056f5',
 			}),
 			makeCard({
-				name: 'The One Ring',
-				oracleId: '3aa83ed2-f48b-4ce6-a614-2c54ddf50538',
+				name: 'Wasteland',
+				oracleId: '09a70ae8-3859-4a09-901d-dce063fa3b5f',
 			}),
 			makeCard({
 				name: 'Island',
@@ -55,7 +55,7 @@ describe('highlander utils', () => {
 		const summary = evaluateHighlanderDeck('7ph', [
 			makeCard({ name: 'Ancestral Recall', oracleId: '550c74d4-1fcb-406a-b02a-639a760a4380' }),
 			makeCard({ name: 'Mana Drain', oracleId: '74d3277a-38e5-4732-afed-084a56148f20' }),
-			makeCard({ name: 'The One Ring', oracleId: '3aa83ed2-f48b-4ce6-a614-2c54ddf50538' }),
+			makeCard({ name: 'Snapcaster Mage', oracleId: '2bb2eda7-3b38-4c56-870f-c3218a1056f5' }),
 		]);
 
 		expect(summary.maxPoints).toBe(7);
