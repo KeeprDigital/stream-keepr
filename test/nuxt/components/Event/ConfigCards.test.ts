@@ -63,7 +63,6 @@ type Wrapper = VueWrapper<any>;
 
 const field = (wrapper: Wrapper, name: string) => wrapper.get(`[data-field="${name}"]`);
 const input = (wrapper: Wrapper, name: string) => field(wrapper, name).get('input');
-const textarea = (wrapper: Wrapper, name: string) => field(wrapper, name).get('textarea');
 const toggle = (wrapper: Wrapper, name: string) => field(wrapper, name).get('[role="switch"]');
 const isOn = (wrapper: Wrapper, name: string) => toggle(wrapper, name).attributes('aria-checked') === 'true';
 const select = (wrapper: Wrapper, name: string) => field(wrapper, name).get('select');
@@ -153,19 +152,6 @@ const CARDS: CardCase[] = [
 			shows: wrapper => shown(wrapper, 'canvasHeight'),
 			expected: '1200',
 		},
-	},
-	{
-		card: 'presentation holding text',
-		component: PresentationSettings,
-		edit: wrapper => textarea(wrapper, 'holdingText').setValue('  Back after this break.  '),
-		saved: { holdingText: 'Back after this break.' },
-	},
-	{
-		card: 'presentation holding text cleared',
-		component: PresentationSettings,
-		event: { holdingText: 'Coverage resumes shortly.' },
-		edit: wrapper => textarea(wrapper, 'holdingText').setValue('   '),
-		saved: { holdingText: null },
 	},
 	{
 		card: 'presentation extra turns label',
@@ -330,7 +316,6 @@ describe('event presentation settings card', () => {
 			canvasHeight: 1920,
 			displayRecordSeparator: '/',
 			displayPositionFormat: 'number',
-			holdingText: 'Coverage resumes shortly.',
 			featureMatchDefaultExtraTurnsLabel: 'Overtime',
 			featureMatchDefaultUntimedLabel: 'Top 8',
 		}));
@@ -340,7 +325,6 @@ describe('event presentation settings card', () => {
 		expect(shown(wrapper, 'displayRecordSeparator')).toBe('/');
 		expect(shown(wrapper, 'displayPositionFormat')).toBe('number');
 		expect(isOn(wrapper, 'displayHideZeroDraws')).toBe(true);
-		expect(shown(wrapper, 'holdingText')).toBe('Coverage resumes shortly.');
 		expect(shown(wrapper, 'extraTurnsLabel')).toBe('Overtime');
 		expect(shown(wrapper, 'untimedLabel')).toBe('Top 8');
 	});

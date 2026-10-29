@@ -340,7 +340,7 @@ The pixel coordinate space every overlay Screen of an Event is authored and rend
 _Avoid_: screen size, resolution
 
 **Event Presentation Settings**:
-What an Event sets once for every Screen it has: its Theme, its Event Canvas, and its on-air wording and formatting, such as the record separator, position format, holding text, and Untimed Label. Wording stays here rather than in the Theme, so a Theme can serve Events that word things differently.
+What an Event sets once for every Screen it has: its Theme, its Event Canvas, and its on-air wording and formatting, such as the record separator, position format, and Untimed Label. Holding text is not among them: it changes during a show, so it is set in Event Controls with the commentators. Wording stays here rather than in the Theme, so a Theme can serve Events that word things differently.
 _Avoid_: on-air formatting (when naming the whole group)
 
 **Screen Mode Sample Dataset**:
