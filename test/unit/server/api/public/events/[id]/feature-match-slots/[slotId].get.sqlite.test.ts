@@ -31,7 +31,7 @@ const NOW = Date.UTC(2026, 9, 29, 12);
 afterEach(() => vi.useRealTimers());
 afterAll(async () => await harness.close());
 
-async function stage(withSession: boolean) {
+async function stage(withSession: boolean, player1GameWins = 1) {
 	const [event] = await db.insert(schema.events)
 		.values({ name: 'Regional Championship', game: 'mtg', featureMatchOrientation: 'horizontal' })
 		.returning({ id: schema.events.id });
@@ -60,7 +60,7 @@ async function stage(withSession: boolean) {
 	if (withSession) {
 		const state = createInitialFeatureMatchState(20, 'countdown', 600_000);
 		state.player1.lifeTotal = 12;
-		state.player1.gameWins = 1;
+		state.player1.gameWins = player1GameWins;
 		state.clock = { ...state.clock, isRunning: true, lastStartedAt: NOW - 90_000 };
 		const [session] = await db.insert(schema.featureMatchSessions)
 			.values({
@@ -102,6 +102,10 @@ describe('the public Feature Match read', () => {
 				player1GameWins: '1',
 				player2Life: '20',
 				player2GameWins: '0',
+				player1Game1Win: '#FFFFFFFF',
+				player1Game2Win: '#00000000',
+				player2Game1Win: '#00000000',
+				player2Game2Win: '#00000000',
 			},
 		},
 		{
@@ -113,6 +117,10 @@ describe('the public Feature Match read', () => {
 				player1GameWins: '0',
 				player2Life: '',
 				player2GameWins: '0',
+				player1Game1Win: '#00000000',
+				player1Game2Win: '#00000000',
+				player2Game1Win: '#00000000',
+				player2Game2Win: '#00000000',
 			},
 		},
 	])('answers one row of the Slot\'s tokens and $name', async ({ withSession, live }) => {
@@ -140,6 +148,18 @@ describe('the public Feature Match read', () => {
 		]);
 		expect(Object.values(rows[0]!).every(value => typeof value === 'string')).toBe(true);
 		expect(event.headers['access-control-allow-origin']).toBe('*');
+	});
+
+	it.each([
+		{ gameWins: 0, game1: '#00000000', game2: '#00000000' },
+		{ gameWins: 1, game1: '#FFFFFFFF', game2: '#00000000' },
+		{ gameWins: 2, game1: '#FFFFFFFF', game2: '#FFFFFFFF' },
+	])('colours each game white once won, transparent before ($gameWins won)', async ({ gameWins, game1, game2 }) => {
+		const { eventId, slotId } = await stage(true, gameWins);
+
+		await expect(read(eventId, slotId).response).resolves.toEqual([
+			expect.objectContaining({ player1Game1Win: game1, player1Game2Win: game2 }),
+		]);
 	});
 
 	it.each([
