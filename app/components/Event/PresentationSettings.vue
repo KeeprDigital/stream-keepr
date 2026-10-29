@@ -27,7 +27,6 @@ const initialData = computed(() => {
 		displayRecordSeparator: props.event.displayRecordSeparator,
 		displayHideZeroDraws: props.event.displayHideZeroDraws,
 		displayPositionFormat: props.event.displayPositionFormat,
-		holdingText: props.event.holdingText ?? '',
 		extraTurnsLabel: defaults.extraTurnsLabel,
 		untimedLabel: defaults.untimedLabel,
 	};
@@ -37,12 +36,9 @@ const { formData, isDirty, reset, save, saving } = useEventConfigForm({
 	initialData,
 	clearOnReset: errors,
 	validate,
-	toUpdate: ({ themeId, holdingText, extraTurnsLabel, untimedLabel, ...changes }) => ({
+	toUpdate: ({ themeId, extraTurnsLabel, untimedLabel, ...changes }) => ({
 		...changes,
 		...fromFeatureMatchDefaults({ extraTurnsLabel, untimedLabel }),
-		...(holdingText === undefined
-			? {}
-			: { holdingText: holdingText.trim() || null }),
 		...(themeId === undefined
 			? {}
 			: {
@@ -189,21 +185,6 @@ const themeItems = computed(() => {
 				</UFormField>
 
 				<USeparator />
-
-				<UFormField
-					name="holdingText"
-					label="Holding Text"
-					description="The message a Screen shows while coverage is paused."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UTextarea
-						v-model="formData.holdingText"
-						class="w-64"
-						autoresize
-						:rows="3"
-						placeholder="Coverage resumes shortly."
-					/>
-				</UFormField>
 
 				<UFormField
 					name="extraTurnsLabel"
