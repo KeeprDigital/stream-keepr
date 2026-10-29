@@ -30,6 +30,7 @@ export function useTopCardsModeData() {
 			config.value.sortBy,
 			config.value.limit,
 			config.value.excludedCardTypes,
+			config.value.pointedOnly,
 		]),
 		read: () => outputReads.topCards(),
 		initialData: null,
@@ -83,9 +84,13 @@ export function useTopCardsModeData() {
 				? 'List '
 				: '';
 
+		const title = config.value.pointedOnly
+			? 'Most Played Pointed Cards'
+			: 'Most Played Cards';
+
 		return config.value.archetypeFilter
-			? `${prefix}Most Played Cards: ${config.value.archetypeFilter}`
-			: `${prefix}Most Played Cards`;
+			? `${prefix}${title}: ${config.value.archetypeFilter}`
+			: `${prefix}${title}`;
 	});
 
 	// ── Empty State ──
@@ -94,6 +99,9 @@ export function useTopCardsModeData() {
 	const emptyMessage = computed(() => {
 		if (!cardData.value?.totalDecks) {
 			return 'No players in this event';
+		}
+		if (config.value.pointedOnly) {
+			return 'No pointed cards played';
 		}
 		return 'No card data available';
 	});

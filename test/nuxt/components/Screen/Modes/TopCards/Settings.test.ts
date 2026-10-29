@@ -34,6 +34,7 @@ const defaultConfig = {
 	sortBy: 'inclusionRate' as const,
 	limit: 10,
 	excludedCardTypes: ['Land'],
+	pointedOnly: false,
 	columns: 5,
 	autoColumns: false,
 	cardSizing: 'fit',
@@ -82,7 +83,12 @@ mockNuxtImport('useServerTime', () => () => ({
 	getServerTime: () => 1_000_000.25,
 }));
 
-mockNuxtImport('useEventStore', () => () => ({ eventId: 1 }));
+const mockEventStore = {
+	eventId: 1,
+	event: { pointsSystem: '7ph' as string | null },
+};
+
+mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('usePlayerListStore', () => () => mockPlayerListStore);
 mockNuxtImport('useModeConfigUpdate', () => () => ({
@@ -215,6 +221,7 @@ describe('screenTopCardsSettings', () => {
 		mockConfig.value = structuredClone(defaultConfig);
 		mockPlayerStore.isLoaded = false;
 		mockPlayerListStore.isLoaded = false;
+		mockEventStore.event = { pointsSystem: '7ph' };
 		mockFetch.mockReset();
 		mockFetch.mockResolvedValue(ranking(10));
 	});
@@ -250,6 +257,36 @@ describe('screenTopCardsSettings', () => {
 		expect(mockUpdateConfig).toHaveBeenCalledWith({
 			excludedCardTypes: ['Land', 'Creature'],
 			currentPage: 1,
+		});
+	});
+
+	describe('pointed only', () => {
+		// Points come from the Event's points system; a Screen left filtering keeps its way back.
+		it.each([
+			{ pointsSystem: '7ph', pointedOnly: false, offered: true },
+			{ pointsSystem: null, pointedOnly: false, offered: false },
+			{ pointsSystem: null, pointedOnly: true, offered: true },
+		])('offers the filter with points system $pointsSystem, filtering $pointedOnly: $offered', async ({ pointsSystem, pointedOnly, offered }) => {
+			mockEventStore.event = { pointsSystem };
+			mockConfig.value = { ...mockConfig.value, pointedOnly };
+			const wrapper = await mountComponent();
+
+			const pointed = toggle(wrapper, 'Pointed only');
+			expect(pointed?.exists() ?? false).toBe(offered);
+			if (offered)
+				expect(pointed.attributes('aria-pressed')).toBe(String(pointedOnly));
+		});
+
+		it.each([
+			{ pointedOnly: false, written: true },
+			{ pointedOnly: true, written: false },
+		])('turns the filter from $pointedOnly', async ({ pointedOnly, written }) => {
+			mockConfig.value = { ...mockConfig.value, pointedOnly };
+			const wrapper = await mountComponent();
+
+			await toggle(wrapper, 'Pointed only').trigger('click');
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith({ pointedOnly: written, currentPage: 1 });
 		});
 	});
 

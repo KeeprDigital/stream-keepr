@@ -33,6 +33,7 @@ defineExpose({ resetConfig, saving });
 // Edits still go through the Page Rotation's `updateConfig` below (ADR-0039).
 const fields = screenModeConfigContract('top-cards').fields;
 
+const eventStore = useEventStore();
 const playerStore = usePlayerStore();
 const playerListStore = usePlayerListStore();
 
@@ -133,6 +134,10 @@ function toggleType(bucket: CardTypeBucket) {
 	updateConfig({ excludedCardTypes: excluded, currentPage: 1 });
 }
 
+// Points come from the Event's points system. A Screen left filtering to
+// pointed cards keeps the toggle, so it can be turned back off.
+const showsPointedOnly = computed(() => !!eventStore.event?.pointsSystem || config.value.pointedOnly);
+
 function typeLabel(bucket: CardTypeBucket): string {
 	return bucket === 'Land'
 		? 'Nonbasic Land'
@@ -178,6 +183,14 @@ function typeLabel(bucket: CardTypeBucket): string {
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Filters">
+			<ScreenSettingsToggle
+				v-if="showsPointedOnly"
+				:label="fields.pointedOnly.label"
+				description="Rank only cards the Event's points system gives points. Pointed lands such as Strip Mine rank only while Nonbasic Land is included."
+				:model-value="config.pointedOnly"
+				@update:model-value="updateConfig({ pointedOnly: $event, currentPage: 1 })"
+			/>
+
 			<UFormField
 				label="Card types"
 				description="Toggle which card types appear in the ranking. Basic lands are always excluded."

@@ -184,6 +184,7 @@ export function topCardsScreenQuery(config: TopCardsModeConfig) {
 			board: config.board,
 			archetype: config.archetypeFilter,
 			excludeTypes: config.excludedCardTypes,
+			pointedOnly: config.pointedOnly,
 		},
 	);
 }

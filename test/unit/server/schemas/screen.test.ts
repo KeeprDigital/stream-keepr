@@ -911,6 +911,7 @@ describe('topCardsModeConfigSchema', () => {
 		sortBy: 'inclusionRate' as const,
 		limit: 10,
 		excludedCardTypes: ['Land'],
+		pointedOnly: false,
 		columns: 5,
 		cardSizing: 'fit' as const,
 		autoColumns: false,
