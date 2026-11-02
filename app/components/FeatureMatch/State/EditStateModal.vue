@@ -9,6 +9,8 @@ const props = defineProps<{
 	state: FeatureMatchState;
 	player1Name?: string | null;
 	player2Name?: string | null;
+	/** Off for a Card Game that tracks no life total. */
+	showLife: boolean;
 	showTurnNumber: boolean;
 	showPlayerTracking: boolean;
 	showCardsKept: boolean;
@@ -207,7 +209,7 @@ function handleCancel() {
 						<div class="text-sm font-semibold truncate">
 							{{ playerLabel(player) }}
 						</div>
-						<UFormField label="Life total">
+						<UFormField v-if="showLife" label="Life total">
 							<UInput
 								v-model="lifeInput[player]"
 								:data-testid="`state-life-${player}`"

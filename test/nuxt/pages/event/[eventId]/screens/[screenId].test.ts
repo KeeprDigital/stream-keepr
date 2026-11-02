@@ -14,7 +14,7 @@ import { getScreenModeConfigurationPolicy, getScreenModeSettingsComponent } from
 vi.mock('~/modules/screen-mode', () => ({
 	getScreenModeConfigurationPolicy: vi.fn(() => null),
 	getScreenModeLabel: vi.fn((mode: string) => mode),
-	getScreenModeSelectOptions: vi.fn(() => []),
+	useEventScreenModeSelectOptions: vi.fn(() => ({ value: [] })),
 	getScreenModeSettingsComponent: vi.fn(() => null),
 }));
 

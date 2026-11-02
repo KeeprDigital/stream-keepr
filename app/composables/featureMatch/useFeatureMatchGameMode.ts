@@ -2,7 +2,7 @@ import type { MaybeRefOrGetter } from 'vue';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { FeatureMatchStateUpdate } from '~/modules/feature-match-session/client';
 import { useIntervalFn } from '@vueuse/core';
-import { getStartingHandSize } from '~~/shared/config/games';
+import { getFeatureMatchStateTracking, getStartingHandSize } from '~~/shared/config/games';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { getEffectiveElapsedMs } from '~~/shared/utils/clock';
 import { LazyUIConfirmActionModal } from '#components';
@@ -28,12 +28,19 @@ export function useFeatureMatchGameMode(
 	const game = computed(() => (eventStore.displayEvent?.game ?? 'mtg'));
 	const defaults = computed(() => toFeatureMatchDefaults(eventStore.displayEvent));
 
-	// ── Feature flags from event config ──
+	// ── Feature flags from the Card Game and event config ──
+
+	// What the Card Game tracks bounds what the Event's toggles can turn on.
+	const tracks = computed(() => getFeatureMatchStateTracking(game.value));
 
 	const turnTrackingEnabled = computed(() => defaults.value.turnTrackingEnabled);
 	const activePlayerTrackingEnabled = computed(() => defaults.value.activePlayerTrackingEnabled);
-	const extraTurnsEnabled = computed(() => defaults.value.extraTurnsEnabled);
-	const mulliganTrackingEnabled = computed(() => defaults.value.mulliganTrackingEnabled);
+	const lifeTrackingEnabled = computed(() => tracks.value.life);
+	const counterTrackingEnabled = computed(() => tracks.value.counters);
+	const overtimeTrackingEnabled = computed(() => tracks.value.overtime);
+	const sideboardTrackingEnabled = computed(() => tracks.value.sideboard);
+	const extraTurnsEnabled = computed(() => tracks.value.overtime && defaults.value.extraTurnsEnabled);
+	const mulliganTrackingEnabled = computed(() => tracks.value.mulligan && defaults.value.mulliganTrackingEnabled);
 
 	// Display feature flags (event-level toggles for optional fields)
 	const pronounsEnabled = computed(() => eventStore.displayEvent?.pronounsEnabled ?? true);
@@ -50,11 +57,7 @@ export function useFeatureMatchGameMode(
 		&& matchState.value.turnNumber < 1,
 	);
 
-	const startingHandSize = computed(() => {
-		return game.value
-			? getStartingHandSize(game.value)
-			: 7;
-	});
+	const startingHandSize = computed(() => getStartingHandSize(game.value));
 
 	// ── Turn counter ──
 
@@ -316,6 +319,10 @@ export function useFeatureMatchGameMode(
 		// Feature flags
 		turnTrackingEnabled,
 		activePlayerTrackingEnabled,
+		lifeTrackingEnabled,
+		counterTrackingEnabled,
+		overtimeTrackingEnabled,
+		sideboardTrackingEnabled,
 		extraTurnsEnabled,
 		mulliganTrackingEnabled,
 		pronounsEnabled,

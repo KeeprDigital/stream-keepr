@@ -71,6 +71,7 @@ async function mountModal(props: Record<string, unknown> = {}, state?: Partial<F
 			}),
 			player1Name: 'Alice',
 			player2Name: 'Bob',
+			showLife: true,
 			showTurnNumber: true,
 			showPlayerTracking: true,
 			showCardsKept: true,
@@ -202,11 +203,14 @@ describe('feature match edit state modal', () => {
 
 	it('hides the flag-gated fields when their tracking is off', async () => {
 		const wrapper = await mountModal({
+			showLife: false,
 			showTurnNumber: false,
 			showPlayerTracking: false,
 			showCardsKept: false,
 		});
 
+		expect(wrapper.find('[data-testid="state-life-player1"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="state-life-player2"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="state-turn-number"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="state-first-player"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="state-active-player"]').exists()).toBe(false);

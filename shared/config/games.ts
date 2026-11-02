@@ -1,9 +1,9 @@
 import type { Game } from '../types/enums';
 import type { FeatureMatchDefaults } from '../types/featureMatchDefaults';
-import type { CounterTypeConfig, GameConfig } from '../types/game';
+import type { CounterTypeConfig, FeatureMatchStateTracking, GameConfig } from '../types/game';
 import { DEFAULT_FEATURE_MATCH_DEFAULTS } from '../types/featureMatchDefaults';
 
-export type { CounterTypeConfig, Game, GameConfig };
+export type { CounterTypeConfig, FeatureMatchStateTracking, Game, GameConfig };
 
 export const GAME_CONFIGS: Record<Game, GameConfig> = {
 	mtg: {
@@ -28,6 +28,13 @@ export const GAME_CONFIGS: Record<Game, GameConfig> = {
 		startingTurnNumber: 0,
 		startingHandSize: 7,
 		playerIdentityLabel: 'Deck',
+		tracks: {
+			life: true,
+			mulligan: true,
+			counters: true,
+			overtime: true,
+			sideboard: true,
+		},
 	},
 	op: {
 		label: 'One Piece',
@@ -43,10 +50,27 @@ export const GAME_CONFIGS: Record<Game, GameConfig> = {
 		},
 		counterTypes: [],
 		startingTurnNumber: 1,
-		startingHandSize: 0,
+		startingHandSize: 5,
 		playerIdentityLabel: 'Leader',
+		// Life and DON!! tracking are deferred (ADR-0057).
+		tracks: {
+			life: false,
+			mulligan: false,
+			counters: false,
+			overtime: false,
+			sideboard: false,
+		},
 	},
 };
+
+/** Every Card Game: what something offered to any Event declares. */
+export const EVERY_CARD_GAME: readonly Game[] = ['mtg', 'op'];
+
+/**
+ * Magic: The Gathering only: what something reading results or the Metagame
+ * declares, as a One Piece Card Game Event never holds them (ADR-0057).
+ */
+export const MTG_ONLY: readonly Game[] = ['mtg'];
 
 export function getGameConfig(game: Game): GameConfig {
 	return GAME_CONFIGS[game];
@@ -68,6 +92,19 @@ export function getStartingTurnNumber(game: Game): number {
 
 export function getStartingHandSize(game: Game): number {
 	return GAME_CONFIGS[game]?.startingHandSize ?? 0;
+}
+
+const TRACKS_NOTHING_OPTIONAL: FeatureMatchStateTracking = {
+	life: false,
+	mulligan: false,
+	counters: false,
+	overtime: false,
+	sideboard: false,
+};
+
+/** The parts of Feature Match state the Card Game tracks; none of the optional ones for a game with no config. */
+export function getFeatureMatchStateTracking(game: Game): FeatureMatchStateTracking {
+	return GAME_CONFIGS[game]?.tracks ?? TRACKS_NOTHING_OPTIONAL;
 }
 
 export function getPlayerIdentityLabel(game: Game): string {

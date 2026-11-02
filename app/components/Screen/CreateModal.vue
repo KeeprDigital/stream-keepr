@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CreateScreenInput, Screen } from '~/types';
-import { getScreenModeDefinition } from '~/modules/screen-mode';
+import { getScreenModeDefinition, useEventScreenModeSelectOptions } from '~/modules/screen-mode';
 
 const props = defineProps<{
 	eventId: number;
@@ -21,6 +21,7 @@ const toast = useToast();
 const { runRequest } = useRequestFeedback();
 
 const isSubmitting = ref(false);
+const modeOptions = useEventScreenModeSelectOptions();
 
 const isEditMode = computed(() => !!props.editScreen);
 const modalTitle = computed(() => isEditMode.value ? 'Edit Screen' : 'Create Screen');
@@ -156,7 +157,7 @@ async function submit() {
 							<USelect
 								v-model="formData.currentMode"
 								class="w-64"
-								:items="SCREEN_MODE_SELECT_OPTIONS"
+								:items="modeOptions"
 							/>
 							<ScreenTypeBadge :display-type="derivedDisplayType.displayType" class="self-start" />
 						</div>

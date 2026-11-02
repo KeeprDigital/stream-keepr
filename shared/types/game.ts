@@ -7,6 +7,20 @@ export interface CounterTypeConfig {
 	icon: string;
 }
 
+/**
+ * The parts of Feature Match state a Card Game tracks beyond the clock, game
+ * wins, turn number and the active and first player, which every Card Game
+ * tracks. The Feature Match controls offer only what it tracks.
+ */
+export interface FeatureMatchStateTracking {
+	life: boolean;
+	mulligan: boolean;
+	counters: boolean;
+	overtime: boolean;
+	/** Revealing the players' Sideboards; a One Piece Card Game Deck List has none. */
+	sideboard: boolean;
+}
+
 export interface GameConfig {
 	label: string;
 	defaults: FeatureMatchDefaults;
@@ -14,6 +28,7 @@ export interface GameConfig {
 	startingTurnNumber: number;
 	startingHandSize: number;
 	playerIdentityLabel: string;
+	tracks: FeatureMatchStateTracking;
 }
 
 // Game-specific player data (discriminated union on `type`)

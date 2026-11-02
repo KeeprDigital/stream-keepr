@@ -279,6 +279,51 @@ describe('useFeatureMatchGameMode', () => {
 		});
 	});
 
+	// One Piece tracks the clock, game wins, turns and players only, whatever the Event's toggles say.
+	describe('the match state a Card Game tracks', () => {
+		it.each([
+			['mtg', true],
+			['op', false],
+		] as const)('on a %s Event, tracks life, mulligans, counters, overtime and sideboards: %s', async (game, tracked) => {
+			mockEventData.value = createMockEvent({ ...trackingEverything, game });
+			const state = shallowRef(createMockFeatureMatchState({
+				turnNumber: 0,
+				clock: countdown(0),
+			}));
+			const mode = useFeatureMatchGameMode(10, computed(() => state.value as FeatureMatchState));
+
+			expect({
+				life: mode.lifeTrackingEnabled.value,
+				mulligan: mode.inMulliganPhase.value,
+				counters: mode.counterTrackingEnabled.value,
+				overtime: mode.overtimeTrackingEnabled.value,
+				sideboard: mode.sideboardTrackingEnabled.value,
+			}).toEqual({
+				life: tracked,
+				mulligan: tracked,
+				counters: tracked,
+				overtime: tracked,
+				sideboard: tracked,
+			});
+
+			state.value = createMockFeatureMatchState({
+				turnNumber: 0,
+				clock: countdown(60001),
+			});
+			await nextTick();
+			expect(mockFeatureMatchStateStore.startOvertime.mock.calls.length > 0).toBe(tracked);
+		});
+
+		it.each([
+			['mtg', 7],
+			['op', 5],
+		] as const)('deals a %s opening hand of %i', (game, handSize) => {
+			mockEventData.value = createMockEvent({ ...trackingEverything, game });
+
+			expect(createSetup().startingHandSize.value).toBe(handSize);
+		});
+	});
+
 	describe('resetting a game', () => {
 		it('resets the game once the operator confirms', async () => {
 			mockOverlay.create.mockReturnValueOnce({

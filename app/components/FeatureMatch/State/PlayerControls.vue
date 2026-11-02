@@ -32,6 +32,7 @@ const {
 	showName,
 	showPronouns,
 	showDeckName,
+	showLife,
 	showCounters,
 	showRecord,
 	showLgs,
@@ -101,6 +102,8 @@ const panelStyle = computed(() => ({
 		class="player-panel"
 		:class="[isActive && 'is-active']"
 		:style="panelStyle"
+		:data-player-side="playerSide"
+		:data-active="String(isActive)"
 	>
 		<!-- Row 1: Player name + pronouns -->
 		<div v-if="showName" class="player-info" :class="playerSide === 'player2' && 'side-right'">
@@ -150,7 +153,7 @@ const panelStyle = computed(() => ({
 		</div>
 
 		<!-- Row 3: Life Counter / Hand Size -->
-		<div class="player-life">
+		<div v-if="showLife" class="player-life">
 			<UINumericCounter
 				:value="counterValue"
 				:accessible-label="`${playerName} ${mulliganPhase ? 'hand size' : 'life total'}`"

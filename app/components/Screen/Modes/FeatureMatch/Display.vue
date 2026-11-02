@@ -34,6 +34,9 @@ const modeError = computed(() => {
 
 const {
 	activePlayerTrackingEnabled,
+	lifeTrackingEnabled,
+	counterTrackingEnabled,
+	overtimeTrackingEnabled,
 	inMulliganPhase,
 	startingHandSize,
 	turnCounterMode,
@@ -66,7 +69,8 @@ const gameLabel = computed(() => {
 });
 
 const hasOvertime = computed(() => !!matchState.value?.overtime);
-const showOvertime = computed(() => hasOvertime.value && (config.value.showOvertime ?? true));
+const showOvertime = computed(() => hasOvertime.value && overtimeTrackingEnabled.value && (config.value.showOvertime ?? true));
+const showCounters = computed(() => counterTrackingEnabled.value && config.value.showCounters);
 
 const leftSide = computed(() => config.value.leftSidePlayer ?? 'player1');
 const rightSide = computed(() => leftSide.value === 'player1'
@@ -94,7 +98,8 @@ function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
 		showName: config.value.showNames,
 		showPronouns: config.value.showPronouns,
 		showDeckName: config.value.showDeckNames,
-		showCounters: config.value.showCounters,
+		showLife: lifeTrackingEnabled.value,
+		showCounters: showCounters.value,
 		showRecord: config.value.showRecords,
 		showMulliganInfo: config.value.showMulliganInfo ?? true,
 		showLgs: config.value.showLgs ?? true,
@@ -118,7 +123,7 @@ function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
 		<div
 			v-if="match && matchState"
 			class="match-layout"
-			:class="{ 'match-layout--with-counters': config.showCounters }"
+			:class="{ 'match-layout--with-counters': showCounters }"
 		>
 			<header class="match-header">
 				<span v-if="gameLabel" class="game-label">

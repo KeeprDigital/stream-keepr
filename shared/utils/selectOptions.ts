@@ -1,6 +1,3 @@
-import { getScreenModeSelectOptions } from '../screenModeDefinitions';
-import { SCREEN_MODE_VALUES } from '../types/enums';
-
 export const GAME_SELECT_OPTIONS: { label: string; value: Game }[] = [
 	{ label: 'Magic: The Gathering', value: 'mtg' },
 	{ label: 'One Piece', value: 'op' },
@@ -22,13 +19,6 @@ export const POSITION_FORMAT_SELECT_OPTIONS: { label: string; value: PositionFor
 	{ label: 'Ordinal (1st, 2nd, 3rd)', value: 'ordinal' },
 	{ label: 'Number (1, 2, 3)', value: 'number' },
 ];
-
-const screenModeOptionMap = new Map(getScreenModeSelectOptions().map(option => [option.value, option.label]));
-
-export const SCREEN_MODE_SELECT_OPTIONS: { label: string; value: ScreenMode }[] = SCREEN_MODE_VALUES.map(value => ({
-	label: screenModeOptionMap.get(value) ?? value,
-	value,
-}));
 
 export const CARD_SIZING_SELECT_OPTIONS: { label: string; value: CardSizing }[] = [
 	{ label: 'Fixed width', value: 'fixed' },

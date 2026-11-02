@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { DropdownMenuItem } from '@nuxt/ui';
 import type { Screen, ScreenCommand, ScreenMode } from '~/types';
-import { getScreenModeDisplayType, getScreenModeIcon, getScreenModeLabel, getScreenModeSelectOptions } from '~/modules/screen-mode';
+import { getScreenModeDisplayType, getScreenModeIcon, getScreenModeLabel, useEventScreenModeSelectOptions } from '~/modules/screen-mode';
 
 const props = defineProps<{
 	screen: Screen;
@@ -104,13 +104,14 @@ async function openOutput() {
 			});
 }
 
-const modeItems: DropdownMenuItem[][] = [
-	getScreenModeSelectOptions().map(option => ({
+const modeOptions = useEventScreenModeSelectOptions();
+const modeItems = computed<DropdownMenuItem[][]>(() => [
+	modeOptions.value.map(option => ({
 		label: option.label,
 		icon: option.icon,
 		onSelect: () => emit('setMode', option.value),
 	})),
-];
+]);
 
 const actionItems: DropdownMenuItem[][] = [
 	[

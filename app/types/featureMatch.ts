@@ -14,6 +14,8 @@ export interface PlayerDisplayConfig {
 	showName?: boolean;
 	showPronouns?: boolean;
 	showDeckName?: boolean;
+	/** The life total, or the hand size while mulligans are tracked; off for a Card Game tracking neither. */
+	showLife?: boolean;
 	showCounters?: boolean;
 	showRecord?: boolean;
 	showMulliganInfo?: boolean;

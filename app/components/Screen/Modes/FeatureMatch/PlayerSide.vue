@@ -31,6 +31,7 @@ const {
 	showName,
 	showPronouns,
 	showDeckName,
+	showLife,
 	showCounters,
 	showRecord,
 	showMulliganInfo,
@@ -96,6 +97,8 @@ function handleLifeSet(value: number) {
 		v-if="player"
 		class="player-side"
 		:class="[`side-${side}`, isActive && 'is-active']"
+		:data-player-side="playerSide"
+		:data-active="String(isActive)"
 	>
 		<div
 			v-if="showName"
@@ -136,7 +139,7 @@ function handleLifeSet(value: number) {
 		</div>
 
 		<div class="player-life">
-			<div class="life-main">
+			<div v-if="showLife" class="life-main">
 				<UINumericCounter
 					:value="counterValue"
 					:accessible-label="`${playerName} ${mulliganPhase ? 'hand size' : 'life total'}`"

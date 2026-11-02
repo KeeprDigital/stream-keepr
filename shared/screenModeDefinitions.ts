@@ -1,6 +1,6 @@
 import type { FoundationTokenName } from './modules/theme/vocabulary';
 import type { PageRotationConfig } from './screenModeConfigs/subShapes';
-import type { DisplayType, ScreenMode } from './types/enums';
+import type { DisplayType, Game, ScreenMode } from './types/enums';
 import type { ModeConfigTypeMap, ScreenOutput } from './types/screenConfig';
 import { pageRotationEdit } from './modules/page-rotation';
 import { SCREEN_MODES, screenModeSupportsBackgroundLayers } from './screenModes';
@@ -162,8 +162,9 @@ export function getDisplayResetForMode<M extends ScreenMode>(
 	return pageRotationEdit(declaration, { autoPageEnabled: reset.autoPageEnabled === true }, display, now);
 }
 
-export function getScreenModeSelectOptions(): ScreenModeSelectOption[] {
-	return Object.entries(SCREEN_MODES).map(([mode, definition]) => ({
+/** The Screen Modes a mode picker offers an Event of `game`: those declaring its Card Game. */
+export function getScreenModeSelectOptions(game: Game): ScreenModeSelectOption[] {
+	return Object.entries(SCREEN_MODES).filter(([, definition]) => definition.cardGames.includes(game)).map(([mode, definition]) => ({
 		label: definition.label,
 		value: mode as ScreenMode,
 		icon: definition.icon,
