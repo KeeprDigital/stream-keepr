@@ -117,18 +117,24 @@ interface NavGroup {
 
 /**
  * An Event page's nav entry, declaring the Card Games whose Events it is
- * offered to: a page reading results or the Metagame is Magic: The Gathering
- * only (ADR-0057).
+ * offered to: a page for Players, Rounds, Matches, results or the Metagame is
+ * Magic: The Gathering only (ADR-0057). Each child declares its own.
  */
-interface EventNavItem extends NavigationMenuItem {
+interface EventNavItem extends Omit<NavigationMenuItem, 'children'> {
 	cardGames: readonly Game[];
+	children?: EventNavItem[];
 }
 
-/** The entries offered to the current Event: those declaring its Card Game. */
+/** The entries, and children, offered to the current Event: those declaring its Card Game. */
 function offeredToEvent(items: EventNavItem[]): NavigationMenuItem[] {
 	return items
 		.filter(item => isOfferedToCardGame(item.cardGames, cardGame.value))
-		.map(({ cardGames: _cardGames, ...item }) => item);
+		.map(({ cardGames: _cardGames, children, ...item }) => children
+			? {
+					...item,
+					children: offeredToEvent(children),
+				}
+			: item);
 }
 
 function graphicsOperationsCockpitItem(): NavigationMenuItem {
@@ -190,13 +196,13 @@ const navGroups = computed<NavGroup[]>(() => {
 					label: 'Players',
 					icon: 'i-lucide-users',
 					to: `/event/${id}/players`,
-					cardGames: EVERY_CARD_GAME,
+					cardGames: MTG_ONLY,
 				},
 				{
 					label: 'Matches',
 					icon: 'i-lucide-swords',
 					to: `/event/${id}/matches`,
-					cardGames: EVERY_CARD_GAME,
+					cardGames: MTG_ONLY,
 				},
 				...(meleeEnabled.value
 					? [
@@ -255,6 +261,7 @@ const navGroups = computed<NavGroup[]>(() => {
 						children: screenStore.screens.map(screen => ({
 							label: screen.name,
 							to: `/event/${id}/screens/${screen.id}`,
+							cardGames: EVERY_CARD_GAME,
 						})),
 					}),
 				},
@@ -269,11 +276,16 @@ const navGroups = computed<NavGroup[]>(() => {
 					defaultOpen: true,
 					cardGames: EVERY_CARD_GAME,
 					children: [
-						{ label: 'Event', to: `/event/${id}/config`, exact: true },
-						{ label: 'Event Structure', to: `/event/${id}/rounds` },
-						{ label: 'Feature Matches', to: `/event/${id}/config/features` },
-						{ label: 'Broadcast', to: `/event/${id}/config/broadcast` },
-						{ label: 'Integrations', to: `/event/${id}/config/integrations` },
+						{
+							label: 'Event',
+							to: `/event/${id}/config`,
+							exact: true,
+							cardGames: EVERY_CARD_GAME,
+						},
+						{ label: 'Event Structure', to: `/event/${id}/rounds`, cardGames: MTG_ONLY },
+						{ label: 'Feature Matches', to: `/event/${id}/config/features`, cardGames: EVERY_CARD_GAME },
+						{ label: 'Broadcast', to: `/event/${id}/config/broadcast`, cardGames: EVERY_CARD_GAME },
+						{ label: 'Integrations', to: `/event/${id}/config/integrations`, cardGames: EVERY_CARD_GAME },
 					],
 				},
 			]),

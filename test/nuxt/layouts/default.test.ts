@@ -122,9 +122,9 @@ const UNavigationMenuStub = defineComponent({
 
 		return { labels };
 	},
-	// Each item gets a button so a test can take the action the sidebar offers,
-	// not merely read the label it offers it under.
-	template: '<nav>{{ labels }}<button v-for="item in items" :key="item.label" type="button" :data-nav-item="item.label" @click="item.onSelect?.()" /></nav>',
+	// Each item and child gets a button so a test can take the action the sidebar
+	// offers, not merely read the label it offers it under.
+	template: '<nav>{{ labels }}<template v-for="item in items" :key="item.label"><button type="button" :data-nav-item="item.label" @click="item.onSelect?.()" /><button v-for="child in item.children ?? []" :key="child.label" type="button" :data-nav-item="child.label" /></template></nav>',
 });
 
 const UButtonStub = defineComponent({
@@ -206,28 +206,21 @@ describe('default layout sync navigation', () => {
 		expect(wrapper.text()).toContain('Sync');
 	});
 
-	// An OP Event holds no results or Metagame, so the pages reading them are not offered.
+	// An OP Event models no Players, Rounds or Matches and holds no Metagame
+	// (ADR-0057), so the pages for them are not offered.
+	const MTG_ONLY_ENTRIES = [
+		'Players',
+		'Matches',
+		'Metagame',
+		'Archetype Review',
+		'Sync',
+		'Cards',
+		'Event Structure',
+	];
+
 	it.each([
-		[
-			'mtg',
-			[
-				'Metagame',
-				'Archetype Review',
-				'Sync',
-				'Cards',
-			],
-			[],
-		],
-		[
-			'op',
-			[],
-			[
-				'Metagame',
-				'Archetype Review',
-				'Sync',
-				'Cards',
-			],
-		],
+		['mtg', MTG_ONLY_ENTRIES, []],
+		['op', [], MTG_ONLY_ENTRIES],
 	] as const)('on a %s Event, offers %j and omits %j', async (game, offered, omitted) => {
 		mockEventStore.event.game = game;
 
@@ -239,6 +232,9 @@ describe('default layout sync navigation', () => {
 			'Controls',
 			'Feature Matches',
 			'Screens',
+			'Event',
+			'Broadcast',
+			'Integrations',
 		]));
 		for (const label of omitted)
 			expect(items).not.toContain(label);

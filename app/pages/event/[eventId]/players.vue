@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui';
 import type { Player } from '~/types';
+import { MTG_ONLY } from '~~/shared/config/games';
 import { LazyPlayerCreateModal, LazyPlayerListCreateModal, LazyPlayerListEditModal, LazyUIConfirmDeleteModal } from '#components';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
+	cardGames: MTG_ONLY,
 	title: 'Player List',
 	layout: false,
 });

@@ -1,3 +1,4 @@
+import { isOfferedToCardGame } from '~~/shared/config/games';
 import { isScreenOutputPage } from '~/modules/auth/pageGate';
 import { resetAllEventStores } from '~/utils/eventStores';
 
@@ -31,6 +32,12 @@ export default defineNuxtRouteMiddleware(async (to) => {
 			if (!eventStore.event) {
 				return navigateTo('/');
 			}
+		}
+
+		// A page this Event's Card Game does not use, such as Players on a One
+		// Piece Card Game Event (ADR-0057), gives way to the Event overview.
+		if (to.meta.cardGames && !isOfferedToCardGame(to.meta.cardGames, eventStore.event.game)) {
+			return navigateTo(`/event/${eventId}`);
 		}
 	}
 	else {

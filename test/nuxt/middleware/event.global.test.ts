@@ -1,3 +1,4 @@
+import type { Game } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,7 +8,7 @@ const {
 	mockResetAllEventStores,
 } = vi.hoisted(() => ({
 	mockEventStore: {
-		event: null as { id: number; meleeEnabled?: boolean } | null,
+		event: null as { id: number; game?: Game; meleeEnabled?: boolean } | null,
 		loadEvent: vi.fn(),
 		$reset: vi.fn(),
 	},
@@ -26,7 +27,7 @@ mockNuxtImport('defineNuxtRouteMiddleware', () => (fn: any) => fn);
 const { default: middleware } = await import('~/middleware/event.global');
 
 function createRoute(path: string, params: Record<string, string> = {}) {
-	return { path, params } as any;
+	return { path, params, meta: {} } as any;
 }
 
 const fromRoute = createRoute('/');
@@ -102,6 +103,52 @@ describe('event.global middleware', () => {
 
 			expect(mockEventStore.loadEvent).toHaveBeenCalledWith(999);
 			expect(mockNavigateTo).toHaveBeenCalledWith('/');
+		});
+	});
+
+	// An OP Event models no Players, Rounds or Matches and never runs Melee Sync
+	// (ADR-0057): a direct visit to a page it does not use lands on its overview.
+	// Routes resolve through the real router, so each page's own declaration counts.
+	describe('pages the Event\'s Card Game does not use', () => {
+		const MTG_ONLY_PAGES = [
+			'/event/1/players',
+			'/event/1/matches',
+			'/event/1/rounds',
+			'/event/1/sync',
+			'/event/1/metagame',
+			'/event/1/metagame/cards',
+			'/event/1/archetype-review',
+			'/event/1/card',
+		];
+		const EVERY_CARD_GAME_PAGES = [
+			'/event/1',
+			'/event/1/feature-matches',
+			'/event/1/screens',
+			'/event/1/config',
+			'/event/1/config/features',
+		];
+
+		function visit(path: string) {
+			return runMiddleware(useRouter().resolve(path) as any);
+		}
+
+		it.each(MTG_ONLY_PAGES)('sends an OP Event from %s to its overview', async (path) => {
+			mockEventStore.event = { id: 1, game: 'op' };
+
+			await visit(path);
+
+			expect(mockNavigateTo).toHaveBeenCalledWith('/event/1');
+		});
+
+		it.each([
+			...MTG_ONLY_PAGES.map(path => ['mtg', path] as const),
+			...EVERY_CARD_GAME_PAGES.map(path => ['op', path] as const),
+		])('lets a %s Event stay on %s', async (game, path) => {
+			mockEventStore.event = { id: 1, game };
+
+			await visit(path);
+
+			expect(mockNavigateTo).not.toHaveBeenCalled();
 		});
 	});
 

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui';
+import { MTG_ONLY } from '~~/shared/config/games';
 import { LazyUIConfirmActionModal } from '#components';
 import { useMeleeSyncUnresolvedDeckListResolution } from '~/modules/melee-sync/unresolvedDeckLists';
 import { formatSyncTimestamp } from '~/utils/meleeSync';
 
 definePageMeta({
+	cardGames: MTG_ONLY,
 	title: 'Sync',
 	layout: false,
 	middleware: 'sync',

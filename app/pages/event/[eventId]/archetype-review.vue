@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { MTG_ONLY } from '~~/shared/config/games';
+
 definePageMeta({
+	cardGames: MTG_ONLY,
 	title: 'Archetype Review',
 	layout: false,
 });

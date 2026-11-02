@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '#ui/types';
+import { MTG_ONLY } from '~~/shared/config/games';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
+	cardGames: MTG_ONLY,
 	title: 'Metagame',
 	layout: false,
 });

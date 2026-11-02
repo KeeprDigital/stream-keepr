@@ -553,6 +553,34 @@ export const nuxtUiStubs = {
 	UTooltip: UTooltipStub,
 };
 
+interface NavigationItemLike {
+	label?: string;
+	to?: string;
+	children?: NavigationItemLike[];
+}
+
+/**
+ * A `<nav>` of links, one per item and per child, labelled and pointing where the item does.
+ * Kept out of `nuxtUiStubs`, which suites rendering the real menu spread: pass
+ * `{ ...nuxtUiStubs, UNavigationMenu: UNavigationMenuStub }`.
+ */
+export const UNavigationMenuStub = defineComponent({
+	name: 'UNavigationMenu',
+	props: {
+		items: {
+			type: Array as PropType<NavigationItemLike[]>,
+			default: () => [],
+		},
+	},
+	setup: props => ({
+		links: computed(() => props.items.flatMap(item => [
+			item,
+			...(item.children ?? []),
+		])),
+	}),
+	template: '<nav><a v-for="(link, index) in links" :key="index" :href="link.to">{{ link.label }}</a></nav>',
+});
+
 interface TableColumnLike {
 	id?: string;
 	accessorKey?: string;

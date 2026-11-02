@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type { Phase, Round } from '~/types';
+import { MTG_ONLY } from '~~/shared/config/games';
 import { LazyRoundEditModal, LazyRoundPhaseEditModal, LazyUIConfirmActionModal } from '#components';
 
 definePageMeta({
+	cardGames: MTG_ONLY,
 	title: 'Event Structure',
 	layout: false,
 });
