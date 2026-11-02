@@ -1,13 +1,6 @@
-import type { OpLeader } from '~~/shared/types/game';
 import { describe, expect, it } from 'vitest';
 import { getMtgGameData, getOpGameData, getPlayerIdentityValue, resolvePlayerDeckIdentity } from '~~/shared/utils/gameData';
-
-const luffy: OpLeader = {
-	number: 'OP01-003',
-	name: 'Monkey.D.Luffy',
-	colors: ['Red', 'Green'],
-	imageUrl: 'https://cards-img.keepr.digital/OP01-003.png',
-};
+import { LUFFY as luffy } from '~~/test/helpers/opCards';
 
 describe('getMtgGameData', () => {
 	it('returns defaults for null', () => {

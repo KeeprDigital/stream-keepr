@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildFeatureMatchOverlayTemplateMetadataValues, featureMatchTokenValues } from '~~/shared/featureMatchOverlayValues';
+import { LUFFY } from '~~/test/helpers/opCards';
 
 describe('broadcast layout template metadata values', () => {
 	it('populates event, stage, round, format, and table placeholders', () => {
@@ -101,12 +102,6 @@ describe('broadcast layout template metadata values', () => {
 });
 
 describe('a side\'s deck on the Feature Match Overlay', () => {
-	const luffy = {
-		number: 'OP01-003',
-		name: 'Monkey.D.Luffy',
-		colors: ['Red', 'Green'],
-		imageUrl: 'https://cards-img.keepr.digital/OP01-003.png',
-	};
 	function valuesFor(game: 'mtg' | 'op', gameData: unknown) {
 		return featureMatchTokenValues({
 			event: {
@@ -131,7 +126,7 @@ describe('a side\'s deck on the Feature Match Overlay', () => {
 	it.each([
 		{
 			game: 'op' as const,
-			gameData: { type: 'op', leader: luffy },
+			gameData: { type: 'op', leader: LUFFY },
 			deck: 'Monkey.D.Luffy',
 			colors: 'Red/Green',
 			image: 'https://cards-img.keepr.digital/OP01-003.png',

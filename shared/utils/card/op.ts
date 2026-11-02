@@ -11,6 +11,16 @@ export function opPrintingImageUrl(printingId: string): string {
 	return `${OP_CARD_IMAGE_ORIGIN}/${encodeURIComponent(printingId)}.png`;
 }
 
+/** Whether a URL is a One Piece Printing image, the only card image a broadcast loads. */
+export function isOpCardImageUrl(value: string): boolean {
+	try {
+		return new URL(value).origin === OP_CARD_IMAGE_ORIGIN;
+	}
+	catch {
+		return false;
+	}
+}
+
 /** A card number: a set code, a dash and three digits, e.g. `OP01-001`, `ST10-016`, `P-001`. */
 const OP_CARD_NUMBER_PATTERN = /^[A-Z]{1,4}\d{0,2}-\d{3}$/;
 

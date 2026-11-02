@@ -322,21 +322,10 @@ watch(
 					data-mana-colors
 					aria-hidden="true"
 				/>
-				<span
-					v-else-if="segment.opColors?.monochrome"
-					class="graphics-compositor-item__mana-colors-key"
-					data-op-colors-key
-					aria-hidden="true"
-				>
-					<span
-						v-for="color in segment.opColors.colors"
-						:key="color"
-						class="graphics-compositor-item__mana-color-key-symbol"
-					/>
-				</span>
 				<OpColorDisplay
 					v-else-if="segment.opColors"
 					:colors="segment.opColors.colors"
+					:monochrome="segment.opColors.monochrome"
 					size="lg"
 				/>
 				<span

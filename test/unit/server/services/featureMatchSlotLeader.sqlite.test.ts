@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
+import { LAW, NAMI, ZORO } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
@@ -36,18 +37,6 @@ afterAll(async () => {
 	await harness.close();
 });
 
-function leader(number: string, name: string, colors: OpLeader['colors']): OpLeader {
-	return {
-		number,
-		name,
-		colors,
-		imageUrl: `https://cards-img.keepr.digital/${number}.png`,
-	};
-}
-const zoro = leader('OP01-001', 'Roronoa Zoro', ['Red']);
-const nami = leader('OP01-016', 'Nami', ['Blue']);
-const law = leader('OP01-002', 'Trafalgar Law', ['Red', 'Green']);
-
 function side(name: string, sideLeader: OpLeader) {
 	return {
 		name,
@@ -63,8 +52,8 @@ async function stageSession() {
 	const [slot] = await db.insert(schema.featureMatches)
 		.values({
 			eventId,
-			player1Data: side('Ana', zoro),
-			player2Data: side('Ben', law),
+			player1Data: side('Ana', ZORO),
+			player2Data: side('Ben', LAW),
 		})
 		.returning();
 	const session = (await featureMatchStateService().createSessionForSlot(slot!.id, eventId))!;
@@ -95,7 +84,7 @@ describe('a Slot side\'s Leader during a Feature Match Session', () => {
 			eventId,
 			slotId,
 			input: {
-				player1Data: side('Ana', nami),
+				player1Data: side('Ana', NAMI),
 			},
 		});
 
@@ -103,11 +92,11 @@ describe('a Slot side\'s Leader during a Feature Match Session', () => {
 			sessionId: session.id,
 			player1: [
 				'Ana',
-				{ type: 'op', leader: nami },
+				{ type: 'op', leader: NAMI },
 			],
 			player2: [
 				'Ben',
-				{ type: 'op', leader: law },
+				{ type: 'op', leader: LAW },
 			],
 		});
 	});
@@ -126,19 +115,19 @@ describe('a Slot side\'s Leader during a Feature Match Session', () => {
 			eventId,
 			slotId,
 			input: {
-				player1Data: side('Ben', law),
-				player2Data: side('Ana', nami),
+				player1Data: side('Ben', LAW),
+				player2Data: side('Ana', NAMI),
 			},
 		});
 
 		const leaders = await sessionLeaders(slotId, eventId);
 		expect([leaders.player1, leaders.player2]).toContainEqual([
 			'Ana',
-			{ type: 'op', leader: nami },
+			{ type: 'op', leader: NAMI },
 		]);
 		expect([leaders.player1, leaders.player2]).toContainEqual([
 			'Ben',
-			{ type: 'op', leader: law },
+			{ type: 'op', leader: LAW },
 		]);
 	});
 });

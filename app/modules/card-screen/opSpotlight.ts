@@ -48,22 +48,24 @@ export function opCardSearchParams(search: OpCardSearch): OpCardSearchParams {
 	return params;
 }
 
-/**
- * One Piece Card Spotlight Module: search through the Event's bandai-keepr
- * proxy, the Printing picker, the preview, and its Card History (ADR-0057).
- *
- * An OP card is shown as printed: it has no flip, rotate, turn-over or meld.
- * Showing it saves it as the Screen Card, with the Event's Card Timeout,
- * through the same save every Screen Card takes.
- */
-export function useOpSpotlightRuntime(state: OpSpotlightRuntimeState) {
-	const { searchCards, lookupCard } = useOpCardRepository();
-	const { getServerTime } = useServerTime();
-	const searches = createGuardedSequence();
-	const lookups = createGuardedSequence();
-	let searchController: AbortController | null = null;
+/** Where one One Piece card search holds its answer. */
+export interface OpCardSearchState {
+	eventId: MaybeRefOrGetter<number | null | undefined>;
+	searching: Ref<boolean>;
+	results: Ref<OpCardSummary[]>;
+	/** `null` until bandai-keepr has answered; `false` while this installation has none configured. */
+	available: Ref<boolean | null>;
+	searchError: Ref<string | null>;
+}
 
-	const previewPrintings = computed<OpPrinting[]>(() => state.previewDetail.value?.printings ?? []);
+/**
+ * Search the Event's One Piece cards into `state`. The newest search wins: an
+ * older one still in flight is aborted, and its answer discarded.
+ */
+export function useOpCardSearch(state: OpCardSearchState) {
+	const { searchCards } = useOpCardRepository();
+	const searches = createGuardedSequence();
+	let searchController: AbortController | null = null;
 
 	async function search(search: OpCardSearch) {
 		const eventId = toValue(state.eventId);
@@ -97,6 +99,33 @@ export function useOpSpotlightRuntime(state: OpSpotlightRuntimeState) {
 			}
 		}
 	}
+
+	/** Abandon the search in flight, if any; what `state` holds stays. */
+	function supersede() {
+		searches.supersede();
+		searchController?.abort();
+		searchController = null;
+		state.searching.value = false;
+	}
+
+	return { search, supersede };
+}
+
+/**
+ * One Piece Card Spotlight Module: search through the Event's bandai-keepr
+ * proxy, the Printing picker, the preview, and its Card History (ADR-0057).
+ *
+ * An OP card is shown as printed: it has no flip, rotate, turn-over or meld.
+ * Showing it saves it as the Screen Card, with the Event's Card Timeout,
+ * through the same save every Screen Card takes.
+ */
+export function useOpSpotlightRuntime(state: OpSpotlightRuntimeState) {
+	const { lookupCard } = useOpCardRepository();
+	const { getServerTime } = useServerTime();
+	const searches = useOpCardSearch(state);
+	const lookups = createGuardedSequence();
+
+	const previewPrintings = computed<OpPrinting[]>(() => state.previewDetail.value?.printings ?? []);
 
 	/** Load a Card's Printings; answers whether the lookup is still the latest and found the Card. */
 	async function loadDetail(number: string): Promise<OpCardDetail | null> {
@@ -209,9 +238,6 @@ export function useOpSpotlightRuntime(state: OpSpotlightRuntimeState) {
 	function reset() {
 		searches.supersede();
 		lookups.supersede();
-		searchController?.abort();
-		searchController = null;
-		state.searching.value = false;
 		state.results.value = [];
 		state.available.value = null;
 		state.searchError.value = null;
@@ -221,7 +247,7 @@ export function useOpSpotlightRuntime(state: OpSpotlightRuntimeState) {
 
 	return {
 		previewPrintings,
-		search,
+		search: searches.search,
 		selectCard,
 		selectHistoryCard,
 		selectPrinting,

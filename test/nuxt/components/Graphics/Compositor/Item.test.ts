@@ -110,7 +110,7 @@ describe('graphicsCompositorItem One Piece Leader', () => {
 		]));
 
 		expect(wrapper.get('[data-op-card-image]').attributes('src')).toBe(url);
-		expect(wrapper.get('[data-op-colors]').attributes('aria-label')).toBe('Red/Green');
+		expect(wrapper.get('[data-op-colors="fill"]').attributes('aria-label')).toBe('Red/Green');
 		expect(wrapper.findAll('[data-op-color]').map(pip => pip.attributes('data-op-color'))).toEqual(['Red', 'Green']);
 		expect(wrapper.text()).not.toContain('Red/Green');
 		expect(wrapper.text()).not.toContain(url);
@@ -135,8 +135,8 @@ describe('graphicsCompositorItem One Piece Leader', () => {
 
 		expect(wrapper.find('[data-op-card-image]').exists()).toBe(false);
 		expect(wrapper.find('[data-op-card-image-key]').exists()).toBe(true);
-		expect(wrapper.find('[data-op-colors]').exists()).toBe(false);
-		expect(wrapper.get('[data-op-colors-key]').findAll('span')).toHaveLength(2);
+		expect(wrapper.find('[data-op-colors="fill"]').exists()).toBe(false);
+		expect(wrapper.findAll('[data-op-colors="key"] [data-op-color]').map(pip => pip.attributes('data-op-color'))).toEqual(['Red', 'Green']);
 	});
 });
 

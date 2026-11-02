@@ -2,18 +2,23 @@
 import type { OpCardColor } from '~~/shared/types/card/op';
 import { formatOpColors } from '~~/shared/utils/card/op';
 
+type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+
 /**
  * One Piece colours as pips, one per colour: both colours of a dual-colour
- * Leader. The One Piece counterpart of `MtgManaColorDisplay`.
+ * Leader. The One Piece counterpart of `MtgManaColorDisplay`. Monochrome paints
+ * each pip as white coverage of the same size, for a Key Output's matte.
  */
 const props = withDefaults(defineProps<{
 	colors: readonly OpCardColor[];
-	size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+	size?: Size;
+	monochrome?: boolean;
 }>(), {
 	size: 'md',
+	monochrome: false,
 });
 
-const sizeClasses: Record<string, string> = {
+const sizeClasses: Record<Size, string> = {
 	xs: 'text-xs',
 	sm: 'text-sm',
 	md: 'text-base',
@@ -38,13 +43,14 @@ const OP_COLOR_FILLS: Record<OpCardColor, string> = {
 		:class="sizeClasses[props.size]"
 		role="img"
 		:aria-label="formatOpColors(props.colors)"
-		data-op-colors
+		:data-op-colors="props.monochrome ? 'key' : 'fill'"
 	>
 		<span
 			v-for="color in props.colors"
 			:key="color"
 			class="op-color"
-			:style="{ backgroundColor: OP_COLOR_FILLS[color] }"
+			:class="{ 'op-color--key': props.monochrome }"
+			:style="{ backgroundColor: props.monochrome ? '#fff' : OP_COLOR_FILLS[color] }"
 			:data-op-color="color"
 		/>
 	</span>
@@ -66,5 +72,9 @@ const OP_COLOR_FILLS: Record<OpCardColor, string> = {
 	flex: 0 0 auto;
 	border-radius: 9999px;
 	box-shadow: inset 0 0 0 0.08em rgb(255 255 255 / 0.6);
+}
+
+.op-color--key {
+	box-shadow: none;
 }
 </style>

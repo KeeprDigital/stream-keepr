@@ -8,6 +8,7 @@ import { createFeatureMatchLayoutComposition, FEATURE_MATCH_LAYOUT_COMPOSITION_I
 import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES } from '~~/shared/featureMatchSampleDataset';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { LUFFY } from '~~/test/helpers/opCards';
 import Display from '~/components/Screen/Modes/FeatureMatchOverlay/Display.vue';
 import { GRAPHICS_PREVIEW_READY_MESSAGE } from '~/modules/graphics/previewMessages';
 
@@ -391,12 +392,7 @@ describe('featureMatchOverlayDisplay', () => {
 				name: 'Ana',
 				gameData: {
 					type: 'op',
-					leader: {
-						number: 'OP01-003',
-						name: 'Monkey.D.Luffy',
-						colors: ['Red', 'Green'],
-						imageUrl: 'https://cards-img.keepr.digital/OP01-003.png',
-					},
+					leader: LUFFY,
 				},
 			},
 			player2Data: null,
@@ -405,7 +401,7 @@ describe('featureMatchOverlayDisplay', () => {
 
 		const wrapper = await mountComponent();
 
-		expect(wrapper.get('[data-op-card-image]').attributes('src')).toBe('https://cards-img.keepr.digital/OP01-003.png');
+		expect(wrapper.get('[data-op-card-image]').attributes('src')).toBe(LUFFY.imageUrl);
 		expect(wrapper.get('[data-op-colors]').attributes('aria-label')).toBe('Red/Green');
 		expect(wrapper.get('[data-graphic-item-kind="text"]').text()).toContain('Monkey.D.Luffy');
 	});

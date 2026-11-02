@@ -46,7 +46,7 @@ import {
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
 import { SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '~~/shared/socialProfiles';
-import { OP_CARD_IMAGE_ORIGIN, parseOpColors } from '~~/shared/utils/card/op';
+import { isOpCardImageUrl, parseOpColors } from '~~/shared/utils/card/op';
 import { MTG_CARD_BORDER_RADIUS } from '~~/shared/utils/card/size';
 import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
 import { clampOpacity, glowDropShadow, paintColour } from '~/modules/screen/outputPaint';
@@ -1252,16 +1252,6 @@ function resolvedInputValues(
 	};
 }
 
-/** Only a bandai-keepr Printing image is loaded on air; any other value paints as its text. */
-function isOpCardImageUrl(value: string): boolean {
-	try {
-		return new URL(value).origin === OP_CARD_IMAGE_ORIGIN;
-	}
-	catch {
-		return false;
-	}
-}
-
 function textDescriptor(
 	output: ScreenOutput,
 	scope: string,
@@ -1309,6 +1299,7 @@ function textDescriptor(
 							opColors: { colors: opColors, monochrome: output === 'key' },
 						}
 					: {}),
+				// Only a bandai-keepr Printing image is loaded on air; any other value paints as its text.
 				...(presentation === 'op-card-image' && isOpCardImageUrl(segment.text)
 					? {
 							cardImage: { url: segment.text, monochrome: output === 'key' },

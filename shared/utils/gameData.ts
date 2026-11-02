@@ -30,7 +30,7 @@ export function getOpGameData(
 	return {
 		...gameData,
 		type: 'op',
-		leader: leaderOf((gameData as OpPlayerGameData).leader),
+		leader: storedOpLeader((gameData as OpPlayerGameData).leader),
 	};
 }
 
@@ -38,7 +38,7 @@ export function getOpGameData(
  * A stored Leader, or `null`. Free text typed before the Leader picker existed
  * names no card, so it reads as no Leader rather than a name-only one.
  */
-function leaderOf(leader: unknown): OpLeader | null {
+export function storedOpLeader(leader: unknown): OpLeader | null {
 	return typeof leader === 'object' && leader !== null
 		? leader as OpLeader
 		: null;

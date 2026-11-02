@@ -48,7 +48,7 @@ A competitor in an Event.
 Submitted cards for a game: a Player's for a Phase, or a Feature Match Deck List.
 
 **Leader**:
-The single leader card heading a One Piece Card Game Deck List, held apart from its Mainboard. It sets the Deck List's colours and is how the community names the deck.
+The single leader card heading a One Piece Card Game Deck List, held apart from its Mainboard. It sets the Deck List's colours and is how the community names the deck. Each player side of a One Piece Feature Match Slot holds its Leader, picked by the operator, which that side's Feature Match Deck List shares (ADR-0057).
 
 **Mainboard**:
 The starting portion of a Deck List — the cards a Player begins each game with.

@@ -2,23 +2,13 @@ import type { InboundMessage } from 'ably';
 import Ably from 'ably';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eventRealtimeChannel } from '../../shared/utils/realtimeChannels';
+import { LAW, NAMI, ZORO } from '../helpers/opCards';
 import { $fetch } from './client';
-import { $fetchRaw, INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './helpers';
+import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './helpers';
 
 // A Slot side's Leader on a One Piece Event (ADR-0057): a change during a
-// Feature Match Session reaches its snapshot, its followers and the public read.
+// Feature Match Session reaches its snapshot and its followers.
 
-function leader(number: string, name: string, colors: string[]) {
-	return {
-		number,
-		name,
-		colors,
-		imageUrl: `https://cards-img.keepr.digital/${number}.png`,
-	};
-}
-const zoro = leader('OP01-001', 'Roronoa Zoro', ['Red']);
-const nami = leader('OP01-016', 'Nami', ['Blue']);
-const law = leader('OP01-002', 'Trafalgar Law', ['Red', 'Green']);
 function side(name: string, sideLeader: unknown) {
 	return {
 		name,
@@ -40,8 +30,8 @@ describe('a Feature Match Slot side\'s Leader', () => {
 		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
 			method: 'POST',
 			body: {
-				player1Data: side('Ana', zoro),
-				player2Data: side('Ben', law),
+				player1Data: side('Ana', ZORO),
+				player2Data: side('Ben', LAW),
 			},
 		});
 		slotId = slot.id;
@@ -66,36 +56,12 @@ describe('a Feature Match Slot side\'s Leader', () => {
 	}
 
 	it('reaches the active Session\'s snapshot without reopening it', async () => {
-		await changeLeader(nami);
+		await changeLeader(NAMI);
 
 		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots/${slotId}`);
 		expect(slot.activeSession!.id).toBe(sessionId);
-		expect(slot.activeSession!.sourceSnapshot.player1.data!.gameData).toEqual({ type: 'op', leader: nami });
-		expect(slot.activeSession!.sourceSnapshot.player2.data!.gameData).toEqual({ type: 'op', leader: law });
-	});
-
-	it('shows on the public read where a Magic deck would', async () => {
-		await changeLeader(nami);
-
-		const [row] = await $fetch(`/api/public/events/${eventId}/feature-match-slots/${slotId}`) as Record<string, string>[];
-		expect(row).toMatchObject({
-			player1Deck: 'Nami',
-			player1DeckColors: 'Blue',
-			player1LeaderImage: 'https://cards-img.keepr.digital/OP01-016.png',
-			player2Deck: 'Trafalgar Law',
-			player2DeckColors: 'Red/Green',
-		});
-	});
-
-	it('refuses a Leader whose image is not a One Piece card image', async () => {
-		const res = await $fetchRaw(`/api/events/${eventId}/feature-match-slots/${slotId}/setup`, {
-			method: 'PATCH',
-			body: {
-				player1Data: side('Ana', { ...nami, imageUrl: 'https://example.com/nami.png' }),
-			},
-		});
-
-		expect(res.status).toBe(400);
+		expect(slot.activeSession!.sourceSnapshot.player1.data!.gameData).toEqual({ type: 'op', leader: NAMI });
+		expect(slot.activeSession!.sourceSnapshot.player2.data!.gameData).toEqual({ type: 'op', leader: LAW });
 	});
 
 	// The Slot's own announcement carries its corrected Session; the correction announces nothing itself.
@@ -114,7 +80,7 @@ describe('a Feature Match Slot side\'s Leader', () => {
 
 		try {
 			await channel.subscribe('featureMatch:updated', listener);
-			await changeLeader(zoro);
+			await changeLeader(ZORO);
 
 			const message = await Promise.race([
 				announced,
@@ -124,13 +90,13 @@ describe('a Feature Match Slot side\'s Leader', () => {
 			]);
 
 			const { featureMatch } = message.data;
-			expect(featureMatch.player1Data.gameData).toEqual({ type: 'op', leader: zoro });
+			expect(featureMatch.player1Data.gameData).toEqual({ type: 'op', leader: ZORO });
 			expect(featureMatch.activeSession).toMatchObject({
 				id: sessionId,
 				sourceSnapshot: {
 					player1: {
 						data: {
-							gameData: { type: 'op', leader: zoro },
+							gameData: { type: 'op', leader: ZORO },
 						},
 					},
 				},

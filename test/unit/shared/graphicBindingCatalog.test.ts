@@ -9,6 +9,7 @@ import {
 	isGraphicBindingFieldCompatible,
 	resolveGraphicBindingField,
 } from '~~/shared/modules/graphics';
+import { LUFFY } from '~~/test/helpers/opCards';
 
 // The binding field catalog as an operator meets it: fields per source kind and game,
 // their types, and what each resolves to.
@@ -230,12 +231,7 @@ describe('graphic Input Binding field catalog', () => {
 			name: 'Ava',
 			gameData: {
 				type: 'op' as const,
-				leader: {
-					number: 'OP01-003',
-					name: 'Monkey.D.Luffy',
-					colors: ['Red' as const, 'Green' as const],
-					imageUrl: 'https://cards-img.keepr.digital/OP01-003.png',
-				},
+				leader: LUFFY,
 			},
 		};
 		expect(resolveGraphicBindingField('player', fieldId, player, dataSet())).toBe(value);

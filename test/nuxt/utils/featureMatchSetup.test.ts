@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ZORO } from '~~/test/helpers/opCards';
 import { DEFAULT_PLAYER_DATA } from '~/types';
 import { buildFeatureMatchSetupUpdate, normalizePlayerSlotData } from '~/utils/featureMatchSetup';
 
@@ -18,32 +19,17 @@ describe('featureMatchSetup payload helpers', () => {
 		})).toBeNull();
 	});
 
-	// A save sends the picked Leader whole; free text typed before the picker names no card.
 	it.each([
 		{
-			leader: {
-				number: 'OP01-001',
-				name: 'Roronoa Zoro',
-				colors: ['Red'],
-				imageUrl: 'https://cards-img.keepr.digital/OP01-001.png',
-			},
-			gameData: {
-				type: 'op',
-				leader: {
-					number: 'OP01-001',
-					name: 'Roronoa Zoro',
-					colors: ['Red'],
-					imageUrl: 'https://cards-img.keepr.digital/OP01-001.png',
-				},
-			},
+			leader: ZORO,
+			gameData: { type: 'op', leader: ZORO },
 		},
-		{ leader: 'Zoro', gameData: null },
 		{ leader: null, gameData: null },
-	])('saves a side\'s Leader $leader as $gameData', ({ leader, gameData }) => {
+	])('saves a side\'s Leader $leader whole', ({ leader, gameData }) => {
 		expect(normalizePlayerSlotData({
 			...DEFAULT_PLAYER_DATA,
 			name: 'Ana',
-			gameData: { type: 'op', leader } as any,
+			gameData: { type: 'op', leader },
 		})?.gameData).toEqual(gameData);
 	});
 

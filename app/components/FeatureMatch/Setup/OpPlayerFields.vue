@@ -2,8 +2,7 @@
 import type { OpCardSummary } from '~~/shared/types/card/op';
 import type { OpPlayerGameData } from '~~/shared/types/game';
 import { opLeaderOf } from '~~/shared/utils/card/op';
-import { opCardSearchParams } from '~/modules/card-screen/opSpotlight';
-import { createGuardedSequence } from '~/utils/guardedSequence';
+import { useOpCardSearch } from '~/modules/card-screen/opSpotlight';
 
 /**
  * A side's Leader, picked from the Event's One Piece card search narrowed to
@@ -15,48 +14,28 @@ const modelValue = defineModel<OpPlayerGameData>({
 });
 
 const eventStore = useEventStore();
-const { searchCards } = useOpCardRepository();
-const searches = createGuardedSequence();
-
 const text = ref('');
 const results = ref<OpCardSummary[]>([]);
 const searching = ref(false);
 /** `null` until bandai-keepr has answered; `false` while this installation has none configured. */
 const available = ref<boolean | null>(null);
-const failed = ref(false);
+const searchError = ref<string | null>(null);
+const searches = useOpCardSearch({
+	eventId: () => eventStore.eventId,
+	searching,
+	results,
+	available,
+	searchError,
+});
 
 const leader = computed(() => modelValue.value.leader ?? null);
+/** Results answer the text typed; with none, nothing is offered. */
+const offered = computed(() => text.value.trim()
+	? results.value
+	: []);
 
-async function searchNow() {
-	const eventId = eventStore.eventId;
-	const query = text.value.trim();
-	const flight = searches.begin();
-	if (!eventId || !query) {
-		results.value = [];
-		searching.value = false;
-		return;
-	}
-	searching.value = true;
-	try {
-		const answer = await searchCards(eventId, opCardSearchParams({ text: query, category: 'leader' }));
-		if (!flight.current)
-			return;
-		available.value = answer.available;
-		results.value = answer.available
-			? answer.items
-			: [];
-		failed.value = false;
-	}
-	catch {
-		if (!flight.current)
-			return;
-		results.value = [];
-		failed.value = true;
-	}
-	finally {
-		if (flight.current)
-			searching.value = false;
-	}
+function searchNow() {
+	void searches.search({ text: text.value, category: 'leader' });
 }
 
 const search = useDebounceFn(searchNow, 300);
@@ -68,13 +47,14 @@ function pick(card: OpCardSummary) {
 	};
 	searches.supersede();
 	text.value = '';
-	results.value = [];
-	searching.value = false;
 }
 
 function clear() {
 	modelValue.value = { ...modelValue.value, leader: null };
 }
+
+// An empty search says at once whether card data is available.
+onMounted(searchNow);
 </script>
 
 <template>
@@ -130,12 +110,12 @@ function clear() {
 			<p v-if="available === false" class="text-sm text-muted">
 				Card data unavailable: no bandai-keepr is configured for this installation.
 			</p>
-			<p v-else-if="failed" class="text-sm text-error">
-				Leader search failed. Try again.
+			<p v-else-if="searchError" class="text-sm text-error">
+				{{ searchError }}
 			</p>
 
-			<ul v-if="results.length > 0" class="flex max-h-72 flex-col gap-1 overflow-y-auto" aria-label="Leaders">
-				<li v-for="card in results" :key="card.number">
+			<ul v-if="offered.length > 0" class="flex max-h-72 flex-col gap-1 overflow-y-auto" aria-label="Leaders">
+				<li v-for="card in offered" :key="card.number">
 					<button
 						type="button"
 						class="flex w-full items-center gap-3 rounded-md p-1 text-left hover:bg-elevated"
