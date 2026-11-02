@@ -71,8 +71,9 @@ export const GAME_CONFIGS: Record<Game, GameConfig> = {
 export const EVERY_CARD_GAME: readonly Game[] = GAME_VALUES;
 
 /**
- * Magic: The Gathering only: what something reading results or the Metagame
- * declares, as a One Piece Card Game Event never holds them (ADR-0057).
+ * Magic: The Gathering only: what something for Players, Rounds, Matches,
+ * results or the Metagame declares, as a One Piece Card Game Event models none
+ * of them (ADR-0057).
  */
 export const MTG_ONLY: readonly Game[] = ['mtg'];
 
@@ -84,6 +85,13 @@ export function isOfferedToCardGame(cardGames: readonly Game[], game: Game | und
 	return game === undefined
 		? EVERY_CARD_GAME.every(cardGame => cardGames.includes(cardGame))
 		: cardGames.includes(game);
+}
+
+/** The items offered to an Event of `game` (`isOfferedToCardGame`), their declarations dropped. */
+export function offeredToCardGame<T extends { cardGames: readonly Game[] }>(items: readonly T[], game: Game | undefined): Omit<T, 'cardGames'>[] {
+	return items
+		.filter(item => isOfferedToCardGame(item.cardGames, game))
+		.map(({ cardGames: _cardGames, ...item }) => item);
 }
 
 export function getGameConfig(game: Game): GameConfig {

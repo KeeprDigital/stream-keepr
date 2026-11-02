@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Game } from '~~/shared/types/enums';
 import type { NavigationMenuItem } from '#ui/types';
-import { EVERY_CARD_GAME, isOfferedToCardGame, MTG_ONLY } from '~~/shared/config/games';
+import { EVERY_CARD_GAME, MTG_ONLY, offeredToCardGame } from '~~/shared/config/games';
 
 const props = defineProps<{
 	eventId: number;
@@ -14,7 +14,7 @@ interface ConfigTab extends NavigationMenuItem {
 	cardGames: readonly Game[];
 }
 
-const tabs = computed<NavigationMenuItem[]>(() => ([
+const tabs = computed<NavigationMenuItem[]>(() => offeredToCardGame<ConfigTab>([
 	{
 		label: 'Event',
 		icon: 'i-lucide-settings',
@@ -46,9 +46,7 @@ const tabs = computed<NavigationMenuItem[]>(() => ([
 		to: `/event/${props.eventId}/config/integrations`,
 		cardGames: EVERY_CARD_GAME,
 	},
-] satisfies ConfigTab[])
-	.filter(tab => isOfferedToCardGame(tab.cardGames, eventStore.event?.game))
-	.map(({ cardGames: _cardGames, ...tab }) => tab));
+], eventStore.event?.game));
 </script>
 
 <template>

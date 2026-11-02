@@ -556,11 +556,13 @@ export const nuxtUiStubs = {
 interface NavigationItemLike {
 	label?: string;
 	to?: string;
+	onSelect?: () => void;
 	children?: NavigationItemLike[];
 }
 
 /**
- * A `<nav>` of links, one per item and per child, labelled and pointing where the item does.
+ * A `<nav>` of links, one per item and per child, labelled (also as `data-nav-item`) and
+ * pointing where the item does; clicking one calls its `onSelect`.
  * Kept out of `nuxtUiStubs`, which suites rendering the real menu spread: pass
  * `{ ...nuxtUiStubs, UNavigationMenu: UNavigationMenuStub }`.
  */
@@ -578,7 +580,7 @@ export const UNavigationMenuStub = defineComponent({
 			...(item.children ?? []),
 		])),
 	}),
-	template: '<nav><a v-for="(link, index) in links" :key="index" :href="link.to">{{ link.label }}</a></nav>',
+	template: '<nav><a v-for="(link, index) in links" :key="index" :href="link.to" :data-nav-item="link.label" @click="link.onSelect?.()">{{ link.label }}</a></nav>',
 });
 
 interface TableColumnLike {

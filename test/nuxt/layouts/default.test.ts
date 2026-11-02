@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, reactive } from 'vue';
 import { LOCAL_DEVELOPER_USER_EMAIL, LOCAL_DEVELOPER_USER_ID, LOCAL_DEVELOPER_USER_NAME } from '~~/shared/utils/localDeveloperAuth';
+import { UNavigationMenuStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 
 vi.mock('~/composables/workflows/useEventLiveRefresh', () => ({
 	useEventLiveRefresh: vi.fn(),
@@ -102,29 +103,6 @@ const UDashboardSidebarStub = defineComponent({
 
 const UDashboardPanelStub = defineComponent({
 	template: '<main><slot name="header" /><slot /></main>',
-});
-
-const UNavigationMenuStub = defineComponent({
-	props: {
-		items: {
-			type: Array,
-			required: true,
-		},
-	},
-	setup(props: { items: Array<any> }) {
-		const labels = computed(() => (props.items as Array<any>)
-			.flatMap(item => [
-				item.label,
-				...(item.children?.map((child: any) => child.label) ?? []),
-			])
-			.filter(Boolean)
-			.join('|'));
-
-		return { labels };
-	},
-	// Each item and child gets a button so a test can take the action the sidebar
-	// offers, not merely read the label it offers it under.
-	template: '<nav>{{ labels }}<template v-for="item in items" :key="item.label"><button type="button" :data-nav-item="item.label" @click="item.onSelect?.()" /><button v-for="child in item.children ?? []" :key="child.label" type="button" :data-nav-item="child.label" /></template></nav>',
 });
 
 const UButtonStub = defineComponent({
