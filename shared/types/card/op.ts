@@ -24,7 +24,7 @@ export type OpCardColor = typeof OP_CARD_COLORS[number];
 export const OP_PRINTING_KINDS = ['standard', 'alt-art', 'reprint'] as const;
 export type OpPrintingKind = typeof OP_PRINTING_KINDS[number];
 
-/** A Card: the gameplay identity behind a card number, imaged by its Base Printing. */
+/** A card behind a card number, imaged by the Printing its values come from (usually the standard one). */
 export interface OpCardSummary {
 	number: string;
 	name: string;
@@ -37,7 +37,7 @@ export interface OpCardSummary {
 	types: string[];
 	effect: string | null;
 	trigger: string | null;
-	/** The Printing the Card's values come from: its Base Printing, or its lowest-id one. */
+	/** The Printing the Card's values come from: its standard Printing, or its lowest-id one. */
 	printingId: string;
 	imageUrl: string;
 }

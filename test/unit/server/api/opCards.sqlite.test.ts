@@ -258,6 +258,12 @@ describe('searching cards', () => {
 		expect(requests).toEqual([]);
 	});
 
+	it('answers no cards for text bandai-keepr finds no words in', async () => {
+		upstream = () => Response.json({ error: 'Invalid query parameter "q": has no words to search for' }, { status: 400 });
+
+		await expect(search({ q: '!!' })).resolves.toEqual({ available: true, items: [], total: 0 });
+	});
+
 	it('is never cached: each search asks bandai-keepr', async () => {
 		await search({ q: 'zoro' });
 		await search({ q: 'zoro' });

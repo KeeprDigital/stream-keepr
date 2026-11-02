@@ -25,6 +25,8 @@ const printings: OpPrinting[] = [
 	},
 ];
 
+// The Card store's own rules are tested at their home (`cardOpSpotlight.test.ts`); this is the wiring.
+const mockSelectOpPrinting = vi.fn();
 const useMockCardStore = defineStore('mock-op-card', () => {
 	const opCardDataAvailable = ref<boolean | null>(null);
 	const opSearchError = ref<string | null>(null);
@@ -35,16 +37,6 @@ const useMockCardStore = defineStore('mock-op-card', () => {
 	const activeCard = ref(null);
 	const activeScreenId = ref<number | null>(5);
 	const cardsMatch = ref(false);
-
-	function selectOpPrinting(id: string) {
-		const printing = opPreviewPrintings.value.find(entry => entry.id === id)!;
-		opPreviewCard.value = {
-			...opPreviewCard.value!,
-			id,
-			printingKind: printing.kind,
-			imageUrl: printing.imageUrl,
-		};
-	}
 
 	return {
 		opCardDataAvailable,
@@ -57,7 +49,7 @@ const useMockCardStore = defineStore('mock-op-card', () => {
 		activeScreenId,
 		cardsMatch,
 		timeout: { isActive: false, remaining: 0 },
-		selectOpPrinting,
+		selectOpPrinting: mockSelectOpPrinting,
 		selectOpCard: vi.fn(),
 		showOpPreviewCard: vi.fn(),
 		controlActiveCard: vi.fn(),
@@ -91,7 +83,7 @@ describe('one Piece Card Spotlight', () => {
 		expect(mount(OpCardList, mountOptions).text()).toContain(text);
 	});
 
-	it('marks the Printing previewed, and moves the mark to the alt-art chosen', async () => {
+	it('marks the Printing previewed, and asks for the alt-art chosen', async () => {
 		const store = useMockCardStore();
 		store.opPreviewPrintings = printings;
 		store.opPreviewCard = {
@@ -109,9 +101,10 @@ describe('one Piece Card Spotlight', () => {
 		expect(choice('Standard').attributes('aria-pressed')).toBe('true');
 		expect(choice('Alt art').attributes('aria-pressed')).toBe('false');
 
+		expect(wrapper.get('img[alt="Roronoa Zoro"]').attributes('src')).toBe('https://cards-img.keepr.digital/OP01-001.png');
+
 		await choice('Alt art').trigger('click');
 
-		expect(choice('Alt art').attributes('aria-pressed')).toBe('true');
-		expect(wrapper.get('img[alt="Roronoa Zoro"]').attributes('src')).toBe('https://cards-img.keepr.digital/OP01-001_p1.png');
+		expect(mockSelectOpPrinting).toHaveBeenCalledWith('OP01-001_p1');
 	});
 });

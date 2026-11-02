@@ -68,6 +68,12 @@ export async function searchOpCards(config: BandaiKeeprConfig, query: OpCardSear
 	url.searchParams.set('offset', String(query.offset));
 
 	const response = await request(config, url);
+	// Every parameter is checked here first, so bandai-keepr refuses only text
+	// with no words to search for (e.g. `!!`): that matches no cards.
+	if (response.status === 400) {
+		await response.body?.cancel().catch(() => undefined);
+		return { items: [], total: 0 };
+	}
 	if (!response.ok)
 		throw await upstreamFailure(response, 'search');
 	const page = await parse(response, bandaiKeeprCardPageSchema, 'search');

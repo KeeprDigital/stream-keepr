@@ -3,6 +3,7 @@ import type { OpCardCategory, OpCardColor, OpCardDetail, OpCardSummary, OpPrinti
 import type { OpCardSearchParams } from '~/composables/repositories/useOpCardRepository';
 import { computed, toRaw, toValue } from 'vue';
 import { parseOpCardNumber } from '~~/shared/utils/card/op';
+import { cardTimeoutStartingAt } from '~~/shared/utils/card/timeout';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
 export interface OpCardSearch {
@@ -185,18 +186,14 @@ export function useOpSpotlightRuntime(state: OpSpotlightRuntimeState) {
 		const previewCard = state.previewCard.value;
 		if (!previewCard)
 			return;
-		const card: OpScreenCard = {
-			...toRaw(previewCard),
-		};
-		delete card.timeoutData;
-		const timeoutSeconds = toValue(state.cardTimeoutSeconds);
-		if (timeoutSeconds) {
-			card.timeoutData = {
-				timeoutDuration: timeoutSeconds * 1000,
-				timeoutStartTimestamp: Math.round(getServerTime()),
-			};
-		}
-		await state.saveActiveCard(card);
+		const { timeoutData: _held, ...card }: OpScreenCard = toRaw(previewCard);
+		const timeoutData = cardTimeoutStartingAt(toValue(state.cardTimeoutSeconds), getServerTime());
+		await state.saveActiveCard(timeoutData
+			? {
+					...card,
+					timeoutData,
+				}
+			: card);
 	}
 
 	function clearPreview() {
