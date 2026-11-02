@@ -1818,7 +1818,7 @@ One Piece Card Game Events run their pairings in Bandai TCG+, which has no expor
 
 ### Decision
 
-**An OP Event models no Players, Rounds, Matches or Match Results.** The operator types each side's name, pronouns and LGS straight into a Feature Match Slot, as manual slot data. Feature Match Slot Promotion, Assignment and Reverse Sync never run for it. Screen Modes and nav that need results or many Deck Lists (Standings, Pairings, Top Cut, Metagame, Most Played Cards, Archetype Spotlight, Head-to-Head, Player History, Cards, Archetype review) declare themselves MTG-only and are not offered.
+**An OP Event models no Players, Rounds, Matches or Match Results.** The operator types each side's name, pronouns and LGS straight into a Feature Match Slot, as manual slot data. Feature Match Slot Promotion, Assignment and Reverse Sync never run for it. Screen Modes and nav that need results or many Deck Lists (Standings, Pairings, Top Cut, Metagame, Most Played Cards, Archetype Spotlight, Head-to-Head, Player History, Cards, Archetype review), Melee Sync, and the Players, Matches and Event Structure pages declare themselves MTG-only and are not offered.
 
 **A Feature Match Deck List belongs to a Slot's player side, not a Player.** The operator pastes it (`N[x] CARDNUMBER [name]` lines). It stays until replaced or its side is cleared, follows its player on `SwapPlayers`, and replacing it during an active Feature Match Session updates that Session's source snapshot. Its Leader is the side's Leader. A Deck Screen can take a Slot side as its Deck Source and follows it live.
 
@@ -1833,7 +1833,7 @@ It matches how OP Events are actually produced, and reuses the Feature Match Slo
 - An OP Player featured in two Rounds is typed and pasted twice; there is no history across Rounds.
 - A snapshot goes stale if bandai-keepr corrects a card; re-pasting refreshes it.
 - OP standings, Metagame or Archetypes would need Players and Player-owned Deck Lists first, so this decision would be reopened.
-- An OP Event that runs on Melee would still get Melee Sync of its structure and results, but its Deck Lists are not imported.
+- An OP Event never runs Melee Sync, even if its tournament is on Melee.gg: its Feature Match Slots are typed by hand like any other OP Event's.
 
 ### Rejected alternatives
 
