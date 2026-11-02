@@ -2,9 +2,11 @@ import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, reactive, ref } from 'vue';
-import { createMockFeatureMatch } from '~~/test/helpers/fixtures';
+import { computed, defineComponent, reactive, ref } from 'vue';
+import { createInitialOvertimeState } from '~~/shared/types/featureMatchState';
+import { createMockFeatureMatch, createMockFeatureMatchState } from '~~/test/helpers/fixtures';
 import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
+import { matchStatePart, offeredMatchStateParts } from '~~/test/nuxt/helpers/featureMatchControls';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import FeatureMatchPanel from '~/components/FeatureMatch/Panel.vue';
 
@@ -81,8 +83,20 @@ mockNuxtImport('useFeatureMatchDeckList', () => () => ({
 	player2HasDeckList: ref(false),
 	openDeckListModal: vi.fn(),
 }));
+/** What the Event's Card Game tracks, as `useFeatureMatchGameMode` reports it. */
+const cardGameTracks = reactive({
+	life: true,
+	counters: true,
+	overtime: true,
+	sideboard: true,
+});
+
 mockNuxtImport('useFeatureMatchGameMode', () => () => ({
 	activePlayerTrackingEnabled: ref(false),
+	lifeTrackingEnabled: computed(() => cardGameTracks.life),
+	counterTrackingEnabled: computed(() => cardGameTracks.counters),
+	overtimeTrackingEnabled: computed(() => cardGameTracks.overtime),
+	sideboardTrackingEnabled: computed(() => cardGameTracks.sideboard),
 	pronounsEnabled: ref(false),
 	standingsEnabled: ref(true),
 	lgsEnabled: ref(false),
@@ -107,6 +121,23 @@ mockNuxtImport('useFeatureMatchSetupActions', () => () => ({
 	swapPlayers: vi.fn(),
 	clearMatch: vi.fn(),
 	populateFromMelee: vi.fn(),
+}));
+
+// The player controls render for real; only their reads are stood in.
+mockNuxtImport('usePlayerFeatureMatchData', () => () => ({
+	player: computed(() => createMockFeatureMatchState().player1),
+	playerName: computed(() => 'Alice'),
+	linkedPlayer: computed(() => null),
+	playerPronouns: computed(() => undefined),
+	deckName: computed(() => undefined),
+	bestOf: computed(() => 1),
+	seatLabel: computed(() => undefined),
+	playerLgs: computed(() => undefined),
+	playerRecord: computed(() => undefined),
+}));
+mockNuxtImport('usePlayerControls', () => () => ({}));
+mockNuxtImport('usePlayerDeckCounters', () => () => ({
+	availableCounterTypes: ref([]),
 }));
 
 const PanelHeaderStub = defineComponent({
@@ -460,5 +491,57 @@ describe('featureMatchPanel setup save', () => {
 		expect(roundFourPanel.get('.feature-match-note').text()).toContain('Round four Note');
 		expect(mockAssignmentStore.consumeRound).toHaveBeenCalledWith(1, 3);
 		expect(mockAssignmentStore.consumeRound).toHaveBeenCalledWith(1, 4);
+	});
+});
+
+describe('featureMatchPanel match state by Card Game', () => {
+	// `useFeatureMatchGameMode` owns what a Card Game tracks; the panel offers exactly that.
+	it.each([
+		[
+			'every part',
+			true,
+			[
+				'counters',
+				'life',
+				'overtime',
+				'sideboard',
+			],
+		],
+		['none of the optional parts', false, []],
+	] as const)('offers %s of the match state its Card Game tracks', async (_, tracked, expected) => {
+		Object.assign(cardGameTracks, {
+			life: tracked,
+			counters: tracked,
+			overtime: tracked,
+			sideboard: tracked,
+		});
+		mockFeatureMatchStateStore.featureMatchStates = new Map([
+			[
+				1,
+				createMockFeatureMatchState({
+					overtime: createInitialOvertimeState(5),
+				}),
+			],
+		]);
+
+		const wrapper = mount(FeatureMatchPanel, {
+			props: mountProps(),
+			global: {
+				stubs: {
+					...mountOptions.global.stubs,
+					UINumericCounter: matchStatePart('life'),
+					FeatureMatchStateCounterList: matchStatePart('counters'),
+					FeatureMatchStateOvertimeTurnsCounter: matchStatePart('overtime'),
+					FeatureMatchStateGameWins: true,
+					FeatureMatchStateEditStateModal: true,
+					FeatureMatchTokensModal: true,
+					PlayerMatchHistoryButton: true,
+					USwitch: matchStatePart('sideboard'),
+				},
+			},
+		});
+		await flushPromises();
+
+		expect(offeredMatchStateParts(wrapper)).toEqual(expected);
 	});
 });

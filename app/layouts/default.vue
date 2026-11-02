@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import type { Game } from '~~/shared/types/enums';
 import type { NavigationMenuItem } from '#ui/types';
+import { EVERY_CARD_GAME, isOfferedToCardGame, MTG_ONLY } from '~~/shared/config/games';
 import { isLocalDeveloperUserId } from '~~/shared/utils/localDeveloperAuth';
 import { LOGIN_PATH } from '~/modules/auth/pageGate';
 import { useAuthSession } from '~/modules/auth/session';
@@ -28,6 +30,7 @@ const route = useRoute();
 const eventId = computed(() => eventStore.eventId);
 const meleeEnabled = computed(() => eventStore.event?.meleeEnabled ?? false);
 const meleeConfigured = computed(() => eventStore.event?.meleeConfigured ?? false);
+const cardGame = computed(() => eventStore.event?.game);
 
 // The Event header and the Screen navigation, on every page this layout frames.
 useConsumedEventData(['event', 'screens']);
@@ -112,6 +115,22 @@ interface NavGroup {
 	items: NavigationMenuItem[];
 }
 
+/**
+ * An Event page's nav entry, declaring the Card Games whose Events it is
+ * offered to: a page reading results or the Metagame is Magic: The Gathering
+ * only (ADR-0057).
+ */
+interface EventNavItem extends NavigationMenuItem {
+	cardGames: readonly Game[];
+}
+
+/** The entries offered to the current Event: those declaring its Card Game. */
+function offeredToEvent(items: EventNavItem[]): NavigationMenuItem[] {
+	return items
+		.filter(item => isOfferedToCardGame(item.cardGames, cardGame.value))
+		.map(({ cardGames: _cardGames, ...item }) => item);
+}
+
 function graphicsOperationsCockpitItem(): NavigationMenuItem {
 	return {
 		label: 'Graphics Operations',
@@ -160,36 +179,77 @@ const navGroups = computed<NavGroup[]>(() => {
 	return [
 		{
 			label: 'Event',
-			items: [
-				{ label: 'Controls', icon: 'i-lucide-sliders-horizontal', to: `/event/${id}` },
-				{ label: 'Players', icon: 'i-lucide-users', to: `/event/${id}/players` },
-				{ label: 'Matches', icon: 'i-lucide-swords', to: `/event/${id}/matches` },
+			items: offeredToEvent([
+				{
+					label: 'Controls',
+					icon: 'i-lucide-sliders-horizontal',
+					to: `/event/${id}`,
+					cardGames: EVERY_CARD_GAME,
+				},
+				{
+					label: 'Players',
+					icon: 'i-lucide-users',
+					to: `/event/${id}/players`,
+					cardGames: EVERY_CARD_GAME,
+				},
+				{
+					label: 'Matches',
+					icon: 'i-lucide-swords',
+					to: `/event/${id}/matches`,
+					cardGames: EVERY_CARD_GAME,
+				},
 				...(meleeEnabled.value
 					? [
-							{ label: 'Metagame', icon: 'i-lucide-pie-chart', to: `/event/${id}/metagame` },
+							{
+								label: 'Metagame',
+								icon: 'i-lucide-pie-chart',
+								to: `/event/${id}/metagame`,
+								cardGames: MTG_ONLY,
+							},
 						]
 					: []),
 				...(meleeEnabled.value
 					? [
-							{ label: 'Archetype Review', icon: 'i-lucide-tags', to: `/event/${id}/archetype-review` },
+							{
+								label: 'Archetype Review',
+								icon: 'i-lucide-tags',
+								to: `/event/${id}/archetype-review`,
+								cardGames: MTG_ONLY,
+							},
 						]
 					: []),
 				...(meleeEnabled.value && meleeConfigured.value
 					? [
-							{ label: 'Sync', icon: 'i-lucide-refresh-cw', to: `/event/${id}/sync` },
+							{
+								label: 'Sync',
+								icon: 'i-lucide-refresh-cw',
+								to: `/event/${id}/sync`,
+								cardGames: MTG_ONLY,
+							},
 						]
 					: []),
-			],
+			]),
 		},
 		{
 			label: 'Production',
-			items: [
-				{ label: 'Feature Matches', icon: 'i-lucide-trophy', to: `/event/${id}/feature-matches` },
-				{ label: 'Cards', icon: 'i-lucide-book-image', to: `/event/${id}/card` },
+			items: offeredToEvent([
+				{
+					label: 'Feature Matches',
+					icon: 'i-lucide-trophy',
+					to: `/event/${id}/feature-matches`,
+					cardGames: EVERY_CARD_GAME,
+				},
+				{
+					label: 'Cards',
+					icon: 'i-lucide-book-image',
+					to: `/event/${id}/card`,
+					cardGames: MTG_ONLY,
+				},
 				{
 					label: 'Screens',
 					icon: 'i-lucide-monitor',
 					to: `/event/${id}/screens`,
+					cardGames: EVERY_CARD_GAME,
 					...(screenStore.screens.length > 0 && {
 						defaultOpen: true,
 						children: screenStore.screens.map(screen => ({
@@ -198,15 +258,16 @@ const navGroups = computed<NavGroup[]>(() => {
 						})),
 					}),
 				},
-			],
+			]),
 		},
 		{
 			label: 'Settings',
-			items: [
+			items: offeredToEvent([
 				{
 					label: 'Settings',
 					icon: 'i-lucide-settings',
 					defaultOpen: true,
+					cardGames: EVERY_CARD_GAME,
 					children: [
 						{ label: 'Event', to: `/event/${id}/config`, exact: true },
 						{ label: 'Event Structure', to: `/event/${id}/rounds` },
@@ -215,7 +276,7 @@ const navGroups = computed<NavGroup[]>(() => {
 						{ label: 'Integrations', to: `/event/${id}/config/integrations` },
 					],
 				},
-			],
+			]),
 		},
 		{
 			label: 'Administration',

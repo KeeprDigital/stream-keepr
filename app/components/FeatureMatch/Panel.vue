@@ -152,6 +152,10 @@ const hasAnyDeckList = computed(() => player1HasDeckList.value || player2HasDeck
 const {
 	turnTrackingEnabled,
 	activePlayerTrackingEnabled,
+	lifeTrackingEnabled,
+	counterTrackingEnabled,
+	overtimeTrackingEnabled,
+	sideboardTrackingEnabled,
 	mulliganTrackingEnabled,
 	pronounsEnabled,
 	standingsEnabled,
@@ -206,6 +210,8 @@ function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
 	return {
 		showName: true,
 		showDeckName: true,
+		showLife: lifeTrackingEnabled.value,
+		showCounters: counterTrackingEnabled.value,
 		showPronouns: pronounsEnabled.value,
 		showRecord: standingsEnabled.value,
 		showLgs: lgsEnabled.value,
@@ -331,7 +337,7 @@ async function save() {
 				<div class="middle">
 					<!-- Turn Tracking & Overtime -->
 					<FeatureMatchStateOvertimeTurnsCounter
-						v-if="matchState?.overtime"
+						v-if="overtimeTrackingEnabled && matchState?.overtime"
 						:overtime="matchState.overtime"
 						:label="extraTurnsLabel"
 						@next-turn="handleNextOvertimeTurn"
@@ -347,7 +353,7 @@ async function save() {
 						@select="handleSelectFirstPlayer"
 					/>
 					<!-- Match-level sideboard reveal: one save for both players (#490) -->
-					<div class="sideboard-toggle">
+					<div v-if="sideboardTrackingEnabled" class="sideboard-toggle">
 						<USwitch
 							:model-value="sideboardsRevealed"
 							label="Show sideboards"
@@ -584,6 +590,7 @@ async function save() {
 		:state="matchState"
 		:player1-name="player1Data.name"
 		:player2-name="player2Data.name"
+		:show-life="lifeTrackingEnabled"
 		:show-turn-number="turnTrackingEnabled || activePlayerTrackingEnabled"
 		:show-player-tracking="activePlayerTrackingEnabled"
 		:show-cards-kept="mulliganTrackingEnabled"

@@ -1,3 +1,4 @@
+import type { Game } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -31,6 +32,7 @@ const mockEventStore = reactive({
 	event: {
 		id: 1,
 		name: 'Event One',
+		game: 'mtg' as Game,
 		meleeEnabled: true,
 		meleeConfigured: true,
 		initialSetupCompletedAt: null as Date | null,
@@ -175,6 +177,7 @@ describe('default layout sync navigation', () => {
 		mockEventStore.event = {
 			id: 1,
 			name: 'Event One',
+			game: 'mtg',
 			meleeEnabled: true,
 			meleeConfigured: true,
 			initialSetupCompletedAt: null,
@@ -201,6 +204,44 @@ describe('default layout sync navigation', () => {
 		const wrapper = await mountLayout();
 
 		expect(wrapper.text()).toContain('Sync');
+	});
+
+	// An OP Event holds no results or Metagame, so the pages reading them are not offered.
+	it.each([
+		[
+			'mtg',
+			[
+				'Metagame',
+				'Archetype Review',
+				'Sync',
+				'Cards',
+			],
+			[],
+		],
+		[
+			'op',
+			[],
+			[
+				'Metagame',
+				'Archetype Review',
+				'Sync',
+				'Cards',
+			],
+		],
+	] as const)('on a %s Event, offers %j and omits %j', async (game, offered, omitted) => {
+		mockEventStore.event.game = game;
+
+		const wrapper = await mountLayout();
+		const items = wrapper.findAll('[data-nav-item]').map(item => item.attributes('data-nav-item'));
+
+		expect(items).toEqual(expect.arrayContaining([
+			...offered,
+			'Controls',
+			'Feature Matches',
+			'Screens',
+		]));
+		for (const label of omitted)
+			expect(items).not.toContain(label);
 	});
 });
 

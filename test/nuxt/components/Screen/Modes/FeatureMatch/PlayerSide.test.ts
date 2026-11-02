@@ -47,6 +47,7 @@ mockNuxtImport('usePlayerDisplayConfig', () => () => ({
 	showName: computed(() => showName),
 	showPronouns: computed(() => showPronouns),
 	showDeckName: computed(() => false),
+	showLife: computed(() => true),
 	showCounters: computed(() => showCounters),
 	showRecord: computed(() => showRecord),
 	showMulliganInfo: computed(() => false),

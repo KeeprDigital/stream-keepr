@@ -8,16 +8,32 @@ import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 
 describe('screen Mode Definition module', () => {
 	it('keeps each definition, its host, its policy and its select option in agreement', () => {
-		const selectOptions = getScreenModeSelectOptions();
-
 		for (const mode of SCREEN_MODE_VALUES) {
 			const definition = getScreenModeDefinition(mode);
 
 			expect(definition.mode).toBe(mode);
 			expect(definition.host.kind).toBe(definition.displayType);
 			expect(definition.configurationPolicy.displayType).toBe(definition.displayType);
-			expect(selectOptions).toContainEqual({ label: definition.label, value: mode, icon: definition.icon });
+			expect(getScreenModeSelectOptions('mtg')).toContainEqual({ label: definition.label, value: mode, icon: definition.icon });
 		}
+	});
+
+	// An OP Event has no results or Metagame, so it is offered only the modes that work without them.
+	it.each([
+		['mtg', SCREEN_MODE_VALUES],
+		[
+			'op',
+			[
+				'background',
+				'card',
+				'deck',
+				'feature-match',
+				'feature-match-overlay',
+				'broadcast-graphics',
+			],
+		],
+	] as const)('offers a %s Event the Screen Modes %j', (game, modes) => {
+		expect(getScreenModeSelectOptions(game).map(option => option.value)).toEqual(modes);
 	});
 
 	// A plain mode's host insets and aligns it; the rest render edge to edge, or fill their window.

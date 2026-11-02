@@ -10,7 +10,6 @@ import type {
 import type { DisplayType, ScreenMode } from '~~/shared/types/enums';
 import { defineAsyncComponent } from 'vue';
 import {
-	getScreenModeSelectOptions,
 	getScreenModeConfigurationPolicy as getSharedScreenModeConfigurationPolicy,
 	getScreenModeDefinition as getSharedScreenModeDefinition,
 	getScreenModeHostDefinition as getSharedScreenModeHostDefinition,
@@ -200,7 +199,7 @@ export { modeMotionVars, modeTokenVar, modeTypographyStyle, screenBackgroundLaye
 export { usePaginatedScreenMode, useProjectedRotationPage, useScreenModePagination } from './pagination';
 export type { ProjectedRotationPageOptions, ScreenModePaginationOptions } from './pagination';
 export { provideScreenModeReadiness, SCREEN_MODE_READY_TIMEOUT_MS, useScreenModeReady, useStagedScreenContent } from './readiness';
-export { getScreenModeSelectOptions };
+export { useEventScreenModeSelectOptions } from './selectOptions';
 export type {
 	ScreenModeConfigurationPolicy,
 	ScreenModeHostDefinition,

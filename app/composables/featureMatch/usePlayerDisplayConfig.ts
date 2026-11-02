@@ -22,6 +22,7 @@ export function usePlayerDisplayConfig(
 		showName: computed(() => cfg()?.showName ?? true),
 		showPronouns: computed(() => cfg()?.showPronouns ?? true),
 		showDeckName: computed(() => cfg()?.showDeckName ?? true),
+		showLife: computed(() => cfg()?.showLife ?? true),
 		showCounters: computed(() => cfg()?.showCounters ?? true),
 		showRecord: computed(() => cfg()?.showRecord ?? false),
 		showLgs: computed(() => cfg()?.showLgs ?? false),

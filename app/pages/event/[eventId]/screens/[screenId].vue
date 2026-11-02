@@ -4,7 +4,7 @@ import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { Screen, ScreenCommand, ScreenMode } from '~/types';
 import { screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
-import { getScreenModeConfigurationPolicy, getScreenModeLabel, getScreenModeSelectOptions, getScreenModeSettingsComponent } from '~/modules/screen-mode';
+import { getScreenModeConfigurationPolicy, getScreenModeLabel, getScreenModeSettingsComponent, useEventScreenModeSelectOptions } from '~/modules/screen-mode';
 
 definePageMeta({
 	title: 'Screen Configuration',
@@ -112,7 +112,7 @@ function accessUrlOptions(output?: FeatureMatchOverlayOutput) {
 	};
 }
 
-const modeOptions = getScreenModeSelectOptions();
+const modeOptions = useEventScreenModeSelectOptions();
 
 // Load screen and subscribe to presence for the current screenId, tearing down
 // the previous subscription first. Sidebar links reuse this component across

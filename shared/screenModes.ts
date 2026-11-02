@@ -4,7 +4,8 @@ import type { DeclaredModeTokenDefinition } from './modules/theme/vocabulary';
 import type { ScreenModeConfigContract, ScreenModeConfigOf } from './screenModeConfigs/contract';
 import type { DeckSource } from './screenModeConfigs/deck';
 import type { PageRotationConfig } from './screenModeConfigs/subShapes';
-import type { DisplayType, ScreenMode } from './types/enums';
+import type { DisplayType, Game, ScreenMode } from './types/enums';
+import { EVERY_CARD_GAME, MTG_ONLY } from './config/games';
 import { archetypeSpotlightModeConfigContract } from './screenModeConfigs/archetypeSpotlight';
 import { backgroundModeConfigContract } from './screenModeConfigs/background';
 import { broadcastGraphicsModeConfigContract } from './screenModeConfigs/broadcastGraphics';
@@ -61,6 +62,12 @@ export interface ScreenModeDefinition {
 	icon: string;
 	displayType: DisplayType;
 	description: string;
+	/**
+	 * The Card Games whose Events the mode is offered to. Every mode declares
+	 * it, so a new mode cannot skip the question; the mode pickers offer an
+	 * Event only the modes declaring its Card Game (`getScreenModeSelectOptions`).
+	 */
+	cardGames: readonly Game[];
 	/**
 	 * The mode is a graphics host: it composes in its Event Canvas and exposes
 	 * Overlay, Fill, and Key Screen Outputs. Its host takes no Theme Token of
@@ -149,6 +156,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-wallpaper',
 		displayType: 'overlay',
 		description: 'Full-screen layered background',
+		cardGames: EVERY_CARD_GAME,
 		config: backgroundModeConfigContract,
 		eventReferences: {},
 	},
@@ -157,6 +165,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-square',
 		displayType: 'overlay',
 		description: 'Single card display',
+		cardGames: EVERY_CARD_GAME,
 		backgroundLayers: true,
 		config: cardModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot' },
@@ -167,6 +176,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-layers',
 		displayType: 'overlay',
 		description: 'Deck list view',
+		cardGames: EVERY_CARD_GAME,
 		backgroundLayers: true,
 		config: deckModeConfigContract,
 		eventReferences: { deckSource: 'deckSource' },
@@ -177,6 +187,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-trophy',
 		displayType: 'overlay',
 		description: 'Player standings',
+		cardGames: MTG_ONLY,
 		backgroundLayers: true,
 		config: standingsModeConfigContract,
 		eventReferences: { roundId: 'round', playerListId: 'playerList' },
@@ -188,6 +199,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-git-branch',
 		displayType: 'overlay',
 		description: 'Top cut bracket',
+		cardGames: MTG_ONLY,
 		backgroundLayers: true,
 		config: topCutModeConfigContract,
 		eventReferences: { phaseId: 'phase' },
@@ -198,6 +210,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-swords',
 		displayType: 'control',
 		description: 'Live feature match controls',
+		cardGames: EVERY_CARD_GAME,
 		config: featureMatchModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot' },
 	},
@@ -206,6 +219,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-panels-top-left',
 		displayType: 'overlay',
 		description: 'Pixel-exact feature match overlay with fill/key outputs',
+		cardGames: EVERY_CARD_GAME,
 		graphicsHost: true,
 		config: featureMatchOverlayModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot' },
@@ -216,6 +230,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-layout-template',
 		displayType: 'overlay',
 		description: 'Composed broadcast graphics stack with overlay/fill/key outputs',
+		cardGames: EVERY_CARD_GAME,
 		graphicsHost: true,
 		themePreview: true,
 		config: broadcastGraphicsModeConfigContract,
@@ -226,6 +241,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-pie-chart',
 		displayType: 'overlay',
 		description: 'Metagame breakdown',
+		cardGames: MTG_ONLY,
 		backgroundLayers: true,
 		config: metagameModeConfigContract,
 		eventReferences: { playerListId: 'playerList' },
@@ -237,6 +253,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-trending-up',
 		displayType: 'overlay',
 		description: 'Most played cards grid',
+		cardGames: MTG_ONLY,
 		backgroundLayers: true,
 		config: topCardsModeConfigContract,
 		eventReferences: { playerListId: 'playerList' },
@@ -248,6 +265,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-history',
 		displayType: 'overlay',
 		description: 'Player match history',
+		cardGames: MTG_ONLY,
 		backgroundLayers: true,
 		config: playerHistoryModeConfigContract,
 		eventReferences: { playerId: 'player' },
@@ -259,6 +277,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-list-ordered',
 		displayType: 'overlay',
 		description: 'Round pairings and results',
+		cardGames: MTG_ONLY,
 		backgroundLayers: true,
 		config: pairingsModeConfigContract,
 		eventReferences: { roundId: 'round' },
@@ -270,6 +289,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-crosshair',
 		displayType: 'overlay',
 		description: 'One archetype\'s pilots, numbers and top cards',
+		cardGames: MTG_ONLY,
 		backgroundLayers: true,
 		config: archetypeSpotlightModeConfigContract,
 		eventReferences: { archetypeId: 'archetype', playerListId: 'playerList' },
@@ -281,6 +301,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-users',
 		displayType: 'overlay',
 		description: 'Two Players side by side before their Match',
+		cardGames: MTG_ONLY,
 		backgroundLayers: true,
 		config: headToHeadModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot', player1Id: 'player', player2Id: 'player' },

@@ -10,6 +10,7 @@ describe('usePlayerDisplayConfig', () => {
 			showName: true,
 			showPronouns: true,
 			showDeckName: true,
+			showLife: true,
 			showCounters: true,
 			showRecord: false,
 			showLgs: false,

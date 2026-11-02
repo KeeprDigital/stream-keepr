@@ -11,10 +11,12 @@ vi.mock('~/modules/screen-mode', () => ({
 	getScreenModeDisplayType: vi.fn(() => 'overlay'),
 	getScreenModeIcon: vi.fn(() => 'i-lucide-monitor'),
 	getScreenModeLabel: vi.fn((mode: string) => mode),
-	getScreenModeSelectOptions: vi.fn(() => [
-		{ label: 'Background', icon: 'i-lucide-wallpaper', value: 'background' },
-		{ label: 'Standings', icon: 'i-lucide-list', value: 'standings' },
-	]),
+	useEventScreenModeSelectOptions: vi.fn(() => ({
+		value: [
+			{ label: 'Background', icon: 'i-lucide-wallpaper', value: 'background' },
+			{ label: 'Standings', icon: 'i-lucide-list', value: 'standings' },
+		],
+	})),
 }));
 
 enableAutoUnmount(afterEach);
