@@ -28,6 +28,7 @@ describe('featureMatchTokenCatalogue', () => {
 			'DeckColors',
 			'Pronouns',
 			'Lgs',
+			'LeaderImage',
 		]);
 		expect(forSide(2)).toEqual(forSide(1));
 	});
@@ -64,11 +65,23 @@ describe('featureMatchTokenCatalogue', () => {
 			.toBe('Player 2 Local Game Store');
 	});
 
-	it('marks only player Deck Colours for MTG mana-pip presentation', () => {
-		expect(featureMatchTokenPresentations()).toEqual({
-			player1DeckColors: 'mtg-mana-colors',
-			player2DeckColors: 'mtg-mana-colors',
-		});
+	// Deck Colours hold mana letters on a Magic Event and Leader colours on a One Piece one.
+	it.each([
+		{
+			game: 'mtg' as const,
+			presentations: { player1DeckColors: 'mtg-mana-colors', player2DeckColors: 'mtg-mana-colors' },
+		},
+		{
+			game: 'op' as const,
+			presentations: {
+				player1DeckColors: 'op-colors',
+				player2DeckColors: 'op-colors',
+				player1LeaderImage: 'op-card-image',
+				player2LeaderImage: 'op-card-image',
+			},
+		},
+	])('paints only the $game Event\'s visual tokens as more than text', ({ game, presentations }) => {
+		expect(featureMatchTokenPresentations(game)).toEqual(presentations);
 	});
 
 	it('resolves a token through the shared Graphic Text Template mechanism', () => {

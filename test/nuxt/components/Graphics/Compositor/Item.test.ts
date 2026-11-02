@@ -77,6 +77,69 @@ describe('graphicsCompositorItem MTG mana colours', () => {
 	});
 });
 
+describe('graphicsCompositorItem One Piece Leader', () => {
+	type Segment = NonNullable<GraphicItemRenderDescriptor['textSegments']>[number];
+	function textDescriptor(segments: Segment[]): GraphicItemRenderDescriptor {
+		return {
+			id: 'leader',
+			label: 'Leader',
+			kind: 'text',
+			style: { position: 'absolute' },
+			textStyle: { fontSize: '28px' },
+			text: segments.map(segment => segment.text).join(''),
+			textSegments: segments,
+		};
+	}
+	const url = 'https://cards-img.keepr.digital/OP01-003.png';
+
+	it('paints a dual-colour Leader\'s colours and its card in place of their text', async () => {
+		const wrapper = await mountItem(textDescriptor([
+			{
+				text: url,
+				inputKey: 'player1LeaderImage',
+				cardImage: { url, monochrome: false },
+			},
+			{
+				text: 'Red/Green',
+				inputKey: 'player1DeckColors',
+				opColors: {
+					colors: ['Red', 'Green'],
+					monochrome: false,
+				},
+			},
+		]));
+
+		expect(wrapper.get('[data-op-card-image]').attributes('src')).toBe(url);
+		expect(wrapper.get('[data-op-colors]').attributes('aria-label')).toBe('Red/Green');
+		expect(wrapper.findAll('[data-op-color]').map(pip => pip.attributes('data-op-color'))).toEqual(['Red', 'Green']);
+		expect(wrapper.text()).not.toContain('Red/Green');
+		expect(wrapper.text()).not.toContain(url);
+	});
+
+	it('paints the Key Output as white coverage: a card-shaped block and one circle per colour', async () => {
+		const wrapper = await mountItem(textDescriptor([
+			{
+				text: url,
+				inputKey: 'player1LeaderImage',
+				cardImage: { url, monochrome: true },
+			},
+			{
+				text: 'Red/Green',
+				inputKey: 'player1DeckColors',
+				opColors: {
+					colors: ['Red', 'Green'],
+					monochrome: true,
+				},
+			},
+		]));
+
+		expect(wrapper.find('[data-op-card-image]').exists()).toBe(false);
+		expect(wrapper.find('[data-op-card-image-key]').exists()).toBe(true);
+		expect(wrapper.find('[data-op-colors]').exists()).toBe(false);
+		expect(wrapper.get('[data-op-colors-key]').findAll('span')).toHaveLength(2);
+	});
+});
+
 /**
  * The `<p>` is re-keyed to restart the CSS animation, so a *new element* is the
  * evidence that the animation ran — the class alone is present either way.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildFeatureMatchOverlayTemplateMetadataValues } from '~~/shared/featureMatchOverlayValues';
+import { buildFeatureMatchOverlayTemplateMetadataValues, featureMatchTokenValues } from '~~/shared/featureMatchOverlayValues';
 
 describe('broadcast layout template metadata values', () => {
 	it('populates event, stage, round, format, and table placeholders', () => {
@@ -96,6 +96,66 @@ describe('broadcast layout template metadata values', () => {
 			table: '',
 			format: '',
 			eventName: '',
+		});
+	});
+});
+
+describe('a side\'s deck on the Feature Match Overlay', () => {
+	const luffy = {
+		number: 'OP01-003',
+		name: 'Monkey.D.Luffy',
+		colors: ['Red', 'Green'],
+		imageUrl: 'https://cards-img.keepr.digital/OP01-003.png',
+	};
+	function valuesFor(game: 'mtg' | 'op', gameData: unknown) {
+		return featureMatchTokenValues({
+			event: {
+				name: 'Open',
+				game,
+				displayRecordSeparator: '-',
+				displayHideZeroDraws: true,
+				displayPositionFormat: 'ordinal',
+			},
+			featureMatch: {
+				player1Data: { name: 'Ana', gameData },
+				player2Data: null,
+				activeSession: null,
+			} as any,
+			sourceMatch: null,
+			round: null,
+			phase: null,
+		});
+	}
+
+	// A One Piece deck is named by its Leader, which also sets its colours.
+	it.each([
+		{
+			game: 'op' as const,
+			gameData: { type: 'op', leader: luffy },
+			deck: 'Monkey.D.Luffy',
+			colors: 'Red/Green',
+			image: 'https://cards-img.keepr.digital/OP01-003.png',
+		},
+		{
+			game: 'op' as const,
+			gameData: { type: 'op', leader: null },
+			deck: '',
+			colors: '',
+			image: '',
+		},
+		{
+			game: 'mtg' as const,
+			gameData: { type: 'mtg', deckName: 'Boros', deckColors: 'RW' },
+			deck: 'Boros',
+			colors: 'RW',
+			image: '',
+		},
+	])('shows $game deck "$deck" in $colors', ({ game, gameData, deck, colors, image }) => {
+		expect(valuesFor(game, gameData)).toMatchObject({
+			player1Deck: deck,
+			player1DeckColors: colors,
+			player1LeaderImage: image,
+			player2LeaderImage: '',
 		});
 	});
 });

@@ -32,6 +32,22 @@ interface OpSpotlightRuntimeState {
 
 const SEARCH_FAILED = 'Card search failed. Try again.';
 
+/** The `op-cards` query an OP card search asks: a card number when the text is one, else a name or text search. */
+export function opCardSearchParams(search: OpCardSearch): OpCardSearchParams {
+	const params: OpCardSearchParams = {};
+	const text = search.text.trim();
+	const number = parseOpCardNumber(text);
+	if (number)
+		params.number = number;
+	else if (text)
+		params.q = text;
+	if (search.color)
+		params.color = search.color;
+	if (search.category)
+		params.category = search.category;
+	return params;
+}
+
 /**
  * One Piece Card Spotlight Module: search through the Event's bandai-keepr
  * proxy, the Printing picker, the preview, and its Card History (ADR-0057).
@@ -49,21 +65,6 @@ export function useOpSpotlightRuntime(state: OpSpotlightRuntimeState) {
 
 	const previewPrintings = computed<OpPrinting[]>(() => state.previewDetail.value?.printings ?? []);
 
-	function searchParams(search: OpCardSearch): OpCardSearchParams {
-		const params: OpCardSearchParams = {};
-		const text = search.text.trim();
-		const number = parseOpCardNumber(text);
-		if (number)
-			params.number = number;
-		else if (text)
-			params.q = text;
-		if (search.color)
-			params.color = search.color;
-		if (search.category)
-			params.category = search.category;
-		return params;
-	}
-
 	async function search(search: OpCardSearch) {
 		const eventId = toValue(state.eventId);
 		if (!eventId)
@@ -74,7 +75,7 @@ export function useOpSpotlightRuntime(state: OpSpotlightRuntimeState) {
 		searchController = controller;
 		state.searching.value = true;
 		try {
-			const answer = await searchCards(eventId, searchParams(search), controller.signal);
+			const answer = await searchCards(eventId, opCardSearchParams(search), controller.signal);
 			if (!flight.current)
 				return;
 			state.available.value = answer.available;

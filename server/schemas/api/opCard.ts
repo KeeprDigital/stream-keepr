@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { OP_CARD_CATEGORIES, OP_CARD_COLORS } from '~~/shared/types/card/op';
 import { parseOpCardNumber } from '~~/shared/utils/card/op';
 
-const opCardNumberSchema = z.string().transform((value, context) => {
+export const opCardNumberSchema = z.string().transform((value, context) => {
 	const number = parseOpCardNumber(value);
 	if (number === null) {
 		context.addIssue({ code: 'custom', message: 'Not a card number' });

@@ -1,5 +1,13 @@
+import type { OpLeader } from '~~/shared/types/game';
 import { describe, expect, it } from 'vitest';
 import { getMtgGameData, getOpGameData, getPlayerIdentityValue, resolvePlayerDeckIdentity } from '~~/shared/utils/gameData';
+
+const luffy: OpLeader = {
+	number: 'OP01-003',
+	name: 'Monkey.D.Luffy',
+	colors: ['Red', 'Green'],
+	imageUrl: 'https://cards-img.keepr.digital/OP01-003.png',
+};
 
 describe('getMtgGameData', () => {
 	it('returns defaults for null', () => {
@@ -16,10 +24,12 @@ describe('getMtgGameData', () => {
 	});
 
 	it('returns defaults when type is op (wrong game)', () => {
-		const data = { type: 'op' as const, leader: 'Luffy' };
+		const data = { type: 'op' as const, leader: luffy };
 		expect(getMtgGameData(data)).toEqual({ type: 'mtg', deckName: null, deckColors: null });
 	});
 });
+
+type OpGameDataInput = Parameters<typeof getOpGameData>[0];
 
 describe('getOpGameData', () => {
 	it('returns defaults for null', () => {
@@ -27,8 +37,14 @@ describe('getOpGameData', () => {
 	});
 
 	it('extracts op data when type is op', () => {
-		const data = { type: 'op' as const, leader: 'Luffy' };
-		expect(getOpGameData(data)).toEqual({ type: 'op', leader: 'Luffy' });
+		const data = { type: 'op' as const, leader: luffy };
+		expect(getOpGameData(data)).toEqual({ type: 'op', leader: luffy });
+	});
+
+	// Free text typed before the Leader picker names no card, so it reads as no Leader.
+	it('reads a free-text Leader stored before the picker as none', () => {
+		const legacy = { type: 'op', leader: 'Luffy' } as unknown as OpGameDataInput;
+		expect(getOpGameData(legacy)).toEqual({ type: 'op', leader: null });
 	});
 
 	it('returns defaults when type is mtg (wrong game)', () => {
@@ -47,7 +63,7 @@ describe('getPlayerIdentityValue', () => {
 	});
 
 	it('returns leader for op game data with discriminator', () => {
-		expect(getPlayerIdentityValue('op', { type: 'op', leader: 'Luffy' })).toBe('Luffy');
+		expect(getPlayerIdentityValue('op', { type: 'op', leader: luffy })).toBe('Monkey.D.Luffy');
 	});
 });
 

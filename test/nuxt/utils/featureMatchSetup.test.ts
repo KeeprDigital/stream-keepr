@@ -18,6 +18,35 @@ describe('featureMatchSetup payload helpers', () => {
 		})).toBeNull();
 	});
 
+	// A save sends the picked Leader whole; free text typed before the picker names no card.
+	it.each([
+		{
+			leader: {
+				number: 'OP01-001',
+				name: 'Roronoa Zoro',
+				colors: ['Red'],
+				imageUrl: 'https://cards-img.keepr.digital/OP01-001.png',
+			},
+			gameData: {
+				type: 'op',
+				leader: {
+					number: 'OP01-001',
+					name: 'Roronoa Zoro',
+					colors: ['Red'],
+					imageUrl: 'https://cards-img.keepr.digital/OP01-001.png',
+				},
+			},
+		},
+		{ leader: 'Zoro', gameData: null },
+		{ leader: null, gameData: null },
+	])('saves a side\'s Leader $leader as $gameData', ({ leader, gameData }) => {
+		expect(normalizePlayerSlotData({
+			...DEFAULT_PLAYER_DATA,
+			name: 'Ana',
+			gameData: { type: 'op', leader } as any,
+		})?.gameData).toEqual(gameData);
+	});
+
 	it('turns blank numeric inputs into null', () => {
 		const update = buildFeatureMatchSetupUpdate({
 			tableNumber: '' as any,

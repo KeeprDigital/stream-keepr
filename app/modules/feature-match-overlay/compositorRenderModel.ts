@@ -1,4 +1,5 @@
 import type { GraphicThemeTokens } from '~~/shared/modules/graphics';
+import type { Game } from '~~/shared/types/enums';
 import type { GraphicInputValue } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { FeatureMatchLayoutConfig, ScreenOutput } from '~~/shared/types/screenConfig';
@@ -37,6 +38,11 @@ export interface FeatureMatchOverlayCompositorRenderModelInput {
 	output: ScreenOutput;
 	canvasWidth: number;
 	canvasHeight: number;
+	/**
+	 * The Event's Card Game, which decides how a visual token such as Deck Colours
+	 * paints. Until it is known, every token paints as text.
+	 */
+	game?: Game;
 	/** The Feature Match Layout whose shared item tree composes. */
 	layout: Pick<FeatureMatchLayoutConfig, 'composition'>;
 	/**
@@ -86,7 +92,9 @@ export function resolveFeatureMatchOverlayCompositorRenderModel(
 		canvasRole: 'layer',
 		// Deliberately no `visibleGraphicIds`: the one composition is always composed.
 		textDeclarations: featureMatchTokenDeclarations(),
-		textTokenPresentations: featureMatchTokenPresentations(),
+		textTokenPresentations: input.game
+			? featureMatchTokenPresentations(input.game)
+			: undefined,
 		inputValues: input.tokenValues
 			? { [FEATURE_MATCH_LAYOUT_COMPOSITION_ID]: input.tokenValues }
 			: undefined,

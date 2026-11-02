@@ -199,3 +199,38 @@ describe('updateFeatureMatchSchema', () => {
 		expect(result.player2Data).toBeNull();
 	});
 });
+
+describe('a Slot side\'s Leader', () => {
+	const leader = {
+		number: 'OP01-001',
+		name: 'Roronoa Zoro',
+		colors: ['Red'],
+		imageUrl: 'https://cards-img.keepr.digital/OP01-001.png',
+	};
+	const sideWith = (value: unknown) => updateFeatureMatchSchema.safeParse({
+		player1Data: {
+			name: 'Ana',
+			gameData: { type: 'op', leader: value },
+		},
+	});
+
+	// The overlay loads the image on air, so it must be a bandai-keepr Printing image.
+	it.each([
+		{ imageUrl: 'https://cards-img.keepr.digital/OP01-001_p1.png', accepted: true },
+		{ imageUrl: 'https://example.com/OP01-001.png', accepted: false },
+		{ imageUrl: 'https://cards-img.keepr.digital.example.com/OP01-001.png', accepted: false },
+	])('takes $imageUrl as its image: $accepted', ({ imageUrl, accepted }) => {
+		expect(sideWith({ ...leader, imageUrl }).success).toBe(accepted);
+	});
+
+	// Free text typed before the Leader picker names no card.
+	it('reads a free-text Leader as none', () => {
+		const result = sideWith('Zoro');
+		expect(result.success && result.data.player1Data?.gameData).toEqual({ type: 'op', leader: null });
+	});
+
+	it('keeps a picked Leader whole', () => {
+		const result = sideWith(leader);
+		expect(result.success && result.data.player1Data?.gameData).toEqual({ type: 'op', leader });
+	});
+});

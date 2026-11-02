@@ -1,6 +1,9 @@
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { players } from '~~/server/db/schema';
+import { OP_CARD_COLORS } from '~~/shared/types/card/op';
+import { OP_CARD_IMAGE_ORIGIN } from '~~/shared/utils/card/op';
+import { opCardNumberSchema } from './opCard';
 
 // Game-specific player data (discriminated union)
 const mtgGameDataSchema = z.object({
@@ -9,9 +12,26 @@ const mtgGameDataSchema = z.object({
 	deckColors: z.string().max(50).nullable().optional(),
 }).strict();
 
+/** A Leader's inline snapshot. Its image goes on air, so it must be a bandai-keepr Printing image. */
+const opLeaderSchema = z.object({
+	number: opCardNumberSchema,
+	name: z.string().trim().min(1).max(200),
+	colors: z.array(z.enum(OP_CARD_COLORS)).max(OP_CARD_COLORS.length),
+	imageUrl: z.url().max(500).refine(
+		url => new URL(url).origin === OP_CARD_IMAGE_ORIGIN,
+		{ message: 'Not a One Piece card image' },
+	),
+}).strict();
+
 const opGameDataSchema = z.object({
 	type: z.literal('op'),
-	leader: z.string().max(200).nullable().optional(),
+	// Free text typed before the Leader picker names no card, so it is read as none.
+	leader: z.preprocess(
+		value => typeof value === 'string'
+			? null
+			: value,
+		opLeaderSchema.nullable().optional(),
+	),
 }).strict();
 
 export const playerGameDataSchema = z.discriminatedUnion('type', [mtgGameDataSchema, opGameDataSchema]);

@@ -8,6 +8,7 @@ import type {
 	GraphicSourceSelectionKind,
 } from '../../types/graphics';
 import { canonicalSocialProfileUrl, SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '../../socialProfiles';
+import { formatOpColors } from '../../utils/card/op';
 import { formatOrdinal } from '../../utils/formatters';
 import { getMtgGameData, getOpGameData } from '../../utils/gameData';
 
@@ -420,13 +421,35 @@ const PLAYER_FIELDS: readonly GraphicBindingField<GraphicBindingPlayer>[] = [
 		game: 'mtg',
 		resolve: player => textOf(getMtgGameData(player.gameData).deckColors),
 	},
+	// The Leader's name keeps the id it had as free text: a stored binding id is never renamed.
 	{
 		id: 'player.leader',
-		label: 'Leader',
+		label: 'Leader name',
 		type: 'text',
 		shape: 'atomic',
 		game: 'op',
-		resolve: player => textOf(getOpGameData(player.gameData).leader),
+		resolve: player => textOf(getOpGameData(player.gameData).leader?.name),
+	},
+	{
+		id: 'player.leaderColors',
+		label: 'Leader colours',
+		type: 'text',
+		shape: 'formatted',
+		game: 'op',
+		resolve: (player) => {
+			const leader = getOpGameData(player.gameData).leader;
+			return leader
+				? textOf(formatOpColors(leader.colors))
+				: undefined;
+		},
+	},
+	{
+		id: 'player.leaderImage',
+		label: 'Leader image URL',
+		type: 'text',
+		shape: 'atomic',
+		game: 'op',
+		resolve: player => textOf(getOpGameData(player.gameData).leader?.imageUrl),
 	},
 ];
 

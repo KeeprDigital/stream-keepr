@@ -1,5 +1,7 @@
 import type { ScreenCard } from '~~/shared/types/card/mtg';
-import type { OpScreenCard } from '~~/shared/types/card/op';
+import type { OpCardColor, OpCardSummary, OpScreenCard } from '~~/shared/types/card/op';
+import type { OpLeader } from '~~/shared/types/game';
+import { OP_CARD_COLORS } from '~~/shared/types/card/op';
 
 /** Where every One Piece Printing's image is served from, publicly. */
 export const OP_CARD_IMAGE_ORIGIN = 'https://cards-img.keepr.digital';
@@ -23,4 +25,28 @@ export function parseOpCardNumber(input: string): string | null {
 /** Whether a Screen Card is the One Piece variant; an MTG card carries no `game`. */
 export function isOpScreenCard(card: ScreenCard | null | undefined): card is OpScreenCard {
 	return card != null && 'game' in card && card.game === 'op';
+}
+
+function isOpCardColor(value: string): value is OpCardColor {
+	return (OP_CARD_COLORS as readonly string[]).includes(value);
+}
+
+/** A searched Leader as a Feature Match Slot side holds it, imaged by the Printing its values come from. */
+export function opLeaderOf(card: OpCardSummary): OpLeader {
+	return {
+		number: card.number,
+		name: card.name,
+		colors: card.colors.filter(isOpCardColor),
+		imageUrl: card.imageUrl,
+	};
+}
+
+/** One Piece colours as broadcast text, e.g. `Red/Green` for a dual-colour Leader. */
+export function formatOpColors(colors: readonly OpCardColor[]): string {
+	return colors.join('/');
+}
+
+/** The One Piece colours a `formatOpColors` text names; anything else is dropped. */
+export function parseOpColors(text: string): OpCardColor[] {
+	return text.split('/').map(part => part.trim()).filter(isOpCardColor);
 }

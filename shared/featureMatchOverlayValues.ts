@@ -1,8 +1,9 @@
 import type { EventResponse, FeatureMatchResponse, MatchResponse, PhaseResponse, RoundResponse } from '~~/shared/api';
 import type { PlayerSide } from '~~/shared/types/enums';
 import { getGameConfig } from '~~/shared/config/games';
+import { formatOpColors } from '~~/shared/utils/card/op';
 import { formatOrdinal } from '~~/shared/utils/formatters';
-import { getMtgGameData } from '~~/shared/utils/gameData';
+import { getMtgGameData, getOpGameData } from '~~/shared/utils/gameData';
 import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
 
 /**
@@ -97,6 +98,7 @@ const PLAYER_VALUE_KEYS = [
 	'DeckColors',
 	'Pronouns',
 	'Lgs',
+	'LeaderImage',
 ] as const;
 
 function playerData(input: FeatureMatchTokenValuesInput, side: PlayerSide) {
@@ -138,15 +140,21 @@ function playerValues(
 	side: PlayerSide,
 ): Record<typeof PLAYER_VALUE_KEYS[number], string> {
 	const data = playerData(input, side);
-	const mtg = getMtgGameData(data?.gameData as Parameters<typeof getMtgGameData>[0]);
+	const mtg = getMtgGameData(data?.gameData);
+	// A One Piece deck is named by its Leader, which also sets its colours, so a
+	// Leader shows where a Magic deck name and its mana colours do.
+	const leader = getOpGameData(data?.gameData).leader;
 
 	return {
 		Name: data?.name ?? '',
 		Record: record(input, side),
-		Deck: mtg.deckName ?? '',
-		DeckColors: mtg.deckColors ?? '',
+		Deck: mtg.deckName ?? leader?.name ?? '',
+		DeckColors: mtg.deckColors ?? (leader
+			? formatOpColors(leader.colors)
+			: ''),
 		Pronouns: data?.pronouns ?? '',
 		Lgs: data?.lgs ?? '',
+		LeaderImage: leader?.imageUrl ?? '',
 	};
 }
 

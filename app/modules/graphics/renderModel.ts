@@ -2,6 +2,7 @@ import type { CSSProperties } from 'vue';
 import type { SocialProfilePresentationProjection } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { GraphicAnimationOwnerValues, GraphicAnimationValues, GraphicThemeTokens, ShapeGeometrySize } from '~~/shared/modules/graphics';
 import type { GraphicsHostTokenPresentation } from '~~/shared/modules/graphics/hostContract';
+import type { OpCardColor } from '~~/shared/types/card/op';
 import type {
 	BroadcastGraphicConfig,
 	ClockGraphicItemConfig,
@@ -45,6 +46,7 @@ import {
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
 import { SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '~~/shared/socialProfiles';
+import { OP_CARD_IMAGE_ORIGIN, parseOpColors } from '~~/shared/utils/card/op';
 import { MTG_CARD_BORDER_RADIUS } from '~~/shared/utils/card/size';
 import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
 import { clampOpacity, glowDropShadow, paintColour } from '~/modules/screen/outputPaint';
@@ -391,6 +393,16 @@ export interface GraphicTextRenderSegment {
 	manaColors?: {
 		colors: string;
 		symbolCount: number;
+		monochrome: boolean;
+	};
+	/** One Piece colours painted as pips while `text` remains measurable. */
+	opColors?: {
+		colors: OpCardColor[];
+		monochrome: boolean;
+	};
+	/** A One Piece card painted from its Printing image, one line tall, while `text` holds its URL. */
+	cardImage?: {
+		url: string;
 		monochrome: boolean;
 	};
 }
@@ -1240,6 +1252,16 @@ function resolvedInputValues(
 	};
 }
 
+/** Only a bandai-keepr Printing image is loaded on air; any other value paints as its text. */
+function isOpCardImageUrl(value: string): boolean {
+	try {
+		return new URL(value).origin === OP_CARD_IMAGE_ORIGIN;
+	}
+	catch {
+		return false;
+	}
+}
+
 function textDescriptor(
 	output: ScreenOutput,
 	scope: string,
@@ -1270,6 +1292,9 @@ function textDescriptor(
 						monochrome: output === 'key',
 					}
 				: undefined;
+			const opColors = presentation === 'op-colors'
+				? parseOpColors(segment.text)
+				: [];
 			return {
 				text: segment.text,
 				inputKey: segment.inputKey,
@@ -1278,6 +1303,16 @@ function textDescriptor(
 					: placeholderStyle(output, item.placeholderStyles?.[segment.inputKey]),
 				...(manaColors
 					? { manaColors }
+					: {}),
+				...(opColors.length > 0
+					? {
+							opColors: { colors: opColors, monochrome: output === 'key' },
+						}
+					: {}),
+				...(presentation === 'op-card-image' && isOpCardImageUrl(segment.text)
+					? {
+							cardImage: { url: segment.text, monochrome: output === 'key' },
+						}
 					: {}),
 			};
 		});
