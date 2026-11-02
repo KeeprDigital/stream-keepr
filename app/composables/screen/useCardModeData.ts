@@ -1,5 +1,5 @@
 import type { Ref } from 'vue';
-import type { MtgCard } from '~/types/card/mtg';
+import type { ScreenCard } from '~~/shared/types/card/mtg';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
 const CARD_LOAD_FAILED = 'Failed to load card data';
@@ -32,7 +32,7 @@ export function useCardModeData() {
  */
 function holdSampleCard() {
 	const outputReads = useScreenOutputReads();
-	const card = ref<MtgCard | null>(null);
+	const card = ref<ScreenCard | null>(null);
 	const error = ref<string | null>(null);
 	const loading = ref(true);
 	outputReads.card().then(

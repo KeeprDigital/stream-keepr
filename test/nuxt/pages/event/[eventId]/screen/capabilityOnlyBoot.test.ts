@@ -1,3 +1,4 @@
+import type { MtgCard } from '~/types/card/mtg';
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -563,7 +564,7 @@ describe('a capability-only Screen Output', () => {
 		const { card } = await useSampleScreenOutputReadRepository().card({ eventId: 42, screenId: 7 });
 		const [lowerThird] = screenModeSampleConfigs('broadcast-graphics')['broadcast-graphics']!.graphics!;
 		return [
-			card!.imageData.front!.normal,
+			(card as MtgCard).imageData.front!.normal,
 			...lowerThird!.items.flatMap(item => item.type === 'text'
 				? [item.text]
 				: []),

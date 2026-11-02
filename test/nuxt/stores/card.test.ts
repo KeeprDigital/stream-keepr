@@ -1,3 +1,4 @@
+import type { MtgCard } from '~/types/card/mtg';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '~~/test/helpers/deferred';
@@ -970,19 +971,19 @@ describe('useCardStore', () => {
 		});
 
 		it('shows the toggle at once, without mutating the held Card in place, and saves it', async () => {
-			const held = store.activeCard!;
+			const held = store.activeCard as MtgCard;
 			const save = deferredSave();
 
 			const controlling = store.controlActiveCard('flip');
 
-			expect(store.activeCard!.displayData.flipped).toBe(true);
+			expect((store.activeCard as MtgCard).displayData.flipped).toBe(true);
 			expect(held.displayData.flipped).toBe(false);
 			expect(mockCardRepo.saveScreenCard).toHaveBeenCalledWith(1, 5, expect.objectContaining({
 				displayData: expect.objectContaining({ flipped: true }),
 			}));
 			save.resolve({ success: true, revision: 2 });
 			await controlling;
-			expect(store.activeCard!.displayData.flipped).toBe(true);
+			expect((store.activeCard as MtgCard).displayData.flipped).toBe(true);
 		});
 
 		it('puts back the field it toggled when its save fails, and reports the failure', async () => {
@@ -1005,7 +1006,7 @@ describe('useCardStore', () => {
 			flip.reject(unavailable());
 			await flipping;
 
-			expect(store.activeCard!.displayData).toMatchObject({ flipped: false, rotated: true });
+			expect((store.activeCard as MtgCard).displayData).toMatchObject({ flipped: false, rotated: true });
 			rotate.resolve({ success: true, revision: 2 });
 			await rotating;
 		});
@@ -1022,7 +1023,7 @@ describe('useCardStore', () => {
 			await unflipping;
 
 			// The server never held the first control's unsaved `true`.
-			expect(store.activeCard!.displayData.flipped).toBe(false);
+			expect((store.activeCard as MtgCard).displayData.flipped).toBe(false);
 		});
 
 		it('leaves a field to the later control of it still out when an earlier one fails', async () => {
@@ -1035,12 +1036,12 @@ describe('useCardStore', () => {
 
 			first.reject(unavailable());
 			await flipping;
-			expect(store.activeCard!.displayData.flipped).toBe(true);
+			expect((store.activeCard as MtgCard).displayData.flipped).toBe(true);
 
 			second.reject(unavailable());
 			third.resolve({ success: true, revision: 2 });
 			await Promise.all([unflipping, reflipping]);
-			expect(store.activeCard!.displayData.flipped).toBe(true);
+			expect((store.activeCard as MtgCard).displayData.flipped).toBe(true);
 		});
 
 		it('puts nothing back over newer state accepted while its save was out', async () => {

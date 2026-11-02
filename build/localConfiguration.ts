@@ -95,6 +95,9 @@ export type LocallyRequiredNuxtName = typeof LOCALLY_REQUIRED_NUXT_NAMES[number]
  * closed both: the partition now covers every name a developer is handed, and the
  * file staged for the preview is the file that carries them.
  *
+ * The two bandai-keepr names are optional because nothing refuses without them:
+ * a One Piece Event's card features say "card data unavailable" instead (ADR-0057).
+ *
  * The two auth names that sat here from #393 and #394 moved to required on #396
  * — see the note above. The promise that they would was recorded in this
  * docblock *and* on the ticket that inherits it, because a promise living only
@@ -106,6 +109,8 @@ export const LOCALLY_OPTIONAL_NUXT_NAMES = [
 	'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY',
 	'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY_VERSION',
 	'NUXT_MELEE_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS',
+	'NUXT_BANDAI_KEEPR_API_KEY',
+	'NUXT_BANDAI_KEEPR_API_URL',
 ] as const;
 
 /**

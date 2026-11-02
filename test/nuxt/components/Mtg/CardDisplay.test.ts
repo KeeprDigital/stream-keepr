@@ -117,6 +117,27 @@ describe('mtgCardDisplay', () => {
 		expect(wrapper.get('[data-testid="card-image"]').text()).toBe('New Card');
 	});
 
+	it('shows a One Piece card as its Printing\'s image, once that has loaded', async () => {
+		const imageUrl = 'https://cards-img.keepr.digital/OP01-001_p1.png';
+		images.hold(imageUrl);
+		const wrapper = mountComponent({
+			game: 'op',
+			id: 'OP01-001_p1',
+			number: 'OP01-001',
+			name: 'Roronoa Zoro',
+			set: 'OP-01',
+			printingKind: 'alt-art',
+			imageUrl,
+		} as unknown as MtgCard);
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(wrapper.find('img').exists()).toBe(false);
+
+		images.release(imageUrl);
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(wrapper.get('img[alt="Roronoa Zoro"]').attributes('src')).toBe(imageUrl);
+		expect(wrapper.find('[data-testid="card-image"]').exists()).toBe(false);
+	});
+
 	it('keeps the card on program until its replacement\'s image has loaded', async () => {
 		const wrapper = mountComponent(card('old-card', 'Old Card'));
 		await vi.advanceTimersByTimeAsync(50);

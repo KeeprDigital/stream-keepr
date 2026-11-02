@@ -1,3 +1,4 @@
+import type { MtgCard } from '~/types/card/mtg';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '~~/test/helpers/deferred';
@@ -240,7 +241,7 @@ describe('useCardStore deck sources and search', () => {
 
 			await store.controlActiveCard(action);
 
-			expect(store.activeCard!.displayData[field]).toBe(true);
+			expect((store.activeCard as MtgCard).displayData[field]).toBe(true);
 			expect(mockCardRepo.saveScreenCard).toHaveBeenCalledWith(1, 5, expect.objectContaining({
 				displayData: expect.objectContaining({ [field]: true }),
 			}));

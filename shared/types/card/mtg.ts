@@ -1,4 +1,5 @@
 import type { ScryfallCardFields, ScryfallImageUris } from '@scryfall/api-types';
+import type { OpScreenCard } from './op';
 
 /* TYPES */
 export interface MtgCardDisplayData {
@@ -52,11 +53,17 @@ export interface MtgCard {
 }
 
 /**
+ * What a Screen Card holds: a Scryfall-shaped MTG card, or one Printing of a
+ * One Piece card, told apart by `game` (ADR-0057). An MTG card carries none.
+ */
+export type ScreenCard = MtgCard | OpScreenCard;
+
+/**
  * A Screen Card at one Card revision: what every Card read answers (#734).
  * The revision advances on each save and Clear and never on expiry, so `card`
  * is `null` both for no Card and for one past its Card Timeout (ADR-0022).
  */
-export interface ScreenCardState<TCard = MtgCard> {
+export interface ScreenCardState<TCard = ScreenCard> {
 	card: TCard | null;
 	revision: number;
 }

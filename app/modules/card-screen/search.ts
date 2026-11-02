@@ -5,6 +5,7 @@ import type { MessageData } from '~/types/realtime';
 import { computed, toRaw, toValue } from 'vue';
 import { cloneMtgCard } from '~~/shared/utils/card/clone';
 import { cardParser } from '~~/shared/utils/card/parsers';
+import { cardTimeoutStartingAt } from '~~/shared/utils/card/timeout';
 
 const SCRYFALL_CLIENT_TIMEOUT_MS = 10_000;
 
@@ -207,13 +208,9 @@ export function useCardSearchRuntime(state: CardSearchRuntimeState) {
 		switch (action) {
 			case 'show': {
 				const cardData = cloneMtgCard(state.previewCard.value);
-				const timeoutSeconds = toValue(state.cardTimeoutSeconds);
-				if (timeoutSeconds) {
-					cardData.timeoutData = {
-						timeoutDuration: timeoutSeconds * 1000,
-						timeoutStartTimestamp: Math.round(getServerTime()),
-					};
-				}
+				const timeoutData = cardTimeoutStartingAt(toValue(state.cardTimeoutSeconds), getServerTime());
+				if (timeoutData)
+					cardData.timeoutData = timeoutData;
 				await state.saveActiveCard(cardData);
 				break;
 			}

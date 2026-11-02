@@ -1,9 +1,13 @@
+import type { ScreenCard } from '~~/shared/types/card/mtg';
+import type { OpCardDetail, OpCardSummary, OpScreenCard } from '~~/shared/types/card/op';
 import type { MatchPlayerDeckData } from '~/types/card/deckList';
 import type { MtgActiveCardAction, MtgCard, MtgFormat } from '~/types/card/mtg';
 import type { CardPageMode } from '~/types/card/page';
 import { useCountdown, useStorage } from '@vueuse/core';
+import { isOpScreenCard } from '~~/shared/utils/card/op';
 import { useActiveCardScreenRuntime } from '~/modules/card-screen/activeCard';
 import { useCardDeckSourceRuntime } from '~/modules/card-screen/deckSources';
+import { useOpSpotlightRuntime } from '~/modules/card-screen/opSpotlight';
 import { useCardSearchRuntime } from '~/modules/card-screen/search';
 
 export const useCardStore = defineStore('card', () => {
@@ -19,7 +23,7 @@ export const useCardStore = defineStore('card', () => {
 
 	const previewCard = ref<MtgCard | null>(null);
 	const previewCardPrintings = ref<MtgCard[]>([]);
-	const activeCard = ref<MtgCard | null>(null);
+	const activeCard = ref<ScreenCard | null>(null);
 	const activeScreenId = ref<number | null>(null);
 
 	const searching = ref(false);
@@ -81,6 +85,32 @@ export const useCardStore = defineStore('card', () => {
 		saveActiveCard,
 	});
 
+	// ──────────────── One Piece Card Spotlight (ADR-0057) ────────────────
+
+	const opSearching = ref(false);
+	const opSearchResults = ref<OpCardSummary[]>([]);
+	const opCardDataAvailable = ref<boolean | null>(null);
+	const opSearchError = ref<string | null>(null);
+	const opPreviewCard = ref<OpScreenCard | null>(null);
+	const opPreviewDetail = ref<OpCardDetail | null>(null);
+	const opSelectionHistory = useStorage<OpScreenCard[]>('opCard-history', []);
+
+	const opSpotlightRuntime = useOpSpotlightRuntime({
+		eventId: () => eventStore.eventId,
+		activeScreenId,
+		cardTimeoutSeconds: () => eventStore.event?.cardTimeout,
+		showCardControls,
+		autoShowSelectedCard,
+		searching: opSearching,
+		results: opSearchResults,
+		available: opCardDataAvailable,
+		searchError: opSearchError,
+		previewCard: opPreviewCard,
+		previewDetail: opPreviewDetail,
+		selectionHistory: opSelectionHistory,
+		saveActiveCard,
+	});
+
 	const deckSourceRuntime = useCardDeckSourceRuntime({
 		eventId: () => eventStore.eventId,
 		featureMatches: () => featureMatchStore.featureMatches,
@@ -105,11 +135,15 @@ export const useCardStore = defineStore('card', () => {
 	// ──────────────── Computed ────────────────
 
 	const cardsMatch = computed(() => {
-		return activeCard.value?.id === previewCard.value?.id
-			&& activeCard.value?.displayData.flipped === previewCard.value?.displayData.flipped
-			&& activeCard.value?.displayData.rotated === previewCard.value?.displayData.rotated
-			&& activeCard.value?.displayData.turnedOver === previewCard.value?.displayData.turnedOver
-			&& activeCard.value?.displayData.counterRotated === previewCard.value?.displayData.counterRotated;
+		const active = activeCard.value;
+		// An OP card is shown as printed: the same Printing is the same card on screen.
+		if (isOpScreenCard(active) || opPreviewCard.value)
+			return isOpScreenCard(active) && active.id === opPreviewCard.value?.id;
+		return active?.id === previewCard.value?.id
+			&& active?.displayData.flipped === previewCard.value?.displayData.flipped
+			&& active?.displayData.rotated === previewCard.value?.displayData.rotated
+			&& active?.displayData.turnedOver === previewCard.value?.displayData.turnedOver
+			&& active?.displayData.counterRotated === previewCard.value?.displayData.counterRotated;
 	});
 
 	const searchFormatQuery = cardSearchRuntime.searchFormatQuery;
@@ -180,6 +214,7 @@ export const useCardStore = defineStore('card', () => {
 		// and a save or Clear still out touches nothing (ADR-0024).
 		activeCardRuntime.endLifetime();
 		deckSourceRuntime.resetDeckSources();
+		opSpotlightRuntime.reset();
 	}
 
 	return {
@@ -214,6 +249,14 @@ export const useCardStore = defineStore('card', () => {
 		playerDeckHasData,
 		loadingPlayerDeck,
 		canUsePlayerDeckMode,
+		// One Piece Card Spotlight state
+		opSearching,
+		opSearchResults,
+		opCardDataAvailable,
+		opSearchError,
+		opPreviewCard,
+		opPreviewPrintings: opSpotlightRuntime.previewPrintings,
+		opSelectionHistory,
 
 		// Computed
 		cardsMatch,
@@ -238,6 +281,13 @@ export const useCardStore = defineStore('card', () => {
 		clearMatchDeckLists,
 		loadPlayerDeck,
 		clearPlayerDeck,
+		searchOpCards: opSpotlightRuntime.search,
+		selectOpCard: opSpotlightRuntime.selectCard,
+		selectOpHistoryCard: opSpotlightRuntime.selectHistoryCard,
+		selectOpPrinting: opSpotlightRuntime.selectPrinting,
+		showOpPreviewCard: opSpotlightRuntime.showPreviewCard,
+		clearOpPreview: opSpotlightRuntime.clearPreview,
+		clearOpHistory: opSpotlightRuntime.clearHistory,
 		applyRemoteUpdated,
 		applyRemotePreview,
 		applyRemoteCleared,

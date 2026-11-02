@@ -82,8 +82,12 @@ describe('screens extended API', () => {
 			set: 'lea',
 			layout: 'normal',
 		});
-		expect(card!.imageData.front).toMatchObject({ normal: 'https://example.com/front.jpg' });
-		expect(card!.imageData.back).toBeNull();
+		expect(card).toMatchObject({
+			imageData: {
+				front: { normal: 'https://example.com/front.jpg' },
+				back: null,
+			},
+		});
 		expect(card!.savedAt).toBeTypeOf('number');
 	});
 

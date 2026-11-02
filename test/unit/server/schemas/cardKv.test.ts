@@ -23,6 +23,57 @@ function validCard() {
 	};
 }
 
+function opCard() {
+	return {
+		game: 'op',
+		id: 'OP01-001_p1',
+		number: 'OP01-001',
+		name: 'Roronoa Zoro',
+		set: 'OP-01',
+		printingKind: 'alt-art',
+		imageUrl: 'https://cards-img.keepr.digital/OP01-001_p1.png',
+		timeoutData: { timeoutDuration: 10_000, timeoutStartTimestamp: 1_790_000_000_000 },
+	};
+}
+
+// The One Piece variant sits beside the Scryfall-shaped one, told apart by `game` (ADR-0057).
+describe('cardInputSchema One Piece variant', () => {
+	it('accepts one Printing of a Card, timed', () => {
+		expect(cardInputSchema.parse(opCard())).toEqual(opCard());
+	});
+
+	it.each([
+		[
+			'an orientation an OP card does not have',
+			{ displayData: validCard().displayData },
+		],
+		[
+			'a Printing kind bandai-keepr does not use',
+			{ printingKind: 'parallel' },
+		],
+		[
+			'a non-HTTPS image URL',
+			{ imageUrl: 'http://cards-img.keepr.digital/OP01-001.png' },
+		],
+		[
+			'no image URL',
+			{ imageUrl: undefined },
+		],
+	])('rejects %s', (_case, change) => {
+		expect(cardInputSchema.safeParse({
+			...opCard(),
+			...change,
+		}).success).toBe(false);
+	});
+
+	it('rejects an MTG card that claims to be One Piece', () => {
+		expect(cardInputSchema.safeParse({
+			...validCard(),
+			game: 'op',
+		}).success).toBe(false);
+	});
+});
+
 describe('cardInputSchema persistence bounds', () => {
 	it('accepts a normal card payload', () => {
 		expect(cardInputSchema.safeParse(validCard()).success).toBe(true);
