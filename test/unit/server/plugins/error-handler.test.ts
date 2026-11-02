@@ -710,6 +710,11 @@ describe('error-handler mapping logic', () => {
 				sentence: 'Card data provider is temporarily unavailable. Try again later.',
 			},
 			{
+				family: 'a bandai-keepr request that failed',
+				cause: { code: 'BANDAI_KEEPR_UPSTREAM_FAILURE' },
+				sentence: 'Card data provider is temporarily unavailable. Try again later.',
+			},
+			{
 				family: 'a Graphics Asset Library store that could not be reached (#294)',
 				cause: new GraphicsAssetLibraryError('Graphics Asset catalogue is unavailable', 'graphics-asset-library-unavailable'),
 				sentence: 'Graphics Asset catalogue is unavailable',

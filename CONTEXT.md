@@ -200,6 +200,10 @@ The count a Screen Card's saves and Clears advance, never its expiry. A save's a
 A Screen Card's optional duration, after which every holder hides it by the shared clock. Expiry is a clock projection, like Page Rotation: no read, client or timer writes it, and nothing announces it (ADR-0022).
 _Avoid_: auto-clear (nothing clears the Card when it runs out)
 
+**Printing**:
+One release of a One Piece card as bandai-keepr lists it — standard, alt-art or reprint — identified by its Printing id (`OP01-001`, `OP01-001_p1`) and imaged at `cards-img.keepr.digital/<PrintingId>.png`. A One Piece Screen Card is one Printing, chosen in Card Spotlight (ADR-0057).
+_Avoid_: variant, parallel, version.
+
 **Screen Output**:
 A live rendering variant exposed by a Screen Mode Definition, such as overlay, fill, or key.
 _Avoid_: Export mode when referring to live Screen rendering.

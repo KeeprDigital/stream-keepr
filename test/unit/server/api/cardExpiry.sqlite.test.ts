@@ -232,6 +232,42 @@ describe('saving a timed Card', () => {
 describe.each([
 	['an operator read', getCard],
 	['a Screen Output read', getOutputCard],
+])('%s of a timed One Piece Card', (_reader, read) => {
+	// An OP Screen Card is one Printing of a Card (ADR-0057); its Card Timeout is the MTG one.
+	const altArt = {
+		game: 'op',
+		id: 'OP01-001_p1',
+		number: 'OP01-001',
+		name: 'Roronoa Zoro',
+		set: 'OP-01',
+		printingKind: 'alt-art',
+		imageUrl: 'https://cards-img.keepr.digital/OP01-001_p1.png',
+		timeoutData: { timeoutDuration: D, timeoutStartTimestamp: SAVED_AT },
+	};
+
+	it('goes to screen with its chosen Printing, and is gone at expiry', async () => {
+		await expect(putCard(request(altArt))).resolves.toEqual({ success: true, revision: 1 });
+		expect(published).toEqual([
+			{
+				type: 'card:updated',
+				data: expect.objectContaining({ screenId, revision: 1, card: altArt }),
+			},
+		]);
+
+		vi.setSystemTime(SAVED_AT + D - 1);
+		await expect(read(request())).resolves.toEqual({
+			card: { ...altArt, savedAt: SAVED_AT },
+			revision: 1,
+		});
+
+		vi.setSystemTime(SAVED_AT + D);
+		await expect(read(request())).resolves.toEqual({ card: null, revision: 1 });
+	});
+});
+
+describe.each([
+	['an operator read', getCard],
+	['a Screen Output read', getOutputCard],
 ])('%s of a timed Card', (_reader, read) => {
 	it('before expiry answers the Card and writes nothing (scenario 2)', async () => {
 		await putCard(request(card('bolt', D)));

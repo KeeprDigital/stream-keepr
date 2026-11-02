@@ -12,7 +12,7 @@ import type {
 	BroadcastGraphicsCommandAppliedPayload,
 	BroadcastGraphicsEpochEndedPayload,
 } from './broadcastGraphicsLiveSession';
-import type { MtgCard } from './card/mtg';
+import type { MtgCard, ScreenCard } from './card/mtg';
 import type { FeatureMatchOrientation, Game, ScreenCommand } from './enums';
 import type { FeatureMatchSessionEventAppliedPayload } from './featureMatchSession';
 import type { CardResponse, PlayerDeckSummaryResponse } from './metagame';
@@ -367,7 +367,7 @@ export interface MessageDefinitions {
 	// at least as new as the one it holds, whether it arrives as an announcement,
 	// a write's answer or a read (#734).
 	'card:updated': {
-		card: MtgCard | null;
+		card: ScreenCard | null;
 		screenId: number;
 		revision: number;
 	};

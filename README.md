@@ -221,6 +221,8 @@ failure on `main`.
 | `NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY`           | 32-byte base64 key encrypting Melee client secrets (AES-256-GCM).                                                          |
 | `NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY_VERSION`   | Non-empty version label for the active key.                                                                                |
 | `NUXT_MELEE_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS` | Optional JSON `{"<version>":"<key>"}` of retired keys still needed to decrypt during rotation.                             |
+| `NUXT_BANDAI_KEEPR_API_KEY`                      | Optional Bearer key for bandai-keepr, the One Piece card API. Blank: OP card features show "card data unavailable".       |
+| `NUXT_BANDAI_KEEPR_API_URL`                      | bandai-keepr's base URL (`https://op-api.keepr.digital`). Blank: OP card data is unavailable, as above.                    |
 
 Generate keys and secrets with `openssl rand -base64 32`. A deployed Worker
 reads no file; there these are Worker secrets (see [Worker secrets](#worker-secrets)).
@@ -861,6 +863,11 @@ them in `wrangler.jsonc`, source control, or public runtime config.
 - **`NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY`**: changing it revokes every
   Screen Output asset capability. Rotate each Screen's asset access afterwards
   before using its output URL.
+- **`NUXT_BANDAI_KEEPR_API_KEY`**: optional; One Piece Events need it for
+  card data. Its URL is the `NUXT_BANDAI_KEEPR_API_URL` var in
+  `wrangler.jsonc`, which is not secret. Without either, OP card features show
+  "card data unavailable" rather than failing. bandai-keepr serves no CORS, so
+  only the Worker calls it, through `/api/events/:id/op-cards`.
 - **Melee key rotation**: put the old version and key in
   `NUXT_MELEE_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS`, deploy the new key and
   version, re-save each enabled Melee integration, and remove the old key only

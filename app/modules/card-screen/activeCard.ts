@@ -1,10 +1,11 @@
 import type { MaybeRefOrGetter, Ref } from 'vue';
-import type { ScreenCardState } from '~~/shared/types/card/mtg';
+import type { ScreenCard, ScreenCardState } from '~~/shared/types/card/mtg';
 import type { useAsyncAction } from '~/composables/core/useAsyncAction';
 import type { MtgCard, MtgCardDisplayData } from '~/types/card/mtg';
 import type { MessageData } from '~/types/realtime';
 import type { Flight } from '~/utils/guardedSequence';
 import { onScopeDispose, toValue } from 'vue';
+import { isOpScreenCard } from '~~/shared/utils/card/op';
 import { cardTimeoutRemainingMs } from '~~/shared/utils/card/timeout';
 import { createGuardedSequence, createKeyedGuardedSequence } from '~/utils/guardedSequence';
 
@@ -24,7 +25,7 @@ interface CountdownController {
 interface ActiveCardRuntimeState {
 	eventId: MaybeRefOrGetter<number | null | undefined>;
 	activeScreenId: Ref<number | null>;
-	activeCard: Ref<MtgCard | null>;
+	activeCard: Ref<ScreenCard | null>;
 	timeout: CountdownController;
 	loading: Ref<boolean>;
 	error: Ref<string | null>;
@@ -98,7 +99,7 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	const acceptances = createGuardedSequence();
 	let lastAcceptance = acceptances.begin();
 	/** The Card last accepted, whose display a failed display control puts back. */
-	let acceptedCard: MtgCard | null = null;
+	let acceptedCard: ScreenCard | null = null;
 	/** The latest display control of each field: only it may put that field back. */
 	const displayControls = createKeyedGuardedSequence<keyof MtgCardDisplayData>();
 	/** The Screen selection, within the Event Lifetime, a write's continuation belongs to. */
@@ -157,7 +158,7 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	}
 
 	/** Hold a Card, arming its hiding from its own timeout data; an expired Card is held as none. */
-	function holdCard(card: MtgCard | null) {
+	function holdCard(card: ScreenCard | null) {
 		if (card && !isExpired(card)) {
 			state.activeCard.value = card;
 			updateTimeout(card);
@@ -170,11 +171,11 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 		}
 	}
 
-	function remainingMs(card: MtgCard) {
+	function remainingMs(card: ScreenCard) {
 		return cardTimeoutRemainingMs(card.timeoutData, getServerTime());
 	}
 
-	function isExpired(card: MtgCard) {
+	function isExpired(card: ScreenCard) {
 		return remainingMs(card) <= 0;
 	}
 
@@ -235,7 +236,7 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 		return state.activeScreenId.value !== null && messageData.screenId === state.activeScreenId.value;
 	}
 
-	function updateTimeout(cardData: MtgCard) {
+	function updateTimeout(cardData: ScreenCard) {
 		if (!cardData.timeoutData) {
 			state.timeout.reset();
 			return;
@@ -244,7 +245,7 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	}
 
 	/** Hide the held Card when its Card Timeout runs out, on the shared clock. */
-	function scheduleLocalTimeout(cardData: MtgCard) {
+	function scheduleLocalTimeout(cardData: ScreenCard) {
 		// Replacing a timed card with an untimed card must cancel the old timer too.
 		clearCardTimeout();
 		if (!cardData.timeoutData)
@@ -293,7 +294,7 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 		return outcome ?? (flight.current ? 'failed' : 'superseded');
 	}
 
-	async function saveActiveCard(cardData: MtgCard) {
+	async function saveActiveCard(cardData: ScreenCard) {
 		const eventId = currentEventId();
 		if (!eventId) {
 			state.error.value = 'No event loaded';
@@ -348,11 +349,12 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	 * once on a copy of the held Card; the held one is never mutated. A failed
 	 * save puts that field alone back to the Card last accepted, unless newer
 	 * Card state was accepted since, the Screen selection changed, or a later
-	 * control of the same field is still out, which owns it now (#734).
+	 * control of the same field is still out, which owns it now (#734). A One
+	 * Piece card has no display controls, so it takes none (ADR-0057).
 	 */
 	async function controlActiveCardDisplay(field: keyof MtgCardDisplayData) {
 		const held = state.activeCard.value;
-		if (!held)
+		if (!held || isOpScreenCard(held))
 			return null;
 		const before = held.displayData[field];
 		const acceptedBefore = lastAcceptance;
@@ -364,8 +366,12 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 		const saved = await saveActiveCard(toggled);
 		const shown = state.activeCard.value;
 		const ownsField = acceptedBefore.current && flight.current && control.current;
-		if (saved === null && shown && ownsField)
-			state.activeCard.value = withDisplayField(shown, field, acceptedCard?.displayData[field] ?? before);
+		if (saved === null && shown && !isOpScreenCard(shown) && ownsField) {
+			const accepted = isOpScreenCard(acceptedCard)
+				? null
+				: acceptedCard;
+			state.activeCard.value = withDisplayField(shown, field, accepted?.displayData[field] ?? before);
+		}
 		return saved;
 	}
 

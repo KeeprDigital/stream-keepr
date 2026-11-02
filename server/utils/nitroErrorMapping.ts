@@ -123,8 +123,12 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		cause
 		&& typeof cause === 'object'
 		&& 'code' in cause
-		&& (cause as { code: unknown }).code === 'SCRYFALL_UPSTREAM_FAILURE'
-		&& (!('notFound' in cause) || (cause as { notFound: unknown }).notFound !== true)
+		&& (
+			((cause as { code: unknown }).code === 'SCRYFALL_UPSTREAM_FAILURE'
+				&& (!('notFound' in cause) || (cause as { notFound: unknown }).notFound !== true))
+			// bandai-keepr's own failure: its "not found" never raises (ADR-0057).
+			|| (cause as { code: unknown }).code === 'BANDAI_KEEPR_UPSTREAM_FAILURE'
+		)
 	) {
 		error.statusCode = 502;
 		error.statusMessage = 'Bad Gateway';

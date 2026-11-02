@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { getMtgGameData } from '~~/shared/utils/gameData';
-import { LazyMtgCardHistory } from '#components';
+import { LazyMtgCardHistory, LazyOpCardHistory } from '#components';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
@@ -18,10 +18,19 @@ const playerStore = usePlayerStore();
 const roundStore = useRoundStore();
 const screenStore = useScreenStore();
 
+/** A One Piece Event's Card Spotlight searches bandai-keepr, and has no Deck List modes (ADR-0057). */
+const isOpEvent = computed(() => eventStore.event?.game === 'op');
+
 const historyModal = useOverlay().create(LazyMtgCardHistory);
+const opHistoryModal = useOverlay().create(LazyOpCardHistory);
+const hasHistory = computed(() => isOpEvent.value
+	? cardStore.opSelectionHistory.length > 0
+	: cardStore.selectionHistory.length > 0);
 
 function openHistory() {
-	void historyModal.open({});
+	void (isOpEvent.value
+		? opHistoryModal
+		: historyModal).open({});
 }
 
 const {
@@ -330,15 +339,19 @@ const timeoutProgress = computed(() => {
 			<!-- Header Bar with Mode Toggle -->
 			<div class="sticky top-0 z-10 m-4">
 				<div class="flex items-center gap-3">
-					<!-- Mode Toggle (always visible) -->
-					<MtgCardModeToggle
-						v-model="activeMode"
-						:match-decklist-disabled="!cardStore.canUseDeckListMode && matchOptions.length === 0"
-						:player-decklist-disabled="!cardStore.canUsePlayerDeckMode"
-					/>
+					<!-- One Piece: search alone -->
+					<OpCardSearch v-if="isOpEvent" class="flex-1" />
+					<template v-else>
+						<!-- Mode Toggle -->
+						<MtgCardModeToggle
+							v-model="activeMode"
+							:match-decklist-disabled="!cardStore.canUseDeckListMode && matchOptions.length === 0"
+							:player-decklist-disabled="!cardStore.canUsePlayerDeckMode"
+						/>
+					</template>
 
 					<!-- Mode-specific header controls -->
-					<div class="flex-1">
+					<div v-if="!isOpEvent" class="flex-1">
 						<div v-show="activeMode === 'search'">
 							<MtgCardSearch />
 						</div>
@@ -363,7 +376,7 @@ const timeoutProgress = computed(() => {
 
 					<!-- Shared controls -->
 					<UButton
-						:disabled="!cardStore.selectionHistory.length"
+						:disabled="!hasHistory"
 						size="xl"
 						variant="outline"
 						color="neutral"
@@ -383,23 +396,30 @@ const timeoutProgress = computed(() => {
 				</div>
 			</div>
 
-			<!-- Search Results -->
-			<div v-show="activeMode === 'search'" class="flex-1 overflow-y-auto p-4">
-				<MtgCardList
-					:cards="cardStore.searchResults"
-					@selected="cardStore.selectPreviewCard"
-				/>
+			<!-- One Piece Search Results -->
+			<div v-if="isOpEvent" class="flex-1 overflow-y-auto p-4">
+				<OpCardList />
 			</div>
 
-			<!-- Feature Match Deck List Content -->
-			<div v-show="activeMode === 'match-decklist'" class="flex-1 overflow-y-auto p-4">
-				<MtgCardDeckList />
-			</div>
+			<template v-else>
+				<!-- Search Results -->
+				<div v-show="activeMode === 'search'" class="flex-1 overflow-y-auto p-4">
+					<MtgCardList
+						:cards="cardStore.searchResults"
+						@selected="cardStore.selectPreviewCard"
+					/>
+				</div>
 
-			<!-- Player Deck List Content -->
-			<div v-show="activeMode === 'player-decklist'" class="flex-1 overflow-y-auto p-4">
-				<MtgCardPlayerDeck />
-			</div>
+				<!-- Feature Match Deck List Content -->
+				<div v-show="activeMode === 'match-decklist'" class="flex-1 overflow-y-auto p-4">
+					<MtgCardDeckList />
+				</div>
+
+				<!-- Player Deck List Content -->
+				<div v-show="activeMode === 'player-decklist'" class="flex-1 overflow-y-auto p-4">
+					<MtgCardPlayerDeck />
+				</div>
+			</template>
 		</div>
 	</NuxtLayout>
 	<!-- Card Controls - Size based on viewport height with a fixed aspect ratio -->
@@ -409,7 +429,8 @@ const timeoutProgress = computed(() => {
 		:ui="{ content: `max-w-[clamp(180px,calc((100dvh-24rem)*61/170+2rem),360px)] sm:max-w-[clamp(180px,calc((100dvh-24rem)*61/170+2rem),360px)]` }"
 	>
 		<template #content>
-			<MtgCardControls />
+			<OpCardControls v-if="isOpEvent" />
+			<MtgCardControls v-else />
 		</template>
 	</USlideover>
 </template>

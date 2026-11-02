@@ -1,20 +1,21 @@
 <script setup lang="ts">
-import type { MtgCard } from '~/types/card/mtg';
+import type { ScreenCard } from '~~/shared/types/card/mtg';
+import { isOpScreenCard } from '~~/shared/utils/card/op';
 import { modeMotionVars, useScreenModeReady } from '~/modules/screen-mode';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 import { preloadImages } from '~/utils/preloadImage';
 
 const props = defineProps<{
 	/** The Screen Card to show; null shows none, leaving with its exit animation. */
-	card: MtgCard | null;
+	card: ScreenCard | null;
 	/** The card's width in Event Canvas px, as a CSS length. */
 	width: string;
 }>();
 
 const showCard = ref(false);
-const displayCard = ref<MtgCard | null>(null);
+const displayCard = ref<ScreenCard | null>(null);
 /** A card whose images have loaded, waiting for the one shown to leave. */
-const pendingCard = ref<MtgCard | null>(null);
+const pendingCard = ref<ScreenCard | null>(null);
 const preloading = ref(false);
 let leaving = false;
 let showCardTimer: ReturnType<typeof setTimeout> | null = null;
@@ -56,7 +57,9 @@ const motionStyle = {
 	'--card-motion-clip': motion.clipPath,
 };
 
-function cardImageUrls(card: MtgCard): string[] {
+function cardImageUrls(card: ScreenCard): string[] {
+	if (isOpScreenCard(card))
+		return [card.imageUrl];
 	return [card.imageData.front?.normal, card.imageData.back?.normal]
 		.filter((url): url is string => !!url);
 }
@@ -150,7 +153,12 @@ function onAfterLeave() {
 			<!-- Card -->
 			<transition mode="out-in" name="card-motion" @after-leave="onAfterLeave">
 				<div v-if="showCard" class="card-image-wrapper" :style="motionStyle">
+					<OpCardImage
+						v-if="isOpScreenCard(displayCard)"
+						:card="displayCard"
+					/>
 					<MtgCardImage
+						v-else
 						:card="displayCard"
 						:display="displayCard.displayData"
 						display-mode="output"

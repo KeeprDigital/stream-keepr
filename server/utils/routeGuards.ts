@@ -1,6 +1,9 @@
 import type { EventReferenceKind } from '~~/shared/screenModes';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { ModeConfigsMap, ScreenModeConfig } from '~~/shared/types/screenConfig';
+import { eq } from 'drizzle-orm';
+import { db } from '~~/server/db';
+import { events } from '~~/server/db/schema';
 import { archetypeService } from '~~/server/services/archetype';
 import { broadcastDeckListService } from '~~/server/services/broadcastDeckList';
 import { featureMatchService } from '~~/server/services/featureMatch';
@@ -21,6 +24,16 @@ function uniqueNumbers(values: Array<number | null | undefined>): number[] {
 	return [
 		...new Set(values.filter((value): value is number => value != null)),
 	];
+}
+
+/** One Piece card data serves only an Event played in the One Piece Card Game (ADR-0057). */
+export async function requireOpEvent(eventId: number): Promise<void> {
+	const event = await db.query.events.findFirst({
+		where: eq(events.id, eventId),
+		columns: { game: true },
+	});
+	if (event?.game !== 'op')
+		throwReferenceNotFound('One Piece card data is only available on a One Piece Card Game Event');
 }
 
 export async function requireRoundInEvent(eventId: number, roundId: number | null | undefined): Promise<void> {

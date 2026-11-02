@@ -25,6 +25,11 @@
 			"migrations_dir": "../../server/db/migrations/sqlite"
 		}
 	],
+	// Non-secret configuration. bandai-keepr's API key is the Worker secret
+	// NUXT_BANDAI_KEEPR_API_KEY; without it OP card data is unavailable (ADR-0057).
+	"vars": {
+		"NUXT_BANDAI_KEEPR_API_URL": "https://op-api.keepr.digital"
+	},
 	"kv_namespaces": [
 		{ "binding": "KV", "id": "a15cf281b12d43e4b5479baf8b69b587" }
 	],

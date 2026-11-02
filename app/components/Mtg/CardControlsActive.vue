@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { isOpScreenCard } from '~~/shared/utils/card/op';
+
 const cardStore = useCardStore();
 
 const { activeCard } = storeToRefs(cardStore);
@@ -7,7 +9,12 @@ const { activeCard } = storeToRefs(cardStore);
 <template>
 	<transition mode="out-in" name="cross-fade">
 		<div v-if="activeCard" :key="activeCard.id">
+			<OpCardImage
+				v-if="isOpScreenCard(activeCard)"
+				:card="activeCard"
+			/>
 			<MtgCardImage
+				v-else
 				:card="activeCard"
 				:display="activeCard.displayData"
 				display-mode="output"
