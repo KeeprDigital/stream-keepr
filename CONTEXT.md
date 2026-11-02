@@ -9,6 +9,10 @@ Domain vocabulary for Stream Keepr. Use these terms when naming modules, seams, 
 **Event**:
 A competitive gaming tournament managed by Stream Keepr.
 
+**Card Game**:
+The trading card game an Event is played in: Magic: The Gathering or One Piece Card Game. Chosen when the Event is created and never changed; it decides which cards, Deck Lists, match state and presentation the Event can hold.
+_Avoid_: game, game mode, game system, TCG.
+
 **Phase**:
 A segment of an Event structure, such as Swiss or Top Cut.
 
@@ -41,7 +45,10 @@ _Avoid_: movement, rank delta.
 A competitor in an Event.
 
 **Deck List**:
-A Player's submitted cards for a game and Phase.
+Submitted cards for a game: a Player's for a Phase, or a Feature Match Deck List.
+
+**Leader**:
+The single leader card heading a One Piece Card Game Deck List, held apart from its Mainboard. It sets the Deck List's colours and is how the community names the deck.
 
 **Mainboard**:
 The starting portion of a Deck List — the cards a Player begins each game with.
@@ -103,7 +110,7 @@ An Event-scoped card list prepared by an operator solely for display on a Deck S
 Optional broadcast-only text and mana colours on a Broadcast Deck List, used as its secondary Deck Screen identity. It does not reference an Archetype.
 
 **Deck Source**:
-The required data binding of a Deck Screen: either one Event-scoped Player (or no selected Player) or one Event-scoped Broadcast Deck List.
+The required data binding of a Deck Screen: either one Event-scoped Player (or no selected Player), one Event-scoped Broadcast Deck List, or one player side of an Event-scoped Feature Match Slot.
 
 ### Feature Match production
 
@@ -117,6 +124,10 @@ _Avoid_: Feature Match when referring to the saved Round selection.
 
 **Feature Match Note**:
 A single mutable plain-text production note belonging to a Feature Match Assignment. It moves with the Assignment between Slots and is discarded when the Assignment ends. Feature Match Notes are off for a new Event; switching them off hides them from production surfaces without deleting any.
+
+**Feature Match Deck List**:
+A Deck List held by one player side of a Feature Match Slot rather than by a Player, pasted by the operator. It stays until replaced or its side is cleared, and moves with its player when the sides are swapped.
+_Avoid_: slot deck, match deck.
 
 **Feature Match Session**:
 The live state timeline for a Feature Match Slot.
@@ -727,6 +738,8 @@ _Avoid_: Dummy data, test data
 
 ### Tournament and Feature Match production
 
+- An **Event** has exactly one **Card Game**, fixed at creation
+- A One Piece Card Game **Deck List** has exactly one **Leader** and a 50-card **Mainboard**, and no **Sideboard**
 - An **Event** contains **Players**, **Phases**, **Rounds**, **Matches**, **Feature Match Slots**, **Feature Match Assignments**, **Screens**, broadcast configuration, game-specific settings, and optional **Melee Sync** configuration
 - **Players**, **Phases**, **Rounds**, **Matches**, **Feature Match Slots**, and **Deck Lists** carry **Provenance** when they originate from **Melee Sync**
 - A **Phase** contains ordered **Rounds**; a **Round** contains zero or more **Matches** and **Feature Match Assignments**, and may have **Round Standings**
@@ -737,12 +750,13 @@ _Avoid_: Dummy data, test data
 - A **Feature Match Assignment** connects exactly one **Match** to exactly one **Feature Match Slot** for exactly one **Round**, and may have one **Feature Match Note**
 - Within one **Round**, a **Match** and a **Feature Match Slot** each have at most one **Feature Match Assignment**
 - A **Feature Match Slot Promotion** creates or updates one **Feature Match Assignment**
+- A **Feature Match Slot**'s player side has at most one **Feature Match Deck List**; in a One Piece Card Game Event it is the side's only Deck List, and its **Leader** is the side's Leader. Replacing it while a **Feature Match Session** is active updates that Session's source snapshot
 - A **Feature Match Session** belongs to exactly one **Feature Match Slot**; while active, the Slot's identity binding fields resolve from the session's source snapshot and its live binding fields from the session's current state
 
 ### Screens and outputs
 
 - A **Screen** has exactly one current **Screen Mode**
-- A Deck **Screen Mode** has exactly one **Deck Source**: either no Player or one Player from the Screen's **Event**, or one **Broadcast Deck List** from that Event while Broadcast Deck Lists are enabled
+- A Deck **Screen Mode** has exactly one **Deck Source**: either no Player or one Player from the Screen's **Event**, one **Broadcast Deck List** from that Event while Broadcast Deck Lists are enabled, or one player side of a **Feature Match Slot** from that Event, followed live
 - A selected **Broadcast Deck List** prevents deleting that list or disabling Broadcast Deck Lists; deleting the whole **Event** is the cascade exception
 - Deleting a selected **Player**, alone or in a Melee data reset, clears every **Deck Source** naming them to no Player in the same write (ADR-0032)
 - **Broadcast Graphics Screen** and **Feature Match Overlay** each expose **Overlay Output**, **Fill Output**, and **Key Output** variants with identical canvas dimensions, all derived from one final composed frame

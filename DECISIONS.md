@@ -1809,3 +1809,34 @@ A stopgap that works now. Sharing the rules rather than copying them keeps vMix 
 - Anyone can enumerate Slots by id and read the Players' names, pronouns, LGS, records, decks and the live state of a Feature Match: what an Overlay would put on air.
 - vMix polls, so its clock is only as fresh as its polling interval; it does not tick between reads.
 - Replace with a capability- or token-scoped read when a real integration needs one, as ADR-0055 says.
+
+## ADR-0057: A One Piece Card Game Event is Feature Matches only, its Deck Lists held by Slot sides
+
+Accepted · 2026-11-02. Compatible with ADR-0047.
+
+One Piece Card Game Events run their pairings in Bandai TCG+, which has no export, and are streamed by featuring one or two Matches a Round. Nobody enters results round to round, and without bulk Deck Lists there is no Metagame to compute.
+
+### Decision
+
+**An OP Event models no Players, Rounds, Matches or Match Results.** The operator types each side's name, pronouns and LGS straight into a Feature Match Slot, as manual slot data. Feature Match Slot Promotion, Assignment and Reverse Sync never run for it. Screen Modes and nav that need results or many Deck Lists (Standings, Pairings, Top Cut, Metagame, Most Played Cards, Archetype Spotlight, Head-to-Head, Player History, Cards, Archetype review) declare themselves MTG-only and are not offered.
+
+**A Feature Match Deck List belongs to a Slot's player side, not a Player.** The operator pastes it (`N[x] CARDNUMBER [name]` lines). It stays until replaced or its side is cleared, follows its player on `SwapPlayers`, and replacing it during an active Feature Match Session updates that Session's source snapshot. Its Leader is the side's Leader. A Deck Screen can take a Slot side as its Deck Source and follows it live.
+
+**Card data comes from bandai-keepr through a server proxy, and entries keep an inline snapshot.** bandai-keepr needs a Bearer key and serves no CORS, so the browser never calls it. Each entry stores card number, name, category, colours, cost, power, counter and image URL, as Broadcast Deck List entries do. The `cards` catalogue, whose `unique(name, game)` cannot hold OP's shared names, is untouched. An unknown card number is kept as a number-only entry with a warning; there is no Unresolved Deck Card workflow. Deck rule breaches (50 cards, 4 copies, one Leader, Leader colours) warn and never refuse.
+
+### Why
+
+It matches how OP Events are actually produced, and reuses the Feature Match Slot's existing manual data rather than building results entry and deck import that TCG+ leaves no source for. Inline snapshots keep the card catalogue's MTG identity rules out of OP's way, because nothing aggregates across OP Deck Lists.
+
+### Consequences
+
+- An OP Player featured in two Rounds is typed and pasted twice; there is no history across Rounds.
+- A snapshot goes stale if bandai-keepr corrects a card; re-pasting refreshes it.
+- OP standings, Metagame or Archetypes would need Players and Player-owned Deck Lists first, so this decision would be reopened.
+- An OP Event that runs on Melee would still get Melee Sync of its structure and results, but its Deck Lists are not imported.
+
+### Rejected alternatives
+
+- **Operator-entered Match Results for non-Melee Events**: reopens ADR-0047 for data nobody will keep up during a stream.
+- **Player-owned OP Deck Lists**: needs Players to be created for every featured competitor, for reuse the production does not need.
+- **Caching OP cards in `cards` keyed by card number**: changes the catalogue's identity for no consumer that aggregates.
