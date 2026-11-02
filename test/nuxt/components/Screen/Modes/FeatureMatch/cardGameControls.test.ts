@@ -1,15 +1,19 @@
+import type { DbEvent } from '~~/server/db/schema';
 import type { Game } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, reactive, ref } from 'vue';
+import { getGameDefaults } from '~~/shared/config/games';
 import { featureMatchModeConfigContract } from '~~/shared/screenModeConfigs/featureMatch';
+import { fromFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { createInitialOvertimeState } from '~~/shared/types/featureMatchState';
 import { createMockEvent, createMockFeatureMatch, createMockFeatureMatchState } from '~~/test/helpers/fixtures';
+import { matchStatePart, offeredMatchStateParts } from '~~/test/nuxt/helpers/featureMatchControls';
 import Display from '~/components/Screen/Modes/FeatureMatch/Display.vue';
 
 /*
- * The Feature Match Controls Screen Mode with the real game mode and player
+ * The Feature Match Controls Screen Mode with the real `useFeatureMatchGameMode` and player
  * sides: only the data reads and the controls' own components are stood in.
  */
 
@@ -78,27 +82,29 @@ mockNuxtImport('useToast', () => () => ({
 	add: vi.fn(),
 }));
 
-function part(name: string) {
-	return defineComponent({ template: `<div data-match-state-part="${name}" />` });
-}
+const EVERY_TOGGLE_ON: Partial<DbEvent> = {
+	featureMatchDefaultTurnTrackingEnabled: true,
+	featureMatchDefaultActivePlayerTrackingEnabled: true,
+	featureMatchDefaultMulliganTrackingEnabled: true,
+	featureMatchDefaultExtraTurnsEnabled: true,
+};
 
-function mountControls(game: Game) {
+/** An Event of `game` as created, with its Card Game's defaults, then `toggles`. */
+function mountControls(game: Game, toggles: Partial<DbEvent> = {}) {
 	event.value = createMockEvent({
 		game,
-		featureMatchDefaultTurnTrackingEnabled: true,
-		featureMatchDefaultActivePlayerTrackingEnabled: true,
-		featureMatchDefaultMulliganTrackingEnabled: true,
-		featureMatchDefaultExtraTurnsEnabled: true,
+		...fromFeatureMatchDefaults(getGameDefaults(game)),
+		...toggles,
 	});
 	return mount(Display, {
 		global: {
 			stubs: {
 				ScreenModeBase: { template: '<div><slot /></div>' },
-				UINumericCounter: part('life'),
-				FeatureMatchStateGameWins: part('game-wins'),
-				FeatureMatchStateCounterList: part('counters'),
-				FeatureMatchStateTurnCounter: part('turn'),
-				FeatureMatchStateOvertimeTurnsCounter: part('overtime'),
+				UINumericCounter: matchStatePart('life'),
+				FeatureMatchStateGameWins: matchStatePart('game-wins'),
+				FeatureMatchStateCounterList: matchStatePart('counters'),
+				FeatureMatchStateTurnCounter: matchStatePart('turn'),
+				FeatureMatchStateOvertimeTurnsCounter: matchStatePart('overtime'),
 				UIcon: defineComponent({
 					props: { name: String },
 					template: '<i :data-icon="name" />',
@@ -108,16 +114,11 @@ function mountControls(game: Game) {
 	});
 }
 
-function parts(wrapper: ReturnType<typeof mountControls>) {
-	return [
-		...new Set(wrapper.findAll('[data-match-state-part]').map(node => node.attributes('data-match-state-part'))),
-	].sort();
-}
-
 describe('feature Match Controls by Card Game', () => {
 	it.each([
 		[
 			'mtg',
+			EVERY_TOGGLE_ON,
 			[
 				'counters',
 				'game-wins',
@@ -128,10 +129,11 @@ describe('feature Match Controls by Card Game', () => {
 		],
 		[
 			'op',
+			{},
 			['game-wins', 'turn'],
 		],
-	] as const)('on a %s Event, offers the match state parts %j', (game, expected) => {
-		expect(parts(mountControls(game))).toEqual(expected);
+	] as const)('on a %s Event with toggles %j, offers the match state parts %j', (game, toggles, expected) => {
+		expect(offeredMatchStateParts(mountControls(game, toggles))).toEqual(expected);
 	});
 
 	it('shows a One Piece match its clock, and its active and first player', () => {

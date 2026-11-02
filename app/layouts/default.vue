@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Game } from '~~/shared/types/enums';
 import type { NavigationMenuItem } from '#ui/types';
-import { EVERY_CARD_GAME, MTG_ONLY } from '~~/shared/config/games';
+import { EVERY_CARD_GAME, isOfferedToCardGame, MTG_ONLY } from '~~/shared/config/games';
 import { isLocalDeveloperUserId } from '~~/shared/utils/localDeveloperAuth';
 import { LOGIN_PATH } from '~/modules/auth/pageGate';
 import { useAuthSession } from '~/modules/auth/session';
@@ -127,7 +127,7 @@ interface EventNavItem extends NavigationMenuItem {
 /** The entries offered to the current Event: those declaring its Card Game. */
 function offeredToEvent(items: EventNavItem[]): NavigationMenuItem[] {
 	return items
-		.filter(item => cardGame.value !== undefined && item.cardGames.includes(cardGame.value))
+		.filter(item => isOfferedToCardGame(item.cardGames, cardGame.value))
 		.map(({ cardGames: _cardGames, ...item }) => item);
 }
 

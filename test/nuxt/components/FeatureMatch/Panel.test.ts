@@ -6,6 +6,7 @@ import { computed, defineComponent, reactive, ref } from 'vue';
 import { createInitialOvertimeState } from '~~/shared/types/featureMatchState';
 import { createMockFeatureMatch, createMockFeatureMatchState } from '~~/test/helpers/fixtures';
 import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
+import { matchStatePart, offeredMatchStateParts } from '~~/test/nuxt/helpers/featureMatchControls';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import FeatureMatchPanel from '~/components/FeatureMatch/Panel.vue';
 
@@ -82,7 +83,7 @@ mockNuxtImport('useFeatureMatchDeckList', () => () => ({
 	player2HasDeckList: ref(false),
 	openDeckListModal: vi.fn(),
 }));
-/** What the Event's Card Game tracks, as the game mode reports it. */
+/** What the Event's Card Game tracks, as `useFeatureMatchGameMode` reports it. */
 const cardGameTracks = reactive({
 	life: true,
 	counters: true,
@@ -494,11 +495,7 @@ describe('featureMatchPanel setup save', () => {
 });
 
 describe('featureMatchPanel match state by Card Game', () => {
-	function part(name: string) {
-		return defineComponent({ template: `<div data-match-state-part="${name}" />` });
-	}
-
-	// The game mode owns what a Card Game tracks; the panel offers exactly that.
+	// `useFeatureMatchGameMode` owns what a Card Game tracks; the panel offers exactly that.
 	it.each([
 		[
 			'every part',
@@ -532,22 +529,19 @@ describe('featureMatchPanel match state by Card Game', () => {
 			global: {
 				stubs: {
 					...mountOptions.global.stubs,
-					UINumericCounter: part('life'),
-					FeatureMatchStateCounterList: part('counters'),
-					FeatureMatchStateOvertimeTurnsCounter: part('overtime'),
+					UINumericCounter: matchStatePart('life'),
+					FeatureMatchStateCounterList: matchStatePart('counters'),
+					FeatureMatchStateOvertimeTurnsCounter: matchStatePart('overtime'),
 					FeatureMatchStateGameWins: true,
 					FeatureMatchStateEditStateModal: true,
 					FeatureMatchTokensModal: true,
 					PlayerMatchHistoryButton: true,
-					USwitch: part('sideboard'),
+					USwitch: matchStatePart('sideboard'),
 				},
 			},
 		});
 		await flushPromises();
 
-		const parts = [
-			...new Set(wrapper.findAll('[data-match-state-part]').map(node => node.attributes('data-match-state-part'))),
-		].sort();
-		expect(parts).toEqual(expected);
+		expect(offeredMatchStateParts(wrapper)).toEqual(expected);
 	});
 });

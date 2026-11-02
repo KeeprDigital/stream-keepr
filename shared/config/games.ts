@@ -1,6 +1,7 @@
 import type { Game } from '../types/enums';
 import type { FeatureMatchDefaults } from '../types/featureMatchDefaults';
 import type { CounterTypeConfig, FeatureMatchStateTracking, GameConfig } from '../types/game';
+import { GAME_VALUES } from '../types/enums';
 import { DEFAULT_FEATURE_MATCH_DEFAULTS } from '../types/featureMatchDefaults';
 
 export type { CounterTypeConfig, FeatureMatchStateTracking, Game, GameConfig };
@@ -45,6 +46,9 @@ export const GAME_CONFIGS: Record<Game, GameConfig> = {
 			clockDuration: 30,
 			clockType: 'countdown',
 			countUpAfterCountdown: false,
+			// The turn and the active and first player are what an OP match tracks besides its clock and wins.
+			turnTrackingEnabled: true,
+			activePlayerTrackingEnabled: true,
 			extraTurnsEnabled: false,
 			extraTurns: 0,
 		},
@@ -64,13 +68,23 @@ export const GAME_CONFIGS: Record<Game, GameConfig> = {
 };
 
 /** Every Card Game: what something offered to any Event declares. */
-export const EVERY_CARD_GAME: readonly Game[] = ['mtg', 'op'];
+export const EVERY_CARD_GAME: readonly Game[] = GAME_VALUES;
 
 /**
  * Magic: The Gathering only: what something reading results or the Metagame
  * declares, as a One Piece Card Game Event never holds them (ADR-0057).
  */
 export const MTG_ONLY: readonly Game[] = ['mtg'];
+
+/**
+ * Whether something declaring `cardGames` is offered to an Event of `game`.
+ * Before the Event's Card Game is known, only what every Card Game supports is.
+ */
+export function isOfferedToCardGame(cardGames: readonly Game[], game: Game | undefined): boolean {
+	return game === undefined
+		? EVERY_CARD_GAME.every(cardGame => cardGames.includes(cardGame))
+		: cardGames.includes(game);
+}
 
 export function getGameConfig(game: Game): GameConfig {
 	return GAME_CONFIGS[game];

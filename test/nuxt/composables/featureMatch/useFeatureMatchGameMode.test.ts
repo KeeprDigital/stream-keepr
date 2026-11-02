@@ -279,7 +279,7 @@ describe('useFeatureMatchGameMode', () => {
 		});
 	});
 
-	// One Piece tracks the clock, game wins, turns and players only, whatever the Event's toggles say.
+	// The One Piece Card Game tracks the clock, game wins, turns and players only, whatever the Event's toggles say.
 	describe('the match state a Card Game tracks', () => {
 		it.each([
 			['mtg', true],

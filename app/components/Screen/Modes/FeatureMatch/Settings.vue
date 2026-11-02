@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Screen } from '~/types';
-import { getCounterTypeConfigs, getPlayerIdentityLabel } from '~~/shared/config/games';
+import { getCounterTypeConfigs, getFeatureMatchStateTracking, getGameConfig, getPlayerIdentityLabel } from '~~/shared/config/games';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { useConsumedEventData } from '~/modules/event-data/resync';
@@ -36,8 +36,22 @@ const hasTurnTracking = computed(
 	() => matchDefaults.value.turnTrackingEnabled || matchDefaults.value.activePlayerTrackingEnabled,
 );
 const hasStandings = computed(() => eventStore.event?.standingsEnabled ?? true);
-const hasExtraTurns = computed(() => matchDefaults.value.extraTurnsEnabled);
-const hasMulliganTracking = computed(() => matchDefaults.value.mulliganTrackingEnabled);
+// What the Card Game tracks bounds what the Event's toggles can turn on.
+const tracks = computed(() => {
+	const game = eventStore.event?.game;
+	return game
+		? getFeatureMatchStateTracking(game)
+		: null;
+});
+const notTracked = computed(() => {
+	const game = eventStore.event?.game;
+	return game
+		? `Not tracked in ${getGameConfig(game).label}.`
+		: undefined;
+});
+const hasLifeTracking = computed(() => tracks.value?.life ?? true);
+const hasExtraTurns = computed(() => (tracks.value?.overtime ?? true) && matchDefaults.value.extraTurnsEnabled);
+const hasMulliganTracking = computed(() => (tracks.value?.mulligan ?? true) && matchDefaults.value.mulliganTrackingEnabled);
 const hasPronouns = computed(() => eventStore.event?.pronounsEnabled ?? true);
 const hasLgs = computed(() => eventStore.event?.lgsEnabled ?? false);
 const hasTableNumber = computed(() => eventStore.event?.tableNumberEnabled ?? false);
@@ -221,7 +235,7 @@ async function handleMatchChange(matchId: number | null) {
 			<ScreenSettingsToggle
 				:label="fields.showOvertime.label"
 				description="Show the extra turns tracker when overtime begins."
-				disabled-description="Enable extra turns in event format settings to use this."
+				:disabled-description="tracks?.overtime === false ? notTracked : 'Enable extra turns in event format settings to use this.'"
 				:enabled="hasExtraTurns"
 				:model-value="config.showOvertime"
 				@update:model-value="updateConfig({ showOvertime: $event })"
@@ -229,7 +243,7 @@ async function handleMatchChange(matchId: number | null) {
 			<ScreenSettingsToggle
 				:label="fields.showMulliganInfo.label"
 				description="Show the cards kept indicator during mulligan phase."
-				disabled-description="Enable mulligan tracking in event settings to use this."
+				:disabled-description="tracks?.mulligan === false ? notTracked : 'Enable mulligan tracking in event settings to use this.'"
 				:enabled="hasMulliganTracking"
 				:model-value="config.showMulliganInfo"
 				@update:model-value="updateConfig({ showMulliganInfo: $event })"
@@ -262,6 +276,8 @@ async function handleMatchChange(matchId: number | null) {
 			<ScreenSettingsToggle
 				:label="fields.allowLifeControls.label"
 				description="Allow players to adjust life totals."
+				:disabled-description="notTracked"
+				:enabled="hasLifeTracking"
 				:model-value="config.allowLifeControls"
 				@update:model-value="updateConfig({ allowLifeControls: $event })"
 			/>

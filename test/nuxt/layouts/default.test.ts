@@ -1,3 +1,4 @@
+import type { Game } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -31,7 +32,7 @@ const mockEventStore = reactive({
 	event: {
 		id: 1,
 		name: 'Event One',
-		game: 'mtg' as 'mtg' | 'op',
+		game: 'mtg' as Game,
 		meleeEnabled: true,
 		meleeConfigured: true,
 		initialSetupCompletedAt: null as Date | null,
