@@ -1,7 +1,7 @@
-import type { ScreenCard } from '~~/shared/types/card/mtg';
-import type { OpCardColor, OpCardSummary, OpScreenCard } from '~~/shared/types/card/op';
-import type { OpLeader } from '~~/shared/types/game';
-import { OP_CARD_COLORS } from '~~/shared/types/card/op';
+import type { ScreenCard } from '../../types/card/mtg';
+import type { OpCardColor, OpCardSummary, OpScreenCard } from '../../types/card/op';
+import type { OpLeader } from '../../types/game';
+import { OP_CARD_COLORS } from '../../types/card/op';
 
 /** Where every One Piece Printing's image is served from, publicly. */
 export const OP_CARD_IMAGE_ORIGIN = 'https://cards-img.keepr.digital';
