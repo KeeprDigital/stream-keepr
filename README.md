@@ -221,7 +221,7 @@ failure on `main`.
 | `NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY`           | 32-byte base64 key encrypting Melee client secrets (AES-256-GCM).                                                          |
 | `NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY_VERSION`   | Non-empty version label for the active key.                                                                                |
 | `NUXT_MELEE_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS` | Optional JSON `{"<version>":"<key>"}` of retired keys still needed to decrypt during rotation.                             |
-| `NUXT_BANDAI_KEEPR_API_KEY`                      | Optional Bearer key for bandai-keepr, the One Piece card API. Blank: OP card features show "card data unavailable".       |
+| `NUXT_BANDAI_KEEPR_API_KEY`                      | Optional Bearer key for bandai-keepr, the One Piece card API. Blank: OP card features show "card data unavailable".        |
 | `NUXT_BANDAI_KEEPR_API_URL`                      | bandai-keepr's base URL (`https://op-api.keepr.digital`). Blank: OP card data is unavailable, as above.                    |
 
 Generate keys and secrets with `openssl rand -base64 32`. A deployed Worker
