@@ -388,6 +388,16 @@ export function featureMatchService() {
 		return !!match;
 	};
 
+	/** The Event's first Slot in Slot order, as its Feature Matches page lists them; `null` while it has none. */
+	const findFirstIdByEventId = async (eventId: number): Promise<number | null> => {
+		const first = await db.query.featureMatches.findFirst({
+			where: eq(featureMatches.eventId, eventId),
+			columns: { id: true },
+			orderBy: [featureMatches.sortOrder, featureMatches.id],
+		});
+		return first?.id ?? null;
+	};
+
 	const countByEventId = async (eventId: number): Promise<number> => {
 		const [result] = await db
 			.select({ count: sql<number>`count(*)` })
@@ -544,6 +554,7 @@ export function featureMatchService() {
 		remove,
 		exists,
 		countByEventId,
+		findFirstIdByEventId,
 		syncFeatureMatches,
 		reconcileEventSlotCount,
 		swapMatchOrder,

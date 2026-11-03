@@ -359,7 +359,7 @@ What an Event sets once for every Screen it has: its Theme, its Event Canvas, an
 _Avoid_: on-air formatting (when naming the whole group)
 
 **Screen Mode Sample Dataset**:
-One fixed canonical set of Event Data a Theme preview renders every Screen Mode against, with the card data its cards are drawn with, a Screen Card, and one built-in Theme-bound Broadcast Graphic on air. That graphic is no Broadcast Graphic Template. Like the Feature Match Sample Dataset, it never appears on a live Screen Output.
+One fixed canonical set of Event Data per Card Game, chosen by the Event's Card Game, that a Theme preview renders every Screen Mode against, with the card data its cards are drawn with, a Screen Card, and one built-in Theme-bound Broadcast Graphic on air. That graphic is no Broadcast Graphic Template. The One Piece Card Game set holds a Feature Match Slot whose sides hold Leaders and a Feature Match Deck List, and a Printing as its Screen Card. A Theme serves Events of every Card Game and has no Event of its own, so its preview shows the Card Game the operator picks. Like the Feature Match Sample Dataset, it never appears on a live Screen Output.
 _Avoid_: dummy data, test data
 
 **Graphic Theme Binding**:
@@ -735,7 +735,7 @@ The terms a Feature Match Layout uses whose meaning the installation supplies: S
 _Avoid_: Free-form role, camera name
 
 **Feature Match Sample Dataset**:
-One fixed canonical set of Feature Match values a preview resolves a Feature Match Layout against when no Feature Match Slot is bound. It never appears on a live Screen Output.
+One fixed canonical set of Feature Match values per Card Game, chosen by the Event's Card Game, that a preview resolves a Feature Match Layout against when no Feature Match Slot is bound; a Theme preview, which has no Event, uses the Card Game the operator picks. The One Piece Card Game set names each side's Leader. It never appears on a live Screen Output.
 _Avoid_: Dummy data, test data
 
 ## Relationships
