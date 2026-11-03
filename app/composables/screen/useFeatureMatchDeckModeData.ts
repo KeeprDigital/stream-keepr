@@ -1,6 +1,7 @@
 import type { OpLeader } from '~~/shared/types/game';
 import type { ScreenOutputFeatureMatchDeckListResponse } from '~~/shared/types/screenOutputReads';
 import type { OpDeckLayout } from '~~/shared/utils/opDeckLayout';
+import type { FeatureMatch } from '~/types';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getOpGameData } from '~~/shared/utils/gameData';
 import { opDeckLayout } from '~~/shared/utils/opDeckLayout';
@@ -9,6 +10,39 @@ import { createGuardedSequence } from '~/utils/guardedSequence';
 import { preloadImages } from '~/utils/preloadImage';
 
 const DECK_LOAD_FAILED = 'Failed to load deck';
+const SLOT_LOAD_FAILED = 'Failed to load Feature Match Slot';
+
+/**
+ * A Theme preview's Slot: the sample's, read once and held here. The Feature
+ * Match store holds the loaded Event's Slots, and a preview has no Event.
+ */
+function holdSampleSlot(slotId: () => number | null) {
+	const outputReads = useScreenOutputReads();
+	const slot = shallowRef<FeatureMatch | null>(null);
+	const error = ref<string | null>(null);
+	const answered = ref(false);
+	const id = slotId();
+	if (id === null) {
+		answered.value = true;
+	}
+	else {
+		outputReads.featureMatchSlot(id).then(
+			(read) => {
+				slot.value = read.slot;
+			},
+			() => {
+				error.value = SLOT_LOAD_FAILED;
+			},
+		).finally(() => {
+			answered.value = true;
+		});
+	}
+	return {
+		slot: computed(() => slot.value),
+		error: computed(() => error.value),
+		answered: computed(() => answered.value),
+	};
+}
 
 /** Who sits on the side shown, and the Deck List they hold. */
 interface SideShown {
@@ -37,9 +71,12 @@ interface DisplayedDeck extends OpDeckLayout {
  * Program keeps the Deck List it shows, and the side it was read for, until the
  * incoming one is read and its images are loaded (ADR-0053). A side holding no
  * Deck List shows nothing.
+ *
+ * A Theme preview shows the One Piece Screen Mode Sample Dataset's Slot and
+ * Deck List, read once, and holds no Slot in the stores.
  */
 export function useFeatureMatchDeckModeData() {
-	const { eventId } = useScreenContext();
+	const { eventId, sampleDataset } = useScreenContext();
 	const config = useScreenModeConfig('deck');
 	const outputReads = useScreenOutputReads();
 
@@ -51,12 +88,14 @@ export function useFeatureMatchDeckModeData() {
 	});
 	const slotId = () => source.value?.slotId ?? null;
 
-	const slotRead = useScreenFeatureMatchSlot<null>({
-		slotId,
-		keep: () => null,
-		initialData: null,
-		errorMessage: 'Failed to load Feature Match Slot',
-	});
+	const slotRead = sampleDataset
+		? holdSampleSlot(slotId)
+		: useScreenFeatureMatchSlot<null>({
+				slotId,
+				keep: () => null,
+				initialData: null,
+				errorMessage: SLOT_LOAD_FAILED,
+			});
 
 	const side = computed<SideShown | null>(() => {
 		const shownSide = source.value?.side;

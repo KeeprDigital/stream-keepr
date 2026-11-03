@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
-import type { ScreenMode } from '~~/shared/types/enums';
+import type { Game, ScreenMode } from '~~/shared/types/enums';
 import { useElementSize } from '@vueuse/core';
 import { createScreenModeSampleContext } from '~/modules/screen-mode/sampleScreen';
 
 const props = defineProps<{
 	mode: ScreenMode;
+	/** The Card Game whose sample the tile shows. */
+	game: Game;
 	label: string;
 	/** The Theme previewed, as stored. */
 	tokens: StoredThemeTokens;
@@ -14,17 +16,18 @@ const props = defineProps<{
 const stage = useTemplateRef<HTMLElement>('stage');
 const { width, height } = useElementSize(stage);
 
-// One Screen host per tile, showing its mode against the Screen Mode Sample
-// Dataset under the Theme as it stands, so each token edit repaints it.
+// One Screen host per tile, showing its mode against its Card Game's Screen
+// Mode Sample Dataset under the Theme as it stands, so each token edit repaints it.
 provideScreenContext(createScreenModeSampleContext({
 	mode: props.mode,
+	game: props.game,
 	themeTokens: toRef(props, 'tokens'),
 	viewport: computed(() => ({ width: width.value, height: height.value })),
 }));
 </script>
 
 <template>
-	<figure class="flex flex-col gap-2" :data-preview-mode="mode">
+	<figure class="flex flex-col gap-2" :data-preview-mode="mode" :data-preview-game="game">
 		<div
 			ref="stage"
 			class="relative aspect-video w-full overflow-hidden rounded-md bg-neutral-950 ring ring-default"

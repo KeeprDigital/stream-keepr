@@ -1,7 +1,7 @@
 import type { InjectionKey, Ref } from 'vue';
 import type { EventCanvas } from '~~/shared/eventCanvas';
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
-import type { ScreenMode } from '~~/shared/types/enums';
+import type { Game, ScreenMode } from '~~/shared/types/enums';
 import type { ModeConfigTypeMap, ScreenOutput } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import type { ScreenCardDataHealth } from '~/types/screen';
@@ -45,11 +45,11 @@ export interface ScreenContext {
 	 */
 	eventCanvas?: Ref<EventCanvas>;
 	/**
-	 * Every read answers from the Screen Mode Sample Dataset rather than the
-	 * Screen. Set only by a Theme preview (`createScreenModeSampleContext`); a
-	 * Screen Output never sets it, so sample data never reaches air.
+	 * Every read answers from this Card Game's Screen Mode Sample Dataset rather
+	 * than the Screen. Set only by a Theme preview (`createScreenModeSampleContext`);
+	 * a Screen Output never sets it, so sample data never reaches air.
 	 */
-	sampleDataset?: true;
+	sampleDataset?: Game;
 	/** The space the Screen renders into; absent means the browser window. */
 	viewport?: Readonly<Ref<{ width: number; height: number }>>;
 }
