@@ -2,7 +2,7 @@
 import type { ScreenOutputMatchSide, ScreenOutputRoundMatch } from '~~/shared/types/screenOutputReads';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { config, error, ready, isEmpty, headerText, pageData, formatResult, winner } = usePairingsModeData();
+const { config, error, ready, isEmpty, headerText, pageData, pageSize, formatResult, winner } = usePairingsModeData();
 
 const inset = useScreenInset();
 
@@ -52,7 +52,7 @@ function resultStyle(row: ScreenOutputRoundMatch) {
 const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef'), {
 	density: 'roomy',
 	prefix: 'pairings',
-	rowCount: () => config.value.rowsPerPage ?? pageData.value.length,
+	rowCount: () => pageSize.value ?? pageData.value.length,
 	insetY: inset,
 });
 

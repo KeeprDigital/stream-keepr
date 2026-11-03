@@ -32,7 +32,7 @@ Whether a Match is reported or a bye, and its game wins and game draws. Only Mel
 _Avoid_: score, for the whole result.
 
 **Game Score**:
-A Match's game wins and game draws read from one of its Players' side, theirs first: 2-1, or 1-1-1 with a game draw. Every reported Match that is not a bye has one; a bye or an unreported Match has none.
+A Match's game wins and game draws read from one of its Players' side, theirs first, in en dashes: 2–1, or 1–1–1 with a game draw. Every reported Match that is not a bye has one; a bye or an unreported Match has none.
 
 **Round Standings**:
 The standings for Players as of a specific Round, including that Round's results. Melee Sync stores them only once the Round is complete, so while a Round is played the latest Round Standings are the previous Round's (ADR-0052).
@@ -191,7 +191,7 @@ The deterministic projection of a paginated Screen Mode's current page from its 
 _Avoid_: Auto-paging when naming the projection itself — auto-page is the operator toggle that turns rotation on.
 
 **Top Cut Bracket**:
-The single-elimination bracket a Top Cut Bracket Screen shows, derived from the Phase its operator picks, since nothing marks a Phase as a top cut: one column per Round of that Phase, in order, each Match at the Bracket Position its winner advances from into the next column. The first Round, with any byes it leaves out, sets its size; a Bracket Position no Match fills yet is pending, showing the winners advancing into it so far.
+The single-elimination bracket a Top Cut Bracket Screen shows, derived from the Phase its operator picks, since nothing marks a Phase as a top cut: one column per Round of that Phase, in order, each Match at the Bracket Position its winner advances from into the next column. The first Round, with any byes it leaves out, sets its size, unless the operator sets a larger one; a set size smaller than the first Round needs is ignored. The first Round is placed by Seed in standard order (1v8, 4v5, 2v7, 3v6 for a bracket of 8), the best Seeds taking any byes it leaves out, and each later Match at the Bracket Position its Players advance from, so no Bracket Position moves as later Rounds are paired; a first Round with no Seeds is placed by the next Round's pairings, else table order. A Bracket Position no Match fills yet is pending, showing the winners advancing into it so far.
 _Avoid_: bracket slot (a Slot is a Feature Match Slot)
 
 **Seed**:

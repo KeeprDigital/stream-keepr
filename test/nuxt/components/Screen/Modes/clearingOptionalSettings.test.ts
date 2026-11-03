@@ -234,6 +234,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		[
 			['Custom header text', 'headerText', 'Championship Bracket'],
 			['Phase', 'phaseId', 3],
+			['Bracket size', 'bracketSizeOverride', 8],
 		],
 	],
 	[

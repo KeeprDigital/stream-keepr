@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatGameScore, readMatchFromPlayerSide } from '../../../shared/utils/matchFromPlayerSide';
+import { formatGameScore, readMatchFromPlayer1Side, readMatchFromPlayerSide } from '../../../shared/utils/matchFromPlayerSide';
 
 function match(overrides: Partial<Parameters<typeof readMatchFromPlayerSide>[0]> = {}) {
 	return {
@@ -49,38 +49,52 @@ describe('readMatchFromPlayerSide', () => {
 	});
 });
 
+describe('readMatchFromPlayer1Side', () => {
+	it('reads a Match from player 1\'s side when no Player names it', () => {
+		const { player1Id: _seated, ...facts } = match({ player1GameWins: 1, player2GameWins: 2 });
+		expect(readMatchFromPlayer1Side(facts)).toEqual({
+			outcome: 'loss',
+			playerGameWins: 1,
+			opponentGameWins: 2,
+			gameDraws: 0,
+			hasResult: true,
+		});
+	});
+});
+
 describe('formatGameScore', () => {
+	// A Game Score is written with en dashes, never hyphens.
 	it.each([
 		[
 			'a win',
 			match(),
 			1,
-			'2-1',
+			'2–1',
 		],
 		[
 			'a loss, from the losing side',
 			match(),
 			2,
-			'1-2',
+			'1–2',
 		],
 		[
 			'a game draw',
 			match({ player1GameWins: 1, player2GameWins: 1, gameDraws: 1 }),
 			1,
-			'1-1-1',
+			'1–1–1',
 		],
 		[
 			'an unplayed draw',
 			match({ player1GameWins: 0, player2GameWins: 0, gameDraws: 0 }),
 			1,
-			'0-0',
+			'0–0',
 		],
 	])('scores %s', (_name, played, playerId, expected) => {
 		expect(formatGameScore(readMatchFromPlayerSide(played, playerId))).toBe(expected);
 	});
 
 	it('omits an unknown game-draw count', () => {
-		expect(formatGameScore(readMatchFromPlayerSide(match({ gameDraws: null }), 1))).toBe('2-1');
+		expect(formatGameScore(readMatchFromPlayerSide(match({ gameDraws: null }), 1))).toBe('2–1');
 	});
 
 	it('has no score for a bye', () => {

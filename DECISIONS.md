@@ -871,6 +871,7 @@ The lease was only checked at two routes. The generic Screen write reached the s
 - The Feature Match Overlay canvas size is not leased, though #738 decided it should be in Feature Match Overlay mode (E2). Since ADR-0051 there is no per-Screen canvas, and the Event Canvas stays unleased in every mode, so nothing is leased for it. That decision applies again only if a per-Screen canvas comes back.
 - Deleting a Screen is not lease-gated. It removes the Screen rather than editing its workspace, and its lease lapses at the holder's next missed heartbeat.
 - Deleting a Player writes its Screens outside the Screen write module (ADR-0032). It clears only a Deck Source, which no lease protects.
+- Deleting a Phase, Round or Archetype writes its Screens outside the Screen write module too (ADR-0060). It only unsets Event References, which no lease protects.
 
 ### Rejected alternatives
 
@@ -1177,7 +1178,7 @@ The switch had no exhaustiveness check, so a mode it forgot was skipped without 
 
 ## ADR-0039: A paginated Screen Mode Definition declares its Page Rotation, and one rule decides its shape changes
 
-Accepted · 2026-10-21 · [#586](https://github.com/KeeprDigital/stream-keepr/issues/586) · Amended 2026-10-22: Most Played Cards declares a Page Rotation over its grid rows · [#757](https://github.com/KeeprDigital/stream-keepr/issues/757) · Amended 2026-10-22: every paginated editor renders one shared Pagination card · [#775](https://github.com/KeeprDigital/stream-keepr/issues/775) · Amended 2026-10-23: the card counts the rows the Screen renders · [#780](https://github.com/KeeprDigital/stream-keepr/issues/780)
+Accepted · 2026-10-21 · [#586](https://github.com/KeeprDigital/stream-keepr/issues/586) · Amended 2026-10-22: Most Played Cards declares a Page Rotation over its grid rows · [#757](https://github.com/KeeprDigital/stream-keepr/issues/757) · Amended 2026-10-22: every paginated editor renders one shared Pagination card · [#775](https://github.com/KeeprDigital/stream-keepr/issues/775) · Amended 2026-10-23: the card counts the rows the Screen renders · [#780](https://github.com/KeeprDigital/stream-keepr/issues/780) · Amended 2026-11-03: a rendering reads the page size from its mode data · [#913](https://github.com/KeeprDigital/stream-keepr/issues/913)
 
 ### Decision
 
@@ -1187,7 +1188,7 @@ Accepted · 2026-10-21 · [#586](https://github.com/KeeprDigital/stream-keepr/is
 
 **One rule decides which edits change the rotation's shape** (`pageRotationEdit` in `shared/modules/page-rotation`): an edit of the declared page size field or of `autoPageIntervalMs`. While auto-page is on, such an edit restarts the rotation from page 1 by writing a Rotation Anchor of now. A page size edit also writes `currentPage: 1`, whether or not auto-page is on, because every page then holds different rows. Any other edit is written as it is, so nothing else re-anchors (ADR-0009).
 
-**Every consumer reads the declaration.** A paginated mode's settings editor writes every edit through `useRotationConfigWrites({ mode, config, rowCount, saveConfig })`, whose `updateConfig` applies the rule and whose `totalPages` counts pages by the declared field; its `updateRotationShape`, which each editor had to remember to call, is deleted. Every paginated editor renders the one Pagination card (`ScreenPaginationSettingsCard`, #775) over what that composable returns: it edits the declared page size field through `setPageSize` and the page duration through `setPageDurationMs`, labels and bounds them from the mode's contract, and shows the page count the editor's `rowCount` gives, so no editor writes the rotation fields itself. A paginated mode's rendering pages through `usePaginatedScreenMode({ mode, config, rows })`, which reads the page size from the declared field and writes a page selection or Rotation Anchor only from an interactive surface. The three hand-wired copies of that paging and its writes are deleted. A display reset writes through the rule as well (`getDisplayResetForMode`). Screen Outputs still never write the Rotation Anchor.
+**Every consumer reads the declaration.** A paginated mode's settings editor writes every edit through `useRotationConfigWrites({ mode, config, rowCount, saveConfig })`, whose `updateConfig` applies the rule and whose `totalPages` counts pages by the declared field; its `updateRotationShape`, which each editor had to remember to call, is deleted. Every paginated editor renders the one Pagination card (`ScreenPaginationSettingsCard`, #775) over what that composable returns: it edits the declared page size field through `setPageSize` and the page duration through `setPageDurationMs`, labels and bounds them from the mode's contract, and shows the page count the editor's `rowCount` gives, so no editor writes the rotation fields itself. A paginated mode's rendering pages through `usePaginatedScreenMode({ mode, config, rows })`, which reads the page size from the declared field and writes a page selection or Rotation Anchor only from an interactive surface. It returns that page size as `pageSize`, which a mode's data passes on wherever its rendering sizes by it, so a Display lays its rows out for it without naming the field; an ESLint rule (`eslint.config.mjs`) refuses a page size field read in `app/components/Screen/Modes`, outside the settings editors (#913). The three hand-wired copies of that paging and its writes are deleted. A display reset writes through the rule as well (`getDisplayResetForMode`). Screen Outputs still never write the Rotation Anchor.
 
 ### Why
 
@@ -1444,7 +1445,7 @@ Accepted · 2026-10-26
 
 **Only Melee Sync writes a Match Result.** `hasResult`, `player1GameWins`, `player2GameWins`, `gameDraws` and `isBye` are Melee-owned in `PROVENANCE_ENTITIES`, and the Match create and update schemas refuse them, so a manual Match write carrying one answers `400`. The Matches page's result modal is gone. A manual Match, including one ADR-0040 keeps, is a pairing with no result.
 
-**Melee Sync stores a whole Game Score.** Melee sends a side's `GameWins`, and a Match's `GameDraws`, as `null` rather than `0` when there were none: a 2-0 arrives as `2` and `null`. `mapMeleeMatchToDbRow` reads such a `null` as `0` on a reported Match that is not a bye, and stores no game wins or game draws for an unreported Match or a bye, whatever Melee sends. So every reported Match that is not a bye holds both sides' game wins and its game draws, and a reader can trust `hasResult`.
+**Melee Sync stores a whole Game Score.** Melee sends a side's `GameWins`, and a Match's `GameDraws`, as `null` rather than `0` when there were none: a 2–0 arrives as `2` and `null`. `mapMeleeMatchToDbRow` reads such a `null` as `0` on a reported Match that is not a bye, and stores no game wins or game draws for an unreported Match or a bye, whatever Melee sends. So every reported Match that is not a bye holds both sides' game wins and its game draws, and a reader can trust `hasResult`.
 
 **Melee's `ResultString` is no longer kept.** It is English from player 1's side ("Kim Fields won 2-0-0") that no Player-side reading can turn round, and it existed only as the fallback for a reported Match without game wins, which no longer occurs. Migration `0005` drops `matches.result_string`. Player history, Pairings, Head-to-Head and Top Cut Bracket read the Game Score; the stored `match.result` Graphic binding keeps its id and resolves the Game Score from player 1's side.
 
@@ -1452,7 +1453,7 @@ Accepted · 2026-10-26
 
 ### Why
 
-A reported 2-0 read as pending. `readMatchFromPlayerSide` needs both sides' game wins to name a winner, so in a local Event about a third of reported Matches showed "Pending" in a Player's history beside Melee's "won 2-0-0" text in the Result column; Head-to-Head called them `reported` with no winner, and Top Cut Bracket advanced no one. Normalising where Melee's payload enters fixes every reader at once.
+A reported 2–0 read as pending. `readMatchFromPlayerSide` needs both sides' game wins to name a winner, so in a local Event about a third of reported Matches showed "Pending" in a Player's history beside Melee's "won 2-0-0" text in the Result column; Head-to-Head called them `reported` with no winner, and Top Cut Bracket advanced no one. Normalising where Melee's payload enters fixes every reader at once.
 
 Manual results were never meant to exist. A result entered by hand reached Player history, Pairings, Head-to-Head and Top Cut Bracket advancement while Melee's standings, which set every Player's record, never counted it, so the two disagreed.
 

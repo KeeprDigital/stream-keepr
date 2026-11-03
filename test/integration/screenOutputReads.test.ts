@@ -618,7 +618,7 @@ describe('capability-only Screen Output reads', () => {
 					matchId: earlier.id,
 					roundName: 'H2H Round 1',
 					outcome: 'player2',
-					gameScore: '1-2',
+					gameScore: '1–2',
 				}),
 			]);
 
@@ -719,6 +719,12 @@ describe('capability-only Screen Output reads', () => {
 					deck: null,
 				},
 			]);
+
+			// A set size larger than the first Round implies sizes the bracket.
+			await topCut.configure({ bracketSizeOverride: 8 });
+			const sized = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
+			expect(sized.data.bracket.size).toBe(8);
+			expect(sized.data.bracket.columns.map(column => column.positions.length)).toEqual([4, 2, 1]);
 		});
 
 		it('refuses to name another Event\'s Phase', async () => {

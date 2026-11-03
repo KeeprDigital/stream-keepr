@@ -2,11 +2,14 @@
  * A Top Cut bracket, derived from one Phase's Rounds and their Matches (#752).
  *
  * Nothing marks a Phase as a top cut: the operator chooses one, and its Rounds,
- * in order, are the bracket's columns. Its first Round sets the bracket's size.
- * Each Match is placed so its winner advances into the next column's position
- * above it, which the next Round's pairings decide where they exist and table
- * order decides where they do not. A position no Match fills yet is pending, its
- * entrants the winners advancing into it so far.
+ * in order, are the bracket's columns. Its first Round sets the bracket's size,
+ * unless the operator sets a larger one (#906). Each Match is placed so its
+ * winner advances into the next column's position above it. With Seeds, the
+ * first Round is placed by Seed in standard order and each later Match where
+ * its Players advance from, so no position moves as Rounds are paired; without
+ * them, the next Round's pairings decide where they exist and table order where
+ * they do not. A position no Match fills yet is pending, its entrants the
+ * winners advancing into it so far.
  */
 
 import type { PlayerDeckIdentity } from '../../utils/gameData';
@@ -17,9 +20,10 @@ export interface BracketEntrant {
 	playerId: number | null;
 	name: string;
 	/**
-	 * The Player's seed: their final position in the last Round Standings
-	 * before the Phase (#759). `null` when they have none; absent when the
-	 * Screen does not show seeds.
+	 * The Player's seed as shown: their final position in the last Round
+	 * Standings before the Phase (#759). `null` when they have none; absent
+	 * when the Screen does not show seeds. Placement reads Seeds from
+	 * `TopCutBracketOptions.seeds` instead, whether or not they show.
 	 */
 	seed?: number | null;
 	/**
@@ -81,8 +85,28 @@ export interface BracketColumn {
 	positions: BracketPosition[];
 }
 
+/** A Player the Phase seeds, as the bracket shows them, and their Seed. */
+export interface SeededPlayer {
+	seed: number;
+	entrant: BracketEntrant;
+}
+
+export interface TopCutBracketOptions {
+	/**
+	 * The operator's bracket size (#906), rounded up to a power of two. Unset,
+	 * or smaller than the first Round implies, the first Round sets it.
+	 */
+	size?: number | null;
+	/**
+	 * The Phase's seeded Players, in any order. A Player absent here has no
+	 * Seed. Byes go to the best Seeds the first Round leaves out, so those
+	 * must be here for a bye to name its Player before the next Round does.
+	 */
+	seeds?: readonly SeededPlayer[];
+}
+
 export interface TopCutBracket {
-	/** How many entrants the first column seats: the first Round's Matches and the byes it leaves out, rounded up to a whole bracket. */
+	/** How many entrants the first column seats: the first Round's Matches and the byes it leaves out, rounded up to a whole bracket, or the operator's size when larger. */
 	size: number;
 	columns: BracketColumn[];
 	/** The winner of the Final, once it has one. */
@@ -123,6 +147,20 @@ function seats(match: BracketMatchInput, entrant: BracketEntrant): boolean {
 function inTableOrder(matches: readonly BracketMatchInput[]): BracketMatchInput[] {
 	return [...matches].sort((a, b) =>
 		(a.tableNumber ?? Number.POSITIVE_INFINITY) - (b.tableNumber ?? Number.POSITIVE_INFINITY));
+}
+
+/**
+ * The Seeds in the order a bracket of `size` seats them, top to bottom: each
+ * pair of neighbours meets in the first Round (1v8, 4v5, 2v7, 3v6 for 8), and
+ * the best Seeds meet as late as they can.
+ */
+function standardSeedOrder(size: number): number[] {
+	let order = [1];
+	while (order.length < size) {
+		const count = order.length * 2;
+		order = order.flatMap(seed => [seed, count + 1 - seed]);
+	}
+	return order;
 }
 
 /** Which side won: a bye's seated side, or the side with more game wins. */
@@ -183,24 +221,123 @@ function advancing(position: BracketPosition | undefined): BracketEntrant | null
 		: position.entrants[position.winner];
 }
 
+/** Each column's Matches by position, and the first column's byes no Match records. */
+interface Placement {
+	matches: Array<Array<BracketMatchInput | null>>;
+	byes: Array<BracketEntrant | null>;
+}
+
+function emptyPlacement(positionCounts: readonly number[]): Placement {
+	return {
+		matches: positionCounts.map(count => Array.from<BracketMatchInput | null>({ length: count }).fill(null)),
+		byes: Array.from<BracketEntrant | null>({ length: positionCounts[0] ?? 0 }).fill(null),
+	};
+}
+
+/** Puts each Match into the first position left free, in the order given. */
+function fillFree(positions: Array<BracketMatchInput | null>, matches: readonly BracketMatchInput[], taken: (position: number) => boolean = () => false): void {
+	for (const match of matches) {
+		const free = positions.findIndex((placed, position) => placed == null && !taken(position));
+		if (free >= 0)
+			positions[free] = match;
+	}
+}
+
+/**
+ * Places the first Round by Seed, and each later Round where its Players
+ * advance from, so nothing a later Round pairs moves an earlier position (#906).
+ *
+ * A first-Round Match takes the position standard order gives its best Seed.
+ * Each position it leaves empty is a bye for the best Seed the first Round
+ * leaves out, when that Seed is better than every Seed it seats: byes go to
+ * the top. A Match no Seed places, in any column, takes the first position
+ * left free in table order.
+ */
+function placeBySeed(rounds: readonly BracketRoundInput[], positionCounts: readonly number[], seedOf: (entrant: BracketEntrant) => number | null, seeds: readonly SeededPlayer[]): Placement {
+	const placement = emptyPlacement(positionCounts);
+	const { matches: placed, byes } = placement;
+	const order = standardSeedOrder(positionCounts[0]! * 2);
+	const positionOfSeed = (seed: number) => Math.floor(order.indexOf(seed) / 2);
+
+	const first = placed[0]!;
+	const firstMatches = inTableOrder(rounds[0]!.matches);
+	const unseeded: BracketMatchInput[] = [];
+	const seatedSeeds: number[] = [];
+	for (const match of firstMatches) {
+		const matchSeeds = [match.player1, match.player2]
+			.map(entrant => entrant && seedOf(entrant))
+			.filter((seed): seed is number => seed != null);
+		seatedSeeds.push(...matchSeeds);
+		const best = Math.min(...matchSeeds);
+		const position = best <= order.length
+			? positionOfSeed(best)
+			: -1;
+		if (position >= 0 && !first[position])
+			first[position] = match;
+		else
+			unseeded.push(match);
+	}
+
+	let byeCount = first.length - firstMatches.length;
+	const worstSeated = Math.max(0, ...seatedSeeds);
+	for (const { seed, entrant } of [...seeds].sort((a, b) => a.seed - b.seed)) {
+		if (byeCount <= 0 || seed >= worstSeated)
+			break;
+		if (seed > order.length || firstMatches.some(match => seats(match, entrant)))
+			continue;
+		const position = positionOfSeed(seed);
+		if (first[position] || byes[position])
+			continue;
+		byes[position] = entrant;
+		byeCount--;
+	}
+	fillFree(first, unseeded, position => byes[position] != null);
+
+	for (let column = 1; column < rounds.length; column++) {
+		const previous = placed[column - 1]!;
+		const cameFrom = (entrant: BracketEntrant) => previous.findIndex((match, position) => {
+			if (match)
+				return seats(match, entrant);
+			const bye = column === 1
+				? byes[position]
+				: null;
+			return bye != null && sameEntrant(bye, entrant);
+		});
+		const positions = placed[column]!;
+		const unplaced: BracketMatchInput[] = [];
+		for (const match of inTableOrder(rounds[column]!.matches)) {
+			const from = [match.player1, match.player2]
+				.map(entrant => entrant
+					? cameFrom(entrant)
+					: -1)
+				.find(position => position >= 0);
+			const position = from == null
+				? -1
+				: Math.floor(from / 2);
+			if (position >= 0 && !positions[position])
+				positions[position] = match;
+			else
+				unplaced.push(match);
+		}
+		fillFree(positions, unplaced);
+	}
+
+	return placement;
+}
+
 /**
  * Places each Round's Matches into its column, latest Round first: a Match in
  * a later column pulls the Matches its entrants came from into the two positions
  * that feed it, and every Match nothing pulls takes the first free position in
  * table order.
  */
-function placeMatches(rounds: readonly BracketRoundInput[], positionCounts: readonly number[]): Array<Array<BracketMatchInput | null>> {
-	const placed = positionCounts.map(count => Array.from<BracketMatchInput | null>({ length: count }).fill(null));
+function placeByTableOrder(rounds: readonly BracketRoundInput[], positionCounts: readonly number[]): Placement {
+	const placement = emptyPlacement(positionCounts);
+	const placed = placement.matches;
 
 	for (let column = rounds.length - 1; column >= 0; column--) {
 		const positions = placed[column]!;
-		for (const match of inTableOrder(rounds[column]!.matches)) {
-			if (positions.includes(match))
-				continue;
-			const free = positions.indexOf(null);
-			if (free >= 0)
-				positions[free] = match;
-		}
+		fillFree(positions, inTableOrder(rounds[column]!.matches).filter(match => !positions.includes(match)));
 
 		if (column === 0)
 			continue;
@@ -218,7 +355,7 @@ function placeMatches(rounds: readonly BracketRoundInput[], positionCounts: read
 		});
 	}
 
-	return placed;
+	return placement;
 }
 
 /**
@@ -235,24 +372,48 @@ function firstColumnEntries(rounds: readonly BracketRoundInput[]): number {
 	return firstRound.length + leftOut.length;
 }
 
+/** How many columns lead to the Final: the first Round's, or the operator's size when larger. */
+function columnCountOf(rounds: readonly BracketRoundInput[], size: number | null | undefined): number {
+	const entries = firstColumnEntries(rounds);
+	const set = size != null && size > 1
+		? Math.log2(nextPowerOfTwo(size))
+		: 0;
+	if (entries > 0)
+		return Math.max(Math.log2(nextPowerOfTwo(entries)) + 1, set);
+	return set || rounds.length;
+}
+
 /**
  * The bracket of one Phase, from its Rounds in order. Its first Round, with
  * the byes it leaves out, sets the size, and so how many columns lead to the
- * Final. A Round past the Final, such as a playoff for third place, is not
- * shown, nor is a Match beyond its column's positions. A Phase whose Rounds
- * hold no Matches yet is one column per Round, all pending.
+ * Final, unless `options.size` is larger. A Round past the Final, such as a
+ * playoff for third place, is not shown, nor is a Match beyond its column's
+ * positions. A Phase whose Rounds hold no Matches yet is one column per Round,
+ * or as many as the set size needs, all pending.
+ *
+ * When `options.seeds` gives any first-Round Player a Seed, the Rounds are
+ * placed by Seed; otherwise by the next Round's pairings and table order.
  */
-export function deriveTopCutBracket(rounds: readonly BracketRoundInput[]): TopCutBracket {
-	const entries = firstColumnEntries(rounds);
-	const columnCount = entries > 0
-		? Math.log2(nextPowerOfTwo(entries)) + 1
-		: rounds.length;
-	if (columnCount === 0)
+export function deriveTopCutBracket(rounds: readonly BracketRoundInput[], options: TopCutBracketOptions = {}): TopCutBracket {
+	if (rounds.length === 0)
 		return EMPTY_TOP_CUT_BRACKET;
+	const columnCount = columnCountOf(rounds, options.size);
 
 	const shown = rounds.slice(0, columnCount);
 	const positionCounts = Array.from({ length: columnCount }, (_, column) => 2 ** (columnCount - 1 - column));
-	const placed = placeMatches(shown, positionCounts);
+	const seeds = options.seeds ?? [];
+	const seedByPlayer = new Map(seeds.flatMap(({ seed, entrant }) => entrant.playerId == null
+		? []
+		: [
+				[entrant.playerId, seed] as const,
+			]));
+	const seedOf = (entrant: BracketEntrant) => entrant.playerId == null
+		? null
+		: seedByPlayer.get(entrant.playerId) ?? null;
+	const seeded = shown[0]!.matches.some(match => [match.player1, match.player2].some(entrant => entrant && seedOf(entrant) != null));
+	const { matches: placed, byes } = seeded
+		? placeBySeed(shown, positionCounts, seedOf, seeds)
+		: placeByTableOrder(shown, positionCounts);
 
 	const columns: BracketColumn[] = [];
 	for (let column = 0; column < columnCount; column++) {
@@ -262,6 +423,11 @@ export function deriveTopCutBracket(rounds: readonly BracketRoundInput[]): TopCu
 			const match = placed[column]?.[position];
 			if (match)
 				return matchPosition(match);
+			const bye = column === 0
+				? byes[position]
+				: null;
+			if (bye)
+				return byePosition(bye);
 			const entrants: BracketPosition['entrants'] = previous
 				? [
 						advancing(previous[position * 2]),

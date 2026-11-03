@@ -29,9 +29,9 @@ const player = ref<any>(null);
 // whatever the composable returns on the first space, and the real formatOutcome
 // is covered by the composable's own test.
 const cannedOutcomes: Record<string, string> = {
-	win: 'WIN 2-1',
-	loss: 'LOSS 0-2',
-	draw: 'DRAW 1-1-1',
+	win: 'WIN 2–1',
+	loss: 'LOSS 0–2',
+	draw: 'DRAW 1–1–1',
 	bye: 'BYE',
 	pending: 'Pending',
 };
@@ -50,6 +50,8 @@ mockNuxtImport('usePlayerHistoryModeData', () => () => ({
 	isEmpty: computed(() => isEmpty.value),
 	headerText: computed(() => headerText.value),
 	pageData: computed(() => pageData.value),
+	// The page size field the mode's Page Rotation declares.
+	pageSize: computed(() => config.value.rowsPerPage),
 	player: computed(() => player.value),
 	formatOutcome,
 }));
@@ -213,7 +215,7 @@ describe('screenModesPlayerHistoryDisplay', () => {
 		const badge = wrapper.get('.outcome-badge');
 		expect(badge.attributes('data-outcome')).toBe('win');
 		expect(badge.get('.outcome-label').text()).toBe('WIN');
-		expect(badge.get('.outcome-score').text()).toBe('2-1');
+		expect(badge.get('.outcome-score').text()).toBe('2–1');
 	});
 
 	it.each([
@@ -330,49 +332,53 @@ describe('screenModesPlayerHistoryDisplay', () => {
 			expect(wrapper.find('.opponent-deck').exists()).toBe(false);
 		});
 
+		// An unreported Match reads Pending in the Game score column only while
+		// the Outcome column, which already says so, is hidden.
+		const unreported = historyRow({
+			outcome: 'pending',
+			hasResult: false,
+			playerGameWins: null,
+			opponentGameWins: null,
+		});
+		const bye = historyRow({
+			outcome: 'bye',
+			opponentName: 'BYE',
+			playerGameWins: 2,
+			opponentGameWins: 0,
+		});
 		it.each([
 			[
-				'a win',
+				'a win, Outcome hidden',
 				historyRow(),
-				'2-1',
+				['opponent', 'gameScore'],
+				'2–1',
 			],
 			[
-				'a loss',
-				historyRow({ outcome: 'loss', playerGameWins: 0, opponentGameWins: 2 }),
-				'0-2',
+				'an unreported Match, Outcome hidden',
+				unreported,
+				['opponent', 'gameScore'],
+				'Pending',
 			],
 			[
-				'a game draw',
-				historyRow({
-					outcome: 'draw',
-					playerGameWins: 1,
-					opponentGameWins: 1,
-					gameDraws: 1,
-				}),
-				'1-1-1',
-			],
-			[
-				'a bye',
-				historyRow({
-					outcome: 'bye',
-					opponentName: 'BYE',
-					playerGameWins: 2,
-					opponentGameWins: 0,
-				}),
+				'an unreported Match, Outcome visible',
+				unreported,
+				['opponent', 'outcome', 'gameScore'],
 				'',
 			],
 			[
-				'an unreported Match',
-				historyRow({
-					outcome: 'pending',
-					hasResult: false,
-					playerGameWins: null,
-					opponentGameWins: null,
-				}),
+				'a bye, Outcome hidden',
+				bye,
+				['opponent', 'gameScore'],
 				'',
 			],
-		])('scores %s from the history Player\'s side', async (_name, row, expected) => {
-			showingColumns('opponent', 'gameScore');
+			[
+				'a bye, Outcome visible',
+				bye,
+				['opponent', 'outcome', 'gameScore'],
+				'',
+			],
+		] as const)('scores %s', async (_name, row, columns, expected) => {
+			showingColumns(...columns);
 			pageData.value = [row];
 
 			const wrapper = await mountComponent();
@@ -387,7 +393,7 @@ describe('screenModesPlayerHistoryDisplay', () => {
 
 			expect(wrapper.get('.outcome-label').text()).toBe('WIN');
 			expect(wrapper.find('.outcome-score').exists()).toBe(false);
-			expect(wrapper.get('.game-score').text()).toBe('2-1');
+			expect(wrapper.get('.game-score').text()).toBe('2–1');
 		});
 
 		it('keeps both in place while the new columns are hidden', async () => {
@@ -405,7 +411,7 @@ describe('screenModesPlayerHistoryDisplay', () => {
 			expect(wrapper.find('.opponent-archetype').exists()).toBe(false);
 			expect(wrapper.find('.game-score').exists()).toBe(false);
 			expect(wrapper.get('.opponent-deck').text()).toContain('Grixis');
-			expect(wrapper.get('.outcome-score').text()).toBe('2-1');
+			expect(wrapper.get('.outcome-score').text()).toBe('2–1');
 		});
 	});
 

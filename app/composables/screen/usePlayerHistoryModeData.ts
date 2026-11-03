@@ -94,7 +94,7 @@ export function usePlayerHistoryModeData() {
 		? 'Select a player to show match history.'
 		: 'No matches found for this player.');
 
-	const { pageData, rowCount } = usePaginatedScreenMode({ mode: 'player-history', config, rows });
+	const { pageData, pageSize, rowCount } = usePaginatedScreenMode({ mode: 'player-history', config, rows });
 
 	function formatOutcome(row: PlayerMatchHistoryEntry) {
 		if (row.outcome === 'bye')
@@ -115,6 +115,7 @@ export function usePlayerHistoryModeData() {
 		emptyMessage,
 		headerText,
 		pageData,
+		pageSize,
 		rowCount,
 		player,
 		formatOutcome,

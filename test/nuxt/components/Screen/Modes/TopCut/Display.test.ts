@@ -275,6 +275,64 @@ describe('screenModesTopCutDisplay', () => {
 			expect(style).toContain('--bracket-position-height: 6.4');
 		});
 
+		it.each([
+			[
+				'neither',
+				false,
+				false,
+				{ seed: null, archetype: null },
+			],
+			[
+				'the Seed',
+				true,
+				false,
+				{ seed: '2', archetype: null },
+			],
+			[
+				'the Archetype',
+				false,
+				true,
+				{ seed: null, archetype: 'Izzet Prowess' },
+			],
+			[
+				'both',
+				true,
+				true,
+				{ seed: '2', archetype: 'Izzet Prowess' },
+			],
+		])('shows %s of the champion under the bracket\'s toggles', async (_, showSeeds, showArchetypes, expected) => {
+			bracket.value = deriveTopCutBracket([
+				{
+					roundId: 1,
+					name: 'Final',
+					matches: [
+						match(1, 1, {
+							...player(1),
+							seed: 1,
+							deck: null,
+						}, {
+							...player(2),
+							seed: 2,
+							deck: { name: 'Izzet Prowess', colors: 'UR' },
+						}, [0, 2]),
+					],
+				},
+			]);
+			config.value = { ...config.value, showSeeds, showArchetypes };
+			const wrapper = await mountComponent();
+
+			const champion = wrapper.find('.bracket-champion');
+			expect(champion.find('.bracket-champion-player').text()).toBe('Seed 2');
+			expect({
+				seed: champion.find('.bracket-champion-seed').exists()
+					? champion.find('.bracket-champion-seed').text()
+					: null,
+				archetype: champion.find('.bracket-champion-archetype').exists()
+					? champion.find('.bracket-champion-archetype').text()
+					: null,
+			}).toEqual(expected);
+		});
+
 		it('sizes type for one line per entrant while Archetypes are off', async () => {
 			bracket.value = unplayed(16);
 			config.value = { ...config.value, showSeeds: true };
