@@ -1,4 +1,5 @@
 import type { MaybeRefOrGetter } from 'vue';
+import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { formatOrdinal } from '~~/shared/utils/formatters';
 import { getMtgGameData, getPlayerIdentityValue } from '~~/shared/utils/gameData';
 import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
@@ -31,31 +32,21 @@ export function usePlayerFeatureMatchData(
 		return featureMatchStateStore.featureMatchStates.get(mid()) ?? null;
 	});
 
-	const activeSession = computed(() => {
-		const sessionId = featureMatchStateStore.sessionIdBySlotId?.get(mid());
-		if (sessionId) {
-			return featureMatchStateStore.featureMatchSessions?.get(sessionId) ?? match.value?.activeSession ?? null;
-		}
-		return match.value?.activeSession ?? null;
-	});
+	/** The Slot carrying the Session the Live State Follower holds for it, which owns side order (ADR-0058). */
+	const followedSlot = computed(() => match.value
+		? withFollowedFeatureMatchSession(match.value, featureMatchStateStore)
+		: null);
+
+	const activeSession = computed(() => followedSlot.value?.activeSession ?? null);
 
 	const player = computed(() => {
 		return matchState.value?.[side()] ?? null;
 	});
 
-	const playerData = computed(() => {
-		const s = side();
-		const snapshotPlayer = activeSession.value?.sourceSnapshot[s];
-		if (snapshotPlayer)
-			return snapshotPlayer.data;
+	// The player this side shows, and the roster Player it links: a seat filled by hand links none.
+	const seated = computed(() => featureMatchSidePlayer(followedSlot.value, side()));
 
-		const m = match.value;
-		if (!m)
-			return null;
-		return s === 'player1'
-			? m.player1Data
-			: m.player2Data;
-	});
+	const playerData = computed(() => seated.value.data);
 
 	const playerName = computed(() => {
 		const fallback = side() === 'player1'
@@ -64,17 +55,7 @@ export function usePlayerFeatureMatchData(
 		return playerData.value?.name || fallback;
 	});
 
-	// The roster Player this side links, from the same source as playerData: the
-	// Session owns side order (ADR-0058). A seat filled by hand links none.
-	const seatedPlayerId = computed(() => {
-		const s = side();
-		const snapshotPlayer = activeSession.value?.sourceSnapshot[s];
-		return snapshotPlayer
-			? snapshotPlayer.playerId
-			: s === 'player1'
-				? match.value?.player1Id
-				: match.value?.player2Id;
-	});
+	const seatedPlayerId = computed(() => seated.value.playerId);
 
 	const linkedPlayer = computed(() => {
 		const playerId = seatedPlayerId.value;

@@ -104,7 +104,8 @@ describe('usePlayerFeatureMatchData', () => {
 							playerId: 9,
 							data: { ...p1Data, name: 'Snapshot Alice', position: 2 },
 						},
-						player2: null,
+						// An empty side, as the server snapshots one: the Slot's Bob is not shown.
+						player2: { playerId: null, data: null },
 					},
 				},
 			}),
@@ -116,7 +117,7 @@ describe('usePlayerFeatureMatchData', () => {
 		expect(data.playerName.value).toBe('Snapshot Alice');
 		expect(data.bestOf.value).toBe(5);
 		expect(data.playerRecord.value).toBe('2nd');
-		expect(usePlayerFeatureMatchData(1, 'player2').playerName.value).toBe('Bob');
+		expect(usePlayerFeatureMatchData(1, 'player2').playerName.value).toBe('Player 2');
 	});
 
 	it('falls back to a seat name and best of three for a Slot it does not hold', () => {
@@ -198,7 +199,7 @@ describe('usePlayerFeatureMatchData', () => {
 						bestOf: 3,
 						playerDisplayMode: 'score',
 						player1: { playerId: 22, data: p1Data },
-						player2: null,
+						player2: { playerId: null, data: null },
 					},
 				},
 			},
