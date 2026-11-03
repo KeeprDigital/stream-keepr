@@ -24,7 +24,8 @@ function tabLabels(game: Game) {
 }
 
 describe('event config tabs', () => {
-	// An OP Event models no Rounds (ADR-0057), so Event Structure is not offered.
+	// An OP Event models no Rounds and never runs Melee Sync (ADR-0057), so Event
+	// Structure and Integrations are not offered.
 	it.each([
 		[
 			'mtg',
@@ -42,7 +43,6 @@ describe('event config tabs', () => {
 				'Event',
 				'Feature Matches',
 				'Broadcast',
-				'Integrations',
 			],
 		],
 	] as const)('on a %s Event, offers %j', (game, tabs) => {

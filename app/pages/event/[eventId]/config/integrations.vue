@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import { MTG_ONLY } from '~~/shared/config/games';
+
+definePageMeta({
+	cardGames: MTG_ONLY,
+});
+
 const eventStore = useEventStore();
 
 const event = computed(() => eventStore.event!);

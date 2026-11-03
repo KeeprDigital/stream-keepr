@@ -184,8 +184,8 @@ describe('default layout sync navigation', () => {
 		expect(wrapper.text()).toContain('Sync');
 	});
 
-	// An OP Event models no Players, Rounds or Matches and holds no Metagame
-	// (ADR-0057), so the pages for them are not offered.
+	// An OP Event models no Players, Rounds or Matches, holds no Metagame and
+	// never runs Melee Sync (ADR-0057), so the pages for them are not offered.
 	const MTG_ONLY_ENTRIES = [
 		'Players',
 		'Matches',
@@ -194,6 +194,7 @@ describe('default layout sync navigation', () => {
 		'Sync',
 		'Cards',
 		'Event Structure',
+		'Integrations',
 	];
 
 	it.each([
@@ -212,7 +213,6 @@ describe('default layout sync navigation', () => {
 			'Screens',
 			'Event',
 			'Broadcast',
-			'Integrations',
 		]));
 		for (const label of omitted)
 			expect(items).not.toContain(label);

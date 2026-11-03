@@ -20,8 +20,10 @@ const mockWorkflows = {
 vi.mock('~~/server/modules/melee-sync/configuration', () => ({
 	updateMeleeConfiguration: vi.fn(),
 }));
+// The Card Game refusal has its home in meleeSync.sqlite; these Events are MTG.
 vi.mock('~~/server/modules/melee-sync/eventData', () => ({
 	requireMeleeSyncEventData: mockLoadEventData,
+	requireMeleeSyncOffered: vi.fn(),
 }));
 
 vi.mock('~~/server/modules/melee-sync/workflows', () => ({

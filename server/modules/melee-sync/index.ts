@@ -11,7 +11,7 @@ import {
 } from '~~/server/utils/meleeSyncState';
 import { updateMeleeConfiguration } from './configuration';
 import { meleeSyncContextFrom } from './context';
-import { requireMeleeSyncEventData as loadMeleeSyncEventData } from './eventData';
+import { requireMeleeSyncEventData as loadMeleeSyncEventData, requireMeleeSyncOffered } from './eventData';
 import { loadLiveResultsStatus } from './liveResults/status';
 import { setMeleeLiveResults } from './liveResultsSetting';
 import { createMeleeSyncWorkflows } from './workflows';
@@ -63,6 +63,7 @@ function createMeleeSyncProgress() {
 async function runMeleeSyncCommand<T extends MeleeSyncCommandResult>(
 	options: RunMeleeSyncCommandOptions<T>,
 ): Promise<T> {
+	await requireMeleeSyncOffered(options.eventId);
 	const lease = await acquireMeleeSyncLease(options.eventId, options.command);
 	let renewalError: unknown = null;
 	let renewalInFlight: Promise<void> | null = null;
@@ -175,7 +176,8 @@ async function runMeleeSyncCommand<T extends MeleeSyncCommandResult>(
 }
 
 /**
- * Melee Sync command seam.
+ * Melee Sync command seam. Every command that configures or runs Melee Sync
+ * first refuses an Event of a Card Game it is not offered to (ADR-0057).
  *
  * Routes pass only request context, Event identity, and command-specific
  * options. Event loading and validated Melee adapter setup stay behind this
@@ -185,8 +187,14 @@ export function meleeSyncModule() {
 	const workflows = createMeleeSyncWorkflows();
 
 	return {
-		updateConfiguration: updateMeleeConfiguration,
-		setLiveResults: setMeleeLiveResults,
+		async updateConfiguration(params: Parameters<typeof updateMeleeConfiguration>[0]) {
+			await requireMeleeSyncOffered(params.eventId);
+			return await updateMeleeConfiguration(params);
+		},
+		async setLiveResults(params: Parameters<typeof setMeleeLiveResults>[0]) {
+			await requireMeleeSyncOffered(params.eventId);
+			return await setMeleeLiveResults(params);
+		},
 		liveResultsStatus: loadLiveResultsStatus,
 
 		async runInitialSetup(requestEvent: H3Event, eventId: number) {
