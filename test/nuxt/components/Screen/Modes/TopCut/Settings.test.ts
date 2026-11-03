@@ -11,7 +11,8 @@ enableAutoUnmount(afterEach);
 
 /**
  * The Top Cut Bracket settings editor picks the Phase of the Screen's Event its bracket
- * is derived from (#752), and whether each Player's seed and Archetype show (#759).
+ * is derived from (#752), its size (#906), and whether each Player's seed and Archetype
+ * show (#759).
  */
 
 const config = ref<Record<string, unknown>>({});
@@ -57,12 +58,26 @@ const USelectStub = defineComponent({
 	},
 	emits: ['update:modelValue'],
 	setup(props, { emit }) {
-		// Choosing the Top 8 Phase.
+		const items = () => props.items as Array<{ label: string; value: unknown }>;
 		return () => h('select', {
 			'data-items': JSON.stringify(props.items),
-			'onChange': () => emit('update:modelValue', 4),
-		});
+			'onChange': (event: Event) => emit('update:modelValue', JSON.parse((event.target as HTMLSelectElement).value)),
+		}, items().map(item => h('option', {
+			value: JSON.stringify(item.value),
+		}, item.label)));
 	},
+});
+
+/** A form field, found by its label, showing its description. */
+const UFormFieldStub = defineComponent({
+	props: {
+		label: { type: String, required: false },
+		description: { type: String, required: false },
+	},
+	setup: (props, { slots }) => () => h('div', { 'data-field': props.label }, [
+		h('p', { class: 'description' }, props.description),
+		slots.default?.(),
+	]),
 });
 
 const ScreenSettingsToggleStub = defineComponent({
@@ -93,9 +108,7 @@ async function mountEditor() {
 					setup: (_, { slots }) => () => h('section', slots.default?.()),
 				}),
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
-				UFormField: defineComponent({
-					setup: (_, { slots }) => () => h('div', slots.default?.()),
-				}),
+				UFormField: UFormFieldStub,
 				USelect: USelectStub,
 				UInput: true,
 			},
@@ -118,7 +131,7 @@ describe('screenModesTopCutSettings', () => {
 		const wrapper = await mountEditor();
 
 		expect(phaseStore.loadPhasesByEventId).toHaveBeenCalledWith(1);
-		expect(JSON.parse(wrapper.find('select').attributes('data-items')!)).toEqual([
+		expect(JSON.parse(wrapper.find('[data-field="Phase"] select').attributes('data-items')!)).toEqual([
 			{ label: 'Select a phase…', value: null },
 			{ label: 'Swiss', value: 3 },
 			{ label: 'Top 8', value: 4 },
@@ -127,9 +140,38 @@ describe('screenModesTopCutSettings', () => {
 
 	it('writes the picked Phase as the Screen\'s phaseId', async () => {
 		const wrapper = await mountEditor();
-		await wrapper.find('select').trigger('change');
+		await wrapper.find('[data-field="Phase"] select').setValue('4');
 
 		expect(writes.at(-1)).toEqual({ phaseId: 4 });
+	});
+
+	it('offers the bracket sizes, sizing from the first Round until one is picked, and says a smaller one is ignored', async () => {
+		const wrapper = await mountEditor();
+		const field = wrapper.find('[data-field="Bracket size"]');
+
+		expect(JSON.parse(field.find('select').attributes('data-items')!).map((item: { value: unknown }) => item.value)).toEqual([null, 4, 8, 16, 32]);
+		expect(field.find('.description').text()).toMatch(/smaller .* ignored/);
+	});
+
+	it.each([
+		[
+			'8',
+			{ bracketSizeOverride: 8 },
+		],
+		[
+			'32',
+			{ bracketSizeOverride: 32 },
+		],
+		[
+			'null',
+			{ bracketSizeOverride: null },
+		],
+	])('writes the picked size %s as the Screen\'s bracketSizeOverride', async (value, write) => {
+		config.value = { ...config.value, bracketSizeOverride: 16 };
+		const wrapper = await mountEditor();
+		await wrapper.find('[data-field="Bracket size"] select').setValue(value);
+
+		expect(writes.at(-1)).toEqual(write);
 	});
 
 	function toggle(wrapper: Awaited<ReturnType<typeof mountEditor>>, label: string) {

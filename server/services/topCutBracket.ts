@@ -1,4 +1,4 @@
-import type { BracketEntrant, BracketRoundInput, NamedPlayerDeckIdentity } from '~~/shared/modules/top-cut-bracket';
+import type { BracketEntrant, BracketRoundInput, NamedPlayerDeckIdentity, SeededPlayer } from '~~/shared/modules/top-cut-bracket';
 import type { TopCutModeConfig } from '~~/shared/screenModeConfigs/topCut';
 import type { ScreenOutputMatchSide, ScreenOutputRoundMatch, ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -10,16 +10,17 @@ import { playerRoundStandingsService } from '~~/server/services/playerRoundStand
 import { roundService } from '~~/server/services/round';
 import { findMatchesByRound } from '~~/server/services/roundMatches';
 import { deriveTopCutBracket, EMPTY_TOP_CUT_BRACKET } from '~~/shared/modules/top-cut-bracket';
+import { TOP_CUT_BRACKET_SIZES } from '~~/shared/screenModeConfigs/topCut';
 import { resolvePlayerDeckIdentity } from '~~/shared/utils/gameData';
 
-/** What a Top Cut Bracket Screen shows beside each Player's name (#759). */
-export type TopCutEntrantDetails = Partial<Pick<TopCutModeConfig, 'showSeeds' | 'showArchetypes'>>;
+/**
+ * What a Top Cut Bracket Screen shows beside each Player's name (#759), and
+ * the bracket size its operator sets (#906).
+ */
+export type TopCutBracketReadOptions = Partial<Pick<TopCutModeConfig, 'showSeeds' | 'showArchetypes' | 'bracketSizeOverride'>>;
 
-/** Each Player's seed: their position in the Round Standings that seed the Phase. */
-async function findSeeds(eventId: number, phaseId: number): Promise<Map<number, number | null>> {
-	const standings = await playerRoundStandingsService().findSeedPositions(eventId, phaseId);
-	return new Map(standings?.positions.map(({ playerId, position }) => [playerId, position]));
-}
+/** The most Players a bracket the operator sizes seats, so the most Seeds that can take a bye. */
+const MOST_SEEDS_ON_BYES = Math.max(...TOP_CUT_BRACKET_SIZES);
 
 /** Each of these Players' deck as a broadcast names it, absent when nothing names one. */
 async function findDecks(eventId: number, playerIds: readonly number[]): Promise<Map<number, NamedPlayerDeckIdentity>> {
@@ -71,13 +72,14 @@ function seatedPlayerIds(matchesByRound: ReadonlyMap<number, readonly ScreenOutp
  * bracket. Each side is named as Pairings names it: its Player by their
  * current name, or the Match's own record of a side no Player holds.
  *
- * Each Player's seed and deck are read only when `details` asks for them
- * (#759), so a Screen that shows neither pays for neither.
+ * Seeds are always read, since they place the first Round and name its byes
+ * (#906); each Player's seed is shown, and their deck read, only when
+ * `options` asks for them (#759).
  */
 export async function findPhaseBracket(
 	eventId: number,
 	phaseId: number | undefined,
-	details: TopCutEntrantDetails = {},
+	options: TopCutBracketReadOptions = {},
 ): Promise<ScreenOutputTopCutResponse> {
 	const phase = phaseId
 		? await phaseService().findById(phaseId, eventId)
@@ -87,28 +89,29 @@ export async function findPhaseBracket(
 
 	const rounds = await roundService().findByPhaseId(phase.id, eventId);
 	const matchesByRound = await findMatchesByRound(eventId, rounds.map(round => round.id));
-	const [seeds, decks] = await Promise.all([
-		details.showSeeds
-			? findSeeds(eventId, phase.id)
-			: null,
-		details.showArchetypes
-			? findDecks(eventId, seatedPlayerIds(matchesByRound))
-			: null,
-	]);
+	const seededPlayers = await playerRoundStandingsService().findSeededPlayers(eventId, phase.id);
+	const seeds = new Map(seededPlayers.map(({ playerId, seed }) => [playerId, seed]));
+	const decks = options.showArchetypes
+		? await findDecks(eventId, [
+				...new Set([
+					...seatedPlayerIds(matchesByRound),
+					...seededPlayers.filter(({ seed }) => seed <= MOST_SEEDS_ON_BYES).map(({ playerId }) => playerId),
+				]),
+			])
+		: null;
 
-	function entrant(side: ScreenOutputMatchSide | null): BracketEntrant | null {
-		if (!side)
-			return null;
-		const seated: BracketEntrant = { playerId: side.id, name: side.name };
+	function entrant(side: ScreenOutputMatchSide): BracketEntrant {
+		const shown: BracketEntrant = { playerId: side.id, name: side.name };
 		const of = <T>(byPlayer: Map<number, T>) => side.id == null
 			? null
 			: byPlayer.get(side.id) ?? null;
-		if (seeds)
-			seated.seed = of(seeds);
+		if (options.showSeeds)
+			shown.seed = of(seeds);
 		if (decks)
-			seated.deck = of(decks);
-		return seated;
+			shown.deck = of(decks);
+		return shown;
 	}
+	const side = (seated: ScreenOutputMatchSide | null) => seated && entrant(seated);
 
 	const bracketRounds: BracketRoundInput[] = rounds.map(round => ({
 		roundId: round.id,
@@ -116,8 +119,8 @@ export async function findPhaseBracket(
 		matches: (matchesByRound.get(round.id) ?? []).map(match => ({
 			matchId: match.matchId,
 			tableNumber: match.tableNumber,
-			player1: entrant(match.player1),
-			player2: entrant(match.player2),
+			player1: side(match.player1),
+			player2: side(match.player2),
 			isBye: match.isBye,
 			hasResult: match.hasResult,
 			player1GameWins: match.player1GameWins,
@@ -128,6 +131,12 @@ export async function findPhaseBracket(
 
 	return {
 		phase: mapPhaseToResponse(phase),
-		bracket: deriveTopCutBracket(bracketRounds),
+		bracket: deriveTopCutBracket(bracketRounds, {
+			size: options.bracketSizeOverride,
+			seeds: seededPlayers.map(({ playerId, name, seed }): SeededPlayer => ({
+				seed,
+				entrant: entrant({ id: playerId, name }),
+			})),
+		}),
 	};
 }

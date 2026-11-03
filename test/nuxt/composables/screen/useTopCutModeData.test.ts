@@ -13,6 +13,7 @@ const defaultConfig = {
 	headerText: undefined as string | undefined,
 	showSeeds: false,
 	showArchetypes: false,
+	bracketSizeOverride: undefined as number | undefined,
 };
 
 const mutableConfig = reactive({ ...defaultConfig });
@@ -157,6 +158,19 @@ describe('useTopCutModeData', () => {
 		expect(mockFetch).toHaveBeenCalledTimes(1);
 	});
 
+	it('re-reads when the bracket size is set', async () => {
+		mutableConfig.phaseId = 3;
+		mockFetch.mockResolvedValue(answer());
+		makeTopCutModeData();
+		await flushPromises();
+		mockFetch.mockClear();
+
+		mutableConfig.bracketSizeOverride = 8;
+		await flushPromises();
+
+		expect(mockFetch).toHaveBeenCalledTimes(1);
+	});
+
 	describe('live-follow', () => {
 		async function following(shown: Partial<Pick<typeof defaultConfig, 'showSeeds' | 'showArchetypes'>> = {}) {
 			mutableConfig.phaseId = 3;
@@ -270,13 +284,6 @@ describe('useTopCutModeData', () => {
 				},
 			],
 			[
-				'another Phase renamed',
-				'phase:updated',
-				{
-					phase: { id: 4 },
-				},
-			],
-			[
 				'a Player it does not seat renamed',
 				'player:updated',
 				{
@@ -304,8 +311,9 @@ describe('useTopCutModeData', () => {
 			expect(mockFetch).not.toHaveBeenCalled();
 		});
 
-		// Seeds come from Round Standings before the Phase, which a sync of any
-		// Round may store, and any Round or Phase edit may reorder.
+		// Seeds place the bracket whether or not they show (#906). They come from Round
+		// Standings before the Phase, which a sync of any Round may store, and any
+		// Round or Phase edit may reorder.
 		const seedChanges = [
 			[
 				'an earlier Round\'s Round Standings synced from Melee',
@@ -356,8 +364,8 @@ describe('useTopCutModeData', () => {
 			['Melee\'s Deck Lists synced', 'melee:decklistsSynced', {}],
 		] as const;
 
-		it.each(seedChanges)('re-reads on %s while seeds show', async (_, type, payload) => {
-			await following({ showSeeds: true });
+		it.each(seedChanges)('re-reads on %s, whether or not seeds show', async (_, type, payload) => {
+			await following();
 			deliver(type, payload);
 			await flushPromises();
 
@@ -386,18 +394,15 @@ describe('useTopCutModeData', () => {
 				'melee:pairingsSynced',
 				{ roundId: 20 },
 			],
-		] as const)('does not re-read on %s while seeds show', async (_, type, payload) => {
-			await following({ showSeeds: true });
+		] as const)('does not re-read on %s', async (_, type, payload) => {
+			await following();
 			deliver(type, payload);
 			await flushPromises();
 
 			expect(mockFetch).not.toHaveBeenCalled();
 		});
 
-		it.each([
-			...seedChanges,
-			...archetypeChanges,
-		])('does not re-read on %s while neither shows', async (_, type, payload) => {
+		it.each(archetypeChanges)('does not re-read on %s while Archetypes are hidden', async (_, type, payload) => {
 			await following();
 			deliver(type, payload);
 			await flushPromises();
