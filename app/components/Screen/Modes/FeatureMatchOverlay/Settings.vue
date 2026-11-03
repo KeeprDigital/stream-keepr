@@ -224,6 +224,22 @@ const SHORTCUTS = [
 		keys: ['⌥ drag'],
 		label: 'Turn off snapping',
 	},
+	{
+		keys: ['⌘ scroll'],
+		label: 'Zoom the preview',
+	},
+	{
+		keys: ['Space drag'],
+		label: 'Pan the preview (or middle-drag)',
+	},
+	{
+		keys: ['⌘', '0'],
+		label: 'Fit the preview',
+	},
+	{
+		keys: ['⌘', '1'],
+		label: 'Preview at 100%',
+	},
 ] as const;
 
 /** Whether a key press belongs to something the author is typing into or choosing in. */
