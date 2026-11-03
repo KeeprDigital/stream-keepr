@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+	GRAPHICS_PREVIEW_ANIMATION_MESSAGE,
 	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
 	GRAPHICS_PREVIEW_STATE_MESSAGE,
 	isFromExpectedSender,
+	isGraphicsPreviewAnimationMessage,
 	isGraphicsPreviewReadyMessage,
 	isGraphicsPreviewSelectMessage,
 	isGraphicsPreviewStateMessage,
@@ -190,6 +192,29 @@ describe('readGraphicsPreviewAnimationPlan', () => {
 		expect(readGraphicsPreviewAnimationPlan({ ...plan, loop: 'yes' })).toBeNull();
 	});
 
+	it.each([
+		[
+			'plays one Graphic Item alone',
+			{ itemId: 'bar' },
+			{ ...plan, itemId: 'bar' },
+		],
+		[
+			'drops an empty item',
+			{ itemId: '' },
+			null,
+		],
+		[
+			'drops an item that is not an id',
+			{ itemId: 4 },
+			null,
+		],
+	])('%s', (_case, overrides, expected) => {
+		expect(readGraphicsPreviewAnimationPlan({
+			...plan,
+			...overrides,
+		})).toEqual(expected);
+	});
+
 	it('carries no schedule of its own, so the preview cannot be told when to be', () => {
 		// A run is an instruction, not a timestamp: anything else on it is dropped.
 		expect(readGraphicsPreviewAnimationPlan({ ...plan, startedAt: 12345, elapsed: 900 })).toEqual(plan);
@@ -271,5 +296,53 @@ describe('readGraphicsPreviewAnimationPlan', () => {
 			},
 			expectedFromPreview,
 		)).toBe(false);
+	});
+});
+
+describe('isGraphicsPreviewAnimationMessage', () => {
+	const run = {
+		type: GRAPHICS_PREVIEW_ANIMATION_MESSAGE,
+		plan: { graphicId: 'feature-match-layout' },
+	};
+
+	// A host owning its preview transport sends the run on its own, from its editor only.
+	it.each([
+		[
+			'a run from the embedding editor',
+			editorWindow,
+			'https://keepr.test',
+			run,
+			true,
+		],
+		[
+			'a stop from the embedding editor',
+			editorWindow,
+			'https://keepr.test',
+			{ ...run, plan: null },
+			true,
+		],
+		[
+			'another message type',
+			editorWindow,
+			'https://keepr.test',
+			{ ...run, type: GRAPHICS_PREVIEW_STATE_MESSAGE },
+			false,
+		],
+		[
+			'a run from another window',
+			previewWindow,
+			'https://keepr.test',
+			run,
+			false,
+		],
+		[
+			'a run from another origin',
+			editorWindow,
+			'https://attacker.test',
+			run,
+			false,
+		],
+	])('%s', (_case, source, origin, data, accepted) => {
+		expect(isGraphicsPreviewAnimationMessage({ origin, source, data }, expectedFromEditor)).toBe(accepted);
 	});
 });

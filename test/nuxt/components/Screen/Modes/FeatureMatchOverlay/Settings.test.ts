@@ -4,6 +4,8 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, reactive, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import PreviewOutputAside from '~/components/Screen/Modes/FeatureMatchOverlay/PreviewOutputAside.vue';
 import Settings from '~/components/Screen/Modes/FeatureMatchOverlay/Settings.vue';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 
@@ -198,7 +200,7 @@ const UButtonStub = defineComponent({
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
 
-async function mountComponent(screen: Partial<Screen> = {}) {
+async function mountComponent(screen: Partial<Screen> = {}, stubs: Record<string, unknown> = {}) {
 	return mount(Settings, {
 		props: {
 			screen: {
@@ -227,6 +229,7 @@ async function mountComponent(screen: Partial<Screen> = {}) {
 				UButton: UButtonStub,
 				UAlert: true,
 				UModal: UModalStub,
+				...stubs,
 			},
 		},
 	});
@@ -686,6 +689,37 @@ describe('featureMatchOverlaySettings — Graphics Authoring Lease', () => {
 		preview(wrapper).vm.$emit('selectCompositorTarget', { type: 'item', graphicId: 'feature-match-layout', itemId: mockConfig.value.layout.composition.items[0]!.id });
 		await nextTick();
 		expect(wrapper.get('[data-testid="compositor-inspector"]').attributes('data-writable')).toBe('false');
+	});
+
+	// The Graphic Animation Preview is not a write path, so the lease never gates it.
+	it('lets an observer play a Graphic Animation Preview run, writing nothing', async () => {
+		const wrapper = await mountComponent({}, {
+			...nuxtUiStubs,
+			UButton: UButtonStub,
+			UPopover: true,
+			FeatureMatchOverlayPreviewOutputAside: PreviewOutputAside,
+			GraphicsCanvasManipulationOverlay: true,
+		});
+		await flushPromises();
+		const postMessage = vi.fn();
+		Object.defineProperty(wrapper.get('iframe').element, 'contentWindow', {
+			configurable: true,
+			value: { postMessage },
+		});
+
+		const play = wrapper.get('[data-testid="animation-preview-play"]');
+		expect(play.attributes('disabled')).toBeUndefined();
+		await play.trigger('click');
+		await nextTick();
+
+		expect(postMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'graphics-compositor:preview-animation',
+				plan: expect.objectContaining({ run: 1 }),
+			}),
+			window.location.origin,
+		);
+		expect(mockUpdateConfig).not.toHaveBeenCalled();
 	});
 
 	it('leaves the Feature Match Slot live for an observer', async () => {

@@ -31,6 +31,12 @@ export const FEATURE_MATCH_LAYOUT_COMPOSITION_ID = 'feature-match-layout';
 
 export const FEATURE_MATCH_LAYOUT_COMPOSITION_NAME = 'Feature Match Layout';
 
+/**
+ * The lifecycle phases a Feature Match Layout's Graphic Animation Preview plays.
+ * A layout declares no Graphic Inputs, so it has no update phase to show.
+ */
+export const FEATURE_MATCH_LAYOUT_ANIMATION_PHASES = ['enter', 'on-screen', 'exit'] as const;
+
 export function createFeatureMatchLayoutComposition(): BroadcastGraphicConfig {
 	return {
 		id: FEATURE_MATCH_LAYOUT_COMPOSITION_ID,
