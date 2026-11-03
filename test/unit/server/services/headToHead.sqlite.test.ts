@@ -86,9 +86,6 @@ beforeAll(async () => {
 			eventId,
 			name: 'Alice',
 			pronouns: 'she/her',
-			wins: 1,
-			losses: 0,
-			points: 3,
 			archetypeId: boros!.id,
 		},
 		{
@@ -106,7 +103,8 @@ beforeAll(async () => {
 	]).returning({ id: schema.players.id });
 	[alice, bob, carol, foreignPlayer] = ids.map(row => row.id) as [number, number, number, number];
 
-	// Alice's latest Round Standings are Round 5's, recorded before Round 2's.
+	// Alice holds no record of her own, so her latest Round Standings show:
+	// Round 5's, recorded before Round 2's.
 	await db.insert(schema.playerRoundStandings).values([
 		{
 			eventId,
