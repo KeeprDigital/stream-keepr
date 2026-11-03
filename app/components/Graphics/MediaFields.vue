@@ -3,6 +3,7 @@ import type { MediaFit } from '~~/shared/types/graphicItem';
 import type { MediaFieldsPatch, MediaFieldsValue } from '~/utils/mediaFields';
 import { MAX_GRAPHIC_MEDIA_PLAYBACK_RATE, MIN_GRAPHIC_MEDIA_PLAYBACK_RATE } from '~~/shared/types/graphics';
 import { MEDIA_FIT_OPTIONS } from '~/utils/mediaFields';
+import { OPACITY_INPUT } from '~/utils/opacityInput';
 
 /**
  * The one media fields control: Media Fit, opacity, focal position, playback
@@ -55,62 +56,56 @@ function updateFocal(axis: 'horizontal' | 'vertical', value: number | null | und
 				@update:model-value="emit('update', { fit: $event as MediaFit })"
 			/>
 		</UFormField>
-		<UFormField v-if="opacity" label="Opacity" :size="size">
-			<UIOpacityInput
-				:model-value="media.opacity"
-				:size="size"
-				class="w-full"
-				:disabled="disabled"
-				data-testid="media-opacity"
-				aria-label="Media opacity"
-				@update:model-value="emit('update', { opacity: $event ?? null })"
-			/>
-		</UFormField>
+		<GraphicsNumberField
+			v-if="opacity"
+			label="Opacity"
+			:size="size"
+			v-bind="OPACITY_INPUT"
+			:model-value="media.opacity"
+			:disabled="disabled"
+			data-testid="media-opacity"
+			aria-label="Media opacity"
+			@update:model-value="emit('update', { opacity: $event ?? null })"
+		/>
 		<template v-if="focal">
-			<UFormField label="Focal X" :size="size">
-				<UInputNumber
-					:model-value="focalPosition.horizontal"
-					:min="0"
-					:max="1"
-					:step="0.05"
-					:size="size"
-					class="w-full"
-					:disabled="disabled"
-					data-testid="media-focal-horizontal"
-					aria-label="Horizontal focal position"
-					@update:model-value="updateFocal('horizontal', $event)"
-				/>
-			</UFormField>
-			<UFormField label="Focal Y" :size="size">
-				<UInputNumber
-					:model-value="focalPosition.vertical"
-					:min="0"
-					:max="1"
-					:step="0.05"
-					:size="size"
-					class="w-full"
-					:disabled="disabled"
-					data-testid="media-focal-vertical"
-					aria-label="Vertical focal position"
-					@update:model-value="updateFocal('vertical', $event)"
-				/>
-			</UFormField>
+			<GraphicsNumberField
+				label="Focal X"
+				:size="size"
+				:model-value="focalPosition.horizontal"
+				:min="0"
+				:max="1"
+				:step="0.05"
+				:disabled="disabled"
+				data-testid="media-focal-horizontal"
+				aria-label="Horizontal focal position"
+				@update:model-value="updateFocal('horizontal', $event)"
+			/>
+			<GraphicsNumberField
+				label="Focal Y"
+				:size="size"
+				:model-value="focalPosition.vertical"
+				:min="0"
+				:max="1"
+				:step="0.05"
+				:disabled="disabled"
+				data-testid="media-focal-vertical"
+				aria-label="Vertical focal position"
+				@update:model-value="updateFocal('vertical', $event)"
+			/>
 		</template>
 		<template v-if="playback">
-			<UFormField label="Playback rate" :size="size">
-				<UInputNumber
-					:model-value="media.playbackRate"
-					:min="MIN_GRAPHIC_MEDIA_PLAYBACK_RATE"
-					:max="MAX_GRAPHIC_MEDIA_PLAYBACK_RATE"
-					:step="0.05"
-					:size="size"
-					class="w-full"
-					:disabled="disabled"
-					data-testid="media-playback-rate"
-					aria-label="Playback rate"
-					@update:model-value="emit('update', { playbackRate: $event ?? null })"
-				/>
-			</UFormField>
+			<GraphicsNumberField
+				label="Playback rate"
+				:size="size"
+				:model-value="media.playbackRate"
+				:min="MIN_GRAPHIC_MEDIA_PLAYBACK_RATE"
+				:max="MAX_GRAPHIC_MEDIA_PLAYBACK_RATE"
+				:step="0.05"
+				:disabled="disabled"
+				data-testid="media-playback-rate"
+				aria-label="Playback rate"
+				@update:model-value="emit('update', { playbackRate: $event ?? null })"
+			/>
 			<UFormField label="Loop" :size="size">
 				<USwitch
 					:model-value="media.loop"

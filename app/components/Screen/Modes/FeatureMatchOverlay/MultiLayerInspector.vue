@@ -72,23 +72,19 @@ function update(axis: keyof GraphicRect, value: number | null | undefined) {
 		</div>
 
 		<fieldset class="grid min-w-0 grid-cols-2 gap-2" :disabled="writable !== true">
-			<UFormField
+			<!-- A Mixed field has no one value to drag from, so only its input edits it. -->
+			<GraphicsNumberField
 				v-for="field in FIELDS"
 				:key="field.axis"
 				:label="field.label"
 				size="sm"
-			>
-				<UInputNumber
-					:model-value="shared(field.axis)"
-					:placeholder="shared(field.axis) === undefined ? 'Mixed' : undefined"
-					:min="field.axis === 'width' || field.axis === 'height' ? 1 : undefined"
-					size="sm"
-					class="w-full"
-					:aria-label="`${field.label} of every selected layer`"
-					:data-testid="`multi-layer-${field.axis}`"
-					@update:model-value="update(field.axis, $event)"
-				/>
-			</UFormField>
+				:model-value="shared(field.axis)"
+				:placeholder="shared(field.axis) === undefined ? 'Mixed' : undefined"
+				:min="field.axis === 'width' || field.axis === 'height' ? 1 : undefined"
+				:aria-label="`${field.label} of every selected layer`"
+				:data-testid="`multi-layer-${field.axis}`"
+				@update:model-value="update(field.axis, $event)"
+			/>
 		</fieldset>
 	</section>
 </template>

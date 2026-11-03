@@ -104,6 +104,7 @@ import { useInspectorSections } from '~/composables/ui/useInspectorSections';
 import { useCompositorEditing } from '~/modules/graphics/compositorEditing';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
+import { OPACITY_INPUT } from '~/utils/opacityInput';
 import GraphicsGeometryFields from '../GeometryFields.vue';
 import GraphicsInspectorSection from '../InspectorSection.vue';
 import GraphicsShapeGeometryFields from '../ShapeGeometryFields.vue';
@@ -1084,15 +1085,14 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						@update:model-value="updateInput(input.key, { default: String($event) })"
 					/>
 				</UFormField>
-				<UFormField v-else-if="input.type === 'number'" label="Default" size="xs">
-					<UInputNumber
-						:model-value="input.default ?? undefined"
-						class="w-full"
-						size="sm"
-						data-testid="graphic-input-default"
-						@update:model-value="updateInput(input.key, { default: $event ?? null })"
-					/>
-				</UFormField>
+				<GraphicsNumberField
+					v-else-if="input.type === 'number'"
+					label="Default"
+					size="xs"
+					:model-value="input.default ?? undefined"
+					data-testid="graphic-input-default"
+					@update:model-value="updateInput(input.key, { default: $event ?? null })"
+				/>
 				<UFormField v-else-if="input.type === 'toggle'" label="Default" size="xs">
 					<USwitch
 						:model-value="input.default"
@@ -1243,23 +1243,18 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				@update="editItem(patchGraphicItem, $event)"
 			>
 				<template #after-size>
-					<UFormField
+					<GraphicsNumberField
 						v-if="isCanvasPositioned"
 						label="Graphic Rotation"
 						size="sm"
 						class="w-1/2 pr-1"
-					>
-						<UInputNumber
-							:model-value="selectedItem.rotation ?? 0"
-							:min="-360"
-							:max="360"
-							size="sm"
-							class="w-full"
-							data-testid="graphic-item-rotation"
-							aria-label="Graphic Rotation"
-							@update:model-value="editItem(patchGraphicItem, { rotation: $event ?? 0 })"
-						/>
-					</UFormField>
+						:model-value="selectedItem.rotation ?? 0"
+						:min="-360"
+						:max="360"
+						data-testid="graphic-item-rotation"
+						aria-label="Graphic Rotation"
+						@update:model-value="editItem(patchGraphicItem, { rotation: $event ?? 0 })"
+					/>
 				</template>
 			</GraphicsGeometryFields>
 
@@ -1275,31 +1270,25 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							@update:model-value="editItem(patchGraphicGroupChildSizing, { mode: $event as GraphicGroupChildSizing['mode'] })"
 						/>
 					</UFormField>
-					<UFormField
+					<GraphicsNumberField
 						v-if="(selectedItem.sizing?.mode ?? 'fixed') === 'fixed'"
 						label="Fixed size"
 						size="sm"
-					>
-						<UInputNumber
-							:model-value="selectedItem.sizing?.size ?? selectedItem.width"
-							:min="0"
-							size="sm"
-							class="w-full"
-							aria-label="Fixed main axis size"
-							@update:model-value="editItem(patchGraphicGroupChildSizing, { size: $event ?? 0 })"
-						/>
-					</UFormField>
-					<UFormField v-else label="Fill weight" size="sm">
-						<UInputNumber
-							:model-value="selectedItem.sizing?.weight ?? 1"
-							:min="0"
-							:step="0.5"
-							size="sm"
-							class="w-full"
-							aria-label="Fill weight"
-							@update:model-value="editItem(patchGraphicGroupChildSizing, { weight: $event ?? 1 })"
-						/>
-					</UFormField>
+						:model-value="selectedItem.sizing?.size ?? selectedItem.width"
+						:min="0"
+						aria-label="Fixed main axis size"
+						@update:model-value="editItem(patchGraphicGroupChildSizing, { size: $event ?? 0 })"
+					/>
+					<GraphicsNumberField
+						v-else
+						label="Fill weight"
+						size="sm"
+						:model-value="selectedItem.sizing?.weight ?? 1"
+						:min="0"
+						:step="0.5"
+						aria-label="Fill weight"
+						@update:model-value="editItem(patchGraphicGroupChildSizing, { weight: $event ?? 1 })"
+					/>
 				</div>
 			</template>
 		</GraphicsInspectorSection>
@@ -1323,26 +1312,23 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						/>
 					</UFormField>
 					<div class="grid grid-cols-2 gap-2">
-						<UFormField label="Padding" size="sm">
-							<UInputNumber
-								:model-value="selectedGroup.padding"
-								:min="0"
-								size="sm"
-								class="w-full"
-								aria-label="Group padding"
-								@update:model-value="editItem(patchGraphicGroup, { padding: $event ?? 0 })"
-							/>
-						</UFormField>
-						<UFormField v-if="selectedGroup.arrangement !== 'canvas'" label="Gap" size="sm">
-							<UInputNumber
-								:model-value="selectedGroup.gap"
-								:min="0"
-								size="sm"
-								class="w-full"
-								aria-label="Group gap"
-								@update:model-value="editItem(patchGraphicGroup, { gap: $event ?? 0 })"
-							/>
-						</UFormField>
+						<GraphicsNumberField
+							label="Padding"
+							size="sm"
+							:model-value="selectedGroup.padding"
+							:min="0"
+							aria-label="Group padding"
+							@update:model-value="editItem(patchGraphicGroup, { padding: $event ?? 0 })"
+						/>
+						<GraphicsNumberField
+							v-if="selectedGroup.arrangement !== 'canvas'"
+							label="Gap"
+							size="sm"
+							:model-value="selectedGroup.gap"
+							:min="0"
+							aria-label="Group gap"
+							@update:model-value="editItem(patchGraphicGroup, { gap: $event ?? 0 })"
+						/>
 						<UFormField v-if="selectedGroup.arrangement !== 'canvas'" label="Align" size="sm">
 							<USelect
 								:model-value="selectedGroup.align"
@@ -1385,19 +1371,15 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						@bind="token => bindThemeToken('defaultChildSurfaceStyle', token)"
 						@detach="detachThemeToken('defaultChildSurfaceStyle')"
 					/>
-					<UFormField
+					<GraphicsNumberField
 						v-if="selectedGroup.defaultChildSurfaceStyle"
 						label="Child fill opacity"
 						size="sm"
-					>
-						<UIOpacityInput
-							:model-value="selectedGroup.defaultChildSurfaceStyle.fillOpacity"
-							size="sm"
-							class="w-full"
-							aria-label="Child fill opacity"
-							@update:model-value="editItem(patchGraphicGroupDefaultChildSurfaceStyle, { fillOpacity: $event ?? 1 })"
-						/>
-					</UFormField>
+						v-bind="OPACITY_INPUT"
+						:model-value="selectedGroup.defaultChildSurfaceStyle.fillOpacity"
+						aria-label="Child fill opacity"
+						@update:model-value="editItem(patchGraphicGroupDefaultChildSurfaceStyle, { fillOpacity: $event ?? 1 })"
+					/>
 					<UFormField
 						v-if="selectedGroup.defaultChildSurfaceStyle?.fill.type === 'solid'"
 						label="Child fill"
@@ -1457,18 +1439,16 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					/>
 				</UFormField>
 				<div class="grid grid-cols-2 gap-2">
-					<UFormField label="Duration (ms)" size="sm">
-						<UInputNumber
-							:model-value="selectedPlayerLife.lifeAnimationDurationMs"
-							:min="MIN_PLAYER_LIFE_ANIMATION_DURATION_MS"
-							:max="MAX_PLAYER_LIFE_ANIMATION_DURATION_MS"
-							size="sm"
-							class="w-full"
-							data-testid="player-life-animation-duration"
-							aria-label="Life change duration"
-							@update:model-value="editItem(patchPlayerLifeGraphicItem, { lifeAnimationDurationMs: $event ?? MIN_PLAYER_LIFE_ANIMATION_DURATION_MS })"
-						/>
-					</UFormField>
+					<GraphicsNumberField
+						label="Duration (ms)"
+						size="sm"
+						:model-value="selectedPlayerLife.lifeAnimationDurationMs"
+						:min="MIN_PLAYER_LIFE_ANIMATION_DURATION_MS"
+						:max="MAX_PLAYER_LIFE_ANIMATION_DURATION_MS"
+						data-testid="player-life-animation-duration"
+						aria-label="Life change duration"
+						@update:model-value="editItem(patchPlayerLifeGraphicItem, { lifeAnimationDurationMs: $event ?? MIN_PLAYER_LIFE_ANIMATION_DURATION_MS })"
+					/>
 					<!-- Tinted by a glow or slide change only; the others ignore it. -->
 					<UFormField label="Accent colour" size="sm">
 						<UIColorPicker
@@ -1512,36 +1492,30 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					</UFormField>
 				</div>
 				<div v-if="selectedGameWins.displayMode === 'boxes'" class="grid grid-cols-3 gap-2">
-					<UFormField label="Box width" size="sm">
-						<UInputNumber
-							:model-value="selectedGameWins.boxWidth"
-							:min="1"
-							size="sm"
-							class="w-full"
-							aria-label="Win box width"
-							@update:model-value="editItem(patchGameWinsGraphicItem, { boxWidth: Math.max(1, $event ?? 1) })"
-						/>
-					</UFormField>
-					<UFormField label="Box height" size="sm">
-						<UInputNumber
-							:model-value="selectedGameWins.boxHeight"
-							:min="1"
-							size="sm"
-							class="w-full"
-							aria-label="Win box height"
-							@update:model-value="editItem(patchGameWinsGraphicItem, { boxHeight: Math.max(1, $event ?? 1) })"
-						/>
-					</UFormField>
-					<UFormField label="Box gap" size="sm">
-						<UInputNumber
-							:model-value="selectedGameWins.boxGap"
-							:min="0"
-							size="sm"
-							class="w-full"
-							aria-label="Win box gap"
-							@update:model-value="editItem(patchGameWinsGraphicItem, { boxGap: $event ?? 0 })"
-						/>
-					</UFormField>
+					<GraphicsNumberField
+						label="Box width"
+						size="sm"
+						:model-value="selectedGameWins.boxWidth"
+						:min="1"
+						aria-label="Win box width"
+						@update:model-value="editItem(patchGameWinsGraphicItem, { boxWidth: Math.max(1, $event ?? 1) })"
+					/>
+					<GraphicsNumberField
+						label="Box height"
+						size="sm"
+						:model-value="selectedGameWins.boxHeight"
+						:min="1"
+						aria-label="Win box height"
+						@update:model-value="editItem(patchGameWinsGraphicItem, { boxHeight: Math.max(1, $event ?? 1) })"
+					/>
+					<GraphicsNumberField
+						label="Box gap"
+						size="sm"
+						:model-value="selectedGameWins.boxGap"
+						:min="0"
+						aria-label="Win box gap"
+						@update:model-value="editItem(patchGameWinsGraphicItem, { boxGap: $event ?? 0 })"
+					/>
 				</div>
 			</div>
 
@@ -1709,16 +1683,15 @@ function clearPlaceholderFontAsset(inputKey: string) {
 								@update:model-value="editItem(patchGraphicItem, { color: $event?.toString() || '#ffffff' })"
 							/>
 						</UFormField>
-						<UFormField label="Opacity" size="sm">
-							<UIOpacityInput
-								:model-value="selectedSocialNetworkIcon.opacity"
-								size="sm"
-								class="w-full"
-								data-testid="social-network-icon-opacity"
-								aria-label="Social network icon opacity"
-								@update:model-value="editItem(patchGraphicItem, { opacity: $event ?? 1 })"
-							/>
-						</UFormField>
+						<GraphicsNumberField
+							label="Opacity"
+							size="sm"
+							v-bind="OPACITY_INPUT"
+							:model-value="selectedSocialNetworkIcon.opacity"
+							data-testid="social-network-icon-opacity"
+							aria-label="Social network icon opacity"
+							@update:model-value="editItem(patchGraphicItem, { opacity: $event ?? 1 })"
+						/>
 					</div>
 				</div>
 			</template>
@@ -1876,22 +1849,17 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					/>
 				</UFormField>
 
-				<UFormField
+				<GraphicsNumberField
 					v-if="selectedTextOverflow.overflowPolicy === 'shrink'"
 					label="Minimum font size"
 					size="sm"
-				>
-					<UInputNumber
-						:model-value="selectedTextOverflow.minFontSize"
-						:min="MIN_GRAPHIC_FONT_SIZE"
-						:max="MAX_GRAPHIC_FONT_SIZE"
-						size="sm"
-						class="w-full"
-						data-testid="text-min-font-size"
-						aria-label="Minimum font size"
-						@update:model-value="editItem(patchGraphicTextOverflow, { minFontSize: $event ?? 1 })"
-					/>
-				</UFormField>
+					:model-value="selectedTextOverflow.minFontSize"
+					:min="MIN_GRAPHIC_FONT_SIZE"
+					:max="MAX_GRAPHIC_FONT_SIZE"
+					data-testid="text-min-font-size"
+					aria-label="Minimum font size"
+					@update:model-value="editItem(patchGraphicTextOverflow, { minFontSize: $event ?? 1 })"
+				/>
 			</template>
 
 			<template v-if="selectedTextItem">

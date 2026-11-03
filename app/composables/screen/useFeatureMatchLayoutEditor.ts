@@ -3,6 +3,7 @@ import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig
 import type { EditHistory } from '~/modules/feature-match-overlay/editHistory';
 import type { FeatureMatchLayoutEditorLayer, FeatureMatchLayoutEditorSelection } from '~/modules/feature-match-overlay/editorSelection';
 import type { LayerPosition } from '~/modules/feature-match-overlay/layerAlignment';
+import type { LayerPlace } from '~/modules/feature-match-overlay/layerDrag';
 import type { LayerSelection } from '~/modules/feature-match-overlay/layerSelection';
 import type { AlignEdge, DistributeAxis } from '~/modules/graphics/canvasAlignment';
 import {
@@ -19,6 +20,7 @@ import { randomUuid } from '~~/shared/utils/uuid';
 import { emptyEditHistory, recordEdit, redoEdit, undoEdit } from '~/modules/feature-match-overlay/editHistory';
 import { CANVAS_SELECTION, editorLayersFrame, editorSelectionKey, editorSelectionLabel, editorSelectionLayer } from '~/modules/feature-match-overlay/editorSelection';
 import { alignLayers, canAlignLayers, canDistributeLayers, distributeLayers } from '~/modules/feature-match-overlay/layerAlignment';
+import { dropLayer } from '~/modules/feature-match-overlay/layerDrag';
 import {
 	collapseLayerSelection,
 	extendLayerSelection,
@@ -135,14 +137,34 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		layerSelection.value = pruneLayerSelection(layout, layerSelection.value);
 	});
 
+	/**
+	 * An open gesture, such as a drag on a number field's label: its first edit
+	 * records the one undo step the whole gesture undoes as, however long it
+	 * pauses, and it coalesces with no edit before or after it.
+	 */
+	let gesture: { recorded: boolean } | null = null;
+
 	/** Record the current layout as an undo step, without writing anything. */
 	function checkpoint(edit: FeatureMatchLayoutEditOptions = {}) {
-		if (!writable.value)
+		if (!writable.value || gesture?.recorded)
 			return;
 		history.value = recordEdit(history.value, snapshot(), {
 			now: Date.now(),
-			key: edit.coalesce,
+			key: gesture
+				? undefined
+				: edit.coalesce,
 		});
+		if (gesture)
+			gesture.recorded = true;
+	}
+
+	/** Edits from here until `endGesture` undo as one step. */
+	function beginGesture() {
+		gesture = { recorded: false };
+	}
+
+	function endGesture() {
+		gesture = null;
 	}
 
 	/**
@@ -335,6 +357,16 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		}
 	}
 
+	/**
+	 * Place one layer in front of or behind another of its section, or into or out
+	 * of a Graphic Group, as one undo step: a dragged row's drop, or "Move to group"
+	 * (#741). The layer is then selected alone.
+	 */
+	function place(layer: FeatureMatchLayoutEditorLayer, where: LayerPlace) {
+		if (editLayout(layout => dropLayer(layout, layer, where)))
+			select(layer);
+	}
+
 	function layerConfig(target: FeatureMatchLayoutEditorSelection) {
 		return editorSelectionLayer(config.value.layout, target);
 	}
@@ -510,6 +542,8 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		canUndo,
 		canRedo,
 		checkpoint,
+		beginGesture,
+		endGesture,
 		discardHistory,
 		edit,
 		editFields,
@@ -522,6 +556,7 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		duplicate,
 		move,
 		moveToEdge,
+		place,
 		isVisible,
 		toggleVisible,
 		rename,
