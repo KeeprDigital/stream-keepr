@@ -313,6 +313,7 @@ mockNuxtImport('useStandingsModeData', () => () => {
 		isEmpty: computed(() => false),
 		headerText: computed(() => 'Standings'),
 		visibleColumns: computed(() => columns),
+		pageSize: computed(() => 8),
 		pageData: computed(() => [
 			{ id: 1, name: 'Climber', position: 1 },
 			{ id: 2, name: 'Faller', position: 2 },
@@ -332,6 +333,7 @@ mockNuxtImport('usePairingsModeData', () => () => ({
 	ready: computed(() => true),
 	isEmpty: computed(() => false),
 	headerText: computed(() => 'Pairings'),
+	pageSize: computed(() => 8),
 	pageData: computed(() => [
 		{
 			matchId: 1,
@@ -382,6 +384,7 @@ mockNuxtImport('usePlayerHistoryModeData', () => () => {
 			draws: 1,
 			position: 1,
 		})),
+		pageSize: computed(() => 8),
 		pageData: computed(() => ['win', 'loss', 'draw', 'pending'].map((outcome, index) => ({
 			id: index + 1,
 			roundName: `Round ${index + 1}`,
@@ -534,6 +537,7 @@ mockNuxtImport('useMetagameModeData', () => () => ({
 	ready: computed(() => true),
 	isEmpty: computed(() => false),
 	headerText: computed(() => 'Metagame'),
+	pageSize: computed(() => 8),
 	pageData: computed(() => [
 		{
 			id: 1,

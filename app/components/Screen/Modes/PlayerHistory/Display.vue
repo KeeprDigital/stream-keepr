@@ -4,7 +4,7 @@ import type { PlayerMatchHistoryEntry } from '~/composables/screen/usePlayerHist
 import { formatGameScore } from '~~/shared/utils/matchFromPlayerSide';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { config, error, ready, isEmpty, headerText, pageData, player, formatOutcome } = usePlayerHistoryModeData();
+const { config, error, ready, isEmpty, headerText, pageData, pageSize, player, formatOutcome } = usePlayerHistoryModeData();
 
 const columnWidths: Record<PlayerHistoryColumnKey, string> = {
 	round: 'minmax(10rem, 1fr)',
@@ -71,7 +71,7 @@ const inset = useScreenInset();
 const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef'), {
 	density: 'roomy',
 	prefix: 'history',
-	rowCount: () => config.value.rowsPerPage ?? pageData.value.length,
+	rowCount: () => pageSize.value ?? pageData.value.length,
 	insetY: inset,
 });
 

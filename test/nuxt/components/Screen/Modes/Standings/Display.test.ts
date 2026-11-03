@@ -57,6 +57,8 @@ mockNuxtImport('useStandingsModeData', () => () => ({
 	headerText: computed(() => 'Standings'),
 	visibleColumns: computed(() => config.value.columns.filter((column: any) => column.visible)),
 	pageData: computed(() => pageData.value),
+	// The page size field the mode's Page Rotation declares.
+	pageSize: computed(() => config.value.rowsPerPage),
 	formatCell: (player: any, key: string) => {
 		switch (key) {
 			case 'position':

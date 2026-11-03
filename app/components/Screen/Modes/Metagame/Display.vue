@@ -25,6 +25,7 @@ const {
 	isEmpty,
 	headerText,
 	pageData,
+	pageSize,
 	chartBars,
 	currentPage,
 	totalPages,
@@ -202,7 +203,7 @@ const gridStyle = computed(() => ({
 const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('rowsRef'), {
 	density: 'compact',
 	prefix: 'metagame',
-	rowCount: () => config.value.pageSize ?? pageData.value.length,
+	rowCount: () => pageSize.value ?? pageData.value.length,
 });
 
 const contentStyle = {

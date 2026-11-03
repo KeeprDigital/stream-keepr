@@ -50,6 +50,8 @@ mockNuxtImport('usePlayerHistoryModeData', () => () => ({
 	isEmpty: computed(() => isEmpty.value),
 	headerText: computed(() => headerText.value),
 	pageData: computed(() => pageData.value),
+	// The page size field the mode's Page Rotation declares.
+	pageSize: computed(() => config.value.rowsPerPage),
 	player: computed(() => player.value),
 	formatOutcome,
 }));
