@@ -49,7 +49,13 @@ export function phaseWriteModule() {
 	}
 
 	async function remove({ eventId, phaseId, originConnectionId }: RemovePhaseParams): Promise<void> {
-		const deleted = await phases.remove(phaseId, eventId);
+		const { deleted, clearedScreens } = await phases.remove(phaseId, eventId);
+
+		// Even for a Phase already gone: the release committed either way (ADR-0059).
+		// No origin, because the deleting client never received these Screens back.
+		for (const screen of clearedScreens)
+			await publication.screenUpdated({ eventId, entity: screen });
+
 		if (!deleted) {
 			throw createError({ statusCode: 404, message: 'Phase not found' });
 		}

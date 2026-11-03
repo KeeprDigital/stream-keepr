@@ -1,7 +1,9 @@
 import type { BatchItem } from 'drizzle-orm/batch';
+import type { DbScreen } from '~~/server/db/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { matches, phases, playerRoundStandings, rounds } from '~~/server/db/schema';
+import { buildReleaseScreenEventReferencesQuery } from '~~/server/services/screen';
 import { inJsonArray } from '~~/server/utils/db';
 
 /**
@@ -37,6 +39,8 @@ export interface ImportedStructureRemoval {
 	readOutcome: (batch: readonly unknown[], results: readonly unknown[]) => KeptImportedStructure & {
 		deletedPhaseIds: number[];
 		deletedRoundIds: number[];
+		/** The Screens released from a deleted Phase or Round, each a new version, to announce. */
+		clearedScreens: DbScreen[];
 	};
 }
 
@@ -53,7 +57,8 @@ export interface ImportedStructureRemoval {
  *    kept and released into manual structure: its Provenance is cleared;
  * 3. the other scoped Rounds are deleted;
  * 4. a scoped Phase still holding a Round (manual, or kept in step 2) is kept
- *    the same way, and the other scoped Phases are deleted.
+ *    the same way, and the other scoped Phases are deleted;
+ * 5. every Screen reference to a deleted Phase or Round is released (ADR-0059).
  *
  * Each step's predicate is evaluated when the batch runs, so a manual Round or
  * Match an operator added after the caller read the structure is still kept.
@@ -106,6 +111,7 @@ export function buildRemoveImportedStructureQueries(
 			.where(and(scopedPhases, sql`exists (select 1 from ${rounds} where ${rounds.phaseId} = ${phases.id})`))
 			.returning({ id: phases.id, name: phases.name }),
 		db.delete(phases).where(scopedPhases).returning({ id: phases.id }),
+		buildReleaseScreenEventReferencesQuery(eventId, ['phase', 'round']),
 	] as const;
 
 	const byId = <T extends { id: number }>(rows: T[]) => rows.toSorted((a, b) => a.id - b.id);
@@ -121,6 +127,7 @@ export function buildRemoveImportedStructureQueries(
 				deletedRoundIds: byId(results[offset + 3] as { id: number }[]).map(row => row.id),
 				keptPhases: byId(results[offset + 4] as KeptPhase[]),
 				deletedPhaseIds: byId(results[offset + 5] as { id: number }[]).map(row => row.id),
+				clearedScreens: results[offset + 6] as DbScreen[],
 			};
 		},
 	};

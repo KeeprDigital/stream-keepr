@@ -1,13 +1,13 @@
-import type { SQLWrapper } from 'drizzle-orm';
+import type { SQL, SQLWrapper } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbScreen, ScreenMode } from '~~/server/db/schema';
 import type { GraphicsAuthoringLeaseFence } from '~~/server/modules/graphics-authoring-lease';
 import type { PersistedScreenOutputAssetCapability } from '~~/server/modules/screen-output-assets/manager';
 import type { CreateScreenInput, UpdateScreenInput } from '~~/shared/api';
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
-import { screens } from '~~/server/db/schema';
+import { archetypes, phases, rounds, screens } from '~~/server/db/schema';
 import {
 	graphicsAuthoringLeaseConflict,
 	graphicsAuthoringLeaseFenceCondition,
@@ -18,6 +18,8 @@ import {
 	updateScreenThemeOverridesWithGraphicAssetReferences,
 } from '~~/server/modules/screen-graphic-asset-references';
 import { mapDeckSourceConflict, StateConflictError } from '~~/server/utils/errors';
+import { SCREEN_MODES } from '~~/shared/screenModes';
+import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import { isGraphicAssetReferencingScreenMode } from '~~/shared/utils/graphicsAssetReferences';
 
@@ -58,6 +60,59 @@ export function buildClearDeckSourceSlotsQuery(eventId: number, slotIds: number[
 			eq(screens.eventId, eventId),
 			sql`json_extract(${screens.modeConfigs}, '$.deck.deckSource.type') = 'featureMatchSlot'`,
 			inArray(sql`json_extract(${screens.modeConfigs}, '$.deck.deckSource.slotId')`, slotIds),
+		))
+		.returning();
+}
+
+/** The Event References a delete releases from its Screens (ADR-0059), and the table each names a row of. */
+const RELEASED_EVENT_REFERENCE_TABLES = {
+	phase: phases,
+	round: rounds,
+	archetype: archetypes,
+};
+
+export type ReleasedEventReferenceKind = keyof typeof RELEASED_EVENT_REFERENCE_TABLES;
+
+/**
+ * Removes every declared Event Reference of `kinds` (`eventReferences` in
+ * `shared/screenModes.ts`) naming a record the Event no longer holds, from each
+ * Screen in the Event, as a new Screen version (ADR-0059). Batch it after the
+ * delete, so it also releases what the delete cascaded away and what an
+ * imported structure removal decided to delete as it ran.
+ */
+export function buildReleaseScreenEventReferencesQuery(eventId: number, kinds: readonly ReleasedEventReferenceKind[]) {
+	const released = SCREEN_MODE_VALUES.flatMap(mode =>
+		Object.entries(SCREEN_MODES[mode].eventReferences).flatMap(([field, kind]) => {
+			if (!(kinds as readonly string[]).includes(kind))
+				return [];
+			const table = RELEASED_EVENT_REFERENCE_TABLES[kind as ReleasedEventReferenceKind];
+			const value = sql`json_extract(${screens.modeConfigs}, ${`$."${mode}".${field}`})`;
+			return [
+				{
+				// Unset is not missing: `NULL NOT IN` an empty set is true.
+					missing: sql`(${value} is not null and ${value} not in (select ${table.id} from ${table} where ${table.eventId} = ${eventId}))`,
+					// A merge patch's null removes the field, leaving it unset as an optional field is.
+					removal: JSON.stringify({
+						[mode]: { [field]: null },
+					}),
+				},
+			];
+		}));
+	if (released.length === 0)
+		throw new Error(`No Screen Mode declares an Event Reference of ${kinds.join(', ')}`);
+
+	return db
+		.update(screens)
+		.set({
+			modeConfigs: released.reduce<SQL>(
+				(configs, { missing, removal }) => sql`json_patch(${configs}, case when ${missing} then ${removal} else '{}' end)`,
+				sql`${screens.modeConfigs}`,
+			),
+			stateVersion: sql`${screens.stateVersion} + 1`,
+		})
+		.where(and(
+			eq(screens.eventId, eventId),
+			or(...released.map(({ missing }) => missing)),
 		))
 		.returning();
 }
