@@ -16,6 +16,7 @@ import {
 } from '~~/shared/modules/graphics';
 import { editorSelectionKey } from '~/modules/feature-match-overlay/editorSelection';
 import { layerDropAt, layerGroupMoves } from '~/modules/feature-match-overlay/layerDrag';
+import { LAYER_GROUP_REFUSAL_REASONS } from '~/modules/feature-match-overlay/layerGrouping';
 import { isLayerSelected } from '~/modules/feature-match-overlay/layerSelection';
 import { isSelectionToggle } from '~/modules/graphics/selection';
 
@@ -38,6 +39,9 @@ import { isSelectionToggle } from '~/modules/graphics/selection';
  * into a Graphic Group or out of one, as one undo step; Escape cancels, and a
  * drop that is refused says why (#741). The arrows and the row menu's "Move to
  * group" do the same from the keyboard.
+ *
+ * A selected row among several groups the selection, or says why it cannot, and
+ * a group's row ungroups it, as ⌘G and ⌘⇧G do (#920).
  *
  * Without the Graphics Authoring Lease the list still selects, and offers no
  * edit at all (#738).
@@ -214,6 +218,37 @@ function moveToGroupMenu(row: LayerRow): DropdownMenuItem[][] {
 	];
 }
 
+/** Group a selected row's selection, or ungroup a group's row (#920). */
+function groupingMenu(row: LayerRow): DropdownMenuItem[] {
+	if (severalSelected.value && isSelected(row)) {
+		const refusal = props.editor.groupRefusal.value;
+		return [
+			{
+				label: 'Group selection',
+				icon: 'i-lucide-group',
+				kbds: ['meta', 'g'],
+				disabled: refusal !== null,
+				description: refusal
+					? LAYER_GROUP_REFUSAL_REASONS[refusal]
+					: undefined,
+				onSelect: () => props.editor.group(),
+			},
+		];
+	}
+	const isGroup = row.depth === 0
+		&& props.layout.composition.items.some(item => item.id === row.target.itemId && item.type === 'group');
+	return isGroup && row.target.type === 'item'
+		? [
+				{
+					label: 'Ungroup',
+					icon: 'i-lucide-ungroup',
+					kbds: ['meta', 'shift', 'g'],
+					onSelect: () => props.editor.ungroup(row.target),
+				},
+			]
+		: [];
+}
+
 function rowMenu(row: LayerRow): DropdownMenuItem[][] {
 	const target = rowTarget(row);
 	return [
@@ -224,6 +259,7 @@ function rowMenu(row: LayerRow): DropdownMenuItem[][] {
 				kbds: ['meta', 'd'],
 				onSelect: () => props.editor.duplicate(target),
 			},
+			...groupingMenu(row),
 		],
 		[
 			{

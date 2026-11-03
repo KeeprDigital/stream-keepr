@@ -16,6 +16,7 @@ import {
 	fromHostSelectionTarget,
 	hostSelectionTarget,
 } from '~/modules/feature-match-overlay/editorSelection';
+import { LAYER_GROUP_REFUSAL_REASONS } from '~/modules/feature-match-overlay/layerGrouping';
 import { isTypingTarget } from '~/utils/typingTarget';
 import FeatureMatchOverlayCompositorInspector from './CompositorInspector.vue';
 import FeatureMatchOverlayLayerInspector from './LayerInspector.vue';
@@ -265,6 +266,14 @@ const SHORTCUTS = [
 		label: 'Hide or show',
 	},
 	{
+		keys: ['⌘', 'G'],
+		label: 'Group the selected layers',
+	},
+	{
+		keys: ['⌘', '⇧', 'G'],
+		label: 'Ungroup the selected group',
+	},
+	{
 		keys: ['F2'],
 		label: 'Rename the focused layer (or double-click it)',
 	},
@@ -313,6 +322,20 @@ const NUDGE: Record<string, { x: number; y: number }> = {
 	ArrowDown: { x: 0, y: 1 },
 };
 
+/** ⌘G: group the selection, or say why it cannot be grouped (#920, E8). */
+function groupSelection() {
+	const refusal = editor.groupRefusal.value;
+	if (!refusal) {
+		editor.group();
+		return;
+	}
+	toast.add({
+		title: 'Can\'t group these layers',
+		description: LAYER_GROUP_REFUSAL_REASONS[refusal],
+		color: 'warning',
+	});
+}
+
 function handleKeydown(event: KeyboardEvent) {
 	if (event.defaultPrevented || isTypingTarget(event.target) || pendingPreset.value || templatesOpen.value)
 		return;
@@ -349,6 +372,12 @@ function handleKeydown(event: KeyboardEvent) {
 	}
 	else if (mod && event.shiftKey && key === 'h') {
 		editor.toggleVisible();
+	}
+	else if (mod && event.shiftKey && key === 'g') {
+		editor.ungroup();
+	}
+	else if (mod && key === 'g' && layers.value.length > 0) {
+		groupSelection();
 	}
 	else if (!mod && (event.key === 'Delete' || event.key === 'Backspace')) {
 		editor.remove();
@@ -597,7 +626,9 @@ useEventListener(import.meta.client
 					:layout="config.layout"
 					:layers="layers"
 					:writable="writable"
+					:group-refusal="editor.groupRefusal.value"
 					@update="editor.setLayersGeometry"
+					@group="editor.group()"
 				/>
 				<FeatureMatchOverlayCompositorInspector
 					v-else-if="selection.type === 'item'"

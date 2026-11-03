@@ -10,14 +10,17 @@ import {
 	deleteGraphicItem,
 	duplicateGraphicItem,
 	findGraphicItem,
+	groupGraphicItems,
 	moveGraphicItem,
 	moveGraphicItemToEdge,
 	patchGraphicItem,
+	ungroupGraphicGroup,
 } from '~~/shared/modules/graphics';
 import { randomUuid } from '~~/shared/utils/uuid';
 import { emptyEditHistory, recordEdit, redoEdit, undoEdit } from '~/modules/feature-match-overlay/editHistory';
 import { CANVAS_SELECTION, editorLayersFrame, editorSelectionKey, editorSelectionLabel, editorSelectionLayer } from '~/modules/feature-match-overlay/editorSelection';
 import { dropLayer } from '~/modules/feature-match-overlay/layerDrag';
+import { layerGroupRefusal } from '~/modules/feature-match-overlay/layerGrouping';
 import {
 	collapseLayerSelection,
 	extendLayerSelection,
@@ -344,6 +347,50 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 			select(layer);
 	}
 
+	/** Why ⌘G cannot group the selected layers, or null when it can (#920). */
+	const groupRefusal = computed(() => layerGroupRefusal(config.value.layout, layers.value));
+
+	/**
+	 * Wrap the selected Graphic Items in a new canvas Graphic Group, drawn where
+	 * they were, as one undo step (#920, E11); the group is then selected alone.
+	 */
+	function group() {
+		if (groupRefusal.value)
+			return;
+		const itemId = randomUuid();
+		const itemIds = layers.value.map(layer => layer.itemId);
+		if (editComposition(composition => groupGraphicItems(composition, itemIds, { id: itemId }).graphic))
+			select({ type: 'item', itemId });
+	}
+
+	/** Whether the one selected layer is a Graphic Group ⌘⇧G can ungroup. */
+	const canUngroup = computed(() => {
+		const current = selection.value;
+		return current.type === 'item'
+			&& config.value.layout.composition.items.some(item => item.id === current.itemId && item.type === 'group');
+	});
+
+	/**
+	 * Restore a Graphic Group's children, or the selected group's, as top-level
+	 * Graphic Items drawn where they were, as one undo step (#920, E12); they are
+	 * then selected.
+	 */
+	function ungroup(target?: FeatureMatchLayoutEditorSelection) {
+		const current = target ?? selection.value;
+		if (current.type !== 'item')
+			return;
+		let itemIds: string[] = [];
+		const ungrouped = editComposition((composition) => {
+			const result = ungroupGraphicGroup(composition, current.itemId);
+			itemIds = result.itemIds;
+			return result.graphic;
+		});
+		if (ungrouped) {
+			const children = itemIds.map(itemId => ({ type: 'item' as const, itemId }));
+			layerSelection.value = { layers: children, anchor: children.at(-1) ?? null };
+		}
+	}
+
 	function layerConfig(target: FeatureMatchLayoutEditorSelection) {
 		return editorSelectionLayer(config.value.layout, target);
 	}
@@ -497,6 +544,10 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		move,
 		moveToEdge,
 		place,
+		groupRefusal,
+		group,
+		canUngroup,
+		ungroup,
 		isVisible,
 		toggleVisible,
 		rename,

@@ -1,5 +1,6 @@
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchLayoutEditorLayer } from '~/modules/feature-match-overlay/editorSelection';
+import type { LayerGroupRefusal } from '~/modules/feature-match-overlay/layerGrouping';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
@@ -17,10 +18,15 @@ const SELECTED: FeatureMatchLayoutEditorLayer[] = [
 	{ type: 'item', itemId: 'player1-game-wins' },
 ];
 
-function mountPanel({ writable = true } = {}) {
+function mountPanel({ writable = true, groupRefusal = null as LayerGroupRefusal | null } = {}) {
 	const layout: FeatureMatchLayoutConfig = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG).layout;
 	return mount(MultiLayerInspector, {
-		props: { layout, layers: SELECTED, writable },
+		props: {
+			layout,
+			layers: SELECTED,
+			writable,
+			groupRefusal,
+		},
 		global: { stubs: nuxtUiStubs },
 	});
 }
@@ -69,5 +75,42 @@ describe('featureMatchOverlayMultiLayerInspector', () => {
 
 	it('edits nothing without the lease', () => {
 		expect(mountPanel({ writable: false }).get('fieldset').attributes('disabled')).toBeDefined();
+	});
+
+	// E8: a selection ⌘G cannot group says why beside the disabled control (#920).
+	it.each([
+		[
+			'groups a selection it can',
+			{ groupRefusal: null },
+			false,
+			'',
+			[[]],
+		],
+		[
+			'says why a Source Item keeps it from grouping',
+			{ groupRefusal: 'source-item' as const },
+			true,
+			'Source Items can\'t be grouped',
+			undefined,
+		],
+		[
+			'groups nothing without the lease',
+			{ writable: false, groupRefusal: null },
+			true,
+			'',
+			undefined,
+		],
+	])('%s', async (_case, options, disabled, reason, emitted) => {
+		const wrapper = mountPanel(options);
+		const button = wrapper.get('[data-testid="multi-layer-group"]');
+		const refusal = wrapper.find('[data-testid="multi-layer-group-refusal"]');
+
+		await button.trigger('click');
+
+		expect(button.attributes('disabled') !== undefined).toBe(disabled);
+		expect(refusal.exists()
+			? refusal.text()
+			: '').toBe(reason);
+		expect(wrapper.emitted('group')).toEqual(emitted);
 	});
 });

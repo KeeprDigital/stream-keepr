@@ -22,6 +22,7 @@ import type {
 	GraphicOnScreenAnimationRecipe,
 	GraphicOutline,
 	GraphicPlaceholderStyle,
+	GraphicRect,
 	GraphicRevealChannel,
 	GraphicScaleChannel,
 	GraphicSlideChannel,
@@ -1190,7 +1191,8 @@ function rebaseGraphicItem<T extends GraphicItemConfig>(item: T, group: GraphicG
 	const landed = direction === 'into'
 		? { x: turned.x - origin.x, y: turned.y - origin.y }
 		: turned;
-	const rotation = roundPlacement((item.rotation ?? 0) + sign * groupRotation);
+	// Within a whole turn either way, as a stored Graphic Rotation must be.
+	const rotation = roundPlacement(((item.rotation ?? 0) + sign * groupRotation) % 360);
 	const { rotation: _rotation, ...rest } = item;
 	return {
 		...rest,
@@ -1253,6 +1255,278 @@ export function placeGraphicItem(
 		...group,
 		children: insertAt(group.children, placement.index, child),
 	});
+}
+
+/** Why these Graphic Items cannot be grouped together. */
+export type GraphicItemsGroupRefusal
+	= | 'too-few'
+		/** Graphic Groups do not nest (E9). */
+		| 'group-into-group'
+		/** Only top-level Graphic Items are grouped; a child already has its group. */
+		| 'group-child';
+
+/** Why these Graphic Items cannot be wrapped in a new Graphic Group, or null when they can. Unknown ids are ignored. */
+export function graphicItemsGroupRefusal(graphic: BroadcastGraphicConfig, itemIds: readonly string[]): GraphicItemsGroupRefusal | null {
+	const locations = [
+		...new Set(itemIds),
+	].flatMap((itemId) => {
+		const location = findGraphicItem(graphic, itemId);
+		return location
+			? [location]
+			: [];
+	});
+	if (locations.length < 2)
+		return 'too-few';
+	if (locations.some(location => location.group))
+		return 'group-child';
+	return locations.some(location => location.item.type === 'group')
+		? 'group-into-group'
+		: null;
+}
+
+/** The axis-aligned box a Graphic Item draws on its container once turned about its Graphic Anchor Point. */
+function drawnBounds(item: GraphicItemConfig): GraphicRect {
+	if (!isTurnedRotation(item.rotation)) {
+		return {
+			x: item.x,
+			y: item.y,
+			width: item.width,
+			height: item.height,
+		};
+	}
+	const anchor = resolveGraphicAnchorPoint(item.anchor);
+	const pivot = { x: item.x + item.width * anchor.x, y: item.y + item.height * anchor.y };
+	const corners = [
+		[0, 0],
+		[1, 0],
+		[0, 1],
+		[1, 1],
+	].map(([x, y]) => turnPoint({ x: item.x + item.width * x!, y: item.y + item.height * y! }, pivot, item.rotation!));
+	const left = roundPlacement(Math.min(...corners.map(corner => corner.x)));
+	const top = roundPlacement(Math.min(...corners.map(corner => corner.y)));
+	return {
+		x: left,
+		y: top,
+		width: roundPlacement(Math.max(...corners.map(corner => corner.x))) - left,
+		height: roundPlacement(Math.max(...corners.map(corner => corner.y))) - top,
+	};
+}
+
+export interface GroupGraphicItemsOptions {
+	/** The new Graphic Group's id. */
+	id: string;
+}
+
+/**
+ * Wrap top-level Graphic Items in a new canvas-arranged Graphic Group (#920, E11).
+ *
+ * The group's box is the union of what its members draw, a turned member by the
+ * box it turns into, and each member is rebased into it (`placeGraphicItem`), so
+ * nothing moves on screen. The members keep their back-to-front order, and the
+ * group takes the frontmost member's slot in the Graphic Layer Order. It paints
+ * no surface and clips nothing, so it changes nothing that is drawn. Answers the
+ * same graphic when refused (`graphicItemsGroupRefusal`).
+ */
+export function groupGraphicItems(
+	graphic: BroadcastGraphicConfig,
+	itemIds: readonly string[],
+	options: GroupGraphicItemsOptions,
+): AddGraphicItemResult {
+	if (graphicItemsGroupRefusal(graphic, itemIds))
+		return { graphic, itemId: '' };
+
+	const ids = new Set(itemIds);
+	const members = graphic.items.filter(item => ids.has(item.id));
+	const boxes = members.map(drawnBounds);
+	const left = Math.min(...boxes.map(box => box.x));
+	const top = Math.min(...boxes.map(box => box.y));
+	const bounds = {
+		x: left,
+		y: top,
+		width: roundPlacement(Math.max(...boxes.map(box => box.x + box.width)) - left),
+		height: roundPlacement(Math.max(...boxes.map(box => box.y + box.height)) - top),
+	};
+	const group: GraphicGroupItemConfig = {
+		...bindNewGraphicItem(getGraphicItemDefinition('group').createDefault({
+			id: options.id,
+			label: nextSequentialName(graphicItemKindLabel('group'), usedLabels(graphic)),
+			canvasWidth: bounds.width,
+			canvasHeight: bounds.height,
+		}) as GraphicGroupItemConfig),
+		...bounds,
+		arrangement: 'canvas',
+	};
+
+	const frontmost = graphic.items.findIndex(item => item.id === members.at(-1)!.id);
+	const withGroup = {
+		...graphic,
+		items: insertAt(graphic.items, frontmost + 1, group),
+	};
+	return {
+		graphic: members.reduce((next, member, index) => placeGraphicItem(next, member.id, {
+			groupId: group.id,
+			index,
+		}), withGroup),
+		itemId: group.id,
+	};
+}
+
+/**
+ * A Graphic Group child carrying what it inherited from its group: the group's
+ * local style default where the child paints a surface but holds none of its own
+ * (bound to the group's Theme token when the default is), and the group's hiding.
+ */
+function bakeInheritedStyle(group: GraphicGroupItemConfig, child: GraphicGroupChildConfig): GraphicGroupChildConfig {
+	let baked: GraphicItemConfig = group.visible
+		? child
+		: { ...child, visible: false };
+	const inherited = group.defaultChildSurfaceStyle;
+	if (inherited && ownsGraphicSurfaceStyle(baked, 'surfaceStyle') && baked.surfaceStyle === undefined) {
+		const binding = group.themeBindings?.defaultChildSurfaceStyle;
+		baked = {
+			...baked,
+			// A JSON copy: the style is stored configuration, and may arrive as a reactive proxy.
+			surfaceStyle: JSON.parse(JSON.stringify(inherited)) as GraphicSurfaceStyle,
+			...(binding
+				? {
+						themeBindings: { ...baked.themeBindings, surfaceStyle: binding },
+					}
+				: {}),
+		} as GraphicItemConfig;
+	}
+	return baked as GraphicGroupChildConfig;
+}
+
+/**
+ * A row or column group's children where it lays them out, as canvas children of
+ * its padded box: the flex layout the compositor renders (`stackedPlacement`). A
+ * fixed child takes its size and a filling one shares what is left by weight; the
+ * group's justify places them along it and its align across. A hidden child takes
+ * no space and keeps its stored corner. No child turns in a row or column, so none
+ * keeps a rotation, and a child laid out to nothing keeps a pixel, the least a
+ * stored size may be.
+ */
+function laidOutOnCanvas(group: GraphicGroupItemConfig, children: readonly GraphicGroupChildConfig[]): GraphicGroupChildConfig[] {
+	const isRow = group.arrangement === 'row';
+	const padding = Math.max(0, group.padding);
+	const gap = Math.max(0, group.gap);
+	const mainSpace = Math.max(0, (isRow ? group.width : group.height) - 2 * padding);
+	const crossSpace = Math.max(0, (isRow ? group.height : group.width) - 2 * padding);
+	const shown = children.filter(child => child.visible);
+	const flexes = shown.map((child) => {
+		const sizing = child.sizing ?? {
+			mode: 'fixed' as const,
+			size: isRow ? child.width : child.height,
+			weight: 1,
+		};
+		return sizing.mode === 'fixed'
+			? {
+					basis: Math.max(0, sizing.size),
+					grow: 0,
+				}
+			: {
+					basis: 0,
+					grow: Math.max(0, sizing.weight),
+				};
+	});
+	const gaps = gap * Math.max(0, shown.length - 1);
+	const free = mainSpace - gaps - flexes.reduce((sum, flex) => sum + flex.basis, 0);
+	const growth = flexes.reduce((sum, flex) => sum + flex.grow, 0);
+	// Flex factors summing below one share only that fraction of the free space.
+	const extents = flexes.map(flex => flex.basis + (free > 0 && growth > 0
+		? free * flex.grow / Math.max(1, growth)
+		: 0));
+	const left = mainSpace - gaps - extents.reduce((sum, extent) => sum + extent, 0);
+	const spread = group.justify === 'space-between' && left > 0 && shown.length > 1;
+	let main = group.justify === 'end'
+		? left
+		: group.justify === 'center'
+			? left / 2
+			: 0;
+	const laidOut = new Map(shown.map((child, index) => {
+		const extent = extents[index]!;
+		const crossExtent = group.align === 'stretch'
+			? crossSpace
+			: isRow ? child.height : child.width;
+		const cross = group.align === 'end'
+			? crossSpace - crossExtent
+			: group.align === 'center'
+				? (crossSpace - crossExtent) / 2
+				: 0;
+		const box = isRow
+			? {
+					x: main,
+					y: cross,
+					width: extent,
+					height: crossExtent,
+				}
+			: {
+					x: cross,
+					y: main,
+					width: crossExtent,
+					height: extent,
+				};
+		main += extent + gap + (spread
+			? left / (shown.length - 1)
+			: 0);
+		return [child.id, box] as const;
+	}));
+
+	return children.map((child) => {
+		const { rotation: _rotation, sizing: _sizing, ...upright } = child;
+		const box = laidOut.get(child.id);
+		return (box
+			? {
+					...upright,
+					x: roundPlacement(box.x),
+					y: roundPlacement(box.y),
+					width: Math.max(1, roundPlacement(box.width)),
+					height: Math.max(1, roundPlacement(box.height)),
+				}
+			: upright) as GraphicGroupChildConfig;
+	});
+}
+
+export interface UngroupGraphicGroupResult {
+	graphic: BroadcastGraphicConfig;
+	/** The former children, back to front; none when refused. */
+	itemIds: string[];
+}
+
+/**
+ * Restore a Graphic Group's children as top-level Graphic Items (#920, E12).
+ *
+ * Each child is rebased to canvas space where its group drew it, a row or column
+ * child from where its group laid it out (`laidOutOnCanvas`), so nothing moves on
+ * screen; they keep their order, in the group's slot in the Graphic Layer Order.
+ * What a child inherited is baked into it (`bakeInheritedStyle`). The group's
+ * clipping, animation and stagger, and its own surface, go with it. Answers the
+ * same graphic, and no ids, for anything but a Graphic Group, and for a Social
+ * Profile Projection's Presentation Group, which cannot be deleted either.
+ */
+export function ungroupGraphicGroup(graphic: BroadcastGraphicConfig, groupId: string): UngroupGraphicGroupResult {
+	const slot = graphic.items.findIndex(item => item.id === groupId);
+	const group = graphic.items[slot];
+	if (
+		group?.type !== 'group'
+		|| (graphic.socialProfileProjections ?? []).some(projection => projection.presentationGroupId === groupId)
+	) {
+		return { graphic, itemIds: [] };
+	}
+
+	const baked = group.children.map(child => bakeInheritedStyle(group, child));
+	const children = group.arrangement === 'canvas'
+		? baked
+		: laidOutOnCanvas(group, baked);
+	const opened = replaceGraphicItem(graphic, { ...group, arrangement: 'canvas', children });
+	const placed = children.reduce((next, child, index) => placeGraphicItem(next, child.id, {
+		groupId: null,
+		index: slot + index,
+	}), opened);
+	return {
+		graphic: deleteGraphicItem(placed, groupId),
+		itemIds: children.map(child => child.id),
+	};
 }
 
 /** How far a duplicate is offset from its original, so it reads as a second item. */

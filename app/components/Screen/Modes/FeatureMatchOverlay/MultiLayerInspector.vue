@@ -2,7 +2,9 @@
 import type { GraphicRect } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchLayoutEditorLayer } from '~/modules/feature-match-overlay/editorSelection';
+import type { LayerGroupRefusal } from '~/modules/feature-match-overlay/layerGrouping';
 import { editorSelectionLayer } from '~/modules/feature-match-overlay/editorSelection';
+import { LAYER_GROUP_REFUSAL_REASONS } from '~/modules/feature-match-overlay/layerGrouping';
 
 /**
  * The property panel with several layers selected (#740): how many, and
@@ -13,16 +15,22 @@ import { editorSelectionLayer } from '~/modules/feature-match-overlay/editorSele
  * top-left rectangle in pixels, as its own panel stores it: a group child's
  * position is within its group. Nothing kind-specific is offered, since the
  * selection can mix Source Items and Graphic Items of any kind.
+ *
+ * Group wraps the selection in a Graphic Group, as ⌘G does, and a selection it
+ * cannot group says why beside the disabled control (#920).
  */
 const props = defineProps<{
 	layout: FeatureMatchLayoutConfig;
 	layers: readonly FeatureMatchLayoutEditorLayer[];
 	/** Whether this session holds the Graphics Authoring Lease; read-only otherwise (#738). */
 	writable?: boolean;
+	/** Why the selection cannot be grouped, or null when it can. */
+	groupRefusal?: LayerGroupRefusal | null;
 }>();
 
 const emit = defineEmits<{
 	update: [patch: Partial<GraphicRect>];
+	group: [];
 }>();
 
 const FIELDS = [
@@ -90,5 +98,26 @@ function update(axis: keyof GraphicRect, value: number | null | undefined) {
 				/>
 			</UFormField>
 		</fieldset>
+
+		<div class="mt-3 border-t border-default/70 pt-3">
+			<UButton
+				label="Group"
+				icon="i-lucide-group"
+				size="sm"
+				color="neutral"
+				variant="outline"
+				:disabled="writable !== true || !!groupRefusal"
+				aria-keyshortcuts="Meta+G"
+				data-testid="multi-layer-group"
+				@click="emit('group')"
+			/>
+			<p
+				v-if="groupRefusal"
+				class="mt-1.5 text-xs text-muted"
+				data-testid="multi-layer-group-refusal"
+			>
+				{{ LAYER_GROUP_REFUSAL_REASONS[groupRefusal] }}
+			</p>
+		</div>
 	</section>
 </template>

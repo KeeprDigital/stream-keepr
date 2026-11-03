@@ -278,3 +278,99 @@ describe('useFeatureMatchLayoutEditor with several layers selected', () => {
 		expect(editor.layers.value).toEqual([SOURCE, ITEM]);
 	});
 });
+
+/** ⌘G and ⌘⇧G, each one undo step that only a leaseholder writes (#920). */
+describe('useFeatureMatchLayoutEditor grouping and ungrouping', () => {
+	const WINS = [
+		ITEM,
+		{ type: 'item', itemId: 'player2-game-wins' },
+	] as const;
+	const TOP_BAR = { type: 'item', itemId: 'top-bar' } as const;
+
+	function topLevelIds(config: ReturnType<typeof editorFor>['config']) {
+		return config.value.layout.composition.items.map(item => item.id);
+	}
+
+	function selectWins(editor: FeatureMatchLayoutEditor) {
+		editor.select(WINS[0]);
+		editor.toggleSelect(WINS[1]);
+	}
+
+	it('groups the selected Graphic Items as one undo step, and selects the new group', () => {
+		const { editor, config, writes } = editorFor(true);
+		selectWins(editor);
+		const before = topLevelIds(config);
+
+		editor.group();
+
+		expect(writes).toHaveLength(1);
+		const created = config.value.layout.composition.items.find(item => !before.includes(item.id));
+		expect(created?.type === 'group' && created.children.map(child => child.id)).toEqual(['player1-game-wins', 'player2-game-wins']);
+		expect(editor.layers.value).toEqual([
+			{ type: 'item', itemId: created!.id },
+		]);
+		editor.undo();
+		expect(topLevelIds(config)).toEqual(before);
+	});
+
+	it('ungroups the selected group as one undo step, and selects its former children', () => {
+		const { editor, config, writes } = editorFor(true);
+		editor.select(TOP_BAR);
+		const before = topLevelIds(config);
+
+		editor.ungroup();
+
+		expect(writes).toHaveLength(1);
+		expect(topLevelIds(config)).not.toContain('top-bar');
+		expect(editor.layers.value.map(layer => layer.itemId)).toContain('top-name-record');
+		editor.undo();
+		expect(topLevelIds(config)).toEqual(before);
+	});
+
+	it.each<[string, boolean, (editor: FeatureMatchLayoutEditor) => void, string | null]>([
+		[
+			'grouping a selection holding a Source Item',
+			true,
+			(editor) => {
+				editor.toggleSelect(WINS[0]);
+				editor.toggleSelect(WINS[1]);
+				editor.group();
+			},
+			'source-item',
+		],
+		[
+			'grouping without the lease',
+			false,
+			(editor) => {
+				selectWins(editor);
+				editor.group();
+			},
+			null,
+		],
+		[
+			'ungrouping without the lease',
+			false,
+			(editor) => {
+				editor.select(TOP_BAR);
+				editor.ungroup();
+			},
+			'too-few',
+		],
+		[
+			'ungrouping a layer that is not a group',
+			true,
+			(editor) => {
+				editor.select(ITEM);
+				editor.ungroup();
+			},
+			'too-few',
+		],
+	])('writes nothing %s', (_, writable, verb, refusal) => {
+		const { editor, writes } = editorFor(writable);
+
+		verb(editor);
+
+		expect(editor.groupRefusal.value).toBe(refusal);
+		expect(writes).toEqual([]);
+	});
+});
