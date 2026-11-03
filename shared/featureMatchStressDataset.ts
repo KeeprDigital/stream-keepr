@@ -7,7 +7,7 @@ import { featureMatchSampleDataset } from './featureMatchSampleDataset';
 import { formatOpColors, opPrintingImageUrl } from './utils/card/op';
 
 /**
- * The Feature Match Stress Dataset (#743): one fixed set of the longest
+ * The Feature Match Stress Dataset: one fixed set of the longest
  * plausible Feature Match values per Card Game, beside the Feature Match Sample
  * Dataset. Only the editor's stress toggle resolves a layout against it, over a
  * bound Feature Match Slot's live data too, and only in the preview; nothing
@@ -15,7 +15,7 @@ import { formatOpColors, opPrintingImageUrl } from './utils/card/op';
  *
  * The sample is typical so a preview looks like a show; this one is the widest
  * a show will plausibly hold, so overflow shows up while authoring rather than
- * on show day. The values are the list approved on #743 (E17).
+ * on show day (ADR-0060). The values are the list approved on #743.
  */
 
 /** An Untimed Label of words at the schema's maximum, so it wraps as a real one would. */
@@ -159,20 +159,22 @@ export interface FeatureMatchStressOptions {
 	untimed: boolean;
 }
 
+const DATASETS: Readonly<Record<Game, (clockDisplayTime: string) => FeatureMatchSample>> = {
+	mtg: clockDisplayTime => ({
+		game: 'mtg',
+		tokenValues: MTG_TOKEN_VALUES,
+		context: mtgContext(clockDisplayTime),
+	}),
+	op: clockDisplayTime => ({
+		game: 'op',
+		tokenValues: OP_TOKEN_VALUES,
+		context: opContext(clockDisplayTime),
+	}),
+};
+
 /** The Feature Match Stress Dataset of an Event played in `game`. */
 export function featureMatchStressDataset(game: Game, { untimed }: FeatureMatchStressOptions): FeatureMatchSample {
-	const clock = untimed
+	return DATASETS[game](untimed
 		? STRESS_UNTIMED_LABEL
-		: STRESS_CLOCK;
-	return game === 'op'
-		? {
-				game,
-				tokenValues: OP_TOKEN_VALUES,
-				context: opContext(clock),
-			}
-		: {
-				game,
-				tokenValues: MTG_TOKEN_VALUES,
-				context: mtgContext(clock),
-			};
+		: STRESS_CLOCK);
 }

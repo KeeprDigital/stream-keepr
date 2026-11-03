@@ -278,7 +278,7 @@ describe('feature Match Overlay preview aside — its preview frame', () => {
 		expect(outputUrls.some(url => /embed=preview|guides=1|safe=1/.test(url))).toBe(false);
 	});
 
-	// The stress toggle is editor state: it rides the preview's URL and is never written (#743).
+	// The stress toggle is editor state: it rides the preview's URL and is never written.
 	it('asks its own frame for the Feature Match Stress Dataset while toggled on, and no output URL for it', async () => {
 		const wrapper = mountAside();
 		const toggle = () => wrapper.get('[data-testid="preview-stress-dataset"]');

@@ -9,6 +9,7 @@ import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES, featureMatchSampleDataset } from '~~
 import { featureMatchStressDataset } from '~~/shared/featureMatchStressDataset';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { clock, text } from '~~/test/helpers/graphicsComposition';
 import { LUFFY } from '~~/test/helpers/opCards';
 import Display from '~/components/Screen/Modes/FeatureMatchOverlay/Display.vue';
 import { GRAPHICS_PREVIEW_READY_MESSAGE } from '~/modules/graphics/previewMessages';
@@ -822,7 +823,7 @@ describe('featureMatchOverlayDisplay', () => {
 
 	/**
 	 * The editor's stress toggle resolves the layout against the Feature Match
-	 * Stress Dataset, over a bound Slot's live data too (#743, E18).
+	 * Stress Dataset, over a bound Slot's live data too.
 	 */
 	describe('the Feature Match Stress Dataset', () => {
 		afterEach(() => {
@@ -833,29 +834,14 @@ describe('featureMatchOverlayDisplay', () => {
 			mockMatchState.value = null;
 		});
 
-		function layoutShowing(text: string): FeatureMatchOverlayModeConfig {
+		function layoutShowing(nameplate: string): FeatureMatchOverlayModeConfig {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-			const definitions = [
-				getGraphicItemDefinition('text').createDefault({
-					id: 'nameplate',
-					label: 'Nameplate',
-					canvasWidth: 1920,
-					canvasHeight: 1080,
-				}),
-				getGraphicItemDefinition('clock').createDefault({
-					id: 'clock',
-					label: 'Clock',
-					canvasWidth: 1920,
-					canvasHeight: 1080,
-				}),
-			];
-			const [nameplate] = definitions;
-			if (nameplate?.type !== 'text')
-				throw new Error('expected a Text Graphic Item');
-			nameplate.text = text;
 			config.layout.composition = {
 				...createFeatureMatchLayoutComposition(),
-				items: definitions,
+				items: [
+					text('nameplate', { text: nameplate, width: 1600 }),
+					clock('clock'),
+				],
 			};
 			config.layout.sources = [];
 			return config;

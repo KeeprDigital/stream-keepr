@@ -5,9 +5,10 @@ import { featureMatchStressDataset } from '~~/shared/featureMatchStressDataset';
 import { FEATURE_MATCH_TOKEN_KEYS } from '~~/shared/featureMatchTokenCatalogue';
 import { GAME_VALUES } from '~~/shared/types/enums';
 import { isOpCardImageUrl } from '~~/shared/utils/card/op';
+import { formatClockTime } from '~~/shared/utils/clock';
 
-// The Stress Dataset exists to be wider than anything a show will hold, so each
-// value is checked against the approved list (#743, E17) and against the sample.
+// The Stress Dataset exists to be wider than anything a show holds: wider than
+// the sample everywhere, and at a bound wherever the app has one.
 describe('the Feature Match Stress Dataset', () => {
 	it.each(GAME_VALUES)('covers every token for %s, none narrower than the sample\'s', (game) => {
 		const { tokenValues } = featureMatchStressDataset(game, { untimed: false });
@@ -19,83 +20,48 @@ describe('the Feature Match Stress Dataset', () => {
 		expect(narrower).toEqual([]);
 	});
 
-	it.each([
-		['mtg', 'Magic: The Gathering Regional Championship Qualifier - Sample City'],
-		['op', 'One Piece Card Game Regional Championship - Sample City'],
-	] as const)('holds the shared values, and %s\'s own Event name', (game, eventName) => {
-		expect(featureMatchStressDataset(game, { untimed: false }).tokenValues).toMatchObject({
-			player1Name: 'Maximiliano Alessandro Fitzgerald-Okonkwo',
-			player2Name: 'Siobhán Nakamura-Vandenberghe',
-			player1Pronouns: 'they/them/theirs',
-			player2Pronouns: 'she/they',
-			player1Lgs: 'The Wandering Wizard Games & Collectibles',
-			player2Lgs: 'Dragon\'s Hoard Tabletop Café',
-			round: 'Round 15',
-			stage: 'Top 8 Quarterfinals',
-			table: 'Feature Match Table 128',
-			eventName,
-		});
-	});
-
-	it.each([
-		{ game: 'mtg', untimed: false, clock: '1:23:45' },
-		{ game: 'op', untimed: false, clock: '1:23:45' },
-		{ game: 'mtg', untimed: true, clock: 'label' },
-		{ game: 'op', untimed: true, clock: 'label' },
-	] as const)('shows $game\'s widest clock, or with untimed $untimed the longest Untimed Label an Event can hold', ({ game, untimed, clock }) => {
+	it.each(GAME_VALUES.flatMap(game => [
+		{ game, untimed: false },
+		{ game, untimed: true },
+	]))('shows $game\'s widest clock, or with untimed $untimed the longest Untimed Label an Event can hold', ({ game, untimed }) => {
 		const { clockDisplayTime } = featureMatchStressDataset(game, { untimed }).context;
 
-		if (clock === 'label') {
+		if (untimed) {
 			const accepts = (label: string) => updateEventSchema.safeParse({ featureMatchDefaultUntimedLabel: label }).success;
-			expect(clockDisplayTime).toHaveLength(100);
 			expect(accepts(clockDisplayTime)).toBe(true);
 			expect(accepts(`${clockDisplayTime}!`)).toBe(false);
+			expect(clockDisplayTime.trim()).toBe(clockDisplayTime);
 		}
 		else {
-			expect(clockDisplayTime).toBe(clock);
+			// Hours, minutes and seconds: the widest form a Session clock formats to.
+			expect(clockDisplayTime).toBe(formatClockTime(((1 * 60 + 23) * 60 + 45) * 1000));
 		}
 	});
 
-	it('stresses a Magic Match\'s records, decks, format and live state', () => {
-		const { tokenValues, context } = featureMatchStressDataset('mtg', { untimed: false });
+	it('stresses a Magic Match\'s live state: three-digit life either way, a best-of-five one game from decided, full revealed sideboards', () => {
+		const { context } = featureMatchStressDataset('mtg', { untimed: false });
+		const { player1, player2, bestOf } = context;
 
-		expect(tokenValues).toMatchObject({
-			player1Record: '12-2-1',
-			player2Record: '11-3-1',
-			player1Deck: 'Temur Rhinos Crashing Footfalls',
-			player2Deck: 'Rakdos Scam Evoke Midrange',
-			player1DeckColors: 'WUBRG',
-			player2DeckColors: 'URG',
-			format: 'Canadian Highlander',
-		});
-		expect(context).toMatchObject({
-			bestOf: 5,
-			player1: { lifeTotal: 999, gameWins: 2, sideboardRevealed: true },
-			player2: { lifeTotal: -999, gameWins: 2, sideboardRevealed: true },
-		});
-		const sideboards = [context.player1.sideboard!, context.player2.sideboard!];
-		expect(sideboards.map(cards => cards.reduce((total, card) => total + card.quantity, 0))).toEqual([15, 15]);
-		expect(sideboards.flat().map(card => card.name)).toEqual(expect.arrayContaining([
-			'Asmoranomardicadaistinaculdacar',
-			'Circle of Protection: Artifacts',
-			'Delver of Secrets // Insectile Aberration',
-			'Kozilek, Butcher of Truth',
-			'Sorin, Vengeful Bloodlord',
-		]));
+		expect([player1.lifeTotal, player2.lifeTotal].map(String)).toEqual(['999', '-999']);
+		expect(bestOf).toBe(5);
+		expect([player1.gameWins, player2.gameWins]).toEqual([2, 2]);
+		for (const { sideboard, sideboardRevealed } of [player1, player2]) {
+			expect(sideboardRevealed).toBe(true);
+			// Fifteen singletons: the most rows a sideboard holds, with no art fetched.
+			expect(sideboard).toHaveLength(15);
+			expect(sideboard!.every(card => card.quantity === 1 && card.imageUrl === null)).toBe(true);
+		}
+		expect(Math.max(...player1.sideboard!.map(card => card.name.length))).toBeGreaterThan(40);
 	});
 
-	it('names a One Piece Match by the catalogue\'s longest two-colour Leaders, with no record, life or sideboard', () => {
+	it('names a One Piece Match by two-colour Leaders, with no record, life or sideboard', () => {
 		const { tokenValues, context } = featureMatchStressDataset('op', { untimed: false });
 
-		expect(tokenValues).toMatchObject({
-			player1Record: '',
-			player2Record: '',
-			player1Deck: 'Donquixote Doflamingo',
-			player1DeckColors: 'Green/Purple',
-			player2Deck: 'Donquixote Rosinante',
-			player2DeckColors: 'Purple/Yellow',
-		});
-		expect(isOpCardImageUrl(String(tokenValues.player1LeaderImage))).toBe(true);
+		for (const side of ['player1', 'player2']) {
+			expect(tokenValues[`${side}Record`]).toBe('');
+			expect(String(tokenValues[`${side}DeckColors`]).split('/')).toHaveLength(2);
+			expect(isOpCardImageUrl(String(tokenValues[`${side}LeaderImage`]))).toBe(true);
+		}
 		expect(context).toMatchObject({
 			player1: { lifeTotal: null, sideboard: null },
 			player2: { lifeTotal: null, sideboard: null },

@@ -739,8 +739,8 @@ One fixed canonical set of Feature Match values per Card Game, chosen by the Eve
 _Avoid_: Dummy data, test data
 
 **Feature Match Stress Dataset**:
-One fixed set of the longest plausible Feature Match values per Card Game, chosen by the Card Game as the Feature Match Sample Dataset is, including the live state: life totals, Sideboards, card names and the clock, or the longest Untimed Label for an Untimed Match. Only the Feature Match Overlay editor's stress toggle resolves a Feature Match Layout against it, and in the preview only, over a bound Feature Match Slot's live data too. The toggle is editor state and is never saved. It never appears on a live Screen Output.
-_Avoid_: worst-case data, overflow data, stress sample
+One fixed set of the longest plausible Feature Match values per Card Game, chosen as the Feature Match Sample Dataset is, live state included: life totals, Sideboards and their card names, and the clock, or the longest Untimed Label for an Untimed Match. The Feature Match Overlay editor's preview resolves a Feature Match Layout against it while its author asks it to, over a bound Feature Match Slot's live data too (ADR-0060). Asking is editor state and is never saved. It never appears on a live Screen Output.
+_Avoid_: worst-case data, overflow data
 
 ## Relationships
 
