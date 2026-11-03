@@ -121,8 +121,14 @@ describe('a Slot side\'s Leader during a Feature Match Session', () => {
 
 		const leaders = await sessionLeaders(slotId, eventId);
 		expect([leaders.player1, leaders.player2]).toEqual([
-			['Ben', { type: 'op', leader: LAW }],
-			['Ana', { type: 'op', leader: NAMI }],
+			[
+				'Ben',
+				{ type: 'op', leader: LAW },
+			],
+			[
+				'Ana',
+				{ type: 'op', leader: NAMI },
+			],
 		]);
 	});
 });
