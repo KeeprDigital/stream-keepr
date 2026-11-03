@@ -2010,7 +2010,7 @@ The sample is typical, so overflow shows up on show day rather than while author
 - **Amend the Sample Dataset to be the worst case.** A preview of only worst cases stops looking like a show, and the sample is shared with the Screen Mode Sample Dataset.
 - **Push the toggle by message instead of the URL.** It avoids a reload, but a frame listening for it must also be shown to refuse it on a live output; the URL flag reuses the guide flags' proven gate.
 
-## ADR-0063: Ungrouping keeps what each child draws, and what only the group drew goes with it
+## ADR-0065: Ungrouping keeps what each child draws, and what only the group drew goes with it
 
 Accepted · 2026-11-04 · [#920](https://github.com/KeeprDigital/stream-keepr/issues/920). Records E11 and E12 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783).
 
