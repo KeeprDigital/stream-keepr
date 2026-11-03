@@ -214,8 +214,9 @@ export function eventService() {
 
 	/**
 	 * Saves the Melee configuration. Moving its boundary resets the imported data,
-	 * and the answer names the Screens whose Deck Source that reset cleared;
-	 * `undefined` when the Event does not exist.
+	 * and the answer names the Screens that reset released: a Deck Source naming a
+	 * deleted Player (ADR-0032), or a reference to a deleted Phase or Round
+	 * (ADR-0060); `undefined` when the Event does not exist.
 	 */
 	const updateMeleeConfig = async (id: number, data: MeleeConfigInput): Promise<{ clearedScreens: DbScreen[]; keptStructure: KeptImportedStructure } | undefined> => {
 		// Check if event exists and get current meleeEventId
@@ -271,9 +272,15 @@ export function eventService() {
 			const results = await db.batch(batch);
 			// Announces the cleared Slots' new Sessions, now that they exist.
 			await reset.settle();
-			const { keptPhases, keptRounds } = reset.structureRemoval.readOutcome(batch, results);
+			const { keptPhases, keptRounds, clearedScreens } = reset.structureRemoval.readOutcome(batch, results);
 			return {
-				clearedScreens: results[0],
+				// A Screen both releases rewrote answers once, at the later version.
+				clearedScreens: [
+					...new Map([
+						...results[0],
+						...clearedScreens,
+					].map(screen => [screen.id, screen])).values(),
+				],
 				keptStructure: { keptPhases, keptRounds },
 			};
 		}

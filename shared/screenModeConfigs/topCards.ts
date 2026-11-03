@@ -12,11 +12,11 @@ import { defineScreenModeConfigContract } from './contract';
 import { editorField } from './fields';
 import {
 	DEFAULT_HEADER_CONFIG,
-	DEFAULT_METAGAME_SCOPE_WITHOUT_MIN_POINTS,
+	DEFAULT_METAGAME_SCOPE,
 	DEFAULT_PAGE_ROTATION,
 	headerConfigShape,
 	metagameArchetypeFilterField,
-	metagameScopeShapeWithoutMinPoints,
+	metagameScopeShape,
 	pageRotationShape,
 } from './subShapes';
 
@@ -26,8 +26,8 @@ const TOP_CARDS_MAX_LIMIT = 60;
 /**
  * The Most Played Cards Screen Mode's config contract: a ranked grid of the most played
  * cards in the event's metagame, rendered as card images the way the Deck Screen
- * renders a deck. It is scoped by the Metagame Scope, less Minimum Points, which
- * it never offered; `excludedCardTypes` and `pointedOnly` are applied
+ * renders a deck. It is scoped by the whole Metagame Scope, Minimum Points
+ * included since #904; `excludedCardTypes` and `pointedOnly` are applied
  * server-side before `limit`, so a filtered top N still fills N slots. While
  * `pointedOnly` is on, Nonbasic Land is never excluded: a pointed land such as
  * Strip Mine is as much a pointed pick as any other card.
@@ -47,7 +47,7 @@ const TOP_CARDS_MAX_LIMIT = 60;
  */
 export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	// Scoping
-	...metagameScopeShapeWithoutMinPoints,
+	...metagameScopeShape,
 	archetypeFilter: metagameArchetypeFilterField,
 
 	// Data selection & filtering
@@ -88,7 +88,7 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	pointsBadgePosition: editorField(z.enum(QUANTITY_POSITION_VALUES), { label: 'Badge position' }),
 	pointsBadgeTextSize: editorField(z.number().int().min(8).max(48), { label: 'Badge text size' }),
 }, {
-	...DEFAULT_METAGAME_SCOPE_WITHOUT_MIN_POINTS,
+	...DEFAULT_METAGAME_SCOPE,
 	archetypeFilter: undefined,
 	board: 'mainboard',
 	sortBy: 'inclusionRate',

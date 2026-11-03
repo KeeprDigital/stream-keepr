@@ -221,6 +221,8 @@ function signal(child, name) {
 	}
 }
 
+const STILL_RUNNING = 'still running after SIGKILL';
+
 /**
  * SIGTERM, then SIGKILL if it is still there after its grace. Resolves to what
  * stopped it, which a startup failure reports (#790): a browser that needed
@@ -235,9 +237,9 @@ async function terminate(browser) {
 	if (await exitedWithin(browser.child, browser.terminateGraceMs))
 		return 'stopped by SIGTERM';
 	signal(browser.child, 'SIGKILL');
-	return await exitedWithin(browser.child, KILL_GRACE_MS)
+	return await exitedWithin(browser.child, browser.killGraceMs)
 		? 'stopped by SIGKILL'
-		: 'still running after SIGKILL';
+		: STILL_RUNNING;
 }
 
 async function removeProfile(profile) {
@@ -250,6 +252,24 @@ async function removeProfile(profile) {
 		retryDelay: 100,
 	})
 		.catch(() => undefined);
+}
+
+/**
+ * Remove a stopped browser's profile, given what stopped it (`terminate`).
+ *
+ * One that outlived SIGKILL still writes to its profile, so the profile is kept
+ * and named on stderr, whichever path stopped it: `pnpm reap` finds the browser
+ * by its `--user-data-dir` once its runner is gone, and the folder is the
+ * operator's to remove after. Resolves to `stopped`, naming a kept profile.
+ */
+async function releaseProfile(browser, stopped) {
+	if (stopped !== STILL_RUNNING) {
+		await removeProfile(browser.profile);
+		return stopped;
+	}
+	const kept = `${stopped}; profile kept: ${browser.profile} (\`pnpm reap\` stops the browser once this run has ended; then remove the folder)`;
+	process.stderr.write(`Chromium (pid ${browser.child.pid}) is ${kept}\n`);
+	return kept;
 }
 
 let stoppingOnSignal = false;
@@ -285,8 +305,7 @@ function stopOnSignal(name) {
 	}
 	stoppingOnSignal = true;
 	void Promise.all([...liveBrowsers].map(async (browser) => {
-		await terminate(browser);
-		await removeProfile(browser.profile);
+		await releaseProfile(browser, await terminate(browser));
 	})).finally(() => {
 		stoppingOnSignal = false;
 		end();
@@ -332,6 +351,8 @@ function track(browser) {
 
 /** How much of a browser's stderr a startup failure keeps, from the end. */
 const STDERR_KEPT_CHARS = 4_000;
+/** The longest unfinished stderr line held back for the DevTools endpoint. */
+const STDERR_LINE_KEPT_CHARS = 1_000;
 /** How long a stopped browser's last stderr is waited for before reporting. */
 const STDERR_DRAIN_MS = 500;
 
@@ -375,16 +396,23 @@ function startupReport(failure, { candidate, pid, stopped, activePort, errorOutp
  *
  * @param {string} candidate
  * @param {readonly string[]} extraArgs
- * @param {{ terminateGraceMs?: number, startupTimeoutMs?: number }} [options]
+ * @param {{
+ *   terminateGraceMs?: number,
+ *   killGraceMs?: number,
+ *   startupTimeoutMs?: number,
+ *   spawnProcess?: Function,
+ * }} [options] `spawnProcess` is `spawn` except under test.
  */
 export async function launchChromium(candidate, extraArgs, {
 	terminateGraceMs = TERMINATE_GRACE_MS,
+	killGraceMs = KILL_GRACE_MS,
 	startupTimeoutMs = 30_000,
+	spawnProcess = spawn,
 } = {}) {
 	if (candidate.includes('/') && !existsSync(candidate))
 		return undefined;
 	const profile = await mkdtemp(join(tmpdir(), CHECKOUT_PROFILE_PREFIX));
-	const child = spawn(candidate, [
+	const child = spawnProcess(candidate, [
 		'--headless=new',
 		'--disable-gpu',
 		'--no-sandbox',
@@ -397,7 +425,12 @@ export async function launchChromium(candidate, extraArgs, {
 	], {
 		stdio: ['ignore', 'ignore', 'pipe'],
 	});
-	const browser = { child, profile, terminateGraceMs };
+	const browser = {
+		child,
+		profile,
+		terminateGraceMs,
+		killGraceMs,
+	};
 	if (child.pid !== undefined)
 		track(browser);
 
@@ -417,14 +450,18 @@ export async function launchChromium(candidate, extraArgs, {
 				)),
 				startupTimeoutMs,
 			);
+			// A chunk can end partway through the URL, so only a line stderr has
+			// finished is read: the endpoint is whatever precedes its newline.
+			let unfinishedLine = '';
 			child.stderr.setEncoding('utf8').on('data', (chunk) => {
-				errorOutput += chunk;
-				const match = errorOutput.match(/DevTools listening on (ws:\/\/\S+)/);
-				if (match) {
+				errorOutput = (errorOutput + chunk).slice(-STDERR_KEPT_CHARS);
+				const lines = (unfinishedLine + chunk).split('\n');
+				unfinishedLine = lines.pop().slice(-STDERR_LINE_KEPT_CHARS);
+				const endpointLine = lines.map(line => line.match(/DevTools listening on (ws:\/\/\S+)/)).find(Boolean);
+				if (endpointLine) {
 					clearTimeout(timeout);
-					resolve(match[1]);
+					resolve(endpointLine[1]);
 				}
-				errorOutput = errorOutput.slice(-STDERR_KEPT_CHARS);
 			});
 			child.once('error', (error) => {
 				clearTimeout(timeout);
@@ -452,7 +489,7 @@ export async function launchChromium(candidate, extraArgs, {
 		// it outlives the run that gave up on it.
 		const stopped = await terminate(browser);
 		if (!(error instanceof StartupFailure)) {
-			await removeProfile(profile);
+			await releaseProfile(browser, stopped);
 			throw error;
 		}
 		// `exit` can come before the last of stderr has been read.
@@ -464,18 +501,16 @@ export async function launchChromium(candidate, extraArgs, {
 			text => `DevToolsActivePort: ${text.trim().split('\n').join(' ')}`,
 			() => 'no DevToolsActivePort',
 		);
-		await removeProfile(profile);
 		throw new Error(startupReport(error, {
 			candidate,
 			pid: child.pid,
-			stopped,
+			stopped: await releaseProfile(browser, stopped),
 			activePort,
 			errorOutput,
 		}));
 	}
 	if (!endpoint) {
-		await terminate(browser);
-		await removeProfile(profile);
+		await releaseProfile(browser, await terminate(browser));
 		return undefined;
 	}
 	return {
@@ -495,9 +530,11 @@ export async function launchChromium(candidate, extraArgs, {
 				closing,
 				new Promise(resolve => setTimeout(resolve, CLOSE_GRACE_MS, false)),
 			]);
-			if (!closed)
-				await terminate(browser);
-			await removeProfile(profile);
+			// Reports rather than throws, so a harness's verdict is never
+			// replaced by how its browser went away.
+			await releaseProfile(browser, closed
+				? 'closed'
+				: await terminate(browser));
 		},
 	};
 }

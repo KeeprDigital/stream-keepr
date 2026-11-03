@@ -1,6 +1,5 @@
 import { findFeatureMatchLayoutTemplateLibraryEntry } from '~~/server/modules/feature-match-layout-template-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { admitScreenGraphicsEditWrite } from '~~/server/modules/graphics-authoring-lease/screenEditWorkspace';
 import { screenWriteModule } from '~~/server/modules/screen-write';
 import { placeFeatureMatchLayoutTemplateSchema } from '~~/server/schemas/api/featureMatchLayoutTemplate';
 import { screenParamsSchema } from '~~/server/schemas/api/screen';
@@ -34,15 +33,13 @@ import { optionalBrowserSessionId } from '~~/server/utils/auth';
  * one. A placement is an authoring action that produces nothing special, which is
  * what "unlinked copy" has to mean.
  *
- * The write is admitted by the Screen's graphics Edit workspace lease, not the
- * template's: placing reads a template and writes a Screen.
+ * The write is admitted and fenced by the Screen's graphics Edit workspace lease,
+ * in the Screen write module (ADR-0030), not by the template's: placing reads a
+ * template and writes a Screen.
  */
 export default defineEventHandler(async (event) => {
 	const { id: eventId, screenId } = await getValidatedRouterParams(event, screenParamsSchema.parse);
 	const body = placeFeatureMatchLayoutTemplateSchema.parse(await readBody(event) ?? {});
-
-	const authoringSessionId = await optionalBrowserSessionId(event);
-	await admitScreenGraphicsEditWrite(eventId, screenId, authoringSessionId);
 
 	const screen = await screenService().findById(screenId, eventId);
 	if (!screen)
@@ -85,7 +82,7 @@ export default defineEventHandler(async (event) => {
 			graphicsAssets: () => graphicsAssetLibraryForEvent(event),
 			stateVersion: body.stateVersion,
 			originConnectionId: getOriginConnectionId(event),
-			authoringSessionId,
+			authoringSessionId: await optionalBrowserSessionId(event),
 		});
 
 		setResponseStatus(event, 201);

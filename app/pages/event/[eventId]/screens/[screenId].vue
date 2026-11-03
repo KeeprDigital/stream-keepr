@@ -69,8 +69,9 @@ const backgroundLayersMode = computed<BackgroundLayersCapableMode | null>(() => 
 		: null;
 });
 
-// Reset: restores the current mode's display settings (preserves bindings and Theme overrides)
-const modeControlsRef = ref<{ resetConfig?: () => void; saving?: boolean } | null>(null);
+// Reset: restores the current mode's display settings (preserves bindings and Theme overrides).
+// A mode whose reset is an authoring write says so while its Graphics Authoring Lease is another's.
+const modeControlsRef = ref<{ resetConfig?: () => void; resetBlocked?: boolean; saving?: boolean } | null>(null);
 const showResetConfirm = ref(false);
 const showCapabilityRotationConfirm = ref(false);
 const rotatingCapability = ref(false);
@@ -492,12 +493,13 @@ async function sendCommand(command: ScreenCommand) {
 								<USeparator orientation="vertical" class="h-6" />
 
 								<UPopover v-model:open="showResetConfirm">
-									<UTooltip text="Reset all display settings">
+									<UTooltip :text="modeControlsRef?.resetBlocked ? 'Another session is editing this Screen\'s graphics' : 'Reset all display settings'">
 										<UButton
 											variant="soft"
 											color="error"
 											icon="i-lucide-rotate-ccw"
 											label="Reset"
+											:disabled="modeControlsRef?.resetBlocked === true"
 										/>
 									</UTooltip>
 									<template #content>

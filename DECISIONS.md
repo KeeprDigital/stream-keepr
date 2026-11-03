@@ -841,17 +841,19 @@ The close, open and receipt-forgetting sequence was written by hand in three pla
 
 ## ADR-0030: A Graphics Authoring Lease is decided by the Screen write module and fenced at the commit
 
-Accepted · 2026-10-20 · [#607](https://github.com/KeeprDigital/stream-keepr/issues/607)
+Accepted · 2026-10-20 · [#607](https://github.com/KeeprDigital/stream-keepr/issues/607) · Amended 2026-11-03: the Feature Match Layout is leased and fenced too · [#738](https://github.com/KeeprDigital/stream-keepr/issues/738)
 
 ### Decision
 
-**The Screen write module decides which writes edit a Screen's graphics Edit workspace.** Every Screen write that can reach it passes through `screenWriteModule()`, and each such update operation takes the asking browser Session as a required `authoringSessionId`. A route only says who is asking. The protected field is the Broadcast Graphics stack. The mode configuration write protects it, and the generic Screen write protects it when it would change it. The canvas is the Event's Event Canvas (ADR-0051), an Event Presentation Settings write that takes no lease, so no Screen field is a canvas the lease guards. A Screen holds no look of its own (ADR-0051), and the Screen Theme Override write is not lease-gated.
+**The Screen write module decides which writes edit a Screen's graphics Edit workspace.** Every Screen write that can reach it passes through `screenWriteModule()`, and each such update operation takes the asking browser Session as a required `authoringSessionId`. A route only says who is asking. The protected fields are the Broadcast Graphics stack and the Feature Match Layout, which is a Feature Match Overlay's `layout` and the `presetId` it started from. One lease covers both, because they are one Screen's one Edit workspace (#738); there is no per-mode lease. The mode configuration write protects the stack on every Broadcast Graphics write, and the layout on every Feature Match Overlay write that carries `layout` or `presetId`. The generic Screen write protects either when it would change it. A Feature Match Overlay's Feature Match Slot (`featureMatchId`) is what the Screen points at, so it is never leased. The canvas is the Event's Event Canvas (ADR-0051), an Event Presentation Settings write that takes no lease, so no Screen field is a canvas the lease guards. A Screen holds no look of its own (ADR-0051), and the Screen Theme Override write is not lease-gated.
 
 **The generic Screen write is gated by change, not by presence.** It replaces `modeConfigs` whole, and the Edit Screen dialog sends it back as it read it. A rename that carries the protected fields back unchanged stays open to every Session. The comparison ignores object key order.
 
 **The lease is checked again inside the statement that commits.** A write is admitted up front, then commits only while no other Session holds a live lease on the artifact. That condition sits in the same `WHERE` clause as the `stateVersion` guard. It is one Drizzle expression, `graphicsAuthoringLeaseFenceCondition`, and the raw D1 mode configuration write renders the same expression. A write the fence refuses answers the lease's own 409, which the client does not retry as a race.
 
-**Live Control stays outside the lease.** Live Session commands, live state reset, Screen commands, Card writes, and Screen mode changes are not admitted by it.
+**Live Control stays outside the lease.** Live Session commands, live state reset, Screen commands, Card writes, Screen mode changes, and choosing a Feature Match Overlay's Feature Match Slot are not admitted by it.
+
+**Both Screen editors take the lease on opening their Edit workspace.** The Broadcast Graphics editor asks while its Edit workspace is open. The Feature Match Overlay editor is all Edit workspace, so it asks as soon as it opens. Without the lease each editor is read-only and offers a take-over. The Feature Match Overlay editor's one write funnel writes nothing, and losing the lease clears its undo history.
 
 ### Why
 
@@ -862,8 +864,11 @@ The lease was only checked at two routes. The generic Screen write reached the s
 - A route that edits the workspace cannot forget the lease. Leaving out `authoringSessionId` is a compile error.
 - The fence uses the server's clock at commit. A lease that lapses between admission and commit admits the write, which matches the lease's own rule.
 - Two takeovers in the same instant still both report success (see the lease module); the fence orders whichever holder the table records.
-- Feature Match Layout placement keeps its admission-only lease check. No client takes a lease on a Feature Match Overlay layout, and its mode configuration route has none.
-- Broadcast Graphic Template placement is admitted inside the mode configuration write, after the template is read. A non-holder placing a missing template now gets its 404 before the lease's 409. Nothing is written either way.
+- Broadcast Graphic Template and Feature Match Layout Template placement are both admitted inside the mode configuration write, after the template is read, and fenced at its commit. A non-holder placing a missing template now gets its 404 before the lease's 409. Nothing is written either way. Feature Match Layout placement lost its separate check at the route (#738).
+- A display reset of a Feature Match Overlay Screen writes its preset's `presetId` and `layout`, so it is lease-gated. The Screen page disables Reset for a Session observing another's lease, and the server refuses it anyway. A Broadcast Graphics reset never touches the stack, which is an authored stack, and is gated as before.
+- Nothing else writes a Feature Match Layout. A Theme or Screen Theme Override write changes look, never a Screen's mode configuration, so neither is refused (ADR-0049). Creating a Screen is not an update, and saving a layout as a Feature Match Layout Template only reads it. The Feature Match Layout Template library's own writes are library writes, not Screen writes. The editor offers them only to the Screen's holder, as the Broadcast Graphics editor does with its library.
+- A Feature Match Overlay layout save that was pending when its author lost the lease is refused at the fence with the lease's 409. The editor drops its unsaved layout and clears its undo history, so the new holder's changes show and cannot be undone over.
+- The Feature Match Overlay canvas size is not leased, though #738 decided it should be in Feature Match Overlay mode (E2). Since ADR-0051 there is no per-Screen canvas, and the Event Canvas stays unleased in every mode, so nothing is leased for it. That decision applies again only if a per-Screen canvas comes back.
 - Deleting a Screen is not lease-gated. It removes the Screen rather than editing its workspace, and its lease lapses at the holder's next missed heartbeat.
 - Deleting a Player writes its Screens outside the Screen write module (ADR-0032). It clears only a Deck Source, which no lease protects.
 
@@ -1101,7 +1106,7 @@ Accepted · 2026-10-21 · [#587](https://github.com/KeeprDigital/stream-keepr/is
 
 **The write forms are derived on the server without special cases** (`configContractModeForms`). The complete schema is the contract's fields, with the server's schema for each server-validated one, plus `backgroundLayers` when the mode declares a Background Layer stack. Screen create and full update accept a fragment of it, because storage holds fragments. The PATCH form is every field `.nullable().optional()`, except each authored stack, with no wrapper peeled and no default stripped. The server's schema maps are built from one per-mode list of these forms.
 
-**Every Screen Mode is on its contract.** Metagame moved first (#587), then the other plain overlay modes (#588), then Background, Feature Match, Feature Match Overlay and Broadcast Graphics, after which the old form was deleted: the hand-written mode config types, the separate defaults objects, and `createModeConfigPatchSchema` with its wrapper-peeling (#589). A contract module holds the mode's own sub-shapes and the defaults its readers complete a nested fragment from, such as Deck's board layouts and `resolveDeckBoards`; a sub-shape several modes repeat, such as a table column, the header, the Page Rotation fields, or the Metagame Scope with its archetype filter (#777), lives once in `subShapes.ts`. The Metagame Scope's settings fields are one component too (`ScreenMetagameScopeFields`), which offers only the scopes its mode's contract holds: Most Played Cards carries no `minPoints`, so it offers no Minimum Points scope, as before. `test/unit/server/schemas/screenModeConfigContracts.test.ts` parses every contract's defaults against its complete schema and both write paths, round-trips them through a PATCH, takes each field alone and `null`, and checks each authored stack refuses `null`.
+**Every Screen Mode is on its contract.** Metagame moved first (#587), then the other plain overlay modes (#588), then Background, Feature Match, Feature Match Overlay and Broadcast Graphics, after which the old form was deleted: the hand-written mode config types, the separate defaults objects, and `createModeConfigPatchSchema` with its wrapper-peeling (#589). A contract module holds the mode's own sub-shapes and the defaults its readers complete a nested fragment from, such as Deck's board layouts and `resolveDeckBoards`; a sub-shape several modes repeat, such as a table column, the header, the Page Rotation fields, or the Metagame Scope with its archetype filter (#777), lives once in `subShapes.ts`. The Metagame Scope's settings fields are one component too (`ScreenMetagameScopeFields`), and every mode reading the Metagame carries the whole scope, so each offers the same scopes. Most Played Cards carried no `minPoints` until #904 gave it Minimum Points. Before then a Most Played Cards config scoped to `minPoints`, which only the API could store, failed its Screen Output read with a 400, since the read query asks for a minimum under that scope. It now reads with its stored minimum, or the default. `test/unit/server/schemas/screenModeConfigContracts.test.ts` parses every contract's defaults against its complete schema and both write paths, round-trips them through a PATCH, takes each field alone and `null`, and checks each authored stack refuses `null`.
 
 **A contract field may carry its editor control's metadata, and its editor reads the control from the contract** (#498). A field edited by a scalar control (a number, toggle, select, colour or text input) is declared with `editorField(schema, meta)` in `shared/screenModeConfigs/fields.ts`, which puts the meta on the field through zod's `.meta()`: the label, a step, a control hint where the schema cannot say (a colour rather than text), and a display scale for a field edited in another unit (Page Rotation's milliseconds, edited in seconds). The bounds are not in the meta: they are the schema's own inclusive `.min()` and `.max()`, read back. The default is not in it either: it stays in `defaults`, and `FieldsWithoutDefaults` still refuses a `.default()` or `.prefault()` under an editor field. The contract derives `fields`, the editor-facing view of every editor field, through `screenModeConfigFields`, as `animationEffectParamFields` does for an Animation Effect's params, except that it reads no default from the schema. A sub-shape several modes repeat carries its meta once, in `subShapes.ts`; a nested block derives its own view, as Deck's board layout does (`DECK_BOARD_LAYOUT_FIELDS`). Rich controls stay bespoke and carry no editor meta: an authored stack, a server-validated field, an Event Reference picker (ADR-0038), a column list, and a preset choice. A Page Rotation field's label and bounds come from the contract, but its edit still goes through `useRotationConfigWrites` (ADR-0039).
 
@@ -1217,7 +1222,8 @@ Accepted · 2026-10-21 · [#701](https://github.com/KeeprDigital/stream-keepr/is
 1. the scope's imported Matches and Round Standings are deleted, as removing the Round would have done;
 2. a scoped Round that still holds a Match (by now only a manual one) is **kept, with its Provenance cleared**: `externalSource` becomes `manual`, and `externalId` and `lastSyncedAt` become null;
 3. the other scoped Rounds are deleted;
-4. a scoped Phase that still holds a Round (a manual one, or one kept in step 2) is kept the same way, and the other scoped Phases are deleted. A kept Phase keeps its `formatExternalId`, because that is still the format it was played in and Deck Lists are matched to its Matches by it.
+4. a scoped Phase that still holds a Round (a manual one, or one kept in step 2) is kept the same way, and the other scoped Phases are deleted. A kept Phase keeps its `formatExternalId`, because that is still the format it was played in and Deck Lists are matched to its Matches by it;
+5. every Screen reference to a deleted Phase or Round is unset (ADR-0060).
 
 **Two paths use it.** Event structure sync scopes it to the stale imported Phases and Rounds. The Melee data reset (disabling the integration, or changing its Melee.gg tournament) scopes it to every imported Phase and Round in the Event. Round Match sync already deletes only imported Matches, so it needs nothing.
 
@@ -1913,3 +1919,33 @@ The two editors author the same Graphic Item recipes, and a Feature Match Layout
 
 - **An owner filter in the shared render model.** It would add a preview-only input to the model every live output composes through. Isolating motion in the composition leaves that model unchanged.
 - **Projecting the item through the per-item animation input** (the sideboard reveal's). That input applies no stagger, so a selected Graphic Group's children would play together rather than in their authored order.
+
+## ADR-0060: Deleting a Phase, Round or Archetype releases every Event Reference naming it
+
+Accepted · 2026-11-03 · [#907](https://github.com/KeeprDigital/stream-keepr/issues/907). Extends ADR-0032 and ADR-0038.
+
+### Decision
+
+**A Phase, Round or Archetype a Screen names can be deleted, and the delete unsets that Event Reference in the same write.** `buildReleaseScreenEventReferencesQuery` removes, from each Screen in the Event, every Event Reference of the given kinds naming a record the Event no longer holds, and bumps its `stateVersion`. The fields come from the Screen Mode Definitions' `eventReferences` of kind `phase`, `round` and `archetype` (ADR-0038), not a list kept here, so a new mode declaring one is released with no further change. Today they are Top Cut Bracket `phaseId`, Standings and Pairings `roundId`, and Archetype Spotlight `archetypeId`. The field is removed, not nulled: each is optional, and a Standings Screen with no Round shows the Current Round.
+
+**Every path that deletes one runs it, in the delete's batch, after the delete.** Deleting a Round releases Rounds; deleting a Phase releases Phases and the Rounds it cascades away; deleting an Archetype releases Archetypes. Melee Sync's removal of stale imported structure and the Melee data reset release Phases and Rounds (`buildRemoveImportedStructureQueries`). It runs after the delete, unlike ADR-0032's clear, and selects by absence rather than by id: a cascade and an imported structure removal decide what they delete as the batch runs (ADR-0040), so only afterwards does the Event say what is gone.
+
+**Each released Screen is announced with `screen:updated`, ahead of the delete's own announcement and without an origin**, as ADR-0032 does. The Melee data reset answers a Screen both its releases rewrote once, at the later version.
+
+**Contradicts ADR-0030, which says every Screen write passes through `screenWriteModule()`,** as ADR-0032 does and for the same reason: the release has to commit in the delete's batch. It also skips the ADR-0038 reference check every Screen write runs; it only removes Event References, so it cannot name anything outside the Event.
+
+### Why
+
+A Screen left naming a deleted Phase, Round or Archetype rendered an empty bracket, a missing Round or an error state, and every later full Screen write failed, because the write checks every declared Event Reference (ADR-0038). The operator could not save the Screen until they repicked. Unset is what an operator gets by deselecting first, and the Melee data reset and a sync delete this structure as a side effect, so refusing the delete would make them hunt for Screens first. A Player (ADR-0032) and a Feature Match Slot (ADR-0057) were already released by their deletes, though their Deck Source keeps the field as null where these remove it.
+
+### Consequences
+
+- An operator form that read a released Screen before the delete gets a `stateVersion` conflict on its next save, as for any concurrent Screen write, lease holder included.
+- A Screen already naming a missing Phase, Round or Archetype is released by the next delete of that kind in its Event, whichever record that delete names.
+- A Phase or Round delete that finds nothing to delete still releases what the Event no longer holds, and announces it. An Archetype delete refuses a missing Archetype before it writes.
+- Player and Player List references (Player History, Head-to-Head, `playerListId`) are not covered here.
+
+### Rejected alternatives
+
+- **Clear by the deleted ids, ahead of the delete, as ADR-0032 does.** The imported structure removal decides which Phases and Rounds go as its batch runs, and a Phase takes its Rounds by cascade; each would need its own prediction of what will be deleted.
+- **`AFTER DELETE` triggers.** Rejected for ADR-0032's reason: the service could not say which Screens changed, and they must be announced.
