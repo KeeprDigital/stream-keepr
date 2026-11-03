@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';
+import { NuxtLinkStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import Settings from '~/components/Screen/Modes/Metagame/Settings.vue';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
@@ -177,10 +178,7 @@ async function mountComponent() {
 				UInputNumber: UInputNumberStub,
 				USwitch: USwitchStub,
 				UButton: true,
-				NuxtLink: {
-					props: ['to'],
-					template: '<a :href="to"><slot /></a>',
-				},
+				NuxtLink: NuxtLinkStub,
 				USeparator: true,
 				UIcon: true,
 			},

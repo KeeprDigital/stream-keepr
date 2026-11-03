@@ -27,7 +27,7 @@ export const CONVERSION_THRESHOLD_BOUNDS: Record<MetagameConversionMetric, { min
 /** The two fields travel together, the threshold bounded by its metric. */
 export const conversionTargetShape = {
 	conversionMetric: z.enum(METAGAME_CONVERSION_METRIC_VALUES),
-	conversionThreshold: z.number().int().min(0).max(999),
+	conversionThreshold: z.number().int().min(Math.min(...Object.values(CONVERSION_THRESHOLD_BOUNDS).map(bound => bound.min))).max(Math.max(...Object.values(CONVERSION_THRESHOLD_BOUNDS).map(bound => bound.max))),
 };
 
 export function isConversionTargetInBounds({ conversionMetric, conversionThreshold }: ConversionTarget): boolean {

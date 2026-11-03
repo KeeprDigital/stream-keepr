@@ -56,7 +56,7 @@ export const useMetagameStore = defineStore('metagame', () => {
 	 * detail options. It is the operator's Event's, so a write shows here while it
 	 * is pending and an announced change from another operator lands here too.
 	 */
-	const conversionQuery = computed<ConversionTarget>(() => eventConversionTarget(eventStore.event));
+	const conversionTarget = computed<ConversionTarget>(() => eventConversionTarget(eventStore.event));
 
 	function applyRemoteInvalidated() {
 		summaryData.value = null;
@@ -111,7 +111,7 @@ export const useMetagameStore = defineStore('metagame', () => {
 		scopeQuery,
 
 		// Conversion target: the Event's
-		conversionQuery,
+		conversionTarget,
 
 		// Data
 		summaryData,

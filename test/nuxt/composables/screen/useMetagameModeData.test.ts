@@ -3,7 +3,7 @@ import type { MetagameScope, MetagameViewMode } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createWireMockEvent } from '~~/test/helpers/fixtures';
+import { createMockEvent, createWireMockEvent } from '~~/test/helpers/fixtures';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 
 const { mockFetch } = vi.hoisted(() => ({
@@ -158,8 +158,8 @@ describe('useMetagameModeData', () => {
 		mockFetch.mockClear();
 
 		// `event:updated` carries the whole Event response.
-		const announced = { id: 1, conversionMetric: 'minPoints', conversionThreshold: 0 } as const;
-		eventStore.applyRemoteUpdated({ event: announced });
+		const announced = createMockEvent({ id: 1, conversionMetric: 'minPoints', conversionThreshold: 0 });
+		eventStore.applyRemoteUpdated({ eventId: announced.id, timestamp: 0, event: announced });
 		await flushPromises();
 
 		expect(mockFetch).toHaveBeenCalledTimes(reads);

@@ -15,7 +15,7 @@ const mockMetagameStore = reactive({
 	topN: 8,
 	minPoints: 0,
 	playerListId: null,
-	conversionQuery: { conversionMetric: 'topN', conversionThreshold: 8 },
+	conversionTarget: { conversionMetric: 'topN', conversionThreshold: 8 },
 	invalidationVersion: 0,
 	error: null as string | null,
 	loadSummary: vi.fn(async () => {}),
@@ -64,12 +64,12 @@ describe('useMetagamePage', () => {
 			0,
 		],
 	])('re-reads its section when the Event\'s Conversion Target becomes %o: %i reads', async (target, reads) => {
-		mockMetagameStore.conversionQuery = { conversionMetric: 'topN', conversionThreshold: 8 };
+		mockMetagameStore.conversionTarget = { conversionMetric: 'topN', conversionThreshold: 8 };
 		const fetchSection = vi.fn(async () => {});
 		const page = effectScope();
 		page.run(() => useMetagamePage(fetchSection));
 
-		mockMetagameStore.conversionQuery = { ...target };
+		mockMetagameStore.conversionTarget = { ...target };
 		await flushPromises();
 
 		expect(fetchSection).toHaveBeenCalledTimes(reads);

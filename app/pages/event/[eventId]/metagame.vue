@@ -82,7 +82,7 @@ onMounted(async () => {
 				</template>
 				<template #right>
 					<MetagameConversionControl
-						v-bind="metagameStore.conversionQuery"
+						v-bind="metagameStore.conversionTarget"
 						@update="saveConversionTarget"
 					/>
 					<MetagameScopeControl

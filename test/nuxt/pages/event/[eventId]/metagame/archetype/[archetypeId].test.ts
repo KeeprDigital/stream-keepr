@@ -41,7 +41,7 @@ mockNuxtImport('useEventStore', () => () => reactive({
 }));
 mockNuxtImport('useMetagameStore', () => () => reactive({
 	scopeQuery: { scope: 'all' },
-	conversionQuery: { conversionMetric: 'topN', conversionThreshold: 8 },
+	conversionTarget: { conversionMetric: 'topN', conversionThreshold: 8 },
 	invalidationVersion: 0,
 }));
 mockNuxtImport('usePlayerStore', () => () => reactive({

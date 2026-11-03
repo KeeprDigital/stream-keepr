@@ -2,7 +2,6 @@ import type { ConversionTarget } from '~~/shared/conversionTarget';
 import type {
 	BoardSelection,
 	MetagameCardSortBy,
-	MetagameConversionMetric,
 	MetagameScope,
 	MetagameSortBy,
 } from '~~/shared/types/enums';
@@ -21,11 +20,8 @@ export interface MetagameScopeInput {
 	playerListId?: number;
 }
 
-/** Conversion target: how far a player must have made it to count as converted. */
-export interface MetagameConversionInput {
-	conversionMetric?: MetagameConversionMetric;
-	conversionThreshold?: number;
-}
+/** Conversion Target a read counts against; none asks for no Conversion Rate. */
+export type MetagameConversionInput = Partial<ConversionTarget>;
 
 export interface MetagameArchetypeBreakdownOptions extends MetagameConversionInput {
 	sortBy?: MetagameSortBy;

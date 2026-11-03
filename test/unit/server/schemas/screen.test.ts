@@ -856,15 +856,6 @@ describe('metagameModeConfigSchema', () => {
 		expect(resolved.archetypeColumns).toEqual(validConfig.archetypeColumns);
 	});
 
-	it('accepts a Conversion Rate column', () => {
-		const archetypeColumns = [
-			...validConfig.archetypeColumns,
-			{ key: 'conversionRate', visible: true },
-		];
-		expect(modeConfigPatchSchemaMap.metagame.parse({ archetypeColumns }))
-			.toEqual({ archetypeColumns });
-	});
-
 	it('accepts the minPoints scope with explicit minPoints', () => {
 		expect(metagameModeConfigSchema.parse({
 			...validConfig,

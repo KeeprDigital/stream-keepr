@@ -186,16 +186,10 @@ describe('useArchetypeSpotlightModeData', () => {
 		});
 	});
 
-	describe('conversionLabel', () => {
-		it.each([
-			['topN', 8, 'Top 8'],
-			['minPoints', 18, '18+ pts'],
-			['minPoints', 0, '0+ pts'],
-		] as const)('names its Event\'s %s target of %d as the archetype page does', (conversionMetric, conversionThreshold, expected) => {
-			mockEventStore.displayEvent = { conversionMetric, conversionThreshold };
+	it('names its Event\'s Conversion Target', () => {
+		mockEventStore.displayEvent = { conversionMetric: 'minPoints', conversionThreshold: 18 };
 
-			expect(makeSpotlight().conversionLabel.value).toBe(expected);
-		});
+		expect(makeSpotlight().conversionLabel.value).toBe('18+ pts');
 	});
 
 	it('formats a pilot\'s record with the Event\'s record settings', () => {

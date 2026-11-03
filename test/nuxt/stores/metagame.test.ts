@@ -37,27 +37,27 @@ describe('useMetagameStore', () => {
 	});
 
 	// The Conversion Target is the Event's (ADR-0061), so the page asks for the one another operator's write announces.
-	describe('conversionQuery', () => {
+	describe('conversionTarget', () => {
 		it('asks for the Event\'s Conversion Target, Top 8 before an Event loads, and follows its announced change', () => {
 			const eventStore = useEventStore();
 			eventStore.$reset();
-			expect(store.conversionQuery).toEqual({ conversionMetric: 'topN', conversionThreshold: 8 });
+			expect(store.conversionTarget).toEqual({ conversionMetric: 'topN', conversionThreshold: 8 });
 
 			eventStore.setEvent({
 				...createMockEvent({ id: 3, conversionMetric: 'topN', conversionThreshold: 16 }),
 				talents: [],
 				meleeConfigured: false,
 			});
-			expect(store.conversionQuery).toEqual({ conversionMetric: 'topN', conversionThreshold: 16 });
+			expect(store.conversionTarget).toEqual({ conversionMetric: 'topN', conversionThreshold: 16 });
 
 			// `event:updated` carries the whole Event response.
-			const announced = { id: 3, conversionMetric: 'minPoints', conversionThreshold: 0 } as const;
-			eventStore.applyRemoteUpdated({ event: announced });
-			expect(store.conversionQuery).toEqual({ conversionMetric: 'minPoints', conversionThreshold: 0 });
+			const announced = createMockEvent({ id: 3, conversionMetric: 'minPoints', conversionThreshold: 0 });
+			eventStore.applyRemoteUpdated({ eventId: announced.id, timestamp: 0, event: announced });
+			expect(store.conversionTarget).toEqual({ conversionMetric: 'minPoints', conversionThreshold: 0 });
 
 			// A store reset leaves the Event's target alone.
 			store.$reset();
-			expect(store.conversionQuery).toEqual({ conversionMetric: 'minPoints', conversionThreshold: 0 });
+			expect(store.conversionTarget).toEqual({ conversionMetric: 'minPoints', conversionThreshold: 0 });
 		});
 	});
 

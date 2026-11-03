@@ -4,7 +4,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
-import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { NuxtLinkStub, nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import Settings from '~/components/Screen/Modes/ArchetypeSpotlight/Settings.vue';
 
 enableAutoUnmount(afterEach);
@@ -40,10 +40,7 @@ describe('the Archetype Spotlight settings editor', () => {
 			global: {
 				stubs: {
 					...nuxtUiStubs,
-					NuxtLink: {
-						props: ['to'],
-						template: '<a :href="to"><slot /></a>',
-					},
+					NuxtLink: NuxtLinkStub,
 				},
 			},
 		});

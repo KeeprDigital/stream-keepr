@@ -94,7 +94,7 @@ async function setActiveSection(section: string | number) {
 }
 
 // ── Stat strip ──
-const conversionLabel = computed(() => conversionTargetLabel(metagameStore.conversionQuery));
+const conversionLabel = computed(() => conversionTargetLabel(metagameStore.conversionTarget));
 
 const stats = computed(() => {
 	if (!detail.value)
@@ -132,7 +132,7 @@ async function fetchDetail() {
 			eventStore.eventId!,
 			archetypeId.value,
 			metagameStore.scopeQuery,
-			{ board: archetypeCardBoardFilter.value, ...metagameStore.conversionQuery },
+			{ board: archetypeCardBoardFilter.value, ...metagameStore.conversionTarget },
 		),
 		{
 			latestKey: 'detail',
@@ -166,8 +166,8 @@ watch(
 		() => metagameStore.topN,
 		() => metagameStore.minPoints,
 		() => metagameStore.playerListId,
-		() => metagameStore.conversionQuery.conversionMetric,
-		() => metagameStore.conversionQuery.conversionThreshold,
+		() => metagameStore.conversionTarget.conversionMetric,
+		() => metagameStore.conversionTarget.conversionThreshold,
 		() => archetypeCardBoardFilter.value,
 		() => metagameStore.invalidationVersion,
 	],

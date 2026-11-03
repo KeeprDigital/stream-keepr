@@ -1908,6 +1908,8 @@ Three targets disagreed (#783): one per Metagame Screen, one per Archetype Spotl
 - Two Screens of one Event can no longer show Conversion Rates against different targets.
 - The page's metagame API still takes the target as query parameters, so the page can ask for its pending value; only a Screen Output's read takes it from the Event.
 - A minimum-points target of 0 counts every Player in the scope as converted.
+- A Screen rendering mounted in the writing operator's own client would re-read on the pending target, before the write commits, and skip its own announcement. None is: the control lives on the Metagame page, which mounts no Screen rendering, and a rendering mounted later reads the stored target.
+- Each threshold step is an announced Event write, and every Metagame and Archetype Spotlight Screen Output re-reads once per step.
 
 ### Rejected alternatives
 

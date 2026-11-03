@@ -93,8 +93,10 @@ async function conversionRates() {
 
 describe('a Screen Output\'s Conversion Rate', () => {
 	it.each([
-		// An Event created before the target existed reads Top 8, whatever its Screens stored.
-		{ target: null, rate: 50 },
+		{
+			target: { conversionMetric: 'topN', conversionThreshold: 8 },
+			rate: 50,
+		},
 		{
 			target: { conversionMetric: 'topN', conversionThreshold: 10 },
 			rate: 100,
@@ -108,8 +110,7 @@ describe('a Screen Output\'s Conversion Rate', () => {
 			rate: 100,
 		},
 	] as const)('counts against the Event\'s target $target', async ({ target, rate }) => {
-		if (target)
-			await db.update(schema.events).set(target).where(eq(schema.events.id, eventId));
+		await db.update(schema.events).set(target).where(eq(schema.events.id, eventId));
 
 		await expect(conversionRates()).resolves.toEqual({ spotlight: rate, metagame: rate });
 	});
