@@ -11,7 +11,7 @@ import type {
 } from '~~/shared/types/graphics';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { FEATURE_MATCH_TOKEN_CATALOGUE } from '~~/shared/featureMatchTokenCatalogue';
 import {
@@ -140,7 +140,7 @@ const SlotOnlyStub = defineComponent({
 	props: {
 		label: { type: String, required: false },
 	},
-	template: '<div :data-label="label"><span>{{ label }}</span><slot /></div>',
+	template: '<div :data-label="label"><span><slot name="label">{{ label }}</slot></span><slot /></div>',
 });
 
 /** Always open, so collapsed sections' controls are reachable. */
@@ -360,6 +360,11 @@ function numberFieldByTestId(wrapper: Wrapper, testId: string) {
 }
 
 describe('graphicsCompositorInspector', () => {
+	beforeAll(() => {
+		// happy-dom has no pointer capture; a number field's label only asks for it.
+		HTMLElement.prototype.setPointerCapture ??= () => {};
+	});
+
 	it('offers no Graphic Item controls while the canvas is selected', async () => {
 		const wrapper = await mountComponent({
 			graphics: stack([shapeItem]),
@@ -504,6 +509,28 @@ describe('graphicsCompositorInspector', () => {
 		await nextTick();
 
 		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ rotation: -6 });
+	});
+
+	it.each([
+		{
+			session: 'the lease holder',
+			writable: true,
+			rotations: [3],
+		},
+		{ session: 'a read-only observer', writable: false, rotations: [] },
+	])('lets $session drag a number field\'s label to change its value', async ({ writable, rotations }) => {
+		const wrapper = await mountComponent({
+			graphics: stack([shapeItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+			writable,
+		});
+		const label = wrapper.findAll('[data-number-scrub]').find(handle => handle.text() === 'Graphic Rotation')!;
+
+		await label.trigger('pointerdown', { button: 0, pointerId: 1, clientX: 0 });
+		await label.trigger('pointermove', { pointerId: 1, clientX: 6 });
+
+		const emitted = (wrapper.emitted('update:graphics') ?? []) as [BroadcastGraphicConfig[]][];
+		expect(emitted.map(([graphics]) => itemOf(graphics)?.rotation)).toEqual(rotations);
 	});
 
 	it('configures one Shape Geometry corner without disturbing the others', async () => {
