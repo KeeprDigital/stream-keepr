@@ -62,6 +62,8 @@ const emit = defineEmits<{
 	selectCompositorTarget: [target: GraphicsSelectionTarget];
 	/** The selected layer moved or resized on the canvas; one `gesture` per drag. */
 	manipulate: [rect: GraphicRect, gesture: number];
+	/** Each frame of a canvas rotate drag, as the selected Graphic Item's new Graphic Rotation. */
+	rotate: [rotation: number, gesture: number];
 }>();
 
 const toast = useToast();
@@ -395,10 +397,13 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 					:rect="selectionFrame?.rect ?? null"
 					:origin="selectionFrame?.origin"
 					:snap-lines="selectionFrame?.snapLines"
+					:rotation="selectionFrame?.rotation"
+					:anchor="selectionFrame?.anchor"
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
 					:label="selectionLabel"
 					@change="(rect, gesture) => emit('manipulate', rect, gesture)"
+					@rotate="(rotation, gesture) => emit('rotate', rotation, gesture)"
 				/>
 			</template>
 		</GraphicsPreviewPanel>

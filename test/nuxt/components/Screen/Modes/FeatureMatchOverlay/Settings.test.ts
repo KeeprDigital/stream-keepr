@@ -163,7 +163,12 @@ const PreviewOutputAsideStub = defineComponent({
 		publicationBlockReason: { type: String, required: false },
 		selectionFrame: { type: Object, required: false },
 	},
-	emits: ['selectTarget', 'selectCompositorTarget', 'manipulate'],
+	emits: [
+		'selectTarget',
+		'selectCompositorTarget',
+		'manipulate',
+		'rotate',
+	],
 	template: '<div data-testid="preview-output-aside" :data-selected="JSON.stringify(selectedTarget)" :data-compositor-selected="JSON.stringify(compositorTarget)" :data-frame="JSON.stringify(selectionFrame)" :data-config="JSON.stringify(config)" :data-canvas-width="canvasWidth" :data-canvas-height="canvasHeight" :data-publication-blocked="String(publicationBlocked)" :title="publicationBlockReason" />',
 });
 
@@ -378,6 +383,26 @@ describe('featureMatchOverlaySettings', () => {
 				},
 				origin: { x: 0, y: 0 },
 			});
+		});
+
+		// Every frame of one rotate drag is one undo step.
+		it('turns the selected Graphic Item as the preview rotates it, undoing the drag as one step', async () => {
+			const wrapper = await mountComponent();
+			await flushPromises();
+			const item = mockConfig.value.layout.composition.items[0]!;
+			const rotation = () => mockConfig.value.layout.composition.items.find(candidate => candidate.id === item.id)!.rotation ?? 0;
+
+			preview(wrapper).vm.$emit('selectCompositorTarget', { type: 'item', graphicId: 'feature-match-layout', itemId: item.id });
+			await nextTick();
+			preview(wrapper).vm.$emit('rotate', 30, 1);
+			preview(wrapper).vm.$emit('rotate', 45, 1);
+			await nextTick();
+
+			expect(rotation()).toBe(45);
+			expect(JSON.parse(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-frame')!)).toMatchObject({ rotation: 45 });
+
+			await press('z', { metaKey: true });
+			expect(rotation()).toBe(item.rotation ?? 0);
 		});
 
 		it('returns to the canvas when the selected layer leaves the layout', async () => {
