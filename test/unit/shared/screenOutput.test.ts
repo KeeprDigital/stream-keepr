@@ -57,7 +57,7 @@ describe('screen Output selection', () => {
 			.toBe('/event/7/screen/main?output=key');
 	});
 
-	it('carries the embed role and guide flags only when the embedder asks for them', () => {
+	it('carries the embed role, guide and stress flags only when the embedder asks for them', () => {
 		const preview = screenOutputPath({
 			eventId: 7,
 			screenSlug: 'main',
@@ -65,9 +65,10 @@ describe('screen Output selection', () => {
 			embed: 'preview',
 			itemGuides: true,
 			safeAreaGuides: true,
+			stressDataset: true,
 		});
 
-		expect(preview).toBe('/event/7/screen/main?output=fill&embed=preview&guides=1&safe=1');
+		expect(preview).toBe('/event/7/screen/main?output=fill&embed=preview&guides=1&safe=1&stress=1');
 		expect(screenOutputPath({ eventId: 7, screenSlug: 'main', embed: 'preview' }))
 			.toBe('/event/7/screen/main?output=overlay&embed=preview');
 		expect(screenOutputPath({ eventId: 7, screenSlug: 'main', embed: 'monitor' }))
