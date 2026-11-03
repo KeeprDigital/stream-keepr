@@ -871,6 +871,7 @@ The lease was only checked at two routes. The generic Screen write reached the s
 - The Feature Match Overlay canvas size is not leased, though #738 decided it should be in Feature Match Overlay mode (E2). Since ADR-0051 there is no per-Screen canvas, and the Event Canvas stays unleased in every mode, so nothing is leased for it. That decision applies again only if a per-Screen canvas comes back.
 - Deleting a Screen is not lease-gated. It removes the Screen rather than editing its workspace, and its lease lapses at the holder's next missed heartbeat.
 - Deleting a Player writes its Screens outside the Screen write module (ADR-0032). It clears only a Deck Source, which no lease protects.
+- Deleting a Phase, Round or Archetype writes its Screens outside the Screen write module too (ADR-0060). It only unsets Event References, which no lease protects.
 
 ### Rejected alternatives
 
