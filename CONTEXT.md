@@ -661,7 +661,7 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 A parameterised rectangle with independently square, rounded, or cut corners and bounded left or right edge slant. Rectangle, rule, slanted-edge, and corner-cut presets initialise the same geometry rather than distinct types.
 
 **Graphic Group**:
-A structural Graphic Item arranging direct context-available Graphic Items as a row, column, or canvas, optionally coordinating clipping or animation and supplying overridable local style defaults. Graphic Groups do not nest.
+A structural Graphic Item arranging direct context-available Graphic Items as a row, column, or canvas, optionally coordinating clipping or animation and supplying overridable local style defaults. Graphic Groups do not nest. A Graphic Item moved into or out of a group keeps where it is drawn, its geometry rebased between canvas and group space; a row or column group refuses a rotated item rather than straightening it.
 
 **Graphic Surface Style**:
 The shared visual treatment for the Graphic Items that paint a surface (Text, Shape, Graphic Group, Clock, Player Life, and Game Wins, which paints its win boxes with two more): fill, fill opacity, a uniform outline around the Shape Geometry, and glow. An independently styled edge is a separate Shape Graphic Item from the rule preset.

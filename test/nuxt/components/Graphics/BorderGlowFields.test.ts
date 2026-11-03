@@ -51,14 +51,6 @@ const global = {
 		UFormField: UFormFieldStub,
 		USwitch: USwitchStub,
 		UInputNumber: UInputNumberStub,
-		UIOpacityInput: defineComponent({
-			name: 'UIOpacityInput',
-			props: {
-				modelValue: { type: Number, required: false },
-			},
-			emits: ['update:modelValue'],
-			template: '<input type="number" :value="modelValue" />',
-		}),
 		UButton: UButtonStub,
 		USelect: defineComponent({
 			name: 'USelect',
@@ -160,7 +152,7 @@ describe('border and glow fields', () => {
 			patch: { size: 0 },
 		});
 
-		input(wrapper, 'UIOpacityInput', 'Glow opacity')!.vm.$emit('update:modelValue', 0.4);
+		input(wrapper, 'UInputNumber', 'Glow opacity')!.vm.$emit('update:modelValue', 0.4);
 		await flushPromises();
 		expect(lastEdit(wrapper)).toEqual({
 			kind: 'glow',

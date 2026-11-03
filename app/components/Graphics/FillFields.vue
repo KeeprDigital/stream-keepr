@@ -2,6 +2,7 @@
 import type { GraphicFillEdit } from '~~/shared/modules/graphics';
 import type { GraphicFill, GraphicFillKind } from '~~/shared/types/graphics';
 import { MAX_GRAPHIC_FILL_STOPS, MIN_GRAPHIC_FILL_STOPS } from '~~/shared/types/graphics';
+import { OPACITY_INPUT } from '~/utils/opacityInput';
 
 /**
  * The one Graphic Fill fields control, for a Graphic Item's own fill (through a
@@ -107,19 +108,17 @@ function editStop(index: number, patch: Extract<GraphicFillEdit, { kind: 'gradie
 		</UFormField>
 
 		<template v-else>
-			<UFormField label="Gradient angle" :size="size">
-				<UInputNumber
-					:model-value="fill.angle"
-					:min="-360"
-					:max="360"
-					:size="size"
-					:disabled="disabled"
-					class="w-full"
-					:aria-label="ariaLabel('Gradient angle')"
-					:data-testid="testId('angle')"
-					@update:model-value="emit('edit', { kind: 'gradient-angle', angle: $event ?? 0 })"
-				/>
-			</UFormField>
+			<GraphicsNumberField
+				label="Gradient angle"
+				:size="size"
+				:model-value="fill.angle"
+				:min="-360"
+				:max="360"
+				:disabled="disabled"
+				:aria-label="ariaLabel('Gradient angle')"
+				:data-testid="testId('angle')"
+				@update:model-value="emit('edit', { kind: 'gradient-angle', angle: $event ?? 0 })"
+			/>
 			<div
 				v-for="(stop, index) in fill.stops"
 				:key="index"
@@ -145,29 +144,26 @@ function editStop(index: number, patch: Extract<GraphicFillEdit, { kind: 'gradie
 						/>
 					</slot>
 				</UFormField>
-				<UFormField label="Position" :size="size">
-					<UInputNumber
-						:model-value="stop.position"
-						:min="0"
-						:max="1"
-						:step="0.05"
-						:size="size"
-						:disabled="disabled"
-						class="w-full"
-						:aria-label="ariaLabel(`Stop ${index + 1} position`)"
-						@update:model-value="editStop(index, { position: $event ?? 0 })"
-					/>
-				</UFormField>
-				<UFormField label="Opacity" :size="size">
-					<UIOpacityInput
-						:model-value="stop.opacity"
-						:size="size"
-						:disabled="disabled"
-						class="w-full"
-						:aria-label="ariaLabel(`Stop ${index + 1} opacity`)"
-						@update:model-value="editStop(index, { opacity: $event ?? 1 })"
-					/>
-				</UFormField>
+				<GraphicsNumberField
+					label="Position"
+					:size="size"
+					:model-value="stop.position"
+					:min="0"
+					:max="1"
+					:step="0.05"
+					:disabled="disabled"
+					:aria-label="ariaLabel(`Stop ${index + 1} position`)"
+					@update:model-value="editStop(index, { position: $event ?? 0 })"
+				/>
+				<GraphicsNumberField
+					label="Opacity"
+					:size="size"
+					v-bind="OPACITY_INPUT"
+					:model-value="stop.opacity"
+					:disabled="disabled"
+					:aria-label="ariaLabel(`Stop ${index + 1} opacity`)"
+					@update:model-value="editStop(index, { opacity: $event ?? 1 })"
+				/>
 			</div>
 			<div class="flex gap-2">
 				<UButton

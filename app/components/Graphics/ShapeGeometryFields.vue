@@ -174,24 +174,19 @@ function updateCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 				Edge slant
 			</p>
 			<div class="grid grid-cols-2 gap-2">
-				<UFormField
+				<GraphicsNumberField
 					v-for="slant in SLANTS"
 					:key="slant.field"
 					:label="slant.label"
 					:size="size"
-				>
-					<UInputNumber
-						:model-value="geometry[slant.field]"
-						:min="-MAX_SHAPE_GEOMETRY_PX"
-						:max="MAX_SHAPE_GEOMETRY_PX"
-						:size="size"
-						class="w-full"
-						:disabled="disabled"
-						:data-testid="slant.testId"
-						:aria-label="slant.ariaLabel"
-						@update:model-value="emit('update', { [slant.field]: $event ?? 0 })"
-					/>
-				</UFormField>
+					:model-value="geometry[slant.field]"
+					:min="-MAX_SHAPE_GEOMETRY_PX"
+					:max="MAX_SHAPE_GEOMETRY_PX"
+					:disabled="disabled"
+					:data-testid="slant.testId"
+					:aria-label="slant.ariaLabel"
+					@update:model-value="emit('update', { [slant.field]: $event ?? 0 })"
+				/>
 			</div>
 		</div>
 	</div>

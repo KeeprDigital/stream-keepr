@@ -34,6 +34,7 @@ import {
 	MIN_GRAPHIC_ANIMATION_REPEAT,
 } from '~~/shared/types/graphics';
 import { useGeometryUnit } from '~/composables/ui/useGeometryUnit';
+import { OPACITY_INPUT } from '~/utils/opacityInput';
 
 /**
  * The one Graphic Animation Recipe fields control, for a lifecycle phase's recipe
@@ -176,28 +177,26 @@ function testId(field: string) {
 <template>
 	<div class="space-y-2">
 		<div class="grid grid-cols-2 gap-2">
-			<UFormField label="Duration (ms)" size="xs">
-				<UInputNumber
-					:model-value="recipe.duration"
-					:min="MIN_GRAPHIC_ANIMATION_DURATION_MS"
-					:max="MAX_GRAPHIC_ANIMATION_DURATION_MS"
-					size="xs"
-					:disabled="disabled"
-					:data-testid="testId('duration')"
-					@update:model-value="value => emit('update', { duration: value ?? MIN_GRAPHIC_ANIMATION_DURATION_MS })"
-				/>
-			</UFormField>
-			<UFormField label="Delay (ms)" size="xs">
-				<UInputNumber
-					:model-value="recipe.delay ?? 0"
-					:min="0"
-					:max="MAX_GRAPHIC_ANIMATION_DELAY_MS"
-					size="xs"
-					:disabled="disabled"
-					:data-testid="testId('delay')"
-					@update:model-value="value => emit('update', { delay: value ?? 0 })"
-				/>
-			</UFormField>
+			<GraphicsNumberField
+				label="Duration (ms)"
+				size="xs"
+				:model-value="recipe.duration"
+				:min="MIN_GRAPHIC_ANIMATION_DURATION_MS"
+				:max="MAX_GRAPHIC_ANIMATION_DURATION_MS"
+				:disabled="disabled"
+				:data-testid="testId('duration')"
+				@update:model-value="value => emit('update', { duration: value ?? MIN_GRAPHIC_ANIMATION_DURATION_MS })"
+			/>
+			<GraphicsNumberField
+				label="Delay (ms)"
+				size="xs"
+				:model-value="recipe.delay ?? 0"
+				:min="0"
+				:max="MAX_GRAPHIC_ANIMATION_DELAY_MS"
+				:disabled="disabled"
+				:data-testid="testId('delay')"
+				@update:model-value="value => emit('update', { delay: value ?? 0 })"
+			/>
 		</div>
 
 		<UFormField label="Easing" size="xs">
@@ -215,29 +214,27 @@ function testId(field: string) {
 
 		<template v-if="cycling">
 			<div class="grid grid-cols-2 gap-2">
-				<UFormField label="Pause (ms)" size="xs">
-					<UInputNumber
-						:model-value="recipe.pause ?? 0"
-						:min="0"
-						:max="MAX_GRAPHIC_ANIMATION_PAUSE_MS"
-						size="xs"
-						:disabled="disabled"
-						:data-testid="testId('pause')"
-						@update:model-value="value => emit('update', { pause: value ?? 0 })"
-					/>
-				</UFormField>
-				<UFormField label="Repeat" size="xs">
-					<UInputNumber
-						:model-value="repeatsIndefinitely ? undefined : Number(recipe.repeat ?? MIN_GRAPHIC_ANIMATION_REPEAT)"
-						:min="MIN_GRAPHIC_ANIMATION_REPEAT"
-						:max="MAX_GRAPHIC_ANIMATION_REPEAT"
-						:disabled="disabled || repeatsIndefinitely"
-						size="xs"
-						:data-testid="testId('repeat')"
-						:step="1"
-						@update:model-value="value => emit('update', { repeat: value == null ? MIN_GRAPHIC_ANIMATION_REPEAT : Math.round(value) })"
-					/>
-				</UFormField>
+				<GraphicsNumberField
+					label="Pause (ms)"
+					size="xs"
+					:model-value="recipe.pause ?? 0"
+					:min="0"
+					:max="MAX_GRAPHIC_ANIMATION_PAUSE_MS"
+					:disabled="disabled"
+					:data-testid="testId('pause')"
+					@update:model-value="value => emit('update', { pause: value ?? 0 })"
+				/>
+				<GraphicsNumberField
+					label="Repeat"
+					size="xs"
+					:model-value="repeatsIndefinitely ? undefined : Number(recipe.repeat ?? MIN_GRAPHIC_ANIMATION_REPEAT)"
+					:min="MIN_GRAPHIC_ANIMATION_REPEAT"
+					:max="MAX_GRAPHIC_ANIMATION_REPEAT"
+					:disabled="disabled || repeatsIndefinitely"
+					:data-testid="testId('repeat')"
+					:step="1"
+					@update:model-value="value => emit('update', { repeat: value == null ? MIN_GRAPHIC_ANIMATION_REPEAT : Math.round(value) })"
+				/>
 			</div>
 			<UFormField label="Repeat indefinitely" size="xs" class="flex items-center gap-2">
 				<USwitch
@@ -272,15 +269,15 @@ function testId(field: string) {
 			</div>
 
 			<div v-if="channel.key === 'fade' && recipe.fade" class="mt-2">
-				<UFormField label="Opacity at excursion" size="xs">
-					<UIOpacityInput
-						:model-value="recipe.fade.opacity"
-						size="xs"
-						:disabled="disabled"
-						:data-testid="testId('fade-opacity')"
-						@update:model-value="value => emit('channel', 'fade', { opacity: value ?? 0 })"
-					/>
-				</UFormField>
+				<GraphicsNumberField
+					label="Opacity at excursion"
+					size="xs"
+					v-bind="OPACITY_INPUT"
+					:model-value="recipe.fade.opacity"
+					:disabled="disabled"
+					:data-testid="testId('fade-opacity')"
+					@update:model-value="value => emit('channel', 'fade', { opacity: value ?? 0 })"
+				/>
 			</div>
 
 			<div v-if="channel.key === 'slide' && recipe.slide" class="mt-2 space-y-2">
@@ -337,18 +334,17 @@ function testId(field: string) {
 			</div>
 
 			<div v-if="channel.key === 'scale' && recipe.scale" class="mt-2 space-y-2">
-				<UFormField label="Factor" size="xs">
-					<UInputNumber
-						:model-value="recipe.scale.factor"
-						:min="0"
-						:max="MAX_GRAPHIC_ANIMATION_SCALE"
-						:step="0.05"
-						size="xs"
-						:disabled="disabled"
-						:data-testid="testId('scale-factor')"
-						@update:model-value="value => emit('channel', 'scale', { factor: value ?? 1 })"
-					/>
-				</UFormField>
+				<GraphicsNumberField
+					label="Factor"
+					size="xs"
+					:model-value="recipe.scale.factor"
+					:min="0"
+					:max="MAX_GRAPHIC_ANIMATION_SCALE"
+					:step="0.05"
+					:disabled="disabled"
+					:data-testid="testId('scale-factor')"
+					@update:model-value="value => emit('channel', 'scale', { factor: value ?? 1 })"
+				/>
 				<UFormField label="Origin" size="xs">
 					<UINinePointPicker
 						:model-value="recipe.scale.origin"
