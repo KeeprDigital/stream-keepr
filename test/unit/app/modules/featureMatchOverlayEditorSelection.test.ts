@@ -136,7 +136,25 @@ describe('feature match layout editor selection', () => {
 		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'child' }, CANVAS_SIZE)?.origin).toEqual({ x: 54, y: 64 });
 	});
 
-	it('offers nothing to move for a row child, a rotated group\'s child or a rotated item', () => {
+	it('offers a rotated item with its rotation about its anchor, and a Source Item as one that cannot turn', () => {
+		const layout = layoutWith(composition => addGraphicItem(composition, { kind: 'text', id: 'title', ...CANVAS }).graphic);
+		layout.composition.items = layout.composition.items.map(item => ({ ...item, rotation: 15, anchor: 'center' }) as GraphicItemConfig);
+		const title = layout.composition.items[0]!;
+
+		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'title' }, CANVAS_SIZE)).toMatchObject({
+			rect: {
+				x: title.x,
+				y: title.y,
+				width: title.width,
+				height: title.height,
+			},
+			rotation: 15,
+			anchor: 'center',
+		});
+		expect(editorSelectionFrame(layout, { type: 'source', itemId: 'main-source' }, CANVAS_SIZE)?.rotation).toBeUndefined();
+	});
+
+	it('offers nothing to move for a row child or a rotated group\'s child', () => {
 		let layout = layoutWith(composition => addGraphicGroupChild(
 			addGraphicItem(composition, { kind: 'group', id: 'cluster', ...CANVAS }).graphic,
 			{ kind: 'shape', groupId: 'cluster', id: 'child' },
@@ -169,9 +187,5 @@ describe('feature match layout editor selection', () => {
 			},
 		};
 		expect(editorSelectionFrame(turnedGroup, { type: 'item', itemId: 'child' }, CANVAS_SIZE)).toBeNull();
-
-		const rotated = layoutWith(composition => addGraphicItem(composition, { kind: 'text', id: 'title', ...CANVAS }).graphic);
-		rotated.composition.items = rotated.composition.items.map(item => ({ ...item, rotation: 15 }) as GraphicItemConfig);
-		expect(editorSelectionFrame(rotated, { type: 'item', itemId: 'title' }, CANVAS_SIZE)).toBeNull();
 	});
 });

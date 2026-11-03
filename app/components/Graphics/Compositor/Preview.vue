@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
-import type { BroadcastGraphicConfig, GraphicAnimationPhase } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
-import type { GraphicsPreviewAnimationScope } from '~/modules/graphics/previewMessages';
+import type { GraphicsPreviewAnimationPlan } from '~/modules/graphics/previewMessages';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { Screen } from '~/types';
-import { GRAPHIC_ANIMATION_PHASE_LABELS } from '~~/shared/modules/graphics';
 import { canonicalSocialProfileUrl, SUPPORTED_SOCIAL_NETWORK_BY_KEY, SUPPORTED_SOCIAL_NETWORKS } from '~~/shared/socialProfiles';
-import { GRAPHIC_ANIMATION_PHASE_VALUES } from '~~/shared/types/graphics';
 import { screenOutputPath } from '~~/shared/utils/screenOutput';
 import {
 	GRAPHICS_PREVIEW_STATE_MESSAGE,
@@ -35,8 +33,8 @@ import { graphicsSelectionGraphicId } from '~/modules/graphics/selection';
  * Input: the preview's only channel to the frame is this one message, and the
  * frame's only channel back is a selection.
  *
- * There is no playhead and no scrubbing. `run` is a token, not a time: bumping it
- * starts a run over, which is the only control an author has over *when*.
+ * The controls are the shared `GraphicsAnimationPreviewControls`, which describe
+ * a run as a plan; there is no playhead and no scrubbing.
  */
 const props = defineProps<{
 	eventId: number;
@@ -62,18 +60,6 @@ const PREVIEW_BACKGROUND_OPTIONS: Array<{ label: string; value: PreviewBackgroun
 	{ label: 'Green', value: 'green', color: '#00b140' },
 ];
 
-const ANIMATION_PHASE_OPTIONS = GRAPHIC_ANIMATION_PHASE_VALUES.map(phase => ({
-	label: GRAPHIC_ANIMATION_PHASE_LABELS[phase],
-	value: phase,
-}));
-
-const ANIMATION_SPEED_OPTIONS = [
-	{ label: '0.25x', value: 0.25 },
-	{ label: '0.5x', value: 0.5 },
-	{ label: '1x', value: 1 },
-	{ label: '2x', value: 2 },
-] as const;
-
 const previewOutput = ref<ScreenOutput>('overlay');
 const previewBackground = ref<PreviewBackground>('transparent');
 const previewBackgroundColor = computed(() =>
@@ -82,12 +68,8 @@ const itemGuides = ref(true);
 const safeAreaGuides = ref(false);
 const previewFrame = ref<HTMLIFrameElement | null>(null);
 
-const animationPhase = ref<GraphicAnimationPhase>('enter');
-const animationScope = ref<GraphicsPreviewAnimationScope>('phase');
-const animationSpeed = ref<number>(1);
-const animationLoop = ref(false);
-/** Zero means nothing is playing; every start bumps it. */
-const animationRun = ref(0);
+/** The run the shared controls describe; null composes at the Graphic Resting State. */
+const animationPlan = ref<GraphicsPreviewAnimationPlan | null>(null);
 
 interface SocialProfileSample {
 	network: SupportedSocialNetwork;
@@ -170,36 +152,10 @@ const previewSocialProfileValues = computed(() => Object.fromEntries(
  */
 const previewGraphicId = computed(() => graphicsSelectionGraphicId(props.selectedTarget));
 
-const animationPlan = computed(() => {
-	const graphicId = previewGraphicId.value;
-	if (animationRun.value === 0 || !graphicId)
-		return null;
-
-	return {
-		graphicId,
-		scope: animationScope.value,
-		phase: animationPhase.value,
-		run: animationRun.value,
-		speed: animationSpeed.value,
-		loop: animationLoop.value,
-	};
-});
-
-function playAnimation() {
-	animationRun.value += 1;
-}
-
-/** Stop and settle at the Graphic Resting State, which is where authoring happens. */
-function stopAnimation() {
-	animationRun.value = 0;
-}
-
-// A selection that leaves the Broadcast Graphic being previewed stops the run
-// rather than silently animating something the author is no longer looking at.
-watch(previewGraphicId, (graphicId, previous) => {
-	if (graphicId !== previous)
-		stopAnimation();
-});
+/** A run plays a whole Broadcast Graphic. */
+const animationTarget = computed(() => previewGraphicId.value === null
+	? null
+	: { graphicId: previewGraphicId.value });
 
 const previewUrl = computed(() => screenOutputPath({
 	eventId: props.eventId,
@@ -291,78 +247,11 @@ watch(
 			/>
 		</template>
 
-		<div
-			class="mb-3 flex flex-wrap items-center gap-3 rounded-md border border-default/70 p-2"
-			data-testid="animation-preview-controls"
-		>
-			<span class="text-xs font-semibold text-muted">Animation</span>
-			<USelectMenu
-				:model-value="animationPhase"
-				:items="ANIMATION_PHASE_OPTIONS"
-				value-key="value"
-				size="xs"
-				class="w-32"
-				aria-label="Preview lifecycle phase"
-				data-testid="animation-preview-phase"
-				@update:model-value="value => { animationPhase = value }"
-			/>
-			<UFieldGroup size="xs">
-				<UButton
-					:color="animationScope === 'phase' ? 'primary' : 'neutral'"
-					:variant="animationScope === 'phase' ? 'subtle' : 'outline'"
-					data-testid="animation-preview-scope-phase"
-					@click="() => { animationScope = 'phase' }"
-				>
-					Phase
-				</UButton>
-				<UButton
-					:color="animationScope === 'lifecycle' ? 'primary' : 'neutral'"
-					:variant="animationScope === 'lifecycle' ? 'subtle' : 'outline'"
-					data-testid="animation-preview-scope-lifecycle"
-					@click="() => { animationScope = 'lifecycle' }"
-				>
-					Lifecycle
-				</UButton>
-			</UFieldGroup>
-			<UFieldGroup size="xs">
-				<UButton
-					v-for="speed in ANIMATION_SPEED_OPTIONS"
-					:key="speed.value"
-					:color="animationSpeed === speed.value ? 'primary' : 'neutral'"
-					:variant="animationSpeed === speed.value ? 'subtle' : 'outline'"
-					:aria-label="`${speed.label} preview speed`"
-					:data-testid="`animation-preview-speed-${speed.value}`"
-					@click="() => { animationSpeed = speed.value }"
-				>
-					{{ speed.label }}
-				</UButton>
-			</UFieldGroup>
-			<UFormField label="Loop" size="xs" class="flex items-center gap-2">
-				<USwitch v-model="animationLoop" size="sm" data-testid="animation-preview-loop" />
-			</UFormField>
-			<UButton
-				size="xs"
-				icon="i-lucide-play"
-				:disabled="previewGraphicId === null"
-				data-testid="animation-preview-play"
-				@click="playAnimation"
-			>
-				Play
-			</UButton>
-			<UButton
-				size="xs"
-				variant="outline"
-				icon="i-lucide-square"
-				:disabled="animationRun === 0"
-				data-testid="animation-preview-stop"
-				@click="stopAnimation"
-			>
-				Stop
-			</UButton>
-			<p v-if="previewGraphicId === null" class="text-xs text-muted" data-testid="animation-preview-hint">
-				Select a Broadcast Graphic to preview its animation.
-			</p>
-		</div>
+		<GraphicsAnimationPreviewControls
+			:target="animationTarget"
+			hint="Select a Broadcast Graphic to preview its animation."
+			@update:plan="plan => { animationPlan = plan }"
+		/>
 
 		<div
 			v-if="socialProfileSampleRows.length > 0"

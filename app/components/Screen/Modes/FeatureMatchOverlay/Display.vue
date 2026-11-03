@@ -10,6 +10,7 @@ import { featureMatchStressDataset } from '~~/shared/featureMatchStressDataset';
 import { paintBroadcastGraphicThemeBindings } from '~~/shared/modules/graphics';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { featureMatchOverlayGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
+import { useFeatureMatchOverlayAnimationPreview } from '~/composables/screen/useFeatureMatchOverlayAnimationPreview';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 import { useFeatureMatchOverlaySideboardData } from '~/composables/screen/useFeatureMatchOverlaySideboardData';
 import { useFeatureMatchOverlaySideboardRevealAnimation } from '~/composables/screen/useFeatureMatchOverlaySideboardRevealAnimation';
@@ -240,16 +241,24 @@ const { itemAnimation } = useFeatureMatchOverlaySideboardRevealAnimation(
 	computed(() => fixedDataset.value ? undefined : graphicsContext.value),
 );
 
+// An editor's Graphic Animation Preview run (#749); a live output never has one.
+const animationPreview = useFeatureMatchOverlayAnimationPreview(
+	computed(() => config.value.layout.composition),
+	themeTokens,
+	isPreview,
+);
+
 const compositorRenderModel = computed(() => resolveFeatureMatchOverlayCompositorRenderModel({
 	output: resolvedOutput.value,
 	game: fixedDataset.value?.game ?? event.value?.game,
 	canvasWidth: canvasWidth.value,
 	canvasHeight: canvasHeight.value,
-	layout: config.value.layout,
+	layout: { composition: animationPreview.composition.value },
 	// A live Screen Output never has a fixed dataset, because it is never a preview.
 	tokenValues: fixedDataset.value?.tokenValues ?? featureMatchTokenValues(hostState.value),
 	featureMatch: graphicsContext.value,
 	itemAnimation: itemAnimation.value,
+	animation: animationPreview.animation.value,
 	// Editor-only, and asked for only by an embedded preview. A live Screen Output
 	// never sets either flag, so no guide can reach one.
 	itemGuides: showPreviewGuides.value,
