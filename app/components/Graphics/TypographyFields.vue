@@ -143,25 +143,20 @@ const unsetChoice = computed(() => props.inheritable ? BASE_OPTION.value : undef
 	<slot name="font" />
 
 	<div class="grid grid-cols-2 gap-2" :data-testid="`${testIdPrefix}-grid`">
-		<UFormField
+		<GraphicsNumberField
 			v-for="field in numberFields"
 			:key="field.key"
 			:label="field.label"
 			:size="size"
-		>
-			<UInputNumber
-				:model-value="typography[field.key]"
-				:min="field.min"
-				:max="field.max"
-				:step="field.step"
-				:size="size"
-				class="w-full"
-				:disabled="disabled"
-				:aria-label="field.ariaLabel"
-				:data-testid="`${testIdPrefix}-${field.testId}`"
-				@update:model-value="updateNumber(field, $event)"
-			/>
-		</UFormField>
+			:model-value="typography[field.key]"
+			:min="field.min"
+			:max="field.max"
+			:step="field.step"
+			:disabled="disabled"
+			:aria-label="field.ariaLabel"
+			:data-testid="`${testIdPrefix}-${field.testId}`"
+			@update:model-value="updateNumber(field, $event)"
+		/>
 		<UFormField label="Style" :size="size">
 			<USelect
 				:model-value="typography.fontStyle ?? unsetChoice"

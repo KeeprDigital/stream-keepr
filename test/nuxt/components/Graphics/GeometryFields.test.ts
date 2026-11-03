@@ -1,7 +1,8 @@
 import type { GraphicAnchorPoint, GraphicRect } from '~~/shared/types/graphics';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
+import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
 import GeometryFields from '~/components/Graphics/GeometryFields.vue';
 
 // The one geometry fields control, shared by the compositor Inspector and Source Item bounds: what
@@ -28,7 +29,7 @@ const UInputNumberStub = defineComponent({
 
 const global = {
 	stubs: {
-		UFormField: defineComponent({ template: '<div><slot /></div>' }),
+		UFormField: defineComponent({ template: '<div><slot name="label" /><slot /></div>' }),
 		UFieldGroup: defineComponent({ template: '<div><slot /></div>' }),
 		UButton: UButtonStub,
 		UInputNumber: UInputNumberStub,
@@ -83,6 +84,8 @@ async function align(wrapper: Wrapper, ariaLabel: string) {
 	return wrapper.emitted('update')?.at(-1)?.[0];
 }
 
+beforeAll(stubPointerCapture);
+
 beforeEach(() => {
 	localStorage.clear();
 });
@@ -96,6 +99,18 @@ describe('geometry fields', () => {
 		expect(shown(wrapper, 'Item y')).toBe(250);
 		expect(shown(wrapper, 'Item width')).toBe(400);
 		expect(shown(wrapper, 'Item height')).toBe(100);
+	});
+
+	it('stops a size dragged below one pixel there, and turns back from it at once', async () => {
+		const wrapper = mountFields();
+		await flushPromises();
+		const width = wrapper.findAll('[data-number-scrub]').find(label => label.text() === 'Width')!;
+
+		await width.trigger('pointerdown', { button: 0, pointerId: 1, clientX: 0 });
+		await width.trigger('pointermove', { pointerId: 1, clientX: -2_000 });
+		await width.trigger('pointermove', { pointerId: 1, clientX: -1_998 });
+
+		expect(wrapper.emitted('update')?.map(([patch]) => (patch as Partial<GraphicRect>).width)).toEqual([1, 2]);
 	});
 
 	it('shows a percentage of the container to two decimal places', async () => {

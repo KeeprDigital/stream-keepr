@@ -1,5 +1,5 @@
 import type { FeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { nextTick, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
@@ -130,6 +130,47 @@ describe('useFeatureMatchLayoutEditor without the lease', () => {
 
 		expect(writes).toHaveLength(1);
 		expect(config.value.layout.sources.find(item => item.id === 'main-source')?.visible).toBe(false);
+	});
+});
+
+describe('useFeatureMatchLayoutEditor gestures', () => {
+	it('undoes a gesture as one step however long it pauses, and joins it to no edit around it', () => {
+		const clock = { now: 1_000 };
+		vi.spyOn(Date, 'now').mockImplementation(() => clock.now);
+		const { editor, config } = editorFor(true);
+		const opacity = () => config.value.layout.frame.opacity;
+		/** Frame opacity edits from a property panel, `msApart` from each other. */
+		function editOpacities(opacities: number[], msApart: number) {
+			for (const next of opacities) {
+				clock.now += msApart;
+				editor.editFields({
+					layout: {
+						...config.value.layout,
+						frame: { ...config.value.layout.frame, opacity: next },
+					},
+				});
+			}
+		}
+
+		editOpacities([0.9], 10);
+		editor.beginGesture();
+		editOpacities([0.8, 0.7, 0.6], 2_000);
+		editor.endGesture();
+		editOpacities([0.5], 10);
+
+		const undone = [
+			opacity(),
+		];
+		while (editor.canUndo.value) {
+			editor.undo();
+			undone.push(opacity());
+		}
+		expect(undone).toEqual([
+			0.5,
+			0.6,
+			0.9,
+			DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.frame.opacity,
+		]);
 	});
 });
 
