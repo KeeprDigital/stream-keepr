@@ -27,6 +27,8 @@ const props = defineProps<{
 	screenHeight: number;
 	eventId: number;
 	selectedTarget: FeatureMatchOverlaySelectionTarget;
+	/** Whether this session holds the Graphics Authoring Lease; read-only otherwise (#738). */
+	writable?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -93,22 +95,25 @@ const header = computed(() => {
 			</div>
 		</div>
 
-		<FeatureMatchOverlayFrameStyleCard
-			v-if="selection.kind === 'canvas'"
-			:config="config"
-			:patch-frame="patchFrame"
-			:event-id="eventId"
-		/>
+		<!-- A disabled fieldset is what makes the read-only panel read-only, as in the shared compositor's inspector. -->
+		<fieldset class="min-w-0" :disabled="writable !== true" data-testid="overlay-layer-inspector-fields">
+			<FeatureMatchOverlayFrameStyleCard
+				v-if="selection.kind === 'canvas'"
+				:config="config"
+				:patch-frame="patchFrame"
+				:event-id="eventId"
+			/>
 
-		<FeatureMatchOverlayInspectorSource
-			v-else-if="selection.kind === 'source'"
-			:config="config"
-			:update-config="updateConfig"
-			:screen-width="screenWidth"
-			:screen-height="screenHeight"
-			:item="selection.item"
-			@remove="emit('remove', $event)"
-			@duplicate="emit('duplicate', $event)"
-		/>
+			<FeatureMatchOverlayInspectorSource
+				v-else-if="selection.kind === 'source'"
+				:config="config"
+				:update-config="updateConfig"
+				:screen-width="screenWidth"
+				:screen-height="screenHeight"
+				:item="selection.item"
+				@remove="emit('remove', $event)"
+				@duplicate="emit('duplicate', $event)"
+			/>
+		</fieldset>
 	</section>
 </template>
