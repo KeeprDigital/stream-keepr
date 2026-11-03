@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { FeatureMatchMenuItem } from '~/composables/featureMatch/useFeatureMatchMenuItems';
 import type { FeatureMatchAssignment, Match } from '~/types';
-import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 
 const props = defineProps<{
 	roundOptions?: Array<{ label: string; value: number }>;
@@ -16,8 +15,6 @@ const deckListMatchId = defineModel<number | undefined>('deckListMatchId');
 const deckListRoundId = defineModel<number | undefined>('deckListRoundId');
 
 const cardStore = useCardStore();
-const featureMatchStore = useFeatureMatchStore();
-const featureMatchStateStore = useFeatureMatchStateStore();
 const featureMatchOptions = useFeatureMatchMenuItems();
 const matchOptions = computed(() => props.matchOptions ?? featureMatchOptions.value);
 
@@ -36,30 +33,10 @@ function loadSelectedMatchup(selectedMatch: Match) {
 if (deckListMatchId.value && props.selectedMatch && !cardStore.deckListHasData)
 	void loadSelectedMatchup(props.selectedMatch);
 
-/**
- * Who the picked Slot's followed Session seats on each side, so a swap reloads
- * its decks onto the sides the Session shows them (ADR-0058).
- */
-const slotSideOrder = computed(() => {
-	const slot = props.selectedMatch
-		? undefined
-		: featureMatchStore.featureMatches.find(match => match.id === deckListMatchId.value);
-	if (!slot)
-		return null;
-	const followed = withFollowedFeatureMatchSession(slot, featureMatchStateStore);
-	return (['player1', 'player2'] as const)
-		.map((side) => {
-			const seated = featureMatchSidePlayer(followed, side);
-			return `${seated.playerId ?? ''}:${seated.data?.name ?? ''}`;
-		})
-		.join('|');
-});
-
 // When picker selection changes, load either a round-specific match or the live feature-match slot.
 watch([
 	deckListMatchId,
 	() => props.selectedMatch,
-	slotSideOrder,
 ], async ([matchId, selectedMatch]) => {
 	if (!matchId) {
 		cardStore.clearMatchDeckLists();

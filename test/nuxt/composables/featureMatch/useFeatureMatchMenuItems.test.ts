@@ -1,6 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { LAW, ZORO } from '~~/test/helpers/opCards';
+import { createFollowedFeatureMatchSessions, followNoSession, followSwappedSession } from '~~/test/nuxt/helpers/followedFeatureMatchSession';
 
 const alice = {
 	name: 'Alice',
@@ -42,39 +43,14 @@ const mockMatches = [
 	},
 ];
 
-const followed = reactive({
-	sessionIdBySlotId: new Map<number, number>(),
-	featureMatchSessions: new Map<number, any>(),
-});
+const followed = createFollowedFeatureMatchSessions();
 
 mockNuxtImport('useFeatureMatchStore', () => () => ({ featureMatches: mockMatches }));
 mockNuxtImport('useFeatureMatchStateStore', () => () => followed);
 
-/** The followed Session of Slot `slotId`, swapped: its player2 sits on player1's side. */
-function followSwappedSession(slotId: number) {
-	const slot = mockMatches.find(match => match.id === slotId)!;
-	followed.sessionIdBySlotId = new Map([
-		[slotId, 90],
-	]);
-	followed.featureMatchSessions = new Map([
-		[
-			90,
-			{
-				id: 90,
-				sourceSnapshot: {
-					playersSwapped: true,
-					player1: { playerId: slot.player2Id ?? null, data: slot.player2Data },
-					player2: { playerId: slot.player1Id ?? null, data: slot.player1Data },
-				},
-			},
-		],
-	]);
-}
-
 describe('useFeatureMatchMenuItems', () => {
 	beforeEach(() => {
-		followed.sessionIdBySlotId = new Map();
-		followed.featureMatchSessions = new Map();
+		followNoSession(followed);
 	});
 
 	it('offers each Feature Match Slot with its Players and their decks', () => {
@@ -124,7 +100,7 @@ describe('useFeatureMatchMenuItems', () => {
 		},
 	])('names a $game Slot\'s players in the order $session Session seats them', ({ game: _game, slot, session, ...named }) => {
 		if (session === 'a swapped')
-			followSwappedSession(slot);
+			followSwappedSession(followed, mockMatches.find(match => match.id === slot)!);
 
 		expect(useFeatureMatchMenuItems().value.find(item => item.value === slot)).toMatchObject(named);
 	});
