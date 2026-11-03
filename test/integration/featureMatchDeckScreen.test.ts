@@ -5,7 +5,7 @@ import Ably from 'ably';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eventRealtimeChannel } from '../../shared/utils/realtimeChannels';
 import { $fetch, anonymousFetch } from './client';
-import { commandId, requireActiveSession, sendFeatureMatchCommand } from './featureMatchSessionHelpers';
+import { commandId, getFeatureMatchSlot, requireActiveSession, sendFeatureMatchCommand } from './featureMatchSessionHelpers';
 import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './helpers';
 
 // A Deck Screen showing a One Piece Feature Match Slot side (ADR-0057) reads
@@ -101,11 +101,13 @@ describe('a Deck Screen showing a Feature Match Slot side', () => {
 			['OP01-025', 4],
 		]);
 
+		const held = await getFeatureMatchSlot(eventId, slotId);
 		await sendFeatureMatchCommand(eventId, sessionId, {
 			commandId: commandId('deck-screen-swap'),
 			type: 'SwapPlayers',
 			payload: {},
-		} as never);
+			baseSequence: requireActiveSession(held).sequence,
+		});
 
 		expect(await shownDeckListId('player1')).toBe(benDeckListId);
 		const ben = await asOutput<ScreenOutputFeatureMatchDeckListResponse>(`feature-match-slots/${slotId}/deck-lists/${benDeckListId}`);
