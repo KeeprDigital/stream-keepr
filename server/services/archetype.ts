@@ -68,23 +68,16 @@ export function archetypeService() {
 	};
 
 	/**
-	 * Build (without executing) the archetype delete statement. Exposed so
-	 * callers that need this to commit atomically with other writes (e.g.
-	 * clearing deck reviews for the same archetype) can append it to a shared
-	 * `db.batch()` instead of running it as its own round trip.
+	 * Build (without executing) the archetype delete statement, for a batch
+	 * that also clears the deck reviews naming it and releases the Screens
+	 * naming it (ADR-0060). There is no standalone delete: it would release
+	 * neither.
 	 */
 	const buildRemoveQuery = (id: number, eventId: number) => {
 		return db
 			.delete(archetypes)
 			.where(and(eq(archetypes.id, id), eq(archetypes.eventId, eventId)))
 			.returning();
-	};
-
-	/** Delete an archetype record. No cascade to players. */
-	const remove = async (id: number, eventId: number): Promise<boolean> => {
-		const result = await buildRemoveQuery(id, eventId);
-
-		return result.length > 0;
 	};
 
 	return {
@@ -94,6 +87,5 @@ export function archetypeService() {
 		create,
 		update,
 		buildRemoveQuery,
-		remove,
 	};
 }
