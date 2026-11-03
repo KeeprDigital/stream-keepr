@@ -1,3 +1,4 @@
+import type { SnapLines } from '~/modules/graphics/canvasManipulation';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
@@ -28,7 +29,7 @@ const RECT = {
 	height: 100,
 };
 
-function mountOverlay(props: Partial<{ rect: typeof RECT | null; origin: { x: number; y: number } }> = {}) {
+function mountOverlay(props: Partial<{ rect: typeof RECT | null; origin: { x: number; y: number }; snapLines: SnapLines }> = {}) {
 	return mount(CanvasManipulationOverlay, {
 		props: {
 			rect: RECT,
@@ -129,6 +130,43 @@ describe('graphicsCanvasManipulationOverlay', () => {
 		const free = mountOverlay();
 		await drag(free, '[data-testid="canvas-manipulation-box"]', { x: -48, y: 0 }, { altKey: true });
 		expect(changes(free).at(-1)).toMatchObject({ x: 4 });
+	});
+
+	it('snaps to the lines it is given in its container\'s pixels, drawing the guide and the gap to the nearest neighbour while dragging', async () => {
+		const wrapper = mountOverlay({
+			origin: { x: 100, y: 0 },
+			snapLines: {
+				x: [0, 500],
+				y: [0],
+				neighbours: [
+					{
+						x: 600,
+						y: 100,
+						width: 50,
+						height: 100,
+					},
+				],
+			},
+		});
+		const box = wrapper.get('[data-testid="canvas-manipulation-box"]');
+
+		await box.trigger('pointerdown', {
+			button: 0,
+			pointerId: 1,
+			clientX: 0,
+			clientY: 0,
+		});
+		await box.trigger('pointermove', { pointerId: 1, clientX: 98, clientY: 0 });
+
+		expect(changes(wrapper).at(-1)).toMatchObject({ x: 300 });
+		expect(wrapper.get('[data-testid="canvas-manipulation-guide"][data-axis="x"]').attributes('style')).toContain('left: 300px');
+		const gap = wrapper.get('[data-testid="canvas-manipulation-gap"][data-axis="x"]');
+		expect(gap.text()).toBe('100');
+		expect(gap.attributes('style')).toContain('left: 300px; top: 75px; width: 50px;');
+
+		await box.trigger('pointerup', { pointerId: 1 });
+		expect(wrapper.find('[data-testid="canvas-manipulation-guide"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="canvas-manipulation-gap"]').exists()).toBe(false);
 	});
 
 	it('reports a rectangle in its container\'s pixels when the container is offset', async () => {

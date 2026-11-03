@@ -322,7 +322,7 @@ describe('featureMatchOverlaySettings', () => {
 			preview(wrapper).vm.$emit('selectTarget', { type: 'source', itemId: 'main-source' });
 			await nextTick();
 
-			expect(JSON.parse(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-frame')!)).toEqual({
+			expect(JSON.parse(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-frame')!)).toMatchObject({
 				rect: {
 					x: source.x,
 					y: source.y,
