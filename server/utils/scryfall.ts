@@ -197,6 +197,7 @@ async function fetchScryfallJson(
 }
 
 const COLLECTION_BATCH_SIZE = 75; // Scryfall limit per request
+const NAMED_LOOKUP_CONCURRENCY = 4;
 
 interface CardIdentifier {
 	name: string;
@@ -411,7 +412,7 @@ export async function batchLookupScryfallIds(
 	}
 
 	// Deduplicate cards by name+set combination
-	const uniqueCards = new Map<string, CardIdentifier>();
+	const requests = new Map<string, { name: string; setCode: string | null; identifier: CardIdentifier }>();
 	for (const card of cards) {
 		const trimmedName = card.name.trim();
 		if (!trimmedName) {
@@ -419,7 +420,7 @@ export async function batchLookupScryfallIds(
 		}
 
 		const key = createCardKey(trimmedName, card.setCode);
-		if (!uniqueCards.has(key)) {
+		if (!requests.has(key)) {
 			// Scryfall collection endpoint rejects "Front // Back" combined names —
 			// strip to the front face so transform, modal_dfc, and split cards are found.
 			const nameForScryfall = trimmedName.includes(' // ')
@@ -429,13 +430,19 @@ export async function batchLookupScryfallIds(
 			if (card.setCode) {
 				identifier.set = card.setCode;
 			}
-			uniqueCards.set(key, identifier);
+			requests.set(key, { name: trimmedName, setCode: card.setCode, identifier });
 		}
 	}
 
+	const identifierKey = (identifier: CardIdentifier) => createCardKey(identifier.name, identifier.set ?? null);
+	const uniqueIdentifiers = new Map<string, CardIdentifier>();
+	for (const request of requests.values())
+		uniqueIdentifiers.set(identifierKey(request.identifier), request.identifier);
 	const identifiers = [
-		...uniqueCards.values(),
+		...uniqueIdentifiers.values(),
 	];
+	const answeredIdentifiers = new Set<string>();
+	let providerFailed = false;
 	const totalBatches = Math.ceil(identifiers.length / COLLECTION_BATCH_SIZE);
 
 	// Process in batches of 75 (Scryfall limit)
@@ -446,10 +453,10 @@ export async function batchLookupScryfallIds(
 		try {
 			const response = await fetchCardCollection(batch);
 
-			// Map results back to card keys
+			// A collection answer is keyed by the card's full name only. Scryfall
+			// answers a name that is another card's face with that card when it
+			// came earlier in the batch (#889), so a face never stands for a name.
 			for (const card of response.data) {
-				// Color identity — join WUBRG codes into a single string.
-				// Use 'in' guard because ScryfallCard.Any is a wide union.
 				const cardData = mapScryfallCardData(card);
 
 				const key = createCardKey(card.name, card.set);
@@ -460,23 +467,12 @@ export async function batchLookupScryfallIds(
 				if (!results.has(nameOnlyKey)) {
 					results.set(nameOnlyKey, cardData);
 				}
+			}
 
-				// For double-faced cards (MDFCs, transform, etc.), Scryfall returns
-				// the full name "Front // Back" but Melee may provide only a single
-				// face name. Store each face name as an additional lookup key so the
-				// card can be resolved regardless of which name format was provided.
-				if (card.name.includes(' // ')) {
-					for (const faceName of card.name.split(' // ')) {
-						const faceKey = createCardKey(faceName, card.set);
-						if (!results.has(faceKey)) {
-							results.set(faceKey, cardData);
-						}
-						const faceNameOnlyKey = createCardKey(faceName, null);
-						if (!results.has(faceNameOnlyKey)) {
-							results.set(faceNameOnlyKey, cardData);
-						}
-					}
-				}
+			const notFoundKeys = new Set(response.not_found.map(identifierKey));
+			for (const identifier of batch) {
+				if (!notFoundKeys.has(identifierKey(identifier)))
+					answeredIdentifiers.add(identifierKey(identifier));
 			}
 
 			// Warn about cards Scryfall could not find (bad name, wrong set, etc.)
@@ -518,12 +514,47 @@ export async function batchLookupScryfallIds(
 				status,
 			}));
 			errors.push(errorMsg);
+			providerFailed = true;
 			// Authoritative imports abort on the first provider failure so an outage
 			// cannot fan out into hundreds of doomed retries. Best-effort callers may
 			// still opt into partial results by leaving stopOnError disabled.
 			if (options.stopOnError)
 				break;
 		}
+	}
+
+	if (providerFailed && options.stopOnError)
+		return { results, errors };
+
+	// A name the batch answered with a card of another name (one face of it, or
+	// a near spelling) is looked up alone, where Scryfall prefers the card of
+	// exactly that name: "Sign in Blood" over "Scheming Silvertongue // Sign in Blood".
+	const answeredElsewhere = [
+		...requests.values(),
+	].filter(request =>
+		answeredIdentifiers.has(identifierKey(request.identifier))
+		&& !getCardDataFromMap(results, request.name, request.setCode));
+	for (let index = 0; index < answeredElsewhere.length; index += NAMED_LOOKUP_CONCURRENCY) {
+		const chunk = answeredElsewhere.slice(index, index + NAMED_LOOKUP_CONCURRENCY);
+		const settled = await Promise.allSettled(chunk.map(request =>
+			fetchScryfallCardByName({ exact: request.name, setCode: request.setCode })));
+		for (const [chunkIndex, outcome] of settled.entries()) {
+			const request = chunk[chunkIndex]!;
+			if (outcome.status === 'fulfilled') {
+				results.set(createCardKey(request.name, request.setCode), outcome.value);
+			}
+			else if (!isScryfallNotFoundError(outcome.reason)) {
+				const status = outcome.reason instanceof ScryfallRequestError
+					? outcome.reason.status
+					: null;
+				providerFailed = true;
+				errors.push(`Scryfall named lookup failed: provider request failed${status === null
+					? ''
+					: ` (HTTP ${status})`}`);
+			}
+		}
+		if (providerFailed && options.stopOnError)
+			break;
 	}
 
 	return { results, errors };
