@@ -71,6 +71,14 @@ export const metagameScopeShape = {
 	playerListId: z.number().int().positive().optional(),
 };
 
+/** The Metagame Scope's fields, which a display reset keeps on every mode carrying it. */
+export const METAGAME_SCOPE_FIELDS = [
+	'scope',
+	'topN',
+	'minPoints',
+	'playerListId',
+] as const satisfies readonly (keyof typeof metagameScopeShape)[];
+
 export const DEFAULT_METAGAME_SCOPE = {
 	scope: 'all',
 	topN: 8,
