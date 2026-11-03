@@ -2,7 +2,7 @@ import type { ScreenCard } from '~~/shared/types/card/mtg';
 import type { OpCardDetail, OpCardSummary, OpScreenCard } from '~~/shared/types/card/op';
 import type { MatchPlayerDeckData } from '~/types/card/deckList';
 import type { MtgActiveCardAction, MtgCard, MtgFormat } from '~/types/card/mtg';
-import type { CardPageMode } from '~/types/card/page';
+import type { CardDeckListSource, CardPageMode } from '~/types/card/page';
 import { useCountdown, useStorage } from '@vueuse/core';
 import { isOpScreenCard } from '~~/shared/utils/card/op';
 import { useActiveCardScreenRuntime } from '~/modules/card-screen/activeCard';
@@ -40,7 +40,7 @@ export const useCardStore = defineStore('card', () => {
 	const deckListPlayer2 = ref<MatchPlayerDeckData | null>(null);
 	const deckListHasData = computed(() => deckListPlayer1.value !== null || deckListPlayer2.value !== null);
 	const deckListRoundId = ref<number | null>(null);
-	const deckListMatchId = ref<number | null>(null);
+	const deckListSource = ref<CardDeckListSource | null>(null);
 	const deckListFilter = ref('');
 
 	// ──────────────── Player Deck State ────────────────
@@ -207,7 +207,7 @@ export const useCardStore = defineStore('card', () => {
 		activeScreenId.value = null;
 		cardPageMode.value = 'search';
 		deckListRoundId.value = null;
-		deckListMatchId.value = null;
+		deckListSource.value = null;
 		error.value = null;
 		loading.value = false;
 		// Ends the Event Lifetime for the Card too: a read still out lands nothing (#704),
@@ -239,7 +239,7 @@ export const useCardStore = defineStore('card', () => {
 		deckListPlayer2,
 		deckListHasData,
 		deckListRoundId,
-		deckListMatchId,
+		deckListSource,
 		deckListFilter,
 		canUseDeckListMode,
 		cardDataDegraded,

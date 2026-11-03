@@ -1,10 +1,10 @@
 import type { Ref } from 'vue';
-import type { CardPageMode } from '~/types/card/page';
+import type { CardDeckListSource, CardPageMode } from '~/types/card/page';
 
 interface CardPageView {
 	mode: Ref<CardPageMode>;
 	roundId: Ref<number | null>;
-	matchId: Ref<number | null>;
+	source: Ref<CardDeckListSource | null>;
 	playerId: Ref<number | null>;
 }
 
@@ -12,6 +12,7 @@ const LINK_KEYS = [
 	'mode',
 	'roundId',
 	'matchId',
+	'slotId',
 	'playerId',
 ] as const;
 
@@ -24,10 +25,21 @@ function queryId(value: unknown): number | null {
 		: null;
 }
 
+function querySource(query: Record<string, unknown>): CardDeckListSource | null {
+	const matchId = queryId(query.matchId);
+	if (matchId !== null)
+		return { kind: 'match', id: matchId };
+	const slotId = queryId(query.slotId);
+	return slotId === null
+		? null
+		: { kind: 'slot', id: slotId };
+}
+
 /**
- * The Cards page's query names the deck it shows: `?mode=match-decklist&roundId=&matchId=`
- * or `?mode=player-decklist&playerId=`. Arriving with one restores that view over what
- * the store holds; the query then follows the view. `linked` says arrival named a view.
+ * The Cards page's query names the deck it shows: `?mode=match-decklist&roundId=` with
+ * `&matchId=` or a Feature Match Slot's `&slotId=`, or `?mode=player-decklist&playerId=`.
+ * Arriving with one restores that view over what the store holds; the query then follows
+ * the view. `linked` says arrival named a view.
  */
 export function useCardPageLink(view: CardPageView) {
 	const route = useRoute();
@@ -38,7 +50,7 @@ export function useCardPageLink(view: CardPageView) {
 	if (linkedMode === 'match-decklist') {
 		view.mode.value = linkedMode;
 		view.roundId.value = queryId(route.query.roundId);
-		view.matchId.value = queryId(route.query.matchId);
+		view.source.value = querySource(route.query);
 	}
 	else if (linkedMode === 'player-decklist') {
 		view.mode.value = linkedMode;
@@ -49,12 +61,16 @@ export function useCardPageLink(view: CardPageView) {
 		const id = (value: number | null) => value === null
 			? undefined
 			: String(value);
+		const sourceId = (kind: CardDeckListSource['kind']) => view.source.value?.kind === kind
+			? view.source.value.id
+			: null;
 		switch (view.mode.value) {
 			case 'match-decklist':
 				return {
 					mode: view.mode.value,
 					roundId: id(view.roundId.value),
-					matchId: id(view.matchId.value),
+					matchId: id(sourceId('match')),
+					slotId: id(sourceId('slot')),
 				};
 			case 'player-decklist':
 				return {
