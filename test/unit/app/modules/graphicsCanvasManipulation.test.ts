@@ -246,11 +246,33 @@ describe('canvas manipulation', () => {
 			expected: 15,
 		},
 		{
-			name: 'stays within half a turn either way',
+			name: 'keeps the rotation it started at, past half a turn',
 			anchor: 'center' as const,
 			rotation: 170,
 			to: { x: 200, y: 250 },
-			expected: -100,
+			expected: 260,
+		},
+		{
+			name: 'wraps past a whole turn to stay within one',
+			anchor: 'center' as const,
+			rotation: 350,
+			to: { x: 200, y: 250 },
+			expected: 80,
+		},
+		{
+			name: 'leaves a rotation the pointer has not turned as it was',
+			anchor: 'center' as const,
+			rotation: 12.5,
+			to: { x: 300.2, y: 150 },
+			expected: 12.5,
+		},
+		{
+			name: 'sweeps the shorter way round past the side behind the anchor',
+			anchor: 'center' as const,
+			rotation: 0,
+			from: { x: 100, y: 140 },
+			to: { x: 100, y: 160 },
+			expected: -11,
 		},
 	])('a rotate drag $name', ({ anchor, rotation, from, to, step, expected }) => {
 		expect(dragRotation({ rect: RECT, rotation, anchor }, from ?? { x: 300, y: 150 }, to, { step })).toBe(expected);

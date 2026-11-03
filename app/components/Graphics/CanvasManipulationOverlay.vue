@@ -2,8 +2,17 @@
 import type { GraphicAnchorPoint, GraphicRect } from '~~/shared/types/graphics';
 import type { ManipulationHandle, SnapLines } from '~/modules/graphics/canvasManipulation';
 import { useElementSize } from '@vueuse/core';
-import { resolveGraphicAnchorPoint } from '~~/shared/modules/graphics/geometry';
-import { canvasSnapLines, dragRotation, manipulateRect, neighbourGaps, RESIZE_HANDLES, rotatedBounds } from '~/modules/graphics/canvasManipulation';
+import { graphicAnchorTransformOrigin } from '~~/shared/modules/graphics/geometry';
+import {
+	canvasSnapLines,
+	dragRotation,
+	drawnPoint,
+	isTurned,
+	manipulateRect,
+	neighbourGaps,
+	RESIZE_HANDLES,
+	rotatedBounds,
+} from '~/modules/graphics/canvasManipulation';
 
 /**
  * Move, resize and rotate handles for the selected layer, drawn over an editor preview.
@@ -94,20 +103,49 @@ const boxStyle = computed(() => {
 	if (!rect || scale.value === 0)
 		return null;
 	const canvasRect = toCanvas(rect);
-	const point = resolveGraphicAnchorPoint(props.anchor);
 	return {
 		left: `${canvasRect.x * scale.value}px`,
 		top: `${canvasRect.y * scale.value}px`,
 		width: `${canvasRect.width * scale.value}px`,
 		height: `${canvasRect.height * scale.value}px`,
-		...(shownRotation.value % 360 === 0
-			? {}
-			: {
+		...(isTurned(shownRotation.value)
+			? {
 					transform: `rotate(${shownRotation.value}deg)`,
-					transformOrigin: `${point.x * 100}% ${point.y * 100}%`,
-				}),
+					transformOrigin: graphicAnchorTransformOrigin(props.anchor),
+				}
+			: {}),
 	};
 });
+
+/** How far the rotate handle stands off the box, in drawn pixels. */
+const ROTATE_HANDLE_OFFSET = 24;
+
+/**
+ * Where the rotate handle sits: above the box, or below it where above would be
+ * off the canvas and out of reach, or just inside its top edge when neither fits.
+ */
+const rotateHandlePlacement = computed<'above' | 'below' | 'inside'>(() => {
+	const rect = shownRect.value;
+	if (!rect || scale.value === 0)
+		return 'above';
+	const canvasRect = toCanvas(rect);
+	const offset = ROTATE_HANDLE_OFFSET / scale.value / Math.max(canvasRect.height, 1);
+	const onCanvas = (fraction: number) => {
+		const point = drawnPoint(canvasRect, { x: 0.5, y: fraction }, shownRotation.value, props.anchor);
+		return point.x >= 0 && point.x <= props.canvasWidth && point.y >= 0 && point.y <= props.canvasHeight;
+	};
+	if (onCanvas(-offset))
+		return 'above';
+	return onCanvas(1 + offset)
+		? 'below'
+		: 'inside';
+});
+
+const ROTATE_HANDLE_POSITION = {
+	above: '-top-6',
+	below: 'top-[calc(100%+1.5rem)]',
+	inside: 'top-6',
+} as const;
 
 const HANDLE_POSITION: Record<(typeof RESIZE_HANDLES)[number], string> = {
 	nw: 'left-0 top-0',
@@ -330,9 +368,11 @@ const readout = computed(() => {
 			/>
 			<span
 				v-if="rotation !== undefined"
-				class="absolute -top-6 left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border border-primary bg-white active:cursor-grabbing"
+				class="absolute left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border border-primary bg-white active:cursor-grabbing"
+				:class="ROTATE_HANDLE_POSITION[rotateHandlePlacement]"
 				:aria-label="label ? `Rotate ${label}` : 'Rotate selection'"
 				data-handle="rotate"
+				:data-placement="rotateHandlePlacement"
 				@pointerdown.stop="start($event, 'rotate')"
 				@pointermove="moveTo"
 				@pointerup="end"
@@ -340,7 +380,8 @@ const readout = computed(() => {
 			/>
 			<span
 				v-if="readout"
-				class="absolute left-0 top-full mt-1 whitespace-nowrap rounded bg-inverted px-1.5 py-0.5 font-mono text-[0.6875rem] text-inverted"
+				class="absolute left-0 top-full mt-1 origin-top-left whitespace-nowrap rounded bg-inverted px-1.5 py-0.5 font-mono text-[0.6875rem] text-inverted"
+				:style="isTurned(shownRotation) ? { transform: `rotate(${-shownRotation}deg)` } : undefined"
 			>{{ readout }}</span>
 		</div>
 	</div>

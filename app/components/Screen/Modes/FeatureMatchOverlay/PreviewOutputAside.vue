@@ -62,6 +62,7 @@ const emit = defineEmits<{
 	selectCompositorTarget: [target: GraphicsSelectionTarget];
 	/** The selected layer moved or resized on the canvas; one `gesture` per drag. */
 	manipulate: [rect: GraphicRect, gesture: number];
+	/** Each frame of a canvas rotate drag, as the selected Graphic Item's new Graphic Rotation. */
 	rotate: [rotation: number, gesture: number];
 }>();
 

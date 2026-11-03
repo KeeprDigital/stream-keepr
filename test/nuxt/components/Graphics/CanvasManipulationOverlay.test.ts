@@ -210,6 +210,40 @@ describe('graphicsCanvasManipulationOverlay', () => {
 		expect(wrapper.find('[data-handle="rotate"]').exists()).toBe(false);
 	});
 
+	// The handle stands 48 canvas pixels off the box at this scale, and must stay on the canvas to be reached.
+	it.each([
+		{ name: 'above the box', rect: RECT, placement: 'above' },
+		{
+			name: 'below a box at the top of the canvas',
+			rect: { ...RECT, y: 0 },
+			placement: 'below',
+		},
+		{
+			name: 'inside a box filling the canvas',
+			rect: {
+				x: 0,
+				y: 0,
+				width: 1920,
+				height: 1080,
+			},
+			placement: 'inside',
+		},
+	])('places the rotate handle $name', ({ rect, placement }) => {
+		const wrapper = mountOverlay({ rect, rotation: 0, anchor: 'center' });
+
+		expect(wrapper.get('[data-handle="rotate"]').attributes('data-placement')).toBe(placement);
+	});
+
+	it.each([
+		{ rotation: 0, cursor: 'cursor-ew-resize' },
+		{ rotation: 45, cursor: 'cursor-nwse-resize' },
+		{ rotation: 90, cursor: 'cursor-ns-resize' },
+	])('turns the east handle\'s resize cursor with a $rotation° rotation', ({ rotation, cursor }) => {
+		const wrapper = mountOverlay({ rotation, anchor: 'center' });
+
+		expect(wrapper.get('[data-handle="e"]').classes()).toContain(cursor);
+	});
+
 	// The anchor of the centred RECT is drawn at (100, 75); the drags sweep about it.
 	it.each([
 		{
@@ -219,7 +253,7 @@ describe('graphicsCanvasManipulationOverlay', () => {
 			rotation: 90,
 		},
 		{
-			name: 'in whole degrees',
+			name: 'freely without Shift',
 			to: { x: 146.985, y: 92.1 },
 			shiftKey: false,
 			rotation: 20,

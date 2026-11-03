@@ -33,6 +33,7 @@ import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from './selection';
 import {
+	graphicAnchorTransformOrigin,
 	graphicAnimationStaggerOffset,
 	isRectangularShapeGeometry,
 	paintGraphicsThemeBindings,
@@ -814,11 +815,6 @@ function glowFilter(output: ScreenOutput, style: GraphicSurfaceStyle | undefined
 	return glowDropShadow(output, style?.glow);
 }
 
-function transformOrigin(anchor: GraphicAnchorPoint | undefined): string {
-	const point = resolveGraphicAnchorPoint(anchor);
-	return `${point.x * 100}% ${point.y * 100}%`;
-}
-
 /** Trim floating-point noise out of a sampled motion value. */
 function motionValue(value: number): number {
 	return Math.round(value * 1000) / 1000;
@@ -954,7 +950,7 @@ function motionStyle(
 			? {}
 			: {
 					transform: parts.join(' '),
-					transformOrigin: transformOrigin(anchor),
+					transformOrigin: graphicAnchorTransformOrigin(anchor),
 				}),
 		...(opacity === undefined
 			? {}

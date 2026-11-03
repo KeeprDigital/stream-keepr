@@ -82,12 +82,57 @@ export interface SnapLayer extends GraphicRect {
 	children?: readonly SnapLayer[];
 }
 
+/** Whether a Graphic Rotation turns what it rotates; a whole turn does not. */
+export function isTurned(rotation: number | undefined): boolean {
+	return (rotation ?? 0) % 360 !== 0;
+}
+
+function rotate(vector: { x: number; y: number }, degrees: number) {
+	const radians = degrees * Math.PI / 180;
+	const cos = Math.cos(radians);
+	const sin = Math.sin(radians);
+	return {
+		x: vector.x * cos - vector.y * sin,
+		y: vector.x * sin + vector.y * cos,
+	};
+}
+
+/** The Graphic Anchor Point of a rectangle, which a rotation leaves in place. */
+function anchorPosition(rect: GraphicRect, anchor: GraphicAnchorPoint | undefined) {
+	const point = resolveGraphicAnchorPoint(anchor);
+	return {
+		x: rect.x + rect.width * point.x,
+		y: rect.y + rect.height * point.y,
+	};
+}
+
+/**
+ * Where a point of a rectangle, given as fractions of its size, is drawn once the
+ * rectangle is turned about its Graphic Anchor Point.
+ */
+export function drawnPoint(
+	rect: GraphicRect,
+	fraction: { x: number; y: number },
+	rotation = 0,
+	anchor?: GraphicAnchorPoint,
+): { x: number; y: number } {
+	const pivot = anchorPosition(rect, anchor);
+	const turned = rotate({
+		x: rect.x + rect.width * fraction.x - pivot.x,
+		y: rect.y + rect.height * fraction.y - pivot.y,
+	}, rotation);
+	return {
+		x: pivot.x + turned.x,
+		y: pivot.y + turned.y,
+	};
+}
+
 /**
  * The axis-aligned box a rectangle covers once rotated about its Graphic Anchor
  * Point, to two decimal places so a quarter turn lands on whole pixels.
  */
 export function rotatedBounds(rect: GraphicRect, rotation = 0, anchor?: GraphicAnchorPoint): GraphicRect {
-	if (rotation % 360 === 0) {
+	if (!isTurned(rotation)) {
 		return {
 			x: rect.x,
 			y: rect.y,
@@ -95,25 +140,14 @@ export function rotatedBounds(rect: GraphicRect, rotation = 0, anchor?: GraphicA
 			height: rect.height,
 		};
 	}
-	const point = resolveGraphicAnchorPoint(anchor);
-	const pivotX = rect.x + rect.width * point.x;
-	const pivotY = rect.y + rect.height * point.y;
-	const radians = rotation * Math.PI / 180;
-	const cos = Math.cos(radians);
-	const sin = Math.sin(radians);
-	const xs: number[] = [];
-	const ys: number[] = [];
-	for (const [cornerX, cornerY] of [
-		[rect.x, rect.y],
-		[rect.x + rect.width, rect.y],
-		[rect.x, rect.y + rect.height],
-		[rect.x + rect.width, rect.y + rect.height],
-	] as const) {
-		const dx = cornerX - pivotX;
-		const dy = cornerY - pivotY;
-		xs.push(pivotX + dx * cos - dy * sin);
-		ys.push(pivotY + dx * sin + dy * cos);
-	}
+	const corners = [
+		{ x: 0, y: 0 },
+		{ x: 1, y: 0 },
+		{ x: 0, y: 1 },
+		{ x: 1, y: 1 },
+	].map(corner => drawnPoint(rect, corner, rotation, anchor));
+	const xs = corners.map(corner => corner.x);
+	const ys = corners.map(corner => corner.y);
 	const left = roundBound(Math.min(...xs));
 	const top = roundBound(Math.min(...ys));
 	return {
@@ -193,7 +227,7 @@ function groupPadding(group: SnapLayer | undefined): number {
 
 /** A group's children where they sit on the canvas, when their stored rectangles say so. */
 function placedChildren(group: SnapLayer): SnapLayer[] {
-	if (!group.visible || group.arrangement !== 'canvas' || (group.rotation ?? 0) % 360 !== 0)
+	if (!group.visible || group.arrangement !== 'canvas' || isTurned(group.rotation))
 		return [];
 	const padding = groupPadding(group);
 	return (group.children ?? []).map(child => ({
@@ -288,29 +322,6 @@ function moveRect(start: GraphicRect, delta: { x: number; y: number }, options: 
 
 type ResizeHandle = Exclude<ManipulationHandle, 'move'>;
 
-/** Where a point of a rectangle, as fractions of its size, is drawn once rotated about its anchor. */
-function drawnPoint(rect: GraphicRect, fraction: { x: number; y: number }, rotation: number, anchor: GraphicAnchorPoint | undefined) {
-	const point = resolveGraphicAnchorPoint(anchor);
-	const turned = rotate({
-		x: (fraction.x - point.x) * rect.width,
-		y: (fraction.y - point.y) * rect.height,
-	}, rotation);
-	return {
-		x: rect.x + rect.width * point.x + turned.x,
-		y: rect.y + rect.height * point.y + turned.y,
-	};
-}
-
-function rotate(vector: { x: number; y: number }, degrees: number) {
-	const radians = degrees * Math.PI / 180;
-	const cos = Math.cos(radians);
-	const sin = Math.sin(radians);
-	return {
-		x: vector.x * cos - vector.y * sin,
-		y: vector.x * sin + vector.y * cos,
-	};
-}
-
 /** The handle opposite the dragged one, as fractions of the rectangle's size. */
 function oppositeFraction(handle: ResizeHandle) {
 	return {
@@ -330,7 +341,7 @@ function oppositeFraction(handle: ResizeHandle) {
 /**
  * Resize a rotated rectangle along its own axes: the drag is turned into them,
  * sizes the rectangle as if it were upright, and the result is placed so the
- * handle opposite the dragged one is drawn where it was (E33). Never snaps (E34).
+ * handle opposite the dragged one is drawn where it was. Never snaps.
  */
 function resizeRotatedRect(
 	start: GraphicRect,
@@ -360,7 +371,7 @@ function resizeRect(
 	delta: { x: number; y: number },
 	options: ManipulationOptions,
 ): ManipulationResult {
-	if ((options.rotation ?? 0) % 360 !== 0)
+	if (isTurned(options.rotation))
 		return resizeRotatedRect(start, handle, delta, { ...options, rotation: options.rotation! });
 	let left = start.x;
 	let top = start.y;
@@ -485,8 +496,9 @@ export interface RotationFrame {
 /**
  * The Graphic Rotation a drag from `from` to `to` turns a layer to: its starting
  * rotation plus the angle the pointer swept about the Graphic Anchor Point, which
- * a rotation leaves in place. Whole degrees, or the nearest multiple of `step`,
- * within half a turn either way.
+ * a rotation leaves in place. The sweep is in whole degrees, so a rotation the
+ * pointer has not turned stays as it was; with a `step`, the rotation is the
+ * nearest multiple of it. A rotation past a whole turn wraps to stay within one.
  */
 export function dragRotation(
 	frame: RotationFrame,
@@ -494,21 +506,19 @@ export function dragRotation(
 	to: { x: number; y: number },
 	options: { step?: number } = {},
 ): number {
-	const point = resolveGraphicAnchorPoint(frame.anchor);
-	const pivot = {
-		x: frame.rect.x + frame.rect.width * point.x,
-		y: frame.rect.y + frame.rect.height * point.y,
-	};
+	const pivot = anchorPosition(frame.rect, frame.anchor);
 	const angle = (point: { x: number; y: number }) => Math.atan2(point.y - pivot.y, point.x - pivot.x) * 180 / Math.PI;
-	const step = options.step && options.step > 0
-		? options.step
-		: 1;
-	const turned = Math.round((frame.rotation + angle(to) - angle(from)) / step) * step;
-	const wrapped = ((turned % 360) + 540) % 360 - 180;
-	// Half a turn is drawn the same either way; keep the sign the drag arrived with.
-	return wrapped === -180 && turned > 0
-		? 180
-		: wrapped + 0;
+	// Atan2 jumps a whole turn behind the pivot; the shorter way round is the same drawing.
+	const sweep = ((angle(to) - angle(from)) % 360 + 540) % 360 - 180;
+	const turned = options.step && options.step > 0
+		? Math.round((frame.rotation + sweep) / options.step) * options.step
+		: frame.rotation + Math.round(sweep);
+	const wrapped = turned > 360
+		? turned - 360
+		: turned < -360
+			? turned + 360
+			: turned;
+	return wrapped + 0;
 }
 
 /** The rectangle an arrow-key nudge produces. */

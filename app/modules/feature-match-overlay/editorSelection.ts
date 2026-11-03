@@ -5,7 +5,7 @@ import type { SnapLines } from '~/modules/graphics/canvasManipulation';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { findGraphicItem } from '~~/shared/modules/graphics';
-import { canvasSnapLines } from '~/modules/graphics/canvasManipulation';
+import { canvasSnapLines, isTurned } from '~/modules/graphics/canvasManipulation';
 
 /**
  * The Feature Match Overlay editor's one selection: the canvas (the Frame), one
@@ -139,7 +139,7 @@ export function editorSelectionFrame(
 			...turn,
 		};
 	}
-	if (location.group.arrangement !== 'canvas' || (location.group.rotation ?? 0) % 360 !== 0)
+	if (location.group.arrangement !== 'canvas' || isTurned(location.group.rotation))
 		return null;
 	const padding = Math.max(0, location.group.padding);
 	return {
