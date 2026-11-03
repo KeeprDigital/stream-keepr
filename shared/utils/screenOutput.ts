@@ -91,10 +91,11 @@ export interface ScreenOutputPathOptions {
 	 *
 	 * `preview` is the editor's rendering of authored state: it composes the stack its
 	 * embedder pushes in rather than playout, resolves media as the author rather than
-	 * through a Screen Output Asset Capability, and may draw editor-only guides and
-	 * the Feature Match Sample Dataset. `monitor` is live in every one of those ways
-	 * and differs from an output in one: it is what the operator running the Screen is
-	 * looking at, so it joins no presence and answers no Screen command.
+	 * through a Screen Output Asset Capability, and may draw editor-only guides, the
+	 * Feature Match Sample Dataset and the Feature Match Stress Dataset. `monitor` is
+	 * live in every one of those ways and differs from an output in one: it is what
+	 * the operator running the Screen is looking at, so it joins no presence and
+	 * answers no Screen command.
 	 *
 	 * Neither is set by the copyable broadcast URLs or the PNG capture URL, so no URL
 	 * this application hands an operator can be either. What that does and does not
@@ -105,6 +106,8 @@ export interface ScreenOutputPathOptions {
 	embed?: ScreenEmbed;
 	itemGuides?: boolean;
 	safeAreaGuides?: boolean;
+	/** Resolve a Feature Match Overlay preview against the Feature Match Stress Dataset. */
+	stressDataset?: boolean;
 	/** Capture the output as a PNG from a temporary tab. */
 	download?: boolean;
 	/**
@@ -187,6 +190,8 @@ export function screenOutputPath(options: ScreenOutputPathOptions): string {
 		query.set('guides', '1');
 	if (options.safeAreaGuides)
 		query.set('safe', '1');
+	if (options.stressDataset)
+		query.set('stress', '1');
 	if (options.download)
 		query.set('download', '1');
 
