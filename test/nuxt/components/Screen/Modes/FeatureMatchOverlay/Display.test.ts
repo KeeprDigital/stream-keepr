@@ -5,7 +5,7 @@ import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
 import { createFeatureMatchLayoutComposition, FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
-import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES } from '~~/shared/featureMatchSampleDataset';
+import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES, featureMatchSampleDataset } from '~~/shared/featureMatchSampleDataset';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { LUFFY } from '~~/test/helpers/opCards';
@@ -30,6 +30,8 @@ const mockContentUrlsCleared = ref(false);
 /** The Event's Theme, and the Screen's own overrides of it. */
 const mockTheme = ref<StoredThemeTokens>();
 const mockScreen = ref<{ themeOverrides: StoredThemeTokens }>({ themeOverrides: {} });
+/** A Theme preview's Card Game; an Event's preview leaves it unset. */
+let mockSampleDataset: 'mtg' | 'op' | undefined;
 
 mockNuxtImport('useScreenContext', () => () => ({
 	outputMode: mockOutputMode,
@@ -39,9 +41,11 @@ mockNuxtImport('useScreenContext', () => () => ({
 	isPreview: mockIsPreview,
 	themeTokens: mockTheme,
 	screen: mockScreen,
+	sampleDataset: mockSampleDataset,
 }));
 
 afterEach(() => {
+	mockSampleDataset = undefined;
 	mockTheme.value = undefined;
 	mockScreen.value = { themeOverrides: {} };
 });
@@ -735,6 +739,10 @@ describe('featureMatchOverlayDisplay', () => {
 	 * safe: it is a preview affordance and never reaches air.
 	 */
 	describe('the canonical sample dataset', () => {
+		afterEach(() => {
+			mockEvent.value = null;
+		});
+
 		function layoutBindingAToken(): FeatureMatchOverlayModeConfig {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			const nameplate = getGraphicItemDefinition('text').createDefault({
@@ -763,6 +771,40 @@ describe('featureMatchOverlayDisplay', () => {
 			const wrapper = await mountComponent();
 
 			expect(wrapper.text()).toContain(FEATURE_MATCH_SAMPLE_TOKEN_VALUES.player1Name);
+		});
+
+		// The sample is the Card Game's the preview is of: an Event's, or a Theme preview's own.
+		it.each([
+			{
+				game: 'mtg',
+				event: { game: 'mtg' },
+				sampleDataset: undefined,
+			},
+			{
+				game: 'op',
+				event: { game: 'op' },
+				sampleDataset: undefined,
+			},
+			{ game: 'op', event: null, sampleDataset: 'op' },
+			{
+				game: 'mtg',
+				event: { game: 'op' },
+				sampleDataset: 'mtg',
+			},
+		] as const)('stands in the $game sample for event $event.game and Theme preview $sampleDataset', async ({ game, event, sampleDataset }) => {
+			const config = layoutBindingAToken();
+			const nameplate = config.layout.composition.items[0]!;
+			if (nameplate.type === 'text')
+				nameplate.text = '{player1Name} {player1Deck}';
+			mockConfig.value = config;
+			mockUsesSampleDataset.value = true;
+			mockEvent.value = event;
+			mockSampleDataset = sampleDataset;
+
+			const wrapper = await mountComponent();
+
+			const { player1Name, player1Deck } = featureMatchSampleDataset(game).tokenValues;
+			expect(wrapper.text()).toContain(`${player1Name} ${player1Deck}`);
 		});
 
 		// The one failure sample data must never cause.

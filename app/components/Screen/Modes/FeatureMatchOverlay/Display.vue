@@ -4,10 +4,7 @@ import type { ScreenGraphicAssetReference } from '~~/shared/utils/graphicsAssetR
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
-import {
-	FEATURE_MATCH_SAMPLE_CONTEXT,
-	FEATURE_MATCH_SAMPLE_TOKEN_VALUES,
-} from '~~/shared/featureMatchSampleDataset';
+import { featureMatchSampleDataset } from '~~/shared/featureMatchSampleDataset';
 import { paintBroadcastGraphicThemeBindings } from '~~/shared/modules/graphics';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { featureMatchOverlayGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
@@ -34,7 +31,7 @@ import { screenMediaSourceUrl } from '~/utils/screenMediaSource';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
 import FeatureMatchOverlayFrameMedia from './FrameMedia.vue';
 
-const { isPreview, outputMode, previewGuides, previewSafeAreas, eventCanvas } = useScreenContext();
+const { isPreview, outputMode, previewGuides, previewSafeAreas, eventCanvas, sampleDataset } = useScreenContext();
 const resolvedOutput = computed<FeatureMatchOverlayOutput>(() => outputMode?.value ?? 'overlay');
 const showPreviewGuides = computed(() => previewGuides?.value ?? false);
 const showSafeAreaGuides = computed(() => previewSafeAreas?.value ?? false);
@@ -193,12 +190,21 @@ const hostState = computed(() => ({
  * watch below, so the flag a frame renders and the flag the trigger observed
  * are always the same reading.
  */
+/**
+ * The Feature Match sample of the Card Game previewed: a Theme preview's own,
+ * which is of no Event, or else the Event being authored's.
+ */
+const sample = computed(() => featureMatchSampleDataset(sampleDataset ?? event.value?.game ?? 'mtg'));
+
 const graphicsContext = computed(() => usesSampleDataset.value
 	? {
-			...FEATURE_MATCH_SAMPLE_CONTEXT,
+			...sample.value.context,
 			// The sample supplies awkward player values, not a pretend Match Format.
-			// Its win indicators follow the Event being authored.
-			bestOf: toFeatureMatchDefaults(event.value).bestOf,
+			// Its win indicators follow the Event being authored; a Theme preview
+			// has none, so they follow the sample's Card Game.
+			bestOf: sampleDataset
+				? sample.value.context.bestOf
+				: toFeatureMatchDefaults(event.value).bestOf,
 		}
 	: featureMatchGraphicsContext(hostState.value, sideboards.value));
 
@@ -222,9 +228,8 @@ const animationPreview = useFeatureMatchOverlayAnimationPreview(
 
 const compositorRenderModel = computed(() => resolveFeatureMatchOverlayCompositorRenderModel({
 	output: resolvedOutput.value,
-	// The sample dataset is a Magic Match, whatever the Event being authored.
 	game: usesSampleDataset.value
-		? 'mtg'
+		? sample.value.game
 		: event.value?.game,
 	canvasWidth: canvasWidth.value,
 	canvasHeight: canvasHeight.value,
@@ -233,7 +238,7 @@ const compositorRenderModel = computed(() => resolveFeatureMatchOverlayComposito
 	// dataset rather than a layout of empty boxes. A live Screen Output never
 	// reaches this branch, because it is never a preview.
 	tokenValues: usesSampleDataset.value
-		? FEATURE_MATCH_SAMPLE_TOKEN_VALUES
+		? sample.value.tokenValues
 		: featureMatchTokenValues(hostState.value),
 	featureMatch: graphicsContext.value,
 	itemAnimation: itemAnimation.value,

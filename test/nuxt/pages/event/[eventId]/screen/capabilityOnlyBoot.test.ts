@@ -567,15 +567,15 @@ describe('a capability-only Screen Output', () => {
 		// Nothing appears to wait on, so the read's answer settles to render.
 		await settleOutput();
 
-		const { players } = await useSampleScreenOutputReadRepository().standings({ eventId: 42, screenId: 7 });
+		const { players } = await useSampleScreenOutputReadRepository('mtg').standings({ eventId: 42, screenId: 7 });
 		expect(standingsRead()).toBe(true);
 		expect(players.map(({ name }) => name).filter(name => wrapper.text().includes(name))).toEqual([]);
 	});
 
 	/** What a rendering of the sample Screen Card or sample Broadcast Graphic would put on air. */
 	async function sampleOnAirMarks() {
-		const { card } = await useSampleScreenOutputReadRepository().card({ eventId: 42, screenId: 7 });
-		const [lowerThird] = screenModeSampleConfigs('broadcast-graphics')['broadcast-graphics']!.graphics!;
+		const { card } = await useSampleScreenOutputReadRepository('mtg').card({ eventId: 42, screenId: 7 });
+		const [lowerThird] = screenModeSampleConfigs('broadcast-graphics', 'mtg')['broadcast-graphics']!.graphics!;
 		return [
 			(card as MtgCard).imageData.front!.normal,
 			...lowerThird!.items.flatMap(item => item.type === 'text'
