@@ -44,7 +44,7 @@ const tabs = computed<NavigationMenuItem[]>(() => offeredToCardGame<ConfigTab>([
 		label: 'Integrations',
 		icon: 'i-lucide-plug',
 		to: `/event/${props.eventId}/config/integrations`,
-		cardGames: EVERY_CARD_GAME,
+		cardGames: MTG_ONLY,
 	},
 ], eventStore.event?.game));
 </script>

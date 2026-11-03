@@ -5,6 +5,7 @@ import { and, desc, eq, or } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { archetypes, matches, phases, playerRoundStandings, players, rounds } from '~~/server/db/schema';
 import { featureMatchService } from '~~/server/services/featureMatch';
+import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { projectHeadToHead } from '~~/shared/utils/headToHead';
 
 /** The two Players a Head-to-Head names, and the Match they are about to play if a Slot says so. */
@@ -17,7 +18,8 @@ interface HeadToHeadSides {
 /**
  * Which Players the configuration shows: those its Feature Match Slot seats
  * now, following the Slot's current Feature Match Assignment, or those picked
- * directly. A Slot the Event no longer has seats no one.
+ * directly. A Slot the Event no longer has seats no one. A Slot's Players sit
+ * on the sides its active Session shows them (ADR-0058).
  */
 async function resolveSides(eventId: number, config: HeadToHeadModeConfig): Promise<HeadToHeadSides> {
 	if (config.playerSource === 'players')
@@ -27,7 +29,11 @@ async function resolveSides(eventId: number, config: HeadToHeadModeConfig): Prom
 		return { player1Id: null, player2Id: null, currentMatchId: null };
 
 	const slot = await featureMatchService().findById(config.featureMatchId, eventId);
-	return { player1Id: slot?.player1Id ?? null, player2Id: slot?.player2Id ?? null, currentMatchId: slot?.matchId ?? null };
+	return {
+		player1Id: featureMatchSidePlayer(slot, 'player1').playerId,
+		player2Id: featureMatchSidePlayer(slot, 'player2').playerId,
+		currentMatchId: slot?.matchId ?? null,
+	};
 }
 
 /** One Player of the Event with their Archetype and latest Round Standings; `null` when the Event has no such Player. */

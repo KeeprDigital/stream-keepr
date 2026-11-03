@@ -5,8 +5,9 @@ import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
 import type { FeatureMatch, Player } from '~/types';
 import type { DeckListTokenWithData, MatchPlayerDeckData } from '~/types/card/deckList';
 import type { MtgCard } from '~/types/card/mtg';
-import { computed, toValue } from 'vue';
+import { computed, ref, toValue, watch } from 'vue';
 import { uniqueDeckTokens } from '~~/shared/utils/deckTokens';
+import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { createPlayerDeckList } from '~~/shared/utils/playerDeck';
 import { scryfallNameKey } from '~/composables/data/useScryfallBatch';
@@ -35,6 +36,7 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 	const { fetchScryfallCards, buildDeckListArrays } = useScryfallBatch();
 	const deckCache = usePlayerDeckCache();
 	const roundStore = useRoundStore();
+	const featureMatchStateStore = useFeatureMatchStateStore();
 
 	const canUseDeckListMode = computed(() => {
 		const players = toValue(state.players);
@@ -396,6 +398,43 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		}
 	}
 
+	/**
+	 * The Feature Match Slot whose decks the matchup surface shows, while it shows
+	 * a Slot's rather than a picked Match's.
+	 */
+	const shownSlotId = ref<number | null>(null);
+
+	/** A Slot's two decks, on the sides its followed Session seats each player (ADR-0058). */
+	function slotMatchupArgs(slotId: number): MatchupDeckListArgs | null {
+		const match = toValue(state.featureMatches).find(m => m.id === slotId);
+		if (!match)
+			return null;
+		const slot = withFollowedFeatureMatchSession(match, featureMatchStateStore);
+		const player1 = featureMatchSidePlayer(slot, 'player1');
+		const player2 = featureMatchSidePlayer(slot, 'player2');
+		return {
+			player1Name: player1.data?.name,
+			player2Name: player2.data?.name,
+			player1Id: player1.playerId,
+			player2Id: player2.playerId,
+			player1DeckId: player1.data?.deckId,
+			player2DeckId: player2.data?.deckId,
+		};
+	}
+
+	const shownSlotArgs = computed(() => shownSlotId.value === null
+		? null
+		: JSON.stringify(slotMatchupArgs(shownSlotId.value)));
+
+	// A swap, or any edit to who the shown Slot seats, reloads its decks in place.
+	watch([shownSlotId, shownSlotArgs], ([slotId, args], [previousSlotId, previousArgs]) => {
+		if (slotId === null || slotId !== previousSlotId || args === previousArgs)
+			return;
+		const next = slotMatchupArgs(slotId);
+		if (next)
+			void runMatchupDeckListLoad(next, { silent: true });
+	});
+
 	async function loadMatchupDeckLists(
 		player1Name: string | null | undefined,
 		player2Name: string | null | undefined,
@@ -404,6 +443,7 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		player1DeckId?: number | null,
 		player2DeckId?: number | null,
 	) {
+		shownSlotId.value = null;
 		await runMatchupDeckListLoad(
 			{
 				player1Name,
@@ -417,19 +457,13 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		);
 	}
 
+	/** A Feature Match Slot's two decks, kept on the sides its followed Session seats each player. */
 	async function loadMatchDeckLists(matchId: number) {
-		const match = toValue(state.featureMatches).find(m => m.id === matchId);
-		if (!match)
+		const args = slotMatchupArgs(matchId);
+		if (!args)
 			return;
-
-		await loadMatchupDeckLists(
-			match.player1Data?.name,
-			match.player2Data?.name,
-			match.player1Id,
-			match.player2Id,
-			match.player1Data?.deckId,
-			match.player2Data?.deckId,
-		);
+		shownSlotId.value = matchId;
+		await runMatchupDeckListLoad(args, { silent: false });
 	}
 
 	/**
@@ -438,6 +472,7 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 	 * left to re-fetch.
 	 */
 	function settleMatchupDegradation() {
+		shownSlotId.value = null;
 		matchupRefetch.settle();
 		lastMatchupArgs = null;
 		renderedMatchupSources = null;

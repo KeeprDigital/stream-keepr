@@ -27,14 +27,34 @@ const FeatureMatchNoteStub = defineComponent({
 
 describe('mtgCardDeckListHeader', () => {
 	it.each([
-		['loads the decks of a Match selected before mount', false, 1],
-		['keeps the decks the store already holds', true, 0],
-	])('%s', (_, deckListHasData, loads) => {
+		[
+			'loads the decks of a Match selected before mount',
+			'match',
+			false,
+			1,
+			0,
+		],
+		[
+			'loads the decks of a Slot selected before mount',
+			'slot',
+			false,
+			0,
+			1,
+		],
+		[
+			'keeps the decks the store already holds',
+			'match',
+			true,
+			0,
+			0,
+		],
+	] as const)('%s', (_, kind, deckListHasData, matchLoads, slotLoads) => {
 		cardStore.deckListHasData = deckListHasData;
 		cardStore.loadMatchupDeckLists.mockClear();
+		cardStore.loadMatchDeckLists.mockClear();
 		mount(CardDeckListHeader, {
 			props: {
-				deckListMatchId: 40,
+				deckListMatchup: { kind, id: 40 },
 				selectedMatch: {
 					id: 40,
 					player1Id: 1,
@@ -49,14 +69,15 @@ describe('mtgCardDeckListHeader', () => {
 		});
 		cardStore.deckListHasData = false;
 
-		expect(cardStore.loadMatchupDeckLists).toHaveBeenCalledTimes(loads);
+		expect(cardStore.loadMatchupDeckLists).toHaveBeenCalledTimes(matchLoads);
+		expect(cardStore.loadMatchDeckLists).toHaveBeenCalledTimes(slotLoads);
 	});
 
 	it('presents the selected Assignment Note beside the Cards match-decklist controls', async () => {
 		const save = vi.fn().mockResolvedValue(undefined);
 		const wrapper = mount(CardDeckListHeader, {
 			props: {
-				deckListMatchId: 7,
+				deckListMatchup: { kind: 'match', id: 7 },
 				selectedAssignment: {
 					id: 9,
 					eventId: 1,
@@ -91,7 +112,7 @@ describe('mtgCardDeckListHeader', () => {
 		const wrapper = mount(CardDeckListHeader, {
 			props: {
 				deckListRoundId: 2,
-				deckListMatchId: 7,
+				deckListMatchup: { kind: 'match', id: 7 },
 				selectedAssignment: {
 					id: 9,
 					eventId: 1,

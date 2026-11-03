@@ -1,10 +1,11 @@
 import type { Ref } from 'vue';
-import type { CardPageMode } from '~/types/card/page';
+import type { CardMatchup, CardPageMode } from '~/types/card/page';
+import { matchupIdOf } from '~/types/card/page';
 
 interface CardPageView {
 	mode: Ref<CardPageMode>;
 	roundId: Ref<number | null>;
-	matchId: Ref<number | null>;
+	matchup: Ref<CardMatchup | null>;
 	playerId: Ref<number | null>;
 }
 
@@ -12,6 +13,7 @@ const LINK_KEYS = [
 	'mode',
 	'roundId',
 	'matchId',
+	'slotId',
 	'playerId',
 ] as const;
 
@@ -24,10 +26,21 @@ function queryId(value: unknown): number | null {
 		: null;
 }
 
+function queryMatchup(query: Record<string, unknown>): CardMatchup | null {
+	const matchId = queryId(query.matchId);
+	if (matchId !== null)
+		return { kind: 'match', id: matchId };
+	const slotId = queryId(query.slotId);
+	return slotId === null
+		? null
+		: { kind: 'slot', id: slotId };
+}
+
 /**
- * The Cards page's query names the deck it shows: `?mode=match-decklist&roundId=&matchId=`
- * or `?mode=player-decklist&playerId=`. Arriving with one restores that view over what
- * the store holds; the query then follows the view. `linked` says arrival named a view.
+ * The Cards page's query names the deck it shows: `?mode=match-decklist&roundId=` with
+ * `&matchId=` or a Feature Match Slot's `&slotId=`, or `?mode=player-decklist&playerId=`.
+ * Arriving with one restores that view over what the store holds; the query then follows
+ * the view. `linked` says arrival named a view.
  */
 export function useCardPageLink(view: CardPageView) {
 	const route = useRoute();
@@ -38,7 +51,7 @@ export function useCardPageLink(view: CardPageView) {
 	if (linkedMode === 'match-decklist') {
 		view.mode.value = linkedMode;
 		view.roundId.value = queryId(route.query.roundId);
-		view.matchId.value = queryId(route.query.matchId);
+		view.matchup.value = queryMatchup(route.query);
 	}
 	else if (linkedMode === 'player-decklist') {
 		view.mode.value = linkedMode;
@@ -54,7 +67,8 @@ export function useCardPageLink(view: CardPageView) {
 				return {
 					mode: view.mode.value,
 					roundId: id(view.roundId.value),
-					matchId: id(view.matchId.value),
+					matchId: id(matchupIdOf(view.matchup.value, 'match')),
+					slotId: id(matchupIdOf(view.matchup.value, 'slot')),
 				};
 			case 'player-decklist':
 				return {

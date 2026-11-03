@@ -1,13 +1,13 @@
 import type { EffectScope } from 'vue';
-import type { CardPageMode } from '~/types/card/page';
+import type { CardMatchup, CardPageMode } from '~/types/card/page';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, ref } from 'vue';
 
-function cardView(held: { mode?: CardPageMode; roundId?: number; matchId?: number; playerId?: number } = {}) {
+function cardView(held: { mode?: CardPageMode; roundId?: number; matchup?: CardMatchup; playerId?: number } = {}) {
 	return {
 		mode: ref<CardPageMode>(held.mode ?? 'search'),
 		roundId: ref<number | null>(held.roundId ?? null),
-		matchId: ref<number | null>(held.matchId ?? null),
+		matchup: ref<CardMatchup | null>(held.matchup ?? null),
 		playerId: ref<number | null>(held.playerId ?? null),
 	};
 }
@@ -16,7 +16,7 @@ function snapshot(view: ReturnType<typeof cardView>) {
 	return {
 		mode: view.mode.value,
 		roundId: view.roundId.value,
-		matchId: view.matchId.value,
+		matchup: view.matchup.value,
 		playerId: view.playerId.value,
 	};
 }
@@ -44,7 +44,7 @@ describe('useCardPageLink', () => {
 			{
 				mode: 'player-decklist',
 				roundId: null,
-				matchId: null,
+				matchup: null,
 				playerId: 12,
 			},
 			true,
@@ -55,7 +55,18 @@ describe('useCardPageLink', () => {
 			{
 				mode: 'match-decklist',
 				roundId: 3,
-				matchId: 40,
+				matchup: { kind: 'match', id: 40 },
+				playerId: null,
+			},
+			true,
+		],
+		[
+			'a Feature Match Slot',
+			{ mode: 'match-decklist', roundId: '3', slotId: '40' },
+			{
+				mode: 'match-decklist',
+				roundId: 3,
+				matchup: { kind: 'slot', id: 40 },
 				playerId: null,
 			},
 			true,
@@ -66,7 +77,7 @@ describe('useCardPageLink', () => {
 			{
 				mode: 'player-decklist',
 				roundId: null,
-				matchId: null,
+				matchup: null,
 				playerId: null,
 			},
 			true,
@@ -77,7 +88,7 @@ describe('useCardPageLink', () => {
 			{
 				mode: 'search',
 				roundId: null,
-				matchId: null,
+				matchup: null,
 				playerId: null,
 			},
 			false,
@@ -97,7 +108,7 @@ describe('useCardPageLink', () => {
 		expect(snapshot(view)).toEqual({
 			mode: 'player-decklist',
 			roundId: null,
-			matchId: null,
+			matchup: null,
 			playerId: 5,
 		});
 		await vi.waitFor(() => expect(useRoute().query).toEqual({ mode: 'player-decklist', playerId: '5' }));
@@ -117,7 +128,7 @@ describe('useCardPageLink', () => {
 			(view: ReturnType<typeof cardView>) => {
 				view.mode.value = 'match-decklist';
 				view.roundId.value = 2;
-				view.matchId.value = 30;
+				view.matchup.value = { kind: 'match', id: 30 };
 				view.playerId.value = 8;
 			},
 			{
@@ -125,6 +136,20 @@ describe('useCardPageLink', () => {
 				mode: 'match-decklist',
 				roundId: '2',
 				matchId: '30',
+			},
+		],
+		[
+			'a Feature Match Slot',
+			(view: ReturnType<typeof cardView>) => {
+				view.mode.value = 'match-decklist';
+				view.roundId.value = 2;
+				view.matchup.value = { kind: 'slot', id: 30 };
+			},
+			{
+				tab: 'x',
+				mode: 'match-decklist',
+				roundId: '2',
+				slotId: '30',
 			},
 		],
 		[

@@ -1,7 +1,9 @@
 import type { MtgCard } from '~/types/card/mtg';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '~~/test/helpers/deferred';
+import { createFollowedFeatureMatchSessions, followNoSession, followSwappedSession } from '~~/test/nuxt/helpers/followedFeatureMatchSession';
 
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn().mockResolvedValue({ data: [] }),
@@ -46,6 +48,19 @@ const mockFeatureMatchStoreState = reactive({
 	loadFeatureMatchesByEventId: vi.fn(),
 });
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStoreState);
+
+const followed = createFollowedFeatureMatchSessions();
+mockNuxtImport('useFeatureMatchStateStore', () => () => followed);
+
+/** A Slot seating Alice and Bob, each with their own deck. */
+const ALICE_V_BOB = {
+	id: 1,
+	player1Id: 41,
+	player1Data: { name: 'Alice', deckId: 77 },
+	player2Id: 42,
+	player2Data: { name: 'Bob', deckId: 78 },
+	activeSession: null,
+};
 
 // The full MtgCard shape `cloneMtgCard` requires.
 function createMockMtgCard(overrides?: Record<string, any>) {
@@ -106,6 +121,7 @@ describe('useCardStore deck sources and search', () => {
 		mockEventStoreState.event = { id: 1, cardTimeout: 0 };
 		mockPlayerStoreState.players = [];
 		mockFeatureMatchStoreState.featureMatches = [];
+		followNoSession(followed);
 		mockFetchDeck.mockReset().mockResolvedValue(null);
 		mockFetchScryfallCards.mockReset().mockResolvedValue({
 			cards: new Map(),
@@ -348,6 +364,36 @@ describe('useCardStore deck sources and search', () => {
 			await store.loadMatchDeckLists(1);
 
 			expect(mockFetchDeck).toHaveBeenCalledWith(42, 1, updatedAt, { deckId: 77 });
+		});
+
+		// The followed Session owns which side each Player sits on (ADR-0058).
+		it.each([
+			{
+				swap: 'no',
+				sides: ['Alice', 'Bob'],
+			},
+			{
+				swap: 'a',
+				sides: ['Bob', 'Alice'],
+			},
+		])('shows each Player\'s deck on the side $swap swapped Session seats them', async ({ swap, sides }) => {
+			mockFeatureMatchStoreState.featureMatches = [ALICE_V_BOB];
+			if (swap === 'a')
+				followSwappedSession(followed, ALICE_V_BOB);
+
+			await store.loadMatchDeckLists(1);
+
+			expect([store.deckListPlayer1?.playerName, store.deckListPlayer2?.playerName]).toEqual(sides);
+		});
+
+		it('moves a shown Slot\'s decks to the sides a swap seats them on', async () => {
+			mockFeatureMatchStoreState.featureMatches = [ALICE_V_BOB];
+			await store.loadMatchDeckLists(1);
+
+			followSwappedSession(followed, ALICE_V_BOB);
+			await flushPromises();
+
+			expect([store.deckListPlayer1?.playerName, store.deckListPlayer2?.playerName]).toEqual(['Bob', 'Alice']);
 		});
 
 		it('holds no Deck List for a seat with no Player', async () => {

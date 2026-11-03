@@ -426,9 +426,9 @@ describe('syncing Deck Lists', () => {
 		expect(event.lastSyncError).toContain('temporarily unavailable');
 	});
 
-	it('refuses a non-MTG Event before reading Melee, and records the refusal', async () => {
-		const eventId = await createEvent('op');
-		melee.fetchEvent.mockResolvedValue({ Name: 'OP Event', Game: 'One Piece Card Game', Phases: [] });
+	it('refuses a Melee tournament of an unrecognised game before reading its Players, and records the refusal', async () => {
+		const eventId = await createEvent();
+		melee.fetchEvent.mockResolvedValue({ Name: 'Other Event', Game: 'Some Future Game', Phases: [] });
 
 		await expect(meleeSyncModule().syncDeckLists(requestEvent, eventId)).rejects.toMatchObject({
 			statusCode: 422,
@@ -440,6 +440,66 @@ describe('syncing Deck Lists', () => {
 		const event = await readEvent(eventId);
 		expect(event.lastDecklistsSyncedAt).toBeNull();
 		expect(event.lastSyncError).not.toBeNull();
+	});
+});
+
+// An OP Event never runs Melee Sync (ADR-0057): every command that configures or
+// runs it is refused before Melee is read, and the Event row is left as it was.
+describe('a One Piece Card Game Event', () => {
+	it.each([
+		{
+			command: 'configuring Melee Sync',
+			run: (eventId: number) => meleeSyncModule().updateConfiguration({
+				eventId,
+				input: {
+					meleeEnabled: true,
+					meleeEventId: 'melee-2',
+					meleeClientId: 'client-1',
+					meleeClientSecret: 'secret',
+				},
+				requestEvent,
+			}),
+		},
+		{
+			command: 'turning Live Results on',
+			run: (eventId: number) => meleeSyncModule().setLiveResults({ eventId, enabled: true }),
+		},
+		{
+			command: 'running Initial Setup',
+			run: (eventId: number) => meleeSyncModule().runInitialSetup(requestEvent, eventId),
+		},
+		{
+			command: 'syncing Event structure',
+			run: (eventId: number) => meleeSyncModule().syncEventStructure(requestEvent, eventId),
+		},
+		{
+			command: 'syncing Players',
+			run: (eventId: number) => meleeSyncModule().syncPlayers(requestEvent, eventId),
+		},
+		{
+			command: 'syncing Deck Lists',
+			run: (eventId: number) => meleeSyncModule().syncDeckLists(requestEvent, eventId),
+		},
+		{
+			command: 'syncing a Round\'s Matches',
+			run: (eventId: number) => meleeSyncModule().syncRoundMatches(requestEvent, eventId, 1),
+		},
+		{
+			command: 'updating from Melee',
+			run: (eventId: number) => meleeSyncModule().updateFromMelee(requestEvent, eventId, { includeDeckLists: true }),
+		},
+	])('refuses $command, touching nothing', async ({ run }) => {
+		const eventId = await createEvent('op');
+		const before = await readEvent(eventId);
+
+		await expect(run(eventId)).rejects.toMatchObject({
+			statusCode: 422,
+			data: { code: 'MELEE_SYNC_CARD_GAME_UNSUPPORTED' },
+		});
+
+		expect(melee.fetchEvent).not.toHaveBeenCalled();
+		expect(await readEvent(eventId)).toEqual(before);
+		expect(publishMessage).not.toHaveBeenCalled();
 	});
 });
 

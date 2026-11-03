@@ -7,6 +7,7 @@ import {
 	fetchScryfallCardBySetAndCollector,
 	getCardDataFromMap,
 } from '~~/server/utils/scryfall';
+import { createScryfallFake, FACE_NAME_COLLISIONS } from '~~/test/helpers/scryfallFake';
 
 vi.stubGlobal('fetch', vi.fn());
 
@@ -164,9 +165,7 @@ describe('batchLookupScryfallIds', () => {
 	});
 
 	it('batches in groups of 75', async () => {
-		vi.mocked(fetch).mockResolvedValue(
-			createScryfallResponse([]) as any,
-		);
+		vi.mocked(fetch).mockImplementation(createScryfallFake([]).fetch);
 
 		const cards = Array.from({ length: 80 }, (_, i) => ({
 			name: `Card ${i}`,
@@ -216,27 +215,6 @@ describe('batchLookupScryfallIds', () => {
 		expect(result.results.get('detention sphere')).toMatchObject(sphere);
 		expect(result.results.get('plains|m21')?.cmc).toBeNull();
 		expect(result.errors).toHaveLength(0);
-	});
-
-	it('handles double-faced card names by splitting on " // "', async () => {
-		vi.mocked(fetch).mockResolvedValue(
-			createScryfallResponse([
-				{ id: 'dfc-1', name: 'Fable of the Mirror-Breaker // Reflection of Kiki-Jiki', set: 'neo' },
-			]) as any,
-		);
-
-		const result = await batchLookupScryfallIds([
-			{ name: 'Fable of the Mirror-Breaker // Reflection of Kiki-Jiki', setCode: 'neo' },
-		]);
-
-		// Full name keys
-		expect(result.results.has('fable of the mirror-breaker // reflection of kiki-jiki|neo')).toBe(true);
-		// Individual face keys
-		expect(result.results.has('fable of the mirror-breaker|neo')).toBe(true);
-		expect(result.results.has('reflection of kiki-jiki|neo')).toBe(true);
-		// Name-only keys
-		expect(result.results.has('fable of the mirror-breaker')).toBe(true);
-		expect(result.results.has('reflection of kiki-jiki')).toBe(true);
 	});
 
 	it('sends POST request with correct body', async () => {
@@ -505,11 +483,12 @@ describe('batchLookupScryfallIds', () => {
 		} as any);
 
 		const result = await batchLookupScryfallIds([
-			{ name: 'Ajani, Nacatl Pariah', setCode: 'mh3' },
+			{ name: 'Ajani, Nacatl Pariah // Ajani, Nacatl Avenger', setCode: 'mh3' },
 		]);
 
-		expect(result.results.get('ajani, nacatl pariah|mh3')?.manaCost).toBe('{1}{W}');
-		expect(result.results.get('ajani, nacatl pariah|mh3')?.cmc).toBe(2);
+		const key = 'ajani, nacatl pariah // ajani, nacatl avenger|mh3';
+		expect(result.results.get(key)?.manaCost).toBe('{1}{W}');
+		expect(result.results.get(key)?.cmc).toBe(2);
 	});
 
 	it('adds not_found cards to errors with card names', async () => {
@@ -568,5 +547,95 @@ describe('batchLookupScryfallIds', () => {
 		expect(result.results.get(key)?.cmc).toBe(3);
 		expect(result.results.get(key)?.colors).toBe('R');
 		expect(result.results.get(key)?.typeLine).toBe('Enchantment // Enchantment Creature — Reflection');
+	});
+});
+
+describe('batchLookupScryfallIds when a card\'s name is another card\'s face', () => {
+	const { schemingSilvertongue, signInBlood, emeritusOfConflict, lightningBolt, bindLiberate, bind, delverOfSecrets } = FACE_NAME_COLLISIONS;
+	const filler = Array.from({ length: 74 }, (_, index) => ({ name: `Unknown Card ${index}`, setCode: null }));
+	const named = (name: string, setCode: string | null = null) => ({ name, setCode });
+
+	// A name answers with the card of exactly that name, whatever order Scryfall saw them in.
+	it.each([
+		{
+			requested: [
+				named('Scheming Silvertongue // Sign in Blood'),
+				named('Sign in Blood'),
+			],
+			answers: [schemingSilvertongue, signInBlood],
+		},
+		{
+			requested: [
+				named('Sign in Blood'),
+				named('Scheming Silvertongue // Sign in Blood'),
+			],
+			answers: [signInBlood, schemingSilvertongue],
+		},
+		{
+			requested: [
+				named('Emeritus of Conflict'),
+				named('Lightning Bolt'),
+			],
+			answers: [emeritusOfConflict, lightningBolt],
+		},
+		{
+			requested: [
+				named('Emeritus of Conflict // Lightning Bolt'),
+				named('Lightning Bolt'),
+				named('Lightning Bolt', 'msc'),
+			],
+			answers: [emeritusOfConflict, lightningBolt, lightningBolt],
+		},
+		{
+			requested: [
+				named('Bind // Liberate'),
+				named('Bind'),
+			],
+			answers: [bindLiberate, bind],
+		},
+		{
+			requested: [
+				named('Delver of Secrets'),
+				named('Insectile Aberration'),
+				named('Delver of Secrets', 'inr'),
+			],
+			answers: [delverOfSecrets, delverOfSecrets, delverOfSecrets],
+		},
+	])('answers $requested with their own cards', async ({ requested, answers }) => {
+		vi.mocked(fetch).mockImplementation(createScryfallFake(Object.values(FACE_NAME_COLLISIONS)).fetch);
+
+		const { results, errors } = await batchLookupScryfallIds(requested, { suppressNotFoundErrors: true });
+
+		expect(requested.map(request => getCardDataFromMap(results, request.name, request.setCode)?.name)).toEqual(answers.map(card => card.name));
+		expect(errors).toEqual([]);
+	});
+
+	it('answers a standalone name with its own card when the two-faced card came back in an earlier batch', async () => {
+		const scryfall = createScryfallFake(Object.values(FACE_NAME_COLLISIONS));
+		vi.mocked(fetch).mockImplementation(scryfall.fetch);
+
+		const { results } = await batchLookupScryfallIds([
+			{ name: 'Scheming Silvertongue // Sign in Blood', setCode: null },
+			...filler,
+			{ name: 'Sign in Blood', setCode: null },
+		], { suppressNotFoundErrors: true });
+
+		expect(scryfall.collectionBatches.map(batch => batch.at(-1))).toEqual(['Unknown Card 73', 'Sign in Blood']);
+		expect(getCardDataFromMap(results, 'Sign in Blood', null)?.name).toBe('Sign in Blood');
+	});
+
+	// Each lookup alone is one more Scryfall request, so only a name the batch
+	// answered with another card's name pays for one.
+	it('looks a name up alone only when the batch answered it with a card of another name', async () => {
+		const scryfall = createScryfallFake(Object.values(FACE_NAME_COLLISIONS));
+		vi.mocked(fetch).mockImplementation(scryfall.fetch);
+
+		await batchLookupScryfallIds([
+			{ name: 'Scheming Silvertongue // Sign in Blood', setCode: null },
+			{ name: 'Sign in Blood', setCode: null },
+			{ name: 'Unknown Card', setCode: null },
+		], { suppressNotFoundErrors: true });
+
+		expect(scryfall.namedLookups).toEqual(['Sign in Blood']);
 	});
 });

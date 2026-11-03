@@ -3,6 +3,7 @@ import { MTG_ONLY } from '~~/shared/config/games';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { LazyMtgCardHistory, LazyOpCardHistory } from '#components';
 import { useConsumedEventData } from '~/modules/event-data/resync';
+import { matchupIdOf } from '~/types/card/page';
 
 definePageMeta({
 	cardGames: MTG_ONLY,
@@ -38,7 +39,7 @@ function openHistory() {
 const {
 	activeScreenId,
 	cardPageMode: activeMode,
-	deckListMatchId: storedDeckListMatchId,
+	deckListMatchup,
 	deckListRoundId: storedDeckListRoundId,
 	playerDeckPlayerId: storedPlayerDeckPlayerId,
 } = storeToRefs(cardStore);
@@ -58,11 +59,19 @@ const selectedScreenId = optionalId(activeScreenId);
 const { linked } = useCardPageLink({
 	mode: activeMode,
 	roundId: storedDeckListRoundId,
-	matchId: storedDeckListMatchId,
+	matchup: deckListMatchup,
 	playerId: storedPlayerDeckPlayerId,
 });
 const deckListRoundId = optionalId(storedDeckListRoundId);
-const deckListMatchId = optionalId(storedDeckListMatchId);
+/** The Round's Match the Deck Lists show, if they show one rather than a Feature Match Slot. */
+const deckListMatchId = computed<number | undefined>({
+	get: () => matchupIdOf(deckListMatchup.value, 'match') ?? undefined,
+	set: (id) => {
+		deckListMatchup.value = id
+			? { kind: 'match', id }
+			: null;
+	},
+});
 const playerDeckPlayerId = optionalId(storedPlayerDeckPlayerId);
 
 // Filter screens to only those in card mode
@@ -82,8 +91,8 @@ function syncSelectedScreen() {
 	selectedScreenId.value = cardScreens.value[0]?.id;
 }
 
-// Get the matchId from the selected screen's card config (if any)
-const selectedScreenMatchId = computed<number | null>(() => {
+// The Feature Match Slot the selected screen's card config is tied to (if any)
+const selectedScreenSlotId = computed<number | null>(() => {
 	if (!selectedScreen.value)
 		return null;
 	const modeConfigs = (selectedScreen.value.modeConfigs ?? {});
@@ -145,14 +154,14 @@ watch(selectedScreenId, async (screenId, previousScreenId) => {
 	// A linked view outranks the match of the Screen first selected on arrival.
 	const keepsLinkedView = linked && previousScreenId === undefined;
 	if (screenId && !keepsLinkedView) {
-		// Check if the screen is tied to a match with decklists
-		const matchId = selectedScreenMatchId.value;
-		if (matchId) {
-			const match = featureMatchStore.featureMatches.find(m => m.id === matchId);
-			if (match) {
-				// Check if this match has decklist data
-				const p1Name = match.player1Data?.name;
-				const p2Name = match.player2Data?.name;
+		// Check if the screen is tied to a Feature Match Slot with decklists
+		const slotId = selectedScreenSlotId.value;
+		if (slotId) {
+			const slot = featureMatchStore.featureMatches.find(m => m.id === slotId);
+			if (slot) {
+				// Check if this Slot has decklist data
+				const p1Name = slot.player1Data?.name;
+				const p2Name = slot.player2Data?.name;
 				const hasDecklists = [p1Name, p2Name].some(name =>
 					name && playerStore.players.some(
 						p => p.name.toLowerCase() === name.toLowerCase() && getMtgGameData(p.gameData).deckName,
@@ -160,11 +169,11 @@ watch(selectedScreenId, async (screenId, previousScreenId) => {
 				);
 				if (hasDecklists) {
 					activeMode.value = 'match-decklist';
-					deckListMatchId.value = matchId;
+					deckListMatchup.value = { kind: 'slot', id: slotId };
 				}
 			}
 		}
-		// If screen is not tied to a match, don't change mode
+		// If screen is not tied to a Slot, don't change mode
 	}
 });
 
@@ -240,7 +249,7 @@ async function saveSelectedAssignmentNote(note: string) {
 
 // Auto-select the first matchup when entering match-decklist mode.
 watch(activeMode, (mode) => {
-	if (mode === 'match-decklist' && !deckListMatchId.value && matchOptions.value.length) {
+	if (mode === 'match-decklist' && !deckListMatchup.value && matchOptions.value.length) {
 		deckListMatchId.value = matchOptions.value[0]!.value;
 	}
 });
@@ -253,7 +262,7 @@ watch(roundOptions, (options) => {
 watch([
 	() => eventStore.eventId,
 	deckListRoundId,
-], async ([eventId, roundId], _, onCleanup) => {
+], async ([eventId, roundId], previous, onCleanup) => {
 	if (!eventId || !roundId)
 		return;
 	const releaseRound = assignmentStore.consumeRound(eventId, roundId);
@@ -262,6 +271,10 @@ watch([
 		matchStore.loadMatchesByRoundId(eventId, roundId),
 		assignmentStore.loadAssignments(eventId, roundId),
 	]);
+	// A Slot shown on arrival stays; picking another Round shows that Round's Matches.
+	const roundPicked = previous?.[1] != null && previous[1] !== roundId;
+	if (deckListMatchup.value?.kind === 'slot' && !roundPicked)
+		return;
 	if (!matchOptions.value.some(option => option.value === deckListMatchId.value)) {
 		deckListMatchId.value = matchOptions.value[0]?.value;
 	}
@@ -359,7 +372,7 @@ const timeoutProgress = computed(() => {
 						</div>
 						<div v-show="activeMode === 'match-decklist'">
 							<MtgCardDeckListHeader
-								v-model:deck-list-match-id="deckListMatchId"
+								v-model:deck-list-matchup="deckListMatchup"
 								v-model:deck-list-round-id="deckListRoundId"
 								:round-options="roundOptions"
 								:match-options="matchOptions"

@@ -284,7 +284,7 @@ const navGroups = computed<NavGroup[]>(() => {
 						{ label: 'Event Structure', to: `/event/${id}/rounds`, cardGames: MTG_ONLY },
 						{ label: 'Feature Matches', to: `/event/${id}/config/features`, cardGames: EVERY_CARD_GAME },
 						{ label: 'Broadcast', to: `/event/${id}/config/broadcast`, cardGames: EVERY_CARD_GAME },
-						{ label: 'Integrations', to: `/event/${id}/config/integrations`, cardGames: EVERY_CARD_GAME },
+						{ label: 'Integrations', to: `/event/${id}/config/integrations`, cardGames: MTG_ONLY },
 					],
 				},
 			]),

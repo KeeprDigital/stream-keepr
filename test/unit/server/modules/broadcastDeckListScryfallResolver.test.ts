@@ -5,6 +5,7 @@ import {
 	createBroadcastDeckListScryfallResolver,
 } from '~~/server/modules/broadcast-deck-list-import';
 import { ScryfallRequestError } from '~~/server/utils/scryfall';
+import { createScryfallFake, FACE_NAME_COLLISIONS } from '~~/test/helpers/scryfallFake';
 
 function scryfallCard(overrides: Partial<ScryfallCardData> = {}): ScryfallCardData {
 	return {
@@ -152,6 +153,25 @@ describe('broadcast Deck List Scryfall resolver', () => {
 				status: 'resolved',
 				card: expect.objectContaining({ canonicalName: 'Card 79', scryfallId: 'Card 79-printing' }),
 			}));
+		}
+		finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
+	it('resolves a name to its own card when another card in the list has that name as a face', async () => {
+		vi.stubGlobal('fetch', createScryfallFake(Object.values(FACE_NAME_COLLISIONS)).fetch);
+
+		try {
+			const result = await createBroadcastDeckListScryfallResolver().resolve([
+				{ name: 'Emeritus of Conflict // Lightning Bolt', setCode: null, collectorNumber: null },
+				{ name: 'Lightning Bolt', setCode: null, collectorNumber: null },
+			]);
+
+			expect(result.map(resolution => resolution.status === 'resolved' && resolution.card.canonicalName)).toEqual([
+				'Emeritus of Conflict // Lightning Bolt',
+				'Lightning Bolt',
+			]);
 		}
 		finally {
 			vi.unstubAllGlobals();
