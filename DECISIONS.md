@@ -2010,7 +2010,7 @@ The sample is typical, so overflow shows up on show day rather than while author
 - **Amend the Sample Dataset to be the worst case.** A preview of only worst cases stops looking like a show, and the sample is shared with the Screen Mode Sample Dataset.
 - **Push the toggle by message instead of the URL.** It avoids a reload, but a frame listening for it must also be shown to refuse it on a live output; the URL flag reuses the guide flags' proven gate.
 
-## ADR-0063: Copied layers and styles stay in this browser, paste within their host, and paste whole or not at all
+## ADR-0064: Copied layers and styles stay in this browser, paste within their host, and paste whole or not at all
 
 Accepted · 2026-11-04 · [#746](https://github.com/KeeprDigital/stream-keepr/issues/746). Records E23–E26 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783), and #746's Theme-bindings note.
 
