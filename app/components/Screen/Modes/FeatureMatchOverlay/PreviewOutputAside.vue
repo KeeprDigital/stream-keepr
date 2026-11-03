@@ -394,6 +394,7 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 				<GraphicsCanvasManipulationOverlay
 					:rect="selectionFrame?.rect ?? null"
 					:origin="selectionFrame?.origin"
+					:snap-lines="selectionFrame?.snapLines"
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
 					:label="selectionLabel"
