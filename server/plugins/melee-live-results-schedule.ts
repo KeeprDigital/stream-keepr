@@ -1,6 +1,7 @@
 // Loads Nitro's Cloudflare preset hook declarations, so `cloudflare:scheduled`
 // is a checked hook name rather than a cast.
 import type {} from 'nitropack/presets/cloudflare/types';
+import { startLocalLiveResultsSchedule } from '~~/server/modules/melee-sync/liveResults/localSchedule';
 import { runDueLiveResultsTicks } from '~~/server/modules/melee-sync/liveResults/runner';
 import { LIVE_RESULTS_CRON } from '~~/server/utils/cronSchedules';
 import { errorNameOf } from '~~/server/utils/errorLogFields';
@@ -8,7 +9,8 @@ import { errorNameOf } from '~~/server/utils/errorLogFields';
 /**
  * Runs the due Melee Live Results ticks on the Worker's minute trigger. Nitro's
  * scheduled handler sets `globalThis.__env__` before calling this hook, so the
- * D1 binding resolves here as in a request.
+ * D1 binding resolves here as in a request. Under `nuxt dev`, where no trigger
+ * fires, the dev server fires this hook itself.
  */
 export default defineNitroPlugin((nitroApp) => {
 	nitroApp.hooks.hook('cloudflare:scheduled', async ({ controller }) => {
@@ -28,4 +30,5 @@ export default defineNitroPlugin((nitroApp) => {
 			}));
 		}
 	});
+	startLocalLiveResultsSchedule(nitroApp, { dev: import.meta.dev });
 });

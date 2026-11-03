@@ -23,6 +23,7 @@ import {
 	STALE_PREVIEW_DEV_VARS,
 	suppliedNames,
 } from '../../../scripts/graphics-acceptance/local-configuration.mjs';
+import { PREVIEW_WRANGLER_CONFIG } from '../../../scripts/preview-worker.mjs';
 import {
 	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
 	LOCAL_AUTH_BYPASS_NAME,
@@ -324,7 +325,7 @@ describe('the preview command', () => {
 		const preview = packageJson.scripts.preview!;
 		const built = preview.indexOf('pnpm build');
 		const staged = preview.indexOf('scripts/stage-preview-secrets.mjs');
-		const wrangler = preview.indexOf('wrangler dev');
+		const wrangler = preview.indexOf('scripts/preview-worker.mjs');
 		expect(built).toBeGreaterThan(-1);
 		// Staging into `.output/server` is only meaningful once the build that
 		// creates — and wipes — that directory has finished.
@@ -340,7 +341,8 @@ describe('the preview command', () => {
 	 * this whole mechanism is built around would be the wrong one.
 	 */
 	it('still points wrangler at the config the resolved path is derived from', () => {
-		expect(packageJson.scripts.preview).toContain('--config .output/server/wrangler.json');
+		expect(packageJson.scripts.preview).toContain('scripts/preview-worker.mjs');
+		expect(PREVIEW_WRANGLER_CONFIG).toBe('.output/server/wrangler.json');
 		expect(RESOLVED_PREVIEW_ENV).toBe('.output/server/.env');
 	});
 });

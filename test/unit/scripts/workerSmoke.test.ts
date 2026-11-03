@@ -46,6 +46,14 @@ describe('the built Worker smoke runner', () => {
 		return child;
 	}
 
+	/** A spawn whose migration and Live Results seed exit 0, then starts `worker`. */
+	function spawnAfterSetup(worker: () => unknown) {
+		return vi.fn()
+			.mockImplementationOnce(() => exitedProcess(0))
+			.mockImplementationOnce(() => exitedProcess(0))
+			.mockImplementationOnce(worker);
+	}
+
 	function livingProcess() {
 		const child = new EventEmitter() as EventEmitter & {
 			stdout: PassThrough;
@@ -87,16 +95,38 @@ describe('the built Worker smoke runner', () => {
 
 	it('distinguishes a Worker that exits during startup from readiness timeout', async () => {
 		const repositoryRoot = await builtRepository();
-		const spawnProcess = vi.fn()
-			.mockImplementationOnce(() => exitedProcess(0))
-			.mockImplementationOnce(() => exitedProcess(17));
+		const spawnProcess = spawnAfterSetup(() => exitedProcess(17));
 
 		await expect(runWorkerSmoke({ repositoryRoot, spawnProcess })).rejects.toMatchObject({
 			probe: 'startup',
 			failureClass: 'process-exit',
 			detail: { actual: 'exit 17' },
 		});
-		expect(spawnProcess).toHaveBeenCalledTimes(2);
+		expect(spawnProcess).toHaveBeenCalledTimes(3);
+	});
+
+	it.each([
+		{
+			failing: 'migrations',
+			exits: [3],
+			failureClass: 'migration-exit',
+		},
+		{
+			failing: 'the Live Results Event seed',
+			exits: [0, 3],
+			failureClass: 'seed-exit',
+		},
+	])('names failed $failing and starts no Worker', async ({ exits, failureClass }) => {
+		const repositoryRoot = await builtRepository();
+		const spawnProcess = vi.fn();
+		for (const status of exits)
+			spawnProcess.mockImplementationOnce(() => exitedProcess(status));
+
+		await expect(runWorkerSmoke({ repositoryRoot, spawnProcess })).rejects.toMatchObject({
+			probe: 'setup',
+			failureClass,
+		});
+		expect(spawnProcess).toHaveBeenCalledTimes(exits.length);
 	});
 
 	it('restores both staged configuration files byte-for-byte after startup failure', async () => {
@@ -123,6 +153,7 @@ describe('the built Worker smoke runner', () => {
 				expect(options.env.HOME).toBeUndefined();
 				return exitedProcess(0);
 			})
+			.mockImplementationOnce(() => exitedProcess(0))
 			.mockImplementationOnce(() => exitedProcess(17));
 
 		await expect(runWorkerSmoke({ repositoryRoot, spawnProcess })).rejects.toMatchObject({
@@ -183,9 +214,7 @@ describe('the built Worker smoke runner', () => {
 	it('names an API-boundary probe failure instead of accepting a reachable Worker', async () => {
 		const repositoryRoot = await builtRepository();
 		const worker = livingProcess();
-		const spawnProcess = vi.fn()
-			.mockImplementationOnce(() => exitedProcess(0))
-			.mockImplementationOnce(() => worker);
+		const spawnProcess = spawnAfterSetup(() => worker);
 		const fetchRequest = vi.fn()
 			.mockResolvedValueOnce(Response.json({
 				serverTime: Date.now(),
@@ -225,9 +254,7 @@ describe('the built Worker smoke runner', () => {
 	 */
 	async function bootstrappedWorkerAnswering(answers: Response[]) {
 		const repositoryRoot = await builtRepository();
-		const spawnProcess = vi.fn()
-			.mockImplementationOnce(() => exitedProcess(0))
-			.mockImplementationOnce(() => livingProcess());
+		const spawnProcess = spawnAfterSetup(() => livingProcess());
 		const fetchRequest = vi.fn();
 		for (const answer of [
 			Response.json({
@@ -379,9 +406,7 @@ describe('the built Worker smoke runner', () => {
 		});
 		const repositoryRoot = await builtRepository();
 		const worker = stubbornProcess();
-		const spawnProcess = vi.fn()
-			.mockImplementationOnce(() => exitedProcess(0))
-			.mockImplementationOnce(() => worker);
+		const spawnProcess = spawnAfterSetup(() => worker);
 		const fetchRequest = vi.fn()
 			.mockResolvedValueOnce(Response.json({
 				serverTime: Date.now(),
@@ -405,9 +430,7 @@ describe('the built Worker smoke runner', () => {
 	it('reports readiness timeout separately while the Worker is still running', async () => {
 		const repositoryRoot = await builtRepository();
 		const worker = livingProcess();
-		const spawnProcess = vi.fn()
-			.mockImplementationOnce(() => exitedProcess(0))
-			.mockImplementationOnce(() => worker);
+		const spawnProcess = spawnAfterSetup(() => worker);
 
 		await expect(runWorkerSmoke({
 			repositoryRoot,
