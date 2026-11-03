@@ -17,24 +17,23 @@ beforeAll(() => {
 });
 
 interface MountOptions {
-	props?: Record<string, unknown>;
+	props?: Partial<Record<'step' | 'max', number> & { disabled: boolean }>;
 	disabledFieldset?: boolean;
 	gesture?: NumberScrubGesture;
 }
 
 function mountField({ props = {}, disabledFieldset = false, gesture }: MountOptions = {}) {
 	const Host = defineComponent({
-		setup: (_, { attrs }) => () => h('fieldset', { disabled: disabledFieldset }, [
-			h(NumberField, attrs as InstanceType<typeof NumberField>['$props']),
+		setup: () => () => h('fieldset', { disabled: disabledFieldset }, [
+			h(NumberField, {
+				'label': 'Width',
+				'modelValue': 10,
+				'aria-label': 'Item width',
+				...props,
+			}),
 		]),
 	});
 	return mount(Host, {
-		attrs: {
-			'label': 'Width',
-			'modelValue': 10,
-			'aria-label': 'Item width',
-			...props,
-		},
 		global: {
 			stubs: nuxtUiStubs,
 			provide: gesture
