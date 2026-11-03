@@ -57,7 +57,7 @@ function configWithItems(): FeatureMatchOverlayModeConfig {
 	};
 }
 
-async function mountList() {
+async function mountList({ writable = true } = {}) {
 	const config = ref(configWithItems());
 	const updateConfig = (patch: Partial<FeatureMatchOverlayModeConfig>) => {
 		config.value = {
@@ -70,6 +70,7 @@ async function mountList() {
 		updateConfig,
 		canvasWidth: 1920,
 		canvasHeight: 1080,
+		writable,
 	});
 	const wrapper = mount(LayerList, {
 		props: {
@@ -279,5 +280,20 @@ describe('featureMatchOverlayLayerList', () => {
 
 			expect(reachedEditor).toEqual([]);
 		});
+	});
+
+	// A session observing another's Graphics Authoring Lease selects, but edits nothing (#738).
+	it('offers an observer selection only', async () => {
+		const { wrapper, editor } = await mountList({ writable: false });
+		const row = '[data-layer-key="item:back"]';
+
+		await wrapper.get(`${row} [data-testid="layer-select"]`).trigger('click');
+		await wrapper.get(`${row} [data-testid="layer-select"]`).trigger('dblclick');
+
+		expect(editor.selection.value).toEqual({ type: 'item', itemId: 'back' });
+		expect(wrapper.find('[data-testid="layer-rename"]').exists()).toBe(false);
+		expect(wrapper.findAll('[data-testid="feature-match-layer-list"] button:not([disabled])')
+			.map(button => button.attributes('data-testid'))
+			.filter(id => id !== 'layer-select' && id !== 'layer-canvas')).toEqual([]);
 	});
 });

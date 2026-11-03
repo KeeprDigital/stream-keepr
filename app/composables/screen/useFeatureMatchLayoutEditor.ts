@@ -40,6 +40,11 @@ interface FeatureMatchLayoutEditorOptions {
 	updateConfig: (partial: Partial<FeatureMatchOverlayModeConfig>) => void;
 	canvasWidth: MaybeRefOrGetter<number>;
 	canvasHeight: MaybeRefOrGetter<number>;
+	/**
+	 * Whether this session holds the Screen's Graphics Authoring Lease (#738).
+	 * Required, so an editor that forgot the lease cannot write.
+	 */
+	writable: MaybeRefOrGetter<boolean>;
 }
 
 /**
@@ -55,15 +60,25 @@ interface FeatureMatchLayoutEditorOptions {
  * The selection follows each structural edit — an added or duplicated layer is
  * selected, a removed one gives way to the canvas — and falls back to the canvas
  * whenever what it names leaves the layout, whoever removed it.
+ *
+ * Only a session holding the Graphics Authoring Lease writes (#738): without it
+ * every verb writes and records nothing, and losing it ends the undo history,
+ * since the next holder's changes would be undone over.
  */
 export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOptions) {
 	const { config, updateConfig } = options;
+	const writable = computed(() => toValue(options.writable));
 
 	const selection = ref<FeatureMatchLayoutEditorSelection>(CANVAS_SELECTION);
 	const history = shallowRef<EditHistory<LayoutSnapshot>>(emptyEditHistory());
 
-	const canUndo = computed(() => history.value.past.length > 0);
-	const canRedo = computed(() => history.value.future.length > 0);
+	const canUndo = computed(() => writable.value && history.value.past.length > 0);
+	const canRedo = computed(() => writable.value && history.value.future.length > 0);
+
+	watch(writable, (isWritable) => {
+		if (!isWritable)
+			history.value = emptyEditHistory();
+	});
 
 	function snapshot(): LayoutSnapshot {
 		return JSON.parse(JSON.stringify({ layout: config.value.layout, presetId: config.value.presetId }));
@@ -87,7 +102,7 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 
 	/** Record the current layout as an undo step, without writing anything. */
 	function checkpoint(edit: FeatureMatchLayoutEditOptions = {}) {
-		if (gesture?.recorded)
+		if (!writable.value || gesture?.recorded)
 			return;
 		history.value = recordEdit(history.value, snapshot(), {
 			now: Date.now(),
@@ -108,10 +123,16 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		gesture = null;
 	}
 
-	/** Write part of the mode config as one undoable edit. */
-	function edit(partial: Partial<FeatureMatchOverlayModeConfig>, editOptions: FeatureMatchLayoutEditOptions = {}) {
+	/**
+	 * Write part of the mode config as one undoable edit: the one write every verb
+	 * takes. Answers whether it wrote, which it does only while leased.
+	 */
+	function edit(partial: Partial<FeatureMatchOverlayModeConfig>, editOptions: FeatureMatchLayoutEditOptions = {}): boolean {
+		if (!writable.value)
+			return false;
 		checkpoint(editOptions);
 		updateConfig(partial);
+		return true;
 	}
 
 	/** Field edits from the property panels: one undo step per burst of typing. */
@@ -124,6 +145,8 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 	}
 
 	function undo() {
+		if (!canUndo.value)
+			return;
 		const step = undoEdit(history.value, snapshot());
 		if (!step)
 			return;
@@ -143,6 +166,8 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 	}
 
 	function redo() {
+		if (!canRedo.value)
+			return;
 		const step = redoEdit(history.value, snapshot());
 		if (!step)
 			return;
@@ -160,10 +185,9 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		const composition = apply(current);
 		if (composition === current)
 			return false;
-		edit({
+		return edit({
 			layout: { ...config.value.layout, composition },
 		}, editOptions);
-		return true;
 	}
 
 	function addItem(kind: GraphicItemKind) {
@@ -210,14 +234,13 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		const layout = apply(current);
 		if (layout === current)
 			return false;
-		edit({ layout }, editOptions);
-		return true;
+		return edit({ layout }, editOptions);
 	}
 
 	function addSource() {
 		const { layout, id } = layoutWriter.createSourceItem(config.value.layout);
-		edit({ layout });
-		select({ type: 'source', itemId: id });
+		if (edit({ layout }))
+			select({ type: 'source', itemId: id });
 	}
 
 	/* ── Either kind of layer ──────────────────────── */
@@ -235,10 +258,8 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 	function duplicate(target: FeatureMatchLayoutEditorSelection = selection.value) {
 		if (target.type === 'source') {
 			const { layout, id } = layoutWriter.duplicateSource(config.value.layout, target.itemId);
-			if (id) {
-				edit({ layout });
+			if (id && edit({ layout }))
 				select({ type: 'source', itemId: id });
-			}
 			return;
 		}
 		if (target.type === 'item') {
@@ -327,6 +348,7 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 	}
 
 	return {
+		writable,
 		selection,
 		select,
 		selectedGroup,

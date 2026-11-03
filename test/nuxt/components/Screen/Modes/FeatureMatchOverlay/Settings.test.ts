@@ -58,7 +58,30 @@ function applyRemoteUpdate(screenId: number, change: () => void) {
 
 const mockSaveState = ref<'idle' | 'saving' | 'committed' | 'failed'>('idle');
 const mockRetry = vi.fn();
+const mockResetConfig = vi.fn();
+const mockDiscard = vi.fn();
 const mockToastAdd = vi.fn();
+
+const mockLeaseWritable = ref(true);
+const mockLeaseAsked = ref<{ endpoint: string; enabled: boolean } | null>(null);
+const mockTakeOver = vi.fn();
+mockNuxtImport('useGraphicsAuthoringLease', () => (options: { endpoint: () => string; enabled?: () => boolean }) => {
+	mockLeaseAsked.value = {
+		endpoint: options.endpoint(),
+		enabled: options.enabled?.() ?? true,
+	};
+	return {
+		lease: ref(null),
+		status: ref('ready'),
+		writable: mockLeaseWritable,
+		heldByAnotherSession: computed(() => !mockLeaseWritable.value),
+		holderName: computed(() => mockLeaseWritable.value ? null : 'Marcus Angel'),
+		canTakeOver: computed(() => !mockLeaseWritable.value),
+		refresh: vi.fn(),
+		takeOver: mockTakeOver,
+		release: vi.fn(),
+	};
+});
 
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
@@ -72,8 +95,9 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	saveState: mockSaveState,
 	saveError: ref('Screen refused the layout'),
 	updateConfig: mockUpdateConfig,
-	resetConfig: vi.fn(),
+	resetConfig: mockResetConfig,
 	retry: mockRetry,
+	discard: mockDiscard,
 }));
 mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
 mockNuxtImport('$fetch', () => mockApiFetch);
@@ -88,9 +112,10 @@ const ScreenSettingsCardStub = defineComponent({
 const LayerInspectorStub = defineComponent({
 	props: {
 		selectedTarget: { type: Object, required: true },
+		writable: { type: Boolean, required: false },
 	},
 	emits: ['remove', 'duplicate'],
-	template: '<div data-testid="layer-inspector" :data-selected="JSON.stringify(selectedTarget)" />',
+	template: '<div data-testid="layer-inspector" :data-selected="JSON.stringify(selectedTarget)" :data-writable="String(writable)" />',
 });
 
 const LayerListStub = defineComponent({
@@ -103,8 +128,29 @@ const LayerListStub = defineComponent({
 const CompositorInspectorStub = defineComponent({
 	props: {
 		selectedTarget: { type: Object, required: true },
+		writable: { type: Boolean, required: false },
 	},
-	template: '<div data-testid="compositor-inspector" :data-selected="JSON.stringify(selectedTarget)" />',
+	template: '<div data-testid="compositor-inspector" :data-selected="JSON.stringify(selectedTarget)" :data-writable="String(writable)" />',
+});
+
+const TemplateLibraryStub = defineComponent({
+	props: {
+		writable: { type: Boolean, required: false },
+	},
+	emits: ['placing', 'placed'],
+	template: '<div data-testid="template-library" :data-writable="String(writable)" />',
+});
+
+const USelectStub = defineComponent({
+	props: {
+		modelValue: {
+			type: [String, Number],
+			required: false,
+		},
+		disabled: { type: Boolean, required: false },
+	},
+	emits: ['update:modelValue'],
+	template: '<div data-testid="select" :data-disabled="String(disabled)" />',
 });
 
 const PreviewOutputAsideStub = defineComponent({
@@ -168,11 +214,11 @@ async function mountComponent(screen: Partial<Screen> = {}, stubs: Record<string
 				// The Feature Match Layout Template library reads the installation's
 				// library on mount. It has its own suite; here it is only a neighbour of
 				// the editor under test.
-				GraphicsFeatureMatchLayoutTemplateLibrary: true,
-				USlideover: true,
+				GraphicsFeatureMatchLayoutTemplateLibrary: TemplateLibraryStub,
+				USlideover: { template: '<div><slot name="body" /></div>' },
 				UPopover: true,
 				UFormField: UFormFieldStub,
-				USelect: true,
+				USelect: USelectStub,
 				UFieldGroup: UFieldGroupStub,
 				UButton: UButtonStub,
 				UAlert: true,
@@ -222,6 +268,7 @@ describe('featureMatchOverlaySettings', () => {
 		vi.clearAllMocks();
 		mockConfig.value = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		mockSaveState.value = 'idle';
+		mockLeaseWritable.value = true;
 		actionListeners.length = 0;
 		mockApiFetch.mockReset();
 		mockApiFetch.mockResolvedValue({
@@ -564,6 +611,115 @@ describe('featureMatchOverlaySettings', () => {
 	});
 });
 
+// One Graphics Authoring Lease covers the Screen's Edit workspace, taken on opening the editor (#738).
+describe('featureMatchOverlaySettings — Graphics Authoring Lease', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockConfig.value = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		mockSaveState.value = 'idle';
+		actionListeners.length = 0;
+		mockApiFetch.mockReset();
+		mockApiFetch.mockResolvedValue({ outcome: 'available', lifecycleState: 'active' });
+		mockLeaseWritable.value = false;
+	});
+
+	async function mountObserver() {
+		const wrapper = await mountComponent();
+		await flushPromises();
+		preview(wrapper).vm.$emit('selectTarget', { type: 'source', itemId: 'main-source' });
+		await nextTick();
+		return wrapper;
+	}
+
+	it('asks for the Screen\'s Edit-workspace lease as soon as the editor opens', async () => {
+		await mountComponent();
+
+		expect(mockLeaseAsked.value).toEqual({ endpoint: '/api/events/1/screens/1/graphics-authoring-lease', enabled: true });
+	});
+
+	it('shows an observer who holds the lease, and takes it over on request', async () => {
+		const wrapper = await mountObserver();
+
+		expect(wrapper.get('[data-testid="edit-lease-notice"]').text()).toContain('Marcus Angel');
+		await wrapper.get('[data-testid="edit-lease-take-over"]').trigger('click');
+
+		expect(mockTakeOver).toHaveBeenCalledTimes(1);
+	});
+
+	it.each<[string, (wrapper: Awaited<ReturnType<typeof mountComponent>>) => Promise<void> | void]>([
+		[
+			'delete key',
+			() => press('Delete'),
+		],
+		[
+			'canvas move',
+			wrapper => preview(wrapper).vm.$emit('manipulate', { x: 1, y: 2, width: 3, height: 4 }, 1),
+		],
+		[
+			'display reset',
+			wrapper => (wrapper.vm as unknown as { resetConfig: () => void }).resetConfig(),
+		],
+	])('writes nothing from the %s', async (_, act) => {
+		const wrapper = await mountObserver();
+
+		await act(wrapper);
+		await nextTick();
+
+		expect(mockUpdateConfig).not.toHaveBeenCalled();
+		expect(mockResetConfig).not.toHaveBeenCalled();
+	});
+
+	it('leaves an observer\'s editing shortcuts to the browser', async () => {
+		await mountObserver();
+		const undo = new KeyboardEvent('keydown', {
+			key: 'z',
+			metaKey: true,
+			bubbles: true,
+			cancelable: true,
+		});
+
+		window.dispatchEvent(undo);
+
+		expect(undo.defaultPrevented).toBe(false);
+	});
+
+	it('drops the unsaved layout when the lease is lost', async () => {
+		mockLeaseWritable.value = true;
+		await mountComponent();
+		await flushPromises();
+
+		mockLeaseWritable.value = false;
+		await nextTick();
+
+		expect(mockDiscard).toHaveBeenCalledWith(['layout', 'presetId']);
+	});
+
+	it('hands every other write path a read-only state', async () => {
+		const wrapper = await mountObserver();
+
+		expect(preview(wrapper).props('selectionFrame')).toBeNull();
+		expect(wrapper.get('[data-testid="layer-inspector"]').attributes('data-writable')).toBe('false');
+		expect(wrapper.get('[data-testid="template-library"]').attributes('data-writable')).toBe('false');
+		expect(wrapper.get('[data-testid="reset-preset"]').attributes('disabled')).toBeDefined();
+		expect(wrapper.get('[data-testid="layout-undo"]').attributes('disabled')).toBeDefined();
+		expect((wrapper.vm as unknown as { resetBlocked: boolean }).resetBlocked).toBe(true);
+
+		preview(wrapper).vm.$emit('selectCompositorTarget', { type: 'item', graphicId: 'feature-match-layout', itemId: mockConfig.value.layout.composition.items[0]!.id });
+		await nextTick();
+		expect(wrapper.get('[data-testid="compositor-inspector"]').attributes('data-writable')).toBe('false');
+	});
+
+	it('leaves the Feature Match Slot live for an observer', async () => {
+		const wrapper = await mountObserver();
+		const slotSelect = wrapper.findAllComponents(USelectStub)[0]!;
+
+		expect(slotSelect.props('disabled')).toBe(false);
+		slotSelect.vm.$emit('update:modelValue', 1);
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ featureMatchId: 1 });
+	});
+});
+
 // Editor Focus Mode (#744): the Feature Match Overlay editor is an Edit workspace throughout, so
 // its toolbar always offers the toggle, and only that toggle exits — Escape stays the editor's own.
 describe('featureMatchOverlaySettings — Editor Focus Mode', () => {
@@ -575,6 +731,7 @@ describe('featureMatchOverlaySettings — Editor Focus Mode', () => {
 		mockSaveState.value = 'idle';
 		mockApiFetch.mockReset();
 		mockApiFetch.mockResolvedValue({ outcome: 'available', lifecycleState: 'active' });
+		mockLeaseWritable.value = true;
 		focusMode.enabled.value = false;
 	});
 

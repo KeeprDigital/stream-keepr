@@ -34,8 +34,6 @@ const BESPOKE_CONTROLS: Record<string, string> = {
 const OPTIONS_NOT_OFFERED: Record<string, readonly string[]> = {
 	// Shared Metagame vocabulary: the Metagame page sorts by it; this editor never offered it.
 	'metagame.sortBy': ['conversionRate'],
-	// Shared Metagame vocabulary: Most Played Cards carries no minimum-points field to scope by.
-	'top-cards.scope': ['minPoints'],
 };
 
 /** Each mode's editor, and the config variants that between them render every scalar control. */
@@ -139,7 +137,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 		editor: 'TopCut',
 		variants: [{}],
 	},
-	// The Top N scope, a Fixed card width, and auto-page.
+	// Each scope's own field, a Fixed card width, and auto-page.
 	'top-cards': {
 		editor: 'TopCards',
 		variants: [
@@ -150,6 +148,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 				cardsPerPage: 5,
 				showPointsBadges: true,
 			},
+			{ scope: 'minPoints' },
 		],
 	},
 };

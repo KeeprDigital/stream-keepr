@@ -194,7 +194,7 @@ describe('archetypeService event scoping', () => {
 	it('writes with the wrong Event touch nothing', async () => {
 		const service = archetypeService();
 		expect(await service.update(two.archetypeId, one.eventId, { name: 'Hijacked' })).toBeUndefined();
-		expect(await service.remove(two.archetypeId, one.eventId)).toBe(false);
+		expect(await service.buildRemoveQuery(two.archetypeId, one.eventId)).toEqual([]);
 		expect((await service.findById(two.archetypeId, two.eventId))?.name).toBe('Shared Archetype');
 	});
 });

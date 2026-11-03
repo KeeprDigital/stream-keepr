@@ -8,6 +8,7 @@ import { playerUpdateModule } from '~~/server/modules/player-update';
 import { archetypeService } from '~~/server/services/archetype';
 import { archetypeCardService } from '~~/server/services/archetypeCard';
 import { playerDeckService } from '~~/server/services/playerDeck';
+import { buildReleaseScreenEventReferencesQuery } from '~~/server/services/screen';
 
 interface CreateArchetypeParams {
 	eventId: number;
@@ -112,11 +113,17 @@ export function archetypeWriteModule() {
 
 		// Clearing deck reviews and deleting the archetype must commit together —
 		// otherwise a delete without the review clear would leave decks pointing at
-		// a since-removed archetype (or vice versa on a partial failure).
-		const [, deletedArchetypes] = await db.batch([
+		// a since-removed archetype (or vice versa on a partial failure). So must
+		// releasing the Screens that name it (ADR-0060).
+		const [, deletedArchetypes, clearedScreens] = await db.batch([
 			deckService.buildClearReviewsByArchetypeQuery(eventId, archetypeId),
 			archetypes.buildRemoveQuery(archetypeId, eventId),
+			buildReleaseScreenEventReferencesQuery(eventId, ['archetype']),
 		]);
+
+		// No origin, because the deleting client never received these Screens back.
+		for (const screen of clearedScreens)
+			await publication.screenUpdated({ eventId, entity: screen });
 
 		if (deletedArchetypes.length === 0) {
 			throw createError({

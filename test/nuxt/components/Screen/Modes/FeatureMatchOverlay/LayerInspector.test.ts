@@ -31,7 +31,7 @@ const UFormFieldStub = defineComponent({
 	props: {
 		label: { type: String, required: false },
 	},
-	template: '<div data-testid="form-field"><span>{{ label }}</span><slot /></div>',
+	template: '<div data-testid="form-field"><span><slot name="label">{{ label }}</slot></span><slot /></div>',
 });
 
 const UInputStub = defineComponent({
@@ -61,6 +61,8 @@ async function mountComponent(overrides: Partial<{
 	config: FeatureMatchOverlayModeConfig;
 	selectedTarget: FeatureMatchOverlaySelectionTarget;
 	updateConfig: FeatureMatchOverlayConfigUpdater;
+	writable: boolean | undefined;
+	stubs: Record<string, unknown>;
 }> = {}) {
 	const updateConfig = overrides.updateConfig ?? vi.fn<FeatureMatchOverlayConfigUpdater>();
 
@@ -72,6 +74,9 @@ async function mountComponent(overrides: Partial<{
 			screenHeight: 1080,
 			eventId: 7,
 			selectedTarget: overrides.selectedTarget ?? { type: 'canvas' },
+			writable: 'writable' in overrides
+				? overrides.writable
+				: true,
 		},
 		global: {
 			stubs: {
@@ -91,6 +96,7 @@ async function mountComponent(overrides: Partial<{
 				UButton: UButtonStub,
 				UBadge: true,
 				UIcon: true,
+				...overrides.stubs,
 			},
 		},
 	});
@@ -99,6 +105,48 @@ async function mountComponent(overrides: Partial<{
 describe('featureMatchOverlayLayerInspector', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+	});
+
+	// Read-only without the Graphics Authoring Lease (#738), failing closed when unstated.
+	it.each([
+		[true, false],
+		[false, true],
+		[undefined, true],
+	])('with writable %s, disables its fields: %s', async (writable, disabled) => {
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'source', itemId: 'main-source' },
+			writable,
+		});
+
+		expect(wrapper.get('[data-testid="overlay-layer-inspector-fields"]').attributes('disabled') !== undefined).toBe(disabled);
+	});
+
+	it.each([
+		{
+			session: 'the lease holder',
+			writable: true,
+			offsets: [3],
+		},
+		{ session: 'a read-only observer', writable: false, offsets: [] },
+	])('lets $session drag a Source Item\'s X label to move it', async ({ writable, offsets }) => {
+		// happy-dom has no pointer capture; the field only asks for it.
+		HTMLElement.prototype.setPointerCapture ??= () => {};
+		const updateConfig = vi.fn<FeatureMatchOverlayConfigUpdater>();
+		const wrapper = await mountComponent({
+			updateConfig,
+			selectedTarget: { type: 'source', itemId: 'main-source' },
+			writable,
+			stubs: { GraphicsGeometryFields: false, UINinePointPicker: true, GraphicsGeometryUnitPicker: true },
+		});
+		const label = wrapper.findAll('[data-number-scrub]').find(handle => handle.text() === 'X')!;
+
+		await label.trigger('pointerdown', { button: 0, pointerId: 1, clientX: 0 });
+		await label.trigger('pointermove', { pointerId: 1, clientX: 6 });
+
+		const sourceX = (config: Partial<FeatureMatchOverlayModeConfig> | undefined) =>
+			config?.layout?.sources.find(source => source.id === 'main-source')?.x ?? Number.NaN;
+		const start = sourceX(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		expect(updateConfig.mock.calls.map(([patch]) => sourceX(patch) - start)).toEqual(offsets);
 	});
 
 	it('edits the Frame when the Canvas is selected', async () => {
