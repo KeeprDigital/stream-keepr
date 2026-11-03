@@ -235,7 +235,7 @@ export function useStandingsModeData() {
 	 * The Position Change column shows, but the read found no previous Round
 	 * holding Round Standings, so every cell is blank (#905).
 	 */
-	const positionChangeUncompared = computed(() =>
+	const noPreviousRoundStandings = computed(() =>
 		freshness.data.value.readPositionChange && !freshness.data.value.previousRoundPositions);
 
 	/** How far a row's Player moved since the previous Round (#755). */
@@ -306,6 +306,6 @@ export function useStandingsModeData() {
 		setPage,
 		formatCell,
 		positionChangeOf,
-		positionChangeUncompared,
+		noPreviousRoundStandings,
 	};
 }

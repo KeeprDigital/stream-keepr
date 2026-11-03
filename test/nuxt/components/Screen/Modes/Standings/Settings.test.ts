@@ -3,9 +3,8 @@ import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, ref } from 'vue';
+import { computed, defineComponent, ref, toRaw } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
-import { deferred } from '~~/test/helpers/deferred';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 import Settings from '~/components/Screen/Modes/Standings/Settings.vue';
 
@@ -75,15 +74,8 @@ const USwitchStub = defineComponent({
 	template: '<button type="button" data-testid="u-switch" @click="$emit(\'update:modelValue\', !modelValue)" />',
 });
 
-const previousRound = {
-	roundId: 6,
-	positions: [
-		{ playerId: 1, position: 1 },
-	],
-};
-
-/** The Standings Screen Output read's answer, with or without a previous Round's Round Standings. */
-function answerStandings(previousRoundPositions: typeof previousRound | null) {
+/** The Standings Screen Output read answers no Players, with or without a previous Round's positions. */
+function answerStandings(previousRoundPositions: { roundId: number; positions: { playerId: number; position: number }[] } | null) {
 	mockFetch.mockResolvedValue({
 		players: [],
 		round: null,
@@ -93,16 +85,21 @@ function answerStandings(previousRoundPositions: typeof previousRound | null) {
 	});
 }
 
-function columnsShowingPositionChange(visible: boolean): StandingsColumnConfig[] {
-	return getDefaultConfigForMode('standings').columns.map(column =>
-		column.key === 'positionChange'
-			? { ...column, visible }
-			: column);
+/** The default Standings config, its Position Change column shown or hidden. */
+function standingsShowingPositionChange(visible: boolean): Record<string, any> {
+	const defaults = getDefaultConfigForMode('standings');
+	return {
+		...defaults,
+		columns: defaults.columns.map((column: StandingsColumnConfig) =>
+			column.key === 'positionChange'
+				? { ...column, visible }
+				: column),
+	};
 }
 
 /** The editor over a Screen as saved; the operator's config starts as saved. */
 async function mountSettings(saved: Record<string, any> = config.value) {
-	config.value = JSON.parse(JSON.stringify(saved));
+	config.value = structuredClone(toRaw(saved));
 	const wrapper = mount(Settings, {
 		props: {
 			screen: {
@@ -121,10 +118,6 @@ async function mountSettings(saved: Record<string, any> = config.value) {
 
 function columnLabels(wrapper: Awaited<ReturnType<typeof mountSettings>>) {
 	return wrapper.findAll('[data-testid="column-label"]').map(label => label.text());
-}
-
-function noDataWarning(wrapper: Awaited<ReturnType<typeof mountSettings>>) {
-	return wrapper.find('[data-testid="position-change-no-data"]');
 }
 
 beforeEach(() => {
@@ -173,98 +166,42 @@ describe('the Standings settings editor\'s columns', () => {
 });
 
 describe('the Standings settings editor\'s Position Change warning', () => {
-	// Warns only from what the Screen's own read answered with the column showing (#905).
+	// Warns from the Screen's own read, and goes at once when the operator hides the column (#905).
 	it.each([
 		[
-			'shown, with no previous Round to compare',
-			true,
+			'its read found no previous Round',
 			true,
 			null,
 			true,
 		],
 		[
-			'shown, with a previous Round to compare',
+			'its read found a previous Round',
 			true,
-			true,
-			previousRound,
+			{
+				roundId: 6,
+				positions: [
+					{ playerId: 1, position: 1 },
+				],
+			},
 			false,
 		],
 		[
-			'hidden by an edit not yet saved',
-			true,
+			'the operator hid the column, the save still out',
 			false,
 			null,
 			false,
 		],
-		[
-			'shown by an edit not yet saved, whose read did not look',
-			false,
-			true,
-			null,
-			false,
-		],
-		['hidden', false, false, null, false],
-	])('with the column %s, warns: %s', async (_, savedShows, editedShows, previous, warns) => {
-		answerStandings(previous);
-		const wrapper = await mountSettings({
-			...getDefaultConfigForMode('standings'),
-			columns: columnsShowingPositionChange(savedShows),
-		});
-		saving.value = savedShows !== editedShows;
-		config.value = {
-			...config.value,
-			columns: columnsShowingPositionChange(editedShows),
-		};
+	])('with the column shown and %s, warns: %s', async (_, editedShows, previousRoundPositions, warns) => {
+		answerStandings(previousRoundPositions);
+		const wrapper = await mountSettings(standingsShowingPositionChange(true));
+
+		saving.value = !editedShows;
+		config.value = standingsShowingPositionChange(editedShows);
 		await flushPromises();
 
-		expect(noDataWarning(wrapper).exists()).toBe(warns);
-	});
-
-	it('waits for the read made with the column shown once its save lands', async () => {
-		const hidden = {
-			...getDefaultConfigForMode('standings'),
-			columns: columnsShowingPositionChange(false),
-		};
-		const shown = {
-			...hidden,
-			columns: columnsShowingPositionChange(true),
-		};
-		const wrapper = await mountSettings(hidden);
-		const read = deferred<unknown>();
-		mockFetch.mockReturnValue(read.promise);
-
-		config.value = { ...config.value, columns: shown.columns };
-		await wrapper.setProps({
-			screen: {
-				id: 1,
-				modeConfigs: { standings: shown },
-			} as unknown as Screen,
-		});
-		await flushPromises();
-		expect(noDataWarning(wrapper).exists()).toBe(false);
-
-		read.resolve({
-			players: [],
-			round: null,
-			roundStandings: null,
-			watchlist: null,
-			previousRoundPositions: null,
-		});
-		await flushPromises();
-		expect(noDataWarning(wrapper).exists()).toBe(true);
-	});
-
-	it('goes once Melee-imported Round Standings give the column something to compare', async () => {
-		const wrapper = await mountSettings({
-			...getDefaultConfigForMode('standings'),
-			columns: columnsShowingPositionChange(true),
-		});
-		expect(noDataWarning(wrapper).text()).toContain('no data for this Event yet');
-
-		answerStandings(previousRound);
-		channel.deliver('melee:roundStandingsSynced', {});
-		await flushPromises();
-
-		expect(noDataWarning(wrapper).exists()).toBe(false);
+		const warning = wrapper.find('[data-testid="position-change-no-data"]');
+		expect(warning.exists()).toBe(warns);
+		if (warns)
+			expect(warning.text()).toContain('no data for this Event yet');
 	});
 });

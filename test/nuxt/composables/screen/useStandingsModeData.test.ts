@@ -2,6 +2,7 @@ import type { EffectScope } from 'vue';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '~~/test/helpers/deferred';
 import { createMockEvent, createMockPlayer, createMockRound } from '~~/test/helpers/fixtures';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 
@@ -850,6 +851,65 @@ describe('useStandingsModeData', () => {
 			await flushPromises();
 
 			expect(mockFetch).not.toHaveBeenCalled();
+		});
+
+		describe('with no previous Round\'s Round Standings', () => {
+			// Only a read made with the column showing looks for the previous Round (#905).
+			it.each([
+				[
+					'the column shows and its read found none',
+					withPositionChange,
+					null,
+					true,
+				],
+				[
+					'its read found a previous Round',
+					withPositionChange,
+					roundSeven.previousRoundPositions,
+					false,
+				],
+				[
+					'the column is hidden',
+					defaultConfig.columns,
+					null,
+					false,
+				],
+			])('is reported when %s: %s', async (_, columns, previousRoundPositions, reported) => {
+				mutableConfig.columns = columns;
+				answerReads({ ...roundSeven, previousRoundPositions });
+
+				const { noPreviousRoundStandings } = await mountStandings();
+
+				expect(noPreviousRoundStandings.value).toBe(reported);
+			});
+
+			it('is not reported from a read made before the column showed, while the column\'s read is pending', async () => {
+				mutableConfig.columns = defaultConfig.columns;
+				answerReads({ ...roundSeven, previousRoundPositions: null });
+				const { noPreviousRoundStandings } = await mountStandings();
+				const read = deferred<unknown>();
+				mockFetch.mockReturnValue(read.promise);
+
+				mutableConfig.columns = withPositionChange;
+				await flushPromises();
+				expect(noPreviousRoundStandings.value).toBe(false);
+
+				read.resolve(standingsRead({ ...roundSeven, previousRoundPositions: null }));
+				await flushPromises();
+				expect(noPreviousRoundStandings.value).toBe(true);
+			});
+
+			it('clears once Melee Sync stores a previous Round\'s Round Standings', async () => {
+				answerReads({ ...roundSeven, previousRoundPositions: null });
+				const { noPreviousRoundStandings } = await mountStandings();
+				expect(noPreviousRoundStandings.value).toBe(true);
+
+				answerReads(roundSeven);
+				deliver('melee:roundStandingsSynced', {});
+				await flushPromises();
+
+				expect(noPreviousRoundStandings.value).toBe(false);
+			});
 		});
 	});
 });
