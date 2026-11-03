@@ -272,10 +272,7 @@ function settleOutput() {
 async function mountOutput(route: string, ready: (text: string) => boolean) {
 	const wrapper = await mountSuspended(ScreenOutputPage, { route });
 	mounted.push(wrapper);
-	for (let round = 0; round < 200 && !ready(wrapper.text()); round++) {
-		await flushPromises();
-		await new Promise(resolve => setTimeout(resolve, 5));
-	}
+	await settleUntil(() => ready(wrapper.text()), 200);
 	return wrapper;
 }
 
@@ -359,10 +356,7 @@ describe('a capability-only Screen Output', () => {
 		});
 		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => history('Second Name'));
 		await useScreenStore().applyRemoteUpdated({ eventId: 42, screenId: 7 } as never);
-		for (let round = 0; round < 100 && !wrapper.text().includes('Changed Header'); round++) {
-			await flushPromises();
-			await new Promise(resolve => setTimeout(resolve, 5));
-		}
+		await settleUntil(() => wrapper.text().includes('Changed Header'));
 
 		expect(wrapper.text()).toContain('Changed Header');
 		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
@@ -499,6 +493,7 @@ describe('a capability-only Screen Output', () => {
 
 	it('hides an expired Card itself rather than clearing it on the server', async () => {
 		// The Card Timeout runs out on a fake clock that otherwise keeps real time.
+		const cardTimeoutMs = 2000;
 		vi.useFakeTimers({
 			toFake: ['setTimeout', 'clearTimeout'],
 			shouldAdvanceTime: true,
@@ -529,7 +524,7 @@ describe('a capability-only Screen Output', () => {
 				},
 				timeoutData: {
 					timeoutStartTimestamp: Date.now(),
-					timeoutDuration: 2000,
+					timeoutDuration: cardTimeoutMs,
 				},
 			},
 			revision: 1,
@@ -539,7 +534,7 @@ describe('a capability-only Screen Output', () => {
 		expect(api.requests.map(request => request.path)).toContain('/api/screen-output/events/42/screens/7/card');
 		expect(useCardStore().activeCard?.id).toBe('expiring-card');
 
-		await vi.advanceTimersByTimeAsync(2000);
+		await vi.advanceTimersByTimeAsync(cardTimeoutMs);
 		await flushPromises();
 
 		expect(useCardStore().activeCard).toBeNull();

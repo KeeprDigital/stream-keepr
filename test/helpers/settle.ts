@@ -15,16 +15,18 @@ export async function settleUntil(ready: () => boolean, rounds = 100) {
 		await settleRound();
 }
 
+/** Rounds `snapshot` must hold still for: at least 100ms of nothing new. */
+const STILL_ROUNDS = 20;
+
 /**
  * Lets promises and short timers run until `snapshot` (what the test can see:
- * requests made, markup rendered) holds still for `stillRounds` rounds in a row,
- * or a bounded number of rounds has passed. For asserting nothing more happens:
- * it waits out every answer and re-render, and a loop that never stops still
- * runs to the bound.
+ * requests made, markup rendered) holds still for 20 rounds in a row, or 100
+ * rounds have passed. For asserting nothing more happens: it waits out every
+ * answer and re-render, and anything that recurs within 100ms runs to the bound.
  */
-export async function settleUntilStill(snapshot: () => unknown, { stillRounds = 3, rounds = 100 } = {}) {
+export async function settleUntilStill(snapshot: () => unknown) {
 	let last = JSON.stringify(snapshot());
-	for (let round = 0, still = 0; round < rounds && still < stillRounds; round++) {
+	for (let round = 0, still = 0; round < 100 && still < STILL_ROUNDS; round++) {
 		await settleRound();
 		const next = JSON.stringify(snapshot());
 		still = next === last

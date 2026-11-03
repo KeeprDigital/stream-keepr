@@ -121,7 +121,7 @@ async function commit(wrapper: VueWrapper, token: string, name: string, value: s
 }
 
 /** A composite token's editor commits once its edits pause; the pause runs on a fake clock. */
-function pauseClock() {
+function fakeDraftClock() {
 	vi.useFakeTimers({
 		toFake: ['setTimeout', 'clearTimeout'],
 	});
@@ -276,7 +276,7 @@ describe('the Theme editor', () => {
 	it('writes the background once its edits pause, as the whole stack', async () => {
 		answerWrite = body => theme(2, { background: body?.value });
 		const wrapper = await mountEditor();
-		pauseClock();
+		fakeDraftClock();
 		const addLayer = () => part(wrapper, 'background', 'background-layers').get('[data-testid="add-layer"]').trigger('click');
 
 		await addLayer();
@@ -336,7 +336,7 @@ describe('the Theme editor', () => {
 			],
 		};
 		const wrapper = await mountEditor();
-		pauseClock();
+		fakeDraftClock();
 
 		await edit(part(wrapper, 'background', 'background-layers'));
 		await pauseEdits();
@@ -405,7 +405,7 @@ describe('the Theme editor', () => {
 
 	it('writes the Animation Effect an operator picks', async () => {
 		const wrapper = await mountEditor();
-		pauseClock();
+		fakeDraftClock();
 
 		await part(wrapper, 'animation-effect', 'animation-effect').get('select').setValue('caustics');
 		await pauseEdits();
