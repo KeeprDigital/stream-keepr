@@ -64,6 +64,19 @@ vi.mock('~~/server/modules/broadcast-graphics-live-session', () => ({
 	broadcastGraphicsLiveSessionModule: () => mockBroadcastGraphicsLiveSessions,
 }));
 
+// A Feature Match Layout write is lease-admitted (#738); the lease itself is proved
+// against the real table in `screenGraphicsAuthoringLease.sqlite.test.ts`.
+vi.mock('~~/server/modules/graphics-authoring-lease/screenEditWorkspace', () => ({
+	admitScreenGraphicsEditWrite: async (eventId: number, screenId: number, sessionId: string | undefined) => ({
+		artifact: {
+			kind: 'screen-edit-workspace',
+			id: String(screenId),
+		},
+		eventId,
+		sessionId,
+	}),
+}));
+
 vi.stubGlobal('createError', (input: { statusCode: number; message?: string; statusMessage?: string }) =>
 	Object.assign(new Error(input.message ?? input.statusMessage), { statusCode: input.statusCode }));
 

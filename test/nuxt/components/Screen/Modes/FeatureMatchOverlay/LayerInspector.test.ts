@@ -61,6 +61,7 @@ async function mountComponent(overrides: Partial<{
 	config: FeatureMatchOverlayModeConfig;
 	selectedTarget: FeatureMatchOverlaySelectionTarget;
 	updateConfig: FeatureMatchOverlayConfigUpdater;
+	writable: boolean | undefined;
 }> = {}) {
 	const updateConfig = overrides.updateConfig ?? vi.fn<FeatureMatchOverlayConfigUpdater>();
 
@@ -72,6 +73,9 @@ async function mountComponent(overrides: Partial<{
 			screenHeight: 1080,
 			eventId: 7,
 			selectedTarget: overrides.selectedTarget ?? { type: 'canvas' },
+			writable: 'writable' in overrides
+				? overrides.writable
+				: true,
 		},
 		global: {
 			stubs: {
@@ -99,6 +103,20 @@ async function mountComponent(overrides: Partial<{
 describe('featureMatchOverlayLayerInspector', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+	});
+
+	// Read-only without the Graphics Authoring Lease (#738), failing closed when unstated.
+	it.each([
+		[true, false],
+		[false, true],
+		[undefined, true],
+	])('with writable %s, disables its fields: %s', async (writable, disabled) => {
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'source', itemId: 'main-source' },
+			writable,
+		});
+
+		expect(wrapper.get('[data-testid="overlay-layer-inspector-fields"]').attributes('disabled') !== undefined).toBe(disabled);
 	});
 
 	it('edits the Frame when the Canvas is selected', async () => {

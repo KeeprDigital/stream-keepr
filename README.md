@@ -260,7 +260,10 @@ whose parent is gone and whose `--user-data-dir` is a
 checkouts, with its helper processes. Your own browsers never run under such a
 profile, so they are never touched. The browser gates also stop their own
 Chrome however they end, including a timeout and SIGINT/SIGTERM of the runner,
-escalating to SIGKILL; the reap is for a runner that was itself SIGKILLed.
+escalating to SIGKILL; the reap is for a runner that was itself SIGKILLed. A
+Chrome still running after SIGKILL keeps its profile, which it is still
+writing, and the run names it on stderr (#915): `pnpm reap` stops that browser
+once the run has ended, and the profile folder is then yours to remove.
 
 A Chrome that fails to start names why (#790): the error carries its stderr
 tail, its state when the launcher gave up, what it took to stop it, and whether

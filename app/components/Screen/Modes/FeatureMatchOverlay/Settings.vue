@@ -35,11 +35,37 @@ const featureMatchStore = useFeatureMatchStore();
 const screenStore = useScreenStore();
 const eventStore = useEventStore();
 
-const { config, saving, saveState, saveError, updateConfig, resetConfig, retry: retrySave } = useModeConfigUpdate(
+const { config, saving, saveState, saveError, updateConfig, resetConfig, retry: retrySave, discard } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
 	'feature-match-overlay',
 );
+
+/**
+ * The Screen's graphics Edit workspace is one leased authoring artifact (ADR-0030),
+ * and this editor is that workspace while the Screen is a Feature Match Overlay,
+ * so it asks for the lease as soon as it opens (#738). The Feature Match Slot is
+ * live operation and never consults it.
+ */
+const editLease = useGraphicsAuthoringLease({
+	endpoint: () => `/api/events/${props.eventId}/screens/${props.screen.id}/graphics-authoring-lease`,
+});
+const { writable } = editLease;
+
+/**
+ * Losing the lease drops this session's unsaved layout. The server refuses it now,
+ * and kept on screen it would hide the new holder's changes, then be built on.
+ */
+watch(writable, (isWritable) => {
+	if (!isWritable)
+		discard(['layout', 'presetId']);
+});
+
+/** A display reset replaces the layout, so it is an authoring write like any other. */
+function resetLayout() {
+	if (writable.value)
+		resetConfig();
+}
 
 const {
 	eligibility: assetPublicationEligibility,
@@ -48,7 +74,11 @@ const {
 	retry: retryAssetPublicationEligibility,
 } = useGraphicAssetPublicationEligibility(config);
 
-defineExpose({ resetConfig, saving });
+defineExpose({
+	resetConfig: resetLayout,
+	resetBlocked: computed(() => !writable.value),
+	saving,
+});
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
 useConsumedEventData(['featureMatchSlots']);
@@ -80,6 +110,7 @@ const editor = useFeatureMatchLayoutEditor({
 	updateConfig,
 	canvasWidth,
 	canvasHeight,
+	writable,
 });
 const { selection } = editor;
 
@@ -96,7 +127,13 @@ function selectCompositorTarget(target: GraphicsSelectionTarget) {
 	editor.select(fromCompositorSelectionTarget(target));
 }
 
-const selectionFrame = computed(() => editorSelectionFrame(config.value.layout, selection.value, eventCanvas.value));
+/**
+ * Where the canvas handles go, with the lines they snap to; none while this
+ * session may not move anything, so neither handles nor snap guides show.
+ */
+const selectionFrame = computed(() => writable.value
+	? editorSelectionFrame(config.value.layout, selection.value, eventCanvas.value)
+	: null);
 const selectionLabel = computed(() => editorSelectionLabel(config.value.layout, selection.value));
 
 function manipulate(rect: GraphicRect, gesture: number) {
@@ -114,9 +151,9 @@ function rotate(rotation: number, gesture: number) {
  * — this one's own echo is suppressed — and every undo step is a whole earlier
  * layout, so undoing past their change would silently discard it. Only a change
  * to the layout itself counts; a colleague switching some other setting leaves
- * the history alone. The editor takes no Graphics Authoring Lease, so this is
- * the guard against two authors undoing over each other, not against two
- * authors editing at once.
+ * the history alone. The Graphics Authoring Lease keeps two authors from editing
+ * at once, and losing it clears the history too; this covers a write that landed
+ * while nobody held it.
  */
 const toast = useToast();
 const stopWatchingRemoteUpdates = screenStore.$onAction(({ name, args, after }) => {
@@ -156,6 +193,8 @@ const showPresetConfirm = computed({
 });
 
 function askToApplyPreset(id: FeatureMatchOverlayPresetId) {
+	if (!writable.value)
+		return;
 	pendingPreset.value = { id, reset: id === config.value.presetId };
 }
 
@@ -255,6 +294,11 @@ function handleKeydown(event: KeyboardEvent) {
 	const current = selection.value;
 	let handled = true;
 
+	// The editor writes nothing without the lease anyway. This keeps an observer's
+	// keys from being swallowed, so ⌘Z or ⌘D reach the browser; Escape still selects.
+	if (!writable.value && event.key !== 'Escape')
+		return;
+
 	if (mod && key === 'z' && !event.shiftKey) {
 		editor.undo();
 	}
@@ -304,6 +348,14 @@ useEventListener(import.meta.client
 
 <template>
 	<div class="space-y-4">
+		<GraphicsAuthoringLeaseNotice
+			:writable="writable"
+			:lease-status="editLease.status.value"
+			:can-take-over="editLease.canTakeOver.value"
+			:holder-name="editLease.holderName.value"
+			@take-over="editLease.takeOver"
+		/>
+
 		<section class="rounded-lg border border-default/70 bg-default p-3" data-testid="overlay-toolbar">
 			<div class="flex flex-wrap items-end gap-3">
 				<UFormField label="Feature Match Slot" size="sm" class="min-w-56 flex-1">
@@ -323,6 +375,7 @@ useEventListener(import.meta.client
 							:items="presetOptions"
 							value-key="value"
 							class="min-w-0 flex-1"
+							:disabled="!writable"
 							@update:model-value="askToApplyPreset($event)"
 						/>
 						<UButton
@@ -330,6 +383,7 @@ useEventListener(import.meta.client
 							variant="soft"
 							color="neutral"
 							icon="i-lucide-rotate-ccw"
+							:disabled="!writable"
 							data-testid="reset-preset"
 							title="Reset the layout to this preset"
 							@click="askToApplyPreset(config.presetId)"
@@ -341,7 +395,7 @@ useEventListener(import.meta.client
 
 				<div class="ml-auto flex items-center gap-1">
 					<div
-						v-if="saveState !== 'idle'"
+						v-if="writable && saveState !== 'idle'"
 						class="mr-1 flex items-center gap-1.5 text-xs"
 						:class="saveState === 'failed' ? 'text-error' : 'text-muted'"
 						:title="saveState === 'failed' ? (saveError ?? undefined) : undefined"
@@ -518,7 +572,7 @@ useEventListener(import.meta.client
 					:canvas-height="canvasHeight"
 					:event-id="eventId"
 					:theme-tokens="previewTheme.themeTokens.value"
-					writable
+					:writable="writable"
 					@update:composition="composition => updateFields({ layout: { ...config.layout, composition } })"
 				/>
 				<FeatureMatchOverlayLayerInspector
@@ -529,6 +583,7 @@ useEventListener(import.meta.client
 					:screen-width="canvasWidth"
 					:screen-height="canvasHeight"
 					:event-id="eventId"
+					:writable="writable"
 					@remove="itemId => editor.remove({ type: 'source', itemId })"
 					@duplicate="itemId => editor.duplicate({ type: 'source', itemId })"
 				/>
@@ -540,16 +595,15 @@ useEventListener(import.meta.client
 			layout — saving copies this Screen's layout out, placing replaces it — so
 			they open from the toolbar beside the preset rather than from the layer list.
 
-			Writable unconditionally, which is the honest state rather than an omission:
-			the Feature Match Overlay editor takes no Graphics Authoring Lease today, so
-			every control on this page is already as writable as this one.
+			Writable while this session holds the Graphics Authoring Lease; an observer
+			still browses the library.
 		-->
 		<USlideover v-model:open="templatesOpen" title="Layout templates">
 			<template #body>
 				<GraphicsFeatureMatchLayoutTemplateLibrary
 					:event-id="eventId"
 					:screen-id="screen.id"
-					writable
+					:writable="writable"
 					bare
 					@placing="editor.checkpoint()"
 					@placed="templatePlaced"
