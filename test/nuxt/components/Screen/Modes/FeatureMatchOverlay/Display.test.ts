@@ -10,7 +10,8 @@ import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition } from '~~/shared/
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { LUFFY } from '~~/test/helpers/opCards';
 import Display from '~/components/Screen/Modes/FeatureMatchOverlay/Display.vue';
-import { GRAPHICS_PREVIEW_READY_MESSAGE } from '~/modules/graphics/previewMessages';
+import FrameAnimation from '~/components/Screen/Modes/FeatureMatchOverlay/FrameAnimation.vue';
+import { GRAPHICS_PREVIEW_ANIMATION_MESSAGE, GRAPHICS_PREVIEW_READY_MESSAGE } from '~/modules/graphics/previewMessages';
 
 // Every Display a test mounts stays live otherwise, watching the same module-level mocks.
 enableAutoUnmount(afterEach);
@@ -1198,6 +1199,86 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(overlay.attributes('data-export-ready')).toBe('false');
 			expect((overlay.element as HTMLElement).style.visibility).toBe('');
 			expect(wrapper.get('[data-graphic-item-kind="text"]').text()).toContain('Text');
+		});
+	});
+	// #749: an editor-only Graphic Animation Preview of the Feature Match Layout.
+	describe('the graphic animation preview', () => {
+		const fadeIn = { enter: { duration: 4000, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } } };
+
+		function animatedConfig(): FeatureMatchOverlayModeConfig {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.composition = {
+				...createFeatureMatchLayoutComposition(),
+				items: ['bar', 'badge'].map(id => ({
+					...getGraphicItemDefinition('shape').createDefault({ id, label: id, canvasWidth: 1920, canvasHeight: 1080 }),
+					animation: fadeIn,
+				})),
+			};
+			config.layout.frame = { ...config.layout.frame, animation: { enabled: true, opacity: 0.6 } };
+			return config;
+		}
+
+		function pushRun(plan: Record<string, unknown> | null) {
+			window.dispatchEvent(new MessageEvent('message', {
+				origin: window.location.origin,
+				source: window.parent,
+				data: {
+					type: GRAPHICS_PREVIEW_ANIMATION_MESSAGE,
+					plan: plan && { graphicId: FEATURE_MATCH_LAYOUT_COMPOSITION_ID, scope: 'phase', phase: 'enter', run: 1, speed: 1, loop: false, ...plan },
+				},
+			}));
+			return nextTick();
+		}
+
+		/** The items drawn faded out, named by their authored (document) order. */
+		function fadedOut(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+			const order = ['bar', 'badge'];
+			return wrapper.findAll('[data-graphic-item-kind="shape"]')
+				.flatMap((node, index) => (node.attributes('style') ?? '').includes('opacity: 0') ? [order[index]] : []);
+		}
+
+		beforeEach(() => {
+			mockConfig.value = animatedConfig();
+			mockIsPreview.value = true;
+		});
+
+		it.each([
+			['the whole composition', {}, ['bar', 'badge']],
+			['the selected Graphic Item alone', { itemId: 'badge' }, ['badge']],
+			['nothing for a run naming another composition', { graphicId: 'lower-third' }, []],
+		])('plays %s from the start of its phase', async (_case, plan, moving) => {
+			const wrapper = await mountComponent();
+			expect(fadedOut(wrapper)).toEqual([]);
+
+			await pushRun(plan);
+
+			expect(fadedOut(wrapper)).toEqual(moving);
+		});
+
+		it('settles at the Graphic Resting State when the run is stopped', async () => {
+			const wrapper = await mountComponent();
+			await pushRun({});
+			await pushRun(null);
+
+			expect(fadedOut(wrapper)).toEqual([]);
+		});
+
+		it('never animates a live Screen Output from a pushed run', async () => {
+			mockIsPreview.value = false;
+
+			const wrapper = await mountComponent();
+			await pushRun({});
+
+			expect(fadedOut(wrapper)).toEqual([]);
+		});
+
+		// E32: the run moves Graphic Items only; the Frame keeps its Animation Effect.
+		it('keeps the Frame\'s Animation Effect running through a run', async () => {
+			const wrapper = await mountComponent();
+			await pushRun({});
+
+			expect(fadedOut(wrapper)).toEqual(['bar', 'badge']);
+			expect(wrapper.findComponent(FrameAnimation).props('animation')).toMatchObject({ enabled: true });
 		});
 	});
 });
