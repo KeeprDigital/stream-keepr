@@ -27,6 +27,12 @@ function roundGeometry(value: number): number {
 	return Math.round(value * 100) / 100;
 }
 
+/** The CSS `transform-origin` that turns a Graphic Item about its Graphic Anchor Point. */
+export function graphicAnchorTransformOrigin(anchor: GraphicAnchorPoint | undefined): string {
+	const point = resolveGraphicAnchorPoint(anchor);
+	return `${point.x * 100}% ${point.y * 100}%`;
+}
+
 /** The coordinate an author sees and edits for a rectangle at one anchor. */
 export function anchoredGraphicPosition(rect: GraphicRect, anchor: GraphicAnchorPoint | undefined) {
 	const point = resolveGraphicAnchorPoint(anchor);
