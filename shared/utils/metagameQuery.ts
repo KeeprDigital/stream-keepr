@@ -1,7 +1,7 @@
+import type { ConversionTarget } from '~~/shared/conversionTarget';
 import type {
 	BoardSelection,
 	MetagameCardSortBy,
-	MetagameConversionMetric,
 	MetagameScope,
 	MetagameSortBy,
 } from '~~/shared/types/enums';
@@ -20,11 +20,8 @@ export interface MetagameScopeInput {
 	playerListId?: number;
 }
 
-/** Conversion target: how far a player must have made it to count as converted. */
-export interface MetagameConversionInput {
-	conversionMetric?: MetagameConversionMetric;
-	conversionThreshold?: number;
-}
+/** Conversion Target a read counts against; none asks for no Conversion Rate. */
+export type MetagameConversionInput = Partial<ConversionTarget>;
 
 export interface MetagameArchetypeBreakdownOptions extends MetagameConversionInput {
 	sortBy?: MetagameSortBy;
@@ -128,13 +125,14 @@ export function buildArchetypeDetailQuery(
 }
 
 /**
- * The breakdown a Metagame Screen renders, read off its configuration.
+ * The breakdown a Metagame Screen renders, read off its configuration and its
+ * Event's Conversion Target (ADR-0061).
  *
  * The Screen Output's read derives its query here from the saved
  * configuration (#604), so a capability can only ever ask for the breakdown its
  * Screen publishes. The chart display reads the archetype table's breakdown.
  */
-export function metagameScreenQuery(config: MetagameModeConfig) {
+export function metagameScreenQuery(config: MetagameModeConfig, target: ConversionTarget) {
 	return config.viewMode === 'cards'
 		? {
 				viewMode: 'cards' as const,
@@ -149,19 +147,18 @@ export function metagameScreenQuery(config: MetagameModeConfig) {
 				query: buildArchetypeBreakdownQuery(config, {
 					sortBy: config.sortBy,
 					limit: config.archetypeLimit ?? undefined,
-					conversionMetric: config.conversionMetric,
-					conversionThreshold: config.conversionThreshold,
+					...target,
 				}),
 			};
 }
 
 /**
  * The archetype detail an Archetype Spotlight Screen renders (#761), read off
- * its configuration: the archetype page's own query for the same scope, board
- * and conversion target, so the Screen shows that page's numbers. `null` while
- * no Archetype is picked.
+ * its configuration and its Event's Conversion Target (ADR-0061): the archetype
+ * page's own query for the same scope, board and target, so the Screen shows
+ * that page's numbers. `null` while no Archetype is picked.
  */
-export function archetypeSpotlightScreenQuery(config: ArchetypeSpotlightModeConfig) {
+export function archetypeSpotlightScreenQuery(config: ArchetypeSpotlightModeConfig, target: ConversionTarget) {
 	if (config.archetypeId == null)
 		return null;
 
@@ -169,7 +166,7 @@ export function archetypeSpotlightScreenQuery(config: ArchetypeSpotlightModeConf
 		archetypeId: config.archetypeId,
 		query: buildArchetypeDetailQuery(
 			config,
-			{ board: config.board, conversionMetric: config.conversionMetric, conversionThreshold: config.conversionThreshold },
+			{ board: config.board, ...target },
 		),
 	};
 }

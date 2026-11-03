@@ -1,6 +1,7 @@
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { events } from '~~/server/db/schema';
+import { conversionTargetShape, isConversionTargetInBounds } from '~~/shared/conversionTarget';
 import { EVENT_CANVAS_SIDE_BOUNDS } from '~~/shared/eventCanvas';
 import { FEATURE_MATCH_ORIENTATION_VALUES, GAME_VALUES } from '~~/shared/types/enums';
 
@@ -59,6 +60,9 @@ export const createEventSchema = createInsertSchema(events)
 		commentator2TalentId: true,
 		// An Event starts on the Default Theme; its Event Presentation Settings pick another.
 		themeId: true,
+		// An Event starts at the default Conversion Target; the Metagame page sets it (ADR-0061).
+		conversionMetric: true,
+		conversionThreshold: true,
 	})
 	.extend({
 		...eventFieldConstraints,
@@ -88,8 +92,19 @@ export const updateEventSchema = createUpdateSchema(events)
 		name: eventFieldConstraints.name.optional(),
 		// Event Presentation Settings: no Theme is the Default Theme.
 		themeId: z.string().min(1).max(100).nullable().optional(),
+		conversionMetric: conversionTargetShape.conversionMetric.optional(),
+		conversionThreshold: conversionTargetShape.conversionThreshold.optional(),
 	})
-	.strict();
+	.strict()
+	// The Conversion Target is written whole, so its threshold is bounded by its own metric (ADR-0061).
+	.refine(
+		({ conversionMetric, conversionThreshold }) => (conversionMetric == null && conversionThreshold == null)
+			|| (conversionMetric != null && conversionThreshold != null && isConversionTargetInBounds({ conversionMetric, conversionThreshold })),
+		{
+			message: 'conversionMetric and conversionThreshold are written together, the threshold within its metric\'s bounds',
+			path: ['conversionThreshold'],
+		},
+	);
 
 // MELEE CONFIG
 

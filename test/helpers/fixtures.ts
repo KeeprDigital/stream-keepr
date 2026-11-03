@@ -80,6 +80,8 @@ export function createMockEvent(overrides?: Partial<DbEvent>): DbEvent {
 		themeId: null,
 		canvasWidth: 1920,
 		canvasHeight: 1080,
+		conversionMetric: 'topN',
+		conversionThreshold: 8,
 		featureMatchDefaultBestOf: 3,
 		featureMatchDefaultStartingLife: 20,
 		featureMatchDefaultClockType: 'countdown',

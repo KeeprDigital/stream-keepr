@@ -47,6 +47,26 @@ describe.each([
 		kept: { limit: 12 },
 		patch: { limit: 15 },
 	},
+	// The Conversion Target is the Event's (ADR-0061).
+	{
+		mode: 'metagame' as const,
+		formerFields: [
+			'maxTableWidth',
+			'animateEntries',
+			'conversionMetric',
+			'conversionThreshold',
+		],
+		former: { conversionMetric: 'minPoints', conversionThreshold: 12 },
+		kept: { sortBy: 'conversionRate' },
+		patch: { sortBy: 'winRate' },
+	},
+	{
+		mode: 'archetype-spotlight' as const,
+		formerFields: ['conversionMetric', 'conversionThreshold'],
+		former: { conversionMetric: 'topN', conversionThreshold: 16 },
+		kept: { archetypeId: 3 },
+		patch: { archetypeId: 4 },
+	},
 ])('a $mode Screen storing its dropped $formerFields', ({ mode, formerFields, former, kept, patch }) => {
 	const stored = {
 		[mode]: {
