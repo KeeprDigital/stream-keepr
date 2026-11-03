@@ -54,8 +54,29 @@ mockNuxtImport('usePlayerListStore', () => () => ({
 }));
 mockNuxtImport('useRoundStore', () => () => ({
 	...loaded,
-	rounds: [],
+	rounds: [
+		{
+			id: 41,
+			phaseId: 4,
+			name: 'Round 1',
+			roundNumber: 1,
+		},
+		{
+			id: 31,
+			phaseId: 3,
+			name: 'Round 1',
+			roundNumber: 1,
+		},
+	],
 	loadRoundsByEventId: vi.fn(),
+}));
+mockNuxtImport('usePhaseStore', () => () => ({
+	...loaded,
+	phases: [
+		{ id: 3, name: 'Swiss', sortOrder: 1 },
+		{ id: 4, name: 'Top Cut', sortOrder: 2 },
+	],
+	loadPhasesByEventId: vi.fn(),
 }));
 
 const USwitchStub = defineComponent({
@@ -123,5 +144,23 @@ describe('the Standings settings editor\'s columns', () => {
 				{ key: 'positionChange', visible: true },
 			],
 		});
+	});
+});
+
+describe('the Standings settings editor\'s Round picker', () => {
+	beforeEach(() => {
+		config.value = structuredClone(getDefaultConfigForMode('standings'));
+	});
+
+	it('offers each Round as "Phase · Round", after Current', async () => {
+		const wrapper = await mountSettings();
+		const picker = wrapper.findAllComponents({ name: 'USelect' })
+			.find(select => (select.props('items') as { label: string }[])[0]?.label === 'Current')!;
+
+		expect(picker.props('items')).toEqual([
+			{ label: 'Current', value: null },
+			{ label: 'Swiss · Round 1', value: 31 },
+			{ label: 'Top Cut · Round 1', value: 41 },
+		]);
 	});
 });

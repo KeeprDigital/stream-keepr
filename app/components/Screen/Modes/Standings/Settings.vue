@@ -28,9 +28,10 @@ const fields = screenModeConfigContract('standings').fields;
 // ── Stores ──
 const playerListStore = usePlayerListStore();
 const roundStore = useRoundStore();
+const phaseStore = usePhaseStore();
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['playerLists', 'rounds']);
+useConsumedEventData(['phases', 'playerLists', 'rounds']);
 
 onMounted(async () => {
 	if (props.eventId) {
@@ -39,6 +40,9 @@ onMounted(async () => {
 		}
 		if (!roundStore.isLoaded) {
 			await roundStore.loadRoundsByEventId(props.eventId);
+		}
+		if (!phaseStore.isLoaded) {
+			await phaseStore.loadPhasesByEventId(props.eventId);
 		}
 	}
 });
@@ -63,10 +67,7 @@ const playerListOptions = computed(() => [
 
 const roundOptions = computed(() => [
 	{ label: 'Current', value: null },
-	...roundStore.rounds.map(round => ({
-		label: round.name,
-		value: round.id,
-	})),
+	...roundPickerOptions(roundStore.rounds, phaseStore.phases),
 ]);
 
 // ── Column Reordering ──
