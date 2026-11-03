@@ -265,12 +265,12 @@ describe('graphics Authoring Leases', () => {
 	// The Feature Match Layout is the same Edit workspace; its Slot is live operation (#738).
 	it('refuses an observer\'s Feature Match Layout write, and admits their Feature Match Slot change', async () => {
 		await askForLease(browserA);
-		const overlayConfig = (body: Record<string, unknown>, cookie: string) =>
+		const patchOverlayModeConfig = (body: Record<string, unknown>, cookie: string) =>
 			request(`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`, { method: 'PATCH', body, cookie });
 
-		expect((await overlayConfig({ presetId: 'full-table' }, browserA)).status).toBe(200);
-		expect((await overlayConfig({ presetId: 'neon-feature-match' }, browserB)).status).toBe(409);
-		expect((await overlayConfig({ featureMatchId: null }, browserB)).status).toBe(200);
+		expect((await patchOverlayModeConfig({ presetId: 'full-table' }, browserA)).status).toBe(200);
+		expect((await patchOverlayModeConfig({ presetId: 'neon-feature-match' }, browserB)).status).toBe(409);
+		expect((await patchOverlayModeConfig({ featureMatchId: null }, browserB)).status).toBe(200);
 
 		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
 		expect(screen.modeConfigs?.['feature-match-overlay']?.presetId).toBe('full-table');

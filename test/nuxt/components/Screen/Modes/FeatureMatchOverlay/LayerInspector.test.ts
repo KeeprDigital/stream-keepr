@@ -61,7 +61,7 @@ async function mountComponent(overrides: Partial<{
 	config: FeatureMatchOverlayModeConfig;
 	selectedTarget: FeatureMatchOverlaySelectionTarget;
 	updateConfig: FeatureMatchOverlayConfigUpdater;
-	writable: boolean;
+	writable: boolean | undefined;
 }> = {}) {
 	const updateConfig = overrides.updateConfig ?? vi.fn<FeatureMatchOverlayConfigUpdater>();
 
@@ -73,7 +73,9 @@ async function mountComponent(overrides: Partial<{
 			screenHeight: 1080,
 			eventId: 7,
 			selectedTarget: overrides.selectedTarget ?? { type: 'canvas' },
-			writable: overrides.writable ?? true,
+			writable: 'writable' in overrides
+				? overrides.writable
+				: true,
 		},
 		global: {
 			stubs: {
@@ -109,19 +111,9 @@ describe('featureMatchOverlayLayerInspector', () => {
 		[false, true],
 		[undefined, true],
 	])('with writable %s, disables its fields: %s', async (writable, disabled) => {
-		const wrapper = mount(LayerInspector, {
-			props: {
-				config: structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG),
-				updateConfig: vi.fn(),
-				screenWidth: 1920,
-				screenHeight: 1080,
-				eventId: 7,
-				selectedTarget: { type: 'source', itemId: 'main-source' },
-				writable,
-			},
-			global: {
-				stubs: { FeatureMatchOverlayInspectorSource: true, UBadge: true, UIcon: true },
-			},
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'source', itemId: 'main-source' },
+			writable,
 		});
 
 		expect(wrapper.get('[data-testid="overlay-layer-inspector-fields"]').attributes('disabled') !== undefined).toBe(disabled);

@@ -35,7 +35,7 @@ const featureMatchStore = useFeatureMatchStore();
 const screenStore = useScreenStore();
 const eventStore = useEventStore();
 
-const { config, saving, saveState, saveError, updateConfig, resetConfig, retry: retrySave } = useModeConfigUpdate(
+const { config, saving, saveState, saveError, updateConfig, resetConfig, retry: retrySave, discard } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
 	'feature-match-overlay',
@@ -50,7 +50,16 @@ const { config, saving, saveState, saveError, updateConfig, resetConfig, retry: 
 const editLease = useGraphicsAuthoringLease({
 	endpoint: () => `/api/events/${props.eventId}/screens/${props.screen.id}/graphics-authoring-lease`,
 });
-const writable = computed(() => editLease.writable.value);
+const { writable } = editLease;
+
+/**
+ * Losing the lease drops this session's unsaved layout. The server refuses it now,
+ * and kept on screen it would hide the new holder's changes, then be built on.
+ */
+watch(writable, (isWritable) => {
+	if (!isWritable)
+		discard(['layout', 'presetId']);
+});
 
 /** A display reset replaces the layout, so it is an authoring write like any other. */
 function resetLayout() {
@@ -278,7 +287,8 @@ function handleKeydown(event: KeyboardEvent) {
 	const current = selection.value;
 	let handled = true;
 
-	// An observer's keys select, and leave the browser's own shortcuts alone.
+	// The editor writes nothing without the lease anyway. This keeps an observer's
+	// keys from being swallowed, so ⌘Z or ⌘D reach the browser; Escape still selects.
 	if (!writable.value && event.key !== 'Escape')
 		return;
 

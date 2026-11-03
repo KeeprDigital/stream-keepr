@@ -160,21 +160,27 @@ function sameJson(left: unknown, right: unknown): boolean {
 }
 
 /**
- * The Feature Match Overlay fields that are its Feature Match Layout as authored:
- * the layout and the preset it started from. The Feature Match Slot is what the
- * Screen points at, live operation the lease never restricts (#738).
+ * The part of each Screen Mode's configuration that is the Screen's graphics Edit
+ * workspace: the whole Broadcast Graphics stack, and a Feature Match Overlay's
+ * Feature Match Layout as authored, its layout and the preset it started from.
+ * The Feature Match Slot is what the Screen points at, live operation the lease
+ * never restricts (#738). The canvas is the Event's (ADR-0051), so no Screen
+ * field is one.
  */
-const FEATURE_MATCH_LAYOUT_FIELDS = ['layout', 'presetId'] as const;
+const EDIT_WORKSPACE_FIELDS: Partial<Record<ScreenMode, 'whole' | readonly string[]>> = {
+	'broadcast-graphics': 'whole',
+	'feature-match-overlay': ['layout', 'presetId'],
+};
 
-function featureMatchLayoutOf(modeConfigs: ScreenResponse['modeConfigs'] | UpdateScreenInput['modeConfigs']) {
-	const overlay = modeConfigs?.['feature-match-overlay'] as Record<string, unknown> | undefined;
-	return FEATURE_MATCH_LAYOUT_FIELDS.map(field => overlay?.[field]);
+function editWorkspaceOf(mode: ScreenMode, config: unknown): unknown {
+	const fields = EDIT_WORKSPACE_FIELDS[mode];
+	if (fields === 'whole')
+		return config;
+	return fields?.map(field => (config as Record<string, unknown> | undefined)?.[field]);
 }
 
 /**
- * Whether a generic Screen write edits the graphics Edit workspace: its
- * Broadcast Graphics stack or its Feature Match Layout. The canvas is the
- * Event's (ADR-0051), so no Screen write resizes it.
+ * Whether a generic Screen write edits the graphics Edit workspace.
  *
  * Decided by what would change rather than by which fields are present: the
  * generic write replaces `modeConfigs` whole, and the Edit Screen dialog sends
@@ -185,23 +191,23 @@ function genericWriteEditsWorkspace(
 	existing: { modeConfigs: ScreenResponse['modeConfigs'] },
 	data: Omit<UpdateScreenInput, 'stateVersion'>,
 ): boolean {
-	return data.modeConfigs !== undefined
-		&& (
-			!sameJson(existing.modeConfigs?.['broadcast-graphics'], data.modeConfigs?.['broadcast-graphics'])
-			|| !sameJson(featureMatchLayoutOf(existing.modeConfigs), featureMatchLayoutOf(data.modeConfigs))
-		);
+	if (data.modeConfigs === undefined)
+		return false;
+	return (Object.keys(EDIT_WORKSPACE_FIELDS) as ScreenMode[]).some(mode => !sameJson(
+		editWorkspaceOf(mode, existing.modeConfigs?.[mode]),
+		editWorkspaceOf(mode, data.modeConfigs?.[mode]),
+	));
 }
 
 /**
- * Whether a mode configuration patch edits the graphics Edit workspace. Every
- * Broadcast Graphics write does; a Feature Match Overlay patch does when it
- * writes its Feature Match Layout, so a Slot change alone stays open (#738).
+ * Whether a mode configuration patch edits the graphics Edit workspace: by the
+ * fields it carries, so a Feature Match Slot change alone stays open.
  */
 function modeConfigWriteEditsWorkspace(mode: ScreenMode, config: Record<string, unknown>): boolean {
-	if (mode === 'broadcast-graphics')
+	const fields = EDIT_WORKSPACE_FIELDS[mode];
+	if (fields === 'whole')
 		return true;
-	return mode === 'feature-match-overlay'
-		&& FEATURE_MATCH_LAYOUT_FIELDS.some(field => Object.hasOwn(config, field));
+	return fields?.some(field => Object.hasOwn(config, field)) ?? false;
 }
 
 export function screenWriteModule() {

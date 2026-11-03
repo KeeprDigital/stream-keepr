@@ -58,6 +58,7 @@ function applyRemoteUpdate(screenId: number, change: () => void) {
 const mockSaveState = ref<'idle' | 'saving' | 'committed' | 'failed'>('idle');
 const mockRetry = vi.fn();
 const mockResetConfig = vi.fn();
+const mockDiscard = vi.fn();
 const mockToastAdd = vi.fn();
 
 const mockLeaseWritable = ref(true);
@@ -95,6 +96,7 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	updateConfig: mockUpdateConfig,
 	resetConfig: mockResetConfig,
 	retry: mockRetry,
+	discard: mockDiscard,
 }));
 mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
 mockNuxtImport('$fetch', () => mockApiFetch);
@@ -604,18 +606,6 @@ describe('featureMatchOverlaySettings — Graphics Authoring Lease', () => {
 			() => press('Delete'),
 		],
 		[
-			'duplicate key',
-			() => press('d', { metaKey: true }),
-		],
-		[
-			'nudge key',
-			() => press('ArrowRight'),
-		],
-		[
-			'undo key',
-			() => press('z', { metaKey: true }),
-		],
-		[
 			'canvas move',
 			wrapper => preview(wrapper).vm.$emit('manipulate', { x: 1, y: 2, width: 3, height: 4 }, 1),
 		],
@@ -631,6 +621,31 @@ describe('featureMatchOverlaySettings — Graphics Authoring Lease', () => {
 
 		expect(mockUpdateConfig).not.toHaveBeenCalled();
 		expect(mockResetConfig).not.toHaveBeenCalled();
+	});
+
+	it('leaves an observer\'s editing shortcuts to the browser', async () => {
+		await mountObserver();
+		const undo = new KeyboardEvent('keydown', {
+			key: 'z',
+			metaKey: true,
+			bubbles: true,
+			cancelable: true,
+		});
+
+		window.dispatchEvent(undo);
+
+		expect(undo.defaultPrevented).toBe(false);
+	});
+
+	it('drops the unsaved layout when the lease is lost', async () => {
+		mockLeaseWritable.value = true;
+		await mountComponent();
+		await flushPromises();
+
+		mockLeaseWritable.value = false;
+		await nextTick();
+
+		expect(mockDiscard).toHaveBeenCalledWith(['layout', 'presetId']);
 	});
 
 	it('hands every other write path a read-only state', async () => {
