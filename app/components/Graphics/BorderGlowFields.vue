@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayGlowPosition } from '~~/shared/types/screenConfig';
 import type { BorderFieldsValue, BorderGlowEdit, BorderSide, GlowFieldsValue } from '~/types/borderGlow';
+import { OPACITY_INPUT } from '~/utils/opacityInput';
 
 /**
  * The one border and glow fields control, for the Feature Match Overlay Frame,
@@ -129,18 +130,16 @@ function toggleSide(side: BorderSide) {
 						/>
 					</slot>
 				</UFormField>
-				<UFormField :label="`${borderLabel} width`" :size="size">
-					<UInputNumber
-						:model-value="border.width"
-						:min="0"
-						:max="MAX_PIXELS"
-						:size="size"
-						:disabled="disabled"
-						class="w-full"
-						:aria-label="ariaLabel(`${borderLabel} width`)"
-						@update:model-value="editBorder({ width: $event ?? 0 })"
-					/>
-				</UFormField>
+				<GraphicsNumberField
+					:label="`${borderLabel} width`"
+					:size="size"
+					:model-value="border.width"
+					:min="0"
+					:max="MAX_PIXELS"
+					:disabled="disabled"
+					:aria-label="ariaLabel(`${borderLabel} width`)"
+					@update:model-value="editBorder({ width: $event ?? 0 })"
+				/>
 			</div>
 
 			<UFormField v-if="perSide" :label="`${borderLabel} sides`" :size="size">
@@ -195,28 +194,25 @@ function toggleSide(side: BorderSide) {
 						/>
 					</slot>
 				</UFormField>
-				<UFormField label="Glow size" :size="size">
-					<UInputNumber
-						:model-value="glow.size"
-						:min="0"
-						:max="MAX_PIXELS"
-						:size="size"
-						:disabled="disabled"
-						class="w-full"
-						:aria-label="ariaLabel('Glow size')"
-						@update:model-value="editGlow({ size: $event ?? 0 })"
-					/>
-				</UFormField>
-				<UFormField label="Glow opacity" :size="size">
-					<UIOpacityInput
-						:model-value="glow.opacity"
-						:size="size"
-						:disabled="disabled"
-						class="w-full"
-						:aria-label="ariaLabel('Glow opacity')"
-						@update:model-value="editGlow({ opacity: $event ?? 1 })"
-					/>
-				</UFormField>
+				<GraphicsNumberField
+					label="Glow size"
+					:size="size"
+					:model-value="glow.size"
+					:min="0"
+					:max="MAX_PIXELS"
+					:disabled="disabled"
+					:aria-label="ariaLabel('Glow size')"
+					@update:model-value="editGlow({ size: $event ?? 0 })"
+				/>
+				<GraphicsNumberField
+					label="Glow opacity"
+					:size="size"
+					v-bind="OPACITY_INPUT"
+					:model-value="glow.opacity"
+					:disabled="disabled"
+					:aria-label="ariaLabel('Glow opacity')"
+					@update:model-value="editGlow({ opacity: $event ?? 1 })"
+				/>
 				<UFormField v-if="glowPosition" label="Glow position" :size="size">
 					<USelect
 						:model-value="glow.position ?? 'both'"

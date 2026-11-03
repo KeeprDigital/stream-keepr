@@ -133,22 +133,17 @@ const inputStep = computed(() => geometryUnitInputStep(unit.value));
 <template>
 	<div class="space-y-3">
 		<div v-if="!stacked" class="grid grid-cols-2 gap-2">
-			<UFormField
+			<GraphicsNumberField
 				v-for="axis in ['x', 'y'] as const"
 				:key="axis"
 				:label="axis.toUpperCase()"
 				size="sm"
-			>
-				<UInputNumber
-					:model-value="shownPosition(axis)"
-					:step="inputStep.step"
-					:step-snapping="inputStep.stepSnapping"
-					size="sm"
-					class="w-full"
-					:aria-label="`Item ${axis}`"
-					@update:model-value="updatePosition(axis, $event)"
-				/>
-			</UFormField>
+				:model-value="shownPosition(axis)"
+				:step="inputStep.step"
+				:step-snapping="inputStep.stepSnapping"
+				:aria-label="`Item ${axis}`"
+				@update:model-value="updatePosition(axis, $event)"
+			/>
 		</div>
 
 		<div class="flex items-end gap-2">
@@ -165,21 +160,16 @@ const inputStep = computed(() => geometryUnitInputStep(unit.value));
 					class="mb-0.5 size-7 shrink-0 justify-center p-0"
 					@click="toggleLink"
 				/>
-				<UFormField
+				<GraphicsNumberField
 					:label="axis === 'width' ? 'Width' : 'Height'"
 					size="sm"
 					class="min-w-0 flex-1"
-				>
-					<UInputNumber
-						:model-value="shownSize(axis)"
-						:step="inputStep.step"
-						:step-snapping="inputStep.stepSnapping"
-						size="sm"
-						class="w-full"
-						:aria-label="`Item ${axis}`"
-						@update:model-value="updateSize(axis, $event)"
-					/>
-				</UFormField>
+					:model-value="shownSize(axis)"
+					:step="inputStep.step"
+					:step-snapping="inputStep.stepSnapping"
+					:aria-label="`Item ${axis}`"
+					@update:model-value="updateSize(axis, $event)"
+				/>
 			</template>
 		</div>
 
