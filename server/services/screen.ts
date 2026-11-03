@@ -42,6 +42,26 @@ export function buildClearDeckSourcePlayersQuery(eventId: number, playerIds: num
 		.returning();
 }
 
+/**
+ * Clears every Feature Match Slot side Deck Source in the Event naming one of
+ * `slotIds` to no Slot, as a new Screen version, keeping its side. Batch it
+ * ahead of the delete of those Slots, as a Player delete does (ADR-0032).
+ */
+export function buildClearDeckSourceSlotsQuery(eventId: number, slotIds: number[]) {
+	return db
+		.update(screens)
+		.set({
+			modeConfigs: sql`json_set(${screens.modeConfigs}, '$.deck.deckSource.slotId', json('null'))`,
+			stateVersion: sql`${screens.stateVersion} + 1`,
+		})
+		.where(and(
+			eq(screens.eventId, eventId),
+			sql`json_extract(${screens.modeConfigs}, '$.deck.deckSource.type') = 'featureMatchSlot'`,
+			inArray(sql`json_extract(${screens.modeConfigs}, '$.deck.deckSource.slotId')`, slotIds),
+		))
+		.returning();
+}
+
 export function screenService() {
 	const findById = async (id: number, eventId: number): Promise<DbScreen | undefined> => {
 		return await db.query.screens.findFirst({

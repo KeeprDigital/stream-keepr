@@ -39,6 +39,9 @@ const boardFields = DECK_SIDEBOARD_LAYOUT_FIELDS;
 // is always a `QuantityPosition`, and why the casts below are safe.
 const BADGE_DISABLED_POINTS: readonly NinePoint[] = ['center'];
 
+/** A One Piece Card Game Event shows a Feature Match Slot side's Deck List, set up in its own settings (ADR-0057). */
+const isOpEvent = computed(() => eventStore.event?.game === 'op');
+
 const broadcastDeckListsEnabled = computed(() =>
 	eventStore.event?.game === 'mtg'
 	&& eventStore.event.broadcastDeckListsEnabled,
@@ -76,7 +79,7 @@ function selectBroadcastDeckList(listId: number | null) {
 }
 
 watch(() => config.value.deckSource.type, (source) => {
-	if (source === 'player' || broadcastDeckListsEnabled.value)
+	if (source === 'player' || (source === 'broadcast' && broadcastDeckListsEnabled.value))
 		sourceTab.value = source;
 });
 
@@ -97,7 +100,7 @@ useConsumedEventData(['players']);
 
 // Merely loading choices or opening a tab never changes the selected source.
 onMounted(async () => {
-	if (props.eventId) {
+	if (props.eventId && !isOpEvent.value) {
 		await Promise.allSettled([
 			playerStore.loadPlayersByEventId(props.eventId),
 			...(broadcastDeckListsEnabled.value
@@ -304,7 +307,13 @@ const emptyBoardHint = computed(() => {
 </script>
 
 <template>
-	<div class="flex flex-col gap-6">
+	<ScreenModesDeckOpSettings
+		v-if="isOpEvent"
+		:config="config"
+		:event-id="eventId"
+		@update="updateConfig"
+	/>
+	<div v-else class="flex flex-col gap-6">
 		<ScreenSettingsCard title="Deck Source">
 			<UTabs
 				v-if="broadcastDeckListsEnabled"

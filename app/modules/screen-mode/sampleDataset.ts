@@ -757,6 +757,8 @@ export function useSampleScreenOutputReadRepository(): SampleReadRepository {
 		card: answer(ANSWERS.card),
 		liveSession: answer(ANSWERS.liveSession),
 		featureMatchSlot: async () => notInSample('Feature Match Slot'),
+		// The dataset's Deck is an MTG Player's; One Piece samples are #877's.
+		featureMatchDeckList: async () => notInSample('Feature Match Deck List'),
 		playerHistory: answer(ANSWERS.playerHistory),
 		standings: answer(ANSWERS.standings),
 		pairings: answer(ANSWERS.pairings),

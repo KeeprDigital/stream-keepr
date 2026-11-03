@@ -39,10 +39,15 @@ type LoadedDeckSource
 	= { type: 'player'; playerId: number }
 		| { type: 'broadcast'; broadcastDeckListId: number };
 
-/** The Deck Source a configuration selects; `null` while it selects no Player. */
+/**
+ * The Deck Source a configuration selects; `null` while it selects no Player,
+ * or a Feature Match Slot side, which `useFeatureMatchDeckModeData` reads.
+ */
 function selectedDeckSource(source: DeckSource): LoadedDeckSource | null {
 	if (source.type === 'broadcast')
 		return { type: 'broadcast', broadcastDeckListId: source.broadcastDeckListId };
+	if (source.type === 'featureMatchSlot')
+		return null;
 	return source.playerId === null
 		? null
 		: { type: 'player', playerId: source.playerId };

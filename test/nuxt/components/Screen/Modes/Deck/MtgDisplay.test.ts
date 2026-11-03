@@ -4,7 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
-import Display from '~/components/Screen/Modes/Deck/Display.vue';
+import Display from '~/components/Screen/Modes/Deck/MtgDisplay.vue';
 
 // The space the boards measure; 0 until they are laid out, when each board fits itself.
 const measured = vi.hoisted(() => ({ width: 0, height: 0 }));

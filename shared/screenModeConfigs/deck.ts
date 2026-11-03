@@ -5,6 +5,7 @@ import {
 	BOARD_SELECTION_VALUES,
 	CARD_SIZING_VALUES,
 	MAINBOARD_VIEW_VALUES,
+	PLAYER_SIDE_VALUES,
 	QUANTITY_POSITION_VALUES,
 	SIDEBOARD_PLACEMENT_VALUES,
 	SIDEBOARD_VIEW_VALUES,
@@ -108,7 +109,8 @@ export const DEFAULT_COMPANION_TAG_POSITION: QuantityPosition = 'top';
 
 /** The Deck Screen Mode's config contract: its shape, type, and defaults. */
 export const deckModeConfigContract = defineScreenModeConfigContract({
-	// The Deck Source (ADR-0032): no Player or one Player, or one Broadcast Deck List.
+	// The Deck Source (ADR-0032): no Player or one Player, one Broadcast Deck
+	// List, or one player side of a Feature Match Slot, followed live (ADR-0057).
 	deckSource: z.discriminatedUnion('type', [
 		z.object({
 			type: z.literal('player'),
@@ -117,6 +119,13 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 		z.object({
 			type: z.literal('broadcast'),
 			broadcastDeckListId: z.number().int().positive(),
+		}).strict(),
+		z.object({
+			type: z.literal('featureMatchSlot'),
+			/** `null` once its Slot is deleted, as a deleted Player leaves no Player. */
+			slotId: z.number().int().positive().nullable(),
+			/** The side shown, in the Session's order: whichever player sits there now (ADR-0058). */
+			side: z.enum(PLAYER_SIDE_VALUES),
 		}).strict(),
 	]),
 	/**
@@ -137,6 +146,8 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	/** The companion as its own card image, beside the boards. */
 	showCompanion: editorField(z.boolean().optional(), { label: 'Show Companion' }),
 	showDeckStats: editorField(z.boolean().optional(), { label: 'Show Deck Stats' }),
+	/** A One Piece Card Game Deck List's cost curve, beside its Leader. */
+	showCostCurve: editorField(z.boolean().optional(), { label: 'Show Cost Curve' }),
 	showDeckMetaPill: editorField(z.boolean().optional(), { label: 'Show Deck Meta Pill' }),
 	showHighlanderTotal: editorField(z.boolean().optional(), { label: 'Show Total Points' }),
 	showHighlanderPointedCards: editorField(z.boolean().optional(), { label: 'Show Pointed Cards' }),
@@ -165,6 +176,7 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	showDeckColors: true,
 	showCompanion: true,
 	showDeckStats: false,
+	showCostCurve: true,
 	showDeckMetaPill: true,
 	showHighlanderTotal: true,
 	showHighlanderPointedCards: true,

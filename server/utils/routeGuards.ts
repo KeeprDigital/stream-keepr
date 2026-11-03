@@ -164,6 +164,9 @@ async function requireDeckSourceInEvent(eventId: number, value: unknown): Promis
 		if (!await broadcastDeckListService().sourceIsSelectable(listId, eventId))
 			throw new ScreenDeckSourceConflictError();
 	}
+	else if (source.type === 'featureMatchSlot') {
+		await requireFeatureMatchSlotInEvent(eventId, referencedId(source.slotId));
+	}
 }
 
 /** How each kind of Event Reference is proved to belong to the Event. */
