@@ -11,6 +11,9 @@ export interface MatchResultFacts {
 	hasResult: boolean;
 }
 
+/** A Match's result as its seats hold it, without knowing which Player sits where. */
+export type SeatedMatchResultFacts = Omit<MatchResultFacts, 'player1Id'>;
+
 /** A Match's result read from one Player's side: their game wins first. */
 export interface MatchSide {
 	outcome: MatchSideOutcome;
@@ -30,11 +33,11 @@ export function readMatchFromPlayerSide(match: MatchResultFacts, playerId: numbe
 }
 
 /** A Match's result from player 1's side, for a reader that names its sides by seat rather than by Player. */
-export function readMatchFromPlayer1Side(match: Omit<MatchResultFacts, 'player1Id'>): MatchSide {
+export function readMatchFromPlayer1Side(match: SeatedMatchResultFacts): MatchSide {
 	return readSide(match, true);
 }
 
-function readSide(match: Omit<MatchResultFacts, 'player1Id'>, isPlayer1: boolean): MatchSide {
+function readSide(match: SeatedMatchResultFacts, isPlayer1: boolean): MatchSide {
 	const playerGameWins = isPlayer1 ? match.player1GameWins : match.player2GameWins;
 	const opponentGameWins = isPlayer1 ? match.player2GameWins : match.player1GameWins;
 
