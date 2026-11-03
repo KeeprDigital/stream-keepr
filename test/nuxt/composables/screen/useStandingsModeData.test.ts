@@ -752,12 +752,12 @@ describe('useStandingsModeData', () => {
 			expect(result.positionChangeOf(result.pageData.value[0]!)).toEqual({ kind: 'up', by: 3 });
 		});
 
-		it('shows a neutral marker for every Player when there is no previous Round', async () => {
+		it('leaves every Player\'s cell blank when there is no previous Round', async () => {
 			answerReads({ ...roundSeven, previousRoundPositions: null });
 
 			const result = await mountStandings();
 
-			expect(positionChanges(result).map(([, change]) => change)).toEqual(['–', '–', '–', '–']);
+			expect(positionChanges(result).map(([, change]) => change)).toEqual(['', '', '', '']);
 		});
 
 		it.each([
