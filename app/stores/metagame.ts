@@ -1,20 +1,18 @@
-import type { MetagameConversionMetric, MetagameScope } from '~~/shared/types/enums';
+import type { ConversionTarget } from '~~/shared/conversionTarget';
+import type { MetagameScope } from '~~/shared/types/enums';
 import type { MetagameSummaryResponse } from '~~/shared/types/metagame';
-import type { MetagameConversionInput } from '~/modules/metagame/client';
+import { eventConversionTarget } from '~~/shared/conversionTarget';
 import { buildMetagameScopeQuery, useMetagameClient } from '~/modules/metagame/client';
 
 export const useMetagameStore = defineStore('metagame', () => {
 	const metagameClient = useMetagameClient();
+	const eventStore = useEventStore();
 
 	// ── Scope state (shared across all metagame views) ──
 	const scope = ref<MetagameScope>('all');
 	const topN = ref<number>(8);
 	const minPoints = ref<number>(9);
 	const playerListId = ref<number | undefined>(undefined);
-
-	// ── Conversion target (shared across archetype views) ──
-	const conversionMetric = ref<MetagameConversionMetric>('topN');
-	const conversionThreshold = ref<number>(8);
 
 	// ── Cached data ──
 	const summaryData = ref<MetagameSummaryResponse | null>(null);
@@ -53,11 +51,12 @@ export const useMetagameStore = defineStore('metagame', () => {
 	/** Reactive scope query params — use as fetch query for any metagame endpoint */
 	const scopeQuery = computed(() => buildScopeQuery());
 
-	/** Reactive conversion target — spread into archetype breakdown/detail options */
-	const conversionQuery = computed<MetagameConversionInput>(() => ({
-		conversionMetric: conversionMetric.value,
-		conversionThreshold: conversionThreshold.value,
-	}));
+	/**
+	 * The Event's Conversion Target (ADR-0061), spread into archetype breakdown and
+	 * detail options. It is the operator's Event's, so a write shows here while it
+	 * is pending and an announced change from another operator lands here too.
+	 */
+	const conversionQuery = computed<ConversionTarget>(() => eventConversionTarget(eventStore.event));
 
 	function applyRemoteInvalidated() {
 		summaryData.value = null;
@@ -98,8 +97,6 @@ export const useMetagameStore = defineStore('metagame', () => {
 		topN.value = 8;
 		minPoints.value = 9;
 		playerListId.value = undefined;
-		conversionMetric.value = 'topN';
-		conversionThreshold.value = 8;
 		applyRemoteInvalidated();
 		loading.value = false;
 		error.value = null;
@@ -113,9 +110,7 @@ export const useMetagameStore = defineStore('metagame', () => {
 		playerListId,
 		scopeQuery,
 
-		// Conversion target
-		conversionMetric,
-		conversionThreshold,
+		// Conversion target: the Event's
 		conversionQuery,
 
 		// Data

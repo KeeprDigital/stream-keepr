@@ -17,6 +17,8 @@ export const SCREEN_OUTPUT_EVENT_FIELDS = [
 	'themeId',
 	'canvasWidth',
 	'canvasHeight',
+	'conversionMetric',
+	'conversionThreshold',
 	'featureMatchDefaultBestOf',
 	'featureMatchDefaultStartingLife',
 	'featureMatchDefaultClockType',

@@ -32,8 +32,6 @@ const BESPOKE_CONTROLS: Record<string, string> = {
 
 // Values a contract's select field allows that its editor does not offer.
 const OPTIONS_NOT_OFFERED: Record<string, readonly string[]> = {
-	// Shared Metagame vocabulary: the Metagame page sorts by it; this editor never offered it.
-	'metagame.sortBy': ['conversionRate'],
 	// Shared Metagame vocabulary: Most Played Cards carries no minimum-points field to scope by.
 	'top-cards.scope': ['minPoints'],
 };
@@ -93,7 +91,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 			},
 		],
 	},
-	// Each scope's and each view's settings, and the conversion target a shown Conversion Rate column asks for.
+	// Each scope's and each view's settings, and the Event's Conversion Target a shown Conversion Rate column names.
 	'metagame': {
 		editor: 'Metagame',
 		variants: [
