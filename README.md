@@ -1006,10 +1006,11 @@ Melee reporting a result. ADR-0052 has the rules.
 - **Local launchers tick it too.** No local runtime fires a cron trigger, so
   `pnpm dev`, `pnpm dev:local` and their `:bypass` variants fire the minute
   cron's hook in-process, and `pnpm preview` fires it through Wrangler's
-  `/__scheduled` route: at start, then each minute, never overlapping. A local
-  run with an Event's Live Results on therefore polls Melee.gg as production
-  does. The built Worker never starts this; its real cron is the only trigger
-  (`pnpm worker:smoke` checks).
+  `/__scheduled` route: at start, then each minute. A run never overlaps the
+  next under `pnpm dev`; under `pnpm preview`, as in production, the Melee Sync
+  lease keeps one Event's ticks apart. A local run with an Event's Live Results
+  on therefore polls Melee.gg as production does. The built Worker never starts
+  this; its real cron is the only trigger (`pnpm worker:smoke` checks).
 
 ## Graphics Asset Library operations
 

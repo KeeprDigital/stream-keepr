@@ -13,23 +13,56 @@ import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { LIVE_RESULTS_CRON } from '../server/utils/cronSchedules.ts';
+import { LIVE_RESULTS_CRON, LIVE_RESULTS_CRON_INTERVAL_MS } from '../server/utils/cronSchedules.ts';
 import { startLocalCron } from '../server/utils/localCron.ts';
 
+/** The generated config Wrangler runs; `.output/server/.env` is read beside it. */
+export const PREVIEW_WRANGLER_CONFIG = '.output/server/wrangler.json';
 const DEFAULT_PORT = 8787;
-const CRON_INTERVAL_MS = 60_000;
+const STOP_SIGNALS = ['SIGINT', 'SIGTERM'];
 
-/** The `--port` the caller passed through to Wrangler, else Wrangler's default. */
-function portOf(argv) {
-	const index = argv.indexOf('--port');
-	return index >= 0
-		? Number(argv[index + 1])
-		: DEFAULT_PORT;
+/**
+ * Splits the caller's Wrangler arguments into the port (`--port N` or
+ * `--port=N`, else Wrangler's default) and the rest, so the cron always fires at
+ * the port Wrangler listens on.
+ */
+export function splitPort(argv) {
+	let port = DEFAULT_PORT;
+	const rest = [];
+	for (let index = 0; index < argv.length; index++) {
+		const argument = argv[index];
+		if (argument === '--port')
+			port = Number(argv[++index]);
+		else if (argument.startsWith('--port='))
+			port = Number(argument.slice('--port='.length));
+		else
+			rest.push(argument);
+	}
+	if (!Number.isInteger(port) || port < 1 || port > 65_535)
+		throw new Error(`preview: --port must be a TCP port, not ${JSON.stringify(String(port))}`);
+	return { port, rest };
 }
 
-/** A Worker still starting refuses the connection; only other failures are worth a line. */
+/** How long the first firing waits for Wrangler to start listening. */
+const STARTUP_WAIT_MS = 60_000;
+
 function isNotListening(error) {
 	return error?.cause?.code === 'ECONNREFUSED';
+}
+
+/** Retries `request` while the Worker is still starting, so the first firing lands once it listens. */
+async function onceListening(request) {
+	const deadline = Date.now() + STARTUP_WAIT_MS;
+	for (;;) {
+		try {
+			return await request();
+		}
+		catch (error) {
+			if (!isNotListening(error) || Date.now() > deadline)
+				throw error;
+			await new Promise(resolve => setTimeout(resolve, 250));
+		}
+	}
 }
 
 /**
@@ -43,51 +76,42 @@ export async function runPreviewWorker({
 	fetchRequest = fetch,
 	signals = undefined,
 }) {
-	const port = portOf(argv);
-	const passthrough = argv.includes('--port')
-		? argv
-		: [
-				...argv,
-				'--port',
-				String(port),
-			];
+	const { port, rest } = splitPort(argv);
 	const child = spawnProcess(join(repositoryRoot, 'node_modules/.bin/wrangler'), [
 		'dev',
 		'--local',
 		'--config',
-		'.output/server/wrangler.json',
+		PREVIEW_WRANGLER_CONFIG,
 		'--persist-to',
 		'.wrangler/state/built-worker',
 		'--test-scheduled',
-		...passthrough,
+		'--port',
+		String(port),
+		...rest,
 	], { cwd: repositoryRoot, stdio: 'inherit' });
 
 	const scheduledUrl = new URL(`http://localhost:${port}/__scheduled`);
 	scheduledUrl.searchParams.set('cron', LIVE_RESULTS_CRON);
 	const cron = startLocalCron({
-		intervalMs: CRON_INTERVAL_MS,
+		intervalMs: LIVE_RESULTS_CRON_INTERVAL_MS,
 		fire: async () => {
-			const response = await fetchRequest(scheduledUrl.href);
+			const response = await onceListening(() => fetchRequest(scheduledUrl.href));
 			if (!response.ok)
 				throw new Error(`/__scheduled answered ${response.status}`);
 		},
-		onError: (error) => {
-			if (!isNotListening(error))
-				process.stderr.write(`preview: Live Results cron not fired: ${error?.message ?? error}\n`);
-		},
+		onError: error => process.stderr.write(`preview: Live Results cron not fired: ${error?.message ?? error}\n`),
 	});
 
-	// Ctrl-C reaches Wrangler through the terminal, so this waits for it to exit;
-	// a SIGTERM sent to this process alone is passed on, so workerd is never stranded.
-	const ignoreInterrupt = () => {};
-	const forwardTerminate = () => child.kill('SIGTERM');
-	signals?.on('SIGINT', ignoreInterrupt);
-	signals?.on('SIGTERM', forwardTerminate);
+	// A stop signal sent to this process alone is passed on and this waits for
+	// Wrangler to exit, so workerd is never stranded.
+	const forward = signal => child.kill(signal);
+	for (const signal of STOP_SIGNALS)
+		signals?.on(signal, forward);
 	return await new Promise((resolve) => {
 		child.once('exit', (code, signal) => {
 			cron.stop();
-			signals?.off('SIGINT', ignoreInterrupt);
-			signals?.off('SIGTERM', forwardTerminate);
+			for (const stopSignal of STOP_SIGNALS)
+				signals?.off(stopSignal, forward);
 			resolve(code ?? (signal ? 1 : 0));
 		});
 	});

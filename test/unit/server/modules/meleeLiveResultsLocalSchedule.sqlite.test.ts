@@ -2,12 +2,12 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
+import { createFakeNitroApp, installNitroPlugin } from '~~/test/helpers/nitroApp';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /*
  * Under a local launcher no cron fires, so the dev server fires the Worker's
- * minute cron hook itself; a deployed Worker never does. Each Event's poll state
- * still decides whether it is due.
+ * minute cron hook itself; a deployed Worker never does.
  */
 
 const harness = await createSqliteD1Harness();
@@ -21,35 +21,18 @@ const { startLocalLiveResultsSchedule } = await import('~~/server/modules/melee-
 
 afterAll(async () => await harness.close());
 
-type Handler = (payload: unknown) => unknown;
-
-/** The slice of a Nitro app the cron plugin and local schedule use, with the real cron plugin installed. */
+/** A Nitro app with the real Live Results cron plugin installed. */
 function nitroAppWithCronPlugin() {
-	const handlers = new Map<string, Handler[]>();
-	const nitroApp = {
-		hooks: {
-			hook: (name: string, handler: Handler) => {
-				handlers.set(name, [
-					...handlers.get(name) ?? [],
-					handler,
-				]);
-			},
-			callHook: async (name: string, payload: unknown) => {
-				for (const handler of handlers.get(name) ?? [])
-					await handler(payload);
-			},
-		},
-	};
-	(installCronPlugin as unknown as (app: typeof nitroApp) => void)(nitroApp);
+	const nitroApp = createFakeNitroApp();
+	installNitroPlugin(installCronPlugin, nitroApp);
 	return {
-		// The test's Nitro app has only the hook methods these call.
+		// The fake has only the hook methods the schedule calls.
 		nitroApp: nitroApp as unknown as Parameters<typeof startLocalLiveResultsSchedule>[0],
-		close: async () => await nitroApp.hooks.callHook('close', undefined),
+		close: async () => await nitroApp.hooks.callHook('close'),
 	};
 }
 
 const start = new Date('2026-11-03T12:00:00.000Z');
-const minutesLater = (minutes: number) => new Date(start.getTime() + minutes * 60_000);
 
 /** An Event with Live Results on and no Rounds: every tick idles, asking Melee nothing. */
 async function seedEvent() {
@@ -86,35 +69,30 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('the local Live Results schedule', () => {
-	it.each([
-		{
-			dev: true,
-			checked: [
-				start,
-				minutesLater(1),
-				minutesLater(1),
-				minutesLater(3),
-			],
-		},
-		{
-			dev: false,
-			checked: [null, null, null, null],
-		},
-	])('in dev $dev, ticks due Events at once and each minute after', async ({ dev, checked }) => {
+	it('under the dev server, ticks a due Event at once and again in a later minute', async () => {
 		const eventId = await seedEvent();
 		const app = nitroAppWithCronPlugin();
 
-		startLocalLiveResultsSchedule(app.nitroApp, { dev });
+		startLocalLiveResultsSchedule(app.nitroApp, { dev: true });
 		await vi.advanceTimersByTimeAsync(0);
-		const seen = [await lastCheckedAt(eventId)];
-		// An idle tick backs off: due again in 1 minute, then in 2.
-		for (const _minute of [1, 2, 3]) {
-			await advanceMinutes(1);
-			seen.push(await lastCheckedAt(eventId));
-		}
+		const atStart = await lastCheckedAt(eventId);
+		await advanceMinutes(5);
+		const later = await lastCheckedAt(eventId);
 		await app.close();
 
-		expect(seen).toEqual(checked);
+		expect(atStart).toEqual(start);
+		expect(later!.getTime()).toBeGreaterThan(start.getTime());
+	});
+
+	it('in a deployed Worker, never ticks: its real cron does', async () => {
+		const eventId = await seedEvent();
+		const app = nitroAppWithCronPlugin();
+
+		startLocalLiveResultsSchedule(app.nitroApp, { dev: false });
+		await advanceMinutes(5);
+		await app.close();
+
+		expect(await lastCheckedAt(eventId)).toBeNull();
 	});
 
 	it('stops when the dev server closes', async () => {

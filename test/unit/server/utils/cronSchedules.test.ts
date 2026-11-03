@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { getStaticJSONValue, parseJSON } from 'jsonc-eslint-parser';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GRAPHICS_CRON, LIVE_RESULTS_CRON } from '~~/server/utils/cronSchedules';
+import { createFakeNitroApp, installNitroPlugin } from '~~/test/helpers/nitroApp';
 
 /*
  * Every `cloudflare:scheduled` handler runs on every cron trigger, so each must
@@ -18,9 +19,6 @@ vi.doMock('~~/server/modules/graphics-asset-library/runtime', () => ({
 }));
 vi.doMock('~~/server/modules/melee-sync/liveResults/runner', () => ({ runDueLiveResultsTicks }));
 
-type ScheduledHook = (payload: { controller: { cron: string }; env: unknown; context: unknown }) => Promise<void>;
-type NitroPlugin = (nitroApp: { hooks: { hook: (name: string, handler: ScheduledHook) => void } }) => void;
-
 const plugins = {
 	'graphics retention': runGraphicsRetention,
 	'graphics reconciliation': runGraphicsReconciliation,
@@ -34,17 +32,10 @@ const pluginModules: Record<keyof typeof plugins, string> = {
 
 /** Fires the plugin's `cloudflare:scheduled` hook as the Worker would on `cron`. */
 async function fire(plugin: keyof typeof plugins, cron: string) {
-	const { default: install } = await import(pluginModules[plugin]) as { default: NitroPlugin };
-	let scheduled: ScheduledHook | undefined;
-	install({
-		hooks: {
-			hook: (name, handler) => {
-				if (name === 'cloudflare:scheduled')
-					scheduled = handler;
-			},
-		},
-	});
-	await scheduled!({
+	const { default: install } = await import(pluginModules[plugin]);
+	const nitroApp = createFakeNitroApp();
+	installNitroPlugin(install, nitroApp);
+	await nitroApp.hooks.callHook('cloudflare:scheduled', {
 		controller: { cron },
 		env: {},
 		context: {},

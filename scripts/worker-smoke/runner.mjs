@@ -28,6 +28,7 @@ const PIXEL_JPEG = Uint8Array.from(Buffer.from(
 
 /** An Event with Live Results on and no Rounds, so its tick idles and asks Melee nothing. */
 const LIVE_RESULTS_EVENT_ID = 900_001;
+const LIVE_RESULTS_TICK_TIMEOUT_MS = 10_000;
 const LIVE_RESULTS_EVENT_SQL = 'INSERT INTO events (id, name, game, feature_match_orientation, melee_enabled, melee_live_results_enabled) '
 	+ `VALUES (${LIVE_RESULTS_EVENT_ID}, 'Built Worker smoke Live Results', 'mtg', 'horizontal', 1, 1)`;
 
@@ -807,8 +808,14 @@ async function expectLiveResultsTickOnlyOnCron({ origin, cookie, fetchRequest, s
 		fetchRequest,
 		signal,
 	});
-	if (await lastCheckedAt('live-results-after-cron') === null)
-		throwShapeFailure('live-results-after-cron', 'a Live Results tick on the minute cron');
+	// `/__scheduled` answers once the handler returns; the tick runs on in its
+	// `waitUntil`, so the check is awaited rather than read once.
+	const deadline = Date.now() + LIVE_RESULTS_TICK_TIMEOUT_MS;
+	while (await lastCheckedAt('live-results-after-cron') === null) {
+		if (Date.now() > deadline)
+			throwShapeFailure('live-results-after-cron', 'a Live Results tick on the minute cron');
+		await abortable(new Promise(resolve => setTimeout(resolve, 100)), signal);
+	}
 }
 
 function jsonRequest(body, headers = {}) {

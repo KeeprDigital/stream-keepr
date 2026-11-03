@@ -2,18 +2,16 @@
 // is a checked hook name rather than a cast.
 import type {} from 'nitropack/presets/cloudflare/types';
 import type { NitroApp } from 'nitropack/types';
-import { LIVE_RESULTS_CRON } from '~~/server/utils/cronSchedules';
+import { LIVE_RESULTS_CRON, LIVE_RESULTS_CRON_INTERVAL_MS } from '~~/server/utils/cronSchedules';
 import { errorNameOf } from '~~/server/utils/errorLogFields';
 import { startLocalCron } from '~~/server/utils/localCron';
-
-/** How often `LIVE_RESULTS_CRON` (`* * * * *`) fires. */
-const LIVE_RESULTS_CRON_INTERVAL_MS = 60_000;
 
 /**
  * Under `nuxt dev` no cron trigger fires, so the dev server fires the Worker's
  * Live Results cron hook itself: at once, then every minute, never overlapping.
  * Each Event's poll state still decides whether it is due. Does nothing unless
- * `dev`: a deployed Worker has its real cron, and would tick twice.
+ * `dev`: a deployed Worker has its real cron, and would tick twice. The gate is
+ * this argument, not the caller's `if`, so the one place it lives is tested.
  */
 export function startLocalLiveResultsSchedule(nitroApp: Pick<NitroApp, 'hooks'>, { dev }: { dev: boolean }) {
 	if (!dev)

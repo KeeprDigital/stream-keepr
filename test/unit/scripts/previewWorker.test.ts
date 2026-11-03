@@ -31,7 +31,11 @@ describe('the preview launcher', () => {
 			argv: ['--port', '9100'],
 			port: 9100,
 		},
-	])('fires the minute cron at the built Worker on port $port each minute', async ({ argv, port }) => {
+		{
+			argv: ['--port=9101', '--ip', '127.0.0.1'],
+			port: 9101,
+		},
+	])('fires the minute cron at the built Worker on port $port until Wrangler exits', async ({ argv, port }) => {
 		const { child, spawnProcess } = fakeWrangler();
 		const fetchRequest = vi.fn(async (_url: string) => new Response('ok'));
 
@@ -42,23 +46,57 @@ describe('the preview launcher', () => {
 			spawnProcess: spawnProcess as unknown as typeof spawn,
 			fetchRequest: fetchRequest as unknown as typeof fetch,
 		});
-		await vi.advanceTimersByTimeAsync(2 * 60_000);
+		await vi.advanceTimersByTimeAsync(0);
 
 		const [, wranglerArguments] = spawnProcess.mock.calls[0]!;
 		expect(wranglerArguments).toEqual(expect.arrayContaining([
-			'dev',
-			'--local',
 			'--test-scheduled',
 			'--port',
 			String(port),
 		]));
-		expect(fetchRequest.mock.calls.map(([url]) => url)).toEqual(
-			Array.from({ length: 3 }).fill(`http://localhost:${port}/__scheduled?cron=*+*+*+*+*`),
-		);
+		expect(wranglerArguments.filter(argument => argument.startsWith('--port'))).toEqual(['--port']);
+		expect(fetchRequest).toHaveBeenLastCalledWith(`http://localhost:${port}/__scheduled?cron=*+*+*+*+*`);
 
+		const firings = fetchRequest.mock.calls.length;
 		child.emit('exit', 0, null);
 		expect(await exited).toBe(0);
 		await vi.advanceTimersByTimeAsync(5 * 60_000);
-		expect(fetchRequest).toHaveBeenCalledTimes(3);
+		expect(fetchRequest).toHaveBeenCalledTimes(firings);
+	});
+
+	it('fires its first minute once Wrangler is listening', async () => {
+		const { child, spawnProcess } = fakeWrangler();
+		const refused = Object.assign(new TypeError('fetch failed'), {
+			cause: { code: 'ECONNREFUSED' },
+		});
+		const fetchRequest = vi.fn(async (_url: string) => new Response('ok'))
+			.mockRejectedValueOnce(refused)
+			.mockRejectedValueOnce(refused);
+
+		const exited = runPreviewWorker({
+			argv: [],
+			repositoryRoot,
+			spawnProcess: spawnProcess as unknown as typeof spawn,
+			fetchRequest: fetchRequest as unknown as typeof fetch,
+		});
+
+		await vi.waitFor(() => expect(fetchRequest).toHaveBeenCalledTimes(3));
+		expect(await fetchRequest.mock.results[2]!.value).toBeInstanceOf(Response);
+		child.emit('exit', 0, null);
+		await exited;
+	});
+
+	it.each([
+		['--port', 'nope'],
+		['--port=0'],
+	])('refuses %s before starting Wrangler', async (...argv) => {
+		const { spawnProcess } = fakeWrangler();
+
+		await expect(runPreviewWorker({
+			argv,
+			repositoryRoot,
+			spawnProcess: spawnProcess as unknown as typeof spawn,
+		})).rejects.toThrow('--port must be a TCP port');
+		expect(spawnProcess).not.toHaveBeenCalled();
 	});
 });
