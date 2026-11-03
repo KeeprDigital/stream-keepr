@@ -17,6 +17,7 @@ import {
 	fromHostSelectionTarget,
 	hostSelectionTarget,
 } from '~/modules/feature-match-overlay/editorSelection';
+import { isTypingTarget } from '~/utils/typingTarget';
 import FeatureMatchOverlayCompositorInspector from './CompositorInspector.vue';
 import FeatureMatchOverlayLayerInspector from './LayerInspector.vue';
 import FeatureMatchOverlayLayerList from './LayerList.vue';
@@ -267,16 +268,23 @@ const SHORTCUTS = [
 		keys: ['⌥ drag'],
 		label: 'Turn off snapping',
 	},
+	{
+		keys: ['⌘ scroll'],
+		label: 'Zoom the preview',
+	},
+	{
+		keys: ['Space drag'],
+		label: 'Pan the preview (or middle-drag)',
+	},
+	{
+		keys: ['⌘', '0'],
+		label: 'Fit the preview',
+	},
+	{
+		keys: ['⌘', '1'],
+		label: 'Preview at 100%',
+	},
 ] as const;
-
-/** Whether a key press belongs to something the author is typing into or choosing in. */
-function isTypingTarget(target: EventTarget | null) {
-	if (!(target instanceof HTMLElement))
-		return false;
-	if (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
-		return true;
-	return target.closest('[role="dialog"], [role="menu"], [role="listbox"]') !== null;
-}
 
 const NUDGE: Record<string, { x: number; y: number }> = {
 	ArrowLeft: { x: -1, y: 0 },
