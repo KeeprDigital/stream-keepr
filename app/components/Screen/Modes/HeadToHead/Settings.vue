@@ -111,6 +111,21 @@ onMounted(async () => {
 			</template>
 		</ScreenSettingsCard>
 
+		<ScreenSettingsCard title="Show Options">
+			<ScreenSettingsToggle
+				:label="fields.showPronouns.label"
+				description="Show each Player's pronouns below their name."
+				:model-value="config.showPronouns"
+				@update:model-value="updateConfig({ showPronouns: $event })"
+			/>
+			<ScreenSettingsToggle
+				:label="fields.showDeckColors.label"
+				description="Show the mana colours of each Player's Archetype beside it."
+				:model-value="config.showDeckColors"
+				@update:model-value="updateConfig({ showDeckColors: $event })"
+			/>
+		</ScreenSettingsCard>
+
 		<ScreenSettingsCard title="Header">
 			<ScreenSettingsToggle
 				:label="fields.showHeader.label"

@@ -21,8 +21,9 @@ function selection(config: HeadToHeadModeConfig): string | null {
 /**
  * The Event Data a Head-to-Head is read from: its Feature Match Slot, which
  * Players the Slot seats and on which sides its Session shows them, those
- * Players and their Archetypes, the Matches between them, and the Round
- * Standings their records come from. Melee's wholesale syncs re-read.
+ * Players, whose own records they show, and their Archetypes, the Matches
+ * between them, and the Round Standings a Player without a record of their
+ * own falls back to. Melee's wholesale syncs re-read.
  */
 function headToHeadDependencies(boundSlotId: () => number | null): ScreenModeDependencies<HeldHeadToHead> {
 	const isBoundSlot = (slotId: number) => slotId === boundSlotId();

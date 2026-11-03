@@ -16,18 +16,25 @@ const entityId = z.number().int().positive().nullable();
  * Assignment, or the Players `player1Id` and `player2Id` picked directly. The
  * choice not taken is kept, so switching back restores it. Each id is an Event
  * Reference (ADR-0038).
+ *
+ * `showPronouns` and `showDeckColors` show each Player's pronouns and their
+ * Archetype's mana-colour pips; both default on, as they always showed (#903).
  */
 export const headToHeadModeConfigContract = defineScreenModeConfigContract({
 	playerSource: editorField(z.enum(HEAD_TO_HEAD_PLAYER_SOURCE_VALUES), { label: 'Players from' }),
 	featureMatchId: entityId,
 	player1Id: entityId,
 	player2Id: entityId,
+	showPronouns: editorField(z.boolean(), { label: 'Show Pronouns' }),
+	showDeckColors: editorField(z.boolean(), { label: 'Show Deck Colors' }),
 	...headerConfigShape,
 }, {
 	playerSource: 'featureMatchSlot',
 	featureMatchId: null,
 	player1Id: null,
 	player2Id: null,
+	showPronouns: true,
+	showDeckColors: true,
 	...DEFAULT_HEADER_CONFIG,
 });
 

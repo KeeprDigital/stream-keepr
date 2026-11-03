@@ -127,7 +127,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 			{ scope: 'minPoints' },
 		],
 	},
-	// The Slot binding and the two Player pickers: both are Event References, so only the source and header are scalar.
+	// The Slot binding and the two Player pickers: both are Event References, so only the source, show toggles and header are scalar.
 	'head-to-head': {
 		editor: 'HeadToHead',
 		variants: [

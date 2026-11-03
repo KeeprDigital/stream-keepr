@@ -42,8 +42,14 @@ export interface HeadToHeadFacts {
 	currentMatchId: number | null;
 }
 
+function holdsRecord({ wins, losses, draws, points }: RecordFacts): boolean {
+	return wins != null || losses != null || draws != null || points != null;
+}
+
 function projectPlayer({ player, archetype, latestStanding }: HeadToHeadPlayerFacts): ScreenOutputHeadToHeadPlayer {
-	const record = latestStanding ?? player;
+	const record = holdsRecord(player)
+		? player
+		: latestStanding ?? player;
 	const deck = resolvePlayerDeckIdentity(archetype, player.gameData);
 	return {
 		id: player.id,
@@ -108,9 +114,9 @@ function projectEarlierMatches(facts: HeadToHeadFacts, player1Id: number, player
  * A Head-to-Head of two Players at one Event (#760): each Player's current
  * record, points and deck, and the earlier Matches between them.
  *
- * A record is the Player's latest Round Standings, as Standings fixed at that
- * Round shows it, else the Player's own record, which an Event without synced
- * Round Standings keeps current.
+ * A record is the Player's own, as Standings with no Round picked shows it and
+ * a Melee Players sync keeps current (#903). Only a Player holding no record
+ * of their own shows their latest Round Standings.
  */
 export function projectHeadToHead(facts: HeadToHeadFacts): ScreenOutputHeadToHeadResponse {
 	const player1 = facts.player1
