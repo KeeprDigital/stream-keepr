@@ -1,10 +1,13 @@
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { flushPromises, mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive, ref } from 'vue';
 import { opSlotSide } from '~~/test/helpers/opCards';
 import Settings from '~/components/Screen/Modes/Deck/Settings.vue';
+
+// Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
+enableAutoUnmount(afterEach);
 
 const mockPlayerStore = {
 	players: [
@@ -229,10 +232,6 @@ function boardCard(wrapper: Awaited<ReturnType<typeof mountComponent>>, title: '
 function sectionTitles(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
 	return wrapper.findAll('[data-testid="settings-card"]').map(card => card.attributes('data-title'));
 }
-
-// The whole Deck editor mounts in each test, about half a second alone; a full
-// parallel run can take several times that, past the default five seconds.
-vi.setConfig({ testTimeout: 15_000 });
 
 describe('screenDeckSettings', () => {
 	beforeEach(() => {
