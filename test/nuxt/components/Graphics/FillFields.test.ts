@@ -35,7 +35,6 @@ const global = {
 	stubs: {
 		UFormField: UFormFieldStub,
 		UInputNumber: numberStub('UInputNumber'),
-		UIOpacityInput: numberStub('UIOpacityInput'),
 		UButton: defineComponent({
 			props: {
 				disabled: { type: Boolean, required: false },
@@ -199,7 +198,7 @@ describe.each(uses)('graphic fill fields for $name', (use) => {
 			patch: { position: 0.8 },
 		});
 
-		numberField(wrapper, 'UIOpacityInput', 'Stop 1 opacity')!.vm.$emit('update:modelValue', null);
+		numberField(wrapper, 'UInputNumber', 'Stop 1 opacity')!.vm.$emit('update:modelValue', null);
 		await flushPromises();
 		expect(lastEdit(wrapper)).toEqual({
 			kind: 'gradient-stop',

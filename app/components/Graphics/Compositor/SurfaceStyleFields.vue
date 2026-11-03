@@ -2,6 +2,7 @@
 import type { GraphicSurfaceStyleEdit } from '~~/shared/modules/graphics';
 import type { GraphicGlow, GraphicOutline, GraphicSurfaceStyle } from '~~/shared/types/graphics';
 import type { BorderGlowEdit } from '~/types/borderGlow';
+import { OPACITY_INPUT } from '~/utils/opacityInput';
 
 /**
  * The property controls for one Graphic Surface Style: through the shared Graphic
@@ -97,15 +98,14 @@ function editBorderGlow(edit: BorderGlowEdit) {
 				@edit="emit('edit', $event)"
 			/>
 
-			<UFormField label="Fill opacity" size="sm">
-				<UIOpacityInput
-					:model-value="surfaceStyle.fillOpacity"
-					size="sm"
-					class="w-full"
-					:aria-label="`${title} fill opacity`"
-					@update:model-value="emit('edit', { kind: 'fill-opacity', fillOpacity: $event ?? 1 })"
-				/>
-			</UFormField>
+			<GraphicsNumberField
+				label="Fill opacity"
+				size="sm"
+				v-bind="OPACITY_INPUT"
+				:model-value="surfaceStyle.fillOpacity"
+				:aria-label="`${title} fill opacity`"
+				@update:model-value="emit('edit', { kind: 'fill-opacity', fillOpacity: $event ?? 1 })"
+			/>
 
 			<GraphicsBorderGlowFields
 				border-label="Outline"

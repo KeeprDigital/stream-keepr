@@ -17,6 +17,7 @@ import {
 	fromHostSelectionTarget,
 	hostSelectionTarget,
 } from '~/modules/feature-match-overlay/editorSelection';
+import { NUMBER_SCRUB_GESTURE } from '~/modules/graphics/numberScrubGesture';
 import { isTypingTarget } from '~/utils/typingTarget';
 import FeatureMatchOverlayCompositorInspector from './CompositorInspector.vue';
 import FeatureMatchOverlayLayerInspector from './LayerInspector.vue';
@@ -190,6 +191,12 @@ onBeforeUnmount(stopWatchingRemoteUpdates);
 function updateFields(partial: Partial<FeatureMatchOverlayModeConfig>) {
 	editor.editFields(partial);
 }
+
+/** A drag on a property panel's number label undoes as one step, however long it pauses. */
+provide(NUMBER_SCRUB_GESTURE, {
+	begin: editor.beginGesture,
+	end: editor.endGesture,
+});
 
 /* ────────────────────────────────────────────────
  * Whole-layout actions

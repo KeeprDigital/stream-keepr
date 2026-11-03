@@ -340,16 +340,15 @@ function staggerOf(phase: GraphicAnimationPhase) {
 							@update:model-value="value => updateStagger(phase, { order: value })"
 						/>
 					</UFormField>
-					<UFormField label="Step (ms)" size="xs">
-						<UInputNumber
-							:model-value="staggerOf(phase)!.step"
-							:min="0"
-							:max="MAX_GRAPHIC_ANIMATION_STAGGER_STEP_MS"
-							size="xs"
-							:data-testid="`animation-${phase}-stagger-step`"
-							@update:model-value="value => updateStagger(phase, { step: Number(value ?? 0) })"
-						/>
-					</UFormField>
+					<GraphicsNumberField
+						label="Step (ms)"
+						size="xs"
+						:model-value="staggerOf(phase)!.step"
+						:min="0"
+						:max="MAX_GRAPHIC_ANIMATION_STAGGER_STEP_MS"
+						:data-testid="`animation-${phase}-stagger-step`"
+						@update:model-value="value => updateStagger(phase, { step: Number(value ?? 0) })"
+					/>
 					<div class="space-y-1">
 						<UFormField
 							v-for="member in staggerMembers"
