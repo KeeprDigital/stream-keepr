@@ -727,7 +727,7 @@ A host-owned Feature Match Overlay element placing an external video source, wit
 _Avoid_: Source Region, camera box, Source Graphic Item
 
 **Layer Lock**:
-An author's lock on one layer of a Feature Match Layout, a Graphic Item or a Source Item, against canvas edits: the canvas neither moves, resizes nor rotates it, arrow nudges skip it, and a click on it falls through to the layer beneath. It stays selectable from the layer list and editable in its property panel. Locking a Graphic Group locks its children. It is editor state, remembered per browser per Screen and never stored in the layout (ADR-0062).
+An author's lock on one layer of a Feature Match Layout, a Graphic Item or a Source Item, against canvas edits: the canvas neither moves, resizes nor rotates it, arrow nudges skip it, and a click on it falls through to the layer beneath. It stays selectable from the layer list and editable in its property panel. Locking a Graphic Group locks its children. It is editor state, remembered per browser per Screen and never stored in the layout (ADR-0063).
 _Avoid_: Frozen layer, pinned layer
 
 **Feature Match Overlay Preset**:
@@ -745,6 +745,10 @@ _Avoid_: Free-form role, camera name
 **Feature Match Sample Dataset**:
 One fixed canonical set of Feature Match values per Card Game, chosen by the Event's Card Game, that a preview resolves a Feature Match Layout against when no Feature Match Slot is bound; a Theme preview, which has no Event, uses the Card Game the operator picks. The One Piece Card Game set names each side's Leader. It never appears on a live Screen Output.
 _Avoid_: Dummy data, test data
+
+**Feature Match Stress Dataset**:
+One fixed set of the longest plausible Feature Match values per Card Game, chosen as the Feature Match Sample Dataset is, live state included: life totals, Sideboards and their card names, and the clock, or the longest Untimed Label for an Untimed Match. The Feature Match Overlay editor's preview resolves a Feature Match Layout against it while its author asks it to, over a bound Feature Match Slot's live data too (ADR-0062). Asking is editor state and is never saved. It never appears on a live Screen Output.
+_Avoid_: worst-case data, overflow data
 
 ## Relationships
 
