@@ -193,7 +193,7 @@ const UButtonStub = defineComponent({
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
 
-async function mountComponent(screen: Partial<Screen> = {}) {
+async function mountComponent(screen: Partial<Screen> = {}, stubs: Record<string, unknown> = {}) {
 	return mount(Settings, {
 		props: {
 			screen: {
@@ -222,6 +222,7 @@ async function mountComponent(screen: Partial<Screen> = {}) {
 				UButton: UButtonStub,
 				UAlert: true,
 				UModal: UModalStub,
+				...stubs,
 			},
 		},
 	});
@@ -661,6 +662,25 @@ describe('featureMatchOverlaySettings — Graphics Authoring Lease', () => {
 		preview(wrapper).vm.$emit('selectCompositorTarget', { type: 'item', graphicId: 'feature-match-layout', itemId: mockConfig.value.layout.composition.items[0]!.id });
 		await nextTick();
 		expect(wrapper.get('[data-testid="compositor-inspector"]').attributes('data-writable')).toBe('false');
+	});
+
+	// The stress preview writes nothing, so an observer judges overflow too.
+	it('leaves the preview\'s stress toggle working for an observer', async () => {
+		const wrapper = await mountComponent({}, {
+			FeatureMatchOverlayPreviewOutputAside: false,
+			GraphicsCanvasManipulationOverlay: true,
+			// The real preview panel, whose toolbar is its card's actions.
+			ScreenSettingsCard: { template: '<section><slot name="actions" :open="true" /><slot /></section>' },
+		});
+		await flushPromises();
+		const toggle = wrapper.get('[data-testid="preview-stress-dataset"]');
+
+		expect(toggle.attributes('disabled')).toBeUndefined();
+		await toggle.trigger('click');
+
+		expect(toggle.attributes('aria-pressed')).toBe('true');
+		expect(wrapper.get('iframe').attributes('src')).toContain('stress=1');
+		expect(mockUpdateConfig).not.toHaveBeenCalled();
 	});
 
 	it('leaves the Feature Match Slot live for an observer', async () => {
