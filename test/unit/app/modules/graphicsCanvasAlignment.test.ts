@@ -164,6 +164,20 @@ describe('canvas alignment', () => {
 				{ x: 100, y: 0 },
 			],
 		],
+		// A box wider than the space between the outer two overlaps them evenly.
+		[
+			'x',
+			[
+				box(0, 0, 10, 10),
+				box(200, 0, 10, 10),
+				box(-50, 0, 200, 10),
+			],
+			[
+				{ x: 0, y: 0 },
+				{ x: 0, y: 0 },
+				{ x: 55, y: 0 },
+			],
+		],
 		[
 			'y',
 			[

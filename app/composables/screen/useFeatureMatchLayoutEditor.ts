@@ -18,7 +18,7 @@ import {
 import { randomUuid } from '~~/shared/utils/uuid';
 import { emptyEditHistory, recordEdit, redoEdit, undoEdit } from '~/modules/feature-match-overlay/editHistory';
 import { CANVAS_SELECTION, editorLayersFrame, editorSelectionKey, editorSelectionLabel, editorSelectionLayer } from '~/modules/feature-match-overlay/editorSelection';
-import { alignableLayers, alignLayers, distributeLayers } from '~/modules/feature-match-overlay/layerAlignment';
+import { alignLayers, canAlignLayers, canDistributeLayers, distributeLayers } from '~/modules/feature-match-overlay/layerAlignment';
 import {
 	collapseLayerSelection,
 	extendLayerSelection,
@@ -402,11 +402,13 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		patchLayer(target, rect, editOptions);
 	}
 
-	/** Where the selected layers sit on the canvas, when the canvas can move them. */
-	const selectionFrame = computed(() => editorLayersFrame(config.value.layout, layers.value, {
+	const canvasSize = () => ({
 		width: toValue(options.canvasWidth),
 		height: toValue(options.canvasHeight),
-	}));
+	});
+
+	/** Where the selected layers sit on the canvas, when the canvas can move them. */
+	const selectionFrame = computed(() => editorLayersFrame(config.value.layout, layers.value, canvasSize()));
 
 	/** Move every selected layer by the same whole-pixel delta, as one edit. */
 	function translateLayers(delta: { x: number; y: number }, editOptions: FeatureMatchLayoutEditOptions) {
@@ -463,11 +465,6 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 
 	/* ── Align and distribute (#919) ──────────────── */
 
-	const canvasSize = () => ({
-		width: toValue(options.canvasWidth),
-		height: toValue(options.canvasHeight),
-	});
-
 	function moveLayers(moved: readonly LayerPosition[]) {
 		patchLayers(moved.map(({ layer, x, y }) => [
 			layer,
@@ -475,14 +472,14 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		] as const));
 	}
 
-	/** Whether a layer, or the selection, holds any layer that aligns. */
+	/** Whether aligning a layer, or the selection, has anything to line up. */
 	function canAlign(target?: FeatureMatchLayoutEditorSelection): boolean {
-		return alignableLayers(config.value.layout, targets(target)).length > 0;
+		return canAlignLayers(config.value.layout, targets(target));
 	}
 
 	/** Whether the selection holds three or more layers that distribute. */
 	function canDistribute(): boolean {
-		return alignableLayers(config.value.layout, layers.value).length >= 3;
+		return canDistributeLayers(config.value.layout, layers.value);
 	}
 
 	/**

@@ -1,4 +1,4 @@
-import type { GraphicRect } from '~~/shared/types/graphics';
+import type { GraphicGroupItemConfig, GraphicRect } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchLayoutEditorLayer } from './editorSelection';
 import type { AlignEdge, BoxMove, DistributeAxis } from '~/modules/graphics/canvasAlignment';
@@ -23,14 +23,44 @@ import { editorLayerCanvasBox, editorSelectionLayer } from './editorSelection';
  * so neither moves among canvas layers; the rest still do.
  */
 
-/** The align commands the property panel and the layer list offer, in their order. */
-export const ALIGN_COMMANDS: readonly { edge: AlignEdge; label: string; icon: string }[] = [
-	{ edge: 'left', label: 'Left', icon: 'i-lucide-align-start-vertical' },
-	{ edge: 'center', label: 'Centre', icon: 'i-lucide-align-center-vertical' },
-	{ edge: 'right', label: 'Right', icon: 'i-lucide-align-end-vertical' },
-	{ edge: 'top', label: 'Top', icon: 'i-lucide-align-start-horizontal' },
-	{ edge: 'middle', label: 'Middle', icon: 'i-lucide-align-center-horizontal' },
-	{ edge: 'bottom', label: 'Bottom', icon: 'i-lucide-align-end-horizontal' },
+/** The align commands the property panel and the layer list offer, in their order, each along one axis. */
+export const ALIGN_COMMANDS: readonly { edge: AlignEdge; axis: DistributeAxis; label: string; icon: string }[] = [
+	{
+		edge: 'left',
+		axis: 'x',
+		label: 'Left',
+		icon: 'i-lucide-align-start-vertical',
+	},
+	{
+		edge: 'center',
+		axis: 'x',
+		label: 'Centre',
+		icon: 'i-lucide-align-center-vertical',
+	},
+	{
+		edge: 'right',
+		axis: 'x',
+		label: 'Right',
+		icon: 'i-lucide-align-end-vertical',
+	},
+	{
+		edge: 'top',
+		axis: 'y',
+		label: 'Top',
+		icon: 'i-lucide-align-start-horizontal',
+	},
+	{
+		edge: 'middle',
+		axis: 'y',
+		label: 'Middle',
+		icon: 'i-lucide-align-center-horizontal',
+	},
+	{
+		edge: 'bottom',
+		axis: 'y',
+		label: 'Bottom',
+		icon: 'i-lucide-align-end-horizontal',
+	},
 ];
 
 /** The distribute commands the property panel and the layer list offer. */
@@ -46,18 +76,13 @@ export interface LayerPosition {
 	y: number;
 }
 
+/** A selected layer that aligns. */
 interface Member {
 	layer: FeatureMatchLayoutEditorLayer;
 	/** The stored top-left rectangle. */
 	rect: GraphicRect;
 	/** The box it covers, in the space they align in. */
 	box: GraphicRect;
-}
-
-interface AlignmentSpace {
-	members: Member[];
-	/** What one layer aligns to. */
-	container: GraphicRect;
 }
 
 /** The Graphic Group a layer is a child of, if any. */
@@ -67,11 +92,14 @@ function parentGroup(layout: FeatureMatchLayoutConfig, layer: FeatureMatchLayout
 		: undefined;
 }
 
-function alignmentSpace(
+/**
+ * The selected layers that align, and the group whose padded box they align in
+ * when they are all its children; otherwise they align on the canvas.
+ */
+function alignmentMembers(
 	layout: FeatureMatchLayoutConfig,
 	layers: readonly FeatureMatchLayoutEditorLayer[],
-	canvas: { width: number; height: number },
-): AlignmentSpace {
+): { members: Member[]; group?: GraphicGroupItemConfig } {
 	const present = layers.filter((layer) => {
 		const group = parentGroup(layout, layer);
 		return editorSelectionLayer(layout, layer) !== undefined
@@ -80,8 +108,8 @@ function alignmentSpace(
 	const groups = new Set(present.map(layer => parentGroup(layout, layer)));
 	const [group] = groups;
 	if (groups.size === 1 && group) {
-		const padding = Math.max(0, group.padding);
 		return {
+			group,
 			members: present.map((layer) => {
 				const item = findGraphicItem(layout.composition, layer.itemId)!.item;
 				return {
@@ -90,12 +118,6 @@ function alignmentSpace(
 					box: rotatedBounds(item, item.rotation, item.anchor),
 				};
 			}),
-			container: {
-				x: 0,
-				y: 0,
-				width: Math.max(0, group.width - 2 * padding),
-				height: Math.max(0, group.height - 2 * padding),
-			},
 		};
 	}
 	return {
@@ -111,7 +133,19 @@ function alignmentSpace(
 					]
 				: [];
 		}),
-		container: { x: 0, y: 0, ...canvas },
+	};
+}
+
+/** What one layer aligns to: its group's padded box, or the canvas. */
+function container(group: GraphicGroupItemConfig | undefined, canvas: { width: number; height: number }): GraphicRect {
+	if (!group)
+		return { x: 0, y: 0, ...canvas };
+	const padding = Math.max(0, group.padding);
+	return {
+		x: 0,
+		y: 0,
+		width: Math.max(0, group.width - 2 * padding),
+		height: Math.max(0, group.height - 2 * padding),
 	};
 }
 
@@ -126,17 +160,29 @@ function positions(members: readonly Member[], moves: readonly BoxMove[]): Layer
 	});
 }
 
-/** The selected layers an align or distribute moves. */
-export function alignableLayers(
+/**
+ * Whether aligning the selected layers has anything to line up: one that aligns
+ * to its container, or two or more that align to each other.
+ */
+export function canAlignLayers(
 	layout: FeatureMatchLayoutConfig,
 	layers: readonly FeatureMatchLayoutEditorLayer[],
-): FeatureMatchLayoutEditorLayer[] {
-	return alignmentSpace(layout, layers, { width: 0, height: 0 }).members.map(member => member.layer);
+): boolean {
+	const { members } = alignmentMembers(layout, layers);
+	return members.length > 0 && members.length >= Math.min(2, layers.length);
+}
+
+/** Whether three or more of the selected layers distribute. */
+export function canDistributeLayers(
+	layout: FeatureMatchLayoutConfig,
+	layers: readonly FeatureMatchLayoutEditorLayer[],
+): boolean {
+	return alignmentMembers(layout, layers).members.length >= 3;
 }
 
 /**
  * Where aligning the selected layers' edge or centre puts each one that moves:
- * several to the bounds the alignable ones cover, one to its container.
+ * several to the bounds the ones that align cover, one to its container.
  */
 export function alignLayers(
 	layout: FeatureMatchLayoutConfig,
@@ -144,22 +190,22 @@ export function alignLayers(
 	canvas: { width: number; height: number },
 	edge: AlignEdge,
 ): LayerPosition[] {
-	const { members, container } = alignmentSpace(layout, layers, canvas);
+	const { members, group } = alignmentMembers(layout, layers);
 	const to = layers.length > 1
 		? undefined
-		: container;
+		: container(group, canvas);
 	return positions(members, alignBoxes(members.map(member => member.box), edge, to));
 }
 
 /**
  * Where spacing the selected layers evenly along an axis puts each one that
- * moves: the outermost two stay. Fewer than three alignable move none.
+ * moves: the outermost two stay. Fewer than three that distribute move none.
  */
 export function distributeLayers(
 	layout: FeatureMatchLayoutConfig,
 	layers: readonly FeatureMatchLayoutEditorLayer[],
 	axis: DistributeAxis,
 ): LayerPosition[] {
-	const { members } = alignmentSpace(layout, layers, { width: 0, height: 0 });
+	const { members } = alignmentMembers(layout, layers);
 	return positions(members, distributeBoxes(members.map(member => member.box), axis));
 }

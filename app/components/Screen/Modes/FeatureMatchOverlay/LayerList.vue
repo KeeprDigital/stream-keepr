@@ -183,12 +183,9 @@ function rowTarget(row: LayerRow): FeatureMatchLayoutEditorLayer | undefined {
 function arrangeMenu(target: FeatureMatchLayoutEditorLayer | undefined): DropdownMenuItem[] {
 	const align: DropdownMenuItem = {
 		label: 'Align',
-		icon: 'i-lucide-align-start-vertical',
+		icon: ALIGN_COMMANDS[0]!.icon,
 		disabled: !props.editor.canAlign(target),
-		children: [
-			ALIGN_COMMANDS.slice(0, 3),
-			ALIGN_COMMANDS.slice(3),
-		].map(commands => commands.map(command => ({
+		children: (['x', 'y'] as const).map(axis => ALIGN_COMMANDS.filter(command => command.axis === axis).map(command => ({
 			label: command.label,
 			icon: command.icon,
 			onSelect: () => props.editor.align(command.edge, target),
@@ -200,7 +197,7 @@ function arrangeMenu(target: FeatureMatchLayoutEditorLayer | undefined): Dropdow
 		align,
 		{
 			label: 'Distribute',
-			icon: 'i-lucide-align-horizontal-space-around',
+			icon: DISTRIBUTE_COMMANDS[0]!.icon,
 			disabled: !props.editor.canDistribute(),
 			children: DISTRIBUTE_COMMANDS.map(command => ({
 				label: command.label,

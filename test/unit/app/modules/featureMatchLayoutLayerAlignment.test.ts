@@ -1,10 +1,10 @@
 import type { AlignEdge } from '~~/app/modules/graphics/canvasAlignment';
-import type { BroadcastGraphicConfig, GraphicGroupItemConfig, GraphicItemConfig } from '~~/shared/types/graphics';
+import type { GraphicGroupItemConfig, ShapeGraphicItemConfig } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
-import { alignableLayers, alignLayers, distributeLayers } from '~~/app/modules/feature-match-overlay/layerAlignment';
-import { addGraphicGroupChild, addGraphicItem } from '~~/shared/modules/graphics';
+import { alignLayers, canAlignLayers, canDistributeLayers, distributeLayers } from '~~/app/modules/feature-match-overlay/layerAlignment';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { group, shape } from '~~/test/helpers/graphicsComposition';
 
 /**
  * Which of the Feature Match Overlay editor's selected layers align and
@@ -19,9 +19,9 @@ const CHILD = { type: 'item', itemId: 'child' } as const;
 const SIBLING = { type: 'item', itemId: 'sibling' } as const;
 const CLUSTER = { type: 'item', itemId: 'cluster' } as const;
 
-interface Shape {
+interface Variant {
 	group?: Partial<GraphicGroupItemConfig>;
-	title?: Partial<GraphicItemConfig>;
+	title?: Partial<ShapeGraphicItemConfig>;
 }
 
 /**
@@ -30,25 +30,8 @@ interface Shape {
  * at (50, 60) 400×300 with padding 4, whose padded box holds "child" at
  * (10, 20) 30×40 and "sibling" at (200, 100) 50×50.
  */
-function layoutOf(shape: Shape = {}): FeatureMatchLayoutConfig {
+function layoutOf(variant: Variant = {}): FeatureMatchLayoutConfig {
 	const base = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG).layout;
-	const size = { canvasWidth: 1920, canvasHeight: 1080 };
-	let composition: BroadcastGraphicConfig = { ...base.composition, items: [] };
-	composition = addGraphicItem(composition, { kind: 'text', id: 'title', ...size }).graphic;
-	composition = addGraphicItem(composition, { kind: 'shape', id: 'badge', ...size }).graphic;
-	composition = addGraphicItem(composition, { kind: 'group', id: 'cluster', ...size }).graphic;
-	composition = addGraphicGroupChild(composition, { kind: 'shape', groupId: 'cluster', id: 'child' }).graphic;
-	composition = addGraphicGroupChild(composition, { kind: 'shape', groupId: 'cluster', id: 'sibling' }).graphic;
-	const place = {
-		title: [500, 400, 100, 50],
-		badge: [900, 700, 60, 60],
-		child: [10, 20, 30, 40],
-		sibling: [200, 100, 50, 50],
-	} as const;
-	const rect = (id: keyof typeof place) => {
-		const [x, y, width, height] = place[id];
-		return { x, y, width, height };
-	};
 	return {
 		...base,
 		sources: base.sources.map(source => source.id === 'main-source'
@@ -61,38 +44,45 @@ function layoutOf(shape: Shape = {}): FeatureMatchLayoutConfig {
 				}
 			: source),
 		composition: {
-			...composition,
-			items: composition.items.map((item) => {
-				if (item.type === 'group') {
-					return {
-						...item,
-						arrangement: 'canvas' as const,
-						padding: 4,
-						x: 50,
-						y: 60,
-						width: 400,
-						height: 300,
-						children: item.children.map(child => ({
-							...child,
-							...rect(child.id as 'child' | 'sibling'),
-						})),
-						...shape.group,
-					};
-				}
-				return {
-					...item,
-					...rect(item.id as 'title' | 'badge'),
-					...(item.id === 'title'
-						? shape.title
-						: {}),
-				} as GraphicItemConfig;
-			}),
+			...base.composition,
+			items: [
+				shape('title', {
+					x: 500,
+					y: 400,
+					width: 100,
+					height: 50,
+					...variant.title,
+				}),
+				shape('badge', {
+					x: 900,
+					y: 700,
+					width: 60,
+					height: 60,
+				}),
+				group('cluster', [
+					shape('child', { x: 10, y: 20, width: 30, height: 40 }),
+					shape('sibling', {
+						x: 200,
+						y: 100,
+						width: 50,
+						height: 50,
+					}),
+				], {
+					arrangement: 'canvas',
+					padding: 4,
+					x: 50,
+					y: 60,
+					width: 400,
+					height: 300,
+					...variant.group,
+				}),
+			],
 		},
 	};
 }
 
 describe('feature match layout layer alignment', () => {
-	it.each<[string, Shape, readonly { type: 'source' | 'item'; itemId: string }[], AlignEdge, unknown[]]>([
+	it.each<[string, Variant, readonly { type: 'source' | 'item'; itemId: string }[], AlignEdge, unknown[]]>([
 		[
 			'Source Items and Graphic Items together, to the bounds they cover, moving none already there (E8, E10)',
 			{},
@@ -192,11 +182,11 @@ describe('feature match layout layer alignment', () => {
 				{ layer: BADGE, x: 500, y: 700 },
 			],
 		],
-	])('aligns %s', (_, shape, layers, edge, moved) => {
-		expect(alignLayers(layoutOf(shape), layers, CANVAS, edge)).toEqual(moved);
+	])('aligns %s', (_, variant, layers, edge, moved) => {
+		expect(alignLayers(layoutOf(variant), layers, CANVAS, edge)).toEqual(moved);
 	});
 
-	it.each<[string, Shape, readonly { type: 'source' | 'item'; itemId: string }[], 'x' | 'y', unknown[]]>([
+	it.each<[string, Variant, readonly { type: 'source' | 'item'; itemId: string }[], 'x' | 'y', unknown[]]>([
 		[
 			'across the canvas, a group child by where it sits on it',
 			{},
@@ -224,51 +214,80 @@ describe('feature match layout layer alignment', () => {
 			'x',
 			[],
 		],
-	])('distributes %s', (_, shape, layers, axis, moved) => {
-		expect(distributeLayers(layoutOf(shape), layers, axis)).toEqual(moved);
+	])('distributes %s', (_, variant, layers, axis, moved) => {
+		expect(distributeLayers(layoutOf(variant), layers, axis)).toEqual(moved);
 	});
 
-	it.each<[string, Shape, readonly { type: 'source' | 'item'; itemId: string }[], unknown[]]>([
+	const ROW = {
+		group: { arrangement: 'row' as const },
+	};
+	const ROTATED = {
+		group: { rotation: 30 },
+	};
+
+	it.each<[string, Variant, readonly { type: 'source' | 'item'; itemId: string }[], boolean, boolean]>([
 		[
-			'every layer on the canvas or in a canvas group',
+			'one layer, to the canvas',
 			{},
-			[SOURCE, CHILD, TITLE],
-			[SOURCE, CHILD, TITLE],
-		],
-		[
-			'no child of a row or column group',
-			{
-				group: { arrangement: 'column' },
-			},
-			[SOURCE, CHILD, TITLE],
-			[SOURCE, TITLE],
-		],
-		[
-			'the children of one rotated group alone',
-			{
-				group: { rotation: 30 },
-			},
-			[CHILD, SIBLING],
-			[CHILD, SIBLING],
-		],
-		[
-			'no child of a rotated group among canvas layers',
-			{
-				group: { rotation: 30 },
-			},
-			[CHILD, TITLE],
 			[TITLE],
+			true,
+			false,
 		],
 		[
-			'no layer that has left the layout',
+			'a group child alone, to its group',
 			{},
-			[
-				SOURCE,
-				{ type: 'item', itemId: 'gone' },
-			],
-			[SOURCE],
+			[CHILD],
+			true,
+			false,
 		],
-	])('aligns %s', (_, shape, layers, alignable) => {
-		expect(alignableLayers(layoutOf(shape), layers)).toEqual(alignable);
+		[
+			'three on the canvas or in a canvas group',
+			{},
+			[SOURCE, CHILD, TITLE],
+			true,
+			true,
+		],
+		[
+			'children of one rotated group, within it',
+			ROTATED,
+			[CHILD, SIBLING],
+			true,
+			false,
+		],
+		[
+			'a row child alone, which its group places',
+			ROW,
+			[CHILD],
+			false,
+			false,
+		],
+		[
+			'three, one a row child, leaving two',
+			ROW,
+			[SOURCE, CHILD, TITLE],
+			true,
+			false,
+		],
+		[
+			'a layer beside a row child, with nothing to line up with',
+			ROW,
+			[SOURCE, CHILD],
+			false,
+			false,
+		],
+		[
+			'three, one a rotated group\'s child among canvas layers, leaving two',
+			ROTATED,
+			[CHILD, TITLE, BADGE],
+			true,
+			false,
+		],
+	])('offers to align and distribute %s', (_, variant, layers, aligns, distributes) => {
+		const layout = layoutOf(variant);
+
+		expect([
+			canAlignLayers(layout, layers),
+			canDistributeLayers(layout, layers),
+		]).toEqual([aligns, distributes]);
 	});
 });

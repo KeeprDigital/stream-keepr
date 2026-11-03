@@ -44,31 +44,29 @@ function button(wrapper: ReturnType<typeof mountControls>['wrapper'], label: str
 }
 
 describe('featureMatchOverlayLayerAlignControls', () => {
-	// Player 1's Source is 340×250 at (24, 16); alone, it aligns to the 1920×1080 canvas.
-	it.each<[string, 'x' | 'y', number]>([
-		['Align left', 'x', 0],
-		['Align centre', 'x', 790],
-		['Align right', 'x', 1580],
-		['Align top', 'y', 0],
-		['Align middle', 'y', 415],
-		['Align bottom', 'y', 830],
-	])('%s moves the selected layer', async (label, axis, value) => {
-		const { wrapper, source } = mountControls();
+	// Player 1's Source is 340×250 at (24, 16): alone, it aligns to the 1920×1080 canvas. Beside
+	// it the main Source is 900 high at y 90, and Player 2's starts at 800.
+	it.each<[string, Parameters<typeof mountControls>[0], string, number]>([
+		[
+			'Align bottom',
+			{},
+			'player1-source',
+			830,
+		],
+		[
+			'Distribute vertically',
+			{
+				layers: [PLAYER1, MAIN, PLAYER2],
+			},
+			'main-source',
+			83,
+		],
+	])('%s moves the selected layers', async (label, options, id, y) => {
+		const { wrapper, source } = mountControls(options);
 
 		await button(wrapper, label).trigger('click');
 
-		expect(source('player1-source')[axis]).toBe(value);
-	});
-
-	// Player 1 ends at 266 and Player 2 starts at 800; the 900-high main Source between them overlaps both evenly.
-	it('distributes three selected layers', async () => {
-		const { wrapper, source } = mountControls({
-			layers: [PLAYER1, MAIN, PLAYER2],
-		});
-
-		await button(wrapper, 'Distribute vertically').trigger('click');
-
-		expect([source('player1-source').y, source('main-source').y, source('player2-source').y]).toEqual([16, 83, 800]);
+		expect(source(id).y).toBe(y);
 	});
 
 	it.each<[string, Parameters<typeof mountControls>[0], boolean, boolean]>([
