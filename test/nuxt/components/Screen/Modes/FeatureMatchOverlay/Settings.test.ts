@@ -1,9 +1,10 @@
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, reactive, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import NumberField from '~/components/Graphics/NumberField.vue';
 import Settings from '~/components/Screen/Modes/FeatureMatchOverlay/Settings.vue';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 
@@ -132,7 +133,7 @@ const UFormFieldStub = defineComponent({
 	props: {
 		label: { type: String, required: false },
 	},
-	template: '<div data-testid="form-field"><span>{{ label }}</span><slot /></div>',
+	template: '<div data-testid="form-field"><span><slot name="label">{{ label }}</slot></span><slot /></div>',
 });
 
 const UFieldGroupStub = defineComponent({
@@ -147,7 +148,7 @@ const UButtonStub = defineComponent({
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
 
-async function mountComponent(screen: Partial<Screen> = {}) {
+async function mountComponent(screen: Partial<Screen> = {}, stubs: Record<string, unknown> = {}) {
 	return mount(Settings, {
 		props: {
 			screen: {
@@ -176,6 +177,7 @@ async function mountComponent(screen: Partial<Screen> = {}) {
 				UButton: UButtonStub,
 				UAlert: true,
 				UModal: UModalStub,
+				...stubs,
 			},
 		},
 	});
@@ -384,6 +386,50 @@ describe('featureMatchOverlaySettings', () => {
 			await wrapper.get('[data-testid="layout-undo"]').trigger('click');
 
 			expect(sourceIds()).toEqual([]);
+		});
+	});
+
+	describe('number field scrubs', () => {
+		/** A property panel holding one real number field: the Frame's opacity. */
+		const FrameOpacityPanelStub = defineComponent({
+			components: { GraphicsNumberField: NumberField },
+			props: {
+				config: { type: Object, required: true },
+				updateConfig: { type: Function, required: true },
+			},
+			template: `<GraphicsNumberField
+				label="Opacity"
+				:min="0"
+				:max="1"
+				:step="0.05"
+				:model-value="config.layout.frame.opacity"
+				@update:model-value="opacity => updateConfig({ layout: { ...config.layout, frame: { ...config.layout.frame, opacity } } })"
+			/>`,
+		});
+
+		beforeAll(() => {
+			// happy-dom has no pointer capture; the field only asks for it.
+			HTMLElement.prototype.setPointerCapture ??= () => {};
+		});
+
+		it('undoes a whole drag on a panel\'s number label as one step, however long it pauses', async () => {
+			let now = 1_000;
+			vi.spyOn(Date, 'now').mockImplementation(() => now);
+			const wrapper = await mountComponent({}, { FeatureMatchOverlayLayerInspector: FrameOpacityPanelStub });
+			await flushPromises();
+			const start = mockConfig.value.layout.frame.opacity;
+			const label = wrapper.get('[data-number-scrub]');
+
+			await label.trigger('pointerdown', { button: 0, pointerId: 1, clientX: 0 });
+			for (const clientX of [-2, -4, -6]) {
+				now += 1_000;
+				await label.trigger('pointermove', { pointerId: 1, clientX });
+			}
+			await label.trigger('pointerup', { pointerId: 1 });
+			expect(mockConfig.value.layout.frame.opacity).toBeCloseTo(start - 0.15);
+
+			await wrapper.get('[data-testid="layout-undo"]').trigger('click');
+			expect(mockConfig.value.layout.frame.opacity).toBe(start);
 		});
 	});
 

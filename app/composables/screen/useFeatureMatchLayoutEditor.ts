@@ -78,12 +78,34 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 			selection.value = CANVAS_SELECTION;
 	});
 
+	/**
+	 * An open gesture, such as a drag on a number field's label: its first edit
+	 * records the one undo step the whole gesture undoes as, however long it
+	 * pauses, and it coalesces with no edit before or after it.
+	 */
+	let gesture: { recorded: boolean } | null = null;
+
 	/** Record the current layout as an undo step, without writing anything. */
 	function checkpoint(edit: FeatureMatchLayoutEditOptions = {}) {
+		if (gesture?.recorded)
+			return;
 		history.value = recordEdit(history.value, snapshot(), {
 			now: Date.now(),
-			key: edit.coalesce,
+			key: gesture
+				? undefined
+				: edit.coalesce,
 		});
+		if (gesture)
+			gesture.recorded = true;
+	}
+
+	/** Edits from here until `endGesture` undo as one step. */
+	function beginGesture() {
+		gesture = { recorded: false };
+	}
+
+	function endGesture() {
+		gesture = null;
 	}
 
 	/** Write part of the mode config as one undoable edit. */
@@ -311,6 +333,8 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		canUndo,
 		canRedo,
 		checkpoint,
+		beginGesture,
+		endGesture,
 		discardHistory,
 		edit,
 		editFields,
