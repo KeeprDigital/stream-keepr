@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { GraphicRect } from '~~/shared/types/graphics';
-import type { ManipulationHandle } from '~/modules/graphics/canvasManipulation';
+import type { ManipulationHandle, SnapLines } from '~/modules/graphics/canvasManipulation';
 import { useElementSize } from '@vueuse/core';
-import { canvasSnapLines, manipulateRect, RESIZE_HANDLES } from '~/modules/graphics/canvasManipulation';
+import { canvasSnapLines, manipulateRect, neighbourGaps, RESIZE_HANDLES } from '~/modules/graphics/canvasManipulation';
 
 /**
  * Move and resize handles for the selected layer, drawn over an editor preview.
@@ -12,8 +12,9 @@ import { canvasSnapLines, manipulateRect, RESIZE_HANDLES } from '~/modules/graph
  * selection box and its handles catch the pointer. Everything is measured in
  * canvas pixels and scaled to however large the preview is drawn.
  *
- * Shift keeps the starting aspect ratio while resizing; Alt turns snapping to the
- * canvas edges and centre lines off.
+ * A drag snaps to the lines it is given, in the layer's container's pixels, and
+ * draws the guide it landed on and the gap to the nearest neighbour on each axis.
+ * Shift keeps the starting aspect ratio while resizing; Alt turns snapping off.
  */
 const props = defineProps<{
 	/** The selected layer's stored rectangle, in its container's pixels; nothing shows without one. */
@@ -22,6 +23,8 @@ const props = defineProps<{
 	origin?: { x: number; y: number };
 	canvasWidth: number;
 	canvasHeight: number;
+	/** What the layer snaps to, in its container's pixels; the canvas's own lines without them. */
+	snapLines?: SnapLines;
 	label?: string;
 }>();
 
@@ -37,6 +40,16 @@ const scale = computed(() => props.canvasWidth > 0
 	: 0);
 
 const origin = computed(() => props.origin ?? { x: 0, y: 0 });
+
+const snapLines = computed<SnapLines>(() => {
+	if (props.snapLines)
+		return props.snapLines;
+	const lines = canvasSnapLines({ width: props.canvasWidth, height: props.canvasHeight });
+	return {
+		x: lines.x.map(line => line - origin.value.x),
+		y: lines.y.map(line => line - origin.value.y),
+	};
+});
 
 interface Drag {
 	handle: ManipulationHandle;
@@ -106,16 +119,16 @@ function moveTo(event: PointerEvent) {
 		x: (event.clientX - current.startX) / scale.value,
 		y: (event.clientY - current.startY) / scale.value,
 	};
-	const result = manipulateRect(toCanvas(current.startRect), current.handle, delta, {
+	const result = manipulateRect(current.startRect, current.handle, delta, {
 		keepRatio: event.shiftKey,
 		snap: event.altKey
 			? undefined
 			: {
-					lines: canvasSnapLines({ width: props.canvasWidth, height: props.canvasHeight }),
+					lines: snapLines.value,
 					threshold: 6 / scale.value,
 				},
 	});
-	const rect = { ...result.rect, x: result.rect.x - origin.value.x, y: result.rect.y - origin.value.y };
+	const rect = result.rect;
 	const previous = live.value?.rect ?? current.startRect;
 	live.value = { rect, snapped: result.snapped };
 	if (rect.x !== previous.x || rect.y !== previous.y || rect.width !== previous.width || rect.height !== previous.height)
@@ -129,6 +142,48 @@ function end(event: PointerEvent) {
 	live.value = null;
 }
 
+/** The guides and gaps a drag draws, in drawn pixels. */
+const guides = computed(() => {
+	const current = live.value;
+	if (!current || scale.value === 0)
+		return null;
+	const { x, y } = origin.value;
+	const gaps = neighbourGaps(current.rect, snapLines.value.neighbours ?? []);
+	return {
+		x: current.snapped.x === undefined
+			? undefined
+			: (current.snapped.x + x) * scale.value,
+		y: current.snapped.y === undefined
+			? undefined
+			: (current.snapped.y + y) * scale.value,
+		gaps: (['x', 'y'] as const).flatMap((axis) => {
+			const gap = gaps[axis];
+			if (!gap)
+				return [];
+			const [along, across, length] = axis === 'x'
+				? ['left', 'top', 'width'] as const
+				: ['top', 'left', 'height'] as const;
+			const start = axis === 'x'
+				? x
+				: y;
+			const cross = axis === 'x'
+				? y
+				: x;
+			return [
+				{
+					axis,
+					size: Math.round(gap.to - gap.from),
+					style: {
+						[along]: `${(gap.from + start) * scale.value}px`,
+						[across]: `${(gap.at + cross) * scale.value}px`,
+						[length]: `${(gap.to - gap.from) * scale.value}px`,
+					},
+				},
+			];
+		}),
+	};
+});
+
 const readout = computed(() => {
 	const rect = live.value?.rect;
 	if (!rect)
@@ -141,17 +196,32 @@ const readout = computed(() => {
 
 <template>
 	<div ref="root" class="pointer-events-none absolute inset-0 overflow-hidden" data-testid="canvas-manipulation-overlay">
-		<template v-if="live && scale > 0">
+		<template v-if="guides">
 			<div
-				v-if="live.snapped.x !== undefined"
+				v-if="guides.x !== undefined"
 				class="absolute inset-y-0 w-px bg-pink-500"
-				:style="{ left: `${live.snapped.x * scale}px` }"
+				:style="{ left: `${guides.x}px` }"
+				data-testid="canvas-manipulation-guide"
+				data-axis="x"
 			/>
 			<div
-				v-if="live.snapped.y !== undefined"
+				v-if="guides.y !== undefined"
 				class="absolute inset-x-0 h-px bg-pink-500"
-				:style="{ top: `${live.snapped.y * scale}px` }"
+				:style="{ top: `${guides.y}px` }"
+				data-testid="canvas-manipulation-guide"
+				data-axis="y"
 			/>
+			<div
+				v-for="gap in guides.gaps"
+				:key="gap.axis"
+				class="absolute flex items-center justify-center bg-pink-500"
+				:class="gap.axis === 'x' ? 'h-px' : 'w-px'"
+				:style="gap.style"
+				data-testid="canvas-manipulation-gap"
+				:data-axis="gap.axis"
+			>
+				<span class="whitespace-nowrap rounded bg-pink-500 px-1 font-mono text-[0.6875rem] text-white">{{ gap.size }}</span>
+			</div>
 		</template>
 
 		<div

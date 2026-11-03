@@ -127,9 +127,12 @@ function selectCompositorTarget(target: GraphicsSelectionTarget) {
 	editor.select(fromCompositorSelectionTarget(target));
 }
 
-/** Where the canvas handles go; none while this session may not move anything. */
+/**
+ * Where the canvas handles go, with the lines they snap to; none while this
+ * session may not move anything, so neither handles nor snap guides show.
+ */
 const selectionFrame = computed(() => writable.value
-	? editorSelectionFrame(config.value.layout, selection.value)
+	? editorSelectionFrame(config.value.layout, selection.value, eventCanvas.value)
 	: null);
 const selectionLabel = computed(() => editorSelectionLabel(config.value.layout, selection.value));
 

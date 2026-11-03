@@ -316,7 +316,10 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 
 	function nudge(delta: { x: number; y: number }) {
 		const target = selection.value;
-		const frame = editorSelectionFrame(config.value.layout, target);
+		const frame = editorSelectionFrame(config.value.layout, target, {
+			width: toValue(options.canvasWidth),
+			height: toValue(options.canvasHeight),
+		});
 		if (frame) {
 			setRect(target, nudgeRect(frame.rect, delta), { coalesce: `nudge:${target.type}:${'itemId' in target
 				? target.itemId
