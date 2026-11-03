@@ -26,7 +26,15 @@ export interface MatchSide {
  * Melee Sync stores them (ADR-0047).
  */
 export function readMatchFromPlayerSide(match: MatchResultFacts, playerId: number): MatchSide {
-	const isPlayer1 = match.player1Id === playerId;
+	return readSide(match, match.player1Id === playerId);
+}
+
+/** A Match's result from player 1's side, for a reader that names its sides by seat rather than by Player. */
+export function readMatchFromPlayer1Side(match: Omit<MatchResultFacts, 'player1Id'>): MatchSide {
+	return readSide(match, true);
+}
+
+function readSide(match: Omit<MatchResultFacts, 'player1Id'>, isPlayer1: boolean): MatchSide {
 	const playerGameWins = isPlayer1 ? match.player1GameWins : match.player2GameWins;
 	const opponentGameWins = isPlayer1 ? match.player2GameWins : match.player1GameWins;
 
@@ -52,14 +60,14 @@ export function readMatchFromPlayerSide(match: MatchResultFacts, playerId: numbe
 }
 
 /**
- * A Match's Game Score from one Player's side, theirs first: `2-1`, or
- * `1-1-1` with game draws. `null` for a bye or an unreported Match, which
- * have none.
+ * A Match's Game Score from one Player's side, theirs first, in en dashes:
+ * `2–1`, or `1–1–1` with game draws. `null` for a bye or an unreported Match,
+ * which have none.
  */
 export function formatGameScore(side: MatchSide): string | null {
 	if (side.outcome === 'bye' || !side.hasResult || side.playerGameWins == null || side.opponentGameWins == null)
 		return null;
-	return `${side.playerGameWins}-${side.opponentGameWins}${side.gameDraws
-		? `-${side.gameDraws}`
+	return `${side.playerGameWins}–${side.opponentGameWins}${side.gameDraws
+		? `–${side.gameDraws}`
 		: ''}`;
 }

@@ -170,7 +170,7 @@ describe('projectHeadToHead', () => {
 					roundNumber: 3,
 					phaseName: 'Swiss',
 					outcome: 'player2',
-					gameScore: '1-2',
+					gameScore: '1–2',
 				},
 			]);
 		});

@@ -221,7 +221,7 @@ describe('findHeadToHead', () => {
 					roundNumber: 2,
 					phaseName: 'Swiss',
 					outcome: 'player1',
-					gameScore: '2-1',
+					gameScore: '2–1',
 				},
 				{
 					matchId: roundFiveMatch,
@@ -230,7 +230,7 @@ describe('findHeadToHead', () => {
 					roundNumber: 5,
 					phaseName: 'Swiss',
 					outcome: 'player2',
-					gameScore: '0-2',
+					gameScore: '0–2',
 				},
 			],
 		});
@@ -244,7 +244,7 @@ describe('findHeadToHead', () => {
 			expect(answer?.player1?.name).toBe('Carol');
 			expect(answer?.player2?.name).toBe('Alice');
 			expect(answer?.earlierMatches).toEqual([
-				expect.objectContaining({ roundName: 'Round 2', outcome: 'player2', gameScore: '0-2' }),
+				expect.objectContaining({ roundName: 'Round 2', outcome: 'player2', gameScore: '0–2' }),
 			]);
 		}
 		finally {
@@ -257,12 +257,12 @@ describe('findHeadToHead', () => {
 		{
 			session: 'none',
 			sides: ['Alice', 'Bob'],
-			roundTwo: '2-1',
+			roundTwo: '2–1',
 		},
 		{
 			session: 'swapped',
 			sides: ['Bob', 'Alice'],
-			roundTwo: '1-2',
+			roundTwo: '1–2',
 		},
 	])('shows a Slot\'s Players on the sides its $session Session seats them', async ({ session, sides, roundTwo }) => {
 		const [slot] = await db.insert(schema.featureMatchSlots)
@@ -294,8 +294,8 @@ describe('findHeadToHead', () => {
 		expect(answer?.player1?.name).toBe('Bob');
 		expect(answer?.player2?.name).toBe('Alice');
 		expect(answer?.earlierMatches.map(earlierMatch => [earlierMatch.roundName, earlierMatch.gameScore])).toEqual([
-			['Round 2', '1-2'],
-			['Round 5', '2-0'],
+			['Round 2', '1–2'],
+			['Round 5', '2–0'],
 		]);
 	});
 

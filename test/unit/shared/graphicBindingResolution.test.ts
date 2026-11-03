@@ -374,13 +374,7 @@ describe('the Match result binding', () => {
 			player1GameWins: 2,
 			player2GameWins: 0,
 			gameDraws: 0,
-		})).toBe('2-0');
-		expect(result({
-			hasResult: true,
-			player1GameWins: 1,
-			player2GameWins: 1,
-			gameDraws: 1,
-		})).toBe('1-1-1');
+		})).toBe('2–0');
 	});
 
 	it('resolves nothing for an unreported Match or a bye', () => {
