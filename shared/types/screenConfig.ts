@@ -467,6 +467,7 @@ const MODE_RESET_PRESERVED_KEYS = {
 	'top-cards': [
 		'scope',
 		'topN',
+		'minPoints',
 		'playerListId',
 		'archetypeFilter',
 	],

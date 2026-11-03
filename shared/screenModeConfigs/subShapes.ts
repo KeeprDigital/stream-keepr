@@ -78,15 +78,6 @@ export const DEFAULT_METAGAME_SCOPE = {
 	playerListId: undefined,
 } as const;
 
-/**
- * The Metagame Scope less Minimum Points, for Most Played Cards, which never
- * offered it. Its `scope` still admits `minPoints`, as it always did, so a Most
- * Played Cards config scoped that way reads with no minimum.
- */
-const { minPoints: _minPointsField, ...metagameScopeShapeWithoutMinPoints } = metagameScopeShape;
-const { minPoints: _minPointsDefault, ...DEFAULT_METAGAME_SCOPE_WITHOUT_MIN_POINTS } = DEFAULT_METAGAME_SCOPE;
-export { DEFAULT_METAGAME_SCOPE_WITHOUT_MIN_POINTS, metagameScopeShapeWithoutMinPoints };
-
 /** A card read's archetype filter: an Archetype's name, narrowing the cards to its decks. */
 export const metagameArchetypeFilterField = editorField(z.string().max(200).optional(), { label: 'Archetype filter' });
 

@@ -24,6 +24,7 @@ export function useTopCardsModeData() {
 			outputReads.scopeKey.value,
 			config.value.scope,
 			config.value.topN,
+			config.value.minPoints,
 			config.value.playerListId,
 			config.value.archetypeFilter,
 			config.value.board,
@@ -80,9 +81,11 @@ export function useTopCardsModeData() {
 
 		const prefix = config.value.scope === 'topN'
 			? `Top ${config.value.topN} `
-			: config.value.scope === 'playerList'
-				? 'List '
-				: '';
+			: config.value.scope === 'minPoints'
+				? `${config.value.minPoints}+ Points `
+				: config.value.scope === 'playerList'
+					? 'List '
+					: '';
 
 		const title = config.value.pointedOnly
 			? 'Most Played Pointed Cards'
