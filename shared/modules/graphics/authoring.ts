@@ -65,6 +65,7 @@ import { createDefaultGraphicAnimationRecipe, getGraphicAnimationPreset } from '
 import { isGraphicBindingFieldCompatible } from './bindingCatalog';
 import { canDeriveGraphicSource } from './bindingResolution';
 import { applyGraphicFillEdit } from './fill';
+import { resolveGraphicAnchorPoint } from './geometry';
 import { createDefaultGraphicInputDeclaration } from './inputs';
 import {
 	createDefaultGraphicSurfaceStyle,
@@ -1095,6 +1096,161 @@ export function moveGraphicItemToEdge(
 	return delta === 0
 		? graphic
 		: moveGraphicItem(graphic, itemId, delta);
+}
+
+/**
+ * Where a Graphic Item goes: into a Graphic Group's children or the top level,
+ * at an index of that list once the item has left its old place (0 is the back).
+ */
+export interface GraphicItemPlacement {
+	groupId: string | null;
+	index: number;
+}
+
+/** Why a Graphic Item cannot join a Graphic Group. */
+export type GraphicItemPlacementRefusal
+	= | 'not-a-group'
+		/** Graphic Groups do not nest. */
+		| 'group-into-group'
+		/** A row or column child has no rotation, and a turned item's is never silently dropped (#741). */
+		| 'rotated-into-arranged-group';
+
+/** Whether a Graphic Rotation turns what it rotates; a whole turn does not. */
+function isTurnedRotation(rotation: number | undefined): boolean {
+	return (rotation ?? 0) % 360 !== 0;
+}
+
+/** Why this Graphic Item cannot join that Graphic Group, or null when it can or is there already. */
+export function graphicItemPlacementRefusal(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	groupId: string | null,
+): GraphicItemPlacementRefusal | null {
+	const location = findGraphicItem(graphic, itemId);
+	if (!location || groupId === null || location.group?.id === groupId)
+		return null;
+	const group = graphic.items.find(item => item.id === groupId);
+	if (group?.type !== 'group')
+		return 'not-a-group';
+	if (location.item.type === 'group')
+		return 'group-into-group';
+	if (group.arrangement !== 'canvas' && isTurnedRotation(location.item.rotation))
+		return 'rotated-into-arranged-group';
+	return null;
+}
+
+function roundPlacement(value: number): number {
+	return Math.round(value * 100) / 100;
+}
+
+function turnPoint(point: { x: number; y: number }, pivot: { x: number; y: number }, degrees: number) {
+	const radians = degrees * Math.PI / 180;
+	const cos = Math.cos(radians);
+	const sin = Math.sin(radians);
+	const x = point.x - pivot.x;
+	const y = point.y - pivot.y;
+	return {
+		x: pivot.x + x * cos - y * sin,
+		y: pivot.y + x * sin + y * cos,
+	};
+}
+
+/**
+ * One item's rectangle and rotation moved between canvas space and a Graphic
+ * Group's space so it is drawn where it was. A group's space starts at its padded
+ * corner, and a canvas-arranged group turns its children about its own Graphic
+ * Anchor Point, so a child is turned back against it. A row or column group places
+ * its children itself, so only the corner is moved.
+ */
+function rebaseGraphicItem<T extends GraphicItemConfig>(item: T, group: GraphicGroupItemConfig, direction: 'into' | 'out'): T {
+	const padding = Math.max(0, group.padding);
+	const origin = { x: group.x + padding, y: group.y + padding };
+	const sign = direction === 'into'
+		? -1
+		: 1;
+	if (group.arrangement !== 'canvas' || !isTurnedRotation(group.rotation)) {
+		return {
+			...item,
+			x: roundPlacement(item.x + sign * origin.x),
+			y: roundPlacement(item.y + sign * origin.y),
+		};
+	}
+	const groupRotation = group.rotation ?? 0;
+	const groupAnchor = resolveGraphicAnchorPoint(group.anchor);
+	const pivot = { x: group.x + group.width * groupAnchor.x, y: group.y + group.height * groupAnchor.y };
+	const anchor = resolveGraphicAnchorPoint(item.anchor);
+	const offset = direction === 'into'
+		? { x: 0, y: 0 }
+		: origin;
+	const anchored = {
+		x: item.x + offset.x + item.width * anchor.x,
+		y: item.y + offset.y + item.height * anchor.y,
+	};
+	const turned = turnPoint(anchored, pivot, sign * groupRotation);
+	const landed = direction === 'into'
+		? { x: turned.x - origin.x, y: turned.y - origin.y }
+		: turned;
+	const rotation = roundPlacement((item.rotation ?? 0) + sign * groupRotation);
+	const { rotation: _rotation, ...rest } = item;
+	return {
+		...rest,
+		...(rotation !== 0
+			? { rotation }
+			: {}),
+		x: roundPlacement(landed.x - item.width * anchor.x),
+		y: roundPlacement(landed.y - item.height * anchor.y),
+	} as T;
+}
+
+function insertAt<T>(entries: readonly T[], index: number, entry: T): T[] {
+	const next = [...entries];
+	next.splice(Math.max(0, Math.min(next.length, Math.trunc(index))), 0, entry);
+	return next;
+}
+
+/**
+ * Place one Graphic Item: reorder it within its sibling list, or move it into or
+ * out of a Graphic Group (#741). Moving between them keeps it drawn where it was
+ * (`rebaseGraphicItem`); one leaving a group leaves its group sizing and its
+ * place in the group's stagger behind. Answers the same graphic when the item is
+ * unknown, already there, or refused (`graphicItemPlacementRefusal`).
+ */
+export function placeGraphicItem(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	placement: GraphicItemPlacement,
+): BroadcastGraphicConfig {
+	const location = findGraphicItem(graphic, itemId);
+	if (!location || graphicItemPlacementRefusal(graphic, itemId, placement.groupId))
+		return graphic;
+	if ((location.group?.id ?? null) === placement.groupId) {
+		const siblings: readonly { id: string }[] = location.group?.children ?? graphic.items;
+		const index = siblings.findIndex(sibling => sibling.id === itemId);
+		const target = Math.max(0, Math.min(siblings.length - 1, Math.trunc(placement.index)));
+		return target === index
+			? graphic
+			: moveGraphicItem(graphic, itemId, target - index);
+	}
+
+	let moved: GraphicItemConfig = location.item;
+	if (location.group) {
+		const { sizing: _sizing, ...outside } = rebaseGraphicItem(location.item, location.group, 'out');
+		moved = outside as GraphicItemConfig;
+	}
+	const without = deleteGraphicItem(graphic, itemId);
+	if (placement.groupId === null) {
+		return {
+			...without,
+			items: insertAt(without.items, placement.index, moved),
+		};
+	}
+
+	const group = without.items.find(item => item.id === placement.groupId) as GraphicGroupItemConfig;
+	const child = rebaseGraphicItem(moved, group, 'into') as GraphicGroupChildConfig;
+	return replaceGraphicItem(without, {
+		...group,
+		children: insertAt(group.children, placement.index, child),
+	});
 }
 
 /** How far a duplicate is offset from its original, so it reads as a second item. */

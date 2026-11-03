@@ -2,6 +2,7 @@ import type { BroadcastGraphicConfig, GraphicItemKind, GraphicRect } from '~~/sh
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { EditHistory } from '~/modules/feature-match-overlay/editHistory';
 import type { FeatureMatchLayoutEditorLayer, FeatureMatchLayoutEditorSelection } from '~/modules/feature-match-overlay/editorSelection';
+import type { LayerPlace } from '~/modules/feature-match-overlay/layerDrag';
 import type { LayerSelection } from '~/modules/feature-match-overlay/layerSelection';
 import {
 	addGraphicGroupChild,
@@ -16,6 +17,7 @@ import {
 import { randomUuid } from '~~/shared/utils/uuid';
 import { emptyEditHistory, recordEdit, redoEdit, undoEdit } from '~/modules/feature-match-overlay/editHistory';
 import { CANVAS_SELECTION, editorLayersFrame, editorSelectionKey, editorSelectionLabel, editorSelectionLayer } from '~/modules/feature-match-overlay/editorSelection';
+import { dropLayer } from '~/modules/feature-match-overlay/layerDrag';
 import {
 	collapseLayerSelection,
 	extendLayerSelection,
@@ -332,6 +334,16 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		}
 	}
 
+	/**
+	 * Place one layer in front of or behind another of its section, or into or out
+	 * of a Graphic Group, as one undo step: a dragged row's drop, or "Move to group"
+	 * (#741). The layer is then selected alone.
+	 */
+	function place(layer: FeatureMatchLayoutEditorLayer, where: LayerPlace) {
+		if (editLayout(layout => dropLayer(layout, layer, where)))
+			select(layer);
+	}
+
 	function layerConfig(target: FeatureMatchLayoutEditorSelection) {
 		return editorSelectionLayer(config.value.layout, target);
 	}
@@ -484,6 +496,7 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		duplicate,
 		move,
 		moveToEdge,
+		place,
 		isVisible,
 		toggleVisible,
 		rename,

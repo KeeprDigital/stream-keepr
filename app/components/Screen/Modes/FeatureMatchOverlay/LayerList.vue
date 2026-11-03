@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui';
+import type { GraphicItemPlacementRefusal } from '~~/shared/modules/graphics';
 import type { GraphicItemConfig, GraphicItemKind } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
 import type { FeatureMatchLayoutEditorLayer } from '~/modules/feature-match-overlay/editorSelection';
+import type { LayerDrop } from '~/modules/feature-match-overlay/layerDrag';
 import { FEATURE_MATCH_SOURCE_ITEM_ICON } from '~~/shared/featureMatchSourceItems';
 import {
 	FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
@@ -13,6 +15,7 @@ import {
 	graphicItemKindLabel,
 } from '~~/shared/modules/graphics';
 import { editorSelectionKey } from '~/modules/feature-match-overlay/editorSelection';
+import { layerDropAt, layerGroupMoves } from '~/modules/feature-match-overlay/layerDrag';
 import { isLayerSelected } from '~/modules/feature-match-overlay/layerSelection';
 import { isSelectionToggle } from '~/modules/graphics/selection';
 
@@ -30,6 +33,10 @@ import { isSelectionToggle } from '~/modules/graphics/selection';
  * Shift-click selects the run of rows from the one chosen last, and ⌘- or
  * Ctrl-click adds or takes out one row (#740). A selected row's menu acts on
  * every selected layer.
+ *
+ * A row drags within its section, into a Graphic Group or out of one, as one
+ * undo step; Escape cancels, and a drop that is refused says why (#741). The
+ * arrows and the row menu's "Move to group" do the same from the keyboard.
  *
  * Without the Graphics Authoring Lease the list still selects, and offers no
  * edit at all (#738).
@@ -177,6 +184,35 @@ function rowTarget(row: LayerRow): FeatureMatchLayoutEditorLayer | undefined {
 		: row.target;
 }
 
+const REFUSALS: Record<GraphicItemPlacementRefusal, string> = {
+	'rotated-into-arranged-group': 'A rotated layer can\'t go into a row or column group',
+	'group-into-group': 'A group can\'t go into another group',
+	'not-a-group': 'Only a group takes layers in',
+};
+
+/** "Move to group": the keyboard's way into or out of a Graphic Group (#741). */
+function moveToGroupMenu(row: LayerRow): DropdownMenuItem[][] {
+	const moves = layerGroupMoves(props.layout, row.target);
+	if (moves.length === 0)
+		return [];
+	return [
+		[
+			{
+				label: 'Move to group',
+				icon: 'i-lucide-folder-input',
+				children: moves.map(move => ({
+					label: move.label,
+					disabled: move.refusal !== null,
+					description: move.refusal
+						? REFUSALS[move.refusal]
+						: undefined,
+					onSelect: () => props.editor.place(row.target, move.place),
+				})),
+			},
+		],
+	];
+}
+
 function rowMenu(row: LayerRow): DropdownMenuItem[][] {
 	const target = rowTarget(row);
 	return [
@@ -202,6 +238,7 @@ function rowMenu(row: LayerRow): DropdownMenuItem[][] {
 				onSelect: () => props.editor.moveToEdge(row.target, 'back'),
 			},
 		],
+		...moveToGroupMenu(row),
 		[
 			{
 				label: 'Delete',
@@ -363,10 +400,108 @@ function renameKeydown(event: KeyboardEvent) {
 		cancelRename();
 	}
 }
+
+/* ── Dragging a row (#741) ─────────────────────── */
+
+/** The row being dragged, alone: v1 drags a single row. */
+const dragged = shallowRef<LayerRow | null>(null);
+/** Where the row would land, as the last dragover found it. */
+const drop = shallowRef<LayerDrop | null>(null);
+
+function startDrag(event: DragEvent, row: LayerRow) {
+	if (!writable.value || renaming.value) {
+		event.preventDefault();
+		return;
+	}
+	dragged.value = row;
+	props.editor.select(row.target);
+	if (event.dataTransfer) {
+		event.dataTransfer.effectAllowed = 'move';
+		event.dataTransfer.setData('text/plain', row.label);
+	}
+}
+
+/** Only a drop that can land is accepted, so a refused one shows the browser's no-drop cursor. */
+function dragOver(event: DragEvent, row: LayerRow) {
+	const from = dragged.value;
+	if (!from)
+		return;
+	const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+	const fraction = box.height > 0
+		? (event.clientY - box.top) / box.height
+		: 0;
+	drop.value = layerDropAt(props.layout, from.target, row.target, fraction);
+	if (drop.value && !drop.value.refusal) {
+		event.preventDefault();
+		if (event.dataTransfer)
+			event.dataTransfer.dropEffect = 'move';
+	}
+}
+
+/** Escape, or a drop anywhere else, ends the drag with a dragend and no drop. */
+function endDrag() {
+	dragged.value = null;
+	drop.value = null;
+}
+
+function dropOn(event: DragEvent) {
+	const from = dragged.value;
+	const landing = drop.value;
+	endDrag();
+	if (!from || !landing || landing.refusal)
+		return;
+	event.preventDefault();
+	props.editor.place(from.target, landing.place);
+}
+
+/** Leaving the list for somewhere else hides the indicator. */
+function leaveList(event: DragEvent) {
+	const into = event.relatedTarget;
+	if (!(into instanceof Node) || !(event.currentTarget as HTMLElement).contains(into))
+		drop.value = null;
+}
+
+const dropRefusal = computed(() => drop.value?.refusal
+	? REFUSALS[drop.value.refusal]
+	: null);
+
+/**
+ * The drop indicator a row shows: a line at an edge, a ring round a group taking
+ * the layer in, and a line reaching out to the group's own indent below its last
+ * child. Red where the drop is refused. Whole class names, for Tailwind to find.
+ */
+const DROP_INDICATOR_CLASSES: Record<LayerDrop['edge'], { open: string; refused: string }> = {
+	'top': {
+		open: 'shadow-[inset_0_2px_0_var(--ui-primary)]',
+		refused: 'shadow-[inset_0_2px_0_var(--ui-error)]',
+	},
+	'bottom': {
+		open: 'shadow-[inset_0_-2px_0_var(--ui-primary)]',
+		refused: 'shadow-[inset_0_-2px_0_var(--ui-error)]',
+	},
+	'below-group': {
+		open: 'relative after:absolute after:-left-4 after:right-0 after:bottom-0 after:h-0.5 after:bg-primary',
+		refused: 'relative after:absolute after:-left-4 after:right-0 after:bottom-0 after:h-0.5 after:bg-error',
+	},
+	'inside': {
+		open: 'ring-2 ring-primary',
+		refused: 'ring-2 ring-error',
+	},
+};
+
+function dropIndicatorClass(row: LayerRow) {
+	const landing = drop.value;
+	if (landing?.row !== row.key)
+		return '';
+	const classes = DROP_INDICATOR_CLASSES[landing.edge];
+	return landing.refusal
+		? classes.refused
+		: classes.open;
+}
 </script>
 
 <template>
-	<div class="space-y-3" data-testid="feature-match-layer-list">
+	<div class="space-y-3" data-testid="feature-match-layer-list" @dragleave="leaveList">
 		<div class="flex items-center justify-between gap-2">
 			<div>
 				<p class="text-sm font-semibold">
@@ -389,6 +524,15 @@ function renameKeydown(event: KeyboardEvent) {
 				</UButton>
 			</UDropdownMenu>
 		</div>
+
+		<p
+			v-if="dropRefusal"
+			role="status"
+			class="rounded-md bg-error/10 px-2 py-1 text-xs text-error"
+			data-testid="layer-drop-refusal"
+		>
+			{{ dropRefusal }}
+		</p>
 
 		<template v-for="section in sections" :key="section.key">
 			<div class="space-y-0.5">
@@ -416,10 +560,19 @@ function renameKeydown(event: KeyboardEvent) {
 						:class="[
 							isSelected(row) ? 'border-primary/60 bg-primary/10' : 'border-transparent hover:bg-elevated/60',
 							row.depth === 1 ? 'ml-4' : '',
-							row.visible ? '' : 'opacity-60',
+							row.visible && dragged?.key !== row.key ? '' : 'opacity-60',
+							dropIndicatorClass(row),
 						]"
+						:draggable="writable && renaming?.key !== row.key"
+						:data-dragging="dragged?.key === row.key || undefined"
+						:data-drop-edge="drop?.row === row.key ? drop.edge : undefined"
+						:data-drop-refused="drop?.row === row.key && drop.refusal ? true : undefined"
 						:data-layer-key="row.key"
 						data-testid="layer-row"
+						@dragstart="startDrag($event, row)"
+						@dragover="dragOver($event, row)"
+						@drop="dropOn($event)"
+						@dragend="endDrag"
 					>
 						<div role="gridcell" class="flex min-w-0 flex-1">
 							<div

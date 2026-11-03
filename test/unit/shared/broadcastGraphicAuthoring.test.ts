@@ -18,6 +18,7 @@ import {
 	findGraphicItem,
 	flattenGraphicItems,
 	GRAPHIC_RULE_PRESET_HEIGHT,
+	graphicItemPlacementRefusal,
 	moveBroadcastGraphic,
 	moveGraphicItem,
 	moveGraphicItemToEdge,
@@ -28,6 +29,7 @@ import {
 	patchGraphicGroupChildSizing,
 	patchGraphicGroupDefaultChildSurfaceStyle,
 	patchGraphicItem,
+	patchGraphicItemAnimationStagger,
 	patchGraphicOutline,
 	patchGraphicSurfaceStyle,
 	patchGraphicTextOverflow,
@@ -38,6 +40,7 @@ import {
 	patchShapeCorner,
 	patchShapeGeometry,
 	patchSocialProfileProjection,
+	placeGraphicItem,
 	selectMediaGraphicItemAsset,
 	setMediaClipGeometry,
 } from '~~/shared/modules/graphics';
@@ -1152,5 +1155,176 @@ describe('duplicating and reordering a Graphic Item', () => {
 		expect(moveGraphicItemToEdge(built, 'one', 'front').items.map(item => item.id)).toEqual(['two', 'three', 'one']);
 		expect(moveGraphicItemToEdge(built, 'three', 'back').items.map(item => item.id)).toEqual(['three', 'one', 'two']);
 		expect(moveGraphicItemToEdge(built, 'three', 'front')).toBe(built);
+	});
+});
+
+describe('placing a Graphic Item in or out of a Graphic Group (#741)', () => {
+	/** Back to front: `lone`; canvas-arranged `box` at (100, 50), padded 10, holding `inner`; row group `row`. */
+	function stage(options: { boxRotation?: number; loneRotation?: number } = {}) {
+		let built = addGraphicItem(graphic('a'), { kind: 'shape', id: 'lone', ...CANVAS }).graphic;
+		built = addGraphicItem(built, { kind: 'group', id: 'box', ...CANVAS }).graphic;
+		built = addGraphicGroupChild(built, { kind: 'shape', groupId: 'box', id: 'inner' }).graphic;
+		built = addGraphicItem(built, { kind: 'group', id: 'row', ...CANVAS }).graphic;
+		built = patchGraphicGroup(built, 'box', { arrangement: 'canvas', padding: 10 });
+		built = patchGraphicItem(built, 'box', {
+			x: 100,
+			y: 50,
+			width: 400,
+			height: 300,
+			rotation: options.boxRotation,
+		});
+		built = patchGraphicItem(built, 'lone', {
+			x: 300,
+			y: 200,
+			width: 40,
+			height: 20,
+			rotation: options.loneRotation,
+		});
+		return patchGraphicItem(built, 'inner', { x: 5, y: 6, width: 30, height: 10 });
+	}
+
+	function located(built: BroadcastGraphicConfig, id: string) {
+		const location = findGraphicItem(built, id)!;
+		return { parent: location.group?.id ?? null, item: location.item };
+	}
+
+	function childIds(built: BroadcastGraphicConfig, groupId: string) {
+		const found = built.items.find(item => item.id === groupId);
+		return found?.type === 'group'
+			? found.children.map(child => child.id)
+			: [];
+	}
+
+	it.each([
+		[
+			'to the front',
+			2,
+			['box', 'row', 'lone'],
+		],
+		[
+			'to the back',
+			0,
+			['lone', 'box', 'row'],
+		],
+		[
+			'past the front, clamped',
+			99,
+			['box', 'row', 'lone'],
+		],
+	])('reorders a Graphic Item within its own sibling list %s', (_case, index, order) => {
+		expect(placeGraphicItem(stage(), 'lone', { groupId: null, index }).items.map(item => item.id)).toEqual(order);
+	});
+
+	it('answers the same graphic when the item already sits there, or is unknown', () => {
+		const built = stage();
+
+		expect(placeGraphicItem(built, 'lone', { groupId: null, index: 0 })).toBe(built);
+		expect(placeGraphicItem(built, 'missing', { groupId: null, index: 0 })).toBe(built);
+	});
+
+	// E13: a canvas group's space is the canvas less its padded corner.
+	it('keeps an item drawn where it was: rebased into group space, and back out', () => {
+		const into = placeGraphicItem(stage(), 'lone', { groupId: 'box', index: 0 });
+
+		expect(located(into, 'lone')).toMatchObject({
+			parent: 'box',
+			item: {
+				x: 190,
+				y: 140,
+				width: 40,
+				height: 20,
+			},
+		});
+		expect(childIds(into, 'box')).toEqual(['lone', 'inner']);
+
+		const out = placeGraphicItem(into, 'lone', { groupId: null, index: 0 });
+		expect(located(out, 'lone')).toMatchObject({
+			parent: null,
+			item: { x: 300, y: 200 },
+		});
+		expect(out.items.map(item => item.id)).toEqual(['lone', 'box', 'row']);
+	});
+
+	it('keeps an item drawn where it was across a rotated canvas group, turned against the group', () => {
+		const into = placeGraphicItem(stage({ boxRotation: 90 }), 'lone', { groupId: 'box', index: 1 });
+
+		// Unturning (300, 200) a quarter about the box's corner (100, 50) gives (250, -150).
+		expect(located(into, 'lone').item).toMatchObject({ x: 140, y: -210, rotation: -90 });
+
+		const out = located(placeGraphicItem(into, 'lone', { groupId: null, index: 0 }), 'lone').item;
+		expect(out).toMatchObject({ x: 300, y: 200 });
+		expect(out.rotation ?? 0).toBe(0);
+	});
+
+	it('takes a child out in canvas space, leaving its group sizing and its group\'s stagger behind', () => {
+		let built = patchGraphicGroupChildSizing(stage(), 'inner', { mode: 'fill' });
+		built = patchGraphicItemAnimationStagger(built, 'box', 'enter', {
+			itemIds: ['inner'],
+		});
+
+		const out = placeGraphicItem(built, 'inner', { groupId: null, index: 3 });
+
+		expect(located(out, 'inner')).toMatchObject({
+			parent: null,
+			item: { x: 115, y: 66 },
+		});
+		expect(located(out, 'inner').item.sizing).toBeUndefined();
+		expect((out.items.find(item => item.id === 'box') as GraphicGroupItemConfig).animation?.stagger).toBeUndefined();
+		expect(out.items.map(item => item.id)).toEqual(['lone', 'box', 'row', 'inner']);
+	});
+
+	// E14: a row or column child has no rotation, so a rotated item is refused rather than straightened.
+	it.each([
+		[
+			'a rotated item into a row group',
+			{ loneRotation: 15 },
+			'lone',
+			'row',
+			'rotated-into-arranged-group',
+		],
+		[
+			'a rotated item into a canvas group',
+			{ loneRotation: 15 },
+			'lone',
+			'box',
+			null,
+		],
+		[
+			'an unrotated item into a row group',
+			{},
+			'lone',
+			'row',
+			null,
+		],
+		[
+			'a whole turn into a row group',
+			{ loneRotation: 360 },
+			'lone',
+			'row',
+			null,
+		],
+		[
+			'a group into a group',
+			{},
+			'box',
+			'row',
+			'group-into-group',
+		],
+		[
+			'an item into something not a group',
+			{},
+			'inner',
+			'lone',
+			'not-a-group',
+		],
+	] as const)('refuses or admits %s', (_case, options, itemId, groupId, refusal) => {
+		const built = stage(options);
+
+		expect(graphicItemPlacementRefusal(built, itemId, groupId)).toBe(refusal);
+		const placed = placeGraphicItem(built, itemId, { groupId, index: 0 });
+		if (refusal)
+			expect(placed).toBe(built);
+		else
+			expect(located(placed, itemId).parent).toBe(groupId);
 	});
 });
