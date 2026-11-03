@@ -4,9 +4,11 @@ import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { createMockFeatureMatchState, createWireMockFeatureMatch } from '~~/test/helpers/fixtures';
+import { settleUntil, settleUntilStill } from '~~/test/helpers/settle';
 import { useRouter } from '#app';
 import { tryUseRealtime } from '~/composables/core/useRealtime';
 import { screenModeSampleConfigs, useSampleScreenOutputReadRepository } from '~/modules/screen-mode/sampleDataset';
+import ScreenOutputPage from '~/pages/event/[eventId]/screen/[screenSlug].vue';
 import { useCardStore } from '~/stores/card';
 import { useEventStore } from '~/stores/event';
 import { useFeatureMatchStore } from '~/stores/featureMatch';
@@ -14,6 +16,14 @@ import { useFeatureMatchStateStore } from '~/stores/featureMatchState';
 import { usePlayerStore } from '~/stores/player';
 import { useScreenStore } from '~/stores/screen';
 import { resetAllEventStores } from '~/utils/eventStores';
+// The page loads each Screen Mode's Display on first use; loaded here, no
+// test's own time pays for transforming one.
+import '~/components/Screen/Modes/BroadcastGraphics/Display.vue';
+import '~/components/Screen/Modes/Card/Display.vue';
+import '~/components/Screen/Modes/Metagame/Display.vue';
+import '~/components/Screen/Modes/PlayerHistory/Display.vue';
+import '~/components/Screen/Modes/Standings/Display.vue';
+import '~/components/Screen/Modes/TopCards/Display.vue';
 
 /**
  * A Screen Output boots on its capability alone (#604).
@@ -236,13 +246,6 @@ function realtime() {
 	};
 }
 
-async function settleUntil(ready: () => boolean) {
-	for (let round = 0; round < 100 && !ready(); round++) {
-		await flushPromises();
-		await new Promise(resolve => setTimeout(resolve, 5));
-	}
-}
-
 const outputEvent = {
 	id: 42,
 	name: 'Capability Event',
@@ -253,11 +256,20 @@ const outputEvent = {
 	displayPositionFormat: 'ordinal',
 };
 
-const mounted: { unmount: () => void }[] = [];
+const mounted: { unmount: () => void; html: () => string }[] = [];
+
+/**
+ * Waits until the output stops reading and re-rendering, for asserting what
+ * it never does.
+ */
+function settleOutput() {
+	return settleUntilStill(() => [
+		api.requests.length,
+		mounted.map(wrapper => wrapper.html()),
+	]);
+}
 
 async function mountOutput(route: string, ready: (text: string) => boolean) {
-	const pagePath = '../../../../../../app/pages/event/[eventId]/screen/[screenSlug].vue';
-	const { default: ScreenOutputPage } = await import(pagePath);
 	const wrapper = await mountSuspended(ScreenOutputPage, { route });
 	mounted.push(wrapper);
 	for (let round = 0; round < 200 && !ready(wrapper.text()); round++) {
@@ -297,6 +309,7 @@ describe('a capability-only Screen Output', () => {
 	afterEach(() => {
 		for (const wrapper of mounted.splice(0))
 			wrapper.unmount();
+		vi.useRealTimers();
 	});
 
 	it('shows a mode change published before its Event channel first attached, without a reload', async () => {
@@ -485,6 +498,11 @@ describe('a capability-only Screen Output', () => {
 	});
 
 	it('hides an expired Card itself rather than clearing it on the server', async () => {
+		// The Card Timeout runs out on a fake clock that otherwise keeps real time.
+		vi.useFakeTimers({
+			toFake: ['setTimeout', 'clearTimeout'],
+			shouldAdvanceTime: true,
+		});
 		api.screen = screen({ currentMode: 'card', modeConfigs: {} });
 		// The Card read answers the Card with its Card revision (#734).
 		api.answers.set('/api/screen-output/events/42/screens/7/card', () => ({
@@ -521,8 +539,8 @@ describe('a capability-only Screen Output', () => {
 		expect(api.requests.map(request => request.path)).toContain('/api/screen-output/events/42/screens/7/card');
 		expect(useCardStore().activeCard?.id).toBe('expiring-card');
 
-		for (let round = 0; round < 400 && useCardStore().activeCard !== null; round++)
-			await new Promise(resolve => setTimeout(resolve, 10));
+		await vi.advanceTimersByTimeAsync(2000);
+		await flushPromises();
 
 		expect(useCardStore().activeCard).toBeNull();
 		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
@@ -551,8 +569,8 @@ describe('a capability-only Screen Output', () => {
 		const standingsRead = () => api.requests.some(request => request.path.endsWith('/screens/7/standings'));
 
 		const wrapper = await mountOutput(`/event/42/screen/main#asset-capability=${capability}`, standingsRead);
-		// Nothing appears to wait on, so give the read's answer its full settle to render.
-		await settleUntil(() => false);
+		// Nothing appears to wait on, so the read's answer settles to render.
+		await settleOutput();
 
 		const { players } = await useSampleScreenOutputReadRepository().standings({ eventId: 42, screenId: 7 });
 		expect(standingsRead()).toBe(true);
@@ -616,7 +634,7 @@ describe('a capability-only Screen Output', () => {
 		const read = () => api.requests.some(request => request.path.endsWith(`/screens/7/${resource}`));
 
 		const wrapper = await mountOutput(`/event/42/screen/main#asset-capability=${capability}`, read);
-		await settleUntil(() => false);
+		await settleOutput();
 
 		expect(read()).toBe(true);
 		expect((await sampleOnAirMarks()).filter(mark => wrapper.html().includes(mark))).toEqual([]);
@@ -779,7 +797,7 @@ describe('a capability-only Feature Match Overlay output', () => {
 
 	it('reads its Slot once, and not again for holding what it read', async () => {
 		await mountOverlay();
-		await settleUntil(() => false);
+		await settleOutput();
 
 		expect(api.requests.filter(request => request.path === slotPath)).toHaveLength(1);
 		expect(privateRequests()).toEqual([]);
@@ -823,7 +841,7 @@ describe('a capability-only Feature Match Overlay output', () => {
 		await settleUntil(() => read.answer !== null);
 		await sessionEvent(session(90, 4, 18));
 		read.answer!(slotRead(session(90, 3, 20)));
-		await settleUntil(() => false);
+		await settleOutput();
 
 		expect(wrapper.text()).toContain('Life 18 · Round 3');
 		expect(held()).toEqual({ sessionId: 90, sequence: 4, lifeTotal: 18 });
@@ -839,7 +857,7 @@ describe('a capability-only Feature Match Overlay output', () => {
 		await settleUntil(() => read.answer !== null);
 		await sessionEvent(session(91, 1, 17, 301));
 		read.answer!(slotRead(session(90, 9, 7)));
-		await settleUntil(() => false);
+		await settleOutput();
 
 		expect(wrapper.text()).toContain('Life 17');
 		expect(held()).toEqual({ sessionId: 91, sequence: 1, lifeTotal: 17 });
@@ -950,7 +968,7 @@ describe('a capability-only output\'s Theme', () => {
 		const reads = eventReads();
 
 		announce(theme('brand', revision, 'rgb(2, 2, 2)'));
-		await settleUntil(() => false);
+		await settleOutput();
 
 		expect(titleColour(wrapper)).toBe(shown);
 		expect(eventReads()).toBe(reads);
@@ -960,7 +978,7 @@ describe('a capability-only output\'s Theme', () => {
 		const wrapper = await mountThemed();
 
 		announce(theme('elsewhere', 9, 'rgb(9, 9, 9)'));
-		await settleUntil(() => false);
+		await settleOutput();
 
 		expect(titleColour(wrapper)).toBe('rgb(1, 1, 1)');
 	});
