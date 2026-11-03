@@ -1,3 +1,4 @@
+import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 
 export interface FeatureMatchMenuItem {
@@ -31,13 +32,19 @@ function formatMatchLabel(p1Name: string | null, p2Name: string | null, index: n
 	return `${prefix} — ${[p1Name ?? 'TBD', p2Name ?? 'TBD'].join(' vs ')}`;
 }
 
+/**
+ * Each Feature Match Slot as a picker offers it, "A vs B", its players in the
+ * order its followed Session seats them (ADR-0058).
+ */
 export function useFeatureMatchMenuItems() {
 	const featureMatchStore = useFeatureMatchStore();
+	const featureMatchStateStore = useFeatureMatchStateStore();
 
 	const items = computed<FeatureMatchMenuItem[]>(() => {
 		return featureMatchStore.featureMatches.map((match, index) => {
-			const p1 = getPlayerLabel(match.player1Data);
-			const p2 = getPlayerLabel(match.player2Data);
+			const slot = withFollowedFeatureMatchSession(match, featureMatchStateStore);
+			const p1 = getPlayerLabel(featureMatchSidePlayer(slot, 'player1').data);
+			const p2 = getPlayerLabel(featureMatchSidePlayer(slot, 'player2').data);
 
 			return {
 				label: formatMatchLabel(p1.name, p2.name, index),

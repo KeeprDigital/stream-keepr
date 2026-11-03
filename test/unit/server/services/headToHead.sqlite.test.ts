@@ -12,11 +12,21 @@ import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
  * Assignment and the latest Round Standings are the queries', not a mock's.
  */
 
+vi.stubGlobal('createError', (input: { statusCode?: number; message?: string }) =>
+	Object.assign(new Error(input.message ?? 'error'), input));
+
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
 vi.doMock('~~/server/db', () => ({ db }));
+vi.doMock('~~/server/utils/ably', () => ({
+	publishMessage: async () => {},
+	publishMessageStrict: async () => {},
+	publishScreenCommand: async () => {},
+	getOriginConnectionId: () => undefined,
+}));
 
 const { findHeadToHead } = await import('~~/server/services/headToHead');
+const { featureMatchStateService } = await import('~~/server/services/featureMatchState');
 
 let eventId: number;
 let alice: number;
@@ -240,6 +250,37 @@ describe('findHeadToHead', () => {
 		finally {
 			await db.update(schema.featureMatchSlots).set({ player1Id: alice, player2Id: bob }).where(eq(schema.featureMatchSlots.id, slotId));
 		}
+	});
+
+	// The active Session owns which side each Player sits on (ADR-0058).
+	it.each([
+		{
+			session: 'none',
+			sides: ['Alice', 'Bob'],
+			roundTwo: '2-1',
+		},
+		{
+			session: 'swapped',
+			sides: ['Bob', 'Alice'],
+			roundTwo: '1-2',
+		},
+	])('shows a Slot\'s Players on the sides its $session Session seats them', async ({ session, sides, roundTwo }) => {
+		const [slot] = await db.insert(schema.featureMatchSlots)
+			.values({ eventId, player1Id: alice, player2Id: bob })
+			.returning({ id: schema.featureMatchSlots.id });
+		if (session === 'swapped') {
+			await featureMatchStateService().applyCommandToActiveSession(slot!.id, eventId, opened => ({
+				commandId: `swap-${slot!.id}`,
+				type: 'SwapPlayers',
+				payload: {},
+				baseSequence: opened.sequence,
+			}));
+		}
+
+		const answer = await findHeadToHead(eventId, config({ playerSource: 'featureMatchSlot', featureMatchId: slot!.id }));
+
+		expect([answer.player1?.name, answer.player2?.name]).toEqual(sides);
+		expect(answer.earlierMatches[0]).toMatchObject({ roundName: 'Round 2', gameScore: roundTwo });
 	});
 
 	it('shows two Players picked directly, with every reported Match between them', async () => {
