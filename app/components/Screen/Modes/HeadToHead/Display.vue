@@ -82,7 +82,7 @@ function outcomeLabel({ outcome }: ScreenOutputHeadToHeadEarlierMatch): string {
 						<div class="name" :style="nameStyle">
 							{{ side?.name ?? 'TBD' }}
 						</div>
-						<div v-if="side?.pronouns" class="pronouns" :style="secondaryTextStyle">
+						<div v-if="config.showPronouns && side?.pronouns" class="pronouns" :style="secondaryTextStyle">
 							{{ side.pronouns }}
 						</div>
 						<div v-if="side" class="stats" :style="secondaryTextStyle">
@@ -92,7 +92,7 @@ function outcomeLabel({ outcome }: ScreenOutputHeadToHeadEarlierMatch): string {
 						<div v-if="side?.deckName" class="deck" :style="primaryTextStyle">
 							{{ side.deckName }}
 							<MtgManaColorDisplay
-								v-if="side.deckColors"
+								v-if="config.showDeckColors && side.deckColors"
 								:colors="side.deckColors"
 								size="sm"
 								class="inline-flex ml-2 align-middle"
