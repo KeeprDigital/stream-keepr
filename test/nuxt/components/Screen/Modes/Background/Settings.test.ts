@@ -1,10 +1,13 @@
 import type { BackgroundLayer, BackgroundModeConfig } from '~~/shared/types/screenConfig';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import Settings from '~/components/Screen/Modes/Background/Settings.vue';
 import { createMockScreen } from '../../../../../helpers/fixtures';
+
+// Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
+enableAutoUnmount(afterEach);
 
 const config = ref<BackgroundModeConfig>({ layers: [] });
 const updateConfig = vi.fn();

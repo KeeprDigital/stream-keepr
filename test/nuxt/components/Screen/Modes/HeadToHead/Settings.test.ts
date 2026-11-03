@@ -1,10 +1,13 @@
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { flushPromises, mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import Settings from '~/components/Screen/Modes/HeadToHead/Settings.vue';
+
+// Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
+enableAutoUnmount(afterEach);
 
 const mockConfig = ref<Record<string, any>>({});
 const mockUpdateConfig = vi.fn((patch: Record<string, unknown>) => {
