@@ -5,6 +5,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import Settings from '~/components/Screen/Modes/Pairings/Settings.vue';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
@@ -63,16 +64,16 @@ mockNuxtImport('useServerTime', () => () => ({
 mockNuxtImport('useRoundStore', () => () => ({
 	rounds: [
 		{
-			id: 41,
-			phaseId: 4,
-			name: 'Round 1',
-			roundNumber: 1,
-		},
-		{
 			id: 31,
 			phaseId: 3,
 			name: 'Round 4',
 			roundNumber: 4,
+		},
+		{
+			id: 41,
+			phaseId: 4,
+			name: 'Round 1',
+			roundNumber: 1,
 		},
 	],
 	isLoaded: true,
@@ -129,13 +130,6 @@ const UButtonStub = defineComponent({
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
 });
 
-const USelectStub = defineComponent({
-	props: {
-		items: { type: Array, required: true },
-	},
-	template: '<select data-testid="round-picker" :data-items="JSON.stringify(items)" />',
-});
-
 async function mountSettings() {
 	const wrapper = mount(Settings, {
 		props: {
@@ -179,10 +173,10 @@ describe('screenModesPairingsSettings', () => {
 		mockFetch.mockResolvedValue(pairingsOf(1));
 		const wrapper = await mountSettings();
 
-		expect(JSON.parse(wrapper.get('[data-testid="round-picker"]').attributes('data-items')!)).toEqual([
-			{ label: 'Select a round…', value: null },
-			{ label: 'Swiss · Round 4', value: 31 },
-			{ label: 'Top Cut · Round 1', value: 41 },
+		expect(wrapper.findAll('select option').map(option => option.text())).toEqual([
+			'Select a round…',
+			'Swiss · Round 4',
+			'Top Cut · Round 1',
 		]);
 	});
 

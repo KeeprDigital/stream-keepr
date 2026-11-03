@@ -1,9 +1,11 @@
+import type { Component } from 'vue';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import { USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import Settings from '~/components/Screen/Modes/Standings/Settings.vue';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
@@ -56,14 +58,14 @@ mockNuxtImport('useRoundStore', () => () => ({
 	...loaded,
 	rounds: [
 		{
-			id: 41,
-			phaseId: 4,
+			id: 31,
+			phaseId: 3,
 			name: 'Round 1',
 			roundNumber: 1,
 		},
 		{
-			id: 31,
-			phaseId: 3,
+			id: 41,
+			phaseId: 4,
 			name: 'Round 1',
 			roundNumber: 1,
 		},
@@ -87,14 +89,14 @@ const USwitchStub = defineComponent({
 	template: '<button type="button" data-testid="u-switch" @click="$emit(\'update:modelValue\', !modelValue)" />',
 });
 
-async function mountSettings() {
+async function mountSettings(stubs: Record<string, Component> = {}) {
 	const wrapper = mount(Settings, {
 		props: {
 			screen: { id: 1 } as Screen,
 			eventId: 1,
 		},
 		global: {
-			stubs: { USwitch: USwitchStub, UIcon: true },
+			stubs: { USwitch: USwitchStub, UIcon: true, ...stubs },
 		},
 	});
 	await flushPromises();
@@ -153,14 +155,13 @@ describe('the Standings settings editor\'s Round picker', () => {
 	});
 
 	it('offers each Round as "Phase · Round", after Current', async () => {
-		const wrapper = await mountSettings();
-		const picker = wrapper.findAllComponents({ name: 'USelect' })
-			.find(select => (select.props('items') as { label: string }[])[0]?.label === 'Current')!;
+		const wrapper = await mountSettings({ USelect: USelectStub });
+		const pickers = wrapper.findAll('select').map(select => select.findAll('option').map(option => option.text()));
 
-		expect(picker.props('items')).toEqual([
-			{ label: 'Current', value: null },
-			{ label: 'Swiss · Round 1', value: 31 },
-			{ label: 'Top Cut · Round 1', value: 41 },
+		expect(pickers).toContainEqual([
+			'Current',
+			'Swiss · Round 1',
+			'Top Cut · Round 1',
 		]);
 	});
 });
