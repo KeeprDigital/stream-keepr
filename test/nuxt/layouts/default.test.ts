@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, reactive } from 'vue';
 import { LOCAL_DEVELOPER_USER_EMAIL, LOCAL_DEVELOPER_USER_ID, LOCAL_DEVELOPER_USER_NAME } from '~~/shared/utils/localDeveloperAuth';
+import { UNavigationMenuStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 
 vi.mock('~/composables/workflows/useEventLiveRefresh', () => ({
 	useEventLiveRefresh: vi.fn(),
@@ -104,29 +105,6 @@ const UDashboardPanelStub = defineComponent({
 	template: '<main><slot name="header" /><slot /></main>',
 });
 
-const UNavigationMenuStub = defineComponent({
-	props: {
-		items: {
-			type: Array,
-			required: true,
-		},
-	},
-	setup(props: { items: Array<any> }) {
-		const labels = computed(() => (props.items as Array<any>)
-			.flatMap(item => [
-				item.label,
-				...(item.children?.map((child: any) => child.label) ?? []),
-			])
-			.filter(Boolean)
-			.join('|'));
-
-		return { labels };
-	},
-	// Each item gets a button so a test can take the action the sidebar offers,
-	// not merely read the label it offers it under.
-	template: '<nav>{{ labels }}<button v-for="item in items" :key="item.label" type="button" :data-nav-item="item.label" @click="item.onSelect?.()" /></nav>',
-});
-
 const UButtonStub = defineComponent({
 	props: {
 		label: {
@@ -206,28 +184,21 @@ describe('default layout sync navigation', () => {
 		expect(wrapper.text()).toContain('Sync');
 	});
 
-	// An OP Event holds no results or Metagame, so the pages reading them are not offered.
+	// An OP Event models no Players, Rounds or Matches and holds no Metagame
+	// (ADR-0057), so the pages for them are not offered.
+	const MTG_ONLY_ENTRIES = [
+		'Players',
+		'Matches',
+		'Metagame',
+		'Archetype Review',
+		'Sync',
+		'Cards',
+		'Event Structure',
+	];
+
 	it.each([
-		[
-			'mtg',
-			[
-				'Metagame',
-				'Archetype Review',
-				'Sync',
-				'Cards',
-			],
-			[],
-		],
-		[
-			'op',
-			[],
-			[
-				'Metagame',
-				'Archetype Review',
-				'Sync',
-				'Cards',
-			],
-		],
+		['mtg', MTG_ONLY_ENTRIES, []],
+		['op', [], MTG_ONLY_ENTRIES],
 	] as const)('on a %s Event, offers %j and omits %j', async (game, offered, omitted) => {
 		mockEventStore.event.game = game;
 
@@ -239,6 +210,9 @@ describe('default layout sync navigation', () => {
 			'Controls',
 			'Feature Matches',
 			'Screens',
+			'Event',
+			'Broadcast',
+			'Integrations',
 		]));
 		for (const label of omitted)
 			expect(items).not.toContain(label);

@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { MTG_ONLY } from '~~/shared/config/games';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { LazyMtgCardHistory, LazyOpCardHistory } from '#components';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
+	cardGames: MTG_ONLY,
 	title: 'Cards',
 	layout: false,
 });

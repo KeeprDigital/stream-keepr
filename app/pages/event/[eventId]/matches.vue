@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { MTG_ONLY } from '~~/shared/config/games';
 import { isMeleeManagedRound } from '~~/shared/utils/roundControl';
 import { LazyMatchCreateModal } from '#components';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
+	cardGames: MTG_ONLY,
 	title: 'Matches',
 	layout: false,
 });

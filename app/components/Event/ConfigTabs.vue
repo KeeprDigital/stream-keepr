@@ -1,22 +1,52 @@
 <script setup lang="ts">
+import type { Game } from '~~/shared/types/enums';
 import type { NavigationMenuItem } from '#ui/types';
+import { EVERY_CARD_GAME, MTG_ONLY, offeredToCardGame } from '~~/shared/config/games';
 
 const props = defineProps<{
 	eventId: number;
 }>();
 
-const tabs = computed<NavigationMenuItem[]>(() => [
+const eventStore = useEventStore();
+
+/** A settings tab, declaring the Card Games whose Events it is offered to (ADR-0057). */
+interface ConfigTab extends NavigationMenuItem {
+	cardGames: readonly Game[];
+}
+
+const tabs = computed<NavigationMenuItem[]>(() => offeredToCardGame<ConfigTab>([
 	{
 		label: 'Event',
 		icon: 'i-lucide-settings',
 		to: `/event/${props.eventId}/config`,
 		exact: true,
+		cardGames: EVERY_CARD_GAME,
 	},
-	{ label: 'Event Structure', icon: 'i-lucide-list-ordered', to: `/event/${props.eventId}/rounds` },
-	{ label: 'Feature Matches', icon: 'i-lucide-toggle-left', to: `/event/${props.eventId}/config/features` },
-	{ label: 'Broadcast', icon: 'i-lucide-radio', to: `/event/${props.eventId}/config/broadcast` },
-	{ label: 'Integrations', icon: 'i-lucide-plug', to: `/event/${props.eventId}/config/integrations` },
-]);
+	{
+		label: 'Event Structure',
+		icon: 'i-lucide-list-ordered',
+		to: `/event/${props.eventId}/rounds`,
+		cardGames: MTG_ONLY,
+	},
+	{
+		label: 'Feature Matches',
+		icon: 'i-lucide-toggle-left',
+		to: `/event/${props.eventId}/config/features`,
+		cardGames: EVERY_CARD_GAME,
+	},
+	{
+		label: 'Broadcast',
+		icon: 'i-lucide-radio',
+		to: `/event/${props.eventId}/config/broadcast`,
+		cardGames: EVERY_CARD_GAME,
+	},
+	{
+		label: 'Integrations',
+		icon: 'i-lucide-plug',
+		to: `/event/${props.eventId}/config/integrations`,
+		cardGames: EVERY_CARD_GAME,
+	},
+], eventStore.event?.game));
 </script>
 
 <template>
