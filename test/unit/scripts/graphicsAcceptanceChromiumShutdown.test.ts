@@ -4,7 +4,7 @@ import { chmodSync, existsSync, rmSync } from 'node:fs';
 import { basename } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { acceptanceProfilePrefix, checkoutProfileMarker } from '../../../scripts/graphics-acceptance/chromium-profile.mjs';
 import { launchChromium } from '../../../scripts/graphics-acceptance/chromium.mjs';
 import { fakeChrome } from './fixtures/fake-chrome';
@@ -163,11 +163,14 @@ describe('the acceptance browser\'s shutdown', () => {
 describe('a browser that outlives SIGKILL', () => {
 	const held: Array<ReturnType<typeof fakeChrome>> = [];
 	afterEach(() => {
+		vi.restoreAllMocks();
 		for (const chrome of held.splice(0)) {
 			chrome.reap();
 			rmSync(chrome.profile()!, { recursive: true, force: true });
 		}
 	});
+
+	type ImmortalChrome = ReturnType<typeof immortalChrome>;
 
 	/** A Chrome no signal stops, launched with every grace short. */
 	function immortalChrome() {
@@ -182,35 +185,42 @@ describe('a browser that outlives SIGKILL', () => {
 		return { chrome, options };
 	}
 
-	async function failureOf(work: Promise<unknown>): Promise<string> {
-		return await work.then(
-			() => { throw new Error('nothing failed'); },
-			(failure: Error) => failure.message,
-		);
+	function captureStderr() {
+		let written = '';
+		vi.spyOn(process.stderr, 'write').mockImplementation((text: string | Uint8Array) => {
+			written += String(text);
+			return true;
+		});
+		return () => written;
 	}
 
 	it.each([
 		{
-			stopping: 'a browser that never announced itself',
-			stop: async ({ options }: ReturnType<typeof immortalChrome>) => await failureOf(launchChromium('chrome', [], options)),
+			stopping: 'a browser that never announced itself, in its startup report',
+			stop: async ({ options }: ImmortalChrome) => await launchChromium('chrome', [], options).then(
+				() => { throw new Error('the stand-in launched'); },
+				(failure: Error) => failure.message,
+			),
 		},
 		{
-			stopping: 'a browser being disposed of',
-			stop: async ({ chrome, options }: ReturnType<typeof immortalChrome>) => {
+			stopping: 'a browser being disposed of, on stderr',
+			stop: async ({ chrome, options }: ImmortalChrome) => {
 				const launching = launchChromium('chrome', [], options);
 				await chrome.started();
 				chrome.say('DevTools listening on ws://127.0.0.1:9/devtools/browser/immortal\n');
 				const browser = await launching;
-				return await failureOf(browser!.dispose());
+				const stderr = captureStderr();
+				await browser!.dispose();
+				return stderr();
 			},
 		},
-	])('keeps the profile it still holds, and says so, when stopping $stopping', async ({ stop }) => {
+	])('keeps the profile it still holds, and names it, when stopping $stopping', async ({ stop }) => {
 		const stand = immortalChrome();
 
-		const message = await stop(stand);
+		const report = await stop(stand);
 
-		expect(message).toContain('still running after SIGKILL');
-		expect(message).toContain(`profile kept: ${stand.chrome.profile()}`);
+		expect(report).toContain('still running after SIGKILL');
+		expect(report).toContain(`profile kept: ${stand.chrome.profile()}`);
 		expect(existsSync(stand.chrome.profile()!)).toBe(true);
 	});
 });

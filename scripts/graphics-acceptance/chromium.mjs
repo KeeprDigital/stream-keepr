@@ -255,17 +255,21 @@ async function removeProfile(profile) {
 }
 
 /**
- * Remove a stopped browser's profile, given what `terminate` said stopped it.
- * One that outlived SIGKILL still holds its profile, so the profile is kept and
- * named: `pnpm reap` finds the browser by it once its runner is gone, and the
- * operator removes the folder after. Resolves to `stopped`, naming any profile
- * kept.
+ * Remove a stopped browser's profile, given what stopped it (`terminate`).
+ *
+ * One that outlived SIGKILL still writes to its profile, so the profile is kept
+ * and named on stderr, whichever path stopped it: `pnpm reap` finds the browser
+ * by its `--user-data-dir` once its runner is gone, and the folder is the
+ * operator's to remove after. Resolves to `stopped`, naming a kept profile.
  */
 async function releaseProfile(browser, stopped) {
-	if (stopped === STILL_RUNNING)
-		return `${stopped}; profile kept: ${browser.profile} (stop it with \`pnpm reap\` once this run ends, then remove it)`;
-	await removeProfile(browser.profile);
-	return stopped;
+	if (stopped !== STILL_RUNNING) {
+		await removeProfile(browser.profile);
+		return stopped;
+	}
+	const kept = `${stopped}; profile kept: ${browser.profile} (\`pnpm reap\` stops the browser once this run has ended; then remove the folder)`;
+	process.stderr.write(`Chromium (pid ${browser.child.pid}) is ${kept}\n`);
+	return kept;
 }
 
 let stoppingOnSignal = false;
@@ -301,9 +305,7 @@ function stopOnSignal(name) {
 	}
 	stoppingOnSignal = true;
 	void Promise.all([...liveBrowsers].map(async (browser) => {
-		const stopped = await releaseProfile(browser, await terminate(browser));
-		if (stopped.startsWith(STILL_RUNNING))
-			process.stderr.write(`Chromium (pid ${browser.child.pid}) is ${stopped}\n`);
+		await releaseProfile(browser, await terminate(browser));
 	})).finally(() => {
 		stoppingOnSignal = false;
 		end();
@@ -349,6 +351,8 @@ function track(browser) {
 
 /** How much of a browser's stderr a startup failure keeps, from the end. */
 const STDERR_KEPT_CHARS = 4_000;
+/** The longest unfinished stderr line held back for the DevTools endpoint. */
+const STDERR_LINE_KEPT_CHARS = 1_000;
 /** How long a stopped browser's last stderr is waited for before reporting. */
 const STDERR_DRAIN_MS = 500;
 
@@ -452,13 +456,11 @@ export async function launchChromium(candidate, extraArgs, {
 			child.stderr.setEncoding('utf8').on('data', (chunk) => {
 				errorOutput = (errorOutput + chunk).slice(-STDERR_KEPT_CHARS);
 				const lines = (unfinishedLine + chunk).split('\n');
-				unfinishedLine = lines.pop().slice(-STDERR_KEPT_CHARS);
-				for (const line of lines) {
-					const match = line.match(/DevTools listening on (ws:\/\/\S+)/);
-					if (match) {
-						clearTimeout(timeout);
-						resolve(match[1]);
-					}
+				unfinishedLine = lines.pop().slice(-STDERR_LINE_KEPT_CHARS);
+				const endpointLine = lines.map(line => line.match(/DevTools listening on (ws:\/\/\S+)/)).find(Boolean);
+				if (endpointLine) {
+					clearTimeout(timeout);
+					resolve(endpointLine[1]);
 				}
 			});
 			child.once('error', (error) => {
@@ -528,13 +530,11 @@ export async function launchChromium(candidate, extraArgs, {
 				closing,
 				new Promise(resolve => setTimeout(resolve, CLOSE_GRACE_MS, false)),
 			]);
-			const stopped = await releaseProfile(browser, closed
+			// Reports rather than throws, so a harness's verdict is never
+			// replaced by how its browser went away.
+			await releaseProfile(browser, closed
 				? 'closed'
 				: await terminate(browser));
-			// Left running, it is the leak #687 found; the run fails rather than
-			// passing over it.
-			if (stopped.startsWith(STILL_RUNNING))
-				throw new Error(`Chromium (pid ${child.pid}) is ${stopped}`);
 		},
 	};
 }

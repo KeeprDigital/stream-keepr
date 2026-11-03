@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync } from 'node:fs';
+import { chmodSync, rmSync } from 'node:fs';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -71,7 +71,8 @@ describe('the acceptance browser\'s DevTools endpoint', () => {
 		const browser = await launching;
 
 		expect(browser?.endpoint).toBe('ws://127.0.0.1:9/devtools/browser/whole');
-		await browser?.dispose();
+		chrome.reap();
+		rmSync(chrome.profile()!, { recursive: true, force: true });
 	});
 });
 
