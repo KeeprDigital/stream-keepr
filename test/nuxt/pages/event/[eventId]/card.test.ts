@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive, ref } from 'vue';
 import { createFollowedFeatureMatchSessions } from '~~/test/nuxt/helpers/followedFeatureMatchSession';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 
 vi.mock('~/modules/event-data/resync', async importOriginal => ({
 	...await importOriginal<typeof import('~/modules/event-data/resync')>(),
@@ -165,6 +166,7 @@ async function openCardsPage(query: Record<string, string> = {}) {
 	const wrapper = mount(CardPage, {
 		global: {
 			stubs: {
+				...nuxtUiStubs,
 				NuxtLayout: NuxtLayoutStub,
 				MtgCardModeToggle: true,
 				MtgCardSearch: true,
@@ -173,11 +175,6 @@ async function openCardsPage(query: Record<string, string> = {}) {
 				MtgCardDeckList: true,
 				MtgCardPlayerDeck: true,
 				MtgCardControls: true,
-				USlideover: true,
-				USelect: true,
-				UInput: true,
-				UButton: true,
-				UFieldGroup: true,
 			},
 		},
 	});
@@ -187,12 +184,23 @@ async function openCardsPage(query: Record<string, string> = {}) {
 	return wrapper;
 }
 
+/** The Deck List header's Round and matchup pickers, in page order. */
+function pickers(wrapper: ReturnType<typeof mount>) {
+	const [round, matchup] = wrapper.findAllComponents({ name: 'USelect' });
+	return { round: round!, matchup: matchup! };
+}
+
+/** The Round Match the matchup picker holds; none while a Slot is shown. */
+function pickedMatchId(wrapper: ReturnType<typeof mount>) {
+	return pickers(wrapper).matchup.props('modelValue');
+}
+
 function shownDecks() {
 	const cardStore = useCardStore();
 	return [cardStore.deckListPlayer1?.playerName, cardStore.deckListPlayer2?.playerName];
 }
 
-describe('cards page Deck List source', () => {
+describe('cards page matchup Deck Lists', () => {
 	let wrapper: ReturnType<typeof mount> | undefined;
 
 	beforeEach(() => {
@@ -210,34 +218,39 @@ describe('cards page Deck List source', () => {
 			'the Card Screen\'s Slot',
 			{},
 			['Alice', 'Bob'],
+			undefined,
 			{ slotId: '7' },
 		],
 		[
 			'a linked Slot',
 			{ mode: 'match-decklist', roundId: '3', slotId: '7' },
 			['Alice', 'Bob'],
+			undefined,
 			{ slotId: '7' },
 		],
 		[
 			'a linked Match',
 			{ mode: 'match-decklist', roundId: '3', matchId: '7' },
 			['Mallory', 'Nina'],
+			SHARED_ID,
 			{ matchId: '7' },
 		],
-	])('shows %s, not the other matchup with its id', async (_, query, decks, link) => {
+	])('shows %s, not the other matchup with its id', async (_, query, decks, pickedMatch, link) => {
 		wrapper = await openCardsPage(query);
 
 		expect(shownDecks()).toEqual(decks);
+		expect(pickedMatchId(wrapper)).toBe(pickedMatch);
 		await vi.waitFor(() => expect(useRoute().query).toEqual({ mode: 'match-decklist', roundId: '3', ...link }));
 	});
 
 	it('replaces a shown Slot with the first Match of a Round the operator picks', async () => {
 		wrapper = await openCardsPage();
 
-		useCardStore().deckListRoundId = 4;
+		await pickers(wrapper).round.find('select').setValue('4');
 		await flushPromises();
 
 		expect(shownDecks()).toEqual(['Mallory', 'Bob']);
+		expect(pickedMatchId(wrapper)).toBe(9);
 		await vi.waitFor(() => expect(useRoute().query).toEqual({ mode: 'match-decklist', roundId: '4', matchId: '9' }));
 	});
 });

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { FeatureMatchMenuItem } from '~/composables/featureMatch/useFeatureMatchMenuItems';
 import type { FeatureMatchAssignment, Match } from '~/types';
-import type { CardDeckListSource } from '~/types/card/page';
+import type { CardMatchup } from '~/types/card/page';
+import { matchupIdOf } from '~/types/card/page';
 
 const props = defineProps<{
 	roundOptions?: Array<{ label: string; value: number }>;
@@ -12,22 +13,20 @@ const props = defineProps<{
 	assignmentNoteRemoteChanged?: boolean;
 }>();
 
-const deckListSource = defineModel<CardDeckListSource | null>('deckListSource');
+const deckListMatchup = defineModel<CardMatchup | null>('deckListMatchup');
 const deckListRoundId = defineModel<number | undefined>('deckListRoundId');
 
 const cardStore = useCardStore();
 const featureMatchOptions = useFeatureMatchMenuItems();
 const matchOptions = computed(() => props.matchOptions ?? featureMatchOptions.value);
 /** The picker lists a Round's Matches when given them, and the Feature Match Slots otherwise. */
-const pickerKind = computed<CardDeckListSource['kind']>(() => props.matchOptions
+const pickerKind = computed<CardMatchup['kind']>(() => props.matchOptions
 	? 'match'
 	: 'slot');
 const pickedId = computed<number | undefined>({
-	get: () => deckListSource.value?.kind === pickerKind.value
-		? deckListSource.value.id
-		: undefined,
+	get: () => matchupIdOf(deckListMatchup.value, pickerKind.value) ?? undefined,
 	set: (id) => {
-		deckListSource.value = id
+		deckListMatchup.value = id
 			? { kind: pickerKind.value, id }
 			: null;
 	},
@@ -45,14 +44,14 @@ function loadSelectedMatchup(selectedMatch: Match) {
 }
 
 /** Load the decks the selection names: a Feature Match Slot's, or a Round's Match's once it has loaded. */
-async function loadSource(source: CardDeckListSource | null | undefined, selectedMatch: Match | null | undefined) {
-	if (!source) {
+async function loadMatchup(matchup: CardMatchup | null | undefined, selectedMatch: Match | null | undefined) {
+	if (!matchup) {
 		cardStore.clearMatchDeckLists();
 		return;
 	}
 
-	if (source.kind === 'slot') {
-		await cardStore.loadMatchDeckLists(source.id);
+	if (matchup.kind === 'slot') {
+		await cardStore.loadMatchDeckLists(matchup.id);
 		return;
 	}
 
@@ -61,13 +60,13 @@ async function loadSource(source: CardDeckListSource | null | undefined, selecte
 }
 
 // A selection restored before mount, as by a linked reload, has no decks loaded yet.
-if (deckListSource.value && !cardStore.deckListHasData)
-	void loadSource(deckListSource.value, props.selectedMatch);
+if (deckListMatchup.value && !cardStore.deckListHasData)
+	void loadMatchup(deckListMatchup.value, props.selectedMatch);
 
 watch([
-	deckListSource,
+	deckListMatchup,
 	() => props.selectedMatch,
-], ([source, selectedMatch]) => loadSource(source, selectedMatch));
+], ([matchup, selectedMatch]) => loadMatchup(matchup, selectedMatch));
 </script>
 
 <template>

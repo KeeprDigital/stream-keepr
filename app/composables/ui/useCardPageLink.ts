@@ -1,10 +1,11 @@
 import type { Ref } from 'vue';
-import type { CardDeckListSource, CardPageMode } from '~/types/card/page';
+import type { CardMatchup, CardPageMode } from '~/types/card/page';
+import { matchupIdOf } from '~/types/card/page';
 
 interface CardPageView {
 	mode: Ref<CardPageMode>;
 	roundId: Ref<number | null>;
-	source: Ref<CardDeckListSource | null>;
+	matchup: Ref<CardMatchup | null>;
 	playerId: Ref<number | null>;
 }
 
@@ -25,7 +26,7 @@ function queryId(value: unknown): number | null {
 		: null;
 }
 
-function querySource(query: Record<string, unknown>): CardDeckListSource | null {
+function queryMatchup(query: Record<string, unknown>): CardMatchup | null {
 	const matchId = queryId(query.matchId);
 	if (matchId !== null)
 		return { kind: 'match', id: matchId };
@@ -50,7 +51,7 @@ export function useCardPageLink(view: CardPageView) {
 	if (linkedMode === 'match-decklist') {
 		view.mode.value = linkedMode;
 		view.roundId.value = queryId(route.query.roundId);
-		view.source.value = querySource(route.query);
+		view.matchup.value = queryMatchup(route.query);
 	}
 	else if (linkedMode === 'player-decklist') {
 		view.mode.value = linkedMode;
@@ -61,16 +62,13 @@ export function useCardPageLink(view: CardPageView) {
 		const id = (value: number | null) => value === null
 			? undefined
 			: String(value);
-		const sourceId = (kind: CardDeckListSource['kind']) => view.source.value?.kind === kind
-			? view.source.value.id
-			: null;
 		switch (view.mode.value) {
 			case 'match-decklist':
 				return {
 					mode: view.mode.value,
 					roundId: id(view.roundId.value),
-					matchId: id(sourceId('match')),
-					slotId: id(sourceId('slot')),
+					matchId: id(matchupIdOf(view.matchup.value, 'match')),
+					slotId: id(matchupIdOf(view.matchup.value, 'slot')),
 				};
 			case 'player-decklist':
 				return {

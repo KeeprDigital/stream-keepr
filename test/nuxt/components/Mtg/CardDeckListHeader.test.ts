@@ -54,7 +54,7 @@ describe('mtgCardDeckListHeader', () => {
 		cardStore.loadMatchDeckLists.mockClear();
 		mount(CardDeckListHeader, {
 			props: {
-				deckListSource: { kind, id: 40 },
+				deckListMatchup: { kind, id: 40 },
 				selectedMatch: {
 					id: 40,
 					player1Id: 1,
@@ -77,7 +77,7 @@ describe('mtgCardDeckListHeader', () => {
 		const save = vi.fn().mockResolvedValue(undefined);
 		const wrapper = mount(CardDeckListHeader, {
 			props: {
-				deckListSource: { kind: 'match', id: 7 },
+				deckListMatchup: { kind: 'match', id: 7 },
 				selectedAssignment: {
 					id: 9,
 					eventId: 1,
@@ -112,7 +112,7 @@ describe('mtgCardDeckListHeader', () => {
 		const wrapper = mount(CardDeckListHeader, {
 			props: {
 				deckListRoundId: 2,
-				deckListSource: { kind: 'match', id: 7 },
+				deckListMatchup: { kind: 'match', id: 7 },
 				selectedAssignment: {
 					id: 9,
 					eventId: 1,

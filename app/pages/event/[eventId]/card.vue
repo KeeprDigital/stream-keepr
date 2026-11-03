@@ -3,6 +3,7 @@ import { MTG_ONLY } from '~~/shared/config/games';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { LazyMtgCardHistory, LazyOpCardHistory } from '#components';
 import { useConsumedEventData } from '~/modules/event-data/resync';
+import { matchupIdOf } from '~/types/card/page';
 
 definePageMeta({
 	cardGames: MTG_ONLY,
@@ -38,7 +39,7 @@ function openHistory() {
 const {
 	activeScreenId,
 	cardPageMode: activeMode,
-	deckListSource,
+	deckListMatchup,
 	deckListRoundId: storedDeckListRoundId,
 	playerDeckPlayerId: storedPlayerDeckPlayerId,
 } = storeToRefs(cardStore);
@@ -58,17 +59,15 @@ const selectedScreenId = optionalId(activeScreenId);
 const { linked } = useCardPageLink({
 	mode: activeMode,
 	roundId: storedDeckListRoundId,
-	source: deckListSource,
+	matchup: deckListMatchup,
 	playerId: storedPlayerDeckPlayerId,
 });
 const deckListRoundId = optionalId(storedDeckListRoundId);
 /** The Round's Match the Deck Lists show, if they show one rather than a Feature Match Slot. */
 const deckListMatchId = computed<number | undefined>({
-	get: () => deckListSource.value?.kind === 'match'
-		? deckListSource.value.id
-		: undefined,
+	get: () => matchupIdOf(deckListMatchup.value, 'match') ?? undefined,
 	set: (id) => {
-		deckListSource.value = id
+		deckListMatchup.value = id
 			? { kind: 'match', id }
 			: null;
 	},
@@ -170,7 +169,7 @@ watch(selectedScreenId, async (screenId, previousScreenId) => {
 				);
 				if (hasDecklists) {
 					activeMode.value = 'match-decklist';
-					deckListSource.value = { kind: 'slot', id: slotId };
+					deckListMatchup.value = { kind: 'slot', id: slotId };
 				}
 			}
 		}
@@ -250,7 +249,7 @@ async function saveSelectedAssignmentNote(note: string) {
 
 // Auto-select the first matchup when entering match-decklist mode.
 watch(activeMode, (mode) => {
-	if (mode === 'match-decklist' && !deckListSource.value && matchOptions.value.length) {
+	if (mode === 'match-decklist' && !deckListMatchup.value && matchOptions.value.length) {
 		deckListMatchId.value = matchOptions.value[0]!.value;
 	}
 });
@@ -274,7 +273,7 @@ watch([
 	]);
 	// A Slot shown on arrival stays; picking another Round shows that Round's Matches.
 	const roundPicked = previous?.[1] != null && previous[1] !== roundId;
-	if (deckListSource.value?.kind === 'slot' && !roundPicked)
+	if (deckListMatchup.value?.kind === 'slot' && !roundPicked)
 		return;
 	if (!matchOptions.value.some(option => option.value === deckListMatchId.value)) {
 		deckListMatchId.value = matchOptions.value[0]?.value;
@@ -373,7 +372,7 @@ const timeoutProgress = computed(() => {
 						</div>
 						<div v-show="activeMode === 'match-decklist'">
 							<MtgCardDeckListHeader
-								v-model:deck-list-source="deckListSource"
+								v-model:deck-list-matchup="deckListMatchup"
 								v-model:deck-list-round-id="deckListRoundId"
 								:round-options="roundOptions"
 								:match-options="matchOptions"
