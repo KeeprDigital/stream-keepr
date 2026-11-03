@@ -156,6 +156,7 @@ const PlayerFormStub = defineComponent({
 	props: {
 		formId: { type: String, required: true },
 		modelValue: { type: Object, required: false },
+		side: { type: String, required: false },
 	},
 	emits: ['submit', 'update:playerId', 'update:modelValue'],
 	template: '<form :id="formId" data-testid="player-form" @submit.prevent="$emit(\'submit\')"></form>',
@@ -243,6 +244,29 @@ describe('featureMatchPanel setup sides after a swap', () => {
 	afterEach(() => {
 		mockFeatureMatchStateStore.featureMatchSessions.clear();
 		mockFeatureMatchStateStore.sessionIdBySlotId.clear();
+	});
+
+	// A Deck List paste targets the Slot side its column's player holds (ADR-0058).
+	it.each([
+		{
+			orientation: 'Slot order',
+			swapped: false,
+			pasteSides: ['player1', 'player2'],
+		},
+		{
+			orientation: 'swapped order',
+			swapped: true,
+			pasteSides: ['player2', 'player1'],
+		},
+	])('sends each column\'s Deck List paste to its own player\'s Slot side in $orientation', async ({ swapped, pasteSides }) => {
+		followSession(swapped);
+		const wrapper = await mountComponent({
+			player1Data: { name: 'Alice' },
+			player2Data: { name: 'Bob' },
+		});
+		await wrapper.get('[data-testid="edit-mode"]').trigger('click');
+
+		expect(wrapper.findAllComponents(PlayerFormStub).map(form => form.props('side'))).toEqual(pasteSides);
 	});
 
 	// The Session owns side order; the form holds the Slot's (ADR-0058).
