@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
@@ -51,11 +52,10 @@ const defaultConfig = {
 const mutableConfig = reactive({ ...defaultConfig });
 
 const mockEventId = ref<number | null>(1);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = screenContextOf({
 	screen: ref({ id: 1, name: 'Test Screen' }),
 	eventId: mockEventId,
-	interactive: ref(false),
-}));
+});
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
 // Server time is the Page Rotation's clock; synced and controllable here.
@@ -75,7 +75,7 @@ const scopes: EffectScope[] = [];
 
 function makeTopCardsModeData() {
 	const scope = effectScope();
-	const result = scope.run(() => useTopCardsModeData())!;
+	const result = scope.run(() => useTopCardsModeData(screenContext))!;
 	scopes.push(scope);
 	return result;
 }

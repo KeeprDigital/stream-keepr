@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, effectScope, nextTick, ref } from 'vue';
 import { createMockEvent, createMockFeatureMatchState } from '~~/test/helpers/fixtures';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
 const mockEventStore = {
 	event: createMockEvent(),
@@ -63,7 +64,7 @@ mockNuxtImport('tryUseRealtime', () => () => ({
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
 mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = screenContextOf({
 	screen: ref({
 		id: 1,
 		name: 'Test',
@@ -72,8 +73,7 @@ mockNuxtImport('useScreenContext', () => () => ({
 		},
 	}),
 	eventId: computed(() => mockEventId.value),
-	interactive: ref(false),
-}));
+});
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mockConfig.value));
 
 describe('useFeatureMatchModeData', () => {
@@ -121,7 +121,7 @@ describe('useFeatureMatchModeData', () => {
 	function createComposable() {
 		activeScope?.stop();
 		activeScope = effectScope();
-		return activeScope.run(() => useFeatureMatchModeData())!;
+		return activeScope.run(() => useFeatureMatchModeData(screenContext))!;
 	}
 
 	it('resolves match when matchId is configured', async () => {

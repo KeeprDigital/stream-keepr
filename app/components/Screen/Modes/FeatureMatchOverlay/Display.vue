@@ -35,7 +35,8 @@ import { screenMediaSourceUrl } from '~/utils/screenMediaSource';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
 import FeatureMatchOverlayFrameMedia from './FrameMedia.vue';
 
-const { isPreview, outputMode, previewGuides, previewSafeAreas, previewStressDataset, eventCanvas, sampleDataset } = useScreenContext();
+const context = useScreenContext();
+const { isPreview, outputMode, previewGuides, previewSafeAreas, previewStressDataset, eventCanvas, sampleDataset } = context;
 const resolvedOutput = computed<FeatureMatchOverlayOutput>(() => outputMode?.value ?? 'overlay');
 const showPreviewGuides = computed(() => previewGuides?.value ?? false);
 const showSafeAreaGuides = computed(() => previewSafeAreas?.value ?? false);
@@ -44,11 +45,11 @@ const canvasWidth = computed(() => (eventCanvas?.value ?? DEFAULT_EVENT_CANVAS).
 const canvasHeight = computed(() => (eventCanvas?.value ?? DEFAULT_EVENT_CANVAS).height);
 const frameMaskId = `feature-match-overlay-frame-mask-${useId().replace(/[^\w-]/g, '')}`;
 const frameGlowFilterId = `feature-match-overlay-frame-glow-${useId().replace(/[^\w-]/g, '')}`;
-const { config, match, matchState, sourceMatch, round, phase, event, usesSampleDataset, loading, error, ready } = useFeatureMatchOverlayModeData();
+const { config, match, matchState, sourceMatch, round, phase, event, usesSampleDataset, loading, error, ready } = useFeatureMatchOverlayModeData(context);
 // Real sideboard card data for the Deck List Graphic Items (#491), fetched
 // client-side while the composition authors one. A sample-dataset preview has
 // no Slot and so no player ids, which is what keeps it from fetching.
-const { sideboards } = useFeatureMatchOverlaySideboardData(config, match);
+const { sideboards } = useFeatureMatchOverlaySideboardData(context, config, match);
 
 /**
  * The Theme this overlay renders under, with its Screen's own overrides: its

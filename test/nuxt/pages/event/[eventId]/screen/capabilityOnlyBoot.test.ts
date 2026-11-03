@@ -112,12 +112,13 @@ vi.mock('~/composables/core/useRealtime', async () => {
 vi.mock('~/components/Screen/Modes/FeatureMatchOverlay/Display.vue', async () => {
 	const { defineComponent, h } = await import('vue');
 	const { useFeatureMatchOverlayModeData } = await import('~/composables/screen/useFeatureMatchOverlayModeData');
+	const { useScreenContext } = await import('~/composables/screen/useScreenContext');
 	return {
 		// `defineAsyncComponent` takes `default` only from a module it recognises as one.
 		__esModule: true,
 		default: defineComponent({
 			setup() {
-				const { matchState, round } = useFeatureMatchOverlayModeData();
+				const { matchState, round } = useFeatureMatchOverlayModeData(useScreenContext());
 				return () => h('div', `Life ${matchState.value?.player1.lifeTotal ?? '-'} · ${round.value?.name ?? '-'}`);
 			},
 		}),

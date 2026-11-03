@@ -15,6 +15,8 @@ const earlierMatches = ref<any[]>([]);
 
 // A canned record, not a copy of the real formatting, which the composable's
 // own test covers: the component only places what it is handed.
+// The mode's data is faked, so nothing reads the Screen context it is handed.
+mockNuxtImport('useScreenContext', () => () => ({}));
 mockNuxtImport('useHeadToHeadModeData', () => () => ({
 	config: computed(() => config.value),
 	error: computed(() => error.value),

@@ -6,6 +6,7 @@ import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deriveTopCutBracket } from '~~/shared/modules/top-cut-bracket';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
 const defaultConfig = {
 	phaseId: undefined as number | undefined,
@@ -26,11 +27,10 @@ const { deliver } = realtime;
 
 mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = screenContextOf({
 	screen: ref({ id: 1, name: 'Test' }),
 	eventId: mockEventId,
-	interactive: ref(false),
-}));
+});
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
 const phase = {
@@ -80,7 +80,7 @@ const scopes: EffectScope[] = [];
 
 function makeTopCutModeData() {
 	const scope = effectScope();
-	const result = scope.run(() => useTopCutModeData())!;
+	const result = scope.run(() => useTopCutModeData(screenContext))!;
 	scopes.push(scope);
 	return result;
 }

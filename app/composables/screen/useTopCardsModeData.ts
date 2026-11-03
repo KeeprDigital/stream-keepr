@@ -1,4 +1,5 @@
 import type { CardBreakdownEntry, CardBreakdownResponse } from '~~/shared/types/metagame';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
 import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
@@ -11,10 +12,10 @@ export interface RankedTopCard {
 	rank: number;
 }
 
-export function useTopCardsModeData() {
-	const { eventId } = useScreenContext();
-	const config = useScreenModeConfig('top-cards');
-	const outputReads = useScreenOutputReads();
+export function useTopCardsModeData(context: ScreenContext) {
+	const { eventId } = context;
+	const config = useScreenModeConfig(context, 'top-cards');
+	const outputReads = useScreenOutputReads(context);
 
 	// The server derives the breakdown from the saved configuration (#604), so
 	// the read changes with the configuration fields it depends on.
@@ -58,7 +59,7 @@ export function useTopCardsModeData() {
 		setPage,
 		nextPage,
 		prevPage,
-	} = usePaginatedScreenMode({ mode: 'top-cards', config, rows: rankedCards });
+	} = usePaginatedScreenMode(context, { mode: 'top-cards', config, rows: rankedCards });
 	/** The cards a full page holds, which every page lays out as, so a short last page keeps its size. */
 	const pageCapacity = computed(() => Math.max(1, Math.min(pageSize.value, entries.value.length)));
 
@@ -112,6 +113,8 @@ export function useTopCardsModeData() {
 	return {
 		config,
 		loading,
+		/** Whether its rows are a read's answer, or it selects nothing: false only while its first read is in flight. */
+		answered: freshness.answered,
 		error,
 		/** Rendering Readiness: its first read has answered or failed, and its page has loaded. */
 		ready: computed(() => freshness.answered.value && !staging.value),

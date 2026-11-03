@@ -3,8 +3,9 @@ import type { BackgroundLayer } from '~~/shared/types/screenConfig';
 import { DEFAULT_THEME_TOKENS } from '~~/shared/modules/theme';
 import { screenBackgroundLayers, useScreenModeReady } from '~/modules/screen-mode';
 
-const config = useScreenModeConfig('background');
-const { screen, themeTokens } = useScreenContext();
+const context = useScreenContext();
+const config = useScreenModeConfig(context, 'background');
+const { screen, themeTokens } = context;
 
 /** The Screen's own stack, else its Theme's background, overridden on this Screen or not. */
 const layers = computed<BackgroundLayer[]>(() => screenBackgroundLayers(

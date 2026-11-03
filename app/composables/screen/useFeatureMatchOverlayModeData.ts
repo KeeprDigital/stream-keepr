@@ -1,4 +1,5 @@
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { Match, Phase, Round } from '~/types';
 import { isFeatureMatchOverlayPreviewConfigMessage } from '~/modules/feature-match-overlay/previewMessages';
 
@@ -9,9 +10,9 @@ interface OverlaySlotContext {
 	phase: Phase | undefined;
 }
 
-export function useFeatureMatchOverlayModeData() {
-	const { isPreview } = useScreenContext();
-	const storedConfig = useScreenModeConfig('feature-match-overlay');
+export function useFeatureMatchOverlayModeData(context: ScreenContext) {
+	const { isPreview } = context;
+	const storedConfig = useScreenModeConfig(context, 'feature-match-overlay');
 	const previewConfigOverride = ref<FeatureMatchOverlayModeConfig | null>(null);
 	/**
 	 * An embedded editor preview renders the working configuration the editor
@@ -33,7 +34,7 @@ export function useFeatureMatchOverlayModeData() {
 	 * Session, which follows through the Live State Follower (#592); the Match,
 	 * Round and Phase are held here, and re-read when a message touches them.
 	 */
-	const slotData = useScreenFeatureMatchSlot<OverlaySlotContext>({
+	const slotData = useScreenFeatureMatchSlot<OverlaySlotContext>(context, {
 		slotId: () => config.value.featureMatchId,
 		keep: read => ({ sourceMatch: read.match, round: read.round ?? undefined, phase: read.phase ?? undefined }),
 		initialData: { sourceMatch: null, round: undefined, phase: undefined },

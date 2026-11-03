@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { config, screenId, card, error, ready } = useCardModeData();
+const { config, screenId, card, error, ready } = useCardModeData(useScreenContext());
 
 /** The card's width is the Screen's own config, in Event Canvas px (ADR-0054). */
 const cardWidth = computed(() => `${config.value.cardWidth}px`);

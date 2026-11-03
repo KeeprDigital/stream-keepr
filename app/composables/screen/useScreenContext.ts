@@ -61,9 +61,6 @@ export interface ScreenContext {
 
 const SCREEN_CONTEXT_KEY: InjectionKey<ScreenContext> = Symbol('screen-context');
 
-/** The context `runInScreenContext` is setting up under, if any. */
-let contextBeingSetUp: ScreenContext | null = null;
-
 /**
  * Provide screen context to all descendant screen components.
  * Called once by the host page (display page, admin preview, etc.).
@@ -75,10 +72,13 @@ export function provideScreenContext(context: ScreenContext) {
 /**
  * Inject the screen context provided by an ancestor.
  * Throws if called outside of a screen context provider.
+ *
+ * A Screen Mode's data composable never calls this: it takes its context as
+ * an argument, which a rendering injects here and a mode's settings editor
+ * builds for the Screen it edits (`useEditedScreenModeData`), so the editor
+ * reads what its renderings read (#780, #914).
  */
 export function useScreenContext(): ScreenContext {
-	if (contextBeingSetUp)
-		return contextBeingSetUp;
 	const context = inject(SCREEN_CONTEXT_KEY);
 	if (!context) {
 		throw new Error(
@@ -90,30 +90,11 @@ export function useScreenContext(): ScreenContext {
 }
 
 /**
- * Sets up `setup` — a Screen Mode's data composable — against `context` rather
- * than an ancestor's, so a surface that is no rendering of the Screen, such as
- * a mode's settings editor, reads what its renderings read (#780). Every
- * `useScreenContext` call `setup` makes synchronously sees `context`, as a
- * descendant of `provideScreenContext` would; so a composable `setup` reaches
- * resolves its context as it is set up, never later in a watcher or callback.
- */
-export function runInScreenContext<T>(context: ScreenContext, setup: () => T): T {
-	const outer = contextBeingSetUp;
-	contextBeingSetUp = context;
-	try {
-		return setup();
-	}
-	finally {
-		contextBeingSetUp = outer;
-	}
-}
-
-/**
  * Get the resolved mode config for a given screen mode.
  * Merges stored config with defaults so consumers always get a complete config object.
  */
-export function useScreenModeConfig<M extends ScreenMode>(mode: M): ComputedRef<ModeConfigTypeMap[M]> {
-	const { screen } = useScreenContext();
+export function useScreenModeConfig<M extends ScreenMode>(context: ScreenContext, mode: M): ComputedRef<ModeConfigTypeMap[M]> {
+	const { screen } = context;
 
 	return computed<ModeConfigTypeMap[M]>(() => resolveScreenModeConfig(screen.value?.modeConfigs, mode));
 }

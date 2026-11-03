@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '~~/test/helpers/deferred';
 import { createMockEvent, createMockPlayer, createMockRound } from '~~/test/helpers/fixtures';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
 const defaultConfig = {
 	viewMode: 'all' as string,
@@ -101,11 +102,11 @@ mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = screenContextOf({
 	screen: ref({ id: 1, name: 'Test' }),
 	eventId: mockEventId,
 	interactive: mockInteractive,
-}));
+});
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 // Server time is the Page Rotation's clock.
 mockNuxtImport('useServerTime', () => () => ({
@@ -138,7 +139,7 @@ const scopes: EffectScope[] = [];
 async function mountStandings() {
 	const scope = effectScope();
 	scopes.push(scope);
-	const result = scope.run(() => useStandingsModeData())!;
+	const result = scope.run(() => useStandingsModeData(screenContext))!;
 	await flushPromises();
 	return result;
 }
