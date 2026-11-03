@@ -720,7 +720,7 @@ describe('capability-only Screen Output reads', () => {
 				},
 			]);
 
-			// A set size larger than the first Round implies sizes the bracket (#906).
+			// A set size larger than the first Round implies sizes the bracket.
 			await topCut.configure({ bracketSizeOverride: 8 });
 			const sized = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
 			expect(sized.data.bracket.size).toBe(8);

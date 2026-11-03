@@ -50,6 +50,7 @@ const sizeOptions = [
 		<ScreenSettingsCard title="Data">
 			<UFormField
 				label="Phase"
+				name="phaseId"
 				description="The bracket shows this Phase's Rounds in order, its first Round placed by each Player's Seed."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -63,6 +64,7 @@ const sizeOptions = [
 
 			<UFormField
 				label="Bracket size"
+				name="bracketSizeOverride"
 				description="Set it to show byes the first Round leaves out before the next Round is paired; the best Seeds take them. A size smaller than the first Round needs is ignored."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>

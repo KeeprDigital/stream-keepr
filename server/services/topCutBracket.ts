@@ -111,7 +111,7 @@ export async function findPhaseBracket(
 			shown.deck = of(decks);
 		return shown;
 	}
-	const side = (seated: ScreenOutputMatchSide | null) => seated && entrant(seated);
+	const seatedEntrant = (side: ScreenOutputMatchSide | null) => side && entrant(side);
 
 	const bracketRounds: BracketRoundInput[] = rounds.map(round => ({
 		roundId: round.id,
@@ -119,8 +119,8 @@ export async function findPhaseBracket(
 		matches: (matchesByRound.get(round.id) ?? []).map(match => ({
 			matchId: match.matchId,
 			tableNumber: match.tableNumber,
-			player1: side(match.player1),
-			player2: side(match.player2),
+			player1: seatedEntrant(match.player1),
+			player2: seatedEntrant(match.player2),
 			isBye: match.isBye,
 			hasResult: match.hasResult,
 			player1GameWins: match.player1GameWins,

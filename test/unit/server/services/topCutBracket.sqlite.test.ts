@@ -282,7 +282,7 @@ describe('findPhaseBracket', () => {
 	it.each([
 		['hidden', false],
 		['shown', true],
-	])('places the first Round by Seed while seeds are %s, the best Seeds on the byes of a set size', async (_, showSeeds) => {
+	])('places the first Round by Seed while Seeds are %s, the best Seeds on the byes of a set size', async (_, showSeeds) => {
 		const result = await findPhaseBracket(eventId, topSixId, { showSeeds, bracketSizeOverride: 8 });
 
 		expect(result.bracket.size).toBe(8);
@@ -300,7 +300,7 @@ describe('findPhaseBracket', () => {
 		]);
 	});
 
-	it('names a bye\'s Player\'s seed and Archetype as it does a seated Player\'s', async () => {
+	it('names a bye\'s Player\'s Seed and Archetype as it does a seated Player\'s', async () => {
 		const result = await findPhaseBracket(eventId, topSixId, { showSeeds: true, showArchetypes: true, bracketSizeOverride: 8 });
 
 		expect(result.bracket.columns[0]!.positions[0]!.entrants[0]).toEqual({

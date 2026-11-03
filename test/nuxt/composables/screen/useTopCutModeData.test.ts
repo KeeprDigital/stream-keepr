@@ -311,7 +311,7 @@ describe('useTopCutModeData', () => {
 			expect(mockFetch).not.toHaveBeenCalled();
 		});
 
-		// Seeds place the bracket whether or not they show (#906). They come from Round
+		// Seeds place the bracket whether or not they show. They come from Round
 		// Standings before the Phase, which a sync of any Round may store, and any
 		// Round or Phase edit may reorder.
 		const seedChanges = [
