@@ -3,6 +3,10 @@ import type { ScreenOutputAssetCapabilityManager } from '~~/server/modules/scree
 import type { CreateScreenInput, UpdateScreenInput } from '~~/server/schemas/api/screen';
 import type { ScreenResponse } from '~~/shared/api';
 import type { ScreenMode } from '~~/shared/types/enums';
+import type { ModeConfigsMap } from '~~/shared/types/screenConfig';
+import { eq } from 'drizzle-orm';
+import { db } from '~~/server/db';
+import { events } from '~~/server/db/schema';
 import { broadcastGraphicsLiveSessionModule } from '~~/server/modules/broadcast-graphics-live-session';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import {
@@ -12,6 +16,7 @@ import {
 import { admitScreenGraphicsEditWrite } from '~~/server/modules/graphics-authoring-lease/screenEditWorkspace';
 import { parseModeConfigPatchResult } from '~~/server/schemas/api/screen';
 import { cardService } from '~~/server/services/card';
+import { featureMatchService } from '~~/server/services/featureMatch';
 import { screenService } from '~~/server/services/screen';
 import { canonicalJson } from '~~/server/utils/canonicalJson';
 import { assertGraphicsTemplateReferencesSelectable } from '~~/server/utils/graphicsTemplateReferences';
@@ -177,6 +182,42 @@ function genericWriteEditsWorkspace(
 		&& !sameJson(existing.modeConfigs?.['broadcast-graphics'], data.modeConfigs?.['broadcast-graphics']);
 }
 
+/**
+ * The `modeConfigs` a Screen entering Deck mode on a One Piece Card Game
+ * Event is written with, its Deck Source on a Feature Match Slot side; or
+ * `undefined` where it needs no default.
+ *
+ * An OP Deck Screen shows a Slot side, never a Player (ADR-0057), so one with
+ * no Slot side chosen (no Deck Source, or the Player source's empty default)
+ * starts on the Event's first Slot, left side, or on no Slot while the Event
+ * has none. A Magic Event's keeps its Player source.
+ */
+async function withOpDeckSourceDefault(
+	eventId: number,
+	modeConfigs: ModeConfigsMap | null | undefined,
+): Promise<ModeConfigsMap | undefined> {
+	const deckSource = modeConfigs?.deck?.deckSource;
+	if (deckSource && !(deckSource.type === 'player' && deckSource.playerId === null))
+		return undefined;
+	const event = await db.query.events.findFirst({
+		where: eq(events.id, eventId),
+		columns: { game: true },
+	});
+	if (event?.game !== 'op')
+		return undefined;
+	return {
+		...modeConfigs,
+		deck: {
+			...modeConfigs?.deck,
+			deckSource: {
+				type: 'featureMatchSlot',
+				slotId: await featureMatchService().findFirstIdByEventId(eventId),
+				side: 'player1',
+			},
+		},
+	};
+}
+
 export function screenWriteModule() {
 	const publication = eventDataPublicationModule();
 	const screens = screenService();
@@ -196,10 +237,15 @@ export function screenWriteModule() {
 		// Constructed here rather than by the route, so a create refused for its
 		// slug or its Graphic Asset References never reaches for a signing key it
 		// was not going to use.
+		const withDeckSource = input.currentMode === 'deck'
+			? await withOpDeckSourceDefault(eventId, input.modeConfigs)
+			: undefined;
 		const preparedCapability = await screenOutputAssetCapabilities().prepare();
 		const newScreen = await screens.create(
 			eventId,
-			input,
+			withDeckSource
+				? { ...input, modeConfigs: withDeckSource }
+				: input,
 			preparedCapability.persisted,
 		);
 
@@ -253,10 +299,23 @@ export function screenWriteModule() {
 					.endEpochOnLeavingBroadcastGraphics(screenId, eventId, originConnectionId)
 			: undefined;
 
+		// Only a Screen entering Deck mode takes the default, so no other save
+		// moves a Deck Screen already on air.
+		const withDeckSource = data.currentMode === 'deck' && existingScreen.currentMode !== 'deck'
+			? await withOpDeckSourceDefault(
+					eventId,
+					data.modeConfigs !== undefined
+						? data.modeConfigs
+						: existingScreen.modeConfigs,
+				)
+			: undefined;
+
 		const updatedScreen = await screens.update(
 			screenId,
 			eventId,
-			data,
+			withDeckSource
+				? { ...data, modeConfigs: withDeckSource }
+				: data,
 			stateVersion,
 			epochEnd?.statements,
 			leaseFence,

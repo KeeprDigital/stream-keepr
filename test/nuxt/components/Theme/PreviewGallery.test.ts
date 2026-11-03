@@ -1,7 +1,8 @@
 import type { VueWrapper } from '@vue/test-utils';
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
-import { THEME_PREVIEW_SCREEN_MODES } from '~~/shared/screenModes';
+import { isOfferedToCardGame } from '~~/shared/config/games';
+import { SCREEN_MODES, THEME_PREVIEW_SCREEN_MODES } from '~~/shared/screenModes';
 import { settleUntil } from '~~/test/helpers/settle';
 import { loadDrawnImages } from '~~/test/nuxt/helpers/drawnImages';
 import PreviewGallery from '~/components/Theme/PreviewGallery.vue';
@@ -42,10 +43,21 @@ function spotlightCard(gallery: VueWrapper) {
 }
 
 describe('the Theme preview gallery', () => {
-	it('shows every Screen Mode a Theme preview shows, in Screen Mode order', () => {
-		const shown = mountGallery().findAll('[data-preview-mode]').map(tile => tile.attributes('data-preview-mode'));
+	// A Theme serves Events of either Card Game, so its preview shows the one picked, Magic first.
+	it.each([
+		{ game: 'mtg', pick: false },
+		{ game: 'mtg', pick: true },
+		{ game: 'op', pick: true },
+	] as const)('shows every $game Screen Mode a Theme preview shows, in Screen Mode order (picked: $pick)', async ({ game, pick }) => {
+		const gallery = mountGallery();
+		if (pick)
+			await gallery.get(`[data-testid="tab-${game}"]`).trigger('click');
 
-		expect(shown).toEqual(THEME_PREVIEW_SCREEN_MODES);
+		const tiles = gallery.findAll('[data-preview-mode]');
+
+		expect(tiles.map(tile => tile.attributes('data-preview-mode')))
+			.toEqual(THEME_PREVIEW_SCREEN_MODES.filter(mode => isOfferedToCardGame(SCREEN_MODES[mode].cardGames, game)));
+		expect(new Set(tiles.map(tile => tile.attributes('data-preview-game')))).toEqual(new Set([game]));
 	});
 
 	it.each([
