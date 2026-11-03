@@ -11,7 +11,6 @@ import { useConsumedEventData } from '~/modules/event-data/resync';
 import {
 	CANVAS_SELECTION,
 	compositorSelectionTarget,
-	editorSelectionFrame,
 	editorSelectionLabel,
 	fromCompositorSelectionTarget,
 	fromHostSelectionTarget,
@@ -21,6 +20,7 @@ import { isTypingTarget } from '~/utils/typingTarget';
 import FeatureMatchOverlayCompositorInspector from './CompositorInspector.vue';
 import FeatureMatchOverlayLayerInspector from './LayerInspector.vue';
 import FeatureMatchOverlayLayerList from './LayerList.vue';
+import FeatureMatchOverlayMultiLayerInspector from './MultiLayerInspector.vue';
 import FeatureMatchOverlayPreviewOutputAside from './PreviewOutputAside.vue';
 
 const props = defineProps<{ screen: Screen; eventId: number }>();
@@ -103,7 +103,7 @@ const aspectMismatch = computed(() => {
 });
 
 /* ────────────────────────────────────────────────
- * The editor: one selection, one history
+ * The editor: one selection of layers, one history
  * ──────────────────────────────────────────────── */
 
 const editor = useFeatureMatchLayoutEditor({
@@ -113,19 +113,29 @@ const editor = useFeatureMatchLayoutEditor({
 	canvasHeight,
 	writable,
 });
-const { selection } = editor;
+const { selection, layers } = editor;
+/** Several layers selected: the panel edits what they share, and the preview marks none alone (#740). */
+const severalSelected = computed(() => layers.value.length > 1);
 
 /** The selection in the host-owned vocabulary the Frame and Source Item editors speak. */
 const selectedTarget = computed(() => hostSelectionTarget(selection.value));
 /** The selection in the shared compositor's vocabulary its inspector and guides speak. */
 const compositorTarget = computed(() => compositorSelectionTarget(selection.value));
 
-function selectHostTarget(target: FeatureMatchOverlaySelectionTarget) {
-	editor.select(fromHostSelectionTarget(target));
+/** A click in the preview selects that layer alone; a ⌘- or Ctrl-click adds it or takes it out (#740). */
+function selectInPreview(target: ReturnType<typeof fromHostSelectionTarget>, toggle: boolean) {
+	if (toggle && target.type !== 'canvas')
+		editor.toggleSelect(target);
+	else
+		editor.select(target);
 }
 
-function selectCompositorTarget(target: GraphicsSelectionTarget) {
-	editor.select(fromCompositorSelectionTarget(target));
+function selectHostTarget(target: FeatureMatchOverlaySelectionTarget, toggle = false) {
+	selectInPreview(fromHostSelectionTarget(target), toggle);
+}
+
+function selectCompositorTarget(target: GraphicsSelectionTarget, toggle = false) {
+	selectInPreview(fromCompositorSelectionTarget(target), toggle);
 }
 
 /**
@@ -133,12 +143,14 @@ function selectCompositorTarget(target: GraphicsSelectionTarget) {
  * session may not move anything, so neither handles nor snap guides show.
  */
 const selectionFrame = computed(() => writable.value
-	? editorSelectionFrame(config.value.layout, selection.value, eventCanvas.value)
+	? editor.selectionFrame.value
 	: null);
-const selectionLabel = computed(() => editorSelectionLabel(config.value.layout, selection.value));
+const selectionLabel = computed(() => severalSelected.value
+	? `${layers.value.length} layers`
+	: editorSelectionLabel(config.value.layout, selection.value));
 
 function manipulate(rect: GraphicRect, gesture: number) {
-	editor.setRect(selection.value, rect, { coalesce: `canvas:${gesture}` });
+	editor.setSelectionRect(rect, { coalesce: `canvas:${gesture}` });
 }
 
 function rotate(rotation: number, gesture: number) {
@@ -257,8 +269,16 @@ const SHORTCUTS = [
 		label: 'Rename the focused layer (or double-click it)',
 	},
 	{
+		keys: ['⌘ click'],
+		label: 'Add or remove a layer from the selection',
+	},
+	{
+		keys: ['⇧ click'],
+		label: 'Select a run of layers in the list',
+	},
+	{
 		keys: ['Esc'],
-		label: 'Select canvas',
+		label: 'Select one layer, then the canvas',
 	},
 	{
 		keys: ['⇧ drag'],
@@ -333,13 +353,13 @@ function handleKeydown(event: KeyboardEvent) {
 	else if (!mod && (event.key === 'Delete' || event.key === 'Backspace')) {
 		editor.remove();
 	}
-	else if (!mod && event.key in NUDGE && current.type !== 'canvas') {
+	else if (!mod && event.key in NUDGE && layers.value.length > 0) {
 		const step = event.shiftKey ? 10 : 1;
 		const direction = NUDGE[event.key]!;
 		editor.nudge({ x: direction.x * step, y: direction.y * step });
 	}
-	else if (event.key === 'Escape' && current.type !== 'canvas') {
-		editor.select(CANVAS_SELECTION);
+	else if (event.key === 'Escape' && layers.value.length > 0) {
+		editor.collapseSelection();
 	}
 	else {
 		handled = false;
@@ -572,8 +592,15 @@ useEventListener(import.meta.client
 			</section>
 
 			<section class="min-w-0 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
+				<FeatureMatchOverlayMultiLayerInspector
+					v-if="severalSelected"
+					:layout="config.layout"
+					:layers="layers"
+					:writable="writable"
+					@update="editor.setLayersGeometry"
+				/>
 				<FeatureMatchOverlayCompositorInspector
-					v-if="selection.type === 'item'"
+					v-else-if="selection.type === 'item'"
 					:layout="config.layout"
 					:selected-target="compositorTarget"
 					:canvas-width="canvasWidth"

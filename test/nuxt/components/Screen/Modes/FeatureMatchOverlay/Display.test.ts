@@ -515,6 +515,36 @@ describe('featureMatchOverlayDisplay', () => {
 			postMessage.mockRestore();
 		});
 
+		// #740: the editor decides what a toggle leaves selected, and pushes the marks back down.
+		it.each([
+			[
+				'a ⌘-click on a Source Item',
+				'[aria-label="Select Main Match Source"]',
+				{ metaKey: true },
+				'feature-match-overlay:select',
+				{ type: 'source', itemId: 'main-source' },
+			],
+			[
+				'a Ctrl-click on a Graphic Item',
+				'[data-item-guide="shared-clock"]',
+				{ ctrlKey: true },
+				'graphics-compositor:select',
+				{ type: 'item', graphicId: FEATURE_MATCH_LAYOUT_COMPOSITION_ID, itemId: 'shared-clock' },
+			],
+		])('reports %s as a toggle, marking nothing itself', async (_, guide, modifiers, type, target) => {
+			mockConfig.value = guidedConfig();
+			mockPreviewGuides.value = true;
+			mockIsPreview.value = true;
+			const postMessage = vi.spyOn(window.parent, 'postMessage');
+
+			const wrapper = await mountComponent();
+			await wrapper.get(guide).trigger('click', modifiers);
+
+			expect(postMessage).toHaveBeenCalledWith({ type, target, toggle: true }, window.location.origin);
+			expect(wrapper.findAll('.is-selected')).toHaveLength(0);
+			postMessage.mockRestore();
+		});
+
 		it('marks the shared Graphic Item the editor selected', async () => {
 			mockConfig.value = guidedConfig();
 			mockPreviewGuides.value = true;

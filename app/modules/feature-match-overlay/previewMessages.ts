@@ -43,7 +43,11 @@ export const FEATURE_MATCH_OVERLAY_PREVIEW_CONFIG_MESSAGE = 'feature-match-overl
  */
 export const FEATURE_MATCH_OVERLAY_PREVIEW_SELECTED_TARGET_MESSAGE = 'feature-match-overlay:selected-target';
 
-/** A host-owned selection the frame reports back, made by clicking a guide. */
+/**
+ * A host-owned selection the frame reports back, made by clicking a guide. A
+ * ⌘- or Ctrl-click carries `toggle: true`, asking the editor to add the layer to
+ * its selection or take it out rather than select it alone (#740).
+ */
 export const FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE = 'feature-match-overlay:select';
 
 /**
@@ -82,11 +86,11 @@ export function isFeatureMatchOverlayPreviewSelectedTargetMessage(
 		&& isFeatureMatchOverlaySelectionTarget(data.target);
 }
 
-/** An embedded preview reporting the host-owned selection an author just made. */
+/** An embedded preview reporting the host-owned selection an author just made; `toggle` is read as `=== true`. */
 export function isFeatureMatchOverlayPreviewSelectMessage(
 	message: MessageEnvelope,
 	expected: ExpectedSender,
-): message is MessageEnvelope & { data: { type: string; target: FeatureMatchOverlaySelectionTarget } } {
+): message is MessageEnvelope & { data: { type: string; target: FeatureMatchOverlaySelectionTarget; toggle?: unknown } } {
 	if (!isFromExpectedSender(message, expected))
 		return false;
 
