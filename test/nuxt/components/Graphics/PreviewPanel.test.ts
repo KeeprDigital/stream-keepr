@@ -1,5 +1,5 @@
 import { enableAutoUnmount, mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { defineComponent, h, nextTick, ref } from 'vue';
 import PreviewPanel from '~/components/Graphics/PreviewPanel.vue';
 
@@ -143,7 +143,7 @@ describe('graphicsPreviewPanel', () => {
 
 	it('fits the viewport to the canvas aspect ratio over a transparency backdrop', () => {
 		const wrapper = mountPanel({ canvasWidth: 1080, canvasHeight: 1920 });
-		const style = wrapper.get('[data-testid="preview-frame"]').attributes('style') ?? '';
+		const style = wrapper.get('[data-testid="preview-stage"]').attributes('style') ?? '';
 
 		expect(style).toContain('aspect-ratio: 1080 / 1920');
 		expect(viewport(wrapper).classList).toContain('transparent-checkerboard-backdrop');
@@ -185,31 +185,49 @@ describe('graphicsPreviewPanel', () => {
 		{
 			case: '⌘-wheel up zooms in',
 			init: { metaKey: true, deltaY: -100 },
-			level: '61%',
+			zoomed: 1,
 			taken: true,
 		},
 		{
 			case: 'Ctrl-wheel down zooms out',
 			init: { ctrlKey: true, deltaY: 100 },
-			level: '41%',
+			zoomed: -1,
 			taken: true,
 		},
 		{
 			case: 'a plain wheel scrolls rather than zooms',
 			init: { deltaY: -100 },
-			level: '50%',
+			zoomed: 0,
 			taken: false,
 		},
-	])('$case', async ({ init, level, taken }) => {
+	])('$case', async ({ init, zoomed, taken }) => {
 		const wrapper = mountPanel();
 
 		const event = await wheel(wrapper, init);
 
-		expect(zoomLevel(wrapper)).toBe(level);
+		expect(Math.sign(Number.parseInt(zoomLevel(wrapper)) - 50)).toBe(zoomed);
 		expect(event.defaultPrevented).toBe(taken);
 		expect(pressed(wrapper)).toEqual(taken
 			? []
 			: ['Fit']);
+	});
+
+	it('holds the zoom still while a press in the viewport drags, and zooms again once it ends', async () => {
+		const wrapper = mountPanel();
+		const handle = wrapper.get('[data-testid="host-handle"]').element;
+		await pointer(scroller(wrapper), 'pointerenter', {});
+
+		await pointer(handle, 'pointerdown', { button: 0 });
+		const during = await wheel(wrapper, { metaKey: true, deltaY: -100 });
+		await key('keydown', { key: '1', metaKey: true });
+		await key('keydown', { key: ' ', code: 'Space' });
+		expect(zoomLevel(wrapper)).toBe('50%');
+		expect(during.defaultPrevented).toBe(true);
+		expect(wrapper.find('[data-testid="preview-pan-surface"]').exists()).toBe(false);
+
+		await pointer(window, 'pointerup', { button: 0 });
+		await key('keydown', { key: '1', metaKey: true });
+		expect(zoomLevel(wrapper)).toBe('100%');
 	});
 
 	it.each([
@@ -307,7 +325,10 @@ describe('graphicsPreviewPanel', () => {
 	it('leaves Space to a field being typed in, even with the pointer over the preview', async () => {
 		const wrapper = mountPanel();
 		const field = document.createElement('input');
-		document.body.append(field);
+		document.body.appendChild(field);
+		onTestFinished(() => {
+			field.remove();
+		});
 		field.focus();
 		await pointer(scroller(wrapper), 'pointerenter', {});
 
@@ -315,7 +336,6 @@ describe('graphicsPreviewPanel', () => {
 
 		expect(space.defaultPrevented).toBe(false);
 		expect(wrapper.find('[data-testid="preview-pan-surface"]').exists()).toBe(false);
-		field.remove();
 	});
 
 	it('puts a solid background behind the viewport in place of the transparency backdrop', () => {

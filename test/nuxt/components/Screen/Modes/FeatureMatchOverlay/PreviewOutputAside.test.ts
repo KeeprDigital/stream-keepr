@@ -281,6 +281,6 @@ describe('feature Match Overlay preview aside — its preview frame', () => {
 	it('fits the preview to the canvas aspect ratio', () => {
 		const wrapper = mountAside({ canvasWidth: 1080, canvasHeight: 1920 });
 
-		expect(wrapper.get('[data-testid="preview-frame"]').attributes('style')).toContain('aspect-ratio: 1080 / 1920');
+		expect(wrapper.get('[data-testid="preview-stage"]').attributes('style')).toContain('aspect-ratio: 1080 / 1920');
 	});
 });

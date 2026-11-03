@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
-import type { PreviewZoom } from '~/modules/graphics/previewControls';
+import type { PreviewPoint, PreviewZoom } from '~/modules/graphics/previewControls';
 import { useElementSize, useEventListener } from '@vueuse/core';
 import { SCREEN_OUTPUT_OPTIONS } from '~~/shared/screenModeDefinitions';
 import {
@@ -10,6 +10,7 @@ import {
 	previewZoomShortcut,
 	wheelPreviewZoom,
 } from '~/modules/graphics/previewControls';
+import { isTypingTarget } from '~/utils/typingTarget';
 
 /**
  * The editor preview shared by the Broadcast Graphics and Feature Match Overlay
@@ -21,19 +22,21 @@ import {
  * and keeps its own state in sync. The `controls` slot adds host controls to the
  * toolbar; the default slot sits between the toolbar and the viewport.
  *
- * ## Zoom and pan (#745)
+ * ## Zoom and pan
  *
- * The preview keeps the footprint Fit gives it; zooming resizes the canvas inside
- * it, and the canvas scrolls. ⌘/Ctrl-wheel (or a pinch) zooms around the pointer,
- * Space-drag or a middle-button drag pans, ⌘0 fits and ⌘1 is 100% — the last two
- * only while the pointer or focus is in the preview, so the browser keeps them
- * everywhere else (E21). The range is 10–800% (E20). Zoom is view state: it never
- * writes, needs no Graphics Authoring Lease, and every visit starts at Fit (E22).
+ * Three boxes nest: the stage keeps the footprint Fit gives the preview at every
+ * zoom, the scroller inside it scrolls, and the viewport is the canvas drawn at
+ * the current scale. ⌘/Ctrl-wheel (or a pinch) zooms around the pointer;
+ * Space-drag or a middle-button drag pans; ⌘0 fits and ⌘1 is 100%, but only while
+ * the pointer or focus is in the preview, so the browser keeps them everywhere
+ * else. The range is 10–800%. Zoom is view state: it never writes, needs no
+ * Graphics Authoring Lease, and every visit starts at Fit.
  *
- * Whatever the host draws over its frame in the viewport (the canvas manipulation
- * overlay) is sized with the canvas, so it follows the zoom. The frame is a
- * same-origin document whose wheel, key and pointer events never reach this one,
- * so the panel listens in it too.
+ * Whatever the host draws over its iframe in the viewport (the canvas
+ * manipulation overlay) is sized with the canvas, so it follows the zoom; the
+ * zoom holds still while a press in the viewport is dragging it. The iframe's
+ * same-origin document keeps its wheel, key and pointer events to itself, so the
+ * panel listens in it too.
  */
 const props = withDefaults(defineProps<{
 	canvasWidth: number;
@@ -52,23 +55,25 @@ const output = defineModel<ScreenOutput>('output', { default: 'overlay' });
 const itemGuides = defineModel<boolean>('itemGuides', { default: true });
 const safeAreaGuides = defineModel<boolean>('safeAreaGuides', { default: false });
 
-const frame = ref<HTMLElement | null>(null);
+const stage = ref<HTMLElement | null>(null);
 const scroller = ref<HTMLElement | null>(null);
 const viewport = ref<HTMLElement | null>(null);
 
 const zoom = ref<PreviewZoom>('fit');
-const { width: frameWidth } = useElementSize(frame);
+const { width: stageWidth } = useElementSize(stage);
 const scale = computed(() => {
 	if (zoom.value !== 'fit')
 		return zoom.value;
 	return props.canvasWidth > 0
-		? frameWidth.value / props.canvasWidth
+		? stageWidth.value / props.canvasWidth
 		: 0;
 });
-const zoomLevel = computed(() => `${Math.round(scale.value * 100)}%`);
+/** Blank only until Fit has been measured. */
+const zoomLevel = computed(() => scale.value > 0
+	? `${Math.round(scale.value * 100)}%`
+	: '');
 
-/** The box Fit draws the canvas in, which the preview keeps at every zoom. */
-const frameStyle = computed(() => ({
+const stageStyle = computed(() => ({
 	aspectRatio: `${props.canvasWidth} / ${props.canvasHeight}`,
 	width: props.fitHeight
 		? `calc(${props.fitHeight} * ${props.canvasWidth / props.canvasHeight})`
@@ -89,10 +94,17 @@ const viewportStyle = computed(() => [
 ]);
 
 /**
+ * A primary press in the viewport, such as a canvas manipulation drag. Its
+ * deltas are measured at the scale it started at, so nothing rescales or pans
+ * under it.
+ */
+const pressing = ref(false);
+
+/**
  * Zoom to `next`, keeping the canvas point at `at` (in the scroller's visible
  * pixels; its centre when omitted) where it is.
  */
-async function setZoom(next: PreviewZoom, at?: { x: number; y: number }) {
+async function setZoom(next: PreviewZoom, at?: PreviewPoint) {
 	const from = scale.value;
 	zoom.value = next === 'fit'
 		? 'fit'
@@ -114,74 +126,76 @@ async function setZoom(next: PreviewZoom, at?: { x: number; y: number }) {
 	el.scrollTop = scroll.top;
 }
 
-/** How far a frame's own viewport sits from this document's. */
-interface Offset { x: number; y: number }
-const NO_OFFSET: Offset = { x: 0, y: 0 };
+/** Where the iframe's own viewport sits in this document's; none for this document's events. */
+type DocumentOrigin = () => PreviewPoint;
+const HERE: DocumentOrigin = () => ({ x: 0, y: 0 });
 
-function zoomByWheel(event: WheelEvent, offset: Offset = NO_OFFSET) {
+/** A pointer event's position in this document's viewport. */
+function pointOf(event: MouseEvent, origin: DocumentOrigin): PreviewPoint {
+	const { x, y } = origin();
+	return { x: event.clientX + x, y: event.clientY + y };
+}
+
+function zoomByWheel(event: WheelEvent, origin: DocumentOrigin = HERE) {
 	if (!(event.ctrlKey || event.metaKey) || !scroller.value)
 		return;
 	// A pinch arrives as a Ctrl-wheel too; either would otherwise zoom the page.
 	event.preventDefault();
+	if (pressing.value)
+		return;
 	const rect = scroller.value.getBoundingClientRect();
+	const point = pointOf(event, origin);
 	void setZoom(wheelPreviewZoom(scale.value, event), {
-		x: event.clientX + offset.x - rect.left,
-		y: event.clientY + offset.y - rect.top,
+		x: point.x - rect.left,
+		y: point.y - rect.top,
 	});
 }
 
 const pointerInside = ref(false);
 
 function focusInside() {
-	return import.meta.client && !!frame.value?.contains(document.activeElement);
-}
-
-/** Whether a key press belongs to something the author is typing into or choosing in. */
-function isTypingTarget(target: EventTarget | null) {
-	const element = target as HTMLElement | null;
-	if (!element || typeof element.closest !== 'function')
-		return false;
-	if (element.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName))
-		return true;
-	return element.closest('[role="dialog"], [role="menu"], [role="listbox"]') !== null;
+	return import.meta.client && !!stage.value?.contains(document.activeElement);
 }
 
 /**
- * Whether Space pressed at `target` is the preview's to take: nothing else has
- * focus, or focus is in the preview, and nothing is being typed into.
+ * Whether Space pressed at `target` arms panning: nothing else has focus, or
+ * focus is in the preview, and nothing is being typed into.
  */
-function spaceIsOurs(target: EventTarget | null, fromFrame: boolean) {
+function spaceArmsPan(target: EventTarget | null, inPreviewDocument: boolean) {
 	if (isTypingTarget(target))
 		return false;
-	if (fromFrame)
+	if (inPreviewDocument)
 		return true;
 	const element = target as Node | null;
 	return !element
 		|| element === document.body
 		|| element === document.documentElement
-		|| !!frame.value?.contains(element);
+		|| !!stage.value?.contains(element);
 }
 
+/** Space is held: the next primary drag anywhere on the stage pans. */
 const panArmed = ref(false);
-const panning = shallowRef<{ x: number; y: number; left: number; top: number } | null>(null);
+const panning = shallowRef<{ from: PreviewPoint; left: number; top: number } | null>(null);
 
 function isSpace(event: KeyboardEvent) {
 	return event.code === 'Space' || event.key === ' ';
 }
 
-function handleKeydown(event: KeyboardEvent, fromFrame = false) {
+function handleKeydown(event: KeyboardEvent, inPreviewDocument = false) {
 	if (event.defaultPrevented)
 		return;
-	const inside = fromFrame || pointerInside.value || focusInside();
+	const inside = inPreviewDocument || pointerInside.value || focusInside();
 	const shortcut = previewZoomShortcut(event);
 	if (shortcut !== null) {
 		if (!inside)
 			return;
 		event.preventDefault();
-		void setZoom(shortcut);
+		if (!pressing.value)
+			void setZoom(shortcut);
 		return;
 	}
-	if (isSpace(event) && !event.metaKey && !event.ctrlKey && !event.altKey && inside && spaceIsOurs(event.target, fromFrame)) {
+	if (isSpace(event) && !event.metaKey && !event.ctrlKey && !event.altKey && inside && !pressing.value
+		&& spaceArmsPan(event.target, inPreviewDocument)) {
 		event.preventDefault();
 		panArmed.value = true;
 	}
@@ -192,46 +206,51 @@ function handleKeyup(event: KeyboardEvent) {
 		panArmed.value = false;
 }
 
-function startPan(x: number, y: number) {
+function startPan(from: PreviewPoint) {
 	const el = scroller.value;
 	if (!el)
 		return;
-	panning.value = {
-		x,
-		y,
-		left: el.scrollLeft,
-		top: el.scrollTop,
-	};
+	panning.value = { from, left: el.scrollLeft, top: el.scrollTop };
 }
 
-function movePan(x: number, y: number) {
+function movePan(event: PointerEvent, origin: DocumentOrigin = HERE) {
 	const pan = panning.value;
 	const el = scroller.value;
 	if (!pan || !el)
 		return;
-	el.scrollLeft = pan.left - (x - pan.x);
-	el.scrollTop = pan.top - (y - pan.y);
+	const point = pointOf(event, origin);
+	el.scrollLeft = pan.left - (point.x - pan.from.x);
+	el.scrollTop = pan.top - (point.y - pan.from.y);
 }
 
-function endPan() {
+function release() {
 	panning.value = null;
+	pressing.value = false;
 }
 
-function startMiddlePan(event: PointerEvent, offset: Offset = NO_OFFSET) {
-	if (event.button !== 1)
-		return;
-	event.preventDefault();
-	startPan(event.clientX + offset.x, event.clientY + offset.y);
+/** A middle press pans from anywhere on the stage. */
+function startMiddlePan(event: PointerEvent, origin: DocumentOrigin = HERE) {
+	if (event.button === 1)
+		startPan(pointOf(event, origin));
 }
 
 function startSurfacePan(event: PointerEvent) {
 	if (event.button !== 0)
 		return;
 	event.preventDefault();
-	startPan(event.clientX, event.clientY);
+	startPan(pointOf(event, HERE));
 }
 
-/** A middle press would otherwise start the browser's autoscroll. */
+function notePress(event: PointerEvent) {
+	if (event.button === 0)
+		pressing.value = true;
+}
+
+/**
+ * A middle press would otherwise start the browser's autoscroll. Cancelled on
+ * `mousedown`, where autoscroll starts; cancelling `pointerdown` instead would
+ * suppress this event rather than the autoscroll.
+ */
 function blockAutoscroll(event: MouseEvent) {
 	if (event.button === 1)
 		event.preventDefault();
@@ -244,73 +263,61 @@ useEventListener(hostWindow, 'keydown', (event: KeyboardEvent) => handleKeydown(
 useEventListener(hostWindow, 'keyup', handleKeyup);
 useEventListener(hostWindow, 'blur', () => {
 	panArmed.value = false;
-	endPan();
+	release();
 });
-useEventListener(hostWindow, 'pointermove', (event: PointerEvent) => movePan(event.clientX, event.clientY));
-useEventListener(hostWindow, 'pointerup', endPan);
-useEventListener(hostWindow, 'pointercancel', endPan);
+useEventListener(hostWindow, 'pointermove', (event: PointerEvent) => movePan(event));
+useEventListener(hostWindow, 'pointerup', release);
+useEventListener(hostWindow, 'pointercancel', release);
 
-let detachFrame: (() => void) | null = null;
+function listen<K extends keyof WindowEventMap>(
+	target: Window,
+	type: K,
+	listener: (event: WindowEventMap[K]) => void,
+	options?: AddEventListenerOptions,
+) {
+	target.addEventListener(type, listener, options);
+	return () => target.removeEventListener(type, listener, options);
+}
 
-/** Listen in the host's preview frame, whose document a navigation replaces. */
-function attachFrame() {
-	detachFrame?.();
-	detachFrame = null;
+let stopListeningInPreview: (() => void) | null = null;
+
+/** Listen in the iframe's document, which every navigation of it replaces. */
+function listenInPreviewDocument() {
+	stopListeningInPreview?.();
+	stopListeningInPreview = null;
 	const iframe = viewport.value?.querySelector('iframe');
-	let frameWindow: Window | null = null;
+	let previewWindow: Window | null = null;
 	try {
-		frameWindow = iframe?.contentWindow ?? null;
-		// A cross-origin frame throws here, and is left alone.
-		void frameWindow?.document;
+		previewWindow = iframe?.contentWindow ?? null;
+		// A cross-origin document throws here, and is left alone.
+		void previewWindow?.document;
 	}
 	catch {
 		return;
 	}
-	if (!iframe || !frameWindow)
+	if (!iframe || !previewWindow)
 		return;
-	const offset = (): Offset => {
+	const origin: DocumentOrigin = () => {
 		const rect = iframe.getBoundingClientRect();
 		return { x: rect.left, y: rect.top };
 	};
-	const listeners: Array<[string, (event: any) => void, AddEventListenerOptions?]> = [
-		[
-			'wheel',
-			(event: WheelEvent) => zoomByWheel(event, offset()),
-			{ passive: false },
-		],
-		[
-			'keydown',
-			(event: KeyboardEvent) => handleKeydown(event, true),
-		],
-		['keyup', handleKeyup],
-		[
-			'pointerdown',
-			(event: PointerEvent) => startMiddlePan(event, offset()),
-		],
-		['mousedown', blockAutoscroll],
-		[
-			'pointermove',
-			(event: PointerEvent) => {
-				const { x, y } = offset();
-				movePan(event.clientX + x, event.clientY + y);
-			},
-		],
-		['pointerup', endPan],
-		['pointercancel', endPan],
+	const stops = [
+		listen(previewWindow, 'wheel', event => zoomByWheel(event, origin), { passive: false }),
+		listen(previewWindow, 'keydown', event => handleKeydown(event, true)),
+		listen(previewWindow, 'keyup', handleKeyup),
+		listen(previewWindow, 'pointerdown', event => startMiddlePan(event, origin)),
+		listen(previewWindow, 'mousedown', blockAutoscroll),
+		listen(previewWindow, 'pointermove', event => movePan(event, origin)),
+		listen(previewWindow, 'pointerup', release),
+		listen(previewWindow, 'pointercancel', release),
 	];
-	const target = frameWindow;
-	for (const [type, listener, options] of listeners)
-		target.addEventListener(type, listener, options);
-	detachFrame = () => {
-		for (const [type, listener, options] of listeners)
-			target.removeEventListener(type, listener, options);
-	};
+	stopListeningInPreview = () => stops.forEach(stop => stop());
 }
 
-onMounted(attachFrame);
+onMounted(listenInPreviewDocument);
 onBeforeUnmount(() => {
-	detachFrame?.();
-	detachFrame = null;
+	stopListeningInPreview?.();
+	stopListeningInPreview = null;
 });
 </script>
 
@@ -380,13 +387,13 @@ onBeforeUnmount(() => {
 		<slot />
 
 		<div
-			ref="frame"
+			ref="stage"
 			class="relative mx-auto"
-			:style="frameStyle"
-			data-testid="preview-frame"
+			:style="stageStyle"
+			data-testid="preview-stage"
 			@pointerenter="pointerInside = true"
 			@pointerleave="pointerInside = false"
-			@pointerdown="startMiddlePan"
+			@pointerdown="startMiddlePan($event)"
 			@mousedown="blockAutoscroll"
 			@wheel="zoomByWheel($event)"
 		>
@@ -401,7 +408,8 @@ onBeforeUnmount(() => {
 					:class="{ 'transparent-checkerboard-backdrop': !background }"
 					:style="viewportStyle"
 					data-testid="preview-viewport"
-					@load.capture="attachFrame"
+					@pointerdown.capture="notePress"
+					@load.capture="listenInPreviewDocument"
 				>
 					<slot name="viewport" />
 				</div>

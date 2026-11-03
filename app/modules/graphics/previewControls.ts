@@ -1,6 +1,6 @@
 /**
- * Zooming and panning an editor preview (#745). View state only: nothing here
- * writes, and a preview starts at Fit on every visit (E22).
+ * Zooming and panning an editor preview. View state only: nothing here writes,
+ * and a preview starts at Fit on every visit.
  */
 
 /** Fit, or a scale where 1 draws one canvas pixel per CSS pixel. */
@@ -12,7 +12,7 @@ export const PREVIEW_ZOOM_OPTIONS = [
 	{ label: '100%', value: 1 },
 ] as const satisfies ReadonlyArray<{ label: string; value: PreviewZoom }>;
 
-/** The zoom range, 10–800% (E20). */
+/** The zoom range, 10–800%. */
 export const PREVIEW_ZOOM_MIN = 0.1;
 export const PREVIEW_ZOOM_MAX = 8;
 
@@ -33,9 +33,24 @@ export function wheelPreviewZoom(scale: number, wheel: { deltaY: number; deltaMo
 	return clampPreviewZoom(scale * Math.exp(-pixels * WHEEL_ZOOM_RATE));
 }
 
-/** ⌘0 / Ctrl-0 fits, ⌘1 / Ctrl-1 is 100%; nothing else is the preview's. */
+/** A position in CSS pixels. */
+export interface PreviewPoint { x: number; y: number }
+
+const SHORTCUT_ZOOM: Record<string, PreviewZoom> = {
+	0: 'fit',
+	1: 1,
+	Digit0: 'fit',
+	Digit1: 1,
+};
+
+/**
+ * ⌘0 / Ctrl-0 fits, ⌘1 / Ctrl-1 is 100%; nothing else is the preview's. The
+ * digit is read from the key or, where a layout needs Shift to type it (AZERTY),
+ * from the physical key.
+ */
 export function previewZoomShortcut(event: {
 	key: string;
+	code?: string;
 	metaKey: boolean;
 	ctrlKey: boolean;
 	shiftKey: boolean;
@@ -43,11 +58,7 @@ export function previewZoomShortcut(event: {
 }): PreviewZoom | null {
 	if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey)
 		return null;
-	if (event.key === '0')
-		return 'fit';
-	if (event.key === '1')
-		return 1;
-	return null;
+	return SHORTCUT_ZOOM[event.key] ?? SHORTCUT_ZOOM[event.code ?? ''] ?? null;
 }
 
 interface Size { width: number; height: number }
@@ -63,7 +74,7 @@ export function previewZoomScroll(input: {
 	client: Size;
 	scroll: { left: number; top: number };
 	/** The pointer, relative to the view's visible top-left. */
-	pointer: { x: number; y: number };
+	pointer: PreviewPoint;
 	from: number;
 	to: number;
 }): { left: number; top: number } {
