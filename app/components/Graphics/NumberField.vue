@@ -12,7 +12,8 @@ import { NUMBER_SCRUB_GESTURE } from '~/modules/graphics/numberScrubGesture';
  *
  * The label is keyboard-neutral: it is not focusable, and a plain click still
  * focuses the input, which stays the accessible way to set a value. A disabled
- * field, or one in a disabled fieldset, does not scrub.
+ * field, or one in a disabled fieldset, does not scrub, and nor does one with no
+ * value to drag from: a Mixed field, or one inheriting its value.
  *
  * `class` lays out the field; every other attribute (aria-*, data-*) lands on the input.
  */
@@ -59,7 +60,7 @@ const active = shallowRef<ActiveScrub | null>(null);
 let swallowClick = false;
 
 function isDisabled() {
-	return props.disabled || handle.value?.closest('fieldset[disabled]') != null;
+	return props.disabled || props.modelValue == null || handle.value?.closest('fieldset[disabled]') != null;
 }
 
 function start(event: PointerEvent) {
@@ -127,7 +128,7 @@ onBeforeUnmount(() => end());
 			<span
 				ref="handle"
 				class="number-scrub"
-				:class="{ 'number-scrub--disabled': disabled }"
+				:class="{ 'number-scrub--disabled': disabled || modelValue == null }"
 				title="Drag to change: Shift ×10, Alt ×0.1"
 				data-number-scrub
 				:data-scrubbing="active ? 'true' : undefined"

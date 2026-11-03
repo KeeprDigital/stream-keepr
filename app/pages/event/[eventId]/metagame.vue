@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ConversionTarget } from '~~/shared/conversionTarget';
 import type { NavigationMenuItem } from '#ui/types';
 import { MTG_ONLY } from '~~/shared/config/games';
 import { useConsumedEventData } from '~/modules/event-data/resync';
@@ -12,6 +13,7 @@ definePageMeta({
 const eventStore = useEventStore();
 const playerListStore = usePlayerListStore();
 const metagameStore = useMetagameStore();
+const { runRequest } = useRequestFeedback();
 
 const isMtg = computed(() => eventStore.event?.game === 'mtg');
 const eventId = computed(() => eventStore.eventId ?? 0);
@@ -46,6 +48,24 @@ const tabs = computed<NavigationMenuItem[]>(() => {
 
 useConsumedEventData(['playerLists']);
 
+/**
+ * Write the Event's Conversion Target (ADR-0061). The Event write is announced,
+ * so every Metagame and Archetype Spotlight Screen Output re-reads; this page
+ * re-reads on the pending target and returns to the stored one if refused.
+ */
+async function saveConversionTarget(target: ConversionTarget) {
+	if (!eventStore.event)
+		return;
+	await runRequest(
+		() => eventStore.updateEvent(target),
+		{
+			latestKey: 'conversion-target',
+			success: false,
+			error: () => ({ title: 'Failed to save the conversion target', description: eventStore.error ?? undefined, color: 'error' }),
+		},
+	);
+}
+
 onMounted(async () => {
 	if (eventId.value && !playerListStore.isLoaded) {
 		await playerListStore.loadByEventId(eventId.value);
@@ -62,10 +82,8 @@ onMounted(async () => {
 				</template>
 				<template #right>
 					<MetagameConversionControl
-						:conversion-metric="metagameStore.conversionMetric"
-						:conversion-threshold="metagameStore.conversionThreshold"
-						@update:conversion-metric="metagameStore.conversionMetric = $event"
-						@update:conversion-threshold="metagameStore.conversionThreshold = $event"
+						v-bind="metagameStore.conversionTarget"
+						@update="saveConversionTarget"
 					/>
 					<MetagameScopeControl
 						:scope="metagameStore.scope"

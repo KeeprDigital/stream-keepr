@@ -16,6 +16,11 @@ import { isGraphicsSelectionTarget } from './selection';
  */
 
 export const GRAPHICS_PREVIEW_STATE_MESSAGE = 'graphics-compositor:preview-state';
+/**
+ * A selection the frame reports back. A ⌘- or Ctrl-click carries `toggle: true`,
+ * which a host holding several layers reads as adding or taking out one (#740);
+ * a host holding one selection ignores it.
+ */
 export const GRAPHICS_PREVIEW_SELECT_MESSAGE = 'graphics-compositor:select';
 
 /**
@@ -297,10 +302,20 @@ export function isGraphicsPreviewReadyMessage(
 	return (message.data as Record<string, unknown>).type === GRAPHICS_PREVIEW_READY_MESSAGE;
 }
 
+/**
+ * A selection a preview frame reports back, under either host's select message
+ * type. `toggle` travels only when set, so a plain click's message is as it was.
+ */
+export function previewSelectMessage<T>(type: string, target: T, toggle: boolean) {
+	return toggle
+		? { type, target, toggle: true as const }
+		: { type, target };
+}
+
 export function isGraphicsPreviewSelectMessage(
 	message: MessageEnvelope,
 	expected: ExpectedSender,
-): message is MessageEnvelope & { data: { type: string; target: GraphicsSelectionTarget } } {
+): message is MessageEnvelope & { data: { type: string; target: GraphicsSelectionTarget; toggle?: unknown } } {
 	if (!isFromExpectedSender(message, expected))
 		return false;
 

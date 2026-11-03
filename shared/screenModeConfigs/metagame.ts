@@ -4,7 +4,6 @@ import {
 	METAGAME_ARCHETYPE_COLUMN_KEY_VALUES,
 	METAGAME_CARD_COLUMN_KEY_VALUES,
 	METAGAME_CARD_SORT_BY_VALUES,
-	METAGAME_CONVERSION_METRIC_VALUES,
 	METAGAME_SORT_BY_VALUES,
 	METAGAME_VIEW_MODE_VALUES,
 } from '../types/enums';
@@ -20,11 +19,6 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 	// Scoping
 	...metagameScopeShape,
 	archetypeFilter: metagameArchetypeFilterField,
-
-	// Conversion Rate target: a numerator condition inside the scope, never narrowing it.
-	// The threshold sits inside the archetype read's bounds, which the Screen Output parses it through.
-	conversionMetric: editorField(z.enum(METAGAME_CONVERSION_METRIC_VALUES), { label: 'Conversion target' }),
-	conversionThreshold: editorField(z.number().int().min(1).max(999), { label: 'Conversion threshold' }),
 
 	// Sorting
 	sortBy: editorField(z.enum(METAGAME_SORT_BY_VALUES), { label: 'Sort archetypes by' }),
@@ -48,8 +42,6 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 	viewMode: 'archetype',
 	...DEFAULT_METAGAME_SCOPE,
 	archetypeFilter: undefined,
-	conversionMetric: 'topN',
-	conversionThreshold: 8,
 	sortBy: 'metaShare',
 	cardSortBy: 'inclusionRate',
 	archetypeColumns: [
@@ -79,7 +71,13 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 	...DEFAULT_HEADER_CONFIG,
 }, {
 	// The table's width and its rows' motion are the mode's Mode Tokens (#851).
-	formerFields: ['maxTableWidth', 'animateEntries'],
+	// The Conversion Target is the Event's (ADR-0061).
+	formerFields: [
+		'maxTableWidth',
+		'animateEntries',
+		'conversionMetric',
+		'conversionThreshold',
+	],
 });
 
 export type MetagameModeConfig = ScreenModeConfigOf<typeof metagameModeConfigContract>;

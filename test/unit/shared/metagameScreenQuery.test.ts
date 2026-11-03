@@ -1,46 +1,40 @@
 import type { ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import { metagameArchetypeDetailQuerySchema, metagameArchetypesQuerySchema, metagameCardsQuerySchema } from '~~/server/schemas/api/metagame';
-import { screenModeConfigContract } from '~~/shared/screenModes';
+import { CONVERSION_THRESHOLD_BOUNDS, DEFAULT_CONVERSION_TARGET } from '~~/shared/conversionTarget';
 import { resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import { archetypeSpotlightScreenQuery, metagameScreenQuery, topCardsScreenQuery } from '~~/shared/utils/metagameQuery';
 
-function screenQuery(stored: ModeConfigsMap['metagame']) {
-	return metagameScreenQuery(resolveScreenModeConfig({ metagame: stored }, 'metagame'));
+function screenQuery(stored: ModeConfigsMap['metagame'], target = DEFAULT_CONVERSION_TARGET) {
+	return metagameScreenQuery(resolveScreenModeConfig({ metagame: stored }, 'metagame'), target);
 }
 
 describe('metagameScreenQuery', () => {
-	it('asks the archetype breakdown for the Conversion Rate the Metagame page asks for by default', () => {
-		expect(screenQuery({}).query).toEqual({
-			scope: 'all',
+	it('asks the archetype breakdown for the Conversion Rate against its Event\'s Conversion Target, inside the Screen\'s scope', () => {
+		const { query } = screenQuery({ scope: 'topN', topN: 32 }, { conversionMetric: 'minPoints', conversionThreshold: 15 });
+
+		expect(query).toEqual({
+			scope: 'topN',
+			topN: 32,
 			sortBy: 'metaShare',
-			conversionMetric: 'topN',
-			conversionThreshold: 8,
-		});
-	});
-
-	it('asks for the Screen\'s own conversion target, inside its scope', () => {
-		const { query } = screenQuery({
-			scope: 'topN',
-			topN: 32,
 			conversionMetric: 'minPoints',
 			conversionThreshold: 15,
 		});
-
-		expect(query).toMatchObject({
-			scope: 'topN',
-			topN: 32,
-			conversionMetric: 'minPoints',
-			conversionThreshold: 15,
-		});
-		expect(metagameArchetypesQuerySchema.parse(query)).toMatchObject({ conversionMetric: 'minPoints', conversionThreshold: 15 });
 	});
 
-	it('sends every conversion threshold the Screen can hold within the archetype read\'s bounds', () => {
-		const { min, max } = screenModeConfigContract('metagame').fields.conversionThreshold;
+	// A stored per-Screen target is a former field: the Event's target wins over it.
+	it('ignores a Screen\'s former conversion target', () => {
+		const stored = { conversionMetric: 'minPoints', conversionThreshold: 15 } as ModeConfigsMap['metagame'];
 
-		for (const conversionThreshold of [min!, max!])
-			expect(() => metagameArchetypesQuerySchema.parse(screenQuery({ conversionThreshold }).query)).not.toThrow();
+		expect(screenQuery(stored).query).toMatchObject({ conversionMetric: 'topN', conversionThreshold: 8 });
+	});
+
+	it.each([
+		{ conversionMetric: 'topN', conversionThreshold: CONVERSION_THRESHOLD_BOUNDS.topN.min },
+		{ conversionMetric: 'minPoints', conversionThreshold: CONVERSION_THRESHOLD_BOUNDS.minPoints.min },
+		{ conversionMetric: 'minPoints', conversionThreshold: CONVERSION_THRESHOLD_BOUNDS.minPoints.max },
+	] as const)('sends every Conversion Target an Event can hold within the archetype read\'s bounds: $conversionMetric $conversionThreshold', (target) => {
+		expect(() => metagameArchetypesQuerySchema.parse(screenQuery({}, target).query)).not.toThrow();
 	});
 
 	it('leaves the card breakdown without a conversion target', () => {
@@ -49,8 +43,8 @@ describe('metagameScreenQuery', () => {
 });
 
 describe('archetypeSpotlightScreenQuery', () => {
-	function spotlightQuery(stored: ModeConfigsMap['archetype-spotlight']) {
-		return archetypeSpotlightScreenQuery(resolveScreenModeConfig({ 'archetype-spotlight': stored }, 'archetype-spotlight'));
+	function spotlightQuery(stored: ModeConfigsMap['archetype-spotlight'], target = DEFAULT_CONVERSION_TARGET) {
+		return archetypeSpotlightScreenQuery(resolveScreenModeConfig({ 'archetype-spotlight': stored }, 'archetype-spotlight'), target);
 	}
 
 	it('asks nothing while no Archetype is picked', () => {
@@ -69,15 +63,13 @@ describe('archetypeSpotlightScreenQuery', () => {
 		});
 	});
 
-	it('asks for the Screen\'s own scope, board and conversion target', () => {
+	it('asks for the Screen\'s own scope and board, against its Event\'s Conversion Target', () => {
 		const request = spotlightQuery({
 			archetypeId: 7,
 			scope: 'minPoints',
 			minPoints: 12,
 			board: 'mainboard',
-			conversionMetric: 'minPoints',
-			conversionThreshold: 18,
-		});
+		}, { conversionMetric: 'minPoints', conversionThreshold: 18 });
 
 		expect(request?.query).toEqual({
 			scope: 'minPoints',

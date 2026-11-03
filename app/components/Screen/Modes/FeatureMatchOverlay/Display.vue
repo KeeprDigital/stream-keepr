@@ -25,7 +25,9 @@ import {
 	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
 	isGraphicsPreviewSelectedTargetMessage,
+	previewSelectMessage,
 } from '~/modules/graphics/previewMessages';
+import { isSelectionToggle } from '~/modules/graphics/selection';
 import { useScreenModeReady } from '~/modules/screen-mode';
 import { screenMediaSourceUrl } from '~/utils/screenMediaSource';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
@@ -265,19 +267,23 @@ function guideStyle(item: { x: number; y: number; width: number; height: number 
 	return renderModel.value.rectStyle(item);
 }
 
-function postPreviewMessage(type: typeof FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE, payload: Record<string, unknown>) {
+function postPreviewMessage(message: Record<string, unknown>) {
 	if (!showPreviewGuides.value || !import.meta.client)
 		return;
 
-	window.parent?.postMessage({
-		type,
-		...payload,
-	}, window.location.origin);
+	window.parent?.postMessage(message, window.location.origin);
 }
 
-function selectPreviewTarget(target: FeatureMatchOverlaySelectionTarget) {
-	selectedPreviewTarget.value = target;
-	postPreviewMessage(FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE, { target });
+/**
+ * Report a host-owned selection back to the editor. A ⌘- or Ctrl-click asks it
+ * to add the layer to its selection or take it out (#740); the editor then
+ * pushes what is marked back down, so this frame marks nothing itself.
+ */
+function selectPreviewTarget(target: FeatureMatchOverlaySelectionTarget, event?: MouseEvent | KeyboardEvent) {
+	const toggle = isSelectionToggle(event);
+	if (!toggle)
+		selectedPreviewTarget.value = target;
+	postPreviewMessage(previewSelectMessage(FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE, target, toggle));
 }
 
 /**
@@ -290,13 +296,13 @@ function selectPreviewTarget(target: FeatureMatchOverlaySelectionTarget) {
  * other click reports only the compositor: the editor clears the host-owned
  * selection itself and pushes both back down.
  */
-function selectCompositorPreviewTarget(target: GraphicsSelectionTarget) {
+function selectCompositorPreviewTarget(target: GraphicsSelectionTarget, toggle = false) {
 	if (!showPreviewGuides.value)
 		return;
 
-	selectedCompositorTarget.value = target;
-	if (import.meta.client)
-		window.parent?.postMessage({ type: GRAPHICS_PREVIEW_SELECT_MESSAGE, target }, window.location.origin);
+	if (!toggle)
+		selectedCompositorTarget.value = target;
+	postPreviewMessage(previewSelectMessage(GRAPHICS_PREVIEW_SELECT_MESSAGE, target, toggle));
 
 	if (target.type === 'canvas')
 		selectPreviewTarget({ type: 'canvas' });
@@ -601,7 +607,7 @@ onBeforeUnmount(() => {
 					role="button"
 					tabindex="0"
 					:aria-label="`Select ${source.item.label}`"
-					@click.stop="selectPreviewTarget({ type: 'source', itemId: source.item.id })"
+					@click.stop="selectPreviewTarget({ type: 'source', itemId: source.item.id }, $event)"
 					@keydown.enter.stop="selectPreviewTarget({ type: 'source', itemId: source.item.id })"
 					@keydown.space.prevent.stop="selectPreviewTarget({ type: 'source', itemId: source.item.id })"
 				>

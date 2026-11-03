@@ -1,15 +1,16 @@
-import type { GraphicAnchorPoint, GraphicRect } from '~~/shared/types/graphics';
-import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
+import type { GraphicAnchorPoint, GraphicItemConfig, GraphicRect } from '~~/shared/types/graphics';
+import type { FeatureMatchLayoutConfig, FeatureMatchSourceItemConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlaySelectionTarget } from './selection';
 import type { SnapLines } from '~/modules/graphics/canvasManipulation';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { findGraphicItem } from '~~/shared/modules/graphics';
-import { canvasSnapLines, isTurned } from '~/modules/graphics/canvasManipulation';
+import { canvasSnapLines, isTurned, rotatedBounds } from '~/modules/graphics/canvasManipulation';
 
 /**
- * The Feature Match Overlay editor's one selection: the canvas (the Frame), one
- * Source Item, or one Graphic Item of the composition.
+ * One selection in the Feature Match Overlay editor: the canvas (the Frame), one
+ * Source Item, or one Graphic Item of the composition. Several layers selected
+ * together are a `LayerSelection` (#740); this names its one layer, or the canvas.
  *
  * The editor has one layer list and one property panel, so it holds one
  * selection. The two vocabularies beneath it — the host-owned target the Frame
@@ -19,7 +20,11 @@ import { canvasSnapLines, isTurned } from '~/modules/graphics/canvasManipulation
  */
 export type FeatureMatchLayoutEditorSelection
 	=	| { type: 'canvas' }
-		| { type: 'source'; itemId: string }
+		| FeatureMatchLayoutEditorLayer;
+
+/** One layer of the layout: a Source Item, or a Graphic Item of the composition. */
+export type FeatureMatchLayoutEditorLayer
+	=	| { type: 'source'; itemId: string }
 		| { type: 'item'; itemId: string };
 
 export const CANVAS_SELECTION: FeatureMatchLayoutEditorSelection = { type: 'canvas' };
@@ -58,22 +63,30 @@ export function editorSelectionKey(selection: FeatureMatchLayoutEditorSelection)
 		: `${selection.type}:${selection.itemId}`;
 }
 
+/**
+ * The stored layer a selection names, a Source Item or a Graphic Item, whose
+ * rectangle, name and visibility read alike; nothing for the canvas or a layer
+ * no longer in this layout.
+ */
+export function editorSelectionLayer(
+	layout: FeatureMatchLayoutConfig,
+	selection: FeatureMatchLayoutEditorSelection,
+): FeatureMatchSourceItemConfig | GraphicItemConfig | undefined {
+	if (selection.type === 'source')
+		return layout.sources.find(item => item.id === selection.itemId);
+	if (selection.type === 'item')
+		return findGraphicItem(layout.composition, selection.itemId)?.item;
+	return undefined;
+}
+
 /** Whether the selection still names something in this layout. */
 export function editorSelectionExists(layout: FeatureMatchLayoutConfig, selection: FeatureMatchLayoutEditorSelection): boolean {
-	if (selection.type === 'canvas')
-		return true;
-	if (selection.type === 'source')
-		return layout.sources.some(item => item.id === selection.itemId);
-	return findGraphicItem(layout.composition, selection.itemId) !== null;
+	return selection.type === 'canvas' || editorSelectionLayer(layout, selection) !== undefined;
 }
 
 /** The name of the layer the selection names, or nothing for the canvas or a layer no longer in this layout. */
 export function editorSelectionLabel(layout: FeatureMatchLayoutConfig, selection: FeatureMatchLayoutEditorSelection): string | undefined {
-	if (selection.type === 'source')
-		return layout.sources.find(item => item.id === selection.itemId)?.label;
-	if (selection.type === 'item')
-		return findGraphicItem(layout.composition, selection.itemId)?.item.label;
-	return undefined;
+	return editorSelectionLayer(layout, selection)?.label;
 }
 
 export interface EditorSelectionFrame {
@@ -89,6 +102,11 @@ export interface EditorSelectionFrame {
 	 */
 	rotation?: number;
 	anchor?: GraphicAnchorPoint;
+	/**
+	 * With several layers selected, each one's box on the canvas. They move as one
+	 * by the box they cover, `rect`, and are not resized together.
+	 */
+	members?: GraphicRect[];
 }
 
 /**
@@ -147,6 +165,87 @@ export function editorSelectionFrame(
 		origin: { x: location.group.x + padding, y: location.group.y + padding },
 		snapLines,
 		...turn,
+	};
+}
+
+/**
+ * The box a layer covers on the canvas, when moving its stored rectangle moves
+ * it there by as much: a Source Item, a Graphic Item on the canvas, or a child of
+ * an unrotated canvas-arranged group, a rotated one by the box it turns into. A
+ * row or column child is placed by its group, and a rotated group's child turns
+ * with it, so neither has one.
+ */
+function canvasBox(layout: FeatureMatchLayoutConfig, layer: FeatureMatchLayoutEditorLayer): GraphicRect | null {
+	if (layer.type === 'source') {
+		const item = layout.sources.find(candidate => candidate.id === layer.itemId);
+		return item
+			? pickRect(item)
+			: null;
+	}
+	const location = findGraphicItem(layout.composition, layer.itemId);
+	if (!location)
+		return null;
+	const { group, item } = location;
+	if (group && (group.arrangement !== 'canvas' || isTurned(group.rotation)))
+		return null;
+	const padding = group
+		? Math.max(0, group.padding)
+		: 0;
+	const covered = rotatedBounds(item, item.rotation, item.anchor);
+	return {
+		...covered,
+		x: covered.x + (group
+			? group.x + padding
+			: 0),
+		y: covered.y + (group
+			? group.y + padding
+			: 0),
+	};
+}
+
+/**
+ * Where the selected layers sit on the canvas, when the canvas can move them.
+ *
+ * One layer is framed as `editorSelectionFrame` frames it. Several move together
+ * by the box they cover, in canvas pixels, which snaps as one to everything else
+ * (#740): a delta in canvas pixels is the same delta in a canvas-arranged group's
+ * padded box, and moves a rotated layer by as much. If the canvas cannot move
+ * one of them, it moves none.
+ */
+export function editorLayersFrame(
+	layout: FeatureMatchLayoutConfig,
+	layers: readonly FeatureMatchLayoutEditorLayer[],
+	canvas: { width: number; height: number },
+): EditorSelectionFrame | null {
+	if (layers.length <= 1) {
+		return layers[0]
+			? editorSelectionFrame(layout, layers[0], canvas)
+			: null;
+	}
+	const members: GraphicRect[] = [];
+	for (const layer of layers) {
+		const box = canvasBox(layout, layer);
+		if (!box)
+			return null;
+		members.push(box);
+	}
+	const left = Math.min(...members.map(rect => rect.x));
+	const top = Math.min(...members.map(rect => rect.y));
+	const right = Math.max(...members.map(rect => rect.x + rect.width));
+	const bottom = Math.max(...members.map(rect => rect.y + rect.height));
+	return {
+		rect: {
+			x: left,
+			y: top,
+			width: right - left,
+			height: bottom - top,
+		},
+		origin: { x: 0, y: 0 },
+		snapLines: canvasSnapLines(canvas, [
+			...layout.sources,
+			...layout.composition.items,
+		], layers.map(layer => layer.itemId)),
+		members,
 	};
 }
 

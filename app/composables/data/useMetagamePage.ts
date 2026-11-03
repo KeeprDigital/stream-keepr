@@ -50,8 +50,9 @@ export function useMetagamePage(
 			() => metagameStore.topN,
 			() => metagameStore.minPoints,
 			() => metagameStore.playerListId,
-			() => metagameStore.conversionMetric,
-			() => metagameStore.conversionThreshold,
+			// The Event's Conversion Target, by its fields: an unrelated Event change re-derives it equal.
+			() => metagameStore.conversionTarget.conversionMetric,
+			() => metagameStore.conversionTarget.conversionThreshold,
 			...(options.extraScopeWatchSources ?? []),
 		],
 		() => fetchPageData(),

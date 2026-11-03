@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { BoardSelection, MetagameConversionMetric } from '~~/shared/types/enums';
+import type { BoardSelection } from '~~/shared/types/enums';
 import type { CardTypeBucket } from '~~/shared/utils/metagame';
 import type { Screen } from '~/types';
 import { screenModeConfigContract } from '~~/shared/screenModes';
@@ -46,11 +46,6 @@ const archetypeOptions = computed(() => [
 	{ label: 'Select an archetype…', value: null },
 	...archetypeStore.archetypes.map(archetype => ({ label: archetype.name, value: archetype.id })),
 ]);
-
-const conversionMetricOptions = [
-	{ label: 'Top N', value: 'topN' },
-	{ label: 'Minimum Points', value: 'minPoints' },
-];
 
 const boardOptions = [
 	{ label: 'Full Deck', value: 'full' },
@@ -123,32 +118,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 				@update="updateConfig({ ...$event, currentPage: 1 })"
 			/>
 
-			<UFormField
-				:label="fields.conversionMetric.label"
-				description="What a player in the scope must reach to count as converted. It never narrows the scope. The Screen keeps its own target: match the Metagame page's to show the same Conversion Rate."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					:model-value="config.conversionMetric"
-					:items="conversionMetricOptions"
-					class="w-48"
-					@update:model-value="updateConfig({ conversionMetric: $event as MetagameConversionMetric })"
-				/>
-			</UFormField>
-
-			<UFormField
-				:label="fields.conversionThreshold.label"
-				:description="config.conversionMetric === 'topN' ? 'Converted at this placement or better.' : 'Converted at this many match points or more.'"
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="config.conversionThreshold"
-					:min="fields.conversionThreshold.min"
-					:max="fields.conversionThreshold.max"
-					class="w-32"
-					@update:model-value="updateConfig({ conversionThreshold: Number($event) })"
-				/>
-			</UFormField>
+			<ScreenConversionTargetField :event-id="eventId" />
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Top Cards">

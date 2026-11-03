@@ -15,7 +15,7 @@ enableAutoUnmount(afterEach);
 beforeAll(stubPointerCapture);
 
 interface MountOptions {
-	props?: Partial<Record<'step' | 'max', number> & { disabled: boolean }>;
+	props?: Partial<Record<'step' | 'max', number> & { disabled: boolean; modelValue: number | undefined }>;
 	disabledFieldset?: boolean;
 	gesture?: NumberScrubGesture;
 }
@@ -134,6 +134,12 @@ describe('graphics number field', () => {
 		{
 			case: 'a disabled fieldset around it',
 			options: { disabledFieldset: true },
+		},
+		{
+			case: 'no value to drag from, as a Mixed field has',
+			options: {
+				props: { modelValue: undefined },
+			},
 		},
 	])('changes nothing under $case', async ({ options }) => {
 		const wrapper = mountField(options);
