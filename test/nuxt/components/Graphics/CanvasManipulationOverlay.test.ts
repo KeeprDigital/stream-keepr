@@ -1,3 +1,4 @@
+import type { GraphicAnchorPoint } from '~~/shared/types/graphics';
 import type { SnapLines } from '~/modules/graphics/canvasManipulation';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -29,7 +30,13 @@ const RECT = {
 	height: 100,
 };
 
-function mountOverlay(props: Partial<{ rect: typeof RECT | null; origin: { x: number; y: number }; snapLines: SnapLines }> = {}) {
+function mountOverlay(props: Partial<{
+	rect: typeof RECT | null;
+	origin: { x: number; y: number };
+	snapLines: SnapLines;
+	rotation: number;
+	anchor: GraphicAnchorPoint;
+}> = {}) {
 	return mount(CanvasManipulationOverlay, {
 		props: {
 			rect: RECT,
@@ -43,13 +50,13 @@ function mountOverlay(props: Partial<{ rect: typeof RECT | null; origin: { x: nu
 
 type Wrapper = ReturnType<typeof mountOverlay>;
 
-async function drag(wrapper: Wrapper, selector: string, to: { x: number; y: number }, init: PointerEventInit = {}) {
+async function drag(wrapper: Wrapper, selector: string, to: { x: number; y: number }, init: PointerEventInit = {}, from = { x: 0, y: 0 }) {
 	const target = wrapper.get(selector);
 	await target.trigger('pointerdown', {
 		button: 0,
 		pointerId: 1,
-		clientX: 0,
-		clientY: 0,
+		clientX: from.x,
+		clientY: from.y,
 		...init,
 	});
 	await target.trigger('pointermove', {
@@ -183,6 +190,65 @@ describe('graphicsCanvasManipulationOverlay', () => {
 				x: 110,
 				y: 110,
 				width: 200,
+				height: 100,
+			},
+		]);
+	});
+
+	it('draws a rotated selection turned about its Graphic Anchor Point, with a rotate handle', () => {
+		const wrapper = mountOverlay({ rotation: 30, anchor: 'center' });
+
+		const style = wrapper.get('[data-testid="canvas-manipulation-box"]').attributes('style');
+		expect(style).toContain('transform: rotate(30deg)');
+		expect(style).toContain('transform-origin: 50% 50%');
+		expect(wrapper.get('[data-handle="rotate"]').attributes('aria-label')).toBe('Rotate Clock');
+	});
+
+	it('offers no rotate handle for a layer that cannot turn', () => {
+		const wrapper = mountOverlay();
+
+		expect(wrapper.find('[data-handle="rotate"]').exists()).toBe(false);
+	});
+
+	// The anchor of the centred RECT is drawn at (100, 75); the drags sweep about it.
+	it.each([
+		{
+			name: 'by the angle swept about its anchor',
+			to: { x: 100, y: 125 },
+			shiftKey: false,
+			rotation: 90,
+		},
+		{
+			name: 'in whole degrees',
+			to: { x: 146.985, y: 92.1 },
+			shiftKey: false,
+			rotation: 20,
+		},
+		{
+			name: 'in 15 degree steps while Shift is held',
+			to: { x: 146.985, y: 92.1 },
+			shiftKey: true,
+			rotation: 15,
+		},
+	])('rotates the selection $name', async ({ to, shiftKey, rotation }) => {
+		const wrapper = mountOverlay({ rotation: 0, anchor: 'center' });
+
+		await drag(wrapper, '[data-handle="rotate"]', to, { shiftKey }, { x: 150, y: 75 });
+
+		expect(wrapper.emitted('rotate')?.map(([degrees]) => degrees).at(-1)).toBe(rotation);
+		expect(wrapper.emitted('change')).toBeUndefined();
+	});
+
+	it('resizes a rotated selection along its own axes, keeping the opposite handle where it is drawn', async () => {
+		const wrapper = mountOverlay({ rotation: 90, anchor: 'center' });
+
+		await drag(wrapper, '[data-handle="e"]', { x: 0, y: 25 });
+
+		expect(changes(wrapper)).toEqual([
+			{
+				x: 75,
+				y: 125,
+				width: 250,
 				height: 100,
 			},
 		]);

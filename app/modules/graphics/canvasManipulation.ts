@@ -52,7 +52,8 @@ export interface ManipulationOptions {
 	snap?: { lines: SnapLines; threshold: number };
 	/**
 	 * The rectangle's Graphic Rotation about its Graphic Anchor Point. A rotated
-	 * rectangle snaps the box it covers while moving and does not snap while resizing.
+	 * rectangle snaps the box it covers while moving. It resizes along its own axes,
+	 * keeping the opposite handle where it is drawn, and does not snap while resizing.
 	 */
 	rotation?: number;
 	anchor?: GraphicAnchorPoint;
@@ -85,7 +86,7 @@ export interface SnapLayer extends GraphicRect {
  * The axis-aligned box a rectangle covers once rotated about its Graphic Anchor
  * Point, to two decimal places so a quarter turn lands on whole pixels.
  */
-function rotatedBounds(rect: GraphicRect, rotation = 0, anchor?: GraphicAnchorPoint): GraphicRect {
+export function rotatedBounds(rect: GraphicRect, rotation = 0, anchor?: GraphicAnchorPoint): GraphicRect {
 	if (rotation % 360 === 0) {
 		return {
 			x: rect.x,
@@ -285,20 +286,88 @@ function moveRect(start: GraphicRect, delta: { x: number; y: number }, options: 
 	};
 }
 
+type ResizeHandle = Exclude<ManipulationHandle, 'move'>;
+
+/** Where a point of a rectangle, as fractions of its size, is drawn once rotated about its anchor. */
+function drawnPoint(rect: GraphicRect, fraction: { x: number; y: number }, rotation: number, anchor: GraphicAnchorPoint | undefined) {
+	const point = resolveGraphicAnchorPoint(anchor);
+	const turned = rotate({
+		x: (fraction.x - point.x) * rect.width,
+		y: (fraction.y - point.y) * rect.height,
+	}, rotation);
+	return {
+		x: rect.x + rect.width * point.x + turned.x,
+		y: rect.y + rect.height * point.y + turned.y,
+	};
+}
+
+function rotate(vector: { x: number; y: number }, degrees: number) {
+	const radians = degrees * Math.PI / 180;
+	const cos = Math.cos(radians);
+	const sin = Math.sin(radians);
+	return {
+		x: vector.x * cos - vector.y * sin,
+		y: vector.x * sin + vector.y * cos,
+	};
+}
+
+/** The handle opposite the dragged one, as fractions of the rectangle's size. */
+function oppositeFraction(handle: ResizeHandle) {
+	return {
+		x: handle.includes('w')
+			? 1
+			: handle.includes('e')
+				? 0
+				: 0.5,
+		y: handle.includes('n')
+			? 1
+			: handle.includes('s')
+				? 0
+				: 0.5,
+	};
+}
+
+/**
+ * Resize a rotated rectangle along its own axes: the drag is turned into them,
+ * sizes the rectangle as if it were upright, and the result is placed so the
+ * handle opposite the dragged one is drawn where it was (E33). Never snaps (E34).
+ */
+function resizeRotatedRect(
+	start: GraphicRect,
+	handle: ResizeHandle,
+	delta: { x: number; y: number },
+	options: ManipulationOptions & { rotation: number },
+): ManipulationResult {
+	const { rotation, anchor } = options;
+	const upright = resizeRect(start, handle, rotate(delta, -rotation), { keepRatio: options.keepRatio });
+	const fixed = oppositeFraction(handle);
+	const target = drawnPoint(start, fixed, rotation, anchor);
+	const sized = { ...upright.rect, x: 0, y: 0 };
+	const drawn = drawnPoint(sized, fixed, rotation, anchor);
+	return {
+		rect: round({
+			...sized,
+			x: target.x - drawn.x,
+			y: target.y - drawn.y,
+		}),
+		snapped: {},
+	};
+}
+
 function resizeRect(
 	start: GraphicRect,
-	handle: Exclude<ManipulationHandle, 'move'>,
+	handle: ResizeHandle,
 	delta: { x: number; y: number },
 	options: ManipulationOptions,
 ): ManipulationResult {
+	if ((options.rotation ?? 0) % 360 !== 0)
+		return resizeRotatedRect(start, handle, delta, { ...options, rotation: options.rotation! });
 	let left = start.x;
 	let top = start.y;
 	let right = start.x + start.width;
 	let bottom = start.y + start.height;
 	const snapped: ManipulationResult['snapped'] = {};
-	const snap = (options.rotation ?? 0) % 360 === 0
-		? options.snap
-		: undefined;
+	const snap = options.snap;
 
 	if (handle.includes('w'))
 		left = Math.min(left + delta.x, right - MIN_SIZE);
@@ -403,6 +472,43 @@ export function manipulateRect(
 	return handle === 'move'
 		? moveRect(start, delta, options)
 		: resizeRect(start, handle, delta, options);
+}
+
+/** A rotatable layer as a rotate drag sees it, in its container's pixels. */
+export interface RotationFrame {
+	rect: GraphicRect;
+	/** Graphic Rotation in degrees about the Graphic Anchor Point. */
+	rotation: number;
+	anchor?: GraphicAnchorPoint;
+}
+
+/**
+ * The Graphic Rotation a drag from `from` to `to` turns a layer to: its starting
+ * rotation plus the angle the pointer swept about the Graphic Anchor Point, which
+ * a rotation leaves in place. Whole degrees, or the nearest multiple of `step`,
+ * within half a turn either way.
+ */
+export function dragRotation(
+	frame: RotationFrame,
+	from: { x: number; y: number },
+	to: { x: number; y: number },
+	options: { step?: number } = {},
+): number {
+	const point = resolveGraphicAnchorPoint(frame.anchor);
+	const pivot = {
+		x: frame.rect.x + frame.rect.width * point.x,
+		y: frame.rect.y + frame.rect.height * point.y,
+	};
+	const angle = (point: { x: number; y: number }) => Math.atan2(point.y - pivot.y, point.x - pivot.x) * 180 / Math.PI;
+	const step = options.step && options.step > 0
+		? options.step
+		: 1;
+	const turned = Math.round((frame.rotation + angle(to) - angle(from)) / step) * step;
+	const wrapped = ((turned % 360) + 540) % 360 - 180;
+	// Half a turn is drawn the same either way; keep the sign the drag arrived with.
+	return wrapped === -180 && turned > 0
+		? 180
+		: wrapped + 0;
 }
 
 /** The rectangle an arrow-key nudge produces. */

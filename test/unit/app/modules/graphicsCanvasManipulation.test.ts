@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canvasSnapLines, manipulateRect, neighbourGaps, nudgeRect } from '~~/app/modules/graphics/canvasManipulation';
+import { canvasSnapLines, dragRotation, manipulateRect, neighbourGaps, nudgeRect } from '~~/app/modules/graphics/canvasManipulation';
 
 /**
  * Direct manipulation on an editor canvas: what a drag from one handle does to a
@@ -119,11 +119,11 @@ describe('canvas manipulation', () => {
 		{
 			name: 'resizes without snapping',
 			handle: 'e' as const,
-			delta: { x: 1617, y: 0 },
+			delta: { x: 0, y: 1618 },
 			rect: {
-				x: 100,
-				y: 100,
-				width: 1817,
+				x: -709,
+				y: 909,
+				width: 1818,
 				height: 100,
 			},
 			snapped: {},
@@ -131,6 +131,129 @@ describe('canvas manipulation', () => {
 	])('a rotated rectangle $name', ({ handle, delta, rect, snapped }) => {
 		const result = manipulateRect(RECT, handle, delta, { snap: SNAP, rotation: 90, anchor: 'center' });
 		expect(result).toEqual({ rect, snapped });
+	});
+
+	// A rotated rectangle resizes along its own axes, and the handle opposite the dragged one stays
+	// where it is drawn, wherever its Graphic Anchor Point is.
+	it.each([
+		{
+			name: 'an edge, a quarter turn about the centre, dragged along the turned width',
+			rotation: 90,
+			anchor: 'center' as const,
+			handle: 'e' as const,
+			delta: { x: 0, y: 50 },
+			rect: {
+				x: 75,
+				y: 125,
+				width: 250,
+				height: 100,
+			},
+		},
+		{
+			name: 'an edge, a half turn about the centre, dragged left',
+			rotation: 180,
+			anchor: 'center' as const,
+			handle: 'e' as const,
+			delta: { x: -50, y: 0 },
+			rect: {
+				x: 50,
+				y: 100,
+				width: 250,
+				height: 100,
+			},
+		},
+		{
+			name: 'a corner, a quarter turn about the centre',
+			rotation: 90,
+			anchor: 'center' as const,
+			handle: 'nw' as const,
+			delta: { x: 0, y: -40 },
+			rect: {
+				x: 80,
+				y: 80,
+				width: 240,
+				height: 100,
+			},
+		},
+		{
+			name: 'a corner, a quarter turn about the opposite corner',
+			rotation: 90,
+			anchor: 'top-left' as const,
+			handle: 'se' as const,
+			delta: { x: -20, y: 30 },
+			rect: {
+				x: 100,
+				y: 100,
+				width: 230,
+				height: 120,
+			},
+		},
+		{
+			name: 'an edge keeping its ratio, a quarter turn about the centre',
+			rotation: 90,
+			anchor: 'center' as const,
+			handle: 'e' as const,
+			delta: { x: 0, y: 100 },
+			keepRatio: true,
+			rect: {
+				x: 50,
+				y: 125,
+				width: 300,
+				height: 150,
+			},
+		},
+	])('resizes a rotated rectangle by $name', ({ rotation, anchor, handle, delta, keepRatio, rect }) => {
+		expect(manipulateRect(RECT, handle, delta, { rotation, anchor, keepRatio }).rect).toEqual(rect);
+	});
+
+	// The rotation a drag around the Graphic Anchor Point turns to, from where it started.
+	it.each([
+		{
+			name: 'turns by the angle swept about the anchor',
+			anchor: 'center' as const,
+			rotation: 0,
+			to: { x: 200, y: 250 },
+			expected: 90,
+		},
+		{
+			name: 'adds the sweep to the rotation it started at',
+			anchor: 'center' as const,
+			rotation: 30,
+			to: { x: 200, y: 250 },
+			expected: 120,
+		},
+		{
+			name: 'sweeps about the item\'s own anchor',
+			anchor: 'top-left' as const,
+			rotation: 0,
+			from: { x: 200, y: 100 },
+			to: { x: 100, y: 200 },
+			expected: 90,
+		},
+		{
+			name: 'turns in whole degrees',
+			anchor: 'center' as const,
+			rotation: 0,
+			to: { x: 293.97, y: 184.2 },
+			expected: 20,
+		},
+		{
+			name: 'steps in 15 degree increments when asked',
+			anchor: 'center' as const,
+			rotation: 0,
+			to: { x: 293.97, y: 184.2 },
+			step: 15,
+			expected: 15,
+		},
+		{
+			name: 'stays within half a turn either way',
+			anchor: 'center' as const,
+			rotation: 170,
+			to: { x: 200, y: 250 },
+			expected: -100,
+		},
+	])('a rotate drag $name', ({ anchor, rotation, from, to, step, expected }) => {
+		expect(dragRotation({ rect: RECT, rotation, anchor }, from ?? { x: 300, y: 150 }, to, { step })).toBe(expected);
 	});
 
 	it('does not snap from beyond the threshold', () => {
