@@ -64,7 +64,7 @@ export function buildClearDeckSourceSlotsQuery(eventId: number, slotIds: number[
 		.returning();
 }
 
-/** The Event References a delete releases from its Screens (ADR-0059), and the table each names a row of. */
+/** The Event References a delete releases from its Screens (ADR-0060), and the table each names a row of. */
 const RELEASED_EVENT_REFERENCE_TABLES = {
 	phase: phases,
 	round: rounds,
@@ -76,16 +76,17 @@ export type ReleasedEventReferenceKind = keyof typeof RELEASED_EVENT_REFERENCE_T
 /**
  * Removes every declared Event Reference of `kinds` (`eventReferences` in
  * `shared/screenModes.ts`) naming a record the Event no longer holds, from each
- * Screen in the Event, as a new Screen version (ADR-0059). Batch it after the
+ * Screen in the Event, as a new Screen version (ADR-0060). Batch it after the
  * delete, so it also releases what the delete cascaded away and what an
  * imported structure removal decided to delete as it ran.
  */
 export function buildReleaseScreenEventReferencesQuery(eventId: number, kinds: readonly ReleasedEventReferenceKind[]) {
 	const released = SCREEN_MODE_VALUES.flatMap(mode =>
 		Object.entries(SCREEN_MODES[mode].eventReferences).flatMap(([field, kind]) => {
-			if (!(kinds as readonly string[]).includes(kind))
+			const releasedKind = kinds.find(candidate => candidate === kind);
+			if (!releasedKind)
 				return [];
-			const table = RELEASED_EVENT_REFERENCE_TABLES[kind as ReleasedEventReferenceKind];
+			const table = RELEASED_EVENT_REFERENCE_TABLES[releasedKind];
 			const value = sql`json_extract(${screens.modeConfigs}, ${`$."${mode}".${field}`})`;
 			return [
 				{

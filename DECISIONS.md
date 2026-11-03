@@ -1217,7 +1217,8 @@ Accepted · 2026-10-21 · [#701](https://github.com/KeeprDigital/stream-keepr/is
 1. the scope's imported Matches and Round Standings are deleted, as removing the Round would have done;
 2. a scoped Round that still holds a Match (by now only a manual one) is **kept, with its Provenance cleared**: `externalSource` becomes `manual`, and `externalId` and `lastSyncedAt` become null;
 3. the other scoped Rounds are deleted;
-4. a scoped Phase that still holds a Round (a manual one, or one kept in step 2) is kept the same way, and the other scoped Phases are deleted. A kept Phase keeps its `formatExternalId`, because that is still the format it was played in and Deck Lists are matched to its Matches by it.
+4. a scoped Phase that still holds a Round (a manual one, or one kept in step 2) is kept the same way, and the other scoped Phases are deleted. A kept Phase keeps its `formatExternalId`, because that is still the format it was played in and Deck Lists are matched to its Matches by it;
+5. every Screen reference to a deleted Phase or Round is unset (ADR-0060).
 
 **Two paths use it.** Event structure sync scopes it to the stale imported Phases and Rounds. The Melee data reset (disabling the integration, or changing its Melee.gg tournament) scopes it to every imported Phase and Round in the Event. Round Match sync already deletes only imported Matches, so it needs nothing.
 
@@ -1882,7 +1883,7 @@ Two owners disagreed (#886). The Session owned side order, while the setup form 
 - **The Slot owns side order, and `SwapPlayers` swaps the Slot row too.** It needs a Slot write alongside a Session command, and it conflicts with promotion and Reverse Sync, which write Match order.
 - **Detect a swapped Slot in the correction.** It would have to match players by id, or by typed data on an OP Event, and the Overlay would still be wrong between Swap and Save.
 
-## ADR-0059: Deleting a Phase, Round or Archetype releases every Event Reference naming it
+## ADR-0060: Deleting a Phase, Round or Archetype releases every Event Reference naming it
 
 Accepted · 2026-11-03 · [#907](https://github.com/KeeprDigital/stream-keepr/issues/907). Extends ADR-0032 and ADR-0038.
 
@@ -1894,11 +1895,11 @@ Accepted · 2026-11-03 · [#907](https://github.com/KeeprDigital/stream-keepr/is
 
 **Each released Screen is announced with `screen:updated`, ahead of the delete's own announcement and without an origin**, as ADR-0032 does. The Melee data reset answers a Screen both its releases rewrote once, at the later version.
 
-**Like ADR-0032, this writes Screens outside `screenWriteModule()`** (ADR-0030), for the same reason: the release has to commit in the delete's batch.
+**Contradicts ADR-0030, which says every Screen write passes through `screenWriteModule()`,** as ADR-0032 does and for the same reason: the release has to commit in the delete's batch. It also skips the ADR-0038 reference check every Screen write runs; it only removes Event References, so it cannot name anything outside the Event.
 
 ### Why
 
-A Screen left naming a deleted Phase, Round or Archetype rendered an empty bracket, a missing Round or an error state, and every later full Screen write failed, because the write checks every declared Event Reference (ADR-0038). The operator could not save the Screen until they repicked. Unset is what an operator gets by deselecting first, and the Melee data reset and a sync delete this structure as a side effect, so refusing the delete would make them hunt for Screens first. A Player (ADR-0032) and a Feature Match Slot (ADR-0057) were already released this way.
+A Screen left naming a deleted Phase, Round or Archetype rendered an empty bracket, a missing Round or an error state, and every later full Screen write failed, because the write checks every declared Event Reference (ADR-0038). The operator could not save the Screen until they repicked. Unset is what an operator gets by deselecting first, and the Melee data reset and a sync delete this structure as a side effect, so refusing the delete would make them hunt for Screens first. A Player (ADR-0032) and a Feature Match Slot (ADR-0057) were already released by their deletes, though their Deck Source keeps the field as null where these remove it.
 
 ### Consequences
 

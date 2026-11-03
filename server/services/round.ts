@@ -106,7 +106,7 @@ export function roundService() {
 		return updatedRound;
 	};
 
-	/** Deletes the Round, and in the same write releases every Screen reference to it (ADR-0059). */
+	/** Deletes the Round, and in the same write releases every Screen reference to it (ADR-0060). */
 	const remove = async (id: number, eventId: number): Promise<{ deleted: boolean; clearedScreens: DbScreen[] }> => {
 		const [deleted, clearedScreens] = await db.batch([
 			db

@@ -51,7 +51,7 @@ export function phaseWriteModule() {
 	async function remove({ eventId, phaseId, originConnectionId }: RemovePhaseParams): Promise<void> {
 		const { deleted, clearedScreens } = await phases.remove(phaseId, eventId);
 
-		// Even for a Phase already gone: the release committed either way (ADR-0059).
+		// Even for a Phase already gone: the release committed either way (ADR-0060).
 		// No origin, because the deleting client never received these Screens back.
 		for (const screen of clearedScreens)
 			await publication.screenUpdated({ eventId, entity: screen });

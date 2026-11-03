@@ -58,7 +58,7 @@ export interface ImportedStructureRemoval {
  * 3. the other scoped Rounds are deleted;
  * 4. a scoped Phase still holding a Round (manual, or kept in step 2) is kept
  *    the same way, and the other scoped Phases are deleted;
- * 5. every Screen reference to a deleted Phase or Round is released (ADR-0059).
+ * 5. every Screen reference to a deleted Phase or Round is released (ADR-0060).
  *
  * Each step's predicate is evaluated when the batch runs, so a manual Round or
  * Match an operator added after the caller read the structure is still kept.

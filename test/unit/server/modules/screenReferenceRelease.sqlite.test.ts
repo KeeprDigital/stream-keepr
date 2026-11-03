@@ -118,7 +118,7 @@ async function seed(imported: boolean) {
 
 type Seeded = Awaited<ReturnType<typeof seed>>;
 
-const melee = { originConnectionId: 'delete-origin' };
+const syncContext = { originConnectionId: 'delete-origin' };
 const meleeEventData = {
 	game: 'mtg' as const,
 	meleeEnabled: true,
@@ -163,7 +163,7 @@ describe('deleting a Phase, Round or Archetype releases the Screens naming it', 
 			name: 'a Melee Sync removing stale imported structure',
 			imported: true,
 			released: ['phase', 'round'],
-			remove: ({ eventId }: Seeded) => createMeleeSyncWorkflows().syncEventStructure(melee, eventId, meleeEventData, {
+			remove: ({ eventId }: Seeded) => createMeleeSyncWorkflows().syncEventStructure(syncContext, eventId, meleeEventData, {
 				ID: 1,
 				Name: 'Open',
 				Game: 'Magic: The Gathering',

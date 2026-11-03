@@ -283,7 +283,7 @@ export function createMeleeSyncWorkflows() {
 			changes.phases.updated.push(...removal.keptPhases.map(phase => phase.id));
 			warnings.push(...describeKeptStructure(removal, 'stale'));
 			// Ahead of the structure's announcement, and with no origin: the syncing
-			// client never received these Screens back (ADR-0059).
+			// client never received these Screens back (ADR-0060).
 			for (const screen of removal.clearedScreens)
 				await publication.screenUpdated({ eventId, entity: screen });
 		}

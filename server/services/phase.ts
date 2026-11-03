@@ -74,7 +74,7 @@ export function phaseService() {
 
 	/**
 	 * Deletes the Phase, and its Rounds by cascade, and in the same write releases
-	 * every Screen reference to them (ADR-0059).
+	 * every Screen reference to them (ADR-0060).
 	 */
 	const remove = async (id: number, eventId: number): Promise<{ deleted: boolean; clearedScreens: DbScreen[] }> => {
 		const [deleted, clearedScreens] = await db.batch([

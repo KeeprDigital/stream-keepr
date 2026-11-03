@@ -56,7 +56,7 @@ export function roundWriteModule() {
 	async function remove({ eventId, roundId, originConnectionId }: RemoveRoundParams): Promise<void> {
 		const { deleted, clearedScreens } = await rounds.remove(roundId, eventId);
 
-		// Even for a Round already gone: the release committed either way (ADR-0059).
+		// Even for a Round already gone: the release committed either way (ADR-0060).
 		// No origin, because the deleting client never received these Screens back.
 		for (const screen of clearedScreens)
 			await publication.screenUpdated({ eventId, entity: screen });

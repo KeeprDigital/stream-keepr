@@ -114,7 +114,7 @@ export function archetypeWriteModule() {
 		// Clearing deck reviews and deleting the archetype must commit together —
 		// otherwise a delete without the review clear would leave decks pointing at
 		// a since-removed archetype (or vice versa on a partial failure). So must
-		// releasing the Screens that name it (ADR-0059).
+		// releasing the Screens that name it (ADR-0060).
 		const [, deletedArchetypes, clearedScreens] = await db.batch([
 			deckService.buildClearReviewsByArchetypeQuery(eventId, archetypeId),
 			archetypes.buildRemoveQuery(archetypeId, eventId),
