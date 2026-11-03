@@ -32,7 +32,7 @@ Whether a Match is reported or a bye, and its game wins and game draws. Only Mel
 _Avoid_: score, for the whole result.
 
 **Game Score**:
-A Match's game wins and game draws read from one of its Players' side, theirs first: 2-1, or 1-1-1 with a game draw. Every reported Match that is not a bye has one; a bye or an unreported Match has none.
+A Match's game wins and game draws read from one of its Players' side, theirs first, in en dashes: 2–1, or 1–1–1 with a game draw. Every reported Match that is not a bye has one; a bye or an unreported Match has none.
 
 **Round Standings**:
 The standings for Players as of a specific Round, including that Round's results. Melee Sync stores them only once the Round is complete, so while a Round is played the latest Round Standings are the previous Round's (ADR-0052).
@@ -160,7 +160,7 @@ A field in a Screen Mode's configuration naming something that must belong to th
 _Avoid_: data binding (a Graphic Input Binding is a Broadcast Graphics concept), Graphic Asset Reference (an installation-wide library link, not Event data)
 
 **Head-to-Head**:
-A Screen Mode showing two Players of an Event side by side before their Match: each one's record, points and Archetype, and the earlier Matches between them at the Event, oldest first, or that this is their first meeting. Its Players come from a Feature Match Slot, following the Slot's current Feature Match Assignment, or are picked directly.
+A Screen Mode showing two Players of an Event side by side before their Match: each one's record and points (the Player's own, or their latest Round Standings while they hold none of their own), their Archetype, and the earlier Matches between them at the Event, oldest first, or that this is their first meeting. Its Players come from a Feature Match Slot, following the Slot's current Feature Match Assignment, or are picked directly.
 _Avoid_: meeting, when naming an earlier Match.
 
 **Authored Stack**:

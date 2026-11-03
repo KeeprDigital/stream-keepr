@@ -47,24 +47,74 @@ function match(overrides: Partial<HeadToHeadMatchFacts> = {}): HeadToHeadMatchFa
 
 describe('projectHeadToHead', () => {
 	describe('each Player', () => {
-		it('shows their record and points from their latest Round Standings', () => {
+		const NO_RECORD = {
+			wins: null,
+			losses: null,
+			draws: null,
+			points: null,
+		};
+		const OWN = {
+			wins: 5,
+			losses: 1,
+			draws: null,
+			points: 15,
+		};
+		const STANDING = {
+			wins: 4,
+			losses: 1,
+			draws: 1,
+			points: 13,
+		};
+
+		// Melee Sync keeps a Player's own record ahead of their latest
+		// Round Standings, which stand in only while the Player holds none.
+		it.each([
+			{
+				case: 'their own record over their latest Round Standings',
+				own: OWN,
+				latestStanding: STANDING,
+				shows: OWN,
+			},
+			{
+				case: 'their own record when no Round Standings hold them',
+				own: OWN,
+				latestStanding: null,
+				shows: OWN,
+			},
+			{
+				case: 'their own record when it holds wins or losses alone',
+				own: { ...NO_RECORD, losses: 2 },
+				latestStanding: STANDING,
+				shows: { ...NO_RECORD, losses: 2 },
+			},
+			{
+				case: 'their latest Round Standings when they hold only points',
+				own: { ...NO_RECORD, points: 0 },
+				latestStanding: STANDING,
+				shows: STANDING,
+			},
+			{
+				case: 'their latest Round Standings when they hold no record of their own',
+				own: NO_RECORD,
+				latestStanding: STANDING,
+				shows: STANDING,
+			},
+			{
+				case: 'no record when they hold neither',
+				own: NO_RECORD,
+				latestStanding: null,
+				shows: NO_RECORD,
+			},
+		])('shows $case', ({ own, latestStanding, shows }) => {
 			const alice = playerFacts(ALICE, 'Alice', {
 				player: {
 					id: ALICE,
 					name: 'Alice',
 					pronouns: 'she/her',
-					wins: 1,
-					losses: 1,
-					draws: 0,
-					points: 3,
 					gameData: null,
+					...own,
 				},
-				latestStanding: {
-					wins: 4,
-					losses: 1,
-					draws: 1,
-					points: 13,
-				},
+				latestStanding,
 			});
 
 			const { player1 } = projectHeadToHead({
@@ -78,39 +128,7 @@ describe('projectHeadToHead', () => {
 				id: ALICE,
 				name: 'Alice',
 				pronouns: 'she/her',
-				wins: 4,
-				losses: 1,
-				draws: 1,
-				points: 13,
-			});
-		});
-
-		it('falls back to the Player\'s own record when no Round Standings hold them', () => {
-			const bob = playerFacts(BOB, 'Bob', {
-				player: {
-					id: BOB,
-					name: 'Bob',
-					pronouns: null,
-					wins: 3,
-					losses: 2,
-					draws: null,
-					points: 9,
-					gameData: null,
-				},
-			});
-
-			const { player2 } = projectHeadToHead({
-				player1: null,
-				player2: bob,
-				matches: [],
-				currentMatchId: null,
-			});
-
-			expect(player2).toMatchObject({
-				wins: 3,
-				losses: 2,
-				draws: null,
-				points: 9,
+				...shows,
 			});
 		});
 
@@ -170,7 +188,7 @@ describe('projectHeadToHead', () => {
 					roundNumber: 3,
 					phaseName: 'Swiss',
 					outcome: 'player2',
-					gameScore: '1-2',
+					gameScore: '1–2',
 				},
 			]);
 		});

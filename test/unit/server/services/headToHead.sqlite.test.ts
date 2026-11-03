@@ -86,9 +86,6 @@ beforeAll(async () => {
 			eventId,
 			name: 'Alice',
 			pronouns: 'she/her',
-			wins: 1,
-			losses: 0,
-			points: 3,
 			archetypeId: boros!.id,
 		},
 		{
@@ -106,7 +103,8 @@ beforeAll(async () => {
 	]).returning({ id: schema.players.id });
 	[alice, bob, carol, foreignPlayer] = ids.map(row => row.id) as [number, number, number, number];
 
-	// Alice's latest Round Standings are Round 5's, recorded before Round 2's.
+	// Alice holds no record of her own, so her latest Round Standings show:
+	// Round 5's, recorded before Round 2's.
 	await db.insert(schema.playerRoundStandings).values([
 		{
 			eventId,
@@ -221,7 +219,7 @@ describe('findHeadToHead', () => {
 					roundNumber: 2,
 					phaseName: 'Swiss',
 					outcome: 'player1',
-					gameScore: '2-1',
+					gameScore: '2–1',
 				},
 				{
 					matchId: roundFiveMatch,
@@ -230,7 +228,7 @@ describe('findHeadToHead', () => {
 					roundNumber: 5,
 					phaseName: 'Swiss',
 					outcome: 'player2',
-					gameScore: '0-2',
+					gameScore: '0–2',
 				},
 			],
 		});
@@ -244,7 +242,7 @@ describe('findHeadToHead', () => {
 			expect(answer?.player1?.name).toBe('Carol');
 			expect(answer?.player2?.name).toBe('Alice');
 			expect(answer?.earlierMatches).toEqual([
-				expect.objectContaining({ roundName: 'Round 2', outcome: 'player2', gameScore: '0-2' }),
+				expect.objectContaining({ roundName: 'Round 2', outcome: 'player2', gameScore: '0–2' }),
 			]);
 		}
 		finally {
@@ -257,12 +255,12 @@ describe('findHeadToHead', () => {
 		{
 			session: 'none',
 			sides: ['Alice', 'Bob'],
-			roundTwo: '2-1',
+			roundTwo: '2–1',
 		},
 		{
 			session: 'swapped',
 			sides: ['Bob', 'Alice'],
-			roundTwo: '1-2',
+			roundTwo: '1–2',
 		},
 	])('shows a Slot\'s Players on the sides its $session Session seats them', async ({ session, sides, roundTwo }) => {
 		const [slot] = await db.insert(schema.featureMatchSlots)
@@ -294,8 +292,8 @@ describe('findHeadToHead', () => {
 		expect(answer?.player1?.name).toBe('Bob');
 		expect(answer?.player2?.name).toBe('Alice');
 		expect(answer?.earlierMatches.map(earlierMatch => [earlierMatch.roundName, earlierMatch.gameScore])).toEqual([
-			['Round 2', '1-2'],
-			['Round 5', '2-0'],
+			['Round 2', '1–2'],
+			['Round 5', '2–0'],
 		]);
 	});
 
