@@ -1,11 +1,11 @@
-import type { GraphicItemConfig, GraphicRect } from '~~/shared/types/graphics';
+import type { GraphicAnchorPoint, GraphicItemConfig, GraphicRect } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig, FeatureMatchSourceItemConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlaySelectionTarget } from './selection';
 import type { SnapLines } from '~/modules/graphics/canvasManipulation';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { findGraphicItem } from '~~/shared/modules/graphics';
-import { canvasSnapLines, rotatedBounds } from '~/modules/graphics/canvasManipulation';
+import { canvasSnapLines, isTurned, rotatedBounds } from '~/modules/graphics/canvasManipulation';
 
 /**
  * One selection in the Feature Match Overlay editor: the canvas (the Frame), one
@@ -97,6 +97,12 @@ export interface EditorSelectionFrame {
 	/** What the layer snaps to, in its container's pixels. */
 	snapLines: SnapLines;
 	/**
+	 * A Graphic Item's Graphic Rotation in degrees, drawn and turned about its
+	 * Graphic Anchor Point. A Source Item has none and cannot turn.
+	 */
+	rotation?: number;
+	anchor?: GraphicAnchorPoint;
+	/**
 	 * With several layers selected, each one's box on the canvas. They move as one
 	 * by the box they cover, `rect`, and are not resized together.
 	 */
@@ -108,9 +114,9 @@ export interface EditorSelectionFrame {
  *
  * A Source Item and a top-level Graphic Item are positioned on the canvas itself,
  * and a child of a canvas-arranged Graphic Group inside its group's padded box. A
- * row or column child is placed by its group, and the stored rectangle of a
- * rotated item or a rotated group's child is not what the author sees, so none
- * is offered: the property panel still edits them.
+ * row or column child is placed by its group, and a rotated group's child would
+ * turn with its group as well as by its own rotation, so neither is offered: the
+ * property panel still edits them. A rotated item is offered with its rotation.
  */
 export function editorSelectionFrame(
 	layout: FeatureMatchLayoutConfig,
@@ -137,22 +143,28 @@ export function editorSelectionFrame(
 	}
 
 	const location = findGraphicItem(layout.composition, selection.itemId);
-	if (!location || (location.item.rotation ?? 0) % 360 !== 0)
+	if (!location)
 		return null;
+	const turn = {
+		rotation: location.item.rotation ?? 0,
+		anchor: location.item.anchor,
+	};
 	if (!location.group) {
 		return {
 			rect: pickRect(location.item),
 			origin: { x: 0, y: 0 },
 			snapLines,
+			...turn,
 		};
 	}
-	if (location.group.arrangement !== 'canvas' || (location.group.rotation ?? 0) % 360 !== 0)
+	if (location.group.arrangement !== 'canvas' || isTurned(location.group.rotation))
 		return null;
 	const padding = Math.max(0, location.group.padding);
 	return {
 		rect: pickRect(location.item),
 		origin: { x: location.group.x + padding, y: location.group.y + padding },
 		snapLines,
+		...turn,
 	};
 }
 
@@ -174,7 +186,7 @@ function canvasBox(layout: FeatureMatchLayoutConfig, layer: FeatureMatchLayoutEd
 	if (!location)
 		return null;
 	const { group, item } = location;
-	if (group && (group.arrangement !== 'canvas' || (group.rotation ?? 0) % 360 !== 0))
+	if (group && (group.arrangement !== 'canvas' || isTurned(group.rotation)))
 		return null;
 	const padding = group
 		? Math.max(0, group.padding)

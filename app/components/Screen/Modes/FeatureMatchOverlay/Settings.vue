@@ -152,6 +152,10 @@ function manipulate(rect: GraphicRect, gesture: number) {
 	editor.setSelectionRect(rect, { coalesce: `canvas:${gesture}` });
 }
 
+function rotate(rotation: number, gesture: number) {
+	editor.setRotation(selection.value, rotation, { coalesce: `canvas:${gesture}` });
+}
+
 /**
  * Someone else's change to this layout ends the undo history.
  *
@@ -277,7 +281,7 @@ const SHORTCUTS = [
 	},
 	{
 		keys: ['⇧ drag'],
-		label: 'Keep aspect ratio',
+		label: 'Keep aspect ratio (rotate in 15° steps)',
 	},
 	{
 		keys: ['⌥ drag'],
@@ -575,6 +579,7 @@ useEventListener(import.meta.client
 					@select-target="selectHostTarget"
 					@select-compositor-target="selectCompositorTarget"
 					@manipulate="manipulate"
+					@rotate="rotate"
 				/>
 			</section>
 

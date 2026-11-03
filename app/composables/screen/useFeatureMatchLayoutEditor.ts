@@ -438,6 +438,12 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 	}
 
 	/** Nudge every selected layer the canvas can move; one undo step per run of presses. */
+	/** Set a Graphic Item's Graphic Rotation, as the canvas turns it. A Source Item does not turn. */
+	function setRotation(target: FeatureMatchLayoutEditorSelection, rotation: number, editOptions: FeatureMatchLayoutEditOptions = {}) {
+		if (target.type === 'item')
+			editComposition(composition => patchGraphicItem(composition, target.itemId, { rotation }), editOptions);
+	}
+
 	function nudge(delta: { x: number; y: number }) {
 		translateLayers(delta, {
 			coalesce: `nudge:${layers.value.map(editorSelectionKey).join(',')}`,
@@ -484,6 +490,7 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		setRect,
 		setSelectionRect,
 		setLayersGeometry,
+		setRotation,
 		nudge,
 	};
 }
