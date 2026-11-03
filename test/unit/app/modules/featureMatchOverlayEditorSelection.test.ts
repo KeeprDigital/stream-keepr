@@ -19,6 +19,7 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
  */
 
 const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
+const CANVAS_SIZE = { width: 1920, height: 1080 };
 
 function layoutWith(items: (composition: FeatureMatchLayoutConfig['composition']) => FeatureMatchLayoutConfig['composition']): FeatureMatchLayoutConfig {
 	const layout = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG).layout;
@@ -82,7 +83,7 @@ describe('feature match layout editor selection', () => {
 		const title = layout.composition.items[0]!;
 		const source = layout.sources.find(item => item.id === 'main-source')!;
 
-		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'title' })).toEqual({
+		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'title' }, CANVAS_SIZE)).toMatchObject({
 			rect: {
 				x: title.x,
 				y: title.y,
@@ -91,14 +92,25 @@ describe('feature match layout editor selection', () => {
 			},
 			origin: { x: 0, y: 0 },
 		});
-		expect(editorSelectionFrame(layout, { type: 'source', itemId: 'main-source' })?.rect)
+		expect(editorSelectionFrame(layout, { type: 'source', itemId: 'main-source' }, CANVAS_SIZE)?.rect)
 			.toEqual({
 				x: source.x,
 				y: source.y,
 				width: source.width,
 				height: source.height,
 			});
-		expect(editorSelectionFrame(layout, { type: 'canvas' })).toBeNull();
+		expect(editorSelectionFrame(layout, { type: 'canvas' }, CANVAS_SIZE)).toBeNull();
+	});
+
+	it('snaps a top-level Graphic Item and a Source Item to each other, since they share the canvas', () => {
+		const layout = layoutWith(composition => addGraphicItem(composition, { kind: 'text', id: 'title', ...CANVAS }).graphic);
+		const title = layout.composition.items[0]!;
+		const source = layout.sources.find(item => item.id === 'main-source')!;
+
+		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'title' }, CANVAS_SIZE)?.snapLines.x)
+			.toEqual(expect.arrayContaining([source.x, source.x + source.width]));
+		expect(editorSelectionFrame(layout, { type: 'source', itemId: 'main-source' }, CANVAS_SIZE)?.snapLines.y)
+			.toEqual(expect.arrayContaining([title.y, title.y + title.height]));
 	});
 
 	it('places a canvas-arranged group child inside its group\'s padded box', () => {
@@ -121,7 +133,7 @@ describe('feature match layout editor selection', () => {
 			},
 		};
 
-		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'child' })?.origin).toEqual({ x: 54, y: 64 });
+		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'child' }, CANVAS_SIZE)?.origin).toEqual({ x: 54, y: 64 });
 	});
 
 	it('offers nothing to move for a row child or a rotated item', () => {
@@ -141,10 +153,10 @@ describe('feature match layout editor selection', () => {
 				],
 			},
 		};
-		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'child' })).toBeNull();
+		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'child' }, CANVAS_SIZE)).toBeNull();
 
 		const rotated = layoutWith(composition => addGraphicItem(composition, { kind: 'text', id: 'title', ...CANVAS }).graphic);
 		rotated.composition.items = rotated.composition.items.map(item => ({ ...item, rotation: 15 }) as GraphicItemConfig);
-		expect(editorSelectionFrame(rotated, { type: 'item', itemId: 'title' })).toBeNull();
+		expect(editorSelectionFrame(rotated, { type: 'item', itemId: 'title' }, CANVAS_SIZE)).toBeNull();
 	});
 });

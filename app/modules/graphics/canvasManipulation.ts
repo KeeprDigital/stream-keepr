@@ -1,12 +1,15 @@
-import type { GraphicRect } from '~~/shared/types/graphics';
+import type { GraphicAnchorPoint, GraphicRect } from '~~/shared/types/graphics';
+import { resolveGraphicAnchorPoint } from '~~/shared/modules/graphics/geometry';
 
 /**
  * Direct manipulation of one rectangle on an editor canvas: dragging it, resizing
  * it from one of eight handles, and nudging it from the keyboard.
  *
- * Pure, and in canvas pixels throughout. The overlay that turns pointer movement
- * into a delta owns the preview's scale; this owns what a delta does to a stored
- * top-left rectangle, and the snapping that makes edges and centres easy to hit.
+ * Pure, and in the pixels of the rectangle's container throughout: the canvas,
+ * or a Graphic Group's padded box for its child. The overlay that turns pointer
+ * movement into a delta owns the preview's scale; this owns what a delta does to
+ * a stored top-left rectangle, and the snapping that makes the canvas's and other
+ * layers' edges and centres easy to hit.
  */
 
 export type ManipulationHandle = 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
@@ -26,17 +29,33 @@ export const RESIZE_HANDLES = [
 const MIN_SIZE = 1;
 
 export interface SnapLines {
-	/** Canvas x positions an edge or centre may snap to. */
+	/** x positions an edge or centre may snap to. */
 	x: readonly number[];
-	/** Canvas y positions an edge or centre may snap to. */
+	/** y positions an edge or centre may snap to. */
 	y: readonly number[];
+	/** The boxes of the layers beside the moving one, for measuring the gap to them. */
+	neighbours?: readonly GraphicRect[];
+}
+
+/** The empty span between a rectangle and its nearest neighbour along one axis. */
+export interface NeighbourGap {
+	from: number;
+	to: number;
+	/** The middle of the span the two share across the gap, on the other axis. */
+	at: number;
 }
 
 export interface ManipulationOptions {
 	/** Keep the starting width-to-height ratio while resizing. */
 	keepRatio?: boolean;
-	/** Lines to snap to, and how close, in canvas pixels, counts as on one. */
+	/** Lines to snap to, and how close counts as on one. */
 	snap?: { lines: SnapLines; threshold: number };
+	/**
+	 * The rectangle's Graphic Rotation about its Graphic Anchor Point. A rotated
+	 * rectangle snaps the box it covers while moving and does not snap while resizing.
+	 */
+	rotation?: number;
+	anchor?: GraphicAnchorPoint;
 }
 
 export interface ManipulationResult {
@@ -45,12 +64,153 @@ export interface ManipulationResult {
 	snapped: { x?: number; y?: number };
 }
 
-/** The canvas's own edges and centre lines. */
-export function canvasSnapLines(canvas: { width: number; height: number }): SnapLines {
+/**
+ * A layer as snapping sees it, in its container's pixels: a Source Item, a
+ * Graphic Item, or a Graphic Group with the children it positions inside its
+ * padded box.
+ */
+export interface SnapLayer extends GraphicRect {
+	id: string;
+	visible: boolean;
+	/** Graphic Rotation in degrees about the Graphic Anchor Point. */
+	rotation?: number;
+	anchor?: GraphicAnchorPoint;
+	padding?: number;
+	children?: readonly SnapLayer[];
+}
+
+/**
+ * The axis-aligned box a rectangle covers once rotated about its Graphic Anchor
+ * Point, to two decimal places so a quarter turn lands on whole pixels.
+ */
+function rotatedBounds(rect: GraphicRect, rotation = 0, anchor?: GraphicAnchorPoint): GraphicRect {
+	if (rotation % 360 === 0) {
+		return {
+			x: rect.x,
+			y: rect.y,
+			width: rect.width,
+			height: rect.height,
+		};
+	}
+	const point = resolveGraphicAnchorPoint(anchor);
+	const pivotX = rect.x + rect.width * point.x;
+	const pivotY = rect.y + rect.height * point.y;
+	const radians = rotation * Math.PI / 180;
+	const cos = Math.cos(radians);
+	const sin = Math.sin(radians);
+	const xs: number[] = [];
+	const ys: number[] = [];
+	for (const [cornerX, cornerY] of [
+		[rect.x, rect.y],
+		[rect.x + rect.width, rect.y],
+		[rect.x, rect.y + rect.height],
+		[rect.x + rect.width, rect.y + rect.height],
+	] as const) {
+		const dx = cornerX - pivotX;
+		const dy = cornerY - pivotY;
+		xs.push(pivotX + dx * cos - dy * sin);
+		ys.push(pivotY + dx * sin + dy * cos);
+	}
+	const left = roundBound(Math.min(...xs));
+	const top = roundBound(Math.min(...ys));
 	return {
-		x: [0, canvas.width / 2, canvas.width],
-		y: [0, canvas.height / 2, canvas.height],
+		x: left,
+		y: top,
+		width: roundBound(Math.max(...xs)) - left,
+		height: roundBound(Math.max(...ys)) - top,
 	};
+}
+
+function roundBound(value: number): number {
+	return Math.round(value * 100) / 100;
+}
+
+/**
+ * The lines a layer may snap to, in its container's pixels: the edges and centre
+ * of every other visible layer beside it, and the canvas's edges and centre
+ * lines. A group child is beside its siblings and also snaps to its group's box,
+ * outer and padded, with everything measured from the padded box's corner.
+ * A rotated layer offers the axis-aligned box it covers.
+ */
+export function canvasSnapLines(
+	canvas: { width: number; height: number },
+	layers: readonly SnapLayer[] = [],
+	layerId?: string,
+): SnapLines {
+	const group = layers.find(layer => layer.children?.some(child => child.id === layerId));
+	const siblings = group?.children ?? layers;
+	const padding = Math.max(0, group?.padding ?? 0);
+	const origin = group
+		? { x: group.x + padding, y: group.y + padding }
+		: { x: 0, y: 0 };
+
+	const x = [0, canvas.width / 2, canvas.width].map(line => line - origin.x);
+	const y = [0, canvas.height / 2, canvas.height].map(line => line - origin.y);
+	const add = (rect: GraphicRect) => {
+		x.push(rect.x, rect.x + rect.width / 2, rect.x + rect.width);
+		y.push(rect.y, rect.y + rect.height / 2, rect.y + rect.height);
+	};
+	if (group) {
+		add({
+			x: -padding,
+			y: -padding,
+			width: group.width,
+			height: group.height,
+		});
+		add({
+			x: 0,
+			y: 0,
+			width: group.width - 2 * padding,
+			height: group.height - 2 * padding,
+		});
+	}
+	const neighbours = siblings
+		.filter(layer => layer.id !== layerId && layer.visible)
+		.map(layer => rotatedBounds(layer, layer.rotation, layer.anchor));
+	neighbours.forEach(add);
+	return {
+		x: uniqueSorted(x),
+		y: uniqueSorted(y),
+		neighbours,
+	};
+}
+
+/**
+ * The gap to the nearest neighbour on each axis: one level with it on the other
+ * axis, and clear of it. Display only; nothing snaps to equal spacing.
+ */
+export function neighbourGaps(rect: GraphicRect, neighbours: readonly GraphicRect[]): { x?: NeighbourGap; y?: NeighbourGap } {
+	const gaps: { x?: NeighbourGap; y?: NeighbourGap } = {};
+	for (const axis of ['x', 'y'] as const) {
+		const size = axis === 'x'
+			? 'width'
+			: 'height';
+		const cross = axis === 'x'
+			? 'y'
+			: 'x';
+		const crossSize = axis === 'x'
+			? 'height'
+			: 'width';
+		for (const other of neighbours) {
+			const sharedStart = Math.max(rect[cross], other[cross]);
+			const sharedEnd = Math.min(rect[cross] + rect[crossSize], other[cross] + other[crossSize]);
+			if (sharedEnd <= sharedStart)
+				continue;
+			const gap = other[axis] >= rect[axis] + rect[size]
+				? { from: rect[axis] + rect[size], to: other[axis] }
+				: { from: other[axis] + other[size], to: rect[axis] };
+			const nearest = gaps[axis];
+			if (gap.to > gap.from && (!nearest || gap.to - gap.from < nearest.to - nearest.from))
+				gaps[axis] = { ...gap, at: (sharedStart + sharedEnd) / 2 };
+		}
+	}
+	return gaps;
+}
+
+function uniqueSorted(values: readonly number[]): number[] {
+	return [
+		...new Set(values.map(roundBound)),
+	].sort((a, b) => a - b);
 }
 
 function nearest(candidates: readonly number[], lines: readonly number[], threshold: number) {
@@ -80,8 +240,9 @@ function moveRect(start: GraphicRect, delta: { x: number; y: number }, options: 
 	const snapped: ManipulationResult['snapped'] = {};
 	if (options.snap) {
 		const { lines, threshold } = options.snap;
-		const snapX = nearest([x, x + start.width / 2, x + start.width], lines.x, threshold);
-		const snapY = nearest([y, y + start.height / 2, y + start.height], lines.y, threshold);
+		const covered = rotatedBounds({ ...start, x, y }, options.rotation, options.anchor);
+		const snapX = nearest([covered.x, covered.x + covered.width / 2, covered.x + covered.width], lines.x, threshold);
+		const snapY = nearest([covered.y, covered.y + covered.height / 2, covered.y + covered.height], lines.y, threshold);
 		if (snapX) {
 			x += snapX.offset;
 			snapped.x = snapX.line;
@@ -108,7 +269,9 @@ function resizeRect(
 	let right = start.x + start.width;
 	let bottom = start.y + start.height;
 	const snapped: ManipulationResult['snapped'] = {};
-	const snap = options.snap;
+	const snap = (options.rotation ?? 0) % 360 === 0
+		? options.snap
+		: undefined;
 
 	if (handle.includes('w'))
 		left = Math.min(left + delta.x, right - MIN_SIZE);

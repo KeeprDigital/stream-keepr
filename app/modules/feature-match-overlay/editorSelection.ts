@@ -1,9 +1,11 @@
 import type { GraphicRect } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlaySelectionTarget } from './selection';
+import type { SnapLines } from '~/modules/graphics/canvasManipulation';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { findGraphicItem } from '~~/shared/modules/graphics';
+import { canvasSnapLines } from '~/modules/graphics/canvasManipulation';
 
 /**
  * The Feature Match Overlay editor's one selection: the canvas (the Frame), one
@@ -79,6 +81,8 @@ export interface EditorSelectionFrame {
 	rect: GraphicRect;
 	/** Where the container's origin sits on the canvas. */
 	origin: { x: number; y: number };
+	/** What the layer snaps to, in its container's pixels. */
+	snapLines: SnapLines;
 }
 
 /**
@@ -93,9 +97,15 @@ export interface EditorSelectionFrame {
 export function editorSelectionFrame(
 	layout: FeatureMatchLayoutConfig,
 	selection: FeatureMatchLayoutEditorSelection,
+	canvas: { width: number; height: number },
 ): EditorSelectionFrame | null {
 	if (selection.type === 'canvas')
 		return null;
+	// Source Items and top-level Graphic Items share the canvas, so each snaps to the others.
+	const snapLines = canvasSnapLines(canvas, [
+		...layout.sources,
+		...layout.composition.items,
+	], selection.itemId);
 
 	if (selection.type === 'source') {
 		const item = layout.sources.find(candidate => candidate.id === selection.itemId);
@@ -103,6 +113,7 @@ export function editorSelectionFrame(
 			? {
 					rect: pickRect(item),
 					origin: { x: 0, y: 0 },
+					snapLines,
 				}
 			: null;
 	}
@@ -114,6 +125,7 @@ export function editorSelectionFrame(
 		return {
 			rect: pickRect(location.item),
 			origin: { x: 0, y: 0 },
+			snapLines,
 		};
 	}
 	if (location.group.arrangement !== 'canvas')
@@ -122,6 +134,7 @@ export function editorSelectionFrame(
 	return {
 		rect: pickRect(location.item),
 		origin: { x: location.group.x + padding, y: location.group.y + padding },
+		snapLines,
 	};
 }
 
