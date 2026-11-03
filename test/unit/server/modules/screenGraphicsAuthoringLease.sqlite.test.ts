@@ -1,5 +1,6 @@
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { GraphicAssetReferenceStatus } from '~~/shared/types/graphicsAsset';
+import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,6 +11,7 @@ import {
 	graphicAssetRevisions,
 	graphicAssets,
 } from '~~/server/db/schema/graphicsAsset';
+import { applyFeatureMatchOverlayPreset, DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/featureMatchOverlayPresets';
 import { seedBroadcastGraphicsScreen } from '~~/test/helpers/broadcastGraphicsScreen';
 import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
@@ -291,5 +293,100 @@ describe('a takeover between admission and commit', () => {
 
 		expect(tookOver).toBe(true);
 		expect(await authoredStack()).toEqual(['authored']);
+	});
+});
+
+/**
+ * The Feature Match Layout is part of the same Edit workspace (#738): one lease
+ * covers it, and a Feature Match Slot change stays live operation, open to all.
+ */
+describe('a Feature Match Overlay Screen\'s Feature Match Layout while leased', () => {
+	let storedLayout: FeatureMatchOverlayModeConfig['layout'];
+	const otherPreset = applyFeatureMatchOverlayPreset(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, 'full-table');
+
+	beforeEach(async () => {
+		const [slot] = await db.insert(schema.featureMatches).values({ eventId } as never).returning();
+		const config = { ...structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG), featureMatchId: slot!.id };
+		storedLayout = config.layout;
+		const current = await screenRow();
+		await db.update(schema.screens).set({
+			currentMode: 'feature-match-overlay',
+			modeConfigs: { ...current!.modeConfigs, 'feature-match-overlay': config },
+		} as never).where(eq(schema.screens.id, screenId));
+	});
+
+	async function overlay() {
+		return (await screenRow())?.modeConfigs?.['feature-match-overlay'];
+	}
+
+	function modeConfigWrite(sessionId: string, config: Record<string, unknown>) {
+		return screenWriteModule().updateModeConfig({
+			eventId,
+			screenId,
+			mode: 'feature-match-overlay',
+			config,
+			graphicsAssets: () => ({ inspectGraphicAssetRevisions: async () => [] }),
+			authoringSessionId: sessionId,
+		});
+	}
+
+	it.each([
+		['its layout', { layout: otherPreset.layout }],
+		['its preset', { presetId: 'full-table' }],
+		['a display reset', { presetId: otherPreset.presetId, layout: otherPreset.layout }],
+	])('refuses another Session\'s mode configuration write of %s', async (_, config) => {
+		await lease(HOLDER);
+
+		await expect(modeConfigWrite(OTHER, config)).rejects.toMatchObject({ statusCode: 409 });
+
+		expect((await overlay())?.layout).toEqual(storedLayout);
+		expect((await overlay())?.presetId).toBe(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.presetId);
+	});
+
+	it('admits the holder\'s layout write', async () => {
+		await lease(HOLDER);
+
+		await modeConfigWrite(HOLDER, { layout: otherPreset.layout });
+
+		expect((await overlay())?.layout).toEqual(otherPreset.layout);
+	});
+
+	it('admits another Session\'s Feature Match Slot change', async () => {
+		await lease(HOLDER);
+
+		await modeConfigWrite(OTHER, { featureMatchId: null });
+
+		expect((await overlay())?.featureMatchId).toBeUndefined();
+		expect((await overlay())?.layout).toEqual(storedLayout);
+	});
+
+	it.each([
+		['refuses', 'a changed layout', { layout: otherPreset.layout }, true],
+		['admits', 'the layout back unchanged', {}, false],
+		['admits', 'a Feature Match Slot change', { featureMatchId: null }, false],
+	])('%s another Session\'s generic Screen write carrying %s', async (_, __, change, refused) => {
+		await lease(HOLDER);
+		const current = await screenRow();
+		const write = screenWriteModule().updateScreen({
+			eventId,
+			screenId,
+			input: {
+				stateVersion: current!.stateVersion,
+				name: 'Renamed',
+				modeConfigs: {
+					...current!.modeConfigs,
+					'feature-match-overlay': { ...current!.modeConfigs!['feature-match-overlay'], ...change },
+				},
+			} as never,
+			authoringSessionId: OTHER,
+		});
+
+		if (refused)
+			await expect(write).rejects.toMatchObject({ statusCode: 409 });
+		else
+			await write;
+
+		expect((await screenRow())?.name).toBe(refused ? 'Program' : 'Renamed');
+		expect((await overlay())?.layout).toEqual(storedLayout);
 	});
 });
