@@ -15,11 +15,12 @@ const ITEM = { type: 'item', itemId: 'player1-game-wins' } as const;
 /** The backmost Graphic Item, which a reorder can bring forward. */
 const firstItemId = DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.composition.items[0]!.id;
 
-function editorFor(writable: boolean) {
+function editorFor(writable: boolean, locks = ref<string[]>([])) {
 	const config = ref(structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG));
 	const writes: unknown[] = [];
 	const leased = ref(writable);
 	const editor = useFeatureMatchLayoutEditor({
+		locks,
 		config,
 		updateConfig: (patch) => {
 			writes.push(patch);
@@ -282,24 +283,8 @@ describe('useFeatureMatchLayoutEditor with several layers selected', () => {
 /** A locked layer is left alone by the canvas and arrow nudges, and edited by its panel (#747). */
 describe('useFeatureMatchLayoutEditor with Layer Locks', () => {
 	function lockedEditor(writable = true) {
-		const editing = editorFor(writable);
 		const locks = ref<string[]>([]);
-		const editor = useFeatureMatchLayoutEditor({
-			config: editing.config,
-			updateConfig: (patch) => {
-				editing.writes.push(patch);
-				editing.config.value = {
-					...editing.config.value,
-					...patch,
-				};
-			},
-			canvasWidth: 1920,
-			canvasHeight: 1080,
-			writable: editing.leased,
-			locks,
-		});
-		editor.select(SOURCE);
-		return { ...editing, editor, locks };
+		return { ...editorFor(writable, locks), locks };
 	}
 
 	function sourceAt(config: ReturnType<typeof editorFor>['config'], id: string) {

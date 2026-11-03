@@ -2007,6 +2007,9 @@ Frame bars and backgrounds sit under everything and were dragged by accident. Cl
 
 - Another browser, or another Screen with the same layout, keeps its own locks. A placed Template or reapplied preset keeps the locks of any layer ids it reuses.
 - A lock on a deleted layer is kept, so undoing the delete brings the layer back locked.
+- A locked child of an unlocked Graphic Group still moves with its group, since the group places it; lock the group to hold both.
+- One unlocked layer selected among locked ones only moves, as several do; select it alone to resize or rotate it.
+- A row or column child, or a rotated group's child, has no box of its own on the canvas, so locked it is badged on its row only.
 - `app/modules/feature-match-overlay/layerLocks.ts` holds the lock rules, and `editorLayersFrame` leaves locked layers out of what the canvas moves.
 
 ### Rejected alternatives
