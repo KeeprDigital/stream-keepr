@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { NumberScrub } from '~/modules/graphics/numberScrub';
-import { NUMBER_SCRUB_GESTURE, scrubNumber, startNumberScrub } from '~/modules/graphics/numberScrub';
+import { scrubNumber, startNumberScrub } from '~/modules/graphics/numberScrub';
+import { NUMBER_SCRUB_GESTURE } from '~/modules/graphics/numberScrubGesture';
 
 /**
  * A graphics inspector's number field: a labelled number input whose label drags
- * the value (E29). Each step of a drag is emitted like a typed value, so it takes
- * the same write path as typing: debounced, and refused without the Graphics
- * Authoring Lease (E30). An editor with undo provides `NUMBER_SCRUB_GESTURE` to
- * make one drag one undo step.
+ * the value, by `scrubNumber`'s rate and within `min` and `max`. Each step of a
+ * drag is emitted like a typed value, so it takes the same write path as typing:
+ * debounced, and refused without the Graphics Authoring Lease (ADR-0030). An
+ * editor with undo provides `NUMBER_SCRUB_GESTURE` to make one drag one undo step.
  *
  * The label is keyboard-neutral: it is not focusable, and a plain click still
  * focuses the input, which stays the accessible way to set a value. A disabled
@@ -66,12 +67,11 @@ function start(event: PointerEvent) {
 		return;
 	event.preventDefault();
 	(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-	const value = Math.min(props.max ?? Infinity, Math.max(props.min ?? -Infinity, props.modelValue ?? 0));
 	swallowClick = false;
 	active.value = {
 		pointerId: event.pointerId,
 		lastX: event.clientX,
-		scrub: startNumberScrub(value),
+		scrub: startNumberScrub(props.modelValue ?? 0, props),
 		changed: false,
 	};
 }

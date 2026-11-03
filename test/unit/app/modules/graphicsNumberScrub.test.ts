@@ -3,7 +3,7 @@ import { scrubNumber, startNumberScrub } from '~~/app/modules/graphics/numberScr
 
 /**
  * Dragging a number field's label: one displayed step per 2px, Shift ×10, Alt ×0.1,
- * held inside the field's bounds (E29).
+ * held inside the field's bounds.
  */
 
 const NONE = { shiftKey: false, altKey: false };
@@ -112,7 +112,7 @@ describe('number scrub', () => {
 			value: 360,
 		},
 	])('$case', ({ start, dx, step, keys, bounds, value }) => {
-		const scrub = scrubNumber(startNumberScrub(start), {
+		const scrub = scrubNumber(startNumberScrub(start, bounds), {
 			dx,
 			step,
 			...keys,

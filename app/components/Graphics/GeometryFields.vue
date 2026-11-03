@@ -72,6 +72,8 @@ const ALIGN_ACTIONS = [
 
 const SIZE_AXES = { width: 'x', height: 'y' } as const;
 
+const MIN_SIZE_PX = 1;
+
 function containerSpan(axis: 'x' | 'y') {
 	return axis === 'x'
 		? props.container.width
@@ -86,6 +88,11 @@ function shownPosition(axis: 'x' | 'y') {
 
 function shownSize(axis: 'width' | 'height') {
 	return displayGeometryValue(props.rect[axis], containerSpan(SIZE_AXES[axis]), unit.value);
+}
+
+/** One pixel in the author's unit: no size edit, typed or dragged, goes below it. */
+function minSize(axis: 'width' | 'height') {
+	return displayGeometryValue(MIN_SIZE_PX, containerSpan(SIZE_AXES[axis]), unit.value);
 }
 
 function updatePosition(axis: 'x' | 'y', value: number | null | undefined) {
@@ -107,17 +114,17 @@ function toggleLink() {
 }
 
 function updateSize(axis: 'width' | 'height', value: number | null | undefined) {
-	const size = Math.max(1, parseGeometryValue(value ?? 0, containerSpan(SIZE_AXES[axis]), unit.value));
+	const size = Math.max(MIN_SIZE_PX, parseGeometryValue(value ?? 0, containerSpan(SIZE_AXES[axis]), unit.value));
 	const ratio = activeRatio.value;
 	const sizes = ratio === null
 		? { [axis]: size }
 		: axis === 'width'
 			? {
 					width: size,
-					height: Math.max(1, size / ratio),
+					height: Math.max(MIN_SIZE_PX, size / ratio),
 				}
 			: {
-					width: Math.max(1, size * ratio),
+					width: Math.max(MIN_SIZE_PX, size * ratio),
 					height: size,
 				};
 	emit('update', resizeGraphicRectFromAnchor(props.rect, sizes, props.anchor));
@@ -165,6 +172,7 @@ const inputStep = computed(() => geometryUnitInputStep(unit.value));
 					size="sm"
 					class="min-w-0 flex-1"
 					:model-value="shownSize(axis)"
+					:min="minSize(axis)"
 					:step="inputStep.step"
 					:step-snapping="inputStep.stepSnapping"
 					:aria-label="`Item ${axis}`"

@@ -4,9 +4,11 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, reactive, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
 import NumberField from '~/components/Graphics/NumberField.vue';
 import Settings from '~/components/Screen/Modes/FeatureMatchOverlay/Settings.vue';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
+import { OPACITY_INPUT } from '~/utils/opacityInput';
 
 enableAutoUnmount(afterEach);
 
@@ -444,20 +446,16 @@ describe('featureMatchOverlaySettings', () => {
 				config: { type: Object, required: true },
 				updateConfig: { type: Function, required: true },
 			},
+			setup: () => ({ OPACITY_INPUT }),
 			template: `<GraphicsNumberField
 				label="Opacity"
-				:min="0"
-				:max="1"
-				:step="0.05"
+				v-bind="OPACITY_INPUT"
 				:model-value="config.layout.frame.opacity"
 				@update:model-value="opacity => updateConfig({ layout: { ...config.layout, frame: { ...config.layout.frame, opacity } } })"
 			/>`,
 		});
 
-		beforeAll(() => {
-			// happy-dom has no pointer capture; the field only asks for it.
-			HTMLElement.prototype.setPointerCapture ??= () => {};
-		});
+		beforeAll(stubPointerCapture);
 
 		it('undoes a whole drag on a panel\'s number label as one step, however long it pauses', async () => {
 			let now = 1_000;

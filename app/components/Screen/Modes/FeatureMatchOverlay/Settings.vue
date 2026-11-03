@@ -17,7 +17,7 @@ import {
 	fromHostSelectionTarget,
 	hostSelectionTarget,
 } from '~/modules/feature-match-overlay/editorSelection';
-import { NUMBER_SCRUB_GESTURE } from '~/modules/graphics/numberScrub';
+import { NUMBER_SCRUB_GESTURE } from '~/modules/graphics/numberScrubGesture';
 import FeatureMatchOverlayCompositorInspector from './CompositorInspector.vue';
 import FeatureMatchOverlayLayerInspector from './LayerInspector.vue';
 import FeatureMatchOverlayLayerList from './LayerList.vue';

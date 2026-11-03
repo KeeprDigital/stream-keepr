@@ -1,9 +1,7 @@
-import type { InjectionKey } from 'vue';
-
 /**
- * Dragging a number field's label to change its value (E29): one displayed step
- * of the field per 2px of horizontal drag, ten with Shift, a tenth with Alt, held
- * inside the field's bounds.
+ * Dragging a number field's label to change its value: one displayed step of the
+ * field per 2px of horizontal drag, ten with Shift, a tenth with Alt, held inside
+ * the field's bounds.
  *
  * Pure. Each pointer move is applied to the scrub so far, so changing a modifier
  * mid-drag changes the rate from there on rather than re-reading the whole drag,
@@ -20,19 +18,27 @@ export interface NumberScrub {
 	remainderPx: number;
 }
 
-export interface NumberScrubMove {
+/** A field's inclusive bounds, either of which may be open. */
+export interface NumberScrubBounds {
+	min?: number;
+	max?: number;
+}
+
+export interface NumberScrubMove extends NumberScrubBounds {
 	/** Horizontal pixels moved since the last move. */
 	dx: number;
 	/** The field's displayed step. */
 	step: number;
 	shiftKey: boolean;
 	altKey: boolean;
-	min?: number;
-	max?: number;
 }
 
-export function startNumberScrub(value: number): NumberScrub {
-	return { value, remainderPx: 0 };
+/** A scrub from the field's value, brought inside its bounds. */
+export function startNumberScrub(value: number, bounds: NumberScrubBounds = {}): NumberScrub {
+	return {
+		value: clamp(value, bounds),
+		remainderPx: 0,
+	};
 }
 
 export function scrubNumber(scrub: NumberScrub, move: NumberScrubMove): NumberScrub {
@@ -46,9 +52,13 @@ export function scrubNumber(scrub: NumberScrub, move: NumberScrubMove): NumberSc
 	const precision = Math.max(decimalPlaces(increment), decimalPlaces(scrub.value));
 	const next = Number((scrub.value + steps * increment).toFixed(precision));
 	return {
-		value: Math.min(move.max ?? Infinity, Math.max(move.min ?? -Infinity, next)),
+		value: clamp(next, move),
 		remainderPx: px - steps * NUMBER_SCRUB_PX_PER_STEP,
 	};
+}
+
+function clamp(value: number, { min, max }: NumberScrubBounds): number {
+	return Math.min(max ?? Infinity, Math.max(min ?? -Infinity, value));
 }
 
 /** Decimal places worth keeping: float noise such as 0.30000000000000004 is cut at ten. */
@@ -56,15 +66,3 @@ function decimalPlaces(value: number): number {
 	const [, fraction = ''] = String(Number(value.toFixed(10))).split('.');
 	return fraction.length;
 }
-
-/**
- * What an editor does around one scrub, so its writes are one undo step: `begin`
- * when the drag first changes the value, `end` when the pointer lets go. An
- * editor without undo provides nothing, and each step is an ordinary edit.
- */
-export interface NumberScrubGesture {
-	begin: () => void;
-	end: () => void;
-}
-
-export const NUMBER_SCRUB_GESTURE: InjectionKey<NumberScrubGesture> = Symbol('number-scrub-gesture');

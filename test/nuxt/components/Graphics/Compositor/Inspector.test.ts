@@ -25,6 +25,7 @@ import {
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
 import { MAX_GRAPHIC_TEXT_LENGTH } from '~~/shared/types/graphics';
+import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
 import Inspector from '~/components/Graphics/Compositor/Inspector.vue';
 
 enableAutoUnmount(afterEach);
@@ -360,10 +361,7 @@ function numberFieldByTestId(wrapper: Wrapper, testId: string) {
 }
 
 describe('graphicsCompositorInspector', () => {
-	beforeAll(() => {
-		// happy-dom has no pointer capture; a number field's label only asks for it.
-		HTMLElement.prototype.setPointerCapture ??= () => {};
-	});
+	beforeAll(stubPointerCapture);
 
 	it('offers no Graphic Item controls while the canvas is selected', async () => {
 		const wrapper = await mountComponent({

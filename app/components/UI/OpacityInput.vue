@@ -2,7 +2,7 @@
 import { OPACITY_INPUT } from '~/utils/opacityInput';
 
 /**
- * The one input for an opacity: 0 (clear) to 1 (opaque) in steps of 0.05.
+ * The one input for an opacity, over `OPACITY_INPUT`'s range and step.
  * A cleared field emits `null`; what that means — fully opaque, fully clear, or
  * unchanged — is the owner's to decide. Size, labels, and test ids fall through
  * to the input. A graphics inspector labels its opacity with a

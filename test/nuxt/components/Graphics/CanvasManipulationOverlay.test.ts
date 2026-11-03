@@ -2,6 +2,7 @@ import type { SnapLines } from '~/modules/graphics/canvasManipulation';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
+import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
 import CanvasManipulationOverlay from '~/components/Graphics/CanvasManipulationOverlay.vue';
 
 // The move and resize handles drawn over an editor preview: pointer movement on the drawn preview,
@@ -17,10 +18,7 @@ vi.mock('@vueuse/core', async importOriginal => ({
 
 enableAutoUnmount(afterEach);
 
-beforeAll(() => {
-	// happy-dom has no pointer capture; the overlay only asks for it.
-	HTMLElement.prototype.setPointerCapture ??= () => {};
-});
+beforeAll(stubPointerCapture);
 
 const RECT = {
 	x: 100,

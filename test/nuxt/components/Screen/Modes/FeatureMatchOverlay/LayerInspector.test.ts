@@ -5,6 +5,7 @@ import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
 import LayerInspector from '~/components/Screen/Modes/FeatureMatchOverlay/LayerInspector.vue';
 
 // The host-owned half of the Feature Match Overlay property panel: the Frame and the Source Items.
@@ -129,8 +130,7 @@ describe('featureMatchOverlayLayerInspector', () => {
 		},
 		{ session: 'a read-only observer', writable: false, offsets: [] },
 	])('lets $session drag a Source Item\'s X label to move it', async ({ writable, offsets }) => {
-		// happy-dom has no pointer capture; the field only asks for it.
-		HTMLElement.prototype.setPointerCapture ??= () => {};
+		stubPointerCapture();
 		const updateConfig = vi.fn<FeatureMatchOverlayConfigUpdater>();
 		const wrapper = await mountComponent({
 			updateConfig,
