@@ -5,6 +5,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import Settings from '~/components/Screen/Modes/Pairings/Settings.vue';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
@@ -62,10 +63,29 @@ mockNuxtImport('useServerTime', () => () => ({
 }));
 mockNuxtImport('useRoundStore', () => () => ({
 	rounds: [
-		{ id: 31, name: 'Round 4' },
+		{
+			id: 31,
+			phaseId: 3,
+			name: 'Round 4',
+			roundNumber: 4,
+		},
+		{
+			id: 41,
+			phaseId: 4,
+			name: 'Round 1',
+			roundNumber: 1,
+		},
 	],
 	isLoaded: true,
 	loadRoundsByEventId: vi.fn(),
+}));
+mockNuxtImport('usePhaseStore', () => () => ({
+	phases: [
+		{ id: 3, name: 'Swiss', sortOrder: 1 },
+		{ id: 4, name: 'Top Cut', sortOrder: 2 },
+	],
+	isLoaded: true,
+	loadPhasesByEventId: vi.fn(),
 }));
 mockNuxtImport('useModeConfigUpdate', () => () => ({
 	config: mockConfig,
@@ -124,7 +144,7 @@ async function mountSettings() {
 				ScreenSettingsCard: { template: '<section><slot /></section>' },
 				ScreenSettingsToggle: true,
 				UFormField: { template: '<div><slot /></div>' },
-				USelect: true,
+				USelect: USelectStub,
 				UInput: true,
 				UInputNumber: true,
 				USeparator: true,
@@ -147,6 +167,17 @@ describe('screenModesPairingsSettings', () => {
 
 	afterEach(() => {
 		vi.restoreAllMocks();
+	});
+
+	it('offers each Round as "Phase · Round", after the placeholder', async () => {
+		mockFetch.mockResolvedValue(pairingsOf(1));
+		const wrapper = await mountSettings();
+
+		expect(wrapper.findAll('select option').map(option => option.text())).toEqual([
+			'Select a round…',
+			'Swiss · Round 4',
+			'Top Cut · Round 1',
+		]);
 	});
 
 	it('counts pages from the pairings the Screen reads for the Round', async () => {

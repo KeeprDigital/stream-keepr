@@ -11,6 +11,7 @@ const props = defineProps<{
 }>();
 
 const roundStore = useRoundStore();
+const phaseStore = usePhaseStore();
 const { config, saving, updateConfig: saveConfig, resetConfig } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
@@ -25,7 +26,7 @@ const fields = screenModeConfigContract('pairings').fields;
 
 const roundOptions = computed(() => [
 	{ label: 'Select a round…', value: null },
-	...roundStore.rounds.map(round => ({ label: round.name, value: round.id })),
+	...roundPickerOptions(roundStore.rounds, phaseStore.phases),
 ]);
 
 // The Matches the Screen pages, read and followed as its Screen Output reads
@@ -51,11 +52,14 @@ const rotation = useRotationConfigWrites({
 const { updateConfig } = rotation;
 
 // What the picker below loads, re-read on Reconnect Resync (#610).
-useConsumedEventData(['rounds']);
+useConsumedEventData(['phases', 'rounds']);
 
 onMounted(async () => {
 	if (props.eventId && !roundStore.isLoaded) {
 		await roundStore.loadRoundsByEventId(props.eventId);
+	}
+	if (props.eventId && !phaseStore.isLoaded) {
+		await phaseStore.loadPhasesByEventId(props.eventId);
 	}
 });
 </script>
