@@ -284,7 +284,10 @@ describe('useFeatureMatchLayoutEditor with several layers selected', () => {
 describe('useFeatureMatchLayoutEditor with Layer Locks', () => {
 	function lockedEditor(writable = true) {
 		const locks = ref<string[]>([]);
-		return { ...editorFor(writable, locks), locks };
+		return {
+			...editorFor(writable, locks),
+			locks,
+		};
 	}
 
 	function sourceAt(config: ReturnType<typeof editorFor>['config'], id: string) {
