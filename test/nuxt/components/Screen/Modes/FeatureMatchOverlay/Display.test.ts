@@ -6,9 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
 import { createFeatureMatchLayoutComposition, FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES, featureMatchSampleDataset } from '~~/shared/featureMatchSampleDataset';
+import { featureMatchStressDataset } from '~~/shared/featureMatchStressDataset';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
-import { shape } from '~~/test/helpers/graphicsComposition';
+import { clock, shape, text } from '~~/test/helpers/graphicsComposition';
 import { LUFFY } from '~~/test/helpers/opCards';
 import Display from '~/components/Screen/Modes/FeatureMatchOverlay/Display.vue';
 import { GRAPHICS_PREVIEW_ANIMATION_MESSAGE, GRAPHICS_PREVIEW_READY_MESSAGE } from '~/modules/graphics/previewMessages';
@@ -20,6 +21,7 @@ const mockConfig = ref<FeatureMatchOverlayModeConfig>(structuredClone(DEFAULT_FE
 const mockOutputMode = ref<FeatureMatchOverlayOutput>('overlay');
 const mockPreviewGuides = ref(false);
 const mockPreviewSafeAreas = ref(false);
+const mockPreviewStressDataset = ref(false);
 const mockEventCanvas = ref({ width: 1920, height: 1080 });
 const mockIsPreview = ref(false);
 const mockLoading = ref(false);
@@ -37,6 +39,7 @@ mockNuxtImport('useScreenContext', () => () => ({
 	outputMode: mockOutputMode,
 	previewGuides: mockPreviewGuides,
 	previewSafeAreas: mockPreviewSafeAreas,
+	previewStressDataset: mockPreviewStressDataset,
 	eventCanvas: mockEventCanvas,
 	isPreview: mockIsPreview,
 	themeTokens: mockTheme,
@@ -845,6 +848,105 @@ describe('featureMatchOverlayDisplay', () => {
 			const wrapper = await mountComponent();
 
 			expect(wrapper.text()).not.toContain(FEATURE_MATCH_SAMPLE_TOKEN_VALUES.player1Name);
+		});
+	});
+
+	/**
+	 * The editor's stress toggle resolves the layout against the Feature Match
+	 * Stress Dataset, over a bound Slot's live data too.
+	 */
+	describe('the Feature Match Stress Dataset', () => {
+		afterEach(() => {
+			mockPreviewStressDataset.value = false;
+			mockUsesSampleDataset.value = false;
+			mockEvent.value = null;
+			mockMatch.value = null;
+			mockMatchState.value = null;
+		});
+
+		function layoutShowing(nameplate: string): FeatureMatchOverlayModeConfig {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.composition = {
+				...createFeatureMatchLayoutComposition(),
+				items: [
+					text('nameplate', { text: nameplate, width: 1600 }),
+					clock('clock'),
+				],
+			};
+			config.layout.sources = [];
+			return config;
+		}
+
+		const LIVE_MATCH = {
+			id: 9,
+			player1Data: { name: 'Live Player' },
+			player2Data: { name: 'Live Opponent' },
+		};
+
+		it.each([
+			{
+				over: 'the sample',
+				usesSample: true,
+				match: null,
+				game: 'mtg',
+			},
+			{
+				over: 'a bound Slot',
+				usesSample: false,
+				match: LIVE_MATCH,
+				game: 'mtg',
+			},
+			{
+				over: 'a bound Slot',
+				usesSample: false,
+				match: LIVE_MATCH,
+				game: 'op',
+			},
+		] as const)('shows the $game values over $over while the toggle is on, and not once it is off', async ({ usesSample, match, game }) => {
+			mockConfig.value = layoutShowing('{player1Name} {player1Deck}');
+			mockUsesSampleDataset.value = usesSample;
+			mockMatch.value = match;
+			mockEvent.value = { game };
+			mockPreviewStressDataset.value = true;
+
+			const wrapper = await mountComponent();
+			const { player1Name, player1Deck } = featureMatchStressDataset(game, { untimed: false }).tokenValues;
+
+			expect(wrapper.text()).toContain(`${player1Name} ${player1Deck}`);
+			expect(wrapper.get('[data-graphic-item-kind="clock"]').text()).toBe('1:23:45');
+
+			mockPreviewStressDataset.value = false;
+			await nextTick();
+
+			expect(wrapper.text()).not.toContain(String(player1Name));
+		});
+
+		// An Untimed Match shows its Untimed Label where the clock would be.
+		it.each([
+			{
+				untimedBy: 'the active Session',
+				matchState: {
+					clock: { type: 'untimed' },
+				},
+				event: { game: 'mtg' },
+			},
+			{
+				untimedBy: 'the Event\'s Match Format',
+				matchState: null,
+				event: { game: 'mtg', featureMatchDefaultClockType: 'untimed' },
+			},
+		])('shows the longest Untimed Label for a Match untimed by $untimedBy', async ({ matchState, event }) => {
+			mockConfig.value = layoutShowing('{player1Name}');
+			mockUsesSampleDataset.value = matchState === null;
+			mockMatch.value = matchState ? LIVE_MATCH : null;
+			mockMatchState.value = matchState;
+			mockEvent.value = event;
+			mockPreviewStressDataset.value = true;
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.get('[data-graphic-item-kind="clock"]').text())
+				.toBe(featureMatchStressDataset('mtg', { untimed: true }).context.clockDisplayTime);
 		});
 	});
 
