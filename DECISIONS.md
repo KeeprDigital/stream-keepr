@@ -1881,3 +1881,26 @@ Two owners disagreed (#886). The Session owned side order, while the setup form 
 
 - **The Slot owns side order, and `SwapPlayers` swaps the Slot row too.** It needs a Slot write alongside a Session command, and it conflicts with promotion and Reverse Sync, which write Match order.
 - **Detect a swapped Slot in the correction.** It would have to match players by id, or by typed data on an OP Event, and the Overlay would still be wrong between Swap and Save.
+
+## ADR-0059: A Feature Match Layout's Graphic Animation Preview plays the whole layout or one Graphic Item alone
+
+Accepted · 2026-11-03 · [#749](https://github.com/KeeprDigital/stream-keepr/issues/749). Records E31 and E32 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783).
+
+### Decision
+
+**The Feature Match Overlay editor offers the Graphic Animation Preview Broadcast Graphics has, over two subjects: the whole Feature Match Layout, or the selected Graphic Item alone (E31).** Phase or lifecycle, speed, loop, Play and Stop are the same controls (`GraphicsAnimationPreviewControls`); the run is the same plan with an optional `itemId`; the frame runs the same clock (`useGraphicAnimationPreviewClock`) and times the run with the same function (`resolveGraphicAnimationPreview`). A Feature Match Overlay pushes a whole mode configuration rather than a preview state, so its run travels on its own shared message, `graphics-compositor:preview-animation`, as the compositor selection already does.
+
+**One item alone means its motion is isolated, and nothing else changes.** Every other owner — the composition, its siblings, and the Graphic Group it sits in — is held at its Graphic Resting State, with its animation Theme bindings dropped so the render model cannot paint them back. The item starts at the run's start, free of any container's stagger. A selected Graphic Group keeps its children's recipes and its own stagger over them, since that is the group's motion. The run then composes through the projection a live output uses.
+
+**The Frame's Animation Effect keeps running during a run (E32).** A run moves Graphic Items only; the Frame and Source Items are host-owned and untouched.
+
+**Only a preview frame listens, and nothing writes.** A live Screen Output installs no listener for the run. The controls send a plan to the embedded frame and write no Screen configuration, so they need no Graphics Authoring Lease and work for a read-only observer.
+
+### Why
+
+The two editors author the same Graphic Item recipes, and a Feature Match Layout has no lifecycle on air of its own, so the composition run is the only place an author sees an enter, on-screen and exit together. The item run answers "what does this recipe do?" without the rest of the layout moving. Isolating motion in the composition, rather than adding an owner filter to the shared render model, kept the render model unchanged.
+
+### Consequences
+
+- Broadcast Graphics still previews a whole Broadcast Graphic; its frame ignores an `itemId`.
+- `test/unit/app/modules/graphicsAnimationPreview.test.ts` holds the timing and isolation rules; the Feature Match Overlay Display and preview aside tests hold the wiring.

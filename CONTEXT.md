@@ -698,7 +698,7 @@ The authored geometry and appearance of a Broadcast Graphic or Graphic Item whil
 One of nine points determining the apparent origin of a scale channel, defaulting to centre and independent of the Graphic Anchor Point.
 
 **Graphic Animation Preview**:
-Deterministic editor-only playback of one lifecycle phase or a full lifecycle, optionally at varied speed or looping. It never changes live Screen state and has no playhead, scrubbing, or keyframes.
+Deterministic editor-only playback of one lifecycle phase or a full lifecycle, optionally at varied speed or looping, of a Broadcast Graphic, a whole Feature Match Layout, or one Feature Match Layout Item alone with every other owner at rest; a Feature Match Overlay Frame keeps its Animation Effect throughout (ADR-0059). It never changes live Screen state, writes nothing, and has no playhead, scrubbing, or keyframes.
 
 ### Feature Match Overlay
 
