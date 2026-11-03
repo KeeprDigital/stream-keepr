@@ -7,6 +7,8 @@ import { defineComponent } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
 import { settleUntil } from '~~/test/helpers/settle';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { THEME_TOKEN_DRAFT_COMMIT_MS } from '~/modules/theme-editor/draft';
+import ThemeEditor from '~/pages/themes/[themeId].vue';
 
 // The Theme editor writes one token per edit and shows each token's state and
 // inherited default; what a write stores is the Theme library's own test.
@@ -53,6 +55,10 @@ beforeEach(() => {
 	});
 });
 
+afterEach(() => {
+	vi.useRealTimers();
+});
+
 const passthroughStub = defineComponent({ template: '<div><slot /></div>' });
 
 /** The library picker, pinning one revision of the first kind it was asked for on a click. */
@@ -80,8 +86,11 @@ const FocusPickerStub = defineComponent({
 	/>`,
 });
 
-async function mountEditor() {
-	const { default: ThemeEditor } = await import('../../../../app/pages/themes/[themeId].vue');
+/**
+ * The editor, with its preview gallery stubbed unless `preview`: the gallery
+ * renders every themed Screen Mode and has its own test, so one wiring test here mounts it.
+ */
+async function mountEditor({ preview = false } = {}) {
 	const wrapper = mount(ThemeEditor, {
 		global: {
 			stubs: {
@@ -89,6 +98,9 @@ async function mountEditor() {
 				NuxtLayout: passthroughStub,
 				NuxtLink: passthroughStub,
 				GraphicsAssetFocusPicker: FocusPickerStub,
+				...(preview
+					? {}
+					: { ThemePreviewGallery: true }),
 			},
 		},
 		// Attached, so the preview's painted style can be read back.
@@ -105,6 +117,18 @@ async function commit(wrapper: VueWrapper, token: string, name: string, value: s
 	const input = part(wrapper, token, name);
 	(input.element as HTMLInputElement).value = value;
 	await input.trigger('change');
+	await flushPromises();
+}
+
+/** A composite token's editor commits once its edits pause; the pause runs on a fake clock. */
+function pauseClock() {
+	vi.useFakeTimers({
+		toFake: ['setTimeout', 'clearTimeout'],
+	});
+}
+
+async function pauseEdits() {
+	await vi.advanceTimersByTimeAsync(THEME_TOKEN_DRAFT_COMMIT_MS);
 	await flushPromises();
 }
 
@@ -174,7 +198,7 @@ describe('the Theme editor', () => {
 
 	it('repaints its preview once a write lands', async () => {
 		answerWrite = () => theme(2, { 'standings.surface': 'rgb(0, 255, 0)' });
-		const wrapper = await mountEditor();
+		const wrapper = await mountEditor({ preview: true });
 		await settleUntil(() => wrapper.find('.standings-table').exists());
 
 		await commit(wrapper, 'standings.surface', 'colour', '#00ff00');
@@ -252,6 +276,7 @@ describe('the Theme editor', () => {
 	it('writes the background once its edits pause, as the whole stack', async () => {
 		answerWrite = body => theme(2, { background: body?.value });
 		const wrapper = await mountEditor();
+		pauseClock();
 		const addLayer = () => part(wrapper, 'background', 'background-layers').get('[data-testid="add-layer"]').trigger('click');
 
 		await addLayer();
@@ -266,7 +291,8 @@ describe('the Theme editor', () => {
 			enabled: true,
 			opacity: 1,
 		};
-		await vi.waitFor(() => expect(writes()).toEqual([
+		await pauseEdits();
+		expect(writes()).toEqual([
 			[
 				'PUT',
 				'background',
@@ -274,8 +300,7 @@ describe('the Theme editor', () => {
 					value: [colorLayer, colorLayer],
 				},
 			],
-		]));
-		await flushPromises();
+		]);
 		expect(field(wrapper, 'background').attributes('data-token-state')).toBe('set');
 	});
 
@@ -311,10 +336,12 @@ describe('the Theme editor', () => {
 			],
 		};
 		const wrapper = await mountEditor();
+		pauseClock();
 
 		await edit(part(wrapper, 'background', 'background-layers'));
+		await pauseEdits();
 
-		await vi.waitFor(() => expect(writes()).toHaveLength(1));
+		expect(writes()).toHaveLength(1);
 		const [[, token, body]] = writes() as [[string, string, { value: Array<{ color: unknown }> }]];
 		expect(token).toBe('background');
 		expect(body.value.map(layer => layer.color)).toEqual(written);
@@ -378,10 +405,12 @@ describe('the Theme editor', () => {
 
 	it('writes the Animation Effect an operator picks', async () => {
 		const wrapper = await mountEditor();
+		pauseClock();
 
 		await part(wrapper, 'animation-effect', 'animation-effect').get('select').setValue('caustics');
+		await pauseEdits();
 
-		await vi.waitFor(() => expect(writes()).toEqual([
+		expect(writes()).toEqual([
 			[
 				'PUT',
 				'animation-effect',
@@ -389,6 +418,6 @@ describe('the Theme editor', () => {
 					value: { effect: 'caustics' },
 				},
 			],
-		]));
+		]);
 	});
 });
