@@ -54,6 +54,16 @@ export const GRAPHICS_PREVIEW_READY_MESSAGE = 'graphics-compositor:preview-ready
  */
 export const GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE = 'graphics-compositor:selected-target';
 
+/**
+ * A Graphic Animation Preview run, pushed on its own, or null to stop one.
+ *
+ * Broadcast Graphics carries its run inside its whole preview state. A host that
+ * owns its preview transport — a Feature Match Overlay pushes a whole mode
+ * configuration — has nowhere to put one, so the run travels as one shared
+ * message, the way the compositor selection does.
+ */
+export const GRAPHICS_PREVIEW_ANIMATION_MESSAGE = 'graphics-compositor:preview-animation';
+
 /** How much of a lifecycle one Graphic Animation Preview run plays. */
 export const GRAPHICS_PREVIEW_ANIMATION_SCOPE_VALUES = ['phase', 'lifecycle'] as const;
 
@@ -76,6 +86,11 @@ export type GraphicsPreviewAnimationScope = typeof GRAPHICS_PREVIEW_ANIMATION_SC
 export interface GraphicsPreviewAnimationPlan {
 	/** The Broadcast Graphic being previewed. Every other graphic stays at rest. */
 	graphicId: string;
+	/**
+	 * The one Graphic Item of that graphic a run plays alone, every other owner
+	 * held at rest. Absent plays the whole graphic.
+	 */
+	itemId?: string;
 	scope: GraphicsPreviewAnimationScope;
 	/** The single phase a `phase` run plays, and where a `lifecycle` run starts. */
 	phase: GraphicAnimationPhase;
@@ -134,9 +149,14 @@ export function readGraphicsPreviewAnimationPlan(value: unknown): GraphicsPrevie
 		return null;
 	if (typeof plan.loop !== 'boolean')
 		return null;
+	if (plan.itemId !== undefined && (typeof plan.itemId !== 'string' || plan.itemId.length === 0))
+		return null;
 
 	return {
 		graphicId: plan.graphicId,
+		...(plan.itemId === undefined
+			? {}
+			: { itemId: plan.itemId }),
 		scope: plan.scope,
 		phase: plan.phase as GraphicAnimationPhase,
 		run: plan.run,
@@ -254,6 +274,21 @@ export function isGraphicsPreviewSelectedTargetMessage(
 
 	const data = message.data as Record<string, unknown>;
 	return data.type === GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE && isGraphicsSelectionTarget(data.target);
+}
+
+/**
+ * A run or a stop from the editor that embedded this preview. The plan itself is
+ * read with `readGraphicsPreviewAnimationPlan`, which turns a malformed one into a
+ * stop.
+ */
+export function isGraphicsPreviewAnimationMessage(
+	message: MessageEnvelope,
+	expected: ExpectedSender,
+): message is MessageEnvelope & { data: { type: string; plan: unknown } } {
+	if (!isFromExpectedSender(message, expected))
+		return false;
+
+	return (message.data as Record<string, unknown>).type === GRAPHICS_PREVIEW_ANIMATION_MESSAGE;
 }
 
 /** An embedded preview reporting that its listeners are installed. */

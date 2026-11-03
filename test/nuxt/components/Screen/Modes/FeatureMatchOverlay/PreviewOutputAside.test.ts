@@ -157,7 +157,8 @@ describe('feature Match Overlay preview aside — output hand-outs', () => {
 
 	it('disables every hand-out, explaining why, while Graphic Asset publication is blocked', async () => {
 		const wrapper = mountAside({ publicationBlocked: true, publicationBlockReason: 'A pinned revision is missing.' });
-		const blocked = wrapper.findAll('button[disabled]');
+		const blocked = wrapper.findAll('button[disabled]')
+			.filter(button => !button.element.closest('[data-testid="animation-preview-controls"]'));
 
 		expect(blocked.length).toBeGreaterThanOrEqual(3);
 		expect(blocked.every(button => button.attributes('title') === 'A pinned revision is missing.')).toBe(true);
@@ -232,6 +233,7 @@ describe('feature Match Overlay preview aside — its preview frame', () => {
 			'feature-match-overlay:preview-config',
 			'feature-match-overlay:selected-target',
 			'graphics-compositor:selected-target',
+			'graphics-compositor:preview-animation',
 		]);
 
 		postMessage.mockClear();
@@ -260,7 +262,7 @@ describe('feature Match Overlay preview aside — its preview frame', () => {
 
 		message(window.location.origin, frame.contentWindow, { type: GRAPHICS_PREVIEW_READY_MESSAGE });
 		await nextTick();
-		expect(postMessage).toHaveBeenCalledTimes(3);
+		expect(postMessage).toHaveBeenCalledTimes(4);
 	});
 
 	// Guides ride the preview's URL only, which is what keeps them off air.
@@ -283,6 +285,114 @@ describe('feature Match Overlay preview aside — its preview frame', () => {
 	it('fits the preview to the canvas aspect ratio', () => {
 		const wrapper = mountAside({ canvasWidth: 1080, canvasHeight: 1920 });
 
-		expect(wrapper.get('iframe').element.parentElement?.getAttribute('style')).toContain('aspect-ratio: 1080 / 1920');
+		expect(wrapper.get('[data-testid="preview-stage"]').attributes('style')).toContain('aspect-ratio: 1080 / 1920');
+	});
+});
+
+// The editor describes a run and the frame plays it; nothing here writes.
+describe('feature Match Overlay preview aside — graphic animation preview', () => {
+	const item = (itemId: string): GraphicsSelectionTarget => ({ type: 'item', graphicId: 'feature-match-layout', itemId });
+
+	/** The run last pushed to the frame: a plan, null for a stop, undefined if none was pushed. */
+	function lastRun(postMessage: ReturnType<typeof vi.fn>) {
+		const runs = postMessage.mock.calls
+			.map(([sent]) => sent)
+			.filter(sent => sent.type === 'graphics-compositor:preview-animation');
+		return runs.length === 0
+			? undefined
+			: runs[runs.length - 1].plan;
+	}
+
+	async function mountPlaying(compositorTarget: GraphicsSelectionTarget, subject: 'composition' | 'item') {
+		const wrapper = mountAside({ compositorTarget });
+		const postMessage = vi.fn();
+		previewFrame(wrapper, { postMessage });
+		await wrapper.get(`[data-testid="animation-preview-subject-${subject}"]`).trigger('click');
+		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
+		await nextTick();
+		return { wrapper, postMessage };
+	}
+
+	it.each([
+		[
+			'the whole composition, whatever is selected',
+			item('wins'),
+			'composition',
+			undefined,
+		],
+		[
+			'the selected Graphic Item alone',
+			item('wins'),
+			'item',
+			'wins',
+		],
+	] as const)('plays %s', async (_case, target, subject, itemId) => {
+		const { postMessage } = await mountPlaying(target, subject);
+
+		expect(lastRun(postMessage)).toEqual({
+			graphicId: 'feature-match-layout',
+			...(itemId
+				? { itemId }
+				: {}),
+			scope: 'phase',
+			phase: 'enter',
+			run: 1,
+			speed: 1,
+			loop: false,
+		});
+	});
+
+	it('offers no item run until a Graphic Item is selected', async () => {
+		const { wrapper, postMessage } = await mountPlaying({ type: 'canvas' }, 'item');
+
+		expect(wrapper.get('[data-testid="animation-preview-play"]').attributes('disabled')).toBeDefined();
+		expect(wrapper.get('[data-testid="animation-preview-hint"]').text()).toContain('Select a Graphic Item');
+		expect(lastRun(postMessage)).toBeUndefined();
+	});
+
+	it.each([
+		[
+			'stops an item run when another item is selected',
+			'item',
+			item('clock'),
+			null,
+		],
+		[
+			'keeps a composition run through a selection change',
+			'composition',
+			item('clock'),
+			expect.objectContaining({ run: 1 }),
+		],
+	] as const)('%s', async (_case, subject, next, expected) => {
+		const { wrapper, postMessage } = await mountPlaying(item('wins'), subject);
+
+		await wrapper.setProps({ compositorTarget: next });
+		await nextTick();
+
+		expect(lastRun(postMessage)).toEqual(expected);
+	});
+
+	// A layout declares no Graphic Inputs, so it has no update phase to play.
+	it('offers the layout\'s own phases only', () => {
+		const wrapper = mountAside();
+
+		expect(wrapper.findAll('[data-testid="animation-preview-phase"] option').map(option => option.text()))
+			.toEqual(['Enter', 'On screen', 'Exit']);
+	});
+
+	it('marks which subject a run plays', async () => {
+		const { wrapper } = await mountPlaying(item('wins'), 'item');
+
+		expect(wrapper.get('[data-testid="animation-preview-subject-item"]').attributes('aria-pressed')).toBe('true');
+		expect(wrapper.get('[data-testid="animation-preview-subject-composition"]').attributes('aria-pressed')).toBe('false');
+	});
+
+	it('hands a reloaded frame the run in play', async () => {
+		const { wrapper, postMessage } = await mountPlaying(item('wins'), 'composition');
+		postMessage.mockClear();
+
+		await wrapper.get('iframe').trigger('load');
+
+		expect(lastRun(postMessage)).toEqual(expect.objectContaining({ graphicId: 'feature-match-layout', run: 1 }));
 	});
 });

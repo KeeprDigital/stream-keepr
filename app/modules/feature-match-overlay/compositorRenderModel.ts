@@ -31,7 +31,8 @@ import { resolveGraphicsCompositionRenderModel } from '~/modules/graphics/render
  * There is no playout here, and no field for one. Every composition is always
  * composed: a Feature Match Overlay has no stack, no Graphic Channels, and no Take
  * or Out, so unlike `onAirGraphicIds` there is nothing to select and no empty set
- * to mean "nothing on air".
+ * to mean "nothing on air". Its lifecycle phases move only under an editor's
+ * Graphic Animation Preview.
  */
 
 export interface FeatureMatchOverlayCompositorRenderModelInput {
@@ -61,6 +62,11 @@ export interface FeatureMatchOverlayCompositorRenderModelInput {
 	 * nests the token values.
 	 */
 	itemAnimation?: Readonly<Record<string, readonly GraphicsAnimationProjection[]>>;
+	/**
+	 * The composition's own lifecycle phases. A Feature Match Overlay is never taken
+	 * on or off air, so only an editor's Graphic Animation Preview supplies one.
+	 */
+	animation?: readonly GraphicsAnimationProjection[];
 	/** Editor-only item guides and selection highlighting. */
 	itemGuides?: boolean;
 	/** Editor-only advisory action-safe and title-safe guides. */
@@ -100,6 +106,9 @@ export function resolveFeatureMatchOverlayCompositorRenderModel(
 			: undefined,
 		itemAnimation: input.itemAnimation
 			? { [FEATURE_MATCH_LAYOUT_COMPOSITION_ID]: input.itemAnimation }
+			: undefined,
+		animation: input.animation
+			? { [FEATURE_MATCH_LAYOUT_COMPOSITION_ID]: input.animation }
 			: undefined,
 		featureMatch: input.featureMatch,
 		itemGuides: input.itemGuides,

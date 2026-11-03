@@ -698,7 +698,7 @@ The authored geometry and appearance of a Broadcast Graphic or Graphic Item whil
 One of nine points determining the apparent origin of a scale channel, defaulting to centre and independent of the Graphic Anchor Point.
 
 **Graphic Animation Preview**:
-Deterministic editor-only playback of one lifecycle phase or a full lifecycle, optionally at varied speed or looping. It never changes live Screen state and has no playhead, scrubbing, or keyframes.
+Deterministic editor-only playback of one lifecycle phase or a full lifecycle, optionally at varied speed or looping, of a Broadcast Graphic, a whole Feature Match Layout, or one Feature Match Layout Item alone with the rest of its layout at its Graphic Resting State; a Feature Match Overlay Frame keeps its Animation Effect throughout (ADR-0059). It never changes live Screen state, writes nothing, and has no playhead, scrubbing, or keyframes.
 
 ### Feature Match Overlay
 
@@ -781,7 +781,7 @@ _Avoid_: Dummy data, test data
 - A **Screen Output** reads everything it renders through its **Screen**, never through an operator's Event reads, and never changes live state by reading it (ADR-0022)
 - A **Program monitor** or preview without a capability renders everything but media, is admitted by its operator's **Session**, and reports its missing asset access so a control surface states the loss
 - **Screen Outputs** and authoring run on Chromium, the only engine transparent video is supported on; another browser may flatten its alpha, and nothing detects or refuses it (ADR-0020)
-- **Broadcast Graphics Screen** and **Feature Match Overlay** previews share output selection, zoom, item selection, guides, and advisory action-safe (5%) and title-safe (10%) guides; guides never appear in live **Screen Outputs** and never clip items
+- **Broadcast Graphics Screen** and **Feature Match Overlay** previews share output selection, zoom and pan, item selection, guides, and advisory action-safe (5%) and title-safe (10%) guides; guides never appear in live **Screen Outputs** and never clip items. Zoom and pan are view state: they never write, need no **Graphics Authoring Lease**, and start at Fit on every visit
 
 ### Theming
 
