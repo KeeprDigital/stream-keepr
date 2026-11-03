@@ -267,6 +267,16 @@ export function isGraphicsPreviewReadyMessage(
 	return (message.data as Record<string, unknown>).type === GRAPHICS_PREVIEW_READY_MESSAGE;
 }
 
+/**
+ * A selection a preview frame reports back, under either host's select message
+ * type. `toggle` travels only when set, so a plain click's message is as it was.
+ */
+export function previewSelectMessage<T>(type: string, target: T, toggle: boolean) {
+	return toggle
+		? { type, target, toggle: true as const }
+		: { type, target };
+}
+
 export function isGraphicsPreviewSelectMessage(
 	message: MessageEnvelope,
 	expected: ExpectedSender,

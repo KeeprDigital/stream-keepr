@@ -157,37 +157,44 @@ describe('useFeatureMatchLayoutEditor with several layers selected', () => {
 
 	const SELECTED = [SOURCE, OTHER_SOURCE, ITEM];
 
-	it('moves every one by the drag of the box they cover, as one undo step', () => {
+	// They cover (24, 16) to (1900, 990).
+	it.each<[string, (editor: FeatureMatchLayoutEditor) => void, { x: number; y: number }]>([
+		[
+			'a canvas drag of the box they cover, over two frames of one gesture',
+			(editor) => {
+				editor.setSelectionRect({
+					x: 30,
+					y: 14,
+					width: 1876,
+					height: 974,
+				}, { coalesce: 'canvas:1' });
+				editor.setSelectionRect({
+					x: 34,
+					y: 11,
+					width: 1876,
+					height: 974,
+				}, { coalesce: 'canvas:1' });
+			},
+			{ x: 10, y: -5 },
+		],
+		[
+			'a run of nudges',
+			(editor) => {
+				editor.nudge({ x: -10, y: 0 });
+				editor.nudge({ x: 0, y: 1 });
+			},
+			{ x: -10, y: 1 },
+		],
+	])('moves every one by the same delta on %s, as one undo step', (_, gesture, delta) => {
 		const { editor, config } = severalSelected();
 		const before = SELECTED.map(layer => rectOf(config, layer));
 
-		// They cover (24, 16) to (1900, 990); drag that box 10 right and 5 up, over two frames.
-		editor.setSelectionRect({
-			x: 30,
-			y: 14,
-			width: 1876,
-			height: 974,
-		}, { coalesce: 'canvas:1' });
-		editor.setSelectionRect({
-			x: 34,
-			y: 11,
-			width: 1876,
-			height: 974,
-		}, { coalesce: 'canvas:1' });
+		gesture(editor);
 
-		expect(SELECTED.map(layer => rectOf(config, layer))).toEqual(before.map(rect => ({ ...rect, x: rect!.x + 10, y: rect!.y - 5 })));
+		expect(SELECTED.map(layer => rectOf(config, layer))).toEqual(before.map(rect => ({ ...rect, x: rect!.x + delta.x, y: rect!.y + delta.y })));
 		editor.undo();
 		expect(SELECTED.map(layer => rectOf(config, layer))).toEqual(before);
 		expect(editor.canUndo.value).toBe(false);
-	});
-
-	it('nudges every one by the same step', () => {
-		const { editor, config } = severalSelected();
-		const before = SELECTED.map(layer => rectOf(config, layer));
-
-		editor.nudge({ x: -10, y: 1 });
-
-		expect(SELECTED.map(layer => rectOf(config, layer))).toEqual(before.map(rect => ({ ...rect, x: rect!.x - 10, y: rect!.y + 1 })));
 	});
 
 	it.each<[string, (editor: FeatureMatchLayoutEditor) => void, (config: ReturnType<typeof editorFor>['config']) => unknown]>([
@@ -197,10 +204,8 @@ describe('useFeatureMatchLayoutEditor with several layers selected', () => {
 			config => SELECTED.map(layer => rectOf(config, layer)),
 		],
 		[
-			'hides every one, then shows them all again',
-			(editor) => {
-				editor.toggleVisible();
-			},
+			'hides every one',
+			editor => editor.toggleVisible(),
 			config => SELECTED.map(layer => rectOf(config, layer)?.visible),
 		],
 		[
@@ -248,20 +253,14 @@ describe('useFeatureMatchLayoutEditor with several layers selected', () => {
 		expect(editor.selection.value).toEqual({ type: 'canvas' });
 	});
 
-	it('names no one layer as the selection, so single-layer verbs leave them alone', () => {
-		const { editor } = severalSelected();
+	it('acts with a single-layer verb on none of them, since no one layer is the selection', () => {
+		const { editor, config } = severalSelected();
+		const order = config.value.layout.sources.map(item => item.id);
+
+		editor.moveToEdge(editor.selection.value, 'front');
 
 		expect(editor.selection.value).toEqual({ type: 'canvas' });
-	});
-
-	it('escape keeps the layer chosen last, then nothing', () => {
-		const { editor } = severalSelected();
-
-		editor.collapseSelection();
-		expect(editor.layers.value).toEqual([ITEM]);
-		expect(editor.selection.value).toEqual(ITEM);
-		editor.collapseSelection();
-		expect(editor.layers.value).toEqual([]);
+		expect(config.value.layout.sources.map(item => item.id)).toEqual(order);
 	});
 
 	it('lets go of a layer someone else removes, keeping the rest', async () => {

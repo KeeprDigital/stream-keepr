@@ -24,7 +24,9 @@ import {
 	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
 	isGraphicsPreviewSelectedTargetMessage,
+	previewSelectMessage,
 } from '~/modules/graphics/previewMessages';
+import { isSelectionToggle } from '~/modules/graphics/selection';
 import { useScreenModeReady } from '~/modules/screen-mode';
 import { screenMediaSourceUrl } from '~/utils/screenMediaSource';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
@@ -256,14 +258,11 @@ function guideStyle(item: { x: number; y: number; width: number; height: number 
 	return renderModel.value.rectStyle(item);
 }
 
-function postPreviewMessage(type: typeof FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE, payload: Record<string, unknown>) {
+function postPreviewMessage(message: Record<string, unknown>) {
 	if (!showPreviewGuides.value || !import.meta.client)
 		return;
 
-	window.parent?.postMessage({
-		type,
-		...payload,
-	}, window.location.origin);
+	window.parent?.postMessage(message, window.location.origin);
 }
 
 /**
@@ -272,16 +271,10 @@ function postPreviewMessage(type: typeof FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_ME
  * pushes what is marked back down, so this frame marks nothing itself.
  */
 function selectPreviewTarget(target: FeatureMatchOverlaySelectionTarget, event?: MouseEvent | KeyboardEvent) {
-	const toggle = isToggleClick(event);
+	const toggle = isSelectionToggle(event);
 	if (!toggle)
 		selectedPreviewTarget.value = target;
-	postPreviewMessage(FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE, toggle
-		? { target, toggle }
-		: { target });
-}
-
-function isToggleClick(event?: MouseEvent | KeyboardEvent): boolean {
-	return event?.metaKey === true || event?.ctrlKey === true;
+	postPreviewMessage(previewSelectMessage(FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE, target, toggle));
 }
 
 /**
@@ -300,11 +293,7 @@ function selectCompositorPreviewTarget(target: GraphicsSelectionTarget, toggle =
 
 	if (!toggle)
 		selectedCompositorTarget.value = target;
-	if (import.meta.client) {
-		window.parent?.postMessage(toggle
-			? { type: GRAPHICS_PREVIEW_SELECT_MESSAGE, target, toggle }
-			: { type: GRAPHICS_PREVIEW_SELECT_MESSAGE, target }, window.location.origin);
-	}
+	postPreviewMessage(previewSelectMessage(GRAPHICS_PREVIEW_SELECT_MESSAGE, target, toggle));
 
 	if (target.type === 'canvas')
 		selectPreviewTarget({ type: 'canvas' });

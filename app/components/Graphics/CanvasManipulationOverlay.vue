@@ -3,6 +3,7 @@ import type { GraphicRect } from '~~/shared/types/graphics';
 import type { ManipulationHandle, SnapLines } from '~/modules/graphics/canvasManipulation';
 import { useElementSize, useEventListener } from '@vueuse/core';
 import { canvasSnapLines, manipulateRect, neighbourGaps, RESIZE_HANDLES } from '~/modules/graphics/canvasManipulation';
+import { isSelectionToggle } from '~/modules/graphics/selection';
 
 /**
  * Move and resize handles for the selected layer, drawn over an editor preview.
@@ -52,7 +53,7 @@ const origin = computed(() => props.origin ?? { x: 0, y: 0 });
 const passesClicks = ref(false);
 if (import.meta.client) {
 	useEventListener(window, ['keydown', 'keyup'], (event: KeyboardEvent) => {
-		passesClicks.value = event.metaKey || event.ctrlKey;
+		passesClicks.value = isSelectionToggle(event);
 	});
 	useEventListener(window, 'blur', () => {
 		passesClicks.value = false;
@@ -123,7 +124,7 @@ const HANDLE_POSITION: Record<(typeof RESIZE_HANDLES)[number], string> = {
 };
 
 function start(event: PointerEvent, handle: ManipulationHandle) {
-	if (!props.rect || event.button !== 0 || event.metaKey || event.ctrlKey)
+	if (!props.rect || event.button !== 0 || isSelectionToggle(event))
 		return;
 	event.preventDefault();
 	(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);

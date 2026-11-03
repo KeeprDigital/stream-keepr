@@ -442,12 +442,6 @@ describe('featureMatchOverlaySettings', () => {
 			expect(wrapper.find('[data-testid="compositor-inspector"]').exists()).toBe(false);
 			expect(previewSelectedTarget(wrapper)).toEqual({ type: 'canvas' });
 			expect(compositorTarget(wrapper)).toEqual({ type: 'canvas' });
-			expect(preview(wrapper).props('selectionFrame')).toMatchObject({
-				members: [
-					expect.any(Object),
-					expect.any(Object),
-				],
-			});
 		});
 
 		it('takes a layer out with another ⌘-click', async () => {
@@ -469,35 +463,28 @@ describe('featureMatchOverlaySettings', () => {
 			expect(positions().map(position => position?.y)).toEqual([40, 40]);
 		});
 
-		it.each<[string, () => Promise<void>, (before: ReturnType<typeof positions>) => unknown]>([
+		it.each<[string, (wrapper: Awaited<ReturnType<typeof mountComponent>>) => Promise<void> | void, { x: number; y: number }]>([
 			[
-				'an arrow key nudges every one',
+				'an arrow key',
 				() => press('ArrowLeft', { shiftKey: true }),
-				before => before.map(position => ({ ...position!, x: position!.x - 10 })),
+				{ x: -10, y: 0 },
 			],
 			[
-				'Delete removes every one',
-				() => press('Delete'),
-				() => [undefined, undefined],
+				'a canvas drag of the box they cover',
+				(wrapper) => {
+					const frame = preview(wrapper).props('selectionFrame') as { rect: { x: number; y: number; width: number; height: number } };
+					preview(wrapper).vm.$emit('manipulate', { ...frame.rect, x: frame.rect.x + 5, y: frame.rect.y + 7 }, 1);
+				},
+				{ x: 5, y: 7 },
 			],
-		])('%s', async (_, act, expected) => {
-			await mountWithTwo();
-			const before = positions();
-
-			await act();
-
-			expect(positions()).toEqual(expected(before));
-		});
-
-		it('moves every one by a canvas drag of the box they cover', async () => {
+		])('moves every one by %s', async (_, act, delta) => {
 			const wrapper = await mountWithTwo();
 			const before = positions();
-			const frame = preview(wrapper).props('selectionFrame') as { rect: { x: number; y: number; width: number; height: number } };
 
-			preview(wrapper).vm.$emit('manipulate', { ...frame.rect, x: frame.rect.x + 5, y: frame.rect.y + 7 }, 1);
+			await act(wrapper);
 			await nextTick();
 
-			expect(positions()).toEqual(before.map(position => ({ x: position!.x + 5, y: position!.y + 7 })));
+			expect(positions()).toEqual(before.map(position => ({ x: position!.x + delta.x, y: position!.y + delta.y })));
 		});
 
 		it('escape keeps the layer chosen last, then selects the canvas', async () => {

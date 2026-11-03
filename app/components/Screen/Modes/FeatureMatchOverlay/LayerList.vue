@@ -14,6 +14,7 @@ import {
 } from '~~/shared/modules/graphics';
 import { editorSelectionKey } from '~/modules/feature-match-overlay/editorSelection';
 import { isLayerSelected } from '~/modules/feature-match-overlay/layerSelection';
+import { isSelectionToggle } from '~/modules/graphics/selection';
 
 /**
  * The Feature Match Layout's one layer list: every Graphic Item, every Source
@@ -122,12 +123,12 @@ const severalSelected = computed(() => props.editor.layers.value.length > 1);
 const canvasSelected = computed(() => props.editor.layers.value.length === 0);
 
 function isSelected(row: LayerRow) {
-	return isLayerSelected({ layers: props.editor.layers.value, anchor: null }, row.target);
+	return isLayerSelected(props.editor.layers.value, row.target);
 }
 
 /** A plain click selects the row alone; Shift selects a run, and ⌘ or Ctrl adds or takes out one. */
 function clickRow(event: MouseEvent, row: LayerRow) {
-	if (event.metaKey || event.ctrlKey)
+	if (isSelectionToggle(event))
 		props.editor.toggleSelect(row.target);
 	else if (event.shiftKey)
 		props.editor.extendSelect(row.target);
@@ -166,11 +167,18 @@ const addMenu = computed<DropdownMenuItem[][]>(() => {
 	return items;
 });
 
-function rowMenu(row: LayerRow): DropdownMenuItem[][] {
-	// A selected row among several speaks for the selection, as the keyboard does.
-	const target = severalSelected.value && isSelected(row)
+/**
+ * What a row's own controls act on: a selected row among several speaks for the
+ * whole selection, as the keyboard does, and any other row for itself.
+ */
+function rowTarget(row: LayerRow): FeatureMatchLayoutEditorLayer | undefined {
+	return severalSelected.value && isSelected(row)
 		? undefined
 		: row.target;
+}
+
+function rowMenu(row: LayerRow): DropdownMenuItem[][] {
+	const target = rowTarget(row);
 	return [
 		[
 			{
@@ -491,7 +499,7 @@ function renameKeydown(event: KeyboardEvent) {
 								:aria-pressed="!row.visible"
 								:disabled="!writable"
 								data-testid="layer-visibility"
-								@click="editor.toggleVisible(row.target)"
+								@click="editor.toggleVisible(rowTarget(row))"
 							/>
 						</div>
 					</div>

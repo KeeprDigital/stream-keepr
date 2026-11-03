@@ -127,7 +127,7 @@ describe('featureMatchOverlayLayerList', () => {
 		expect(wrapper.get('[data-testid="layer-canvas"]').attributes('aria-current')).toBeUndefined();
 	});
 
-	// #740: Shift- and ⌘-click build the selection; a group never shares it with its own child (E9).
+	// #740: which click builds the selection how. What it then holds is layerSelection's rule.
 	it.each<[string, Array<[string, KeyboardEventInit]>, (sources: string[]) => string[]]>([
 		[
 			'⌘-click adds a row',
@@ -150,21 +150,6 @@ describe('featureMatchOverlayLayerList', () => {
 				],
 			],
 			() => ['item:cluster', 'item:back'],
-		],
-		[
-			'⌘-click takes a selected row out',
-			[
-				['item:back', {}],
-				[
-					'item:cluster',
-					{ metaKey: true },
-				],
-				[
-					'item:back',
-					{ metaKey: true },
-				],
-			],
-			() => ['item:cluster'],
 		],
 		[
 			'Shift-click selects every row from the last one chosen',
@@ -193,17 +178,6 @@ describe('featureMatchOverlayLayerList', () => {
 			],
 			() => ['item:child'],
 		],
-		[
-			'⌘-clicking a group\'s child replaces the group',
-			[
-				['item:cluster', {}],
-				[
-					'item:child',
-					{ metaKey: true },
-				],
-			],
-			() => ['item:child'],
-		],
 	])('%s', async (_, clicks, expected) => {
 		const { wrapper, config } = await mountList();
 
@@ -214,35 +188,45 @@ describe('featureMatchOverlayLayerList', () => {
 		expect(selectedKeys(wrapper)).toEqual(expected(sources));
 	});
 
-	it('lists the layers as one multi-selectable grid', async () => {
-		const { wrapper } = await mountList();
-
-		expect(wrapper.findAll('[role="grid"]').map(grid => grid.attributes('aria-multiselectable'))).toEqual(['true', 'true']);
-	});
-
-	it.each<[string, (rows: string[]) => string[], number]>([
+	// A selected row among several speaks for the selection: `added` rows appear, and `visible` is the pair's visibility after.
+	it.each<[string, string, (rows: string[]) => string[], number, Array<boolean | undefined>]>([
 		[
-			'Delete',
+			'Delete in its menu',
+			'[data-menu-entry="Delete"]',
 			rows => rows.filter(key => key !== 'item:back' && key !== 'source:main-source'),
 			0,
+			[undefined, undefined],
 		],
 		[
-			'Duplicate',
+			'Duplicate in its menu',
+			'[data-menu-entry="Duplicate"]',
 			rows => rows,
 			2,
+			[true, true],
 		],
-	])('%s in a selected row\'s menu acts on every selected layer', async (entry, kept, selected) => {
-		const { wrapper, sync } = await mountList();
+		[
+			'its eye',
+			'[data-testid="layer-visibility"]',
+			rows => rows,
+			0,
+			[false, false],
+		],
+	])('%s acts on every selected layer', async (_, control, kept, added, visible) => {
+		const { wrapper, config, sync } = await mountList();
 		const before = rowKeys(wrapper) as string[];
 		await wrapper.get('[data-layer-key="item:back"] [data-testid="layer-select"]').trigger('click');
 		await wrapper.get('[data-layer-key="source:main-source"] [data-testid="layer-select"]').trigger('click', { metaKey: true });
 
-		await wrapper.get(`[data-layer-key="item:back"] [data-menu-entry="${entry}"]`).trigger('click');
+		await wrapper.get(`[data-layer-key="item:back"] ${control}`).trigger('click');
 		await sync();
 
 		expect(rowKeys(wrapper)).toEqual(expect.arrayContaining(kept(before)));
-		expect(rowKeys(wrapper)).toHaveLength(kept(before).length + selected);
-		expect(selectedKeys(wrapper).filter(key => !before.includes(key!))).toHaveLength(selected);
+		expect(rowKeys(wrapper)).toHaveLength(kept(before).length + added);
+		expect(selectedKeys(wrapper).filter(key => !before.includes(key!))).toHaveLength(added);
+		expect([
+			config.value.layout.composition.items.find(item => item.id === 'back')?.visible,
+			config.value.layout.sources.find(item => item.id === 'main-source')?.visible,
+		]).toEqual(visible);
 	});
 
 	it('moves a row toward the front with the arrow pointing up', async () => {

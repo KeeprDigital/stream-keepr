@@ -2,17 +2,17 @@
 import type { GraphicRect } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchLayoutEditorLayer } from '~/modules/feature-match-overlay/editorSelection';
-import { findGraphicItem } from '~~/shared/modules/graphics';
+import { editorSelectionLayer } from '~/modules/feature-match-overlay/editorSelection';
 
 /**
- * The property panel with several layers selected (E12, #740): how many, and
+ * The property panel with several layers selected (#740): how many, and
  * the geometry they share.
  *
  * Each field shows the value every selected layer has, or reads Mixed, and an
  * edit writes that value to all of them. Values are each layer's stored
  * top-left rectangle in pixels, as its own panel stores it: a group child's
  * position is within its group. Nothing kind-specific is offered, since the
- * selection can mix Source Items and Graphic Items of any kind (E8).
+ * selection can mix Source Items and Graphic Items of any kind.
  */
 const props = defineProps<{
 	layout: FeatureMatchLayoutConfig;
@@ -33,9 +33,7 @@ const FIELDS = [
 ] as const;
 
 const rects = computed(() => props.layers.flatMap((layer) => {
-	const rect = layer.type === 'source'
-		? props.layout.sources.find(item => item.id === layer.itemId)
-		: findGraphicItem(props.layout.composition, layer.itemId)?.item;
+	const rect = editorSelectionLayer(props.layout, layer);
 	return rect
 		? [rect]
 		: [];

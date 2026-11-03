@@ -7,7 +7,7 @@ import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import MultiLayerInspector from '~/components/Screen/Modes/FeatureMatchOverlay/MultiLayerInspector.vue';
 
 /**
- * The property panel with several layers selected (E12, #740): how many, and
+ * The property panel with several layers selected (#740): how many, and
  * the geometry they share, written to all of them at once.
  */
 
@@ -59,11 +59,15 @@ describe('featureMatchOverlayMultiLayerInspector', () => {
 		]);
 	});
 
-	it('ignores an emptied field, and edits nothing without the lease', async () => {
+	it('writes nothing for an emptied field', async () => {
 		const wrapper = mountPanel();
-		await field(wrapper, 'width').setValue('');
-		expect(wrapper.emitted('update')).toBeUndefined();
 
+		await field(wrapper, 'width').setValue('');
+
+		expect(wrapper.emitted('update')).toBeUndefined();
+	});
+
+	it('edits nothing without the lease', () => {
 		expect(mountPanel({ writable: false }).get('fieldset').attributes('disabled')).toBeDefined();
 	});
 });

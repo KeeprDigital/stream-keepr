@@ -18,7 +18,7 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
 /**
  * The editor's selection of several layers: built by toggling and by range,
  * collapsed by Escape, and never holding a Graphic Group with its own child or
- * children of two groups (E9, #740).
+ * children of two groups (#740).
  */
 
 const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
@@ -86,7 +86,7 @@ describe('feature match layout layer selection', () => {
 			anchor: 's1',
 		},
 		{
-			name: 'mixes Source Items and Graphic Items (E8)',
+			name: 'mixes Source Items and Graphic Items',
 			start: ['s1'],
 			toggle: 'a',
 			layers: ['s1', 'a'],
@@ -121,21 +121,21 @@ describe('feature match layout layer selection', () => {
 			anchor: 'top',
 		},
 		{
-			name: 'replaces a group with its own child (E9)',
+			name: 'replaces a group with its own child',
 			start: ['a', 'top'],
 			toggle: 'a1',
 			layers: ['a1'],
 			anchor: 'a1',
 		},
 		{
-			name: 'replaces a child with its own group (E9)',
+			name: 'replaces a child with its own group',
 			start: ['a1', 's1'],
 			toggle: 'a',
 			layers: ['a'],
 			anchor: 'a',
 		},
 		{
-			name: 'replaces a child of another group (E9)',
+			name: 'replaces a child of another group',
 			start: ['a1', 'top'],
 			toggle: 'b1',
 			layers: ['b1'],
@@ -182,11 +182,25 @@ describe('feature match layout layer selection', () => {
 			anchor: 'a2',
 		},
 		{
-			name: 'restarts at a layer that breaks E9, as adding it would',
+			name: 'keeps a group it crosses whole, leaving its children out',
+			start: ['a'],
+			to: 'top',
+			layers: ['a', 'b', 'top'],
+			anchor: 'a',
+		},
+		{
+			name: 'keeps the children of the group it starts inside, beside the next group',
 			start: ['a1'],
 			to: 'b1',
-			layers: ['b1'],
-			anchor: 'b1',
+			layers: ['a1', 'a2', 'b'],
+			anchor: 'a1',
+		},
+		{
+			name: 'anchors on the anchor\'s group when it crosses that group too',
+			start: ['b1'],
+			to: 'a',
+			layers: ['b', 'a'],
+			anchor: 'b',
 		},
 	])('a range $name', ({ start, to, layers, anchor }) => {
 		expect(ids(extendLayerSelection(LAYOUT, selecting(...start), layer(to)))).toEqual({ layers, anchor });

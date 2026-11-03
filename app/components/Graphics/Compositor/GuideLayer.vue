@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { GraphicsItemGuide, GraphicsSafeAreaGuide } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
+import { isSelectionToggle } from '~/modules/graphics/selection';
 
 /**
  * The editor preview's guide layer: the canvas catch-all, the advisory
@@ -44,7 +45,7 @@ const emit = defineEmits<{
 }>();
 
 function selectItem(guide: GraphicsItemGuide, event?: MouseEvent | KeyboardEvent) {
-	emit('select', { type: 'item', graphicId: guide.graphicId, itemId: guide.itemId }, event?.metaKey === true || event?.ctrlKey === true);
+	emit('select', { type: 'item', graphicId: guide.graphicId, itemId: guide.itemId }, isSelectionToggle(event));
 }
 
 const hasGuideLayer = computed(() =>

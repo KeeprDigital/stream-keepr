@@ -15,7 +15,7 @@ import {
 } from '~~/shared/modules/graphics';
 import { randomUuid } from '~~/shared/utils/uuid';
 import { emptyEditHistory, recordEdit, redoEdit, undoEdit } from '~/modules/feature-match-overlay/editHistory';
-import { CANVAS_SELECTION, editorLayersFrame, editorSelectionLabel } from '~/modules/feature-match-overlay/editorSelection';
+import { CANVAS_SELECTION, editorLayersFrame, editorSelectionKey, editorSelectionLabel, editorSelectionLayer } from '~/modules/feature-match-overlay/editorSelection';
 import {
 	collapseLayerSelection,
 	extendLayerSelection,
@@ -291,7 +291,7 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 
 	/**
 	 * Duplicate a layer, or every selected layer as one undo step, each as a single
-	 * layer duplicates (E8); the copies are selected.
+	 * layer duplicates; the copies are selected.
 	 */
 	function duplicate(target?: FeatureMatchLayoutEditorSelection) {
 		const copying = targets(target);
@@ -332,13 +332,8 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		}
 	}
 
-	/** A layer's stored rectangle and visibility, read the same for either kind. */
-	function layerConfig(target: FeatureMatchLayoutEditorSelection): (GraphicRect & { visible?: boolean }) | undefined {
-		if (target.type === 'source')
-			return config.value.layout.sources.find(item => item.id === target.itemId);
-		if (target.type === 'item')
-			return findGraphicItem(config.value.layout.composition, target.itemId)?.item;
-		return undefined;
+	function layerConfig(target: FeatureMatchLayoutEditorSelection) {
+		return editorSelectionLayer(config.value.layout, target);
 	}
 
 	function isVisible(target: FeatureMatchLayoutEditorSelection): boolean {
@@ -445,13 +440,13 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 	/** Nudge every selected layer the canvas can move; one undo step per run of presses. */
 	function nudge(delta: { x: number; y: number }) {
 		translateLayers(delta, {
-			coalesce: `nudge:${layers.value.map(layer => `${layer.type}:${layer.itemId}`).join(',')}`,
+			coalesce: `nudge:${layers.value.map(editorSelectionKey).join(',')}`,
 		});
 	}
 
 	/**
 	 * Write a shared X, Y, W or H to every selected layer's stored rectangle, as the
-	 * multi-select panel edits it (E12), one undo step per burst of typing.
+	 * multi-select panel edits it, one undo step per burst of typing.
 	 */
 	function setLayersGeometry(patch: Partial<GraphicRect>) {
 		patchLayers(layers.value.map(layer => [layer, patch] as const), { coalesce: 'fields' });

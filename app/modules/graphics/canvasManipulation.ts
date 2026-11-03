@@ -85,7 +85,7 @@ export interface SnapLayer extends GraphicRect {
  * The axis-aligned box a rectangle covers once rotated about its Graphic Anchor
  * Point, to two decimal places so a quarter turn lands on whole pixels.
  */
-function rotatedBounds(rect: GraphicRect, rotation = 0, anchor?: GraphicAnchorPoint): GraphicRect {
+export function rotatedBounds(rect: GraphicRect, rotation = 0, anchor?: GraphicAnchorPoint): GraphicRect {
 	if (rotation % 360 === 0) {
 		return {
 			x: rect.x,
@@ -142,11 +142,11 @@ function roundBound(value: number): number {
 export function canvasSnapLines(
 	canvas: { width: number; height: number },
 	layers: readonly SnapLayer[] = [],
-	layerId?: string | readonly string[],
+	movingIds?: string | readonly string[],
 ): SnapLines {
-	const moving = new Set(typeof layerId === 'string'
-		? [layerId]
-		: layerId ?? []);
+	const moving = new Set(typeof movingIds === 'string'
+		? [movingIds]
+		: movingIds ?? []);
 	// Several layers move as one on the canvas, so only one moving alone is in its group's space.
 	const group = moving.size === 1
 		? layers.find(layer => layer.children?.some(child => moving.has(child.id)))

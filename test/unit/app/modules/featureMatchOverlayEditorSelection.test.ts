@@ -286,5 +286,36 @@ describe('feature match layout editor selection', () => {
 				{ type: 'item', itemId: 'title' },
 			], CANVAS_SIZE)).toBeNull();
 		});
+
+		it('moves a rotated layer among them by the box it turns into', () => {
+			const layout = layoutOfThree();
+			const turned = {
+				...layout,
+				composition: {
+					...layout.composition,
+					items: layout.composition.items.map(item => item.id === 'title'
+						? { ...item, rotation: 90, anchor: 'center' } as GraphicItemConfig
+						: item),
+				},
+			};
+
+			expect(editorLayersFrame(turned, [
+				{ type: 'item', itemId: 'title' },
+				{ type: 'source', itemId: 'main-source' },
+			], CANVAS_SIZE)?.members).toEqual([
+				{
+					x: 525,
+					y: 375,
+					width: 50,
+					height: 100,
+				},
+				{
+					x: 100,
+					y: 100,
+					width: 200,
+					height: 100,
+				},
+			]);
+		});
 	});
 });
