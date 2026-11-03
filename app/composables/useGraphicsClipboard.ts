@@ -1,4 +1,4 @@
-import type { ClipboardPasteRefusal, CopiedLayers, CopiedStyle, GraphicsClipboardHost } from '~/modules/graphics/clipboard';
+import type { ClipboardPasteRefusal, CopiedLayers, CopiedStyle, GraphicsClipboardEntry, GraphicsClipboardHost } from '~/modules/graphics/clipboard';
 import {
 	clipboardRefusalMessage,
 	readGraphicsClipboard,
@@ -52,13 +52,14 @@ export function useGraphicsClipboard(host: GraphicsClipboardHost) {
 	}
 
 	/**
-	 * The copied layers to paste, once every Graphic Asset they pin is still
-	 * selectable; nothing, with the reason shown, otherwise.
+	 * What was copied of one kind, once it is this host's and every Graphic Asset
+	 * it would pin is still selectable; nothing, with the reason shown, otherwise.
 	 */
-	async function layersToPaste(): Promise<CopiedLayers | null> {
-		const copied = readGraphicsClipboard('layers');
+	async function toPaste<K extends GraphicsClipboardEntry['kind']>(kind: K): Promise<Extract<GraphicsClipboardEntry, { kind: K }> | null> {
+		const copied = readGraphicsClipboard(kind);
 		if (!copied)
 			return null;
+		// Before asking the library: the other host's entry is refused for that alone.
 		if (copied.host !== host) {
 			refuse({ reason: 'other-host', from: copied.host });
 			return null;
@@ -71,9 +72,14 @@ export function useGraphicsClipboard(host: GraphicsClipboardHost) {
 		return copied;
 	}
 
-	/** The copied style to paste, or nothing. */
-	function styleToPaste(): CopiedStyle | null {
-		return readGraphicsClipboard('style');
+	/** The copied layers to paste. */
+	function layersToPaste(): Promise<CopiedLayers | null> {
+		return toPaste('layers');
+	}
+
+	/** The copied style to paste. */
+	function styleToPaste(): Promise<CopiedStyle | null> {
+		return toPaste('style');
 	}
 
 	return {

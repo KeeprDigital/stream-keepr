@@ -13,7 +13,9 @@ import {
 	pasteBroadcastGraphicLayers,
 	pasteFeatureMatchLayers,
 	pasteGraphicStyle,
+	readGraphicsClipboard,
 	unselectableCopiedItems,
+	writeGraphicsClipboard,
 } from '~/modules/graphics/clipboard';
 import { resolveGraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 
@@ -355,6 +357,93 @@ describe('the Graphic Assets a paste would pin (E25)', () => {
 		]), 'bug', 'bed');
 
 		await expect(unselectableCopiedItems(copied, async () => status)).resolves.toEqual(expected);
+	});
+
+	it.each([
+		[
+			'a library font in its typography',
+			text('from', {
+				typography: {
+					...text('x').typography,
+					font: { kind: 'asset', reference: ASSET },
+				},
+			}),
+			['from'],
+		],
+		[
+			'a picture, which a style does not paste',
+			media('from', { asset: ASSET }),
+			[],
+		],
+	] as const)('names a copied style pinning %s', async (_case, item, expected) => {
+		const retired: GraphicAssetReferenceStatus = { ...ACTIVE, lifecycleState: 'retired' };
+
+		await expect(unselectableCopiedItems(copyGraphicStyle('broadcast-graphics', item), async () => retired)).resolves.toEqual(expected);
+	});
+});
+
+describe('keeping what was copied in this browser (E23)', () => {
+	function memoryStorage(entries: Record<string, string> = {}) {
+		const stored = new Map(Object.entries(entries));
+		return {
+			getItem: (key: string) => stored.get(key) ?? null,
+			setItem: (key: string, value: string) => void stored.set(key, value),
+			stored,
+		};
+	}
+
+	it('reads back what was kept, each kind apart', () => {
+		const storage = memoryStorage();
+		const layers = copyItems(graphic('a', [
+			shape('bed'),
+		]), 'bed');
+		const style = copyGraphicStyle('broadcast-graphics', shape('bed'));
+
+		expect(writeGraphicsClipboard(layers, storage)).toBe(true);
+		expect(writeGraphicsClipboard(style, storage)).toBe(true);
+
+		expect(readGraphicsClipboard('layers', storage)).toEqual(layers);
+		expect(readGraphicsClipboard('style', storage)).toEqual(style);
+	});
+
+	it.each([
+		['nothing kept', undefined],
+		['text that is not JSON', 'not json'],
+		[
+			'an entry of another shape',
+			JSON.stringify({
+				kind: 'layers',
+				host: 'somewhere',
+				items: [],
+				sources: [],
+			}),
+		],
+	])('reads nothing from %s', (_case, raw) => {
+		const storage = memoryStorage();
+		if (raw !== undefined) {
+			writeGraphicsClipboard(copyItems(graphic('a', [
+				shape('bed'),
+			]), 'bed'), storage);
+			const [key] = [
+				...storage.stored.keys(),
+			];
+			storage.stored.set(key!, raw);
+		}
+
+		expect(readGraphicsClipboard('layers', storage)).toBeNull();
+	});
+
+	it('answers that nothing was kept when the browser refuses', () => {
+		const refusing = {
+			getItem: () => null,
+			setItem: () => {
+				throw new Error('QuotaExceededError');
+			},
+		};
+
+		expect(writeGraphicsClipboard(copyItems(graphic('a', [
+			shape('bed'),
+		]), 'bed'), refusing)).toBe(false);
 	});
 });
 

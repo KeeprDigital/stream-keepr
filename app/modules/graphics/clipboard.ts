@@ -153,6 +153,13 @@ function graphicItemCount(items: readonly GraphicItemConfig[]): number {
 		: 0), 0);
 }
 
+export interface PasteOptions {
+	/** The Graphic Group the selection is or sits in: where copied children land. */
+	groupId?: string | null;
+	/** Mints each copy's id. */
+	nextId: () => string;
+}
+
 interface CompositionPaste {
 	composition: BroadcastGraphicConfig;
 	/** The Graphic Group the copies land in, or none for the top level. */
@@ -169,7 +176,7 @@ interface CompositionPaste {
 function pasteIntoComposition(
 	composition: BroadcastGraphicConfig,
 	copied: readonly CopiedGraphicItem[],
-	options: { groupId?: string | null; nextId: () => string },
+	options: PasteOptions,
 ): CompositionPaste {
 	const candidate = options.groupId
 		? composition.items.find(item => item.id === options.groupId)
@@ -255,13 +262,6 @@ function strandedProjectionReaders(graphic: BroadcastGraphicConfig, itemIds: rea
 			.filter(({ item, groupId }) => projectionKeysRead(item).some(key => groups.get(key) === undefined || groups.get(key) !== groupId))
 			.map(({ item }) => item.label);
 	});
-}
-
-export interface PasteOptions {
-	/** The Graphic Group the selection is or sits in: where copied children land. */
-	groupId?: string | null;
-	/** Mints each copy's id. */
-	nextId: () => string;
 }
 
 export type BroadcastGraphicLayersPaste
@@ -391,34 +391,58 @@ function isSelectable(status: GraphicAssetReferenceStatus): boolean {
 	return status.outcome === 'available' && status.lifecycleState === 'active';
 }
 
+/** Every Graphic Asset Revision one item pins itself, a Graphic Group's children aside. */
+function pinnedReferences(item: GraphicItemConfig): GraphicAssetReference[] {
+	const own = item.type === 'group'
+		? { ...item, children: [] }
+		: item;
+	return broadcastGraphicsGraphicAssetReferences({
+		graphics: [
+			{
+				id: 'clipboard',
+				name: 'clipboard',
+				items: [own],
+			},
+		],
+	})
+		.map(entry => entry.reference);
+}
+
+/** What a style paste pins: a library font in its typography, the only style group that names an asset. */
+function stylePinnedReferences(item: GraphicItemConfig): GraphicAssetReference[] {
+	const font = 'typography' in item
+		? item.typography.font
+		: undefined;
+	return font?.kind === 'asset'
+		? [font.reference]
+		: [];
+}
+
 /**
  * The copied items, by label, that pin a Graphic Asset no longer selectable (E25),
  * asked of the Graphics Asset Library through `status` once per distinct revision.
- * An asset-bound Media Graphic Item's last-resolved revision counts like any other.
+ * An asset-bound Media Graphic Item's last-resolved revision counts like any other;
+ * a copied style counts only what it pastes.
  */
 export async function unselectableCopiedItems(
-	copied: CopiedLayers,
+	copied: GraphicsClipboardEntry,
 	status: (reference: GraphicAssetReference) => Promise<GraphicAssetReferenceStatus>,
 ): Promise<string[]> {
-	const items = copied.items.flatMap(({ item }) => item.type === 'group'
+	const pinned = copied.kind === 'style'
 		? [
-				{ ...item, children: [] },
-				...item.children,
-			]
-		: [item]);
-	const pinned = items.map(item => ({
-		label: item.label,
-		references: broadcastGraphicsGraphicAssetReferences({
-			graphics: [
 				{
-					id: 'clipboard',
-					name: 'clipboard',
-					items: [item],
+					label: copied.item.label,
+					references: stylePinnedReferences(copied.item),
 				},
-			],
-		})
-			.map(entry => entry.reference),
-	}));
+			]
+		: copied.items
+				.flatMap(({ item }) => item.type === 'group'
+					? [item, ...item.children]
+					: [item])
+				.map(item => ({
+					label: item.label,
+					references: pinnedReferences(item),
+				}));
 	const statuses = new Map<string, Promise<boolean>>();
 	function selectable(reference: GraphicAssetReference) {
 		const key = `${reference.assetId}\0${reference.revisionId}`;
@@ -532,25 +556,6 @@ export function pasteGraphicStyle(copied: CopiedStyle, host: GraphicsClipboardHo
 	else
 		delete item.themeBindings;
 	return { ok: true, item: item as unknown as GraphicItemConfig, scope };
-}
-
-/** `composition` with the item of `item`'s id replaced by it, wherever it sits. */
-export function withGraphicItem(composition: BroadcastGraphicConfig, item: GraphicItemConfig): BroadcastGraphicConfig {
-	return {
-		...composition,
-		items: composition.items.map((entry) => {
-			if (entry.id === item.id)
-				return item;
-			if (entry.type !== 'group' || !entry.children.some(child => child.id === item.id))
-				return entry;
-			return {
-				...entry,
-				children: entry.children.map(child => child.id === item.id
-					? item as GraphicGroupChildConfig
-					: child),
-			};
-		}),
-	};
 }
 
 /* ────────────────────────────────────────────────

@@ -13,6 +13,7 @@ import {
 	moveGraphicItem,
 	moveGraphicItemToEdge,
 	patchGraphicItem,
+	replaceGraphicItemById,
 } from '~~/shared/modules/graphics';
 import { randomUuid } from '~~/shared/utils/uuid';
 import { emptyEditHistory, recordEdit, redoEdit, undoEdit } from '~/modules/feature-match-overlay/editHistory';
@@ -27,7 +28,7 @@ import {
 } from '~/modules/feature-match-overlay/layerSelection';
 import * as layoutWriter from '~/modules/feature-match-overlay/layout';
 import { nudgeRect } from '~/modules/graphics/canvasManipulation';
-import { copyGraphicLayers, copyGraphicStyle, pasteFeatureMatchLayers, pasteGraphicStyle, withGraphicItem } from '~/modules/graphics/clipboard';
+import { copyGraphicLayers, copyGraphicStyle, pasteFeatureMatchLayers, pasteGraphicStyle } from '~/modules/graphics/clipboard';
 
 /** What one undo step restores: the authored layout and the preset it started from. */
 interface LayoutSnapshot {
@@ -534,7 +535,7 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 				return next;
 			}
 			pasted = true;
-			return withGraphicItem(next, outcome.item);
+			return replaceGraphicItemById(next, outcome.item);
 		}, config.value.layout.composition);
 		if (!pasted)
 			return refusal;

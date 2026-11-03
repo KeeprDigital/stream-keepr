@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick, ref } from 'vue';
 import { shape, surfaceStyle, text } from '~~/test/helpers/graphicsComposition';
 import EditWorkspace from '~/components/Screen/Modes/BroadcastGraphics/EditWorkspace.vue';
-import { copyGraphicLayers, writeGraphicsClipboard } from '~/modules/graphics/clipboard';
 
 enableAutoUnmount(afterEach);
 
@@ -336,7 +335,7 @@ describe('broadcastGraphicsEditWorkspace', () => {
 		});
 	});
 
-	/** Copy and paste (#746): the rules are the clipboard module's; the workspace wires keys to them. */
+	/** The clipboard module owns the paste rules; the workspace wires keys to them under the lease. */
 	describe('copy and paste', () => {
 		const panel = surfaceStyle({
 			fill: { type: 'solid', color: '#ff0000' },
@@ -404,21 +403,6 @@ describe('broadcastGraphicsEditWorkspace', () => {
 
 			const [next] = wrapper.emitted('update:graphics')!.at(-1) as [BroadcastGraphicConfig[]];
 			expect(next[0]!.items[0]).toMatchObject({ id: 'bed', surfaceStyle: panel });
-		});
-
-		it('refuses layers copied from a Feature Match Layout, saying why (E24)', async () => {
-			writeGraphicsClipboard(copyGraphicLayers('feature-match-overlay', { composition: graphics[0]! }, [
-				{ type: 'item', itemId: 'bed' },
-			])!);
-			const wrapper = await mountWorkspace({ graphics });
-
-			await press('KeyV');
-
-			expect(wrapper.emitted('update:graphics')).toBeUndefined();
-			expect(mockToastAdd).toHaveBeenLastCalledWith(expect.objectContaining({
-				title: 'Nothing pasted',
-				description: expect.stringContaining('pastes only into a Feature Match Layout'),
-			}));
 		});
 
 		it('copies for an observing session, which cannot paste', async () => {

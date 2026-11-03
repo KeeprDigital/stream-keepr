@@ -1258,6 +1258,11 @@ function updateGraphicItem(
 	};
 }
 
+/** Put `item` whole in place of the Graphic Item with its id, wherever it sits. */
+export function replaceGraphicItemById(graphic: BroadcastGraphicConfig, item: GraphicItemConfig): BroadcastGraphicConfig {
+	return updateGraphicItem(graphic, item.id, () => item);
+}
+
 /**
  * Replace top-level properties of one Graphic Item.
  *

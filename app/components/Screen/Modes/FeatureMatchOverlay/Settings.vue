@@ -350,8 +350,8 @@ async function pasteLayers() {
 		clipboard.refuse(refusal);
 }
 
-function pasteStyle() {
-	const copied = clipboard.styleToPaste();
+async function pasteStyle() {
+	const copied = await clipboard.styleToPaste();
 	const refusal = copied && editor.pasteStyle(copied);
 	if (refusal)
 		clipboard.refuse(refusal);
@@ -391,10 +391,9 @@ function handleKeydown(event: KeyboardEvent) {
 		editor.duplicate();
 	}
 	else if (mod && !event.shiftKey && event.code === 'KeyV') {
-		if (event.altKey)
-			pasteStyle();
-		else
-			void pasteLayers();
+		void (event.altKey
+			? pasteStyle()
+			: pasteLayers());
 	}
 	else if (mod && (event.code === 'BracketRight' || event.code === 'BracketLeft')) {
 		const forward = event.code === 'BracketRight';

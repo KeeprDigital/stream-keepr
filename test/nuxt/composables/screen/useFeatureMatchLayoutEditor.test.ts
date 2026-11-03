@@ -4,7 +4,7 @@ import { nextTick, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { media, shape, surfaceStyle, text } from '~~/test/helpers/graphicsComposition';
 import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
-import { copyGraphicLayers, copyGraphicStyle } from '~/modules/graphics/clipboard';
+import { copyGraphicStyle } from '~/modules/graphics/clipboard';
 
 /**
  * The editor writes the Feature Match Layout only while its session holds the
@@ -333,7 +333,7 @@ describe('useFeatureMatchLayoutEditor with several layers selected', () => {
 	});
 });
 
-/** Copy and paste (#746): the rules live in the clipboard module; the editor selects and records. */
+/** The clipboard module owns the paste rules; the editor selects the copies and records one step. */
 describe('useFeatureMatchLayoutEditor copying and pasting', () => {
 	function withItems(...items: ReturnType<typeof shape | typeof text | typeof media>[]) {
 		const editing = editorFor(true);
@@ -363,24 +363,6 @@ describe('useFeatureMatchLayoutEditor copying and pasting', () => {
 		expect(config.value.layout).toEqual(before);
 	});
 
-	it('answers a refused paste and writes nothing', () => {
-		const { editor, writes } = editorFor(true);
-		const fromBroadcastGraphics = copyGraphicLayers('broadcast-graphics', {
-			composition: {
-				id: 'a',
-				name: 'a',
-				items: [
-					shape('bed'),
-				],
-			},
-		}, [
-			{ type: 'item', itemId: 'bed' },
-		])!;
-
-		expect(editor.paste(fromBroadcastGraphics)).toEqual({ reason: 'other-host', from: 'broadcast-graphics' });
-		expect(writes).toEqual([]);
-	});
-
 	it('pastes a style onto every selected Graphic Item it fits, as one undo step', () => {
 		const panel = surfaceStyle({
 			fill: { type: 'solid', color: '#ff0000' },
@@ -399,16 +381,5 @@ describe('useFeatureMatchLayoutEditor copying and pasting', () => {
 		expect(writes).toHaveLength(1);
 		expect(config.value.layout.composition.items.map(item => 'surfaceStyle' in item && item.surfaceStyle)).toEqual([panel, panel, false]);
 		expect(config.value.layout.composition.items[1]).not.toHaveProperty('themeBindings');
-	});
-
-	it('answers why a style fits none of the selection', () => {
-		const { editor, writes } = withItems(shape('from'), media('to'));
-		editor.select({ type: 'item', itemId: 'from' });
-		const copied = editor.copyStyle()!;
-		editor.select({ type: 'item', itemId: 'to' });
-		writes.length = 0;
-
-		expect(editor.pasteStyle(copied)).toEqual({ reason: 'incompatible' });
-		expect(writes).toEqual([]);
 	});
 });

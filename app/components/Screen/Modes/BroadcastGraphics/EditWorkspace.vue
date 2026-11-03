@@ -5,7 +5,7 @@ import type { GraphicsAuthoringLeaseStatus } from '~/composables/screen/useGraph
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { Screen } from '~/types';
 import { useEventListener } from '@vueuse/core';
-import { BROADCAST_GRAPHICS_HOST_CONTRACT, replaceBroadcastGraphic } from '~~/shared/modules/graphics';
+import { BROADCAST_GRAPHICS_HOST_CONTRACT, replaceBroadcastGraphic, replaceGraphicItemById } from '~~/shared/modules/graphics';
 import { randomUuid } from '~~/shared/utils/uuid';
 import GraphicsCompositorInspector from '~/components/Graphics/Compositor/Inspector.vue';
 import GraphicsCompositorPreview from '~/components/Graphics/Compositor/Preview.vue';
@@ -16,7 +16,6 @@ import {
 	copyGraphicStyle,
 	pasteBroadcastGraphicLayers,
 	pasteGraphicStyle,
-	withGraphicItem,
 } from '~/modules/graphics/clipboard';
 import { graphicsSelectionGraphicId, resolveGraphicsSelection } from '~/modules/graphics/selection';
 import { isTypingTarget } from '~/utils/typingTarget';
@@ -202,8 +201,8 @@ async function pasteLayers() {
 		emit('update:selectedTarget', { type: 'item', graphicId, itemId });
 }
 
-function pasteStyle() {
-	const copied = clipboard.styleToPaste();
+async function pasteStyle() {
+	const copied = await clipboard.styleToPaste();
 	const current = selection.value;
 	if (!copied || !canAuthor.value)
 		return;
@@ -216,7 +215,7 @@ function pasteStyle() {
 		clipboard.refuse(outcome.refusal);
 		return;
 	}
-	emit('update:graphics', replaceBroadcastGraphic(props.graphics, withGraphicItem(current.graphic, outcome.item)));
+	emit('update:graphics', replaceBroadcastGraphic(props.graphics, replaceGraphicItemById(current.graphic, outcome.item)));
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -230,10 +229,9 @@ function handleKeydown(event: KeyboardEvent) {
 	}
 	else if (event.code === 'KeyV' && canAuthor.value) {
 		event.preventDefault();
-		if (event.altKey)
-			pasteStyle();
-		else
-			void pasteLayers();
+		void (event.altKey
+			? pasteStyle()
+			: pasteLayers());
 	}
 }
 
