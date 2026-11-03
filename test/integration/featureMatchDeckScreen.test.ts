@@ -23,10 +23,10 @@ describe('a Deck Screen showing a Feature Match Slot side', () => {
 	let capability: string;
 
 	async function paste(side: 'player1' | 'player2', text: string): Promise<number> {
-		const answer = await $fetch(`/api/events/${eventId}/feature-match-slots/${slotId}/deck-lists`, {
+		const answer = await $fetch<{ deckList: { id: number } }>(`/api/events/${eventId}/feature-match-slots/${slotId}/deck-lists`, {
 			method: 'POST',
 			body: { side, text },
-		}) as { deckList: { id: number } };
+		});
 		return answer.deckList.id;
 	}
 
