@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { GraphicAnchorPoint, GraphicRect } from '~~/shared/types/graphics';
 import type { ManipulationHandle, SnapLines } from '~/modules/graphics/canvasManipulation';
-import { useElementSize } from '@vueuse/core';
+import { useElementSize, useEventListener } from '@vueuse/core';
 import { graphicAnchorTransformOrigin } from '~~/shared/modules/graphics/geometry';
 import {
 	canvasSnapLines,
@@ -13,6 +13,7 @@ import {
 	RESIZE_HANDLES,
 	rotatedBounds,
 } from '~/modules/graphics/canvasManipulation';
+import { isSelectionToggle } from '~/modules/graphics/selection';
 
 /**
  * Move, resize and rotate handles for the selected layer, drawn over an editor preview.
@@ -29,6 +30,11 @@ import {
  * A layer that can turn is drawn turned about its Graphic Anchor Point, as the
  * compositor draws it, with a rotate handle; Shift steps a rotation by 15°. A
  * turned layer resizes along its own axes and snaps only while moving.
+ *
+ * With several layers selected (#740) the box is the one they cover: it moves
+ * them together, outlines each, and offers no resize handle. While ⌘ or Ctrl is
+ * held the box lets clicks through, so a ⌘-click on a layer under it reaches the
+ * preview and adds that layer to the selection or takes it out.
  */
 const props = defineProps<{
 	/** The selected layer's stored rectangle, in its container's pixels; nothing shows without one. */
@@ -40,6 +46,8 @@ const props = defineProps<{
 	/** What the layer snaps to, in its container's pixels; the canvas's own lines without them. */
 	snapLines?: SnapLines;
 	label?: string;
+	/** With several layers selected, each one's box, in canvas pixels; the selection then only moves. */
+	members?: readonly GraphicRect[];
 	/** The layer's Graphic Rotation in degrees; a layer without one cannot turn. */
 	rotation?: number;
 	/** The Graphic Anchor Point the layer turns about. */
@@ -63,6 +71,26 @@ const scale = computed(() => props.canvasWidth > 0
 	: 0);
 
 const origin = computed(() => props.origin ?? { x: 0, y: 0 });
+
+/** Whether ⌘ or Ctrl is held, so a click is a selection toggle for the preview beneath. */
+const passesClicks = ref(false);
+if (import.meta.client) {
+	useEventListener(window, ['keydown', 'keyup'], (event: KeyboardEvent) => {
+		passesClicks.value = isSelectionToggle(event);
+	});
+	useEventListener(window, 'blur', () => {
+		passesClicks.value = false;
+	});
+}
+
+const memberStyles = computed(() => scale.value === 0
+	? []
+	: (props.members ?? []).map(member => ({
+			left: `${member.x * scale.value}px`,
+			top: `${member.y * scale.value}px`,
+			width: `${member.width * scale.value}px`,
+			height: `${member.height * scale.value}px`,
+		})));
 
 const snapLines = computed<SnapLines>(() => {
 	if (props.snapLines)
@@ -183,7 +211,7 @@ function handleCursor(handle: (typeof RESIZE_HANDLES)[number]): string {
 }
 
 function start(event: PointerEvent, handle: ManipulationHandle | 'rotate') {
-	if (!props.rect || event.button !== 0)
+	if (!props.rect || event.button !== 0 || isSelectionToggle(event))
 		return;
 	event.preventDefault();
 	(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
@@ -344,11 +372,22 @@ const readout = computed(() => {
 			</div>
 		</template>
 
+		<template v-if="boxStyle && !live">
+			<div
+				v-for="(style, index) in memberStyles"
+				:key="index"
+				class="absolute outline-1 outline-primary/70 outline-dashed"
+				:style="style"
+				data-testid="canvas-manipulation-member"
+			/>
+		</template>
 		<div
 			v-if="boxStyle"
-			class="pointer-events-auto absolute cursor-move outline-2 outline-primary"
+			class="absolute cursor-move outline-2 outline-primary"
+			:class="passesClicks ? 'pointer-events-none' : 'pointer-events-auto'"
 			:style="boxStyle"
 			:aria-label="label ? `Move ${label}` : 'Move selection'"
+			:data-passes-clicks="String(passesClicks)"
 			data-testid="canvas-manipulation-box"
 			@pointerdown="start($event, 'move')"
 			@pointermove="moveTo"
@@ -356,7 +395,7 @@ const readout = computed(() => {
 			@pointercancel="end"
 		>
 			<span
-				v-for="handle in RESIZE_HANDLES"
+				v-for="handle in members ? [] : RESIZE_HANDLES"
 				:key="handle"
 				class="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-primary bg-white"
 				:class="[HANDLE_POSITION[handle], handleCursor(handle)]"

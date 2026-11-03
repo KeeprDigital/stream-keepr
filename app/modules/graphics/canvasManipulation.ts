@@ -170,13 +170,22 @@ function roundBound(value: number): number {
  * hidden group hides them all. A layer on the canvas is also beside the children
  * of an unrotated canvas-arranged group. A rotated layer offers the axis-aligned
  * box it covers.
+ *
+ * Several layers moving together (#740) snap as one on the canvas: none of them
+ * adds a line, nor does a moving group's children, which move with it.
  */
 export function canvasSnapLines(
 	canvas: { width: number; height: number },
 	layers: readonly SnapLayer[] = [],
-	layerId?: string,
+	movingIds?: string | readonly string[],
 ): SnapLines {
-	const group = layers.find(layer => layer.children?.some(child => child.id === layerId));
+	const moving = new Set(typeof movingIds === 'string'
+		? [movingIds]
+		: movingIds ?? []);
+	// Several layers move as one on the canvas, so only one moving alone is in its group's space.
+	const group = moving.size === 1
+		? layers.find(layer => layer.children?.some(child => moving.has(child.id)))
+		: undefined;
 	const padding = groupPadding(group);
 	const origin = group
 		? { x: group.x + padding, y: group.y + padding }
@@ -185,10 +194,12 @@ export function canvasSnapLines(
 		? group.visible
 			? group.children ?? []
 			: []
-		: layers.flatMap(layer => [
-				layer,
-				...placedChildren(layer),
-			]);
+		: layers.flatMap(layer => moving.has(layer.id) && moving.size > 1
+				? []
+				: [
+						layer,
+						...placedChildren(layer),
+					]);
 
 	const x = [0, canvas.width / 2, canvas.width].map(line => line - origin.x);
 	const y = [0, canvas.height / 2, canvas.height].map(line => line - origin.y);
@@ -211,7 +222,7 @@ export function canvasSnapLines(
 		});
 	}
 	const neighbours = siblings
-		.filter(layer => layer.id !== layerId && layer.visible)
+		.filter(layer => !moving.has(layer.id) && layer.visible)
 		.map(layer => rotatedBounds(layer, layer.rotation, layer.anchor));
 	neighbours.forEach(add);
 	return {

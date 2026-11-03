@@ -111,14 +111,122 @@ describe('featureMatchOverlayLayerList', () => {
 		expect(wrapper.find('[data-testid="layer-canvas"]').exists()).toBe(true);
 	});
 
-	it('marks only the selected row, and the canvas only while it is selected', async () => {
+	function selectedKeys(wrapper: Awaited<ReturnType<typeof mountList>>['wrapper']) {
+		return wrapper.findAll('[data-testid="layer-row"][aria-selected="true"]').map(row => row.attributes('data-layer-key'));
+	}
+
+	it('marks the selected rows, and the canvas only while no layer is selected', async () => {
 		const { wrapper } = await mountList();
 		expect(wrapper.get('[data-testid="layer-canvas"]').attributes('aria-current')).toBe('true');
+		expect(selectedKeys(wrapper)).toEqual([]);
 
-		await wrapper.findAll('[data-testid="layer-select"]')[0]!.trigger('click');
+		await wrapper.get('[data-layer-key="item:back"] [data-testid="layer-select"]').trigger('click');
 
-		expect(wrapper.findAll('[aria-current="true"]')).toHaveLength(1);
+		expect(selectedKeys(wrapper)).toEqual(['item:back']);
+		expect(wrapper.findAll('[data-testid="layer-row"][aria-selected="false"]').length).toBeGreaterThan(0);
 		expect(wrapper.get('[data-testid="layer-canvas"]').attributes('aria-current')).toBeUndefined();
+	});
+
+	// #740: which click builds the selection how. What it then holds is layerSelection's rule.
+	it.each<[string, Array<[string, KeyboardEventInit]>, (sources: string[]) => string[]]>([
+		[
+			'⌘-click adds a row',
+			[
+				['item:back', {}],
+				[
+					'source:main-source',
+					{ metaKey: true },
+				],
+			],
+			() => ['item:back', 'source:main-source'],
+		],
+		[
+			'Ctrl-click adds a row',
+			[
+				['item:back', {}],
+				[
+					'item:cluster',
+					{ ctrlKey: true },
+				],
+			],
+			() => ['item:cluster', 'item:back'],
+		],
+		[
+			'Shift-click selects every row from the last one chosen',
+			[
+				['item:child', {}],
+				[
+					'source:main-source',
+					{ shiftKey: true },
+				],
+			],
+			sources => [
+				'item:child',
+				'item:back',
+				...sources.slice(0, sources.indexOf('source:main-source') + 1),
+			],
+		],
+		[
+			'a plain click selects that row alone',
+			[
+				['item:back', {}],
+				[
+					'item:cluster',
+					{ metaKey: true },
+				],
+				['item:child', {}],
+			],
+			() => ['item:child'],
+		],
+	])('%s', async (_, clicks, expected) => {
+		const { wrapper, config } = await mountList();
+
+		for (const [key, modifiers] of clicks)
+			await wrapper.get(`[data-layer-key="${key}"] [data-testid="layer-select"]`).trigger('click', modifiers);
+
+		const sources = [...config.value.layout.sources].reverse().map(item => `source:${item.id}`);
+		expect(selectedKeys(wrapper)).toEqual(expected(sources));
+	});
+
+	// A selected row among several speaks for the selection: `added` rows appear, and `visible` is the pair's visibility after.
+	it.each<[string, string, (rows: string[]) => string[], number, Array<boolean | undefined>]>([
+		[
+			'Delete in its menu',
+			'[data-menu-entry="Delete"]',
+			rows => rows.filter(key => key !== 'item:back' && key !== 'source:main-source'),
+			0,
+			[undefined, undefined],
+		],
+		[
+			'Duplicate in its menu',
+			'[data-menu-entry="Duplicate"]',
+			rows => rows,
+			2,
+			[true, true],
+		],
+		[
+			'its eye',
+			'[data-testid="layer-visibility"]',
+			rows => rows,
+			0,
+			[false, false],
+		],
+	])('%s acts on every selected layer', async (_, control, kept, added, visible) => {
+		const { wrapper, config, sync } = await mountList();
+		const before = rowKeys(wrapper) as string[];
+		await wrapper.get('[data-layer-key="item:back"] [data-testid="layer-select"]').trigger('click');
+		await wrapper.get('[data-layer-key="source:main-source"] [data-testid="layer-select"]').trigger('click', { metaKey: true });
+
+		await wrapper.get(`[data-layer-key="item:back"] ${control}`).trigger('click');
+		await sync();
+
+		expect(rowKeys(wrapper)).toEqual(expect.arrayContaining(kept(before)));
+		expect(rowKeys(wrapper)).toHaveLength(kept(before).length + added);
+		expect(selectedKeys(wrapper).filter(key => !before.includes(key!))).toHaveLength(added);
+		expect([
+			config.value.layout.composition.items.find(item => item.id === 'back')?.visible,
+			config.value.layout.sources.find(item => item.id === 'main-source')?.visible,
+		]).toEqual(visible);
 	});
 
 	it('moves a row toward the front with the arrow pointing up', async () => {

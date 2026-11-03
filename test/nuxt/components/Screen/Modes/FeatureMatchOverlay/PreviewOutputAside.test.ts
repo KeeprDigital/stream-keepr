@@ -187,6 +187,7 @@ describe('feature Match Overlay preview aside — its preview frame', () => {
 		previewFrame(wrapper, window);
 
 		message(window.location.origin, window, { type, target });
+		message(window.location.origin, window, { type, target, toggle: true });
 		message('https://example.invalid', window, {
 			type,
 			target: { ...target, itemId: 'spoofed' },
@@ -198,7 +199,8 @@ describe('feature Match Overlay preview aside — its preview frame', () => {
 		await nextTick();
 
 		expect(wrapper.emitted(event)).toEqual([
-			[target],
+			[target, false],
+			[target, true],
 		]);
 	});
 

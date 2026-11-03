@@ -74,3 +74,11 @@ export function graphicsSelectionGraphicId(target: GraphicsSelectionTarget): str
 		? null
 		: target.graphicId;
 }
+
+/**
+ * Whether a click asks to add what it hits to a selection of several, or take it
+ * out, rather than select it alone: ⌘ on a Mac, Ctrl elsewhere (#740).
+ */
+export function isSelectionToggle(event: { metaKey: boolean; ctrlKey: boolean } | undefined): boolean {
+	return event?.metaKey === true || event?.ctrlKey === true;
+}
