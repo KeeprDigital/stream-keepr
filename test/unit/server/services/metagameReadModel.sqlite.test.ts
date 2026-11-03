@@ -264,11 +264,14 @@ describe('card breakdown', () => {
 		expect(limited.entries).toHaveLength(1);
 	});
 
-	it('narrows to the scoped Players\' decks', async () => {
-		const topTwo = await metagameReadModel().getCardBreakdown(eventId, { scope: 'topN', topN: 2 });
+	it.each([
+		{ scope: 'topN', topN: 2 },
+		{ scope: 'minPoints', minPoints: 9 },
+	] as const)('narrows to the scoped Players\' decks: $scope', async (scope) => {
+		const scoped = await metagameReadModel().getCardBreakdown(eventId, scope);
 
-		expect(topTwo.totalDecks).toBe(2);
-		expect(names(topTwo.entries)).not.toContain('Negate');
+		expect(scoped.totalDecks).toBe(2);
+		expect(names(scoped.entries)).not.toContain('Negate');
 	});
 
 	it('answers an Event without decks with nothing', async () => {

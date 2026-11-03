@@ -133,7 +133,7 @@ describe('phaseService event scoping', () => {
 	it('writes with the wrong Event touch nothing', async () => {
 		const service = phaseService();
 		expect(await service.update(two.phaseId, one.eventId, { name: 'Hijacked' })).toBeUndefined();
-		expect(await service.remove(two.phaseId, one.eventId)).toBe(false);
+		expect(await service.remove(two.phaseId, one.eventId)).toMatchObject({ deleted: false });
 		expect((await phaseService().findById(two.phaseId, two.eventId))?.name).toBe('Event Two Swiss');
 	});
 });
@@ -164,7 +164,7 @@ describe('roundService event scoping', () => {
 	it('writes with the wrong Event touch nothing', async () => {
 		const service = roundService();
 		expect(await service.update(two.roundId, one.eventId, { name: 'Hijacked' })).toBeUndefined();
-		expect(await service.remove(two.roundId, one.eventId)).toBe(false);
+		expect(await service.remove(two.roundId, one.eventId)).toMatchObject({ deleted: false });
 		expect((await roundService().findById(two.roundId, two.eventId))?.name).toBe('Round 1');
 	});
 });

@@ -19,6 +19,7 @@ import { metagameModeConfigContract } from '../screenModeConfigs/metagame';
 import { pairingsModeConfigContract } from '../screenModeConfigs/pairings';
 import { playerHistoryModeConfigContract } from '../screenModeConfigs/playerHistory';
 import { standingsModeConfigContract } from '../screenModeConfigs/standings';
+import { METAGAME_SCOPE_FIELDS } from '../screenModeConfigs/subShapes';
 import { topCardsModeConfigContract } from '../screenModeConfigs/topCards';
 import { topCutModeConfigContract } from '../screenModeConfigs/topCut';
 
@@ -458,27 +459,13 @@ const MODE_RESET_PRESERVED_KEYS = {
 	],
 	'metagame': [
 		'viewMode',
-		'scope',
-		'topN',
-		'minPoints',
-		'playerListId',
+		...METAGAME_SCOPE_FIELDS,
 		'archetypeFilter',
 	],
-	'top-cards': [
-		'scope',
-		'topN',
-		'playerListId',
-		'archetypeFilter',
-	],
+	'top-cards': [...METAGAME_SCOPE_FIELDS, 'archetypeFilter'],
 	'player-history': ['playerId'],
 	'pairings': ['roundId'],
-	'archetype-spotlight': [
-		'archetypeId',
-		'scope',
-		'topN',
-		'minPoints',
-		'playerListId',
-	],
+	'archetype-spotlight': ['archetypeId', ...METAGAME_SCOPE_FIELDS],
 	'head-to-head': [
 		'playerSource',
 		'featureMatchId',
