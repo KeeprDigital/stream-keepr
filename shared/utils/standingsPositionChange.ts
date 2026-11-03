@@ -40,6 +40,10 @@ export function positionChange(
 	return { kind: 'unchanged' };
 }
 
+/**
+ * A Position Change as its cell shows it: `–` for a Player who held their
+ * place, and a blank cell when nothing compares (#905).
+ */
 export function formatPositionChange(change: PositionChange): string {
 	switch (change.kind) {
 		case 'up':
@@ -49,7 +53,8 @@ export function formatPositionChange(change: PositionChange): string {
 		case 'new':
 			return 'new';
 		case 'unchanged':
-		case 'none':
 			return '–';
+		case 'none':
+			return '';
 	}
 }

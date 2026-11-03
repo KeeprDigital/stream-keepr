@@ -24,6 +24,7 @@ export function useTopCardsModeData() {
 			outputReads.scopeKey.value,
 			config.value.scope,
 			config.value.topN,
+			config.value.minPoints,
 			config.value.playerListId,
 			config.value.archetypeFilter,
 			config.value.board,
@@ -51,6 +52,7 @@ export function useTopCardsModeData() {
 	const {
 		rowCount,
 		pageData,
+		pageSize,
 		totalPages,
 		currentPage,
 		setPage,
@@ -58,7 +60,7 @@ export function useTopCardsModeData() {
 		prevPage,
 	} = usePaginatedScreenMode({ mode: 'top-cards', config, rows: rankedCards });
 	/** The cards a full page holds, which every page lays out as, so a short last page keeps its size. */
-	const pageCapacity = computed(() => Math.max(1, Math.min(config.value.cardsPerPage, entries.value.length)));
+	const pageCapacity = computed(() => Math.max(1, Math.min(pageSize.value, entries.value.length)));
 
 	// ── Staging ──
 	// A page, a new one or new data, reaches program once its card images have
@@ -78,11 +80,12 @@ export function useTopCardsModeData() {
 		if (config.value.headerText)
 			return config.value.headerText;
 
-		const prefix = config.value.scope === 'topN'
-			? `Top ${config.value.topN} `
-			: config.value.scope === 'playerList'
-				? 'List '
-				: '';
+		const prefix = {
+			all: '',
+			topN: `Top ${config.value.topN} `,
+			minPoints: `${config.value.minPoints}+ Points `,
+			playerList: 'List ',
+		}[config.value.scope];
 
 		const title = config.value.pointedOnly
 			? 'Most Played Pointed Cards'

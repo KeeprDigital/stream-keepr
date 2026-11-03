@@ -137,7 +137,19 @@ describe('topCardsScreenQuery', () => {
 		expect(query.excludeTypes).toEqual(excludeTypes);
 	});
 
-	it('reads a Minimum Points scope, which it never offered, with no minimum', () => {
-		expect(topCardsQuery({ scope: 'minPoints' })).not.toHaveProperty('minPoints');
+	// A config scoped to Minimum Points that stores no minimum reads with the default one.
+	it.each([
+		{
+			stored: { scope: 'minPoints', minPoints: 12 },
+			minPoints: 12,
+		},
+		{
+			stored: { scope: 'minPoints' },
+			minPoints: 9,
+		},
+	] as const)('asks for its stored or default minimum under the Minimum Points scope: $stored', ({ stored, minPoints }) => {
+		const query = metagameCardsQuerySchema.parse(topCardsQuery(stored));
+
+		expect(query.minPoints).toBe(minPoints);
 	});
 });

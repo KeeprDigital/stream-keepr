@@ -890,6 +890,7 @@ describe('topCardsModeConfigSchema', () => {
 	const validConfig = {
 		scope: 'all' as const,
 		topN: 8,
+		minPoints: 9,
 		board: 'mainboard' as const,
 		sortBy: 'inclusionRate' as const,
 		limit: 10,

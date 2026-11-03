@@ -1,8 +1,9 @@
-import type { DbPhase, ExternalSource } from '~~/server/db/schema';
+import type { DbPhase, DbScreen, ExternalSource } from '~~/server/db/schema';
 import type { CreatePhaseInput, UpdatePhaseInput } from '~~/shared/api';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { phases } from '~~/server/db/schema';
+import { buildReleaseScreenEventReferencesQuery } from '~~/server/services/screen';
 import { pickManualWritable } from '~~/server/utils/provenance';
 
 export type PhaseUpsertInput = CreatePhaseInput & {
@@ -71,18 +72,20 @@ export function phaseService() {
 		return updatedPhase;
 	};
 
-	const remove = async (id: number, eventId: number): Promise<boolean> => {
-		const result = await db
-			.delete(phases)
-			.where(
-				and(
-					eq(phases.id, id),
-					eq(phases.eventId, eventId),
-				),
-			)
-			.returning();
+	/**
+	 * Deletes the Phase, and its Rounds by cascade, and in the same write releases
+	 * every Screen reference to them (ADR-0060).
+	 */
+	const remove = async (id: number, eventId: number): Promise<{ deleted: boolean; clearedScreens: DbScreen[] }> => {
+		const [deleted, clearedScreens] = await db.batch([
+			db
+				.delete(phases)
+				.where(and(eq(phases.id, id), eq(phases.eventId, eventId)))
+				.returning({ id: phases.id }),
+			buildReleaseScreenEventReferencesQuery(eventId, ['phase', 'round']),
+		]);
 
-		return result.length > 0;
+		return { deleted: deleted.length > 0, clearedScreens };
 	};
 
 	const exists = async (id: number, eventId: number): Promise<boolean> => {

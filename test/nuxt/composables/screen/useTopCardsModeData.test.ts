@@ -18,8 +18,9 @@ const { deliver } = realtime;
 mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 
 const defaultConfig = {
-	scope: 'all' as 'all' | 'topN' | 'playerList',
+	scope: 'all' as 'all' | 'topN' | 'minPoints' | 'playerList',
 	topN: 8,
+	minPoints: 9,
 	playerListId: undefined as number | undefined,
 	archetypeFilter: undefined as string | undefined,
 	board: 'mainboard' as const,
@@ -103,6 +104,11 @@ describe('useTopCardsModeData', () => {
 			'Top 8 Most Played Cards',
 		],
 		[
+			'the Minimum Points scope',
+			{ scope: 'minPoints', minPoints: 12 },
+			'12+ Points Most Played Cards',
+		],
+		[
 			'the archetype filter',
 			{ archetypeFilter: 'Mono Red' },
 			'Most Played Cards: Mono Red',
@@ -141,12 +147,24 @@ describe('useTopCardsModeData', () => {
 		expect(entries.value.map(entry => entry.name)).toEqual(['Card 1']);
 	});
 
-	it('re-reads when a configuration field the breakdown depends on changes', async () => {
+	it.each([
+		{
+			field: 'excludedCardTypes',
+			scoped: {},
+			change: { excludedCardTypes: [] },
+		},
+		{
+			field: 'minPoints',
+			scoped: { scope: 'minPoints' },
+			change: { minPoints: 12 },
+		},
+	] as const)('re-reads when $field, a configuration field the breakdown depends on, changes', async ({ scoped, change }) => {
+		Object.assign(mutableConfig, scoped);
 		makeTopCardsModeData();
 		await flushPromises();
 		mockFetch.mockClear();
 
-		mutableConfig.excludedCardTypes = [];
+		Object.assign(mutableConfig, change);
 		await flushPromises();
 
 		expect(mockFetch).toHaveBeenCalledWith('/api/screen-output/events/1/screens/1/top-cards', expect.anything());

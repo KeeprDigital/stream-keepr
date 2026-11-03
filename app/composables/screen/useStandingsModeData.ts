@@ -22,6 +22,13 @@ function byStandingsPosition(a: Player, b: Player): number {
 }
 
 /**
+ * The Standings read's answer, and whether it was read with the Position
+ * Change column showing: only then does its lack of a previous Round mean
+ * the column has nothing to compare (#905).
+ */
+type StandingsRead = ScreenOutputStandingsResponse & { readPositionChange: boolean };
+
+/**
  * The Event Data Standings are read from: the roster, the Round they are fixed
  * at and its snapshot, the watchlist they filter to, and, while the Position
  * Change column shows, the previous Round in the Event's Round order. Every
@@ -35,8 +42,8 @@ function byStandingsPosition(a: Player, b: Player): number {
 function standingsDependencies(
 	watchlistId: () => number | null,
 	showsPositionChange: () => boolean,
-): ScreenModeDependencies<ScreenOutputStandingsResponse> {
-	const holdsRound = (held: ScreenOutputStandingsResponse, roundId: number) => held.round?.id === roundId;
+): ScreenModeDependencies<StandingsRead> {
+	const holdsRound = (held: StandingsRead, roundId: number) => held.round?.id === roundId;
 	const isWatchlist = (listId: number) => listId === watchlistId();
 
 	return {
@@ -75,18 +82,25 @@ export function useStandingsModeData() {
 	 * on the server from the saved configuration (#604). It is held here, never
 	 * in the Player store, so an operator's roster cannot stand in for it (#603).
 	 */
-	const freshness = useScreenModeFreshness<ScreenOutputStandingsResponse>({
+	const freshness = useScreenModeFreshness<StandingsRead>({
 		eventId,
 		source: () => outputReads.scopeKey.value
 			? `${outputReads.scopeKey.value}:${config.value.viewMode}:${config.value.playerListId}:${config.value.roundId}:${showsPositionChange()}`
 			: null,
-		read: () => outputReads.standings(),
+		read: async () => {
+			const readPositionChange = showsPositionChange();
+			return {
+				...await outputReads.standings(),
+				readPositionChange,
+			};
+		},
 		initialData: {
 			players: [],
 			round: null,
 			roundStandings: null,
 			watchlist: null,
 			previousRoundPositions: null,
+			readPositionChange: false,
 		},
 		errorMessage: 'Failed to load standings data',
 		dependsOn: standingsDependencies(selectedWatchlistId, showsPositionChange),
@@ -185,6 +199,7 @@ export function useStandingsModeData() {
 	const {
 		rowCount,
 		pageData,
+		pageSize,
 		totalPages,
 		currentPage,
 		setPage,
@@ -217,6 +232,13 @@ export function useStandingsModeData() {
 	}
 
 	// ── Position Change ──
+	/**
+	 * The Position Change column shows, but the read found no previous Round
+	 * holding Round Standings, so every cell is blank (#905).
+	 */
+	const noPreviousRoundStandings = computed(() =>
+		freshness.data.value.readPositionChange && !freshness.data.value.previousRoundPositions);
+
 	/** How far a row's Player moved since the previous Round (#755). */
 	function positionChangeOf(player: Player): PositionChange {
 		return positionChange(player.id, player.position, previousRoundPositionMap.value);
@@ -277,6 +299,7 @@ export function useStandingsModeData() {
 		visibleColumns,
 		displayRows,
 		pageData,
+		pageSize,
 		rowCount,
 		currentPage,
 		totalPages,
@@ -285,5 +308,6 @@ export function useStandingsModeData() {
 		setPage,
 		formatCell,
 		positionChangeOf,
+		noPreviousRoundStandings,
 	};
 }

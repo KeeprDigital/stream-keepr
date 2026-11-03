@@ -1,8 +1,9 @@
-import type { DbRound, ExternalSource } from '~~/server/db/schema';
+import type { DbRound, DbScreen, ExternalSource } from '~~/server/db/schema';
 import type { CreateRoundInput, UpdateRoundInput } from '~~/shared/api';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { phases, rounds } from '~~/server/db/schema';
+import { buildReleaseScreenEventReferencesQuery } from '~~/server/services/screen';
 import { pickManualWritable } from '~~/server/utils/provenance';
 
 export type RoundUpsertInput = CreateRoundInput & {
@@ -105,18 +106,17 @@ export function roundService() {
 		return updatedRound;
 	};
 
-	const remove = async (id: number, eventId: number): Promise<boolean> => {
-		const result = await db
-			.delete(rounds)
-			.where(
-				and(
-					eq(rounds.id, id),
-					eq(rounds.eventId, eventId),
-				),
-			)
-			.returning();
+	/** Deletes the Round, and in the same write releases every Screen reference to it (ADR-0060). */
+	const remove = async (id: number, eventId: number): Promise<{ deleted: boolean; clearedScreens: DbScreen[] }> => {
+		const [deleted, clearedScreens] = await db.batch([
+			db
+				.delete(rounds)
+				.where(and(eq(rounds.id, id), eq(rounds.eventId, eventId)))
+				.returning({ id: rounds.id }),
+			buildReleaseScreenEventReferencesQuery(eventId, ['round']),
+		]);
 
-		return result.length > 0;
+		return { deleted: deleted.length > 0, clearedScreens };
 	};
 
 	const findByExternalId = async (eventId: number, externalId: string, externalSource: ExternalSource): Promise<DbRound | undefined> => {

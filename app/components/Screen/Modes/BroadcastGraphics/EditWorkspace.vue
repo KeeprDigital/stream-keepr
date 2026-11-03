@@ -146,48 +146,18 @@ const visibleSaveState = computed(() => {
 		return null;
 	return props.saveState;
 });
-
-const leaseNotice = computed(() => {
-	if (canAuthor.value)
-		return null;
-	if (props.leaseStatus === 'error')
-		return 'The Graphics Authoring Lease for this Edit workspace could not be checked, so authoring stays read-only.';
-	if (props.leaseStatus !== 'ready')
-		return 'Checking the Graphics Authoring Lease for this Edit workspace.';
-	// Named where the server could resolve the holder's session to a person
-	// (#398): "another session" is true and useless — an operator wants to know
-	// whether to go and ask a colleague or close their own second window, and the
-	// name is what answers that. It falls back to the old sentence rather than to
-	// a placeholder, because a holder whose session has since ended is still
-	// holding it.
-	if (props.holderName)
-		return `${props.holderName} holds the Graphics Authoring Lease for this Edit workspace, in another browser. You are observing their accepted changes read-only.`;
-	return 'Another session holds the Graphics Authoring Lease for this Edit workspace. You are observing its accepted changes read-only.';
-});
 </script>
 
 <template>
 	<div>
-		<div
-			v-if="leaseNotice"
-			class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3"
-			data-testid="edit-lease-notice"
-		>
-			<UIcon name="i-lucide-eye" class="size-4 shrink-0 text-warning" />
-			<p class="min-w-0 flex-1 text-sm">
-				{{ leaseNotice }}
-			</p>
-			<UButton
-				v-if="canTakeOver === true"
-				size="xs"
-				variant="soft"
-				icon="i-lucide-pencil-ruler"
-				data-testid="edit-lease-take-over"
-				@click="emit('takeOver')"
-			>
-				Take over
-			</UButton>
-		</div>
+		<GraphicsAuthoringLeaseNotice
+			class="mb-4"
+			:writable="canAuthor"
+			:lease-status="leaseStatus"
+			:can-take-over="canTakeOver"
+			:holder-name="holderName"
+			@take-over="emit('takeOver')"
+		/>
 
 		<div
 			v-if="visibleSaveState === 'failed'"

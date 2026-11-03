@@ -131,6 +131,7 @@ export function useMetagameModeData() {
 	const {
 		rowCount,
 		pageData,
+		pageSize,
 		totalPages,
 		currentPage,
 		setPage,
@@ -165,6 +166,7 @@ export function useMetagameModeData() {
 		displayRows,
 		chartBars,
 		pageData,
+		pageSize,
 		rowCount,
 		currentPage,
 		totalPages,

@@ -1,8 +1,8 @@
 import type { DbPlayerRoundStandings } from '~~/server/db/schema';
 import type { EventRound } from '~~/shared/utils/eventRoundOrder';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
-import { phases, playerRoundStandings, rounds } from '~~/server/db/schema';
+import { phases, playerRoundStandings, players, rounds } from '~~/server/db/schema';
 import { previousStandingsRoundId, seedingRoundId } from '~~/shared/utils/eventRoundOrder';
 
 export interface RoundStandingInput {
@@ -18,6 +18,13 @@ export interface RoundStandingInput {
 export interface RoundStandingPositions {
 	roundId: number;
 	positions: Array<{ playerId: number; position: number | null }>;
+}
+
+/** A Player a Phase seeds, by their current name, and their Seed. */
+export interface SeededPlayerRow {
+	playerId: number;
+	name: string;
+	seed: number;
 }
 
 export function playerRoundStandingsService() {
@@ -87,17 +94,36 @@ export function playerRoundStandingsService() {
 		await findRoundPositions(eventId, previousStandingsRoundId(await listEventRounds(eventId), roundId));
 
 	/**
-	 * The Round Standings that seed a Phase's Top Cut Bracket (#759): the last
+	 * The Players a Phase's Top Cut Bracket seeds (#759), best Seed first, each
+	 * by their current name: their positions in the Round Standings of the last
 	 * Round before the Phase's first, in the Event's Round order, that holds
-	 * Round Standings. `null` when no such Round exists, or the Phase holds no
-	 * Round of the Event.
+	 * them. None when no such Round exists, or the Phase holds no Round of the
+	 * Event. A Player that Round gives no position has no Seed.
 	 */
-	const findSeedPositions = async (eventId: number, phaseId: number): Promise<RoundStandingPositions | null> =>
-		await findRoundPositions(eventId, seedingRoundId(await listEventRounds(eventId), phaseId));
+	const findSeededPlayers = async (eventId: number, phaseId: number): Promise<SeededPlayerRow[]> => {
+		const roundId = seedingRoundId(await listEventRounds(eventId), phaseId);
+		if (roundId == null)
+			return [];
+		const rows = await db
+			.select({ playerId: playerRoundStandings.playerId, name: players.name, seed: playerRoundStandings.position })
+			.from(playerRoundStandings)
+			.innerJoin(players, eq(players.id, playerRoundStandings.playerId))
+			.where(and(
+				eq(playerRoundStandings.eventId, eventId),
+				eq(playerRoundStandings.roundId, roundId),
+				isNotNull(playerRoundStandings.position),
+			))
+			.orderBy(playerRoundStandings.position);
+		return rows.flatMap(({ seed, ...row }) => seed == null
+			? []
+			: [
+					{ ...row, seed },
+				]);
+	};
 
 	return {
 		findByRoundId,
 		findPreviousRoundPositions,
-		findSeedPositions,
+		findSeededPlayers,
 	};
 }
