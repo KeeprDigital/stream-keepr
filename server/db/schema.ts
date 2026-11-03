@@ -14,6 +14,7 @@ import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
 import { relations, sql } from 'drizzle-orm';
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
+import { DEFAULT_CONVERSION_TARGET } from '~~/shared/conversionTarget';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { BROADCAST_GRAPHICS_LIVE_SESSION_STATUS_VALUES } from '~~/shared/types/broadcastGraphicsLiveSession';
 import { OP_CARD_CATEGORIES } from '~~/shared/types/card/op';
@@ -26,6 +27,7 @@ import {
 	FEATURE_MATCH_ORIENTATION_VALUES,
 	GAME_VALUES,
 	MELEE_LIVE_RESULTS_STOP_REASON_VALUES,
+	METAGAME_CONVERSION_METRIC_VALUES,
 	PLAYER_DISPLAY_MODE_VALUES,
 	POINTS_SYSTEM_VALUES,
 	POSITION_FORMAT_VALUES,
@@ -146,6 +148,10 @@ export const events = sqliteTable('events', {
 	// The Event Canvas: the coordinate space every Screen of the Event is authored and rendered in (ADR-0051).
 	canvasWidth: integer('canvas_width').notNull().default(DEFAULT_EVENT_CANVAS.width),
 	canvasHeight: integer('canvas_height').notNull().default(DEFAULT_EVENT_CANVAS.height),
+
+	// The Conversion Target every Metagame read of the Event counts Conversion Rate against (ADR-0061).
+	conversionMetric: text('conversion_metric', { enum: METAGAME_CONVERSION_METRIC_VALUES }).notNull().default(DEFAULT_CONVERSION_TARGET.conversionMetric),
+	conversionThreshold: integer('conversion_threshold').notNull().default(DEFAULT_CONVERSION_TARGET.conversionThreshold),
 
 	// Feature match defaults
 	featureMatchDefaultBestOf: integer('feature_match_default_best_of').notNull().default(3),

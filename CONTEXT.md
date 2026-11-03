@@ -75,8 +75,12 @@ A strategic Deck classification assigned to Players and used for Metagame analys
 A Player of an Archetype within the current Metagame scope; an Archetype's pilots are its Players in that scope.
 
 **Conversion Rate**:
-The percentage of an Archetype's Players in the current Metagame scope that reached a conversion target — a Top N placement or a minimum match-point total. The target is a numerator condition evaluated inside the scope; it never narrows the scope itself.
+The percentage of an Archetype's Players in the current Metagame scope that reached their Event's **Conversion Target**. The target is a numerator condition evaluated inside the scope; it never narrows the scope itself.
 _Avoid_: top-cut rate, cash rate, qualification rate
+
+**Conversion Target**:
+What a Player must reach to count as converted: a Top N placement (N at least 1) or a minimum match-point total (0 or more), Top 8 by default. Each Event has one, set on the Metagame page; the Metagame page, the Metagame Screen and Archetype Spotlight all count Conversion Rate against it, and a Screen holds none of its own (ADR-0061).
+_Avoid_: conversion threshold, when naming the whole target; cut line.
 
 **Melee Sync**:
 The workflow that imports and refreshes Event structure, Players, Deck Lists, standings, Matches, and Rounds from Melee.gg. An operator runs it from the Sync page; Live Results runs its Round sync on a schedule. One Melee Sync command runs per Event at a time; an operator's command takes over from a Live Results tick instead of waiting for it.

@@ -60,6 +60,27 @@ describe('createEventSchema', () => {
 });
 
 describe('updateEventSchema', () => {
+	// A Top N target is a placement, so at least 1; a minimum-points target may be 0.
+	it.each([
+		['topN', 0, false],
+		['topN', 1, true],
+		['topN', 999, true],
+		['topN', 1000, false],
+		['minPoints', -1, false],
+		['minPoints', 0, true],
+		['minPoints', 999, true],
+		['minPoints', 1000, false],
+	] as const)('bounds a %s conversion target of %i: %s', (conversionMetric, conversionThreshold, accepted) => {
+		expect(updateEventSchema.safeParse({ conversionMetric, conversionThreshold }).success).toBe(accepted);
+	});
+
+	it.each([
+		{ conversionMetric: 'topN' },
+		{ conversionThreshold: 8 },
+	])('refuses half a conversion target: %o', (half) => {
+		expect(updateEventSchema.safeParse(half).success).toBe(false);
+	});
+
 	it('refuses to reinterpret an existing Event\'s game', () => {
 		expect(updateEventSchema.safeParse({ game: 'op', name: 'Still MTG' }).success).toBe(false);
 	});

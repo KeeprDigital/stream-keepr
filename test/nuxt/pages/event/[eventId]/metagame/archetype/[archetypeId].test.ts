@@ -41,6 +41,7 @@ mockNuxtImport('useEventStore', () => () => reactive({
 }));
 mockNuxtImport('useMetagameStore', () => () => reactive({
 	scopeQuery: { scope: 'all' },
+	conversionTarget: { conversionMetric: 'topN', conversionThreshold: 8 },
 	invalidationVersion: 0,
 }));
 mockNuxtImport('usePlayerStore', () => () => reactive({
@@ -78,7 +79,12 @@ describe('archetype metagame detail page', () => {
 		await flushPromises();
 
 		expect(mockFetch).toHaveBeenCalledWith('/api/events/99/metagame/archetypes/8', {
-			query: { scope: 'all', board: 'full' },
+			query: {
+				scope: 'all',
+				board: 'full',
+				conversionMetric: 'topN',
+				conversionThreshold: 8,
+			},
 		});
 		wrapper.unmount();
 	});

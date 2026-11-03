@@ -1,4 +1,5 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { flushPromises } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, reactive } from 'vue';
 import { eventDataResync } from '~/modules/event-data/resync';
@@ -14,8 +15,7 @@ const mockMetagameStore = reactive({
 	topN: 8,
 	minPoints: 0,
 	playerListId: null,
-	conversionMetric: 'top8',
-	conversionThreshold: 0,
+	conversionTarget: { conversionMetric: 'topN', conversionThreshold: 8 },
 	invalidationVersion: 0,
 	error: null as string | null,
 	loadSummary: vi.fn(async () => {}),
@@ -47,5 +47,32 @@ describe('useMetagamePage', () => {
 		await eventDataResync.resync();
 		expect(mockMetagameStore.loadSummary).not.toHaveBeenCalled();
 		expect(fetchSection).not.toHaveBeenCalled();
+	});
+
+	// The Event's Conversion Target (ADR-0061) is re-derived on every Event change; only a changed target re-reads.
+	it.each([
+		[
+			{ conversionMetric: 'minPoints', conversionThreshold: 8 },
+			1,
+		],
+		[
+			{ conversionMetric: 'topN', conversionThreshold: 16 },
+			1,
+		],
+		[
+			{ conversionMetric: 'topN', conversionThreshold: 8 },
+			0,
+		],
+	])('re-reads its section when the Event\'s Conversion Target becomes %o: %i reads', async (target, reads) => {
+		mockMetagameStore.conversionTarget = { conversionMetric: 'topN', conversionThreshold: 8 };
+		const fetchSection = vi.fn(async () => {});
+		const page = effectScope();
+		page.run(() => useMetagamePage(fetchSection));
+
+		mockMetagameStore.conversionTarget = { ...target };
+		await flushPromises();
+
+		expect(fetchSection).toHaveBeenCalledTimes(reads);
+		page.stop();
 	});
 });

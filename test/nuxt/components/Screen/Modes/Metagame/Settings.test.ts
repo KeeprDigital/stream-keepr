@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';
+import { NuxtLinkStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import Settings from '~/components/Screen/Modes/Metagame/Settings.vue';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
@@ -42,7 +43,7 @@ const mockPlayerListStore = {
 };
 
 const mockEventStore = {
-	event: { id: 1 },
+	event: { id: 1, conversionMetric: 'minPoints', conversionThreshold: 0 },
 	loadEvent: vi.fn().mockResolvedValue(undefined),
 	$reset: vi.fn(),
 };
@@ -177,6 +178,7 @@ async function mountComponent() {
 				UInputNumber: UInputNumberStub,
 				USwitch: USwitchStub,
 				UButton: true,
+				NuxtLink: NuxtLinkStub,
 				USeparator: true,
 				UIcon: true,
 			},
@@ -217,36 +219,68 @@ describe('screenMetagameSettings', () => {
 		});
 	});
 
-	it('asks for the conversion target only while the Conversion Rate column shows, and persists it', async () => {
-		const hidden = await mountComponent();
-		await flushPromises();
-		expect(hidden.text()).not.toContain('Conversion target');
-		hidden.unmount();
-
+	// The Conversion Target is the Event's (ADR-0061): a Screen names it and where to change it, and offers no input for it.
+	it.each([
+		{
+			name: 'hides it with no Conversion Rate shown or sorted',
+			conversionColumn: false,
+			sortBy: 'metaShare',
+			viewMode: 'archetype',
+			shown: false,
+		},
+		{
+			name: 'shows it while the Conversion Rate column shows',
+			conversionColumn: true,
+			sortBy: 'metaShare',
+			viewMode: 'archetype',
+			shown: true,
+		},
+		{
+			name: 'shows it while archetypes sort by Conversion Rate',
+			conversionColumn: false,
+			sortBy: 'conversionRate',
+			viewMode: 'chart',
+			shown: true,
+		},
+		{
+			name: 'hides it on the cards table',
+			conversionColumn: true,
+			sortBy: 'conversionRate',
+			viewMode: 'cards',
+			shown: false,
+		},
+	])('$name, read-only', async ({ conversionColumn, sortBy, viewMode, shown }) => {
 		mockConfig.value = {
 			...structuredClone(defaultConfig),
+			viewMode,
+			sortBy,
 			archetypeColumns: [
 				...defaultConfig.archetypeColumns,
-				{ key: 'conversionRate', visible: true },
+				{ key: 'conversionRate', visible: conversionColumn },
 			],
-			conversionMetric: 'topN',
-			conversionThreshold: 8,
 		};
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		const fields = wrapper.findAll('[data-testid="form-field"]');
-		const target = fields.find(field => field.text().includes('Conversion target'))!;
-		expect(target.text()).toContain('Top N|Minimum Points');
-		target.getComponent(USelectStub).vm.$emit('update:modelValue', 'minPoints');
+		const target = wrapper.find('[data-testid="event-conversion-target"]');
+		expect(target.exists()).toBe(shown);
+		if (shown) {
+			expect(target.text()).toBe('0+ pts');
+			expect(wrapper.get('[data-testid="event-conversion-target-link"]').attributes('href')).toBe('/event/1/metagame');
+		}
+		expect(wrapper.text()).not.toContain('Conversion threshold');
+	});
 
-		const threshold = fields.find(field => field.text().includes('Conversion threshold'))!;
-		expect(threshold.getComponent(UInputNumberStub).props('modelValue')).toBe(8);
-		threshold.getComponent(UInputNumberStub).vm.$emit('update:modelValue', 15);
+	it('offers sorting archetypes by Conversion Rate', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const sortBy = wrapper.findAll('[data-testid="form-field"]').find(field => field.find('span').text() === 'Sort archetypes by')!;
+		expect(sortBy.text()).toContain('Conversion Rate');
+		sortBy.getComponent(USelectStub).vm.$emit('update:modelValue', 'conversionRate');
 		await nextTick();
 
-		expect(mockUpdateConfig).toHaveBeenCalledWith({ conversionMetric: 'minPoints' });
-		expect(mockUpdateConfig).toHaveBeenCalledWith({ conversionThreshold: 15 });
+		expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({ sortBy: 'conversionRate' }));
 	});
 
 	it('persists reordered columns for the active table', async () => {
