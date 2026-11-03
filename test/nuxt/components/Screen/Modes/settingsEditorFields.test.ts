@@ -39,7 +39,14 @@ const OPTIONS_NOT_OFFERED: Record<string, readonly string[]> = {
 };
 
 /** Each mode's editor, and the config variants that between them render every scalar control. */
-const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Record<string, unknown>[] }>> = {
+/** An editor variant shown for a One Piece Card Game Event, whose editor may differ (ADR-0057). */
+interface EditorVariants {
+	editor: string;
+	variants: Record<string, unknown>[];
+	opVariants?: Record<string, unknown>[];
+}
+
+const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 	'feature-match': {
 		editor: 'FeatureMatch',
 		variants: [{}],
@@ -68,6 +75,8 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 				},
 			},
 		],
+		// A Slot side's OP Deck List: its Mainboard, cost curve and badges.
+		opVariants: [{}],
 	},
 	// Each view mode's settings; the archetype colours show with the deck column.
 	'standings': {
@@ -213,8 +222,9 @@ mockNuxtImport('useBroadcastDeckListStore', () => () => ({
 	loadCollection: vi.fn(),
 }));
 // A points system, so the Deck editor offers its card point settings.
+const editorEvent = { id: 1, game: 'mtg', pointsSystem: '7ph' };
 mockNuxtImport('useEventStore', () => () => ({
-	event: { id: 1, game: 'mtg', pointsSystem: '7ph' },
+	event: editorEvent,
 	$reset: vi.fn(),
 }));
 mockNuxtImport('usePlayerDeckCache', () => () => ({
@@ -385,7 +395,12 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 		const eventReferences = new Set(Object.keys(SCREEN_MODES[mode].eventReferences));
 		const rendered = new Set<string>();
 
-		for (const variant of entry.variants) {
+		const variants = [
+			...entry.variants.map(variant => ({ variant, game: 'mtg' })),
+			...(entry.opVariants ?? []).map(variant => ({ variant, game: 'op' })),
+		];
+		for (const { variant, game } of variants) {
+			editorEvent.game = game;
 			const initial = {
 				...getDefaultConfigForMode(mode),
 				...variant,

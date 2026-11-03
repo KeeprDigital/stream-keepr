@@ -133,13 +133,13 @@ onMounted(async () => {
 				@update:model-value="emit('update', { showPlayerName: $event })"
 			/>
 			<ScreenSettingsToggle
-				label="Show Leader Name"
+				:label="fields.showDeckName.label"
 				description="The Leader's name, which names the deck."
 				:model-value="config.showDeckName !== false"
 				@update:model-value="emit('update', { showDeckName: $event })"
 			/>
 			<ScreenSettingsToggle
-				label="Show Leader Colors"
+				:label="fields.showDeckColors.label"
 				description="The Leader's colours, beside its name."
 				:model-value="config.showDeckColors !== false"
 				@update:model-value="emit('update', { showDeckColors: $event })"
