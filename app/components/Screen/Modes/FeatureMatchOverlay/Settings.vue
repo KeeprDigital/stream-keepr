@@ -18,6 +18,7 @@ import {
 	hostSelectionTarget,
 } from '~/modules/feature-match-overlay/editorSelection';
 import { NUMBER_SCRUB_GESTURE } from '~/modules/graphics/numberScrubGesture';
+import { isTypingTarget } from '~/utils/typingTarget';
 import FeatureMatchOverlayCompositorInspector from './CompositorInspector.vue';
 import FeatureMatchOverlayLayerInspector from './LayerInspector.vue';
 import FeatureMatchOverlayLayerList from './LayerList.vue';
@@ -139,6 +140,10 @@ const selectionLabel = computed(() => editorSelectionLabel(config.value.layout, 
 
 function manipulate(rect: GraphicRect, gesture: number) {
 	editor.setRect(selection.value, rect, { coalesce: `canvas:${gesture}` });
+}
+
+function rotate(rotation: number, gesture: number) {
+	editor.setRotation(selection.value, rotation, { coalesce: `canvas:${gesture}` });
 }
 
 /**
@@ -264,22 +269,29 @@ const SHORTCUTS = [
 	},
 	{
 		keys: ['⇧ drag'],
-		label: 'Keep aspect ratio',
+		label: 'Keep aspect ratio (rotate in 15° steps)',
 	},
 	{
 		keys: ['⌥ drag'],
 		label: 'Turn off snapping',
 	},
+	{
+		keys: ['⌘ scroll'],
+		label: 'Zoom the preview',
+	},
+	{
+		keys: ['Space drag'],
+		label: 'Pan the preview (or middle-drag)',
+	},
+	{
+		keys: ['⌘', '0'],
+		label: 'Fit the preview',
+	},
+	{
+		keys: ['⌘', '1'],
+		label: 'Preview at 100%',
+	},
 ] as const;
-
-/** Whether a key press belongs to something the author is typing into or choosing in. */
-function isTypingTarget(target: EventTarget | null) {
-	if (!(target instanceof HTMLElement))
-		return false;
-	if (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
-		return true;
-	return target.closest('[role="dialog"], [role="menu"], [role="listbox"]') !== null;
-}
 
 const NUDGE: Record<string, { x: number; y: number }> = {
 	ArrowLeft: { x: -1, y: 0 },
@@ -562,6 +574,7 @@ useEventListener(import.meta.client
 					@select-target="selectHostTarget"
 					@select-compositor-target="selectCompositorTarget"
 					@manipulate="manipulate"
+					@rotate="rotate"
 				/>
 			</section>
 

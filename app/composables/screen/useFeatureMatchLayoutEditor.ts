@@ -334,6 +334,12 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		patchLayer(target, rect, editOptions);
 	}
 
+	/** Set a Graphic Item's Graphic Rotation, as the canvas turns it. A Source Item does not turn. */
+	function setRotation(target: FeatureMatchLayoutEditorSelection, rotation: number, editOptions: FeatureMatchLayoutEditOptions = {}) {
+		if (target.type === 'item')
+			editComposition(composition => patchGraphicItem(composition, target.itemId, { rotation }), editOptions);
+	}
+
 	function nudge(delta: { x: number; y: number }) {
 		const target = selection.value;
 		const frame = editorSelectionFrame(config.value.layout, target, {
@@ -373,6 +379,7 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		toggleVisible,
 		rename,
 		setRect,
+		setRotation,
 		nudge,
 	};
 }

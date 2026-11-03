@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref, toRaw } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
+import { USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import Settings from '~/components/Screen/Modes/Standings/Settings.vue';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
@@ -62,8 +63,29 @@ mockNuxtImport('usePlayerListStore', () => () => ({
 }));
 mockNuxtImport('useRoundStore', () => () => ({
 	...loaded,
-	rounds: [],
+	rounds: [
+		{
+			id: 31,
+			phaseId: 3,
+			name: 'Round 1',
+			roundNumber: 1,
+		},
+		{
+			id: 41,
+			phaseId: 4,
+			name: 'Round 1',
+			roundNumber: 1,
+		},
+	],
 	loadRoundsByEventId: vi.fn(),
+}));
+mockNuxtImport('usePhaseStore', () => () => ({
+	...loaded,
+	phases: [
+		{ id: 3, name: 'Swiss', sortOrder: 1 },
+		{ id: 4, name: 'Top Cut', sortOrder: 2 },
+	],
+	loadPhasesByEventId: vi.fn(),
 }));
 
 const USwitchStub = defineComponent({
@@ -109,7 +131,7 @@ async function mountSettings(saved: Record<string, any> = config.value) {
 			eventId: 1,
 		},
 		global: {
-			stubs: { USwitch: USwitchStub, UIcon: true },
+			stubs: { USwitch: USwitchStub, USelect: USelectStub, UIcon: true },
 		},
 	});
 	await flushPromises();
@@ -203,5 +225,18 @@ describe('the Standings settings editor\'s Position Change warning', () => {
 		expect(warning.exists()).toBe(warns);
 		if (warns)
 			expect(warning.text()).toContain('no data for this Event yet');
+	});
+});
+
+describe('the Standings settings editor\'s Round picker', () => {
+	it('offers each Round as "Phase · Round", after Current', async () => {
+		const wrapper = await mountSettings();
+		const pickers = wrapper.findAll('select').map(select => select.findAll('option').map(option => option.text()));
+
+		expect(pickers).toContainEqual([
+			'Current',
+			'Swiss · Round 1',
+			'Top Cut · Round 1',
+		]);
 	});
 });

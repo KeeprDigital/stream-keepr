@@ -3,8 +3,10 @@ import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { GraphicRect } from '~~/shared/types/graphics';
 import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { EditorSelectionFrame } from '~/modules/feature-match-overlay/editorSelection';
+import type { GraphicsPreviewAnimationPlan } from '~/modules/graphics/previewMessages';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
+import { FEATURE_MATCH_LAYOUT_ANIMATION_PHASES, FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { SCREEN_OUTPUT_OPTIONS } from '~~/shared/screenModeDefinitions';
 import { screenOutputPath } from '~~/shared/utils/screenOutput';
 import {
@@ -13,6 +15,7 @@ import {
 	isFeatureMatchOverlayPreviewSelectMessage,
 } from '~/modules/feature-match-overlay/previewMessages';
 import {
+	GRAPHICS_PREVIEW_ANIMATION_MESSAGE,
 	GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE,
 	GRAPHICS_PREVIEW_THEME_MESSAGE,
 	isGraphicsPreviewReadyMessage,
@@ -22,7 +25,7 @@ import {
 /**
  * The Feature Match Overlay editor preview: the shared preview panel (output
  * selection, zoom, item guides, advisory action-safe and title-safe guides), plus
- * output URL hand-out and PNG capture.
+ * output URL hand-out, PNG capture, and Graphic Animation Preview.
  *
  * Two selections travel through it, because the page has two authoring surfaces.
  * The host-owned one names the Frame or a Source Item; the
@@ -62,6 +65,8 @@ const emit = defineEmits<{
 	selectCompositorTarget: [target: GraphicsSelectionTarget];
 	/** The selected layer moved or resized on the canvas; one `gesture` per drag. */
 	manipulate: [rect: GraphicRect, gesture: number];
+	/** Each frame of a canvas rotate drag, as the selected Graphic Item's new Graphic Rotation. */
+	rotate: [rotation: number, gesture: number];
 }>();
 
 const toast = useToast();
@@ -155,11 +160,45 @@ function syncThemeToPreview() {
 
 watch(() => props.previewThemeValues, syncThemeToPreview);
 
+/**
+ * Graphic Animation Preview (#749): a run plays the whole Feature Match Layout —
+ * every item's enter, on-screen and exit — or the selected Graphic Item alone
+ * (E31). The shared controls describe the run and this pushes it to the frame,
+ * which plays it over the working layout. It never writes and never reaches a
+ * live Screen Output, so it is offered whether or not this session may author.
+ */
+const ANIMATION_SUBJECTS = [
+	{ value: 'composition', label: 'Whole layout' },
+	{ value: 'item', label: 'Selected item' },
+] as const;
+const animationSubject = ref<typeof ANIMATION_SUBJECTS[number]['value']>('composition');
+const animationPlan = ref<GraphicsPreviewAnimationPlan | null>(null);
+const animationTarget = computed(() => {
+	if (animationSubject.value === 'composition')
+		return { graphicId: FEATURE_MATCH_LAYOUT_COMPOSITION_ID };
+	return props.compositorTarget.type === 'item'
+		? { graphicId: FEATURE_MATCH_LAYOUT_COMPOSITION_ID, itemId: props.compositorTarget.itemId }
+		: null;
+});
+
+function syncAnimationToPreview() {
+	if (!import.meta.client || !previewFrame.value?.contentWindow)
+		return;
+
+	previewFrame.value.contentWindow.postMessage({
+		type: GRAPHICS_PREVIEW_ANIMATION_MESSAGE,
+		plan: animationPlan.value && { ...animationPlan.value },
+	}, window.location.origin);
+}
+
+watch(animationPlan, syncAnimationToPreview);
+
 function syncPreviewState() {
 	syncConfigToPreview();
 	syncSelectedTargetToPreview();
 	syncCompositorTargetToPreview();
 	syncThemeToPreview();
+	syncAnimationToPreview();
 }
 
 /**
@@ -382,6 +421,27 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 				</UPopover>
 			</template>
 
+			<GraphicsAnimationPreviewControls
+				:target="animationTarget"
+				:phases="FEATURE_MATCH_LAYOUT_ANIMATION_PHASES"
+				hint="Select a Graphic Item to preview its animation alone."
+				@update:plan="plan => { animationPlan = plan }"
+			>
+				<UFieldGroup size="xs">
+					<UButton
+						v-for="subject in ANIMATION_SUBJECTS"
+						:key="subject.value"
+						:color="animationSubject === subject.value ? 'primary' : 'neutral'"
+						:variant="animationSubject === subject.value ? 'subtle' : 'outline'"
+						:aria-pressed="animationSubject === subject.value"
+						:data-testid="`animation-preview-subject-${subject.value}`"
+						@click="() => { animationSubject = subject.value }"
+					>
+						{{ subject.label }}
+					</UButton>
+				</UFieldGroup>
+			</GraphicsAnimationPreviewControls>
+
 			<template #viewport>
 				<iframe
 					ref="previewFrame"
@@ -395,10 +455,13 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 					:rect="selectionFrame?.rect ?? null"
 					:origin="selectionFrame?.origin"
 					:snap-lines="selectionFrame?.snapLines"
+					:rotation="selectionFrame?.rotation"
+					:anchor="selectionFrame?.anchor"
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
 					:label="selectionLabel"
 					@change="(rect, gesture) => emit('manipulate', rect, gesture)"
+					@rotate="(rotation, gesture) => emit('rotate', rotation, gesture)"
 				/>
 			</template>
 		</GraphicsPreviewPanel>

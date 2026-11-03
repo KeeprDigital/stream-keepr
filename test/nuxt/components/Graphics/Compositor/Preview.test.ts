@@ -237,13 +237,14 @@ describe('graphicsCompositorPreview', () => {
 	it('fits the preview without changing the saved canvas aspect ratio', async () => {
 		const wrapper = await mountComponent({ canvasWidth: 1080, canvasHeight: 1920 });
 		const canvas = wrapper.get('iframe').element.parentElement;
-		const style = canvas?.getAttribute('style') ?? '';
+		const stage = canvas?.closest('[data-testid="preview-stage"]');
+		const style = stage?.getAttribute('style') ?? '';
 
 		expect(style).toContain('aspect-ratio: 1080 / 1920');
 		expect(style).toContain('max-width: 100%');
 		expect(style).not.toContain('max-height');
 		expect(canvas?.classList).toContain('transparent-checkerboard-backdrop');
-		expect(canvas?.parentElement?.classList).not.toContain('transparent-checkerboard-backdrop');
+		expect(stage?.classList).not.toContain('transparent-checkerboard-backdrop');
 	});
 
 	it('previews transparency or a selected solid background without changing output', async () => {
