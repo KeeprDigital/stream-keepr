@@ -553,35 +553,60 @@ describe('batchLookupScryfallIds', () => {
 describe('batchLookupScryfallIds when a card\'s name is another card\'s face', () => {
 	const { schemingSilvertongue, signInBlood, emeritusOfConflict, lightningBolt, bindLiberate, bind, delverOfSecrets } = FACE_NAME_COLLISIONS;
 	const filler = Array.from({ length: 74 }, (_, index) => ({ name: `Unknown Card ${index}`, setCode: null }));
+	const named = (name: string, setCode: string | null = null) => ({ name, setCode });
 
 	// A name answers with the card of exactly that name, whatever order Scryfall saw them in.
 	it.each([
 		{
-			requested: ['Scheming Silvertongue // Sign in Blood', 'Sign in Blood'],
+			requested: [
+				named('Scheming Silvertongue // Sign in Blood'),
+				named('Sign in Blood'),
+			],
 			answers: [schemingSilvertongue, signInBlood],
 		},
 		{
-			requested: ['Sign in Blood', 'Scheming Silvertongue // Sign in Blood'],
+			requested: [
+				named('Sign in Blood'),
+				named('Scheming Silvertongue // Sign in Blood'),
+			],
 			answers: [signInBlood, schemingSilvertongue],
 		},
 		{
-			requested: ['Emeritus of Conflict', 'Lightning Bolt'],
+			requested: [
+				named('Emeritus of Conflict'),
+				named('Lightning Bolt'),
+			],
 			answers: [emeritusOfConflict, lightningBolt],
 		},
 		{
-			requested: ['Bind // Liberate', 'Bind'],
+			requested: [
+				named('Emeritus of Conflict // Lightning Bolt'),
+				named('Lightning Bolt'),
+				named('Lightning Bolt', 'msc'),
+			],
+			answers: [emeritusOfConflict, lightningBolt, lightningBolt],
+		},
+		{
+			requested: [
+				named('Bind // Liberate'),
+				named('Bind'),
+			],
 			answers: [bindLiberate, bind],
 		},
 		{
-			requested: ['Delver of Secrets', 'Insectile Aberration'],
-			answers: [delverOfSecrets, delverOfSecrets],
+			requested: [
+				named('Delver of Secrets'),
+				named('Insectile Aberration'),
+				named('Delver of Secrets', 'inr'),
+			],
+			answers: [delverOfSecrets, delverOfSecrets, delverOfSecrets],
 		},
 	])('answers $requested with their own cards', async ({ requested, answers }) => {
 		vi.mocked(fetch).mockImplementation(createScryfallFake(Object.values(FACE_NAME_COLLISIONS)).fetch);
 
-		const { results, errors } = await batchLookupScryfallIds(requested.map(name => ({ name, setCode: null })), { suppressNotFoundErrors: true });
+		const { results, errors } = await batchLookupScryfallIds(requested, { suppressNotFoundErrors: true });
 
-		expect(requested.map(name => getCardDataFromMap(results, name, null)?.name)).toEqual(answers.map(card => card.name));
+		expect(requested.map(request => getCardDataFromMap(results, request.name, request.setCode)?.name)).toEqual(answers.map(card => card.name));
 		expect(errors).toEqual([]);
 	});
 
@@ -599,6 +624,8 @@ describe('batchLookupScryfallIds when a card\'s name is another card\'s face', (
 		expect(getCardDataFromMap(results, 'Sign in Blood', null)?.name).toBe('Sign in Blood');
 	});
 
+	// Each lookup alone is one more Scryfall request, so only a name the batch
+	// answered with another card's name pays for one.
 	it('looks a name up alone only when the batch answered it with a card of another name', async () => {
 		const scryfall = createScryfallFake(Object.values(FACE_NAME_COLLISIONS));
 		vi.mocked(fetch).mockImplementation(scryfall.fetch);

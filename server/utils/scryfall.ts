@@ -395,10 +395,73 @@ export interface ScryfallLookupResult {
 	errors: string[];
 }
 
+/** One name (and optional set) a caller asked for, with the identifier sent for it. */
+interface CardRequest {
+	name: string;
+	setCode: string | null;
+	identifier: CardIdentifier;
+}
+
+function identifierKey(identifier: CardIdentifier): string {
+	return createCardKey(identifier.name, identifier.set ?? null);
+}
+
+function providerFailureReason(error: unknown): { reason: string; status: number | null } {
+	if (!(error instanceof ScryfallRequestError))
+		return { reason: 'provider returned an invalid response', status: null };
+	return {
+		reason: `provider request failed${error.status === null
+			? ''
+			: ` (HTTP ${error.status})`}`,
+		status: error.status,
+	};
+}
+
+/**
+ * Looks each request up alone with `named?exact`, where Scryfall prefers the
+ * card of exactly that name: "Sign in Blood" over "Scheming Silvertongue // Sign in Blood".
+ */
+async function lookUpNamesAlone(
+	requests: readonly CardRequest[],
+	results: Map<string, ScryfallCardData>,
+	errors: string[],
+	stopOnError: boolean,
+): Promise<void> {
+	for (let index = 0; index < requests.length; index += NAMED_LOOKUP_CONCURRENCY) {
+		const chunk = requests.slice(index, index + NAMED_LOOKUP_CONCURRENCY);
+		const settled = await Promise.allSettled(chunk.map(request =>
+			fetchScryfallCardByName({ exact: request.name, setCode: request.setCode })));
+		let failed = false;
+		for (const [chunkIndex, outcome] of settled.entries()) {
+			const request = chunk[chunkIndex]!;
+			if (outcome.status === 'fulfilled') {
+				results.set(createCardKey(request.name, request.setCode), outcome.value);
+				continue;
+			}
+			if (isScryfallNotFoundError(outcome.reason))
+				continue;
+			const { reason, status } = providerFailureReason(outcome.reason);
+			console.error(JSON.stringify({
+				service: 'scryfall',
+				event: 'named_lookup_failed',
+				status,
+			}));
+			errors.push(`Scryfall named lookup failed: ${reason}`);
+			failed = true;
+		}
+		if (failed && stopOnError)
+			return;
+	}
+}
+
 /**
  * Batch lookup Scryfall data for a list of cards.
  * Returns both the results map AND any errors encountered — callers decide
  * whether errors are fatal or just warnings. Never swallows failures silently.
+ *
+ * A collection answer counts only for its card's full name: the endpoint can
+ * answer a name with an earlier identifier's card that carries it as a face.
+ * A name answered with a card of another name is looked up alone instead.
  */
 export async function batchLookupScryfallIds(
 	cards: Array<{ name: string; setCode: string | null }>,
@@ -412,7 +475,7 @@ export async function batchLookupScryfallIds(
 	}
 
 	// Deduplicate cards by name+set combination
-	const requests = new Map<string, { name: string; setCode: string | null; identifier: CardIdentifier }>();
+	const requests = new Map<string, CardRequest>();
 	for (const card of cards) {
 		const trimmedName = card.name.trim();
 		if (!trimmedName) {
@@ -434,7 +497,6 @@ export async function batchLookupScryfallIds(
 		}
 	}
 
-	const identifierKey = (identifier: CardIdentifier) => createCardKey(identifier.name, identifier.set ?? null);
 	const uniqueIdentifiers = new Map<string, CardIdentifier>();
 	for (const request of requests.values())
 		uniqueIdentifiers.set(identifierKey(request.identifier), request.identifier);
@@ -453,9 +515,6 @@ export async function batchLookupScryfallIds(
 		try {
 			const response = await fetchCardCollection(batch);
 
-			// A collection answer is keyed by the card's full name only. Scryfall
-			// answers a name that is another card's face with that card when it
-			// came earlier in the batch (#889), so a face never stands for a name.
 			for (const card of response.data) {
 				const cardData = mapScryfallCardData(card);
 
@@ -497,14 +556,7 @@ export async function batchLookupScryfallIds(
 			}
 		}
 		catch (error) {
-			const status = error instanceof ScryfallRequestError
-				? error.status
-				: null;
-			const reason = error instanceof ScryfallRequestError
-				? `provider request failed${status === null
-					? ''
-					: ` (HTTP ${status})`}`
-				: 'provider returned an invalid response';
+			const { reason, status } = providerFailureReason(error);
 			const errorMsg = `Scryfall batch ${batchIndex}/${totalBatches} failed: ${reason}`;
 			console.error(JSON.stringify({
 				service: 'scryfall',
@@ -526,36 +578,12 @@ export async function batchLookupScryfallIds(
 	if (providerFailed && options.stopOnError)
 		return { results, errors };
 
-	// A name the batch answered with a card of another name (one face of it, or
-	// a near spelling) is looked up alone, where Scryfall prefers the card of
-	// exactly that name: "Sign in Blood" over "Scheming Silvertongue // Sign in Blood".
-	const answeredElsewhere = [
+	const answeredWithAnotherName = [
 		...requests.values(),
 	].filter(request =>
 		answeredIdentifiers.has(identifierKey(request.identifier))
-		&& !getCardDataFromMap(results, request.name, request.setCode));
-	for (let index = 0; index < answeredElsewhere.length; index += NAMED_LOOKUP_CONCURRENCY) {
-		const chunk = answeredElsewhere.slice(index, index + NAMED_LOOKUP_CONCURRENCY);
-		const settled = await Promise.allSettled(chunk.map(request =>
-			fetchScryfallCardByName({ exact: request.name, setCode: request.setCode })));
-		for (const [chunkIndex, outcome] of settled.entries()) {
-			const request = chunk[chunkIndex]!;
-			if (outcome.status === 'fulfilled') {
-				results.set(createCardKey(request.name, request.setCode), outcome.value);
-			}
-			else if (!isScryfallNotFoundError(outcome.reason)) {
-				const status = outcome.reason instanceof ScryfallRequestError
-					? outcome.reason.status
-					: null;
-				providerFailed = true;
-				errors.push(`Scryfall named lookup failed: provider request failed${status === null
-					? ''
-					: ` (HTTP ${status})`}`);
-			}
-		}
-		if (providerFailed && options.stopOnError)
-			break;
-	}
+		&& !results.has(createCardKey(request.name, request.setCode)));
+	await lookUpNamesAlone(answeredWithAnotherName, results, errors, options.stopOnError ?? false);
 
 	return { results, errors };
 }

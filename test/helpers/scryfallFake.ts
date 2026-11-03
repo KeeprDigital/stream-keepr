@@ -1,8 +1,7 @@
 /**
- * A Scryfall stand-in for the network boundary, reproducing the name matching
- * observed on the live API (#889): a lone name answers with the card of exactly
- * that name before a card that only carries it as a face, while `/cards/collection`
- * answers a name with an earlier identifier's card when the name is one of its faces.
+ * Scryfall at the network boundary, matching names as the live API does: a lone name
+ * prefers the card of exactly that name, but `/cards/collection` answers a name with an
+ * earlier identifier's card when the name is one of its faces.
  */
 
 export interface FakeScryfallCard {

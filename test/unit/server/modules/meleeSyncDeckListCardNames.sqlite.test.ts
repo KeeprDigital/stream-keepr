@@ -1,8 +1,9 @@
-import type { H3Event } from 'h3';
 import { asc, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
+import { stubH3Event } from '~~/test/helpers/h3Event';
+import { meleePlayer } from '~~/test/helpers/meleeFixtures';
 import { createScryfallFake, FACE_NAME_COLLISIONS } from '~~/test/helpers/scryfallFake';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
@@ -39,29 +40,16 @@ const { meleeSyncModule } = await import('~~/server/modules/melee-sync');
 
 afterAll(async () => await harness.close());
 
-const { schemingSilvertongue, signInBlood, emeritusOfConflict, lightningBolt } = FACE_NAME_COLLISIONS;
+const { schemingSilvertongue, signInBlood } = FACE_NAME_COLLISIONS;
 
-function meleePlayer(records: Array<{ n: string; t: string }>) {
+function deckRecord(name: string, type: string) {
 	return {
-		TeamId: 1,
-		PlayerName: 'Alice',
-		PronounsDescription: null,
-		Decklists: [
-			{
-				Guid: 'deck-1',
-				FormatId: 'standard',
-				DecklistName: 'Rakdos',
-				Records: records.map(record => ({
-					l: record.n,
-					n: record.n,
-					s: null,
-					q: 1,
-					c: 0,
-					t: record.t,
-				})),
-				Attributes: [],
-			},
-		],
+		l: name,
+		n: name,
+		s: null,
+		q: 1,
+		c: 0,
+		t: type,
 	};
 }
 
@@ -75,18 +63,17 @@ async function mainboardOf(eventId: number) {
 }
 
 beforeEach(() => {
+	vi.stubGlobal('fetch', createScryfallFake(Object.values(FACE_NAME_COLLISIONS)).fetch);
 	melee.fetchEvent.mockResolvedValue({ Name: 'Melee Championship', Game: 'Magic: The Gathering', Phases: [] });
 	melee.fetchMergedPlayers.mockResolvedValue([]);
 });
 
 describe('importing a Deck List holding a card and another card that has its name as a face', () => {
-	// Melee lists the creature first, so its card reaches Scryfall before the standalone one.
+	// Melee lists the creature first, so its card reaches Scryfall before Sign in Blood.
 	it.each([
-		{ twoFaced: schemingSilvertongue, standalone: signInBlood, creature: 'Scheming Silvertongue // Sign in Blood' },
-		{ twoFaced: schemingSilvertongue, standalone: signInBlood, creature: 'Scheming Silvertongue' },
-		{ twoFaced: emeritusOfConflict, standalone: lightningBolt, creature: 'Emeritus of Conflict // Lightning Bolt' },
-	])('stores $standalone.name as its own card beside "$creature"', async ({ twoFaced, standalone, creature }) => {
-		vi.stubGlobal('fetch', createScryfallFake(Object.values(FACE_NAME_COLLISIONS)).fetch);
+		'Scheming Silvertongue // Sign in Blood',
+		'Scheming Silvertongue',
+	])('stores Sign in Blood as its own card beside "%s"', async (creature) => {
 		const [event] = await db.insert(schema.events).values({
 			name: 'Melee Championship',
 			game: 'mtg',
@@ -95,17 +82,27 @@ describe('importing a Deck List holding a card and another card that has its nam
 			meleeEventId: 'melee-1',
 		}).returning({ id: schema.events.id });
 		melee.fetchPlayers.mockResolvedValue([
-			meleePlayer([
-				{ n: creature, t: 'Creature' },
-				{ n: standalone.name, t: 'Sorcery' },
-			]),
+			meleePlayer(1, {
+				Decklists: [
+					{
+						Guid: 'deck-1',
+						FormatId: 'standard',
+						DecklistName: 'Rakdos',
+						Records: [
+							deckRecord(creature, 'Creature'),
+							deckRecord('Sign in Blood', 'Sorcery'),
+						],
+						Attributes: [],
+					},
+				],
+			}),
 		]);
 
-		await meleeSyncModule().syncDeckLists({} as H3Event, event!.id);
+		await meleeSyncModule().syncDeckLists(stubH3Event(), event!.id);
 
 		expect(await mainboardOf(event!.id)).toEqual([
-			{ name: twoFaced.name, quantity: 1 },
-			{ name: standalone.name, quantity: 1 },
+			{ name: schemingSilvertongue.name, quantity: 1 },
+			{ name: signInBlood.name, quantity: 1 },
 		]);
 	});
 });
