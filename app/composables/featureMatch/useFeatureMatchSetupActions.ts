@@ -25,14 +25,13 @@ export function useFeatureMatchSetupActions(deps: FeatureMatchSetupDeps) {
 
 	const meleeModalOpen = ref(false);
 
+	/**
+	 * Swaps the sides in the Feature Match Session only. The Session owns which
+	 * side each player sits on and the form holds the Slot's pairing order
+	 * (ADR-0058), so the form is left alone: the panel shows it oriented by the
+	 * Session, and a save sends each player's edits to their own Slot side.
+	 */
 	async function swapPlayers() {
-		const snapshot = structuredClone(toRaw(formData.value));
-
-		formData.value.player1Data = structuredClone(toRaw(snapshot.player2Data));
-		formData.value.player2Data = structuredClone(toRaw(snapshot.player1Data));
-		formData.value.player1Id = snapshot.player2Id;
-		formData.value.player2Id = snapshot.player1Id;
-
 		await runRequest(async () => {
 			if (eventStore.eventId) {
 				await featureMatchStateStore.swapPlayers(eventStore.eventId, formData.value.id);
@@ -41,13 +40,6 @@ export function useFeatureMatchSetupActions(deps: FeatureMatchSetupDeps) {
 		}, {
 			success: { title: 'Players swapped', color: 'success' },
 			error: { title: 'Failed to swap players', color: 'error' },
-			onFailure: () => {
-				// Rollback form data on failure
-				formData.value.player1Data = snapshot.player1Data;
-				formData.value.player2Data = snapshot.player2Data;
-				formData.value.player1Id = snapshot.player1Id;
-				formData.value.player2Id = snapshot.player2Id;
-			},
 		});
 	}
 

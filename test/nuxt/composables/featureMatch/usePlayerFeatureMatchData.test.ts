@@ -145,6 +145,39 @@ describe('usePlayerFeatureMatchData', () => {
 		expect(usePlayerFeatureMatchData(1, 'player1').deckName.value).toBe('Reviewed Deck');
 	});
 
+	// The Session owns side order and the Slot keeps pairing order (ADR-0058).
+	it('reads the deck name from the roster Player a swapped Session seats on that side', () => {
+		mockMatches.value = [
+			slot({
+				player1Id: 21,
+				player2Id: 22,
+				activeSession: {
+					sourceSnapshot: {
+						player1: { playerId: 22, data: p2Data },
+						player2: { playerId: 21, data: p1Data },
+					},
+				},
+			}),
+		];
+		mockRoster.value = [
+			createMockPlayer({
+				id: 21,
+				name: 'Alice',
+				gameData: { type: 'mtg', deckName: 'Alice Deck' },
+			}),
+			createMockPlayer({
+				id: 22,
+				name: 'Bob',
+				gameData: { type: 'mtg', deckName: 'Bob Deck' },
+			}),
+		];
+
+		expect([
+			usePlayerFeatureMatchData(1, 'player1').deckName.value,
+			usePlayerFeatureMatchData(1, 'player2').deckName.value,
+		]).toEqual(['Bob Deck', 'Alice Deck']);
+	});
+
 	it.each([
 		[
 			'the roster Player the Slot seats',

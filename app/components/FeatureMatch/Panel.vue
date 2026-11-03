@@ -124,15 +124,50 @@ const hasMeleeMatches = computed(() => {
 	return matchStore.matches.length > 0;
 });
 
-const player1Data = computed({
-	get() { return formData.value.player1Data!; },
-	set(newValue: PlayerData) { formData.value.player1Data = newValue; },
+// ──────────────── Sides ────────────────
+
+/**
+ * Whether the Feature Match Session shows its players in the opposite order to
+ * the Slot. The Session owns which side each player sits on and the form holds
+ * the Slot's pairing order (ADR-0058), so each shown side reads and writes the
+ * Slot side its player holds: an edit lands on its own player, and a swap turns
+ * the columns without leaving anything to save.
+ */
+const sidesSwapped = computed(() => {
+	const sessionId = featureMatchStateStore.sessionIdBySlotId?.get(props.match.id);
+	const session = (sessionId === undefined
+		? undefined
+		: featureMatchStateStore.featureMatchSessions?.get(sessionId))
+	?? props.match.activeSession;
+	return session?.sourceSnapshot.playersSwapped ?? false;
 });
 
-const player2Data = computed({
-	get() { return formData.value.player2Data!; },
-	set(newValue: PlayerData) { formData.value.player2Data = newValue; },
-});
+function slotSideOf(shown: PlayerSide): PlayerSide {
+	if (!sidesSwapped.value)
+		return shown;
+	return shown === 'player1'
+		? 'player2'
+		: 'player1';
+}
+
+function shownSideData(shown: PlayerSide) {
+	return computed({
+		get: () => formData.value[`${slotSideOf(shown)}Data`]!,
+		set: (newValue: PlayerData) => { formData.value[`${slotSideOf(shown)}Data`] = newValue; },
+	});
+}
+
+function shownSidePlayerId(shown: PlayerSide) {
+	return computed({
+		get: () => formData.value[`${slotSideOf(shown)}Id`],
+		set: (newValue: number | null) => { formData.value[`${slotSideOf(shown)}Id`] = newValue; },
+	});
+}
+
+const player1Data = shownSideData('player1');
+const player2Data = shownSideData('player2');
+const player1Id = shownSidePlayerId('player1');
+const player2Id = shownSidePlayerId('player2');
 
 const player1FormId = computed(() => `feature-match-${props.match.id}-player-1-form`);
 const player2FormId = computed(() => `feature-match-${props.match.id}-player-2-form`);
@@ -446,12 +481,12 @@ async function save() {
 						:standings-enabled="standingsEnabled"
 						:lgs-enabled="lgsEnabled"
 						:players="playerStore.players"
-						:player-id="formData.player1Id"
+						:player-id="player1Id"
 						:form-id="player1FormId"
 						:slot-id="match.id"
-						side="player1"
+						:side="slotSideOf('player1')"
 						:deck-list-locked="isDirty"
-						@update:player-id="formData.player1Id = $event"
+						@update:player-id="player1Id = $event"
 						@submit="save"
 					/>
 				</div>
@@ -468,12 +503,12 @@ async function save() {
 						:standings-enabled="standingsEnabled"
 						:lgs-enabled="lgsEnabled"
 						:players="playerStore.players"
-						:player-id="formData.player2Id"
+						:player-id="player2Id"
 						:form-id="player2FormId"
 						:slot-id="match.id"
-						side="player2"
+						:side="slotSideOf('player2')"
 						:deck-list-locked="isDirty"
-						@update:player-id="formData.player2Id = $event"
+						@update:player-id="player2Id = $event"
 						@submit="save"
 					/>
 				</div>

@@ -4,6 +4,7 @@ import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig
 import type { FeatureMatchOverlaySideboards } from '~/modules/feature-match-overlay/tokenValues';
 import type { GraphicsDeckListCard } from '~/modules/graphics/renderModel';
 import type { FeatureMatch } from '~/types';
+import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { selectPlayerDeck } from '~/composables/data/usePlayerDeckCache';
 
@@ -47,8 +48,7 @@ function hasDeckListItem(config: FeatureMatchOverlayModeConfig, side: PlayerSide
 
 /**
  * The deck the active Feature Match Session pinned for this player, matched by
- * player rather than by side: the snapshot's sides are swap-aware while the
- * Slot's are not, and the deck belongs to the player either way.
+ * player rather than by side: the deck belongs to the player either way.
  */
 function snapshotDeckId(match: FeatureMatch | null, playerId: number): number | null {
 	const snapshot = match?.activeSession?.sourceSnapshot;
@@ -105,9 +105,8 @@ export function useFeatureMatchOverlaySideboardData(
 	const requests = computed<Record<PlayerSide, SideRequest | null>>(() => {
 		const result: Record<PlayerSide, SideRequest | null> = { player1: null, player2: null };
 		for (const side of PLAYER_SIDES) {
-			const playerId = side === 'player1'
-				? match.value?.player1Id
-				: match.value?.player2Id;
+			// The Session owns which side each player sits on (ADR-0058).
+			const { playerId } = featureMatchSidePlayer(match.value, side);
 			if (playerId == null || !hasDeckListItem(config.value, side))
 				continue;
 			result[side] = {

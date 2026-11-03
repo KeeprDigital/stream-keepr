@@ -2,6 +2,7 @@ import type { EventResponse, FeatureMatchResponse, MatchResponse, PhaseResponse,
 import type { PlayerSide } from '~~/shared/types/enums';
 import { getGameConfig } from '~~/shared/config/games';
 import { formatOpColors } from '~~/shared/utils/card/op';
+import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { formatOrdinal } from '~~/shared/utils/formatters';
 import { getMtgGameData, getOpGameData } from '~~/shared/utils/gameData';
 import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
@@ -101,10 +102,9 @@ const PLAYER_VALUE_KEYS = [
 	'LeaderImage',
 ] as const;
 
+/** The player a side shows, by the Session's side order while one is active (ADR-0058). */
 function playerData(input: FeatureMatchTokenValuesInput, side: PlayerSide) {
-	return side === 'player1'
-		? input.featureMatch?.player1Data
-		: input.featureMatch?.player2Data;
+	return featureMatchSidePlayer(input.featureMatch, side).data;
 }
 
 /**

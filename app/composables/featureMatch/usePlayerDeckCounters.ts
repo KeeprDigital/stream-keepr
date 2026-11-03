@@ -5,6 +5,7 @@ import type { ScreenOutputPlayerDecksResponse } from '~~/shared/types/screenOutp
 import type { Player } from '~/types';
 import { getCounterTypeConfigs } from '~~/shared/config/games';
 import { counterConfigsForDeckCounterTypes } from '~~/shared/utils/deckCounters';
+import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { selectPlayerDeck } from '~/composables/data/usePlayerDeckCache';
 
@@ -23,6 +24,7 @@ export function usePlayerDeckCounters(
 ) {
 	const eventStore = useEventStore();
 	const featureMatchStore = useFeatureMatchStore();
+	const featureMatchStateStore = useFeatureMatchStateStore();
 	const playerStore = usePlayerStore();
 	const deckCache = usePlayerDeckCache();
 
@@ -33,15 +35,17 @@ export function usePlayerDeckCounters(
 		return featureMatchStore.featureMatches.find(match => match.id === toValue(matchId)) ?? null;
 	});
 
+	// The player this side seats, by the followed Session's side order (ADR-0058).
 	const playerLocator = computed(() => {
-		const side = toValue(playerSide);
 		const m = match.value;
 		if (!m)
 			return { id: null, name: null };
-
-		return side === 'player1'
-			? { id: m.player1Id, name: m.player1Data?.name ?? null }
-			: { id: m.player2Id, name: m.player2Data?.name ?? null };
+		const sessionId = featureMatchStateStore.sessionIdBySlotId?.get(m.id);
+		const followed = sessionId === undefined
+			? undefined
+			: featureMatchStateStore.featureMatchSessions?.get(sessionId);
+		const seated = featureMatchSidePlayer({ ...m, activeSession: followed ?? m.activeSession }, toValue(playerSide));
+		return { id: seated.playerId, name: seated.data?.name ?? null };
 	});
 
 	const matchedPlayer = computed(() => {

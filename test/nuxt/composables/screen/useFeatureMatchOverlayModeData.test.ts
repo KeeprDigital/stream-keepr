@@ -18,6 +18,8 @@ const mockFeatureMatchStore = {
 };
 const mockFeatureMatchStateStore = {
 	featureMatchStates: new Map<number, unknown>(),
+	featureMatchSessions: new Map<number, unknown>(),
+	sessionIdBySlotId: new Map<number, number>(),
 	currentEventId: null as number | null,
 	loadState: vi.fn(),
 	readSessionsAsScreenOutput: vi.fn((_read: (slotId: number) => Promise<unknown>) => vi.fn()),
@@ -126,6 +128,8 @@ describe('useFeatureMatchOverlayModeData', () => {
 		mockFeatureMatchStore.currentEventId = 7;
 		mockFeatureMatchStore.isLoaded = true;
 		mockFeatureMatchStateStore.featureMatchStates = new Map();
+		mockFeatureMatchStateStore.featureMatchSessions = new Map();
+		mockFeatureMatchStateStore.sessionIdBySlotId = new Map();
 		mockFeatureMatchStateStore.currentEventId = 7;
 		mockFeatureMatchStore.holdFeatureMatch.mockImplementation((slot: { id: number; matchId: number | null }) => {
 			mockFeatureMatchStore.featureMatches = [slot];
@@ -317,6 +321,44 @@ describe('useFeatureMatchOverlayModeData', () => {
 				'/api/screen-output/events/7/screens/42/feature-match-slots/12',
 				expect.anything(),
 			);
+			wrapper.unmount();
+		});
+
+		// The followed Session carries side order (ADR-0058); the read's is as old as the read.
+		it.each([
+			{
+				held: 'the Session the store follows',
+				followed: { id: 90, slotId: 11, sequence: 4 },
+				shown: { id: 90, slotId: 11, sequence: 4 },
+			},
+			{
+				held: 'the Session its read carried, while the store follows none',
+				followed: null,
+				shown: { id: 90, slotId: 11 },
+			},
+		])('carries $held', async ({ followed, shown }) => {
+			mockFeatureMatchStateStore.sessionIdBySlotId = new Map(followed
+				? [
+						[11, followed.id],
+					]
+				: []);
+			mockFeatureMatchStateStore.featureMatchSessions = new Map(followed
+				? [
+						[followed.id, followed],
+					]
+				: []);
+			const { wrapper, data } = mountOverlay({
+				isPreview: ref(false),
+				screen: ref({
+					id: 42,
+					modeConfigs: {
+						'feature-match-overlay': boundConfig(11),
+					},
+				} as never),
+			});
+			await flushPromises();
+
+			expect(data().match.value?.activeSession).toEqual(shown);
 			wrapper.unmount();
 		});
 	});
