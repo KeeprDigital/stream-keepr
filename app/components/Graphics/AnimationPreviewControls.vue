@@ -24,14 +24,16 @@ const props = defineProps<{
 	target: Pick<GraphicsPreviewAnimationPlan, 'graphicId' | 'itemId'> | null;
 	/** Why Play is unavailable, shown while there is no target. */
 	hint: string;
+	/** The host's lifecycle phases, in order; every phase when absent. */
+	phases?: readonly GraphicAnimationPhase[];
 }>();
 
 const emit = defineEmits<{ 'update:plan': [plan: GraphicsPreviewAnimationPlan | null] }>();
 
-const ANIMATION_PHASE_OPTIONS = GRAPHIC_ANIMATION_PHASE_VALUES.map(phase => ({
+const animationPhaseOptions = computed(() => (props.phases ?? GRAPHIC_ANIMATION_PHASE_VALUES).map(phase => ({
 	label: GRAPHIC_ANIMATION_PHASE_LABELS[phase],
 	value: phase,
-}));
+})));
 
 const ANIMATION_SPEED_OPTIONS = [
 	{ label: '0.25x', value: 0.25 },
@@ -94,7 +96,7 @@ watch(
 		<slot />
 		<USelectMenu
 			:model-value="animationPhase"
-			:items="ANIMATION_PHASE_OPTIONS"
+			:items="animationPhaseOptions"
 			value-key="value"
 			size="xs"
 			class="w-32"

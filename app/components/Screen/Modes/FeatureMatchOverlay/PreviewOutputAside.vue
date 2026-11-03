@@ -6,7 +6,7 @@ import type { EditorSelectionFrame } from '~/modules/feature-match-overlay/edito
 import type { GraphicsPreviewAnimationPlan } from '~/modules/graphics/previewMessages';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
-import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
+import { FEATURE_MATCH_LAYOUT_ANIMATION_PHASES, FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { SCREEN_OUTPUT_OPTIONS } from '~~/shared/screenModeDefinitions';
 import { screenOutputPath } from '~~/shared/utils/screenOutput';
 import {
@@ -421,6 +421,7 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 
 			<GraphicsAnimationPreviewControls
 				:target="animationTarget"
+				:phases="FEATURE_MATCH_LAYOUT_ANIMATION_PHASES"
 				hint="Select a Graphic Item to preview its animation alone."
 				@update:plan="plan => { animationPlan = plan }"
 			>

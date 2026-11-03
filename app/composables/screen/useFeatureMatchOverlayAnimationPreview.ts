@@ -2,7 +2,7 @@ import type { Ref } from 'vue';
 import type { GraphicThemeTokens } from '~~/shared/modules/graphics';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { GraphicsPreviewAnimationPlan } from '~/modules/graphics/previewMessages';
-import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
+import { FEATURE_MATCH_LAYOUT_ANIMATION_PHASES, FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { paintBroadcastGraphicThemeBindings } from '~~/shared/modules/graphics';
 import { resolveGraphicAnimationPreview } from '~/modules/graphics/animationPreview';
 import {
@@ -18,7 +18,8 @@ import { useGraphicAnimationPreviewClock } from './useGraphicAnimationPreviewClo
  *
  * A run plays the whole composition, or one Graphic Item alone (E31). It moves
  * Graphic Items only: the Frame and its Animation Effect are host-owned and keep
- * running (E32).
+ * running (E32). A Deck List's sideboard reveal on an item held at rest by a
+ * one-item run snaps rather than plays, since its recipes are isolated away.
  *
  * Only a preview listens. A live Screen Output installs no listener, so a run
  * posted at one reaches nothing, and nothing here writes Screen state.
@@ -30,16 +31,20 @@ export function useFeatureMatchOverlayAnimationPreview(
 ) {
 	const plan = ref<GraphicsPreviewAnimationPlan | null>(null);
 
-	const preview = computed(() => {
+	const resolvedRun = computed(() => {
 		const current = plan.value;
 		if (!current || current.graphicId !== FEATURE_MATCH_LAYOUT_COMPOSITION_ID)
 			return null;
 		// Painted first, so a phase bound to a Theme token is timed by what it shows.
-		return resolveGraphicAnimationPreview(paintBroadcastGraphicThemeBindings(composition.value, themeTokens.value), current);
+		return resolveGraphicAnimationPreview(
+			paintBroadcastGraphicThemeBindings(composition.value, themeTokens.value),
+			current,
+			FEATURE_MATCH_LAYOUT_ANIMATION_PHASES,
+		);
 	});
 	const { position } = useGraphicAnimationPreviewClock(
-		computed(() => preview.value ? plan.value : null),
-		computed(() => preview.value?.timeline ?? []),
+		computed(() => resolvedRun.value ? plan.value : null),
+		computed(() => resolvedRun.value?.timeline ?? []),
 	);
 
 	function handleMessage(message: MessageEvent) {
@@ -55,7 +60,7 @@ export function useFeatureMatchOverlayAnimationPreview(
 
 	return {
 		/** The composition as the run composes it: one item's motion isolated, or as authored. */
-		composition: computed(() => preview.value?.graphic ?? composition.value),
+		composition: computed(() => resolvedRun.value?.graphic ?? composition.value),
 		/** The composition's lifecycle phases for the compositor, or nothing at rest. */
 		animation: computed(() => position.value
 			? [position.value]

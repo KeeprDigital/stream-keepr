@@ -1,7 +1,7 @@
 import type { GraphicAnimationTimelineSegment } from '~~/shared/modules/graphics';
-import type { BroadcastGraphicConfig, GraphicItemConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicAnimationPhase, GraphicItemConfig } from '~~/shared/types/graphics';
 import type { GraphicsPreviewAnimationPlan } from './previewMessages';
-import { broadcastGraphicAnimationTimeline } from '~~/shared/modules/graphics';
+import { broadcastGraphicAnimationTimeline, flattenGraphicItems } from '~~/shared/modules/graphics';
 import { GRAPHIC_ANIMATION_PHASE_VALUES } from '~~/shared/types/graphics';
 
 /**
@@ -21,15 +21,19 @@ import { GRAPHIC_ANIMATION_PHASE_VALUES } from '~~/shared/types/graphics';
  * would otherwise be painted straight back.
  *
  * The graphic is expected painted already, so a phase a Theme binds is timed by
- * the recipe it shows.
+ * the recipe it shows. `lifecycle` is the host's own phase order: a host with no
+ * update phase leaves it out, so a lifecycle run never pauses on one.
  */
 export function resolveGraphicAnimationPreview(
 	graphic: BroadcastGraphicConfig,
 	plan: GraphicsPreviewAnimationPlan,
+	lifecycle: readonly GraphicAnimationPhase[] = GRAPHIC_ANIMATION_PHASE_VALUES,
 ): { graphic: BroadcastGraphicConfig; timeline: GraphicAnimationTimelineSegment[] } {
+	if (!lifecycle.includes(plan.phase))
+		return { graphic, timeline: [] };
 	const phases = plan.scope === 'phase'
 		? [plan.phase]
-		: GRAPHIC_ANIMATION_PHASE_VALUES.slice(GRAPHIC_ANIMATION_PHASE_VALUES.indexOf(plan.phase));
+		: lifecycle.slice(lifecycle.indexOf(plan.phase));
 
 	if (plan.itemId === undefined) {
 		return {
@@ -39,11 +43,7 @@ export function resolveGraphicAnimationPreview(
 	}
 
 	const itemId = plan.itemId;
-	const subject = graphic.items
-		.flatMap(item => item.type === 'group'
-			? [item, ...item.children]
-			: [item])
-		.find(item => item.id === itemId);
+	const subject = flattenGraphicItems(graphic).find(item => item.id === itemId);
 	if (!subject)
 		return { graphic, timeline: [] };
 

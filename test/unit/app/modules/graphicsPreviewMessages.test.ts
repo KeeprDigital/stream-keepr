@@ -300,68 +300,49 @@ describe('readGraphicsPreviewAnimationPlan', () => {
 });
 
 describe('isGraphicsPreviewAnimationMessage', () => {
-	const plan = {
-		graphicId: 'feature-match-layout',
-		scope: 'lifecycle',
-		phase: 'enter',
-		run: 1,
-		speed: 1,
-		loop: false,
+	const run = {
+		type: GRAPHICS_PREVIEW_ANIMATION_MESSAGE,
+		plan: { graphicId: 'feature-match-layout' },
 	};
 
-	// A host owning its preview transport sends the run on its own; null stops it.
+	// A host owning its preview transport sends the run on its own, from its editor only.
 	it.each([
 		[
 			'a run from the embedding editor',
 			editorWindow,
 			'https://keepr.test',
-			plan,
+			run,
 			true,
-			plan,
 		],
 		[
 			'a stop from the embedding editor',
 			editorWindow,
 			'https://keepr.test',
-			null,
+			{ ...run, plan: null },
 			true,
-			null,
 		],
 		[
-			'a malformed run, read as a stop',
+			'another message type',
 			editorWindow,
 			'https://keepr.test',
-			{ ...plan, speed: 0 },
-			true,
-			null,
+			{ ...run, type: GRAPHICS_PREVIEW_STATE_MESSAGE },
+			false,
 		],
 		[
 			'a run from another window',
 			previewWindow,
 			'https://keepr.test',
-			plan,
+			run,
 			false,
-			null,
 		],
 		[
 			'a run from another origin',
 			editorWindow,
 			'https://attacker.test',
-			plan,
+			run,
 			false,
-			null,
 		],
-	])('%s', (_case, source, origin, sent, accepted, read) => {
-		const message = {
-			origin,
-			source,
-			data: { type: GRAPHICS_PREVIEW_ANIMATION_MESSAGE, plan: sent },
-		};
-
-		const result = isGraphicsPreviewAnimationMessage(message, expectedFromEditor);
-
-		expect(result).toBe(accepted);
-		if (result)
-			expect(readGraphicsPreviewAnimationPlan(message.data.plan)).toEqual(read);
+	])('%s', (_case, source, origin, data, accepted) => {
+		expect(isGraphicsPreviewAnimationMessage({ origin, source, data }, expectedFromEditor)).toBe(accepted);
 	});
 });

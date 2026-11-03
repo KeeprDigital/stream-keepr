@@ -1,7 +1,8 @@
 import type { BroadcastGraphicConfig, GraphicAnimationRecipe, GraphicContainerAnimation, GraphicItemConfig } from '~~/shared/types/graphics';
 import type { GraphicsPreviewAnimationPlan } from '~/modules/graphics/previewMessages';
 import { describe, expect, it } from 'vitest';
-import { getGraphicItemDefinition } from '~~/shared/modules/graphics';
+import { flattenGraphicItems } from '~~/shared/modules/graphics';
+import { graphic, group, shape } from '~~/test/helpers/graphicsComposition';
 import { resolveGraphicAnimationPreview } from '~/modules/graphics/animationPreview';
 
 function recipe(duration: number, delay = 0): GraphicAnimationRecipe {
@@ -13,39 +14,43 @@ function recipe(duration: number, delay = 0): GraphicAnimationRecipe {
 	};
 }
 
-function shape(id: string, animation?: GraphicItemConfig['animation']): GraphicItemConfig {
-	return {
-		...getGraphicItemDefinition('shape').createDefault({
-			id,
-			label: id,
-			canvasWidth: 1920,
-			canvasHeight: 1080,
-		}),
-		...(animation
-			? { animation }
-			: {}),
-	} as GraphicItemConfig;
-}
-
-function group(id: string, children: GraphicItemConfig[], animation?: GraphicItemConfig['animation']): GraphicItemConfig {
-	return {
-		...getGraphicItemDefinition('group').createDefault({
-			id,
-			label: id,
-			canvasWidth: 1920,
-			canvasHeight: 1080,
-		}),
-		children,
-		...(animation
-			? { animation }
-			: {}),
-	} as GraphicItemConfig;
-}
-
-/** Bar enters over 400ms; the badge exits over 300ms after 100ms. */
+/** Bar enters over 400ms; the badge exits over 300ms after 100ms; the team group staggers its children. */
 const composition: BroadcastGraphicConfig = {
-	id: 'layout',
-	name: 'Layout',
+	...graphic('layout', [
+		shape('bar', {
+			animation: {
+				enter: recipe(400),
+			},
+		}),
+		shape('badge', {
+			animation: {
+				exit: recipe(300, 100),
+			},
+		}),
+		group('team', [
+			shape('name', {
+				animation: {
+					enter: recipe(600),
+				},
+			}),
+			shape('flag', {
+				animation: {
+					enter: recipe(600),
+				},
+			}),
+		], {
+			animation: {
+				exit: recipe(500),
+				stagger: {
+					enter: {
+						order: 'list',
+						step: 100,
+						itemIds: ['name', 'flag'],
+					},
+				},
+			},
+		}),
+	]),
 	animation: {
 		enter: recipe(200),
 		stagger: {
@@ -56,31 +61,6 @@ const composition: BroadcastGraphicConfig = {
 			},
 		},
 	},
-	items: [
-		shape('bar', {
-			enter: recipe(400),
-		}),
-		shape('badge', {
-			exit: recipe(300, 100),
-		}),
-		group('team', [
-			shape('name', {
-				enter: recipe(600),
-			}),
-			shape('flag', {
-				enter: recipe(600),
-			}),
-		], {
-			exit: recipe(500),
-			stagger: {
-				enter: {
-					order: 'list',
-					step: 100,
-					itemIds: ['name', 'flag'],
-				},
-			},
-		}),
-	],
 };
 
 function plan(overrides: Partial<GraphicsPreviewAnimationPlan> = {}): GraphicsPreviewAnimationPlan {
@@ -95,21 +75,18 @@ function plan(overrides: Partial<GraphicsPreviewAnimationPlan> = {}): GraphicsPr
 	};
 }
 
-function owner(graphic: BroadcastGraphicConfig, id: string): GraphicItemConfig | undefined {
-	return graphic.items
-		.flatMap(item => item.type === 'group'
-			? [item, ...item.children]
-			: [item])
-		.find(item => item.id === id);
+function owner(previewed: BroadcastGraphicConfig, id: string): GraphicItemConfig | undefined {
+	return flattenGraphicItems(previewed).find(item => item.id === id);
 }
 
 describe('resolveGraphicAnimationPreview', () => {
 	it.each([
-		// Whole composition: the latest owner decides each phase, the group's
-		// children staggered after the top-level stagger.
+		// The latest owner decides each phase; the group's children are staggered after
+		// the top-level stagger.
 		[
 			'the whole composition, every phase',
 			plan(),
+			undefined,
 			[
 				{ phase: 'enter', start: 0, duration: 800 },
 				{ phase: 'on-screen', start: 800, duration: 0 },
@@ -120,14 +97,32 @@ describe('resolveGraphicAnimationPreview', () => {
 		[
 			'one phase of the whole composition',
 			plan({ scope: 'phase', phase: 'exit' }),
+			undefined,
 			[
 				{ phase: 'exit', start: 0, duration: 500 },
 			],
 		],
-		// The badge alone: only its own recipe counts.
+		// A host with no update phase runs straight from on-screen to exit.
+		[
+			'a lifecycle the host narrows',
+			plan(),
+			['enter', 'on-screen', 'exit'] as const,
+			[
+				{ phase: 'enter', start: 0, duration: 800 },
+				{ phase: 'on-screen', start: 800, duration: 0 },
+				{ phase: 'exit', start: 800, duration: 500 },
+			],
+		],
+		[
+			'a phase the host does not have',
+			plan({ phase: 'update' }),
+			['enter', 'on-screen', 'exit'] as const,
+			[],
+		],
 		[
 			'one item alone',
 			plan({ itemId: 'badge' }),
+			undefined,
 			[
 				{ phase: 'enter', start: 0, duration: 0 },
 				{ phase: 'on-screen', start: 0, duration: 0 },
@@ -139,6 +134,7 @@ describe('resolveGraphicAnimationPreview', () => {
 		[
 			'a group alone, with its own stagger',
 			plan({ itemId: 'team', scope: 'phase' }),
+			undefined,
 			[
 				{ phase: 'enter', start: 0, duration: 700 },
 			],
@@ -146,6 +142,7 @@ describe('resolveGraphicAnimationPreview', () => {
 		[
 			'a group child alone, free of its group',
 			plan({ itemId: 'flag', scope: 'phase' }),
+			undefined,
 			[
 				{ phase: 'enter', start: 0, duration: 600 },
 			],
@@ -153,10 +150,11 @@ describe('resolveGraphicAnimationPreview', () => {
 		[
 			'an item that is not in the composition',
 			plan({ itemId: 'gone' }),
+			undefined,
 			[],
 		],
-	])('times %s', (_case, run, timeline) => {
-		expect(resolveGraphicAnimationPreview(composition, run).timeline).toEqual(timeline);
+	])('times %s', (_case, run, lifecycle, timeline) => {
+		expect(resolveGraphicAnimationPreview(composition, run, lifecycle).timeline).toEqual(timeline);
 	});
 
 	it('plays the whole composition as authored', () => {
@@ -186,36 +184,33 @@ describe('resolveGraphicAnimationPreview', () => {
 			undefined,
 		],
 	])('moves %s alone, holding every other owner at rest', (itemId, moving, groupStagger) => {
-		const { graphic } = resolveGraphicAnimationPreview(composition, plan({ itemId }));
+		const previewed = resolveGraphicAnimationPreview(composition, plan({ itemId })).graphic;
 
-		expect(graphic.animation).toBeUndefined();
+		expect(previewed.animation).toBeUndefined();
 		for (const id of ['bar', 'badge', 'team', 'name', 'flag'])
-			expect(owner(graphic, id)?.animation !== undefined, id).toBe(moving.includes(id));
-		expect((owner(graphic, 'team')?.animation as GraphicContainerAnimation | undefined)?.stagger).toEqual(groupStagger);
+			expect(owner(previewed, id)?.animation !== undefined, id).toBe(moving.includes(id));
+		expect((owner(previewed, 'team')?.animation as GraphicContainerAnimation | undefined)?.stagger).toEqual(groupStagger);
 		// Geometry and paint are untouched: only motion is isolated.
-		expect(owner(graphic, 'badge')?.x).toBe(owner(composition, 'badge')?.x);
+		expect(owner(previewed, 'badge')?.x).toBe(owner(composition, 'badge')?.x);
 	});
 
 	it('keeps a Theme from repainting motion onto an owner held at rest', () => {
 		const bound: BroadcastGraphicConfig = {
-			...composition,
-			themeBindings: { 'animation.enter': 'motion-enter' },
-			items: [
-				{
-					...shape('bar'),
+			...graphic('layout', [
+				shape('bar', {
 					themeBindings: { 'animation.enter': 'motion-enter', 'surfaceStyle.fill': 'accent' },
-				} as GraphicItemConfig,
-				{
-					...shape('badge'),
+				}),
+				shape('badge', {
 					themeBindings: { 'animation.exit': 'motion-exit' },
-				} as GraphicItemConfig,
-			],
+				}),
+			]),
+			themeBindings: { 'animation.enter': 'motion-enter' },
 		};
 
-		const { graphic } = resolveGraphicAnimationPreview(bound, plan({ itemId: 'badge' }));
+		const previewed = resolveGraphicAnimationPreview(bound, plan({ itemId: 'badge' })).graphic;
 
-		expect(graphic.themeBindings).toBeUndefined();
-		expect(owner(graphic, 'bar')?.themeBindings).toEqual({ 'surfaceStyle.fill': 'accent' });
-		expect(owner(graphic, 'badge')?.themeBindings).toEqual({ 'animation.exit': 'motion-exit' });
+		expect(previewed.themeBindings).toBeUndefined();
+		expect(owner(previewed, 'bar')?.themeBindings).toEqual({ 'surfaceStyle.fill': 'accent' });
+		expect(owner(previewed, 'badge')?.themeBindings).toEqual({ 'animation.exit': 'motion-exit' });
 	});
 });

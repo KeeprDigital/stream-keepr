@@ -8,9 +8,9 @@ import { createFeatureMatchLayoutComposition, FEATURE_MATCH_LAYOUT_COMPOSITION_I
 import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES, featureMatchSampleDataset } from '~~/shared/featureMatchSampleDataset';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { shape } from '~~/test/helpers/graphicsComposition';
 import { LUFFY } from '~~/test/helpers/opCards';
 import Display from '~/components/Screen/Modes/FeatureMatchOverlay/Display.vue';
-import FrameAnimation from '~/components/Screen/Modes/FeatureMatchOverlay/FrameAnimation.vue';
 import { GRAPHICS_PREVIEW_ANIMATION_MESSAGE, GRAPHICS_PREVIEW_READY_MESSAGE } from '~/modules/graphics/previewMessages';
 
 // Every Display a test mounts stays live otherwise, watching the same module-level mocks.
@@ -1243,7 +1243,7 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(wrapper.get('[data-graphic-item-kind="text"]').text()).toContain('Text');
 		});
 	});
-	// #749: an editor-only Graphic Animation Preview of the Feature Match Layout.
+	// An editor-only run over the working layout; a live output never plays one.
 	describe('the graphic animation preview', () => {
 		const fadeIn = {
 			enter: {
@@ -1258,15 +1258,7 @@ describe('featureMatchOverlayDisplay', () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.composition = {
 				...createFeatureMatchLayoutComposition(),
-				items: ['bar', 'badge'].map(id => ({
-					...getGraphicItemDefinition('shape').createDefault({
-						id,
-						label: id,
-						canvasWidth: 1920,
-						canvasHeight: 1080,
-					}),
-					animation: fadeIn,
-				})),
+				items: ['bar', 'badge'].map(id => shape(id, { animation: fadeIn })),
 			};
 			config.layout.frame = {
 				...config.layout.frame,
@@ -1351,13 +1343,23 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(fadedOut(wrapper)).toEqual([]);
 		});
 
-		// E32: the run moves Graphic Items only; the Frame keeps its Animation Effect.
+		// A run moves Graphic Items only; the Frame's Animation Effect keeps drawing.
 		it('keeps the Frame\'s Animation Effect running through a run', async () => {
-			const wrapper = await mountComponent();
+			mockTheme.value = {
+				'animation-effect': { effect: 'net' },
+			};
+			const wrapper = mount(Display, {
+				global: {
+					stubs: {
+						FeatureMatchOverlayFrameMedia: true,
+						ScreenAnimationEffectSurface: { template: '<div data-testid="frame-animation-effect" />' },
+					},
+				},
+			});
 			await pushRun({});
 
 			expect(fadedOut(wrapper)).toEqual(['bar', 'badge']);
-			expect(wrapper.findComponent(FrameAnimation).props('animation')).toMatchObject({ enabled: true });
+			expect(wrapper.find('[data-testid="frame-animation-effect"]').exists()).toBe(true);
 		});
 	});
 });

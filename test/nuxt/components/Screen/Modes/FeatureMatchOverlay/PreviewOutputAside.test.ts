@@ -287,7 +287,7 @@ describe('feature Match Overlay preview aside — its preview frame', () => {
 	});
 });
 
-// #749: the editor describes a run; the frame plays it. Nothing here writes.
+// The editor describes a run and the frame plays it; nothing here writes.
 describe('feature Match Overlay preview aside — graphic animation preview', () => {
 	const item = (itemId: string): GraphicsSelectionTarget => ({ type: 'item', graphicId: 'feature-match-layout', itemId });
 
@@ -368,6 +368,14 @@ describe('feature Match Overlay preview aside — graphic animation preview', ()
 		await nextTick();
 
 		expect(lastRun(postMessage)).toEqual(expected);
+	});
+
+	// A layout declares no Graphic Inputs, so it has no update phase to play.
+	it('offers the layout\'s own phases only', () => {
+		const wrapper = mountAside();
+
+		expect(wrapper.findAll('[data-testid="animation-preview-phase"] option').map(option => option.text()))
+			.toEqual(['Enter', 'On screen', 'Exit']);
 	});
 
 	it('marks which subject a run plays', async () => {
