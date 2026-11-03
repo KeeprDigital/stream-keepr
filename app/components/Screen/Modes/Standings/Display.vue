@@ -12,6 +12,7 @@ const {
 	headerText,
 	visibleColumns,
 	pageData,
+	pageSize,
 	formatCell,
 	positionChangeOf,
 } = useStandingsModeData();
@@ -83,13 +84,13 @@ function getDeckColors(player: Player) {
 }
 
 const layoutRowCount = computed(() => {
-	const rowsPerPage = Math.max(config.value.rowsPerPage ?? pageData.value.length ?? 1, 1);
+	const pageRows = Math.max(pageSize.value ?? pageData.value.length ?? 1, 1);
 
 	if (config.value.viewMode === 'reveal') {
-		return Math.max(1, Math.min(config.value.revealCount ?? rowsPerPage, rowsPerPage));
+		return Math.max(1, Math.min(config.value.revealCount ?? pageRows, pageRows));
 	}
 
-	return rowsPerPage;
+	return pageRows;
 });
 
 const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef'), {

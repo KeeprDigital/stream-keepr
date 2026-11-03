@@ -1,6 +1,10 @@
+import type { PageRotationMode } from '~~/shared/screenModes';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useScreenModePagination } from '~/modules/screen-mode/pagination';
+import { DEFAULT_PAGE_ROTATION } from '~~/shared/screenModeConfigs/subShapes';
+import { SCREEN_MODES } from '~~/shared/screenModes';
+import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
+import { usePaginatedScreenMode, useScreenModePagination } from '~/modules/screen-mode/pagination';
 
 /**
  * The Page Rotation contract: with auto-page on, the current page is a
@@ -16,6 +20,16 @@ mockNuxtImport('useServerTime', () => () => ({
 	isSynced: mockIsSynced,
 	serverTimeOffset: ref(0),
 	getServerTime: () => mockServerNow,
+}));
+
+mockNuxtImport('useScreenContext', () => () => ({
+	screen: ref(null),
+	eventId: ref(null),
+	interactive: ref(false),
+}));
+
+mockNuxtImport('useScreenStore', () => () => ({
+	updateModeConfig: vi.fn(),
 }));
 
 function rows(count: number) {
@@ -177,5 +191,30 @@ describe('useScreenModePagination (page rotation)', () => {
 		const { pagination } = harness({ autoPageEnabled: false, currentPage: 9, rowCount: 6 });
 		expect(pagination.currentPage.value).toBe(3);
 		expect(pagination.pageData.value).toEqual([4, 5]);
+	});
+});
+
+/** A rendering reads its page size through the field its mode declares (ADR-0039). */
+describe('usePaginatedScreenMode', () => {
+	const paginated = SCREEN_MODE_VALUES.flatMap((mode) => {
+		const pageRotation = SCREEN_MODES[mode].pageRotation;
+		return pageRotation
+			? [
+					{ mode: mode as PageRotationMode, field: pageRotation.pageSize },
+				]
+			: [];
+	});
+
+	it.each(paginated)('exposes $mode\'s page size from $field', ({ mode, field }) => {
+		const config = computed(() => ({ ...DEFAULT_PAGE_ROTATION, autoPageEnabled: false, [field]: 3 }) as never);
+
+		const { pageSize, pageData } = usePaginatedScreenMode({
+			mode,
+			config,
+			rows: rows(7),
+		});
+
+		expect(pageSize.value).toBe(3);
+		expect(pageData.value).toEqual([0, 1, 2]);
 	});
 });

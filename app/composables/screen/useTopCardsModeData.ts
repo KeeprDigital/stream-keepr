@@ -52,6 +52,7 @@ export function useTopCardsModeData() {
 	const {
 		rowCount,
 		pageData,
+		pageSize,
 		totalPages,
 		currentPage,
 		setPage,
@@ -59,7 +60,7 @@ export function useTopCardsModeData() {
 		prevPage,
 	} = usePaginatedScreenMode({ mode: 'top-cards', config, rows: rankedCards });
 	/** The cards a full page holds, which every page lays out as, so a short last page keeps its size. */
-	const pageCapacity = computed(() => Math.max(1, Math.min(config.value.cardsPerPage, entries.value.length)));
+	const pageCapacity = computed(() => Math.max(1, Math.min(pageSize.value, entries.value.length)));
 
 	// ── Staging ──
 	// A page, a new one or new data, reaches program once its card images have

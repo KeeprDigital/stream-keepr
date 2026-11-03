@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Screen } from '~/types';
+import { TOP_CUT_BRACKET_SIZES } from '~~/shared/screenModeConfigs/topCut';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
@@ -36,6 +37,12 @@ const phaseOptions = computed(() => [
 		.sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
 		.map(phase => ({ label: phase.name, value: phase.id })),
 ]);
+
+// Unset, the first Round sizes the bracket; a set size only enlarges it (#906).
+const sizeOptions = [
+	{ label: 'From the first Round', value: null },
+	...TOP_CUT_BRACKET_SIZES.map(size => ({ label: `Top ${size}`, value: size })),
+];
 </script>
 
 <template>
@@ -43,7 +50,8 @@ const phaseOptions = computed(() => [
 		<ScreenSettingsCard title="Data">
 			<UFormField
 				label="Phase"
-				description="The bracket shows this Phase's Rounds in order; its first Round sets the bracket's size."
+				name="phaseId"
+				description="The bracket shows this Phase's Rounds in order, its first Round placed by each Player's Seed."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<USelect
@@ -51,6 +59,20 @@ const phaseOptions = computed(() => [
 					:items="phaseOptions"
 					class="w-64"
 					@update:model-value="updateConfig({ phaseId: $event ?? null })"
+				/>
+			</UFormField>
+
+			<UFormField
+				label="Bracket size"
+				name="bracketSizeOverride"
+				description="Set it to show byes the first Round leaves out before the next Round is paired; the best Seeds take them. A size smaller than the first Round needs is ignored."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<USelect
+					:model-value="config.bracketSizeOverride ?? null"
+					:items="sizeOptions"
+					class="w-64"
+					@update:model-value="updateConfig({ bracketSizeOverride: $event ?? null })"
 				/>
 			</UFormField>
 		</ScreenSettingsCard>
