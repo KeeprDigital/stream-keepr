@@ -249,6 +249,33 @@ describe('featureMatchOverlayLayerList', () => {
 		expect(config.value.layout.composition.items.find(item => item.id === 'back')?.visible).toBe(false);
 	});
 
+	// #747: a group's lock holds its children, whose own toggles then cannot free them.
+	it('locks a layer from its row, a group locking its children, and unlocks it again', async () => {
+		const { wrapper, editor } = await mountList();
+		const lock = (key: string) => wrapper.get(`[data-layer-key="${key}"] [data-testid="layer-lock"]`);
+		const states = () => [
+			'item:back',
+			'item:cluster',
+			'item:child',
+			'source:main-source',
+		].map(key => [
+			lock(key).attributes('aria-pressed'),
+			lock(key).attributes('disabled') !== undefined,
+		]);
+
+		await lock('item:cluster').trigger('click');
+		expect(states()).toEqual([
+			['false', false],
+			['true', false],
+			['true', true],
+			['false', false],
+		]);
+		expect(editor.isLocked({ type: 'item', itemId: 'child' })).toBe(true);
+
+		await lock('item:cluster').trigger('click');
+		expect(states().map(([pressed]) => pressed)).toEqual(['false', 'false', 'false', 'false']);
+	});
+
 	it('adds a Source Item from the Add menu and selects it', async () => {
 		const { wrapper, config, editor } = await mountList();
 		const before = config.value.layout.sources.length;

@@ -173,6 +173,8 @@ const PreviewOutputAsideStub = defineComponent({
 		publicationBlocked: { type: Boolean, required: false },
 		publicationBlockReason: { type: String, required: false },
 		selectionFrame: { type: Object, required: false },
+		lockedLayers: { type: Array, required: false },
+		lockedBoxes: { type: Array, required: false },
 	},
 	emits: [
 		'selectTarget',
@@ -180,7 +182,7 @@ const PreviewOutputAsideStub = defineComponent({
 		'manipulate',
 		'rotate',
 	],
-	template: '<div data-testid="preview-output-aside" :data-selected="JSON.stringify(selectedTarget)" :data-compositor-selected="JSON.stringify(compositorTarget)" :data-frame="JSON.stringify(selectionFrame)" :data-config="JSON.stringify(config)" :data-canvas-width="canvasWidth" :data-canvas-height="canvasHeight" :data-publication-blocked="String(publicationBlocked)" :title="publicationBlockReason" />',
+	template: '<div data-testid="preview-output-aside" :data-locked-layers="JSON.stringify(lockedLayers)" :data-locked-boxes="JSON.stringify(lockedBoxes)" :data-selected="JSON.stringify(selectedTarget)" :data-compositor-selected="JSON.stringify(compositorTarget)" :data-frame="JSON.stringify(selectionFrame)" :data-config="JSON.stringify(config)" :data-canvas-width="canvasWidth" :data-canvas-height="canvasHeight" :data-publication-blocked="String(publicationBlocked)" :title="publicationBlockReason" />',
 });
 
 const UModalStub = defineComponent({
@@ -880,5 +882,70 @@ describe('featureMatchOverlaySettings — Editor Focus Mode', () => {
 
 		expect(focusMode.active.value).toBe(false);
 		expect(focusMode.enabled.value).toBe(true);
+	});
+});
+
+describe('featureMatchOverlaySettings — Layer Locks', () => {
+	const SOURCE = { type: 'source', itemId: 'main-source' } as const;
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockConfig.value = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		mockApiFetch.mockReset();
+		mockApiFetch.mockResolvedValue({ outcome: 'available', lifecycleState: 'active' });
+		mockLeaseWritable.value = true;
+	});
+
+	afterEach(() => {
+		localStorage.clear();
+	});
+
+	function sourceX() {
+		return mockConfig.value.layout.sources.find(item => item.id === SOURCE.itemId)!.x;
+	}
+
+	function previewLocks(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+		const aside = wrapper.get('[data-testid="preview-output-aside"]');
+		return {
+			layers: JSON.parse(aside.attributes('data-locked-layers') ?? '[]'),
+			boxes: JSON.parse(aside.attributes('data-locked-boxes') ?? '[]').length,
+			frame: JSON.parse(aside.attributes('data-frame') ?? 'null'),
+		};
+	}
+
+	async function mountSelectingSource(screenId: number) {
+		const wrapper = await mountComponent({ id: screenId });
+		await flushPromises();
+		preview(wrapper).vm.$emit('selectTarget', SOURCE);
+		await nextTick();
+		return wrapper;
+	}
+
+	it('locks the selected layer with ⌘⇧L: the preview clicks through it and badges it, and arrows leave it', async () => {
+		const wrapper = await mountSelectingSource(1);
+		const start = sourceX();
+
+		await press('l', { metaKey: true, shiftKey: true });
+		await press('ArrowRight');
+
+		expect(previewLocks(wrapper)).toEqual({
+			layers: [SOURCE],
+			boxes: 1,
+			frame: null,
+		});
+		expect(sourceX()).toBe(start);
+	});
+
+	it('remembers a lock per Screen in this browser', async () => {
+		const locking = await mountSelectingSource(1);
+		await press('l', { metaKey: true, shiftKey: true });
+		locking.unmount();
+
+		const again = await mountSelectingSource(1);
+		expect(previewLocks(again).layers).toEqual([SOURCE]);
+		again.unmount();
+
+		const another = await mountSelectingSource(2);
+		expect(previewLocks(another).layers).toEqual([]);
 	});
 });

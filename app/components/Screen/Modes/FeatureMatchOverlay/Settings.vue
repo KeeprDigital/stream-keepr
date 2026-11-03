@@ -7,6 +7,7 @@ import { useEventListener } from '@vueuse/core';
 import { eventCanvasOf } from '~~/shared/eventCanvas';
 import { applyFeatureMatchOverlayPreset, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
+import { useFeatureMatchLayoutLocks } from '~/composables/screen/useFeatureMatchLayoutLocks';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import {
 	CANVAS_SELECTION,
@@ -112,6 +113,8 @@ const editor = useFeatureMatchLayoutEditor({
 	canvasWidth,
 	canvasHeight,
 	writable,
+	// Remembered per browser per Screen, never part of the layout (#747).
+	locks: useFeatureMatchLayoutLocks(props.screen.id),
 });
 const { selection, layers } = editor;
 /** Several layers selected: the panel edits what they share, and the preview marks none alone (#740). */
@@ -269,6 +272,10 @@ const SHORTCUTS = [
 		label: 'Rename the focused layer (or double-click it)',
 	},
 	{
+		keys: ['⌘', '⇧', 'L'],
+		label: 'Lock or unlock against canvas edits',
+	},
+	{
 		keys: ['⌘ click'],
 		label: 'Add or remove a layer from the selection',
 	},
@@ -349,6 +356,9 @@ function handleKeydown(event: KeyboardEvent) {
 	}
 	else if (mod && event.shiftKey && key === 'h') {
 		editor.toggleVisible();
+	}
+	else if (mod && event.shiftKey && key === 'l') {
+		editor.toggleLock();
 	}
 	else if (!mod && (event.key === 'Delete' || event.key === 'Backspace')) {
 		editor.remove();
@@ -583,6 +593,8 @@ useEventListener(import.meta.client
 					:publication-block-reason="assetPublicationBlockReason"
 					:selection-frame="selectionFrame"
 					:selection-label="selectionLabel"
+					:locked-layers="editor.locked.value"
+					:locked-boxes="editor.lockedSelectionBoxes.value"
 					fit-height="calc(100vh - 14rem)"
 					@select-target="selectHostTarget"
 					@select-compositor-target="selectCompositorTarget"

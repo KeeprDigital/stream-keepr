@@ -278,3 +278,112 @@ describe('useFeatureMatchLayoutEditor with several layers selected', () => {
 		expect(editor.layers.value).toEqual([SOURCE, ITEM]);
 	});
 });
+
+/** A locked layer is left alone by the canvas and arrow nudges, and edited by its panel (#747). */
+describe('useFeatureMatchLayoutEditor with Layer Locks', () => {
+	function lockedEditor(writable = true) {
+		const editing = editorFor(writable);
+		const locks = ref<string[]>([]);
+		const editor = useFeatureMatchLayoutEditor({
+			config: editing.config,
+			updateConfig: (patch) => {
+				editing.writes.push(patch);
+				editing.config.value = {
+					...editing.config.value,
+					...patch,
+				};
+			},
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+			writable: editing.leased,
+			locks,
+		});
+		editor.select(SOURCE);
+		return { ...editing, editor, locks };
+	}
+
+	function sourceAt(config: ReturnType<typeof editorFor>['config'], id: string) {
+		const source = config.value.layout.sources.find(item => item.id === id)!;
+		return { x: source.x, y: source.y };
+	}
+
+	it('locks the selected layer as editor state, writing nothing to the layout and recording no undo step', () => {
+		const { editor, writes, locks } = lockedEditor();
+
+		editor.toggleLock();
+
+		expect(locks.value).toEqual(['source:main-source']);
+		expect(editor.isLocked(SOURCE)).toBe(true);
+		expect(writes).toEqual([]);
+		expect(editor.canUndo.value).toBe(false);
+	});
+
+	it('neither locks nor unlocks without the lease', () => {
+		const { editor, locks } = lockedEditor(false);
+
+		editor.toggleLock();
+		locks.value = ['source:main-source'];
+		editor.toggleLock(SOURCE);
+
+		expect(locks.value).toEqual(['source:main-source']);
+	});
+
+	it.each<[string, (editor: FeatureMatchLayoutEditor) => void]>([
+		[
+			'an arrow nudge',
+			editor => editor.nudge({ x: 5, y: 0 }),
+		],
+		[
+			'a canvas move',
+			editor => editor.setRect(SOURCE, { x: 1, y: 2, width: 3, height: 4 }),
+		],
+		[
+			'a canvas drag of the selection',
+			editor => editor.setSelectionRect({ x: 1, y: 2, width: 3, height: 4 }),
+		],
+		[
+			'a canvas rotation',
+			editor => editor.setRotation(ITEM, 45),
+		],
+	])('leaves a locked layer alone on %s, offering the canvas nothing to move', (_, verb) => {
+		const { editor, writes, locks } = lockedEditor();
+		locks.value = ['source:main-source', 'item:player1-game-wins'];
+
+		verb(editor);
+		editor.select(ITEM);
+		verb(editor);
+
+		expect(writes).toEqual([]);
+		expect(editor.selectionFrame.value).toBeNull();
+	});
+
+	it('nudges only the unlocked layers of several selected', () => {
+		const { editor, config, locks } = lockedEditor();
+		editor.toggleSelect(OTHER_SOURCE);
+		locks.value = ['source:main-source'];
+		const before = [
+			sourceAt(config, 'main-source'),
+			sourceAt(config, 'player1-source'),
+		];
+
+		editor.nudge({ x: 5, y: 0 });
+
+		expect([
+			sourceAt(config, 'main-source'),
+			sourceAt(config, 'player1-source'),
+		]).toEqual([
+			before[0],
+			{ ...before[1], x: before[1]!.x + 5 },
+		]);
+	});
+
+	it('still edits a locked layer from the property panel', () => {
+		const { editor, config, locks } = lockedEditor();
+		editor.toggleSelect(OTHER_SOURCE);
+		locks.value = ['source:main-source'];
+
+		editor.setLayersGeometry({ x: 7 });
+
+		expect([sourceAt(config, 'main-source').x, sourceAt(config, 'player1-source').x]).toEqual([7, 7]);
+	});
+});

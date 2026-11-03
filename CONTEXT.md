@@ -726,6 +726,10 @@ _Avoid_: Region
 A host-owned Feature Match Overlay element placing an external video source, with optional Frame cutout and source framing: its corner radii, border sides and glow position. Its fill, border and glow are the Feature Match Overlay's Source Item surface Mode Token. It is not a Graphic Item and lives in the layout's own Source Item list.
 _Avoid_: Source Region, camera box, Source Graphic Item
 
+**Layer Lock**:
+An author's lock on one layer of a Feature Match Layout, a Graphic Item or a Source Item, against canvas edits: the canvas neither moves, resizes nor rotates it, arrow nudges skip it, and a click on it falls through to the layer beneath. It stays selectable from the layer list and editable in its property panel. Locking a Graphic Group locks its children. It is editor state, remembered per browser per Screen and never stored in the layout (ADR-0062).
+_Avoid_: Frozen layer, pinned layer
+
 **Feature Match Overlay Preset**:
 A built-in starting point that initializes a Feature Match Layout.
 _Avoid_: Template when referring to the whole layout preset.

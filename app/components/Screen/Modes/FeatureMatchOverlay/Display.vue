@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayOutput, ScreenVideoPlayback } from '~~/shared/types/screenConfig';
 import type { ScreenGraphicAssetReference } from '~~/shared/utils/graphicsAssetReferences';
+import type { FeatureMatchLayoutEditorLayer } from '~/modules/feature-match-overlay/editorSelection';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
@@ -15,6 +16,7 @@ import { useFeatureMatchOverlaySideboardRevealAnimation } from '~/composables/sc
 import { resolveFeatureMatchOverlayCompositorRenderModel } from '~/modules/feature-match-overlay/compositorRenderModel';
 import {
 	FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE,
+	isFeatureMatchOverlayPreviewLockedLayersMessage,
 	isFeatureMatchOverlayPreviewSelectedTargetMessage,
 } from '~/modules/feature-match-overlay/previewMessages';
 import { frameBorderLine, resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-overlay/renderModel';
@@ -323,6 +325,35 @@ function isPreviewTargetSelected(target: FeatureMatchOverlaySelectionTarget) {
 	return featureMatchOverlaySelectionKey(selectedPreviewTarget.value) === featureMatchOverlaySelectionKey(target);
 }
 
+/**
+ * The layers the editor locked (#747). Their guides are drawn but not offered, so
+ * a click on one falls through to the layer beneath it, or to the canvas.
+ */
+const lockedLayers = ref<FeatureMatchLayoutEditorLayer[]>([]);
+const lockedItemIds = computed(() => lockedLayers.value.flatMap(layer => layer.type === 'item'
+	? [layer.itemId]
+	: []));
+
+function isSourceLocked(itemId: string) {
+	return lockedLayers.value.some(layer => layer.type === 'source' && layer.itemId === itemId);
+}
+
+function selectSourceGuide(itemId: string, event?: MouseEvent | KeyboardEvent) {
+	if (!isSourceLocked(itemId))
+		selectPreviewTarget({ type: 'source', itemId }, event);
+}
+
+function handleLockedLayersMessage(message: MessageEvent) {
+	if (!isFeatureMatchOverlayPreviewLockedLayersMessage(message, {
+		origin: window.location.origin,
+		source: window.parent,
+	})) {
+		return;
+	}
+
+	lockedLayers.value = message.data.layers;
+}
+
 function handleSelectedPreviewTargetMessage(message: MessageEvent) {
 	if (!isFeatureMatchOverlayPreviewSelectedTargetMessage(message, {
 		origin: window.location.origin,
@@ -389,6 +420,7 @@ onMounted(() => {
 	if (isPreview?.value) {
 		window.addEventListener('message', handleSelectedPreviewTargetMessage);
 		window.addEventListener('message', handleSelectedCompositorTargetMessage);
+		window.addEventListener('message', handleLockedLayersMessage);
 	}
 	announcePreviewReady();
 });
@@ -399,6 +431,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
 	window.removeEventListener('message', handleSelectedPreviewTargetMessage);
 	window.removeEventListener('message', handleSelectedCompositorTargetMessage);
+	window.removeEventListener('message', handleLockedLayersMessage);
 });
 </script>
 
@@ -595,6 +628,7 @@ onBeforeUnmount(() => {
 			:item-guides="compositorRenderModel.itemGuides"
 			:safe-area-guides="compositorRenderModel.safeAreaGuides"
 			:selectable-canvas="showPreviewGuides"
+			:locked-item-ids="lockedItemIds"
 			@select="selectCompositorPreviewTarget"
 		>
 			<template v-if="showPreviewGuides">
@@ -602,14 +636,17 @@ onBeforeUnmount(() => {
 					v-for="source in sourceItems"
 					:key="`source-guide-${source.item.id}`"
 					class="graphic-item-guide graphic-item-guide--source"
-					:class="{ 'is-selected': isPreviewTargetSelected({ type: 'source', itemId: source.item.id }) }"
+					:class="{
+						'is-selected': isPreviewTargetSelected({ type: 'source', itemId: source.item.id }),
+						'is-locked': isSourceLocked(source.item.id),
+					}"
 					:style="guideStyle(source.item)"
-					role="button"
-					tabindex="0"
-					:aria-label="`Select ${source.item.label}`"
-					@click.stop="selectPreviewTarget({ type: 'source', itemId: source.item.id }, $event)"
-					@keydown.enter.stop="selectPreviewTarget({ type: 'source', itemId: source.item.id })"
-					@keydown.space.prevent.stop="selectPreviewTarget({ type: 'source', itemId: source.item.id })"
+					v-bind="isSourceLocked(source.item.id)
+						? { 'data-locked': 'true', 'aria-hidden': 'true' }
+						: { 'role': 'button', 'tabindex': 0, 'aria-label': `Select ${source.item.label}` }"
+					@click.stop="selectSourceGuide(source.item.id, $event)"
+					@keydown.enter.stop="selectSourceGuide(source.item.id)"
+					@keydown.space.prevent.stop="selectSourceGuide(source.item.id)"
 				>
 					<span>{{ source.item.label }}</span>
 				</div>
@@ -655,6 +692,12 @@ onBeforeUnmount(() => {
 
 .graphic-item-guide--source {
 	border-color: rgba(56, 189, 248, 0.95);
+}
+
+/* A locked layer lets a click fall through to whatever lies beneath it (#747). */
+.graphic-item-guide.is-locked {
+	pointer-events: none;
+	cursor: default;
 }
 
 .graphic-item-guide span {

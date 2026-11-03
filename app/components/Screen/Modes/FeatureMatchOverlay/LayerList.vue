@@ -28,8 +28,9 @@ import { isSelectionToggle } from '~/modules/graphics/selection';
  * Front at the top, so the arrow pointing up moves a layer toward the front.
  *
  * Shift-click selects the run of rows from the one chosen last, and ⌘- or
- * Ctrl-click adds or takes out one row (#740). A selected row's menu acts on
- * every selected layer.
+ * Ctrl-click adds or takes out one row (#740). A selected row's menu, eye and
+ * lock act on every selected layer. A locked row keeps its lock in view as its
+ * badge (#747).
  *
  * Without the Graphics Authoring Lease the list still selects, and offers no
  * edit at all (#738).
@@ -488,6 +489,24 @@ function renameKeydown(event: KeyboardEvent) {
 									data-testid="layer-more"
 								/>
 							</UDropdownMenu>
+						</div>
+						<div
+							role="gridcell"
+							class="shrink-0"
+							:class="editor.isLocked(row.target) || (writable && isSelected(row)) ? 'flex' : 'hidden group-hover:flex group-focus-within:flex'"
+						>
+							<UButton
+								size="xs"
+								variant="ghost"
+								:color="editor.isLocked(row.target) ? 'primary' : 'neutral'"
+								:icon="editor.isLocked(row.target) ? 'i-lucide-lock' : 'i-lucide-lock-open'"
+								:aria-label="`Lock ${row.label}`"
+								:aria-pressed="editor.isLocked(row.target)"
+								:disabled="!writable || editor.isLockedByItsGroup(row.target)"
+								:title="editor.isLockedByItsGroup(row.target) ? 'Locked with its group' : undefined"
+								data-testid="layer-lock"
+								@click="editor.toggleLock(rowTarget(row))"
+							/>
 						</div>
 						<div role="gridcell" class="shrink-0">
 							<UButton
