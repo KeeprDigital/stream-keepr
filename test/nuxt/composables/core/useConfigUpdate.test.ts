@@ -130,6 +130,35 @@ describe('useConfigUpdate', () => {
 		expect(config.value.color).toBe('blue');
 	});
 
+	// An edit its author may no longer write (#738): the store shows again, nothing is retried.
+	it('discards the named fields\' local edits, pending saves and refusals, keeping the others', async () => {
+		const storeConfig = ref<Partial<TestConfig>>({ color: 'red', size: 10 });
+		const firstSave = deferred();
+		const saveToStore = vi.fn()
+			.mockImplementationOnce(() => firstSave.promise)
+			.mockResolvedValue(undefined);
+		const { config, saveError, updateConfig, discard } = useConfigUpdate<TestConfig>({
+			getStoreConfig: () => storeConfig.value,
+			saveToStore,
+			defaults: { color: 'red', size: 10 },
+			debounceMs: 100,
+		});
+
+		updateConfig({ color: 'green' });
+		await vi.advanceTimersByTimeAsync(100);
+		updateConfig({ color: 'blue', size: 20 });
+
+		discard(['color']);
+		expect(config.value).toEqual({ color: 'red', size: 20 });
+
+		firstSave.reject(new Error('refused'));
+		await vi.advanceTimersByTimeAsync(200);
+
+		expect(config.value.color).toBe('red');
+		expect(saveError.value).toBeNull();
+		expect(saveToStore).toHaveBeenLastCalledWith({ size: 20 });
+	});
+
 	it('treats a null store result as a failed save and retains the local override for retry', async () => {
 		const storeConfig = ref<Partial<TestConfig>>({ color: 'red' });
 		const saveToStore = vi.fn()

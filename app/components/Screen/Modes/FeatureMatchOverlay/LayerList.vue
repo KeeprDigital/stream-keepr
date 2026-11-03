@@ -24,6 +24,9 @@ import { editorSelectionKey } from '~/modules/feature-match-overlay/editorSelect
  * Source Item in front of a Graphic Item, because nothing renders one there.
  *
  * Front at the top, so the arrow pointing up moves a layer toward the front.
+ *
+ * Without the Graphics Authoring Lease the list still selects, and offers no
+ * edit at all (#738).
  */
 const props = defineProps<{
 	layout: FeatureMatchLayoutConfig;
@@ -98,6 +101,7 @@ const sections = computed(() => [
 ]);
 
 const selectedKey = computed(() => editorSelectionKey(props.editor.selection.value));
+const writable = computed(() => props.editor.writable.value);
 
 /* ── Add menu ─────────────────────────────────── */
 
@@ -223,6 +227,8 @@ function setRenameInput(element: unknown) {
 
 function startRename(row: LayerRow) {
 	props.editor.select(row.target);
+	if (!writable.value)
+		return;
 	renaming.value = row;
 	draft.value = row.label;
 	void nextTick(() => {
@@ -318,12 +324,13 @@ function renameKeydown(event: KeyboardEvent) {
 					Front at the top
 				</p>
 			</div>
-			<UDropdownMenu :items="addMenu" :content="{ align: 'end' }">
+			<UDropdownMenu :items="writable ? addMenu : []" :content="{ align: 'end' }">
 				<UButton
 					size="sm"
 					variant="soft"
 					icon="i-lucide-plus"
 					trailing-icon="i-lucide-chevron-down"
+					:disabled="!writable"
 					data-testid="layer-add"
 				>
 					Add
@@ -372,7 +379,7 @@ function renameKeydown(event: KeyboardEvent) {
 						v-else
 						type="button"
 						class="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2 text-left"
-						:title="`${row.label} · ${row.kind} — double-click or F2 to rename`"
+						:title="writable ? `${row.label} · ${row.kind} — double-click or F2 to rename` : `${row.label} · ${row.kind}`"
 						:aria-current="row.key === selectedKey ? 'true' : undefined"
 						data-testid="layer-select"
 						@click="editor.select(row.target)"
@@ -383,6 +390,7 @@ function renameKeydown(event: KeyboardEvent) {
 						<span class="min-w-0 flex-1 truncate text-sm">{{ row.label }}</span>
 					</button>
 					<div
+						v-if="writable"
 						class="shrink-0 items-center"
 						:class="row.key === selectedKey ? 'flex' : 'hidden group-hover:flex group-focus-within:flex'"
 					>
@@ -424,6 +432,7 @@ function renameKeydown(event: KeyboardEvent) {
 						:icon="row.visible ? 'i-lucide-eye' : 'i-lucide-eye-off'"
 						:aria-label="row.visible ? `Hide ${row.label}` : `Show ${row.label}`"
 						:aria-pressed="!row.visible"
+						:disabled="!writable"
 						data-testid="layer-visibility"
 						@click="editor.toggleVisible(row.target)"
 					/>

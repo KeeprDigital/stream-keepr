@@ -11,5 +11,6 @@ export function useEditedScreenModeData() {
 	return {
 		rowCount: ref(0),
 		loading: ref(false),
+		noPreviousRoundStandings: ref(false),
 	};
 }

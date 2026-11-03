@@ -89,7 +89,7 @@ const isDeckColumnVisible = computed(() => isColumnVisible(config.value.columns,
 // ── Pagination ──
 // The rows the Screen pages, its view mode and reveal applied, read and followed as its Screen Output reads and follows them, so
 // the page count is the one it renders (#780).
-const { rowCount, loading: loadingRows } = useEditedScreenModeData(
+const { rowCount, loading: loadingRows, noPreviousRoundStandings } = useEditedScreenModeData(
 	{
 		screen: () => props.screen,
 		eventId: () => props.eventId,
@@ -97,6 +97,11 @@ const { rowCount, loading: loadingRows } = useEditedScreenModeData(
 	},
 	useStandingsModeData,
 );
+
+// The Screen's own read found no previous Round's Round Standings to compare
+// with (#905); hiding the column clears the warning before the save lands.
+const warnsPositionChangeHasNoData = computed(() =>
+	isColumnVisible(config.value.columns, 'positionChange') && noPreviousRoundStandings.value);
 
 // The live Page Rotation projection and the anchor writes an operator makes.
 // Every edit below goes through its `updateConfig`, which restarts the
@@ -326,6 +331,16 @@ const modeSettingsLabel = computed(() => {
 				:columns="editorColumns"
 				:labels="COLUMN_LABELS"
 				@update="updateConfig({ columns: $event })"
+			/>
+
+			<UAlert
+				v-if="warnsPositionChangeHasNoData"
+				data-testid="position-change-no-data"
+				color="warning"
+				variant="soft"
+				icon="i-lucide-triangle-alert"
+				title="Position Change has no data for this Event yet"
+				description="No Round before this Screen's Round holds Round Standings to compare with, so every Position Change cell is blank until Melee Sync stores them."
 			/>
 
 			<template v-if="isDeckColumnVisible">
