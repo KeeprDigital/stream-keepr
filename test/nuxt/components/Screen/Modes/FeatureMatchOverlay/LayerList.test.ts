@@ -111,14 +111,138 @@ describe('featureMatchOverlayLayerList', () => {
 		expect(wrapper.find('[data-testid="layer-canvas"]').exists()).toBe(true);
 	});
 
-	it('marks only the selected row, and the canvas only while it is selected', async () => {
+	function selectedKeys(wrapper: Awaited<ReturnType<typeof mountList>>['wrapper']) {
+		return wrapper.findAll('[data-testid="layer-row"][aria-selected="true"]').map(row => row.attributes('data-layer-key'));
+	}
+
+	it('marks the selected rows, and the canvas only while no layer is selected', async () => {
 		const { wrapper } = await mountList();
 		expect(wrapper.get('[data-testid="layer-canvas"]').attributes('aria-current')).toBe('true');
+		expect(selectedKeys(wrapper)).toEqual([]);
 
-		await wrapper.findAll('[data-testid="layer-select"]')[0]!.trigger('click');
+		await wrapper.get('[data-layer-key="item:back"] [data-testid="layer-select"]').trigger('click');
 
-		expect(wrapper.findAll('[aria-current="true"]')).toHaveLength(1);
+		expect(selectedKeys(wrapper)).toEqual(['item:back']);
+		expect(wrapper.findAll('[data-testid="layer-row"][aria-selected="false"]').length).toBeGreaterThan(0);
 		expect(wrapper.get('[data-testid="layer-canvas"]').attributes('aria-current')).toBeUndefined();
+	});
+
+	// #740: Shift- and ⌘-click build the selection; a group never shares it with its own child (E9).
+	it.each<[string, Array<[string, KeyboardEventInit]>, (sources: string[]) => string[]]>([
+		[
+			'⌘-click adds a row',
+			[
+				['item:back', {}],
+				[
+					'source:main-source',
+					{ metaKey: true },
+				],
+			],
+			() => ['item:back', 'source:main-source'],
+		],
+		[
+			'Ctrl-click adds a row',
+			[
+				['item:back', {}],
+				[
+					'item:cluster',
+					{ ctrlKey: true },
+				],
+			],
+			() => ['item:cluster', 'item:back'],
+		],
+		[
+			'⌘-click takes a selected row out',
+			[
+				['item:back', {}],
+				[
+					'item:cluster',
+					{ metaKey: true },
+				],
+				[
+					'item:back',
+					{ metaKey: true },
+				],
+			],
+			() => ['item:cluster'],
+		],
+		[
+			'Shift-click selects every row from the last one chosen',
+			[
+				['item:child', {}],
+				[
+					'source:main-source',
+					{ shiftKey: true },
+				],
+			],
+			sources => [
+				'item:child',
+				'item:back',
+				...sources.slice(0, sources.indexOf('source:main-source') + 1),
+			],
+		],
+		[
+			'a plain click selects that row alone',
+			[
+				['item:back', {}],
+				[
+					'item:cluster',
+					{ metaKey: true },
+				],
+				['item:child', {}],
+			],
+			() => ['item:child'],
+		],
+		[
+			'⌘-clicking a group\'s child replaces the group',
+			[
+				['item:cluster', {}],
+				[
+					'item:child',
+					{ metaKey: true },
+				],
+			],
+			() => ['item:child'],
+		],
+	])('%s', async (_, clicks, expected) => {
+		const { wrapper, config } = await mountList();
+
+		for (const [key, modifiers] of clicks)
+			await wrapper.get(`[data-layer-key="${key}"] [data-testid="layer-select"]`).trigger('click', modifiers);
+
+		const sources = [...config.value.layout.sources].reverse().map(item => `source:${item.id}`);
+		expect(selectedKeys(wrapper)).toEqual(expected(sources));
+	});
+
+	it('lists the layers as one multi-selectable grid', async () => {
+		const { wrapper } = await mountList();
+
+		expect(wrapper.findAll('[role="grid"]').map(grid => grid.attributes('aria-multiselectable'))).toEqual(['true', 'true']);
+	});
+
+	it.each<[string, (rows: string[]) => string[], number]>([
+		[
+			'Delete',
+			rows => rows.filter(key => key !== 'item:back' && key !== 'source:main-source'),
+			0,
+		],
+		[
+			'Duplicate',
+			rows => rows,
+			2,
+		],
+	])('%s in a selected row\'s menu acts on every selected layer', async (entry, kept, selected) => {
+		const { wrapper, sync } = await mountList();
+		const before = rowKeys(wrapper) as string[];
+		await wrapper.get('[data-layer-key="item:back"] [data-testid="layer-select"]').trigger('click');
+		await wrapper.get('[data-layer-key="source:main-source"] [data-testid="layer-select"]').trigger('click', { metaKey: true });
+
+		await wrapper.get(`[data-layer-key="item:back"] [data-menu-entry="${entry}"]`).trigger('click');
+		await sync();
+
+		expect(rowKeys(wrapper)).toEqual(expect.arrayContaining(kept(before)));
+		expect(rowKeys(wrapper)).toHaveLength(kept(before).length + selected);
+		expect(selectedKeys(wrapper).filter(key => !before.includes(key!))).toHaveLength(selected);
 	});
 
 	it('moves a row toward the front with the arrow pointing up', async () => {

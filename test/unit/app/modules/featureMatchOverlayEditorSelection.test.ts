@@ -3,6 +3,7 @@ import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import {
 	compositorSelectionTarget,
+	editorLayersFrame,
 	editorSelectionExists,
 	editorSelectionFrame,
 	editorSelectionLabel,
@@ -173,5 +174,117 @@ describe('feature match layout editor selection', () => {
 		const rotated = layoutWith(composition => addGraphicItem(composition, { kind: 'text', id: 'title', ...CANVAS }).graphic);
 		rotated.composition.items = rotated.composition.items.map(item => ({ ...item, rotation: 15 }) as GraphicItemConfig);
 		expect(editorSelectionFrame(rotated, { type: 'item', itemId: 'title' }, CANVAS_SIZE)).toBeNull();
+	});
+
+	describe('several layers (#740)', () => {
+		/** A canvas-arranged `cluster` at (50, 60) padded 4, its `child` at (10, 20); `title` at (500, 400); the main Source Item. */
+		function layoutOfThree(): FeatureMatchLayoutConfig {
+			const layout = layoutWith(composition => addGraphicGroupChild(
+				addGraphicItem(addGraphicItem(composition, { kind: 'text', id: 'title', ...CANVAS }).graphic, { kind: 'group', id: 'cluster', ...CANVAS }).graphic,
+				{ kind: 'shape', groupId: 'cluster', id: 'child' },
+			).graphic);
+			return {
+				...layout,
+				sources: layout.sources.map(source => source.id === 'main-source'
+					? {
+							...source,
+							x: 100,
+							y: 100,
+							width: 200,
+							height: 100,
+						}
+					: source),
+				composition: {
+					...layout.composition,
+					items: layout.composition.items.map((item) => {
+						if (item.type === 'group') {
+							return {
+								...item,
+								arrangement: 'canvas' as const,
+								padding: 4,
+								x: 50,
+								y: 60,
+								children: item.children.map(child => ({
+									...child,
+									x: 10,
+									y: 20,
+									width: 30,
+									height: 40,
+								})),
+							};
+						}
+						return {
+							...item,
+							x: 500,
+							y: 400,
+							width: 100,
+							height: 50,
+						} as GraphicItemConfig;
+					}),
+				},
+			};
+		}
+
+		it('moves them as the box they cover on the canvas, a group child placed in its group', () => {
+			const frame = editorLayersFrame(layoutOfThree(), [
+				{ type: 'item', itemId: 'child' },
+				{ type: 'item', itemId: 'title' },
+				{ type: 'source', itemId: 'main-source' },
+			], CANVAS_SIZE);
+
+			expect(frame).toMatchObject({
+				rect: {
+					x: 64,
+					y: 84,
+					width: 536,
+					height: 366,
+				},
+				origin: { x: 0, y: 0 },
+				members: [
+					{ x: 64, y: 84, width: 30, height: 40 },
+					{
+						x: 500,
+						y: 400,
+						width: 100,
+						height: 50,
+					},
+					{
+						x: 100,
+						y: 100,
+						width: 200,
+						height: 100,
+					},
+				],
+			});
+			expect(frame?.snapLines.x).not.toContain(600);
+		});
+
+		it('frames one layer as that layer alone, and none as nothing', () => {
+			const layout = layoutOfThree();
+
+			expect(editorLayersFrame(layout, [
+				{ type: 'item', itemId: 'child' },
+			], CANVAS_SIZE))
+				.toEqual(editorSelectionFrame(layout, { type: 'item', itemId: 'child' }, CANVAS_SIZE));
+			expect(editorLayersFrame(layout, [], CANVAS_SIZE)).toBeNull();
+		});
+
+		it('offers nothing to move when the canvas cannot move one of them', () => {
+			const layout = layoutOfThree();
+			const rowCluster = {
+				...layout,
+				composition: {
+					...layout.composition,
+					items: layout.composition.items.map(item => item.type === 'group'
+						? { ...item, arrangement: 'row' as const }
+						: item),
+				},
+			};
+
+			expect(editorLayersFrame(rowCluster, [
+				{ type: 'item', itemId: 'child' },
+				{ type: 'item', itemId: 'title' },
+			], CANVAS_SIZE)).toBeNull();
+		});
 	});
 });

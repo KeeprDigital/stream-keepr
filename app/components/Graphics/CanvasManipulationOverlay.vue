@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { GraphicRect } from '~~/shared/types/graphics';
 import type { ManipulationHandle, SnapLines } from '~/modules/graphics/canvasManipulation';
-import { useElementSize } from '@vueuse/core';
+import { useElementSize, useEventListener } from '@vueuse/core';
 import { canvasSnapLines, manipulateRect, neighbourGaps, RESIZE_HANDLES } from '~/modules/graphics/canvasManipulation';
 
 /**
@@ -15,6 +15,11 @@ import { canvasSnapLines, manipulateRect, neighbourGaps, RESIZE_HANDLES } from '
  * A drag snaps to the lines it is given, in the layer's container's pixels, and
  * draws the guide it landed on and the gap to the nearest neighbour on each axis.
  * Shift keeps the starting aspect ratio while resizing; Alt turns snapping off.
+ *
+ * With several layers selected (#740) the box is the one they cover: it moves
+ * them together, outlines each, and offers no resize handle. While ⌘ or Ctrl is
+ * held the box lets clicks through, so a ⌘-click on a layer under it reaches the
+ * preview and adds that layer to the selection or takes it out.
  */
 const props = defineProps<{
 	/** The selected layer's stored rectangle, in its container's pixels; nothing shows without one. */
@@ -26,6 +31,8 @@ const props = defineProps<{
 	/** What the layer snaps to, in its container's pixels; the canvas's own lines without them. */
 	snapLines?: SnapLines;
 	label?: string;
+	/** With several layers selected, each one's box, in canvas pixels; the selection then only moves. */
+	members?: readonly GraphicRect[];
 }>();
 
 const emit = defineEmits<{
@@ -40,6 +47,26 @@ const scale = computed(() => props.canvasWidth > 0
 	: 0);
 
 const origin = computed(() => props.origin ?? { x: 0, y: 0 });
+
+/** Whether ⌘ or Ctrl is held, so a click is a selection toggle for the preview beneath. */
+const passesClicks = ref(false);
+if (import.meta.client) {
+	useEventListener(window, ['keydown', 'keyup'], (event: KeyboardEvent) => {
+		passesClicks.value = event.metaKey || event.ctrlKey;
+	});
+	useEventListener(window, 'blur', () => {
+		passesClicks.value = false;
+	});
+}
+
+const memberStyles = computed(() => scale.value === 0
+	? []
+	: (props.members ?? []).map(member => ({
+			left: `${member.x * scale.value}px`,
+			top: `${member.y * scale.value}px`,
+			width: `${member.width * scale.value}px`,
+			height: `${member.height * scale.value}px`,
+		})));
 
 const snapLines = computed<SnapLines>(() => {
 	if (props.snapLines)
@@ -96,7 +123,7 @@ const HANDLE_POSITION: Record<(typeof RESIZE_HANDLES)[number], string> = {
 };
 
 function start(event: PointerEvent, handle: ManipulationHandle) {
-	if (!props.rect || event.button !== 0)
+	if (!props.rect || event.button !== 0 || event.metaKey || event.ctrlKey)
 		return;
 	event.preventDefault();
 	(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
@@ -224,11 +251,22 @@ const readout = computed(() => {
 			</div>
 		</template>
 
+		<template v-if="boxStyle && !live">
+			<div
+				v-for="(style, index) in memberStyles"
+				:key="index"
+				class="absolute outline-1 outline-primary/70 outline-dashed"
+				:style="style"
+				data-testid="canvas-manipulation-member"
+			/>
+		</template>
 		<div
 			v-if="boxStyle"
-			class="pointer-events-auto absolute cursor-move outline-2 outline-primary"
+			class="absolute cursor-move outline-2 outline-primary"
+			:class="passesClicks ? 'pointer-events-none' : 'pointer-events-auto'"
 			:style="boxStyle"
 			:aria-label="label ? `Move ${label}` : 'Move selection'"
+			:data-passes-clicks="String(passesClicks)"
 			data-testid="canvas-manipulation-box"
 			@pointerdown="start($event, 'move')"
 			@pointermove="moveTo"
@@ -236,7 +274,7 @@ const readout = computed(() => {
 			@pointercancel="end"
 		>
 			<span
-				v-for="handle in RESIZE_HANDLES"
+				v-for="handle in members ? [] : RESIZE_HANDLES"
 				:key="handle"
 				class="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-primary bg-white"
 				:class="HANDLE_POSITION[handle]"

@@ -58,8 +58,9 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-	selectTarget: [target: FeatureMatchOverlaySelectionTarget];
-	selectCompositorTarget: [target: GraphicsSelectionTarget];
+	/** `toggle` is a ⌘- or Ctrl-click: add the layer to the selection, or take it out (#740). */
+	selectTarget: [target: FeatureMatchOverlaySelectionTarget, toggle: boolean];
+	selectCompositorTarget: [target: GraphicsSelectionTarget, toggle: boolean];
 	/** The selected layer moved or resized on the canvas; one `gesture` per drag. */
 	manipulate: [rect: GraphicRect, gesture: number];
 }>();
@@ -182,7 +183,7 @@ function handlePreviewSelection(message: MessageEvent) {
 	}
 
 	releaseFrameFocus();
-	emit('selectTarget', message.data.target);
+	emit('selectTarget', message.data.target, message.data.toggle === true);
 }
 
 /**
@@ -227,7 +228,7 @@ function handleCompositorPreviewSelection(message: MessageEvent) {
 	}
 
 	releaseFrameFocus();
-	emit('selectCompositorTarget', message.data.target);
+	emit('selectCompositorTarget', message.data.target, message.data.toggle === true);
 }
 
 onMounted(() => {
@@ -395,6 +396,7 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 					:rect="selectionFrame?.rect ?? null"
 					:origin="selectionFrame?.origin"
 					:snap-lines="selectionFrame?.snapLines"
+					:members="selectionFrame?.members"
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
 					:label="selectionLabel"

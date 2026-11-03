@@ -132,6 +132,15 @@ const CompositorInspectorStub = defineComponent({
 	template: '<div data-testid="compositor-inspector" :data-selected="JSON.stringify(selectedTarget)" :data-writable="String(writable)" />',
 });
 
+const MultiLayerInspectorStub = defineComponent({
+	props: {
+		layers: { type: Array, required: true },
+		writable: { type: Boolean, required: false },
+	},
+	emits: ['update'],
+	template: '<div data-testid="multi-layer-inspector" :data-layers="JSON.stringify(layers)" :data-writable="String(writable)" />',
+});
+
 const TemplateLibraryStub = defineComponent({
 	props: {
 		writable: { type: Boolean, required: false },
@@ -209,6 +218,7 @@ async function mountComponent(screen: Partial<Screen> = {}) {
 				FeatureMatchOverlayLayerInspector: LayerInspectorStub,
 				FeatureMatchOverlayLayerList: LayerListStub,
 				FeatureMatchOverlayCompositorInspector: CompositorInspectorStub,
+				FeatureMatchOverlayMultiLayerInspector: MultiLayerInspectorStub,
 				FeatureMatchOverlayPreviewOutputAside: PreviewOutputAsideStub,
 				// The Feature Match Layout Template library reads the installation's
 				// library on mount. It has its own suite; here it is only a neighbour of
@@ -395,6 +405,109 @@ describe('featureMatchOverlaySettings', () => {
 			};
 			await nextTick();
 
+			expect(selectedTarget(wrapper)).toEqual({ type: 'canvas' });
+		});
+	});
+
+	// #740: ⌘-click in the preview builds a selection of several, and every verb takes all of it.
+	describe('several layers', () => {
+		const ITEM_ID = 'player1-game-wins';
+		const SELECTED = [
+			{ type: 'source', itemId: 'main-source' },
+			{ type: 'item', itemId: ITEM_ID },
+		];
+
+		async function mountWithTwo() {
+			const wrapper = await mountComponent();
+			await flushPromises();
+			preview(wrapper).vm.$emit('selectTarget', { type: 'source', itemId: 'main-source' }, false);
+			await nextTick();
+			preview(wrapper).vm.$emit('selectCompositorTarget', { type: 'item', graphicId: 'feature-match-layout', itemId: ITEM_ID }, true);
+			await nextTick();
+			return wrapper;
+		}
+
+		function positions() {
+			return [
+				mockConfig.value.layout.sources.find(item => item.id === 'main-source'),
+				mockConfig.value.layout.composition.items.find(item => item.id === ITEM_ID),
+			].map(layer => layer && { x: layer.x, y: layer.y });
+		}
+
+		it('shows the multi-layer panel, and no single layer as selected in the preview', async () => {
+			const wrapper = await mountWithTwo();
+
+			expect(JSON.parse(wrapper.get('[data-testid="multi-layer-inspector"]').attributes('data-layers')!)).toEqual(SELECTED);
+			expect(wrapper.find('[data-testid="layer-inspector"]').exists()).toBe(false);
+			expect(wrapper.find('[data-testid="compositor-inspector"]').exists()).toBe(false);
+			expect(previewSelectedTarget(wrapper)).toEqual({ type: 'canvas' });
+			expect(compositorTarget(wrapper)).toEqual({ type: 'canvas' });
+			expect(preview(wrapper).props('selectionFrame')).toMatchObject({
+				members: [
+					expect.any(Object),
+					expect.any(Object),
+				],
+			});
+		});
+
+		it('takes a layer out with another ⌘-click', async () => {
+			const wrapper = await mountWithTwo();
+
+			preview(wrapper).vm.$emit('selectTarget', { type: 'source', itemId: 'main-source' }, true);
+			await nextTick();
+
+			expect(wrapper.find('[data-testid="multi-layer-inspector"]').exists()).toBe(false);
+			expect(compositorTarget(wrapper)).toEqual({ type: 'item', graphicId: 'feature-match-layout', itemId: ITEM_ID });
+		});
+
+		it('writes an edited shared field to every selected layer', async () => {
+			const wrapper = await mountWithTwo();
+
+			wrapper.getComponent(MultiLayerInspectorStub).vm.$emit('update', { y: 40 });
+			await nextTick();
+
+			expect(positions().map(position => position?.y)).toEqual([40, 40]);
+		});
+
+		it.each<[string, () => Promise<void>, (before: ReturnType<typeof positions>) => unknown]>([
+			[
+				'an arrow key nudges every one',
+				() => press('ArrowLeft', { shiftKey: true }),
+				before => before.map(position => ({ ...position!, x: position!.x - 10 })),
+			],
+			[
+				'Delete removes every one',
+				() => press('Delete'),
+				() => [undefined, undefined],
+			],
+		])('%s', async (_, act, expected) => {
+			await mountWithTwo();
+			const before = positions();
+
+			await act();
+
+			expect(positions()).toEqual(expected(before));
+		});
+
+		it('moves every one by a canvas drag of the box they cover', async () => {
+			const wrapper = await mountWithTwo();
+			const before = positions();
+			const frame = preview(wrapper).props('selectionFrame') as { rect: { x: number; y: number; width: number; height: number } };
+
+			preview(wrapper).vm.$emit('manipulate', { ...frame.rect, x: frame.rect.x + 5, y: frame.rect.y + 7 }, 1);
+			await nextTick();
+
+			expect(positions()).toEqual(before.map(position => ({ x: position!.x + 5, y: position!.y + 7 })));
+		});
+
+		it('escape keeps the layer chosen last, then selects the canvas', async () => {
+			const wrapper = await mountWithTwo();
+
+			await press('Escape');
+			expect(wrapper.get('[data-testid="compositor-inspector"]').attributes('data-selected'))
+				.toBe(JSON.stringify({ type: 'item', graphicId: 'feature-match-layout', itemId: ITEM_ID }));
+
+			await press('Escape');
 			expect(selectedTarget(wrapper)).toEqual({ type: 'canvas' });
 		});
 	});

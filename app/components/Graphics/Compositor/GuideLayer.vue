@@ -38,10 +38,13 @@ const props = defineProps<{
 	selectableCanvas?: boolean;
 }>();
 
-const emit = defineEmits<{ select: [target: GraphicsSelectionTarget] }>();
+const emit = defineEmits<{
+	/** `toggle` is a ⌘- or Ctrl-click on an item: add it to a selection of several, or take it out (#740). */
+	select: [target: GraphicsSelectionTarget, toggle: boolean];
+}>();
 
-function selectItem(guide: GraphicsItemGuide) {
-	emit('select', { type: 'item', graphicId: guide.graphicId, itemId: guide.itemId });
+function selectItem(guide: GraphicsItemGuide, event?: MouseEvent | KeyboardEvent) {
+	emit('select', { type: 'item', graphicId: guide.graphicId, itemId: guide.itemId }, event?.metaKey === true || event?.ctrlKey === true);
 }
 
 const hasGuideLayer = computed(() =>
@@ -56,7 +59,7 @@ const hasGuideLayer = computed(() =>
 			type="button"
 			class="canvas-guide"
 			aria-label="Select canvas"
-			@click.stop="emit('select', { type: 'canvas' })"
+			@click.stop="emit('select', { type: 'canvas' }, false)"
 		/>
 		<div
 			v-for="guide in safeAreaGuides"
@@ -80,7 +83,7 @@ const hasGuideLayer = computed(() =>
 			role="button"
 			tabindex="0"
 			:aria-label="`Select ${guide.label}`"
-			@click.stop="selectItem(guide)"
+			@click.stop="selectItem(guide, $event)"
 			@keydown.enter.stop="selectItem(guide)"
 			@keydown.space.prevent.stop="selectItem(guide)"
 		>

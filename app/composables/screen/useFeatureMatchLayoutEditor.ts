@@ -1,7 +1,8 @@
 import type { BroadcastGraphicConfig, GraphicItemKind, GraphicRect } from '~~/shared/types/graphics';
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { EditHistory } from '~/modules/feature-match-overlay/editHistory';
-import type { FeatureMatchLayoutEditorSelection } from '~/modules/feature-match-overlay/editorSelection';
+import type { FeatureMatchLayoutEditorLayer, FeatureMatchLayoutEditorSelection } from '~/modules/feature-match-overlay/editorSelection';
+import type { LayerSelection } from '~/modules/feature-match-overlay/layerSelection';
 import {
 	addGraphicGroupChild,
 	addGraphicItem,
@@ -14,7 +15,15 @@ import {
 } from '~~/shared/modules/graphics';
 import { randomUuid } from '~~/shared/utils/uuid';
 import { emptyEditHistory, recordEdit, redoEdit, undoEdit } from '~/modules/feature-match-overlay/editHistory';
-import { CANVAS_SELECTION, editorSelectionExists, editorSelectionFrame, editorSelectionLabel } from '~/modules/feature-match-overlay/editorSelection';
+import { CANVAS_SELECTION, editorLayersFrame, editorSelectionLabel } from '~/modules/feature-match-overlay/editorSelection';
+import {
+	collapseLayerSelection,
+	extendLayerSelection,
+	NO_LAYERS,
+	onlyLayer,
+	pruneLayerSelection,
+	toggleLayer,
+} from '~/modules/feature-match-overlay/layerSelection';
 import * as layoutWriter from '~/modules/feature-match-overlay/layout';
 import { nudgeRect } from '~/modules/graphics/canvasManipulation';
 
@@ -48,7 +57,7 @@ interface FeatureMatchLayoutEditorOptions {
 }
 
 /**
- * The Feature Match Overlay editor's verbs, over its one selection and its undo
+ * The Feature Match Overlay editor's verbs, over its selection and its undo
  * history.
  *
  * Every layout write the editor makes goes through `edit`, which records the
@@ -57,9 +66,14 @@ interface FeatureMatchLayoutEditorOptions {
  * the Screen points at and how big it is, not authored layout, so neither is
  * recorded.
  *
+ * The selection is none, one or several layers (#740). `selection` names its one
+ * layer, or the canvas with none or several, so a verb aimed at one layer never
+ * picks one of several. Delete, duplicate, hide, nudge and a canvas move act on
+ * every selected layer, each as one undo step.
+ *
  * The selection follows each structural edit — an added or duplicated layer is
- * selected, a removed one gives way to the canvas — and falls back to the canvas
- * whenever what it names leaves the layout, whoever removed it.
+ * selected, a removed one gives way to the canvas — and lets go of a layer
+ * whenever it leaves the layout, whoever removed it.
  *
  * Only a session holding the Graphics Authoring Lease writes (#738): without it
  * every verb writes and records nothing, and losing it ends the undo history,
@@ -69,7 +83,15 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 	const { config, updateConfig } = options;
 	const writable = computed(() => toValue(options.writable));
 
-	const selection = ref<FeatureMatchLayoutEditorSelection>(CANVAS_SELECTION);
+	const layerSelection = shallowRef<LayerSelection>(NO_LAYERS);
+	/** Every selected layer, in the order the author chose them. */
+	const layers = computed(() => layerSelection.value.layers);
+	/** The layer the author chose last: the one the layer list keeps in view. */
+	const anchor = computed(() => layerSelection.value.anchor);
+	/** The one selected layer, or the canvas with none or several. */
+	const selection = computed<FeatureMatchLayoutEditorSelection>(() => layers.value.length === 1
+		? layers.value[0]!
+		: CANVAS_SELECTION);
 	const history = shallowRef<EditHistory<LayoutSnapshot>>(emptyEditHistory());
 
 	const canUndo = computed(() => writable.value && history.value.past.length > 0);
@@ -84,13 +106,30 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		return JSON.parse(JSON.stringify({ layout: config.value.layout, presetId: config.value.presetId }));
 	}
 
+	/** Select one layer, or none with the canvas. */
 	function select(next: FeatureMatchLayoutEditorSelection) {
-		selection.value = next;
+		layerSelection.value = next.type === 'canvas'
+			? NO_LAYERS
+			: onlyLayer(next);
+	}
+
+	/** ⌘-click: add a layer to the selection, or take it out. */
+	function toggleSelect(layer: FeatureMatchLayoutEditorLayer) {
+		layerSelection.value = toggleLayer(config.value.layout, layerSelection.value, layer);
+	}
+
+	/** Shift-click: select the layer list's run from the anchor to this layer. */
+	function extendSelect(layer: FeatureMatchLayoutEditorLayer) {
+		layerSelection.value = extendLayerSelection(config.value.layout, layerSelection.value, layer);
+	}
+
+	/** Escape: several layers to the one chosen last, one to none. */
+	function collapseSelection() {
+		layerSelection.value = collapseLayerSelection(layerSelection.value);
 	}
 
 	watch(() => config.value.layout, (layout) => {
-		if (!editorSelectionExists(layout, selection.value))
-			selection.value = CANVAS_SELECTION;
+		layerSelection.value = pruneLayerSelection(layout, layerSelection.value);
 	});
 
 	/** Record the current layout as an undo step, without writing anything. */
@@ -225,33 +264,53 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 
 	/* ── Either kind of layer ──────────────────────── */
 
-	function remove(target: FeatureMatchLayoutEditorSelection = selection.value) {
-		if (target.type === 'canvas')
-			return;
-		const removed = target.type === 'source'
-			? editLayout(layout => layoutWriter.removeSource(layout, target.itemId))
-			: editComposition(composition => deleteGraphicItem(composition, target.itemId));
+	/** The layers a verb acts on: the one it names, or every selected layer. */
+	function targets(target?: FeatureMatchLayoutEditorSelection): FeatureMatchLayoutEditorLayer[] {
+		if (target) {
+			return target.type === 'canvas'
+				? []
+				: [target];
+		}
+		return [...layers.value];
+	}
+
+	/** Remove a layer, or every selected layer as one undo step. */
+	function remove(target?: FeatureMatchLayoutEditorSelection) {
+		const removing = targets(target);
+		const removed = removing.length > 0 && editLayout(layout => removing.reduce((next, layer) => {
+			if (layer.type === 'source')
+				return layoutWriter.removeSource(next, layer.itemId);
+			const composition = deleteGraphicItem(next.composition, layer.itemId);
+			return composition === next.composition
+				? next
+				: { ...next, composition };
+		}, layout));
 		if (removed)
 			select(CANVAS_SELECTION);
 	}
 
-	function duplicate(target: FeatureMatchLayoutEditorSelection = selection.value) {
-		if (target.type === 'source') {
-			const { layout, id } = layoutWriter.duplicateSource(config.value.layout, target.itemId);
-			if (id && edit({ layout }))
-				select({ type: 'source', itemId: id });
-			return;
-		}
-		if (target.type === 'item') {
-			let copyId = '';
-			if (editComposition((composition) => {
-				const result = duplicateGraphicItem(composition, target.itemId, { nextId: randomUuid });
-				copyId = result.itemId;
-				return result.graphic;
-			})) {
-				select({ type: 'item', itemId: copyId });
+	/**
+	 * Duplicate a layer, or every selected layer as one undo step, each as a single
+	 * layer duplicates (E8); the copies are selected.
+	 */
+	function duplicate(target?: FeatureMatchLayoutEditorSelection) {
+		const copying = targets(target);
+		const copies: FeatureMatchLayoutEditorLayer[] = [];
+		const duplicated = copying.length > 0 && editLayout(layout => copying.reduce((next, layer) => {
+			if (layer.type === 'source') {
+				const result = layoutWriter.duplicateSource(next, layer.itemId);
+				if (result.id)
+					copies.push({ type: 'source', itemId: result.id });
+				return result.layout;
 			}
-		}
+			const result = duplicateGraphicItem(next.composition, layer.itemId, { nextId: randomUuid });
+			if (!result.itemId)
+				return next;
+			copies.push({ type: 'item', itemId: result.itemId });
+			return { ...next, composition: result.graphic };
+		}, layout));
+		if (duplicated)
+			layerSelection.value = { layers: copies, anchor: copies.at(-1) ?? null };
 	}
 
 	/** Move one layer a step toward the front (+1) or the back (-1) of its own list. */
@@ -273,27 +332,58 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		}
 	}
 
-	function isVisible(target: FeatureMatchLayoutEditorSelection): boolean {
+	/** A layer's stored rectangle and visibility, read the same for either kind. */
+	function layerConfig(target: FeatureMatchLayoutEditorSelection): (GraphicRect & { visible?: boolean }) | undefined {
 		if (target.type === 'source')
-			return config.value.layout.sources.find(item => item.id === target.itemId)?.visible !== false;
+			return config.value.layout.sources.find(item => item.id === target.itemId);
 		if (target.type === 'item')
-			return findGraphicItem(config.value.layout.composition, target.itemId)?.item.visible !== false;
-		return true;
+			return findGraphicItem(config.value.layout.composition, target.itemId)?.item;
+		return undefined;
+	}
+
+	function isVisible(target: FeatureMatchLayoutEditorSelection): boolean {
+		return layerConfig(target)?.visible !== false;
 	}
 
 	/**
-	 * Patch what a Source Item and a Graphic Item both have, through each kind's
-	 * own write: the Source Item list's, or the composition's.
+	 * Patch what Source Items and Graphic Items both have, each through its own
+	 * kind's write, as one edit.
 	 */
-	function patchLayer(target: FeatureMatchLayoutEditorSelection, patch: LayerPatch, editOptions: FeatureMatchLayoutEditOptions = {}) {
-		if (target.type === 'source')
-			editLayout(layout => layoutWriter.patchSource(layout, target.itemId, patch), editOptions);
-		else if (target.type === 'item')
-			editComposition(composition => patchGraphicItem(composition, target.itemId, patch), editOptions);
+	function patchLayers(
+		patches: readonly (readonly [FeatureMatchLayoutEditorLayer, LayerPatch])[],
+		editOptions: FeatureMatchLayoutEditOptions = {},
+	) {
+		if (patches.length === 0)
+			return;
+		editLayout(layout => patches.reduce((next, [layer, patch]) => {
+			if (layer.type === 'source')
+				return layoutWriter.patchSource(next, layer.itemId, patch);
+			return {
+				...next,
+				composition: patchGraphicItem(next.composition, layer.itemId, patch),
+			};
+		}, layout), editOptions);
 	}
 
-	function toggleVisible(target: FeatureMatchLayoutEditorSelection = selection.value) {
-		patchLayer(target, { visible: !isVisible(target) });
+	function patchLayer(target: FeatureMatchLayoutEditorSelection, patch: LayerPatch, editOptions: FeatureMatchLayoutEditOptions = {}) {
+		if (target.type !== 'canvas') {
+			patchLayers([
+				[target, patch],
+			], editOptions);
+		}
+	}
+
+	/**
+	 * Hide or show a layer. Every selected layer hides while any of them shows, and
+	 * all show once all are hidden, as one undo step.
+	 */
+	function toggleVisible(target?: FeatureMatchLayoutEditorSelection) {
+		const toggling = targets(target);
+		const visible = !toggling.some(isVisible);
+		patchLayers(toggling.map(layer => [
+			layer,
+			{ visible },
+		] as const));
 	}
 
 	/**
@@ -314,23 +404,69 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		patchLayer(target, rect, editOptions);
 	}
 
+	/** Where the selected layers sit on the canvas, when the canvas can move them. */
+	const selectionFrame = computed(() => editorLayersFrame(config.value.layout, layers.value, {
+		width: toValue(options.canvasWidth),
+		height: toValue(options.canvasHeight),
+	}));
+
+	/** Move every selected layer by the same whole-pixel delta, as one edit. */
+	function translateLayers(delta: { x: number; y: number }, editOptions: FeatureMatchLayoutEditOptions) {
+		if (!selectionFrame.value || (delta.x === 0 && delta.y === 0))
+			return;
+		patchLayers(layers.value.flatMap((layer) => {
+			const rect = layerConfig(layer);
+			if (!rect)
+				return [];
+			const moved = nudgeRect(rect, delta);
+			return [
+				[
+					layer,
+					{ x: moved.x, y: moved.y },
+				] as const,
+			];
+		}), editOptions);
+	}
+
+	/**
+	 * The canvas moved or resized the selection: one layer takes the rectangle, and
+	 * several move by as far as the box they cover moved (#740).
+	 */
+	function setSelectionRect(rect: GraphicRect, editOptions: FeatureMatchLayoutEditOptions = {}) {
+		const frame = selectionFrame.value;
+		if (!frame)
+			return;
+		if (frame.members)
+			translateLayers({ x: rect.x - frame.rect.x, y: rect.y - frame.rect.y }, editOptions);
+		else
+			setRect(selection.value, rect, editOptions);
+	}
+
+	/** Nudge every selected layer the canvas can move; one undo step per run of presses. */
 	function nudge(delta: { x: number; y: number }) {
-		const target = selection.value;
-		const frame = editorSelectionFrame(config.value.layout, target, {
-			width: toValue(options.canvasWidth),
-			height: toValue(options.canvasHeight),
+		translateLayers(delta, {
+			coalesce: `nudge:${layers.value.map(layer => `${layer.type}:${layer.itemId}`).join(',')}`,
 		});
-		if (frame) {
-			setRect(target, nudgeRect(frame.rect, delta), { coalesce: `nudge:${target.type}:${'itemId' in target
-				? target.itemId
-				: ''}` });
-		}
+	}
+
+	/**
+	 * Write a shared X, Y, W or H to every selected layer's stored rectangle, as the
+	 * multi-select panel edits it (E12), one undo step per burst of typing.
+	 */
+	function setLayersGeometry(patch: Partial<GraphicRect>) {
+		patchLayers(layers.value.map(layer => [layer, patch] as const), { coalesce: 'fields' });
 	}
 
 	return {
 		writable,
 		selection,
+		layers,
+		anchor,
 		select,
+		toggleSelect,
+		extendSelect,
+		collapseSelection,
+		selectionFrame,
 		selectedGroup,
 		canUndo,
 		canRedo,
@@ -351,6 +487,8 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		toggleVisible,
 		rename,
 		setRect,
+		setSelectionRect,
+		setLayersGeometry,
 		nudge,
 	};
 }

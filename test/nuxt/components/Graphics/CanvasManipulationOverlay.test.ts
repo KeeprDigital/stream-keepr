@@ -29,7 +29,7 @@ const RECT = {
 	height: 100,
 };
 
-function mountOverlay(props: Partial<{ rect: typeof RECT | null; origin: { x: number; y: number }; snapLines: SnapLines }> = {}) {
+function mountOverlay(props: Partial<{ rect: typeof RECT | null; origin: { x: number; y: number }; snapLines: SnapLines; members: (typeof RECT)[] }> = {}) {
 	return mount(CanvasManipulationOverlay, {
 		props: {
 			rect: RECT,
@@ -206,5 +206,62 @@ describe('graphicsCanvasManipulationOverlay', () => {
 		const gestures = wrapper.emitted('change')!.map(([, gesture]) => gesture);
 		expect(gestures[0]).toBe(gestures[1]);
 		expect(gestures[2]).not.toBe(gestures[0]);
+	});
+
+	// #740: several layers move together by the box they cover, and are not resized together.
+	it('outlines each of several layers, moves the box they cover, and offers no resize handle', async () => {
+		const wrapper = mountOverlay({
+			members: [
+				{
+					x: 100,
+					y: 100,
+					width: 50,
+					height: 50,
+				},
+				{
+					x: 250,
+					y: 150,
+					width: 50,
+					height: 50,
+				},
+			],
+		});
+
+		expect(wrapper.findAll('[data-testid="canvas-manipulation-member"]')).toHaveLength(2);
+		expect(wrapper.findAll('[data-handle]')).toHaveLength(0);
+		await drag(wrapper, '[data-testid="canvas-manipulation-box"]', { x: 30, y: 10 });
+
+		expect(changes(wrapper)).toEqual([
+			{
+				x: 160,
+				y: 120,
+				width: 200,
+				height: 100,
+			},
+		]);
+	});
+
+	it.each([
+		[
+			'⌘',
+			{ key: 'Meta', metaKey: true },
+		],
+		[
+			'Ctrl',
+			{ key: 'Control', ctrlKey: true },
+		],
+	])('lets a click with %s held through to the preview beneath, until it is let go', async (_, held) => {
+		const wrapper = mountOverlay();
+		const box = () => wrapper.get('[data-testid="canvas-manipulation-box"]');
+
+		window.dispatchEvent(new KeyboardEvent('keydown', held));
+		await wrapper.vm.$nextTick();
+		expect(box().attributes('data-passes-clicks')).toBe('true');
+		await drag(wrapper, '[data-testid="canvas-manipulation-box"]', { x: 30, y: 10 }, held);
+		expect(changes(wrapper)).toEqual([]);
+
+		window.dispatchEvent(new KeyboardEvent('keyup', { key: held.key }));
+		await wrapper.vm.$nextTick();
+		expect(box().attributes('data-passes-clicks')).toBe('false');
 	});
 });

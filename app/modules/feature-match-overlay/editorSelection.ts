@@ -8,8 +8,9 @@ import { findGraphicItem } from '~~/shared/modules/graphics';
 import { canvasSnapLines } from '~/modules/graphics/canvasManipulation';
 
 /**
- * The Feature Match Overlay editor's one selection: the canvas (the Frame), one
- * Source Item, or one Graphic Item of the composition.
+ * One selection in the Feature Match Overlay editor: the canvas (the Frame), one
+ * Source Item, or one Graphic Item of the composition. Several layers selected
+ * together are a `LayerSelection` (#740); this names its one layer, or the canvas.
  *
  * The editor has one layer list and one property panel, so it holds one
  * selection. The two vocabularies beneath it — the host-owned target the Frame
@@ -19,7 +20,11 @@ import { canvasSnapLines } from '~/modules/graphics/canvasManipulation';
  */
 export type FeatureMatchLayoutEditorSelection
 	=	| { type: 'canvas' }
-		| { type: 'source'; itemId: string }
+		| FeatureMatchLayoutEditorLayer;
+
+/** One layer of the layout: a Source Item, or a Graphic Item of the composition. */
+export type FeatureMatchLayoutEditorLayer
+	=	| { type: 'source'; itemId: string }
 		| { type: 'item'; itemId: string };
 
 export const CANVAS_SELECTION: FeatureMatchLayoutEditorSelection = { type: 'canvas' };
@@ -83,6 +88,11 @@ export interface EditorSelectionFrame {
 	origin: { x: number; y: number };
 	/** What the layer snaps to, in its container's pixels. */
 	snapLines: SnapLines;
+	/**
+	 * With several layers selected, each one's box on the canvas. They move as one
+	 * by the box they cover, `rect`, and are not resized together.
+	 */
+	members?: GraphicRect[];
 }
 
 /**
@@ -135,6 +145,51 @@ export function editorSelectionFrame(
 		rect: pickRect(location.item),
 		origin: { x: location.group.x + padding, y: location.group.y + padding },
 		snapLines,
+	};
+}
+
+/**
+ * Where the selected layers sit on the canvas, when the canvas can move them.
+ *
+ * One layer is framed as `editorSelectionFrame` frames it. Several move together
+ * by the box they cover, in canvas pixels, which snaps as one to everything else
+ * (#740): a delta in canvas pixels is the same delta in a canvas-arranged group's
+ * padded box. If the canvas cannot move one of them, it moves none.
+ */
+export function editorLayersFrame(
+	layout: FeatureMatchLayoutConfig,
+	layers: readonly FeatureMatchLayoutEditorLayer[],
+	canvas: { width: number; height: number },
+): EditorSelectionFrame | null {
+	if (layers.length <= 1) {
+		return layers[0]
+			? editorSelectionFrame(layout, layers[0], canvas)
+			: null;
+	}
+	const members: GraphicRect[] = [];
+	for (const layer of layers) {
+		const frame = editorSelectionFrame(layout, layer, canvas);
+		if (!frame)
+			return null;
+		members.push({ ...frame.rect, x: frame.rect.x + frame.origin.x, y: frame.rect.y + frame.origin.y });
+	}
+	const left = Math.min(...members.map(rect => rect.x));
+	const top = Math.min(...members.map(rect => rect.y));
+	const right = Math.max(...members.map(rect => rect.x + rect.width));
+	const bottom = Math.max(...members.map(rect => rect.y + rect.height));
+	return {
+		rect: {
+			x: left,
+			y: top,
+			width: right - left,
+			height: bottom - top,
+		},
+		origin: { x: 0, y: 0 },
+		snapLines: canvasSnapLines(canvas, [
+			...layout.sources,
+			...layout.composition.items,
+		], layers.map(layer => layer.itemId)),
+		members,
 	};
 }
 

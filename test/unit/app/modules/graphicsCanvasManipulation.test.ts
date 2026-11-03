@@ -378,6 +378,52 @@ describe('canvas manipulation', () => {
 			const lines = canvasSnapLines(CANVAS, layers, 'self');
 			expect({ x: lines.x, y: lines.y }).toEqual({ x, y });
 		});
+
+		// Several layers move as one, in canvas pixels (#740).
+		it.each([
+			{
+				name: 'none of the moving layers adds anything, a group child among them included',
+				moving: ['self', 'child'],
+				x: [0, 100, 300, 350, 400, 500, 1000],
+				y: [0, 50, 150, 250, 300, 350, 400, 500],
+			},
+			{
+				name: 'a moving group\'s children move with it, and add nothing',
+				moving: ['self', 'cluster'],
+				x: [0, 300, 350, 400, 500, 1000],
+				y: [0, 250, 300, 350, 400, 500],
+			},
+			{
+				name: 'a group child that is not moving still adds its edges',
+				moving: ['self', 'other'],
+				x: [0, 100, 130, 150, 170, 300, 500, 1000],
+				y: [0, 50, 90, 100, 110, 150, 250, 500],
+			},
+		])('$name', ({ moving, x, y }) => {
+			const layers = [
+				layer('self', { x: 0, y: 0, width: 10, height: 10 }),
+				layer('other', {
+					x: 300,
+					y: 300,
+					width: 100,
+					height: 100,
+				}),
+				layer('cluster', {
+					x: 100,
+					y: 50,
+					width: 400,
+					height: 200,
+				}, {
+					arrangement: 'canvas',
+					padding: 10,
+					children: [
+						layer('child', { x: 20, y: 30, width: 40, height: 20 }),
+					],
+				}),
+			];
+			const lines = canvasSnapLines(CANVAS, layers, moving);
+			expect({ x: lines.x, y: lines.y }).toEqual({ x, y });
+		});
 	});
 
 	describe('neighbour gaps', () => {
