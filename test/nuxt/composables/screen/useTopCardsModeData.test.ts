@@ -1,11 +1,11 @@
 import type { EffectScope } from 'vue';
-import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
@@ -52,11 +52,10 @@ const defaultConfig = {
 const mutableConfig = reactive({ ...defaultConfig });
 
 const mockEventId = ref<number | null>(1);
-const screenContext = {
+const screenContext = screenContextOf({
 	screen: ref({ id: 1, name: 'Test Screen' }),
 	eventId: mockEventId,
-	interactive: ref(false),
-} as unknown as ScreenContext;
+});
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
 // Server time is the Page Rotation's clock; synced and controllable here.

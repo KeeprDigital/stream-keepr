@@ -111,13 +111,19 @@ const UButtonStub = defineComponent({
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
 });
 
-async function mountSettings() {
+function screenOn(roundId: number | undefined) {
+	return {
+		id: 1,
+		modeConfigs: {
+			pairings: { ...savedConfig, roundId },
+		},
+	} as unknown as Screen;
+}
+
+async function mountSettings(roundId: number | undefined = savedConfig.roundId) {
 	const wrapper = mount(Settings, {
 		props: {
-			screen: {
-				id: 1,
-				modeConfigs: { pairings: savedConfig },
-			} as unknown as Screen,
+			screen: screenOn(roundId),
 			eventId: 1,
 		},
 		global: {
@@ -159,14 +165,29 @@ describe('screenModesPairingsSettings', () => {
 		expect(wrapper.text()).toContain('Page 1 of 2');
 	});
 
-	it('shows the page count loading, not a count of its own, until the Screen\'s first read answers', async () => {
+	it.each([
+		{
+			selected: 'as the editor opens',
+			select: async () => mountSettings(),
+		},
+		{
+			selected: 'once none was',
+			select: async () => {
+				const wrapper = await mountSettings(undefined);
+				await wrapper.setProps({
+					screen: screenOn(31),
+				});
+				return wrapper;
+			},
+		},
+	])('shows the pages counting, not "Page 1 of 1", until the Round selected $selected is read', async ({ select }) => {
 		const read = deferred<ReturnType<typeof pairingsOf>>();
 		mockFetch.mockReturnValue(read.promise);
-		const wrapper = await mountSettings();
+		const wrapper = await select();
 		const pageSelection = () => wrapper.get('[role="group"][aria-label="Page selection"]');
 
 		expect(pageSelection().attributes('aria-busy')).toBe('true');
-		expect(pageSelection().text()).not.toContain('Page 1 of 1');
+		expect(pageSelection().text()).toContain('Counting pages…');
 
 		read.resolve(pairingsOf(10));
 		await flushPromises();

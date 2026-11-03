@@ -109,7 +109,7 @@ const showsConversionRate = computed(() =>
 
 // The table rows the Screen pages (none for a chart, which is one page), read and followed as its Screen Output reads and follows them, so
 // the page count is the one it renders (#780).
-const { rowCount, loading: loadingRows } = useEditedScreenModeData(
+const { rowCount, loading: loadingRows, answered: rowsAnswered } = useEditedScreenModeData(
 	{
 		screen: () => props.screen,
 		eventId: () => props.eventId,
@@ -304,6 +304,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 			page-size-description="Number of table rows shown per page."
 			auto-page-description="Automatically cycle through table pages."
 			:loading="loadingRows"
+			:counting="!rowsAnswered"
 		/>
 	</div>
 </template>

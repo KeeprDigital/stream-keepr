@@ -57,7 +57,7 @@ onMounted(async () => {
 // The grid rows the Screen pages — the cards it reads, once the filters have
 // applied, in rows of `columns` — read and followed as its Screen Output reads
 // and follows them, so the page count is the one it renders (#780).
-const { rowCount, loading: loadingCards } = useEditedScreenModeData(
+const { rowCount, loading: loadingCards, answered: rowsAnswered } = useEditedScreenModeData(
 	{
 		screen: () => props.screen,
 		eventId: () => props.eventId,
@@ -265,6 +265,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:rotation="rotation"
 					auto-page-description="Automatically cycle through pages of cards."
 					:loading="loadingCards"
+					:counting="!rowsAnswered"
 				/>
 			</template>
 		</ScreenSettingsCard>

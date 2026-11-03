@@ -1,11 +1,11 @@
 import type { EffectScope } from 'vue';
-import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '~~/test/helpers/deferred';
 import { createMockEvent, createMockPlayer, createMockRound } from '~~/test/helpers/fixtures';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
 const defaultConfig = {
 	viewMode: 'all' as string,
@@ -102,11 +102,11 @@ mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
-const screenContext = {
+const screenContext = screenContextOf({
 	screen: ref({ id: 1, name: 'Test' }),
 	eventId: mockEventId,
 	interactive: mockInteractive,
-} as unknown as ScreenContext;
+});
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 // Server time is the Page Rotation's clock.
 mockNuxtImport('useServerTime', () => () => ({

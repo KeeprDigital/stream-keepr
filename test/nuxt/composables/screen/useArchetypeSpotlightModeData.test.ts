@@ -1,10 +1,10 @@
 import type { EffectScope } from 'vue';
 import type { ScreenOutputArchetypePilot, ScreenOutputArchetypeSpotlightResponse } from '~~/shared/types/screenOutputReads';
-import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
 const defaultConfig = {
 	archetypeId: undefined as number | undefined,
@@ -43,11 +43,11 @@ mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
-const screenContext = {
+const screenContext = screenContextOf({
 	screen: ref({ id: 1, name: 'Test' }),
 	eventId: mockEventId,
 	interactive: mockInteractive,
-} as unknown as ScreenContext;
+});
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
 function pilot(id: number, name: string, position: number | null, overrides: Partial<ScreenOutputArchetypePilot> = {}): ScreenOutputArchetypePilot {

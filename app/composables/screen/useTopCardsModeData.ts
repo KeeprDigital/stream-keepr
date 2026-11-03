@@ -113,6 +113,8 @@ export function useTopCardsModeData(context: ScreenContext) {
 	return {
 		config,
 		loading,
+		/** Whether its rows are a read's answer, or it selects nothing: false only while its first read is in flight. */
+		answered: freshness.answered,
 		error,
 		/** Rendering Readiness: its first read has answered or failed, and its page has loaded. */
 		ready: computed(() => freshness.answered.value && !staging.value),

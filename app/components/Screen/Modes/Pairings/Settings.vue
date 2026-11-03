@@ -30,7 +30,7 @@ const roundOptions = computed(() => [
 
 // The Matches the Screen pages, read and followed as its Screen Output reads
 // and follows them, so the page count is the one it renders (#780).
-const { rowCount, loading: loadingMatches } = useEditedScreenModeData(
+const { rowCount, loading: loadingMatches, answered: rowsAnswered } = useEditedScreenModeData(
 	{
 		screen: () => props.screen,
 		eventId: () => props.eventId,
@@ -105,6 +105,7 @@ onMounted(async () => {
 			page-size-description="Number of pairings shown per page."
 			auto-page-description="Automatically cycle through pairings pages."
 			:loading="loadingMatches"
+			:counting="!rowsAnswered"
 		/>
 	</div>
 </template>

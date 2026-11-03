@@ -1,8 +1,8 @@
-import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAttachSignal, createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 import { SCREEN_MODE_REREAD_MS } from '~/modules/screen-mode/freshness';
 
 const mockCardStore = reactive({
@@ -34,12 +34,11 @@ let mockCardDataHealth: Ref<'complete' | 'degraded'> | undefined;
 
 mockNuxtImport('useCardStore', () => () => mockCardStore);
 function screenContext() {
-	return {
+	return screenContextOf({
 		screen: mockScreen,
 		eventId: computed(() => 1),
-		interactive: ref(false),
 		cardDataHealth: mockCardDataHealth,
-	} as unknown as ScreenContext;
+	});
 }
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => ({ featureMatchId: null })));
 

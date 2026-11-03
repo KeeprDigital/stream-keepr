@@ -1,12 +1,12 @@
 import type { EffectScope } from 'vue';
 import type { TopCutBracket } from '~~/shared/modules/top-cut-bracket';
 import type { ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
-import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deriveTopCutBracket } from '~~/shared/modules/top-cut-bracket';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
 const defaultConfig = {
 	phaseId: undefined as number | undefined,
@@ -27,11 +27,10 @@ const { deliver } = realtime;
 
 mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
-const screenContext = {
+const screenContext = screenContextOf({
 	screen: ref({ id: 1, name: 'Test' }),
 	eventId: mockEventId,
-	interactive: ref(false),
-} as unknown as ScreenContext;
+});
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
 const phase = {

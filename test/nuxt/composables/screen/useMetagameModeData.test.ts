@@ -1,10 +1,10 @@
 import type { EffectScope } from 'vue';
 import type { MetagameScope, MetagameViewMode } from '~~/shared/types/enums';
-import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
@@ -61,11 +61,11 @@ const mutableConfig = reactive({ ...defaultConfig });
 const mockInteractive = ref(false);
 
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
-const screenContext = {
+const screenContext = screenContextOf({
 	screen: ref({ id: 1, name: 'Test Screen' }),
 	eventId: computed(() => 1),
 	interactive: mockInteractive,
-} as unknown as ScreenContext;
+});
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
 // Server time is the Page Rotation's clock.

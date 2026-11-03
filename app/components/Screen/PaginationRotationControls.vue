@@ -11,12 +11,14 @@ const props = defineProps<{
 	rotation: PageRotationControls;
 	/** What auto-page cycles through, in the mode's own words. */
 	autoPageDescription: string;
-	/**
-	 * The rows are loading, so manual page selection waits for them. Until they
-	 * first load, the controls show that instead of a page count, which would
-	 * read as an answer (#914).
-	 */
+	/** The rows are loading, so manual page selection waits for them. */
 	loading?: boolean;
+	/**
+	 * The rows have yet to answer their first read (the mode data's `answered`),
+	 * so there is no page count: the controls show they are counting rather than
+	 * a "Page 1 of 1" that would read as an answer (#914).
+	 */
+	counting?: boolean;
 }>();
 
 const fields = computed(() => props.rotation.fields);
@@ -26,14 +28,7 @@ const intervalSeconds = computed(() =>
 );
 const currentPage = computed(() => props.rotation.currentPage.value);
 const totalPages = computed(() => props.rotation.totalPages.value);
-const pageSelectionDisabled = computed(() => totalPages.value <= 1 || props.loading);
-
-// A re-read keeps the count it has; only the first load has none to show.
-const counted = ref(!props.loading);
-watch(() => props.loading, (loading) => {
-	if (!loading)
-		counted.value = true;
-});
+const pageSelectionDisabled = computed(() => totalPages.value <= 1 || props.loading || props.counting);
 </script>
 
 <template>
@@ -72,7 +67,7 @@ watch(() => props.loading, (loading) => {
 	<div
 		role="group"
 		aria-label="Page selection"
-		:aria-busy="!counted"
+		:aria-busy="counting"
 		class="flex items-center justify-center gap-2 max-sm:flex-wrap"
 	>
 		<UButton
@@ -83,8 +78,8 @@ watch(() => props.loading, (loading) => {
 			@click="rotation.adminPrevPage()"
 		/>
 		<span class="text-sm text-muted min-w-24 text-center">
-			<template v-if="counted">Page {{ currentPage }} of {{ totalPages }}</template>
-			<template v-else>Counting pages…</template>
+			<template v-if="counting">Counting pages…</template>
+			<template v-else>Page {{ currentPage }} of {{ totalPages }}</template>
 		</span>
 		<UButton
 			label="Next"

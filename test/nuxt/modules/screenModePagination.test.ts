@@ -1,10 +1,10 @@
 import type { PageRotationMode } from '~~/shared/screenModes';
-import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_PAGE_ROTATION } from '~~/shared/screenModeConfigs/subShapes';
 import { SCREEN_MODES } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 import { usePaginatedScreenMode, useScreenModePagination } from '~/modules/screen-mode/pagination';
 
 /**
@@ -23,12 +23,7 @@ mockNuxtImport('useServerTime', () => () => ({
 	getServerTime: () => mockServerNow,
 }));
 
-const screenContext = {
-	screen: ref(null),
-	eventId: computed(() => null),
-	interactive: ref(false),
-	overlayContainer: ref(null),
-} satisfies ScreenContext;
+const screenContext = screenContextOf();
 
 mockNuxtImport('useScreenStore', () => () => ({
 	updateModeConfig: vi.fn(),

@@ -88,7 +88,7 @@ const isDeckColumnVisible = computed(() => isColumnVisible(config.value.columns,
 // ── Pagination ──
 // The rows the Screen pages, its view mode and reveal applied, read and followed as its Screen Output reads and follows them, so
 // the page count is the one it renders (#780).
-const { rowCount, loading: loadingRows, noPreviousRoundStandings } = useEditedScreenModeData(
+const { rowCount, loading: loadingRows, answered: rowsAnswered, noPreviousRoundStandings } = useEditedScreenModeData(
 	{
 		screen: () => props.screen,
 		eventId: () => props.eventId,
@@ -382,6 +382,7 @@ const modeSettingsLabel = computed(() => {
 			page-size-description="Number of players shown per page."
 			auto-page-description="Automatically cycle through pages on the display."
 			:loading="loadingRows"
+			:counting="!rowsAnswered"
 		/>
 	</div>
 </template>

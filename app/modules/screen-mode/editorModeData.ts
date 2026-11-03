@@ -14,10 +14,9 @@ export interface EditedScreen {
 
 /**
  * A mode's data composable, set up against a Screen context for the Screen a
- * settings editor edits (#914): it
- * reads what the Screen Output reads and keeps it current the same way (Screen
- * Mode Data Freshness), so the editor shows what the Screen renders rather
- * than an estimate from config (#780).
+ * settings editor edits (#914): it reads what the Screen Output reads and
+ * keeps it current the same way (Screen Mode Data Freshness), so the editor
+ * shows what the Screen renders rather than an estimate from config (#780).
  *
  * It reads through the Screen as saved, as its renderings do. The store shows
  * an edit at once, but the server answers each read from the configuration it

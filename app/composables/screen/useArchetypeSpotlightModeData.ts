@@ -87,6 +87,8 @@ export function useArchetypeSpotlightModeData(context: ScreenContext) {
 	return {
 		config,
 		loading,
+		/** Whether its rows are a read's answer, or it selects nothing: false only while its first read is in flight. */
+		answered: freshness.answered,
 		error,
 		/** Rendering Readiness: its first read has answered or failed, and its top cards have loaded. */
 		ready: computed(() => freshness.answered.value && !staging.value),

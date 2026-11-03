@@ -151,6 +151,8 @@ export function useMetagameModeData(context: ScreenContext) {
 		ready: freshness.answered,
 		config,
 		loading,
+		/** Whether its rows are a read's answer, or it selects nothing: false only while its first read is in flight. */
+		answered: freshness.answered,
 		error,
 		isEmpty,
 		emptyMessage,

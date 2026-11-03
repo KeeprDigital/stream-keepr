@@ -2,7 +2,7 @@ import type { PageRotationMode } from '~~/shared/screenModes';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, h, nextTick, ref } from 'vue';
+import { computed, defineComponent, h, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import PaginationSettingsCard from '~/components/Screen/PaginationSettingsCard.vue';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
@@ -57,10 +57,10 @@ interface Harness {
 	config: Record<string, unknown>;
 	rowCount: number;
 	loading?: boolean;
+	counting?: boolean;
 }
 
-function mountCard({ mode, config: overrides, rowCount, loading: initiallyLoading = false }: Harness) {
-	const loading = ref(initiallyLoading);
+function mountCard({ mode, config: overrides, rowCount, loading, counting }: Harness) {
 	const config = ref<Record<string, any>>({
 		...getDefaultConfigForMode(mode),
 		...overrides,
@@ -83,7 +83,8 @@ function mountCard({ mode, config: overrides, rowCount, loading: initiallyLoadin
 				rotation,
 				pageSizeDescription: 'Rows on each page.',
 				autoPageDescription: 'Cycle through the pages.',
-				loading: loading.value,
+				loading,
+				counting,
 			});
 		},
 	});
@@ -102,7 +103,7 @@ function mountCard({ mode, config: overrides, rowCount, loading: initiallyLoadin
 			},
 		},
 	});
-	return { wrapper, saveConfig, loading };
+	return { wrapper, saveConfig };
 }
 
 function numberInput(wrapper: ReturnType<typeof mountCard>['wrapper'], label: string) {
@@ -202,34 +203,44 @@ describe('the shared Pagination settings card', () => {
 		expect(button(wrapper, 'Next').attributes('disabled')).toBeDefined();
 	});
 
-	// Only the first load has no count to show; a later one keeps the count it has.
+	// Before the rows' first read answers there is no count; a later read keeps the count it has.
 	it.each([
 		{
-			load: 'their first load',
-			loadedBefore: false,
+			rows: 'yet to answer',
+			counting: true,
+			loading: true,
 			busy: 'true',
 			shown: 'Counting pages…',
+			selectable: false,
 		},
 		{
-			load: 'a later load',
-			loadedBefore: true,
+			rows: 'reading again',
+			counting: false,
+			loading: true,
 			busy: 'false',
 			shown: 'Page 1 of 4',
+			selectable: false,
 		},
-	])('shows $shown and waits while the rows are in $load', async ({ loadedBefore, busy, shown }) => {
-		const { wrapper, loading } = mountCard({
+		{
+			rows: 'read',
+			counting: false,
+			loading: false,
+			busy: 'false',
+			shown: 'Page 1 of 4',
+			selectable: true,
+		},
+	])('shows $shown with its rows $rows', ({ counting, loading, busy, shown, selectable }) => {
+		const { wrapper } = mountCard({
 			mode: 'archetype-spotlight',
 			config: { rowsPerPage: 2 },
 			rowCount: 8,
-			loading: !loadedBefore,
+			loading,
+			counting,
 		});
-		loading.value = true;
-		await nextTick();
 
 		const pageSelection = wrapper.get('[role="group"][aria-label="Page selection"]');
 		expect(pageSelection.attributes('aria-busy')).toBe(busy);
 		expect(pageSelection.text()).toContain(shown);
-		expect(button(wrapper, 'Previous').attributes('disabled')).toBeDefined();
-		expect(button(wrapper, 'Next').attributes('disabled')).toBeDefined();
+		expect(button(wrapper, 'Next').attributes('disabled') === undefined).toBe(selectable);
 	});
 });
