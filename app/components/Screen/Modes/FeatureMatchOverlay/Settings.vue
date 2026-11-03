@@ -96,7 +96,7 @@ function selectCompositorTarget(target: GraphicsSelectionTarget) {
 	editor.select(fromCompositorSelectionTarget(target));
 }
 
-const selectionFrame = computed(() => editorSelectionFrame(config.value.layout, selection.value));
+const selectionFrame = computed(() => editorSelectionFrame(config.value.layout, selection.value, eventCanvas.value));
 const selectionLabel = computed(() => editorSelectionLabel(config.value.layout, selection.value));
 
 function manipulate(rect: GraphicRect, gesture: number) {
