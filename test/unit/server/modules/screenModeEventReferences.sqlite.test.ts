@@ -155,6 +155,11 @@ const SAMPLES: Record<EventReferenceKind, Sample[]> = {
 			naming: e => ({ type: 'broadcast', broadcastDeckListId: e.broadcastDeckListId }),
 			refusal: { statusCode: 409, code: 'SCREEN_DECK_SOURCE_CONFLICT' },
 		},
+		{
+			name: 'Feature Match Slot side Deck Source',
+			naming: e => ({ type: 'featureMatchSlot', slotId: e.featureMatchSlotId, side: 'player2' }),
+			refusal: { statusCode: 404, message: 'Feature match slot not found' },
+		},
 	],
 };
 

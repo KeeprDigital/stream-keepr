@@ -177,9 +177,10 @@ describe('syncFeatureMatches', () => {
 		expect(shrunk).toEqual({
 			created: [],
 			deleted: [third!.id, second!.id],
+			clearedScreens: [],
 		});
 
-		expect(await featureMatchService().syncFeatureMatches(eventId, 1)).toEqual({ created: [], deleted: [] });
+		expect(await featureMatchService().syncFeatureMatches(eventId, 1)).toEqual({ created: [], deleted: [], clearedScreens: [] });
 	});
 
 	it('answers the Session failure, carrying the failed removal with it', async () => {

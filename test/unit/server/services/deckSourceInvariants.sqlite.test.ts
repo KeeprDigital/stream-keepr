@@ -12,6 +12,8 @@ vi.doMock('~~/server/db', () => ({ db }));
 const mockPublication = {
 	screenUpdated: vi.fn(async ({ entity }: { entity: unknown }) => entity),
 	playerDeleted: vi.fn(),
+	featureMatchSlotDeleted: vi.fn(),
+	eventUpdated: vi.fn(async ({ entity }: { entity: unknown }) => entity),
 };
 vi.doMock('~~/server/modules/event-data-publication', () => ({
 	eventDataPublicationModule: () => mockPublication,
@@ -27,6 +29,8 @@ const { eventService } = await import('~~/server/services/event');
 const { screenService } = await import('~~/server/services/screen');
 const { screenWriteModule } = await import('~~/server/modules/screen-write');
 const { playerUpdateModule } = await import('~~/server/modules/player-update');
+const { featureMatchSlotWriteModule } = await import('~~/server/modules/feature-match-slot-write');
+const { eventWriteModule } = await import('~~/server/modules/event-write');
 
 let eventId: number;
 let otherEventId: number;
@@ -425,5 +429,130 @@ describe('deleting the Player a Deck Source selects (#651)', () => {
 		await expect(screenService().updateModeConfig(selecting.id, eventId, 'standings', { headerText: 'After reset' }))
 			.resolves
 			.toBeDefined();
+	});
+});
+
+describe('a Feature Match Slot side Deck Source (ADR-0057)', () => {
+	/** An OP Event with two Slots in display order, and a Screen showing a side of each. */
+	let seeded = 0;
+	async function seedSlotSides(name: string) {
+		const label = `${name}-${++seeded}`;
+		const [event] = await db.insert(schema.events).values({
+			name: `${label} Event`,
+			game: 'op',
+			featureMatchOrientation: 'horizontal',
+			numFeatureMatches: 2,
+		}).returning({ id: schema.events.id });
+		const [kept, deleted] = await db.insert(schema.featureMatchSlots).values([
+			{ eventId: event!.id, sortOrder: 0 },
+			{ eventId: event!.id, sortOrder: 1 },
+		]).returning({ id: schema.featureMatchSlots.id });
+		const showing = (name: string, slotId: number) => screenService().create(event!.id, {
+			name,
+			slug: `${label}-${name}`.toLowerCase(),
+			currentMode: 'deck',
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'featureMatchSlot', slotId, side: 'player2' },
+				},
+			},
+		} as never, capability(`${label}-${name}`));
+		return {
+			eventId: event!.id,
+			deletedSlotId: deleted!.id,
+			selecting: await showing('Selecting', deleted!.id),
+			bystander: await showing('Bystander', kept!.id),
+		};
+	}
+
+	it.each([
+		{
+			name: 'deleting the Slot',
+			remove: (eventId: number, slotId: number) =>
+				featureMatchSlotWriteModule().remove({ eventId, slotId, originConnectionId: 'delete-origin' }),
+			deleteAnnouncement: mockPublication.featureMatchSlotDeleted,
+		},
+		{
+			name: 'lowering the Event\'s Slot count past it',
+			remove: (eventId: number) =>
+				eventWriteModule().updateEvent({
+					eventId,
+					input: { numFeatureMatches: 1 },
+					originConnectionId: 'delete-origin',
+				}),
+			deleteAnnouncement: mockPublication.eventUpdated,
+		},
+	])('$name clears every Deck Source naming it in the same write, and announces each first', async ({ remove, deleteAnnouncement }) => {
+		const { eventId, deletedSlotId, selecting, bystander } = await seedSlotSides('Delete');
+		mockPublication.screenUpdated.mockClear();
+		deleteAnnouncement.mockClear();
+
+		await remove(eventId, deletedSlotId);
+
+		expect(await db.query.featureMatchSlots.findFirst({
+			where: eq(schema.featureMatchSlots.id, deletedSlotId),
+		})).toBeUndefined();
+		expect(await screenService().findById(selecting.id, eventId)).toMatchObject({
+			stateVersion: selecting.stateVersion + 1,
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'featureMatchSlot', slotId: null, side: 'player2' },
+				},
+			},
+		});
+		expect(await screenService().findById(bystander.id, eventId)).toMatchObject({
+			stateVersion: bystander.stateVersion,
+			modeConfigs: bystander.modeConfigs,
+		});
+		// The deleting client holds the Screen at its old version too, so no origin.
+		expect(mockPublication.screenUpdated.mock.calls).toEqual([
+			[
+				{
+					eventId,
+					entity: expect.objectContaining({ id: selecting.id, stateVersion: selecting.stateVersion + 1 }),
+				},
+			],
+		]);
+		expect(mockPublication.screenUpdated.mock.invocationCallOrder[0]).toBeLessThan(deleteAnnouncement.mock.invocationCallOrder[0]!);
+		await expect(screenService().updateModeConfig(selecting.id, eventId, 'deck', { showCostCurve: false }))
+			.resolves
+			.toMatchObject({ stateVersion: selecting.stateVersion + 2 });
+	});
+
+	it.each([
+		{
+			name: 'another Event\'s Slot at Screen create',
+			write: async (eventId: number, _screenId: number, slotId: number) => screenService().create(eventId, {
+				name: 'Foreign Slot',
+				slug: 'foreign-slot',
+				modeConfigs: {
+					deck: {
+						deckSource: { type: 'featureMatchSlot', slotId, side: 'player1' },
+					},
+				},
+			} as never, capability('foreign-slot')),
+			slotOf: (other: Awaited<ReturnType<typeof seedSlotSides>>) => other.deletedSlotId,
+		},
+		{
+			name: 'a Slot deleted before the write lands',
+			write: async (eventId: number, screenId: number, slotId: number) => {
+				await db.delete(schema.featureMatchSlots).where(eq(schema.featureMatchSlots.id, slotId));
+				const screen = await screenService().findById(screenId, eventId);
+				return screenService().updateModeConfig(screenId, eventId, 'deck', {
+					deckSource: { type: 'featureMatchSlot', slotId, side: 'player1' },
+				}, screen!.stateVersion);
+			},
+			slotOf: null,
+		},
+	])('refuses a Slot side Deck Source naming $name', async ({ write, slotOf }) => {
+		const own = await seedSlotSides('Guard');
+		const other = await seedSlotSides('Other');
+		const slotId = slotOf
+			? slotOf(other)
+			: own.deletedSlotId;
+
+		await expect(write(own.eventId, own.bystander.id, slotId))
+			.rejects
+			.toMatchObject({ statusCode: 409, code: 'SCREEN_DECK_SOURCE_CONFLICT' });
 	});
 });

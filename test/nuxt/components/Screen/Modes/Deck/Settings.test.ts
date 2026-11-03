@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive, ref } from 'vue';
+import { opSlotSide } from '~~/test/helpers/opCards';
 import Settings from '~/components/Screen/Modes/Deck/Settings.vue';
 
 const mockPlayerStore = {
@@ -47,7 +48,33 @@ const mockBroadcastDeckListStore = reactive({
 	loadCollection: mockLoadBroadcastDeckLists,
 });
 
+/** An OP Slot whose first player has a Deck List and whose second has none. */
+const ALICE = opSlotSide('Alice', null, 501);
+const BOB = opSlotSide('Bob', null, null);
+const mockFeatureMatchStore = reactive({
+	featureMatches: [
+		{
+			id: 11,
+			player1Id: null,
+			player2Id: null,
+			player1Data: ALICE,
+			player2Data: BOB,
+			activeSession: null,
+		},
+	],
+	loadFeatureMatchesByEventId: vi.fn(),
+});
+const mockFeatureMatchStateStore = reactive({
+	featureMatchSessions: new Map<number, unknown>(),
+	sessionIdBySlotId: new Map<number, number>(),
+});
+
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
+mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
+mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
+mockNuxtImport('useFeatureMatchMenuItems', () => () => ref([
+	{ label: 'Alice vs Bob', value: 11 },
+]));
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useBroadcastDeckListStore', () => () => mockBroadcastDeckListStore);
 mockNuxtImport('usePlayerDeckCache', () => () => ({
@@ -675,5 +702,82 @@ describe('screenDeckSettings', () => {
 
 		expect(wrapper.get('[data-testid="empty-sideboard-hint"]').text()).toContain('no mainboard cards');
 		expect(mockUpdateConfig).not.toHaveBeenCalled();
+	});
+});
+
+describe('screenDeckSettings on a One Piece Card Game Event', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockEventStore.event = {
+			id: 1,
+			game: 'op',
+			broadcastDeckListsEnabled: false,
+			pointsSystem: null,
+		};
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			deckSource: { type: 'player', playerId: null },
+		};
+		mockFeatureMatchStateStore.featureMatchSessions = new Map();
+		mockFeatureMatchStateStore.sessionIdBySlotId = new Map();
+	});
+
+	it('picks a Feature Match Slot side as the Deck Source, and offers nothing MTG-only', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(sectionTitles(wrapper)).toEqual([
+			'Deck Source',
+			'Header',
+			'Mainboard',
+			'Card Badges',
+		]);
+		await wrapper.get('[data-testid="deck-source-slot"] [data-value="11"]').trigger('click');
+		await wrapper.get('[data-testid="deck-source-side"] [data-value="player2"]').trigger('click');
+		expect(mockUpdateConfig.mock.calls.map(([patch]) => patch.deckSource)).toEqual([
+			{ type: 'featureMatchSlot', slotId: 11, side: 'player1' },
+			{ type: 'featureMatchSlot', slotId: 11, side: 'player2' },
+		]);
+		expect(mockPlayerStore.loadPlayersByEventId).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		{
+			name: 'a side holding a Deck List',
+			side: 'player1',
+			swapped: false,
+			hint: false,
+		},
+		{
+			name: 'a side holding none',
+			side: 'player2',
+			swapped: false,
+			hint: true,
+		},
+		{
+			name: 'a side Swap Players moved the player with none to',
+			side: 'player1',
+			swapped: true,
+			hint: true,
+		},
+	])('says the Screen shows nothing only for $name', async ({ side, swapped, hint }) => {
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			deckSource: { type: 'featureMatchSlot', slotId: 11, side },
+		};
+		if (swapped) {
+			mockFeatureMatchStateStore.featureMatchSessions.set(90, {
+				id: 90,
+				sourceSnapshot: {
+					player1: { playerId: null, data: BOB },
+					player2: { playerId: null, data: ALICE },
+				},
+			});
+			mockFeatureMatchStateStore.sessionIdBySlotId.set(11, 90);
+		}
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(wrapper.find('[data-testid="empty-side-hint"]').exists()).toBe(hint);
 	});
 });

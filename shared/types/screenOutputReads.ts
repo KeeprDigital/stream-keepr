@@ -1,5 +1,6 @@
 import type { FeatureMatchResponse, MatchResponse, PhaseResponse, PlayerResponse, RoundResponse } from '~~/shared/api';
 import type { TopCutBracket } from '~~/shared/modules/top-cut-bracket';
+import type { SavedFeatureMatchDeckList } from '~~/shared/types/featureMatchDeckList';
 import type { ArchetypeBreakdownResponse, CardBreakdownEntry, CardBreakdownResponse, PlayerDeckCollectionResponse } from '~~/shared/types/metagame';
 
 /**
@@ -163,6 +164,9 @@ export interface ScreenOutputFeatureMatchResponse {
 	round: RoundResponse | null;
 	phase: PhaseResponse | null;
 }
+
+/** A Feature Match Deck List of the Slot a Deck Screen shows a side of: its cards, not its paste or warnings. */
+export type ScreenOutputFeatureMatchDeckListResponse = Pick<SavedFeatureMatchDeckList, 'id' | 'slotId' | 'entries' | 'leaderNumber' | 'mainboardCount'>;
 
 /** A Player the Screen renders, with their decks as the operator's decks read answers them. */
 export interface ScreenOutputPlayerDecksResponse {

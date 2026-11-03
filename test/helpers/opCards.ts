@@ -1,4 +1,5 @@
-import type { OpCardSummary } from '~~/shared/types/card/op';
+import type { OpCardCategory, OpCardSummary } from '~~/shared/types/card/op';
+import type { FeatureMatchDeckListEntry } from '~~/shared/types/featureMatchDeckList';
 import type { OpLeader } from '~~/shared/types/game';
 import { vi } from 'vitest';
 
@@ -38,6 +39,39 @@ export const ZORO = opLeader('OP01-001', 'Roronoa Zoro', ['Red']);
 export const LUFFY = opLeader('OP01-003', 'Monkey.D.Luffy', ['Red', 'Green']);
 export const NAMI = opLeader('OP01-016', 'Nami', ['Blue']);
 export const LAW = opLeader('OP01-002', 'Trafalgar Law', ['Red', 'Green']);
+
+/** A Feature Match Deck List entry snapshotting a known card; `category: null` makes it number-only. */
+export function opDeckListEntry(number: string, quantity: number, category: OpCardCategory | null, cost: number | null = null): FeatureMatchDeckListEntry {
+	return {
+		number,
+		quantity,
+		card: category === null
+			? null
+			: {
+					name: `Card ${number}`,
+					category,
+					colors: ['Red'],
+					cost,
+					power: null,
+					counter: null,
+					imageUrl: `https://cards-img.keepr.digital/${number}.png`,
+				},
+	};
+}
+
+/** A One Piece Feature Match Slot side's slot data: its name, Leader and Deck List reference. */
+export function opSlotSide(name: string, leader: OpLeader | null, deckListId: number | null) {
+	return {
+		name,
+		gameData: {
+			type: 'op' as const,
+			leader,
+			featureMatchDeckList: deckListId === null
+				? null
+				: { id: deckListId, mainboardCount: 50 },
+		},
+	};
+}
 
 /** A Card as bandai-keepr's `GET /cards/:number` answers it, with its standard Printing. */
 export function bandaiKeeprCard(overrides: {

@@ -89,7 +89,10 @@ export function eventWriteModule() {
 		if (input.numFeatureMatches !== undefined) {
 			const slotService = featureMatchService();
 			try {
-				await slotService.syncFeatureMatches(eventId, updatedEvent.numFeatureMatches);
+				const { clearedScreens } = await slotService.syncFeatureMatches(eventId, updatedEvent.numFeatureMatches);
+				// Each Deck Source a deleted Slot released, with no origin (ADR-0032).
+				for (const screen of clearedScreens)
+					await publication.screenUpdated({ eventId, entity: screen });
 			}
 			catch (error) {
 				// The count was written first. A Slot change that failed leaves the

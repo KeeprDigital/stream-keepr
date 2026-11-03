@@ -1,5 +1,5 @@
 import type { BatchItem } from 'drizzle-orm/batch';
-import type { DbFeatureMatch, DbFeatureMatchSession } from '~~/server/db/schema';
+import type { DbFeatureMatch, DbFeatureMatchSession, DbScreen } from '~~/server/db/schema';
 import type { CreateFeatureMatchInput, UpdateFeatureMatchInput } from '~~/shared/api';
 import type { ExternalSource } from '~~/shared/types/enums';
 import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
@@ -7,6 +7,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events, featureMatches, featureMatchSessions, matches } from '~~/server/db/schema';
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
+import { buildClearDeckSourceSlotsQuery } from '~~/server/services/screen';
 import { chunkRowsWithinParameterBudget, inJsonArray, observedValue } from '~~/server/utils/db';
 import { runCompensation, StateConflictError } from '~~/server/utils/errors';
 import { pickManualWritable } from '~~/server/utils/provenance';
@@ -357,18 +358,22 @@ export function featureMatchService() {
 		return await findById(updatedMatch.id, eventId);
 	};
 
-	const remove = async (id: number, eventId: number): Promise<boolean> => {
-		const result = await db
-			.delete(featureMatches)
-			.where(
-				and(
-					eq(featureMatches.id, id),
-					eq(featureMatches.eventId, eventId),
-				),
-			)
-			.returning();
+	/** Deletes the Slot, and in the same write releases every Deck Source showing a side of it. */
+	const remove = async (id: number, eventId: number): Promise<{ deleted: boolean; clearedScreens: DbScreen[] }> => {
+		const [clearedScreens, deleted] = await db.batch([
+			buildClearDeckSourceSlotsQuery(eventId, [id]),
+			db
+				.delete(featureMatches)
+				.where(
+					and(
+						eq(featureMatches.id, id),
+						eq(featureMatches.eventId, eventId),
+					),
+				)
+				.returning({ id: featureMatches.id }),
+		]);
 
-		return result.length > 0;
+		return { deleted: deleted.length > 0, clearedScreens };
 	};
 
 	const exists = async (id: number, eventId: number): Promise<boolean> => {
@@ -392,13 +397,15 @@ export function featureMatchService() {
 		return result?.count ?? 0;
 	};
 
-	const syncFeatureMatches = async (eventId: number, targetCount: number): Promise<{ created: DbFeatureMatch[]; deleted: number[] }> => {
+	/** Adds or deletes Slots to `targetCount`; a delete releases every Deck Source showing a side of a deleted Slot. */
+	const syncFeatureMatches = async (eventId: number, targetCount: number): Promise<{ created: DbFeatureMatch[]; deleted: number[]; clearedScreens: DbScreen[] }> => {
 		// Get current matches ordered by sortOrder, then id
 		const currentMatches = await findByEventId(eventId);
 
 		const currentCount = currentMatches.length;
 		const created: DbFeatureMatch[] = [];
 		const deleted: number[] = [];
+		let clearedScreens: DbScreen[] = [];
 
 		if (currentCount < targetCount) {
 			// Create new matches with sequential sortOrder after current max
@@ -446,19 +453,22 @@ export function featureMatchService() {
 			const matchesToDelete = sorted.slice(0, currentCount - targetCount);
 			const idsToDelete = matchesToDelete.map(m => m.id);
 
-			await db
-				.delete(featureMatches)
-				.where(
-					and(
-						eq(featureMatches.eventId, eventId),
-						inJsonArray(featureMatches.id, idsToDelete),
+			[clearedScreens] = await db.batch([
+				buildClearDeckSourceSlotsQuery(eventId, idsToDelete),
+				db
+					.delete(featureMatches)
+					.where(
+						and(
+							eq(featureMatches.eventId, eventId),
+							inJsonArray(featureMatches.id, idsToDelete),
+						),
 					),
-				);
+			]);
 
 			deleted.push(...idsToDelete);
 		}
 
-		return { created, deleted };
+		return { created, deleted, clearedScreens };
 	};
 
 	/**

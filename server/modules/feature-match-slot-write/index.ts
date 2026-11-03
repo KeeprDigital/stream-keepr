@@ -65,7 +65,11 @@ export function featureMatchSlotWriteModule() {
 	}
 
 	async function remove({ eventId, slotId, originConnectionId }: RemoveSlotParams): Promise<{ success: true }> {
-		const deleted = await slots.remove(slotId, eventId);
+		const { deleted, clearedScreens } = await slots.remove(slotId, eventId);
+		// Each released Deck Source first, and with no origin: the deleting client
+		// holds those Screens at their old version too (ADR-0032).
+		for (const screen of clearedScreens)
+			await publication.screenUpdated({ eventId, entity: screen });
 		if (!deleted) {
 			throw createError({ statusCode: 404, message: 'Feature match slot not found' });
 		}

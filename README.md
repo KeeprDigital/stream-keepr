@@ -455,7 +455,8 @@ The history starts at `0000_baseline.sql`, squashed before first ship while no
 database held data (ADR-0019). Its tail is hand-written — a seed row and the
 Screen Deck-source triggers — because drizzle-kit cannot generate either;
 `test/unit/server/db/baselineMigration.sqlite.test.ts` fails if a re-squash
-drops them.
+drops them. `0015_screen_deck_source_slot_side` replaced those triggers; a
+re-squash takes its version.
 
 The squash was a one-time transition. A D1 whose `_hub_migrations` still lists
 the old `0000`–`0031` names reads `0000_baseline` as unapplied and fails on its
