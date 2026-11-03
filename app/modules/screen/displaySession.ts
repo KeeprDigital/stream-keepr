@@ -178,6 +178,9 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	 */
 	const previewGuides = computed(() => isPreview.value && route.query.guides === '1');
 	const previewSafeAreas = computed(() => isPreview.value && route.query.safe === '1');
+	// The Feature Match Stress Dataset is gated the same way: a live Screen Output
+	// never carries the preview role, so it never shows stress values.
+	const previewStressDataset = computed(() => isPreview.value && route.query.stress === '1');
 	const assetCapability = computed(() => screenOutputAssetCapabilityFromHash(route.hash ?? ''));
 
 	const isControlScreen = computed(() => {
@@ -212,6 +215,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		isPreview,
 		previewGuides,
 		previewSafeAreas,
+		previewStressDataset,
 		assetCapability,
 		cardDataHealth,
 		themeTokens,

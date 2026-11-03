@@ -738,6 +738,10 @@ _Avoid_: Free-form role, camera name
 One fixed canonical set of Feature Match values per Card Game, chosen by the Event's Card Game, that a preview resolves a Feature Match Layout against when no Feature Match Slot is bound; a Theme preview, which has no Event, uses the Card Game the operator picks. The One Piece Card Game set names each side's Leader. It never appears on a live Screen Output.
 _Avoid_: Dummy data, test data
 
+**Feature Match Stress Dataset**:
+One fixed set of the longest plausible Feature Match values per Card Game, chosen by the Card Game as the Feature Match Sample Dataset is, including the live state: life totals, Sideboards, card names and the clock, or the longest Untimed Label for an Untimed Match. Only the Feature Match Overlay editor's stress toggle resolves a Feature Match Layout against it, and in the preview only, over a bound Feature Match Slot's live data too. The toggle is editor state and is never saved. It never appears on a live Screen Output.
+_Avoid_: worst-case data, overflow data, stress sample
+
 ## Relationships
 
 ### Tournament and Feature Match production

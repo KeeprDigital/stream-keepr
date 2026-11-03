@@ -5,6 +5,7 @@ import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { featureMatchSampleDataset } from '~~/shared/featureMatchSampleDataset';
+import { featureMatchStressDataset } from '~~/shared/featureMatchStressDataset';
 import { paintBroadcastGraphicThemeBindings } from '~~/shared/modules/graphics';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { featureMatchOverlayGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
@@ -30,7 +31,7 @@ import { screenMediaSourceUrl } from '~/utils/screenMediaSource';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
 import FeatureMatchOverlayFrameMedia from './FrameMedia.vue';
 
-const { isPreview, outputMode, previewGuides, previewSafeAreas, eventCanvas, sampleDataset } = useScreenContext();
+const { isPreview, outputMode, previewGuides, previewSafeAreas, previewStressDataset, eventCanvas, sampleDataset } = useScreenContext();
 const resolvedOutput = computed<FeatureMatchOverlayOutput>(() => outputMode?.value ?? 'overlay');
 const showPreviewGuides = computed(() => previewGuides?.value ?? false);
 const showSafeAreaGuides = computed(() => previewSafeAreas?.value ?? false);
@@ -190,48 +191,69 @@ const hostState = computed(() => ({
  * are always the same reading.
  */
 /**
- * The Feature Match sample of the Card Game previewed: a Theme preview's own,
- * which is of no Event, or else the Event being authored's.
+ * The Card Game previewed: a Theme preview's own, which is of no Event, or else
+ * the Event being authored's.
  */
-const sample = computed(() => featureMatchSampleDataset(sampleDataset ?? event.value?.game ?? 'mtg'));
+const previewGame = computed(() => sampleDataset ?? event.value?.game ?? 'mtg');
+const sample = computed(() => featureMatchSampleDataset(previewGame.value));
 
-const graphicsContext = computed(() => usesSampleDataset.value
-	? {
-			...sample.value.context,
-			// The sample supplies awkward player values, not a pretend Match Format.
-			// Its win indicators follow the Event being authored; a Theme preview
-			// has none, so they follow the sample's Card Game.
-			bestOf: sampleDataset
-				? sample.value.context.bestOf
-				: toFeatureMatchDefaults(event.value).bestOf,
-		}
-	: featureMatchGraphicsContext(hostState.value, sideboards.value));
+/**
+ * The editor's stress toggle (#743): the Feature Match Stress Dataset, over any
+ * bound Slot's live data (E18). The display session reads it only on an embedded
+ * preview, so a live Screen Output never shows it. Its clock is the Untimed Label
+ * when the Match previewed is an Untimed Match: the active Session's clock says
+ * so, or else the Event's Match Format.
+ */
+const stress = computed(() => previewStressDataset?.value
+	? featureMatchStressDataset(previewGame.value, {
+			untimed: (matchState.value?.clock?.type ?? toFeatureMatchDefaults(event.value).clockType) === 'untimed',
+		})
+	: null);
+/** Whether a fixed dataset, sample or stress, stands in for the live Match. */
+const usesFixedDataset = computed(() => Boolean(stress.value) || usesSampleDataset.value);
+
+const graphicsContext = computed(() => {
+	if (stress.value)
+		return stress.value.context;
+	return usesSampleDataset.value
+		? {
+				...sample.value.context,
+				// The sample supplies awkward player values, not a pretend Match Format.
+				// Its win indicators follow the Event being authored; a Theme preview
+				// has none, so they follow the sample's Card Game.
+				bestOf: sampleDataset
+					? sample.value.context.bestOf
+					: toFeatureMatchDefaults(event.value).bestOf,
+			}
+		: featureMatchGraphicsContext(hostState.value, sideboards.value);
+});
 
 // The per-item reveal trigger (#492): a sideboardRevealed edge plays the Deck
 // List Graphic Items' authored enter/exit recipes through the compositor's
 // per-item animation input. The trigger watches only the live context: the
-// sample dataset is a constant, and crossing between it and the live context
+// sample and stress datasets are constants, and crossing between one and the live context
 // is a data-source switch rather than an operator's reveal — the composable
 // treats an absent context as joining, so neither crossing plays motion.
 const { itemAnimation } = useFeatureMatchOverlaySideboardRevealAnimation(
 	config,
-	computed(() => usesSampleDataset.value ? undefined : graphicsContext.value),
+	computed(() => usesFixedDataset.value ? undefined : graphicsContext.value),
 );
 
 const compositorRenderModel = computed(() => resolveFeatureMatchOverlayCompositorRenderModel({
 	output: resolvedOutput.value,
-	game: usesSampleDataset.value
+	game: stress.value?.game ?? (usesSampleDataset.value
 		? sample.value.game
-		: event.value?.game,
+		: event.value?.game),
 	canvasWidth: canvasWidth.value,
 	canvasHeight: canvasHeight.value,
 	layout: config.value.layout,
 	// A preview with no Feature Match Slot behind it shows the canonical sample
-	// dataset rather than a layout of empty boxes. A live Screen Output never
-	// reaches this branch, because it is never a preview.
-	tokenValues: usesSampleDataset.value
+	// dataset rather than a layout of empty boxes, and the stress toggle shows the
+	// Stress Dataset over either. A live Screen Output never reaches either
+	// branch, because it is never a preview.
+	tokenValues: stress.value?.tokenValues ?? (usesSampleDataset.value
 		? sample.value.tokenValues
-		: featureMatchTokenValues(hostState.value),
+		: featureMatchTokenValues(hostState.value)),
 	featureMatch: graphicsContext.value,
 	itemAnimation: itemAnimation.value,
 	// Editor-only, and asked for only by an embedded preview. A live Screen Output

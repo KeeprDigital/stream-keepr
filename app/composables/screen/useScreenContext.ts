@@ -26,6 +26,11 @@ export interface ScreenContext {
 	previewGuides?: Ref<boolean>;
 	/** Show advisory action-safe and title-safe guides in embedded previews. */
 	previewSafeAreas?: Ref<boolean>;
+	/**
+	 * Resolve a Feature Match Overlay against the Feature Match Stress Dataset, over
+	 * any bound Feature Match Slot, in embedded previews only.
+	 */
+	previewStressDataset?: Ref<boolean>;
 	/** Opaque capability supplied to an unattended Screen Output via its URL fragment. */
 	assetCapability?: Ref<string | null>;
 	/**

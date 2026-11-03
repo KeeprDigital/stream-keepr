@@ -278,6 +278,26 @@ describe('feature Match Overlay preview aside — its preview frame', () => {
 		expect(outputUrls.some(url => /embed=preview|guides=1|safe=1/.test(url))).toBe(false);
 	});
 
+	// The stress toggle is editor state: it rides the preview's URL and is never written (#743).
+	it('asks its own frame for the Feature Match Stress Dataset while toggled on, and no output URL for it', async () => {
+		const wrapper = mountAside();
+		const toggle = () => wrapper.get('[data-testid="preview-stress-dataset"]');
+		const src = () => wrapper.get('iframe').attributes('src');
+
+		expect(toggle().attributes('aria-pressed')).toBe('false');
+		expect(src()).not.toContain('stress=1');
+		await toggle().trigger('click');
+		expect(toggle().attributes('aria-pressed')).toBe('true');
+		expect(src()).toContain('stress=1');
+		await toggle().trigger('click');
+		expect(src()).not.toContain('stress=1');
+
+		await toggle().trigger('click');
+		const outputUrls = wrapper.findAll('input').map(input => (input.element as HTMLInputElement).value).filter(Boolean);
+		expect(outputUrls.some(url => url.includes('stress=1'))).toBe(false);
+		expect(apiFetch).not.toHaveBeenCalled();
+	});
+
 	it('fits the preview to the canvas aspect ratio', () => {
 		const wrapper = mountAside({ canvasWidth: 1080, canvasHeight: 1920 });
 

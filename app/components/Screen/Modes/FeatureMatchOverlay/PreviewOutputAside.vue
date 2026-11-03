@@ -31,7 +31,9 @@ import {
  * one of them non-canvas.
  *
  * Guides are asked for on the preview's own URL, so a live Screen Output — which
- * never carries the preview embed role — can never draw one.
+ * never carries the preview embed role — can never draw one. So is the Feature
+ * Match Stress Dataset (#743): editor state, never written, and offered whether or
+ * not this session may author, since it changes nothing but what the preview shows.
  */
 
 const props = defineProps<{
@@ -71,6 +73,7 @@ const requestUrl = useRequestURL();
 const previewOutput = ref<FeatureMatchOverlayOutput>('overlay');
 const itemGuides = ref(true);
 const safeAreaGuides = ref(false);
+const stressDataset = ref(false);
 const previewFrame = ref<HTMLIFrameElement | null>(null);
 
 const outputBaseUrl = computed(() => import.meta.client
@@ -83,6 +86,7 @@ const previewUrl = computed(() => screenOutputPath({
 	embed: 'preview',
 	itemGuides: itemGuides.value,
 	safeAreaGuides: safeAreaGuides.value,
+	stressDataset: stressDataset.value,
 }));
 
 /**
@@ -254,9 +258,9 @@ watch(() => props.config, () => {
 	syncConfigToPreview();
 }, { deep: true });
 
-// Either switch changes the preview URL, which reloads the frame; the working
+// Each switch changes the preview URL, which reloads the frame; the working
 // state has to be pushed into the new document once it exists.
-watch([itemGuides, safeAreaGuides], () => {
+watch([itemGuides, safeAreaGuides, stressDataset], () => {
 	void nextTick(syncPreviewState);
 });
 
@@ -315,6 +319,18 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 			:canvas-height="canvasHeight"
 		>
 			<template #controls>
+				<UButton
+					size="sm"
+					icon="i-lucide-ruler"
+					:color="stressDataset ? 'primary' : 'neutral'"
+					:variant="stressDataset ? 'subtle' : 'outline'"
+					:aria-pressed="stressDataset"
+					title="Preview the longest plausible Feature Match values, over any bound Slot. Nothing is saved."
+					data-testid="preview-stress-dataset"
+					@click="() => { stressDataset = !stressDataset }"
+				>
+					Stress test
+				</UButton>
 				<UPopover>
 					<UButton
 						size="sm"
