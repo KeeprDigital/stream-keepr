@@ -3,6 +3,7 @@ import type { MetagameScope, MetagameViewMode } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMockEvent, createWireMockEvent } from '~~/test/helpers/fixtures';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
@@ -142,6 +143,27 @@ describe('useMetagameModeData', () => {
 		await flushPromises();
 
 		expect(mockFetch).toHaveBeenCalledWith(METAGAME_READ, expect.anything());
+	});
+
+	// The Event's Conversion Target (ADR-0061) reaches a Screen Output as an `event:updated` folded into its Event context.
+	it.each([
+		['archetype', 1],
+		['chart', 1],
+		['cards', 0],
+	] as const)('re-reads its %s breakdown %i times when its Event\'s Conversion Target changes', async (viewMode, reads) => {
+		mutableConfig.viewMode = viewMode;
+		const eventStore = useEventStore();
+		eventStore.setOutputEvent(createWireMockEvent({ id: 1 }));
+		makeMetagameModeData();
+		await flushPromises();
+		mockFetch.mockClear();
+
+		// `event:updated` carries the whole Event response.
+		const announced = createMockEvent({ id: 1, conversionMetric: 'minPoints', conversionThreshold: 0 });
+		eventStore.applyRemoteUpdated({ eventId: announced.id, timestamp: 0, event: announced });
+		await flushPromises();
+
+		expect(mockFetch).toHaveBeenCalledTimes(reads);
 	});
 
 	it.each([

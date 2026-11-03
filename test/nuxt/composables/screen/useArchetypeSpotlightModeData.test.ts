@@ -12,8 +12,6 @@ const defaultConfig = {
 	topN: 8,
 	minPoints: 9,
 	playerListId: undefined as number | undefined,
-	conversionMetric: 'topN' as 'topN' | 'minPoints',
-	conversionThreshold: 8,
 	board: 'full' as const,
 	cardLimit: 8,
 	excludedCardTypes: ['Land'],
@@ -32,7 +30,14 @@ const mockInteractive = ref(false);
 const mockScreenStore = {
 	updateModeConfig: vi.fn(),
 };
-const mockEventStore = reactive({ displayEvent: null as null | { displayRecordSeparator?: string; displayHideZeroDraws?: boolean } });
+const mockEventStore = reactive({
+	displayEvent: null as null | {
+		displayRecordSeparator?: string;
+		displayHideZeroDraws?: boolean;
+		conversionMetric?: 'topN' | 'minPoints';
+		conversionThreshold?: number;
+	},
+});
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
 }));
@@ -136,8 +141,9 @@ describe('useArchetypeSpotlightModeData', () => {
 		expect(isEmpty.value).toBe(true);
 	});
 
-	it('re-reads when the Archetype, scope or conversion target changes', async () => {
+	it('re-reads when the Archetype, scope or its Event\'s Conversion Target changes', async () => {
 		mutableConfig.archetypeId = 7;
+		mockEventStore.displayEvent = { conversionMetric: 'topN', conversionThreshold: 8 };
 		mockFetch.mockResolvedValue(answer());
 		makeSpotlight();
 		await flushPromises();
@@ -146,7 +152,8 @@ describe('useArchetypeSpotlightModeData', () => {
 		await flushPromises();
 		mutableConfig.scope = 'topN';
 		await flushPromises();
-		mutableConfig.conversionThreshold = 4;
+		// An `event:updated` folded into the held Event context.
+		mockEventStore.displayEvent = { conversionMetric: 'topN', conversionThreshold: 4 };
 		await flushPromises();
 
 		expect(mockFetch).toHaveBeenCalledTimes(4);
@@ -180,16 +187,10 @@ describe('useArchetypeSpotlightModeData', () => {
 		});
 	});
 
-	describe('conversionLabel', () => {
-		it.each([
-			['topN', 8, 'Top 8'],
-			['minPoints', 18, '18+ pts'],
-		] as const)('names a %s target of %d as the archetype page does', (conversionMetric, conversionThreshold, expected) => {
-			mutableConfig.conversionMetric = conversionMetric;
-			mutableConfig.conversionThreshold = conversionThreshold;
+	it('names its Event\'s Conversion Target', () => {
+		mockEventStore.displayEvent = { conversionMetric: 'minPoints', conversionThreshold: 18 };
 
-			expect(makeSpotlight().conversionLabel.value).toBe(expected);
-		});
+		expect(makeSpotlight().conversionLabel.value).toBe('18+ pts');
 	});
 
 	it('formats a pilot\'s record with the Event\'s record settings', () => {

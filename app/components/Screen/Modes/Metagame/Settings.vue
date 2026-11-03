@@ -3,7 +3,6 @@ import type {
 	MetagameArchetypeColumnKey,
 	MetagameCardColumnKey,
 	MetagameCardSortBy,
-	MetagameConversionMetric,
 	MetagameSortBy,
 	MetagameViewMode,
 } from '~~/shared/types/enums';
@@ -57,15 +56,11 @@ const viewModeOptions = [
 	{ label: 'Chart', value: 'chart' },
 ];
 
-const conversionMetricOptions = [
-	{ label: 'Top N', value: 'topN' },
-	{ label: 'Minimum Points', value: 'minPoints' },
-];
-
 const sortByOptions = [
 	{ label: 'Meta Share', value: 'metaShare' },
 	{ label: 'Count', value: 'count' },
 	{ label: 'Win Rate', value: 'winRate' },
+	{ label: 'Conversion Rate', value: 'conversionRate' },
 ];
 
 const cardSortByOptions = [
@@ -103,8 +98,10 @@ const activeColumns = computed<ActiveMetagameColumnConfig[]>(() =>
 		: withEveryColumn(config.value.archetypeColumns, defaults.archetypeColumns),
 );
 
+// The Event's Conversion Target matters while the Conversion Rate shows or orders the archetypes.
 const showsConversionRate = computed(() =>
-	config.value.archetypeColumns.some(column => column.key === 'conversionRate' && column.visible),
+	config.value.sortBy === 'conversionRate'
+	|| config.value.archetypeColumns.some(column => column.key === 'conversionRate' && column.visible),
 );
 
 // The table rows the Screen pages (none for a chart, which is one page), read and followed as its Screen Output reads and follows them, so
@@ -186,34 +183,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 					/>
 				</UFormField>
 
-				<template v-if="showsConversionRate">
-					<UFormField
-						:label="fields.conversionMetric.label"
-						description="What a player in the scope must reach to count as converted. It never narrows the scope."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<USelect
-							:model-value="config.conversionMetric"
-							:items="conversionMetricOptions"
-							class="w-48"
-							@update:model-value="updateConfig({ conversionMetric: $event as MetagameConversionMetric })"
-						/>
-					</UFormField>
-
-					<UFormField
-						:label="fields.conversionThreshold.label"
-						:description="config.conversionMetric === 'topN' ? 'Converted at this placement or better.' : 'Converted at this many match points or more.'"
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<UInputNumber
-							:model-value="config.conversionThreshold"
-							:min="fields.conversionThreshold.min"
-							:max="fields.conversionThreshold.max"
-							class="w-32"
-							@update:model-value="updateConfig({ conversionThreshold: Number($event) })"
-						/>
-					</UFormField>
-				</template>
+				<ScreenConversionTargetField v-if="showsConversionRate" :event-id="eventId" />
 
 				<UFormField
 					:label="fields.archetypeLimit.label"

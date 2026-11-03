@@ -393,7 +393,7 @@ describe('metagame API', () => {
 	// ──────────────── Archetype Spotlight Screen Output ────────────────
 
 	describe('archetype spotlight Screen Output read', () => {
-		it('answers the archetype page\'s numbers for the Screen\'s Archetype, scope and conversion target', async () => {
+		it('answers the archetype page\'s numbers for the Screen\'s Archetype and scope, and its Event\'s Conversion Target', async () => {
 			const screen = await $fetch<{ id: number }>(`/api/events/${eventId}/screens`, {
 				method: 'POST',
 				body: { name: 'Spotlight', slug: `spotlight-${eventId}`, currentMode: 'archetype-spotlight' },
@@ -414,7 +414,12 @@ describe('metagame API', () => {
 			// No Archetype picked: nothing to publish.
 			expect((await outputSpotlight()).status).toBe(404);
 
-			await configure({ archetypeId: archetypeId1, conversionMetric: 'topN', conversionThreshold: 2 });
+			// The Conversion Target is the Event's (ADR-0061).
+			await $fetch(`/api/events/${eventId}`, {
+				method: 'PATCH',
+				body: { conversionMetric: 'topN', conversionThreshold: 2 },
+			});
+			await configure({ archetypeId: archetypeId1 });
 			const whole = await outputSpotlight();
 			const page = (await $fetch(`/api/events/${eventId}/metagame/archetypes/${archetypeId1}`, {
 				query: {

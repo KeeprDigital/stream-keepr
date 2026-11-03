@@ -5,6 +5,7 @@ import type {
 import type { ScreenOutputMetagameResponse } from '~~/shared/types/screenOutputReads';
 import type { MetagameChartBar } from '~~/shared/utils/metagameChart';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
+import { eventConversionTarget } from '~~/shared/conversionTarget';
 import { projectMetagameChart } from '~~/shared/utils/metagameChart';
 import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
@@ -17,9 +18,12 @@ export function useMetagameModeData(context: ScreenContext) {
 	const config = useScreenModeConfig(context, 'metagame');
 
 	const outputReads = useScreenOutputReads(context);
+	const eventStore = useEventStore();
 
-	// The server derives the breakdown from the saved configuration (#604), so
-	// the read changes with the configuration fields it depends on.
+	// The server derives the breakdown from the saved configuration (#604) and,
+	// for an archetype breakdown, its Event's Conversion Target (ADR-0061), so the
+	// read changes with what it depends on. An `event:updated` folded into the
+	// held Event context changes the target.
 	const freshness = useScreenModeFreshness<ScreenOutputMetagameResponse | null>({
 		eventId,
 		source: () => outputReads.scopeKey.value && JSON.stringify([
@@ -34,6 +38,9 @@ export function useMetagameModeData(context: ScreenContext) {
 			config.value.cardSortBy,
 			config.value.limit,
 			config.value.archetypeLimit,
+			config.value.viewMode === 'cards'
+				? null
+				: eventConversionTarget(eventStore.displayEvent),
 		]),
 		read: () => outputReads.metagame(),
 		initialData: null,

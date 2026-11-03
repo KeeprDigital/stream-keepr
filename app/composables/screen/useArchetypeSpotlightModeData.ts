@@ -1,5 +1,6 @@
 import type { ScreenOutputArchetypePilot, ScreenOutputArchetypeSpotlightResponse } from '~~/shared/types/screenOutputReads';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
+import { conversionTargetLabel, eventConversionTarget } from '~~/shared/conversionTarget';
 import { archetypeSpotlightScreenQuery } from '~~/shared/utils/metagameQuery';
 import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
 import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
@@ -15,13 +16,17 @@ export function useArchetypeSpotlightModeData(context: ScreenContext) {
 	const outputReads = useScreenOutputReads(context);
 	const eventStore = useEventStore();
 
-	// The server derives the read from the saved configuration (#604), so the
-	// read changes with what it asks: the archetype detail query, and the
-	// projection's card fields.
+	// The Event's Conversion Target (ADR-0061): an `event:updated` folded into the
+	// held Event context changes it, and so the read.
+	const conversionTarget = computed(() => eventConversionTarget(eventStore.displayEvent));
+
+	// The server derives the read from the saved configuration (#604) and the
+	// Event's target, so the read changes with what it asks: the archetype detail
+	// query, and the projection's card fields.
 	const freshness = useScreenModeFreshness<ScreenOutputArchetypeSpotlightResponse | null>({
 		eventId,
 		source: () => {
-			const request = archetypeSpotlightScreenQuery(config.value);
+			const request = archetypeSpotlightScreenQuery(config.value, conversionTarget.value);
 			return outputReads.scopeKey.value && request
 				? JSON.stringify([
 						outputReads.scopeKey.value,
@@ -72,10 +77,8 @@ export function useArchetypeSpotlightModeData(context: ScreenContext) {
 			: `Spotlight: ${name}`;
 	});
 
-	/** The conversion target, named as the app's archetype page names it. */
-	const conversionLabel = computed(() => config.value.conversionMetric === 'topN'
-		? `Top ${config.value.conversionThreshold}`
-		: `${config.value.conversionThreshold}+ pts`);
+	/** The Event's Conversion Target, named as the app's archetype page names it. */
+	const conversionLabel = computed(() => conversionTargetLabel(conversionTarget.value));
 
 	function formatRecord(pilot: ScreenOutputArchetypePilot): string {
 		return formatPlayerRecord(pilot, eventStore.displayEvent);

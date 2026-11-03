@@ -617,3 +617,15 @@ export const UTableStub = defineComponent({
 		</tr>
 	</tbody></table>`,
 });
+
+/**
+ * An `<a>` pointing where the link does. Kept out of `nuxtUiStubs`, which suites
+ * rendering the real link spread: pass `{ ...nuxtUiStubs, NuxtLink: NuxtLinkStub }`.
+ */
+export const NuxtLinkStub = defineComponent({
+	name: 'NuxtLink',
+	props: {
+		to: { type: String, required: true },
+	},
+	template: '<a :href="to"><slot /></a>',
+});

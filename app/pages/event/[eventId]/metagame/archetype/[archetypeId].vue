@@ -2,6 +2,7 @@
 import type { TabsItem } from '@nuxt/ui';
 import type { BoardSelection, MetagameCardSortBy } from '~~/shared/types/enums';
 import type { ArchetypeDetailResponse } from '~~/shared/types/metagame';
+import { conversionTargetLabel } from '~~/shared/conversionTarget';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useMetagameClient } from '~/modules/metagame/client';
 
@@ -93,9 +94,7 @@ async function setActiveSection(section: string | number) {
 }
 
 // ── Stat strip ──
-const conversionLabel = computed(() => metagameStore.conversionMetric === 'topN'
-	? `Top ${metagameStore.conversionThreshold}`
-	: `${metagameStore.conversionThreshold}+ pts`);
+const conversionLabel = computed(() => conversionTargetLabel(metagameStore.conversionTarget));
 
 const stats = computed(() => {
 	if (!detail.value)
@@ -133,7 +132,7 @@ async function fetchDetail() {
 			eventStore.eventId!,
 			archetypeId.value,
 			metagameStore.scopeQuery,
-			{ board: archetypeCardBoardFilter.value, ...metagameStore.conversionQuery },
+			{ board: archetypeCardBoardFilter.value, ...metagameStore.conversionTarget },
 		),
 		{
 			latestKey: 'detail',
@@ -167,8 +166,8 @@ watch(
 		() => metagameStore.topN,
 		() => metagameStore.minPoints,
 		() => metagameStore.playerListId,
-		() => metagameStore.conversionMetric,
-		() => metagameStore.conversionThreshold,
+		() => metagameStore.conversionTarget.conversionMetric,
+		() => metagameStore.conversionTarget.conversionThreshold,
 		() => archetypeCardBoardFilter.value,
 		() => metagameStore.invalidationVersion,
 	],

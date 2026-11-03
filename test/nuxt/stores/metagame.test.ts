@@ -1,7 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '~~/test/helpers/deferred';
-import { createMockPlayer, createMockUiArchetype } from '~~/test/helpers/fixtures';
+import { createMockEvent, createMockPlayer, createMockUiArchetype } from '~~/test/helpers/fixtures';
 import { lastCallTo } from '~~/test/helpers/lastCallTo';
 import { transportFailure } from '~~/test/helpers/transportFailure';
 import { realtimeHandlersFor } from '~~/test/nuxt/helpers/realtimeEventSession';
@@ -34,6 +34,31 @@ describe('useMetagameStore', () => {
 		store = useMetagameStore();
 		store.$reset();
 		mockFetch.mockResolvedValue(makeSummaryData());
+	});
+
+	// The Conversion Target is the Event's (ADR-0061), so the page asks for the one another operator's write announces.
+	describe('conversionTarget', () => {
+		it('asks for the Event\'s Conversion Target, Top 8 before an Event loads, and follows its announced change', () => {
+			const eventStore = useEventStore();
+			eventStore.$reset();
+			expect(store.conversionTarget).toEqual({ conversionMetric: 'topN', conversionThreshold: 8 });
+
+			eventStore.setEvent({
+				...createMockEvent({ id: 3, conversionMetric: 'topN', conversionThreshold: 16 }),
+				talents: [],
+				meleeConfigured: false,
+			});
+			expect(store.conversionTarget).toEqual({ conversionMetric: 'topN', conversionThreshold: 16 });
+
+			// `event:updated` carries the whole Event response.
+			const announced = createMockEvent({ id: 3, conversionMetric: 'minPoints', conversionThreshold: 0 });
+			eventStore.applyRemoteUpdated({ eventId: announced.id, timestamp: 0, event: announced });
+			expect(store.conversionTarget).toEqual({ conversionMetric: 'minPoints', conversionThreshold: 0 });
+
+			// A store reset leaves the Event's target alone.
+			store.$reset();
+			expect(store.conversionTarget).toEqual({ conversionMetric: 'minPoints', conversionThreshold: 0 });
+		});
 	});
 
 	describe('loadSummary', () => {
@@ -112,16 +137,14 @@ describe('useMetagameStore', () => {
 			expect(store.invalidationVersion).toBe(version + 1);
 		});
 
-		it('follows a reset, which also restores the default scope and conversion target', () => {
+		it('follows a reset, which also restores the default scope', () => {
 			store.scope = 'topN';
-			store.conversionMetric = 'minPoints';
 			store.summaryData = makeSummaryData();
 			const version = store.invalidationVersion;
 
 			store.$reset();
 
 			expect(store.scopeQuery).toEqual({ scope: 'all' });
-			expect(store.conversionQuery).toEqual({ conversionMetric: 'topN', conversionThreshold: 8 });
 			expect(store.summaryData).toBeNull();
 			expect(store.invalidationVersion).toBe(version + 1);
 		});

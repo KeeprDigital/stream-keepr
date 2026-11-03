@@ -87,6 +87,7 @@ import type {
 	FeatureMatchOrientation,
 	Game,
 	MeleeLiveResultsStopReason,
+	MetagameConversionMetric,
 	PlayerDisplayMode,
 	PointsSystem,
 	PositionFormat,
@@ -149,6 +150,9 @@ export interface EventListResponse {
 	/** The Event Canvas every Screen of the Event is authored and rendered in (ADR-0051). */
 	canvasWidth: number;
 	canvasHeight: number;
+	/** The Event's Conversion Target, which every Metagame read counts Conversion Rate against (ADR-0061). */
+	conversionMetric: MetagameConversionMetric;
+	conversionThreshold: number;
 	featureMatchDefaultBestOf: number;
 	featureMatchDefaultStartingLife: number;
 	featureMatchDefaultClockType: ClockType;
@@ -227,6 +231,9 @@ export type UpdateEventInput = Partial<Omit<CreateEventInput, 'game'>> & {
 	commentator2TalentId?: number | null;
 	/** Event Presentation Settings: no Theme is the Default Theme. */
 	themeId?: string | null;
+	/** The Conversion Target, written whole (ADR-0061). */
+	conversionMetric?: MetagameConversionMetric;
+	conversionThreshold?: number;
 };
 
 export interface MeleeConfigInput {
