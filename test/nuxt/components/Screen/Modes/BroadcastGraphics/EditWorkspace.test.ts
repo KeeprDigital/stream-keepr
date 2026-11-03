@@ -2,8 +2,9 @@ import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { defineComponent, h, ref } from 'vue';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { defineComponent, h, nextTick, ref } from 'vue';
+import { shape, surfaceStyle, text } from '~~/test/helpers/graphicsComposition';
 import EditWorkspace from '~/components/Screen/Modes/BroadcastGraphics/EditWorkspace.vue';
 
 enableAutoUnmount(afterEach);
@@ -18,6 +19,8 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	onAirGraphicIds: () => onAirIds.value,
 }));
 mockNuxtImport('useBroadcastGraphicsPlayoutClock', () => () => ref(1_000));
+const mockToastAdd = vi.fn();
+mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
 
 // Where the Broadcast Graphic Template library is allowed to appear.
 
@@ -329,6 +332,92 @@ describe('broadcastGraphicsEditWorkspace', () => {
 
 			expect(wrapper.get('[data-testid="edit-lease-notice"]').text()).toContain('Marcus Angel');
 			expect(wrapper.find('[data-testid="edit-lease-take-over"]').exists()).toBe(true);
+		});
+	});
+
+	/** The clipboard module owns the paste rules; the workspace wires keys to them under the lease. */
+	describe('copy and paste', () => {
+		const panel = surfaceStyle({
+			fill: { type: 'solid', color: '#ff0000' },
+		});
+		const name = text('name', { surfaceStyle: panel });
+		const bed = shape('bed');
+		const graphics: BroadcastGraphicConfig[] = [
+			{
+				id: 'lower-third',
+				name: 'Lower Third',
+				items: [bed, name],
+			},
+			{ id: 'slate', name: 'Slate', items: [] },
+		];
+
+		async function press(code: string, init: KeyboardEventInit = {}) {
+			window.dispatchEvent(new KeyboardEvent('keydown', {
+				code,
+				metaKey: true,
+				bubbles: true,
+				cancelable: true,
+				...init,
+			}));
+			await flushPromises();
+		}
+
+		beforeEach(() => {
+			localStorage.clear();
+			mockToastAdd.mockClear();
+		});
+
+		it('copies the selected Graphic Item and pastes it into the selected Broadcast Graphic, selecting the copy', async () => {
+			const wrapper = await mountWorkspace({
+				graphics,
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+			await press('KeyC');
+			await wrapper.setProps({
+				selectedTarget: { type: 'graphic', graphicId: 'slate' },
+			});
+
+			await press('KeyV');
+
+			const [next] = wrapper.emitted('update:graphics')!.at(-1) as [BroadcastGraphicConfig[]];
+			const pasted = next.find(graphic => graphic.id === 'slate')!.items;
+			expect(pasted).toMatchObject([
+				{ type: 'text', label: 'name', x: name.x + 20 },
+			]);
+			expect(wrapper.emitted('update:selectedTarget')!.at(-1)).toEqual([
+				{ type: 'item', graphicId: 'slate', itemId: pasted[0]!.id },
+			]);
+		});
+
+		it('pastes a copied style onto the selected Graphic Item with ⌘⌥V', async () => {
+			const wrapper = await mountWorkspace({
+				graphics,
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+			await press('KeyC', { altKey: true });
+			await wrapper.setProps({
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bed' },
+			});
+
+			await press('KeyV', { altKey: true });
+
+			const [next] = wrapper.emitted('update:graphics')!.at(-1) as [BroadcastGraphicConfig[]];
+			expect(next[0]!.items[0]).toMatchObject({ id: 'bed', surfaceStyle: panel });
+		});
+
+		it('copies for an observing session, which cannot paste', async () => {
+			const wrapper = await mountWorkspace({
+				graphics,
+				writable: false,
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			await press('KeyC');
+			await press('KeyV');
+			await nextTick();
+
+			expect(mockToastAdd).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'Copied 1 layer' }));
+			expect(wrapper.emitted('update:graphics')).toBeUndefined();
 		});
 	});
 });

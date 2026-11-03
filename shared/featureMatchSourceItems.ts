@@ -20,6 +20,15 @@ export const FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION = 1;
 export const FEATURE_MATCH_SOURCE_ITEM_LABEL = 'Source';
 export const FEATURE_MATCH_SOURCE_ITEM_ICON = 'i-lucide-video';
 
+/**
+ * How many external video source areas one Feature Match Layout may frame.
+ *
+ * Its own cap rather than a share of the Graphic Item budget: a Source Item is a
+ * host-owned Definition on its own list, and a broadcast has as many cameras as it
+ * has cameras.
+ */
+export const MAX_FEATURE_MATCH_SOURCE_ITEMS = 20;
+
 export function createFeatureMatchSourceItem(id: string): FeatureMatchSourceItemConfig {
 	return {
 		id,

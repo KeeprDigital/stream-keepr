@@ -4,6 +4,7 @@ import type { EditHistory } from '~/modules/feature-match-overlay/editHistory';
 import type { FeatureMatchLayoutEditorLayer, FeatureMatchLayoutEditorSelection } from '~/modules/feature-match-overlay/editorSelection';
 import type { LayerPlace } from '~/modules/feature-match-overlay/layerDrag';
 import type { LayerSelection } from '~/modules/feature-match-overlay/layerSelection';
+import type { ClipboardPasteRefusal, CopiedLayers, CopiedStyle } from '~/modules/graphics/clipboard';
 import {
 	addGraphicGroupChild,
 	addGraphicItem,
@@ -13,6 +14,7 @@ import {
 	moveGraphicItem,
 	moveGraphicItemToEdge,
 	patchGraphicItem,
+	replaceGraphicItemById,
 } from '~~/shared/modules/graphics';
 import { randomUuid } from '~~/shared/utils/uuid';
 import { emptyEditHistory, recordEdit, redoEdit, undoEdit } from '~/modules/feature-match-overlay/editHistory';
@@ -28,6 +30,7 @@ import {
 } from '~/modules/feature-match-overlay/layerSelection';
 import * as layoutWriter from '~/modules/feature-match-overlay/layout';
 import { nudgeRect } from '~/modules/graphics/canvasManipulation';
+import { copyGraphicLayers, copyGraphicStyle, pasteFeatureMatchLayers, pasteGraphicStyle } from '~/modules/graphics/clipboard';
 
 /** What one undo step restores: the authored layout and the preset it started from. */
 interface LayoutSnapshot {
@@ -490,6 +493,68 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		patchLayers(layers.value.map(layer => [layer, patch] as const), { coalesce: 'fields' });
 	}
 
+	/* ── Clipboard (#746) ──────────────────────────── */
+
+	/** Copy every selected layer. Copying is not a write, so an observer may. */
+	function copy(): CopiedLayers | null {
+		return copyGraphicLayers('feature-match-overlay', config.value.layout, layers.value);
+	}
+
+	/**
+	 * Paste copied layers as one undo step, into the Graphic Group the selection is
+	 * or sits in when nothing copied is a group, and select the copies. Answers why
+	 * a paste was refused, or null.
+	 */
+	function paste(copied: CopiedLayers): ClipboardPasteRefusal | null {
+		const outcome = pasteFeatureMatchLayers(copied, config.value.layout, {
+			groupId: selectedGroup.value?.id,
+			nextId: randomUuid,
+		});
+		if (!outcome.ok)
+			return outcome.refusal;
+		if (edit({ layout: outcome.layout }))
+			layerSelection.value = { layers: outcome.pasted, anchor: outcome.pasted.at(-1) ?? null };
+		return null;
+	}
+
+	/** Copy the style of the one selected Graphic Item. */
+	function copyStyle(): CopiedStyle | null {
+		const current = selection.value;
+		const item = current.type === 'item'
+			? findGraphicItem(config.value.layout.composition, current.itemId)?.item
+			: undefined;
+		return item
+			? copyGraphicStyle('feature-match-overlay', item)
+			: null;
+	}
+
+	/**
+	 * Paste a copied style onto every selected Graphic Item it fits, as one undo
+	 * step. Answers why it fits none of them, or null.
+	 */
+	function pasteStyle(copied: CopiedStyle): ClipboardPasteRefusal | null {
+		let refusal: ClipboardPasteRefusal = { reason: 'no-destination' };
+		let pasted = false;
+		const composition = layers.value.reduce((next, layer) => {
+			const item = layer.type === 'item'
+				? findGraphicItem(next, layer.itemId)?.item
+				: undefined;
+			if (!item)
+				return next;
+			const outcome = pasteGraphicStyle(copied, 'feature-match-overlay', item);
+			if (!outcome.ok) {
+				refusal = outcome.refusal;
+				return next;
+			}
+			pasted = true;
+			return replaceGraphicItemById(next, outcome.item);
+		}, config.value.layout.composition);
+		if (!pasted)
+			return refusal;
+		editComposition(() => composition);
+		return null;
+	}
+
 	return {
 		writable,
 		selection,
@@ -527,6 +592,10 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		setLayersGeometry,
 		setRotation,
 		nudge,
+		copy,
+		paste,
+		copyStyle,
+		pasteStyle,
 	};
 }
 

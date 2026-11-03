@@ -4,10 +4,21 @@ import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/typ
 import type { GraphicsAuthoringLeaseStatus } from '~/composables/screen/useGraphicsAuthoringLease';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { Screen } from '~/types';
-import { BROADCAST_GRAPHICS_HOST_CONTRACT } from '~~/shared/modules/graphics';
+import { useEventListener } from '@vueuse/core';
+import { BROADCAST_GRAPHICS_HOST_CONTRACT, replaceBroadcastGraphic, replaceGraphicItemById } from '~~/shared/modules/graphics';
+import { randomUuid } from '~~/shared/utils/uuid';
 import GraphicsCompositorInspector from '~/components/Graphics/Compositor/Inspector.vue';
 import GraphicsCompositorPreview from '~/components/Graphics/Compositor/Preview.vue';
 import GraphicsCompositorStackTree from '~/components/Graphics/Compositor/StackTree.vue';
+import { hasTextSelection, useGraphicsClipboard } from '~/composables/useGraphicsClipboard';
+import {
+	copyGraphicLayers,
+	copyGraphicStyle,
+	pasteBroadcastGraphicLayers,
+	pasteGraphicStyle,
+} from '~/modules/graphics/clipboard';
+import { graphicsSelectionGraphicId, resolveGraphicsSelection } from '~/modules/graphics/selection';
+import { isTypingTarget } from '~/utils/typingTarget';
 
 /**
  * The Edit workspace of a Broadcast Graphics Screen: the shared compositor's
@@ -146,6 +157,87 @@ const visibleSaveState = computed(() => {
 		return null;
 	return props.saveState;
 });
+
+/*
+ * Copy and paste (#746): ⌘C and ⌘V copy the selected Graphic Item and paste it
+ * into the selected Broadcast Graphic, on this Screen or another; ⌘⌥C and ⌘⌥V do
+ * the same for its style. What is copied is kept in this browser. Copying is not
+ * a write, so an observer may; pasting is, so only the lease holder does.
+ */
+const clipboard = useGraphicsClipboard('broadcast-graphics');
+const selection = computed(() => resolveGraphicsSelection(props.graphics, props.selectedTarget));
+
+function copy(style: boolean): boolean {
+	const current = selection.value;
+	if (current.kind !== 'item')
+		return false;
+	return style
+		? clipboard.copyStyle(copyGraphicStyle('broadcast-graphics', current.item))
+		: clipboard.copyLayers(copyGraphicLayers('broadcast-graphics', { composition: current.graphic }, [
+				{ type: 'item', itemId: current.item.id },
+			]));
+}
+
+/** Into the selected Broadcast Graphic, and into the Graphic Group the selection is or sits in. */
+async function pasteLayers() {
+	const copied = await clipboard.layersToPaste();
+	const graphicId = graphicsSelectionGraphicId(props.selectedTarget);
+	if (!copied || !canAuthor.value)
+		return;
+	const current = selection.value;
+	const outcome = pasteBroadcastGraphicLayers(copied, { graphics: props.graphics, graphicId: graphicId ?? '' }, {
+		groupId: current.kind === 'item'
+			? current.group?.id ?? current.item.id
+			: undefined,
+		nextId: randomUuid,
+	});
+	if (!outcome.ok) {
+		clipboard.refuse(outcome.refusal);
+		return;
+	}
+	emit('update:graphics', outcome.graphics);
+	const itemId = outcome.pasted.at(-1);
+	if (graphicId && itemId)
+		emit('update:selectedTarget', { type: 'item', graphicId, itemId });
+}
+
+async function pasteStyle() {
+	const copied = await clipboard.styleToPaste();
+	const current = selection.value;
+	if (!copied || !canAuthor.value)
+		return;
+	if (current.kind !== 'item') {
+		clipboard.refuse({ reason: 'no-destination' });
+		return;
+	}
+	const outcome = pasteGraphicStyle(copied, 'broadcast-graphics', current.item);
+	if (!outcome.ok) {
+		clipboard.refuse(outcome.refusal);
+		return;
+	}
+	emit('update:graphics', replaceBroadcastGraphic(props.graphics, replaceGraphicItemById(current.graphic, outcome.item)));
+}
+
+function handleKeydown(event: KeyboardEvent) {
+	const mod = event.metaKey || event.ctrlKey;
+	if (!mod || event.shiftKey || event.defaultPrevented || isTypingTarget(event.target))
+		return;
+	// By code: ⌥ changes the character a key types.
+	if (event.code === 'KeyC' && !hasTextSelection()) {
+		if (copy(event.altKey))
+			event.preventDefault();
+	}
+	else if (event.code === 'KeyV' && canAuthor.value) {
+		event.preventDefault();
+		void (event.altKey
+			? pasteStyle()
+			: pasteLayers());
+	}
+}
+
+useEventListener(import.meta.client
+	? window
+	: undefined, 'keydown', handleKeydown);
 </script>
 
 <template>

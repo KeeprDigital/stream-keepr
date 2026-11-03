@@ -577,6 +577,24 @@ export const MAX_GRAPHIC_INPUT_CHOICE_LENGTH = 40;
 export const MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC = 8;
 export const MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN = 40;
 
+/**
+ * The Graphic Item caps the write path enforces, here so an authoring surface can
+ * refuse a paste that would pass one (#746). Why each number is what it is stays
+ * beside the schema in `server/schemas/api/screen.ts`, and ADR-0007.
+ */
+export const MAX_GRAPHIC_GROUP_CHILDREN = 50;
+/** Top-level Graphic Items in one Broadcast Graphic. */
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC = 100;
+/**
+ * The same bound, named for the other host that composes the same Graphic Items,
+ * and counting Graphic Group children. Deliberately tied rather than merely equal:
+ * a render-cost ceiling that differs between two hosts of the same compositor is
+ * the per-ticket divergence #99 exists to end.
+ */
+export const MAX_GRAPHIC_ITEMS_PER_FEATURE_MATCH_LAYOUT = MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC;
+/** Graphic Items on one Broadcast Graphics Screen in total, Graphic Group children included (ADR-0007). */
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 300;
+
 /** One selectable option of a choice Graphic Input. */
 export interface GraphicInputChoiceOption {
 	/** The stored value. Stable, so renaming the label never invalidates a value. */
