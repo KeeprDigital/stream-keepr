@@ -18,7 +18,7 @@ import { SAMPLE_ID, sampleDeckCardData, useSampleScreenOutputReadRepository } fr
 export function useScreenOutputReads() {
 	const { screen, eventId, assetCapability, sampleDataset } = useScreenContext();
 	const repository = sampleDataset
-		? useSampleScreenOutputReadRepository()
+		? useSampleScreenOutputReadRepository(sampleDataset)
 		: useScreenOutputReadRepository();
 	const cardData = sampleDataset
 		? sampleDeckCardData

@@ -1,30 +1,40 @@
-import type { PhaseResponse, PlayerResponse, RoundResponse } from '~~/shared/api';
+import type { FeatureMatchResponse, PhaseResponse, PlayerResponse, RoundResponse } from '~~/shared/api';
+import type { OpFeatureMatchSampleSide } from '~~/shared/featureMatchSampleDataset';
 import type { FoundationTokenName } from '~~/shared/modules/theme';
 import type { BracketEntrant, BracketMatchInput } from '~~/shared/modules/top-cut-bracket';
 import type { BroadcastGraphicsLiveSessionResponse } from '~~/shared/types/broadcastGraphicsLiveSession';
 import type { MtgCard } from '~~/shared/types/card/mtg';
-import type { ScreenMode } from '~~/shared/types/enums';
+import type { OpScreenCard } from '~~/shared/types/card/op';
+import type { Game, ScreenMode } from '~~/shared/types/enums';
 import type { BroadcastGraphicConfig, GraphicItemConfig, TextGraphicItemConfig } from '~~/shared/types/graphics';
 import type { GraphicThemeSlot } from '~~/shared/types/graphicThemeBindings';
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 import type { ModeConfigsMap } from '~~/shared/types/screenConfig';
+import type { ScreenOutputFeatureMatchDeckListResponse, ScreenOutputFeatureMatchResponse } from '~~/shared/types/screenOutputReads';
 import type { ScryfallCardFetchResult } from '~/composables/data/useScryfallBatch';
 import type { ScreenOutputReadScope, useScreenOutputReadRepository } from '~/composables/repositories/useScreenOutputReadRepository';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
+import { OP_FEATURE_MATCH_SAMPLE_SIDES } from '~~/shared/featureMatchSampleDataset';
 import { bindGraphicThemeOwner, DEFAULT_GRAPHIC_THEME_TOKENS, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { deriveTopCutBracket } from '~~/shared/modules/top-cut-bracket';
+import { formatOpColors, opPrintingImageUrl } from '~~/shared/utils/card/op';
 import { scryfallNameKey } from '~/composables/data/useScryfallBatch';
 
 /**
  * The Screen Mode Sample Dataset: one fixed canonical set of Event Data a Theme
- * preview renders every Screen Mode against. The Feature Match Sample Dataset
- * is its prior art.
+ * preview renders every Screen Mode against, one per Card Game. The Feature
+ * Match Sample Dataset is its prior art.
  *
  * It is canonical, not plausible. Two operators judging one Theme see the same
  * preview, and a token edit changes nothing else, so the values are constants
  * here, not sampled from what the installation holds. They are awkward the way
  * real ones are: a long name beside a short one, a record with a draw in it, a
  * Player who climbed and one who fell.
+ *
+ * A Magic Event's sample has Players, Rounds, results and a Metagame. A One
+ * Piece Card Game Event models none of them (ADR-0057), so its sample is one
+ * Feature Match Slot whose sides hold Leaders and a Feature Match Deck List,
+ * and a Printing on Card Spotlight: what its Screen Modes show.
  *
  * It reaches a rendering only through a Theme preview's Screen context
  * (`createScreenModeSampleContext`), which no Screen Output builds. Putting
@@ -478,44 +488,49 @@ function sampleText(id: string, text: string, fontSize: number, rect: SampleRect
 const LEADER = PLAYERS[0]!;
 
 /**
- * Broadcast Graphics' sample: a lower third naming the sample's leader, every
- * part of it bound to a Foundation Token, so it shows the Theme as a placed
- * graphic would. It is no Broadcast Graphic Template and sits in no library:
- * only a Theme preview's Screen holds it.
+ * Broadcast Graphics' sample: a lower third naming the sample's first player,
+ * every part of it bound to a Foundation Token, so it shows the Theme as a
+ * placed graphic would. It is no Broadcast Graphic Template and sits in no
+ * library: only a Theme preview's Screen holds it.
  */
-const SAMPLE_LOWER_THIRD: BroadcastGraphicConfig = withThemeBindings({
-	id: 'sample-lower-third',
-	name: 'Sample lower third',
-	items: [
-		withThemeBindings(sampleShape('sample-panel', {
-			x: 96,
-			y: 828,
-			width: 960,
-			height: 156,
-		}), { surfaceStyle: 'panel', geometry: 'panel-shape' }),
-		withThemeBindings(sampleShape('sample-accent', {
-			x: 96,
-			y: 828,
-			width: 14,
-			height: 156,
-		}), { 'surfaceStyle.fill': 'accent-fill' }),
-		withThemeBindings(sampleText('sample-name', LEADER.name, 56, {
-			x: 140,
-			y: 846,
-			width: 880,
-			height: 72,
-		}), { 'typography': 'heading', 'typography.color': 'text-primary' }),
-		withThemeBindings(
-			sampleText('sample-deck', `${deckOf(0).name} · ${LEADER.wins}-${LEADER.losses}-${LEADER.draws}`, 34, {
+function sampleLowerThird(name: string, detail: string): BroadcastGraphicConfig {
+	return withThemeBindings({
+		id: 'sample-lower-third',
+		name: 'Sample lower third',
+		items: [
+			withThemeBindings(sampleShape('sample-panel', {
+				x: 96,
+				y: 828,
+				width: 960,
+				height: 156,
+			}), { surfaceStyle: 'panel', geometry: 'panel-shape' }),
+			withThemeBindings(sampleShape('sample-accent', {
+				x: 96,
+				y: 828,
+				width: 14,
+				height: 156,
+			}), { 'surfaceStyle.fill': 'accent-fill' }),
+			withThemeBindings(sampleText('sample-name', name, 56, {
 				x: 140,
-				y: 920,
+				y: 846,
 				width: 880,
-				height: 48,
-			}),
-			{ 'typography': 'body', 'typography.color': 'text-secondary' },
-		),
-	],
-}, { 'animation.enter': 'motion-enter', 'animation.update': 'motion-update', 'animation.exit': 'motion-exit' });
+				height: 72,
+			}), { 'typography': 'heading', 'typography.color': 'text-primary' }),
+			withThemeBindings(
+				sampleText('sample-deck', detail, 34, {
+					x: 140,
+					y: 920,
+					width: 880,
+					height: 48,
+				}),
+				{ 'typography': 'body', 'typography.color': 'text-secondary' },
+			),
+		],
+	}, { 'animation.enter': 'motion-enter', 'animation.update': 'motion-update', 'animation.exit': 'motion-exit' });
+}
+
+/** The leading Player, by their deck and record. */
+const SAMPLE_LOWER_THIRD = sampleLowerThird(LEADER.name, `${deckOf(0).name} · ${LEADER.wins}-${LEADER.losses}-${LEADER.draws}`);
 
 /** The sample Live Session: the lower third on air, long since settled at rest. */
 const SAMPLE_LIVE_SESSION: BroadcastGraphicsLiveSessionResponse = {
@@ -706,36 +721,142 @@ const ANSWERS = {
 } satisfies { [K in keyof SampleReadRepository]?: Awaited<ReturnType<SampleReadRepository[K]>> };
 
 /**
- * Each mode's configuration under the sample: what it selects from the
- * dataset, where its defaults select nothing, and Broadcast Graphics' stack.
+ * The One Piece sample's Feature Match Slot. A preview holds it apart from the
+ * Feature Match store, whose Slots are an Event's, so its id need only be one
+ * a Deck Source can name.
  */
-const SCREEN_MODE_SAMPLE_CONFIGS: ModeConfigsMap = {
-	'broadcast-graphics': {
-		graphics: [SAMPLE_LOWER_THIRD],
+const OP_SAMPLE_SLOT_ID = 1;
+const OP_SAMPLE_DECK_LIST_ID = 1;
+
+/** The side holding the sample's Deck List: the first, in Slot order. */
+const [OP_DECK_SIDE] = OP_FEATURE_MATCH_SAMPLE_SIDES;
+
+/** Every card of a side's Deck List but its Leader. */
+function mainboardCount(side: OpFeatureMatchSampleSide): number {
+	return side.deckList
+		.filter(entry => entry.card?.category !== 'leader')
+		.reduce((sum, entry) => sum + entry.quantity, 0);
+}
+
+/** A sample side's slot data, as the operator typed and pasted it. */
+function opSlotData(side: OpFeatureMatchSampleSide) {
+	return {
+		name: side.name,
+		pronouns: side.pronouns,
+		lgs: side.lgs,
+		gameData: {
+			type: 'op' as const,
+			leader: side.leader,
+			featureMatchDeckList: side.deckList.length > 0
+				? {
+						id: OP_SAMPLE_DECK_LIST_ID,
+						mainboardCount: mainboardCount(side),
+					}
+				: null,
+		},
+	};
+}
+
+const OP_SAMPLE_SLOT: FeatureMatchResponse = {
+	id: OP_SAMPLE_SLOT_ID,
+	eventId: SAMPLE_ID,
+	matchId: null,
+	externalId: null,
+	externalSource: null,
+	tableNumber: 1,
+	roundName: 'Round 6',
+	formatName: null,
+	player1Id: null,
+	player2Id: null,
+	player1Data: opSlotData(OP_FEATURE_MATCH_SAMPLE_SIDES[0]),
+	player2Data: opSlotData(OP_FEATURE_MATCH_SAMPLE_SIDES[1]),
+	bestOf: 1,
+	sortOrder: 0,
+	playerDisplayMode: 'score',
+	activeSessionId: null,
+	activeSession: null,
+	createdAt: SAMPLE_TIMESTAMP,
+	updatedAt: SAMPLE_TIMESTAMP,
+};
+
+/** Card Spotlight's Screen Card: one alt-art Printing. Untimed, so it stays up as long as the preview does. */
+const OP_SAMPLE_SCREEN_CARD: OpScreenCard = {
+	game: 'op',
+	id: 'OP05-119_p1',
+	number: 'OP05-119',
+	name: 'Monkey.D.Luffy',
+	set: 'OP-05',
+	printingKind: 'alt-art',
+	imageUrl: opPrintingImageUrl('OP05-119_p1'),
+};
+
+/** The first side, by their Leader and its colours. */
+const OP_SAMPLE_LOWER_THIRD = sampleLowerThird(
+	OP_DECK_SIDE.name,
+	`${OP_DECK_SIDE.leader.name} · ${formatOpColors(OP_DECK_SIDE.leader.colors)}`,
+);
+
+/** What the One Piece dataset answers for each read a One Piece Event's Screen Modes make. */
+const OP_ANSWERS = {
+	card: { card: OP_SAMPLE_SCREEN_CARD, revision: 1 },
+	liveSession: SAMPLE_LIVE_SESSION,
+	featureMatchSlot: {
+		slot: OP_SAMPLE_SLOT,
+		match: null,
+		round: null,
+		phase: null,
+	} satisfies ScreenOutputFeatureMatchResponse,
+	featureMatchDeckList: {
+		id: OP_SAMPLE_DECK_LIST_ID,
+		slotId: OP_SAMPLE_SLOT_ID,
+		entries: OP_DECK_SIDE.deckList,
+		leaderNumber: OP_DECK_SIDE.leader.number,
+		mainboardCount: mainboardCount(OP_DECK_SIDE),
+	} satisfies ScreenOutputFeatureMatchDeckListResponse,
+};
+
+/**
+ * Each mode's configuration under each Card Game's sample: what it selects
+ * from the dataset, where its defaults select nothing, and Broadcast Graphics'
+ * stack.
+ */
+const SCREEN_MODE_SAMPLE_CONFIGS: Record<Game, ModeConfigsMap> = {
+	mtg: {
+		'broadcast-graphics': {
+			graphics: [SAMPLE_LOWER_THIRD],
+		},
+		'deck': {
+			deckSource: { type: 'player', playerId: player(0).id },
+		},
+		'pairings': { roundId: ROUND_8.id },
+		'top-cut': { phaseId: TOP_CUT.id, showSeeds: true, showArchetypes: true },
+		'player-history': { playerId: player(0).id },
+		'archetype-spotlight': { archetypeId: SPOTLIT.id },
+		'head-to-head': { playerSource: 'players', player1Id: player(0).id, player2Id: player(1).id },
+		'standings': {
+			columns: [
+				{ key: 'position', visible: true },
+				{ key: 'name', visible: true },
+				{ key: 'record', visible: true },
+				{ key: 'points', visible: true },
+				{ key: 'deck', visible: true },
+				{ key: 'positionChange', visible: true },
+			],
+		},
 	},
-	'deck': {
-		deckSource: { type: 'player', playerId: player(0).id },
-	},
-	'pairings': { roundId: ROUND_8.id },
-	'top-cut': { phaseId: TOP_CUT.id, showSeeds: true, showArchetypes: true },
-	'player-history': { playerId: player(0).id },
-	'archetype-spotlight': { archetypeId: SPOTLIT.id },
-	'head-to-head': { playerSource: 'players', player1Id: player(0).id, player2Id: player(1).id },
-	'standings': {
-		columns: [
-			{ key: 'position', visible: true },
-			{ key: 'name', visible: true },
-			{ key: 'record', visible: true },
-			{ key: 'points', visible: true },
-			{ key: 'deck', visible: true },
-			{ key: 'positionChange', visible: true },
-		],
+	op: {
+		'broadcast-graphics': {
+			graphics: [OP_SAMPLE_LOWER_THIRD],
+		},
+		'deck': {
+			deckSource: { type: 'featureMatchSlot', slotId: OP_SAMPLE_SLOT_ID, side: 'player1' },
+		},
 	},
 };
 
-/** The sample configuration of `mode`, or its defaults where it needs none. */
-export function screenModeSampleConfigs(mode: ScreenMode): ModeConfigsMap {
-	const config = SCREEN_MODE_SAMPLE_CONFIGS[mode];
+/** The sample configuration of `mode` under `game`'s sample, or its defaults where it needs none. */
+export function screenModeSampleConfigs(mode: ScreenMode, game: Game = 'mtg'): ModeConfigsMap {
+	const config = SCREEN_MODE_SAMPLE_CONFIGS[game][mode];
 	return config
 		? { [mode]: config }
 		: {};
@@ -747,18 +868,39 @@ function notInSample(resource: string): never {
 }
 
 /**
- * The Screen Output read repository a Theme preview reads from: every read
- * answers the dataset, a fresh copy each time, and nothing leaves the browser.
+ * The Screen Output read repository a Theme preview of `game` reads from:
+ * every read answers that Card Game's dataset, a fresh copy each time, and
+ * nothing leaves the browser.
  */
-export function useSampleScreenOutputReadRepository(): SampleReadRepository {
+export function useSampleScreenOutputReadRepository(game: Game = 'mtg'): SampleReadRepository {
 	const answer = <T>(value: T) => async (_scope: ScreenOutputReadScope): Promise<T> => structuredClone(value);
+	const none = (resource: string) => async () => notInSample(resource);
+	if (game === 'op') {
+		// A One Piece Event models no Players, Rounds, results or Metagame (ADR-0057).
+		return {
+			event: none('Event context'),
+			card: answer(OP_ANSWERS.card),
+			liveSession: answer(OP_ANSWERS.liveSession),
+			featureMatchSlot: answer(OP_ANSWERS.featureMatchSlot),
+			featureMatchDeckList: answer(OP_ANSWERS.featureMatchDeckList),
+			playerHistory: none('Player History'),
+			standings: none('Standings'),
+			pairings: none('Pairings'),
+			archetypeSpotlight: none('Archetype'),
+			headToHead: none('Head-to-Head'),
+			metagame: none('Metagame'),
+			topCards: none('Most Played Cards'),
+			topCut: none('Top Cut'),
+			playerDecks: none('Player'),
+		};
+	}
 	return {
-		event: async () => notInSample('Event context'),
+		event: none('Event context'),
 		card: answer(ANSWERS.card),
 		liveSession: answer(ANSWERS.liveSession),
-		featureMatchSlot: async () => notInSample('Feature Match Slot'),
-		// The dataset's Deck is an MTG Player's; One Piece samples are #877's.
-		featureMatchDeckList: async () => notInSample('Feature Match Deck List'),
+		featureMatchSlot: none('Feature Match Slot'),
+		// A Magic Deck Screen's sample is a Player's deck.
+		featureMatchDeckList: none('Feature Match Deck List'),
 		playerHistory: answer(ANSWERS.playerHistory),
 		standings: answer(ANSWERS.standings),
 		pairings: answer(ANSWERS.pairings),
