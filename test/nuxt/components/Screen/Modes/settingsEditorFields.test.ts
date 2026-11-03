@@ -28,6 +28,9 @@ const BESPOKE_CONTROLS: Record<string, string> = {
 	'deck.board': 'the Mainboard and Sideboard show toggles',
 	// Paging on is a page smaller than the ranking, so its toggle and its page size both read the card count.
 	'top-cards.cardsPerPage': 'the Split into pages toggle, and a page size kept below the card count',
+	// Numeric sizes and an unset choice, which a string select field cannot hold; both
+	// the editor and the contract read them from TOP_CUT_BRACKET_SIZES.
+	'top-cut.bracketSizeOverride': 'the Bracket size select',
 };
 
 // Values a contract's select field allows that its editor does not offer.
@@ -125,7 +128,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 			{ scope: 'minPoints' },
 		],
 	},
-	// The Slot binding and the two Player pickers: both are Event References, so only the source and header are scalar.
+	// The Slot binding and the two Player pickers: both are Event References, so only the source, show toggles and header are scalar.
 	'head-to-head': {
 		editor: 'HeadToHead',
 		variants: [

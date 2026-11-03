@@ -38,6 +38,8 @@ mockNuxtImport('usePairingsModeData', () => () => ({
 	isEmpty: computed(() => isEmpty.value),
 	headerText: computed(() => headerText.value),
 	pageData: computed(() => pageData.value),
+	// The page size field the mode's Page Rotation declares.
+	pageSize: computed(() => config.value.rowsPerPage),
 	formatResult: (row: any) => cannedResults.get(row.matchId) ?? 'Pending',
 	winner: (row: any) => cannedWinners.get(row.matchId) ?? null,
 }));

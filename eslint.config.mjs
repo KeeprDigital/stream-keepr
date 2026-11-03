@@ -25,6 +25,12 @@ const testSyntax = [
 	},
 ];
 const integrationIngestionBody = 'Build ingestion initiation bodies with graphicsIngestionRequest() so the duplicate-content policy defaults to create-separate.';
+// ADR-0039: a rendering reads its page size from its mode data (`pageSize`), never its config field.
+const pageSizeFieldMessage = 'Read the page size its Page Rotation declares (`pageSize` from the mode data), not its config field.';
+const pageSizeFieldSyntax = [
+	{ selector: 'MemberExpression[property.name=/^(?:pageSize|\\w+PerPage)$/]:matches([object.name=\'config\'], [object.property.name=/^(?:value|config)$/])', message: pageSizeFieldMessage },
+	{ selector: 'VariableDeclarator:not([init.callee.name=/^use\\w+ModeData$/]) > ObjectPattern > Property[key.name=/^(?:pageSize|\\w+PerPage)$/]', message: pageSizeFieldMessage },
+];
 const compositorPanelSyntax = [
 	{ selector: 'CallExpression[callee.name=\'emit\'][arguments.0.value=\'update:graphics\']:not(CallExpression[callee.name=\'useCompositorEditing\'] CallExpression)', message: 'Commit the stack only through useCompositorEditing.' },
 	{ selector: 'Identifier[name=\'replaceBroadcastGraphic\']', message: 'Stack replacement belongs to the compositor editing module.' },
@@ -177,6 +183,27 @@ export default withNuxt(
 						{ regex: 'screen-mode/sample(Screen|Dataset)$', message: 'The Screen Mode Sample Dataset is a Theme preview\'s alone (components/Theme).' },
 					],
 				},
+			],
+		},
+	},
+	{
+		// A Screen Mode's renderings; its settings editor writes the field through the Pagination card.
+		// The leading selectors repeat antfu's defaults, which this block would otherwise replace.
+		files: ['app/components/Screen/Modes/**/*.vue'],
+		ignores: ['app/components/Screen/Modes/**/*Settings.vue'],
+		rules: {
+			'no-restricted-syntax': [
+				'error',
+				'TSEnumDeclaration[const=true]',
+				'TSExportAssignment',
+				...pageSizeFieldSyntax,
+			],
+			'vue/no-restricted-syntax': [
+				'error',
+				'DebuggerStatement',
+				'LabeledStatement',
+				'WithStatement',
+				...pageSizeFieldSyntax,
 			],
 		},
 	},

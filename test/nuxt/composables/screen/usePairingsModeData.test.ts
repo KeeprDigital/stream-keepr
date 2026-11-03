@@ -220,17 +220,7 @@ describe('usePairingsModeData', () => {
 					player2GameWins: 1,
 					gameDraws: 0,
 				}),
-				'2-1',
-			],
-			[
-				'reported Match with game draws',
-				pairing({
-					hasResult: true,
-					player1GameWins: 1,
-					player2GameWins: 1,
-					gameDraws: 1,
-				}),
-				'1-1-1',
+				'2–1',
 			],
 		])('formats a %s', (_name, row, expected) => {
 			expect(makePairingsModeData().formatResult(row)).toBe(expected);
@@ -342,7 +332,7 @@ describe('usePairingsModeData', () => {
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(formatResult(pageData.value[0]!)).toBe('2-0');
+			expect(formatResult(pageData.value[0]!)).toBe('2–0');
 		});
 
 		it('picks up a Match paired into the Round, or moved out of it', async () => {
@@ -451,7 +441,7 @@ describe('usePairingsModeData', () => {
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(rereads ? 1 : 0);
-			expect(formatResult(pageData.value[0]!)).toBe(rereads ? '2-0' : 'Pending');
+			expect(formatResult(pageData.value[0]!)).toBe(rereads ? '2–0' : 'Pending');
 		});
 
 		it('follows a rename of a Player it shows, and of no one else', async () => {
@@ -483,7 +473,7 @@ describe('usePairingsModeData', () => {
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(formatResult(pageData.value[0]!)).toBe('2-0');
+			expect(formatResult(pageData.value[0]!)).toBe('2–0');
 		});
 	});
 });

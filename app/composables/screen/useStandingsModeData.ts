@@ -199,6 +199,7 @@ export function useStandingsModeData() {
 	const {
 		rowCount,
 		pageData,
+		pageSize,
 		totalPages,
 		currentPage,
 		setPage,
@@ -298,6 +299,7 @@ export function useStandingsModeData() {
 		visibleColumns,
 		displayRows,
 		pageData,
+		pageSize,
 		rowCount,
 		currentPage,
 		totalPages,

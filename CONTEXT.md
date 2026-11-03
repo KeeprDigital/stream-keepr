@@ -32,7 +32,7 @@ Whether a Match is reported or a bye, and its game wins and game draws. Only Mel
 _Avoid_: score, for the whole result.
 
 **Game Score**:
-A Match's game wins and game draws read from one of its Players' side, theirs first: 2-1, or 1-1-1 with a game draw. Every reported Match that is not a bye has one; a bye or an unreported Match has none.
+A Match's game wins and game draws read from one of its Players' side, theirs first, in en dashes: 2–1, or 1–1–1 with a game draw. Every reported Match that is not a bye has one; a bye or an unreported Match has none.
 
 **Round Standings**:
 The standings for Players as of a specific Round, including that Round's results. Melee Sync stores them only once the Round is complete, so while a Round is played the latest Round Standings are the previous Round's (ADR-0052).
@@ -160,7 +160,7 @@ A field in a Screen Mode's configuration naming something that must belong to th
 _Avoid_: data binding (a Graphic Input Binding is a Broadcast Graphics concept), Graphic Asset Reference (an installation-wide library link, not Event data)
 
 **Head-to-Head**:
-A Screen Mode showing two Players of an Event side by side before their Match: each one's record, points and Archetype, and the earlier Matches between them at the Event, oldest first, or that this is their first meeting. Its Players come from a Feature Match Slot, following the Slot's current Feature Match Assignment, or are picked directly.
+A Screen Mode showing two Players of an Event side by side before their Match: each one's record and points (the Player's own, or their latest Round Standings while they hold none of their own), their Archetype, and the earlier Matches between them at the Event, oldest first, or that this is their first meeting. Its Players come from a Feature Match Slot, following the Slot's current Feature Match Assignment, or are picked directly.
 _Avoid_: meeting, when naming an earlier Match.
 
 **Authored Stack**:
@@ -191,7 +191,7 @@ The deterministic projection of a paginated Screen Mode's current page from its 
 _Avoid_: Auto-paging when naming the projection itself — auto-page is the operator toggle that turns rotation on.
 
 **Top Cut Bracket**:
-The single-elimination bracket a Top Cut Bracket Screen shows, derived from the Phase its operator picks, since nothing marks a Phase as a top cut: one column per Round of that Phase, in order, each Match at the Bracket Position its winner advances from into the next column. The first Round, with any byes it leaves out, sets its size; a Bracket Position no Match fills yet is pending, showing the winners advancing into it so far.
+The single-elimination bracket a Top Cut Bracket Screen shows, derived from the Phase its operator picks, since nothing marks a Phase as a top cut: one column per Round of that Phase, in order, each Match at the Bracket Position its winner advances from into the next column. The first Round, with any byes it leaves out, sets its size, unless the operator sets a larger one; a set size smaller than the first Round needs is ignored. The first Round is placed by Seed in standard order (1v8, 4v5, 2v7, 3v6 for a bracket of 8), the best Seeds taking any byes it leaves out, and each later Match at the Bracket Position its Players advance from, so no Bracket Position moves as later Rounds are paired; a first Round with no Seeds is placed by the next Round's pairings, else table order. A Bracket Position no Match fills yet is pending, showing the winners advancing into it so far.
 _Avoid_: bracket slot (a Slot is a Feature Match Slot)
 
 **Seed**:

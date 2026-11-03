@@ -19,6 +19,7 @@ let eventId: number;
 let topCutId: number;
 let swissId: number;
 let foreignPhaseId: number;
+let topSixId: number;
 let quarterfinalsId: number;
 let semifinalsId: number;
 const playerIds: number[] = [];
@@ -30,14 +31,16 @@ beforeAll(async () => {
 	]).returning({ id: schema.events.id });
 	eventId = event!.id;
 
-	const [swiss, topCut, foreignPhase] = await db.insert(schema.phases).values([
+	const [swiss, topCut, foreignPhase, topSix] = await db.insert(schema.phases).values([
 		{ eventId, name: 'Swiss', sortOrder: 0 },
 		{ eventId, name: 'Top 8', sortOrder: 1 },
 		{ eventId: otherEvent!.id, name: 'Top 8' },
+		{ eventId, name: 'Top 6', sortOrder: 2 },
 	]).returning({ id: schema.phases.id });
 	swissId = swiss!.id;
 	topCutId = topCut!.id;
 	foreignPhaseId = foreignPhase!.id;
+	topSixId = topSix!.id;
 
 	// Inserted out of Round order, so the order is the read's.
 	const [semifinals, quarterfinals, swissRound] = await db.insert(schema.rounds).values([
@@ -67,7 +70,11 @@ beforeAll(async () => {
 		.values({ eventId, name: 'Izzet Prowess', colors: 'UR' })
 		.returning({ id: schema.archetypes.id });
 
-	// Seed 1's Archetype is assigned; Seed 2's deck is named only by their Deck List.
+	// Seed 1's Archetype is assigned; Seed 2's and Seed 8's decks are named only by their Deck List.
+	const deckLists: Record<number, { deckName: string; deckColors: string }> = {
+		1: { deckName: 'Mono-Green Landfall', deckColors: 'G' },
+		7: { deckName: 'Dimir Control', deckColors: 'UB' },
+	};
 	const players = await db.insert(schema.players).values(
 		Array.from({ length: 8 }, (_, index) => ({
 			eventId,
@@ -75,13 +82,39 @@ beforeAll(async () => {
 			archetypeId: index === 0
 				? archetype!.id
 				: null,
-			gameData: index === 1
-				? { type: 'mtg' as const, deckName: 'Mono-Green Landfall', deckColors: 'G' }
+			gameData: deckLists[index]
+				? { type: 'mtg' as const, ...deckLists[index] }
 				: null,
 		})),
 	).returning({ id: schema.players.id });
 	playerIds.push(...players.map(row => row.id));
 	const seed = (n: number) => playerIds[n - 1]!;
+
+	// The Top 6 follows the Top 8, so the Top 8's Round Standings seed it: Seed 8
+	// is its Seed 1, Seed 7 its Seed 2, and so on. Its first Round is in table
+	// order 3v6, 4v5, by its own Seeds.
+	const [topSixFirstRound] = await db.insert(schema.rounds).values({
+		eventId,
+		phaseId: topSixId,
+		name: 'Quarterfinals',
+		roundNumber: 1,
+	}).returning({ id: schema.rounds.id });
+	await db.insert(schema.matches).values([
+		{
+			eventId,
+			roundId: topSixFirstRound!.id,
+			tableNumber: 1,
+			player1Id: seed(6),
+			player2Id: seed(3),
+		},
+		{
+			eventId,
+			roundId: topSixFirstRound!.id,
+			tableNumber: 2,
+			player1Id: seed(5),
+			player2Id: seed(4),
+		},
+	]);
 
 	await db.insert(schema.matches).values([
 		{
@@ -232,7 +265,7 @@ describe('findPhaseBracket', () => {
 		expect(result.bracket.columns[0]!.positions.map(position => position.entrants.map(entrant => entrant?.deck ?? null))).toEqual([
 			[
 				{ name: 'Izzet Prowess', colors: 'UR' },
-				null,
+				{ name: 'Dimir Control', colors: 'UB' },
 			],
 			[null, null],
 			[
@@ -240,6 +273,51 @@ describe('findPhaseBracket', () => {
 				null,
 			],
 			[null, null],
+		]);
+	});
+
+	const names = (result: Awaited<ReturnType<typeof findPhaseBracket>>) =>
+		result.bracket.columns[0]!.positions.map(position => position.entrants.map(entrant => entrant?.name ?? null));
+
+	it.each([
+		['hidden', false],
+		['shown', true],
+	])('places the first Round by Seed while Seeds are %s, the best Seeds on the byes of a set size', async (_, showSeeds) => {
+		const result = await findPhaseBracket(eventId, topSixId, { showSeeds, bracketSizeOverride: 8 });
+
+		expect(result.bracket.size).toBe(8);
+		expect(names(result)).toEqual([
+			['Seed 8', null],
+			['Seed 5', 'Seed 4'],
+			['Seed 7', null],
+			['Seed 6', 'Seed 3'],
+		]);
+		expect(result.bracket.columns[0]!.positions.map(position => position.status)).toEqual([
+			'bye',
+			'unreported',
+			'bye',
+			'unreported',
+		]);
+	});
+
+	it('names a bye\'s Player\'s Seed and Archetype as it does a seated Player\'s', async () => {
+		const result = await findPhaseBracket(eventId, topSixId, { showSeeds: true, showArchetypes: true, bracketSizeOverride: 8 });
+
+		expect(result.bracket.columns[0]!.positions[0]!.entrants[0]).toEqual({
+			playerId: playerIds[7],
+			name: 'Seed 8',
+			seed: 1,
+			deck: { name: 'Dimir Control', colors: 'UB' },
+		});
+	});
+
+	it('sizes the bracket from its first Round while no size is set', async () => {
+		const result = await findPhaseBracket(eventId, topSixId);
+
+		expect(result.bracket.size).toBe(4);
+		expect(names(result)).toEqual([
+			['Seed 5', 'Seed 4'],
+			['Seed 6', 'Seed 3'],
 		]);
 	});
 

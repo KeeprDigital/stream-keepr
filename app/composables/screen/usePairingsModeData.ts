@@ -1,5 +1,6 @@
 import type { ScreenOutputPairingsResponse, ScreenOutputRoundMatch } from '~~/shared/types/screenOutputReads';
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
+import { formatGameScore, readMatchFromPlayer1Side } from '~~/shared/utils/matchFromPlayerSide';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 
@@ -59,16 +60,12 @@ export function usePairingsModeData() {
 		: 'Pairings'));
 	const isEmpty = computed(() => freshness.answered.value && (!config.value.roundId || rows.value.length === 0));
 
-	const { pageData, rowCount } = usePaginatedScreenMode({ mode: 'pairings', config, rows });
+	const { pageData, pageSize, rowCount } = usePaginatedScreenMode({ mode: 'pairings', config, rows });
 
 	function formatResult(row: ScreenOutputRoundMatch) {
 		if (row.isBye)
 			return 'BYE';
-		if (!row.hasResult || row.player1GameWins == null || row.player2GameWins == null)
-			return 'Pending';
-		return `${row.player1GameWins}-${row.player2GameWins}${row.gameDraws
-			? `-${row.gameDraws}`
-			: ''}`;
+		return formatGameScore(readMatchFromPlayer1Side(row)) ?? 'Pending';
 	}
 
 	/** Which side won the Match: the seated Player of a bye, or the one with more game wins; `null` for a draw or a pending Match. */
@@ -95,6 +92,7 @@ export function usePairingsModeData() {
 		headerText,
 		round,
 		pageData,
+		pageSize,
 		rowCount,
 		formatResult,
 		winner,

@@ -11,6 +11,8 @@ const props = defineProps<{
 
 const playerStore = usePlayerStore();
 const featureMatchStore = useFeatureMatchStore();
+const eventStore = useEventStore();
+const hasPronouns = computed(() => eventStore.event?.pronounsEnabled ?? true);
 const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
@@ -109,6 +111,23 @@ onMounted(async () => {
 					/>
 				</UFormField>
 			</template>
+		</ScreenSettingsCard>
+
+		<ScreenSettingsCard title="Show Options">
+			<ScreenSettingsToggle
+				:label="fields.showPronouns.label"
+				description="Show each Player's pronouns below their name."
+				disabled-description="Enable player pronouns in event settings to use this."
+				:enabled="hasPronouns"
+				:model-value="config.showPronouns"
+				@update:model-value="updateConfig({ showPronouns: $event })"
+			/>
+			<ScreenSettingsToggle
+				:label="fields.showDeckColors.label"
+				description="Show the mana colors of each Player's deck beside its name."
+				:model-value="config.showDeckColors"
+				@update:model-value="updateConfig({ showDeckColors: $event })"
+			/>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Header">

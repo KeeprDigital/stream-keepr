@@ -154,8 +154,13 @@ function entrantStyle(position: BracketPosition, side: 0 | 1) {
 					<div class="bracket-column-name" :style="roundNameStyle">
 						Champion
 					</div>
+					<!-- The champion's Seed and Archetype show under the bracket entrants' toggles (#906). -->
 					<div class="bracket-champion-name" :style="championStyle">
-						{{ bracket.champion.name }}
+						<span v-if="config.showSeeds" class="bracket-champion-seed" :style="secondaryTextStyle">{{ bracket.champion.seed ?? '' }}</span>
+						<div class="bracket-champion-identity">
+							<span class="bracket-champion-player">{{ bracket.champion.name }}</span>
+							<span v-if="config.showArchetypes" class="bracket-champion-archetype" :style="secondaryTextStyle">{{ bracket.champion.deck?.name ?? '' }}</span>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -285,11 +290,39 @@ function entrantStyle(position: BracketPosition, side: 0 | 1) {
 }
 
 .bracket-champion-name {
+	align-items: center;
 	border-style: solid;
 	border-width: 2px;
 	border-radius: 0.3em;
+	display: flex;
 	font-size: 1.25em;
+	gap: 0.5em;
+	justify-content: center;
 	padding: 0.5em 0.75em;
 	text-align: center;
+}
+
+.bracket-champion-seed {
+	flex-shrink: 0;
+	font-size: 0.8em;
+	font-variant-numeric: tabular-nums;
+}
+
+.bracket-champion-identity {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.bracket-champion-player,
+.bracket-champion-archetype {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.bracket-champion-archetype {
+	font-size: 0.7em;
 }
 </style>
