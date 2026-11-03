@@ -363,13 +363,6 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 			select({ type: 'item', itemId });
 	}
 
-	/** Whether the one selected layer is a Graphic Group ⌘⇧G can ungroup. */
-	const canUngroup = computed(() => {
-		const current = selection.value;
-		return current.type === 'item'
-			&& config.value.layout.composition.items.some(item => item.id === current.itemId && item.type === 'group');
-	});
-
 	/**
 	 * Restore a Graphic Group's children, or the selected group's, as top-level
 	 * Graphic Items drawn where they were, as one undo step (#920, E12); they are
@@ -379,14 +372,9 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		const current = target ?? selection.value;
 		if (current.type !== 'item')
 			return;
-		let itemIds: string[] = [];
-		const ungrouped = editComposition((composition) => {
-			const result = ungroupGraphicGroup(composition, current.itemId);
-			itemIds = result.itemIds;
-			return result.graphic;
-		});
-		if (ungrouped) {
-			const children = itemIds.map(itemId => ({ type: 'item' as const, itemId }));
+		const result = ungroupGraphicGroup(config.value.layout.composition, current.itemId);
+		if (editComposition(() => result.graphic)) {
+			const children = result.itemIds.map(itemId => ({ type: 'item' as const, itemId }));
 			layerSelection.value = { layers: children, anchor: children.at(-1) ?? null };
 		}
 	}
@@ -546,7 +534,6 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		place,
 		groupRefusal,
 		group,
-		canUngroup,
 		ungroup,
 		isVisible,
 		toggleVisible,

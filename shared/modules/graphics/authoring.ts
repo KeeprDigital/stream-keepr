@@ -1302,13 +1302,23 @@ function drawnBounds(item: GraphicItemConfig): GraphicRect {
 		[0, 1],
 		[1, 1],
 	].map(([x, y]) => turnPoint({ x: item.x + item.width * x!, y: item.y + item.height * y! }, pivot, item.rotation!));
-	const left = roundPlacement(Math.min(...corners.map(corner => corner.x)));
-	const top = roundPlacement(Math.min(...corners.map(corner => corner.y)));
+	return boundingBox(corners.map(corner => ({
+		x: corner.x,
+		y: corner.y,
+		width: 0,
+		height: 0,
+	})));
+}
+
+/** The axis-aligned box covering every one of these rectangles, to two decimal places. */
+function boundingBox(rects: readonly GraphicRect[]): GraphicRect {
+	const left = roundPlacement(Math.min(...rects.map(rect => rect.x)));
+	const top = roundPlacement(Math.min(...rects.map(rect => rect.y)));
 	return {
 		x: left,
 		y: top,
-		width: roundPlacement(Math.max(...corners.map(corner => corner.x))) - left,
-		height: roundPlacement(Math.max(...corners.map(corner => corner.y))) - top,
+		width: roundPlacement(Math.max(...rects.map(rect => rect.x + rect.width)) - left),
+		height: roundPlacement(Math.max(...rects.map(rect => rect.y + rect.height)) - top),
 	};
 }
 
@@ -1337,15 +1347,7 @@ export function groupGraphicItems(
 
 	const ids = new Set(itemIds);
 	const members = graphic.items.filter(item => ids.has(item.id));
-	const boxes = members.map(drawnBounds);
-	const left = Math.min(...boxes.map(box => box.x));
-	const top = Math.min(...boxes.map(box => box.y));
-	const bounds = {
-		x: left,
-		y: top,
-		width: roundPlacement(Math.max(...boxes.map(box => box.x + box.width)) - left),
-		height: roundPlacement(Math.max(...boxes.map(box => box.y + box.height)) - top),
-	};
+	const bounds = boundingBox(members.map(drawnBounds));
 	const group: GraphicGroupItemConfig = {
 		...bindNewGraphicItem(getGraphicItemDefinition('group').createDefault({
 			id: options.id,
@@ -1514,10 +1516,10 @@ export function ungroupGraphicGroup(graphic: BroadcastGraphicConfig, groupId: st
 		return { graphic, itemIds: [] };
 	}
 
-	const baked = group.children.map(child => bakeInheritedStyle(group, child));
-	const children = group.arrangement === 'canvas'
-		? baked
-		: laidOutOnCanvas(group, baked);
+	// Laid out before baking: a hidden group hides its children, which would then take no space in it.
+	const children = (group.arrangement === 'canvas'
+		? group.children
+		: laidOutOnCanvas(group, group.children)).map(child => bakeInheritedStyle(group, child));
 	const opened = replaceGraphicItem(graphic, { ...group, arrangement: 'canvas', children });
 	const placed = children.reduce((next, child, index) => placeGraphicItem(next, child.id, {
 		groupId: null,

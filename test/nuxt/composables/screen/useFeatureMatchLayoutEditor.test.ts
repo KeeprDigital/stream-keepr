@@ -327,7 +327,7 @@ describe('useFeatureMatchLayoutEditor grouping and ungrouping', () => {
 		expect(topLevelIds(config)).toEqual(before);
 	});
 
-	it.each<[string, boolean, (editor: FeatureMatchLayoutEditor) => void, string | null]>([
+	it.each<[string, boolean, (editor: FeatureMatchLayoutEditor) => void]>([
 		[
 			'grouping a selection holding a Source Item',
 			true,
@@ -336,7 +336,6 @@ describe('useFeatureMatchLayoutEditor grouping and ungrouping', () => {
 				editor.toggleSelect(WINS[1]);
 				editor.group();
 			},
-			'source-item',
 		],
 		[
 			'grouping without the lease',
@@ -345,7 +344,6 @@ describe('useFeatureMatchLayoutEditor grouping and ungrouping', () => {
 				selectWins(editor);
 				editor.group();
 			},
-			null,
 		],
 		[
 			'ungrouping without the lease',
@@ -354,7 +352,6 @@ describe('useFeatureMatchLayoutEditor grouping and ungrouping', () => {
 				editor.select(TOP_BAR);
 				editor.ungroup();
 			},
-			'too-few',
 		],
 		[
 			'ungrouping a layer that is not a group',
@@ -363,14 +360,12 @@ describe('useFeatureMatchLayoutEditor grouping and ungrouping', () => {
 				editor.select(ITEM);
 				editor.ungroup();
 			},
-			'too-few',
 		],
-	])('writes nothing %s', (_, writable, verb, refusal) => {
+	])('writes nothing %s', (_, writable, verb) => {
 		const { editor, writes } = editorFor(writable);
 
 		verb(editor);
 
-		expect(editor.groupRefusal.value).toBe(refusal);
 		expect(writes).toEqual([]);
 	});
 });

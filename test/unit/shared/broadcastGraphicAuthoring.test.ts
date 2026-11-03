@@ -1796,38 +1796,85 @@ describe('grouping and ungrouping Graphic Items (#920)', () => {
 		expect(ungrouped.items.map(rectOf)).toEqual(['mid', 'back', 'front'].map(id => rectOf(findGraphicItem(built, id)?.item)));
 	});
 
-	// E12: what a child inherited is baked in; clipping and the group's own animation go with the group.
-	it('bakes the style each child inherits into it, and drops the group\'s clipping and animation', () => {
-		// `a` is a Text Graphic Item, which paints no surface of its own and so inherits one.
-		let built = packed({ arrangement: 'canvas', clip: true, visible: false }, { a: {}, b: {}, c: {} });
+	// E12: what a child inherited is baked in; the group's clipping and animation go with it.
+	// The group defaults its children's surface to fill opacity 0.5, bound to `panel`, clips, and staggers `kid`.
+	// Hidden row: 380 inner less `kid`'s 50 leaves 330, packed to the end of a row padded 10 at (100, 50).
+	it.each([
+		[
+			'a Text Graphic Item holding no surface takes the group\'s default, bound as it was',
+			'text',
+			{},
+			null,
+			{
+				visible: true,
+				surfaceStyle: { fillOpacity: 0.5 },
+				themeBindings: { surfaceStyle: 'panel' },
+			},
+		],
+		[
+			'a Shape Graphic Item keeps its own surface',
+			'shape',
+			{},
+			0.25,
+			{
+				visible: true,
+				surfaceStyle: { fillOpacity: 0.25 },
+			},
+		],
+		[
+			'a Media Graphic Item paints no surface, so takes none',
+			'media',
+			{},
+			null,
+			{ visible: true },
+		],
+		[
+			'a hidden row group\'s child is hidden, where the row laid it out',
+			'shape',
+			{
+				arrangement: 'row',
+				visible: false,
+				x: 100,
+				y: 50,
+				width: 400,
+				height: 100,
+				padding: 10,
+				gap: 0,
+				align: 'start',
+				justify: 'end',
+			},
+			null,
+			{
+				visible: false,
+				x: 440,
+				y: 60,
+				width: 50,
+				height: 20,
+			},
+		],
+	] as const)('bakes what a child inherits: %s', (_case, kind, groupPatch, own, baked) => {
+		let built = addGraphicItem(graphic('a'), { kind: 'group', id: 'pack', ...CANVAS }).graphic;
+		built = addGraphicGroupChild(built, { kind, groupId: 'pack', id: 'kid' }).graphic;
+		built = patchGraphicItem(built, 'kid', { x: 0, y: 0, width: 50, height: 20 });
+		if (own !== null)
+			built = patchGraphicSurfaceStyle(built, 'kid', { fillOpacity: own });
 		built = patchGraphicGroupDefaultChildSurfaceStyle(built, 'pack', { fillOpacity: 0.5 });
 		built = patchGraphicItem(built, 'pack', {
+			arrangement: 'canvas',
+			clip: true,
+			...groupPatch,
 			themeBindings: { defaultChildSurfaceStyle: 'panel' },
-		});
+		} as Partial<GraphicItemConfig>);
 		built = patchGraphicItemAnimationStagger(built, 'pack', 'enter', {
-			itemIds: ['b'],
+			itemIds: ['kid'],
 		});
-		built = patchGraphicSurfaceStyle(built, 'b', { fillOpacity: 0.25 });
-		built = deleteGraphicItem(deleteGraphicItem(built, 'a'), 'c');
-		built = addGraphicGroupChild(built, { kind: 'text', groupId: 'pack', id: 'a' }).graphic;
-		built = addGraphicGroupChild(built, { kind: 'media', groupId: 'pack', id: 'c' }).graphic;
-		const inherited = groupOf(built, 'pack').defaultChildSurfaceStyle;
 
 		const ungrouped = ungroupGraphicGroup(built, 'pack').graphic;
-		const a = surfaced(findGraphicItem(ungrouped, 'a')?.item);
 
-		expect(inherited?.fillOpacity).toBe(0.5);
-		expect(a.surfaceStyle).toEqual(inherited);
-		expect(a.themeBindings?.surfaceStyle).toBe('panel');
-		expect(findGraphicItem(ungrouped, 'b')?.item).toEqual({
-			...findGraphicItem(built, 'b')?.item,
-			x: expect.any(Number),
-			y: expect.any(Number),
-			visible: false,
-		});
-		expect(findGraphicItem(ungrouped, 'c')?.item).not.toHaveProperty('surfaceStyle');
-		expect(ungrouped.items.filter(item => ['a', 'b', 'c'].includes(item.id)).map(item => item.visible)).toEqual([false, false, false]);
-		expect(ungrouped.items.some(item => item.type === 'group')).toBe(false);
+		expect(ungrouped.items.map(item => item.id)).toEqual(['kid']);
+		expect(ungrouped.items[0]).toMatchObject(baked);
+		expect('surfaceStyle' in ungrouped.items[0]!).toBe(kind !== 'media');
+		expect(ungrouped.items[0]!.animation).toBeUndefined();
 	});
 
 	it.each([
