@@ -5,7 +5,7 @@ import { fitColumns } from '~~/shared/utils/cardGrid';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 import { CARD_BADGE_POSITION_CLASSES } from '~/utils/cardBadgePosition';
 
-const { config, error, ready, isEmpty, headerText, pageEntries, currentPage, totalPages, pageCapacity } = useTopCardsModeData();
+const { config, error, ready, isEmpty, headerText, pageEntries, currentPage, totalPages, pageCapacity } = useTopCardsModeData(useScreenContext());
 
 // ── Columns, from the space the grid really has ──
 // Pages hold cards, not rows (ADR-0054), so the Screen chooses its columns from

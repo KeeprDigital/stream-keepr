@@ -24,6 +24,8 @@ const testSyntax = [
 		message: 'Run persistence on createSqliteD1Harness rather than mocking Drizzle or the schema.',
 	},
 ];
+// antfu's defaults, which a block setting `no-restricted-syntax` would otherwise replace.
+const defaultTsSyntax = ['TSEnumDeclaration[const=true]', 'TSExportAssignment'];
 const integrationIngestionBody = 'Build ingestion initiation bodies with graphicsIngestionRequest() so the duplicate-content policy defaults to create-separate.';
 // ADR-0039: a rendering reads its page size from its mode data (`pageSize`), never its config field.
 const pageSizeFieldMessage = 'Read the page size its Page Rotation declares (`pageSize` from the mode data), not its config field.';
@@ -188,14 +190,12 @@ export default withNuxt(
 	},
 	{
 		// A Screen Mode's renderings; its settings editor writes the field through the Pagination card.
-		// The leading selectors repeat antfu's defaults, which this block would otherwise replace.
 		files: ['app/components/Screen/Modes/**/*.vue'],
 		ignores: ['app/components/Screen/Modes/**/*Settings.vue'],
 		rules: {
 			'no-restricted-syntax': [
 				'error',
-				'TSEnumDeclaration[const=true]',
-				'TSExportAssignment',
+				...defaultTsSyntax,
 				...pageSizeFieldSyntax,
 			],
 			'vue/no-restricted-syntax': [
@@ -204,6 +204,22 @@ export default withNuxt(
 				'LabeledStatement',
 				'WithStatement',
 				...pageSizeFieldSyntax,
+			],
+		},
+	},
+	{
+		// #914: a Screen Mode's data, and what it builds on, takes its Screen context as an argument,
+		// so a settings editor sets it up against the Screen it edits. Only a rendering injects it:
+		// the composables ignored here serve renderings alone.
+		files: ['app/composables/screen/**/*.ts', 'app/modules/screen-mode/**/*.ts'],
+		ignores: [
+			'app/composables/screen/{useScreenContext,useScreenInset,useScreenGraphicThemeTokens,useScreenGraphicAssetContentUrls}.ts',
+		],
+		rules: {
+			'no-restricted-syntax': [
+				'error',
+				...defaultTsSyntax,
+				{ selector: 'CallExpression[callee.name=\'useScreenContext\']', message: 'Take the Screen context as an argument; only a rendering injects it (#914).' },
 			],
 		},
 	},

@@ -1,6 +1,7 @@
 import type { Ref } from 'vue';
 import type { PlayerSide } from '~~/shared/types/enums';
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { FeatureMatchOverlaySideboards } from '~/modules/feature-match-overlay/tokenValues';
 import type { GraphicsDeckListCard } from '~/modules/graphics/renderModel';
 import type { FeatureMatch } from '~/types';
@@ -86,11 +87,12 @@ function snapshotDeckId(match: FeatureMatch | null, playerId: number): number | 
  * that failed most recently.
  */
 export function useFeatureMatchOverlaySideboardData(
+	context: ScreenContext,
 	config: Ref<FeatureMatchOverlayModeConfig>,
 	match: Ref<FeatureMatch | null>,
 ) {
-	const { eventId, cardDataHealth } = useScreenContext();
-	const outputReads = useScreenOutputReads();
+	const { eventId, cardDataHealth } = context;
+	const outputReads = useScreenOutputReads(context);
 	const realtime = tryUseRealtime();
 	const { fetchScryfallCards, buildDeckListArrays } = useScryfallBatch();
 

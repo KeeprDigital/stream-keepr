@@ -55,7 +55,7 @@ const boardOptions = [
 
 // The Archetype's pilots the Screen pages, read and followed as its Screen Output reads and follows them, so
 // the page count is the one it renders (#780).
-const { rowCount, loading: loadingPilots } = useEditedScreenModeData(
+const { rowCount, loading: loadingPilots, answered: rowsAnswered } = useEditedScreenModeData(
 	{
 		screen: () => props.screen,
 		eventId: () => props.eventId,
@@ -197,6 +197,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 			page-size-description="Number of pilots shown per page."
 			auto-page-description="Automatically cycle through pages of pilots."
 			:loading="loadingPilots"
+			:counting="!rowsAnswered"
 		/>
 	</div>
 </template>

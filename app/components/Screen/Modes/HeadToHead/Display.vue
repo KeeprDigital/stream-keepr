@@ -2,7 +2,7 @@
 import type { ScreenOutputHeadToHeadEarlierMatch } from '~~/shared/types/screenOutputReads';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { config, error, ready, isEmpty, firstMeeting, headerText, player1, player2, earlierMatches, formatRecord } = useHeadToHeadModeData();
+const { config, error, ready, isEmpty, firstMeeting, headerText, player1, player2, earlierMatches, formatRecord } = useHeadToHeadModeData(useScreenContext());
 
 const primaryTextStyle = {
 	color: modeTokenVar('head-to-head', 'primary-text'),

@@ -1,4 +1,5 @@
 import type { ScreenOutputReadScope } from '~/composables/repositories/useScreenOutputReadRepository';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { useScreenOutputReadRepository } from '~/composables/repositories/useScreenOutputReadRepository';
 import { SAMPLE_ID, sampleDeckCardData, useSampleScreenOutputReadRepository } from '~/modules/screen-mode/sampleDataset';
 
@@ -15,8 +16,8 @@ import { SAMPLE_ID, sampleDeckCardData, useSampleScreenOutputReadRepository } fr
  * instead, at a scope of its own, and nothing is fetched: not even the card
  * data its deck cards are drawn with, which a Screen reads from Scryfall.
  */
-export function useScreenOutputReads() {
-	const { screen, eventId, assetCapability, sampleDataset } = useScreenContext();
+export function useScreenOutputReads(context: ScreenContext) {
+	const { screen, eventId, assetCapability, sampleDataset } = context;
 	const repository = sampleDataset
 		? useSampleScreenOutputReadRepository(sampleDataset)
 		: useScreenOutputReadRepository();

@@ -43,6 +43,8 @@ const pageData = ref<any[]>([
 
 const chartBars = ref<MetagameChartBar[]>([]);
 
+// The mode's data is faked, so nothing reads the Screen context it is handed.
+mockNuxtImport('useScreenContext', () => () => ({}));
 mockNuxtImport('useMetagameModeData', () => () => ({
 	config: computed(() => config.value),
 	loading: ref(false),

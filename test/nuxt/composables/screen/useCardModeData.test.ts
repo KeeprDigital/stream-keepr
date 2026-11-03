@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAttachSignal, createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 import { SCREEN_MODE_REREAD_MS } from '~/modules/screen-mode/freshness';
 
 const mockCardStore = reactive({
@@ -32,12 +33,13 @@ const mockScreen = ref<{ id: number } | null>({ id: 1 });
 let mockCardDataHealth: Ref<'complete' | 'degraded'> | undefined;
 
 mockNuxtImport('useCardStore', () => () => mockCardStore);
-mockNuxtImport('useScreenContext', () => () => ({
-	screen: mockScreen,
-	eventId: computed(() => 1),
-	interactive: ref(false),
-	cardDataHealth: mockCardDataHealth,
-}));
+function screenContext() {
+	return screenContextOf({
+		screen: mockScreen,
+		eventId: computed(() => 1),
+		cardDataHealth: mockCardDataHealth,
+	});
+}
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => ({ featureMatchId: null })));
 
 /** Mount a component that calls useCardModeData, return its reactive state and the wrapper */
@@ -45,7 +47,7 @@ function mountCardModeData() {
 	let result: ReturnType<typeof useCardModeData>;
 	const Comp = defineComponent({
 		setup() {
-			result = useCardModeData();
+			result = useCardModeData(screenContext());
 			return () => h('div');
 		},
 	});
