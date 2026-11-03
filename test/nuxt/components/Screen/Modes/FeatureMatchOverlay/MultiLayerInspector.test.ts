@@ -4,6 +4,7 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
 import MultiLayerInspector from '~/components/Screen/Modes/FeatureMatchOverlay/MultiLayerInspector.vue';
 
 /**
@@ -57,6 +58,40 @@ describe('featureMatchOverlayMultiLayerInspector', () => {
 				{ y: 120 },
 			],
 		]);
+	});
+
+	it.each([
+		{
+			case: 'a shared field\'s label writes the dragged value to every layer',
+			axis: 'X',
+			writable: true,
+			updates: [
+				[
+					{ x: 27 },
+				],
+			],
+		},
+		{
+			case: 'a Mixed field\'s label writes nothing',
+			axis: 'Y',
+			writable: true,
+			updates: undefined,
+		},
+		{
+			case: 'a label without the lease writes nothing',
+			axis: 'X',
+			writable: false,
+			updates: undefined,
+		},
+	])('dragging $case', async ({ axis, writable, updates }) => {
+		stubPointerCapture();
+		const wrapper = mountPanel({ writable });
+		const label = wrapper.findAll('[data-number-scrub]').find(handle => handle.text() === axis)!;
+
+		await label.trigger('pointerdown', { button: 0, pointerId: 1, clientX: 0 });
+		await label.trigger('pointermove', { pointerId: 1, clientX: 6 });
+
+		expect(wrapper.emitted('update')).toEqual(updates);
 	});
 
 	it('writes nothing for an emptied field', async () => {
