@@ -175,7 +175,7 @@ export function editorSelectionFrame(
  * row or column child is placed by its group, and a rotated group's child turns
  * with it, so neither has one.
  */
-function canvasBox(layout: FeatureMatchLayoutConfig, layer: FeatureMatchLayoutEditorLayer): GraphicRect | null {
+export function editorLayerCanvasBox(layout: FeatureMatchLayoutConfig, layer: FeatureMatchLayoutEditorLayer): GraphicRect | null {
 	if (layer.type === 'source') {
 		const item = layout.sources.find(candidate => candidate.id === layer.itemId);
 		return item
@@ -224,7 +224,7 @@ export function editorLayersFrame(
 	}
 	const members: GraphicRect[] = [];
 	for (const layer of layers) {
-		const box = canvasBox(layout, layer);
+		const box = editorLayerCanvasBox(layout, layer);
 		if (!box)
 			return null;
 		members.push(box);

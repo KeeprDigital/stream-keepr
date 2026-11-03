@@ -13,6 +13,7 @@ import {
 	graphicItemKindLabel,
 } from '~~/shared/modules/graphics';
 import { editorSelectionKey } from '~/modules/feature-match-overlay/editorSelection';
+import { ALIGN_COMMANDS, DISTRIBUTE_COMMANDS } from '~/modules/feature-match-overlay/layerAlignment';
 import { isLayerSelected } from '~/modules/feature-match-overlay/layerSelection';
 import { isSelectionToggle } from '~/modules/graphics/selection';
 
@@ -29,7 +30,8 @@ import { isSelectionToggle } from '~/modules/graphics/selection';
  *
  * Shift-click selects the run of rows from the one chosen last, and ⌘- or
  * Ctrl-click adds or takes out one row (#740). A selected row's menu acts on
- * every selected layer.
+ * every selected layer, aligning and distributing them too (#919); another
+ * row's menu aligns that layer alone, to its container.
  *
  * Without the Graphics Authoring Lease the list still selects, and offers no
  * edit at all (#738).
@@ -177,6 +179,38 @@ function rowTarget(row: LayerRow): FeatureMatchLayoutEditorLayer | undefined {
 		: row.target;
 }
 
+/** Align the row's layer, or the selection it speaks for; distribute the selection. */
+function arrangeMenu(target: FeatureMatchLayoutEditorLayer | undefined): DropdownMenuItem[] {
+	const align: DropdownMenuItem = {
+		label: 'Align',
+		icon: 'i-lucide-align-start-vertical',
+		disabled: !props.editor.canAlign(target),
+		children: [
+			ALIGN_COMMANDS.slice(0, 3),
+			ALIGN_COMMANDS.slice(3),
+		].map(commands => commands.map(command => ({
+			label: command.label,
+			icon: command.icon,
+			onSelect: () => props.editor.align(command.edge, target),
+		}))),
+	};
+	if (target)
+		return [align];
+	return [
+		align,
+		{
+			label: 'Distribute',
+			icon: 'i-lucide-align-horizontal-space-around',
+			disabled: !props.editor.canDistribute(),
+			children: DISTRIBUTE_COMMANDS.map(command => ({
+				label: command.label,
+				icon: command.icon,
+				onSelect: () => props.editor.distribute(command.axis),
+			})),
+		},
+	];
+}
+
 function rowMenu(row: LayerRow): DropdownMenuItem[][] {
 	const target = rowTarget(row);
 	return [
@@ -188,6 +222,7 @@ function rowMenu(row: LayerRow): DropdownMenuItem[][] {
 				onSelect: () => props.editor.duplicate(target),
 			},
 		],
+		arrangeMenu(target),
 		[
 			{
 				label: 'Bring to front',

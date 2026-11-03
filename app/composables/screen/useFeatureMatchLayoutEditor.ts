@@ -2,7 +2,9 @@ import type { BroadcastGraphicConfig, GraphicItemKind, GraphicRect } from '~~/sh
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { EditHistory } from '~/modules/feature-match-overlay/editHistory';
 import type { FeatureMatchLayoutEditorLayer, FeatureMatchLayoutEditorSelection } from '~/modules/feature-match-overlay/editorSelection';
+import type { LayerPosition } from '~/modules/feature-match-overlay/layerAlignment';
 import type { LayerSelection } from '~/modules/feature-match-overlay/layerSelection';
+import type { AlignEdge, DistributeAxis } from '~/modules/graphics/canvasAlignment';
 import {
 	addGraphicGroupChild,
 	addGraphicItem,
@@ -16,6 +18,7 @@ import {
 import { randomUuid } from '~~/shared/utils/uuid';
 import { emptyEditHistory, recordEdit, redoEdit, undoEdit } from '~/modules/feature-match-overlay/editHistory';
 import { CANVAS_SELECTION, editorLayersFrame, editorSelectionKey, editorSelectionLabel, editorSelectionLayer } from '~/modules/feature-match-overlay/editorSelection';
+import { alignableLayers, alignLayers, distributeLayers } from '~/modules/feature-match-overlay/layerAlignment';
 import {
 	collapseLayerSelection,
 	extendLayerSelection,
@@ -68,8 +71,8 @@ interface FeatureMatchLayoutEditorOptions {
  *
  * The selection is none, one or several layers (#740). `selection` names its one
  * layer, or the canvas with none or several, so a verb aimed at one layer never
- * picks one of several. Delete, duplicate, hide, nudge and a canvas move act on
- * every selected layer, each as one undo step.
+ * picks one of several. Delete, duplicate, hide, nudge, a canvas move, align and
+ * distribute act on every selected layer, each as one undo step.
  *
  * The selection follows each structural edit — an added or duplicated layer is
  * selected, a removed one gives way to the canvas — and lets go of a layer
@@ -437,13 +440,13 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 			setRect(selection.value, rect, editOptions);
 	}
 
-	/** Nudge every selected layer the canvas can move; one undo step per run of presses. */
 	/** Set a Graphic Item's Graphic Rotation, as the canvas turns it. A Source Item does not turn. */
 	function setRotation(target: FeatureMatchLayoutEditorSelection, rotation: number, editOptions: FeatureMatchLayoutEditOptions = {}) {
 		if (target.type === 'item')
 			editComposition(composition => patchGraphicItem(composition, target.itemId, { rotation }), editOptions);
 	}
 
+	/** Nudge every selected layer the canvas can move; one undo step per run of presses. */
 	function nudge(delta: { x: number; y: number }) {
 		translateLayers(delta, {
 			coalesce: `nudge:${layers.value.map(editorSelectionKey).join(',')}`,
@@ -456,6 +459,44 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 	 */
 	function setLayersGeometry(patch: Partial<GraphicRect>) {
 		patchLayers(layers.value.map(layer => [layer, patch] as const), { coalesce: 'fields' });
+	}
+
+	/* ── Align and distribute (#919) ──────────────── */
+
+	const canvasSize = () => ({
+		width: toValue(options.canvasWidth),
+		height: toValue(options.canvasHeight),
+	});
+
+	function moveLayers(moved: readonly LayerPosition[]) {
+		patchLayers(moved.map(({ layer, x, y }) => [
+			layer,
+			{ x, y },
+		] as const));
+	}
+
+	/** Whether a layer, or the selection, holds any layer that aligns. */
+	function canAlign(target?: FeatureMatchLayoutEditorSelection): boolean {
+		return alignableLayers(config.value.layout, targets(target)).length > 0;
+	}
+
+	/** Whether the selection holds three or more layers that distribute. */
+	function canDistribute(): boolean {
+		return alignableLayers(config.value.layout, layers.value).length >= 3;
+	}
+
+	/**
+	 * Line up an edge or centre of a layer, or of every selected layer, as one undo
+	 * step: several to the bounds they cover, one to its container. Writes nothing
+	 * when none would move.
+	 */
+	function align(edge: AlignEdge, target?: FeatureMatchLayoutEditorSelection) {
+		moveLayers(alignLayers(config.value.layout, targets(target), canvasSize(), edge));
+	}
+
+	/** Space the selected layers evenly between the outermost two, as one undo step. */
+	function distribute(axis: DistributeAxis) {
+		moveLayers(distributeLayers(config.value.layout, layers.value, axis));
 	}
 
 	return {
@@ -492,6 +533,10 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		setLayersGeometry,
 		setRotation,
 		nudge,
+		canAlign,
+		canDistribute,
+		align,
+		distribute,
 	};
 }
 
