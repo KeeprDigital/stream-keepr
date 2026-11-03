@@ -1,11 +1,14 @@
 import type { ScreenOutputRoundMatch } from '~~/shared/types/screenOutputReads';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { flushPromises, mount } from '@vue/test-utils';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 import Settings from '~/components/Screen/Modes/Pairings/Settings.vue';
+
+// Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
+enableAutoUnmount(afterEach);
 
 // The Pagination card's page count is the one the Screen Output renders: the Round's Matches as the
 // Screen reads them, followed as the Screen follows them (Screen Mode Data Freshness), not a count…

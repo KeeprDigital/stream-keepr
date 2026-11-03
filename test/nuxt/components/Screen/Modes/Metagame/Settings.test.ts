@@ -1,9 +1,12 @@
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { flushPromises, mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';
 import Settings from '~/components/Screen/Modes/Metagame/Settings.vue';
+
+// Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
+enableAutoUnmount(afterEach);
 
 vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
 
