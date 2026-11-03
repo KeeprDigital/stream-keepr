@@ -425,6 +425,22 @@ describe('syncing Deck Lists', () => {
 		expect(event.lastDecklistsSyncedAt).toEqual(syncedAt);
 		expect(event.lastSyncError).toContain('temporarily unavailable');
 	});
+
+	it('refuses a Melee tournament of an unrecognised game before reading its Players, and records the refusal', async () => {
+		const eventId = await createEvent();
+		melee.fetchEvent.mockResolvedValue({ Name: 'Other Event', Game: 'Some Future Game', Phases: [] });
+
+		await expect(meleeSyncModule().syncDeckLists(requestEvent, eventId)).rejects.toMatchObject({
+			statusCode: 422,
+			data: { code: 'MELEE_DECKLIST_GAME_UNSUPPORTED' },
+		});
+
+		expect(melee.fetchPlayers).not.toHaveBeenCalled();
+		expect(await decksOf(eventId)).toEqual([]);
+		const event = await readEvent(eventId);
+		expect(event.lastDecklistsSyncedAt).toBeNull();
+		expect(event.lastSyncError).not.toBeNull();
+	});
 });
 
 // An OP Event never runs Melee Sync (ADR-0057): every command that configures or
