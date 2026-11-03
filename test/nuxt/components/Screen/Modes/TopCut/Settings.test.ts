@@ -3,7 +3,9 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, ref } from 'vue';
+import { TOP_CUT_BRACKET_SIZES } from '~~/shared/screenModeConfigs/topCut';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import { UFormFieldStub, USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import Settings from '~/components/Screen/Modes/TopCut/Settings.vue';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
@@ -11,8 +13,16 @@ enableAutoUnmount(afterEach);
 
 /**
  * The Top Cut Bracket settings editor picks the Phase of the Screen's Event its bracket
- * is derived from (#752), and whether each Player's seed and Archetype show (#759).
+ * is derived from, its size, and whether each Player's Seed and Archetype show.
  */
+
+/** A select's options, as their labels and the values they write. */
+function options(wrapper: Awaited<ReturnType<typeof mountEditor>>, field: string) {
+	return wrapper.findAll(`[data-field="${field}"] option`).map(option => [
+		option.text(),
+		option.attributes('value'),
+	]);
+}
 
 const config = ref<Record<string, unknown>>({});
 const writes: Record<string, unknown>[] = [];
@@ -50,21 +60,6 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 }));
 mockNuxtImport('usePhaseStore', () => () => phaseStore);
 
-const USelectStub = defineComponent({
-	props: {
-		modelValue: { type: null, required: false },
-		items: { type: Array, required: true },
-	},
-	emits: ['update:modelValue'],
-	setup(props, { emit }) {
-		// Choosing the Top 8 Phase.
-		return () => h('select', {
-			'data-items': JSON.stringify(props.items),
-			'onChange': () => emit('update:modelValue', 4),
-		});
-	},
-});
-
 const ScreenSettingsToggleStub = defineComponent({
 	props: {
 		label: { type: String, required: true },
@@ -93,9 +88,7 @@ async function mountEditor() {
 					setup: (_, { slots }) => () => h('section', slots.default?.()),
 				}),
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
-				UFormField: defineComponent({
-					setup: (_, { slots }) => () => h('div', slots.default?.()),
-				}),
+				UFormField: UFormFieldStub,
 				USelect: USelectStub,
 				UInput: true,
 			},
@@ -118,18 +111,49 @@ describe('screenModesTopCutSettings', () => {
 		const wrapper = await mountEditor();
 
 		expect(phaseStore.loadPhasesByEventId).toHaveBeenCalledWith(1);
-		expect(JSON.parse(wrapper.find('select').attributes('data-items')!)).toEqual([
-			{ label: 'Select a phase…', value: null },
-			{ label: 'Swiss', value: 3 },
-			{ label: 'Top 8', value: 4 },
+		expect(options(wrapper, 'phaseId')).toEqual([
+			['Select a phase…', 'null'],
+			['Swiss', '3'],
+			['Top 8', '4'],
 		]);
 	});
 
 	it('writes the picked Phase as the Screen\'s phaseId', async () => {
 		const wrapper = await mountEditor();
-		await wrapper.find('select').trigger('change');
+		await wrapper.find('[data-field="phaseId"] select').setValue('4');
 
 		expect(writes.at(-1)).toEqual({ phaseId: 4 });
+	});
+
+	it('offers the bracket sizes, sizing from the first Round until one is picked, and says a smaller one is ignored', async () => {
+		const wrapper = await mountEditor();
+
+		expect(options(wrapper, 'bracketSizeOverride').map(([, value]) => value)).toEqual([
+			'null',
+			...TOP_CUT_BRACKET_SIZES.map(String),
+		]);
+		expect(wrapper.find('[data-field="bracketSizeOverride"] p').text()).toMatch(/smaller .* ignored/);
+	});
+
+	it.each([
+		[
+			'8',
+			{ bracketSizeOverride: 8 },
+		],
+		[
+			'32',
+			{ bracketSizeOverride: 32 },
+		],
+		[
+			'null',
+			{ bracketSizeOverride: null },
+		],
+	])('writes the picked size %s as the Screen\'s bracketSizeOverride', async (value, write) => {
+		config.value = { ...config.value, bracketSizeOverride: 16 };
+		const wrapper = await mountEditor();
+		await wrapper.find('[data-field="bracketSizeOverride"] select').setValue(value);
+
+		expect(writes.at(-1)).toEqual(write);
 	});
 
 	function toggle(wrapper: Awaited<ReturnType<typeof mountEditor>>, label: string) {

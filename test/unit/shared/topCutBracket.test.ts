@@ -1,4 +1,4 @@
-import type { BracketEntrant, BracketMatchInput, BracketRoundInput, TopCutBracket } from '~~/shared/modules/top-cut-bracket';
+import type { BracketEntrant, BracketMatchInput, BracketRoundInput, SeededPlayer, TopCutBracket } from '~~/shared/modules/top-cut-bracket';
 import { describe, expect, it } from 'vitest';
 import { deriveTopCutBracket } from '~~/shared/modules/top-cut-bracket';
 
@@ -30,6 +30,19 @@ function match(table: number | null, player1: BracketEntrant | null, player2: Br
 
 function round(roundId: number, name: string, matches: BracketMatchInput[]): BracketRoundInput {
 	return { roundId, name, matches };
+}
+
+/** Players 1 to `count`, each seeded by their id. */
+function seeded(count: number): SeededPlayer[] {
+	return Array.from({ length: count }, (_, index) => ({
+		seed: index + 1,
+		entrant: player(index + 1),
+	}));
+}
+
+/** A first Round pairing these seeds, at tables in the order given. */
+function pairedRound(pairs: ReadonlyArray<readonly [number, number]>): BracketRoundInput {
+	return round(1, 'First Round', pairs.map(([a, b], index) => match(index + 1, player(a), player(b))));
 }
 
 /** Each column as its positions' entrant names, `-` for an empty seat. */
@@ -332,5 +345,304 @@ describe('deriveTopCutBracket', () => {
 
 	it('is empty for a Phase with no Rounds', () => {
 		expect(deriveTopCutBracket([])).toEqual({ size: 0, columns: [], champion: null });
+	});
+
+	describe('a set size', () => {
+		it.each([
+			['unset', null, 2, 4],
+			[
+				'larger than the first Round implies',
+				8,
+				2,
+				8,
+			],
+			[
+				'as large as the first Round implies',
+				8,
+				4,
+				8,
+			],
+			['larger by two Rounds', 16, 2, 16],
+			[
+				'smaller than the first Round implies, which is ignored',
+				4,
+				4,
+				8,
+			],
+		])('sizes the bracket when %s', (_, size, matches, expected) => {
+			const bracket = deriveTopCutBracket([
+				round(1, 'First Round', Array.from({ length: matches }, (_, index) => match(index + 1, player(index * 2 + 1), player(index * 2 + 2)))),
+			], { size });
+
+			expect(bracket.size).toBe(expected);
+			expect(bracket.columns.map(column => column.positions.length)).toEqual(
+				Array.from({
+					length: Math.log2(expected),
+				}, (_, column) => expected / 2 ** (column + 1)),
+			);
+		});
+
+		it('sizes a Phase whose Rounds hold no Matches yet', () => {
+			const bracket = deriveTopCutBracket([
+				round(1, 'Top 8', []),
+			], { size: 8 });
+
+			expect(bracket.columns.map(column => [column.name, column.positions.length])).toEqual([
+				['Top 8', 4],
+				['Semifinals', 2],
+				['Final', 1],
+			]);
+		});
+	});
+
+	describe('placed by Seed', () => {
+		it.each([
+			[
+				4,
+				[
+					[2, 3],
+					[1, 4],
+				],
+				['P1 v P4', 'P2 v P3'],
+			],
+			[
+				8,
+				[
+					[3, 6],
+					[2, 7],
+					[4, 5],
+					[1, 8],
+				],
+				[
+					'P1 v P8',
+					'P4 v P5',
+					'P2 v P7',
+					'P3 v P6',
+				],
+			],
+			[
+				16,
+				[
+					[6, 11],
+					[3, 14],
+					[7, 10],
+					[2, 15],
+					[5, 12],
+					[4, 13],
+					[8, 9],
+					[1, 16],
+				],
+				[
+					'P1 v P16',
+					'P8 v P9',
+					'P4 v P13',
+					'P5 v P12',
+					'P2 v P15',
+					'P7 v P10',
+					'P3 v P14',
+					'P6 v P11',
+				],
+			],
+			[
+				32,
+				Array.from({ length: 16 }, (_, index) => [16 - index, 17 + index] as const),
+				[
+					'P1 v P32',
+					'P16 v P17',
+					'P8 v P25',
+					'P9 v P24',
+					'P4 v P29',
+					'P13 v P20',
+					'P5 v P28',
+					'P12 v P21',
+					'P2 v P31',
+					'P15 v P18',
+					'P7 v P26',
+					'P10 v P23',
+					'P3 v P30',
+					'P14 v P19',
+					'P6 v P27',
+					'P11 v P22',
+				],
+			],
+		] as const)('seats a Top %i\'s first Round in standard order, whatever its table order', (size, pairs, expected) => {
+			const bracket = deriveTopCutBracket([
+				pairedRound(pairs),
+			], {
+				seeds: seeded(size),
+			});
+
+			expect(seats(bracket)[0]).toEqual(expected);
+		});
+
+		it('gives the top Seeds the byes of a Top 6 set to size 8, and leaves the Semifinals pending', () => {
+			const bracket = deriveTopCutBracket([
+				round(1, 'Quarterfinals', [
+					match(1, player(3), player(6), [2, 0]),
+					match(2, player(4), player(5)),
+				]),
+			], {
+				size: 8,
+				seeds: seeded(40),
+			});
+
+			expect(seats(bracket)).toEqual([
+				[
+					'P1 v -',
+					'P4 v P5',
+					'P2 v -',
+					'P3 v P6',
+				],
+				['P1 v -', 'P2 v P3'],
+				['- v -'],
+			]);
+			expect(bracket.columns.map(column => column.positions.map(position => position.status))).toEqual([
+				['bye', 'unreported', 'bye', 'reported'],
+				['awaiting', 'awaiting'],
+				['awaiting'],
+			]);
+		});
+
+		it.each([
+			[
+				'a Top 7',
+				[
+					[2, 7],
+					[3, 6],
+					[4, 5],
+				],
+				null,
+				[
+					'P1 v -',
+					'P4 v P5',
+					'P2 v P7',
+					'P3 v P6',
+				],
+			],
+			// No Seed better than the worst one seated sits out, so no one takes a bye.
+			[
+				'a Top 4 set to size 8',
+				[
+					[1, 4],
+					[2, 3],
+				],
+				8,
+				['P1 v P4', '- v -', 'P2 v P3', '- v -'],
+			],
+		] as const)('gives byes only to Seeds better than every one %s seats', (_, pairs, size, expected) => {
+			const bracket = deriveTopCutBracket([
+				pairedRound(pairs),
+			], {
+				size,
+				seeds: seeded(40),
+			});
+
+			expect(seats(bracket)[0]).toEqual(expected);
+		});
+
+		it.each([
+			[
+				'crossing its table order',
+				[
+					[1, 3],
+					[2, 4],
+				],
+			],
+			[
+				'along its table order',
+				[
+					[1, 4],
+					[2, 3],
+				],
+			],
+		] as const)('keeps every first-Round position when the next Round is paired %s', (_, semifinals) => {
+			const quarterfinals = round(1, 'Quarterfinals', [
+				match(1, player(2), player(7), [2, 0]),
+				match(2, player(3), player(6), [2, 0]),
+				match(3, player(1), player(8), [2, 0]),
+				match(4, player(4), player(5), [2, 0]),
+			]);
+			const before = deriveTopCutBracket([quarterfinals], {
+				seeds: seeded(8),
+			});
+			const after = deriveTopCutBracket([
+				quarterfinals,
+				round(2, 'Semifinals', semifinals.map(([a, b], index) => match(index + 1, player(a), player(b)))),
+			], {
+				seeds: seeded(8),
+			});
+
+			expect(seats(after)[0]).toEqual(seats(before)[0]);
+			expect(seats(after)[0]).toEqual([
+				'P1 v P8',
+				'P4 v P5',
+				'P2 v P7',
+				'P3 v P6',
+			]);
+		});
+
+		it('places each later Match where its Players advance from', () => {
+			const bracket = deriveTopCutBracket([
+				round(1, 'Quarterfinals', [
+					match(1, player(3), player(6), [2, 0]),
+					match(2, player(4), player(5), [0, 2]),
+				]),
+				round(2, 'Semifinals', [
+					match(1, player(2), player(3)),
+					match(2, player(5), player(1)),
+				]),
+			], {
+				seeds: seeded(8),
+			});
+
+			expect(seats(bracket)).toEqual([
+				[
+					'P1 v -',
+					'P4 v P5',
+					'P2 v -',
+					'P3 v P6',
+				],
+				['P5 v P1', 'P2 v P3'],
+				['- v -'],
+			]);
+		});
+
+		it('fills the positions Seeds leave free with unseeded Matches in table order', () => {
+			const bracket = deriveTopCutBracket([
+				round(1, 'Quarterfinals', [
+					match(1, { playerId: null, name: 'Alice' }, { playerId: null, name: 'Bob' }),
+					match(2, player(2), player(7)),
+					match(3, { playerId: null, name: 'Cara' }, { playerId: null, name: 'Dan' }),
+					match(4, player(1), player(8)),
+				]),
+			], {
+				seeds: seeded(8),
+			});
+
+			expect(seats(bracket)[0]).toEqual([
+				'P1 v P8',
+				'Alice v Bob',
+				'P2 v P7',
+				'Cara v Dan',
+			]);
+		});
+
+		it('places by table order when no first-Round Player has a Seed', () => {
+			const bracket = deriveTopCutBracket([
+				pairedRound([
+					[3, 6],
+					[2, 7],
+					[4, 5],
+					[1, 8],
+				]),
+			], { seeds: [] });
+
+			expect(seats(bracket)[0]).toEqual([
+				'P3 v P6',
+				'P2 v P7',
+				'P4 v P5',
+				'P1 v P8',
+			]);
+		});
 	});
 });
