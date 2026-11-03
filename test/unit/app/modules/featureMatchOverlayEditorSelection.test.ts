@@ -136,7 +136,7 @@ describe('feature match layout editor selection', () => {
 		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'child' }, CANVAS_SIZE)?.origin).toEqual({ x: 54, y: 64 });
 	});
 
-	it('offers nothing to move for a row child or a rotated item', () => {
+	it('offers nothing to move for a row child, a rotated group\'s child or a rotated item', () => {
 		let layout = layoutWith(composition => addGraphicGroupChild(
 			addGraphicItem(composition, { kind: 'group', id: 'cluster', ...CANVAS }).graphic,
 			{ kind: 'shape', groupId: 'cluster', id: 'child' },
@@ -154,6 +154,21 @@ describe('feature match layout editor selection', () => {
 			},
 		};
 		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'child' }, CANVAS_SIZE)).toBeNull();
+
+		const turnedGroup = {
+			...layout,
+			composition: {
+				...layout.composition,
+				items: [
+					{
+						...group(layout),
+						arrangement: 'canvas' as const,
+						rotation: 30,
+					},
+				],
+			},
+		};
+		expect(editorSelectionFrame(turnedGroup, { type: 'item', itemId: 'child' }, CANVAS_SIZE)).toBeNull();
 
 		const rotated = layoutWith(composition => addGraphicItem(composition, { kind: 'text', id: 'title', ...CANVAS }).graphic);
 		rotated.composition.items = rotated.composition.items.map(item => ({ ...item, rotation: 15 }) as GraphicItemConfig);

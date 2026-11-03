@@ -285,6 +285,95 @@ describe('canvas manipulation', () => {
 					440,
 				],
 			},
+			{
+				name: 'a canvas-arranged group\'s visible children add their edges and centres, in canvas pixels',
+				layers: [
+					layer('self', { x: 0, y: 0, width: 10, height: 10 }),
+					layer('cluster', {
+						x: 100,
+						y: 50,
+						width: 400,
+						height: 200,
+					}, {
+						arrangement: 'canvas',
+						padding: 10,
+						children: [
+							layer('child', { x: 20, y: 30, width: 40, height: 20 }),
+							layer('hidden', {
+								x: 300,
+								y: 150,
+								width: 10,
+								height: 10,
+							}, { visible: false }),
+						],
+					}),
+				],
+				x: [0, 100, 130, 150, 170, 300, 500, 1000],
+				y: [0, 50, 90, 100, 110, 150, 250, 500],
+			},
+			{
+				name: 'a row group\'s children add nothing, since the group places them',
+				layers: [
+					layer('self', { x: 0, y: 0, width: 10, height: 10 }),
+					layer('cluster', {
+						x: 100,
+						y: 50,
+						width: 400,
+						height: 200,
+					}, {
+						arrangement: 'row',
+						padding: 10,
+						children: [
+							layer('child', { x: 20, y: 30, width: 40, height: 20 }),
+						],
+					}),
+				],
+				x: [0, 100, 300, 500, 1000],
+				y: [0, 50, 150, 250, 500],
+			},
+			{
+				name: 'a rotated group\'s children add nothing, since they turn with it',
+				layers: [
+					layer('self', { x: 0, y: 0, width: 10, height: 10 }),
+					layer('cluster', {
+						x: 100,
+						y: 50,
+						width: 400,
+						height: 200,
+					}, {
+						arrangement: 'canvas',
+						rotation: 90,
+						anchor: 'center',
+						padding: 10,
+						children: [
+							layer('child', { x: 20, y: 30, width: 40, height: 20 }),
+						],
+					}),
+				],
+				x: [0, 200, 300, 400, 500, 1000],
+				y: [-50, 0, 150, 250, 350, 500],
+			},
+			{
+				name: 'a child of a hidden group snaps to the canvas only',
+				layers: [
+					layer('cluster', {
+						x: 100,
+						y: 50,
+						width: 400,
+						height: 200,
+					}, {
+						visible: false,
+						arrangement: 'canvas',
+						padding: 10,
+						children: [
+							layer('self', { x: 0, y: 0, width: 10, height: 10 }),
+							layer('sibling', { x: 20, y: 30, width: 40, height: 20 }),
+						],
+					}),
+				],
+				x: [-110, 390, 890],
+				y: [-60, 190, 440],
+			},
 		])('$name', ({ layers, x, y }) => {
 			const lines = canvasSnapLines(CANVAS, layers, 'self');
 			expect({ x: lines.x, y: lines.y }).toEqual({ x, y });

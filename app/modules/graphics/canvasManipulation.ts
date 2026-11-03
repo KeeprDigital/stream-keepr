@@ -75,6 +75,8 @@ export interface SnapLayer extends GraphicRect {
 	/** Graphic Rotation in degrees about the Graphic Anchor Point. */
 	rotation?: number;
 	anchor?: GraphicAnchorPoint;
+	/** A Graphic Group's arrangement; only a canvas-arranged group's children keep their stored rectangles. */
+	arrangement?: string;
 	padding?: number;
 	children?: readonly SnapLayer[];
 }
@@ -129,8 +131,10 @@ function roundBound(value: number): number {
  * The lines a layer may snap to, in its container's pixels: the edges and centre
  * of every other visible layer beside it, and the canvas's edges and centre
  * lines. A group child is beside its siblings and also snaps to its group's box,
- * outer and padded, with everything measured from the padded box's corner.
- * A rotated layer offers the axis-aligned box it covers.
+ * outer and padded, with everything measured from the padded box's corner; a
+ * hidden group hides them all. A layer on the canvas is also beside the children
+ * of an unrotated canvas-arranged group. A rotated layer offers the axis-aligned
+ * box it covers.
  */
 export function canvasSnapLines(
 	canvas: { width: number; height: number },
@@ -138,11 +142,18 @@ export function canvasSnapLines(
 	layerId?: string,
 ): SnapLines {
 	const group = layers.find(layer => layer.children?.some(child => child.id === layerId));
-	const siblings = group?.children ?? layers;
-	const padding = Math.max(0, group?.padding ?? 0);
+	const padding = groupPadding(group);
 	const origin = group
 		? { x: group.x + padding, y: group.y + padding }
 		: { x: 0, y: 0 };
+	const siblings = group
+		? group.visible
+			? group.children ?? []
+			: []
+		: layers.flatMap(layer => [
+				layer,
+				...placedChildren(layer),
+			]);
 
 	const x = [0, canvas.width / 2, canvas.width].map(line => line - origin.x);
 	const y = [0, canvas.height / 2, canvas.height].map(line => line - origin.y);
@@ -150,7 +161,7 @@ export function canvasSnapLines(
 		x.push(rect.x, rect.x + rect.width / 2, rect.x + rect.width);
 		y.push(rect.y, rect.y + rect.height / 2, rect.y + rect.height);
 	};
-	if (group) {
+	if (group?.visible) {
 		add({
 			x: -padding,
 			y: -padding,
@@ -173,6 +184,22 @@ export function canvasSnapLines(
 		y: uniqueSorted(y),
 		neighbours,
 	};
+}
+
+function groupPadding(group: SnapLayer | undefined): number {
+	return Math.max(0, group?.padding ?? 0);
+}
+
+/** A group's children where they sit on the canvas, when their stored rectangles say so. */
+function placedChildren(group: SnapLayer): SnapLayer[] {
+	if (!group.visible || group.arrangement !== 'canvas' || (group.rotation ?? 0) % 360 !== 0)
+		return [];
+	const padding = groupPadding(group);
+	return (group.children ?? []).map(child => ({
+		...child,
+		x: child.x + group.x + padding,
+		y: child.y + group.y + padding,
+	}));
 }
 
 /**

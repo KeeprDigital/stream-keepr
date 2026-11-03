@@ -90,9 +90,9 @@ export interface EditorSelectionFrame {
  *
  * A Source Item and a top-level Graphic Item are positioned on the canvas itself,
  * and a child of a canvas-arranged Graphic Group inside its group's padded box. A
- * row or column child is placed by its group, and a rotated item's stored
- * rectangle is not what the author sees, so neither is offered: the property
- * panel still edits both.
+ * row or column child is placed by its group, and the stored rectangle of a
+ * rotated item or a rotated group's child is not what the author sees, so none
+ * is offered: the property panel still edits them.
  */
 export function editorSelectionFrame(
 	layout: FeatureMatchLayoutConfig,
@@ -128,7 +128,7 @@ export function editorSelectionFrame(
 			snapLines,
 		};
 	}
-	if (location.group.arrangement !== 'canvas')
+	if (location.group.arrangement !== 'canvas' || (location.group.rotation ?? 0) % 360 !== 0)
 		return null;
 	const padding = Math.max(0, location.group.padding);
 	return {
