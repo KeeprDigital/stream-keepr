@@ -306,7 +306,10 @@ describe('a Feature Match Overlay Screen\'s Feature Match Layout while leased', 
 
 	beforeEach(async () => {
 		const [slot] = await db.insert(schema.featureMatches).values({ eventId } as never).returning();
-		const config = { ...structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG), featureMatchId: slot!.id };
+		const config = {
+			...structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG),
+			featureMatchId: slot!.id,
+		};
 		storedLayout = config.layout;
 		const current = await screenRow();
 		await db.update(schema.screens).set({
@@ -325,15 +328,26 @@ describe('a Feature Match Overlay Screen\'s Feature Match Layout while leased', 
 			screenId,
 			mode: 'feature-match-overlay',
 			config,
-			graphicsAssets: () => ({ inspectGraphicAssetRevisions: async () => [] }),
+			graphicsAssets: () => ({
+				inspectGraphicAssetRevisions: async () => [],
+			}),
 			authoringSessionId: sessionId,
 		});
 	}
 
 	it.each([
-		['its layout', { layout: otherPreset.layout }],
-		['its preset', { presetId: 'full-table' }],
-		['a display reset', { presetId: otherPreset.presetId, layout: otherPreset.layout }],
+		[
+			'its layout',
+			{ layout: otherPreset.layout },
+		],
+		[
+			'its preset',
+			{ presetId: 'full-table' },
+		],
+		[
+			'a display reset',
+			{ presetId: otherPreset.presetId, layout: otherPreset.layout },
+		],
 	])('refuses another Session\'s mode configuration write of %s', async (_, config) => {
 		await lease(HOLDER);
 
@@ -361,9 +375,24 @@ describe('a Feature Match Overlay Screen\'s Feature Match Layout while leased', 
 	});
 
 	it.each([
-		['refuses', 'a changed layout', { layout: otherPreset.layout }, true],
-		['admits', 'the layout back unchanged', {}, false],
-		['admits', 'a Feature Match Slot change', { featureMatchId: null }, false],
+		[
+			'refuses',
+			'a changed layout',
+			{ layout: otherPreset.layout },
+			true,
+		],
+		[
+			'admits',
+			'the layout back unchanged',
+			{},
+			false,
+		],
+		[
+			'admits',
+			'a Feature Match Slot change',
+			{ featureMatchId: null },
+			false,
+		],
 	])('%s another Session\'s generic Screen write carrying %s', async (_, __, change, refused) => {
 		await lease(HOLDER);
 		const current = await screenRow();
@@ -375,7 +404,10 @@ describe('a Feature Match Overlay Screen\'s Feature Match Layout while leased', 
 				name: 'Renamed',
 				modeConfigs: {
 					...current!.modeConfigs,
-					'feature-match-overlay': { ...current!.modeConfigs!['feature-match-overlay'], ...change },
+					'feature-match-overlay': {
+						...current!.modeConfigs!['feature-match-overlay'],
+						...change,
+					},
 				},
 			} as never,
 			authoringSessionId: OTHER,
