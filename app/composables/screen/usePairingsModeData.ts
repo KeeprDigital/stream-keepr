@@ -59,7 +59,7 @@ export function usePairingsModeData() {
 		: 'Pairings'));
 	const isEmpty = computed(() => freshness.answered.value && (!config.value.roundId || rows.value.length === 0));
 
-	const { pageData, rowCount } = usePaginatedScreenMode({ mode: 'pairings', config, rows });
+	const { pageData, pageSize, rowCount } = usePaginatedScreenMode({ mode: 'pairings', config, rows });
 
 	function formatResult(row: ScreenOutputRoundMatch) {
 		if (row.isBye)
@@ -95,6 +95,7 @@ export function usePairingsModeData() {
 		headerText,
 		round,
 		pageData,
+		pageSize,
 		rowCount,
 		formatResult,
 		winner,

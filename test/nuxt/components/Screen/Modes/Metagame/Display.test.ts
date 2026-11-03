@@ -53,6 +53,8 @@ mockNuxtImport('useMetagameModeData', () => () => ({
 		? 'Most Played Cards'
 		: 'Full Field Metagame'),
 	pageData: computed(() => pageData.value),
+	// The page size field the mode's Page Rotation declares.
+	pageSize: computed(() => config.value.pageSize),
 	chartBars: computed(() => chartBars.value),
 	currentPage: computed(() => 1),
 	totalPages: computed(() => 2),

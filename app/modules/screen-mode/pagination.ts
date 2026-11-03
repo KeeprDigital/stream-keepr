@@ -141,6 +141,8 @@ export function useScreenModePagination<TRow>(options: ScreenModePaginationOptio
 	return {
 		/** How many rows the rotation pages over, which its page count follows. */
 		rowCount: computed(() => options.rows.value.length),
+		/** How many rows a page holds, which a rendering lays its rows out for. */
+		pageSize: options.pageSize,
 		pageData,
 		totalPages,
 		currentPage,
@@ -160,7 +162,8 @@ export interface PaginatedScreenModeOptions<M extends PageRotationMode, TRow> {
 /**
  * A paginated Screen Mode's paging as its rendering reads it: the mode's Page
  * Rotation over `rows`, a page holding as many rows as the field the mode
- * declares (`pageRotation.pageSize`).
+ * declares (`pageRotation.pageSize`). Its `pageSize` is that field's value,
+ * so a rendering never names the field itself.
  *
  * A page selection is written only from an interactive surface, such as the
  * Program monitor; a Screen Output never writes, so it cannot move the
