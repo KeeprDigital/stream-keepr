@@ -28,8 +28,8 @@ const integrationIngestionBody = 'Build ingestion initiation bodies with graphic
 // ADR-0039: a rendering reads its page size from its mode data (`pageSize`), never its config field.
 const pageSizeFieldMessage = 'Read the page size its Page Rotation declares (`pageSize` from the mode data), not its config field.';
 const pageSizeFieldSyntax = [
-	{ selector: 'MemberExpression[property.name=/^(?:pageSize|\\w+PerPage)$/]', message: pageSizeFieldMessage },
-	{ selector: 'VariableDeclarator:not([init.type=\'CallExpression\']) > ObjectPattern > Property[key.name=/^(?:pageSize|\\w+PerPage)$/]', message: pageSizeFieldMessage },
+	{ selector: 'MemberExpression[property.name=/^(?:pageSize|\\w+PerPage)$/]:matches([object.name=\'config\'], [object.property.name=/^(?:value|config)$/])', message: pageSizeFieldMessage },
+	{ selector: 'VariableDeclarator:not([init.callee.name=/^use\\w+ModeData$/]) > ObjectPattern > Property[key.name=/^(?:pageSize|\\w+PerPage)$/]', message: pageSizeFieldMessage },
 ];
 const compositorPanelSyntax = [
 	{ selector: 'CallExpression[callee.name=\'emit\'][arguments.0.value=\'update:graphics\']:not(CallExpression[callee.name=\'useCompositorEditing\'] CallExpression)', message: 'Commit the stack only through useCompositorEditing.' },
