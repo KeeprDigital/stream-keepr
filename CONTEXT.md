@@ -130,7 +130,7 @@ A Deck List held by one player side of a Feature Match Slot rather than by a Pla
 _Avoid_: slot deck, match deck.
 
 **Feature Match Session**:
-The live state timeline for a Feature Match Slot.
+The live state timeline for a Feature Match Slot. It owns which side each player sits on: Swap Players moves them in the Session only, and the Slot keeps its pairing order (ADR-0058).
 
 **Untimed Match**:
 A Feature Match whose Session clock type is untimed: it has no clock to run and so no extra turns. The type comes from the Event's Match Format when the Session opens. Where its clock would render, it shows the Event's Untimed Label, or nothing while that label is blank.
@@ -756,6 +756,7 @@ _Avoid_: Dummy data, test data
 - A **Feature Match Slot Promotion** creates or updates one **Feature Match Assignment**
 - A **Feature Match Slot**'s player side has at most one **Feature Match Deck List**; in a One Piece Card Game Event it is the side's only Deck List, and its **Leader** is the side's Leader. Replacing it while a **Feature Match Session** is active updates that Session's source snapshot
 - A **Feature Match Session** belongs to exactly one **Feature Match Slot**; while active, the Slot's identity binding fields resolve from the session's source snapshot and its live binding fields from the session's current state
+- While a **Feature Match Session** is active, it decides which player each side of its **Feature Match Slot** shows; the Slot's own sides keep their pairing order
 
 ### Screens and outputs
 

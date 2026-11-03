@@ -154,3 +154,46 @@ describe('a side\'s deck on the Feature Match Overlay', () => {
 		});
 	});
 });
+
+describe('which player a side shows on the Feature Match Overlay', () => {
+	// The active Session owns side order (ADR-0058); the Slot keeps pairing order.
+	it('names each side by the active Session\'s side order', () => {
+		const values = featureMatchTokenValues({
+			event: {
+				name: 'Open',
+				game: 'mtg',
+				displayRecordSeparator: '-',
+				displayHideZeroDraws: true,
+				displayPositionFormat: 'ordinal',
+			},
+			featureMatch: {
+				player1Data: { name: 'Ana', wins: 3, losses: 0 },
+				player2Data: { name: 'Ben', wins: 2, losses: 1 },
+				activeSession: {
+					sourceSnapshot: {
+						playersSwapped: true,
+						player1: {
+							playerId: 2,
+							data: { name: 'Ben', wins: 2, losses: 1 },
+						},
+						player2: {
+							playerId: 1,
+							data: { name: 'Ana', wins: 3, losses: 0 },
+						},
+					},
+				},
+			} as any,
+			sourceMatch: null,
+			round: null,
+			phase: null,
+		});
+
+		expect([
+			values.player1Name,
+			values.player1Record,
+			values.player2Name,
+			values.player2Record,
+		])
+			.toEqual(['Ben', '2-1', 'Ana', '3-0']);
+	});
+});

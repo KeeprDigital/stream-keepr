@@ -282,15 +282,15 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 		expect(mockPlayerDecks.mock.calls[0]![0]).toBe(6);
 	});
 
-	it('pins the session snapshot"s deckId first, matched by player across a swap', async () => {
+	it('shows the player a swapped Session seats on the side, with their pinned deck', async () => {
 		config.value = overlayConfig([
 			deckListItem('player1'),
 		]);
 		match.value = slotMatch({
 			activeSession: {
 				sourceSnapshot: {
-					// The session was swapped: the Slot's player 5 sits on the
-					// snapshot's player2 side. The deck pin belongs to the player.
+					// The Session owns side order (ADR-0058): Slot player 6
+					// sits on its player1 side, and brings their deck pin.
 					player1: {
 						playerId: 6,
 						data: { deckId: 40 },
@@ -306,7 +306,8 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 		mountSideboardData();
 		await flushPromises();
 
-		expect(mockPlayerDecks).toHaveBeenCalledWith(5, { deckId: 30 });
+		expect(mockPlayerDecks).toHaveBeenCalledWith(6, { deckId: 40 });
+		expect(mockPlayerDecks).not.toHaveBeenCalledWith(5, expect.anything());
 	});
 
 	it('falls back to the collection"s own ladder when the pinned deck is gone', async () => {

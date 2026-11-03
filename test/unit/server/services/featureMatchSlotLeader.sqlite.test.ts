@@ -110,24 +110,25 @@ describe('a Slot side\'s Leader during a Feature Match Session', () => {
 			payload: {},
 			baseSequence: session.sequence,
 		});
-		// The setup form swaps its own sides with the Session's, then saves.
+		// The setup form saves in Slot order; the Session keeps the swap (ADR-0058).
 		await featureMatchSlotWriteModule().updateSetup({
 			eventId,
 			slotId,
 			input: {
-				player1Data: side('Ben', LAW),
-				player2Data: side('Ana', NAMI),
+				player1Data: side('Ana', NAMI),
 			},
 		});
 
 		const leaders = await sessionLeaders(slotId, eventId);
-		expect([leaders.player1, leaders.player2]).toContainEqual([
-			'Ana',
-			{ type: 'op', leader: NAMI },
-		]);
-		expect([leaders.player1, leaders.player2]).toContainEqual([
-			'Ben',
-			{ type: 'op', leader: LAW },
+		expect([leaders.player1, leaders.player2]).toEqual([
+			[
+				'Ben',
+				{ type: 'op', leader: LAW },
+			],
+			[
+				'Ana',
+				{ type: 'op', leader: NAMI },
+			],
 		]);
 	});
 });

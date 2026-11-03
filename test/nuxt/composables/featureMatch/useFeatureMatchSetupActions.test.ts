@@ -50,24 +50,28 @@ describe('useFeatureMatchSetupActions', () => {
 	});
 
 	describe('swapping players', () => {
-		it('swaps the seats and the Session, and says so', async () => {
-			const { swapPlayers, formData } = createSetup();
-
-			await swapPlayers();
-
-			expect(seats(formData)).toEqual([20, 'Bob', 10, 'Alice']);
-			expect(mockFeatureMatchStateStore.swapPlayers).toHaveBeenCalledWith(1, 1);
-			expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({ title: 'Players swapped', color: 'success' }));
-		});
-
-		it('puts the seats back when the Session refuses the swap', async () => {
-			mockFeatureMatchStateStore.swapPlayers.mockRejectedValue(new Error('refused'));
+		// The Session owns side order and the form holds the Slot's (ADR-0058), so a
+		// swap never edits the form, whether the Session takes it or not.
+		it.each([
+			{
+				outcome: 'takes',
+				answer: () => Promise.resolve(),
+				toast: { title: 'Players swapped', color: 'success' },
+			},
+			{
+				outcome: 'refuses',
+				answer: () => Promise.reject(new Error('refused')),
+				toast: { title: 'Failed to swap players', color: 'error' },
+			},
+		])('swaps the Session, leaving the form\'s seats, when the Session $outcome it', async ({ answer, toast }) => {
+			mockFeatureMatchStateStore.swapPlayers.mockImplementation(answer);
 			const { swapPlayers, formData } = createSetup();
 
 			await swapPlayers();
 
 			expect(seats(formData)).toEqual([10, 'Alice', 20, 'Bob']);
-			expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({ title: 'Failed to swap players', color: 'error' }));
+			expect(mockFeatureMatchStateStore.swapPlayers).toHaveBeenCalledWith(1, 1);
+			expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining(toast));
 		});
 	});
 

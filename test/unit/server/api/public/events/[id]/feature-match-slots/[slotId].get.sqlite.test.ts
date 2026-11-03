@@ -27,6 +27,18 @@ vi.doMock('~~/server/db', () => ({ db }));
 const { default: handler } = await import('~~/server/api/public/events/[id]/feature-match-slots/[slotId].get');
 
 const NOW = Date.UTC(2026, 9, 29, 12);
+const ALICE = {
+	name: 'Alice',
+	wins: 4,
+	losses: 1,
+	draws: 0,
+};
+const BO = {
+	name: 'Bo',
+	wins: 3,
+	losses: 2,
+	draws: 1,
+};
 
 afterEach(() => vi.useRealTimers());
 afterAll(async () => await harness.close());
@@ -42,18 +54,8 @@ async function stage(withSession: boolean) {
 			tableNumber: 4,
 			roundName: 'Round 5',
 			formatName: 'Modern',
-			player1Data: {
-				name: 'Alice',
-				wins: 4,
-				losses: 1,
-				draws: 0,
-			},
-			player2Data: {
-				name: 'Bo',
-				wins: 3,
-				losses: 2,
-				draws: 1,
-			},
+			player1Data: ALICE,
+			player2Data: BO,
 		})
 		.returning({ id: schema.featureMatchSlots.id });
 	const slotId = slot!.id;
@@ -66,7 +68,12 @@ async function stage(withSession: boolean) {
 			.values({
 				eventId,
 				slotId,
-				sourceSnapshot: { playerDisplayMode: 'score' } as FeatureMatchSourceSnapshot,
+				// A Session's snapshot seats the Slot's players (ADR-0058).
+				sourceSnapshot: {
+					playerDisplayMode: 'score',
+					player1: { playerId: null, data: ALICE },
+					player2: { playerId: null, data: BO },
+				} as FeatureMatchSourceSnapshot,
 				currentState: state,
 			})
 			.returning({ id: schema.featureMatchSessions.id });

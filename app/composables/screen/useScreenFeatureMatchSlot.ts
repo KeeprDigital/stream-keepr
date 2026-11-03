@@ -69,10 +69,14 @@ export function useScreenFeatureMatchSlot<T>(options: ScreenFeatureMatchSlotOpti
 		dependsOn: options.dependsOn ?? {},
 	});
 
+	/** The Slot held, with the Session followed for it: `SwapPlayers` moves only that (ADR-0058). */
 	const slot = computed<FeatureMatch | null>(() => {
 		const slotId = options.slotId();
-		return slotId
-			? featureMatchStore.featureMatches.find(held => held.id === slotId) ?? null
+		const held = slotId
+			? featureMatchStore.featureMatches.find(candidate => candidate.id === slotId) ?? null
+			: null;
+		return held
+			? withFollowedFeatureMatchSession(held, featureMatchStateStore)
 			: null;
 	});
 

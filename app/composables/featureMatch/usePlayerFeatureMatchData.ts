@@ -64,15 +64,20 @@ export function usePlayerFeatureMatchData(
 		return playerData.value?.name || fallback;
 	});
 
-	// The roster Player whose name this side shows, from the same source as playerData; a seat filled by hand links none.
-	const linkedPlayer = computed(() => {
+	// The roster Player this side links, from the same source as playerData: the
+	// Session owns side order (ADR-0058). A seat filled by hand links none.
+	const seatedPlayerId = computed(() => {
 		const s = side();
 		const snapshotPlayer = activeSession.value?.sourceSnapshot[s];
-		const playerId = snapshotPlayer
+		return snapshotPlayer
 			? snapshotPlayer.playerId
 			: s === 'player1'
 				? match.value?.player1Id
 				: match.value?.player2Id;
+	});
+
+	const linkedPlayer = computed(() => {
+		const playerId = seatedPlayerId.value;
 		return playerId
 			? playerStore.players.find(p => p.id === playerId) ?? null
 			: null;
@@ -86,9 +91,7 @@ export function usePlayerFeatureMatchData(
 
 	const deckName = computed(() => {
 		if (game.value === 'mtg') {
-			const playerId = side() === 'player1'
-				? match.value?.player1Id
-				: match.value?.player2Id;
+			const playerId = seatedPlayerId.value;
 			const rosterPlayer = playerId
 				? playerStore.players.find(p => p.id === playerId)
 				: playerStore.players.find(p => p.name.toLowerCase() === playerName.value.toLowerCase());
