@@ -1919,7 +1919,7 @@ A Screen left naming a deleted Phase, Round or Archetype rendered an empty brack
 - **Clear by the deleted ids, ahead of the delete, as ADR-0032 does.** The imported structure removal decides which Phases and Rounds go as its batch runs, and a Phase takes its Rounds by cascade; each would need its own prediction of what will be deleted.
 - **`AFTER DELETE` triggers.** Rejected for ADR-0032's reason: the service could not say which Screens changed, and they must be announced.
 
-## ADR-0061: The Feature Match Stress Dataset overrides a bound Slot, in the editor's preview only
+## ADR-0062: The Feature Match Stress Dataset overrides a bound Slot, in the editor's preview only
 
 Accepted · 2026-11-04 · [#743](https://github.com/KeeprDigital/stream-keepr/issues/743).
 

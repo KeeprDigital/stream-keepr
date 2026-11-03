@@ -15,7 +15,7 @@ import { formatOpColors, opPrintingImageUrl } from './utils/card/op';
  *
  * The sample is typical so a preview looks like a show; this one is the widest
  * a show will plausibly hold, so overflow shows up while authoring rather than
- * on show day (ADR-0061). The values are the list approved on #743.
+ * on show day (ADR-0062). The values are the list approved on #743.
  */
 
 /** An Untimed Label of words at the schema's maximum, so it wraps as a real one would. */
