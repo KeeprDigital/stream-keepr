@@ -1,7 +1,7 @@
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { Screen } from '~/types';
 import { computed, ref, shallowRef, toValue, watch } from 'vue';
 import { eventCanvasOf } from '~~/shared/eventCanvas';
-import { runInScreenContext } from '~/composables/screen/useScreenContext';
 import { useEventStore } from '~/stores/event';
 
 export interface EditedScreen {
@@ -13,7 +13,8 @@ export interface EditedScreen {
 }
 
 /**
- * A mode's data composable, set up for the Screen a settings editor edits: it
+ * A mode's data composable, set up against a Screen context for the Screen a
+ * settings editor edits (#914): it
  * reads what the Screen Output reads and keeps it current the same way (Screen
  * Mode Data Freshness), so the editor shows what the Screen renders rather
  * than an estimate from config (#780).
@@ -26,7 +27,7 @@ export interface EditedScreen {
  * is answered. It is not interactive: the editor writes the rotation itself
  * (`useRotationConfigWrites`).
  */
-export function useEditedScreenModeData<T>(edited: EditedScreen, setup: () => T): T {
+export function useEditedScreenModeData<T>(edited: EditedScreen, setup: (context: ScreenContext) => T): T {
 	const saved = shallowRef(toValue(edited.screen));
 	watch([edited.screen, edited.saving], ([screen, saving]) => {
 		if (!saving)
@@ -36,12 +37,12 @@ export function useEditedScreenModeData<T>(edited: EditedScreen, setup: () => T)
 	// The Event's canvas and Theme too, which a display laying itself out from
 	// them reads, so the editor counts the pages its Screen Output counts.
 	const eventStore = useEventStore();
-	return runInScreenContext({
+	return setup({
 		screen: saved,
 		eventId: computed(() => toValue(edited.eventId) || null),
 		interactive: ref(false),
 		overlayContainer: ref(null),
 		eventCanvas: computed(() => eventCanvasOf(eventStore.event)),
 		themeTokens: computed(() => eventStore.eventTheme?.tokens),
-	}, setup);
+	});
 }

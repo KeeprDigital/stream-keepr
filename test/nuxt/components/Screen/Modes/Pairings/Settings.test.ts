@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import { deferred } from '~~/test/helpers/deferred';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 import Settings from '~/components/Screen/Modes/Pairings/Settings.vue';
 
@@ -156,6 +157,22 @@ describe('screenModesPairingsSettings', () => {
 
 		expect(mockFetch).toHaveBeenCalledWith('/api/screen-output/events/1/screens/1/pairings', expect.anything());
 		expect(wrapper.text()).toContain('Page 1 of 2');
+	});
+
+	it('shows the page count loading, not a count of its own, until the Screen\'s first read answers', async () => {
+		const read = deferred<ReturnType<typeof pairingsOf>>();
+		mockFetch.mockReturnValue(read.promise);
+		const wrapper = await mountSettings();
+		const pageSelection = () => wrapper.get('[role="group"][aria-label="Page selection"]');
+
+		expect(pageSelection().attributes('aria-busy')).toBe('true');
+		expect(pageSelection().text()).not.toContain('Page 1 of 1');
+
+		read.resolve(pairingsOf(10));
+		await flushPromises();
+
+		expect(pageSelection().attributes('aria-busy')).toBe('false');
+		expect(pageSelection().text()).toContain('Page 1 of 2');
 	});
 
 	it('follows Matches added to the Round after it was selected, as the Screen does', async () => {

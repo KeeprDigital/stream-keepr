@@ -1,5 +1,6 @@
 import type { EffectScope } from 'vue';
 import type { ScreenOutputPairingsResponse, ScreenOutputRoundMatch } from '~~/shared/types/screenOutputReads';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -31,11 +32,11 @@ const { deliver } = realtime;
 mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = {
 	screen: ref({ id: 1, name: 'Test' }),
 	eventId: mockEventId,
 	interactive: mockInteractive,
-}));
+} as unknown as ScreenContext;
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
 function pairing(overrides: Partial<ScreenOutputRoundMatch> = {}): ScreenOutputRoundMatch {
@@ -75,7 +76,7 @@ const scopes: EffectScope[] = [];
 
 function makePairingsModeData() {
 	const scope = effectScope();
-	const result = scope.run(() => usePairingsModeData())!;
+	const result = scope.run(() => usePairingsModeData(screenContext))!;
 	scopes.push(scope);
 	return result;
 }

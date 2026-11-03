@@ -1,4 +1,5 @@
 import type { EffectScope } from 'vue';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -101,11 +102,11 @@ mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = {
 	screen: ref({ id: 1, name: 'Test' }),
 	eventId: mockEventId,
 	interactive: mockInteractive,
-}));
+} as unknown as ScreenContext;
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 // Server time is the Page Rotation's clock.
 mockNuxtImport('useServerTime', () => () => ({
@@ -138,7 +139,7 @@ const scopes: EffectScope[] = [];
 async function mountStandings() {
 	const scope = effectScope();
 	scopes.push(scope);
-	const result = scope.run(() => useStandingsModeData())!;
+	const result = scope.run(() => useStandingsModeData(screenContext))!;
 	await flushPromises();
 	return result;
 }

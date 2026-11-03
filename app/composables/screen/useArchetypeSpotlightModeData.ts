@@ -1,4 +1,5 @@
 import type { ScreenOutputArchetypePilot, ScreenOutputArchetypeSpotlightResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { archetypeSpotlightScreenQuery } from '~~/shared/utils/metagameQuery';
 import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
 import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
@@ -8,10 +9,10 @@ import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 import { useStagedScreenContent } from '~/modules/screen-mode/readiness';
 
 /** The Archetype Spotlight Screen's data (#761): one Archetype's pilots, numbers and top cards in a Metagame scope. */
-export function useArchetypeSpotlightModeData() {
-	const { eventId } = useScreenContext();
-	const config = useScreenModeConfig('archetype-spotlight');
-	const outputReads = useScreenOutputReads();
+export function useArchetypeSpotlightModeData(context: ScreenContext) {
+	const { eventId } = context;
+	const config = useScreenModeConfig(context, 'archetype-spotlight');
+	const outputReads = useScreenOutputReads(context);
 	const eventStore = useEventStore();
 
 	// The server derives the read from the saved configuration (#604), so the
@@ -48,7 +49,7 @@ export function useArchetypeSpotlightModeData() {
 	const pilots = computed(() => spotlight.value?.pilots ?? []);
 	const topCards = computed(() => spotlight.value?.topCards ?? []);
 
-	const { pageData, rowCount, totalPages, currentPage } = usePaginatedScreenMode({ mode: 'archetype-spotlight', config, rows: pilots });
+	const { pageData, rowCount, totalPages, currentPage } = usePaginatedScreenMode(context, { mode: 'archetype-spotlight', config, rows: pilots });
 
 	// ── Header ──
 	const scopeLabel = computed(() => {

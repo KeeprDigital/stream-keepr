@@ -208,6 +208,24 @@ export default withNuxt(
 		},
 	},
 	{
+		// #914: a Screen Mode's data takes its Screen context as an argument, so a settings
+		// editor sets it up against the Screen it edits. Only a rendering injects the context.
+		// The leading selectors repeat antfu's defaults, which this block would otherwise replace.
+		files: [
+			'app/composables/screen/use*ModeData.ts',
+			'app/composables/screen/{useScreenOutputReads,useScreenFeatureMatchSlot,useFeatureMatchOverlaySideboardData,useCardGridColumns}.ts',
+			'app/modules/screen-mode/**/*.ts',
+		],
+		rules: {
+			'no-restricted-syntax': [
+				'error',
+				'TSEnumDeclaration[const=true]',
+				'TSExportAssignment',
+				{ selector: 'CallExpression[callee.name=\'useScreenContext\']', message: 'Take the Screen context as an argument; only a rendering injects it (#914).' },
+			],
+		},
+	},
+	{
 		files: ['app/components/Graphics/Compositor/**/*.vue'],
 		rules: {
 			'no-restricted-syntax': ['error', ...compositorPanelSyntax],

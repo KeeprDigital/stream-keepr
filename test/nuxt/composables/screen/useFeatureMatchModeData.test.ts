@@ -1,3 +1,4 @@
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -63,7 +64,7 @@ mockNuxtImport('tryUseRealtime', () => () => ({
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
 mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = {
 	screen: ref({
 		id: 1,
 		name: 'Test',
@@ -73,7 +74,7 @@ mockNuxtImport('useScreenContext', () => () => ({
 	}),
 	eventId: computed(() => mockEventId.value),
 	interactive: ref(false),
-}));
+} as unknown as ScreenContext;
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mockConfig.value));
 
 describe('useFeatureMatchModeData', () => {
@@ -121,7 +122,7 @@ describe('useFeatureMatchModeData', () => {
 	function createComposable() {
 		activeScope?.stop();
 		activeScope = effectScope();
-		return activeScope.run(() => useFeatureMatchModeData())!;
+		return activeScope.run(() => useFeatureMatchModeData(screenContext))!;
 	}
 
 	it('resolves match when matchId is configured', async () => {

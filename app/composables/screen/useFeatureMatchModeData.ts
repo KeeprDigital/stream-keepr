@@ -1,12 +1,14 @@
-export function useFeatureMatchModeData() {
-	const config = useScreenModeConfig('feature-match');
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
+
+export function useFeatureMatchModeData(context: ScreenContext) {
+	const config = useScreenModeConfig(context, 'feature-match');
 
 	/**
 	 * The Slot and its Session come through the Screen (#604), and the Session
 	 * follows through the Live State Follower (#592); this mode keeps nothing
 	 * else of the read.
 	 */
-	const { slot: match, state: matchState, loading, error, answered } = useScreenFeatureMatchSlot<null>({
+	const { slot: match, state: matchState, loading, error, answered } = useScreenFeatureMatchSlot<null>(context, {
 		slotId: () => config.value.featureMatchId,
 		keep: () => null,
 		initialData: null,

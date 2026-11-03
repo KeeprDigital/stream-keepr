@@ -1,6 +1,7 @@
 import type { StandingsColumnKey } from '~~/shared/types/enums';
 import type { ScreenOutputStandingsResponse } from '~~/shared/types/screenOutputReads';
 import type { PositionChange } from '~~/shared/utils/standingsPositionChange';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import type { Player } from '~/types';
 import { isColumnVisible } from '~~/shared/screenModeConfigs/subShapes';
@@ -64,11 +65,11 @@ function standingsDependencies(
 	};
 }
 
-export function useStandingsModeData() {
-	const { eventId } = useScreenContext();
-	const config = useScreenModeConfig('standings');
+export function useStandingsModeData(context: ScreenContext) {
+	const { eventId } = context;
+	const config = useScreenModeConfig(context, 'standings');
 
-	const outputReads = useScreenOutputReads();
+	const outputReads = useScreenOutputReads(context);
 	const eventStore = useEventStore();
 
 	const selectedWatchlistId = () => config.value.viewMode === 'watchlist'
@@ -205,7 +206,7 @@ export function useStandingsModeData() {
 		setPage,
 		nextPage,
 		prevPage,
-	} = usePaginatedScreenMode({ mode: 'standings', config, rows: displayRows });
+	} = usePaginatedScreenMode(context, { mode: 'standings', config, rows: displayRows });
 
 	// ── Header Text Computation ──
 	function computeHeaderText(): string {

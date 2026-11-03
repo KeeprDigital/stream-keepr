@@ -2,7 +2,7 @@ import type { PageRotationMode } from '~~/shared/screenModes';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, h, ref } from 'vue';
+import { computed, defineComponent, h, nextTick, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import PaginationSettingsCard from '~/components/Screen/PaginationSettingsCard.vue';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
@@ -59,7 +59,8 @@ interface Harness {
 	loading?: boolean;
 }
 
-function mountCard({ mode, config: overrides, rowCount, loading }: Harness) {
+function mountCard({ mode, config: overrides, rowCount, loading: initiallyLoading = false }: Harness) {
+	const loading = ref(initiallyLoading);
 	const config = ref<Record<string, any>>({
 		...getDefaultConfigForMode(mode),
 		...overrides,
@@ -82,7 +83,7 @@ function mountCard({ mode, config: overrides, rowCount, loading }: Harness) {
 				rotation,
 				pageSizeDescription: 'Rows on each page.',
 				autoPageDescription: 'Cycle through the pages.',
-				loading,
+				loading: loading.value,
 			});
 		},
 	});
@@ -101,7 +102,7 @@ function mountCard({ mode, config: overrides, rowCount, loading }: Harness) {
 			},
 		},
 	});
-	return { wrapper, saveConfig };
+	return { wrapper, saveConfig, loading };
 }
 
 function numberInput(wrapper: ReturnType<typeof mountCard>['wrapper'], label: string) {
@@ -192,22 +193,43 @@ describe('the shared Pagination settings card', () => {
 		expect(saveConfig).toHaveBeenLastCalledWith({ currentPage: 3 });
 	});
 
-	it('disables manual selection with only one page or while the rows load', () => {
-		const onePage = mountCard({
+	it('disables manual selection with only one page', () => {
+		const { wrapper } = mountCard({
 			mode: 'archetype-spotlight',
 			config: { rowsPerPage: 8 },
 			rowCount: 8,
 		});
-		expect(button(onePage.wrapper, 'Next').attributes('disabled')).toBeDefined();
+		expect(button(wrapper, 'Next').attributes('disabled')).toBeDefined();
+	});
 
-		const loading = mountCard({
+	// Only the first load has no count to show; a later one keeps the count it has.
+	it.each([
+		{
+			load: 'their first load',
+			loadedBefore: false,
+			busy: 'true',
+			shown: 'Counting pages…',
+		},
+		{
+			load: 'a later load',
+			loadedBefore: true,
+			busy: 'false',
+			shown: 'Page 1 of 4',
+		},
+	])('shows $shown and waits while the rows are in $load', async ({ loadedBefore, busy, shown }) => {
+		const { wrapper, loading } = mountCard({
 			mode: 'archetype-spotlight',
 			config: { rowsPerPage: 2 },
 			rowCount: 8,
-			loading: true,
+			loading: !loadedBefore,
 		});
-		expect(loading.wrapper.text()).toContain('Page 1 of 4');
-		expect(button(loading.wrapper, 'Previous').attributes('disabled')).toBeDefined();
-		expect(button(loading.wrapper, 'Next').attributes('disabled')).toBeDefined();
+		loading.value = true;
+		await nextTick();
+
+		const pageSelection = wrapper.get('[role="group"][aria-label="Page selection"]');
+		expect(pageSelection.attributes('aria-busy')).toBe(busy);
+		expect(pageSelection.text()).toContain(shown);
+		expect(button(wrapper, 'Previous').attributes('disabled')).toBeDefined();
+		expect(button(wrapper, 'Next').attributes('disabled')).toBeDefined();
 	});
 });

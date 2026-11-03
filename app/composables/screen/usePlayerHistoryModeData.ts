@@ -1,5 +1,6 @@
 import type { MatchResponse } from '~~/shared/api';
 import type { MatchSide } from '~~/shared/utils/matchFromPlayerSide';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import type { Player } from '~/types';
 import { formatGameScore } from '~~/shared/utils/matchFromPlayerSide';
@@ -63,10 +64,10 @@ export function playerHistoryDependencies(playerId: () => number | null): Screen
 	};
 }
 
-export function usePlayerHistoryModeData() {
-	const { eventId } = useScreenContext();
-	const config = useScreenModeConfig('player-history');
-	const outputReads = useScreenOutputReads();
+export function usePlayerHistoryModeData(context: ScreenContext) {
+	const { eventId } = context;
+	const config = useScreenModeConfig(context, 'player-history');
+	const outputReads = useScreenOutputReads(context);
 
 	const freshness = useScreenModeFreshness<PlayerHistory>({
 		eventId,
@@ -94,7 +95,7 @@ export function usePlayerHistoryModeData() {
 		? 'Select a player to show match history.'
 		: 'No matches found for this player.');
 
-	const { pageData, pageSize, rowCount } = usePaginatedScreenMode({ mode: 'player-history', config, rows });
+	const { pageData, pageSize, rowCount } = usePaginatedScreenMode(context, { mode: 'player-history', config, rows });
 
 	function formatOutcome(row: PlayerMatchHistoryEntry) {
 		if (row.outcome === 'bye')

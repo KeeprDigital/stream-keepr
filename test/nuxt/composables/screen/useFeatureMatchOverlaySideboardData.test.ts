@@ -1,4 +1,5 @@
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { FeatureMatch } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
@@ -51,13 +52,13 @@ mockNuxtImport('useReconnectResync', () => (resync: () => void, _eventId: unknow
 		disconnected: ref(false),
 	};
 });
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = {
 	screen: ref(null),
 	eventId: computed(() => mockEventId.value),
 	interactive: ref(false),
 	overlayContainer: ref(null),
 	cardDataHealth: mockCardDataHealth,
-}));
+} as unknown as ScreenContext;
 
 /** The server commits an edit to a Player and announces it on the Event channel. */
 function announcePlayerUpdated(player: Record<string, unknown>) {
@@ -159,7 +160,7 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 	function mountSideboardData() {
 		const scope = effectScope();
 		activeScopes.push(scope);
-		return scope.run(() => useFeatureMatchOverlaySideboardData(config, match))!;
+		return scope.run(() => useFeatureMatchOverlaySideboardData(screenContext, config, match))!;
 	}
 
 	beforeEach(() => {

@@ -1,5 +1,6 @@
 import type { EffectScope } from 'vue';
 import type { ScreenOutputArchetypePilot, ScreenOutputArchetypeSpotlightResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -42,11 +43,11 @@ mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = {
 	screen: ref({ id: 1, name: 'Test' }),
 	eventId: mockEventId,
 	interactive: mockInteractive,
-}));
+} as unknown as ScreenContext;
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
 function pilot(id: number, name: string, position: number | null, overrides: Partial<ScreenOutputArchetypePilot> = {}): ScreenOutputArchetypePilot {
@@ -82,7 +83,7 @@ const scopes: EffectScope[] = [];
 
 function makeSpotlight() {
 	const scope = effectScope();
-	const result = scope.run(() => useArchetypeSpotlightModeData())!;
+	const result = scope.run(() => useArchetypeSpotlightModeData(screenContext))!;
 	scopes.push(scope);
 	return result;
 }

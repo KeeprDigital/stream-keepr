@@ -1,5 +1,6 @@
 import type { EffectScope } from 'vue';
 import type { PlayerMatchHistoryEntry } from '~/composables/screen/usePlayerHistoryModeData';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -37,11 +38,11 @@ const { deliver } = realtime;
 mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = {
 	screen: ref({ id: 1, name: 'Test' }),
 	eventId: mockEventId,
 	interactive: mockInteractive,
-}));
+} as unknown as ScreenContext;
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
 function historyEntry(overrides: Partial<PlayerMatchHistoryEntry> = {}): PlayerMatchHistoryEntry {
@@ -78,7 +79,7 @@ const scopes: EffectScope[] = [];
 
 function makePlayerHistoryModeData() {
 	const scope = effectScope();
-	const result = scope.run(() => usePlayerHistoryModeData())!;
+	const result = scope.run(() => usePlayerHistoryModeData(screenContext))!;
 	scopes.push(scope);
 	return result;
 }

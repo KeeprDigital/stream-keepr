@@ -1,3 +1,4 @@
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -66,13 +67,13 @@ mockNuxtImport('useScreenOutputBroadcastDeckListRepository', () => () => ({
 	getSelected: mockGetSelectedBroadcastDeckList,
 }));
 mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = {
 	screen: mockScreen,
 	eventId: computed(() => mockEventId.value),
 	interactive: ref(false),
 	assetCapability: mockAssetCapability,
 	cardDataHealth: mockCardDataHealth,
-}));
+} as unknown as ScreenContext;
 const mockBoardLayouts = ref<Record<string, unknown>>({});
 mockNuxtImport('useScreenModeConfig', () => (_mode: string) => computed(() => ({
 	deckSource: mockBroadcastDeckListId.value === null
@@ -236,7 +237,7 @@ describe('useDeckModeData', () => {
 	function mountDeckModeData() {
 		const scope = effectScope();
 		activeScopes.push(scope);
-		return scope.run(() => useDeckModeData())!;
+		return scope.run(() => useDeckModeData(screenContext))!;
 	}
 
 	function mainboardNames(result: ReturnType<typeof mountDeckModeData>) {

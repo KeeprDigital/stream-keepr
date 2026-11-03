@@ -1,4 +1,5 @@
 import type { PageRotationMode } from '~~/shared/screenModes';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_PAGE_ROTATION } from '~~/shared/screenModeConfigs/subShapes';
@@ -22,11 +23,12 @@ mockNuxtImport('useServerTime', () => () => ({
 	getServerTime: () => mockServerNow,
 }));
 
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = {
 	screen: ref(null),
-	eventId: ref(null),
+	eventId: computed(() => null),
 	interactive: ref(false),
-}));
+	overlayContainer: ref(null),
+} satisfies ScreenContext;
 
 mockNuxtImport('useScreenStore', () => () => ({
 	updateModeConfig: vi.fn(),
@@ -208,7 +210,7 @@ describe('usePaginatedScreenMode', () => {
 	it.each(paginated)('exposes $mode\'s page size from $field', ({ mode, field }) => {
 		const config = computed(() => ({ ...DEFAULT_PAGE_ROTATION, autoPageEnabled: false, [field]: 3 }) as never);
 
-		const { pageSize, pageData } = usePaginatedScreenMode({
+		const { pageSize, pageData } = usePaginatedScreenMode(screenContext, {
 			mode,
 			config,
 			rows: rows(7),

@@ -1,4 +1,5 @@
 import type { EffectScope } from 'vue';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -51,11 +52,11 @@ const defaultConfig = {
 const mutableConfig = reactive({ ...defaultConfig });
 
 const mockEventId = ref<number | null>(1);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = {
 	screen: ref({ id: 1, name: 'Test Screen' }),
 	eventId: mockEventId,
 	interactive: ref(false),
-}));
+} as unknown as ScreenContext;
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
 // Server time is the Page Rotation's clock; synced and controllable here.
@@ -75,7 +76,7 @@ const scopes: EffectScope[] = [];
 
 function makeTopCardsModeData() {
 	const scope = effectScope();
-	const result = scope.run(() => useTopCardsModeData())!;
+	const result = scope.run(() => useTopCardsModeData(screenContext))!;
 	scopes.push(scope);
 	return result;
 }

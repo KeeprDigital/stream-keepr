@@ -37,20 +37,13 @@ describe('useScreenContext', () => {
 
 		expect(withScreenContext(context, () => useScreenContext())).toBe(context);
 	});
-
-	it('sets a composable up against a given context outside any provider, and only it (#780)', () => {
-		const context = screenContext();
-
-		expect(runInScreenContext(context, () => useScreenContext())).toBe(context);
-		expect(() => useScreenContext()).toThrow('outside of a screen context');
-	});
 });
 
 describe('useScreenModeConfig', () => {
 	it('reads the mode\'s defaults when the Screen stores nothing for it', () => {
 		const context = screenContext(createMockScreen({ modeConfigs: null }));
 
-		const config = withScreenContext(context, () => useScreenModeConfig('deck'));
+		const config = useScreenModeConfig(context, 'deck');
 
 		expect(config.value).toEqual(getDefaultConfigForMode('deck'));
 	});
@@ -63,7 +56,7 @@ describe('useScreenModeConfig', () => {
 		} as any;
 		const context = screenContext(createMockScreen({ modeConfigs }));
 
-		const config = withScreenContext(context, () => useScreenModeConfig('deck'));
+		const config = useScreenModeConfig(context, 'deck');
 
 		expect(config.value.deckSource).toEqual({ type: 'player', playerId: 5 });
 		expect(config.value).toEqual(resolveScreenModeConfig(modeConfigs, 'deck'));

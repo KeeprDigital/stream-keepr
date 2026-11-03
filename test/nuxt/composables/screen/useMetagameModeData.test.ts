@@ -1,5 +1,6 @@
 import type { EffectScope } from 'vue';
 import type { MetagameScope, MetagameViewMode } from '~~/shared/types/enums';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -60,11 +61,11 @@ const mutableConfig = reactive({ ...defaultConfig });
 const mockInteractive = ref(false);
 
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = {
 	screen: ref({ id: 1, name: 'Test Screen' }),
 	eventId: computed(() => 1),
 	interactive: mockInteractive,
-}));
+} as unknown as ScreenContext;
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
 // Server time is the Page Rotation's clock.
@@ -91,7 +92,7 @@ const scopes: EffectScope[] = [];
 
 function makeMetagameModeData() {
 	const scope = effectScope();
-	const result = scope.run(() => useMetagameModeData())!;
+	const result = scope.run(() => useMetagameModeData(screenContext))!;
 	scopes.push(scope);
 	return result;
 }

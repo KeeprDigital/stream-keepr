@@ -1,6 +1,7 @@
 import type { EffectScope } from 'vue';
 import type { TopCutBracket } from '~~/shared/modules/top-cut-bracket';
 import type { ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -26,11 +27,11 @@ const { deliver } = realtime;
 
 mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = {
 	screen: ref({ id: 1, name: 'Test' }),
 	eventId: mockEventId,
 	interactive: ref(false),
-}));
+} as unknown as ScreenContext;
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
 const phase = {
@@ -80,7 +81,7 @@ const scopes: EffectScope[] = [];
 
 function makeTopCutModeData() {
 	const scope = effectScope();
-	const result = scope.run(() => useTopCutModeData())!;
+	const result = scope.run(() => useTopCutModeData(screenContext))!;
 	scopes.push(scope);
 	return result;
 }

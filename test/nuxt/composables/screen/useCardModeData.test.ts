@@ -1,3 +1,4 @@
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -32,12 +33,14 @@ const mockScreen = ref<{ id: number } | null>({ id: 1 });
 let mockCardDataHealth: Ref<'complete' | 'degraded'> | undefined;
 
 mockNuxtImport('useCardStore', () => () => mockCardStore);
-mockNuxtImport('useScreenContext', () => () => ({
-	screen: mockScreen,
-	eventId: computed(() => 1),
-	interactive: ref(false),
-	cardDataHealth: mockCardDataHealth,
-}));
+function screenContext() {
+	return {
+		screen: mockScreen,
+		eventId: computed(() => 1),
+		interactive: ref(false),
+		cardDataHealth: mockCardDataHealth,
+	} as unknown as ScreenContext;
+}
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => ({ featureMatchId: null })));
 
 /** Mount a component that calls useCardModeData, return its reactive state and the wrapper */
@@ -45,7 +48,7 @@ function mountCardModeData() {
 	let result: ReturnType<typeof useCardModeData>;
 	const Comp = defineComponent({
 		setup() {
-			result = useCardModeData();
+			result = useCardModeData(screenContext());
 			return () => h('div');
 		},
 	});

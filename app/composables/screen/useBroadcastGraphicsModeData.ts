@@ -1,4 +1,5 @@
 import type { BroadcastGraphicConfig, GraphicInputValue, SocialProfileProjectionValues } from '~~/shared/types/graphics';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { GraphicsPreviewState } from '~/modules/graphics/previewMessages';
 import type { GraphicsAnimationProjection } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
@@ -29,9 +30,9 @@ import {
  * pushes in, showing the Broadcast Graphic being authored without touching live
  * Screen state.
  */
-export function useBroadcastGraphicsModeData() {
-	const { eventId, isPreview, screen, sampleDataset } = useScreenContext();
-	const storedConfig = useScreenModeConfig('broadcast-graphics');
+export function useBroadcastGraphicsModeData(context: ScreenContext) {
+	const { eventId, isPreview, screen, sampleDataset } = context;
+	const storedConfig = useScreenModeConfig(context, 'broadcast-graphics');
 	const sessionStore = useBroadcastGraphicsLiveSessionStore();
 	const previewState = ref<GraphicsPreviewState | null>(null);
 
@@ -362,7 +363,7 @@ export function useBroadcastGraphicsModeData() {
 	//
 	// It reads that snapshot through its Screen, whatever credential it holds
 	// (#604): a Screen Output has no Session for the Live Control path.
-	const outputReads = useScreenOutputReads();
+	const outputReads = useScreenOutputReads(context);
 	watch(() => screen.value?.id, (screenId, _previous, onCleanup) => {
 		if (screenId)
 			onCleanup(sessionStore.readSessionAsScreenOutput(screenId, () => outputReads.liveSession()));

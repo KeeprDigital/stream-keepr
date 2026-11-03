@@ -1,6 +1,7 @@
 import type { OpLeader } from '~~/shared/types/game';
 import type { ScreenOutputFeatureMatchDeckListResponse } from '~~/shared/types/screenOutputReads';
 import type { OpDeckLayout } from '~~/shared/utils/opDeckLayout';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { FeatureMatch } from '~/types';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getOpGameData } from '~~/shared/utils/gameData';
@@ -16,8 +17,8 @@ const SLOT_LOAD_FAILED = 'Failed to load Feature Match Slot';
  * A Theme preview's Slot: the sample's, read once and held here. The Feature
  * Match store holds the loaded Event's Slots, and a preview has no Event.
  */
-function holdSampleSlot(slotId: () => number | null) {
-	const outputReads = useScreenOutputReads();
+function holdSampleSlot(context: ScreenContext, slotId: () => number | null) {
+	const outputReads = useScreenOutputReads(context);
 	const slot = shallowRef<FeatureMatch | null>(null);
 	const error = ref<string | null>(null);
 	const answered = ref(false);
@@ -75,10 +76,10 @@ interface DisplayedDeck extends OpDeckLayout {
  * A Theme preview shows the One Piece Screen Mode Sample Dataset's Slot and
  * Deck List, read once, and holds no Slot in the stores.
  */
-export function useFeatureMatchDeckModeData() {
-	const { eventId, sampleDataset } = useScreenContext();
-	const config = useScreenModeConfig('deck');
-	const outputReads = useScreenOutputReads();
+export function useFeatureMatchDeckModeData(context: ScreenContext) {
+	const { eventId, sampleDataset } = context;
+	const config = useScreenModeConfig(context, 'deck');
+	const outputReads = useScreenOutputReads(context);
 
 	const source = computed(() => {
 		const deckSource = config.value.deckSource;
@@ -89,8 +90,8 @@ export function useFeatureMatchDeckModeData() {
 	const slotId = () => source.value?.slotId ?? null;
 
 	const slotRead = sampleDataset
-		? holdSampleSlot(slotId)
-		: useScreenFeatureMatchSlot<null>({
+		? holdSampleSlot(context, slotId)
+		: useScreenFeatureMatchSlot<null>(context, {
 				slotId,
 				keep: () => null,
 				initialData: null,

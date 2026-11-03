@@ -2,7 +2,7 @@
 import type { ScreenOutputMatchSide, ScreenOutputRoundMatch } from '~~/shared/types/screenOutputReads';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { config, error, ready, isEmpty, headerText, pageData, pageSize, formatResult, winner } = usePairingsModeData();
+const { config, error, ready, isEmpty, headerText, pageData, pageSize, formatResult, winner } = usePairingsModeData(useScreenContext());
 
 const inset = useScreenInset();
 

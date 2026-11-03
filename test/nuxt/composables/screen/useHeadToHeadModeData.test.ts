@@ -1,5 +1,6 @@
 import type { EffectScope } from 'vue';
 import type { ScreenOutputHeadToHeadEarlierMatch, ScreenOutputHeadToHeadPlayer, ScreenOutputHeadToHeadResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,11 +25,11 @@ const { deliver } = realtime;
 
 mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = {
 	screen: ref({ id: 1, name: 'Test' }),
 	eventId: mockEventId,
 	interactive: ref(false),
-}));
+} as unknown as ScreenContext;
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 const displayEvent = ref<Record<string, unknown> | null>(null);
 mockNuxtImport('useEventStore', () => () => reactive({ displayEvent }));
@@ -78,7 +79,7 @@ const scopes: EffectScope[] = [];
 
 function makeHeadToHeadModeData() {
 	const scope = effectScope();
-	const result = scope.run(() => useHeadToHeadModeData())!;
+	const result = scope.run(() => useHeadToHeadModeData(screenContext))!;
 	scopes.push(scope);
 	return result;
 }

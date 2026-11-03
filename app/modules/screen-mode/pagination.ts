@@ -2,6 +2,7 @@ import type { ComputedRef } from 'vue';
 import type { PageRotationConfig } from '~~/shared/screenModeConfigs/subShapes';
 import type { PageRotationMode } from '~~/shared/screenModes';
 import type { ModeConfigTypeMap, ScreenModeConfigPatch } from '~~/shared/types/screenConfig';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { computed, ref, watchEffect } from 'vue';
 import { msUntilNextRotationFlip, projectRotationPage, rotationAnchorForPage, rotationPageSize } from '~~/shared/modules/page-rotation';
 import { screenModePageRotation } from '~~/shared/screenModes';
@@ -169,8 +170,8 @@ export interface PaginatedScreenModeOptions<M extends PageRotationMode, TRow> {
  * Program monitor; a Screen Output never writes, so it cannot move the
  * Rotation Anchor (ADR-0009).
  */
-export function usePaginatedScreenMode<M extends PageRotationMode, TRow>(options: PaginatedScreenModeOptions<M, TRow>) {
-	const { screen, eventId, interactive } = useScreenContext();
+export function usePaginatedScreenMode<M extends PageRotationMode, TRow>(context: ScreenContext, options: PaginatedScreenModeOptions<M, TRow>) {
+	const { screen, eventId, interactive } = context;
 	const screenStore = useScreenStore();
 	const declaration = screenModePageRotation(options.mode);
 	const rotation = computed<PageRotationConfig>(() => options.config.value);
