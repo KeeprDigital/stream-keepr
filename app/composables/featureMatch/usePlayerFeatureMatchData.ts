@@ -64,8 +64,8 @@ export function usePlayerFeatureMatchData(
 		return playerData.value?.name || fallback;
 	});
 
-	// The roster Player this side seats, from the same source as playerData: the
-	// Session owns side order (ADR-0058). A seat filled by hand seats none.
+	// The roster Player this side links, from the same source as playerData: the
+	// Session owns side order (ADR-0058). A seat filled by hand links none.
 	const seatedPlayerId = computed(() => {
 		const s = side();
 		const snapshotPlayer = activeSession.value?.sourceSnapshot[s];

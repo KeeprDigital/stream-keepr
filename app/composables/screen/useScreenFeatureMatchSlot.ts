@@ -69,26 +69,15 @@ export function useScreenFeatureMatchSlot<T>(options: ScreenFeatureMatchSlotOpti
 		dependsOn: options.dependsOn ?? {},
 	});
 
-	/**
-	 * The Slot held, carrying the Session the Live State Follower holds for it
-	 * rather than the one its last read carried: a Session command such as
-	 * `SwapPlayers` moves the followed Session without touching the Slot, and the
-	 * Session's source snapshot owns which side each player sits on (ADR-0058).
-	 */
+	/** The Slot held, with the Session followed for it: `SwapPlayers` moves only that (ADR-0058). */
 	const slot = computed<FeatureMatch | null>(() => {
 		const slotId = options.slotId();
 		const held = slotId
 			? featureMatchStore.featureMatches.find(candidate => candidate.id === slotId) ?? null
 			: null;
-		if (!held)
-			return null;
-		const sessionId = featureMatchStateStore.sessionIdBySlotId?.get(held.id);
-		const followed = sessionId === undefined
-			? undefined
-			: featureMatchStateStore.featureMatchSessions?.get(sessionId);
-		return followed && followed !== held.activeSession
-			? { ...held, activeSession: followed }
-			: held;
+		return held
+			? withFollowedFeatureMatchSession(held, featureMatchStateStore)
+			: null;
 	});
 
 	const state = computed<FeatureMatchState | null>(() => {

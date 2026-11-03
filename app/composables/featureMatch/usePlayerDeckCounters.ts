@@ -40,11 +40,7 @@ export function usePlayerDeckCounters(
 		const m = match.value;
 		if (!m)
 			return { id: null, name: null };
-		const sessionId = featureMatchStateStore.sessionIdBySlotId?.get(m.id);
-		const followed = sessionId === undefined
-			? undefined
-			: featureMatchStateStore.featureMatchSessions?.get(sessionId);
-		const seated = featureMatchSidePlayer({ ...m, activeSession: followed ?? m.activeSession }, toValue(playerSide));
+		const seated = featureMatchSidePlayer(withFollowedFeatureMatchSession(m, featureMatchStateStore), toValue(playerSide));
 		return { id: seated.playerId, name: seated.data?.name ?? null };
 	});
 

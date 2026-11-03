@@ -131,16 +131,12 @@ const hasMeleeMatches = computed(() => {
  * the Slot. The Session owns which side each player sits on and the form holds
  * the Slot's pairing order (ADR-0058), so each shown side reads and writes the
  * Slot side its player holds: an edit lands on its own player, and a swap turns
- * the columns without leaving anything to save.
+ * the columns without leaving anything to save. The flag, not the snapshot's
+ * sides, says this: it is the one record of how the Session's order relates to
+ * the Slot's.
  */
-const sidesSwapped = computed(() => {
-	const sessionId = featureMatchStateStore.sessionIdBySlotId?.get(props.match.id);
-	const session = (sessionId === undefined
-		? undefined
-		: featureMatchStateStore.featureMatchSessions?.get(sessionId))
-	?? props.match.activeSession;
-	return session?.sourceSnapshot.playersSwapped ?? false;
-});
+const sidesSwapped = computed(() =>
+	withFollowedFeatureMatchSession(props.match, featureMatchStateStore).activeSession?.sourceSnapshot.playersSwapped ?? false);
 
 function slotSideOf(shown: PlayerSide): PlayerSide {
 	if (!sidesSwapped.value)
