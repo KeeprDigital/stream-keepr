@@ -1,9 +1,15 @@
-import type { CreateFeatureMatchInput, FeatureMatchResponse, UpdateFeatureMatchInput, UpdatePlayerInput } from '~~/shared/api';
+import type { DbFeatureMatch } from '~~/server/db/schema';
+import type { CreateFeatureMatchInput, FeatureMatchResponse, ManualPlayerSlotData, UpdateFeatureMatchInput, UpdatePlayerInput } from '~~/shared/api';
+import type { FeatureMatchDeckListReference } from '~~/shared/types/featureMatchDeckList';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { playerUpdateModule } from '~~/server/modules/player-update';
 import { featureMatchService } from '~~/server/services/featureMatch';
+import { deckListReferenceOf, featureMatchDeckListService } from '~~/server/services/featureMatchDeckList';
 import { playerService } from '~~/server/services/player';
 import { validateFeatureMatchReferences } from '~~/server/utils/routeGuards';
+
+const SIDE_DATA_KEYS = ['player1Data', 'player2Data'] as const;
+type SideDataKey = typeof SIDE_DATA_KEYS[number];
 
 interface CreateSlotParams {
 	eventId: number;
@@ -44,6 +50,7 @@ export function featureMatchSlotWriteModule() {
 	const slots = featureMatchService();
 	const players = playerService();
 	const playerUpdate = playerUpdateModule();
+	const deckLists = featureMatchDeckListService();
 
 	async function create({ eventId, input, originConnectionId }: CreateSlotParams): Promise<FeatureMatchResponse> {
 		await validateFeatureMatchReferences(eventId, input);
@@ -79,11 +86,8 @@ export function featureMatchSlotWriteModule() {
 	 * the Slot write, which then lands the rest of this save on the edited Slot.
 	 * It is published with no origin: the saving client applied only the Slot.
 	 */
-	async function writeSeatedPlayerEdits(eventId: number, slotId: number, input: UpdateFeatureMatchInput) {
+	async function writeSeatedPlayerEdits(eventId: number, current: DbFeatureMatch, input: UpdateFeatureMatchInput) {
 		if (!input.player1Data && !input.player2Data)
-			return;
-		const current = await slots.findById(slotId, eventId);
-		if (!current)
 			return;
 
 		for (const side of [1, 2] as const) {
@@ -118,14 +122,83 @@ export function featureMatchSlotWriteModule() {
 		}
 	}
 
+	/**
+	 * A side's Feature Match Deck List reference is the server's (ADR-0057). A
+	 * save keeps it (key omitted), drops it (`null`) or moves one of this Slot's
+	 * Deck Lists between sides; one naming any other Deck List, as a stale form
+	 * might, keeps what the side holds. Its Mainboard count is the Deck List's
+	 * own, and a Deck List both sides name stays with the side that held it.
+	 */
+	async function settleDeckListReferences(current: DbFeatureMatch, input: UpdateFeatureMatchInput): Promise<UpdateFeatureMatchInput> {
+		const named = SIDE_DATA_KEYS
+			.map(key => deckListReferenceOf(input[key])?.id)
+			.filter((id): id is number => id !== undefined);
+		const stored = await deckLists.referencesFor(current.id, named);
+
+		const held = (key: SideDataKey) => deckListReferenceOf(current[key]);
+		const settled: Record<SideDataKey, FeatureMatchDeckListReference | null> = { player1Data: null, player2Data: null };
+		for (const key of SIDE_DATA_KEYS) {
+			const data = input[key];
+			if (!Object.hasOwn(input, key)) {
+				settled[key] = held(key);
+				continue;
+			}
+			if (data?.gameData?.type !== 'op')
+				continue;
+			const requested = data.gameData.featureMatchDeckList;
+			settled[key] = requested === undefined
+				? held(key)
+				: requested && (stored.get(requested.id) ?? held(key));
+		}
+		const [first, second] = [settled.player1Data, settled.player2Data];
+		if (first && first.id === second?.id) {
+			const loser: SideDataKey = held('player2Data')?.id === first.id && held('player1Data')?.id !== first.id
+				? 'player1Data'
+				: 'player2Data';
+			settled[loser] = null;
+		}
+
+		const output = { ...input };
+		for (const key of SIDE_DATA_KEYS) {
+			const data = input[key];
+			// A side that never held a Deck List and names none is left as written.
+			if (data?.gameData?.type === 'op' && (settled[key] || data.gameData.featureMatchDeckList !== undefined)) {
+				output[key] = {
+					...data,
+					gameData: { ...data.gameData, featureMatchDeckList: settled[key] },
+				} satisfies ManualPlayerSlotData;
+			}
+		}
+		return output;
+	}
+
+	/** Deletes the Deck Lists this write took off the Slot's sides: a cleared side's, or a replaced one. */
+	async function releaseDeckLists(before: DbFeatureMatch, after: DbFeatureMatch) {
+		const kept = new Set([after.player1Data, after.player2Data].map(data => deckListReferenceOf(data)?.id));
+		const released = [before.player1Data, before.player2Data]
+			.map(data => deckListReferenceOf(data)?.id)
+			.filter((id): id is number => id !== undefined && !kept.has(id));
+		await deckLists.remove(before.id, released);
+	}
+
 	async function updateSetup({ eventId, slotId, input, originConnectionId }: UpdateSlotSetupParams): Promise<FeatureMatchResponse> {
 		await validateFeatureMatchReferences(eventId, input);
-		await writeSeatedPlayerEdits(eventId, slotId, input);
+		// Only a save that edits a side writes a Player or moves a Deck List.
+		const current = SIDE_DATA_KEYS.some(key => Object.hasOwn(input, key))
+			? await slots.findById(slotId, eventId)
+			: undefined;
+		let settledInput = input;
+		if (current) {
+			await writeSeatedPlayerEdits(eventId, current, input);
+			settledInput = await settleDeckListReferences(current, input);
+		}
 
-		const updatedSlot = await slots.update(slotId, eventId, input);
+		const updatedSlot = await slots.update(slotId, eventId, settledInput);
 		if (!updatedSlot) {
 			throw createError({ statusCode: 404, message: 'Feature match slot not found' });
 		}
+		if (current)
+			await releaseDeckLists(current, updatedSlot);
 
 		return await publication.featureMatchSlotUpdated({
 			eventId,

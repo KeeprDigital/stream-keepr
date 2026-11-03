@@ -33,6 +33,23 @@ describe('featureMatchSetup payload helpers', () => {
 		})?.gameData).toEqual(gameData);
 	});
 
+	// The reference is how a side keeps its Deck List through a setup save.
+	it.each([
+		{
+			leader: ZORO,
+			featureMatchDeckList: { id: 4, mainboardCount: 50 },
+		},
+		{
+			leader: null,
+			featureMatchDeckList: { id: 4, mainboardCount: 50 },
+		},
+	])('saves a side\'s Deck List reference with Leader $leader', (gameData) => {
+		expect(normalizePlayerSlotData({
+			...DEFAULT_PLAYER_DATA,
+			gameData: { type: 'op', ...gameData },
+		})?.gameData).toEqual({ type: 'op', ...gameData });
+	});
+
 	it('turns blank numeric inputs into null', () => {
 		const update = buildFeatureMatchSetupUpdate({
 			tableNumber: '' as any,

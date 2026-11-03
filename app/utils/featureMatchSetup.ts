@@ -102,9 +102,14 @@ function normalizeGameData(gameData: PlayerGameData | null | undefined): PlayerG
 			: null;
 	}
 
+	const op = getOpGameData(gameData);
 	const normalized: PlayerGameData = {
 		type: 'op',
-		leader: getOpGameData(gameData).leader,
+		leader: op.leader,
+		// The side's Deck List rides along by reference; the server checks it.
+		...(op.featureMatchDeckList !== undefined
+			? { featureMatchDeckList: op.featureMatchDeckList }
+			: {}),
 	};
 	return hasMeaningfulValue(normalized)
 		? normalized

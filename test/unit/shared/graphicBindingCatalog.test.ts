@@ -242,6 +242,25 @@ describe('graphic Input Binding field catalog', () => {
 			.toBeUndefined();
 	});
 
+	it('resolves a side\'s Deck List Mainboard count through player.deckCardCount, on One Piece Events only', () => {
+		const withDeckList = {
+			name: 'Ava',
+			gameData: {
+				type: 'op' as const,
+				featureMatchDeckList: { id: 7, mainboardCount: 50 },
+			},
+		};
+
+		expect(resolveGraphicBindingField('player', 'player.deckCardCount', withDeckList, dataSet())).toBe(50);
+		expect(resolveGraphicBindingField('player', 'player.deckCardCount', {
+			name: 'Ava',
+			gameData: { type: 'op' },
+		}, dataSet()))
+			.toBeUndefined();
+		expect(bindableGraphicBindingFields('player', 'number', 'op').gameSpecific.map(field => field.id)).toEqual(['player.deckCardCount']);
+		expect(bindableGraphicBindingFields('player', 'number', 'mtg').gameSpecific).toEqual([]);
+	});
+
 	it('reads a Player\'s Archetype name through the Event\'s Archetypes', () => {
 		const data = dataSet({
 			archetypes: {

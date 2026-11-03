@@ -9,7 +9,7 @@ import {
 	RESET_TYPE_VALUES,
 } from '~~/shared/types/enums';
 import { isMergeableFeatureMatchCommand } from '~~/shared/types/featureMatchSession';
-import { playerGameDataSchema } from './player';
+import { playerGameDataSchema, slotSideGameDataSchema } from './player';
 
 function blankStringToNull(value: unknown) {
 	if (typeof value !== 'string')
@@ -99,7 +99,7 @@ const updateFeatureMatchPlayerDataSchema = z.preprocess(
 			archetypeId: nullablePositiveIntegerSchema,
 			deckList: nullableStringSchema(100000),
 			lgs: nullableStringSchema(200),
-			gameData: playerGameDataSchema.nullable().optional(),
+			gameData: slotSideGameDataSchema.nullable().optional(),
 		})
 		.strict()
 		.transform(data => hasMeaningfulValue(data)

@@ -3,6 +3,7 @@ import type { PlayerSlotData } from '~~/shared/api';
 import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { BroadcastGraphicsLiveSessionStatus } from '~~/shared/types/broadcastGraphicsLiveSession';
+import type { OpCardColor } from '~~/shared/types/card/op';
 import type { PlayerManuallyEditedField } from '~~/shared/types/enums';
 import type { FeatureMatchSessionStatus, FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
@@ -15,6 +16,7 @@ import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-or
 
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { BROADCAST_GRAPHICS_LIVE_SESSION_STATUS_VALUES } from '~~/shared/types/broadcastGraphicsLiveSession';
+import { OP_CARD_CATEGORIES } from '~~/shared/types/card/op';
 /* ENUMS — imported from shared, re-exported for backward compatibility */
 import {
 	CLOCK_TYPE_VALUES,
@@ -474,6 +476,50 @@ export const featureMatchSessions = sqliteTable('feature_match_sessions', {
 	index('feature_match_sessions_event_id_idx').on(table.eventId),
 	index('feature_match_sessions_slot_id_idx').on(table.slotId),
 	uniqueIndex('feature_match_sessions_active_slot_idx').on(table.slotId).where(sql`${table.status} = 'active'`),
+]);
+
+/**
+ * A Feature Match Deck List: the One Piece Deck List one player side of a Slot
+ * holds (ADR-0057). The side's slot data references it by id, so it moves with
+ * the side's player; deleting the Slot deletes it.
+ */
+export const featureMatchDeckLists = sqliteTable('feature_match_deck_lists', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	eventId: integer('event_id')
+		.references(() => events.id, { onDelete: 'cascade' })
+		.notNull(),
+	slotId: integer('slot_id')
+		.references(() => featureMatchSlots.id, { onDelete: 'cascade' })
+		.notNull(),
+	/** The text the operator pasted, so a re-paste can start from it. */
+	sourceText: text('source_text').notNull(),
+	/** Cards in the Mainboard: every entry but the Leaders. A side's slot data copies it. */
+	mainboardCount: integer('mainboard_count').notNull(),
+	...timestamps,
+}, table => [
+	index('feature_match_deck_lists_event_id_idx').on(table.eventId),
+	index('feature_match_deck_lists_slot_id_idx').on(table.slotId),
+]);
+
+/** One pasted card number, with an inline snapshot of its card; a number-only entry has none. */
+export const featureMatchDeckListEntries = sqliteTable('feature_match_deck_list_entries', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	deckListId: integer('deck_list_id')
+		.references(() => featureMatchDeckLists.id, { onDelete: 'cascade' })
+		.notNull(),
+	sortOrder: integer('sort_order').notNull(),
+	quantity: integer('quantity').notNull(),
+	cardNumber: text('card_number').notNull(),
+	name: text('name'),
+	category: text('category', { enum: OP_CARD_CATEGORIES }),
+	colors: text('colors', { mode: 'json' }).$type<OpCardColor[]>(),
+	cost: integer('cost'),
+	power: integer('power'),
+	counter: integer('counter'),
+	imageUrl: text('image_url'),
+	...timestamps,
+}, table => [
+	uniqueIndex('feature_match_deck_list_entries_order_idx').on(table.deckListId, table.sortOrder),
 ]);
 
 /**
@@ -1038,6 +1084,21 @@ export const featureMatchAssignmentsRelations = relations(featureMatchAssignment
 	}),
 }));
 
+export const featureMatchDeckListsRelations = relations(featureMatchDeckLists, ({ one, many }) => ({
+	slot: one(featureMatchSlots, {
+		fields: [featureMatchDeckLists.slotId],
+		references: [featureMatchSlots.id],
+	}),
+	entries: many(featureMatchDeckListEntries),
+}));
+
+export const featureMatchDeckListEntriesRelations = relations(featureMatchDeckListEntries, ({ one }) => ({
+	deckList: one(featureMatchDeckLists, {
+		fields: [featureMatchDeckListEntries.deckListId],
+		references: [featureMatchDeckLists.id],
+	}),
+}));
+
 export const featureMatchSessionsRelations = relations(featureMatchSessions, ({ one }) => ({
 	event: one(events, {
 		fields: [featureMatchSessions.eventId],
@@ -1189,6 +1250,9 @@ export type DbFeatureMatchSlot = typeof featureMatchSlots.$inferSelect;
 export type DbFeatureMatchSlotInsert = typeof featureMatchSlots.$inferInsert;
 export type DbFeatureMatchSession = typeof featureMatchSessions.$inferSelect;
 export type DbFeatureMatchSessionInsert = typeof featureMatchSessions.$inferInsert;
+export type DbFeatureMatchDeckList = typeof featureMatchDeckLists.$inferSelect;
+export type DbFeatureMatchDeckListEntry = typeof featureMatchDeckListEntries.$inferSelect;
+export type DbFeatureMatchDeckListEntryInsert = typeof featureMatchDeckListEntries.$inferInsert;
 export type DbBroadcastGraphicsLiveSession = typeof broadcastGraphicsLiveSessions.$inferSelect;
 export type DbBroadcastGraphicsLiveSessionInsert = typeof broadcastGraphicsLiveSessions.$inferInsert;
 export type DbBroadcastGraphicTemplate = typeof broadcastGraphicTemplates.$inferSelect;
