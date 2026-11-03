@@ -11,8 +11,8 @@ import { parseOpCardNumber } from '~~/shared/utils/card/op';
  */
 
 /** A One Piece Mainboard holds this many cards, and a card number at most four copies. */
-export const OP_MAINBOARD_SIZE = 50;
-export const OP_MAX_COPIES = 4;
+const OP_MAINBOARD_SIZE = 50;
+const OP_MAX_COPIES = 4;
 
 export interface PastedDeckListLine {
 	number: string;
@@ -98,14 +98,14 @@ export function featureMatchDeckListView(entries: FeatureMatchDeckListEntry[]): 
 	}
 	const leaderColors = leader?.card?.colors ?? [];
 	if (leader) {
-		const offColour = mainboard
+		const offColor = mainboard
 			.filter(entry => entry.card && !entry.card.colors.some(color => leaderColors.includes(color)))
 			.map(entry => entry.number);
-		if (offColour.length > 0) {
+		if (offColor.length > 0) {
 			warnings.push({
-				code: 'OFF_COLOUR',
-				message: `Off the Leader's colours: ${offColour.join(', ')}.`,
-				numbers: offColour,
+				code: 'OFF_COLOR',
+				message: `Off the Leader's colours: ${offColor.join(', ')}.`,
+				numbers: offColor,
 			});
 		}
 	}

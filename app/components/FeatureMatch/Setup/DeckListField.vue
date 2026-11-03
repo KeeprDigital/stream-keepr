@@ -145,7 +145,7 @@ async function save() {
 
 				<template v-if="preview">
 					<ul class="flex flex-col gap-1" aria-label="Deck List warnings">
-						<li v-for="warning in preview.warnings" :key="warning.code">
+						<li v-for="(warning, index) in preview.warnings" :key="`${warning.code}-${index}`">
 							<UAlert
 								color="warning"
 								variant="subtle"

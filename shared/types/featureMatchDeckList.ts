@@ -1,5 +1,4 @@
 import type { OpCardCategory, OpCardColor } from './card/op';
-import type { PlayerSide } from './enums';
 
 /**
  * A Feature Match Deck List: the One Piece Card Game Deck List one player side
@@ -30,10 +29,8 @@ export type FeatureMatchDeckListWarning
 		| { code: 'TOO_MANY_COPIES'; message: string; number: string; quantity: number }
 		| { code: 'NO_LEADER'; message: string }
 		| { code: 'MULTIPLE_LEADERS'; message: string; numbers: string[] }
-		| { code: 'OFF_COLOUR'; message: string; numbers: string[] }
+		| { code: 'OFF_COLOR'; message: string; numbers: string[] }
 		| { code: 'UNKNOWN_CARD'; message: string; numbers: string[] };
-
-export type FeatureMatchDeckListWarningCode = FeatureMatchDeckListWarning['code'];
 
 /** A Deck List as a preview, or a saved one, shows it. */
 export interface FeatureMatchDeckListView {
@@ -62,15 +59,11 @@ export interface FeatureMatchDeckListReference {
 	mainboardCount: number;
 }
 
-export interface FeatureMatchDeckListPreviewInput {
-	text: string;
-}
-
-export interface SaveFeatureMatchDeckListInput {
-	side: PlayerSide;
-	text: string;
-}
-
 export type FeatureMatchDeckListPreviewAnswer
 	= | { available: false }
 		| { available: true; deckList: FeatureMatchDeckListView };
+
+/** A save's answer, with the Slot it wrote: the server's response or the client's parsed one. */
+export type SaveFeatureMatchDeckListAnswer<TSlot>
+	= | { available: false }
+		| { available: true; deckList: SavedFeatureMatchDeckList; featureMatch: TSlot };

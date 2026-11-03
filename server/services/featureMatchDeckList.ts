@@ -1,7 +1,7 @@
 import type { DbFeatureMatchDeckListEntry, DbFeatureMatchDeckListEntryInsert } from '~~/server/db/schema';
 import type { PlayerSlotData } from '~~/shared/api';
 import type { FeatureMatchDeckListEntry, FeatureMatchDeckListReference, FeatureMatchDeckListView, SavedFeatureMatchDeckList } from '~~/shared/types/featureMatchDeckList';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, lt, not } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { featureMatchDeckListEntries, featureMatchDeckLists } from '~~/server/db/schema';
 import { featureMatchDeckListView } from '~~/server/modules/feature-match-deck-list/paste';
@@ -115,10 +115,21 @@ export function featureMatchDeckListService() {
 			.where(and(eq(featureMatchDeckLists.slotId, slotId), inJsonArray(featureMatchDeckLists.id, [...ids])));
 	};
 
+	/** Deletes this Slot's Deck Lists older than `id` that neither side's data holds. */
+	const removeUnheldBefore = async (slotId: number, id: number, sides: readonly (PlayerSlotData | null | undefined)[]): Promise<void> => {
+		const held = sides.map(deckListReferenceOf).filter(reference => reference !== null).map(reference => reference.id);
+		await db.delete(featureMatchDeckLists).where(and(
+			eq(featureMatchDeckLists.slotId, slotId),
+			lt(featureMatchDeckLists.id, id),
+			not(inJsonArray(featureMatchDeckLists.id, held)),
+		));
+	};
+
 	return {
 		create,
 		findById,
 		referencesFor,
 		remove,
+		removeUnheldBefore,
 	};
 }

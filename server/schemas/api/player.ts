@@ -30,14 +30,24 @@ const opGameDataSchema = z.object({
 			: storedOpLeader(value),
 		opLeaderSchema.nullable().optional(),
 	),
-	// A Slot side's Deck List reference; the setup write checks it names one of the Slot's.
-	featureMatchDeckList: z.object({
-		id: z.number().int().positive(),
-		mainboardCount: z.number().int().nonnegative(),
-	}).strict().nullable().optional(),
 }).strict();
 
 export const playerGameDataSchema = z.discriminatedUnion('type', [mtgGameDataSchema, opGameDataSchema]);
+
+/**
+ * A Slot side's game data, as a setup save writes it: a One Piece side may also
+ * reference its Feature Match Deck List, which the setup write checks names one
+ * of the Slot's (ADR-0057). Nothing else may write a reference.
+ */
+export const slotSideGameDataSchema = z.discriminatedUnion('type', [
+	mtgGameDataSchema,
+	opGameDataSchema.extend({
+		featureMatchDeckList: z.object({
+			id: z.number().int().positive(),
+			mainboardCount: z.number().int().nonnegative(),
+		}).strict().nullable().optional(),
+	}).strict(),
+]);
 
 // CREATE
 export const createPlayerSchema = createInsertSchema(players)

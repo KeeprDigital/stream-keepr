@@ -454,7 +454,7 @@ const PLAYER_FIELDS: readonly GraphicBindingField<GraphicBindingPlayer>[] = [
 	// A Feature Match Slot side's Deck List, counted without its Leader: 50 in a legal deck.
 	{
 		id: 'player.deckCardCount',
-		label: 'Deck card count',
+		label: 'Mainboard card count',
 		type: 'number',
 		shape: 'atomic',
 		game: 'op',

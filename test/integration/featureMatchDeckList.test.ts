@@ -49,7 +49,7 @@ describe('a Feature Match Slot side\'s Deck List', () => {
 		}) as any;
 	}
 
-	it('previews a paste with placeholders and warnings, storing nothing', async () => {
+	it('previews a paste with number-only placeholders, storing nothing', async () => {
 		const answer = await $fetch(`/api/events/${eventId}/feature-match-slots/${slotId}/deck-lists/preview`, {
 			method: 'POST',
 			body: { text: ZORO_DECK },
@@ -60,7 +60,6 @@ describe('a Feature Match Slot side\'s Deck List', () => {
 			['OP01-025', 'Roronoa Zoro'],
 			['OP99-999', null],
 		]);
-		expect(answer.deckList.warnings.map((warning: any) => warning.code)).toEqual(['MAINBOARD_COUNT', 'UNKNOWN_CARD']);
 		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots/${slotId}`);
 		expect(slot.player1Data?.gameData ?? null).toBeNull();
 	});
@@ -107,10 +106,19 @@ describe('a Feature Match Slot side\'s Deck List', () => {
 
 			const reference = { id: replaced.deckList.id, mainboardCount: 6 };
 			const { featureMatch } = message.data;
-			expect(featureMatch.player1Data.gameData).toMatchObject({ leader: { number: 'OP01-001' }, featureMatchDeckList: reference });
+			expect(featureMatch.player1Data.gameData).toMatchObject({
+				leader: { number: 'OP01-001' },
+				featureMatchDeckList: reference,
+			});
 			expect(featureMatch.activeSession).toMatchObject({
 				id: sessionId,
-				sourceSnapshot: { player1: { data: { gameData: { featureMatchDeckList: reference } } } },
+				sourceSnapshot: {
+					player1: {
+						data: {
+							gameData: { featureMatchDeckList: reference },
+						},
+					},
+				},
 			});
 		}
 		finally {

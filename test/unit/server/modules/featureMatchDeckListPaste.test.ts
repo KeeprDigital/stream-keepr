@@ -205,7 +205,7 @@ describe('featureMatchDeckListView', () => {
 				character('OP01-200', 1),
 				character('OP01-201', 1, ['Blue']),
 			],
-			'OFF_COLOUR',
+			'OFF_COLOR',
 			{
 				numbers: ['OP01-201'],
 			},

@@ -5,6 +5,7 @@ import {
 	featureMatchCommandSchema,
 	updateFeatureMatchSchema,
 } from '~~/server/schemas/api/featureMatch';
+import { createPlayerSchema, updatePlayerSchema } from '~~/server/schemas/api/player';
 import { FEATURE_MATCH_BATCHABLE_COMMAND_TYPES } from '~~/shared/types/featureMatchSession';
 import { ZORO } from '~~/test/helpers/opCards';
 
@@ -224,5 +225,42 @@ describe('a Slot side\'s Leader', () => {
 	])('holds a side\'s Leader $leader as $held', ({ leader, held }) => {
 		const result = sideWith(leader);
 		expect(result.success && result.data.player1Data?.gameData).toEqual({ type: 'op', leader: held });
+	});
+});
+
+// Only a Slot setup save carries a Deck List reference, which its write then checks against the Slot.
+describe('a Feature Match Deck List reference', () => {
+	const gameData = {
+		type: 'op',
+		featureMatchDeckList: { id: 4, mainboardCount: 50 },
+	};
+
+	it.each([
+		[
+			'a Slot setup save',
+			() => updateFeatureMatchSchema.safeParse({
+				player1Data: { name: 'Ana', gameData },
+			}),
+			true,
+		],
+		[
+			'a Slot create',
+			() => createFeatureMatchSchema.safeParse({
+				player1Data: { name: 'Ana', gameData },
+			}),
+			false,
+		],
+		[
+			'a Player create',
+			() => createPlayerSchema.safeParse({ name: 'Ana', gameData }),
+			false,
+		],
+		[
+			'a Player update',
+			() => updatePlayerSchema.safeParse({ gameData }),
+			false,
+		],
+	] as const)('is taken by %s: %3$s', (_label, parse, accepted) => {
+		expect(parse().success).toBe(accepted);
 	});
 });
