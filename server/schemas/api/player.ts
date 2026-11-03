@@ -30,6 +30,11 @@ const opGameDataSchema = z.object({
 			: storedOpLeader(value),
 		opLeaderSchema.nullable().optional(),
 	),
+	// A Slot side's Deck List reference; the setup write checks it names one of the Slot's.
+	featureMatchDeckList: z.object({
+		id: z.number().int().positive(),
+		mainboardCount: z.number().int().nonnegative(),
+	}).strict().nullable().optional(),
 }).strict();
 
 export const playerGameDataSchema = z.discriminatedUnion('type', [mtgGameDataSchema, opGameDataSchema]);

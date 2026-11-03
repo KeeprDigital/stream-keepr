@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Game } from '~~/shared/types/enums';
+import type { Game, PlayerSide } from '~~/shared/types/enums';
 import type { MtgPlayerGameData, OpPlayerGameData } from '~~/shared/types/game';
 import type { InputMenuItem } from '#ui/types';
 import type { Player, PlayerData } from '~/types';
@@ -14,6 +14,11 @@ const props = defineProps<{
 	players?: Player[];
 	playerId?: number | null;
 	formId: string;
+	/** The Slot and its side this form edits, for the side's Feature Match Deck List. */
+	slotId?: number;
+	side?: PlayerSide;
+	/** While the setup form holds unsaved changes, a Deck List waits for them. */
+	deckListLocked?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -127,6 +132,13 @@ const opGameData = computed({
 		<!-- Game-Specific Fields -->
 		<FeatureMatchSetupMtgPlayerFields v-if="props.game === 'mtg'" v-model="mtgGameData" />
 		<FeatureMatchSetupOpPlayerFields v-if="props.game === 'op'" v-model="opGameData" />
+		<FeatureMatchSetupDeckListField
+			v-if="props.game === 'op' && props.slotId && props.side"
+			:slot-id="props.slotId"
+			:side="props.side"
+			:deck-list="opGameData.featureMatchDeckList ?? null"
+			:locked="props.deckListLocked ?? false"
+		/>
 
 		<USeparator v-if="props.standingsEnabled || props.lgsEnabled" />
 

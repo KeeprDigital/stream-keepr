@@ -15,12 +15,15 @@ import { INTEGRATION_MODE_ENV } from './state';
 
 const disableFsWatchImport = fileURLToPath(new URL('./disable-fs-watch.mjs', import.meta.url));
 const mockScryfallImport = fileURLToPath(new URL('./mock-scryfall.mjs', import.meta.url));
+const mockBandaiKeeprImport = fileURLToPath(new URL('./mock-bandai-keepr.mjs', import.meta.url));
 const nodeOptions = [
 	process.env.NODE_OPTIONS,
 	'--import',
 	disableFsWatchImport,
 	'--import',
 	mockScryfallImport,
+	'--import',
+	mockBandaiKeeprImport,
 	// Connection diagnostics, and reading an early answer's body to its end (#633).
 	'--require',
 	INTEGRATION_SERVER_PRELOAD,
@@ -167,6 +170,9 @@ export const integrationServerEnv: Record<string, string> = {
 	NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY: INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY,
 	NUXT_BETTER_AUTH_SECRET: INTEGRATION_BETTER_AUTH_SECRET,
 	NUXT_ADMIN_BOOTSTRAP_TOKEN: INTEGRATION_ADMIN_BOOTSTRAP_TOKEN,
+	// Answered by `./mock-bandai-keepr.mjs`; the key is invented, the origin served by nobody.
+	NUXT_BANDAI_KEEPR_API_URL: 'https://bandai-keepr.integration.invalid',
+	NUXT_BANDAI_KEEPR_API_KEY: 'integration-bandai-keepr-key',
 	NODE_OPTIONS: nodeOptions,
 };
 

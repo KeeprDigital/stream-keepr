@@ -1,4 +1,5 @@
 import type { OpCardColor } from './card/op';
+import type { FeatureMatchDeckListReference } from './featureMatchDeckList';
 import type { FeatureMatchDefaults } from './featureMatchDefaults';
 
 export interface CounterTypeConfig {
@@ -55,6 +56,12 @@ export interface OpLeader {
 export interface OpPlayerGameData {
 	type: 'op';
 	leader?: OpLeader | null;
+	/**
+	 * A Feature Match Slot side's Deck List, by reference: it travels with the
+	 * side's player data, so it moves with its player on a swap (ADR-0057).
+	 * The server owns its Mainboard count.
+	 */
+	featureMatchDeckList?: FeatureMatchDeckListReference | null;
 }
 
 export type PlayerGameData = MtgPlayerGameData | OpPlayerGameData;

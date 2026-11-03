@@ -448,6 +448,9 @@ async function save() {
 						:players="playerStore.players"
 						:player-id="formData.player1Id"
 						:form-id="player1FormId"
+						:slot-id="match.id"
+						side="player1"
+						:deck-list-locked="isDirty"
 						@update:player-id="formData.player1Id = $event"
 						@submit="save"
 					/>
@@ -467,6 +470,9 @@ async function save() {
 						:players="playerStore.players"
 						:player-id="formData.player2Id"
 						:form-id="player2FormId"
+						:slot-id="match.id"
+						side="player2"
+						:deck-list-locked="isDirty"
 						@update:player-id="formData.player2Id = $event"
 						@submit="save"
 					/>
