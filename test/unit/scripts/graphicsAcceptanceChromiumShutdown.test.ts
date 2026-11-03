@@ -1,12 +1,13 @@
 import type { ChildProcess } from 'node:child_process';
 import { execFileSync, spawn } from 'node:child_process';
-import { chmodSync, existsSync } from 'node:fs';
+import { chmodSync, existsSync, rmSync } from 'node:fs';
 import { basename } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { acceptanceProfilePrefix, checkoutProfileMarker } from '../../../scripts/graphics-acceptance/chromium-profile.mjs';
 import { launchChromium } from '../../../scripts/graphics-acceptance/chromium.mjs';
+import { fakeChrome } from './fixtures/fake-chrome';
 
 /**
  * The acceptance browser always goes away (#687).
@@ -156,5 +157,60 @@ describe('the acceptance browser\'s shutdown', () => {
 
 		expect(await exited).toEqual({ code: 3, signal: null });
 		expect(await gone(pid, 2_000)).toBe(true);
+	});
+});
+
+describe('a browser that outlives SIGKILL', () => {
+	const held: Array<ReturnType<typeof fakeChrome>> = [];
+	afterEach(() => {
+		for (const chrome of held.splice(0)) {
+			chrome.reap();
+			rmSync(chrome.profile()!, { recursive: true, force: true });
+		}
+	});
+
+	/** A Chrome no signal stops, launched with every grace short. */
+	function immortalChrome() {
+		const chrome = fakeChrome({ diesOn: [] });
+		held.push(chrome);
+		const options = {
+			startupTimeoutMs: 300,
+			terminateGraceMs: 100,
+			killGraceMs: 100,
+			spawnProcess: chrome.spawn,
+		};
+		return { chrome, options };
+	}
+
+	async function failureOf(work: Promise<unknown>): Promise<string> {
+		return await work.then(
+			() => { throw new Error('nothing failed'); },
+			(failure: Error) => failure.message,
+		);
+	}
+
+	it.each([
+		{
+			stopping: 'a browser that never announced itself',
+			stop: async ({ options }: ReturnType<typeof immortalChrome>) => await failureOf(launchChromium('chrome', [], options)),
+		},
+		{
+			stopping: 'a browser being disposed of',
+			stop: async ({ chrome, options }: ReturnType<typeof immortalChrome>) => {
+				const launching = launchChromium('chrome', [], options);
+				await chrome.started();
+				chrome.say('DevTools listening on ws://127.0.0.1:9/devtools/browser/immortal\n');
+				const browser = await launching;
+				return await failureOf(browser!.dispose());
+			},
+		},
+	])('keeps the profile it still holds, and says so, when stopping $stopping', async ({ stop }) => {
+		const stand = immortalChrome();
+
+		const message = await stop(stand);
+
+		expect(message).toContain('still running after SIGKILL');
+		expect(message).toContain(`profile kept: ${stand.chrome.profile()}`);
+		expect(existsSync(stand.chrome.profile()!)).toBe(true);
 	});
 });
