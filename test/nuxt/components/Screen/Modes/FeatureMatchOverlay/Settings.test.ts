@@ -791,6 +791,25 @@ describe('featureMatchOverlaySettings — Graphics Authoring Lease', () => {
 		expect(wrapper.get('[data-testid="compositor-inspector"]').attributes('data-writable')).toBe('false');
 	});
 
+	// The stress preview writes nothing, so an observer judges overflow too.
+	it('leaves the preview\'s stress toggle working for an observer', async () => {
+		const wrapper = await mountComponent({}, {
+			FeatureMatchOverlayPreviewOutputAside: false,
+			GraphicsCanvasManipulationOverlay: true,
+			// The real preview panel, whose toolbar is its card's actions.
+			ScreenSettingsCard: { template: '<section><slot name="actions" :open="true" /><slot /></section>' },
+		});
+		await flushPromises();
+		const toggle = wrapper.get('[data-testid="preview-stress-dataset"]');
+
+		expect(toggle.attributes('disabled')).toBeUndefined();
+		await toggle.trigger('click');
+
+		expect(toggle.attributes('aria-pressed')).toBe('true');
+		expect(wrapper.get('iframe').attributes('src')).toContain('stress=1');
+		expect(mockUpdateConfig).not.toHaveBeenCalled();
+	});
+
 	// The Graphic Animation Preview is not a write path, so the lease never gates it.
 	it('lets an observer play a Graphic Animation Preview run, writing nothing', async () => {
 		const wrapper = await mountComponent({}, {

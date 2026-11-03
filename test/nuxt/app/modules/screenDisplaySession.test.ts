@@ -422,15 +422,21 @@ describe('useScreenDisplaySession', () => {
 	 * what is on air, which it can only do by loading playout and resolving media as
 	 * an output does — both of which the preview reading of this URL suppresses.
 	 */
-	it('leaves a Program monitor live: not a preview, and no preview backdrop or guides', async () => {
+	it('leaves a Program monitor live: not a preview, and no preview backdrop, guides or stress values', async () => {
 		const harness = createHarness({
-			query: { embed: 'monitor', guides: '1', safe: '1' },
+			query: {
+				embed: 'monitor',
+				guides: '1',
+				safe: '1',
+				stress: '1',
+			},
 		});
 		await flushPromises();
 
 		expect(harness.session.screenContext.isPreview?.value).toBe(false);
 		expect(harness.session.screenContext.previewGuides?.value).toBe(false);
 		expect(harness.session.screenContext.previewSafeAreas?.value).toBe(false);
+		expect(harness.session.screenContext.previewStressDataset?.value).toBe(false);
 	});
 
 	/**
@@ -449,16 +455,18 @@ describe('useScreenDisplaySession', () => {
 		expect(harness.session.screenContext.isPreview?.value).toBe(false);
 	});
 
-	// Preview guides never appear on a live Screen Output: the guide flags count only with embed=preview.
-	it('draws no guides for guides=1 and safe=1 without embed=preview', async () => {
+	// Preview guides and the Feature Match Stress Dataset never reach a live Screen
+	// Output: their flags count only with embed=preview.
+	it('draws no guides or stress values for guides=1, safe=1 and stress=1 without embed=preview', async () => {
 		const harness = createHarness({
-			query: { guides: '1', safe: '1' },
+			query: { guides: '1', safe: '1', stress: '1' },
 		});
 		await flushPromises();
 
 		expect(harness.session.screenContext.isPreview?.value).toBe(false);
 		expect(harness.session.screenContext.previewGuides?.value).toBe(false);
 		expect(harness.session.screenContext.previewSafeAreas?.value).toBe(false);
+		expect(harness.session.screenContext.previewStressDataset?.value).toBe(false);
 		expect(harness.realtimeSession.start).toHaveBeenCalledWith(42, 7);
 	});
 
@@ -466,14 +474,20 @@ describe('useScreenDisplaySession', () => {
 	 * The other side, so the refusal above is the preview flag being load-bearing
 	 * rather than the flags never being read at all.
 	 */
-	it('draws the guides an embedded preview asks for', async () => {
+	it('draws the guides and stress values an embedded preview asks for', async () => {
 		const harness = createHarness({
-			query: { embed: 'preview', guides: '1', safe: '1' },
+			query: {
+				embed: 'preview',
+				guides: '1',
+				safe: '1',
+				stress: '1',
+			},
 		});
 		await flushPromises();
 
 		expect(harness.session.screenContext.previewGuides?.value).toBe(true);
 		expect(harness.session.screenContext.previewSafeAreas?.value).toBe(true);
+		expect(harness.session.screenContext.previewStressDataset?.value).toBe(true);
 	});
 
 	it('reads the opaque asset capability only from the URL fragment', async () => {
