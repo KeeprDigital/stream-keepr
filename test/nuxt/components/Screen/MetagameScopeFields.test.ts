@@ -84,16 +84,14 @@ describe('screenMetagameScopeFields', () => {
 		];
 	});
 
-	it('offers every scope its contract holds', () => {
-		const wrapper = mountFields({ config: baseConfig, fields: metagameFields });
+	it.each([
+		['metagame', metagameFields],
+		['top-cards', topCardsFields],
+		['archetype-spotlight', spotlightFields],
+	] as const)('offers %s every scope', (_mode, fields) => {
+		const wrapper = mountFields({ config: baseConfig, fields });
 
 		expect(field(wrapper, 'Player scope')!.text()).toBe('All Players|Top N|Minimum Points|Player List');
-	});
-
-	it('offers no Minimum Points scope to a mode whose contract holds no minimum', () => {
-		const wrapper = mountFields({ config: baseConfig, fields: topCardsFields });
-
-		expect(field(wrapper, 'Player scope')!.text()).toBe('All Players|Top N|Player List');
 	});
 
 	it('offers the Player List scope only while the Event has a list', () => {

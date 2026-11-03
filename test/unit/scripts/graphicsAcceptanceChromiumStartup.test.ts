@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync } from 'node:fs';
+import { chmodSync, rmSync } from 'node:fs';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { launchChromium, warmChromium } from '../../../scripts/graphics-acceptance/chromium.mjs';
+import { fakeChrome } from './fixtures/fake-chrome';
 
 /**
  * A browser that fails to start says why (#790).
@@ -44,6 +45,34 @@ describe('the acceptance browser\'s startup', () => {
 		expect(message).toMatch(/^Chromium exited with code 0 before announcing its DevTools endpoint\./);
 		expect(message).toContain('FATAL:zygote_host_impl_linux.cc(127)] No usable sandbox!');
 		expect(message).toContain('already exited');
+	});
+});
+
+describe('the acceptance browser\'s DevTools endpoint', () => {
+	it.each([
+		{
+			chunks: ['DevTools listening on ws://127.0.0.1:9/devtools/browser/whole\n'],
+		},
+		{
+			chunks: ['DevTools listening on ws://127.0.0.1:9/devtools/bro', 'wser/whole\n'],
+		},
+		{
+			chunks: ['DevTools listen', 'ing on ws://127.0.0.1:9/devtools/browser/whole', '\nnext line'],
+		},
+	])('is read from a complete line however stderr splits it: $chunks', async ({ chunks }) => {
+		const chrome = fakeChrome();
+		const launching = launchChromium('chrome', [], { ...quick, spawnProcess: chrome.spawn });
+		await chrome.started();
+		for (const chunk of chunks) {
+			chrome.say(chunk);
+			await new Promise(resolve => setImmediate(resolve));
+		}
+
+		const browser = await launching;
+
+		expect(browser?.endpoint).toBe('ws://127.0.0.1:9/devtools/browser/whole');
+		chrome.reap();
+		rmSync(chrome.profile()!, { recursive: true, force: true });
 	});
 });
 

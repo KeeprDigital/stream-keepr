@@ -6,23 +6,24 @@ import type { MetagameScope } from '~~/shared/types/enums';
  * The settings fields of a Metagame Scope (#777), shared by every mode reading
  * the metagame: the scope, the field its current scope reads, and the archetype
  * filter where its mode offers one. Each control's label and bounds come from
- * the mode's contract `fields`, and a scope or filter the contract does not hold
- * is not offered. Each edit is emitted as the patch naming it, a cleared Player
- * List or filter as the `null` that deletes it (ADR-0041); the editor writes it.
+ * the mode's contract `fields`. Every mode offers every scope (#904); a filter
+ * the contract does not hold is not offered. Each edit is emitted as the patch
+ * naming it, a cleared Player List or filter as the `null` that deletes it
+ * (ADR-0041); the editor writes it.
  */
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
 	config: {
 		scope: MetagameScope;
 		topN: number;
-		minPoints?: number;
+		minPoints: number;
 		playerListId?: number;
 		archetypeFilter?: string;
 	};
-	/** The mode's contract field views; `minPoints` and `archetypeFilter` only where it holds them. */
+	/** The mode's contract field views; `archetypeFilter` only where it holds one. */
 	fields: {
 		scope: ScreenModeConfigField;
 		topN: ScreenModeConfigField;
-		minPoints?: ScreenModeConfigField;
+		minPoints: ScreenModeConfigField;
 		archetypeFilter?: ScreenModeConfigField;
 	};
 	/** What the scope decides for this mode. */
@@ -47,10 +48,8 @@ const scopeOptions = computed(() => {
 	const options = [
 		{ label: 'All Players', value: 'all' },
 		{ label: 'Top N', value: 'topN' },
+		{ label: 'Minimum Points', value: 'minPoints' },
 	];
-
-	if (props.fields.minPoints)
-		options.push({ label: 'Minimum Points', value: 'minPoints' });
 
 	if (playerListStore.lists.length > 0)
 		options.push({ label: 'Player List', value: 'playerList' });
@@ -97,7 +96,7 @@ const playerListOptions = computed(() => [
 	</UFormField>
 
 	<UFormField
-		v-if="config.scope === 'minPoints' && fields.minPoints"
+		v-if="config.scope === 'minPoints'"
 		:label="fields.minPoints.label"
 		description="Include players with at least this many match points."
 		class="flex max-sm:flex-col justify-between items-start gap-4"

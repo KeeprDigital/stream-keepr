@@ -245,6 +245,21 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 	}
 
 	/**
+	 * Drop every unsaved edit of `keys`: its local value, its queued save and any
+	 * refusal held for retry, so the store's value shows again. For an edit its
+	 * author may no longer write, such as one a lost Graphics Authoring Lease
+	 * leaves behind (#738). A save already out still settles, but no longer speaks
+	 * for a field discarded here.
+	 */
+	function discard(keys: readonly string[]) {
+		const strip = <V extends Record<string, unknown>>(record: V): V =>
+			Object.fromEntries(Object.entries(record).filter(([key]) => !keys.includes(key))) as V;
+		localOverrides.value = strip(localOverrides.value);
+		pendingUpdates.value = strip(pendingUpdates.value);
+		refusedFields.value = strip(refusedFields.value);
+	}
+
+	/**
 	 * Spend the pending edit rather than discard it, at whichever of the two moments
 	 * arrives first.
 	 *
@@ -287,5 +302,6 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 		saveError,
 		updateConfig,
 		retry,
+		discard,
 	};
 }
