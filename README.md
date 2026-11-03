@@ -242,7 +242,8 @@ The `dev` launchers first apply pending migrations to the local D1 store Nitro
 serves from (`.wrangler/state/v3`, bindings from `wrangler.dev.jsonc`).
 `pnpm preview` builds, applies migrations to an ignored local D1 store under
 `.wrangler/state/built-worker`, and runs the generated Worker under local
-workerd. Neither touches a remote database.
+workerd (`scripts/preview-worker.mjs`, which also fires its minute cron; see
+[Melee Live Results](#melee-live-results)). Neither touches a remote database.
 
 Stop dev servers with Ctrl-C (SIGINT) or SIGTERM. A server killed with SIGKILL
 or SIGHUP strands its `workerd` process, which then holds memory and sqlite
@@ -1002,6 +1003,13 @@ Melee reporting a result. ADR-0052 has the rules.
   writes. Only another operator command answers `409`.
 - **A deploy without the minute cron stops Live Results silently.** Events keep
   the setting and resume once the cron is back.
+- **Local launchers tick it too.** No local runtime fires a cron trigger, so
+  `pnpm dev`, `pnpm dev:local` and their `:bypass` variants fire the minute
+  cron's hook in-process, and `pnpm preview` fires it through Wrangler's
+  `/__scheduled` route: at start, then each minute, never overlapping. A local
+  run with an Event's Live Results on therefore polls Melee.gg as production
+  does. The built Worker never starts this; its real cron is the only trigger
+  (`pnpm worker:smoke` checks).
 
 ## Graphics Asset Library operations
 

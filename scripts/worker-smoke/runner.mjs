@@ -7,6 +7,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
+import { LIVE_RESULTS_CRON } from '../../server/utils/cronSchedules.ts';
 import {
 	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
 	LOCAL_AUTH_BYPASS_NAME,
@@ -24,6 +25,11 @@ const PIXEL_JPEG = Uint8Array.from(Buffer.from(
 	'/9j/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJtAEx7/2Q==',
 	'base64',
 ));
+
+/** An Event with Live Results on and no Rounds, so its tick idles and asks Melee nothing. */
+const LIVE_RESULTS_EVENT_ID = 900_001;
+const LIVE_RESULTS_EVENT_SQL = 'INSERT INTO events (id, name, game, feature_match_orientation, melee_enabled, melee_live_results_enabled) '
+	+ `VALUES (${LIVE_RESULTS_EVENT_ID}, 'Built Worker smoke Live Results', 'mtg', 'horizontal', 1, 1)`;
 
 export class WorkerSmokeFailure extends Error {
 	constructor(probe, failureClass, detail = {}) {
@@ -125,29 +131,40 @@ export async function runWorkerSmoke({
 			env: hermeticChildEnvironment(),
 			stdio: ['ignore', 'pipe', 'pipe'],
 		};
-		const migration = spawnProcess(wranglerPath, [
-			'd1',
-			'migrations',
-			'apply',
+		const runSetup = async (arguments_) => {
+			const setup = spawnProcess(wranglerPath, [
+				'd1',
+				...arguments_,
+				'--local',
+				'--config',
+				configPath,
+				'--persist-to',
+				persistencePath,
+			], { ...childProcessOptions, detached: true });
+			activeChild = setup;
+			captureChildOutput(setup, workerLog);
+			activeChildExit = childExit(setup, 'setup');
+			const setupExit = await abortable(activeChildExit, smokeSignal);
+			if (setupExit.status !== 0) {
+				throw new WorkerSmokeFailure('setup', arguments_[0] === 'migrations'
+					? 'migration-exit'
+					: 'seed-exit', {
+					expected: 'exit 0',
+					actual: exitDescription(setupExit),
+				});
+			}
+			activeChild = undefined;
+			activeChildExit = undefined;
+		};
+		await runSetup(['migrations', 'apply', 'DB']);
+		// Melee Sync can be switched on only after Melee.gg accepts the
+		// credentials, so the Live Results Event is written straight to D1.
+		await runSetup([
+			'execute',
 			'DB',
-			'--local',
-			'--config',
-			configPath,
-			'--persist-to',
-			persistencePath,
-		], { ...childProcessOptions, detached: true });
-		activeChild = migration;
-		captureChildOutput(migration, workerLog);
-		activeChildExit = childExit(migration, 'setup');
-		const migrationExit = await abortable(activeChildExit, smokeSignal);
-		if (migrationExit.status !== 0) {
-			throw new WorkerSmokeFailure('setup', 'migration-exit', {
-				expected: 'exit 0',
-				actual: exitDescription(migrationExit),
-			});
-		}
-		activeChild = undefined;
-		activeChildExit = undefined;
+			'--command',
+			LIVE_RESULTS_EVENT_SQL,
+		]);
 
 		const startWorker = async () => {
 			const port = await availableLoopbackPort();
@@ -162,6 +179,8 @@ export async function runWorkerSmoke({
 				'127.0.0.1',
 				'--port',
 				String(port),
+				// Exposes `/__scheduled`, the Worker's scheduled handler.
+				'--test-scheduled',
 			];
 			activeChild = spawnProcess(wranglerPath, arguments_, { ...childProcessOptions, detached: true });
 			captureChildOutput(activeChild, workerLog);
@@ -658,6 +677,7 @@ async function runProductProbes({ origin, fetchRequest, generated, sensitiveValu
 	});
 
 	await expectDeployVerifyPasses({ origin, fetchRequest, signal });
+	await expectLiveResultsTickOnlyOnCron({ origin, cookie, fetchRequest, signal });
 }
 
 /** Better Auth's own sign-in rule: three requests per client per 10 seconds. */
@@ -749,6 +769,46 @@ async function expectDeployVerifyPasses({ origin, fetchRequest, signal }) {
 			actual: redactSmokeText(error.message),
 		});
 	}
+}
+
+/**
+ * The built Worker ticks Live Results only when its minute cron fires: the
+ * in-process schedule a local dev server runs never starts in it (#887), and
+ * the scheduled handler reaches the tick.
+ */
+async function expectLiveResultsTickOnlyOnCron({ origin, cookie, fetchRequest, signal }) {
+	const lastCheckedAt = async (probe) => {
+		const status = await expectJson({
+			probe,
+			expected: 200,
+			origin,
+			path: `/api/events/${LIVE_RESULTS_EVENT_ID}/melee/live-results`,
+			fetchRequest,
+			signal,
+			init: {
+				headers: { cookie },
+			},
+		});
+		return status?.lastCheckedAt ?? null;
+	};
+
+	const beforeCron = await lastCheckedAt('live-results-before-cron');
+	if (beforeCron !== null) {
+		throw new WorkerSmokeFailure('live-results-before-cron', 'unexpected-tick', {
+			expected: 'no Live Results tick before the cron fires',
+			actual: `checked at ${beforeCron}`,
+		});
+	}
+	await expectStatus({
+		probe: 'live-results-cron',
+		expected: 200,
+		origin,
+		path: `/__scheduled?${new URLSearchParams({ cron: LIVE_RESULTS_CRON })}`,
+		fetchRequest,
+		signal,
+	});
+	if (await lastCheckedAt('live-results-after-cron') === null)
+		throwShapeFailure('live-results-after-cron', 'a Live Results tick on the minute cron');
 }
 
 function jsonRequest(body, headers = {}) {

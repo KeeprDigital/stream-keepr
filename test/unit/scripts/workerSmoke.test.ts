@@ -89,6 +89,7 @@ describe('the built Worker smoke runner', () => {
 		const repositoryRoot = await builtRepository();
 		const spawnProcess = vi.fn()
 			.mockImplementationOnce(() => exitedProcess(0))
+			.mockImplementationOnce(() => exitedProcess(0))
 			.mockImplementationOnce(() => exitedProcess(17));
 
 		await expect(runWorkerSmoke({ repositoryRoot, spawnProcess })).rejects.toMatchObject({
@@ -96,7 +97,31 @@ describe('the built Worker smoke runner', () => {
 			failureClass: 'process-exit',
 			detail: { actual: 'exit 17' },
 		});
-		expect(spawnProcess).toHaveBeenCalledTimes(2);
+		expect(spawnProcess).toHaveBeenCalledTimes(3);
+	});
+
+	it.each([
+		{
+			failing: 'migrations',
+			exits: [3],
+			failureClass: 'migration-exit',
+		},
+		{
+			failing: 'the Live Results Event seed',
+			exits: [0, 3],
+			failureClass: 'seed-exit',
+		},
+	])('names failed $failing and starts no Worker', async ({ exits, failureClass }) => {
+		const repositoryRoot = await builtRepository();
+		const spawnProcess = vi.fn();
+		for (const status of exits)
+			spawnProcess.mockImplementationOnce(() => exitedProcess(status));
+
+		await expect(runWorkerSmoke({ repositoryRoot, spawnProcess })).rejects.toMatchObject({
+			probe: 'setup',
+			failureClass,
+		});
+		expect(spawnProcess).toHaveBeenCalledTimes(exits.length);
 	});
 
 	it('restores both staged configuration files byte-for-byte after startup failure', async () => {
@@ -123,6 +148,7 @@ describe('the built Worker smoke runner', () => {
 				expect(options.env.HOME).toBeUndefined();
 				return exitedProcess(0);
 			})
+			.mockImplementationOnce(() => exitedProcess(0))
 			.mockImplementationOnce(() => exitedProcess(17));
 
 		await expect(runWorkerSmoke({ repositoryRoot, spawnProcess })).rejects.toMatchObject({
@@ -185,6 +211,7 @@ describe('the built Worker smoke runner', () => {
 		const worker = livingProcess();
 		const spawnProcess = vi.fn()
 			.mockImplementationOnce(() => exitedProcess(0))
+			.mockImplementationOnce(() => exitedProcess(0))
 			.mockImplementationOnce(() => worker);
 		const fetchRequest = vi.fn()
 			.mockResolvedValueOnce(Response.json({
@@ -226,6 +253,7 @@ describe('the built Worker smoke runner', () => {
 	async function bootstrappedWorkerAnswering(answers: Response[]) {
 		const repositoryRoot = await builtRepository();
 		const spawnProcess = vi.fn()
+			.mockImplementationOnce(() => exitedProcess(0))
 			.mockImplementationOnce(() => exitedProcess(0))
 			.mockImplementationOnce(() => livingProcess());
 		const fetchRequest = vi.fn();
@@ -381,6 +409,7 @@ describe('the built Worker smoke runner', () => {
 		const worker = stubbornProcess();
 		const spawnProcess = vi.fn()
 			.mockImplementationOnce(() => exitedProcess(0))
+			.mockImplementationOnce(() => exitedProcess(0))
 			.mockImplementationOnce(() => worker);
 		const fetchRequest = vi.fn()
 			.mockResolvedValueOnce(Response.json({
@@ -406,6 +435,7 @@ describe('the built Worker smoke runner', () => {
 		const repositoryRoot = await builtRepository();
 		const worker = livingProcess();
 		const spawnProcess = vi.fn()
+			.mockImplementationOnce(() => exitedProcess(0))
 			.mockImplementationOnce(() => exitedProcess(0))
 			.mockImplementationOnce(() => worker);
 

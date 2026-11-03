@@ -1629,6 +1629,8 @@ Accepted · 2026-10-27
 
 **A one-minute Cloudflare cron is the scheduler.** `wrangler.jsonc` declares `* * * * *` beside the hourly `17 * * * *`, and every `cloudflare:scheduled` handler checks `controller.cron` against `server/utils/cronSchedules.ts`, so the graphics jobs stay hourly. `runDueLiveResultsTicks` ticks Events with Melee Sync and Live Results on whose `meleeLiveResultsNextCheckAt` is unset or passed, longest-waiting first, at most 25 per run, one at a time, each in its own `try`/`catch`.
 
+**Local launchers fire the same cron themselves.** No local runtime fires a cron trigger, so under `pnpm dev`, `dev:local` and their `:bypass` variants Live Results never ticked and an operator saw "Not checked yet" for good (#887). The dev server fires the Worker's own `cloudflare:scheduled` hook with `* * * * *` in-process (`liveResults/localSchedule.ts`, started by the Live Results cron plugin only when `import.meta.dev`), and `pnpm preview` fires it through Wrangler's `/__scheduled` test route (`scripts/preview-worker.mjs`). Both run at start and then each minute, and skip a minute while the previous firing still runs (`server/utils/localCron.ts`). They fire the entry the cron does, so the runner, the lease and each Event's next check decide what ticks, exactly as deployed. A deployed Worker never starts the local schedule: its real cron would tick every Event twice, and `pnpm worker:smoke` proves the built Worker ticks only when its cron fires.
+
 **Poll state is columns on `events`**: next check, backoff step, last checked, last change, Live Results error, stop reason. Cadence is `nextLiveResultsSchedule`: results every minute, every five minutes after thirty quiet minutes, back to every minute on a change; probing, idling and failures back off from a minute, doubling to a fifteen-minute cap. Live Results stops itself, storing a stop reason, after twelve hours with no change of any kind (failed ticks count) or on a Melee 401/403.
 
 **The Melee Sync lease keeps a tick from writing after Melee Sync is turned off, and never blocks an operator.** A tick takes the Event's lease as `live-results` for two minutes or skips; it never waits. Any operator command, configuration included, takes a `live-results` lease over at once in the same conditional `UPDATE` that takes a free one; only another operator command's lease answers `409`. Just before each Player or Round write the tick renews its lease by token and re-reads that Melee Sync and Live Results are both on, abandoning that write and every later one, its poll state included, when either check fails. Its poll-state write is itself conditioned on the lease token and both settings, so a reset that took the lease over always wins.
@@ -1648,12 +1650,13 @@ A minute cron meets the cadence: the shortest interval is a minute, and backoff 
 ### Consequences
 
 - A deploy without the minute cron silently stops Live Results; Events keep their setting and resume on the next deploy with it.
+- Live Results polls Melee.gg from any running local launcher with an Event's Live Results on, as production does. Turning it off on the Sync page stops that.
 - Every new `cloudflare:scheduled` handler must check its own cron, or it runs every minute. `test/unit/server/utils/cronSchedules.test.ts` pins the triggers against `wrangler.jsonc` and each handler's gate.
 - A result corrected on Melee after its Round is complete is not polled for; a manual sync picks it up.
 - Polling refreshes Players only when a new Round is first paired, never Deck Lists or Event structure.
 - An operator command taken over a tick can overlap only the write the tick had already begun when it lost the lease: one Round snapshot or Player reconcile, which is itself a Melee Sync write of the same data. The tick's poll-state write is then refused by the token condition.
 - `melee:roundSynced` is gone in the same release, with no compatibility window: a Screen Output still on the previous bundle during a deploy misses Round sync messages until it reloads.
-- `test/unit/server/modules/meleeLiveResults.sqlite.test.ts` pins the tick, the runner and the status route; `meleeLiveResultsRules.test.ts` the cadence; `meleeLiveResultsCurrentRound.sqlite.test.ts` the Current Round.
+- `test/unit/server/modules/meleeLiveResults.sqlite.test.ts` pins the tick, the runner and the status route; `meleeLiveResultsRules.test.ts` the cadence; `meleeLiveResultsCurrentRound.sqlite.test.ts` the Current Round; `meleeLiveResultsLocalSchedule.sqlite.test.ts` the local schedule and its dev gate; `test/unit/server/utils/localCron.test.ts` its cadence and overlap rule; `test/unit/scripts/previewWorker.test.ts` the preview launcher.
 
 ### Rejected alternatives
 
@@ -1663,6 +1666,7 @@ A minute cron meets the cadence: the shortest interval is a minute, and backoff 
 - **Keep `melee:roundSynced` as the only message, published only on change.** Standings would still re-read on every reported result, and the Pairings Screen could not tell a result from a re-pairing.
 - **Let a tick wait for the lease like an operator command.** A tick that waits holds a cron invocation for nothing; the next minute's tick tries again.
 - **Let an operator command wait out a tick.** A tick slower than the wait still answers the operator `409`, and every wait delays the operator for polling, which Live Results must never do.
+- **Leave local launchers without a scheduler, firing `/__scheduled` by hand.** Live Results is meant to just work wherever an operator runs the app, and a forgotten manual step looks exactly like #887.
 
 ## ADR-0053: Program holds what it shows until what replaces it is ready
 
