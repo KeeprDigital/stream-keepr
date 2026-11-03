@@ -42,8 +42,9 @@ export interface HeadToHeadFacts {
 	currentMatchId: number | null;
 }
 
-function holdsRecord({ wins, losses, draws, points }: RecordFacts): boolean {
-	return wins != null || losses != null || draws != null || points != null;
+/** A Player holds a record once they hold wins or losses, as Standings with no Round picked lists them. */
+function holdsRecord({ wins, losses }: RecordFacts): boolean {
+	return wins != null || losses != null;
 }
 
 function projectPlayer({ player, archetype, latestStanding }: HeadToHeadPlayerFacts): ScreenOutputHeadToHeadPlayer {
@@ -115,7 +116,7 @@ function projectEarlierMatches(facts: HeadToHeadFacts, player1Id: number, player
  * record, points and deck, and the earlier Matches between them.
  *
  * A record is the Player's own, as Standings with no Round picked shows it and
- * a Melee Players sync keeps current (#903). Only a Player holding no record
+ * Melee Sync keeps current (#903). Only a Player holding no record
  * of their own shows their latest Round Standings.
  */
 export function projectHeadToHead(facts: HeadToHeadFacts): ScreenOutputHeadToHeadResponse {

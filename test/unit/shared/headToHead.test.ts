@@ -66,7 +66,7 @@ describe('projectHeadToHead', () => {
 			points: 13,
 		};
 
-		// A Melee Players sync keeps a Player's own record ahead of their latest
+		// Melee Sync keeps a Player's own record ahead of their latest
 		// Round Standings, which stand in only while the Player holds none.
 		it.each([
 			{
@@ -82,10 +82,16 @@ describe('projectHeadToHead', () => {
 				shows: OWN,
 			},
 			{
-				case: 'their own record when it holds only points',
+				case: 'their own record when it holds wins or losses alone',
+				own: { ...NO_RECORD, losses: 2 },
+				latestStanding: STANDING,
+				shows: { ...NO_RECORD, losses: 2 },
+			},
+			{
+				case: 'their latest Round Standings when they hold only points',
 				own: { ...NO_RECORD, points: 0 },
 				latestStanding: STANDING,
-				shows: { ...NO_RECORD, points: 0 },
+				shows: STANDING,
 			},
 			{
 				case: 'their latest Round Standings when they hold no record of their own',
