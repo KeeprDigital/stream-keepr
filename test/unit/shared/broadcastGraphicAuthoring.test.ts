@@ -1245,11 +1245,23 @@ describe('placing a Graphic Item in or out of a Graphic Group (#741)', () => {
 		expect(out.items.map(item => item.id)).toEqual(['lone', 'box', 'row']);
 	});
 
-	it('keeps an item drawn where it was across a rotated canvas group, turned against the group', () => {
-		const into = placeGraphicItem(stage({ boxRotation: 90 }), 'lone', { groupId: 'box', index: 1 });
+	// Top-left: unturning (300, 200) a quarter about the box's corner (100, 50) gives (250, -150).
+	// Centre: the item's centre (320, 210) unturned about the box's centre (300, 200) gives (310, 180).
+	it.each([
+		[
+			'top-left',
+			{ x: 140, y: -210 },
+		],
+		[
+			'center',
+			{ x: 180, y: 110 },
+		],
+	] as const)('keeps an item drawn where it was across a rotated canvas group, turned against the group, both anchored %s', (anchor, rebased) => {
+		let built = patchGraphicItem(stage({ boxRotation: 90 }), 'box', { anchor });
+		built = patchGraphicItem(built, 'lone', { anchor });
+		const into = placeGraphicItem(built, 'lone', { groupId: 'box', index: 1 });
 
-		// Unturning (300, 200) a quarter about the box's corner (100, 50) gives (250, -150).
-		expect(located(into, 'lone').item).toMatchObject({ x: 140, y: -210, rotation: -90 });
+		expect(located(into, 'lone').item).toMatchObject({ ...rebased, rotation: -90 });
 
 		const out = located(placeGraphicItem(into, 'lone', { groupId: null, index: 0 }), 'lone').item;
 		expect(out).toMatchObject({ x: 300, y: 200 });

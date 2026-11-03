@@ -423,11 +423,17 @@ describe('featureMatchOverlayLayerList', () => {
 				]));
 		}
 
-		function itemIds(config: Awaited<ReturnType<typeof mountList>>['config']) {
+		type Config = Awaited<ReturnType<typeof mountList>>['config'];
+
+		function itemIds(config: Config) {
 			return config.value.layout.composition.items.map(item => item.id);
 		}
 
-		function rotateBack(config: Awaited<ReturnType<typeof mountList>>['config']) {
+		function parentOf(config: Config, id: string) {
+			return findGraphicItem(config.value.layout.composition, id)?.group?.id ?? null;
+		}
+
+		function rotateBack(config: Config) {
 			const composition = patchGraphicItem(config.value.layout.composition, 'back', { rotation: 15 });
 			config.value = {
 				...config.value,
@@ -435,34 +441,41 @@ describe('featureMatchOverlayLayerList', () => {
 			};
 		}
 
-		it('drops a row in front of another, showing where it lands, as one undo step', async () => {
+		it.each<[string, number, string, string[], string[], string | null]>([
+			[
+				'in front of the group',
+				0.1,
+				'top',
+				['cluster', 'back'],
+				['item:back', 'item:cluster', 'item:child'],
+				null,
+			],
+			[
+				'into the group',
+				0.6,
+				'inside',
+				['cluster'],
+				['item:cluster', 'item:back', 'item:child'],
+				'cluster',
+			],
+		])('drops a row %s, showing where it lands, as one undo step', async (_case, fraction, edge, items, rows, parent) => {
 			const { wrapper, config, editor, sync } = await mountList();
 
 			await dragOn(wrapper, 'dragstart', 'item:back');
 			expect(wrapper.get('[data-layer-key="item:back"]').attributes('data-dragging')).toBe('true');
-			expect(await dragOn(wrapper, 'dragover', 'item:cluster', 0.1)).toBe(true);
-			expect(dropEdges(wrapper)).toEqual({ 'item:cluster': 'top' });
-			await dragOn(wrapper, 'drop', 'item:cluster', 0.1);
+			expect(await dragOn(wrapper, 'dragover', 'item:cluster', fraction)).toBe(true);
+			expect(dropEdges(wrapper)).toEqual({ 'item:cluster': edge });
+			await dragOn(wrapper, 'drop', 'item:cluster', fraction);
 			await sync();
 
-			expect(itemIds(config)).toEqual(['cluster', 'back']);
-			expect(rowKeys(wrapper).slice(0, 3)).toEqual(['item:back', 'item:cluster', 'item:child']);
+			expect(itemIds(config)).toEqual(items);
+			expect(parentOf(config, 'back')).toBe(parent);
+			expect(rowKeys(wrapper).slice(0, 3)).toEqual(rows);
 			expect(dropEdges(wrapper)).toEqual({});
 			expect(editor.selection.value).toEqual({ type: 'item', itemId: 'back' });
 			editor.undo();
 			expect(itemIds(config)).toEqual(['back', 'cluster']);
 			expect(editor.canUndo.value).toBe(false);
-		});
-
-		it('drops a Graphic Item into a Graphic Group from the group\'s row', async () => {
-			const { wrapper, config } = await mountList();
-
-			await dragOn(wrapper, 'dragstart', 'item:back');
-			await dragOn(wrapper, 'dragover', 'item:cluster', 0.6);
-			expect(dropEdges(wrapper)).toEqual({ 'item:cluster': 'inside' });
-			await dragOn(wrapper, 'drop', 'item:cluster', 0.6);
-
-			expect(findGraphicItem(config.value.layout.composition, 'back')?.group?.id).toBe('cluster');
 		});
 
 		// Escape ends a native drag with a dragend and no drop.
@@ -495,14 +508,28 @@ describe('featureMatchOverlayLayerList', () => {
 			expect(config.value).toBe(before);
 		});
 
-		it('never drops a Source among the Graphic Items', async () => {
+		it('lands a release in the gap after the row whose drop it last showed', async () => {
 			const { wrapper, config } = await mountList();
-			const source = `source:${config.value.layout.sources[0]!.id}`;
 
-			await dragOn(wrapper, 'dragstart', source);
+			await dragOn(wrapper, 'dragstart', 'item:back');
+			await dragOn(wrapper, 'dragover', 'item:cluster', 0.1);
+			const grid = wrapper.get('[data-layer-key="item:cluster"]').element.parentElement!;
+			grid.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true }));
 
-			expect(await dragOn(wrapper, 'dragover', 'item:back', 0.1)).toBe(false);
-			expect(dropEdges(wrapper)).toEqual({});
+			expect(itemIds(config)).toEqual(['cluster', 'back']);
+		});
+
+		// Such a row fires no dragend.
+		it('ends a drag whose row leaves the list', async () => {
+			const { wrapper, editor, sync } = await mountList();
+
+			await dragOn(wrapper, 'dragstart', 'item:child');
+			editor.remove({ type: 'item', itemId: 'child' });
+			await sync();
+			editor.undo();
+			await sync();
+
+			expect(wrapper.find('[data-dragging]').exists()).toBe(false);
 		});
 
 		it('drags nothing without the Graphics Authoring Lease', async () => {
@@ -517,20 +544,20 @@ describe('featureMatchOverlayLayerList', () => {
 			expect(config.value).toBe(before);
 		});
 
-		// E15: the keyboard alternative.
+		// The keyboard reaches a group through the row menu, as a drag does.
 		it('moves a Graphic Item into a group and out again from its row menu, one undo step each', async () => {
 			const { wrapper, config, editor, sync } = await mountList();
 
 			await wrapper.get('[data-layer-key="item:back"] [data-menu-entry="Group 1"]').trigger('click');
 			await sync();
-			expect(findGraphicItem(config.value.layout.composition, 'back')?.group?.id).toBe('cluster');
+			expect(parentOf(config, 'back')).toBe('cluster');
 
 			await wrapper.get('[data-layer-key="item:back"] [data-menu-entry="Out of Group 1"]').trigger('click');
 			await sync();
 			expect(itemIds(config)).toEqual(['cluster', 'back']);
 
 			editor.undo();
-			expect(findGraphicItem(config.value.layout.composition, 'back')?.group?.id).toBe('cluster');
+			expect(parentOf(config, 'back')).toBe('cluster');
 		});
 
 		it('offers a rotated item no row group from its row menu, saying why', async () => {

@@ -31,12 +31,13 @@ import { isSelectionToggle } from '~/modules/graphics/selection';
  * Front at the top, so the arrow pointing up moves a layer toward the front.
  *
  * Shift-click selects the run of rows from the one chosen last, and ⌘- or
- * Ctrl-click adds or takes out one row (#740). A selected row's menu acts on
- * every selected layer.
+ * Ctrl-click adds or takes out one row (#740). A selected row's menu duplicates
+ * and deletes every selected layer; its moves, like the arrows, move its own.
  *
- * A row drags within its section, into a Graphic Group or out of one, as one
- * undo step; Escape cancels, and a drop that is refused says why (#741). The
- * arrows and the row menu's "Move to group" do the same from the keyboard.
+ * One row drags at a time, and is selected alone as it goes: within its section,
+ * into a Graphic Group or out of one, as one undo step; Escape cancels, and a
+ * drop that is refused says why (#741). The arrows and the row menu's "Move to
+ * group" do the same from the keyboard.
  *
  * Without the Graphics Authoring Lease the list still selects, and offers no
  * edit at all (#738).
@@ -358,11 +359,13 @@ function cancelRename() {
 		refocusRow(row);
 }
 
-/** A row that leaves the list mid-rename takes its rename with it. */
-watch(() => [
+const rowKeys = computed(() => [
 	...itemRows.value,
 	...sourceRows.value,
-].map(row => row.key), (keys) => {
+].map(row => row.key));
+
+/** A row that leaves the list mid-rename takes its rename with it. */
+watch(rowKeys, (keys) => {
 	if (renaming.value && !keys.includes(renaming.value.key))
 		endRename();
 });
@@ -403,13 +406,15 @@ function renameKeydown(event: KeyboardEvent) {
 
 /* ── Dragging a row (#741) ─────────────────────── */
 
+const LAYER_DRAG_TYPE = 'application/x-stream-keepr-layer';
+
 /** The row being dragged, alone: v1 drags a single row. */
 const dragged = shallowRef<LayerRow | null>(null);
 /** Where the row would land, as the last dragover found it. */
 const drop = shallowRef<LayerDrop | null>(null);
 
 function startDrag(event: DragEvent, row: LayerRow) {
-	if (!writable.value || renaming.value) {
+	if (!writable.value || renaming.value?.key === row.key) {
 		event.preventDefault();
 		return;
 	}
@@ -417,7 +422,8 @@ function startDrag(event: DragEvent, row: LayerRow) {
 	props.editor.select(row.target);
 	if (event.dataTransfer) {
 		event.dataTransfer.effectAllowed = 'move';
-		event.dataTransfer.setData('text/plain', row.label);
+		// A type of its own, so a release over a text field types nothing into it.
+		event.dataTransfer.setData(LAYER_DRAG_TYPE, row.key);
 	}
 }
 
@@ -442,6 +448,18 @@ function dragOver(event: DragEvent, row: LayerRow) {
 function endDrag() {
 	dragged.value = null;
 	drop.value = null;
+}
+
+/** A row that leaves the list mid-drag fires no dragend, so its drag ends here. */
+watch(rowKeys, (keys) => {
+	if (dragged.value && !keys.includes(dragged.value.key))
+		endDrag();
+});
+
+/** The gaps between rows keep the drop the last row showed, so releasing there lands it. */
+function dragOverSection(event: DragEvent) {
+	if (dragged.value && drop.value && !drop.value.refusal)
+		event.preventDefault();
 }
 
 function dropOn(event: DragEvent) {
@@ -501,7 +519,7 @@ function dropIndicatorClass(row: LayerRow) {
 </script>
 
 <template>
-	<div class="space-y-3" data-testid="feature-match-layer-list" @dragleave="leaveList">
+	<div class="relative space-y-3" data-testid="feature-match-layer-list" @dragleave="leaveList">
 		<div class="flex items-center justify-between gap-2">
 			<div>
 				<p class="text-sm font-semibold">
@@ -525,10 +543,11 @@ function dropIndicatorClass(row: LayerRow) {
 			</UDropdownMenu>
 		</div>
 
+		<!-- Over the header, taking no space, so it never moves the rows under the pointer. -->
 		<p
 			v-if="dropRefusal"
 			role="status"
-			class="rounded-md bg-error/10 px-2 py-1 text-xs text-error"
+			class="pointer-events-none absolute inset-x-0 top-0 z-10 rounded-md bg-default px-2 py-1 text-xs text-error ring-1 ring-error/50"
 			data-testid="layer-drop-refusal"
 		>
 			{{ dropRefusal }}
@@ -549,6 +568,8 @@ function dropIndicatorClass(row: LayerRow) {
 					aria-multiselectable="true"
 					:aria-labelledby="`layer-section-${section.key}`"
 					class="space-y-0.5"
+					@dragover="dragOverSection"
+					@drop="dropOn"
 				>
 					<div
 						v-for="row in section.rows"
@@ -571,7 +592,6 @@ function dropIndicatorClass(row: LayerRow) {
 						data-testid="layer-row"
 						@dragstart="startDrag($event, row)"
 						@dragover="dragOver($event, row)"
-						@drop="dropOn($event)"
 						@dragend="endDrag"
 					>
 						<div role="gridcell" class="flex min-w-0 flex-1">

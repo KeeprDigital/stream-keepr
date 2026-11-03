@@ -1,4 +1,4 @@
-import type { GraphicItemPlacementRefusal } from '~~/shared/modules/graphics';
+import type { GraphicItemPlacement, GraphicItemPlacementRefusal } from '~~/shared/modules/graphics';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchLayoutEditorLayer } from './editorSelection';
@@ -11,7 +11,7 @@ import { setSourceOrder } from './layout';
  * keyboard alternative, "Move to group".
  *
  * Pure. A row lands in front of or behind another row of its own section —
- * Graphic Items or Sources, which never mix — or at the front of a Graphic
+ * Graphic Items or Source Items, which never mix — or at the front of a Graphic
  * Group. Moving a Graphic Item into or out of a group keeps it drawn where it was,
  * and a refused move says why (`placeGraphicItem`). v1 drags a single row.
  */
@@ -169,7 +169,7 @@ export function dropLayer(
 	}
 
 	const composition = layout.composition;
-	let placement: { groupId: string | null; index: number };
+	let placement: GraphicItemPlacement;
 	if (place.kind === 'into') {
 		placement = { groupId: place.groupId, index: Number.MAX_SAFE_INTEGER };
 	}

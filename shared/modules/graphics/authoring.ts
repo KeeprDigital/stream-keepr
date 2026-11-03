@@ -1211,8 +1211,10 @@ function insertAt<T>(entries: readonly T[], index: number, entry: T): T[] {
 /**
  * Place one Graphic Item: reorder it within its sibling list, or move it into or
  * out of a Graphic Group (#741). Moving between them keeps it drawn where it was
- * (`rebaseGraphicItem`); one leaving a group leaves its group sizing and its
- * place in the group's stagger behind. Answers the same graphic when the item is
+ * (`rebaseGraphicItem`), and leaves its place in its old container's stagger
+ * behind; one leaving a group leaves its group sizing too. A row or column child's
+ * stored corner is not where its group laid it out, so it leaves from that corner.
+ * Answers the same graphic when the item is
  * unknown, already there, or refused (`graphicItemPlacementRefusal`).
  */
 export function placeGraphicItem(

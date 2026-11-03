@@ -1,5 +1,5 @@
 import type { FeatureMatchLayoutEditorLayer } from '~~/app/modules/feature-match-overlay/editorSelection';
-import type { LayerDrop } from '~~/app/modules/feature-match-overlay/layerDrag';
+import type { LayerDrop, LayerPlace } from '~~/app/modules/feature-match-overlay/layerDrag';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
@@ -15,7 +15,7 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
 
 const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
 
-/** Front to back: empty group `e`; group `a` (`a1`, `a2`); group `b` (`b1`); item `top`; then Sources `s2`, `s1`. */
+/** Front to back: empty group `e`; group `a` (`a1`, `a2`); group `b` (`b1`); item `top`; then Source Items `s2`, `s1`. */
 function layout(options: { topRotation?: number } = {}): FeatureMatchLayoutConfig {
 	const base = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG).layout;
 	let composition: BroadcastGraphicConfig = { ...base.composition, items: [] };
@@ -174,7 +174,7 @@ describe('feature match layout layer drag', () => {
 			null,
 		],
 		[
-			'a Source over a Source',
+			'a Source Item over a Source Item',
 			's1',
 			's2',
 			0.3,
@@ -188,14 +188,14 @@ describe('feature match layout layer drag', () => {
 			},
 		],
 		[
-			'a Source over a Graphic Item goes nowhere',
+			'a Source Item over a Graphic Item goes nowhere',
 			's1',
 			'top',
 			0.3,
 			null,
 		],
 		[
-			'a Graphic Item over a Source goes nowhere',
+			'a Graphic Item over a Source Item goes nowhere',
 			'top',
 			's1',
 			0.3,
@@ -210,12 +210,15 @@ describe('feature match layout layer drag', () => {
 			expect(drop).toBeNull();
 	});
 
-	it.each<[string, string, LayerDrop['place'], string[], Record<string, string | null>]>([
+	const SOURCE_ITEMS = ['s1', 's2'];
+
+	it.each<[string, string, LayerPlace, string[], string[], Record<string, string | null>]>([
 		[
 			'into a group, at its front',
 			'top',
 			{ kind: 'into', groupId: 'a' },
 			['e', 'a', 'top', 'a1', 'a2', 'b', 'b1'],
+			SOURCE_ITEMS,
 			{ top: 'a' },
 		],
 		[
@@ -226,6 +229,7 @@ describe('feature match layout layer drag', () => {
 				of: layer('b'),
 			},
 			['e', 'a', 'a1', 'a2', 'top', 'b', 'b1'],
+			SOURCE_ITEMS,
 			{ top: null },
 		],
 		[
@@ -236,6 +240,7 @@ describe('feature match layout layer drag', () => {
 				of: layer('a'),
 			},
 			['e', 'a', 'a2', 'a1', 'b', 'b1', 'top'],
+			SOURCE_ITEMS,
 			{ a1: null },
 		],
 		[
@@ -246,79 +251,118 @@ describe('feature match layout layer drag', () => {
 				of: layer('b1'),
 			},
 			['e', 'a', 'a2', 'b', 'b1', 'a1', 'top'],
+			SOURCE_ITEMS,
 			{ a1: 'b' },
 		],
 		[
-			'a Source behind a Source',
+			'a Source Item behind a Source Item',
 			's2',
 			{
 				kind: 'behind',
 				of: layer('s1'),
 			},
 			['e', 'a', 'a1', 'a2', 'b', 'b1', 'top'],
+			['s2', 's1'],
 			{},
 		],
-	])('drops a row %s', (_case, dragged, place, items, parents) => {
+	])('drops a row %s', (_case, dragged, place, items, sources, parents) => {
 		const next = dropLayer(LAYOUT, layer(dragged), place);
 
 		expect(order(next).filter(id => !id.startsWith('s'))).toEqual(items);
+		expect(next.sources.map(source => source.id)).toEqual(sources);
 		for (const [id, parent] of Object.entries(parents))
 			expect(parentOf(next, id)).toBe(parent);
-		if (dragged === 's2')
-			expect(next.sources.map(source => source.id)).toEqual(['s2', 's1']);
 	});
 
-	// E14: shown as refused while hovered, and the drop changes nothing.
-	it('refuses a rotated item into a row group, with its reason, and drops nothing', () => {
+	// A row or column group shows a rotated item's drop as refused, and the drop changes nothing.
+	it.each<[string, number]>([
+		['a', 0.6],
+		['a1', 0.2],
+	])('refuses a rotated item dropped on %s at %s, with its reason', (over, fraction) => {
 		const rotated = layout({ topRotation: 15 });
 
-		expect(layerDropAt(rotated, layer('top'), layer('a'), 0.6)).toMatchObject({ edge: 'inside', refusal: 'rotated-into-arranged-group' });
-		expect(layerDropAt(rotated, layer('top'), layer('a1'), 0.2)).toMatchObject({ refusal: 'rotated-into-arranged-group' });
+		expect(layerDropAt(rotated, layer('top'), layer(over), fraction)?.refusal).toBe('rotated-into-arranged-group');
 		expect(dropLayer(rotated, layer('top'), { kind: 'into', groupId: 'a' })).toBe(rotated);
 	});
 
-	it('answers the same layout for a drop that changes nothing', () => {
-		expect(dropLayer(LAYOUT, layer('top'), {
-			kind: 'behind',
-			of: layer('b'),
-		})).toBe(LAYOUT);
-		expect(dropLayer(LAYOUT, layer('s1'), {
-			kind: 'behind',
-			of: layer('s2'),
-		})).toBe(LAYOUT);
+	it.each<[string, string, LayerPlace]>([
+		[
+			'a Graphic Item',
+			'top',
+			{
+				kind: 'behind',
+				of: layer('b'),
+			},
+		],
+		[
+			'a Source Item',
+			's1',
+			{
+				kind: 'behind',
+				of: layer('s2'),
+			},
+		],
+	])('answers the same layout when %s is dropped where it already is', (_case, dragged, place) => {
+		expect(dropLayer(LAYOUT, layer(dragged), place)).toBe(LAYOUT);
 	});
 
-	// E15: the keyboard alternative to dragging a row into or out of a group.
-	it('offers a Graphic Item every other group to move into, and out of its own in front of it', () => {
-		const rotated = layout({ topRotation: 15 });
-
-		// Groups are labelled in the order they were added: `b`, `a`, then `e`.
-		expect(layerGroupMoves(LAYOUT, layer('a1'))).toEqual([
-			{
-				label: 'Out of Group 2',
-				place: {
-					kind: 'in-front-of',
-					of: layer('a'),
-				},
-				refusal: null,
-			},
-			{
-				label: 'Group 3',
-				place: { kind: 'into', groupId: 'e' },
-				refusal: null,
-			},
-			{
-				label: 'Group 1',
-				place: { kind: 'into', groupId: 'b' },
-				refusal: null,
-			},
-		]);
-		expect(layerGroupMoves(rotated, layer('top')).map(move => [move.label, move.refusal])).toEqual([
-			['Group 3', 'rotated-into-arranged-group'],
-			['Group 2', 'rotated-into-arranged-group'],
-			['Group 1', 'rotated-into-arranged-group'],
-		]);
-		expect(layerGroupMoves(LAYOUT, layer('a'))).toEqual([]);
-		expect(layerGroupMoves(LAYOUT, layer('s1'))).toEqual([]);
+	// Groups are labelled in the order they were added: `b` Group 1, `a` Group 2, `e` Group 3.
+	it.each<[string, string, { topRotation?: number }, Array<[string, LayerPlace, string | null]>]>([
+		[
+			'a child: out of its group in front of it, then every other group front to back',
+			'a1',
+			{},
+			[
+				[
+					'Out of Group 2',
+					{
+						kind: 'in-front-of',
+						of: layer('a'),
+					},
+					null,
+				],
+				[
+					'Group 3',
+					{ kind: 'into', groupId: 'e' },
+					null,
+				],
+				[
+					'Group 1',
+					{ kind: 'into', groupId: 'b' },
+					null,
+				],
+			],
+		],
+		[
+			'a rotated item: every row group, refused',
+			'top',
+			{ topRotation: 15 },
+			[
+				[
+					'Group 3',
+					{ kind: 'into', groupId: 'e' },
+					'rotated-into-arranged-group',
+				],
+				[
+					'Group 2',
+					{ kind: 'into', groupId: 'a' },
+					'rotated-into-arranged-group',
+				],
+				[
+					'Group 1',
+					{ kind: 'into', groupId: 'b' },
+					'rotated-into-arranged-group',
+				],
+			],
+		],
+		[
+			'a Graphic Group: nothing',
+			'a',
+			{},
+			[],
+		],
+		['a Source Item: nothing', 's1', {}, []],
+	])('offers "Move to group" for %s', (_case, id, options, moves) => {
+		expect(layerGroupMoves(layout(options), layer(id))).toEqual(moves.map(([label, place, refusal]) => ({ label, place, refusal })));
 	});
 });
