@@ -1,7 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import { defineComponent, ref } from 'vue';
+import { defineComponent, nextTick, ref } from 'vue';
 import CardDeckListHeader from '~/components/Mtg/CardDeckListHeader.vue';
 
 const cardStore = {
@@ -14,6 +14,24 @@ const cardStore = {
 
 mockNuxtImport('useCardStore', () => () => cardStore);
 mockNuxtImport('useFeatureMatchMenuItems', () => () => ref([]));
+const featureMatchStore = reactive({
+	featureMatches: [
+		{
+			id: 3,
+			player1Id: 1,
+			player1Data: { name: 'Alice' },
+			player2Id: 2,
+			player2Data: { name: 'Bob' },
+			activeSession: null,
+		},
+	],
+});
+mockNuxtImport('useFeatureMatchStore', () => () => featureMatchStore);
+const featureMatchStateStore = reactive({
+	sessionIdBySlotId: new Map<number, number>(),
+	featureMatchSessions: new Map<number, any>(),
+});
+mockNuxtImport('useFeatureMatchStateStore', () => () => featureMatchStateStore);
 
 const FeatureMatchNoteStub = defineComponent({
 	props: [
@@ -50,6 +68,43 @@ describe('mtgCardDeckListHeader', () => {
 		cardStore.deckListHasData = false;
 
 		expect(cardStore.loadMatchupDeckLists).toHaveBeenCalledTimes(loads);
+	});
+
+	// The followed Session owns which side each Player sits on (ADR-0058).
+	it('reloads a Slot\'s decks when its Session swaps the Players\' sides', async () => {
+		cardStore.loadMatchDeckLists.mockClear();
+		mount(CardDeckListHeader, {
+			props: { deckListMatchId: 3 },
+			global: {
+				stubs: { USelect: true, UInput: true, UButton: true },
+			},
+		});
+		await nextTick();
+		featureMatchStateStore.sessionIdBySlotId = new Map([
+			[3, 90],
+		]);
+		featureMatchStateStore.featureMatchSessions = new Map([
+			[
+				90,
+				{
+					id: 90,
+					sourceSnapshot: {
+						playersSwapped: true,
+						player1: {
+							playerId: 2,
+							data: { name: 'Bob' },
+						},
+						player2: {
+							playerId: 1,
+							data: { name: 'Alice' },
+						},
+					},
+				},
+			],
+		]);
+		await nextTick();
+
+		expect(cardStore.loadMatchDeckLists).toHaveBeenCalledTimes(1);
 	});
 
 	it('presents the selected Assignment Note beside the Cards match-decklist controls', async () => {

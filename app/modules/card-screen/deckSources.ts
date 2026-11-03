@@ -7,6 +7,7 @@ import type { DeckListTokenWithData, MatchPlayerDeckData } from '~/types/card/de
 import type { MtgCard } from '~/types/card/mtg';
 import { computed, toValue } from 'vue';
 import { uniqueDeckTokens } from '~~/shared/utils/deckTokens';
+import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { createPlayerDeckList } from '~~/shared/utils/playerDeck';
 import { scryfallNameKey } from '~/composables/data/useScryfallBatch';
@@ -35,6 +36,7 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 	const { fetchScryfallCards, buildDeckListArrays } = useScryfallBatch();
 	const deckCache = usePlayerDeckCache();
 	const roundStore = useRoundStore();
+	const featureMatchStateStore = useFeatureMatchStateStore();
 
 	const canUseDeckListMode = computed(() => {
 		const players = toValue(state.players);
@@ -417,18 +419,22 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		);
 	}
 
+	/** A Feature Match Slot's two decks, on the sides its followed Session seats each Player (ADR-0058). */
 	async function loadMatchDeckLists(matchId: number) {
 		const match = toValue(state.featureMatches).find(m => m.id === matchId);
 		if (!match)
 			return;
 
+		const slot = withFollowedFeatureMatchSession(match, featureMatchStateStore);
+		const player1 = featureMatchSidePlayer(slot, 'player1');
+		const player2 = featureMatchSidePlayer(slot, 'player2');
 		await loadMatchupDeckLists(
-			match.player1Data?.name,
-			match.player2Data?.name,
-			match.player1Id,
-			match.player2Id,
-			match.player1Data?.deckId,
-			match.player2Data?.deckId,
+			player1.data?.name,
+			player2.data?.name,
+			player1.playerId,
+			player2.playerId,
+			player1.data?.deckId,
+			player2.data?.deckId,
 		);
 	}
 

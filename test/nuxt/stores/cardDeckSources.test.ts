@@ -47,6 +47,12 @@ const mockFeatureMatchStoreState = reactive({
 });
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStoreState);
 
+const mockFeatureMatchStateStoreState = reactive({
+	sessionIdBySlotId: new Map<number, number>(),
+	featureMatchSessions: new Map<number, any>(),
+});
+mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStoreState);
+
 // The full MtgCard shape `cloneMtgCard` requires.
 function createMockMtgCard(overrides?: Record<string, any>) {
 	return {
@@ -106,6 +112,8 @@ describe('useCardStore deck sources and search', () => {
 		mockEventStoreState.event = { id: 1, cardTimeout: 0 };
 		mockPlayerStoreState.players = [];
 		mockFeatureMatchStoreState.featureMatches = [];
+		mockFeatureMatchStateStoreState.sessionIdBySlotId = new Map();
+		mockFeatureMatchStateStoreState.featureMatchSessions = new Map();
 		mockFetchDeck.mockReset().mockResolvedValue(null);
 		mockFetchScryfallCards.mockReset().mockResolvedValue({
 			cards: new Map(),
@@ -348,6 +356,53 @@ describe('useCardStore deck sources and search', () => {
 			await store.loadMatchDeckLists(1);
 
 			expect(mockFetchDeck).toHaveBeenCalledWith(42, 1, updatedAt, { deckId: 77 });
+		});
+
+		// The followed Session owns which side each Player sits on (ADR-0058).
+		it.each([
+			{
+				session: 'no',
+				sides: ['Alice', 'Bob'],
+			},
+			{
+				session: 'a swapped',
+				sides: ['Bob', 'Alice'],
+			},
+		])('shows each Player\'s deck on the side $session Session seats them', async ({ session, sides }) => {
+			const alice = { name: 'Alice', deckId: 77 };
+			const bob = { name: 'Bob', deckId: 78 };
+			mockFeatureMatchStoreState.featureMatches = [
+				{
+					id: 1,
+					player1Id: 41,
+					player1Data: alice,
+					player2Id: 42,
+					player2Data: bob,
+					activeSession: null,
+				},
+			];
+			if (session === 'a swapped') {
+				mockFeatureMatchStateStoreState.sessionIdBySlotId = new Map([
+					[1, 90],
+				]);
+				mockFeatureMatchStateStoreState.featureMatchSessions = new Map([
+					[
+						90,
+						{
+							id: 90,
+							sourceSnapshot: {
+								playersSwapped: true,
+								player1: { playerId: 42, data: bob },
+								player2: { playerId: 41, data: alice },
+							},
+						},
+					],
+				]);
+			}
+
+			await store.loadMatchDeckLists(1);
+
+			expect([store.deckListPlayer1?.playerName, store.deckListPlayer2?.playerName]).toEqual(sides);
 		});
 
 		it('holds no Deck List for a seat with no Player', async () => {

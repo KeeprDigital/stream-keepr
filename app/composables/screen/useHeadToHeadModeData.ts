@@ -1,3 +1,4 @@
+import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import type { HeadToHeadModeConfig } from '~~/shared/types/screenConfig';
 import type { ScreenOutputHeadToHeadPlayer, ScreenOutputHeadToHeadResponse } from '~~/shared/types/screenOutputReads';
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
@@ -19,7 +20,7 @@ function selection(config: HeadToHeadModeConfig): string | null {
 
 /**
  * The Event Data a Head-to-Head is read from: its Feature Match Slot, which
- * Players the Slot seats, those Players and their Archetypes, the Matches
+ * Players the Slot seats and on which sides its Session shows them, those Players and their Archetypes, the Matches
  * between them, and the Round Standings their records come from. Melee's
  * wholesale syncs re-read.
  */
@@ -33,9 +34,14 @@ function headToHeadDependencies(boundSlotId: () => number | null): ScreenModeDep
 			&& ids.includes(match.player1Id) && ids.includes(match.player2Id);
 	};
 	const holdsEarlierMatch = (held: HeldHeadToHead, matchId: number) => held?.earlierMatches.some(earlierMatch => earlierMatch.matchId === matchId) ?? false;
+	/** The Slot's Session seats a held Player on the other side, as `SwapPlayers` does (ADR-0058). */
+	const seatsHeldOpposite = (held: HeldHeadToHead, snapshot: FeatureMatchSourceSnapshot) =>
+		(held?.player1 != null && held.player1.id === snapshot.player2?.playerId)
+		|| (held?.player2 != null && held.player2.id === snapshot.player1?.playerId);
 
 	return {
 		'featureMatch:updated': ({ featureMatch }) => isBoundSlot(featureMatch.id),
+		'featureMatchSession:eventApplied': ({ slotId, sourceSnapshot }, held) => isBoundSlot(slotId) && seatsHeldOpposite(held, sourceSnapshot),
 		'featureMatch:deleted': ({ featureMatchId }) => isBoundSlot(featureMatchId),
 		'melee:featureMatchesSynced': ({ slotIds }) => slotIds.some(isBoundSlot),
 		'player:updated': ({ player }, held) => holdsPlayer(held, player.id),

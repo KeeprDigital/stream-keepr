@@ -253,6 +253,44 @@ describe('useHeadToHeadModeData', () => {
 			expect(mockFetch).not.toHaveBeenCalled();
 		});
 
+		// The Session owns which side each Player sits on (ADR-0058).
+		it.each([
+			{
+				change: 'a swap of its Slot\'s Session',
+				slotId: 4,
+				seated: [BOB, ALICE],
+				reads: 1,
+			},
+			{
+				change: 'a Session event that keeps its sides',
+				slotId: 4,
+				seated: [ALICE, BOB],
+				reads: 0,
+			},
+			{
+				change: 'a swap of another Slot\'s Session',
+				slotId: 5,
+				seated: [BOB, ALICE],
+				reads: 0,
+			},
+		])('re-reads on $change: $reads', async ({ slotId, seated, reads }) => {
+			await showingSlot();
+
+			deliver('featureMatchSession:eventApplied', {
+				slotId,
+				sessionId: 90,
+				sequence: 2,
+				eventType: 'SwapPlayers',
+				sourceSnapshot: {
+					player1: { playerId: seated[0], data: null },
+					player2: { playerId: seated[1], data: null },
+				},
+			} as never);
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(reads);
+		});
+
 		it('follows its Slot being synced from Melee or deleted', async () => {
 			await showingSlot();
 
