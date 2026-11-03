@@ -5,6 +5,7 @@ import { effectScope, reactive } from 'vue';
 import { fitColumns } from '~~/shared/utils/cardGrid';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 import { SCREEN_MODE_REREAD_MS } from '~/modules/screen-mode/freshness';
 
 /** The server's two halves of the Screen Output Player read (#604). */
@@ -66,13 +67,12 @@ mockNuxtImport('useScreenOutputBroadcastDeckListRepository', () => () => ({
 	getSelected: mockGetSelectedBroadcastDeckList,
 }));
 mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = screenContextOf({
 	screen: mockScreen,
 	eventId: computed(() => mockEventId.value),
-	interactive: ref(false),
 	assetCapability: mockAssetCapability,
 	cardDataHealth: mockCardDataHealth,
-}));
+});
 const mockBoardLayouts = ref<Record<string, unknown>>({});
 mockNuxtImport('useScreenModeConfig', () => (_mode: string) => computed(() => ({
 	deckSource: mockBroadcastDeckListId.value === null
@@ -236,7 +236,7 @@ describe('useDeckModeData', () => {
 	function mountDeckModeData() {
 		const scope = effectScope();
 		activeScopes.push(scope);
-		return scope.run(() => useDeckModeData())!;
+		return scope.run(() => useDeckModeData(screenContext))!;
 	}
 
 	function mainboardNames(result: ReturnType<typeof mountDeckModeData>) {

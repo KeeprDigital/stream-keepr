@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import { deferred } from '~~/test/helpers/deferred';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 import { USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import Settings from '~/components/Screen/Modes/Pairings/Settings.vue';
@@ -130,13 +131,19 @@ const UButtonStub = defineComponent({
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
 });
 
-async function mountSettings() {
+function screenOn(roundId: number | undefined) {
+	return {
+		id: 1,
+		modeConfigs: {
+			pairings: { ...savedConfig, roundId },
+		},
+	} as unknown as Screen;
+}
+
+async function mountSettings(roundId: number | undefined = savedConfig.roundId) {
 	const wrapper = mount(Settings, {
 		props: {
-			screen: {
-				id: 1,
-				modeConfigs: { pairings: savedConfig },
-			} as unknown as Screen,
+			screen: screenOn(roundId),
 			eventId: 1,
 		},
 		global: {
@@ -187,6 +194,37 @@ describe('screenModesPairingsSettings', () => {
 
 		expect(mockFetch).toHaveBeenCalledWith('/api/screen-output/events/1/screens/1/pairings', expect.anything());
 		expect(wrapper.text()).toContain('Page 1 of 2');
+	});
+
+	it.each([
+		{
+			selected: 'as the editor opens',
+			select: async () => mountSettings(),
+		},
+		{
+			selected: 'once none was',
+			select: async () => {
+				const wrapper = await mountSettings(undefined);
+				await wrapper.setProps({
+					screen: screenOn(31),
+				});
+				return wrapper;
+			},
+		},
+	])('shows the pages counting, not "Page 1 of 1", until the Round selected $selected is read', async ({ select }) => {
+		const read = deferred<ReturnType<typeof pairingsOf>>();
+		mockFetch.mockReturnValue(read.promise);
+		const wrapper = await select();
+		const pageSelection = () => wrapper.get('[role="group"][aria-label="Page selection"]');
+
+		expect(pageSelection().attributes('aria-busy')).toBe('true');
+		expect(pageSelection().text()).toContain('Counting pages…');
+
+		read.resolve(pairingsOf(10));
+		await flushPromises();
+
+		expect(pageSelection().attributes('aria-busy')).toBe('false');
+		expect(pageSelection().text()).toContain('Page 1 of 2');
 	});
 
 	it('follows Matches added to the Round after it was selected, as the Screen does', async () => {

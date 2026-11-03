@@ -4,6 +4,7 @@ import type { DeckListStats } from '~~/shared/types/deckList';
 import type { HighlanderDeckSummary } from '~~/shared/types/highlander';
 import type { PlayerDeckResponse } from '~~/shared/types/metagame';
 import type { DeckSource } from '~~/shared/types/screenConfig';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import type { Player } from '~/types';
 import type { DeckListCardWithData } from '~/types/card/deckList';
@@ -215,11 +216,11 @@ async function preloadDeckImages(cards: DeckListCardWithData[]): Promise<boolean
 	return true;
 }
 
-export function useDeckModeData() {
-	const { eventId, assetCapability, cardDataHealth } = useScreenContext();
-	const config = useScreenModeConfig('deck');
+export function useDeckModeData(context: ScreenContext) {
+	const { eventId, assetCapability, cardDataHealth } = context;
+	const config = useScreenModeConfig(context, 'deck');
 
-	const outputReads = useScreenOutputReads();
+	const outputReads = useScreenOutputReads(context);
 	const broadcastDeckLists = useScreenOutputBroadcastDeckListRepository();
 	const { buildDeckListArrays } = useScryfallBatch();
 
@@ -313,7 +314,7 @@ export function useDeckModeData() {
 	// its own cards and the Event Canvas (ADR-0054).
 	const boards = computed(() => resolveDeckBoards(config.value));
 	const boardColumns = {
-		mainboard: useCardGridColumns({
+		mainboard: useCardGridColumns(context, {
 			sizing: () => boards.value.mainboard.cardSizing,
 			autoColumns: () => boards.value.mainboard.autoColumns,
 			columns: () => boards.value.mainboard.columns,
@@ -321,7 +322,7 @@ export function useDeckModeData() {
 			cardWidth: () => boards.value.mainboard.cardWidth,
 			gap: () => boards.value.mainboard.cardGap,
 		}),
-		sideboard: useCardGridColumns({
+		sideboard: useCardGridColumns(context, {
 			sizing: () => boards.value.sideboard.cardSizing,
 			autoColumns: () => boards.value.sideboard.autoColumns,
 			columns: () => boards.value.sideboard.columns,

@@ -29,7 +29,7 @@ const {
 	displayedDeckVersion,
 	pendingSwapVersion,
 	commitPendingDeck,
-} = useDeckModeData();
+} = useDeckModeData(useScreenContext());
 
 const primaryTextStyle = {
 	color: modeTokenVar('deck', 'primary-text'),

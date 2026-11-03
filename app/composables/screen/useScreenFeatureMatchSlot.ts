@@ -1,5 +1,6 @@
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { ScreenOutputFeatureMatchResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import type { FeatureMatch } from '~/types';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
@@ -32,11 +33,11 @@ interface ScreenFeatureMatchSlotOptions<T> {
  * A gap in the Session's notifications reloads through the Screen as well: the
  * store's reader is installed here for as long as the rendering lives.
  */
-export function useScreenFeatureMatchSlot<T>(options: ScreenFeatureMatchSlotOptions<T>) {
-	const { eventId } = useScreenContext();
+export function useScreenFeatureMatchSlot<T>(context: ScreenContext, options: ScreenFeatureMatchSlotOptions<T>) {
+	const { eventId } = context;
 	const featureMatchStore = useFeatureMatchStore();
 	const featureMatchStateStore = useFeatureMatchStateStore();
-	const outputReads = useScreenOutputReads();
+	const outputReads = useScreenOutputReads(context);
 	onScopeDispose(featureMatchStateStore.readSessionsAsScreenOutput(outputReads.featureMatchSession));
 
 	/** The Slot what is shown was kept from. */

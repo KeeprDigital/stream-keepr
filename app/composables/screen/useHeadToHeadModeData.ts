@@ -1,6 +1,7 @@
 import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import type { HeadToHeadModeConfig } from '~~/shared/types/screenConfig';
 import type { ScreenOutputHeadToHeadPlayer, ScreenOutputHeadToHeadResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
@@ -72,10 +73,10 @@ function headToHeadDependencies(boundSlotId: () => number | null): ScreenModeDep
  * Screen Output (#760). Bound to a Feature Match Slot, it follows the Slot's
  * current Feature Match Assignment as the Slot is reassigned.
  */
-export function useHeadToHeadModeData() {
-	const { eventId } = useScreenContext();
-	const config = useScreenModeConfig('head-to-head');
-	const outputReads = useScreenOutputReads();
+export function useHeadToHeadModeData(context: ScreenContext) {
+	const { eventId } = context;
+	const config = useScreenModeConfig(context, 'head-to-head');
+	const outputReads = useScreenOutputReads(context);
 	const eventStore = useEventStore();
 
 	const freshness = useScreenModeFreshness<HeldHeadToHead>({

@@ -26,6 +26,8 @@ let showRecord = false;
 let mockPronouns: string | undefined;
 let mockRecord: string | undefined;
 
+// The Screen Output reads are faked, so nothing reads the Screen context they are handed.
+mockNuxtImport('useScreenContext', () => () => ({}));
 mockNuxtImport('usePlayerFeatureMatchData', () => () => ({
 	player: computed(() => mockPlayer),
 	playerName: computed(() => 'Player One'),

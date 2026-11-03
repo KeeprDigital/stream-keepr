@@ -32,7 +32,7 @@ const playerOptions = computed(() => [
 
 // The Player's Matches the Screen pages, read and followed as its Screen Output reads and follows them, so
 // the page count is the one it renders (#780).
-const { rowCount, loading: loadingHistory } = useEditedScreenModeData(
+const { rowCount, loading: loadingHistory, answered: rowsAnswered } = useEditedScreenModeData(
 	{
 		screen: () => props.screen,
 		eventId: () => props.eventId,
@@ -127,6 +127,7 @@ onMounted(async () => {
 			page-size-description="Number of match rows shown per page."
 			auto-page-description="Automatically cycle through match history pages."
 			:loading="loadingHistory"
+			:counting="!rowsAnswered"
 		/>
 	</div>
 </template>

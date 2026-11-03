@@ -11,7 +11,8 @@ import { resolveBroadcastGraphicsRenderModel } from '~/modules/broadcast-graphic
 import { useScreenModeReady } from '~/modules/screen-mode';
 import { createImageRetainer } from '~/utils/preloadImage';
 
-const { outputMode, previewGuides, previewSafeAreas, eventCanvas } = useScreenContext();
+const context = useScreenContext();
+const { outputMode, previewGuides, previewSafeAreas, eventCanvas } = context;
 const {
 	animationProjection,
 	background,
@@ -27,7 +28,7 @@ const {
 	selectedTarget,
 	publishSelection,
 	ready,
-} = useBroadcastGraphicsModeData();
+} = useBroadcastGraphicsModeData(context);
 
 const resolvedOutput = computed<ScreenOutput>(() => outputMode?.value ?? 'overlay');
 

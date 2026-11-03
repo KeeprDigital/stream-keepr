@@ -57,9 +57,10 @@ interface Harness {
 	config: Record<string, unknown>;
 	rowCount: number;
 	loading?: boolean;
+	counting?: boolean;
 }
 
-function mountCard({ mode, config: overrides, rowCount, loading }: Harness) {
+function mountCard({ mode, config: overrides, rowCount, loading, counting }: Harness) {
 	const config = ref<Record<string, any>>({
 		...getDefaultConfigForMode(mode),
 		...overrides,
@@ -83,6 +84,7 @@ function mountCard({ mode, config: overrides, rowCount, loading }: Harness) {
 				pageSizeDescription: 'Rows on each page.',
 				autoPageDescription: 'Cycle through the pages.',
 				loading,
+				counting,
 			});
 		},
 	});
@@ -192,22 +194,53 @@ describe('the shared Pagination settings card', () => {
 		expect(saveConfig).toHaveBeenLastCalledWith({ currentPage: 3 });
 	});
 
-	it('disables manual selection with only one page or while the rows load', () => {
-		const onePage = mountCard({
+	it('disables manual selection with only one page', () => {
+		const { wrapper } = mountCard({
 			mode: 'archetype-spotlight',
 			config: { rowsPerPage: 8 },
 			rowCount: 8,
 		});
-		expect(button(onePage.wrapper, 'Next').attributes('disabled')).toBeDefined();
+		expect(button(wrapper, 'Next').attributes('disabled')).toBeDefined();
+	});
 
-		const loading = mountCard({
+	// Before the rows' first read answers there is no count; a later read keeps the count it has.
+	it.each([
+		{
+			rows: 'yet to answer',
+			counting: true,
+			loading: true,
+			busy: 'true',
+			shown: 'Counting pages…',
+			selectable: false,
+		},
+		{
+			rows: 'reading again',
+			counting: false,
+			loading: true,
+			busy: 'false',
+			shown: 'Page 1 of 4',
+			selectable: false,
+		},
+		{
+			rows: 'read',
+			counting: false,
+			loading: false,
+			busy: 'false',
+			shown: 'Page 1 of 4',
+			selectable: true,
+		},
+	])('shows $shown with its rows $rows', ({ counting, loading, busy, shown, selectable }) => {
+		const { wrapper } = mountCard({
 			mode: 'archetype-spotlight',
 			config: { rowsPerPage: 2 },
 			rowCount: 8,
-			loading: true,
+			loading,
+			counting,
 		});
-		expect(loading.wrapper.text()).toContain('Page 1 of 4');
-		expect(button(loading.wrapper, 'Previous').attributes('disabled')).toBeDefined();
-		expect(button(loading.wrapper, 'Next').attributes('disabled')).toBeDefined();
+
+		const pageSelection = wrapper.get('[role="group"][aria-label="Page selection"]');
+		expect(pageSelection.attributes('aria-busy')).toBe(busy);
+		expect(pageSelection.text()).toContain(shown);
+		expect(button(wrapper, 'Next').attributes('disabled') === undefined).toBe(selectable);
 	});
 });

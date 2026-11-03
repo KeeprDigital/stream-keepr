@@ -2,7 +2,7 @@
 import type { BracketPosition } from '~~/shared/modules/top-cut-bracket';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
-const { config, error, ready, isEmpty, headerText, bracket } = useTopCutModeData();
+const { config, error, ready, isEmpty, headerText, bracket } = useTopCutModeData(useScreenContext());
 
 /** Set on the root, over the shared broadcast table chrome's own colour and face. */
 const displayStyle = {

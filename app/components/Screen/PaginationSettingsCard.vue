@@ -21,6 +21,8 @@ const props = defineProps<{
 	autoPageDescription: string;
 	/** The rows are loading, so manual page selection waits for them. */
 	loading?: boolean;
+	/** The rows have yet to answer their first read, so there is no page count to show. */
+	counting?: boolean;
 }>();
 
 // Each control's label and bounds, read from the mode's config contract (#498).
@@ -50,6 +52,7 @@ const pageSize = computed(() => props.rotation.pageSize.value);
 			:rotation="rotation"
 			:auto-page-description="autoPageDescription"
 			:loading="loading"
+			:counting="counting"
 		/>
 	</ScreenSettingsCard>
 </template>

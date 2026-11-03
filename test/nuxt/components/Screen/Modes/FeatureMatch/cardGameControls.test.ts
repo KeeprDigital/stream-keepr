@@ -32,6 +32,8 @@ const matchState = createMockFeatureMatchState({
 });
 const match = createMockFeatureMatch({ id: 1 });
 
+// The mode's data is faked, so nothing reads the Screen context it is handed.
+mockNuxtImport('useScreenContext', () => () => ({}));
 mockNuxtImport('useEventStore', () => () => reactive({
 	eventId: 1,
 	event: computed(() => event.value),

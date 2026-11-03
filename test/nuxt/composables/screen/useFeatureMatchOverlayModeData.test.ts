@@ -65,7 +65,7 @@ function mountOverlay(context: Partial<ScreenContext>) {
 	let data!: ReturnType<typeof useFeatureMatchOverlayModeData>;
 	const Child = defineComponent({
 		setup() {
-			data = useFeatureMatchOverlayModeData();
+			data = useFeatureMatchOverlayModeData(useScreenContext());
 			return () => h('div');
 		},
 	});

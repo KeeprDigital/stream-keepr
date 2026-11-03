@@ -1,4 +1,5 @@
 import type { CardSizing } from '~~/shared/types/enums';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { DEFAULT_THEME_TOKENS } from '~~/shared/modules/theme';
 import { fitColumns, fixedColumns } from '~~/shared/utils/cardGrid';
@@ -24,8 +25,8 @@ export interface CardGridColumnsOptions {
  * gap, never from the rendered page: a settings editor reads the same inputs
  * its Screen Output does, so both count the same pages (ADR-0054).
  */
-export function useCardGridColumns(options: CardGridColumnsOptions): ComputedRef<number> {
-	const { screen, themeTokens, eventCanvas } = useScreenContext();
+export function useCardGridColumns(context: ScreenContext, options: CardGridColumnsOptions): ComputedRef<number> {
+	const { screen, themeTokens, eventCanvas } = context;
 
 	return computed(() => {
 		if (!options.autoColumns())

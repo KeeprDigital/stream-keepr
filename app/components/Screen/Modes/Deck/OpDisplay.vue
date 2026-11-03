@@ -11,6 +11,7 @@ import { CARD_BADGE_POSITION_CLASSES } from '~/utils/cardBadgePosition';
  * Sideboard, so no Board Selection; its cards are laid out by the Mainboard's
  * layout block (ADR-0054).
  */
+const context = useScreenContext();
 const {
 	config,
 	displayedDeckListId,
@@ -20,7 +21,7 @@ const {
 	costCurve,
 	error,
 	ready,
-} = useFeatureMatchDeckModeData();
+} = useFeatureMatchDeckModeData(context);
 
 const primaryTextStyle = {
 	color: modeTokenVar('deck', 'primary-text'),
@@ -41,7 +42,7 @@ const layout = computed(() => resolveDeckBoards(config.value).mainboard);
 const isFit = computed(() => layout.value.cardSizing === 'fit');
 
 /** Every group shares one column count, so their cards line up. */
-const columns = useCardGridColumns({
+const columns = useCardGridColumns(context, {
 	sizing: () => layout.value.cardSizing,
 	autoColumns: () => layout.value.autoColumns,
 	columns: () => layout.value.columns,

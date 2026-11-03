@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope } from 'vue';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
 const mockOnChannel = vi.fn<(
 	channel: string,
@@ -51,13 +52,11 @@ mockNuxtImport('useReconnectResync', () => (resync: () => void, _eventId: unknow
 		disconnected: ref(false),
 	};
 });
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = screenContextOf({
 	screen: ref(null),
 	eventId: computed(() => mockEventId.value),
-	interactive: ref(false),
-	overlayContainer: ref(null),
 	cardDataHealth: mockCardDataHealth,
-}));
+});
 
 /** The server commits an edit to a Player and announces it on the Event channel. */
 function announcePlayerUpdated(player: Record<string, unknown>) {
@@ -159,7 +158,7 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 	function mountSideboardData() {
 		const scope = effectScope();
 		activeScopes.push(scope);
-		return scope.run(() => useFeatureMatchOverlaySideboardData(config, match))!;
+		return scope.run(() => useFeatureMatchOverlaySideboardData(screenContext, config, match))!;
 	}
 
 	beforeEach(() => {

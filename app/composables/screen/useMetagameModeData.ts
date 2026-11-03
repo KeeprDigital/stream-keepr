@@ -4,6 +4,7 @@ import type {
 } from '~~/shared/types/metagame';
 import type { ScreenOutputMetagameResponse } from '~~/shared/types/screenOutputReads';
 import type { MetagameChartBar } from '~~/shared/utils/metagameChart';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { eventConversionTarget } from '~~/shared/conversionTarget';
 import { projectMetagameChart } from '~~/shared/utils/metagameChart';
 import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
@@ -12,11 +13,11 @@ import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 
 type MetagameDisplayRow = ArchetypeBreakdownResponse['entries'][number] | CardBreakdownResponse['entries'][number];
 
-export function useMetagameModeData() {
-	const { eventId } = useScreenContext();
-	const config = useScreenModeConfig('metagame');
+export function useMetagameModeData(context: ScreenContext) {
+	const { eventId } = context;
+	const config = useScreenModeConfig(context, 'metagame');
 
-	const outputReads = useScreenOutputReads();
+	const outputReads = useScreenOutputReads(context);
 	const eventStore = useEventStore();
 
 	// The server derives the breakdown from the saved configuration (#604) and,
@@ -137,7 +138,7 @@ export function useMetagameModeData() {
 		setPage,
 		nextPage,
 		prevPage,
-	} = usePaginatedScreenMode({ mode: 'metagame', config, rows: pagedRows });
+	} = usePaginatedScreenMode(context, { mode: 'metagame', config, rows: pagedRows });
 
 	// ── Empty State ──
 	const isEmpty = computed(() => freshness.answered.value && displayRows.value.length === 0);
@@ -157,6 +158,8 @@ export function useMetagameModeData() {
 		ready: freshness.answered,
 		config,
 		loading,
+		/** Whether its rows are a read's answer, or it selects nothing: false only while its first read is in flight. */
+		answered: freshness.answered,
 		error,
 		isEmpty,
 		emptyMessage,

@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
 const defaultConfig = {
 	roundId: undefined as number | undefined,
@@ -31,11 +32,11 @@ const { deliver } = realtime;
 mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = screenContextOf({
 	screen: ref({ id: 1, name: 'Test' }),
 	eventId: mockEventId,
 	interactive: mockInteractive,
-}));
+});
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
 function pairing(overrides: Partial<ScreenOutputRoundMatch> = {}): ScreenOutputRoundMatch {
@@ -75,7 +76,7 @@ const scopes: EffectScope[] = [];
 
 function makePairingsModeData() {
 	const scope = effectScope();
-	const result = scope.run(() => usePairingsModeData())!;
+	const result = scope.run(() => usePairingsModeData(screenContext))!;
 	scopes.push(scope);
 	return result;
 }

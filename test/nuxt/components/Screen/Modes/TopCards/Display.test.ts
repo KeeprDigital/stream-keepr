@@ -75,6 +75,8 @@ const currentPage = ref(1);
 const totalPages = ref(1);
 const pageCapacity = ref(2);
 
+// The mode's data is faked, so nothing reads the Screen context it is handed.
+mockNuxtImport('useScreenContext', () => () => ({}));
 mockNuxtImport('useTopCardsModeData', () => () => ({
 	config: computed(() => config.value),
 	loading: ref(false),
