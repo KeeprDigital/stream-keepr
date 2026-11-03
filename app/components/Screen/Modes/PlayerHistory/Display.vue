@@ -20,6 +20,7 @@ const visibleColumns = computed(() => config.value.columns.filter(column => colu
 // under their name, and the game score on the outcome badge.
 const showsArchetypeColumn = computed(() => visibleColumns.value.some(column => column.key === 'opponentArchetype'));
 const showsGameScoreColumn = computed(() => visibleColumns.value.some(column => column.key === 'gameScore'));
+const showsOutcomeColumn = computed(() => visibleColumns.value.some(column => column.key === 'outcome'));
 const gridStyle = computed(() => ({
 	gridTemplateColumns: visibleColumns.value.map(column => columnWidths[column.key]).join(' '),
 }));
@@ -81,6 +82,13 @@ const displayStyle = computed(() => ({
 	color: modeTokenVar('player-history', 'primary-text'),
 }));
 
+/** Its Game Score; an unreported Match reads Pending unless the Outcome column already says so. */
+function gameScoreText(row: PlayerMatchHistoryEntry) {
+	if (row.outcome === 'pending' && !showsOutcomeColumn.value)
+		return 'Pending';
+	return formatGameScore(row) ?? '';
+}
+
 function outcomeParts(row: PlayerMatchHistoryEntry) {
 	const text = formatOutcome(row);
 	const [label, ...scoreParts] = text.split(' ');
@@ -139,7 +147,7 @@ function outcomeParts(row: PlayerMatchHistoryEntry) {
 							<ScreenModesPlayerHistoryOpponentDeck v-if="row.opponentDeckName" :name="row.opponentDeckName" :colors="row.opponentDeckColors" />
 						</div>
 						<div v-else-if="column.key === 'gameScore'" class="game-score" :style="primaryTextStyle">
-							{{ formatGameScore(row) ?? '' }}
+							{{ gameScoreText(row) }}
 						</div>
 					</template>
 				</div>

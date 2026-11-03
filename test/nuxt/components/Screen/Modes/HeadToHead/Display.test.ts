@@ -74,7 +74,13 @@ async function mountComponent() {
 
 describe('screenModesHeadToHeadDisplay', () => {
 	beforeEach(() => {
-		config.value = { playerSource: 'featureMatchSlot', featureMatchId: 4, showHeader: true };
+		config.value = {
+			playerSource: 'featureMatchSlot',
+			featureMatchId: 4,
+			showHeader: true,
+			showPronouns: true,
+			showDeckColors: true,
+		};
 		error.value = null;
 		isEmpty.value = false;
 		firstMeeting.value = false;
@@ -107,6 +113,22 @@ describe('screenModesHeadToHeadDisplay', () => {
 		expect(second!.find('.pronouns').exists()).toBe(false);
 		expect(second!.get('.points').text()).toBe('9 pts');
 		expect(second!.find('.deck').exists()).toBe(false);
+	});
+
+	it.each([
+		{ toggle: 'showPronouns', hides: '.pronouns' },
+		{ toggle: 'showDeckColors', hides: '.mana' },
+	])('hides each Player\'s $hides when $toggle is off', async ({ toggle, hides }) => {
+		player2.value = side(8, 'Oskar Lind', { pronouns: 'he/him', deckName: 'Dimir Murktide', deckColors: 'UB' });
+		config.value = { ...config.value, [toggle]: false };
+
+		const players = (await mountComponent()).findAll('.head-to-head-player');
+
+		expect(players.map(player => player.find(hides).exists())).toEqual([false, false]);
+		expect(players.map(player => player.find('.deck').text())).toEqual([
+			expect.stringContaining('Boros Energy'),
+			expect.stringContaining('Dimir Murktide'),
+		]);
 	});
 
 	it('leaves out a record and points a Player does not have yet', async () => {

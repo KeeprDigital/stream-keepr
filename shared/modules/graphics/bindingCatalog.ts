@@ -11,6 +11,7 @@ import { canonicalSocialProfileUrl, SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '../.
 import { formatOpColors } from '../../utils/card/op';
 import { formatOrdinal } from '../../utils/formatters';
 import { getMtgGameData, getOpGameData } from '../../utils/gameData';
+import { formatGameScore, readMatchFromPlayer1Side } from '../../utils/matchFromPlayerSide';
 
 /**
  * The Graphic Input Binding field catalog.
@@ -555,18 +556,13 @@ const MATCH_FIELDS: readonly GraphicBindingField<GraphicBindingMatch>[] = [
 		type: 'text',
 		shape: 'atomic',
 		// Its Game Score from player 1's side; a bye or an unreported Match has none.
-		resolve: (match) => {
-			if (!match.hasResult || match.isBye)
-				return undefined;
-			const first = numberOf(match.player1GameWins);
-			const second = numberOf(match.player2GameWins);
-			if (first === undefined || second === undefined)
-				return undefined;
-			const draws = numberOf(match.gameDraws);
-			return `${first}-${second}${draws
-				? `-${draws}`
-				: ''}`;
-		},
+		resolve: match => formatGameScore(readMatchFromPlayer1Side({
+			hasResult: match.hasResult ?? false,
+			isBye: match.isBye ?? false,
+			player1GameWins: numberOf(match.player1GameWins) ?? null,
+			player2GameWins: numberOf(match.player2GameWins) ?? null,
+			gameDraws: numberOf(match.gameDraws) ?? null,
+		})) ?? undefined,
 	},
 	{
 		id: 'match.player1GameWins',
