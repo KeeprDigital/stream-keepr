@@ -618,7 +618,7 @@ describe('capability-only Screen Output reads', () => {
 					matchId: earlier.id,
 					roundName: 'H2H Round 1',
 					outcome: 'player2',
-					gameScore: '1-2',
+					gameScore: '1–2',
 				}),
 			]);
 

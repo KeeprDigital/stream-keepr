@@ -637,7 +637,7 @@ const ANSWERS = {
 				roundNumber: 3,
 				phaseName: SWISS.name,
 				outcome: 'player1' as const,
-				gameScore: '2-1',
+				gameScore: '2–1',
 			},
 		],
 	},

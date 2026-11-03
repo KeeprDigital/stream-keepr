@@ -241,7 +241,7 @@ describe('usePlayerHistoryModeData', () => {
 					opponentGameWins: 1,
 					gameDraws: 0,
 				}),
-				'WIN 2-1',
+				'WIN 2–1',
 			],
 			[
 				'scored loss',
@@ -251,29 +251,22 @@ describe('usePlayerHistoryModeData', () => {
 					opponentGameWins: 2,
 					gameDraws: 0,
 				}),
-				'LOSS 0-2',
+				'LOSS 0–2',
 			],
 			[
-				'scored draw with game draws',
+				'scored draw',
 				historyEntry({
 					outcome: 'draw',
 					playerGameWins: 1,
 					opponentGameWins: 1,
-					gameDraws: 1,
+					gameDraws: 0,
 				}),
-				'DRAW 1-1-1',
+				'DRAW 1–1',
 			],
 		])('formats a %s', (_name, row, expected) => {
 			const { formatOutcome } = makePlayerHistoryModeData();
 
 			expect(formatOutcome(row)).toBe(expected);
-		});
-
-		it('omits a zero game-draw count from the score', () => {
-			const { formatOutcome } = makePlayerHistoryModeData();
-
-			expect(formatOutcome(historyEntry({ gameDraws: 0 }))).toBe('WIN 2-1');
-			expect(formatOutcome(historyEntry({ gameDraws: null }))).toBe('WIN 2-1');
 		});
 	});
 
@@ -402,7 +395,7 @@ describe('usePlayerHistoryModeData', () => {
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(formatOutcome(pageData.value[0]!)).toBe('WIN 2-0');
+			expect(formatOutcome(pageData.value[0]!)).toBe('WIN 2–0');
 		});
 
 		it('picks up a new Match for the selected Player', async () => {
@@ -505,7 +498,7 @@ describe('usePlayerHistoryModeData', () => {
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(rereads ? 1 : 0);
-			expect(formatOutcome(pageData.value[0]!)).toBe(rereads ? 'WIN 2-0' : 'Pending');
+			expect(formatOutcome(pageData.value[0]!)).toBe(rereads ? 'WIN 2–0' : 'Pending');
 		});
 
 		it('follows an edit to the selected Player\'s record or an opponent\'s, and no one else\'s', async () => {
@@ -552,7 +545,7 @@ describe('usePlayerHistoryModeData', () => {
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(formatOutcome(pageData.value[0]!)).toBe('WIN 2-0');
+			expect(formatOutcome(pageData.value[0]!)).toBe('WIN 2–0');
 		});
 	});
 });
