@@ -100,7 +100,8 @@ export function useFeatureMatchDeckModeData() {
 					...layout.groups.flatMap(group => group.cards.map(card => card.imageUrl)),
 				].filter((url): url is string => !!url))
 			: new Set<string>();
-		if (flight.stale)
+		// The side may have moved on while the images loaded, back to what is shown.
+		if (flight.stale || deckListId.value !== read.id)
 			return;
 		// A card whose image failed shows its name instead.
 		for (const card of layout.groups.flatMap(group => group.cards)) {
@@ -111,12 +112,14 @@ export function useFeatureMatchDeckModeData() {
 	}
 
 	watch([deckListId, deckRead.data], ([id, read]) => {
-		if (id === null) {
+		if (id === null || displayed.value?.deckListId === id) {
+			// What the side holds is shown, or nothing is: no build in flight may replace it.
 			builds.supersede();
-			displayed.value = null;
+			if (id === null)
+				displayed.value = null;
 			return;
 		}
-		if (read?.id === id && displayed.value?.deckListId !== id && side.value)
+		if (read?.id === id && side.value)
 			void show(read, side.value);
 	}, { immediate: true });
 

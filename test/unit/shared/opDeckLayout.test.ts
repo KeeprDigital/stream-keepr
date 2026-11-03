@@ -1,27 +1,6 @@
-import type { OpCardCategory } from '~~/shared/types/card/op';
-import type { FeatureMatchDeckListEntry } from '~~/shared/types/featureMatchDeckList';
 import { describe, expect, it } from 'vitest';
 import { opDeckLayout } from '~~/shared/utils/opDeckLayout';
-
-function entry(number: string, quantity: number, category: OpCardCategory, cost: number | null): FeatureMatchDeckListEntry {
-	return {
-		number,
-		quantity,
-		card: {
-			name: `Card ${number}`,
-			category,
-			colors: ['Red'],
-			cost,
-			power: null,
-			counter: null,
-			imageUrl: `https://cards-img.keepr.digital/${number}.png`,
-		},
-	};
-}
-
-function unknown(number: string, quantity: number): FeatureMatchDeckListEntry {
-	return { number, quantity, card: null };
-}
+import { opDeckListEntry as entry } from '~~/test/helpers/opCards';
 
 /** A Deck List in paste order: a Leader, then cards out of category and cost order. */
 const PASTED = [
@@ -32,7 +11,7 @@ const PASTED = [
 	entry('OP01-013', 4, 'character', 2),
 	entry('OP01-011', 4, 'character', 2),
 	entry('OP01-029', 2, 'event', 0),
-	unknown('OP99-999', 1),
+	entry('OP99-999', 1, null),
 ];
 
 describe('opDeckLayout', () => {
@@ -114,7 +93,7 @@ describe('opDeckLayout', () => {
 			name: 'empty for cards with no known cost',
 			entries: [
 				entry('OP01-001', 1, 'leader', null),
-				unknown('OP99-999', 4),
+				entry('OP99-999', 4, null),
 			],
 			curve: [],
 		},

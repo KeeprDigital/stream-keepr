@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive, ref } from 'vue';
+import { opSlotSide } from '~~/test/helpers/opCards';
 import Settings from '~/components/Screen/Modes/Deck/Settings.vue';
 
 const mockPlayerStore = {
@@ -48,19 +49,8 @@ const mockBroadcastDeckListStore = reactive({
 });
 
 /** An OP Slot whose first player has a Deck List and whose second has none. */
-function opSide(name: string, deckListId: number | null) {
-	return {
-		name,
-		gameData: {
-			type: 'op',
-			featureMatchDeckList: deckListId === null
-				? null
-				: { id: deckListId, mainboardCount: 50 },
-		},
-	};
-}
-const ALICE = opSide('Alice', 501);
-const BOB = opSide('Bob', null);
+const ALICE = opSlotSide('Alice', null, 501);
+const BOB = opSlotSide('Bob', null, null);
 const mockFeatureMatchStore = reactive({
 	featureMatches: [
 		{
