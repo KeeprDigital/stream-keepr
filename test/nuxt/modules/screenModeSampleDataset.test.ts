@@ -10,10 +10,9 @@ import { loadDrawnImages } from '~~/test/nuxt/helpers/drawnImages';
 import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
 import PreviewTile from '~/components/Theme/PreviewTile.vue';
 
-// Each Card Game's Screen Mode Sample Dataset fills every plain overlay mode and
-// every mode a Theme preview shows that its Events are offered, so a mode themed
-// later previews with no change to it, and it fills them alone: a preview makes
-// no request, not even for card data.
+// Each Card Game's Screen Mode Sample Dataset fills every plain overlay and Theme
+// preview mode its Events are offered, so a newly themed mode previews unchanged,
+// and fills them alone: a preview makes no request, not even for card data.
 
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),

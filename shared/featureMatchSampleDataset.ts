@@ -213,6 +213,9 @@ const PURPLE_LUFFY_DECK_LIST: FeatureMatchDeckListEntry[] = [
 	opEntry('OP09-080', 2, 'Thousand Sunny', 'stage', 1, null, null),
 ];
 
+/** The Round the One Piece sample's Slot is featured in, as the operator typed it. */
+export const OP_FEATURE_MATCH_SAMPLE_ROUND = 'Round 6';
+
 /** A One Piece sample side's slot data: who sits there, their Leader, and their Deck List if they hold one. */
 export interface OpFeatureMatchSampleSide {
 	name: string;
@@ -262,8 +265,8 @@ const OP_SAMPLE_TOKEN_VALUES: Readonly<Record<string, GraphicInputValue>> = {
 	...opPlayerTokens(OP_FEATURE_MATCH_SAMPLE_SIDES[0], 'player1'),
 	...opPlayerTokens(OP_FEATURE_MATCH_SAMPLE_SIDES[1], 'player2'),
 	// An OP Event has no Phases, so its stage is the Round the operator typed.
-	round: 'Round 6',
-	stage: 'Round 6',
+	round: OP_FEATURE_MATCH_SAMPLE_ROUND,
+	stage: OP_FEATURE_MATCH_SAMPLE_ROUND,
 	table: 'Table 1',
 	format: getGameConfig('op').label,
 	eventName: 'Sample Treasure Cup',

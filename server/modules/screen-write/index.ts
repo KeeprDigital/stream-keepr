@@ -183,21 +183,19 @@ function genericWriteEditsWorkspace(
 }
 
 /**
- * `modeConfigs` with a One Piece Card Game Event's Deck Screen on a Feature
- * Match Slot side, or `undefined` where it needs no default.
+ * The `modeConfigs` a Screen entering Deck mode on a One Piece Card Game
+ * Event is written with, its Deck Source on a Feature Match Slot side; or
+ * `undefined` where it needs no default.
  *
- * An OP Deck Screen shows a Slot side, never a Player (ADR-0057), so one in
- * Deck mode with no Slot side chosen (no Deck Source, or the Player source's
- * empty default) starts on the Event's first Slot, left side, or on no Slot
- * while the Event has none. A Magic Event's keeps its Player source.
+ * An OP Deck Screen shows a Slot side, never a Player (ADR-0057), so one with
+ * no Slot side chosen (no Deck Source, or the Player source's empty default)
+ * starts on the Event's first Slot, left side, or on no Slot while the Event
+ * has none. A Magic Event's keeps its Player source.
  */
 async function withOpDeckSourceDefault(
 	eventId: number,
-	mode: ScreenMode | undefined,
 	modeConfigs: ModeConfigsMap | null | undefined,
 ): Promise<ModeConfigsMap | undefined> {
-	if (mode !== 'deck')
-		return undefined;
 	const deckSource = modeConfigs?.deck?.deckSource;
 	if (deckSource && !(deckSource.type === 'player' && deckSource.playerId === null))
 		return undefined;
@@ -239,12 +237,14 @@ export function screenWriteModule() {
 		// Constructed here rather than by the route, so a create refused for its
 		// slug or its Graphic Asset References never reaches for a signing key it
 		// was not going to use.
-		const defaulted = await withOpDeckSourceDefault(eventId, input.currentMode, input.modeConfigs);
+		const withDeckSource = input.currentMode === 'deck'
+			? await withOpDeckSourceDefault(eventId, input.modeConfigs)
+			: undefined;
 		const preparedCapability = await screenOutputAssetCapabilities().prepare();
 		const newScreen = await screens.create(
 			eventId,
-			defaulted
-				? { ...input, modeConfigs: defaulted }
+			withDeckSource
+				? { ...input, modeConfigs: withDeckSource }
 				: input,
 			preparedCapability.persisted,
 		);
@@ -299,19 +299,22 @@ export function screenWriteModule() {
 					.endEpochOnLeavingBroadcastGraphics(screenId, eventId, originConnectionId)
 			: undefined;
 
-		const defaulted = await withOpDeckSourceDefault(
-			eventId,
-			data.currentMode ?? existingScreen.currentMode,
-			data.modeConfigs !== undefined
-				? data.modeConfigs
-				: existingScreen.modeConfigs,
-		);
+		// Only a Screen entering Deck mode takes the default, so no other save
+		// moves a Deck Screen already on air.
+		const withDeckSource = data.currentMode === 'deck' && existingScreen.currentMode !== 'deck'
+			? await withOpDeckSourceDefault(
+					eventId,
+					data.modeConfigs !== undefined
+						? data.modeConfigs
+						: existingScreen.modeConfigs,
+				)
+			: undefined;
 
 		const updatedScreen = await screens.update(
 			screenId,
 			eventId,
-			defaulted
-				? { ...data, modeConfigs: defaulted }
+			withDeckSource
+				? { ...data, modeConfigs: withDeckSource }
 				: data,
 			stateVersion,
 			epochEnd?.statements,

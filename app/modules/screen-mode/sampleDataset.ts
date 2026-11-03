@@ -14,7 +14,7 @@ import type { ScreenOutputFeatureMatchDeckListResponse, ScreenOutputFeatureMatch
 import type { ScryfallCardFetchResult } from '~/composables/data/useScryfallBatch';
 import type { ScreenOutputReadScope, useScreenOutputReadRepository } from '~/composables/repositories/useScreenOutputReadRepository';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
-import { OP_FEATURE_MATCH_SAMPLE_SIDES } from '~~/shared/featureMatchSampleDataset';
+import { OP_FEATURE_MATCH_SAMPLE_ROUND, OP_FEATURE_MATCH_SAMPLE_SIDES } from '~~/shared/featureMatchSampleDataset';
 import { bindGraphicThemeOwner, DEFAULT_GRAPHIC_THEME_TOKENS, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { deriveTopCutBracket } from '~~/shared/modules/top-cut-bracket';
 import { formatOpColors, opPrintingImageUrl } from '~~/shared/utils/card/op';
@@ -764,7 +764,7 @@ const OP_SAMPLE_SLOT: FeatureMatchResponse = {
 	externalId: null,
 	externalSource: null,
 	tableNumber: 1,
-	roundName: 'Round 6',
+	roundName: OP_FEATURE_MATCH_SAMPLE_ROUND,
 	formatName: null,
 	player1Id: null,
 	player2Id: null,
@@ -855,7 +855,7 @@ const SCREEN_MODE_SAMPLE_CONFIGS: Record<Game, ModeConfigsMap> = {
 };
 
 /** The sample configuration of `mode` under `game`'s sample, or its defaults where it needs none. */
-export function screenModeSampleConfigs(mode: ScreenMode, game: Game = 'mtg'): ModeConfigsMap {
+export function screenModeSampleConfigs(mode: ScreenMode, game: Game): ModeConfigsMap {
 	const config = SCREEN_MODE_SAMPLE_CONFIGS[game][mode];
 	return config
 		? { [mode]: config }
@@ -867,34 +867,12 @@ function notInSample(resource: string): never {
 	throw new Error(`The Screen Mode Sample Dataset holds no ${resource}`);
 }
 
-/**
- * The Screen Output read repository a Theme preview of `game` reads from:
- * every read answers that Card Game's dataset, a fresh copy each time, and
- * nothing leaves the browser.
- */
-export function useSampleScreenOutputReadRepository(game: Game = 'mtg'): SampleReadRepository {
-	const answer = <T>(value: T) => async (_scope: ScreenOutputReadScope): Promise<T> => structuredClone(value);
-	const none = (resource: string) => async () => notInSample(resource);
-	if (game === 'op') {
-		// A One Piece Event models no Players, Rounds, results or Metagame (ADR-0057).
-		return {
-			event: none('Event context'),
-			card: answer(OP_ANSWERS.card),
-			liveSession: answer(OP_ANSWERS.liveSession),
-			featureMatchSlot: answer(OP_ANSWERS.featureMatchSlot),
-			featureMatchDeckList: answer(OP_ANSWERS.featureMatchDeckList),
-			playerHistory: none('Player History'),
-			standings: none('Standings'),
-			pairings: none('Pairings'),
-			archetypeSpotlight: none('Archetype'),
-			headToHead: none('Head-to-Head'),
-			metagame: none('Metagame'),
-			topCards: none('Most Played Cards'),
-			topCut: none('Top Cut'),
-			playerDecks: none('Player'),
-		};
-	}
-	return {
+const answer = <T>(value: T) => async (_scope: ScreenOutputReadScope): Promise<T> => structuredClone(value);
+const none = (resource: string) => async () => notInSample(resource);
+
+/** Each Card Game's reads: every one answers its dataset, a fresh copy each time. */
+const SAMPLE_READ_REPOSITORIES: Record<Game, SampleReadRepository> = {
+	mtg: {
 		event: none('Event context'),
 		card: answer(ANSWERS.card),
 		liveSession: answer(ANSWERS.liveSession),
@@ -910,5 +888,30 @@ export function useSampleScreenOutputReadRepository(game: Game = 'mtg'): SampleR
 		topCards: answer(ANSWERS.topCards),
 		topCut: answer(ANSWERS.topCut),
 		playerDecks: answer(ANSWERS.playerDecks),
-	};
+	},
+	// A One Piece Event models no Players, Rounds, results or Metagame (ADR-0057).
+	op: {
+		event: none('Event context'),
+		card: answer(OP_ANSWERS.card),
+		liveSession: answer(OP_ANSWERS.liveSession),
+		featureMatchSlot: answer(OP_ANSWERS.featureMatchSlot),
+		featureMatchDeckList: answer(OP_ANSWERS.featureMatchDeckList),
+		playerHistory: none('Player History'),
+		standings: none('Standings'),
+		pairings: none('Pairings'),
+		archetypeSpotlight: none('Archetype'),
+		headToHead: none('Head-to-Head'),
+		metagame: none('Metagame'),
+		topCards: none('Most Played Cards'),
+		topCut: none('Top Cut'),
+		playerDecks: none('Player'),
+	},
+};
+
+/**
+ * The Screen Output read repository a Theme preview of `game` reads from:
+ * every read answers that Card Game's dataset, and nothing leaves the browser.
+ */
+export function useSampleScreenOutputReadRepository(game: Game): SampleReadRepository {
+	return SAMPLE_READ_REPOSITORIES[game];
 }

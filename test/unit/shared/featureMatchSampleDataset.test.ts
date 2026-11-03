@@ -44,19 +44,17 @@ describe('the canonical Feature Match sample dataset', () => {
 		expect(Math.max(...player1.sideboard!.map(card => card.name.length))).toBeGreaterThan(20);
 	});
 
-	it('samples a One Piece Match by its Leaders, with a long name beside a short one', () => {
+	it('samples a One Piece Match named by its Leaders, with a long name beside a short one', () => {
 		const { tokenValues, context } = featureMatchSampleDataset('op');
 
 		expect(String(tokenValues.player1Name).length).toBeGreaterThan(20);
 		expect(String(tokenValues.player1Name).length).toBeGreaterThan(String(tokenValues.player2Name).length);
-		expect(tokenValues).toMatchObject({
-			player1Deck: 'Monkey.D.Luffy',
-			player1DeckColors: 'Purple',
-			player1LeaderImage: 'https://cards-img.keepr.digital/OP05-060.png',
-			player2Deck: 'Enel',
-			player2DeckColors: 'Yellow',
-			player2LeaderImage: 'https://cards-img.keepr.digital/OP05-098.png',
-			format: 'One Piece',
+		// Each side's deck is named, coloured and imaged by its Leader, a real Printing.
+		OP_FEATURE_MATCH_SAMPLE_SIDES.forEach(({ leader }, index) => {
+			const side = `player${index + 1}`;
+			expect(tokenValues[`${side}Deck`]).toBe(leader.name);
+			expect(tokenValues[`${side}DeckColors`]).toBe(leader.colors.join('/'));
+			expect(isOpCardImageUrl(String(tokenValues[`${side}LeaderImage`]))).toBe(true);
 		});
 		// No life or sideboard is tracked, and a One Piece Match is best-of-one.
 		expect(context).toMatchObject({

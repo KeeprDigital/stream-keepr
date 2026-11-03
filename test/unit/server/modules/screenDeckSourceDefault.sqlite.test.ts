@@ -114,6 +114,33 @@ describe('a new Deck Screen\'s Deck Source', () => {
 		expect(deck.currentMode).toBe('deck');
 	});
 
+	// A Deck Screen already on air moves only when the operator moves it.
+	it('leaves an existing Deck Screen\'s source alone on any other save', async () => {
+		const [stored] = await db.insert(schema.screens).values({
+			eventId: events.op.id,
+			name: 'Older Deck',
+			slug: 'older-deck',
+			currentMode: 'deck',
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId: null },
+				},
+			},
+			assetCapabilitySeed: 'seed',
+			assetCapabilityVersion: 1,
+			assetCapabilityDigest: 'older-deck-digest',
+		}).returning();
+
+		const renamed = await screenWriteModule().updateScreen({
+			authoringSessionId: undefined,
+			eventId: events.op.id,
+			screenId: stored!.id,
+			input: { stateVersion: stored!.stateVersion, name: 'Renamed Deck' } as never,
+		});
+
+		expect(renamed.modeConfigs?.deck?.deckSource).toEqual({ type: 'player', playerId: null });
+	});
+
 	it('keeps a Slot side the operator chose', async () => {
 		const chosen = { type: 'featureMatchSlot', slotId: events.op.otherSlotId, side: 'player2' };
 
