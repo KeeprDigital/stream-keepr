@@ -57,6 +57,8 @@ export function useFeatureMatchOverlayAnimationPreview(
 		/** The composition as the run composes it: one item's motion isolated, or as authored. */
 		composition: computed(() => preview.value?.graphic ?? composition.value),
 		/** The composition's lifecycle phases for the compositor, or nothing at rest. */
-		animation: computed(() => position.value ? [position.value] : undefined),
+		animation: computed(() => position.value
+			? [position.value]
+			: undefined),
 	};
 }

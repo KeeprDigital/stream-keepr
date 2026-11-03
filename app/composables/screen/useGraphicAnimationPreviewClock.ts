@@ -1,7 +1,7 @@
 import type { Ref } from 'vue';
+import type { GraphicAnimationTimelineSegment } from '~~/shared/modules/graphics';
 import type { GraphicAnimationPhase } from '~~/shared/types/graphics';
 import type { GraphicsPreviewAnimationPlan } from '~/modules/graphics/previewMessages';
-import type { GraphicAnimationTimelineSegment } from '~~/shared/modules/graphics';
 import { graphicAnimationTimelineAt, graphicAnimationTimelineDurationMs } from '~~/shared/modules/graphics';
 
 /**

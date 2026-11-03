@@ -1203,18 +1203,33 @@ describe('featureMatchOverlayDisplay', () => {
 	});
 	// #749: an editor-only Graphic Animation Preview of the Feature Match Layout.
 	describe('the graphic animation preview', () => {
-		const fadeIn = { enter: { duration: 4000, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } } };
+		const fadeIn = {
+			enter: {
+				duration: 4000,
+				easing: 'linear' as const,
+				delay: 0,
+				fade: { opacity: 0 },
+			},
+		};
 
 		function animatedConfig(): FeatureMatchOverlayModeConfig {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.composition = {
 				...createFeatureMatchLayoutComposition(),
 				items: ['bar', 'badge'].map(id => ({
-					...getGraphicItemDefinition('shape').createDefault({ id, label: id, canvasWidth: 1920, canvasHeight: 1080 }),
+					...getGraphicItemDefinition('shape').createDefault({
+						id,
+						label: id,
+						canvasWidth: 1920,
+						canvasHeight: 1080,
+					}),
 					animation: fadeIn,
 				})),
 			};
-			config.layout.frame = { ...config.layout.frame, animation: { enabled: true, opacity: 0.6 } };
+			config.layout.frame = {
+				...config.layout.frame,
+				animation: { enabled: true, opacity: 0.6 },
+			};
 			return config;
 		}
 
@@ -1224,7 +1239,15 @@ describe('featureMatchOverlayDisplay', () => {
 				source: window.parent,
 				data: {
 					type: GRAPHICS_PREVIEW_ANIMATION_MESSAGE,
-					plan: plan && { graphicId: FEATURE_MATCH_LAYOUT_COMPOSITION_ID, scope: 'phase', phase: 'enter', run: 1, speed: 1, loop: false, ...plan },
+					plan: plan && {
+						graphicId: FEATURE_MATCH_LAYOUT_COMPOSITION_ID,
+						scope: 'phase',
+						phase: 'enter',
+						run: 1,
+						speed: 1,
+						loop: false,
+						...plan,
+					},
 				},
 			}));
 			return nextTick();
@@ -1234,7 +1257,9 @@ describe('featureMatchOverlayDisplay', () => {
 		function fadedOut(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
 			const order = ['bar', 'badge'];
 			return wrapper.findAll('[data-graphic-item-kind="shape"]')
-				.flatMap((node, index) => (node.attributes('style') ?? '').includes('opacity: 0') ? [order[index]] : []);
+				.flatMap((node, index) => (node.attributes('style') ?? '').includes('opacity: 0')
+					? [order[index]]
+					: []);
 		}
 
 		beforeEach(() => {
@@ -1243,9 +1268,21 @@ describe('featureMatchOverlayDisplay', () => {
 		});
 
 		it.each([
-			['the whole composition', {}, ['bar', 'badge']],
-			['the selected Graphic Item alone', { itemId: 'badge' }, ['badge']],
-			['nothing for a run naming another composition', { graphicId: 'lower-third' }, []],
+			[
+				'the whole composition',
+				{},
+				['bar', 'badge'],
+			],
+			[
+				'the selected Graphic Item alone',
+				{ itemId: 'badge' },
+				['badge'],
+			],
+			[
+				'nothing for a run naming another composition',
+				{ graphicId: 'lower-third' },
+				[],
+			],
 		])('plays %s from the start of its phase', async (_case, plan, moving) => {
 			const wrapper = await mountComponent();
 			expect(fadedOut(wrapper)).toEqual([]);

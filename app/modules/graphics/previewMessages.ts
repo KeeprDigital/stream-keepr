@@ -149,7 +149,9 @@ export function readGraphicsPreviewAnimationPlan(value: unknown): GraphicsPrevie
 
 	return {
 		graphicId: plan.graphicId,
-		...(plan.itemId === undefined ? {} : { itemId: plan.itemId }),
+		...(plan.itemId === undefined
+			? {}
+			: { itemId: plan.itemId }),
 		scope: plan.scope,
 		phase: plan.phase as GraphicAnimationPhase,
 		run: plan.run,

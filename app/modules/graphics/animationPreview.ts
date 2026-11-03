@@ -31,12 +31,18 @@ export function resolveGraphicAnimationPreview(
 		? [plan.phase]
 		: GRAPHIC_ANIMATION_PHASE_VALUES.slice(GRAPHIC_ANIMATION_PHASE_VALUES.indexOf(plan.phase));
 
-	if (plan.itemId === undefined)
-		return { graphic, timeline: broadcastGraphicAnimationTimeline(graphic, phases) };
+	if (plan.itemId === undefined) {
+		return {
+			graphic,
+			timeline: broadcastGraphicAnimationTimeline(graphic, phases),
+		};
+	}
 
 	const itemId = plan.itemId;
 	const subject = graphic.items
-		.flatMap(item => item.type === 'group' ? [item, ...item.children] : [item])
+		.flatMap(item => item.type === 'group'
+			? [item, ...item.children]
+			: [item])
 		.find(item => item.id === itemId);
 	if (!subject)
 		return { graphic, timeline: [] };
@@ -48,20 +54,33 @@ export function resolveGraphicAnimationPreview(
 				return item;
 			const rested = atRest(item);
 			return rested.type === 'group'
-				? { ...rested, children: rested.children.map(child => child.id === itemId ? child : atRest(child)) }
+				? {
+						...rested,
+						children: rested.children.map(child => child.id === itemId
+							? child
+							: atRest(child)),
+					}
 				: rested;
 		}),
 	};
 
 	// The item as its own one-item graphic: its delays, and a group's stagger over
 	// its children, measured from the run's start.
-	return { graphic: isolated, timeline: broadcastGraphicAnimationTimeline({ items: [subject] }, phases) };
+	return {
+		graphic: isolated,
+		timeline: broadcastGraphicAnimationTimeline({
+			items: [subject],
+		}, phases),
+	};
 }
 
 function atRest<T extends BroadcastGraphicConfig | GraphicItemConfig>(owner: T): T {
 	const { animation: _animation, themeBindings, ...rest } = owner;
 	const kept = Object.entries(themeBindings ?? {}).filter(([slot]) => !slot.startsWith('animation.'));
 	return (kept.length > 0
-		? { ...rest, themeBindings: Object.fromEntries(kept) }
+		? {
+				...rest,
+				themeBindings: Object.fromEntries(kept),
+			}
 		: rest) as T;
 }

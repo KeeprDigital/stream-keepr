@@ -193,11 +193,26 @@ describe('readGraphicsPreviewAnimationPlan', () => {
 	});
 
 	it.each([
-		['plays one Graphic Item alone', { itemId: 'bar' }, { ...plan, itemId: 'bar' }],
-		['drops an empty item', { itemId: '' }, null],
-		['drops an item that is not an id', { itemId: 4 }, null],
+		[
+			'plays one Graphic Item alone',
+			{ itemId: 'bar' },
+			{ ...plan, itemId: 'bar' },
+		],
+		[
+			'drops an empty item',
+			{ itemId: '' },
+			null,
+		],
+		[
+			'drops an item that is not an id',
+			{ itemId: 4 },
+			null,
+		],
 	])('%s', (_case, overrides, expected) => {
-		expect(readGraphicsPreviewAnimationPlan({ ...plan, ...overrides })).toEqual(expected);
+		expect(readGraphicsPreviewAnimationPlan({
+			...plan,
+			...overrides,
+		})).toEqual(expected);
 	});
 
 	it('carries no schedule of its own, so the preview cannot be told when to be', () => {
@@ -285,17 +300,63 @@ describe('readGraphicsPreviewAnimationPlan', () => {
 });
 
 describe('isGraphicsPreviewAnimationMessage', () => {
-	const plan = { graphicId: 'feature-match-layout', scope: 'lifecycle', phase: 'enter', run: 1, speed: 1, loop: false };
+	const plan = {
+		graphicId: 'feature-match-layout',
+		scope: 'lifecycle',
+		phase: 'enter',
+		run: 1,
+		speed: 1,
+		loop: false,
+	};
 
 	// A host owning its preview transport sends the run on its own; null stops it.
 	it.each([
-		['a run from the embedding editor', editorWindow, 'https://keepr.test', plan, true, plan],
-		['a stop from the embedding editor', editorWindow, 'https://keepr.test', null, true, null],
-		['a malformed run, read as a stop', editorWindow, 'https://keepr.test', { ...plan, speed: 0 }, true, null],
-		['a run from another window', previewWindow, 'https://keepr.test', plan, false, null],
-		['a run from another origin', editorWindow, 'https://attacker.test', plan, false, null],
+		[
+			'a run from the embedding editor',
+			editorWindow,
+			'https://keepr.test',
+			plan,
+			true,
+			plan,
+		],
+		[
+			'a stop from the embedding editor',
+			editorWindow,
+			'https://keepr.test',
+			null,
+			true,
+			null,
+		],
+		[
+			'a malformed run, read as a stop',
+			editorWindow,
+			'https://keepr.test',
+			{ ...plan, speed: 0 },
+			true,
+			null,
+		],
+		[
+			'a run from another window',
+			previewWindow,
+			'https://keepr.test',
+			plan,
+			false,
+			null,
+		],
+		[
+			'a run from another origin',
+			editorWindow,
+			'https://attacker.test',
+			plan,
+			false,
+			null,
+		],
 	])('%s', (_case, source, origin, sent, accepted, read) => {
-		const message = { origin, source, data: { type: GRAPHICS_PREVIEW_ANIMATION_MESSAGE, plan: sent } };
+		const message = {
+			origin,
+			source,
+			data: { type: GRAPHICS_PREVIEW_ANIMATION_MESSAGE, plan: sent },
+		};
 
 		const result = isGraphicsPreviewAnimationMessage(message, expectedFromEditor);
 

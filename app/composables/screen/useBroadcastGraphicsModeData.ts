@@ -3,7 +3,6 @@ import type { GraphicsPreviewState } from '~/modules/graphics/previewMessages';
 import type { GraphicsAnimationProjection } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { parseBroadcastGraphicsBackgroundConfig } from '~~/shared/animationEffects';
-import { useGraphicAnimationPreviewClock } from './useGraphicAnimationPreviewClock';
 import { resolveGraphicAnimationPreview } from '~/modules/graphics/animationPreview';
 import {
 	GRAPHICS_PREVIEW_READY_MESSAGE,
@@ -11,6 +10,7 @@ import {
 	isGraphicsPreviewStateMessage,
 	readGraphicsPreviewState,
 } from '~/modules/graphics/previewMessages';
+import { useGraphicAnimationPreviewClock } from './useGraphicAnimationPreviewClock';
 
 /**
  * What a Broadcast Graphics Screen Output renders.
