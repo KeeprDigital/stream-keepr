@@ -44,8 +44,10 @@ vi.mock('~~/server/services/melee', () => ({
 vi.mock('~~/server/modules/melee-sync/workflows', () => ({
 	createMeleeSyncWorkflows: () => ({}),
 }));
+// The Card Game refusal has its home in meleeSync.sqlite; these Events are MTG.
 vi.mock('~~/server/modules/melee-sync/eventData', () => ({
 	requireMeleeSyncEventData: vi.fn(),
+	requireMeleeSyncOffered: vi.fn(),
 }));
 vi.mock('~~/server/services/meleeIntegration', () => ({
 	requireMeleeIntegration: mockRequireMeleeIntegration,
