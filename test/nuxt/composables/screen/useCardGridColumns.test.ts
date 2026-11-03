@@ -28,14 +28,14 @@ function columnsIn({ sizing, autoColumns, count = 10, canvas, overrides = {}, ca
 				}
 			: {}),
 	};
-	return runInScreenContext(context, () => useCardGridColumns({
+	return useCardGridColumns(context, {
 		sizing: () => sizing,
 		autoColumns: () => autoColumns,
 		columns: () => 5,
 		count: () => count,
 		cardWidth: () => cardWidth,
 		gap: () => 12,
-	})).value;
+	}).value;
 }
 
 describe('useCardGridColumns', () => {
@@ -102,7 +102,7 @@ describe('useCardGridColumns', () => {
 			screen: () => createMockScreen() as any,
 			eventId: () => 1,
 			saving: () => false,
-		}, () => useCardGridColumns({
+		}, context => useCardGridColumns(context, {
 			sizing: () => 'fit',
 			autoColumns: () => true,
 			columns: () => 5,

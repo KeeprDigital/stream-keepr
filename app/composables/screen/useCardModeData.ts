@@ -1,19 +1,20 @@
 import type { Ref } from 'vue';
 import type { ScreenCard } from '~~/shared/types/card/mtg';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
 const CARD_LOAD_FAILED = 'Failed to load card data';
 
-export function useCardModeData() {
-	const config = useScreenModeConfig('card');
-	const { screen, sampleDataset } = useScreenContext();
+export function useCardModeData(context: ScreenContext) {
+	const config = useScreenModeConfig(context, 'card');
+	const { screen, sampleDataset } = context;
 
 	// Screen ID from context
 	const screenId = computed<number | null>(() => screen.value?.id ?? null);
 
 	const { card, loading, error, answered } = sampleDataset
-		? holdSampleCard()
-		: followScreenCard(screenId);
+		? holdSampleCard(context)
+		: followScreenCard(context, screenId);
 
 	return {
 		config,
@@ -30,8 +31,8 @@ export function useCardModeData() {
  * A Theme preview's Screen Card: the sample's, read once and held here. The
  * Card store holds the loaded Event's Card, and a preview has no Event.
  */
-function holdSampleCard() {
-	const outputReads = useScreenOutputReads();
+function holdSampleCard(context: ScreenContext) {
+	const outputReads = useScreenOutputReads(context);
 	const card = ref<ScreenCard | null>(null);
 	const error = ref<string | null>(null);
 	const loading = ref(true);
@@ -54,10 +55,10 @@ function holdSampleCard() {
 }
 
 /** The Screen's Card, held by the Card store and kept fresh as it changes. */
-function followScreenCard(screenId: Readonly<Ref<number | null>>) {
-	const { eventId, cardDataHealth } = useScreenContext();
+function followScreenCard(context: ScreenContext, screenId: Readonly<Ref<number | null>>) {
+	const { eventId, cardDataHealth } = context;
 	const cardStore = useCardStore();
-	const outputReads = useScreenOutputReads();
+	const outputReads = useScreenOutputReads(context);
 	// A rendering of the Screen reads its Card through the Screen (#604).
 	onScopeDispose(cardStore.readActiveCardAsScreenOutput(() => outputReads.card()));
 

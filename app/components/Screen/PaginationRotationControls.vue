@@ -13,6 +13,12 @@ const props = defineProps<{
 	autoPageDescription: string;
 	/** The rows are loading, so manual page selection waits for them. */
 	loading?: boolean;
+	/**
+	 * The rows have yet to answer their first read (the mode data's `answered`),
+	 * so there is no page count: the controls show they are counting rather than
+	 * a "Page 1 of 1" that would read as an answer (#914).
+	 */
+	counting?: boolean;
 }>();
 
 const fields = computed(() => props.rotation.fields);
@@ -22,7 +28,7 @@ const intervalSeconds = computed(() =>
 );
 const currentPage = computed(() => props.rotation.currentPage.value);
 const totalPages = computed(() => props.rotation.totalPages.value);
-const pageSelectionDisabled = computed(() => totalPages.value <= 1 || props.loading);
+const pageSelectionDisabled = computed(() => totalPages.value <= 1 || props.loading || props.counting);
 </script>
 
 <template>
@@ -58,7 +64,12 @@ const pageSelectionDisabled = computed(() => totalPages.value <= 1 || props.load
 		Manual Page Controls
 	</p>
 
-	<div class="flex items-center justify-center gap-2 max-sm:flex-wrap">
+	<div
+		role="group"
+		aria-label="Page selection"
+		:aria-busy="counting"
+		class="flex items-center justify-center gap-2 max-sm:flex-wrap"
+	>
 		<UButton
 			label="Previous"
 			icon="i-lucide-chevron-left"
@@ -67,7 +78,8 @@ const pageSelectionDisabled = computed(() => totalPages.value <= 1 || props.load
 			@click="rotation.adminPrevPage()"
 		/>
 		<span class="text-sm text-muted min-w-24 text-center">
-			Page {{ currentPage }} of {{ totalPages }}
+			<template v-if="counting">Counting pages…</template>
+			<template v-else>Page {{ currentPage }} of {{ totalPages }}</template>
 		</span>
 		<UButton
 			label="Next"

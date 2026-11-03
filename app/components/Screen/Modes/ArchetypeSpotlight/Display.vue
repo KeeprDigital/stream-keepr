@@ -14,7 +14,7 @@ const {
 	currentPage,
 	totalPages,
 	formatRecord,
-} = useArchetypeSpotlightModeData();
+} = useArchetypeSpotlightModeData(useScreenContext());
 
 const primaryTextStyle = {
 	color: modeTokenVar('archetype-spotlight', 'primary-text'),

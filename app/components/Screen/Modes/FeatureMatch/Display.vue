@@ -13,7 +13,7 @@ const {
 	loading: stateLoading,
 	error: dataError,
 	ready,
-} = useFeatureMatchModeData();
+} = useFeatureMatchModeData(useScreenContext());
 
 function allow(key: FeatureMatchBooleanKey): boolean {
 	return config.value[key] ?? featureMatchModeConfigContract.defaults[key]!;

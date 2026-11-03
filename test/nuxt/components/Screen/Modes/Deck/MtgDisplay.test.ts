@@ -34,6 +34,8 @@ const displayedDeckVersion = ref(1);
 const pendingSwapVersion = ref(0);
 const commitPendingDeck = vi.fn();
 
+// The mode's data is faked, so nothing reads the Screen context it is handed.
+mockNuxtImport('useScreenContext', () => () => ({}));
 mockNuxtImport('useDeckModeData', () => () => ({
 	config: computed(() => mutableConfig),
 	primaryHeader: primaryName,

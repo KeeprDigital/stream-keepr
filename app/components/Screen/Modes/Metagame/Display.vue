@@ -29,7 +29,7 @@ const {
 	chartBars,
 	currentPage,
 	totalPages,
-} = useMetagameModeData();
+} = useMetagameModeData(useScreenContext());
 
 const primaryTextStyle = {
 	color: modeTokenVar('metagame', 'primary-text'),

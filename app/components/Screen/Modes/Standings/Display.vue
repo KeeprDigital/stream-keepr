@@ -15,7 +15,7 @@ const {
 	pageSize,
 	formatCell,
 	positionChangeOf,
-} = useStandingsModeData();
+} = useStandingsModeData(useScreenContext());
 
 const inset = useScreenInset();
 

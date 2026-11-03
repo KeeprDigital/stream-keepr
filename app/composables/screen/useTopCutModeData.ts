@@ -1,4 +1,5 @@
 import type { ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import { EMPTY_TOP_CUT_BRACKET } from '~~/shared/modules/top-cut-bracket';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
@@ -67,10 +68,10 @@ function topCutDependencies(
  * names, read through the Screen and kept current by Screen Mode Data
  * Freshness.
  */
-export function useTopCutModeData() {
-	const { eventId } = useScreenContext();
-	const config = useScreenModeConfig('top-cut');
-	const outputReads = useScreenOutputReads();
+export function useTopCutModeData(context: ScreenContext) {
+	const { eventId } = context;
+	const config = useScreenModeConfig(context, 'top-cut');
+	const outputReads = useScreenOutputReads(context);
 
 	const freshness = useScreenModeFreshness<ScreenOutputTopCutResponse>({
 		eventId,

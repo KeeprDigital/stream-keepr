@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
 const defaultConfig = {
 	playerSource: 'featureMatchSlot' as 'featureMatchSlot' | 'players',
@@ -24,11 +25,10 @@ const { deliver } = realtime;
 
 mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = screenContextOf({
 	screen: ref({ id: 1, name: 'Test' }),
 	eventId: mockEventId,
-	interactive: ref(false),
-}));
+});
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 const displayEvent = ref<Record<string, unknown> | null>(null);
 mockNuxtImport('useEventStore', () => () => reactive({ displayEvent }));
@@ -78,7 +78,7 @@ const scopes: EffectScope[] = [];
 
 function makeHeadToHeadModeData() {
 	const scope = effectScope();
-	const result = scope.run(() => useHeadToHeadModeData())!;
+	const result = scope.run(() => useHeadToHeadModeData(screenContext))!;
 	scopes.push(scope);
 	return result;
 }

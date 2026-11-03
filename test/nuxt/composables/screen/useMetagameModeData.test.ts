@@ -5,6 +5,7 @@ import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockEvent, createWireMockEvent } from '~~/test/helpers/fixtures';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
+import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
@@ -61,11 +62,11 @@ const mutableConfig = reactive({ ...defaultConfig });
 const mockInteractive = ref(false);
 
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
-mockNuxtImport('useScreenContext', () => () => ({
+const screenContext = screenContextOf({
 	screen: ref({ id: 1, name: 'Test Screen' }),
 	eventId: computed(() => 1),
 	interactive: mockInteractive,
-}));
+});
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
 // Server time is the Page Rotation's clock.
@@ -92,7 +93,7 @@ const scopes: EffectScope[] = [];
 
 function makeMetagameModeData() {
 	const scope = effectScope();
-	const result = scope.run(() => useMetagameModeData())!;
+	const result = scope.run(() => useMetagameModeData(screenContext))!;
 	scopes.push(scope);
 	return result;
 }

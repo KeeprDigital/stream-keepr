@@ -1,4 +1,5 @@
 import type { ScreenOutputPairingsResponse, ScreenOutputRoundMatch } from '~~/shared/types/screenOutputReads';
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import { formatGameScore, readMatchFromPlayer1Side } from '~~/shared/utils/matchFromPlayerSide';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
@@ -35,10 +36,10 @@ function pairingsDependencies(roundId: () => number | undefined): ScreenModeDepe
 	};
 }
 
-export function usePairingsModeData() {
-	const { eventId } = useScreenContext();
-	const config = useScreenModeConfig('pairings');
-	const outputReads = useScreenOutputReads();
+export function usePairingsModeData(context: ScreenContext) {
+	const { eventId } = context;
+	const config = useScreenModeConfig(context, 'pairings');
+	const outputReads = useScreenOutputReads(context);
 
 	const freshness = useScreenModeFreshness<HeldPairings>({
 		eventId,
@@ -60,7 +61,7 @@ export function usePairingsModeData() {
 		: 'Pairings'));
 	const isEmpty = computed(() => freshness.answered.value && (!config.value.roundId || rows.value.length === 0));
 
-	const { pageData, pageSize, rowCount } = usePaginatedScreenMode({ mode: 'pairings', config, rows });
+	const { pageData, pageSize, rowCount } = usePaginatedScreenMode(context, { mode: 'pairings', config, rows });
 
 	function formatResult(row: ScreenOutputRoundMatch) {
 		if (row.isBye)
@@ -87,6 +88,8 @@ export function usePairingsModeData() {
 		ready: freshness.answered,
 		config,
 		loading,
+		/** Whether its rows are a read's answer, or it selects nothing: false only while its first read is in flight. */
+		answered: freshness.answered,
 		error,
 		isEmpty,
 		headerText,

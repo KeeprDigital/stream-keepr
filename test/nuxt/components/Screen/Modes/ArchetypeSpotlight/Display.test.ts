@@ -19,6 +19,8 @@ const currentPage = ref(1);
 // composable's own test covers: the component only places what it is handed.
 const cannedRecords = new Map<number, string>();
 
+// The mode's data is faked, so nothing reads the Screen context it is handed.
+mockNuxtImport('useScreenContext', () => () => ({}));
 mockNuxtImport('useArchetypeSpotlightModeData', () => () => ({
 	config: computed(() => config.value),
 	error: computed(() => error.value),
