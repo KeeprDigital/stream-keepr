@@ -1,3 +1,4 @@
+import type { Game } from '../../types/enums';
 import { FEATURE_MATCH_TOKEN_CATALOGUE } from '../../featureMatchTokenCatalogue';
 
 /**
@@ -63,8 +64,12 @@ export type GraphicsContextKind = 'event' | 'feature-match';
  */
 export type GraphicsHostComposition = 'stack' | 'single';
 
-/** A host-owned visual treatment for one otherwise textual placeholder value. */
-export type GraphicsHostTokenPresentation = 'mtg-mana-colors';
+/**
+ * A host-owned visual treatment for one otherwise textual placeholder value:
+ * MTG mana pips for a colour string such as `WU`, One Piece colour pips for one
+ * such as `Red/Green`, or the One Piece card a Printing image URL shows.
+ */
+export type GraphicsHostTokenPresentation = 'mtg-mana-colors' | 'op-colors' | 'op-card-image';
 
 /** One host-supplied placeholder a Graphic Text Template may name. */
 export interface GraphicsHostToken {
@@ -72,13 +77,15 @@ export interface GraphicsHostToken {
 	key: string;
 	label: string;
 	/**
-	 * An optional application-owned presentation for this token's value.
+	 * An optional application-owned presentation for this token's value, per Card
+	 * Game: one token can hold a different game's value on each game's Events. A
+	 * Card Game it does not name paints the value as text.
 	 *
 	 * The value remains text for template substitution, measurement, and authoring;
 	 * the compositor only replaces that run's paint. This keeps a visual token from
 	 * turning every ordinary Graphic Input with the same value into special markup.
 	 */
-	presentation?: GraphicsHostTokenPresentation;
+	presentation?: Readonly<Partial<Record<Game, GraphicsHostTokenPresentation>>>;
 }
 
 /**

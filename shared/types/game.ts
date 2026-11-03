@@ -1,3 +1,4 @@
+import type { OpCardColor } from './card/op';
 import type { FeatureMatchDefaults } from './featureMatchDefaults';
 
 export interface CounterTypeConfig {
@@ -38,9 +39,22 @@ export interface MtgPlayerGameData {
 	deckColors?: string | null;
 }
 
+/**
+ * A Feature Match Slot side's Leader: an inline snapshot of one Leader card,
+ * taken from bandai-keepr when the operator picks it (ADR-0057). Its image is
+ * the card's standard Printing.
+ */
+export interface OpLeader {
+	number: string;
+	name: string;
+	/** One colour, or two for a dual-colour Leader. */
+	colors: OpCardColor[];
+	imageUrl: string;
+}
+
 export interface OpPlayerGameData {
 	type: 'op';
-	leader?: string | null;
+	leader?: OpLeader | null;
 }
 
 export type PlayerGameData = MtgPlayerGameData | OpPlayerGameData;

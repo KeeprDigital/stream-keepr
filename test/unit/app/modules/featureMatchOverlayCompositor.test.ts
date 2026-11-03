@@ -99,12 +99,14 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 		} as GraphicItemConfig;
 		const overlay = resolveFeatureMatchOverlayCompositorRenderModel({
 			output: 'overlay',
+			game: 'mtg',
 			layout: layout([text]),
 			tokenValues: { player1DeckColors: 'WU', player1Deck: 'Control' },
 			...CANVAS,
 		}).graphics[0]!.items[0]!;
 		const key = resolveFeatureMatchOverlayCompositorRenderModel({
 			output: 'key',
+			game: 'mtg',
 			layout: layout([text]),
 			tokenValues: { player1DeckColors: 'WU', player1Deck: 'Control' },
 			...CANVAS,
@@ -118,6 +120,43 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 		});
 		expect(overlay.textSegments?.[2]?.manaColors).toBeUndefined();
 		expect(key.textSegments?.[0]?.manaColors?.monochrome).toBe(true);
+	});
+
+	describe('a One Piece Event\'s Leader', () => {
+		const text = {
+			...item('text', 'leader'),
+			text: '{player1LeaderImage}{player1DeckColors} {player1Deck}',
+		} as GraphicItemConfig;
+		function segments(output: 'overlay' | 'key', leaderImage: string) {
+			return resolveFeatureMatchOverlayCompositorRenderModel({
+				output,
+				game: 'op',
+				layout: layout([text]),
+				tokenValues: { player1LeaderImage: leaderImage, player1DeckColors: 'Red/Green', player1Deck: 'Monkey.D.Luffy' },
+				...CANVAS,
+			}).graphics[0]!.items[0]!.textSegments!;
+		}
+		const image = 'https://cards-img.keepr.digital/OP01-003.png';
+
+		it.each([
+			{ output: 'overlay' as const, monochrome: false },
+			{ output: 'key' as const, monochrome: true },
+		])('paints its colours as pips and its card as an image on the $output Output', ({ output, monochrome }) => {
+			const [cardImage, colors, , name] = segments(output, image);
+
+			expect(cardImage!.cardImage).toEqual({ url: image, monochrome });
+			expect(colors!.opColors).toEqual({
+				colors: ['Red', 'Green'],
+				monochrome,
+			});
+			expect(colors!.manaColors).toBeUndefined();
+			expect(name!.text).toBe('Monkey.D.Luffy');
+		});
+
+		// Only a bandai-keepr Printing image is loaded on air.
+		it('paints any other URL as its text', () => {
+			expect(segments('overlay', 'https://example.com/x.png')[0]!.cardImage).toBeUndefined();
+		});
 	});
 
 	it('renders the context-gated Items from the supplied session state', () => {

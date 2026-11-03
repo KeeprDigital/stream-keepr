@@ -2,6 +2,7 @@ import type {
 	GraphicsHostToken,
 	GraphicsHostTokenPresentation,
 } from './modules/graphics/hostContract';
+import type { Game } from './types/enums';
 import type { GraphicInputDeclaration, TextGraphicInputDeclaration } from './types/graphics';
 import { MAX_GRAPHIC_TEXT_LENGTH } from './types/graphics';
 
@@ -34,8 +35,9 @@ import { MAX_GRAPHIC_TEXT_LENGTH } from './types/graphics';
  * - `{spacer}` was layout expressed inside a string. A Graphic Group's gap,
  *   padding, and justification express it structurally instead.
  * - `{deckColors}` rendered colour pips rather than its own value. Its replacement
- *   remains a text token with a colour string such as `WU`, but the catalogue marks
- *   that run for the compositor's application-owned MTG mana-colour presentation.
+ *   remains a text token with a colour string such as `WU`, or `Red/Green` for a
+ *   One Piece Leader, but the catalogue marks that run for the compositor's
+ *   application-owned colour presentation of the Event's Card Game.
  *   The mark belongs to the host token rather than the string: an ordinary Graphic
  *   Input whose value happens to be `WU` must remain ordinary text.
  * - Legacy rendering trimmed separators around a token that resolved empty, so
@@ -61,14 +63,24 @@ export type FeatureMatchToken = GraphicsHostToken;
 const PLAYER_TOKENS: readonly {
 	suffix: string;
 	label: string;
-	presentation?: GraphicsHostTokenPresentation;
+	presentation?: FeatureMatchToken['presentation'];
 }[] = [
 	{ suffix: 'Name', label: 'Name' },
 	{ suffix: 'Record', label: 'Record' },
+	// A One Piece deck is named by its Leader, which also sets its colours.
 	{ suffix: 'Deck', label: 'Deck' },
-	{ suffix: 'DeckColors', label: 'Deck Colours', presentation: 'mtg-mana-colors' },
+	{
+		suffix: 'DeckColors',
+		label: 'Deck Colours',
+		presentation: { mtg: 'mtg-mana-colors', op: 'op-colors' },
+	},
 	{ suffix: 'Pronouns', label: 'Pronouns' },
 	{ suffix: 'Lgs', label: 'Local Game Store' },
+	{
+		suffix: 'LeaderImage',
+		label: 'Leader Image',
+		presentation: { op: 'op-card-image' },
+	},
 ] as const;
 
 /** Tokens belonging to the Match, Round, or Event rather than to one player. */
@@ -129,15 +141,17 @@ export function featureMatchTokenDeclarations(): TextGraphicInputDeclaration[] {
 	}));
 }
 
-/** Visual treatments the Feature Match host asks the shared compositor to paint. */
-export function featureMatchTokenPresentations(): Readonly<Record<string, GraphicsHostTokenPresentation>> {
+/** Visual treatments the Feature Match host asks the shared compositor to paint on this Card Game's Events. */
+export function featureMatchTokenPresentations(game: Game): Readonly<Record<string, GraphicsHostTokenPresentation>> {
 	return Object.fromEntries(
-		FEATURE_MATCH_TOKEN_CATALOGUE.flatMap(token =>
-			token.presentation
+		FEATURE_MATCH_TOKEN_CATALOGUE.flatMap((token) => {
+			const presentation = token.presentation?.[game];
+			return presentation
 				? [
-						[token.key, token.presentation] as const,
+						[token.key, presentation] as const,
 					]
-				: []),
+				: [];
+		}),
 	);
 }
 

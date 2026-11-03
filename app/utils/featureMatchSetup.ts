@@ -1,6 +1,7 @@
 import type { ManualPlayerSlotData, PlayerSlotData, UpdateFeatureMatchInput } from '~~/shared/api';
 import type { PlayerGameData } from '~~/shared/types/game';
 import type { FeatureMatchFormData, PlayerData } from '~/types';
+import { getOpGameData } from '~~/shared/utils/gameData';
 
 type FeatureMatchSetupChanges = Partial<FeatureMatchFormData>;
 type NullableInteger = number | null | undefined;
@@ -103,7 +104,7 @@ function normalizeGameData(gameData: PlayerGameData | null | undefined): PlayerG
 
 	const normalized: PlayerGameData = {
 		type: 'op',
-		leader: normalizeOptionalString(gameData.leader) ?? null,
+		leader: getOpGameData(gameData).leader,
 	};
 	return hasMeaningfulValue(normalized)
 		? normalized

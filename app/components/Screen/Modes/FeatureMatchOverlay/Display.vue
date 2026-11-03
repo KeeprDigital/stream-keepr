@@ -214,6 +214,10 @@ const { itemAnimation } = useFeatureMatchOverlaySideboardRevealAnimation(
 
 const compositorRenderModel = computed(() => resolveFeatureMatchOverlayCompositorRenderModel({
 	output: resolvedOutput.value,
+	// The sample dataset is a Magic Match, whatever the Event being authored.
+	game: usesSampleDataset.value
+		? 'mtg'
+		: event.value?.game,
 	canvasWidth: canvasWidth.value,
 	canvasHeight: canvasHeight.value,
 	layout: config.value.layout,

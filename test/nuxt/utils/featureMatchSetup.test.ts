@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ZORO } from '~~/test/helpers/opCards';
 import { DEFAULT_PLAYER_DATA } from '~/types';
 import { buildFeatureMatchSetupUpdate, normalizePlayerSlotData } from '~/utils/featureMatchSetup';
 
@@ -16,6 +17,20 @@ describe('featureMatchSetup payload helpers', () => {
 			...DEFAULT_PLAYER_DATA,
 			gameData: { type: 'mtg', deckName: '', deckColors: null },
 		})).toBeNull();
+	});
+
+	it.each([
+		{
+			leader: ZORO,
+			gameData: { type: 'op', leader: ZORO },
+		},
+		{ leader: null, gameData: null },
+	])('saves a side\'s Leader $leader whole', ({ leader, gameData }) => {
+		expect(normalizePlayerSlotData({
+			...DEFAULT_PLAYER_DATA,
+			name: 'Ana',
+			gameData: { type: 'op', leader },
+		})?.gameData).toEqual(gameData);
 	});
 
 	it('turns blank numeric inputs into null', () => {

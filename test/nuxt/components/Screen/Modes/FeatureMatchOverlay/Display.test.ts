@@ -8,6 +8,7 @@ import { createFeatureMatchLayoutComposition, FEATURE_MATCH_LAYOUT_COMPOSITION_I
 import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES } from '~~/shared/featureMatchSampleDataset';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { LUFFY } from '~~/test/helpers/opCards';
 import Display from '~/components/Screen/Modes/FeatureMatchOverlay/Display.vue';
 import { GRAPHICS_PREVIEW_READY_MESSAGE } from '~/modules/graphics/previewMessages';
 
@@ -47,10 +48,11 @@ afterEach(() => {
 const mockUsesSampleDataset = ref(false);
 const mockMatchState = ref<Record<string, unknown> | null>(null);
 const mockEvent = ref<Record<string, unknown> | null>(null);
+const mockMatch = ref<Record<string, unknown> | null>(null);
 
 mockNuxtImport('useFeatureMatchOverlayModeData', () => () => ({
 	config: computed(() => mockConfig.value),
-	match: ref(null),
+	match: mockMatch,
 	matchState: mockMatchState,
 	sourceMatch: ref(null),
 	round: ref(null),
@@ -365,6 +367,45 @@ describe('featureMatchOverlayDisplay', () => {
 		});
 	});
 
+	// A One Piece deck is named by its Leader, which also sets its colours (ADR-0057).
+	it('shows a One Piece side\'s Leader where a Magic deck name and its colours would be', async () => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		config.layout.composition = {
+			...createFeatureMatchLayoutComposition(),
+			items: [
+				{
+					...getGraphicItemDefinition('text').createDefault({
+						id: 'leader',
+						label: 'Leader',
+						canvasWidth: 1920,
+						canvasHeight: 1080,
+					}),
+					text: '{player1LeaderImage}{player1DeckColors} {player1Deck}',
+				} as never,
+			],
+		};
+		mockConfig.value = config;
+		mockEvent.value = { name: 'One Piece Regional', game: 'op' };
+		mockMatch.value = {
+			id: 1,
+			player1Data: {
+				name: 'Ana',
+				gameData: {
+					type: 'op',
+					leader: LUFFY,
+				},
+			},
+			player2Data: null,
+			activeSession: null,
+		};
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.get('[data-op-card-image]').attributes('src')).toBe(LUFFY.imageUrl);
+		expect(wrapper.get('[data-op-colors]').attributes('aria-label')).toBe('Red/Green');
+		expect(wrapper.get('[data-graphic-item-kind="text"]').text()).toContain('Monkey.D.Luffy');
+	});
+
 	// ADR-0051: the overlay composes in the Event Canvas.
 	it('draws the Frame across the Event Canvas', async () => {
 		mockEventCanvas.value = { width: 1280, height: 720 };
@@ -596,6 +637,7 @@ describe('featureMatchOverlayDisplay', () => {
 		mockIsPreview.value = false;
 		mockMatchState.value = null;
 		mockEvent.value = null;
+		mockMatch.value = null;
 		mockSideboards.value = { player1: null, player2: null };
 	});
 

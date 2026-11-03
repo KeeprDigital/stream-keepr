@@ -6,6 +6,7 @@ import {
 	updateFeatureMatchSchema,
 } from '~~/server/schemas/api/featureMatch';
 import { FEATURE_MATCH_BATCHABLE_COMMAND_TYPES } from '~~/shared/types/featureMatchSession';
+import { ZORO } from '~~/test/helpers/opCards';
 
 describe('createFeatureMatchSchema', () => {
 	it('accepts a manual Slot but refuses integration-owned provenance', () => {
@@ -197,5 +198,31 @@ describe('updateFeatureMatchSchema', () => {
 
 		expect(result.player1Data).toBeNull();
 		expect(result.player2Data).toBeNull();
+	});
+});
+
+describe('a Slot side\'s Leader', () => {
+	const sideWith = (value: unknown) => updateFeatureMatchSchema.safeParse({
+		player1Data: {
+			name: 'Ana',
+			gameData: { type: 'op', leader: value },
+		},
+	});
+
+	// The overlay loads the image on air, so it must be a bandai-keepr Printing image.
+	it.each([
+		{ imageUrl: ZORO.imageUrl, accepted: true },
+		{ imageUrl: 'https://example.com/OP01-001.png', accepted: false },
+	])('takes $imageUrl as its image: $accepted', ({ imageUrl, accepted }) => {
+		expect(sideWith({ ...ZORO, imageUrl }).success).toBe(accepted);
+	});
+
+	// Free text typed before the Leader picker names no card.
+	it.each([
+		{ leader: ZORO, held: ZORO },
+		{ leader: 'Zoro', held: null },
+	])('holds a side\'s Leader $leader as $held', ({ leader, held }) => {
+		const result = sideWith(leader);
+		expect(result.success && result.data.player1Data?.gameData).toEqual({ type: 'op', leader: held });
 	});
 });

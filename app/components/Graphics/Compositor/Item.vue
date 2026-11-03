@@ -322,6 +322,25 @@ watch(
 					data-mana-colors
 					aria-hidden="true"
 				/>
+				<OpColorDisplay
+					v-else-if="segment.opColors"
+					:colors="segment.opColors.colors"
+					:monochrome="segment.opColors.monochrome"
+					size="lg"
+				/>
+				<span
+					v-else-if="segment.cardImage?.monochrome"
+					class="graphics-compositor-item__card-image graphics-compositor-item__card-image--key"
+					data-op-card-image-key
+					aria-hidden="true"
+				/>
+				<img
+					v-else-if="segment.cardImage"
+					class="graphics-compositor-item__card-image"
+					:src="segment.cardImage.url"
+					alt="Leader"
+					data-op-card-image
+				>
 				<template v-else>{{ segment.text }}</template>
 			</span>
 		</p>
@@ -537,6 +556,20 @@ watch(
 	align-items: center;
 	gap: 0.1em;
 	vertical-align: middle;
+}
+
+/* A card one line tall, so its Text Graphic Item's font size sizes it. */
+.graphics-compositor-item__card-image {
+	display: inline-block;
+	height: 1em;
+	aspect-ratio: 600 / 838;
+	vertical-align: middle;
+	border-radius: 0.04em;
+	object-fit: cover;
+}
+
+.graphics-compositor-item__card-image--key {
+	background: #fff;
 }
 
 .graphics-compositor-item__mana-color-key-symbol {

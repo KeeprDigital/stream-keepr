@@ -1,5 +1,5 @@
 import type { Game } from '../types/enums';
-import type { MtgPlayerGameData, OpPlayerGameData, PlayerGameData } from '../types/game';
+import type { MtgPlayerGameData, OpLeader, OpPlayerGameData, PlayerGameData } from '../types/game';
 
 /**
  * Checks if the data has the discriminator `type` field.
@@ -27,7 +27,21 @@ export function getOpGameData(
 		return { type: 'op', leader: null };
 	if (hasDiscriminator(gameData) && gameData.type !== 'op')
 		return { type: 'op', leader: null };
-	return { ...gameData, type: 'op' };
+	return {
+		...gameData,
+		type: 'op',
+		leader: storedOpLeader((gameData as OpPlayerGameData).leader),
+	};
+}
+
+/**
+ * A stored Leader, or `null`. Free text typed before the Leader picker existed
+ * names no card, so it reads as no Leader rather than a name-only one.
+ */
+export function storedOpLeader(leader: unknown): OpLeader | null {
+	return typeof leader === 'object' && leader !== null
+		? leader as OpLeader
+		: null;
 }
 
 /** Get the display label for a player's game-specific identity (deck name or leader) */
@@ -43,7 +57,7 @@ export function getPlayerIdentityValue(
 			case 'mtg':
 				return (gameData as MtgPlayerGameData).deckName ?? null;
 			case 'op':
-				return (gameData as OpPlayerGameData).leader ?? null;
+				return getOpGameData(gameData).leader?.name ?? null;
 			default:
 				return null;
 		}
@@ -53,7 +67,7 @@ export function getPlayerIdentityValue(
 		case 'mtg':
 			return (gameData as MtgPlayerGameData).deckName ?? null;
 		case 'op':
-			return (gameData as OpPlayerGameData).leader ?? null;
+			return getOpGameData(gameData).leader?.name ?? null;
 		default:
 			return null;
 	}

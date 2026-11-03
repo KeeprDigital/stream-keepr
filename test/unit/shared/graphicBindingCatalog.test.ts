@@ -9,6 +9,7 @@ import {
 	isGraphicBindingFieldCompatible,
 	resolveGraphicBindingField,
 } from '~~/shared/modules/graphics';
+import { LUFFY } from '~~/test/helpers/opCards';
 
 // The binding field catalog as an operator meets it: fields per source kind and game,
 // their types, and what each resolves to.
@@ -220,6 +221,27 @@ describe('graphic Input Binding field catalog', () => {
 			.toBeUndefined();
 	});
 
+	// `player.leader` predates the Leader picker; a stored binding id is never renamed.
+	it.each([
+		{ fieldId: 'player.leader', value: 'Monkey.D.Luffy' },
+		{ fieldId: 'player.leaderColors', value: 'Red/Green' },
+		{ fieldId: 'player.leaderImage', value: 'https://cards-img.keepr.digital/OP01-003.png' },
+	])('resolves a side\'s Leader through $fieldId', ({ fieldId, value }) => {
+		const player = {
+			name: 'Ava',
+			gameData: {
+				type: 'op' as const,
+				leader: LUFFY,
+			},
+		};
+		expect(resolveGraphicBindingField('player', fieldId, player, dataSet())).toBe(value);
+		expect(resolveGraphicBindingField('player', fieldId, {
+			name: 'Ava',
+			gameData: { type: 'op', leader: null },
+		}, dataSet()))
+			.toBeUndefined();
+	});
+
 	it('reads a Player\'s Archetype name through the Event\'s Archetypes', () => {
 		const data = dataSet({
 			archetypes: {
@@ -256,7 +278,7 @@ describe('the fields one Graphic Input may bind to', () => {
 		expect(mtg.common.every(field => field.game === undefined)).toBe(true);
 		expect(mtg.gameSpecific.map(field => field.id)).toEqual(['player.deckName', 'player.deckColors']);
 		expect(bindableGraphicBindingFields('player', 'text', 'op').gameSpecific.map(field => field.id))
-			.toEqual(['player.leader']);
+			.toEqual(['player.leader', 'player.leaderColors', 'player.leaderImage']);
 	});
 
 	it('offers nothing at all where the kind has no field of that type', () => {
