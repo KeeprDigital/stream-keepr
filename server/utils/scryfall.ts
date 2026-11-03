@@ -197,6 +197,7 @@ async function fetchScryfallJson(
 }
 
 const COLLECTION_BATCH_SIZE = 75; // Scryfall limit per request
+const NAMED_LOOKUP_CONCURRENCY = 4;
 
 interface CardIdentifier {
 	name: string;
@@ -394,10 +395,73 @@ export interface ScryfallLookupResult {
 	errors: string[];
 }
 
+/** One name (and optional set) a caller asked for, with the identifier sent for it. */
+interface CardRequest {
+	name: string;
+	setCode: string | null;
+	identifier: CardIdentifier;
+}
+
+function identifierKey(identifier: CardIdentifier): string {
+	return createCardKey(identifier.name, identifier.set ?? null);
+}
+
+function providerFailureReason(error: unknown): { reason: string; status: number | null } {
+	if (!(error instanceof ScryfallRequestError))
+		return { reason: 'provider returned an invalid response', status: null };
+	return {
+		reason: `provider request failed${error.status === null
+			? ''
+			: ` (HTTP ${error.status})`}`,
+		status: error.status,
+	};
+}
+
+/**
+ * Looks each request up alone with `named?exact`, where Scryfall prefers the
+ * card of exactly that name: "Sign in Blood" over "Scheming Silvertongue // Sign in Blood".
+ */
+async function lookUpNamesAlone(
+	requests: readonly CardRequest[],
+	results: Map<string, ScryfallCardData>,
+	errors: string[],
+	stopOnError: boolean,
+): Promise<void> {
+	for (let index = 0; index < requests.length; index += NAMED_LOOKUP_CONCURRENCY) {
+		const chunk = requests.slice(index, index + NAMED_LOOKUP_CONCURRENCY);
+		const settled = await Promise.allSettled(chunk.map(request =>
+			fetchScryfallCardByName({ exact: request.name, setCode: request.setCode })));
+		let failed = false;
+		for (const [chunkIndex, outcome] of settled.entries()) {
+			const request = chunk[chunkIndex]!;
+			if (outcome.status === 'fulfilled') {
+				results.set(createCardKey(request.name, request.setCode), outcome.value);
+				continue;
+			}
+			if (isScryfallNotFoundError(outcome.reason))
+				continue;
+			const { reason, status } = providerFailureReason(outcome.reason);
+			console.error(JSON.stringify({
+				service: 'scryfall',
+				event: 'named_lookup_failed',
+				status,
+			}));
+			errors.push(`Scryfall named lookup failed: ${reason}`);
+			failed = true;
+		}
+		if (failed && stopOnError)
+			return;
+	}
+}
+
 /**
  * Batch lookup Scryfall data for a list of cards.
  * Returns both the results map AND any errors encountered — callers decide
  * whether errors are fatal or just warnings. Never swallows failures silently.
+ *
+ * A collection answer counts only for its card's full name: the endpoint can
+ * answer a name with an earlier identifier's card that carries it as a face.
+ * A name answered with a card of another name is looked up alone instead.
  */
 export async function batchLookupScryfallIds(
 	cards: Array<{ name: string; setCode: string | null }>,
@@ -411,7 +475,7 @@ export async function batchLookupScryfallIds(
 	}
 
 	// Deduplicate cards by name+set combination
-	const uniqueCards = new Map<string, CardIdentifier>();
+	const requests = new Map<string, CardRequest>();
 	for (const card of cards) {
 		const trimmedName = card.name.trim();
 		if (!trimmedName) {
@@ -419,7 +483,7 @@ export async function batchLookupScryfallIds(
 		}
 
 		const key = createCardKey(trimmedName, card.setCode);
-		if (!uniqueCards.has(key)) {
+		if (!requests.has(key)) {
 			// Scryfall collection endpoint rejects "Front // Back" combined names —
 			// strip to the front face so transform, modal_dfc, and split cards are found.
 			const nameForScryfall = trimmedName.includes(' // ')
@@ -429,13 +493,18 @@ export async function batchLookupScryfallIds(
 			if (card.setCode) {
 				identifier.set = card.setCode;
 			}
-			uniqueCards.set(key, identifier);
+			requests.set(key, { name: trimmedName, setCode: card.setCode, identifier });
 		}
 	}
 
+	const uniqueIdentifiers = new Map<string, CardIdentifier>();
+	for (const request of requests.values())
+		uniqueIdentifiers.set(identifierKey(request.identifier), request.identifier);
 	const identifiers = [
-		...uniqueCards.values(),
+		...uniqueIdentifiers.values(),
 	];
+	const answeredIdentifiers = new Set<string>();
+	let providerFailed = false;
 	const totalBatches = Math.ceil(identifiers.length / COLLECTION_BATCH_SIZE);
 
 	// Process in batches of 75 (Scryfall limit)
@@ -446,10 +515,7 @@ export async function batchLookupScryfallIds(
 		try {
 			const response = await fetchCardCollection(batch);
 
-			// Map results back to card keys
 			for (const card of response.data) {
-				// Color identity — join WUBRG codes into a single string.
-				// Use 'in' guard because ScryfallCard.Any is a wide union.
 				const cardData = mapScryfallCardData(card);
 
 				const key = createCardKey(card.name, card.set);
@@ -460,23 +526,12 @@ export async function batchLookupScryfallIds(
 				if (!results.has(nameOnlyKey)) {
 					results.set(nameOnlyKey, cardData);
 				}
+			}
 
-				// For double-faced cards (MDFCs, transform, etc.), Scryfall returns
-				// the full name "Front // Back" but Melee may provide only a single
-				// face name. Store each face name as an additional lookup key so the
-				// card can be resolved regardless of which name format was provided.
-				if (card.name.includes(' // ')) {
-					for (const faceName of card.name.split(' // ')) {
-						const faceKey = createCardKey(faceName, card.set);
-						if (!results.has(faceKey)) {
-							results.set(faceKey, cardData);
-						}
-						const faceNameOnlyKey = createCardKey(faceName, null);
-						if (!results.has(faceNameOnlyKey)) {
-							results.set(faceNameOnlyKey, cardData);
-						}
-					}
-				}
+			const notFoundKeys = new Set(response.not_found.map(identifierKey));
+			for (const identifier of batch) {
+				if (!notFoundKeys.has(identifierKey(identifier)))
+					answeredIdentifiers.add(identifierKey(identifier));
 			}
 
 			// Warn about cards Scryfall could not find (bad name, wrong set, etc.)
@@ -501,14 +556,7 @@ export async function batchLookupScryfallIds(
 			}
 		}
 		catch (error) {
-			const status = error instanceof ScryfallRequestError
-				? error.status
-				: null;
-			const reason = error instanceof ScryfallRequestError
-				? `provider request failed${status === null
-					? ''
-					: ` (HTTP ${status})`}`
-				: 'provider returned an invalid response';
+			const { reason, status } = providerFailureReason(error);
 			const errorMsg = `Scryfall batch ${batchIndex}/${totalBatches} failed: ${reason}`;
 			console.error(JSON.stringify({
 				service: 'scryfall',
@@ -518,6 +566,7 @@ export async function batchLookupScryfallIds(
 				status,
 			}));
 			errors.push(errorMsg);
+			providerFailed = true;
 			// Authoritative imports abort on the first provider failure so an outage
 			// cannot fan out into hundreds of doomed retries. Best-effort callers may
 			// still opt into partial results by leaving stopOnError disabled.
@@ -525,6 +574,16 @@ export async function batchLookupScryfallIds(
 				break;
 		}
 	}
+
+	if (providerFailed && options.stopOnError)
+		return { results, errors };
+
+	const answeredWithAnotherName = [
+		...requests.values(),
+	].filter(request =>
+		answeredIdentifiers.has(identifierKey(request.identifier))
+		&& !results.has(createCardKey(request.name, request.setCode)));
+	await lookUpNamesAlone(answeredWithAnotherName, results, errors, options.stopOnError ?? false);
 
 	return { results, errors };
 }
