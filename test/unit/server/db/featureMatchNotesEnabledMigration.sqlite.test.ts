@@ -10,7 +10,7 @@ describe('the Feature Match Notes toggle migration', () => {
 	});
 
 	it('keeps Feature Match Notes on for an Event that existed before it', async () => {
-		harness = await createSqliteD1Harness({ throughMigration: '0001' });
+		harness = await createSqliteD1Harness({ throughMigration: '0000' });
 		await harness.client.execute(`
 			INSERT INTO events (id, name, game, feature_match_orientation)
 			VALUES (1, 'Existing Event', 'mtg', 'horizontal')

@@ -116,8 +116,13 @@ function editBorderGlow(edit: BorderGlowEdit) {
 			glow-test-id="theme-surface-glow"
 			@edit="editBorderGlow"
 		>
-			<template #color="{ value, label: colorLabel, update }">
-				<ThemeColorSourceField :value="value ?? DEFAULT_COLOR" :label="colorLabel" @update="update" />
+			<template #color="{ target, value, label: colorLabel, update }">
+				<ThemeColorSourceField
+					:value="value ?? DEFAULT_COLOR"
+					:label="colorLabel"
+					:alpha="target === 'border'"
+					@update="update"
+				/>
 			</template>
 		</GraphicsBorderGlowFields>
 	</div>
