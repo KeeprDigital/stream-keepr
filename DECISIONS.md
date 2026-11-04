@@ -1387,7 +1387,7 @@ Accepted · 2026-10-26
 
 ### Decision
 
-**A Feature Match Slot setup save that edits a seated Player's name, pronouns or LGS writes those fields to the Player.** `featureMatchSlotWriteModule().updateSetup` compares each side's submitted `name`, `pronouns` and `lgs` with the Player seated there (the side's `playerNId` in the save, else the Slot's) and sends the differences through `playerUpdateModule().updatePlayer`. An omitted field was not edited and is left alone. A cleared name stays on the Slot only, because a Player always has one. A side with no Player seated has nothing to write.
+**A Feature Match Slot setup save that edits a seated Player's name, pronouns or LGS writes those fields to the Player.** `featureMatchSlotWriteModule().updateSetup` compares each side's submitted `name`, `pronouns` and `lgs` with the Player seated there (the side's `playerNId` in the save, else the Slot's) and sends the differences through `playerUpdateModule().updatePlayer`. An omitted field was not edited and is left alone. A cleared name is a Player write only for a Player with a Nickname to fall back to (ADR-0074); otherwise it stays on the Slot only, because a Player always shows by something. A side with no Player seated has nothing to write.
 
 **Records, deck and archetype stay Slot snapshot fields.** A setup edit to wins, losses, draws, position, points, deck or archetype is held by the Slot only, and Melee Sync's standings reach it through Reverse Sync as before.
 
@@ -1401,7 +1401,7 @@ Reverse Sync rebuilds a Slot's player snapshot from the Player after every Playe
 
 - The write-through is an ordinary manual Player write, so a name or pronouns it changes becomes a Manually Edited Field and holds through Melee Sync (ADR-0046). LGS is never imported and holds anyway.
 - A setup save that fails on the Slot write (a `409`, or the Slot deleted) has already written the Player. The Player's edit stands and the operator retries the Slot.
-- `test/unit/server/services/featureMatchSlotSetupSurvivesReverseSync.sqlite.test.ts` holds the round-sync case against SQLite; `test/unit/server/modules/featureMatchSlotWrite.test.ts` holds the order and the missing origin.
+- `test/unit/server/services/featureMatchSlotSetupSurvivesReverseSync.sqlite.test.ts` holds the round-sync and One Piece Nickname cases against SQLite; `test/unit/server/modules/eventDataWrites.test.ts` holds the order and the missing origin.
 
 ### Rejected alternatives
 

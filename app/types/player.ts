@@ -24,6 +24,7 @@ export type FeatureMatchFormData = Omit<FeatureMatchData, 'player1Data' | 'playe
 // Default player data for empty match forms
 export const DEFAULT_PLAYER_DATA: PlayerData = {
 	name: '',
+	nickname: undefined,
 	pronouns: undefined,
 	externalId: undefined,
 	externalSource: undefined,

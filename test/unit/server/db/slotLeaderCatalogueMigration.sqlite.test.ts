@@ -27,7 +27,7 @@ describe('the Slot-side Leader catalogue migration', () => {
 	});
 
 	async function stageSides() {
-		harness = await createSqliteD1Harness({ throughMigration: '0002' });
+		harness = await createSqliteD1Harness({ throughMigration: '0003' });
 		await harness.client.execute(`
 			INSERT INTO events (id, name, game, feature_match_orientation) VALUES (1, 'OP Regional', 'op', 'horizontal')
 		`);

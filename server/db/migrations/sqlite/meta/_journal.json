@@ -26,8 +26,15 @@
     {
       "idx": 3,
       "version": "6",
-      "when": 1793793231360,
-      "tag": "0003_slot_leader_catalogue",
+      "when": 1793793321860,
+      "tag": "0003_player_nickname",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793794199421,
+      "tag": "0004_slot_leader_catalogue",
       "breakpoints": true
     }
   ]

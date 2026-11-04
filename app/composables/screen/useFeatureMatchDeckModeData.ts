@@ -6,6 +6,7 @@ import type { FeatureMatch } from '~/types';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getOpGameData } from '~~/shared/utils/gameData';
 import { opDeckLayout } from '~~/shared/utils/opDeckLayout';
+import { playerDisplayName } from '~~/shared/utils/playerName';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 import { preloadImages } from '~/utils/preloadImage';
@@ -105,7 +106,7 @@ export function useFeatureMatchDeckModeData(context: ScreenContext) {
 		const { data } = featureMatchSidePlayer(slotRead.slot.value, shownSide);
 		const gameData = getOpGameData(data?.gameData);
 		return {
-			playerName: data?.name ?? '',
+			playerName: playerDisplayName(data),
 			leader: gameData.leader ?? null,
 			deckListId: gameData.featureMatchDeckList?.id ?? null,
 		};

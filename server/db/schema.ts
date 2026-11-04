@@ -210,7 +210,10 @@ export const players = sqliteTable('players', {
 		.references(() => events.id, { onDelete: 'cascade' })
 		.notNull(),
 
+	// The operator's name. Empty on a One Piece Card Game Player shown by their Nickname (ADR-0074).
 	name: text('name').notNull(),
+	// A One Piece Card Game Player's Bandai TCG+ handle, owned by the TCG+ Import (ADR-0074).
+	nickname: text('nickname'),
 	pronouns: text('pronouns'),
 
 	externalId: text('external_id'),

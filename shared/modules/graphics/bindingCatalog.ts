@@ -12,6 +12,7 @@ import { formatOpColors } from '../../utils/card/op';
 import { formatOrdinal } from '../../utils/formatters';
 import { getMtgGameData, getOpGameData } from '../../utils/gameData';
 import { formatGameScore, readMatchFromPlayer1Side } from '../../utils/matchFromPlayerSide';
+import { playerDisplayName } from '../../utils/playerName';
 
 /**
  * The Graphic Input Binding field catalog.
@@ -84,6 +85,7 @@ export interface GraphicBindingEvent {
  */
 export interface GraphicBindingPlayer {
 	name?: string | null;
+	nickname?: string | null;
 	pronouns?: string | null;
 	wins?: number | null;
 	losses?: number | null;
@@ -326,7 +328,7 @@ const PLAYER_FIELDS: readonly GraphicBindingField<GraphicBindingPlayer>[] = [
 		label: 'Name',
 		type: 'text',
 		shape: 'atomic',
-		resolve: player => textOf(player.name),
+		resolve: player => textOf(playerDisplayName(player)),
 	},
 	{
 		id: 'player.pronouns',

@@ -68,6 +68,7 @@ function hasMeaningfulValue(value: unknown): boolean {
 const createFeatureMatchPlayerDataSchema = z
 	.object({
 		name: z.string().min(1).max(200),
+		nickname: nullableStringSchema(100),
 		pronouns: nullableStringSchema(50),
 		wins: nullableNonnegativeIntegerSchema,
 		losses: nullableNonnegativeIntegerSchema,
@@ -89,6 +90,7 @@ const updateFeatureMatchPlayerDataSchema = z.preprocess(
 	z
 		.object({
 			name: nullableStringSchema(200),
+			nickname: nullableStringSchema(100),
 			pronouns: nullableStringSchema(50),
 			wins: nullableNonnegativeIntegerSchema,
 			losses: nullableNonnegativeIntegerSchema,

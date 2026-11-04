@@ -4,6 +4,7 @@ import type { MtgPlayerGameData, OpPlayerGameData } from '~~/shared/types/game';
 import type { InputMenuItem } from '#ui/types';
 import type { Player, PlayerData } from '~/types';
 import { getMtgGameData, getOpGameData } from '~~/shared/utils/gameData';
+import { playerDisplayName, playerMatchesSearch } from '~~/shared/utils/playerName';
 
 const props = defineProps<{
 	displayMode: PlayerDisplayMode;
@@ -34,13 +35,18 @@ const player = defineModel<PlayerData>({
 
 const hasPlayers = computed(() => (props.players?.length ?? 0) > 0);
 
+// The picker finds a Player by name, Nickname or Bandai member number (ADR-0074).
+const searchTerm = ref('');
+
 const playerItems = computed<(InputMenuItem & { id: number })[]>(() => {
 	if (!props.players?.length)
 		return [];
-	return props.players.map(p => ({
-		label: p.name,
-		id: p.id,
-	}));
+	return props.players
+		.filter(p => playerMatchesSearch(p, searchTerm.value))
+		.map(p => ({
+			label: playerDisplayName(p),
+			id: p.id,
+		}));
 });
 
 const pickerValue = computed(() => props.playerId ?? undefined);
@@ -53,6 +59,7 @@ function onPlayerSelected(value: number | null) {
 		if (selected) {
 			player.value = {
 				name: selected.name,
+				nickname: selected.nickname ?? undefined,
 				pronouns: selected.pronouns ?? undefined,
 				externalId: selected.externalId ?? undefined,
 				externalSource: selected.externalSource ?? undefined,
@@ -62,7 +69,11 @@ function onPlayerSelected(value: number | null) {
 				position: selected.position ?? undefined,
 				points: selected.points ?? undefined,
 				lgs: selected.lgs ?? undefined,
-				gameData: selected.gameData ?? undefined,
+				// A One Piece side's Leader and Feature Match Deck List stay its own
+				// until the Player's Deck List reaches the side (#1006).
+				gameData: props.game === 'op'
+					? player.value.gameData
+					: selected.gameData ?? undefined,
 			};
 		}
 	}
@@ -95,8 +106,10 @@ const opGameData = computed({
 		<!-- Player Picker -->
 		<UFormField v-if="hasPlayers" label="Player" name="player">
 			<UInputMenu
+				v-model:search-term="searchTerm"
 				:model-value="pickerValue"
 				:items="playerItems"
+				ignore-filter
 				value-key="id"
 				icon="i-lucide-user-search"
 				placeholder="Link player..."
@@ -111,6 +124,7 @@ const opGameData = computed({
 			<UFormField label="Name" name="name" :class="props.pronounsEnabled ? 'flex-2' : 'flex-1'">
 				<UInput
 					v-model="player.name"
+					:placeholder="player.nickname"
 					class="w-full"
 				/>
 			</UFormField>

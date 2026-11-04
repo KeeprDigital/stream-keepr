@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Player } from '~/types';
 import { VueDraggable } from 'vue-draggable-plus';
+import { playerDisplayName, playerMatchesSearch } from '~~/shared/utils/playerName';
 
 const props = defineProps<{
 	listId: number;
@@ -59,19 +60,16 @@ const availablePlayers = computed(() => {
 	let available = props.allPlayers.filter(p => !mSet.has(p.id));
 
 	if (availableSearch.value) {
-		const q = availableSearch.value.toLowerCase();
-		available = available.filter(p => p.name.toLowerCase().includes(q));
+		available = available.filter(p => playerMatchesSearch(p, availableSearch.value));
 	}
 
 	return available;
 });
 
-const memberSearchLower = computed(() => memberSearch.value.toLowerCase());
-
 function isMemberVisible(player: Player): boolean {
 	if (!memberSearch.value)
 		return true;
-	return player.name.toLowerCase().includes(memberSearchLower.value);
+	return playerMatchesSearch(player, memberSearch.value);
 }
 
 const visibleMemberCount = computed(() => {
@@ -91,9 +89,9 @@ function applySortMode(mode: SortOption) {
 	sorted.sort((a, b) => {
 		switch (mode) {
 			case 'name-asc':
-				return a.name.localeCompare(b.name);
+				return playerDisplayName(a).localeCompare(playerDisplayName(b));
 			case 'name-desc':
-				return b.name.localeCompare(a.name);
+				return playerDisplayName(b).localeCompare(playerDisplayName(a));
 			case 'position-asc': {
 				const posA = a.position ?? Number.MAX_SAFE_INTEGER;
 				const posB = b.position ?? Number.MAX_SAFE_INTEGER;
@@ -313,18 +311,18 @@ defineExpose({ hasChanges, save, reset, saving });
 						<UCheckbox
 							:model-value="selectedAvailable.has(player.id)"
 							size="xs"
-							:aria-label="`Select ${player.name}`"
+							:aria-label="`Select ${playerDisplayName(player)}`"
 							@click.stop
 							@update:model-value="toggleAvailableSelection(player.id)"
 						/>
-						<span class="text-sm flex-1 truncate">{{ player.name }}</span>
+						<span class="text-sm flex-1 truncate">{{ playerDisplayName(player) }}</span>
 						<UButton
 							variant="ghost"
 							color="neutral"
 							size="xs"
 							icon="i-lucide-plus"
 							class="shrink-0"
-							:aria-label="`Add ${player.name} to list`"
+							:aria-label="`Add ${playerDisplayName(player)} to list`"
 							@click.stop="addPlayer(player.id)"
 						/>
 					</div>
@@ -408,11 +406,11 @@ defineExpose({ hasChanges, save, reset, saving });
 						<UCheckbox
 							:model-value="selectedMembers.has(player.id)"
 							size="xs"
-							:aria-label="`Select ${player.name}`"
+							:aria-label="`Select ${playerDisplayName(player)}`"
 							@update:model-value="toggleMemberSelection(player.id)"
 						/>
 						<button type="button" class="flex-1 truncate text-left text-sm" @click="toggleMemberSelection(player.id)">
-							{{ player.name }}
+							{{ playerDisplayName(player) }}
 						</button>
 						<span v-if="player.position" class="text-xs text-muted font-mono">#{{ player.position }}</span>
 						<UButton
@@ -421,7 +419,7 @@ defineExpose({ hasChanges, save, reset, saving });
 							size="xs"
 							icon="i-lucide-x"
 							class="shrink-0"
-							:aria-label="`Remove ${player.name} from list`"
+							:aria-label="`Remove ${playerDisplayName(player)} from list`"
 							@click="removePlayer(player.id)"
 						/>
 					</div>

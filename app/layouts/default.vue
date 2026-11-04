@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Game } from '~~/shared/types/enums';
 import type { NavigationMenuItem } from '#ui/types';
-import { EVERY_CARD_GAME, MTG_ONLY, offeredToCardGame } from '~~/shared/config/games';
+import { EVENT_PAGE_CARD_GAMES, EVERY_CARD_GAME, offeredToCardGame } from '~~/shared/config/games';
 import { isLocalDeveloperUserId } from '~~/shared/utils/localDeveloperAuth';
 import { LOGIN_PATH } from '~/modules/auth/pageGate';
 import { useAuthSession } from '~/modules/auth/session';
@@ -195,13 +195,13 @@ const navGroups = computed<NavGroup[]>(() => {
 					label: 'Players',
 					icon: 'i-lucide-users',
 					to: `/event/${id}/players`,
-					cardGames: MTG_ONLY,
+					cardGames: EVENT_PAGE_CARD_GAMES.players,
 				},
 				{
 					label: 'Matches',
 					icon: 'i-lucide-swords',
 					to: `/event/${id}/matches`,
-					cardGames: MTG_ONLY,
+					cardGames: EVENT_PAGE_CARD_GAMES.matches,
 				},
 				...(meleeEnabled.value
 					? [
@@ -209,7 +209,7 @@ const navGroups = computed<NavGroup[]>(() => {
 								label: 'Metagame',
 								icon: 'i-lucide-pie-chart',
 								to: `/event/${id}/metagame`,
-								cardGames: MTG_ONLY,
+								cardGames: EVENT_PAGE_CARD_GAMES.metagame,
 							},
 						]
 					: []),
@@ -219,7 +219,7 @@ const navGroups = computed<NavGroup[]>(() => {
 								label: 'Archetype Review',
 								icon: 'i-lucide-tags',
 								to: `/event/${id}/archetype-review`,
-								cardGames: MTG_ONLY,
+								cardGames: EVENT_PAGE_CARD_GAMES.archetypeReview,
 							},
 						]
 					: []),
@@ -229,7 +229,7 @@ const navGroups = computed<NavGroup[]>(() => {
 								label: 'Sync',
 								icon: 'i-lucide-refresh-cw',
 								to: `/event/${id}/sync`,
-								cardGames: MTG_ONLY,
+								cardGames: EVENT_PAGE_CARD_GAMES.sync,
 							},
 						]
 					: []),
@@ -248,7 +248,7 @@ const navGroups = computed<NavGroup[]>(() => {
 					label: 'Cards',
 					icon: 'i-lucide-book-image',
 					to: `/event/${id}/card`,
-					cardGames: MTG_ONLY,
+					cardGames: EVENT_PAGE_CARD_GAMES.cards,
 				},
 				{
 					label: 'Screens',
@@ -281,10 +281,10 @@ const navGroups = computed<NavGroup[]>(() => {
 							exact: true,
 							cardGames: EVERY_CARD_GAME,
 						},
-						{ label: 'Event Structure', to: `/event/${id}/rounds`, cardGames: MTG_ONLY },
+						{ label: 'Event Structure', to: `/event/${id}/rounds`, cardGames: EVENT_PAGE_CARD_GAMES.eventStructure },
 						{ label: 'Feature Matches', to: `/event/${id}/config/features`, cardGames: EVERY_CARD_GAME },
 						{ label: 'Broadcast', to: `/event/${id}/config/broadcast`, cardGames: EVERY_CARD_GAME },
-						{ label: 'Integrations', to: `/event/${id}/config/integrations`, cardGames: MTG_ONLY },
+						{ label: 'Integrations', to: `/event/${id}/config/integrations`, cardGames: EVENT_PAGE_CARD_GAMES.integrations },
 					],
 				},
 			]),

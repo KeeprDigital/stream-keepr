@@ -165,6 +165,7 @@ function buildBulkPlayerUpsertQueries(
 				id: sql`null`,
 				eventId: sql`json_extract(value, '$.eventId')`,
 				name: sql`json_extract(value, '$.name')`,
+				nickname: sql`json_extract(value, '$.nickname')`,
 				pronouns: sql`json_extract(value, '$.pronouns')`,
 				externalId: sql`json_extract(value, '$.externalId')`,
 				externalSource: sql`json_extract(value, '$.externalSource')`,

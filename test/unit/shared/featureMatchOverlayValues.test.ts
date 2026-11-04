@@ -155,6 +155,31 @@ describe('a side\'s deck on the Feature Match Overlay', () => {
 	});
 });
 
+describe('a side\'s name on the Feature Match Overlay', () => {
+	// Shown by the shared name-or-Nickname rule (ADR-0074).
+	it('shows a One Piece side with no name by its Nickname', () => {
+		const values = featureMatchTokenValues({
+			event: {
+				name: 'Open',
+				game: 'op',
+				displayRecordSeparator: '-',
+				displayHideZeroDraws: true,
+				displayPositionFormat: 'ordinal',
+			},
+			featureMatch: {
+				player1Data: { name: '', nickname: 'linlin_88' },
+				player2Data: { name: 'Big Mom', nickname: 'linlin_88' },
+				activeSession: null,
+			} as any,
+			sourceMatch: null,
+			round: null,
+			phase: null,
+		});
+
+		expect(values).toMatchObject({ player1Name: 'linlin_88', player2Name: 'Big Mom' });
+	});
+});
+
 describe('which player a side shows on the Feature Match Overlay', () => {
 	// The active Session owns side order (ADR-0058); the Slot keeps pairing order.
 	it('names each side by the active Session\'s side order', () => {

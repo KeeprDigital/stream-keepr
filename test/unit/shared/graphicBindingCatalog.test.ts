@@ -214,6 +214,12 @@ describe('graphic Input Binding field catalog', () => {
 		}))).toBe('3');
 	});
 
+	// Shown by the shared name-or-Nickname rule (ADR-0074).
+	it('names a One Piece Player with no name by their Nickname', () => {
+		expect(resolveGraphicBindingField('player', 'player.name', { name: '', nickname: 'linlin_88' }, dataSet()))
+			.toBe('linlin_88');
+	});
+
 	it('resolves nothing for a field the entity has no value for', () => {
 		expect(resolveGraphicBindingField('player', 'player.pronouns', { name: 'Ava Reed' }, dataSet()))
 			.toBeUndefined();

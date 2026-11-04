@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	EVENT_PAGE_CARD_GAMES,
 	EVERY_CARD_GAME,
 	GAME_CONFIGS,
 	getCounterTypeConfigs,
@@ -41,5 +42,22 @@ describe('card Game support', () => {
 		[EVERY_CARD_GAME, undefined, true],
 	] as const)('offers what declares %j to a %s Event: %s', (cardGames, game, offered) => {
 		expect(isOfferedToCardGame(cardGames, game)).toBe(offered);
+	});
+});
+
+describe('the Event pages each Card Game is offered', () => {
+	// A One Piece Card Game Event has Players (ADR-0074); what needs Rounds, Matches or Melee stays Magic's.
+	it.each([
+		['players', true],
+		['matches', false],
+		['eventStructure', false],
+		['sync', false],
+		['metagame', false],
+		['archetypeReview', false],
+		['cards', false],
+		['integrations', false],
+	] as const)('offers %s to a One Piece Event: %s', (page, offered) => {
+		expect(isOfferedToCardGame(EVENT_PAGE_CARD_GAMES[page], 'op')).toBe(offered);
+		expect(isOfferedToCardGame(EVENT_PAGE_CARD_GAMES[page], 'mtg')).toBe(true);
 	});
 });

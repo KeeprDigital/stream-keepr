@@ -76,7 +76,7 @@ const FormFieldsStub = defineComponent({
 
 enableAutoUnmount(afterEach);
 
-async function mountModal() {
+async function mountModal(game: 'mtg' | 'op' = 'mtg', player: Parameters<typeof createMockPlayer>[0] = {}) {
 	return mount(ManageModal, {
 		attrs: { 'onUpdate:open': overlayClose },
 		props: {
@@ -85,8 +85,9 @@ async function mountModal() {
 				eventId: 1,
 				name: 'Alice',
 				gameData: { type: 'mtg', deckName: 'Burn', deckColors: 'R' },
+				...player,
 			}),
-			game: 'mtg',
+			game,
 		},
 		global: {
 			stubs: {
@@ -231,5 +232,31 @@ describe('player manage modal', () => {
 		wrapper.unmount();
 
 		expect(removeRouteGuard).toHaveBeenCalled();
+	});
+
+	// A cleared name falls back to the Nickname, so only a One Piece Player with one may save it (ADR-0074).
+	it.each([
+		[
+			'op',
+			{ nickname: 'linlin_88', gameData: null },
+			false,
+		],
+		[
+			'op',
+			{ nickname: null, gameData: null },
+			true,
+		],
+		['mtg', {}, true],
+	] as const)('on a %s Event, holding %j, refuses a cleared name: %s', async (game, player, refused) => {
+		const wrapper = await mountModal(game, player);
+		editName(wrapper, '');
+		await flushPromises();
+
+		expect(saveButton(wrapper).attributes('disabled') !== undefined).toBe(refused);
+		if (refused)
+			return;
+		await wrapper.get('form').trigger('submit');
+		await flushPromises();
+		expect(mockPlayerStore.updatePlayer).toHaveBeenCalledWith(1, 7, expect.objectContaining({ name: '', nickname: 'linlin_88' }));
 	});
 });

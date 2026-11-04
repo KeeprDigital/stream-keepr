@@ -34,9 +34,9 @@ const { playerUpdateModule } = await import('~~/server/modules/player-update');
 
 afterAll(async () => await harness.close());
 
-async function createEvent() {
+async function createEvent(game: 'mtg' | 'op' = 'mtg') {
 	const [event] = await db.insert(schema.events)
-		.values({ name: 'Player Open', game: 'mtg', featureMatchOrientation: 'horizontal' })
+		.values({ name: 'Player Open', game, featureMatchOrientation: 'horizontal' })
 		.returning({ id: schema.events.id });
 	return event!.id;
 }
@@ -176,6 +176,101 @@ describe('updating a Player', () => {
 			slotIds: [slot!.id],
 			originConnectionId: 'origin-1',
 		});
+	});
+});
+
+describe('a Player\'s name and Nickname', () => {
+	// Name is optional on One Piece, where the Nickname stands in; Magic still requires one (ADR-0074).
+	it.each([
+		{
+			game: 'op',
+			input: { name: '', nickname: 'linlin_88' },
+			stored: { name: '', nickname: 'linlin_88' },
+		},
+		{
+			game: 'op',
+			input: { name: 'Big Mom', nickname: null },
+			stored: { name: 'Big Mom', nickname: null },
+		},
+		{
+			game: 'mtg',
+			input: { name: 'Ava Reed' },
+			stored: { name: 'Ava Reed', nickname: null },
+		},
+	] as const)('creates a $game Player from $input', async ({ game, input, stored }) => {
+		const eventId = await createEvent(game);
+
+		const created = await playerUpdateModule().createPlayer({ eventId, input });
+
+		expect(created).toMatchObject(stored);
+		expect(await readPlayer(created.id)).toMatchObject(stored);
+	});
+
+	it.each([
+		{
+			game: 'op',
+			input: { name: '  ', nickname: '' },
+		},
+		{
+			game: 'mtg',
+			input: { name: '' },
+		},
+		{
+			game: 'mtg',
+			input: { name: '', nickname: 'linlin_88' },
+		},
+		{
+			game: 'mtg',
+			input: { name: 'Ava Reed', nickname: 'ava' },
+		},
+	] as const)('refuses a $game Player from $input, saving nothing', async ({ game, input }) => {
+		const eventId = await createEvent(game);
+
+		await expect(playerUpdateModule().createPlayer({ eventId, input }))
+			.rejects
+			.toMatchObject({ statusCode: 400 });
+		expect(await db.select().from(schema.players).where(eq(schema.players.eventId, eventId))).toEqual([]);
+	});
+
+	it('falls back to the Nickname when a One Piece Player\'s name is cleared', async () => {
+		const eventId = await createEvent('op');
+		const [player] = await db.insert(schema.players).values({ eventId, name: 'Big Mom', nickname: 'linlin_88' }).returning();
+
+		const updated = await playerUpdateModule().updatePlayer({
+			eventId,
+			playerId: player!.id,
+			input: { name: '' },
+		});
+
+		expect(updated).toMatchObject({ name: '', nickname: 'linlin_88' });
+	});
+
+	// A cleared field would leave the Player shown blank.
+	it.each([
+		{
+			game: 'op',
+			held: { name: 'Big Mom', nickname: null },
+			input: { name: '' },
+		},
+		{
+			game: 'op',
+			held: { name: '', nickname: 'linlin_88' },
+			input: { nickname: null },
+		},
+		{
+			game: 'mtg',
+			held: { name: 'Alice', nickname: null },
+			input: { name: '' },
+		},
+	] as const)('refuses $input on a $game Player holding $held, keeping them as they were', async ({ game, held, input }) => {
+		const eventId = await createEvent(game);
+		const [player] = await db.insert(schema.players).values({ eventId, ...held }).returning();
+
+		await expect(playerUpdateModule().updatePlayer({ eventId, playerId: player!.id, input }))
+			.rejects
+			.toMatchObject({ statusCode: 400 });
+		expect(await readPlayer(player!.id)).toMatchObject(held);
+		expect(publication.playerUpdated).not.toHaveBeenCalled();
 	});
 });
 

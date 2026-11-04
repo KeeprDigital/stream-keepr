@@ -96,6 +96,7 @@ export function featureMatchStateService() {
 	function playerToSnapshotData(player: NonNullable<Awaited<ReturnType<typeof db.query.players.findFirst>>>): FeatureMatchSnapshotPlayerData {
 		return {
 			name: player.name,
+			nickname: player.nickname,
 			pronouns: player.pronouns,
 			externalId: player.externalId,
 			externalSource: player.externalSource,

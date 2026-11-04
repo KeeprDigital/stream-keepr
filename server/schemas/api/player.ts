@@ -68,8 +68,10 @@ export const createPlayerSchema = createInsertSchema(players)
 		updatedAt: true,
 	})
 	.extend({
-		// String length limits
-		name: z.string().min(1).max(200),
+		// String length limits. A blank name is the Player write's to refuse:
+		// only a One Piece Card Game Player with a Nickname may have one (ADR-0074).
+		name: z.string().trim().max(200),
+		nickname: z.string().max(100).nullable().optional(),
 		pronouns: z.string().max(50).nullable().optional(),
 		lgs: z.string().max(200).nullable().optional(),
 		// Numeric bounds
@@ -101,7 +103,8 @@ export const updatePlayerSchema = createUpdateSchema(players)
 	})
 	.extend({
 		// String length limits (all optional for partial updates)
-		name: z.string().min(1).max(200).optional(),
+		name: z.string().trim().max(200).optional(),
+		nickname: z.string().max(100).nullable().optional(),
 		pronouns: z.string().max(50).nullable().optional(),
 		lgs: z.string().max(200).nullable().optional(),
 		// Numeric bounds (all optional for partial updates)

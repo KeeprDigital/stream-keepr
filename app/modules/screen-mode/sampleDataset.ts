@@ -155,6 +155,7 @@ const SAMPLE_PLAYERS: PlayerResponse[] = PLAYERS.map((player, index) => ({
 	id: playerId(index),
 	eventId: SAMPLE_ID,
 	name: player.name,
+	nickname: null,
 	pronouns: player.pronouns,
 	externalId: null,
 	externalSource: null,
