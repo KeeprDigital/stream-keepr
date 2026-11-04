@@ -757,7 +757,7 @@ Issue #590 refused a command result from any different epoch, as Broadcast Graph
 
 ## ADR-0027: The Key Output keys every glow at its own opacity
 
-Accepted · 2026-10-17 · [#599](https://github.com/KeeprDigital/stream-keepr/issues/599)
+Accepted · 2026-10-17 · [#599](https://github.com/KeeprDigital/stream-keepr/issues/599) · Amended 2026-11-04: a colour's own alpha is keyed, and graphics colour pickers write it · [#967](https://github.com/KeeprDigital/stream-keepr/issues/967)
 
 ### Decision
 
@@ -771,7 +771,7 @@ Graphic Item glow already reached the Key Output, but Source Item and Frame glow
 
 - A half-opaque glow is grey in the matte.
 - A Frame border with no colour paints nothing in the Key Output either, as in the Fill Output.
-- A colour that carries its own alpha (`rgba()`, eight-digit hex, `transparent`) still keys at the authored opacity alone; the pickers write opaque hex, so the matte matches what they author.
+- A colour that carries its own alpha (`rgba()`, eight-digit hex, `transparent`) keys at that alpha times the authored opacity (ADR-0049), so the matte matches a translucent colour the picker writes (#967).
 - The Frame has no raw CSS gradient since #831. Its fill is its `frame-surface` Mode Token's Graphic Fill, which the Key Output keys at each colour's own alpha. It keys the Frame through opaque white only while the Frame paints media or an Animation Effect, whose colours it has none of.
 
 ### Rejected alternatives

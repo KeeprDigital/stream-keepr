@@ -57,11 +57,6 @@ function testId(suffix: string) {
 	return `${props.testIdPrefix}-${suffix}`;
 }
 
-/** The default picker's colour; a cleared one is black. */
-function pickedColor(value: unknown) {
-	return value?.toString() || '#000000';
-}
-
 function editSolid(color: string) {
 	emit('edit', { kind: 'solid-fill', color });
 }
@@ -102,7 +97,7 @@ function editStop(index: number, patch: Extract<GraphicFillEdit, { kind: 'gradie
 					:size="size"
 					:aria-label="ariaLabel('Fill colour')"
 					:data-testid="testId('color')"
-					@update:model-value="editSolid(pickedColor($event))"
+					@update:model-value="color => color && editSolid(color)"
 				/>
 			</slot>
 		</UFormField>
@@ -140,7 +135,7 @@ function editStop(index: number, patch: Extract<GraphicFillEdit, { kind: 'gradie
 							:size="size"
 							:aria-label="ariaLabel(`Stop ${index + 1} colour`)"
 							:data-testid="testId('stop-color')"
-							@update:model-value="editStop(index, { color: pickedColor($event) })"
+							@update:model-value="color => color && editStop(index, { color })"
 						/>
 					</slot>
 				</UFormField>

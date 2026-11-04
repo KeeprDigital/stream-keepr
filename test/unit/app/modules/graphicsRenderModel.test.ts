@@ -267,6 +267,20 @@ describe('graphicsCompositionRenderModel', () => {
 		expect(badge?.textStyle?.color).toBe(DEFAULT_GRAPHIC_TYPOGRAPHY.color);
 	});
 
+	// A translucent text colour keys at its own alpha, so Fill and Key agree (ADR-0049).
+	it.each([
+		['fill', 'rgba(255, 0, 0, 0.5)'],
+		['key', '#ffffff80'],
+	] as const)('paints a translucent text colour in the %s output as %s', (output, painted) => {
+		const model = compose([
+			text('name', {
+				typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, color: 'rgba(255, 0, 0, 0.5)' },
+			}),
+		], { output });
+
+		expect(model.graphics[0]?.items[0]?.textStyle?.color).toBe(painted);
+	});
+
 	it('rotates a canvas-positioned Graphic Item around its Graphic Anchor Point', () => {
 		const model = compose([
 			shape('tilted', { rotation: -6, anchor: 'bottom-left' }),

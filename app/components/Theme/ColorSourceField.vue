@@ -48,6 +48,8 @@ function chooseSource(source: string) {
 		<UIColorPicker
 			v-if="!follows"
 			:model-value="value"
+			alpha
+			commit="close"
 			size="xs"
 			:disabled="disabled"
 			:aria-label="label"

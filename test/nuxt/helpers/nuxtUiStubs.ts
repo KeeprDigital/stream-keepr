@@ -94,6 +94,7 @@ export const UInputNumberStub = defineComponent({
 		min: { type: Number, required: false },
 		max: { type: Number, required: false },
 		step: { type: Number, required: false },
+		formatOptions: { type: Object, required: false },
 		disabled: { type: Boolean, default: false },
 	},
 	emits: ['update:modelValue', 'change', 'blur'],
@@ -108,6 +109,37 @@ export const UInputNumberStub = defineComponent({
 		};
 	},
 	template: '<input v-bind="$attrs" type="number" :value="modelValue ?? \'\'" :min="min" :max="max" :step="step" :disabled="disabled" @input="onInput" @change="$emit(\'change\', $event)" @blur="$emit(\'blur\', $event)" />',
+});
+
+/** `<input type="range">`; emits a number. */
+export const USliderStub = defineComponent({
+	name: 'USlider',
+	inheritAttrs: false,
+	props: {
+		...presentation,
+		modelValue: { type: Number, default: undefined },
+		min: { type: Number, default: 0 },
+		max: { type: Number, default: 100 },
+		step: { type: Number, default: 1 },
+		disabled: { type: Boolean, default: false },
+	},
+	emits: ['update:modelValue', 'change'],
+	template: '<input v-bind="$attrs" type="range" :value="modelValue" :min="min" :max="max" :step="step" :disabled="disabled" @input="$emit(\'update:modelValue\', Number($event.target.value))" @change="$emit(\'change\', $event)" />',
+});
+
+/** `<input type="color">`; emits the `#rrggbb` chosen, as Nuxt UI's hex format does. */
+export const UColorPickerStub = defineComponent({
+	name: 'UColorPicker',
+	inheritAttrs: false,
+	props: {
+		...presentation,
+		modelValue: { type: String, default: undefined },
+		format: { type: String, required: false },
+		throttle: { type: Number, required: false },
+		disabled: { type: Boolean, default: false },
+	},
+	emits: ['update:modelValue'],
+	template: '<input v-bind="$attrs" type="color" :value="modelValue" :disabled="disabled" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 });
 
 interface SelectOption {
@@ -534,6 +566,7 @@ export const nuxtUiStubs = {
 	UButton: UButtonStub,
 	UCard: UCardStub,
 	UCheckbox: UCheckboxStub,
+	UColorPicker: UColorPickerStub,
 	UContainer: UContainerStub,
 	UDropdownMenu: UDropdownMenuStub,
 	UFieldGroup: UFieldGroupStub,
@@ -548,6 +581,7 @@ export const nuxtUiStubs = {
 	USelectMenu: USelectMenuStub,
 	USeparator: USeparatorStub,
 	USlideover: USlideoverStub,
+	USlider: USliderStub,
 	USwitch: USwitchStub,
 	UTextarea: UTextareaStub,
 	UTooltip: UTooltipStub,

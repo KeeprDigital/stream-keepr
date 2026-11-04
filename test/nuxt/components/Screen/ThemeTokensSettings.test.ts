@@ -12,6 +12,7 @@ import { screenModeTokenName } from '~~/shared/screenModes';
 import { standingsModeTokens } from '~~/shared/screenModeTokens/standings';
 import { deferred } from '~~/test/helpers/deferred';
 import { createWireMockScreen } from '~~/test/helpers/fixtures';
+import { editColorPicker } from '~~/test/nuxt/helpers/colorPicker';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import ThemeTokensSettings from '~/components/Screen/ThemeTokensSettings.vue';
 
@@ -79,10 +80,9 @@ async function mountSection(mode: ScreenMode, themeOverrides: StoredThemeTokens 
 
 const field = (wrapper: VueWrapper, token: string) => wrapper.get(`[data-token="${token}"]`);
 
+/** An override commits once its colour picker closes. */
 async function commitColour(wrapper: VueWrapper, token: string, value: string) {
-	const input = field(wrapper, token).get('[data-token-part="colour"]');
-	(input.element as HTMLInputElement).value = value;
-	await input.trigger('change');
+	await editColorPicker(field(wrapper, token), '[data-token-part="colour"]', 'hue', value);
 }
 
 function writes() {
@@ -181,6 +181,25 @@ describe('a Screen\'s token section', () => {
 		await flushPromises();
 
 		expect(field(wrapper, 'divider').get('[data-token-inherited]').text()).toBe('Theme: #654321');
+	});
+
+	// Each override write announces `screen:updated`, so a drag writes once, on close.
+	it('writes a colour override once its picker closes, carrying its alpha', async () => {
+		const wrapper = await mountSection('standings');
+		const row = field(wrapper, 'divider');
+
+		await row.get('[data-token-part="colour"]').trigger('click');
+		await row.get('[data-color-part="hue"]').setValue('#00ff00');
+		await row.get('[data-color-part="hue"]').setValue('#ff0000');
+		await row.get('[data-color-part="alpha"]').setValue(40);
+		await flushPromises();
+		expect(writes()).toEqual([]);
+
+		await row.get('[data-token-part="colour"]').trigger('click');
+		await flushPromises();
+		expect(writes()).toEqual([
+			{ divider: 'rgba(255, 0, 0, 0.4)' },
+		]);
 	});
 
 	it('writes one override per edit, and shows it overridden while the write is out', async () => {
