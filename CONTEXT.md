@@ -64,7 +64,7 @@ The reserve portion of a Deck List, exchanged with Mainboard cards between games
 Which boards of a Deck List a rendering surface presents: Full (Mainboard and Sideboard), Mainboard only, or Sideboard only. Shared by every deck-rendering surface, including Metagame card filtering.
 
 **Unresolved Deck Card**:
-A Deck List entry naming no known card: on Magic: The Gathering, one imported by **Melee Sync** whose name matched none; on One Piece Card Game, a card number the card data source does not know, from a **TCG+ Import**, a hand-entered Deck List or a paste. Resolving one names the card for every Deck List in the Event holding that entry (ADR-0031, ADR-0074). On One Piece Card Game, the Cards page lists them Event-wide, and one can also be retried.
+A Deck List entry naming no known card: on Magic: The Gathering, one imported by **Melee Sync** whose name matched none; on One Piece Card Game, a card number the card data source does not know, from a **TCG+ Import**, a hand-entered Deck List or a paste. Resolving one names the card for every Deck List in the Event holding that entry (ADR-0031, ADR-0074). On One Piece Card Game, the Cards page lists them Event-wide, one can also be retried, and each TCG+ Import retries those its Players' Deck Lists hold, hand-edited ones included.
 
 **Metagame**:
 Analysis of Players, Deck Lists, cards, archetypes, and standings within an Event or scoped Player group.
