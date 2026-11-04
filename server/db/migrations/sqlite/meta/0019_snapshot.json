@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "caeb5c09-350a-4063-8df6-064552175a39",
+  "id": "2eac8788-4054-40ff-aed1-a0b620d4a78a",
   "prevId": "124a8b93-bf7f-49ff-96e8-77620228632d",
   "tables": {
     "archetype_cards": {
