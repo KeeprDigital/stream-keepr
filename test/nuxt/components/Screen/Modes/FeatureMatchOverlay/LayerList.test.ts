@@ -33,7 +33,7 @@ const UDropdownMenuStub = defineComponent({
 			<slot />
 			<template v-for="(group, groupIndex) in items" :key="groupIndex">
 				<button
-					v-for="entry in group.flatMap(entry => entry.children ?? [entry]).filter(entry => entry.onSelect)"
+					v-for="entry in group.flatMap(entry => entry.children ? entry.children.flat() : [entry]).filter(entry => entry.onSelect)"
 					:key="entry.label"
 					type="button"
 					:data-menu-entry="entry.label"
@@ -272,6 +272,55 @@ describe('featureMatchOverlayLayerList', () => {
 		await sync();
 
 		expect(config.value.layout.composition.items.map(item => item.id)).toEqual(['back', 'child']);
+	});
+
+	// #919. Player 1's Source is 340×250 at (24, 16), Player 2's at (24, 800), and the main Source 1500×900 at (400, 90).
+	it.each<[string, string[], string, string, Record<string, { x: number; y: number }>]>([
+		[
+			'Align › Right in a selected row\'s menu aligns the selection to its bounds',
+			['source:player2-source', 'source:main-source'],
+			'source:player2-source',
+			'Right',
+			{
+				'player2-source': { x: 1560, y: 800 },
+				'main-source': { x: 400, y: 90 },
+			},
+		],
+		[
+			'Align › Left in another row\'s menu aligns that row alone to the canvas',
+			['source:player2-source', 'source:main-source'],
+			'source:player1-source',
+			'Left',
+			{
+				'player1-source': { x: 0, y: 16 },
+				'player2-source': { x: 24, y: 800 },
+			},
+		],
+		[
+			'Distribute › Vertically in a selected row\'s menu spaces the selection',
+			['source:player1-source', 'source:main-source', 'source:player2-source'],
+			'source:main-source',
+			'Vertically',
+			{
+				'player1-source': { x: 24, y: 16 },
+				'main-source': { x: 400, y: 83 },
+				'player2-source': { x: 24, y: 800 },
+			},
+		],
+	])('%s', async (_, selecting, row, entry, placed) => {
+		const { wrapper, config } = await mountList();
+		for (const [index, key] of selecting.entries())
+			await wrapper.get(`[data-layer-key="${key}"] [data-testid="layer-select"]`).trigger('click', { metaKey: index > 0 });
+
+		await wrapper.get(`[data-layer-key="${row}"] [data-menu-entry="${entry}"]`).trigger('click');
+
+		expect(Object.fromEntries(Object.keys(placed).map((id) => {
+			const source = config.value.layout.sources.find(item => item.id === id)!;
+			return [
+				id,
+				{ x: source.x, y: source.y },
+			];
+		}))).toEqual(placed);
 	});
 
 	it('moves a row toward the front with the arrow pointing up', async () => {

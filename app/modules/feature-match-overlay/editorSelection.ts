@@ -5,6 +5,7 @@ import type { SnapLines } from '~/modules/graphics/canvasManipulation';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { findGraphicItem } from '~~/shared/modules/graphics';
+import { unionBox } from '~/modules/graphics/canvasAlignment';
 import { canvasSnapLines, isTurned, rotatedBounds } from '~/modules/graphics/canvasManipulation';
 
 /**
@@ -175,7 +176,7 @@ export function editorSelectionFrame(
  * row or column child is placed by its group, and a rotated group's child turns
  * with it, so neither has one.
  */
-function canvasBox(layout: FeatureMatchLayoutConfig, layer: FeatureMatchLayoutEditorLayer): GraphicRect | null {
+export function editorLayerCanvasBox(layout: FeatureMatchLayoutConfig, layer: FeatureMatchLayoutEditorLayer): GraphicRect | null {
 	if (layer.type === 'source') {
 		const item = layout.sources.find(candidate => candidate.id === layer.itemId);
 		return item
@@ -224,22 +225,13 @@ export function editorLayersFrame(
 	}
 	const members: GraphicRect[] = [];
 	for (const layer of layers) {
-		const box = canvasBox(layout, layer);
+		const box = editorLayerCanvasBox(layout, layer);
 		if (!box)
 			return null;
 		members.push(box);
 	}
-	const left = Math.min(...members.map(rect => rect.x));
-	const top = Math.min(...members.map(rect => rect.y));
-	const right = Math.max(...members.map(rect => rect.x + rect.width));
-	const bottom = Math.max(...members.map(rect => rect.y + rect.height));
 	return {
-		rect: {
-			x: left,
-			y: top,
-			width: right - left,
-			height: bottom - top,
-		},
+		rect: unionBox(members),
 		origin: { x: 0, y: 0 },
 		snapLines: canvasSnapLines(canvas, [
 			...layout.sources,

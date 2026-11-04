@@ -15,6 +15,7 @@ import {
 	graphicItemKindLabel,
 } from '~~/shared/modules/graphics';
 import { editorSelectionKey } from '~/modules/feature-match-overlay/editorSelection';
+import { ALIGN_COMMANDS, DISTRIBUTE_COMMANDS } from '~/modules/feature-match-overlay/layerAlignment';
 import { layerDropAt, layerGroupMoves } from '~/modules/feature-match-overlay/layerDrag';
 import { LAYER_GROUP_REFUSAL_REASONS } from '~/modules/feature-match-overlay/layerGrouping';
 import { isLayerSelected } from '~/modules/feature-match-overlay/layerSelection';
@@ -33,7 +34,9 @@ import { isSelectionToggle } from '~/modules/graphics/selection';
  *
  * Shift-click selects the run of rows from the one chosen last, and ⌘- or
  * Ctrl-click adds or takes out one row (#740). A selected row's menu duplicates
- * and deletes every selected layer; its moves, like the arrows, move its own.
+ * and deletes every selected layer, and aligns and distributes them (#919);
+ * another row's menu aligns that layer alone, to its container. Its moves, like
+ * the arrows, move its own.
  *
  * One row drags at a time, and is selected alone as it goes: within its section,
  * into a Graphic Group or out of one, as one undo step; Escape cancels, and a
@@ -189,6 +192,35 @@ function rowTarget(row: LayerRow): FeatureMatchLayoutEditorLayer | undefined {
 		: row.target;
 }
 
+/** Align the row's layer, or the selection it speaks for; distribute the selection. */
+function arrangeMenu(target: FeatureMatchLayoutEditorLayer | undefined): DropdownMenuItem[] {
+	const align: DropdownMenuItem = {
+		label: 'Align',
+		icon: ALIGN_COMMANDS[0]!.icon,
+		disabled: !props.editor.canAlign(target),
+		children: (['x', 'y'] as const).map(axis => ALIGN_COMMANDS.filter(command => command.axis === axis).map(command => ({
+			label: command.label,
+			icon: command.icon,
+			onSelect: () => props.editor.align(command.edge, target),
+		}))),
+	};
+	if (target)
+		return [align];
+	return [
+		align,
+		{
+			label: 'Distribute',
+			icon: DISTRIBUTE_COMMANDS[0]!.icon,
+			disabled: !props.editor.canDistribute(),
+			children: DISTRIBUTE_COMMANDS.map(command => ({
+				label: command.label,
+				icon: command.icon,
+				onSelect: () => props.editor.distribute(command.axis),
+			})),
+		},
+	];
+}
+
 const REFUSALS: Record<GraphicItemPlacementRefusal, string> = {
 	'rotated-into-arranged-group': 'A rotated layer can\'t go into a row or column group',
 	'group-into-group': 'A group can\'t go into another group',
@@ -261,6 +293,7 @@ function rowMenu(row: LayerRow): DropdownMenuItem[][] {
 			},
 			...groupingMenu(row),
 		],
+		arrangeMenu(target),
 		[
 			{
 				label: 'Bring to front',

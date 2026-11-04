@@ -21,6 +21,7 @@ import { LAYER_GROUP_REFUSAL_REASONS } from '~/modules/feature-match-overlay/lay
 import { NUMBER_SCRUB_GESTURE } from '~/modules/graphics/numberScrubGesture';
 import { isTypingTarget } from '~/utils/typingTarget';
 import FeatureMatchOverlayCompositorInspector from './CompositorInspector.vue';
+import FeatureMatchOverlayLayerAlignControls from './LayerAlignControls.vue';
 import FeatureMatchOverlayLayerInspector from './LayerInspector.vue';
 import FeatureMatchOverlayLayerList from './LayerList.vue';
 import FeatureMatchOverlayMultiLayerInspector from './MultiLayerInspector.vue';
@@ -680,6 +681,11 @@ useEventListener(import.meta.client
 			</section>
 
 			<section class="min-w-0 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
+				<FeatureMatchOverlayLayerAlignControls
+					v-if="layers.length > 0"
+					:editor="editor"
+					class="mb-3 border-b border-default/70 pb-2"
+				/>
 				<FeatureMatchOverlayMultiLayerInspector
 					v-if="severalSelected"
 					:layout="config.layout"
