@@ -2010,40 +2010,47 @@ The sample is typical, so overflow shows up on show day rather than while author
 - **Amend the Sample Dataset to be the worst case.** A preview of only worst cases stops looking like a show, and the sample is shared with the Screen Mode Sample Dataset.
 - **Push the toggle by message instead of the URL.** It avoids a reload, but a frame listening for it must also be shown to refuse it on a live output; the URL flag reuses the guide flags' proven gate.
 
-## ADR-0063: A Layer Lock is editor state, remembered per browser per Screen, and the canvas clicks through it
+## ADR-0063: A Layer Lock is stored on the layer in the Feature Match Layout, and the canvas clicks through it
 
-Accepted · 2026-11-04 · [#747](https://github.com/KeeprDigital/stream-keepr/issues/747). Records E27 and E28 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783).
+Accepted · 2026-11-04 · [#747](https://github.com/KeeprDigital/stream-keepr/issues/747) · Amended 2026-11-04: the lock moved from this browser's storage onto the layer · [#943](https://github.com/KeeprDigital/stream-keepr/issues/943). Records E27 and E28 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783).
 
 ### Decision
 
-**A Layer Lock keeps a layer of a Feature Match Layout from canvas edits, and nothing else.** A locked layer is not moved, resized or rotated on the canvas and arrow nudges skip it; with several selected, the canvas moves only the unlocked ones. It stays selectable from the layer list, where it shows no canvas handles but a lock badge on its row and its canvas outline, and its property panel still edits it (E27). Delete, duplicate, hide, reorder (a drag in the layer list included), copy and paste, and align and distribute are not canvas edits and still act on it.
+**A Layer Lock keeps a layer of a Feature Match Layout from canvas edits, and nothing else.** A locked layer is not moved, resized or rotated on the canvas and arrow nudges skip it; with several selected, the canvas moves only the unlocked ones. It stays selectable from the layer list, where it shows no canvas handles but a lock badge on its row and its canvas outline, and its property panel still edits it (E27). Delete, duplicate, hide, reorder (a drag in the layer list included), copy and paste, group and ungroup, and align and distribute are not canvas edits and still act on it.
 
-**A click on a locked layer in the preview falls through to the layer beneath it, or to the canvas (E27).** The editor pushes every locked layer to its preview frame on `feature-match-overlay:locked-layers`, and the frame draws their guides without offering them.
+**A click on a locked layer in the preview falls through to the layer beneath it, or to the canvas (E27).** The preview frame reads the locks from the working layout the editor already pushes it, and draws their guides without offering them.
 
 **Locking a Graphic Group locks its children; a Source Item locks too (E28).** A child locked through its group cannot be unlocked on its own.
 
-**A Layer Lock is editor state, not layout.** It is remembered per browser per Screen in local storage, keyed by layer, and is never part of the Feature Match Layout, so the config contract, its saves and its Template Packages are unchanged, and nothing needs back-compat. Locking records no undo step. Like every edit, it needs the Graphics Authoring Lease (ADR-0030): an observer sees locks but cannot change them.
+**A Layer Lock is the layer's own optional `locked` field in the Feature Match Layout (#943).** A Graphic Item, a Graphic Group child and a Source Item each carry one; unlocking drops the field, and a layer stored without it is unlocked, so no stored layout or Template Package needs migrating. Locking is a layout edit through the editor's one write funnel: one undo step, written only by the Graphics Authoring Lease holder (ADR-0030), and seen by every session of the Screen. The field is shared Graphic Item vocabulary, but only a Feature Match Layout holds one: a Broadcast Graphic refuses it, since no Broadcast Graphics editor shows or lifts a lock.
+
+**A lock travels with the layout and stays with the original.** Saving a Feature Match Layout Template keeps it, and placing one or installing its Template Package (`.sklayout`) keeps it. A duplicate or a pasted copy arrives unlocked, a Graphic Group's children too, since a copy lands somewhere new to be placed. Ungrouping a locked Graphic Group bakes its lock into each child, as it bakes in the group's hiding (ADR-0065); grouping leaves each member's own lock, and the new group starts unlocked.
 
 ### Why
 
-Frame bars and backgrounds sit under everything and were dragged by accident. Clicking through a locked layer lets the author reach what lies beneath it on the canvas, which is the point of locking it.
+Frame bars and backgrounds sit under everything and were dragged by accident. Clicking through a locked layer lets the author reach what lies beneath it on the canvas, which is the point of locking it. #747 kept the lock in browser storage, which reached no other operator or machine, no template, and no undo; once operators share a Screen's editing, a lock one of them sets has to hold for the others (#943).
 
 ### Consequences
 
-- Another browser, or another Screen with the same layout, keeps its own locks. A placed Template or reapplied preset keeps the locks of any layer ids it reuses.
-- A lock on a deleted layer is kept, so undoing the delete brings the layer back locked.
+- Every operator of the Screen sees the same locks, and an observer sees them but cannot change them.
+- Undoing a delete brings the layer back with its lock, since the lock is part of the layer.
+- Reapplying a preset clears every lock, as presets carry none.
 - A locked child of an unlocked Graphic Group still moves with its group, since the group places it; lock the group to hold both.
 - One unlocked layer selected among locked ones only moves, as several do; select it alone to resize or rotate it.
 - A row or column child, or a rotated group's child, has no box of its own on the canvas, so locked it is badged on its row only.
-- `app/modules/feature-match-overlay/layerLocks.ts` holds the lock rules, and `editorLayersFrame` leaves locked layers out of what the canvas moves.
+- A `.sklayout` package carrying a lock is refused by an installation built before #943, on its strict schema; the Feature Match Layout format version is unchanged, since no term changed meaning.
+- Locks set in browser storage under #747 (`editor-featureMatchLayoutLocks:<screenId>`) are not imported and no longer read. #747 was never released, a browser's private lock should not silently become every operator's, and an import would make a write on opening that the author did not ask for.
+- `app/modules/feature-match-overlay/layerLocks.ts` holds the lock rules. `withoutLayerLock` in `shared/modules/graphics/authoring.ts` is how every copy drops one: `cloneGraphicItem` for Graphic Items, and a Source Item's duplicate and paste. `ungroupGraphicGroup` bakes a group's lock in, and `editorLayersFrame` leaves locked layers out of what the canvas moves.
 
 ### Rejected alternatives
 
-- **A `locked` field on each stored layer.** It would change the config contract and every Template Package for what is one author's convenience, and lock the layer for every author of the Screen.
+- **Keep the lock in browser storage, per browser per Screen (#747).** Another operator, another machine and a template would not see it, and it could not be undone.
+- **One `locks` list of layer ids on the layout.** Every copy of a layer would have to be kept off the list by hand, and the lock would not sit with the layer it holds.
+- **A pasted or duplicated layer keeps its lock.** It would land offset and locked, so the canvas would refuse the drag that places it and a click would fall through it.
 
 ## ADR-0064: Copied layers and styles stay in this browser, paste within their host, and paste whole or not at all
 
-Accepted · 2026-11-04 · [#746](https://github.com/KeeprDigital/stream-keepr/issues/746). Records E23–E26 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783), and #746's Theme-bindings note.
+Accepted · 2026-11-04 · [#746](https://github.com/KeeprDigital/stream-keepr/issues/746) · Amended 2026-11-04: a copy arrives unlocked · [#943](https://github.com/KeeprDigital/stream-keepr/issues/943). Records E23–E26 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783), and #746's Theme-bindings note.
 
 ### Decision
 
@@ -2053,7 +2060,7 @@ Accepted · 2026-11-04 · [#746](https://github.com/KeeprDigital/stream-keepr/is
 
 **A paste lands whole or not at all (E25).** It is refused, naming the items, when one pins a Graphic Asset no longer selectable: retired, trashed, missing, or with unavailable content, asked of the Graphics Asset Library before writing. It is refused whole when it would pass a Graphic Item cap: a Broadcast Graphics Screen's 300 (ADR-0007), a Broadcast Graphic's or Feature Match Layout's 100, or a Graphic Group's 50. The commit still checks every reference as for any Screen write (ADR-0034). In Broadcast Graphics an item reading a Social Profile Projection pastes only into that projection's Presentation Group, since the projection does not travel with it and the write path refuses it anywhere else.
 
-**Copies land in front, offset 20 pixels from where they were on the canvas.** A Graphic Group arrives with its children. Every copy gets a fresh id, and keeps its name unless one in the destination already carries it. With a Graphic Group selected, or one of its children, copied non-group items land in it.
+**Copies land in front, offset 20 pixels from where they were on the canvas.** A Graphic Group arrives with its children. Every copy gets a fresh id, arrives unlocked (ADR-0063), and keeps its name unless one in the destination already carries it. With a Graphic Group selected, or one of its children, copied non-group items land in it.
 
 **Style paste follows the Graphic Item Definition (E26).** Between items of one Definition, every style group it declares pastes: typography, each Graphic Surface Style, and its Shape Geometry. Between two kinds that both paint a surface, only the Graphic Surface Style does. Anything else is refused.
 
@@ -2079,7 +2086,7 @@ Each is #783's recommendation for v1. Reading the system clipboard needs the bro
 
 ## ADR-0065: Ungrouping keeps what each child draws, and what only the group drew goes with it
 
-Accepted · 2026-11-04 · [#920](https://github.com/KeeprDigital/stream-keepr/issues/920). Records E11 and E12 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783).
+Accepted · 2026-11-04 · [#920](https://github.com/KeeprDigital/stream-keepr/issues/920) · Amended 2026-11-04: a locked group's children come out locked · [#943](https://github.com/KeeprDigital/stream-keepr/issues/943). Records E11 and E12 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783).
 
 ### Decision
 
@@ -2087,7 +2094,7 @@ Accepted · 2026-11-04 · [#920](https://github.com/KeeprDigital/stream-keepr/is
 
 **⌘⇧G puts each child on the canvas where its group drew it.** A canvas group's children are rebased as any item leaving a group is (`placeGraphicItem`). A row or column group's children are first placed where its flex layout put them (`laidOutOnCanvas` in `shared/modules/graphics/authoring.ts`), taking their laid-out size and losing a rotation the row never drew; a hidden child takes no space there and keeps its stored corner.
 
-**What a child inherited is baked in; what only the group drew is dropped.** A child that can paint a surface but holds none of its own takes the group's local style default, and the default's Graphic Theme Binding, and a hidden group's children are hidden, each where the group laid it out. The group's clipping, animation and stagger go, and so do its own surface and glow, which belonged to the group rather than to any child.
+**What a child inherited is baked in; what only the group drew is dropped.** A child that can paint a surface but holds none of its own takes the group's local style default, and the default's Graphic Theme Binding, and a hidden group's children are hidden, each where the group laid it out; a locked group's children are locked (ADR-0063). The group's clipping, animation and stagger go, and so do its own surface and glow, which belonged to the group rather than to any child.
 
 **Two visible changes are accepted for v1.** Ungrouping drops the group's own surface and glow, though its glow, a filter over the whole group, also lit its children; undo restores them. Resting positions are kept but motion is not: grouping takes members out of the Broadcast Graphic's stagger, and a member's `clear-parent` slide then clears the group's box rather than the canvas; ungrouping drops the group's stagger.
 

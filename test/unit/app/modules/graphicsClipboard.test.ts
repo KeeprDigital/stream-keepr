@@ -300,6 +300,44 @@ describe('pasting layers into a Feature Match Layout', () => {
 		expect(outcome.layout.composition.items.at(-1)).toMatchObject({ id: 'new-1', label: `${item.label} copy`, x: item.x + 20 });
 	});
 
+	it('pastes locked layers unlocked, leaving the originals locked (ADR-0063)', () => {
+		const locked: FeatureMatchLayoutConfig = {
+			...layout,
+			sources: [
+				{ ...layout.sources[0]!, locked: true },
+			],
+			composition: {
+				...layout.composition,
+				items: [
+					{
+						...shape('s'),
+						locked: true,
+					},
+				],
+			},
+		};
+		const copied = copyGraphicLayers('feature-match-overlay', locked, [
+			{ type: 'item', itemId: 's' },
+			{ type: 'source', itemId: locked.sources[0]!.id },
+		])!;
+
+		const outcome = pasteFeatureMatchLayers(copied, locked, {
+			nextId: sequentialIds(),
+		});
+
+		if (!outcome.ok)
+			throw new Error(outcome.refusal.reason);
+		expect([
+			...outcome.layout.composition.items,
+			...outcome.layout.sources,
+		].map(entry => entry.locked)).toEqual([
+			true,
+			undefined,
+			true,
+			undefined,
+		]);
+	});
+
 	it('refuses a paste whole that would pass the layout\'s Graphic Item cap', () => {
 		const full: FeatureMatchLayoutConfig = {
 			...layout,

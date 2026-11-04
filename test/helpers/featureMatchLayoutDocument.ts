@@ -137,8 +137,11 @@ export function maximalFeatureMatchLayoutDocument(
 	};
 	name.surfaceStyle = maximalSurfaceStyle();
 	name.rotation = -2;
+	// Layer Locks travel with the layout (ADR-0063).
+	name.locked = true;
 
 	child.sizing = { mode: 'fill', size: 240, weight: 2 };
+	child.locked = true;
 	child.surfaceStyle = maximalSurfaceStyle();
 
 	clock.surfaceStyle = maximalSurfaceStyle();
@@ -287,6 +290,7 @@ export function maximalFeatureMatchLayoutDocument(
 				id: 'main-source',
 				label: 'Main Match Source',
 				visible: true,
+				locked: true,
 				anchor: 'center',
 				configurationVersion: 1,
 				sourceRole: 'main',
@@ -334,5 +338,28 @@ export function maximalFeatureMatchLayoutDocument(
 			},
 		],
 		composition,
+	};
+}
+
+/**
+ * The layout with each named layer stored locked (ADR-0063): a Source Item, a
+ * top-level Graphic Item or a Graphic Group child, matched by id.
+ */
+export function withLayersLocked(layout: FeatureMatchLayoutConfig, ids: readonly string[]): FeatureMatchLayoutConfig {
+	const lock = <T extends { id: string }>(item: T): T => ids.includes(item.id)
+		? { ...item, locked: true }
+		: item;
+	return {
+		...layout,
+		sources: layout.sources.map(lock),
+		composition: {
+			...layout.composition,
+			items: layout.composition.items.map(item => lock(item.type === 'group'
+				? {
+						...item,
+						children: item.children.map(lock),
+					}
+				: item)),
+		},
 	};
 }

@@ -33,7 +33,7 @@ import {
 import { alignLayers, canAlignLayers, canDistributeLayers, distributeLayers } from '~/modules/feature-match-overlay/layerAlignment';
 import { dropLayer } from '~/modules/feature-match-overlay/layerDrag';
 import { layerGroupRefusal } from '~/modules/feature-match-overlay/layerGrouping';
-import { isLayerLocked, isLockedByGroup, lockedLayers, toggleLayerLocks } from '~/modules/feature-match-overlay/layerLocks';
+import { isLayerLocked, isLockedByGroup, toggleLayerLocks } from '~/modules/feature-match-overlay/layerLocks';
 import {
 	collapseLayerSelection,
 	extendLayerSelection,
@@ -73,11 +73,6 @@ interface FeatureMatchLayoutEditorOptions {
 	 * Required, so an editor that forgot the lease cannot write.
 	 */
 	writable: MaybeRefOrGetter<boolean>;
-	/**
-	 * The Layer Locks (#747), editor state the caller remembers per browser per
-	 * Screen and never part of the layout. None are kept without one.
-	 */
-	locks?: Ref<string[]>;
 }
 
 /**
@@ -104,14 +99,13 @@ interface FeatureMatchLayoutEditorOptions {
  * since the next holder's changes would be undone over.
  *
  * A locked layer (#747) is left alone by every canvas verb — a move, a resize, a
- * rotation and an arrow nudge — and still edited by the property panel. Locking
- * is editor state, so it records no undo step, but like every edit it needs the
- * lease.
+ * rotation and an arrow nudge — and still edited by the property panel. The
+ * lock is stored on the layer (#943), so locking is a layout edit like any other:
+ * one undo step, and only while leased.
  */
 export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOptions) {
 	const { config, updateConfig } = options;
 	const writable = computed(() => toValue(options.writable));
-	const locks = options.locks ?? ref<string[]>([]);
 
 	const layerSelection = shallowRef<LayerSelection>(NO_LAYERS);
 	/** Every selected layer, in the order the author chose them. */
@@ -490,27 +484,23 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 
 	/** Whether the canvas leaves a layer alone: locked in its own right, or through its group. */
 	function isLocked(target: FeatureMatchLayoutEditorSelection): boolean {
-		return target.type !== 'canvas' && isLayerLocked(config.value.layout, locks.value, target);
+		return target.type !== 'canvas' && isLayerLocked(config.value.layout, target);
 	}
 
 	/** Whether a Graphic Item is locked only because its Graphic Group is, so its own lock cannot free it. */
 	function isLockedByItsGroup(target: FeatureMatchLayoutEditorLayer): boolean {
-		return isLockedByGroup(config.value.layout, locks.value, target);
+		return isLockedByGroup(config.value.layout, target);
 	}
 
 	/**
-	 * Lock or unlock a layer, or every selected layer: all lock while any is
-	 * unlocked, and all unlock once all are locked. Only while leased.
+	 * Lock or unlock a layer, or every selected layer, as one undo step: all lock
+	 * while any is unlocked, and all unlock once all are locked.
 	 */
 	function toggleLock(target?: FeatureMatchLayoutEditorSelection) {
 		const toggling = targets(target);
-		if (!writable.value || toggling.length === 0)
-			return;
-		locks.value = toggleLayerLocks(config.value.layout, locks.value, toggling);
+		if (toggling.length > 0)
+			editLayout(layout => toggleLayerLocks(layout, toggling));
 	}
-
-	/** Every locked layer in the layout, for the preview to click through. */
-	const locked = computed(() => lockedLayers(config.value.layout, locks.value));
 
 	/** Where each selected locked layer sits on the canvas, for its lock badge. */
 	const lockedSelectionBoxes = computed(() => layers.value.flatMap((layer) => {
@@ -729,7 +719,6 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		isLocked,
 		isLockedByItsGroup,
 		toggleLock,
-		locked,
 		lockedSelectionBoxes,
 		canAlign,
 		canDistribute,
