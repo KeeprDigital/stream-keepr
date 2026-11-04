@@ -13,6 +13,7 @@ import {
 	graphicTextTemplateProjectedValueReferences,
 	readSocialProfileProjectedValueReference,
 	replaceBroadcastGraphic,
+	withoutLayerLock,
 } from '~~/shared/modules/graphics';
 import {
 	MAX_GRAPHIC_GROUP_CHILDREN,
@@ -363,8 +364,8 @@ export function pasteFeatureMatchLayers(
 
 	const label = copyLabeller(layout.sources.map(source => source.label), { keep: true });
 	// A copy lands unlocked, as a pasted Graphic Item does (`cloneGraphicItem`).
-	const sources = copied.sources.map(({ locked: _locked, ...source }) => ({
-		...detached(source),
+	const sources = copied.sources.map(source => ({
+		...detached(withoutLayerLock(source)),
 		id: options.nextId(),
 		label: label(source.label),
 		x: source.x + GRAPHIC_ITEM_DUPLICATE_OFFSET,

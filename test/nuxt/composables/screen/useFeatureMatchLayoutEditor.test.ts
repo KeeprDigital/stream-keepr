@@ -2,6 +2,7 @@ import type { FeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMa
 import { describe, expect, it, vi } from 'vitest';
 import { nextTick, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { withLayersLocked } from '~~/test/helpers/featureMatchLayoutDocument';
 import { media, shape, surfaceStyle, text } from '~~/test/helpers/graphicsComposition';
 import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
 import { copyGraphicStyle } from '~/modules/graphics/clipboard';
@@ -444,23 +445,11 @@ describe('useFeatureMatchLayoutEditor grouping and ungrouping', () => {
 describe('useFeatureMatchLayoutEditor with Layer Locks', () => {
 	type Config = ReturnType<typeof editorFor>['config'];
 
-	/** Store the named Source Items and top-level Graphic Items locked, as another session's write would. */
+	/** Store the named layers locked, as another session's write would. */
 	function storeLocked(config: Config, ids: string[]) {
-		const layout = config.value.layout;
 		config.value = {
 			...config.value,
-			layout: {
-				...layout,
-				sources: layout.sources.map(source => ids.includes(source.id)
-					? { ...source, locked: true }
-					: source),
-				composition: {
-					...layout.composition,
-					items: layout.composition.items.map(item => ids.includes(item.id)
-						? { ...item, locked: true }
-						: item),
-				},
-			},
+			layout: withLayersLocked(config.value.layout, ids),
 		};
 	}
 

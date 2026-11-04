@@ -1,6 +1,6 @@
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchLayoutEditorLayer } from './editorSelection';
-import { findGraphicItem, replaceGraphicItemById } from '~~/shared/modules/graphics';
+import { findGraphicItem, replaceGraphicItemById, withoutLayerLock } from '~~/shared/modules/graphics';
 import { layerOrder } from './layerSelection';
 
 /**
@@ -34,10 +34,9 @@ export function isLayerLocked(layout: FeatureMatchLayoutConfig, layer: FeatureMa
 
 /** A layer's own lock set, or its field dropped, so an unlocked layer is stored as one never locked. */
 function withLock<T extends { locked?: boolean }>(item: T, locked: boolean): T {
-	const { locked: _locked, ...unlocked } = item;
 	return locked
-		? { ...unlocked, locked: true } as T
-		: unlocked as T;
+		? { ...item, locked: true }
+		: withoutLayerLock(item);
 }
 
 /**
@@ -50,8 +49,11 @@ export function toggleLayerLocks(
 	layers: readonly FeatureMatchLayoutEditorLayer[],
 ): FeatureMatchLayoutConfig {
 	const lock = layers.some(layer => !isLayerLocked(layout, layer));
+	// Locking writes the unlocked ones; unlocking, those locked in their own right.
 	return layers
-		.filter(layer => !lock || !isLayerLocked(layout, layer))
+		.filter(layer => lock
+			? !isLayerLocked(layout, layer)
+			: lockedInOwnRight(layout, layer))
 		.reduce((next, layer) => {
 			if (layer.type === 'source') {
 				return {

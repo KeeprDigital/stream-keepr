@@ -5,6 +5,7 @@ import type {
 	FeatureMatchSourceItemConfig,
 } from '~~/shared/types/screenConfig';
 import { createFeatureMatchSourceItem } from '~~/shared/featureMatchSourceItems';
+import { withoutLayerLock } from '~~/shared/modules/graphics';
 
 /**
  * The host-owned Feature Match Layout writer: every mutation of the Frame or of
@@ -160,9 +161,8 @@ export function duplicateSource(layout: FeatureMatchLayoutConfig, id: string): {
 	for (let suffix = 2; labels.has(label); suffix += 1)
 		label = `${original.label} copy ${suffix}`;
 
-	const { locked: _locked, ...unlocked } = original;
 	const copy: FeatureMatchSourceItemConfig = {
-		...(JSON.parse(JSON.stringify(unlocked)) as FeatureMatchSourceItemConfig),
+		...(JSON.parse(JSON.stringify(withoutLayerLock(original))) as FeatureMatchSourceItemConfig),
 		id: nextId('source'),
 		label,
 		x: original.x + SOURCE_ITEM_DUPLICATE_OFFSET,

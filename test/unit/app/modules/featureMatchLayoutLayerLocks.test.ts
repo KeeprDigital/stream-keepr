@@ -10,11 +10,12 @@ import {
 } from '~~/app/modules/feature-match-overlay/layerLocks';
 import { addGraphicGroupChild, addGraphicItem, flattenGraphicItems } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { withLayersLocked } from '~~/test/helpers/featureMatchLayoutDocument';
 
 /**
- * A Layer Lock keeps a layer from canvas edits (#747) and is stored on the layer
- * (#943): locked in its own right or through its Graphic Group (E28), a Source
- * Item too, and a layer stored without one is unlocked.
+ * A Layer Lock keeps a layer from canvas edits and is stored on the layer: locked
+ * in its own right or through its Graphic Group (E28), a Source Item too, and a
+ * layer stored without one is unlocked.
  */
 
 const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
@@ -27,24 +28,13 @@ function layout(locked: string[] = []): FeatureMatchLayoutConfig {
 	composition = addGraphicGroupChild(composition, { kind: 'text', groupId: 'g', id: 'g2' }).graphic;
 	composition = addGraphicGroupChild(composition, { kind: 'text', groupId: 'g', id: 'g1' }).graphic;
 	composition = addGraphicItem(composition, { kind: 'text', id: 'top', ...CANVAS }).graphic;
-	const lock = <T extends { id: string }>(item: T): T => locked.includes(item.id)
-		? { ...item, locked: true }
-		: item;
-	return {
+	return withLayersLocked({
 		...base,
-		composition: {
-			...composition,
-			items: composition.items.map(item => lock(item.type === 'group'
-				? {
-						...item,
-						children: item.children.map(lock),
-					}
-				: item)),
-		},
+		composition,
 		sources: [
-			lock({ ...base.sources[0]!, id: 's1' }),
+			{ ...base.sources[0]!, id: 's1' },
 		],
-	};
+	}, locked);
 }
 
 /** Each layer stored with a `locked` field, and what it holds. */
@@ -165,6 +155,14 @@ describe('feature match layout layer locks', () => {
 		],
 	])('%s', (_, locked, ids, expected) => {
 		expect(storedLocks(toggleLayerLocks(layout(locked), ids.map(layer)))).toEqual(expected);
+	});
+
+	it('writes nothing toggling a child locked only through its group', () => {
+		const locked = layout(['g']);
+
+		expect(toggleLayerLocks(locked, [
+			layer('g1'),
+		])).toBe(locked);
 	});
 
 	it('lists every locked layer of the layout, a locked group\'s children included', () => {

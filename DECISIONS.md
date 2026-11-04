@@ -2012,7 +2012,7 @@ The sample is typical, so overflow shows up on show day rather than while author
 
 ## ADR-0063: A Layer Lock is stored on the layer in the Feature Match Layout, and the canvas clicks through it
 
-Accepted · 2026-11-04 · [#747](https://github.com/KeeprDigital/stream-keepr/issues/747). Records E27 and E28 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783). Amended 2026-11-04: the lock moved from this browser's storage onto the layer · [#943](https://github.com/KeeprDigital/stream-keepr/issues/943)
+Accepted · 2026-11-04 · [#747](https://github.com/KeeprDigital/stream-keepr/issues/747) · Amended 2026-11-04: the lock moved from this browser's storage onto the layer · [#943](https://github.com/KeeprDigital/stream-keepr/issues/943). Records E27 and E28 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783).
 
 ### Decision
 
@@ -2040,7 +2040,7 @@ Frame bars and backgrounds sit under everything and were dragged by accident. Cl
 - A row or column child, or a rotated group's child, has no box of its own on the canvas, so locked it is badged on its row only.
 - A `.sklayout` package carrying a lock is refused by an installation built before #943, on its strict schema; the Feature Match Layout format version is unchanged, since no term changed meaning.
 - Locks set in browser storage under #747 (`editor-featureMatchLayoutLocks:<screenId>`) are not imported and no longer read. #747 was never released, a browser's private lock should not silently become every operator's, and an import would make a write on opening that the author did not ask for.
-- `app/modules/feature-match-overlay/layerLocks.ts` holds the lock rules, `cloneGraphicItem` and `ungroupGraphicGroup` in `shared/modules/graphics/authoring.ts` what a copy and an ungroup do with one, and `editorLayersFrame` leaves locked layers out of what the canvas moves.
+- `app/modules/feature-match-overlay/layerLocks.ts` holds the lock rules. `withoutLayerLock` in `shared/modules/graphics/authoring.ts` is how every copy drops one: `cloneGraphicItem` for Graphic Items, and a Source Item's duplicate and paste. `ungroupGraphicGroup` bakes a group's lock in, and `editorLayersFrame` leaves locked layers out of what the canvas moves.
 
 ### Rejected alternatives
 
@@ -2050,7 +2050,7 @@ Frame bars and backgrounds sit under everything and were dragged by accident. Cl
 
 ## ADR-0064: Copied layers and styles stay in this browser, paste within their host, and paste whole or not at all
 
-Accepted · 2026-11-04 · [#746](https://github.com/KeeprDigital/stream-keepr/issues/746). Records E23–E26 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783), and #746's Theme-bindings note.
+Accepted · 2026-11-04 · [#746](https://github.com/KeeprDigital/stream-keepr/issues/746) · Amended 2026-11-04: a copy arrives unlocked · [#943](https://github.com/KeeprDigital/stream-keepr/issues/943). Records E23–E26 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783), and #746's Theme-bindings note.
 
 ### Decision
 
@@ -2086,7 +2086,7 @@ Each is #783's recommendation for v1. Reading the system clipboard needs the bro
 
 ## ADR-0065: Ungrouping keeps what each child draws, and what only the group drew goes with it
 
-Accepted · 2026-11-04 · [#920](https://github.com/KeeprDigital/stream-keepr/issues/920). Records E11 and E12 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783).
+Accepted · 2026-11-04 · [#920](https://github.com/KeeprDigital/stream-keepr/issues/920) · Amended 2026-11-04: a locked group's children come out locked · [#943](https://github.com/KeeprDigital/stream-keepr/issues/943). Records E11 and E12 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783).
 
 ### Decision
 

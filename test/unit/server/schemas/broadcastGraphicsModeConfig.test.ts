@@ -1595,8 +1595,6 @@ describe('graphic Animation bounds', () => {
 
 /** A Layer Lock is stored on a Feature Match Layout's layers only (ADR-0063). */
 describe('a Layer Lock', () => {
-	const LOCKED = { locked: true };
-
 	function groupOf(child: Record<string, unknown>) {
 		return {
 			...getGraphicItemDefinition('group').createDefault({
@@ -1609,63 +1607,74 @@ describe('a Layer Lock', () => {
 		};
 	}
 
-	function featureMatchLayoutWith(lock: 'item' | 'child' | 'source') {
-		const config = structuredClone(getDefaultConfigForMode('feature-match-overlay')) as unknown as Record<string, any>;
-		config.layout.composition.items = [
-			lock === 'child'
-				? groupOf({
-						...shapeItem('child'),
-						...LOCKED,
-					})
-				: {
-						...shapeItem('item'),
-						...(lock === 'item'
-							? LOCKED
-							: {}),
-					},
-		];
-		config.layout.sources[0] = {
-			...config.layout.sources[0],
-			...(lock === 'source'
-				? LOCKED
-				: {}),
-		};
-		return modeConfigPatchSchemaMap['feature-match-overlay'].safeParse({ layout: config.layout });
-	}
+	const LOCKED_ITEM = {
+		...shapeItem('item'),
+		locked: true,
+	};
+	const LOCKED_CHILD = groupOf({
+		...shapeItem('child'),
+		locked: true,
+	});
 
-	function broadcastGraphicWith(lock: 'item' | 'child') {
-		return modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({
+	it.each<[string, Record<string, unknown>[], boolean]>([
+		[
+			'a top-level item',
+			[LOCKED_ITEM],
+			false,
+		],
+		[
+			'a group child',
+			[LOCKED_CHILD],
+			false,
+		],
+		[
+			'a Source Item',
+			[
+				shapeItem('item'),
+			],
+			true,
+		],
+	])('is stored on a Feature Match Layout\'s %s', (_, items, lockSource) => {
+		const config = structuredClone(getDefaultConfigForMode('feature-match-overlay')) as unknown as Record<string, any>;
+		config.layout.composition.items = items;
+		config.layout.sources[0].locked = lockSource;
+
+		expect(modeConfigPatchSchemaMap['feature-match-overlay'].safeParse({ layout: config.layout }).success).toBe(true);
+	});
+
+	it.each<[string, Record<string, unknown>]>([
+		['a locked top-level item', LOCKED_ITEM],
+		['a locked group child', LOCKED_CHILD],
+		[
+			'an item stored unlocked',
+			{
+				...shapeItem('item'),
+				locked: false,
+			},
+		],
+	])('is refused on a Broadcast Graphic\'s %s', (_, item) => {
+		const result = modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({
+			graphics: [
+				{
+					...graphic('graphic'),
+					items: [item],
+				},
+			],
+		});
+
+		expect(messages(result)).toContain('Layer Locks are available only in Feature Match Layouts');
+	});
+
+	it('leaves a Broadcast Graphic holding no lock alone', () => {
+		expect(modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({
 			graphics: [
 				{
 					...graphic('graphic'),
 					items: [
-						lock === 'child'
-							? groupOf({
-									...shapeItem('child'),
-									...LOCKED,
-								})
-							: {
-									...shapeItem('item'),
-									...LOCKED,
-								},
+						groupOf(shapeItem('child')),
 					],
 				},
 			],
-		});
-	}
-
-	it.each<['item' | 'child' | 'source']>([
-		['item'],
-		['child'],
-		['source'],
-	])('is stored on a Feature Match Layout %s', (lock) => {
-		expect(featureMatchLayoutWith(lock).success).toBe(true);
-	});
-
-	it.each<['item' | 'child']>([
-		['item'],
-		['child'],
-	])('is refused on a Broadcast Graphic %s', (lock) => {
-		expect(messages(broadcastGraphicWith(lock))).toContain('Layer Locks are available only in Feature Match Layouts');
+		}).success).toBe(true);
 	});
 });

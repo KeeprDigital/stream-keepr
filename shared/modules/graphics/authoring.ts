@@ -1555,6 +1555,15 @@ export interface CloneGraphicItemOptions {
 }
 
 /**
+ * A layer without its Layer Lock (ADR-0063): how a copy of a locked layer
+ * arrives, and how an unlocked layer is stored.
+ */
+export function withoutLayerLock<T extends { locked?: boolean }>(item: T): T {
+	const { locked: _locked, ...unlocked } = item;
+	return unlocked as T;
+}
+
+/**
  * A detached copy of one Graphic Item, a Graphic Group with copies of its
  * children, each under a fresh id and the name `label` gives it, and unlocked:
  * a Layer Lock holds the original where it is, and a copy lands somewhere new to
@@ -1564,16 +1573,15 @@ export interface CloneGraphicItemOptions {
  */
 export function cloneGraphicItem<T extends GraphicItemConfig>(item: T, options: CloneGraphicItemOptions): T {
 	// A JSON copy: the item is stored configuration, and may arrive as a reactive proxy.
-	const copy = JSON.parse(JSON.stringify(item)) as T;
+	const copy = withoutLayerLock(JSON.parse(JSON.stringify(item)) as T);
 	copy.id = options.nextId();
 	copy.label = options.label(copy.label);
-	delete copy.locked;
 	if (copy.type === 'group') {
-		copy.children = copy.children.map(({ locked: _locked, ...child }) => ({
-			...child,
+		copy.children = copy.children.map(child => ({
+			...withoutLayerLock(child),
 			id: options.nextId(),
 			label: options.label(child.label),
-		}) as GraphicGroupChildConfig);
+		}));
 	}
 	return copy;
 }

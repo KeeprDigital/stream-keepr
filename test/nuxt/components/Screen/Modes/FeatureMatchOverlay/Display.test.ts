@@ -9,6 +9,7 @@ import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES, featureMatchSampleDataset } from '~~
 import { featureMatchStressDataset } from '~~/shared/featureMatchStressDataset';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { withLayersLocked } from '~~/test/helpers/featureMatchLayoutDocument';
 import { clock, shape, text } from '~~/test/helpers/graphicsComposition';
 import { LUFFY } from '~~/test/helpers/opCards';
 import Display from '~/components/Screen/Modes/FeatureMatchOverlay/Display.vue';
@@ -610,14 +611,13 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(guide().classes()).toContain('is-selected');
 		});
 
-		// #747: a click on a layer the layout stores locked falls through to whatever lies beneath it.
+		// A click on a layer the layout stores locked falls through to whatever lies beneath it.
 		it('stops offering the layers the layout locks, so a click reaches what lies beneath', async () => {
 			const config = guidedConfig();
-			config.layout.sources = config.layout.sources.map(source => source.id === 'main-source'
-				? { ...source, locked: true }
-				: source);
-			config.layout.composition.items = config.layout.composition.items.map(item => ({ ...item, locked: true }));
-			mockConfig.value = config;
+			mockConfig.value = {
+				...config,
+				layout: withLayersLocked(config.layout, ['main-source', 'shared-clock']),
+			};
 			mockPreviewGuides.value = true;
 			mockIsPreview.value = true;
 			const postMessage = vi.spyOn(window.parent, 'postMessage');

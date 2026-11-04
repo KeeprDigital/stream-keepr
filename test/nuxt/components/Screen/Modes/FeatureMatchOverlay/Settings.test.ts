@@ -1068,7 +1068,7 @@ describe('featureMatchOverlaySettings — Layer Locks', () => {
 		return mockConfig.value.layout.sources.find(item => item.id === SOURCE.itemId)!.x;
 	}
 
-	function previewLocks(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+	function lockState(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
 		const aside = wrapper.get('[data-testid="preview-output-aside"]');
 		return {
 			locked: mockConfig.value.layout.sources.find(item => item.id === SOURCE.itemId)?.locked,
@@ -1092,7 +1092,7 @@ describe('featureMatchOverlaySettings — Layer Locks', () => {
 		await press('l', { metaKey: true, shiftKey: true });
 		await press('ArrowRight');
 
-		expect(previewLocks(wrapper)).toEqual({
+		expect(lockState(wrapper)).toEqual({
 			locked: true,
 			boxes: 1,
 			frame: null,

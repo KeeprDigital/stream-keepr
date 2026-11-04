@@ -340,3 +340,26 @@ export function maximalFeatureMatchLayoutDocument(
 		composition,
 	};
 }
+
+/**
+ * The layout with each named layer stored locked (ADR-0063): a Source Item, a
+ * top-level Graphic Item or a Graphic Group child, matched by id.
+ */
+export function withLayersLocked(layout: FeatureMatchLayoutConfig, ids: readonly string[]): FeatureMatchLayoutConfig {
+	const lock = <T extends { id: string }>(item: T): T => ids.includes(item.id)
+		? { ...item, locked: true }
+		: item;
+	return {
+		...layout,
+		sources: layout.sources.map(lock),
+		composition: {
+			...layout.composition,
+			items: layout.composition.items.map(item => lock(item.type === 'group'
+				? {
+						...item,
+						children: item.children.map(lock),
+					}
+				: item)),
+		},
+	};
+}
