@@ -46,13 +46,22 @@ function route(path: string, options?: { method?: string }) {
 	throw new Error(`unexpected ${path}`);
 }
 
-function mountModal() {
+function mountModal(player: Parameters<typeof createMockPlayer>[0] = {}) {
 	return mount(OpDeckListModal, {
 		props: {
-			player: createMockPlayer({ id: 4, name: '', nickname: 'ana' }),
+			player: createMockPlayer({
+				id: 4,
+				name: '',
+				nickname: 'ana',
+				...player,
+			}),
 		},
 		global: { stubs: nuxtUiStubs },
 	});
+}
+
+function useImportedButton(wrapper: ReturnType<typeof mountModal>) {
+	return wrapper.findAll('button').find(button => button.text() === 'Use imported Deck List');
 }
 
 describe('a Player\'s Deck List editor', () => {
@@ -113,5 +122,77 @@ describe('a Player\'s Deck List editor', () => {
 				['OP01-025', 'true'],
 				['OP99-999', 'false'],
 			]);
+	});
+
+	// A TCG+ Import keeps a hand edit it differs from (ADR-0074).
+	it.each([
+		[
+			'a hand edit to an imported Player\'s list',
+			'tcgplus',
+			true,
+			true,
+		],
+		[
+			'an imported list',
+			'tcgplus',
+			false,
+			false,
+		],
+		[
+			'a hand-added Player\'s list',
+			null,
+			true,
+			false,
+		],
+	] as const)('offers to use the imported Deck List over %s: %s', async (_label, externalSource, handEdited, offered) => {
+		mockFetch.mockImplementation((path: string, options?: { method?: string }) => options?.method === 'GET'
+			? Promise.resolve({
+					deckList: { ...SAVED, handEdited },
+				})
+			: route(path, options));
+		const wrapper = mountModal({
+			externalSource,
+			externalId: externalSource ? '0001' : null,
+		});
+		await flushPromises();
+
+		expect(useImportedButton(wrapper) !== undefined).toBe(offered);
+	});
+
+	it('takes the imported Deck List, showing it as saved', async () => {
+		const imported = {
+			...SAVED,
+			id: 32,
+			handEdited: false,
+			sourceText: '1x OP01-016 Nami',
+		};
+		const taking = deferred<unknown>();
+		mockFetch.mockImplementation((path: string, options?: { method?: string }) => {
+			if (options?.method === 'GET') {
+				return Promise.resolve({
+					deckList: { ...SAVED, handEdited: true },
+				});
+			}
+			if (path.endsWith('/deck-list/use-imported'))
+				return taking.promise;
+			return route(path, options);
+		});
+		const wrapper = mountModal({ externalSource: 'tcgplus', externalId: '0001' });
+		await flushPromises();
+
+		await useImportedButton(wrapper)!.trigger('click');
+		await flushPromises();
+
+		expect(useImportedButton(wrapper)!.attributes('aria-busy')).toBe('true');
+		expect(mockFetch).toHaveBeenCalledWith('/api/events/7/players/4/deck-list/use-imported', expect.objectContaining({ method: 'POST' }));
+		taking.resolve({
+			deckList: imported,
+			player: createWireMockPlayer({ id: 4 }),
+		});
+		await flushPromises();
+
+		expect(wrapper.get('[data-deck-list]').attributes('data-hand-edited')).toBe('false');
+		expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('1x OP01-016 Nami');
+		expect(useImportedButton(wrapper)).toBeUndefined();
 	});
 });

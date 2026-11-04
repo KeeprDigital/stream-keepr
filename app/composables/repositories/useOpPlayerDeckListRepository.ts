@@ -2,7 +2,7 @@ import type { SavedOpPlayerDeckList, WriteOpPlayerDeckListAnswer } from '~~/shar
 import type { Player } from '~/types';
 import { useEventDataFetch } from '~/modules/event-data/client';
 
-/** A One Piece Card Game Player's Deck List (ADR-0074), read and written by hand. */
+/** A One Piece Card Game Player's Deck List (ADR-0074), read and written by hand, or taken back from the last TCG+ Import. */
 export function useOpPlayerDeckListRepository() {
 	const eventData = useEventDataFetch();
 	const path = (eventId: number, playerId: number) => ({
@@ -28,5 +28,15 @@ export function useOpPlayerDeckListRepository() {
 			},
 		);
 
-	return { read, write };
+	/** Drops a hand edit for the Deck List the last TCG+ Import brought the Player. */
+	const takeImported = async (eventId: number, playerId: number) =>
+		await eventData.command<WriteOpPlayerDeckListAnswer<Player>>(
+			{
+				...path(eventId, playerId),
+				suffix: 'deck-list/use-imported',
+			},
+			{ method: 'POST' },
+		);
+
+	return { read, write, takeImported };
 }

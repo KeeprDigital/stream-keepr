@@ -8,6 +8,7 @@ import { createFeatureMatchRealtimeHandlers } from './featureMatchHandlers';
 import { createMeleeRealtimeHandlers } from './meleeHandlers';
 import { createPlayerMetagameRealtimeHandlers } from './playerMetagameHandlers';
 import { createScreenCardRealtimeHandlers } from './screenCardHandlers';
+import { createTcgPlusRealtimeHandlers } from './tcgPlusHandlers';
 import { createTournamentStructureRealtimeHandlers } from './tournamentStructureHandlers';
 
 export type { AcceptRealtimeMessage } from './types';
@@ -39,5 +40,6 @@ export function createEventRealtimeHandlers(options: EventRealtimeSessionHandler
 		...createBroadcastGraphicsRealtimeHandlers(options),
 		...createBroadcastDeckListRealtimeHandlers(options),
 		...createMeleeRealtimeHandlers(options),
+		...createTcgPlusRealtimeHandlers(options),
 	} satisfies EventRoomHandlers;
 }

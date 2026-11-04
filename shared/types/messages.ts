@@ -363,6 +363,13 @@ export interface MessageDefinitions {
 		roundId: number;
 	};
 
+	// TCG+ Import (ADR-0074)
+	/** A TCG+ Import committed: the Players it named, and how many Deck Lists it wrote. */
+	'tcgplus:imported': {
+		playerCount: number;
+		deckCount: number;
+	};
+
 	// Card management (screen-scoped). `card:updated` and `card:cleared` carry
 	// the Card revision the write committed. A holder applies only a Card state
 	// at least as new as the one it holds, whether it arrives as an announcement,

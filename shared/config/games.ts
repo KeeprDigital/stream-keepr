@@ -80,13 +80,14 @@ export const MTG_ONLY: readonly Game[] = ['mtg'];
 /**
  * The Card Games each Event page is offered to, read by its page guard, the
  * Event nav and the settings tabs alike. A One Piece Card Game Event has
- * Players (ADR-0074) but no Rounds, Matches or Melee Sync (ADR-0057).
+ * Players, and a Sync page that runs its TCG+ Import (ADR-0074), but no
+ * Rounds, Matches or Melee Sync (ADR-0057).
  */
 export const EVENT_PAGE_CARD_GAMES = {
 	players: EVERY_CARD_GAME,
 	matches: MTG_ONLY,
 	eventStructure: MTG_ONLY,
-	sync: MTG_ONLY,
+	sync: EVERY_CARD_GAME,
 	metagame: MTG_ONLY,
 	archetypeReview: MTG_ONLY,
 	cards: MTG_ONLY,

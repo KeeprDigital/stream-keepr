@@ -6,7 +6,8 @@
  *
  * Every column of every synced entity is classified exactly once:
  * - manualWritable: operators may write it
- * - meleeOwned: only Melee Sync may write it (identity + sync lifecycle, and
+ * - meleeOwned: only an import (Melee Sync, or a Player's TCG+ Import,
+ *   ADR-0074) may write it (identity + sync lifecycle, and
  *   a Match's result: ADR-0047)
  * - serverManaged: only the server itself writes it (keys, timestamps,
  *   workflow pointers)

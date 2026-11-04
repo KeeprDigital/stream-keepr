@@ -2499,6 +2499,8 @@ The Metagame is all or nothing: either the whole field was imported or no Metaga
 - **Catalogue corrections.** A card bandai-keepr corrects stays as first fetched until the catalogue row is cleared. Nothing refreshes it.
 - **No standings.** OP standings, records and Conversion Rate wait for a source. The export has none.
 - **Duplicates.** A hand-added Player who later appears in an import is duplicated until the operator deletes one.
+- **How the import lands.** `server/modules/tcgplus-import` reads the export by its Japanese headers, never by position, and refuses a file missing one (`422 TCGPLUS_EXPORT_INVALID`). Preview and import each send the whole export, so the browser holds it between them; its routes take a body up to 4 MiB rather than the usual 1 MiB. The import resolves every card number in one lookup before writing, then writes the Players in one batch and the changed Deck Lists in a second (`opDeckListWriteModule().writeMany`). A failure between the two leaves the Players without their new Deck Lists, and a re-import finishes them. It announces one `tcgplus:imported` count rather than a `player:updated` per Player, as Melee Sync does.
+- **The import's Deck List is kept.** Each import stores the Deck List it brought every Player (`tcgplus_imported_deck_lists`), so "Use imported Deck List" takes it at once rather than waiting for the next import.
 - **CONTEXT.md.** Its Deck List, Leader, Archetype, Unresolved Deck Card and Feature Match Deck List entries, and its new Nickname and TCG+ Import entries, state this decision ahead of the code.
 
 ### Rejected alternatives

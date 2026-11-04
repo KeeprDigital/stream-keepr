@@ -1,8 +1,10 @@
+import type { DbPlayer } from '~~/server/db/schema';
 import type { FeatureMatchResponse, ManualPlayerSlotData, PlayerResponse } from '~~/shared/api';
 import type { OpCatalogueCard } from '~~/shared/types/card/op';
 import type { PlayerSide } from '~~/shared/types/enums';
 import type { SavedFeatureMatchDeckList } from '~~/shared/types/featureMatchDeckList';
 import type { OpDeckListEntry, OpDeckListView, SavedOpPlayerDeckList, WriteOpPlayerDeckListAnswer } from '~~/shared/types/opDeckList';
+import type { LeaderArchetype } from './archetypes';
 import type { PastedDeckListLine } from './paste';
 import { and, eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
@@ -15,6 +17,7 @@ import { featureMatchService } from '~~/server/services/featureMatch';
 import { featureMatchDeckListService } from '~~/server/services/featureMatchDeckList';
 import { opPlayerDeckListService } from '~~/server/services/opPlayerDeckList';
 import { bandaiKeeprConfig } from '~~/server/utils/bandaiKeepr';
+import { inJsonArray } from '~~/server/utils/db';
 import { runCompensation } from '~~/server/utils/errors';
 import { requireOpEvent } from '~~/server/utils/routeGuards';
 import { catalogueOpLeader } from '~~/shared/utils/card/op';
@@ -98,16 +101,19 @@ interface ResolvedInput {
 	marked: string | null;
 }
 
-/** The input's entries with their cards, through the catalogue and at most one bulk lookup. */
-async function resolveInput(input: OpDeckListInput): Promise<ResolvedInput> {
-	const lines = inputLines(input);
+function inputNumbers(input: OpDeckListInput, lines: readonly PastedDeckListLine[]): string[] {
 	const given = input.leaderNumber ?? null;
-	const cards = await opCardCatalogueModule().resolve(bandaiKeeprConfig, [
+	return [
 		...lines.map(line => line.number),
 		...(given === null
 			? []
 			: [given]),
-	]);
+	];
+}
+
+/** The input's entries with the cards resolved for them. */
+function withCards(input: OpDeckListInput, lines: readonly PastedDeckListLine[], cards: ReadonlyMap<string, OpCatalogueCard | null>): ResolvedInput {
+	const given = input.leaderNumber ?? null;
 	const entries = lines.map(line => ({ ...line, card: cards.get(line.number) ?? null }));
 	// ADR-0057: a pasted Leader line sets the Leader, and only a paste with none keeps the one picked.
 	const pastedLeader = 'text' in input && entries.some(entry => entry.card?.category === 'leader');
@@ -115,6 +121,21 @@ async function resolveInput(input: OpDeckListInput): Promise<ResolvedInput> {
 	if (marked !== null && !entries.some(entry => entry.number === marked))
 		entries.unshift({ number: marked, quantity: 1, card: cards.get(marked) ?? null });
 	return { entries, marked };
+}
+
+/** The inputs' entries with their cards, through the catalogue and at most one bulk lookup for them all. */
+async function resolveInputs(inputs: readonly OpDeckListInput[]): Promise<ResolvedInput[]> {
+	const lineSets = inputs.map(inputLines);
+	const cards = await opCardCatalogueModule().resolve(
+		bandaiKeeprConfig,
+		inputs.flatMap((input, index) => inputNumbers(input, lineSets[index]!)),
+	);
+	return inputs.map((input, index) => withCards(input, lineSets[index]!, cards));
+}
+
+async function resolveInput(input: OpDeckListInput): Promise<ResolvedInput> {
+	const [resolved] = await resolveInputs([input]);
+	return resolved!;
 }
 
 function leaderCardOf(view: OpDeckListView): OpCatalogueCard | null {
@@ -266,5 +287,95 @@ export function opDeckListWriteModule() {
 		return await playerDeckLists.findByPlayer(eventId, playerId);
 	}
 
-	return { write, readPlayer };
+	/**
+	 * The Deck Lists `inputs` would save, each with its Leader and warnings,
+	 * resolved in one bulk lookup for them all. It saves no Deck List, though
+	 * the lookup fills the card catalogue, whose rows are never wrong.
+	 */
+	async function previewMany({ eventId, inputs }: { eventId: number; inputs: readonly OpDeckListInput[] }): Promise<OpDeckListView[]> {
+		await requireOpEvent(eventId);
+		const resolved = await resolveInputs(inputs);
+		return resolved.map(({ entries, marked }) => opDeckListView(entries, marked));
+	}
+
+	/**
+	 * Writes many Players' Deck Lists at once, as previewed by `previewMany`:
+	 * one batch for them all, each Leader's Archetype derived once, every
+	 * Session showing them corrected, and emptied Archetypes removed. The
+	 * Archetypes it creates or renames are announced; the Players are not, one
+	 * by one, so the caller announces them as a count. Answers the Players as
+	 * written.
+	 */
+	async function writeMany({ eventId, writes, source }: {
+		eventId: number;
+		writes: ReadonlyArray<{ playerId: number; deckList: OpDeckListView }>;
+		source: OpDeckListWriteSource;
+	}): Promise<DbPlayer[]> {
+		if (writes.length === 0)
+			return [];
+		await requireOpEvent(eventId);
+		const derived = new Map<string, LeaderArchetype>();
+		for (const { deckList } of writes) {
+			const leader = leaderCardOf(deckList);
+			if (leader && deckList.leaderNumber !== null && !derived.has(deckList.leaderNumber))
+				derived.set(deckList.leaderNumber, await deriveLeaderArchetype(eventId, deckList.leaderNumber, leader));
+		}
+		const created = [
+			...derived.values(),
+		].flatMap(({ created }) => created ?? []);
+		const playerIds = writes.map(({ playerId }) => playerId);
+		const previous = await db.select({ archetypeId: players.archetypeId })
+			.from(players)
+			.where(and(eq(players.eventId, eventId), inJsonArray(players.id, playerIds)));
+
+		let written: DbPlayer[];
+		try {
+			written = await playerDeckLists.replaceMany(eventId, writes.map(({ playerId, deckList }) => ({
+				eventId,
+				playerId,
+				view: deckList,
+				archetypeId: deckList.leaderNumber === null
+					? null
+					: derived.get(deckList.leaderNumber)?.archetype.id ?? null,
+				handEdited: source === 'hand',
+			})));
+		}
+		catch (error) {
+			await runCompensation(error, () => removeEmptiedLeaderArchetypes(eventId, created.map(archetype => archetype.id)));
+			throw error;
+		}
+
+		for (const archetype of created)
+			await publication.archetypeCreated({ eventId, entity: archetype });
+		// A later Leader's clash may rename one created or renamed earlier: the last name stands.
+		const renamed = new Map([
+			...derived.values(),
+		].flatMap(({ renamed }) => renamed).map(archetype => [archetype.id, archetype]));
+		for (const archetype of renamed.values())
+			await publication.archetypeUpdated({ eventId, entity: archetype });
+		await playerUpdateModule().publishPlayerSnapshotUpdates({
+			eventId,
+			playerIds: written.map(player => player.id),
+		});
+
+		const held = new Set(written.map(player => player.archetypeId));
+		const emptied = [
+			...new Set(previous.flatMap(({ archetypeId }) => archetypeId !== null && !held.has(archetypeId)
+				? [archetypeId]
+				: [])),
+		];
+		const { deletedIds, releasedScreens } = await removeEmptiedLeaderArchetypes(eventId, emptied);
+		for (const screen of releasedScreens)
+			await publication.screenUpdated({ eventId, entity: screen });
+		for (const id of deletedIds)
+			await publication.archetypeDeleted({ eventId, id });
+		return written;
+	}
+
+	return {
+		write,
+		readPlayer,
+		previewMany,
+		writeMany,
+	};
 }

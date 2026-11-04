@@ -10,7 +10,8 @@ import { playerDisplayName } from '~~/shared/utils/playerName';
  * box prefilled with the saved list and a Leader picker. A pasted Leader line
  * overrules the Leader picked. Saving goes through the OP Deck List write,
  * which warns of rule breaches and never refuses; the saved list's warnings
- * stay shown.
+ * stay shown. A hand-edited list of a Player a TCG+ Import brought can be
+ * dropped for the import's.
  */
 const props = defineProps<{
 	player: Player;
@@ -31,6 +32,10 @@ const leaderNumber = ref<string | null>(null);
 const pickedLeader = ref<OpLeader | null>(null);
 const loading = ref(true);
 const saving = ref(false);
+const takingImported = ref(false);
+
+/** A TCG+ Import keeps a hand edit it differs from; the operator may take the import's instead. */
+const canUseImported = computed(() => props.player.externalSource === 'tcgplus' && saved.value?.handEdited === true);
 
 const leaderModel = computed<OpPlayerGameData>({
 	get: () => ({ type: 'op' as const, leader: pickedLeader.value }),
@@ -78,6 +83,24 @@ async function save() {
 			success: { title: 'Deck List saved', color: 'success' },
 			error: { title: 'Failed to save the Deck List', color: 'error' },
 			onSuccess: answer => show(answer.deckList),
+		},
+	);
+}
+
+async function takeImported() {
+	const eventId = eventStore.eventId;
+	if (!eventId)
+		return;
+	await runRequest(
+		() => repository.takeImported(eventId, props.player.id),
+		{
+			loadingRef: takingImported,
+			success: { title: 'Imported Deck List restored', color: 'success' },
+			error: { title: 'Failed to restore the imported Deck List', color: 'error' },
+			onSuccess: (answer) => {
+				show(answer.deckList);
+				text.value = answer.deckList.sourceText;
+			},
 		},
 	);
 }
@@ -141,6 +164,16 @@ async function save() {
 		<template #footer>
 			<div class="flex w-full justify-end gap-2">
 				<UButton
+					v-if="canUseImported"
+					label="Use imported Deck List"
+					color="neutral"
+					variant="outline"
+					class="mr-auto"
+					:loading="takingImported"
+					:disabled="loading || saving"
+					@click="takeImported"
+				/>
+				<UButton
 					label="Close"
 					color="neutral"
 					variant="ghost"
@@ -151,7 +184,7 @@ async function save() {
 					color="primary"
 					aria-label="Save Deck List"
 					:loading="saving"
-					:disabled="loading"
+					:disabled="loading || takingImported"
 					@click="save"
 				/>
 			</div>

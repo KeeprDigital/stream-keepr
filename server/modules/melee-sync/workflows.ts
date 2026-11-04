@@ -6,7 +6,7 @@ import type { MeleeSyncContext } from './context';
 import type { PreviousRoundStandingsResult } from './roundMatches';
 import { createError } from 'h3';
 import { mapMeleePlayersToDb } from '~~/server/mappers/melee';
-import { eventDataPublicationModule, RealtimePublicationError } from '~~/server/modules/event-data-publication';
+import { eventDataPublicationModule, publishSyncAfterCommit } from '~~/server/modules/event-data-publication';
 import { syncMatchesFromMelee, syncPreviousRoundStandingsFromMelee } from '~~/server/modules/melee-sync/roundMatches';
 import { importedMtgCardResolverService } from '~~/server/services/importedMtgCardResolver';
 import { describeKeptStructure, removeImportedStructure } from '~~/server/services/importedStructure';
@@ -17,7 +17,6 @@ import { playerService } from '~~/server/services/player';
 import { playerFeatureMatchSyncService } from '~~/server/services/playerFeatureMatchSync';
 import { roundService } from '~~/server/services/round';
 import { errorNameOf } from '~~/server/utils/errorLogFields';
-import { publishFailureFields } from '~~/server/utils/realtimePublishFailure';
 import { isMeleeManagedRound } from '~~/shared/utils/roundControl';
 import {
 	buildPlayersWithDeckLists,
@@ -83,25 +82,7 @@ async function publishAfterCommit(
 	warnings: string[],
 	publish: () => Promise<void>,
 ): Promise<void> {
-	try {
-		await publish();
-	}
-	catch (error) {
-		if (!(error instanceof RealtimePublicationError))
-			throw error;
-
-		// The provider's account of the refusal, from the `ErrorInfo` the strict
-		// publish wrapped. Without it this line says a notification was lost and
-		// nothing about why — and under a rejected key it says that once per
-		// published stage, forever, with 40400 sitting in the cause each time
-		// (#264, the same field set #253 gave the swallowing path).
-		console.warn(JSON.stringify({
-			message: 'melee_sync_realtime_publish_failed',
-			messageType: error.messageType,
-			...publishFailureFields(error.cause),
-		}));
-		warnings.push(`Data was saved, but realtime notification "${error.messageType}" could not be delivered`);
-	}
+	await publishSyncAfterCommit(warnings, publish, 'melee_sync_realtime_publish_failed');
 }
 
 /**

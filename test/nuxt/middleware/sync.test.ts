@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockEventStore, mockNavigateTo } = vi.hoisted(() => ({
 	mockEventStore: {
-		event: null as { meleeEnabled?: boolean; meleeConfigured?: boolean; initialSetupCompletedAt?: Date | null } | null,
+		event: null as { game?: 'mtg' | 'op'; meleeEnabled?: boolean; meleeConfigured?: boolean; initialSetupCompletedAt?: Date | null } | null,
 	},
 	mockNavigateTo: vi.fn(),
 }));
@@ -26,19 +26,34 @@ describe('sync middleware', () => {
 		vi.clearAllMocks();
 	});
 
-	it('redirects to integrations when melee is disabled', async () => {
-		mockEventStore.event = { meleeEnabled: false, meleeConfigured: false, initialSetupCompletedAt: null };
+	it.each([
+		[
+			'melee is disabled',
+			{ game: 'mtg', meleeEnabled: false, meleeConfigured: false },
+		],
+		[
+			'melee is not configured',
+			{ game: 'mtg', meleeEnabled: true, meleeConfigured: false },
+		],
+	] as const)('sends a Magic Event to integrations when %s', async (_label, event) => {
+		mockEventStore.event = { ...event, initialSetupCompletedAt: null };
 
 		await middleware(createRoute(), {} as any);
 
 		expect(mockNavigateTo).toHaveBeenCalledWith('/event/1/config/integrations');
 	});
 
-	it('redirects to integrations when melee is not configured', async () => {
-		mockEventStore.event = { meleeEnabled: true, meleeConfigured: false, initialSetupCompletedAt: null };
+	// Its Sync is the TCG+ Import (ADR-0074).
+	it('lets a One Piece Event without Melee stay', async () => {
+		mockEventStore.event = {
+			game: 'op',
+			meleeEnabled: false,
+			meleeConfigured: false,
+			initialSetupCompletedAt: null,
+		};
 
 		await middleware(createRoute(), {} as any);
 
-		expect(mockNavigateTo).toHaveBeenCalledWith('/event/1/config/integrations');
+		expect(mockNavigateTo).not.toHaveBeenCalled();
 	});
 });

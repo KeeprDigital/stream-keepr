@@ -896,6 +896,20 @@ export const playerDeckUnresolvedCards = sqliteTable('player_deck_unresolved_car
 ]);
 
 /**
+ * The Deck List the last TCG+ Import brought for a One Piece Card Game Player,
+ * by card number, kept beside a hand edit it did not replace, so "Use imported
+ * Deck List" can take it (ADR-0074).
+ */
+export const tcgPlusImportedDeckLists = sqliteTable('tcgplus_imported_deck_lists', {
+	playerId: integer('player_id')
+		.primaryKey()
+		.references(() => players.id, { onDelete: 'cascade' }),
+	leaderCardNumber: text('leader_card_number'),
+	entries: text('entries', { mode: 'json' }).$type<Array<{ number: string; quantity: number }>>().notNull(),
+	importedAt: integer('imported_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+/**
  * Junction: manually-curated key cards for an archetype (max 5).
  * Replaces the old archetypes.key_cards JSON array.
  */
