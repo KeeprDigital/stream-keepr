@@ -86,6 +86,7 @@ vi.doMock('~~/server/utils/bandaiKeepr', async importOriginal => ({
 
 const { opDeckListWriteModule } = await import('~~/server/modules/op-deck-list-write');
 const { archetypeWriteModule } = await import('~~/server/modules/archetype-write');
+const { playerUpdateModule } = await import('~~/server/modules/player-update');
 const { featureMatchStateService } = await import('~~/server/services/featureMatchState');
 
 const ZORO_DECK = '1x OP01-001 Roronoa Zoro\n4x OP01-025\n4x OP99-999';
@@ -420,19 +421,42 @@ describe('a Player\'s Archetype', () => {
 		expect((await deckRows(player.id))[0]!.archetypeId).toBe((await playerRow(player.id)).archetypeId);
 	});
 
+	const emptyings = {
+		'by a new Leader': (eventId: number, playerId: number) => write(eventId, playerId, { text: '1x OP01-016' }),
+		'by deleting its Player': (eventId: number, playerId: number) => playerUpdateModule().deletePlayer({ eventId, playerId }),
+	};
 	it.each([
-		['is deleted, and the Screens naming it released, when left with no Players', null, false],
+		[
+			'is deleted, and the Screens naming it released, when left with no Players',
+			'by a new Leader',
+			null,
+			false,
+		],
+		[
+			'is deleted, and the Screens naming it released, when left with no Players',
+			'by deleting its Player',
+			null,
+			false,
+		],
 		[
 			'is kept when an operator renamed it',
+			'by a new Leader',
+			{ name: 'Zoro Aggro' },
+			true,
+		],
+		[
+			'is kept when an operator renamed it',
+			'by deleting its Player',
 			{ name: 'Zoro Aggro' },
 			true,
 		],
 		[
 			'is kept when an operator pinned its series',
+			'by a new Leader',
 			{ chartSeries: 3 },
 			true,
 		],
-	] as const)('derived and emptied, %s', async (_label, customisation, kept) => {
+	] as const)('derived and emptied, %s (%s)', async (_label, emptying, customisation, kept) => {
 		const eventId = await stageEvent();
 		const player = await stagePlayer(eventId);
 		await write(eventId, player.id, { text: '1x OP01-001' });
@@ -454,7 +478,7 @@ describe('a Player\'s Archetype', () => {
 			.returning();
 		published.length = 0;
 
-		await write(eventId, player.id, { text: '1x OP01-016' });
+		await emptyings[emptying](eventId, player.id);
 
 		const held = await db.query.archetypes.findFirst({
 			where: eq(schema.archetypes.id, zoro.id),

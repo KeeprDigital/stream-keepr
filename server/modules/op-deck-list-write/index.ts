@@ -22,7 +22,7 @@ import { runCompensation } from '~~/server/utils/errors';
 import { requireOpEvent } from '~~/server/utils/routeGuards';
 import { catalogueOpLeader } from '~~/shared/utils/card/op';
 import { getOpGameData } from '~~/shared/utils/gameData';
-import { deriveLeaderArchetype, removeEmptiedLeaderArchetypes } from './archetypes';
+import { announceDerivedArchetypes, deriveLeaderArchetype, releaseEmptiedLeaderArchetypes, removeEmptiedLeaderArchetypes } from './archetypes';
 import { opDeckListText, opDeckListView, parseOpDeckListText } from './paste';
 
 /**
@@ -201,24 +201,18 @@ export function opDeckListWriteModule() {
 		}
 
 		// The Archetypes go out first, so a client applying the Player knows its Archetype.
-		if (derived?.created)
-			await publication.archetypeCreated({ eventId, entity: derived.created });
-		for (const renamed of derived?.renamed ?? [])
-			await publication.archetypeUpdated({ eventId, entity: renamed });
+		await announceDerivedArchetypes(eventId, derived
+			? [derived]
+			: []);
 		const player = await publication.playerUpdated({ eventId, entity: written });
 		await playerUpdateModule().publishPlayerSnapshotUpdates({
 			eventId,
 			playerIds: [playerId],
 		});
 
-		const emptied = previous.archetypeId !== null && previous.archetypeId !== written.archetypeId
+		await releaseEmptiedLeaderArchetypes(eventId, previous.archetypeId !== null && previous.archetypeId !== written.archetypeId
 			? [previous.archetypeId]
-			: [];
-		const { deletedIds, releasedScreens } = await removeEmptiedLeaderArchetypes(eventId, emptied);
-		for (const screen of releasedScreens)
-			await publication.screenUpdated({ eventId, entity: screen });
-		for (const id of deletedIds)
-			await publication.archetypeDeleted({ eventId, id });
+			: []);
 
 		const deckList = await playerDeckLists.findByPlayer(eventId, playerId);
 		if (!deckList)
@@ -365,30 +359,20 @@ export function opDeckListWriteModule() {
 			throw error;
 		}
 
-		for (const archetype of created)
-			await publication.archetypeCreated({ eventId, entity: archetype });
-		// A later Leader's clash may rename one created or renamed earlier: the last name stands.
-		const renamed = new Map([
+		await announceDerivedArchetypes(eventId, [
 			...derived.values(),
-		].flatMap(({ renamed }) => renamed).map(archetype => [archetype.id, archetype]));
-		for (const archetype of renamed.values())
-			await publication.archetypeUpdated({ eventId, entity: archetype });
+		]);
 		await playerUpdateModule().publishPlayerSnapshotUpdates({
 			eventId,
 			playerIds: written.map(player => player.id),
 		});
 
 		const held = new Set(written.map(player => player.archetypeId));
-		const emptied = [
+		await releaseEmptiedLeaderArchetypes(eventId, [
 			...new Set(previous.flatMap(({ archetypeId }) => archetypeId !== null && !held.has(archetypeId)
 				? [archetypeId]
 				: [])),
-		];
-		const { deletedIds, releasedScreens } = await removeEmptiedLeaderArchetypes(eventId, emptied);
-		for (const screen of releasedScreens)
-			await publication.screenUpdated({ eventId, entity: screen });
-		for (const id of deletedIds)
-			await publication.archetypeDeleted({ eventId, id });
+		]);
 		return written;
 	}
 

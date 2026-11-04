@@ -3,6 +3,7 @@ import type { OpCatalogueCard } from '~~/shared/types/card/op';
 import { and, eq, isNotNull, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { archetypes, cards, playerDecks, players } from '~~/server/db/schema';
+import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { opCatalogueRowFor } from '~~/server/services/opCardCatalogue';
 import { buildReleaseScreenEventReferencesQuery } from '~~/server/services/screen';
 import { inJsonArray } from '~~/server/utils/db';
@@ -110,4 +111,34 @@ export async function removeEmptiedLeaderArchetypes(eventId: number, ids: readon
 		deletedIds: deleted.map(row => row.id),
 		releasedScreens,
 	};
+}
+
+/**
+ * Announces what deriving Leaders' Archetypes did: those created, then those
+ * a clash renamed. A later Leader's clash may rename one created or renamed
+ * earlier, so the last name stands.
+ */
+export async function announceDerivedArchetypes(eventId: number, derived: readonly LeaderArchetype[]): Promise<void> {
+	const publication = eventDataPublicationModule();
+	for (const { created } of derived) {
+		if (created)
+			await publication.archetypeCreated({ eventId, entity: created });
+	}
+	const renamed = new Map(derived.flatMap(({ renamed }) => renamed).map(archetype => [archetype.id, archetype]));
+	for (const archetype of renamed.values())
+		await publication.archetypeUpdated({ eventId, entity: archetype });
+}
+
+/**
+ * Removes those of `ids` a Deck List write or a Player's deletion left with no
+ * Players, unless customised, and announces it: the released Screens, then
+ * the deleted Archetypes. Announced with no origin, as no client applied it.
+ */
+export async function releaseEmptiedLeaderArchetypes(eventId: number, ids: readonly number[]): Promise<void> {
+	const { deletedIds, releasedScreens } = await removeEmptiedLeaderArchetypes(eventId, ids);
+	const publication = eventDataPublicationModule();
+	for (const screen of releasedScreens)
+		await publication.screenUpdated({ eventId, entity: screen });
+	for (const id of deletedIds)
+		await publication.archetypeDeleted({ eventId, id });
 }

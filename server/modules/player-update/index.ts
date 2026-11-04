@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events } from '~~/server/db/schema';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
+import { releaseEmptiedLeaderArchetypes } from '~~/server/modules/op-deck-list-write/archetypes';
 import { archetypeService } from '~~/server/services/archetype';
 import { playerService } from '~~/server/services/player';
 import { playerDeckService } from '~~/server/services/playerDeck';
@@ -226,7 +227,7 @@ export function playerUpdateModule() {
 		playerId,
 		originConnectionId,
 	}: DeletePlayerParams): Promise<{ success: true }> {
-		const { deleted, clearedScreens } = await players.remove(playerId, eventId);
+		const { deleted, archetypeId, clearedScreens } = await players.remove(playerId, eventId);
 
 		// Even for a Player already gone: the clear committed either way (ADR-0032).
 		// No origin, because the deleting client never received these Screens back.
@@ -245,6 +246,9 @@ export function playerUpdateModule() {
 			id: playerId,
 			originConnectionId,
 		});
+		// A One Piece Card Game Leader Archetype goes with its last Player, unless customised (ADR-0074).
+		if (archetypeId !== null)
+			await releaseEmptiedLeaderArchetypes(eventId, [archetypeId]);
 
 		return { success: true };
 	}

@@ -2465,7 +2465,7 @@ Accepted · 2026-11-04 · [#1000](https://github.com/KeeprDigital/stream-keepr/i
 - **Created automatically.** One Archetype per distinct Leader card number, named after the Leader (with the card number when two Leaders share a name) and coloured by it.
 - **Derived, not assigned.** A Player's Archetype follows their Leader. It is never reviewed or reassigned, though an operator may rename an Archetype or pin its chart series, which marks it customised for good. The server refuses Archetype Review and creating or deleting an Archetype by hand on OP.
 - **Name clashes.** When a new Leader shares a name with an Archetype already in the Event, it and every clashing Archetype not customised take their card number, and keep it once the clash is gone, so names stay stable.
-- **Removed when empty.** An auto-created Archetype left without Players is deleted, unless an operator renamed it or pinned a series.
+- **Removed when empty.** An auto-created Archetype left without Players, by a Deck List write or by deleting its last Player, is deleted, and the Screens naming it released, unless an operator renamed it or pinned a series. It is created again if a Player takes that Leader later.
 - **Unknown Leader.** A Player whose Leader is unresolved is unclassified.
 
 **OP Metagame counts every Player's Deck List, and reads participation only.**
@@ -2505,7 +2505,7 @@ The Metagame is all or nothing: either the whole field was imported or no Metaga
 - **The import's Deck List is kept.** Each import stores the Deck List it brought every Player (`tcgplus_imported_deck_lists`), so "Use imported Deck List" takes it at once rather than waiting for the next import.
 - **Resolutions are not remembered.** Unlike Melee Sync's name overrides, nothing maps a resolved number for the next import, so a re-import still holding the misentered number brings it back, unless the Deck List was hand-edited.
 - **One write per Deck List.** A retry or resolution writes each Deck List holding the number on its own. A lookup failing partway leaves the earlier ones rewritten; retrying finishes the rest.
-- **Deleting a Player keeps their Archetype.** Only an OP Deck List write removes an Archetype it leaves without Players, so deleting a Leader's last Player leaves its Archetype in place, and OP refuses deleting one by hand. It is reused if a Player takes that Leader again.
+- **No Archetype deleted by hand.** OP refuses it: an Archetype goes only when it is left without Players and not customised.
 
 ### Rejected alternatives
 
