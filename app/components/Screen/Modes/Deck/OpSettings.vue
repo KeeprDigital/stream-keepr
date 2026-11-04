@@ -1,15 +1,14 @@
 <script setup lang="ts">
-import type { CardSizing, PlayerSide, QuantityPosition } from '~~/shared/types/enums';
+import type { PlayerSide } from '~~/shared/types/enums';
 import type { DeckModeConfig, ResolvedMainboardLayout } from '~~/shared/types/screenConfig';
-import type { NinePoint } from '~~/shared/utils/ninePoints';
+import type { Screen } from '~/types';
 import { DECK_MAINBOARD_LAYOUT_FIELDS } from '~~/shared/screenModeConfigs/deck';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { DEFAULT_DECK_TEXT_SIZES, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getOpGameData } from '~~/shared/utils/gameData';
-import { CARD_SIZING_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
+import { FOLLOWS_THE_THEME, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
-import { BADGE_DISABLED_POINTS } from '~/utils/cardBadges';
 import { withFollowedFeatureMatchSession } from '~/utils/featureMatchFollowedSession';
 
 /**
@@ -18,6 +17,7 @@ import { withFollowedFeatureMatchSession } from '~/utils/featureMatchFollowedSes
  * Leader and a Mainboard only, so no Sideboard, Companion or points.
  */
 const props = defineProps<{
+	screen: Screen;
 	config: DeckModeConfig;
 	eventId: number;
 }>();
@@ -32,7 +32,6 @@ const featureMatchStateStore = useFeatureMatchStateStore();
 const fields = screenModeConfigContract('deck').fields;
 const layoutFields = DECK_MAINBOARD_LAYOUT_FIELDS;
 
-const slotOptions = useFeatureMatchMenuItems();
 const sideOptions: { label: string; value: PlayerSide }[] = [
 	{ label: 'Player 1', value: 'player1' },
 	{ label: 'Player 2', value: 'player2' },
@@ -80,6 +79,41 @@ function updateLayout(patch: Partial<ResolvedMainboardLayout>) {
 	});
 }
 
+const layoutDescriptions = {
+	cardSizing: 'Fit shrinks the cards until every one fits the screen; Fixed takes the card width below, shows the Leader at twice it, and may run off the screen.',
+	alignment: 'Where the cards sit when they don\'t fill their space; a Fixed grid places them across only.',
+	columns: 'Number of columns in each group\'s grid.',
+};
+
+/** For a closed card's summary: how many Screen Theme Overrides the Looks of mounted `groups` hold. */
+function look(...groups: string[]) {
+	return lookSummary('deck', props.screen.themeOverrides, groups);
+}
+
+const headerCardSummary = computed(() => settingsSummary([
+	[
+		props.config.showPlayerName !== false && 'Player name',
+		props.config.showDeckName !== false && 'Leader',
+		props.config.showDeckColors !== false && 'colours',
+	].filter(Boolean).join(', ') || 'Nothing shown',
+	look('header'),
+]));
+const mainboardSummary = computed(() => settingsSummary([
+	layout.value.cardSizing === 'fixed'
+		? `${layout.value.cardWidth} px cards`
+		: 'Fit',
+	props.config.showCostCurve !== false && 'Cost curve',
+]));
+const cardLookSummary = computed(() => settingsSummary([
+	look('card-look'),
+], FOLLOWS_THE_THEME));
+const badgesSummary = computed(() => settingsSummary([
+	props.config.showQuantities
+		? 'Quantity badge'
+		: 'No badges',
+	look('quantity-badge'),
+]));
+
 // What the Slot picker loads, re-read on Reconnect Resync (#610).
 useConsumedEventData(['featureMatchSlots']);
 
@@ -91,26 +125,18 @@ onMounted(async () => {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard title="Deck Source">
-			<UFormField
-				label="Feature Match Slot"
-				description="The Slot whose Deck List to show."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
+		<ScreenSettingsCard id="deck:deck-source" title="Deck Source" :collapsible="false">
+			<ScreenSettingsField label="Feature Match Slot" description="The Slot whose Deck List to show.">
+				<ScreenFeatureMatchSelect
 					data-testid="deck-source-slot"
-					:model-value="source?.slotId ?? undefined"
-					:items="slotOptions"
-					value-key="value"
+					:model-value="source?.slotId"
 					placeholder="Select a slot…"
-					class="w-64"
-					@update:model-value="selectSource({ slotId: $event ?? null })"
+					@update:model-value="selectSource({ slotId: $event })"
 				/>
-			</UFormField>
-			<UFormField
+			</ScreenSettingsField>
+			<ScreenSettingsField
 				label="Side"
 				description="Shows whichever player sits on this side now: after Swap Players, the other player's Deck List."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<USelect
 					data-testid="deck-source-side"
@@ -119,162 +145,84 @@ onMounted(async () => {
 					class="w-64"
 					@update:model-value="selectSource({ side: $event as PlayerSide })"
 				/>
-			</UFormField>
+			</ScreenSettingsField>
 			<p v-if="emptySideHint" data-testid="empty-side-hint" class="text-xs text-muted">
 				{{ emptySideHint }}
 			</p>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Header">
-			<ScreenSettingsToggle
-				:label="fields.showPlayerName.label"
-				description="The player's name, on the first line."
+		<ScreenSettingsCard id="deck:header" title="Header" :summary="headerCardSummary">
+			<ScreenConfigField
+				:field="fields.showPlayerName"
 				:model-value="config.showPlayerName !== false"
-				@update:model-value="emit('update', { showPlayerName: $event })"
+				description="The player's name, on the first line."
+				@update:model-value="emit('update', { showPlayerName: $event === true })"
 			/>
-			<ScreenSettingsToggle
-				:label="fields.showDeckName.label"
-				description="The Leader's name, which names the deck."
+			<ScreenConfigField
+				:field="fields.showDeckName"
 				:model-value="config.showDeckName !== false"
-				@update:model-value="emit('update', { showDeckName: $event })"
+				description="The Leader's name, which names the deck."
+				@update:model-value="emit('update', { showDeckName: $event === true })"
 			/>
-			<ScreenSettingsToggle
-				:label="fields.showDeckColors.label"
-				description="The Leader's colours, beside its name."
+			<ScreenConfigField
+				:field="fields.showDeckColors"
 				:model-value="config.showDeckColors !== false"
-				@update:model-value="emit('update', { showDeckColors: $event })"
+				description="The Leader's colours, beside its name."
+				@update:model-value="emit('update', { showDeckColors: $event === true })"
 			/>
+
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Mainboard">
+		<ScreenSettingsCard id="deck:mainboard" title="Mainboard" :summary="mainboardSummary">
 			<p class="text-xs text-muted">
 				Grouped Character, Event, Stage, each by cost, beside the Leader.
 			</p>
 
-			<ScreenSettingsToggle
-				:label="fields.showCostCurve.label"
-				description="Cards by cost, under the Leader."
+			<ScreenConfigField
+				:field="fields.showCostCurve"
 				:model-value="config.showCostCurve !== false"
-				@update:model-value="emit('update', { showCostCurve: $event })"
+				description="Cards by cost, under the Leader."
+				@update:model-value="emit('update', { showCostCurve: $event === true })"
 			/>
 
 			<USeparator />
 
-			<UFormField
-				:label="layoutFields.cardSizing.label"
-				description="Fit shrinks the cards until every one fits the screen. Fixed takes the card width below, shows the Leader at twice it, and may run off the screen."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					:model-value="layout.cardSizing"
-					:items="CARD_SIZING_SELECT_OPTIONS"
-					class="w-48"
-					@update:model-value="updateLayout({ cardSizing: $event as CardSizing })"
-				/>
-			</UFormField>
-
-			<UFormField
-				:label="layoutFields.alignment.label"
-				description="Where the cards sit when they don't fill their space. A Fixed grid places them across only."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UINinePointPicker
-					:model-value="layout.alignment"
-					aria-label="Mainboard alignment"
-					@update:model-value="updateLayout({ alignment: $event as NinePoint })"
-				/>
-			</UFormField>
-
-			<UFormField
-				v-if="layout.cardSizing === 'fixed'"
-				:label="layoutFields.cardWidth.label"
-				description="Each card's width in px."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="layout.cardWidth"
-					:min="layoutFields.cardWidth.min"
-					:max="layoutFields.cardWidth.max"
-					class="w-32"
-					@update:model-value="updateLayout({ cardWidth: Number($event) })"
-				/>
-			</UFormField>
-
-			<ScreenSettingsToggle
-				:label="layoutFields.autoColumns.label"
-				description="Choose the columns from the card count and the screen's size."
-				:model-value="layout.autoColumns"
-				@update:model-value="updateLayout({ autoColumns: $event })"
+			<ScreenCardGridLayoutFields
+				:layout="layout"
+				:fields="layoutFields"
+				:show="{ alignment: true }"
+				:descriptions="layoutDescriptions"
+				grid-name="Mainboard"
+				@update="updateLayout($event)"
 			/>
-
-			<UFormField
-				v-if="!layout.autoColumns"
-				:label="layoutFields.columns.label"
-				description="Number of columns in each group's grid."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="layout.columns"
-					:min="layoutFields.columns.min"
-					:max="layoutFields.columns.max"
-					class="w-32"
-					@update:model-value="updateLayout({ columns: Number($event) })"
-				/>
-			</UFormField>
-
-			<UFormField
-				:label="layoutFields.cardGap.label"
-				description="The space between cards in px."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="layout.cardGap"
-					:min="layoutFields.cardGap.min"
-					:max="layoutFields.cardGap.max"
-					class="w-32"
-					@update:model-value="updateLayout({ cardGap: Number($event) })"
-				/>
-			</UFormField>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Card Badges">
-			<ScreenSettingsToggle
-				:label="fields.showQuantities.label"
-				description="Show quantity badges on cards with multiple copies."
-				:model-value="config.showQuantities"
-				@update:model-value="emit('update', { showQuantities: $event })"
-			/>
+		<ScreenSettingsCard
+			id="deck:card-look"
+			title="Card Look"
+			subtitle="How the Deck List's cards read."
+			:summary="cardLookSummary"
+		>
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="card-look" />
+		</ScreenSettingsCard>
 
-			<template v-if="config.showQuantities">
-				<USeparator />
-
-				<UFormField
-					:label="fields.quantityPosition.label"
-					description="Where the badge appears on the card."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UINinePointPicker
-						:model-value="config.quantityPosition ?? DEFAULT_QUANTITY_POSITION"
-						:disabled-points="BADGE_DISABLED_POINTS"
-						aria-label="Quantity badge position"
-						@update:model-value="emit('update', { quantityPosition: $event as QuantityPosition })"
-					/>
-				</UFormField>
-
-				<UFormField
-					:label="fields.quantityBadgeSize.label"
-					description="The badge's text size in px; the badge sizes itself around it."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UInputNumber
-						:model-value="config.quantityBadgeSize ?? DEFAULT_DECK_TEXT_SIZES.quantityBadgeSize"
-						:min="fields.quantityBadgeSize.min"
-						:max="fields.quantityBadgeSize.max"
-						class="w-32"
-						@update:model-value="emit('update', { quantityBadgeSize: Number($event) })"
-					/>
-				</UFormField>
-			</template>
+		<ScreenSettingsCard id="deck:card-badges" title="Card Badges" :summary="badgesSummary">
+			<ScreenCardBadgeFields
+				title="Quantity Badge"
+				:shown="!!config.showQuantities"
+				:shown-field="fields.showQuantities"
+				shown-description="Show quantity badges on cards with multiple copies."
+				:position="config.quantityPosition ?? DEFAULT_QUANTITY_POSITION"
+				:position-field="fields.quantityPosition"
+				:text-size="config.quantityBadgeSize ?? DEFAULT_DECK_TEXT_SIZES.quantityBadgeSize"
+				:size-field="fields.quantityBadgeSize"
+				@update="emit('update', $event)"
+			>
+				<template #look>
+					<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="quantity-badge" />
+				</template>
+			</ScreenCardBadgeFields>
 		</ScreenSettingsCard>
 	</div>
 </template>

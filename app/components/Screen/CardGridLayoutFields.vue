@@ -12,6 +12,10 @@ import { CARD_SIZING_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
  * fields or a board's layout block view; each edit is emitted as the patch
  * naming its layout key. Alignment and stack reveal show only where `show`
  * asks for them.
+ *
+ * In `view` `stack` (Deck List's sideboard strip, ADR-0054) the cards overlap
+ * in one column, so its width shows whatever the sizing, and it has no
+ * columns or gap.
  */
 interface CardGridLayout {
 	cardSizing: CardSizing;
@@ -41,7 +45,10 @@ const props = withDefaults(defineProps<{
 	descriptions?: Partial<Record<CardGridLayoutKey, string>>;
 	/** The grid's name, naming its alignment picker. */
 	gridName?: string;
+	/** How the cards are laid out: a grid, or a stack of overlapping cards. */
+	view?: 'grid' | 'stack';
 }>(), {
+	view: 'grid',
 	show: () => ({}),
 	descriptions: () => ({}),
 	gridName: 'Card grid',
@@ -94,7 +101,7 @@ function write<K extends CardGridLayoutKey>(key: K, value: CardGridLayout[K] | n
 	</ScreenSettingsField>
 
 	<ScreenConfigField
-		v-if="layout.cardSizing === 'fixed'"
+		v-if="view === 'stack' || layout.cardSizing === 'fixed'"
 		:field="fields.cardWidth"
 		:model-value="layout.cardWidth"
 		:description="description('cardWidth')"
@@ -109,25 +116,27 @@ function write<K extends CardGridLayoutKey>(key: K, value: CardGridLayout[K] | n
 		@update:model-value="write('stackReveal', $event)"
 	/>
 
-	<ScreenConfigField
-		:field="fields.autoColumns"
-		:model-value="layout.autoColumns"
-		:description="description('autoColumns')"
-		@update:model-value="write('autoColumns', $event)"
-	/>
+	<template v-if="view === 'grid'">
+		<ScreenConfigField
+			:field="fields.autoColumns"
+			:model-value="layout.autoColumns"
+			:description="description('autoColumns')"
+			@update:model-value="write('autoColumns', $event)"
+		/>
 
-	<ScreenConfigField
-		v-if="!layout.autoColumns"
-		:field="fields.columns"
-		:model-value="layout.columns"
-		:description="description('columns')"
-		@update:model-value="write('columns', $event)"
-	/>
+		<ScreenConfigField
+			v-if="!layout.autoColumns"
+			:field="fields.columns"
+			:model-value="layout.columns"
+			:description="description('columns')"
+			@update:model-value="write('columns', $event)"
+		/>
 
-	<ScreenConfigField
-		:field="fields.cardGap"
-		:model-value="layout.cardGap"
-		:description="description('cardGap')"
-		@update:model-value="write('cardGap', $event)"
-	/>
+		<ScreenConfigField
+			:field="fields.cardGap"
+			:model-value="layout.cardGap"
+			:description="description('cardGap')"
+			@update:model-value="write('cardGap', $event)"
+		/>
+	</template>
 </template>

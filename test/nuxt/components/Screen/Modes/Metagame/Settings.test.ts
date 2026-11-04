@@ -4,6 +4,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';
 import { NuxtLinkStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { screenSettingsLayoutStubs, settingsLayout, settingsSummaries } from '~~/test/nuxt/helpers/screenSettingsLayout';
 import Settings from '~/components/Screen/Modes/Metagame/Settings.vue';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
@@ -103,14 +104,6 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	resetConfig: vi.fn(),
 }));
 
-const ScreenSettingsCardStub = defineComponent({
-	props: {
-		title: { type: String, required: false },
-		subtitle: { type: String, required: false },
-	},
-	template: '<section data-testid="settings-card"><h2>{{ title }}</h2><p v-if="subtitle">{{ subtitle }}</p><slot /></section>',
-});
-
 const ScreenSettingsToggleStub = defineComponent({
 	props: {
 		label: { type: String, required: true },
@@ -170,7 +163,7 @@ async function mountComponent() {
 		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: ScreenSettingsCardStub,
+				...screenSettingsLayoutStubs,
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
 				UFormField: UFormFieldStub,
 				USelect: USelectStub,
@@ -192,6 +185,114 @@ describe('screenMetagameSettings', () => {
 		mockConfig.value = structuredClone(defaultConfig);
 		mockPlayerStore.isLoaded = false;
 		mockPlayerListStore.isLoaded = false;
+	});
+
+	// Each Mode Token's Look sits in the card for what it styles (ADR-0072):
+	// the Table outside chart view, the Chart in it.
+	it.each([
+		[
+			'archetype',
+			'Table',
+			'metagame:table',
+			'table',
+		],
+		[
+			'cards',
+			'Table',
+			'metagame:table',
+			'table',
+		],
+		[
+			'chart',
+			'Chart',
+			'metagame:chart',
+			'chart',
+		],
+	] as const)('lays out its cards in %s view', async (viewMode, title, id, group) => {
+		mockConfig.value = {
+			...structuredClone(defaultConfig),
+			viewMode,
+		};
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const paged = viewMode !== 'chart';
+		expect(settingsLayout(wrapper)).toEqual([
+			{
+				id: 'metagame:data',
+				title: 'Data',
+				collapsible: false,
+				groups: [],
+			},
+			{
+				id,
+				title,
+				collapsible: true,
+				groups: [group],
+			},
+			{
+				id: 'metagame:size-and-surface',
+				title: 'Size & Surface',
+				collapsible: true,
+				groups: ['size-and-surface'],
+			},
+			{
+				id: 'metagame:header',
+				title: 'Header',
+				collapsible: true,
+				groups: ['header'],
+			},
+			...(paged
+				? [
+						{
+							id: 'metagame:pagination',
+							title: 'Pagination',
+							collapsible: true,
+							groups: [],
+						},
+					]
+				: []),
+		]);
+	});
+
+	it('summarises each closed card', async () => {
+		mockConfig.value = {
+			...structuredClone(defaultConfig),
+			headerText: 'Day 2',
+		};
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(settingsSummaries(wrapper)).toEqual({
+			'metagame:table': '4 of 7 columns shown',
+			'metagame:size-and-surface': 'Follows the Theme',
+			'metagame:header': '“Day 2”',
+			'metagame:pagination': '10 per page · Manual paging',
+		});
+	});
+
+	it('links the chart to the Metagame page, where an Archetype pins its series', async () => {
+		mockConfig.value = {
+			...structuredClone(defaultConfig),
+			viewMode: 'chart',
+		};
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="pinned-chart-series-link"]').attributes('href')).toBe('/event/1/metagame');
+	});
+
+	it('writes a cleared archetype limit as the null that shows every archetype', async () => {
+		mockConfig.value = {
+			...structuredClone(defaultConfig),
+			archetypeLimit: 8,
+		};
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		wrapper.get('[data-config-field="archetypeLimit"]').getComponent(UInputNumberStub).vm.$emit('update:modelValue', null);
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ archetypeLimit: null, currentPage: 1 });
 	});
 
 	it('offers a Conversion Rate column to a column list saved before it existed, hidden at the end', async () => {

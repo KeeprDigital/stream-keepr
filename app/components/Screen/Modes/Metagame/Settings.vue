@@ -14,6 +14,7 @@ import type { Screen } from '~/types';
 import { withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { METAGAME_CHART_MAX_ARCHETYPES } from '~~/shared/utils/metagameChart';
+import { columnsSummary, FOLLOWS_THE_THEME, headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
@@ -135,31 +136,47 @@ function persistColumns(columns: ActiveMetagameColumnConfig[]) {
 	updateConfig({ archetypeColumns: columns as MetagameArchetypeColumnConfig[] });
 }
 
-function updateArchetypeLimit(value: number | null | undefined) {
+function updateArchetypeLimit(value: string | number | boolean | null) {
 	updateConfig({
-		archetypeLimit: value == null
+		archetypeLimit: value === null
 			? null
 			: Number(value),
 		currentPage: 1,
 	});
 }
+
+/** For a closed card's summary: how many Screen Theme Overrides the Looks of the mounted `group` holds. */
+function look(group: string) {
+	return lookSummary('metagame', props.screen.themeOverrides, [group]);
+}
+
+const tableSummary = computed(() => settingsSummary([
+	columnsSummary(activeColumns.value),
+	look('table'),
+]));
+const chartSummary = computed(() => settingsSummary([
+	look('chart'),
+], FOLLOWS_THE_THEME));
+const sizeAndSurfaceSummary = computed(() => settingsSummary([
+	look('size-and-surface'),
+], FOLLOWS_THE_THEME));
+const headerCardSummary = computed(() => settingsSummary([
+	headerSummary(config.value),
+	look('header'),
+]));
+const paginationCardSummary = computed(() => paginationSummary(rotation));
 </script>
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard title="Data">
-			<UFormField
-				:label="fields.viewMode.label"
+		<ScreenSettingsCard id="metagame:data" title="Data" :collapsible="false">
+			<ScreenConfigField
+				:field="fields.viewMode"
+				:model-value="config.viewMode"
+				:items="viewModeOptions"
 				description="Choose the metagame table or chart to show."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					:model-value="config.viewMode"
-					:items="viewModeOptions"
-					class="w-48"
-					@update:model-value="updateConfig({ viewMode: $event as MetagameViewMode, currentPage: 1 })"
-				/>
-			</UFormField>
+				@update:model-value="$event !== null && updateConfig({ viewMode: $event as MetagameViewMode, currentPage: 1 })"
+			/>
 
 			<ScreenMetagameScopeFields
 				:config="config"
@@ -170,106 +187,109 @@ function updateArchetypeLimit(value: number | null | undefined) {
 			/>
 
 			<template v-if="config.viewMode !== 'cards'">
-				<UFormField
-					:label="fields.sortBy.label"
+				<ScreenConfigField
+					:field="fields.sortBy"
+					:model-value="config.sortBy"
+					:items="sortByOptions"
 					description="Order archetypes using this metric."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<USelect
-						:model-value="config.sortBy"
-						:items="sortByOptions"
-						class="w-48"
-						@update:model-value="updateConfig({ sortBy: $event as MetagameSortBy, currentPage: 1 })"
-					/>
-				</UFormField>
+					@update:model-value="$event !== null && updateConfig({ sortBy: $event as MetagameSortBy, currentPage: 1 })"
+				/>
 
 				<ScreenConversionTargetField v-if="showsConversionRate" :event-id="eventId" />
 
-				<UFormField
-					:label="fields.archetypeLimit.label"
+				<ScreenConfigField
+					:field="fields.archetypeLimit"
+					:model-value="config.archetypeLimit"
 					:description="config.viewMode === 'chart'
-						? `Show the top archetypes and group the remainder as Other. The chart draws at most ${METAGAME_CHART_MAX_ARCHETYPES}.`
-						: 'Show the top archetypes and group the remainder as Other. Leave empty to show all.'"
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UInputNumber
-						:model-value="config.archetypeLimit"
-						placeholder="All"
-						:min="fields.archetypeLimit.min"
-						:max="fields.archetypeLimit.max"
-						class="w-32"
-						@update:model-value="updateArchetypeLimit($event)"
-					/>
-				</UFormField>
+						? `Show the top archetypes and group the rest as Other; the chart draws at most ${METAGAME_CHART_MAX_ARCHETYPES}.`
+						: 'Show the top archetypes and group the rest as Other, or leave empty to show all.'"
+					placeholder="All"
+					nullable
+					@update:model-value="updateArchetypeLimit($event)"
+				/>
 			</template>
 
 			<template v-else>
-				<UFormField
-					:label="fields.cardSortBy.label"
+				<ScreenConfigField
+					:field="fields.cardSortBy"
+					:model-value="config.cardSortBy"
+					:items="cardSortByOptions"
 					description="Order cards using this metric."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<USelect
-						:model-value="config.cardSortBy"
-						:items="cardSortByOptions"
-						class="w-48"
-						@update:model-value="updateConfig({ cardSortBy: $event as MetagameCardSortBy, currentPage: 1 })"
-					/>
-				</UFormField>
+					@update:model-value="$event !== null && updateConfig({ cardSortBy: $event as MetagameCardSortBy, currentPage: 1 })"
+				/>
 
-				<UFormField
-					:label="fields.limit.label"
+				<ScreenConfigField
+					:field="fields.limit"
+					:model-value="config.limit"
 					description="Maximum number of card rows to include."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UInputNumber
-						:model-value="config.limit"
-						:min="fields.limit.min"
-						:max="fields.limit.max"
-						class="w-32"
-						@update:model-value="updateConfig({ limit: Number($event), currentPage: 1 })"
-					/>
-				</UFormField>
+					@update:model-value="$event !== null && updateConfig({ limit: Number($event), currentPage: 1 })"
+				/>
 			</template>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard
 			v-if="config.viewMode !== 'chart'"
-			title="Columns"
+			id="metagame:table"
+			title="Table"
 			subtitle="Drag to reorder, toggle to show/hide."
+			:summary="tableSummary"
 		>
 			<ScreenColumnVisibilityList
 				:columns="activeColumns"
 				:labels="columnLabels"
 				@update="persistColumns"
 			/>
+
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="table" />
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Header">
-			<ScreenSettingsToggle
-				:label="fields.showHeader.label"
-				description="Show the metagame title above the table."
-				:model-value="config.showHeader"
-				@update:model-value="updateConfig({ showHeader: $event })"
-			/>
-
-			<UFormField
-				v-if="config.showHeader"
-				:label="fields.headerText.label"
-				description="Leave empty for an auto-generated title."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
+		<ScreenSettingsCard
+			v-else
+			id="metagame:chart"
+			title="Chart"
+			:summary="chartSummary"
+		>
+			<ScreenSettingsField
+				label="Pinned Chart Series"
+				description="Give an Archetype its own chart series on the Metagame page, so it keeps that series whichever others show."
 			>
-				<UInput
-					:model-value="config.headerText ?? ''"
-					placeholder="Auto"
-					class="w-64"
-					@update:model-value="updateConfig({ headerText: $event || null })"
-				/>
-			</UFormField>
+				<NuxtLink
+					:to="`/event/${eventId}/metagame`"
+					data-testid="pinned-chart-series-link"
+					class="text-sm text-primary hover:underline"
+				>
+					Pin on the Metagame page
+				</NuxtLink>
+			</ScreenSettingsField>
+
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="chart" />
 		</ScreenSettingsCard>
+
+		<ScreenSettingsCard
+			id="metagame:size-and-surface"
+			title="Size & Surface"
+			subtitle="How wide the table or chart runs, and what it sits on."
+			:summary="sizeAndSurfaceSummary"
+		>
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="size-and-surface" />
+		</ScreenSettingsCard>
+
+		<ScreenHeaderSettingsCard
+			id="metagame:header"
+			:summary="headerCardSummary"
+			:config="config"
+			:fields="fields"
+			show-description="Show the metagame title above the table."
+			auto-description="Leave empty for an auto-generated title."
+			@update="updateConfig($event)"
+		>
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
+		</ScreenHeaderSettingsCard>
 
 		<ScreenPaginationSettingsCard
 			v-if="config.viewMode !== 'chart'"
+			id="metagame:pagination"
+			:summary="paginationCardSummary"
 			:rotation="rotation"
 			page-size-description="Number of table rows shown per page."
 			auto-page-description="Automatically cycle through table pages."
