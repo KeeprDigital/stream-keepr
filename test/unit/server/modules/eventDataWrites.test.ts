@@ -82,7 +82,7 @@ beforeEach(() => {
 		}
 	}
 	services.playerList.getMemberCount!.mockResolvedValue(5);
-	for (const service of ['slot', 'phase', 'round'] as const)
+	for (const service of ['slot', 'phase', 'round', 'talent'] as const)
 		services[service].remove!.mockResolvedValue({ deleted: true, clearedScreens: [] });
 	for (const guard of Object.values(guards)) {
 		guard.mockResolvedValue(undefined);
@@ -206,8 +206,8 @@ describe('a write to an entity the Event does not hold', () => {
 			}),
 		],
 	] as const)('refuses to %s with a 404 and publishes nothing', async (_label, service, method, write) => {
-		// A Slot, Phase or Round delete answers what it released beside whether it deleted.
-		services[service][method]!.mockResolvedValue(method === 'remove' && ['slot', 'phase', 'round'].includes(service)
+		// A Slot, Phase, Round or Talent delete answers what it released beside whether it deleted.
+		services[service][method]!.mockResolvedValue(method === 'remove' && ['slot', 'phase', 'round', 'talent'].includes(service)
 			? { deleted: false, clearedScreens: [] }
 			: undefined);
 

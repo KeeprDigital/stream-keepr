@@ -55,6 +55,7 @@ interface EventEntities {
 	playerListId: number;
 	featureMatchSlotId: number;
 	archetypeId: number;
+	talentId: number;
 	broadcastDeckListId: number;
 }
 
@@ -70,6 +71,7 @@ async function seedEventEntities(eventId: number, label: string): Promise<EventE
 	const [list] = await db.insert(schema.playerLists).values({ eventId, name: `${label} List` }).returning({ id: schema.playerLists.id });
 	const [slot] = await db.insert(schema.featureMatchSlots).values({ eventId }).returning({ id: schema.featureMatchSlots.id });
 	const [archetype] = await db.insert(schema.archetypes).values({ eventId, name: `${label} Archetype` }).returning({ id: schema.archetypes.id });
+	const [talent] = await db.insert(schema.eventTalents).values({ eventId, name: `${label} Talent` }).returning({ id: schema.eventTalents.id });
 	const [deckList] = await db.insert(schema.broadcastDeckLists).values({
 		eventId,
 		name: `${label} Deck List`,
@@ -83,6 +85,7 @@ async function seedEventEntities(eventId: number, label: string): Promise<EventE
 		playerListId: list!.id,
 		featureMatchSlotId: slot!.id,
 		archetypeId: archetype!.id,
+		talentId: talent!.id,
 		broadcastDeckListId: deckList!.id,
 	};
 }
@@ -142,6 +145,20 @@ const SAMPLES: Record<EventReferenceKind, Sample[]> = {
 			name: 'Archetype',
 			naming: e => e.archetypeId,
 			refusal: { statusCode: 404, message: 'Archetype not found' },
+		},
+	],
+	talent: [
+		{
+			name: 'Talent',
+			naming: e => e.talentId,
+			refusal: { statusCode: 404, message: 'Talent not found' },
+		},
+	],
+	talentLineup: [
+		{
+			name: 'Talent lineup',
+			naming: e => [own.talentId, e.talentId],
+			refusal: { statusCode: 404, message: 'Talent not found' },
 		},
 	],
 	deckSource: [
@@ -237,6 +254,8 @@ describe('screen Mode Event References', () => {
 			'head-to-head.player1Id: player',
 			'head-to-head.player2Id: player',
 			'round-clock.roundId: round',
+			'talent.talentId: talent',
+			'talent.talentIds: talentLineup',
 		]);
 	});
 
