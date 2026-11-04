@@ -411,8 +411,9 @@ const timeoutProgress = computed(() => {
 				</div>
 			</div>
 
-			<!-- One Piece Search Results -->
-			<div v-if="isOpEvent" class="flex-1 overflow-y-auto p-4">
+			<!-- One Piece: the Event's Unresolved Deck Cards, then search results -->
+			<div v-if="isOpEvent" class="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+				<OpUnresolvedDeckCards />
 				<OpCardList />
 			</div>
 
