@@ -35,12 +35,14 @@ import { isSelectionToggle } from '~/modules/graphics/selection';
  * Ctrl-click adds or takes out one row (#740). A selected row's menu duplicates
  * and deletes every selected layer, and aligns and distributes them (#919);
  * another row's menu aligns that layer alone, to its container. Its moves, like
- * the arrows, move its own.
+ * the arrows, move its own. Its eye and lock act on every selected layer. A
+ * locked row keeps its lock in view as its badge (#747).
  *
  * One row drags at a time, and is selected alone as it goes: within its section,
  * into a Graphic Group or out of one, as one undo step; Escape cancels, and a
  * drop that is refused says why (#741). The arrows and the row menu's "Move to
- * group" do the same from the keyboard.
+ * group" do the same from the keyboard. A locked row drags too: a lock keeps a
+ * layer from canvas edits only.
  *
  * Without the Graphics Authoring Lease the list still selects, and offers no
  * edit at all (#738).
@@ -694,6 +696,24 @@ function dropIndicatorClass(row: LayerRow) {
 									data-testid="layer-more"
 								/>
 							</UDropdownMenu>
+						</div>
+						<div
+							role="gridcell"
+							class="shrink-0"
+							:class="editor.isLocked(row.target) || (writable && isSelected(row)) ? 'flex' : 'hidden group-hover:flex group-focus-within:flex'"
+						>
+							<UButton
+								size="xs"
+								variant="ghost"
+								:color="editor.isLocked(row.target) ? 'primary' : 'neutral'"
+								:icon="editor.isLocked(row.target) ? 'i-lucide-lock' : 'i-lucide-lock-open'"
+								:aria-label="`Lock ${row.label}`"
+								:aria-pressed="editor.isLocked(row.target)"
+								:disabled="!writable || editor.isLockedByItsGroup(row.target)"
+								:title="editor.isLockedByItsGroup(row.target) ? 'Locked with its group' : undefined"
+								data-testid="layer-lock"
+								@click="editor.toggleLock(rowTarget(row))"
+							/>
 						</div>
 						<div role="gridcell" class="shrink-0">
 							<UButton

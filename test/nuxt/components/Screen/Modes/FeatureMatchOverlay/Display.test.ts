@@ -610,6 +610,42 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(guide().classes()).toContain('is-selected');
 		});
 
+		// #747: a click on a locked layer falls through to whatever lies beneath it.
+		it('stops offering the layers the editor locked, so a click reaches what lies beneath', async () => {
+			mockConfig.value = guidedConfig();
+			mockPreviewGuides.value = true;
+			mockIsPreview.value = true;
+			const postMessage = vi.spyOn(window.parent, 'postMessage');
+
+			const wrapper = await mountComponent();
+			window.dispatchEvent(new MessageEvent('message', {
+				origin: window.location.origin,
+				source: window.parent,
+				data: {
+					type: 'feature-match-overlay:locked-layers',
+					layers: [
+						{ type: 'source', itemId: 'main-source' },
+						{ type: 'item', itemId: 'shared-clock' },
+					],
+				},
+			}));
+			await nextTick();
+
+			expect(wrapper.find('[aria-label="Select Main Match Source"]').exists()).toBe(false);
+			expect(wrapper.find('[aria-label="Select Shared Clock"]').exists()).toBe(false);
+			expect(wrapper.find('[aria-label="Select Player 1 Source"]').exists()).toBe(true);
+			const locked = wrapper.findAll('[data-locked="true"]');
+			expect(locked).toHaveLength(2);
+			for (const guide of locked)
+				await guide.trigger('click');
+			expect(postMessage).not.toHaveBeenCalledWith(expect.objectContaining({
+				target: expect.objectContaining({
+					itemId: expect.any(String),
+				}),
+			}), expect.anything());
+			postMessage.mockRestore();
+		});
+
 		// Who this frame is willing to hear a selection from (#259).
 		describe('listening only where there is an editor to listen to', () => {
 			// The same rule read through what it protects, with the guides flag forced on beside a

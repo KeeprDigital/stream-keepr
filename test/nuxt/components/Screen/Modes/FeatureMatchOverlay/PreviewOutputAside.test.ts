@@ -233,16 +233,26 @@ describe('feature Match Overlay preview aside — its preview frame', () => {
 			'feature-match-overlay:preview-config',
 			'feature-match-overlay:selected-target',
 			'graphics-compositor:selected-target',
+			'feature-match-overlay:locked-layers',
 			'graphics-compositor:preview-animation',
 		]);
 
 		postMessage.mockClear();
 		await wrapper.setProps({
 			compositorTarget: { type: 'item', graphicId: 'feature-match-layout', itemId: 'wins' },
+			lockedLayers: [
+				{ type: 'source', itemId: 'main-source' },
+			],
 		});
 		expect(postMessage).toHaveBeenCalledWith({
 			type: 'graphics-compositor:selected-target',
 			target: { type: 'item', graphicId: 'feature-match-layout', itemId: 'wins' },
+		}, window.location.origin);
+		expect(postMessage).toHaveBeenCalledWith({
+			type: 'feature-match-overlay:locked-layers',
+			layers: [
+				{ type: 'source', itemId: 'main-source' },
+			],
 		}, window.location.origin);
 	});
 
@@ -262,7 +272,7 @@ describe('feature Match Overlay preview aside — its preview frame', () => {
 
 		message(window.location.origin, frame.contentWindow, { type: GRAPHICS_PREVIEW_READY_MESSAGE });
 		await nextTick();
-		expect(postMessage).toHaveBeenCalledTimes(4);
+		expect(postMessage).toHaveBeenCalledTimes(5);
 	});
 
 	// Guides ride the preview's URL only, which is what keeps them off air.

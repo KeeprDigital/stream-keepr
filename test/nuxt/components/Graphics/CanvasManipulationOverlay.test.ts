@@ -35,6 +35,7 @@ function mountOverlay(props: Partial<{
 	rotation: number;
 	anchor: GraphicAnchorPoint;
 	members: (typeof RECT)[];
+	locked: (typeof RECT)[];
 }> = {}) {
 	return mount(CanvasManipulationOverlay, {
 		props: {
@@ -83,6 +84,19 @@ describe('graphicsCanvasManipulationOverlay', () => {
 		const wrapper = mountOverlay({ rect: null });
 
 		expect(wrapper.find('[data-testid="canvas-manipulation-box"]').exists()).toBe(false);
+	});
+
+	// #747: a locked layer is outlined with a badge, and nothing on it moves.
+	it('badges each selected locked layer at the preview\'s scale, with no handle to move it', () => {
+		const wrapper = mountOverlay({
+			rect: null,
+			locked: [RECT],
+		});
+
+		const outline = wrapper.get('[data-testid="canvas-locked-layer"]');
+		expect(outline.attributes('style')).toContain('left: 50px; top: 50px; width: 100px; height: 50px;');
+		expect(outline.get('[role="img"]').attributes('aria-label')).toBe('Locked');
+		expect(wrapper.find('[data-handle]').exists()).toBe(false);
 	});
 
 	it('moves the selection by the drag, in canvas pixels', async () => {
