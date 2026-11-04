@@ -1,17 +1,18 @@
 import type { H3Event } from 'h3';
-import type { GraphicAssetId, GraphicAssetReference, GraphicAssetReferenceStatus, GraphicAssetRevisionId } from '~~/shared/types/graphicsAsset';
+import type { GraphicAssetId, GraphicAssetRevisionId } from '~~/shared/types/graphicsAsset';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
-import {
-	graphicAssetContents,
-	graphicAssetReferences,
-	graphicAssetRevisions,
-	graphicAssets,
-} from '~~/server/db/schema/graphicsAsset';
+import { graphicAssetReferences } from '~~/server/db/schema/graphicsAsset';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
-import { createTestGraphicsLibrary, ingestImage, publishedRevision } from '~~/test/helpers/graphicsLibrary';
+import {
+	catalogueSelectability,
+	createTestGraphicsLibrary,
+	ingestImage,
+	publishedRevision,
+	seedGraphicAssetRevision,
+} from '~~/test/helpers/graphicsLibrary';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
@@ -34,24 +35,7 @@ vi.doMock('~~/server/modules/broadcast-graphics-live-session', () => ({
 	refreshBroadcastGraphicsBindings: async () => {},
 }));
 
-/** Assets the library answered for before they were retired, as a route's question can be overtaken by the commit. */
-const answeredBeforeRetirement = new Set<string>();
-
-/** The library a write asks about selectability: what the catalogue holds, with every content byte available. */
-async function inspectGraphicAssetRevisions(input: { references: GraphicAssetReference[] }): Promise<GraphicAssetReferenceStatus[]> {
-	return await Promise.all(input.references.map(async (reference) => {
-		const [row] = await db.select({ kind: graphicAssets.kind, lifecycleState: graphicAssets.lifecycleState })
-			.from(graphicAssetRevisions)
-			.innerJoin(graphicAssets, eq(graphicAssets.id, graphicAssetRevisions.assetId))
-			.where(eq(graphicAssetRevisions.id, reference.revisionId));
-		const lifecycleState = answeredBeforeRetirement.has(reference.assetId)
-			? 'active'
-			: row?.lifecycleState;
-		return row
-			? { outcome: 'available' as const, kind: row.kind, lifecycleState } as GraphicAssetReferenceStatus
-			: { outcome: 'missing' as const };
-	}));
-}
+const { inspectGraphicAssetRevisions, answeredBeforeRetirement } = catalogueSelectability(harness);
 vi.doMock('~~/server/modules/graphics-asset-library/runtime', () => ({
 	graphicsAssetLibraryForEvent: () => ({ inspectGraphicAssetRevisions }),
 }));
@@ -69,6 +53,7 @@ const handler = (module: { default: unknown }) => module.default as Handler;
 const createTalent = handler(await import('~~/server/api/events/[id]/talents/index.post'));
 const updateTalent = handler(await import('~~/server/api/events/[id]/talents/[talentId]/index.patch'));
 const deleteTalent = handler(await import('~~/server/api/events/[id]/talents/[talentId]/index.delete'));
+const deleteEvent = handler(await import('~~/server/api/events/[id]/index.delete'));
 
 function call(handler: Handler, params: Record<string, string | number>, body?: unknown) {
 	return handler(stubH3Event({
@@ -101,21 +86,12 @@ async function ingest(): Promise<Revision> {
 	return publishedRevision(await ingestImage(context, { idempotencyKey: `image-${++images}`, initiatedBy: 'author' }));
 }
 
-/** A font revision, seeded as the catalogue holds one: font ingestion needs a browser's evidence. */
-const FACE = { assetId: 'asset-face' as GraphicAssetId, revisionId: 'revision-face' as GraphicAssetRevisionId };
+let face: Revision;
+let clip: Revision;
 
 beforeAll(async () => {
-	const digest = 'f'.repeat(64);
-	await db.insert(graphicAssetContents).values({ digest, byteLength: 70, canonicalMime: 'font/woff2' } as never);
-	await db.insert(graphicAssets).values({ id: FACE.assetId, name: 'Brand face', kind: 'font' } as never);
-	await db.insert(graphicAssetRevisions).values({
-		id: FACE.revisionId,
-		assetId: FACE.assetId,
-		revisionNumber: 1,
-		contentDigest: digest,
-		compatibilityProfile: 'static-font-v1',
-		technicalFacts: {},
-	} as never);
+	face = await seedGraphicAssetRevision(harness, 'font', 'face');
+	clip = await seedGraphicAssetRevision(harness, 'silent-video', 'clip');
 });
 
 let portrait: Revision;
@@ -175,6 +151,7 @@ describe('a Talent photo', () => {
 		const talent = await write();
 
 		expect(talent.photo).toEqual(portrait);
+		expect(talent).not.toHaveProperty('graphicAssetReferenceVersion');
 		expect(await storedPhoto(talent.id)).toEqual(portrait);
 		expect(await talentReferences()).toEqual([
 			{
@@ -238,7 +215,7 @@ describe('a Talent photo', () => {
 		[
 			'deleting the Event',
 			async () => {
-				await db.delete(schema.events).where(eq(schema.events.id, eventId));
+				await call(deleteEvent, { id: eventId });
 			},
 		],
 	])('releases it on %s, so it retires and enters Trash', async (_case, release) => {
@@ -279,8 +256,12 @@ describe('a Talent photo', () => {
 			async () => ({ assetId: other.assetId, revisionId: 'revision-invented' }),
 		],
 		[
+			'a silent video',
+			async () => clip,
+		],
+		[
 			'a font',
-			async () => FACE,
+			async () => face,
 		],
 	])('refuses a Talent naming %s, storing nothing', async (_case, photo) => {
 		const value = await photo();

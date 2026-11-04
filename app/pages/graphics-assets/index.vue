@@ -439,7 +439,7 @@ async function runLifecycleAction(
 		if (outcome.outcome === 'in-use') {
 			usageByAssetId[asset.id] = outcome.usage;
 			lifecycleErrorByAssetId[asset.id] = action === 'retire'
-				? `This Graphic Asset cannot be retired while a saved template, Theme or Talent references it: ${
+				? `This Graphic Asset cannot be retired while a saved template, Theme, Screen Theme Override or Talent references it: ${
 					[
 						...new Set(outcome.usage.map(usageReferrer)),
 					].join(', ')

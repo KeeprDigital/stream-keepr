@@ -29,21 +29,4 @@ describe('talent mapper', () => {
 	it('always exposes an empty Social Profile map for an existing Talent', () => {
 		expect(mapTalentToResponse(createMockTalent()).socialProfiles).toEqual({});
 	});
-
-	it.each([
-		['no photo', null, null],
-		[
-			'a photo',
-			{ assetId: 'asset-1', revisionId: 'revision-1' },
-			{ assetId: 'asset-1', revisionId: 'revision-1' },
-		],
-	] as const)('exposes %s and keeps its index version internal', (_case, photo, expected) => {
-		const result = mapTalentToResponse(createMockTalent({
-			photo: photo as never,
-			graphicAssetReferenceVersion: 'version-1',
-		}));
-
-		expect(result.photo).toEqual(expected);
-		expect(result).not.toHaveProperty('graphicAssetReferenceVersion');
-	});
 });

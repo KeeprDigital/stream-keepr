@@ -63,16 +63,16 @@ vi.stubGlobal('createError', (input: { statusCode: number; message?: string }) =
 const { phaseWriteModule } = await import('~~/server/modules/phase-write');
 const { roundWriteModule } = await import('~~/server/modules/round-write');
 const { talentWriteModule } = await import('~~/server/modules/talent-write');
-/** A write naming no photo never asks the library. */
-function noLibrary() {
-	throw new Error('The library was asked about a write naming no photo');
-}
 const { matchWriteModule } = await import('~~/server/modules/match-write');
 const { featureMatchSlotWriteModule } = await import('~~/server/modules/feature-match-slot-write');
 const { playerListWriteModule } = await import('~~/server/modules/player-list-write');
 const { featureMatchSessionModule } = await import('~~/server/modules/feature-match-session');
 
 const origin = 'origin-1';
+/** A write naming no photo never asks the library. */
+function noLibrary(): never {
+	throw new Error('The library was asked about a write naming no photo');
+}
 const matchInput = { roundId: 2, player1Id: 3, player2Id: 4 } as never;
 
 beforeEach(() => {

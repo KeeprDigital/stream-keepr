@@ -746,7 +746,7 @@ describe('the Graphics Asset Library Workspace', () => {
 		await retire!.trigger('click');
 		await flushPromises();
 
-		expect(wrapper.text()).toContain(`cannot be retired while a saved template, Theme or Talent ${named}`);
+		expect(wrapper.text()).toContain(`cannot be retired while a saved template, Theme, Screen Theme Override or Talent ${named}`);
 	});
 
 	it('exposes reversible retirement and Trash actions with blocked usage and recovery facts', async () => {

@@ -86,19 +86,18 @@ export function talentService() {
 
 	/** The same columns by their stored names, for the photo write's own statements. */
 	const storedColumns = (fields: { name?: string; socialProfiles?: SocialProfiles }): TalentColumnValues => {
-		const columns: TalentColumnValues = {};
-		if (fields.name !== undefined)
-			columns.name = fields.name;
-		if (fields.socialProfiles !== undefined) {
-			const profiles = socialProfileColumns(fields.socialProfiles);
-			columns.twitch_handle = profiles.twitchHandle;
-			columns.youtube_handle = profiles.youtubeHandle;
-			columns.x_handle = profiles.xHandle;
-			columns.instagram_handle = profiles.instagramHandle;
-			columns.tiktok_handle = profiles.tiktokHandle;
-			columns.bluesky_handle = profiles.blueskyHandle;
-		}
-		return columns;
+		const values = {
+			...(fields.name === undefined
+				? {}
+				: { name: fields.name }),
+			...(fields.socialProfiles === undefined
+				? {}
+				: socialProfileColumns(fields.socialProfiles)),
+		};
+		return Object.fromEntries(Object.entries(values).map(([key, value]) => [
+			eventTalents[key as keyof typeof values].name,
+			value,
+		]));
 	};
 
 	const findByReferenceVersion = async (version: string) => {
