@@ -5,8 +5,9 @@ import * as schema from '~~/server/db/schema';
 import { knownOpCard } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-// A Deck List Screen showing a One Piece Card Game Player reads that Player and
-// their Deck List through the Screen: a capability reaches no other Player's.
+// A Deck List Screen showing a One Piece Card Game Player, or a Slot side a
+// Player is linked into, reads that Player and their Deck List through the
+// Screen: a capability reaches no other Player's.
 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
@@ -52,15 +53,15 @@ const ids = {
 	screens: {} as Record<string, number>,
 };
 
-async function stageScreens(eventId: number, screens: Array<{ slug: string; mode: 'deck' | 'card'; playerId: number }>) {
-	const rows = await db.insert(schema.screens).values(screens.map(({ slug, mode, playerId }) => ({
+async function stageScreens(eventId: number, screens: Array<{ slug: string; mode: 'deck' | 'card'; playerId?: number; deckSource?: unknown }>) {
+	const rows = await db.insert(schema.screens).values(screens.map(({ slug, mode, playerId, deckSource }) => ({
 		eventId,
 		name: slug,
 		slug,
 		currentMode: mode,
 		modeConfigs: {
 			deck: {
-				deckSource: { type: 'player', playerId },
+				deckSource: deckSource ?? { type: 'player', playerId },
 			},
 		} as never,
 		assetCapabilitySeed: `seed-${slug}`,
@@ -135,6 +136,15 @@ beforeAll(async () => {
 		{ slug: 'card', mode: 'card', playerId: ids.shown },
 		{ slug: 'empty', mode: 'deck', playerId: ids.empty },
 	]);
+	// A Slot seating the shown Player and the one with no Deck List.
+	const [slot] = await db.insert(schema.featureMatchSlots).values({ eventId: ids.event, player1Id: ids.shown, player2Id: ids.empty }).returning({ id: schema.featureMatchSlots.id });
+	await stageScreens(ids.event, [
+		{
+			slug: 'slot',
+			mode: 'deck',
+			deckSource: { type: 'featureMatchSlot', slotId: slot!.id, side: 'player2' },
+		},
+	]);
 	await stageScreens(ids.mtgEvent, [
 		{ slug: 'mtg', mode: 'deck', playerId: ids.mtgPlayer },
 	]);
@@ -178,6 +188,13 @@ describe('a Deck List Screen showing a One Piece Card Game Player, read with its
 		});
 	});
 
+	it('reads a Player linked into the Slot whose side it shows', async () => {
+		await expect(readDeckList(params('slot', ids.shown))).resolves.toMatchObject({
+			player: { id: ids.shown },
+			deckList: { id: ids.deckList },
+		});
+	});
+
 	it('answers a Player with no Deck List with none', async () => {
 		await expect(readDeckList(params('empty', ids.empty))).resolves.toEqual({
 			player: expect.objectContaining({ id: ids.empty }),
@@ -196,6 +213,12 @@ describe('a Deck List Screen showing a One Piece Card Game Player, read with its
 			name: 'its Player while the Screen shows another mode',
 			screen: 'card',
 			playerId: () => ids.shown,
+			eventId: () => ids.event,
+		},
+		{
+			name: 'a Player its Slot does not seat',
+			screen: 'slot',
+			playerId: () => ids.other,
 			eventId: () => ids.event,
 		},
 		{

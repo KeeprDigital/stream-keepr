@@ -117,7 +117,9 @@ const emptySideHint = computed(() => {
 	if (!selected || !slot)
 		return null;
 	const { data } = featureMatchSidePlayer(withFollowedFeatureMatchSession(slot, featureMatchStateStore), selected.side);
-	return getOpGameData(data?.gameData).featureMatchDeckList
+	// A linked side shows its Player's Deck List (ADR-0074).
+	const gameData = getOpGameData(data?.gameData);
+	return gameData.featureMatchDeckList || gameData.deckList
 		? null
 		: 'The player on this side has no Deck List, so the Screen shows nothing. Paste one in the Slot\'s setup.';
 });

@@ -1,7 +1,7 @@
 import type { OpLeader } from '~~/shared/types/game';
 import type { OpDeckListEntry } from '~~/shared/types/opDeckList';
 import type { DeckModeConfig } from '~~/shared/types/screenConfig';
-import type { ScreenOutputFeatureMatchDeckListResponse, ScreenOutputOpPlayerDeckListResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenOutputOpPlayerDeckListResponse } from '~~/shared/types/screenOutputReads';
 import type { OpDeckLayout } from '~~/shared/utils/opDeckLayout';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { FeatureMatch } from '~/types';
@@ -56,6 +56,11 @@ interface SideShown {
 	deckListId: number | null;
 }
 
+/** A Slot side's Deck List: its own Feature Match Deck List, or its linked Player's (ADR-0074). */
+type SideDeckList
+	= { owner: 'side'; id: number }
+		| { owner: 'player'; playerId: number; id: number };
+
 /** A Deck List as read for program. */
 interface DeckRead {
 	id: number;
@@ -85,9 +90,11 @@ interface OpDeckSourceRead {
  * The Slot and its Session follow through the stores (`useScreenFeatureMatchSlot`).
  * The side shows whichever player sits there now: the active Session's, or the
  * Slot's while none is (ADR-0058), so a swap shows the other player. That
- * player's slot data names their Deck List by id, which a re-paste replaces and
- * a clear removes, so the Deck List is read again whenever the id changes. A
- * Deck List never changes under its id.
+ * player's slot data names their Deck List by id: the side's own, which a
+ * re-paste replaces and a clear removes, or a linked Player's, which every
+ * write to it replaces and the Slot then announces (ADR-0074). So the Deck
+ * List is read again whenever the id changes; a Deck List never changes under
+ * its id.
  *
  * A Theme preview shows the One Piece Screen Mode Sample Dataset's Slot and
  * Deck List, read once, and holds no Slot in the stores.
@@ -113,29 +120,45 @@ function useSlotSideSource(context: ScreenContext, config: ComputedRef<DeckModeC
 				errorMessage: SLOT_LOAD_FAILED,
 			});
 
-	const side = computed<SideShown | null>(() => {
+	const seated = computed(() => {
 		const shownSide = source.value?.side;
 		if (!shownSide || !slotRead.slot.value)
 			return null;
-		const { data } = featureMatchSidePlayer(slotRead.slot.value, shownSide);
+		const { playerId, data } = featureMatchSidePlayer(slotRead.slot.value, shownSide);
 		const gameData = getOpGameData(data?.gameData);
+		const sideDeckList: SideDeckList | null = gameData.featureMatchDeckList
+			? { owner: 'side', id: gameData.featureMatchDeckList.id }
+			: gameData.deckList && playerId !== null
+				? { owner: 'player', playerId, id: gameData.deckList.id }
+				: null;
 		return {
-			playerName: playerDisplayName(data),
-			leader: gameData.leader ?? null,
-			deckListId: gameData.featureMatchDeckList?.id ?? null,
+			side: {
+				playerName: playerDisplayName(data),
+				leader: gameData.leader ?? null,
+				deckListId: sideDeckList?.id ?? null,
+			} satisfies SideShown,
+			deckList: sideDeckList,
 		};
 	});
-	const deckListId = computed(() => side.value?.deckListId ?? null);
+	const sideDeckList = computed(() => seated.value?.deckList ?? null);
 
-	const deckRead = useScreenModeFreshness<ScreenOutputFeatureMatchDeckListResponse | null>({
+	const deckRead = useScreenModeFreshness<DeckRead | null>({
 		eventId,
 		source: () => {
 			const id = slotId();
-			return id && deckListId.value && outputReads.scopeKey.value
-				? `${outputReads.scopeKey.value}:${id}:${deckListId.value}`
-				: null;
+			const deckList = sideDeckList.value;
+			if (!id || !deckList || !outputReads.scopeKey.value)
+				return null;
+			return deckList.owner === 'player'
+				? `${outputReads.scopeKey.value}:${id}:player:${deckList.playerId}:${deckList.id}`
+				: `${outputReads.scopeKey.value}:${id}:${deckList.id}`;
 		},
-		read: () => outputReads.featureMatchDeckList(slotId()!, deckListId.value!),
+		read: async () => {
+			const deckList = sideDeckList.value!;
+			return deckList.owner === 'player'
+				? (await outputReads.opPlayerDeckList(deckList.playerId)).deckList
+				: await outputReads.featureMatchDeckList(slotId()!, deckList.id);
+		},
 		initialData: null,
 		errorMessage: DECK_LOAD_FAILED,
 		// A Deck List is never edited in place: its replacement has a new id, which the Slot announces.
@@ -144,7 +167,7 @@ function useSlotSideSource(context: ScreenContext, config: ComputedRef<DeckModeC
 
 	return {
 		selected: () => slotId() !== null,
-		side,
+		side: computed(() => seated.value?.side ?? null),
 		deck: deckRead.data,
 		answered: slotRead.answered,
 		error: computed(() => slotRead.error.value ?? deckRead.error.value ?? null),

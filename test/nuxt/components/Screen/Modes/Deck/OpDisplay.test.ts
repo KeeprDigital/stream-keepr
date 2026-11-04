@@ -5,7 +5,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, reactive, ref } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
-import { LUFFY, NAMI, opDeckListEntry, opSlotSide as side } from '~~/test/helpers/opCards';
+import { LUFFY, NAMI, opDeckListEntry, opSlotSide as side, ZORO } from '~~/test/helpers/opCards';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
 import OpDisplay from '~/components/Screen/Modes/Deck/OpDisplay.vue';
@@ -276,6 +276,44 @@ describe('a Deck List Screen showing a Feature Match Slot side', () => {
 		await flushPromises();
 
 		expect(shown(wrapper)).toEqual(after);
+	});
+
+	it('shows the Deck List of a Player linked into the side, through a re-import', async () => {
+		/** A linked side's slot data: the Player's Leader and Deck List, by reference (ADR-0074). */
+		const linked = (deckListId: number) => ({
+			name: '',
+			nickname: 'zoro_main',
+			gameData: {
+				type: 'op',
+				leader: ZORO,
+				deckList: { id: deckListId, mainboardCount: 9, leaderNumber: ZORO.number },
+			},
+		});
+		const wrapper = mountDisplay();
+		await flushPromises();
+
+		featureMatchStore.holdFeatureMatch({
+			...slot(linked(601), BOB),
+			player1Id: 31,
+		});
+		await flushPromises();
+		expect(shown(wrapper)).toEqual({
+			state: 'deck',
+			deckListId: '601',
+			player: 'zoro_main',
+			leader: ZORO.number,
+		});
+
+		playerRead.value = {
+			player: opPlayer(),
+			deckList: deckList(602, ZORO_LIST_ENTRIES),
+		};
+		featureMatchStore.holdFeatureMatch({
+			...slot(linked(602), BOB),
+			player1Id: 31,
+		});
+		await flushPromises();
+		expect(shown(wrapper)).toMatchObject({ state: 'deck', deckListId: '602' });
 	});
 
 	it('shows the side the Session puts the Slot\'s first player on', async () => {

@@ -980,7 +980,25 @@ describe('screenDeckSettings on a One Piece Card Game Event', () => {
 			swapped: true,
 			hint: true,
 		},
-	])('says the Screen shows nothing only for $name of a Slot', async ({ side, swapped, hint }) => {
+		{
+			name: 'a side a Player holding a Deck List is linked into',
+			side: 'player2',
+			swapped: false,
+			linked: true,
+			hint: false,
+		},
+	])('says the Screen shows nothing only for $name of a Slot', async ({ side, swapped, linked, hint }) => {
+		mockFeatureMatchStore.featureMatches[0]!.player2Data = linked
+			? {
+					name: '',
+					nickname: 'zoro_main',
+					gameData: {
+						type: 'op',
+						leader: null,
+						deckList: { id: 601, mainboardCount: 50, leaderNumber: null },
+					},
+				}
+			: BOB;
 		mockConfig.value = {
 			...defaultDeckConfig(),
 			deckSource: { type: 'featureMatchSlot', slotId: 11, side },
