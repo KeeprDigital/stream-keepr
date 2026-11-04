@@ -8,9 +8,10 @@ import { $fetch, anonymousFetch } from './client';
 import { commandId, getFeatureMatchSlot, requireActiveSession, sendFeatureMatchCommand } from './featureMatchSessionHelpers';
 import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './helpers';
 
-// A Deck List Screen showing an OP Slot side reads its Deck List by capability alone,
-// follows the player the Session seats there (ADR-0058), and is released when
-// its Slot is deleted (ADR-0057). bandai-keepr is `./mock-bandai-keepr.mjs`.
+// A Deck List Screen showing an OP Slot side reads its Deck List by
+// capability alone, follows the player the Session seats there (ADR-0058),
+// and is released when its Slot is deleted (ADR-0057). bandai-keepr is
+// `./mock-bandai-keepr.mjs`.
 
 const ZORO_DECK = '1x OP01-001 Roronoa Zoro\n4x OP01-025';
 const NAMI_DECK = '1x OP01-016 Nami\n4x OP01-040';

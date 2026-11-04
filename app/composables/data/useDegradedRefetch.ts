@@ -11,8 +11,8 @@ export interface DegradedRefetchOptions<TSource> {
 	refetch: () => void;
 	/**
 	 * Whether a freshly built source is the same one the current rendering was
-	 * built from. Identity is the consumer's: the Deck List Screen Mode compares a
-	 * source-freshness stamp against what is on program, the Card Spotlight
+	 * built from. Identity is the consumer's: the Deck List Screen Mode compares
+	 * a source-freshness stamp against what is on program, the Card Spotlight
 	 * Screen surfaces compare deck-response object identity (#465 review, #471).
 	 */
 	isUnchanged: (next: TSource) => boolean;

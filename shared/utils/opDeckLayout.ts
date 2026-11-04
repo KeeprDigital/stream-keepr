@@ -1,10 +1,10 @@
 import type { FeatureMatchDeckListEntry } from '../types/featureMatchDeckList';
 
 /**
- * How a Deck List Screen lays out a One Piece Card Game Deck List: its Mainboard
- * grouped Character, Event, Stage, each by cost, and its cost curve. The
- * Leader is shown apart, so it is in neither. A number-only entry, which
- * bandai-keepr did not know, is grouped last and has no cost.
+ * How a Deck List Screen lays out a One Piece Card Game Deck List: its
+ * Mainboard grouped Character, Event, Stage, each by cost, and its cost
+ * curve. The Leader is shown apart, so it is in neither. A number-only entry,
+ * which bandai-keepr did not know, is grouped last and has no cost.
  */
 
 export type OpDeckGroupKey = 'character' | 'event' | 'stage' | 'unknown';

@@ -3,8 +3,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-// A Deck List Screen showing a Feature Match Slot side reads that Slot, and its Deck
-// Lists, through the Screen: a capability reaches nothing else (ADR-0022).
+// A Deck List Screen showing a Feature Match Slot side reads that Slot, and
+// its Deck Lists, through the Screen: a capability reaches nothing else
+// (ADR-0022).
 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });

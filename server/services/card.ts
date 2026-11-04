@@ -7,9 +7,9 @@ import { storedCardSchema } from '~~/server/schemas/kv/card';
 import { cardTimeoutRemainingMs } from '~~/shared/utils/card/timeout';
 
 /**
- * Where a Card Spotlight Screen's derived copy of its card lives: the KV binding Nitro
- * mounts at `kv` (`nuxt.config.ts`). Resolved per call, because storage is a
- * Nitro runtime global.
+ * Where a Card Spotlight Screen's derived copy of its card lives: the KV
+ * binding Nitro mounts at `kv` (`nuxt.config.ts`). Resolved per call, because
+ * storage is a Nitro runtime global.
  */
 const kvStorage = () => useStorage('kv');
 

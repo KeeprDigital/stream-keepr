@@ -30,7 +30,8 @@ interface CardDeckSourceRuntimeState {
  * Card Spotlight Screen Deck List source Module.
  *
  * Owns Feature Match and Player Deck List source loading, Scryfall enrichment,
- * source availability checks, and source reset behaviour for Card Spotlight Screens.
+ * source availability checks, and source reset behaviour for Card Spotlight
+ * Screens.
  */
 export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 	const { fetchScryfallCards, buildDeckListArrays } = useScryfallBatch();

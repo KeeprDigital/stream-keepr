@@ -2,8 +2,9 @@
 import { resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 
 /**
- * The Deck List Screen Mode: a One Piece Card Game Deck List from a Feature Match
- * Slot side (ADR-0057), or a Player's or Broadcast Deck List's MTG deck.
+ * The Deck List Screen Mode: a One Piece Card Game Deck List from a Feature
+ * Match Slot side (ADR-0057), or a Player's or Broadcast Deck List's MTG
+ * deck.
  */
 const { screen } = useScreenContext();
 const showsSlotSide = computed(() =>

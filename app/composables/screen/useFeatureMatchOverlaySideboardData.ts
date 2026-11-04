@@ -25,7 +25,8 @@ interface SideboardSourceState {
 	 * and its sideboard — a resolved deck card rewrites that without moving the
 	 * Player's revision (#648), and a Player's revision moves without it. It is
 	 * how a rebuild tells "identical rendering, keep it" from "the source
-	 * changed, swap it in" — the Deck List Screen Mode's rule (#465), held per side.
+	 * changed, swap it in" — the Deck List Screen Mode's rule (#465), held per
+	 * side.
 	 */
 	stamps: Record<PlayerSide, string | null>;
 }

@@ -228,7 +228,8 @@ export interface OpFeatureMatchSampleSide {
 /**
  * The One Piece sample's two sides, in Slot order. A long name beside a short
  * one, a mono-colour Leader on each, and a long-named card in the Deck List.
- * Shared with the Screen Mode Sample Dataset, whose Slot and Deck List Screen show them.
+ * Shared with the Screen Mode Sample Dataset, whose Slot and Deck List Screen
+ * show them.
  */
 export const OP_FEATURE_MATCH_SAMPLE_SIDES: readonly [OpFeatureMatchSampleSide, OpFeatureMatchSampleSide] = [
 	{

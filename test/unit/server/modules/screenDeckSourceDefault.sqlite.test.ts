@@ -7,7 +7,8 @@ import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 /**
  * A Deck List Screen on a One Piece Card Game Event shows a Feature Match Slot
  * side, never a Player (ADR-0057), so one with no Slot side chosen starts on
- * the Event's first Slot, left side. A Magic Deck List Screen keeps its Player source.
+ * the Event's first Slot, left side. A Magic Deck List Screen keeps its Player
+ * source.
  */
 
 vi.stubGlobal('createError', (input: { statusCode?: number; message?: string; statusMessage?: string }) =>

@@ -59,8 +59,8 @@ interface DisplayedDeck extends OpDeckLayout {
 }
 
 /**
- * A Deck List Screen whose Deck Source is one player side of a Feature Match Slot
- * (ADR-0057), followed live.
+ * A Deck List Screen whose Deck Source is one player side of a Feature Match
+ * Slot (ADR-0057), followed live.
  *
  * The Slot and its Session follow through the stores (`useScreenFeatureMatchSlot`).
  * The side shows whichever player sits there now: the active Session's, or the

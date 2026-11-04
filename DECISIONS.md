@@ -901,7 +901,7 @@ The resolution published nothing. Only the resolving browser cleared its own dec
 ### Consequences
 
 - A degraded Deck or sideboard rebuild is compared by what it was built from, not by Player revision. Otherwise a rewritten Deck List could be kept off program as "unchanged" while Scryfall is still failing.
-- A surface that already holds a deck read from the cache keeps it until it reads again: Feature Match deck counters and tokens, an open Player deck modal, a Card Spotlight Screen deck source. Only its next read is fresh. A resolved card that adds a deck counter type reaches the Feature Match counters only then.
+- A surface that already holds a deck read from the cache keeps it until it reads again: Feature Match deck counters and tokens, an open Player deck modal, a Card Spotlight Screen's Deck List source. Only its next read is fresh. A resolved card that adds a deck counter type reaches the Feature Match counters only then.
 - Other operators' Unresolved Deck Card lists on the Melee sync page do not follow the message. A second resolution of the same group gets a 404 and reloads the list.
 - A Companion resolution names every matching Deck List, including one whose manual Companion it left alone. That one re-reads for nothing.
 
