@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { playerDisplayName, playerMatchesSearch } from '~~/shared/utils/playerName';
+import { playerDisplayName, playerMatchesSearch, unshownPlayerReason } from '~~/shared/utils/playerName';
 
 describe('a Player\'s display name', () => {
 	// The operator's name wins; the TCG+ Nickname stands in only while there is none (ADR-0074).
@@ -60,5 +60,38 @@ describe('finding a Player in a picker', () => {
 		[meleePlayer, 'reed', true],
 	])('%j matches %j: %s', (player, query, matches) => {
 		expect(playerMatchesSearch(player, query)).toBe(matches);
+	});
+});
+
+describe('whether a written Player can be shown', () => {
+	// A Player always shows by something: an OP Player by name or Nickname, an MTG one by name (ADR-0074).
+	it.each([
+		[
+			'op',
+			{ name: '', nickname: 'linlin_88' },
+			null,
+		],
+		[
+			'op',
+			{ name: ' ', nickname: ' ' },
+			'A Player needs a name or a Nickname',
+		],
+		[
+			'mtg',
+			{ name: 'Ava Reed', nickname: null },
+			null,
+		],
+		[
+			'mtg',
+			{ name: '', nickname: null },
+			'A Player needs a name',
+		],
+		[
+			'mtg',
+			{ name: 'Ava Reed', nickname: 'ava' },
+			'Only a One Piece Card Game Player has a Nickname',
+		],
+	] as const)('on %s, %o is refused for %s', (game, player, reason) => {
+		expect(unshownPlayerReason(game, player)).toBe(reason);
 	});
 });

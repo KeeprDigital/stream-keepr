@@ -12,7 +12,7 @@ import { playerService } from '~~/server/services/player';
 import { playerDeckService } from '~~/server/services/playerDeck';
 import { playerFeatureMatchSyncService } from '~~/server/services/playerFeatureMatchSync';
 import { requireArchetypeInEvent } from '~~/server/utils/routeGuards';
-import { playerDisplayName } from '~~/shared/utils/playerName';
+import { unshownPlayerReason } from '~~/shared/utils/playerName';
 
 interface UpdatePlayerInputParams {
 	eventId: number;
@@ -87,16 +87,9 @@ function withoutDeckListOwnedFields<T extends { gameData?: unknown; archetypeId?
  * Player has no Nickname, so needs a name.
  */
 function requireShownPlayer(game: Game, player: PlayerNameFacts) {
-	if (game !== 'op' && player.nickname)
-		throw createError({ statusCode: 400, message: 'Only a One Piece Card Game Player has a Nickname' });
-	if (!playerDisplayName(player)) {
-		throw createError({
-			statusCode: 400,
-			message: game === 'op'
-				? 'A Player needs a name or a Nickname'
-				: 'A Player needs a name',
-		});
-	}
+	const reason = unshownPlayerReason(game, player);
+	if (reason)
+		throw createError({ statusCode: 400, message: reason });
 }
 
 export function playerUpdateModule() {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MtgPlayerGameData, OpPlayerGameData } from '~~/shared/types/game';
 import type { Player, PlayerData } from '~/types';
-import { playerDisplayName } from '~~/shared/utils/playerName';
+import { playerDisplayName, unshownPlayerReason } from '~~/shared/utils/playerName';
 import { LazyUIConfirmDeleteModal } from '#components';
 import { toCreatePlayerInput, toPlayerData } from '~/types/player';
 
@@ -79,10 +79,8 @@ const { confirmDiscard } = useModalUnsavedChanges(computed(() => isDirty.value &
 const saving = ref(false);
 const formId = `edit-player-${props.player.id}-form`;
 
-// A One Piece Card Game Player with a Nickname shows by it while they have no name (ADR-0074).
-const isValid = computed(() => playerDisplayName(props.game === 'op'
-	? formData.value
-	: { name: formData.value.name }) !== '');
+// The server's rule: a One Piece Card Game Player may go by their Nickname alone (ADR-0074).
+const isValid = computed(() => unshownPlayerReason(props.game, formData.value) === null);
 
 async function handleSave() {
 	const name = formData.value.name?.trim() ?? '';

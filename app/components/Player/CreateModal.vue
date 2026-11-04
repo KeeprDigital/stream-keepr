@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MtgPlayerGameData } from '~~/shared/types/game';
 import type { PlayerData } from '~/types';
-import { playerDisplayName } from '~~/shared/utils/playerName';
+import { unshownPlayerReason } from '~~/shared/utils/playerName';
 import { DEFAULT_PLAYER_DATA, toCreatePlayerInput } from '~/types/player';
 
 const props = defineProps<{
@@ -26,10 +26,8 @@ const formId = 'create-player-form';
 // Game-specific data
 const mtgGameData = ref<MtgPlayerGameData>({ type: 'mtg', deckName: null, deckColors: null });
 
-// A One Piece Card Game Player may go by their Nickname alone (ADR-0074).
-const isValid = computed(() => playerDisplayName(props.game === 'op'
-	? formData.value
-	: { name: formData.value.name }) !== '');
+// The server's rule: a One Piece Card Game Player may go by their Nickname alone (ADR-0074).
+const isValid = computed(() => unshownPlayerReason(props.game, formData.value) === null);
 
 async function handleSubmit() {
 	const name = formData.value.name?.trim() ?? '';
