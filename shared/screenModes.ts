@@ -18,6 +18,7 @@ import { metagameModeConfigContract } from './screenModeConfigs/metagame';
 import { pairingsModeConfigContract } from './screenModeConfigs/pairings';
 import { playerHistoryModeConfigContract } from './screenModeConfigs/playerHistory';
 import { standingsModeConfigContract } from './screenModeConfigs/standings';
+import { talentModeConfigContract } from './screenModeConfigs/talent';
 import { topCardsModeConfigContract } from './screenModeConfigs/topCards';
 import { topCutModeConfigContract } from './screenModeConfigs/topCut';
 import { archetypeSpotlightModeTokens } from './screenModeTokens/archetypeSpotlight';
@@ -29,6 +30,7 @@ import { metagameModeTokens } from './screenModeTokens/metagame';
 import { pairingsModeTokens } from './screenModeTokens/pairings';
 import { playerHistoryModeTokens } from './screenModeTokens/playerHistory';
 import { standingsModeTokens } from './screenModeTokens/standings';
+import { talentModeTokens } from './screenModeTokens/talent';
 import { topCardsModeTokens } from './screenModeTokens/topCards';
 import { topCutModeTokens } from './screenModeTokens/topCut';
 import { SCREEN_MODE_VALUES } from './types/enums';
@@ -36,8 +38,9 @@ import { SCREEN_MODE_VALUES } from './types/enums';
 /**
  * What a field declared as each kind of Event Reference holds. A kind is what
  * the field names: a Phase, a Round, a Player, a Player List, a Feature Match
- * Slot or an Archetype by id, or a whole Deck Source, which names a Player or a
- * Broadcast Deck List.
+ * Slot, an Archetype or a Talent by id, a Talent lineup as an ordered list of
+ * Talent ids, or a whole Deck Source, which names a Player or a Broadcast Deck
+ * List.
  */
 interface EventReferenceValues {
 	phase: EntityIdField;
@@ -46,6 +49,8 @@ interface EventReferenceValues {
 	playerList: EntityIdField;
 	featureMatchSlot: EntityIdField;
 	archetype: EntityIdField;
+	talent: EntityIdField;
+	talentLineup: readonly number[] | undefined;
 	deckSource: DeckSource | undefined;
 }
 
@@ -306,6 +311,18 @@ const SCREEN_MODE_DEFINITIONS = {
 		config: headToHeadModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot', player1Id: 'player', player2Id: 'player' },
 		modeTokens: headToHeadModeTokens,
+	},
+	// Talent is no Melee concept, so ADR-0057 leaves it to every Card Game.
+	'talent': {
+		label: 'Talent',
+		icon: 'i-lucide-mic',
+		displayType: 'overlay',
+		description: 'The broadcast\'s presenters and commentators, with their Social Profiles',
+		cardGames: EVERY_CARD_GAME,
+		backgroundLayers: true,
+		config: talentModeConfigContract,
+		eventReferences: { talentId: 'talent', talentIds: 'talentLineup' },
+		modeTokens: talentModeTokens,
 	},
 } as const satisfies Record<ScreenMode, ScreenModeDefinition>;
 

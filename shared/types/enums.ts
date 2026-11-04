@@ -27,6 +27,7 @@ export const SCREEN_MODE_VALUES = [
 	'pairings',
 	'archetype-spotlight',
 	'head-to-head',
+	'talent',
 ] as const;
 /**
  * Each Screen Mode key renamed after release, and the key it is now (#773, ADR-0043).
@@ -36,6 +37,10 @@ export const SCREEN_MODE_VALUES = [
 export const FORMER_SCREEN_MODE_KEYS: Readonly<Record<string, ScreenMode>> = { topCut: 'top-cut' };
 /** Where a Head-to-Head Screen takes its two Players from (#760). */
 export const HEAD_TO_HEAD_PLAYER_SOURCE_VALUES = ['featureMatchSlot', 'players'] as const;
+/** Whether a Talent Screen shows one Talent or a lineup of them (#782). */
+export const TALENT_SCREEN_SELECTION_VALUES = ['one', 'lineup'] as const;
+/** How a Talent Screen lays its Talents out: a lower third, or a full panel (#782). */
+export const TALENT_SCREEN_LAYOUT_VALUES = ['lowerThird', 'fullPanel'] as const;
 export const SCREEN_COMMAND_VALUES = ['refresh', 'identify', 'debug'] as const;
 export const CLOCK_TYPE_VALUES = ['countdown', 'countup', 'untimed'] as const;
 export const RECORD_SEPARATOR_VALUES = ['-', '/', ' | ', ' '] as const;
@@ -155,6 +160,8 @@ export type PositionFormat = typeof POSITION_FORMAT_VALUES[number];
 export type DisplayType = typeof DISPLAY_TYPE_VALUES[number];
 export type ScreenMode = typeof SCREEN_MODE_VALUES[number];
 export type HeadToHeadPlayerSource = typeof HEAD_TO_HEAD_PLAYER_SOURCE_VALUES[number];
+export type TalentScreenSelection = typeof TALENT_SCREEN_SELECTION_VALUES[number];
+export type TalentScreenLayout = typeof TALENT_SCREEN_LAYOUT_VALUES[number];
 export type ScreenCommand = typeof SCREEN_COMMAND_VALUES[number];
 export type RecordSeparator = typeof RECORD_SEPARATOR_VALUES[number];
 export type MainboardView = typeof MAINBOARD_VIEW_VALUES[number];

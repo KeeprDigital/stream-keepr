@@ -20,6 +20,7 @@ import { pairingsModeConfigContract } from '../screenModeConfigs/pairings';
 import { playerHistoryModeConfigContract } from '../screenModeConfigs/playerHistory';
 import { standingsModeConfigContract } from '../screenModeConfigs/standings';
 import { METAGAME_SCOPE_FIELDS } from '../screenModeConfigs/subShapes';
+import { talentModeConfigContract } from '../screenModeConfigs/talent';
 import { topCardsModeConfigContract } from '../screenModeConfigs/topCards';
 import { topCutModeConfigContract } from '../screenModeConfigs/topCut';
 
@@ -255,6 +256,7 @@ export { DEFAULT_COMPANION_TAG_POSITION, DEFAULT_DECK_BOARD_LAYOUT, DEFAULT_DECK
 export type { FeatureMatchModeConfig } from '../screenModeConfigs/featureMatch';
 export type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayPresetId } from '../screenModeConfigs/featureMatchOverlay';
 export type { HeadToHeadModeConfig } from '../screenModeConfigs/headToHead';
+export type { TalentModeConfig } from '../screenModeConfigs/talent';
 export type { MetagameArchetypeColumnConfig, MetagameCardColumnConfig, MetagameModeConfig } from '../screenModeConfigs/metagame';
 export type { PairingsModeConfig } from '../screenModeConfigs/pairings';
 export type { PlayerHistoryColumnConfig, PlayerHistoryModeConfig } from '../screenModeConfigs/playerHistory';
@@ -356,6 +358,7 @@ const MODE_CONFIG_CONTRACTS = {
 	'pairings': pairingsModeConfigContract,
 	'archetype-spotlight': archetypeSpotlightModeConfigContract,
 	'head-to-head': headToHeadModeConfigContract,
+	'talent': talentModeConfigContract,
 } as const;
 
 /** Any one mode's config. */
@@ -472,6 +475,7 @@ const MODE_RESET_PRESERVED_KEYS = {
 		'player1Id',
 		'player2Id',
 	],
+	'talent': ['selection', 'talentId', 'talentIds'],
 } as const satisfies ModeResetPreservedKeysMap;
 
 // Helper to get default config for a mode
