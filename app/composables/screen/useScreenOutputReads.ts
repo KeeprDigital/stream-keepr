@@ -61,6 +61,7 @@ export function useScreenOutputReads(context: ScreenContext) {
 		metagame: () => repository.metagame(requireScope()),
 		topCards: () => repository.topCards(requireScope()),
 		topCut: () => repository.topCut(requireScope()),
+		roundClock: () => repository.roundClock(requireScope()),
 		featureMatchSlot: (slotId: number) => repository.featureMatchSlot(requireScope(), slotId),
 		/** A Feature Match Deck List of the Slot a Deck List Screen shows a side of. */
 		featureMatchDeckList: (slotId: number, deckListId: number) =>

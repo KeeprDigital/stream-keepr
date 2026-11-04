@@ -68,6 +68,9 @@ export const PROVENANCE_ENTITIES = {
 			'name',
 			'roundNumber',
 			'controlMode',
+			// Operator-entered timing, which Melee Sync never writes (ADR-0066).
+			'startedAt',
+			'durationMinutes',
 		],
 		meleeOwned: ['externalId', 'externalSource', 'lastSyncedAt'],
 		serverManaged: [

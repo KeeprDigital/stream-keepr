@@ -1,5 +1,6 @@
 import type { DbRound, DbScreen, ExternalSource } from '~~/server/db/schema';
-import type { CreateRoundInput, UpdateRoundInput } from '~~/shared/api';
+import type { UpdateRoundInput } from '~~/server/schemas/api/round';
+import type { CreateRoundInput } from '~~/shared/api';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { phases, rounds } from '~~/server/db/schema';

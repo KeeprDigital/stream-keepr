@@ -3,6 +3,7 @@ import type { DropdownMenuItem } from '@nuxt/ui';
 import type { Round } from '~/types';
 import { isManualOverrideRound, isMeleeManagedRound } from '~~/shared/utils/roundControl';
 import { formatSyncTimestamp } from '~/utils/meleeSync';
+import { formatRoundTiming } from '~/utils/roundTiming';
 
 const props = defineProps<{
 	round: Round;
@@ -14,8 +15,11 @@ const emit = defineEmits<{
 	syncMatches: [round: Round];
 	enableManualOverride: [round: Round];
 	editRound: [round: Round];
+	startRound: [round: Round];
 	deleteRound: [round: Round];
 }>();
+
+const timing = computed(() => formatRoundTiming(props.round));
 
 const menuItems = computed<DropdownMenuItem[][]>(() => {
 	const round = props.round;
@@ -33,6 +37,15 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
 			},
 		],
 	];
+
+	// Once started, starting again restarts its clock, so it waits in the menu.
+	if (round.startedAt) {
+		items[0]!.push({
+			label: 'Start now',
+			icon: 'i-lucide-play',
+			onSelect: () => emit('startRound', round),
+		});
+	}
 
 	if (isMeleeManagedRound(round) && round.lastSyncedAt) {
 		items[0]!.push({
@@ -86,9 +99,27 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
 			>
 				Synced {{ formatSyncTimestamp(round.lastSyncedAt) }}
 			</UBadge>
+			<UBadge
+				v-if="timing"
+				color="neutral"
+				variant="subtle"
+				size="xs"
+				data-testid="round-timing"
+			>
+				{{ timing }}
+			</UBadge>
 		</div>
 
 		<div class="flex items-center gap-2 shrink-0">
+			<UButton
+				v-if="!round.startedAt"
+				size="xs"
+				variant="soft"
+				color="primary"
+				icon="i-lucide-play"
+				label="Start now"
+				@click="emit('startRound', round)"
+			/>
 			<UButton
 				size="xs"
 				variant="ghost"

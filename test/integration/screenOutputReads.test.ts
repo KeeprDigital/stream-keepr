@@ -1,5 +1,5 @@
 import type { ScreenResponse } from '~~/shared/api';
-import type { ScreenOutputFeatureMatchResponse, ScreenOutputHeadToHeadResponse, ScreenOutputPairingsResponse, ScreenOutputPlayerDecksResponse, ScreenOutputStandingsResponse, ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenOutputFeatureMatchResponse, ScreenOutputHeadToHeadResponse, ScreenOutputPairingsResponse, ScreenOutputPlayerDecksResponse, ScreenOutputRoundClockResponse, ScreenOutputStandingsResponse, ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { $fetch, anonymousFetch } from './client';
 import { $fetchRaw } from './helpers';
@@ -556,6 +556,40 @@ describe('capability-only Screen Output reads', () => {
 			await recordMeleeResult(match.id, [2, 1]);
 			const reported = await pairings.read<ScreenOutputPairingsResponse>('pairings');
 			expect(reported.data.matches[0]).toMatchObject({ hasResult: true, player1GameWins: 2, player2GameWins: 1 });
+		});
+	});
+
+	describe('round-clock', () => {
+		it('reads the Round the Screen names with its timing, and follows "Start now" (ADR-0066)', async () => {
+			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, {
+				method: 'POST',
+				body: { name: 'Clock Swiss' },
+			});
+			const round = await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
+				method: 'POST',
+				body: { phaseId: phase.id, name: 'Clock Round', roundNumber: 1 },
+			});
+			await $fetch(`/api/events/${eventId}/rounds/${round.id}`, {
+				method: 'PATCH',
+				body: { durationMinutes: 50 },
+			});
+			const clock = await outputScreen('round-clock');
+
+			// No Round picked, and none paired from Melee: no Current Round to show.
+			expect((await clock.read<ScreenOutputRoundClockResponse>('round-clock')).data).toEqual({ round: null });
+
+			await clock.configure({ roundId: round.id });
+			const pending = await clock.read<ScreenOutputRoundClockResponse>('round-clock');
+			expect(pending.data.round).toEqual({
+				id: round.id,
+				name: 'Clock Round',
+				startedAt: null,
+				durationMinutes: 50,
+			});
+
+			await $fetch(`/api/events/${eventId}/rounds/${round.id}/start`, { method: 'POST' });
+			const started = await clock.read<ScreenOutputRoundClockResponse>('round-clock');
+			expect(started.data.round?.startedAt).toEqual(expect.any(String));
 		});
 	});
 

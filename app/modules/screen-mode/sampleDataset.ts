@@ -201,6 +201,8 @@ function round(id: number, phaseId: number, name: string, roundNumber: number): 
 		roundNumber,
 		controlMode: 'default',
 		lastSyncedAt: null,
+		startedAt: null,
+		durationMinutes: null,
 		createdAt: SAMPLE_TIMESTAMP,
 		updatedAt: SAMPLE_TIMESTAMP,
 	};
@@ -664,6 +666,15 @@ const ANSWERS = {
 	},
 	topCards: { entries: SAMPLE_TOP_CARDS, totalDecks: PLAYERS.length, scope: 'all' as const },
 	topCut: { phase: TOP_CUT, bracket: SAMPLE_BRACKET },
+	// Not yet started, so the Round Clock shows the same full duration whenever it is previewed.
+	roundClock: {
+		round: {
+			id: ROUND_8.id,
+			name: ROUND_8.name,
+			startedAt: null,
+			durationMinutes: 50,
+		},
+	},
 	archetypeSpotlight: {
 		archetype: SPOTLIT,
 		playerCount: spotlitPilots.length,
@@ -888,6 +899,7 @@ const SAMPLE_READ_REPOSITORIES: Record<Game, SampleReadRepository> = {
 		metagame: answer(ANSWERS.metagame),
 		topCards: answer(ANSWERS.topCards),
 		topCut: answer(ANSWERS.topCut),
+		roundClock: answer(ANSWERS.roundClock),
 		playerDecks: answer(ANSWERS.playerDecks),
 	},
 	// A One Piece Event models no Players, Rounds, results or Metagame (ADR-0057).
@@ -905,6 +917,7 @@ const SAMPLE_READ_REPOSITORIES: Record<Game, SampleReadRepository> = {
 		metagame: none('Metagame'),
 		topCards: none('Most Played Cards'),
 		topCut: none('Top Cut'),
+		roundClock: none('Round'),
 		playerDecks: none('Player'),
 	},
 };

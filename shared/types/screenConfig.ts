@@ -18,6 +18,7 @@ import { headToHeadModeConfigContract } from '../screenModeConfigs/headToHead';
 import { metagameModeConfigContract } from '../screenModeConfigs/metagame';
 import { pairingsModeConfigContract } from '../screenModeConfigs/pairings';
 import { playerHistoryModeConfigContract } from '../screenModeConfigs/playerHistory';
+import { roundClockModeConfigContract } from '../screenModeConfigs/roundClock';
 import { standingsModeConfigContract } from '../screenModeConfigs/standings';
 import { METAGAME_SCOPE_FIELDS } from '../screenModeConfigs/subShapes';
 import { topCardsModeConfigContract } from '../screenModeConfigs/topCards';
@@ -258,6 +259,7 @@ export type { HeadToHeadModeConfig } from '../screenModeConfigs/headToHead';
 export type { MetagameArchetypeColumnConfig, MetagameCardColumnConfig, MetagameModeConfig } from '../screenModeConfigs/metagame';
 export type { PairingsModeConfig } from '../screenModeConfigs/pairings';
 export type { PlayerHistoryColumnConfig, PlayerHistoryModeConfig } from '../screenModeConfigs/playerHistory';
+export type { RoundClockModeConfig } from '../screenModeConfigs/roundClock';
 export type { StandingsColumnConfig, StandingsModeConfig } from '../screenModeConfigs/standings';
 export type { TopCardsModeConfig } from '../screenModeConfigs/topCards';
 export type { TopCutModeConfig } from '../screenModeConfigs/topCut';
@@ -358,6 +360,7 @@ const MODE_CONFIG_CONTRACTS = {
 	'pairings': pairingsModeConfigContract,
 	'archetype-spotlight': archetypeSpotlightModeConfigContract,
 	'head-to-head': headToHeadModeConfigContract,
+	'round-clock': roundClockModeConfigContract,
 } as const;
 
 /** Any one mode's config. */
@@ -474,6 +477,7 @@ const MODE_RESET_PRESERVED_KEYS = {
 		'player1Id',
 		'player2Id',
 	],
+	'round-clock': ['roundId'],
 } as const satisfies ModeResetPreservedKeysMap;
 
 // Helper to get default config for a mode

@@ -4,7 +4,7 @@ import type {
 	UpdateRoundInput,
 } from '~/types';
 import type { MessageData } from '~/types/realtime';
-import { useEventDataResource } from '~/modules/event-data/client';
+import { useEventDataFetch, useEventDataResource } from '~/modules/event-data/client';
 import { useEventDataLifecycle } from '~/modules/event-data/lifecycle';
 
 export const useRoundStore = defineStore('round', () => {
@@ -29,6 +29,27 @@ export const useRoundStore = defineStore('round', () => {
 	const updateRound = lifecycle.update;
 	const removeRound = lifecycle.remove;
 	const getRoundById = lifecycle.getById;
+	const eventDataFetch = useEventDataFetch();
+
+	/**
+	 * "Start now": the server stamps the Round's start with its own time, so the
+	 * answer is held as it comes back, not predicted (ADR-0066).
+	 */
+	async function startRound(eventId: number, roundId: number): Promise<Round> {
+		const flight = lifecycle.currentLifetime();
+		const started = await eventDataFetch.command<Round>(
+			{
+				eventId,
+				resourcePath: 'rounds',
+				resourceId: roundId,
+				suffix: 'start',
+			},
+			{ method: 'POST' },
+		);
+		if (flight.current)
+			lifecycle.applyRemoteUpdated(started);
+		return started;
+	}
 
 	function applyRemoteCreated(data: MessageData<'round:created'>) {
 		lifecycle.applyRemoteCreated(data.round as Round);
@@ -53,6 +74,7 @@ export const useRoundStore = defineStore('round', () => {
 		createRound,
 		updateRound,
 		removeRound,
+		startRound,
 		getRoundById,
 		applyRemoteCreated,
 		applyRemoteUpdated,

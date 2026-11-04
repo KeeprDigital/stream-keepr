@@ -17,6 +17,7 @@ const emit = defineEmits<{
 	syncMatches: [round: Round];
 	enableManualOverride: [round: Round];
 	editRound: [round: Round];
+	startRound: [round: Round];
 	deleteRound: [round: Round];
 }>();
 
@@ -95,6 +96,7 @@ function getPhaseMenuItems(phase: Phase): DropdownMenuItem[][] {
 				@sync-matches="emit('syncMatches', $event)"
 				@enable-manual-override="emit('enableManualOverride', $event)"
 				@edit-round="emit('editRound', $event)"
+				@start-round="emit('startRound', $event)"
 				@delete-round="emit('deleteRound', $event)"
 			/>
 

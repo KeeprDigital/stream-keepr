@@ -1,4 +1,5 @@
-import type { CreateRoundInput, RoundResponse, UpdateRoundInput } from '~~/shared/api';
+import type { UpdateRoundInput } from '~~/server/schemas/api/round';
+import type { CreateRoundInput, RoundResponse } from '~~/shared/api';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { roundService } from '~~/server/services/round';
 import { requirePhaseInEvent } from '~~/server/utils/routeGuards';
@@ -13,6 +14,12 @@ interface UpdateRoundParams {
 	eventId: number;
 	roundId: number;
 	input: UpdateRoundInput;
+	originConnectionId?: string;
+}
+
+interface StartRoundParams {
+	eventId: number;
+	roundId: number;
 	originConnectionId?: string;
 }
 
@@ -53,6 +60,18 @@ export function roundWriteModule() {
 		});
 	}
 
+	/** "Start now": the Round starts at server time, so every Round Clock counts from one instant (ADR-0066). */
+	async function start({ eventId, roundId, originConnectionId }: StartRoundParams): Promise<RoundResponse> {
+		return await update({
+			eventId,
+			roundId,
+			input: {
+				startedAt: new Date(),
+			},
+			originConnectionId,
+		});
+	}
+
 	async function remove({ eventId, roundId, originConnectionId }: RemoveRoundParams): Promise<void> {
 		const { deleted, clearedScreens } = await rounds.remove(roundId, eventId);
 
@@ -75,6 +94,7 @@ export function roundWriteModule() {
 	return {
 		create,
 		update,
+		start,
 		remove,
 	};
 }
