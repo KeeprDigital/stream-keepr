@@ -149,8 +149,9 @@ export interface GraphicsAssetDeliveryDependencies {
 	/** Anything short of a canonical store refuses every byte read with `graphics-asset-library-unavailable`. */
 	canonical: GraphicsObjectStoreHealth | GraphicsCanonicalObjectStore;
 	/**
-	 * Told of each contradiction a read observed, before the read answers. A
-	 * delivery without one observes nothing durable.
+	 * Told of each contradiction a read observed; the read answers once this
+	 * settles, so a reader that must not wait settles it at once and finishes
+	 * the report elsewhere. A delivery without one observes nothing durable.
 	 */
 	reportDisagreement?: (observed: GraphicsCanonicalDisagreement) => Promise<void>;
 }

@@ -73,6 +73,7 @@ import type { GraphicsOperationalQueuesCatalogue } from './operational-queues';
 import type { GraphicsOperationsCockpitCatalogue } from './operations-cockpit';
 import type {
 	GraphicsAssetReconciliationCatalogue,
+	GraphicsObservedDisagreementCatalogue,
 	GraphicsReconciliationMedia,
 	RegenerateGraphicsDerivativeOutcome,
 	VerifyGraphicsContentBytesOutcome,
@@ -1613,7 +1614,7 @@ export function createGraphicsAssetLibrary(
 			if (!('findExpectedContent' in catalogue))
 				return;
 			await createGraphicsDisagreementReporter({
-				catalogue: catalogue as GraphicsAssetCatalogue & GraphicsAssetReconciliationCatalogue,
+				catalogue: catalogue as GraphicsAssetCatalogue & GraphicsObservedDisagreementCatalogue,
 				canonical: requireCanonical(),
 				now,
 				generateIdentity,

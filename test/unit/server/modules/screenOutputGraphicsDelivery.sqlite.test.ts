@@ -23,12 +23,32 @@ afterEach(async () => {
 	await harness.close();
 });
 
+type D1Catalogue = ReturnType<typeof createD1GraphicsAssetCatalogue>;
+
 /** One published PNG, and the delivery a Screen Output builds over the same catalogue and canonical store. */
-async function publishedForScreenOutput() {
+async function publishedForScreenOutput(options: {
+	/** Holds the reconciliation half of every report pending until it settles. */
+	holdReports?: Promise<void>;
+	defer?: (promise: Promise<unknown>) => void;
+} = {}) {
 	const catalogue = createD1GraphicsAssetCatalogue(harness.database);
 	const context = createTestGraphicsLibrary({ catalogue });
 	const reference = publishedRevision(await ingestImage(context, { idempotencyKey: 'on-air' }));
-	const delivery = createScreenOutputGraphicsDelivery({ catalogue, canonical: context.canonical });
+	const { holdReports } = options;
+	const reportingCatalogue: D1Catalogue = holdReports
+		? {
+				...catalogue,
+				findRevisionContentDigest: async (input) => {
+					await holdReports;
+					return await catalogue.findRevisionContentDigest(input);
+				},
+			}
+		: catalogue;
+	const delivery = createScreenOutputGraphicsDelivery({
+		catalogue: reportingCatalogue,
+		canonical: context.canonical,
+		defer: options.defer,
+	});
 	return { context, reference, delivery };
 }
 
@@ -53,7 +73,7 @@ async function openUnavailableContent(published: Published) {
 }
 
 describe('a Screen Output\'s Graphics Asset delivery', () => {
-	it.each(READS)('opens one Graphics Discrepancy, without a sweep, on %s whose canonical object is missing', async (_name, read) => {
+	it.each(READS)('opens one Graphics Discrepancy, before any scheduled pass, on %s whose canonical object is missing', async (_name, read) => {
 		const published = await publishedForScreenOutput();
 		await published.context.canonical.delete(canonicalIdentity(digestOf(pixelPng)));
 
@@ -77,33 +97,23 @@ describe('a Screen Output\'s Graphics Asset delivery', () => {
 	});
 
 	it.each(READS)('answers %s before its report settles, handing the report to the Worker to finish', async (_name, read) => {
-		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
-		const context = createTestGraphicsLibrary({ catalogue });
-		const reference = publishedRevision(await ingestImage(context, { idempotencyKey: 'deferred' }));
-		await context.canonical.delete(canonicalIdentity(digestOf(pixelPng)));
-		const reconciliationReached = deferred();
+		const reports = deferred();
 		const deferredWork: Promise<unknown>[] = [];
-		const delivery = createScreenOutputGraphicsDelivery({
-			catalogue: {
-				...catalogue,
-				findRevisionContentDigest: async (input) => {
-					await reconciliationReached.promise;
-					return await catalogue.findRevisionContentDigest(input);
-				},
-			},
-			canonical: context.canonical,
+		const published = await publishedForScreenOutput({
+			holdReports: reports.promise,
 			defer: promise => deferredWork.push(promise),
 		});
+		await published.context.canonical.delete(canonicalIdentity(digestOf(pixelPng)));
 
 		const answer = await Promise.race([
-			read({ context, reference, delivery }),
+			read(published),
 			new Promise(resolve => setTimeout(resolve, 1000, 'still reporting')),
 		]);
 		expect(answer).toEqual({ outcome: 'unavailable', retryable: true });
-		expect(await openUnavailableContent({ context, reference, delivery })).toBe(0);
+		expect(await openUnavailableContent(published)).toBe(0);
 
-		reconciliationReached.resolve();
+		reports.resolve();
 		await Promise.all(deferredWork);
-		expect(await openUnavailableContent({ context, reference, delivery })).toBe(1);
+		expect(await openUnavailableContent(published)).toBe(1);
 	});
 });

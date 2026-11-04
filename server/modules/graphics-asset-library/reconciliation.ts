@@ -677,6 +677,7 @@ function createExpectationReconciliation(dependencies: GraphicsObservedReconcili
 		};
 	}
 
+	/** Reconciles exactly the content behind one digest a reader just observed failing. */
 	async function reconcileObservedDigest(input: { digest: string }): Promise<void> {
 		const expectation = await catalogue.findExpectedContent({ digest: input.digest });
 		if (!expectation)
@@ -688,15 +689,6 @@ function createExpectationReconciliation(dependencies: GraphicsObservedReconcili
 			await catalogue.recordGraphicsAssetEvidence(records);
 	}
 
-	async function reconcileObservedContent(input: {
-		assetId: GraphicAssetId;
-		revisionId: GraphicAssetRevisionId;
-	}): Promise<void> {
-		const digest = await catalogue.findRevisionContentDigest(input);
-		if (digest)
-			await reconcileObservedDigest({ digest });
-	}
-
 	return {
 		timestamp,
 		evidence,
@@ -704,15 +696,19 @@ function createExpectationReconciliation(dependencies: GraphicsObservedReconcili
 		canonicalObjectAgrees,
 		observationFacts,
 		reconcileExpectation,
-		reconcileObservedContent,
 		reconcileObservedDigest,
 	};
 }
 
 /**
- * Reconciles a contradiction a reader observed, built from the catalogue and
- * the canonical store alone. A reader that never stages bytes, such as a
- * Screen Output, feeds Graphics Reconciliation through this (ADR-0073).
+ * Reconciles a contradiction a reader observed, without waiting for the next
+ * scheduled pass, so an integrity failure it hit becomes durable operational
+ * state immediately. Built from the catalogue and the canonical store alone, so
+ * a reader that never stages bytes, such as a Screen Output, feeds Graphics
+ * Reconciliation too (ADR-0073).
+ *
+ * A Graphics Derivative has no revision of its own, so a preview read reports
+ * its digest rather than an asset and revision.
  */
 export function createGraphicsDisagreementReporter(dependencies: {
 	catalogue: GraphicsObservedDisagreementCatalogue;
@@ -720,15 +716,20 @@ export function createGraphicsDisagreementReporter(dependencies: {
 	now?: () => Date;
 	generateIdentity?: () => string;
 }): (observed: GraphicsCanonicalDisagreement) => Promise<void> {
-	const reconciliation = createExpectationReconciliation({
-		catalogue: dependencies.catalogue,
+	const { catalogue } = dependencies;
+	const { reconcileObservedDigest } = createExpectationReconciliation({
+		catalogue,
 		canonical: dependencies.canonical,
 		now: dependencies.now ?? (() => new Date()),
 		generateIdentity: dependencies.generateIdentity ?? (() => crypto.randomUUID()),
 	});
-	return async observed => await ('digest' in observed
-		? reconciliation.reconcileObservedDigest(observed)
-		: reconciliation.reconcileObservedContent(observed));
+	return async (observed) => {
+		const digest = 'digest' in observed
+			? observed.digest
+			: await catalogue.findRevisionContentDigest(observed);
+		if (digest)
+			await reconcileObservedDigest({ digest });
+	};
 }
 
 export function createGraphicsReconciliation(dependencies: GraphicsReconciliationDependencies) {
@@ -740,8 +741,6 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 		canonicalObjectAgrees,
 		observationFacts,
 		reconcileExpectation,
-		reconcileObservedContent,
-		reconcileObservedDigest,
 	} = createExpectationReconciliation({
 		catalogue,
 		canonical,
@@ -1490,19 +1489,6 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 				evidence: { recorded: records.length },
 			};
 		},
-		/**
-		 * Reconciles exactly the content a caller just observed failing, without
-		 * waiting for the next scheduled pass. Readers use this so an integrity
-		 * failure they hit becomes durable operational state immediately.
-		 */
-		reconcileObservedContent,
-		/**
-		 * Reconciles exactly the content behind one digest a caller just observed
-		 * failing. A Graphics Derivative has no revision of its own, so a reader
-		 * resolving a preview reaches reconciliation through this rather than
-		 * through an asset and revision.
-		 */
-		reconcileObservedDigest,
 		async overview(): Promise<GraphicsReconciliationOverview> {
 			const [state, openCounts, discrepancies] = await Promise.all([
 				catalogue.getReconciliationState(),
