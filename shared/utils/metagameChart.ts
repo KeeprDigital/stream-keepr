@@ -35,18 +35,30 @@ function shareOf(count: number, classifiedPlayers: number): number {
 }
 
 /**
- * Gives each Archetype on the chart a distinct colour slot by its id rather
- * than its rank, so a reload or a re-sort leaves every colour where it was.
- * Each prefers the slot its id lands on; a clash moves the higher id to the
- * next free slot. Eight slots cannot hold every id, so an Archetype entering
- * or leaving the chart can move one whose preferred slot it shares, and only
- * that one.
+ * Gives each Archetype on the chart a distinct colour slot. A Pinned Chart
+ * Series is placed first, so it holds whichever others enter or leave; two
+ * shown Archetypes pinning one series leave it to the lower id, and the other
+ * is placed as if unpinned. The rest go by id rather than rank, so a reload or
+ * a re-sort leaves every colour where it was: each prefers the slot its id
+ * lands on, and a clash moves the higher id to the next free slot. Eight slots
+ * cannot hold every id, so an unpinned Archetype entering or leaving the chart
+ * can move one whose preferred slot it shares, and only that one.
  */
-function assignColorSlots(ids: number[]): Map<number, number> {
+function assignColorSlots(entries: Pick<ArchetypeBreakdownEntry, 'id' | 'chartSeries'>[]): Map<number, number> {
 	const slots = new Map<number, number>();
 	const taken = new Set<number>();
+	const byId = [...entries].sort((a, b) => a.id - b.id);
 
-	for (const id of [...ids].sort((a, b) => a - b)) {
+	for (const { id, chartSeries } of byId) {
+		if (chartSeries != null && !taken.has(chartSeries)) {
+			taken.add(chartSeries);
+			slots.set(id, chartSeries);
+		}
+	}
+
+	for (const { id } of byId) {
+		if (slots.has(id))
+			continue;
 		const preferred = ((id - 1) % METAGAME_CHART_MAX_ARCHETYPES + METAGAME_CHART_MAX_ARCHETYPES) % METAGAME_CHART_MAX_ARCHETYPES;
 		for (let offset = 0; offset < METAGAME_CHART_MAX_ARCHETYPES; offset++) {
 			const slot = ((preferred + offset) % METAGAME_CHART_MAX_ARCHETYPES) + 1;
@@ -74,7 +86,7 @@ export function projectMetagameChart(breakdown: ArchetypeBreakdownResponse): Met
 		.concat(breakdown.entries.filter(isAggregate))
 		.reduce((total, entry) => total + entry.count, 0);
 
-	const colorSlots = assignColorSlots(shown.map(entry => entry.id));
+	const colorSlots = assignColorSlots(shown);
 	const rows: Omit<MetagameChartBar, 'length'>[] = shown.map(entry => ({
 		id: entry.id,
 		name: entry.name,

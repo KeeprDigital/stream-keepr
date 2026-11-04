@@ -529,6 +529,8 @@ export interface ArchetypeResponse {
 	eventId: number;
 	name: string;
 	colors: string | null;
+	/** The Pinned Chart Series, 1 to 8; null when unpinned. */
+	chartSeries: number | null;
 	createdAt: Date;
 	updatedAt: Date;
 }
@@ -538,7 +540,9 @@ export interface CreateArchetypeInput {
 	colors?: string | null;
 }
 
-export type UpdateArchetypeInput = Partial<CreateArchetypeInput>;
+export type UpdateArchetypeInput = Partial<CreateArchetypeInput> & {
+	chartSeries?: number | null;
+};
 
 export interface PlayerListResponse {
 	id: number;

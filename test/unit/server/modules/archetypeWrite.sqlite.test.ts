@@ -148,6 +148,33 @@ describe('updating an Archetype', () => {
 		}));
 	});
 
+	it.each([
+		['pins a chart series', null, 3, 3],
+		['moves a pin', 3, 7, 7],
+		['clears a pin', 3, null, null],
+		['keeps a pin an unrelated edit leaves out', 3, undefined, 3],
+	])('%s, and announces the stored Archetype', async (_case, pinned, chartSeries, stored) => {
+		const eventId = await createEvent();
+		const [archetype] = await db.insert(schema.archetypes).values({ eventId, name: 'Boros Energy', chartSeries: pinned }).returning();
+
+		await archetypeWriteModule().updateArchetype({
+			eventId,
+			archetypeId: archetype!.id,
+			input: chartSeries === undefined
+				? { name: 'Boros Energy' }
+				: { chartSeries },
+			originConnectionId: 'origin-1',
+		});
+
+		const [row] = await db.select().from(schema.archetypes).where(eq(schema.archetypes.id, archetype!.id));
+		expect(row?.chartSeries).toBe(stored);
+		expect(publication.archetypeUpdated).toHaveBeenCalledWith(expect.objectContaining({
+			eventId,
+			entity: expect.objectContaining({ id: archetype!.id, chartSeries: stored }),
+			originConnectionId: 'origin-1',
+		}));
+	});
+
 	it('refuses an Archetype the Event does not hold', async () => {
 		const eventId = await createEvent();
 

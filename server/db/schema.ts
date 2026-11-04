@@ -717,7 +717,14 @@ export const archetypes = sqliteTable('archetypes', {
 		.references(() => events.id, { onDelete: 'cascade' })
 		.notNull(),
 	name: text('name').notNull(),
+	/** Mana colours, not the chart colour. */
 	colors: text('colors'),
+	/**
+	 * The Pinned Chart Series: one of the Theme's chart series, 1 to 8, that
+	 * every chart colouring Archetypes gives this one first; null when unpinned.
+	 * An operator's alone; Melee Sync never writes it.
+	 */
+	chartSeries: integer('chart_series'),
 
 	...timestamps,
 }, table => [

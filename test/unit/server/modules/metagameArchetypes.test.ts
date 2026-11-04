@@ -39,8 +39,8 @@ describe('metagame archetype rules', () => {
 		const entries = buildArchetypeBreakdownEntries(
 			groups,
 			[
-				{ id: 1, name: 'Burn', colors: 'R' },
-				{ id: 2, name: 'Control', colors: 'U' },
+				{ id: 1, name: 'Burn', colors: 'R', chartSeries: 3 },
+				{ id: 2, name: 'Control', colors: 'U', chartSeries: null },
 			],
 			3,
 			new Map([
@@ -66,6 +66,7 @@ describe('metagame archetype rules', () => {
 		expect(entries).toEqual(expect.arrayContaining([
 			expect.objectContaining({
 				id: 1,
+				chartSeries: 3,
 				count: 2,
 				metaShare: 66.67,
 				winRate: 62.5,
@@ -96,7 +97,7 @@ describe('metagame archetype rules', () => {
 		]);
 
 		const entries = buildArchetypeBreakdownEntries(groups, [
-			{ id: 1, name: 'Burn', colors: 'R' },
+			{ id: 1, name: 'Burn', colors: 'R', chartSeries: null },
 		], 1, new Map());
 
 		expect(entries[0]!.conversionRate).toBeNull();
@@ -144,8 +145,8 @@ describe('metagame archetype rules', () => {
 		const entries = buildArchetypeBreakdownEntries(
 			groups,
 			[
-				{ id: 1, name: 'Burn', colors: 'R' },
-				{ id: 2, name: 'Control', colors: 'U' },
+				{ id: 1, name: 'Burn', colors: 'R', chartSeries: null },
+				{ id: 2, name: 'Control', colors: 'U', chartSeries: null },
 			],
 			5,
 			new Map(),
@@ -186,7 +187,7 @@ describe('metagame archetype rules', () => {
 		const entries = buildArchetypeBreakdownEntries(
 			groups,
 			[
-				{ id: 1, name: 'Burn', colors: 'R' },
+				{ id: 1, name: 'Burn', colors: 'R', chartSeries: null },
 			],
 			3,
 			new Map(),
@@ -201,6 +202,7 @@ describe('metagame archetype rules', () => {
 			id: 1,
 			name: 'Alpha',
 			colors: null,
+			chartSeries: null,
 			count: 1,
 			metaShare: 50,
 			winRate: 60,
@@ -212,6 +214,7 @@ describe('metagame archetype rules', () => {
 			id: 2,
 			name: 'Beta',
 			colors: null,
+			chartSeries: null,
 			count: 2,
 			metaShare: 50,
 			winRate: 40,
@@ -231,6 +234,7 @@ describe('metagame archetype rules', () => {
 			id: 1,
 			name: 'Alpha',
 			colors: null,
+			chartSeries: null,
 			count: 1,
 			metaShare: 50,
 			winRate: null,
@@ -242,6 +246,7 @@ describe('metagame archetype rules', () => {
 			id: 2,
 			name: 'Beta',
 			colors: null,
+			chartSeries: null,
 			count: 2,
 			metaShare: 50,
 			winRate: null,
@@ -259,6 +264,7 @@ describe('metagame archetype rules', () => {
 				id,
 				name,
 				colors: null,
+				chartSeries: null,
 				count,
 				metaShare: 0,
 				winRate: null,
@@ -347,6 +353,7 @@ describe('metagame archetype rules', () => {
 				id: -1,
 				name: 'Other',
 				colors: null,
+				chartSeries: null,
 				count: 3,
 				metaShare: 30,
 				winRate: 33.33,
