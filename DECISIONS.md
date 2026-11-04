@@ -2457,7 +2457,9 @@ Accepted · 2026-11-04 · [#1000](https://github.com/KeeprDigital/stream-keepr/i
 - Card data comes only from bandai-keepr's bulk lookup. The export's own card fields are not used.
 - A card number the catalogue already holds is never looked up again.
 - If the lookup fails, the import or paste fails whole and saves nothing.
-- A card number bandai-keepr does not know stays out of the catalogue. It is held number-only as an **Unresolved Deck Card**, with a warning, and retried on the next import or paste. The Cards page lists them Event-wide. Resolving one names the card for every Deck List in the Event holding that number, as ADR-0031 does for MTG.
+- A card number bandai-keepr does not know stays out of the catalogue. It is held number-only as an **Unresolved Deck Card**, with a warning, and retried on the next import or paste. The Cards page lists them Event-wide, with the Player and Slot side Deck Lists holding each.
+- **Retry and resolve.** The operator can retry one through the bulk lookup, or resolve it to a card picked from a bandai-keepr search (through the server proxy, as the browser never calls bandai-keepr). Either names the card for every Deck List in the Event holding that number, as ADR-0031 does for MTG, by rewriting each through the OP Deck List write. A rewrite keeps whether the Deck List was hand-edited, and copies of a picked card the Deck List already holds are added into its entry.
+- **A resolution re-projects.** Contradicts ADR-0031, whose resolution re-projects nothing and announces only `playerDeck:cardsResolved`, because on OP the Leader is the Archetype projection, and every reader holds a Deck List by id. So each rewritten Deck List gets a new id and the write's own announcements (`player:updated` and Reverse Sync for a Player, the Slot's for a side), and a resolved Leader re-derives the Player's Archetype.
 
 **An OP Player's Archetype is their Leader card.**
 
@@ -2501,6 +2503,8 @@ The Metagame is all or nothing: either the whole field was imported or no Metaga
 - **Duplicates.** A hand-added Player who later appears in an import is duplicated until the operator deletes one.
 - **How the import lands.** `server/modules/tcgplus-import` reads the export by its Japanese headers, never by position, and refuses a file missing one (`422 TCGPLUS_EXPORT_INVALID`). Preview and import each send the whole export, so the browser holds it between them; its routes take a body up to 4 MiB rather than the usual 1 MiB. The import resolves every card number in one lookup before writing, then writes the Players in one batch and the changed Deck Lists in a second (`opDeckListWriteModule().writeMany`). A failure between the two leaves the Players without their new Deck Lists, and a re-import finishes them. It announces one `tcgplus:imported` count rather than a `player:updated` per Player, as Melee Sync does.
 - **The import's Deck List is kept.** Each import stores the Deck List it brought every Player (`tcgplus_imported_deck_lists`), so "Use imported Deck List" takes it at once rather than waiting for the next import.
+- **Resolutions are not remembered.** Unlike Melee Sync's name overrides, nothing maps a resolved number for the next import, so a re-import still holding the misentered number brings it back, unless the Deck List was hand-edited.
+- **One write per Deck List.** A retry or resolution writes each Deck List holding the number on its own. A lookup failing partway leaves the earlier ones rewritten; retrying finishes the rest.
 - **CONTEXT.md.** Its Deck List, Leader, Archetype, Unresolved Deck Card and Feature Match Deck List entries, and its new Nickname and TCG+ Import entries, state this decision ahead of the code.
 
 ### Rejected alternatives

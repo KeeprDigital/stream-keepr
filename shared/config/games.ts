@@ -90,7 +90,7 @@ export const EVENT_PAGE_CARD_GAMES = {
 	sync: EVERY_CARD_GAME,
 	metagame: MTG_ONLY,
 	archetypeReview: MTG_ONLY,
-	cards: MTG_ONLY,
+	cards: EVERY_CARD_GAME,
 	integrations: MTG_ONLY,
 } as const satisfies Record<string, readonly Game[]>;
 

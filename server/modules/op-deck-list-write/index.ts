@@ -8,7 +8,7 @@ import type { LeaderArchetype } from './archetypes';
 import type { PastedDeckListLine } from './paste';
 import { and, eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
-import { players } from '~~/server/db/schema';
+import { playerDecks, players } from '~~/server/db/schema';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { featureMatchSlotWriteModule } from '~~/server/modules/feature-match-slot-write';
 import { opCardCatalogueModule } from '~~/server/modules/op-card-catalogue';
@@ -23,7 +23,7 @@ import { requireOpEvent } from '~~/server/utils/routeGuards';
 import { catalogueOpLeader } from '~~/shared/utils/card/op';
 import { getOpGameData } from '~~/shared/utils/gameData';
 import { deriveLeaderArchetype, removeEmptiedLeaderArchetypes } from './archetypes';
-import { opDeckListView, parseOpDeckListText } from './paste';
+import { opDeckListText, opDeckListView, parseOpDeckListText } from './paste';
 
 /**
  * The OP Deck List write (ADR-0074): every One Piece Card Game Deck List write
@@ -57,8 +57,12 @@ export type OpDeckListInput
 		/** Entries, a number given twice added together, with the Leader marked, as a TCG+ export does. */
 		| { entries: readonly PastedDeckListLine[]; leaderNumber: string | null };
 
-/** Where a write came from: a TCG+ Import, or an operator's hand (which a later import keeps). */
-export type OpDeckListWriteSource = 'import' | 'hand';
+/**
+ * Where a write came from: a TCG+ Import, an operator's hand (which a later
+ * import keeps), or an Unresolved Deck Card's retry or resolution, which
+ * keeps whether the Deck List was hand-edited.
+ */
+export type OpDeckListWriteSource = 'import' | 'hand' | 'resolution';
 
 interface WriteParams<TOwner extends OpDeckListOwner> {
 	eventId: number;
@@ -156,6 +160,16 @@ export function opDeckListWriteModule() {
 		return player;
 	}
 
+	async function isHandEdited(eventId: number, playerId: number, source: OpDeckListWriteSource): Promise<boolean> {
+		if (source !== 'resolution')
+			return source === 'hand';
+		const deck = await db.query.playerDecks.findFirst({
+			where: and(eq(playerDecks.eventId, eventId), eq(playerDecks.playerId, playerId), eq(playerDecks.isPrimary, true)),
+			columns: { handEdited: true },
+		});
+		return deck?.handEdited ?? false;
+	}
+
 	// Announced with no origin: the writing client applied none of it, so it follows the messages too.
 	async function writePlayer(
 		{ eventId, owner, input, source }: WriteParams<{ kind: 'player'; playerId: number }>,
@@ -176,7 +190,7 @@ export function opDeckListWriteModule() {
 			playerId,
 			view,
 			archetypeId: derived?.archetype.id ?? null,
-			handEdited: source === 'hand',
+			handEdited: await isHandEdited(eventId, playerId, source),
 		});
 		if (!written) {
 			await removeEmptiedLeaderArchetypes(eventId, derived?.created
@@ -226,7 +240,7 @@ export function opDeckListWriteModule() {
 		const view = opDeckListView(entries);
 		const sourceText = 'text' in input
 			? input.text
-			: '';
+			: opDeckListText(view.entries, view.leaderNumber);
 		const deckListId = await deckLists.create(eventId, slotId, sourceText, view);
 
 		// Read after the lookup, so an edit to the side made meanwhile is kept.
@@ -309,7 +323,8 @@ export function opDeckListWriteModule() {
 	async function writeMany({ eventId, writes, source }: {
 		eventId: number;
 		writes: ReadonlyArray<{ playerId: number; deckList: OpDeckListView }>;
-		source: OpDeckListWriteSource;
+		/** A resolution rewrites one Deck List at a time, keeping its flag, so it is not offered here. */
+		source: Exclude<OpDeckListWriteSource, 'resolution'>;
 	}): Promise<DbPlayer[]> {
 		if (writes.length === 0)
 			return [];

@@ -204,6 +204,40 @@ describe('a Player\'s Deck List', () => {
 		]);
 	});
 
+	it.each([
+		[
+			'import',
+			{
+				entries: [
+					{ number: 'OP99-999', quantity: 4 },
+				],
+				leaderNumber: 'OP01-001',
+			},
+		],
+		[
+			'paste',
+			{ text: '1x OP01-001\n4x OP99-999' },
+		],
+	] as const)('retries a number bandai-keepr did not know when an %s sees it again', async (_input, input) => {
+		const eventId = await stageEvent();
+		const [ana, ben] = [await stagePlayer(eventId, 'ana'), await stagePlayer(eventId, 'ben')];
+		await write(eventId, ana.id, { text: ZORO_DECK });
+		upstream.know(knownOpCard({
+			number: 'OP99-999',
+			name: 'Late Card',
+			category: 'event',
+			colors: ['Red'],
+		}));
+		upstream.reset();
+
+		const { deckList } = await write(eventId, ben.id, input, 'import');
+
+		expect(upstream.batches()).toEqual([
+			['OP99-999'],
+		]);
+		expect(deckList.entries.find(entry => entry.number === 'OP99-999')?.card?.name).toBe('Late Card');
+	});
+
 	it('saves nothing when the lookup fails', async () => {
 		const eventId = await stageEvent();
 		const player = await stagePlayer(eventId);
