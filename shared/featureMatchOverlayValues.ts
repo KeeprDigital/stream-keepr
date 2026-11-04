@@ -5,6 +5,7 @@ import { formatOpColors } from '~~/shared/utils/card/op';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { formatOrdinal } from '~~/shared/utils/formatters';
 import { getMtgGameData, getOpGameData } from '~~/shared/utils/gameData';
+import { playerDisplayName } from '~~/shared/utils/playerName';
 import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
 
 /**
@@ -146,7 +147,7 @@ function playerValues(
 	const leader = getOpGameData(data?.gameData).leader;
 
 	return {
-		Name: data?.name ?? '',
+		Name: playerDisplayName(data),
 		Record: record(input, side),
 		Deck: mtg.deckName ?? leader?.name ?? '',
 		DeckColors: mtg.deckColors ?? (leader

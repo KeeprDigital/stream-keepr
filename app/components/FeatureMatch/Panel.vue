@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FeatureMatchData, FeatureMatchFormData, PlayerData, PlayerDisplayConfig, UpdateFeatureMatchInput } from '~/types';
+import { playerDisplayName } from '~~/shared/utils/playerName';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { DEFAULT_PLAYER_DATA, toPlayerData } from '~/types';
 import { buildFeatureMatchSetupUpdate } from '~/utils/featureMatchSetup';
@@ -625,8 +626,8 @@ async function save() {
 		v-if="matchState"
 		v-model:open="editStateOpen"
 		:state="matchState"
-		:player1-name="player1Data.name"
-		:player2-name="player2Data.name"
+		:player1-name="playerDisplayName(player1Data)"
+		:player2-name="playerDisplayName(player2Data)"
 		:show-life="lifeTrackingEnabled"
 		:show-turn-number="turnTrackingEnabled || activePlayerTrackingEnabled"
 		:show-player-tracking="activePlayerTrackingEnabled"

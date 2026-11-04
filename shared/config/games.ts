@@ -71,11 +71,27 @@ export const GAME_CONFIGS: Record<Game, GameConfig> = {
 export const EVERY_CARD_GAME: readonly Game[] = GAME_VALUES;
 
 /**
- * Magic: The Gathering only: what something for Players, Rounds, Matches,
- * results or the Metagame declares, as a One Piece Card Game Event models none
- * of them (ADR-0057).
+ * Magic: The Gathering only: what something for Rounds, Matches, results or
+ * Melee Sync declares, as a One Piece Card Game Event models none of them
+ * (ADR-0057).
  */
 export const MTG_ONLY: readonly Game[] = ['mtg'];
+
+/**
+ * The Card Games each Event page is offered to, read by its page guard, the
+ * Event nav and the settings tabs alike. A One Piece Card Game Event has
+ * Players (ADR-0074) but no Rounds, Matches or Melee Sync (ADR-0057).
+ */
+export const EVENT_PAGE_CARD_GAMES = {
+	players: EVERY_CARD_GAME,
+	matches: MTG_ONLY,
+	eventStructure: MTG_ONLY,
+	sync: MTG_ONLY,
+	metagame: MTG_ONLY,
+	archetypeReview: MTG_ONLY,
+	cards: MTG_ONLY,
+	integrations: MTG_ONLY,
+} as const satisfies Record<string, readonly Game[]>;
 
 /**
  * Whether something declaring `cardGames` is offered to an Event of `game`.

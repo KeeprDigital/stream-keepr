@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui';
 import type { RowSelectionState } from '@tanstack/vue-table';
+import type { Game } from '~~/shared/types/enums';
 import type { Player, PlayerListSummary } from '~/types';
 import { getFilteredRowModel } from '@tanstack/vue-table';
 import { getMtgGameData } from '~~/shared/utils/gameData';
+import { playerDisplayName, playerMatchesSearch } from '~~/shared/utils/playerName';
 import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
 
 interface Props {
@@ -12,9 +14,12 @@ interface Props {
 	globalFilter?: string;
 	lists?: PlayerListSummary[];
 	activeListId?: number | null;
+	/** The Event's Card Game: a One Piece Card Game Player has a Nickname, and no record or match history (ADR-0074). */
+	game?: Game;
 }
 
 const props = withDefaults(defineProps<Props>(), {
+	game: 'mtg',
 	loading: false,
 	globalFilter: '',
 	lists: () => [],
@@ -50,7 +55,9 @@ function getPlayerActiveDeck(player: Player) {
 // Sorting state
 const sorting = ref<Array<{ id: string; desc: boolean }>>([
 	{
-		id: 'position',
+		id: props.game === 'op'
+			? 'name'
+			: 'position',
 		desc: false,
 	},
 ]);
@@ -82,7 +89,7 @@ const globalFilterOptions = {
 	globalFilterFn: (row: { original: Player }, _columnId: string, filterValue: string) => {
 		const player = row.original;
 		const query = filterValue.toLowerCase();
-		if (player.name.toLowerCase().includes(query))
+		if (playerMatchesSearch(player, query))
 			return true;
 		// Search across all deck names, not just the active one
 		const deckLists = getPlayerDeckLists(player);
@@ -124,7 +131,7 @@ function getRowMenuItems(player: Player): DropdownMenuItem[][] {
 				});
 	}
 
-	if (hasPlayerHistoryScreens.value) {
+	if (hasPlayerHistoryScreens.value && props.game === 'mtg') {
 		sendItems.push(playerHistoryScreens.value.length === 1
 			? {
 					label: 'Send Match History to Screen',
@@ -210,6 +217,32 @@ const columns = computed<TableColumn<Player>[]>(() => {
 				'ariaLabel': 'Select row',
 			}),
 		},
+	];
+
+	if (props.game === 'op') {
+		cols.push(
+			{
+				id: 'name',
+				accessorFn: row => playerDisplayName(row),
+				header: createSortableHeader('Name'),
+				enableSorting: true,
+			},
+			{
+				accessorKey: 'nickname',
+				header: createSortableHeader('Nickname'),
+				enableSorting: true,
+			},
+			{
+				accessorKey: 'pronouns',
+				header: createSortableHeader('Pronouns'),
+				enableSorting: true,
+			},
+			{ id: 'actions', header: '' },
+		);
+		return cols;
+	}
+
+	cols.push(
 		{
 			accessorKey: 'position',
 			header: createSortableHeader('#'),
@@ -242,12 +275,11 @@ const columns = computed<TableColumn<Player>[]>(() => {
 			header: createSortableHeader('Deck'),
 			enableSorting: true,
 		},
-	];
-
-	cols.push({
-		id: 'actions',
-		header: '',
-	});
+		{
+			id: 'actions',
+			header: '',
+		},
+	);
 
 	return cols;
 });
@@ -292,7 +324,12 @@ const columns = computed<TableColumn<Player>[]>(() => {
 			</template>
 
 			<template #name-cell="{ row }">
-				<PlayerMatchHistoryButton :player="row.original" />
+				<span v-if="game === 'op'">{{ playerDisplayName(row.original) }}</span>
+				<PlayerMatchHistoryButton v-else :player="row.original" />
+			</template>
+
+			<template #nickname-cell="{ row }">
+				<span class="text-muted">{{ row.original.nickname || '-' }}</span>
 			</template>
 
 			<template #pronouns-cell="{ row }">

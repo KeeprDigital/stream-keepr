@@ -6,6 +6,7 @@ import { playerGameDataSchema } from './player';
 // Embedded player data for match slots (same shape as feature match player data)
 const matchPlayerDataSchema = z.object({
 	name: z.string().min(1).max(200),
+	nickname: z.string().max(100).nullable().optional(),
 	pronouns: z.string().max(50).nullable().optional(),
 	wins: z.number().int().nonnegative().nullable().optional(),
 	losses: z.number().int().nonnegative().nullable().optional(),

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { MtgPlayerGameData, OpPlayerGameData } from '~~/shared/types/game';
 import type { PlayerData } from '~/types';
+import { playerDisplayName } from '~~/shared/utils/playerName';
 import { DEFAULT_PLAYER_DATA, toCreatePlayerInput } from '~/types/player';
 
 const props = defineProps<{
@@ -26,9 +27,14 @@ const formId = 'create-player-form';
 const mtgGameData = ref<MtgPlayerGameData>({ type: 'mtg', deckName: null, deckColors: null });
 const opGameData = ref<OpPlayerGameData>({ type: 'op', leader: null });
 
+// A One Piece Card Game Player may go by their Nickname alone (ADR-0074).
+const isValid = computed(() => playerDisplayName(props.game === 'op'
+	? formData.value
+	: { name: formData.value.name }) !== '');
+
 async function handleSubmit() {
-	const name = formData.value.name?.trim();
-	if (!name || !eventStore.eventId)
+	const name = formData.value.name?.trim() ?? '';
+	if (!isValid.value || !eventStore.eventId)
 		return;
 
 	const input = toCreatePlayerInput({
@@ -56,10 +62,6 @@ async function handleSubmit() {
 function handleCancel() {
 	emit('close');
 }
-
-const isValid = computed(() => {
-	return (formData.value.name?.trim().length ?? 0) > 0;
-});
 </script>
 
 <template>

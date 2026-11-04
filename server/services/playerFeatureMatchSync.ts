@@ -16,6 +16,7 @@ import { randomCommandId } from '~~/shared/utils/uuid';
 function playerToMatchData(player: DbPlayer): PlayerSlotData {
 	return {
 		name: player.name,
+		nickname: player.nickname,
 		pronouns: player.pronouns,
 		externalId: player.externalId,
 		externalSource: player.externalSource,
@@ -243,7 +244,7 @@ export function playerFeatureMatchSyncService() {
 				// `Object.assign` also mutates its target where the spread did not, so this now
 				// depends on `playerToMatchData` handing back a fresh object per call. No test
 				// held that property, so one now does — see the pin in this module's suite.
-				const updatedData = hasDeckIdentity && existingData.deckId != null && !selectedDeck
+				const rebuiltData = hasDeckIdentity && existingData.deckId != null && !selectedDeck
 					? Object.assign(playerToMatchData(player), {
 						// The exact historical deck is no longer in the current submitted-deck
 						// snapshot. Preserve its embedded identity instead of rebinding this
@@ -263,6 +264,11 @@ export function playerFeatureMatchSyncService() {
 									|| existingData?.gameData?.type === 'mtg',
 							},
 						);
+				// A One Piece Card Game side's Leader and Feature Match Deck List are the
+				// side's own, linked Player or not (ADR-0057), so a Player write leaves them.
+				const updatedData = existingData?.gameData?.type === 'op'
+					? Object.assign(rebuiltData, { gameData: existingData.gameData } satisfies Partial<PlayerSlotData>)
+					: rebuiltData;
 				if (jsonValuesEqual(existingData, updatedData))
 					continue;
 				if (side === 1)

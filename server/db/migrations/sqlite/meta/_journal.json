@@ -15,6 +15,13 @@
       "when": 1793766300810,
       "tag": "0001_since_v1_5_0",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793791980772,
+      "tag": "0002_player_nickname",
+      "breakpoints": true
     }
   ]
 }

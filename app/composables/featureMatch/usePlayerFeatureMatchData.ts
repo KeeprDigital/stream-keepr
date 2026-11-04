@@ -2,6 +2,7 @@ import type { MaybeRefOrGetter } from 'vue';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { formatOrdinal } from '~~/shared/utils/formatters';
 import { getMtgGameData, getPlayerIdentityValue } from '~~/shared/utils/gameData';
+import { playerDisplayName } from '~~/shared/utils/playerName';
 import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
 
 /**
@@ -52,7 +53,7 @@ export function usePlayerFeatureMatchData(
 		const fallback = side() === 'player1'
 			? 'Player 1'
 			: 'Player 2';
-		return playerData.value?.name || fallback;
+		return playerDisplayName(playerData.value) || fallback;
 	});
 
 	const seatedPlayerId = computed(() => seated.value.playerId);

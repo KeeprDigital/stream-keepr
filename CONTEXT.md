@@ -42,10 +42,10 @@ How many positions a Player moved since the previous Round's Round Standings: th
 _Avoid_: movement, rank delta.
 
 **Player**:
-A competitor in an Event. A One Piece Card Game Player is shown by their name if an operator gave one, otherwise by their Nickname (ADR-0074).
+A competitor in an Event. Wherever a Player appears, one rule decides what shows: their name if an operator gave one, otherwise their Nickname (ADR-0074). A Magic: The Gathering Player has no Nickname, so needs a name; a One Piece Card Game Player needs a name or a Nickname, and clearing the name brings the Nickname back.
 
 **Nickname**:
-A One Piece Card Game Player's handle in Bandai TCG+, owned by the TCG+ Import and refreshed by each import. It is not the Player's name: the operator gives that, and the Nickname stands in only while there is none.
+A One Piece Card Game Player's handle in Bandai TCG+, owned by the TCG+ Import and refreshed by each import; an operator types it only for a Player added by hand. It is not the Player's name: the operator gives that, and the Nickname stands in only while there is none. Player pickers find a Player by name, Nickname or Bandai member number.
 _Avoid_: name, display name, when meaning the TCG+ handle.
 
 **Deck List**:

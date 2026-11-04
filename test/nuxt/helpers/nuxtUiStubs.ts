@@ -579,6 +579,55 @@ export const USeparatorStub = defineComponent({
 	template: '<hr>',
 });
 
+interface InputMenuItemLike {
+	label?: string;
+	[key: string]: unknown;
+}
+
+/**
+ * A `<input role="combobox">` for the search term over `<button role="option">`s, one per item;
+ * clicking one emits its `value-key` value (else the item). Without `ignore-filter` it filters by
+ * label, as `UInputMenu` does. Kept out of `nuxtUiStubs`, which suites rendering the real menu
+ * spread: pass `{ ...nuxtUiStubs, UInputMenu: UInputMenuStub }`.
+ */
+export const UInputMenuStub = defineComponent({
+	name: 'UInputMenu',
+	inheritAttrs: false,
+	props: {
+		...presentation,
+		modelValue: { type: null as unknown as PropType<unknown>, default: undefined },
+		items: {
+			type: Array as PropType<InputMenuItemLike[]>,
+			default: () => [],
+		},
+		valueKey: { type: String, required: false },
+		searchTerm: { type: String, default: '' },
+		ignoreFilter: { type: Boolean, default: false },
+		placeholder: { type: String, required: false },
+		icon: { type: String, required: false },
+		clear: { type: Boolean, default: false },
+	},
+	emits: ['update:modelValue', 'update:searchTerm'],
+	setup(props) {
+		const term = ref(props.searchTerm);
+		return {
+			term,
+			shown: computed(() => props.ignoreFilter
+				? props.items
+				: props.items.filter(item => (item.label ?? '').toLowerCase().includes(term.value.toLowerCase()))),
+		};
+	},
+	watch: {
+		searchTerm(value: string) {
+			this.term = value;
+		},
+	},
+	template: `<div>
+		<input v-bind="$attrs" role="combobox" :aria-label="placeholder" :value="term" @input="term = $event.target.value; $emit('update:searchTerm', term)">
+		<button v-for="(item, index) in shown" :key="index" type="button" role="option" @click="$emit('update:modelValue', valueKey ? item[valueKey] : item)">{{ item.label }}</button>
+	</div>`,
+});
+
 /** Every stub above, keyed by component name, for `global.stubs`. */
 export const nuxtUiStubs = {
 	UAlert: UAlertStub,

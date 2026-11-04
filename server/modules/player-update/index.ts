@@ -1,11 +1,17 @@
 import type { CreatePlayerInput, PlayerResponse, UpdatePlayerInput } from '~~/shared/api';
+import type { Game } from '~~/shared/types/enums';
 import type { PlayerDeckSummaryResponse } from '~~/shared/types/metagame';
+import type { PlayerNameFacts } from '~~/shared/utils/playerName';
+import { eq } from 'drizzle-orm';
+import { db } from '~~/server/db';
+import { events } from '~~/server/db/schema';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { archetypeService } from '~~/server/services/archetype';
 import { playerService } from '~~/server/services/player';
 import { playerDeckService } from '~~/server/services/playerDeck';
 import { playerFeatureMatchSyncService } from '~~/server/services/playerFeatureMatchSync';
 import { requireArchetypeInEvent } from '~~/server/utils/routeGuards';
+import { playerDisplayName } from '~~/shared/utils/playerName';
 
 interface UpdatePlayerInputParams {
 	eventId: number;
@@ -46,6 +52,36 @@ interface PublishPlayerSnapshotUpdatesParams {
 }
 
 type ReconcileDeckProjectionsParams = PublishPlayerSnapshotUpdatesParams;
+
+/** A written Nickname as stored: trimmed, and none when blank. */
+function withStoredNickname<T extends { nickname?: string | null }>(input: T): T {
+	return input.nickname === undefined
+		? input
+		: { ...input, nickname: input.nickname?.trim() || null };
+}
+
+/**
+ * A Player must always show by something (ADR-0074). A One Piece Card Game
+ * Player shows by their name, else their Nickname; a Magic: The Gathering
+ * Player has no Nickname, so needs a name.
+ */
+async function requireShownPlayer(eventId: number, player: PlayerNameFacts) {
+	const event = await db.query.events.findFirst({
+		where: eq(events.id, eventId),
+		columns: { game: true },
+	});
+	const game: Game = event?.game ?? 'mtg';
+	if (game !== 'op' && player.nickname)
+		throw createError({ statusCode: 400, message: 'Only a One Piece Card Game Player has a Nickname' });
+	if (!playerDisplayName(player)) {
+		throw createError({
+			statusCode: 400,
+			message: game === 'op'
+				? 'A Player needs a name or a Nickname'
+				: 'A Player needs a name',
+		});
+	}
+}
 
 export function playerUpdateModule() {
 	const publication = eventDataPublicationModule();
@@ -108,8 +144,20 @@ export function playerUpdateModule() {
 		originConnectionId,
 	}: UpdatePlayerInputParams): Promise<PlayerResponse> {
 		await requireArchetypeInEvent(eventId, input.archetypeId);
+		const written = withStoredNickname(input);
+		if (written.name !== undefined || written.nickname !== undefined) {
+			const current = await players.findById(playerId, eventId);
+			if (current) {
+				await requireShownPlayer(eventId, {
+					name: written.name ?? current.name,
+					nickname: written.nickname !== undefined
+						? written.nickname
+						: current.nickname,
+				});
+			}
+		}
 
-		const updatedPlayer = await players.update(playerId, eventId, input);
+		const updatedPlayer = await players.update(playerId, eventId, written);
 
 		if (!updatedPlayer) {
 			throw createError({
@@ -144,8 +192,10 @@ export function playerUpdateModule() {
 		originConnectionId,
 	}: CreatePlayerInputParams): Promise<PlayerResponse> {
 		await requireArchetypeInEvent(eventId, input.archetypeId);
+		const written = withStoredNickname(input);
+		await requireShownPlayer(eventId, written);
 
-		const newPlayer = await players.create(eventId, input);
+		const newPlayer = await players.create(eventId, written);
 
 		return await publication.playerCreated({
 			eventId,

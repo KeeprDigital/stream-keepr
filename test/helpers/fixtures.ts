@@ -133,6 +133,7 @@ export function createMockPlayer(overrides?: Partial<DbPlayer>): DbPlayer {
 		id: 1,
 		eventId: 1,
 		name: 'Test Player',
+		nickname: null,
 		pronouns: null,
 		externalId: null,
 		externalSource: null,

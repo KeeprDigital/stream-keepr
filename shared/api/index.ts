@@ -311,6 +311,8 @@ export interface ResolveMeleeUnresolvedDeckCardResponse {
 
 export interface PlayerSlotData {
 	name?: string | null;
+	/** A One Piece Card Game Player's Nickname, shown while the side has no name (ADR-0074). */
+	nickname?: string | null;
 	pronouns?: string | null;
 	externalId?: string | null;
 	externalSource?: ExternalSource | null;
@@ -336,7 +338,10 @@ export type ManualPlayerSlotData = Omit<PlayerSlotData, 'externalId' | 'external
 export interface PlayerResponse {
 	id: number;
 	eventId: number;
+	/** The operator's name; empty on a One Piece Card Game Player shown by their Nickname. */
 	name: string;
+	/** A One Piece Card Game Player's Bandai TCG+ handle (ADR-0074). */
+	nickname: string | null;
 	pronouns: string | null;
 	externalId: string | null;
 	externalSource: ExternalSource | null;
@@ -359,7 +364,9 @@ export interface PlayerResponse {
  * provenance. See ManualPlayerSlotData for the same rule on match slots.
  */
 export interface CreatePlayerInput {
+	/** Optional on a One Piece Card Game Player with a Nickname; required otherwise. */
 	name: string;
+	nickname?: string | null;
 	pronouns?: string | null;
 	wins?: number | null;
 	losses?: number | null;

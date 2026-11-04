@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { ConversionTarget } from '~~/shared/conversionTarget';
 import type { NavigationMenuItem } from '#ui/types';
-import { MTG_ONLY } from '~~/shared/config/games';
+import { EVENT_PAGE_CARD_GAMES } from '~~/shared/config/games';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
-	cardGames: MTG_ONLY,
+	cardGames: EVENT_PAGE_CARD_GAMES.metagame,
 	title: 'Metagame',
 	layout: false,
 });

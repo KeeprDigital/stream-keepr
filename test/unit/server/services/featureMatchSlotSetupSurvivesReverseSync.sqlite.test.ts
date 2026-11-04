@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
+import { LUFFY } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
@@ -35,6 +36,7 @@ const { featureMatchSlotWriteModule } = await import('~~/server/modules/feature-
 const { featureMatchPromotionModule } = await import('~~/server/modules/feature-match-promotion');
 const { featureMatchService } = await import('~~/server/services/featureMatch');
 const { playerFeatureMatchSyncService } = await import('~~/server/services/playerFeatureMatchSync');
+const { playerUpdateModule } = await import('~~/server/modules/player-update');
 
 afterAll(async () => {
 	await harness.close();
@@ -210,5 +212,92 @@ describe('a Slot setup edit to a seated Player', () => {
 			where: eq(schema.players.eventId, eventId),
 		})).toEqual(before);
 		expect((await slotById(unseated.id, eventId))?.player1Data).toMatchObject({ name: 'Walk-in', lgs: 'Northgate Games' });
+	});
+});
+
+/** A One Piece Card Game Event's Slot with an unlinked side holding its own Leader, and a Player to link into it. */
+async function stageOpSlot(player: { name: string; nickname: string | null }) {
+	const [event] = await db.insert(schema.events)
+		.values({ name: 'OP Regionals', game: 'op', featureMatchOrientation: 'horizontal' })
+		.returning();
+	const eventId = event!.id;
+	const [seated] = await db.insert(schema.players).values({ eventId, ...player }).returning();
+	const slot = await featureMatchService().create(eventId, {});
+	const sideData = {
+		name: '',
+		gameData: { type: 'op' as const, leader: LUFFY },
+	};
+	return {
+		eventId,
+		slotId: slot.id,
+		playerId: seated!.id,
+		sideData,
+	};
+}
+
+describe('linking a One Piece Card Game Player into a Slot side', () => {
+	it('seats the Player, shown by their Nickname, and keeps the side\'s own Leader through a Player write', async () => {
+		const { eventId, slotId, playerId, sideData } = await stageOpSlot({ name: '', nickname: 'linlin_88' });
+
+		await featureMatchSlotWriteModule().updateSetup({
+			eventId,
+			slotId,
+			input: {
+				player1Id: playerId,
+				player1Data: { ...sideData, nickname: 'linlin_88' },
+			},
+		});
+		await playerUpdateModule().updatePlayer({
+			eventId,
+			playerId,
+			input: { pronouns: 'she/her' },
+		});
+
+		const slot = await slotById(slotId, eventId);
+		expect(slot?.player1Id).toBe(playerId);
+		expect(slot?.player1Data).toMatchObject({
+			name: '',
+			nickname: 'linlin_88',
+			pronouns: 'she/her',
+			gameData: { leader: LUFFY },
+		});
+	});
+
+	// A cleared name is a Player write only where a Nickname is there to fall back to.
+	it.each([
+		{
+			held: { name: '', nickname: 'linlin_88' },
+			edited: 'Big Mom',
+			stored: 'Big Mom',
+		},
+		{
+			held: { name: 'Big Mom', nickname: 'linlin_88' },
+			edited: '',
+			stored: '',
+		},
+		{
+			held: { name: 'Big Mom', nickname: null },
+			edited: '',
+			stored: 'Big Mom',
+		},
+	])('writes a setup name of $edited to a linked Player holding $held', async ({ held, edited, stored }) => {
+		const { eventId, slotId, playerId, sideData } = await stageOpSlot(held);
+		await featureMatchService().update(slotId, eventId, {
+			player1Id: playerId,
+			player1Data: {
+				...sideData,
+				...held,
+			},
+		});
+
+		await featureMatchSlotWriteModule().updateSetup({
+			eventId,
+			slotId,
+			input: {
+				player1Data: { ...sideData, nickname: held.nickname, name: edited },
+			},
+		});
+
+		expect((await playerById(playerId))?.name).toBe(stored);
 	});
 });

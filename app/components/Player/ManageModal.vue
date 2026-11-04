@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { MtgPlayerGameData, OpPlayerGameData } from '~~/shared/types/game';
 import type { Player, PlayerData } from '~/types';
+import { playerDisplayName } from '~~/shared/utils/playerName';
 import { LazyUIConfirmDeleteModal } from '#components';
 import { toCreatePlayerInput, toPlayerData } from '~/types/player';
 
@@ -27,6 +28,7 @@ const { runRequest } = useRequestFeedback();
 function playerToFormData(player: Player): PlayerData {
 	return toPlayerData({
 		name: player.name,
+		nickname: player.nickname,
 		pronouns: player.pronouns,
 		lgs: player.lgs,
 		wins: player.wins,
@@ -87,9 +89,14 @@ const { confirmDiscard } = useModalUnsavedChanges(computed(() => isDirty.value &
 const saving = ref(false);
 const formId = `edit-player-${props.player.id}-form`;
 
+// A One Piece Card Game Player with a Nickname shows by it while they have no name (ADR-0074).
+const isValid = computed(() => playerDisplayName(props.game === 'op'
+	? formData.value
+	: { name: formData.value.name }) !== '');
+
 async function handleSave() {
-	const name = formData.value.name?.trim();
-	if (!name || !eventStore.eventId)
+	const name = formData.value.name?.trim() ?? '';
+	if (!isValid.value || !eventStore.eventId)
 		return;
 
 	const input = toCreatePlayerInput({
@@ -126,7 +133,7 @@ async function handleDelete() {
 	const deleteModal = overlay.create(LazyUIConfirmDeleteModal);
 	const confirmed = await deleteModal.open({
 		title: 'Delete Player',
-		itemName: props.player.name,
+		itemName: playerDisplayName(props.player),
 	}).result;
 
 	if (!confirmed)
@@ -153,8 +160,6 @@ async function handleCancel() {
 	if (await confirmDiscard())
 		emit('close');
 }
-
-const isValid = computed(() => (formData.value.name?.trim().length ?? 0) > 0);
 </script>
 
 <template>
@@ -191,6 +196,7 @@ const isValid = computed(() => (formData.value.name?.trim().length ?? 0) > 0);
 					:game="game"
 					:pronouns-enabled="pronounsEnabled"
 					:lgs-enabled="lgsEnabled"
+					:nickname-imported="player.externalSource === 'tcgplus'"
 				/>
 			</UForm>
 		</template>

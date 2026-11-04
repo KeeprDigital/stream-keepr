@@ -112,11 +112,13 @@ export function featureMatchSlotWriteModule() {
 			if (!player)
 				continue;
 
-			// An omitted field was not edited. A Player always has a name, so a
-			// cleared one stays on the Slot only.
+			// An omitted field was not edited. A cleared name falls back to the
+			// Player's Nickname (ADR-0074); with none to fall back to, it stays on
+			// the Slot only, because a Player always shows by something.
 			const changes: UpdatePlayerInput = {};
-			if (data.name && data.name !== player.name)
-				changes.name = data.name;
+			const name = data.name?.trim();
+			if (name !== undefined && name !== player.name && (name || player.nickname))
+				changes.name = name;
 			if (Object.hasOwn(data, 'pronouns') && (data.pronouns ?? null) !== player.pronouns)
 				changes.pronouns = data.pronouns ?? null;
 			if (Object.hasOwn(data, 'lgs') && (data.lgs ?? null) !== player.lgs)

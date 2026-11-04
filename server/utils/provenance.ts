@@ -27,6 +27,7 @@ export const PROVENANCE_ENTITIES = {
 	players: {
 		manualWritable: [
 			'name',
+			'nickname',
 			'pronouns',
 			'wins',
 			'losses',
