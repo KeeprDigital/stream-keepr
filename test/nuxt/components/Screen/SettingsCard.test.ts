@@ -30,64 +30,82 @@ describe('screenSettingsCard', () => {
 		vi.restoreAllMocks();
 	});
 
+	/** The toggle's ARIA state, or `null` when the card renders no toggle. */
+	function ariaState(wrapper: ReturnType<typeof mountCard>) {
+		const button = toggle(wrapper);
+		if (!button.exists())
+			return null;
+		const controls = button.attributes('aria-controls');
+		return {
+			expanded: button.attributes('aria-expanded'),
+			controlsBody: controls !== undefined && wrapper.find(`#${controls} [data-testid="field"]`).exists(),
+		};
+	}
+
+	const OPEN = { expanded: 'true', controlsBody: true };
+	const CLOSED = { expanded: 'false', controlsBody: false };
+
 	it.each([
 		{
 			name: 'open by default',
 			props: {},
-			expanded: 'true',
-			afterToggle: 'false',
+			before: OPEN,
+			afterToggle: CLOSED,
 		},
 		{
 			name: 'defaultOpen: false',
 			props: { defaultOpen: false },
-			expanded: 'false',
-			afterToggle: 'true',
+			before: CLOSED,
+			afterToggle: OPEN,
 		},
-	])('$name: the toggle\'s aria-expanded follows the open body', async ({ props, expanded, afterToggle }) => {
+		{
+			name: 'collapsible: false',
+			props: { collapsible: false, defaultOpen: false },
+			before: null,
+			afterToggle: null,
+		},
+	])('$name: the toggle\'s ARIA state follows the body', async ({ props, before, afterToggle }) => {
 		const wrapper = mountCard(props);
 		await flushPromises();
 
-		expect(toggle(wrapper).attributes('aria-expanded')).toBe(expanded);
-		expect(wrapper.find('[data-testid="field"]').exists()).toBe(expanded === 'true');
-		expect(wrapper.get('[data-testid="action"]').text()).toBe(expanded === 'true'
-			? 'open'
-			: 'closed');
-		const body = wrapper.find(`#${toggle(wrapper).attributes('aria-controls')}`);
-		expect(body.exists()).toBe(expanded === 'true');
+		expect(ariaState(wrapper)).toEqual(before);
+		expect(wrapper.find('[data-testid="field"]').exists()).toBe(before?.expanded !== 'false');
+		expect(wrapper.get('[data-testid="action"]').text()).toBe(before?.expanded === 'false'
+			? 'closed'
+			: 'open');
 
-		await toggle(wrapper).trigger('click');
-
-		expect(toggle(wrapper).attributes('aria-expanded')).toBe(afterToggle);
-		expect(wrapper.find('[data-testid="field"]').exists()).toBe(afterToggle === 'true');
-		expect(wrapper.findAll('h3').map(heading => heading.text())).toEqual(['Card Badges']);
+		if (before) {
+			await toggle(wrapper).trigger('click');
+			expect(ariaState(wrapper)).toEqual(afterToggle);
+		}
 	});
 
-	it('collapsible: false shows its body with no toggle', async () => {
-		const wrapper = mountCard({ collapsible: false, subtitle: 'Badges on each card.' });
+	it('renders its title and subtitle once, open or closed', async () => {
+		const wrapper = mountCard({ subtitle: 'Badges on each card.' });
 		await flushPromises();
+		await toggle(wrapper).trigger('click');
 
-		expect(toggle(wrapper).exists()).toBe(false);
-		expect(wrapper.find('[data-testid="field"]').exists()).toBe(true);
-		expect(wrapper.text()).toContain('Badges on each card.');
+		expect(wrapper.findAll('h3').map(heading => heading.text())).toEqual(['Card Badges']);
+		expect(wrapper.text().split('Badges on each card.')).toHaveLength(2);
 	});
 
 	// Remembered per browser by `mode:card` id; with no id, a remount starts over.
 	it.each([
 		{
 			name: 'an id closed before remount',
-			props: { id: 'topCards:badges' },
+			props: { id: 'top-cards:badges' },
 			closeFirst: true,
 			expanded: 'false',
 		},
 		{
 			name: 'an id never toggled',
-			props: { id: 'topCards:badges' },
+			props: { id: 'top-cards:badges' },
 			closeFirst: false,
 			expanded: 'true',
 		},
 		{
 			name: 'an id never toggled, defaultOpen: false',
-			props: { id: 'topCards:badges', defaultOpen: false },
+			props: { id: 'top-cards:badges', defaultOpen: false },
 			closeFirst: false,
 			expanded: 'false',
 		},
@@ -137,7 +155,7 @@ describe('screenSettingsCard', () => {
 		});
 		vi.spyOn(console, 'error').mockImplementation(() => {});
 
-		const wrapper = mountCard({ id: 'topCards:badges', defaultOpen: false });
+		const wrapper = mountCard({ id: 'top-cards:badges', defaultOpen: false });
 		await flushPromises();
 		expect(toggle(wrapper).attributes('aria-expanded')).toBe('false');
 

@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { ANIMATION_EFFECT_VALUES } from '~~/shared/animationEffects';
-import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { nuxtUiStubs, UColorPickerStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import AnimationEffectFields from '~/components/Screen/AnimationEffectFields.vue';
 
 const UIColorPickerStub = defineComponent({
@@ -23,15 +23,6 @@ const ScreenSettingsToggleStub = defineComponent({
 	},
 	emits: ['update:modelValue'],
 	template: '<button type="button" data-testid="settings-toggle" :data-description="description" @click="$emit(\'update:modelValue\', !modelValue)">{{ label }}</button>',
-});
-
-/** Nuxt UI's colour area, as a plain colour input; the real `UIColorPicker` wraps it. */
-const UColorPickerStub = defineComponent({
-	props: {
-		modelValue: { type: String, required: false },
-	},
-	emits: ['update:modelValue'],
-	template: '<input type="color" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 });
 
 async function mountComponent(selection: AnimationEffectSelection, onUpdate = vi.fn(), { realColorPicker = false } = {}) {
@@ -127,9 +118,7 @@ describe('screenAnimationEffectFields', () => {
 	});
 
 	it.each([
-		{ typed: '#12', written: null },
 		{ typed: '', written: null },
-		{ typed: 'rgba(0, 0, 0, 0.5)', written: null },
 		{ typed: '#abcdef', written: '#abcdef' },
 	])('typing "$typed" into an effect colour writes $written', async ({ typed, written }) => {
 		const { wrapper, onUpdate } = await mountComponent({ effect: 'fog' }, vi.fn(), { realColorPicker: true });

@@ -13,7 +13,7 @@ const props = withDefaults(defineProps<{
 	subtitle?: string;
 	collapsible?: boolean;
 	defaultOpen?: boolean;
-	/** `mode:card`, e.g. `topCards:badges`; remembers the open state per browser. */
+	/** `mode:card`, e.g. `top-cards:badges`; remembers the open state per browser. */
 	id?: string;
 	/** One line shown in the header while closed. */
 	summary?: string;
@@ -56,7 +56,7 @@ function toggleOpen() {
 	<UCard variant="subtle">
 		<template #header>
 			<div class="flex flex-wrap items-start justify-between gap-3">
-				<div>
+				<div class="min-w-0 flex-1">
 					<h3 class="font-semibold">
 						{{ title }}
 					</h3>
@@ -82,7 +82,7 @@ function toggleOpen() {
 						:icon="open ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
 						:aria-label="`${open ? 'Collapse' : 'Expand'} ${title}`"
 						:aria-expanded="open"
-						:aria-controls="bodyId"
+						:aria-controls="open ? bodyId : undefined"
 						@click="toggleOpen"
 					/>
 				</div>
