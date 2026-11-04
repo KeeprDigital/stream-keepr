@@ -98,7 +98,7 @@ A per-Event setting, off by default and on only while Melee Sync is on, under wh
 _Avoid_: auto-sync, polling, when naming the setting.
 
 **TCG+ Import**:
-The workflow that imports a One Piece Card Game Event's Players, their Nicknames and their Deck Lists from a Bandai TCG+ deck list export. An operator uploads the export on the Sync page, previews what it changes, and confirms. A re-import updates Players by their Bandai member number and marks those missing from it inactive; a Deck List an operator edited by hand is kept (ADR-0074).
+The workflow that imports a One Piece Card Game Event's Players, their Nicknames and their Deck Lists from a Bandai TCG+ deck list export. An operator uploads the export on the Sync page, previews what it changes, and confirms. A re-import updates Players by their Bandai member number and marks those missing from it inactive; a Deck List an operator edited by hand is kept until the operator takes the import's (ADR-0074).
 _Avoid_: CSV import, deck upload.
 
 **Provenance**:
