@@ -2058,6 +2058,8 @@ Accepted · 2026-11-04 · [#920](https://github.com/KeeprDigital/stream-keepr/is
 
 **What a child inherited is baked in; what only the group drew is dropped.** A child that can paint a surface but holds none of its own takes the group's local style default, and the default's Graphic Theme Binding, and a hidden group's children are hidden, each where the group laid it out. The group's clipping, animation and stagger go, and so do its own surface and glow, which belonged to the group rather than to any child.
 
+**Two visible changes are accepted for v1.** Ungrouping drops the group's own surface and glow, though its glow, a filter over the whole group, also lit its children; undo restores them. Resting positions are kept but motion is not: grouping takes members out of the Broadcast Graphic's stagger, and a member's `clear-parent` slide then clears the group's box rather than the canvas; ungrouping drops the group's stagger.
+
 ### Why
 
 "Nothing moves" is the authoring promise of grouping both ways. A row or column child's stored corner is not where it is drawn, so rebasing from that corner, as moving one layer out of a group does (#741), would scatter a whole stack at once.
@@ -2066,8 +2068,6 @@ Accepted · 2026-11-04 · [#920](https://github.com/KeeprDigital/stream-keepr/is
 
 - The flex layout is computed twice: in CSS by the compositor (`stackedPlacement` in `app/modules/graphics/renderModel.ts`) and in `laidOutOnCanvas`. A change to one must change the other; the ungroup tests pin the layout cases.
 - A child laid out to no size is stored a pixel wide, the least the write schema admits.
-- A group with a surface or a glow visibly loses it on ungroup; undo restores it.
-- Resting positions are kept, motion is not: grouping takes members out of the Broadcast Graphic's stagger, and a `clear-parent` slide then clears the group's box rather than the canvas; ungrouping drops the group's stagger.
 
 ### Rejected alternatives
 
