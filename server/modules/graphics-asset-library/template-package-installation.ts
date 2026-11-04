@@ -56,11 +56,17 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return prototype === Object.prototype || prototype === null;
 }
 
+/** One Graphic Asset Reference a Template document holds, at the owner slot its path names. */
+export interface TemplateDocumentReference {
+	ownerSlot: string;
+	reference: GraphicAssetReference;
+}
+
 export interface TemplateDocumentRewrite {
 	/** An independent copy whose every reference names a local identity and revision. */
 	document: unknown;
 	/** One rewritten reference per document path that carried one. */
-	references: { ownerSlot: string; reference: GraphicAssetReference }[];
+	references: TemplateDocumentReference[];
 	/**
 	 * Document paths carrying a reference no confirmed mapping accounts for.
 	 * Preflight proves a package declares every reference its Template needs, so
@@ -84,7 +90,7 @@ export function rewriteTemplateDocumentReferences(
 	document: unknown,
 	localReferences: ReadonlyMap<string, GraphicAssetReference>,
 ): TemplateDocumentRewrite {
-	const references: { ownerSlot: string; reference: GraphicAssetReference }[] = [];
+	const references: TemplateDocumentReference[] = [];
 	const unmapped: string[] = [];
 	const rewritten = walkTemplateDocumentReferences(document, (value, ownerSlot) => {
 		const local = localReferences.get(packagedOriginKey({
@@ -119,8 +125,8 @@ export function rewriteTemplateDocumentReferences(
  */
 export function installedTemplateDocumentReferences(
 	document: unknown,
-): { ownerSlot: string; reference: GraphicAssetReference }[] {
-	const references: { ownerSlot: string; reference: GraphicAssetReference }[] = [];
+): TemplateDocumentReference[] {
+	const references: TemplateDocumentReference[] = [];
 	walkTemplateDocumentReferences(document, (value, ownerSlot) => {
 		references.push({
 			ownerSlot,

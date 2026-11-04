@@ -384,8 +384,16 @@ describe('broadcast Graphic Template Packages', () => {
 		const completed = await installPackage(received.id);
 		const templateId = completed.templatePackageInstallation!.templateId;
 		installedTemplateIds.push(templateId);
+		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
+		const placed = await request(`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/placements`, {
+			method: 'POST',
+			cookie: authorCookie,
+			body: { templateId, stateVersion: screen.stateVersion },
+		});
+		expect(placed.status).toBe(201);
+		const placedId = (placed.data.graphic as BroadcastGraphicConfig).id;
 		const usage = async () => (await request(`/api/graphics-assets/${asset.assetId}/usage`, { cookie: authorCookie }))
-			.data as { owner: { kind: string; id: string } }[];
+			.data as { owner: { kind: string; id: string; slot: string } }[];
 		expect(await usage()).toContainEqual(expect.objectContaining({
 			owner: expect.objectContaining({ id: templateId }),
 		}));
@@ -395,6 +403,8 @@ describe('broadcast Graphic Template Packages', () => {
 		expect(deleted.status).toBe(204);
 		expect((await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie })).status).toBe(404);
 		expect((await usage()).map(item => item.owner.id)).not.toContain(templateId);
+		// The copy placed from it keeps its own references.
+		expect((await usage()).some(item => item.owner.kind === 'screen' && item.owner.slot.includes(placedId))).toBe(true);
 
 		const retried = await installPackage(received.id);
 

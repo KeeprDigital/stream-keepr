@@ -238,7 +238,7 @@ async function place(templateId: string) {
 							This cannot be undone.
 						</template>
 						<template v-else>
-							Importing its Template Package again brings it back.
+							Importing its Template Package again adds it back as a new entry.
 						</template>
 						Broadcast Graphics already placed from it are not affected.
 					</GraphicsTemplateLibraryConfirmation>

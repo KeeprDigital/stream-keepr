@@ -1,5 +1,6 @@
 import type { GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library';
-import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
+import type { GraphicAssetReference, InstalledGraphicsTemplateKind } from '~~/shared/types/graphicsAsset';
+import type { PackageLibrary } from '~~/test/helpers/templatePackageLibrary';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createInMemoryGraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
@@ -57,19 +58,20 @@ async function installedTemplate(catalogue: () => GraphicsAssetCatalogue) {
 		operation,
 		installation,
 		asset,
+		remove: () => removeFrom(library, installation.templateId),
 	};
+}
+
+function removeFrom(library: PackageLibrary, templateId: string, kind: InstalledGraphicsTemplateKind = 'broadcast-graphic') {
+	return library.removeInstalledGraphicsTemplate({ templateId, kind, removedBy: 'remover' });
 }
 
 describe.each(catalogues)('removing an Installed Graphics Template, over %s', (_, catalogue) => {
 	it('releases its references, so its asset may enter Trash', async () => {
-		const { library, installation, asset } = await installedTemplate(catalogue);
+		const { library, installation, asset, remove } = await installedTemplate(catalogue);
 		expect((await library.trashGraphicAsset({ assetId: asset.assetId })).outcome).toBe('in-use');
 
-		const removed = await library.removeInstalledGraphicsTemplate({
-			templateId: installation.templateId,
-			kind: 'broadcast-graphic',
-			removedBy: 'remover',
-		});
+		const removed = await remove();
 
 		expect(removed.outcome).toBe('removed');
 		expect(await library.findInstalledGraphicsTemplate({ templateId: installation.templateId })).toBeUndefined();
@@ -79,30 +81,22 @@ describe.each(catalogues)('removing an Installed Graphics Template, over %s', (_
 	});
 
 	it('holds its asset back from Retire until it is removed', async () => {
-		const { library, installation, asset } = await installedTemplate(catalogue);
+		const { library, installation, asset, remove } = await installedTemplate(catalogue);
 		const refused = await library.retireGraphicAsset({ assetId: asset.assetId });
 		expect(refused.outcome === 'in-use' && refused.usage.map(usage => usage.owner.id))
 			.toEqual([installation.templateId]);
 
-		await library.removeInstalledGraphicsTemplate({
-			templateId: installation.templateId,
-			kind: 'broadcast-graphic',
-			removedBy: 'remover',
-		});
+		await remove();
 
 		expect((await library.retireGraphicAsset({ assetId: asset.assetId })).outcome).toBe('retired');
 	});
 
 	it('keeps an asset another installation still references out of Trash', async () => {
-		const { library, archive, installation, asset } = await installedTemplate(catalogue);
+		const { library, archive, asset, remove } = await installedTemplate(catalogue);
 		const second = installationOf(await installPackage(library, archive));
 		expect(second.assets[0]).toMatchObject({ outcome: 'reused', assetId: asset.assetId });
 
-		await library.removeInstalledGraphicsTemplate({
-			templateId: installation.templateId,
-			kind: 'broadcast-graphic',
-			removedBy: 'remover',
-		});
+		await remove();
 
 		const trash = await library.trashGraphicAsset({ assetId: asset.assetId });
 		expect(trash.outcome).toBe('in-use');
@@ -111,38 +105,38 @@ describe.each(catalogues)('removing an Installed Graphics Template, over %s', (_
 	});
 
 	it.each([
-		['an unknown identity', 'no-such-template', 'broadcast-graphic'],
-		['a template of the other kind', undefined, 'feature-match-layout'],
-		['a template already removed', 'removed', 'broadcast-graphic'],
-	] as const)('answers not-found for %s', async (_, identity, kind) => {
-		const { library, installation } = await installedTemplate(catalogue);
-		if (identity === 'removed') {
-			await library.removeInstalledGraphicsTemplate({
-				templateId: installation.templateId,
-				kind: 'broadcast-graphic',
-				removedBy: 'remover',
-			});
-		}
+		{
+			case: 'an unknown identity',
+			removedFirst: false,
+			unknown: true,
+			kind: 'broadcast-graphic',
+		},
+		{
+			case: 'a template of the other kind',
+			removedFirst: false,
+			unknown: false,
+			kind: 'feature-match-layout',
+		},
+		{
+			case: 'a template already removed',
+			removedFirst: true,
+			unknown: false,
+			kind: 'broadcast-graphic',
+		},
+	] as const)('answers not-found for $case', async ({ removedFirst, unknown, kind }) => {
+		const { library, installation, remove } = await installedTemplate(catalogue);
+		if (removedFirst)
+			await remove();
 
-		const removed = await library.removeInstalledGraphicsTemplate({
-			templateId: identity === 'no-such-template'
-				? identity
-				: installation.templateId,
-			kind,
-			removedBy: 'remover',
-		});
+		const removed = await removeFrom(library, unknown ? 'no-such-template' : installation.templateId, kind);
 
 		expect(removed.outcome).toBe('not-found');
 	});
 
 	it('reinstalls the template when its installation is retried', async () => {
-		const { library, operation, installation, asset } = await installedTemplate(catalogue);
+		const { library, operation, installation, asset, remove } = await installedTemplate(catalogue);
 		const before = await library.inspectInstalledGraphicsTemplate({ templateId: installation.templateId });
-		await library.removeInstalledGraphicsTemplate({
-			templateId: installation.templateId,
-			kind: 'broadcast-graphic',
-			removedBy: 'remover',
-		});
+		await remove();
 
 		const retried = await library.installTemplatePackage({
 			operationId: operation.id,
@@ -157,12 +151,8 @@ describe.each(catalogues)('removing an Installed Graphics Template, over %s', (_
 	});
 
 	it('refuses to reinstall while an asset it pins is trashed, and reinstalls once it is restored', async () => {
-		const { library, operation, installation, asset } = await installedTemplate(catalogue);
-		await library.removeInstalledGraphicsTemplate({
-			templateId: installation.templateId,
-			kind: 'broadcast-graphic',
-			removedBy: 'remover',
-		});
+		const { library, operation, installation, asset, remove } = await installedTemplate(catalogue);
+		await remove();
 		await library.trashGraphicAsset({ assetId: asset.assetId });
 		const retry = () => library.installTemplatePackage({
 			operationId: operation.id,
@@ -192,11 +182,7 @@ describe('a superseded revision only a removed template pinned', () => {
 		expect(installation.assets[0]).toMatchObject({ outcome: 'reused', revisionId: first.revisionId });
 		expect((await library.runGraphicsRetention()).revisions.pruningScheduled).toBe(0);
 
-		await library.removeInstalledGraphicsTemplate({
-			templateId: installation.templateId,
-			kind: 'broadcast-graphic',
-			removedBy: 'remover',
-		});
+		await removeFrom(library, installation.templateId);
 
 		expect((await library.runGraphicsRetention()).revisions.pruningScheduled).toBe(1);
 	});
