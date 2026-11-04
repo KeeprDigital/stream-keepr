@@ -7,6 +7,7 @@ import { defineComponent, ref } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 import { UInputStub, USelectStub, USwitchStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { screenSettingsLayoutStubs, settingsLayout, settingsSummaries } from '~~/test/nuxt/helpers/screenSettingsLayout';
 import Settings from '~/components/Screen/Modes/Pairings/Settings.vue';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
@@ -131,24 +132,26 @@ const UButtonStub = defineComponent({
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
 });
 
-function screenOn(roundId: number | undefined) {
+function screenOn(roundId: number | undefined, themeOverrides: Record<string, unknown> = {}) {
 	return {
 		id: 1,
+		currentMode: 'pairings',
+		themeOverrides,
 		modeConfigs: {
 			pairings: { ...savedConfig, roundId },
 		},
 	} as unknown as Screen;
 }
 
-async function mountSettings(roundId: number | undefined = savedConfig.roundId) {
+async function mountSettings(roundId: number | undefined = savedConfig.roundId, themeOverrides: Record<string, unknown> = {}) {
 	const wrapper = mount(Settings, {
 		props: {
-			screen: screenOn(roundId),
+			screen: screenOn(roundId, themeOverrides),
 			eventId: 1,
 		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: { template: '<section><slot /></section>' },
+				...screenSettingsLayoutStubs,
 				UFormField: { template: '<div><slot /></div>' },
 				USelect: USelectStub,
 				USwitch: USwitchStub,
@@ -211,6 +214,80 @@ describe('screenModesPairingsSettings', () => {
 		await act(wrapper);
 
 		expect(mockUpdateConfig).toHaveBeenCalledWith(patch);
+	});
+
+	// Data, then one card per element, each Mode Token in its group's Look (ADR-0071).
+	it('lays out its cards in order', async () => {
+		mockFetch.mockResolvedValue(pairingsOf(1));
+		const wrapper = await mountSettings();
+
+		expect(settingsLayout(wrapper)).toEqual([
+			{
+				id: 'pairings:data',
+				title: 'Data',
+				collapsible: false,
+				groups: [],
+			},
+			{
+				id: 'pairings:table',
+				title: 'Table',
+				collapsible: true,
+				groups: ['table', 'result-badge'],
+			},
+			{
+				id: 'pairings:header',
+				title: 'Header',
+				collapsible: true,
+				groups: ['header'],
+			},
+			{
+				id: 'pairings:pagination',
+				title: 'Pagination',
+				collapsible: true,
+				groups: [],
+			},
+		]);
+	});
+
+	it.each([
+		[
+			'no override',
+			{},
+			{},
+			{
+				'pairings:table': 'Follows the Theme',
+				'pairings:header': 'Auto title',
+				'pairings:pagination': '8 per page · Manual paging',
+			},
+		],
+		[
+			'a hidden header and overridden table tokens',
+			{ showHeader: false },
+			{ 'pairings.surface': '#000000', 'pairings.result-bye': '#ffaa00', 'pairings.title-text': '#ffffff' },
+			{
+				'pairings:table': '2 Screen Theme Overrides',
+				'pairings:header': 'Hidden · 1 Screen Theme Override',
+				'pairings:pagination': '8 per page · Manual paging',
+			},
+		],
+	])('summarises each closed card with %s', async (_case, edits, themeOverrides, summaries) => {
+		mockFetch.mockResolvedValue(pairingsOf(1));
+		mockConfig.value = {
+			...savedConfig,
+			...edits,
+		};
+		const wrapper = await mountSettings(savedConfig.roundId, themeOverrides);
+
+		expect(settingsSummaries(wrapper)).toEqual(summaries);
+	});
+
+	it('picks a Round, back on page 1', async () => {
+		mockFetch.mockResolvedValue(pairingsOf(1));
+		const wrapper = await mountSettings();
+
+		await wrapper.get('[data-settings-card="pairings:data"] select').setValue('41');
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ roundId: 41, currentPage: 1 });
 	});
 
 	it('counts pages from the pairings the Screen reads for the Round', async () => {
