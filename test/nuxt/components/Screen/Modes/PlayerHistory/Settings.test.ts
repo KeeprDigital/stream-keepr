@@ -4,6 +4,8 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import { nuxtUiStubs, USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { screenSettingsLayoutStubs, settingsLayout, settingsSummaries } from '~~/test/nuxt/helpers/screenSettingsLayout';
 import Settings from '~/components/Screen/Modes/PlayerHistory/Settings.vue';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
@@ -31,7 +33,9 @@ const mockUpdateConfig = vi.fn((patch: Record<string, unknown>) => {
 });
 
 mockNuxtImport('usePlayerStore', () => () => ({
-	players: [],
+	players: [
+		{ id: 5, name: 'Ada' },
+	],
 	isLoaded: true,
 	loadPlayersByEventId: vi.fn(),
 	$reset: vi.fn(),
@@ -51,20 +55,18 @@ const USwitchStub = defineComponent({
 	template: '<button type="button" data-testid="u-switch" @click="$emit(\'update:modelValue\', !modelValue)">{{ String(!!modelValue) }}</button>',
 });
 
-async function mountComponent() {
+async function mountComponent(themeOverrides: Record<string, unknown> = {}) {
 	return mount(Settings, {
 		props: {
-			screen: { id: 1 } as Screen,
+			screen: { id: 1, currentMode: 'player-history', themeOverrides } as unknown as Screen,
 			eventId: 1,
 		},
 		global: {
 			stubs: {
+				...nuxtUiStubs,
+				...screenSettingsLayoutStubs,
 				USwitch: USwitchStub,
-				USelect: true,
-				UInput: true,
-				UInputNumber: true,
-				UButton: true,
-				USeparator: true,
+				USelect: USelectStub,
 				UIcon: true,
 			},
 		},
@@ -101,5 +103,73 @@ describe('screenPlayerHistorySettings', () => {
 				{ key: 'gameScore', visible: true },
 			],
 		});
+	});
+
+	// Data, then one card per element, each Mode Token in its group's Look (ADR-0071).
+	it('lays out its cards in order', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(settingsLayout(wrapper)).toEqual([
+			{
+				id: 'player-history:data',
+				title: 'Data',
+				collapsible: false,
+				groups: [],
+			},
+			{
+				id: 'player-history:table',
+				title: 'Table',
+				collapsible: true,
+				groups: ['table', 'outcome-badge'],
+			},
+			{
+				id: 'player-history:header',
+				title: 'Header',
+				collapsible: true,
+				groups: ['header'],
+			},
+			{
+				id: 'player-history:pagination',
+				title: 'Pagination',
+				collapsible: true,
+				groups: [],
+			},
+		]);
+	});
+
+	it.each([
+		[
+			'no override',
+			{},
+			{
+				'player-history:table': '3 of 6 columns shown',
+				'player-history:header': 'Auto title',
+				'player-history:pagination': '8 per page · Manual paging',
+			},
+		],
+		[
+			'overridden outcome badge tokens',
+			{ 'player-history.outcome-win': '#00ff00', 'player-history.outcome-loss': '#ff0000' },
+			{
+				'player-history:table': '3 of 6 columns shown · 2 Screen Theme Overrides',
+				'player-history:header': 'Auto title',
+				'player-history:pagination': '8 per page · Manual paging',
+			},
+		],
+	])('summarises each closed card with %s', async (_case, themeOverrides, summaries) => {
+		const wrapper = await mountComponent(themeOverrides);
+		await flushPromises();
+
+		expect(settingsSummaries(wrapper)).toEqual(summaries);
+	});
+
+	it('picks a Player, back on page 1', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await wrapper.get('[data-settings-card="player-history:data"] select').setValue('5');
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ playerId: 5, currentPage: 1 });
 	});
 });
