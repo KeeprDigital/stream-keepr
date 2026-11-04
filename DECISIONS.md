@@ -2394,7 +2394,7 @@ It owns three rules:
 How the existing types fit around it:
 
 - `GraphicsAssetCatalogue` extends the delivery catalogue, and `GraphicsAssetLibrary` extends `GraphicsAssetDelivery`.
-- The facade wires `reportDisagreement` to reconciliation, as before.
+- Every reader wires `reportDisagreement` to `createGraphicsDisagreementReporter` (`reconciliation.ts`). It is built from the catalogue's observation reads and writes and the canonical store alone, never staging or media. The scheduled sweep compares an expectation through the same code, so a reader and the sweep open the same Graphics Discrepancy and announce it once (#992).
 - `catalogueRequest` moved to `catalogue-request.ts`, unchanged, so every family shares one way of failing as unavailable.
 
 **Template Package export keeps the shared agreement rule.** It reads through delivery's `readCanonicalContent` and `observeCanonicalContent` until #990 moves it.
@@ -2408,8 +2408,9 @@ How the existing types fit around it:
 ### Consequences
 
 - **Routes and write modules:** nothing changes. Their `Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevisions'>` (`screen-write/index.ts:104`, `talent-write/index.ts:10`, `theme-library/index.ts:99`, `server/utils/graphicsTemplateReferences.ts:66`) still compiles. A new caller can depend on `GraphicsAssetDelivery` directly.
-- **The Screen Output Asset Capability** now builds `createGraphicsAssetDelivery` with no stub staging store.
-- **Screen Output reads never fed reconciliation.** Reaching reconciliation needed the staging store the stub lacked, and that failure was swallowed. CONTEXT.md's rule that every reader observing a contradiction feeds Graphics Reconciliation did not hold for them. This change keeps that behaviour but makes it visible: the capability passes no reporter. #992 tracks the fix.
+- **The Screen Output Asset Capability** now builds delivery with no stub staging store, through `createScreenOutputGraphicsDelivery` (`screen-output-assets/graphics-delivery.ts`).
+- **On-air reads now feed reconciliation (#992).** Before, reaching reconciliation needed the staging store the stub lacked, and that failure was swallowed. So CONTEXT.md's rule that every reader observing a contradiction feeds Graphics Reconciliation did not hold for Screen Outputs. Now a Screen Output reports through the reporter, so content whose canonical object is missing opens its Graphics Discrepancy on the first read, not at the next sweep. A store that could not answer still reports nothing.
+- **An on-air report never holds the read.** The Screen Output hands each report to the Worker's `waitUntil`, the same deferral its edge-cache write uses. The read answers first, and a failed report is dropped, because the sweep re-observes it. Without an execution context (local Node), the read awaits its report. Operator-facing reads through the facade still await theirs. Concurrent reports of one content still open one discrepancy, because opening is idempotent on the open subject.
 - **A catalogue double needs only the three reads** to back delivery.
 - **The estimated cost** of each split:
   - Delivery: small, done (5 facade methods, 3 catalogue reads, 1 caller rewired).
@@ -2424,4 +2425,5 @@ How the existing types fit around it:
 - **Splitting the retention, reconciliation, cockpit or queue catalogues further.** Each already has its own module and port. Another layer would only delegate.
 - **Its own interface for health and capacity.** Three pass-through methods; the deletion test removes it.
 - **Give delivery reconciliation itself rather than a reporter.** Building reconciliation needs the staging store, which would put staging back into every delivery. A reporter keeps delivery buildable from the catalogue and the canonical store alone.
+- **Let the reconciliation factory take staging lazily, so a Screen Output could build all of it (#992).** The output would still need the media port, built from the facade's validators, and every repair action would type-check against a staging store that might not be there. The reporter needs neither.
 - **Move export onto delivery now.** Export belongs to the Template Package family (#990).
