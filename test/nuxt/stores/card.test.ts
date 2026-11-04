@@ -1198,12 +1198,12 @@ describe('useCardStore', () => {
 			store.activeScreenId = 5;
 			mockCardRepo.getScreenCard.mockRejectedValue(transportFailure({
 				status: 404,
-				body: { message: 'Screen is not in Card mode' },
+				body: { message: 'Screen is not in Card Spotlight mode' },
 			}));
 
 			await store.loadActiveCard();
 
-			expect(store.error).toBe('Screen is not in Card mode');
+			expect(store.error).toBe('Screen is not in Card Spotlight mode');
 			expect(store.loading).toBe(false);
 		});
 

@@ -105,7 +105,7 @@ const assignmentStore = {
 	isRemoteChanged: () => false,
 	updateAssignment: vi.fn(),
 };
-/** A Card Screen tied to Feature Match Slot 7. */
+/** A Card Spotlight Screen tied to Feature Match Slot 7. */
 const screenStore = reactive({
 	screens: [
 		{
@@ -215,7 +215,7 @@ describe('cards page matchup Deck Lists', () => {
 	// Slot 7 and Match 7 come from different tables: each reference keeps its own kind.
 	it.each([
 		[
-			'the Card Screen\'s Slot',
+			'the Card Spotlight Screen\'s Slot',
 			{},
 			['Alice', 'Bob'],
 			undefined,

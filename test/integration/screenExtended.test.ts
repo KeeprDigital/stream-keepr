@@ -140,7 +140,7 @@ describe('screens extended API', () => {
 		});
 	});
 
-	it('updates deck mode config', async () => {
+	it('updates Deck List mode config', async () => {
 		const updated = await $fetch(`/api/events/${eventId}/screens/${screenId}/config/deck`, {
 			method: 'PATCH',
 			body: {
