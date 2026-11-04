@@ -17,6 +17,7 @@ import type {
 	GraphicsReconciliationSweepResult,
 	GraphicsRepairRejectionCode,
 } from '~~/shared/types/graphicsAsset';
+import type { GraphicsCanonicalDisagreement } from './delivery';
 import type {
 	BoundedByteStream,
 	GraphicsCanonicalObjectStore,
@@ -353,8 +354,51 @@ const EMPTY_OPEN_COUNTS: Record<GraphicsDiscrepancyKind, number> = {
 	'critical-integrity-incident': 0,
 };
 
-export function createGraphicsReconciliation(dependencies: GraphicsReconciliationDependencies) {
-	const { catalogue, canonical, staging, media, now, generateIdentity } = dependencies;
+/**
+ * The catalogue reads and writes that reconcile one reader's observation:
+ * expectations, the content's advisory availability, its discrepancy and its
+ * Evidence. Never staging or media, which only repair needs.
+ */
+export type GraphicsObservedDisagreementCatalogue = Pick<
+	GraphicsAssetReconciliationCatalogue,
+	| 'findExpectedContent'
+	| 'findRevisionContentDigest'
+	| 'recordContentReconciled'
+	| 'resolveDiscrepanciesForDigest'
+	| 'markContentAvailable'
+	| 'markContentUnavailable'
+	| 'openDiscrepancy'
+	| 'recordGraphicsAssetEvidence'
+>;
+
+interface GraphicsObservedReconciliationDependencies {
+	catalogue: GraphicsObservedDisagreementCatalogue;
+	canonical: Pick<GraphicsCanonicalObjectStore, 'readMetadata'>;
+	now: () => Date;
+	generateIdentity: () => string;
+}
+
+type CanonicalObservation
+	= | { outcome: 'agrees'; byteLength: number; canonicalMime?: string }
+		| { outcome: 'missing' }
+		| {
+			outcome: 'mismatched';
+			reasonCode: Extract<
+				GraphicsDiscrepancyReasonCode,
+				'canonical-object-facts-mismatch' | 'canonical-object-redundant-metadata-mismatch'
+			>;
+			byteLength: number;
+			canonicalMime?: string;
+		}
+		| { outcome: 'byte-store-unavailable' };
+
+/**
+ * Comparing one expectation against the byte store and recording what that
+ * proves. The scheduled sweep and a reader's observation share it, so both
+ * open the same Graphics Discrepancy and announce it once.
+ */
+function createExpectationReconciliation(dependencies: GraphicsObservedReconciliationDependencies) {
+	const { catalogue, canonical, now, generateIdentity } = dependencies;
 
 	function timestamp() {
 		return now().toISOString();
@@ -386,199 +430,6 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			expiresAt: null,
 		};
 	}
-
-	/**
-	 * The actions valid in one discrepancy's exact state.
-	 *
-	 * Nothing that writes is ever offered on an isolated critical integrity
-	 * incident: repairing one would mean overwriting bytes or mutating
-	 * metadata, which is precisely what must not happen. It is offered deep
-	 * verification, which writes nothing and is the only action that can settle
-	 * it. An unexpected object is offered only a recheck, because adopting it
-	 * would invent catalogue state from a byte observation.
-	 */
-	function validActions(
-		record: GraphicsDiscrepancyRecord,
-		context: { regenerable: boolean; sourceAvailable: boolean },
-	): GraphicsDiscrepancyAction[] {
-		if (record.state === 'resolved')
-			return [];
-		// An isolated incident offers no action that writes. Deep verification is
-		// offered because it is the only way to settle one: it either proves the
-		// stored bytes are exactly what the catalogue expects, or proves they are
-		// not, without overwriting anything.
-		//
-		// It is offered whenever there is catalogued content to verify against,
-		// deliberately without first checking whether bytes are there. Reading
-		// the store for every row would put an operational view back into the
-		// hundreds of subrequests, and answering from the last recorded
-		// observation would hide the action at the exact moment it is wanted —
-		// right after an operator restores bytes, when nothing has re-observed
-		// them yet. The action itself reports honestly when there is nothing to
-		// verify.
-		if (record.isolated || record.kind === 'critical-integrity-incident') {
-			return record.digest
-				? ['recheck', 'verify-stored-bytes']
-				: ['recheck'];
-		}
-		// An unexpected object is never adopted, so nothing here writes catalogue
-		// state for it either.
-		if (record.kind === 'unexpected-object')
-			return ['recheck'];
-		const actions: GraphicsDiscrepancyAction[] = [
-			'recheck',
-			'verify-stored-bytes',
-			'repair-with-exact-bytes',
-		];
-		// Regeneration needs a Graphics Derivative to reproduce and a source to
-		// reproduce it from. Content nothing reaches at all has neither, so it is
-		// repaired with exact bytes like any other missing content.
-		if (record.kind === 'missing-derivative' && context.regenerable && context.sourceAvailable)
-			actions.push('regenerate-derivative');
-		return actions;
-	}
-
-	/**
-	 * Everything a queue of discrepancies needs to be described, read in a fixed
-	 * number of set-based queries rather than a few per row.
-	 *
-	 * A queue of 200 incidents used to cost hundreds of subrequests, which is a
-	 * real ceiling on a Worker; this keeps one operational view to a handful
-	 * regardless of queue depth.
-	 */
-	interface DiscrepancyContext {
-		expectations: Map<string, ExpectedGraphicAssetContent>;
-		usage: Map<string, GraphicsDiscrepancyUsage[]>;
-		quarantine: Map<string, { quarantinedAt: string; deleteAfter: string }>;
-	}
-
-	async function loadDiscrepancyContext(
-		records: readonly GraphicsDiscrepancyRecord[],
-	): Promise<DiscrepancyContext> {
-		const digests = [
-			...new Set(
-				records.map(record => record.digest).filter((digest): digest is string => Boolean(digest)),
-			),
-		];
-		if (digests.length === 0) {
-			return {
-				expectations: new Map(),
-				usage: new Map(),
-				quarantine: new Map(),
-			};
-		}
-		const [expectations, usage, quarantine] = await Promise.all([
-			catalogue.findExpectedContents({ digests }),
-			catalogue.listContentUsageForDigests({ digests }),
-			catalogue.findQuarantinedDigests({ digests }),
-		]);
-		// A missing Graphics Derivative is judged against its source, which is a
-		// different digest, so those are resolved in one further set-based read.
-		const sourceDigests = [
-			...new Set(
-				[
-					...expectations.values(),
-				]
-					.map(expectation => expectation.derivative?.sourceDigest)
-					.filter((digest): digest is string => Boolean(digest) && !expectations.has(digest!)),
-			),
-		];
-		if (sourceDigests.length > 0) {
-			for (const [digest, expectation] of await catalogue.findExpectedContents({
-				digests: sourceDigests,
-			})) {
-				expectations.set(digest, expectation);
-			}
-		}
-		return { expectations, usage, quarantine };
-	}
-
-	/**
-	 * Expands one durable record into the administrator-facing view: the
-	 * structured evidence behind the disagreement, the pinned usage it affects,
-	 * and only the actions valid in that state. No digest or object key crosses
-	 * this boundary.
-	 *
-	 * This reads no bytes. Whether an object is currently present comes from the
-	 * discrepancy's own last observation, and whether a derivative's source can
-	 * be reproduced comes from the catalogue's advisory availability state —
-	 * which is exactly what advisory state is for. Deciding what to *offer* may
-	 * use it; every action that acts re-proves it against the byte store first.
-	 */
-	function describeWith(
-		record: GraphicsDiscrepancyRecord,
-		context: DiscrepancyContext,
-	): GraphicsDiscrepancy {
-		const expectation = record.digest
-			? context.expectations.get(record.digest)
-			: undefined;
-		const quarantine = record.digest && record.state === 'open'
-			? context.quarantine.get(record.digest)
-			: undefined;
-		const affectedUsage = (record.digest && context.usage.get(record.digest)) || [];
-		const derivative = expectation?.derivative;
-		const sourceAvailable = derivative !== undefined
-			&& context.expectations.get(derivative.sourceDigest)?.availability === 'available';
-		return {
-			id: record.id,
-			kind: record.kind,
-			state: record.state,
-			reasonCode: record.reasonCode,
-			isolated: record.isolated,
-			detectedAt: record.detectedAt,
-			lastCheckedAt: record.lastCheckedAt,
-			...(record.resolvedAt
-				? { resolvedAt: record.resolvedAt }
-				: {}),
-			...(record.resolution
-				? { resolution: record.resolution }
-				: {}),
-			expected: record.expected,
-			observed: record.observed,
-			affectedUsage,
-			...(derivative
-				? {
-						derivative: {
-							id: derivative.id,
-							kind: derivative.kind,
-							sourceAssetId: derivative.sourceAssetId,
-							sourceRevisionId: derivative.sourceRevisionId,
-							sourceAvailable,
-						},
-					}
-				: {}),
-			...(quarantine
-				? {
-						quarantine: {
-							quarantinedAt: quarantine.quarantinedAt,
-							deleteAfter: quarantine.deleteAfter,
-						},
-					}
-				: {}),
-			actions: validActions(record, {
-				regenerable: derivative !== undefined,
-				sourceAvailable,
-			}),
-		};
-	}
-
-	async function describe(record: GraphicsDiscrepancyRecord): Promise<GraphicsDiscrepancy> {
-		return describeWith(record, await loadDiscrepancyContext([record]));
-	}
-
-	type CanonicalObservation
-		= | { outcome: 'agrees'; byteLength: number; canonicalMime?: string }
-			| { outcome: 'missing' }
-			| {
-				outcome: 'mismatched';
-				reasonCode: Extract<
-					GraphicsDiscrepancyReasonCode,
-					'canonical-object-facts-mismatch' | 'canonical-object-redundant-metadata-mismatch'
-				>;
-				byteLength: number;
-				canonicalMime?: string;
-			}
-			| { outcome: 'byte-store-unavailable' };
 
 	/**
 	 * Compares one stored object against the catalogue's record of it.
@@ -824,6 +675,257 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 			availabilityRestored: false,
 			criticalIncident: critical,
 		};
+	}
+
+	async function reconcileObservedDigest(input: { digest: string }): Promise<void> {
+		const expectation = await catalogue.findExpectedContent({ digest: input.digest });
+		if (!expectation)
+			return;
+		const correlationId = generateIdentity();
+		const records: GraphicsAssetEvidenceEntry[] = [];
+		await reconcileExpectation(expectation, correlationId, records);
+		if (records.length > 0)
+			await catalogue.recordGraphicsAssetEvidence(records);
+	}
+
+	async function reconcileObservedContent(input: {
+		assetId: GraphicAssetId;
+		revisionId: GraphicAssetRevisionId;
+	}): Promise<void> {
+		const digest = await catalogue.findRevisionContentDigest(input);
+		if (digest)
+			await reconcileObservedDigest({ digest });
+	}
+
+	return {
+		timestamp,
+		evidence,
+		observeCanonicalObject,
+		canonicalObjectAgrees,
+		observationFacts,
+		reconcileExpectation,
+		reconcileObservedContent,
+		reconcileObservedDigest,
+	};
+}
+
+/**
+ * Reconciles a contradiction a reader observed, built from the catalogue and
+ * the canonical store alone. A reader that never stages bytes, such as a
+ * Screen Output, feeds Graphics Reconciliation through this (ADR-0073).
+ */
+export function createGraphicsDisagreementReporter(dependencies: {
+	catalogue: GraphicsObservedDisagreementCatalogue;
+	canonical: Pick<GraphicsCanonicalObjectStore, 'readMetadata'>;
+	now?: () => Date;
+	generateIdentity?: () => string;
+}): (observed: GraphicsCanonicalDisagreement) => Promise<void> {
+	const reconciliation = createExpectationReconciliation({
+		catalogue: dependencies.catalogue,
+		canonical: dependencies.canonical,
+		now: dependencies.now ?? (() => new Date()),
+		generateIdentity: dependencies.generateIdentity ?? (() => crypto.randomUUID()),
+	});
+	return async observed => await ('digest' in observed
+		? reconciliation.reconcileObservedDigest(observed)
+		: reconciliation.reconcileObservedContent(observed));
+}
+
+export function createGraphicsReconciliation(dependencies: GraphicsReconciliationDependencies) {
+	const { catalogue, canonical, staging, media, now, generateIdentity } = dependencies;
+	const {
+		timestamp,
+		evidence,
+		observeCanonicalObject,
+		canonicalObjectAgrees,
+		observationFacts,
+		reconcileExpectation,
+		reconcileObservedContent,
+		reconcileObservedDigest,
+	} = createExpectationReconciliation({
+		catalogue,
+		canonical,
+		now,
+		generateIdentity,
+	});
+
+	/**
+	 * The actions valid in one discrepancy's exact state.
+	 *
+	 * Nothing that writes is ever offered on an isolated critical integrity
+	 * incident: repairing one would mean overwriting bytes or mutating
+	 * metadata, which is precisely what must not happen. It is offered deep
+	 * verification, which writes nothing and is the only action that can settle
+	 * it. An unexpected object is offered only a recheck, because adopting it
+	 * would invent catalogue state from a byte observation.
+	 */
+	function validActions(
+		record: GraphicsDiscrepancyRecord,
+		context: { regenerable: boolean; sourceAvailable: boolean },
+	): GraphicsDiscrepancyAction[] {
+		if (record.state === 'resolved')
+			return [];
+		// An isolated incident offers no action that writes. Deep verification is
+		// offered because it is the only way to settle one: it either proves the
+		// stored bytes are exactly what the catalogue expects, or proves they are
+		// not, without overwriting anything.
+		//
+		// It is offered whenever there is catalogued content to verify against,
+		// deliberately without first checking whether bytes are there. Reading
+		// the store for every row would put an operational view back into the
+		// hundreds of subrequests, and answering from the last recorded
+		// observation would hide the action at the exact moment it is wanted —
+		// right after an operator restores bytes, when nothing has re-observed
+		// them yet. The action itself reports honestly when there is nothing to
+		// verify.
+		if (record.isolated || record.kind === 'critical-integrity-incident') {
+			return record.digest
+				? ['recheck', 'verify-stored-bytes']
+				: ['recheck'];
+		}
+		// An unexpected object is never adopted, so nothing here writes catalogue
+		// state for it either.
+		if (record.kind === 'unexpected-object')
+			return ['recheck'];
+		const actions: GraphicsDiscrepancyAction[] = [
+			'recheck',
+			'verify-stored-bytes',
+			'repair-with-exact-bytes',
+		];
+		// Regeneration needs a Graphics Derivative to reproduce and a source to
+		// reproduce it from. Content nothing reaches at all has neither, so it is
+		// repaired with exact bytes like any other missing content.
+		if (record.kind === 'missing-derivative' && context.regenerable && context.sourceAvailable)
+			actions.push('regenerate-derivative');
+		return actions;
+	}
+
+	/**
+	 * Everything a queue of discrepancies needs to be described, read in a fixed
+	 * number of set-based queries rather than a few per row.
+	 *
+	 * A queue of 200 incidents used to cost hundreds of subrequests, which is a
+	 * real ceiling on a Worker; this keeps one operational view to a handful
+	 * regardless of queue depth.
+	 */
+	interface DiscrepancyContext {
+		expectations: Map<string, ExpectedGraphicAssetContent>;
+		usage: Map<string, GraphicsDiscrepancyUsage[]>;
+		quarantine: Map<string, { quarantinedAt: string; deleteAfter: string }>;
+	}
+
+	async function loadDiscrepancyContext(
+		records: readonly GraphicsDiscrepancyRecord[],
+	): Promise<DiscrepancyContext> {
+		const digests = [
+			...new Set(
+				records.map(record => record.digest).filter((digest): digest is string => Boolean(digest)),
+			),
+		];
+		if (digests.length === 0) {
+			return {
+				expectations: new Map(),
+				usage: new Map(),
+				quarantine: new Map(),
+			};
+		}
+		const [expectations, usage, quarantine] = await Promise.all([
+			catalogue.findExpectedContents({ digests }),
+			catalogue.listContentUsageForDigests({ digests }),
+			catalogue.findQuarantinedDigests({ digests }),
+		]);
+		// A missing Graphics Derivative is judged against its source, which is a
+		// different digest, so those are resolved in one further set-based read.
+		const sourceDigests = [
+			...new Set(
+				[
+					...expectations.values(),
+				]
+					.map(expectation => expectation.derivative?.sourceDigest)
+					.filter((digest): digest is string => Boolean(digest) && !expectations.has(digest!)),
+			),
+		];
+		if (sourceDigests.length > 0) {
+			for (const [digest, expectation] of await catalogue.findExpectedContents({
+				digests: sourceDigests,
+			})) {
+				expectations.set(digest, expectation);
+			}
+		}
+		return { expectations, usage, quarantine };
+	}
+
+	/**
+	 * Expands one durable record into the administrator-facing view: the
+	 * structured evidence behind the disagreement, the pinned usage it affects,
+	 * and only the actions valid in that state. No digest or object key crosses
+	 * this boundary.
+	 *
+	 * This reads no bytes. Whether an object is currently present comes from the
+	 * discrepancy's own last observation, and whether a derivative's source can
+	 * be reproduced comes from the catalogue's advisory availability state —
+	 * which is exactly what advisory state is for. Deciding what to *offer* may
+	 * use it; every action that acts re-proves it against the byte store first.
+	 */
+	function describeWith(
+		record: GraphicsDiscrepancyRecord,
+		context: DiscrepancyContext,
+	): GraphicsDiscrepancy {
+		const expectation = record.digest
+			? context.expectations.get(record.digest)
+			: undefined;
+		const quarantine = record.digest && record.state === 'open'
+			? context.quarantine.get(record.digest)
+			: undefined;
+		const affectedUsage = (record.digest && context.usage.get(record.digest)) || [];
+		const derivative = expectation?.derivative;
+		const sourceAvailable = derivative !== undefined
+			&& context.expectations.get(derivative.sourceDigest)?.availability === 'available';
+		return {
+			id: record.id,
+			kind: record.kind,
+			state: record.state,
+			reasonCode: record.reasonCode,
+			isolated: record.isolated,
+			detectedAt: record.detectedAt,
+			lastCheckedAt: record.lastCheckedAt,
+			...(record.resolvedAt
+				? { resolvedAt: record.resolvedAt }
+				: {}),
+			...(record.resolution
+				? { resolution: record.resolution }
+				: {}),
+			expected: record.expected,
+			observed: record.observed,
+			affectedUsage,
+			...(derivative
+				? {
+						derivative: {
+							id: derivative.id,
+							kind: derivative.kind,
+							sourceAssetId: derivative.sourceAssetId,
+							sourceRevisionId: derivative.sourceRevisionId,
+							sourceAvailable,
+						},
+					}
+				: {}),
+			...(quarantine
+				? {
+						quarantine: {
+							quarantinedAt: quarantine.quarantinedAt,
+							deleteAfter: quarantine.deleteAfter,
+						},
+					}
+				: {}),
+			actions: validActions(record, {
+				regenerable: derivative !== undefined,
+				sourceAvailable,
+			}),
+		};
+	}
+
+	async function describe(record: GraphicsDiscrepancyRecord): Promise<GraphicsDiscrepancy> {
+		return describeWith(record, await loadDiscrepancyContext([record]));
 	}
 
 	/**
@@ -1325,17 +1427,6 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 		]);
 	}
 
-	async function reconcileObservedDigest(input: { digest: string }): Promise<void> {
-		const expectation = await catalogue.findExpectedContent({ digest: input.digest });
-		if (!expectation)
-			return;
-		const correlationId = generateIdentity();
-		const records: GraphicsAssetEvidenceEntry[] = [];
-		await reconcileExpectation(expectation, correlationId, records);
-		if (records.length > 0)
-			await catalogue.recordGraphicsAssetEvidence(records);
-	}
-
 	/**
 	 * Lists open discrepancies with a budget per kind.
 	 *
@@ -1404,14 +1495,7 @@ export function createGraphicsReconciliation(dependencies: GraphicsReconciliatio
 		 * waiting for the next scheduled pass. Readers use this so an integrity
 		 * failure they hit becomes durable operational state immediately.
 		 */
-		async reconcileObservedContent(input: {
-			assetId: GraphicAssetId;
-			revisionId: GraphicAssetRevisionId;
-		}): Promise<void> {
-			const digest = await catalogue.findRevisionContentDigest(input);
-			if (digest)
-				await reconcileObservedDigest({ digest });
-		},
+		reconcileObservedContent,
 		/**
 		 * Reconciles exactly the content behind one digest a caller just observed
 		 * failing. A Graphics Derivative has no revision of its own, so a reader
