@@ -14,7 +14,7 @@ describe('the Event Canvas migration', () => {
 	});
 
 	it('gives an existing Event the default 1920×1080 canvas', async () => {
-		harness = await createSqliteD1Harness({ throughMigration: '0007' });
+		harness = await createSqliteD1Harness({ throughMigration: '0000' });
 		await harness.client.execute(`
 			INSERT INTO events (id, name, game, feature_match_orientation)
 			VALUES (1, 'Existing Event', 'mtg', 'horizontal')

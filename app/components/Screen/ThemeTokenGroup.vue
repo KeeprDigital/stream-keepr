@@ -2,10 +2,11 @@
 import type { Screen } from '~/types';
 import { placeScreenThemeTokens } from '~~/shared/screenThemeOverrides';
 
-// A Screen settings group's Look (ADR-0071): the Mode Tokens declaring
+// A Screen settings group's Look (ADR-0072): the Mode Tokens declaring
 // `group` as their `settingsGroup`, under a "Look" subheading after the
-// group's config controls. While mounted it registers `group` with the page,
-// so the residual Screen-wide look leaves those tokens out.
+// group's config controls. It registers `group` with the page for as long as
+// its card is on it, collapsed or not, so the residual Screen-wide look leaves
+// those tokens out.
 
 const props = defineProps<{
 	screen: Screen;
@@ -13,8 +14,7 @@ const props = defineProps<{
 	group: string;
 }>();
 
-const release = useScreenSettingsGroups()?.register(props.group);
-onScopeDispose(() => release?.());
+useScreenSettingsGroup(props.group);
 
 const names = computed(() => placeScreenThemeTokens(props.screen.currentMode, [props.group]).groups[props.group] ?? []);
 </script>

@@ -144,7 +144,7 @@ export interface SqliteD1HarnessOptions {
 	/**
 	 * Stop after this migration instead of applying every one, so a test can
 	 * arrange pre-migration rows and then observe what the next migration does
-	 * to them. Matches on a filename prefix such as `0014`.
+	 * to them. Matches on a filename prefix such as `0000`.
 	 */
 	throughMigration?: string;
 }

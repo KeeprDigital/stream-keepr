@@ -27,15 +27,15 @@ describe('the Screen look drop migration', () => {
 		['an empty', {}],
 		['no', null],
 	])('keeps a Screen that had %s look of its own, without it', async (_case, screenConfig) => {
-		harness = await createSqliteD1Harness({ throughMigration: '0009' });
+		harness = await createSqliteD1Harness({ throughMigration: '0000' });
 		await harness.client.execute(`
 			INSERT INTO events (id, name, game, feature_match_orientation)
 			VALUES (1, 'Existing Event', 'mtg', 'horizontal')
 		`);
 		await harness.client.execute({
 			sql: `
-				INSERT INTO screens (id, event_id, name, slug, current_mode, mode_configs, screen_config, theme_overrides, asset_capability_seed, asset_capability_digest)
-				VALUES (1, 1, 'Main', 'main', 'standings', ?, ?, ?, 'seed', 'digest')
+				INSERT INTO screens (id, event_id, name, slug, current_mode, mode_configs, screen_config, asset_capability_seed, asset_capability_digest)
+				VALUES (1, 1, 'Main', 'main', 'standings', ?, ?, 'seed', 'digest')
 			`,
 			args: [
 				JSON.stringify({
@@ -44,7 +44,6 @@ describe('the Screen look drop migration', () => {
 				screenConfig === null
 					? null
 					: JSON.stringify(screenConfig),
-				JSON.stringify({ accent: '#00ff00' }),
 			],
 		});
 
@@ -57,14 +56,12 @@ describe('the Screen look drop migration', () => {
 			slug: row.slug,
 			currentMode: row.current_mode,
 			modeConfigs: JSON.parse(String(row.mode_configs)),
-			themeOverrides: JSON.parse(String(row.theme_overrides)),
 		}).toEqual({
 			slug: 'main',
 			currentMode: 'standings',
 			modeConfigs: {
 				standings: { rowsPerPage: 6 },
 			},
-			themeOverrides: { accent: '#00ff00' },
 		});
 	});
 });

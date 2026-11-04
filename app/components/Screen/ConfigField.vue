@@ -12,8 +12,10 @@ import type { ScreenModeConfigField } from '~~/shared/screenModeConfigs/fields';
  * With `nullable`, an emptied field emits the `null` that deletes it
  * (ADR-0041); without it, an emptied number or colour emits nothing, and
  * emptied text emits `''`.
+ *
+ * A toggle may be feature-gated (`enabled`), as `ScreenSettingsToggle` gates it.
  */
-const props = defineProps<{
+const props = withDefaults(defineProps<{
 	field: ScreenModeConfigField;
 	modelValue?: Value | null;
 	description?: string;
@@ -23,7 +25,13 @@ const props = defineProps<{
 	nullable?: boolean;
 	/** A tighter upper bound than the field's own, in displayed units, such as a page smaller than the ranking. */
 	max?: number;
-}>();
+	/** A toggle's feature gate: when `false` it shows off, disabled, with `disabledDescription`, and never writes. */
+	enabled?: boolean;
+	disabledDescription?: string;
+}>(), {
+	// Absent is ungated, not a boolean prop's `false`.
+	enabled: undefined,
+});
 
 const emit = defineEmits<{
 	'update:modelValue': [value: Value | null];
@@ -117,6 +125,8 @@ function updateText(value: unknown) {
 		:data-config-field="field.key"
 		:label="field.label"
 		:description="description"
+		:enabled="enabled"
+		:disabled-description="disabledDescription"
 		:model-value="modelValue === null || modelValue === undefined ? undefined : Boolean(modelValue)"
 		@update:model-value="updateValue($event)"
 	/>

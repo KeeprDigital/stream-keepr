@@ -180,6 +180,19 @@ const UInputStub = defineComponent({
 	template: '<input :value="modelValue" />',
 });
 
+/** The colour picker, carrying which colour controls a field opts into. */
+const UIColorPickerStub = defineComponent({
+	name: 'UIColorPicker',
+	props: {
+		modelValue: { type: String, required: false },
+		alpha: { type: Boolean, required: false },
+		clearable: { type: Boolean, required: false },
+		hexOnly: { type: Boolean, required: false },
+	},
+	emits: ['update:modelValue'],
+	template: '<input :value="modelValue" />',
+});
+
 const UButtonStub = defineComponent({
 	name: 'UButton',
 	props: {
@@ -244,7 +257,7 @@ async function mountComponent(options: {
 				UInputNumber: UInputNumberStub,
 				USwitch: USwitchStub,
 				UTextarea: UInputStub,
-				UIColorPicker: UInputStub,
+				UIColorPicker: UIColorPickerStub,
 				UButton: UButtonStub,
 				UBadge: true,
 				UIcon: true,
@@ -278,6 +291,10 @@ function control(wrapper: Wrapper, name: string, attribute: string, value: strin
 
 function numberField(wrapper: Wrapper, ariaLabel: string) {
 	return control(wrapper, 'UInputNumber', 'aria-label', ariaLabel);
+}
+
+function colorPicker(wrapper: Wrapper, testId: string) {
+	return control(wrapper, 'UIColorPicker', 'data-testid', testId);
 }
 
 function selectField(wrapper: Wrapper, testId: string) {
@@ -371,6 +388,43 @@ describe('graphicsCompositorInspector', () => {
 
 		expect(wrapper.find('[data-testid="graphic-item-label"]').exists()).toBe(false);
 		expect(wrapper.text()).toContain('1920x1080');
+	});
+
+	// A colour with no opacity control beside it edits its own alpha; one with an opacity does not.
+	it.each([
+		[
+			'the text colour',
+			textItem,
+			'graphic-typography-color',
+			true,
+		],
+		[
+			'a social network icon colour',
+			socialNetworkIconItem,
+			'social-network-icon-color',
+			false,
+		],
+	])('offers alpha on %s exactly where no opacity sits beside it', async (_case, item, testId, alpha) => {
+		const wrapper = await mountComponent({
+			graphics: stack([item]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: item.id },
+		});
+
+		expect(colorPicker(wrapper, testId).props('alpha')).toBe(alpha);
+	});
+
+	it('writes a translucent text colour as the picker emits it', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([textItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+		});
+
+		colorPicker(wrapper, 'graphic-typography-color').vm.$emit('update:modelValue', 'rgba(255, 0, 0, 0.5)');
+		await nextTick();
+
+		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({
+			typography: { color: 'rgba(255, 0, 0, 0.5)' },
+		});
 	});
 
 	it('renames the selected Broadcast Graphic', async () => {
@@ -1090,7 +1144,7 @@ describe('graphicsCompositorInspector', () => {
 		it('edits colour and opacity independently of the shared geometry and visibility controls', async () => {
 			const wrapper = await selectedIcon();
 
-			wrapper.get('[data-testid="social-network-icon-color"]').getComponent(UInputStub).vm.$emit('update:modelValue', '#ffcc00');
+			colorPicker(wrapper, 'social-network-icon-color').vm.$emit('update:modelValue', '#ffcc00');
 			await nextTick();
 			expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ color: '#ffcc00', opacity: 0.75 });
 
@@ -2303,10 +2357,7 @@ describe('graphicsCompositorInspector', () => {
 			numberFieldByTestId(wrapper, 'player-life-animation-duration').vm.$emit('update:modelValue', 800);
 			await nextTick();
 			// The colour a glow or slide change tints; the other animations ignore it.
-			wrapper.findAllComponents(UInputStub)
-				.find(input => input.attributes('data-testid') === 'player-life-animation-accent')!
-				.vm
-				.$emit('update:modelValue', '#ff0055');
+			colorPicker(wrapper, 'player-life-animation-accent').vm.$emit('update:modelValue', '#ff0055');
 			await nextTick();
 
 			expect(itemOf(emittedGraphics(wrapper, 0))).toMatchObject({ lifeAnimation: 'pop' });
@@ -2351,10 +2402,7 @@ describe('graphicsCompositorInspector', () => {
 			// is the distinction the indicator exists to make.
 			const wrapper = await mountKind('game-wins');
 
-			wrapper.findAllComponents(UInputStub)
-				.find(input => input.attributes('data-testid') === 'game-wins-box-graphic-fill-color')!
-				.vm
-				.$emit('update:modelValue', '#123456');
+			colorPicker(wrapper, 'game-wins-box-graphic-fill-color').vm.$emit('update:modelValue', '#123456');
 			await nextTick();
 			await switchField(wrapper, 'game-wins-won-box-graphic-glow-enabled').trigger('click');
 

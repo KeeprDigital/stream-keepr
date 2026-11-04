@@ -1,6 +1,6 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 
-/** The Top Cut Bracket settings groups its Mode Tokens may name (ADR-0071). */
+/** The Top Cut Bracket settings groups its Mode Tokens may name (ADR-0072). */
 export type TopCutSettingsGroup = 'header' | 'entrants' | 'bracket' | 'champion';
 
 /** How the Top Cut Bracket Screen Mode looks: its Mode Tokens, by name within the mode. */

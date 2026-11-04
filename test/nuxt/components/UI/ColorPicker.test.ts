@@ -1,109 +1,271 @@
-import { mount } from '@vue/test-utils';
-import { describe, expect, it } from 'vitest';
-import { defineComponent } from 'vue';
+import type { VueWrapper } from '@vue/test-utils';
+import { enableAutoUnmount, mount } from '@vue/test-utils';
+import { afterEach, describe, expect, it } from 'vitest';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import ColorPicker from '~/components/UI/ColorPicker.vue';
 
-const UPopoverStub = defineComponent({
-	props: {
-		open: { type: Boolean, required: false },
-	},
-	emits: ['update:open'],
-	template: '<div><slot /><slot name="content" /></div>',
-});
+// The one colour control: `#rrggbb` when opaque, `rgba()` below 100 % alpha,
+// `undefined` for Clear, never `''`. Alpha is opt-in, and refused with hexOnly.
 
-const UButtonStub = defineComponent({
-	props: {
-		variant: { type: String, required: false },
-		color: { type: String, required: false },
-		size: { type: String, required: false },
-		block: { type: Boolean, required: false },
-		disabled: { type: Boolean, required: false },
-	},
-	emits: ['click'],
-	template: '<button type="button" :class="$attrs.class" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
-});
+enableAutoUnmount(afterEach);
 
-const UColorPickerStub = defineComponent({
-	props: {
-		modelValue: { type: String, required: false },
-		size: { type: String, required: false },
-	},
-	emits: ['update:modelValue'],
-	template: '<input data-testid="color-input" type="color" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-});
-
-const UInputStub = defineComponent({
-	props: {
-		modelValue: { type: String, required: false },
-		placeholder: { type: String, required: false },
-		size: { type: String, required: false },
-	},
-	emits: ['update:modelValue'],
-	template: '<input data-testid="text-input" type="text" :value="modelValue" :placeholder="placeholder" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-});
-
-async function mountComponent(props: Record<string, unknown> = {}) {
+function mountPicker(props: Record<string, unknown>) {
 	return mount(ColorPicker, {
 		props,
-		global: {
-			stubs: {
-				UPopover: UPopoverStub,
-				UButton: UButtonStub,
-				UColorPicker: UColorPickerStub,
-				UInput: UInputStub,
-			},
-		},
+		attrs: { 'aria-label': 'Text colour' },
+		global: { stubs: nuxtUiStubs },
 	});
 }
 
+const trigger = (wrapper: VueWrapper) => wrapper.get('[aria-label="Text colour"]');
+const part = (wrapper: VueWrapper, name: string) => wrapper.find(`[data-color-part="${name}"]`);
+
+async function open(wrapper: VueWrapper) {
+	await trigger(wrapper).trigger('click');
+}
+
+const emitted = (wrapper: VueWrapper) => wrapper.emitted('update:modelValue')?.map(([value]) => value);
+
+type Edit = (wrapper: VueWrapper) => Promise<unknown>;
+const pick = (hex: string): Edit => wrapper => part(wrapper, 'hue').setValue(hex);
+const slide = (percent: number): Edit => wrapper => part(wrapper, 'alpha').setValue(percent);
+const enterAlpha = (percent: number): Edit => wrapper => part(wrapper, 'alpha-percent').setValue(percent);
+const type = (text: string): Edit => wrapper => part(wrapper, 'text').setValue(text);
+const press = (name: 'transparent' | 'clear'): Edit => wrapper => part(wrapper, name).trigger('click');
+
 describe('uiColorPicker', () => {
-	it('clears to transparent from the transparent action', async () => {
-		const wrapper = await mountComponent({ modelValue: '#112233' });
-		const buttons = wrapper.findAll('button');
-
-		await buttons[1]!.trigger('click');
-
-		expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['']);
-	});
-
-	it('accepts raw CSS values unchanged when allowRawValue is enabled', async () => {
-		const wrapper = await mountComponent({ allowRawValue: true, modelValue: 'linear-gradient(red, blue)' });
-		const input = wrapper.get('[data-testid="text-input"]');
-
-		await input.setValue('radial-gradient(circle, red, blue)');
-
-		expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['radial-gradient(circle, red, blue)']);
-	});
-
-	it('offers no transparent choice for a hex-only colour', async () => {
-		const wrapper = await mountComponent({ hexOnly: true, modelValue: '#112233' });
-
-		expect(wrapper.findAll('button')).toHaveLength(1);
-	});
-
-	it('emits a typed hex-only colour only once it is a complete hex colour', async () => {
-		const wrapper = await mountComponent({ hexOnly: true, modelValue: '#112233' });
-		const input = wrapper.get('[data-testid="text-input"]');
-
-		await input.setValue('#12');
-		await input.setValue('');
-		expect(wrapper.emitted('update:modelValue')).toBeUndefined();
-
-		await input.setValue('#abcdef');
-		expect(wrapper.emitted('update:modelValue')).toEqual([
+	it.each<[string, Record<string, unknown>, Edit, Array<string | undefined>]>([
+		[
+			'an opaque pick emits hex',
+			{ modelValue: '#ffffff', alpha: true },
+			pick('#112233'),
+			['#112233'],
+		],
+		[
+			'a drag keeps a stored rgba() alpha',
+			{ modelValue: 'rgba(17, 34, 51, 0.5)', alpha: true },
+			pick('#ff0000'),
+			['rgba(255, 0, 0, 0.5)'],
+		],
+		[
+			'a drag keeps an eight-digit hex alpha',
+			{ modelValue: '#11223380' },
+			pick('#ff0000'),
+			['rgba(255, 0, 0, 0.5)'],
+		],
+		[
+			'the alpha slider below 100 % emits rgba()',
+			{ modelValue: '#112233', alpha: true },
+			slide(50),
+			['rgba(17, 34, 51, 0.5)'],
+		],
+		[
+			'the alpha slider at 100 % emits hex',
+			{ modelValue: 'rgba(17, 34, 51, 0.5)', alpha: true },
+			slide(100),
+			['#112233'],
+		],
+		[
+			'the alpha % field emits rgba()',
+			{ modelValue: '#112233', alpha: true },
+			enterAlpha(25),
+			['rgba(17, 34, 51, 0.25)'],
+		],
+		[
+			'Transparent keeps the hue at alpha 0',
+			{ modelValue: '#112233', alpha: true },
+			press('transparent'),
+			['rgba(17, 34, 51, 0)'],
+		],
+		[
+			'Clear unsets',
+			{ modelValue: '#112233', alpha: true, clearable: true },
+			press('clear'),
+			[undefined],
+		],
+		[
+			'a typed hex keeps the alpha beside it',
+			{ modelValue: 'rgba(17, 34, 51, 0.5)', alpha: true },
+			type('#ff0000'),
+			['rgba(255, 0, 0, 0.5)'],
+		],
+		[
+			'a typed rgba() carries its own alpha',
+			{ modelValue: '#112233', alpha: true },
+			type('rgba(1, 2, 3, 0.4)'),
+			['rgba(1, 2, 3, 0.4)'],
+		],
+		[
+			'a typed raw value passes through',
+			{ modelValue: '#112233', allowRawValue: true },
+			type('radial-gradient(red, blue)'),
+			['radial-gradient(red, blue)'],
+		],
+		[
+			'a typed raw value is refused without allowRawValue',
+			{ modelValue: '#112233' },
+			type('radial-gradient(red, blue)'),
+			[],
+		],
+		[
+			'an emptied required colour emits nothing',
+			{ modelValue: '#112233', alpha: true },
+			type(''),
+			[],
+		],
+		[
+			'an emptied clearable colour unsets',
+			{ modelValue: '#112233', clearable: true },
+			type(''),
+			[undefined],
+		],
+		[
+			'a hex-only colour waits for a complete hex',
+			{ modelValue: '#112233', hexOnly: true },
+			type('#12'),
+			[],
+		],
+		[
+			'a hex-only colour emits a complete hex',
+			{ modelValue: '#112233', hexOnly: true },
+			type('#ABCDEF'),
 			['#abcdef'],
-		]);
+		],
+	])('%s', async (_case, props, edit, values) => {
+		const wrapper = mountPicker(props);
+		await open(wrapper);
+
+		await edit(wrapper);
+
+		expect(emitted(wrapper) ?? []).toEqual(values);
 	});
 
-	it('cannot be opened while disabled', async () => {
-		const wrapper = await mountComponent({ disabled: true, modelValue: '#112233' });
+	it('opens a stored rgba() on its hue and alpha', async () => {
+		const wrapper = mountPicker({ modelValue: 'rgba(17, 34, 51, 0.5)', alpha: true });
+		expect(trigger(wrapper).attributes('data-color-alpha')).toBe('50');
 
-		expect(wrapper.get('button').attributes('disabled')).toBeDefined();
+		await open(wrapper);
+
+		expect((part(wrapper, 'hue').element as HTMLInputElement).value).toBe('#112233');
+		expect((part(wrapper, 'alpha').element as HTMLInputElement).value).toBe('50');
+		expect((part(wrapper, 'alpha-percent').element as HTMLInputElement).value).toBe('50');
+		expect((part(wrapper, 'text').element as HTMLInputElement).value).toBe('#112233');
 	});
 
-	it('treats the transparent keyword as transparent state', async () => {
-		const wrapper = await mountComponent({ allowRawValue: true, modelValue: 'transparent' });
+	it.each([
+		[
+			'alpha',
+			{ modelValue: '#112233', alpha: true },
+			[
+				'hue',
+				'alpha',
+				'text',
+				'alpha-percent',
+				'transparent',
+			],
+		],
+		[
+			'a required colour',
+			{ modelValue: '#112233' },
+			['hue', 'text'],
+		],
+		[
+			'a clearable colour',
+			{ modelValue: '#112233', clearable: true },
+			['hue', 'text', 'clear'],
+		],
+		[
+			'hex-only',
+			{ modelValue: '#112233', hexOnly: true },
+			['hue', 'text'],
+		],
+	])('offers %s exactly its controls', async (_case, props, parts) => {
+		const wrapper = mountPicker(props);
+		await open(wrapper);
 
-		expect(wrapper.find('button').classes()).toContain('checkerboard');
+		expect(wrapper.findAll('[data-color-part]').map(found => found.attributes('data-color-part'))).toEqual(parts);
+	});
+
+	it('marks Transparent pressed at alpha 0', async () => {
+		const wrapper = mountPicker({ modelValue: 'rgba(17, 34, 51, 0)', alpha: true });
+		await open(wrapper);
+
+		expect(part(wrapper, 'transparent').attributes('aria-pressed')).toBe('true');
+	});
+
+	it('shows an unparseable raw value as its own swatch, with alpha disabled', async () => {
+		const wrapper = mountPicker({ modelValue: 'linear-gradient(red, blue)', alpha: true, allowRawValue: true });
+		expect(trigger(wrapper).attributes('data-color-state')).toBe('raw');
+		expect(trigger(wrapper).get('[data-color-swatch]').attributes('style')).toContain('linear-gradient(red, blue)');
+
+		await open(wrapper);
+
+		expect(part(wrapper, 'alpha').attributes('disabled')).toBeDefined();
+		expect(part(wrapper, 'alpha-percent').attributes('disabled')).toBeDefined();
+		expect((part(wrapper, 'text').element as HTMLInputElement).value).toBe('linear-gradient(red, blue)');
+	});
+
+	it('emits once, on close, with commit="close"', async () => {
+		const wrapper = mountPicker({ modelValue: '#ffffff', alpha: true, commit: 'close' });
+		await open(wrapper);
+
+		await pick('#112233')(wrapper);
+		await slide(40)(wrapper);
+		expect(emitted(wrapper)).toBeUndefined();
+		expect(trigger(wrapper).attributes('data-color-alpha')).toBe('40');
+
+		await open(wrapper);
+		expect(emitted(wrapper)).toEqual(['rgba(17, 34, 51, 0.4)']);
+	});
+
+	it('emits nothing on close when nothing changed, with commit="close"', async () => {
+		const wrapper = mountPicker({ modelValue: '#ffffff', alpha: true, commit: 'close' });
+		await open(wrapper);
+		await open(wrapper);
+
+		expect(emitted(wrapper)).toBeUndefined();
+	});
+
+	// Another operator's write lands while it is open; an untouched picker keeps it.
+	it('writes back nothing stale when its value changes while open, with commit="close"', async () => {
+		const wrapper = mountPicker({ modelValue: '#ffffff', alpha: true, commit: 'close' });
+		await open(wrapper);
+		await wrapper.setProps({ modelValue: '#00ff00' });
+		await open(wrapper);
+
+		expect(emitted(wrapper)).toBeUndefined();
+	});
+
+	it('commits an open edit when it unmounts, with commit="close"', async () => {
+		const wrapper = mountPicker({ modelValue: '#ffffff', alpha: true, commit: 'close' });
+		await open(wrapper);
+		await pick('#112233')(wrapper);
+
+		wrapper.unmount();
+
+		expect(emitted(wrapper)).toEqual(['#112233']);
+	});
+
+	it('emits nothing when the colour area echoes the hue it was given', async () => {
+		const wrapper = mountPicker({ modelValue: 'rgba(17, 34, 51, 0.5)', alpha: true });
+		await open(wrapper);
+
+		await pick('#112233')(wrapper);
+
+		expect(emitted(wrapper)).toBeUndefined();
+	});
+
+	it('disables every control in the popover while disabled', async () => {
+		const wrapper = mountPicker({ modelValue: '#112233', alpha: true, clearable: true });
+		await open(wrapper);
+		await wrapper.setProps({ disabled: true });
+
+		expect(wrapper.findAll('[data-color-part]').filter(control => control.attributes('disabled') === undefined)).toEqual([]);
+	});
+
+	it('cannot be opened while disabled', () => {
+		const wrapper = mountPicker({ disabled: true, modelValue: '#112233' });
+
+		expect(trigger(wrapper).attributes('disabled')).toBeDefined();
 	});
 });

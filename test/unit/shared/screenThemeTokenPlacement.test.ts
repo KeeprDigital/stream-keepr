@@ -8,7 +8,7 @@ import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 
 // A Screen settings page renders every Theme Token its Screen may override
 // exactly once: in the mounted settings group its Mode Token declares, in
-// Background & Placement, or in the residual Screen-wide look (ADR-0071).
+// Background & Placement, or in the residual Screen-wide look (ADR-0072).
 
 /** What the page lists, from the mode's declaration alone. */
 function overridable(mode: ScreenMode): string[] {

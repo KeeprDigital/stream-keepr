@@ -58,7 +58,7 @@ function screenThemeListedTokens(mode: ScreenMode): string[] {
 	];
 }
 
-/** Where a Screen's settings page renders each Theme Token it lists (ADR-0071). */
+/** Where a Screen's settings page renders each Theme Token it lists (ADR-0072). */
 export interface ScreenThemeTokenPlacement {
 	/** Each settings group the mode's Mode Tokens declare, with its Mode Tokens in declaration order. */
 	groups: Readonly<Record<string, readonly string[]>>;

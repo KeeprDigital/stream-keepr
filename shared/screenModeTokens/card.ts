@@ -1,6 +1,6 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 
-/** The Card Spotlight settings groups its Mode Tokens may name (ADR-0071). */
+/** The Card Spotlight settings groups its Mode Tokens may name (ADR-0072). */
 export type CardSettingsGroup = 'card';
 
 /** How the Card Spotlight Screen Mode looks: its Mode Tokens, by name within the mode. */

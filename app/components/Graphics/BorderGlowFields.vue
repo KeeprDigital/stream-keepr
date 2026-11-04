@@ -122,11 +122,11 @@ function toggleSide(side: BorderSide) {
 					>
 						<UIColorPicker
 							:model-value="border.color"
-							:hex-only="hexOnly"
+							v-bind="hexOnly ? { hexOnly: true } : { alpha: true }"
 							:disabled="disabled"
 							:size="size"
 							:aria-label="ariaLabel(`${borderLabel} colour`)"
-							@update:model-value="editBorder({ color: $event || undefined })"
+							@update:model-value="color => color && editBorder({ color })"
 						/>
 					</slot>
 				</UFormField>
@@ -190,7 +190,7 @@ function toggleSide(side: BorderSide) {
 							:disabled="disabled"
 							:size="size"
 							:aria-label="ariaLabel('Glow colour')"
-							@update:model-value="editGlow({ color: $event || undefined })"
+							@update:model-value="color => color && editGlow({ color })"
 						/>
 					</slot>
 				</UFormField>

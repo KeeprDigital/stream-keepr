@@ -156,7 +156,7 @@ describe.each([
 			showDeckName: false,
 		},
 	},
-	// `cardSizing` replaced it (ADR-0054); 0014 migrated stored values, so a straggler reads as the default.
+	// `cardSizing` replaced it (ADR-0054); nothing migrated stored values, so a straggler reads as the default.
 	{
 		mode: 'deck',
 		stored: {

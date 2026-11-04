@@ -29,7 +29,7 @@ const props = defineProps<{
 	/** The Event whose adopted library assets a picker offers first; a Theme has none. */
 	eventId?: number;
 	/**
-	 * One row, as a Screen settings group's Look shows it (ADR-0071): label,
+	 * One row, as a Screen settings group's Look shows it (ADR-0072): label,
 	 * source, control, state badge and reset. What it inherits is announced only.
 	 */
 	compact?: boolean;

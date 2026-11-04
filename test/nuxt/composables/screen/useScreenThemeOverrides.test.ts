@@ -81,6 +81,14 @@ describe('useScreenThemeOverrides', () => {
 		});
 	});
 
+	it('reads a Mode Token resolving to none, as an unset asset does', async () => {
+		const screen = seedThemedScreen('feature-match-overlay');
+		const overrides = scope.run(() => useScreenThemeOverrides(screen, 1))!;
+		await flushPromises();
+
+		expect(overrides.entry('feature-match-overlay.frame-media').resolved).toBeNull();
+	});
+
 	it('follows a Theme edit announced after it loaded', async () => {
 		const overrides = setUp();
 		await flushPromises();

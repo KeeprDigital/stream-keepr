@@ -371,7 +371,7 @@ A Screen's own value for one Theme Token, used by that Screen in place of its Th
 _Avoid_: local style, pin
 
 **Screen Settings Group**:
-One element or decision on a Screen's settings page, such as its Header, Table or Card Badges, holding the controls for it and, under "Look", the Screen Theme Overrides of the Mode Tokens that style it. A Mode Token names its group. The Foundation Tokens, and any Mode Token whose group is not on the page, sit in the closing "Screen-wide look" card, after "Background & Placement" (ADR-0071).
+One element or decision on a Screen's settings page, such as its Header, Table or Card Badges, holding the controls for it and, under "Look", the Screen Theme Overrides of the Mode Tokens that style it. A Mode Token names its group. The Foundation Tokens, and any Mode Token whose group is not on the page, sit in the closing "Screen-wide look" card, after "Background & Placement" (ADR-0072).
 
 **Event Canvas**:
 The pixel coordinate space every overlay Screen of an Event is authored and rendered in, default 1920 × 1080. A Screen Output scales it uniformly to fit its window, so output resolution is not the canvas's to set. Feature Match Controls, an operator surface, fills its window instead (ADR-0051).
