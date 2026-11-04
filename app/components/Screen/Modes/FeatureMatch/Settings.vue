@@ -252,7 +252,7 @@ async function handleMatchChange(matchId: number | null) {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard title="Match Selection" :collapsible="false">
+		<ScreenSettingsCard title="Feature Match Slot" :collapsible="false">
 			<ScreenSettingsField label="Feature Match Slot" description="The Slot whose Match this Screen controls.">
 				<ScreenFeatureMatchSelect
 					:model-value="config.featureMatchId"
