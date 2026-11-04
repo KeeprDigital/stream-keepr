@@ -5,7 +5,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import { stubH3Event } from '~~/test/helpers/h3Event';
-import { fakeOpCardBulkLookup, knownOpCard } from '~~/test/helpers/opCards';
+import { fakeOpCardBulkLookup, knownOpCard, mockOpWriteBoundaries } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 import { tcgPlusDeck, tcgPlusExport } from '~~/test/helpers/tcgPlusExport';
 
@@ -14,23 +14,6 @@ import { tcgPlusDeck, tcgPlusExport } from '~~/test/helpers/tcgPlusExport';
 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
-
-const published: Array<{ type: string; payload: unknown }> = [];
-vi.doMock('~~/server/db', () => ({ db }));
-vi.doMock('~~/server/utils/ably', () => ({
-	publishMessage: async (_eventId: number, type: string, payload: unknown) => {
-		published.push({ type, payload });
-	},
-	publishMessageStrict: async (_eventId: number, type: string, payload: unknown) => {
-		published.push({ type, payload });
-	},
-	publishScreenCommand: async () => {},
-	getOriginConnectionId: () => undefined,
-}));
-vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOriginal => ({
-	...await importOriginal<object>(),
-	refreshBroadcastGraphicsBindings: async () => {},
-}));
 
 const LEADERS = [
 	knownOpCard({
@@ -59,10 +42,7 @@ let upstream = fakeOpCardBulkLookup([
 	...LEADERS,
 	...CHARACTERS,
 ]);
-vi.doMock('~~/server/utils/bandaiKeepr', async importOriginal => ({
-	...await importOriginal<object>(),
-	lookUpOpCards: (...args: Parameters<typeof upstream.lookUpOpCards>) => upstream.lookUpOpCards(...args),
-}));
+const { published } = mockOpWriteBoundaries(db, () => upstream);
 vi.stubGlobal('defineEventHandler', (handler: unknown) => handler);
 vi.stubGlobal('getValidatedRouterParams', async (event: { params: unknown }, parse: (value: unknown) => unknown) => parse(event.params));
 vi.stubGlobal('readValidatedBody', async (event: { body: unknown }, parse: (value: unknown) => unknown) => parse(event.body));

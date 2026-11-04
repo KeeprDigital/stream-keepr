@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import { stubH3Event } from '~~/test/helpers/h3Event';
-import { fakeOpCardBulkLookup, knownOpCard } from '~~/test/helpers/opCards';
+import { fakeOpCardBulkLookup, knownOpCard, mockOpWriteBoundaries } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 // The Cards page lists, retries and resolves an OP Event's Unresolved Deck Cards through these routes.
@@ -11,17 +11,6 @@ import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
 
-vi.doMock('~~/server/db', () => ({ db }));
-vi.doMock('~~/server/utils/ably', () => ({
-	publishMessage: async () => {},
-	publishMessageStrict: async () => {},
-	publishScreenCommand: async () => {},
-	getOriginConnectionId: () => undefined,
-}));
-vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOriginal => ({
-	...await importOriginal<object>(),
-	refreshBroadcastGraphicsBindings: async () => {},
-}));
 const upstream = fakeOpCardBulkLookup([
 	knownOpCard({
 		number: 'OP01-016',
@@ -36,10 +25,7 @@ const upstream = fakeOpCardBulkLookup([
 		colors: ['Blue'],
 	}),
 ]);
-vi.doMock('~~/server/utils/bandaiKeepr', async importOriginal => ({
-	...await importOriginal<object>(),
-	lookUpOpCards: upstream.lookUpOpCards,
-}));
+mockOpWriteBoundaries(db, () => upstream);
 vi.stubGlobal('defineEventHandler', (handler: unknown) => handler);
 vi.stubGlobal('getValidatedRouterParams', async (event: { params: unknown }, parse: (value: unknown) => unknown) => parse(event.params));
 vi.stubGlobal('readValidatedBody', async (event: { body: unknown }, parse: (value: unknown) => unknown) => parse(event.body));

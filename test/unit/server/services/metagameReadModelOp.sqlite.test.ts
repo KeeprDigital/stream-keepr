@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
-import { fakeOpCardBulkLookup, knownOpCard } from '~~/test/helpers/opCards';
+import { fakeOpCardBulkLookup, knownOpCard, mockOpWriteBoundaries } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 // A One Piece Event's Metagame (ADR-0074): every Player's Deck List counts,
@@ -20,18 +20,6 @@ vi.stubGlobal('useRuntimeConfig', () => ({ bandaiKeeprApiKey: 'test-key', bandai
 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
-
-vi.doMock('~~/server/db', () => ({ db }));
-vi.doMock('~~/server/utils/ably', () => ({
-	publishMessage: async () => {},
-	publishMessageStrict: async () => {},
-	publishScreenCommand: async () => {},
-	getOriginConnectionId: () => undefined,
-}));
-vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOriginal => ({
-	...await importOriginal<object>(),
-	refreshBroadcastGraphicsBindings: async () => {},
-}));
 
 const upstream = fakeOpCardBulkLookup([
 	knownOpCard({
@@ -82,10 +70,7 @@ const upstream = fakeOpCardBulkLookup([
 		cost: 10,
 	}),
 ]);
-vi.doMock('~~/server/utils/bandaiKeepr', async importOriginal => ({
-	...await importOriginal<object>(),
-	lookUpOpCards: upstream.lookUpOpCards,
-}));
+mockOpWriteBoundaries(db, () => upstream);
 
 const { metagameReadModel } = await import('~~/server/modules/metagame/readModel');
 const { opDeckListWriteModule } = await import('~~/server/modules/op-deck-list-write');

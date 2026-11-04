@@ -2,6 +2,7 @@ import type { DbCardInsert } from '~~/server/db/schema';
 import type { OpCardCategory, OpCardSummary } from '~~/shared/types/card/op';
 import type { FeatureMatchDeckListEntry } from '~~/shared/types/featureMatchDeckList';
 import type { OpLeader } from '~~/shared/types/game';
+import { vi } from 'vitest';
 
 /** One Piece card fixtures: a searched card as bandai-keepr's proxy answers it, and a Slot side's Leader snapshot. */
 
@@ -161,4 +162,41 @@ export function fakeOpCardBulkLookup(cards: OpCardSummary[]) {
 			failure = null;
 		},
 	};
+}
+
+/** A realtime message an OP write published, as `mockOpWriteBoundaries` records it. */
+export interface PublishedMessage {
+	eventId: number;
+	type: string;
+	payload: unknown;
+}
+
+/**
+ * Fakes the boundaries a One Piece write reaches past the database, for a
+ * suite on `createSqliteD1Harness`: `db` stands in for the server's, Ably
+ * publishes are recorded in `published`, Broadcast Graphics bindings are not
+ * refreshed, and the bulk lookup is whichever fake `lookup()` answers when
+ * called. Call it before importing the server code under test.
+ */
+export function mockOpWriteBoundaries(db: unknown, lookup: () => ReturnType<typeof fakeOpCardBulkLookup>): { published: PublishedMessage[] } {
+	const published: PublishedMessage[] = [];
+	const record = async (eventId: number, type: string, payload: unknown) => {
+		published.push({ eventId, type, payload });
+	};
+	vi.doMock('~~/server/db', () => ({ db }));
+	vi.doMock('~~/server/utils/ably', () => ({
+		publishMessage: record,
+		publishMessageStrict: record,
+		publishScreenCommand: async () => {},
+		getOriginConnectionId: () => undefined,
+	}));
+	vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOriginal => ({
+		...await importOriginal<object>(),
+		refreshBroadcastGraphicsBindings: async () => {},
+	}));
+	vi.doMock('~~/server/utils/bandaiKeepr', async importOriginal => ({
+		...await importOriginal<object>(),
+		lookUpOpCards: (...args: Parameters<ReturnType<typeof fakeOpCardBulkLookup>['lookUpOpCards']>) => lookup().lookUpOpCards(...args),
+	}));
+	return { published };
 }

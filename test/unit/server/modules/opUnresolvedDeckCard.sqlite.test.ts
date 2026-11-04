@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
-import { fakeOpCardBulkLookup, knownOpCard } from '~~/test/helpers/opCards';
+import { fakeOpCardBulkLookup, knownOpCard, mockOpWriteBoundaries } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 // OP Unresolved Deck Cards (ADR-0074): listed Event-wide by card number, retried
@@ -16,23 +16,6 @@ vi.stubGlobal('useRuntimeConfig', () => runtimeConfig);
 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
-
-const published: Array<{ type: string; payload: unknown }> = [];
-vi.doMock('~~/server/db', () => ({ db }));
-vi.doMock('~~/server/utils/ably', () => ({
-	publishMessage: async (_eventId: number, type: string, payload: unknown) => {
-		published.push({ type, payload });
-	},
-	publishMessageStrict: async (_eventId: number, type: string, payload: unknown) => {
-		published.push({ type, payload });
-	},
-	publishScreenCommand: async () => {},
-	getOriginConnectionId: () => undefined,
-}));
-vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOriginal => ({
-	...await importOriginal<object>(),
-	refreshBroadcastGraphicsBindings: async () => {},
-}));
 
 const ZORO = knownOpCard({
 	number: 'OP01-001',
@@ -70,10 +53,7 @@ const LATE = knownOpCard({
 	cost: 1,
 });
 let upstream = fakeOpCardBulkLookup([ZORO, RED, BLUE]);
-vi.doMock('~~/server/utils/bandaiKeepr', async importOriginal => ({
-	...await importOriginal<object>(),
-	lookUpOpCards: (...args: Parameters<typeof upstream.lookUpOpCards>) => upstream.lookUpOpCards(...args),
-}));
+const { published } = mockOpWriteBoundaries(db, () => upstream);
 
 const { opDeckListWriteModule } = await import('~~/server/modules/op-deck-list-write');
 const { opUnresolvedDeckCardModule } = await import('~~/server/modules/op-unresolved-deck-card');

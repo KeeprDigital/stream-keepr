@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
-import { fakeOpCardBulkLookup, knownOpCard } from '~~/test/helpers/opCards';
+import { fakeOpCardBulkLookup, knownOpCard, mockOpWriteBoundaries } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 // A Feature Match Deck List belongs to a Slot side (ADR-0057): it stays until replaced
@@ -16,18 +16,6 @@ vi.stubGlobal('useRuntimeConfig', () => runtimeConfig);
 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
-
-vi.doMock('~~/server/db', () => ({ db }));
-vi.doMock('~~/server/utils/ably', () => ({
-	publishMessage: async () => {},
-	publishMessageStrict: async () => {},
-	publishScreenCommand: async () => {},
-	getOriginConnectionId: () => undefined,
-}));
-vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOriginal => ({
-	...await importOriginal<object>(),
-	refreshBroadcastGraphicsBindings: async () => {},
-}));
 
 const ZORO = knownOpCard({
 	number: 'OP01-001',
@@ -67,10 +55,7 @@ const LATE = knownOpCard({
 	cost: 1,
 });
 let upstream = fakeOpCardBulkLookup([ZORO, NAMI, RED, BLUE]);
-vi.doMock('~~/server/utils/bandaiKeepr', async importOriginal => ({
-	...await importOriginal<object>(),
-	lookUpOpCards: (...args: Parameters<typeof upstream.lookUpOpCards>) => upstream.lookUpOpCards(...args),
-}));
+mockOpWriteBoundaries(db, () => upstream);
 
 const { featureMatchDeckListModule } = await import('~~/server/modules/feature-match-deck-list');
 const { featureMatchSlotWriteModule } = await import('~~/server/modules/feature-match-slot-write');

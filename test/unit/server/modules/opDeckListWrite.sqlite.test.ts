@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
-import { fakeOpCardBulkLookup, knownOpCard } from '~~/test/helpers/opCards';
+import { fakeOpCardBulkLookup, knownOpCard, mockOpWriteBoundaries } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 // The OP Deck List write (ADR-0074), for a Player: every rule behind it, at
@@ -15,22 +15,6 @@ vi.stubGlobal('useRuntimeConfig', () => runtimeConfig);
 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
-
-const published: Array<{ eventId: number; type: string; payload: unknown }> = [];
-function record(eventId: number, type: string, payload: unknown) {
-	published.push({ eventId, type, payload });
-}
-vi.doMock('~~/server/db', () => ({ db }));
-vi.doMock('~~/server/utils/ably', () => ({
-	publishMessage: async (eventId: number, type: string, payload: unknown) => record(eventId, type, payload),
-	publishMessageStrict: async (eventId: number, type: string, payload: unknown) => record(eventId, type, payload),
-	publishScreenCommand: async () => {},
-	getOriginConnectionId: () => undefined,
-}));
-vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOriginal => ({
-	...await importOriginal<object>(),
-	refreshBroadcastGraphicsBindings: async () => {},
-}));
 
 const ZORO = knownOpCard({
 	number: 'OP01-001',
@@ -79,10 +63,7 @@ const KNOWN = [
 	BLUE,
 ];
 let upstream = fakeOpCardBulkLookup(KNOWN);
-vi.doMock('~~/server/utils/bandaiKeepr', async importOriginal => ({
-	...await importOriginal<object>(),
-	lookUpOpCards: (...args: Parameters<typeof upstream.lookUpOpCards>) => upstream.lookUpOpCards(...args),
-}));
+const { published } = mockOpWriteBoundaries(db, () => upstream);
 
 const { opDeckListWriteModule } = await import('~~/server/modules/op-deck-list-write');
 const { archetypeWriteModule } = await import('~~/server/modules/archetype-write');
