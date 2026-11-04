@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
-import { LUFFY, opLeaderCatalogueRow } from '~~/test/helpers/opCards';
+import { LUFFY, NAMI, opLeaderCatalogueRow, ZORO } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
@@ -37,6 +37,8 @@ const { featureMatchPromotionModule } = await import('~~/server/modules/feature-
 const { featureMatchService } = await import('~~/server/services/featureMatch');
 const { playerFeatureMatchSyncService } = await import('~~/server/services/playerFeatureMatchSync');
 const { playerUpdateModule } = await import('~~/server/modules/player-update');
+const { opDeckListWriteModule } = await import('~~/server/modules/op-deck-list-write');
+const { featureMatchDeckListService } = await import('~~/server/services/featureMatchDeckList');
 
 afterAll(async () => {
 	await harness.close();
@@ -222,8 +224,8 @@ async function stageOpSlot(player: { name: string; nickname: string | null }) {
 		.returning();
 	const eventId = event!.id;
 	const [seated] = await db.insert(schema.players).values({ eventId, ...player }).returning();
-	// The side's Leader is catalogued already, as a picked one is (ADR-0074).
-	await db.insert(schema.cards).values(opLeaderCatalogueRow(LUFFY)).onConflictDoNothing();
+	// Every Leader is catalogued already, so no Deck List write looks one up (ADR-0074).
+	await db.insert(schema.cards).values([LUFFY, ZORO, NAMI].map(opLeaderCatalogueRow)).onConflictDoNothing();
 	const slot = await featureMatchService().create(eventId, {});
 	const sideData = {
 		name: '',
@@ -237,8 +239,17 @@ async function stageOpSlot(player: { name: string; nickname: string | null }) {
 	};
 }
 
+function writePlayerDeckList(eventId: number, playerId: number, text: string) {
+	return opDeckListWriteModule().write({
+		eventId,
+		owner: { kind: 'player', playerId },
+		input: { text },
+		source: 'hand',
+	});
+}
+
 describe('linking a One Piece Card Game Player into a Slot side', () => {
-	it('seats the Player, shown by their Nickname, and keeps the side\'s own Leader through a Player write', async () => {
+	it('seats the Player, shown by their Nickname, through a Player write', async () => {
 		const { eventId, slotId, playerId, sideData } = await stageOpSlot({ name: '', nickname: 'linlin_88' });
 
 		await featureMatchSlotWriteModule().updateSetup({
@@ -261,8 +272,85 @@ describe('linking a One Piece Card Game Player into a Slot side', () => {
 			name: '',
 			nickname: 'linlin_88',
 			pronouns: 'she/her',
-			gameData: { leader: LUFFY },
 		});
+	});
+
+	it('shows the Player\'s Leader and Deck List, and releases the Feature Match Deck List the side held', async () => {
+		const { eventId, slotId, playerId } = await stageOpSlot({ name: '', nickname: 'linlin_88' });
+		const { deckList: pasted } = await opDeckListWriteModule().write({
+			eventId,
+			owner: { kind: 'slotSide', slotId, side: 'player1' },
+			input: { text: '1x OP01-003' },
+			source: 'hand',
+		});
+		const { deckList } = await writePlayerDeckList(eventId, playerId, '1x OP01-001');
+		const unlinked = await slotById(slotId, eventId);
+
+		// The form sends the side as it held it: its own Leader and Feature Match Deck List.
+		await featureMatchSlotWriteModule().updateSetup({
+			eventId,
+			slotId,
+			input: { player1Id: playerId, player1Data: unlinked!.player1Data },
+		});
+
+		expect((await slotById(slotId, eventId))?.player1Data?.gameData).toEqual({
+			type: 'op',
+			leader: ZORO,
+			deckList: { id: deckList.id, mainboardCount: 0, leaderNumber: ZORO.number },
+		});
+		expect(await featureMatchDeckListService().findById(pasted.id, slotId, eventId)).toBeNull();
+	});
+
+	it.each([
+		{ edit: 'a Player Deck List write', save: false },
+		{ edit: 'a Player Deck List write, then a setup save from a form holding the side as it was', save: true },
+	])('shows the Player\'s new Leader after $edit', async ({ save }) => {
+		const { eventId, slotId, playerId, sideData } = await stageOpSlot({ name: '', nickname: 'linlin_88' });
+		await writePlayerDeckList(eventId, playerId, '1x OP01-001');
+		await featureMatchSlotWriteModule().updateSetup({
+			eventId,
+			slotId,
+			input: { player1Id: playerId, player1Data: sideData },
+		});
+		const formSide = (await slotById(slotId, eventId))!.player1Data;
+
+		const { deckList } = await writePlayerDeckList(eventId, playerId, '1x OP01-016');
+		if (save) {
+			await featureMatchSlotWriteModule().updateSetup({
+				eventId,
+				slotId,
+				input: {
+					player1Data: { ...formSide, pronouns: 'she/her' },
+				},
+			});
+		}
+
+		const expected = {
+			type: 'op',
+			leader: NAMI,
+			deckList: { id: deckList.id, mainboardCount: 0, leaderNumber: NAMI.number },
+		};
+		expect((await slotById(slotId, eventId))?.player1Data?.gameData).toEqual(expected);
+		expect((await activeSourceSnapshot(slotId, eventId)).player1.data?.gameData).toEqual(expected);
+	});
+
+	it('leaves an unlinked side the Leader it showed, and none of the Player\'s Deck List', async () => {
+		const { eventId, slotId, playerId, sideData } = await stageOpSlot({ name: '', nickname: 'linlin_88' });
+		await writePlayerDeckList(eventId, playerId, '1x OP01-001');
+		await featureMatchSlotWriteModule().updateSetup({
+			eventId,
+			slotId,
+			input: { player1Id: playerId, player1Data: sideData },
+		});
+		const formSide = (await slotById(slotId, eventId))!.player1Data;
+
+		await featureMatchSlotWriteModule().updateSetup({
+			eventId,
+			slotId,
+			input: { player1Id: null, player1Data: formSide },
+		});
+
+		expect((await slotById(slotId, eventId))?.player1Data?.gameData).toEqual({ type: 'op', leader: ZORO });
 	});
 
 	// A cleared name is a Player write only where a Nickname is there to fall back to.
