@@ -172,8 +172,12 @@ A Screen Mode showing two Players of an Event side by side before their Match: e
 _Avoid_: meeting, when naming an earlier Match.
 
 **Talent Screen**:
-A Screen in Talent mode, introducing the Event's Talent on air: one Talent, or a lineup of up to eight in the order picked, as a lower third or a full panel. Each shows its name, and as the operator chooses its role, its photo, and its Social Profiles on the Supported Social Networks chosen, all at once or one at a time as a Social Profile Rotation. It is offered to Events of every Card Game.
+A Screen in Talent mode, introducing the Event's Talent on air: one Talent, or a **Talent lineup** of up to eight in the order picked, as a lower third or a full panel. Each shows its name, and as the operator chooses its role, its photo, and its Social Profiles on the Supported Social Networks chosen, all at once or one at a time as a Social Profile Rotation. It is offered to Events of every Card Game.
 _Avoid_: desk screen, casters screen
+
+**Talent lineup**:
+The ordered list of Talents a Talent Screen shows together, at most eight; an Event Reference of its own kind. Deleting a Talent drops it from every lineup, keeping the rest in order (ADR-0070).
+_Avoid_: desk, panel (a full panel is a layout)
 
 **Authored Stack**:
 An ordered list in a Screen Mode's configuration holding authored content with no recovery path: the Background Screen's Background Layers and a Broadcast Graphics Screen's stack of Broadcast Graphics. A display reset leaves one untouched, and an edit may replace one but never delete it (ADR-0037).

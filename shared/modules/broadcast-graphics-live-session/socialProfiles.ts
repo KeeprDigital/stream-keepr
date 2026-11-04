@@ -1,4 +1,4 @@
-import type { SocialProfiles, SupportedSocialNetwork } from '../../socialProfiles';
+import type { SupportedSocialNetwork } from '../../socialProfiles';
 import type {
 	BroadcastGraphicConfig,
 	SocialProfileProjectionDeclaration,
@@ -8,8 +8,7 @@ import type {
 import type { GraphicBindingDataSet, GraphicBindingTalent, GraphicSourceSelectionsState } from '../graphics';
 import type { BroadcastGraphicsLiveState } from './playout';
 import {
-	canonicalSocialProfileUrl,
-	MAX_SOCIAL_PROFILE_HANDLE_LENGTH,
+	socialProfileValues,
 	SUPPORTED_SOCIAL_NETWORKS,
 } from '../../socialProfiles';
 import { resolveGraphicSourceSelections } from '../graphics';
@@ -459,35 +458,6 @@ export function socialProfileProjectionValues(
 	}));
 }
 
-/**
- * A Talent's Social Profiles as correlated tuples, in Supported Social Network
- * catalogue order, limited to `networks` when given.
- *
- * Rejects exactly what recovery rejects: a zero-length or over-bound handle
- * committed by acceptance would make every later read judge the whole session
- * incompatible, and the next Take re-commit the same tuple.
- */
-export function socialProfileValues(
-	profiles: SocialProfiles,
-	networks?: readonly SupportedSocialNetwork[],
-): SocialProfileProjectionValue[] {
-	return SUPPORTED_SOCIAL_NETWORKS.flatMap((network) => {
-		const handle = profiles[network.key];
-		if (networks && !networks.includes(network.key))
-			return [];
-		return handle === undefined || handle.length === 0 || handle.length > MAX_SOCIAL_PROFILE_HANDLE_LENGTH
-			? []
-			: [
-					{
-						network: network.key,
-						networkLabel: network.label,
-						handle,
-						profileUrl: canonicalSocialProfileUrl(network.key, handle),
-					},
-				];
-	});
-}
-
 function talentIdOf(talent: GraphicBindingTalent, data: GraphicBindingDataSet): number | undefined {
 	const ownId = (talent as GraphicBindingTalent & { id?: unknown }).id;
 	if (typeof ownId === 'number' && Number.isFinite(ownId))
@@ -523,6 +493,9 @@ export function resolveSocialProfileProjectionAcceptances(
 		const talentId = talent
 			? talentIdOf(talent, data)
 			: undefined;
+		// Acceptance rejects exactly what recovery rejects (`socialProfileValues`): a
+		// zero-length or over-bound handle committed here would make every later read
+		// judge the whole session incompatible, and the next Take re-commit the same tuple.
 		const acceptedProfiles = talent && talentId !== undefined
 			? socialProfileValues(talent.socialProfiles)
 			: [];

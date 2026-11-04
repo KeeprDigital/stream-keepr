@@ -1,6 +1,5 @@
 import type { SocialProfileProjectionValue } from '../../types/graphics';
 import { projectSocialProfileRotation } from '../broadcast-graphics-live-session/socialProfiles';
-import { msUntilNextRotationFlip } from '../page-rotation';
 
 /**
  * A Talent Screen's Social Profile Rotation (#782): one Talent's Social Profiles
@@ -35,6 +34,5 @@ export function projectTalentScreenSocialProfile(
  * rendering schedules one re-evaluation for its whole lineup.
  */
 export function msUntilNextTalentScreenProfile(rotation: { dwellMs: number; now: number }): number {
-	// Any page count above one steps at every dwell boundary.
-	return msUntilNextRotationFlip({ pageDurationMs: rotation.dwellMs, totalPages: 2, now: rotation.now }) ?? rotation.dwellMs;
+	return rotation.dwellMs - (Math.max(0, rotation.now) % rotation.dwellMs);
 }

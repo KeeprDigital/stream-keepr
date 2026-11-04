@@ -312,7 +312,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		eventReferences: { featureMatchId: 'featureMatchSlot', player1Id: 'player', player2Id: 'player' },
 		modeTokens: headToHeadModeTokens,
 	},
-	// Talent is no Melee concept, so ADR-0057 leaves it to every Card Game.
+	// Talent needs no results or Deck Lists, so ADR-0057 leaves it to every Card Game.
 	'talent': {
 		label: 'Talent',
 		icon: 'i-lucide-mic',

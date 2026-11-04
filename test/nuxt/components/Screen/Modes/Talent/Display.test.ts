@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { computed, ref } from 'vue';
+import { UIconStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import Display from '~/components/Screen/Modes/Talent/Display.vue';
 
 const config = ref<any>(null);
@@ -55,12 +56,7 @@ function profile(network: string, handle: string) {
 function mountComponent() {
 	return mount(Display, {
 		global: {
-			stubs: {
-				UIcon: {
-					props: ['name'],
-					template: '<i :data-icon="name" />',
-				},
-			},
+			stubs: { UIcon: UIconStub },
 		},
 	});
 }
@@ -131,8 +127,10 @@ describe('screenModesTalentDisplay', () => {
 		expect(wrapper.get('[data-talent-id="8"] [data-talent-photo]').attributes('data-talent-photo')).toBe('none');
 	});
 
-	it('shows no photo, nor asks for one, while photos are hidden', () => {
+	// The read answers no photo while photos are hidden.
+	it('shows no photo, nor its placeholder, while photos are hidden', () => {
 		config.value.showPhoto = false;
+		talents.value = talents.value.map(talent => ({ ...talent, photo: null }));
 		const wrapper = mountComponent();
 
 		expect(resolvedPhotos.value).toEqual([]);

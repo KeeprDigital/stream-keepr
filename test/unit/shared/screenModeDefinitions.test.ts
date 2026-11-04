@@ -19,7 +19,7 @@ describe('screen Mode Definition module', () => {
 	});
 
 	// An OP Event has no results or Metagame, so it is offered only the modes that work without them;
-	// Talent is no Melee concept, so it is among them (#782).
+	// Talent needs neither, so it is among them (#782).
 	it.each([
 		['mtg', SCREEN_MODE_VALUES],
 		[

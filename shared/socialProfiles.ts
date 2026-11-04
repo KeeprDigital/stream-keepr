@@ -1,3 +1,5 @@
+import type { SocialProfileProjectionValue } from './types/graphics';
+
 export const SUPPORTED_SOCIAL_NETWORK_KEYS = [
 	'twitch',
 	'youtube',
@@ -220,4 +222,30 @@ export function normalizeSocialProfileInput(
 
 export function canonicalSocialProfileUrl(network: SupportedSocialNetwork, handle: string) {
 	return SUPPORTED_SOCIAL_NETWORK_BY_KEY[network].canonicalProfileUrl(handle);
+}
+
+/**
+ * A Talent's Social Profiles as `{ network, networkLabel, handle, profileUrl }`
+ * tuples, in Supported Social Network catalog order, limited to `networks` when
+ * given. A zero-length or over-bound handle is left out, as no reader accepts one.
+ */
+export function socialProfileValues(
+	profiles: SocialProfiles,
+	networks?: readonly SupportedSocialNetwork[],
+): SocialProfileProjectionValue[] {
+	return SUPPORTED_SOCIAL_NETWORKS.flatMap((network) => {
+		const handle = profiles[network.key];
+		if (networks && !networks.includes(network.key))
+			return [];
+		return handle === undefined || handle.length === 0 || handle.length > MAX_SOCIAL_PROFILE_HANDLE_LENGTH
+			? []
+			: [
+					{
+						network: network.key,
+						networkLabel: network.label,
+						handle,
+						profileUrl: canonicalSocialProfileUrl(network.key, handle),
+					},
+				];
+	});
 }

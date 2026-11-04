@@ -184,7 +184,7 @@ export interface ScreenOutputTalent {
 	role: string | null;
 	/** The exact image revision, while the Screen shows photos and the Talent holds one. */
 	photo: GraphicAssetReference | null;
-	/** The Social Profiles on the networks the Screen shows, in Supported Social Network catalogue order. */
+	/** The Social Profiles on the networks the Screen shows, in Supported Social Network catalog order. */
 	socialProfiles: SocialProfileProjectionValue[];
 }
 

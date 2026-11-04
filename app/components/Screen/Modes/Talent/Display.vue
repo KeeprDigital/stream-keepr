@@ -5,12 +5,10 @@ import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
 const { config, error, ready, isEmpty, headerText, talents } = useTalentModeData(useScreenContext());
 
-/** The photos shown, resolved through the Screen's capability (ADR-0070). */
-const photos = computed<GraphicAssetReference[]>(() => config.value.showPhoto
-	? talents.value.flatMap(talent => talent.photo
-			? [talent.photo]
-			: [])
-	: []);
+/** The photos the read answers, only while the Screen shows them, resolved through its capability (ADR-0070). */
+const photos = computed<GraphicAssetReference[]>(() => talents.value.flatMap(talent => talent.photo
+	? [talent.photo]
+	: []));
 const { contentUrl, contentUrlsSettled } = useScreenGraphicAssetContentUrls(() => photos.value);
 
 const titleStyle = {
@@ -142,6 +140,7 @@ function initials(name: string): string {
 }
 .talent-list {
 	display: flex;
+	flex-wrap: wrap;
 	gap: 1.5rem;
 	min-width: 0;
 }

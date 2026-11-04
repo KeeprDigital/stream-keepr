@@ -15,9 +15,9 @@ import type { ScryfallCardFetchResult } from '~/composables/data/useScryfallBatc
 import type { ScreenOutputReadScope, useScreenOutputReadRepository } from '~/composables/repositories/useScreenOutputReadRepository';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { OP_FEATURE_MATCH_SAMPLE_ROUND, OP_FEATURE_MATCH_SAMPLE_SIDES } from '~~/shared/featureMatchSampleDataset';
-import { socialProfileValues } from '~~/shared/modules/broadcast-graphics-live-session/socialProfiles';
 import { bindGraphicThemeOwner, DEFAULT_GRAPHIC_THEME_TOKENS, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { deriveTopCutBracket } from '~~/shared/modules/top-cut-bracket';
+import { socialProfileValues } from '~~/shared/socialProfiles';
 import { formatOpColors, opPrintingImageUrl } from '~~/shared/utils/card/op';
 import { scryfallNameKey } from '~/composables/data/useScryfallBatch';
 
@@ -560,7 +560,7 @@ const SAMPLE_LIVE_SESSION: BroadcastGraphicsLiveSessionResponse = {
 type SampleReadRepository = ReturnType<typeof useScreenOutputReadRepository>;
 
 /**
- * The sample desk: a host and a commentator, with no photo, since a photo is
+ * The sample lineup: a host and a commentator, with no photo, since a photo is
  * library content a Theme preview has none of. Every Card Game shares them.
  */
 const SAMPLE_TALENTS: ScreenOutputTalentResponse = {
@@ -840,7 +840,7 @@ const OP_ANSWERS = {
 	} satisfies ScreenOutputFeatureMatchDeckListResponse,
 };
 
-/** The sample desk as a full-panel lineup, so the preview shows every part of the mode. */
+/** The sample lineup as a full panel, so the preview shows every part of the mode. */
 const SAMPLE_TALENT_CONFIG = {
 	selection: 'lineup',
 	talentIds: SAMPLE_TALENTS.talents.map(talent => talent.id),

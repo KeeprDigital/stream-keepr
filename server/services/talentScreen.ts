@@ -4,8 +4,8 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { eventTalents } from '~~/server/db/schema';
 import { mapTalentToResponse } from '~~/server/mappers/talent';
-import { socialProfileValues } from '~~/shared/modules/broadcast-graphics-live-session/socialProfiles';
 import { talentScreenTalentIds } from '~~/shared/screenModeConfigs/talent';
+import { socialProfileValues } from '~~/shared/socialProfiles';
 
 /**
  * The Talents a Talent Screen shows (#782), in its order, each with only what

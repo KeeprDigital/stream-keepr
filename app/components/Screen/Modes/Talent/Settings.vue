@@ -75,7 +75,7 @@ function removeFromLineup(index: number) {
 	});
 }
 
-/** The networks shown, always written in the Supported Social Network catalogue's order. */
+/** The networks shown, always written in the Supported Social Network catalog's order. */
 function toggleNetwork(network: SupportedSocialNetwork, shown: boolean) {
 	const chosen = new Set(config.value.socialNetworks);
 	if (shown)

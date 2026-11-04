@@ -17,7 +17,7 @@ export const TALENT_SCREEN_MAX_LINEUP = 8;
  * is an Event Reference (ADR-0038), released when its Talent is deleted.
  *
  * `socialNetworks` is which Supported Social Networks show, always in the
- * catalogue's order. With `rotateSocialProfiles` on, each Talent shows one of
+ * catalog's order. With `rotateSocialProfiles` on, each Talent shows one of
  * its Social Profiles at a time, for `socialProfileDwellMs` each: a Social
  * Profile Rotation projected from server time, so every rendering agrees.
  *

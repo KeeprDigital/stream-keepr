@@ -6,15 +6,13 @@ import { msUntilNextTalentScreenProfile, projectTalentScreenSocialProfile } from
 import { talentScreenTalentIds } from '~~/shared/screenModeConfigs/talent';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
-type HeldTalents = ScreenOutputTalentResponse;
-
 /** One shown Talent, with the Social Profiles it shows now: all of them, or the rotation's current one. */
 export interface ShownTalent extends ScreenOutputTalent {
 	shownProfiles: SocialProfileProjectionValue[];
 }
 
 /** A Talent Screen reads its Talents, so an edit or delete of one it shows re-reads (#782). */
-function talentDependencies(shows: (talentId: number) => boolean): ScreenModeDependencies<HeldTalents> {
+function talentDependencies(shows: (talentId: number) => boolean): ScreenModeDependencies<ScreenOutputTalentResponse> {
 	return {
 		'talent:updated': ({ talent }) => shows(talent.id),
 		'talent:deleted': ({ talentId }) => shows(talentId),
@@ -65,7 +63,7 @@ export function useTalentModeData(context: ScreenContext) {
 	const outputReads = useScreenOutputReads(context);
 	const shownIds = computed(() => talentScreenTalentIds(config.value));
 
-	const freshness = useScreenModeFreshness<HeldTalents>({
+	const freshness = useScreenModeFreshness<ScreenOutputTalentResponse>({
 		eventId,
 		source: () => {
 			const ids = shownIds.value;
