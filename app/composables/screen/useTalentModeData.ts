@@ -3,7 +3,7 @@ import type { ScreenOutputTalent, ScreenOutputTalentResponse } from '~~/shared/t
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import { msUntilNextTalentScreenProfile, projectTalentScreenSocialProfile } from '~~/shared/modules/talent-screen';
-import { talentScreenTalentIds } from '~~/shared/screenModeConfigs/talent';
+import { TALENT_SCREEN_AUTO_HEADER_TEXT, talentScreenTalentIds } from '~~/shared/screenModeConfigs/talent';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
 /** One shown Talent, with the Social Profiles it shows now: all of them, or the rotation's current one. */
@@ -100,7 +100,7 @@ export function useTalentModeData(context: ScreenContext) {
 			: talent.socialProfiles,
 	})));
 
-	const headerText = computed(() => config.value.headerText || 'On the Desk');
+	const headerText = computed(() => config.value.headerText || TALENT_SCREEN_AUTO_HEADER_TEXT);
 	/** Nothing is selected, or every Talent selected is gone. */
 	const isEmpty = computed(() => shownIds.value.length === 0 || (freshness.answered.value && talents.value.length === 0));
 

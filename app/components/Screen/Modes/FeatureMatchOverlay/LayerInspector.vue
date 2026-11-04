@@ -25,7 +25,7 @@ const props = defineProps<{
 	updateConfig: FeatureMatchOverlayConfigUpdater;
 	screenWidth: number;
 	screenHeight: number;
-	/** The Screen whose Theme Overrides the sections' Look rows write. */
+	/** The Screen whose Screen Theme Overrides the sections' Look rows write. */
 	screen: Screen;
 	eventId: number;
 	selectedTarget: FeatureMatchOverlaySelectionTarget;

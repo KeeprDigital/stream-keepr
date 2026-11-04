@@ -2,7 +2,7 @@
 import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
 import type { TalentScreenLayout, TalentScreenSelection } from '~~/shared/types/enums';
 import type { Screen } from '~/types';
-import { TALENT_SCREEN_MAX_LINEUP } from '~~/shared/screenModeConfigs/talent';
+import { TALENT_SCREEN_AUTO_HEADER_TEXT, TALENT_SCREEN_MAX_LINEUP } from '~~/shared/screenModeConfigs/talent';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { SUPPORTED_SOCIAL_NETWORKS } from '~~/shared/socialProfiles';
 
@@ -94,7 +94,7 @@ const layoutSummary = computed(() => [
 ].filter(Boolean).join(' · '));
 
 const headerSummary = computed(() => config.value.showHeader
-	? config.value.headerText || 'On the Desk'
+	? config.value.headerText || TALENT_SCREEN_AUTO_HEADER_TEXT
 	: 'Hidden');
 
 const socialProfilesSummary = computed(() => {
@@ -112,7 +112,7 @@ const socialProfilesSummary = computed(() => {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard title="Talent" :collapsible="false">
+		<ScreenSettingsCard id="talent:talent" title="Talent" :collapsible="false">
 			<ScreenConfigField
 				:field="fields.selection"
 				:model-value="config.selection"
@@ -223,7 +223,7 @@ const socialProfilesSummary = computed(() => {
 			:config="config"
 			:fields="fields"
 			show-description="Show a title above the Talent."
-			auto-description="Leave empty for &quot;On the Desk&quot;."
+			:auto-description="`Leave empty for &quot;${TALENT_SCREEN_AUTO_HEADER_TEXT}&quot;.`"
 			@update="updateConfig($event)"
 		>
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
@@ -252,7 +252,7 @@ const socialProfilesSummary = computed(() => {
 				:field="fields.socialProfileDwellMs"
 				:model-value="config.socialProfileDwellMs"
 				description="How long each Social Profile shows before the next."
-				@update:model-value="$event !== null && updateConfig({ socialProfileDwellMs: Number($event) })"
+				@update:model-value="updateConfig({ socialProfileDwellMs: Number($event) })"
 			/>
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="social-profiles" />
 		</ScreenSettingsCard>

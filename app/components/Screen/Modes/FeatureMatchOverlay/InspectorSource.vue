@@ -11,7 +11,7 @@ import FeatureMatchOverlaySourceFramingStyleFields from './SourceFramingStyleFie
 const props = defineProps<{
 	config: FeatureMatchOverlayModeConfig;
 	updateConfig: FeatureMatchOverlayConfigUpdater;
-	/** The Screen whose Theme Override the Appearance section's Look writes. */
+	/** The Screen whose Screen Theme Override the Appearance section's Look writes. */
 	screen: Screen;
 	eventId: number;
 	screenWidth: number;
@@ -138,7 +138,7 @@ const SOURCE_ROLE_OPTIONS = [
 					:framing-style="item.framingStyle"
 					@update="updates => editor.updateSourceFramingStyle(item.id, updates)"
 				/>
-				<!-- Every Source Item shares this Look, so it writes the Screen's override, not this item. -->
+				<!-- Every Source Item shares this Look, so it writes a Screen Theme Override, not this item. -->
 				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="source-appearance" />
 			</div>
 		</FeatureMatchOverlayControlSection>

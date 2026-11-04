@@ -125,6 +125,18 @@ describe('featureMatchOverlayLayerInspector', () => {
 		expect(wrapper.get('[data-testid="overlay-layer-inspector-fields"]').attributes('disabled') !== undefined).toBe(disabled);
 	});
 
+	// A Look row edits like any other field: read-only for an observer (#982).
+	it('keeps the Source Item\'s Look inside the read-only fields', async () => {
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'source', itemId: 'main-source' },
+			writable: false,
+		});
+		const fields = wrapper.get('[data-testid="overlay-layer-inspector-fields"]');
+
+		expect(fields.attributes('disabled')).toBeDefined();
+		expect(fields.find('[group="source-appearance"]').exists()).toBe(true);
+	});
+
 	it.each([
 		{
 			session: 'the lease holder',

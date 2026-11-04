@@ -69,7 +69,7 @@ describe('screenRoundClockSettings', () => {
 		expect(settingsCards(wrapper)).toEqual([
 			{
 				title: 'Data',
-				id: undefined,
+				id: 'round-clock:data',
 				collapsible: false,
 				looks: [],
 			},

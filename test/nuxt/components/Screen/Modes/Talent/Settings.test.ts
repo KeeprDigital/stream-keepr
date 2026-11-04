@@ -82,7 +82,7 @@ describe('screenTalentSettings', () => {
 		expect(settingsCards(wrapper)).toEqual([
 			{
 				title: 'Talent',
-				id: undefined,
+				id: 'talent:talent',
 				collapsible: false,
 				looks: [],
 			},

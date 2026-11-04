@@ -14,7 +14,7 @@ import FeatureMatchOverlayControlSection from './ControlSection.vue';
  * The Frame's own fields, each section ending with the Look of what it styles:
  * its fill, border and glow are the Theme's `frame-surface` Mode Token, its
  * effect `frame-animation-effect`, and the Theme may add media beneath its own
- * (#831). Each row writes the Screen's Theme Override (ADR-0071).
+ * (#831). Each row writes a Screen Theme Override (ADR-0071).
  */
 const props = defineProps<{
 	config: FeatureMatchOverlayModeConfig;

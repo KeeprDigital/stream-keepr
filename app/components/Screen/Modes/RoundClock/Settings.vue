@@ -21,7 +21,7 @@ const fields = screenModeConfigContract('round-clock').fields;
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard title="Data" :collapsible="false">
+		<ScreenSettingsCard id="round-clock:data" title="Data" :collapsible="false">
 			<!-- Unset follows the Current Round from Round to Round (ADR-0066). -->
 			<ScreenRoundField
 				:model-value="config.roundId"
