@@ -142,7 +142,7 @@ describe('screenHeadToHeadSettings', () => {
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ player1Id: null });
 	});
 
-	// The Players binding, then one card per element, each Mode Token in its group's Look (ADR-0071).
+	// The Players binding, then one card per element, each Mode Token in its group's Look (ADR-0072).
 	it('lays out its cards in order', async () => {
 		const wrapper = await mountComponent();
 

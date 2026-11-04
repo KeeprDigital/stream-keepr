@@ -179,7 +179,7 @@ describe('screenModesTopCutSettings', () => {
 		expect(writes.at(-1)).toEqual({ [field]: false });
 	});
 
-	// Data, then one card per element of the bracket, each Mode Token in its group's Look (ADR-0071).
+	// Data, then one card per element of the bracket, each Mode Token in its group's Look (ADR-0072).
 	it('lays out its cards in order', async () => {
 		const wrapper = await mountEditor();
 

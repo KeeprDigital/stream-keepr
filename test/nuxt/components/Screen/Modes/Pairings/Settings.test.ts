@@ -216,7 +216,7 @@ describe('screenModesPairingsSettings', () => {
 		expect(mockUpdateConfig).toHaveBeenCalledWith(patch);
 	});
 
-	// Data, then one card per element, each Mode Token in its group's Look (ADR-0071).
+	// Data, then one card per element, each Mode Token in its group's Look (ADR-0072).
 	it('lays out its cards in order', async () => {
 		mockFetch.mockResolvedValue(pairingsOf(1));
 		const wrapper = await mountSettings();

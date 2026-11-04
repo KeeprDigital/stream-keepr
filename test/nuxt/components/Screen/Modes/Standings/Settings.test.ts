@@ -271,7 +271,7 @@ const PAGINATION = {
 };
 
 describe('the Standings settings layout', () => {
-	// Data, the reveal's live controls, then one card per element, each Mode Token in its group's Look (ADR-0071).
+	// Data, the reveal's live controls, then one card per element, each Mode Token in its group's Look (ADR-0072).
 	it.each([
 		[
 			'all',
