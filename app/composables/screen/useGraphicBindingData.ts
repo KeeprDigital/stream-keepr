@@ -4,7 +4,7 @@ import type {
 	GraphicBindingFeatureMatchSlot,
 } from '~~/shared/modules/graphics';
 import type { GraphicSourceSelectionKind } from '~~/shared/types/graphics';
-import { playerDisplayName } from '~~/shared/utils/playerName';
+import { playerDisplayName, playerMatchesSearch } from '~~/shared/utils/playerName';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 /**
@@ -109,13 +109,16 @@ export function useGraphicBindingData() {
 		archetypes: byId(archetypeStore.archetypes ?? []),
 	}));
 
-	/** What one picker offers, in the order an operator reads it. */
-	function selectionOptions(kind: GraphicSourceSelectionKind): { label: string; value: number }[] {
+	/**
+	 * What one picker offers, in the order an operator reads it. A search finds
+	 * a Player by name, Nickname or Bandai member number (ADR-0074).
+	 */
+	function selectionOptions(kind: GraphicSourceSelectionKind, search = ''): { label: string; value: number }[] {
 		const data = dataSet.value;
 
 		switch (kind) {
 			case 'player':
-				return Object.entries(data.players).map(([id, player]) => ({
+				return Object.entries(data.players).filter(([, player]) => playerMatchesSearch(player, search)).map(([id, player]) => ({
 					label: playerDisplayName(player) || `Player ${id}`,
 					value: Number(id),
 				}));

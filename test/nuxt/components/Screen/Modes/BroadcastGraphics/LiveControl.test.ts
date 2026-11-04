@@ -16,6 +16,7 @@ import {
 	graphicInputTraces,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { createEmptyGraphicBindingDataSet } from '~~/shared/modules/graphics';
+import { UInputMenuStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import LiveControl from '~/components/Screen/Modes/BroadcastGraphics/LiveControl.vue';
 
 enableAutoUnmount(afterEach);
@@ -75,11 +76,11 @@ mockNuxtImport('$fetch', () => mockApiFetch);
 
 mockNuxtImport('useGraphicBindingData', () => () => ({
 	dataSet: computed(() => mockBindingData.value),
-	selectionOptions: (kind: string) => (kind === 'player'
+	selectionOptions: (kind: string, search = '') => (kind === 'player'
 		? Object.entries(mockBindingData.value.players).map(([id, player]) => ({
 				label: player.name ?? id,
 				value: Number(id),
-			}))
+			})).filter(option => option.label.toLowerCase().includes(search.toLowerCase()))
 		: []),
 }));
 
@@ -226,6 +227,10 @@ function graphic(inputs: GraphicInputDeclaration[], overrides: Partial<Broadcast
 	};
 }
 
+function playerOptions(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+	return wrapper.findAll('[data-graphic-source="player"] [role="option"]').map(option => option.text());
+}
+
 async function mountComponent(
 	config: BroadcastGraphicConfig,
 	playoutState: GraphicPlayoutState = 'off',
@@ -253,6 +258,7 @@ async function mountComponent(
 				UInputNumber: UInputNumberStub,
 				USwitch: USwitchStub,
 				USelect: USelectStub,
+				UInputMenu: UInputMenuStub,
 				GraphicsAssetFocusPicker: GraphicsAssetFocusPickerStub,
 			},
 		},
@@ -633,7 +639,26 @@ describe('broadcastGraphicsLiveControl', () => {
 		}));
 
 		expect(wrapper.findAll('[data-graphic-source]')).toHaveLength(1);
-		expect(wrapper.get('[data-testid="live-control-source-player"]').findAll('option')).toHaveLength(2);
+		expect(playerOptions(wrapper)).toEqual(['Ava Reed', 'Sam Ortiz']);
+	});
+
+	it('narrows the Player picker to the Players its search finds', async () => {
+		mockBindingData.value = {
+			...createEmptyGraphicBindingDataSet(),
+			players: {
+				1: { name: 'Ava Reed' },
+				2: { name: 'Sam Ortiz' },
+			},
+		};
+		const wrapper = await mountComponent(graphic([NAME], {
+			sources: [
+				{ key: 'player', label: 'Player', kind: 'player' },
+			],
+		}));
+
+		await wrapper.get('[data-testid="live-control-source-player"]').setValue('sam');
+
+		expect(playerOptions(wrapper)).toEqual(['Sam Ortiz']);
 	});
 
 	it('selects and clears a Graphic Source Selection through the authoritative command', async () => {
@@ -649,7 +674,7 @@ describe('broadcastGraphicsLiveControl', () => {
 			],
 		}));
 
-		await wrapper.get('[data-testid="live-control-source-player"]').setValue('1');
+		await wrapper.get('[data-graphic-source="player"] [role="option"]').trigger('click');
 
 		expect(mockSelectSource).toHaveBeenCalledWith(7, 3, 'lower-third', 'player', 1);
 

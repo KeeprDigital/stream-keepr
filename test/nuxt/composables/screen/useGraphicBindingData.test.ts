@@ -77,7 +77,7 @@ const mockFeatureMatchStore = {
 };
 const mockPlayerStore = reactive({
 	isLoaded: true,
-	players: [] as { id: number; name?: string | null }[],
+	players: [] as { id: number; name?: string | null; nickname?: string | null; externalSource?: 'tcgplus'; externalId?: string }[],
 	loadPlayersByEventId: vi.fn(),
 });
 const mockMatchStore = {
@@ -319,6 +319,42 @@ describe('useGraphicBindingData', () => {
 			{ label: 'Ava R.', value: 3 },
 			{ label: 'Player 4', value: 4 },
 		]);
+	});
+
+	it.each([
+		[
+			'name',
+			'ava',
+			[3],
+		],
+		[
+			'Nickname',
+			'luffy',
+			[4],
+		],
+		[
+			'Bandai member number',
+			'0042',
+			[4],
+		],
+		[
+			'nothing',
+			'',
+			[3, 4],
+		],
+	])('finds a Player by %s', (_by, search, found) => {
+		mockPlayerStore.players = [
+			{ id: 3, name: 'Ava R.' },
+			{
+				id: 4,
+				name: '',
+				nickname: 'LuffyFan',
+				externalSource: 'tcgplus',
+				externalId: '00420001',
+			},
+		];
+
+		expect(useGraphicBindingData().selectionOptions('player', search).map(option => option.value)).toEqual(found);
 	});
 
 	it('re-resolves from Event Data re-read on Reconnect Resync, including a Player deleted meanwhile (#610)', async () => {
