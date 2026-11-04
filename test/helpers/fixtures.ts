@@ -158,6 +158,7 @@ export function createMockArchetype(overrides?: Partial<DbArchetype>): DbArchety
 		eventId: 1,
 		name: 'Azorius Control',
 		colors: 'WU',
+		chartSeries: null,
 		...defaultTimestamps(overrides),
 		...overrides,
 	};

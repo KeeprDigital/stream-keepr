@@ -53,25 +53,31 @@ mockNuxtImport('useToast', () => () => ({
 	add: vi.fn(),
 }));
 
+async function mountPage() {
+	route.params.archetypeId = '7';
+	mockFetch.mockResolvedValue(createMockArchetypeDetailResponse());
+	const pagePath = '../../../../../../../app/pages/event/[eventId]/metagame/archetype/[archetypeId].vue';
+	const { default: ArchetypeDetailPage } = await import(pagePath);
+	return mount(ArchetypeDetailPage, {
+		global: {
+			stubs: {
+				...nuxtUiStubs,
+				UTabs: true,
+				UILoadingSpinner: true,
+				MetagameStatStrip: true,
+				MtgManaColorDisplay: true,
+				MetagameKeyCards: true,
+				MetagameCardsTable: true,
+				MetagamePlayersTable: true,
+				MetagameArchetypeChartSeriesField: true,
+			},
+		},
+	});
+}
+
 describe('archetype metagame detail page', () => {
 	it('re-reads the Archetype when the route names another', async () => {
-		mockFetch.mockResolvedValue(createMockArchetypeDetailResponse());
-		const pagePath = '../../../../../../../app/pages/event/[eventId]/metagame/archetype/[archetypeId].vue';
-		const { default: ArchetypeDetailPage } = await import(pagePath);
-		const wrapper = mount(ArchetypeDetailPage, {
-			global: {
-				stubs: {
-					...nuxtUiStubs,
-					UTabs: true,
-					UILoadingSpinner: true,
-					MetagameStatStrip: true,
-					MtgManaColorDisplay: true,
-					MetagameKeyCards: true,
-					MetagameCardsTable: true,
-					MetagamePlayersTable: true,
-				},
-			},
-		});
+		const wrapper = await mountPage();
 		await flushPromises();
 		mockFetch.mockClear();
 
@@ -86,6 +92,14 @@ describe('archetype metagame detail page', () => {
 				conversionThreshold: 8,
 			},
 		});
+		wrapper.unmount();
+	});
+
+	it('edits the Pinned Chart Series of the Archetype it shows', async () => {
+		const wrapper = await mountPage();
+		await flushPromises();
+
+		expect(wrapper.findComponent({ name: 'MetagameArchetypeChartSeriesField' }).props()).toEqual({ eventId: 99, archetypeId: 1 });
 		wrapper.unmount();
 	});
 });

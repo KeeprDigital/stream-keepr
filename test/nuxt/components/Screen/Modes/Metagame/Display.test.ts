@@ -246,6 +246,15 @@ describe('screenMetagameDisplay', () => {
 			]);
 		});
 
+		it('fills each bar from its colour slot\'s chart series, and Other from the neutral fill', async () => {
+			const wrapper = await mountComponent();
+
+			const fills = wrapper.findAll('[data-testid="metagame-chart-fill"]');
+			expect(fills.map(fill => fill.attributes('data-color-slot'))).toEqual(['4', '1', 'other']);
+			expect(fills[0]!.attributes('style')).toContain('chart-series-4');
+			expect(fills[2]!.attributes('style')).toContain('chart-other');
+		});
+
 		it('shows each Archetype\'s mana colours beside its name', async () => {
 			const wrapper = await mountComponent();
 
