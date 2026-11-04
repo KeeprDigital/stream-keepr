@@ -226,6 +226,43 @@ describe('uiColorPicker', () => {
 		expect(emitted(wrapper)).toBeUndefined();
 	});
 
+	// Another operator's write lands while it is open; an untouched picker keeps it.
+	it('writes back nothing stale when its value changes while open, with commit="close"', async () => {
+		const wrapper = mountPicker({ modelValue: '#ffffff', alpha: true, commit: 'close' });
+		await open(wrapper);
+		await wrapper.setProps({ modelValue: '#00ff00' });
+		await open(wrapper);
+
+		expect(emitted(wrapper)).toBeUndefined();
+	});
+
+	it('commits an open edit when it unmounts, with commit="close"', async () => {
+		const wrapper = mountPicker({ modelValue: '#ffffff', alpha: true, commit: 'close' });
+		await open(wrapper);
+		await pick('#112233')(wrapper);
+
+		wrapper.unmount();
+
+		expect(emitted(wrapper)).toEqual(['#112233']);
+	});
+
+	it('emits nothing when the colour area echoes the hue it was given', async () => {
+		const wrapper = mountPicker({ modelValue: 'rgba(17, 34, 51, 0.5)', alpha: true });
+		await open(wrapper);
+
+		await pick('#112233')(wrapper);
+
+		expect(emitted(wrapper)).toBeUndefined();
+	});
+
+	it('disables every control in the popover while disabled', async () => {
+		const wrapper = mountPicker({ modelValue: '#112233', alpha: true, clearable: true });
+		await open(wrapper);
+		await wrapper.setProps({ disabled: true });
+
+		expect(wrapper.findAll('[data-color-part]').filter(control => control.attributes('disabled') === undefined)).toEqual([]);
+	});
+
 	it('cannot be opened while disabled', () => {
 		const wrapper = mountPicker({ disabled: true, modelValue: '#112233' });
 

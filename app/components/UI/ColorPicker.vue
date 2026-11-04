@@ -49,11 +49,14 @@ const HEX_COLOR_RE = /^#[0-9A-F]{6}$/i;
 const HUE_ONLY_RE = /^#(?:[0-9A-F]{3}|[0-9A-F]{6})$/i;
 
 const open = ref(false);
-/** What a `commit="close"` edit holds until the popover closes. */
-const draft = ref<string | undefined>();
+/**
+ * What a `commit="close"` edit holds until the popover closes. Until the first
+ * edit the picker shows the live value, so a write landing meanwhile is kept.
+ */
+const draft = ref<{ value: string | undefined } | null>(null);
 
-const value = computed(() => (props.commit === 'close' && open.value
-	? draft.value
+const value = computed(() => (props.commit === 'close' && draft.value
+	? draft.value.value
 	: props.modelValue)?.trim() || undefined);
 const parsed = computed(() => value.value === undefined
 	? null
@@ -68,24 +71,30 @@ const swatchState = computed(() => {
 		: 'raw';
 });
 
+function commitDraft() {
+	const edit = draft.value;
+	draft.value = null;
+	if (edit && edit.value !== props.modelValue)
+		emit('update:modelValue', edit.value);
+}
+
 watch(open, (isOpen) => {
-	if (props.commit !== 'close')
-		return;
-	if (isOpen)
-		draft.value = props.modelValue;
-	else if (draft.value !== props.modelValue)
-		emit('update:modelValue', draft.value);
+	if (!isOpen)
+		commitDraft();
 });
+// A picker unmounted while open (a selection change) still commits its edit.
+onBeforeUnmount(commitDraft);
 
 function apply(next: string | undefined) {
 	if (props.commit === 'close')
-		draft.value = next;
+		draft.value = { value: next };
 	else
 		emit('update:modelValue', next);
 }
 
 function pickHue(hex: string | undefined) {
-	if (!hex)
+	// The colour area re-emits the hue it is given; that is no edit.
+	if (!hex || hex.toLowerCase() === parsed.value?.hex)
 		return;
 	apply(formatEditableColor({
 		hex,
@@ -194,6 +203,7 @@ const alphaTrackStyle = computed(() => {
 				<UColorPicker
 					:model-value="parsed?.hex ?? '#000000'"
 					size="sm"
+					:disabled="disabled"
 					aria-label="Hue and saturation"
 					data-color-part="hue"
 					@update:model-value="pickHue"
@@ -208,7 +218,7 @@ const alphaTrackStyle = computed(() => {
 							:step="1"
 							size="sm"
 							color="neutral"
-							:disabled="!parsed"
+							:disabled="disabled || !parsed"
 							:ui="{ track: 'bg-transparent', range: 'bg-transparent' }"
 							aria-label="Alpha"
 							data-color-part="alpha"
@@ -223,6 +233,7 @@ const alphaTrackStyle = computed(() => {
 						:placeholder="textPlaceholder"
 						size="sm"
 						class="min-w-0 flex-1 font-mono"
+						:disabled="disabled"
 						aria-label="Colour value"
 						data-color-part="text"
 						@focus="typing = true"
@@ -237,7 +248,7 @@ const alphaTrackStyle = computed(() => {
 						:step="1"
 						size="sm"
 						class="w-24"
-						:disabled="!parsed"
+						:disabled="disabled || !parsed"
 						:format-options="{ style: 'unit', unit: 'percent', maximumFractionDigits: 0 }"
 						aria-label="Alpha percent"
 						data-color-part="alpha-percent"
@@ -251,6 +262,7 @@ const alphaTrackStyle = computed(() => {
 					color="neutral"
 					size="sm"
 					block
+					:disabled="disabled"
 					:aria-pressed="parsed?.alpha === 0"
 					:class="parsed?.alpha === 0 ? 'ring-2 ring-primary' : ''"
 					data-color-part="transparent"
@@ -266,6 +278,7 @@ const alphaTrackStyle = computed(() => {
 					color="neutral"
 					size="sm"
 					block
+					:disabled="disabled"
 					icon="i-lucide-eraser"
 					data-color-part="clear"
 					@click="clear"
