@@ -50,6 +50,7 @@ import {
 	DEFAULT_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
 	GRAPHIC_ANIMATION_PHASE_VALUES,
 	GRAPHIC_INPUT_KEY_PATTERN,
+	MAX_GRAPHIC_GROUP_CHILDREN,
 	MAX_GRAPHIC_INPUT_KEY_LENGTH,
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
@@ -1260,6 +1261,8 @@ export function placeGraphicItem(
 /** Why these Graphic Items cannot be grouped together. */
 export type GraphicItemsGroupRefusal
 	= | 'too-few'
+		/** More than a Graphic Group may hold (`MAX_GRAPHIC_GROUP_CHILDREN`). */
+		| 'too-many'
 		/** Graphic Groups do not nest (E9). */
 		| 'group-into-group'
 		/** Only top-level Graphic Items are grouped; a child already has its group. */
@@ -1277,6 +1280,8 @@ export function graphicItemsGroupRefusal(graphic: BroadcastGraphicConfig, itemId
 	});
 	if (locations.length < 2)
 		return 'too-few';
+	if (locations.length > MAX_GRAPHIC_GROUP_CHILDREN)
+		return 'too-many';
 	if (locations.some(location => location.group))
 		return 'group-child';
 	return locations.some(location => location.item.type === 'group')
@@ -1539,6 +1544,54 @@ export interface DuplicateGraphicItemOptions {
 	nextId: () => string;
 }
 
+export interface CloneGraphicItemOptions {
+	/** Mints the id of the copy and of each of a Graphic Group's children. */
+	nextId: () => string;
+	/** Names the copy and each child, from the name it was copied from. */
+	label: (label: string) => string;
+}
+
+/**
+ * A detached copy of one Graphic Item, a Graphic Group with copies of its
+ * children, each under a fresh id and the name `label` gives it. It keeps
+ * everything else, its Graphic Theme Bindings included; nothing referencing the
+ * original, such as a stagger or a Social Profile Projection, is extended to it.
+ */
+export function cloneGraphicItem<T extends GraphicItemConfig>(item: T, options: CloneGraphicItemOptions): T {
+	// A JSON copy: the item is stored configuration, and may arrive as a reactive proxy.
+	const copy = JSON.parse(JSON.stringify(item)) as T;
+	copy.id = options.nextId();
+	copy.label = options.label(copy.label);
+	if (copy.type === 'group') {
+		copy.children = copy.children.map(child => ({
+			...child,
+			id: options.nextId(),
+			label: options.label(child.label),
+		}));
+	}
+	return copy;
+}
+
+/**
+ * Names copies landing among `taken` names. With `keep`, a name nothing else
+ * carries stays; any other becomes "name copy", then "name copy 2" and on. Each
+ * name it gives is taken from then on.
+ */
+export function copyLabeller(taken: readonly string[], options: { keep?: boolean } = {}): (label: string) => string {
+	const used = new Set(taken);
+	return (label) => {
+		let candidate = label;
+		if (!options.keep || used.has(candidate)) {
+			const base = `${label} copy`;
+			candidate = base;
+			for (let index = 2; used.has(candidate); index += 1)
+				candidate = `${base} ${index}`;
+		}
+		used.add(candidate);
+		return candidate;
+	};
+}
+
 /**
  * Duplicate one Graphic Item directly in front of itself, in its own sibling list.
  *
@@ -1556,35 +1609,12 @@ export function duplicateGraphicItem(
 	if (!location)
 		return { graphic, itemId: '' };
 
-	const taken = usedLabels(graphic);
-	function copyLabel(label: string) {
-		const base = `${label} copy`;
-		let candidate = base;
-		let index = 2;
-		while (taken.includes(candidate)) {
-			candidate = `${base} ${index}`;
-			index += 1;
-		}
-		taken.push(candidate);
-		return candidate;
-	}
-
-	// A JSON copy: the item is stored configuration, and may arrive as a reactive proxy.
-	const source = JSON.parse(JSON.stringify(location.item)) as GraphicItemConfig;
-	const copy = {
-		...source,
-		id: options.nextId(),
-		label: copyLabel(source.label),
-		x: source.x + GRAPHIC_ITEM_DUPLICATE_OFFSET,
-		y: source.y + GRAPHIC_ITEM_DUPLICATE_OFFSET,
-	} as GraphicItemConfig;
-	if (copy.type === 'group') {
-		copy.children = copy.children.map(child => ({
-			...child,
-			id: options.nextId(),
-			label: copyLabel(child.label),
-		}));
-	}
+	const copy = cloneGraphicItem(location.item, {
+		nextId: options.nextId,
+		label: copyLabeller(usedLabels(graphic)),
+	});
+	copy.x += GRAPHIC_ITEM_DUPLICATE_OFFSET;
+	copy.y += GRAPHIC_ITEM_DUPLICATE_OFFSET;
 
 	if (location.group) {
 		const group = location.group;
@@ -1665,6 +1695,11 @@ function updateGraphicItem(
 			};
 		}),
 	};
+}
+
+/** Put `item` whole in place of the Graphic Item with its id, wherever it sits. */
+export function replaceGraphicItemById(graphic: BroadcastGraphicConfig, item: GraphicItemConfig): BroadcastGraphicConfig {
+	return updateGraphicItem(graphic, item.id, () => item);
 }
 
 /**

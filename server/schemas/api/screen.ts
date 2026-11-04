@@ -13,7 +13,7 @@ import {
 } from '~~/server/modules/graphics-asset-library';
 import { graphicTypographyFields, shapeGeometrySchema } from '~~/server/schemas/api/graphicValues';
 import { storedFrameAnimationConfigSchema } from '~~/shared/animationEffects';
-import { FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION } from '~~/shared/featureMatchSourceItems';
+import { FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION, MAX_FEATURE_MATCH_SOURCE_ITEMS } from '~~/shared/featureMatchSourceItems';
 import {
 	GRAPHIC_FONT_IDS,
 	graphicSourceRelationKind,
@@ -68,10 +68,14 @@ import {
 	MAX_GRAPHIC_ANIMATION_STAGGER_STEP_MS,
 	MAX_GRAPHIC_FILL_STOPS,
 	MAX_GRAPHIC_FONT_SIZE,
+	MAX_GRAPHIC_GROUP_CHILDREN,
 	MAX_GRAPHIC_INPUT_CHOICE_LENGTH,
 	MAX_GRAPHIC_INPUT_CHOICE_OPTIONS,
 	MAX_GRAPHIC_INPUT_KEY_LENGTH,
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
+	MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
+	MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN,
+	MAX_GRAPHIC_ITEMS_PER_FEATURE_MATCH_LAYOUT,
 	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MAX_GRAPHIC_SLIDE_DISTANCE_PX,
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
@@ -593,6 +597,18 @@ export {
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 };
 export { MAX_GRAPHIC_CHANNELS_PER_SCREEN } from '~~/shared/screenModeConfigs/broadcastGraphics';
+/**
+ * The Graphic Item caps live in `shared/types/graphics.ts` for the same reason:
+ * a paste has to refuse what this schema would (#746). Their reasoning stays below,
+ * beside the schemas that enforce them.
+ */
+export {
+	MAX_FEATURE_MATCH_SOURCE_ITEMS,
+	MAX_GRAPHIC_GROUP_CHILDREN,
+	MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
+	MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN,
+	MAX_GRAPHIC_ITEMS_PER_FEATURE_MATCH_LAYOUT,
+};
 
 const graphicInputKeySchema = z.string()
 	.min(1)
@@ -1037,8 +1053,6 @@ const graphicGroupChildConfigSchema = z.discriminatedUnion('type', [
 	}).strict(),
 ]);
 
-export const MAX_GRAPHIC_GROUP_CHILDREN = 50;
-
 const graphicGroupItemConfigSchema = z.object({
 	...graphicItemBaseShape,
 	type: z.literal('group'),
@@ -1077,24 +1091,11 @@ const graphicItemConfigSchema = z.discriminatedUnion('type', [
 	deckListGraphicItemConfigSchema,
 ]);
 
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC = 100;
-
-/**
- * The same bound, named for the other host that composes the same Graphic Items.
- *
- * A Feature Match Layout and a Broadcast Graphic are both one composition of the
- * shared vocabulary, so they get one number; it is spelled twice so an operator
- * reads a limit in their own vocabulary rather than one named after the other
- * Screen Mode. They are deliberately tied rather than merely equal — a render-cost
- * ceiling that differs between two hosts of the same compositor is the per-ticket
- * divergence #99 exists to end.
- */
-export const MAX_GRAPHIC_ITEMS_PER_FEATURE_MATCH_LAYOUT = MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC;
-
 export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
 
-/**
- * The whole-Screen Graphic Item budget, counting Graphic Group children.
+/*
+ * `MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN` (in `shared/types/graphics.ts`):
+ * the whole-Screen Graphic Item budget, counting Graphic Group children.
  *
  * It binds a product the per-list caps leave unbounded: 50 Broadcast Graphics x 100
  * Graphic Items x 50 Graphic Group children is 255,000 Graphic Items against a
@@ -1138,7 +1139,6 @@ export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
  * rather than of this cap — reconstructing it per ticket is how two tickets came to
  * quote different baselines for the same pre-existing Graphic Item.
  */
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 300;
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 1_930_214;
 
 function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
@@ -1376,15 +1376,6 @@ const featureMatchLayoutCompositionSchema = z.object({
 	composition => graphicStaggerNamesASubset(composition, composition.items.length),
 	GRAPHIC_STAGGER_SUBSET_MESSAGE,
 );
-
-/**
- * How many external video source areas one Feature Match Layout may frame.
- *
- * Its own cap rather than a share of the Graphic Item budget: a Source Item is a
- * host-owned Definition on its own list, and a broadcast has as many cameras as it
- * has cameras.
- */
-export const MAX_FEATURE_MATCH_SOURCE_ITEMS = 20;
 
 /**
  * A Broadcast Graphics Screen's authored stack of Broadcast Graphics: the

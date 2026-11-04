@@ -7,6 +7,7 @@ import { useEventListener } from '@vueuse/core';
 import { eventCanvasOf } from '~~/shared/eventCanvas';
 import { applyFeatureMatchOverlayPreset, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
+import { hasTextSelection, useGraphicsClipboard } from '~/composables/useGraphicsClipboard';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import {
 	CANVAS_SELECTION,
@@ -253,6 +254,22 @@ const SHORTCUTS = [
 		label: 'Duplicate',
 	},
 	{
+		keys: ['⌘', 'C'],
+		label: 'Copy',
+	},
+	{
+		keys: ['⌘', 'V'],
+		label: 'Paste, here or on another Screen',
+	},
+	{
+		keys: ['⌘', '⌥', 'C'],
+		label: 'Copy style',
+	},
+	{
+		keys: ['⌘', '⌥', 'V'],
+		label: 'Paste style',
+	},
+	{
 		keys: ['⌫'],
 		label: 'Delete',
 	},
@@ -343,6 +360,26 @@ function groupSelection() {
 	});
 }
 
+/**
+ * Copy and paste (#746) keep what is copied in this browser, so it pastes into
+ * another Screen's layout too. Copying is not a write; pasting is.
+ */
+const clipboard = useGraphicsClipboard('feature-match-overlay');
+
+async function pasteLayers() {
+	const copied = await clipboard.layersToPaste();
+	const refusal = copied && editor.paste(copied);
+	if (refusal)
+		clipboard.refuse(refusal);
+}
+
+async function pasteStyle() {
+	const copied = await clipboard.styleToPaste();
+	const refusal = copied && editor.pasteStyle(copied);
+	if (refusal)
+		clipboard.refuse(refusal);
+}
+
 function handleKeydown(event: KeyboardEvent) {
 	if (event.defaultPrevented || isTypingTarget(event.target) || pendingPreset.value || templatesOpen.value)
 		return;
@@ -351,6 +388,16 @@ function handleKeydown(event: KeyboardEvent) {
 	const key = event.key.toLowerCase();
 	const current = selection.value;
 	let handled = true;
+
+	// By code: ⌥ changes the character a key types.
+	if (mod && !event.shiftKey && event.code === 'KeyC' && !hasTextSelection()) {
+		const copied = event.altKey
+			? clipboard.copyStyle(editor.copyStyle())
+			: clipboard.copyLayers(editor.copy());
+		if (copied)
+			event.preventDefault();
+		return;
+	}
 
 	// The editor writes nothing without the lease anyway. This keeps an observer's
 	// keys from being swallowed, so ⌘Z or ⌘D reach the browser; Escape still selects.
@@ -365,6 +412,11 @@ function handleKeydown(event: KeyboardEvent) {
 	}
 	else if (mod && key === 'd') {
 		editor.duplicate();
+	}
+	else if (mod && !event.shiftKey && event.code === 'KeyV') {
+		void (event.altKey
+			? pasteStyle()
+			: pasteLayers());
 	}
 	else if (mod && (event.code === 'BracketRight' || event.code === 'BracketLeft')) {
 		const forward = event.code === 'BracketRight';

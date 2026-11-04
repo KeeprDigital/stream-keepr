@@ -2,6 +2,7 @@ import type { GraphicItemsGroupRefusal } from '~~/shared/modules/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchLayoutEditorLayer } from './editorSelection';
 import { graphicItemsGroupRefusal } from '~~/shared/modules/graphics';
+import { MAX_GRAPHIC_GROUP_CHILDREN } from '~~/shared/types/graphics';
 
 /** Why ⌘G cannot group the selected layers (#920). */
 export type LayerGroupRefusal = 'source-item' | GraphicItemsGroupRefusal;
@@ -22,6 +23,7 @@ export function layerGroupRefusal(layout: FeatureMatchLayoutConfig, layers: read
 export const LAYER_GROUP_REFUSAL_REASONS: Record<LayerGroupRefusal, string> = {
 	'source-item': 'Source Items can\'t be grouped',
 	'too-few': 'Select two or more layers to group them',
+	'too-many': `A group holds at most ${MAX_GRAPHIC_GROUP_CHILDREN} layers`,
 	'group-into-group': 'A group can\'t go into another group',
 	'group-child': 'Layers already in a group can\'t be grouped again',
 };

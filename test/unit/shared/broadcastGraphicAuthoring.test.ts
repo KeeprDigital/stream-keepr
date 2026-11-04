@@ -47,6 +47,7 @@ import {
 	setMediaClipGeometry,
 	ungroupGraphicGroup,
 } from '~~/shared/modules/graphics';
+import { MAX_GRAPHIC_GROUP_CHILDREN } from '~~/shared/types/graphics';
 
 const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
 
@@ -1470,6 +1471,19 @@ describe('grouping and ungrouping Graphic Items (#920)', () => {
 	});
 
 	// E9: Graphic Groups do not nest, so only two or more top-level non-group items are grouped.
+	// A Graphic Group holds at most MAX_GRAPHIC_GROUP_CHILDREN children, which the write schema enforces.
+	it.each([
+		[MAX_GRAPHIC_GROUP_CHILDREN, null],
+		[MAX_GRAPHIC_GROUP_CHILDREN + 1, 'too-many'],
+	] as const)('refuses or admits grouping %i items against the group child cap', (count, refusal) => {
+		let built = graphic('a');
+		const ids = Array.from({ length: count }, (_, index) => `item-${index}`);
+		for (const id of ids)
+			built = addGraphicItem(built, { kind: 'shape', id, ...CANVAS }).graphic;
+
+		expect(graphicItemsGroupRefusal(built, ids)).toBe(refusal);
+	});
+
 	// Rows marked `packed` group `back` and `mid` into `pack` first.
 	it.each([
 		[
