@@ -391,7 +391,7 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 	});
 
 	// An imported design is the Graphics Asset Library's own record of what a Template Package
-	// published, and this library reads it rather than writing it.
+	// published: never revised here, but removable (ADR-0068).
 	it('offers an imported design only what can be done to it', async () => {
 		mockList.mockResolvedValue([
 			summary({
@@ -406,9 +406,17 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 		expect(entry.text()).toContain('imported');
 		expect(entry.find('[data-testid="template-name"]').exists()).toBe(false);
 		expect(entry.find('[data-testid="template-description"]').exists()).toBe(false);
-		expect(entry.find('[data-testid="template-delete"]').exists()).toBe(false);
 		// Still a design, so it still places and still travels.
 		expect(entry.find('[data-testid="template-place"]').exists()).toBe(true);
 		expect(entry.find('[data-testid="template-export"]').exists()).toBe(true);
+
+		await entry.get('[data-testid="template-delete"]').trigger('click');
+		await flushPromises();
+		// Importing its package again brings it back, so the prompt says so.
+		expect(wrapper.get('[data-testid="template-delete-confirm"]').text()).toContain('Template Package again');
+		await wrapper.get('[data-testid="template-delete-confirmed"]').trigger('click');
+		await flushPromises();
+
+		expect(mockRemove).toHaveBeenCalledWith('installed-1');
 	});
 });

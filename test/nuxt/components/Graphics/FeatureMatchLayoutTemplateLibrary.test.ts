@@ -226,8 +226,8 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 		expect(wrapper.emitted('placed')).toHaveLength(1);
 	});
 
-	// An imported layout is the Graphics Asset Library's own record.
-	it('offers no rename or delete on a layout a Template Package installed', async () => {
+	// An imported layout is the Graphics Asset Library's own record: never renamed here, but removable (ADR-0068).
+	it('offers no rename on a layout a Template Package installed, but removes it', async () => {
 		mockList.mockResolvedValue([
 			summary({ authored: false }),
 		]);
@@ -237,10 +237,17 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 		const entry = wrapper.get('[data-template-id="template-1"]');
 		expect(entry.text()).toContain('imported');
 		expect(entry.find('[data-testid="layout-template-name"]').exists()).toBe(false);
-		expect(entry.find('[data-testid="layout-template-delete"]').exists()).toBe(false);
 		// It is still placeable and exportable, which is what a design is for.
 		expect(entry.find('[data-testid="layout-template-place"]').exists()).toBe(true);
 		expect(entry.find('[data-testid="layout-template-export"]').exists()).toBe(true);
+
+		await entry.get('[data-testid="layout-template-delete"]').trigger('click');
+		await flushPromises();
+		expect(wrapper.get('[data-testid="layout-template-delete-confirm"]').text()).toContain('Template Package again');
+		await wrapper.get('[data-testid="layout-template-delete-confirmed"]').trigger('click');
+		await flushPromises();
+
+		expect(mockRemove).toHaveBeenCalledWith('template-1');
 	});
 
 	// A session observing a Screen another session's Graphics Authoring Lease covers still browses

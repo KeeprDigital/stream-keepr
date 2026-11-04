@@ -351,15 +351,11 @@ describe('broadcast Graphic Template Packages', () => {
 
 	/**
 	 * An imported design is the Graphics Asset Library's own record of what a
-	 * Template Package published — the very record whose Graphic Asset References
-	 * pin the revisions it needs. This library reads it and never writes it, so a
-	 * revision or a deletion here is refused rather than half-applied.
-	 *
-	 * The refusal is a `409` naming the way forward, not a `404`: the design is
-	 * visible in the library, and reporting it missing would be false about
+	 * Template Package published. This library never revises it, so a revision here
+	 * is refused with a `409` naming the way forward rather than a `404` about
 	 * something the author is looking straight at.
 	 */
-	it('refuses to revise or delete an imported design, and says what to do instead', async () => {
+	it('refuses to revise an imported design, and says what to do instead', async () => {
 		const received = await receivePackage(exportedPackage);
 		const completed = await installPackage(received.id);
 		const templateId = completed.templatePackageInstallation!.templateId;
@@ -373,17 +369,40 @@ describe('broadcast Graphic Template Packages', () => {
 		expect(revised.status).toBe(409);
 		expect(revised.data.message).toContain('Place it on a Screen and save the placed copy');
 
-		const deleted = await request(`${TEMPLATES_PATH}/${templateId}`, {
-			method: 'DELETE',
-			cookie: authorCookie,
-		});
-		expect(deleted.status).toBe(409);
-
-		// And it is still there, unchanged, rather than partly acted upon.
 		const still = (await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie }))
 			.data as BroadcastGraphicTemplateResponse;
 		expect(still.name).toBe(sourceTemplate.name);
 		expect(still.revision).toBe(1);
+	});
+
+	/**
+	 * Removing an imported design releases the Graphic Asset References it held, and
+	 * retrying the installation that published it reinstalls it (ADR-0068).
+	 */
+	it('removes an imported design with its references, and a retried installation reinstalls it', async () => {
+		const received = await receivePackage(exportedPackage);
+		const completed = await installPackage(received.id);
+		const templateId = completed.templatePackageInstallation!.templateId;
+		installedTemplateIds.push(templateId);
+		const usage = async () => (await request(`/api/graphics-assets/${asset.assetId}/usage`, { cookie: authorCookie }))
+			.data as { owner: { kind: string; id: string } }[];
+		expect(await usage()).toContainEqual(expect.objectContaining({
+			owner: expect.objectContaining({ id: templateId }),
+		}));
+
+		const deleted = await request(`${TEMPLATES_PATH}/${templateId}`, { method: 'DELETE', cookie: authorCookie });
+
+		expect(deleted.status).toBe(204);
+		expect((await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie })).status).toBe(404);
+		expect((await usage()).map(item => item.owner.id)).not.toContain(templateId);
+
+		const retried = await installPackage(received.id);
+
+		expect(retried.templatePackageInstallation).toEqual(completed.templatePackageInstallation);
+		expect((await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie })).status).toBe(200);
+		expect(await usage()).toContainEqual(expect.objectContaining({
+			owner: expect.objectContaining({ id: templateId }),
+		}));
 	});
 
 	it('exports an imported design again, so it is not stranded where it landed', async () => {

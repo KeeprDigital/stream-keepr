@@ -467,10 +467,10 @@ The identity of one exact preflight proposal — archive bytes, compatibility pr
 How one packaged asset identity would become a local Graphic Asset, decided by provenance: an exact Graphic Asset Origin match reuses the local revision; a related revision, digest-only match, or new content creates a separate local Graphic Asset (reusing canonical bytes where the digest exists). The same origin identity and revision with a different digest rejects the whole package.
 
 **Template Package Installation**:
-The one atomic act turning a confirmed Template Package Preflight Report into local state. It re-derives the report from the same staged bytes and installs only while the conclusion matches what was confirmed; bytes and derivatives are written first, then one transaction publishes every asset, revision, origin, association, rewritten reference, and the Installed Graphics Template. Repeating it answers with the installation already committed.
+The one atomic act turning a confirmed Template Package Preflight Report into local state. It re-derives the report from the same staged bytes and installs only while the conclusion matches what was confirmed; bytes and derivatives are written first, then one transaction publishes every asset, revision, origin, association, rewritten reference, and the Installed Graphics Template. Repeating it answers with the installation already committed, first reinstalling that Installed Graphics Template if it was removed (ADR-0068).
 
 **Installed Graphics Template**:
-The independent local copy of the single Template a Template Package carried, with its own identity and managed revision. Its Graphic Asset References already point at exact local revisions and protect them; the source identity is provenance only.
+The independent local copy of the single Template a Template Package carried, with its own identity and managed revision. Its Graphic Asset References already point at exact local revisions and protect them; the source identity is provenance only. It is never revised, but any signed-in User may remove it, which releases its references and keeps its record as provenance (ADR-0068).
 _Avoid_: Imported template, template installation record.
 
 ### Graphics Asset Library
@@ -947,7 +947,8 @@ _Avoid_: worst-case data, overflow data
 - Two packaged identities claiming one source identity and revision reject the complete package
 - A proposal reusing a **Retired Graphic Asset** or **Trashed Graphic Asset** is reported before confirmation and stays retryable, since neither takes new references until restored
 - A later locally created revision never inherits **Graphic Asset Origin** from an imported one
-- An **Installed Graphics Template** owns one ordinary **Graphic Asset Reference** per asset field, so a pinned asset cannot enter Trash
+- An **Installed Graphics Template** owns one ordinary **Graphic Asset Reference** per asset field, so a pinned asset cannot enter Trash until the Template is removed
+- Removing an **Installed Graphics Template** releases its references in the same write and leaves placed copies untouched; retrying its **Template Package Installation** reinstalls it while every revision it pins is on an active **Graphic Asset** (ADR-0068)
 - Every write of a **Broadcast Graphic Template** or **Feature Match Layout Template** requires each **Graphic Asset Reference** it holds to name an available revision of an active **Graphic Asset** whose kind fits its slot, including references it already held (ADR-0034)
 - A **Graphic Asset** cannot be retired while any **Broadcast Graphic Template**, **Feature Match Layout Template**, **Theme** or **Screen Theme Override** references any of its revisions, and the refusal names them; a **Screen**'s own mode reference or an **Installed Graphics Template**'s does not hold it back (ADR-0034, ADR-0050)
 - A **Template Package Installation** run inside an **Event** associates every asset it created or reused with that Event without changing reused assets' metadata

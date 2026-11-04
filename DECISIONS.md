@@ -998,7 +998,7 @@ Without the Retire guard, the rule would turn retiring an asset into making ever
 
 - A template's references cannot become retired, trashed, pruned, or purged under it. Trash, Revision Pruning, and purge each prove no reference points at a revision, and Retire now proves no template does.
 - Unavailable content can still appear under a saved template. It refuses that template's writes until Exact-Byte Repair restores the bytes.
-- An Installed Graphics Template does not hold Retire back. It is never revised and cannot be deleted, so counting it would make its assets unretirable for good. Retiring one of its assets leaves it unplaceable until restored, as before.
+- An Installed Graphics Template does not hold Retire back. It is never revised, so its references stay as installed until it is removed (ADR-0068). Retiring one of its assets leaves it unplaceable until restored, as before.
 - A template already holding a retired reference (written before this rule, or by a direct database change) is refused on every write until the reference is replaced in that write or the asset restored.
 - A rename on a stale `revision` skips the route's check and gets the revision conflict, so an author is not told about a document they have not read. A revision carrying a new document is checked first, as before.
 - A Template Package Installation writes Installed Graphics Templates through the library's own store, which already maps every reference to one exact local revision.
@@ -2104,3 +2104,33 @@ Accepted · 2026-11-04 · [#920](https://github.com/KeeprDigital/stream-keepr/is
 
 - **Replace the group's surface with a Shape Graphic Item.** It keeps the backdrop, but invents a layer the author never made; E12 drops what is not inherited.
 - **Refuse to ungroup a row or column group.** The author would have to switch it to canvas first, which moves its children, so the only way out of a stack would move what it held.
+
+## ADR-0068: An Installed Graphics Template may be removed, releasing its references, and a retried installation reinstalls it
+
+Accepted · 2026-11-04 · [#622](https://github.com/KeeprDigital/stream-keepr/issues/622)
+
+### Decision
+
+**Any signed-in User may remove an Installed Graphics Template.** It is the library's own Delete, for an imported entry as for an authored one. #411 will narrow who may. Removal releases the Template's Graphic Asset References and takes it out of the library in one transaction (`removeInstalledGraphicsTemplate` in the Graphics Asset Library). Copies placed from it are independent and unaffected. Editing an Installed Graphics Template stays out of scope: it is still never renamed or revised, and is changed by placing it and saving the placed copy.
+
+**The row stays, as provenance.** A removed Template keeps its document, source identity and installing operation, marked with `removed_at` and `removed_by`. It is in no listing, reads as not found, and holds no reference, so nothing in the library counts it. The Graphics Ingestion Operation that installed it keeps its idempotency key and its `packageInstallation` receipt unchanged.
+
+**Retrying the installation reinstalls the same Template.** Posting the installation of a completed operation answers with that operation, as before. When the Template it published has been removed, the post first reinstalls it under the same identity. The staged package is long released, but nothing needs it: the stored document already names local revisions, so reinstalling re-indexes those (`installedTemplateDocumentReferences`). As installation required of a reused revision, each must exist on an active Graphic Asset. If one is retired, trashed or gone, the retry is refused with `409` and nothing changes; restoring the asset, or importing the Template Package again, is the way back. Importing again creates a new Installed Graphics Template, as it always has.
+
+**Removal follows the Trash rule.** A Graphic Asset is refused Trash while anything references it, and a Template something still referenced would be refused removal the same way. Nothing references an Installed Graphics Template by identity today, because placing one copies it, so no removal is refused on that ground yet.
+
+### Why
+
+An Installed Graphics Template could not be deleted, so the revisions its references pinned could never be Trashed, pruned or purged, even after nothing else used them (#622).
+
+### Consequences
+
+- A revision only a removed Template pinned is unreferenced at once: Trash may take its asset, and a superseded one becomes a Revision Pruning candidate at the next Graphics Retention Sweep. A revision another artifact still references stays held by that reference.
+- Removal records no Evidence: it is not a Graphic Asset lifecycle transition. The removed row's `removed_by` and `removed_at` record who removed it and when.
+- Migration `0019_installed_template_removal` adds the two nullable columns. Existing rows read as installed.
+
+### Rejected alternatives
+
+- **Delete the row.** A retried installation would then have nothing to reinstall from, because its staged bytes are released at completion, and the receipt would name a Template no record explains.
+- **Refuse a retry after removal as already handled.** The maintainer chose to reinstall (#622).
+- **Two-stage removal, like Trash, with a restore window.** Retrying the installation already restores a removed Template, for as long as its assets can take references.
