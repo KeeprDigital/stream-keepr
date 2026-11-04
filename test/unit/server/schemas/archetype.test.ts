@@ -1,9 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { createArchetypeSchema, setArchetypeKeyCardsSchema } from '~~/server/schemas/api/archetype';
+import { createArchetypeSchema, setArchetypeKeyCardsSchema, updateArchetypeSchema } from '~~/server/schemas/api/archetype';
 
 describe('createArchetypeSchema', () => {
 	it('refuses fields the server owns', () => {
 		expect(createArchetypeSchema.safeParse({ name: 'Azorius Control', eventId: 2 }).success).toBe(false);
+	});
+
+	it('takes no Pinned Chart Series, which only an edit sets', () => {
+		expect(createArchetypeSchema.safeParse({ name: 'Azorius Control', chartSeries: 3 }).success).toBe(false);
+	});
+});
+
+describe('updateArchetypeSchema', () => {
+	// A Pinned Chart Series names one of the Theme's eight chart series, or none.
+	it.each([
+		[0, false],
+		[1, true],
+		[8, true],
+		[9, false],
+		[2.5, false],
+		[null, true],
+	])('takes chart series %j → %s', (chartSeries, accepted) => {
+		expect(updateArchetypeSchema.safeParse({ chartSeries }).success).toBe(accepted);
 	});
 });
 

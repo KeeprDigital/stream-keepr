@@ -221,6 +221,10 @@ watch(
 					/>
 				</div>
 				<MetagameStatStrip :stats="stats" />
+				<MetagameArchetypeChartSeriesField
+					:event-id="eventStore.eventId!"
+					:archetype-id="detail.id"
+				/>
 			</div>
 		</UCard>
 

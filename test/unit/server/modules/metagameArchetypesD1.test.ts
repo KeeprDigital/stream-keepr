@@ -183,6 +183,7 @@ describe('the Metagame Archetype breakdown on D1', () => {
 				id: -1,
 				name: 'Other',
 				colors: null,
+				chartSeries: null,
 				count: 115,
 				metaShare: 92,
 				winRate: 50,

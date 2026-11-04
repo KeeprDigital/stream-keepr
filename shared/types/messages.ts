@@ -44,6 +44,7 @@ export interface ArchetypePayload {
 	eventId: number;
 	name: string;
 	colors: string | null;
+	chartSeries: number | null;
 	keyCards: CardResponse[];
 	createdAt: Date;
 	updatedAt: Date;

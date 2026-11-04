@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "200edc89-94fe-44e3-ae6e-9179f7436711",
-  "prevId": "3eb9341a-79f5-457e-99be-5d1f4c578276",
+  "id": "5cf4aad2-98ba-4839-8b80-f39d1c6a973f",
+  "prevId": "3f4713a7-1c6a-46f2-b22f-141627a08bd3",
   "tables": {
     "archetype_cards": {
       "name": "archetype_cards",
@@ -120,6 +120,13 @@
         "colors": {
           "name": "colors",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "chart_series": {
+          "name": "chart_series",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
