@@ -1,6 +1,6 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 
-/** The Head-to-Head settings groups its Mode Tokens may name (ADR-0071). */
+/** The Head-to-Head settings groups its Mode Tokens may name (ADR-0072). */
 export type HeadToHeadSettingsGroup = 'header' | 'player-details' | 'earlier-matches';
 
 /** How the Head-to-Head Screen Mode looks: its Mode Tokens, by name within the mode. */

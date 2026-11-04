@@ -1,11 +1,13 @@
 import type { VueWrapper } from '@vue/test-utils';
 import type { ThemeResponse } from '~~/shared/types/theme';
+import type { ColorPickerPart } from '~~/test/nuxt/helpers/colorPicker';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
 import { settleUntil } from '~~/test/helpers/settle';
+import { editColorPicker } from '~~/test/nuxt/helpers/colorPicker';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { THEME_TOKEN_DRAFT_COMMIT_MS } from '~/modules/theme-editor/draft';
 import ThemeEditor from '~/pages/themes/[themeId].vue';
@@ -113,10 +115,9 @@ async function mountEditor({ preview = false } = {}) {
 const field = (wrapper: VueWrapper, token: string) => wrapper.get(`[data-token="${token}"]`);
 const part = (wrapper: VueWrapper, token: string, name: string) => field(wrapper, token).get(`[data-token-part="${name}"]`);
 
-async function commit(wrapper: VueWrapper, token: string, name: string, value: string) {
-	const input = part(wrapper, token, name);
-	(input.element as HTMLInputElement).value = value;
-	await input.trigger('change');
+/** A colour token commits once its picker closes. */
+async function commitColour(wrapper: VueWrapper, token: string, control: ColorPickerPart, value: string) {
+	await editColorPicker(field(wrapper, token), '[data-token-part="colour"]', control, value);
 	await flushPromises();
 }
 
@@ -162,29 +163,29 @@ describe('the Theme editor', () => {
 		[
 			'a colour',
 			'accent',
-			'colour',
+			'hue',
 			'#ff0000',
 			'#ff0000',
 		],
 		[
-			'a colour\'s opacity',
+			'a colour\'s alpha',
 			'accent',
-			'opacity',
+			'alpha',
 			'50',
 			'rgba(0, 119, 163, 0.5)',
 		],
 		[
-			'a Mode Token\'s own colour, keeping the opacity it follows',
+			'a Mode Token\'s own colour, keeping the alpha it follows',
 			'standings.row-divider',
-			'colour',
+			'hue',
 			'#00ff00',
 			'rgba(0, 255, 0, 0.12)',
 		],
-	])('writes %s as one token, and shows it set once the write lands', async (_case, token, name, entered, value) => {
+	] as const)('writes %s as one token, and shows it set once the write lands', async (_case, token, control, entered, value) => {
 		answerWrite = () => theme(2, { [token]: value });
 		const wrapper = await mountEditor();
 
-		await commit(wrapper, token, name, entered);
+		await commitColour(wrapper, token, control, entered);
 
 		expect(writes()).toEqual([
 			[
@@ -201,7 +202,7 @@ describe('the Theme editor', () => {
 		const wrapper = await mountEditor({ preview: true });
 		await settleUntil(() => wrapper.find('.standings-table').exists());
 
-		await commit(wrapper, 'standings.surface', 'colour', '#00ff00');
+		await commitColour(wrapper, 'standings.surface', 'hue', '#00ff00');
 
 		expect(getComputedStyle(wrapper.get('.standings-table').element).backgroundColor).toBe('rgb(0, 255, 0)');
 	});
@@ -265,8 +266,8 @@ describe('the Theme editor', () => {
 		answerWrite = () => answers.shift()!();
 		const wrapper = await mountEditor();
 
-		await commit(wrapper, 'accent', 'colour', '#ff0000');
-		await commit(wrapper, 'standings.surface', 'colour', '#000000');
+		await commitColour(wrapper, 'accent', 'hue', '#ff0000');
+		await commitColour(wrapper, 'standings.surface', 'hue', '#111111');
 		older.resolve(theme(2, { accent: '#ff0000' }));
 		await flushPromises();
 

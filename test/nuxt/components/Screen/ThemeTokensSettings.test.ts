@@ -140,4 +140,23 @@ describe('the Screen-wide look', () => {
 			{ divider: null },
 		]);
 	});
+
+	// Each override write announces `screen:updated`, so a drag writes once, on close.
+	it('writes a colour override once its picker closes, carrying its alpha', async () => {
+		const wrapper = await mountSection('standings');
+		const row = card(wrapper).get('[data-token="divider"]');
+
+		await row.get('[data-token-part="colour"]').trigger('click');
+		await row.get('[data-color-part="hue"]').setValue('#00ff00');
+		await row.get('[data-color-part="hue"]').setValue('#ff0000');
+		await row.get('[data-color-part="alpha"]').setValue(40);
+		await flushPromises();
+		expect(overrideWrites(mockApiFetch)).toEqual([]);
+
+		await row.get('[data-token-part="colour"]').trigger('click');
+		await flushPromises();
+		expect(overrideWrites(mockApiFetch)).toEqual([
+			{ divider: 'rgba(255, 0, 0, 0.4)' },
+		]);
+	});
 });

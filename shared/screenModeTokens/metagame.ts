@@ -11,7 +11,7 @@ function chartSlot<N extends number>(slot: N) {
 	} as const;
 }
 
-/** The Metagame settings groups its Mode Tokens may name (ADR-0071). */
+/** The Metagame settings groups its Mode Tokens may name (ADR-0072). */
 export type MetagameSettingsGroup = 'header' | 'table' | 'chart' | 'size-and-surface';
 
 /**

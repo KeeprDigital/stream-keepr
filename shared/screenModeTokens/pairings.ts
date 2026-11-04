@@ -1,6 +1,6 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 
-/** The Pairings settings groups its Mode Tokens may name (ADR-0071). */
+/** The Pairings settings groups its Mode Tokens may name (ADR-0072). */
 export type PairingsSettingsGroup = 'header' | 'table' | 'result-badge';
 
 /** How the Pairings Screen Mode looks: its Mode Tokens, by name within the mode. */

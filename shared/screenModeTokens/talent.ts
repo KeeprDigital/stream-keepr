@@ -1,6 +1,6 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 
-/** The Talent settings groups its Mode Tokens may name (ADR-0071). */
+/** The Talent settings groups its Mode Tokens may name (ADR-0072). */
 export type TalentSettingsGroup = 'header' | 'layout' | 'social-profiles';
 
 /** How the Talent Screen Mode looks: its Mode Tokens, by name within the mode. */

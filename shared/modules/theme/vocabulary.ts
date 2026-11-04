@@ -237,7 +237,7 @@ export type FoundationTokenNameOfType<T extends ThemeTokenType> = {
  * `settingsGroup` names the Screen Settings Group whose element it styles,
  * one of `Group`, the groups its mode declares. The group renders its Screen
  * Theme Override under "Look"; until the group is mounted on the page, it
- * renders in the residual Screen-wide look (ADR-0071).
+ * renders in the residual Screen-wide look (ADR-0072).
  */
 export type DeclaredModeTokenDefinition<Group extends string> = {
 	[T in ThemeTokenType]: TokenDefinitionOf<T, ModeTokenValue<T, FoundationTokenNameOfType<T>>> & {

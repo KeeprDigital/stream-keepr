@@ -66,6 +66,7 @@ const global = {
 			props: {
 				modelValue: { type: String, required: false },
 				hexOnly: { type: Boolean, required: false },
+				alpha: { type: Boolean, required: false },
 			},
 			emits: ['update:modelValue'],
 			template: '<button type="button" />',
@@ -160,18 +161,30 @@ describe('border and glow fields', () => {
 		});
 	});
 
-	it('edits colour with a colour picker, hex-only where the host asks, and clears to undefined', async () => {
-		const wrapper = mountFields({ hexOnly: true });
+	// The glow has its own opacity beside it, so only the border colour edits alpha.
+	it.each([
+		[
+			'the host asks hex-only',
+			true,
+			{ hexOnly: true, alpha: false },
+		],
+		[
+			'the host takes any colour',
+			false,
+			{ hexOnly: false, alpha: true },
+		],
+	])('edits colour with a colour picker when %s', async (_case, hexOnly, borderPicker) => {
+		const wrapper = mountFields({ hexOnly });
 		const picker = input(wrapper, 'UIColorPicker', 'Border colour')!;
 
-		expect(picker.props('hexOnly')).toBe(true);
-		expect(picker.props('modelValue')).toBe('#0077a3');
+		expect(picker.props()).toMatchObject({ modelValue: '#0077a3', ...borderPicker });
+		expect(input(wrapper, 'UIColorPicker', 'Glow colour')!.props('alpha')).toBe(false);
 
-		picker.vm.$emit('update:modelValue', '');
+		picker.vm.$emit('update:modelValue', 'rgba(255, 0, 0, 0.5)');
 		await flushPromises();
 		expect(lastEdit(wrapper)).toEqual({
 			kind: 'border',
-			patch: { color: undefined },
+			patch: { color: 'rgba(255, 0, 0, 0.5)' },
 		});
 
 		input(wrapper, 'UIColorPicker', 'Glow colour')!.vm.$emit('update:modelValue', '#ff0000');

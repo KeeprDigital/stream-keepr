@@ -73,7 +73,7 @@ describe('the Melee-owned Match result migration', () => {
 	}
 
 	it('gives a reported Melee Match the zero game wins and game draws Melee sent as null', async () => {
-		harness = await createSqliteD1Harness({ throughMigration: '0004' });
+		harness = await createSqliteD1Harness({ throughMigration: '0000' });
 		await insertStructure();
 		await insertMatch(1, {
 			externalSource: 'melee',
@@ -118,7 +118,7 @@ describe('the Melee-owned Match result migration', () => {
 	});
 
 	it('leaves an unreported Melee Match and a bye without a Game Score', async () => {
-		harness = await createSqliteD1Harness({ throughMigration: '0004' });
+		harness = await createSqliteD1Harness({ throughMigration: '0000' });
 		await insertStructure();
 		await insertMatch(1, {
 			externalSource: 'melee',
@@ -152,7 +152,7 @@ describe('the Melee-owned Match result migration', () => {
 	});
 
 	it('clears a result an operator entered on a manual Match', async () => {
-		harness = await createSqliteD1Harness({ throughMigration: '0004' });
+		harness = await createSqliteD1Harness({ throughMigration: '0000' });
 		await insertStructure();
 		await insertMatch(1, {
 			externalSource: 'manual',
@@ -186,7 +186,7 @@ describe('the Melee-owned Match result migration', () => {
 	});
 
 	it('no longer keeps Melee\'s result text', async () => {
-		harness = await createSqliteD1Harness({ throughMigration: '0004' });
+		harness = await createSqliteD1Harness({ throughMigration: '0000' });
 		await insertStructure();
 		await insertMatch(1, {
 			externalSource: 'melee',
