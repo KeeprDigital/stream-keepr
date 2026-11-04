@@ -497,6 +497,8 @@ mockNuxtImport('useArchetypeSpotlightModeData', () => () => ({
 	ready: computed(() => true),
 	isEmpty: computed(() => false),
 	headerText: computed(() => 'Spotlight'),
+	game: computed(() => 'mtg'),
+	readsStandings: computed(() => true),
 	conversionLabel: computed(() => 'Top 8'),
 	spotlight: computed(() => ({
 		archetype: { id: 1, name: 'Archetype', colors: null },
@@ -602,6 +604,7 @@ mockNuxtImport('useTopCutModeData', () => () => ({
 }));
 
 mockNuxtImport('useMetagameModeData', () => () => ({
+	game: computed(() => 'mtg'),
 	config: computed(() => ({
 		viewMode: 'archetype',
 		showHeader: true,
