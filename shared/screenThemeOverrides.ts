@@ -6,6 +6,7 @@ import type { ThemeTokenReference, ThemeTokenType, ThemeTokenValue } from './mod
 import type { FoundationTokenName } from './modules/theme/vocabulary';
 import type { ScreenMode } from './types/enums';
 import { GRAPHIC_THEME_SLOT_TOKEN_TYPES } from './modules/graphics/themeBindings';
+import { resolveThemeTokens } from './modules/theme/resolution';
 import { FOUNDATION_TOKENS } from './modules/theme/vocabulary';
 import { screenModeHostTokens } from './screenModeDefinitions';
 import { SCREEN_MODES, screenModeSupportsBackgroundLayers, screenModeTokens } from './screenModes';
@@ -20,6 +21,8 @@ export const SCREEN_THEME_OVERRIDE_REFUSALS = {
 
 export type ScreenThemeOverrideRefusal = keyof typeof SCREEN_THEME_OVERRIDE_REFUSALS;
 
+const NOTHING_STORED = Object.freeze({});
+
 const GRAPHIC_BINDABLE_TYPES: ReadonlySet<ThemeTokenType> = new Set(Object.values(GRAPHIC_THEME_SLOT_TOKEN_TYPES));
 
 /**
@@ -32,6 +35,76 @@ export function screenModeBindableFoundationTokens(mode: ScreenMode): Foundation
 		return [];
 	return (Object.keys(FOUNDATION_TOKENS) as FoundationTokenName[])
 		.filter(name => GRAPHIC_BINDABLE_TYPES.has(FOUNDATION_TOKENS[name].type));
+}
+
+/**
+ * The Theme Tokens a Screen's settings page lists for `mode`, each once: what
+ * the mode's declaration consumes (`resolveThemeTokens`'s `consumed`, which no
+ * stored value changes), then any further Foundation Token its Graphic Items
+ * may bind.
+ */
+function screenThemeListedTokens(mode: ScreenMode): string[] {
+	const { consumed } = resolveThemeTokens({
+		vocabulary: FOUNDATION_TOKENS,
+		modeTokens: screenModeTokens(mode),
+		theme: NOTHING_STORED,
+		overrides: NOTHING_STORED,
+		hostTokens: screenModeHostTokens(mode),
+	});
+	const bindable = screenModeBindableFoundationTokens(mode).filter(name => !consumed.includes(name));
+	return [
+		...consumed,
+		...bindable,
+	];
+}
+
+/** Where a Screen's settings page renders each Theme Token it lists (ADR-0072). */
+export interface ScreenThemeTokenPlacement {
+	/** Each settings group the mode's Mode Tokens declare, with its Mode Tokens in declaration order. */
+	groups: Readonly<Record<string, readonly string[]>>;
+	/** Background & Placement: the Foundation Tokens the Screen's host consumes itself, a plain mode's `inset` and `alignment`. */
+	placement: readonly string[];
+	/**
+	 * The residual Screen-wide look: each Mode Token whose group is not mounted
+	 * on the page, then every other listed Foundation Token.
+	 */
+	screenWide: {
+		modeTokens: readonly string[];
+		foundationTokens: readonly string[];
+	};
+}
+
+/**
+ * Where each Theme Token a Screen in `mode` lists renders, given the settings
+ * groups mounted on its page. Each lands in exactly one place: a Mode Token in
+ * its mounted group, else the Screen-wide look, so it never disappears or
+ * doubles while its group is not yet mounted.
+ */
+export function placeScreenThemeTokens(mode: ScreenMode, mountedGroups: Iterable<string>): ScreenThemeTokenPlacement {
+	const mounted = new Set(mountedGroups);
+	const modeTokens = screenModeTokens(mode);
+	const hostTokens = screenModeHostTokens(mode);
+	const groups: Record<string, string[]> = {};
+	const unplacedModeTokens: string[] = [];
+	const foundationTokens: string[] = [];
+	const placement: string[] = [];
+	for (const name of screenThemeListedTokens(mode)) {
+		if (!Object.hasOwn(modeTokens, name)) {
+			(hostTokens.includes(name)
+				? placement
+				: foundationTokens).push(name);
+			continue;
+		}
+		const group = modeTokens[name as keyof typeof modeTokens]!.settingsGroup;
+		(groups[group] ??= []).push(name);
+		if (!mounted.has(group))
+			unplacedModeTokens.push(name);
+	}
+	return {
+		groups,
+		placement,
+		screenWide: { modeTokens: unplacedModeTokens, foundationTokens },
+	};
 }
 
 /**

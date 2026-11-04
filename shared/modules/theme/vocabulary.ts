@@ -233,10 +233,20 @@ export type FoundationTokenNameOfType<T extends ThemeTokenType> = {
  * A Mode Token as a Screen Mode Definition declares it: its default names a
  * Foundation Token of its own type, checked against the vocabulary, or holds
  * a literal.
+ *
+ * `settingsGroup` names the Screen Settings Group whose element it styles,
+ * one of `Group`, the groups its mode declares. The group renders its Screen
+ * Theme Override under "Look"; until the group is mounted on the page, it
+ * renders in the residual Screen-wide look (ADR-0072).
  */
-export type DeclaredModeTokenDefinition = {
-	[T in ThemeTokenType]: TokenDefinitionOf<T, ModeTokenValue<T, FoundationTokenNameOfType<T>>>;
+export type DeclaredModeTokenDefinition<Group extends string> = {
+	[T in ThemeTokenType]: TokenDefinitionOf<T, ModeTokenValue<T, FoundationTokenNameOfType<T>>> & {
+		settingsGroup: Group;
+	};
 }[ThemeTokenType];
+
+/** A Mode Token as declared, whichever Screen Settings Group of its mode it names. */
+export type AnyDeclaredModeTokenDefinition = DeclaredModeTokenDefinition<string>;
 
 /**
  * The Default Theme's stored values: none, so every token reads its shipped

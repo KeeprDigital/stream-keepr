@@ -101,7 +101,7 @@ describe('screenFeatureMatchSettings', () => {
 		const wrapper = await mountSettings();
 
 		expect(wrapper.findAll('h3').map(title => title.text())).toEqual([
-			'Match Selection',
+			'Feature Match Slot',
 			'Player Info',
 			'Match Display',
 			'Game State',
@@ -242,16 +242,16 @@ describe('screenFeatureMatchSettings', () => {
 	it('binds the Screen to a Feature Match Slot and loads its state', async () => {
 		const wrapper = await mountSettings();
 
-		await card(wrapper, 'Match Selection').get('select').setValue('5');
+		await card(wrapper, 'Feature Match Slot').get('select').setValue('5');
 
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ featureMatchId: 5 });
 		expect(mockLoadState).toHaveBeenCalledWith(1, 5);
 	});
 
-	it('keeps Match Selection open, with no collapse control', async () => {
+	it('keeps the Feature Match Slot card open, with no collapse control', async () => {
 		const wrapper = await mountSettings();
 
-		expect(collapseToggle(wrapper, 'Match Selection').exists()).toBe(false);
+		expect(collapseToggle(wrapper, 'Feature Match Slot').exists()).toBe(false);
 	});
 
 	it.each([
