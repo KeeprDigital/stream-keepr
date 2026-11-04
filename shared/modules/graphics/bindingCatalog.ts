@@ -12,6 +12,7 @@ import { formatOpColors } from '../../utils/card/op';
 import { formatOrdinal } from '../../utils/formatters';
 import { getMtgGameData, getOpGameData } from '../../utils/gameData';
 import { formatGameScore, readMatchFromPlayer1Side } from '../../utils/matchFromPlayerSide';
+import { playerDisplayName } from '../../utils/playerName';
 
 /**
  * The Graphic Input Binding field catalog.
@@ -84,6 +85,7 @@ export interface GraphicBindingEvent {
  */
 export interface GraphicBindingPlayer {
 	name?: string | null;
+	nickname?: string | null;
 	pronouns?: string | null;
 	wins?: number | null;
 	losses?: number | null;
@@ -326,7 +328,7 @@ const PLAYER_FIELDS: readonly GraphicBindingField<GraphicBindingPlayer>[] = [
 		label: 'Name',
 		type: 'text',
 		shape: 'atomic',
-		resolve: player => textOf(player.name),
+		resolve: player => textOf(playerDisplayName(player)),
 	},
 	{
 		id: 'player.pronouns',
@@ -452,14 +454,18 @@ const PLAYER_FIELDS: readonly GraphicBindingField<GraphicBindingPlayer>[] = [
 		game: 'op',
 		resolve: player => textOf(getOpGameData(player.gameData).leader?.imageUrl),
 	},
-	// A Feature Match Slot side's Deck List, counted without its Leader: 50 in a legal deck.
+	// The Deck List a side shows, counted without its Leader: 50 in a legal deck. An
+	// unlinked side holds a Feature Match Deck List; a Player, and a side linked to one, theirs.
 	{
 		id: 'player.deckCardCount',
 		label: 'Mainboard card count',
 		type: 'number',
 		shape: 'atomic',
 		game: 'op',
-		resolve: player => numberOf(getOpGameData(player.gameData).featureMatchDeckList?.mainboardCount),
+		resolve: (player) => {
+			const gameData = getOpGameData(player.gameData);
+			return numberOf((gameData.featureMatchDeckList ?? gameData.deckList)?.mainboardCount);
+		},
 	},
 ];
 

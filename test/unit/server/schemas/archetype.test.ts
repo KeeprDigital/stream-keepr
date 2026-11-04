@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { createArchetypeSchema, setArchetypeKeyCardsSchema, updateArchetypeSchema } from '~~/server/schemas/api/archetype';
 
 describe('createArchetypeSchema', () => {
-	it('refuses fields the server owns', () => {
-		expect(createArchetypeSchema.safeParse({ name: 'Azorius Control', eventId: 2 }).success).toBe(false);
+	it.each([
+		['eventId', 2],
+		['leaderCardNumber', 'OP01-001'],
+		['customised', true],
+	])('refuses %s, which the server owns', (field, value) => {
+		expect(createArchetypeSchema.safeParse({ name: 'Azorius Control', [field]: value }).success).toBe(false);
 	});
 
 	it('takes no Pinned Chart Series, which only an edit sets', () => {
@@ -12,6 +16,14 @@ describe('createArchetypeSchema', () => {
 });
 
 describe('updateArchetypeSchema', () => {
+	// A One Piece Archetype's Leader and customised flag are derived (ADR-0074).
+	it.each([
+		['leaderCardNumber', 'OP01-001'],
+		['customised', false],
+	])('refuses %s, which the server owns', (field, value) => {
+		expect(updateArchetypeSchema.safeParse({ [field]: value }).success).toBe(false);
+	});
+
 	// A Pinned Chart Series names one of the Theme's eight chart series, or none.
 	it.each([
 		[0, false],

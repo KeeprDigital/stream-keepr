@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { BoardSelection } from '~~/shared/types/enums';
 import type { Screen } from '~/types';
+import { getFeatureMatchStateTracking, getMetagameRules } from '~~/shared/config/games';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
@@ -26,6 +27,11 @@ const fields = screenModeConfigContract('archetype-spotlight').fields;
 
 const archetypeStore = useArchetypeStore();
 const playerListStore = usePlayerListStore();
+const eventStore = useEventStore();
+// The Event's Card Game decides whether its Metagame reads standings, and its decks a Sideboard (ADR-0074).
+const game = computed(() => eventStore.event?.game);
+const readsStandings = computed(() => !game.value || getMetagameRules(game.value).readsStandings);
+const hasSideboard = computed(() => !game.value || getFeatureMatchStateTracking(game.value).sideboard);
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
 useConsumedEventData(['archetypes', 'playerLists']);
@@ -82,7 +88,7 @@ function look(group: string) {
 
 const topCardsSummary = computed(() => settingsSummary([
 	`Top ${config.value.cardLimit}`,
-	boardOptions.find(option => option.value === config.value.board)?.label,
+	hasSideboard.value && boardOptions.find(option => option.value === config.value.board)?.label,
 	look('top-cards'),
 ]));
 const pilotsSummary = computed(() => settingsSummary([
@@ -110,11 +116,13 @@ const headerCardSummary = computed(() => settingsSummary([
 			<ScreenMetagameScopeFields
 				:config="config"
 				:fields="fields"
-				description="Which players count towards the pilots, meta share and Conversion Rate."
+				:description="readsStandings
+					? 'Which players count towards the pilots, meta share and Conversion Rate.'
+					: 'Which players count towards the pilots and meta share.'"
 				@update="updateConfig({ ...$event, currentPage: 1 })"
 			/>
 
-			<ScreenConversionTargetField :event-id="eventId" />
+			<ScreenConversionTargetField v-if="readsStandings" :event-id="eventId" />
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="data" />
 		</ScreenSettingsCard>
@@ -128,6 +136,7 @@ const headerCardSummary = computed(() => settingsSummary([
 			/>
 
 			<ScreenConfigField
+				v-if="hasSideboard"
 				:field="fields.board"
 				:model-value="config.board"
 				:items="boardOptions"
@@ -137,7 +146,10 @@ const headerCardSummary = computed(() => settingsSummary([
 
 			<ScreenCardTypeFilterField
 				:excluded="config.excludedCardTypes"
-				description="Toggle which card types appear among the top cards; basic lands never do."
+				:game="game"
+				:description="game === 'op'
+					? 'Toggle which card types appear among the top cards; Leaders never do.'
+					: 'Toggle which card types appear among the top cards; basic lands never do.'"
 				test-id-prefix="archetype-spotlight-type"
 				@update="updateConfig({ excludedCardTypes: $event })"
 			/>

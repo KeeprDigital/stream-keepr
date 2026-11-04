@@ -1,3 +1,4 @@
+import type { DbCardInsert } from '~~/server/db/schema';
 import type { OpCardCategory, OpCardSummary } from '~~/shared/types/card/op';
 import type { FeatureMatchDeckListEntry } from '~~/shared/types/featureMatchDeckList';
 import type { OpLeader } from '~~/shared/types/game';
@@ -39,6 +40,18 @@ export const ZORO = opLeader('OP01-001', 'Roronoa Zoro', ['Red']);
 export const LUFFY = opLeader('OP01-003', 'Monkey.D.Luffy', ['Red', 'Green']);
 export const NAMI = opLeader('OP01-016', 'Nami', ['Blue']);
 export const LAW = opLeader('OP01-002', 'Trafalgar Law', ['Red', 'Green']);
+
+/** The card catalogue's row for a Leader, so a Slot side referencing its number reads it (ADR-0074). */
+export function opLeaderCatalogueRow(leader: OpLeader): DbCardInsert {
+	return {
+		name: leader.name,
+		game: 'op',
+		cardNumber: leader.number,
+		category: 'leader',
+		colors: JSON.stringify(leader.colors),
+		imageUrl: leader.imageUrl,
+	};
+}
 
 /** A Feature Match Deck List entry snapshotting a known card; `category: null` makes it number-only. */
 export function opDeckListEntry(number: string, quantity: number, category: OpCardCategory | null, cost: number | null = null): FeatureMatchDeckListEntry {
@@ -104,29 +117,86 @@ export function bandaiKeeprCard(overrides: {
 	};
 }
 
-/**
- * Fakes bandai-keepr at `fetch`: it knows `cards` by number and answers 404
- * for any other. `lookups()` lists the numbers asked for since `reset()`.
- */
-export function stubBandaiKeepr(cards: ReturnType<typeof bandaiKeeprCard>[]) {
-	const byNumber = new Map(cards.map(card => [card.number, card]));
-	let asked: string[] = [];
-	vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
-		const url = new URL(new Request(input, init).url);
-		const number = /^\/cards\/([^/]+)$/.exec(url.pathname)?.[1];
-		if (!number)
-			return Response.json({ error: `unrouted ${url.pathname}` }, { status: 500 });
-		const decoded = decodeURIComponent(number);
-		asked.push(decoded);
-		const card = byNumber.get(decoded);
-		return card
-			? Response.json(card)
-			: Response.json({ error: 'Card not found' }, { status: 404 });
+/** A card as the bulk lookup port answers it, imaged by its standard Printing. */
+export function knownOpCard(card: Pick<OpCardSummary, 'number' | 'name' | 'category' | 'colors'> & Partial<OpCardSummary>): OpCardSummary {
+	return opCardSummary({
+		cost: null,
+		life: null,
+		power: null,
+		counter: null,
+		types: [],
+		printingId: card.number,
+		imageUrl: `https://cards-img.keepr.digital/${card.number}.png`,
+		...card,
 	});
+}
+
+/**
+ * Fakes the bandai-keepr bulk lookup port (`lookUpOpCards`): it knows `cards`
+ * by number and answers any other as not found. `batches()` lists the numbers
+ * each call asked for since `reset()`; `fail()` makes every call throw.
+ */
+export function fakeOpCardBulkLookup(cards: OpCardSummary[]) {
+	const byNumber = new Map(cards.map(card => [card.number, card]));
+	let batches: string[][] = [];
+	let failure: Error | null = null;
 	return {
-		lookups: () => [...asked],
+		lookUpOpCards: async (_config: unknown, numbers: readonly string[]) => {
+			batches.push([...numbers]);
+			if (failure)
+				throw failure;
+			return {
+				cards: numbers.flatMap(number => byNumber.get(number) ?? []),
+				notFound: numbers.filter(number => !byNumber.has(number)),
+			};
+		},
+		batches: () => batches.map(batch => [...batch]),
+		know: (card: OpCardSummary) => {
+			byNumber.set(card.number, card);
+		},
+		fail: (error: Error) => {
+			failure = error;
+		},
 		reset: () => {
-			asked = [];
+			batches = [];
+			failure = null;
 		},
 	};
+}
+
+/** A realtime message an OP write published, as `mockOpWriteBoundaries` records it. */
+export interface PublishedMessage {
+	eventId: number;
+	type: string;
+	payload: unknown;
+}
+
+/**
+ * Fakes the boundaries a One Piece write reaches past the database, for a
+ * suite on `createSqliteD1Harness`: `db` stands in for the server's, Ably
+ * publishes are recorded in `published`, Broadcast Graphics bindings are not
+ * refreshed, and the bulk lookup is whichever fake `lookup()` answers when
+ * called. Call it before importing the server code under test.
+ */
+export function mockOpWriteBoundaries(db: unknown, lookup: () => ReturnType<typeof fakeOpCardBulkLookup>): { published: PublishedMessage[] } {
+	const published: PublishedMessage[] = [];
+	const record = async (eventId: number, type: string, payload: unknown) => {
+		published.push({ eventId, type, payload });
+	};
+	vi.doMock('~~/server/db', () => ({ db }));
+	vi.doMock('~~/server/utils/ably', () => ({
+		publishMessage: record,
+		publishMessageStrict: record,
+		publishScreenCommand: async () => {},
+		getOriginConnectionId: () => undefined,
+	}));
+	vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOriginal => ({
+		...await importOriginal<object>(),
+		refreshBroadcastGraphicsBindings: async () => {},
+	}));
+	vi.doMock('~~/server/utils/bandaiKeepr', async importOriginal => ({
+		...await importOriginal<object>(),
+		lookUpOpCards: (...args: Parameters<ReturnType<typeof fakeOpCardBulkLookup>['lookUpOpCards']>) => lookup().lookUpOpCards(...args),
+	}));
+	return { published };
 }

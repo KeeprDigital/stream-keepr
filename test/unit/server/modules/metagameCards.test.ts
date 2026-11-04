@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareCardBreakdownEntries, createCardTypeBucketFilter, isEligibleMetagameCard, toCardBreakdownEntry } from '~~/server/modules/metagame/cards';
+import { compareCardBreakdownEntries, createCardTypeBucketFilter, isEligibleMetagameCard, metagameCardType, toCardBreakdownEntry } from '~~/server/modules/metagame/cards';
 
 const row = {
 	cardId: 1,
@@ -9,6 +9,8 @@ const row = {
 	colors: 'R',
 	cmc: 1,
 	manaCost: '{R}',
+	cardNumber: null,
+	imageUrl: null,
 	totalCopies: 8,
 	mainboardCount: 6,
 	sideboardCount: 2,
@@ -31,9 +33,65 @@ describe('metagame card rules', () => {
 		});
 	});
 
-	it('centralizes Metagame card eligibility', () => {
-		expect(isEligibleMetagameCard('Instant')).toBe(true);
-		expect(isEligibleMetagameCard('Basic Land — Mountain')).toBe(false);
+	// MTG leaves basic lands out; OP counts its categories past the Leader, which is the Archetype (ADR-0074).
+	it.each([
+		[
+			'mtg',
+			{ cardType: 'Instant' },
+			true,
+		],
+		[
+			'mtg',
+			{ cardType: 'Basic Land — Mountain' },
+			false,
+		],
+		[
+			'op',
+			{ cardType: null, category: 'character' },
+			true,
+		],
+		[
+			'op',
+			{ cardType: null, category: 'event' },
+			true,
+		],
+		[
+			'op',
+			{ cardType: null, category: 'stage' },
+			true,
+		],
+		[
+			'op',
+			{ cardType: null, category: 'leader' },
+			false,
+		],
+	] as const)('on %s, counts %j: %s', (game, card, eligible) => {
+		expect(isEligibleMetagameCard(game, card)).toBe(eligible);
+	});
+
+	it.each([
+		[
+			'mtg',
+			{ cardType: 'Legendary Creature — Human' },
+			'Legendary Creature — Human',
+		],
+		[
+			'op',
+			{ cardType: null, category: 'character' },
+			'Character',
+		],
+		[
+			'op',
+			{ cardType: null, category: 'event' },
+			'Event',
+		],
+		[
+			'op',
+			{ cardType: null, category: 'stage' },
+			'Stage',
+		],
+	] as const)('on %s, shows %j as the type %s', (game, card, cardType) => {
+		expect(metagameCardType(game, card)).toBe(cardType);
 	});
 
 	it('sorts Card breakdown entries by the selected metric', () => {
@@ -66,12 +124,12 @@ describe('metagame card rules', () => {
 
 describe('createCardTypeBucketFilter', () => {
 	it('excludes nothing when no buckets are given', () => {
-		expect(createCardTypeBucketFilter(undefined)('Instant')).toBe(true);
-		expect(createCardTypeBucketFilter([])('Land — Island')).toBe(true);
+		expect(createCardTypeBucketFilter('mtg', undefined)('Instant')).toBe(true);
+		expect(createCardTypeBucketFilter('mtg', [])('Land — Island')).toBe(true);
 	});
 
 	it('drops cards whose front-face bucket is excluded', () => {
-		const filter = createCardTypeBucketFilter(['Land', 'Creature']);
+		const filter = createCardTypeBucketFilter('mtg', ['Land', 'Creature']);
 
 		expect(filter('Legendary Creature — Human Wizard')).toBe(false);
 		expect(filter('Land — Urza’s Saga')).toBe(false);
@@ -79,7 +137,7 @@ describe('createCardTypeBucketFilter', () => {
 	});
 
 	it('buckets by the front face of a double-faced card', () => {
-		const filter = createCardTypeBucketFilter(['Land']);
+		const filter = createCardTypeBucketFilter('mtg', ['Land']);
 
 		// Front face is a Sorcery, back face a Land — the front face decides.
 		expect(filter('Sorcery // Land')).toBe(true);
@@ -87,10 +145,18 @@ describe('createCardTypeBucketFilter', () => {
 	});
 
 	it('maps unmatched types to the Other bucket', () => {
-		const filter = createCardTypeBucketFilter(['Other']);
+		const filter = createCardTypeBucketFilter('mtg', ['Other']);
 
 		expect(filter('Conspiracy')).toBe(false);
 		expect(filter(null)).toBe(false);
 		expect(filter('Artifact')).toBe(true);
+	});
+
+	it('buckets an OP card by its Metagame type, which no MTG type names', () => {
+		const filter = createCardTypeBucketFilter('op', ['Event', 'Land']);
+
+		expect(filter('Event')).toBe(false);
+		expect(filter('Character')).toBe(true);
+		expect(filter('Stage')).toBe(true);
 	});
 });

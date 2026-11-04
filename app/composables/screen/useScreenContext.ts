@@ -98,3 +98,12 @@ export function useScreenModeConfig<M extends ScreenMode>(context: ScreenContext
 
 	return computed<ModeConfigTypeMap[M]>(() => resolveScreenModeConfig(screen.value?.modeConfigs, mode));
 }
+
+/**
+ * The Card Game a Screen renders for: a Theme preview's sample's, or else its
+ * Event's. Unknown until the Event context loads.
+ */
+export function useScreenCardGame(context: ScreenContext): ComputedRef<Game | undefined> {
+	const eventStore = useEventStore();
+	return computed(() => context.sampleDataset ?? eventStore.displayEvent?.game);
+}

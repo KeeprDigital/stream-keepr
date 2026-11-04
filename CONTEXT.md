@@ -42,10 +42,10 @@ How many positions a Player moved since the previous Round's Round Standings: th
 _Avoid_: movement, rank delta.
 
 **Player**:
-A competitor in an Event. A One Piece Card Game Player is shown by their name if an operator gave one, otherwise by their Nickname (ADR-0074).
+A competitor in an Event. Wherever a Player appears, one rule decides what shows: their name if an operator gave one, otherwise their Nickname (ADR-0074). A Magic: The Gathering Player has no Nickname, so needs a name; a One Piece Card Game Player needs a name or a Nickname, and clearing the name brings the Nickname back.
 
 **Nickname**:
-A One Piece Card Game Player's handle in Bandai TCG+, owned by the TCG+ Import and refreshed by each import. It is not the Player's name: the operator gives that, and the Nickname stands in only while there is none.
+A One Piece Card Game Player's handle in Bandai TCG+, owned by the TCG+ Import and refreshed by each import; an operator types it only for a Player added by hand. It is not the Player's name: the operator gives that, and the Nickname stands in only while there is none. Player pickers find a Player by name, Nickname or Bandai member number.
 _Avoid_: name, display name, when meaning the TCG+ handle.
 
 **Deck List**:
@@ -64,16 +64,16 @@ The reserve portion of a Deck List, exchanged with Mainboard cards between games
 Which boards of a Deck List a rendering surface presents: Full (Mainboard and Sideboard), Mainboard only, or Sideboard only. Shared by every deck-rendering surface, including Metagame card filtering.
 
 **Unresolved Deck Card**:
-A Deck List entry naming no known card: on Magic: The Gathering, one imported by **Melee Sync** whose name matched none; on One Piece Card Game, a card number the card data source does not know, from a **TCG+ Import**, a hand-entered Deck List or a paste. Resolving one names the card for every Deck List in the Event holding that entry (ADR-0031, ADR-0074).
+A Deck List entry naming no known card: on Magic: The Gathering, one imported by **Melee Sync** whose name matched none; on One Piece Card Game, a card number the card data source does not know, from a **TCG+ Import**, a hand-entered Deck List or a paste. Resolving one names the card for every Deck List in the Event holding that entry (ADR-0031, ADR-0074). On One Piece Card Game, the Cards page lists them Event-wide, one can also be retried, and each TCG+ Import retries those its Players' Deck Lists hold, hand-edited ones included.
 
 **Metagame**:
 Analysis of Players, Deck Lists, cards, archetypes, and standings within an Event or scoped Player group.
 
 **Metagame Scope**:
-Which Players a Metagame read counts: every Player, the top N by placement, those with at least a minimum match-point total, or one Player List's members. A One Piece Card Game Event, having no standings, offers only every Player and a Player List (ADR-0074). The Metagame page and every Screen Mode reading the Metagame carry the same scope, so a scope asks each read the same question; an Archetype's pilots, meta share and Conversion Rate are read within it.
+Which Players a Metagame read counts: every Player, the top N by placement, those with at least a minimum match-point total, or one Player List's members. A One Piece Card Game Event, having no standings, offers only every Player and a Player List, and reads any other scope as every Player (ADR-0074). The Metagame page and every Screen Mode reading the Metagame carry the same scope, so a scope asks each read the same question; an Archetype's pilots, meta share and Conversion Rate are read within it.
 
 **Archetype**:
-A strategic Deck classification assigned to Players and used for Metagame analysis. On a One Piece Card Game Event an Archetype is a Leader card: a Player's Archetype follows their Leader and is never assigned by hand (ADR-0074).
+A strategic Deck classification assigned to Players and used for Metagame analysis. On a One Piece Card Game Event an Archetype is a Leader card: a Player's Archetype follows their Leader and is never assigned by hand. An operator renaming one or pinning its series customises it, and a customised Archetype stays when its last Player leaves (ADR-0074).
 
 **Pinned Chart Series**:
 One of the Theme's eight chart series, `chart-series-1` to `chart-series-8`, that an operator gives an Archetype on its Metagame page, so every chart colouring Archetypes gives it that series first and it keeps it whichever others enter or leave. It names a series, never a colour: the Theme, or a Screen Theme Override, decides the look. Two shown Archetypes pinning one series leave it to the one created first. Only an operator writes it; Melee Sync never does (ADR-0069).
@@ -98,7 +98,7 @@ A per-Event setting, off by default and on only while Melee Sync is on, under wh
 _Avoid_: auto-sync, polling, when naming the setting.
 
 **TCG+ Import**:
-The workflow that imports a One Piece Card Game Event's Players, their Nicknames and their Deck Lists from a Bandai TCG+ deck list export. An operator uploads the export on the Sync page, previews what it changes, and confirms. A re-import updates Players by their Bandai member number and marks those missing from it inactive; a Deck List an operator edited by hand is kept (ADR-0074).
+The workflow that imports a One Piece Card Game Event's Players, their Nicknames and their Deck Lists from a Bandai TCG+ deck list export. An operator uploads the export on the Sync page, previews what it changes, and confirms. A re-import updates Players by their Bandai member number and marks those missing from it inactive; a Deck List an operator edited by hand is kept until the operator takes the import's (ADR-0074).
 _Avoid_: CSV import, deck upload.
 
 **Provenance**:

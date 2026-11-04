@@ -6,7 +6,7 @@ import {
 	METAGAME_SCOPE_VALUES,
 	METAGAME_SORT_BY_VALUES,
 } from '~~/shared/types/enums';
-import { CARD_TYPE_BUCKET_ORDER } from '~~/shared/utils/metagame';
+import { METAGAME_CARD_TYPE_BUCKETS } from '~~/shared/utils/metagame';
 
 // ─── Shared query param schemas ─────────────────────────────────
 
@@ -45,7 +45,7 @@ export const metagameCardTableQuerySchema = metagameQuerySchema.and(z.object({
 	board: boardSelectionSchema,
 }));
 
-const cardTypeBucketSchema = z.enum(CARD_TYPE_BUCKET_ORDER);
+const cardTypeBucketSchema = z.enum(METAGAME_CARD_TYPE_BUCKETS);
 
 /**
  * Comma-separated card-type buckets to drop from the breakdown, applied
@@ -55,7 +55,7 @@ export const metagameExcludeTypesSchema = z.string()
 	.trim()
 	.min(1)
 	.transform(value => value.split(','))
-	.pipe(z.array(cardTypeBucketSchema).min(1).max(CARD_TYPE_BUCKET_ORDER.length));
+	.pipe(z.array(cardTypeBucketSchema).min(1).max(METAGAME_CARD_TYPE_BUCKETS.length));
 
 export const metagameCardsQuerySchema = metagameCardTableQuerySchema.and(z.object({
 	sortBy: metagameCardSortBySchema.default('inclusionRate'),

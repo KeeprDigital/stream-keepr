@@ -13,7 +13,10 @@ const mtgGameDataSchema = z.object({
 	deckColors: z.string().max(50).nullable().optional(),
 }).strict();
 
-/** A Leader's inline snapshot. Its image goes on air, so it must be a bandai-keepr Printing image. */
+/**
+ * A picked Leader as a save sends it. The server keeps only its number, a card
+ * catalogue reference (ADR-0074); its image must be a bandai-keepr Printing image.
+ */
 const opLeaderSchema = z.object({
 	number: opCardNumberSchema,
 	name: z.string().trim().min(1).max(200),
@@ -37,7 +40,9 @@ export const playerGameDataSchema = z.discriminatedUnion('type', [mtgGameDataSch
 /**
  * A Slot side's game data, as a setup save writes it: a One Piece side may also
  * reference its Feature Match Deck List, which the setup write checks names one
- * of the Slot's (ADR-0057). Nothing else may write a reference.
+ * of the Slot's (ADR-0057). Nothing else may write a reference. A linked side's
+ * Player Deck List reference, which its form holds, is the server's to write
+ * (ADR-0074), so it is dropped.
  */
 export const slotSideGameDataSchema = z.discriminatedUnion('type', [
 	mtgGameDataSchema,
@@ -46,7 +51,8 @@ export const slotSideGameDataSchema = z.discriminatedUnion('type', [
 			id: z.number().int().positive(),
 			mainboardCount: z.number().int().nonnegative(),
 		}).strict().nullable().optional(),
-	}).strict(),
+		deckList: z.unknown().optional(),
+	}).strict().transform(({ deckList: _deckList, ...gameData }) => gameData),
 ]);
 
 // CREATE
@@ -68,8 +74,10 @@ export const createPlayerSchema = createInsertSchema(players)
 		updatedAt: true,
 	})
 	.extend({
-		// String length limits
-		name: z.string().min(1).max(200),
+		// String length limits. A blank name is the Player write's to refuse:
+		// only a One Piece Card Game Player with a Nickname may have one (ADR-0074).
+		name: z.string().trim().max(200),
+		nickname: z.string().max(100).nullable().optional(),
 		pronouns: z.string().max(50).nullable().optional(),
 		lgs: z.string().max(200).nullable().optional(),
 		// Numeric bounds
@@ -101,7 +109,8 @@ export const updatePlayerSchema = createUpdateSchema(players)
 	})
 	.extend({
 		// String length limits (all optional for partial updates)
-		name: z.string().min(1).max(200).optional(),
+		name: z.string().trim().max(200).optional(),
+		nickname: z.string().max(100).nullable().optional(),
 		pronouns: z.string().max(50).nullable().optional(),
 		lgs: z.string().max(200).nullable().optional(),
 		// Numeric bounds (all optional for partial updates)

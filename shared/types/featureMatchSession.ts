@@ -66,6 +66,8 @@ export function isMergeableFeatureMatchCommand(type: FeatureMatchCommandType): t
 
 export interface FeatureMatchSnapshotPlayerData {
 	name?: string | null;
+	/** A One Piece Card Game Player's Nickname, shown while the side has no name (ADR-0074). */
+	nickname?: string | null;
 	pronouns?: string | null;
 	externalId?: string | null;
 	externalSource?: ExternalSource | null;

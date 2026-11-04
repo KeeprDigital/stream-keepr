@@ -1,7 +1,7 @@
 import type { ScreenModeConfigOf } from './contract';
 import { z } from 'zod';
 import { BOARD_SELECTION_VALUES } from '../types/enums';
-import { CARD_TYPE_BUCKET_ORDER } from '../utils/metagame';
+import { METAGAME_CARD_TYPE_BUCKETS } from '../utils/metagame';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField } from './fields';
 import { DEFAULT_HEADER_CONFIG, DEFAULT_METAGAME_SCOPE, DEFAULT_PAGE_ROTATION, headerConfigShape, metagameScopeShape, pageRotationPageSize, pageRotationShape } from './subShapes';
@@ -25,7 +25,7 @@ export const archetypeSpotlightModeConfigContract = defineScreenModeConfigContra
 	// Top included cards
 	board: editorField(z.enum(BOARD_SELECTION_VALUES), { label: 'Board' }),
 	cardLimit: editorField(z.number().int().min(1).max(20), { label: 'Top cards' }),
-	excludedCardTypes: z.array(z.enum(CARD_TYPE_BUCKET_ORDER)).max(CARD_TYPE_BUCKET_ORDER.length),
+	excludedCardTypes: z.array(z.enum(METAGAME_CARD_TYPE_BUCKETS)).max(METAGAME_CARD_TYPE_BUCKETS.length),
 
 	// Header
 	...headerConfigShape,

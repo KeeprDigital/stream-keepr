@@ -111,6 +111,7 @@ watch(
 			<div class="flex gap-8 items-start">
 				<MetagameCardThumbnail
 					:scryfall-id="detail.card.scryfallId"
+					:image-url="detail.card.imageUrl"
 					:name="detail.card.name"
 					size="lg"
 					class="flex-shrink-0"

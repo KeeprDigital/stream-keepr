@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { ConversionTarget } from '~~/shared/conversionTarget';
 import type { NavigationMenuItem } from '#ui/types';
-import { MTG_ONLY } from '~~/shared/config/games';
+import { EVENT_PAGE_CARD_GAMES, getMetagameRules } from '~~/shared/config/games';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
-	cardGames: MTG_ONLY,
+	cardGames: EVENT_PAGE_CARD_GAMES.metagame,
 	title: 'Metagame',
 	layout: false,
 });
@@ -16,6 +16,10 @@ const metagameStore = useMetagameStore();
 const { runRequest } = useRequestFeedback();
 
 const isMtg = computed(() => eventStore.event?.game === 'mtg');
+// What the Event's Metagame reads: an OP one reads participation only (ADR-0074).
+const rules = computed(() => eventStore.event
+	? getMetagameRules(eventStore.event.game)
+	: null);
 const eventId = computed(() => eventStore.eventId ?? 0);
 
 const route = useRoute();
@@ -31,13 +35,15 @@ const tabs = computed<NavigationMenuItem[]>(() => {
 			exact: true,
 			active: path === base || path.startsWith(`${base}/archetype`),
 		},
-	];
-	if (isMtg.value) {
-		items.push({
+		{
 			label: 'Cards',
 			to: `${base}/cards`,
 			active: path === `${base}/cards` || path.startsWith(`${base}/card`),
-		}, {
+		},
+	];
+	// Token requirements are Scryfall's, so Magic's.
+	if (isMtg.value) {
+		items.push({
 			label: 'Tokens',
 			to: `${base}/tokens`,
 			active: path === `${base}/tokens`,
@@ -82,6 +88,7 @@ onMounted(async () => {
 				</template>
 				<template #right>
 					<MetagameConversionControl
+						v-if="rules?.readsStandings ?? true"
 						v-bind="metagameStore.conversionTarget"
 						@update="saveConversionTarget"
 					/>
@@ -91,6 +98,7 @@ onMounted(async () => {
 						:min-points="metagameStore.minPoints"
 						:player-list-id="metagameStore.playerListId"
 						:player-lists="playerListStore.lists"
+						:scopes="rules?.scopes"
 						@update:scope="metagameStore.scope = $event"
 						@update:top-n="metagameStore.topN = $event"
 						@update:min-points="metagameStore.minPoints = $event"

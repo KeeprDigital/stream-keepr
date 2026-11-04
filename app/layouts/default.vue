@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Game } from '~~/shared/types/enums';
 import type { NavigationMenuItem } from '#ui/types';
-import { EVERY_CARD_GAME, MTG_ONLY, offeredToCardGame } from '~~/shared/config/games';
+import { EVENT_PAGE_CARD_GAMES, EVERY_CARD_GAME, offeredToCardGame } from '~~/shared/config/games';
 import { isLocalDeveloperUserId } from '~~/shared/utils/localDeveloperAuth';
 import { LOGIN_PATH } from '~/modules/auth/pageGate';
 import { useAuthSession } from '~/modules/auth/session';
@@ -30,6 +30,8 @@ const route = useRoute();
 const eventId = computed(() => eventStore.eventId);
 const meleeEnabled = computed(() => eventStore.event?.meleeEnabled ?? false);
 const meleeConfigured = computed(() => eventStore.event?.meleeConfigured ?? false);
+// An MTG Event's Players come from Melee; an OP Event's come from a TCG+ Import (ADR-0074).
+const playersImported = computed(() => eventStore.event?.game === 'op' || meleeEnabled.value);
 const cardGame = computed(() => eventStore.event?.game);
 
 // The Event header and the Screen navigation, on every page this layout frames.
@@ -195,21 +197,21 @@ const navGroups = computed<NavGroup[]>(() => {
 					label: 'Players',
 					icon: 'i-lucide-users',
 					to: `/event/${id}/players`,
-					cardGames: MTG_ONLY,
+					cardGames: EVENT_PAGE_CARD_GAMES.players,
 				},
 				{
 					label: 'Matches',
 					icon: 'i-lucide-swords',
 					to: `/event/${id}/matches`,
-					cardGames: MTG_ONLY,
+					cardGames: EVENT_PAGE_CARD_GAMES.matches,
 				},
-				...(meleeEnabled.value
+				...(playersImported.value
 					? [
 							{
 								label: 'Metagame',
 								icon: 'i-lucide-pie-chart',
 								to: `/event/${id}/metagame`,
-								cardGames: MTG_ONLY,
+								cardGames: EVENT_PAGE_CARD_GAMES.metagame,
 							},
 						]
 					: []),
@@ -219,17 +221,18 @@ const navGroups = computed<NavGroup[]>(() => {
 								label: 'Archetype Review',
 								icon: 'i-lucide-tags',
 								to: `/event/${id}/archetype-review`,
-								cardGames: MTG_ONLY,
+								cardGames: EVENT_PAGE_CARD_GAMES.archetypeReview,
 							},
 						]
 					: []),
-				...(meleeEnabled.value && meleeConfigured.value
+				// A One Piece Card Game Event's Sync is its TCG+ Import, which needs no Melee (ADR-0074).
+				...(cardGame.value === 'op' || (meleeEnabled.value && meleeConfigured.value)
 					? [
 							{
 								label: 'Sync',
 								icon: 'i-lucide-refresh-cw',
 								to: `/event/${id}/sync`,
-								cardGames: MTG_ONLY,
+								cardGames: EVENT_PAGE_CARD_GAMES.sync,
 							},
 						]
 					: []),
@@ -248,7 +251,7 @@ const navGroups = computed<NavGroup[]>(() => {
 					label: 'Cards',
 					icon: 'i-lucide-book-image',
 					to: `/event/${id}/card`,
-					cardGames: MTG_ONLY,
+					cardGames: EVENT_PAGE_CARD_GAMES.cards,
 				},
 				{
 					label: 'Screens',
@@ -281,10 +284,10 @@ const navGroups = computed<NavGroup[]>(() => {
 							exact: true,
 							cardGames: EVERY_CARD_GAME,
 						},
-						{ label: 'Event Structure', to: `/event/${id}/rounds`, cardGames: MTG_ONLY },
+						{ label: 'Event Structure', to: `/event/${id}/rounds`, cardGames: EVENT_PAGE_CARD_GAMES.eventStructure },
 						{ label: 'Feature Matches', to: `/event/${id}/config/features`, cardGames: EVERY_CARD_GAME },
 						{ label: 'Broadcast', to: `/event/${id}/config/broadcast`, cardGames: EVERY_CARD_GAME },
-						{ label: 'Integrations', to: `/event/${id}/config/integrations`, cardGames: MTG_ONLY },
+						{ label: 'Integrations', to: `/event/${id}/config/integrations`, cardGames: EVENT_PAGE_CARD_GAMES.integrations },
 					],
 				},
 			]),

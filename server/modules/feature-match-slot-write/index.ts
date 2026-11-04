@@ -1,15 +1,30 @@
 import type { DbFeatureMatch } from '~~/server/db/schema';
-import type { CreateFeatureMatchInput, FeatureMatchResponse, ManualPlayerSlotData, UpdateFeatureMatchInput, UpdatePlayerInput } from '~~/shared/api';
+import type { CreateFeatureMatchInput, FeatureMatchResponse, ManualPlayerSlotData, PlayerSlotData, UpdateFeatureMatchInput, UpdatePlayerInput } from '~~/shared/api';
 import type { FeatureMatchDeckListReference } from '~~/shared/types/featureMatchDeckList';
+import { eq } from 'drizzle-orm';
+import { db } from '~~/server/db';
+import { events } from '~~/server/db/schema';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
+import { opCardCatalogueModule } from '~~/server/modules/op-card-catalogue';
 import { playerUpdateModule } from '~~/server/modules/player-update';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { deckListReferenceOf, featureMatchDeckListService } from '~~/server/services/featureMatchDeckList';
+import { linkedOpSideGameData, slotLeaderNumbers } from '~~/server/services/featureMatchSlotLeader';
 import { playerService } from '~~/server/services/player';
+import { bandaiKeeprConfig } from '~~/server/utils/bandaiKeepr';
 import { validateFeatureMatchReferences } from '~~/server/utils/routeGuards';
 
 const SIDE_DATA_KEYS = ['player1Data', 'player2Data'] as const;
 type SideDataKey = typeof SIDE_DATA_KEYS[number];
+const SIDE_PLAYER_KEY = { player1Data: 'player1Id', player2Data: 'player2Id' } as const satisfies Record<SideDataKey, string>;
+
+async function isOpEvent(eventId: number): Promise<boolean> {
+	const event = await db.query.events.findFirst({
+		where: eq(events.id, eventId),
+		columns: { game: true },
+	});
+	return event?.game === 'op';
+}
 
 interface CreateSlotParams {
 	eventId: number;
@@ -52,8 +67,25 @@ export function featureMatchSlotWriteModule() {
 	const playerUpdate = playerUpdateModule();
 	const deckLists = featureMatchDeckListService();
 
+	/**
+	 * A picked Leader is saved to the card catalogue before a side references it
+	 * by number (ADR-0074): only its number is taken from the save, the card is
+	 * bandai-keepr's, and a number that names no Leader card is refused.
+	 */
+	async function catalogueLeaders(input: UpdateFeatureMatchInput) {
+		const numbers = slotLeaderNumbers(input);
+		if (numbers.length === 0)
+			return;
+		const cards = await opCardCatalogueModule().resolve(bandaiKeeprConfig, numbers);
+		for (const number of numbers) {
+			if (cards.get(number)?.category !== 'leader')
+				throw createError({ statusCode: 400, message: `${number} is not a Leader card` });
+		}
+	}
+
 	async function create({ eventId, input, originConnectionId }: CreateSlotParams): Promise<FeatureMatchResponse> {
 		await validateFeatureMatchReferences(eventId, input);
+		await catalogueLeaders(input);
 
 		const slot = await slots.create(eventId, input);
 
@@ -112,11 +144,13 @@ export function featureMatchSlotWriteModule() {
 			if (!player)
 				continue;
 
-			// An omitted field was not edited. A Player always has a name, so a
-			// cleared one stays on the Slot only.
+			// An omitted field was not edited. A cleared name falls back to the
+			// Player's Nickname (ADR-0074); with none to fall back to, it stays on
+			// the Slot only, because a Player always shows by something.
 			const changes: UpdatePlayerInput = {};
-			if (data.name && data.name !== player.name)
-				changes.name = data.name;
+			const name = data.name?.trim();
+			if (name !== undefined && name !== player.name && (name || player.nickname))
+				changes.name = name;
 			if (Object.hasOwn(data, 'pronouns') && (data.pronouns ?? null) !== player.pronouns)
 				changes.pronouns = data.pronouns ?? null;
 			if (Object.hasOwn(data, 'lgs') && (data.lgs ?? null) !== player.lgs)
@@ -185,16 +219,76 @@ export function featureMatchSlotWriteModule() {
 		await deckLists.remove(before.id, released);
 	}
 
+	/**
+	 * A One Piece side linked to a Player shows the Player's Leader and Deck
+	 * List and holds none of its own (ADR-0074), so its game data is the
+	 * server's, read from the Player whatever the save sent. An unlinked side
+	 * keeps the Leader it shows, and no Player Deck List reference.
+	 */
+	async function settleOpSides(eventId: number, current: DbFeatureMatch | undefined, input: UpdateFeatureMatchInput): Promise<UpdateFeatureMatchInput> {
+		if (!await isOpEvent(eventId))
+			return input;
+		const output = { ...input };
+		for (const key of SIDE_DATA_KEYS) {
+			const requested = input[SIDE_PLAYER_KEY[key]];
+			const edited = Object.hasOwn(input, key);
+			// A side the save neither edits nor seats is left as stored.
+			if (!edited && requested === undefined)
+				continue;
+			const playerId = requested !== undefined
+				? requested
+				: current?.[SIDE_PLAYER_KEY[key]] ?? null;
+			const data = edited
+				? input[key]
+				: current?.[key];
+			if (playerId == null) {
+				if (data?.gameData?.type === 'op' && Object.hasOwn(data.gameData, 'deckList')) {
+					const { deckList: _deckList, ...gameData } = data.gameData;
+					output[key] = { ...data, gameData };
+				}
+				continue;
+			}
+			const player = await players.findById(playerId, eventId);
+			if (!player)
+				continue;
+			// Provenance is never written by an operator save; the Player's arrives through Reverse Sync.
+			const { externalId: _externalId, externalSource: _externalSource, ...manual }: PlayerSlotData = data ?? {};
+			output[key] = {
+				...manual,
+				gameData: linkedOpSideGameData(player.gameData),
+			} satisfies ManualPlayerSlotData;
+		}
+		return output;
+	}
+
+	/** Leaves out each side whose Leader a Player's Deck List sets: only a picked Leader is catalogued here. */
+	function pickedLeaderSides(input: UpdateFeatureMatchInput, current: DbFeatureMatch | undefined): UpdateFeatureMatchInput {
+		const picked = { ...input };
+		for (const key of SIDE_DATA_KEYS) {
+			const requested = input[SIDE_PLAYER_KEY[key]];
+			const playerId = requested !== undefined
+				? requested
+				: current?.[SIDE_PLAYER_KEY[key]] ?? null;
+			if (playerId != null)
+				delete picked[key];
+		}
+		return picked;
+	}
+
 	async function updateSetup({ eventId, slotId, input, originConnectionId }: UpdateSlotSetupParams): Promise<FeatureMatchResponse> {
 		await validateFeatureMatchReferences(eventId, input);
-		// Only a save that edits a side writes a Player or moves a Deck List.
-		const current = SIDE_DATA_KEYS.some(key => Object.hasOwn(input, key))
+		// Only a save that edits or seats a side writes a Player or moves a Deck List.
+		const current = [
+			...SIDE_DATA_KEYS,
+			...Object.values(SIDE_PLAYER_KEY),
+		].some(key => Object.hasOwn(input, key))
 			? await slots.findById(slotId, eventId)
 			: undefined;
+		await catalogueLeaders(pickedLeaderSides(input, current));
 		let settledInput = input;
 		if (current) {
 			await writeSeatedPlayerEdits(eventId, current, input);
-			settledInput = await settleDeckListReferences(current, input);
+			settledInput = await settleOpSides(eventId, current, await settleDeckListReferences(current, input));
 		}
 
 		const updatedSlot = await slots.update(slotId, eventId, settledInput);

@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { MTG_ONLY } from '~~/shared/config/games';
+import { EVENT_PAGE_CARD_GAMES } from '~~/shared/config/games';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { LazyMtgCardHistory, LazyOpCardHistory } from '#components';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { matchupIdOf } from '~/types/card/page';
 
 definePageMeta({
-	cardGames: MTG_ONLY,
+	cardGames: EVENT_PAGE_CARD_GAMES.cards,
 	title: 'Cards',
 	layout: false,
 });
@@ -411,8 +411,9 @@ const timeoutProgress = computed(() => {
 				</div>
 			</div>
 
-			<!-- One Piece Search Results -->
-			<div v-if="isOpEvent" class="flex-1 overflow-y-auto p-4">
+			<!-- One Piece: the Event's Unresolved Deck Cards, then search results -->
+			<div v-if="isOpEvent" class="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+				<OpUnresolvedDeckCards />
 				<OpCardList />
 			</div>
 

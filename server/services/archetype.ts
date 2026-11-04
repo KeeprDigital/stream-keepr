@@ -56,7 +56,7 @@ export function archetypeService() {
 	const update = async (
 		id: number,
 		eventId: number,
-		data: UpdateArchetypeInput,
+		data: UpdateArchetypeInput & { customised?: true },
 	): Promise<DbArchetype | undefined> => {
 		const [updated] = await db
 			.update(archetypes)

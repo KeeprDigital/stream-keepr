@@ -15,6 +15,41 @@
       "when": 1793766300810,
       "tag": "0001_since_v1_5_0",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793791950013,
+      "tag": "0002_op_card_catalogue",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793793321860,
+      "tag": "0003_player_nickname",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793794199421,
+      "tag": "0004_slot_leader_catalogue",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1793795082634,
+      "tag": "0005_op_player_deck_lists",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793797822243,
+      "tag": "0006_tcgplus_imported_deck_lists",
+      "breakpoints": true
     }
   ]
 }

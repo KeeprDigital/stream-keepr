@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui';
 import type { Player } from '~/types';
-import { MTG_ONLY } from '~~/shared/config/games';
-import { LazyPlayerCreateModal, LazyPlayerListCreateModal, LazyPlayerListEditModal, LazyUIConfirmDeleteModal } from '#components';
+import { EVENT_PAGE_CARD_GAMES } from '~~/shared/config/games';
+import { playerDisplayName } from '~~/shared/utils/playerName';
+import { LazyPlayerCreateModal, LazyPlayerListCreateModal, LazyPlayerListEditModal, LazyPlayerOpDeckListModal, LazyUIConfirmDeleteModal } from '#components';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
-	cardGames: MTG_ONLY,
+	cardGames: EVENT_PAGE_CARD_GAMES.players,
 	title: 'Player List',
 	layout: false,
 });
@@ -219,6 +220,11 @@ function handleEditList(listId: number) {
 
 // ── Player Action Handlers ──
 
+function handleEditDeckList(player: Player) {
+	const modal = overlay.create(LazyPlayerOpDeckListModal);
+	void modal.open({ player });
+}
+
 async function handleDeletePlayer(player: Player) {
 	if (!eventId.value)
 		return;
@@ -226,7 +232,7 @@ async function handleDeletePlayer(player: Player) {
 	const deleteModal = overlay.create(LazyUIConfirmDeleteModal);
 	const confirmed = await deleteModal.open({
 		title: 'Delete Player',
-		itemName: player.name,
+		itemName: playerDisplayName(player),
 	}).result;
 
 	if (!confirmed)
@@ -417,7 +423,7 @@ async function handleBulkRemoveFromList() {
 				<template #right>
 					<UISearchInput
 						v-model="searchQuery"
-						placeholder="Search by name or deck..."
+						:placeholder="eventStore.event?.game === 'op' ? 'Search by name, Nickname or member number...' : 'Search by name or deck...'"
 						aria-label="Search players"
 					/>
 					<UButton
@@ -474,11 +480,13 @@ async function handleBulkRemoveFromList() {
 				:global-filter="globalFilter"
 				:lists="playerListStore.lists"
 				:active-list-id="activeListId"
+				:game="eventStore.event?.game ?? 'mtg'"
 				@add-to-list="handleAddToList"
 				@remove-from-list="handleRemoveFromList"
 				@edit-player="openPlayerEdit"
 				@delete-player="handleDeletePlayer"
 				@view-deck-list="openPlayerDeckList"
+				@edit-deck-list="handleEditDeckList"
 				@send-deck-to-screen="handleSendDeckToScreen"
 				@send-match-history-to-screen="handleSendMatchHistoryToScreen"
 			/>

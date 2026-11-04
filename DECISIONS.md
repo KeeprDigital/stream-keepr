@@ -1387,9 +1387,9 @@ Accepted · 2026-10-26
 
 ### Decision
 
-**A Feature Match Slot setup save that edits a seated Player's name, pronouns or LGS writes those fields to the Player.** `featureMatchSlotWriteModule().updateSetup` compares each side's submitted `name`, `pronouns` and `lgs` with the Player seated there (the side's `playerNId` in the save, else the Slot's) and sends the differences through `playerUpdateModule().updatePlayer`. An omitted field was not edited and is left alone. A cleared name stays on the Slot only, because a Player always has one. A side with no Player seated has nothing to write.
+**A Feature Match Slot setup save that edits a seated Player's name, pronouns or LGS writes those fields to the Player.** `featureMatchSlotWriteModule().updateSetup` compares each side's submitted `name`, `pronouns` and `lgs` with the Player seated there (the side's `playerNId` in the save, else the Slot's) and sends the differences through `playerUpdateModule().updatePlayer`. An omitted field was not edited and is left alone. A cleared name is a Player write only for a Player with a Nickname to fall back to (ADR-0074); otherwise it stays on the Slot only, because a Player always shows by something. A side with no Player seated has nothing to write.
 
-**Records, deck and archetype stay Slot snapshot fields.** A setup edit to wins, losses, draws, position, points, deck or archetype is held by the Slot only, and Melee Sync's standings reach it through Reverse Sync as before.
+**Records, deck and archetype stay Slot snapshot fields.** A setup edit to wins, losses, draws, position, points, deck or archetype is held by the Slot only, and Melee Sync's standings reach it through Reverse Sync as before. The exception is a One Piece Card Game side linked to a Player: its Leader and Deck List are the Player's, so a setup save never writes them, and they are edited as the Player's Deck List (ADR-0074).
 
 **The Player write runs before the Slot write, and is published with no origin.** Its Reverse Sync rewrites every Slot seating the Player, the edited one included, from the Player; the Slot write that follows then lands the rest of the save on the edited Slot, so a record edited in the same save is not overwritten. The saving client applied only the Slot, so it must receive the Player's and the other Slots' messages too.
 
@@ -1401,7 +1401,7 @@ Reverse Sync rebuilds a Slot's player snapshot from the Player after every Playe
 
 - The write-through is an ordinary manual Player write, so a name or pronouns it changes becomes a Manually Edited Field and holds through Melee Sync (ADR-0046). LGS is never imported and holds anyway.
 - A setup save that fails on the Slot write (a `409`, or the Slot deleted) has already written the Player. The Player's edit stands and the operator retries the Slot.
-- `test/unit/server/services/featureMatchSlotSetupSurvivesReverseSync.sqlite.test.ts` holds the round-sync case against SQLite; `test/unit/server/modules/featureMatchSlotWrite.test.ts` holds the order and the missing origin.
+- `test/unit/server/services/featureMatchSlotSetupSurvivesReverseSync.sqlite.test.ts` holds the round-sync and One Piece Nickname cases against SQLite; `test/unit/server/modules/eventDataWrites.test.ts` holds the order and the missing origin.
 
 ### Rejected alternatives
 
@@ -1821,42 +1821,41 @@ A stopgap that works now. Sharing the rules rather than copying them keeps vMix 
 - vMix polls, so its clock is only as fresh as its polling interval; it does not tick between reads.
 - Replace with a capability- or token-scoped read when a real integration needs one, as ADR-0055 says.
 
-## ADR-0057: A One Piece Card Game Event is Feature Matches only, its Deck Lists held by Slot sides
+## ADR-0057: A One Piece Card Game Event has no Rounds or Matches, and its Feature Match Slot sides seat a Player or manual data
 
-Accepted · 2026-11-02. Compatible with ADR-0047. **Changed by ADR-0074** (accepted 2026-11-04, implementation pending under [#1000](https://github.com/KeeprDigital/stream-keepr/issues/1000)). TCG+ does export Deck Lists, so OP Events gain Players with Player-owned Deck Lists, a shared card catalogue keyed by card number, and participation Metagame. This section describes OP Events until that lands. Its "no Players" decision, its inline card snapshots, and the rejected alternatives "Player-owned OP Deck Lists" and "Caching OP cards in `cards` keyed by card number" are reversed there.
+Accepted · 2026-11-02 · Compatible with ADR-0047 · Amended 2026-11-05 ([#1000](https://github.com/KeeprDigital/stream-keepr/issues/1000)): ADR-0074 gave OP Events Players with Player-owned Deck Lists, one card catalogue keyed by card number, Unresolved Deck Cards and a participation Metagame, so this section no longer says OP Events have no Players, keep inline card snapshots or offer no Metagame; it now covers what the Feature Match Slot side keeps.
 
-One Piece Card Game Events run their pairings in Bandai TCG+, which has no export, and are streamed by featuring one or two Matches a Round. Nobody enters results round to round, and without bulk Deck Lists there is no Metagame to compute.
+One Piece Card Game Events run their pairings in Bandai TCG+, whose only export is a deck list export with no pairings or results, and are streamed by featuring one or two Matches a Round. Nobody enters results round to round.
 
 ### Decision
 
-**An OP Event models no Players, Rounds, Matches or Match Results.** The operator types each side's name, pronouns and LGS straight into a Feature Match Slot, as manual slot data. Feature Match Slot Promotion, Assignment and Reverse Sync never run for it. Screen Modes and nav that need results or many Deck Lists (Standings, Pairings, Top Cut, Metagame, Most Played Cards, Archetype Spotlight, Head-to-Head, Player History, Cards, Archetype review), Melee Sync, and the Players, Matches and Event Structure pages declare themselves MTG-only and are not offered.
+**An OP Event models no Rounds, Matches or Match Results.** Its Players come from a TCG+ Import or the Players page (ADR-0074). Feature Match Slot Promotion and Assignment never run for it; Reverse Sync does, from a Player to every Slot seating them. Melee Sync, Integrations, Archetype Review, the Matches and Event Structure pages, and the Screen Modes that need Rounds or results (Standings, Top Cut, Pairings, Player History, Head-to-Head, Round Clock) declare themselves MTG-only and are not offered (`EVENT_PAGE_CARD_GAMES`, `SCREEN_MODE_CARD_GAMES`); ADR-0074 lists what OP Events are offered.
 
-**A Feature Match Deck List belongs to a Slot's player side, not a Player.** The operator pastes it (`N[x] CARDNUMBER [name]` lines). It stays until replaced or its side is cleared, follows its player on `SwapPlayers`, and replacing it during an active Feature Match Session updates that Session's source snapshot. Its Leader is the side's Leader. A Deck List Screen can take a Slot side as its Deck Source and follows it live.
+**A Feature Match Slot side seats a Player, or holds manual slot data.** A side linked to a Player shows that Player's Leader and Deck List by reference (ADR-0074), and its setup form edits the Player's Deck List. An unlinked side is manual slot data: the operator types its name, pronouns and LGS, picks its Leader and pastes its Feature Match Deck List.
 
-**A Deck List Screen showing a Slot side follows whichever player sits there now, and is released when its Slot goes.** The Deck Source names the Slot and a side, and the side's player comes from `featureMatchSidePlayer` (ADR-0058), so a swap shows the other player's Deck List; the side's Deck List reference names what to read, so a re-paste or a clear reaches the Screen with the Slot's announcement. Its OP layout shows the Leader large, a cost curve, and the Mainboard grouped Character, Event, Stage, each by cost (`opDeckLayout`); it has no Sideboard, so no Board Selection, and a side holding no Deck List shows nothing. A Screen entering Deck List mode on an OP Event with no Slot side chosen starts on the Event's first Slot, left side (no Slot while it has none), written by the Screen write that puts it in Deck List mode ([#877](https://github.com/KeeprDigital/stream-keepr/issues/877)). Deleting a Slot, alone or by lowering the Event's Slot count, clears every Deck Source naming it to no Slot, keeping its side, in the same write, and announces each Screen first without an origin, as ADR-0032 does for a Player. The Screen guard triggers prove the Slot belongs to the Screen's Event (migration `0001_since_v1_5_0`).
+**A Feature Match Deck List belongs to an unlinked Slot side, not a Player.** The operator pastes it (`N[x] CARDNUMBER [name]` lines; a Printing id reads as its card number, a number pasted twice is added into its first line, any other line is ignored). It stays until replaced or its side is cleared, follows its player on `SwapPlayers`, and replacing it during an active Feature Match Session updates that Session's source snapshot. Its Leader is the side's Leader. It is written through the OP Deck List write, as a Player's Deck List is, and never counts in the Metagame (ADR-0074). A paste to a linked side is refused (`409`).
 
-**A side's slot data holds its Deck List by reference.** The Deck List's entries live in their own table, deleted with their Slot; the side's manual slot data keeps only the Deck List's id and Mainboard count (the `player.deckCardCount` binding). A paste is saved through the Slot setup write, so the Session's snapshot carries the reference and the Session's own re-orientation after `SwapPlayers` keeps it with its player; the Slot's sides are never swapped for it. A setup save may keep, move or drop a reference; one naming another Slot's or a missing Deck List, as a stale form would, keeps what the side holds, so a stale save never deletes a newer paste. The Mainboard count is always the stored one, and only a setup save carries a reference. A Deck List the save drops (side cleared, or replaced) is deleted. A paste with a Leader sets the side's Leader; one with none keeps the Leader picked; one with two or more uses the first and warns.
+**A Deck List Screen showing a Slot side follows whichever player sits there now, and is released when its Slot goes.** The Deck Source names the Slot and a side, and the side's player comes from `featureMatchSidePlayer` (ADR-0058), so a swap shows the other player's Deck List; the side's Deck List reference names what to read, so a re-paste or a clear reaches the Screen with the Slot's announcement, and a linked side shows its Player's Deck List. Its OP layout shows the Leader large, a cost curve, and the Mainboard grouped Character, Event, Stage, each by cost (`opDeckLayout`); it has no Sideboard, so no Board Selection, and a side holding no Deck List shows nothing. A Screen entering Deck List mode on an OP Event with no Deck Source chosen starts on the Event's first Slot, left side (no Slot while it has none), written by the Screen write that puts it in Deck List mode ([#877](https://github.com/KeeprDigital/stream-keepr/issues/877)). Deleting a Slot, alone or by lowering the Event's Slot count, clears every Deck Source naming it to no Slot, keeping its side, in the same write, and announces each Screen first without an origin, as ADR-0032 does for a Player. The Screen guard triggers prove the Slot belongs to the Screen's Event (migration `0001_since_v1_5_0`).
 
-**A Slot side's Leader is picked, not typed, and kept as an inline snapshot.** The operator picks it from a Leader-only card search; the side's manual slot data keeps its card number, name, colours and standard Printing image URL, so it follows its player on `SwapPlayers` and a change during an active Feature Match Session corrects that Session's source snapshot. A Leader typed as free text before the picker names no card and reads as no Leader. On the Feature Match Overlay, and so on the public read (ADR-0056), a side's Deck and Deck Colours tokens name its Leader and its colours, because the Leader names the deck and sets its colours; a Leader Image token adds the card.
+**A side's slot data holds its Deck List by reference.** A Feature Match Deck List's entries live in their own table, deleted with their Slot; each holds a card number and quantity and reads its card from the catalogue, so a number catalogued later fills in. The side's slot data keeps only the Deck List's id and Mainboard count (the `player.deckCardCount` binding). A paste is saved through the Slot setup write, so the Session's snapshot carries the reference and the Session's own re-orientation after `SwapPlayers` keeps it with its player; the Slot's sides are never swapped for it. A setup save may keep, move or drop a reference; one naming another Slot's or a missing Deck List, as a stale form would, keeps what the side holds, so a stale save never deletes a newer paste. The Mainboard count is always the stored one, and only a setup save carries a reference. A Deck List the save drops (side cleared, replaced, or the side linked to a Player) is deleted. A linked side's game data is the server's: a setup save takes the Player's Deck List reference and Leader whatever the form sent. A paste with a Leader sets the side's Leader; one with none keeps the Leader picked; one with two or more uses the first and warns.
 
-**Card data comes from bandai-keepr through a server proxy, and entries keep an inline snapshot.** bandai-keepr needs a Bearer key and serves no CORS, so the browser never calls it. Each entry stores card number, name, category, colours, cost, power, counter and image URL, as Broadcast Deck List entries do. The `cards` catalogue, whose `unique(name, game)` cannot hold OP's shared names, is untouched. An unknown card number is kept as a number-only entry with a warning; there is no Unresolved Deck Card workflow. Deck rule breaches (50 cards, 4 copies, one Leader, Leader colours) warn and never refuse.
+**A Slot side's Leader is picked, not typed, and held by card number.** The operator picks it from a Leader-only card search. The side's slot data keeps only its card number, and every read fills in the card from the catalogue (`withCatalogueLeaders`); a picked card that is not a Leader is refused. The Leader follows its player on `SwapPlayers`, and a change during an active Feature Match Session corrects that Session's source snapshot. A number the catalogue lacks, or a Leader typed as free text before the picker, reads as no Leader. On the Feature Match Overlay, and so on the public read (ADR-0056), a side's Deck and Deck Colours tokens name its Leader and its colours, because the Leader names the deck and sets its colours; a Leader Image token adds the card.
+
+**Card data comes from bandai-keepr through a server proxy.** bandai-keepr needs a Bearer key and serves no CORS, so the browser never calls it. Pasted card numbers resolve through the shared card catalogue and bandai-keepr's bulk lookup, as imported ones do (ADR-0074); a number bandai-keepr does not know is kept number-only as an Unresolved Deck Card, with a warning. Deck rule breaches (50 cards, 4 copies, one Leader, Leader colours) warn and never refuse.
 
 ### Why
 
-It matches how OP Events are actually produced, and reuses the Feature Match Slot's existing manual data rather than building results entry and deck import that TCG+ leaves no source for. Inline snapshots keep the card catalogue's MTG identity rules out of OP's way, because nothing aggregates across OP Deck Lists.
+It matches how OP Events are actually produced. TCG+ leaves no source for pairings or results, and nobody will enter them during a stream. Manual slot data stays for a side with no Player to link, such as one featured before an import, and reuses what a Feature Match Slot already holds.
 
 ### Consequences
 
-- An OP Player featured in two Rounds is typed and pasted twice; there is no history across Rounds.
-- A snapshot goes stale if bandai-keepr corrects a card; re-pasting refreshes it.
-- OP standings, Metagame or Archetypes would need Players and Player-owned Deck Lists first, so this decision would be reopened.
-- An OP Event never runs Melee Sync, even if its tournament is on Melee.gg: its Feature Match Slots are typed by hand like any other OP Event's.
+- An unlinked side's competitor is typed and pasted again each time they are featured, and their Deck List never counts in the Metagame. Linking the side to a Player avoids both.
+- OP standings, records or Conversion Rate would need a source for results, so this decision would be reopened. TCG+ exports none (ADR-0074).
+- An OP Event never runs Melee Sync, even if its tournament is on Melee.gg. Its Players come from the TCG+ Import or the Players page.
 
 ### Rejected alternatives
 
 - **Operator-entered Match Results for non-Melee Events**: reopens ADR-0047 for data nobody will keep up during a stream.
-- **Player-owned OP Deck Lists**: needs Players to be created for every featured competitor, for reuse the production does not need.
-- **Caching OP cards in `cards` keyed by card number**: changes the catalogue's identity for no consumer that aggregates.
 
 ## ADR-0058: A Feature Match Session owns which side each player sits on
 
@@ -2430,39 +2429,43 @@ How the existing types fit around it:
 
 ## ADR-0074: A One Piece Card Game Event's Players and their Deck Lists come from a TCG+ Import, and its cards from one catalogue keyed by card number
 
-Accepted · 2026-11-04 · [#1000](https://github.com/KeeprDigital/stream-keepr/issues/1000). Implementation pending. Changes ADR-0057. Blocked by a bulk lookup endpoint in bandai-keepr.
+Accepted · 2026-11-04 · [#1000](https://github.com/KeeprDigital/stream-keepr/issues/1000) · Changes ADR-0057.
 
 ### Decision
 
 **An OP Event has Players, and each Player holds one Deck List.**
 
 - **TCG+ Import.** The operator uploads the Bandai TCG+ deck list export on the OP Sync page, previews what it will change, and confirms. Nothing is saved before the confirm, and there is no undo.
-- **Re-import.** It upserts Players by their Bandai member number. A Player missing from the file is marked inactive, never deleted, as Melee Sync does. A Player's Deck List is replaced only when its cards changed.
+- **Re-import.** It upserts Players by their Bandai member number. A Player missing from the file is marked inactive, never deleted, as Melee Sync does, and one back in it is active again. A Player's Deck List is replaced only when its cards changed, or when it holds an Unresolved Deck Card the catalogue now knows.
 - **What the import ignores.** The export's status column is ignored. Rows sharing a card number, which are printings the export cannot tell apart, are summed into one entry.
-- **Players added by hand.** They are kept as on MTG, and the import never matches them. When a name matches an incoming Nickname, the preview warns about a possible duplicate.
+- **Players added by hand.** They are kept as on MTG, and the import never matches them. When one's name or Nickname matches an incoming Nickname, the preview warns about a possible duplicate.
 
 **A Player's Nickname is the import's, and their name is the operator's.** The import owns the Nickname and refreshes it on every import. The name is optional. Wherever a Player is shown, one rule decides what appears: the name if set, otherwise the Nickname.
 
 **An OP Player's Deck List is imported or entered by hand, and a hand edit survives re-import.**
 
 - **Where it's edited:** on the Players page, or from a Feature Match Slot side the Player is linked to, as a Player write (as ADR-0045 treats a seated Player's identity).
+- **One write.** Every OP Deck List write, a Player's or an unlinked Slot side's, goes through the OP Deck List write (`server/modules/op-deck-list-write`), and each one gives the Deck List a new id, so whatever holds it by reference sees the change. A Player's game data holds only that reference and its Leader's card number; their Archetype and game data are the write's, and a Player write leaves them.
 - **How it's edited:** the paste format and paste rules are ADR-0057's.
-- **Re-import:** the preview flags a hand-edited Deck List the import differs from, and the operator may drop the edit to take the import's.
+- **Re-import:** the preview flags a hand-edited Deck List the import differs from, and the operator may drop the edit to take the import's. The import still retries a hand-edited Deck List's Unresolved Deck Cards in its one lookup, and names any now known by rewriting the hand edit as a resolution, which keeps it hand-edited. The preview lists every Deck List the import rewrites.
 - **Deck rule breaches** warn and never refuse.
 
 **OP cards live in the shared card catalogue, keyed by card number; MTG cards stay keyed by name.**
 
-- Player Deck Lists, pasted Feature Match Deck Lists and picked Leaders all reference the catalogue, replacing ADR-0057's inline snapshots. A migration builds catalogue rows from the snapshots already stored.
+- Player Deck Lists, pasted Feature Match Deck Lists and picked Leaders all reference the catalogue, replacing the inline snapshots ADR-0057 first kept. A migration builds catalogue rows from the snapshots already stored.
 - Card data comes only from bandai-keepr's bulk lookup. The export's own card fields are not used.
 - A card number the catalogue already holds is never looked up again.
 - If the lookup fails, the import or paste fails whole and saves nothing.
-- A card number bandai-keepr does not know stays out of the catalogue. It is held number-only as an **Unresolved Deck Card**, with a warning, and retried on the next import or paste. The Cards page lists them Event-wide. Resolving one names the card for every Deck List in the Event holding that number, as ADR-0031 does for MTG.
+- A card number bandai-keepr does not know stays out of the catalogue. It is held number-only as an **Unresolved Deck Card**, with a warning, and retried on the next import or paste. The Cards page lists them Event-wide, with the Player and Slot side Deck Lists holding each.
+- **Retry and resolve.** The operator can retry one through the bulk lookup, or resolve it to a card picked from a bandai-keepr search (through the server proxy, as the browser never calls bandai-keepr). Either names the card for every Deck List in the Event holding that number, as ADR-0031 does for MTG, by rewriting each through the OP Deck List write. A rewrite keeps whether the Deck List was hand-edited, and copies of a picked card the Deck List already holds are added into its entry.
+- **A resolution re-projects.** Contradicts ADR-0031, whose resolution re-projects nothing and announces only `playerDeck:cardsResolved`, because on OP the Leader is the Archetype projection, and every reader holds a Deck List by id. So each rewritten Deck List gets a new id and the write's own announcements (`player:updated` and Reverse Sync for a Player, the Slot's for a side), and a resolved Leader re-derives the Player's Archetype.
 
 **An OP Player's Archetype is their Leader card.**
 
 - **Created automatically.** One Archetype per distinct Leader card number, named after the Leader (with the card number when two Leaders share a name) and coloured by it.
-- **Derived, not assigned.** A Player's Archetype follows their Leader. It is never reviewed or reassigned, though an operator may rename an Archetype or pin its chart series.
-- **Removed when empty.** An auto-created Archetype left without Players is deleted, unless an operator renamed it or pinned a series.
+- **Derived, not assigned.** A Player's Archetype follows their Leader. It is never reviewed or reassigned, though an operator may rename an Archetype or pin its chart series, which marks it customised for good. The server refuses Archetype Review and creating or deleting an Archetype by hand on OP.
+- **Name clashes.** When a new Leader shares a name with an Archetype already in the Event, it and every clashing Archetype not customised take their card number, and keep it once the clash is gone, so names stay stable.
+- **Removed when empty.** An auto-created Archetype left without Players, by a Deck List write or by deleting its last Player, is deleted, and the Screens naming it released, unless an operator renamed it or pinned a series. It is created again if a Player takes that Leader later.
 - **Unknown Leader.** A Player whose Leader is unresolved is unclassified.
 
 **OP Metagame counts every Player's Deck List, and reads participation only.**
@@ -2470,12 +2473,13 @@ Accepted · 2026-11-04 · [#1000](https://github.com/KeeprDigital/stream-keepr/i
 - Its scopes are every Player and a Player List.
 - With no standings, it shows no Conversion Target, Conversion Rate, win rate or average position.
 - Its card rules are OP's: Character, Event and Stage, with no basic lands, highlander or Scryfall data.
+- The read model holds these rules, read off the Event's Card Game (`getMetagameRules`), so a stored or requested scope it does not offer reads every Player, and a requested Conversion Target, win rate or place reads as none. The page and Screen editors offer only what it reads, and a Screen rendering hides any column it does not.
 
 **A Feature Match Slot side takes a Player as on MTG, or manual data.**
 
-- **Linked side.** Its Leader and Deck List are the Player's, by reference. A re-import or edit reaches the Slot, and the active Feature Match Session's snapshot is corrected, as replacing a paste is today.
+- **Linked side.** Its Leader and Deck List are the Player's, by reference. A re-import or edit reaches the Slot, and the active Feature Match Session's snapshot is corrected, as replacing a paste is today. The side's game data is the server's: a setup save takes it from the Player whatever the form sent, and releases a Feature Match Deck List the side held. Its setup form edits the Player's Deck List, and a paste to the side itself is refused (`409`).
 - **Unlinked side.** Paste and Leader picking stay available. That Feature Match Deck List never counts in Metagame.
-- **Deck List Screen.** On an OP Event it takes a Player or a Slot side as its Deck Source, and both render in the OP layout.
+- **Deck List Screen.** On an OP Event it takes a Player or a Slot side as its Deck Source, and both render in the OP layout. A Player source follows every write to the Player's Deck List: a hand edit or resolution gives the Deck List a new id and rolls the Player's `updatedAt`, which its `player:updated` carries, and the Screen reads again on every `tcgplus:imported`. A linked Slot side shows its Player's Deck List the same way, and a Screen showing that side may read the Players its Slot seats. A Player holding no Deck List shows nothing. A Screen with neither chosen still starts on the first Slot's left side; a Player chosen stays. Deleting the Player releases the Deck Source (ADR-0032).
 
 **What OP Events now offer.** The Players, Metagame, Sync and Cards pages, and the Metagame, Most Played Cards and Archetype Spotlight Screen Modes. Standings, Top Cut, Pairings, Player History, Head-to-Head, Round Clock, Matches, Event Structure, Archetype Review and Integrations stay MTG-only.
 
@@ -2491,13 +2495,17 @@ The Metagame is all or nothing: either the whole field was imported or no Metaga
 
 ### Consequences
 
-- **Blocked by bandai-keepr.** Nothing lands before its bulk lookup endpoint. Pasting moves to that endpoint too, dropping its 80-number cap.
-- **Picking a featured match.** An OP Feature Match is picked from Players instead of typed. A Player featured in two Rounds no longer needs re-entering, which reverses ADR-0057's first consequence.
+- **One lookup.** Imports, pastes and picked Leaders all resolve through bandai-keepr's bulk lookup (`POST /cards/collection`), at most 1,000 numbers a request.
+- **Picking a featured match.** An OP Feature Match is picked from Players instead of typed. A Player featured in two Rounds no longer needs re-entering, as an unlinked side's competitor still does (ADR-0057).
 - **No printing.** The export does not say which printing a Player registered, so every entry shows its card's standard printing.
 - **Catalogue corrections.** A card bandai-keepr corrects stays as first fetched until the catalogue row is cleared. Nothing refreshes it.
 - **No standings.** OP standings, records and Conversion Rate wait for a source. The export has none.
 - **Duplicates.** A hand-added Player who later appears in an import is duplicated until the operator deletes one.
-- **CONTEXT.md.** Its Deck List, Leader, Archetype, Unresolved Deck Card and Feature Match Deck List entries, and its new Nickname and TCG+ Import entries, state this decision ahead of the code.
+- **How the import lands.** `server/modules/tcgplus-import` reads the export by its Japanese headers, never by position, and refuses a file missing one (`422 TCGPLUS_EXPORT_INVALID`). Preview and import each send the whole export, so the browser holds it between them; its routes take a body up to 4 MiB rather than the usual 1 MiB. The import resolves every card number in one lookup before writing, then writes the Players in one batch and the changed Deck Lists in a second (`opDeckListWriteModule().writeMany`). A failure between the two leaves the Players without their new Deck Lists, and a re-import finishes them. It announces one `tcgplus:imported` count rather than a `player:updated` per Player, as Melee Sync does.
+- **The import's Deck List is kept.** Each import stores the Deck List it brought every Player (`tcgplus_imported_deck_lists`), so "Use imported Deck List" takes it at once rather than waiting for the next import.
+- **Resolutions are not remembered.** Unlike Melee Sync's name overrides, nothing maps a resolved number for the next import, so a re-import still holding the misentered number brings it back, unless the Deck List was hand-edited.
+- **One write per Deck List.** A retry or resolution writes each Deck List holding the number on its own. A lookup failing partway leaves the earlier ones rewritten; retrying finishes the rest.
+- **No Archetype deleted by hand.** OP refuses it: an Archetype goes only when it is left without Players and not customised.
 
 ### Rejected alternatives
 

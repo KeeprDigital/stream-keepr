@@ -38,6 +38,7 @@ function makePlayer(overrides?: Partial<Player>): Player {
 		id: 1,
 		eventId: 99,
 		name: 'Alex',
+		nickname: null,
 		pronouns: null,
 		externalId: null,
 		externalSource: null,

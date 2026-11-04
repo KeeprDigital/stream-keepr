@@ -42,6 +42,20 @@ export interface OpCardSummary {
 	imageUrl: string;
 }
 
+/**
+ * A One Piece card as the card catalogue holds it (ADR-0074): what bandai-keepr
+ * answered when its number was first looked up, imaged by its standard Printing.
+ */
+export interface OpCatalogueCard {
+	name: string;
+	category: OpCardCategory;
+	colors: OpCardColor[];
+	cost: number | null;
+	power: number | null;
+	counter: number | null;
+	imageUrl: string;
+}
+
 /** One release of a Card: standard, alt-art or reprint, each with its own image. */
 export interface OpPrinting {
 	id: string;

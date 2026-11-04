@@ -19,8 +19,14 @@ const loaded = {
 };
 mockNuxtImport('useArchetypeStore', () => () => ({ ...loaded, archetypes: [] }));
 mockNuxtImport('usePlayerListStore', () => () => ({ ...loaded, lists: [] }));
+const mockEvent = {
+	id: 1,
+	game: 'mtg',
+	conversionMetric: 'topN',
+	conversionThreshold: 16,
+};
 mockNuxtImport('useEventStore', () => () => ({
-	event: { id: 1, conversionMetric: 'topN', conversionThreshold: 16 },
+	event: mockEvent,
 	$reset: vi.fn(),
 }));
 const { updateConfig } = vi.hoisted(() => ({
@@ -55,6 +61,7 @@ async function mountSettings() {
 describe('the Archetype Spotlight settings editor', () => {
 	beforeEach(() => {
 		updateConfig.mockClear();
+		mockEvent.game = 'mtg';
 	});
 
 	// Each Mode Token's Look sits in the card for what it styles (ADR-0072).
@@ -125,6 +132,17 @@ describe('the Archetype Spotlight settings editor', () => {
 		expect(updateConfig).toHaveBeenCalledWith({
 			excludedCardTypes: ['Land', 'Creature'],
 		});
+	});
+
+	// An OP Metagame reads no standings, and its Deck List is one Mainboard of Characters, Events and Stages (ADR-0074).
+	it('on a One Piece Event, offers no Conversion Target or board, and the OP card types', async () => {
+		mockEvent.game = 'op';
+		const wrapper = await mountSettings();
+
+		expect(wrapper.find('[data-testid="event-conversion-target"]').exists()).toBe(false);
+		expect(wrapper.find('[data-config-field="board"]').exists()).toBe(false);
+		expect(wrapper.findAll('[data-testid^="archetype-spotlight-type-"]').map(chip => chip.text())).toEqual(['Character', 'Event', 'Stage']);
+		expect(settingsSummaries(wrapper)['archetype-spotlight:top-cards']).toBe('Top 8');
 	});
 
 	// The Conversion Target is the Event's (ADR-0061): the Screen names it and where to change it.

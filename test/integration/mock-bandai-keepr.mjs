@@ -5,8 +5,9 @@ import process from 'node:process';
  *
  * The suite configures bandai-keepr at an origin nobody serves
  * (`integrationServerEnv`), and this answers it: a card number lookup finds
- * the fixture cards below and 404s any other number. Every other origin goes
- * to whatever `fetch` was before.
+ * the fixture cards below and 404s any other number, and the bulk lookup
+ * (`POST /cards/collection`) answers any other number `not_found`. Every other
+ * origin goes to whatever `fetch` was before.
  */
 
 const bandaiKeeprOrigin = process.env.NUXT_BANDAI_KEEPR_API_URL
@@ -48,6 +49,7 @@ function card(number, name, category, colors) {
 
 const cards = new Map([
 	card('OP01-001', 'Roronoa Zoro', 'leader', ['Red']),
+	card('OP01-002', 'Trafalgar Law', 'leader', ['Red', 'Green']),
 	card('OP01-016', 'Nami', 'leader', ['Blue']),
 	card('OP01-025', 'Roronoa Zoro', 'character', ['Red']),
 	card('OP01-040', 'Usopp', 'character', ['Blue']),
@@ -59,6 +61,22 @@ globalThis.fetch = async (input, init) => {
 		: String(input));
 	if (requestUrl.origin !== bandaiKeeprOrigin)
 		return await upstreamFetch(input, init);
+
+	if (requestUrl.pathname === '/cards/collection') {
+		const request = new Request(input, init);
+		const { identifiers } = await request.json();
+		return Response.json({
+			results: identifiers.map((identifier, index) => {
+				const known = cards.get(identifier.number);
+				return known
+					? { index, card: known }
+					: {
+							index,
+							error: { code: 'not_found' },
+						};
+			}),
+		});
+	}
 
 	const number = /^\/cards\/([^/]+)$/.exec(requestUrl.pathname)?.[1];
 	const found = number

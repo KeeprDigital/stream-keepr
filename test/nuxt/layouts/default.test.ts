@@ -184,15 +184,23 @@ describe('default layout sync navigation', () => {
 		expect(wrapper.text()).toContain('Sync');
 	});
 
-	// An OP Event models no Players, Rounds or Matches, holds no Metagame and
-	// never runs Melee Sync (ADR-0057), so the pages for them are not offered.
+	it.each([
+		['mtg', false],
+		['op', true],
+	] as const)('on a %s Event without Melee, offers Sync: %s', async (game, offered) => {
+		Object.assign(mockEventStore.event, { game, meleeEnabled: false, meleeConfigured: false });
+
+		const wrapper = await mountLayout();
+		const items = wrapper.findAll('[data-nav-item]').map(item => item.attributes('data-nav-item'));
+
+		expect(items.includes('Sync')).toBe(offered);
+	});
+
+	// An OP Event models no Rounds or Matches and never runs Melee Sync
+	// (ADR-0057), so the pages for them are not offered.
 	const MTG_ONLY_ENTRIES = [
-		'Players',
 		'Matches',
-		'Metagame',
 		'Archetype Review',
-		'Sync',
-		'Cards',
 		'Event Structure',
 		'Integrations',
 	];
@@ -209,13 +217,31 @@ describe('default layout sync navigation', () => {
 		expect(items).toEqual(expect.arrayContaining([
 			...offered,
 			'Controls',
+			'Players',
+			'Metagame',
 			'Feature Matches',
+			'Cards',
 			'Screens',
 			'Event',
 			'Broadcast',
 		]));
 		for (const label of omitted)
 			expect(items).not.toContain(label);
+	});
+
+	// An MTG Event's Players come from Melee, an OP Event's from a TCG+ Import (ADR-0074).
+	it.each([
+		['mtg', false],
+		['op', true],
+	] as const)('on a %s Event without Melee, offers the Metagame: %s', async (game, offered) => {
+		mockEventStore.event.game = game;
+		mockEventStore.event.meleeEnabled = false;
+		mockEventStore.event.meleeConfigured = false;
+
+		const wrapper = await mountLayout();
+		const items = wrapper.findAll('[data-nav-item]').map(item => item.attributes('data-nav-item'));
+
+		expect(items.includes('Metagame')).toBe(offered);
 	});
 });
 

@@ -39,6 +39,7 @@ export function metagameBreakdownDependencies(scoping: () => MetagameBreakdownSc
 		'melee:dataReset': true,
 		'melee:playersSynced': true,
 		'melee:decklistsSynced': true,
+		'tcgplus:imported': true,
 		'melee:roundStandingsSynced': true,
 	};
 }

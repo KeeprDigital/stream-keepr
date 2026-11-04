@@ -5,6 +5,8 @@ const props = defineProps<{
 	minPoints: number;
 	playerListId?: number;
 	playerLists: Array<{ id: number; name: string; memberCount: number }>;
+	/** The scopes the Event's Card Game offers (ADR-0074); every scope until it is known. */
+	scopes?: readonly MetagameScope[];
 }>();
 
 const emit = defineEmits<{
@@ -14,18 +16,30 @@ const emit = defineEmits<{
 	(e: 'update:playerListId', id: number | undefined): void;
 }>();
 
+function offers(scope: MetagameScope): boolean {
+	return !props.scopes || props.scopes.includes(scope);
+}
+
 const TOP_N_PRESETS = [8, 16, 32];
 
 // Build combined scope options: All, Top N presets, custom scopes, then player lists
 const scopeItems = computed(() => {
 	const items: Array<{ label: string; value: string }> = [
 		{ label: 'All Players', value: 'all' },
-		...TOP_N_PRESETS.map(n => ({ label: `Top ${n}`, value: `topN:${n}` })),
-		{ label: 'Top N…', value: 'topN' },
-		{ label: 'Minimum Points…', value: 'minPoints' },
+		...(offers('topN')
+			? [
+					...TOP_N_PRESETS.map(n => ({ label: `Top ${n}`, value: `topN:${n}` })),
+					{ label: 'Top N…', value: 'topN' },
+				]
+			: []),
+		...(offers('minPoints')
+			? [
+					{ label: 'Minimum Points…', value: 'minPoints' },
+				]
+			: []),
 	];
 
-	if (props.playerLists.length > 0) {
+	if (offers('playerList') && props.playerLists.length > 0) {
 		for (const list of props.playerLists) {
 			items.push({
 				label: `${list.name} (${list.memberCount})`,
@@ -44,6 +58,9 @@ const customTopN = ref(false);
 
 // Derive current combined value
 const currentValue = computed(() => {
+	// A scope the Card Game does not offer reads every Player, as the server does.
+	if (!offers(props.scope))
+		return 'all';
 	if (props.scope === 'topN') {
 		return !customTopN.value && TOP_N_PRESETS.includes(props.topN)
 			? `topN:${props.topN}`
@@ -57,7 +74,7 @@ const currentValue = computed(() => {
 });
 
 const showTopNInput = computed(() => props.scope === 'topN' && currentValue.value === 'topN');
-const showMinPointsInput = computed(() => props.scope === 'minPoints');
+const showMinPointsInput = computed(() => currentValue.value === 'minPoints');
 
 function onScopeChange(value: string) {
 	customTopN.value = value === 'topN';

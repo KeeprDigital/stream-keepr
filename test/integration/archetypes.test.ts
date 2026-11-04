@@ -21,11 +21,12 @@ describe('archetypes API', () => {
 		}) as any;
 		opEventId = opEvent.id;
 
-		const opArchetype = await $fetch(`/api/events/${opEventId}/archetypes`, {
+		// A One Piece Archetype follows its Leader, so none is created by hand (ADR-0074).
+		const opCreate = await $fetchRaw(`/api/events/${opEventId}/archetypes`, {
 			method: 'POST',
 			body: { name: 'Straw Hat' },
-		}) as any;
-		expect(opArchetype.id).toBeTypeOf('number');
+		});
+		expect(opCreate.status).toBe(400);
 
 		const keyCardArchetype = await $fetch(`/api/events/${eventId}/archetypes`, {
 			method: 'POST',

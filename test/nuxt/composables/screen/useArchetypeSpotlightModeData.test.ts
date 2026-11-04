@@ -251,7 +251,7 @@ describe('useArchetypeSpotlightModeData', () => {
 			expect(pageData.value[0]?.wins).toBe(5);
 		});
 
-		it('follows deck reviews, resolved cards, Archetype edits and Melee syncs', async () => {
+		it('follows deck reviews, resolved cards, Archetype edits, Melee syncs and TCG+ Imports', async () => {
 			await showingSpotlight();
 
 			for (const [type, payload] of [
@@ -280,12 +280,13 @@ describe('useArchetypeSpotlightModeData', () => {
 					'melee:roundStandingsSynced',
 					{ roundId: 31 },
 				],
+				['tcgplus:imported', {}],
 			] as const) {
 				deliver(type, payload);
 				await flushPromises();
 			}
 
-			expect(mockFetch).toHaveBeenCalledTimes(6);
+			expect(mockFetch).toHaveBeenCalledTimes(7);
 		});
 
 		it('follows its Player List\'s members only while the scope names that list', async () => {

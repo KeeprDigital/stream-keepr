@@ -96,3 +96,70 @@ describe('the Metagame page\'s conversion control', () => {
 		wrapper.unmount();
 	});
 });
+
+// An OP Metagame reads participation only: every Player or a Player List, and no Conversion Target (ADR-0074).
+describe('the Metagame page on each Card Game', () => {
+	beforeEach(() => {
+		mockFetch.mockReset();
+		usePlayerListStore().$reset();
+	});
+
+	async function mountFor(game: 'mtg' | 'op') {
+		useEventStore().setEvent({
+			...createMockEvent({ id: 3, game }),
+			talents: [],
+			meleeConfigured: false,
+		});
+		mockFetch.mockImplementation((url: string) => Promise.resolve(url.endsWith('/player-lists')
+			? [
+					{ id: 4, name: 'Day 2', memberCount: 12 },
+				]
+			: []));
+		const { default: MetagamePage } = await import('~/pages/event/[eventId]/metagame.vue');
+		const wrapper = mount(MetagamePage, {
+			global: {
+				stubs: {
+					...stubs,
+					MetagameScopeControl: false,
+					UNavigationMenu: {
+						props: ['items'],
+						template: '<nav data-testid="tabs">{{ items.map(item => item.label).join("|") }}</nav>',
+					},
+				},
+			},
+		});
+		await flushPromises();
+		return wrapper;
+	}
+
+	it.each([
+		[
+			'mtg',
+			'Archetypes|Cards|Tokens',
+			true,
+			[
+				'All Players',
+				'Top 8',
+				'Top 16',
+				'Top 32',
+				'Top N…',
+				'Minimum Points…',
+				'Day 2 (12)',
+			],
+		],
+		[
+			'op',
+			'Archetypes|Cards',
+			false,
+			['All Players', 'Day 2 (12)'],
+		],
+	] as const)('on a %s Event, offers the tabs %s, a Conversion Target: %s, and the scopes %j', async (game, tabs, conversion, scopes) => {
+		const wrapper = await mountFor(game);
+
+		expect(wrapper.get('[data-testid="tabs"]').text()).toBe(tabs);
+		expect(wrapper.find('select[aria-label="Conversion target"]').exists()).toBe(conversion);
+		const scope = wrapper.findAll('select').find(select => select.attributes('aria-label') !== 'Conversion target')!;
+		expect(scope.findAll('option').map(option => option.text())).toEqual(scopes);
+		wrapper.unmount();
+	});
+});

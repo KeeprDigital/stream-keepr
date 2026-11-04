@@ -1,5 +1,6 @@
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getMtgGameData } from '~~/shared/utils/gameData';
+import { playerDisplayName } from '~~/shared/utils/playerName';
 
 export interface FeatureMatchMenuItem {
 	label: string;
@@ -13,13 +14,14 @@ export interface FeatureMatchMenuItem {
 }
 
 function getPlayerLabel(
-	playerData: { name?: string | null; gameData?: unknown } | null | undefined,
+	playerData: { name?: string | null; nickname?: string | null; gameData?: unknown } | null | undefined,
 ): { name: string | null; deckName: string | null; colors: string | null } {
-	if (!playerData?.name)
+	const name = playerDisplayName(playerData);
+	if (!playerData || !name)
 		return { name: null, deckName: null, colors: null };
 	const mtg = getMtgGameData(playerData.gameData as Parameters<typeof getMtgGameData>[0]);
 	return {
-		name: playerData.name,
+		name,
 		deckName: mtg.deckName ?? null,
 		colors: mtg.deckColors ?? null,
 	};

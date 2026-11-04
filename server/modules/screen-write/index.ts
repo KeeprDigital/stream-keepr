@@ -220,10 +220,11 @@ function modeConfigWriteEditsWorkspace(mode: ScreenMode, config: Record<string, 
  * Event is written with, its Deck Source on a Feature Match Slot side; or
  * `undefined` where it needs no default.
  *
- * An OP Deck List Screen shows a Slot side, never a Player (ADR-0057), so one
- * with no Slot side chosen (no Deck Source, or the Player source's empty
+ * An OP Deck List Screen shows a Slot side or a Player (ADR-0057, ADR-0074).
+ * One with neither chosen (no Deck Source, or the Player source's empty
  * default) starts on the Event's first Slot, left side, or on no Slot while
- * the Event has none. A Magic Event's keeps its Player source.
+ * the Event has none; a Player chosen stays. A Magic Event's keeps its Player
+ * source.
  */
 async function withOpDeckSourceDefault(
 	eventId: number,

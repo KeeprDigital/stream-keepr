@@ -106,23 +106,23 @@ describe('event.global middleware', () => {
 		});
 	});
 
-	// An OP Event models no Players, Rounds or Matches and never runs Melee Sync
+	// An OP Event models no Rounds or Matches and never runs Melee Sync
 	// (ADR-0057): a direct visit to a page it does not use lands on its overview.
 	// Routes resolve through the real router, so each page's own declaration counts.
 	describe('pages the Event\'s Card Game does not use', () => {
 		const MTG_ONLY_PAGES = [
-			'/event/1/players',
 			'/event/1/matches',
 			'/event/1/rounds',
-			'/event/1/sync',
-			'/event/1/metagame',
-			'/event/1/metagame/cards',
 			'/event/1/archetype-review',
-			'/event/1/card',
 			'/event/1/config/integrations',
 		];
 		const EVERY_CARD_GAME_PAGES = [
 			'/event/1',
+			'/event/1/players',
+			'/event/1/metagame',
+			'/event/1/metagame/cards',
+			'/event/1/sync',
+			'/event/1/card',
 			'/event/1/feature-matches',
 			'/event/1/screens',
 			'/event/1/config',

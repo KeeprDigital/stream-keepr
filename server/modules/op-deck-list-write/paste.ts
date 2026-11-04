@@ -1,23 +1,16 @@
-import type {
-	FeatureMatchDeckListEntry,
-	FeatureMatchDeckListView,
-	FeatureMatchDeckListWarning,
-} from '~~/shared/types/featureMatchDeckList';
+import type { OpCatalogueCard } from '~~/shared/types/card/op';
+import type { OpDeckListEntry, OpDeckListLine, OpDeckListView, OpDeckListWarning } from '~~/shared/types/opDeckList';
 import { parseOpCardNumber } from '~~/shared/utils/card/op';
 
 /**
- * The rules of a pasted Feature Match Deck List (ADR-0057): how its text reads,
- * and which deck rule breaches it warns of. A breach never refuses a save.
+ * The rules of a One Piece Card Game Deck List, pasted or imported (ADR-0057,
+ * ADR-0074): how its text reads, which entry is its Leader, and which deck
+ * rule breaches it warns of. A breach never refuses a save.
  */
 
 /** A One Piece Mainboard holds this many cards, and a card number at most four copies. */
 const OP_MAINBOARD_SIZE = 50;
 const OP_MAX_COPIES = 4;
-
-export interface PastedDeckListLine {
-	number: string;
-	quantity: number;
-}
 
 /**
  * `N[x] CARDNUMBER [name]`: a quantity, an optional `x`, a card number (a
@@ -29,8 +22,8 @@ const CARD_LINE = /^(\d+)\s*(?:x\s*)?([a-z]{1,4}\d{0,2}-\d{3})(?:_[a-z]\d+)?(?:\
  * The cards a paste names, in paste order, a number pasted twice added into
  * its first line. Every other line (blank, heading, unreadable) is ignored.
  */
-export function parseFeatureMatchDeckListText(text: string): PastedDeckListLine[] {
-	const byNumber = new Map<string, PastedDeckListLine>();
+export function parseOpDeckListText(text: string): OpDeckListLine[] {
+	const byNumber = new Map<string, OpDeckListLine>();
 	for (const line of text.split(/\r?\n/)) {
 		const match = CARD_LINE.exec(line.trim());
 		if (!match)
@@ -50,7 +43,7 @@ export function parseFeatureMatchDeckListText(text: string): PastedDeckListLine[
 	];
 }
 
-function isLeader(entry: FeatureMatchDeckListEntry): boolean {
+function isLeader(entry: OpDeckListEntry): boolean {
 	return entry.card?.category === 'leader';
 }
 
@@ -60,14 +53,32 @@ function cardsWord(count: number): string {
 		: 'cards';
 }
 
-/** A Deck List's Leader, Mainboard count and warnings, read from its entries. */
-export function featureMatchDeckListView(entries: FeatureMatchDeckListEntry[]): FeatureMatchDeckListView {
-	const leaders = entries.filter(isLeader);
+/** A Deck List's Leader card, or `null` with no Leader or an unresolved one. */
+export function opDeckListLeaderCard(view: Pick<OpDeckListView, 'entries' | 'leaderNumber'>): OpCatalogueCard | null {
+	return view.entries.find(entry => entry.number === view.leaderNumber)?.card ?? null;
+}
+
+/**
+ * A Deck List's Leader, Mainboard count and warnings, read from its entries.
+ * Its Leader is the `marked` entry when one is marked, catalogued or not, and
+ * otherwise its first leader card.
+ */
+export function opDeckListView(entries: OpDeckListEntry[], marked: string | null = null): OpDeckListView {
+	const markedEntry = marked === null
+		? undefined
+		: entries.find(entry => entry.number === marked);
+	const isLeaderEntry = (entry: OpDeckListEntry) => entry === markedEntry || isLeader(entry);
+	const leaders = [
+		...(markedEntry
+			? [markedEntry]
+			: []),
+		...entries.filter(entry => entry !== markedEntry && isLeader(entry)),
+	];
 	const leader = leaders[0] ?? null;
-	const mainboard = entries.filter(entry => !isLeader(entry));
+	const mainboard = entries.filter(entry => !isLeaderEntry(entry));
 	const mainboardCount = mainboard.reduce((sum, entry) => sum + entry.quantity, 0);
 
-	const warnings: FeatureMatchDeckListWarning[] = [];
+	const warnings: OpDeckListWarning[] = [];
 	if (mainboardCount !== OP_MAINBOARD_SIZE) {
 		warnings.push({
 			code: 'MAINBOARD_COUNT',
@@ -97,7 +108,7 @@ export function featureMatchDeckListView(entries: FeatureMatchDeckListEntry[]): 
 		});
 	}
 	const leaderColors = leader?.card?.colors ?? [];
-	if (leader) {
+	if (leader?.card) {
 		const offColor = mainboard
 			.filter(entry => entry.card && !entry.card.colors.some(color => leaderColors.includes(color)))
 			.map(entry => entry.number);
@@ -126,4 +137,21 @@ export function featureMatchDeckListView(entries: FeatureMatchDeckListEntry[]): 
 		mainboardCount,
 		warnings,
 	};
+}
+
+function entryLine(entry: OpDeckListEntry): string {
+	return entry.card
+		? `${entry.quantity}x ${entry.number} ${entry.card.name}`
+		: `${entry.quantity}x ${entry.number}`;
+}
+
+/** A Deck List in the paste format, its Leader first, so an edit starts from what is saved. */
+export function opDeckListText(entries: readonly OpDeckListEntry[], leaderNumber: string | null): string {
+	const leader = entries.find(entry => entry.number === leaderNumber);
+	return [
+		...(leader
+			? [leader]
+			: []),
+		...entries.filter(entry => entry !== leader),
+	].map(entryLine).join('\n');
 }

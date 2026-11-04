@@ -6,6 +6,15 @@ import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
 
 export type UpsertCardInput = Omit<DbCardInsert, 'id' | 'createdAt' | 'updatedAt'>;
 
+/**
+ * The conflict target naming a Magic: The Gathering card by name. The
+ * catalogue is unique per game (ADR-0074), so the index is partial.
+ */
+export const MTG_CARD_IDENTITY = {
+	target: [cards.name, cards.game],
+	targetWhere: sql`${cards.game} = 'mtg'`,
+};
+
 export function mtgCardService() {
 	/**
 	 * Batch upsert cards. Uses D1 batch API for a single round-trip.
@@ -107,11 +116,17 @@ export function mtgCardService() {
 					manaCost: sql`json_extract(value, '$.manaCost')`,
 					deckCounterTypes: sql`coalesce(json_extract(value, '$.deckCounterTypes'), '[]')`,
 					deckTokens: sql`coalesce(json_extract(value, '$.deckTokens'), '[]')`,
+					cardNumber: sql`null`,
+					category: sql`null`,
+					cost: sql`null`,
+					power: sql`null`,
+					counter: sql`null`,
+					imageUrl: sql`null`,
 					createdAt: sql`${writeAtMs}`,
 					updatedAt: sql`${writeAtMs}`,
 				}, sql`from json_each(${payload}) where true`))
 				.onConflictDoUpdate({
-					target: [cards.name, cards.game],
+					...MTG_CARD_IDENTITY,
 					set,
 				})
 				.returning());

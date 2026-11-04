@@ -1,24 +1,42 @@
 <script setup lang="ts">
-import type { MtgPlayerGameData, OpPlayerGameData } from '~~/shared/types/game';
+import type { MtgPlayerGameData } from '~~/shared/types/game';
 import type { PlayerData } from '~/types';
 
 defineProps<{
 	game: 'mtg' | 'op';
 	pronounsEnabled?: boolean;
 	lgsEnabled?: boolean;
+	/** The TCG+ Import owns an imported Player's Nickname, so it is not edited here (ADR-0074). */
+	nicknameImported?: boolean;
 }>();
 
 const formData = defineModel<PlayerData>({ required: true });
 const mtgGameData = defineModel<MtgPlayerGameData>('mtgGameData', { required: true });
-const opGameData = defineModel<OpPlayerGameData>('opGameData', { required: true });
 </script>
 
 <template>
-	<UFormField label="Name" required>
+	<UFormField
+		label="Name"
+		:required="game !== 'op'"
+		:hint="game === 'op' ? 'Shown instead of the Nickname' : undefined"
+	>
 		<UInput
 			v-model="formData.name"
-			placeholder="Player name"
+			:placeholder="game === 'op' ? formData.nickname || 'Player name' : 'Player name'"
 			autofocus
+			class="w-full"
+		/>
+	</UFormField>
+
+	<UFormField
+		v-if="game === 'op'"
+		label="Nickname"
+		:help="nicknameImported ? 'From the TCG+ Import' : undefined"
+	>
+		<UInput
+			v-model="formData.nickname"
+			placeholder="Bandai TCG+ Nickname"
+			:disabled="nicknameImported"
 			class="w-full"
 		/>
 	</UFormField>
@@ -39,7 +57,6 @@ const opGameData = defineModel<OpPlayerGameData>('opGameData', { required: true 
 		/>
 	</UFormField>
 
-	<!-- Game-specific fields -->
+	<!-- Game-specific fields. A One Piece Player's Leader is their Deck List's, edited with it (ADR-0074). -->
 	<FeatureMatchSetupMtgPlayerFields v-if="game === 'mtg'" v-model="mtgGameData" />
-	<FeatureMatchSetupOpPlayerFields v-if="game === 'op'" v-model="opGameData" />
 </template>

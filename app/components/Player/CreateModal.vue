@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { MtgPlayerGameData, OpPlayerGameData } from '~~/shared/types/game';
+import type { MtgPlayerGameData } from '~~/shared/types/game';
 import type { PlayerData } from '~/types';
+import { unshownPlayerReason } from '~~/shared/utils/playerName';
 import { DEFAULT_PLAYER_DATA, toCreatePlayerInput } from '~/types/player';
 
 const props = defineProps<{
@@ -24,19 +25,22 @@ const formId = 'create-player-form';
 
 // Game-specific data
 const mtgGameData = ref<MtgPlayerGameData>({ type: 'mtg', deckName: null, deckColors: null });
-const opGameData = ref<OpPlayerGameData>({ type: 'op', leader: null });
+
+// The server's rule: a One Piece Card Game Player may go by their Nickname alone (ADR-0074).
+const isValid = computed(() => unshownPlayerReason(props.game, formData.value) === null);
 
 async function handleSubmit() {
-	const name = formData.value.name?.trim();
-	if (!name || !eventStore.eventId)
+	const name = formData.value.name?.trim() ?? '';
+	if (!isValid.value || !eventStore.eventId)
 		return;
 
 	const input = toCreatePlayerInput({
 		...formData.value,
 		name,
+		// A One Piece Player's game data is their Deck List's, written by the OP Deck List write (ADR-0074).
 		gameData: props.game === 'mtg'
 			? mtgGameData.value
-			: opGameData.value,
+			: undefined,
 	});
 
 	await runRequest(
@@ -56,10 +60,6 @@ async function handleSubmit() {
 function handleCancel() {
 	emit('close');
 }
-
-const isValid = computed(() => {
-	return (formData.value.name?.trim().length ?? 0) > 0;
-});
 </script>
 
 <template>
@@ -80,7 +80,6 @@ const isValid = computed(() => {
 				<PlayerFormFields
 					v-model="formData"
 					v-model:mtg-game-data="mtgGameData"
-					v-model:op-game-data="opGameData"
 					:game="game"
 					:pronouns-enabled="pronounsEnabled"
 					:lgs-enabled="lgsEnabled"

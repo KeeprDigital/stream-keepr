@@ -6,7 +6,8 @@ export const GAME_VALUES = ['mtg', 'op'] as const;
 export const POINTS_SYSTEM_VALUES = ['7ph'] as const;
 export const DECK_COMPANION_SOURCE_VALUES = ['manual', 'melee'] as const;
 export const FEATURE_MATCH_ORIENTATION_VALUES = ['horizontal', 'vertical'] as const;
-export const EXTERNAL_SOURCE_VALUES = ['melee', 'manual'] as const;
+// `tcgplus` is a TCG+ Import's Player, keyed by their Bandai member number (ADR-0074).
+export const EXTERNAL_SOURCE_VALUES = ['melee', 'manual', 'tcgplus'] as const;
 /** The Melee-imported Player fields an operator's edit keeps from Melee Sync (ADR-0046). */
 export const PLAYER_MANUALLY_EDITED_FIELD_VALUES = ['name', 'pronouns'] as const;
 export const PLAYER_DISPLAY_MODE_VALUES = ['score', 'position'] as const;

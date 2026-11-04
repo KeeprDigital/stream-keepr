@@ -1,17 +1,21 @@
 <script setup lang="ts">
-import type { CardTypeBucket } from '~~/shared/utils/metagame';
-import { CARD_TYPE_BUCKET_ORDER } from '~~/shared/utils/metagame';
+import type { Game } from '~~/shared/types/enums';
+import type { MetagameCardTypeBucket } from '~~/shared/utils/metagame';
+import { getMetagameCardTypeBuckets } from '~~/shared/utils/metagame';
 
 /**
  * The card type chips of a card ranking (Most Played Cards, Archetype
- * Spotlight's top cards): one chip per card type, pressed while the ranking
+ * Spotlight's top cards): one chip per card type its Event's Card Game counts
+ * (ADR-0074), pressed while the ranking
  * includes it. Toggling a chip emits the excluded types with it added or
  * removed. A `locked` type stays included, whatever `excluded` holds, and its
  * chip cannot be toggled.
  */
 const props = withDefaults(defineProps<{
-	excluded: CardTypeBucket[];
-	locked?: CardTypeBucket[];
+	excluded: MetagameCardTypeBucket[];
+	locked?: MetagameCardTypeBucket[];
+	/** The Event's Card Game, whose card types the chips name. */
+	game?: Game;
 	description: string;
 	/** Each chip's test id is this prefix and its type. */
 	testIdPrefix: string;
@@ -20,18 +24,20 @@ const props = withDefaults(defineProps<{
 });
 
 const emit = defineEmits<{
-	update: [excluded: CardTypeBucket[]];
+	update: [excluded: MetagameCardTypeBucket[]];
 }>();
 
-function isLocked(bucket: CardTypeBucket): boolean {
+const buckets = computed(() => getMetagameCardTypeBuckets(props.game));
+
+function isLocked(bucket: MetagameCardTypeBucket): boolean {
 	return props.locked.includes(bucket);
 }
 
-function isIncluded(bucket: CardTypeBucket): boolean {
+function isIncluded(bucket: MetagameCardTypeBucket): boolean {
 	return isLocked(bucket) || !props.excluded.includes(bucket);
 }
 
-function toggle(bucket: CardTypeBucket) {
+function toggle(bucket: MetagameCardTypeBucket) {
 	if (isLocked(bucket))
 		return;
 	emit('update', isIncluded(bucket)
@@ -39,7 +45,7 @@ function toggle(bucket: CardTypeBucket) {
 		: props.excluded.filter(type => type !== bucket));
 }
 
-function label(bucket: CardTypeBucket): string {
+function label(bucket: MetagameCardTypeBucket): string {
 	return bucket === 'Land'
 		? 'Nonbasic Land'
 		: bucket;
@@ -54,7 +60,7 @@ function label(bucket: CardTypeBucket): string {
 	>
 		<div class="flex flex-wrap gap-2">
 			<UButton
-				v-for="bucket in CARD_TYPE_BUCKET_ORDER"
+				v-for="bucket in buckets"
 				:key="bucket"
 				:label="label(bucket)"
 				:variant="isIncluded(bucket) ? 'solid' : 'outline'"

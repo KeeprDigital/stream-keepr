@@ -1,13 +1,16 @@
+import type { Game } from '~~/shared/types/enums';
 import type { ArchetypeDetailResponse } from '~~/shared/types/metagame';
 import type { ScreenOutputArchetypePilot, ScreenOutputArchetypeSpotlightResponse } from '~~/shared/types/screenOutputReads';
-import type { CardTypeBucket } from '~~/shared/utils/metagame';
+import type { MetagameCardTypeBucket } from '~~/shared/utils/metagame';
 import { createCardTypeBucketFilter } from './cards';
 
 export interface ArchetypeSpotlightOptions {
+	/** The Event's Card Game, whose card types the exclusions name. */
+	game: Game;
 	/** How many of the most-included cards to show. */
 	cardLimit: number;
 	/** Card-type buckets left out of the top cards before the limit applies. */
-	excludedCardTypes: readonly CardTypeBucket[];
+	excludedCardTypes: readonly MetagameCardTypeBucket[];
 }
 
 function byPosition(a: ScreenOutputArchetypePilot, b: ScreenOutputArchetypePilot): number {
@@ -31,7 +34,7 @@ export function projectArchetypeSpotlight(
 	detail: ArchetypeDetailResponse,
 	options: ArchetypeSpotlightOptions,
 ): ScreenOutputArchetypeSpotlightResponse {
-	const includesCardType = createCardTypeBucketFilter(options.excludedCardTypes);
+	const includesCardType = createCardTypeBucketFilter(options.game, options.excludedCardTypes);
 
 	return {
 		archetype: { id: detail.id, name: detail.name, colors: detail.colors },

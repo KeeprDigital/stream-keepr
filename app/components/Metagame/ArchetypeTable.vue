@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type { MetagameSortBy } from '~~/shared/types/enums';
+import type { Game, MetagameSortBy } from '~~/shared/types/enums';
 import type { ArchetypeBreakdownEntry } from '~~/shared/types/metagame';
 import type { TableColumn } from '#ui/types';
 import type { Archetype } from '~/types';
+import { isMetagameColumnOffered, isMetagameSortOffered } from '~~/shared/utils/metagame';
 import { LazyArchetypeKeyCardsEditModal } from '#components';
 
 const props = defineProps<{
@@ -11,9 +12,10 @@ const props = defineProps<{
 	loading: boolean;
 	sortBy: MetagameSortBy;
 	selectedArchetype?: string | null;
-	isMtg?: boolean;
+	/** The Event's Card Game: Magic's Archetypes have key cards, and an OP Metagame reads no standings (ADR-0074). */
+	game?: Game;
 	/** Archetype objects used for key-card indicators and edit button.
-	 *  Required when isMtg is true; consumers must pre-load and pass this. */
+	 *  Required on a Magic Event; consumers must pre-load and pass this. */
 	archetypes?: Archetype[];
 }>();
 
@@ -21,6 +23,8 @@ const emit = defineEmits<{
 	(e: 'select', archetype: string | null): void;
 	(e: 'update:sortBy', value: MetagameSortBy): void;
 }>();
+
+const isMtg = computed(() => props.game === 'mtg');
 
 const overlay = useOverlay();
 
@@ -49,7 +53,7 @@ watch(sorting, (value) => {
 		emit('update:sortBy', nextSortBy as MetagameSortBy);
 }, { deep: true });
 
-const columns: TableColumn<ArchetypeBreakdownEntry>[] = [
+const allColumns: TableColumn<ArchetypeBreakdownEntry>[] = [
 	{
 		accessorKey: 'name',
 		header: createSortableHeader('Archetype'),
@@ -82,6 +86,20 @@ const columns: TableColumn<ArchetypeBreakdownEntry>[] = [
 	},
 	{ id: 'actions', header: '', enableSorting: false },
 ];
+
+/** Whether the Event's Metagame reads what a column shows. */
+function offersColumn(column: TableColumn<ArchetypeBreakdownEntry>): boolean {
+	const key = 'accessorKey' in column
+		? column.accessorKey
+		: column.id;
+	if (key === 'winRate' || key === 'conversionRate')
+		return isMetagameSortOffered(props.game, key);
+	if (key === 'avgPosition')
+		return isMetagameColumnOffered(props.game, 'avgPlace');
+	return true;
+}
+
+const columns = computed(() => allColumns.filter(offersColumn));
 
 function findArchetype(archetypeId: number): Archetype | undefined {
 	return props.archetypes?.find(a => a.id === archetypeId);
@@ -131,11 +149,11 @@ async function openKeyCardsEdit(archetypeId: number) {
 						>
 							{{ row.original.name }}
 						</span>
-						<MtgManaColorDisplay
-							v-if="isMtg && row.original.colors"
+						<MetagameArchetypeColors
+							v-if="game && row.original.colors"
 							:colors="row.original.colors"
+							:game="game"
 							size="xs"
-							:cost="true"
 						/>
 						<UIcon
 							v-if="row.original.name === selectedArchetype"

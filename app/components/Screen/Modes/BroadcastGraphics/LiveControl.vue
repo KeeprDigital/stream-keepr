@@ -173,6 +173,9 @@ function socialProfileTiming(control: typeof socialProfileProjectionControls.val
 	return `${dwell} · ${transitionLabel} · ${transitionDurationMs} ms`;
 }
 
+/** Each Player picker's search, keyed by Graphic Source Selection. */
+const sourceSearches = ref<Record<string, string>>({});
+
 function selectedSource(sourceKey: string): number | undefined {
 	return sessionStore.sourceSelections(props.screen.id, props.graphic.id)[sourceKey];
 }
@@ -616,7 +619,23 @@ watch(
 					</UBadge>
 				</div>
 				<div class="flex items-center gap-2">
+					<!-- A Player is found by name, Nickname or Bandai member number (ADR-0074). -->
+					<UInputMenu
+						v-if="source.kind === 'player'"
+						v-model:search-term="sourceSearches[source.key]"
+						:model-value="selectedSource(source.key)"
+						:items="selectionOptions(source.kind, sourceSearches[source.key])"
+						ignore-filter
+						value-key="value"
+						class="w-full flex-1"
+						size="sm"
+						icon="i-lucide-user-search"
+						placeholder="Nothing selected"
+						:data-testid="`live-control-source-${source.key}`"
+						@update:model-value="selectSource(source.key, selectionIdOf($event))"
+					/>
 					<USelect
+						v-else
 						:model-value="selectedSource(source.key)"
 						:items="selectionOptions(source.kind)"
 						class="w-full flex-1"

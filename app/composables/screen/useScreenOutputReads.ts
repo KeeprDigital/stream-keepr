@@ -70,6 +70,8 @@ export function useScreenOutputReads(context: ScreenContext) {
 		/** The Slot's Feature Match Session, or `null` while it has none — never started by reading. */
 		featureMatchSession: async (slotId: number) =>
 			(await repository.featureMatchSlot(requireScope(), slotId)).slot.activeSession ?? null,
+		/** A One Piece Card Game Player a Deck List Screen shows, with their Deck List. */
+		opPlayerDeckList: (playerId: number) => repository.opPlayerDeckList(requireScope(), playerId),
 		playerDecks: (playerId: number, selection?: { deckId?: number }) =>
 			repository.playerDecks(requireScope(), playerId, selection),
 		/** The card data deck cards are drawn with, by Scryfall id or else by name. */

@@ -10,7 +10,10 @@ const modal = {
 const overlay = {
 	create: vi.fn(() => modal),
 };
-const eventStore = reactive({ eventId: 1 as number | null });
+const eventStore = reactive({
+	eventId: 1 as number | null,
+	event: { game: 'mtg' as 'mtg' | 'op' },
+});
 const deckCache = {
 	getDeckLists: vi.fn(),
 	fetchDecks: vi.fn(),
@@ -34,10 +37,11 @@ mockNuxtImport('useOverlay', () => () => overlay);
 mockNuxtImport('useEventStore', () => () => eventStore);
 mockNuxtImport('usePlayerDeckCache', () => () => deckCache);
 
-function player(id: number, name: string) {
+function player(id: number, name: string, nickname: string | null = null) {
 	return ({
 		id,
 		name,
+		nickname,
 		updatedAt: new Date('2026-02-01'),
 	}) as never;
 }
@@ -45,6 +49,8 @@ function player(id: number, name: string) {
 describe('usePlayerDeckListModal', () => {
 	beforeEach(() => {
 		eventStore.eventId = 1;
+		eventStore.event.game = 'mtg';
+		vi.clearAllMocks();
 		deckCache.getDeckLists.mockReturnValue([]);
 		deckCache.fetchDecks.mockResolvedValue(undefined);
 	});
@@ -91,5 +97,16 @@ describe('usePlayerDeckListModal', () => {
 		await bob;
 
 		expect(modal.patch).not.toHaveBeenCalled();
+	});
+
+	// An OP Player's Deck List is theirs alone, shown in the OP layout and never edited from here (ADR-0074).
+	it('shows a One Piece Player\'s Deck List read-only, fetching no MTG decks', async () => {
+		eventStore.event.game = 'op';
+		const ana = player(4, '', 'ana');
+
+		await usePlayerDeckListModal().openPlayerDeckList(ana);
+
+		expect(modal.open).toHaveBeenCalledWith({ player: ana, readonly: true });
+		expect(deckCache.fetchDecks).not.toHaveBeenCalled();
 	});
 });

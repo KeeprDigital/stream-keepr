@@ -115,11 +115,21 @@ describe('metagameCardsQuerySchema', () => {
 		expect(metagameCardsQuerySchema.safeParse({ scope: 'all', board: 'both' }).success).toBe(false);
 	});
 
-	it('parses comma-separated excludeTypes into card-type buckets', () => {
-		expect(metagameCardsQuerySchema.parse({ scope: 'all', excludeTypes: 'Land,Other' }).excludeTypes).toEqual(['Land', 'Other']);
+	// Either Card Game's types: OP's are its categories past the Leader (ADR-0074).
+	it.each([
+		[
+			'Land,Other',
+			['Land', 'Other'],
+		],
+		[
+			'Character,Stage',
+			['Character', 'Stage'],
+		],
+	])('parses comma-separated excludeTypes %j into card-type buckets', (excludeTypes, buckets) => {
+		expect(metagameCardsQuerySchema.parse({ scope: 'all', excludeTypes }).excludeTypes).toEqual(buckets);
 	});
 
-	it.each(['Land,Tribal', ''])('refuses excludeTypes %j', (excludeTypes) => {
+	it.each(['Land,Tribal', 'Leader', ''])('refuses excludeTypes %j', (excludeTypes) => {
 		expect(metagameCardsQuerySchema.safeParse({ scope: 'all', excludeTypes }).success).toBe(false);
 	});
 

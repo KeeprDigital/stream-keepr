@@ -6,6 +6,7 @@ import type { ScreenOutputMetagameResponse } from '~~/shared/types/screenOutputR
 import type { MetagameChartBar } from '~~/shared/utils/metagameChart';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { eventConversionTarget } from '~~/shared/conversionTarget';
+import { offeredMetagameScope } from '~~/shared/utils/metagame';
 import { projectMetagameChart } from '~~/shared/utils/metagameChart';
 import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
@@ -19,6 +20,9 @@ export function useMetagameModeData(context: ScreenContext) {
 
 	const outputReads = useScreenOutputReads(context);
 	const eventStore = useEventStore();
+	const game = useScreenCardGame(context);
+	// The scope read: one the Card Game does not offer reads every Player (ADR-0074).
+	const scope = computed(() => offeredMetagameScope(game.value, config.value.scope));
 
 	// The server derives the breakdown from the saved configuration (#604) and,
 	// for an archetype breakdown, its Event's Conversion Target (ADR-0061), so the
@@ -83,11 +87,11 @@ export function useMetagameModeData(context: ScreenContext) {
 		if (config.value.headerText)
 			return config.value.headerText;
 
-		const prefix = config.value.scope === 'topN'
+		const prefix = scope.value === 'topN'
 			? `Top ${config.value.topN}`
-			: config.value.scope === 'minPoints'
+			: scope.value === 'minPoints'
 				? `${config.value.minPoints}+ Points`
-				: config.value.scope === 'playerList'
+				: scope.value === 'playerList'
 					? 'List'
 					: 'Full Field';
 
@@ -157,6 +161,8 @@ export function useMetagameModeData(context: ScreenContext) {
 		/** Rendering Readiness: its first read has answered or failed. */
 		ready: freshness.answered,
 		config,
+		/** The Card Game it renders for, whose Metagame decides the columns it shows. */
+		game,
 		loading,
 		/** Whether its rows are a read's answer, or it selects nothing: false only while its first read is in flight. */
 		answered: freshness.answered,

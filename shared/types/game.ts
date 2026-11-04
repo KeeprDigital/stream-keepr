@@ -1,6 +1,8 @@
 import type { OpCardColor } from './card/op';
+import type { MetagameScope } from './enums';
 import type { FeatureMatchDeckListReference } from './featureMatchDeckList';
 import type { FeatureMatchDefaults } from './featureMatchDefaults';
+import type { OpPlayerDeckListReference } from './opDeckList';
 
 export interface CounterTypeConfig {
 	key: string;
@@ -23,6 +25,17 @@ export interface FeatureMatchStateTracking {
 	sideboard: boolean;
 }
 
+/** What a Card Game's Metagame reads (ADR-0074). */
+export interface MetagameRules {
+	/** The Metagame Scopes it offers; any other reads every Player. */
+	scopes: readonly MetagameScope[];
+	/**
+	 * Whether it reads standings: win rate, average position, points and the
+	 * Conversion Target. Without them it reads participation only.
+	 */
+	readsStandings: boolean;
+}
+
 export interface GameConfig {
 	label: string;
 	defaults: FeatureMatchDefaults;
@@ -31,6 +44,7 @@ export interface GameConfig {
 	startingHandSize: number;
 	playerIdentityLabel: string;
 	tracks: FeatureMatchStateTracking;
+	metagame: MetagameRules;
 }
 
 // Game-specific player data (discriminated union on `type`)
@@ -41,9 +55,10 @@ export interface MtgPlayerGameData {
 }
 
 /**
- * A Feature Match Slot side's Leader: an inline snapshot of one Leader card,
- * taken from bandai-keepr when the operator picks it (ADR-0057). Its image is
- * the card's standard Printing.
+ * A Feature Match Slot side's Leader: one Leader card from the card catalogue,
+ * imaged by its standard Printing. The side stores only its number and every
+ * read fills in the rest from the catalogue (ADR-0074); a save is trusted for
+ * the number alone.
  */
 export interface OpLeader {
 	number: string;
@@ -62,6 +77,11 @@ export interface OpPlayerGameData {
 	 * The server owns its Mainboard count.
 	 */
 	featureMatchDeckList?: FeatureMatchDeckListReference | null;
+	/**
+	 * A Player's Deck List, by reference (ADR-0074): written only by the OP
+	 * Deck List write. Its Leader is the Player's Leader.
+	 */
+	deckList?: OpPlayerDeckListReference | null;
 }
 
 export type PlayerGameData = MtgPlayerGameData | OpPlayerGameData;

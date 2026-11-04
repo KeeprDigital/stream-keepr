@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
+import { metagameCardImageUrl } from '~~/shared/utils/metagame';
 
 const props = defineProps<{
 	scryfallId: string | null;
+	/** A One Piece card's standard Printing image, which it shows over any Scryfall face. */
+	imageUrl?: string | null;
 	name?: string;
 	size?: 'sm' | 'md' | 'lg';
 }>();
 
 const imageError = ref(false);
 
-const imageUrl = computed(() => scryfallCardImageUrl(props.scryfallId));
+const shownImageUrl = computed(() => metagameCardImageUrl(props));
 
 const widthClass = computed(() => {
 	switch (props.size) {
@@ -19,8 +21,8 @@ const widthClass = computed(() => {
 	}
 });
 
-// Reset error when scryfallId changes
-watch(() => props.scryfallId, () => {
+// Reset error when the image changes
+watch(shownImageUrl, () => {
 	imageError.value = false;
 });
 </script>
@@ -31,8 +33,8 @@ watch(() => props.scryfallId, () => {
 		:class="[widthClass]"
 	>
 		<img
-			v-if="imageUrl && !imageError"
-			:src="imageUrl"
+			v-if="shownImageUrl && !imageError"
+			:src="shownImageUrl"
 			:alt="name ?? 'Card image'"
 			class="w-full h-full object-cover"
 			loading="lazy"

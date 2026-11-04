@@ -1,17 +1,20 @@
 <script setup lang="ts">
+import type { Game } from '~~/shared/types/enums';
 import type { MetagameChartBar } from '~~/shared/utils/metagameChart';
 import { useElementSize } from '@vueuse/core';
 import { modeMotionVars, modeTokenVar } from '~/modules/screen-mode';
 
 /**
  * The Metagame Screen's chart display: meta share by Archetype as horizontal
- * bars, each labelled with its name, mana colours and share. HTML rather than
+ * bars, each labelled with its name, colours and share. HTML rather than
  * a canvas chart, so its text takes the Metagame Mode Tokens and stays crisp
  * at any output size. Its labels' type and colour are the row type and
  * primary text the Display hosting it sets.
  */
 const props = defineProps<{
 	bars: MetagameChartBar[];
+	/** The Card Game whose colours each Archetype holds. */
+	game: Game | undefined;
 }>();
 
 /** Each categorical colour slot's fill, slot 1 first. */
@@ -83,9 +86,10 @@ function fillOf(bar: MetagameChartBar): string {
 		>
 			<div class="metagame-chart-label">
 				<span class="metagame-chart-name" data-testid="metagame-chart-name">{{ bar.name }}</span>
-				<MtgManaColorDisplay
+				<MetagameArchetypeColors
 					v-if="bar.colors"
 					:colors="bar.colors"
+					:game="game"
 					size="sm"
 					class="metagame-chart-mana"
 				/>

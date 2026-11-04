@@ -4,7 +4,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import { mapFeatureMatchToResponse } from '~~/server/mappers/featureMatch';
 import { featureMatchTokenValues } from '~~/shared/featureMatchOverlayValues';
-import { LAW, ZORO } from '~~/test/helpers/opCards';
+import { LAW, NAMI, opLeaderCatalogueRow, ZORO } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
@@ -35,6 +35,7 @@ const { featureMatchSlotWriteModule } = await import('~~/server/modules/feature-
 const { featureMatchPromotionModule } = await import('~~/server/modules/feature-match-promotion');
 const { featureMatchService } = await import('~~/server/services/featureMatch');
 const { featureMatchStateService } = await import('~~/server/services/featureMatchState');
+const { opDeckListWriteModule } = await import('~~/server/modules/op-deck-list-write');
 
 afterAll(async () => {
 	await harness.close();
@@ -82,6 +83,7 @@ async function stageOp() {
 		.values({ name: 'One Piece Regional', game: 'op', featureMatchOrientation: 'horizontal' })
 		.returning({ id: schema.events.id });
 	const eventId = event!.id;
+	await db.insert(schema.cards).values([ZORO, LAW].map(opLeaderCatalogueRow)).onConflictDoNothing();
 	const [slot] = await db.insert(schema.featureMatches)
 		.values({
 			eventId,
@@ -97,6 +99,50 @@ async function stageOp() {
 		.returning();
 	await featureMatchStateService().createSessionForSlot(slot!.id, eventId);
 	return { eventId, slotId: slot!.id };
+}
+
+/** Ana and Ben picked from the Event's Players, each side showing that Player's Deck List (ADR-0074). */
+async function stageOpLinked() {
+	const [event] = await db.insert(schema.events)
+		.values({ name: 'One Piece Regional', game: 'op', featureMatchOrientation: 'horizontal' })
+		.returning({ id: schema.events.id });
+	const eventId = event!.id;
+	await db.insert(schema.cards).values([ZORO, LAW, NAMI].map(opLeaderCatalogueRow)).onConflictDoNothing();
+	const [ana, ben] = await db.insert(schema.players)
+		.values([
+			{ eventId, name: 'Ana' },
+			{ eventId, name: 'Ben' },
+		])
+		.returning();
+	await writePlayerDeckList(eventId, ana!.id, ZORO.number);
+	await writePlayerDeckList(eventId, ben!.id, LAW.number);
+	const slot = await featureMatchService().create(eventId, {});
+	await featureMatchSlotWriteModule().updateSetup({
+		eventId,
+		slotId: slot.id,
+		input: {
+			player1Id: ana!.id,
+			player1Data: { name: 'Ana' },
+			player2Id: ben!.id,
+			player2Data: { name: 'Ben' },
+		},
+	});
+	return { eventId, slotId: slot.id, anaId: ana!.id };
+}
+
+/** A TCG+ re-import of one Player's Deck List, led by `leaderNumber`. */
+async function writePlayerDeckList(eventId: number, playerId: number, leaderNumber: string) {
+	await opDeckListWriteModule().write({
+		eventId,
+		owner: { kind: 'player', playerId },
+		input: {
+			entries: [
+				{ number: leaderNumber, quantity: 1 },
+			],
+			leaderNumber,
+		},
+		source: 'import',
+	});
 }
 
 type Staged = Awaited<ReturnType<typeof stageMtg>>;
@@ -134,10 +180,8 @@ async function saveSetupWithNoSide(staged: Staged) {
 	});
 }
 
-/** Each side, left then right, as the Overlay and as the controls show it. */
-async function seats({ eventId, slotId }: Staged) {
+async function overlayTokens({ eventId, slotId }: Staged) {
 	const slot = mapFeatureMatchToResponse((await featureMatchService().findById(slotId, eventId))!);
-	const { sourceSnapshot, currentState } = slot.activeSession!;
 	const tokens = featureMatchTokenValues({
 		event: {
 			name: 'Open',
@@ -151,6 +195,13 @@ async function seats({ eventId, slotId }: Staged) {
 		round: null,
 		phase: null,
 	});
+	return { slot, tokens };
+}
+
+/** Each side, left then right, as the Overlay and as the controls show it. */
+async function seats(staged: Staged) {
+	const { slot, tokens } = await overlayTokens(staged);
+	const { sourceSnapshot, currentState } = slot.activeSession!;
 	const named = (name?: string | null, pronouns?: string | null) => pronouns
 		? `${name} (${pronouns})`
 		: name;
@@ -219,5 +270,85 @@ describe.each([
 		}
 
 		expect(await seats(staged)).toEqual({ overlay: order, controls: order });
+	});
+});
+
+/** Each side's Player and the Leader their Deck List is led by, as the Overlay and as the controls show it. */
+async function decks(staged: Staged) {
+	const { slot, tokens } = await overlayTokens(staged);
+	const { sourceSnapshot } = slot.activeSession!;
+	return {
+		overlay: (['player1', 'player2'] as const).map(side =>
+			`${tokens[`${side}Name`]}: ${tokens[`${side}Deck`]} ${tokens[`${side}DeckColors`]} ${tokens[`${side}LeaderImage`]}`),
+		controls: (['player1', 'player2'] as const).map((side) => {
+			const data = sourceSnapshot[side].data;
+			return `${data?.name}: ${data?.gameData?.type === 'op'
+				? data.gameData.leader?.name
+				: ''}`;
+		}),
+	};
+}
+
+function deckOf(name: string, leader: typeof ZORO) {
+	return `${name}: ${leader.name} ${leader.colors.join('/')} ${leader.imageUrl}`;
+}
+
+describe('a One Piece side linked to a Player', () => {
+	it.each([
+		{
+			path: 'linking',
+			steps: [],
+			order: [
+				['Ana', ZORO],
+				['Ben', LAW],
+			],
+		},
+		{
+			path: 'a swap',
+			steps: ['swap'],
+			order: [
+				['Ben', LAW],
+				['Ana', ZORO],
+			],
+		},
+		{
+			path: 'a re-import of Ana\'s Deck List',
+			steps: ['reimportAna'],
+			order: [
+				['Ana', NAMI],
+				['Ben', LAW],
+			],
+		},
+		{
+			path: 'a swap then a re-import of Ana\'s Deck List',
+			steps: ['swap', 'reimportAna'],
+			order: [
+				['Ben', LAW],
+				['Ana', NAMI],
+			],
+		},
+		{
+			path: 'a swap, a setup save, then a re-import of Ana\'s Deck List',
+			steps: ['swap', 'saveEditingAna', 'reimportAna'],
+			order: [
+				['Ben', LAW],
+				['Ana', NAMI],
+			],
+		},
+	] as const)('shows each Player\'s Leader on the side they sit on after $path', async ({ steps, order }) => {
+		const staged = await stageOpLinked();
+
+		for (const step of steps) {
+			if (step === 'swap')
+				await command(staged, 'SwapPlayers');
+			else if (step === 'saveEditingAna')
+				await saveSetupEditingAna(staged);
+			else
+				await writePlayerDeckList(staged.eventId, staged.anaId, NAMI.number);
+		}
+
+		const shown = await decks(staged);
+		expect(shown.overlay).toEqual(order.map(([name, leader]) => deckOf(name, leader)));
+		expect(shown.controls).toEqual(order.map(([name, leader]) => `${name}: ${leader.name}`));
 	});
 });

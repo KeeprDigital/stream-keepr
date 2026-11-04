@@ -44,7 +44,12 @@ const mockPlayerListStore = {
 };
 
 const mockEventStore = {
-	event: { id: 1, conversionMetric: 'minPoints', conversionThreshold: 0 },
+	event: {
+		id: 1,
+		game: 'mtg',
+		conversionMetric: 'minPoints',
+		conversionThreshold: 0,
+	} as Record<string, unknown>,
 	loadEvent: vi.fn().mockResolvedValue(undefined),
 	$reset: vi.fn(),
 };
@@ -185,6 +190,7 @@ describe('screenMetagameSettings', () => {
 		mockConfig.value = structuredClone(defaultConfig);
 		mockPlayerStore.isLoaded = false;
 		mockPlayerListStore.isLoaded = false;
+		mockEventStore.event.game = 'mtg';
 	});
 
 	// Each Mode Token's Look sits in the card for what it styles (ADR-0072):
@@ -382,6 +388,79 @@ describe('screenMetagameSettings', () => {
 		await nextTick();
 
 		expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({ sortBy: 'conversionRate' }));
+	});
+
+	// A One Piece Metagame reads participation only, and its cards no mana cost or Sideboard (ADR-0074).
+	describe('on a One Piece Event', () => {
+		beforeEach(() => {
+			mockEventStore.event.game = 'op';
+		});
+
+		it('offers only the scopes and orders it reads, and no Conversion Target', async () => {
+			mockConfig.value = {
+				...structuredClone(defaultConfig),
+				sortBy: 'conversionRate',
+			};
+			const wrapper = await mountComponent();
+			await flushPromises();
+
+			const select = (label: string) => wrapper.findAll('[data-testid="form-field"]').find(field => field.find('span').text() === label)!.get('[data-testid="u-select"]').text();
+			expect(select('Player scope')).toBe('All Players|Player List');
+			expect(select('Sort archetypes by')).toBe('Meta Share|Count');
+			expect(wrapper.find('[data-testid="event-conversion-target"]').exists()).toBe(false);
+		});
+
+		it.each([
+			[
+				'archetype',
+				[
+					'Archetype',
+					'Count',
+					'Share',
+					'Colors',
+				],
+			],
+			[
+				'cards',
+				[
+					'Card',
+					'Type',
+					'Inclusion',
+					'Avg Copies',
+					'Total Copies',
+					'Decks',
+					'Main',
+				],
+			],
+		] as const)('offers the %s table only the columns it reads', async (viewMode, labels) => {
+			mockConfig.value = {
+				...structuredClone(defaultConfig),
+				viewMode,
+			};
+			const wrapper = await mountComponent();
+			await flushPromises();
+
+			expect(wrapper.findAll('[data-testid="column-label"]').map(label => label.text())).toEqual(labels);
+		});
+
+		it('keeps the columns it does not offer where they were stored, when a column is toggled', async () => {
+			const wrapper = await mountComponent();
+			await flushPromises();
+
+			await wrapper.findAll('[data-testid="u-switch"]')[3]!.trigger('click');
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith({
+				archetypeColumns: [
+					{ key: 'archetype', visible: true },
+					{ key: 'count', visible: true },
+					{ key: 'metaShare', visible: true },
+					{ key: 'colors', visible: true },
+					{ key: 'winRate', visible: true },
+					{ key: 'avgPlace', visible: false },
+					{ key: 'conversionRate', visible: false },
+				],
+			});
+		});
 	});
 
 	it('persists reordered columns for the active table', async () => {

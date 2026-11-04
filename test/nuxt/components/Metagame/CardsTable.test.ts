@@ -11,6 +11,8 @@ const lightningBolt = {
 	colors: 'R',
 	cmc: 1,
 	manaCost: '{R}',
+	cardNumber: null as string | null,
+	imageUrl: null as string | null,
 	inclusionRate: 50,
 	avgCopies: 3,
 	totalCopies: 6,
@@ -46,7 +48,44 @@ function mountCardsTable(props: Record<string, unknown> = {}) {
 	});
 }
 
+const usopp = {
+	...lightningBolt,
+	id: 2,
+	name: 'Usopp',
+	cardType: 'Character',
+	colors: 'Green',
+	cmc: null,
+	manaCost: null,
+	cardNumber: 'OP01-040',
+	imageUrl: 'https://cards-img.keepr.digital/OP01-040.png',
+	sideboardCount: 0,
+};
+const gumGum = {
+	...usopp,
+	id: 3,
+	name: 'Gum-Gum Jet Pistol',
+	cardType: 'Event',
+};
+
 describe('metagameCardsTable', () => {
+	// An OP card has no mana cost, its deck no Sideboard, and its types are its categories past the Leader (ADR-0074).
+	it('on a One Piece Event, shows no Cost or Sideboard, and filters by OP card type', async () => {
+		const wrapper = mountCardsTable({
+			game: 'op',
+			entries: [usopp, gumGum],
+		});
+
+		expect(wrapper.findAll('th').map(column => column.attributes('data-column'))).not.toEqual(expect.arrayContaining(['manaCost']));
+		expect(wrapper.find('[data-column="sideboardCount"]').exists()).toBe(false);
+		expect(wrapper.text()).not.toContain('Side');
+		const chips = wrapper.findAll('button').filter(button => ['Character', 'Event'].includes(button.text()));
+		expect(chips.map(chip => chip.text())).toEqual(['Character', 'Event']);
+
+		await chips[1]!.trigger('click');
+
+		expect(wrapper.findAll('td').map(cell => cell.text())).toEqual(['Usopp']);
+	});
+
 	it('keeps the current rows on screen while a new read loads', async () => {
 		const wrapper = mountCardsTable();
 

@@ -155,6 +155,7 @@ const SAMPLE_PLAYERS: PlayerResponse[] = PLAYERS.map((player, index) => ({
 	id: playerId(index),
 	eventId: SAMPLE_ID,
 	name: player.name,
+	nickname: null,
 	pronouns: player.pronouns,
 	externalId: null,
 	externalSource: null,
@@ -273,6 +274,8 @@ function card(id: number, name: string, cardType: string, colors: string | null,
 			? manaCost.split('}').length - 1
 			: 0,
 		manaCost,
+		cardNumber: null,
+		imageUrl: null,
 		inclusionRate: Math.round((deckCount / PLAYERS.length) * 1000) / 10,
 		avgCopies,
 		totalCopies,
@@ -832,6 +835,77 @@ const OP_SAMPLE_LOWER_THIRD = sampleLowerThird(
 	`${OP_DECK_SIDE.leader.name} · ${formatOpColors(OP_DECK_SIDE.leader.colors)}`,
 );
 
+/**
+ * The One Piece sample's Metagame: an Archetype per Leader, counted by
+ * participation only, as a TCG+ Import's field reads (ADR-0074).
+ */
+const OP_ARCHETYPES = [
+	{
+		id: 1,
+		name: OP_DECK_SIDE.leader.name,
+		colors: formatOpColors(OP_DECK_SIDE.leader.colors),
+		pilots: ['Sebastián Castellanos-Ruiz', 'Hana Kobayashi', 'Diego Alvarez'],
+	},
+	{
+		id: 2,
+		name: OP_FEATURE_MATCH_SAMPLE_SIDES[1].leader.name,
+		colors: formatOpColors(OP_FEATURE_MATCH_SAMPLE_SIDES[1].leader.colors),
+		pilots: ['Mei Tanaka', 'Liam O\'Connell'],
+	},
+	{
+		id: 3,
+		name: 'Roronoa Zoro',
+		colors: 'Red',
+		pilots: ['Priya Raman', 'Tom Becker'],
+	},
+	{
+		id: 4,
+		name: 'Nami',
+		colors: 'Blue',
+		pilots: ['Aiko Mori'],
+	},
+] as const;
+const OP_PLAYER_COUNT = OP_ARCHETYPES.reduce((sum, archetype) => sum + archetype.pilots.length, 0);
+const [OP_SPOTLIT] = OP_ARCHETYPES;
+
+/** A card of the sample's Deck List, counted across the field's Deck Lists. */
+function opCardEntry(id: number, number: string, deckCount: number): CardBreakdownEntry {
+	const entry = OP_DECK_SIDE.deckList.find(item => item.number === number)!;
+	const totalCopies = deckCount * entry.quantity;
+	return {
+		id,
+		name: entry.card!.name,
+		cardType: {
+			character: 'Character',
+			event: 'Event',
+			stage: 'Stage',
+			leader: null,
+		}[entry.card!.category],
+		scryfallId: null,
+		colors: formatOpColors(entry.card!.colors),
+		cmc: null,
+		manaCost: null,
+		cardNumber: number,
+		imageUrl: entry.card!.imageUrl,
+		inclusionRate: Math.round((deckCount / OP_PLAYER_COUNT) * 1000) / 10,
+		avgCopies: entry.quantity,
+		totalCopies,
+		mainboardCount: totalCopies,
+		sideboardCount: 0,
+		mainboardDeckCount: deckCount,
+		sideboardDeckCount: 0,
+		deckCount,
+	};
+}
+
+const OP_SAMPLE_TOP_CARDS: CardBreakdownEntry[] = [
+	opCardEntry(1, 'OP05-119', 3),
+	opCardEntry(2, 'OP05-077', 3),
+	opCardEntry(3, 'OP05-062', 3),
+	opCardEntry(4, 'OP09-080', 2),
+	opCardEntry(5, 'OP05-066', 2),
+];
+
 /** What the One Piece dataset answers for each read a One Piece Event's Screen Modes make. */
 const OP_ANSWERS = {
 	card: { card: OP_SAMPLE_SCREEN_CARD, revision: 1 },
@@ -849,6 +923,43 @@ const OP_ANSWERS = {
 		leaderNumber: OP_DECK_SIDE.leader.number,
 		mainboardCount: mainboardCount(OP_DECK_SIDE),
 	} satisfies ScreenOutputFeatureMatchDeckListResponse,
+	// No standings: no win rate, place, record or Conversion (ADR-0074).
+	metagame: {
+		viewMode: 'archetype' as const,
+		breakdown: {
+			entries: OP_ARCHETYPES.map(({ pilots, ...archetype }) => ({
+				...archetype,
+				chartSeries: null,
+				count: pilots.length,
+				metaShare: Math.round((pilots.length / OP_PLAYER_COUNT) * 10000) / 100,
+				winRate: null,
+				avgPosition: null,
+				conversionRate: null,
+				keyCards: [],
+			})),
+			totalPlayers: OP_PLAYER_COUNT,
+			classifiedPlayers: OP_PLAYER_COUNT,
+			scope: 'all' as const,
+		},
+	},
+	topCards: { entries: OP_SAMPLE_TOP_CARDS, totalDecks: OP_PLAYER_COUNT, scope: 'all' as const },
+	archetypeSpotlight: {
+		archetype: { id: OP_SPOTLIT.id, name: OP_SPOTLIT.name, colors: OP_SPOTLIT.colors },
+		playerCount: OP_SPOTLIT.pilots.length,
+		metaShare: Math.round((OP_SPOTLIT.pilots.length / OP_PLAYER_COUNT) * 10000) / 100,
+		convertedCount: null,
+		conversionRate: null,
+		pilots: OP_SPOTLIT.pilots.map((name, index) => ({
+			id: index + 1,
+			name,
+			position: null,
+			points: null,
+			wins: null,
+			losses: null,
+			draws: null,
+		})),
+		topCards: OP_SAMPLE_TOP_CARDS.slice(0, 3),
+	},
 };
 
 /** The sample lineup as a full panel, so the preview shows every part of the mode. */
@@ -896,6 +1007,7 @@ const SCREEN_MODE_SAMPLE_CONFIGS: Record<Game, ModeConfigsMap> = {
 		'deck': {
 			deckSource: { type: 'featureMatchSlot', slotId: OP_SAMPLE_SLOT_ID, side: 'player1' },
 		},
+		'archetype-spotlight': { archetypeId: OP_SPOTLIT.id },
 		'talent': SAMPLE_TALENT_CONFIG,
 	},
 };
@@ -936,8 +1048,9 @@ const SAMPLE_READ_REPOSITORIES: Record<Game, SampleReadRepository> = {
 		topCut: answer(ANSWERS.topCut),
 		roundClock: answer(ANSWERS.roundClock),
 		playerDecks: answer(ANSWERS.playerDecks),
+		opPlayerDeckList: none('One Piece Player'),
 	},
-	// A One Piece Event models no Players, Rounds, results or Metagame (ADR-0057).
+	// A One Piece Event models no Rounds or results (ADR-0057); its Metagame reads participation only (ADR-0074).
 	op: {
 		event: none('Event context'),
 		card: answer(OP_ANSWERS.card),
@@ -947,14 +1060,16 @@ const SAMPLE_READ_REPOSITORIES: Record<Game, SampleReadRepository> = {
 		playerHistory: none('Player History'),
 		standings: none('Standings'),
 		pairings: none('Pairings'),
-		archetypeSpotlight: none('Archetype'),
+		archetypeSpotlight: answer(OP_ANSWERS.archetypeSpotlight),
 		headToHead: none('Head-to-Head'),
 		talent: answer(SAMPLE_TALENTS),
-		metagame: none('Metagame'),
-		topCards: none('Most Played Cards'),
+		metagame: answer(OP_ANSWERS.metagame),
+		topCards: answer(OP_ANSWERS.topCards),
 		topCut: none('Top Cut'),
 		roundClock: none('Round'),
 		playerDecks: none('Player'),
+		// A One Piece Deck List Screen's sample is a Feature Match Slot side's.
+		opPlayerDeckList: none('Player'),
 	},
 };
 

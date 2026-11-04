@@ -1,48 +1,16 @@
-import type { OpCardCategory, OpCardColor } from './card/op';
+import type { OpCatalogueCard } from './card/op';
+import type { OpDeckListEntry, OpDeckListView, OpDeckListWarning } from './opDeckList';
 
 /**
  * A Feature Match Deck List: the One Piece Card Game Deck List one player side
  * of a Feature Match Slot holds, pasted by the operator (ADR-0057).
  */
 
-/** The card behind an entry, as bandai-keepr answered it when the Deck List was pasted. */
-export interface FeatureMatchDeckListCard {
-	name: string;
-	category: OpCardCategory;
-	colors: OpCardColor[];
-	cost: number | null;
-	power: number | null;
-	counter: number | null;
-	/** The card's standard Printing image. */
-	imageUrl: string;
-}
-
-export interface FeatureMatchDeckListEntry {
-	number: string;
-	quantity: number;
-	/** `null` for a number bandai-keepr does not know: a number-only placeholder. */
-	card: FeatureMatchDeckListCard | null;
-}
-
-export type FeatureMatchDeckListWarning
-	= | { code: 'MAINBOARD_COUNT'; message: string; count: number }
-		| { code: 'TOO_MANY_COPIES'; message: string; number: string; quantity: number }
-		| { code: 'NO_LEADER'; message: string }
-		| { code: 'MULTIPLE_LEADERS'; message: string; numbers: string[] }
-		| { code: 'OFF_COLOR'; message: string; numbers: string[] }
-		| { code: 'UNKNOWN_CARD'; message: string; numbers: string[] };
-
-/** A Deck List as a preview, or a saved one, shows it. */
-export interface FeatureMatchDeckListView {
-	/** Every pasted card in paste order, Leaders included; a number pasted twice is one entry. */
-	entries: FeatureMatchDeckListEntry[];
-	/** The card number of the Deck List's Leader: its first leader-category entry. */
-	leaderNumber: string | null;
-	/** Cards in the Mainboard: every entry but the Leaders, number-only ones included. */
-	mainboardCount: number;
-	/** Deck rule breaches. They never refuse a save. */
-	warnings: FeatureMatchDeckListWarning[];
-}
+/** The card behind an entry: the card catalogue's row for its number (ADR-0074). */
+export type FeatureMatchDeckListCard = OpCatalogueCard;
+export type FeatureMatchDeckListEntry = OpDeckListEntry;
+export type FeatureMatchDeckListWarning = OpDeckListWarning;
+export type FeatureMatchDeckListView = OpDeckListView;
 
 export interface SavedFeatureMatchDeckList extends FeatureMatchDeckListView {
 	id: number;

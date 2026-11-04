@@ -3,6 +3,7 @@ import type { PlayerSlotData } from '~~/shared/api';
 import { and, asc, desc, eq, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { archetypes, featureMatches, matches, phases, playerDecks, players, rounds } from '~~/server/db/schema';
+import { linkedOpSideGameData } from '~~/server/services/featureMatchSlotLeader';
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
 import { chunkJsonRows } from '~~/server/utils/db';
 import { isStateConflictFailure } from '~~/server/utils/errors';
@@ -16,6 +17,7 @@ import { randomCommandId } from '~~/shared/utils/uuid';
 function playerToMatchData(player: DbPlayer): PlayerSlotData {
 	return {
 		name: player.name,
+		nickname: player.nickname,
 		pronouns: player.pronouns,
 		externalId: player.externalId,
 		externalSource: player.externalSource,
@@ -243,26 +245,33 @@ export function playerFeatureMatchSyncService() {
 				// `Object.assign` also mutates its target where the spread did not, so this now
 				// depends on `playerToMatchData` handing back a fresh object per call. No test
 				// held that property, so one now does — see the pin in this module's suite.
-				const updatedData = hasDeckIdentity && existingData.deckId != null && !selectedDeck
+				// A One Piece side linked to a Player shows the Player's Leader and Deck
+				// List, by reference, and holds none of its own (ADR-0074).
+				const isOpSide = player.gameData?.type === 'op' || existingData?.gameData?.type === 'op';
+				const updatedData = isOpSide
 					? Object.assign(playerToMatchData(player), {
+						gameData: linkedOpSideGameData(player.gameData),
+					} satisfies Partial<PlayerSlotData>)
+					: hasDeckIdentity && existingData.deckId != null && !selectedDeck
+						? Object.assign(playerToMatchData(player), {
 						// The exact historical deck is no longer in the current submitted-deck
 						// snapshot. Preserve its embedded identity instead of rebinding this
 						// match to another format/primary deck.
-						deckId: existingData.deckId,
-						archetypeId: existingData.archetypeId,
-						gameData: existingData.gameData,
-					} satisfies Partial<PlayerSlotData>)
-					: applyMatchDeckSnapshot(
-							playerToMatchData(player),
-							selectedDeck,
-							selectedDeck?.archetypeId == null
-								? null
-								: archetypesById.get(selectedDeck.archetypeId),
-							{
-								expectsMtgDeck: playerDeckRows.length > 0
-									|| existingData?.gameData?.type === 'mtg',
-							},
-						);
+							deckId: existingData.deckId,
+							archetypeId: existingData.archetypeId,
+							gameData: existingData.gameData,
+						} satisfies Partial<PlayerSlotData>)
+						: applyMatchDeckSnapshot(
+								playerToMatchData(player),
+								selectedDeck,
+								selectedDeck?.archetypeId == null
+									? null
+									: archetypesById.get(selectedDeck.archetypeId),
+								{
+									expectsMtgDeck: playerDeckRows.length > 0
+										|| existingData?.gameData?.type === 'mtg',
+								},
+							);
 				if (jsonValuesEqual(existingData, updatedData))
 					continue;
 				if (side === 1)

@@ -34,9 +34,9 @@ const { playerUpdateModule } = await import('~~/server/modules/player-update');
 
 afterAll(async () => await harness.close());
 
-async function createEvent() {
+async function createEvent(game: 'mtg' | 'op' = 'mtg') {
 	const [event] = await db.insert(schema.events)
-		.values({ name: 'Player Open', game: 'mtg', featureMatchOrientation: 'horizontal' })
+		.values({ name: 'Player Open', game, featureMatchOrientation: 'horizontal' })
 		.returning({ id: schema.events.id });
 	return event!.id;
 }
@@ -179,6 +179,101 @@ describe('updating a Player', () => {
 	});
 });
 
+describe('a Player\'s name and Nickname', () => {
+	// Name is optional on One Piece, where the Nickname stands in; Magic still requires one (ADR-0074).
+	it.each([
+		{
+			game: 'op',
+			input: { name: '', nickname: 'linlin_88' },
+			stored: { name: '', nickname: 'linlin_88' },
+		},
+		{
+			game: 'op',
+			input: { name: 'Big Mom', nickname: null },
+			stored: { name: 'Big Mom', nickname: null },
+		},
+		{
+			game: 'mtg',
+			input: { name: 'Ava Reed' },
+			stored: { name: 'Ava Reed', nickname: null },
+		},
+	] as const)('creates a $game Player from $input', async ({ game, input, stored }) => {
+		const eventId = await createEvent(game);
+
+		const created = await playerUpdateModule().createPlayer({ eventId, input });
+
+		expect(created).toMatchObject(stored);
+		expect(await readPlayer(created.id)).toMatchObject(stored);
+	});
+
+	it.each([
+		{
+			game: 'op',
+			input: { name: '  ', nickname: '' },
+		},
+		{
+			game: 'mtg',
+			input: { name: '' },
+		},
+		{
+			game: 'mtg',
+			input: { name: '', nickname: 'linlin_88' },
+		},
+		{
+			game: 'mtg',
+			input: { name: 'Ava Reed', nickname: 'ava' },
+		},
+	] as const)('refuses a $game Player from $input, saving nothing', async ({ game, input }) => {
+		const eventId = await createEvent(game);
+
+		await expect(playerUpdateModule().createPlayer({ eventId, input }))
+			.rejects
+			.toMatchObject({ statusCode: 400 });
+		expect(await db.select().from(schema.players).where(eq(schema.players.eventId, eventId))).toEqual([]);
+	});
+
+	it('falls back to the Nickname when a One Piece Player\'s name is cleared', async () => {
+		const eventId = await createEvent('op');
+		const [player] = await db.insert(schema.players).values({ eventId, name: 'Big Mom', nickname: 'linlin_88' }).returning();
+
+		const updated = await playerUpdateModule().updatePlayer({
+			eventId,
+			playerId: player!.id,
+			input: { name: '' },
+		});
+
+		expect(updated).toMatchObject({ name: '', nickname: 'linlin_88' });
+	});
+
+	// A cleared field would leave the Player shown blank.
+	it.each([
+		{
+			game: 'op',
+			held: { name: 'Big Mom', nickname: null },
+			input: { name: '' },
+		},
+		{
+			game: 'op',
+			held: { name: '', nickname: 'linlin_88' },
+			input: { nickname: null },
+		},
+		{
+			game: 'mtg',
+			held: { name: 'Alice', nickname: null },
+			input: { name: '' },
+		},
+	] as const)('refuses $input on a $game Player holding $held, keeping them as they were', async ({ game, held, input }) => {
+		const eventId = await createEvent(game);
+		const [player] = await db.insert(schema.players).values({ eventId, ...held }).returning();
+
+		await expect(playerUpdateModule().updatePlayer({ eventId, playerId: player!.id, input }))
+			.rejects
+			.toMatchObject({ statusCode: 400 });
+		expect(await readPlayer(player!.id)).toMatchObject(held);
+		expect(publication.playerUpdated).not.toHaveBeenCalled();
+	});
+});
+
 describe('reviewing a Deck List', () => {
 	it('records the Archetype on a primary Deck List and projects it onto the Player', async () => {
 		const eventId = await createEvent();
@@ -242,6 +337,77 @@ describe('reviewing a Deck List', () => {
 
 		const [stored] = await db.select().from(schema.playerDecks).where(eq(schema.playerDecks.id, deck.id));
 		expect(stored?.reviewedAt).toBeNull();
+	});
+
+	// Archetype Review is not offered on OP: a Player's Archetype follows their Leader (ADR-0074).
+	it('is refused on a One Piece Card Game Event', async () => {
+		const eventId = await createEvent('op');
+		const archetype = await createArchetype(eventId, 'Roronoa Zoro');
+		const player = await createPlayer(eventId);
+		const deck = await createDeck(eventId, player.id);
+
+		await expect(playerUpdateModule().reviewPlayerDeck({
+			eventId,
+			playerId: player.id,
+			deckId: deck.id,
+			archetypeId: archetype.id,
+		}))
+			.rejects
+			.toMatchObject({ statusCode: 400 });
+
+		const [stored] = await db.select().from(schema.playerDecks).where(eq(schema.playerDecks.id, deck.id));
+		expect(stored?.reviewedAt).toBeNull();
+	});
+});
+
+// The OP Deck List write owns a One Piece Player's game data and Archetype (ADR-0074).
+describe('a One Piece Card Game Player\'s Deck List reference and Archetype', () => {
+	const held = {
+		type: 'op' as const,
+		deckList: { id: 7, mainboardCount: 50, leaderNumber: 'OP01-001' },
+	};
+
+	it('are kept over a Player write naming others', async () => {
+		const eventId = await createEvent('op');
+		const archetype = await createArchetype(eventId, 'Roronoa Zoro');
+		const other = await createArchetype(eventId, 'Nami');
+		const [player] = await db.insert(schema.players)
+			.values({
+				eventId,
+				name: '',
+				nickname: 'alice',
+				gameData: held,
+				archetypeId: archetype.id,
+			})
+			.returning();
+
+		await playerUpdateModule().updatePlayer({
+			eventId,
+			playerId: player!.id,
+			input: {
+				name: 'Alice',
+				gameData: { type: 'op', leader: null },
+				archetypeId: other.id,
+			},
+		});
+
+		expect(await readPlayer(player!.id)).toMatchObject({ name: 'Alice', gameData: held, archetypeId: archetype.id });
+	});
+
+	it('are none on a Player created by hand', async () => {
+		const eventId = await createEvent('op');
+		const archetype = await createArchetype(eventId, 'Roronoa Zoro');
+
+		const created = await playerUpdateModule().createPlayer({
+			eventId,
+			input: {
+				name: 'Alice',
+				gameData: { type: 'op', leader: null },
+				archetypeId: archetype.id,
+			},
+		});
+
+		expect(await readPlayer((created as { id: number }).id)).toMatchObject({ gameData: null, archetypeId: null });
 	});
 });
 

@@ -1,10 +1,11 @@
-import type { DbFeatureMatchDeckListEntry, DbFeatureMatchDeckListEntryInsert } from '~~/server/db/schema';
+import type { DbFeatureMatchDeckListEntryInsert } from '~~/server/db/schema';
 import type { PlayerSlotData } from '~~/shared/api';
-import type { FeatureMatchDeckListEntry, FeatureMatchDeckListReference, FeatureMatchDeckListView, SavedFeatureMatchDeckList } from '~~/shared/types/featureMatchDeckList';
+import type { FeatureMatchDeckListReference, FeatureMatchDeckListView, SavedFeatureMatchDeckList } from '~~/shared/types/featureMatchDeckList';
 import { and, asc, eq, lt, not } from 'drizzle-orm';
 import { db } from '~~/server/db';
-import { featureMatchDeckListEntries, featureMatchDeckLists } from '~~/server/db/schema';
-import { featureMatchDeckListView } from '~~/server/modules/feature-match-deck-list/paste';
+import { cards, featureMatchDeckListEntries, featureMatchDeckLists } from '~~/server/db/schema';
+import { opDeckListView } from '~~/server/modules/op-deck-list-write/paste';
+import { opCatalogueCardColumns, opCatalogueRowFor, toOpCatalogueCard } from '~~/server/services/opCardCatalogue';
 import { chunkRowsWithinParameterBudget, inJsonArray } from '~~/server/utils/db';
 import { runCompensation } from '~~/server/utils/errors';
 import { getOpGameData } from '~~/shared/utils/gameData';
@@ -16,27 +17,9 @@ export function deckListReferenceOf(data: PlayerSlotData | null | undefined): Fe
 	return getOpGameData(data.gameData).featureMatchDeckList ?? null;
 }
 
-function toEntry(row: DbFeatureMatchDeckListEntry): FeatureMatchDeckListEntry {
-	return {
-		number: row.cardNumber,
-		quantity: row.quantity,
-		card: row.name !== null && row.category !== null && row.imageUrl !== null
-			? {
-					name: row.name,
-					category: row.category,
-					colors: row.colors ?? [],
-					cost: row.cost,
-					power: row.power,
-					counter: row.counter,
-					imageUrl: row.imageUrl,
-				}
-			: null,
-	};
-}
-
-/** Storage of Feature Match Deck Lists: each with its entries' inline card snapshots. */
+/** Storage of Feature Match Deck Lists: each entry a card number, its card read from the card catalogue (ADR-0074). */
 export function featureMatchDeckListService() {
-	/** Stores a Deck List for a Slot, entries and all, or nothing. */
+	/** Stores a Deck List for a Slot, entries and all, or nothing. An entry keeps its number and quantity; its card is the catalogue's. */
 	const create = async (eventId: number, slotId: number, sourceText: string, view: FeatureMatchDeckListView): Promise<number> => {
 		const [deckList] = await db.insert(featureMatchDeckLists)
 			.values({
@@ -54,13 +37,6 @@ export function featureMatchDeckListService() {
 			sortOrder,
 			quantity: entry.quantity,
 			cardNumber: entry.number,
-			name: entry.card?.name ?? null,
-			category: entry.card?.category ?? null,
-			colors: entry.card?.colors ?? null,
-			cost: entry.card?.cost ?? null,
-			power: entry.card?.power ?? null,
-			counter: entry.card?.counter ?? null,
-			imageUrl: entry.card?.imageUrl ?? null,
 		}));
 		const insertEntries = (chunk: DbFeatureMatchDeckListEntryInsert[]) => db.insert(featureMatchDeckListEntries).values(chunk);
 		const [first, ...rest] = chunkRowsWithinParameterBudget(rows, insertEntries).map(insertEntries);
@@ -86,15 +62,24 @@ export function featureMatchDeckListService() {
 		});
 		if (!deckList)
 			return null;
-		const rows = await db.select()
+		const rows = await db.select({
+			number: featureMatchDeckListEntries.cardNumber,
+			quantity: featureMatchDeckListEntries.quantity,
+			...opCatalogueCardColumns,
+		})
 			.from(featureMatchDeckListEntries)
+			.leftJoin(cards, opCatalogueRowFor(featureMatchDeckListEntries.cardNumber))
 			.where(eq(featureMatchDeckListEntries.deckListId, id))
 			.orderBy(asc(featureMatchDeckListEntries.sortOrder));
 		return {
 			id: deckList.id,
 			slotId: deckList.slotId,
 			sourceText: deckList.sourceText,
-			...featureMatchDeckListView(rows.map(toEntry)),
+			...opDeckListView(rows.map(row => ({
+				number: row.number,
+				quantity: row.quantity,
+				card: toOpCatalogueCard(row),
+			}))),
 		};
 	};
 

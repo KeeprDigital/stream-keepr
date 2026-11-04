@@ -13,6 +13,11 @@ export interface FeatureMatchSlotSides {
 	} | null;
 }
 
+/** The Slot field holding each side's data, in the Slot's own order. */
+export const SLOT_SIDE_DATA_KEY = { player1: 'player1Data', player2: 'player2Data' } as const satisfies Record<PlayerSide, keyof FeatureMatchSlotSides>;
+/** The Slot field seating each side's Player, in the Slot's own order. */
+export const SLOT_SIDE_PLAYER_KEY = { player1: 'player1Id', player2: 'player2Id' } as const satisfies Record<PlayerSide, keyof FeatureMatchSlotSides>;
+
 export interface FeatureMatchSidePlayer {
 	playerId: number | null;
 	data: FeatureMatchSnapshotPlayerData | PlayerSlotData | null;

@@ -49,6 +49,9 @@ const SHOWS: Record<Game, Partial<Record<ScreenMode, Shown>>> = {
 			&& text('Sebastián Castellanos-Ruiz')(rendering),
 		'broadcast-graphics': text('Monkey.D.Luffy · Purple'),
 		'feature-match-overlay': text('Enel'),
+		'metagame': text('Roronoa Zoro'),
+		'top-cards': rendering => rendering.find('[data-testid="top-cards-item"] img[src="https://cards-img.keepr.digital/OP05-119.png"]').exists(),
+		'archetype-spotlight': text('Hana Kobayashi'),
 		'talent': text('Jordan Reyes'),
 	},
 	mtg: {

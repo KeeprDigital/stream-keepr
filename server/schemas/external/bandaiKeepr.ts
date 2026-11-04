@@ -37,5 +37,19 @@ export const bandaiKeeprCardDetailSchema = z.object({
 	})),
 });
 
+/**
+ * `POST /cards/collection`: one result per identifier asked, each a `card` or
+ * an `error`. Asked by number only, `not_found` is the one error expected.
+ */
+export const bandaiKeeprCollectionSchema = z.object({
+	results: z.array(z.object({
+		index: z.number().int().nonnegative(),
+		card: bandaiKeeprCardSchema.optional(),
+		error: z.object({
+			code: z.string(),
+		}).optional(),
+	})),
+});
+
 export type BandaiKeeprCard = z.infer<typeof bandaiKeeprCardSchema>;
 export type BandaiKeeprCardDetail = z.infer<typeof bandaiKeeprCardDetailSchema>;

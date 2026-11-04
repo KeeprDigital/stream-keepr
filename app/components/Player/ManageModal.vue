@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { MtgPlayerGameData, OpPlayerGameData } from '~~/shared/types/game';
 import type { Player, PlayerData } from '~/types';
+import { playerDisplayName, unshownPlayerReason } from '~~/shared/utils/playerName';
 import { LazyUIConfirmDeleteModal } from '#components';
 import { toCreatePlayerInput, toPlayerData } from '~/types/player';
 
@@ -27,6 +28,7 @@ const { runRequest } = useRequestFeedback();
 function playerToFormData(player: Player): PlayerData {
 	return toPlayerData({
 		name: player.name,
+		nickname: player.nickname,
 		pronouns: player.pronouns,
 		lgs: player.lgs,
 		wins: player.wins,
@@ -51,9 +53,6 @@ const { formData: gameDataForm, isDirty: isGameDataDirty, reset: resetGameData }
 		mtg: (props.player.gameData as MtgPlayerGameData)?.type === 'mtg'
 			? { ...(props.player.gameData as MtgPlayerGameData) }
 			: { type: 'mtg', deckName: null, deckColors: null } as MtgPlayerGameData,
-		op: (props.player.gameData as OpPlayerGameData)?.type === 'op'
-			? { ...(props.player.gameData as OpPlayerGameData) }
-			: { type: 'op', leader: null } as OpPlayerGameData,
 	},
 });
 
@@ -61,13 +60,6 @@ const mtgGameData = computed({
 	get: () => gameDataForm.value.mtg,
 	set: (value: MtgPlayerGameData) => {
 		gameDataForm.value.mtg = value;
-	},
-});
-
-const opGameData = computed({
-	get: () => gameDataForm.value.op,
-	set: (value: OpPlayerGameData) => {
-		gameDataForm.value.op = value;
 	},
 });
 
@@ -87,9 +79,12 @@ const { confirmDiscard } = useModalUnsavedChanges(computed(() => isDirty.value &
 const saving = ref(false);
 const formId = `edit-player-${props.player.id}-form`;
 
+// The server's rule: a One Piece Card Game Player may go by their Nickname alone (ADR-0074).
+const isValid = computed(() => unshownPlayerReason(props.game, formData.value) === null);
+
 async function handleSave() {
-	const name = formData.value.name?.trim();
-	if (!name || !eventStore.eventId)
+	const name = formData.value.name?.trim() ?? '';
+	if (!isValid.value || !eventStore.eventId)
 		return;
 
 	const input = toCreatePlayerInput({
@@ -97,7 +92,8 @@ async function handleSave() {
 		name,
 		gameData: props.game === 'mtg'
 			? mtgGameData.value
-			: opGameData.value,
+			// A One Piece Player's game data is their Deck List's, written by the OP Deck List write (ADR-0074).
+			: undefined,
 	});
 
 	await runRequest(
@@ -126,7 +122,7 @@ async function handleDelete() {
 	const deleteModal = overlay.create(LazyUIConfirmDeleteModal);
 	const confirmed = await deleteModal.open({
 		title: 'Delete Player',
-		itemName: props.player.name,
+		itemName: playerDisplayName(props.player),
 	}).result;
 
 	if (!confirmed)
@@ -153,8 +149,6 @@ async function handleCancel() {
 	if (await confirmDiscard())
 		emit('close');
 }
-
-const isValid = computed(() => (formData.value.name?.trim().length ?? 0) > 0);
 </script>
 
 <template>
@@ -187,10 +181,10 @@ const isValid = computed(() => (formData.value.name?.trim().length ?? 0) > 0);
 				<PlayerFormFields
 					v-model="formData"
 					v-model:mtg-game-data="mtgGameData"
-					v-model:op-game-data="opGameData"
 					:game="game"
 					:pronouns-enabled="pronounsEnabled"
 					:lgs-enabled="lgsEnabled"
+					:nickname-imported="player.externalSource === 'tcgplus'"
 				/>
 			</UForm>
 		</template>

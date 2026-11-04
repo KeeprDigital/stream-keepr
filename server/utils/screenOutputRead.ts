@@ -118,14 +118,18 @@ export async function requireScreenOutputFeatureMatchSlot(event: H3Event, slotId
 
 /**
  * The Players whose records and decks a Screen's current mode renders: the Deck
- * mode's selected Player, or the two sides of the Feature Match Slot it shows.
+ * mode's selected Player, or the two sides of the Feature Match Slot it shows,
+ * a Deck List Screen's Slot side included, since a linked side shows its
+ * Player's Deck List (ADR-0074).
  */
 export async function screenOutputPublishedPlayerIds(screen: DbScreen, eventId: number): Promise<number[]> {
 	if (screen.currentMode === 'deck') {
 		const source = screenOutputModeConfig(screen, 'deck').deckSource;
-		return source.type === 'player' && source.playerId !== null
-			? [source.playerId]
-			: [];
+		if (source.type !== 'featureMatchSlot') {
+			return source.type === 'player' && source.playerId !== null
+				? [source.playerId]
+				: [];
+		}
 	}
 
 	const slotId = screenOutputFeatureMatchSlotId(screen);

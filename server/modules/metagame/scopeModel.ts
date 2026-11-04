@@ -1,9 +1,11 @@
 import type { SQL } from 'drizzle-orm';
-import type { BoardSelection, MetagameScope } from '~~/shared/types/enums';
+import type { BoardSelection, Game, MetagameScope, PointsSystem } from '~~/shared/types/enums';
+import type { MetagameRules } from '~~/shared/types/game';
 import type { PlayerScope } from './scope';
 import { and, eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
-import { archetypes, playerDecks, players } from '~~/server/db/schema';
+import { archetypes, events, playerDecks, players } from '~~/server/db/schema';
+import { getMetagameRules } from '~~/shared/config/games';
 import { countScopedPlayers, getPlayerScope, playerScopeWhere } from './scope';
 
 export interface MetagameScopeQuery {
@@ -23,6 +25,13 @@ export interface MetagameDeckUniverse {
 
 export interface MetagameScopeModel {
 	eventId: number;
+	/** The Event's Card Game, whose card rules the Metagame counts by. */
+	game: Game;
+	/** What the Event's Metagame reads (ADR-0074). */
+	rules: MetagameRules;
+	/** The Event's points system: highlander points are Magic's, so an OP Metagame reads none. */
+	pointsSystem: PointsSystem | null;
+	/** The scope read: one the Card Game does not offer reads every Player. */
 	scope: MetagameScope;
 	playerScope: PlayerScope;
 	playerWhere: SQL;
@@ -51,8 +60,26 @@ async function resolveArchetypeFilterId(eventId: number, archetypeId?: number, a
 	return archetype?.id ?? null;
 }
 
+/** The Card Game whose card rules an Event's Metagame counts by. */
+export async function readMetagameGame(eventId: number): Promise<Game> {
+	const event = await db.query.events.findFirst({
+		where: eq(events.id, eventId),
+		columns: { game: true },
+	});
+	return event?.game ?? 'mtg';
+}
+
 export async function resolveMetagameScope(eventId: number, query: MetagameScopeQuery): Promise<MetagameScopeModel> {
-	const playerScope = getPlayerScope(eventId, query.scope, query.topN, query.playerListId, query.minPoints);
+	const event = await db.query.events.findFirst({
+		where: eq(events.id, eventId),
+		columns: { game: true, pointsSystem: true },
+	});
+	const game = event?.game ?? 'mtg';
+	const rules = getMetagameRules(game);
+	const scope = rules.scopes.includes(query.scope)
+		? query.scope
+		: 'all';
+	const playerScope = getPlayerScope(eventId, scope, query.topN, query.playerListId, query.minPoints);
 	const playerWhere = playerScopeWhere(playerScope);
 	const resolvedArchetypeId = await resolveArchetypeFilterId(eventId, query.archetypeId, query.archetype);
 	const playerFilters: SQL[] = [playerWhere];
@@ -76,7 +103,12 @@ export async function resolveMetagameScope(eventId: number, query: MetagameScope
 
 	return {
 		eventId,
-		scope: query.scope,
+		game,
+		rules,
+		pointsSystem: game === 'mtg'
+			? event?.pointsSystem ?? null
+			: null,
+		scope,
 		playerScope,
 		playerWhere,
 		playerFilters,

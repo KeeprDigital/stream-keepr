@@ -214,6 +214,12 @@ describe('graphic Input Binding field catalog', () => {
 		}))).toBe('3');
 	});
 
+	// Shown by the shared name-or-Nickname rule (ADR-0074).
+	it('names a One Piece Player with no name by their Nickname', () => {
+		expect(resolveGraphicBindingField('player', 'player.name', { name: '', nickname: 'linlin_88' }, dataSet()))
+			.toBe('linlin_88');
+	});
+
 	it('resolves nothing for a field the entity has no value for', () => {
 		expect(resolveGraphicBindingField('player', 'player.pronouns', { name: 'Ava Reed' }, dataSet()))
 			.toBeUndefined();
@@ -242,14 +248,24 @@ describe('graphic Input Binding field catalog', () => {
 			.toBeUndefined();
 	});
 
-	it('resolves a side\'s Deck List Mainboard count through player.deckCardCount, on One Piece Events only', () => {
-		const withDeckList = {
-			name: 'Ava',
+	// A linked side, and a Player, show the Player's Deck List (ADR-0074); an unlinked side its Feature Match Deck List.
+	it.each([
+		{
+			held: 'a Feature Match Deck List',
 			gameData: {
 				type: 'op' as const,
 				featureMatchDeckList: { id: 7, mainboardCount: 50 },
 			},
-		};
+		},
+		{
+			held: 'a Player\'s Deck List',
+			gameData: {
+				type: 'op' as const,
+				deckList: { id: 7, mainboardCount: 50, leaderNumber: 'OP01-003' },
+			},
+		},
+	])('resolves the Mainboard count of $held through player.deckCardCount, on One Piece Events only', ({ gameData }) => {
+		const withDeckList = { name: 'Ava', gameData };
 
 		expect(resolveGraphicBindingField('player', 'player.deckCardCount', withDeckList, dataSet())).toBe(50);
 		expect(resolveGraphicBindingField('player', 'player.deckCardCount', {

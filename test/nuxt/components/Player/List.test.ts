@@ -191,3 +191,54 @@ describe('playerList rows', () => {
 		expect(wrapper.emitted(event as string)).toEqual([args]);
 	});
 });
+
+describe('playerList on a One Piece Card Game Event', () => {
+	// Shown by the shared name-or-Nickname rule, with no Rounds behind a record or match history (ADR-0074).
+	it.each([
+		[
+			{ name: '', nickname: 'linlin_88' },
+			'linlin_88',
+		],
+		[
+			{ name: 'Big Mom', nickname: 'linlin_88' },
+			'Big Mom',
+		],
+	])('shows %j as %s, beside their Nickname', (identity, shown) => {
+		const wrapper = mount(PlayerList, {
+			props: {
+				players: [
+					createMockPlayer({ id: 7, ...identity }) as never,
+				],
+				game: 'op',
+			},
+			global: {
+				stubs: { ...nuxtUiStubs, UTable: UTableStub, MtgManaColorDisplay: true },
+			},
+		});
+
+		expect(wrapper.get('[data-column="name"]').text()).toBe(shown);
+		expect(wrapper.find('[data-column="name"] button').exists()).toBe(false);
+		expect(wrapper.get('[data-column="nickname"]').text()).toBe('linlin_88');
+		expect(wrapper.find('[data-column="record"]').exists()).toBe(false);
+	});
+
+	it('edits a Player\'s Deck List from the row menu', async () => {
+		const player = createMockPlayer({ id: 7, name: '', nickname: 'linlin_88' });
+		const wrapper = mount(PlayerList, {
+			props: {
+				players: [player as never],
+				game: 'op',
+			},
+			global: {
+				stubs: { ...nuxtUiStubs, UTable: UTableStub, MtgManaColorDisplay: true },
+			},
+		});
+
+		await wrapper.get('[aria-label="Player actions"]').trigger('click');
+		await wrapper.findAll('[role="menuitem"]').find(item => item.text() === 'Edit Deck List')!.trigger('click');
+
+		expect(wrapper.emitted('editDeckList')).toEqual([
+			[player],
+		]);
+	});
+});

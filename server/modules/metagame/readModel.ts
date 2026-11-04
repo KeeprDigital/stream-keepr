@@ -1,5 +1,5 @@
 import type { BoardSelection, MetagameCardSortBy, MetagameConversionMetric, MetagameScope, MetagameSortBy } from '~~/shared/types/enums';
-import type { CardTypeBucket } from '~~/shared/utils/metagame';
+import type { MetagameCardTypeBucket } from '~~/shared/utils/metagame';
 import { createMetagameReadModelImplementation } from './readModelImplementation';
 
 export type { MetagameDeckUniverse, MetagameScopeModel } from './scopeModel';
@@ -24,7 +24,7 @@ export interface MetagameCardBreakdownQuery extends MetagameScopeQuery {
 	archetypeId?: number;
 	board?: BoardSelection;
 	archetype?: string;
-	excludeTypes?: CardTypeBucket[];
+	excludeTypes?: MetagameCardTypeBucket[];
 	pointedOnly?: boolean;
 }
 

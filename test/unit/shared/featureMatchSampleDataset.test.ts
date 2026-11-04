@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { featureMatchDeckListView } from '~~/server/modules/feature-match-deck-list/paste';
+import { opDeckListView } from '~~/server/modules/op-deck-list-write/paste';
 import {
 	FEATURE_MATCH_SAMPLE_CONTEXT,
 	FEATURE_MATCH_SAMPLE_TOKEN_VALUES,
@@ -67,7 +67,7 @@ describe('the canonical Feature Match sample dataset', () => {
 	// A preview showing deck rule warnings would teach an operator nothing about their Theme.
 	it('holds a One Piece Deck List that breaks no deck rule, imaged from the Printing host', () => {
 		const [player1] = OP_FEATURE_MATCH_SAMPLE_SIDES;
-		const view = featureMatchDeckListView(player1.deckList);
+		const view = opDeckListView(player1.deckList);
 
 		expect(view.warnings).toEqual([]);
 		expect(view).toMatchObject({ leaderNumber: player1.leader.number, mainboardCount: 50 });

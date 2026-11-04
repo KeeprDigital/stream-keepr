@@ -4,9 +4,11 @@ import type {
 	MetagameCardSortBy,
 	TopCardsStat,
 } from '~~/shared/types/enums';
-import type { CardTypeBucket } from '~~/shared/utils/metagame';
+import type { MetagameCardTypeBucket } from '~~/shared/utils/metagame';
 import type { Screen } from '~/types';
+import { getFeatureMatchStateTracking } from '~~/shared/config/games';
 import { screenModeConfigContract } from '~~/shared/screenModes';
+import { getMetagameCardTypeBuckets } from '~~/shared/utils/metagame';
 import { headerSummary, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
@@ -116,12 +118,16 @@ const statBadgeOptions = [
 // Points come from the Event's points system. A Screen left filtering to
 // pointed cards, or badging their points, keeps its toggle, so it can be
 // turned back off.
-const hasPointsSystem = computed(() => !!eventStore.event?.pointsSystem);
+// The Event's Card Game decides its card types, and whether a deck has a Sideboard or points (ADR-0074).
+const game = computed(() => eventStore.event?.game);
+const hasSideboard = computed(() => !game.value || getFeatureMatchStateTracking(game.value).sideboard);
+// Highlander points are Magic's.
+const hasPointsSystem = computed(() => game.value !== 'op' && !!eventStore.event?.pointsSystem);
 const showsPointedOnly = computed(() => hasPointsSystem.value || config.value.pointedOnly);
 const showsPointsBadges = computed(() => hasPointsSystem.value || config.value.showPointsBadges);
 
 /** Ranking pointed cards keeps nonbasic lands in, whatever the Land filter holds. */
-const lockedTypes = computed<CardTypeBucket[]>(() => config.value.pointedOnly
+const lockedTypes = computed<MetagameCardTypeBucket[]>(() => config.value.pointedOnly
 	? ['Land']
 	: []);
 
@@ -145,7 +151,8 @@ function look(...groups: string[]) {
 }
 
 const filtersSummary = computed(() => {
-	const excluded = config.value.excludedCardTypes.filter(type => !lockedTypes.value.includes(type)).length;
+	const offered = getMetagameCardTypeBuckets(game.value);
+	const excluded = config.value.excludedCardTypes.filter(type => offered.includes(type) && !lockedTypes.value.includes(type)).length;
 	return settingsSummary([
 		config.value.pointedOnly && 'Pointed only',
 		excluded > 0 && `${excluded} ${excluded === 1
@@ -203,6 +210,7 @@ const badgesSummary = computed(() => {
 			/>
 
 			<ScreenConfigField
+				v-if="hasSideboard"
 				:field="fields.board"
 				:model-value="config.board"
 				:items="boardOptions"
@@ -231,7 +239,10 @@ const badgesSummary = computed(() => {
 			<ScreenCardTypeFilterField
 				:excluded="config.excludedCardTypes"
 				:locked="lockedTypes"
-				description="Toggle which card types appear in the ranking; basic lands never do."
+				:game="game"
+				:description="game === 'op'
+					? 'Toggle which card types appear in the ranking; Leaders never do.'
+					: 'Toggle which card types appear in the ranking; basic lands never do.'"
 				test-id-prefix="top-cards-type"
 				@update="updateConfig({ excludedCardTypes: $event, currentPage: 1 })"
 			/>

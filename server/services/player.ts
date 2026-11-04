@@ -165,6 +165,7 @@ function buildBulkPlayerUpsertQueries(
 				id: sql`null`,
 				eventId: sql`json_extract(value, '$.eventId')`,
 				name: sql`json_extract(value, '$.name')`,
+				nickname: sql`json_extract(value, '$.nickname')`,
 				pronouns: sql`json_extract(value, '$.pronouns')`,
 				externalId: sql`json_extract(value, '$.externalId')`,
 				externalSource: sql`json_extract(value, '$.externalSource')`,
@@ -289,17 +290,20 @@ export function playerService() {
 		return updatedPlayer;
 	};
 
-	/** Deletes the Player, and in the same write releases every Deck Source selecting them. */
-	const remove = async (id: number, eventId: number): Promise<{ deleted: boolean; clearedScreens: DbScreen[] }> => {
+	/**
+	 * Deletes the Player, and in the same write releases every Deck Source
+	 * selecting them. Answers the Archetype they held, if any.
+	 */
+	const remove = async (id: number, eventId: number): Promise<{ deleted: boolean; archetypeId: number | null; clearedScreens: DbScreen[] }> => {
 		const [clearedScreens, deleted] = await db.batch([
 			buildClearDeckSourcePlayersQuery(eventId, [id]),
 			db
 				.delete(players)
 				.where(and(eq(players.id, id), eq(players.eventId, eventId)))
-				.returning({ id: players.id }),
+				.returning({ id: players.id, archetypeId: players.archetypeId }),
 		]);
 
-		return { deleted: deleted.length > 0, clearedScreens };
+		return { deleted: deleted.length > 0, archetypeId: deleted[0]?.archetypeId ?? null, clearedScreens };
 	};
 
 	/**

@@ -8,7 +8,7 @@ import {
 	MAX_SILENT_VIDEO_INGESTION_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 } from './shared/utils/graphicsAssetCompatibility';
-import { MUTATION_BODY_METHODS } from './shared/utils/requestBodyLimits';
+import { MUTATION_BODY_METHODS, TCGPLUS_IMPORT_MAX_BODY_BYTES } from './shared/utils/requestBodyLimits';
 
 const isIntegration = process.env.STREAM_KEEPR_INTEGRATION === 'true';
 const integrationWranglerPersistDir = process.env.STREAM_KEEPR_INTEGRATION_WRANGLER_PERSIST_DIR ?? '.wrangler/state/integration';
@@ -170,6 +170,15 @@ export default defineNuxtConfig({
 					PUT: {
 						maxBytes: MAX_SILENT_VIDEO_INGESTION_BYTES,
 						label: 'Graphic Asset Content repair',
+					},
+				},
+			},
+			// A TCG+ Import sends the whole export, preview and import alike (ADR-0074).
+			'/api/events/*/tcgplus/**': {
+				boundedRawMutations: {
+					POST: {
+						maxBytes: TCGPLUS_IMPORT_MAX_BODY_BYTES,
+						label: 'TCG+ export',
 					},
 				},
 			},
