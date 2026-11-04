@@ -190,9 +190,10 @@ function updatedAtStamp(updatedAt: Date | string | null | undefined): number | n
 
 /**
  * A Player's own Deck List (ADR-0074), read with the Player through the
- * Screen. Every Deck List write, by hand or by a TCG+ Import, gives the Deck
- * List a new id and rolls the Player's `updatedAt`, as a rename does, so an
- * announced Player at the revision held carries nothing new.
+ * Screen. Every Deck List write gives the Deck List a new id and rolls the
+ * Player's `updatedAt`, as a rename does, so an announced Player at the
+ * revision held carries nothing new. A TCG+ Import announces itself, not each
+ * Player it wrote, so it is always read again.
  */
 function usePlayerSource(context: ScreenContext, config: ComputedRef<DeckModeConfig>): OpDeckSourceRead {
 	const outputReads = useScreenOutputReads(context);
@@ -217,6 +218,8 @@ function usePlayerSource(context: ScreenContext, config: ComputedRef<DeckModeCon
 		dependsOn: {
 			'player:updated': ({ player }, held) =>
 				player.id === playerId() && updatedAtStamp(player.updatedAt) !== updatedAtStamp(held?.player.updatedAt),
+			// An import announces itself once rather than each Player it wrote.
+			'tcgplus:imported': true,
 		},
 	});
 

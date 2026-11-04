@@ -390,7 +390,31 @@ describe('a Deck List Screen showing a One Piece Card Game Player', () => {
 
 	it.each([
 		{
-			name: 'an edit or re-import writes the Player a new Deck List',
+			name: 'a hand edit writes the Player a new Deck List',
+			message: 'player:updated',
+			read: {
+				player: opPlayer({
+					updatedAt: '2026-11-01T11:00:00.000Z',
+					gameData: {
+						type: 'op',
+						deckList: { id: 602, mainboardCount: 4, leaderNumber: 'OP01-016' },
+					},
+				}),
+				deckList: deckList(602, [
+					opDeckListEntry('OP01-016', 1, 'leader', null),
+					opDeckListEntry('OP01-040', 4, 'character', 3),
+				]),
+			},
+			after: {
+				state: 'deck',
+				deckListId: '602',
+				player: 'zoro_main',
+				leader: 'OP01-016',
+			},
+		},
+		{
+			name: 'a TCG+ Import writes the Player a new Deck List',
+			message: 'tcgplus:imported',
 			read: {
 				player: opPlayer({
 					updatedAt: '2026-11-01T11:00:00.000Z',
@@ -413,6 +437,7 @@ describe('a Deck List Screen showing a One Piece Card Game Player', () => {
 		},
 		{
 			name: 'the operator names the Player',
+			message: 'player:updated',
 			read: {
 				player: opPlayer({ name: 'Zoro', updatedAt: '2026-11-01T11:00:00.000Z' }),
 				deckList: deckList(601, ZORO_LIST_ENTRIES),
@@ -424,12 +449,15 @@ describe('a Deck List Screen showing a One Piece Card Game Player', () => {
 				leader: 'OP01-001',
 			},
 		},
-	])('follows live when $name', async ({ read, after }) => {
+	])('follows live when $name', async ({ message, read, after }) => {
 		const wrapper = mountPlayer();
 		await flushPromises();
 
 		playerRead.value = read;
-		realtime.deliver('player:updated', { player: read.player }, 7);
+		// An import announces itself once, not each Player it wrote.
+		realtime.deliver(message, message === 'player:updated'
+			? { player: read.player }
+			: { playerCount: 512, deckCount: 512 }, 7);
 		await flushPromises();
 
 		expect(shown(wrapper)).toEqual(after);

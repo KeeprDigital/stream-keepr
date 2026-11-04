@@ -79,7 +79,7 @@ const mockBroadcastDeckListStore = reactive({
 const ALICE = opSlotSide('Alice', null, 501);
 const BOB = opSlotSide('Bob', null, null);
 const mockFeatureMatchStore = reactive({
-	featureMatches: [
+	featureMatches: <Array<{ id: number; player1Id: null; player2Id: null; player1Data: unknown; player2Data: unknown; activeSession: null }>>[
 		{
 			id: 11,
 			player1Id: null,
