@@ -2291,7 +2291,7 @@ Accepted · 2026-11-04 · [#955](https://github.com/KeeprDigital/stream-keepr/is
 
 The coverage test places each mode's tokens with no group, one group and every group mounted, and fails if one is placed twice or not at all.
 
-**The page ends with Background & Placement, then Screen-wide look.** The order is the Screen info card, the mode's settings, Background & Placement, then the Screen-wide look. Both closing cards start closed unless something in them is set or overridden: a Background Layer or a host token's override, or an override of a token the residual lists. Data and live-action cards stay open and are not collapsible. Remembering each card's open state per browser, by `mode:card` id, belongs to `ScreenSettingsCard`. Editor Focus Mode hides both closing cards, as it hid the Theme card. A group's Look is part of the mode's settings, so it shows in Editor Focus Mode: the Feature Match Overlay's Frame and Source Item rows show there once its inspector mounts their groups (#982).
+**The page ends with Background & Placement, then Screen-wide look.** The order is the Screen info card, the mode's settings, Background & Placement, then the Screen-wide look. Both closing cards start closed unless something in them is set or overridden: a Background Layer or a host token's override, or an override of a token the residual lists. Data and live-action cards stay open and are not collapsible. Each collapsible card remembers its open state per browser by `mode:card` id (`ScreenSettingsCard`, #964). Editor Focus Mode hides both closing cards, as it hid the Theme card. A group's Look is part of the mode's settings, so it shows in Editor Focus Mode: the Feature Match Overlay's Frame and Source Item rows show there once its inspector mounts their groups (#982).
 
 **Only where a row renders changes.** A row still writes a Screen Theme Override (`PATCH …/theme-overrides`) and shows Theme against Overridden (ADR-0049). It never becomes mode config (ADR-0051). A display reset still leaves every override in place, whichever card shows it.
 
@@ -2302,7 +2302,8 @@ All of a Screen's Mode Tokens sat in one flat Theme card above the mode's settin
 ### Consequences
 
 - `useScreenThemeOverrides` holds the Theme load, the resolution, and the per-token write and Clear for every card that renders rows. Cards mounting together share one in-flight read of the Event's Theme.
-- No mode mounts a group yet, so each mode's Mode Tokens stay in the Screen-wide look until its own settings ticket mounts them (#971–#983). The residual card works out whether to start open when it mounts. A group registering later moves its tokens out, but cannot close the card again.
+- No mode mounts a group yet, so each mode's Mode Tokens stay in the Screen-wide look until its own settings ticket mounts them (#971–#983).
+- Both closing cards remember their open state as `<mode>:background-and-placement` and `<mode>:screen-wide-look`. Until an operator toggles one in this browser, it follows what it holds, so a group registering after the residual card mounts moves its override out and can close the card again. Once toggled, the remembered state wins over what the card holds, on every Screen of that mode.
 - A Mode Token added later must name a group of its mode, or it fails to compile. It renders in the residual card until its group is mounted.
 - Round Clock's and Talent's Mode Tokens name groups here too, though #968 left them for #983, so every Mode Token is placed by one rule.
 

@@ -8,7 +8,7 @@ import { placeScreenThemeTokens } from '~~/shared/screenThemeOverrides';
 // `ScreenThemeTokenGroup` renders, so a token renders here until its group is
 // mounted and never disappears or doubles. The host's own `inset` and
 // `alignment` sit in Background & Placement instead. It starts closed unless
-// it holds an override.
+// it holds an override, and remembers per browser once toggled.
 
 const props = defineProps<{
 	screen: Screen;
@@ -34,6 +34,7 @@ const subtitle = computed(() => overrides.themeName.value
 <template>
 	<ScreenSettingsCard
 		v-if="sections.length"
+		:id="`${screen.currentMode}:screen-wide-look`"
 		title="Screen-wide look"
 		:subtitle="subtitle"
 		:default-open="overridden"

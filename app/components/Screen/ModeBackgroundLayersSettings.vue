@@ -42,6 +42,7 @@ function writeLayers(nextLayers: BackgroundLayer[]) {
 
 <template>
 	<ScreenSettingsCard
+		:id="`${mode}:background-and-placement`"
 		title="Background & Placement"
 		subtitle="Layers behind this mode's content, and where the content sits in the Event Canvas."
 		:default-open="holdsSomething"
