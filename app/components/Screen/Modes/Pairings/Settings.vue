@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Screen } from '~/types';
 import { screenModeConfigContract } from '~~/shared/screenModes';
-import { useConsumedEventData } from '~/modules/event-data/resync';
+import { FOLLOWS_THE_THEME, headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
@@ -10,8 +10,6 @@ const props = defineProps<{
 	eventId: number;
 }>();
 
-const roundStore = useRoundStore();
-const phaseStore = usePhaseStore();
 const { config, saving, updateConfig: saveConfig, resetConfig } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
@@ -23,11 +21,6 @@ defineExpose({ resetConfig, saving });
 // Each control's label and bounds, read from the mode's config contract (#498).
 // Edits still go through the Page Rotation's `updateConfig` below (ADR-0039).
 const fields = screenModeConfigContract('pairings').fields;
-
-const roundOptions = computed(() => [
-	{ label: 'Select a round…', value: null },
-	...roundPickerOptions(roundStore.rounds, phaseStore.phases),
-]);
 
 // The Matches the Screen pages, read and followed as its Screen Output reads
 // and follows them, so the page count is the one it renders (#780).
@@ -51,46 +44,54 @@ const rotation = useRotationConfigWrites({
 });
 const { updateConfig } = rotation;
 
-// What the picker below loads, re-read on Reconnect Resync (#610).
-useConsumedEventData(['phases', 'rounds']);
-
-onMounted(async () => {
-	if (props.eventId && !roundStore.isLoaded) {
-		await roundStore.loadRoundsByEventId(props.eventId);
-	}
-	if (props.eventId && !phaseStore.isLoaded) {
-		await phaseStore.loadPhasesByEventId(props.eventId);
-	}
-});
+// ── Closed card summaries ──
+const lookOf = (...groups: string[]) => lookSummary('pairings', props.screen.themeOverrides, groups);
+const tableSummary = computed(() => settingsSummary([
+	lookOf('table', 'result-badge'),
+], FOLLOWS_THE_THEME));
+const headerCardSummary = computed(() => settingsSummary([
+	headerSummary(config.value),
+	lookOf('header'),
+]));
+const paginationCardSummary = computed(() => paginationSummary(rotation));
 </script>
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard title="Data">
-			<UFormField
-				label="Round"
+		<ScreenSettingsCard id="pairings:data" title="Data" :collapsible="false">
+			<ScreenRoundField
+				:model-value="config.roundId"
+				null-label="Select a round…"
 				description="Select the round whose pairings should be shown."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					:model-value="config.roundId ?? null"
-					:items="roundOptions"
-					class="w-64"
-					@update:model-value="updateConfig({ roundId: $event ?? null, currentPage: 1 })"
-				/>
-			</UFormField>
+				:event-id="eventId"
+				@update:model-value="updateConfig({ roundId: $event, currentPage: 1 })"
+			/>
+		</ScreenSettingsCard>
+
+		<ScreenSettingsCard id="pairings:table" title="Table" :summary="tableSummary">
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="table" />
+
+			<ScreenSettingsGroup title="Result Badge">
+				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="result-badge" />
+			</ScreenSettingsGroup>
 		</ScreenSettingsCard>
 
 		<ScreenHeaderSettingsCard
+			id="pairings:header"
 			:config="config"
 			:fields="fields"
+			:summary="headerCardSummary"
 			show-description="Show the round name above the pairings."
 			auto-description="Leave empty for the round's name and pairings."
 			@update="updateConfig($event)"
-		/>
+		>
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
+		</ScreenHeaderSettingsCard>
 
 		<ScreenPaginationSettingsCard
+			id="pairings:pagination"
 			:rotation="rotation"
+			:summary="paginationCardSummary"
 			page-size-description="Number of pairings shown per page."
 			auto-page-description="Automatically cycle through pairings pages."
 			:loading="loadingMatches"

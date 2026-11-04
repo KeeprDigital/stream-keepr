@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref, toRaw } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
-import { USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { nuxtUiStubs, USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { screenSettingsLayoutStubs, settingsLayout, settingsSummaries } from '~~/test/nuxt/helpers/screenSettingsLayout';
 import Settings from '~/components/Screen/Modes/Standings/Settings.vue';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
@@ -120,18 +121,26 @@ function standingsShowingPositionChange(visible: boolean): Record<string, any> {
 }
 
 /** The editor over a Screen as saved; the operator's config starts as saved. */
-async function mountSettings(saved: Record<string, any> = config.value) {
+async function mountSettings(saved: Record<string, any> = config.value, themeOverrides: Record<string, unknown> = {}) {
 	config.value = structuredClone(toRaw(saved));
 	const wrapper = mount(Settings, {
 		props: {
 			screen: {
 				id: 1,
+				currentMode: 'standings',
+				themeOverrides,
 				modeConfigs: { standings: saved },
 			} as unknown as Screen,
 			eventId: 1,
 		},
 		global: {
-			stubs: { USwitch: USwitchStub, USelect: USelectStub, UIcon: true },
+			stubs: {
+				...nuxtUiStubs,
+				...screenSettingsLayoutStubs,
+				USwitch: USwitchStub,
+				USelect: USelectStub,
+				UIcon: true,
+			},
 		},
 	});
 	await flushPromises();
@@ -229,14 +238,208 @@ describe('the Standings settings editor\'s Position Change warning', () => {
 });
 
 describe('the Standings settings editor\'s Round picker', () => {
-	it('offers each Round as "Phase · Round", after Current', async () => {
+	it('offers each Round as "Phase · Round", after the current standings', async () => {
 		const wrapper = await mountSettings();
 		const pickers = wrapper.findAll('select').map(select => select.findAll('option').map(option => option.text()));
 
 		expect(pickers).toContainEqual([
-			'Current',
+			'Current standings',
 			'Swiss · Round 1',
 			'Top Cut · Round 1',
 		]);
+	});
+});
+
+const DATA = { id: 'standings:data', title: 'Data', collapsible: false };
+const TABLE = {
+	id: 'standings:table',
+	title: 'Table',
+	collapsible: true,
+	groups: ['table'],
+};
+const HEADER = {
+	id: 'standings:header',
+	title: 'Header',
+	collapsible: true,
+	groups: ['header'],
+};
+const PAGINATION = {
+	id: 'standings:pagination',
+	title: 'Pagination',
+	collapsible: true,
+	groups: [],
+};
+
+describe('the Standings settings layout', () => {
+	// Data, the reveal's live controls, then one card per element, each Mode Token in its group's Look (ADR-0072).
+	it.each([
+		[
+			'all',
+			[
+				{
+					...DATA,
+					groups: ['data'],
+				},
+				TABLE,
+				HEADER,
+				PAGINATION,
+			],
+		],
+		[
+			'reveal',
+			[
+				{
+					...DATA,
+					groups: ['data'],
+				},
+				{
+					id: 'standings:reveal-controls',
+					title: 'Reveal Controls',
+					collapsible: false,
+					groups: [],
+				},
+				TABLE,
+				HEADER,
+				PAGINATION,
+			],
+		],
+	])('lays out the %s view mode\'s cards in order', async (viewMode, layout) => {
+		const wrapper = await mountSettings({
+			...getDefaultConfigForMode('standings'),
+			viewMode,
+		});
+
+		expect(settingsLayout(wrapper)).toEqual(layout);
+	});
+
+	// The reveal's motion is a reveal-only Look, mounted in every view mode so it never falls to the Screen-wide look.
+	it.each([
+		['all', false],
+		['topN', false],
+		['reveal', true],
+	])('shows the reveal\'s Look in the %s view mode: %s', async (viewMode, shown) => {
+		const wrapper = await mountSettings({
+			...getDefaultConfigForMode('standings'),
+			viewMode,
+		});
+
+		const look = wrapper.get<HTMLElement>('[data-settings-group="data"]');
+
+		expect(look.element.style.display !== 'none').toBe(shown);
+	});
+
+	// Each view mode's own fields sit directly under the view mode select that reveals them.
+	it.each([
+		[
+			'all',
+			['viewMode'],
+		],
+		[
+			'topN',
+			['viewMode', 'topNCount'],
+		],
+		[
+			'slice',
+			['viewMode', 'sliceStart', 'sliceEnd'],
+		],
+		[
+			'watchlist',
+			['viewMode'],
+		],
+		[
+			'reveal',
+			['viewMode', 'revealCount', 'revealOrder'],
+		],
+	])('shows the %s view mode\'s fields under it in Data', async (viewMode, fields) => {
+		const wrapper = await mountSettings({
+			...getDefaultConfigForMode('standings'),
+			viewMode,
+		});
+		const data = wrapper.get('[data-settings-card="standings:data"]');
+
+		expect(data.findAll('[data-config-field]').map(field => field.attributes('data-config-field'))).toEqual(fields);
+	});
+
+	it('names the Player List picker\'s empty state under the watchlist view mode', async () => {
+		const wrapper = await mountSettings({
+			...getDefaultConfigForMode('standings'),
+			viewMode: 'watchlist',
+		});
+
+		expect(wrapper.get('[data-settings-card="standings:data"]').text()).toContain('No player lists available');
+	});
+
+	it.each([
+		[
+			'the defaults',
+			{},
+			{},
+			{
+				'standings:table': '4 of 6 columns shown',
+				'standings:header': 'Auto title',
+				'standings:pagination': '8 per page · Manual paging',
+			},
+		],
+		[
+			'a custom header and overridden table tokens',
+			{ headerText: 'Final Standings', autoPageEnabled: true },
+			{ 'standings.surface': '#000000', 'standings.rise': '#00ff00' },
+			{
+				'standings:table': '4 of 6 columns shown · 2 Screen Theme Overrides',
+				'standings:header': '“Final Standings”',
+				'standings:pagination': '8 per page · Auto-page every 10 s',
+			},
+		],
+	])('summarises each closed card for %s', async (_case, edits, themeOverrides, summaries) => {
+		const wrapper = await mountSettings({
+			...getDefaultConfigForMode('standings'),
+			...edits,
+		}, themeOverrides);
+
+		expect(settingsSummaries(wrapper)).toEqual(summaries);
+	});
+
+	type Wrapper = Awaited<ReturnType<typeof mountSettings>>;
+	it.each([
+		{
+			name: 'picks a Round, back on page 1',
+			viewMode: 'all',
+			act: (w: Wrapper) => w.get('[data-settings-card="standings:data"] select').setValue('31'),
+			patch: { roundId: 31, currentPage: 1 },
+		},
+		{
+			name: 'sets the top N count',
+			viewMode: 'topN',
+			act: (w: Wrapper) => w.get('[data-config-field="topNCount"] input').setValue('12'),
+			patch: { topNCount: 12 },
+		},
+		{
+			name: 'sets the slice end',
+			viewMode: 'slice',
+			act: (w: Wrapper) => w.get('[data-config-field="sliceEnd"] input').setValue('24'),
+			patch: { sliceEnd: 24 },
+		},
+		{
+			name: 'sets the reveal order',
+			viewMode: 'reveal',
+			act: (w: Wrapper) => w.get('[data-config-field="revealOrder"] select').setValue('topDown'),
+			patch: { revealOrder: 'topDown' },
+		},
+		{
+			name: 'reveals the next Player',
+			viewMode: 'reveal',
+			act: (w: Wrapper) => w.findAll('button').find(button => button.text() === 'Reveal Next')!.trigger('click'),
+			patch: { revealedCount: 1 },
+		},
+	])('$name', async ({ viewMode, act, patch }) => {
+		const wrapper = await mountSettings({
+			...getDefaultConfigForMode('standings'),
+			viewMode,
+		});
+		writes.length = 0;
+
+		await act(wrapper);
+
+		expect(writes.at(-1)).toEqual(patch);
 	});
 });

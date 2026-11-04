@@ -2,6 +2,7 @@
 import type { HeadToHeadPlayerSource } from '~~/shared/types/enums';
 import type { Screen } from '~/types';
 import { screenModeConfigContract } from '~~/shared/screenModes';
+import { FOLLOWS_THE_THEME, headerSummary, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
@@ -29,12 +30,27 @@ const sourceOptions: { label: string; value: HeadToHeadPlayerSource }[] = [
 	{ label: 'Two Players', value: 'players' },
 ];
 
-const slotOptions = useFeatureMatchMenuItems();
-
 const playerOptions = computed(() => [
 	{ label: 'Select a player…', value: null },
 	...playerStore.players.map(player => ({ label: player.name, value: player.id })),
 ]);
+
+// ── Closed card summaries ──
+const lookOf = (...groups: string[]) => lookSummary('head-to-head', props.screen.themeOverrides, groups);
+const playerDetailsSummary = computed(() => settingsSummary([
+	config.value.showPronouns && hasPronouns.value
+		? 'Pronouns shown'
+		: 'Pronouns hidden',
+	config.value.showDeckColors ? 'Deck colors shown' : 'Deck colors hidden',
+	lookOf('player-details'),
+]));
+const earlierMatchesSummary = computed(() => settingsSummary([
+	lookOf('earlier-matches'),
+], FOLLOWS_THE_THEME));
+const headerCardSummary = computed(() => settingsSummary([
+	headerSummary(config.value),
+	lookOf('header'),
+]));
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
 useConsumedEventData(['featureMatchSlots', 'players']);
@@ -53,43 +69,30 @@ onMounted(async () => {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard title="Players">
-			<UFormField
-				:label="fields.playerSource.label"
+		<ScreenSettingsCard id="head-to-head:players" title="Players" :collapsible="false">
+			<ScreenConfigField
+				:field="fields.playerSource"
+				:model-value="config.playerSource"
+				:items="sourceOptions"
 				description="Follow a Feature Match Slot as it is reassigned, or pick the two Players."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					data-testid="head-to-head-source"
-					:model-value="config.playerSource"
-					:items="sourceOptions"
-					class="w-64"
-					@update:model-value="updateConfig({ playerSource: $event })"
-				/>
-			</UFormField>
+				@update:model-value="updateConfig({ playerSource: $event as HeadToHeadPlayerSource })"
+			/>
 
-			<UFormField
+			<ScreenSettingsField
 				v-if="config.playerSource === 'featureMatchSlot'"
 				label="Feature Match Slot"
 				description="Shows the two Players of the Match this Slot is showing."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
-				<USelect
+				<ScreenFeatureMatchSelect
 					data-testid="head-to-head-slot"
-					:model-value="config.featureMatchId ?? undefined"
-					:items="slotOptions"
-					value-key="value"
+					:model-value="config.featureMatchId"
 					placeholder="Select a slot…"
-					class="w-64"
-					@update:model-value="updateConfig({ featureMatchId: $event ?? null })"
+					@update:model-value="updateConfig({ featureMatchId: $event })"
 				/>
-			</UFormField>
+			</ScreenSettingsField>
 
 			<template v-else>
-				<UFormField
-					label="First Player"
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
+				<ScreenSettingsField label="First Player">
 					<USelect
 						data-testid="head-to-head-player-1"
 						:model-value="config.player1Id ?? null"
@@ -97,11 +100,8 @@ onMounted(async () => {
 						class="w-64"
 						@update:model-value="updateConfig({ player1Id: $event ?? null })"
 					/>
-				</UFormField>
-				<UFormField
-					label="Second Player"
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
+				</ScreenSettingsField>
+				<ScreenSettingsField label="Second Player">
 					<USelect
 						data-testid="head-to-head-player-2"
 						:model-value="config.player2Id ?? null"
@@ -109,48 +109,43 @@ onMounted(async () => {
 						class="w-64"
 						@update:model-value="updateConfig({ player2Id: $event ?? null })"
 					/>
-				</UFormField>
+				</ScreenSettingsField>
 			</template>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Show Options">
-			<ScreenSettingsToggle
-				:label="fields.showPronouns.label"
+		<ScreenSettingsCard id="head-to-head:player-details" title="Player Details" :summary="playerDetailsSummary">
+			<ScreenConfigField
+				:field="fields.showPronouns"
+				:model-value="config.showPronouns"
 				description="Show each Player's pronouns below their name."
 				disabled-description="Enable player pronouns in event settings to use this."
 				:enabled="hasPronouns"
-				:model-value="config.showPronouns"
-				@update:model-value="updateConfig({ showPronouns: $event })"
+				@update:model-value="updateConfig({ showPronouns: $event === true })"
 			/>
-			<ScreenSettingsToggle
-				:label="fields.showDeckColors.label"
-				description="Show the mana colors of each Player's deck beside its name."
+			<ScreenConfigField
+				:field="fields.showDeckColors"
 				:model-value="config.showDeckColors"
-				@update:model-value="updateConfig({ showDeckColors: $event })"
-			/>
-		</ScreenSettingsCard>
-
-		<ScreenSettingsCard title="Header">
-			<ScreenSettingsToggle
-				:label="fields.showHeader.label"
-				description="Show a title above the two Players."
-				:model-value="config.showHeader"
-				@update:model-value="updateConfig({ showHeader: $event })"
+				description="Show the mana colors of each Player's deck beside its name."
+				@update:model-value="updateConfig({ showDeckColors: $event === true })"
 			/>
 
-			<UFormField
-				v-if="config.showHeader"
-				:label="fields.headerText.label"
-				description="Leave empty for &quot;Head to Head&quot;."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInput
-					:model-value="config.headerText ?? ''"
-					placeholder="Auto"
-					class="w-64"
-					@update:model-value="updateConfig({ headerText: $event || null })"
-				/>
-			</UFormField>
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="player-details" />
 		</ScreenSettingsCard>
+
+		<ScreenSettingsCard id="head-to-head:earlier-matches" title="Earlier Matches" :summary="earlierMatchesSummary">
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="earlier-matches" />
+		</ScreenSettingsCard>
+
+		<ScreenHeaderSettingsCard
+			id="head-to-head:header"
+			:config="config"
+			:fields="fields"
+			:summary="headerCardSummary"
+			show-description="Show a title above the two Players."
+			auto-description="Leave empty for &quot;Head to Head&quot;."
+			@update="updateConfig($event)"
+		>
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
+		</ScreenHeaderSettingsCard>
 	</div>
 </template>

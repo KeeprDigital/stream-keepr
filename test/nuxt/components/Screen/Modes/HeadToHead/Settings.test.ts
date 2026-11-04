@@ -4,6 +4,8 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { screenSettingsLayoutStubs, settingsLayout, settingsSummaries } from '~~/test/nuxt/helpers/screenSettingsLayout';
 import Settings from '~/components/Screen/Modes/HeadToHead/Settings.vue';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
@@ -24,6 +26,12 @@ mockNuxtImport('usePlayerStore', () => () => ({
 	],
 	isLoaded: true,
 	loadPlayersByEventId: vi.fn(),
+}));
+const mockEvent = ref({ id: 1, pronounsEnabled: true });
+mockNuxtImport('useEventStore', () => () => ({
+	get event() {
+		return mockEvent.value;
+	},
 }));
 mockNuxtImport('useFeatureMatchStore', () => () => ({
 	loadFeatureMatchesByEventId: vi.fn(),
@@ -56,22 +64,29 @@ const USelectStub = defineComponent({
 	},
 });
 
-async function mountComponent() {
+async function mountComponent(themeOverrides: Record<string, unknown> = {}) {
 	const wrapper = mount(Settings, {
 		props: {
-			screen: { id: 1 } as Screen,
+			screen: { id: 1, currentMode: 'head-to-head', themeOverrides } as unknown as Screen,
 			eventId: 1,
 		},
 		global: {
-			stubs: { USelect: USelectStub, UInput: true, ScreenSettingsToggle: true },
+			stubs: {
+				...nuxtUiStubs,
+				...screenSettingsLayoutStubs,
+				USelect: USelectStub,
+			},
 		},
 	});
 	await flushPromises();
 	return wrapper;
 }
 
-async function pick(wrapper: Awaited<ReturnType<typeof mountComponent>>, testId: string, value: unknown) {
-	const select = wrapper.get(`[data-testid="${testId}"]`);
+/** Picks `value` in the select a test id, or `[data-config-field]` selector, names. */
+async function pick(wrapper: Awaited<ReturnType<typeof mountComponent>>, target: string, value: unknown) {
+	const select = wrapper.get(target.startsWith('[')
+		? `${target} select`
+		: `[data-testid="${target}"]`);
 	(select.element as unknown as HTMLElement).dataset.pick = JSON.stringify(value);
 	await select.trigger('change');
 }
@@ -82,6 +97,7 @@ describe('screenHeadToHeadSettings', () => {
 		mockConfig.value = {
 			...getDefaultConfigForMode('head-to-head'),
 		};
+		mockEvent.value = { id: 1, pronounsEnabled: true };
 	});
 
 	it('binds the Screen to a Feature Match Slot of the Event', async () => {
@@ -99,7 +115,7 @@ describe('screenHeadToHeadSettings', () => {
 		mockConfig.value = { ...mockConfig.value, featureMatchId: 4 };
 		const wrapper = await mountComponent();
 
-		await pick(wrapper, 'head-to-head-source', 'players');
+		await pick(wrapper, '[data-config-field="playerSource"]', 'players');
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ playerSource: 'players' });
 		await flushPromises();
 
@@ -124,5 +140,104 @@ describe('screenHeadToHeadSettings', () => {
 		await pick(wrapper, 'head-to-head-player-1', null);
 
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ player1Id: null });
+	});
+
+	// The Players binding, then one card per element, each Mode Token in its group's Look (ADR-0072).
+	it('lays out its cards in order', async () => {
+		const wrapper = await mountComponent();
+
+		expect(settingsLayout(wrapper)).toEqual([
+			{
+				id: 'head-to-head:players',
+				title: 'Players',
+				collapsible: false,
+				groups: [],
+			},
+			{
+				id: 'head-to-head:player-details',
+				title: 'Player Details',
+				collapsible: true,
+				groups: ['player-details'],
+			},
+			{
+				id: 'head-to-head:earlier-matches',
+				title: 'Earlier Matches',
+				collapsible: true,
+				groups: ['earlier-matches'],
+			},
+			{
+				id: 'head-to-head:header',
+				title: 'Header',
+				collapsible: true,
+				groups: ['header'],
+			},
+		]);
+	});
+
+	it.each([
+		[
+			'no override',
+			{},
+			{},
+			{
+				'head-to-head:player-details': 'Pronouns shown · Deck colors shown',
+				'head-to-head:earlier-matches': 'Follows the Theme',
+				'head-to-head:header': 'Auto title',
+			},
+		],
+		[
+			'hidden details and overridden tokens',
+			{ showPronouns: false, showDeckColors: false, showHeader: false },
+			{
+				'head-to-head.name-typography': { family: 'Inter' },
+				'head-to-head.surface': '#000000',
+			},
+			{
+				'head-to-head:player-details': 'Pronouns hidden · Deck colors hidden · 1 Screen Theme Override',
+				'head-to-head:earlier-matches': '1 Screen Theme Override',
+				'head-to-head:header': 'Hidden',
+			},
+		],
+	])('summarises each closed card with %s', async (_case, edits, themeOverrides, summaries) => {
+		mockConfig.value = {
+			...mockConfig.value,
+			...edits,
+		};
+		const wrapper = await mountComponent(themeOverrides);
+
+		expect(settingsSummaries(wrapper)).toEqual(summaries);
+	});
+
+	// Pronouns follow the Event's own setting: off there, the toggle is off and says where to turn it on.
+	it.each([
+		[
+			true,
+			'true',
+			false,
+			'Show each Player\'s pronouns below their name.',
+		],
+		[
+			false,
+			'false',
+			true,
+			'Enable player pronouns in event settings to use this.',
+		],
+	])('with Event pronouns %s, shows the pronouns toggle on: %s, disabled: %s', async (pronounsEnabled, checked, disabled, description) => {
+		mockEvent.value = { id: 1, pronounsEnabled };
+		const wrapper = await mountComponent();
+		const field = wrapper.get('[data-config-field="showPronouns"]');
+		const toggle = field.get('[role="switch"]');
+
+		expect(toggle.attributes('aria-checked')).toBe(checked);
+		expect(toggle.attributes('disabled') !== undefined).toBe(disabled);
+		expect(field.text()).toContain(description);
+	});
+
+	it('writes the deck colors toggle through its contract field', async () => {
+		const wrapper = await mountComponent();
+
+		await wrapper.get('[data-config-field="showDeckColors"] [role="switch"]').trigger('click');
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ showDeckColors: false });
 	});
 });
