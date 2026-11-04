@@ -191,7 +191,6 @@ describe('default layout sync navigation', () => {
 		'Metagame',
 		'Archetype Review',
 		'Sync',
-		'Cards',
 		'Event Structure',
 		'Integrations',
 	];
@@ -210,6 +209,7 @@ describe('default layout sync navigation', () => {
 			'Controls',
 			'Players',
 			'Feature Matches',
+			'Cards',
 			'Screens',
 			'Event',
 			'Broadcast',
