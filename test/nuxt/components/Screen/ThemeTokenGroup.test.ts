@@ -3,9 +3,10 @@ import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, h } from 'vue';
+import { defineComponent, h, ref } from 'vue';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { fakeScreenThemeNetwork, overrideWrites, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
+import ScreenSettingsCard from '~/components/Screen/SettingsCard.vue';
 import ThemeTokenGroup from '~/components/Screen/ThemeTokenGroup.vue';
 
 // A Screen Settings Group renders the Mode Tokens that name it under "Look",
@@ -101,5 +102,49 @@ describe('a Screen Settings Group\'s Look', () => {
 		await flushPromises();
 
 		expect(overrideWrites(mockApiFetch)).toEqual([written]);
+	});
+});
+
+// A collapsed card unmounts its body, but its groups' tokens stay out of the Screen-wide look.
+describe('a Screen Settings Group\'s registration', () => {
+	async function mountInCard() {
+		const screen = seedThemedScreen('standings');
+		const showCard = ref(true);
+		const Page = defineComponent(() => {
+			const groups = provideScreenSettingsGroups();
+			return () => h('div', {
+				'data-mounted-groups': [...groups.mounted.value].join(' '),
+			}, showCard.value
+				? [
+						h(ScreenSettingsCard, { title: 'Header' }, () => h(ThemeTokenGroup, {
+							screen: screen(),
+							eventId: 1,
+							group: 'header',
+						})),
+					]
+				: []);
+		});
+		const wrapper = mount(Page, {
+			global: { stubs: nuxtUiStubs },
+		});
+		await flushPromises();
+		return { wrapper, showCard };
+	}
+
+	const mountedGroups = (wrapper: VueWrapper) => wrapper.get('[data-mounted-groups]').attributes('data-mounted-groups');
+
+	it('holds its group while its card is collapsed, and releases it when the card goes', async () => {
+		const { wrapper, showCard } = await mountInCard();
+		expect(mountedGroups(wrapper)).toBe('header');
+
+		await wrapper.get('button[aria-label="Collapse Header"]').trigger('click');
+		await wrapper.get('button[aria-label="Expand Header"]').trigger('click');
+		await wrapper.get('button[aria-label="Collapse Header"]').trigger('click');
+		expect(wrapper.find('[data-settings-group]').exists()).toBe(false);
+		expect(mountedGroups(wrapper)).toBe('header');
+
+		showCard.value = false;
+		await flushPromises();
+		expect(mountedGroups(wrapper)).toBe('');
 	});
 });

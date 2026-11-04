@@ -2285,7 +2285,7 @@ Accepted · 2026-11-04 · [#955](https://github.com/KeeprDigital/stream-keepr/is
 
 **Every token a Screen may override renders once on its settings page** (`placeScreenThemeTokens` in `shared/screenThemeOverrides.ts`). That is what its mode's declaration consumes, plus, on a graphics host, every Foundation Token its Graphic Items may bind (ADR-0049). Each lands in one place:
 
-- **A Mode Token** renders in its group, under a "Look" subheading after the group's config controls, as a compact row (`ScreenThemeTokenGroup`). A mounted group registers itself with the page (`provideScreenSettingsGroups`). Until it does, its tokens render in the residual card, so a token never disappears or doubles while a mode's settings have not adopted its group yet.
+- **A Mode Token** renders in its group, under a "Look" subheading after the group's config controls, as a compact row (`ScreenThemeTokenGroup`). A mounted group registers itself with the page (`provideScreenSettingsGroups`) for as long as its `ScreenSettingsCard` is on it: collapsing the card unmounts its body, but not the registration, so its tokens do not move. Until a group registers, its tokens render in the residual card, so a token never disappears or doubles while a mode's settings have not adopted its group yet.
 - **A plain mode's host tokens**, `inset` and `alignment`, render in **Background & Placement**, beside the mode's Background Layer stack.
 - **Every other Foundation Token** renders in the residual **Screen-wide look**. Foundation Tokens stay overridable per Screen, but together: overriding one restyles every Mode Token following it, so placing it beside one element would mislead.
 
