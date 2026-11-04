@@ -12,11 +12,13 @@ export function mapTalentToResponse(talent: DbEventTalent): TalentResponse {
 		blueskyHandle,
 		graphicAssetReferenceVersion: _graphicAssetReferenceVersion,
 		photo,
+		role,
 		...fields
 	} = talent;
 
 	return {
 		...mapTimestamps(fields),
+		role: role ?? null,
 		photo: photo ?? null,
 		socialProfiles: Object.fromEntries([
 			['twitch', twitchHandle],

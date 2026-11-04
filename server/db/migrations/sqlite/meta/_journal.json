@@ -134,6 +134,13 @@
       "when": 1793757869261,
       "tag": "0021_talent_photo",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1793759260338,
+      "tag": "0024_talent_role",
+      "breakpoints": true
     }
   ]
 }

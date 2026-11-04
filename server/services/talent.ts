@@ -85,11 +85,14 @@ export function talentService() {
 	};
 
 	/** The same columns by their stored names, for the photo write's own statements. */
-	const storedColumns = (fields: { name?: string; socialProfiles?: SocialProfiles }): TalentColumnValues => {
+	const storedColumns = (fields: { name?: string; role?: string | null; socialProfiles?: SocialProfiles }): TalentColumnValues => {
 		const values = {
 			...(fields.name === undefined
 				? {}
 				: { name: fields.name }),
+			...(fields.role === undefined
+				? {}
+				: { role: fields.role }),
 			...(fields.socialProfiles === undefined
 				? {}
 				: socialProfileColumns(fields.socialProfiles)),

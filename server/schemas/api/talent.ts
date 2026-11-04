@@ -22,6 +22,11 @@ const PHOTO_COLUMN_OMIT = {
 /** One exact image revision, or `null` for none (ADR-0067). */
 const photoField = graphicAssetReferenceSchema.nullable().optional();
 
+/** Free text such as "Host" or "Commentator"; blank stores none (#782). */
+const roleField = z.string().max(100).nullable().optional().transform(role => role === undefined
+	? undefined
+	: role?.trim() || null);
+
 function socialProfileField(network: Parameters<typeof normalizeSocialProfileInput>[0]) {
 	return z.string().transform((value, context) => {
 		try {
@@ -62,6 +67,7 @@ export const createTalentSchema = createInsertSchema(eventTalents)
 	})
 	.extend({
 		name: z.string().min(1).max(200),
+		role: roleField,
 		socialProfiles: socialProfilesInputSchema.optional(),
 		photo: photoField,
 	})
@@ -79,6 +85,7 @@ export const updateTalentSchema = createUpdateSchema(eventTalents)
 	})
 	.extend({
 		name: z.string().min(1).max(200).optional(),
+		role: roleField,
 		socialProfiles: socialProfilesInputSchema.optional(),
 		photo: photoField,
 	})

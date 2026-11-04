@@ -8,11 +8,12 @@ import { deferred } from '~~/test/helpers/deferred';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import ConfigTalents from '~/components/Event/ConfigTalents.vue';
 
-function talent(id: number, name: string, socialProfiles: Talent['socialProfiles'] = {}, photo: Talent['photo'] = null): Talent {
+function talent(id: number, name: string, socialProfiles: Talent['socialProfiles'] = {}, photo: Talent['photo'] = null, role: string | null = null): Talent {
 	return {
 		id,
 		eventId: 1,
 		name,
+		role,
 		socialProfiles,
 		photo,
 		createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -112,6 +113,7 @@ function profileInput(wrapper: Wrapper, network: string) {
 }
 
 const nameInput = (wrapper: Wrapper) => wrapper.get('[data-field="name"] input');
+const roleInput = (wrapper: Wrapper) => wrapper.get('[data-field="role"] input');
 const editorIsOpen = (wrapper: Wrapper) => wrapper.find('[role="dialog"]').exists();
 
 async function pickPhoto(wrapper: Wrapper, photo: Talent['photo']) {
@@ -266,6 +268,36 @@ describe('event config Talents', () => {
 		await chooseRowAction(wrapper, 1, 'Delete');
 
 		expect(eventStore.removeTalent.mock.calls.map(([id]) => id)).toEqual(deleted);
+	});
+
+	it.each([
+		['sets a trimmed role', ALICE, ' Host ', { role: 'Host' }],
+		['clears a role left blank', talent(11, 'Alice', {}, null, 'Host'), '  ', { role: null }],
+	])('%s', async (_case, current, role, update) => {
+		const wrapper = mountComponent([current]);
+		await chooseRowAction(wrapper, 0, 'Edit');
+
+		await roleInput(wrapper).setValue(role);
+		await saveEditor(wrapper);
+
+		expect(eventStore.updateTalent).toHaveBeenCalledWith(11, update);
+	});
+
+	it('creates a Talent with a role', async () => {
+		const wrapper = mountComponent([]);
+		await button(wrapper, 'Add Talent').trigger('click');
+
+		await nameInput(wrapper).setValue('Dana');
+		await roleInput(wrapper).setValue('Commentator');
+		await saveEditor(wrapper);
+
+		expect(eventStore.addTalent).toHaveBeenCalledWith({ name: 'Dana', role: 'Commentator', socialProfiles: {} });
+	});
+
+	it('shows each Talent\'s role beside its name', () => {
+		const wrapper = mountComponent([talent(11, 'Alice', {}, null, 'Host'), BOB]);
+
+		expect(wrapper.findAll('[data-talent-role]').map(role => role.text())).toEqual(['Host']);
 	});
 
 	it('offers the library\'s images for this Event as the photo', async () => {
