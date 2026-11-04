@@ -1133,12 +1133,12 @@ export type DeckListView = typeof DECK_LIST_VIEW_VALUES[number];
  * Session's deck data.
  *
  * Sideboard-only at v1, and deliberately lean: no board field — a full deck
- * outgrows any plausible overlay region — and none of the Deck Screen Mode's
- * styling vocabulary. Framing, labels, and backgrounds come from neighbouring
- * compositor items; this item renders cards and nothing else, never beyond its
- * authored bounds. Widening to other boards later is an additive field and a
- * configuration version bump on this same kind, which is why the kind keeps the
- * general name.
+ * outgrows any plausible overlay region — and none of the Deck List Screen
+ * Mode's styling vocabulary. Framing, labels, and backgrounds come from
+ * neighbouring compositor items; this item renders cards and nothing else,
+ * never beyond its authored bounds. Widening to other boards later is an
+ * additive field and a configuration version bump on this same kind, which is
+ * why the kind keeps the general name.
  *
  * The `grid` view auto-fits the authored bounds knoblessly — rows, columns, and
  * card size are computed from the bounds and the live card count, the Game Wins

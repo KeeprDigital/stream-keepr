@@ -7,7 +7,7 @@ export function useSendDeckToScreen() {
 	const toast = useToast();
 	const { runRequest } = useRequestFeedback();
 
-	// Get all screens in deck mode
+	// Get all Screens in Deck List mode
 	const deckScreens = computed(() => {
 		return screenStore.screens.filter(s => s.currentMode === 'deck');
 	});
@@ -52,14 +52,14 @@ export function useSendDeckToScreen() {
 	}
 
 	/**
-	 * Send a player's deck to the first (or only) deck screen
+	 * Send a player's deck to the first (or only) Deck List Screen
 	 */
 	async function sendToFirstDeckScreen(playerId: number) {
 		const screen = deckScreens.value[0];
 		if (!screen) {
 			toast.add({
-				title: 'No Deck Screen',
-				description: 'No screen is configured for deck mode',
+				title: 'No Deck List Screen',
+				description: 'No Screen is in Deck List mode',
 				color: 'warning',
 			});
 			return false;
@@ -69,7 +69,7 @@ export function useSendDeckToScreen() {
 	}
 
 	/**
-	 * Get dropdown items for selecting a deck screen
+	 * Get dropdown items for selecting a Deck List Screen
 	 */
 	function getDeckScreenItems(playerId: number) {
 		return deckScreens.value.map(screen => ({

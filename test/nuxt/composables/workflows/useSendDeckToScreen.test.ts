@@ -44,7 +44,7 @@ describe('useSendDeckToScreen', () => {
 		mockUpdateModeConfig.mockResolvedValue(undefined);
 	});
 
-	it('offers only the Screens in Deck mode', () => {
+	it('offers only the Screens in Deck List mode', () => {
 		const { deckScreens, hasDeckScreens, hasMultipleDeckScreens } = useSendDeckToScreen();
 
 		expect(deckScreens.value.map(screen => screen.id)).toEqual([1, 3]);
@@ -79,14 +79,14 @@ describe('useSendDeckToScreen', () => {
 			})).toEqual([]);
 		});
 
-		it('offers nothing when no Screen is in Deck mode', () => {
+		it('offers nothing when no Screen is in Deck List mode', () => {
 			mockScreenStore.screens = [allScreens[1]!];
 			const { createSendDeckItems } = useSendDeckToScreen();
 
 			expect(createSendDeckItems(playerWithDeck)).toEqual([]);
 		});
 
-		it('sends straight to the only Deck Screen', async () => {
+		it('sends straight to the only Deck List Screen', async () => {
 			mockScreenStore.screens = [allScreens[0]!];
 			const [item] = useSendDeckToScreen().createSendDeckItems(playerWithDeck);
 
@@ -98,7 +98,7 @@ describe('useSendDeckToScreen', () => {
 			expect(mockUpdateModeConfig).toHaveBeenCalledWith(1, 1, 'deck', deckSourceOf(42));
 		});
 
-		it('asks which Deck Screen when there are several', () => {
+		it('asks which Deck List Screen when there are several', () => {
 			const [item] = useSendDeckToScreen().createSendDeckItems(playerWithDeck);
 
 			expect(item!.label).toBe('Send Deck to…');

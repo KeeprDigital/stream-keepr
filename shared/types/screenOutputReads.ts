@@ -165,7 +165,7 @@ export interface ScreenOutputFeatureMatchResponse {
 	phase: PhaseResponse | null;
 }
 
-/** A Feature Match Deck List of the Slot a Deck Screen shows a side of: its cards, not its paste or warnings. */
+/** A Feature Match Deck List of the Slot a Deck List Screen shows a side of: its cards, not its paste or warnings. */
 export type ScreenOutputFeatureMatchDeckListResponse = Pick<SavedFeatureMatchDeckList, 'id' | 'slotId' | 'entries' | 'leaderNumber' | 'mainboardCount'>;
 
 /** A Player the Screen renders, with their decks as the operator's decks read answers them. */

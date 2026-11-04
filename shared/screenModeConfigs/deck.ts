@@ -101,13 +101,13 @@ export const DEFAULT_DECK_TEXT_SIZES = {
 	pointedCardSize: 14,
 } as const;
 
-/** Where each badge sits on a Deck Screen card until an operator moves it. */
+/** Where each badge sits on a Deck List Screen card until an operator moves it. */
 export const DEFAULT_QUANTITY_POSITION: QuantityPosition = 'top-right';
 export const DEFAULT_HIGHLANDER_POINTS_POSITION: QuantityPosition = 'top-left';
 /** Top centre: clear of the corner badges, and shown by a stacked card's top slice. */
 export const DEFAULT_COMPANION_TAG_POSITION: QuantityPosition = 'top';
 
-/** The Deck Screen Mode's config contract: its shape, type, and defaults. */
+/** The Deck List Screen Mode's config contract: its shape, type, and defaults. */
 export const deckModeConfigContract = defineScreenModeConfigContract({
 	// The Deck Source (ADR-0032): no Player or one Player, one Broadcast Deck
 	// List, or one player side of a Feature Match Slot, followed live (ADR-0057).
