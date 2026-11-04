@@ -34,7 +34,7 @@ defineExpose({ resetConfig, saving });
 const fields = screenModeConfigContract('deck').fields;
 const boardFields = DECK_SIDEBOARD_LAYOUT_FIELDS;
 
-/** A One Piece Card Game Event shows a Feature Match Slot side's Deck List, set up in its own settings (ADR-0057). */
+/** A One Piece Card Game Event shows a Feature Match Slot side's or a Player's Deck List, set up in its own settings (ADR-0057, ADR-0074). */
 const isOpEvent = computed(() => eventStore.event?.game === 'op');
 
 const broadcastDeckListsEnabled = computed(() =>

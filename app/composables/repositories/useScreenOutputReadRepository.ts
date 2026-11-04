@@ -7,6 +7,7 @@ import type {
 	ScreenOutputFeatureMatchResponse,
 	ScreenOutputHeadToHeadResponse,
 	ScreenOutputMetagameResponse,
+	ScreenOutputOpPlayerDeckListResponse,
 	ScreenOutputPairingsResponse,
 	ScreenOutputPlayerDecksResponse,
 	ScreenOutputRoundClockResponse,
@@ -67,6 +68,8 @@ export function useScreenOutputReadRepository() {
 			read<ScreenOutputFeatureMatchResponse>(scope, `feature-match-slots/${slotId}`),
 		featureMatchDeckList: (scope: ScreenOutputReadScope, slotId: number, deckListId: number) =>
 			read<ScreenOutputFeatureMatchDeckListResponse>(scope, `feature-match-slots/${slotId}/deck-lists/${deckListId}`),
+		opPlayerDeckList: (scope: ScreenOutputReadScope, playerId: number) =>
+			read<ScreenOutputOpPlayerDeckListResponse>(scope, `players/${playerId}/deck-list`),
 		playerDecks: (scope: ScreenOutputReadScope, playerId: number, selection: { deckId?: number } = {}) =>
 			read<ScreenOutputPlayerDecksResponse>(
 				scope,

@@ -2480,7 +2480,7 @@ Accepted · 2026-11-04 · [#1000](https://github.com/KeeprDigital/stream-keepr/i
 
 - **Linked side.** Its Leader and Deck List are the Player's, by reference. A re-import or edit reaches the Slot, and the active Feature Match Session's snapshot is corrected, as replacing a paste is today. The side's game data is the server's: a setup save takes it from the Player whatever the form sent, and releases a Feature Match Deck List the side held. Its setup form edits the Player's Deck List, and a paste to the side itself is refused (`409`).
 - **Unlinked side.** Paste and Leader picking stay available. That Feature Match Deck List never counts in Metagame.
-- **Deck List Screen.** On an OP Event it takes a Player or a Slot side as its Deck Source, and both render in the OP layout.
+- **Deck List Screen.** On an OP Event it takes a Player or a Slot side as its Deck Source, and both render in the OP layout. A Player source follows every write to the Player's Deck List, by hand or by import, because each write gives the Deck List a new id and rolls the Player's `updatedAt`. A linked Slot side shows its Player's Deck List the same way, and a Screen showing that side may read the Players its Slot seats. A Player holding no Deck List shows nothing. A Screen with neither chosen still starts on the first Slot's left side; a Player chosen stays. Deleting the Player releases the Deck Source (ADR-0032).
 
 **What OP Events now offer.** The Players, Metagame, Sync and Cards pages, and the Metagame, Most Played Cards and Archetype Spotlight Screen Modes. Standings, Top Cut, Pairings, Player History, Head-to-Head, Round Clock, Matches, Event Structure, Archetype Review and Integrations stay MTG-only.
 
